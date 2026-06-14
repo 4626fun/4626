@@ -3,7 +3,7 @@
 #
 # Sync Hermit workspace content between this repo and the Pinata-hosted agent.
 # Pinata reads `/home/node/clawd/workspace/`; pull/push uses the agent git remote:
-#   git clone https://pinata:<gateway-token>@agents.pinata.cloud/v0/agents/x7lmjaxx/git
+#   git clone https://pinata:<gateway-token>@agents.pinata.cloud/v0/agents/x6bk3ima/git
 #
 # Modes:
 #   list                    Four canonical seeds + full workspace paths (default).
@@ -26,7 +26,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MONOREPO_ROOT="$(cd "$REPO_ROOT/.." && pwd)"
 SEED_DIR="$REPO_ROOT/server/_lib/hermit/seed"
 WORKSPACE_DIR="$REPO_ROOT/server/_lib/hermit/workspace"
-DEFAULT_PINATA_CLONE="$MONOREPO_ROOT/agent-hermit-x7lmjaxx"
+DEFAULT_PINATA_CLONE="$MONOREPO_ROOT/agent-hermit-x6bk3ima"
 
 SEEDS=(SOUL USER MEMORY SPANISH)
 WORKSPACE_MD=(
@@ -94,7 +94,7 @@ print_file_digest() {
 pinata_clone_dir() {
   local dir="${1:-$DEFAULT_PINATA_CLONE}"
   if [[ ! -d "$dir/.git" ]]; then
-    echo "ERROR: Pinata clone not found at $dir (run: git clone https://pinata:\$HERMIT_PINATA_BEARER_TOKEN@agents.pinata.cloud/v0/agents/x7lmjaxx/git agent-hermit-x7lmjaxx)" >&2
+    echo "ERROR: Pinata clone not found at $dir (run: git clone https://pinata:\$HERMIT_PINATA_BEARER_TOKEN@agents.pinata.cloud/v0/agents/x6bk3ima/git agent-hermit-x6bk3ima)" >&2
     exit 1
   fi
   printf '%s' "$dir"
@@ -218,7 +218,7 @@ cmd_pull_pinata() {
   fi
   if [[ -n "${HERMIT_PINATA_BEARER_TOKEN:-}" ]]; then
     git -C "$clone" remote set-url origin \
-      "https://pinata:${HERMIT_PINATA_BEARER_TOKEN}@agents.pinata.cloud/v0/agents/x7lmjaxx/git"
+      "https://pinata:${HERMIT_PINATA_BEARER_TOKEN}@agents.pinata.cloud/v0/agents/x6bk3ima/git"
   fi
   git -C "$clone" pull --ff-only
   cmd_import_pinata "$clone"

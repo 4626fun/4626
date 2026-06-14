@@ -62,25 +62,22 @@ describe('isLocalhostPrivyCustomDomainConfigError', () => {
   })
 })
 
-describe('performZoraCrossAppAuth localhost short-circuit', () => {
-  it('immediately throws helpful message on localhost without calling the link fn', async () => {
+describe('performZoraCrossAppAuth localhost behavior', () => {
+  it('does not short-circuit localhost when cross-app auth succeeds', async () => {
     const originalWindow = globalThis.window
     // @ts-expect-error test shim
     globalThis.window = { location: { hostname: 'localhost' } }
 
-    const linkFn = vi.fn()
-    const loginFn = vi.fn()
+    const linkFn = vi.fn(async () => {})
+    const loginFn = vi.fn(async () => {})
 
-    await expect(
-      performZoraCrossAppAuth({
-        privyAuthed: true,
-        appId: 'zora-app-id',
-        linkCrossAppAccount: linkFn,
-        loginWithCrossAppAccount: loginFn,
-      })
-    ).rejects.toThrow(/Privy localhost \+ custom domain/)
-
-    expect(linkFn).not.toHaveBeenCalled()
+    await performZoraCrossAppAuth({
+      privyAuthed: true,
+      appId: 'zora-app-id',
+      linkCrossAppAccount: linkFn,
+      loginWithCrossAppAccount: loginFn,
+    })
+    expect(linkFn).toHaveBeenCalledTimes(1)
     expect(loginFn).not.toHaveBeenCalled()
 
     // @ts-expect-error test cleanup
@@ -141,6 +138,27 @@ describe('performZoraCrossAppAuth', () => {
   it('falls back to login when link fails with generic auth copy', async () => {
     const linkCrossAppAccount = vi.fn(async () => {
       throw new Error('There was an issue connecting your Zora account. Please try again.')
+    })
+    const loginWithCrossAppAccount = vi.fn(async () => {})
+    const sanitizeRedirect = vi.fn(() => vi.fn())
+
+    await performZoraCrossAppAuth({
+      privyAuthed: true,
+      appId: 'zora-app-id',
+      linkCrossAppAccount,
+      loginWithCrossAppAccount,
+      sanitizeRedirect,
+      isRedirectUrlNotAllowedError: () => false,
+    })
+
+    expect(linkCrossAppAccount).toHaveBeenCalledTimes(1)
+    expect(loginWithCrossAppAccount).toHaveBeenCalledWith({ appId: 'zora-app-id' })
+    expect(sanitizeRedirect).toHaveBeenCalledTimes(2)
+  })
+
+  it('falls back to login when link fails with generic viem wallet RPC copy', async () => {
+    const linkCrossAppAccount = vi.fn(async () => {
+      throw new Error('An unknown RPC error occurred. Details: Unable to connect to wallet Version: viem@2.45.1')
     })
     const loginWithCrossAppAccount = vi.fn(async () => {})
     const sanitizeRedirect = vi.fn(() => vi.fn())

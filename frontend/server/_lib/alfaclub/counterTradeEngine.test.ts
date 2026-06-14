@@ -84,6 +84,24 @@ describe('counterTradeEngine', () => {
     expect(decision.counterNotionalUsd).toBeGreaterThan(0)
   })
 
+  it('uses strict inverse parity without bias or preset sizing modifiers', () => {
+    const decision = deriveCounterTradeDecision({
+      bias: 'bullish',
+      preset: 'defensive',
+      fill: makeFill(),
+      userNotionalUsd: 200,
+      userLeverage: 6,
+      runtime: makeRuntime(),
+      counterWalletState: null,
+      strictInverseParity: true,
+    })
+    expect(decision.ok).toBe(true)
+    if (!decision.ok) return
+    expect(decision.counterSide).toBe('short')
+    expect(decision.counterLeverage).toBe(6)
+    expect(decision.counterNotionalUsd).toBe(200)
+  })
+
   it('skips when user notional is below configured minimum', () => {
     const decision = deriveCounterTradeDecision({
       bias: 'neutral',

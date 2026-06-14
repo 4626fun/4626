@@ -124,25 +124,24 @@ function resolveTradeSideLabel(event: Pick<ChartOverlayEvent, 'side' | 'dir'>): 
   return null
 }
 
-function describeTradeEventAction(event: Pick<ChartOverlayEvent, 'action' | 'side' | 'dir' | 'closedPnl'>): string {
+function describeTradeEventAction(
+  event: Pick<ChartOverlayEvent, 'action' | 'side' | 'dir' | 'closedPnl'>,
+): string {
   const side = resolveTradeSideLabel(event)
-  const sideText = side ? ` ${side}` : ''
+  const sideLabel = side ?? 'position'
   switch (event.action) {
     case 'entry':
-      return `Opened new${sideText || ' position'}`
+      return `◉ Opened ${sideLabel}`
     case 'add':
-      return `Added to${sideText || ' position'}`
+      return `↗ Increased ${sideLabel}`
     case 'reduce':
-      return `Reduced${sideText || ' position'}`
+      return `↘ Reduced ${sideLabel}`
     case 'close':
-      if (typeof event.closedPnl === 'number' && event.closedPnl > 0) {
-        return `Took profit on${sideText || ' position'}`
-      }
-      return `Closed${sideText || ' position'}`
+      return `✕ Closed ${sideLabel}`
     case 'liquidated':
-      return `Liquidated${sideText || ' position'}`
+      return `☠ Liquidated ${sideLabel}`
     case 'flip':
-      return `Flipped to${sideText || ' opposite side'}`
+      return side ? `⇄ Flipped to ${side}` : '⇄ Flipped position'
     default:
       return 'Trade update'
   }
@@ -301,6 +300,7 @@ function resolveMergedLifecycleAction(
   right: RawTradeEvent['action'],
 ): RawTradeEvent['action'] | null {
   const actionSet = new Set([left, right])
+  if (actionSet.has('close') && actionSet.size === 1) return 'close'
   if (actionSet.has('entry') && actionSet.has('add')) return 'entry'
   if (actionSet.has('reduce') && actionSet.has('close')) return 'close'
   return null
@@ -340,8 +340,16 @@ function mergeAdjacentLifecycleTradeEvents(events: RawTradeEvent[]): RawTradeEve
       continue
     }
 
+    const sameMarketAndSource = last.market === event.market && last.source === event.source
+    const sameExactTimestamp = last.time === event.time
+    const sameMinute = Math.floor(last.time / 60_000) === Math.floor(event.time / 60_000)
+    const closeLikePair =
+      (last.action === 'close' || last.action === 'reduce') &&
+      (event.action === 'close' || event.action === 'reduce')
+    const compatibleSide = !last.side || !event.side || last.side === event.side
     const isSameBucket =
-      last.time === event.time && last.market === event.market && last.source === event.source
+      sameMarketAndSource &&
+      (sameExactTimestamp || (sameMinute && closeLikePair && compatibleSide))
     const mergedAction = isSameBucket ? resolveMergedLifecycleAction(last.action, event.action) : null
     if (mergedAction) {
       merged[merged.length - 1] = mergeLifecyclePair(last, event, mergedAction)
@@ -562,9 +570,9 @@ async function fetchRoomTimelineBySymbol(
 }
 
 export function Positions() {
-  const PANEL_MIN_WIDTH = 240
-  const PANEL_MAX_WIDTH = 420
-  const PANEL_DEFAULT_WIDTH = 320
+  const PANEL_MIN_WIDTH = 420
+  const PANEL_MAX_WIDTH = 760
+  const PANEL_DEFAULT_WIDTH = 520
   const [chatScope, setChatScope] = useState<'host' | 'all' | 'sender'>('all')
   const [selectedSender, setSelectedSender] = useState<string | null>(null)
   const [selectedMarket, setSelectedMarket] = useState<string>('')
@@ -582,7 +590,6 @@ export function Positions() {
   const [messagePanelCollapsed, setMessagePanelCollapsed] = useState(false)
   const [tradePanelWidth, setTradePanelWidth] = useState(PANEL_DEFAULT_WIDTH)
   const [messagePanelWidth, setMessagePanelWidth] = useState(PANEL_DEFAULT_WIDTH)
-  const [tradeSourceFilter, setTradeSourceFilter] = useState<'all' | 'host' | 'counter'>('all')
   const [messageSourceFilter, setMessageSourceFilter] = useState<'all' | 'host' | 'room' | 'bot'>('all')
   const resizeStateRef = useRef<{
     side: 'left' | 'right'
@@ -887,10 +894,21 @@ export function Positions() {
     [timelineListEvents],
   )
 
-  const filteredTimelineTradeEvents = useMemo(() => {
-    if (tradeSourceFilter === 'all') return timelineTradeEvents
-    return timelineTradeEvents.filter((event) => event.source === tradeSourceFilter)
-  }, [timelineTradeEvents, tradeSourceFilter])
+  const filteredTimelineTradeEvents = useMemo(() => timelineTradeEvents, [timelineTradeEvents])
+  const alfaTimelineTradeEvents = useMemo(
+    () =>
+      filteredTimelineTradeEvents
+        .filter((event) => event.source === 'host')
+        .sort((a, b) => b.time - a.time || a.id.localeCompare(b.id)),
+    [filteredTimelineTradeEvents],
+  )
+  const virtualsTimelineTradeEvents = useMemo(
+    () =>
+      filteredTimelineTradeEvents
+        .filter((event) => event.source === 'counter')
+        .sort((a, b) => b.time - a.time || a.id.localeCompare(b.id)),
+    [filteredTimelineTradeEvents],
+  )
 
   const filteredTimelineChatEvents = useMemo(() => {
     if (messageSourceFilter === 'all') return timelineChatEvents
@@ -1228,22 +1246,6 @@ export function Positions() {
               </div>
               {!tradePanelCollapsed ? (
                 <>
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    {(['all', 'host', 'counter'] as const).map((filter) => (
-                      <button
-                        key={filter}
-                        type="button"
-                        onClick={() => setTradeSourceFilter(filter)}
-                        className={`rounded-full px-2 py-1 text-[10px] uppercase tracking-wide ${
-                          tradeSourceFilter === filter
-                            ? 'bg-sky-400/15 text-sky-200'
-                            : 'bg-white/[0.05] text-zinc-400 hover:text-zinc-200'
-                        }`}
-                      >
-                        {filter === 'all' ? 'all' : filter === 'host' ? 'room' : 'agent'}
-                      </button>
-                    ))}
-                  </div>
                   <div
                     ref={tradeTimelineListRef}
                     className="mt-3 max-h-[48vh] lg:max-h-none lg:flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 [scrollbar-gutter:stable]"
@@ -1252,85 +1254,175 @@ export function Positions() {
                       <div className="mb-2 px-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
                         Trades ({filteredTimelineTradeEvents.length})
                       </div>
-                      <div className="space-y-1.5">
-                        {filteredTimelineTradeEvents.map((event, index) => (
-                          <div
-                            key={`trade-${event.id}-${index}`}
-                            data-event-id={event.id}
-                            onClick={() => setSelectedEventId(event.id)}
-                            onKeyDown={(keyboardEvent) => {
-                              if (keyboardEvent.key === 'Enter' || keyboardEvent.key === ' ') {
-                                keyboardEvent.preventDefault()
-                                setSelectedEventId(event.id)
-                              }
-                            }}
-                            role="button"
-                            tabIndex={0}
-                            className={`relative w-full overflow-hidden text-left rounded-lg p-2 text-xs transition border ${
-                              event.source === 'counter'
-                                ? 'border-emerald-300/20 bg-emerald-400/12 hover:bg-emerald-400/16'
-                                : 'border-sky-300/20 bg-sky-400/10 hover:bg-sky-400/14'
-                            } ${
-                              selectedEventId === event.id
-                                ? 'ring-1 ring-sky-300/70'
-                                : hoveredEventId === event.id
-                                  ? 'ring-1 ring-violet-300/55'
-                                  : ''
-                            }`}
-                          >
-                            {(() => {
-                              const source = tradeSourceMeta(event.source)
-                              const marketCoin =
-                                ((event.market ?? effectiveMarket).split('/')[0] ?? '').toUpperCase() || 'TOKEN'
-                              const showRealizedPnl = event.action === 'close' || event.action === 'liquidated'
-                              const hasMeaningfulRealizedPnl = Math.abs(event.closedPnl ?? 0) >= 0.005
-                              const pnlClass = event.closedPnl >= 0 ? 'text-emerald-200' : 'text-rose-200'
-                              const summaryLine = buildTradeSummaryLine(event, marketCoin)
-                              return (
-                                <div className="relative space-y-1">
-                                  <img
-                                    src={source.logo}
-                                    alt=""
-                                    aria-hidden="true"
-                                    className="pointer-events-none absolute -right-5 -top-3 h-20 w-20 select-none object-contain opacity-[0.15]"
-                                    loading="lazy"
-                                  />
-                                  <div className="flex items-center justify-between gap-1.5">
-                                    <a
-                                      href={source.href}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      onClick={(clickEvent) => clickEvent.stopPropagation()}
-                                      className="relative z-[1] inline-flex min-w-0 items-center gap-1.5 text-[12px] font-semibold leading-snug text-zinc-100 underline-offset-2 transition hover:text-white hover:underline"
-                                    >
-                                      <img
-                                        src={source.logo}
-                                        alt={source.logoAlt}
-                                        className="h-3.5 w-3.5 shrink-0 object-contain"
-                                        loading="lazy"
-                                      />
-                                      <span className="truncate">{describeTradeEventAction(event)}</span>
-                                    </a>
-                                    {showRealizedPnl && hasMeaningfulRealizedPnl ? (
-                                      <span className={`relative z-[1] text-[11px] font-medium ${pnlClass}`}>
-                                        {event.closedPnl >= 0 ? '+' : '-'}
-                                        {formatCompactUsd(Math.abs(event.closedPnl))}
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                  <div className="relative z-[1] text-[11px] font-semibold leading-tight text-zinc-100">
-                                    {summaryLine}
-                                  </div>
-                                  <div className="relative z-[1] flex items-center justify-end gap-1.5 pt-0.5 flex-nowrap">
-                                    <span className="shrink-0 whitespace-nowrap text-[10px] text-zinc-300">
-                                      {formatTime(event.time)}
-                                    </span>
-                                  </div>
-                                </div>
-                              )
-                            })()}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <div className="px-1 pb-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                            AlfaClub
                           </div>
-                        ))}
+                          <div className="relative pl-3">
+                            <div className="pointer-events-none absolute bottom-0 left-[5px] top-0 w-px bg-sky-300/25" />
+                            <div className="space-y-1.5">
+                              {alfaTimelineTradeEvents.map((event, index) => {
+                                const source = tradeSourceMeta(event.source)
+                                const marketCoin =
+                                  ((event.market ?? effectiveMarket).split('/')[0] ?? '').toUpperCase() || 'TOKEN'
+                                const showRealizedPnl = event.action === 'close' || event.action === 'liquidated'
+                                const hasMeaningfulRealizedPnl = Math.abs(event.closedPnl ?? 0) >= 0.005
+                                const pnlClass = event.closedPnl >= 0 ? 'text-emerald-200' : 'text-rose-200'
+                                const summaryLine = buildTradeSummaryLine(event, marketCoin)
+                                return (
+                                  <div key={`alfa-timeline-row-${event.id}-${index}`} className="relative">
+                                    <span className="pointer-events-none absolute left-[-10px] top-3 block h-2 w-2 rounded-full bg-sky-300/80" />
+                                    <div
+                                      data-event-id={event.id}
+                                      onClick={() => setSelectedEventId(event.id)}
+                                      onKeyDown={(keyboardEvent) => {
+                                        if (keyboardEvent.key === 'Enter' || keyboardEvent.key === ' ') {
+                                          keyboardEvent.preventDefault()
+                                          setSelectedEventId(event.id)
+                                        }
+                                      }}
+                                      role="button"
+                                      tabIndex={0}
+                                      className={`relative w-full overflow-hidden text-left rounded-lg p-2 text-xs transition border border-sky-300/20 bg-sky-400/10 hover:bg-sky-400/14 ${
+                                        selectedEventId === event.id
+                                          ? 'ring-1 ring-sky-300/70'
+                                          : hoveredEventId === event.id
+                                            ? 'ring-1 ring-violet-300/55'
+                                            : ''
+                                      }`}
+                                    >
+                                      <div className="relative space-y-1">
+                                        <img
+                                          src={source.logo}
+                                          alt=""
+                                          aria-hidden="true"
+                                          className="pointer-events-none absolute -right-5 -top-3 h-20 w-20 select-none object-contain opacity-[0.15]"
+                                          loading="lazy"
+                                        />
+                                        <div className="flex items-center justify-between gap-1.5">
+                                          <a
+                                            href={source.href}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(clickEvent) => clickEvent.stopPropagation()}
+                                            className="relative z-[1] inline-flex min-w-0 items-center gap-1.5 text-[12px] font-semibold leading-snug text-zinc-100 underline-offset-2 transition hover:text-white hover:underline"
+                                          >
+                                            <img
+                                              src={source.logo}
+                                              alt={source.logoAlt}
+                                              className="h-3.5 w-3.5 shrink-0 object-contain"
+                                              loading="lazy"
+                                            />
+                                            <span className="truncate whitespace-nowrap">{describeTradeEventAction(event)}</span>
+                                          </a>
+                                          {showRealizedPnl && hasMeaningfulRealizedPnl ? (
+                                            <span className={`relative z-[1] shrink-0 whitespace-nowrap text-[11px] font-medium ${pnlClass}`}>
+                                              {event.closedPnl >= 0 ? '+' : '-'}
+                                              {formatCompactUsd(Math.abs(event.closedPnl))}
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                        <div className="relative z-[1] truncate whitespace-nowrap text-[11px] font-semibold leading-tight text-zinc-100">
+                                          {summaryLine}
+                                        </div>
+                                        <div className="relative z-[1] flex items-center justify-end gap-1.5 pt-0.5 flex-nowrap">
+                                          <span className="shrink-0 whitespace-nowrap text-[10px] text-zinc-300">
+                                            {formatTime(event.time)}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="px-1 pb-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500 text-right">
+                            Virtuals
+                          </div>
+                          <div className="relative pl-3">
+                            <div className="pointer-events-none absolute bottom-0 left-[5px] top-0 w-px bg-emerald-300/25" />
+                            <div className="space-y-1.5">
+                              {virtualsTimelineTradeEvents.map((event, index) => {
+                                const source = tradeSourceMeta(event.source)
+                                const marketCoin =
+                                  ((event.market ?? effectiveMarket).split('/')[0] ?? '').toUpperCase() || 'TOKEN'
+                                const showRealizedPnl = event.action === 'close' || event.action === 'liquidated'
+                                const hasMeaningfulRealizedPnl = Math.abs(event.closedPnl ?? 0) >= 0.005
+                                const pnlClass = event.closedPnl >= 0 ? 'text-emerald-200' : 'text-rose-200'
+                                const summaryLine = buildTradeSummaryLine(event, marketCoin)
+                                return (
+                                  <div key={`virtuals-timeline-row-${event.id}-${index}`} className="relative">
+                                    <span className="pointer-events-none absolute left-[-10px] top-3 block h-2 w-2 rounded-full bg-emerald-300/80" />
+                                    <div
+                                      data-event-id={event.id}
+                                      onClick={() => setSelectedEventId(event.id)}
+                                      onKeyDown={(keyboardEvent) => {
+                                        if (keyboardEvent.key === 'Enter' || keyboardEvent.key === ' ') {
+                                          keyboardEvent.preventDefault()
+                                          setSelectedEventId(event.id)
+                                        }
+                                      }}
+                                      role="button"
+                                      tabIndex={0}
+                                      className={`relative w-full overflow-hidden text-left rounded-lg p-2 text-xs transition border border-emerald-300/20 bg-emerald-400/12 hover:bg-emerald-400/16 ${
+                                        selectedEventId === event.id
+                                          ? 'ring-1 ring-sky-300/70'
+                                          : hoveredEventId === event.id
+                                            ? 'ring-1 ring-violet-300/55'
+                                            : ''
+                                      }`}
+                                    >
+                                      <div className="relative space-y-1">
+                                        <img
+                                          src={source.logo}
+                                          alt=""
+                                          aria-hidden="true"
+                                          className="pointer-events-none absolute -right-5 -top-3 h-20 w-20 select-none object-contain opacity-[0.15]"
+                                          loading="lazy"
+                                        />
+                                        <div className="flex items-center justify-between gap-1.5">
+                                          <a
+                                            href={source.href}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(clickEvent) => clickEvent.stopPropagation()}
+                                            className="relative z-[1] inline-flex min-w-0 items-center gap-1.5 text-[12px] font-semibold leading-snug text-zinc-100 underline-offset-2 transition hover:text-white hover:underline"
+                                          >
+                                            <img
+                                              src={source.logo}
+                                              alt={source.logoAlt}
+                                              className="h-3.5 w-3.5 shrink-0 object-contain"
+                                              loading="lazy"
+                                            />
+                                            <span className="truncate whitespace-nowrap">{describeTradeEventAction(event)}</span>
+                                          </a>
+                                          {showRealizedPnl && hasMeaningfulRealizedPnl ? (
+                                            <span className={`relative z-[1] shrink-0 whitespace-nowrap text-[11px] font-medium ${pnlClass}`}>
+                                              {event.closedPnl >= 0 ? '+' : '-'}
+                                              {formatCompactUsd(Math.abs(event.closedPnl))}
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                        <div className="relative z-[1] truncate whitespace-nowrap text-[11px] font-semibold leading-tight text-zinc-100">
+                                          {summaryLine}
+                                        </div>
+                                        <div className="relative z-[1] flex items-center justify-end gap-1.5 pt-0.5 flex-nowrap">
+                                          <span className="shrink-0 whitespace-nowrap text-[10px] text-zinc-300">
+                                            {formatTime(event.time)}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>

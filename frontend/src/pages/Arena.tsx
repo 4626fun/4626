@@ -2,8 +2,10 @@ import { useEffect, useId, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { SlidersHorizontal } from 'lucide-react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
 import { PageMeta, META } from '@/components/seo/PageMeta'
+import { useBacktestAudit } from '@/hooks/useBacktestAudit'
 import { useBacktestMarkets } from '@/hooks/useBacktestMarkets'
 import { useBacktestSweep } from '@/hooks/useBacktestSweep'
 import { useCounterTradeStatus } from '@/hooks/useCounterTradeStatus'
@@ -36,6 +38,20 @@ function chooseBacktestInterval(windowHours: number): '1m' | '5m' | '15m' | '1h'
   if (windowHours <= 24 * 14) return '5m'
   if (windowHours <= 24 * 30) return '15m'
   return '1h'
+}
+
+function buildBacktestRunIdFromRow(row: {
+  symbol: string
+  interval: string
+  windowHours: number
+  leverage: number
+  healthFloor: number
+  deadband: number
+  minChunkUsd: number
+  maxChunkUsd: number
+  cooldownBars: number
+}): string {
+  return `${row.symbol}-${row.interval}-${row.windowHours}-${row.leverage}-${row.healthFloor}-${row.deadband}-${row.minChunkUsd}-${row.maxChunkUsd}-${row.cooldownBars}`
 }
 
 const counterTradeFileGroups = [
@@ -786,6 +802,7 @@ export function ArenaBacktestPage() {
   const [healthFloorFilter, setHealthFloorFilter] = useState<string>('all')
   const [chunkFilter, setChunkFilter] = useState<string>('all')
   const [cooldownFilter, setCooldownFilter] = useState<string>('all')
+  const [noCommingleOnly, setNoCommingleOnly] = useState<boolean>(true)
   const [topN, setTopN] = useState<number>(10)
   const [isRunning, setIsRunning] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
@@ -803,6 +820,7 @@ export function ArenaBacktestPage() {
     minChunkUsd: 500,
     maxChunkUsd: 800,
     cooldownBars: 3,
+    requireNoCommingle: true,
   })
   const marketsQuery = useBacktestMarkets()
   const sweep = useBacktestSweep({ file: selectedFile })
@@ -833,13 +851,19 @@ export function ArenaBacktestPage() {
       if (healthFloorFilter !== 'all' && String(row.healthFloor) !== healthFloorFilter) return false
       if (chunkFilter !== 'all' && `${row.minChunkUsd}-${row.maxChunkUsd}` !== chunkFilter) return false
       if (cooldownFilter !== 'all' && String(row.cooldownBars) !== cooldownFilter) return false
+      if (noCommingleOnly && row.commingleViolationCount > 0) return false
       return true
     })
     return byFilter.sort((a, b) => b.objective - a.objective)
-  }, [sweep.data, healthFloorFilter, chunkFilter, cooldownFilter])
+  }, [sweep.data, healthFloorFilter, chunkFilter, cooldownFilter, noCommingleOnly])
 
   const topRows = useMemo(() => filteredRows.slice(0, topN), [filteredRows, topN])
   const selectedTopRow = topRows[0] ?? null
+  const selectedRunId = useMemo(
+    () => (selectedTopRow ? buildBacktestRunIdFromRow(selectedTopRow) : null),
+    [selectedTopRow],
+  )
+  const auditQuery = useBacktestAudit({ file: selectedFile, runId: selectedRunId })
   const runFileOptions = useMemo(() => {
     const files = sweep.data?.files ?? []
     return files.map((file) => {
@@ -878,6 +902,16 @@ export function ArenaBacktestPage() {
     [availableMarkets, defaults.market],
   )
   const leverageMax = selectedMarket?.maxLeverage ?? 40
+  const intervalMinutes = useMemo(() => {
+    if (intervalForWindow === '1m') return 1
+    if (intervalForWindow === '5m') return 5
+    if (intervalForWindow === '15m') return 15
+    return 60
+  }, [intervalForWindow])
+  const rebalanceCooldownMinutes = defaults.cooldownBars * intervalMinutes
+  const totalLongCapitalUsd = defaults.initialLongMarginUsd + defaults.initialLongBufferUsd
+  const totalShortCapitalUsd = defaults.initialShortMarginUsd + defaults.initialShortBufferUsd
+  const totalCapitalUsd = totalLongCapitalUsd + totalShortCapitalUsd
 
   useEffect(() => {
     if (availableMarkets.length === 0) return
@@ -912,6 +946,7 @@ export function ArenaBacktestPage() {
       `--min-chunks ${defaults.minChunkUsd}`,
       `--max-chunks ${defaults.maxChunkUsd}`,
       `--cooldowns ${defaults.cooldownBars}`,
+      `--require-no-commingle ${defaults.requireNoCommingle ? 1 : 0}`,
     ].join(' ')
   }, [defaults, inferredSymbol, intervalForWindow])
 
@@ -938,6 +973,7 @@ export function ArenaBacktestPage() {
           minChunkUsd: defaults.minChunkUsd,
           maxChunkUsd: defaults.maxChunkUsd,
           cooldownBars: defaults.cooldownBars,
+          requireNoCommingle: defaults.requireNoCommingle,
         }),
       })
       const payload = await response.json().catch(() => null)
@@ -976,24 +1012,37 @@ export function ArenaBacktestPage() {
   const formatNum = (value: number, digits = 4) =>
     new Intl.NumberFormat('en-US', { maximumFractionDigits: digits, minimumFractionDigits: 0 }).format(value)
   const formatPct = (value: number) => `${(value * 100).toFixed(2)}%`
+  const playbackData = useMemo(() => {
+    const rows = auditQuery.data?.rows ?? []
+    return rows
+      .slice()
+      .sort((a, b) => a.stepIndex - b.stepIndex)
+      .map((row) => ({
+        step: row.stepIndex,
+        mark: row.mark,
+        weakHealth: row.weakHealth,
+        healthGap: row.healthGap,
+        isolated: row.noCrossLegTransfer ? 1 : 0,
+      }))
+  }, [auditQuery.data?.rows])
   const scenarioStatement = selectedTopRow
-    ? `Scenario: ${selectedTopRow.symbol} moved from ${formatUsd(selectedTopRow.startPrice)} to ${formatUsd(selectedTopRow.endPrice)} (${formatPct(selectedTopRow.priceChangePct)}) over ${formatNum(selectedTopRow.windowHours, 0)}h on ${selectedTopRow.interval} candles; with ${selectedTopRow.leverage}x leverage and isolated legs, this setup ended at ${formatUsd(selectedTopRow.finalEquity)} after ${formatNum(selectedTopRow.rebalanceCount, 0)} rebalances, with long/short BTC at ${formatNum(selectedTopRow.finalLongQty, 6)} / ${formatNum(selectedTopRow.finalShortQty, 6)}.`
+    ? `Scenario: ${selectedTopRow.symbol} moved from ${formatUsd(selectedTopRow.startPrice)} to ${formatUsd(selectedTopRow.endPrice)} (${formatPct(selectedTopRow.priceChangePct)}) over ${formatNum(selectedTopRow.windowHours, 0)}h on ${selectedTopRow.interval} candles; with ${selectedTopRow.leverage}x leverage and isolated legs, this setup ended at ${formatUsd(selectedTopRow.finalEquity)} after ${formatNum(selectedTopRow.rebalanceCount, 0)} rebalances, with long/short BTC at ${formatNum(selectedTopRow.finalLongQty, 6)} / ${formatNum(selectedTopRow.finalShortQty, 6)} and ${formatNum(selectedTopRow.commingleViolationCount, 0)} cross-leg commingle violations.`
     : null
 
   return (
     <article className={`${shellToneCard} p-8 sm:p-12`}>
-      <div className="max-w-7xl space-y-6">
+      <div className="max-w-none space-y-6">
         <div className="label">Backtesting workspace</div>
         <h2 className="headline text-3xl sm:text-5xl">Arena strategy backtests</h2>
         <p className="text-base sm:text-lg text-zinc-300 leading-relaxed">
-          Pick a past backtest run, review the strongest setups, and tune values you want to try next.
+          Configure one run directly: choose market, set long/short margin and buffers, pick lookback depth, tune rebalance
+          timing, then run and inspect non-commingled outcomes.
         </p>
 
-        <div className="grid gap-4 lg:grid-cols-3">
-          <div className="rounded-2xl border border-zinc-900/70 bg-black/25 p-5 sm:p-6 space-y-3">
-            <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Step 1</div>
-            <h3 className="text-xl text-zinc-100">Backtest run</h3>
-            <p className="text-sm text-zinc-400">Choose which saved run results to view.</p>
+        <div className="rounded-2xl border border-zinc-900/70 bg-black/25 p-5 sm:p-6 space-y-4">
+          <h3 className="text-xl text-zinc-100">Run configuration</h3>
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <label className="block text-xs uppercase tracking-[0.16em] text-zinc-500">
               Saved runs
               <select
@@ -1008,20 +1057,8 @@ export function ArenaBacktestPage() {
                 ))}
               </select>
             </label>
-            <button
-              type="button"
-              onClick={() => void sweep.refetch()}
-              className="inline-flex items-center rounded-lg bg-zinc-900 px-3 py-2 text-xs text-zinc-100 hover:bg-zinc-800"
-            >
-              Refresh
-            </button>
-          </div>
-
-          <div className="rounded-2xl border border-zinc-900/70 bg-black/25 p-5 sm:p-6 space-y-3">
-            <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Step 2</div>
-            <h3 className="text-xl text-zinc-100">Filters</h3>
             <label className="block text-xs uppercase tracking-[0.16em] text-zinc-500">
-              Health floor
+              Health floor filter
               <select
                 value={healthFloorFilter}
                 onChange={(event) => setHealthFloorFilter(event.target.value)}
@@ -1036,7 +1073,7 @@ export function ArenaBacktestPage() {
               </select>
             </label>
             <label className="block text-xs uppercase tracking-[0.16em] text-zinc-500">
-              Chunk range
+              Chunk range filter
               <select
                 value={chunkFilter}
                 onChange={(event) => setChunkFilter(event.target.value)}
@@ -1051,7 +1088,7 @@ export function ArenaBacktestPage() {
               </select>
             </label>
             <label className="block text-xs uppercase tracking-[0.16em] text-zinc-500">
-              Cooldown bars
+              Cooldown filter
               <select
                 value={cooldownFilter}
                 onChange={(event) => setCooldownFilter(event.target.value)}
@@ -1067,10 +1104,98 @@ export function ArenaBacktestPage() {
             </label>
           </div>
 
-          <div className="rounded-2xl border border-zinc-900/70 bg-black/25 p-5 sm:p-6 space-y-3">
-            <div className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Step 3</div>
-            <h3 className="text-xl text-zinc-100">Run configuration</h3>
-            <div className="grid grid-cols-2 gap-2 text-sm text-zinc-300">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void sweep.refetch()}
+              className="inline-flex items-center rounded-lg bg-zinc-900 px-3 py-2 text-xs text-zinc-100 hover:bg-zinc-800"
+            >
+              Refresh runs
+            </button>
+            <label className="flex items-center gap-2 text-xs uppercase tracking-[0.16em] text-zinc-400">
+              <input
+                type="checkbox"
+                checked={noCommingleOnly}
+                onChange={(event) => setNoCommingleOnly(event.target.checked)}
+                className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-sky-500"
+              />
+              no-commingle rows only
+            </label>
+          </div>
+
+          <div className="grid gap-2 md:grid-cols-4">
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2">
+              <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Long side capital</div>
+              <div className="text-sm text-zinc-100">{formatUsd(totalLongCapitalUsd)}</div>
+            </div>
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2">
+              <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Short side capital</div>
+              <div className="text-sm text-zinc-100">{formatUsd(totalShortCapitalUsd)}</div>
+            </div>
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2">
+              <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Total capital</div>
+              <div className="text-sm text-zinc-100">{formatUsd(totalCapitalUsd)}</div>
+            </div>
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2">
+              <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Data frequency</div>
+              <div className="text-sm text-zinc-100">{intervalForWindow}</div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Quick presets</span>
+            <button
+              type="button"
+              onClick={() =>
+                setDefaults((current) => ({
+                  ...current,
+                  healthFloor: 1.05,
+                  deadband: 0.06,
+                  minChunkUsd: 250,
+                  maxChunkUsd: 500,
+                  cooldownBars: 3,
+                }))
+              }
+              className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-900"
+            >
+              Frequent
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setDefaults((current) => ({
+                  ...current,
+                  healthFloor: 0.95,
+                  deadband: 0.1,
+                  minChunkUsd: 500,
+                  maxChunkUsd: 800,
+                  cooldownBars: 6,
+                }))
+              }
+              className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-900"
+            >
+              Balanced
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setDefaults((current) => ({
+                  ...current,
+                  healthFloor: 0.8,
+                  deadband: 0.16,
+                  minChunkUsd: 800,
+                  maxChunkUsd: 1500,
+                  cooldownBars: 12,
+                }))
+              }
+              className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-900"
+            >
+              Conservative
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-sm text-zinc-300 lg:grid-cols-3 2xl:grid-cols-4">
+              <div className="col-span-full text-[11px] uppercase tracking-[0.14em] text-zinc-500">Market and horizon</div>
               <label className="text-zinc-500">
                 Market
                 <select
@@ -1120,6 +1245,7 @@ export function ArenaBacktestPage() {
                   className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
                 />
               </label>
+              <div className="col-span-full text-[11px] uppercase tracking-[0.14em] text-zinc-500 mt-1">Capital allocation</div>
               <label className="text-zinc-500">
                 Long margin (USD)
                 <input
@@ -1180,8 +1306,9 @@ export function ArenaBacktestPage() {
                   className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
                 />
               </label>
+              <div className="col-span-full text-[11px] uppercase tracking-[0.14em] text-zinc-500 mt-1">Rebalance policy</div>
               <label className="text-zinc-500">
-                healthFloor
+                Weak-leg health trigger
                 <input
                   type="number"
                   step="0.001"
@@ -1193,7 +1320,7 @@ export function ArenaBacktestPage() {
                 />
               </label>
               <label className="text-zinc-500">
-                deadband
+                Rebalance deadband
                 <input
                   type="number"
                   step="0.001"
@@ -1205,7 +1332,7 @@ export function ArenaBacktestPage() {
                 />
               </label>
               <label className="text-zinc-500">
-                min chunk
+                Min rebalance size (USD)
                 <input
                   type="number"
                   value={defaults.minChunkUsd}
@@ -1216,7 +1343,7 @@ export function ArenaBacktestPage() {
                 />
               </label>
               <label className="text-zinc-500">
-                max chunk
+                Max rebalance size (USD)
                 <input
                   type="number"
                   value={defaults.maxChunkUsd}
@@ -1227,7 +1354,7 @@ export function ArenaBacktestPage() {
                 />
               </label>
               <label className="text-zinc-500 col-span-2">
-                cooldown bars
+                Minimum bars between rebalances
                 <input
                   type="number"
                   value={defaults.cooldownBars}
@@ -1237,36 +1364,60 @@ export function ArenaBacktestPage() {
                   className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
                 />
               </label>
-            </div>
-            <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 p-2 text-xs text-zinc-400 space-y-1">
-              <p>
-                Historical interval for selected timeframe: <span className="text-zinc-100">{intervalForWindow}</span>
-              </p>
-              <p>
-                Constraints: leverage 1-{leverageMax}x for {defaults.market}, USD inputs must be positive, legs stay isolated
-                (no cross-leg fund transfers).
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => void handleRunBacktest()}
-                disabled={isRunning}
-                className="inline-flex items-center rounded-lg bg-sky-700 px-3 py-2 text-xs text-white hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isRunning ? 'Running backtest...' : 'Run backtest'}
-              </button>
-            </div>
-            {runError ? <p className="text-xs text-red-300">{runError}</p> : null}
-            {runOutput ? (
-              <pre className="max-h-36 overflow-auto rounded-lg border border-zinc-800 bg-zinc-950/60 p-2 text-[11px] text-zinc-300 whitespace-pre-wrap">
-                {runOutput}
-              </pre>
-            ) : null}
-            <p className="text-xs text-zinc-500 break-all">
-              <code className="text-zinc-300">{runCommand}</code>
-            </p>
+              <label className="text-zinc-500 col-span-2 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={defaults.requireNoCommingle}
+                  onChange={(event) =>
+                    setDefaults((current) => ({ ...current, requireNoCommingle: event.target.checked }))
+                  }
+                  className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-sky-500"
+                />
+                Hard-enforce no commingling during run
+              </label>
           </div>
+
+          <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 p-2 text-xs text-zinc-400 space-y-1">
+            <p>
+              Historical interval for selected timeframe: <span className="text-zinc-100">{intervalForWindow}</span>
+            </p>
+            <p>
+              Rebalance timing: at least{' '}
+              <span className="text-zinc-100">
+                {defaults.cooldownBars} bars (~{formatNum(rebalanceCooldownMinutes, 0)} min)
+              </span>{' '}
+              between rebalances.
+            </p>
+            <p>
+              Constraints: leverage 1-{leverageMax}x for {defaults.market}, USD inputs must be positive, legs stay isolated
+              (no cross-leg fund transfers).
+            </p>
+            {defaults.requireNoCommingle ? (
+              <p className="text-sky-200">
+                Run mode: hard-enforced isolation. Backtest run fails if any cross-leg commingle violation is detected.
+              </p>
+            ) : null}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleRunBacktest()}
+              disabled={isRunning}
+              className="inline-flex items-center rounded-lg bg-sky-700 px-3 py-2 text-xs text-white hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isRunning ? 'Running backtest...' : 'Run backtest'}
+            </button>
+          </div>
+          {runError ? <p className="text-xs text-red-300">{runError}</p> : null}
+          {runOutput ? (
+            <pre className="max-h-36 overflow-auto rounded-lg border border-zinc-800 bg-zinc-950/60 p-2 text-[11px] text-zinc-300 whitespace-pre-wrap">
+              {runOutput}
+            </pre>
+          ) : null}
+          <p className="text-xs text-zinc-500 break-all">
+            <code className="text-zinc-300">{runCommand}</code>
+          </p>
         </div>
 
         {selectedTopRow ? (
@@ -1285,6 +1436,58 @@ export function ArenaBacktestPage() {
                 <p>{scenarioStatement}</p>
               </div>
             ) : null}
+            <div className="rounded-xl border border-zinc-900/70 bg-zinc-950/40 p-3">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <h4 className="text-sm uppercase tracking-[0.14em] text-zinc-400">Playback chart</h4>
+                {selectedRunId ? <code className="text-[10px] text-zinc-500">{selectedRunId}</code> : null}
+              </div>
+              {auditQuery.isLoading ? (
+                <p className="text-xs text-zinc-500">Loading playback data...</p>
+              ) : auditQuery.error ? (
+                <p className="text-xs text-red-300">
+                  {(auditQuery.error as Error).message || 'Failed to load playback chart.'}
+                </p>
+              ) : playbackData.length === 0 ? (
+                <p className="text-xs text-zinc-500">No playback points found for this parameter set.</p>
+              ) : (
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={playbackData} margin={{ top: 6, right: 16, left: 6, bottom: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                      <XAxis dataKey="step" tick={{ fill: '#a1a1aa', fontSize: 11 }} />
+                      <YAxis
+                        yAxisId="price"
+                        tick={{ fill: '#a1a1aa', fontSize: 11 }}
+                        stroke="#a1a1aa"
+                        tickFormatter={(value: number) => formatNum(value, 0)}
+                      />
+                      <YAxis
+                        yAxisId="health"
+                        orientation="right"
+                        domain={[0, 'auto']}
+                        tick={{ fill: '#93c5fd', fontSize: 11 }}
+                        stroke="#93c5fd"
+                      />
+                      <Tooltip
+                        contentStyle={{ background: '#0a0a0a', border: '1px solid #27272a', color: '#e4e4e7' }}
+                        labelStyle={{ color: '#a1a1aa' }}
+                        formatter={(value: unknown, name: string | number) => {
+                          const numeric = typeof value === 'number' ? value : Number(value ?? 0)
+                          const label = String(name)
+                          if (label === 'mark') return [formatUsd(numeric), 'Price']
+                          if (label === 'weakHealth') return [formatNum(numeric, 3), 'Weak health']
+                          if (label === 'healthGap') return [formatNum(numeric, 3), 'Health gap']
+                          return [formatNum(numeric, 3), label]
+                        }}
+                      />
+                      <Line yAxisId="price" type="monotone" dataKey="mark" stroke="#f97316" dot={false} strokeWidth={2} />
+                      <Line yAxisId="health" type="monotone" dataKey="weakHealth" stroke="#38bdf8" dot={false} strokeWidth={2} />
+                      <Line yAxisId="health" type="monotone" dataKey="healthGap" stroke="#22c55e" dot={false} strokeWidth={1.5} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
           </div>
         ) : null}
 

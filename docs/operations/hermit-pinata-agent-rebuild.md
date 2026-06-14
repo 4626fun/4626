@@ -124,4 +124,4 @@ See also: [`hermit-pinata-spanish.md`](hermit-pinata-spanish.md), [`alfaclub-cre
 
 ## 5. Delete old agent (optional)
 
-**Done (2026-05-18):** replaced stuck `xno7wq81` with **`x7lmjaxx`** (`https://x7lmjaxx.agents.pinata.cloud`). Update Vercel `HERMIT_PINATA_*` + `GATEWAY_TOKEN` to match `pinata agents get x7lmjaxx` if production still points at the old id.
+**Done (2026-06-14):** replaced `x7lmjaxx` with **`x6bk3ima`** (`https://x6bk3ima.agents.pinata.cloud`) during a single-agent-plan destructive rebuild. Update Vercel `HERMIT_PINATA_*` + `GATEWAY_TOKEN` to match `pinata agents get x6bk3ima` if production still points at the old id.

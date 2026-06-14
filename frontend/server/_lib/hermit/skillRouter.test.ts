@@ -799,7 +799,7 @@ describe('executeHermitCommand', () => {
   })
 
   it('pinataEndpointSupportsHttpDraft accepts hosted HTTPS endpoints', () => {
-    expect(pinataEndpointSupportsHttpDraft('https://x7lmjaxx.agents.pinata.cloud')).toBe(true)
+    expect(pinataEndpointSupportsHttpDraft('https://x6bk3ima.agents.pinata.cloud')).toBe(true)
     expect(pinataEndpointSupportsHttpDraft('https://pinata.example/chat')).toBe(true)
   })
 

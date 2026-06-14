@@ -1,6 +1,11 @@
 import { sanitizeCrossAppRedirectUrlForAuth, isPrivyRedirectUrlNotAllowedError } from '@/hooks/siweAuthCrossApp'
 
 type CrossAppFn = ((params: { appId: string }) => Promise<unknown>) | null | undefined
+const LOCALHOST_PRIVY_CUSTOM_DOMAIN_MESSAGE =
+  'Privy localhost + custom domain (privy.4626.fun) configuration required for OAuth/Zora linking. ' +
+  'In your Privy dashboard, for the Local Dev client: add http://localhost:5173 and http://localhost:5174 (and 127.0.0.1 variants) to Allowed Origins, ' +
+  'and allow the redirect URLs produced by your VITE_APP_ORIGIN / VITE_MARKETING_ORIGIN. ' +
+  'Then restart your dev server. See .env.example for details.'
 
 function readErrorStatusCode(error: unknown): number | null {
   const candidate = Number(
@@ -53,6 +58,8 @@ export function isRecoverableCrossAppAuthError(error: unknown): boolean {
   if (!message) return false
   // Some Privy cross-app lanes return only this generic string.
   return (
+    message.includes('unknown rpc error occurred') ||
+    message.includes('unable to connect to wallet') ||
     message.includes('authentication failed') ||
     message.includes('issue connecting your zora account') ||
     message.includes('issue connecting your account') ||
@@ -102,20 +109,6 @@ export async function performZoraCrossAppAuth(params: {
   const sanitizeRedirect = params.sanitizeRedirect ?? sanitizeCrossAppRedirectUrlForAuth
   const isRedirectUrlNotAllowedError = params.isRedirectUrlNotAllowedError ?? isPrivyRedirectUrlNotAllowedError
 
-  // Short-circuit on localhost with custom domain to avoid the 401 on /oauth/link
-  // and give immediate actionable guidance instead of a failing network request.
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname.toLowerCase()
-    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
-      throw new Error(
-        'Privy localhost + custom domain (privy.4626.fun) configuration required for OAuth/Zora linking. ' +
-        'In your Privy dashboard, for the Local Dev client: add http://localhost:5173 and http://localhost:5174 (and 127.0.0.1 variants) to Allowed Origins, ' +
-        'and allow the redirect URLs produced by your VITE_APP_ORIGIN / VITE_MARKETING_ORIGIN. ' +
-        'Then restart your dev server. See .env.example for details.'
-      )
-    }
-  }
-
   const hasLink = typeof params.linkCrossAppAccount === 'function'
   const hasLogin = typeof params.loginWithCrossAppAccount === 'function'
   const action = params.privyAuthed ? (hasLink ? 'link' : hasLogin ? 'login' : null) : (hasLogin ? 'login' : hasLink ? 'link' : null)
@@ -130,12 +123,7 @@ export async function performZoraCrossAppAuth(params: {
       return
     } catch (linkError: unknown) {
       if (isLocalhostPrivyCustomDomainConfigError(linkError)) {
-        throw new Error(
-          'Privy localhost + custom domain (privy.4626.fun) configuration required for OAuth/Zora linking. ' +
-            'In your Privy dashboard, for the Local Dev client: add http://localhost:5173 and http://localhost:5174 (and 127.0.0.1 variants) to Allowed Origins, ' +
-            'and allow the redirect URLs produced by your VITE_APP_ORIGIN / VITE_MARKETING_ORIGIN. ' +
-            'Then restart your dev server. See .env.example for details.'
-        )
+        throw new Error(LOCALHOST_PRIVY_CUSTOM_DOMAIN_MESSAGE)
       }
       if (
         hasLogin &&
@@ -155,12 +143,7 @@ export async function performZoraCrossAppAuth(params: {
     )
   } catch (loginError: unknown) {
     if (isLocalhostPrivyCustomDomainConfigError(loginError)) {
-      throw new Error(
-        'Privy localhost + custom domain (privy.4626.fun) configuration required for OAuth/Zora linking. ' +
-          'In your Privy dashboard, for the Local Dev client: add http://localhost:5173 and http://localhost:5174 (and 127.0.0.1 variants) to Allowed Origins, ' +
-          'and allow the redirect URLs produced by your VITE_APP_ORIGIN / VITE_MARKETING_ORIGIN. ' +
-          'Then restart your dev server. See .env.example for details.'
-      )
+      throw new Error(LOCALHOST_PRIVY_CUSTOM_DOMAIN_MESSAGE)
     }
     // Some Privy environments surface a generic "Authentication failed" on one lane
     // while the companion cross-app lane succeeds. Mirror the link->login fallback.

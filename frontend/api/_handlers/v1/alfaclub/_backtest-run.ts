@@ -30,6 +30,7 @@ type BacktestRunBody = {
   minChunkUsd?: unknown
   maxChunkUsd?: unknown
   cooldownBars?: unknown
+  requireNoCommingle?: unknown
 }
 
 function toPositiveNumber(value: unknown, fallback: number): number {
@@ -47,6 +48,17 @@ function toNonNegativeInt(value: unknown, fallback: number): number {
   const numeric = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(numeric)) return fallback
   return Math.max(0, Math.floor(numeric))
+}
+
+function toBoolean(value: unknown, fallback: boolean): boolean {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value !== 0
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    if (['1', 'true', 'yes', 'on'].includes(normalized)) return true
+    if (['0', 'false', 'no', 'off'].includes(normalized)) return false
+  }
+  return fallback
 }
 
 function parseInterval(value: unknown, windowHours: number): '1m' | '5m' | '15m' | '1h' {
@@ -97,6 +109,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const minChunkUsd = toPositiveNumber(body.minChunkUsd, 500)
   const maxChunkUsd = toPositiveNumber(body.maxChunkUsd, Math.max(500, minChunkUsd))
   const cooldownBars = toNonNegativeInt(body.cooldownBars, 3)
+  const requireNoCommingle = toBoolean(body.requireNoCommingle, true)
 
   const frontendCwd = resolveFrontendCwd()
   const args = [
@@ -129,6 +142,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     String(maxChunkUsd),
     '--cooldowns',
     String(cooldownBars),
+    '--require-no-commingle',
+    requireNoCommingle ? '1' : '0',
   ]
 
   try {
@@ -158,6 +173,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           minChunkUsd,
           maxChunkUsd,
           cooldownBars,
+          requireNoCommingle,
         },
       },
     } satisfies ApiEnvelope<{
@@ -177,6 +193,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         minChunkUsd: number
         maxChunkUsd: number
         cooldownBars: number
+        requireNoCommingle: boolean
       }
     }>)
   } catch (error) {

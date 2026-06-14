@@ -1,30 +1,10 @@
 import type { Address } from 'viem'
+import { resolveServerBaseRpcUrls } from '../onchain/baseRpcUrl.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
-function normalizeRpcUrl(raw: string): string | null {
-  const t = raw.trim()
-  if (!t) return null
-  if (!t.startsWith('http://') && !t.startsWith('https://')) return `https://${t}`
-  return t
-}
-
-const DEFAULT_BASE_RPCS = [
-  'https://base-mainnet.public.blastapi.io',
-  'https://base.llamarpc.com',
-  'https://mainnet.base.org',
-] as const
-
 function getBaseRpcUrls(): string[] {
-  const raw = (process.env.BASE_RPC_URL ?? '').trim()
-  const parts = raw
-    ? raw
-        .split(/[\s,]+/g)
-        .map(normalizeRpcUrl)
-        .filter((x): x is string => Boolean(x))
-    : []
-  const urls = parts.length > 0 ? [...parts, ...DEFAULT_BASE_RPCS] : [...DEFAULT_BASE_RPCS]
-  return Array.from(new Set(urls))
+  return resolveServerBaseRpcUrls()
 }
 
 export function getKeeprBaseRpcUrls(): string[] {

@@ -231,6 +231,7 @@ export function deriveCounterTradeDecision(params: {
   userLeverage: number | null
   runtime: CounterTradeRuntimeConfig
   counterWalletState: HyperliquidClearinghouseState | null
+  strictInverseParity?: boolean
 }): CounterTradeDecision {
   const fillAction = classifyCounterTradeFillAction(params.fill)
   if (fillAction === 'reduce' || fillAction === 'close' || fillAction === 'liquidated') {
@@ -253,16 +254,21 @@ export function deriveCounterTradeDecision(params: {
   const presetCaps = PRESET_CAPS[params.preset]
   const favoredDirection = isFavoredDirection({ bias: params.bias, userSide })
   const counterSide = deriveCounterSide(userSide)
+  const strictInverseParity = params.strictInverseParity === true
 
   const leverageMultiplier =
-    params.bias === 'neutral'
+    strictInverseParity
+      ? 1
+      : params.bias === 'neutral'
       ? params.runtime.neutralMultiplier
       : favoredDirection
         ? params.runtime.favoredMultiplier
         : params.runtime.unfavoredMultiplier
 
   const notionalRatio =
-    params.bias === 'neutral'
+    strictInverseParity
+      ? 1
+      : params.bias === 'neutral'
       ? params.runtime.neutralNotionalRatio
       : favoredDirection
         ? params.runtime.favoredNotionalRatio
@@ -272,7 +278,9 @@ export function deriveCounterTradeDecision(params: {
   const candidateLeverage = userLeverage * leverageMultiplier
 
   const biasLeverageCap =
-    params.bias === 'neutral'
+    strictInverseParity
+      ? params.runtime.globalMaxLeverage
+      : params.bias === 'neutral'
       ? params.runtime.neutralBiasLeverageCap
       : favoredDirection
         ? params.runtime.favoredBiasLeverageCap
@@ -282,7 +290,9 @@ export function deriveCounterTradeDecision(params: {
     candidateLeverage,
     params.runtime.globalMaxLeverage,
     biasLeverageCap,
-    params.runtime.globalMaxLeverage * presetCaps.leverageCapMultiplier,
+    strictInverseParity
+      ? params.runtime.globalMaxLeverage
+      : params.runtime.globalMaxLeverage * presetCaps.leverageCapMultiplier,
   )
   const counterLeverage = toQuarter(cappedLeverage)
   if (!Number.isFinite(counterLeverage) || counterLeverage <= 0.25) {
@@ -292,7 +302,9 @@ export function deriveCounterTradeDecision(params: {
   const rawCounterNotional = params.userNotionalUsd * notionalRatio
   const counterNotionalUsd = Math.min(
     rawCounterNotional,
-    params.runtime.maxCounterNotionalPerTradeUsd * presetCaps.notionalCapMultiplier,
+    strictInverseParity
+      ? params.runtime.maxCounterNotionalPerTradeUsd
+      : params.runtime.maxCounterNotionalPerTradeUsd * presetCaps.notionalCapMultiplier,
   )
   if (!Number.isFinite(counterNotionalUsd) || counterNotionalUsd <= 0) {
     return { ok: false, reason: 'invalid_input', fillAction }

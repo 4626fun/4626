@@ -114,7 +114,7 @@ resolve_pinata_cli() {
 resolve_agent_id() {
   local endpoint="${HERMIT_AGENT_CHAT_ENDPOINT:-}"
   if [[ -z "$endpoint" ]]; then
-    echo "x7lmjaxx"
+    echo "x6bk3ima"
     return 0
   fi
   python3 - <<'PY' "$endpoint"
@@ -124,7 +124,7 @@ host = urlparse(sys.argv[1]).hostname or ""
 if host.endswith(".agents.pinata.cloud"):
     print(host.split(".", 1)[0])
 else:
-    print("x7lmjaxx")
+    print("x6bk3ima")
 PY
 }
 

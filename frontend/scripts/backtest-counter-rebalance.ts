@@ -13,6 +13,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { buildRoomTimelineData } from '../server/_lib/alfaclub/roomTimeline.js'
+import { getDb } from '../server/_lib/db/postgres.js'
 
 type Side = 'long' | 'short'
 
@@ -135,6 +136,51 @@ function parseNumberList(
   const deduped = Array.from(new Set(values))
   deduped.sort((a, b) => a - b)
   return deduped
+}
+
+function parseBooleanFlag(raw: string | undefined, defaultValue = false): boolean {
+  if (!raw) return defaultValue
+  const normalized = raw.trim().toLowerCase()
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false
+  return defaultValue
+}
+
+async function fetchMarksFromSupabaseCache(params: {
+  symbol: string
+  interval: string
+  windowHours: number
+}): Promise<number[] | null> {
+  if (params.interval !== '1m') return null
+
+  const db = await getDb().catch(() => null)
+  if (!db?.query) return null
+
+  const endTime = new Date()
+  const startTime = new Date(endTime.getTime() - params.windowHours * 60 * 60 * 1000)
+  try {
+    const sql = `
+      SELECT close
+      FROM public.backtest_market_bars_1m
+      WHERE symbol = $1
+        AND interval = '1m'
+        AND bar_time >= $2
+        AND bar_time <= $3
+      ORDER BY bar_time ASC
+    `
+    const res = await db.query(sql, [params.symbol, startTime.toISOString(), endTime.toISOString()])
+    const marks = (res.rows ?? [])
+      .map((row) => {
+        const value = (row as { close?: unknown }).close
+        if (typeof value === 'number') return value
+        const n = Number(value)
+        return Number.isFinite(n) ? n : NaN
+      })
+      .filter((n): n is number => Number.isFinite(n) && n > 0)
+    return marks
+  } catch {
+    return null
+  }
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -549,21 +595,32 @@ async function main() {
     alpha: toNum(args.get('alpha'), 0.2),
   }
 
-  const timeline = await buildRoomTimelineData({
-    roomId: '1659',
+  const cachedMarks = await fetchMarksFromSupabaseCache({
     symbol: config.symbol,
     interval: config.interval,
     windowHours: config.windowHours,
   })
-  const marks = (timeline.candles ?? [])
-    .map((c) => c.close)
-    .filter((n): n is number => Number.isFinite(n) && n > 0)
+  const marksFromCache = cachedMarks ?? []
+  let marks: number[] = marksFromCache
+  let marksSource: 'supabase' | 'live' = 'supabase'
+  if (marks.length < 20) {
+    const timeline = await buildRoomTimelineData({
+      roomId: '1659',
+      symbol: config.symbol,
+      interval: config.interval,
+      windowHours: config.windowHours,
+    })
+    marks = (timeline.candles ?? [])
+      .map((c) => c.close)
+      .filter((n): n is number => Number.isFinite(n) && n > 0)
+    marksSource = 'live'
+  }
   if (marks.length < 20) {
     throw new Error(`Not enough candle data for backtest (${marks.length})`)
   }
 
   console.log(
-    `[backtest-counter-rebalance] interval=${config.interval} windowHours=${config.windowHours} candles=${marks.length}`,
+    `[backtest-counter-rebalance] interval=${config.interval} windowHours=${config.windowHours} candles=${marks.length} source=${marksSource}`,
   )
 
   const floors = parseNumberList(args.get('floors'), [0.7, 0.75, 0.8], { min: 0.1, max: 3 })
@@ -571,6 +628,7 @@ async function main() {
   const minChunks = parseNumberList(args.get('min-chunks'), [100, 250, 500], { integer: true, min: 1 })
   const maxChunks = parseNumberList(args.get('max-chunks'), [400, 800], { integer: true, min: 1 })
   const cooldownBars = parseNumberList(args.get('cooldowns'), [3, 6, 12], { integer: true, min: 0, max: 10_000 })
+  const requireNoCommingle = parseBooleanFlag(args.get('require-no-commingle'), false)
 
   const results: BacktestResult[] = []
   const auditRows: BacktestRebalanceAuditRow[] = []
@@ -621,6 +679,17 @@ async function main() {
   writeFileSync(auditPath, toAuditCsv(auditRows), 'utf8')
   console.log(`\nSaved sweep CSV: ${outPath}`)
   console.log(`Saved rebalance audit CSV: ${auditPath}`)
+
+  if (requireNoCommingle) {
+    const violatingRuns = results.filter((row) => row.commingleViolationCount > 0)
+    if (violatingRuns.length > 0) {
+      const totalViolations = violatingRuns.reduce((sum, row) => sum + row.commingleViolationCount, 0)
+      throw new Error(
+        `No-commingle requirement failed: ${violatingRuns.length}/${results.length} parameter sets had cross-leg violations (${totalViolations} total). See ${auditPath}`,
+      )
+    }
+    console.log('No-commingle requirement passed: zero cross-leg violations across all parameter sets.')
+  }
 }
 
 void main().catch((err) => {

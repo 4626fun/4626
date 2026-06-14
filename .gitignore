@@ -124,6 +124,7 @@ logs/
 # Local workspace/tooling caches
 /.worktrees/
 /agent-hermit-x7lmjaxx/
+/agent-hermit-x6bk3ima/
 /.playwright-mcp/
 /.tmp-ssh-venv/
 /.venv-paramiko/

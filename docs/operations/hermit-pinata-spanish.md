@@ -66,7 +66,7 @@ bash frontend/scripts/hermit-seed-sync.sh verify-workspace
 bash frontend/scripts/hermit-seed-sync.sh bundle-workspace /tmp/hermit-workspace/
 bash frontend/scripts/hermit-seed-sync.sh tar-workspace /tmp/hermit-workspace.tar.gz
 
-# Pull latest from Pinata agent git (clone once at repo root: agent-hermit-x7lmjaxx/)
+# Pull latest from Pinata agent git (clone once at repo root: agent-hermit-x6bk3ima/)
 bash frontend/scripts/hermit-seed-sync.sh pull-pinata
 bash frontend/scripts/hermit-seed-sync.sh import-pinata   # after manual edits in the clone only
 ```

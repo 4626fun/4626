@@ -142,6 +142,21 @@ function decodeTokenExpMs(jwt: string | null | undefined): number | null {
   return Number.isFinite(ms) ? ms : null
 }
 
+function readEnvToken(envKey: string): string | null {
+  const raw = (process.env[envKey] ?? '').trim()
+  return raw.length > 0 ? raw : null
+}
+
+function isPrivyInvalidTokenFailure(message: string): boolean {
+  if (!message) return false
+  if (!/^privy_refresh_failed:400(?::|$)/.test(message)) return false
+  return (
+    /missing_or_invalid_token/i.test(message) ||
+    /invalid_refresh_token/i.test(message) ||
+    /invalid auth token/i.test(message)
+  )
+}
+
 /**
  * Hits Privy's session-refresh endpoint and returns the new token bundle.
  * Throws on non-2xx or malformed response. Callers are responsible for
@@ -511,7 +526,55 @@ export async function runAlfaClubPrivyRefreshOnce(
     ).catch(() => false)
     return { status: 'refreshed', identityTokenExp: newExp }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
+    let message = err instanceof Error ? err.message : String(err)
+    if (isPrivyInvalidTokenFailure(message)) {
+      const envAccessToken = readEnvToken('ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN')
+      const envRefreshToken = readEnvToken('ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN')
+      const canRetryWithEnv =
+        Boolean(envAccessToken) &&
+        Boolean(envRefreshToken) &&
+        (envAccessToken !== accessToken || envRefreshToken !== refreshToken)
+
+      if (canRetryWithEnv) {
+        log.warn('[alfaclub-refresher] retrying with env bootstrap token pair after Privy token rejection')
+        try {
+          const fallbackBundle = await refresh({
+            accessToken: envAccessToken as string,
+            refreshToken: envRefreshToken as string,
+          })
+          await writeBundle(fallbackBundle, 'privy-token-refresher', {
+            accessToken: envAccessToken as string,
+            refreshToken: envRefreshToken as string,
+          })
+          const fallbackIdentityExp = decodeTokenExpMs(fallbackBundle.identityToken)
+          const fallbackAccessExp = decodeTokenExpMs(fallbackBundle.accessToken)
+          await recordSuccess(
+            buildRefreshSuccessPayload({
+              at: new Date(now()).toISOString(),
+              identityTokenExpIso: fallbackIdentityExp
+                ? new Date(fallbackIdentityExp).toISOString()
+                : null,
+              accessTokenExpIso: fallbackAccessExp
+                ? new Date(fallbackAccessExp).toISOString()
+                : null,
+              writer: 'privy-token-refresher',
+              rotatedRefresh: fallbackBundle.refreshToken !== envRefreshToken,
+            }),
+          ).catch(() => false)
+          log.info('[alfaclub-refresher] recovered via env bootstrap token pair', {
+            newIdentityExp: fallbackIdentityExp
+              ? new Date(fallbackIdentityExp).toISOString()
+              : null,
+            newAccessExp: fallbackAccessExp ? new Date(fallbackAccessExp).toISOString() : null,
+          })
+          return { status: 'refreshed', identityTokenExp: fallbackIdentityExp }
+        } catch (fallbackErr) {
+          const fallbackMessage =
+            fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)
+          message = `${message} | env_fallback_failed:${fallbackMessage}`
+        }
+      }
+    }
     log.warn('[alfaclub-refresher] refresh failed', { error: message })
     await recordFailure(
       buildRefreshFailurePayload({

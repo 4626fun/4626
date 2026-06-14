@@ -179,6 +179,53 @@ describe('runAlfaClubPrivyRefreshOnce', () => {
     }
   })
 
+  it('retries once with env bootstrap tokens when Privy rejects DB tokens as invalid', async () => {
+    const priorAccess = process.env.ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN
+    const priorRefresh = process.env.ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN
+    process.env.ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN = 'at-env-fresh'
+    process.env.ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN = 'rt-env-fresh'
+    try {
+      const refresh = vi
+        .fn<() => Promise<PrivyRefreshBundle>>()
+        .mockRejectedValueOnce(
+          new Error(
+            'privy_refresh_failed:400:{"error":"Invalid auth token","code":"missing_or_invalid_token"}',
+          ),
+        )
+        .mockResolvedValueOnce({
+          accessToken: 'at-new',
+          identityToken: jwtWithExp(NOW_MS / 1000 + 60 * 60),
+          refreshToken: 'rt-new',
+        })
+
+      const outcome = await runAlfaClubPrivyRefreshOnce({
+        readAccessToken: async () => 'at-db-stale',
+        readRefreshToken: async () => 'rt-db-stale',
+        readIdentityToken: async () => jwtWithExp(NOW_MS / 1000 + 5 * 60),
+        refresh,
+        writeBundle: async () => {},
+        log: silentLog(),
+        now,
+      })
+
+      expect(outcome.status).toBe('refreshed')
+      expect(refresh).toHaveBeenCalledTimes(2)
+      expect(refresh).toHaveBeenNthCalledWith(1, {
+        accessToken: 'at-db-stale',
+        refreshToken: 'rt-db-stale',
+      })
+      expect(refresh).toHaveBeenNthCalledWith(2, {
+        accessToken: 'at-env-fresh',
+        refreshToken: 'rt-env-fresh',
+      })
+    } finally {
+      if (priorAccess === undefined) delete process.env.ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN
+      else process.env.ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN = priorAccess
+      if (priorRefresh === undefined) delete process.env.ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN
+      else process.env.ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN = priorRefresh
+    }
+  })
+
   it('refreshes when identity token has no decodable exp (defensive)', async () => {
     // If we can't tell when the identity token expires, default to refreshing.
     // This is safer than silently running on a stale token.

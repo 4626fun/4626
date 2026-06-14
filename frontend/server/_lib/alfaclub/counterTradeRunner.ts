@@ -80,6 +80,7 @@ export function resolveCounterTradeFillSourceWallet(params: {
 
 export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
   const runtime = readCounterTradeRuntimeConfig()
+  const strictInverseParity = runtime.roomId === '1659'
   if (!runtime.enabled || !isCounterTradeEnabledByEnv()) {
     return {
       ok: false,
@@ -427,6 +428,7 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
           userLeverage: deriveUserLeverage(fill) ?? findCoinLeverageFromState(userWalletState, fill.coin),
           runtime,
           counterWalletState,
+          strictInverseParity,
         })
 
         if (!decision.ok) {
@@ -484,22 +486,31 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
         // Optional LLM risk-review gate: it can veto or shrink the candidate
         // (never enlarge / flip / re-lever). Disabled or advisory by default;
         // see counterTradeLlmAdvisor.ts for the policy.
-        const llmGate = await applyCounterTradeLlmGate({
-          roomId: runtime.roomId,
-          pair,
-          fill,
-          fillAction: decision.fillAction,
-          bias: roomStrategy.globalBias,
-          preset: optIn.preset,
-          counterSide: decision.counterSide,
-          counterLeverage: decision.counterLeverage,
-          counterNotionalUsd: cappedCounterNotionalUsd,
-          counterWalletState,
-          hourlyExecutedCount: usageState.hourlyUsage.executedCount,
-          hourlyCap: usageState.hourlyCap,
-          dailyNotionalUsedUsd: usageState.dailyUsage.notionalUsd,
-          dailyNotionalCapUsd: usageState.dailyCap,
-        })
+        const llmGate = strictInverseParity
+          ? {
+              proceed: true,
+              notionalUsd: cappedCounterNotionalUsd,
+              evaluated: false,
+              applied: false,
+              advice: null,
+              skipReason: null,
+            }
+          : await applyCounterTradeLlmGate({
+              roomId: runtime.roomId,
+              pair,
+              fill,
+              fillAction: decision.fillAction,
+              bias: roomStrategy.globalBias,
+              preset: optIn.preset,
+              counterSide: decision.counterSide,
+              counterLeverage: decision.counterLeverage,
+              counterNotionalUsd: cappedCounterNotionalUsd,
+              counterWalletState,
+              hourlyExecutedCount: usageState.hourlyUsage.executedCount,
+              hourlyCap: usageState.hourlyCap,
+              dailyNotionalUsedUsd: usageState.dailyUsage.notionalUsd,
+              dailyNotionalCapUsd: usageState.dailyCap,
+            })
         if (!llmGate.proceed) {
           skipped += 1
           await recordCounterTradeAction({

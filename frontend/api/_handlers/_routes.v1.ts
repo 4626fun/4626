@@ -91,6 +91,7 @@ const v1RouteLoaders: ApiRouteLoaders = {
   'alfaclub/room-label-status': () => import('./v1/alfaclub/_room-label-status.js'),
   'alfaclub/counter-trade-status': () => import('./v1/alfaclub/_counter-trade-status.js'),
   'alfaclub/backtest-sweep': () => import('./v1/alfaclub/_backtest-sweep.js'),
+  'alfaclub/backtest-audit': () => import('./v1/alfaclub/_backtest-audit.js'),
   'alfaclub/backtest-markets': () => import('./v1/alfaclub/_backtest-markets.js'),
   'alfaclub/backtest-run': () => import('./v1/alfaclub/_backtest-run.js'),
   'alfaclub/room-timeline': () => import('./v1/alfaclub/_room-timeline.js'),
