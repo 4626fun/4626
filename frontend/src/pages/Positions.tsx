@@ -1046,25 +1046,25 @@ export function Positions() {
     () => {
       const resolveRangesForSource = (source: 'host' | 'counter') => {
         const ranges: Array<{ start: number; end: number }> = []
-        const openIndexBySide = new Map<string, number>()
+        const latestEntryIndexBySide = new Map<string, number>()
         for (let index = 0; index < timelineTradeRows.length; index += 1) {
           const event = timelineTradeRows[index]!
           if (event.source !== source) continue
           const action = resolveDisplayTradeAction(event)
           const side = resolveTradeSideLabel(event) ?? 'position'
-          const isOpenFamily = action === 'entry' || action === 'add' || action === 'flip'
-          const isCloseFamily = action === 'close' || action === 'liquidated'
-          if (isOpenFamily) {
-            openIndexBySide.set(side, index)
+          const isEntry = action === 'entry'
+          const isTerminalClose = action === 'close' || action === 'liquidated'
+          if (isEntry) {
+            latestEntryIndexBySide.set(side, index)
             continue
           }
-          if (!isCloseFamily) continue
+          if (!isTerminalClose) continue
           const openIndex =
-            openIndexBySide.get(side) ??
-            (side !== 'position' ? openIndexBySide.get('position') : undefined)
+            latestEntryIndexBySide.get(side) ??
+            (side !== 'position' ? latestEntryIndexBySide.get('position') : undefined)
           if (openIndex == null || openIndex >= index) continue
           ranges.push({ start: openIndex, end: index })
-          openIndexBySide.delete(side)
+          latestEntryIndexBySide.delete(side)
         }
         return ranges
       }
@@ -1517,8 +1517,6 @@ export function Positions() {
                               >
                                 {event.source === 'host' ? card : <div />}
                                 <div className="relative flex items-start justify-center">
-                                  <span className="pointer-events-none absolute inset-y-0 left-[4px] w-px bg-sky-300/20" />
-                                  <span className="pointer-events-none absolute inset-y-0 left-[11px] w-px bg-emerald-300/20" />
                                   {hasHostLifecycleConnector ? (
                                     <span className="pointer-events-none absolute inset-y-0 left-[4px] w-px bg-sky-300/45" />
                                   ) : null}
