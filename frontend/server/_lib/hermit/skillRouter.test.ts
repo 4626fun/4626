@@ -1372,7 +1372,7 @@ describe('executeHermitCommand', () => {
         HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
         HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
       })
-      fetchMock.mockRejectedValueOnce(new Error('network down'))
+      fetchMock.mockRejectedValue(new Error('network down'))
 
       await expect(
         executeHermitCommand({
@@ -1380,6 +1380,64 @@ describe('executeHermitCommand', () => {
           senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         }),
       ).rejects.toThrow('Hermit agent path unavailable')
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('posts full creative policy hints for /meme', async () => {
+      restoreEnv = applyEnv({
+        HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+        HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
+      })
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ text: '{"line":"meme prompt"}' }),
+      } as Response)
+
+      await executeHermitCommand({
+        commandText: '/meme akita cat',
+        senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      })
+
+      const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.body))
+      expect(body.hints).toMatchObject({
+        lane: 'hermit_creative',
+        route: 'meme',
+        tier: 'creative_premium',
+        maxOutputTokens: 320,
+        timeoutMs: 10000,
+      })
+      expect(body.hints.model).toContain('hermes')
+      expect(body.hints.timeoutMs).toBe(10000)
+    })
+
+    it('retries on 502 but not on 401', async () => {
+      restoreEnv = applyEnv({
+        HERMIT_AGENT_CHAT_ENDPOINT: 'https://hermit.internal/chat',
+        HERMIT_AGENT_BEARER_TOKEN: 'token-abc',
+      })
+      fetchMock
+        .mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({ error: 'Unauthorized' }) } as Response)
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ text: 'should not reach' }) } as Response)
+
+      await expect(
+        executeHermitCommand({
+          commandText: '/meme retry test',
+          senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        }),
+      ).rejects.toThrow('Hermit meme path unavailable')
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+
+      fetchMock.mockReset()
+      fetchMock
+        .mockResolvedValueOnce({ ok: false, status: 502, json: async () => ({ error: 'bad gateway' }) } as Response)
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ text: '{"line":"recovered"}' }) } as Response)
+
+      const result = await executeHermitCommand({
+        commandText: '/meme retry test',
+        senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      })
+      expect(result.kind).toBe('meme')
+      expect(fetchMock).toHaveBeenCalledTimes(2)
     })
 
     it('/gmeow degrades to local meme when the HTTP endpoint throws', async () => {

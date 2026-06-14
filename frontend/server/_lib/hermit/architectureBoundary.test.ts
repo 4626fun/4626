@@ -72,14 +72,20 @@ describe('hermit creative lane — architecture boundary', () => {
     readFileSync(resolve(here, 'skillRouter.ts'), 'utf8'),
   )
   const policySource = stripComments(readFileSync(resolve(here, 'policy.ts'), 'utf8'))
+  const creativePolicySource = stripComments(readFileSync(resolve(here, 'creativePolicy.ts'), 'utf8'))
   const memeStoreSource = stripComments(readFileSync(resolve(here, 'memeStore.ts'), 'utf8'))
   const repositorySource = stripComments(readFileSync(resolve(here, 'repository.ts'), 'utf8'))
+  const draftSource = stripComments(
+    readFileSync(resolve(here, '../../../api/_handlers/hermit/_draft.ts'), 'utf8'),
+  )
 
   const sources: Array<{ name: string; src: string }> = [
     { name: 'skillRouter.ts', src: skillRouterSource },
     { name: 'policy.ts', src: policySource },
+    { name: 'creativePolicy.ts', src: creativePolicySource },
     { name: 'memeStore.ts', src: memeStoreSource },
     { name: 'repository.ts', src: repositorySource },
+    { name: '_draft.ts', src: draftSource },
   ]
 
   const forbiddenAuthSymbols = [

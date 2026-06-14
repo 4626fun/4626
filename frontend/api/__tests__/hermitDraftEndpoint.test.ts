@@ -125,6 +125,54 @@ describe('POST /api/hermit/draft', () => {
     const call = generateTextMock.mock.calls[0][0]
     expect(call.model).toBe('openai/gpt-4.1-mini')
     expect(call.prompt).toBe('short hype line for the vault')
+    expect(call.maxRetries).toBe(0)
+  })
+
+  it('honors hints.model and hints.maxOutputTokens over env defaults', async () => {
+    const req = createMockReq({
+      method: 'POST',
+      headers: AUTH,
+      body: {
+        prompt: 'meme line',
+        hints: {
+          route: 'meme',
+          tier: 'creative_premium',
+          model: 'openai/gpt-5.4-mini',
+          maxOutputTokens: 320,
+          timeoutMs: 8000,
+        },
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(200)
+    const call = generateTextMock.mock.calls[0][0]
+    expect(call.model).toBe('openai/gpt-5.4-mini')
+    expect(call.maxOutputTokens).toBe(320)
+    expect(call.maxRetries).toBe(0)
+  })
+
+  it('routes Hermes hint through compatible provider even on gateway env', async () => {
+    restoreEnv?.()
+    restoreEnv = applyEnv({
+      HERMIT_AGENT_BEARER_TOKEN: 'secret-token',
+      HERMIT_AGENT_MODEL: 'openai/gpt-4.1-mini',
+      OPENROUTER_API_KEY: 'or-key',
+    })
+    const req = createMockReq({
+      method: 'POST',
+      headers: AUTH,
+      body: {
+        prompt: 'gm',
+        hints: { model: 'nousresearch/hermes-4-70b', maxOutputTokens: 200 },
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(createOpenAICompatibleMock).toHaveBeenCalledTimes(1)
+    expect(compatModelFactoryMock).toHaveBeenCalledWith('nousresearch/hermes-4-70b')
+    expect(generateTextMock.mock.calls[0][0].maxOutputTokens).toBe(200)
   })
 
   it('honors HERMIT_AGENT_MODEL override', async () => {

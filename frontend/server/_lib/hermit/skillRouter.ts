@@ -19,6 +19,14 @@
  */
 import { pickGmeowLocalLine, pickRandomHermitMeme } from './memeStore.js'
 import { formatHermitCommandRoomHelp } from './hermitAlfaClubHelp.js'
+import { resolveHermitCreativePolicy, type HermitCreativePolicy, type HermitDraftMode } from './creativePolicy.js'
+import {
+  classifyDraftFetchError,
+  classifyDraftHttpStatus,
+  isRetryableDraftFailure,
+  type DraftHttpFailureClass,
+  type DraftHttpResult,
+} from './draftHttpResult.js'
 import type {
   HermitExecutionParams,
   HermitExecutionResult,
@@ -87,8 +95,6 @@ type PinataChatResult = {
   text: string
 }
 
-const PINATA_HTTP_FALLBACK_TIMEOUT_MS_DEFAULT = 30_000
-
 const PINATA_AGENT_FAILURE_PATTERNS = [
   /oauth token refresh failed/i,
   /agent failed before reply/i,
@@ -105,15 +111,6 @@ export function isPinataAgentFailureReply(text: string): boolean {
   return PINATA_AGENT_FAILURE_PATTERNS.some((pattern) => pattern.test(trimmed))
 }
 
-function readPinataHttpTimeoutMs(): number {
-  const raw = asTrimmed(process.env.HERMIT_AGENT_HTTP_TIMEOUT_MS)
-  if (!raw) return PINATA_HTTP_FALLBACK_TIMEOUT_MS_DEFAULT
-  const parsed = Number(raw)
-  if (!Number.isFinite(parsed) || parsed <= 0) return PINATA_HTTP_FALLBACK_TIMEOUT_MS_DEFAULT
-  return Math.min(Math.max(Math.floor(parsed), 1_000), 120_000)
-}
-
-type HermitDraftMode = 'copy' | 'announce' | 'quest' | 'tone'
 
 function asTrimmed(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
@@ -866,13 +863,11 @@ async function runPinataDraftOverHttp(params: {
   endpoint: string
   bearer: string
   prompt: string
-}): Promise<PinataChatResult | null> {
-  // Bound by `HERMIT_AGENT_HTTP_TIMEOUT_MS` so a hung creative backend
-  // cannot stall the AlfaClub chat-bridge tick or leave a /hermit
-  // serverless invocation running until Vercel kills it.
+  policy: HermitCreativePolicy
+}): Promise<DraftHttpResult> {
   const controller = new AbortController()
-  const timeoutHandle = setTimeout(() => controller.abort(), readPinataHttpTimeoutMs())
-  let res: Response
+  const timeoutHandle = setTimeout(() => controller.abort(), params.policy.timeoutMs)
+  let res: Response | undefined
   try {
     res = await fetch(toPinataHttpChatUrl(params.endpoint), {
       method: 'POST',
@@ -880,15 +875,32 @@ async function runPinataDraftOverHttp(params: {
         Authorization: `Bearer ${params.bearer}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ prompt: params.prompt }),
+      body: JSON.stringify({
+        prompt: params.prompt,
+        hints: {
+          lane: 'hermit_creative',
+          route: params.policy.route,
+          tier: params.policy.tier,
+          model: params.policy.targetModelHint,
+          maxOutputTokens: params.policy.maxOutputTokens,
+          timeoutMs: params.policy.timeoutMs,
+        },
+      }),
       signal: controller.signal,
     })
-  } catch {
-    return null
+  } catch (error) {
+    return { ok: false, failureClass: classifyDraftFetchError(error) }
   } finally {
     clearTimeout(timeoutHandle)
   }
-  if (!res.ok) return null
+
+  if (!res) {
+    return { ok: false, failureClass: 'network' }
+  }
+
+  if (!res.ok) {
+    return { ok: false, failureClass: classifyDraftHttpStatus(res.status), status: res.status }
+  }
 
   try {
     const body = (await res.json()) as Record<string, unknown>
@@ -897,25 +909,72 @@ async function runPinataDraftOverHttp(params: {
       asTrimmed(body.response) ||
       asTrimmed(body.output) ||
       asTrimmed(body.message)
-    return text ? { text } : null
+    return text ? { ok: true, text } : { ok: false, failureClass: 'empty_body', status: res.status }
   } catch {
-    return null
+    return { ok: false, failureClass: 'server_error', status: res.status }
   }
+}
+
+function draftRetryBackoffMs(): number {
+  return 150 + Math.floor(Math.random() * 151)
 }
 
 async function runPinataDraft(params: {
   prompt: string
+  policy: HermitCreativePolicy
   senderAddress?: string
   sourceIdentity?: string | null
 }): Promise<PinataChatResult | null> {
   const cfg = readHermitAgentConfig()
   if (!cfg) return null
 
-  return runPinataDraftOverHttp({
-    endpoint: cfg.endpoint,
-    bearer: cfg.bearer,
-    prompt: params.prompt,
+  const maxAttempts = Math.max(1, params.policy.retryCount + 1)
+  const startedAtMs = Date.now()
+  let attempts = 0
+  let lastResult: PinataChatResult | null = null
+  let lastFailureClass: DraftHttpFailureClass | null = null
+  while (attempts < maxAttempts) {
+    attempts += 1
+    const httpResult = await runPinataDraftOverHttp({
+      endpoint: cfg.endpoint,
+      bearer: cfg.bearer,
+      prompt: params.prompt,
+      policy: params.policy,
+    })
+    if (httpResult.ok) {
+      lastResult = { text: httpResult.text }
+      lastFailureClass = null
+      break
+    }
+    lastFailureClass = httpResult.failureClass
+    const retryable = isRetryableDraftFailure(httpResult.failureClass)
+    logger.info('[hermit] creative draft attempt failed', {
+      route: params.policy.route,
+      attempt: attempts,
+      maxAttempts,
+      failureClass: httpResult.failureClass,
+      status: httpResult.status ?? null,
+      retryable: retryable && attempts < maxAttempts,
+    })
+    if (!retryable || attempts >= maxAttempts) {
+      lastResult = null
+      break
+    }
+    await new Promise((resolve) => setTimeout(resolve, draftRetryBackoffMs()))
+  }
+  logger.info('[hermit] creative draft call completed', {
+    route: params.policy.route,
+    tier: params.policy.tier,
+    modelHint: params.policy.targetModelHint,
+    timeoutMs: params.policy.timeoutMs,
+    maxOutputTokens: params.policy.maxOutputTokens,
+    retryCount: params.policy.retryCount,
+    attempts,
+    ok: Boolean(lastResult?.text),
+    lastFailureClass,
+    latencyMs: Date.now() - startedAtMs,
   })
+  return lastResult
 }
 
 export type SpanishDialect =
@@ -3123,6 +3182,7 @@ export async function executeHermitCommand(
     const localLine = pickGmeowLocalLine(meme)
     const localReply = `${localLine}\n${meme.url}`
     const explicitSignalSource = classifyExplicitSignal(args)
+    const creativePolicy = resolveHermitCreativePolicy({ command: '/gmeow' })
     let draft: PinataChatResult | null = null
     let fallbackReason: 'pinata_throw' | 'pinata_provider_error_text' | null = null
     const pinataCaptionRequested =
@@ -3136,6 +3196,7 @@ export async function executeHermitCommand(
             memeTags: meme.tags,
             userPreferences,
           }),
+          policy: creativePolicy,
           senderAddress: params.senderAddress,
           sourceIdentity: params.sourceIdentity ?? null,
         })
@@ -3167,6 +3228,7 @@ export async function executeHermitCommand(
       provider,
       fallbackReason,
       pinataCaptionRequested,
+      creativePolicy,
       hasAttachment: Boolean(attachment),
       explicitSignalSource,
     })
@@ -3182,8 +3244,10 @@ export async function executeHermitCommand(
 
   if (command === '/meme') {
     const explicitSignalSource = classifyExplicitSignal(args)
+    const creativePolicy = resolveHermitCreativePolicy({ command: '/meme' })
     const draft = await runPinataDraft({
       prompt: buildPinataPromptForHermitImage(args, userPreferences),
+      policy: creativePolicy,
       senderAddress: params.senderAddress,
       sourceIdentity: params.sourceIdentity ?? null,
     })
@@ -3263,6 +3327,7 @@ export async function executeHermitCommand(
     }
 
     const { mode, prompt } = parseHermitDraftMode(args)
+    const creativePolicy = resolveHermitCreativePolicy({ command: '/hermit', hermitMode: mode })
     const explicitSignalSource = classifyExplicitSignal(prompt)
     const draft = await runPinataDraft({
       prompt: buildPinataPromptForHermit({
@@ -3271,6 +3336,7 @@ export async function executeHermitCommand(
         userPreferences,
         room1659Market: params.room1659Market,
       }),
+      policy: creativePolicy,
       senderAddress: params.senderAddress,
       sourceIdentity: params.sourceIdentity ?? null,
     })

@@ -363,10 +363,10 @@ function localApiRoutesPlugin(): Plugin {
       // Keep this loosely typed: API handlers often return `VercelResponse`, and we don't want
       // Vite's config TS project to type-check every function signature.
       const routes: Record<string, () => Promise<{ default: (req: any, res: any) => any }>> = {
-        '/api/robots.txt': apiImport('./api/robots.txt'),
-        '/api/sitemap.xml': apiImport('./api/sitemap.xml'),
-        '/api/social-preview': apiImport('./api/social-preview'),
-        '/api/social-preview-debug': apiImport('./api/social-preview-debug'),
+        '/api/robots.txt': apiImport('./api/_handlers/seo/_robots'),
+        '/api/sitemap.xml': apiImport('./api/_handlers/seo/_sitemap'),
+        '/api/social-preview': apiImport('./api/_handlers/social/_socialPreviewRoute'),
+        '/api/social-preview-debug': apiImport('./api/_handlers/social/_socialPreviewDebug'),
         '/api/creator-allowlist': apiImport('./api/_handlers/creator-access/_allowlist'),
         '/api/flags/discover': apiImport('./api/_handlers/flags/_discover'),
         '/api/flags/evaluate': apiImport('./api/_handlers/flags/_evaluate'),

@@ -13,7 +13,87 @@ const docsPages = [
   { key: 'getting-started', label: 'Getting Started', path: '/arena/getting-started' },
   { key: 'view-status', label: 'View Status', path: '/arena/view-status' },
   { key: 'view-chart', label: 'View Chart', path: '/arena/view-chart' },
+  { key: 'counter-trade-files', label: 'Counter-Trade Files', path: '/arena/counter-trade-files' },
   { key: 'positions', label: 'Positions', path: '/arena/positions' },
+] as const
+
+const counterTradeFileGroups = [
+  {
+    title: 'Core runtime loop',
+    description: 'Main execution path for ingest, decisioning, risk gating, and trade submission.',
+    files: [
+      { path: 'frontend/server/_lib/alfaclub/counterTradeTicker.ts', why: 'Long-lived loop scheduler (Railway/Hermit).' },
+      { path: 'frontend/server/_lib/alfaclub/counterTradeRunner.ts', why: 'Orchestrates each tick and execution lifecycle.' },
+      { path: 'frontend/server/_lib/alfaclub/counterTradeEngine.ts', why: 'Fill classification and deterministic decision logic.' },
+      { path: 'frontend/server/_lib/alfaclub/counterTradeConfig.ts', why: 'Env-driven runtime policy and limits.' },
+      { path: 'frontend/server/_lib/alfaclub/counterTradeDefense.ts', why: 'Defense and reduction routines.' },
+      { path: 'frontend/server/_lib/alfaclub/counterTradeHarvest.ts', why: 'Harvest accounting and summary math.' },
+      { path: 'frontend/server/_lib/alfaclub/counterTradeLlmAdvisor.ts', why: 'Optional LLM risk-review gate.' },
+      { path: 'frontend/server/_lib/alfaclub/counterTradeStore.ts', why: 'Room strategy, opt-in state, event and action ledgers.' },
+    ],
+  },
+  {
+    title: 'Execution and market dependencies',
+    description: 'Supporting modules invoked directly by the counter-trade runtime.',
+    files: [
+      { path: 'frontend/server/_lib/alfaclub/hyperliquid.ts', why: 'Fills, clearinghouse, and balance reads.' },
+      { path: 'frontend/server/_lib/alfaclub/room1659Market.ts', why: 'Room 1659 wallet source resolution.' },
+      { path: 'frontend/server/_lib/alfaclub/chatBridge.ts', why: 'Posts execution and status updates back to room chat.' },
+      { path: 'frontend/server/_lib/arena/arenaClient.ts', why: 'Submits open/close/transfer actions to Arena lane.' },
+      { path: 'frontend/server/_lib/arena/arenaConfig.ts', why: 'Arena runtime config resolution.' },
+      { path: 'frontend/server/_lib/arena/arenaIdentityMappingStore.ts', why: 'Resolves room actor identity and bot wallet mapping.' },
+      { path: 'frontend/server/agents/hermit/index.ts', why: 'Runtime boot where in-process ticker is started.' },
+    ],
+  },
+  {
+    title: 'API + route registration',
+    description: 'Server endpoints and route wiring used by operators/UI.',
+    files: [
+      { path: 'frontend/api/_handlers/v1/alfaclub/_counter-trade-status.ts', why: 'Status endpoint consumed by /arena/view-status.' },
+      { path: 'frontend/api/_handlers/v1/alfaclub/_counter-trade-run.ts', why: 'Cron/manual trigger endpoint for loop execution.' },
+      { path: 'frontend/api/_handlers/_routes.v1.ts', why: 'Registers v1 counter-trade handlers.' },
+      { path: 'frontend/src/lib/api/apiEndpoints.ts', why: 'Client endpoint map (`counterTradeStatus`).' },
+    ],
+  },
+  {
+    title: 'Arena UI surfaces',
+    description: 'Frontend pages and hooks that display runtime state and docs.',
+    files: [
+      { path: 'frontend/src/pages/Arena.tsx', why: 'Arena docs shell and status pages under /arena/*.' },
+      { path: 'frontend/src/hooks/useCounterTradeStatus.ts', why: 'React Query hook for live status.' },
+      { path: 'frontend/src/lib/alfaclub/counterTradeStatus.ts', why: 'Status fetcher + payload parsing.' },
+      { path: 'frontend/src/app/routeDefinitions.tsx', why: 'Route tree for `/arena/*` subpages.' },
+      { path: 'frontend/src/app/lazyRoutes.tsx', why: 'Lazy exports for arena subpages.' },
+      { path: 'frontend/src/pages/admin/AlfaClubVigilante.tsx', why: 'Admin/operator visibility for lane controls.' },
+      { path: 'frontend/src/pages/AlfaClubLiquidity.tsx', why: 'Related AlfaClub operator context and controls.' },
+    ],
+  },
+  {
+    title: 'Database and ops assets',
+    description: 'Schema and operational tooling used to run and maintain the bot safely.',
+    files: [
+      { path: 'supabase/migrations/20260709000000_alfaclub_counter_trade_engine.sql', why: 'Counter-trade schema and ledger tables.' },
+      { path: 'frontend/server/_lib/db/schemaBootstrap.ts', why: 'Schema bootstrap integration (`ensureAlfaclubCounterTradeSchema`).' },
+      { path: 'frontend/scripts/ops/normalize-counter-trade-room-optins.ts', why: 'Single-actor room hygiene utility.' },
+      { path: 'scripts/ops/counter-trade-smoke.sh', why: 'Smoke test script for lane verification.' },
+      { path: 'docs/operations/alfaclub-counter-trade-production-runbook.md', why: 'Primary production runbook.' },
+      { path: 'docs/operations/virtuals-arena-railway-runbook.md', why: 'Railway runtime and operational workflow.' },
+      { path: 'docs/operations/agent-lane-policy-matrix.md', why: 'Lane ownership and boundary references.' },
+    ],
+  },
+  {
+    title: 'Tests (coverage references)',
+    description: 'Main test files validating behavior and safety constraints.',
+    files: [
+      { path: 'frontend/server/_lib/alfaclub/counterTradeRunner.test.ts', why: 'Runner behavior and guardrails.' },
+      { path: 'frontend/server/_lib/alfaclub/counterTradeRunner.e2e.test.ts', why: 'End-to-end loop behavior.' },
+      { path: 'frontend/server/_lib/alfaclub/counterTradeEngine.test.ts', why: 'Decisioning and fill classification.' },
+      { path: 'frontend/server/_lib/alfaclub/counterTradeDefense.test.ts', why: 'Defense logic coverage.' },
+      { path: 'frontend/server/_lib/alfaclub/counterTradeHarvest.test.ts', why: 'Harvest math and summaries.' },
+      { path: 'frontend/server/_lib/alfaclub/counterTradeLlmAdvisor.test.ts', why: 'LLM gate behavior and constraints.' },
+      { path: 'frontend/server/_lib/alfaclub/counterTradeTicker.test.ts', why: 'Ticker scheduling and overlap guards.' },
+    ],
+  },
 ] as const
 
 const mermaidSpec = `flowchart LR
@@ -593,6 +673,42 @@ export function ArenaChartPage() {
       >
         Go to /arena/positions
       </Link>
+    </article>
+  )
+}
+
+export function ArenaCounterTradeFilesPage() {
+  return (
+    <article className={`${shellToneCard} p-8 sm:p-12`}>
+      <div className="max-w-6xl space-y-10">
+        <section className="space-y-4">
+          <div className="label">Counter-trade inventory</div>
+          <h2 className="headline text-3xl sm:text-5xl">Files currently involved</h2>
+          <p className="text-base sm:text-lg text-zinc-300 leading-relaxed">
+            Living index of the counter-trading bot codepath used by the Arena inverse engine. Grouped by function so
+            operators can quickly locate execution logic, API surfaces, data model, and tests.
+          </p>
+        </section>
+
+        <section className="space-y-6">
+          {counterTradeFileGroups.map((group) => (
+            <div key={group.title} className="rounded-2xl border border-zinc-900/70 bg-black/25 p-5 sm:p-6 space-y-4">
+              <div className="space-y-1">
+                <h3 className="text-2xl text-zinc-100">{group.title}</h3>
+                <p className="text-sm text-zinc-500">{group.description}</p>
+              </div>
+              <ul className="space-y-2">
+                {group.files.map((file) => (
+                  <li key={file.path} className="rounded-lg border border-zinc-900/70 bg-zinc-950/40 px-3 py-2">
+                    <code className="block text-xs sm:text-sm text-sky-300 break-all">{file.path}</code>
+                    <p className="mt-1 text-xs sm:text-sm text-zinc-400">{file.why}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </section>
+      </div>
     </article>
   )
 }
