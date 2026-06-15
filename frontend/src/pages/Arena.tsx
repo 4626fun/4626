@@ -798,11 +798,6 @@ export function ArenaHowItWorksPage() {
 }
 
 export function ArenaBacktestPage() {
-  const [selectedFile, setSelectedFile] = useState<string | null>(null)
-  const [healthFloorFilter, setHealthFloorFilter] = useState<string>('all')
-  const [chunkFilter, setChunkFilter] = useState<string>('all')
-  const [cooldownFilter, setCooldownFilter] = useState<string>('all')
-  const [noCommingleOnly, setNoCommingleOnly] = useState<boolean>(true)
   const [topN, setTopN] = useState<number>(10)
   const [isRunning, setIsRunning] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
@@ -823,68 +818,21 @@ export function ArenaBacktestPage() {
     requireNoCommingle: true,
   })
   const marketsQuery = useBacktestMarkets()
-  const sweep = useBacktestSweep({ file: selectedFile })
+  const sweep = useBacktestSweep()
 
-  useEffect(() => {
-    if (!sweep.data?.file) return
-    setSelectedFile((current) => current ?? sweep.data?.file ?? null)
-  }, [sweep.data?.file])
-
-  const healthFloorOptions = useMemo(() => {
+  const sortedRows = useMemo(() => {
     if (!sweep.data) return []
-    return Array.from(new Set(sweep.data.rows.map((row) => row.healthFloor))).sort((a, b) => a - b)
+    return [...sweep.data.rows].sort((a, b) => b.objective - a.objective)
   }, [sweep.data])
 
-  const chunkOptions = useMemo(() => {
-    if (!sweep.data) return []
-    return Array.from(new Set(sweep.data.rows.map((row) => `${row.minChunkUsd}-${row.maxChunkUsd}`))).sort()
-  }, [sweep.data])
-
-  const cooldownOptions = useMemo(() => {
-    if (!sweep.data) return []
-    return Array.from(new Set(sweep.data.rows.map((row) => row.cooldownBars))).sort((a, b) => a - b)
-  }, [sweep.data])
-
-  const filteredRows = useMemo(() => {
-    if (!sweep.data) return []
-    const byFilter = sweep.data.rows.filter((row) => {
-      if (healthFloorFilter !== 'all' && String(row.healthFloor) !== healthFloorFilter) return false
-      if (chunkFilter !== 'all' && `${row.minChunkUsd}-${row.maxChunkUsd}` !== chunkFilter) return false
-      if (cooldownFilter !== 'all' && String(row.cooldownBars) !== cooldownFilter) return false
-      if (noCommingleOnly && row.commingleViolationCount > 0) return false
-      return true
-    })
-    return byFilter.sort((a, b) => b.objective - a.objective)
-  }, [sweep.data, healthFloorFilter, chunkFilter, cooldownFilter, noCommingleOnly])
-
-  const topRows = useMemo(() => filteredRows.slice(0, topN), [filteredRows, topN])
+  const topRows = useMemo(() => sortedRows.slice(0, topN), [sortedRows, topN])
   const selectedTopRow = topRows[0] ?? null
+  const activeSweepFile = sweep.data?.file ?? null
   const selectedRunId = useMemo(
     () => (selectedTopRow ? buildBacktestRunIdFromRow(selectedTopRow) : null),
     [selectedTopRow],
   )
-  const auditQuery = useBacktestAudit({ file: selectedFile, runId: selectedRunId })
-  const runFileOptions = useMemo(() => {
-    const files = sweep.data?.files ?? []
-    return files.map((file) => {
-      const base = file.replace(/\.csv$/i, '')
-      const match = base.match(/^counter-rebalance-([A-Z0-9]+)-x(\d+)-(\d{10,})$/i)
-      if (!match) return { file, label: file }
-      const [, symbolRaw, leverageRaw, tsRaw] = match
-      const symbol = String(symbolRaw ?? '').toUpperCase()
-      const leverage = Number(leverageRaw)
-      const ts = Number(tsRaw)
-      if (!Number.isFinite(ts)) return { file, label: `${symbol} • ${leverage}x` }
-      const when = new Date(ts)
-      const whenLabel = new Intl.DateTimeFormat('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      }).format(when)
-      return { file, label: `${symbol} • ${leverage}x • ${whenLabel}` }
-    })
-  }, [sweep.data?.files])
+  const auditQuery = useBacktestAudit({ file: activeSweepFile, runId: selectedRunId })
 
   const intervalForWindow = useMemo(() => chooseBacktestInterval(defaults.windowHours), [defaults.windowHours])
   const inferredSymbol = useMemo(() => defaults.market.split('/')[0] ?? 'BTC', [defaults.market])
@@ -983,7 +931,6 @@ export function ArenaBacktestPage() {
       const output = typeof payload?.data?.stdout === 'string' ? payload.data.stdout : ''
       setRunOutput(output.trim().length > 0 ? output : 'Backtest completed. Refreshing sweep list...')
       await sweep.refetch()
-      setSelectedFile(null)
     } catch (error) {
       setRunError(error instanceof Error ? error.message : 'Backtest run failed')
     } finally {
@@ -1042,85 +989,14 @@ export function ArenaBacktestPage() {
         <div className="rounded-2xl border border-zinc-900/70 bg-black/25 p-5 sm:p-6 space-y-4">
           <h3 className="text-xl text-zinc-100">Run configuration</h3>
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <label className="block text-xs uppercase tracking-[0.16em] text-zinc-500">
-              Saved runs
-              <select
-                value={selectedFile ?? ''}
-                onChange={(event) => setSelectedFile(event.target.value || null)}
-                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-              >
-                {runFileOptions.map(({ file, label }, idx) => (
-                  <option key={file} value={file}>
-                    {idx === 0 ? `Latest • ${label}` : label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-xs uppercase tracking-[0.16em] text-zinc-500">
-              Health floor filter
-              <select
-                value={healthFloorFilter}
-                onChange={(event) => setHealthFloorFilter(event.target.value)}
-                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-              >
-                <option value="all">All</option>
-                {healthFloorOptions.map((option) => (
-                  <option key={option} value={String(option)}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-xs uppercase tracking-[0.16em] text-zinc-500">
-              Chunk range filter
-              <select
-                value={chunkFilter}
-                onChange={(event) => setChunkFilter(event.target.value)}
-                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-              >
-                <option value="all">All</option>
-                {chunkOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-xs uppercase tracking-[0.16em] text-zinc-500">
-              Cooldown filter
-              <select
-                value={cooldownFilter}
-                onChange={(event) => setCooldownFilter(event.target.value)}
-                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-              >
-                <option value="all">All</option>
-                {cooldownOptions.map((option) => (
-                  <option key={option} value={String(option)}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => void sweep.refetch()}
               className="inline-flex items-center rounded-lg bg-zinc-900 px-3 py-2 text-xs text-zinc-100 hover:bg-zinc-800"
             >
-              Refresh runs
+              Refresh results
             </button>
-            <label className="flex items-center gap-2 text-xs uppercase tracking-[0.16em] text-zinc-400">
-              <input
-                type="checkbox"
-                checked={noCommingleOnly}
-                onChange={(event) => setNoCommingleOnly(event.target.checked)}
-                className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-sky-500"
-              />
-              isolation-safe runs only
-            </label>
           </div>
 
           <div className="grid gap-2 md:grid-cols-4">
@@ -1228,11 +1104,36 @@ export function ArenaBacktestPage() {
                     </option>
                   ))}
                 </select>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {[168, 720, 2160].map((hours) => {
+                    const isActive = defaults.windowHours === hours
+                    const label = hours === 168 ? '7d' : hours === 720 ? '30d' : '90d'
+                    return (
+                      <button
+                        key={hours}
+                        type="button"
+                        onClick={() =>
+                          setDefaults((current) => ({
+                            ...current,
+                            windowHours: hours,
+                          }))
+                        }
+                        className={`rounded-md border px-2 py-1 text-[11px] ${
+                          isActive
+                            ? 'border-sky-500/70 bg-sky-500/20 text-sky-200'
+                            : 'border-zinc-700 text-zinc-300 hover:bg-zinc-900'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
               </label>
               <label className="text-zinc-500">
                 Leverage (x)
                 <input
-                  type="number"
+                  type="range"
                   min={1}
                   max={leverageMax}
                   value={defaults.leverage}
@@ -1242,128 +1143,55 @@ export function ArenaBacktestPage() {
                       leverage: Math.min(leverageMax, Math.max(1, Number(event.target.value) || 1)),
                     }))
                   }
-                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
+                  className="mt-1 w-full accent-sky-500"
                 />
               </label>
               <div className="col-span-full text-[11px] uppercase tracking-[0.14em] text-zinc-500 mt-1">Capital allocation</div>
               <label className="text-zinc-500">
-                Long position margin (USD)
+                Per-leg position margin (USD)
                 <input
-                  type="number"
-                  min={1}
+                  type="range"
+                  min={100}
+                  max={5000}
+                  step={50}
                   value={defaults.initialLongMarginUsd}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const value = Math.max(1, Number(event.target.value) || 1)
                     setDefaults((current) => ({
                       ...current,
-                      initialLongMarginUsd: Math.max(1, Number(event.target.value) || 1),
+                      initialLongMarginUsd: value,
+                      initialShortMarginUsd: value,
                     }))
-                  }
-                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
+                  }}
+                  className="mt-1 w-full accent-sky-500"
                 />
               </label>
               <label className="text-zinc-500">
-                Short position margin (USD)
+                Per-leg reserve buffer (USD)
                 <input
-                  type="number"
-                  min={1}
-                  value={defaults.initialShortMarginUsd}
-                  onChange={(event) =>
-                    setDefaults((current) => ({
-                      ...current,
-                      initialShortMarginUsd: Math.max(1, Number(event.target.value) || 1),
-                    }))
-                  }
-                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
-                />
-              </label>
-              <label className="text-zinc-500">
-                Long reserve buffer (USD)
-                <input
-                  type="number"
-                  min={1}
+                  type="range"
+                  min={100}
+                  max={5000}
+                  step={50}
                   value={defaults.initialLongBufferUsd}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const value = Math.max(1, Number(event.target.value) || 1)
                     setDefaults((current) => ({
                       ...current,
-                      initialLongBufferUsd: Math.max(1, Number(event.target.value) || 1),
+                      initialLongBufferUsd: value,
+                      initialShortBufferUsd: value,
                     }))
-                  }
-                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
+                  }}
+                  className="mt-1 w-full accent-sky-500"
                 />
               </label>
-              <label className="text-zinc-500">
-                Short reserve buffer (USD)
-                <input
-                  type="number"
-                  min={1}
-                  value={defaults.initialShortBufferUsd}
-                  onChange={(event) =>
-                    setDefaults((current) => ({
-                      ...current,
-                      initialShortBufferUsd: Math.max(1, Number(event.target.value) || 1),
-                    }))
-                  }
-                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
-                />
-              </label>
-              <div className="col-span-full text-[11px] uppercase tracking-[0.14em] text-zinc-500 mt-1">Rebalance policy</div>
-              <label className="text-zinc-500">
-                Rebalance trigger (weak-leg health floor)
-                <input
-                  type="number"
-                  step="0.001"
-                  value={defaults.healthFloor}
-                  onChange={(event) =>
-                    setDefaults((current) => ({ ...current, healthFloor: Number(event.target.value) || 0 }))
-                  }
-                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
-                />
-              </label>
-              <label className="text-zinc-500">
-                Minimum health gap before rebalance
-                <input
-                  type="number"
-                  step="0.001"
-                  value={defaults.deadband}
-                  onChange={(event) =>
-                    setDefaults((current) => ({ ...current, deadband: Number(event.target.value) || 0 }))
-                  }
-                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
-                />
-              </label>
-              <label className="text-zinc-500">
-                Min rebalance size (USD)
-                <input
-                  type="number"
-                  value={defaults.minChunkUsd}
-                  onChange={(event) =>
-                    setDefaults((current) => ({ ...current, minChunkUsd: Math.max(1, Number(event.target.value) || 1) }))
-                  }
-                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
-                />
-              </label>
-              <label className="text-zinc-500">
-                Max rebalance size (USD)
-                <input
-                  type="number"
-                  value={defaults.maxChunkUsd}
-                  onChange={(event) =>
-                    setDefaults((current) => ({ ...current, maxChunkUsd: Math.max(1, Number(event.target.value) || 1) }))
-                  }
-                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
-                />
-              </label>
-              <label className="text-zinc-500 col-span-2">
-                Rebalance cooldown (bars)
-                <input
-                  type="number"
-                  value={defaults.cooldownBars}
-                  onChange={(event) =>
-                    setDefaults((current) => ({ ...current, cooldownBars: Math.max(0, Number(event.target.value) || 0) }))
-                  }
-                  className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
-                />
-              </label>
+              <div className="col-span-full text-[11px] uppercase tracking-[0.14em] text-zinc-500 mt-1">Strategy profile</div>
+              <div className="col-span-full rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-xs text-zinc-300">
+                Preset-driven policy: health floor <span className="text-zinc-100">{formatNum(defaults.healthFloor, 3)}</span>, gap{' '}
+                <span className="text-zinc-100">{formatNum(defaults.deadband, 3)}</span>, chunk{' '}
+                <span className="text-zinc-100">{formatUsd(defaults.minChunkUsd)}-{formatUsd(defaults.maxChunkUsd)}</span>, cooldown{' '}
+                <span className="text-zinc-100">{defaults.cooldownBars}</span> bars.
+              </div>
               <label className="text-zinc-500 col-span-2 flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -1391,6 +1219,9 @@ export function ArenaBacktestPage() {
             <p>
               Constraints: leverage 1-{leverageMax}x for {defaults.market}, all USD inputs must stay positive, and legs stay isolated
               (no cross-leg fund transfers).
+            </p>
+            <p>
+              Controls are intentionally minimal: market, horizon, leverage, per-leg capital, preset profile, and isolation mode.
             </p>
             {defaults.requireNoCommingle ? (
               <p className="text-sky-200">

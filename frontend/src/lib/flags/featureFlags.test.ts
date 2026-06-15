@@ -10,6 +10,7 @@ import {
   isPrivyHostModeAllowed,
   resolvePrivyClientId,
   resolvePrivyAppId,
+  resolvePrivyApiUrl,
   allFlags,
   resolveAllFlagValues,
   buildFlagDefinitions,
@@ -40,17 +41,27 @@ describe('isPrivyHostModeAllowed', () => {
 
 describe('resolvePrivyClientId', () => {
   it('returns null when empty', () => {
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID_ENABLED', '1')
     vi.stubEnv('VITE_PRIVY_CLIENT_ID', '')
     expect(resolvePrivyClientId()).toBeNull()
   })
 
-  it('returns configured value', () => {
+  it('returns null unless explicit client-id mode is enabled', () => {
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID', 'client_live_123')
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID_ENABLED', '')
+    expect(resolvePrivyClientId()).toBeNull()
+  })
+
+  it('returns configured value when explicit client-id mode is enabled', () => {
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID_ENABLED', '1')
     vi.stubEnv('VITE_PRIVY_CLIENT_ID', 'client_live_123')
     expect(resolvePrivyClientId()).toBe('client_live_123')
   })
 
   it('suppresses client id on loopback by default', () => {
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID_ENABLED', '1')
     vi.stubEnv('VITE_PRIVY_CLIENT_ID', 'client_live_123')
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID_ON_LOOPBACK', '')
     vi.stubGlobal('window', {
       location: { origin: 'http://localhost:5174' },
     } as unknown as Window & typeof globalThis)
@@ -58,12 +69,33 @@ describe('resolvePrivyClientId', () => {
   })
 
   it('allows client id on loopback when explicitly enabled', () => {
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID_ENABLED', '1')
     vi.stubEnv('VITE_PRIVY_CLIENT_ID', 'client_live_123')
     vi.stubEnv('VITE_PRIVY_CLIENT_ID_ON_LOOPBACK', '1')
     vi.stubGlobal('window', {
       location: { origin: 'http://localhost:5174' },
     } as unknown as Window & typeof globalThis)
     expect(resolvePrivyClientId()).toBe('client_live_123')
+  })
+})
+
+describe('resolvePrivyApiUrl', () => {
+  it('returns null when API URL mode is disabled', () => {
+    vi.stubEnv('VITE_PRIVY_API_URL_ENABLED', '')
+    vi.stubEnv('VITE_PRIVY_API_URL', 'https://auth.privy.io')
+    expect(resolvePrivyApiUrl()).toBeNull()
+  })
+
+  it('maps legacy privy.4626.fun API URL to auth.privy.io', () => {
+    vi.stubEnv('VITE_PRIVY_API_URL_ENABLED', '1')
+    vi.stubEnv('VITE_PRIVY_API_URL', 'https://privy.4626.fun')
+    expect(resolvePrivyApiUrl()).toBe('https://auth.privy.io')
+  })
+
+  it('returns configured canonical HTTPS API URL when enabled', () => {
+    vi.stubEnv('VITE_PRIVY_API_URL_ENABLED', '1')
+    vi.stubEnv('VITE_PRIVY_API_URL', 'https://auth.privy.io')
+    expect(resolvePrivyApiUrl()).toBe('https://auth.privy.io')
   })
 })
 

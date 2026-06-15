@@ -347,6 +347,11 @@ export function resolvePrivyApiUrl(): string | null {
   try {
     const parsed = new URL(raw)
     if (parsed.protocol !== 'https:') return null
+    // Hard safety rail: stale configs occasionally point at `privy.4626.fun`,
+    // but the canonical browser API host must remain `auth.privy.io`.
+    if (parsed.hostname.toLowerCase() === 'privy.4626.fun') {
+      return 'https://auth.privy.io'
+    }
     return parsed.origin
   } catch {
     return null

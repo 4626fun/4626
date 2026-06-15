@@ -453,6 +453,19 @@ function formatArenaUsage(): string {
   ].join('\n')
 }
 
+function summarizeArenaRunFailure(
+  run: { error?: string; stderr?: string; stdout?: string } | undefined,
+): string | null {
+  if (!run) return null
+  const candidate = [run.error, run.stderr, run.stdout]
+    .map((part) => String(part ?? '').trim())
+    .find((part) => part.length > 0)
+  if (!candidate) return null
+  const firstLine = candidate.split('\n').map((line) => line.trim()).find((line) => line.length > 0)
+  if (!firstLine) return null
+  return firstLine.length > 280 ? `${firstLine.slice(0, 277)}...` : firstLine
+}
+
 function formatStrategyUsage(): string {
   return [
     '**Counter-trade strategy controls**',
@@ -3072,10 +3085,15 @@ export async function executeHermitCommand(
         parsed.kind === 'bridge'
           ? await runArenaBridgeToHyperliquid(parsed.amountUsd, config)
           : await runArenaDepositUsdc(parsed.amountUsd, config)
+      const failureDetail = summarizeArenaRunFailure(result.run)
       return {
         kind: 'hermit',
         provider: 'local',
-        reply: result.ok ? `${result.message}${result.run?.dryRun ? ' [dry-run]' : ''}` : result.message,
+        reply: result.ok
+          ? `${result.message}${result.run?.dryRun ? ' [dry-run]' : ''}`
+          : failureDetail
+            ? `${result.message}\nDetails: ${failureDetail}`
+            : result.message,
       }
     }
     if (parsed.kind === 'transfer') {
