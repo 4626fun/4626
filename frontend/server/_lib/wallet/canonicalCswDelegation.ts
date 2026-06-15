@@ -96,6 +96,11 @@ function getPrivyServerAuth(): { appId: string; appSecret: string } {
   return { appId, appSecret }
 }
 
+function getPrivyJwtVerificationKey(): string | null {
+  const key = String(process.env.PRIVY_JWT_VERIFICATION_KEY ?? '').trim()
+  return key.length > 0 ? key : null
+}
+
 function getPrivyTokenFromRequest(req: VercelRequest): string {
   const fromHeader = readHeader(req, 'x-privy-token')
   if (fromHeader) return fromHeader
@@ -420,7 +425,8 @@ export async function verifyPrivyRequest(req: VercelRequest): Promise<PrivyReque
   const token = getPrivyTokenFromRequest(req)
   const auth = getPrivyServerAuth()
   const client = new PrivyClient(auth.appId, auth.appSecret)
-  const claims = await client.verifyAuthToken(token)
+  const verificationKey = getPrivyJwtVerificationKey()
+  const claims = await client.verifyAuthToken(token, verificationKey ?? undefined)
   const privyUserId = typeof (claims as any)?.userId === 'string' ? String((claims as any).userId).trim() : ''
   if (!privyUserId) throw new Error('Privy user ID missing from auth token')
   const privyUser = (await client.getUserById(privyUserId)) as PrivyUserLike

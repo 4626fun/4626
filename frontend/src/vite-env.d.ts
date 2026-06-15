@@ -17,6 +17,7 @@ interface ImportMetaEnv {
   readonly VITE_PRIVY_CLIENT_ID_ON_LOOPBACK?: string
   readonly VITE_PRIVY_ENABLED?: string
   readonly VITE_PRIVY_ALLOWED_ORIGINS?: string
+  readonly VITE_PRIVY_API_URL?: string
   readonly VITE_PRIVY_DISABLE_ANALYTICS?: string
   readonly VITE_PRIVY_ENABLE_ANALYTICS?: string
   readonly VITE_APP_ORIGIN?: string

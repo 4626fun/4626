@@ -16,10 +16,49 @@ const PROVIDER_ICON: Record<AccountLinkProvider, LucideIcon | null> = {
   zora_cross_app: null,
 }
 
-function ProviderIconBadge({ provider }: { provider: AccountLinkProvider }) {
+const PROVIDER_LOGO_SRC: Partial<Record<AccountLinkProvider, string>> = {
+  zora_cross_app: '/brands/zora-token.svg',
+  twitter: '/brands/x-logo.svg',
+  telegram: '/brands/telegram-logo.svg',
+}
+
+function resolveProviderLogoSrc(input: { provider: AccountLinkProvider; label: string }): string | null {
+  const direct = PROVIDER_LOGO_SRC[input.provider]
+  if (typeof direct === 'string' && direct.trim().length > 0) return direct
+  const label = input.label.trim().toLowerCase()
+  if (label.includes('farcaster')) return '/brands/farcaster-logo.svg'
+  return null
+}
+
+function resolveProviderBackgroundTint(input: { provider: AccountLinkProvider; label: string }): string {
+  if (input.provider === 'zora_cross_app') {
+    return 'bg-[radial-gradient(120%_120%_at_100%_0%,rgba(138,99,210,0.2),transparent_62%)]'
+  }
+  if (input.provider === 'twitter') {
+    return 'bg-[radial-gradient(120%_120%_at_100%_0%,rgba(255,255,255,0.14),transparent_62%)]'
+  }
+  if (input.provider === 'telegram') {
+    return 'bg-[radial-gradient(120%_120%_at_100%_0%,rgba(34,158,217,0.22),transparent_62%)]'
+  }
+  const label = input.label.trim().toLowerCase()
+  if (label.includes('farcaster')) {
+    return 'bg-[radial-gradient(120%_120%_at_100%_0%,rgba(138,99,210,0.2),transparent_62%)]'
+  }
+  return 'bg-[radial-gradient(120%_120%_at_100%_0%,rgba(255,255,255,0.1),transparent_62%)]'
+}
+
+function ProviderIconBadge({ provider, label }: { provider: AccountLinkProvider; label: string }) {
+  const logoSrc = resolveProviderLogoSrc({ provider, label })
   const Icon = PROVIDER_ICON[provider]
   const commonClass =
     'flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.03] text-zinc-400'
+  if (logoSrc) {
+    return (
+      <span className={commonClass} aria-hidden="true">
+        <img src={logoSrc} alt="" className="h-3.5 w-3.5 object-contain" loading="lazy" />
+      </span>
+    )
+  }
   if (Icon) {
     return (
       <span className={commonClass} aria-hidden="true">
@@ -66,10 +105,28 @@ export function LinkedIdentitiesSection({
           const telegramBlocked =
             provider.provider === 'telegram' && !provider.linked && !telegramLaunchParamsAvailable
           const points = PROVIDER_POINTS[provider.provider] ?? null
+          const logoSrc = resolveProviderLogoSrc({ provider: provider.provider, label: provider.label })
+          const backgroundTintClass = resolveProviderBackgroundTint({
+            provider: provider.provider,
+            label: provider.label,
+          })
           return (
-            <li key={provider.provider} className="flex items-center gap-2.5 px-3 py-2.5 text-[11.5px]">
-              <ProviderIconBadge provider={provider.provider} />
-              <div className="min-w-0 flex-1">
+            <li
+              key={provider.provider}
+              className="relative flex items-center gap-2.5 overflow-hidden bg-white/[0.01] px-3 py-2.5 text-[11.5px]"
+            >
+              <span aria-hidden="true" className={`pointer-events-none absolute inset-0 ${backgroundTintClass}`} />
+              {logoSrc ? (
+                <img
+                  src={logoSrc}
+                  alt=""
+                  className="pointer-events-none absolute -right-5 -top-5 h-16 w-16 select-none object-contain opacity-[0.1] saturate-0 brightness-200"
+                  loading="lazy"
+                  draggable={false}
+                />
+              ) : null}
+              <ProviderIconBadge provider={provider.provider} label={provider.label} />
+              <div className="relative z-10 min-w-0 flex-1">
                 <div className="truncate text-zinc-200">{provider.label}</div>
                 <div
                   className={`truncate text-[10.5px] ${
@@ -86,7 +143,7 @@ export function LinkedIdentitiesSection({
                 </div>
               </div>
               {showPoints && points !== null && !provider.linked ? (
-                <span className="shrink-0 rounded-md border border-white/[0.06] bg-white/[0.02] px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-zinc-400">
+                <span className="relative z-10 shrink-0 rounded-md border border-white/[0.06] bg-white/[0.02] px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-zinc-400">
                   +{points}
                 </span>
               ) : null}
@@ -95,16 +152,16 @@ export function LinkedIdentitiesSection({
                   type="button"
                   disabled={busy}
                   onClick={() => void onUnlinkProvider(provider.provider)}
-                  className="shrink-0 text-[10.5px] text-zinc-600 transition-colors hover:text-rose-300 disabled:opacity-50"
+                  className="relative z-10 shrink-0 text-[10.5px] text-zinc-600 transition-colors hover:text-rose-300 disabled:opacity-50"
                 >
-                  {busy ? '…' : 'Unlink'}
+                  {busy ? 'Signing out…' : `Sign out of ${provider.label}`}
                 </button>
               ) : (
                 <button
                   type="button"
                   disabled={busy || telegramBlocked}
                   onClick={() => void onLinkProvider(provider.provider)}
-                  className="shrink-0 rounded-md border border-brand-primary/25 bg-brand-primary/[0.08] px-2 py-0.5 text-[10.5px] font-medium text-brand-200 transition-colors hover:border-brand-primary/40 hover:bg-brand-primary/[0.14] disabled:opacity-40"
+                  className="relative z-10 shrink-0 rounded-md border border-brand-primary/25 bg-brand-primary/[0.08] px-2 py-0.5 text-[10.5px] font-medium text-brand-200 transition-colors hover:border-brand-primary/40 hover:bg-brand-primary/[0.14] disabled:opacity-40"
                 >
                   {busy ? '…' : 'Link'}
                 </button>

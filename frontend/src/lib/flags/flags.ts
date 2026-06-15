@@ -9,6 +9,7 @@ export {
   isPrivyHostModeAllowed,
   resolvePrivyAppId as getPrivyAppId,
   resolvePrivyClientId as getPrivyClientId,
+  resolvePrivyApiUrl as getPrivyApiUrl,
 } from '@/lib/flags/featureFlags'
 
 import {

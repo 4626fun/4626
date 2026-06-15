@@ -15,8 +15,10 @@ import {
   TOKENLESS_FINALIZING_BOOTSTRAP_COOLDOWN_MS,
   getWalletProviderCollisionMessage,
   isSessionFinalizingError,
+  isStalePrivyTokenError,
   isTransientWaitlistNetworkError,
   isWalletProviderCollisionError,
+  STALE_PRIVY_SESSION_MESSAGE,
   withTimeout,
 } from './waitlistBootstrapUtils'
 import { executeWaitlistBootstrapPipeline } from './waitlistBootstrapPipeline'
@@ -89,6 +91,9 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
         } catch (tokenError: unknown) {
           if (isWalletProviderCollisionError(tokenError)) {
             throw new Error(getWalletProviderCollisionMessage())
+          }
+          if (isStalePrivyTokenError(tokenError)) {
+            throw new Error(STALE_PRIVY_SESSION_MESSAGE)
           }
           return null
         }

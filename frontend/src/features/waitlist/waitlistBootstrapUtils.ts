@@ -78,6 +78,24 @@ export function isSessionFinalizingError(error: unknown): boolean {
   )
 }
 
+export function isStalePrivyTokenError(error: unknown): boolean {
+  const text =
+    error && typeof error === 'object' && typeof (error as { message?: unknown }).message === 'string'
+      ? String((error as { message: string }).message)
+      : typeof error === 'string'
+        ? error
+        : ''
+  const normalized = text.toLowerCase()
+  if (!normalized) return false
+  return (
+    normalized.includes('missing privy auth token') ||
+    normalized.includes('invalid privy auth token') ||
+    normalized.includes('missing_or_invalid_token') ||
+    normalized.includes('privy verification failed') ||
+    normalized.includes('session expired')
+  )
+}
+
 export function isWalletProviderCollisionError(error: unknown): boolean {
   const text =
     typeof error === 'string'

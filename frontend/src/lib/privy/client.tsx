@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Component, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { getPrivyAppId, getPrivyClientId, isPrivyClientEnabled } from '@/lib/flags/flags'
+import { getPrivyApiUrl, getPrivyAppId, getPrivyClientId, isPrivyClientEnabled } from '@/lib/flags/flags'
 import { CONFIGURED_APP_ORIGIN, resolveAuthRedirectOrigin } from '@/lib/env/host'
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth'
 import { base } from 'viem/chains'
@@ -61,7 +61,14 @@ export function usePrivyClientStatus(): PrivyClientStatus {
 type PrivyProviderConfig = Parameters<typeof PrivyProvider>[0]['config']
 
 class PrivyProviderSafetyBoundary extends Component<
-  { appId: string; clientId: string | null; baseConfig: PrivyProviderConfig; safeConfig: PrivyProviderConfig; children: ReactNode },
+  {
+    appId: string
+    clientId: string | null
+    apiUrl: string | null
+    baseConfig: PrivyProviderConfig
+    safeConfig: PrivyProviderConfig
+    children: ReactNode
+  },
   { safeMode: boolean }
 > {
   state = { safeMode: false }
@@ -81,11 +88,16 @@ class PrivyProviderSafetyBoundary extends Component<
   }
 
   render() {
-    const { appId, clientId, baseConfig, safeConfig, children } = this.props
+    const { appId, clientId, apiUrl, baseConfig, safeConfig, children } = this.props
     const config = this.state.safeMode ? safeConfig : baseConfig
 
     return (
-      <PrivyProvider appId={appId} {...(clientId ? { clientId } : null)} config={config as any}>
+      <PrivyProvider
+        appId={appId}
+        {...(clientId ? { clientId } : null)}
+        {...(apiUrl ? ({ apiUrl } as any) : null)}
+        config={config as any}
+      >
         {children}
       </PrivyProvider>
     )
@@ -122,6 +134,7 @@ export function PrivyClientProvider(props: {
   const enabled = isPrivyClientEnabled()
   const appId = enabled ? getPrivyAppId() : null
   const clientId = enabled ? getPrivyClientId() : null
+  const apiUrl = enabled ? getPrivyApiUrl() : null
   const hasRuntimeConfig = Boolean(enabled && appId)
   const [runtimeStatus, setRuntimeStatus] = useState<PrivyClientStatus>('loading')
   const handleRuntimeStatus = useCallback((next: PrivyClientStatus) => {
@@ -224,7 +237,13 @@ export function PrivyClientProvider(props: {
 
   return (
     <PrivyClientContext.Provider value={ctx}>
-      <PrivyProviderSafetyBoundary appId={appId} clientId={clientId} baseConfig={baseConfig} safeConfig={safeConfig}>
+      <PrivyProviderSafetyBoundary
+        appId={appId}
+        clientId={clientId}
+        apiUrl={apiUrl}
+        baseConfig={baseConfig}
+        safeConfig={safeConfig}
+      >
         <PrivyStatusObserver onStatus={handleRuntimeStatus} />
         <AppLoadingBootstrapGate active={runtimeStatus === 'loading'} label="privy-init">
           <PrivyWalletHooksContextProvider enabled>{children}</PrivyWalletHooksContextProvider>

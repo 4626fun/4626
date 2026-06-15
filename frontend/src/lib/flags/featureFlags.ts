@@ -334,6 +334,18 @@ export function resolvePrivyClientId(): string | null {
   return clientId
 }
 
+export function resolvePrivyApiUrl(): string | null {
+  const raw = String(import.meta.env.VITE_PRIVY_API_URL ?? '').trim()
+  if (!raw) return null
+  try {
+    const parsed = new URL(raw)
+    if (parsed.protocol !== 'https:') return null
+    return parsed.origin
+  } catch {
+    return null
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Registry — all flags in one place for Toolbar / discovery
 // ---------------------------------------------------------------------------

@@ -59,6 +59,7 @@ import {
   getWalletProviderCollisionMessage,
   getWaitlistNetworkUnstableMessage,
   isSessionFinalizingError,
+  isStalePrivyTokenError,
   isTransientWaitlistNetworkError,
   isWalletProviderCollisionError,
   withTimeout,
@@ -85,6 +86,7 @@ const HANDOFF_QUERY_KEY = 'cv_handoff'
 const WAITLIST_EASE: [number, number, number, number] = [0.4, 0, 0.2, 1]
 const WAITLIST_SPINNER_TIMEOUT_MESSAGE = 'Sign-in is taking longer than expected. Tap Continue to retry.'
 const WAITLIST_BUSY_WATCHDOG_MS = 25_000
+const PRIVY_OAUTH_QUERY_KEYS = ['privy_oauth_code', 'privy_oauth_state', 'privy_oauth_provider'] as const
 
 async function runPrivyLoginWithTimeout(
   login: (options?: unknown) => Promise<unknown>,
@@ -471,7 +473,18 @@ export function WaitlistFlow(props: {
     if (localHost === 'localhost' || localHost === '127.0.0.1' || localHost === '::1' || localHost === '[::1]') {
       return false
     }
-    const target = getMarketingWaitlistEntryUrl()
+    let target = getMarketingWaitlistEntryUrl()
+    try {
+      const currentUrl = new URL(window.location.href)
+      const targetUrl = new URL(target)
+      for (const key of PRIVY_OAUTH_QUERY_KEYS) {
+        const value = currentUrl.searchParams.get(key)
+        if (value) targetUrl.searchParams.set(key, value)
+      }
+      target = targetUrl.toString()
+    } catch {
+      // Keep the canonical target as-is if URL parsing fails.
+    }
     const current = `${window.location.origin}${window.location.pathname}${window.location.search}${window.location.hash}`
     if (target === current) return false
     window.location.assign(target)
@@ -817,6 +830,10 @@ export function WaitlistFlow(props: {
         setError(privyAuthed ? RECOVERY_REQUIRED_WHILE_PRIVY_AUTHED_MESSAGE : RECOVERY_REQUIRED_MESSAGE)
         return
       }
+      if (isStalePrivyTokenError(authError)) {
+        setError(STALE_PRIVY_SESSION_MESSAGE)
+        return
+      }
       setError(
         isPrivyLoginBootstrapError(authError)
           ? getSignInNetworkUnstableMessage()
@@ -1015,6 +1032,10 @@ export function WaitlistFlow(props: {
       })
       clearWaitlistAuthPending()
     } catch (bootstrapError: unknown) {
+      if (isStalePrivyTokenError(bootstrapError)) {
+        await resetStaleAuthenticatedPrivySession()
+        return
+      }
       if (isSessionFinalizingError(bootstrapError)) {
         if (await probeStalePrivyTokenSession()) {
           await resetStaleAuthenticatedPrivySession()
@@ -1199,6 +1220,10 @@ export function WaitlistFlow(props: {
           }
         } catch (bootstrapError: unknown) {
           if (cancelled) return
+          if (isStalePrivyTokenError(bootstrapError)) {
+            await resetStaleAuthenticatedPrivySession()
+            return
+          }
           if (isSessionFinalizingError(bootstrapError)) {
             if (await probeStalePrivyTokenSession()) {
               await resetStaleAuthenticatedPrivySession()

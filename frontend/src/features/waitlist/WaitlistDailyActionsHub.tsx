@@ -1,7 +1,5 @@
 import { useState, type ReactNode } from 'react'
 import { Check, ChevronDown, Copy, ExternalLink, Link2 } from 'lucide-react'
-import { RiTelegram2Fill } from 'react-icons/ri'
-import { SiFarcaster, SiX } from 'react-icons/si'
 
 import { apiFetch } from '@/lib/api/apiBase'
 import { getMarketingBaseUrl } from '@/lib/env/host'
@@ -60,10 +58,17 @@ function mutedPill(text: string) {
   )
 }
 
+function BrandLogoIcon(props: { src: string; alt: string; className?: string }) {
+  const { src, alt, className = 'h-3.5 w-3.5' } = props
+  return <img src={src} alt={alt} className={className} loading="lazy" />
+}
+
 function DailyCard(props: {
   title: string
   connectReward: string
   brandIcon?: ReactNode
+  backgroundLogoSrc?: string
+  backgroundTintClass?: string
   connected?: boolean
   showConnectedAsCheck?: boolean
   collapsedHint?: string
@@ -74,6 +79,8 @@ function DailyCard(props: {
     title,
     connectReward,
     brandIcon,
+    backgroundLogoSrc,
+    backgroundTintClass,
     connected = true,
     showConnectedAsCheck = true,
     collapsedHint,
@@ -82,11 +89,25 @@ function DailyCard(props: {
   } = props
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <article className="rounded-xl bg-black/30">
+    <article className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-black/35">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+        <div
+          className={`absolute inset-0 ${backgroundTintClass ?? 'bg-[radial-gradient(120%_120%_at_100%_0%,rgba(255,255,255,0.08),transparent_62%)]'}`}
+        />
+        {backgroundLogoSrc ? (
+          <img
+            src={backgroundLogoSrc}
+            alt=""
+            className="absolute -right-8 -top-8 h-28 w-28 select-none object-contain opacity-[0.11] saturate-0 brightness-200"
+            loading="lazy"
+            draggable={false}
+          />
+        ) : null}
+      </div>
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left"
+        className="relative z-10 flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left"
         aria-expanded={open}
       >
         <p className="inline-flex items-center gap-2 text-sm font-medium text-zinc-100">
@@ -108,7 +129,7 @@ function DailyCard(props: {
         </div>
       </button>
       {open ? (
-        <div className="space-y-3 px-3.5 py-3">
+        <div className="relative z-10 space-y-3 px-3.5 py-3">
           {children}
           {!connected && collapsedHint ? <p className="text-[11px] text-amber-200/90">{collapsedHint}</p> : null}
         </div>
@@ -180,7 +201,9 @@ function ZoraDailyCard(props: {
     <DailyCard
       title="Zora"
       connectReward="+40"
-      brandIcon={<span className="text-xs font-semibold text-zinc-200">Z</span>}
+      brandIcon={<BrandLogoIcon src="/brands/zora-token.svg" alt="Zora" />}
+      backgroundLogoSrc="/brands/zora-token.svg"
+      backgroundTintClass="bg-[radial-gradient(120%_120%_at_100%_0%,rgba(138,99,210,0.24),transparent_62%)]"
       connected={linked}
       collapsedHint="Connect to unlock next cards."
       defaultOpen
@@ -285,7 +308,9 @@ function TwitterDailyCard(props: {
     <DailyCard
       title="X"
       connectReward="+16"
-      brandIcon={<SiX className="h-3.5 w-3.5" />}
+      brandIcon={<BrandLogoIcon src="/brands/x-logo.svg" alt="X" />}
+      backgroundLogoSrc="/brands/x-logo.svg"
+      backgroundTintClass="bg-[radial-gradient(120%_120%_at_100%_0%,rgba(255,255,255,0.16),transparent_62%)]"
       connected={linked}
       showConnectedAsCheck
       collapsedHint="Connect to unlock action and reward."
@@ -310,7 +335,7 @@ function TwitterDailyCard(props: {
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 text-[10px] text-zinc-400 hover:text-zinc-200"
               >
-                <SiX className="h-3 w-3" />
+                <BrandLogoIcon src="/brands/x-logo.svg" alt="X" className="h-3 w-3" />
                 Compose
                 <ExternalLink className="h-3 w-3" />
               </a>
@@ -353,7 +378,9 @@ function FarcasterDailyCard(props: {
     <DailyCard
       title="Farcaster"
       connectReward="+0"
-      brandIcon={<SiFarcaster className="h-3.5 w-3.5" />}
+      brandIcon={<BrandLogoIcon src="/brands/farcaster-logo.svg" alt="Farcaster" />}
+      backgroundLogoSrc="/brands/farcaster-logo.svg"
+      backgroundTintClass="bg-[radial-gradient(120%_120%_at_100%_0%,rgba(138,99,210,0.24),transparent_62%)]"
       connected={linked}
       showConnectedAsCheck
       collapsedHint="Link Zora above to unlock."
@@ -368,7 +395,7 @@ function FarcasterDailyCard(props: {
                 onClick={() => openWindow(buildWarpcastIntent(shareUrl, 'Join me on 4626:'))}
                 className="inline-flex items-center gap-1.5 rounded-md bg-brand-primary/80 px-3 py-1.5 text-[11px] font-medium text-white shadow-[0_10px_24px_-14px_rgb(var(--brand-primary)/0.95)] hover:bg-brand-hover"
               >
-                <SiFarcaster className="h-3 w-3" />
+                <BrandLogoIcon src="/brands/farcaster-logo.svg" alt="Farcaster" className="h-3 w-3" />
                 Post
               </button>
             }
@@ -393,7 +420,9 @@ function TelegramDailyCard(props: {
     <DailyCard
       title="Telegram"
       connectReward={`+${PROVIDER_POINTS.telegram}`}
-      brandIcon={<RiTelegram2Fill className="h-3.5 w-3.5" />}
+      brandIcon={<BrandLogoIcon src="/brands/telegram-logo.svg" alt="Telegram" />}
+      backgroundLogoSrc="/brands/telegram-logo.svg"
+      backgroundTintClass="bg-[radial-gradient(120%_120%_at_100%_0%,rgba(34,158,217,0.24),transparent_62%)]"
       connected={linked}
       showConnectedAsCheck
       collapsedHint="Connect to unlock action and reward."
@@ -424,7 +453,7 @@ function TelegramDailyCard(props: {
               rel="noreferrer"
               className="inline-flex items-center gap-1.5 rounded-md bg-brand-primary/80 px-3 py-1.5 text-[11px] font-medium text-white shadow-[0_10px_24px_-14px_rgb(var(--brand-primary)/0.95)] hover:bg-brand-hover"
             >
-              <RiTelegram2Fill className="h-3 w-3" />
+              <BrandLogoIcon src="/brands/telegram-logo.svg" alt="Telegram" className="h-3 w-3" />
               Join
               <ExternalLink className="h-3 w-3" />
             </a>

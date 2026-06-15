@@ -36,6 +36,11 @@ function getPrivyServerAuth(): { appId: string; appSecret: string } | null {
   return { appId, appSecret }
 }
 
+function getPrivyJwtVerificationKey(): string | null {
+  const key = String(process.env.PRIVY_JWT_VERIFICATION_KEY ?? '').trim()
+  return key.length > 0 ? key : null
+}
+
 function getBearerToken(req: VercelRequest): string | null {
   const h = req.headers?.authorization
   const raw = typeof h === 'string' ? h.trim() : ''
@@ -248,7 +253,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const client = new PrivyClient(auth.appId, auth.appSecret)
-    const claims = await client.verifyAuthToken(token)
+    const verificationKey = getPrivyJwtVerificationKey()
+    const claims = await client.verifyAuthToken(token, verificationKey ?? undefined)
     const loaded = await loadPrivyUserWithWalletLinkRetry(client, claims.userId)
     let user = loaded.user
     let classified = loaded.classified
