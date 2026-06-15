@@ -627,6 +627,15 @@ function isBareGmeowFromTrustedSender(rawText: string, senderLower: string): boo
   return /^gmeow+\b/.test(rawText.trim().toLowerCase())
 }
 
+function normalizeBareArenaCommand(rawText: string): string | null {
+  const trimmed = String(rawText ?? '').trim()
+  if (!trimmed) return null
+  const match = trimmed.match(/^arena(?:\s+(.+))?$/i)
+  if (!match) return null
+  const suffix = String(match[1] ?? '').trim()
+  return suffix.length > 0 ? `/arena ${suffix}` : '/arena'
+}
+
 function isTelegramRelayedSlashCommand(rawText: string, extractedCommandText: string): boolean {
   const command = String(extractedCommandText ?? '').trim()
   if (!command.startsWith('/')) return false
@@ -648,7 +657,8 @@ export function isHistoryMessageCommandCandidate(message: AlfaClubRoomHistoryMes
   if (!isHexAddress(normalized.sender) && !telegramRelayedCommand) return false
   if (normalized.sender === CANONICAL_CSW_ADDRESS.toLowerCase()) return false
   const trustedBareGmeow = isBareGmeowFromTrustedSender(commandText, normalized.sender)
-  return trustedBareGmeow || isAlfaClubSlashCommandText(commandText)
+  const bareArena = normalizeBareArenaCommand(commandText)
+  return trustedBareGmeow || Boolean(bareArena) || isAlfaClubSlashCommandText(commandText)
 }
 
 /**
@@ -711,12 +721,13 @@ export function collectAlfaClubCommandMessages(params: {
     if (self && entry.sender === self) continue
     if (entry.sender === CANONICAL_CSW_ADDRESS.toLowerCase()) continue
     const trustedBareGmeow = isBareGmeowFromTrustedSender(commandText, entry.sender)
-    if (!trustedBareGmeow && !isAlfaClubSlashCommandText(commandText)) continue
+    const bareArena = normalizeBareArenaCommand(commandText)
+    if (!trustedBareGmeow && !bareArena && !isAlfaClubSlashCommandText(commandText)) continue
     commands.push({
       id: entry.id,
       date: entry.date,
       sender: entry.sender,
-      text: trustedBareGmeow ? '/gmeow' : commandText.trim(),
+      text: trustedBareGmeow ? '/gmeow' : bareArena ? bareArena : commandText.trim(),
     })
   }
   return commands
