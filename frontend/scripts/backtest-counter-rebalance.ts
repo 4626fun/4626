@@ -659,6 +659,12 @@ async function main() {
     }
   }
 
+  if (results.length === 0) {
+    throw new Error(
+      'No parameter sets were generated. Ensure max-chunks >= min-chunks and numeric sweep lists are valid.',
+    )
+  }
+
   results.sort((a, b) => b.objective - a.objective)
   const top = results.slice(0, 10)
   console.log('\nTop parameter sets (by objective):')

@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { readdir, readFile } from 'node:fs/promises'
+import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '@4626/server-core'
 
@@ -61,6 +61,19 @@ function resolveBacktestsDirCandidates(): string[] {
   ]
 }
 
+type BacktestFileEntry = {
+  dir: string
+  name: string
+  mtimeMs: number
+}
+
+function isSweepCsvFile(name: string): boolean {
+  if (!name.endsWith('.csv')) return false
+  // Rebalance audit CSVs use a different schema and should not populate sweep rows.
+  if (name.endsWith('-rebalances.csv')) return false
+  return true
+}
+
 function normalizeRequestedFile(raw: string | null): string | null {
   if (!raw) return null
   const base = path.basename(raw)
@@ -93,21 +106,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const candidateDirs = resolveBacktestsDirCandidates()
     const requestedFile = normalizeRequestedFile(parseStringQuery(req.query.file))
-    let selectedDir: string | null = null
-    let files: string[] = []
+    const discovered: BacktestFileEntry[] = []
 
     for (const dir of candidateDirs) {
       const dirEntries = await readdir(dir, { withFileTypes: true }).catch(() => [])
-      const csvFiles = dirEntries
-        .filter((entry) => entry.isFile() && entry.name.endsWith('.csv'))
-        .map((entry) => entry.name)
-        .sort((a, b) => b.localeCompare(a))
-      if (csvFiles.length > 0) {
-        selectedDir = dir
-        files = csvFiles
-        break
+      const csvFiles = dirEntries.filter((entry) => entry.isFile() && isSweepCsvFile(entry.name))
+      for (const file of csvFiles) {
+        const fullPath = path.join(dir, file.name)
+        const mtimeMs = await stat(fullPath)
+          .then((meta) => meta.mtimeMs)
+          .catch(() => 0)
+        discovered.push({ dir, name: file.name, mtimeMs })
       }
     }
+
+    const sorted = discovered.sort((a, b) => b.mtimeMs - a.mtimeMs || b.name.localeCompare(a.name))
+    const files = Array.from(new Set(sorted.map((entry) => entry.name)))
 
     if (files.length === 0) {
       return res.status(200).json({
@@ -121,8 +135,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
     }
 
-    const selected = requestedFile && files.includes(requestedFile) ? requestedFile : files[0]
-    const fullPath = path.join(selectedDir ?? candidateDirs[0], selected)
+    const selected =
+      requestedFile && files.includes(requestedFile) ? requestedFile : (sorted[0]?.name ?? files[0])
+    const selectedEntry = sorted.find((entry) => entry.name === selected) ?? sorted[0]
+    if (!selectedEntry) {
+      return res.status(500).json({ success: false, error: 'backtest_sweep_file_resolve_failed' })
+    }
+    const fullPath = path.join(selectedEntry.dir, selectedEntry.name)
     const raw = await readFile(fullPath, 'utf8')
     const rows = parseCsv(raw)
 
@@ -132,7 +151,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         files,
         file: selected,
         rows,
-        resolvedDir: selectedDir,
+        resolvedDir: selectedEntry.dir,
       },
     })
   } catch (error) {

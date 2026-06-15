@@ -108,6 +108,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const deadband = toRangeNumber(body.deadband, 0.08, 0.001, 0.5)
   const minChunkUsd = toPositiveNumber(body.minChunkUsd, 500)
   const maxChunkUsd = toPositiveNumber(body.maxChunkUsd, Math.max(500, minChunkUsd))
+  if (maxChunkUsd < minChunkUsd) {
+    return res.status(400).json({
+      success: false,
+      error: 'maxChunkUsd must be greater than or equal to minChunkUsd',
+    } satisfies ApiEnvelope<never>)
+  }
   const cooldownBars = toNonNegativeInt(body.cooldownBars, 3)
   const requireNoCommingle = toBoolean(body.requireNoCommingle, true)
 
@@ -198,9 +204,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }>)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Backtest execution failed'
+    const stderr =
+      typeof (error as { stderr?: unknown }).stderr === 'string'
+        ? trimOutput((error as { stderr: string }).stderr)
+        : ''
+    const stdout =
+      typeof (error as { stdout?: unknown }).stdout === 'string'
+        ? trimOutput((error as { stdout: string }).stdout)
+        : ''
+    const detail = [stderr, stdout].filter((part) => part.length > 0).join('\n')
     return res.status(500).json({
       success: false,
-      error: message,
+      error: detail ? `${message}\n${detail}` : message,
     } satisfies ApiEnvelope<never>)
   }
 }

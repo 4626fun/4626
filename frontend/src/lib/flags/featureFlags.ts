@@ -335,6 +335,9 @@ export function resolvePrivyClientId(): string | null {
 }
 
 export function resolvePrivyApiUrl(): string | null {
+  // Fail-safe: custom Privy API domains are opt-in behind an explicit enable flag.
+  // This prevents a misrouted custom domain from taking down auth flows in prod.
+  if (!isTruthyEnv(import.meta.env.VITE_PRIVY_API_URL_ENABLED)) return null
   const raw = String(import.meta.env.VITE_PRIVY_API_URL ?? '').trim()
   if (!raw) return null
   try {
