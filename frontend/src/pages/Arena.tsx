@@ -1119,7 +1119,7 @@ export function ArenaBacktestPage() {
                 onChange={(event) => setNoCommingleOnly(event.target.checked)}
                 className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-sky-500"
               />
-              no-commingle rows only
+              isolation-safe runs only
             </label>
           </div>
 
@@ -1137,7 +1137,7 @@ export function ArenaBacktestPage() {
               <div className="text-sm text-zinc-100">{formatUsd(totalCapitalUsd)}</div>
             </div>
             <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Data frequency</div>
+              <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Candle interval</div>
               <div className="text-sm text-zinc-100">{intervalForWindow}</div>
             </div>
           </div>
@@ -1158,7 +1158,7 @@ export function ArenaBacktestPage() {
               }
               className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-900"
             >
-              Frequent
+              Aggressive
             </button>
             <button
               type="button"
@@ -1190,7 +1190,7 @@ export function ArenaBacktestPage() {
               }
               className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-900"
             >
-              Conservative
+              Low frequency
             </button>
           </div>
 
@@ -1211,7 +1211,7 @@ export function ArenaBacktestPage() {
                 </select>
               </label>
               <label className="text-zinc-500">
-                Timeframe
+                Backtest horizon
                 <select
                   value={defaults.windowHours}
                   onChange={(event) =>
@@ -1230,7 +1230,7 @@ export function ArenaBacktestPage() {
                 </select>
               </label>
               <label className="text-zinc-500">
-                Leverage
+                Leverage (x)
                 <input
                   type="number"
                   min={1}
@@ -1247,7 +1247,7 @@ export function ArenaBacktestPage() {
               </label>
               <div className="col-span-full text-[11px] uppercase tracking-[0.14em] text-zinc-500 mt-1">Capital allocation</div>
               <label className="text-zinc-500">
-                Long margin (USD)
+                Long position margin (USD)
                 <input
                   type="number"
                   min={1}
@@ -1262,7 +1262,7 @@ export function ArenaBacktestPage() {
                 />
               </label>
               <label className="text-zinc-500">
-                Short margin (USD)
+                Short position margin (USD)
                 <input
                   type="number"
                   min={1}
@@ -1277,7 +1277,7 @@ export function ArenaBacktestPage() {
                 />
               </label>
               <label className="text-zinc-500">
-                Long buffer (USD)
+                Long reserve buffer (USD)
                 <input
                   type="number"
                   min={1}
@@ -1292,7 +1292,7 @@ export function ArenaBacktestPage() {
                 />
               </label>
               <label className="text-zinc-500">
-                Short buffer (USD)
+                Short reserve buffer (USD)
                 <input
                   type="number"
                   min={1}
@@ -1308,7 +1308,7 @@ export function ArenaBacktestPage() {
               </label>
               <div className="col-span-full text-[11px] uppercase tracking-[0.14em] text-zinc-500 mt-1">Rebalance policy</div>
               <label className="text-zinc-500">
-                Weak-leg health trigger
+                Rebalance trigger (weak-leg health floor)
                 <input
                   type="number"
                   step="0.001"
@@ -1320,7 +1320,7 @@ export function ArenaBacktestPage() {
                 />
               </label>
               <label className="text-zinc-500">
-                Rebalance deadband
+                Minimum health gap before rebalance
                 <input
                   type="number"
                   step="0.001"
@@ -1354,7 +1354,7 @@ export function ArenaBacktestPage() {
                 />
               </label>
               <label className="text-zinc-500 col-span-2">
-                Minimum bars between rebalances
+                Rebalance cooldown (bars)
                 <input
                   type="number"
                   value={defaults.cooldownBars}
@@ -1373,28 +1373,28 @@ export function ArenaBacktestPage() {
                   }
                   className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-sky-500"
                 />
-                Hard-enforce no commingling during run
+                Fail run if any cross-leg commingling is detected
               </label>
           </div>
 
           <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 p-2 text-xs text-zinc-400 space-y-1">
             <p>
-              Historical interval for selected timeframe: <span className="text-zinc-100">{intervalForWindow}</span>
+              Candle interval selected from horizon: <span className="text-zinc-100">{intervalForWindow}</span>
             </p>
             <p>
-              Rebalance timing: at least{' '}
+              Rebalance timing: wait at least{' '}
               <span className="text-zinc-100">
                 {defaults.cooldownBars} bars (~{formatNum(rebalanceCooldownMinutes, 0)} min)
               </span>{' '}
               between rebalances.
             </p>
             <p>
-              Constraints: leverage 1-{leverageMax}x for {defaults.market}, USD inputs must be positive, legs stay isolated
+              Constraints: leverage 1-{leverageMax}x for {defaults.market}, all USD inputs must stay positive, and legs stay isolated
               (no cross-leg fund transfers).
             </p>
             {defaults.requireNoCommingle ? (
               <p className="text-sky-200">
-                Run mode: hard-enforced isolation. Backtest run fails if any cross-leg commingle violation is detected.
+                Run mode: strict isolation. The backtest fails immediately if any cross-leg transfer is detected.
               </p>
             ) : null}
           </div>

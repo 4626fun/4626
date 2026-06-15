@@ -13,6 +13,7 @@ interface ImportMetaEnv {
   readonly VITE_SWAP_PROVIDER?: string
   readonly VITE_PUBLIC_SITE_MODE?: string
   readonly VITE_PRIVY_APP_ID?: string
+  readonly VITE_PRIVY_CLIENT_ID_ENABLED?: string
   readonly VITE_PRIVY_CLIENT_ID?: string
   readonly VITE_PRIVY_CLIENT_ID_ON_LOOPBACK?: string
   readonly VITE_PRIVY_ENABLED?: string

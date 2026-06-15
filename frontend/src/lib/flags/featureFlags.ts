@@ -324,6 +324,10 @@ export function resolvePrivyAppId(): string | null {
 }
 
 export function resolvePrivyClientId(): string | null {
+  // Fail-safe default: do not use client-id based auth domain routing unless
+  // explicitly enabled. A misconfigured custom Privy domain can break iframe
+  // auth bootstrap (`frame-ancestors` / `x-frame-options`) and stall waitlist.
+  if (!isTruthyEnv(import.meta.env.VITE_PRIVY_CLIENT_ID_ENABLED)) return null
   const clientId = String(import.meta.env.VITE_PRIVY_CLIENT_ID ?? '').trim()
   if (!clientId) return null
   // Local dev should prefer app-id auth unless explicitly forced. This avoids

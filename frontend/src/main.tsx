@@ -16,6 +16,7 @@ import {
   isPrivyPasswordlessFailure,
   isPrivyPasswordlessInitRequest,
   normalizeFetchMethod,
+  rewritePrivyLegacyRequestInput,
 } from '@/lib/privy/passwordlessFetchGuard'
 import '@4626/brand-kit/styles'
 import './index.css'
@@ -286,6 +287,14 @@ if (typeof window !== 'undefined') {
       debugEnabled ||
       params.get('privy_analytics') === '0' ||
       window.localStorage.getItem('cv:privy:analytics') === 'off'
+    if (!(window as any).__cvPrivyHostRewritePatched) {
+      const originalFetch = window.fetch.bind(window)
+      window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+        const rewritten = rewritePrivyLegacyRequestInput(input, init)
+        return originalFetch(rewritten.input, rewritten.init)
+      }
+      ;(window as any).__cvPrivyHostRewritePatched = true
+    }
     let privyPasswordlessCooldownUntilMs = 0
     let privyPasswordlessInFlight: Promise<Response> | null = null
     if (disablePrivyAnalytics && !(window as any).__cvPrivyAnalyticsFetchPatched) {

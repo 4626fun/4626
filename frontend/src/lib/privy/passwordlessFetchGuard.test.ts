@@ -7,6 +7,8 @@ import {
   isPrivyPasswordlessFailure,
   isPrivyPasswordlessInitRequest,
   normalizeFetchMethod,
+  rewritePrivyLegacyRequestInput,
+  rewritePrivyLegacyRequestUrl,
 } from './passwordlessFetchGuard'
 
 describe('passwordlessFetchGuard', () => {
@@ -22,6 +24,30 @@ describe('passwordlessFetchGuard', () => {
     expect(normalizeFetchMethod(undefined)).toBe('GET')
     expect(normalizeFetchMethod('')).toBe('GET')
     expect(normalizeFetchMethod(' post ')).toBe('POST')
+  })
+
+  it('rewrites legacy Privy custom-domain API requests to auth.privy.io', () => {
+    expect(rewritePrivyLegacyRequestUrl('https://privy.4626.fun/api/v1/passwordless/init')).toBe(
+      'https://auth.privy.io/api/v1/passwordless/init',
+    )
+    expect(rewritePrivyLegacyRequestUrl('https://privy.4626.fun/healthz')).toBe('https://privy.4626.fun/healthz')
+    expect(rewritePrivyLegacyRequestUrl('https://auth.privy.io/api/v1/passwordless/init')).toBe(
+      'https://auth.privy.io/api/v1/passwordless/init',
+    )
+  })
+
+  it('preserves Request inputs while rewriting legacy Privy URLs', () => {
+    const request = new Request('https://privy.4626.fun/api/v1/passwordless/init', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'x@y.z' }),
+    })
+    const rewritten = rewritePrivyLegacyRequestInput(request)
+    expect(rewritten.rewritten).toBe(true)
+    expect(rewritten.url).toBe('https://auth.privy.io/api/v1/passwordless/init')
+    expect(rewritten.input instanceof Request).toBe(true)
+    expect((rewritten.input as Request).url).toBe('https://auth.privy.io/api/v1/passwordless/init')
+    expect((rewritten.input as Request).method).toBe('POST')
   })
 
   it('uses retry-after seconds when Privy returns a rate limit header', () => {

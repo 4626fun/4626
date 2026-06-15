@@ -1,4 +1,7 @@
 const PRIVY_PASSWORDLESS_INIT_URL = 'https://auth.privy.io/api/v1/passwordless/init'
+const PRIVY_CANONICAL_ORIGIN = 'https://auth.privy.io'
+const PRIVY_LEGACY_CUSTOM_ORIGIN = 'https://privy.4626.fun'
+const PRIVY_API_PATH_PREFIX = '/api/v1/'
 const DEFAULT_PRIVY_PASSWORDLESS_FAILURE_BACKOFF_MS = 10_000
 const DEFAULT_PRIVY_PASSWORDLESS_RATE_LIMIT_BACKOFF_MS = 30_000
 
@@ -19,6 +22,52 @@ export function isPrivyPasswordlessInitRequest(url: string, method: string): boo
     return new URL(url).toString() === PRIVY_PASSWORDLESS_INIT_URL
   } catch {
     return false
+  }
+}
+
+export function rewritePrivyLegacyRequestUrl(url: string): string {
+  try {
+    const parsed = new URL(url)
+    if (parsed.origin.toLowerCase() !== PRIVY_LEGACY_CUSTOM_ORIGIN) return url
+    if (!parsed.pathname.startsWith(PRIVY_API_PATH_PREFIX)) return url
+    parsed.protocol = 'https:'
+    parsed.host = new URL(PRIVY_CANONICAL_ORIGIN).host
+    return parsed.toString()
+  } catch {
+    return url
+  }
+}
+
+export function rewritePrivyLegacyRequestInput(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): {
+  input: RequestInfo | URL
+  init: RequestInit | undefined
+  url: string
+  rewritten: boolean
+} {
+  const originalUrl =
+    typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+  const rewrittenUrl = rewritePrivyLegacyRequestUrl(originalUrl)
+  if (rewrittenUrl === originalUrl) {
+    return { input, init, url: originalUrl, rewritten: false }
+  }
+
+  if (input instanceof Request) {
+    return {
+      input: new Request(rewrittenUrl, input),
+      init,
+      url: rewrittenUrl,
+      rewritten: true,
+    }
+  }
+
+  return {
+    input: rewrittenUrl,
+    init,
+    url: rewrittenUrl,
+    rewritten: true,
   }
 }
 
