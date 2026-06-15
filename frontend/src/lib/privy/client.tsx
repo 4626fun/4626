@@ -34,6 +34,26 @@ type PrivyClientMode = 'default' | 'waitlist-email-only'
 
 const PrivyClientContext = createContext<PrivyClientStatus>('disabled')
 
+function isLoopbackHostname(hostname: string): boolean {
+  const h = String(hostname || '').trim().toLowerCase()
+  return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]'
+}
+
+function coerceLoopbackAuthRedirectOrigin(input: {
+  resolvedOrigin: string
+  currentOrigin: string
+}): string {
+  try {
+    const resolved = new URL(input.resolvedOrigin)
+    const current = new URL(input.currentOrigin)
+    if (!isLoopbackHostname(current.hostname)) return input.resolvedOrigin
+    if (isLoopbackHostname(resolved.hostname)) return input.resolvedOrigin
+    return current.origin
+  } catch {
+    return input.currentOrigin
+  }
+}
+
 export function usePrivyClientStatus(): PrivyClientStatus {
   return useContext(PrivyClientContext)
 }
@@ -164,8 +184,11 @@ export function PrivyClientProvider(props: {
   // Use the bare origin so transient search/hash state on the current page never breaks OAuth init.
   const customOAuthRedirectUrl =
     typeof window !== 'undefined'
-      ? resolveAuthRedirectOrigin({
-          configuredOrigin: CONFIGURED_APP_ORIGIN,
+      ? coerceLoopbackAuthRedirectOrigin({
+          resolvedOrigin: resolveAuthRedirectOrigin({
+            configuredOrigin: CONFIGURED_APP_ORIGIN,
+            currentOrigin: window.location.origin,
+          }),
           currentOrigin: window.location.origin,
         })
       : null
