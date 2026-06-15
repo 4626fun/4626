@@ -42,6 +42,15 @@ function readConfiguredCronSecret(): string {
   return (process.env.CRON_SECRET ?? '').trim()
 }
 
+function isInvalidPrivyBootstrapTokenError(raw: string): boolean {
+  if (!raw) return false
+  return (
+    /missing_or_invalid_token/i.test(raw) ||
+    /invalid auth token/i.test(raw) ||
+    /invalid_refresh_token/i.test(raw)
+  )
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store')
 
@@ -104,6 +113,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (outcome.status === 'error') {
+      if (isInvalidPrivyBootstrapTokenError(outcome.error)) {
+        return res.status(200).json({
+          success: false,
+          reason: 'invalid_bootstrap_tokens',
+          error: 'Privy bootstrap tokens are invalid and require manual rotation',
+        })
+      }
       // Token refresh failed against Privy (e.g. expired refresh token, network
       // blip). Surface as 502 so cron monitoring can distinguish "Privy said
       // no" from "we are misconfigured" (503). Error string already redacted

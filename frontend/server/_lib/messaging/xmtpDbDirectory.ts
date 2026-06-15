@@ -4,6 +4,8 @@ import path from 'node:path'
 
 declare const process: { env: Record<string, string | undefined>; cwd: () => string }
 
+const warnedNonWritableEnvXmtpDirs = new Set<string>()
+
 function countDbFiles(dirPath: string): number {
   try {
     return fs.readdirSync(dirPath).filter((name) => name.endsWith('.db3')).length
@@ -147,7 +149,12 @@ export function resolveXmtpDbDirectory(): string {
   const fromEnv = (process.env.XMTP_DB_DIRECTORY ?? '').trim()
   if (fromEnv) {
     if (ensureWritableDir(fromEnv)) return fromEnv
-    console.warn(`[xmtp] XMTP_DB_DIRECTORY is not writable: ${fromEnv}. Falling back to auto-detected writable path.`)
+    if (!warnedNonWritableEnvXmtpDirs.has(fromEnv)) {
+      warnedNonWritableEnvXmtpDirs.add(fromEnv)
+      console.warn(
+        `[xmtp] XMTP_DB_DIRECTORY is not writable: ${fromEnv}. Falling back to auto-detected writable path.`,
+      )
+    }
   }
 
   const cwdDir = path.join(process.cwd(), '.xmtp-data')

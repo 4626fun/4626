@@ -344,6 +344,46 @@ Confirm the Railway Hermit `/healthz` response includes a healthy counter-trade 
 
 ## Rollout plan
 
+### Subaccount sleeve staged rollout (event -> trend -> meanRevert)
+
+Use this sequence when enabling Hyperliquid subaccount sleeves for the
+counter-trader. Keep this feature flag off by default until mappings are ready.
+
+1. Configure env on the Railway executor:
+   - `COUNTER_TRADE_HL_SUBACCOUNTS_ENABLED=0`
+   - `ALFACLUB_COUNTER_TRADE_HL_SUBACCOUNT_EVENT=0x...`
+   - `ALFACLUB_COUNTER_TRADE_HL_SUBACCOUNT_TREND=0x...`
+   - `ALFACLUB_COUNTER_TRADE_HL_SUBACCOUNT_MEAN_REVERT=0x...`
+   - aggressive risk math knobs:
+     - `ALFACLUB_COUNTER_TRADE_RISK_PER_TRADE_BPS=100`
+     - `ALFACLUB_COUNTER_TRADE_DAILY_LOSS_CAP_BPS=300`
+     - `ALFACLUB_COUNTER_TRADE_MAX_DRAWDOWN_PAUSE_BPS=1000`
+     - `ALFACLUB_COUNTER_TRADE_STOP_DISTANCE_PCT_EVENT=4`
+     - `ALFACLUB_COUNTER_TRADE_STOP_DISTANCE_PCT_TREND=2.5`
+     - `ALFACLUB_COUNTER_TRADE_STOP_DISTANCE_PCT_MEAN_REVERT=1.5`
+
+2. Event sleeve canary (aggressive preset only):
+   - Turn on `COUNTER_TRADE_HL_SUBACCOUNTS_ENABLED=1`.
+   - Keep opt-ins limited to canary users in `aggressive` preset (maps to
+     `event` sleeve).
+   - Monitor logs and ledger for:
+     - `counter_trade.execution_submitted` with `strategy=event`
+     - no `subaccount_missing_mapping:*`
+     - no sustained `risk_gate:daily_loss_cap_reached` or `risk_gate:drawdown_pause`
+
+3. Expand to trend sleeve:
+   - Add canary users in `balanced` preset (maps to `trend` sleeve).
+   - Verify `strategy=trend` execution and independent gating behavior.
+
+4. Expand to mean-revert sleeve:
+   - Add canary users in `defensive` preset (maps to `meanRevert` sleeve).
+   - Verify `strategy=meanRevert` execution and gating.
+
+5. Full rollout:
+   - Increase cohort gradually only after all three sleeves are stable.
+   - Any missing sleeve mapping should remain fail-closed (expected reason:
+     `subaccount_missing_mapping:<strategy>`); do not fallback to master.
+
 ### Phase 0: Disabled deploy (safe install)
 
 1. On Railway Hermit set `ALFACLUB_COUNTER_TRADE_RUNNER_ENABLED=1` but `ALFACLUB_COUNTER_TRADE_ENABLED=0`.

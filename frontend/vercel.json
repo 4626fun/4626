@@ -35,44 +35,16 @@
       "schedule": "1,6,11,16,21,26,31,36,41,46,51,56 * * * *"
     },
     {
-      "path": "/api/sync-creator-metrics?mode=backfill",
-      "schedule": "5,35 * * * *"
-    },
-    {
       "path": "/api/waitlist/airtable-sync",
       "schedule": "*/15 * * * *"
-    },
-    {
-      "path": "/api/v1/alfaclub/run",
-      "schedule": "0 12 * * *"
     },
     {
       "path": "/api/v1/alfaclub/chat-bridge-run",
       "schedule": "* * * * *"
     },
     {
-      "path": "/api/v1/alfaclub/proliquid-score-run",
-      "schedule": "*/2 * * * *"
-    },
-    {
-      "path": "/api/v1/alfaclub/radar",
-      "schedule": "5 12 * * *"
-    },
-    {
-      "path": "/api/v1/alfaclub/daily-brief",
-      "schedule": "10 12 * * *"
-    },
-    {
       "path": "/api/v1/alfaclub/chat-token-refresh",
       "schedule": "*/10 * * * *"
-    },
-    {
-      "path": "/api/v1/alfaclub/position-alerts",
-      "schedule": "1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51,53,55,57,59 * * * *"
-    },
-    {
-      "path": "/api/v1/alfaclub/room-label-sync",
-      "schedule": "*/30 * * * *"
     },
     {
       "path": "/api/v1/lottery/amoe/retry-cron",
@@ -111,47 +83,21 @@
       "schedule": "3,8,13,18,23,28,33,38,43,48,53,58 * * * *"
     },
     {
-      "path": "/api/keeper/jobs/enqueue-sweep-canary",
-      "schedule": "*/15 * * * *"
-    },
-    {
-      "path": "/api/keeper/jobs/enqueue-vault-canary",
-      "schedule": "*/30 * * * *"
-    },
-    {
       "path": "/api/keeper/jobs/enqueue-active-vaults",
       "schedule": "*/30 * * * *"
-    },
-    {
-      "path": "/api/keeper/jobs/process-keepr-actions",
-      "schedule": "3,8,13,18,23,28,33,38,43,48,53,58 * * * *"
-    },
-    {
-      "path": "/api/keeper/jobs/enqueue-bridge-integrity",
-      "schedule": "*/15 * * * *"
-    },
-    {
-      "path": "/api/keeper/jobs/enqueue-ethos-sync",
-      "schedule": "7,17,27,37,47,57 * * * *"
-    },
-    {
-      "path": "/api/keeper/jobs/enqueue-strategy-canary",
-      "schedule": "*/30 * * * *"
-    },
-    {
-      "path": "/api/keeper/jobs/enqueue-solana-reconcile",
-      "schedule": "*/15 * * * *"
-    },
-    {
-      "path": "/api/keeper/jobs/enqueue-ajna-manager",
-      "schedule": "*/15 * * * *"
-    },
-    {
-      "path": "/api/keeper/jobs/enqueue-strategy-signals",
-      "schedule": "6,11,16,21,26,31,36,41,46,51,56 * * * *"
     }
   ],
   "routes": [
+    {
+      "src": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "privy.4626.fun"
+        }
+      ],
+      "dest": "https://auth.privy.io/$1"
+    },
     {
       "src": "/(.*)",
       "has": [

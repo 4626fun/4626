@@ -143,6 +143,22 @@ describe('POST /api/v1/alfaclub/chat-token-refresh', () => {
     expect(res.body?.error).toBe('privy_refresh_failed:401')
   })
 
+  it('returns 200 invalid_bootstrap_tokens when Privy reports invalid token pair', async () => {
+    runAlfaClubPrivyRefreshOnceMock.mockResolvedValueOnce({
+      status: 'error',
+      error:
+        'privy_refresh_failed:400:{"error":"Invalid auth token","code":"missing_or_invalid_token"}',
+    })
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-cron-secret': 'test-cron-secret' },
+    })
+    const res = createMockRes()
+    await refreshHandler(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.reason).toBe('invalid_bootstrap_tokens')
+  })
+
   it('returns 500 with a clipped message when the refresher throws', async () => {
     runAlfaClubPrivyRefreshOnceMock.mockRejectedValueOnce(new Error('boom'))
     const req = createMockReq({

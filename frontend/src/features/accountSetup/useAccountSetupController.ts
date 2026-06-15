@@ -8,15 +8,9 @@ import { useAccount, useConnections, usePublicClient, useSwitchChain, useWalletC
 import { mergeAccountMeWithBootstrap } from '@/lib/account/mergeAccountMeBootstrap'
 import { apiFetch } from '@/lib/api/apiBase'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
-import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { extractPrivyWalletsFromUser, useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import {
-  isLocalhostPrivyCustomDomainConfigError,
-  isMissingPrivyAuthTokenError,
-  isRecoverableCrossAppAuthError,
   isUserRejectedCrossAppAuthError,
-  isUnauthorizedCrossAppLinkError,
-  performZoraCrossAppAuth,
 } from '@/lib/privy/zoraCrossApp'
 import { isTelegramMiniAppContext, readPrivyTelegramLaunchParams } from '@/lib/telegram/telegramWebApp'
 import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
@@ -52,8 +46,6 @@ import {
 } from '@/lib/wallet/onboardingWalletDelegation'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 import { buildZoraHandoffUrl } from '@/lib/zora/referrals'
-import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
-import { selectCrossAppAuthAction } from '@/features/waitlist/crossAppWalletUtils'
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import { checkEoaOwnershipOfCsw } from '@/wallet/accountContext/ownership'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
@@ -395,41 +387,6 @@ export function useAccountSetupController(params: {
     [getAccessToken],
   )
 
-  const ensurePrivyTokenReadyForCrossApp = useCallback(async (): Promise<boolean> => {
-    const privyNow = privyRef.current
-    const getAccessTokenNow =
-      typeof privyNow?.getAccessToken === 'function'
-        ? (privyNow.getAccessToken as () => Promise<string | null>)
-        : async () => null
-    const token = await resolvePrivyAccessTokenWithRetry(getAccessTokenNow, {
-      attempts: 6,
-      delayMs: 200,
-    })
-    if (token) return true
-    if (!privyNow?.authenticated) return true
-
-    // Split-state guard: UI can be authenticated while cross-app lanes return
-    // Missing auth token. Clear Privy + app session so the next attempt starts clean.
-    await runWaitlistPrivyLogout({
-      logout: async () => {
-        await (privyNow?.logout ? privyNow.logout().catch(() => null) : Promise.resolve())
-      },
-      shouldLogout: true,
-    })
-    return false
-  }, [])
-
-  const resetPrivySessionAfterUnauthorizedCrossApp = useCallback(async (): Promise<void> => {
-    const privyNow = privyRef.current
-    if (!privyNow?.authenticated) return
-    await runWaitlistPrivyLogout({
-      logout: async () => {
-        await (privyNow?.logout ? privyNow.logout().catch(() => null) : Promise.resolve())
-      },
-      shouldLogout: true,
-    })
-  }, [])
-
   const loadMe = useCallback(
     async (options?: { showSpinner?: boolean }) => {
       // Read unstable objects via refs so the callback does not need them in its dependency array.
@@ -702,23 +659,26 @@ export function useAccountSetupController(params: {
     [authHeaders],
   )
 
+  const resolveZoraReadOnlySignals = useCallback(
+    async (headers: Record<string, string>) => {
+      const response = await apiFetch('/api/zora/resolve', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({}),
+      })
+      const payload = (await response.json().catch(() => null)) as ApiEnvelope<ZoraResolveResponse> | null
+      if (!response.ok || !payload?.success || !payload.data) {
+        throw new Error(readApiError(payload, 'Failed to resolve Zora signals.'))
+      }
+      return payload.data
+    },
+    [],
+  )
+
   const performClientSideLink = useCallback(
     async (provider: string) => {
       if (provider === 'zora_cross_app') {
-        const action = selectCrossAppAuthAction({
-          privyAuthed,
-          linkCrossAppAccount,
-          loginWithCrossAppAccount,
-        })
-        if (!action) throw new Error('Zora linking is unavailable in this client.')
-        await performZoraCrossAppAuth({
-          privyAuthed,
-          appId: ZORA_PRIVY_APP_ID,
-          linkCrossAppAccount,
-          loginWithCrossAppAccount,
-          sanitizeRedirect: sanitizeCrossAppRedirectUrlForAuth,
-          isRedirectUrlNotAllowedError: isPrivyRedirectUrlNotAllowedError,
-        })
+        // Read-only mode: no Privy cross-app linking for Zora.
         return
       }
 
@@ -761,7 +721,7 @@ export function useAccountSetupController(params: {
         }
       }
     },
-    [linkCrossAppAccount, login, loginWithCrossAppAccount, privy, privyAuthed],
+    [login, privy],
   )
 
   const performClientSideUnlink = useCallback(async (provider: string, value?: string | null) => {
@@ -787,11 +747,15 @@ export function useAccountSetupController(params: {
     setNoticeGuarded(null)
     try {
       if (provider === 'zora_cross_app') {
-        const sessionReady = await ensurePrivyTokenReadyForCrossApp()
-        if (!sessionReady) {
-          setErrorGuarded('Privy session expired. Sign in again with email OTP, then retry Connect with Zora.')
-          return
-        }
+        const headers = await authHeaders()
+        const resolvedSignals = await resolveZoraReadOnlySignals(headers)
+        setNoticeGuarded(
+          hasResolvedZoraSignals(resolvedSignals)
+            ? 'Zora read-only signals detected.'
+            : 'No Zora read-only signals found yet. Open your Zora profile once, then retry detection.',
+        )
+        await loadMe({ showSpinner: false })
+        return
       }
       await performClientSideLink(provider)
       if (provider === 'external_eoa') {
@@ -821,54 +785,18 @@ export function useAccountSetupController(params: {
       await loadMe({ showSpinner: false })
     } catch (linkError: any) {
       if (provider === 'zora_cross_app') {
-        if (isLocalhostPrivyCustomDomainConfigError(linkError)) {
-          setErrorGuarded(
-            'Privy localhost setup required for Zora linking (custom domain privy.4626.fun). In the Privy dashboard for your Local Dev client, add http://localhost:5173, http://localhost:5174 (and 127.0.0.1 variants) to Allowed Origins + allowed redirect URLs. Restart Vite after changing. See .env.example "Privy Local Dev".'
-          )
-        } else if (isPrivyRedirectUrlNotAllowedError(linkError)) {
-          setErrorGuarded('Privy redirect URL is not allowed for this origin. Add this app URL in Privy settings and retry.')
-        } else if (isMissingPrivyAuthTokenError(linkError)) {
-          setErrorGuarded('Privy session is stale on localhost. Sign out, sign back in with email OTP, then retry Connect with Zora.')
-        } else if (
-          isUnauthorizedCrossAppLinkError(linkError) ||
-          Number(linkError?.status) === 401 ||
-          String(linkError?.message ?? '').toLowerCase().includes('oauth/init')
-        ) {
-          await resetPrivySessionAfterUnauthorizedCrossApp()
-          setErrorGuarded(
-            'Privy session expired during Zora auth. Sign in again with email OTP, then retry Connect with Zora.',
-          )
-        } else if (isRecoverableCrossAppAuthError(linkError)) {
-          // Generic cross-app auth copy can appear even when read-only signal resolution
-          // already has enough identity context (canonical CSW / creator coin / handle).
-          // Re-check resolve before surfacing a blocking auth error.
-          try {
-            const headers = await authHeaders()
-            const resolveRes = await apiFetch('/api/zora/resolve', {
-              method: 'POST',
-              headers,
-              body: JSON.stringify({}),
-            })
-            const resolvePayload = (await resolveRes.json().catch(() => null)) as ApiEnvelope<ZoraResolveResponse> | null
-            if (resolveRes.ok && resolvePayload?.success && hasResolvedZoraSignals(resolvePayload.data)) {
-              setNoticeGuarded('Zora signals were detected after auth retry. Link completed.')
-              await loadMe({ showSpinner: false })
-              return
-            }
-          } catch {
-            // fall through to user guidance below
-          }
-          setErrorGuarded('Zora authentication failed. Open zora.co in this browser first, then tap Connect again.')
-        } else {
-          setErrorGuarded(typeof linkError?.message === 'string' ? linkError.message : 'Failed to link Zora.')
-        }
+        setErrorGuarded(
+          typeof linkError?.message === 'string'
+            ? linkError.message
+            : 'Failed to resolve Zora read-only signals.',
+        )
       } else {
         setErrorGuarded(typeof linkError?.message === 'string' ? linkError.message : `Failed to link ${provider}.`)
       }
     } finally {
       setBusyProviderGuarded(null)
     }
-  }, [authHeaders, callLinkEndpoint, ensurePrivyTokenReadyForCrossApp, loadMe, performClientSideLink, privyAuthed])
+  }, [authHeaders, callLinkEndpoint, loadMe, performClientSideLink, resolveZoraReadOnlySignals])
 
   const onUnlinkProvider = useCallback(async (provider: string) => {
     const privyAuthedNow = Boolean(privyRef.current?.authenticated)
@@ -889,152 +817,32 @@ export function useAccountSetupController(params: {
   }, [callUnlinkEndpoint, loadMe, me, performClientSideUnlink, privyAuthed])
 
   const onLinkZora = useCallback(async () => {
-    // Read via refs to keep the callback stable during long cross-app auth flows.
-    const privyAuthedNow = Boolean(privyRef.current?.authenticated)
-    const linkCrossAppAccountNow = linkCrossAppAccount
-    const loginWithCrossAppAccountNow = loginWithCrossAppAccount
-
     setBusyProviderGuarded('zora_cross_app')
     setErrorGuarded(null)
     setNoticeGuarded(null)
     try {
-      const sessionReady = await ensurePrivyTokenReadyForCrossApp()
-      if (!sessionReady) {
-        setErrorGuarded(
-          'Privy session expired. Sign in again with email OTP, then retry Connect with Zora.',
-        )
-        return
-      }
-
-      const action = selectCrossAppAuthAction({
-        privyAuthed: privyAuthedNow,
-        linkCrossAppAccount: linkCrossAppAccountNow,
-        loginWithCrossAppAccount: loginWithCrossAppAccountNow,
-      })
-      if (!action) throw new Error('Zora linking is unavailable in this client.')
-
-      // Start cross-app auth immediately. Privy opens its popup with a plain
-      // `window.open()` that only succeeds inside this click's transient user
-      // activation — any awaited work before this point (access-token fetch,
-      // /api/zora/resolve prechecks) consumes the activation, the popup gets
-      // blocked, and Privy fails instantly with the generic "There was an issue
-      // connecting your Zora account" modal. Signals-already-resolved cases are
-      // handled by the zoraLinked UI branch and onRefreshZora instead.
-      await performZoraCrossAppAuth({
-        privyAuthed: privyAuthedNow,
-        appId: ZORA_PRIVY_APP_ID,
-        linkCrossAppAccount: linkCrossAppAccountNow,
-        loginWithCrossAppAccount: loginWithCrossAppAccountNow,
-        sanitizeRedirect: sanitizeCrossAppRedirectUrlForAuth,
-        isRedirectUrlNotAllowedError: isPrivyRedirectUrlNotAllowedError,
-      })
-
       const headers = await authHeaders()
-      const resolveSignals = async () => {
-        const resolveRes = await apiFetch('/api/zora/resolve', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({}),
-        })
-        const resolvePayload = (await resolveRes.json().catch(() => null)) as ApiEnvelope<ZoraResolveResponse> | null
-        if (!resolveRes.ok || !resolvePayload?.success || !resolvePayload.data) {
-          const resolveError = new Error(readApiError(resolvePayload, 'Failed to resolve Zora signals.')) as Error & {
-            status?: number
-          }
-          resolveError.status = resolveRes.status
-          throw resolveError
-        }
-        return resolvePayload.data
-      }
-
-      const linkResponse = await apiFetch('/api/accounts/link', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ provider: 'zora_cross_app', value: null }),
-      })
-      const linkPayload = (await linkResponse.json().catch(() => null)) as ApiEnvelope<AccountSetupMe> | null
-      if (!linkResponse.ok || !linkPayload?.success || !linkPayload.data) {
-        throw new Error(readApiError(linkPayload, 'Failed to link zora_cross_app.'))
-      }
-      setMeGuarded(linkPayload.data)
-
-      const resolvedSignals = await resolveSignals()
+      const resolvedSignals = await resolveZoraReadOnlySignals(headers)
       setNoticeGuarded(
         hasResolvedZoraSignals(resolvedSignals)
-          ? 'Zora linked and signals resolved.'
-          : 'Zora linked. Open Zora once if needed, then refresh signals here.',
+          ? 'Zora read-only signals detected.'
+          : 'No Zora read-only signals found yet. Open your Zora profile once, then retry detection.',
       )
       await loadMe({ showSpinner: false })
     } catch (zoraError: any) {
       if (isUserRejectedCrossAppAuthError(zoraError)) {
-        setNoticeGuarded('Zora connect was canceled.')
+        setNoticeGuarded('Zora read-only detection canceled.')
         return
       }
-      const resolveSignalsAfterAuthFailure = async (): Promise<boolean> => {
-        try {
-          const retryHeaders = await authHeaders()
-          const resolveRes = await apiFetch('/api/zora/resolve', {
-            method: 'POST',
-            headers: retryHeaders,
-            body: JSON.stringify({}),
-          })
-          const resolvePayload = (await resolveRes.json().catch(() => null)) as ApiEnvelope<ZoraResolveResponse> | null
-          if (resolveRes.ok && resolvePayload?.success && hasResolvedZoraSignals(resolvePayload.data)) {
-            setNoticeGuarded('Zora signals were detected after auth retry. Link completed.')
-            await loadMe({ showSpinner: false })
-            return true
-          }
-        } catch {
-          // fall through to caller fallback handling
-        }
-        return false
-      }
-      const redirectToZoraHandoff = (): boolean => {
-        const fallbackZoraHandoffUrl = buildZoraHandoffUrl({
-          returnPath: params.zoraReturnPath ?? '/accounts',
-          context: 'signup',
-        })
-        if (typeof window !== 'undefined' && fallbackZoraHandoffUrl) {
-          setNoticeGuarded('Zora auth failed in-app. Redirecting to Zora handoff to complete account detection…')
-          window.setTimeout(() => {
-            window.location.assign(fallbackZoraHandoffUrl)
-          }, 120)
-          return true
-        }
-        return false
-      }
-      if (isLocalhostPrivyCustomDomainConfigError(zoraError)) {
-        setErrorGuarded(
-          'Privy localhost setup required for Zora linking (custom domain privy.4626.fun). In the Privy dashboard for your Local Dev client, add http://localhost:5173, http://localhost:5174 (and 127.0.0.1 variants) to Allowed Origins + allowed redirect URLs. Restart Vite after changing. See .env.example "Privy Local Dev".'
-        )
-      } else if (isMissingPrivyAuthTokenError(zoraError)) {
-        setErrorGuarded(
-          'Privy session is stale on localhost. Click Sign out, sign back in with email OTP, then retry Connect with Zora.',
-        )
-      } else if (isPrivyRedirectUrlNotAllowedError(zoraError)) {
-        setErrorGuarded('Privy redirect URL is not allowed for this origin. Add this app URL in Privy settings and retry.')
-      } else if (
-        isUnauthorizedCrossAppLinkError(zoraError) ||
-        Number(zoraError?.status) === 401 ||
-        String(zoraError?.message ?? '').toLowerCase().includes('oauth/init')
-      ) {
-        await resetPrivySessionAfterUnauthorizedCrossApp()
-        setErrorGuarded(
-          'Privy session expired during Zora auth. Sign in again with email OTP, then retry Connect with Zora.',
-        )
-      } else if (isRecoverableCrossAppAuthError(zoraError)) {
-        if (await resolveSignalsAfterAuthFailure()) return
-        if (redirectToZoraHandoff()) return
-        setErrorGuarded(
-          'Zora authentication failed. Allow pop-ups for this site and open zora.co in this browser first, then tap Connect again.',
-        )
-      } else {
-        setErrorGuarded(typeof zoraError?.message === 'string' ? zoraError.message : 'Failed to link Zora.')
-      }
+      setErrorGuarded(
+        typeof zoraError?.message === 'string'
+          ? zoraError.message
+          : 'Failed to resolve Zora read-only signals.',
+      )
     } finally {
       setBusyProviderGuarded(null)
     }
-  }, [authHeaders, ensurePrivyTokenReadyForCrossApp, linkCrossAppAccount, loadMe, loginWithCrossAppAccount, params.zoraReturnPath, privyAuthed, resetPrivySessionAfterUnauthorizedCrossApp])
+  }, [authHeaders, loadMe, resolveZoraReadOnlySignals])
 
   const onRefreshZora = useCallback(async () => {
     setBusyProviderGuarded('zora_cross_app')
