@@ -26,6 +26,7 @@ function mockConfig(overrides: Partial<ArenaConfig> = {}): ArenaConfig {
     hlApiWalletAddress: null,
     hlAgentPrivateKey: null,
     hlMasterAddressOverride: null,
+    hlSubaccountAddress: null,
     commandTimeoutMs: 60_000,
     maxUsdcDeposit: 50_000,
     maxTradeSizeUsd: 100_000,
@@ -83,6 +84,36 @@ describe('arenaClient trade guardrails', () => {
   it('builds v2 flag-style close args via tsx', async () => {
     const result = await runArenaTrade({ action: 'close', pair: 'xyz:GOLD' }, mockConfig({ dryRun: true }))
     expect(result.run?.args).toEqual(['tsx', 'scripts/trade.ts', 'close', '--pair', 'xyz:GOLD'])
+  })
+
+  it('passes strategy subaccount args through to trade.ts', async () => {
+    const result = await runArenaTrade(
+      {
+        action: 'open',
+        pair: 'xyz:GOLD',
+        side: 'short',
+        sizeUsd: 300,
+        leverage: 3,
+        subaccountAddress: '0x1111111111111111111111111111111111111111',
+        strategyKey: 'event',
+      },
+      mockConfig({ dryRun: true }),
+    )
+    expect(result.run?.args).toEqual([
+      'tsx',
+      'scripts/trade.ts',
+      'open',
+      '--pair',
+      'xyz:GOLD',
+      '--side',
+      'short',
+      '--size',
+      '300',
+      '--leverage',
+      '3',
+      '--subaccount',
+      '0x1111111111111111111111111111111111111111',
+    ])
   })
 })
 

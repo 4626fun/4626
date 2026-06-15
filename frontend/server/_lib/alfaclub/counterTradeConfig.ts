@@ -5,6 +5,15 @@ declare const process: { env: Record<string, string | undefined> }
 export type CounterTradeBias = 'bullish' | 'bearish' | 'neutral'
 export type CounterTradePreset = 'defensive' | 'balanced' | 'aggressive'
 export type CounterTradeSide = 'long' | 'short'
+export type CounterTradeStrategyKey = 'trend' | 'meanRevert' | 'event'
+export type CounterTradeSubaccountMap = Record<CounterTradeStrategyKey, string | null>
+
+export type CounterTradeRiskProfile = {
+  riskPerTradeBps: number
+  dailyLossCapBps: number
+  maxDrawdownPauseBps: number
+  stopDistancePctByStrategy: Record<CounterTradeStrategyKey, number>
+}
 
 export type CounterTradeRuntimeConfig = {
   enabled: boolean
@@ -85,6 +94,9 @@ export type CounterTradeRuntimeConfig = {
   liquidationMinDistancePct: number
   eventLookbackMs: number
   runLimitPerIdentity: number
+  subaccountsEnabled: boolean
+  subaccounts: CounterTradeSubaccountMap
+  riskProfile: CounterTradeRiskProfile
 }
 
 function readBool(name: string, fallback: boolean): boolean {
@@ -124,12 +136,50 @@ function readOptionalAddress(name: string): string | null {
   return null
 }
 
+function clampBps(raw: number, fallback: number, minBps: number, maxBps: number): number {
+  if (!Number.isFinite(raw)) return fallback
+  return Math.min(maxBps, Math.max(minBps, Math.round(raw)))
+}
+
 export function readCounterTradeRuntimeConfig(): CounterTradeRuntimeConfig {
   const minUserNotionalUsd = Math.max(
     1,
     readPositiveNumber('ALFACLUB_COUNTER_TRADE_MIN_USER_NOTIONAL_USD', 1),
   )
   const roomId = readRoomId()
+  const subaccountsEnabled = readBool('COUNTER_TRADE_HL_SUBACCOUNTS_ENABLED', false)
+  const subaccounts: CounterTradeSubaccountMap = {
+    trend: readOptionalAddress('ALFACLUB_COUNTER_TRADE_HL_SUBACCOUNT_TREND'),
+    meanRevert: readOptionalAddress('ALFACLUB_COUNTER_TRADE_HL_SUBACCOUNT_MEAN_REVERT'),
+    event: readOptionalAddress('ALFACLUB_COUNTER_TRADE_HL_SUBACCOUNT_EVENT'),
+  }
+  const riskProfile: CounterTradeRiskProfile = {
+    // Aggressive defaults selected in the implementation plan.
+    riskPerTradeBps: clampBps(
+      readPositiveNumber('ALFACLUB_COUNTER_TRADE_RISK_PER_TRADE_BPS', 100),
+      100,
+      1,
+      10_000,
+    ),
+    dailyLossCapBps: clampBps(
+      readPositiveNumber('ALFACLUB_COUNTER_TRADE_DAILY_LOSS_CAP_BPS', 300),
+      300,
+      1,
+      10_000,
+    ),
+    maxDrawdownPauseBps: clampBps(
+      readPositiveNumber('ALFACLUB_COUNTER_TRADE_MAX_DRAWDOWN_PAUSE_BPS', 1000),
+      1000,
+      1,
+      10_000,
+    ),
+    stopDistancePctByStrategy: {
+      trend: readPositiveNumber('ALFACLUB_COUNTER_TRADE_STOP_DISTANCE_PCT_TREND', 2.5),
+      meanRevert: readPositiveNumber('ALFACLUB_COUNTER_TRADE_STOP_DISTANCE_PCT_MEAN_REVERT', 1.5),
+      event: readPositiveNumber('ALFACLUB_COUNTER_TRADE_STOP_DISTANCE_PCT_EVENT', 4),
+    },
+  }
+
   return {
     enabled: readBool('ALFACLUB_COUNTER_TRADE_ENABLED', false),
     exitEnabled: readBool('ALFACLUB_COUNTER_TRADE_EXIT_ENABLED', true),
@@ -183,6 +233,9 @@ export function readCounterTradeRuntimeConfig(): CounterTradeRuntimeConfig {
     ),
     eventLookbackMs: readPositiveInt('ALFACLUB_COUNTER_TRADE_EVENT_LOOKBACK_MS', 45 * 60_000),
     runLimitPerIdentity: readPositiveInt('ALFACLUB_COUNTER_TRADE_RUN_LIMIT_PER_IDENTITY', 20),
+    subaccountsEnabled,
+    subaccounts,
+    riskProfile,
   }
 }
 

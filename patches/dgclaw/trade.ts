@@ -34,6 +34,7 @@ interface TradeArgs {
   takeProfit?: string;
   amount?: string;
   to?: 'perp' | 'spot';
+  subaccount?: string;
 }
 
 // ---- CLI Parsing ----
@@ -66,6 +67,7 @@ Options:
   --tp <px>             Take profit trigger price
   --amount <usdc>       USDC amount (required for transfer)
   --to <perp|spot>      Transfer destination (default: perp)
+  --subaccount <addr>   Hyperliquid subaccount address (optional)
 
 Signing:
   Default: orders are signed by your ACP agent wallet via acp-cli (no API wallet needed).
@@ -75,6 +77,7 @@ Signing:
 Environment:
   HL_MASTER_ADDRESS     Master account address (the ACP agent wallet). Auto-detected via acp-cli if unset.
   HL_AGENT_PRIVATE_KEY  Approved HL API-wallet private key (enables local signing; requires HL_MASTER_ADDRESS)
+  HL_SUBACCOUNT_ADDRESS Optional Hyperliquid subaccount address for strategy sleeve routing.
   ACP_CLI_DIR           Path to acp-cli repo (auto-detected as sibling dir if unset)
 
 Examples:
@@ -125,6 +128,9 @@ function parseArgs(): TradeArgs {
         break;
       case '--to':
         result.to = args[++i] as 'perp' | 'spot';
+        break;
+      case '--subaccount':
+        result.subaccount = args[++i];
         break;
       default:
         if (!args[i].startsWith('--')) break;
@@ -188,13 +194,32 @@ function assertOrderAccepted(result: any, context: string): void {
   }
 }
 
+function normalizeAddressOrNull(value: string | null | undefined): string | null {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  return /^0x[a-fA-F0-9]{40}$/.test(raw) ? raw.toLowerCase() : null;
+}
+
+function resolveSubaccountAddress(args: TradeArgs): string | null {
+  const fromArg = normalizeAddressOrNull(args.subaccount);
+  if (args.subaccount && !fromArg) {
+    console.error(`Invalid --subaccount address: ${args.subaccount}`);
+    process.exit(1);
+  }
+  const fromEnv = normalizeAddressOrNull(process.env.HL_SUBACCOUNT_ADDRESS);
+  if (process.env.HL_SUBACCOUNT_ADDRESS && !fromEnv) {
+    console.error('HL_SUBACCOUNT_ADDRESS is set but is not a valid 0x address.');
+    process.exit(1);
+  }
+  return fromArg ?? fromEnv;
+}
+
 // ---- Commands ----
 
 async function openPosition(
   exchange: ExchangeClient,
   info: InfoClient,
   args: TradeArgs,
-  masterAddress: string,
 ) {
   if (!args.pair) { console.error('--pair is required'); process.exit(1); }
   if (!args.side) { console.error('--side is required'); process.exit(1); }
@@ -302,14 +327,14 @@ async function closePosition(
   exchange: ExchangeClient,
   info: InfoClient,
   args: TradeArgs,
-  masterAddress: string,
+  accountAddressForReads: string,
 ) {
   if (!args.pair) { console.error('--pair is required'); process.exit(1); }
 
   const { index: assetId, meta } = await getAssetIndex(info, args.pair);
 
   // Get current position to determine size and side
-  const state = await info.clearinghouseState({ user: masterAddress as `0x${string}` });
+  const state = await info.clearinghouseState({ user: accountAddressForReads as `0x${string}` });
   const position = state.assetPositions.find(
     (p: any) => p.position.coin.toUpperCase() === args.pair!.toUpperCase(),
   );
@@ -369,7 +394,7 @@ async function modifyPosition(
   exchange: ExchangeClient,
   info: InfoClient,
   args: TradeArgs,
-  masterAddress: string,
+  accountAddressForReads: string,
 ) {
   if (!args.pair) { console.error('--pair is required'); process.exit(1); }
   if (!args.leverage && !args.stopLoss && !args.takeProfit) {
@@ -380,7 +405,7 @@ async function modifyPosition(
   const { index: assetId } = await getAssetIndex(info, args.pair);
 
   // Get current position
-  const state = await info.clearinghouseState({ user: masterAddress as `0x${string}` });
+  const state = await info.clearinghouseState({ user: accountAddressForReads as `0x${string}` });
   const position = state.assetPositions.find(
     (p: any) => p.position.coin.toUpperCase() === args.pair!.toUpperCase(),
   );
@@ -404,7 +429,7 @@ async function modifyPosition(
   }
 
   // Cancel existing TP/SL orders before placing new ones
-  const openOrders = await info.openOrders({ user: masterAddress as `0x${string}` });
+  const openOrders = await info.openOrders({ user: accountAddressForReads as `0x${string}` });
   const tpslOrders = openOrders.filter(
     (o: any) => o.coin?.toUpperCase() === args.pair!.toUpperCase() && o.orderType?.includes('trigger'),
   );
@@ -463,8 +488,8 @@ async function modifyPosition(
   }
 }
 
-async function showPositions(info: InfoClient, masterAddress: string) {
-  const state = await info.clearinghouseState({ user: masterAddress as `0x${string}` });
+async function showPositions(info: InfoClient, accountAddressForReads: string) {
+  const state = await info.clearinghouseState({ user: accountAddressForReads as `0x${string}` });
   const positions = state.assetPositions.filter(
     (p: any) => parseFloat(p.position.szi) !== 0,
   );
@@ -477,8 +502,8 @@ async function showPositions(info: InfoClient, masterAddress: string) {
   console.log(JSON.stringify(positions, null, 2));
 }
 
-async function showBalance(info: InfoClient, masterAddress: string) {
-  const user = masterAddress as `0x${string}`;
+async function showBalance(info: InfoClient, accountAddressForReads: string) {
+  const user = accountAddressForReads as `0x${string}`;
 
   // Spot balance (primary balance in unified account mode)
   const spotState = await info.spotClearinghouseState({ user });
@@ -657,6 +682,7 @@ function makeAcpWallet(masterAddress: string) {
 
 async function main() {
   const args = parseArgs();
+  const subaccountAddress = resolveSubaccountAddress(args);
 
   const transport = new HttpTransport({ url: HL_API_URL });
   const info = new InfoClient({ transport });
@@ -668,23 +694,28 @@ async function main() {
   }
 
   const masterAddress = getMasterAddress();
+  const accountAddressForReads = subaccountAddress ?? masterAddress;
 
   switch (args.command) {
     case 'positions':
-      await showPositions(info, masterAddress);
+      await showPositions(info, accountAddressForReads);
       break;
     case 'balance':
-      await showBalance(info, masterAddress);
+      await showBalance(info, accountAddressForReads);
       break;
     case 'open':
     case 'close':
     case 'modify': {
       const agentKey = getAgentPrivateKey();
       const wallet = agentKey ? await makeApiWallet(agentKey) : makeAcpWallet(masterAddress);
-      const exchange = new ExchangeClient({ wallet: wallet as any, transport });
-      if (args.command === 'open') await openPosition(exchange, info, args, masterAddress);
-      else if (args.command === 'close') await closePosition(exchange, info, args, masterAddress);
-      else await modifyPosition(exchange, info, args, masterAddress);
+      const exchange = new ExchangeClient({
+        wallet: wallet as any,
+        transport,
+        ...(subaccountAddress ? { defaultVaultAddress: subaccountAddress as `0x${string}` } : {}),
+      } as any);
+      if (args.command === 'open') await openPosition(exchange, info, args);
+      else if (args.command === 'close') await closePosition(exchange, info, args, accountAddressForReads);
+      else await modifyPosition(exchange, info, args, accountAddressForReads);
       break;
     }
     case 'transfer': {
@@ -697,7 +728,11 @@ async function main() {
         process.exit(1);
       }
       const wallet = makeAcpWallet(masterAddress);
-      const exchange = new ExchangeClient({ wallet: wallet as any, transport });
+      const exchange = new ExchangeClient({
+        wallet: wallet as any,
+        transport,
+        ...(subaccountAddress ? { defaultVaultAddress: subaccountAddress as `0x${string}` } : {}),
+      } as any);
       await transferUsdClass(exchange, args);
       break;
     }

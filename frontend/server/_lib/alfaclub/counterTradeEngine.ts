@@ -6,6 +6,7 @@ import {
   type CounterTradePreset,
   type CounterTradeRuntimeConfig,
   type CounterTradeSide,
+  type CounterTradeStrategyKey,
 } from './counterTradeConfig.js'
 
 export type CounterTradeDecision =
@@ -61,6 +62,12 @@ const PRESET_CAPS: Record<CounterTradePreset, PresetCaps> = {
     notionalCapMultiplier: 1.2,
     hourlyActionMultiplier: 1.2,
   },
+}
+
+const PRESET_STRATEGY_MAP: Record<CounterTradePreset, CounterTradeStrategyKey> = {
+  defensive: 'meanRevert',
+  balanced: 'trend',
+  aggressive: 'event',
 }
 
 function parseLeverageFromDir(dir: string | null): number | null {
@@ -335,6 +342,12 @@ export function derivePresetDailyNotionalCap(params: {
 }): number {
   const multiplier = PRESET_CAPS[params.preset].notionalCapMultiplier
   return Math.max(1, params.runtime.dailyNotionalCapUsd * multiplier)
+}
+
+export function resolveCounterTradeStrategyForPreset(
+  preset: CounterTradePreset,
+): CounterTradeStrategyKey {
+  return PRESET_STRATEGY_MAP[preset]
 }
 
 export function deriveUserLeverage(fill: HyperliquidUserFillDetailed): number | null {

@@ -288,6 +288,7 @@ function buildArenaCommandEnv(config: ArenaConfig): Record<string, string> {
     }
   }
   if (config.hlApiWalletAddress) env.ARENA_HL_API_WALLET_ADDRESS = config.hlApiWalletAddress
+  if (config.hlSubaccountAddress) env.HL_SUBACCOUNT_ADDRESS = config.hlSubaccountAddress
   return env
 }
 
@@ -375,6 +376,7 @@ export async function runArenaStatus(config = readArenaConfig()): Promise<ArenaO
       agentId: config.agentId,
       agentWalletAddress: config.agentWalletAddress,
       hlApiWalletAddress: config.hlApiWalletAddress,
+      hlSubaccountAddress: config.hlSubaccountAddress,
       commandTimeoutMs: config.commandTimeoutMs,
       dgclawDir: config.dgclawDir,
       dgclawBin: config.dgclawBin,
@@ -644,6 +646,7 @@ export async function runArenaTrade(request: ArenaTradeRequest, config = readAre
   if (!pairCheck.ok) return fail(pairCheck.message, { reason: pairCheck.reason })
 
   const action = request.action
+  const subaccountAddress = normalizeAddress(request.subaccountAddress) ?? config.hlSubaccountAddress
   if (action === 'close') {
     // dgclaw v2 trade.ts only accepts flag-style options; positional args are silently ignored.
     // Optional sizeUsd makes this a partial reduce-only close (repo-patched
@@ -651,6 +654,7 @@ export async function runArenaTrade(request: ArenaTradeRequest, config = readAre
     const closeSizeUsd = parsePositiveNumber(request.sizeUsd ?? 0)
     const closeArgs = ['close', '--pair', pairCheck.normalizedPair]
     if (closeSizeUsd > 0) closeArgs.push('--size', String(closeSizeUsd))
+    if (subaccountAddress) closeArgs.push('--subaccount', subaccountAddress)
     const command = buildNodeScriptCommand(config, 'scripts/trade.ts', closeArgs)
     const run = await runCommand(command, config)
     auditLog('trade_close', {
@@ -658,6 +662,8 @@ export async function runArenaTrade(request: ArenaTradeRequest, config = readAre
       dryRun: run.dryRun,
       pair: pairCheck.normalizedPair,
       market: pairCheck.market,
+      strategy: request.strategyKey ?? null,
+      subaccountAddress,
       ...(closeSizeUsd > 0 ? { partialSizeUsd: closeSizeUsd } : {}),
     })
     return {
@@ -689,6 +695,7 @@ export async function runArenaTrade(request: ArenaTradeRequest, config = readAre
     String(sizeUsd),
     '--leverage',
     String(leverage),
+    ...(subaccountAddress ? ['--subaccount', subaccountAddress] : []),
   ])
   const run = await runCommand(command, config)
   auditLog('trade_open', {
@@ -699,6 +706,8 @@ export async function runArenaTrade(request: ArenaTradeRequest, config = readAre
     side,
     sizeUsd,
     leverage,
+    strategy: request.strategyKey ?? null,
+    subaccountAddress,
   })
   return {
     ok: run.ok,

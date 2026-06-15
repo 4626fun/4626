@@ -29,6 +29,8 @@ export type ArenaTradeRequest = {
    */
   sizeUsd?: number
   leverage?: number
+  subaccountAddress?: string
+  strategyKey?: string
 }
 
 export type ArenaRunResult = {

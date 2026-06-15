@@ -31,6 +31,11 @@ describe('isRecoverableCrossAppAuthError', () => {
     expect(isRecoverableCrossAppAuthError(new Error('Popup blocked by browser settings'))).toBe(true)
     expect(isRecoverableCrossAppAuthError(new Error('window.open failed for cross-app flow'))).toBe(true)
     expect(isRecoverableCrossAppAuthError(new Error('Error linking account'))).toBe(true)
+    expect(
+      isRecoverableCrossAppAuthError(
+        new Error('Attempted to log in, but user is already logged in. Use a `link` helper instead.'),
+      ),
+    ).toBe(true)
     expect(isRecoverableCrossAppAuthError(new Error('plain network error'))).toBe(false)
   })
 })
@@ -215,5 +220,26 @@ describe('performZoraCrossAppAuth', () => {
 
     expect(loginWithCrossAppAccount).toHaveBeenCalledWith({ appId: 'zora-app-id' })
     expect(sanitizeRedirect).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to link when login lane says already logged in', async () => {
+    const linkCrossAppAccount = vi.fn(async () => {})
+    const loginWithCrossAppAccount = vi.fn(async () => {
+      throw new Error('Attempted to log in, but user is already logged in. Use a `link` helper instead.')
+    })
+    const sanitizeRedirect = vi.fn(() => vi.fn())
+
+    await performZoraCrossAppAuth({
+      privyAuthed: false,
+      appId: 'zora-app-id',
+      linkCrossAppAccount,
+      loginWithCrossAppAccount,
+      sanitizeRedirect,
+      isRedirectUrlNotAllowedError: () => false,
+    })
+
+    expect(loginWithCrossAppAccount).toHaveBeenCalledTimes(1)
+    expect(linkCrossAppAccount).toHaveBeenCalledWith({ appId: 'zora-app-id' })
+    expect(sanitizeRedirect).toHaveBeenCalledTimes(2)
   })
 })

@@ -30,7 +30,13 @@ export async function handleCounterTradeExitFlow(params: {
   closedCoinsThisTick: Set<string>
   counterWalletState: HyperliquidClearinghouseState | null
   identityConfig: ArenaConfig
+  strategyKey: string
+  strategySubaccount: string | null
 }): Promise<CounterTradeExitFlowResult> {
+  const executionConfig: ArenaConfig = {
+    ...params.identityConfig,
+    hlSubaccountAddress: params.strategySubaccount,
+  }
   const exitPair = String(params.fill.coin ?? '').trim()
   const exitCoinKey = exitPair.toUpperCase()
   const recordExitOutcome = async (status: 'executed' | 'skipped' | 'failed', reason: string) => {
@@ -66,7 +72,15 @@ export async function handleCounterTradeExitFlow(params: {
   }
 
   const closeSubmittedAtMs = Date.now()
-  const closeResult = await runArenaTrade({ action: 'close', pair: exitPair }, params.identityConfig)
+  const closeResult = await runArenaTrade(
+    {
+      action: 'close',
+      pair: exitPair,
+      strategyKey: params.strategyKey,
+      subaccountAddress: params.strategySubaccount ?? undefined,
+    },
+    executionConfig,
+  )
   if (closeResult.ok) {
     params.closedCoinsThisTick.add(exitCoinKey)
     params.openedCoinsThisTick.delete(exitCoinKey)
@@ -102,6 +116,8 @@ export async function handleCounterTradeExitFlow(params: {
       senderAddress: params.senderAddress,
       pair: exitPair,
       fillAction: params.fillAction,
+      strategy: params.strategyKey,
+      subaccount: params.strategySubaccount,
       closedSide: botLeg?.side ?? null,
       closedPositionValueUsd: botLeg?.positionValue ?? null,
       bankedRealizedPnlUsd: banked?.realizedPnlUsd ?? null,
@@ -142,6 +158,8 @@ export async function handleCounterTradeExitFlow(params: {
     senderAddress: params.senderAddress,
     eventKey: params.eventKey,
     pair: exitPair,
+      strategy: params.strategyKey,
+      subaccount: params.strategySubaccount,
     reason: closeResult.message,
   })
   return { handled: true, executedDelta: 0, skippedDelta: 0, failedDelta: 1 }

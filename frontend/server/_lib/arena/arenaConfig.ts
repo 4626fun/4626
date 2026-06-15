@@ -23,6 +23,11 @@ export type ArenaConfig = {
   hlAgentPrivateKey: string | null
   /** Master account that approved hlAgentPrivateKey (reads + order target). */
   hlMasterAddressOverride: string | null
+  /**
+   * Optional Hyperliquid subaccount execution target. When set, trade scripts
+   * route orders to this subaccount while preserving master/API-wallet signing.
+   */
+  hlSubaccountAddress: string | null
   commandTimeoutMs: number
   maxUsdcDeposit: number
   maxTradeSizeUsd: number
@@ -98,6 +103,7 @@ export function readArenaConfig(): ArenaConfig {
   const agentId = readOptionalString('ARENA_AGENT_ID')
   const agentWalletAddress = normalizeAddressOrNull(readOptionalString('ARENA_AGENT_WALLET_ADDRESS'))
   const hlApiWalletAddress = normalizeAddressOrNull(readOptionalString('ARENA_HL_API_WALLET_ADDRESS'))
+  const hlSubaccountAddress = normalizeAddressOrNull(readOptionalString('ARENA_HL_SUBACCOUNT_ADDRESS'))
   const commandTimeoutMs = readPositiveInt('ARENA_COMMAND_TIMEOUT_MS', DEFAULT_COMMAND_TIMEOUT_MS)
   const maxUsdcDeposit = readPositiveNumber('ARENA_MAX_USDC_DEPOSIT', DEFAULT_MAX_USDC_DEPOSIT)
   const maxTradeSizeUsd = readPositiveNumber('ARENA_MAX_TRADE_SIZE_USD', DEFAULT_MAX_TRADE_SIZE_USD)
@@ -123,6 +129,7 @@ export function readArenaConfig(): ArenaConfig {
     hlApiWalletAddress,
     hlAgentPrivateKey: null,
     hlMasterAddressOverride: null,
+    hlSubaccountAddress,
     commandTimeoutMs,
     maxUsdcDeposit,
     maxTradeSizeUsd,

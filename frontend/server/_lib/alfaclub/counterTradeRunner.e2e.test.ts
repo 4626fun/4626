@@ -120,6 +120,22 @@ const BASE_RUNTIME = {
   liquidationMinDistancePct: 8,
   eventLookbackMs: 45 * 60_000,
   runLimitPerIdentity: 20,
+  subaccountsEnabled: false,
+  subaccounts: {
+    trend: null,
+    meanRevert: null,
+    event: null,
+  },
+  riskProfile: {
+    riskPerTradeBps: 100,
+    dailyLossCapBps: 300,
+    maxDrawdownPauseBps: 1000,
+    stopDistancePctByStrategy: {
+      trend: 2.5,
+      meanRevert: 1.5,
+      event: 4,
+    },
+  },
 } as const
 
 const FILL = {
@@ -299,7 +315,7 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
     expect(result.failed).toBe(0)
     expect(mocks.runArenaTrade).toHaveBeenCalledTimes(1)
     expect(mocks.runArenaTrade).toHaveBeenCalledWith(
-      { action: 'close', pair: 'BTC' },
+      expect.objectContaining({ action: 'close', pair: 'BTC' }),
       expect.objectContaining({ agentWalletAddress: '0xagentwallet' }),
     )
     expect(mocks.recordCounterTradeAction).toHaveBeenCalledWith(
@@ -376,7 +392,7 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
 
     expect(result.executed).toBe(1)
     expect(mocks.runArenaTrade).toHaveBeenCalledWith(
-      { action: 'close', pair: 'BTC' },
+      expect.objectContaining({ action: 'close', pair: 'BTC' }),
       expect.anything(),
     )
   })
@@ -444,7 +460,7 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
     expect(result.executed).toBe(1)
     expect(result.blocked).toBe(0)
     expect(mocks.runArenaTrade).toHaveBeenCalledWith(
-      { action: 'close', pair: 'BTC' },
+      expect.objectContaining({ action: 'close', pair: 'BTC' }),
       expect.anything(),
     )
   })
@@ -471,7 +487,7 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
     )
     expect(mocks.runArenaTrade).toHaveBeenNthCalledWith(
       2,
-      { action: 'close', pair: 'BTC' },
+      expect.objectContaining({ action: 'close', pair: 'BTC' }),
       expect.anything(),
     )
   })
@@ -571,7 +587,7 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
     expect(result.failed).toBe(0)
     expect(mocks.runArenaTrade).toHaveBeenCalledTimes(1)
     expect(mocks.runArenaTrade).toHaveBeenCalledWith(
-      { action: 'close', pair: 'BTC', sizeUsd: 250 },
+      expect.objectContaining({ action: 'close', pair: 'BTC', sizeUsd: 250 }),
       expect.objectContaining({ agentWalletAddress: '0xagentwallet' }),
     )
     expect(mocks.recordCounterTradeAction).toHaveBeenCalledWith(
@@ -655,7 +671,7 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
     expect(result.executed).toBe(1)
     expect(result.blocked).toBe(0)
     expect(mocks.runArenaTrade).toHaveBeenCalledWith(
-      { action: 'close', pair: 'BTC' },
+      expect.objectContaining({ action: 'close', pair: 'BTC' }),
       expect.anything(),
     )
   })
@@ -687,7 +703,7 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
     expect(result.executed).toBe(1)
     expect(mocks.runArenaTrade).toHaveBeenCalledTimes(1)
     expect(mocks.runArenaTrade).toHaveBeenCalledWith(
-      { action: 'close', pair: 'BTC' },
+      expect.objectContaining({ action: 'close', pair: 'BTC' }),
       expect.anything(),
     )
     expect(mocks.recordCounterTradeAction).toHaveBeenCalledWith(
@@ -735,7 +751,7 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
     // ~5.3% liq distance is inside half the 12% defend threshold → escalated
     // shave: 2 × 25% of the $1000 leg = $500.
     expect(mocks.runArenaTrade).toHaveBeenCalledWith(
-      { action: 'close', pair: 'BTC', sizeUsd: 500 },
+      expect.objectContaining({ action: 'close', pair: 'BTC', sizeUsd: 500 }),
       expect.objectContaining({
         hlAgentPrivateKey: agentKey,
         hlMasterAddressOverride: userWallet,

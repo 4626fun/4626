@@ -47,6 +47,22 @@ const RUNTIME: CounterTradeRuntimeConfig = {
   liquidationMinDistancePct: 8,
   eventLookbackMs: 45 * 60_000,
   runLimitPerIdentity: 20,
+  subaccountsEnabled: false,
+  subaccounts: {
+    trend: null,
+    meanRevert: null,
+    event: null,
+  },
+  riskProfile: {
+    riskPerTradeBps: 100,
+    dailyLossCapBps: 300,
+    maxDrawdownPauseBps: 1000,
+    stopDistancePctByStrategy: {
+      trend: 2.5,
+      meanRevert: 1.5,
+      event: 4,
+    },
+  },
 }
 
 type Leg = NonNullable<HyperliquidClearinghouseState['assetPositions']>[number]

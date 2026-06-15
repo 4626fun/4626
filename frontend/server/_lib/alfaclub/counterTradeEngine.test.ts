@@ -5,6 +5,7 @@ import {
   deriveEventKeyFromFill,
   findCounterPositionForCoin,
   isExitFillAction,
+  resolveCounterTradeStrategyForPreset,
 } from './counterTradeEngine.js'
 import type { CounterTradeRuntimeConfig } from './counterTradeConfig.js'
 import type { HyperliquidClearinghouseState, HyperliquidUserFillDetailed } from './hyperliquid.js'
@@ -48,6 +49,22 @@ function makeRuntime(): CounterTradeRuntimeConfig {
     liquidationMinDistancePct: 8,
     eventLookbackMs: 45 * 60_000,
     runLimitPerIdentity: 20,
+    subaccountsEnabled: false,
+    subaccounts: {
+      trend: null,
+      meanRevert: null,
+      event: null,
+    },
+    riskProfile: {
+      riskPerTradeBps: 100,
+      dailyLossCapBps: 300,
+      maxDrawdownPauseBps: 1000,
+      stopDistancePctByStrategy: {
+        trend: 2.5,
+        meanRevert: 1.5,
+        event: 4,
+      },
+    },
   }
 }
 
@@ -239,6 +256,12 @@ describe('counterTradeEngine', () => {
     } as unknown as HyperliquidClearinghouseState
 
     expect(findCounterPositionForCoin(state, 'BTC')).toBeNull()
+  })
+
+  it('maps presets to strategy sleeves deterministically', () => {
+    expect(resolveCounterTradeStrategyForPreset('defensive')).toBe('meanRevert')
+    expect(resolveCounterTradeStrategyForPreset('balanced')).toBe('trend')
+    expect(resolveCounterTradeStrategyForPreset('aggressive')).toBe('event')
   })
 })
 

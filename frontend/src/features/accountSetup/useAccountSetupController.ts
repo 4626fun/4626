@@ -419,6 +419,17 @@ export function useAccountSetupController(params: {
     return false
   }, [])
 
+  const resetPrivySessionAfterUnauthorizedCrossApp = useCallback(async (): Promise<void> => {
+    const privyNow = privyRef.current
+    if (!privyNow?.authenticated) return
+    await runWaitlistPrivyLogout({
+      logout: async () => {
+        await (privyNow?.logout ? privyNow.logout().catch(() => null) : Promise.resolve())
+      },
+      shouldLogout: true,
+    })
+  }, [])
+
   const loadMe = useCallback(
     async (options?: { showSpinner?: boolean }) => {
       // Read unstable objects via refs so the callback does not need them in its dependency array.
@@ -823,8 +834,9 @@ export function useAccountSetupController(params: {
           Number(linkError?.status) === 401 ||
           String(linkError?.message ?? '').toLowerCase().includes('oauth/init')
         ) {
+          await resetPrivySessionAfterUnauthorizedCrossApp()
           setErrorGuarded(
-            'Privy cross-app Zora auth is unavailable right now. Use Connect with Zora again, or refresh signals if you already linked.',
+            'Privy session expired during Zora auth. Sign in again with email OTP, then retry Connect with Zora.',
           )
         } else if (isRecoverableCrossAppAuthError(linkError)) {
           // Generic cross-app auth copy can appear even when read-only signal resolution
@@ -1006,10 +1018,9 @@ export function useAccountSetupController(params: {
         Number(zoraError?.status) === 401 ||
         String(zoraError?.message ?? '').toLowerCase().includes('oauth/init')
       ) {
-        if (await resolveSignalsAfterAuthFailure()) return
-        if (redirectToZoraHandoff()) return
+        await resetPrivySessionAfterUnauthorizedCrossApp()
         setErrorGuarded(
-          'Privy cross-app Zora auth is unavailable right now. Allow pop-ups for this site and open zora.co in this browser first, then tap Connect again.',
+          'Privy session expired during Zora auth. Sign in again with email OTP, then retry Connect with Zora.',
         )
       } else if (isRecoverableCrossAppAuthError(zoraError)) {
         if (await resolveSignalsAfterAuthFailure()) return
@@ -1023,7 +1034,7 @@ export function useAccountSetupController(params: {
     } finally {
       setBusyProviderGuarded(null)
     }
-  }, [authHeaders, ensurePrivyTokenReadyForCrossApp, linkCrossAppAccount, loadMe, loginWithCrossAppAccount, params.zoraReturnPath, privyAuthed])
+  }, [authHeaders, ensurePrivyTokenReadyForCrossApp, linkCrossAppAccount, loadMe, loginWithCrossAppAccount, params.zoraReturnPath, privyAuthed, resetPrivySessionAfterUnauthorizedCrossApp])
 
   const onRefreshZora = useCallback(async () => {
     setBusyProviderGuarded('zora_cross_app')

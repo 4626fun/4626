@@ -65,6 +65,8 @@ export function isRecoverableCrossAppAuthError(error: unknown): boolean {
   if (!message) return false
   // Some Privy cross-app lanes return only this generic string.
   return (
+    message.includes('attempted to log in, but user is already logged in') ||
+    (message.includes('already logged in') && message.includes('link helper')) ||
     message.includes('unknown rpc error occurred') ||
     message.includes('unable to connect to wallet') ||
     message.includes('error linking account') ||

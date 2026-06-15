@@ -30,7 +30,13 @@ export async function executeCounterTradeEntryFlow(params: {
   chatPostEnabled: boolean
   chatPostRoomId: string
   identityConfig: ArenaConfig
+  strategyKey: string
+  strategySubaccount: string | null
 }): Promise<CounterTradeEntryFlowResult> {
+  const executionConfig: ArenaConfig = {
+    ...params.identityConfig,
+    hlSubaccountAddress: params.strategySubaccount,
+  }
   const tradeResult = await runArenaTrade(
     {
       action: 'open',
@@ -38,16 +44,19 @@ export async function executeCounterTradeEntryFlow(params: {
       side: params.counterSide,
       sizeUsd: params.counterNotionalUsd,
       leverage: params.counterLeverage,
+      strategyKey: params.strategyKey,
+      subaccountAddress: params.strategySubaccount ?? undefined,
     },
-    params.identityConfig,
+    executionConfig,
   )
 
   if (tradeResult.ok) {
     let resolvedCounterNotionalUsd = params.counterNotionalUsd
     let resolvedCounterLeverage = params.counterLeverage
-    if (params.identityConfig.agentWalletAddress) {
+    const counterStateAddress = params.strategySubaccount ?? params.identityConfig.agentWalletAddress
+    if (counterStateAddress) {
       try {
-        const postTradeState = await getClearinghouseState(params.identityConfig.agentWalletAddress)
+        const postTradeState = await getClearinghouseState(counterStateAddress)
         const postTradePosition = findCounterPositionForCoin(postTradeState, params.pair)
         const postTradeLeverage = findCoinLeverageFromState(postTradeState, params.pair)
         if (postTradePosition?.positionValue != null && Number.isFinite(postTradePosition.positionValue)) {
@@ -70,6 +79,16 @@ export async function executeCounterTradeEntryFlow(params: {
       counterSide: params.counterSide,
       counterNotionalUsd: resolvedCounterNotionalUsd,
       counterLeverage: resolvedCounterLeverage,
+    })
+    logger.info('counter_trade.execution_submitted', {
+      roomId: params.roomId,
+      senderAddress: params.senderAddress,
+      pair: params.pair,
+      strategy: params.strategyKey,
+      subaccount: params.strategySubaccount,
+      counterSide: params.counterSide,
+      counterLeverage: resolvedCounterLeverage,
+      counterNotionalUsd: resolvedCounterNotionalUsd,
     })
 
     if (params.chatPostEnabled) {
@@ -118,6 +137,8 @@ export async function executeCounterTradeEntryFlow(params: {
     senderAddress: params.senderAddress,
     eventKey: params.eventKey,
     pair: params.pair,
+      strategy: params.strategyKey,
+      subaccount: params.strategySubaccount,
     reason: tradeResult.message,
   })
   return {

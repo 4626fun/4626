@@ -22,6 +22,7 @@ import {
   deriveUserNotional,
   deriveUserSide,
   isExitFillAction,
+  resolveCounterTradeStrategyForPreset,
 } from './counterTradeEngine.js'
 import { findCoinLeverageFromState } from './counterTradeLeverage.js'
 import {
@@ -36,6 +37,7 @@ import {
   registerCounterTradeEventIfNew,
 } from './counterTradeStore.js'
 import { initCounterTradeUsageState } from './counterTradeUsageState.js'
+import { evaluateCounterTradeRiskGate } from './counterTradeRisk.js'
 
 export type CounterTradeRunResult = {
   ok: boolean
@@ -76,6 +78,15 @@ export function resolveCounterTradeFillSourceWallet(params: {
     return resolveRoom1659HyperliquidUserForSnapshot(params.senderAddress)
   }
   return params.identityHlApiWalletAddress ?? params.senderAddress
+}
+
+function resolveStrategySubaccount(params: {
+  strategyKey: 'trend' | 'meanRevert' | 'event'
+  runtimeSubaccountsEnabled: boolean
+  runtimeSubaccounts: Record<'trend' | 'meanRevert' | 'event', string | null>
+}): string | null {
+  if (!params.runtimeSubaccountsEnabled) return null
+  return params.runtimeSubaccounts[params.strategyKey] ?? null
 }
 
 export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
@@ -312,7 +323,6 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
       const userWalletState = await getClearinghouseState(userWalletForFills)
       const sorted = [...fills].sort((a, b) => a.time - b.time).slice(-runtime.runLimitPerIdentity)
       let lastExecutedAtMs = parseIsoMs(optIn.lastActionAt)
-      const bufferRatio = computeBufferRatio(counterWalletState)
       // Hot-path optimization: fetch usage windows once per actor/tick and keep
       // local counters in sync as this loop records entry executions.
       const usageState = await initCounterTradeUsageState({
@@ -339,6 +349,17 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
         })
         if (!isNewEvent) continue
         newEvents += 1
+        const strategyKey = resolveCounterTradeStrategyForPreset(optIn.preset)
+        const strategySubaccount = resolveStrategySubaccount({
+          strategyKey,
+          runtimeSubaccountsEnabled: runtime.subaccountsEnabled,
+          runtimeSubaccounts: runtime.subaccounts,
+        })
+        const strategyExecutionAddress = strategySubaccount ?? identity.agentWalletAddress
+        const strategyCounterWalletState = strategyExecutionAddress
+          ? await getClearinghouseState(strategyExecutionAddress)
+          : counterWalletState
+        const strategyBufferRatio = computeBufferRatio(strategyCounterWalletState)
 
         // Mirrored exits: when the countered user closes (or is liquidated out
         // of) a pair, close the bot's position on that pair. Risk-reducing, so
@@ -357,8 +378,10 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
             chatPostRoomId: runtime.chatPostRoomId,
             openedCoinsThisTick,
             closedCoinsThisTick,
-            counterWalletState,
+            counterWalletState: strategyCounterWalletState,
             identityConfig,
+            strategyKey,
+            strategySubaccount,
           })
           executed += exitResult.executedDelta
           skipped += exitResult.skippedDelta
@@ -405,7 +428,7 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
         // Buffer floor: keep a free-USDC reserve in the bot silo. In cross
         // margin that reserve is what extends liquidation distance on every
         // open leg, so new entries stop before the buffer is consumed.
-        if (bufferRatio != null && bufferRatio < runtime.minBufferRatio) {
+        if (strategyBufferRatio != null && strategyBufferRatio < runtime.minBufferRatio) {
           blocked += 1
           await recordCounterTradeAction({
             roomId: runtime.roomId,
@@ -427,7 +450,7 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
           userNotionalUsd,
           userLeverage: deriveUserLeverage(fill) ?? findCoinLeverageFromState(userWalletState, fill.coin),
           runtime,
-          counterWalletState,
+          counterWalletState: strategyCounterWalletState,
           strictInverseParity,
         })
 
@@ -468,6 +491,60 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
 
         const cappedCounterNotionalUsd = Math.min(decision.counterNotionalUsd, remainingDailyNotional)
         const pair = String(fill.coin ?? '').trim()
+        if (runtime.subaccountsEnabled && !strategySubaccount) {
+          blocked += 1
+          await recordCounterTradeAction({
+            roomId: runtime.roomId,
+            senderAddress: optIn.senderAddress,
+            eventKey,
+            status: 'blocked',
+            reason: `subaccount_missing_mapping:${strategyKey}`,
+            counterSide: null,
+            counterNotionalUsd: null,
+            counterLeverage: null,
+          })
+          logger.warn('counter_trade.subaccount_missing_mapping', {
+            roomId: runtime.roomId,
+            senderAddress: optIn.senderAddress,
+            strategy: strategyKey,
+          })
+          continue
+        }
+        const riskState = strategyCounterWalletState
+        const riskGate = evaluateCounterTradeRiskGate({
+          roomId: runtime.roomId,
+          senderAddress: optIn.senderAddress,
+          strategy: strategyKey,
+          equityUsd: riskState?.accountValueUsd ?? null,
+          requestedNotionalUsd: cappedCounterNotionalUsd,
+          riskProfile: runtime.riskProfile,
+        })
+        if (runtime.subaccountsEnabled && !riskGate.ok) {
+          blocked += 1
+          await recordCounterTradeAction({
+            roomId: runtime.roomId,
+            senderAddress: optIn.senderAddress,
+            eventKey,
+            status: 'blocked',
+            reason: `risk_gate:${riskGate.reason}`,
+            counterSide: null,
+            counterNotionalUsd: null,
+            counterLeverage: null,
+          })
+          logger.info('counter_trade.risk_gate_blocked', {
+            roomId: runtime.roomId,
+            senderAddress: optIn.senderAddress,
+            strategy: strategyKey,
+            subaccount: strategySubaccount,
+            reason: riskGate.reason,
+            dailyLossUsd: riskGate.dailyLossUsd,
+            drawdownPct: riskGate.drawdownPct,
+          })
+          continue
+        }
+        const strategyCappedNotionalUsd = riskGate.ok
+          ? riskGate.sizedNotionalUsd
+          : cappedCounterNotionalUsd
         if (!pair) {
           skipped += 1
           await recordCounterTradeAction({
@@ -504,7 +581,7 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
               preset: optIn.preset,
               counterSide: decision.counterSide,
               counterLeverage: decision.counterLeverage,
-              counterNotionalUsd: cappedCounterNotionalUsd,
+              counterNotionalUsd: strategyCappedNotionalUsd,
               counterWalletState,
               hourlyExecutedCount: usageState.hourlyUsage.executedCount,
               hourlyCap: usageState.hourlyCap,
@@ -555,6 +632,8 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
           chatPostEnabled: runtime.chatPostEnabled,
           chatPostRoomId: runtime.chatPostRoomId,
           identityConfig,
+          strategyKey,
+          strategySubaccount,
         })
 
         if (entryResult.executedDelta > 0 && entryResult.resolvedCounterNotionalUsd != null) {
