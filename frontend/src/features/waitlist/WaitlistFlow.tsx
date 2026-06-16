@@ -245,11 +245,6 @@ function WaitlistAuthStep(props: {
       className="relative flex min-h-[calc(100dvh-2rem)] flex-col justify-center py-4 sm:py-6"
     >
       <div className="relative z-10 mx-auto w-full max-w-md text-center">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute left-1/2 top-1/2 h-48 w-[min(100%,24rem)] -translate-x-1/2 -translate-y-1/2 bg-[radial-gradient(ellipse_at_center,rgb(var(--brand-primary)/0.08),transparent_70%)]"
-        />
-
         <motion.div {...stagger(0)} className="relative px-2 sm:px-0">
           {/* Header */}
           <h2 className="text-[2rem] font-semibold leading-tight tracking-tight text-white sm:text-[2.25rem]">
@@ -651,6 +646,7 @@ export function WaitlistFlow(props: {
       logout: async () => {
         await privy.logout().catch(() => null)
       },
+      readToken: getAccessToken,
       shouldLogout: true,
     })
     await waitForPrivyLogoutSettlement()
@@ -670,7 +666,7 @@ export function WaitlistFlow(props: {
       }
       throw error
     }
-  }, [login, privy, requestBootstrap, waitForPrivyLogoutSettlement])
+  }, [getAccessToken, login, privy, requestBootstrap, waitForPrivyLogoutSettlement])
 
   const runRecoveryPrivyLogin = useCallback(async (): Promise<void> => {
     const recoveryOptions = buildWaitlistRecoveryLoginOptions()
@@ -689,6 +685,7 @@ export function WaitlistFlow(props: {
         logout: async () => {
           await privy.logout().catch(() => null)
         },
+        readToken: getAccessToken,
         shouldLogout: true,
       })
       await waitForPrivyLogoutSettlement()
@@ -697,7 +694,7 @@ export function WaitlistFlow(props: {
         recoveryOptions as any,
       )
     }
-  }, [login, privy, waitForPrivyLogoutSettlement])
+  }, [getAccessToken, login, privy, waitForPrivyLogoutSettlement])
 
   const handoffIntoExistingAccount = useCallback(async (): Promise<void> => {
     clearWaitlistRecoveryGate()
@@ -708,6 +705,7 @@ export function WaitlistFlow(props: {
       logout: async () => {
         await privy.logout().catch(() => null)
       },
+      readToken: getAccessToken,
       shouldLogout: true,
     })
     await waitForPrivyLogoutSettlement({ tokenOnly: true })
@@ -918,7 +916,8 @@ export function WaitlistFlow(props: {
         logout: async () => {
           await privy.logout().catch(() => null)
         },
-        shouldLogout: true,
+        readToken: getAccessToken,
+        shouldLogout: privyAuthedRef.current,
       })
       await waitForPrivyLogoutSettlement().catch(() => undefined)
       resetResolvedAccountState()
@@ -940,6 +939,7 @@ export function WaitlistFlow(props: {
       setSignOutBusy(false)
     }
   }, [
+    getAccessToken,
     privy,
     resetBootstrapCooldowns,
     resetResolvedAccountState,
@@ -1016,11 +1016,12 @@ export function WaitlistFlow(props: {
       logout: async () => {
         await privy.logout().catch(() => null)
       },
-      shouldLogout: true,
+      readToken: getAccessToken,
+      shouldLogout: privyAuthedRef.current,
     })
     setRecoveryRequired(false)
     setError(WAITLIST_STALE_SESSION_RESET_MESSAGE)
-  }, [privy, resetResolvedAccountState, setError, setRecoveryRequired])
+  }, [getAccessToken, privy, resetResolvedAccountState, setError, setRecoveryRequired])
 
   const resumePendingWaitlistAuth = useCallback(async () => {
     clearWaitlistRecoveryGate()
@@ -1053,7 +1054,11 @@ export function WaitlistFlow(props: {
       if (isSessionMismatch) {
         resetResolvedAccountState()
         if (!disableAggressiveSessionReset) {
-          await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
+          await runWaitlistPrivyLogout({
+            logout: privyLogoutRef.current,
+            readToken: getAccessToken,
+            shouldLogout: shouldDestroyPrivySession,
+          })
         }
       }
       if (isRecoveryRequired) {
@@ -1075,6 +1080,7 @@ export function WaitlistFlow(props: {
     }
   }, [
     disableAggressiveSessionReset,
+    getAccessToken,
     privyAuthed,
     probeStalePrivyTokenSession,
     recoveryRequiredBootstrapCooldownUntilRef,
@@ -1249,7 +1255,11 @@ export function WaitlistFlow(props: {
           if (isSessionMismatch) {
             resetResolvedAccountState()
             if (!disableAggressiveSessionReset) {
-              await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
+              await runWaitlistPrivyLogout({
+                logout: privyLogoutRef.current,
+                readToken: getAccessToken,
+                shouldLogout: shouldDestroyPrivySession,
+              })
             }
           }
 
@@ -1281,6 +1291,7 @@ export function WaitlistFlow(props: {
     busy,
     disableAggressiveSessionReset,
     error,
+    getAccessToken,
     privyAuthed,
     probeStalePrivyTokenSession,
     requestBootstrap,

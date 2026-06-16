@@ -14,6 +14,8 @@ declare const process: { env: Record<string, string | undefined> }
 
 const DEFAULT_INFO_URL = 'https://api.hyperliquid.xyz/info'
 const FETCH_TIMEOUT_MS = 8_000
+const CANDLE_FETCH_TIMEOUT_MS = 25_000
+const CANDLE_FETCH_MAX_ATTEMPTS = 3
 /** Hard cap on response size to protect against a misbehaving endpoint. */
 const MAX_RESPONSE_BYTES = 2_000_000
 /** Seconds in a 30-day window. */
@@ -161,47 +163,64 @@ async function getCandleSnapshotPage(params: {
   interval: string
   startTimeMs: number
   endTimeMs: number
-}): Promise<HyperliquidCandle[] | null> {
+}): Promise<{ candles: HyperliquidCandle[] | null; error: string | null }> {
   const url = getInfoUrl()
-  const raw = await fetchJsonBounded(url, {
-    type: 'candleSnapshot',
-    req: {
-      coin: params.coin,
-      interval: params.interval,
-      startTime: params.startTimeMs,
-      endTime: params.endTimeMs,
-    },
-  })
-  if (isErrorShape(raw)) return null
-  if (!Array.isArray(raw)) return null
-  const out: HyperliquidCandle[] = []
-  for (const entry of raw) {
-    if (!entry || typeof entry !== 'object') continue
-    const candle = entry as Record<string, unknown>
-    const time =
-      typeof candle.t === 'number'
-        ? candle.t
-        : typeof candle.time === 'number'
-          ? candle.time
-          : Number(candle.T ?? 0)
-    if (!Number.isFinite(time)) continue
+  let lastError: string | null = null
+  for (let attempt = 1; attempt <= CANDLE_FETCH_MAX_ATTEMPTS; attempt += 1) {
+    const raw = await fetchJsonBounded(
+      url,
+      {
+        type: 'candleSnapshot',
+        req: {
+          coin: params.coin,
+          interval: params.interval,
+          startTime: params.startTimeMs,
+          endTime: params.endTimeMs,
+        },
+      },
+      CANDLE_FETCH_TIMEOUT_MS,
+    )
+    if (isErrorShape(raw)) {
+      lastError = raw.__error
+      if (attempt < CANDLE_FETCH_MAX_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, 400 * attempt))
+        continue
+      }
+      return { candles: null, error: lastError }
+    }
+    if (!Array.isArray(raw)) {
+      return { candles: null, error: 'invalid_candle_shape' }
+    }
+    const out: HyperliquidCandle[] = []
+    for (const entry of raw) {
+      if (!entry || typeof entry !== 'object') continue
+      const candle = entry as Record<string, unknown>
+      const time =
+        typeof candle.t === 'number'
+          ? candle.t
+          : typeof candle.time === 'number'
+            ? candle.time
+            : Number(candle.T ?? 0)
+      if (!Number.isFinite(time)) continue
 
-    const open = parseFloatSafe(candle.o)
-    const high = parseFloatSafe(candle.h)
-    const low = parseFloatSafe(candle.l)
-    const close = parseFloatSafe(candle.c)
-    if (open == null || high == null || low == null || close == null) continue
-    out.push({
-      time,
-      open,
-      high,
-      low,
-      close,
-      volume: parseFloatSafe(candle.v),
-    })
+      const open = parseFloatSafe(candle.o)
+      const high = parseFloatSafe(candle.h)
+      const low = parseFloatSafe(candle.l)
+      const close = parseFloatSafe(candle.c)
+      if (open == null || high == null || low == null || close == null) continue
+      out.push({
+        time,
+        open,
+        high,
+        low,
+        close,
+        volume: parseFloatSafe(candle.v),
+      })
+    }
+    out.sort((a, b) => a.time - b.time)
+    return { candles: out, error: null }
   }
-  out.sort((a, b) => a.time - b.time)
-  return out
+  return { candles: null, error: lastError ?? 'fetch_failed' }
 }
 
 // ---------------------------------------------------------------------------
@@ -448,12 +467,14 @@ export async function getCandleSnapshot(params: {
 
   // Keep existing behavior for unknown intervals.
   if (!stepMs || stepMs <= 0) {
-    return getCandleSnapshotPage(params)
+    const page = await getCandleSnapshotPage(params)
+    return page.candles
   }
 
   const byTime = new Map<number, HyperliquidCandle>()
   let cursorEnd = endTimeMs
   let iterations = 0
+  let lastError: string | null = null
 
   while (cursorEnd > startTimeMs && iterations < MAX_CANDLE_PAGINATION_STEPS) {
     iterations += 1
@@ -463,21 +484,25 @@ export async function getCandleSnapshot(params: {
       startTimeMs,
       endTimeMs: cursorEnd,
     })
-    if (page == null) return byTime.size > 0 ? Array.from(byTime.values()).sort((a, b) => a.time - b.time) : null
-    if (page.length === 0) break
+    if (page.error) lastError = page.error
+    if (page.candles == null) {
+      return byTime.size > 0 ? Array.from(byTime.values()).sort((a, b) => a.time - b.time) : null
+    }
+    if (page.candles.length === 0) break
 
-    for (const candle of page) {
+    for (const candle of page.candles) {
       if (candle.time < startTimeMs || candle.time > endTimeMs) continue
       byTime.set(candle.time, candle)
     }
 
-    const earliest = page[0]!.time
+    const earliest = page.candles[0]!.time
     if (!Number.isFinite(earliest) || earliest <= startTimeMs) break
     const nextCursorEnd = earliest - 1
     if (nextCursorEnd >= cursorEnd) break
     cursorEnd = nextCursorEnd
   }
 
+  if (byTime.size === 0 && lastError) return null
   return Array.from(byTime.values()).sort((a, b) => a.time - b.time)
 }
 

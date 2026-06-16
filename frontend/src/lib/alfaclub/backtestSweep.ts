@@ -28,6 +28,7 @@ export type BacktestSweepRow = {
   minHealthAgent: number
   forcedSkipsInsufficientBuffer: number
   commingleViolationCount: number
+  liquidationCount?: number
   objective: number
 }
 
@@ -73,6 +74,7 @@ function parseRow(value: unknown): BacktestSweepRow | null {
     minHealthAgent: asNumber(value.minHealthAgent),
     forcedSkipsInsufficientBuffer: asNumber(value.forcedSkipsInsufficientBuffer),
     commingleViolationCount: asNumber(value.commingleViolationCount),
+    liquidationCount: asNumber(value.liquidationCount),
     objective: asNumber(value.objective),
   }
 }

@@ -56,7 +56,10 @@ export function AddOwnerBaseApp() {
   } = controller
 
   const privyClientStatus = usePrivyClientStatus()
-  const { logout: privyLogout } = usePrivy() as { logout?: () => Promise<void> }
+  const { logout: privyLogout, getAccessToken: privyGetAccessToken } = usePrivy() as {
+    logout?: () => Promise<void>
+    getAccessToken?: () => Promise<string | null>
+  }
   const { signIn, signOut, busy: authBusy, error: authError, hasSession, authAddress } = useSiweAuth()
   const privyContextWallets = usePrivyWalletsFromContext()
   const { connectBaseAccountWallet } = useSubAccountSetup()
@@ -96,6 +99,7 @@ export function AddOwnerBaseApp() {
     try {
       await runWaitlistPrivyLogout({
         logout: typeof privyLogout === 'function' ? privyLogout : undefined,
+        readToken: typeof privyGetAccessToken === 'function' ? privyGetAccessToken : undefined,
         shouldLogout: true,
       })
       await signOut()
@@ -105,7 +109,7 @@ export function AddOwnerBaseApp() {
     } finally {
       setPrivySignOutBusy(false)
     }
-  }, [authBusy, privyLogout, privySignOutBusy, signOut])
+  }, [authBusy, privyGetAccessToken, privyLogout, privySignOutBusy, signOut])
 
   const publicClient = usePublicClient({ chainId: base.id })
 

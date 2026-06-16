@@ -21,8 +21,10 @@ const APP_LOADING_SR_STATUS = LOADING_INTENT_CONFIG.page.srStatus
 const APP_LOADING_SCROLL_LOCK_CLASS = 'app-loading-scroll-lock'
 /** Bridge brief gaps when sequential bootstrap registrars hand off. */
 const APP_LOADING_HIDE_DELAY_MS = 280
-/** After this long, log which registrars are still holding the overlay so stuck loads are diagnosable. */
-const APP_LOADING_STUCK_WARN_MS = 8_000
+/** After this long, log which registrars are still holding the overlay so stuck loads are diagnosable.
+ * Keep this close to auth/bootstrap timeout windows to avoid noisy false alarms during transient dev reconnects.
+ */
+const APP_LOADING_STUCK_WARN_MS = 20_000
 
 type AppLoadingStore = {
   count: number

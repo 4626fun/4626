@@ -93,7 +93,10 @@ function shouldSuppressWalletNoise(args: unknown[]): boolean {
     joined.includes('failed to add embedded wallet connector: wallet proxy not initialized') ||
     (ethereumCollisionSignal && hasExtensionOriginSignal(joined)) ||
     joined.includes('embedded1193provider.request() called with args') ||
-    joined.includes('eth_accounts for privy')
+    joined.includes('eth_accounts for privy') ||
+    joined.includes('unable to migrate wallets') ||
+    joined.includes('user must be authenticated before migrating wallets') ||
+    joined.includes('error destroying session')
   )
 }
 

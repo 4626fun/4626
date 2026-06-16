@@ -3,9 +3,6 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '@4626/server-core'
 
-type CsvValue = string | number
-type CsvRow = Record<string, CsvValue>
-
 function setPublicCors(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
@@ -19,36 +16,6 @@ function parseStringQuery(value: unknown): string | null {
   }
   if (Array.isArray(value)) return parseStringQuery(value[0] ?? null)
   return null
-}
-
-function parseNumberCell(raw: string): number | null {
-  if (!/^-?\d+(?:\.\d+)?$/.test(raw)) return null
-  const n = Number(raw)
-  return Number.isFinite(n) ? n : null
-}
-
-function parseCsv(content: string): CsvRow[] {
-  const lines = content
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-  if (lines.length < 2) return []
-
-  const headers = lines[0].split(',').map((cell) => cell.trim())
-  const rows: CsvRow[] = []
-  for (const line of lines.slice(1)) {
-    const cells = line.split(',').map((cell) => cell.trim())
-    const row: CsvRow = {}
-    for (let i = 0; i < headers.length; i += 1) {
-      const key = headers[i]
-      if (!key) continue
-      const raw = cells[i] ?? ''
-      const numeric = parseNumberCell(raw)
-      row[key] = numeric == null ? raw : numeric
-    }
-    rows.push(row)
-  }
-  return rows
 }
 
 function resolveBacktestsDirCandidates(): string[] {
@@ -70,10 +37,8 @@ function normalizeRequestedFile(raw: string | null): string | null {
   return base
 }
 
-function toAuditFileName(baseCsvFile: string): string {
-  return baseCsvFile.endsWith('.csv')
-    ? baseCsvFile.replace(/\.csv$/i, '-rebalances.csv')
-    : `${baseCsvFile}-rebalances.csv`
+function toSeriesFileName(baseCsvFile: string): string {
+  return baseCsvFile.endsWith('.csv') ? baseCsvFile.replace(/\.csv$/i, '-series.json') : `${baseCsvFile}-series.json`
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -89,7 +54,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const limiter = checkRateLimit(
-    rateLimitKey('alfaclub-backtest-audit', getClientIp(req)),
+    rateLimitKey('alfaclub-backtest-series', getClientIp(req)),
     RATE_LIMITS.smartWalletOwnerRead,
   )
   if (!limiter.allowed) {
@@ -123,12 +88,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (files.length === 0) {
       return res.status(200).json({
         success: true,
-        data: {
-          file: null,
-          runId: requestedRunId,
-          rows: [],
-          searchedDirs: candidateDirs,
-        },
+        data: null,
       })
     }
 
@@ -136,27 +96,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       requestedFile && files.includes(requestedFile) ? requestedFile : (sorted[0]?.name ?? files[0])
     const selectedEntry = sorted.find((entry) => entry.name === selected) ?? sorted[0]
     if (!selectedEntry) {
-      return res.status(500).json({ success: false, error: 'backtest_audit_file_resolve_failed' })
+      return res.status(500).json({ success: false, error: 'backtest_series_file_resolve_failed' })
     }
-    const auditFile = toAuditFileName(selected)
-    const fullPath = path.join(selectedEntry.dir, auditFile)
-    const raw = await readFile(fullPath, 'utf8')
-    const rows = parseCsv(raw)
-    const filteredRows =
-      requestedRunId == null ? rows : rows.filter((row) => String(row.runId ?? '') === requestedRunId)
+
+    const seriesFile = toSeriesFileName(selected)
+    const fullPath = path.join(selectedEntry.dir, seriesFile)
+    const raw = await readFile(fullPath, 'utf8').catch(() => null)
+    if (!raw) {
+      return res.status(200).json({
+        success: true,
+        data: null,
+      })
+    }
+
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    if (
+      requestedRunId &&
+      typeof parsed.runId === 'string' &&
+      parsed.runId !== requestedRunId
+    ) {
+      // One series JSON per sweep CSV — return it even when runId strings drift (float formatting).
+      res.setHeader('X-Backtest-Series-RunId-Mismatch', '1')
+    }
 
     return res.status(200).json({
       success: true,
-      data: {
-        file: selected,
-        auditFile,
-        runId: requestedRunId,
-        rows: filteredRows,
-        resolvedDir: selectedEntry.dir,
-      },
+      data: parsed,
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'backtest_audit_read_failed'
+    const message = error instanceof Error ? error.message : 'backtest_series_read_failed'
     return res.status(500).json({ success: false, error: message })
   }
 }

@@ -20,7 +20,7 @@
       "maxDuration": 10
     },
     "api/[...path].ts": {
-      "maxDuration": 60,
+      "maxDuration": 300,
       "includeFiles": "{public/.well-known/agent-registration.json,server/_lib/alfaclub/assets/**,../supabase/migrations/**}",
       "excludeFiles": "{node_modules/.pnpm/**/bindings_node.darwin*.node,node_modules/.pnpm/**/bindings_node.win32*.node,node_modules/.pnpm/**/bindings_node.linux-arm64*.node,node_modules/.pnpm/**/bindings_node.linux-x64-musl.node}"
     },

@@ -64,6 +64,7 @@ import { ChevronDown, ExternalLink } from 'lucide-react'
 import { useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 import { usePrivyClientStatus } from '@/lib/privy/client'
+import { safePrivyLogout } from '@/lib/privy/logout'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
 import { RequestCreatorAccess } from '@/components/deploy/RequestCreatorAccess'
 import { LaunchCoinCard } from '@/features/waitlist/LaunchCoinCard'
@@ -7497,11 +7498,10 @@ function DeployVaultMain() {
         if (!privyAuthenticated || !likelyAlreadyLoggedIn || typeof logout !== 'function') return
       }
 
-      try {
-        await logout()
-      } catch {
-        // ignore
-      }
+      await safePrivyLogout({
+        logout,
+        readToken: getAccessToken,
+      }).catch(() => undefined)
       try {
         await login(loginOptions)
       } catch {
@@ -7512,7 +7512,7 @@ function DeployVaultMain() {
       label: privyAuthenticated ? 'Switch account connection' : 'Restore account connection',
       onClick: () => void run(),
     }
-  }, [login, logout, privyAuthenticated, privyReady])
+  }, [getAccessToken, login, logout, privyAuthenticated, privyReady])
 
   const externalSignerConnectors = useMemo(() => {
     const seen = new Set<string>()

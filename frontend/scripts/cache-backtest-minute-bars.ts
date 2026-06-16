@@ -5,11 +5,17 @@
  * Usage:
  *   pnpm -C frontend exec tsx scripts/cache-backtest-minute-bars.ts
  *   pnpm -C frontend exec tsx scripts/cache-backtest-minute-bars.ts --symbol BTC --window-hours 2160 --chunk-hours 24
+ *
+ * Default (resume): append new bars since the latest cached minute.
+ * When cache coverage for --window-hours is below target, automatically backfills the full window.
+ * Force full re-fetch: add --no-resume
+ * Cron / incremental only: add --incremental-only
  */
 
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+import { expectedBarCount, minCoverageRatio } from '../server/_lib/alfaclub/backtestIntervalPolicy.js'
 import { getDb } from '../server/_lib/db/postgres.js'
 import { getCandleSnapshot } from '../server/_lib/alfaclub/hyperliquid.js'
 
@@ -19,6 +25,7 @@ type CliArgs = {
   windowHours: number
   chunkHours: number
   resumeFromLast: boolean
+  incrementalOnly: boolean
   dryRun: boolean
 }
 
@@ -86,41 +93,138 @@ function parseArgs(argv: string[]): CliArgs {
     windowHours,
     chunkHours,
     resumeFromLast: !flags.has('no-resume'),
+    incrementalOnly: flags.has('incremental-only'),
     dryRun: flags.has('dry-run'),
   }
 }
 
-async function resolveFetchWindow(args: CliArgs): Promise<{ startTimeMs: number; endTimeMs: number; resumed: boolean }> {
-  const endTimeMs = Date.now()
-  const fallbackStart = endTimeMs - args.windowHours * 60 * 60 * 1000
-  if (!args.resumeFromLast) {
-    return { startTimeMs: fallbackStart, endTimeMs, resumed: false }
-  }
+type CacheCoverage = {
+  count: number
+  expectedBars: number
+  coveragePct: number
+  minBarTimeMs: number | null
+  maxBarTimeMs: number | null
+}
 
+async function readCacheCoverage(symbol: string, windowHours: number): Promise<CacheCoverage | null> {
   const db = await getDb().catch(() => null)
-  if (!db?.query) {
-    return { startTimeMs: fallbackStart, endTimeMs, resumed: false }
-  }
+  if (!db?.query) return null
+
+  const endTime = new Date()
+  const startTime = new Date(endTime.getTime() - windowHours * 60 * 60 * 1000)
+  const expectedBars = expectedBarCount(windowHours, '1m')
 
   const sql = `
-    SELECT max(bar_time) AS max_bar_time
+    SELECT
+      count(*)::int AS bar_count,
+      min(bar_time) AS min_bar_time,
+      max(bar_time) AS max_bar_time
     FROM public.backtest_market_bars_1m
     WHERE symbol = $1
       AND interval = '1m'
+      AND bar_time >= $2
+      AND bar_time <= $3
   `
-  const res = await db.query(sql, [args.symbol])
-  const maxBarTimeRaw = (res.rows?.[0] as { max_bar_time?: unknown } | undefined)?.max_bar_time
-  if (!maxBarTimeRaw) {
-    return { startTimeMs: fallbackStart, endTimeMs, resumed: false }
+  const res = await db.query(sql, [symbol, startTime.toISOString(), endTime.toISOString()])
+  const row = res.rows?.[0] as { bar_count?: unknown; min_bar_time?: unknown; max_bar_time?: unknown } | undefined
+  const countRaw = row?.bar_count
+  const count = typeof countRaw === 'number' ? countRaw : Number(countRaw ?? 0)
+  const minBarTimeMs = row?.min_bar_time ? new Date(String(row.min_bar_time)).getTime() : null
+  const maxBarTimeMs = row?.max_bar_time ? new Date(String(row.max_bar_time)).getTime() : null
+
+  return {
+    count: Number.isFinite(count) ? count : 0,
+    expectedBars,
+    coveragePct: expectedBars > 0 ? count / expectedBars : 0,
+    minBarTimeMs: Number.isFinite(minBarTimeMs ?? NaN) ? minBarTimeMs : null,
+    maxBarTimeMs: Number.isFinite(maxBarTimeMs ?? NaN) ? maxBarTimeMs : null,
+  }
+}
+
+type FetchWindow = {
+  startTimeMs: number
+  endTimeMs: number
+  mode: 'full' | 'incremental' | 'backfill_window'
+  /** Why incremental mode was chosen (cron flag vs coverage gate). */
+  incrementalReason?: 'coverage_ok' | 'cron_only'
+  coverageBefore: CacheCoverage | null
+}
+async function resolveFetchWindow(args: CliArgs): Promise<FetchWindow> {
+  const endTimeMs = Date.now()
+  const targetStartMs = endTimeMs - args.windowHours * 60 * 60 * 1000
+  const coverageBefore = await readCacheCoverage(args.symbol, args.windowHours)
+  const minCoverage = minCoverageRatio(args.windowHours, '1m')
+
+  if (!args.resumeFromLast) {
+    return {
+      startTimeMs: targetStartMs,
+      endTimeMs,
+      mode: 'full',
+      coverageBefore,
+    }
   }
 
-  const maxBarTimeMs = new Date(String(maxBarTimeRaw)).getTime()
-  if (!Number.isFinite(maxBarTimeMs)) {
-    return { startTimeMs: fallbackStart, endTimeMs, resumed: false }
+  if (args.incrementalOnly) {
+    const maxBarTimeMs = coverageBefore?.maxBarTimeMs ?? null
+    if (maxBarTimeMs == null) {
+      return { startTimeMs: targetStartMs, endTimeMs, mode: 'backfill_window', coverageBefore }
+    }
+    return {
+      startTimeMs: Math.max(0, maxBarTimeMs + 60_000),
+      endTimeMs,
+      mode: 'incremental',
+      incrementalReason: 'cron_only',
+      coverageBefore,
+    }
   }
 
-  const resumedStart = maxBarTimeMs + 60_000
-  return { startTimeMs: Math.max(0, resumedStart), endTimeMs, resumed: true }
+  const coverageOk =
+    coverageBefore != null &&
+    coverageBefore.coveragePct >= minCoverage &&
+    coverageBefore.maxBarTimeMs != null &&
+    endTimeMs - coverageBefore.maxBarTimeMs <= 15 * 60 * 1000
+
+  if (coverageOk) {
+    return {
+      startTimeMs: Math.max(0, coverageBefore!.maxBarTimeMs! + 60_000),
+      endTimeMs,
+      mode: 'incremental',
+      incrementalReason: 'coverage_ok',
+      coverageBefore,
+    }
+  }
+
+  return {
+    startTimeMs: targetStartMs,
+    endTimeMs,
+    mode: 'backfill_window',
+    coverageBefore,
+  }
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function fetchCandlesWithRetry(params: {
+  coin: string
+  interval: '1m'
+  startTimeMs: number
+  endTimeMs: number
+  maxAttempts?: number
+}) {
+  const maxAttempts = params.maxAttempts ?? 3
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const candles = await getCandleSnapshot({
+      coin: params.coin,
+      interval: params.interval,
+      startTimeMs: params.startTimeMs,
+      endTimeMs: params.endTimeMs,
+    })
+    if (candles) return candles
+    if (attempt < maxAttempts) await sleep(400 * attempt)
+  }
+  return null
 }
 
 async function fetchMinuteBarsInChunks(args: CliArgs, window: { startTimeMs: number; endTimeMs: number }) {
@@ -136,24 +240,40 @@ async function fetchMinuteBarsInChunks(args: CliArgs, window: { startTimeMs: num
 
   let cursor = startTimeMs
   let chunks = 0
+  let failedChunks = 0
+  const totalChunksEstimate = Math.max(1, Math.ceil((targetEndTimeMs - startTimeMs) / chunkMs))
+  console.log(
+    `[cache-backtest-minute-bars] fetching ${totalChunksEstimate} chunk(s) of ${args.chunkHours}h from Hyperliquid…`,
+  )
   while (cursor < targetEndTimeMs) {
     chunks += 1
     const chunkStart = cursor
     const chunkEnd = Math.min(targetEndTimeMs, cursor + chunkMs)
-    const candles = await getCandleSnapshot({
+    if (chunks === 1 || chunks % 10 === 0 || chunks === totalChunksEstimate) {
+      console.log(
+        `[cache-backtest-minute-bars] chunk ${chunks}/${totalChunksEstimate} · ${new Date(chunkStart).toISOString().slice(0, 10)} → ${new Date(chunkEnd).toISOString().slice(0, 10)} · ${byTime.size} unique bars so far`,
+      )
+    }
+    const candles = await fetchCandlesWithRetry({
       coin: args.symbol,
       interval: args.interval,
       startTimeMs: chunkStart,
       endTimeMs: chunkEnd,
     })
     if (!candles) {
-      throw new Error(`candle_fetch_failed chunk=${chunks} start=${new Date(chunkStart).toISOString()}`)
+      failedChunks += 1
+      cursor = chunkEnd + 1
+      continue
     }
     for (const candle of candles) {
       if (!Number.isFinite(candle.time)) continue
       byTime.set(candle.time, candle)
     }
     cursor = chunkEnd + 1
+  }
+
+  if (byTime.size === 0 && failedChunks > 0) {
+    throw new Error(`candle_fetch_failed failedChunks=${failedChunks}`)
   }
 
   const rows = Array.from(byTime.values())
@@ -172,7 +292,7 @@ async function fetchMinuteBarsInChunks(args: CliArgs, window: { startTimeMs: num
       fetchedAtIso: new Date().toISOString(),
     } satisfies CacheRow))
 
-  return { rows, chunks, startTimeMs, endTimeMs: targetEndTimeMs }
+  return { rows, chunks, failedChunks, startTimeMs, endTimeMs: targetEndTimeMs }
 }
 
 async function upsertRows(rows: CacheRow[]) {
@@ -240,26 +360,90 @@ async function main() {
 
   const started = Date.now()
   const window = await resolveFetchWindow(args)
-  const { rows, chunks, startTimeMs, endTimeMs } = await fetchMinuteBarsInChunks(args, window)
+  if (window.coverageBefore) {
+    console.log('[cache-backtest-minute-bars] cache_before', {
+      bars: window.coverageBefore.count,
+      expected: window.coverageBefore.expectedBars,
+      coveragePct: Number((window.coverageBefore.coveragePct * 100).toFixed(1)),
+      min: window.coverageBefore.minBarTimeMs
+        ? new Date(window.coverageBefore.minBarTimeMs).toISOString()
+        : null,
+      max: window.coverageBefore.maxBarTimeMs
+        ? new Date(window.coverageBefore.maxBarTimeMs).toISOString()
+        : null,
+    })
+  }
+  if (window.mode === 'incremental') {
+    if (window.incrementalReason === 'cron_only') {
+      console.log(
+        '[cache-backtest-minute-bars] mode=incremental-only (cron — append since last cached bar; does not backfill gaps)',
+      )
+    } else {
+      console.log(
+        '[cache-backtest-minute-bars] mode=incremental (cache coverage OK + fresh — appending new bars only)',
+      )
+    }
+  } else if (window.mode === 'backfill_window') {
+    console.log(
+      `[cache-backtest-minute-bars] mode=backfill_window (coverage below ${(minCoverageRatio(args.windowHours, '1m') * 100).toFixed(0)}% — fetching full ${args.windowHours}h window)`,
+    )
+  } else {
+    console.log('[cache-backtest-minute-bars] mode=full (--no-resume)')
+  }
+
+  const { rows, chunks, failedChunks, startTimeMs, endTimeMs } = await fetchMinuteBarsInChunks(args, window)
   const elapsedFetchMs = Date.now() - started
   console.log('[cache-backtest-minute-bars] fetched', {
-    resumed: window.resumed,
+    mode: window.mode,
     chunks,
+    failedChunks,
     rows: rows.length,
     from: new Date(startTimeMs).toISOString(),
     to: new Date(endTimeMs).toISOString(),
     fetchSeconds: Number((elapsedFetchMs / 1000).toFixed(2)),
   })
 
+  if (failedChunks > 0) {
+    console.warn(
+      `[cache-backtest-minute-bars] warn: ${failedChunks} chunk(s) failed after retries — row count may be low; wait and re-run backfill`,
+    )
+  }
+
+  if (rows.length === 0 && window.mode === 'incremental') {
+    console.log('[cache-backtest-minute-bars] nothing new to upsert')
+    return
+  }
+
   if (args.dryRun) return
 
   const upsertStarted = Date.now()
   await upsertRows(rows)
   const elapsedUpsertMs = Date.now() - upsertStarted
+
+  const coverageAfter = await readCacheCoverage(args.symbol, args.windowHours)
+  const barsBefore = window.coverageBefore?.count ?? null
+  const barsDelta =
+    barsBefore != null && coverageAfter ? coverageAfter.count - barsBefore : null
   console.log('[cache-backtest-minute-bars] done', {
-    rows: rows.length,
+    rowsFetched: rows.length,
+    barsDelta,
     upsertSeconds: Number((elapsedUpsertMs / 1000).toFixed(2)),
   })
+  if (coverageAfter) {
+    console.log('[cache-backtest-minute-bars] cache_after', {
+      bars: coverageAfter.count,
+      barsDelta,
+      expected: coverageAfter.expectedBars,
+      coveragePct: Number((coverageAfter.coveragePct * 100).toFixed(1)),
+      min: coverageAfter.minBarTimeMs ? new Date(coverageAfter.minBarTimeMs).toISOString() : null,
+      max: coverageAfter.maxBarTimeMs ? new Date(coverageAfter.maxBarTimeMs).toISOString() : null,
+    })
+    if (coverageAfter.coveragePct < minCoverageRatio(args.windowHours, '1m')) {
+      console.log(
+        '[cache-backtest-minute-bars] note: Hyperliquid exposes ~5k recent 1m candles (~3.5 days). 90-day 1m backtests need this cache filled over time (daily cron) or use auto finest resolution (1h for full 90d until cache is complete).',
+      )
+    }
+  }
 }
 
 void main().catch((error) => {

@@ -87,6 +87,22 @@ describe('runWaitlistPrivyLogout', () => {
     expect(logout).not.toHaveBeenCalled()
   })
 
+  it('skips Privy logout when no access token is available', async () => {
+    const logout = vi.fn(async () => undefined)
+    const readToken = vi.fn(async () => null)
+
+    await expect(
+      runWaitlistPrivyLogout({
+        logout,
+        readToken,
+        shouldLogout: true,
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(readToken).toHaveBeenCalledTimes(1)
+    expect(logout).not.toHaveBeenCalled()
+  })
+
   it('times out if logout never resolves', async () => {
     vi.useFakeTimers()
     const neverResolvingLogout = vi.fn(() => new Promise<void>(() => {}))

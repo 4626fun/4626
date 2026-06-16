@@ -26,6 +26,10 @@ import { type WaitlistAccountsSummary } from './waitlistAccountTypes'
 import { clearWaitlistRecoveryGate } from './waitlistRecoveryGate'
 import { clearWaitlistAuthPending } from './waitlistAuthPending'
 
+// Canonicalization is best-effort during waitlist bootstrap; keep auth UX responsive
+// and let the setup workspace retry deeper account sync if this times out.
+const WAITLIST_CANONICALIZATION_TIMEOUT_MS = 4_000
+
 type UseWaitlistBootstrapParams = {
   activeReferralCode: string | null
   ensureEmbeddedWallet: () => Promise<{ address: string }>
@@ -138,7 +142,7 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
           runCanonicalization: async (privyToken) => {
             const canonicalization = await withTimeout(
               runCanonicalizationPipeline({ privyToken }),
-              FLOW_TIMEOUT_MS,
+              WAITLIST_CANONICALIZATION_TIMEOUT_MS,
               'Account sync',
             )
             return {

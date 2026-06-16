@@ -2,12 +2,19 @@ import { useEffect, useId, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { SlidersHorizontal } from 'lucide-react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+
+import { ArenaBacktestAnalysis } from '@/components/arena/ArenaBacktestAnalysis'
 
 import { PageMeta, META } from '@/components/seo/PageMeta'
-import { useBacktestAudit } from '@/hooks/useBacktestAudit'
 import { useBacktestMarkets } from '@/hooks/useBacktestMarkets'
+import { useBacktestSeries } from '@/hooks/useBacktestSeries'
 import { useBacktestSweep } from '@/hooks/useBacktestSweep'
+import {
+  intervalToMinutes,
+  resolveBacktestIntervalForRun,
+} from '@/lib/alfaclub/backtestIntervalPolicy'
+import { buildBacktestRunId } from '@/lib/alfaclub/backtestRunId'
+import type { BacktestSeriesPayload } from '@/lib/alfaclub/backtestSeries'
 import { useCounterTradeStatus } from '@/hooks/useCounterTradeStatus'
 import { CounterTradeFlowTimeline } from '@/components/alfaclub/CounterTradeFlowTimeline'
 import { apiFetch } from '@/lib/api/apiBase'
@@ -25,7 +32,7 @@ const docsPages = [
 ] as const
 
 const DEFAULT_BACKTEST_MARKETS = ['BTC/USDC', 'ETH/USDC', 'SOL/USDC'] as const
-const BACKTEST_TIMEFRAME_OPTIONS = [
+const BACKTEST_HORIZON_PRESETS = [
   { label: '24 hours', value: 24 },
   { label: '7 days', value: 24 * 7 },
   { label: '15 days', value: 24 * 15 },
@@ -33,11 +40,40 @@ const BACKTEST_TIMEFRAME_OPTIONS = [
   { label: '90 days', value: 24 * 90 },
 ] as const
 
-function chooseBacktestInterval(windowHours: number): '1m' | '5m' | '15m' | '1h' {
-  if (windowHours <= 24 * 3) return '1m'
-  if (windowHours <= 24 * 14) return '5m'
-  if (windowHours <= 24 * 30) return '15m'
-  return '1h'
+function parseCapitalInput(raw: string): number | null {
+  const cleaned = raw.replace(/[,$\s]/g, '')
+  if (!cleaned) return null
+  const numeric = Number(cleaned)
+  if (!Number.isFinite(numeric) || numeric < 0) return null
+  return Math.round(numeric)
+}
+
+/** Plain-language label for the auto bar-size picker (not user-facing jargon). */
+function describeBarSizeMode(windowHours: number): string {
+  if (windowHours >= 24 * 90) {
+    return 'Auto — 1-minute bars when cache is full, else 1-hour for all 90 days'
+  }
+  if (windowHours >= 24 * 7) {
+    return 'Auto — 1-minute bars when available, else coarser bars'
+  }
+  return '1-minute bars'
+}
+
+function describeLastRunBarSize(resolvedInterval: string | null, windowHours: number): string | null {
+  if (!resolvedInterval || resolvedInterval === 'auto') return null
+  const intervalLabel =
+    resolvedInterval === '1m'
+      ? '1-minute'
+      : resolvedInterval === '5m'
+        ? '5-minute'
+        : resolvedInterval === '15m'
+          ? '15-minute'
+          : '1-hour'
+  let detail = `Last backtest replayed on ${intervalLabel} price snapshots`
+  if (resolvedInterval === '1h' && windowHours >= 24 * 90) {
+    detail += ' (90-day minute cache still filling — hourly is the finest full-horizon option today)'
+  }
+  return detail
 }
 
 function buildBacktestRunIdFromRow(row: {
@@ -51,7 +87,7 @@ function buildBacktestRunIdFromRow(row: {
   maxChunkUsd: number
   cooldownBars: number
 }): string {
-  return `${row.symbol}-${row.interval}-${row.windowHours}-${row.leverage}-${row.healthFloor}-${row.deadband}-${row.minChunkUsd}-${row.maxChunkUsd}-${row.cooldownBars}`
+  return buildBacktestRunId(row)
 }
 
 const counterTradeFileGroups = [
@@ -802,6 +838,10 @@ export function ArenaBacktestPage() {
   const [isRunning, setIsRunning] = useState(false)
   const [runError, setRunError] = useState<string | null>(null)
   const [runOutput, setRunOutput] = useState<string | null>(null)
+  const [showRunLog, setShowRunLog] = useState(false)
+  const [pinnedSweepFile, setPinnedSweepFile] = useState<string | null>(null)
+  const [inlineSeries, setInlineSeries] = useState<BacktestSeriesPayload | null>(null)
+  const [lastResolvedInterval, setLastResolvedInterval] = useState<string | null>(null)
   const [defaults, setDefaults] = useState({
     market: 'BTC/USDC',
     leverage: 30,
@@ -818,7 +858,7 @@ export function ArenaBacktestPage() {
     requireNoCommingle: true,
   })
   const marketsQuery = useBacktestMarkets()
-  const sweep = useBacktestSweep()
+  const sweep = useBacktestSweep({ file: pinnedSweepFile })
 
   const sortedRows = useMemo(() => {
     if (!sweep.data) return []
@@ -827,14 +867,22 @@ export function ArenaBacktestPage() {
 
   const topRows = useMemo(() => sortedRows.slice(0, topN), [sortedRows, topN])
   const selectedTopRow = topRows[0] ?? null
-  const activeSweepFile = sweep.data?.file ?? null
+  const activeSweepFile = pinnedSweepFile ?? sweep.data?.file ?? null
   const selectedRunId = useMemo(
     () => (selectedTopRow ? buildBacktestRunIdFromRow(selectedTopRow) : null),
     [selectedTopRow],
   )
-  const auditQuery = useBacktestAudit({ file: activeSweepFile, runId: selectedRunId })
+  const seriesQuery = useBacktestSeries({
+    file: inlineSeries ? null : activeSweepFile,
+    runId: selectedRunId,
+  })
+  const activeSeries = inlineSeries ?? seriesQuery.data ?? null
 
-  const intervalForWindow = useMemo(() => chooseBacktestInterval(defaults.windowHours), [defaults.windowHours])
+  const intervalForRun = useMemo(
+    () => resolveBacktestIntervalForRun(defaults.windowHours),
+    [defaults.windowHours],
+  )
+  const displayResolvedInterval = selectedTopRow?.interval ?? lastResolvedInterval
   const inferredSymbol = useMemo(() => defaults.market.split('/')[0] ?? 'BTC', [defaults.market])
   const availableMarkets = useMemo(() => {
     const fromApi = marketsQuery.data?.markets ?? []
@@ -851,11 +899,13 @@ export function ArenaBacktestPage() {
   )
   const leverageMax = selectedMarket?.maxLeverage ?? 40
   const intervalMinutes = useMemo(() => {
-    if (intervalForWindow === '1m') return 1
-    if (intervalForWindow === '5m') return 5
-    if (intervalForWindow === '15m') return 15
-    return 60
-  }, [intervalForWindow])
+    const resolved = displayResolvedInterval ?? intervalForRun
+    if (resolved === 'auto') return 60
+    if (resolved === '1m') return 1
+    if (resolved === '5m') return 5
+    if (resolved === '15m') return 15
+    return intervalToMinutes(resolved as '1h')
+  }, [displayResolvedInterval, intervalForRun])
   const rebalanceCooldownMinutes = defaults.cooldownBars * intervalMinutes
   const totalLongCapitalUsd = defaults.initialLongMarginUsd + defaults.initialLongBufferUsd
   const totalShortCapitalUsd = defaults.initialShortMarginUsd + defaults.initialShortBufferUsd
@@ -878,26 +928,6 @@ export function ArenaBacktestPage() {
     }))
   }, [leverageMax])
 
-  const runCommand = useMemo(() => {
-    return [
-      'pnpm -C frontend run ops:counter-trade:backtest',
-      `--symbol ${inferredSymbol}`,
-      `--interval ${intervalForWindow}`,
-      `--window-hours ${defaults.windowHours}`,
-      `--leverage ${defaults.leverage}`,
-      `--initial-long-margin-usd ${defaults.initialLongMarginUsd}`,
-      `--initial-short-margin-usd ${defaults.initialShortMarginUsd}`,
-      `--initial-long-buffer-usd ${defaults.initialLongBufferUsd}`,
-      `--initial-short-buffer-usd ${defaults.initialShortBufferUsd}`,
-      `--floors ${defaults.healthFloor}`,
-      `--deadbands ${defaults.deadband}`,
-      `--min-chunks ${defaults.minChunkUsd}`,
-      `--max-chunks ${defaults.maxChunkUsd}`,
-      `--cooldowns ${defaults.cooldownBars}`,
-      `--require-no-commingle ${defaults.requireNoCommingle ? 1 : 0}`,
-    ].join(' ')
-  }, [defaults, inferredSymbol, intervalForWindow])
-
   const handleRunBacktest = async () => {
     try {
       setIsRunning(true)
@@ -909,7 +939,7 @@ export function ArenaBacktestPage() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           symbol: inferredSymbol,
-          interval: intervalForWindow,
+          interval: intervalForRun,
           windowHours: defaults.windowHours,
           leverage: defaults.leverage,
           initialLongMarginUsd: defaults.initialLongMarginUsd,
@@ -926,9 +956,34 @@ export function ArenaBacktestPage() {
       })
       const payload = await response.json().catch(() => null)
       if (!response.ok) {
-        throw new Error(resolveApiErrorMessage(payload, `Backtest run failed (${response.status})`))
+        const detail =
+          payload && typeof payload === 'object' && typeof (payload as { error?: unknown }).error === 'string'
+            ? (payload as { error: string }).error
+            : null
+        throw new Error(detail?.trim() || `Backtest run failed (${response.status})`)
+      }
+      if (
+        payload &&
+        typeof payload === 'object' &&
+        (payload as { success?: unknown }).success === false
+      ) {
+        throw new Error(resolveApiErrorMessage(payload, 'Backtest run failed'))
       }
       const output = typeof payload?.data?.stdout === 'string' ? payload.data.stdout : ''
+      const sweepFile =
+        typeof payload?.data?.sweepFile === 'string' && payload.data.sweepFile.trim()
+          ? payload.data.sweepFile.trim()
+          : null
+      const resolvedInterval =
+        typeof payload?.data?.resolvedInterval === 'string' ? payload.data.resolvedInterval : null
+      const seriesPayload = payload?.data?.series
+      if (seriesPayload && typeof seriesPayload === 'object') {
+        setInlineSeries(seriesPayload as BacktestSeriesPayload)
+      } else {
+        setInlineSeries(null)
+      }
+      if (sweepFile) setPinnedSweepFile(sweepFile)
+      if (resolvedInterval) setLastResolvedInterval(resolvedInterval)
       setRunOutput(output.trim().length > 0 ? output : 'Backtest completed. Refreshing sweep list...')
       await sweep.refetch()
     } catch (error) {
@@ -959,31 +1014,16 @@ export function ArenaBacktestPage() {
   const formatNum = (value: number, digits = 4) =>
     new Intl.NumberFormat('en-US', { maximumFractionDigits: digits, minimumFractionDigits: 0 }).format(value)
   const formatPct = (value: number) => `${(value * 100).toFixed(2)}%`
-  const playbackData = useMemo(() => {
-    const rows = auditQuery.data?.rows ?? []
-    return rows
-      .slice()
-      .sort((a, b) => a.stepIndex - b.stepIndex)
-      .map((row) => ({
-        step: row.stepIndex,
-        mark: row.mark,
-        weakHealth: row.weakHealth,
-        healthGap: row.healthGap,
-        isolated: row.noCrossLegTransfer ? 1 : 0,
-      }))
-  }, [auditQuery.data?.rows])
-  const scenarioStatement = selectedTopRow
-    ? `Scenario: ${selectedTopRow.symbol} moved from ${formatUsd(selectedTopRow.startPrice)} to ${formatUsd(selectedTopRow.endPrice)} (${formatPct(selectedTopRow.priceChangePct)}) over ${formatNum(selectedTopRow.windowHours, 0)}h on ${selectedTopRow.interval} candles; with ${selectedTopRow.leverage}x leverage and isolated legs, this setup ended at ${formatUsd(selectedTopRow.finalEquity)} after ${formatNum(selectedTopRow.rebalanceCount, 0)} rebalances, with long/short BTC at ${formatNum(selectedTopRow.finalLongQty, 6)} / ${formatNum(selectedTopRow.finalShortQty, 6)} and ${formatNum(selectedTopRow.commingleViolationCount, 0)} cross-leg commingle violations.`
-    : null
 
   return (
     <article className={`${shellToneCard} p-8 sm:p-12`}>
       <div className="max-w-none space-y-6">
         <div className="label">Backtesting workspace</div>
         <h2 className="headline text-3xl sm:text-5xl">Arena strategy backtests</h2>
-        <p className="text-base sm:text-lg text-zinc-300 leading-relaxed">
-          Configure one run directly: choose market, set long/short margin and buffers, pick lookback depth, tune rebalance
-          timing, then run and inspect non-commingled outcomes.
+        <p className="text-base sm:text-lg text-zinc-300 leading-relaxed max-w-3xl">
+          Run isolated long/short counter-rebalance simulations with automatic finest-bar resolution. Shorter horizons
+          replay on 1-minute bars; 90-day runs use 1m when the bar cache is complete, otherwise the finest interval that
+          fully covers the window (typically 1h from Hyperliquid).
         </p>
 
         <div className="rounded-2xl border border-zinc-900/70 bg-black/25 p-5 sm:p-6 space-y-4">
@@ -992,29 +1032,117 @@ export function ArenaBacktestPage() {
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => void sweep.refetch()}
+              onClick={() => {
+                setPinnedSweepFile(null)
+                setInlineSeries(null)
+                void sweep.refetch()
+              }}
               className="inline-flex items-center rounded-lg bg-zinc-900 px-3 py-2 text-xs text-zinc-100 hover:bg-zinc-800"
             >
               Refresh results
             </button>
+            {pinnedSweepFile ? (
+              <span className="text-[11px] text-zinc-500 truncate max-w-[16rem]" title={pinnedSweepFile}>
+                Pinned: {pinnedSweepFile}
+              </span>
+            ) : null}
           </div>
 
-          <div className="grid gap-2 md:grid-cols-4">
-            <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Long side capital</div>
-              <div className="text-sm text-zinc-100">{formatUsd(totalLongCapitalUsd)}</div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 space-y-2">
+              <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Long leg (room)</div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-zinc-500">
+                  <span className="text-[11px] text-zinc-500">Margin (USD)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={50}
+                    value={defaults.initialLongMarginUsd}
+                    onChange={(event) => {
+                      const parsed = parseCapitalInput(event.target.value)
+                      if (parsed == null) return
+                      setDefaults((current) => ({ ...current, initialLongMarginUsd: parsed }))
+                    }}
+                    className="mt-1 w-full rounded-md border border-zinc-800 bg-black/40 px-2 py-1.5 text-sm tabular-nums text-zinc-100"
+                  />
+                </label>
+                <label className="text-zinc-500">
+                  <span className="text-[11px] text-zinc-500">Buffer (USD)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={50}
+                    value={defaults.initialLongBufferUsd}
+                    onChange={(event) => {
+                      const parsed = parseCapitalInput(event.target.value)
+                      if (parsed == null) return
+                      setDefaults((current) => ({ ...current, initialLongBufferUsd: parsed }))
+                    }}
+                    className="mt-1 w-full rounded-md border border-zinc-800 bg-black/40 px-2 py-1.5 text-sm tabular-nums text-zinc-100"
+                  />
+                </label>
+              </div>
+              <div className="text-[11px] text-zinc-500">
+                Side total {formatUsd(totalLongCapitalUsd)} — margin is perp collateral; buffer funds rebalances
+              </div>
             </div>
-            <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Short side capital</div>
-              <div className="text-sm text-zinc-100">{formatUsd(totalShortCapitalUsd)}</div>
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3 space-y-2">
+              <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Short leg (agent)</div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-zinc-500">
+                  <span className="text-[11px] text-zinc-500">Margin (USD)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={50}
+                    value={defaults.initialShortMarginUsd}
+                    onChange={(event) => {
+                      const parsed = parseCapitalInput(event.target.value)
+                      if (parsed == null) return
+                      setDefaults((current) => ({ ...current, initialShortMarginUsd: parsed }))
+                    }}
+                    className="mt-1 w-full rounded-md border border-zinc-800 bg-black/40 px-2 py-1.5 text-sm tabular-nums text-zinc-100"
+                  />
+                </label>
+                <label className="text-zinc-500">
+                  <span className="text-[11px] text-zinc-500">Buffer (USD)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={50}
+                    value={defaults.initialShortBufferUsd}
+                    onChange={(event) => {
+                      const parsed = parseCapitalInput(event.target.value)
+                      if (parsed == null) return
+                      setDefaults((current) => ({ ...current, initialShortBufferUsd: parsed }))
+                    }}
+                    className="mt-1 w-full rounded-md border border-zinc-800 bg-black/40 px-2 py-1.5 text-sm tabular-nums text-zinc-100"
+                  />
+                </label>
+              </div>
+              <div className="text-[11px] text-zinc-500">
+                Side total {formatUsd(totalShortCapitalUsd)} — legs stay isolated when no-commingle is on
+              </div>
             </div>
+          </div>
+
+          <div className="grid gap-2 md:grid-cols-2">
             <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2">
               <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Total capital</div>
-              <div className="text-sm text-zinc-100">{formatUsd(totalCapitalUsd)}</div>
+              <div className="text-sm text-zinc-100 tabular-nums">{formatUsd(totalCapitalUsd)}</div>
+              <div className="mt-1 text-[11px] text-zinc-500">
+                Long {formatUsd(totalLongCapitalUsd)} + short {formatUsd(totalShortCapitalUsd)}
+              </div>
             </div>
             <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-2">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Candle interval</div>
-              <div className="text-sm text-zinc-100">{intervalForWindow}</div>
+              <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Bar size</div>
+              <div className="text-sm text-zinc-100">{describeBarSizeMode(defaults.windowHours)}</div>
+              {describeLastRunBarSize(displayResolvedInterval, defaults.windowHours) ? (
+                <div className="mt-1 text-[11px] text-sky-300/90">
+                  {describeLastRunBarSize(displayResolvedInterval, defaults.windowHours)}
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -1098,92 +1226,31 @@ export function ArenaBacktestPage() {
                   }
                   className="mt-1 w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-100"
                 >
-                  {BACKTEST_TIMEFRAME_OPTIONS.map((option) => (
+                  {BACKTEST_HORIZON_PRESETS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
                   ))}
                 </select>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {[168, 720, 2160].map((hours) => {
-                    const isActive = defaults.windowHours === hours
-                    const label = hours === 168 ? '7d' : hours === 720 ? '30d' : '90d'
-                    return (
-                      <button
-                        key={hours}
-                        type="button"
-                        onClick={() =>
-                          setDefaults((current) => ({
-                            ...current,
-                            windowHours: hours,
-                          }))
-                        }
-                        className={`rounded-md border px-2 py-1 text-[11px] ${
-                          isActive
-                            ? 'border-sky-500/70 bg-sky-500/20 text-sky-200'
-                            : 'border-zinc-700 text-zinc-300 hover:bg-zinc-900'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    )
-                  })}
-                </div>
               </label>
               <label className="text-zinc-500">
                 Leverage (x)
-                <input
-                  type="range"
-                  min={1}
-                  max={leverageMax}
-                  value={defaults.leverage}
-                  onChange={(event) =>
-                    setDefaults((current) => ({
-                      ...current,
-                      leverage: Math.min(leverageMax, Math.max(1, Number(event.target.value) || 1)),
-                    }))
-                  }
-                  className="mt-1 w-full accent-sky-500"
-                />
-              </label>
-              <div className="col-span-full text-[11px] uppercase tracking-[0.14em] text-zinc-500 mt-1">Capital allocation</div>
-              <label className="text-zinc-500">
-                Per-leg position margin (USD)
-                <input
-                  type="range"
-                  min={100}
-                  max={5000}
-                  step={50}
-                  value={defaults.initialLongMarginUsd}
-                  onChange={(event) => {
-                    const value = Math.max(1, Number(event.target.value) || 1)
-                    setDefaults((current) => ({
-                      ...current,
-                      initialLongMarginUsd: value,
-                      initialShortMarginUsd: value,
-                    }))
-                  }}
-                  className="mt-1 w-full accent-sky-500"
-                />
-              </label>
-              <label className="text-zinc-500">
-                Per-leg reserve buffer (USD)
-                <input
-                  type="range"
-                  min={100}
-                  max={5000}
-                  step={50}
-                  value={defaults.initialLongBufferUsd}
-                  onChange={(event) => {
-                    const value = Math.max(1, Number(event.target.value) || 1)
-                    setDefaults((current) => ({
-                      ...current,
-                      initialLongBufferUsd: value,
-                      initialShortBufferUsd: value,
-                    }))
-                  }}
-                  className="mt-1 w-full accent-sky-500"
-                />
+                <div className="mt-1 flex items-center gap-2">
+                  <input
+                    type="range"
+                    min={1}
+                    max={leverageMax}
+                    value={defaults.leverage}
+                    onChange={(event) =>
+                      setDefaults((current) => ({
+                        ...current,
+                        leverage: Math.min(leverageMax, Math.max(1, Number(event.target.value) || 1)),
+                      }))
+                    }
+                    className="w-full accent-sky-500"
+                  />
+                  <span className="w-10 text-right tabular-nums text-zinc-100">{defaults.leverage}</span>
+                </div>
               </label>
               <div className="col-span-full text-[11px] uppercase tracking-[0.14em] text-zinc-500 mt-1">Strategy profile</div>
               <div className="col-span-full rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-xs text-zinc-300">
@@ -1205,120 +1272,51 @@ export function ArenaBacktestPage() {
               </label>
           </div>
 
-          <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 p-2 text-xs text-zinc-400 space-y-1">
+          <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 p-2 text-xs text-zinc-400">
             <p>
-              Candle interval selected from horizon: <span className="text-zinc-100">{intervalForWindow}</span>
+              {describeBarSizeMode(defaults.windowHours)} · cooldown {defaults.cooldownBars} bars (~
+              {formatNum(rebalanceCooldownMinutes, 0)} min at last bar size) · strict leg isolation{' '}
+              {defaults.requireNoCommingle ? 'on' : 'off'} · leverage{' '}
+              <span className="text-zinc-200">{defaults.leverage}x</span>.
             </p>
-            <p>
-              Rebalance timing: wait at least{' '}
-              <span className="text-zinc-100">
-                {defaults.cooldownBars} bars (~{formatNum(rebalanceCooldownMinutes, 0)} min)
-              </span>{' '}
-              between rebalances.
-            </p>
-            <p>
-              Constraints: leverage 1-{leverageMax}x for {defaults.market}, all USD inputs must stay positive, and legs stay isolated
-              (no cross-leg fund transfers).
-            </p>
-            <p>
-              Controls are intentionally minimal: market, horizon, leverage, per-leg capital, preset profile, and isolation mode.
-            </p>
-            {defaults.requireNoCommingle ? (
-              <p className="text-sky-200">
-                Run mode: strict isolation. The backtest fails immediately if any cross-leg transfer is detected.
-              </p>
-            ) : null}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => void handleRunBacktest()}
               disabled={isRunning}
               className="inline-flex items-center rounded-lg bg-sky-700 px-3 py-2 text-xs text-white hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isRunning ? 'Running backtest...' : 'Run backtest'}
+              {isRunning ? 'Running backtest…' : 'Run backtest'}
             </button>
+            {runOutput ? (
+              <button
+                type="button"
+                onClick={() => setShowRunLog((current) => !current)}
+                className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-900"
+              >
+                {showRunLog ? 'Hide log' : 'Show log'}
+              </button>
+            ) : null}
           </div>
           {runError ? <p className="text-xs text-red-300">{runError}</p> : null}
-          {runOutput ? (
+          {showRunLog && runOutput ? (
             <pre className="max-h-36 overflow-auto rounded-lg border border-zinc-800 bg-zinc-950/60 p-2 text-[11px] text-zinc-300 whitespace-pre-wrap">
               {runOutput}
             </pre>
           ) : null}
-          <p className="text-xs text-zinc-500 break-all">
-            <code className="text-zinc-300">{runCommand}</code>
-          </p>
         </div>
 
         {selectedTopRow ? (
-          <div className="rounded-2xl border border-zinc-900/70 bg-black/25 p-5 sm:p-6 space-y-4">
-            <h3 className="text-xl text-zinc-100">Top Row Context</h3>
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 text-sm text-zinc-300">
-              <div>Start: <span className="text-zinc-100">{formatUsd(selectedTopRow.startPrice)}</span></div>
-              <div>End: <span className="text-zinc-100">{formatUsd(selectedTopRow.endPrice)}</span></div>
-              <div>Move: <span className="text-zinc-100">{formatPct(selectedTopRow.priceChangePct)}</span></div>
-              <div>Long BTC: <span className="text-zinc-100">{formatNum(selectedTopRow.finalLongQty, 6)}</span></div>
-              <div>Short BTC: <span className="text-zinc-100">{formatNum(selectedTopRow.finalShortQty, 6)}</span></div>
-            </div>
-            {scenarioStatement ? (
-              <div className="rounded-xl border border-sky-900/50 bg-sky-950/20 p-3 text-sm text-sky-100">
-                <div className="text-[11px] uppercase tracking-[0.16em] text-sky-300 mb-1">Scenario statement</div>
-                <p>{scenarioStatement}</p>
-              </div>
-            ) : null}
-            <div className="rounded-xl border border-zinc-900/70 bg-zinc-950/40 p-3">
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <h4 className="text-sm uppercase tracking-[0.14em] text-zinc-400">Playback chart</h4>
-                {selectedRunId ? <code className="text-[10px] text-zinc-500">{selectedRunId}</code> : null}
-              </div>
-              {auditQuery.isLoading ? (
-                <p className="text-xs text-zinc-500">Loading playback data...</p>
-              ) : auditQuery.error ? (
-                <p className="text-xs text-red-300">
-                  {(auditQuery.error as Error).message || 'Failed to load playback chart.'}
-                </p>
-              ) : playbackData.length === 0 ? (
-                <p className="text-xs text-zinc-500">No playback points found for this parameter set.</p>
-              ) : (
-                <div className="h-72">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={playbackData} margin={{ top: 6, right: 16, left: 6, bottom: 4 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-                      <XAxis dataKey="step" tick={{ fill: '#a1a1aa', fontSize: 11 }} />
-                      <YAxis
-                        yAxisId="price"
-                        tick={{ fill: '#a1a1aa', fontSize: 11 }}
-                        stroke="#a1a1aa"
-                        tickFormatter={(value: number) => formatNum(value, 0)}
-                      />
-                      <YAxis
-                        yAxisId="health"
-                        orientation="right"
-                        domain={[0, 'auto']}
-                        tick={{ fill: '#93c5fd', fontSize: 11 }}
-                        stroke="#93c5fd"
-                      />
-                      <Tooltip
-                        contentStyle={{ background: '#0a0a0a', border: '1px solid #27272a', color: '#e4e4e7' }}
-                        labelStyle={{ color: '#a1a1aa' }}
-                        formatter={(value: unknown, name: string | number) => {
-                          const numeric = typeof value === 'number' ? value : Number(value ?? 0)
-                          const label = String(name)
-                          if (label === 'mark') return [formatUsd(numeric), 'Price']
-                          if (label === 'weakHealth') return [formatNum(numeric, 3), 'Weak health']
-                          if (label === 'healthGap') return [formatNum(numeric, 3), 'Health gap']
-                          return [formatNum(numeric, 3), label]
-                        }}
-                      />
-                      <Line yAxisId="price" type="monotone" dataKey="mark" stroke="#f97316" dot={false} strokeWidth={2} />
-                      <Line yAxisId="health" type="monotone" dataKey="weakHealth" stroke="#38bdf8" dot={false} strokeWidth={2} />
-                      <Line yAxisId="health" type="monotone" dataKey="healthGap" stroke="#22c55e" dot={false} strokeWidth={1.5} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-            </div>
+          <div className="rounded-2xl border border-zinc-900/70 bg-black/25 p-5 sm:p-6">
+            <ArenaBacktestAnalysis
+              row={selectedTopRow}
+              series={activeSeries}
+              seriesLoading={!inlineSeries && seriesQuery.isLoading}
+              seriesError={inlineSeries ? null : (seriesQuery.error as Error | null)}
+              sweepFile={activeSweepFile}
+            />
           </div>
         ) : null}
 

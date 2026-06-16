@@ -1,5 +1,6 @@
 import { apiFetch } from '@/lib/api/apiBase'
 import { clearWaitlistRecoveryGate } from '@/features/waitlist/waitlistRecoveryGate'
+import { safePrivyLogout } from '@/lib/privy/logout'
 
 const SESSION_TOKEN_KEY = 'cv_siwe_session_token'
 const SESSION_TOKEN_CHANGED_EVENT = 'cv-siwe-session-token-change'
@@ -83,6 +84,7 @@ export function isAlreadyLoggedInAuthError(error: unknown): boolean {
 
 export async function runWaitlistPrivyLogout(params: {
   logout: (() => Promise<void>) | null | undefined
+  readToken?: (() => Promise<string | null>) | null
   timeoutMs?: number
   shouldLogout?: boolean
 }): Promise<void> {
@@ -114,9 +116,10 @@ export async function runWaitlistPrivyLogout(params: {
   if (shouldLogout && typeof logout === 'function') {
     tasks.push(
       settleWithinTimeout(
-        Promise.resolve()
-          .then(() => logout())
-          .catch(() => undefined),
+        safePrivyLogout({
+          logout,
+          readToken: params.readToken,
+        }).catch(() => undefined),
       ),
     )
   }

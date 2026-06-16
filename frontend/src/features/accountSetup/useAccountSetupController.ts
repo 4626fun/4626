@@ -880,6 +880,7 @@ export function useAccountSetupController(params: {
         logout: async () => {
           await (privyNow?.logout ? privyNow.logout().catch(() => null) : Promise.resolve())
         },
+        readToken: typeof privyNow?.getAccessToken === 'function' ? (() => privyNow.getAccessToken()) : undefined,
         shouldLogout: true,
       })
       if (typeof window !== 'undefined') {
