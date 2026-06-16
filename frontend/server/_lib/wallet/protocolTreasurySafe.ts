@@ -116,7 +116,10 @@ export function resolveKeeperAutomationPublicAddress(
   const configured = (env[KEEPER_AUTOMATION_PUBLIC_KEY_ENV] ?? '').trim()
   if (configured && isAddress(configured)) return getAddress(configured)
 
-  const automationPk = readHexPrivateKey(env, KEEPER_AUTOMATION_PRIVATE_KEY_ENV)
+  // Keep public-address derivation aligned with keeper signing-key resolution:
+  // PROTOCOL_AJNA_KEEPER should still resolve when only fallback signer keys
+  // (e.g. PROTOCOL_AUTOMATION_SAFE_OWNER_PK / KPR_PRIVATE_KEY) are configured.
+  const automationPk = resolveKeeperAutomationPrivateKey(env)
   if (automationPk) return getAddress(privateKeyToAccount(automationPk).address)
   return null
 }
