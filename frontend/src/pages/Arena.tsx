@@ -1153,7 +1153,7 @@ export function ArenaBacktestPage() {
               onClick={() =>
                 setDefaults((current) => ({
                   ...current,
-                  healthFloor: 1.05,
+                  healthFloor: 0.88,
                   deadband: 0.06,
                   minChunkUsd: 250,
                   maxChunkUsd: 500,
@@ -1254,7 +1254,9 @@ export function ArenaBacktestPage() {
               </label>
               <div className="col-span-full text-[11px] uppercase tracking-[0.14em] text-zinc-500 mt-1">Strategy profile</div>
               <div className="col-span-full rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2 text-xs text-zinc-300">
-                Preset-driven policy: health floor <span className="text-zinc-100">{formatNum(defaults.healthFloor, 3)}</span>, gap{' '}
+                Preset-driven policy: health floor{' '}
+                <span className="text-zinc-100">{formatNum(Math.min(1, defaults.healthFloor), 3)}</span>{' '}
+                <span className="text-zinc-500">(1.0 = entry, 0 = liquidation)</span>, gap{' '}
                 <span className="text-zinc-100">{formatNum(defaults.deadband, 3)}</span>, chunk{' '}
                 <span className="text-zinc-100">{formatUsd(defaults.minChunkUsd)}-{formatUsd(defaults.maxChunkUsd)}</span>, cooldown{' '}
                 <span className="text-zinc-100">{defaults.cooldownBars}</span> bars.
@@ -1316,6 +1318,7 @@ export function ArenaBacktestPage() {
               seriesLoading={!inlineSeries && seriesQuery.isLoading}
               seriesError={inlineSeries ? null : (seriesQuery.error as Error | null)}
               sweepFile={activeSweepFile}
+              initialCapitalHint={totalCapitalUsd}
             />
           </div>
         ) : null}
@@ -1350,7 +1353,9 @@ export function ArenaBacktestPage() {
               <table className="min-w-full text-sm text-zinc-200">
                 <thead className="text-xs uppercase tracking-[0.12em] text-zinc-500">
                   <tr>
-                    <th className="px-3 py-2 text-left">Objective</th>
+                    <th className="px-3 py-2 text-left" title="Ranking score (penalizes low min health + rebalance count). Fees already in final equity.">
+                      Score
+                    </th>
                     <th className="px-3 py-2 text-left">Final equity</th>
                     <th className="px-3 py-2 text-left">Realized</th>
                     <th className="px-3 py-2 text-left">Costs</th>

@@ -44,3 +44,12 @@ export function minCoverageRatio(windowHours: number, interval: BacktestCandleIn
 }
 
 export const BACKTEST_INTERVAL_RANK: BacktestCandleInterval[] = ['1m', '5m', '15m', '1h']
+
+/**
+ * Leg health is ~1.0 at entry, 0 at liquidation, and can exceed 1 when price moves in that leg's favor.
+ * Floors above 1.0 fire almost immediately after entry and do not mean "105% health."
+ */
+export function clampBacktestHealthFloor(value: number): number {
+  if (!Number.isFinite(value)) return 0.7
+  return Math.min(1, Math.max(0.05, value))
+}

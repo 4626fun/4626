@@ -9,7 +9,11 @@ import {
   setCors,
   setNoStore,
 } from '../../../../packages/server-core/src/index.js'
-import { isAutoBacktestInterval, parseBacktestInterval } from '../../../../server/_lib/alfaclub/backtestIntervalPolicy.js'
+import {
+  clampBacktestHealthFloor,
+  isAutoBacktestInterval,
+  parseBacktestInterval,
+} from '../../../../server/_lib/alfaclub/backtestIntervalPolicy.js'
 import { executeBacktestCounterRebalance } from '../../../../server/_lib/alfaclub/backtestCounterRebalance.js'
 
 const BACKTEST_RUN_BODY_MAX_BYTES = 65_536
@@ -95,7 +99,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const initialShortMarginUsd = toPositiveNumber(body.initialShortMarginUsd, 1_000)
   const initialLongBufferUsd = toPositiveNumber(body.initialLongBufferUsd, 1_000)
   const initialShortBufferUsd = toPositiveNumber(body.initialShortBufferUsd, 1_000)
-  const healthFloor = toRangeNumber(body.healthFloor, 0.75, 0.5, 1.5)
+  const healthFloor = clampBacktestHealthFloor(toRangeNumber(body.healthFloor, 0.75, 0.05, 1.5))
   const deadband = toRangeNumber(body.deadband, 0.08, 0.001, 0.5)
   const minChunkUsd = toPositiveNumber(body.minChunkUsd, 500)
   const maxChunkUsd = toPositiveNumber(body.maxChunkUsd, Math.max(500, minChunkUsd))

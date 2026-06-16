@@ -728,6 +728,41 @@ body {
   --privy-color-error-light: #fca5a5;
 }
 
+/* Privy modal stability: avoid backdrop blur shimmer over grain/grid canvas. */
+#privy-dialog-backdrop {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  background: rgba(0, 0, 0, 0.56) !important;
+  transition: none !important;
+}
+
+#privy-modal-content {
+  transition: none !important;
+}
+
+#privy-dialog .asmEx,
+#privy-dialog .asmEx::before,
+#privy-dialog .asmEx::after {
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+#privy-dialog,
+#privy-dialog *,
+#privy-dialog *::before,
+#privy-dialog *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* While Privy modal is open, hide underlying waitlist content to prevent
+   bright CTA/button glow bleeding at modal edges. */
+body:has(#privy-dialog) #waitlist-page {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 /* Accessibility: Respect reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
   *,

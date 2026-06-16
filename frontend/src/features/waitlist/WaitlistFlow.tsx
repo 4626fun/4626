@@ -231,10 +231,6 @@ function WaitlistAuthStep(props: {
     error && error !== SESSION_FINALIZING_RETRY_MESSAGE && (!recoveryRequired || privyAuthed)
       ? error
       : null
-  const progressPct = hasWaitlistStats
-    ? Math.min(100, Math.max(2, Math.round((signedUpCount / capacity) * 100)))
-    : 0
-
   return (
     <motion.div
       key="step-auth"
@@ -253,12 +249,6 @@ function WaitlistAuthStep(props: {
 
           {hasWaitlistStats ? (
             <div className="mx-auto mt-4 w-full max-w-[20rem] space-y-2">
-              <div className="h-1 w-full overflow-hidden rounded-full bg-white/[0.08]">
-                <div
-                  className="h-full rounded-full bg-[rgb(var(--brand-primary))] transition-[width] duration-700 ease-out"
-                  style={{ width: `${progressPct}%` }}
-                />
-              </div>
               <p className="text-xs tabular-nums text-zinc-500">{waitlistProgressLine}</p>
             </div>
           ) : null}

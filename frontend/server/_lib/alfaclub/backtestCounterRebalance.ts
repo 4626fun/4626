@@ -7,7 +7,11 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 
-import { chooseBacktestInterval, parseBacktestInterval } from './backtestIntervalPolicy.js'
+import {
+  chooseBacktestInterval,
+  clampBacktestHealthFloor,
+  parseBacktestInterval,
+} from './backtestIntervalPolicy.js'
 import { loadFinestBacktestMarketBars } from './backtestMarketBars.js'
 import {
   downsampleBacktestSeries,
@@ -434,7 +438,8 @@ function runBacktest(
   const priceChangePct = entry > 0 ? (finalMark - entry) / entry : 0
   const riskPenalty = Math.max(0, 0.7 - Math.min(minHealthRoom, minHealthAgent)) * 1_000
   const turnoverPenalty = rebalanceCount * 0.5
-  const objective = finalEquity - executionCost - riskPenalty - turnoverPenalty
+  // executionCost is already deducted from leg buffers during simulation — do not subtract twice.
+  const objective = finalEquity - riskPenalty - turnoverPenalty
 
   const result: BacktestResult = {
     symbol: config.symbol,
@@ -675,8 +680,14 @@ export async function executeBacktestCounterRebalance(
     `[backtest-counter-rebalance] interval=${config.interval} windowHours=${config.windowHours} candles=${marks.length} source=${marketBars.source} coverage=${(marketBars.coverageRatio * 100).toFixed(1)}%`,
   )
 
-  const floors = input.healthFloors ?? [input.healthFloor]
+  const floors = (input.healthFloors ?? [input.healthFloor]).map(clampBacktestHealthFloor)
   const deadbands = input.deadbands ?? [input.deadband]
+  const scalarFloor = clampBacktestHealthFloor(input.healthFloor)
+  if (scalarFloor !== input.healthFloor) {
+    log(
+      `[backtest-counter-rebalance] health floor clamped ${input.healthFloor} → ${scalarFloor} (health is ~1.0 at entry, 0 at liquidation)`,
+    )
+  }
   const minChunks = input.minChunks ?? [input.minChunkUsd]
   const maxChunks = input.maxChunks ?? [input.maxChunkUsd]
   const cooldownBarsList = input.cooldownBarsList ?? [input.cooldownBars]
@@ -780,6 +791,10 @@ export async function executeBacktestCounterRebalance(
         endPrice: topResult.endPrice,
         priceChangePct: topResult.priceChangePct,
         liquidationCount: topResult.liquidationCount,
+        realizedPnl: topResult.realizedPnl,
+        executionCost: topResult.executionCost,
+        forcedSkipsInsufficientBuffer: topResult.forcedSkipsInsufficientBuffer,
+        objective: topResult.objective,
       },
       rebalanceEvents: topRebalanceEvents,
       points: downsampled,

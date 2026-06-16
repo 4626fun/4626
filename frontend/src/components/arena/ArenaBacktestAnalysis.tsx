@@ -8,6 +8,7 @@ import {
   ComposedChart,
   Line,
   ReferenceDot,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -79,6 +80,8 @@ type ArenaBacktestAnalysisProps = {
   seriesLoading: boolean
   seriesError: Error | null
   sweepFile?: string | null
+  /** Run-form total capital when series summary is not loaded yet. */
+  initialCapitalHint?: number
 }
 
 export function ArenaBacktestAnalysis({
@@ -87,6 +90,7 @@ export function ArenaBacktestAnalysis({
   seriesLoading,
   seriesError,
   sweepFile,
+  initialCapitalHint,
 }: ArenaBacktestAnalysisProps) {
   const [showHealth, setShowHealth] = useState(true)
 
@@ -118,7 +122,22 @@ export function ArenaBacktestAnalysis({
   const showsLegacyNegativeEquity =
     (series?.summary.finalEquity ?? row.finalEquity) < 0 || minLegHealth < 0
 
-  const returnPct = series?.summary.returnPct ?? 0
+  const returnPct =
+    series?.summary.returnPct ??
+    (initialCapitalHint && initialCapitalHint > 0
+      ? (row.finalEquity - initialCapitalHint) / initialCapitalHint
+      : 0)
+  const initialCapital =
+    series?.summary.initialCapital ??
+    (initialCapitalHint && initialCapitalHint > 0
+      ? initialCapitalHint
+      : row.finalEquity / (1 + returnPct || 1))
+  const netPnl = (series?.summary.finalEquity ?? row.finalEquity) - initialCapital
+  const realizedPnl = series?.summary.realizedPnl ?? row.realizedPnl
+  const executionCost = series?.summary.executionCost ?? row.executionCost
+  const forcedSkips = series?.summary.forcedSkipsInsufficientBuffer ?? row.forcedSkipsInsufficientBuffer
+  const bothLegsFlat = row.finalLongQty <= 1e-8 && row.finalShortQty <= 1e-8
+  const peakEquity = chartData.length > 0 ? Math.max(...chartData.map((point) => point.equity)) : null
 
   const coveragePct = series?.dataQuality.coveragePct
   const barCount = series?.dataQuality.barCount
@@ -200,11 +219,64 @@ export function ArenaBacktestAnalysis({
         </div>
       ) : null}
 
+      <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/50 px-4 py-3 text-xs text-zinc-300 space-y-2">
+        <div className="font-medium text-zinc-100">How to read this replay</div>
+        <p>
+          Portfolio equity = long leg (buffer + margin + unrealized) + short leg (same), with{' '}
+          <span className="text-zinc-100">isolated silos</span> — no cash moves between room and agent wallets.
+          Rebalances trim the stronger leg into its buffer and add margin on the weaker leg using{' '}
+          <span className="text-zinc-100">that leg&apos;s own buffer only</span>, so notionals drift and the book
+          is not perfectly delta-neutral after the first rebalance.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 tabular-nums">
+          <div>
+            <div className="text-zinc-500">Started</div>
+            <div className="text-zinc-100">{formatUsd(initialCapital)}</div>
+          </div>
+          <div>
+            <div className="text-zinc-500">Ended</div>
+            <div className={netPnl >= 0 ? 'text-emerald-300' : 'text-red-300'}>
+              {formatUsd(series?.summary.finalEquity ?? row.finalEquity)} ({formatPct(returnPct)})
+            </div>
+          </div>
+          <div>
+            <div className="text-zinc-500">Realized P&amp;L · fees</div>
+            <div className="text-zinc-100">
+              {formatUsd(realizedPnl)} · {formatUsd(executionCost)}
+            </div>
+          </div>
+          <div>
+            <div className="text-zinc-500">Skipped rebalances</div>
+            <div className={forcedSkips > 50 ? 'text-amber-300' : 'text-zinc-100'}>{forcedSkips}</div>
+          </div>
+        </div>
+        {peakEquity != null && peakEquity > initialCapital * 1.02 ? (
+          <p className="text-zinc-500">
+            Peak equity was {formatUsd(peakEquity)} mid-window — imbalanced legs can show paper gains on a falling
+            market before liquidations/fees drag the total down.
+          </p>
+        ) : null}
+        {series?.summary.priceChangePct != null &&
+        Math.abs(series.summary.priceChangePct - returnPct) > 0.03 ? (
+          <p className="text-zinc-500">
+            Underlying moved {formatPct(series.summary.priceChangePct)} while portfolio return was{' '}
+            {formatPct(returnPct)} — after rebalances the book is not delta-neutral, so BTC direction alone does not
+            predict total equity.
+          </p>
+        ) : null}
+        {bothLegsFlat ? (
+          <p className="text-amber-200/90">
+            Both legs finished flat (liquidated or fully closed). Ending equity is mostly leftover buffer cash, not
+            open perp exposure.
+          </p>
+        ) : null}
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Total return"
           value={formatPct(returnPct)}
-          hint={`${formatUsd(row.finalEquity)} final equity`}
+          hint={`${formatUsd(series?.summary.finalEquity ?? row.finalEquity)} from ${formatUsd(initialCapital)}`}
           tone={returnPct >= 0 ? 'positive' : 'negative'}
           icon={<TrendingUp className="h-4 w-4" />}
         />
@@ -332,6 +404,20 @@ export function ArenaBacktestAnalysis({
                   dot={false}
                   isAnimationActive={false}
                 />
+                {initialCapital > 0 ? (
+                  <ReferenceLine
+                    yAxisId="equity"
+                    y={initialCapital}
+                    stroke="#52525b"
+                    strokeDasharray="4 4"
+                    label={{
+                      value: `Start ${formatUsd(initialCapital)}`,
+                      position: 'insideTopLeft',
+                      fill: '#71717a',
+                      fontSize: 10,
+                    }}
+                  />
+                ) : null}
                 <Line
                   yAxisId="price"
                   type="monotone"
@@ -390,8 +476,9 @@ export function ArenaBacktestAnalysis({
           <div className="mb-3">
             <h4 className="text-sm font-medium text-zinc-100">Rebalance timeline</h4>
             <p className="text-xs text-zinc-500 mt-0.5">
-              Triggered when the weaker leg&apos;s health drops below the floor and the long/short health gap exceeds
-              the deadband. Each row is one bar where a margin chunk moved from the strong leg to the weak leg.
+              Triggered when the weaker leg&apos;s health drops below the floor and the health gap exceeds the
+              deadband. Each row is one bar where the strong leg trimmed margin to its buffer and the weak leg added
+              margin from its own buffer (no cross-wallet transfer).
             </p>
           </div>
           <div className="max-h-64 overflow-auto rounded-lg border border-zinc-800/80">
@@ -399,7 +486,7 @@ export function ArenaBacktestAnalysis({
               <thead className="sticky top-0 bg-zinc-950/95 text-[11px] uppercase tracking-[0.12em] text-zinc-500">
                 <tr>
                   <th className="px-3 py-2 text-left font-medium">Time</th>
-                  <th className="px-3 py-2 text-left font-medium">Strong → weak</th>
+                  <th className="px-3 py-2 text-left font-medium">Strong trim · weak add</th>
                   <th className="px-3 py-2 text-right font-medium">Mark</th>
                   <th className="px-3 py-2 text-right font-medium">Weak health</th>
                   <th className="px-3 py-2 text-right font-medium">Gap</th>
@@ -413,8 +500,8 @@ export function ArenaBacktestAnalysis({
                     <td className="px-3 py-2 whitespace-nowrap tabular-nums text-zinc-100">
                       {formatBacktestSeriesTime(event.t)}
                     </td>
-                    <td className="px-3 py-2 capitalize">
-                      {event.strongSide} → {event.weakSide}
+                    <td className="px-3 py-2 capitalize text-zinc-400">
+                      {event.strongSide} trim · {event.weakSide} add
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">{formatUsd(event.mark)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{formatNum(event.weakHealth, 3)}</td>

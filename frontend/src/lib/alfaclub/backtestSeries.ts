@@ -32,6 +32,10 @@ export type BacktestSeriesSummary = {
   endPrice: number
   priceChangePct: number
   liquidationCount?: number
+  realizedPnl?: number
+  executionCost?: number
+  forcedSkipsInsufficientBuffer?: number
+  objective?: number
 }
 
 export type BacktestSeriesPayload = {
