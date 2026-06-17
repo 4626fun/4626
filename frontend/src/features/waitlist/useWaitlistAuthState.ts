@@ -60,7 +60,6 @@ import { getAppBaseUrl } from '@/lib/env/host'
  * (e.g. cooldowns, probe, phase) as we iterate.
  */
 export function useWaitlistAuthState(params?: {
-  privyAuthed?: boolean
   activeReferralCode?: string | null
   ensureEmbeddedWallet?: () => Promise<{ address: string }>
   getVerifiedEmailHint?: () => string | null
@@ -998,6 +997,7 @@ export function useWaitlistAuthState(params?: {
     setRecoveryRequired,
     finalizing,
     setFinalizing: setFinalizingState,
+    privyAuthed,
     completionBusy,
     setCompletionBusy,
     signOutBusy,

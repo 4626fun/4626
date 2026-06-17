@@ -108,9 +108,9 @@ function WaitlistAuthStep(props: {
         }
   )
 
-  // The `finalizing` boolean comes from the hook (explicit state machine, not derived from error strings).
-  // It drives a single quiet "Setting up your account" state + optional Retry affordance.
-  // Visible error is suppressed while finalizing to avoid flicker.
+  // finalizing (boolean prop from the hook) is the single source of truth for the
+  // "finishing sign-in" phase. This prevents the old triple-stack flicker of different
+  // "setting up / finishing / takes a few seconds" messages.
   const working = privyAuthed && !recoveryRequired && (busy || finalizing)
   const visibleError =
     error && !finalizing && (!recoveryRequired || privyAuthed) ? error : null
@@ -279,7 +279,6 @@ export function WaitlistFlow(props: {
   const privy = usePrivy()
   const privyClientStatus = usePrivyClientStatus()
 
-  const privyAuthed = privy.authenticated
   const { ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
 
   const [step, setStep] = useState<WaitlistStep>('auth')
@@ -310,6 +309,7 @@ export function WaitlistFlow(props: {
     setRecoveryRequired,
     finalizing,
     setFinalizing,
+    privyAuthed,
     completionBusy,
     setCompletionBusy,
     signOutBusy,
