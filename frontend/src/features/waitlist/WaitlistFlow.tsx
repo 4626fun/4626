@@ -1,6 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { useLogin, usePrivy } from '@privy-io/react-auth'
+import { usePrivy } from '@privy-io/react-auth'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
 import { Button } from '@/components/ui/Button'
@@ -12,10 +11,7 @@ import { createStaleSessionProbe, withSessionRepairTimeout } from '@/lib/auth/se
 import {
   getMarketingWaitlistEntryUrl,
   isOnCanonicalMarketingWaitlistPage,
-  isWaitlistStartAuthSearchParam,
   readStoredWaitlistReferralCode,
-  storeWaitlistReferralCode,
-  WAITLIST_START_AUTH_QUERY_KEY,
 } from '@/lib/auth/waitlistEntry'
 import { getAppBaseUrl } from '@/lib/env/host'
 import { usePrivyClientStatus } from '@/lib/privy/client'
@@ -33,9 +29,7 @@ import {
   isRecoveryRequiredAuthError,
   runWaitlistPrivyLogout,
 } from './waitlistAuthState'
-import { buildWaitlistEmailLoginOptions, buildWaitlistRecoveryLoginOptions } from './waitlistLoginOptions'
 import { type WaitlistEmailUi, canEnterAppFromAccountState, deriveWaitlistAuthUi } from './waitlistFlowUi'
-import { bridgePrivySession, createAuthHandoffCode } from './waitlistHandoff'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
 import { type WaitlistAccountsSummary } from './waitlistAccountTypes'
 import {
@@ -82,15 +76,6 @@ type WaitlistStatsData = {
 const HANDOFF_QUERY_KEY = 'cv_handoff'
 const WAITLIST_EASE: [number, number, number, number] = [0.4, 0, 0.2, 1]
 const PRIVY_OAUTH_QUERY_KEYS = ['privy_oauth_code', 'privy_oauth_state', 'privy_oauth_provider'] as const
-
-function isTelegramMiniAppRuntime(): boolean {
-  if (typeof window === 'undefined') return false
-  const maybeTelegram = (window as any)?.Telegram?.WebApp
-  if (maybeTelegram) return true
-  if (typeof navigator === 'undefined') return false
-  const ua = navigator.userAgent.toLowerCase()
-  return ua.includes('telegram')
-}
 
 // useWaitlistAuthState provides busy/error/recovery/finalizing + guarded attempt logic
 // Extracted to reduce the giant component. More logic can migrate here over time.
@@ -357,25 +342,14 @@ export function WaitlistFlow(props: {
 
   const privy = usePrivy()
   const privyClientStatus = usePrivyClientStatus()
-  const { login } = useLogin()
 
   const privyAuthed = privy.authenticated
-  const shouldDestroyPrivySession = privyAuthed && privyClientStatus === 'ready'
-  const { getAccessToken } = privy
   const { ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
 
-  const [searchParams, setSearchParams] = useSearchParams()
   const [step, setStep] = useState<WaitlistStep>('auth')
 
   // waitlistStats is display-only (progress banner); keep local here.
   const [waitlistStats, setWaitlistStats] = useState<WaitlistStatsData | null>(null)
-
-  const clearStartAuthDeepLink = useCallback(() => {
-    if (!isWaitlistStartAuthSearchParam(searchParams.get(WAITLIST_START_AUTH_QUERY_KEY))) return
-    const nextParams = new URLSearchParams(searchParams)
-    nextParams.delete(WAITLIST_START_AUTH_QUERY_KEY)
-    setSearchParams(nextParams, { replace: true })
-  }, [searchParams, setSearchParams])
 
   const fetchWaitlistStats = useCallback(async () => {
     try {
@@ -415,26 +389,14 @@ export function WaitlistFlow(props: {
     onEnterApp,
     // Internal refs/cooldowns etc. owned by hook; not destructured here unless needed for render.
   } = useWaitlistAuthState({
-    privyAuthed,
     redirectToCanonicalWaitlist,
-    getAccessToken,
-    disableAggressiveSessionReset,
     runWaitlistPrivyLogout,
-    privy,
     setStep,
     activeReferralCode,
     ensureEmbeddedWallet,
     getVerifiedEmailHint: () => resolveWaitlistVerifiedEmailHint(privy.user),
     step,
     privyClientStatus,
-    login,
-    clearStartAuthDeepLink,
-    searchParams,
-    setSearchParams,
-    navigateWithSessionHandoff,
-    enterAppUrl,
-    bridgePrivySession,
-    createAuthHandoffCode,
     isOnCanonicalMarketingWaitlistPage,
     waitlistRecoveryUrl,
     HANDOFF_QUERY_KEY,
@@ -452,21 +414,6 @@ export function WaitlistFlow(props: {
   const activeReferralCode = useMemo(() => readStoredWaitlistReferralCode(), [])
   const enterAppUrl = useMemo(() => buildAppEntryUrl(getAppBaseUrl()), [])
   const waitlistRecoveryUrl = useMemo(() => getMarketingWaitlistEntryUrl(), [])
-  const disableAggressiveSessionReset = useMemo(() => isTelegramMiniAppRuntime(), [])
-
-  const fetchWaitlistStats = useCallback(async () => {
-    try {
-      const response = await apiFetch('/api/waitlist/stats', {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-      })
-      const payload = (await response.json().catch(() => null)) as ApiEnvelope<WaitlistStatsData> | null
-      if (!response.ok || !payload?.success || !payload.data) return
-      setWaitlistStats(payload.data)
-    } catch {
-      // Keep the last known value if stats refresh fails.
-    }
-  }, [])
 
   // Stats polling (non-core auth; kept local for separation).
   useEffect(() => {

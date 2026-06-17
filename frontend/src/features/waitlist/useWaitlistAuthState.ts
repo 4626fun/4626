@@ -1,10 +1,11 @@
 import { useCallback, useState, useRef, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { useLogin, usePrivy } from '@privy-io/react-auth'
 
 import { useWaitlistBootstrap } from './useWaitlistBootstrap'
 
 import { createStaleSessionProbe, withSessionRepairTimeout } from '@/lib/auth/sessionRepair'
 import { isWaitlistStartAuthSearchParam, WAITLIST_START_AUTH_QUERY_KEY } from '@/lib/auth/waitlistEntry'
-import { buildWaitlistEmailLoginOptions, buildWaitlistRecoveryLoginOptions } from './waitlistLoginOptions'
 import {
   RECOVERY_REQUIRED_MESSAGE,
   RECOVERY_REQUIRED_WHILE_PRIVY_AUTHED_MESSAGE,
@@ -34,6 +35,11 @@ import {
 } from './waitlistStorage'
 import { isRecoveryRequiredAuthError } from './waitlistAuthState'
 
+import { bridgePrivySession as bridgePrivySessionFn, createAuthHandoffCode as createAuthHandoffCodeFn } from './waitlistHandoff'
+import { buildWaitlistEmailLoginOptions, buildWaitlistRecoveryLoginOptions } from './waitlistLoginOptions'
+import { buildAppEntryUrl } from '@/lib/auth/appEntry'
+import { getAppBaseUrl } from '@/lib/env/host'
+
 /**
  * Extracted state + guards for waitlist auth flow.
  * Owns the attempt state machine pieces that were previously duplicated across
@@ -49,10 +55,8 @@ export function useWaitlistAuthState(params?: {
   ensureEmbeddedWallet?: () => Promise<{ address: string }>
   getVerifiedEmailHint?: () => string | null
   setStep?: (s: any) => void
-  getAccessToken?: () => Promise<string | null>
   disableAggressiveSessionReset?: boolean
   shouldDestroyPrivySession?: boolean
-  privy?: any
   runWaitlistPrivyLogout?: (opts: any) => Promise<void>
   requestBootstrap?: (opts?: any) => Promise<any>
   resetBootstrapCooldowns?: () => void
@@ -66,32 +70,32 @@ export function useWaitlistAuthState(params?: {
   resetStalePrivySessionAndRetryEmailLogin?: () => Promise<void>
   login?: any
   clearStoredWaitlistSessionToken?: () => void
-  clearStartAuthDeepLink?: () => void
-  searchParams?: any
-  setSearchParams?: any
-  navigateWithSessionHandoff?: (url: string) => Promise<void>
-  enterAppUrl?: string
   onEnterApp?: () => Promise<void>
   onTryDifferentEmail?: () => Promise<void>
-  // raw for internal helpers
-  bridgePrivySession?: (token: string) => Promise<boolean>
-  createAuthHandoffCode?: (opts: { privyToken: string | null }) => Promise<string | null>
   isOnCanonicalMarketingWaitlistPage?: () => boolean
   waitlistRecoveryUrl?: string
   HANDOFF_QUERY_KEY?: string
   clearStoredWaitlistVerifiedEmailHint?: () => void
 }) {
-  const privyAuthed = params?.privyAuthed ?? false
+  const privyAuthed = params?.privyAuthed ?? internalPrivy.authenticated
   const redirectToCanonical = params?.redirectToCanonicalWaitlist ?? (() => false)
   const activeReferralCode = params?.activeReferralCode ?? null
   const ensureEmbeddedWallet = params?.ensureEmbeddedWallet || (async () => ({ address: '' }))
   const getVerifiedEmailHint = params?.getVerifiedEmailHint || (() => null)
   const setStep = params?.setStep || (() => {})
-  const getAccessToken = params?.getAccessToken
-  const disableAggressive = params?.disableAggressiveSessionReset ?? false
+  const getAccessToken = params?.getAccessToken || internalPrivy.getAccessToken
+  const disableAggressive = params?.disableAggressiveSessionReset ?? (() => {
+    if (typeof window === 'undefined') return false
+    const maybeTelegram = (window as any)?.Telegram?.WebApp
+    if (maybeTelegram) return true
+    if (typeof navigator === 'undefined') return false
+    const ua = navigator.userAgent.toLowerCase()
+    return ua.includes('telegram')
+  })()
   const shouldDestroy = params?.shouldDestroyPrivySession ?? false
-  const privy = params?.privy
+  const privy = params?.privy || internalPrivy
   const runLogout = params?.runWaitlistPrivyLogout
+  const login = params?.login || internalLogin
   const getNetworkMsg = getWaitlistNetworkUnstableMessage
   const requestBootstrap = params?.requestBootstrap
   const resetBootstrapCooldowns = params?.resetBootstrapCooldowns || (() => {})
@@ -101,25 +105,37 @@ export function useWaitlistAuthState(params?: {
   const handoffIntoExistingAccount = params?.handoffIntoExistingAccount
   const tryResumeExistingPrivySession = params?.tryResumeExistingPrivySession
   const resetStalePrivySessionAndRetryEmailLogin = params?.resetStalePrivySessionAndRetryEmailLogin
-  const login = params?.login
-  const buildWaitlistEmailLoginOptions = params?.buildWaitlistEmailLoginOptions
-  const buildWaitlistRecoveryLoginOptions = params?.buildWaitlistRecoveryLoginOptions
   const isWalletProviderCollisionError = params?.isWalletProviderCollisionError
   const getWalletProviderCollisionMessage = params?.getWalletProviderCollisionMessage
   const isAlreadyLoggedInAuthError = params?.isAlreadyLoggedInAuthError
   const clearStoredWaitlistSessionToken = params?.clearStoredWaitlistSessionToken
-  const clearStartAuthDeepLink = params?.clearStartAuthDeepLink
-  const searchParams = params?.searchParams
-  const setSearchParams = params?.setSearchParams
-  const navigateWithSessionHandoff = params?.navigateWithSessionHandoff
-  const enterAppUrl = params?.enterAppUrl
-  const bridgePrivySession = params?.bridgePrivySession
-  const createAuthHandoffCode = params?.createAuthHandoffCode
   const isOnCanonicalMarketingWaitlistPage = params?.isOnCanonicalMarketingWaitlistPage
   const waitlistRecoveryUrl = params?.waitlistRecoveryUrl
   const HANDOFF_QUERY_KEY = params?.HANDOFF_QUERY_KEY
   const clearStoredWaitlistVerifiedEmailHint = params?.clearStoredWaitlistVerifiedEmailHint
   const STALE_PRIVY_SESSION_MESSAGE = params?.STALE_PRIVY_SESSION_MESSAGE || 'Sign-in session expired. Tap Use existing account to sign in again with email.'
+
+  // search/clear with internal fallback so component doesn't need to pass router state
+  const searchParams = params?.searchParams || internalSearchParams
+  const setSearchParams = params?.setSearchParams || internalSetSearchParams
+  const clearStartAuthDeepLink = params?.clearStartAuthDeepLink || (() => {
+    if (!isWaitlistStartAuthSearchParam(searchParams.get(WAITLIST_START_AUTH_QUERY_KEY))) return
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.delete(WAITLIST_START_AUTH_QUERY_KEY)
+    setSearchParams(nextParams, { replace: true })
+  })
+
+  // Internal router state for deep link handling (self contained)
+  const [internalSearchParams, internalSetSearchParams] = useSearchParams()
+
+  // Internal Privy for self-containment (fallbacks allow parent override if needed)
+  const internalPrivy = usePrivy()
+  const { login: internalLogin } = useLogin()
+
+  // Use direct imports for self-contained handoff + login option logic (reduces param surface)
+  const bridgePrivySession = bridgePrivySessionFn
+  const createAuthHandoffCode = createAuthHandoffCodeFn
+  const enterAppUrl = buildAppEntryUrl(getAppBaseUrl())
 
   // Core UI states owned here (centralized from component) — declared early to avoid TDZ
   // when passed into useWaitlistBootstrap and early callbacks.
