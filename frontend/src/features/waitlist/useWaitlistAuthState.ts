@@ -1006,6 +1006,7 @@ export function useWaitlistAuthState(params?: {
     setSessionRepairBusy,
     account,
     setAccount,
+    activeReferralCode,
     attemptInFlightRef,
     authBootstrapAutoAttemptedRef,
     privyAuthedBootstrapAttemptedRef,

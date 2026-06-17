@@ -6,18 +6,13 @@ import { Button } from '@/components/ui/Button'
 import { AppLoadingBootstrapGate } from '@/components/layout/AppLoadingOverlay'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { apiFetch } from '@/lib/api/apiBase'
-import {
-  readStoredWaitlistReferralCode,
-} from '@/lib/auth/waitlistEntry'
+
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
 
-import {
-  type WaitlistStep,
-  resolveWaitlistStep,
-} from './waitlistFlowState'
+import type { WaitlistStep } from './waitlistFlowState'
 import { type WaitlistEmailUi, canEnterAppFromAccountState, deriveWaitlistAuthUi } from './waitlistFlowUi'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
 import { type WaitlistAccountsSummary } from './waitlistAccountTypes'
@@ -113,9 +108,9 @@ function WaitlistAuthStep(props: {
         }
   )
 
-  // Use explicit finalizing flag + clear error for UI.
-  // The finalizing state indicates we are still waiting for Privy token / bootstrap
-  // to settle after a successful email login.
+  // The `finalizing` boolean comes from the hook (explicit state machine, not derived from error strings).
+  // It drives a single quiet "Setting up your account" state + optional Retry affordance.
+  // Visible error is suppressed while finalizing to avoid flicker.
   const working = privyAuthed && !recoveryRequired && (busy || finalizing)
   const visibleError =
     error && !finalizing && (!recoveryRequired || privyAuthed) ? error : null
@@ -322,6 +317,7 @@ export function WaitlistFlow(props: {
     sessionRepairBusy,
     setSessionRepairBusy,
     account,
+    activeReferralCode,
     onContinueAuth,
     onRecoverAccount,
     onSignOut,
@@ -340,8 +336,6 @@ export function WaitlistFlow(props: {
     step === 'done'
       ? 'mx-auto w-full max-w-none px-0 py-5 sm:py-8'
       : 'mx-auto w-full max-w-5xl px-4 py-6 sm:py-8'
-
-  const activeReferralCode = useMemo(() => readStoredWaitlistReferralCode(), [])
 
   // Stats polling (non-core auth; kept local for separation).
   useEffect(() => {
