@@ -5,7 +5,7 @@
  * When expanded: a panel listing all conversations.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MessageSquare, ChevronDown, Plus, Search, Wifi, WifiOff, X } from 'lucide-react'
 import { useXmtp, type ChatConversation } from '@/lib/xmtp/provider'
 import { getAgentIdentity } from './agentIdentity'
@@ -186,6 +186,36 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
   const isLoading = status === 'signing' || status === 'connecting'
   const [searchQuery, setSearchQuery] = useState('')
 
+  // Bounded busy state for "Connect Messaging" so a hung background repair can
+  // never leave the button permanently disabled. Hard safety timeout (~15s).
+  const [connectBusy, setConnectBusy] = useState(false)
+  const connectSafetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const clearConnectSafetyTimer = () => {
+    if (connectSafetyTimerRef.current) {
+      clearTimeout(connectSafetyTimerRef.current)
+      connectSafetyTimerRef.current = null
+    }
+  }
+
+  useEffect(() => clearConnectSafetyTimer, [])
+
+  const handleConnectMessaging = useCallback(() => {
+    if (connectBusy || isLoading) return
+    setConnectBusy(true)
+    clearConnectSafetyTimer()
+    connectSafetyTimerRef.current = setTimeout(() => {
+      setConnectBusy(false)
+      connectSafetyTimerRef.current = null
+    }, 15_000)
+    void Promise.resolve(connect('user'))
+      .catch(() => undefined)
+      .finally(() => {
+        setConnectBusy(false)
+        clearConnectSafetyTimer()
+      })
+  }, [connect, connectBusy, isLoading])
+
   const filteredConversations = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase()
     const sorted = [...conversations].sort(
@@ -308,10 +338,16 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
               {!localStateResetRequired ? (
                 <button
                   type="button"
-                  onClick={() => void connect('user')}
-                  className="px-4 py-2 rounded-lg bg-brand-primary/20 text-brand-primary text-sm font-medium hover:bg-brand-primary/30 transition-colors"
+                  onClick={handleConnectMessaging}
+                  disabled={connectBusy || isLoading}
+                  aria-busy={connectBusy || isLoading}
+                  className="px-4 py-2 rounded-lg bg-brand-primary/20 text-brand-primary text-sm font-medium hover:bg-brand-primary/30 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {hasWalletIdentity ? `Connect Messaging (${xmtpModeLabel})` : 'Connect Messaging'}
+                  {connectBusy || isLoading
+                    ? 'Connecting…'
+                    : hasWalletIdentity
+                    ? `Connect Messaging (${xmtpModeLabel})`
+                    : 'Connect Messaging'}
                 </button>
               ) : null}
               {localStateResetRequired ? (

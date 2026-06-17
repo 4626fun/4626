@@ -8,6 +8,7 @@ import { AppLoadingBootstrapGate } from '@/components/layout/AppLoadingOverlay'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { apiFetch } from '@/lib/api/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
+import { createStaleSessionProbe, withSessionRepairTimeout } from '@/lib/auth/sessionRepair'
 import {
   getMarketingWaitlistEntryUrl,
   isOnCanonicalMarketingWaitlistPage,
@@ -60,6 +61,7 @@ import {
   getWaitlistNetworkUnstableMessage,
   isSessionFinalizingError,
   isStalePrivyTokenError,
+  isTimeoutErrorMessage,
   isTransientWaitlistNetworkError,
   isWalletProviderCollisionError,
   withTimeout,
@@ -441,7 +443,16 @@ export function WaitlistFlow(props: {
   const startAuthAutoAttemptedRef = useRef(false)
   const finalizingAutoRetryCountRef = useRef(0)
   const finalizingBackgroundRetryCountRef = useRef(0)
-  const staleSessionProbeMissesRef = useRef(0)
+  // Shared bounded double-probe: a single null token read is never "stale".
+  // True-stale requires >= 2 probe misses (see @/lib/auth/sessionRepair).
+  const staleSessionProbeRef = useRef<ReturnType<typeof createStaleSessionProbe> | null>(null)
+  if (!staleSessionProbeRef.current) {
+    staleSessionProbeRef.current = createStaleSessionProbe({
+      getToken: () => getAccessToken(),
+      hasLiveCookie: () => false,
+      withTimeout: withSessionRepairTimeout,
+    })
+  }
   const privyLogoutRef = useRef<null | (() => Promise<void>)>(null)
   const privyAuthedRef = useRef(privyAuthed)
   const privyClientStatusRef = useRef(privyClientStatus)
@@ -949,12 +960,19 @@ export function WaitlistFlow(props: {
     try {
       const token = await withTimeout(getAccessToken(), 4_000, 'Session refresh token').catch(() => null)
       if (!token) {
-        if (!privyAuthedRef.current) {
+        const hasLiveCookie = privyAuthedRef.current
+        console.info('[auth-repair]', {
+          surface: 'waitlist',
+          transition: 'repair-token-miss',
+          outcome: hasLiveCookie ? 'transient' : 'true-stale',
+        })
+        if (!hasLiveCookie) {
           setStep('auth')
         }
         return false
       }
 
+      console.info('[auth-repair]', { surface: 'waitlist', transition: 'bridging' })
       await withTimeout(bridgePrivySession(token), 6_000, 'Session bridge refresh').catch(() => undefined)
       const next = await withTimeout(
         requestBootstrap({ waitForTokenHydration: true }),
@@ -964,19 +982,23 @@ export function WaitlistFlow(props: {
       if (!next) {
         // Even when bootstrap is briefly stale, token/session repair may still be enough
         // for embedded-wallet reconnect paths to recover in-place.
+        console.info('[auth-repair]', { surface: 'waitlist', transition: 'repaired', outcome: 'repaired' })
         setError(null)
-        staleSessionProbeMissesRef.current = 0
+        staleSessionProbeRef.current?.reset()
         return true
       }
 
+      console.info('[auth-repair]', { surface: 'waitlist', transition: 'repaired', outcome: 'repaired' })
       setRecoveryRequired(false)
       setError(null)
-      staleSessionProbeMissesRef.current = 0
+      staleSessionProbeRef.current?.reset()
       return true
     } catch (repairError: unknown) {
       if (isSessionFinalizingError(repairError) || isStalePrivyTokenError(repairError)) {
+        console.info('[auth-repair]', { surface: 'waitlist', transition: 'bridge-error', outcome: 'transient' })
         setError(SESSION_FINALIZING_RETRY_MESSAGE)
       } else if (isTimeoutErrorMessage((repairError as { message?: unknown })?.message)) {
+        console.info('[auth-repair]', { surface: 'waitlist', transition: 'bridge-timeout', outcome: 'transient' })
         setError('Session refresh timed out. Tap Refresh session once more.')
       }
       return false
@@ -1040,25 +1062,20 @@ export function WaitlistFlow(props: {
    */
   const probeStalePrivyTokenSession = useCallback(async (): Promise<boolean> => {
     if (!privyAuthedRef.current) {
-      staleSessionProbeMissesRef.current = 0
+      staleSessionProbeRef.current?.reset()
       return false
     }
-    const token = await withTimeout(getAccessToken(), 4_000, 'Sign-in token probe').catch(() => null)
-    if (token) {
-      staleSessionProbeMissesRef.current = 0
-      return false
-    }
-
-    await new Promise<void>((resolve) => setTimeout(resolve, 450))
-    const secondToken = await withTimeout(getAccessToken(), 4_000, 'Sign-in token reprobe').catch(() => null)
-    if (secondToken) {
-      staleSessionProbeMissesRef.current = 0
-      return false
-    }
-
-    staleSessionProbeMissesRef.current += 1
-    return staleSessionProbeMissesRef.current >= 2
-  }, [getAccessToken])
+    const probe = staleSessionProbeRef.current
+    if (!probe) return false
+    const outcome = await probe.probe()
+    console.info('[auth-repair]', {
+      surface: 'waitlist',
+      transition: 'probe',
+      outcome,
+      missCount: probe.missCount,
+    })
+    return outcome === 'true-stale'
+  }, [])
 
   const resetStaleAuthenticatedPrivySession = useCallback(async (): Promise<void> => {
     clearWaitlistAuthPending()

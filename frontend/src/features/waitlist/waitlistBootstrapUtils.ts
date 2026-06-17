@@ -115,3 +115,16 @@ export function isWalletProviderCollisionError(error: unknown): boolean {
 export function getWalletProviderCollisionMessage(): string {
   return 'A browser wallet extension is interfering with sign-in. Disable conflicting wallet extensions, then reload and try again.'
 }
+
+export function isTimeoutErrorMessage(message: unknown): boolean {
+  const text =
+    typeof message === 'string'
+      ? message
+      : typeof (message as { message?: unknown })?.message === 'string'
+        ? String((message as { message: string }).message)
+        : ''
+  const normalized = text.trim().toLowerCase()
+  if (!normalized) return false
+  // withTimeout() above rejects with `${label} timed out`.
+  return normalized.includes('timed out') || normalized.includes('timeout')
+}

@@ -14,6 +14,7 @@ import {
   isRecoverableCrossAppAuthError,
   isUserRejectedCrossAppAuthError,
 } from '@/lib/privy/zoraCrossApp'
+import { isInjectedWalletCollisionMessage } from '@/lib/auth/sessionRepair'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { isTelegramMiniAppContext, readPrivyTelegramLaunchParams } from '@/lib/telegram/telegramWebApp'
 import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
@@ -814,6 +815,13 @@ export function useAccountSetupController(params: {
                 : ''
             if (isUserRejectedCrossAppAuthError(zoraAuthError)) {
               crossAppAuthFallbackMessage = 'Zora auth canceled. Checking your existing Zora read-only signals instead.'
+            } else if (isInjectedWalletCollisionMessage(message)) {
+              // Injected wallet-extension collision is cosmetic environment noise.
+              // Degrade to read-only signal detection without flipping the
+              // Zora-OAuth backoff (the OAuth path itself was not unstable).
+              console.info('[auth-repair]', { surface: 'zora', transition: 'collision-degrade', outcome: 'transient' })
+              crossAppAuthFallbackMessage =
+                'Could not complete Zora OAuth in this browser. Checking existing Zora read-only signals instead.'
             } else if (
               isRecoverableCrossAppAuthError(zoraAuthError) ||
               message.toLowerCase().includes('timed out') ||

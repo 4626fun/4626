@@ -244,7 +244,15 @@ function WaitlistGroupChatPanelContent(props: {
         xmtpMemberAddress={chatConfig.xmtpMemberAddress}
         retryJoin={join.retryJoin}
         chatReady={surfaceChatReady}
-        onRequestReauth={onRepairSession ?? onSignOut}
+        onRequestReauth={
+          onRepairSession ??
+          (onSignOut
+            ? () => {
+                onSignOut()
+                return false
+              }
+            : undefined)
+        }
         reauthBusy={repairBusy ?? signOutBusy}
       />
     </div>

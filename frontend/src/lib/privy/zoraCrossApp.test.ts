@@ -44,7 +44,6 @@ describe('isLocalhostPrivyCustomDomainConfigError', () => {
   const originalWindow = globalThis.window
 
   afterEach(() => {
-    // @ts-expect-error test cleanup
     globalThis.window = originalWindow
   })
 
@@ -108,7 +107,6 @@ describe('performZoraCrossAppAuth localhost behavior', () => {
     expect(linkFn).toHaveBeenCalledTimes(1)
     expect(loginFn).not.toHaveBeenCalled()
 
-    // @ts-expect-error test cleanup
     globalThis.window = originalWindow
   })
 })

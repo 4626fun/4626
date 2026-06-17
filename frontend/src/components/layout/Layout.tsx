@@ -10,7 +10,7 @@ import { isPublicSiteMode } from '@/lib/flags/flags'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
 import { PageTransitionOutlet } from '@/components/layout/PageTransition'
 import { FlagToolbarBridge } from '@/components/flags/FlagToolbarBridge'
-import { XmtpChatProvider } from '@/lib/xmtp/provider'
+import { ChatProviderWithSessionRepair } from '@/lib/xmtp/ChatProviderWithSessionRepair'
 import { VaultNavBar } from '@/components/brand/VaultNavBar'
 import { requestOpenAccountTray } from '@/components/account/trayEvents'
 import { useAccountTrayPortfolio } from '@/components/account/useAccountTrayPortfolio'
@@ -312,7 +312,7 @@ function LayoutFrame(props: {
       </a>
 
       {shouldEnableChat ? (
-        <XmtpChatProvider>
+        <ChatProviderWithSessionRepair>
           {/* Main */}
           <main id="main-content" className={`flex min-h-0 flex-1 flex-col overflow-x-clip ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
             <PageTransitionOutlet />
@@ -322,7 +322,7 @@ function LayoutFrame(props: {
           <Suspense fallback={null}>
             <LazyChatSurface />
           </Suspense>
-        </XmtpChatProvider>
+        </ChatProviderWithSessionRepair>
       ) : (
         <main id="main-content" className={`flex min-h-0 flex-1 flex-col overflow-x-clip ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
           <PageTransitionOutlet />

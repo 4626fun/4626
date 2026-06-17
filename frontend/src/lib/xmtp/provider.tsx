@@ -59,6 +59,7 @@ import {
   syncConversationsForGroupDiscovery,
   groupMembershipListOptions,
 } from '@/lib/xmtp/xmtpHelpers'
+import { isSessionRepairableChatError } from '@/lib/auth/sessionRepair'
 import {
   markXmtpRateLimited,
   xmtpSyncBlockedRemainingMs,
@@ -980,11 +981,19 @@ export function XmtpChatProvider({
   children,
   identityHintAddress = null,
   manualConnectOnly = false,
+  attemptSessionRepair,
 }: {
   children: ReactNode
   identityHintAddress?: string | null
   /** When true, skip auto-connect and stream-driven reconnect (waitlist embedded chat). */
   manualConnectOnly?: boolean
+  /**
+   * Optional bounded session-repair callback. When a connect attempt fails with
+   * a repairable embedded-signer auth error, the provider invokes this once
+   * before surfacing the "expired" message; on success it retries connect once.
+   * Returns true when the session was repaired.
+   */
+  attemptSessionRepair?: () => Promise<boolean>
 }) {
   const { address, isConnected, connector } = useAccount()
   const accountContext = useAccountContext()
@@ -1037,6 +1046,11 @@ export function XmtpChatProvider({
   const statusRef = useRef(status)
   const refreshConversationsRef = useRef<(() => Promise<ChatConversation[]>) | null>(null)
   const pendingLocalResetHandledRef = useRef(false)
+  const attemptSessionRepairRef = useRef<(() => Promise<boolean>) | undefined>(attemptSessionRepair)
+  // One bounded repair attempt per identity; reset when the identity changes.
+  const embeddedSignerRepairAttemptedRef = useRef<string | null>(null)
+  // Latest `connect` so the connect-catch can retry once without a self-dependency.
+  const connectRef = useRef<((intent?: ConnectIntent) => Promise<void>) | null>(null)
 
   useEffect(() => {
     identityHintAddressRef.current = normalizeEvmAddress(identityHintAddress) ?? null
@@ -1045,6 +1059,10 @@ export function XmtpChatProvider({
   useEffect(() => {
     manualConnectOnlyRef.current = manualConnectOnly
   }, [manualConnectOnly])
+
+  useEffect(() => {
+    attemptSessionRepairRef.current = attemptSessionRepair
+  }, [attemptSessionRepair])
 
   useEffect(() => {
     statusRef.current = status
@@ -1686,6 +1704,7 @@ export function XmtpChatProvider({
         try {
           await refreshConversations()
           if (mountedRef.current) {
+            embeddedSignerRepairAttemptedRef.current = null
             setStatus('connected')
             setError(null)
           }
@@ -1956,6 +1975,7 @@ export function XmtpChatProvider({
         msgStreamRef.current = allMsgStream
         void requestNotificationPermission()
         if (mountedRef.current) {
+          embeddedSignerRepairAttemptedRef.current = null
           setAutoConnectEnabled(xmtpIdentityAddress)
           setStatus('connected')
           setError(null)
@@ -2335,7 +2355,20 @@ export function XmtpChatProvider({
           markLocalStateInvalid(msg)
           return
         }
-        if (isPrivyEmbeddedSignerAuthError(msg)) {
+        if (isSessionRepairableChatError(msg)) {
+          const repairFn = attemptSessionRepairRef.current
+          const identityKey = normalizeEvmAddress(xmtpIdentityAddress) ?? xmtpIdentityAddress.toLowerCase()
+          const alreadyAttempted = embeddedSignerRepairAttemptedRef.current === identityKey
+          if (repairFn && !alreadyAttempted) {
+            embeddedSignerRepairAttemptedRef.current = identityKey
+            console.info('[auth-repair]', { surface: 'chat', transition: 'connect-catch-repair' })
+            const repaired = await Promise.resolve(repairFn()).catch(() => false)
+            if (repaired && mountedRef.current) {
+              // Session re-bridged: retry connect exactly once via the latest ref.
+              await Promise.resolve(connectRef.current?.('user')).catch(() => undefined)
+              return
+            }
+          }
           clearAutoConnect(xmtpIdentityAddress)
           setStatus('error')
           setError(
@@ -2362,6 +2395,10 @@ export function XmtpChatProvider({
       }
     }
   }, [address, connector, walletClient, publicClient, resolveXmtpIdentityAddress, buildConvoSummary, applyConversationSummaries, xmtpModeOverride, markLocalStateInvalid, acquireTabLock, startTabLockHeartbeat, releaseTabLock, stopTabLockHeartbeat, refreshConversations])
+
+  useEffect(() => {
+    connectRef.current = connect
+  }, [connect])
 
   const reconnectFromLocalInstall = useCallback(async (): Promise<void> => {
     if (manualConnectOnlyRef.current) return
