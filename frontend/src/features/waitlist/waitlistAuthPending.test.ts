@@ -6,7 +6,7 @@ import {
   clearWaitlistAuthPending,
   readWaitlistAuthPending,
   writeWaitlistAuthPending,
-} from './waitlistAuthPending'
+} from './waitlistStorage'
 
 describe('waitlistAuthPending', () => {
   beforeEach(() => {

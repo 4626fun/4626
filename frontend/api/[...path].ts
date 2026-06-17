@@ -18,13 +18,13 @@ function buildPrivyProxyUrl(req: VercelRequest): string | null {
   return `${PRIVY_PROXY_UPSTREAM}${raw}`
 }
 
-function toProxyBody(req: VercelRequest): string | Buffer | undefined {
+function toProxyBody(req: VercelRequest): BodyInit | undefined {
   const method = String(req.method ?? 'GET')
     .trim()
     .toUpperCase()
   if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return undefined
   if (typeof req.body === 'string') return req.body
-  if (Buffer.isBuffer(req.body)) return req.body
+  if (Buffer.isBuffer(req.body)) return req.body.toString('utf8')
   if (req.body == null) return undefined
   return JSON.stringify(req.body)
 }

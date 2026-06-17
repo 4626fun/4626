@@ -11,8 +11,7 @@ import { AppLoadingProvider } from '@/components/layout/AppLoadingOverlay'
 
 import { WaitlistFlow } from './WaitlistFlow'
 import { WaitlistSetupWorkspace } from './WaitlistSetupWorkspace'
-import { clearWaitlistRecoveryGate, writeWaitlistRecoveryGate } from './waitlistRecoveryGate'
-import { clearWaitlistAuthPending } from './waitlistAuthPending'
+import { clearWaitlistAuthPending, clearWaitlistRecoveryGate, writeWaitlistRecoveryGate } from './waitlistStorage'
 
 const collisionStateRef = vi.hoisted(() => ({
   current: {
@@ -827,6 +826,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     await waitFor(() => {
       expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     }, { timeout: 10_000 })
+    expect(screen.queryByText(/almost there/i)).toBeNull()
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
   })
 

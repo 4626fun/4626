@@ -14,8 +14,8 @@ export const FLOW_TIMEOUT_MS = 20_000
 export const PRIVY_TOKEN_READ_TIMEOUT_MS = 4_000
 export const TOKENLESS_FINALIZING_BOOTSTRAP_COOLDOWN_MS = 2_500
 export const RECOVERY_REQUIRED_BOOTSTRAP_COOLDOWN_MS = 15_000
-export const FINALIZING_BACKGROUND_RETRY_MS = 900
-export const FINALIZING_BACKGROUND_RETRY_MAX_ATTEMPTS = 5
+export const FINALIZING_BACKGROUND_RETRY_MS = 1100
+export const FINALIZING_BACKGROUND_RETRY_MAX_ATTEMPTS = 8
 export const PRIVY_LOGOUT_SETTLE_ATTEMPTS = 10
 export const PRIVY_LOGOUT_SETTLE_DELAY_MS = 150
 
@@ -76,6 +76,21 @@ export function isSessionFinalizingError(error: unknown): boolean {
     normalized.includes('session is still finalizing') ||
     normalized.includes('finishing sign-in')
   )
+}
+
+export async function runPrivyLoginWithTimeout(
+  login: (options?: unknown) => Promise<unknown>,
+  options: unknown,
+): Promise<void> {
+  await withTimeout(Promise.resolve().then(() => login(options)), FLOW_TIMEOUT_MS, 'Sign-in')
+}
+
+export function isPrivyLoginBootstrapError(error: unknown): boolean {
+  return isTransientWaitlistNetworkError(error)
+}
+
+export function getSignInNetworkUnstableMessage(): string {
+  return getWaitlistNetworkUnstableMessage()
 }
 
 export function isStalePrivyTokenError(error: unknown): boolean {

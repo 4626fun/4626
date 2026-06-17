@@ -7,7 +7,7 @@ import {
   clearWaitlistRecoveryGate,
   readWaitlistRecoveryGate,
   writeWaitlistRecoveryGate,
-} from './waitlistRecoveryGate'
+} from './waitlistStorage'
 
 describe('waitlistRecoveryGate', () => {
   beforeEach(() => {

@@ -23,8 +23,7 @@ import {
 } from './waitlistBootstrapUtils'
 import { executeWaitlistBootstrapPipeline } from './waitlistBootstrapPipeline'
 import { type WaitlistAccountsSummary } from './waitlistAccountTypes'
-import { clearWaitlistRecoveryGate } from './waitlistRecoveryGate'
-import { clearWaitlistAuthPending } from './waitlistAuthPending'
+import { clearWaitlistAuthPending, clearWaitlistRecoveryGate } from './waitlistStorage'
 
 // Canonicalization is best-effort during waitlist bootstrap; keep auth UX responsive
 // and let the setup workspace retry deeper account sync if this times out.
@@ -105,9 +104,13 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
 
       let token = await readPrivyToken()
       if (!token && waitForTokenHydration) {
-        const tokenRetryDelaysMs = [100, 200, 400]
+        // Be patient with Privy custom-auth-domain / post-OTP token minting.
+        // A single short poll is not enough; allow cumulative ~4s before declaring finalizing.
+        const tokenRetryDelaysMs = [120, 250, 450, 700, 900]
+        const waitBudgetMs = 5000
+        const waitStart = Date.now()
         for (const delayMs of tokenRetryDelaysMs) {
-          if (token) break
+          if (token || Date.now() - waitStart > waitBudgetMs) break
           await new Promise<void>((resolve) => setTimeout(resolve, delayMs))
           token = await readPrivyToken()
         }
@@ -239,7 +242,9 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
 
   const settleBootstrapAfterRecoverableLoginError = useCallback(
     async (opts?: { bypassRecoveryCooldown?: boolean }): Promise<WaitlistAccountsSummary> => {
-      const retryDelaysMs = [300, 600, 900, 1_200]
+      // Extra attempts + patience here help when the immediate post-login settle races the
+      // Privy token hydration or server verified-email load.
+      const retryDelaysMs = [300, 600, 900, 1_200, 1_500]
       finalizingAutoRetryCountRef.current = 0
       for (let attempt = 0; attempt <= retryDelaysMs.length; attempt += 1) {
         finalizingAutoRetryCountRef.current = attempt + 1

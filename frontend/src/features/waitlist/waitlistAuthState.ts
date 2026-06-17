@@ -1,5 +1,5 @@
 import { apiFetch } from '@/lib/api/apiBase'
-import { clearWaitlistRecoveryGate } from '@/features/waitlist/waitlistRecoveryGate'
+import { clearWaitlistRecoveryGate } from '@/features/waitlist/waitlistStorage'
 import { safePrivyLogout } from '@/lib/privy/logout'
 
 const SESSION_TOKEN_KEY = 'cv_siwe_session_token'

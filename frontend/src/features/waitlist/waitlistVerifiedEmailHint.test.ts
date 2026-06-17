@@ -9,7 +9,7 @@ import {
   readStoredWaitlistVerifiedEmailHint,
   resolveWaitlistVerifiedEmailHint,
   resolveWaitlistPrivyDisplayEmail,
-} from './waitlistVerifiedEmailHint'
+} from './waitlistStorage'
 
 describe('waitlistVerifiedEmailHint', () => {
   beforeEach(() => {

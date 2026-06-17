@@ -12,11 +12,11 @@ import {
 } from '../../../../packages/server-core/src/index.js'
 import { getPerpMarkets } from '../../../../server/_lib/alfaclub/hyperliquid.js'
 
-const FALLBACK_MARKETS = [
+const FALLBACK_MARKETS: Array<{ symbol: string; market: string; maxLeverage: number | null }> = [
   { symbol: 'BTC', market: 'BTC/USDC', maxLeverage: 40 },
   { symbol: 'ETH', market: 'ETH/USDC', maxLeverage: 40 },
   { symbol: 'SOL', market: 'SOL/USDC', maxLeverage: 40 },
-] as const
+]
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
