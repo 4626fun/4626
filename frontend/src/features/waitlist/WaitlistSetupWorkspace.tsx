@@ -18,6 +18,8 @@ type WaitlistSetupWorkspaceProps = {
   onEnterApp: () => void | Promise<void>
   onSignOut: () => void | Promise<void>
   signOutBusy?: boolean
+  onRepairSession?: () => Promise<boolean> | boolean
+  repairBusy?: boolean
 }
 
 export function WaitlistSetupWorkspace(props: WaitlistSetupWorkspaceProps) {
@@ -36,6 +38,8 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
     onEnterApp,
     onSignOut,
     signOutBusy = false,
+    onRepairSession,
+    repairBusy = false,
   } = props
   const controller = useAccountSetupController({
     initialData: { me: initialAccount, zoraStatus: null },
@@ -152,6 +156,8 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
                 layout="mobile"
                 onSignOut={onSignOut}
                 signOutBusy={signOutBusy}
+                onRepairSession={onRepairSession}
+                repairBusy={repairBusy}
               />
             </div>
           ) : null}
@@ -165,6 +171,8 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
               layout="sidebar"
               onSignOut={onSignOut}
               signOutBusy={signOutBusy}
+              onRepairSession={onRepairSession}
+              repairBusy={repairBusy}
             />
           </aside>
         ) : null}

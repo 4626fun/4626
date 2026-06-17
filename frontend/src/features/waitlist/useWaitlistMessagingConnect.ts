@@ -18,6 +18,7 @@ type UseWaitlistMessagingConnectParams = {
   joinStatus: WaitlistChatStatus
   retryJoin: () => void
   walletReady: boolean
+  repairSession?: () => Promise<boolean> | boolean
 }
 
 export function useWaitlistMessagingConnect(params: UseWaitlistMessagingConnectParams) {
@@ -30,6 +31,7 @@ export function useWaitlistMessagingConnect(params: UseWaitlistMessagingConnectP
     joinStatus,
     retryJoin,
     walletReady,
+    repairSession,
   } = params
 
   const [prepareError, setPrepareError] = useState<string | null>(null)
@@ -56,31 +58,53 @@ export function useWaitlistMessagingConnect(params: UseWaitlistMessagingConnectP
       if (connectInFlightRef.current) return
 
       setPrepareError(null)
-      if (!privyAuthenticated) {
-        setPrepareError(
-          'Your 4626 session is active, but Privy sign-in is not loaded in this browser. Sign in with email again, then retry.',
-        )
-        return
-      }
 
       connectInFlightRef.current = true
       setPrepareBusy(true)
       try {
-        if (options?.reconnect) {
-          disconnect()
-        }
+        let repairedOnce = false
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          if (!privyAuthenticated) {
+            if (!repairedOnce && repairSession) {
+              const repaired = await Promise.resolve(repairSession()).catch(() => false)
+              repairedOnce = repaired
+              if (repaired) continue
+            }
+            setPrepareError(
+              'Your 4626 session is active, but Privy sign-in is not loaded in this browser. Sign in with email again, then retry.',
+            )
+            return
+          }
 
-        const prepared = await prepare()
-        if (!prepared.ok) {
-          setPrepareError(prepared.error)
-          return
-        }
+          if (options?.reconnect || attempt > 0) {
+            disconnect()
+          }
 
-        await connect('user')
-        setMessagingEverConnected(true)
+          const prepared = await prepare()
+          if (!prepared.ok) {
+            setPrepareError(prepared.error)
+            return
+          }
 
-        if (!options?.skipJoinRetry && shouldRequestJoin) {
-          retryJoin()
+          try {
+            await connect('user')
+            setMessagingEverConnected(true)
+
+            if (!options?.skipJoinRetry && shouldRequestJoin) {
+              retryJoin()
+            }
+            return
+          } catch (connectError) {
+            const raw =
+              connectError instanceof Error ? connectError.message : String(connectError)
+            const authExpired = isPrivyEmbeddedSignerAuthError(raw)
+            if (authExpired && !repairedOnce && repairSession) {
+              const repaired = await Promise.resolve(repairSession()).catch(() => false)
+              repairedOnce = repaired
+              if (repaired) continue
+            }
+            throw connectError
+          }
         }
       } catch (err) {
         const raw = err instanceof Error ? err.message : String(err)
@@ -97,7 +121,7 @@ export function useWaitlistMessagingConnect(params: UseWaitlistMessagingConnectP
         setPrepareBusy(false)
       }
     },
-    [connect, disconnect, prepare, privyAuthenticated, retryJoin, shouldRequestJoin],
+    [connect, disconnect, prepare, privyAuthenticated, retryJoin, shouldRequestJoin, repairSession],
   )
 
   const reconnectMessaging = useCallback(async () => {

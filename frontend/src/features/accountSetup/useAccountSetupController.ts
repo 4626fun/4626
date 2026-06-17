@@ -10,8 +10,11 @@ import { apiFetch } from '@/lib/api/apiBase'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import { extractPrivyWalletsFromUser, useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import {
+  performZoraCrossAppAuth,
+  isRecoverableCrossAppAuthError,
   isUserRejectedCrossAppAuthError,
 } from '@/lib/privy/zoraCrossApp'
+import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { isTelegramMiniAppContext, readPrivyTelegramLaunchParams } from '@/lib/telegram/telegramWebApp'
 import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
 
@@ -82,6 +85,40 @@ function parseChainId(value: string | number | null | undefined): number | null 
   }
   const parsed = Number(trimmed)
   return Number.isFinite(parsed) ? parsed : null
+}
+
+const ZORA_CROSSAPP_BACKOFF_KEY = 'cv:zora-crossapp-backoff'
+
+function readZoraCrossAppBackoff(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.sessionStorage.getItem(ZORA_CROSSAPP_BACKOFF_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeZoraCrossAppBackoff(value: boolean): void {
+  if (typeof window === 'undefined') return
+  try {
+    if (value) {
+      window.sessionStorage.setItem(ZORA_CROSSAPP_BACKOFF_KEY, '1')
+    } else {
+      window.sessionStorage.removeItem(ZORA_CROSSAPP_BACKOFF_KEY)
+    }
+  } catch {
+    // best effort
+  }
+}
+
+async function withOperationTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => reject(new Error(`${label} timed out`)), ms)
+    promise
+      .then(resolve)
+      .catch(reject)
+      .finally(() => clearTimeout(timeoutId))
+  })
 }
 
 async function resolvePrivyAccessTokenWithRetry(
@@ -661,11 +698,15 @@ export function useAccountSetupController(params: {
 
   const resolveZoraReadOnlySignals = useCallback(
     async (headers: Record<string, string>) => {
-      const response = await apiFetch('/api/zora/resolve', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({}),
-      })
+      const response = await withOperationTimeout(
+        apiFetch('/api/zora/resolve', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({}),
+        }),
+        15_000,
+        'Zora signal resolve',
+      )
       const payload = (await response.json().catch(() => null)) as ApiEnvelope<ZoraResolveResponse> | null
       if (!response.ok || !payload?.success || !payload.data) {
         throw new Error(readApiError(payload, 'Failed to resolve Zora signals.'))
@@ -747,13 +788,59 @@ export function useAccountSetupController(params: {
     setNoticeGuarded(null)
     try {
       if (provider === 'zora_cross_app') {
+        let crossAppAuthCompleted = false
+        let crossAppAuthFallbackMessage: string | null = null
+        if (readZoraCrossAppBackoff()) {
+          crossAppAuthFallbackMessage =
+            'Zora OAuth was unstable in this browser. Checking existing Zora read-only signals instead.'
+        } else {
+          try {
+            await withOperationTimeout(
+              performZoraCrossAppAuth({
+                privyAuthed: Boolean(privyRef.current?.authenticated),
+                appId: ZORA_PRIVY_APP_ID,
+                linkCrossAppAccount,
+                loginWithCrossAppAccount,
+              }),
+              20_000,
+              'Zora cross-app auth',
+            )
+            crossAppAuthCompleted = true
+            writeZoraCrossAppBackoff(false)
+          } catch (zoraAuthError: unknown) {
+            const message =
+              typeof (zoraAuthError as { message?: unknown })?.message === 'string'
+                ? String((zoraAuthError as { message: string }).message)
+                : ''
+            if (isUserRejectedCrossAppAuthError(zoraAuthError)) {
+              crossAppAuthFallbackMessage = 'Zora auth canceled. Checking your existing Zora read-only signals instead.'
+            } else if (
+              isRecoverableCrossAppAuthError(zoraAuthError) ||
+              message.toLowerCase().includes('timed out') ||
+              message.toLowerCase().includes('authentication failed')
+            ) {
+              writeZoraCrossAppBackoff(true)
+              crossAppAuthFallbackMessage =
+                'Could not complete Zora OAuth in this browser. Checking existing Zora read-only signals instead.'
+            } else {
+              throw zoraAuthError
+            }
+          }
+        }
+
         const headers = await authHeaders()
         const resolvedSignals = await resolveZoraReadOnlySignals(headers)
-        setNoticeGuarded(
-          hasResolvedZoraSignals(resolvedSignals)
-            ? 'Zora read-only signals detected.'
-            : 'No Zora read-only signals found yet. Open your Zora profile once, then retry detection.',
-        )
+        const hasSignals = hasResolvedZoraSignals(resolvedSignals)
+        if (hasSignals) {
+          setNoticeGuarded(crossAppAuthFallbackMessage ?? 'Zora read-only signals detected.')
+        } else {
+          setNoticeGuarded(
+            crossAppAuthFallbackMessage ??
+              (crossAppAuthCompleted
+                ? 'No Zora read-only signals found yet. Open your Zora profile once, then retry detection.'
+                : 'Zora auth did not complete and no existing signals were found yet. Open your Zora profile once, then retry detection.'),
+          )
+        }
         await loadMe({ showSpinner: false })
         return
       }
@@ -796,7 +883,7 @@ export function useAccountSetupController(params: {
     } finally {
       setBusyProviderGuarded(null)
     }
-  }, [authHeaders, callLinkEndpoint, loadMe, performClientSideLink, resolveZoraReadOnlySignals])
+  }, [authHeaders, callLinkEndpoint, loadMe, performClientSideLink, resolveZoraReadOnlySignals, linkCrossAppAccount, loginWithCrossAppAccount])
 
   const onUnlinkProvider = useCallback(async (provider: string) => {
     const privyAuthedNow = Boolean(privyRef.current?.authenticated)
@@ -850,11 +937,15 @@ export function useAccountSetupController(params: {
     setNoticeGuarded(null)
     try {
       const headers = await authHeaders()
-      const response = await apiFetch('/api/zora/refresh', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({}),
-      })
+      const response = await withOperationTimeout(
+        apiFetch('/api/zora/refresh', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({}),
+        }),
+        15_000,
+        'Zora signal refresh',
+      )
       const payload = (await response.json().catch(() => null)) as ApiEnvelope<ZoraResolveResponse> | null
       if (!response.ok || !payload?.success || !payload.data) {
         throw new Error(readApiError(payload, 'Failed to refresh Zora signals.'))

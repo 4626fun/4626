@@ -21,6 +21,9 @@ type WaitlistGroupChatPanelProps = {
   /** Forwarded to surface for the embedded signer expiry recovery path. */
   onSignOut?: () => void
   signOutBusy?: boolean
+  /** Preferred recovery path: repair session drift without hard sign-out. */
+  onRepairSession?: () => Promise<boolean> | boolean
+  repairBusy?: boolean
 }
 
 export function WaitlistGroupChatPanel(props: WaitlistGroupChatPanelProps) {
@@ -30,7 +33,15 @@ export function WaitlistGroupChatPanel(props: WaitlistGroupChatPanelProps) {
 }
 
 function WaitlistGroupChatPanelInner(props: WaitlistGroupChatPanelProps) {
-  const { signingReady, setupComplete, layout = 'inline', onSignOut, signOutBusy } = props
+  const {
+    signingReady,
+    setupComplete,
+    layout = 'inline',
+    onSignOut,
+    signOutBusy,
+    onRepairSession,
+    repairBusy,
+  } = props
   const statusQuery = useWaitlistXmtpStatus(setupComplete)
   const chatConfig = statusQuery.data
   const identityHintAddress = chatConfig?.xmtpMemberAddress ?? null
@@ -49,6 +60,8 @@ function WaitlistGroupChatPanelInner(props: WaitlistGroupChatPanelProps) {
             layout={layout}
             onSignOut={onSignOut}
             signOutBusy={signOutBusy}
+            onRepairSession={onRepairSession}
+            repairBusy={repairBusy}
           />
         )}
       </XmtpChatProvider>
@@ -62,12 +75,16 @@ function WaitlistGroupChatPanelBody({
   layout,
   onSignOut,
   signOutBusy,
+  onRepairSession,
+  repairBusy,
 }: {
   signingReady: boolean
   statusQuery: ReturnType<typeof useWaitlistXmtpStatus>
   layout: 'inline' | 'sidebar' | 'mobile'
   onSignOut?: () => void
   signOutBusy?: boolean
+  onRepairSession?: () => Promise<boolean> | boolean
+  repairBusy?: boolean
 }) {
   const { status: xmtpStatus } = useXmtp()
   const messagingReady = xmtpStatus === 'connected'
@@ -124,6 +141,8 @@ function WaitlistGroupChatPanelBody({
         chatReady={serverChatReady}
         onSignOut={onSignOut}
         signOutBusy={signOutBusy}
+        onRepairSession={onRepairSession}
+        repairBusy={repairBusy}
       />
     </WaitlistChatSection>
   )
@@ -139,8 +158,22 @@ function WaitlistGroupChatPanelContent(props: {
   chatReady: boolean
   onSignOut?: () => void
   signOutBusy?: boolean
+  onRepairSession?: () => Promise<boolean> | boolean
+  repairBusy?: boolean
 }) {
-  const { signingReady, statusQuery, chatConfig, blockedMessage, join, groupName, chatReady, onSignOut, signOutBusy } = props
+  const {
+    signingReady,
+    statusQuery,
+    chatConfig,
+    blockedMessage,
+    join,
+    groupName,
+    chatReady,
+    onSignOut,
+    signOutBusy,
+    onRepairSession,
+    repairBusy,
+  } = props
   const hasCachedStatus = Boolean(chatConfig)
   const hasStatusErrorWithoutFallback = statusQuery.isError && !hasCachedStatus
   const hasStatusErrorWithFallback = statusQuery.isError && hasCachedStatus
@@ -211,8 +244,8 @@ function WaitlistGroupChatPanelContent(props: {
         xmtpMemberAddress={chatConfig.xmtpMemberAddress}
         retryJoin={join.retryJoin}
         chatReady={surfaceChatReady}
-        onRequestReauth={onSignOut}
-        reauthBusy={signOutBusy}
+        onRequestReauth={onRepairSession ?? onSignOut}
+        reauthBusy={repairBusy ?? signOutBusy}
       />
     </div>
   )

@@ -2,6 +2,7 @@ import '@/lib/bootstrap/consoleNoisePatch'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
+import { Buffer as BufferPolyfill } from 'buffer'
 
 import { RootRouter } from './RootRouter'
 import { RootErrorBoundary } from './components/RootErrorBoundary'
@@ -21,6 +22,12 @@ import {
 import '@4626/brand-kit/styles'
 import './index.css'
 import '@google/model-viewer' // registers <model-viewer>; bundled so devtools don't resolve CDN maps under webRoot
+
+// Some wallet-provider/viem paths still expect a Node-style Buffer in browser.
+// Ensure it exists globally before auth/wallet/chat flows initialize.
+if (typeof globalThis !== 'undefined' && !(globalThis as any).Buffer) {
+  ;(globalThis as any).Buffer = BufferPolyfill
+}
 
 function stabilizeScrollMeasurementRoots() {
   if (typeof document === 'undefined') return

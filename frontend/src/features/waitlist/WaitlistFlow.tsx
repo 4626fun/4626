@@ -425,6 +425,7 @@ export function WaitlistFlow(props: {
   const [account, setAccount] = useState<AccountsSummary | null>(null)
   const [waitlistStats, setWaitlistStats] = useState<WaitlistStatsData | null>(null)
   const [signOutBusy, setSignOutBusy] = useState(false)
+  const [sessionRepairBusy, setSessionRepairBusy] = useState(false)
 
   useEffect(() => {
     if (!account?.emailVerified) return
@@ -636,7 +637,8 @@ export function WaitlistFlow(props: {
       logout: async () => {
         await privy.logout().catch(() => null)
       },
-      readToken: getAccessToken,
+      // Force a real logout call here even when token introspection is stale/null.
+      // This path exists specifically to clear zombie Privy state.
       shouldLogout: true,
     })
     await waitForPrivyLogoutSettlement()
@@ -656,7 +658,7 @@ export function WaitlistFlow(props: {
       }
       throw error
     }
-  }, [getAccessToken, login, privy, requestBootstrap, waitForPrivyLogoutSettlement])
+  }, [login, privy, requestBootstrap, waitForPrivyLogoutSettlement])
 
   const runRecoveryPrivyLogin = useCallback(async (): Promise<void> => {
     const recoveryOptions = buildWaitlistRecoveryLoginOptions()
@@ -675,7 +677,7 @@ export function WaitlistFlow(props: {
         logout: async () => {
           await privy.logout().catch(() => null)
         },
-        readToken: getAccessToken,
+        // Force logout on already-logged-in recovery handoff.
         shouldLogout: true,
       })
       await waitForPrivyLogoutSettlement()
@@ -684,7 +686,7 @@ export function WaitlistFlow(props: {
         recoveryOptions as any,
       )
     }
-  }, [getAccessToken, login, privy, waitForPrivyLogoutSettlement])
+  }, [login, privy, waitForPrivyLogoutSettlement])
 
   const handoffIntoExistingAccount = useCallback(async (): Promise<void> => {
     clearWaitlistRecoveryGate()
@@ -695,7 +697,7 @@ export function WaitlistFlow(props: {
       logout: async () => {
         await privy.logout().catch(() => null)
       },
-      readToken: getAccessToken,
+      // Force logout before recovery login to avoid stale-session reuse.
       shouldLogout: true,
     })
     await waitForPrivyLogoutSettlement({ tokenOnly: true })
@@ -940,6 +942,46 @@ export function WaitlistFlow(props: {
     waitForPrivyLogoutSettlement,
   ])
 
+  const onRepairSession = useCallback(async (): Promise<boolean> => {
+    if (sessionRepairBusy) return false
+    setSessionRepairBusy(true)
+    try {
+      const token = await withTimeout(getAccessToken(), 4_000, 'Session refresh token').catch(() => null)
+      if (!token) {
+        if (!privyAuthedRef.current) {
+          setStep('auth')
+        }
+        return false
+      }
+
+      await withTimeout(bridgePrivySession(token), 6_000, 'Session bridge refresh').catch(() => undefined)
+      const next = await withTimeout(
+        requestBootstrap({ waitForTokenHydration: true }),
+        12_000,
+        'Session bootstrap refresh',
+      )
+      if (!next) {
+        // Even when bootstrap is briefly stale, token/session repair may still be enough
+        // for embedded-wallet reconnect paths to recover in-place.
+        setError(null)
+        return true
+      }
+
+      setRecoveryRequired(false)
+      setError(null)
+      return true
+    } catch (repairError: unknown) {
+      if (isSessionFinalizingError(repairError) || isStalePrivyTokenError(repairError)) {
+        setError(SESSION_FINALIZING_RETRY_MESSAGE)
+      } else if (isTimeoutErrorMessage((repairError as { message?: unknown })?.message)) {
+        setError('Session refresh timed out. Tap Refresh session once more.')
+      }
+      return false
+    } finally {
+      setSessionRepairBusy(false)
+    }
+  }, [getAccessToken, requestBootstrap, sessionRepairBusy, setError, setRecoveryRequired])
+
   const navigateWithSessionHandoff = useCallback(
     async (initialTarget: string) => {
       let target = initialTarget
@@ -1006,12 +1048,12 @@ export function WaitlistFlow(props: {
       logout: async () => {
         await privy.logout().catch(() => null)
       },
-      readToken: getAccessToken,
-      shouldLogout: privyAuthedRef.current,
+      // Force logout when token/session drift is detected; token probes can be stale.
+      shouldLogout: true,
     })
     setRecoveryRequired(false)
     setError(WAITLIST_STALE_SESSION_RESET_MESSAGE)
-  }, [getAccessToken, privy, resetResolvedAccountState, setError, setRecoveryRequired])
+  }, [privy, resetResolvedAccountState, setError, setRecoveryRequired])
 
   const resumePendingWaitlistAuth = useCallback(async () => {
     clearWaitlistRecoveryGate()
@@ -1210,9 +1252,17 @@ export function WaitlistFlow(props: {
         try {
           setBusy(true)
           const next = await requestBootstrap({ waitForTokenHydration: true })
-          if (!cancelled && next) {
+          if (cancelled) return
+          if (next) {
             finalizingBackgroundRetryCountRef.current = 0
             setError(null)
+          } else {
+            finalizingBackgroundRetryCountRef.current += 1
+            if (finalizingBackgroundRetryCountRef.current >= FINALIZING_BACKGROUND_RETRY_MAX_ATTEMPTS) {
+              setError(WAITLIST_SPINNER_TIMEOUT_MESSAGE)
+            } else {
+              setError(SESSION_FINALIZING_RETRY_MESSAGE)
+            }
           }
         } catch (bootstrapError: unknown) {
           if (cancelled) return
@@ -1326,6 +1376,8 @@ export function WaitlistFlow(props: {
               onEnterApp={onEnterApp}
               onSignOut={onSignOut}
               signOutBusy={signOutBusy}
+              onRepairSession={onRepairSession}
+              repairBusy={sessionRepairBusy}
             />
           </div>
         ) : null
@@ -1364,6 +1416,8 @@ export function WaitlistFlow(props: {
                 onEnterApp={onEnterApp}
                 onSignOut={onSignOut}
                 signOutBusy={signOutBusy}
+                onRepairSession={onRepairSession}
+                repairBusy={sessionRepairBusy}
               />
             </motion.div>
           ) : null}

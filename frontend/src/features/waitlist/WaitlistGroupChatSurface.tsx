@@ -29,8 +29,8 @@ export type WaitlistGroupChatSurfaceProps = {
   xmtpMemberAddress: string | null
   retryJoin: () => void
   chatReady: boolean
-  /** Optional handler to trigger full sign-out + re-login (for embedded signer expiry). */
-  onRequestReauth?: () => void
+  /** Optional handler to repair auth/session drift without a forced sign-out. */
+  onRequestReauth?: () => Promise<boolean> | boolean
   reauthBusy?: boolean
 }
 
@@ -101,6 +101,7 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
     joinStatus,
     retryJoin,
     walletReady,
+    repairSession: onRequestReauth,
   })
   const prepareError = formatWaitlistChatError(rawMessaging.prepareError) ?? rawMessaging.prepareError
   const {
@@ -232,7 +233,7 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
               </Button>
             ) : null}
 
-            {/* For signer expiry, prefer a reauth action over retrying a doomed connect. */}
+            {/* For signer expiry, prefer session repair over retrying a doomed connect. */}
             {isReauthError && onRequestReauth ? (
               <Button
                 type="button"
@@ -240,9 +241,14 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
                 size="sm"
                 loading={reauthBusy}
                 disabled={reauthBusy}
-                onClick={() => void onRequestReauth()}
+                onClick={() =>
+                  void (async () => {
+                    await onRequestReauth()
+                    await reconnectMessaging()
+                  })()
+                }
               >
-                Sign out and sign in again
+                Refresh session
               </Button>
             ) : null}
 
@@ -300,7 +306,7 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
 
           {isReauthError && !onRequestReauth ? (
             <p className="text-[10px] text-zinc-500">
-              Use the Sign out link below, then sign in with email again.
+              Session repair is unavailable here. Use Sign out, then sign in again.
             </p>
           ) : null}
         </div>
