@@ -441,6 +441,7 @@ export function WaitlistFlow(props: {
   const startAuthAutoAttemptedRef = useRef(false)
   const finalizingAutoRetryCountRef = useRef(0)
   const finalizingBackgroundRetryCountRef = useRef(0)
+  const staleSessionProbeMissesRef = useRef(0)
   const privyLogoutRef = useRef<null | (() => Promise<void>)>(null)
   const privyAuthedRef = useRef(privyAuthed)
   const privyClientStatusRef = useRef(privyClientStatus)
@@ -964,11 +965,13 @@ export function WaitlistFlow(props: {
         // Even when bootstrap is briefly stale, token/session repair may still be enough
         // for embedded-wallet reconnect paths to recover in-place.
         setError(null)
+        staleSessionProbeMissesRef.current = 0
         return true
       }
 
       setRecoveryRequired(false)
       setError(null)
+      staleSessionProbeMissesRef.current = 0
       return true
     } catch (repairError: unknown) {
       if (isSessionFinalizingError(repairError) || isStalePrivyTokenError(repairError)) {
@@ -1036,9 +1039,25 @@ export function WaitlistFlow(props: {
    * bounded token probe so the flow resets instead of retrying forever.
    */
   const probeStalePrivyTokenSession = useCallback(async (): Promise<boolean> => {
-    if (!privyAuthedRef.current) return false
-    const token = await withTimeout(getAccessToken(), 3_000, 'Sign-in token probe').catch(() => null)
-    return !token
+    if (!privyAuthedRef.current) {
+      staleSessionProbeMissesRef.current = 0
+      return false
+    }
+    const token = await withTimeout(getAccessToken(), 4_000, 'Sign-in token probe').catch(() => null)
+    if (token) {
+      staleSessionProbeMissesRef.current = 0
+      return false
+    }
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 450))
+    const secondToken = await withTimeout(getAccessToken(), 4_000, 'Sign-in token reprobe').catch(() => null)
+    if (secondToken) {
+      staleSessionProbeMissesRef.current = 0
+      return false
+    }
+
+    staleSessionProbeMissesRef.current += 1
+    return staleSessionProbeMissesRef.current >= 2
   }, [getAccessToken])
 
   const resetStaleAuthenticatedPrivySession = useCallback(async (): Promise<void> => {
@@ -1066,7 +1085,11 @@ export function WaitlistFlow(props: {
       clearWaitlistAuthPending()
     } catch (bootstrapError: unknown) {
       if (isStalePrivyTokenError(bootstrapError)) {
-        await resetStaleAuthenticatedPrivySession()
+        if (await probeStalePrivyTokenSession()) {
+          await resetStaleAuthenticatedPrivySession()
+          return
+        }
+        setError(SESSION_FINALIZING_RETRY_MESSAGE)
         return
       }
       if (isSessionFinalizingError(bootstrapError)) {
@@ -1267,7 +1290,16 @@ export function WaitlistFlow(props: {
         } catch (bootstrapError: unknown) {
           if (cancelled) return
           if (isStalePrivyTokenError(bootstrapError)) {
-            await resetStaleAuthenticatedPrivySession()
+            if (await probeStalePrivyTokenSession()) {
+              await resetStaleAuthenticatedPrivySession()
+              return
+            }
+            finalizingBackgroundRetryCountRef.current += 1
+            if (finalizingBackgroundRetryCountRef.current >= FINALIZING_BACKGROUND_RETRY_MAX_ATTEMPTS) {
+              setError(WAITLIST_SPINNER_TIMEOUT_MESSAGE)
+              return
+            }
+            setError(SESSION_FINALIZING_RETRY_MESSAGE)
             return
           }
           if (isSessionFinalizingError(bootstrapError)) {
