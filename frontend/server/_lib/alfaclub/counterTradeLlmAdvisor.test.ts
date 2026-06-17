@@ -20,6 +20,7 @@ const CONTEXT: CounterTradeCandidateContext = {
     dir: 'Open Long 5x',
     side: 'long',
     startPosition: 0,
+    leverage: 5,
     closedPnl: 0,
     fee: 0.5,
   },

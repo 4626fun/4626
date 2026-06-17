@@ -64,6 +64,12 @@ programs/creator-share-hook/target/deploy/*-keypair.json
 !**/.env.*.example
 !**/.env.tpl
 
+# Local auth token dumps (NEVER commit)
+triplet.json
+*triplet*.json
+*token-dump*.json
+*session-dump*.json
+
 # IDE and editor files
 .vscode/*
 !.vscode/launch.json

@@ -27,6 +27,7 @@ function makeFill(overrides: Partial<HyperliquidUserFillDetailed>): HyperliquidU
     dir: 'Open Long',
     side: 'long',
     startPosition: 0,
+    leverage: null,
     ...overrides,
   }
 }

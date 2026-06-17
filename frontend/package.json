@@ -80,6 +80,7 @@
     "alfaclub:chat:smoke": "tsx --env-file=.env scripts/alfaclub-chat-smoke.ts",
     "alfaclub:gmeow:smoke": "tsx --env-file=.env scripts/alfaclub-chat-smoke.ts --preset gmeow",
     "ops:alfaclub-refresh-snapshot": "tsx scripts/ops/alfaclub-refresh-snapshot.ts",
+    "ops:alfaclub:repair-chat-token": "tsx scripts/ops/alfaclub-repair-chat-token.ts",
     "ops:alfaclub-proxy-reliability-smoke": "tsx scripts/ops/alfaclub-proxy-reliability-smoke.ts",
     "ops:counter-trade:normalize-optins": "tsx scripts/ops/normalize-counter-trade-room-optins.ts",
     "ops:counter-trade:backtest": "tsx scripts/backtest-counter-rebalance.ts",

@@ -51,6 +51,8 @@
     "src/lib/observability/**/*.ts",
     "src/lib/uniswap/swapQuoteSanitize.ts",
     "src/lib/xmtp/xmtpInteractive.ts",
+    "src/lib/xmtp/xmtpHelpers.ts",
+    "src/lib/xmtp/xmtpSyncCoordinator.ts",
     "src/lib/api/**/*.ts",
     "src/lib/auth/**/*.ts",
     "src/lib/debank/**/*.ts",

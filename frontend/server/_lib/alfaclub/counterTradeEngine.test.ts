@@ -79,6 +79,7 @@ function makeFill(overrides: Partial<HyperliquidUserFillDetailed> = {}): Hyperli
     dir: 'Open Long 6x',
     side: 'long',
     startPosition: 0,
+    leverage: null,
     ...overrides,
   }
 }

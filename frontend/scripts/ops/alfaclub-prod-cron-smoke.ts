@@ -15,6 +15,69 @@ type StepResult = {
   detail: string
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+function readIsoMs(value: unknown): number | null {
+  if (typeof value !== 'string' || !value.trim()) return null
+  const ms = Date.parse(value)
+  return Number.isFinite(ms) ? ms : null
+}
+
+function classifyCronResponse(path: string, status: number, parsed: Record<string, unknown>): {
+  ok: boolean
+  detailSuffix: string
+} {
+  const suffixes: string[] = []
+  const success = parsed.success
+  const data = asRecord(parsed.data)
+
+  if (typeof parsed.error === 'string') suffixes.push(parsed.error)
+  if (success === false) suffixes.push('success=false')
+  if (typeof data?.reason === 'string') suffixes.push(`reason=${data.reason}`)
+  if (typeof data?.skipped === 'boolean') suffixes.push(`skipped=${data.skipped}`)
+  if (typeof data?.sent === 'boolean') suffixes.push(`sent=${data.sent}`)
+
+  let ok = status >= 200 && status < 300 && success !== false
+
+  if (path.endsWith('/chat-auth-health') && data) {
+    const lastSuccess = asRecord(data.lastSuccess)
+    const lastFailure = asRecord(data.lastFailure)
+    const failureAt = readIsoMs(lastFailure?.at)
+    const successAt = readIsoMs(lastSuccess?.at)
+    const errorCode = typeof lastFailure?.errorCode === 'string' ? lastFailure.errorCode : ''
+    if (failureAt !== null && (successAt === null || failureAt > successAt)) {
+      ok = false
+      suffixes.push(`latest_failure=${errorCode || 'unknown'}`)
+    }
+  }
+
+  if (path.endsWith('/chat-token-refresh')) {
+    const text = [
+      typeof parsed.error === 'string' ? parsed.error : '',
+      typeof data?.reason === 'string' ? data.reason : '',
+      typeof data?.message === 'string' ? data.message : '',
+    ].join(' ')
+    if (/invalid|missing_or_invalid_token|bootstrap tokens/i.test(text)) {
+      ok = false
+      suffixes.push('refresh_chain_unhealthy')
+    }
+  }
+
+  if (path.endsWith('/chat-bridge-run') && success === false) {
+    ok = false
+    if (typeof data?.reason === 'string') suffixes.push(`bridge_${data.reason}`)
+  }
+
+  return {
+    ok,
+    detailSuffix: suffixes.length > 0 ? ` — ${Array.from(new Set(suffixes)).join(' — ')}` : '',
+  }
+}
+
 function readArg(name: string): string | null {
   const prefix = `--${name}=`
   for (const raw of process.argv.slice(2)) {
@@ -46,19 +109,15 @@ async function callCron(
   })
   const body = await response.text().catch(() => '')
   let detail = `HTTP ${response.status}`
+  let ok = response.status >= 200 && response.status < 300
   try {
     const parsed = JSON.parse(body) as Record<string, unknown>
-    if (typeof parsed.error === 'string') detail += ` — ${parsed.error}`
-    else if (parsed.success === true && parsed.data && typeof parsed.data === 'object') {
-      const data = parsed.data as Record<string, unknown>
-      if (typeof data.reason === 'string') detail += ` — reason=${data.reason}`
-      if (typeof data.skipped === 'boolean') detail += ` — skipped=${data.skipped}`
-      if (typeof data.sent === 'boolean') detail += ` — sent=${data.sent}`
-    } else if (parsed.success === false) detail += ` — success=false`
+    const classified = classifyCronResponse(path, response.status, parsed)
+    ok = classified.ok
+    detail += classified.detailSuffix
   } catch {
     detail += ` — ${redactBody(body)}`
   }
-  const ok = response.status >= 200 && response.status < 300
   return { name: path, ok, status: response.status, detail }
 }
 
