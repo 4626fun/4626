@@ -6,14 +6,9 @@ import { Button } from '@/components/ui/Button'
 import { AppLoadingBootstrapGate } from '@/components/layout/AppLoadingOverlay'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { apiFetch } from '@/lib/api/apiBase'
-import { buildAppEntryUrl } from '@/lib/auth/appEntry'
-import { createStaleSessionProbe, withSessionRepairTimeout } from '@/lib/auth/sessionRepair'
 import {
-  getMarketingWaitlistEntryUrl,
-  isOnCanonicalMarketingWaitlistPage,
   readStoredWaitlistReferralCode,
 } from '@/lib/auth/waitlistEntry'
-import { getAppBaseUrl } from '@/lib/env/host'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
@@ -23,42 +18,14 @@ import {
   type WaitlistStep,
   resolveWaitlistStep,
 } from './waitlistFlowState'
-import {
-  clearStoredWaitlistSessionToken,
-  isAlreadyLoggedInAuthError,
-  isRecoveryRequiredAuthError,
-  runWaitlistPrivyLogout,
-} from './waitlistAuthState'
 import { type WaitlistEmailUi, canEnterAppFromAccountState, deriveWaitlistAuthUi } from './waitlistFlowUi'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
 import { type WaitlistAccountsSummary } from './waitlistAccountTypes'
-import {
-  PRIVY_LOGOUT_SETTLE_ATTEMPTS,
-  PRIVY_LOGOUT_SETTLE_DELAY_MS,
-  RECOVERY_REQUIRED_MESSAGE,
-  RECOVERY_REQUIRED_WHILE_PRIVY_AUTHED_MESSAGE,
-  SESSION_MISMATCH_MESSAGE,
-  STALE_PRIVY_SESSION_MESSAGE,
-  WAITLIST_STALE_SESSION_RESET_MESSAGE,
-  getWalletProviderCollisionMessage,
-  isSessionFinalizingError,
-  isStalePrivyTokenError,
-  isTimeoutErrorMessage,
-  isTransientWaitlistNetworkError,
-  isWalletProviderCollisionError,
-} from './waitlistBootstrapUtils'
 export { isPrivyLoginBootstrapError } from './waitlistBootstrapUtils'
 import { useWaitlistAuthState } from './useWaitlistAuthState'
 import { ReferrerGreetingBanner } from './ReferrerGreetingBanner'
 import {
-  captureWaitlistVerifiedEmailHint,
-  clearStoredWaitlistVerifiedEmailHint,
-  clearWaitlistAuthPending,
-  clearWaitlistRecoveryGate,
   resolveWaitlistPrivyDisplayEmail,
-  resolveWaitlistVerifiedEmailHint,
-  writeWaitlistAuthPending,
-  writeWaitlistRecoveryGate,
 } from './waitlistStorage'
 type AccountsSummary = WaitlistAccountsSummary
 
@@ -73,9 +40,7 @@ type WaitlistStatsData = {
   spotsRemaining: number
 }
 
-const HANDOFF_QUERY_KEY = 'cv_handoff'
 const WAITLIST_EASE: [number, number, number, number] = [0.4, 0, 0.2, 1]
-const PRIVY_OAUTH_QUERY_KEYS = ['privy_oauth_code', 'privy_oauth_state', 'privy_oauth_provider'] as const
 
 // useWaitlistAuthState provides busy/error/recovery/finalizing + guarded attempt logic
 // Extracted to reduce the giant component. More logic can migrate here over time.
@@ -316,30 +281,6 @@ export function WaitlistFlow(props: {
   const baseInAppContext = useMemo(() => isBaseAppInAppContext(), [])
   const disableHeroMotion = Boolean(prefersReducedMotion || baseInAppContext)
 
-  const redirectToCanonicalWaitlist = useCallback(() => {
-    if (typeof window === 'undefined') return false
-    const localHost = window.location.hostname.toLowerCase()
-    if (localHost === 'localhost' || localHost === '127.0.0.1' || localHost === '::1' || localHost === '[::1]') {
-      return false
-    }
-    let target = getMarketingWaitlistEntryUrl()
-    try {
-      const currentUrl = new URL(window.location.href)
-      const targetUrl = new URL(target)
-      for (const key of PRIVY_OAUTH_QUERY_KEYS) {
-        const value = currentUrl.searchParams.get(key)
-        if (value) targetUrl.searchParams.set(key, value)
-      }
-      target = targetUrl.toString()
-    } catch {
-      // Keep the canonical target as-is if URL parsing fails.
-    }
-    const current = `${window.location.origin}${window.location.pathname}${window.location.search}${window.location.hash}`
-    if (target === current) return false
-    window.location.assign(target)
-    return true
-  }, [])
-
   const privy = usePrivy()
   const privyClientStatus = usePrivyClientStatus()
 
@@ -389,31 +330,18 @@ export function WaitlistFlow(props: {
     onEnterApp,
     // Internal refs/cooldowns etc. owned by hook; not destructured here unless needed for render.
   } = useWaitlistAuthState({
-    redirectToCanonicalWaitlist,
-    runWaitlistPrivyLogout,
     setStep,
-    activeReferralCode,
     ensureEmbeddedWallet,
-    getVerifiedEmailHint: () => resolveWaitlistVerifiedEmailHint(privy.user),
     step,
     privyClientStatus,
-    isOnCanonicalMarketingWaitlistPage,
-    waitlistRecoveryUrl,
-    HANDOFF_QUERY_KEY,
-    clearStoredWaitlistVerifiedEmailHint,
   })
 
-  // NOTE: Guarded setter pattern (setErrorGuarded etc.) is already established in
-  // useAccountSetupController and useAddUserOpOwnerInstall. The attempt state here
-  // already uses ref-based in-flight guards; additional guarded wrappers can be
-  // added when specific long-OTP or bootstrap churn is observed.
   const wrapClass =
     step === 'done'
       ? 'mx-auto w-full max-w-none px-0 py-5 sm:py-8'
       : 'mx-auto w-full max-w-5xl px-4 py-6 sm:py-8'
+
   const activeReferralCode = useMemo(() => readStoredWaitlistReferralCode(), [])
-  const enterAppUrl = useMemo(() => buildAppEntryUrl(getAppBaseUrl()), [])
-  const waitlistRecoveryUrl = useMemo(() => getMarketingWaitlistEntryUrl(), [])
 
   // Stats polling (non-core auth; kept local for separation).
   useEffect(() => {
