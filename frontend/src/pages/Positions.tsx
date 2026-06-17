@@ -1133,7 +1133,7 @@ export function Positions() {
   }, [messagePanelCollapsed, messagePanelWidth, tradePanelCollapsed, tradePanelWidth])
 
   const beginResize = useCallback(
-    (side: 'left' | 'right') => (event: React.MouseEvent<HTMLDivElement>) => {
+    (side: 'left' | 'right') => (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault()
       resizeStateRef.current = {
         side,
@@ -1429,12 +1429,13 @@ export function Positions() {
                         <div className="pointer-events-none absolute bottom-0 left-1/2 top-0 -translate-x-1/2 w-px bg-white/10" />
                         <div>
                           {timelineTradeRowsWithSpacing.map(({ event, spacerPx }, index) => {
-                            const source = tradeSourceMeta(event.source)
+                            const source = tradeSourceMeta(event.source ?? 'host')
                             const marketCoin =
                               ((event.market ?? effectiveMarket).split('/')[0] ?? '').toUpperCase() || 'TOKEN'
                             const showRealizedPnl = event.action === 'close' || event.action === 'liquidated'
-                            const hasMeaningfulRealizedPnl = Math.abs(event.closedPnl ?? 0) >= 0.005
-                            const pnlClass = event.closedPnl >= 0 ? 'text-emerald-200' : 'text-rose-200'
+                            const closedPnl = event.closedPnl ?? 0
+                            const hasMeaningfulRealizedPnl = Math.abs(closedPnl) >= 0.005
+                            const pnlClass = closedPnl >= 0 ? 'text-emerald-200' : 'text-rose-200'
                             const summaryLine = buildTradeSummaryLine(event, marketCoin)
                             const hasHostLifecycleConnector = timelineLifecycleConnectorRanges.host.some(
                               (range) => index >= range.start && index < range.end,
@@ -1493,8 +1494,8 @@ export function Positions() {
                                     </a>
                                     {showRealizedPnl && hasMeaningfulRealizedPnl ? (
                                       <span className={`relative z-[1] shrink-0 whitespace-nowrap text-[11px] font-medium ${pnlClass}`}>
-                                        {event.closedPnl >= 0 ? '+' : '-'}
-                                        {formatCompactUsd(Math.abs(event.closedPnl))}
+                                        {closedPnl >= 0 ? '+' : '-'}
+                                        {formatCompactUsd(Math.abs(closedPnl))}
                                       </span>
                                     ) : null}
                                   </div>

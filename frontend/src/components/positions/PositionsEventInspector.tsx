@@ -197,7 +197,7 @@ export function PositionsEventInspector(props: {
             <div className="text-zinc-300">
               Lane:{' '}
               {(() => {
-                const source = tradeSourceMeta(event.source)
+                const source = tradeSourceMeta(event.source ?? 'host')
                 return (
                   <a
                     href={source.href}
