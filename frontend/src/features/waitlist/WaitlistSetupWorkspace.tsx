@@ -1,15 +1,22 @@
-import { useCallback, useMemo, useState } from 'react'
+import { Suspense, lazy, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokens/tokenSymbols'
-import { AccountSetupWorkspaceView } from '@/features/accountSetup/AccountSetupWorkspaceView'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
-import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
-import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
-import { WalletProviders } from '@/web3/Web3Providers'
+import { LoadingInline } from '@/components/ui/LoadingState'
 import { WaitlistUnlocksPanel } from './WaitlistUnlocksPanel'
-import { WaitlistGroupChatPanel } from './WaitlistGroupChatPanel'
 import { WaitlistWorkspaceHeader } from './WaitlistWorkspaceHeader'
 import { WaitlistLeaderboardPanel } from './WaitlistLeaderboardPanel'
+import { isWaitlistStepTwoSigningComplete } from './waitlistFlowState'
+
+const LazyWaitlistAdvancedSetup = lazy(async () => {
+  const mod = await import('./WaitlistAdvancedSetup')
+  return { default: mod.WaitlistAdvancedSetup }
+})
+
+const LazyWaitlistGroupChatPanel = lazy(async () => {
+  const mod = await import('./WaitlistGroupChatPanel')
+  return { default: mod.WaitlistGroupChatPanel }
+})
 
 type WaitlistSetupWorkspaceProps = {
   initialAccount: AccountSetupMe
@@ -23,14 +30,6 @@ type WaitlistSetupWorkspaceProps = {
 }
 
 export function WaitlistSetupWorkspace(props: WaitlistSetupWorkspaceProps) {
-  return (
-    <WalletProviders reconnectOnMount={false}>
-      <WaitlistSetupWorkspaceContent {...props} />
-    </WalletProviders>
-  )
-}
-
-function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
   const {
     initialAccount,
     canEnterApp,
@@ -41,99 +40,86 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
     onRepairSession,
     repairBusy = false,
   } = props
-  const controller = useAccountSetupController({
-    initialData: { me: initialAccount, zoraStatus: null },
-    zoraReturnPath: '/waitlist',
-  })
-  const [signingStepComplete, setSigningStepComplete] = useState(false)
-  const onSigningStepCompleteChange = useCallback((complete: boolean) => {
-    setSigningStepComplete(complete)
-  }, [])
-  const waitlistJoined = initialAccount.emailVerified === true
-  const setupComplete = controller.zoraLinked && Boolean(controller.canonicalCswAddress)
-  const canEnterNow = canEnterApp
-  const inBaseApp = useMemo(() => isBaseAppInAppContext(), [])
-  const showWorkspaceHeader = waitlistJoined && !(inBaseApp && !signingStepComplete)
-  // Chat room surface is available on waitlist once email verified (for desktop) or after wallet signing step (Base App).
-  // The panel internally gates interactive join on signingReady; this just mounts the teaser / connect UI.
-  const chatEnabled = waitlistJoined && (!inBaseApp || signingStepComplete)
-
-  const primaryColumnActions = (
-    <div className="space-y-4">
-      <section
-        aria-label="Waitlist points actions"
-        className="px-0 py-0"
-      >
-        <WaitlistUnlocksPanel
-          score={controller.me?.score ?? initialAccount.score}
-          email={controller.me?.email ?? initialAccount.email}
-          linkedMethods={controller.me?.linkedMethods ?? initialAccount.linkedMethods}
-          busyProvider={controller.busyProvider}
-          onLinkProvider={controller.onLinkProvider}
-          zoraHandle={controller.me?.accountSignals?.zoraHandle ?? initialAccount.accountSignals?.zoraHandle ?? null}
-          canonicalCswAddress={
-            controller.me?.accountSignals?.canonicalCswAddress ??
-            initialAccount.accountSignals?.canonicalCswAddress ??
-            null
-          }
-          signingStepComplete={signingStepComplete}
-        />
-      </section>
-
-      {canEnterNow ? (
-        <section aria-label="App access" className="space-y-2">
-          <Button
-            type="button"
-            variant="primary"
-            onClick={() => void onEnterApp()}
-            disabled={completionBusy}
-            loading={completionBusy}
-            className="w-full disabled:grayscale"
-          >
-            {`${SHARE_SYMBOL_PREFIX} Enter App`}
-          </Button>
-          {!setupComplete ? (
-            <p className="text-xs text-zinc-500">
-              Complete optional setup below for the best in-app experience.
-            </p>
-          ) : null}
-        </section>
-      ) : waitlistJoined ? (
-        <section aria-label="Approval status" className="space-y-2">
-          <p className="text-sm text-zinc-300">Waiting for approval.</p>
-          <p className="text-xs text-zinc-500 lg:hidden">
-            Open the leaderboard section below to see where you rank.
-          </p>
-        </section>
-      ) : null}
-    </div>
+  const initialSigningReady = useMemo(
+    () =>
+      isWaitlistStepTwoSigningComplete({
+        ownerInstallRequested: false,
+        accountSignals: initialAccount.accountSignals,
+        subAccountFlowEnabled: true,
+      }),
+    [initialAccount.accountSignals],
   )
-
-  const gridClass = chatEnabled
-    ? 'grid grid-cols-1 gap-5 xl:grid-cols-[minmax(260px,300px)_minmax(0,1fr)_minmax(300px,360px)] xl:items-start xl:gap-6'
-    : 'grid grid-cols-1 gap-5 xl:grid-cols-[minmax(260px,300px)_minmax(0,1fr)] xl:items-start xl:gap-6'
+  const [signingStepComplete, setSigningStepComplete] = useState(initialSigningReady)
+  const [showAdvancedSetup, setShowAdvancedSetup] = useState(false)
+  const [showChat, setShowChat] = useState(false)
+  const waitlistJoined = initialAccount.emailVerified === true
 
   return (
     <div className="mx-auto w-full max-w-[1380px] space-y-5 px-3 sm:space-y-6 sm:px-4">
-      {showWorkspaceHeader ? (
+      {waitlistJoined ? (
         <WaitlistWorkspaceHeader
           canEnterApp={canEnterApp}
-          setupComplete={setupComplete}
+          setupComplete={signingStepComplete}
           showSetupHeading
         />
       ) : null}
 
-      <div className={gridClass}>
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(260px,300px)_minmax(0,1fr)] xl:items-start xl:gap-6">
         <WaitlistLeaderboardPanel layout="rail" />
 
         <div className="min-w-0 space-y-5">
-          <div className="mx-auto w-full max-w-[860px] lg:max-w-none">
-            <AccountSetupWorkspaceView
-              context="waitlist"
-              controller={controller}
-              onSigningStepCompleteChange={onSigningStepCompleteChange}
-              summaryActions={primaryColumnActions}
-              waitlistFooter={
+          <section className="mx-auto w-full max-w-[720px] space-y-5 rounded-3xl bg-black/20 px-4 py-5 ring-1 ring-white/[0.06] sm:px-5">
+            <WaitlistUnlocksPanel
+              score={initialAccount.score}
+              email={initialAccount.email}
+              linkedMethods={initialAccount.linkedMethods}
+              zoraHandle={initialAccount.accountSignals.zoraHandle}
+              canonicalCswAddress={initialAccount.accountSignals.canonicalCswAddress}
+              signingStepComplete={signingStepComplete}
+              showIdentityActions={false}
+            />
+
+            {canEnterApp ? (
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={() => void onEnterApp()}
+                  disabled={completionBusy}
+                  loading={completionBusy}
+                  className="w-full disabled:grayscale"
+                >
+                  {`${SHARE_SYMBOL_PREFIX} Enter App`}
+                </Button>
+                <p className="text-xs text-zinc-500">Optional setup can wait until after you enter.</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
+                <p>You're in. We'll notify you when your spot opens.</p>
+                <p className="mt-1 text-xs text-zinc-500">Share your referral link to move up the list.</p>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setShowAdvancedSetup((open) => !open)}
+                className="flex-1"
+              >
+                {showAdvancedSetup ? 'Hide account setup' : 'Optional account setup'}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setShowChat((open) => !open)}
+                className="flex-1"
+              >
+                {showChat ? 'Hide chat' : 'Open group chat'}
+              </Button>
+            </div>
+
+            <div className="flex justify-center pt-1">
                 <button
                   type="button"
                   onClick={() => void onSignOut()}
@@ -142,40 +128,43 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
                 >
                   {signOutBusy ? 'Signing out...' : 'Sign out'}
                 </button>
-              }
-            />
-          </div>
+            </div>
+          </section>
+
+          {showAdvancedSetup ? (
+            <section className="mx-auto w-full max-w-[720px]">
+              <Suspense fallback={<LoadingInline labelOverride="Loading account setup…" />}>
+                <LazyWaitlistAdvancedSetup
+                  initialAccount={initialAccount}
+                  canEnterApp={canEnterApp}
+                  completionBusy={completionBusy}
+                  onEnterApp={onEnterApp}
+                  onSignOut={onSignOut}
+                  signOutBusy={signOutBusy}
+                  onSigningStepCompleteChange={setSigningStepComplete}
+                />
+              </Suspense>
+            </section>
+          ) : null}
+
+          {showChat ? (
+            <section className="mx-auto w-full max-w-[720px]">
+              <Suspense fallback={<LoadingInline labelOverride="Loading waitlist chat…" />}>
+                <LazyWaitlistGroupChatPanel
+                  setupComplete={waitlistJoined}
+                  signingReady={signingStepComplete}
+                  layout="inline"
+                  onSignOut={onSignOut}
+                  signOutBusy={signOutBusy}
+                  onRepairSession={onRepairSession}
+                  repairBusy={repairBusy}
+                />
+              </Suspense>
+            </section>
+          ) : null}
 
           <WaitlistLeaderboardPanel layout="mobile" />
-
-          {chatEnabled ? (
-            <div className="lg:hidden">
-              <WaitlistGroupChatPanel
-                setupComplete={chatEnabled}
-                signingReady={signingStepComplete}
-                layout="mobile"
-                onSignOut={onSignOut}
-                signOutBusy={signOutBusy}
-                onRepairSession={onRepairSession}
-                repairBusy={repairBusy}
-              />
-            </div>
-          ) : null}
         </div>
-
-        {chatEnabled ? (
-          <aside className="hidden min-w-0 xl:block xl:sticky xl:top-4" aria-label="Waitlist group chat">
-            <WaitlistGroupChatPanel
-              setupComplete={chatEnabled}
-              signingReady={signingStepComplete}
-              layout="sidebar"
-              onSignOut={onSignOut}
-              signOutBusy={signOutBusy}
-              onRepairSession={onRepairSession}
-              repairBusy={repairBusy}
-            />
-          </aside>
-        ) : null}
       </div>
     </div>
   )

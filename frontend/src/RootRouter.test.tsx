@@ -21,7 +21,7 @@ vi.mock('@/lib/env/host', async () => {
 vi.mock('./App', () => ({
   default: () => <div data-testid="protected-app">protected app</div>,
 }))
-vi.mock('./web3/Web3Providers', () => ({
+vi.mock('./web3/AppQueryProvider', () => ({
   AppQueryProvider: ({ children }: { children: unknown }) => <>{children}</>,
 }))
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useLogin, usePrivy } from '@privy-io/react-auth'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
@@ -42,7 +42,6 @@ import {
 import { buildWaitlistEmailLoginOptions, buildWaitlistRecoveryLoginOptions } from './waitlistLoginOptions'
 import { type WaitlistEmailUi, canEnterAppFromAccountState, deriveWaitlistAuthUi } from './waitlistFlowUi'
 import { bridgePrivySession, createAuthHandoffCode } from './waitlistHandoff'
-import { WaitlistSetupWorkspace } from './WaitlistSetupWorkspace'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
 import { type WaitlistAccountsSummary } from './waitlistAccountTypes'
 import {
@@ -77,6 +76,11 @@ import {
   writeWaitlistAuthPending,
 } from './waitlistAuthPending'
 type AccountsSummary = WaitlistAccountsSummary
+
+const LazyWaitlistSetupWorkspace = lazy(async () => {
+  const mod = await import('./WaitlistSetupWorkspace')
+  return { default: mod.WaitlistSetupWorkspace }
+})
 
 type WaitlistStatsData = {
   signedUpCount: number
@@ -1278,6 +1282,20 @@ export function WaitlistFlow(props: {
   const canEnterApp = canEnterAppFromAccountState({
     appAccessStatus: account?.appAccessStatus ?? null,
   })
+  const setupWorkspace = account ? (
+    <Suspense fallback={<PixelWaveLoader name="wave-lr" size={20} color="rgb(var(--brand-primary))" />}>
+      <LazyWaitlistSetupWorkspace
+        initialAccount={account as AccountSetupMe}
+        canEnterApp={canEnterApp}
+        completionBusy={completionBusy}
+        onEnterApp={onEnterApp}
+        onSignOut={onSignOut}
+        signOutBusy={signOutBusy}
+        onRepairSession={onRepairSession}
+        repairBusy={sessionRepairBusy}
+      />
+    </Suspense>
+  ) : null
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -1418,16 +1436,7 @@ export function WaitlistFlow(props: {
           />
         ) : step === 'done' && account ? (
           <div key="done-static">
-            <WaitlistSetupWorkspace
-              initialAccount={account as AccountSetupMe}
-              canEnterApp={canEnterApp}
-              completionBusy={completionBusy}
-              onEnterApp={onEnterApp}
-              onSignOut={onSignOut}
-              signOutBusy={signOutBusy}
-              onRepairSession={onRepairSession}
-              repairBusy={sessionRepairBusy}
-            />
+            {setupWorkspace}
           </div>
         ) : null
       ) : (
@@ -1458,16 +1467,7 @@ export function WaitlistFlow(props: {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.22, ease: WAITLIST_EASE }}
             >
-              <WaitlistSetupWorkspace
-                initialAccount={account as AccountSetupMe}
-                canEnterApp={canEnterApp}
-                completionBusy={completionBusy}
-                onEnterApp={onEnterApp}
-                onSignOut={onSignOut}
-                signOutBusy={signOutBusy}
-                onRepairSession={onRepairSession}
-                repairBusy={sessionRepairBusy}
-              />
+              {setupWorkspace}
             </motion.div>
           ) : null}
         </AnimatePresence>

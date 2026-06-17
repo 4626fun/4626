@@ -1,45 +1,11 @@
 import { useEffect, type ReactNode } from 'react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { getAccount, watchAccount } from '@wagmi/core'
 import { WagmiProvider } from 'wagmi'
 import { wagmiConfig } from '@/config/wagmi'
 import { useDeferUntilAfterCommit } from '@/hooks/useDeferUntilMounted'
 import { applyChainBrandTheme, resolveChainBrandTheme } from '@/theme/chainBrandTheme'
-
-function isRateLimitedError(error: unknown): boolean {
-  const asAny = error as { status?: unknown; details?: unknown; shortMessage?: unknown; message?: unknown }
-  const status = Number(asAny?.status ?? NaN)
-  if (status === 429) return true
-  const message = String(
-    asAny?.details ??
-      asAny?.shortMessage ??
-      asAny?.message ??
-      '',
-  ).toLowerCase()
-  return (
-    message.includes('429') ||
-    message.includes('rate limit') ||
-    message.includes('too many requests')
-  )
-}
-
-// Single QueryClient instance
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5,
-      retry: (failureCount, error) => failureCount < 1 && !isRateLimitedError(error),
-    },
-  },
-})
-
-export function AppQueryProvider({ children }: { children: ReactNode }) {
-  return (
-    <QueryClientProvider client={queryClient}>
-      {children}
-    </QueryClientProvider>
-  )
-}
+import { AppQueryProvider } from './AppQueryProvider'
+export { AppQueryProvider } from './AppQueryProvider'
 
 export function WalletProviders({
   children,

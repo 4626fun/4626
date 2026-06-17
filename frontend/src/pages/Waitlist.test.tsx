@@ -11,7 +11,7 @@ vi.mock('@/lib/privy/client', () => ({
   usePrivyClientStatus: () => mockPrivyClientStatus,
 }))
 
-vi.mock('@/web3/Web3Providers', () => ({
+vi.mock('@/web3/AppQueryProvider', () => ({
   AppQueryProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }))
 

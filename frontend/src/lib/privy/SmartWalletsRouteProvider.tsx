@@ -1,7 +1,11 @@
-import type { ReactNode } from 'react'
+import { Suspense, lazy, type ReactNode } from 'react'
 import { usePrivy } from '@privy-io/react-auth'
-import { SmartWalletsProvider } from '@privy-io/react-auth/smart-wallets'
 import { usePrivyClientStatus } from './client'
+
+const LazySmartWalletsProvider = lazy(async () => {
+  const mod = await import('@privy-io/react-auth/smart-wallets')
+  return { default: mod.SmartWalletsProvider }
+})
 
 /**
  * Route-scoped SmartWallets provider.
@@ -16,5 +20,9 @@ export function SmartWalletsRouteProvider({ children }: { children: ReactNode })
   // Otherwise Privy can log/throw "User must be authenticated before migrating wallets"
   // during waitlist step 1 and interfere with the email-only bootstrap lane.
   if (status !== 'ready' || !authenticated) return <>{children}</>
-  return <SmartWalletsProvider>{children}</SmartWalletsProvider>
+  return (
+    <Suspense fallback={null}>
+      <LazySmartWalletsProvider>{children}</LazySmartWalletsProvider>
+    </Suspense>
+  )
 }

@@ -9,16 +9,32 @@ import {
 import { isPublicSiteMode } from '@/lib/flags/flags'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
 import { PageTransitionOutlet } from '@/components/layout/PageTransition'
-import { FlagToolbarBridge } from '@/components/flags/FlagToolbarBridge'
-import { ChatProviderWithSessionRepair } from '@/lib/xmtp/ChatProviderWithSessionRepair'
-import { VaultNavBar } from '@/components/brand/VaultNavBar'
 import { requestOpenAccountTray } from '@/components/account/trayEvents'
-import { useAccountTrayPortfolio } from '@/components/account/useAccountTrayPortfolio'
-import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
+
+const LazyFlagToolbarBridge = lazy(async () => {
+  const mod = await import('@/components/flags/FlagToolbarBridge')
+  return { default: mod.FlagToolbarBridge }
+})
+
+const LazyVaultNavBar = lazy(async () => {
+  const mod = await import('@/components/brand/VaultNavBar')
+  return { default: mod.VaultNavBar }
+})
 
 const LazyChatSurface = lazy(async () => {
   const mod = await import('../chat/ChatSurface')
   return { default: mod.ChatSurface }
+})
+
+const LazyChatProviderWithSessionRepair = lazy(async () => {
+  const mod = await import('@/lib/xmtp/ChatProviderWithSessionRepair')
+  return { default: mod.ChatProviderWithSessionRepair }
+})
+
+const LazyLayoutWithSessionChrome = lazy(async () => {
+  const mod = await import('./LayoutWithSessionChrome')
+  return { default: mod.LayoutWithSessionChrome }
 })
 
 type MobileNavItem = {
@@ -53,18 +69,6 @@ function isActiveLink(location: { pathname: string; search?: string; hash?: stri
   return prefixes.some((p) => (p === '/' ? pathname === '/' : pathname === p || pathname.startsWith(`${p}/`)))
 }
 
-function isBaseInAppBrowser(): boolean {
-  if (typeof navigator === 'undefined') return false
-  const ua = navigator.userAgent.toLowerCase()
-  return (
-    ua.includes('coinbase') ||
-    ua.includes('cbios') ||
-    ua.includes('cbandroid') ||
-    ua.includes('baseapp') ||
-    ua.includes(' base/')
-  )
-}
-
 function formatUsdCompact(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return '--'
   const amount = Number(value)
@@ -90,21 +94,6 @@ const mobileNavLabelClass = (isActive: boolean) =>
     isActive ? 'font-semibold text-white' : 'font-medium text-current'
   }`
 
-function hasCoinbaseInjectedProvider(): boolean {
-  if (typeof window === 'undefined') return false
-  const ethereum = (window as any).ethereum
-  if (!ethereum) return false
-  if (Boolean(ethereum.isCoinbaseWallet)) return true
-  if (Array.isArray(ethereum.providers)) {
-    return ethereum.providers.some((provider: any) => Boolean(provider?.isCoinbaseWallet))
-  }
-  return false
-}
-
-function isBaseInAppContext(): boolean {
-  return isBaseInAppBrowser() || hasCoinbaseInjectedProvider()
-}
-
 function findScrollableAncestor(target: EventTarget | null): HTMLElement | null {
   if (typeof window === 'undefined' || typeof document === 'undefined') return null
   if (!(target instanceof Element)) return null
@@ -120,7 +109,7 @@ function findScrollableAncestor(target: EventTarget | null): HTMLElement | null 
   return null
 }
 
-type LayoutSessionChrome = {
+export type LayoutSessionChrome = {
   hasSession: boolean
   mobileWalletUsd: number | null
   mobileWalletLoading: boolean
@@ -130,35 +119,16 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
   const interactive = props.interactive ?? true
   const hostMode = getHostMode()
   if (interactive && hostMode === 'app') {
-    return <LayoutWithSessionChrome {...props} />
+    return (
+      <Suspense fallback={<LayoutFrame {...props} sessionChrome={null} />}>
+        <LazyLayoutWithSessionChrome {...props} />
+      </Suspense>
+    )
   }
   return <LayoutFrame {...props} sessionChrome={null} />
 }
 
-function LayoutWithSessionChrome(props: { interactive?: boolean; chatEnabled?: boolean }) {
-  const interactive = props.interactive ?? true
-  const hostMode = getHostMode()
-  const auth = useSiweAuth()
-  const location = useLocation()
-  const isWaitlistSurface = isMarketingWaitlistEntryLocation(location)
-  const { trayHoldings, isLoading: mobileWalletLoading } = useAccountTrayPortfolio({
-    enabled: interactive && hostMode === 'app' && !isWaitlistSurface,
-  })
-  const mobileWalletUsd = auth.hasSession ? trayHoldings.activeNetworkUsd : null
-
-  return (
-    <LayoutFrame
-      {...props}
-      sessionChrome={{
-        hasSession: auth.hasSession,
-        mobileWalletUsd,
-        mobileWalletLoading,
-      }}
-    />
-  )
-}
-
-function LayoutFrame(props: {
+export function LayoutFrame(props: {
   interactive?: boolean
   chatEnabled?: boolean
   sessionChrome: LayoutSessionChrome | null
@@ -174,7 +144,7 @@ function LayoutFrame(props: {
       ? getCanonicalMarketingWaitlistPath()
       : buildCanonicalMarketingWaitlistUrl(getMarketingBaseUrl())
   const [isMobileChatOverlayActive, setIsMobileChatOverlayActive] = useState(false)
-  const [hideMobileNavForBaseApp] = useState(() => isBaseInAppContext())
+  const [hideMobileNavForBaseApp] = useState(() => isBaseAppInAppContext())
   const isWaitlistSurface = isMarketingWaitlistEntryLocation(location)
   const showWaitlistFocusedShell = isWaitlistSurface
   const shouldOverlayMobileNav = location.pathname.startsWith('/explore')
@@ -301,7 +271,11 @@ function LayoutFrame(props: {
 
   return (
     <div className={`vault-shell relative flex min-h-0 flex-1 flex-col bg-transparent ${showWaitlistFocusedShell ? 'min-h-dvh' : ''}`}>
-      {showTopNavBar ? <VaultNavBar interactive={interactive} /> : null}
+      {showTopNavBar ? (
+        <Suspense fallback={null}>
+          <LazyVaultNavBar interactive={interactive} />
+        </Suspense>
+      ) : null}
 
       {/* Skip to content link */}
       <a
@@ -312,7 +286,8 @@ function LayoutFrame(props: {
       </a>
 
       {shouldEnableChat ? (
-        <ChatProviderWithSessionRepair>
+        <Suspense fallback={null}>
+          <LazyChatProviderWithSessionRepair>
           {/* Main */}
           <main id="main-content" className={`flex min-h-0 flex-1 flex-col overflow-x-clip ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
             <PageTransitionOutlet />
@@ -322,15 +297,19 @@ function LayoutFrame(props: {
           <Suspense fallback={null}>
             <LazyChatSurface />
           </Suspense>
-        </ChatProviderWithSessionRepair>
+          </LazyChatProviderWithSessionRepair>
+        </Suspense>
       ) : (
         <main id="main-content" className={`flex min-h-0 flex-1 flex-col overflow-x-clip ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
           <PageTransitionOutlet />
         </main>
       )}
 
-      {/* Vercel Flags Explorer bridge — exposes flag state to the Toolbar */}
-      <FlagToolbarBridge />
+      {interactive && !isWaitlistSurface ? (
+        <Suspense fallback={null}>
+          <LazyFlagToolbarBridge />
+        </Suspense>
+      ) : null}
 
       {/* Mobile Nav — floating dock */}
       <nav

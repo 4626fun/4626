@@ -16,6 +16,7 @@ type WaitlistUnlocksPanelProps = {
   zoraHandle?: string | null
   canonicalCswAddress?: string | null
   signingStepComplete?: boolean
+  showIdentityActions?: boolean
   className?: string
 }
 
@@ -32,6 +33,7 @@ export function WaitlistUnlocksPanel({
   zoraHandle = null,
   canonicalCswAddress = null,
   signingStepComplete = false,
+  showIdentityActions = true,
   className = '',
 }: WaitlistUnlocksPanelProps) {
   const referral = useMyReferralCode(email)
@@ -83,6 +85,7 @@ export function WaitlistUnlocksPanel({
         referralCode={referral.data?.referralCode ?? null}
         qualifiedCount={referral.data?.referrals.qualifiedCount ?? 0}
         pendingCount={referral.data?.referrals.pendingCount ?? 0}
+        showIdentityActions={showIdentityActions}
       />
     </div>
   )

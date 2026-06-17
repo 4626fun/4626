@@ -16,8 +16,8 @@ export function WaitlistWorkspaceHeader(props: WaitlistWorkspaceHeaderProps) {
   const subtitle = canEnterApp
     ? "Your spot is open — enter the app when you're ready. Points and chat stay here on the waitlist page."
     : setupComplete
-      ? "We'll notify you when your spot opens. Optional setup below unlocks swaps and chat sooner."
-      : 'Finish setup below to link your creator identity and wallet.'
+      ? "We'll notify you when your spot opens. You can keep earning points here."
+      : "We'll notify you when your spot opens. Account setup is optional while you wait."
 
   return (
     <header className="mx-auto max-w-4xl space-y-2 text-center">

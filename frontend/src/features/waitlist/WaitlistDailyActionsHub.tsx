@@ -21,6 +21,7 @@ type WaitlistDailyActionsHubProps = {
   referralCode: string | null
   qualifiedCount: number
   pendingCount: number
+  showIdentityActions?: boolean
 }
 
 type ApiEnvelope<T> = {
@@ -506,6 +507,7 @@ export function WaitlistDailyActionsHub(props: WaitlistDailyActionsHubProps) {
     referralCode,
     qualifiedCount,
     pendingCount,
+    showIdentityActions = true,
   } = props
 
   const hasLinkedTwitter = Array.isArray(linkedMethods.twitter) && linkedMethods.twitter.length > 0
@@ -516,29 +518,33 @@ export function WaitlistDailyActionsHub(props: WaitlistDailyActionsHubProps) {
 
   return (
     <div className="space-y-3">
-      <ZoraDailyCard
-        linked={hasLinkedZora}
-        busy={busyProvider === 'zora_cross_app'}
-        zoraHandle={zoraHandle}
-        canonicalCswAddress={canonicalCswAddress}
-        signingStepComplete={signingStepComplete}
-        onLinkProvider={onLinkProvider}
-      />
-      <TwitterDailyCard
-        linked={hasLinkedTwitter}
-        zoraLinked={hasLinkedZora}
-        busy={busyProvider === 'twitter'}
-        onLinkProvider={onLinkProvider}
-      />
-      <FarcasterDailyCard linked={hasLinkedZora} shareUrl={shareUrl} />
-      <TelegramDailyCard
-        linked={hasLinkedTelegram}
-        busy={busyProvider === 'telegram'}
-        onLinkProvider={onLinkProvider}
-        telegramGroupUrl={telegramGroupUrl}
-        copiedPrompt={copiedPrompt}
-        onCopyTelegramPrompt={onCopyTelegramPrompt}
-      />
+      {showIdentityActions ? (
+        <>
+          <ZoraDailyCard
+            linked={hasLinkedZora}
+            busy={busyProvider === 'zora_cross_app'}
+            zoraHandle={zoraHandle}
+            canonicalCswAddress={canonicalCswAddress}
+            signingStepComplete={signingStepComplete}
+            onLinkProvider={onLinkProvider}
+          />
+          <TwitterDailyCard
+            linked={hasLinkedTwitter}
+            zoraLinked={hasLinkedZora}
+            busy={busyProvider === 'twitter'}
+            onLinkProvider={onLinkProvider}
+          />
+          <FarcasterDailyCard linked={hasLinkedZora} shareUrl={shareUrl} />
+          <TelegramDailyCard
+            linked={hasLinkedTelegram}
+            busy={busyProvider === 'telegram'}
+            onLinkProvider={onLinkProvider}
+            telegramGroupUrl={telegramGroupUrl}
+            copiedPrompt={copiedPrompt}
+            onCopyTelegramPrompt={onCopyTelegramPrompt}
+          />
+        </>
+      ) : null}
       <ReferralCard referralCode={referralCode} qualifiedCount={qualifiedCount} pendingCount={pendingCount} />
     </div>
   )

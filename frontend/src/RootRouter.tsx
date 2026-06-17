@@ -6,8 +6,7 @@ import { MarketingWaitlistRoute } from '@/app/routeGuards'
 import { AppCanvas } from '@/components/layout/AppCanvas'
 import { AppLoadingOverlay, AppLoadingProvider, AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { Layout } from '@/components/layout/Layout'
-import App from './App'
-import { AppQueryProvider } from './web3/Web3Providers'
+import { AppQueryProvider } from './web3/AppQueryProvider'
 
 function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof TModule>(
   loader: () => Promise<TModule>,
@@ -29,6 +28,7 @@ const WaitlistInviteEntry = lazyNamed(
   'WaitlistInviteEntry',
 )
 const Waitlist = lazyNamed(() => import('./pages/Waitlist'), 'Waitlist')
+const App = lazyNamed(() => import('./App'), 'default')
 
 function ProtectedAppBoundary() {
   return (

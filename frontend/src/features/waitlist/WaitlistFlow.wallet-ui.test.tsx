@@ -224,7 +224,7 @@ async function continueIntoWaitlistSetup() {
     await continueWaitlist()
   }
   expect(await screen.findByRole('heading', { name: /you're on the waitlist/i }, { timeout: 8_000 })).toBeTruthy()
-  expect(await screen.findByRole('heading', { name: /activate your account/i })).toBeTruthy()
+  expect(await screen.findByRole('button', { name: /optional account setup/i })).toBeTruthy()
 }
 
 const WAITLIST_ACCOUNT = {
@@ -388,7 +388,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     expect(onSignOut).toHaveBeenCalledTimes(1)
   })
 
-  it('renders a setup-first workspace for verified users instead of a CTA-only completion state', async () => {
+  it('renders the waitlist workspace for verified users instead of returning to the auth CTA', async () => {
     mockPrivyAuthenticated = true
     render(
       <MemoryRouter>
@@ -401,7 +401,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     expect(screen.queryByRole('button', { name: /continue with email/i })).toBeNull()
   })
 
-  it('shows a single setup title after entering the waitlist setup workspace', async () => {
+  it('keeps account setup optional after entering the waitlist workspace', async () => {
     mockPrivyAuthenticated = true
     render(
       <MemoryRouter>
@@ -410,7 +410,8 @@ describe('WaitlistFlow simplified completion UI', () => {
     )
 
     await continueIntoWaitlistSetup()
-    expect(screen.getAllByRole('heading', { name: /activate your account/i })).toHaveLength(1)
+    expect(screen.queryByRole('heading', { name: /activate your account/i })).toBeNull()
+    expect(screen.getAllByRole('button', { name: /optional account setup/i })).toHaveLength(1)
   })
 
   it('keeps waitlist workspace focused and hides advanced settings action', async () => {
@@ -426,7 +427,7 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByRole('heading', { name: /activate your account/i })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: /you're on the waitlist/i })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /account settings/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /advanced account settings/i })).toBeNull()
   })
@@ -444,7 +445,7 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByRole('heading', { name: /activate your account/i })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: /you're approved/i })).toBeTruthy()
     expect(await screen.findByRole('button', { name: /enter app/i })).toBeTruthy()
   })
 
@@ -720,7 +721,7 @@ describe('WaitlistFlow simplified completion UI', () => {
       expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     }, { timeout: 7_000 })
     await waitFor(() => {
-      expect(screen.getByText(/activate your account/i)).toBeTruthy()
+      expect(screen.getByRole('heading', { name: /you're on the waitlist/i })).toBeTruthy()
     }, { timeout: 7_000 })
     expect(bootstrapCalls).toBeLessThanOrEqual(3)
     expect(screen.queryByText(/sign-in session is still finalizing/i)).toBeNull()

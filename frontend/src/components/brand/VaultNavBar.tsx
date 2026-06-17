@@ -1,10 +1,7 @@
-import { Component, type ReactNode, useState } from 'react'
+import { Component, Suspense, lazy, type ReactNode, useState } from 'react'
 import { Search } from 'lucide-react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 
-import { ConnectButton } from '@/components/account/ConnectButton'
-import { useAdminStatusFromSession } from '@/hooks/useAdminStatus'
-import { useSiweAuth } from '@/hooks/useSiweAuth'
 import {
   buildCanonicalMarketingWaitlistUrl,
   getCanonicalMarketingWaitlistPath,
@@ -13,6 +10,16 @@ import { isPublicSiteMode } from '@/lib/flags/flags'
 import { getHostMode, getMarketingBaseUrl, MARKETING_ORIGIN } from '@/lib/env/host'
 import { Logo } from './Logo'
 import { TextScramble } from './TextScramble'
+
+const LazyConnectButton = lazy(async () => {
+  const mod = await import('@/components/account/ConnectButton')
+  return { default: mod.ConnectButton }
+})
+
+const LazyVaultNavBarWithAdminStatus = lazy(async () => {
+  const mod = await import('./VaultNavBarWithAdminStatus')
+  return { default: mod.VaultNavBarWithAdminStatus }
+})
 
 type NavItem = {
   label: string
@@ -67,7 +74,7 @@ function isActiveLink(location: { pathname: string }, item: NavItem): boolean {
   return prefixes.some((p) => (p === '/' ? pathname === '/' : pathname === p || pathname.startsWith(`${p}/`)))
 }
 
-type VaultNavBarContentProps = {
+export type VaultNavBarContentProps = {
   interactive: boolean
   location: { pathname: string }
   publicMode: boolean
@@ -75,7 +82,7 @@ type VaultNavBarContentProps = {
   isAdmin: boolean
 }
 
-function VaultNavBarContent(props: VaultNavBarContentProps) {
+export function VaultNavBarContent(props: VaultNavBarContentProps) {
   const { interactive, location, publicMode, hostMode, isAdmin } = props
   const [searchParams, setSearchParams] = useSearchParams()
   const [brandHovered, setBrandHovered] = useState(false)
@@ -223,28 +230,15 @@ function VaultNavBarContent(props: VaultNavBarContentProps) {
         {showConnect ? (
           <div className="flex shrink-0 items-center gap-2">
             <NavConnectButtonBoundary>
-              <ConnectButton variant="nav" />
+              <Suspense fallback={null}>
+                <LazyConnectButton variant="nav" />
+              </Suspense>
             </NavConnectButtonBoundary>
           </div>
         ) : null}
       </div>
     </header>
   )
-}
-
-function VaultNavBarWithAdminStatus(props: {
-  interactive: boolean
-  location: { pathname: string }
-  publicMode: boolean
-  hostMode: ReturnType<typeof getHostMode>
-}) {
-  const siwe = useSiweAuth()
-  const adminStatus = useAdminStatusFromSession({
-    authAddress: typeof siwe.authAddress === 'string' ? siwe.authAddress : null,
-    sessionHydrated: siwe.sessionHydrated,
-  })
-
-  return <VaultNavBarContent {...props} isAdmin={adminStatus.isAdmin} />
 }
 
 export function VaultNavBar(props: { interactive?: boolean }) {
@@ -255,12 +249,14 @@ export function VaultNavBar(props: { interactive?: boolean }) {
   const shouldLoadAdminStatus = interactive && hostMode !== 'marketing' && !publicMode
   if (shouldLoadAdminStatus) {
     return (
-      <VaultNavBarWithAdminStatus
-        interactive={interactive}
-        location={location}
-        publicMode={publicMode}
-        hostMode={hostMode}
-      />
+      <Suspense fallback={<VaultNavBarContent interactive={interactive} location={location} publicMode={publicMode} hostMode={hostMode} isAdmin={false} />}>
+        <LazyVaultNavBarWithAdminStatus
+          interactive={interactive}
+          location={location}
+          publicMode={publicMode}
+          hostMode={hostMode}
+        />
+      </Suspense>
     )
   }
 

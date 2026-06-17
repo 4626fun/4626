@@ -56,17 +56,6 @@ const POLYGON_RPC_PROXY = IS_BROWSER ? '/api/rpc?chain=polygon' : ''
 const ENABLE_INJECTED_CONNECTOR = injectedConnectorFlag()
 const RPC_PROXY_PREFIX = '/api/rpc?chain='
 
-function isWaitlistAuthPath(pathname: string): boolean {
-  const path = String(pathname || '').trim().toLowerCase()
-  if (!path) return false
-  return (
-    path === '/waitlist' ||
-    path.startsWith('/waitlist/') ||
-    path.startsWith('/r/') ||
-    path.startsWith('/telegram/')
-  )
-}
-
 function uniqueNonEmptyStrings(values: Array<string | undefined | null>): string[] {
   const out: string[] = []
   const seen = new Set<string>()
@@ -248,23 +237,7 @@ const POLYGON_READ_RPC_URLS = uniqueNonEmptyStrings(
 )
 
 function buildConnectors() {
-  const onWaitlistAuthPath = IS_BROWSER && isWaitlistAuthPath(window.location.pathname)
   const providerCollision = detectEthereumProviderCollision()
-
-  // Waitlist/email auth routes need NO wagmi connectors. Email OTP is handled
-  // entirely by Privy's SDK; WagmiProvider is not mounted on /waitlist (only
-  // AppQueryProvider is). Instantiating coinbaseWallet() here would inject the
-  // Coinbase Wallet SDK, which dispatches EIP-6963 announceProvider/requestProvider
-  // events that wake installed EVM extensions (Rabby/MetaMask/Brave/etc). Those
-  // extensions then race to assign window.ethereum, producing the
-  // "Cannot set property ethereum ... which has only a getter",
-  // "Cannot redefine property: ethereum", and "injected is not defined" errors
-  // that destabilize the email OTP bootstrap and trigger the redirect loop.
-  // Wagmi connectors are only needed once the user reaches the setup workspace
-  // (WaitlistGroupChatSurface), which mounts under a different provider tree.
-  if (onWaitlistAuthPath) {
-    return [] as any
-  }
 
   const baseConnectors: any[] = [
     coinbaseWallet({
