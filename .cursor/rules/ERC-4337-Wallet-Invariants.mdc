@@ -38,3 +38,13 @@ The canonical asset-holding account above does not automatically equal the ERC-4
 - Asset checks, balance reads, and owner index resolution always use the parent CSW (`profiles.csw_address`), regardless of which track is executing.
 - **`shouldApplyCanonicalEnforcement`** applies when the active canonical or execution wallet equals `CANONICAL_CSW_ADDRESS` (same address as that account's `profiles.csw_address`). Allowlisted admin EOAs operating a different account's CSW must not trigger 4626 policy gates.
 - If you are unsure which track applies to a code path, check whether the caller is a wagmi/Privy connector in the user's browser (user-initiated frontend) or a server/agent surface (server-side). When in doubt, do not fall back silently — surface the ambiguity.
+
+## Canonical CSW test selection
+
+When testing canonical CSW identity, distinguish three layers and prefer adding coverage at the layer that is currently untested:
+
+1. **Policy constants and allowlists** — `CANONICAL_CSW_ADDRESS`, `CANONICAL_CSW_ALLOWED_OWNER_EOAS`, `isCanonicalCsw`, `isAllowedOwnerEoa`, `shouldApplyCanonicalEnforcement` (in `frontend/src/wallet/canonicalWalletPolicy.ts`).
+2. **Address resolvers** — client/server canonical CSW or XMTP inbox resolvers such as `resolveClientAgentXmtpAddress` (`frontend/src/lib/xmtp/agentXmtpAddress.ts`) and `resolveServerAgentInboxAddress` (`frontend/server/_lib/wallet/canonicalCswEnv.ts`).
+3. **Consumers** — chat identity (`getAgentIdentity` in `frontend/src/components/chat/agentIdentity.ts`), swap execution gates, deploy eligibility, and signer gates.
+
+If resolver tests already exist, prefer adding coverage at the consumer layer. The invariant under test is that the canonical CSW identity is never conflated with a delegated signer (Privy embedded EOA, Privy server wallet, or admin EOA). See `AGENTS.md` § Regression test quality for assertion-strength guidance.

@@ -48,6 +48,68 @@ Canonical maintainer references:
 - **Telegram link-start tokens must be single-use, claim-bound, and consumed on success.** Do not leave link intents replayable across users or sessions until expiry.
 - **Group-scoped Telegram message actions must be owner-scoped.** Deletion, refresh, pause, or other controls on shared bot messages and live cards must only be executable by the actor who created or owns that surface, unless product explicitly wants collaborative controls.
 
+### Agent validation and editing discipline
+
+These are repo-level process rules for any agent (cloud or local) editing this codebase. They exist to prevent the repeatable failure modes observed during model confidence tests.
+
+#### Validation honesty
+
+Agents must report validation results exactly.
+
+- If a command fails, say it failed. Include the exact command, exit code, and error text.
+- If the failure appears unrelated or pre-existing, identify it as "failed with likely pre-existing error" and include the exact file, line, and error message. Do not claim the gate passed.
+- Do not summarize a failed gate as passed, even if the failure is in a file you did not touch. A targeted test passing does not imply `typecheck`, `lint`, or the full suite passed.
+- Do not omit failed validation commands from the final report. Every validation command run must appear in the results section with its actual outcome.
+- When a multi-stage command (e.g. `tsc ... && tsc ...`) short-circuits, fixing the first stage can surface previously-masked errors in the second stage. Report the newly-surfaced errors honestly as pre-existing if they predate your change, and do not claim the overall command passed until both stages are clean.
+
+#### Pre-edit checkpoint for wallet / auth / XMTP / deploy / swap / canonical-CSW changes
+
+Before editing files in wallet, auth, XMTP, deploy-session, swap execution, or canonical CSW code, an agent must summarize (in its response or plan, before any edit):
+
+1. Exact invariant being changed or tested.
+2. Files inspected (with paths).
+3. File(s) proposed for modification (with paths).
+4. Why the change is the smallest safe diff.
+5. Whether the change is test-only or production code.
+6. Targeted validation command to run first (e.g. `pnpm -C frontend exec vitest run <file>`).
+
+Do not edit until this checkpoint is complete. This is especially important in 4626 because user-initiated frontend execution and server-side deploy-session execution are intentionally orthogonal (see `.cursor/rules/ERC-4337-Wallet-Invariants.mdc` § Execution address depends on the execution track). A change that blurs that boundary can route sponsored swaps through the wrong sender or gate legitimate frontend execution behind server-session checks.
+
+#### Regression test quality
+
+For invariant tests, prefer concrete behavior assertions over prose/string assertions.
+
+Strong assertions include:
+
+- return value shape (e.g. `{ name, avatar } | null`)
+- routing mode and fallback mode
+- sender identity and execution method
+- called/not-called boundary mocks (e.g. `sendCoinbaseSmartWalletUserOperation` not called for sub-account sends)
+- env precedence (override honored, invalid override ignored)
+- consumer behavior (e.g. `getAgentIdentity` returns `null` for a Privy embedded EOA)
+
+Weak assertions include:
+
+- checking only that a debug `reason` string contains or omits words
+- testing comments, labels, or incidental wording
+- adding broad tests that do not fail for the intended regression
+
+If a resolver is already tested, prefer testing an untested consumer of that resolver rather than duplicating resolver-level coverage. For routing boundaries, assert mode / sender / method / called-not-called behavior where the code under test supports it.
+
+#### Local LLM / provider configuration isolation
+
+Local development model configuration for Cursor, Aider, Hugging Face Router, OpenAI-compatible endpoints, or BYOK must not modify production runtime behavior.
+
+Do not change:
+
+- Hermit runtime model config (`HERMIT_AGENT_*`, `/api/hermit/draft` provider wiring)
+- Eliza runtime model config
+- XMTP production agent behavior
+- deploy-session runtime model/provider settings
+- production env names for canonical CSW, Privy, XMTP, or paymaster behavior
+
+If a user asks to configure a local coding assistant, limit changes to local docs, ignored local env examples, or user-specific editor settings. This matches the existing distinction: the Hugging Face Inference Router is for local Cursor/Aider only (`OPENAI_API_BASE=https://router.huggingface.co/v1` in shell profile or Cursor Settings), not for production Hermit/Eliza lanes.
+
 ### Running services
 
 - **Frontend**: `cd frontend && pnpm dev` starts Vite at `http://localhost:5173/`. Hot-reloads on file changes. The app is in waitlist mode by default — unauthenticated routes redirect to `/` or show the waitlist modal.
@@ -403,6 +465,7 @@ Keeper bots in `kpr/` relay data between Solana and Base. Install: `cd kpr && np
 - When asked to restart local dev servers or complete local ops (kill old Vite/Anvil, run `pnpm -C frontend run dev:deploy-dry-run`, verify WASM/ports), execute those steps directly rather than only pasting commands.
 - For KPR deprecation work, prefer hard-cut sunset execution (remove references/docs/workflows) over compatibility shims unless explicitly requested.
 - For ad-hoc 3D model generation tasks (for example hologram GLBs), prefer the user's Hugging Face API/Space path over alternate providers unless they explicitly request a different provider.
+- For Hugging Face Inference Router as a local Cursor/Aider coding model, configure `OPENAI_API_BASE=https://router.huggingface.co/v1` and the HF token in shell profile or Cursor Settings only — do not add setup blocks to root `.env.example`, and never replace `frontend/.env` `OPENAI_API_KEY` (OpenAI image/Eliza lanes).
 - For CSW owner-setup and deploy flows, prefer click-first Base App deep-link/prolink or parent-CSW Relay owner-install (`/waitlist?setup=owner-install`, `AddOwnerSigningPanel`) — not app sub-account owner targets. Avoid external-EOA fallback paths, and if canonical signing is unavailable, fail with explicit guidance rather than forcing long manual EOA signature sequences.
 - On Deploy UI surfaces, prefer a canonical always-visible stage timeline with plain-language phase labels/status and explicit disabled states, rather than hiding or ambiguously marking stages as "optional." The Deploy Vault page uses the premium dark redesign (`DeployHero` with pills — top-right Base `NetworkBadge` removed, restyled deploy card, structured `role="alert"` "Deployment failed" card instead of raw red error dumps, presentation-only toasts watching existing state transitions) — styling passes must stay presentation-only and never touch deploy logic. Address rows render the **full untruncated address** (mono, wrapping) with copy/BaseScan icons — no click-to-expand. Separate **"Your contracts"** from protocol shared infrastructure structurally as **side-by-side two-column layouts** (protocol factories/modules/helpers in one column, the user's contracts in the other, with row baselines aligned across columns — pad missing per-column descriptions so rows line up); the emergency-safety wiring section uses the same two-column split. Attach **protocol/brand logos wherever possible** on contract rows (Base, Solana, Chainlink, Safe for treasury rows, Uniswap near the CCA auction phase) via `frontend/public/protocols/` + `PROTOCOL_LOGOS`/`manifest.json`. During dry-run/deploy, contract rows should update dynamically (green check per contract as it lands) and completed phases show a green **complete** pill. Keep the page borderless — separation via background tint, spacing, and typography; borders only on functional affordances (inputs, timeline nodes).
 - For bonding-curve visualizations, prefer green candlestick bodies for the bonding-curve spread with Sudoswap overlays, and keep direct chart interactions (mouse-wheel zoom around cursor plus click-drag horizontal panning).
@@ -483,6 +546,8 @@ Keeper bots in `kpr/` relay data between Solana and Base. Install: `cd kpr && np
 - **Sub-account execution track is flag-gated for swaps only.** When both `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` (server) and `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` (client) are set, `resolveExecutionTrack` (`frontend/server/_lib/wallet/executionTrack.ts`) may return `sub-account` for a distinct registered `profiles.base_sub_account`. Waitlist Step 2 shows `WaitlistConnectBaseApp` for Base App passkey CSWs; `/swap` may route through sub-account `wallet_sendCalls`. Deploy remains parent-CSW + `legacy-owner-install` only — do not promote sub-account as deploy sender. Zora users with EOA owners still use `AddOwnerSigningPanel` / `canonical4337`. When parent-CSW embedded-owner install is already complete, waitlist must skip sub-account UI (`parentCswSigningReady` on `WaitlistConnectBaseApp`) — sub-account is swap-only fallback, not a substitute for parent owner-install.
 - **`resolveWaitlistStep` must not regress verified users to email auth.** When email is verified but signing is incomplete, route to the `done` setup workspace (not `auth`). **`shouldAutoBootstrapWaitlistSession` stays false** — bootstrap runs only after explicit Continue, not on Privy auto-restore. When Privy marks authenticated but `login()` never resolves after email OTP, resume bootstrap from an auth-pending flag instead of leaving the full-screen "Loading…" overlay stuck.
 - **HttpOnly `cv_auth_session` ≠ Privy session.** Users can have a 4626 session cookie while `privyAuthenticated` is false; canonical `/swap` then shows **Privy sign-in required**. Restore Privy with email OTP (`signIn({ method: 'privy' })` / waitlist email), not Base-only wallet connect. In `useSiweAuth`, `preferBaseAccountWallet: true` must still call `setActiveWallet` after `connectWallet` and fall through to `login()` when no Privy access token is present — connecting Base alone does not load the embedded signer.
+- **Waitlist/chat/Zora session repair shares `frontend/src/lib/auth/sessionRepair.ts`.** Use `attemptSessionRepair` + `createStaleSessionProbe` (double-probe; true-stale only after `>= 2` misses with no live `cv_auth_session`) — a single null `getAccessToken()` after OTP is transient, not hard sign-out. XMTP mounts repair via `useXmtpSessionRepair`/`ChatProviderWithSessionRepair`: one bounded repair + single `connect('user')` retry before embedded-signer expired copy. `ChatBar` Connect uses `connectBusy` with ~15s safety timer. Zora cross-app timeout/auth/collision failures degrade to read-only `resolveZoraReadOnlySignals` (`/api/zora/resolve`); `isWalletProviderCollisionError` must not count as stale session.
+- **Hugging Face Inference Router is local-only assistant config.** Repo code does not read `OPENAI_API_BASE`; Cursor/Aider use `https://router.huggingface.co/v1` via user shell env or Cursor Settings. Primary coding-model candidate: `Qwen/Qwen2.5-Coder-32B-Instruct` (fallbacks: `deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct`, `bigcode/starcoder2-15b`). Unrelated repo HF usage stays on `HF_TOKEN` (e.g. `generate_akita_3d_hf.py`).
 - **`useEnsurePrivyEmbeddedWallet` lives in `@/lib/privy/embeddedWallet`**, not under `@/hooks/`.
 - **Privy uses the custom auth domain `privy.4626.fun` with per-environment dashboard clients.** That domain must be present in the app CSP `frame-ancestors`/connect rules and in the Privy app's allowed domains/origins alongside `4626.fun`, `app.4626.fun`, localhost dev ports, and `web.telegram.org`. **Production CSP `connect-src` in `frontend/vercel.json` must include `https://privy.4626.fun` and `https://privy.app.4626.fun`** (not just `frame-src`/`child-src`) — the SDK's session-refresh fetches hit `https://privy.4626.fun/api/v1/sessions`, and blocking them leaves Privy init permanently stuck (loading overlay `held by: privy-init`); regression test in `alfaclubVercelWiring.test.ts` pins both domains in `connect-src`. Privy clients are environment-scoped (Local Dev / Production Web / Production Mobile) — a stale or mismatched `VITE_PRIVY_CLIENT_ID` in a running dev server surfaces as `Invalid app client ID` / "Something went wrong"; restart the dev server after `.env` Privy changes before debugging deeper. Cookies are enabled on the `4626.fun` base domain so sessions survive the marketing ↔ app host split.
 - **Privy on localhost runs through `loopbackSessionMarkerShim` with known limits.** The custom auth domain puts the SDK in server-cookie mode; on loopback those cookies are third-party, so the shim re-asserts the `privy-session` marker every 2s (loopback origins only). Localhost sessions do **not** survive a hard page reload, the embedded-signer iframe session lives ~1 hour, and Zora cross-app OAuth is structurally flaky on localhost — these are documented limitations, not bugs. **"Missing auth token" from inside the Privy embedded-wallet iframe** (raw digest signing, XMTP signers) means a stale/expired iframe session: page-side token refresh cannot fix it — only a real Privy logout + fresh email-OTP login re-seeds the iframe. `/swap` surfaces a "Sign in again to fix signing" recovery CTA for this, and refresh checks must decode the JWT `exp` (a truthy-but-expired token is a failed refresh, not success).
