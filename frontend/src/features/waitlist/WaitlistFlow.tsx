@@ -108,10 +108,9 @@ function WaitlistAuthStep(props: {
         }
   )
 
-  // Single source of truth for what this step shows. Exactly one status message
-  // renders at a time — never the old "Creating account… / Finishing sign-in… /
-  // this usually takes a few seconds" triple-stack.
-  const finalizing = error === SESSION_FINALIZING_RETRY_MESSAGE
+  // finalizing (boolean prop from the hook) is the single source of truth for the
+  // "finishing sign-in" phase. This prevents the old triple-stack flicker of different
+  // "setting up / finishing / takes a few seconds" messages.
   const working = privyAuthed && !recoveryRequired && (busy || finalizing)
   const visibleError =
     error && !finalizing && (!recoveryRequired || privyAuthed) ? error : null
@@ -152,11 +151,9 @@ function WaitlistAuthStep(props: {
               <div className="space-y-1.5">
                 <p className="text-sm font-medium text-white" role="status" aria-live="polite">
                   Setting up your account
-                  Setting up your account
                 </p>
                 {privyEmail ? <p className="text-xs text-zinc-500">{privyEmail}</p> : null}
               </div>
-              {finalizing && !busy ? (
               {finalizing && !busy ? (
                 <Button
                   type="button"
@@ -335,317 +332,22 @@ export function WaitlistFlow(props: {
     privyClientStatus,
   })
 
-  const onSignOut = useCallback(async () => {
-    if (signOutBusy) return
-    setSignOutBusy(true)
-    try {
-      await runWaitlistPrivyLogout({
-        logout: async () => {
-          await privy.logout().catch(() => null)
-        },
-        readToken: getAccessToken,
-        shouldLogout: privyAuthedRef.current,
-      })
-      await waitForPrivyLogoutSettlement().catch(() => undefined)
-      resetResolvedAccountState()
-      // Block auto-bootstrap until the user explicitly clicks Continue again.
-      authBootstrapAutoAttemptedRef.current = true
-      finalizingAutoRetryCountRef.current = 0
-      finalizingBackgroundRetryCountRef.current = 0
-      resetBootstrapCooldowns()
-      clearWaitlistRecoveryGate()
-      clearWaitlistAuthPending()
-      clearStoredWaitlistVerifiedEmailHint()
-      setStep('auth')
-      setBusy(false)
-      setRecoveryRequired(false)
-      setError(null)
-    } catch {
-      setError('Could not fully sign out. Please retry.')
-    } finally {
-      setSignOutBusy(false)
-    }
-  }, [
-    getAccessToken,
-    privy,
-    resetBootstrapCooldowns,
-    resetResolvedAccountState,
-    setBusy,
-    setError,
-    setRecoveryRequired,
-    signOutBusy,
-    waitForPrivyLogoutSettlement,
-  ])
+  const wrapClass =
+    step === 'done'
+      ? 'mx-auto w-full max-w-none px-0 py-5 sm:py-8'
+      : 'mx-auto w-full max-w-5xl px-4 py-6 sm:py-8'
 
-  const onRepairSession = useCallback(async (): Promise<boolean> => {
-    if (sessionRepairBusy) return false
-    setSessionRepairBusy(true)
-    try {
-      const token = await withTimeout(getAccessToken(), 4_000, 'Session refresh token').catch(() => null)
-      if (!token) {
-        const hasLiveCookie = privyAuthedRef.current
-        console.info('[auth-repair]', {
-          surface: 'waitlist',
-          transition: 'repair-token-miss',
-          outcome: hasLiveCookie ? 'transient' : 'true-stale',
-        })
-        if (!hasLiveCookie) {
-          setStep('auth')
-        }
-        return false
-      }
-
-      console.info('[auth-repair]', { surface: 'waitlist', transition: 'bridging' })
-      await withTimeout(bridgePrivySession(token), 6_000, 'Session bridge refresh').catch(() => undefined)
-      const next = await withTimeout(
-        requestBootstrap({ waitForTokenHydration: true }),
-        12_000,
-        'Session bootstrap refresh',
-      )
-      if (!next) {
-        // Even when bootstrap is briefly stale, token/session repair may still be enough
-        // for embedded-wallet reconnect paths to recover in-place.
-        console.info('[auth-repair]', { surface: 'waitlist', transition: 'repaired', outcome: 'repaired' })
-        setError(null)
-        staleSessionProbeRef.current?.reset()
-        return true
-      }
-
-      console.info('[auth-repair]', { surface: 'waitlist', transition: 'repaired', outcome: 'repaired' })
-      setRecoveryRequired(false)
-      setError(null)
-      staleSessionProbeRef.current?.reset()
-      return true
-    } catch (repairError: unknown) {
-      if (isSessionFinalizingError(repairError) || isStalePrivyTokenError(repairError)) {
-        console.info('[auth-repair]', { surface: 'waitlist', transition: 'bridge-error', outcome: 'transient' })
-        setError(SESSION_FINALIZING_RETRY_MESSAGE)
-      } else if (isTimeoutErrorMessage((repairError as { message?: unknown })?.message)) {
-        console.info('[auth-repair]', { surface: 'waitlist', transition: 'bridge-timeout', outcome: 'transient' })
-        setError('Session refresh timed out. Tap Refresh session once more.')
-      }
-      return false
-    } finally {
-      setSessionRepairBusy(false)
-    }
-  }, [getAccessToken, requestBootstrap, sessionRepairBusy, setError, setRecoveryRequired])
-
-  const navigateWithSessionHandoff = useCallback(
-    async (initialTarget: string) => {
-      let target = initialTarget
-      let privyToken: string | null = null
-
-      if (privyAuthed) {
-        privyToken = await getAccessToken().catch(() => null)
-        if (privyToken) {
-          // Establishes the cv_auth_session cookie on the marketing origin.
-          // We no longer receive a session token in JSON (FINDING-02); the
-          // subsequent createAuthHandoffCode call authenticates via that
-          // cookie via `withCredentials: true`.
-          await bridgePrivySession(privyToken)
-        }
-      }
-
-      if (target.startsWith('http') && typeof window !== 'undefined') {
-        try {
-          const parsed = new URL(target)
-          if (parsed.origin !== window.location.origin) {
-            const handoffCode = await createAuthHandoffCode({ privyToken })
-            if (handoffCode) {
-              parsed.searchParams.set(HANDOFF_QUERY_KEY, handoffCode)
-              target = parsed.toString()
-            }
-          }
-        } catch {
-          // Keep original target if URL parsing fails.
-        }
-        window.location.href = target
-        return
-      }
-
-      window.location.assign(target)
-    },
-    [getAccessToken, privyAuthed],
-  )
-
-  const onEnterApp = useCallback(async () => {
-    if (completionBusy) return
-    setCompletionBusy(true)
-    try {
-      await navigateWithSessionHandoff(enterAppUrl)
-    } finally {
-      setCompletionBusy(false)
-    }
-  }, [completionBusy, enterAppUrl, navigateWithSessionHandoff])
-
-  /**
-   * Privy can restore a cookie session that reports `authenticated` while its
-   * token mint is broken (stale custom-auth-domain state). Detect that with a
-   * bounded token probe so the flow resets instead of retrying forever.
-   */
-  const probeStalePrivyTokenSession = useCallback(async (): Promise<boolean> => {
-    if (!privyAuthedRef.current) {
-      staleSessionProbeRef.current?.reset()
-      return false
-    }
-    const probe = staleSessionProbeRef.current
-    if (!probe) return false
-    const outcome = await probe.probe()
-    console.info('[auth-repair]', {
-      surface: 'waitlist',
-      transition: 'probe',
-      outcome,
-      missCount: probe.missCount,
-    })
-    return outcome === 'true-stale'
-  }, [])
-
-  const resetStaleAuthenticatedPrivySession = useCallback(async (): Promise<void> => {
-    clearWaitlistAuthPending()
-    resetResolvedAccountState()
-    await runWaitlistPrivyLogout({
-      logout: async () => {
-        await privy.logout().catch(() => null)
-      },
-      // Force logout when token/session drift is detected; token probes can be stale.
-      shouldLogout: true,
-    })
-    setRecoveryRequired(false)
-    setError(WAITLIST_STALE_SESSION_RESET_MESSAGE)
-  }, [privy, resetResolvedAccountState, setError, setRecoveryRequired])
-
-  const resumePendingWaitlistAuth = useCallback(async () => {
-    clearWaitlistRecoveryGate()
-    setRecoveryRequired(false)
-    recoveryRequiredBootstrapCooldownUntilRef.current = 0
-    try {
-      await settleBootstrapAfterRecoverableLoginError({
-        bypassRecoveryCooldown: true,
-      })
-      clearWaitlistAuthPending()
-    } catch (bootstrapError: unknown) {
-      if (isStalePrivyTokenError(bootstrapError)) {
-        if (await probeStalePrivyTokenSession()) {
-          await resetStaleAuthenticatedPrivySession()
-          return
-        }
-        setError(SESSION_FINALIZING_RETRY_MESSAGE)
-        return
-      }
-      if (isSessionFinalizingError(bootstrapError)) {
-        if (await probeStalePrivyTokenSession()) {
-          await resetStaleAuthenticatedPrivySession()
-          return
-        }
-        setError(SESSION_FINALIZING_RETRY_MESSAGE)
-        return
-      }
-      const message =
-        typeof (bootstrapError as { message?: unknown })?.message === 'string'
-          ? String((bootstrapError as { message: string }).message)
-          : 'Failed to load account state.'
-      const isSessionMismatch = isSessionEmailMismatchError(message)
-      const isRecoveryRequired = isRecoveryRequiredAuthError(bootstrapError)
-      if (isSessionMismatch) {
-        resetResolvedAccountState()
-        if (!disableAggressiveSessionReset) {
-          await runWaitlistPrivyLogout({
-            logout: privyLogoutRef.current,
-            readToken: getAccessToken,
-            shouldLogout: shouldDestroyPrivySession,
-          })
-        }
-      }
-      if (isRecoveryRequired) {
-        writeWaitlistRecoveryGate(true)
-        clearWaitlistAuthPending()
-        setRecoveryRequired(true)
-        setError(
-          privyAuthed ? RECOVERY_REQUIRED_WHILE_PRIVY_AUTHED_MESSAGE : RECOVERY_REQUIRED_MESSAGE,
-        )
-        return
-      }
-      setError(
-        isSessionMismatch
-          ? SESSION_MISMATCH_MESSAGE
-          : isTransientWaitlistNetworkError(bootstrapError)
-            ? getWaitlistNetworkUnstableMessage()
-            : message,
-      )
-    }
-  }, [
-    disableAggressiveSessionReset,
-    getAccessToken,
-    privyAuthed,
-    probeStalePrivyTokenSession,
-    recoveryRequiredBootstrapCooldownUntilRef,
-    resetResolvedAccountState,
-    resetStaleAuthenticatedPrivySession,
-    setError,
-    setRecoveryRequired,
-    settleBootstrapAfterRecoverableLoginError,
-    shouldDestroyPrivySession,
-  ])
-
+  // Stats polling (non-core auth; kept local for separation).
   useEffect(() => {
-    if (step !== 'auth') return
-    if (recoveryHandoffInFlightRef.current) return
-    if (!privyAuthed || privyClientStatus !== 'ready') return
-    if (account?.emailVerified) return
-    if (recoveryRequired) return
-
-    // Privy can mark the session authenticated before `login()` resolves (email link / redirect).
-    if (authAttemptInFlightRef.current) {
-      if (recoveryHandoffInFlightRef.current) return
-      if (!loginAwaitInProgressRef.current || pendingAuthResumeStartedRef.current) return
-      pendingAuthResumeStartedRef.current = true
-      void (async () => {
-        try {
-          await resumePendingWaitlistAuth()
-        } finally {
-          endAuthAttempt()
-          pendingAuthResumeStartedRef.current = false
-        }
-      })()
-      return
-    }
-
-    if (privyAuthedBootstrapAttemptedRef.current) return
-    privyAuthedBootstrapAttemptedRef.current = true
-    authBootstrapAutoAttemptedRef.current = true
-
-    void (async () => {
-      setBusy(true)
-      setError((current) => (current === SESSION_FINALIZING_RETRY_MESSAGE ? current : null))
-      try {
-        await resumePendingWaitlistAuth()
-      } finally {
-        setBusy(false)
-      }
-    })()
-  }, [
-    account?.emailVerified,
-    authAttemptInFlightRef,
-    endAuthAttempt,
-    privyAuthed,
-    privyClientStatus,
-    recoveryRequired,
-    resumePendingWaitlistAuth,
-    setBusy,
-    setError,
-    step,
-  ])
-
-  const onTryDifferentEmail = useCallback(async () => {
-    await onSignOut()
-  }, [onSignOut])
-
-  useEffect(() => {
-    void fetchWaitlistStats()
-    const intervalId = window.setInterval(() => {
+    const runFetch = () => {
       void fetchWaitlistStats()
-    }, 30_000)
-    return () => window.clearInterval(intervalId)
+    }
+    const timeoutId = window.setTimeout(runFetch, 0)
+    const intervalId = window.setInterval(runFetch, 30_000)
+    return () => {
+      window.clearTimeout(timeoutId)
+      window.clearInterval(intervalId)
+    }
   }, [fetchWaitlistStats])
 
   const authRecoveryUiActive = recoveryRequired
@@ -671,116 +373,6 @@ export function WaitlistFlow(props: {
       />
     </Suspense>
   ) : null
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (step !== 'auth') return
-    if (busy) return
-    if (authAttemptInFlightRef.current) return
-    if (error !== SESSION_FINALIZING_RETRY_MESSAGE) return
-
-    let cancelled = false
-    const timeoutId = window.setTimeout(() => {
-      void (async () => {
-        try {
-          const next = await requestBootstrap({ waitForTokenHydration: true })
-          if (cancelled) return
-          if (next) {
-            finalizingBackgroundRetryCountRef.current = 0
-            setError(null)
-          } else {
-            finalizingBackgroundRetryCountRef.current += 1
-            if (finalizingBackgroundRetryCountRef.current >= FINALIZING_BACKGROUND_RETRY_MAX_ATTEMPTS) {
-              setError(WAITLIST_SPINNER_TIMEOUT_MESSAGE)
-            } else {
-              setError(SESSION_FINALIZING_RETRY_MESSAGE)
-            }
-          }
-        } catch (bootstrapError: unknown) {
-          if (cancelled) return
-          if (isStalePrivyTokenError(bootstrapError)) {
-            if (await probeStalePrivyTokenSession()) {
-              await resetStaleAuthenticatedPrivySession()
-              return
-            }
-            finalizingBackgroundRetryCountRef.current += 1
-            if (finalizingBackgroundRetryCountRef.current >= FINALIZING_BACKGROUND_RETRY_MAX_ATTEMPTS) {
-              setError(WAITLIST_SPINNER_TIMEOUT_MESSAGE)
-              return
-            }
-            setError(SESSION_FINALIZING_RETRY_MESSAGE)
-            return
-          }
-          if (isSessionFinalizingError(bootstrapError)) {
-            if (await probeStalePrivyTokenSession()) {
-              await resetStaleAuthenticatedPrivySession()
-              return
-            }
-            finalizingBackgroundRetryCountRef.current += 1
-            if (finalizingBackgroundRetryCountRef.current >= FINALIZING_BACKGROUND_RETRY_MAX_ATTEMPTS) {
-              setError(WAITLIST_SPINNER_TIMEOUT_MESSAGE)
-              return
-            }
-            setError(SESSION_FINALIZING_RETRY_MESSAGE)
-            return
-          }
-
-          finalizingBackgroundRetryCountRef.current = 0
-          const message =
-            typeof (bootstrapError as { message?: unknown })?.message === 'string'
-              ? String((bootstrapError as { message: string }).message)
-              : 'Failed to load account state.'
-          const isSessionMismatch = isSessionEmailMismatchError(message)
-          const isRecoveryRequired = isRecoveryRequiredAuthError(bootstrapError)
-
-          if (isSessionMismatch) {
-            resetResolvedAccountState()
-            if (!disableAggressiveSessionReset) {
-              await runWaitlistPrivyLogout({
-                logout: privyLogoutRef.current,
-                readToken: getAccessToken,
-                shouldLogout: shouldDestroyPrivySession,
-              })
-            }
-          }
-
-          if (isRecoveryRequired) {
-            writeWaitlistRecoveryGate(true)
-            setRecoveryRequired(true)
-            setError(
-              privyAuthed ? RECOVERY_REQUIRED_WHILE_PRIVY_AUTHED_MESSAGE : RECOVERY_REQUIRED_MESSAGE,
-            )
-            return
-          }
-
-          setError(isSessionMismatch ? SESSION_MISMATCH_MESSAGE : message)
-        } finally {
-          setBusy(false)
-        }
-      })()
-    }, FINALIZING_BACKGROUND_RETRY_MS)
-
-    return () => {
-      cancelled = true
-      window.clearTimeout(timeoutId)
-    }
-  }, [
-    authAttemptInFlightRef,
-    busy,
-    disableAggressiveSessionReset,
-    error,
-    getAccessToken,
-    privyAuthed,
-    probeStalePrivyTokenSession,
-    requestBootstrap,
-    resetResolvedAccountState,
-    resetStaleAuthenticatedPrivySession,
-    setBusy,
-    setError,
-    setRecoveryRequired,
-    shouldDestroyPrivySession,
-    step,
-  ])
 
   return (
     <AppLoadingBootstrapGate active={showAuthBootstrapLoader} label="waitlist-auth-bootstrap">
