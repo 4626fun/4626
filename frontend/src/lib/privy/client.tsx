@@ -163,11 +163,18 @@ export function PrivyClientProvider(props: {
       solana: { connectors: solanaConnectors },
     }
 
-    // Waitlist auth is intentionally email-only. Keep wallet connectors available
-    // for account-setup surfaces, but skip cross-app smart-wallet init here to
-    // avoid popup opener requirements (`window.opener`) in constrained browsers.
+    // Waitlist auth is intentionally email-only. Do NOT initialize any external
+    // wallet connector (Coinbase Wallet SDK, WalletConnect) on this route: those
+    // SDKs inject content scripts that race with installed EVM extensions
+    // (Rabby/MetaMask) for `window.ethereum`, producing the
+    // "injected is not defined" / "Cannot redefine property: ethereum" errors
+    // that destabilize the email OTP bootstrap. Email OTP needs no external
+    // wallet. Account-setup surfaces mount a fresh PrivyClientProvider without
+    // this mode and get the full connector set there.
     if (mode === 'waitlist-email-only') {
-      return sharedWalletConnectors
+      return {
+        solana: { connectors: solanaConnectors },
+      }
     }
 
     return {
