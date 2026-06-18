@@ -4,6 +4,7 @@ import { SlidersHorizontal } from 'lucide-react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 
 import { ArenaBacktestAnalysis } from '@/components/arena/ArenaBacktestAnalysis'
+import { EfficiencyCurveChart } from '@/components/arena/EfficiencyCurveChart'
 
 import { PageMeta, META } from '@/components/seo/PageMeta'
 import { useBacktestMarkets } from '@/hooks/useBacktestMarkets'
@@ -15,6 +16,7 @@ import {
 } from '@/lib/alfaclub/backtestIntervalPolicy'
 import { buildBacktestRunId } from '@/lib/alfaclub/backtestRunId'
 import type { BacktestSeriesPayload } from '@/lib/alfaclub/backtestSeries'
+import { calculateOptimalBufferAction, generateEfficiencyCurve } from '@/lib/alfaclub/dynamicBuffer'
 import { useCounterTradeStatus } from '@/hooks/useCounterTradeStatus'
 import { CounterTradeFlowTimeline } from '@/components/alfaclub/CounterTradeFlowTimeline'
 import { apiFetch } from '@/lib/api/apiBase'
@@ -910,6 +912,53 @@ export function ArenaBacktestPage() {
   const totalLongCapitalUsd = defaults.initialLongMarginUsd + defaults.initialLongBufferUsd
   const totalShortCapitalUsd = defaults.initialShortMarginUsd + defaults.initialShortBufferUsd
   const totalCapitalUsd = totalLongCapitalUsd + totalShortCapitalUsd
+  const efficiencyCurveData = useMemo(
+    () => generateEfficiencyCurve(defaults.initialLongMarginUsd, defaults.leverage, 60),
+    [defaults.initialLongMarginUsd, defaults.leverage],
+  )
+  const latestSeriesPoint = activeSeries?.points?.at(-1) ?? null
+  const longActionSuggestion = useMemo(() => {
+    const entryPrice = selectedTopRow?.startPrice ?? 100
+    const currentPrice = selectedTopRow?.endPrice ?? entryPrice
+    return calculateOptimalBufferAction({
+      margin: defaults.initialLongMarginUsd,
+      buffer: defaults.initialLongBufferUsd,
+      notional: defaults.initialLongMarginUsd * defaults.leverage,
+      health: latestSeriesPoint?.longHealth ?? selectedTopRow?.minHealthRoom ?? 1,
+      entryPrice,
+      currentPrice,
+      isLong: true,
+    })
+  }, [
+    defaults.initialLongBufferUsd,
+    defaults.initialLongMarginUsd,
+    defaults.leverage,
+    latestSeriesPoint?.longHealth,
+    selectedTopRow?.endPrice,
+    selectedTopRow?.minHealthRoom,
+    selectedTopRow?.startPrice,
+  ])
+  const shortActionSuggestion = useMemo(() => {
+    const entryPrice = selectedTopRow?.startPrice ?? 100
+    const currentPrice = selectedTopRow?.endPrice ?? entryPrice
+    return calculateOptimalBufferAction({
+      margin: defaults.initialShortMarginUsd,
+      buffer: defaults.initialShortBufferUsd,
+      notional: defaults.initialShortMarginUsd * defaults.leverage,
+      health: latestSeriesPoint?.shortHealth ?? selectedTopRow?.minHealthAgent ?? 1,
+      entryPrice,
+      currentPrice,
+      isLong: false,
+    })
+  }, [
+    defaults.initialShortBufferUsd,
+    defaults.initialShortMarginUsd,
+    defaults.leverage,
+    latestSeriesPoint?.shortHealth,
+    selectedTopRow?.endPrice,
+    selectedTopRow?.minHealthAgent,
+    selectedTopRow?.startPrice,
+  ])
 
   useEffect(() => {
     if (availableMarkets.length === 0) return
@@ -1308,6 +1357,52 @@ export function ArenaBacktestPage() {
               {runOutput}
             </pre>
           ) : null}
+        </div>
+
+        <div className="rounded-2xl border border-zinc-900/70 bg-black/25 p-5 sm:p-6 space-y-4">
+          <div>
+            <h3 className="text-xl text-zinc-100">Capital-efficient dynamic buffer system</h3>
+            <p className="mt-1 text-sm text-zinc-400">
+              Efficiency curve and live action suggestions use your current leverage/capital inputs.
+            </p>
+          </div>
+          <EfficiencyCurveChart data={efficiencyCurveData} leverage={defaults.leverage} />
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
+              <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Long leg suggestion</div>
+              {longActionSuggestion ? (
+                <div className="mt-2 space-y-1">
+                  <div className="text-sm text-zinc-100">
+                    {longActionSuggestion.type} {formatUsd(longActionSuggestion.amount)} ·{' '}
+                    <span className="text-zinc-300">{longActionSuggestion.reason}</span>
+                  </div>
+                  <div className="text-xs text-zinc-500">
+                    Health → {formatNum(longActionSuggestion.newHealth, 3)} · Buffer →{' '}
+                    {formatUsd(longActionSuggestion.newBuffer)}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-2 text-sm text-zinc-500">No action suggested at current conditions.</div>
+              )}
+            </div>
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
+              <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Short leg suggestion</div>
+              {shortActionSuggestion ? (
+                <div className="mt-2 space-y-1">
+                  <div className="text-sm text-zinc-100">
+                    {shortActionSuggestion.type} {formatUsd(shortActionSuggestion.amount)} ·{' '}
+                    <span className="text-zinc-300">{shortActionSuggestion.reason}</span>
+                  </div>
+                  <div className="text-xs text-zinc-500">
+                    Health → {formatNum(shortActionSuggestion.newHealth, 3)} · Buffer →{' '}
+                    {formatUsd(shortActionSuggestion.newBuffer)}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-2 text-sm text-zinc-500">No action suggested at current conditions.</div>
+              )}
+            </div>
+          </div>
         </div>
 
         {selectedTopRow ? (
