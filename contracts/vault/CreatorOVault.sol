@@ -15,6 +15,18 @@ import {IStrategyValuation} from "../interfaces/IStrategyValuation.sol";
 import {ICreatorOVaultModuleIdentity} from "./modules/ICreatorOVaultModuleIdentity.sol";
 import {CreatorOVaultLiquidityLib} from "./libraries/CreatorOVaultLiquidityLib.sol";
 
+struct CcaLifecycleStatus {
+    uint8 phase;
+}
+
+interface ICCALifecycleStatusReader {
+    function getLifecycleStatus() external view returns (CcaLifecycleStatus memory status);
+}
+
+interface ICCAPhaseReader {
+    function phase() external view returns (uint8);
+}
+
 /**
  * @title CreatorOVault
  * @author 0xakita.eth
@@ -114,6 +126,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     bytes32 internal constant MODULE_KIND_CORE = keccak256("CreatorOVaultModule.core");
     bytes32 internal constant MODULE_KIND_STRATEGIES = keccak256("CreatorOVaultModule.strategies");
     bytes32 internal constant MODULE_KIND_ADMIN = keccak256("CreatorOVaultModule.admin");
+    uint8 internal constant CCA_PHASE_AUCTION_LIVE = 1;
 
     // =================================
     // ANTI-INFLATION ATTACK CONSTANTS
@@ -407,6 +420,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     address public impairmentGuardian;
     address public impairmentClaims;
     address public impairmentRecoveryEscrow;
+    address public ccaLaunchStrategy;
 
     // =================================
     // EVENTS
@@ -1004,6 +1018,24 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         if (bad != address(0)) revert StrategyValuationNotReady(bad);
     }
 
+    function _isCcaAuctionLive() internal view returns (bool) {
+        address strategy = ccaLaunchStrategy;
+        if (strategy == address(0)) return false;
+
+        try ICCALifecycleStatusReader(strategy).getLifecycleStatus() returns (CcaLifecycleStatus memory status) {
+            return status.phase == CCA_PHASE_AUCTION_LIVE;
+        } catch {
+            // Fallback for stale/legacy strategy wiring that does not expose lifecycle snapshots.
+            try ICCAPhaseReader(strategy).phase() returns (uint8 phaseValue) {
+                return phaseValue == CCA_PHASE_AUCTION_LIVE;
+            } catch {
+                // Fail closed: when a strategy is configured but lifecycle reads fail,
+                // disable deposits/mints until wiring is corrected.
+                return true;
+            }
+        }
+    }
+
     /**
      * @notice Deposit Creator Coin into vault
      * @dev Protected against first-depositor inflation attacks via:
@@ -1201,6 +1233,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
      */
     function maxDeposit(address receiver) public view override returns (uint256) {
         if (vaultMode != VaultMode.Normal) return 0;
+        if (_isCcaAuctionLive()) return 0;
         if (paused || isShutdown) return 0;
         if (whitelistEnabled && !whitelist[receiver]) return 0;
         if (_firstStrategyValuationNotReady() != address(0)) return 0;
@@ -1221,6 +1254,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
      */
     function maxMint(address receiver) public view override returns (uint256) {
         if (vaultMode != VaultMode.Normal) return 0;
+        if (_isCcaAuctionLive()) return 0;
         if (paused || isShutdown) return 0;
         if (whitelistEnabled && !whitelist[receiver]) return 0;
         if (_firstStrategyValuationNotReady() != address(0)) return 0;
@@ -1795,6 +1829,11 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     // =================================
 
     function setGaugeController(address _gaugeController) external onlyOwner {
+        _delegate(_adminModule);
+    }
+
+    /// @notice Link or clear the vault CCA strategy used for auction-time deposit gating.
+    function setCCALaunchStrategy(address _ccaLaunchStrategy) external onlyOwner {
         _delegate(_adminModule);
     }
 
