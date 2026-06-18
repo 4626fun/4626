@@ -1311,9 +1311,9 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
      * @dev Rejects fee-on-transfer / deflationary / rebasing tokens by enforcing
      *      that the vault's balance increases by exactly `amount`.
      */
-    function _pullCreatorCoinExact(address from, uint256 amount) internal returns (uint256 received) {
+    function _pullCreatorCoinExact(uint256 amount) internal returns (uint256 received) {
         uint256 beforeBal = CREATOR_COIN.balanceOf(address(this));
-        CREATOR_COIN.safeTransferFrom(from, address(this), amount);
+        CREATOR_COIN.safeTransferFrom(msg.sender, address(this), amount);
         uint256 afterBal = CREATOR_COIN.balanceOf(address(this));
 
         received = afterBal - beforeBal;

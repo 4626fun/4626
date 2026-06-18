@@ -70,6 +70,7 @@ abstract contract CreatorOVaultModuleStorage {
     uint256 internal coinBalance;
 
     // Strategy management
+    // slither-disable-next-line uninitialized-state
     mapping(address => bool) internal activeStrategies;
     mapping(address => uint256) internal strategyWeights;
     address[] internal strategyList;

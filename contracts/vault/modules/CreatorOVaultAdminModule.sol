@@ -115,6 +115,7 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
         emit VaultShutdown();
     }
 
+    // slither-disable-next-line uninitialized-state
     function emergencyWithdrawFromStrategies() external onlyDelegateCall {
         IERC20 coin = _creatorCoin();
         uint256 length = strategyList.length;
