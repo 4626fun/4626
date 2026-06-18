@@ -865,6 +865,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     // MISC
     // =================================
 
+    // slither-disable-next-line uninitialized-state
     function burnSharesForPriceIncrease(uint256 shares) external onlyDelegateCall {
         if (shares == 0) revert ZeroAmount();
         address sender = msg.sender;
