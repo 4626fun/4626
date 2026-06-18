@@ -420,6 +420,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     address public impairmentGuardian;
     address public impairmentClaims;
     address public impairmentRecoveryEscrow;
+    // slither-disable-next-line uninitialized-state
     address public ccaLaunchStrategy;
 
     // =================================

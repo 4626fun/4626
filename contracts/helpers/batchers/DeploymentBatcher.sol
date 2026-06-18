@@ -1192,6 +1192,7 @@ contract DeploymentBatcherPhase2Module {
         }
     }
 
+    // slither-disable-next-line arbitrary-send-eth
     function _bridgeShareAllocationToSolana(address shareOFT, uint256 amount) internal {
         IDeploymentBatcherSolanaConfig config = IDeploymentBatcherSolanaConfig(batcher);
         IDeploymentBatcherSolanaConfig.OVaultRuntimeConfig memory runtime = config.getOVaultRuntimeConfig();
