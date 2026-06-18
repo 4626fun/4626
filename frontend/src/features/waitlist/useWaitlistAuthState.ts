@@ -20,19 +20,19 @@ import {
   WAITLIST_STALE_SESSION_RESET_MESSAGE,
   FLOW_TIMEOUT_MS,
   getSignInNetworkUnstableMessage,
-  getWalletProviderCollisionMessage,
+  getWalletProviderCollisionMessage as getWalletProviderCollisionMessageDefault,
   getWaitlistNetworkUnstableMessage,
   isPrivyLoginBootstrapError,
   isSessionFinalizingError,
   isStalePrivyTokenError,
   isTimeoutErrorMessage,
   isTransientWaitlistNetworkError,
-  isWalletProviderCollisionError,
+  isWalletProviderCollisionError as isWalletProviderCollisionErrorDefault,
   runPrivyLoginWithTimeout,
 } from './waitlistBootstrapUtils'
 import {
-  isAlreadyLoggedInAuthError,
-  clearStoredWaitlistSessionToken,
+  isAlreadyLoggedInAuthError as isAlreadyLoggedInAuthErrorDefault,
+  clearStoredWaitlistSessionToken as clearStoredWaitlistSessionTokenDefault,
   runWaitlistPrivyLogout as runWaitlistPrivyLogoutFn,
 } from './waitlistAuthState'
 
@@ -90,7 +90,7 @@ export function useWaitlistAuthState(params?: {
   // Default redirect impl inside hook (no need to pass from component).
   const redirectToCanonical = params?.redirectToCanonicalWaitlist ?? (() => {
     if (typeof window === 'undefined') return false
-    const localHost = window.location.hostname.toLowerCase()
+    const localHost = (window.location?.hostname ?? '').toLowerCase()
     if (localHost === 'localhost' || localHost === '127.0.0.1' || localHost === '::1' || localHost === '[::1]') {
       return false
     }
@@ -111,7 +111,7 @@ export function useWaitlistAuthState(params?: {
     if (target === current) return false
     window.location.assign(target)
     return true
-  })()
+  })
 
   // Now safe to derive from hooks + params.
   const privyAuthed = params?.privyAuthed ?? internalPrivy.authenticated
@@ -137,10 +137,14 @@ export function useWaitlistAuthState(params?: {
   const tokenlessFinalizingBootstrapCooldownUntilRef = params?.tokenlessFinalizingBootstrapCooldownUntilRef || { current: 0 }
   const step = params?.step
   const privyClientStatus = params?.privyClientStatus
-  const isWalletProviderCollisionError = params?.isWalletProviderCollisionError
-  const getWalletProviderCollisionMessage = params?.getWalletProviderCollisionMessage
-  const isAlreadyLoggedInAuthError = params?.isAlreadyLoggedInAuthError
-  const clearStoredWaitlistSessionToken = params?.clearStoredWaitlistSessionToken
+  const isWalletProviderCollisionError =
+    params?.isWalletProviderCollisionError || isWalletProviderCollisionErrorDefault
+  const getWalletProviderCollisionMessage =
+    params?.getWalletProviderCollisionMessage || getWalletProviderCollisionMessageDefault
+  const isAlreadyLoggedInAuthError =
+    params?.isAlreadyLoggedInAuthError || isAlreadyLoggedInAuthErrorDefault
+  const clearStoredWaitlistSessionToken =
+    params?.clearStoredWaitlistSessionToken || clearStoredWaitlistSessionTokenDefault
   const isOnCanonicalMarketingWaitlistPage = params?.isOnCanonicalMarketingWaitlistPage || isOnCanonicalMarketingWaitlistPageFn
   const waitlistRecoveryUrl = params?.waitlistRecoveryUrl ?? getMarketingWaitlistEntryUrl()
   const HANDOFF_QUERY_KEY = params?.HANDOFF_QUERY_KEY ?? 'cv_handoff'
@@ -150,6 +154,8 @@ export function useWaitlistAuthState(params?: {
 
   // Always have a referral value (pure read; no need to pass from component)
   const activeReferralCode = params?.activeReferralCode ?? readStoredWaitlistReferralCode()
+  const isLoopbackHost = (host: string): boolean =>
+    host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]'
 
   // search/clear with internal fallback so component doesn't need to pass router state
   const searchParams = params?.searchParams || internalSearchParams
@@ -316,7 +322,9 @@ export function useWaitlistAuthState(params?: {
       try {
         const parsed = new URL(target)
         if (parsed.origin !== window.location.origin) {
-          if (createAuthHandoffCode) {
+          if (isLoopbackHost(window.location.hostname.toLowerCase())) {
+            target = `${window.location.origin}${parsed.pathname}${parsed.search}${parsed.hash}`
+          } else if (createAuthHandoffCode) {
             const handoffCode = await createAuthHandoffCode({ privyToken })
             if (handoffCode) {
               parsed.searchParams.set(HANDOFF_QUERY_KEY || 'cv_handoff', handoffCode)
@@ -343,11 +351,15 @@ export function useWaitlistAuthState(params?: {
     if (target.startsWith('http') && typeof window !== 'undefined') {
       try {
         const parsed = new URL(target)
-        if (parsed.origin !== window.location.origin && createAuthHandoffCode) {
-          const handoffCode = await createAuthHandoffCode({ privyToken })
-          if (handoffCode) {
-            parsed.searchParams.set(HANDOFF_QUERY_KEY || 'cv_handoff', handoffCode)
-            target = parsed.toString()
+        if (parsed.origin !== window.location.origin) {
+          if (isLoopbackHost(window.location.hostname.toLowerCase())) {
+            target = `${window.location.origin}${parsed.pathname}${parsed.search}${parsed.hash}`
+          } else if (createAuthHandoffCode) {
+            const handoffCode = await createAuthHandoffCode({ privyToken })
+            if (handoffCode) {
+              parsed.searchParams.set(HANDOFF_QUERY_KEY || 'cv_handoff', handoffCode)
+              target = parsed.toString()
+            }
           }
         }
       } catch {}
