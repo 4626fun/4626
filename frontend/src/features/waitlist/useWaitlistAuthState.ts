@@ -40,7 +40,8 @@ import {
   clearWaitlistAuthPending,
   writeWaitlistAuthPending,
   writeWaitlistRecoveryGate,
-  clearStoredWaitlistVerifiedEmailHint,
+  clearWaitlistRecoveryGate,
+  clearStoredWaitlistVerifiedEmailHint as clearStoredWaitlistVerifiedEmailHintFromStorage,
   captureWaitlistVerifiedEmailHint,
   resolveWaitlistVerifiedEmailHint,
 } from './waitlistStorage'
@@ -77,6 +78,10 @@ export function useWaitlistAuthState(params?: {
   onEnterApp?: () => Promise<void>
   onTryDifferentEmail?: () => Promise<void>
 }) {
+  const PRIVY_LOGOUT_SETTLE_ATTEMPTS = 10
+  const PRIVY_LOGOUT_SETTLE_DELAY_MS = 150
+  const withTimeout = withSessionRepairTimeout
+
   // ALL hooks MUST be at the very top before any other statements (no TDZ for their results).
   const [internalSearchParams, internalSetSearchParams] = useSearchParams()
   const internalPrivy = usePrivy()
@@ -139,7 +144,8 @@ export function useWaitlistAuthState(params?: {
   const isOnCanonicalMarketingWaitlistPage = params?.isOnCanonicalMarketingWaitlistPage || isOnCanonicalMarketingWaitlistPageFn
   const waitlistRecoveryUrl = params?.waitlistRecoveryUrl ?? getMarketingWaitlistEntryUrl()
   const HANDOFF_QUERY_KEY = params?.HANDOFF_QUERY_KEY ?? 'cv_handoff'
-  const clearStoredWaitlistVerifiedEmailHint = params?.clearStoredWaitlistVerifiedEmailHint || clearStoredWaitlistVerifiedEmailHint
+  const clearStoredWaitlistVerifiedEmailHint =
+    params?.clearStoredWaitlistVerifiedEmailHint || clearStoredWaitlistVerifiedEmailHintFromStorage
   const STALE_PRIVY_SESSION_MESSAGE = params?.STALE_PRIVY_SESSION_MESSAGE || 'Sign-in session expired. Tap Use existing account to sign in again with email.'
 
   // Always have a referral value (pure read; no need to pass from component)
@@ -170,9 +176,24 @@ export function useWaitlistAuthState(params?: {
   const [signOutBusy, setSignOutBusy] = useState(false)
   const [sessionRepairBusy, setSessionRepairBusy] = useState(false)
   const [account, setAccount] = useState<any>(null)
+  const authAttemptInFlightRef = useRef(false)
+  const attemptInFlightRef = authAttemptInFlightRef
+  const authBootstrapAutoAttemptedRef = useRef(false)
+  const privyAuthedBootstrapAttemptedRef = useRef(false)
+  const recoveryHandoffInFlightRef = useRef(false)
+  const pendingAuthResumeStartedRef = useRef(false)
+  const loginStartedWhileLoggedOutRef = useRef(false)
+  const loginAwaitInProgressRef = useRef(false)
+  const startAuthAutoAttemptedRef = useRef(false)
+  const finalizingAutoRetryCountRef = useRef(0)
+  const finalizingBackgroundRetryCountRef = useRef(0)
+  const finalizingBgTimerRef = useRef<number | null>(null)
+  const privyAuthedRef = useRef(privyAuthed)
+  const privyClientStatusRef = useRef<'disabled' | 'loading' | 'ready'>('loading')
 
   const waitForPrivyLogoutSettlement = useCallback(async (opts?: { tokenOnly?: boolean }): Promise<void> => {
-    for (let attempt = 0; attempt < PRIVY_LOGOUT_SETTLE_ATTEMPTS || 10; attempt += 1) {
+    const maxAttempts = PRIVY_LOGOUT_SETTLE_ATTEMPTS || 10
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const token = getAccessToken ? await getAccessToken().catch(() => null) : null
       const tokenMissing = !token
       const authCleared = privyAuthedRef.current === false
@@ -205,6 +226,9 @@ export function useWaitlistAuthState(params?: {
     tokenlessFinalizingBootstrapCooldownUntilRef: tokenlessFromBootstrap,
     recoveryRequiredBootstrapCooldownUntilRef: recoveryFromBootstrap,
   } = bootstrap
+  const settle = settleFromBootstrap
+  const recoveryRequiredBootstrapCooldownUntilRef = recoveryFromBootstrap
+  const recoveryCooldownRef = recoveryFromBootstrap
 
   // Internal helpers defined here using passed deps (for simplification, no local in component)
   const tryResumeExistingPrivySession = useCallback(async (): Promise<boolean> => {
@@ -380,7 +404,6 @@ export function useWaitlistAuthState(params?: {
     }
   }, [
     recoveryRequiredBootstrapCooldownUntilRef,
-    resetAuthAttemptFlags,
     setBusy,
     setRecoveryRequired,
     setError,
@@ -401,22 +424,6 @@ export function useWaitlistAuthState(params?: {
       recoveryRequiredBootstrapCooldownUntilRef.current = 0
     }
   }, [privyAuthed, authAttemptInFlightRef, recoveryRequiredBootstrapCooldownUntilRef, setRecoveryRequired])
-
-  const attemptInFlightRef = useRef(false)
-  const authBootstrapAutoAttemptedRef = useRef(false)
-  const privyAuthedBootstrapAttemptedRef = useRef(false)
-  const recoveryHandoffInFlightRef = useRef(false)
-  const pendingAuthResumeStartedRef = useRef(false)
-  const loginStartedWhileLoggedOutRef = useRef(false)
-  const loginAwaitInProgressRef = useRef(false)
-  const startAuthAutoAttemptedRef = useRef(false)
-  const finalizingAutoRetryCountRef = useRef(0)
-  const finalizingBackgroundRetryCountRef = useRef(0)
-  const finalizingBgTimerRef = useRef<number | null>(null)
-
-  // Refs that were previously in component for tracking live privy state
-  const privyAuthedRef = useRef(privyAuthed)
-  const privyClientStatusRef = useRef<'disabled' | 'loading' | 'ready'>('loading')
 
   useEffect(() => {
     privyAuthedRef.current = privyAuthed
@@ -542,8 +549,6 @@ export function useWaitlistAuthState(params?: {
     busy,
     authAttemptInFlightRef,
     requestBootstrap,
-    probeStalePrivyTokenSession,
-    resetStaleAuthenticatedPrivySession,
     setAccount,
     getNetworkMsg,
     setBusy,
@@ -592,11 +597,9 @@ export function useWaitlistAuthState(params?: {
   }, [
     account?.emailVerified,
     authAttemptInFlightRef,
-    endAuthAttempt,
     privyAuthed,
     privyClientStatus,
     recoveryRequired,
-    resumePendingWaitlistAuth,
     setBusy,
     setError,
     step,
@@ -613,7 +616,7 @@ export function useWaitlistAuthState(params?: {
     startAuthAutoAttemptedRef.current = true
     if (clearStartAuthDeepLink) clearStartAuthDeepLink()
     if (onContinueAuth) void onContinueAuth()
-  }, [step, searchParams, privyClientStatus, busy, authAttemptInFlightRef, clearStartAuthDeepLink, onContinueAuth])
+  }, [step, searchParams, privyClientStatus, busy, authAttemptInFlightRef, clearStartAuthDeepLink])
 
   // Stale probe (moved)
   const staleSessionProbeRef = useRef<any>(null)
@@ -737,6 +740,7 @@ export function useWaitlistAuthState(params?: {
     attemptInFlightRef.current = false
     setBusy(false)
   }, [])
+  const endAuthAttempt = endAttempt
 
   const beginRecoveryHandoffAttempt = useCallback((): boolean => {
     if (busy || attemptInFlightRef.current || recoveryHandoffInFlightRef.current) return false
