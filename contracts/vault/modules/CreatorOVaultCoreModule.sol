@@ -299,7 +299,9 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
             try ICCAPhaseReader(strategy).phase() returns (uint8 phaseValue) {
                 return phaseValue == CCA_PHASE_AUCTION_LIVE;
             } catch {
-                return false;
+                // Fail closed: if lifecycle is unreadable while a strategy is configured,
+                // treat deposits as blocked rather than bypassing the guard.
+                return true;
             }
         }
     }

@@ -1029,7 +1029,9 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
             try ICCAPhaseReader(strategy).phase() returns (uint8 phaseValue) {
                 return phaseValue == CCA_PHASE_AUCTION_LIVE;
             } catch {
-                return false;
+                // Fail closed: when a strategy is configured but lifecycle reads fail,
+                // disable deposits/mints until wiring is corrected.
+                return true;
             }
         }
     }

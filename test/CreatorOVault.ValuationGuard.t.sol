@@ -184,6 +184,8 @@ contract MockCcaLifecycleForVaultGuard {
     }
 }
 
+contract MockUnreadableCcaForVaultGuard {}
+
 contract ManipulableInnerERC4626 is ERC4626 {
     uint256 public assetsMultiplier = 1e18;
     bool public revertOnConvert;
@@ -366,6 +368,30 @@ contract CreatorOVaultValuationGuardTest is Test {
         vm.prank(alice);
         uint256 shares = vault.deposit(assets, alice);
         assertGt(shares, 0);
+    }
+
+    function test_depositAndMint_revert_whenCcaLifecycleUnreadable() external {
+        MockUnreadableCcaForVaultGuard unreadable = new MockUnreadableCcaForVaultGuard();
+        vault.setCCALaunchStrategy(address(unreadable));
+
+        uint256 assets = vault.MINIMUM_FIRST_DEPOSIT() * 2;
+        uint256 shares = assets * 1000; // _decimalsOffset() = 3
+
+        vm.prank(alice);
+        vm.expectRevert(CCA_AUCTION_DEPOSIT_BLOCKED_SELECTOR);
+        vault.deposit(assets, alice);
+
+        vm.prank(alice);
+        vm.expectRevert(CCA_AUCTION_DEPOSIT_BLOCKED_SELECTOR);
+        vault.mint(shares, alice);
+    }
+
+    function test_maxDepositAndMaxMint_returnZero_whenCcaLifecycleUnreadable() external {
+        MockUnreadableCcaForVaultGuard unreadable = new MockUnreadableCcaForVaultGuard();
+        vault.setCCALaunchStrategy(address(unreadable));
+
+        assertEq(vault.maxDeposit(alice), 0, "maxDeposit should fail closed when CCA lifecycle unreadable");
+        assertEq(vault.maxMint(alice), 0, "maxMint should fail closed when CCA lifecycle unreadable");
     }
 
     function test_mint_reverts_whenTrustedPpsDeviationTooHigh() external {
