@@ -476,6 +476,7 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
         minDeploymentInterval = _interval;
     }
 
+    // slither-disable-next-line uninitialized-state
     function setMaxTotalSupply(uint256 _maxTotalSupply) external onlyDelegateCall {
         uint256 current = _totalSupply;
         if (_maxTotalSupply < current) revert MaxTotalSupplyBelowCurrent(_maxTotalSupply, current);
