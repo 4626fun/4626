@@ -16,8 +16,10 @@ export const APP_ONLY_PATHS = [
 ] as const
 
 const APP_ONLY_PATH_PREFIXES = APP_ONLY_PATHS.map((p) => `${p}/`)
+const MARKETING_OVERRIDES = new Set(['/alfaclub/key-safety'])
 
 export function isAppOnlyPath(pathname: string): boolean {
+  if (MARKETING_OVERRIDES.has(pathname)) return false
   for (let i = 0; i < APP_ONLY_PATHS.length; i += 1) {
     if (pathname === APP_ONLY_PATHS[i] || pathname.startsWith(APP_ONLY_PATH_PREFIXES[i]!)) {
       return true

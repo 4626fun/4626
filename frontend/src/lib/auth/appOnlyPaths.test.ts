@@ -28,5 +28,6 @@ describe('appOnlyPaths', () => {
     expect(isAppOnlyPath('/continue')).toBe(false)
     expect(isAppOnlyPath('/portfolio/0xabc')).toBe(false)
     expect(isAppOnlyPath('/alfaclub/liquidity')).toBe(true)
+    expect(isAppOnlyPath('/alfaclub/key-safety')).toBe(false)
   })
 })

@@ -107,6 +107,7 @@ export const MARKETING_ONLY_ROUTES: PathRouteDef[] = [
   { path: '/area/positions', element: <Navigate to="/arena/positions" replace /> },
   { path: '/cca', element: <DistributeCcaLaunch /> },
   { path: '/status', element: <Status /> },
+  { path: '/alfaclub/key-safety', element: <AlfaClubKeySafety /> },
   { path: '/dev/metaball-os', element: <MetaballOsProbe /> },
   { path: '/dev/tactical-map', element: <TacticalTokenMap /> },
 ]
@@ -246,7 +247,6 @@ export const APP_ACCEPTED_ROUTES: PathRouteDef[] = [
       </SmartWalletRoute>
     ),
   },
-  { path: '/alfaclub/key-safety', element: <AlfaClubKeySafety /> },
   { path: '/auction-demo', element: <AuctionDemo /> },
 ]
 
