@@ -15,15 +15,12 @@ import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
 import type { WaitlistStep } from './waitlistFlowState'
 import { type WaitlistEmailUi, canEnterAppFromAccountState, deriveWaitlistAuthUi } from './waitlistFlowUi'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
-import { type WaitlistAccountsSummary } from './waitlistAccountTypes'
 export { isPrivyLoginBootstrapError } from './waitlistBootstrapUtils'
 import { useWaitlistAuthState } from './useWaitlistAuthState'
 import { ReferrerGreetingBanner } from './ReferrerGreetingBanner'
 import {
   resolveWaitlistPrivyDisplayEmail,
 } from './waitlistStorage'
-type AccountsSummary = WaitlistAccountsSummary
-
 const LazyWaitlistSetupWorkspace = lazy(async () => {
   const mod = await import('./WaitlistSetupWorkspace')
   return { default: mod.WaitlistSetupWorkspace }
@@ -302,20 +299,13 @@ export function WaitlistFlow(props: {
 
   const {
     busy,
-    setBusy,
     error,
-    setError,
     recoveryRequired,
-    setRecoveryRequired,
     finalizing,
-    setFinalizing,
     privyAuthed,
     completionBusy,
-    setCompletionBusy,
     signOutBusy,
-    setSignOutBusy,
     sessionRepairBusy,
-    setSessionRepairBusy,
     account,
     activeReferralCode,
     onContinueAuth,
