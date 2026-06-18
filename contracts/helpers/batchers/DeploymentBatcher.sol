@@ -1074,6 +1074,7 @@ contract DeploymentBatcherPhase2Module {
         ICreatorGaugeController(out.gaugeController).setOracle(out.oracle);
 
         ICreatorOVault(params.vault).setGaugeController(out.gaugeController);
+        ICreatorOVault(params.vault).setCCALaunchStrategy(out.ccaStrategy);
 
         ICCALaunchStrategy(out.ccaStrategy).setApprovedLauncher(address(this), true);
         if (vaultActivationBatcher != address(0)) {

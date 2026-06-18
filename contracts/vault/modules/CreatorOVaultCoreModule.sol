@@ -29,6 +29,18 @@ interface ICreatorORecoveryEscrow {
     function claimRecovery(address asset, uint256 epochId, address receiver, uint256 amount) external;
 }
 
+struct CcaLifecycleStatus {
+    uint8 phase;
+}
+
+interface ICCALifecycleStatusReader {
+    function getLifecycleStatus() external view returns (CcaLifecycleStatus memory status);
+}
+
+interface ICCAPhaseReader {
+    function phase() external view returns (uint8);
+}
+
 /// @notice Core ERC-4626 + queue + profit unlocking + reporting logic for CreatorOVault.
 /// @dev Must be invoked via delegatecall from CreatorOVault.
 contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModuleIdentity {
@@ -45,6 +57,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     uint256 internal constant MINIMUM_FIRST_DEPOSIT = 50_000_000e18;
     uint8 internal constant MAX_VALUATION_MISS_THRESHOLD = 30;
     uint256 internal constant IMPAIR_REASON_MAX = 7;
+    uint8 internal constant CCA_PHASE_AUCTION_LIVE = 1;
 
     // ---- events (must match vault signatures) ----
     event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares);
@@ -125,6 +138,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     error NothingToClaim(uint256 epochId, address account);
     error RecoveryEscrowNotConfigured();
     error ClaimSupplyExceeded(uint256 epochId, uint256 totalClaimSupply, uint256 requested);
+    error CcaAuctionDepositBlocked();
 
     // =================================
     // PROFIT UNLOCKING
@@ -274,8 +288,25 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         if (bad != address(0)) revert StrategyValuationNotReady(bad);
     }
 
+    function _isCcaAuctionLive() internal view returns (bool) {
+        address strategy = ccaLaunchStrategy;
+        if (strategy == address(0)) return false;
+
+        try ICCALifecycleStatusReader(strategy).getLifecycleStatus() returns (CcaLifecycleStatus memory status) {
+            return status.phase == CCA_PHASE_AUCTION_LIVE;
+        } catch {
+            // Fallback for stale/legacy strategy wiring that does not expose lifecycle snapshots.
+            try ICCAPhaseReader(strategy).phase() returns (uint8 phaseValue) {
+                return phaseValue == CCA_PHASE_AUCTION_LIVE;
+            } catch {
+                return false;
+            }
+        }
+    }
+
     function deposit(uint256 assets, address receiver) external onlyDelegateCall returns (uint256 shares) {
         if (vaultMode != VaultMode.Normal) revert VaultNotNormal();
+        if (_isCcaAuctionLive()) revert CcaAuctionDepositBlocked();
         if (assets == 0) revert ZeroAmount();
         if (receiver == address(0)) revert ZeroAddress();
         _processProfitUnlock();
@@ -320,6 +351,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
 
     function mint(uint256 shares, address receiver) external onlyDelegateCall returns (uint256 assets) {
         if (vaultMode != VaultMode.Normal) revert VaultNotNormal();
+        if (_isCcaAuctionLive()) revert CcaAuctionDepositBlocked();
         if (shares == 0) revert ZeroShares();
         if (receiver == address(0)) revert ZeroAddress();
         _processProfitUnlock();
@@ -500,6 +532,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
 
     function maxDeposit(address receiver) external view onlyDelegateCall returns (uint256) {
         if (vaultMode != VaultMode.Normal) return 0;
+        if (_isCcaAuctionLive()) return 0;
         if (paused || isShutdown) return 0;
         if (whitelistEnabled && !whitelist[receiver]) return 0;
         if (_firstStrategyValuationNotReady(false) != address(0)) return 0;
@@ -518,6 +551,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
 
     function maxMint(address receiver) external view onlyDelegateCall returns (uint256) {
         if (vaultMode != VaultMode.Normal) return 0;
+        if (_isCcaAuctionLive()) return 0;
         if (paused || isShutdown) return 0;
         if (whitelistEnabled && !whitelist[receiver]) return 0;
         if (_firstStrategyValuationNotReady(false) != address(0)) return 0;

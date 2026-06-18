@@ -168,6 +168,22 @@ contract MockNoValuationInterfaceStrategy is IStrategy {
     function rebalance() external pure override {}
 }
 
+contract MockCcaLifecycleForVaultGuard {
+    uint8 public phase;
+
+    struct LifecycleStatus {
+        uint8 phase;
+    }
+
+    function setPhase(uint8 nextPhase) external {
+        phase = nextPhase;
+    }
+
+    function getLifecycleStatus() external view returns (LifecycleStatus memory status) {
+        status.phase = phase;
+    }
+}
+
 contract ManipulableInnerERC4626 is ERC4626 {
     uint256 public assetsMultiplier = 1e18;
     bool public revertOnConvert;
@@ -192,6 +208,7 @@ contract ManipulableInnerERC4626 is ERC4626 {
 contract CreatorOVaultValuationGuardTest is Test {
     bytes4 private constant STRATEGY_VALUATION_NOT_READY_SELECTOR =
         bytes4(keccak256("StrategyValuationNotReady(address)"));
+    bytes4 private constant CCA_AUCTION_DEPOSIT_BLOCKED_SELECTOR = bytes4(keccak256("CcaAuctionDepositBlocked()"));
 
     MockCreatorCoinForValuationGuard internal creatorCoin;
     CreatorOVault internal vault;
@@ -312,6 +329,43 @@ contract CreatorOVaultValuationGuardTest is Test {
         vm.prank(alice);
         vm.expectRevert();
         vault.deposit(50_000e18, alice);
+    }
+
+    function test_maxDepositAndMaxMint_returnZero_whenCcaAuctionLive() external {
+        MockCcaLifecycleForVaultGuard cca = new MockCcaLifecycleForVaultGuard();
+        vault.setCCALaunchStrategy(address(cca));
+        cca.setPhase(1); // LifecyclePhase.AuctionLive
+
+        assertEq(vault.maxDeposit(alice), 0, "maxDeposit should be 0 while CCA auction is live");
+        assertEq(vault.maxMint(alice), 0, "maxMint should be 0 while CCA auction is live");
+    }
+
+    function test_depositAndMint_revert_whenCcaAuctionLive() external {
+        MockCcaLifecycleForVaultGuard cca = new MockCcaLifecycleForVaultGuard();
+        vault.setCCALaunchStrategy(address(cca));
+        cca.setPhase(1); // LifecyclePhase.AuctionLive
+
+        uint256 assets = vault.MINIMUM_FIRST_DEPOSIT() * 2;
+        uint256 shares = assets * 1000; // _decimalsOffset() = 3
+
+        vm.prank(alice);
+        vm.expectRevert(CCA_AUCTION_DEPOSIT_BLOCKED_SELECTOR);
+        vault.deposit(assets, alice);
+
+        vm.prank(alice);
+        vm.expectRevert(CCA_AUCTION_DEPOSIT_BLOCKED_SELECTOR);
+        vault.mint(shares, alice);
+    }
+
+    function test_deposit_allowed_whenCcaPhaseNotAuctionLive() external {
+        MockCcaLifecycleForVaultGuard cca = new MockCcaLifecycleForVaultGuard();
+        vault.setCCALaunchStrategy(address(cca));
+        cca.setPhase(2); // LifecyclePhase.AuctionEndedPending
+
+        uint256 assets = vault.MINIMUM_FIRST_DEPOSIT() * 2;
+        vm.prank(alice);
+        uint256 shares = vault.deposit(assets, alice);
+        assertGt(shares, 0);
     }
 
     function test_mint_reverts_whenTrustedPpsDeviationTooHigh() external {

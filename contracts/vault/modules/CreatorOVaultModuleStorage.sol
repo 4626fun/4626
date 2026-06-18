@@ -196,5 +196,11 @@ abstract contract CreatorOVaultModuleStorage {
     address internal impairmentGuardian;
     address internal impairmentClaims;
     address internal impairmentRecoveryEscrow;
+
+    // ---------------------------------------------------------------------
+    // CCA linkage (appended; preserves prior storage ordering)
+    // ---------------------------------------------------------------------
+    /// @notice Optional CCA launch strategy used to enforce auction-time deposit pauses.
+    address internal ccaLaunchStrategy;
 }
 

@@ -43,6 +43,7 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
     event UpdateKeeper(address indexed newKeeper);
     event UpdateEmergencyAdmin(address indexed newEmergencyAdmin);
     event UpdateGaugeController(address indexed oldController, address indexed newController);
+    event UpdateCcaLaunchStrategy(address indexed oldStrategy, address indexed newStrategy);
     event UpdateBurnStream(address indexed oldBurnStream, address indexed newBurnStream);
     event BurnStreamQueuerUpdated(address indexed queuer, bool authorized);
     event UpdatePerformanceFee(uint16 newPerformanceFee);
@@ -165,6 +166,14 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
         address old = gaugeController;
         gaugeController = _gaugeController;
         emit UpdateGaugeController(old, _gaugeController);
+    }
+
+    /// @notice Link/unlink the vault's CCA strategy used for auction-time deposit gating.
+    /// @dev Zero address clears the gate linkage.
+    function setCCALaunchStrategy(address _ccaLaunchStrategy) external onlyDelegateCall {
+        address old = ccaLaunchStrategy;
+        ccaLaunchStrategy = _ccaLaunchStrategy;
+        emit UpdateCcaLaunchStrategy(old, _ccaLaunchStrategy);
     }
 
     /**
