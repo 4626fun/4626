@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   deriveConnectButtonState,
   deriveWalletIdentityPresentation,
+  shouldPreferWalletLoginAfterEmail,
   shouldAllowExternalWalletButtons,
   shouldResolveConnectIdentity,
 } from './ConnectButton'
@@ -103,6 +104,23 @@ describe('shouldResolveConnectIdentity', () => {
         showOptions: false,
       }),
     ).toBe(true)
+  })
+})
+
+describe('shouldPreferWalletLoginAfterEmail', () => {
+  it('returns true when a prior Privy auth timestamp exists', () => {
+    expect(
+      shouldPreferWalletLoginAfterEmail({
+        lastAuthAtRaw: '1718786200000',
+      }),
+    ).toBe(true)
+  })
+
+  it('returns false for empty, invalid, or non-positive values', () => {
+    expect(shouldPreferWalletLoginAfterEmail({ lastAuthAtRaw: null })).toBe(false)
+    expect(shouldPreferWalletLoginAfterEmail({ lastAuthAtRaw: '' })).toBe(false)
+    expect(shouldPreferWalletLoginAfterEmail({ lastAuthAtRaw: 'not-a-number' })).toBe(false)
+    expect(shouldPreferWalletLoginAfterEmail({ lastAuthAtRaw: '0' })).toBe(false)
   })
 })
 

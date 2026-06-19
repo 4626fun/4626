@@ -39,11 +39,11 @@ type PrivySessionResponse = { address: string; privyUserId?: string } | null
 type AuthHandoffRedeemResponse = { address: string }
 
 /**
- * Explicit user-initiated Privy sign-in should prefer identity-first methods.
- * Wallet-first in this path can accidentally create a new Privy identity and
- * then collide with an existing email-bound account.
+ * Explicit user-initiated Privy sign-in defaults to email-only.
+ * Wallet-first remains available through `preferBaseAccountWallet` for
+ * returning users that already completed email-based account creation.
  */
-export const PRIVY_INTERACTIVE_LOGIN_METHODS = ['email', 'wallet'] as const
+export const PRIVY_INTERACTIVE_LOGIN_METHODS = ['email'] as const
 
 // Prevent request storms:
 // `useSiweAuth()` can be mounted in multiple places; without a shared guard each instance can auto-bridge.
