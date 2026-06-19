@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+// slither-disable-start uninitialized-state
+
 /// @notice Storage layout shared by CreatorOVault delegatecall modules.
 /// @dev MUST match CreatorOVault's storage layout exactly (including OZ bases).
 /// FIX: I-02 — Layout integrity is verified at deploy time via `setModulesOnce()` which checks
@@ -204,4 +206,6 @@ abstract contract CreatorOVaultModuleStorage {
     /// @notice Optional CCA launch strategy used to enforce auction-time deposit pauses.
     address internal ccaLaunchStrategy;
 }
+
+// slither-disable-end uninitialized-state
 
