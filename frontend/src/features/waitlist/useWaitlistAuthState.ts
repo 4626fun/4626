@@ -62,6 +62,18 @@ const FINALIZING_STUCK_MESSAGE =
   'Sign-in is taking longer than expected. Retries continue automatically; tap Retry now or Continue to nudge, or sign out to restart.'
 const FINALIZING_LOGIN_INCOMPLETE_MESSAGE =
   'Email sign-in did not complete. Request a fresh code and try again.'
+const PRIVY_LAST_AUTH_HINT_KEY = 'cv:privy:lastAuthAt'
+
+function hasPriorPrivyAuthMarker(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    const raw = window.localStorage.getItem(PRIVY_LAST_AUTH_HINT_KEY)
+    const parsed = Number(raw)
+    return Number.isFinite(parsed) && parsed > 0
+  } catch {
+    return false
+  }
+}
 
 /**
  * Extracted state + guards for waitlist auth flow.
@@ -128,7 +140,11 @@ export function useWaitlistAuthState(params?: {
   // Now safe to derive from hooks + params.
   const privyAuthed = params?.privyAuthed ?? internalPrivy.authenticated
   const ensureEmbeddedWallet = params?.ensureEmbeddedWallet || (async () => ({ address: '' }))
-  const getVerifiedEmailHint = params?.getVerifiedEmailHint || (() => resolveWaitlistVerifiedEmailHint(internalPrivy.user))
+  const paramsGetVerifiedEmailHint = params?.getVerifiedEmailHint
+  const getVerifiedEmailHint = useCallback(() => {
+    if (paramsGetVerifiedEmailHint) return paramsGetVerifiedEmailHint()
+    return resolveWaitlistVerifiedEmailHint(internalPrivy.user)
+  }, [paramsGetVerifiedEmailHint, internalPrivy.user])
   const setStep = params?.setStep ?? NOOP_SET_STEP
   const getAccessToken = params?.getAccessToken || internalPrivy.getAccessToken
   const disableAggressive = params?.disableAggressiveSessionReset ?? (() => {
@@ -274,7 +290,13 @@ export function useWaitlistAuthState(params?: {
     await waitForPrivyLogoutSettlement()
     try {
       if (login && buildWaitlistEmailLoginOptions) {
-        await runPrivyLoginWithTimeout(login as (options?: unknown) => Promise<unknown>, buildWaitlistEmailLoginOptions() as any)
+        await runPrivyLoginWithTimeout(
+          login as (options?: unknown) => Promise<unknown>,
+          buildWaitlistEmailLoginOptions({
+            verifiedEmailHint: getVerifiedEmailHint?.(),
+            hasPriorAuthMarker: hasPriorPrivyAuthMarker(),
+          }) as any,
+        )
       }
       const next = requestFromBootstrap ? await requestFromBootstrap({ forceNew: true, waitForTokenHydration: true, bypassRecoveryCooldown: true }) : null
       if (!next) {
@@ -290,6 +312,7 @@ export function useWaitlistAuthState(params?: {
     runLogout,
     privy,
     login,
+    getVerifiedEmailHint,
     requestFromBootstrap,
     waitForPrivyLogoutSettlement,
     STALE_PRIVY_SESSION_MESSAGE,
@@ -698,7 +721,15 @@ export function useWaitlistAuthState(params?: {
         loginStartedWhileLoggedOutRef.current = true
         loginAwaitInProgressRef.current = true
         try {
-          if (login && buildWaitlistEmailLoginOptions) await runPrivyLoginWithTimeout(login as (options?: unknown) => Promise<unknown>, buildWaitlistEmailLoginOptions() as any)
+          if (login && buildWaitlistEmailLoginOptions) {
+            await runPrivyLoginWithTimeout(
+              login as (options?: unknown) => Promise<unknown>,
+              buildWaitlistEmailLoginOptions({
+                verifiedEmailHint: getVerifiedEmailHint?.(),
+                hasPriorAuthMarker: hasPriorPrivyAuthMarker(),
+              }) as any,
+            )
+          }
           loginAwaitInProgressRef.current = false
           captureWaitlistVerifiedEmailHint(privy.user)
           await new Promise<void>((resolve) => setTimeout(resolve, 120))
@@ -763,6 +794,7 @@ export function useWaitlistAuthState(params?: {
     isAlreadyLoggedInAuthError,
     isWalletProviderCollisionError,
     privy.user,
+    getVerifiedEmailHint,
   ])
 
   const onRecoverAccount = useCallback(async () => {

@@ -22,7 +22,7 @@ export function deriveWaitlistAuthUi(options?: { recoveryRequired?: boolean }): 
 
   return {
     title: 'Join the waitlist',
-    subtitle: 'Sign in with your email to claim a spot.',
+    subtitle: 'Use email for first-time setup. Returning users can sign in with wallet or email.',
     ctaLabel: 'Continue with email',
     busyLabel: 'Finishing sign-in…',
   }
