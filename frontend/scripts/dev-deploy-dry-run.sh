@@ -87,6 +87,21 @@ ensure_node_version() {
 
 ensure_node_version
 
+ensure_server_core_dist() {
+  local dist_index="$FRONTEND_DIR/packages/server-core/dist/index.js"
+  local dist_auth="$FRONTEND_DIR/packages/server-core/dist/auth.js"
+  if [[ -f "$dist_index" && -f "$dist_auth" ]]; then
+    return 0
+  fi
+  echo "Missing @4626/server-core dist artifacts; building local API runtime package..."
+  (
+    cd "$FRONTEND_DIR"
+    pnpm run build:server-core
+  )
+}
+
+ensure_server_core_dist
+
 maybe_raise_inotify_limit() {
   local target=524288
   local current=0
