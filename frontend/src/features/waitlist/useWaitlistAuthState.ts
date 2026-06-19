@@ -18,6 +18,8 @@ import {
   SESSION_MISMATCH_MESSAGE,
   STALE_PRIVY_SESSION_MESSAGE,
   WAITLIST_STALE_SESSION_RESET_MESSAGE,
+  FINALIZING_BACKGROUND_RETRY_MAX_ATTEMPTS,
+  FINALIZING_BACKGROUND_RETRY_MS,
   FLOW_TIMEOUT_MS,
   getSignInNetworkUnstableMessage,
   getWalletProviderCollisionMessage as getWalletProviderCollisionMessageDefault,
@@ -56,6 +58,10 @@ const DEFAULT_STALE_PRIVY_SESSION_MESSAGE =
   'Sign-in session expired. Tap Use existing account to sign in again with email.'
 const NOOP_SET_STEP = (_step: unknown) => {}
 const NOOP_CALLBACK = () => {}
+const FINALIZING_STUCK_MESSAGE =
+  'Sign-in is taking longer than expected. Retries continue automatically; tap Retry now or Continue to nudge, or sign out to restart.'
+const FINALIZING_LOGIN_INCOMPLETE_MESSAGE =
+  'Email sign-in did not complete. Request a fresh code and try again.'
 
 /**
  * Extracted state + guards for waitlist auth flow.
@@ -93,7 +99,7 @@ export function useWaitlistAuthState(params?: {
   const { login: internalLogin } = useLogin()
 
   // Default redirect impl inside hook (no need to pass from component).
-  const redirectToCanonical = params?.redirectToCanonicalWaitlist ?? (() => {
+  const redirectToCanonicalFallback = useCallback(() => {
     if (typeof window === 'undefined') return false
     const localHost = (window.location?.hostname ?? '').toLowerCase()
     if (localHost === 'localhost' || localHost === '127.0.0.1' || localHost === '::1' || localHost === '[::1]') {
@@ -116,7 +122,8 @@ export function useWaitlistAuthState(params?: {
     if (target === current) return false
     window.location.assign(target)
     return true
-  })
+  }, [])
+  const redirectToCanonical = params?.redirectToCanonicalWaitlist ?? redirectToCanonicalFallback
 
   // Now safe to derive from hooks + params.
   const privyAuthed = params?.privyAuthed ?? internalPrivy.authenticated
@@ -204,6 +211,7 @@ export function useWaitlistAuthState(params?: {
   const finalizingAutoRetryCountRef = useRef(0)
   const finalizingBackgroundRetryCountRef = useRef(0)
   const finalizingBgTimerRef = useRef<number | null>(null)
+  const finalizingRetryExhaustedRef = useRef(false)
   const privyAuthedRef = useRef(privyAuthed)
   const privyClientStatusRef = useRef<'disabled' | 'loading' | 'ready'>('loading')
 
@@ -497,6 +505,7 @@ export function useWaitlistAuthState(params?: {
   }, [privy, setAccount, runLogout, setError, setRecoveryRequired])
 
   const resumePendingWaitlistAuth = useCallback(async () => {
+    finalizingRetryExhaustedRef.current = false
     clearWaitlistRecoveryGate()
     setRecoveryRequired(false)
     recoveryCooldownRef.current = 0
@@ -571,6 +580,7 @@ export function useWaitlistAuthState(params?: {
   const beginAttempt = useCallback((): boolean => {
     if (busy || attemptInFlightRef.current) return false
     attemptInFlightRef.current = true
+    finalizingRetryExhaustedRef.current = false
     authBootstrapAutoAttemptedRef.current = true
     privyAuthedBootstrapAttemptedRef.current = true
     setBusy(true)
@@ -591,6 +601,7 @@ export function useWaitlistAuthState(params?: {
     if (busy || attemptInFlightRef.current || recoveryHandoffInFlightRef.current) return false
     recoveryHandoffInFlightRef.current = true
     attemptInFlightRef.current = true
+    finalizingRetryExhaustedRef.current = false
     privyAuthedBootstrapAttemptedRef.current = true
     authBootstrapAutoAttemptedRef.current = true
     setBusy(true)
@@ -621,6 +632,7 @@ export function useWaitlistAuthState(params?: {
     loginAwaitInProgressRef.current = false
     startAuthAutoAttemptedRef.current = false
     attemptInFlightRef.current = false
+    finalizingRetryExhaustedRef.current = false
   }, [attemptInFlightRef])
 
   const finalizeRecoveryHandoffError = useCallback(
@@ -890,6 +902,7 @@ export function useWaitlistAuthState(params?: {
       resetAuthAttemptFlags()
       finalizingAutoRetryCountRef.current = 0
       finalizingBackgroundRetryCountRef.current = 0
+      finalizingRetryExhaustedRef.current = false
       if (finalizingBgTimerRef.current) {
         window.clearTimeout(finalizingBgTimerRef.current)
         finalizingBgTimerRef.current = null
@@ -927,21 +940,29 @@ export function useWaitlistAuthState(params?: {
     let cancelled = false
     const timeoutId = window.setTimeout(() => {
       void (async () => {
+        const exhaustFinalizingRetries = (message: string) => {
+          finalizingRetryExhaustedRef.current = true
+          clearWaitlistAuthPending()
+          setFinalizing(false)
+          setError(message)
+        }
         try {
           const next = requestBootstrap ? await requestBootstrap({ waitForTokenHydration: true }) : null
           if (cancelled) return
           if (next) {
             finalizingBackgroundRetryCountRef.current = 0
+            finalizingRetryExhaustedRef.current = false
             setFinalizing(false)
             setError(null)
           } else {
             finalizingBackgroundRetryCountRef.current += 1
-            if (finalizingBackgroundRetryCountRef.current >= 8) {
-              setFinalizing(false)
-              setError(
-                'Sign-in is taking longer than expected. Retries continue automatically; tap Retry now or Continue to nudge, or sign out to restart.',
-              )
+            const retries = finalizingBackgroundRetryCountRef.current
+            if (!privyAuthedRef.current && retries >= 3) {
+              exhaustFinalizingRetries(FINALIZING_LOGIN_INCOMPLETE_MESSAGE)
+            } else if (retries >= FINALIZING_BACKGROUND_RETRY_MAX_ATTEMPTS) {
+              exhaustFinalizingRetries(FINALIZING_STUCK_MESSAGE)
             } else {
+              finalizingRetryExhaustedRef.current = false
               setFinalizing(true)
               setError(null)
             }
@@ -954,13 +975,16 @@ export function useWaitlistAuthState(params?: {
               return
             }
             finalizingBackgroundRetryCountRef.current += 1
-            if (finalizingBackgroundRetryCountRef.current >= 8) {
-              setFinalizing(false)
-              setError(
-                'Sign-in is taking longer than expected. Retries continue automatically; tap Retry now or Continue to nudge, or sign out to restart.',
-              )
+            const retries = finalizingBackgroundRetryCountRef.current
+            if (!privyAuthedRef.current && retries >= 3) {
+              exhaustFinalizingRetries(FINALIZING_LOGIN_INCOMPLETE_MESSAGE)
               return
             }
+            if (retries >= FINALIZING_BACKGROUND_RETRY_MAX_ATTEMPTS) {
+              exhaustFinalizingRetries(FINALIZING_STUCK_MESSAGE)
+              return
+            }
+            finalizingRetryExhaustedRef.current = false
             setFinalizing(true)
             setError(null)
             return
@@ -971,13 +995,16 @@ export function useWaitlistAuthState(params?: {
               return
             }
             finalizingBackgroundRetryCountRef.current += 1
-            if (finalizingBackgroundRetryCountRef.current >= 8) {
-              setFinalizing(false)
-              setError(
-                'Sign-in is taking longer than expected. Retries continue automatically; tap Retry now or Continue to nudge, or sign out to restart.',
-              )
+            const retries = finalizingBackgroundRetryCountRef.current
+            if (!privyAuthedRef.current && retries >= 3) {
+              exhaustFinalizingRetries(FINALIZING_LOGIN_INCOMPLETE_MESSAGE)
               return
             }
+            if (retries >= FINALIZING_BACKGROUND_RETRY_MAX_ATTEMPTS) {
+              exhaustFinalizingRetries(FINALIZING_STUCK_MESSAGE)
+              return
+            }
+            finalizingRetryExhaustedRef.current = false
             setFinalizing(true)
             setError(null)
             return
@@ -1013,7 +1040,7 @@ export function useWaitlistAuthState(params?: {
           setBusy(false)
         }
       })()
-    }, 1100)
+    }, FINALIZING_BACKGROUND_RETRY_MS)
 
     finalizingBgTimerRef.current = timeoutId
 
@@ -1046,6 +1073,7 @@ export function useWaitlistAuthState(params?: {
     if (!privyAuthed || privyClientStatus !== 'ready') return
     if (account?.emailVerified) return
     if (recoveryRequired) return
+    if (finalizingRetryExhaustedRef.current) return
 
     if (authAttemptInFlightRef.current) {
       if (recoveryHandoffInFlightRef.current) return
@@ -1088,6 +1116,7 @@ export function useWaitlistAuthState(params?: {
     endAuthAttempt,
     finalizing,
     resumePendingWaitlistAuth,
+    finalizingRetryExhaustedRef,
   ])
 
   // Deep link auto start effect (moved below callback declarations for exhaustive-deps correctness)
