@@ -91,6 +91,19 @@ export function shouldResolveConnectIdentity(input: ResolveIdentityInput): boole
   return input.showMenu || input.showOptions
 }
 
+const PRIVY_LAST_AUTH_HINT_KEY = 'cv:privy:lastAuthAt'
+
+type WalletPreferredLoginInput = {
+  lastAuthAtRaw: string | null | undefined
+}
+
+export function shouldPreferWalletLoginAfterEmail(input: WalletPreferredLoginInput): boolean {
+  const raw = typeof input.lastAuthAtRaw === 'string' ? input.lastAuthAtRaw.trim() : ''
+  if (!raw) return false
+  const timestampMs = Number(raw)
+  return Number.isFinite(timestampMs) && timestampMs > 0
+}
+
 export function ExternalWalletOptions(props: {
   authBusy: boolean
   hasMultipleInjectedProviders: boolean
@@ -347,6 +360,15 @@ export function ConnectButton({
   const [traySection, setTraySection] = useState<'account' | 'portfolio' | 'points'>('account')
   const privyStatus = usePrivyClientStatus()
   const prefersPrivyWalletLogin = privyStatus === 'ready'
+  const shouldPreferWalletLogin = useMemo(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      const raw = localStorage.getItem(PRIVY_LAST_AUTH_HINT_KEY)
+      return shouldPreferWalletLoginAfterEmail({ lastAuthAtRaw: raw })
+    } catch {
+      return false
+    }
+  }, [])
   const [showMenu, setShowMenu] = useState(false)
   const [showOptions, setShowOptions] = useState(false)
   const mountedRef = useRef(true)
@@ -897,7 +919,10 @@ export function ConnectButton({
   const signInOnClick = () => {
     if (prefersPrivyWalletLogin) {
       void (async () => {
-        const signed = await auth.signIn({ method: 'privy' })
+        const signed = await auth.signIn({
+          method: 'privy',
+          preferBaseAccountWallet: shouldPreferWalletLogin,
+        })
         if (!signed) {
           setShowMenu(false)
           setShowOptions(true)
@@ -948,9 +973,23 @@ export function ConnectButton({
                     void auth.signIn({ method: 'privy' })
                   }}
                 >
-                  <span className="label block">Sign in with email or wallet</span>
-                  <span className="app-meta-value text-zinc-500 block mt-1">Verified email first, or continue with wallet</span>
+                  <span className="label block">Continue with email</span>
+                  <span className="app-meta-value text-zinc-500 block mt-1">Use email OTP for first-time account setup and recovery.</span>
                 </button>
+                {shouldPreferWalletLogin ? (
+                  <button
+                    type="button"
+                    disabled={auth.busy}
+                    className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-50"
+                    onClick={() => {
+                      setShowOptions(false)
+                      void auth.signIn({ method: 'privy', preferBaseAccountWallet: true })
+                    }}
+                  >
+                    <span className="label block">Continue with wallet</span>
+                    <span className="app-meta-value text-zinc-500 block mt-1">Returning sign-in using your linked Base wallet.</span>
+                  </button>
+                ) : null}
               </>
             ) : null}
             <ExternalWalletOptions

@@ -10,8 +10,8 @@ import {
 } from './useSiweAuth'
 
 describe('PRIVY_INTERACTIVE_LOGIN_METHODS', () => {
-  it('prefers email before wallet for explicit Privy sign-in', () => {
-    expect(PRIVY_INTERACTIVE_LOGIN_METHODS).toEqual(['email', 'wallet'])
+  it('keeps explicit Privy sign-in email-only by default', () => {
+    expect(PRIVY_INTERACTIVE_LOGIN_METHODS).toEqual(['email'])
   })
 })
 
