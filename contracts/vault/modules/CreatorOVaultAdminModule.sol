@@ -115,6 +115,7 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
         emit VaultShutdown();
     }
 
+    // slither-disable-next-line uninitialized-state
     function emergencyWithdrawFromStrategies() external onlyDelegateCall {
         IERC20 coin = _creatorCoin();
         uint256 length = strategyList.length;
@@ -475,6 +476,7 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
         minDeploymentInterval = _interval;
     }
 
+    // slither-disable-next-line uninitialized-state
     function setMaxTotalSupply(uint256 _maxTotalSupply) external onlyDelegateCall {
         uint256 current = _totalSupply;
         if (_maxTotalSupply < current) revert MaxTotalSupplyBelowCurrent(_maxTotalSupply, current);

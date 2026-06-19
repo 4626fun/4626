@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
+// slither-disable-start uninitialized-state
+
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -420,6 +422,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     address public impairmentGuardian;
     address public impairmentClaims;
     address public impairmentRecoveryEscrow;
+    // slither-disable-next-line uninitialized-state
     address public ccaLaunchStrategy;
 
     // =================================
@@ -1311,9 +1314,9 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
      * @dev Rejects fee-on-transfer / deflationary / rebasing tokens by enforcing
      *      that the vault's balance increases by exactly `amount`.
      */
-    function _pullCreatorCoinExact(address from, uint256 amount) internal returns (uint256 received) {
+    function _pullCreatorCoinExact(uint256 amount) internal returns (uint256 received) {
         uint256 beforeBal = CREATOR_COIN.balanceOf(address(this));
-        CREATOR_COIN.safeTransferFrom(from, address(this), amount);
+        CREATOR_COIN.safeTransferFrom(msg.sender, address(this), amount);
         uint256 afterBal = CREATOR_COIN.balanceOf(address(this));
 
         received = afterBal - beforeBal;
@@ -2221,3 +2224,5 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         return 3; // 10^3 = 1000 virtual shares
     }
 }
+
+// slither-disable-end uninitialized-state

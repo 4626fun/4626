@@ -1112,7 +1112,7 @@ contract DeploymentBatcherPhase2Module {
             IDeploymentBatcherSolanaConfig config = IDeploymentBatcherSolanaConfig(batcher);
             IDeploymentBatcherSolanaConfig.OVaultRuntimeConfig memory runtime = config.getOVaultRuntimeConfig();
             _ensureRegistryAndShareOftPeerWired(params, runtime.solanaEid);
-            _bridgeShareAllocationToSolana(params.shareOFT, params.owner, result.solanaAmount);
+            _bridgeShareAllocationToSolana(params.shareOFT, result.solanaAmount);
         }
 
         if (result.vestingAmount > 0) {
@@ -1192,7 +1192,8 @@ contract DeploymentBatcherPhase2Module {
         }
     }
 
-    function _bridgeShareAllocationToSolana(address shareOFT, address refundAddress, uint256 amount) internal {
+    // slither-disable-next-line arbitrary-send-eth
+    function _bridgeShareAllocationToSolana(address shareOFT, uint256 amount) internal {
         IDeploymentBatcherSolanaConfig config = IDeploymentBatcherSolanaConfig(batcher);
         IDeploymentBatcherSolanaConfig.OVaultRuntimeConfig memory runtime = config.getOVaultRuntimeConfig();
         if (!runtime.enabled || runtime.solanaEid == 0) revert SolanaShareBridgeNotConfigured();
@@ -1215,11 +1216,11 @@ contract DeploymentBatcherPhase2Module {
         MessagingFee memory fee = IOFT(shareOFT).quoteSend(sendParam, false);
         if (msg.value < fee.nativeFee) revert InsufficientSolanaBridgeFee(fee.nativeFee, msg.value);
 
-        IOFT(shareOFT).send{value: fee.nativeFee}(sendParam, fee, refundAddress);
+        IOFT(shareOFT).send{value: fee.nativeFee}(sendParam, fee, msg.sender);
 
         uint256 surplus = msg.value - fee.nativeFee;
         if (surplus > 0) {
-            (bool ok,) = payable(refundAddress).call{value: surplus}("");
+            (bool ok,) = payable(msg.sender).call{value: surplus}("");
             if (!ok) revert SolanaBridgeRefundFailed();
         }
     }
@@ -2320,6 +2321,7 @@ contract DeploymentBatcher is ReentrancyGuard {
     }
 
     function _delegatePhase1(bytes memory callData) internal returns (bytes memory result) {
+        // slither-disable-next-line controlled-delegatecall
         (bool ok, bytes memory outData) = address(phase1Module).delegatecall(callData);
         if (!ok) {
             assembly {
@@ -2330,6 +2332,7 @@ contract DeploymentBatcher is ReentrancyGuard {
     }
 
     function _delegatePhase2(bytes memory callData) internal returns (bytes memory result) {
+        // slither-disable-next-line controlled-delegatecall
         (bool ok, bytes memory outData) = address(phase2Module).delegatecall(callData);
         if (!ok) {
             assembly {

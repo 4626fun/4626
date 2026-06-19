@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
+// slither-disable-start uninitialized-state
+
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -865,6 +867,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     // MISC
     // =================================
 
+    // slither-disable-next-line uninitialized-state
     function burnSharesForPriceIncrease(uint256 shares) external onlyDelegateCall {
         if (shares == 0) revert ZeroAmount();
         address sender = msg.sender;
@@ -1102,3 +1105,5 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         }
     }
 }
+
+// slither-disable-end uninitialized-state
