@@ -55,6 +55,7 @@ import { checkEoaOwnershipOfCsw } from '@/wallet/accountContext/ownership'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { submitOwnerViaPreparedCallsWithEoaOwner } from '@/lib/wallet/eoaOwnerPreparedCalls'
 import type { PreparedOwnerTxRequest } from '@/lib/wallet/zoraAddOwnerApi'
+import { buildOwnerWalletConnectList, mapOwnerWalletConnectError } from './ownerWalletConnectOptions'
 
 import { PROVIDER_ROWS, deriveOwnerAuthorityState, hasResolvedZoraSignals, isMobileWalletEnvironment, shortValue, sleep } from './shared'
 import type {
@@ -629,15 +630,13 @@ export function useAccountSetupController(params: {
     setNoticeGuarded(null)
     setBusyProviderGuarded('owner_wallet')
     try {
-      const result = await Promise.resolve(
+      const walletList = buildOwnerWalletConnectList({
+        prefersWalletConnectQr,
+      })
+
+      const connectPromise = Promise.resolve(
         connectWalletNow({
-          walletList: [
-            'coinbase_wallet',
-            'base_account',
-            prefersWalletConnectQr ? 'wallet_connect_qr' : 'wallet_connect',
-            'detected_ethereum_wallets',
-            'metamask',
-          ],
+          walletList,
           walletChainType: 'ethereum-only',
           description: 'Connect your Base Account or one of the current owners of your Coinbase Smart Wallet on Base.',
         }),
@@ -646,6 +645,8 @@ export function useAccountSetupController(params: {
         if (message.toLowerCase().includes('user') && message.toLowerCase().includes('reject')) return null
         throw connectError
       })
+
+      const result = await withOperationTimeout(connectPromise, 25_000, 'Owner wallet connect')
       const selectedWallet =
         result && typeof result === 'object' && 'wallet' in (result as Record<string, unknown>)
           ? ((result as { wallet?: unknown }).wallet ?? null)
@@ -655,7 +656,7 @@ export function useAccountSetupController(params: {
       }
       await sleep(120)
     } catch (connectError: any) {
-      setErrorGuarded(typeof connectError?.message === 'string' ? connectError.message : 'Failed to connect owner wallet.')
+      setErrorGuarded(mapOwnerWalletConnectError(connectError))
     } finally {
       setBusyProviderGuarded(null)
     }
