@@ -4722,8 +4722,11 @@ function DeployVaultBatcher({
         // ============================================================
         if (!publicClient) throw new Error('Public client not ready.')
 
-        // Hard guard: require at least one executable signer path (canonical/Privy lanes only).
-        if (!planOnly && !canUsePrivySmartWallet && !canUseWalletSendCalls) {
+        // Hard guard: require at least one executable signer path.
+        // Embedded-owner ERC-4337 is valid even when no Privy smart-wallet client is mounted.
+        const canUseEmbeddedOwnerSigner =
+          privyEmbeddedEoaIsCanonicalOwner && privyEmbeddedEoaCanSign && Boolean(privyEmbeddedEoaAddress)
+        if (!planOnly && !canUsePrivySmartWallet && !canUseWalletSendCalls && !canUseEmbeddedOwnerSigner) {
           throw new Error(
             'Smart wallet required. Sign in to 4626 to restore your canonical Coinbase Smart Wallet session, or use Coinbase Wallet (Base Account), then retry.',
           )
