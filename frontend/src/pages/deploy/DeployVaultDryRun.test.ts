@@ -40,4 +40,12 @@ describe('DeployVault dry run wiring', () => {
     expect(pageSource).toContain("functionName: 'setMinimumTotalIdle'")
     expect(pageSource).toContain("functionName: 'deployToStrategies'")
   })
+
+  it('accepts embedded-owner signer lane in deploy hard guard', () => {
+    const pageSource = fs.readFileSync(path.resolve(__dirname, './DeployVault.tsx'), 'utf8')
+
+    expect(pageSource).toContain('const canUseEmbeddedOwnerSigner =')
+    expect(pageSource).toContain('privyEmbeddedEoaIsCanonicalOwner && privyEmbeddedEoaCanSign')
+    expect(pageSource).toContain('!canUseWalletSendCalls && !canUseEmbeddedOwnerSigner')
+  })
 })
