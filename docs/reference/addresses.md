@@ -14,35 +14,34 @@ Deployed contract addresses for 4626.
 
 ## Base (Hub Chain)
 
-### Current Live Infrastructure (`v1.14.0` greenfield deploy target)
+### Current Live Infrastructure (`v1.14.1` greenfield deploy target)
 
 | Contract | Address |
 |----------|---------|
-| CreatorRegistry | `0x3f64087dc361Ad52300409E5873b26941D6418B6` |
-| CreatorOVaultFactory | `0x09a2fd817F30D2599fb13520d06751259b6AdcFE` |
-| VaultActivationBatcher | `0x5036FB536f53b15307825eB2006B21E22f0F3193` |
-| CreatorLotteryManager | `0x5c0115589d7F4930A0dc93417aE409f44186f4E7` |
-| CreatorVRFConsumerV2_5 | `0xE4AcDD5316EcF4D98301509968F0728EEDaaB68E` |
-| SolanaBridgeAdapter | `0x700b4BBAf965c013123bAd02a6562FBa487aC0f1` |
-| UniversalBytecodeStoreV2 | `0x8B51E6784A0C6681F5de25bAC4f9B2fDCEDE72b4` |
-| UniversalCreate2DeployerFromStore | `0x4760216AFd59B843671E0FdFCe6498Ec8CFf38a7` |
-| CreatorOVaultCoreModule | `0x72689fB2243ff247F3A59b431C2C9E95AeFE8A2B` |
-| CreatorOVaultStrategiesModule | `0xF1430f5E10B4C73De06de37ADa6bC77C51DA8157` |
-| CreatorOVaultAdminModule | `0x702DB3176493D79Ee47ac746AA9865113e667aD1` |
-| DeploymentBatcher | `0xa99058f424FB3ACC639F59355C65C40149030651` |
-| DeploymentBatcherPhase1Module | `0xE83876c67E1E845A199f64fb33D76ADC62EAaB9D` |
-| DeploymentBatcherPhase2Module | `0xdDbD468271BffF84De09AAc3C43B582e2dBEDC5E` |
-| DeploymentBatcherPhase3Helper | `0x674a2D5EE33e184e2120B373a9AcB3fef640885c` |
-| DeploymentBatcherUniV4Helper | `0xF71a6236586077CD29C971443D2cce37B543DcBB` |
-| DeploymentBatcherUtilsHelper | `0xD71C4910C7bB38FB1089Cca42b0883F1BFFfa28D` |
+| CreatorRegistry | `0xDD7B106a15540bA2F59464590222bF47D8C9394E` |
+| CreatorOVaultFactory | `0xf4a4d70D9fB3b29c56eB2aaE264FBd3DF9221A6a` |
+| VaultActivationBatcher | `0x5EaFfa41f07a1aAf6ecd38833fd128C53fD8669A` |
+| CreatorLotteryManager | `0x29F901864D65Eb848BC548ebCEAcD6dAD39EFd26` |
+| CreatorVRFConsumerV2_5 | `0x86B605400DBb67cc4756493c7791422184e4dC59` |
+| SolanaBridgeAdapter | `0x8e99bb0270bbdf2d64ff6854509CD2410A28fBae` |
+| UniversalBytecodeStoreV2 | `0xb3712E84F123e7C5390913E30FC6BBD5AEd2a314` |
+| UniversalCreate2DeployerFromStore | `0x2fA570Cb17925Da86b303D4651f06b83057a10c4` |
+| CreatorOVaultCoreModule | `0xD4553478780571A1A5F6cCCC0735F897F15a85Cf` |
+| CreatorOVaultStrategiesModule | `0x4036e3D2d029451cEB68d521a5D0233F56518681` |
+| CreatorOVaultAdminModule | `0xDd136c20F8f6688089e55a6CA8709718c5183307` |
+| DeploymentBatcher | `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1` |
+| DeploymentBatcherPhase1Module | `0x0fac3F8040879eF1ca6cc4572cc27f0908a8f266` |
+| DeploymentBatcherPhase2Module | `0xde192645Fb02dD05f586930e55D709E89c320435` |
+| DeploymentBatcherPhase3Helper | `0xE0971a924E33251556fE73a4025166701b772dBe` |
+| DeploymentBatcherUniV4Helper | `0xD2c68F175FB4DB4069A2ebBc3f02B31C635438eb` |
+| DeploymentBatcherUtilsHelper | `0xE41231e399511baaDa8844C9D1c83C096e3f2E60` |
 
 Notes:
-- Shared/global and split Phase-1 infra shell remain from v1.11.2-pipe-a; **v1.14.0** pairs the CreatorOVault `CreatorOVaultModuleStorage.v3` impairment module stack with store-seeded deploy bytecode.
+- **v1.14.1** is a full shared/global + split Phase-1 refresh that keeps CreatorOVault `CreatorOVaultModuleStorage.v3` and rotates the batcher shell, helper modules, registry, and store/deployer pair.
 - `DeploymentBatcher` deploys as a slim shell; helpers and `DeploymentBatcherPhase1Module` wire post-deploy via protocol treasury Safe (`wireDeploymentHelpers` + `setPhase1Module`).
-- Greenfield Phase 1 reads **Phase1Module immutables** (`phase1Module()` → `0xE838…`), not batcher-shell module getters (shell may still expose legacy `.current` modules).
-- Retired v1.13.0 v2 Phase1Module (`0x19Bd8…`) is for grandfathered vaults only — do not restore for new greenfield deploys after the v1.14.0 cutover.
-- Pre-Pipe-A batcher `0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8` is deprecated — do not use for greenfield deploys.
-- **2026-06-12 Phase2Module rotation (100M deposit widening):** `setPhase2Module(0xdDbD…DC5E)` executed via protocol treasury Safe (tx `0xa6f4a4a9a3961f3c53853b4c9c2fa1d18e377203148d99e8ef924134af54520b`; module deploy tx `0xae1f18d21551119f696f391e6ddecfb2884e210f7ac4f1889ada8f1521cefdb2`). The new module enforces a first-deposit **range of [50M, 100M]** creator tokens in `_validateFinalizePhase2`; previous module `0x67FD8A34E5b26F875a9513DFf37521A1ca92d80f` (exact 50M) retired. The live batcher shell predates the widening, so shell getters still report `MAX_DEPOSIT = 50M` — informational only; enforcement lives in the module.
+- Greenfield Phase 1 reads **Phase1Module immutables** (`phase1Module()` → `0x0fac…`), not batcher-shell module getters (shell may still expose legacy `.current` modules).
+- Retired v1.13.0 v2 Phase1Module (`0x19Bd8…`) is for grandfathered vaults only — do not restore for new greenfield deploys after the v1.14.1 cutover.
+- Pre-v1.14.1 batchers (`0xa99058…` and older) are deprecated for new greenfield deploys.
 
 ### Per-Creator Deployments
 

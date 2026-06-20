@@ -23,22 +23,23 @@ export const PRE_CURRENT_MODULE_DEPLOYMENT_BATCHER = addr('e3F9490CfD6bd3D680104
 export const PRE_V1110_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('004684670d284EF607E1B2424fcf8ccBda8ef828')
 export const PRE_V1111_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('271Ab2C53D79d52ddB14506a44133Fe3FA395332')
 export const PRE_V1112_PIPE_A_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8')
-/** v1.11.2-pipe-a epoch: slim shell + post-deploy helper wiring + payable finalize / ShareOFT peer. */
-export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('a99058f424FB3ACC639F59355C65C40149030651')
-/** v1.14.0 greenfield target: v3 impairment modules + store-aligned create2 deployer. */
-export const SPLIT_PHASE1_PHASE1_MODULE = addr('E83876c67E1E845A199f64fb33D76ADC62EAaB9D')
+export const PRE_V1140_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('a99058f424FB3ACC639F59355C65C40149030651')
+/** v1.14.1 epoch: fresh split shell + post-deploy helper wiring + payable finalize / ShareOFT peer. */
+export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('660B251F2feB28f61A8e23e65C66F9b917Ee61c1')
+/** v1.14.1 greenfield target: v3 impairment modules + store-aligned create2 deployer. */
+export const SPLIT_PHASE1_PHASE1_MODULE = addr('0fac3F8040879eF1ca6cc4572cc27f0908a8f266')
 /** Retired v1.13.0 v2 Phase1Module (grandfathered greenfield only). */
 export const SPLIT_PHASE1_PHASE1_MODULE_V2_LEGACY = addr('19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87')
 /** Earlier impairment pilot Phase1Module (superseded by v1.14.0 store cutover). */
 export const SPLIT_PHASE1_PHASE1_MODULE_V3_IMPAIRMENT = addr('ffbFf3E529e5A4dBFD9ea2e9C01B773D1B7fA1a0')
-export const SPLIT_PHASE1_PHASE2_MODULE = addr('67FD8A34E5b26F875a9513DFf37521A1ca92d80f')
-export const SPLIT_PHASE1_PHASE3_HELPER = addr('674a2D5EE33e184e2120B373a9AcB3fef640885c')
-export const SPLIT_PHASE1_UNIV4_HELPER = addr('F71a6236586077CD29C971443D2cce37B543DcBB')
-export const SPLIT_PHASE1_UTILS_HELPER = addr('D71C4910C7bB38FB1089Cca42b0883F1BFFfa28D')
-export const CREATOR_OVAULT_FACTORY = addr('09a2fd817F30D2599fb13520d06751259b6AdcFE')
-export const CREATOR_OVAULT_CORE_MODULE = addr('72689fB2243ff247F3A59b431C2C9E95AeFE8A2B')
-export const CREATOR_OVAULT_STRATEGIES_MODULE = addr('F1430f5E10B4C73De06de37ADa6bC77C51DA8157')
-export const CREATOR_OVAULT_ADMIN_MODULE = addr('702DB3176493D79Ee47ac746AA9865113e667aD1')
+export const SPLIT_PHASE1_PHASE2_MODULE = addr('de192645Fb02dD05f586930e55D709E89c320435')
+export const SPLIT_PHASE1_PHASE3_HELPER = addr('E0971a924E33251556fE73a4025166701b772dBe')
+export const SPLIT_PHASE1_UNIV4_HELPER = addr('D2c68F175FB4DB4069A2ebBc3f02B31C635438eb')
+export const SPLIT_PHASE1_UTILS_HELPER = addr('E41231e399511baaDa8844C9D1c83C096e3f2E60')
+export const CREATOR_OVAULT_FACTORY = addr('f4a4d70D9fB3b29c56eB2aaE264FBd3DF9221A6a')
+export const CREATOR_OVAULT_CORE_MODULE = addr('D4553478780571A1A5F6cCCC0735F897F15a85Cf')
+export const CREATOR_OVAULT_STRATEGIES_MODULE = addr('4036e3D2d029451cEB68d521a5D0233F56518681')
+export const CREATOR_OVAULT_ADMIN_MODULE = addr('Dd136c20F8f6688089e55a6CA8709718c5183307')
 
 const DEPRECATED_CREATOR_VAULT_BATCHERS = new Set<string>([
   LEGACY_DEPLOYMENT_BATCHER.toLowerCase(),
@@ -47,6 +48,7 @@ const DEPRECATED_CREATOR_VAULT_BATCHERS = new Set<string>([
   PRE_V1110_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_V1111_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_V1112_PIPE_A_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+  PRE_V1140_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
 ])
 
 export function isDeprecatedCreatorVaultBatcherAddress(value: string | null | undefined): boolean {
@@ -99,17 +101,17 @@ export function normalizeCreatorVaultBatcherAddress(
 
 export const BASE_DEFAULTS = {
   // Shared infrastructure
-  // v1.11.2-pipe-a protocol cutover addresses.
-  registry: addr('3f64087dc361Ad52300409E5873b26941D6418B6'),
-  lotteryManager: addr('5c0115589d7F4930A0dc93417aE409f44186f4E7'),
-  vrfConsumer: addr('E4AcDD5316EcF4D98301509968F0728EEDaaB68E'),
+  // v1.14.1 protocol cutover addresses.
+  registry: addr('DD7B106a15540bA2F59464590222bF47D8C9394E'),
+  lotteryManager: addr('29F901864D65Eb848BC548ebCEAcD6dAD39EFd26'),
+  vrfConsumer: addr('86B605400DBb67cc4756493c7791422184e4dC59'),
   // No live global PayoutRouterFactory is part of the current deploy flow.
   // PayoutRouter is deployed per creator through DeploymentBatcher; keep this
   // zero so stale no-code factory addresses fail closed if a legacy caller uses it.
   payoutRouterFactory: addr('0000000000000000000000000000000000000000'),
 
-  // Base↔Solana bridge integration for current v1.14.0 target stack.
-  solanaBridgeAdapter: addr('700b4BBAf965c013123bAd02a6562FBa487aC0f1'),
+  // Base↔Solana bridge integration for current v1.14.1 target stack.
+  solanaBridgeAdapter: addr('8e99bb0270bbdf2d64ff6854509CD2410A28fBae'),
 
   // CREATE2 infra (canonical, chain-agnostic)
   create2Factory: addr('4e59b44847b379578588920cA78FbF26c0B4956C'),
@@ -119,13 +121,13 @@ export const BASE_DEFAULTS = {
   // active Base DeploymentBatcher. Keep these paired with
   // `creatorVaultBatcher`; strict no-EOA deploy preflight checks the
   // batcher's onchain getters.
-  universalBytecodeStore: addr('8B51E6784A0C6681F5de25bAC4f9B2fDCEDE72b4'),
-  /** Paired with `universalBytecodeStore` on live split batcher `0xa99058…`. */
-  universalCreate2DeployerFromStore: addr('4760216AFd59B843671E0FdFCe6498Ec8CFf38a7'),
+  universalBytecodeStore: addr('b3712E84F123e7C5390913E30FC6BBD5AEd2a314'),
+  /** Paired with `universalBytecodeStore` on live split batcher `0x660B25…`. */
+  universalCreate2DeployerFromStore: addr('2fA570Cb17925Da86b303D4651f06b83057a10c4'),
   vaultAuxiliaryDeployBatcher: addr('a3986F2F812a80a4Ee4A33646bE5248D9e22eb88'),
 
   // AA helpers
-  vaultActivationBatcher: addr('5036FB536f53b15307825eB2006B21E22f0F3193'),
+  vaultActivationBatcher: addr('5EaFfa41f07a1aAf6ecd38833fd128C53fD8669A'),
   // Module-fixed split Phase-1 deployment batcher for strict no-EOA deploy
   // sessions. It exposes both core/finalize split selectors, Base↔Solana
   // bridge routing, compatible CreatorOVault modules, and enabled OVault
