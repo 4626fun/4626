@@ -3,7 +3,7 @@ import { Suspense, lazy } from 'react'
 import { AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { META, PageMeta } from '@/components/seo/PageMeta'
 import { PrivyClientProvider, usePrivyClientStatus } from '@/lib/privy/client'
-import { WalletProviders } from '@/web3/Web3Providers'
+import { Web3Providers } from '@/web3/Web3Providers'
 
 const LazyWaitlistFlow = lazy(async () => {
   const mod = await import('@/features/waitlist/WaitlistFlow')
@@ -25,9 +25,9 @@ export function Waitlist() {
     <>
       <PageMeta title={META.waitlist.title} description={META.waitlist.description} canonicalPath="/waitlist" />
       <PrivyClientProvider showWalletLoginFirst={false} mode="waitlist-email-only">
-        <WalletProviders reconnectOnMount={false}>
+        <Web3Providers>
           <WaitlistFlowGate />
-        </WalletProviders>
+        </Web3Providers>
       </PrivyClientProvider>
     </>
   )
