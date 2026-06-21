@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAccount, useConnect } from 'wagmi'
+import { usePrivy } from '@privy-io/react-auth'
 
 import { Button } from '@/components/ui/Button'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
@@ -14,12 +15,29 @@ type WaitlistBootstrapResponse = {
   requiresPrivyAuth: boolean
 }
 
-async function bootstrapWaitlist(): Promise<WaitlistBootstrapResponse> {
+function useSafePrivyHook() {
+  try {
+    return usePrivy() as {
+      getAccessToken?: (() => Promise<string | null>) | null
+    }
+  } catch {
+    return {
+      getAccessToken: null as null | (() => Promise<string | null>),
+    }
+  }
+}
+
+async function bootstrapWaitlist(privyAccessToken: string): Promise<WaitlistBootstrapResponse> {
+  const token = privyAccessToken.trim()
+  if (!token) {
+    throw new Error('Missing Privy auth token.')
+  }
   const response = await apiFetch('/api/waitlist/bootstrap', {
     method: 'POST',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({}),
   })
@@ -34,6 +52,7 @@ async function bootstrapWaitlist(): Promise<WaitlistBootstrapResponse> {
 export function WaitlistFlow(props: { sectionId?: string }) {
   const sectionId = props.sectionId ?? 'waitlist-page'
   const auth = useSiweAuth()
+  const privy = useSafePrivyHook()
   const { isConnected, address } = useAccount()
   const { connectAsync, connectors, isPending } = useConnect()
 
@@ -56,14 +75,18 @@ export function WaitlistFlow(props: { sectionId?: string }) {
       const signedIn = await auth.signIn({ method: 'privy' })
       if (!signedIn) return
 
-      await bootstrapWaitlist()
+      const privyToken = (await privy.getAccessToken?.().catch(() => null)) ?? ''
+      const bootstrap = await bootstrapWaitlist(privyToken)
+      if (bootstrap.requiresPrivyAuth) {
+        throw new Error('Could not verify waitlist signup. Please try again.')
+      }
       setStatus('You are on the waitlist. You can now continue to app sign-in anytime.')
     } catch (signupError) {
       setError(signupError instanceof Error ? signupError.message : 'Email signup failed.')
     } finally {
       setEmailBusy(false)
     }
-  }, [auth])
+  }, [auth, privy])
 
   const handleConnectWallet = useCallback(
     async (connectorId: string) => {
