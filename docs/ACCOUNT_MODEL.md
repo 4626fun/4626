@@ -33,7 +33,7 @@ and what works on `4626.fun` today:
 | # | Population | Connected wallet | Canonical CSW | Signer | Sub-account? | Spend permission? | What works on 4626.fun today |
 |---|---|---|---|---|---|---|---|
 | (a) | **Privy email-only** — signed up via email on 4626.fun | Privy embedded EOA only | none (no parent CSW) | Privy embedded EOA | No | No | All EOA-friendly flows: vault deposits, swaps, gauge votes. No CSW-gated flows. |
-| (b) | **Base App user** — signed in via Base App | Parent CSW (passkey at `owner[0]`) | The Base App CSW | Frontend: Privy embedded EOA via sub-account `setToOwnerAccount()` (orchestrator wired into waitlist `connect-base-app` step; see §5.3). Server: Privy server wallet added to parent CSW (separate track). | Wired (orchestrator + waitlist step; ships dark behind `WAITLIST_SUBACCOUNT_FLOW_ENABLED` / `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED`) | Planned (Track C / waitlist scope; v1 ships without) | **Today:** EOA-friendly flows only — same surface as population (a). The sub-account orchestrator (`setupSubAccount` + `useSubAccountSetup`) is wired into the waitlist `connect-base-app` step but the user-visible flow stays off until both `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` (server) and `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` (frontend) are flipped in production. Base App-gated owner mutations on the parent CSW are **not** available and will not be (see §4). This row will flip from "EOA-friendly flows only" to "sub-account-backed canonical flows" only after the production flag flip lands; do not edit the row earlier than that. |
+| (b) | **Base App user** — signed in via Base App | Parent CSW (passkey at `owner[0]`) | The Base App CSW | Frontend: Privy embedded EOA as direct owner of parent CSW (`legacy-owner-install`); sub-account via `setToOwnerAccount()` is flag-gated swap-only fallback. Server: Privy server wallet added to parent CSW (separate track). | Wired (orchestrator + waitlist step; ships dark behind `WAITLIST_SUBACCOUNT_FLOW_ENABLED` / `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED`) | Planned (Track C / waitlist scope; v1 ships without) | **Today:** EOA-friendly flows only — same surface as population (a). The sub-account orchestrator (`setupSubAccount` + `useSubAccountSetup`) is wired into the waitlist `connect-base-app` step but the user-visible flow stays off until both `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` (server) and `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` (frontend) are flipped in production. Base App-gated owner mutations on the parent CSW are **not** available and will not be (see §4). This row will flip from "EOA-friendly flows only" to "sub-account-backed canonical flows" only after the production flag flip lands; do not edit the row earlier than that. |
 | (c) | **Zora CSW user with EOA owner in our Supabase mapping** | The user-controlled EOA from `zora_csw_owners.current_owners` (often the Privy-embedded EOA from Zora's own onboarding) | The Zora-deployed CSW | EOA owner of the Zora CSW | Possible but not the default | No | March-9 owner-`executeBatch` lane works for owner-mutating calls on the Zora CSW (e.g. `addOwnerAddress`). Signed UserOps via the EOA owner work for `setPayoutRecipient` / `transferOwnership` on the creator coin (this is **what the deploy flow already does** — see §5). |
 | (d) | **Zora CSW user with no EOA owner** | The Zora CSW (Coinbase-managed signers only — passkeys) | The Zora-deployed CSW | None we can use from a third-party dapp | No (Base App middleware blocks owner-mutation UserOps from third-party dapps for this population — same constraint as (b) for owner mutations) | No | Read paths only. Pre-flight simulation in the deploy flow detects this and surfaces a clear error before any signature prompt. The user must complete owner-gated actions from inside Zora / Base App's own UI. |
 
@@ -73,23 +73,28 @@ drift independently:
   [docs/arch-b-sub-account-design-addendum.md](./arch-b-sub-account-design-addendum.md) §"Invariants preserved",
   and reaffirmed in [docs/sub-accounts-baseapp-design.md](./sub-accounts-baseapp-design.md) §"Schema".
 
-- **The parent CSW remains the canonical asset-holding account
-  (`profiles.csw_address`) — visible on Basescan / Zora / Coinbase app —
-  but it is not the execution address** for user-initiated frontend
-  writes on the sub-account track.
-  Source: [`frontend/docs/account-auth-invariants.md`](../frontend/docs/account-auth-invariants.md) §"User-initiated frontend execution (CSW path, executionMode === 'canonical')".
+- **The parent CSW is the default execution address for user-initiated
+  frontend writes** (`profiles.csw_address`). Sponsored swaps use
+  `canonical4337` with the parent CSW as ERC-4337 sender and the Privy
+  embedded EOA as signer (installed as a direct owner via
+  `legacy-owner-install`).
+  Source: [`docs/4626-connection-methods.md`](./4626-connection-methods.md) §12,
+  `frontend/server/_lib/wallet/executionTrack.ts`.
 
-- **The sub-account is the execution lane only; not promoted to
-  canonical.** The sub-account address lives on
-  `command_issuer_execution_context` as the execution surface — never on
-  `profile_wallets.is_canonical_smart_wallet`.
-  Sources: [docs/sub-accounts-baseapp-design.md](./sub-accounts-baseapp-design.md) §"Schema",
-  [docs/arch-b-sub-account-design-addendum.md](./arch-b-sub-account-design-addendum.md) §"Migration / backwards compat".
+- **The sub-account is a flag-gated, swap-only fallback lane — not the
+  default.** When `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` and a distinct
+  `profiles.base_sub_account` is registered, swaps may route through
+  the sub-account via `wallet_sendCalls`. Deploy still uses the parent
+  CSW. The sub-account is not promoted to canonical identity.
+  Sources: `frontend/server/_lib/wallet/executionTrack.ts`,
+  [docs/sub-accounts-baseapp-design.md](./sub-accounts-baseapp-design.md) §"Schema".
 
-- **The Privy embedded EOA is *not* installed as a direct owner on the
-  parent CSW for the user-initiated frontend track.** It is the
-  sub-account's signer via `setToOwnerAccount()`.
-  Source: [`frontend/docs/account-auth-invariants.md`](../frontend/docs/account-auth-invariants.md) §"User-initiated frontend execution (CSW path)".
+- **The Privy embedded EOA is installed as a direct owner on the parent
+  CSW for the user-initiated frontend track** (`legacy-owner-install`).
+  This is the default setup path; the sub-account's `setToOwnerAccount()`
+  path is the flag-gated alternative, not the primary track.
+  Source: [`docs/4626-connection-methods.md`](./4626-connection-methods.md) §12,
+  `frontend/server/_lib/wallet/executionTrack.ts`.
 
 - **For server-side automation only** (XMTP agent, ERC-8004 identity,
   deploy-session): a Privy *server* wallet (not the user's embedded
@@ -228,8 +233,10 @@ via `navigator.credentials.get()`. These are dev-scoped diagnostics.
 (`setupSubAccount()` orchestrator) and `frontend/src/hooks/useSubAccountSetup.ts`
 (React hook). Tests at `frontend/src/lib/wallet/subAccountSetup.test.ts`.
 Waitlist consumer: `frontend/src/features/waitlist/WaitlistConnectBaseApp.tsx`
-mounted as the `connect-base-app` step in `WaitlistFlow.tsx`. Server
-endpoint: `POST /api/arch-b/sub-account/baseapp/register` (Track C1).
+mounted in `frontend/src/features/accountSetup/AccountSetupWorkspaceView.tsx`
+(lazy-loaded), alongside `WaitlistModernParentOwnerInstall` for the
+parent-CSW owner-install path. Server endpoint:
+`POST /api/arch-b/sub-account/baseapp/register` (Track C1).
 
 **What it does.** Three stages, idempotent:
 1. `wallet_getSubAccounts({ account: parentCSW, domain })`.

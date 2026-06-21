@@ -23,7 +23,7 @@ type WaitlistAccountWithCanonical = {
 function hasRegisteredSubAccountExecution(
   track: WaitlistAccountWithCanonical['accountSignals']['executionTrack'] | undefined,
 ): boolean {
-  return track === 'sub-account' || track === 'migration-pending'
+  return track === 'sub-account'
 }
 
 /** Parent-CSW legacy owner install — requires on-chain confirmation, not server/db flags alone. */

@@ -61,6 +61,7 @@ import { selectPreferredWalletConnector } from '@/lib/wallet/wagmiConnectorSelec
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 import { resolveCreatorTradeTokenAddress } from '@/lib/onchain/vaultResolve'
 import { useAccountContext } from '@/wallet/accountContext'
+import { isCanonicalCsw } from '@/wallet/canonicalWalletPolicy'
 import { useScreenshotReady } from '@/lib/ui/screenshotMode'
 import { normalizeSwapAddress } from '@/lib/swap/resolveSwapBalanceOwner'
 
@@ -396,16 +397,32 @@ export function Swap() {
     ],
   )
   const usePrivyEmbeddedCanonicalSigner = executionMode === 'canonical' && canonicalSignerGate.ready
-  const canonicalSignerAddress =
-    executionMode === 'canonical' && usePrivyEmbeddedCanonicalSigner ? privyEmbeddedEoaAddress : null
-  const canonicalSignerWalletClient =
-    executionMode === 'canonical' && usePrivyEmbeddedCanonicalSigner
-      ? (privyEmbeddedCanonicalWalletClient as any)
+  // P3: When the embedded-EOA gate is not ready but a connected external EOA is a confirmed
+  // owner of a user-owned (non-platform) CSW, fall back to the external EOA as the canonical
+  // signer so routing stays on the canonical sender path (canonicalDirect). Platform canonical
+  // CSW (CANONICAL_CSW_ADDRESS) keeps strict embedded-signer enforcement — this fallback never
+  // activates for the platform account.
+  const useExternalEoaCanonicalSigner =
+    executionMode === 'canonical' &&
+    !usePrivyEmbeddedCanonicalSigner &&
+    accountContext.eoaIsOwnerOfCsw === true &&
+    !isCanonicalCsw(canonicalAddress)
+  const canonicalSignerAddress = usePrivyEmbeddedCanonicalSigner
+    ? privyEmbeddedEoaAddress
+    : useExternalEoaCanonicalSigner
+      ? signerAddress
+      : null
+  const canonicalSignerWalletClient = usePrivyEmbeddedCanonicalSigner
+    ? (privyEmbeddedCanonicalWalletClient as any)
+    : useExternalEoaCanonicalSigner
+      ? walletClient
       : null
   const executionSignerAddress = executionMode === 'canonical' ? canonicalSignerAddress : signerAddress
   const executionWalletClient = executionMode === 'canonical' ? canonicalSignerWalletClient : walletClient
   const executionSignerType =
-    executionMode === 'canonical' && usePrivyEmbeddedCanonicalSigner ? 'EOA' : accountContext.signerType
+    executionMode === 'canonical' && (usePrivyEmbeddedCanonicalSigner || useExternalEoaCanonicalSigner)
+      ? 'EOA'
+      : accountContext.signerType
   const executionCapabilities = useMemo(
     () =>
       executionMode === 'canonical'
@@ -421,27 +438,28 @@ export function Swap() {
     executionMode === 'canonical'
       ? usePrivyEmbeddedCanonicalSigner
         ? 'privy-embedded'
-        : 'privy-embedded-required'
+        : useExternalEoaCanonicalSigner
+          ? (connector?.id ?? null)
+          : 'privy-embedded-required'
       : (connector?.id ?? null)
   const executionConnectorName =
     executionMode === 'canonical'
       ? usePrivyEmbeddedCanonicalSigner
         ? 'Privy Embedded EOA'
-        : 'Privy Embedded EOA (required)'
+        : useExternalEoaCanonicalSigner
+          ? (connector?.name ?? null)
+          : 'Privy Embedded EOA (required)'
       : (connector?.name ?? null)
   // Ensure the swap execution (sender, asset owner for approvals/swaps, and balance checks)
   // uses the parent/main/zora csw (the same balanceOwnerAddress we resolved for the token selector
   // holdings and per-token balances). This makes sure "my Zora CSW holdings" shown in the selector
   // are the ones actually spent/signed for in the swap tx.
   const executionAddress = balanceOwnerAddress ?? (executionMode === 'canonical' ? canonicalAddress : (accountContext.activeAccount ?? null))
-  const routerExecutionTrack = executionMode === 'canonical' && usePrivyEmbeddedCanonicalSigner
-    ? 'legacy-owner-install'
-    : effectiveExecutionTrack
   const executionReady = Boolean(
     executionAddress &&
       executionWalletClient &&
       publicClient &&
-      (executionMode !== 'canonical' || canonicalSignerGate.ready),
+      (executionMode !== 'canonical' || canonicalSignerGate.ready || useExternalEoaCanonicalSigner),
   )
 
   const canonicalSignerGuardError =
@@ -451,6 +469,7 @@ export function Swap() {
       new Set([
         'execution-setup-required',
         'embedded-wallet-not-owner',
+        'owner-removed-stale-track',
       ]),
     [],
   )
@@ -688,7 +707,7 @@ export function Swap() {
         ? getAddress(executionSignerAddress)
         : null,
     executionMode,
-    executionTrack: routerExecutionTrack,
+    executionTrack: effectiveExecutionTrack,
     executionAddress,
     executionReady,
     expectedSessionAddress: executionMode === 'canonical' ? (privyEmbeddedEoaAddress ?? executionSignerAddress) : executionSignerAddress,

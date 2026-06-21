@@ -77,7 +77,7 @@ export type AccountsMePayload = {
     baseSubAccount: BaseSubAccountSummary
     /**
      * Derived execution track. Values: `sub-account`, `legacy-owner-install`,
-     * `migration-pending`, `none-yet`. See `executionTrack.ts` for the
+     * `none-yet`. See `executionTrack.ts` for the
      * classification rules. Prefer this field over deriving the track from
      * individual signals on the client.
      *

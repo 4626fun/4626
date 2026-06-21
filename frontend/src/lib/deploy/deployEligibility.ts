@@ -28,7 +28,7 @@ export type DeployEligibilityInput = {
   canonicalIdentityType: 'contract' | 'eoa' | 'unknown'
   zoraLinked?: boolean
   baseAppLinked?: boolean
-  executionTrack?: 'sub-account' | 'legacy-owner-install' | 'migration-pending' | 'none-yet' | null
+  executionTrack?: 'sub-account' | 'legacy-owner-install' | 'none-yet' | null
   onchainEoaOwnerCount?: number
   privyEmbeddedEoaIsOwnerOfCanonicalCsw?: boolean | null
   /** When set, overrides generic passkey-only Zora block (simulation already failed). */

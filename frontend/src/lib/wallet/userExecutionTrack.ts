@@ -8,7 +8,6 @@
 export type UserFrontendExecutionTrack =
   | 'sub-account'
   | 'legacy-owner-install'
-  | 'migration-pending'
   | 'none-yet'
 
 export type UserExecutionAccountSignals = {
@@ -140,10 +139,7 @@ function resolveDistinctSubAccountAddress(params: {
     isDistinctFromCsw?: boolean
   } | null
 }): string | null {
-  if (
-    params.effectiveExecutionTrack !== 'sub-account' &&
-    params.effectiveExecutionTrack !== 'migration-pending'
-  ) {
+  if (params.effectiveExecutionTrack !== 'sub-account') {
     return null
   }
   const candidate = params.baseSubAccount?.address
@@ -192,7 +188,7 @@ export function deriveAccountChromeExecution(params: {
   const subAccountLaneActive =
     params.subAccountFlowEnabled === true &&
     Boolean(subAccountAddress) &&
-    (effectiveExecutionTrack === 'sub-account' || effectiveExecutionTrack === 'migration-pending')
+    (effectiveExecutionTrack === 'sub-account')
 
   if (effectiveExecutionTrack === 'legacy-owner-install') {
     return {

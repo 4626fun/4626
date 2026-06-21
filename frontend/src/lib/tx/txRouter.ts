@@ -46,7 +46,6 @@ export type UserExecutionTrack =
   | 'sub-account'
   | 'legacy-owner-install'
   | 'none-yet'
-  | 'migration-pending'
 
 export type TxRouterContext = {
   chainId: number
@@ -357,7 +356,7 @@ function resolveCanonicalIdentityAddress(context: TxRouterContext): `0x${string}
 }
 
 function isSubAccountExecutionTrack(track: UserExecutionTrack | null | undefined): boolean {
-  return track === 'sub-account' || track === 'migration-pending'
+  return track === 'sub-account'
 }
 
 function isSubAccountCanonicalExecution(context: TxRouterContext): boolean {

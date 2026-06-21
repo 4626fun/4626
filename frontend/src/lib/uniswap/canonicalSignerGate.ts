@@ -39,6 +39,7 @@ export type CanonicalSignerGateResult = {
     | 'embedded-wallet-cannot-sign'
     | 'owner-check-pending'
     | 'embedded-wallet-not-owner'
+    | 'owner-removed-stale-track'
     | 'ok'
   reason: string | null
 }
@@ -56,7 +57,7 @@ function gateFailure(
 }
 
 function isSubAccountTrack(track: UserExecutionTrack | null | undefined): boolean {
-  return track === 'sub-account' || track === 'migration-pending'
+  return track === 'sub-account'
 }
 
 export function evaluateCanonicalSignerGate(input: CanonicalSignerGateInput): CanonicalSignerGateResult {
@@ -200,6 +201,12 @@ export function evaluateCanonicalSignerGate(input: CanonicalSignerGateInput): Ca
   }
 
   if (input.ownerCheckStatus === 'not-owner') {
+    if (input.executionTrack === 'legacy-owner-install') {
+      return gateFailure(
+        'owner-removed-stale-track',
+        'The embedded wallet is no longer an owner on the canonical smart wallet. Re-enable 4626 signing in account setup.',
+      )
+    }
     return gateFailure(
       'embedded-wallet-not-owner',
       'Privy embedded wallet is not an owner on the canonical smart wallet.',

@@ -93,8 +93,8 @@ Server constructs UserOp (sender = CSW address)
 | Wallet Type | Canonical Role | Where It Signs | Default Usage in 4626 | Key Advantage | Key Constraint |
 |---|---|---|---|---|---|
 | **Zora/Base Coinbase Smart Wallet (CSW)** | Canonical identity + asset holder | Parent CSW (direct) | Source of truth for identity, balances, ownership, and server-side sender | Strong continuity across Zora/Base surfaces | Passkey UX is too heavy for frequent frontend execution |
-| **Base Sub-Account** | Execution-only child wallet | Sub-account contract | Frontend user actions (swaps, vault interactions, in-app execution) | Silent day-to-day signing after one-time setup | Not usable for headless server execution |
-| **Privy Embedded EOA** | Signer identity (not canonical) | Signs sub-account path | User UX signer routed through `setToOwnerAccount()` | Fast UX with no repeated passkeys | Must not replace canonical CSW identity |
+| **Base Sub-Account** | Execution-only child wallet (flag-gated) | Sub-account contract | Swap-only fallback lane when `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` | Silent day-to-day signing after one-time setup | Not usable for headless server execution; not the deploy default |
+| **Privy Embedded EOA** | Signer identity (not canonical) | Signs parent CSW path (direct owner via `legacy-owner-install`) | User UX signer for sponsored canonical swaps | Fast UX with no repeated passkeys | Must not replace canonical CSW identity |
 | **Privy Server Wallet** | Delegated signer (not canonical) | Signs parent CSW UserOps | XMTP agent, deploy-session automation, ERC-8004 operations | Headless reliable server signing | Requires one-time CSW owner install (`addOwnerAddress`) |
 | **Privy Smart Wallet (4626)** | Optional helper signer surface | ERC-4337 smart wallet lane | Compatibility lane for owner setup / fallback signing only | Useful fallback when available | Do not silently promote to canonical wallet |
 
@@ -103,15 +103,15 @@ Server constructs UserOp (sender = CSW address)
 | Wallet | Primary Function | Why it exists in this setup |
 |---|---|---|
 | **Canonical CSW (parent)** | Identity + custody source of truth | Keeps ownership, balances, and canonical account continuity across Base/Zora |
-| **Base sub-account** | User app execution sender | Provides app-scoped execution with silent signing and batching support |
-| **Privy embedded EOA** | Primary signer for sub-account path | Removes repeated passkey friction for day-to-day user actions |
+| **Base sub-account** | Flag-gated swap-only fallback lane | App-scoped execution with silent signing; not the default user lane |
+| **Privy embedded EOA** | Primary signer for parent CSW path (direct owner) | Removes repeated passkey friction for sponsored canonical swaps |
 | **Connected external EOA** | Fallback/override signer path | Gives resilience and user-controlled manual signing when needed |
 | **Privy server wallet** | Server-side delegated signer on parent CSW | Enables headless automation (XMTP/deploy/session) without changing canonical identity |
 
 Design rule:
 
 - **Canonical identity/custody stays on CSW.**
-- **User execution defaults to sub-account + embedded signer.**
+- **User execution defaults to parent CSW + embedded signer (`legacy-owner-install`). Sub-account is flag-gated swap-only fallback.**
 - **External EOA is fallback/override, not the default primary signer lane.**
 
 ---

@@ -135,19 +135,19 @@ This is the path used for swaps, vault interactions, and other user-triggered wr
 
 After the shared prerequisites above:
 
-5. create an app-scoped sub-account via `wallet_addSubAccount` (one passkey popup; the only WebAuthn interaction)
-6. configure the sub-account signer via `baseAccountSdk.subAccount.setToOwnerAccount()`, routing all future signing to the Privy embedded EOA
-7. persist the sub-account address through `POST /onboarding/register-sub-account` into `profiles.base_sub_account`
+5. install the Privy embedded EOA as a direct owner on the parent CSW via `addOwnerAddress` (the `legacy-owner-install` path; surfaced as "Enable 4626 signing" in the waitlist/account-setup UI)
+6. verify on-chain that the embedded EOA is an owner of the parent CSW (`resolveEmbeddedOwnerOnCanonicalCsw`)
 
 Rules:
 
-- the ERC-4337 `sender` / `msg.sender` for user-initiated frontend writes is the sub-account, **not** the parent CSW
-- the parent CSW remains the canonical asset-holding account (`profiles.csw_address`) — visible on Basescan / Zora / Coinbase app — but it is not the execution address
-- the Privy embedded EOA is **not** installed as a direct owner on the parent CSW on this track; it is the sub-account's signer via `setToOwnerAccount()`
-- if the user does not yet have a CSW, route them to Base app with the referral flow, then resume sub-account setup when they return
-- do not treat wallet setup as complete until the sub-account is created, signer-configured, and persisted
-- features that require canonical execution stay gated until this track is complete
+- the ERC-4337 `sender` / `msg.sender` for user-initiated frontend writes is the **parent CSW** (`profiles.csw_address`), not a sub-account
+- sponsored swaps use `canonical4337` with the parent CSW as sender and the Privy embedded EOA as signer
+- the Privy embedded EOA **is** installed as a direct owner on the parent CSW on this track (`legacy-owner-install`)
+- if the user does not yet have a CSW, route them to Base app with the referral flow, then resume embedded-owner signing setup for the canonical parent CSW when they return
+- do not treat wallet setup as complete until the embedded EOA is confirmed as an on-chain owner of the parent CSW
+- features that require canonical execution stay gated until `canonicalSignerGate.ready` (embedded EOA detected, canSign, and `ownerCheckStatus === 'owner'`)
 - after verified email, the default web setup surface is `/waitlist`; `/accounts` is reserved for advanced settings, recovery, and secondary identity controls
+- **Flag-gated sub-account lane:** when `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` and a distinct `profiles.base_sub_account` is registered, swaps may route through the sub-account via `wallet_sendCalls`. This is a swap-only fallback, not the deploy default. The sub-account's `setToOwnerAccount()` path is the alternative, not the primary track.
 
 ### User-initiated frontend execution (external EOA path, `executionMode === 'eoa'`)
 

@@ -99,7 +99,7 @@ describe('POST /api/onboarding/bootstrap', () => {
     })
   })
 
-  it('returns migration-pending track when both legacy owner install and a real sub-account are present', async () => {
+  it('returns legacy-owner-install track when both legacy owner install and a real sub-account are present', async () => {
     bootstrapCanonicalDelegationStateMock.mockResolvedValue({
       chainId: 8453,
       profileId: 13,
@@ -112,7 +112,7 @@ describe('POST /api/onboarding/bootstrap', () => {
         isDistinctFromCsw: true,
         registered: true,
       },
-      executionTrack: 'migration-pending',
+      executionTrack: 'legacy-owner-install',
     })
 
     const req = createMockReq({
@@ -123,7 +123,7 @@ describe('POST /api/onboarding/bootstrap', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(res.body?.data?.executionTrack).toBe('migration-pending')
+    expect(res.body?.data?.executionTrack).toBe('legacy-owner-install')
     expect(res.body?.data?.privyEmbeddedEoaIsOwnerOfCanonicalCsw).toBe(true)
   })
 

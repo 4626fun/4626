@@ -32,7 +32,6 @@ export type ExecutionTrack =
   | 'sub-account'
   | 'legacy-owner-install'
   | 'none-yet'
-  | 'migration-pending'
 
 export type BaseSubAccountSummary = {
   /** Lowercased 0x address if one is persisted, null otherwise. */

@@ -150,46 +150,6 @@ describe('evaluateCanonicalSignerGate', () => {
     expect(result.code).toBe('ok')
   })
 
-  it('falls back to embedded owner path when sub-account provider is not hydrated', () => {
-    const result = evaluateCanonicalSignerGate({
-      executionMode: 'canonical',
-      executionTrack: 'migration-pending',
-      canonicalAddress: CANONICAL_CSW_ADDRESS,
-      baseSubAccountAddress: '0x2222222222222222222222222222222222222222',
-      subAccountProviderReady: false,
-      clientStatus: 'ready',
-      authStatus: 'authenticated',
-      embeddedWalletDetected: true,
-      embeddedWalletAddress: '0x1111111111111111111111111111111111111111',
-      embeddedWalletCanSign: true,
-      ownerCheckStatus: 'owner',
-    })
-
-    expect(result.required).toBe(true)
-    expect(result.ready).toBe(true)
-    expect(result.code).toBe('ok')
-  })
-
-  it('waits for owner check before falling back when sub-account provider is not hydrated', () => {
-    const result = evaluateCanonicalSignerGate({
-      executionMode: 'canonical',
-      executionTrack: 'migration-pending',
-      canonicalAddress: CANONICAL_CSW_ADDRESS,
-      baseSubAccountAddress: '0x2222222222222222222222222222222222222222',
-      subAccountProviderReady: false,
-      clientStatus: 'ready',
-      authStatus: 'authenticated',
-      embeddedWalletDetected: true,
-      embeddedWalletAddress: '0x1111111111111111111111111111111111111111',
-      embeddedWalletCanSign: true,
-      ownerCheckStatus: 'unknown',
-    })
-
-    expect(result.required).toBe(true)
-    expect(result.ready).toBe(false)
-    expect(result.code).toBe('owner-check-pending')
-  })
-
   it('allows none-yet track when embedded owner is already confirmed', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
@@ -242,6 +202,25 @@ describe('evaluateCanonicalSignerGate', () => {
     expect(result.ready).toBe(false)
     expect(result.code).toBe('embedded-wallet-not-owner')
     expect(result.reason).toContain('not an owner')
+  })
+
+  it('surfaces recoverable code when stale legacy-owner-install track loses owner', () => {
+    const result = evaluateCanonicalSignerGate({
+      executionMode: 'canonical',
+      executionTrack: 'legacy-owner-install',
+      canonicalAddress: CANONICAL_CSW_ADDRESS,
+      clientStatus: 'ready',
+      authStatus: 'authenticated',
+      embeddedWalletDetected: true,
+      embeddedWalletAddress: '0x1111111111111111111111111111111111111111',
+      embeddedWalletCanSign: true,
+      ownerCheckStatus: 'not-owner',
+    })
+
+    expect(result.required).toBe(true)
+    expect(result.ready).toBe(false)
+    expect(result.code).toBe('owner-removed-stale-track')
+    expect(result.reason).toContain('Re-enable 4626 signing')
   })
 
   it('is ready when embedded wallet can sign and is owner', () => {

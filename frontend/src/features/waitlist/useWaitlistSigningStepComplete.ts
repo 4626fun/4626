@@ -5,7 +5,7 @@ import { isWaitlistStepTwoSigningComplete } from './waitlistFlowState'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 
 type WaitlistAccountSignals = {
-  executionTrack?: 'sub-account' | 'legacy-owner-install' | 'migration-pending' | 'none-yet'
+  executionTrack?: 'sub-account' | 'legacy-owner-install' | 'none-yet'
   baseSubAccount?: {
     address?: string | null
     registered?: boolean
