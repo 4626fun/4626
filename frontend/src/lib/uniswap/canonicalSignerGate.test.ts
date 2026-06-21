@@ -130,26 +130,6 @@ describe('evaluateCanonicalSignerGate', () => {
     expect(result.reason).toContain('ownership check')
   })
 
-  it('is ready for sub-account track without parent owner check', () => {
-    const result = evaluateCanonicalSignerGate({
-      executionMode: 'canonical',
-      executionTrack: 'sub-account',
-      canonicalAddress: CANONICAL_CSW_ADDRESS,
-      baseSubAccountAddress: '0x2222222222222222222222222222222222222222',
-      subAccountProviderReady: true,
-      clientStatus: 'ready',
-      authStatus: 'authenticated',
-      embeddedWalletDetected: true,
-      embeddedWalletAddress: '0x1111111111111111111111111111111111111111',
-      embeddedWalletCanSign: true,
-      ownerCheckStatus: 'not-owner',
-    })
-
-    expect(result.required).toBe(true)
-    expect(result.ready).toBe(true)
-    expect(result.code).toBe('ok')
-  })
-
   it('allows none-yet track when embedded owner is already confirmed', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',

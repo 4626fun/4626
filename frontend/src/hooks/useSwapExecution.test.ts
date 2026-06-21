@@ -282,15 +282,12 @@ describe('deriveSwapExecutionReadiness', () => {
     ).toBe(true)
   })
 
-  it('blocks sub-account execution when 4626 canonical policy applies (parent-CSW hardening)', () => {
-    // Since the parent-CSW restore hardening, the sub-account track no longer
-    // bypasses canonical enforcement: when the policy-pinned canonical CSW is
-    // active, execution must come from the parent CSW with an allowed signer.
+  it('blocks non-canonical execution address when 4626 canonical policy applies', () => {
     expect(
       deriveSwapExecutionReadiness({
         quoteReady: true,
         executionMode: 'canonical',
-        executionTrack: 'sub-account',
+        executionTrack: 'none-yet',
         canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
         executionAddress: '0x3333333333333333333333333333333333333333',
         signerAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',

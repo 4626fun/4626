@@ -25,22 +25,23 @@ describe('classifyDeployPopulation', () => {
     ).toBe('zora-eoa-owner')
   })
 
-  it('returns base-app-passkey for sub-account execution track', () => {
+  it('returns base-app-passkey for base-app-linked accounts', () => {
     expect(
       classifyDeployPopulation({
         canonicalCswAddress: CSW,
         canonicalIdentityType: 'contract',
-        executionTrack: 'sub-account',
+        executionTrack: 'none-yet',
+        baseAppLinked: true,
       }),
     ).toBe('base-app-passkey')
   })
 
-  it('prefers zora-eoa-owner when embedded EOA owns parent CSW despite sub-account track', () => {
+  it('prefers zora-eoa-owner when embedded EOA owns parent CSW despite none-yet track', () => {
     expect(
       classifyDeployPopulation({
         canonicalCswAddress: CSW,
         canonicalIdentityType: 'contract',
-        executionTrack: 'sub-account',
+        executionTrack: 'none-yet',
         privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
       }),
     ).toBe('zora-eoa-owner')
@@ -52,7 +53,7 @@ describe('evaluateDeployEligibility', () => {
     const result = evaluateDeployEligibility({
       canonicalCswAddress: CSW,
       canonicalIdentityType: 'contract',
-      executionTrack: 'sub-account',
+      executionTrack: 'none-yet',
       baseAppLinked: true,
     })
     expect(result.code).toBe('base-app-deploy-blocked')

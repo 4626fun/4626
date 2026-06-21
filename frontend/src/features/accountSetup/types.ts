@@ -29,7 +29,7 @@ export type AccountSignals = {
     registered: boolean
     isDistinctFromCsw: boolean
   }
-  executionTrack: 'sub-account' | 'legacy-owner-install' | 'none-yet'
+  executionTrack: 'legacy-owner-install' | 'none-yet'
   privyEmbeddedEoaIsOwnerOfCanonicalCsw: boolean | null
   creatorCoin: AccountCreatorCoin | null
   zoraHandle: string | null

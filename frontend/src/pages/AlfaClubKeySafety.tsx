@@ -347,6 +347,31 @@ export function AlfaClubKeySafety() {
   const SafetyIcon = safety.icon
   const recoveryPercent = Math.round(evaluation.recovery.donationRecoveryFraction * 100)
   const showResults = unlockedStep >= 4
+  const clubRiskRows = useMemo(() => {
+    const supplyCandidates = [20, 40, 60, 80, 100]
+    const ownershipCandidates = [10, 20, 30, 40, 50]
+    return supplyCandidates.map((supply) => {
+      const ownershipPercent = ownershipCandidates.find((candidate) => candidate >= sharePercent) ?? 50
+      const keysHeld = Math.round((ownershipPercent / 100) * supply)
+      const clubEvaluation = evaluateKeyDefense({
+        roomType: 'trading',
+        roomTier: 'club',
+        keySupply: supply,
+        yourKeys: keysHeld,
+        potUsdc,
+        donationUsdc,
+        targetRecoveryFraction: 0.5,
+      })
+      return {
+        supply,
+        ownershipPercent,
+        keysHeld,
+        status: resolveSafetyStatus(clubEvaluation, Math.max(0, potUsdc + donationUsdc)),
+        minAttackKeys: clubEvaluation.raid.minAttackKeys,
+        minAttackCostUsdc: clubEvaluation.raid.minAttackKeysCostUsdc,
+      }
+    })
+  }, [donationUsdc, potUsdc, sharePercent])
 
   return (
     <div className="relative pb-24 md:pb-0">
@@ -545,7 +570,7 @@ export function AlfaClubKeySafety() {
                     unlock(3)
                   }}
                   maxKeys={Math.max(80, keySupply + 10)}
-                  heightClassName="h-[22rem] sm:h-96"
+                  heightClassName="h-[26rem] sm:h-[30rem]"
                   withFrame={false}
                 />
               </div>
@@ -633,20 +658,12 @@ export function AlfaClubKeySafety() {
                   </div>
 
                   <div className="rounded-3xl bg-black/35 p-5 shadow-[0_16px_36px_rgba(0,0,0,0.35),inset_0_0_0_1px_rgba(255,255,255,0.04)]">
-                    <details open={safetyStatus === 'at-risk'}>
-                      <summary className="cursor-pointer list-none text-[11px] uppercase tracking-[0.12em] text-zinc-400">
-                        See why this result happens
-                      </summary>
-                      <p className="mt-2 text-xs text-zinc-400">
-                        The chart above shows where attacker profit flips from loss to gain as key buys increase.
-                      </p>
-                    </details>
-                  </div>
-
-                  <details className="rounded-3xl bg-black/35 p-5 shadow-[0_16px_36px_rgba(0,0,0,0.35),inset_0_0_0_1px_rgba(255,255,255,0.04)]">
-                    <summary className="cursor-pointer list-none text-[11px] uppercase tracking-[0.12em] text-zinc-400">
-                      Show technical details
-                    </summary>
+                    <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-400">
+                      Why this result happens
+                    </p>
+                    <p className="mt-2 text-xs text-zinc-400">
+                      The chart above shows where attacker profit flips from loss to gain as key buys increase.
+                    </p>
                     <div className="mt-3 grid gap-2 text-xs text-zinc-300 sm:grid-cols-2">
                       <p>
                         Vote control: <span className="font-mono text-zinc-100">{evaluation.hasVeto ? 'Held' : `+${evaluation.vetoKeysToBuy.toLocaleString()} keys`}</span>
@@ -672,7 +689,51 @@ export function AlfaClubKeySafety() {
                         <span className="font-mono text-zinc-100">{minAttackBreakdown ? formatUsd(minAttackBreakdown.distributedPerKeyUsdc) : '—'}</span>
                       </p>
                     </div>
-                  </details>
+                  </div>
+
+                  <div className="rounded-3xl bg-black/35 p-5 shadow-[0_16px_36px_rgba(0,0,0,0.35),inset_0_0_0_1px_rgba(255,255,255,0.04)]">
+                    <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-400">
+                      Club room risk scan (model)
+                    </p>
+                    <p className="mt-2 text-xs text-zinc-500">
+                      Uses current pot ({formatUsd(potUsdc)}) and donation ({formatUsd(donationUsdc)}) with club-tier curve assumptions.
+                    </p>
+                    <div className="mt-3 overflow-x-auto">
+                      <table className="min-w-full border-separate border-spacing-y-1 text-xs text-zinc-300">
+                        <thead>
+                          <tr className="text-zinc-500">
+                            <th className="px-2 py-1 text-left font-medium">Supply</th>
+                            <th className="px-2 py-1 text-left font-medium">Owner %</th>
+                            <th className="px-2 py-1 text-left font-medium">Keys held</th>
+                            <th className="px-2 py-1 text-left font-medium">Attacker buys</th>
+                            <th className="px-2 py-1 text-left font-medium">Buy cost</th>
+                            <th className="px-2 py-1 text-left font-medium">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {clubRiskRows.map((row) => (
+                            <tr key={`club-risk-${row.supply}`} className="bg-white/[0.03]">
+                              <td className="rounded-l-lg px-2 py-1.5 font-mono">{row.supply}</td>
+                              <td className="px-2 py-1.5 font-mono">{row.ownershipPercent}%</td>
+                              <td className="px-2 py-1.5 font-mono">{row.keysHeld.toLocaleString()}</td>
+                              <td className="px-2 py-1.5 font-mono">{row.minAttackKeys.toLocaleString()}</td>
+                              <td className="px-2 py-1.5 font-mono">{formatUsd(row.minAttackCostUsdc)}</td>
+                              <td
+                                className={cn(
+                                  'rounded-r-lg px-2 py-1.5 font-medium',
+                                  row.status === 'at-risk' && 'text-red-200',
+                                  row.status === 'caution' && 'text-amber-200',
+                                  row.status === 'safe' && 'text-sky-200',
+                                )}
+                              >
+                                {row.status}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </>
               ) : null}
             </div>

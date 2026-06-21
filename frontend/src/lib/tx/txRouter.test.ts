@@ -84,91 +84,6 @@ describe('txRouter', () => {
     expect(decision.fallbackMode).toBe('canonicalDirect')
   })
 
-  it('routes sub-account canonical swaps through wallet_sendCalls from the execution address', async () => {
-    const request = vi.fn(async ({ method }: { method: string }) => {
-      if (method === 'wallet_sendCalls') return '0xcallbundle'
-      if (method === 'wallet_getCallsStatus') {
-        return { status: 200, receipts: [{ transactionHash: HASH_A }] }
-      }
-      throw new Error(`unexpected method: ${method}`)
-    })
-    const context = makeContext({
-      executionTrack: 'sub-account',
-      executionAddress: ADDRESS_C,
-      signerAddress: ADDRESS_B,
-      walletClient: { request },
-      connectorId: 'base-sub-account',
-      connectorName: 'Base Account Sub-Account',
-      capabilities: {
-        paymasterService: false,
-        atomicStatus: 'supported',
-        supports5792: true,
-      },
-    })
-
-    const result = await buildAndSendSwap({
-      context,
-      swapTx: {
-        to: ADDRESS_B,
-        from: ADDRESS_C,
-        data: '0x5678',
-        value: '0',
-        chainId: 8453,
-      },
-    })
-
-    expect(result.routing.mode).toBe('sendCalls')
-    expect(result.routing.fallbackMode).toBe('sendCalls')
-    expect(result.send.mode).toBe('sendCalls')
-    expect(result.send.sender).toBe(ADDRESS_C)
-    expect(request).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'wallet_sendCalls',
-        params: [
-          expect.objectContaining({
-            from: ADDRESS_C,
-          }),
-        ],
-      }),
-    )
-    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
-  })
-
-  it('does not fallback from sub-account sendCalls to parent-CSW execution', async () => {
-    const request = vi.fn(async ({ method }: { method: string }) => {
-      if (method === 'wallet_sendCalls') throw new Error('Method not found')
-      throw new Error(`unexpected method: ${method}`)
-    })
-    const sendTransaction = vi.fn(async () => HASH_A)
-    const context = makeContext({
-      executionTrack: 'sub-account',
-      executionAddress: ADDRESS_C,
-      signerAddress: ADDRESS_B,
-      walletClient: { request, sendTransaction },
-      capabilities: {
-        paymasterService: true,
-        atomicStatus: 'supported',
-        supports5792: true,
-      },
-    })
-
-    await expect(
-      buildAndSendSwap({
-        context,
-        swapTx: {
-          to: ADDRESS_B,
-          from: ADDRESS_C,
-          data: '0x5678',
-          value: '0',
-          chainId: 8453,
-        },
-      }),
-    ).rejects.toThrow('Method not found')
-
-    expect(sendTransaction).not.toHaveBeenCalled()
-    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
-  })
-
   it('falls back from wallet_sendCalls to parent-CSW ERC-4337 for approval+swap', async () => {
     const request = vi.fn(async ({ method }: { method: string }) => {
       if (method === 'wallet_sendCalls') throw new Error('Method not found')
@@ -900,8 +815,10 @@ describe('txRouter', () => {
     })
     const context = makeContext({
       executionMode: 'canonical',
-      executionTrack: 'sub-account',
-      executionAddress: ADDRESS_C,
+      executionTrack: 'none-yet',
+      canonicalAddress: CANONICAL_CSW_ADDRESS,
+      executionAddress: CANONICAL_CSW_ADDRESS,
+      signerAddress: CANONICAL_CSW_ALLOWED_OWNER_EOAS[0],
       walletClient: {
         request,
       },
@@ -916,14 +833,14 @@ describe('txRouter', () => {
       context,
       approvalTx: {
         to: ADDRESS_B,
-        from: ADDRESS_C,
+        from: CANONICAL_CSW_ADDRESS,
         data: '0xaaaa',
         value: '0',
         chainId: 8453,
       },
       swapTx: {
         to: ADDRESS_C,
-        from: ADDRESS_C,
+        from: CANONICAL_CSW_ADDRESS,
         data: '0xbbbb',
         value: '0',
         chainId: 8453,

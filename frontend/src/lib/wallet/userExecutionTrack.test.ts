@@ -15,20 +15,20 @@ describe('isParentCswEmbeddedOwnerReady', () => {
     expect(
       isParentCswEmbeddedOwnerReady({
         parentEmbeddedOwnerOnChain: true,
-        accountSignals: { executionTrack: 'sub-account' },
+        accountSignals: { executionTrack: 'none-yet' },
       }),
     ).toBe(true)
   })
 })
 
 describe('shouldUseBaseAppSubAccountPath', () => {
-  it('returns false for population c even with stale sub-account track', () => {
+  it('returns false for parent-owner accounts', () => {
     expect(
       shouldUseBaseAppSubAccountPath({
         subAccountFlowEnabled: true,
         parentEmbeddedOwnerOnChain: true,
         accountSignals: {
-          executionTrack: 'sub-account',
+          executionTrack: 'none-yet',
           baseSubAccount: { registered: true, isDistinctFromCsw: true },
         },
       }),
@@ -49,13 +49,22 @@ describe('shouldUseBaseAppSubAccountPath', () => {
 })
 
 describe('resolveEffectiveExecutionTrack', () => {
-  it('promotes parent-owner execution over sub-account track', () => {
+  it('promotes parent-owner execution over none-yet track', () => {
     expect(
       resolveEffectiveExecutionTrack({
-        executionTrack: 'sub-account',
+        executionTrack: 'none-yet',
         parentEmbeddedOwnerOnChain: true,
       }),
     ).toBe('legacy-owner-install')
+  })
+
+  it('returns none-yet when no owner is confirmed', () => {
+    expect(
+      resolveEffectiveExecutionTrack({
+        executionTrack: 'none-yet',
+        parentEmbeddedOwnerOnChain: false,
+      }),
+    ).toBe('none-yet')
   })
 })
 
@@ -109,19 +118,13 @@ describe('inferWaitlistEoaOwnerRoutingHint', () => {
 
 describe('deriveAccountChromeExecution', () => {
   const csw = '0xAb6d5c10b03300326cd7fab7267ae192842967b5'
-  const subAccount = '0x1111111111111111111111111111111111111111'
 
-  it('hides sub-account chrome for population c with stale sub-account DB state', () => {
+  it('returns parent-csw chrome when parent-owner is on-chain', () => {
     const chrome = deriveAccountChromeExecution({
-      executionTrack: 'sub-account',
+      executionTrack: 'none-yet',
       parentEmbeddedOwnerOnChain: true,
       subAccountFlowEnabled: true,
       canonicalCswAddress: csw,
-      baseSubAccount: {
-        address: subAccount,
-        registered: true,
-        isDistinctFromCsw: true,
-      },
     })
 
     expect(chrome.mode).toBe('parent-csw')
@@ -131,36 +134,11 @@ describe('deriveAccountChromeExecution', () => {
     expect(chrome.swapSenderLabel).toContain('Coinbase Smart Wallet')
   })
 
-  it('surfaces sub-account chrome for population b when flags are on', () => {
+  it('returns none chrome when no owner is confirmed', () => {
     const chrome = deriveAccountChromeExecution({
-      executionTrack: 'sub-account',
-      privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
-      subAccountFlowEnabled: true,
-      canonicalCswAddress: csw,
-      baseSubAccount: {
-        address: subAccount,
-        registered: true,
-        isDistinctFromCsw: true,
-      },
-    })
-
-    expect(chrome.mode).toBe('sub-account')
-    expect(chrome.showSubAccountInTray).toBe(true)
-    expect(chrome.showSubAccountInAccounts).toBe(true)
-    expect(chrome.subAccountAddress).toBe(subAccount)
-    expect(chrome.swapSenderLabel).toContain('4626 app wallet')
-  })
-
-  it('does not surface sub-account chrome when the sub-account flag is off', () => {
-    const chrome = deriveAccountChromeExecution({
-      executionTrack: 'sub-account',
+      executionTrack: 'none-yet',
       subAccountFlowEnabled: false,
       canonicalCswAddress: csw,
-      baseSubAccount: {
-        address: subAccount,
-        registered: true,
-        isDistinctFromCsw: true,
-      },
     })
 
     expect(chrome.mode).toBe('none')

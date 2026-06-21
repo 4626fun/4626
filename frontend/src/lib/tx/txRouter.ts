@@ -43,7 +43,6 @@ export type TxMethod =
   | 'walletClient.sendTransaction'
   | 'eth_sendTransaction'
 export type UserExecutionTrack =
-  | 'sub-account'
   | 'legacy-owner-install'
   | 'none-yet'
 
@@ -355,18 +354,7 @@ function resolveCanonicalIdentityAddress(context: TxRouterContext): `0x${string}
   )
 }
 
-function isSubAccountExecutionTrack(track: UserExecutionTrack | null | undefined): boolean {
-  return track === 'sub-account'
-}
-
-function isSubAccountCanonicalExecution(context: TxRouterContext): boolean {
-  return context.executionMode === 'canonical' && isSubAccountExecutionTrack(context.executionTrack)
-}
-
 function resolveCanonicalSenderAddress(context: TxRouterContext): `0x${string}` | null {
-  if (isSubAccountCanonicalExecution(context)) {
-    return context.executionAddress ?? null
-  }
   return resolveCanonicalIdentityAddress(context)
 }
 
@@ -388,16 +376,14 @@ function assertCanonicalPolicyContext(context: TxRouterContext): void {
   }
   if (
     context.executionAddress &&
-    !isCanonicalCsw(context.executionAddress) &&
-    !isSubAccountCanonicalExecution(context)
+    !isCanonicalCsw(context.executionAddress)
   ) {
     throw new Error('Canonical CSW policy blocked non-canonical execution address')
   }
-  if (!isSubAccountCanonicalExecution(context) && !isAllowedCanonicalSigner(context.signerAddress)) {
+  if (!isAllowedCanonicalSigner(context.signerAddress)) {
     throw new Error('Canonical CSW policy requires an allowed owner signer')
   }
   if (
-    !isSubAccountCanonicalExecution(context) &&
     context.signerType === 'SMART_WALLET' &&
     !isCanonicalCsw(context.signerAddress)
   ) {
@@ -433,30 +419,6 @@ export function detectTxSendMode(context: TxRouterContext): TxRoutingDecision {
   const smartWalletDetected = inferSmartWalletDetection(context)
   const sendCallsHint = supportsSendCallsHint(context)
   const selectedSender = context.executionMode === 'canonical' ? resolveCanonicalSenderAddress(context) : context.signerAddress
-
-  if (isSubAccountCanonicalExecution(context)) {
-    const decision: TxRoutingDecision = {
-      mode: 'sendCalls',
-      fallbackMode: 'sendCalls',
-      smartWalletDetected: true,
-      supportsSendCallsHint: sendCallsHint,
-      reason: 'canonical sub-account execution requires wallet_sendCalls from the app-scoped sub-account',
-    }
-    context.debug?.({
-      event: 'route_selected',
-      mode: decision.mode,
-      fallbackMode: decision.fallbackMode,
-      chainId: context.chainId,
-      sender: selectedSender,
-      callTargets: [],
-      reason: decision.reason,
-      connectorId: context.connectorId ?? null,
-      connectorName: context.connectorName ?? null,
-      smartWalletDetected: true,
-      supportsSendCallsHint: sendCallsHint,
-    })
-    return decision
-  }
 
   if (context.executionMode === 'canonical' && sendCallsHint) {
     const decision: TxRoutingDecision = {
@@ -728,9 +690,6 @@ async function sendViaCanonical4337(params: {
 }): Promise<TxRouterSendResult> {
   const { context, decision, calls } = params
   assertCanonicalPolicyContext(context)
-  if (isSubAccountCanonicalExecution(context)) {
-    throw new Error('Sub-account canonical execution cannot fall back to parent-CSW ERC-4337')
-  }
   const canonicalIdentity = resolveCanonicalIdentityAddress(context)
   if (!canonicalIdentity || !context.signerAddress || !context.publicClient || !context.walletClient) {
     throw new Error('Canonical smart wallet or owner signer is not ready for ERC-4337 execution')
@@ -918,9 +877,6 @@ async function sendViaCanonicalDirect(params: {
 }): Promise<TxRouterSendResult> {
   const { context, decision, calls } = params
   assertCanonicalPolicyContext(context)
-  if (isSubAccountCanonicalExecution(context)) {
-    throw new Error('Sub-account canonical execution cannot fall back to parent-CSW direct execution')
-  }
   const canonicalIdentity = resolveCanonicalIdentityAddress(context)
   if (!canonicalIdentity || !context.signerAddress || !context.walletClient) {
     throw new Error('Canonical direct send is not ready')
@@ -1172,7 +1128,6 @@ function ensureCanonicalOneClickBatchRouting(
   void _hasNativeValue
 
   const canonical4337Ready = Boolean(context.publicClient && context.canonicalAddress && context.signerAddress)
-  if (isSubAccountCanonicalExecution(context)) return decision
 
   if (context.executionMode === 'canonical' && canonical4337Ready && decision.mode === 'sendCalls') {
     return {

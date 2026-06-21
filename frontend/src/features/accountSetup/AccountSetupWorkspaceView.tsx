@@ -252,9 +252,7 @@ export function AccountSetupWorkspaceView(props: {
   const stepTwoDoneSubtitle = signingStepComplete
     ? parentEmbeddedOwnerOnChain || executionTrack === 'legacy-owner-install'
       ? 'Embedded signer installed on your parent smart wallet'
-      : executionTrack === 'sub-account'
-        ? 'Base App sub-account connected for swaps'
-        : '4626 signing enabled'
+      : '4626 signing enabled'
     : ownerInstallInProgress || pendingOwnerInstallHash
       ? ownerInstallPhase === 'awaiting_signature'
         ? 'Waiting for Base App signature…'
@@ -1196,9 +1194,7 @@ export function AccountSetupWorkspaceView(props: {
                 ) : (
                   <p className="mt-4 text-xs text-zinc-500 leading-relaxed">
                     {signingStepComplete
-                      ? executionTrack === 'sub-account'
-                        ? '4626 swaps can route through your Base App sub-account.'
-                        : '4626 signing is enabled on your canonical wallet.'
+                      ? '4626 signing is enabled on your canonical wallet.'
                       : subAccountFlowEnabled
                         ? 'Connect Base App for sponsored swaps, or use the modern Base App owner install path (recommended for parent-CSW signing).'
                         : 'Modern Base App owner install (validated self-call) is the primary way to enable parent-CSW signing. The older Zora EOA-relay option is the legacy fallback.'}

@@ -122,7 +122,7 @@ describe('resolveExecutionTrack', () => {
     ).toBe('none-yet')
   })
 
-  it("returns 'sub-account' when sub-account flow is enabled and a distinct sub-account is registered", () => {
+  it("returns 'none-yet' when sub-account flow is enabled but parent owner is not confirmed", () => {
     const prev = process.env.WAITLIST_SUBACCOUNT_FLOW_ENABLED
     process.env.WAITLIST_SUBACCOUNT_FLOW_ENABLED = '1'
     try {
@@ -131,7 +131,7 @@ describe('resolveExecutionTrack', () => {
           baseSubAccountAddress: SUB,
           privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
         }),
-      ).toBe('sub-account')
+      ).toBe('none-yet')
     } finally {
       if (prev === undefined) delete process.env.WAITLIST_SUBACCOUNT_FLOW_ENABLED
       else process.env.WAITLIST_SUBACCOUNT_FLOW_ENABLED = prev

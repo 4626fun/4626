@@ -1,12 +1,11 @@
 /**
  * Client-side user-initiated frontend execution track resolution.
  *
- * Parent CSW embedded-owner (population c) must win over stale sub-account DB
- * state (population b). Shared by waitlist, swap, and deploy surfaces.
+ * Parent CSW embedded-owner is the only user-initiated frontend execution
+ * lane. Shared by waitlist, swap, and deploy surfaces.
  */
 
 export type UserFrontendExecutionTrack =
-  | 'sub-account'
   | 'legacy-owner-install'
   | 'none-yet'
 
@@ -105,7 +104,7 @@ export function resolveEffectiveExecutionTrack(params: {
   ) {
     return 'legacy-owner-install'
   }
-  return params.executionTrack ?? 'none-yet'
+  return 'none-yet'
 }
 
 export type WaitlistStepRoutingContext = {
@@ -117,7 +116,7 @@ export type WaitlistStepRoutingContext = {
   onchainEoaOwnerCount?: number
 }
 
-export type AccountChromeExecutionMode = 'parent-csw' | 'sub-account' | 'none'
+export type AccountChromeExecutionMode = 'parent-csw' | 'none'
 
 export type AccountChromeExecution = {
   mode: AccountChromeExecutionMode
@@ -130,36 +129,9 @@ export type AccountChromeExecution = {
   executionLaneDescription: string
 }
 
-function resolveDistinctSubAccountAddress(params: {
-  effectiveExecutionTrack: UserFrontendExecutionTrack
-  canonicalCswAddress?: string | null
-  baseSubAccount?: {
-    address?: string | null
-    registered?: boolean
-    isDistinctFromCsw?: boolean
-  } | null
-}): string | null {
-  if (params.effectiveExecutionTrack !== 'sub-account') {
-    return null
-  }
-  const candidate = params.baseSubAccount?.address
-  if (params.baseSubAccount?.registered !== true || typeof candidate !== 'string' || !candidate.trim()) {
-    return null
-  }
-  const normalized = candidate.trim()
-  if (params.baseSubAccount.isDistinctFromCsw === false) return null
-  if (
-    params.canonicalCswAddress &&
-    normalized.toLowerCase() === params.canonicalCswAddress.toLowerCase()
-  ) {
-    return null
-  }
-  return normalized
-}
-
 /**
  * Account chrome (tray, /accounts, swap sender hint) must follow the effective
- * execution track — parent CSW owner (population c) hides stale sub-account UI.
+ * execution track — parent CSW owner is the only execution lane.
  */
 export function deriveAccountChromeExecution(params: {
   executionTrack?: UserFrontendExecutionTrack | null
@@ -179,17 +151,6 @@ export function deriveAccountChromeExecution(params: {
     privyEmbeddedEoaIsOwnerOfCanonicalCsw: params.privyEmbeddedEoaIsOwnerOfCanonicalCsw,
   })
 
-  const subAccountAddress = resolveDistinctSubAccountAddress({
-    effectiveExecutionTrack,
-    canonicalCswAddress: params.canonicalCswAddress,
-    baseSubAccount: params.baseSubAccount,
-  })
-
-  const subAccountLaneActive =
-    params.subAccountFlowEnabled === true &&
-    Boolean(subAccountAddress) &&
-    (effectiveExecutionTrack === 'sub-account')
-
   if (effectiveExecutionTrack === 'legacy-owner-install') {
     return {
       mode: 'parent-csw',
@@ -201,20 +162,6 @@ export function deriveAccountChromeExecution(params: {
       executionLaneTitle: 'Parent smart wallet signing',
       executionLaneDescription:
         'Sponsored swaps and deploys send from your Coinbase Smart Wallet — your canonical identity.',
-    }
-  }
-
-  if (subAccountLaneActive) {
-    return {
-      mode: 'sub-account',
-      effectiveExecutionTrack,
-      showSubAccountInTray: true,
-      showSubAccountInAccounts: true,
-      swapSenderLabel: 'Sending from 4626 app wallet (swaps only)',
-      subAccountAddress,
-      executionLaneTitle: '4626 app wallet (swaps only)',
-      executionLaneDescription:
-        'Base App swap lane — execution only, not your onchain identity or deploy sender.',
     }
   }
 

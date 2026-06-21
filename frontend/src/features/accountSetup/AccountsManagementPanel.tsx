@@ -241,9 +241,7 @@ export function AccountsManagementPanel(props: {
             label="4626 signing"
             detail={
               signingStepComplete
-                ? executionTrack === 'sub-account'
-                  ? 'Swap execution uses your Base App sub-account'
-                  : 'Embedded signer confirmed on your parent CSW'
+                ? 'Embedded signer confirmed on your parent CSW'
                 : 'Required for sponsored swaps from your canonical wallet'
             }
             complete={signingStepComplete}

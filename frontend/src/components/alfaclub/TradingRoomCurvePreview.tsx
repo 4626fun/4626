@@ -189,6 +189,8 @@ export function TradingRoomCurvePreview({
     return minVotePassPoint.averageBuyCostPerKeyUsdc * minVotePassPoint.keysBought
   }, [minVotePassPoint])
 
+  const minVotePassProfitUsdc = minVotePassPoint?.profitUsdc ?? null
+
   const breakEvenX = useMemo(() => {
     if (!raidCurve || raidCurve.length < 2) return null
     for (let index = 1; index < raidCurve.length; index += 1) {
@@ -368,12 +370,12 @@ export function TradingRoomCurvePreview({
           {hasAttackCurve && minVotePassX !== null ? (
             <ReferenceLine
               x={minVotePassX}
-              stroke="rgba(250,204,21,0.55)"
-              strokeDasharray="3 3"
+              stroke="rgba(250,204,21,0.92)"
+              strokeWidth={2.5}
               label={{
                 value: 'Control threshold',
                 position: 'insideTopLeft',
-                fill: 'rgba(250,204,21,0.8)',
+                fill: 'rgba(250,204,21,0.95)',
                 fontSize: 10,
               }}
             />
@@ -383,12 +385,17 @@ export function TradingRoomCurvePreview({
               x={breakEvenX}
               stroke="rgba(248,113,113,0.65)"
               strokeDasharray="4 4"
-              label={{
-                value: 'Profit starts here',
-                position: 'insideTopRight',
-                fill: 'rgba(248,113,113,0.85)',
-                fontSize: 10,
-              }}
+            />
+          ) : null}
+          {hasAttackCurve && minVotePassX !== null && minVotePassProfitUsdc !== null ? (
+            <ReferenceDot
+              x={minVotePassX}
+              y={minVotePassProfitUsdc}
+              r={4.5}
+              fill="rgb(250 204 21)"
+              stroke="rgb(255 255 255 / 0.95)"
+              strokeWidth={1.5}
+              ifOverflow="visible"
             />
           ) : null}
           {clampedActiveKeyIndex !== undefined ? (
@@ -516,7 +523,7 @@ export function TradingRoomCurvePreview({
       ) : null}
       {hasAttackCurve ? (
         <p className="mt-1 text-[11px] text-zinc-600">
-          Below zero = attacker loses money. Above zero = attacker profits.
+          Yellow line = control threshold. Below zero = attacker loses money. Above zero = attacker profits.
         </p>
       ) : null}
       {hasAttackCurve && minVotePassPoint && minVotePassBuySpendUsdc !== null ? (

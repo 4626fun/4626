@@ -11,8 +11,6 @@ export type CanonicalSignerGateInput = {
   executionMode: WalletMode
   executionTrack?: UserExecutionTrack | null
   canonicalAddress: string | null
-  baseSubAccountAddress?: string | null
-  subAccountProviderReady?: boolean
   clientStatus?: CanonicalPrivyClientStatus
   authStatus?: CanonicalAuthStatus
   embeddedWalletDetected: boolean
@@ -30,9 +28,6 @@ export type CanonicalSignerGateResult = {
     | 'privy-auth-loading'
     | 'privy-auth-required'
     | 'missing-canonical-address'
-    | 'base-sub-account-missing'
-    | 'base-sub-account-invalid'
-    | 'base-sub-account-provider-missing'
     | 'execution-setup-required'
     | 'embedded-wallet-missing'
     | 'embedded-wallet-address-invalid'
@@ -54,10 +49,6 @@ function gateFailure(
     code,
     reason,
   }
-}
-
-function isSubAccountTrack(track: UserExecutionTrack | null | undefined): boolean {
-  return track === 'sub-account'
 }
 
 export function evaluateCanonicalSignerGate(input: CanonicalSignerGateInput): CanonicalSignerGateResult {
@@ -90,8 +81,6 @@ export function evaluateCanonicalSignerGate(input: CanonicalSignerGateInput): Ca
       'Canonical mode requires a canonical smart wallet address before signing can proceed.',
     )
   }
-
-  const subAccountTrack = isSubAccountTrack(input.executionTrack)
 
   if (input.executionTrack === 'none-yet') {
     if (input.ownerCheckStatus === 'owner') {
@@ -144,53 +133,6 @@ export function evaluateCanonicalSignerGate(input: CanonicalSignerGateInput): Ca
       'embedded-wallet-cannot-sign',
       'Privy embedded wallet cannot sign in this session.',
     )
-  }
-
-  if (subAccountTrack) {
-    if (!input.baseSubAccountAddress) {
-      return gateFailure(
-        'base-sub-account-missing',
-        'Canonical swaps require your app-scoped Base sub-account.',
-      )
-    }
-    if (!isAddress(input.baseSubAccountAddress)) {
-      return gateFailure(
-        'base-sub-account-invalid',
-        'Canonical swaps require a valid app-scoped Base sub-account address.',
-      )
-    }
-    if (input.baseSubAccountAddress.toLowerCase() === input.canonicalAddress.toLowerCase()) {
-      return gateFailure(
-        'base-sub-account-invalid',
-        'Canonical swaps require a distinct app-scoped Base sub-account.',
-      )
-    }
-    if (input.subAccountProviderReady !== true) {
-      if (input.ownerCheckStatus === 'owner') {
-        return {
-          required: true,
-          ready: true,
-          code: 'ok',
-          reason: null,
-        }
-      }
-      if (input.ownerCheckStatus === 'pending' || input.ownerCheckStatus === 'unknown') {
-        return gateFailure(
-          'owner-check-pending',
-          'Waiting for canonical ownership check before falling back from sub-account routing.',
-        )
-      }
-      return gateFailure(
-        'base-sub-account-provider-missing',
-        'Reconnect with Base Account to route canonical swaps through your 4626 sub-account.',
-      )
-    }
-    return {
-      required: true,
-      ready: true,
-      code: 'ok',
-      reason: null,
-    }
   }
 
   if (input.ownerCheckStatus === 'pending' || input.ownerCheckStatus === 'unknown') {

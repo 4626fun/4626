@@ -20,34 +20,11 @@ type WaitlistAccountWithCanonical = {
   accountSignals: UserExecutionAccountSignals
 }
 
-function hasRegisteredSubAccountExecution(
-  track: WaitlistAccountWithCanonical['accountSignals']['executionTrack'] | undefined,
-): boolean {
-  return track === 'sub-account'
-}
-
 /** Parent-CSW legacy owner install — requires on-chain confirmation, not server/db flags alone. */
 function isLegacyParentOwnerSigningReady(params: {
   parentEmbeddedOwnerOnChain?: boolean
 }): boolean {
   return params.parentEmbeddedOwnerOnChain === true
-}
-
-function isSubAccountExecutionReady(
-  accountSignals?: WaitlistAccountWithCanonical['accountSignals'],
-): boolean {
-  if (accountSignals?.baseSubAccount?.registered === true) return true
-  return hasRegisteredSubAccountExecution(accountSignals?.executionTrack)
-}
-
-function resolveSubAccountAddress(params: {
-  baseSubAccount?: string | null
-  accountSignals?: WaitlistAccountWithCanonical['accountSignals']
-}): string | null {
-  const fromSignals = params.accountSignals?.baseSubAccount?.address?.trim()
-  if (fromSignals) return fromSignals
-  const fromProfile = params.baseSubAccount?.trim()
-  return fromProfile || null
 }
 
 export function shouldFocusWaitlistBaseAppConnect(params: {
@@ -116,11 +93,11 @@ export function shouldForceBaseAppConnectStep(params: {
   ) {
     return false
   }
-  return !isSubAccountExecutionReady(params.account.accountSignals)
+  return true
 }
 
 /**
- * Waitlist step 2 completion — parent CSW embedded owner on-chain or sub-account track.
+ * Waitlist step 2 completion — parent CSW embedded owner on-chain.
  */
 export function isWaitlistStepTwoSigningComplete(params: {
   ownerInstallRequested: boolean
@@ -130,9 +107,6 @@ export function isWaitlistStepTwoSigningComplete(params: {
 }): boolean {
   if (params.parentEmbeddedOwnerOnChain === true) return true
   if (params.accountSignals?.executionTrack === 'legacy-owner-install') return true
-  if (params.subAccountFlowEnabled && isSubAccountExecutionReady(params.accountSignals)) {
-    return true
-  }
   return false
 }
 
@@ -146,7 +120,6 @@ export function shouldShowParentCswAddOwnerPanel(params: {
   onchainEoaOwnerCount?: number
   subAccountFlowEnabled?: boolean
 }): boolean {
-  if (params.subAccountFlowEnabled && isSubAccountExecutionReady(params.accountSignals)) return false
   if (params.signingStepComplete) return false
   if (isLegacyParentOwnerSigningReady({ parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain })) {
     return false
@@ -187,19 +160,7 @@ export function shouldShowBaseAppConnectPanel(params: {
     return false
   }
 
-  const subAccountAddress = resolveSubAccountAddress({
-    accountSignals: params.accountSignals,
-  })
-  const signingReady = isWaitlistStepTwoSigningComplete({
-    accountSignals: params.accountSignals,
-    parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain,
-    subAccountFlowEnabled: params.subAccountFlowEnabled,
-    ownerInstallRequested: false,
-  })
-  const shouldOfferSubAccountStep =
-    !hasRegisteredSubAccountExecution(params.accountSignals?.executionTrack)
-  const shouldRecoverSubAccountOwner = Boolean(subAccountAddress) && !signingReady
-  return shouldOfferSubAccountStep || shouldRecoverSubAccountOwner
+  return true
 }
 
 export function resolveWaitlistStep(params: {

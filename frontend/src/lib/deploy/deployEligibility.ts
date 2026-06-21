@@ -28,7 +28,7 @@ export type DeployEligibilityInput = {
   canonicalIdentityType: 'contract' | 'eoa' | 'unknown'
   zoraLinked?: boolean
   baseAppLinked?: boolean
-  executionTrack?: 'sub-account' | 'legacy-owner-install' | 'none-yet' | null
+  executionTrack?: 'legacy-owner-install' | 'none-yet' | null
   onchainEoaOwnerCount?: number
   privyEmbeddedEoaIsOwnerOfCanonicalCsw?: boolean | null
   /** When set, overrides generic passkey-only Zora block (simulation already failed). */
@@ -65,7 +65,7 @@ export function classifyDeployPopulation(input: DeployEligibilityInput): DeployU
     return 'zora-eoa-owner'
   }
 
-  if (input.baseAppLinked || input.executionTrack === 'sub-account') {
+  if (input.baseAppLinked) {
     return 'base-app-passkey'
   }
 

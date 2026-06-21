@@ -55,7 +55,7 @@ describe('mergeBootstrapSignals (R7: concurrent fetch merge consistency)', () =>
         linked: true,
         canonicalCswAddress: '0xCSW',
         baseSubAccount: { address: '0xPAYLOAD_SUB', registered: true, isDistinctFromCsw: true },
-        executionTrack: 'sub-account',
+        executionTrack: 'legacy-owner-install',
         privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
         creatorCoin: null,
         zoraHandle: 'test',
@@ -64,7 +64,7 @@ describe('mergeBootstrapSignals (R7: concurrent fetch merge consistency)', () =>
     })
     const bootstrap = makeBootstrap()
     const merged = mergeBootstrapSignals(payload, bootstrap)
-    expect(merged.accountSignals.executionTrack).toBe('sub-account')
+    expect(merged.accountSignals.executionTrack).toBe('legacy-owner-install')
     expect(merged.accountSignals.baseSubAccount.address).toBe('0xPAYLOAD_SUB')
     expect(merged.accountSignals.canonicalCswAddress).toBe('0xCSW')
   })
