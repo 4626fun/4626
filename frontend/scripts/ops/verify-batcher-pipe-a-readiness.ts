@@ -308,7 +308,7 @@ async function main() {
       detail: String(phase1Module),
     },
     {
-      id: 'phase1_module_v1140_target',
+      id: 'phase1_module_v1141_target',
       ok: phase1ModuleAddress === getAddress(SPLIT_PHASE1_PHASE1_MODULE),
       detail: `live=${phase1ModuleAddress ?? 'n/a'} expected=${SPLIT_PHASE1_PHASE1_MODULE}`,
     },
