@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAccount, useConnect } from 'wagmi'
-import { usePrivy } from '@privy-io/react-auth'
 
 import { Button } from '@/components/ui/Button'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
@@ -15,13 +14,12 @@ type WaitlistBootstrapResponse = {
   requiresPrivyAuth: boolean
 }
 
-async function bootstrapWaitlistWithPrivyToken(token: string): Promise<WaitlistBootstrapResponse> {
+async function bootstrapWaitlist(): Promise<WaitlistBootstrapResponse> {
   const response = await apiFetch('/api/waitlist/bootstrap', {
     method: 'POST',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({}),
   })
@@ -36,7 +34,6 @@ async function bootstrapWaitlistWithPrivyToken(token: string): Promise<WaitlistB
 export function WaitlistFlow(props: { sectionId?: string }) {
   const sectionId = props.sectionId ?? 'waitlist-page'
   const auth = useSiweAuth()
-  const { getAccessToken } = usePrivy()
   const { isConnected, address } = useAccount()
   const { connectAsync, connectors, isPending } = useConnect()
 
@@ -59,19 +56,14 @@ export function WaitlistFlow(props: { sectionId?: string }) {
       const signedIn = await auth.signIn({ method: 'privy' })
       if (!signedIn) return
 
-      const token = typeof getAccessToken === 'function' ? await getAccessToken().catch(() => null) : null
-      if (!token) {
-        throw new Error('Signed in, but could not verify your waitlist session. Please retry.')
-      }
-
-      await bootstrapWaitlistWithPrivyToken(token)
+      await bootstrapWaitlist()
       setStatus('You are on the waitlist. You can now continue to app sign-in anytime.')
     } catch (signupError) {
       setError(signupError instanceof Error ? signupError.message : 'Email signup failed.')
     } finally {
       setEmailBusy(false)
     }
-  }, [auth, getAccessToken])
+  }, [auth])
 
   const handleConnectWallet = useCallback(
     async (connectorId: string) => {
