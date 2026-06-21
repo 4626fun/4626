@@ -60,6 +60,7 @@ export const API_ENDPOINTS = {
   },
   alfaclub: {
     counterTradeStatus: '/api/v1/alfaclub/counter-trade-status',
+    keySafetyClubRisk: '/api/v1/alfaclub/key-safety-club-risk',
     backtestSweep: '/api/v1/alfaclub/backtest-sweep',
     backtestAudit: '/api/v1/alfaclub/backtest-audit',
     backtestSeries: '/api/v1/alfaclub/backtest-series',

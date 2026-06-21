@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2, ShieldAlert } from 'lucide-react'
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
 import { KeyOwnershipBar } from '@/components/alfaclub/KeyOwnershipBar'
 import { TradingRoomCurvePreview } from '@/components/alfaclub/TradingRoomCurvePreview'
@@ -10,6 +10,8 @@ import {
   type AlfaRoomTier,
   type KeyDefenseEvaluation,
 } from '@/lib/alfaclub/keyDefense'
+import { apiFetch } from '@/lib/api/apiBase'
+import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 import { cn } from '@/lib/shared/utils'
 
 const ROOM_TIERS: Array<{ id: AlfaRoomTier; label: string; formula: string }> = [
@@ -223,6 +225,22 @@ function StatTile({ label, value, caption, tone }: StatTileProps) {
 
 type SafetyStatus = 'safe' | 'caution' | 'at-risk'
 
+type ClubRiskRow = {
+  roomId: string
+  roomName: string
+  creatorHandle: string | null
+  supply: number
+  ownerSharePercent: number
+  keysHeld: number
+  volumeUsdc: number
+  pnlPctAllTime: number | null
+  modeledPotUsdc: number
+  potSource: 'snapshot' | 'curve_baseline'
+  minAttackKeys: number
+  minAttackCostUsdc: number
+  status: SafetyStatus
+}
+
 function resolveSafetyStatus(evaluation: KeyDefenseEvaluation, potAtRiskUsdc: number): SafetyStatus {
   if (!evaluation.raid.raidUnprofitable) return 'at-risk'
   const nearThreshold =
@@ -347,7 +365,7 @@ export function AlfaClubKeySafety() {
   const SafetyIcon = safety.icon
   const recoveryPercent = Math.round(evaluation.recovery.donationRecoveryFraction * 100)
   const showResults = unlockedStep >= 4
-  const clubRiskRows = useMemo(() => {
+  const fallbackClubRiskRows = useMemo<ClubRiskRow[]>(() => {
     const supplyCandidates = [20, 40, 60, 80, 100]
     const ownershipCandidates = [10, 20, 30, 40, 50]
     return supplyCandidates.map((supply) => {
@@ -363,15 +381,68 @@ export function AlfaClubKeySafety() {
         targetRecoveryFraction: 0.5,
       })
       return {
+        roomId: `modeled-${supply}`,
+        roomName: `Modeled club room (${supply} supply)`,
+        creatorHandle: null,
         supply,
-        ownershipPercent,
+        ownerSharePercent: ownershipPercent,
         keysHeld,
+        volumeUsdc: 0,
+        pnlPctAllTime: null,
+        modeledPotUsdc: potUsdc,
+        potSource: 'curve_baseline' as const,
         status: resolveSafetyStatus(clubEvaluation, Math.max(0, potUsdc + donationUsdc)),
         minAttackKeys: clubEvaluation.raid.minAttackKeys,
         minAttackCostUsdc: clubEvaluation.raid.minAttackKeysCostUsdc,
       }
     })
   }, [donationUsdc, potUsdc, sharePercent])
+  const [liveClubRiskRows, setLiveClubRiskRows] = useState<ClubRiskRow[] | null>(null)
+  const [liveClubRiskLoading, setLiveClubRiskLoading] = useState(false)
+  const [liveClubRiskError, setLiveClubRiskError] = useState<string | null>(null)
+  const clubRiskRows = liveClubRiskRows ?? fallbackClubRiskRows
+
+  useEffect(() => {
+    if (!showResults) return
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(async () => {
+      setLiveClubRiskLoading(true)
+      setLiveClubRiskError(null)
+      try {
+        const path = `${API_ENDPOINTS.alfaclub.keySafetyClubRisk}?limit=20&ownerSharePercent=${encodeURIComponent(
+          String(sharePercent),
+        )}&donationUsdc=${encodeURIComponent(String(donationUsdc))}`
+        const res = await apiFetch(path, {
+          method: 'GET',
+          signal: controller.signal,
+        })
+        if (!res.ok) {
+          const payload = (await res.json().catch(() => null)) as { error?: string } | null
+          throw new Error(payload?.error ?? `risk_data_fetch_failed_${res.status}`)
+        }
+        const payload = (await res.json()) as {
+          success?: boolean
+          data?: { rows?: ClubRiskRow[] }
+          error?: string
+        }
+        if (!payload.success || !Array.isArray(payload.data?.rows)) {
+          throw new Error(payload.error ?? 'risk_data_payload_invalid')
+        }
+        setLiveClubRiskRows(payload.data.rows)
+      } catch (error) {
+        if (controller.signal.aborted) return
+        const message = error instanceof Error ? error.message : 'risk_data_fetch_failed'
+        setLiveClubRiskError(message)
+        setLiveClubRiskRows(null)
+      } finally {
+        if (!controller.signal.aborted) setLiveClubRiskLoading(false)
+      }
+    }, 220)
+    return () => {
+      controller.abort()
+      window.clearTimeout(timeoutId)
+    }
+  }, [donationUsdc, sharePercent, showResults])
 
   return (
     <div className="relative pb-24 md:pb-0">
@@ -696,12 +767,22 @@ export function AlfaClubKeySafety() {
                       Club room risk scan (model)
                     </p>
                     <p className="mt-2 text-xs text-zinc-500">
-                      Uses current pot ({formatUsd(potUsdc)}) and donation ({formatUsd(donationUsdc)}) with club-tier curve assumptions.
+                      Uses live club-room snapshots when available; otherwise falls back to modeled rows. Owner share assumption is {sharePercent}%.
                     </p>
+                    {liveClubRiskLoading ? (
+                      <p className="mt-2 text-xs text-zinc-500">Refreshing live room risk rows…</p>
+                    ) : null}
+                    {liveClubRiskError ? (
+                      <p className="mt-2 text-xs text-amber-300">
+                        Live room data unavailable ({liveClubRiskError}); showing modeled rows.
+                      </p>
+                    ) : null}
                     <div className="mt-3 overflow-x-auto">
                       <table className="min-w-full border-separate border-spacing-y-1 text-xs text-zinc-300">
                         <thead>
                           <tr className="text-zinc-500">
+                            <th className="px-2 py-1 text-left font-medium">Room</th>
+                            <th className="px-2 py-1 text-left font-medium">Volume</th>
                             <th className="px-2 py-1 text-left font-medium">Supply</th>
                             <th className="px-2 py-1 text-left font-medium">Owner %</th>
                             <th className="px-2 py-1 text-left font-medium">Keys held</th>
@@ -712,9 +793,16 @@ export function AlfaClubKeySafety() {
                         </thead>
                         <tbody>
                           {clubRiskRows.map((row) => (
-                            <tr key={`club-risk-${row.supply}`} className="bg-white/[0.03]">
-                              <td className="rounded-l-lg px-2 py-1.5 font-mono">{row.supply}</td>
-                              <td className="px-2 py-1.5 font-mono">{row.ownershipPercent}%</td>
+                            <tr key={row.roomId} className="bg-white/[0.03]">
+                              <td className="rounded-l-lg px-2 py-1.5">
+                                <p className="max-w-[16rem] truncate font-medium text-zinc-100">{row.roomName}</p>
+                                {row.creatorHandle ? (
+                                  <p className="text-[11px] text-zinc-500">@{row.creatorHandle}</p>
+                                ) : null}
+                              </td>
+                              <td className="px-2 py-1.5 font-mono">{formatUsd(row.volumeUsdc)}</td>
+                              <td className="px-2 py-1.5 font-mono">{row.supply}</td>
+                              <td className="px-2 py-1.5 font-mono">{row.ownerSharePercent}%</td>
                               <td className="px-2 py-1.5 font-mono">{row.keysHeld.toLocaleString()}</td>
                               <td className="px-2 py-1.5 font-mono">{row.minAttackKeys.toLocaleString()}</td>
                               <td className="px-2 py-1.5 font-mono">{formatUsd(row.minAttackCostUsdc)}</td>

@@ -1,14 +1,4 @@
-import { summarizeBaseSubAccount } from '../wallet/executionTrack.js'
-
-const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
-
-function normalizeMemberAddress(value: string | null): `0x${string}` | null {
-  const raw = typeof value === 'string' ? value.trim().toLowerCase() : ''
-  if (!ADDRESS_RE.test(raw)) return null
-  return raw as `0x${string}`
-}
-
-export type WaitlistChatExecutionTrack = 'legacy-owner-install' | 'sub-account' | 'none-yet'
+export type WaitlistChatExecutionTrack = 'legacy-owner-install' | 'none-yet'
 
 export type WaitlistChatEligibilitySnapshot = {
   canonicalCswAddress: `0x${string}` | null
@@ -27,32 +17,19 @@ export type ResolveWaitlistChatEligibilityInput = {
   embeddedEoaAddress: `0x${string}` | null
   baseSubAccountAddress: `0x${string}` | null
   embeddedIsOwnerOfParent: boolean
-  subAccountFlowEnabled?: boolean
   ownerCheckFailed?: boolean
 }
 
 function resolveChatExecutionTrack(input: {
-  canonicalCswAddress: `0x${string}`
-  baseSubAccountAddress: `0x${string}` | null
   embeddedIsOwnerOfParent: boolean
-  subAccountFlowEnabled: boolean
 }): WaitlistChatExecutionTrack {
   if (input.embeddedIsOwnerOfParent) return 'legacy-owner-install'
-  if (input.subAccountFlowEnabled) {
-    const summary = summarizeBaseSubAccount({
-      canonicalCswAddress: input.canonicalCswAddress,
-      baseSubAccountAddress: input.baseSubAccountAddress,
-    })
-    if (summary.registered) return 'sub-account'
-  }
   return 'none-yet'
 }
 
 export function resolveWaitlistChatEligibilitySnapshot(
   input: ResolveWaitlistChatEligibilityInput,
 ): WaitlistChatEligibilitySnapshot {
-  const subAccountFlowEnabled = input.subAccountFlowEnabled ?? false
-
   if (!input.canonicalCswAddress) {
     return {
       canonicalCswAddress: null,
@@ -93,15 +70,7 @@ export function resolveWaitlistChatEligibilitySnapshot(
   }
 
   const executionTrack = resolveChatExecutionTrack({
-    canonicalCswAddress: input.canonicalCswAddress,
-    baseSubAccountAddress: input.baseSubAccountAddress,
     embeddedIsOwnerOfParent: input.embeddedIsOwnerOfParent,
-    subAccountFlowEnabled,
-  })
-
-  const subAccountSummary = summarizeBaseSubAccount({
-    canonicalCswAddress: input.canonicalCswAddress,
-    baseSubAccountAddress: input.baseSubAccountAddress,
   })
 
   if (executionTrack === 'legacy-owner-install') {
@@ -118,25 +87,6 @@ export function resolveWaitlistChatEligibilitySnapshot(
     }
   }
 
-  if (executionTrack === 'sub-account' && subAccountSummary.address) {
-    const xmtpMemberAddress = normalizeMemberAddress(subAccountSummary.address)
-    return {
-      canonicalCswAddress: input.canonicalCswAddress,
-      embeddedEoaAddress: input.embeddedEoaAddress,
-      baseSubAccountAddress: xmtpMemberAddress,
-      executionTrack,
-      xmtpMemberAddress,
-      chatReady: Boolean(xmtpMemberAddress),
-      embeddedIsOwnerOfParent: input.embeddedIsOwnerOfParent,
-      joinBlockedReason: xmtpMemberAddress ? null : 'sub_account_not_registered',
-    }
-  }
-
-  const joinBlockedReason =
-    subAccountFlowEnabled && !input.embeddedIsOwnerOfParent
-      ? 'sub_account_not_registered'
-      : 'embedded_owner_not_installed'
-
   return {
     canonicalCswAddress: input.canonicalCswAddress,
     embeddedEoaAddress: input.embeddedEoaAddress,
@@ -145,6 +95,6 @@ export function resolveWaitlistChatEligibilitySnapshot(
     xmtpMemberAddress: null,
     chatReady: false,
     embeddedIsOwnerOfParent: input.embeddedIsOwnerOfParent,
-    joinBlockedReason,
+    joinBlockedReason: 'embedded_owner_not_installed',
   }
 }

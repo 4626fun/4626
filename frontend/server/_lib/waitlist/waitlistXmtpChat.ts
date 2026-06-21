@@ -1,6 +1,5 @@
 import { getKeeprVaultByVaultAddress } from '../keepr/keeprRegistry.js'
 import { isCswOwner } from '../wallet/cswOwner.js'
-import { isWaitlistSubaccountFlowEnabled } from '../wallet/waitlistSubaccountFlowEnv.js'
 import {
   resolveWaitlistChatEligibilitySnapshot,
   type WaitlistChatEligibilitySnapshot,
@@ -101,7 +100,6 @@ export async function resolveWaitlistChatEligibility(
       embeddedEoaAddress,
       baseSubAccountAddress,
       embeddedIsOwnerOfParent,
-      subAccountFlowEnabled: isWaitlistSubaccountFlowEnabled(),
     })
   } catch {
     return resolveWaitlistChatEligibilitySnapshot({
@@ -110,7 +108,6 @@ export async function resolveWaitlistChatEligibility(
       baseSubAccountAddress,
       embeddedIsOwnerOfParent: false,
       ownerCheckFailed: true,
-      subAccountFlowEnabled: isWaitlistSubaccountFlowEnabled(),
     })
   }
 }

@@ -95,6 +95,7 @@ const v1RouteLoaders: ApiRouteLoaders = {
   'alfaclub/backtest-series': () => import('./v1/alfaclub/_backtest-series.js'),
   'alfaclub/backtest-markets': () => import('./v1/alfaclub/_backtest-markets.js'),
   'alfaclub/backtest-run': () => import('./v1/alfaclub/_backtest-run.js'),
+  'alfaclub/key-safety-club-risk': () => import('./v1/alfaclub/_key-safety-club-risk.js'),
   'alfaclub/room-timeline': () => import('./v1/alfaclub/_room-timeline.js'),
   'alfaclub/room-access/status': () => import('./v1/alfaclub/_room-access-status.js'),
   'alfaclub/room-access/join': () => import('./v1/alfaclub/_room-access-join.js'),
