@@ -26,9 +26,9 @@ describe('Waitlist', () => {
     mockPrivyClientStatus = 'disabled'
   })
 
-  it('still mounts the waitlist flow when Privy client is disabled', () => {
+  it('still mounts the waitlist flow when Privy client is disabled', async () => {
     render(<Waitlist />)
 
-    expect(screen.getByTestId('waitlist-flow-mock')).toBeTruthy()
+    expect(await screen.findByTestId('waitlist-flow-mock')).toBeTruthy()
   })
 })
