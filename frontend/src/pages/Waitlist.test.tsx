@@ -15,6 +15,10 @@ vi.mock('@/web3/AppQueryProvider', () => ({
   AppQueryProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }))
 
+vi.mock('@/components/layout/AppLoadingOverlay', () => ({
+  AppLoadingRegistrar: () => null,
+}))
+
 vi.mock('@/features/waitlist/WaitlistFlow', () => ({
   WaitlistFlow: () => <div data-testid="waitlist-flow-mock">waitlist flow mounted</div>,
 }))
