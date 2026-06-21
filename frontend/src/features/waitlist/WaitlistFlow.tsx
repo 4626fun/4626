@@ -95,21 +95,21 @@ export function WaitlistFlow(props: { sectionId?: string }) {
 
   return (
     <section id={sectionId} className="mx-auto w-full max-w-3xl px-4 py-10 sm:py-14">
-      <div className="rounded-3xl border border-white/10 bg-black/40 p-6 shadow-2xl shadow-black/30 sm:p-8">
+      <div className="rounded-3xl border-0 bg-black/40 p-6 sm:p-8">
         <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Join the waitlist</h1>
         <p className="mt-3 text-sm leading-6 text-zinc-300">
           New users join with email. Returning users can sign in with their EOA wallet.
         </p>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+          <div className="rounded-2xl border-0 p-4">
             <p className="label text-zinc-400">New user</p>
             <h2 className="mt-1 text-lg font-medium text-white">Email signup</h2>
             <p className="mt-2 text-sm text-zinc-400">Use email OTP to create or recover your 4626 account.</p>
             <Button
               type="button"
               variant="primary"
-              className="mt-4 w-full"
+              className="mt-4 w-full border-0"
               onClick={() => void handleEmailSignup()}
               disabled={isBusy}
             >
@@ -124,7 +124,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
             </Button>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+          <div className="rounded-2xl border-0 p-4">
             <p className="label text-zinc-400">Returning user</p>
             <h2 className="mt-1 text-lg font-medium text-white">EOA wallet sign-in</h2>
             <p className="mt-2 text-sm text-zinc-400">Connect your wallet, then complete SIWE sign-in.</p>
@@ -134,8 +134,8 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                   <Button
                     key={connector.uid}
                     type="button"
-                    variant="secondary"
-                    className="w-full"
+                    variant="primary"
+                    className="w-full border-0"
                     onClick={() => void handleConnectWallet(connector.id)}
                     disabled={isBusy || isPending}
                   >
@@ -147,7 +147,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
               <Button
                 type="button"
                 variant="primary"
-                className="mt-4 w-full"
+                className="mt-4 w-full border-0"
                 onClick={() => void handleWalletSignIn()}
                 disabled={isBusy}
               >
@@ -165,12 +165,12 @@ export function WaitlistFlow(props: { sectionId?: string }) {
         </div>
 
         {status ? (
-          <p className="mt-5 rounded-xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200" role="status">
+          <p className="mt-5 rounded-xl border-0 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200" role="status">
             {status}
           </p>
         ) : null}
         {error || auth.error ? (
-          <p className="mt-5 rounded-xl bg-rose-500/10 px-4 py-3 text-sm text-rose-200" role="alert">
+          <p className="mt-5 rounded-xl border-0 bg-rose-500/10 px-4 py-3 text-sm text-rose-200" role="alert">
             {error || auth.error}
           </p>
         ) : null}
