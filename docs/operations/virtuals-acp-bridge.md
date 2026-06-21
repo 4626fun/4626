@@ -54,6 +54,10 @@ never guessed.
 2. Make sure at least one Eliza LLM provider key is set (`GROQ_API_KEY`,
    `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENROUTER_API_KEY`).
 3. Set the `VIRTUALS_ACP_*` block in `.env` (see `frontend/.env.example`).
+4. For revenue-first credit usage, set:
+   - `VIRTUALS_API_KEY` (Virtuals compute key)
+   - optional `ELIZA_LLM_VIRTUALS_ACP_PROVIDER_PRIORITY` to keep
+     `VirtualsCompute` first for `agentKey=virtuals-acp`.
 4. Start it:
    - **Standalone (recommended):** `pnpm -C frontend agent:virtuals`.
      Optional `VIRTUALS_ACP_HEALTH_PORT` exposes `/healthz` + `/readyz` for
@@ -76,3 +80,46 @@ Start with `VIRTUALS_ACP_AUTO_LLM=0` (observe-only) and watch the logged
 entries for a day. Then enable `VIRTUALS_ACP_AUTO_LLM=1` with
 `VIRTUALS_ACP_AUTO_FUND=0` and a small `VIRTUALS_ACP_MAX_BUDGET_USDC`. Only
 enable auto-fund once you trust the job mix the agent receives.
+
+## Revenue-first credit policy
+
+When your primary objective is ACP job throughput/revenue (not trade gating),
+prefer this operating policy:
+
+1. **Phase A (observe, 2-3 days)**
+   - `VIRTUALS_ACP_AUTO_LLM=0`
+   - `VIRTUALS_ACP_AUTO_FUND=0`
+   - Validate incoming job mix before allowing tool execution.
+2. **Phase B (constrained execute, 3-5 days)**
+   - `VIRTUALS_ACP_AUTO_LLM=1`
+   - `VIRTUALS_ACP_AUTO_FUND=0`
+   - Keep conservative `VIRTUALS_ACP_MAX_BUDGET_USDC`.
+3. **Phase C (scale)**
+   - Increase quality/throughput only if completion and net economics improve.
+   - Enable `AUTO_FUND` only after stable execution quality.
+
+Keep counter-trade LLM gating separate unless explicitly changing objectives.
+
+Suggested budget guardrails for `$200/week` credits:
+
+- Theoretical daily ceiling: about `$28.57/day`.
+- Start at 70-80% utilization budget (about `$20-$23/day`) to avoid end-of-week
+  starvation during bursty job windows.
+- If this runner is dedicated to ACP jobs, set `ELIZA_DAILY_LLM_USD_BUDGET`
+  accordingly and scale up only after quality gates hold.
+
+## Monitoring and stop/go gates
+
+Track these metrics daily/weekly:
+
+- job completion count and completion rate
+- average time-to-first-response
+- unparseable-decision rate
+- tools executed vs decisions attempted
+- net USDC/job (after funding + inference spend)
+
+`/virtuals status` now surfaces LLM execution telemetry:
+- `attempted`, `executed`, `wait`, `unparseable`, and average decision latency.
+
+Pause/retune if unparseable decisions or timeout behavior rises, or if net
+USDC/job degrades week-over-week.

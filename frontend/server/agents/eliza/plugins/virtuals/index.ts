@@ -60,6 +60,7 @@ function formatStatus(): string {
     `Agent wallet: ${status.agentAddress}`,
     `Chain: ${status.chainId} | auto-LLM: ${status.autoLlmEnabled ? 'on' : 'off'} | auto-fund: ${status.autoFundEnabled ? 'on' : 'off'} | budget cap: ${status.maxBudgetUsdc} USDC`,
     `Entries handled: ${status.entriesHandled} | tools executed: ${status.toolsExecuted}`,
+    `LLM decisions: attempted ${status.llmDecisions.attempted}, executed ${status.llmDecisions.executed}, wait ${status.llmDecisions.wait}, unparseable ${status.llmDecisions.unparseable}, avg latency ${status.llmDecisions.avgLatencyMs}ms`,
     sessions,
   ].join('\n')
 }

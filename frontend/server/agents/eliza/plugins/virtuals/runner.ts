@@ -12,7 +12,8 @@
  *   VIRTUALS_ACP_WALLET_ADDRESS=0x...   (agent wallet from Virtuals UI)
  *   VIRTUALS_ACP_WALLET_ID=...          (Privy wallet id from Virtuals UI)
  *   VIRTUALS_ACP_SIGNER_PRIVATE_KEY=... (session signer key from Virtuals UI)
- * plus at least one LLM provider key (GROQ_API_KEY / OPENAI_API_KEY / ...).
+ * plus at least one LLM provider key (VIRTUALS_API_KEY / GROQ_API_KEY /
+ * OPENAI_API_KEY / ...).
  *
  * Optional:
  *   VIRTUALS_ACP_CHAIN_ID (default 8453), VIRTUALS_ACP_PERSONA,
@@ -95,6 +96,10 @@ async function main(): Promise<void> {
       sessions: current.sessions.length,
       entriesHandled: current.entriesHandled,
       toolsExecuted: current.toolsExecuted,
+      llmAttempted: current.llmDecisions.attempted,
+      llmExecuted: current.llmDecisions.executed,
+      llmUnparseable: current.llmDecisions.unparseable,
+      llmAvgLatencyMs: current.llmDecisions.avgLatencyMs,
       lastError: current.lastError ?? undefined,
     })
   }, 5 * 60 * 1000).unref()

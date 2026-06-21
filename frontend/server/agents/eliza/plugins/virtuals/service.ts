@@ -45,6 +45,13 @@ export type VirtualsAcpServiceStatus = {
   sessions: Array<{ jobId: string; chainId: number; roles: string[]; status: string }>
   entriesHandled: number
   toolsExecuted: number
+  llmDecisions: {
+    attempted: number
+    unparseable: number
+    wait: number
+    executed: number
+    avgLatencyMs: number
+  }
   lastError: string | null
 }
 
@@ -55,6 +62,11 @@ export class VirtualsAcpService {
   private agentAddress: string | null = null
   private entriesHandled = 0
   private toolsExecuted = 0
+  private llmAttempted = 0
+  private llmUnparseable = 0
+  private llmWait = 0
+  private llmExecuted = 0
+  private llmDecisionLatencyTotalMs = 0
   private lastError: string | null = null
   private readonly inFlightSessions = new Set<string>()
 
@@ -144,6 +156,14 @@ export class VirtualsAcpService {
       })),
       entriesHandled: this.entriesHandled,
       toolsExecuted: this.toolsExecuted,
+      llmDecisions: {
+        attempted: this.llmAttempted,
+        unparseable: this.llmUnparseable,
+        wait: this.llmWait,
+        executed: this.llmExecuted,
+        avgLatencyMs:
+          this.llmAttempted > 0 ? Math.round(this.llmDecisionLatencyTotalMs / this.llmAttempted) : 0,
+      },
       lastError: this.lastError,
     }
   }
@@ -195,6 +215,8 @@ export class VirtualsAcpService {
 
     const history = await session.toMessages()
     if (history.length === 0) return
+    const decisionStartedAt = Date.now()
+    this.llmAttempted += 1
 
     const systemPrompt = buildToolSystemPrompt({
       persona: config.persona,
@@ -218,6 +240,8 @@ export class VirtualsAcpService {
 
     const decision = parseToolDecision(result.text, tools)
     if (decision.kind === 'none') {
+      this.llmUnparseable += 1
+      this.llmDecisionLatencyTotalMs += Date.now() - decisionStartedAt
       logger.warn('[virtuals-acp] no usable tool decision from LLM', {
         jobId: session.jobId,
         provider: result.provider,
@@ -225,7 +249,11 @@ export class VirtualsAcpService {
       })
       return
     }
-    if (decision.name === 'wait') return
+    if (decision.name === 'wait') {
+      this.llmWait += 1
+      this.llmDecisionLatencyTotalMs += Date.now() - decisionStartedAt
+      return
+    }
 
     const args = clampSpendArgs(decision.name, decision.args, config.maxBudgetUsdc)
     logger.info('[virtuals-acp] executing tool', {
@@ -236,6 +264,8 @@ export class VirtualsAcpService {
     })
     await session.executeTool(decision.name, args)
     this.toolsExecuted += 1
+    this.llmExecuted += 1
+    this.llmDecisionLatencyTotalMs += Date.now() - decisionStartedAt
   }
 }
 

@@ -52,6 +52,13 @@ type GenerateParams = {
 
 const PROVIDERS: LlmProvider[] = [
   {
+    name: 'VirtualsCompute',
+    envKey: 'VIRTUALS_API_KEY',
+    apiUrl: 'https://compute.virtuals.io/v1/chat/completions',
+    model: 'moonshotai/kimi-k2-0905',
+    estimateUsdPer1kTokens: 0.001,
+  },
+  {
     name: 'Groq',
     envKey: 'GROQ_API_KEY',
     apiUrl: 'https://api.groq.com/openai/v1/chat/completions',
@@ -107,7 +114,7 @@ function isAbortError(error: unknown): boolean {
 }
 
 function parsePriority(raw: string | undefined): string[] {
-  const fallback = ['Groq', 'OpenAI', 'Anthropic', 'OpenRouter']
+  const fallback = ['Groq', 'OpenAI', 'Anthropic', 'OpenRouter', 'VirtualsCompute']
   const source = String(raw ?? '').trim()
   if (!source) return fallback
   const requested = source
@@ -216,6 +223,7 @@ class ElizaLlmService {
   private readonly intentRoutingEnabled: boolean
   private readonly complexInputChars: number
   private readonly complexProviderPriority: string[]
+  private readonly virtualsAcpProviderPriority: string[]
   private readonly budgetGuard: DailyBudgetGuard
   private readonly circuits = new Map<string, ProviderCircuitState>()
 
@@ -231,6 +239,10 @@ class ElizaLlmService {
     this.complexInputChars = Math.floor(parsePositiveNumber(process.env.ELIZA_LLM_COMPLEX_INPUT_CHARS, 700))
     this.complexProviderPriority = parsePriority(
       process.env.ELIZA_LLM_COMPLEX_PROVIDER_PRIORITY ?? 'Anthropic,OpenAI,Groq,OpenRouter',
+    )
+    this.virtualsAcpProviderPriority = parsePriority(
+      process.env.ELIZA_LLM_VIRTUALS_ACP_PROVIDER_PRIORITY ??
+        'VirtualsCompute,Groq,OpenAI,Anthropic,OpenRouter',
     )
     const tokenBudget = Number(String(process.env.ELIZA_DAILY_LLM_TOKEN_BUDGET ?? '').trim())
     const usdBudget = Number(String(process.env.ELIZA_DAILY_LLM_USD_BUDGET ?? '').trim())
@@ -256,13 +268,10 @@ class ElizaLlmService {
     return ordered
   }
 
-  private providersForMessage(userMessage: string): LlmProvider[] {
-    const providers = this.getAvailableProviders()
-    if (!this.intentRoutingEnabled) return providers
-    if (!messageLooksComplex(userMessage, this.complexInputChars)) return providers
+  private orderProvidersByPriority(providers: LlmProvider[], priority: string[]): LlmProvider[] {
     const byName = new Map(providers.map((provider) => [provider.name.toLowerCase(), provider]))
     const ordered: LlmProvider[] = []
-    for (const name of this.complexProviderPriority) {
+    for (const name of priority) {
       const provider = byName.get(name.toLowerCase())
       if (provider) ordered.push(provider)
     }
@@ -270,6 +279,16 @@ class ElizaLlmService {
       if (!ordered.includes(provider)) ordered.push(provider)
     }
     return ordered
+  }
+
+  private providersForMessage(agentKey: string, userMessage: string): LlmProvider[] {
+    const providers = this.getAvailableProviders()
+    if (agentKey === 'virtuals-acp') {
+      return this.orderProvidersByPriority(providers, this.virtualsAcpProviderPriority)
+    }
+    if (!this.intentRoutingEnabled) return providers
+    if (!messageLooksComplex(userMessage, this.complexInputChars)) return providers
+    return this.orderProvidersByPriority(providers, this.complexProviderPriority)
   }
 
   getHealth() {
@@ -401,7 +420,7 @@ class ElizaLlmService {
     if (params.abortSignal?.aborted) {
       throw new AgentError('UPSTREAM_ERROR', 'request_cancelled', { retryable: false })
     }
-    const providers = this.providersForMessage(params.userMessage)
+    const providers = this.providersForMessage(params.agentKey, params.userMessage)
     if (providers.length === 0) {
       return { text: null, provider: null, attempts: [] }
     }
