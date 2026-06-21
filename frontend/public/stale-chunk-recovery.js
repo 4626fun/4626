@@ -45,8 +45,56 @@
     }
   }
 
+  function isLikelyStaleStylesheetLink(link) {
+    if (!link || typeof link !== 'object') return false
+    const rel = String(link.rel || '').toLowerCase()
+    if (rel !== 'stylesheet') return false
+    const href = String(link.href || '').toLowerCase()
+    if (!href) return false
+    return href.includes('/assets/') && href.endsWith('.css')
+  }
+
+  function maybeRecoverFromStylesheetFailure(target) {
+    const link = target instanceof HTMLLinkElement ? target : null
+    if (!link || !isLikelyStaleStylesheetLink(link)) return false
+    reloadOnce()
+    return true
+  }
+
+  function verifyStylesheetLoadState() {
+    const links = document.querySelectorAll('link[rel="stylesheet"]')
+    for (const link of links) {
+      if (!(link instanceof HTMLLinkElement)) continue
+      if (!isLikelyStaleStylesheetLink(link)) continue
+      // If the browser could not parse the stylesheet (e.g. stale hashed css
+      // path served index.html as text/html), sheet stays null.
+      if (!link.sheet) {
+        reloadOnce()
+        return
+      }
+    }
+  }
+
   // Vite dispatches this event when modulepreload fails.
   window.addEventListener('vite:preloadError', () => reloadOnce())
+
+  // Handle stale hashed CSS URLs that return HTML and trigger MIME errors.
+  window.addEventListener(
+    'error',
+    (event) => {
+      if (maybeRecoverFromStylesheetFailure(event.target)) return
+      const msg = String(event?.message || '')
+      if (msg.includes('Refused to apply style') && msg.includes("MIME type ('text/html')")) {
+        reloadOnce()
+      }
+    },
+    true,
+  )
+
+  window.addEventListener('load', () => {
+    // Run after initial load so link.sheet has settled.
+    setTimeout(verifyStylesheetLoadState, 0)
+  })
 
   // Generic safety net for browsers that don't emit the preload event.
   window.addEventListener('unhandledrejection', (event) => {

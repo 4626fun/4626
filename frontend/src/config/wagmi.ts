@@ -111,29 +111,20 @@ function rememberEip6963Provider(detail: Eip6963ProviderDetail | null | undefine
   eip6963Providers.set(key, detail)
 }
 
-function requestEip6963Providers() {
-  if (!IS_BROWSER || typeof window === 'undefined') return
-  if (SHOULD_SKIP_EIP6963_DISCOVERY) return
-  try {
-    window.dispatchEvent(new Event('eip6963:requestProvider'))
-  } catch {
-    // EIP-6963 is best-effort; fall back to legacy injected globals.
-  }
-}
-
 function ensureEip6963Discovery() {
   if (!IS_BROWSER || typeof window === 'undefined' || eip6963DiscoveryStarted) return
   if (SHOULD_SKIP_EIP6963_DISCOVERY) return
   eip6963DiscoveryStarted = true
+  // Passive-only discovery: do not dispatch `eip6963:requestProvider` from app
+  // code, because some extension stacks treat that as an injection trigger and
+  // race to mutate `window.ethereum`.
   window.addEventListener('eip6963:announceProvider', ((event: CustomEvent<Eip6963ProviderDetail>) => {
     rememberEip6963Provider(event.detail)
   }) as EventListener)
-  requestEip6963Providers()
 }
 
 function findEip6963Provider(predicate: (detail: Eip6963ProviderDetail) => boolean): any | undefined {
   ensureEip6963Discovery()
-  requestEip6963Providers()
   for (const detail of eip6963Providers.values()) {
     try {
       if (predicate(detail)) return detail.provider as any
