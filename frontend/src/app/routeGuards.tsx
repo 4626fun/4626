@@ -34,6 +34,13 @@ function ReplaceOnMount(props: { to: string }) {
  * Waits for Privy to be ready, creates a one-time handoff code, then redirects so the
  * destination can restore the session without a second sign-in.
  */
+// R8 fix: module-level guard prevents double-fire when React remounts the
+// component (e.g. Strict Mode double-invoke or parent re-render). The per-
+// instance `fired` ref resets on remount, which can trigger a second
+// createAuthHandoffCode + window.location.replace before the first navigation
+// unloads the page. The module flag survives remounts within the same page.
+let handoffRedirectFired = false
+
 function HandoffOnMount(props: { to: string }) {
   const { ready, authenticated, getAccessToken } = usePrivy()
   const fired = useRef(false)
@@ -42,7 +49,9 @@ function HandoffOnMount(props: { to: string }) {
     if (typeof window === 'undefined') return
     if (!ready) return
     if (fired.current) return
+    if (handoffRedirectFired) return
     fired.current = true
+    handoffRedirectFired = true
 
     void (async () => {
       let target = props.to

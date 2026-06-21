@@ -17,6 +17,10 @@ type AuthMeResponse = {
   address: string
 } | null
 
+const PRIVY_ACCESS_TOKEN_TIMEOUT_MS = 4_000
+const PRIVY_ACCESS_TOKEN_ATTEMPTS = 8
+const PRIVY_ACCESS_TOKEN_RETRY_DELAY_MS = 250
+
 function useSafeWaitlistLogin() {
   try {
     return useLogin() as {
@@ -58,27 +62,47 @@ async function readAuthSessionAddress(): Promise<string | null> {
   return address || null
 }
 
-async function readPrivyAccessTokenWithRetry(
-  getAccessToken: (() => Promise<string | null>) | null | undefined,
-  opts?: { attempts?: number; delayMs?: number },
-): Promise<string | null> {
-  if (typeof getAccessToken !== 'function') return null
-  const attempts = Math.max(1, Number(opts?.attempts ?? 1))
-  const delayMs = Math.max(0, Number(opts?.delayMs ?? 0))
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = globalThis.setTimeout(() => reject(new Error(message)), timeoutMs)
+    promise
+      .then(resolve)
+      .catch(reject)
+      .finally(() => globalThis.clearTimeout(timeoutId))
+  })
+}
 
-  for (let i = 0; i < attempts; i += 1) {
-    try {
-      const token = await getAccessToken()
-      const normalized = typeof token === 'string' ? token.trim() : ''
-      if (normalized) return normalized
-    } catch {
-      // ignore transient access token read failures
-    }
-    if (i < attempts - 1 && delayMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, delayMs))
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => globalThis.setTimeout(resolve, ms))
+}
+
+export async function readPrivyAccessTokenWithRetries(params: {
+  read: (() => Promise<string | null>) | null | undefined
+  attempts?: number
+  retryDelayMs?: number
+  timeoutMs?: number
+}): Promise<string> {
+  const read = params.read
+  if (typeof read !== 'function') return ''
+  const attempts = Math.max(1, Number(params.attempts ?? PRIVY_ACCESS_TOKEN_ATTEMPTS))
+  const retryDelayMs = Math.max(0, Number(params.retryDelayMs ?? PRIVY_ACCESS_TOKEN_RETRY_DELAY_MS))
+  const timeoutMs = Math.max(1, Number(params.timeoutMs ?? PRIVY_ACCESS_TOKEN_TIMEOUT_MS))
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const token = await withTimeout(
+      Promise.resolve()
+        .then(() => read())
+        .then((value) => String(value ?? '').trim())
+        .catch(() => ''),
+      timeoutMs,
+      'Privy access token read timed out.',
+    ).catch(() => '')
+    if (token) return token
+    if (attempt < attempts - 1 && retryDelayMs > 0) {
+      await sleep(retryDelayMs)
     }
   }
-  return null
+  return ''
 }
 
 async function bootstrapWaitlist(privyAccessToken: string): Promise<WaitlistBootstrapResponse> {
@@ -115,6 +139,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
   const autoPromptAttemptedRef = useRef(false)
+  const signupInFlightRef = useRef(false)
 
   useEffect(() => {
     if (!privy.ready) return
@@ -131,9 +156,14 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   }, [privy.ready])
 
   const handleEmailSignup = useCallback(async () => {
+    // R5 fix: in-flight guard prevents concurrent execution when the
+    // auto-prompt effect and a manual button click overlap on the same tick.
+    if (signupInFlightRef.current) return
+    signupInFlightRef.current = true
     setError(null)
     setStatus(null)
     setEmailBusy(true)
+    let bridged = false
     try {
       const needsInteractiveLogin = !privy.authenticated
       if (needsInteractiveLogin) {
@@ -146,20 +176,31 @@ export function WaitlistFlow(props: { sectionId?: string }) {
         }
       }
 
-      const privyToken = await readPrivyAccessTokenWithRetry(privy.getAccessToken, {
-        attempts: 10,
-        delayMs: 250,
+      const privyToken = await readPrivyAccessTokenWithRetries({
+        read: privy.getAccessToken?.bind(privy) ?? null,
       })
       if (!privyToken) {
         throw new Error('Could not verify your email session. Please try again.')
       }
 
-      const bridged = await bridgePrivySession(privyToken)
+      bridged = await bridgePrivySession(privyToken)
       if (!bridged) {
         throw new Error('Could not create your app session. Please try again.')
       }
 
-      const bootstrap = await bootstrapWaitlist(privyToken)
+      let bootstrap = await bootstrapWaitlist(privyToken)
+      if (bootstrap.requiresPrivyAuth) {
+        // One bounded retry handles the post-OTP session race where the first
+        // token read can be transiently empty even after Privy sign-in succeeds.
+        const retryToken = await readPrivyAccessTokenWithRetries({
+          read: privy.getAccessToken?.bind(privy) ?? null,
+          attempts: 4,
+          retryDelayMs: 200,
+        })
+        if (retryToken) {
+          bootstrap = await bootstrapWaitlist(retryToken)
+        }
+      }
       if (bootstrap.requiresPrivyAuth) {
         throw new Error('Could not verify waitlist signup. Please try again.')
       }
@@ -171,11 +212,21 @@ export function WaitlistFlow(props: { sectionId?: string }) {
       setSessionAddress(confirmedSessionAddress)
       setStatus('You are on the waitlist. You can now continue to app sign-in anytime.')
     } catch (signupError) {
+      // R4 fix: if the Privy->4626 session bridge succeeded but a later step
+      // (e.g. bootstrap) failed, clear the stale HttpOnly session cookie so
+      // a retry does not inherit a session for an incomplete account.
+      if (bridged) {
+        await runWaitlistPrivyLogout({
+          logout: privy.logout ?? null,
+          readToken: privy.getAccessToken ?? null,
+        }).catch(() => {})
+      }
       setError(signupError instanceof Error ? signupError.message : 'Email signup failed.')
     } finally {
+      signupInFlightRef.current = false
       setEmailBusy(false)
     }
-  }, [login, privy.authenticated, privy.getAccessToken])
+  }, [login, privy])
 
   const handleSignOut = useCallback(async () => {
     if (signOutBusy) return

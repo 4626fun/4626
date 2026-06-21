@@ -3,7 +3,7 @@
  *
  * Models the FriendKey bonding curve (FriendDotSpace/contracts:
  * `BondingCurveLib.sol`, `FriendKeyV2.sol`, `FriendRoomManager.sol`) plus the
- * AlfaClub app-layer distribution rules (50%-of-all-keys vote, 24h stake lock,
+ * AlfaClub app-layer distribution rules (66%-of-all-keys vote, 24h stake lock,
  * performance fees, 10% reserve) to answer: how many of your own room keys
  * should you hold/stake so others cannot profitably dissolve the room and
  * walk away with the trading fund you donated to.
@@ -112,7 +112,7 @@ export type DistributionPolicy = {
 }
 
 export const DEFAULT_DISTRIBUTION_POLICY: DistributionPolicy = {
-  voteThresholdFraction: 0.5,
+  voteThresholdFraction: 0.66,
   reserveFraction: 0.1,
   creatorPerformanceFeeFraction: 0.15,
   protocolPerformanceFeeFraction: 0.05,
@@ -179,7 +179,7 @@ export function sellProceedsAfterFee(
 /**
  * Minimum keys (of the CURRENT supply `S`) you must hold so existing holders
  * alone can never reach the vote threshold: k > (1 − T)·S.
- * For T = 0.5 this is floor(S/2) + 1.
+ * For T = 0.66 this is floor(0.34·S) + 1.
  */
 export function vetoHold(
   keySupply: number,
@@ -193,7 +193,7 @@ export function vetoHold(
 /**
  * Keys you'd need to BUY (gap `g`) to gain veto, accounting for your buys
  * increasing total supply: hostile = S − k must stay below T·(S + g).
- * For T = 0.5: g > S − 2k, i.e. g = max(0, S − 2k + 1).
+ * For T = 0.66: g > hostile/0.66 − S.
  */
 export function keysToBuyForVeto(
   keySupply: number,
@@ -210,7 +210,7 @@ export function keysToBuyForVeto(
 /**
  * Minimum keys an attacker must buy so that hostile existing keys plus the
  * bought keys reach the vote threshold against your `k` non-distribute keys:
- * (S − k + a) ≥ T·(S + a). For T = 0.5: a ≥ 2k − S.
+ * (S − k + a) ≥ T·(S + a). For T = 0.66 this requires materially more attacker buys.
  */
 export function attackerKeysToPassVote(
   keySupply: number,

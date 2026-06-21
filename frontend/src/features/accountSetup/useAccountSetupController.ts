@@ -5,7 +5,7 @@ import { getAddress } from 'viem'
 import { base } from 'viem/chains'
 import { useAccount, useConnections, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 
-import { mergeAccountMeWithBootstrap } from '@/lib/account/mergeAccountMeBootstrap'
+import { fetchBootstrapExecutionSignals, mergeBootstrapSignals } from '@/lib/account/mergeAccountMeBootstrap'
 import { apiFetch } from '@/lib/api/apiBase'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import { extractPrivyWalletsFromUser, useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
@@ -468,8 +468,15 @@ export function useAccountSetupController(params: {
           'Content-Type': 'application/json',
           'X-Privy-Token': token,
         }
-        const [meResult, zoraResult] = await Promise.allSettled([
+        // R7 fix: fetch /api/onboarding/bootstrap concurrently with
+        // /api/accounts/me so both observe the same DB snapshot. The old
+        // sequential path (accounts/me -> bootstrap) allowed DB state to
+        // change between the two reads, producing inconsistent merges
+        // (e.g. executionTrack from one snapshot, baseSubAccount from
+        // another). allSettled keeps a zora failure from blocking the merge.
+        const [meResult, bootstrapResult, zoraResult] = await Promise.allSettled([
           apiFetch('/api/accounts/me', { method: 'GET', headers }),
+          fetchBootstrapExecutionSignals(getAccessTokenNow),
           apiFetch('/api/zora/link/status', { method: 'POST', headers, body: JSON.stringify({}) }),
         ])
         if (meResult.status !== 'fulfilled') {
@@ -482,7 +489,13 @@ export function useAccountSetupController(params: {
           throw new Error(readApiError(mePayload, 'Failed to load account state.'))
         }
 
-        const mergedMe = await mergeAccountMeWithBootstrap(mePayload.data, getAccessTokenNow)
+        // R7: merge the concurrently-fetched bootstrap snapshot. A rejected
+        // or null bootstrap degrades gracefully to the accounts/me payload.
+        const bootstrapSignals =
+          bootstrapResult.status === 'fulfilled' ? bootstrapResult.value : null
+        const mergedMe = bootstrapSignals
+          ? mergeBootstrapSignals(mePayload.data, bootstrapSignals)
+          : mePayload.data
         setMeGuarded(mergedMe)
         if (zoraResult.status !== 'fulfilled') {
           setZoraStatus(null)

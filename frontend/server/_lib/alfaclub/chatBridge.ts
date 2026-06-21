@@ -3337,7 +3337,10 @@ async function runBridgeTick(
   let historyErrorJwt = commandJwt ?? ''
   let fetchedMessages: AlfaClubRoomHistoryMessage[] | null = null
   let historyError: unknown = null
-  if (flags.readBotToken) {
+  // Prefer JWT history reads whenever a command JWT is available.
+  // The read-bot lane is useful as a fallback when JWT is absent, but forcing
+  // it first on every tick can trigger per-owner rate limits and noisy logs.
+  if (flags.readBotToken && !jwt) {
     try {
       fetchedMessages = await fetchRoomHistoryViaReadBotToken({
         apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),

@@ -529,6 +529,27 @@ export function AlfaClubKeySafety() {
             </div>
 
             <div className="space-y-4">
+              <div className="rounded-3xl bg-black/35 p-5 shadow-[0_16px_36px_rgba(0,0,0,0.35),inset_0_0_0_1px_rgba(255,255,255,0.04)]">
+                <p className="mb-2 text-[11px] uppercase tracking-[0.12em] text-zinc-500">Why this matters</p>
+                <p className="mb-3 text-xs text-zinc-400">
+                  This calculator estimates whether a hostile buyer can profit by forcing a distribution event.
+                </p>
+                <TradingRoomCurvePreview
+                  selectedTier={roomTier}
+                  activeKeyIndex={keySupply}
+                  raidCurve={showResults ? evaluation.raid.curve : undefined}
+                  progressiveStage={unlockedStep}
+                  ownerSharePercent={sharePercent}
+                  onActiveKeyChange={(next) => {
+                    setKeySupply(next)
+                    unlock(3)
+                  }}
+                  maxKeys={Math.max(80, keySupply + 10)}
+                  heightClassName="h-[22rem] sm:h-96"
+                  withFrame={false}
+                />
+              </div>
+
               {showResults ? (
                 <>
                   <div className={cn('rounded-2xl p-4', safety.shellClassName)} role="status">
@@ -617,24 +638,8 @@ export function AlfaClubKeySafety() {
                         See why this result happens
                       </summary>
                       <p className="mt-2 text-xs text-zinc-400">
-                        Where attacker profit flips from loss to gain. Move along attacker key buys to see when net turns positive.
+                        The chart above shows where attacker profit flips from loss to gain as key buys increase.
                       </p>
-                      <div className="mt-3">
-                        <TradingRoomCurvePreview
-                          selectedTier={roomTier}
-                          activeKeyIndex={keySupply}
-                          raidCurve={evaluation.raid.curve}
-                          progressiveStage={unlockedStep}
-                          ownerSharePercent={sharePercent}
-                          onActiveKeyChange={(next) => {
-                            setKeySupply(next)
-                            unlock(3)
-                          }}
-                          maxKeys={Math.max(80, keySupply + 10)}
-                          heightClassName="h-96"
-                          withFrame={false}
-                        />
-                      </div>
                     </details>
                   </div>
 
@@ -669,27 +674,7 @@ export function AlfaClubKeySafety() {
                     </div>
                   </details>
                 </>
-              ) : (
-                <div className="rounded-3xl bg-black/35 p-5 shadow-[0_16px_36px_rgba(0,0,0,0.35),inset_0_0_0_1px_rgba(255,255,255,0.04)]">
-                  <p className="mb-2 text-[11px] uppercase tracking-[0.12em] text-zinc-500">Why this matters</p>
-                  <p className="mb-3 text-xs text-zinc-400">
-                    This calculator estimates whether a hostile buyer can profit by forcing a distribution event.
-                  </p>
-                  <TradingRoomCurvePreview
-                    selectedTier={roomTier}
-                    activeKeyIndex={keySupply}
-                    progressiveStage={unlockedStep}
-                    ownerSharePercent={sharePercent}
-                    onActiveKeyChange={(next) => {
-                      setKeySupply(next)
-                      unlock(3)
-                    }}
-                    maxKeys={Math.max(80, keySupply + 10)}
-                    heightClassName="h-96"
-                    withFrame={false}
-                  />
-                </div>
-              )}
+              ) : null}
             </div>
           </div>
         </div>

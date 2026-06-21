@@ -179,6 +179,16 @@ export function TradingRoomCurvePreview({
     return attackXOffset + firstPoint.keysBought
   }, [attackXOffset, raidCurve])
 
+  const minVotePassPoint = useMemo(() => {
+    if (!raidCurve || raidCurve.length === 0) return null
+    return raidCurve[0] ?? null
+  }, [raidCurve])
+
+  const minVotePassBuySpendUsdc = useMemo(() => {
+    if (!minVotePassPoint) return null
+    return minVotePassPoint.averageBuyCostPerKeyUsdc * minVotePassPoint.keysBought
+  }, [minVotePassPoint])
+
   const breakEvenX = useMemo(() => {
     if (!raidCurve || raidCurve.length < 2) return null
     for (let index = 1; index < raidCurve.length; index += 1) {
@@ -277,7 +287,7 @@ export function TradingRoomCurvePreview({
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart
           data={data}
-          margin={{ top: 8, right: 8, bottom: 18, left: 0 }}
+          margin={{ top: 8, right: 8, bottom: 22, left: 0 }}
           onMouseDown={(event) => {
             if (!chartIsInteractive) return
             setIsDragging(true)
@@ -361,7 +371,7 @@ export function TradingRoomCurvePreview({
               stroke="rgba(250,204,21,0.55)"
               strokeDasharray="3 3"
               label={{
-                value: 'Vote can pass from here',
+                value: 'Control threshold',
                 position: 'insideTopLeft',
                 fill: 'rgba(250,204,21,0.8)',
                 fontSize: 10,
@@ -488,7 +498,7 @@ export function TradingRoomCurvePreview({
         </ComposedChart>
       </ResponsiveContainer>
       {progressiveStage >= 3 ? (
-        <div className="mt-1 flex items-center gap-3 text-[11px] text-zinc-500">
+        <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-zinc-500">
           <span className="inline-flex items-center gap-1">
             <span className="h-2 w-2 rounded-full bg-cyan-400/90" />
             Owner {ownerSharePercent.toFixed(0)}%
@@ -508,6 +518,21 @@ export function TradingRoomCurvePreview({
         <p className="mt-1 text-[11px] text-zinc-600">
           Below zero = attacker loses money. Above zero = attacker profits.
         </p>
+      ) : null}
+      {hasAttackCurve && minVotePassPoint && minVotePassBuySpendUsdc !== null ? (
+        <div className="mt-1.5 flex flex-wrap gap-2 text-[11px]">
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-amber-200 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.25)]">
+            Control threshold
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.04] px-2.5 py-1 text-zinc-300 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
+            Keys needed:{' '}
+            <span className="font-mono text-zinc-100">{minVotePassPoint.keysBought.toLocaleString()}</span>
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.04] px-2.5 py-1 text-zinc-300 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
+            Buy cost:{' '}
+            <span className="font-mono text-zinc-100">{formatUsdLong(minVotePassBuySpendUsdc)}</span>
+          </span>
+        </div>
       ) : null}
     </div>
   )

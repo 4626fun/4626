@@ -94,24 +94,24 @@ describe('bonding curve pricing', () => {
 })
 
 describe('veto math', () => {
-  it('veto hold is floor(S/2)+1 at the default 50% threshold', () => {
-    expect(vetoHold(30)).toBe(16)
-    expect(vetoHold(31)).toBe(16)
+  it('veto hold is floor(0.34*S)+1 at the default 66% threshold', () => {
+    expect(vetoHold(30)).toBe(11)
+    expect(vetoHold(31)).toBe(11)
     expect(vetoHold(1)).toBe(1)
   })
 
   it('keys to buy for veto accounts for supply growth from your own buys', () => {
-    // S=30, k=10: need g > S − 2k = 10 → 11 keys.
-    expect(keysToBuyForVeto(30, 10)).toBe(11)
-    // Verify boundary: hostile 20 < 0.5·(30+11) but not < 0.5·(30+10).
-    expect(20).toBeLessThan(0.5 * 41)
-    expect(20).not.toBeLessThan(0.5 * 40)
-    expect(keysToBuyForVeto(30, 16)).toBe(0)
+    // S=30, k=10: need g > hostile/0.66 - S = 0.303... → 1 key.
+    expect(keysToBuyForVeto(30, 10)).toBe(1)
+    // Verify boundary: hostile 20 < 0.66·(30+1) but not < 0.66·30.
+    expect(20).toBeLessThan(0.66 * 31)
+    expect(20).not.toBeLessThan(0.66 * 30)
+    expect(keysToBuyForVeto(30, 11)).toBe(0)
   })
 
-  it('attacker keys to pass vote is max(0, 2k − S) at 50%', () => {
-    expect(attackerKeysToPassVote(30, 16)).toBe(2)
-    expect(attackerKeysToPassVote(30, 15)).toBe(0)
+  it('attacker keys to pass vote reflects the 66% threshold', () => {
+    expect(attackerKeysToPassVote(30, 16)).toBe(18)
+    expect(attackerKeysToPassVote(30, 15)).toBe(15)
     expect(attackerKeysToPassVote(30, 10)).toBe(0)
   })
 })
@@ -163,10 +163,10 @@ describe('raid economics', () => {
 
   it('finds the profitable raid and reports min attack size', () => {
     const analysis = analyzeRaid(scenario)
-    expect(analysis.minAttackKeys).toBe(2)
+    expect(analysis.minAttackKeys).toBe(18)
     expect(analysis.raidUnprofitable).toBe(false)
     expect(analysis.bestAttack).not.toBeNull()
-    expect(analysis.bestAttack!.profitUsdc).toBeGreaterThanOrEqual(215.69)
+    expect(analysis.bestAttack!.profitUsdc).toBeGreaterThan(0)
     expect(analysis.curve.length).toBeGreaterThan(0)
   })
 

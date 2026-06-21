@@ -111,7 +111,17 @@ async function runBootstrapTransaction<T>(
   action: (txDb: BootstrapDb) => Promise<T>,
 ): Promise<T> {
   const query = typeof db.query === 'function' ? db.query.bind(db) : null
-  if (!query) return action(db)
+  if (!query) {
+    // R6: When db.query is unavailable (Supabase sql-only path), the
+    // transaction is skipped. ON CONFLICT clauses in upsertBootstrapProfile
+    // handle duplicate inserts, but rebindEmailProfileToPrivyUser (which
+    // moves referral points between profiles) is NOT atomic without a
+    // transaction. Concurrent bootstrap calls for the same privyUserId can
+    // interleave point moves. For production safety, callers should serialize
+    // using pg_advisory_lock(hash(privyUserId)) before calling this function
+    // when db.query is not available.
+    return action(db)
+  }
   await query('BEGIN')
   try {
     const result = await action(db)
@@ -391,6 +401,18 @@ async function ensureBootstrapReferralCode(params: {
     `C${Number(params.signupId).toString(36).toUpperCase()}`,
   ])
 
+  // R10: The referral code assignment uses atomic conditional UPDATEs
+  // (WHERE referral_code IS NULL / WHERE referral_code = ${old}) so that
+  // concurrent bootstrap calls cannot overwrite each other's code. When
+  // runBootstrapTransaction wraps this in a real transaction, row-level
+  // locks serialize concurrent calls for the same signupId. On the
+  // non-transactional Supabase sql-only path (see R6), the conditional
+  // UPDATE still prevents overwrites at the DB level, but two concurrent
+  // calls could both read referral_code IS NULL, both attempt the same
+  // desired code, and one would get 0 rows (graceful fallback to next
+  // candidate). The real risk is duplicate codes across DIFFERENT profiles
+  // if referral_code lacks a UNIQUE constraint — ensure the schema enforces
+  // uniqueness.
   for (const desired of candidates) {
     try {
       const updated = await params.db.sql`

@@ -3118,10 +3118,23 @@ export async function executeHermitCommand(
         },
         config,
       )
+      const executionHandoffMessage =
+        'Arena execution is pinned to the InverseAKITA executor service. ' +
+        'This bridge is chat/control only, so trade execution is disabled here by design.'
+      const isExecutionHandoff =
+        !result.ok &&
+        result.message.includes('Arena commands are disabled. Set ARENA_ENABLED=1 to enable the control lane.')
+      const failureDetail = summarizeArenaRunFailure(result.run)
       return {
         kind: 'hermit',
         provider: 'local',
-        reply: result.ok ? `${result.message}${result.run?.dryRun ? ' [dry-run]' : ''}` : result.message,
+        reply: result.ok
+          ? `${result.message}${result.run?.dryRun ? ' [dry-run]' : ''}`
+          : isExecutionHandoff
+            ? executionHandoffMessage
+            : failureDetail
+              ? `${result.message}\nDetails: ${failureDetail}`
+              : result.message,
       }
     }
     return {

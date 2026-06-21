@@ -13,11 +13,14 @@ import {
   type Hex,
 } from 'viem'
 import { base } from 'viem/chains'
-import { isDeprecatedCreatorVaultBatcherAddress } from '../src/config/contracts.defaults.js'
+import {
+  SPLIT_PHASE1_DEPLOYMENT_BATCHER,
+  isDeprecatedCreatorVaultBatcherAddress,
+} from '../src/config/contracts.defaults.js'
 import { deploymentBatcherNotConfiguredMessage } from '../src/lib/deploy/deploymentBatcherConfigError.js'
 import { readPhase1ModuleAddress } from '../src/lib/deploy/phase1ModuleDeploy.js'
 
-const DEFAULT_SOURCE_BATCHER = '0xa99058f424FB3ACC639F59355C65C40149030651' as Address
+const DEFAULT_SOURCE_BATCHER = SPLIT_PHASE1_DEPLOYMENT_BATCHER as Address
 // Anvil account #0. Local-only default used to deploy the replacement batcher onto the fork.
 const DEFAULT_ANVIL_DEPLOYER_PRIVATE_KEY =
   '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
@@ -232,8 +235,6 @@ const repoRoot = path.resolve(scriptDir, '../..')
 const rpcUrl = (process.env.BASE_RPC_URL ?? process.env.VITE_BASE_RPC ?? 'http://127.0.0.1:8545').trim()
 const sourceBatcherRaw = (
   process.env.DEPLOY_DRY_RUN_SOURCE_BATCHER ??
-  process.env.CREATOR_VAULT_BATCHER ??
-  process.env.VITE_CREATOR_VAULT_BATCHER ??
   DEFAULT_SOURCE_BATCHER
 ).trim()
 const deployerPrivateKey = (process.env.DEPLOY_DRY_RUN_DEPLOYER_PRIVATE_KEY ?? DEFAULT_ANVIL_DEPLOYER_PRIVATE_KEY).trim()

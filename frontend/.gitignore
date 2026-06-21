@@ -45,6 +45,7 @@ xmtp-*.db3-wal
 
 # Offline token icon renderer compare outputs
 tmp/
+tmp/alfaclub-chat-triplet.json
 
 # Accidental tsc emit beside TS sources (never commit)
 server/**/*.js

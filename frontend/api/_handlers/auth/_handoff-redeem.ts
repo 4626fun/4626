@@ -25,6 +25,13 @@ type RedeemBody = {
 
 // FIX: FINDING-04 — global rate limit on handoff redeem to resist distributed brute-force.
 // In-memory Map with TTL; complements the per-IP limit below.
+// NOTE: This counter is per-isolate on serverless. Each warm Vercel instance
+// has its own copy, so concurrent instances do not share state. The per-IP
+// limit is the primary brute-force defense; this global counter is
+// defense-in-depth that only works within a single isolate. For true global
+// deduplication, move to a durable counter (e.g., Upstash Redis or a DB row
+// with TTL). The handoff code has 256-bit entropy, making brute-force
+// infeasible regardless.
 const GLOBAL_HANDOFF_WINDOW_MS = 60_000
 const GLOBAL_HANDOFF_MAX_FAILED = 100
 let globalHandoffFailedCount = 0

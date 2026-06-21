@@ -251,9 +251,9 @@ export class VirtualsAcpService {
         logger.info('[virtuals-acp] executed backtest job', {
           jobId: session.jobId,
           symbol: backtestRequest.symbol,
-          windowHours: backtestRequest.windowHours,
-          leverage: backtestRequest.leverage,
-          requireOneMinute: backtestRequest.requireOneMinute,
+          leveragePercent: backtestRequest.leveragePercent,
+          rebalanceHealthPercent: backtestRequest.rebalanceHealthPercent,
+          rebalanceSizePercent: backtestRequest.rebalanceSizePercent,
           resolvedInterval: backtest.resolvedInterval,
         })
       } catch (error) {
