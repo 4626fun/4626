@@ -1102,14 +1102,16 @@ export function useWaitlistAuthState(params?: {
   useEffect(() => {
     if (step !== 'auth') return
     if (recoveryHandoffInFlightRef.current) return
-    if (!privyAuthed || privyClientStatus !== 'ready') return
+    if (!privyAuthed) return
     if (account?.emailVerified) return
     if (recoveryRequired) return
     if (finalizingRetryExhaustedRef.current) return
 
     if (authAttemptInFlightRef.current) {
       if (recoveryHandoffInFlightRef.current) return
-      if (!loginAwaitInProgressRef.current || pendingAuthResumeStartedRef.current) return
+      if (!loginAwaitInProgressRef.current || pendingAuthResumeStartedRef.current) {
+        return
+      }
       pendingAuthResumeStartedRef.current = true
       void (async () => {
         try {
@@ -1121,6 +1123,8 @@ export function useWaitlistAuthState(params?: {
       })()
       return
     }
+
+    if (privyClientStatus !== 'ready') return
 
     if (privyAuthedBootstrapAttemptedRef.current) return
     privyAuthedBootstrapAttemptedRef.current = true
