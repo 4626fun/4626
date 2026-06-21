@@ -6,6 +6,7 @@ import { MarketingWaitlistRoute } from '@/app/routeGuards'
 import { AppCanvas } from '@/components/layout/AppCanvas'
 import { AppLoadingOverlay, AppLoadingProvider, AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { Layout } from '@/components/layout/Layout'
+import { apiFetch } from '@/lib/api/apiBase'
 import { AppQueryProvider } from './web3/AppQueryProvider'
 
 function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof TModule>(
@@ -49,12 +50,64 @@ function StandaloneDocumentRedirect(props: { htmlPath: '/telegram-link.html' }) 
   return <AppLoadingRegistrar label="standalone-doc-redirect" />
 }
 
-function AppHostRedirect(props: { target: string }) {
+type AuthHandoffCreateResponse = {
+  code: string
+}
+
+const AUTH_HANDOFF_QUERY_KEY = 'cv_handoff'
+
+async function createCrossHostHandoffCode(): Promise<string> {
+  const response = await apiFetch('/api/auth/handoff/create', {
+    method: 'POST',
+    withCredentials: true,
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({}),
+  }).catch(() => null)
+  if (!response?.ok) return ''
+
+  const payload = (await response.json().catch(() => null)) as
+    | { success?: boolean; data?: AuthHandoffCreateResponse | null }
+    | null
+  if (!payload?.success) return ''
+  const code = typeof payload.data?.code === 'string' ? payload.data.code.trim() : ''
+  return code || ''
+}
+
+function AppHostRedirect(props: { target: string; withSessionHandoff?: boolean }) {
   useEffect(() => {
     if (typeof window === 'undefined') return
-    if (isCurrentWindowUrl(props.target)) return
-    window.location.replace(props.target)
-  }, [props.target])
+    let cancelled = false
+
+    void (async () => {
+      let nextTarget = props.target
+
+      if (props.withSessionHandoff) {
+        try {
+          const parsed = new URL(nextTarget)
+          if (!parsed.searchParams.has(AUTH_HANDOFF_QUERY_KEY)) {
+            const handoffCode = await createCrossHostHandoffCode()
+            if (handoffCode) {
+              parsed.searchParams.set(AUTH_HANDOFF_QUERY_KEY, handoffCode)
+              nextTarget = parsed.toString()
+            }
+          }
+        } catch {
+          nextTarget = props.target
+        }
+      }
+
+      if (cancelled) return
+      if (isCurrentWindowUrl(nextTarget)) return
+      window.location.replace(nextTarget)
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [props.target, props.withSessionHandoff])
 
   return <AppLoadingRegistrar label="app-host-redirect" />
 }
@@ -86,7 +139,7 @@ export function RootRouter() {
         {shouldRouteAppHostRootToMarketing ? (
         <AppHostRedirect target={marketingHomeTarget} />
       ) : shouldRouteToApp ? (
-        <AppHostRedirect target={appRedirectTarget} />
+        <AppHostRedirect target={appRedirectTarget} withSessionHandoff />
       ) : (
         <Routes>
           <Route element={<MarketingLayout />}>
