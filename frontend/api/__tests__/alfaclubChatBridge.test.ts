@@ -207,6 +207,20 @@ describe('readAlfaClubChatBridgeFlags', () => {
     expect(flags.botToken).toBe('alfa_bot_uppercase')
   })
 
+  it('falls back to bot token for history reads when read token is unset', () => {
+    restoreEnv = applyEnv({
+      ALFACLUB_CHAT_BRIDGE_ENABLED: '1',
+      ALFACLUB_CHAT_ROOM_ID: '1043',
+      ALFACLUB_API_KEY: 'alfa_bot_uppercase',
+      ALFACLUB_READ_BOT_TOKEN: undefined,
+      ALFACLUB_CHAT_READ_BOT_TOKEN: undefined,
+    })
+
+    const flags = readAlfaClubChatBridgeFlags()
+    expect(flags.botToken).toBe('alfa_bot_uppercase')
+    expect(flags.readBotToken).toBe('alfa_bot_uppercase')
+  })
+
   it('auto-enables telegram relay when bot token and destination are configured', () => {
     restoreEnv = applyEnv({
       ALFACLUB_CHAT_BRIDGE_ENABLED: '1',

@@ -416,6 +416,11 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
   )
   const telegramRelayEnabledFallback = Boolean(telegramRelayBotToken && telegramRelayChatId)
 
+  // If a dedicated read token is not configured, reuse the main bot token for
+  // history reads. This keeps the bridge operational when the Privy JWT lane
+  // is stale and avoids auth-loop thrash on `room_history_paginate`.
+  const readBotToken = authFlags.readBotToken ?? authFlags.botToken
+
   return {
     killSwitch: parseBool(process.env.ALFACLUB_VIGILANTE_KILL_SWITCH),
     enabled: parseBool(process.env.ALFACLUB_CHAT_BRIDGE_ENABLED),
@@ -423,7 +428,7 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
     hermitCommandRoomIds,
     jwt: authFlags.jwt,
     ingestJwt: normalizeEnvScalar(process.env.ALFACLUB_CHAT_INGEST_JWT) || null,
-    readBotToken: authFlags.readBotToken,
+    readBotToken,
     botToken: authFlags.botToken,
     apiBaseUrl: authFlags.apiBaseUrl,
     apiProxyUrl: authFlags.apiProxyUrl,

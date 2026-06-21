@@ -18,6 +18,8 @@ export type ToolDecision =
   | { kind: 'tool'; name: string; args: Record<string, unknown> }
   | { kind: 'none' }
 
+export type MessageToolSelection = { name: string; argName: string }
+
 /** Tools that move USDC and therefore get clamped / policy-gated. */
 const SPEND_TOOL_NAMES = new Set(['setBudget', 'fund'])
 
@@ -109,4 +111,31 @@ export function parseToolDecision(text: string | null, availableTools: AcpToolLi
       ? (decision.args as Record<string, unknown>)
       : {}
   return { kind: 'tool', name, args }
+}
+
+/**
+ * Resolve a "message send" ACP tool from the current session tool list.
+ * We prefer explicit names first, then fall back to any tool with a required
+ * string parameter that looks like a message/content field.
+ */
+export function selectMessageTool(tools: AcpToolLike[]): MessageToolSelection | null {
+  const preferredNames = ['sendMessage', 'respond', 'deliver']
+  for (const preferredName of preferredNames) {
+    const tool = tools.find((entry) => entry.name === preferredName)
+    if (!tool) continue
+    const textParam =
+      tool.parameters.find((param) => param.name === 'message' || param.name === 'content') ??
+      tool.parameters.find((param) => param.type === 'string')
+    if (!textParam) continue
+    return { name: tool.name, argName: textParam.name }
+  }
+
+  for (const tool of tools) {
+    const textParam =
+      tool.parameters.find((param) => param.name === 'message' || param.name === 'content') ??
+      tool.parameters.find((param) => param.type === 'string' && param.required !== false)
+    if (!textParam) continue
+    return { name: tool.name, argName: textParam.name }
+  }
+  return null
 }

@@ -33,6 +33,8 @@ export type VirtualsAcpConfig = {
   autoFundEnabled: boolean
   /** When false, the service only observes/logs job events; no LLM-driven tool execution. */
   autoLlmEnabled: boolean
+  /** When true (default), ACP backtests require a paid/funded job signal before execution. */
+  requirePaidBacktests: boolean
 }
 
 function readBool(name: string, fallback: boolean): boolean {
@@ -69,6 +71,7 @@ export function readVirtualsAcpConfig(): VirtualsAcpConfig {
     maxBudgetUsdc: readPositiveNumber('VIRTUALS_ACP_MAX_BUDGET_USDC', DEFAULT_MAX_BUDGET_USDC),
     autoFundEnabled: readBool('VIRTUALS_ACP_AUTO_FUND', false),
     autoLlmEnabled: readBool('VIRTUALS_ACP_AUTO_LLM', true),
+    requirePaidBacktests: readBool('VIRTUALS_ACP_REQUIRE_PAID_BACKTESTS', true),
   }
 }
 

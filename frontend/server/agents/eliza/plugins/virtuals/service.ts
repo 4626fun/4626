@@ -27,11 +27,14 @@ import type { JobSession, JobRoomEntry, AcpAgentDetail } from '@virtuals-protoco
 import { logger } from '../../../../_lib/infra/logger.js'
 import { getElizaLlmService } from '../../llm.js'
 import { readVirtualsAcpConfig, checkVirtualsAcpConfig, type VirtualsAcpConfig } from './config.js'
+import { parseBacktestRequestFromText, runRealBacktestJob } from './backtestJobs.js'
+import { evaluateBacktestPaymentGate } from './paymentGate.js'
 import {
   buildToolSystemPrompt,
   clampSpendArgs,
   filterToolsByPolicy,
   parseToolDecision,
+  selectMessageTool,
 } from './toolLoop.js'
 
 export type VirtualsAcpServiceStatus = {
@@ -215,6 +218,63 @@ export class VirtualsAcpService {
 
     const history = await session.toMessages()
     if (history.length === 0) return
+    const latestUserMessage = [...history]
+      .reverse()
+      .find((message) => message.role === 'user')?.content
+    const messageTool = selectMessageTool(tools)
+    const backtestRequest =
+      typeof latestUserMessage === 'string' ? parseBacktestRequestFromText(latestUserMessage) : null
+    if (backtestRequest && messageTool) {
+      if (config.requirePaidBacktests) {
+        const paymentGate = evaluateBacktestPaymentGate(session as unknown)
+        if (!paymentGate.allowed) {
+          await session.executeTool(messageTool.name, {
+            [messageTool.argName]:
+              'Backtest requires a paid job before execution. ' +
+              `Current payment signal: ${paymentGate.reason}. ` +
+              'Please fund/set job budget in ACP, then resend your backtest request.',
+          })
+          this.toolsExecuted += 1
+          logger.info('[virtuals-acp] blocked unpaid backtest request', {
+            jobId: session.jobId,
+            status: session.status,
+            reason: paymentGate.reason,
+            amountUsdc: paymentGate.amountUsdc,
+          })
+          return
+        }
+      }
+      try {
+        const backtest = await runRealBacktestJob(backtestRequest)
+        await session.executeTool(messageTool.name, { [messageTool.argName]: backtest.responseText })
+        this.toolsExecuted += 1
+        logger.info('[virtuals-acp] executed backtest job', {
+          jobId: session.jobId,
+          symbol: backtestRequest.symbol,
+          windowHours: backtestRequest.windowHours,
+          leverage: backtestRequest.leverage,
+          requireOneMinute: backtestRequest.requireOneMinute,
+          resolvedInterval: backtest.resolvedInterval,
+        })
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Backtest failed due to an unknown runtime error'
+        await session.executeTool(messageTool.name, {
+          [messageTool.argName]:
+            `Backtest request failed: ${message}. ` +
+            'Please retry with shorter window (for example 24h/72h) or BTC/ETH if data coverage is missing.',
+        })
+        this.toolsExecuted += 1
+        logger.warn('[virtuals-acp] backtest job failed', {
+          jobId: session.jobId,
+          symbol: backtestRequest.symbol,
+          message,
+        })
+      }
+      return
+    }
     const decisionStartedAt = Date.now()
     this.llmAttempted += 1
 

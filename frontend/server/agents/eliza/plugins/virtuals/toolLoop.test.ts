@@ -6,6 +6,7 @@ import {
   filterToolsByPolicy,
   isSpendTool,
   parseToolDecision,
+  selectMessageTool,
   type AcpToolLike,
 } from './toolLoop.js'
 
@@ -130,5 +131,34 @@ describe('buildToolSystemPrompt', () => {
     expect(prompt).not.toContain('- fund:')
     expect(prompt).toContain('at most 5 USDC')
     expect(prompt).toContain('"wait"')
+  })
+})
+
+describe('selectMessageTool', () => {
+  it('prefers sendMessage and resolves message arg', () => {
+    const selected = selectMessageTool(TOOLS)
+    expect(selected).toEqual({ name: 'sendMessage', argName: 'message' })
+  })
+
+  it('falls back to respond/content style tools', () => {
+    const selected = selectMessageTool([
+      {
+        name: 'respond',
+        description: 'Respond to job room',
+        parameters: [{ name: 'content', type: 'string', required: true }],
+      },
+    ])
+    expect(selected).toEqual({ name: 'respond', argName: 'content' })
+  })
+
+  it('returns null when no text-capable tool exists', () => {
+    const selected = selectMessageTool([
+      {
+        name: 'setBudget',
+        description: 'Set budget',
+        parameters: [{ name: 'amount', type: 'number', required: true }],
+      },
+    ])
+    expect(selected).toBeNull()
   })
 })

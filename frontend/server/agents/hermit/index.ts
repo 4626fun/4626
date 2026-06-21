@@ -140,6 +140,16 @@ type RuntimeState = {
   counterTrade: CounterTradeTickerState | null
   // ACP auth bootstrap result (signing readiness for live arena/counter-trades)
   acpAuthBootstrap: AcpAuthBootstrapResult | null
+  // Optional Virtuals ACP bridge status (job-session lane).
+  virtualsAcpStarted: boolean
+  virtualsAcpReason: string | null
+  virtualsAcp: {
+    running: boolean
+    sessions: number
+    entriesHandled: number
+    toolsExecuted: number
+    lastError: string | null
+  } | null
 }
 
 type TickRollupState = {
@@ -170,12 +180,25 @@ const state: RuntimeState = {
   counterTradeTickerReason: null,
   counterTrade: null,
   acpAuthBootstrap: null,
+  virtualsAcpStarted: false,
+  virtualsAcpReason: null,
+  virtualsAcp: null,
 }
 
 let stopBridge: (() => void) | null = null
 let stopRefresher: (() => void) | null = null
 let stopCounterTradeTicker: (() => void) | null = null
 let readCounterTradeState: (() => CounterTradeTickerState) | null = null
+let stopVirtualsAcp: (() => void) | null = null
+let readVirtualsAcpState:
+  | (() => {
+      running: boolean
+      sessions: number
+      entriesHandled: number
+      toolsExecuted: number
+      lastError: string | null
+    })
+  | null = null
 let tickRollup: TickRollupState = {
   windowStartedAtMs: Date.now(),
   ticks: 0,
@@ -186,6 +209,12 @@ let tickRollup: TickRollupState = {
 
 function asErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function readBoolEnv(name: string, fallback = false): boolean {
+  const raw = String(process.env[name] ?? '').trim().toLowerCase()
+  if (!raw) return fallback
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
 }
 
 function resetTickRollup(nowMs: number): void {
@@ -268,6 +297,9 @@ function startHealthServer(): void {
 
     if (readCounterTradeState) {
       state.counterTrade = readCounterTradeState()
+    }
+    if (readVirtualsAcpState) {
+      state.virtualsAcp = readVirtualsAcpState()
     }
     const ready = state.bridgeStarted
     const status = url === '/readyz' && !ready ? 503 : 200
@@ -430,11 +462,59 @@ async function startRuntime(): Promise<void> {
       error: asErrorMessage(error),
     })
   }
+
+  // Optional Virtuals ACP bridge.
+  // Kept fail-open so Virtuals SDK/runtime issues never take down Hermit.
+  if (readBoolEnv('VIRTUALS_ACP_ENABLED', false)) {
+    try {
+      // Intentional dynamic import: avoid module-load crashes from optional ACP deps.
+      const mod = await import('../eliza/plugins/virtuals/service.js')
+      const service = mod.getVirtualsAcpService()
+      const result = await service.start()
+      state.virtualsAcpStarted = result.started
+      state.virtualsAcpReason = result.started ? null : result.reason ?? 'unknown'
+      if (result.started) {
+        stopVirtualsAcp = () => void service.stop()
+        readVirtualsAcpState = () => {
+          const s = service.getStatus()
+          return {
+            running: s.running,
+            sessions: s.sessions.length,
+            entriesHandled: s.entriesHandled,
+            toolsExecuted: s.toolsExecuted,
+            lastError: s.lastError,
+          }
+        }
+        state.virtualsAcp = readVirtualsAcpState()
+        logger.info('[hermit] virtuals ACP bridge started', {
+          autoLlm: service.getStatus().autoLlmEnabled,
+          autoFund: service.getStatus().autoFundEnabled,
+          sessions: service.getStatus().sessions.length,
+        })
+      } else {
+        logger.info('[hermit] virtuals ACP bridge not started', {
+          reason: result.reason ?? 'unknown',
+        })
+      }
+    } catch (error) {
+      state.virtualsAcpStarted = false
+      state.virtualsAcpReason = asErrorMessage(error)
+      logger.warn('[hermit] virtuals ACP bridge boot failed (continuing)', {
+        error: asErrorMessage(error),
+      })
+    }
+  } else {
+    state.virtualsAcpStarted = false
+    state.virtualsAcpReason = 'disabled'
+  }
 }
 
 function shutdown(signal: string): void {
   logger.info('[hermit] shutting down', { signal })
   flushTickRollup(Date.now(), true)
+  try {
+    stopVirtualsAcp?.()
+  } catch {}
   try {
     stopCounterTradeTicker?.()
   } catch {}

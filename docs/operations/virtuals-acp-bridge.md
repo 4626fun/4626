@@ -43,6 +43,8 @@ never guessed.
 - **Observe-only mode.** `VIRTUALS_ACP_AUTO_LLM=0` keeps the connection live
   and logs every entry but never executes tools — useful for the first days of
   a new agent.
+- **Paid-only backtests.** `VIRTUALS_ACP_REQUIRE_PAID_BACKTESTS=1` (default)
+  blocks ACP backtest execution unless the job shows a paid/funded signal.
 
 ## Setup
 
