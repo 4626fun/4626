@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Navigate, Route } from 'react-router-dom'
 
 import {
+  AcpBacktestReportPage,
   AccountsPage,
   AddOwnerBaseApp,
   Arena,
@@ -87,6 +88,18 @@ export function renderPathRoutes(
 }
 
 export const MARKETING_ONLY_ROUTES: PathRouteDef[] = [
+  { path: '/faq', element: <Faq /> },
+  { path: '/faq/how-it-works', element: <FaqHowItWorks /> },
+  { path: '/positions', element: <Positions /> },
+  { path: '/area/positions', element: <Navigate to="/arena/positions" replace /> },
+  { path: '/cca', element: <DistributeCcaLaunch /> },
+  { path: '/status', element: <Status /> },
+  { path: '/alfaclub/key-safety', element: <AlfaClubKeySafety /> },
+  { path: '/dev/metaball-os', element: <MetaballOsProbe /> },
+  { path: '/dev/tactical-map', element: <TacticalTokenMap /> },
+]
+
+export const APP_PUBLIC_ROUTES: PathRouteDef[] = [
   {
     path: '/arena',
     element: <Arena />,
@@ -101,15 +114,7 @@ export const MARKETING_ONLY_ROUTES: PathRouteDef[] = [
       { path: 'positions', element: <Positions /> },
     ],
   },
-  { path: '/faq', element: <Faq /> },
-  { path: '/faq/how-it-works', element: <FaqHowItWorks /> },
-  { path: '/positions', element: <Positions /> },
-  { path: '/area/positions', element: <Navigate to="/arena/positions" replace /> },
-  { path: '/cca', element: <DistributeCcaLaunch /> },
-  { path: '/status', element: <Status /> },
-  { path: '/alfaclub/key-safety', element: <AlfaClubKeySafety /> },
-  { path: '/dev/metaball-os', element: <MetaballOsProbe /> },
-  { path: '/dev/tactical-map', element: <TacticalTokenMap /> },
+  { path: '/acp/backtest/:jobId', element: <AcpBacktestReportPage /> },
 ]
 
 /**

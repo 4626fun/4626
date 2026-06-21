@@ -1,5 +1,7 @@
 /** App-only paths that should always run on app.4626.fun. */
 export const APP_ONLY_PATHS = [
+  '/arena',
+  '/acp',
   '/explore',
   '/swap',
   '/telegram',

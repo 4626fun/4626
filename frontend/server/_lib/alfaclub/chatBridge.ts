@@ -2056,7 +2056,11 @@ function isRoomHistoryAuthError(error: unknown): boolean {
     message === 'room_history_failed:401' ||
     message === 'room_history_failed:403' ||
     message.startsWith('room_history_failed:401:') ||
-    message.startsWith('room_history_failed:403:')
+    message.startsWith('room_history_failed:403:') ||
+    message === 'room_history_read_bot_failed:401' ||
+    message === 'room_history_read_bot_failed:403' ||
+    message.startsWith('room_history_read_bot_failed:401:') ||
+    message.startsWith('room_history_read_bot_failed:403:')
   )
 }
 

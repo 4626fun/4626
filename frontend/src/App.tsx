@@ -7,6 +7,7 @@ import { APP_ORIGIN, getHostMode } from '@/lib/env/host'
 import { useOptionalAccessContext, waitlistEntryHref } from './app/accessShared'
 import {
   ACCOUNT_ROUTES,
+  APP_PUBLIC_ROUTES,
   ADMIN_CHILD_ROUTES,
   APP_ACCEPTED_ROUTES,
   EXPLORE_ROUTES,
@@ -117,6 +118,7 @@ function App() {
         <Route path="/404" element={<NotFoundPage />} />
 
         <Route element={<Layout interactive={false} />}>
+          {renderPathRoutes(APP_PUBLIC_ROUTES)}
           {renderPathRoutes(MARKETING_ONLY_ROUTES, marketingOnlyElement)}
           <Route path="/leaderboard" element={<Leaderboard />} />
         </Route>
