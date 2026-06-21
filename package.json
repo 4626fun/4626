@@ -74,10 +74,12 @@
     "path-to-regexp": "6.3.0",
     "follow-redirects": "1.16.0",
     "fast-uri": "3.1.2",
+    "esbuild": "0.28.1",
     "tmp": "0.2.7",
     "undici": "6.24.0",
     "ws": "8.21.0",
     "yaml": "2.8.3",
+    "js-yaml": "4.2.0",
     "svix>uuid": "10.0.0"
   },
   "pnpm": {
@@ -104,6 +106,7 @@
       "path-to-regexp": "6.3.0",
       "follow-redirects": "1.16.0",
       "fast-uri": "3.1.2",
+      "esbuild": "0.28.1",
       "tmp": "0.2.7",
       "undici": "6.24.0",
       "uuid": "11.1.1",
@@ -111,6 +114,7 @@
       "rpc-websockets>uuid": "11.1.1",
       "ws": "8.21.0",
       "yaml": "2.8.3",
+      "js-yaml": "4.2.0",
       "svix>uuid": "10.0.0"
     },
     "peerDependencyRules": {
