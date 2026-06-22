@@ -33,7 +33,7 @@ const docsPages = [
   { key: 'positions', label: 'View Live', path: '/arena/positions' },
 ] as const
 
-const DEFAULT_BACKTEST_MARKETS = ['BTC/USDC', 'ETH/USDC', 'SOL/USDC'] as const
+const DEFAULT_BACKTEST_MARKETS = ['BTC/USDC', 'ETH/USDC', 'SOL/USDC', 'HYPE/USDC'] as const
 const BACKTEST_HORIZON_PRESETS = [
   { label: '24 hours', value: 24 },
   { label: '7 days', value: 24 * 7 },

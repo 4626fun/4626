@@ -18,6 +18,8 @@ import { resolve } from 'node:path'
 import { expectedBarCount, minCoverageRatio } from '../server/_lib/alfaclub/backtestIntervalPolicy.js'
 import { getDb } from '../server/_lib/db/postgres.js'
 import { getCandleSnapshot } from '../server/_lib/alfaclub/hyperliquid.js'
+import { getBinanceKlines } from '../server/_lib/alfaclub/binanceKlines.js'
+import { getBybitKlines } from '../server/_lib/alfaclub/bybitKlines.js'
 
 type CliArgs = {
   symbol: string
@@ -27,6 +29,7 @@ type CliArgs = {
   resumeFromLast: boolean
   incrementalOnly: boolean
   dryRun: boolean
+  source: 'hyperliquid' | 'binance' | 'bybit'
 }
 
 type CacheRow = {
@@ -83,6 +86,9 @@ function parseArgs(argv: string[]): CliArgs {
   const symbol = (map.get('symbol') ?? 'BTC').trim().toUpperCase()
   const windowHoursRaw = Number(map.get('window-hours') ?? 24 * 90)
   const chunkHoursRaw = Number(map.get('chunk-hours') ?? 24)
+  const sourceRaw = (map.get('source') ?? 'hyperliquid').trim().toLowerCase()
+  const source: CliArgs['source'] =
+    sourceRaw === 'binance' ? 'binance' : sourceRaw === 'bybit' ? 'bybit' : 'hyperliquid'
 
   const windowHours = Number.isFinite(windowHoursRaw) ? Math.max(1, Math.floor(windowHoursRaw)) : 24 * 90
   const chunkHours = Number.isFinite(chunkHoursRaw) ? Math.max(1, Math.floor(chunkHoursRaw)) : 24
@@ -95,6 +101,7 @@ function parseArgs(argv: string[]): CliArgs {
     resumeFromLast: !flags.has('no-resume'),
     incrementalOnly: flags.has('incremental-only'),
     dryRun: flags.has('dry-run'),
+    source,
   }
 }
 
@@ -212,15 +219,31 @@ async function fetchCandlesWithRetry(params: {
   startTimeMs: number
   endTimeMs: number
   maxAttempts?: number
+  source: 'hyperliquid' | 'binance' | 'bybit'
 }) {
   const maxAttempts = params.maxAttempts ?? 3
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const candles = await getCandleSnapshot({
-      coin: params.coin,
-      interval: params.interval,
-      startTimeMs: params.startTimeMs,
-      endTimeMs: params.endTimeMs,
-    })
+    const candles =
+      params.source === 'binance'
+        ? await getBinanceKlines({
+            symbol: params.coin,
+            interval: params.interval,
+            startTimeMs: params.startTimeMs,
+            endTimeMs: params.endTimeMs,
+          })
+        : params.source === 'bybit'
+          ? await getBybitKlines({
+              symbol: params.coin,
+              interval: params.interval,
+              startTimeMs: params.startTimeMs,
+              endTimeMs: params.endTimeMs,
+            })
+          : await getCandleSnapshot({
+              coin: params.coin,
+              interval: params.interval,
+              startTimeMs: params.startTimeMs,
+              endTimeMs: params.endTimeMs,
+            })
     if (candles) return candles
     if (attempt < maxAttempts) await sleep(400 * attempt)
   }
@@ -243,7 +266,7 @@ async function fetchMinuteBarsInChunks(args: CliArgs, window: { startTimeMs: num
   let failedChunks = 0
   const totalChunksEstimate = Math.max(1, Math.ceil((targetEndTimeMs - startTimeMs) / chunkMs))
   console.log(
-    `[cache-backtest-minute-bars] fetching ${totalChunksEstimate} chunk(s) of ${args.chunkHours}h from Hyperliquid…`,
+    `[cache-backtest-minute-bars] fetching ${totalChunksEstimate} chunk(s) of ${args.chunkHours}h from ${args.source}…`,
   )
   while (cursor < targetEndTimeMs) {
     chunks += 1
@@ -259,6 +282,7 @@ async function fetchMinuteBarsInChunks(args: CliArgs, window: { startTimeMs: num
       interval: args.interval,
       startTimeMs: chunkStart,
       endTimeMs: chunkEnd,
+      source: args.source,
     })
     if (!candles) {
       failedChunks += 1
@@ -288,7 +312,7 @@ async function fetchMinuteBarsInChunks(args: CliArgs, window: { startTimeMs: num
       low: candle.low,
       close: candle.close,
       volume: candle.volume,
-      source: 'hyperliquid',
+      source: args.source,
       fetchedAtIso: new Date().toISOString(),
     } satisfies CacheRow))
 
@@ -439,9 +463,11 @@ async function main() {
       max: coverageAfter.maxBarTimeMs ? new Date(coverageAfter.maxBarTimeMs).toISOString() : null,
     })
     if (coverageAfter.coveragePct < minCoverageRatio(args.windowHours, '1m')) {
-      console.log(
-        '[cache-backtest-minute-bars] note: Hyperliquid exposes ~5k recent 1m candles (~3.5 days). 90-day 1m backtests need this cache filled over time (daily cron) or use auto finest resolution (1h for full 90d until cache is complete).',
-      )
+      const note =
+        args.source === 'binance' || args.source === 'bybit'
+          ? `[cache-backtest-minute-bars] note: coverage still below target after ${args.source} backfill — some chunks may have failed; re-run to fill gaps.`
+          : `[cache-backtest-minute-bars] note: Hyperliquid exposes ~5k recent 1m candles (~3.5 days). 90-day 1m backtests need this cache filled over time (daily cron) or use auto finest resolution (1h for full 90d until cache is complete). Binance backfill (--source binance) or Bybit backfill (--source bybit) can fill the gap immediately.`
+      console.log(note)
     }
   }
 }
