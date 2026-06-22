@@ -30,6 +30,7 @@ interface ImportMetaEnv {
   readonly VITE_AKITA_VAULT: string
   readonly VITE_AKITA_WRAPPER: string
   readonly VITE_AKITA_SHARE_OFT: string
+  readonly VITE_VANITY_WASM_WORKER?: string
 }
 
 interface ImportMeta {

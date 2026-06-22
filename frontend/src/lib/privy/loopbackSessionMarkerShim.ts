@@ -9,10 +9,12 @@
  * refresh token — cookie-mode logins return `refresh_token: "deprecated"`).
  *
  * Originally, `privy.4626.fun` set the marker cookie on `.4626.fun` (first-party
- * on production). However, the safety rail in `featureFlags.ts` now maps
- * `privy.4626.fun` → `auth.privy.io`, which means the marker cookie lands on
- * `.privy.io` instead — a third-party cookie on `4626.fun` that modern browsers
- * block. The same blocking occurs on localhost. In both cases, immediately
+ * on production). Without the shim, on origins where the Privy refresh cookie is
+ * a blocked third-party cookie, the SDK's `getAccessToken()` returns null after
+ * OTP. The `resolvePrivyApiUrl()` in `featureFlags.ts` now returns
+ * `https://privy.4626.fun` for `*.4626.fun` origins (first-party reverse proxy
+ * via Vercel routes), but the marker cookie shim is still needed as a
+ * belt-and-suspenders measure for the SDK's `hasRefreshCredentials` check. The same blocking occurs on localhost. In both cases, immediately
  * after a successful OTP login the SDK destroys its own freshly stored token
  * and `getAccessToken()` returns null forever — which our waitlist bootstrap
  * then (correctly) treats as a broken session and signs back out.

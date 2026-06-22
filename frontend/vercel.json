@@ -47,6 +47,18 @@
       "schedule": "*/10 * * * *"
     },
     {
+      "path": "/api/v1/alfaclub/run",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/v1/alfaclub/radar",
+      "schedule": "5 12 * * *"
+    },
+    {
+      "path": "/api/v1/alfaclub/daily-brief",
+      "schedule": "10 12 * * *"
+    },
+    {
       "path": "/api/v1/lottery/amoe/retry-cron",
       "schedule": "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
     },

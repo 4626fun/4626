@@ -18,11 +18,13 @@ describe('isPrivyHostModeAllowed', () => {
 
 describe('getPrivyClientId', () => {
   it('returns null when no browser client id is configured', () => {
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID_ENABLED', '1')
     vi.stubEnv('VITE_PRIVY_CLIENT_ID', '')
     expect(getPrivyClientId()).toBeNull()
   })
 
   it('returns the configured Privy browser client id', () => {
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID_ENABLED', '1')
     vi.stubEnv('VITE_PRIVY_CLIENT_ID', 'client_live_123')
     expect(getPrivyClientId()).toBe('client_live_123')
   })

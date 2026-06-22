@@ -1037,6 +1037,20 @@ export async function recordProviderLink(params: {
       WHERE privy_user_id = ${privyUserId};
     `
   } else {
+    // Remove stale values for this provider that are no longer current.
+    // This handles username changes (e.g. Telegram display name updates):
+    // without this, upsertLinkedMethod only adds new rows (ON CONFLICT by
+    // (privy_user_id, type, value)) and old usernames persist forever in
+    // linkedMethods, showing the wrong identity to the user.
+    if (targetValues.length > 0) {
+      const lowerTargets = targetValues.map((v) => v.toLowerCase())
+      await db.sql`
+        DELETE FROM account_linked_methods
+        WHERE privy_user_id = ${privyUserId}
+          AND type = ${provider}
+          AND NOT (LOWER(value) = ANY(${lowerTargets}::text[]));
+      `
+    }
     for (const methodValue of targetValues) {
       await upsertLinkedMethod({
         db,

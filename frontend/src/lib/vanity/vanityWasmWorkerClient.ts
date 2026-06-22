@@ -24,8 +24,7 @@ const pending = new Map<number, PendingRequest>()
 
 export function isVanityWasmWorkerEnabled(): boolean {
   if (typeof Worker === 'undefined') return false
-  const importMetaEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env
-  const raw = String(importMetaEnv?.VITE_VANITY_WASM_WORKER ?? '').trim().toLowerCase()
+  const raw = String(import.meta.env.VITE_VANITY_WASM_WORKER ?? '').trim().toLowerCase()
   if (raw === '0' || raw === 'false' || raw === 'no') return false
   return true
 }
