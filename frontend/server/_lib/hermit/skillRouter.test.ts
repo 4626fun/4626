@@ -247,6 +247,14 @@ describe('executeHermitCommand', () => {
       ARENA_DGCLAW_DIR: '/tmp',
       ARENA_DRY_RUN: '1',
     })
+    vi.spyOn(arenaStore, 'resolveArenaIdentityForContext').mockResolvedValue({
+      source: 'user',
+      roomId: '1659',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      agentId: 'agent-1',
+      agentWalletAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      hlApiWalletAddress: null,
+    })
     const runBacktestSpy = vi
       .spyOn(virtualsBacktestJobs, 'runRealBacktestJob')
       .mockResolvedValue({
@@ -273,6 +281,67 @@ describe('executeHermitCommand', () => {
         rebalanceSizePercent: 35,
       }),
     )
+  })
+
+  it('rejects /arena backtest when sender has no mapped identity', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+    })
+    vi.spyOn(arenaStore, 'resolveArenaIdentityForContext').mockResolvedValue({
+      source: 'env_default',
+      roomId: '1659',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      agentId: null,
+      agentWalletAddress: null,
+      hlApiWalletAddress: null,
+    })
+    const runBacktestSpy = vi
+      .spyOn(virtualsBacktestJobs, 'runRealBacktestJob')
+      .mockResolvedValue({
+        responseText: 'Backtest complete for BTC (2160h).',
+        resolvedInterval: '1m',
+      })
+
+    const result = await executeHermitCommand({
+      commandText: '/arena backtest BTC',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.reply).toContain('Arena backtest requires a mapped identity')
+    expect(runBacktestSpy).not.toHaveBeenCalled()
+  })
+
+  it('surfaces backtest failure with actionable error message', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+    })
+    vi.spyOn(arenaStore, 'resolveArenaIdentityForContext').mockResolvedValue({
+      source: 'user',
+      roomId: '1659',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      agentId: 'agent-1',
+      agentWalletAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      hlApiWalletAddress: null,
+    })
+    vi.spyOn(virtualsBacktestJobs, 'runRealBacktestJob').mockRejectedValue(
+      new Error('hyperliquid_candle_fetch_failed symbol=FOO interval=1m'),
+    )
+
+    const result = await executeHermitCommand({
+      commandText: '/arena backtest FOO',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.reply).toContain('Arena backtest failed: hyperliquid_candle_fetch_failed')
+    expect(result.reply).toContain('Try BTC/ETH')
   })
 
   it('supports /arena identity show with resolver fallback', async () => {

@@ -2747,8 +2747,27 @@ export async function executeHermitCommand(
       }
     }
     if (parsed.kind === 'backtest') {
+      // Gate on resolved identity — only users with a mapped arena identity
+      // can trigger compute-intensive backtest runs, consistent with other
+      // arena subcommands (trade, deposit, etc.).
+      if (!resolvedIdentity.agentWalletAddress) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply:
+            'Arena backtest requires a mapped identity. Run `/arena identity show` or `/arena register` first.',
+        }
+      }
       try {
-        const backtest = await runRealBacktestJob(parsed.request)
+        // 60s timeout — a 90-day 1m backtest with cached bars finishes in
+        // ~5-10s, but HL chunked fallback can take much longer. Don't let
+        // a single backtest block the XMTP consumer indefinitely.
+        const backtest = await Promise.race([
+          runRealBacktestJob(parsed.request),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Backtest timed out after 60s')), 60_000),
+          ),
+        ])
         return {
           kind: 'hermit',
           provider: 'local',

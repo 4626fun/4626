@@ -169,6 +169,12 @@ export async function runRealBacktestJob(
     leveragePercent: request.leveragePercent,
   })
 
+  // Capital allocation: user's "capital" input is split 50/50 between long
+  // and short legs. Within each leg, half goes to margin (position collateral)
+  // and half to buffer (rebalance reserve). So `capital 4000` produces:
+  //   longMargin=$1000, longBuffer=$1000, shortMargin=$1000, shortBuffer=$1000
+  // This differs from the API path (_backtest-run.ts) which takes margin and
+  // buffer as separate fields with no halving.
   const longMargin = Math.max(100, request.initialLongUsd * 0.5)
   const shortMargin = Math.max(100, request.initialShortUsd * 0.5)
   const targetChunk = Math.max(
@@ -193,10 +199,16 @@ export async function runRealBacktestJob(
   })
 
   if (result.resolvedInterval !== '1m') {
-    throw new Error(
-      `1m execution required but resolved interval was ${result.resolvedInterval}. ` +
-        '1m cache coverage is insufficient for this request.',
-    )
+    // Don't throw — surface a warning instead. The 1m cache may not be
+    // populated yet (requires `cache-backtest-minute-bars.ts` to run).
+    // Coarser intervals (5m, 15m, 1h) still produce valid backtest results,
+    // just with fewer rebalance opportunities per bar.
+    const tail = result.stdout.split('\n').slice(-8).join('\n').slice(0, 1200)
+    const responseText =
+      `Backtest complete for ${request.symbol} (${FIXED_WINDOW_HOURS}h, ${appliedLeverage.toFixed(2)}x from ${request.leveragePercent}% of max ${maxLeverage}x, long $${Math.round(request.initialLongUsd)}, short $${Math.round(request.initialShortUsd)}, health ${request.rebalanceHealthPercent}%, size ${request.rebalanceSizePercent}%). ` +
+      `Resolved interval: ${result.resolvedInterval} (WARNING: 1m cache unavailable — results use coarser candles; run cache-backtest-minute-bars.ts for 1m fidelity).\n\n` +
+      `Recent output:\n${tail || '(no stdout output captured)'}`
+    return { responseText, resolvedInterval: result.resolvedInterval }
   }
 
   const tail = result.stdout.split('\n').slice(-8).join('\n').slice(0, 1200)

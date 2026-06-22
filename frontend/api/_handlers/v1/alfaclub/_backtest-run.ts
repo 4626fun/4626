@@ -4,7 +4,11 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import {
   type ApiEnvelope,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
   handleOptions,
+  rateLimitKey,
   readJsonBody,
   setCors,
   setNoStore,
@@ -15,6 +19,7 @@ import {
   parseBacktestInterval,
 } from '../../../../server/_lib/alfaclub/backtestIntervalPolicy.js'
 import { executeBacktestCounterRebalance } from '../../../../server/_lib/alfaclub/backtestCounterRebalance.js'
+import { verifyPrivyForAccounts } from '../../../../server/_lib/identity/accountsIdentity.js'
 
 const BACKTEST_RUN_BODY_MAX_BYTES = 65_536
 
@@ -81,6 +86,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+
+  // Auth gate: backtest is compute-intensive (fetches candle data + runs
+  // simulation). Require a valid Privy token so anonymous callers cannot
+  // abuse the endpoint.
+  let privyUserId: string
+  try {
+    const privyContext = await verifyPrivyForAccounts(req)
+    privyUserId = privyContext.privyUserId
+  } catch {
+    return res.status(401).json({ success: false, error: 'Privy authentication required' } satisfies ApiEnvelope<never>)
+  }
+
+  // Rate limit: 5 per minute per privy user + IP (backtest is expensive)
+  const limiter = checkRateLimit(
+    rateLimitKey('alfaclub-backtest-run', privyUserId, getClientIp(req)),
+    RATE_LIMITS.alfaclubBacktestRun,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
   let body: BacktestRunBody

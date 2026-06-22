@@ -106,7 +106,7 @@ describe('runRealBacktestJob', () => {
     expect(result.responseText).toContain('Resolved interval: 1m')
   })
 
-  it('fails when strict 1m execution degrades', async () => {
+  it('surfaces warning when 1m cache unavailable and interval degrades', async () => {
     const run = vi.fn().mockResolvedValue({
       stdout: 'line1\nline2',
       resolvedInterval: '5m',
@@ -114,18 +114,19 @@ describe('runRealBacktestJob', () => {
       series: null,
     })
     const resolveLeverage = vi.fn().mockResolvedValue({ appliedLeverage: 5, maxLeverage: 10 })
-    await expect(
-      runRealBacktestJob(
-        {
-          symbol: 'ETH',
-          leveragePercent: 50,
-          rebalanceHealthPercent: 75,
-          rebalanceSizePercent: 35,
-          initialLongUsd: 1000,
-          initialShortUsd: 1000,
-        },
-        { run: run as never, resolveLeverage: resolveLeverage as never },
-      ),
-    ).rejects.toThrow('1m execution required')
+    const result = await runRealBacktestJob(
+      {
+        symbol: 'ETH',
+        leveragePercent: 50,
+        rebalanceHealthPercent: 75,
+        rebalanceSizePercent: 35,
+        initialLongUsd: 1000,
+        initialShortUsd: 1000,
+      },
+      { run: run as never, resolveLeverage: resolveLeverage as never },
+    )
+    expect(result.resolvedInterval).toBe('5m')
+    expect(result.responseText).toContain('WARNING: 1m cache unavailable')
+    expect(result.responseText).toContain('Resolved interval: 5m')
   })
 })

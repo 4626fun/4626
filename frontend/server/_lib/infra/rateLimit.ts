@@ -199,6 +199,8 @@ export const RATE_LIMITS = {
   buildCharmCalldata: { windowMs: 60_000, maxRequests: 80 },
   // General API: 60 per minute per IP
   general: { windowMs: 60_000, maxRequests: 60 },
+  // AlfaClub backtest run: 5 per minute per privy user + IP (compute-intensive)
+  alfaclubBacktestRun: { windowMs: 60_000, maxRequests: 5 },
 } as const
 
 /**
