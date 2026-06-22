@@ -249,7 +249,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const responseRows = rows.flatMap((row) => {
       const supplyRaw = parseNumber(row.supply_col_raw) ?? parseNumber(row.supply_raw)
       if (!Number.isFinite(supplyRaw) || (supplyRaw ?? 0) <= 0) return []
-      const supply = Math.max(1, Math.floor(supplyRaw))
+      const supply = Math.max(1, Math.floor(supplyRaw!))
       const keysHeld = Math.round((ownerSharePercent / 100) * supply)
 
       const volumeRaw = parseNumber(row.volume_col_raw) ?? parseNumber(row.volume_raw)
@@ -261,7 +261,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       )
       if (!Number.isFinite(potFromSnapshot ?? NaN) || (potFromSnapshot ?? 0) < 0) return []
       const potSource = 'snapshot' as const
-      const potUsdc = potFromSnapshot
+      const potUsdc = potFromSnapshot!
       const potAtRiskUsdc = Math.max(0, potUsdc + donationUsdc)
 
       const risk = estimateClubRisk({
