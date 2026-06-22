@@ -20,6 +20,11 @@ describe('passwordlessFetchGuard', () => {
     expect(isPrivyPasswordlessInitRequest('https://auth.privy.io/api/v1/analytics_events', 'POST')).toBe(false)
   })
 
+  it('matches passwordless init on privy.4626.fun custom domain', () => {
+    expect(isPrivyPasswordlessInitRequest('https://privy.4626.fun/api/v1/passwordless/init', 'POST')).toBe(true)
+    expect(isPrivyPasswordlessInitRequest('https://privy.4626.fun/api/v1/passwordless/init', 'GET')).toBe(false)
+  })
+
   it('normalizes empty fetch methods to GET', () => {
     expect(normalizeFetchMethod(undefined)).toBe('GET')
     expect(normalizeFetchMethod('')).toBe('GET')

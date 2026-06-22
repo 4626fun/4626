@@ -16,10 +16,17 @@ export function normalizeFetchMethod(value: string | null | undefined): string {
   return method || 'GET'
 }
 
+const PRIVY_PASSWORDLESS_INIT_PATH = '/api/v1/passwordless/init'
+const PRIVY_PASSWORDLESS_INIT_HOSTS = ['auth.privy.io', 'privy.4626.fun']
+
 export function isPrivyPasswordlessInitRequest(url: string, method: string): boolean {
   if (normalizeFetchMethod(method) !== 'POST') return false
   try {
-    return new URL(url).toString() === PRIVY_PASSWORDLESS_INIT_URL
+    const parsed = new URL(url)
+    return (
+      parsed.pathname === PRIVY_PASSWORDLESS_INIT_PATH &&
+      PRIVY_PASSWORDLESS_INIT_HOSTS.includes(parsed.hostname.toLowerCase())
+    )
   } catch {
     return false
   }

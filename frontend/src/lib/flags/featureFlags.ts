@@ -339,19 +339,31 @@ export function resolvePrivyClientId(): string | null {
 }
 
 export function resolvePrivyApiUrl(): string | null {
+  // On *.4626.fun production origins, automatically use the first-party
+  // privy.4626.fun reverse proxy as the Privy API URL. This keeps session
+  // cookies first-party on .4626.fun so OTP session creation works in
+  // browsers that block third-party cookies (incognito, Chrome 118+).
+  //
+  // The embedded-wallet iframe already loads from privy.4626.fun (configured
+  // in the Privy dashboard). If API calls go to auth.privy.io instead, the
+  // domain mismatch causes POST /api/v1/sessions to fail with
+  // missing_or_invalid_token after OTP — the session cookie is on
+  // privy.4626.fun but the API call hits auth.privy.io.
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname.toLowerCase()
+    if (host === '4626.fun' || host.endsWith('.4626.fun')) {
+      return 'https://privy.4626.fun'
+    }
+  }
+
+  // For non-4626.fun origins (e.g. localhost), use explicit env config.
   // Fail-safe: custom Privy API domains are opt-in behind an explicit enable flag.
-  // This prevents a misrouted custom domain from taking down auth flows in prod.
   if (!isTruthyEnv(import.meta.env.VITE_PRIVY_API_URL_ENABLED)) return null
   const raw = String(import.meta.env.VITE_PRIVY_API_URL ?? '').trim()
   if (!raw) return null
   try {
     const parsed = new URL(raw)
     if (parsed.protocol !== 'https:') return null
-    // Hard safety rail: stale configs occasionally point at `privy.4626.fun`,
-    // but the canonical browser API host must remain `auth.privy.io`.
-    if (parsed.hostname.toLowerCase() === 'privy.4626.fun') {
-      return 'https://auth.privy.io'
-    }
     return parsed.origin
   } catch {
     return null

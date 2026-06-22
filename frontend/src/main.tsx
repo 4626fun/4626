@@ -17,7 +17,6 @@ import {
   isPrivyPasswordlessFailure,
   isPrivyPasswordlessInitRequest,
   normalizeFetchMethod,
-  rewritePrivyLegacyRequestInput,
 } from '@/lib/privy/passwordlessFetchGuard'
 import '@4626/brand-kit/styles'
 import './index.css'
@@ -297,21 +296,13 @@ if (typeof window !== 'undefined') {
       debugEnabled ||
       params.get('privy_analytics') === '0' ||
       window.localStorage.getItem('cv:privy:analytics') === 'off'
-    if (!(window as any).__cvPrivyHostRewritePatched) {
-      const originalFetch = window.fetch.bind(window)
-      window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
-        const rewritten = rewritePrivyLegacyRequestInput(input, init)
-        return originalFetch(rewritten.input, rewritten.init)
-      }
-      ;(window as any).__cvPrivyHostRewritePatched = true
-    }
     let privyPasswordlessCooldownUntilMs = 0
     let privyPasswordlessInFlight: Promise<Response> | null = null
     if (disablePrivyAnalytics && !(window as any).__cvPrivyAnalyticsFetchPatched) {
       const originalFetch = window.fetch.bind(window)
       window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
-        if (url.includes('https://auth.privy.io/api/v1/analytics_events')) {
+        if (url.includes('/api/v1/analytics_events') && (url.includes('auth.privy.io') || url.includes('privy.4626.fun'))) {
           return Promise.resolve(new Response(null, { status: 204 }))
         }
         return originalFetch(input, init)
@@ -323,7 +314,7 @@ if (typeof window !== 'undefined') {
       window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
         const method = normalizeFetchMethod(init?.method ?? (input instanceof Request ? input.method : undefined))
-        if (disablePrivyAnalytics && url.includes('https://auth.privy.io/api/v1/analytics_events')) {
+        if (disablePrivyAnalytics && url.includes('/api/v1/analytics_events') && (url.includes('auth.privy.io') || url.includes('privy.4626.fun'))) {
           return Promise.resolve(new Response(null, { status: 204 }))
         }
         if (isPrivyPasswordlessInitRequest(url, method)) {

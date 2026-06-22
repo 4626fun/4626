@@ -80,19 +80,37 @@ describe('resolvePrivyClientId', () => {
 })
 
 describe('resolvePrivyApiUrl', () => {
-  it('returns null when API URL mode is disabled', () => {
+  it('returns null when API URL mode is disabled on non-4626.fun origins', () => {
     vi.stubEnv('VITE_PRIVY_API_URL_ENABLED', '')
     vi.stubEnv('VITE_PRIVY_API_URL', 'https://auth.privy.io')
     expect(resolvePrivyApiUrl()).toBeNull()
   })
 
-  it('maps legacy privy.4626.fun API URL to auth.privy.io', () => {
-    vi.stubEnv('VITE_PRIVY_API_URL_ENABLED', '1')
-    vi.stubEnv('VITE_PRIVY_API_URL', 'https://privy.4626.fun')
-    expect(resolvePrivyApiUrl()).toBe('https://auth.privy.io')
+  it('auto-resolves privy.4626.fun on 4626.fun origin regardless of env', () => {
+    vi.stubEnv('VITE_PRIVY_API_URL_ENABLED', '')
+    vi.stubEnv('VITE_PRIVY_API_URL', '')
+    vi.stubGlobal('window', {
+      location: { hostname: '4626.fun' },
+    } as unknown as Window & typeof globalThis)
+    expect(resolvePrivyApiUrl()).toBe('https://privy.4626.fun')
   })
 
-  it('returns configured canonical HTTPS API URL when enabled', () => {
+  it('auto-resolves privy.4626.fun on app.4626.fun subdomain', () => {
+    vi.stubEnv('VITE_PRIVY_API_URL_ENABLED', '')
+    vi.stubEnv('VITE_PRIVY_API_URL', '')
+    vi.stubGlobal('window', {
+      location: { hostname: 'app.4626.fun' },
+    } as unknown as Window & typeof globalThis)
+    expect(resolvePrivyApiUrl()).toBe('https://privy.4626.fun')
+  })
+
+  it('returns env-configured privy.4626.fun URL as-is on non-4626.fun origins', () => {
+    vi.stubEnv('VITE_PRIVY_API_URL_ENABLED', '1')
+    vi.stubEnv('VITE_PRIVY_API_URL', 'https://privy.4626.fun')
+    expect(resolvePrivyApiUrl()).toBe('https://privy.4626.fun')
+  })
+
+  it('returns configured canonical HTTPS API URL when enabled on non-4626.fun origins', () => {
     vi.stubEnv('VITE_PRIVY_API_URL_ENABLED', '1')
     vi.stubEnv('VITE_PRIVY_API_URL', 'https://auth.privy.io')
     expect(resolvePrivyApiUrl()).toBe('https://auth.privy.io')
