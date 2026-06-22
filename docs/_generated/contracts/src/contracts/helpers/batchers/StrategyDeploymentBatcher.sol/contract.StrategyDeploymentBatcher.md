@@ -15,7 +15,7 @@ Batches deployment and wiring of 4626 strategies.
 Used by AA deployment flows to create pools, vaults, and adapters.
 
 
-## State Variables
+## Constants
 ### V3_FACTORY
 
 ```solidity
@@ -118,7 +118,7 @@ uint32 private constant CHARM_TWAP_DURATION = 300
 
 
 ```solidity
-constructor() Ownable(msg.sender);
+constructor(address _creatorCharmStrategyFactory, address _ajnaStrategyFactory) Ownable(msg.sender);
 ```
 
 ### batchDeployStrategies
@@ -247,6 +247,18 @@ error ZeroQuote();
 
 ```solidity
 error ZeroVault();
+```
+
+### ZeroCreatorCharmFactory
+
+```solidity
+error ZeroCreatorCharmFactory();
+```
+
+### ZeroAjnaFactory
+
+```solidity
+error ZeroAjnaFactory();
 ```
 
 ### CharmFactoryGovernanceMismatch

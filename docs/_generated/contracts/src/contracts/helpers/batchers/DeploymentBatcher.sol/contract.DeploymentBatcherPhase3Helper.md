@@ -2,7 +2,7 @@
 [Git Source](https://github.com/wenakita/4626/blob/main/contracts/helpers/batchers/DeploymentBatcher.sol)
 
 
-## State Variables
+## Constants
 ### V3_FEE_TIER
 
 ```solidity
@@ -45,6 +45,13 @@ uint32 internal constant CHARM_TWAP_DURATION = 300
 ```
 
 
+### CHARM_AJNA_MIN_COLLATERAL_RATIO_BPS
+
+```solidity
+uint256 internal constant CHARM_AJNA_MIN_COLLATERAL_RATIO_BPS = 12_500
+```
+
+
 ### CHARM_FACTORY
 
 ```solidity
@@ -77,6 +84,13 @@ IUniversalCreate2DeployerFromStore public immutable create2Deployer
 
 ```solidity
 address public immutable protocolTreasury
+```
+
+
+### protocolAutomation
+
+```solidity
+address public immutable protocolAutomation
 ```
 
 
@@ -123,10 +137,12 @@ address public immutable batcher
 constructor(
     address _create2Deployer,
     address _protocolTreasury,
+    address _protocolAutomation,
     address _usdc,
     address _uniswapV3Factory,
     address _uniswapRouter,
-    address _ajnaFactory
+    address _ajnaFactory,
+    address _batcher
 ) ;
 ```
 
@@ -139,6 +155,40 @@ function deployPhase3Strategies(
     DeploymentBatcher.StrategyCodeIds calldata codeIds,
     bytes32 baseSalt
 ) external returns (DeploymentBatcher.Phase3Result memory out);
+```
+
+### _resolveAjnaPool
+
+
+```solidity
+function _resolveAjnaPool(address creatorToken) internal returns (address ajnaPool);
+```
+
+### _resolveCreatorOracle
+
+
+```solidity
+function _resolveCreatorOracle(address creatorToken) internal view returns (address oracle);
+```
+
+### _wireCharmAjnaSynergy
+
+
+```solidity
+function _wireCharmAjnaSynergy(address charmStrategy, address ajnaPool, address oracle) internal;
+```
+
+### _deployCharmPipeline
+
+
+```solidity
+function _deployCharmPipeline(
+    DeploymentBatcher.Phase3Params calldata params,
+    DeploymentBatcher.StrategyCodeIds calldata codeIds,
+    bytes32 baseSalt,
+    address v3Pool,
+    bool deferOwnershipTransfer
+) internal returns (address charmVault, address charmStrategy);
 ```
 
 ### _saltFor
@@ -176,6 +226,24 @@ function _isAllowedCharmFactoryGovernance(address governance) internal pure retu
 error NotBatcher();
 ```
 
+### NotOwner
+
+```solidity
+error NotOwner();
+```
+
+### InvalidCodeId
+
+```solidity
+error InvalidCodeId();
+```
+
+### Phase3ManagementMismatch
+
+```solidity
+error Phase3ManagementMismatch(address expected, address actual);
+```
+
 ### MissingInitialSqrtPriceX96
 
 ```solidity
@@ -210,5 +278,23 @@ error CharmVaultManagerMismatch(address expected, address actual);
 
 ```solidity
 error Phase3HelperLostAdmin();
+```
+
+### MissingCreatorOracleForSynergy
+
+```solidity
+error MissingCreatorOracleForSynergy();
+```
+
+### ZeroAddress
+
+```solidity
+error ZeroAddress();
+```
+
+### InvalidWeight
+
+```solidity
+error InvalidWeight();
 ```
 

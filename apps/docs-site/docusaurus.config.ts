@@ -67,6 +67,7 @@ const config: Config = {
   themeConfig: {
     image: 'brand/logo.svg',
     navbar: {
+      hideOnScroll: true,
       title: '4626.fun',
       logo: {
         alt: '4626.fun Logo',
@@ -85,8 +86,23 @@ const config: Config = {
           position: 'left',
         },
         {
+          to: '/contracts',
+          label: 'Contracts',
+          position: 'left',
+        },
+        {
+          to: '/api',
+          label: 'API',
+          position: 'left',
+        },
+        {
           to: '/operations/deployment/releases',
           label: 'Change Log',
+          position: 'right',
+        },
+        {
+          href: 'https://4626.fun',
+          label: 'App',
           position: 'right',
         },
         {
@@ -100,21 +116,53 @@ const config: Config = {
     },
     footer: {
       style: 'dark',
+      logo: {
+        alt: '4626.fun',
+        src: 'brand/logo.svg',
+        href: 'https://4626.fun',
+        width: 36,
+        height: 36,
+      },
       links: [
         {
-          title: 'Docs',
+          title: 'Build',
           items: [
+            {
+              label: 'Getting Started',
+              to: '/getting-started',
+            },
             {
               label: 'Wallet Architecture',
               to: '/wallet-architecture',
             },
             {
-              label: 'Four Compressions',
-              to: '/compressions',
-            },
-            {
               label: 'Contracts',
               to: '/contracts',
+            },
+            {
+              label: 'API Reference',
+              to: '/api',
+            },
+          ],
+        },
+        {
+          title: 'Operate',
+          items: [
+            {
+              label: 'Deployment & Ops',
+              to: '/operators',
+            },
+            {
+              label: 'Automation / KPR',
+              to: '/operations/automation',
+            },
+            {
+              label: 'Security',
+              to: '/security',
+            },
+            {
+              label: 'Audits',
+              to: '/audits',
             },
           ],
         },
@@ -134,6 +182,10 @@ const config: Config = {
         {
           title: 'Community',
           items: [
+            {
+              label: '4626.fun',
+              href: 'https://4626.fun',
+            },
             {
               label: 'GitHub',
               href: 'https://github.com/wenakita/4626',

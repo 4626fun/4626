@@ -20,7 +20,7 @@ Epoch schedule:
 (up to the full epoch), which can create a discrete price-per-share jump. Run a keeper for smoothness.
 
 
-## State Variables
+## Constants
 ### EPOCH_DURATION
 
 ```solidity
@@ -42,6 +42,14 @@ IERC20 public immutable vaultShares
 ```
 
 
+### MAX_FAILED_BURN_ACCUMULATOR
+
+```solidity
+uint256 public constant MAX_FAILED_BURN_ACCUMULATOR = 1_000_000e18
+```
+
+
+## State Variables
 ### pendingShares
 
 ```solidity
@@ -88,13 +96,6 @@ mapping(address => bool) public authorizedQueuers
 
 ```solidity
 uint256 public failedBurnAccumulator
-```
-
-
-### MAX_FAILED_BURN_ACCUMULATOR
-
-```solidity
-uint256 public constant MAX_FAILED_BURN_ACCUMULATOR = 1_000_000e18
 ```
 
 

@@ -30,7 +30,6 @@ const sidebars: SidebarsConfig = {
           link: { type: 'doc', id: 'guides/index' },
           items: [
             'guides/launch-token',
-            'guides/deploy-vault',
             'guides/activate-vault',
             {
               type: 'category',
@@ -55,7 +54,6 @@ const sidebars: SidebarsConfig = {
       link: { type: 'doc', id: 'creators/index' },
       items: [
         'guides/launch-token',
-        'guides/deploy-vault',
         'guides/activate-vault',
         'frontend/creator-workspace',
         {
@@ -112,8 +110,6 @@ const sidebars: SidebarsConfig = {
             'integrations/oft',
             'integrations/lens',
             'integrations/lens-grove',
-            'integrations/solana-integration',
-            'integrations/solana-spoke-article',
           ],
         },
         {
@@ -223,7 +219,6 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Services',
           items: [
-            'operations/services/agent/eliza/index',
             'operations/services/solana-provisioner/index',
           ],
         },
@@ -253,7 +248,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'security/agent-security-model',
         'security/agent-security-migration',
-        'security/payout-router-ownership-hardening-2026-03',
+        'security/transactional-integrity-audit',
       ],
     },
 
@@ -266,26 +261,21 @@ const sidebars: SidebarsConfig = {
         {
           type: 'category',
           label: 'Ajna',
-          items: [
-            'audits/ajna/executive-brief',
-            'audits/ajna/adversarial-audit',
-            'audits/ajna/master-qna',
-          ],
+          items: ['audits/codex/audit_findings_factories_batchers_ajna'],
         },
         {
           type: 'category',
           label: 'Charm',
           items: [
+            'audits/charm/index',
             'audits/charm/executive-brief',
-            'audits/charm/adversarial-audit',
-            'audits/charm/master-qa',
           ],
         },
         {
           type: 'category',
           label: 'Codex',
           items: [
-            'audits/codex/security-second-pass-review',
+            'audits/codex/AUDIT_RECONCILIATION',
             'audits/codex/remediation-2026-04-02',
           ],
         },

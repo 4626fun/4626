@@ -5,7 +5,7 @@
 [IStrategy](/contracts/interfaces/IStrategy.sol/interface.IStrategy.md), [IStrategyValuation](/contracts/interfaces/IStrategyValuation.sol/interface.IStrategyValuation.md), ReentrancyGuard, Ownable
 
 
-## State Variables
+## Constants
 ### DEFAULT_TWAP_DURATION
 Default TWAP window used for valuation (share pricing).
 
@@ -57,6 +57,42 @@ ISwapRouter public immutable UNISWAP_ROUTER
 ```
 
 
+### AJNA_WAD
+
+```solidity
+uint256 internal constant AJNA_WAD = 1e18
+```
+
+
+### USDC_TO_AJNA_WAD
+
+```solidity
+uint256 internal constant USDC_TO_AJNA_WAD = 1e12
+```
+
+
+### AJNA_MIN_BUCKET_INDEX
+
+```solidity
+uint256 internal constant AJNA_MIN_BUCKET_INDEX = 1
+```
+
+
+### AJNA_MAX_BUCKET_INDEX
+
+```solidity
+uint256 internal constant AJNA_MAX_BUCKET_INDEX = 7_388
+```
+
+
+### AJNA_APPROX_BUCKET_STEP_BPS
+
+```solidity
+uint256 internal constant AJNA_APPROX_BUCKET_STEP_BPS = 50
+```
+
+
+## State Variables
 ### charmVault
 
 ```solidity
@@ -159,41 +195,6 @@ uint256 public ajnaBorrowLimitIndex
 
 ```solidity
 uint256 public ajnaRepayLimitIndex
-```
-
-
-### AJNA_WAD
-
-```solidity
-uint256 internal constant AJNA_WAD = 1e18
-```
-
-
-### USDC_TO_AJNA_WAD
-
-```solidity
-uint256 internal constant USDC_TO_AJNA_WAD = 1e12
-```
-
-
-### AJNA_MIN_BUCKET_INDEX
-
-```solidity
-uint256 internal constant AJNA_MIN_BUCKET_INDEX = 1
-```
-
-
-### AJNA_MAX_BUCKET_INDEX
-
-```solidity
-uint256 internal constant AJNA_MAX_BUCKET_INDEX = 7_388
-```
-
-
-### AJNA_APPROX_BUCKET_STEP_BPS
-
-```solidity
-uint256 internal constant AJNA_APPROX_BUCKET_STEP_BPS = 50
 ```
 
 

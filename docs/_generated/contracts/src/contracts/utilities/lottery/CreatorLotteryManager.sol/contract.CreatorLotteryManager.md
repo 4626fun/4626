@@ -5,7 +5,7 @@
 OApp, OAppOptionsType3, ReentrancyGuard, Pausable
 
 
-## State Variables
+## Constants
 ### MIN_SWAP_USD
 
 ```solidity
@@ -70,6 +70,21 @@ uint16 public constant MSG_TYPE_LOTTERY_ENTRY = 3
 
 ```solidity
 uint16 public constant MSG_TYPE_WINNER_CALLBACK = 4
+```
+
+
+### BOOST_SOURCE_TIMELOCK
+Delay between proposing and committing a boost-source change
+once `timelockArmed` is true. See `proposeBoostManager` /
+`proposeVaultGaugeVoting` and docs/security/amoe-pr3-handoff.md.
+
+`internal` on main to save EIP-170 budget; the same constant is
+exposed `public` on the admin module for off-chain consumers and
+is also surfaced via `getBoostSourceTimelockState`.
+
+
+```solidity
+uint256 internal constant BOOST_SOURCE_TIMELOCK = 24 hours
 ```
 
 
@@ -188,6 +203,14 @@ ICreatorRegistryLottery public immutable registry
 ```
 
 
+### _adminModule
+
+```solidity
+address private immutable _adminModule
+```
+
+
+## State Variables
 ### authorizedSwapContracts
 Authorized swap contracts that can trigger lottery
 
@@ -511,10 +534,69 @@ uint256 private _payoutLock
 ```
 
 
-### _adminModule
+### baseCeilingPPM
+Pre-boost win-chance ceiling (PPM). The linear formula is
+`winChancePPM = swapValueUSD / 250_000` capped at this value.
+Default 40_000 PPM (= 4% at $10K swap).
+
 
 ```solidity
-address private immutable _adminModule
+uint256 public baseCeilingPPM
+```
+
+
+### authorizedAmoeRelayer
+Trusted relayer authorized to call `processAmoeEntry`.
+Off-chain points-to-USD accounting is trusted to this key in PR 1;
+PR 4 (zkMetal-bound pointsBurned) will move that trust into a
+circuit-bound public input. See docs/security/amoe-pr1-handoff.md.
+
+
+```solidity
+address public authorizedAmoeRelayer
+```
+
+
+### _pendingBoostManager
+Pending replacement for `boostManager`, set by `proposeBoostManager`.
+Read via `getPendingBoostSources()` to keep main-contract bytecode
+under EIP-170; the storage layout is mirrored in the admin module.
+
+
+```solidity
+address internal _pendingBoostManager
+```
+
+
+### _pendingBoostManagerEffectiveAt
+
+```solidity
+uint256 internal _pendingBoostManagerEffectiveAt
+```
+
+
+### _pendingVaultGaugeVoting
+
+```solidity
+address internal _pendingVaultGaugeVoting
+```
+
+
+### _pendingVaultGaugeVotingEffectiveAt
+
+```solidity
+uint256 internal _pendingVaultGaugeVotingEffectiveAt
+```
+
+
+### _timelockArmed
+Once true, the legacy `setBoostManager` / `setVaultGaugeVoting`
+setters revert and the timelocked propose/commit/cancel flow is the
+only path. One-way switch (no disarm). Read via `isTimelockArmed()`.
+
+
+```solidity
+bool internal _timelockArmed
 ```
 
 
@@ -585,6 +667,63 @@ function processSwapLottery(address buyer, address tokenIn, uint256 amountIn, ui
 |Name|Type|Description|
 |----|----|-----------|
 |`entryId`|`uint256`|VRF request ID (0 if no entry)|
+
+
+### _boostAndDispatchVRF
+
+Shared boost + VRF dispatch path. Used by both `processSwapLottery`
+and `processAmoeEntry` to keep their behavior identical at the
+boost / VRF layer (Option B2 boost parity).
+
+
+```solidity
+function _boostAndDispatchVRF(
+    address buyer,
+    address creatorCoin,
+    address shareBalanceToken,
+    uint256 creatorShareBalanceUSD,
+    uint256 swapValueUSD,
+    uint256 callerFeeValue
+) internal returns (uint256 entryId, uint256 boostedWinChanceOut);
+```
+
+### processAmoeEntry
+
+Process an Alternative Method Of Entry (AMOE) lottery entry.
+
+Gated to a single trusted off-chain relayer (`authorizedAmoeRelayer`).
+The relayer is responsible for converting points-burned to a USD
+value (1e6 / USDC units) before calling. PR 1 trusts that key for
+points-to-USD accounting; PR 4 will move that trust into a
+zkMetal-bound public input. See docs/security/amoe-pr1-handoff.md.
+Boost flow mirrors `processSwapLottery` so AMOE entries get the
+same ve4626 personal + vault gauge boost parity (Option B2). The
+`pointsBurnedAsUSD` value is treated identically to a paid swap
+value for the purpose of `calculateWinChance` and `_applyBoost`.
+Defense-in-depth: enforces `pointsBurnedAsUSD >= minSwapAmount`
+on-chain even though the relayer also enforces it off-chain.
+
+
+```solidity
+function processAmoeEntry(address buyer, address creatorCoin, uint256 pointsBurnedAsUSD)
+    external
+    nonReentrant
+    whenNotPaused
+    returns (uint256 entryId);
+```
+**Parameters**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`buyer`|`address`|The user receiving the lottery entry.|
+|`creatorCoin`|`address`|The creator coin the entry is for.|
+|`pointsBurnedAsUSD`|`uint256`|Off-chain-computed USD value of burnt points (1e6 units).|
+
+**Returns**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`entryId`|`uint256`|VRF request ID (0 if no entry).|
 
 
 ### _requestCrossChainVRF
@@ -676,6 +815,19 @@ function _calculateTokenUSD(address creatorCoin, address tokenIn, uint256 amount
 ```
 
 ### calculateWinChance
+
+Linear pre-boost win chance (PR 1 — AMOE Linear Parity).
+
+Formula: `winChancePPM = swapValueUSD / 250_000`, capped at
+`baseCeilingPPM`. swapValueUSD is in 1e6 (USDC) units, so:
+$1     → 1_000_000  / 250_000 =     4 PPM   (0.0004%)
+$10    → 10_000_000 / 250_000 =    40 PPM   (0.004%)
+$100   → 100_000_000 / 250_000 =   400 PPM   (0.04%)
+$1_000 → 1_000_000_000 / 250_000 = 4_000 PPM (0.4%)
+$10_000 → 10_000_000_000 / 250_000 = 40_000 PPM (4% — base ceiling)
+The legacy `lotteryConfig.baseWinChance` field is retained for
+slot/ABI parity but is no longer read. `lotteryConfig.maxWinChance`
+remains the absolute (post-boost) cap and is enforced in `_applyBoost`.
 
 
 ```solidity
@@ -1024,6 +1176,76 @@ function setVaultGaugeVoting(address _vaultGaugeVoting) external;
 |----|----|-----------|
 |`_vaultGaugeVoting`|`address`|Address of the VaultGaugeVoting contract|
 
+
+### setAuthorizedAmoeRelayer
+
+
+```solidity
+function setAuthorizedAmoeRelayer(address _relayer) external;
+```
+
+### setBaseCeilingPPM
+
+
+```solidity
+function setBaseCeilingPPM(uint256 _ceilingPPM) external;
+```
+
+### proposeBoostManager
+
+
+```solidity
+function proposeBoostManager(address _manager) external;
+```
+
+### commitBoostManager
+
+
+```solidity
+function commitBoostManager() external;
+```
+
+### cancelBoostManagerProposal
+
+
+```solidity
+function cancelBoostManagerProposal() external;
+```
+
+### proposeVaultGaugeVoting
+
+
+```solidity
+function proposeVaultGaugeVoting(address _gauge) external;
+```
+
+### commitVaultGaugeVoting
+
+
+```solidity
+function commitVaultGaugeVoting() external;
+```
+
+### cancelVaultGaugeVotingProposal
+
+
+```solidity
+function cancelVaultGaugeVotingProposal() external;
+```
+
+### armBoostSourceTimelock
+
+
+```solidity
+function armBoostSourceTimelock() external;
+```
+
+### disableBoostSources
+
+
+```solidity
+function disableBoostSources() external;
+```
 
 ### setLotteryConfig
 
@@ -1374,6 +1596,66 @@ event InvalidPayloadReceived(uint32 indexed srcEid, uint256 payloadLength);
 event StaleVRFResultDiscarded(uint256 indexed requestId, uint256 requestTimestamp, uint256 gracePeriod);
 ```
 
+### AuthorizedAmoeRelayerUpdated
+
+```solidity
+event AuthorizedAmoeRelayerUpdated(address indexed previousRelayer, address indexed newRelayer);
+```
+
+### BaseCeilingPPMUpdated
+
+```solidity
+event BaseCeilingPPMUpdated(uint256 previousCeilingPPM, uint256 newCeilingPPM);
+```
+
+### BoostManagerProposed
+
+```solidity
+event BoostManagerProposed(address indexed previous, address indexed proposed, uint256 effectiveAt);
+```
+
+### BoostManagerProposalCancelled
+
+```solidity
+event BoostManagerProposalCancelled(address indexed cancelled);
+```
+
+### BoostManagerUpdated
+
+```solidity
+event BoostManagerUpdated(address indexed previous, address indexed newManager);
+```
+
+### VaultGaugeVotingProposed
+
+```solidity
+event VaultGaugeVotingProposed(address indexed previous, address indexed proposed, uint256 effectiveAt);
+```
+
+### VaultGaugeVotingProposalCancelled
+
+```solidity
+event VaultGaugeVotingProposalCancelled(address indexed cancelled);
+```
+
+### VaultGaugeVotingUpdated
+
+```solidity
+event VaultGaugeVotingUpdated(address indexed previous, address indexed newGauge);
+```
+
+### BoostSourceTimelockArmed
+
+```solidity
+event BoostSourceTimelockArmed();
+```
+
+### BoostSourcesDisabled
+
+```solidity
+event BoostSourcesDisabled(address indexed previousBoostManager, address indexed previousVaultGaugeVoting);
+```
+
 ### JackpotPayoutCapped
 Emitted when the per-call iteration cap truncated the payout.
 Off-chain monitors can use this to reconcile that the remaining coins
@@ -1432,6 +1714,36 @@ error NoPendingVrfResult(uint256 requestId);
 error ETHRefundFailed();
 ```
 
+### TimelockNotArmed
+
+```solidity
+error TimelockNotArmed();
+```
+
+### TimelockAlreadyArmed
+
+```solidity
+error TimelockAlreadyArmed();
+```
+
+### TimelockNotExpired
+
+```solidity
+error TimelockNotExpired();
+```
+
+### NoPendingProposal
+
+```solidity
+error NoPendingProposal();
+```
+
+### LegacySetterDisabled
+
+```solidity
+error LegacySetterDisabled();
+```
+
 ## Structs
 ### LotteryConfig
 Lottery configuration (shared across all creators)
@@ -1444,7 +1756,19 @@ struct LotteryConfig {
     bool isActive;
     uint256 baseWinChance; // PPM (parts per million)
     uint256 maxWinChance; // PPM
-    uint256 usdMultiplierBps; // Bonus for slippage (10500 = 1.05x)
+    // Tunable lottery-odds boost knob applied inside `_calculateTokenUSD`
+    // to every paid-path token→USD conversion (swap input + balance read).
+    // Bounds [10_000, 15_000]: 10_000 = neutral (1.00x, no effect),
+    // > 10_000 inflates lottery PPM as a marketing/engagement boost.
+    // Production must set this to 10_000 at deploy via setLotteryConfig.
+    // Historically labeled "slippage bonus" but it does not function as one:
+    // applies uniformly to balance reads, only scales upward, and
+    // directly inflates `winChancePPM = swapValueUSD / 250_000` rather
+    // than truing-up an executed value. AMOE bypasses this multiplier
+    // entirely because `pointsBurnedAsUSD` is already an end-value USD
+    // figure (no token→USD conversion). At the production setting of
+    // 10_000, AMOE and paid paths produce identical PPM at equal notional.
+    uint256 usdMultiplierBps;
 }
 ```
 

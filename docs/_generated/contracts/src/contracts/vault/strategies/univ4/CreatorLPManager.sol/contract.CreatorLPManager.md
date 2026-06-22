@@ -50,7 +50,7 @@ REBALANCE GUARDS (from Charm):
 - Boundary: Price can't be too close to MIN/MAX tick
 
 
-## State Variables
+## Constants
 ### MIN_TICK
 
 ```solidity
@@ -90,6 +90,16 @@ IERC20 public immutable PAIRED_TOKEN
 ```
 
 
+### hookRegistry
+Governance-managed hook allowlist for V4 pool configuration.
+
+
+```solidity
+IApprovedV4HooksRegistry public immutable hookRegistry
+```
+
+
+## State Variables
 ### poolManager
 Uniswap V4 PoolManager (holds all pools)
 
@@ -141,15 +151,6 @@ Permit2 contract used by PosM for token pulls into PoolManager
 
 ```solidity
 address public permit2
-```
-
-
-### hookRegistry
-Governance-managed hook allowlist for V4 pool configuration.
-
-
-```solidity
-IApprovedV4HooksRegistry public immutable hookRegistry
 ```
 
 

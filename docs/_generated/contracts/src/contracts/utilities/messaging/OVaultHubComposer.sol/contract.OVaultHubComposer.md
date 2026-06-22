@@ -15,7 +15,7 @@ balance-delta invariants so a compose packet can never spend or mint more than
 the packet-provided OFT amount.
 
 
-## State Variables
+## Constants
 ### ACTION_DEPOSIT
 
 ```solidity
@@ -44,6 +44,7 @@ address public immutable endpoint
 ```
 
 
+## State Variables
 ### creatorMeshes
 
 ```solidity

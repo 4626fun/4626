@@ -7,7 +7,7 @@ AjnaVaultLibrary
 Math and validation helpers for the inner Ajna ERC-4626 vault.
 
 
-## State Variables
+## Constants
 ### MAX_AJNA_BUCKET_INDEX
 
 ```solidity

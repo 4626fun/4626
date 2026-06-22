@@ -5,7 +5,7 @@
 Ownable, ReentrancyGuard
 
 
-## State Variables
+## Constants
 ### BASIS_POINTS
 
 ```solidity
@@ -27,6 +27,33 @@ int24 public constant MAX_TICK = 887272
 ```
 
 
+### REBALANCE_BURN_SLIPPAGE_BPS
+Slippage tolerance (in bps) for BURN_POSITION min-out amounts during rebalance.
+FIX: S-H05 — BURN_POSITION previously passed zero as both min amounts. To defend
+against sandwich attacks in the same block a rebalance lands (TWAP oracles use
+historical data and cannot react within a single tx), the min amounts are now
+derived from the TWAP-implied sqrtPriceX96 with a 1% floor.
+
+
+```solidity
+uint256 public constant REBALANCE_BURN_SLIPPAGE_BPS = 100
+```
+
+
+### WITHDRAW_BURN_SLIPPAGE_BPS
+Tighter slippage tolerance (in bps) for BURN_POSITION during full withdraws.
+
+`withdrawAll` is a higher-trust path (onlyLPManager) but still benefits from a
+non-zero min amount so LP manager bugs / compromised keepers cannot silently
+burn against a manipulated pool. Kept at 2% to avoid unnecessary reverts when
+the pool genuinely diverges from TWAP within a block.
+
+
+```solidity
+uint256 public constant WITHDRAW_BURN_SLIPPAGE_BPS = 200
+```
+
+
 ### CREATOR_COIN
 Creator Coin token
 
@@ -45,6 +72,16 @@ IERC20 public immutable PAIRED_TOKEN
 ```
 
 
+### hookRegistry
+Governance-managed hook allowlist for V4 pool configuration.
+
+
+```solidity
+IApprovedV4HooksRegistry public immutable hookRegistry
+```
+
+
+## State Variables
 ### lpManager
 LP Manager that controls this strategy
 
@@ -105,15 +142,6 @@ Permit2 contract used by PosM for token pulls into PoolManager
 
 ```solidity
 address public permit2
-```
-
-
-### hookRegistry
-Governance-managed hook allowlist for V4 pool configuration.
-
-
-```solidity
-IApprovedV4HooksRegistry public immutable hookRegistry
 ```
 
 
@@ -499,13 +527,47 @@ function _posmDecrease(uint256 tokenId, uint128 liquidityToRemove) internal;
 
 ### _posmBurn
 
-FIX: S-H05 — BURN_POSITION min amounts are zero because V4 burn always
-returns the full position value at current pool price. Manipulation is
-guarded by the TWAP deviation check in checkCanRebalance() (now 900s window).
+FIX: S-H05 — Dual defense against pool manipulation during burns:
+(1) `checkCanRebalance()` rejects rebalances when spot deviates from the
+900s TWAP by more than `maxTwapDeviation` (prevents multi-block
+manipulation and stale-price exits).
+(2) `amount0Min` / `amount1Min` are derived from the TWAP-implied
+sqrtPriceX96 with a per-path slippage floor (see
+REBALANCE_BURN_SLIPPAGE_BPS / WITHDRAW_BURN_SLIPPAGE_BPS). This makes
+same-block sandwiching strictly unprofitable because the burn reverts
+if the PoolManager would return less than the TWAP-implied amounts
+net of slippage.
 
 
 ```solidity
-function _posmBurn(uint256 tokenId) internal;
+function _posmBurn(uint256 tokenId, uint128 amount0Min, uint128 amount1Min) internal;
+```
+
+### _computeBurnMinAmounts
+
+FIX: S-H05 — Compute BURN_POSITION min-out amounts from the TWAP-implied
+sqrtPriceX96 with a bps slippage floor.
+Returns (0, 0) when:
+- `liquidity == 0` (nothing to burn) — callers still pay for position tracking state.
+- `maxTwapDeviation == 0` (TWAP checks explicitly disabled by governance). In this
+regime the operator has opted out of manipulation protection wholesale and a
+zero min-out preserves pre-fix withdraw behaviour.
+Reverts with `TwapOracleNotSet()` when:
+- `maxTwapDeviation > 0` (TWAP protection is on) but `twapOracle` is unset.
+This mirrors `getTwap()`'s presence check and surfaces the mis-configuration
+as a clear, named revert on the `withdrawAll` / `rebalance` paths rather than
+letting the raw low-level call to a zero address bubble up. Using a zero min-out
+fallback here is deliberately avoided because that would silently disable the
+S-H05 slippage floor precisely when the operator believes it is on.
+Otherwise, computes the expected amounts from the TWAP tick and shaves
+`slippageBps` basis points.
+
+
+```solidity
+function _computeBurnMinAmounts(int24 tickLower, int24 tickUpper, uint128 liquidity, uint256 slippageBps)
+    internal
+    view
+    returns (uint128 amount0Min, uint128 amount1Min);
 ```
 
 ### _calculateLiquidity

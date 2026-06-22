@@ -5,7 +5,7 @@
 Ownable, ReentrancyGuard
 
 
-## State Variables
+## Constants
 ### BOOST_PRECISION
 
 ```solidity
@@ -34,6 +34,14 @@ Ive4626 public immutable ve4626
 ```
 
 
+### BOOST_TIMELOCK_DURATION
+
+```solidity
+uint256 public constant BOOST_TIMELOCK_DURATION = 48 hours
+```
+
+
+## State Variables
 ### baseBoost
 
 ```solidity
@@ -59,13 +67,6 @@ uint256 public minVotingPower = 0.1 ether
 
 ```solidity
 bool public boostParametersLocked
-```
-
-
-### BOOST_TIMELOCK_DURATION
-
-```solidity
-uint256 public constant BOOST_TIMELOCK_DURATION = 48 hours
 ```
 
 

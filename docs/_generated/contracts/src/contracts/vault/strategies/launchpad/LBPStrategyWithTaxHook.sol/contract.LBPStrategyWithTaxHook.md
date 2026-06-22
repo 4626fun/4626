@@ -13,7 +13,7 @@ with an external hook address (e.g. the existing Base tax hook).
 Hooks are immutable per pool key. To use a non-strategy hook, the pool must be initialized with it.
 
 
-## State Variables
+## Constants
 ### token
 The token that is being distributed
 
@@ -158,6 +158,7 @@ address public immutable taxHook
 ```
 
 
+## State Variables
 ### auction
 The auction that will be used to create the auction
 

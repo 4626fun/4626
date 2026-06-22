@@ -12,7 +12,7 @@ IStrategy + IStrategyValuation for Solana exposure under CreatorOVault accountin
 Combines Base liquid balance with keeper-reported remote NAV; enforces freshness and delta guardrails.
 
 
-## State Variables
+## Constants
 ### vault
 
 ```solidity
@@ -27,6 +27,14 @@ IERC20 public immutable CREATOR
 ```
 
 
+### NAV_WINDOW_DURATION
+
+```solidity
+uint64 public constant NAV_WINDOW_DURATION = 1 hours
+```
+
+
+## State Variables
 ### remoteNav
 
 ```solidity
@@ -83,13 +91,6 @@ uint256 public totalReconciledFromSolana
 ```
 
 
-### NAV_WINDOW_DURATION
-
-```solidity
-uint64 public constant NAV_WINDOW_DURATION = 1 hours
-```
-
-
 ### navWindowAnchor
 
 ```solidity
@@ -122,6 +123,13 @@ bool private _emergencyPaused
 
 ```solidity
 mapping(address => bool) public keepers
+```
+
+
+### usedReportIds
+
+```solidity
+mapping(bytes32 => bool) public usedReportIds
 ```
 
 
@@ -362,6 +370,12 @@ event RemoteNavEnabledSet(bool enabled);
 event EmergencyPausedSet(bool paused);
 ```
 
+### ReportIdConsumed
+
+```solidity
+event ReportIdConsumed(bytes32 indexed reportId, bytes32 indexed context);
+```
+
 ## Errors
 ### OnlyVault
 
@@ -421,5 +435,17 @@ error InvalidBridgeAddress();
 
 ```solidity
 error InsufficientBaseLiquidity();
+```
+
+### InvalidReportId
+
+```solidity
+error InvalidReportId();
+```
+
+### ReportIdAlreadyUsed
+
+```solidity
+error ReportIdAlreadyUsed();
 ```
 

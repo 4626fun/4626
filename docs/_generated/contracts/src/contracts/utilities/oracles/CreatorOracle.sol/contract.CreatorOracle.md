@@ -38,7 +38,7 @@ USE CASES:
 - Cross-chain: Consistent pricing everywhere
 
 
-## State Variables
+## Constants
 ### BASE_CHAIN_ID
 Base chain ID (source of truth)
 
@@ -117,6 +117,21 @@ uint16 public constant MAX_CARDINALITY = 1024
 ```
 
 
+### PPM
+
+```solidity
+uint32 private constant PPM = 1_000_000
+```
+
+
+### ONE_DAY_PPM
+
+```solidity
+uint64 private constant ONE_DAY_PPM = 86_400 * 1_000_000
+```
+
+
+## State Variables
 ### creatorPriceUSD
 Creator token USD price (broadcast from Base)
 
@@ -329,20 +344,6 @@ Use truncated (manipulation-resistant) tick
 
 ```solidity
 bool public useTruncatedTick = true
-```
-
-
-### PPM
-
-```solidity
-uint32 private constant PPM = 1_000_000
-```
-
-
-### ONE_DAY_PPM
-
-```solidity
-uint64 private constant ONE_DAY_PPM = 86_400 * 1_000_000
 ```
 
 
@@ -810,22 +811,33 @@ function updateCreatorPriceFromV3TWAP(uint32 twapDuration) external;
 
 ### broadcastCreatorPrice
 
-Broadcast price to other chains
+DEPRECATED — see `broadcastCreatorPriceWithFees`.
+
+FIX: M-3 (4626-439) — the equal-split variant divided `msg.value / dstEids.length`
+and used that as the fee for every destination. LayerZero fees differ per
+destination chain, so any chain whose real fee exceeded the split amount
+reverted mid-loop and the broadcast partially failed, while leaving excess
+ETH stranded on non-refund paths. Rather than carry a footgun with an
+attractive short signature, this entrypoint is now a hard revert that emits
+a migration-signal event against off-chain call simulation. Callers must
+switch to `broadcastCreatorPriceWithFees(dstEids, options, fees)` and quote
+per-destination native fees via `quote()` / `endpoint.quote(...)`.
+
+**Note:**
+deprecated: Use `broadcastCreatorPriceWithFees` with per-chain fees.
 
 
 ```solidity
-function broadcastCreatorPrice(uint32[] calldata dstEids, bytes calldata options)
+function broadcastCreatorPrice(
+    uint32[] calldata dstEids,
+    bytes calldata /* options */
+)
     external
     payable
-    returns (MessagingReceipt[] memory receipts);
+    returns (
+        MessagingReceipt[] memory /* receipts */
+    );
 ```
-**Parameters**
-
-|Name|Type|Description|
-|----|----|-----------|
-|`dstEids`|`uint32[]`|Destination chain EIDs|
-|`options`|`bytes`|LayerZero options|
-
 
 ### broadcastCreatorPriceWithFees
 
@@ -976,6 +988,12 @@ event TickWasCapped(int24 rawTick, int24 truncatedTick, int24 movement);
 event ChainlinkFeedSet(address indexed feed);
 ```
 
+### BroadcastEqualSplitCallAttempted
+
+```solidity
+event BroadcastEqualSplitCallAttempted(address indexed caller, uint256 msgValue, uint32[] dstEids);
+```
+
 ## Errors
 ### ZeroAddress
 
@@ -1077,6 +1095,12 @@ error InvalidBaseEid();
 
 ```solidity
 error InvalidOriginEid(uint32 srcEid);
+```
+
+### BroadcastEqualSplitDeprecated
+
+```solidity
+error BroadcastEqualSplitDeprecated();
 ```
 
 ## Structs

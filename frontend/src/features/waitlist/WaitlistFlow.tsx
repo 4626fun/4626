@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import {
+  ArrowRight,
+  CheckCircle2,
+  AlertCircle,
+  Layers,
+  Shield,
+  TrendingUp,
+  Sparkles,
+} from 'lucide-react'
 import { useLogin, usePrivy } from '@privy-io/react-auth'
 
 import { Button } from '@/components/ui/Button'
@@ -125,6 +135,55 @@ async function bootstrapWaitlist(privyAccessToken: string): Promise<WaitlistBoot
     throw new Error(payload?.error || 'Could not finish waitlist signup.')
   }
   return payload.data
+}
+
+const TRUST_CHIPS = [
+  'Email-only access',
+  'Base-native',
+  'Creator vault launch',
+  'No wallet required to join',
+] as const
+
+const VALUE_PROPS = [
+  {
+    icon: Layers,
+    title: 'Creator vaults',
+    desc: 'Turn creator coins into redeemable onchain shares.',
+  },
+  {
+    icon: Shield,
+    title: 'Non-custodial',
+    desc: 'Transparent, self-sovereign ownership on Base.',
+  },
+  {
+    icon: TrendingUp,
+    title: 'Early access',
+    desc: 'Position before public vaults open to everyone.',
+  },
+  {
+    icon: Sparkles,
+    title: '4626 rollout',
+    desc: 'Be first in line for the ERC-4626 launch wave.',
+  },
+] as const
+
+const FOOTER_TRUST = 'Built on Base · Non-custodial · ERC-4626 standard' as const
+
+/* Staggered entrance — children fade in one by one after the container mounts */
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: { staggerChildren: 0.07, delayChildren: 0.15 },
+  },
+}
+const staggerItem = {
+  hidden: { opacity: 0, y: 14 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] as const },
+  },
 }
 
 export function WaitlistFlow(props: { sectionId?: string }) {
@@ -274,67 +333,257 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   const isBusy = emailBusy || signOutBusy
 
   return (
-    <section id={sectionId} className="mx-auto w-full max-w-3xl px-4 py-10 sm:py-14">
-      <div className="rounded-3xl border-0 bg-black/40 p-6 sm:p-8">
-        <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Join the waitlist</h1>
-        <p className="mt-3 text-sm leading-6 text-zinc-300">
-          Email sign-up opens automatically when this page loads.
-        </p>
-        <p className="mt-1 text-sm leading-6 text-zinc-400">
-          If the pop-up does not appear, use the button below.
-        </p>
+    <section
+      id={sectionId}
+      className="relative flex min-h-[100dvh] w-full items-center justify-center overflow-hidden"
+    >
+      {/* Ambient background — radial brand glow + faint wire grid + bottom fade */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(ellipse 70% 55% at 50% 0%, rgb(var(--brand-primary) / 0.14) 0%, transparent 65%)',
+          }}
+        />
+        <div className="absolute inset-0 bg-wire-grid opacity-[0.035]" />
+        <div
+          className="absolute inset-x-0 bottom-0 h-32"
+          style={{
+            background: 'linear-gradient(to bottom, transparent, rgb(var(--vault-bg) / 0.9))',
+          }}
+        />
+      </div>
 
-        <div className="mt-8 rounded-2xl border-0 p-4">
-          <p className="label text-zinc-400">Email signup</p>
-          <h2 className="mt-1 text-lg font-medium text-white">Sign up with email</h2>
-          <p className="mt-2 text-sm text-zinc-400">Use email OTP to create or recover your 4626 account.</p>
-          <Button
-            type="button"
-            variant="primary"
-            className="mt-4 w-full border-0"
-            onClick={() => void handleEmailSignup()}
-            disabled={isBusy || !privy.ready}
+      <div className="relative mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:py-20">
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
+          {/* ─── Left column — hero copy ─── */}
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+            className="flex flex-col justify-center"
           >
-            {emailBusy ? (
-              <span className="inline-flex items-center gap-2">
-                <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.9)" />
-                Signing up…
+            <div className="flex items-center gap-3 self-start">
+              <div className="status-active">
+                <span className="label">Creator vault launch · Base</span>
+              </div>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/[0.06] px-2.5 py-1 text-[10px] font-medium tracking-wide text-amber-300/80">
+                <Sparkles className="size-2.5" aria-hidden="true" />
+                Limited early access
               </span>
-            ) : (
-              'Sign up with email'
-            )}
-          </Button>
+            </div>
+
+            <h1 className="headline mt-6 text-4xl leading-[0.98] tracking-[-0.04em] sm:text-5xl lg:text-[3.4rem]">
+              Early access to
+              <br />
+              <span className="glow-brand">creator-owned vaults.</span>
+            </h1>
+
+            <p className="mt-5 max-w-md text-[15px] font-light leading-relaxed text-zinc-400">
+              Join the first wave of creators and holders turning creator coins into redeemable vault shares on Base. Email gets you in — no wallet needed yet.
+            </p>
+
+            {/* trust chips — staggered entrance */}
+            <motion.ul
+              variants={staggerContainer}
+              initial="hidden"
+              animate="show"
+              className="mt-7 flex flex-wrap gap-2"
+            >
+              {TRUST_CHIPS.map((chip) => (
+                <motion.li
+                  key={chip}
+                  variants={staggerItem}
+                  className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium tracking-wide text-zinc-300"
+                >
+                  {chip}
+                </motion.li>
+              ))}
+            </motion.ul>
+
+            {/* value props — staggered entrance with icons */}
+            <motion.ul
+              variants={staggerContainer}
+              initial="hidden"
+              animate="show"
+              className="mt-8 space-y-4"
+            >
+              {VALUE_PROPS.map((vp) => {
+                const Icon = vp.icon
+                return (
+                  <motion.li key={vp.title} variants={staggerItem} className="flex items-start gap-3.5">
+                    <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03]">
+                      <Icon className="size-3.5 text-[rgb(var(--brand-primary))]" aria-hidden="true" />
+                    </span>
+                    <span className="text-sm leading-relaxed text-zinc-300">
+                      <span className="font-medium text-zinc-100">{vp.title}</span>
+                      <span className="text-zinc-400"> — {vp.desc}</span>
+                    </span>
+                  </motion.li>
+                )
+              })}
+            </motion.ul>
+          </motion.div>
+
+          {/* ─── Right column — access pass card ─── */}
+          <motion.div
+            initial={{ opacity: 0, y: 22 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
+            className="flex items-center justify-center lg:justify-end"
+          >
+            <div className="glass-card relative w-full max-w-md overflow-hidden p-6 ring-1 ring-white/5 shadow-[0_30px_80px_rgba(0,0,0,0.6)] sm:p-8">
+              {/* card top accent — gradient hairline */}
+              <div
+                className="pointer-events-none absolute inset-x-0 top-0 h-px"
+                style={{
+                  background:
+                    'linear-gradient(90deg, transparent, rgb(var(--brand-primary) / 0.4), transparent)',
+                }}
+                aria-hidden="true"
+              />
+
+              {/* card accent glow */}
+              <div
+                className="pointer-events-none absolute -right-20 -top-24 h-48 w-48 rounded-full"
+                style={{
+                  background: 'radial-gradient(circle, rgb(var(--brand-primary) / 0.16) 0%, transparent 70%)',
+                }}
+                aria-hidden="true"
+              />
+
+              {/* vault preview visual — concentric rings with animated pulse */}
+              <div className="relative mb-6 flex justify-center" aria-hidden="true">
+                <div className="relative size-24">
+                  {/* outer ring */}
+                  <div className="absolute inset-0 rounded-full border border-white/10" />
+                  {/* animated pulse ring */}
+                  <motion.div
+                    className="absolute inset-0 rounded-full border border-[rgb(var(--brand-primary)/0.3)]"
+                    animate={{ scale: [1, 1.18, 1], opacity: [0.5, 0, 0.5] }}
+                    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                  />
+                  {/* mid ring */}
+                  <div className="absolute inset-[12px] rounded-full border border-[rgb(var(--brand-primary)/0.35)]" />
+                  {/* inner glow */}
+                  <div
+                    className="absolute inset-[22px] rounded-full"
+                    style={{
+                      background: 'radial-gradient(circle, rgb(var(--brand-primary) / 0.22) 0%, transparent 72%)',
+                    }}
+                  />
+                  {/* core symbol */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span
+                      className="font-mono text-lg font-light"
+                      style={{ color: 'rgb(var(--brand-primary))' }}
+                    >
+                      ■
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* card header */}
+              <div className="relative">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="label">Access pass</span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-medium text-zinc-400">
+                    <span
+                      className={`size-1.5 rounded-full ${sessionAddress ? 'bg-emerald-400' : 'bg-zinc-500'}`}
+                    />
+                    {sessionAddress ? 'Confirmed' : 'Open'}
+                  </span>
+                </div>
+
+                <h2 className="mt-4 text-lg font-medium tracking-tight text-white">
+                  {sessionAddress ? 'You are on the list' : 'Join the launch list'}
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                  {sessionAddress
+                    ? 'Your spot is reserved. Continue into the app to explore vaults.'
+                    : 'Use email OTP to create or recover your 4626 account. No wallet required to join.'}
+                </p>
+              </div>
+
+              {/* CTA */}
+              <div className="relative mt-6">
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="lg"
+                  className="w-full transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
+                  onClick={() => void handleEmailSignup()}
+                  disabled={isBusy || !privy.ready}
+                >
+                  {emailBusy ? (
+                    <span className="inline-flex items-center gap-2">
+                      <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.9)" />
+                      Securing access…
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-2">
+                      Join with email
+                      <ArrowRight className="size-4" aria-hidden="true" />
+                    </span>
+                  )}
+                </Button>
+                <p className="mt-3 text-center text-[11px] leading-relaxed text-zinc-500">
+                  {!privy.ready
+                    ? 'Preparing secure session…'
+                    : 'Email verification opens automatically. If the pop-up does not appear, use the button above.'}
+                </p>
+              </div>
+
+              {/* success — with icon */}
+              {status ? (
+                <div
+                  className="mt-5 flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3"
+                  role="status"
+                >
+                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-400" aria-hidden="true" />
+                  <p className="text-sm leading-relaxed text-emerald-200">{status}</p>
+                </div>
+              ) : null}
+              {error ? (
+                <div
+                  className="mt-5 flex items-start gap-2.5 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3"
+                  role="alert"
+                >
+                  <AlertCircle className="mt-0.5 size-4 shrink-0 text-rose-400" aria-hidden="true" />
+                  <p className="text-sm leading-relaxed text-rose-200">{error}</p>
+                </div>
+              ) : null}
+
+              {/* session actions */}
+              {sessionAddress ? (
+                <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-white/5 pt-6">
+                  <Link
+                    to="/swap"
+                    className="inline-flex h-10 items-center gap-2 rounded-xl bg-[rgb(var(--brand-primary))] px-4 text-sm font-medium text-white transition hover:bg-[rgb(var(--brand-hover))]"
+                  >
+                    Enter app
+                    <ArrowRight className="size-4" aria-hidden="true" />
+                  </Link>
+                  <button
+                    type="button"
+                    className="text-sm text-red-300/90 transition hover:text-red-200"
+                    onClick={() => void handleSignOut()}
+                    disabled={isBusy}
+                  >
+                    Sign out
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </motion.div>
         </div>
 
-        {status ? (
-          <p className="mt-5 rounded-xl border-0 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200" role="status">
-            {status}
-          </p>
-        ) : null}
-        {error ? (
-          <p className="mt-5 rounded-xl border-0 bg-rose-500/10 px-4 py-3 text-sm text-rose-200" role="alert">
-            {error}
-          </p>
-        ) : null}
-
-        {sessionAddress ? (
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            <Link
-              to="/swap"
-              className="inline-flex h-10 items-center rounded-lg bg-[rgb(var(--brand-primary))] px-4 text-sm font-medium text-white transition hover:bg-[rgb(var(--brand-hover))]"
-            >
-              Enter app
-            </Link>
-            <button
-              type="button"
-              className="text-sm text-red-300/90 transition hover:text-red-200"
-              onClick={() => void handleSignOut()}
-              disabled={isBusy}
-            >
-              Sign out
-            </button>
-          </div>
-        ) : null}
+        {/* footer trust line */}
+        <p className="mt-12 text-center text-[11px] font-light tracking-wide text-zinc-600">
+          {FOOTER_TRUST}
+        </p>
       </div>
     </section>
   )

@@ -80,6 +80,6 @@
     "src/**/*.test.ts",
     // These tests pull in app-layer code outside the restricted server/node typecheck surface
     "server/_lib/wallet/cswOwnerSignature.test.ts",
-    "server/_lib/wallet/zoraWalletHoldings.test.ts",
+    "server/_lib/wallet/zoraWalletHoldings.test.ts"
   ]
 }

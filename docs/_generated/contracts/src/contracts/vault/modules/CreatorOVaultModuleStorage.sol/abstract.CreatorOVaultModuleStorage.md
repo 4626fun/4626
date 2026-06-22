@@ -6,7 +6,7 @@ Storage layout shared by CreatorOVault delegatecall modules.
 MUST match CreatorOVault's storage layout exactly (including OZ bases).
 FIX: I-02 — Layout integrity is verified at deploy time via `setModulesOnce()` which checks
 `moduleStorageVersion()`. Upgrades MUST bump MODULE_STORAGE_VERSION if layout changes.
-Consider adopting ERC-7201 namespaced storage for structural collision immunity.
+Storage-hardening roadmap: `docs/research/ovault-storage-namespacing-rfc.md`.
 
 
 ## State Variables
@@ -451,7 +451,211 @@ address internal _adminModule
 ```
 
 
+### strategyMaxAssets
+
+```solidity
+mapping(address => uint256) internal strategyMaxAssets
+```
+
+
+### managementFee
+
+```solidity
+uint16 internal managementFee
+```
+
+
+### managementFeeRecipient
+
+```solidity
+address internal managementFeeRecipient
+```
+
+
+### riskConfigDelay
+Delay before scheduled risk changes execute. 0 = instant (legacy behavior).
+
+
+```solidity
+uint64 internal riskConfigDelay
+```
+
+
+### pendingRiskKind
+Single-flight pending risk update (Morpho-style governance latency).
+
+
+```solidity
+uint8 internal pendingRiskKind
+```
+
+
+### pendingRiskTarget
+
+```solidity
+address internal pendingRiskTarget
+```
+
+
+### pendingRiskValue
+
+```solidity
+uint256 internal pendingRiskValue
+```
+
+
+### pendingRiskUnlockTime
+
+```solidity
+uint64 internal pendingRiskUnlockTime
+```
+
+
+### valuationMissThreshold
+Consecutive unhealthy valuation reports before auto-disable. 0 = disabled.
+
+
+```solidity
+uint8 internal valuationMissThreshold
+```
+
+
+### strategyValuationMisses
+
+```solidity
+mapping(address => uint8) internal strategyValuationMisses
+```
+
+
+### sharePermitNonces
+
+```solidity
+mapping(address => uint256) internal sharePermitNonces
+```
+
+
+### vaultMode
+
+```solidity
+VaultMode internal vaultMode
+```
+
+
+### activeImpairmentEpoch
+
+```solidity
+uint256 internal activeImpairmentEpoch
+```
+
+
+### nextImpairmentEpochId
+
+```solidity
+uint256 internal nextImpairmentEpochId
+```
+
+
+### impairmentChallengeWindow
+
+```solidity
+uint64 internal impairmentChallengeWindow
+```
+
+
+### impairmentEpochs
+
+```solidity
+mapping(uint256 => ImpairmentEpoch) internal impairmentEpochs
+```
+
+
+### strategyImpaired
+
+```solidity
+mapping(address => bool) internal strategyImpaired
+```
+
+
+### impairmentAmountClaimed
+
+```solidity
+mapping(uint256 => mapping(address => uint256)) internal impairmentAmountClaimed
+```
+
+
+### impairmentClaimMinted
+
+```solidity
+mapping(uint256 => mapping(address => bool)) internal impairmentClaimMinted
+```
+
+
+### impairmentRootUnlockTime
+
+```solidity
+mapping(uint256 => uint64) internal impairmentRootUnlockTime
+```
+
+
+### impairmentRootChallenged
+
+```solidity
+mapping(uint256 => bool) internal impairmentRootChallenged
+```
+
+
+### impairmentGuardian
+
+```solidity
+address internal impairmentGuardian
+```
+
+
+### impairmentClaims
+
+```solidity
+address internal impairmentClaims
+```
+
+
+### impairmentRecoveryEscrow
+
+```solidity
+address internal impairmentRecoveryEscrow
+```
+
+
+### ccaLaunchStrategy
+Optional CCA launch strategy used to enforce auction-time deposit pauses.
+
+
+```solidity
+address internal ccaLaunchStrategy
+```
+
+
 ## Structs
+### ImpairmentEpoch
+
+```solidity
+struct ImpairmentEpoch {
+    ImpairmentEpochStatus status;
+    address strategy;
+    address recoveryAsset;
+    uint256 reasonCode;
+    uint256 tripBlock;
+    uint64 trippedAt;
+    uint64 finalizedAt;
+    uint64 resolvedAt;
+    uint256 totalSharesAtTrip;
+    uint256 totalClaimSupply;
+    uint256 excludedBookValue;
+    bytes32 snapshotRoot;
+    uint256 totalRecovered;
+    uint256 totalClaimed;
+}
+```
+
 ### QueuedWithdrawal
 
 ```solidity
@@ -459,6 +663,27 @@ struct QueuedWithdrawal {
     uint256 shares;
     uint256 unlockBlock;
     address receiver;
+}
+```
+
+## Enums
+### VaultMode
+
+```solidity
+enum VaultMode {
+    Normal,
+    Suspect
+}
+```
+
+### ImpairmentEpochStatus
+
+```solidity
+enum ImpairmentEpochStatus {
+    None,
+    Tripped,
+    Finalized,
+    Resolved
 }
 ```
 

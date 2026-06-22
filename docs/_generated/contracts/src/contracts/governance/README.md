@@ -16,6 +16,7 @@
 - [ICreatorRegistry](VaultGaugeVoting.sol/interface.ICreatorRegistry.md)
 - [IVaultGaugeVoting](VaultGaugeVoting.sol/interface.IVaultGaugeVoting.md)
 - [VaultGaugeVoting](VaultGaugeVoting.sol/contract.VaultGaugeVoting.md)
+- [VaultRolePolicyManager](VaultRolePolicyManager.sol/contract.VaultRolePolicyManager.md)
 - [IVaultGaugeVotingForRewards](VoterRewardsDistributor.sol/interface.IVaultGaugeVotingForRewards.md)
 - [ICreatorRegistryForVoterRewards](VoterRewardsDistributor.sol/interface.ICreatorRegistryForVoterRewards.md)
 - [VoterRewardsDistributor](VoterRewardsDistributor.sol/contract.VoterRewardsDistributor.md)

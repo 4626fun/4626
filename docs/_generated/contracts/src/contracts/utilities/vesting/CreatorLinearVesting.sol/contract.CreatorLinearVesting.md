@@ -9,7 +9,7 @@ Minimal linear vesting wallet for the creator’s ShareOFT allocation.
 Intentionally small/simple (no cliff, no revocation) to minimize deployment gas.
 
 
-## State Variables
+## Constants
 ### token
 
 ```solidity
@@ -38,6 +38,7 @@ uint64 public immutable durationSeconds
 ```
 
 
+## State Variables
 ### released
 
 ```solidity

@@ -9,7 +9,7 @@ Strategy management + strategy interaction logic for CreatorOVault.
 Must be invoked via delegatecall from CreatorOVault.
 
 
-## State Variables
+## Constants
 ### MODULE_KIND
 
 ```solidity
@@ -20,7 +20,7 @@ bytes32 internal constant MODULE_KIND = keccak256("CreatorOVaultModule.strategie
 ### MODULE_STORAGE_VERSION
 
 ```solidity
-bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.current")
+bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v3")
 ```
 
 
@@ -74,6 +74,15 @@ function addStrategy(address strategy, uint256 weight) external onlyDelegateCall
 function addStrategy(address strategy, uint256 weight, bool addToQueue) public onlyDelegateCall;
 ```
 
+### migrateStrategy
+
+
+```solidity
+function migrateStrategy(address oldStrategy, address newStrategy, uint256 weight, bool addToQueue)
+    external
+    onlyDelegateCall;
+```
+
 ### removeStrategy
 
 
@@ -81,11 +90,55 @@ function addStrategy(address strategy, uint256 weight, bool addToQueue) public o
 function removeStrategy(address strategy) external onlyDelegateCall;
 ```
 
+### _addStrategy
+
+
+```solidity
+function _addStrategy(address strategy, uint256 weight, bool addToQueue) internal;
+```
+
+### _removeStrategy
+
+
+```solidity
+function _removeStrategy(address strategy) internal;
+```
+
 ### forceRemoveStrategy
 
 
 ```solidity
 function forceRemoveStrategy(address strategy) external onlyDelegateCall;
+```
+
+### reinstateImpairedStrategy
+
+
+```solidity
+function reinstateImpairedStrategy(address strategy, uint256 epochId) external onlyDelegateCall;
+```
+
+### __ejectDisabledStrategy
+
+Best-effort unwind + list/queue removal for valuation-disabled strategies (core module only).
+
+
+```solidity
+function __ejectDisabledStrategy(address strategy) external onlyDelegateCall;
+```
+
+### _ejectStrategyFromList
+
+
+```solidity
+function _ejectStrategyFromList(address strategy) internal;
+```
+
+### _isStrategyListed
+
+
+```solidity
+function _isStrategyListed(address strategy) internal view returns (bool);
 ```
 
 ### updateStrategyWeight
@@ -118,6 +171,28 @@ function _depositIntoStrategyMeasured(address strategy, uint256 amount) internal
 
 ```solidity
 function _withdrawFromStrategyMeasured(address strategy, uint256 amount) internal returns (uint256 withdrawn);
+```
+
+### _tryWithdrawFromStrategyMeasured
+
+FIX: M-09 — best-effort withdraw used on the user-facing withdrawal hot path.
+A hostile or temporarily-illiquid strategy must not be able to freeze vault
+withdrawals. On revert or measured/reported mismatch we emit
+`StrategyWithdrawFailed` and fall through with 0/received — the caller
+(`_withdrawFromStrategies`) continues to the next strategy in the queue, and
+the vault's core module still reverts with `InsufficientBalance` if the
+aggregate shortfall can't be met. Strict accounting remains on
+`_withdrawFromStrategyMeasured` for admin flows (`removeStrategy`).
+FIX: M-09 Codex review (PR #357) — negative balance deltas (strategy
+DECREASED the vault's balance, e.g. via leftover allowance) must be
+treated as a failed leg instead of subtracted blindly. Prior version
+underflowed on `afterBalRevert - beforeBal` and re-bricked the user's
+withdraw, defeating the entire M-09 best-effort fix. Both the revert
+path and the success-with-lying-report path now guard this.
+
+
+```solidity
+function _tryWithdrawFromStrategyMeasured(address strategy, uint256 amount) internal returns (uint256 withdrawn);
 ```
 
 ### _getStrategyAssetsSafe
@@ -186,6 +261,39 @@ function deployToStrategies() external onlyDelegateCall;
 function forceDeployToStrategies() external onlyDelegateCall;
 ```
 
+### rebalanceStrategies
+
+Pull overweight strategy TVL back to idle, then redeploy by weight.
+
+Cross-strategy moves always route vault idle — strategies never transfer directly.
+
+
+```solidity
+function rebalanceStrategies(uint256 minDeviationBps) external onlyDelegateCall;
+```
+**Parameters**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`minDeviationBps`|`uint256`|Minimum overweight drift (bps of target) before withdrawing excess.|
+
+
+### _deployUnderweightStrategies
+
+
+```solidity
+function _deployUnderweightStrategies(uint256 deployableBase, uint256 minIdle)
+    internal
+    returns (uint256 totalDeposited);
+```
+
+### _sumActiveStrategyAssets
+
+
+```solidity
+function _sumActiveStrategyAssets(uint256 idleBalance) internal view returns (uint256 total);
+```
+
 ### _deployToStrategies
 
 
@@ -251,6 +359,13 @@ function assessUnrealisedLosses(address strategy, uint256 assetsNeeded)
 
 ```solidity
 function _removeFromQueue(address strategy) internal;
+```
+
+### _findLatestEpochForStrategy
+
+
+```solidity
+function _findLatestEpochForStrategy(address strategy) internal view returns (uint256 epochId);
 ```
 
 ## Events
@@ -338,6 +453,18 @@ event UnrealisedLossAssessed(address indexed strategy, uint256 lossAmount);
 event AutoAllocated(address indexed strategy, uint256 amount);
 ```
 
+### StrategiesRebalanced
+
+```solidity
+event StrategiesRebalanced(uint256 totalWithdrawn, uint256 totalRedeployed);
+```
+
+### ImpairedStrategyReinstated
+
+```solidity
+event ImpairedStrategyReinstated(address indexed strategy, uint256 indexed epochId);
+```
+
 ## Errors
 ### ZeroAddress
 
@@ -391,6 +518,12 @@ error NoStrategies();
 
 ```solidity
 error NothingToBuy();
+```
+
+### VaultNotNormal
+
+```solidity
+error VaultNotNormal();
 ```
 
 ### TransferAmountMismatch

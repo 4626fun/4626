@@ -14,7 +14,7 @@ NOTE: This pattern stores data in the deployed contract's runtime bytecode and
 is therefore limited by EIP-170 (max contract code size ~24KB).
 
 
-## State Variables
+## Constants
 ### DATA_OFFSET
 
 ```solidity

@@ -2,7 +2,7 @@
 [Git Source](https://github.com/wenakita/4626/blob/main/contracts/helpers/batchers/DeploymentBatcher.sol)
 
 
-## State Variables
+## Constants
 ### create2Deployer
 
 ```solidity
@@ -36,7 +36,7 @@ address public immutable batcher
 
 
 ```solidity
-constructor(address _create2Deployer, address _poolManager, address _permit2) ;
+constructor(address _create2Deployer, address _poolManager, address _permit2, address _batcher) ;
 ```
 
 ### deployUniV4Strategies
@@ -62,6 +62,18 @@ function _saltFor(bytes32 baseSalt, string memory label) internal pure returns (
 
 ```solidity
 error NotBatcher();
+```
+
+### NotOwner
+
+```solidity
+error NotOwner();
+```
+
+### InvalidCodeId
+
+```solidity
+error InvalidCodeId();
 ```
 
 ### ZeroAddress

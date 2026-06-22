@@ -93,7 +93,7 @@ pnpm exec tsx runner.ts charm-rebalance-manager --dry-run
 | **Protocol automation** (`PROTOCOL_AUTOMATION_SAFE`) | Hot Safe | Charm vault **`manager`**; Ajna **`admin`** (`setMinBucketIndex`) |
 | **Automation EOA** (`4626_KEEPER_AUTOMATION_*`) | Hot signer | Safe owner; Ajna auth **`keeper`** (`moveFromBuffer` / buffer moves) |
 
-Deploy a fresh **DeploymentBatcher** with `PROTOCOL_AUTOMATION` set before redeploying vaults. Creators do **not** operate Ajna on new vaults — protocol automation owns rebucket + buffer moves. Grandfathered vaults with CSW or treasury as Ajna admin keep legacy exec paths until redeployed.
+Deploy a fresh **DeploymentBatcher** with `PROTOCOL_AUTOMATION` set before redeploying vaults. Creators do **not** operate Ajna on new vaults — protocol automation owns rebucket + buffer moves. Grandfathered vaults with CSW or treasury as Ajna admin keep existing exec paths until redeployed.
 
 Railway deploys the XMTP Eliza agent only (`railway.toml`); it does not run Charm listeners or the action queue. See `docs/operations/automation/keeper-job-coordination.md` for env details.
 
@@ -150,7 +150,7 @@ Optional hook lane: `POST /setup-creator` on provisioner for CreatorConfig PDA (
 On Vercel, append `rebalance` to `KEEPER_SOLANA_RECONCILE_ACTIONS` and set on Vultr/local:
 
 - `KPR_SOLANA_REBALANCE_EXECUTE=1`
-- `KPR_SOLANA_REBALANCE_CREATORS_JSON` with AKITA creator + legacy adapter `0x2414…` + destination pubkey
+- `KPR_SOLANA_REBALANCE_CREATORS_JSON` with AKITA creator + current adapter `0x2414…` + destination pubkey
 
 ## Quick status (2026-05-25)
 
@@ -158,7 +158,7 @@ On Vercel, append `rebalance` to `KEEPER_SOLANA_RECONCILE_ACTIONS` and set on Vu
 |-------|--------|
 | Vultr orchestrator `/healthz` | ✅ 200 |
 | AKITA on canonical Solana adapter | ❌ not registered |
-| ShareOFT on adapter | ❌ neither legacy nor live share registered |
+| ShareOFT on adapter | ❌ neither current nor target share registered |
 | Local `KPR_API_KEY` vs Vercel | sync via `./scripts/ops/sync-kpr-env-from-vercel.sh` |
 | Keeper code on `main` | ✅ shipped |
 | `KEEPER_AJNA_MANAGER_*` on Vercel | ✅ enabled |

@@ -5,7 +5,7 @@
 [IAjnaERC4626StrategyFactory](/contracts/helpers/batchers/StrategyDeploymentFactories.sol/interface.IAjnaERC4626StrategyFactory.md)
 
 
-## State Variables
+## Constants
 ### authDeployer
 
 ```solidity

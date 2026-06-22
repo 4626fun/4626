@@ -402,7 +402,7 @@ async function checkStrategyEntitlements(): Promise<Check[]> {
     ok: hasStrategy,
     detail: hasStrategy
       ? `active/pending: ${[...active].join(', ') || '(none)'}`
-      : 'Need vault_full_deploy OR legacy (charm_active_lp + ajna_sleeve) before deploy',
+      : 'Need vault_full_deploy OR equivalent (charm_active_lp + ajna_sleeve) before deploy',
   })
   checks.push({
     section: 'creator',
@@ -429,7 +429,7 @@ async function main(): Promise<void> {
 
   process.stdout.write('\n=== AKITA full-stack pre-launch readiness ===\n\n')
   process.stdout.write(`Creator coin (unchanged): ${AKITA_CREATOR}\n`)
-  process.stdout.write(`Legacy stack (replace on redeploy): vault ${AKITA_DEFAULTS.vault} / share ${AKITA_DEFAULTS.shareOFT}\n`)
+  process.stdout.write(`Current stack snapshot: vault ${AKITA_DEFAULTS.vault} / share ${AKITA_DEFAULTS.shareOFT}\n`)
   process.stdout.write(`Pipe A batcher: ${BATCHER}\n`)
 
   const platform: Check[] = []
@@ -486,11 +486,11 @@ async function main(): Promise<void> {
   const preflight = run('pnpm', ['-C', 'kpr', 'preflight-orchestrator'])
   deferred.push({
     section: 'deferred',
-    id: 'kpr_preflight_legacy_adapter',
+    id: 'kpr_preflight_share_mesh_deferral',
     ok: true,
     detail: preflight.ok
-      ? 'preflight clean (unexpected for legacy wsAKITA — verify env)'
-      : 'EXPECTED deferral: legacy wsAKITA not on SolanaBridgeAdapter; Pipe A mesh does not need adapter registration pre-deploy',
+      ? 'preflight clean (adapter mapping already aligned)'
+      : 'EXPECTED deferral: current ShareOFT mapping is not on SolanaBridgeAdapter; Pipe A share mesh does not need adapter registration pre-deploy',
   })
 
   printSection('Deferred until after redeploy (informational)', deferred)
@@ -501,13 +501,13 @@ async function main(): Promise<void> {
   process.stdout.write('\n--- Your checklist (before you launch deploy) ---\n')
   process.stdout.write('  1. Execution-ready wallet (parent CSW + embedded owner on app track)\n')
   process.stdout.write('  2. ≥100,000,000 AKITA creator tokens approved for vault deposit\n')
-  process.stdout.write('  3. **`vault_full_deploy`** active/pending (or legacy comp: charm + ajna + solana_ovault_mesh)\n')
+  process.stdout.write('  3. **`vault_full_deploy`** active/pending (or equivalent comp: charm + ajna + solana_ovault_mesh)\n')
   process.stdout.write('  4. Optional fork dry-run: pnpm -C frontend run dev:deploy-dry-run\n')
   process.stdout.write('  5. Launch at https://app.4626.fun/deploy/vault with AKITA creator coin\n')
-  process.stdout.write('  6. Use a NEW deploymentVersion salt (not legacy grandfathered addresses)\n')
+  process.stdout.write('  6. Use a NEW deploymentVersion salt (not grandfathered addresses)\n')
 
   process.stdout.write('\n--- After Phase 1 (new ShareOFT address known) — operator ---\n')
-  process.stdout.write('  • LZ Base init-config + wire on the NEW CreatorShareOFT (not legacy wsAKITA)\n')
+  process.stdout.write('  • LZ Base init-config + wire on the NEW CreatorShareOFT (symbol ■AKITA)\n')
   process.stdout.write('  • Safe: configureCreatorMesh on OVaultHubComposer\n')
   process.stdout.write('  • Vultr: update SOLANA_SHARE_OFT_MAPPING to new ShareOFT + share mesh mint; restart orchestrator\n')
   process.stdout.write('  • Update AKITA_DEFAULTS + keeper backfill + Vercel env\n')

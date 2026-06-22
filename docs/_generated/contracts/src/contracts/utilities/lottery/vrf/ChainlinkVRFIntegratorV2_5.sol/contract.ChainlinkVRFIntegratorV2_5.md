@@ -5,7 +5,7 @@
 OApp, OAppOptionsType3
 
 
-## State Variables
+## Constants
 ### IGNORE_REQUEST_NOT_FOUND
 
 ```solidity
@@ -27,6 +27,27 @@ bytes32 internal constant IGNORE_PROVIDER_NOT_FOUND = bytes32("PROVIDER_NOT_FOUN
 ```
 
 
+### deploymentNonce
+
+```solidity
+uint64 public immutable deploymentNonce
+```
+
+
+### MAX_CLEANUP_BATCH
+FIX: L-02 (audit 2026-04-25) — bound the per-call iteration count so
+the permissionless cleanup path cannot be used to grief gas / mempool
+pressure with arbitrarily large `requestIds` arrays. Operators / keepers
+can still drain a long backlog by calling repeatedly; legitimate users
+will rarely supply more than a handful of ids per call.
+
+
+```solidity
+uint256 public constant MAX_CLEANUP_BATCH = 256
+```
+
+
+## State Variables
 ### requestCounter
 
 ```solidity
@@ -38,13 +59,6 @@ uint64 public requestCounter
 
 ```solidity
 uint32 public defaultGasLimit = 690420
-```
-
-
-### deploymentNonce
-
-```solidity
-uint64 public immutable deploymentNonce
 ```
 
 
@@ -273,6 +287,11 @@ function setSponsoredCallerAuthorization(address caller, bool authorized) extern
 
 Clean up expired requests
 
+L-02 (audit 2026-04-25): the batch length is capped at
+`MAX_CLEANUP_BATCH`. Calls with a larger array revert before any
+state writes, preserving the original semantics for normal use
+while removing the unbounded-loop griefing surface.
+
 
 ```solidity
 function cleanupExpiredRequests(uint64[] calldata requestIds) external;
@@ -391,6 +410,12 @@ event SponsoredCallerAuthorizationUpdated(address indexed caller, bool authorize
 
 ```solidity
 error UnauthorizedSponsoredCaller();
+```
+
+### CleanupBatchTooLarge
+
+```solidity
+error CleanupBatchTooLarge(uint256 supplied, uint256 maxAllowed);
 ```
 
 ## Structs

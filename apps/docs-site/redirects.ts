@@ -59,26 +59,26 @@ export const redirects: ClientRedirect[] = [
     from: '/farcaster-close-gap-phases',
     to: '/integrations',
   },
-  { from: '/solana-spoke-article', to: '/integrations/solana-spoke-article' },
+  { from: '/solana-spoke-article', to: '/integrations' },
 
   { from: '/security-scan-overview', to: '/security' },
 
-  { from: '/ajna-erc4626-kpr-adversarial-audit', to: '/audits/ajna/adversarial-audit' },
-  { from: '/ajna-erc4626-kpr-executive-brief', to: '/audits/ajna/executive-brief' },
-  { from: '/ajna-erc4626-kpr-master-qna', to: '/audits/ajna/master-qna' },
+  { from: '/ajna-erc4626-kpr-adversarial-audit', to: '/audits/codex/audit_findings_factories_batchers_ajna' },
+  { from: '/ajna-erc4626-kpr-executive-brief', to: '/audits/codex/audit_findings_factories_batchers_ajna' },
+  { from: '/ajna-erc4626-kpr-master-qna', to: '/audits/codex/audit_findings_factories_batchers_ajna' },
   {
     from: '/charm-alpha-vaults-v2-4626fun-adversarial-audit',
-    to: '/audits/charm/adversarial-audit',
+    to: '/audits/charm/executive-brief',
   },
   {
     from: '/charm-alpha-vaults-v2-4626fun-executive-brief',
     to: '/audits/charm/executive-brief',
   },
-  { from: '/charm-alpha-vaults-v2-4626fun-master-qa', to: '/audits/charm/master-qa' },
-  { from: '/codex-security-findings', to: '/audits/codex/security-second-pass-review' },
+  { from: '/charm-alpha-vaults-v2-4626fun-master-qa', to: '/audits/charm/executive-brief' },
+  { from: '/codex-security-findings', to: '/audits/codex/AUDIT_RECONCILIATION' },
   {
     from: '/codex-security-second-pass-review',
-    to: '/audits/codex/security-second-pass-review',
+    to: '/audits/codex/AUDIT_RECONCILIATION',
   },
   { from: '/breakout-report', to: '/audits/token-image' },
   {

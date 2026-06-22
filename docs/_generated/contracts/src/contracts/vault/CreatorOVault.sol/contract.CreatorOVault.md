@@ -2,7 +2,7 @@
 [Git Source](https://github.com/wenakita/4626/blob/main/contracts/vault/CreatorOVault.sol)
 
 **Inherits:**
-ERC4626, Ownable, ReentrancyGuard, EIP712
+ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permit
 
 **Title:**
 CreatorOVault
@@ -37,13 +37,81 @@ CONSTRUCTOR ARGS (same on all chains):
 - _symbol: Vault symbol (e.g., "▢AKITA")
 
 
-## State Variables
+## Constants
 ### MAX_FEE
 Maximum performance fee (20%)
 
 
 ```solidity
 uint16 public constant MAX_FEE = 2_000
+```
+
+
+### MAX_MANAGEMENT_FEE
+Maximum management (TVL) fee (5% annualized bps charge in report)
+
+
+```solidity
+uint16 public constant MAX_MANAGEMENT_FEE = 500
+```
+
+
+### MIN_RISK_CONFIG_DELAY
+Risk timelock bounds
+
+
+```solidity
+uint64 public constant MIN_RISK_CONFIG_DELAY = 1 days
+```
+
+
+### MAX_RISK_CONFIG_DELAY
+
+```solidity
+uint64 public constant MAX_RISK_CONFIG_DELAY = 30 days
+```
+
+
+### RISK_KIND_NONE
+
+```solidity
+uint8 internal constant RISK_KIND_NONE = 0
+```
+
+
+### RISK_KIND_PERFORMANCE_FEE
+
+```solidity
+uint8 internal constant RISK_KIND_PERFORMANCE_FEE = 1
+```
+
+
+### RISK_KIND_MANAGEMENT_FEE
+
+```solidity
+uint8 internal constant RISK_KIND_MANAGEMENT_FEE = 2
+```
+
+
+### RISK_KIND_STRATEGY_MAX_ASSETS
+
+```solidity
+uint8 internal constant RISK_KIND_STRATEGY_MAX_ASSETS = 3
+```
+
+
+### RISK_KIND_MANAGEMENT_FEE_RECIPIENT
+
+```solidity
+uint8 internal constant RISK_KIND_MANAGEMENT_FEE_RECIPIENT = 4
+```
+
+
+### PERMIT_TYPEHASH
+
+```solidity
+bytes32 private constant PERMIT_TYPEHASH =
+    keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)")
 ```
 
 
@@ -86,7 +154,7 @@ uint256 public constant MAX_STRATEGIES = 5
 ### MODULE_STORAGE_VERSION
 
 ```solidity
-bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.current")
+bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v3")
 ```
 
 
@@ -108,6 +176,13 @@ bytes32 internal constant MODULE_KIND_STRATEGIES = keccak256("CreatorOVaultModul
 
 ```solidity
 bytes32 internal constant MODULE_KIND_ADMIN = keccak256("CreatorOVaultModule.admin")
+```
+
+
+### CCA_PHASE_AUCTION_LIVE
+
+```solidity
+uint8 internal constant CCA_PHASE_AUCTION_LIVE = 1
 ```
 
 
@@ -175,6 +250,69 @@ IERC20 public immutable CREATOR_COIN
 ```
 
 
+### OP_DEPOSIT
+Bitmask permission: deposit-like actions
+
+
+```solidity
+uint256 public constant OP_DEPOSIT = 1 << 0
+```
+
+
+### OP_WITHDRAW
+Bitmask permission: withdraw-like actions
+
+
+```solidity
+uint256 public constant OP_WITHDRAW = 1 << 1
+```
+
+
+### OP_ACTIVATE
+Bitmask permission: activation/batching actions
+
+
+```solidity
+uint256 public constant OP_ACTIVATE = 1 << 2
+```
+
+
+### _PERMIT_OPERATOR_TYPEHASH
+
+```solidity
+bytes32 private constant _PERMIT_OPERATOR_TYPEHASH =
+    keccak256("PermitOperator(address exec,uint256 perms,uint256 nonce,uint256 deadline)")
+```
+
+
+### MIN_RESCUE_DELAY
+Minimum allowed rescue delay
+
+
+```solidity
+uint64 public constant MIN_RESCUE_DELAY = 1 days
+```
+
+
+### MAX_RESCUE_DELAY
+Maximum allowed rescue delay
+
+
+```solidity
+uint64 public constant MAX_RESCUE_DELAY = 30 days
+```
+
+
+### MAX_QUEUE
+Maximum queue size
+
+
+```solidity
+uint256 public constant MAX_QUEUE = 10
+```
+
+
+## State Variables
 ### coinBalance
 Current Creator Coin balance held directly by vault
 
@@ -421,33 +559,6 @@ mapping(address => bool) public whitelist
 ```
 
 
-### OP_DEPOSIT
-Bitmask permission: deposit-like actions
-
-
-```solidity
-uint256 public constant OP_DEPOSIT = 1 << 0
-```
-
-
-### OP_WITHDRAW
-Bitmask permission: withdraw-like actions
-
-
-```solidity
-uint256 public constant OP_WITHDRAW = 1 << 1
-```
-
-
-### OP_ACTIVATE
-Bitmask permission: activation/batching actions
-
-
-```solidity
-uint256 public constant OP_ACTIVATE = 1 << 2
-```
-
-
 ### operatorEpoch
 Operator epoch. Bumped on ownership transfer to invalidate all previous operator grants.
 
@@ -472,32 +583,6 @@ Nonce for `permitOperator` (separate from Permit2 nonces and deploy authorizatio
 
 ```solidity
 uint256 public operatorNonce
-```
-
-
-### _PERMIT_OPERATOR_TYPEHASH
-
-```solidity
-bytes32 private constant _PERMIT_OPERATOR_TYPEHASH =
-    keccak256("PermitOperator(address exec,uint256 perms,uint256 nonce,uint256 deadline)")
-```
-
-
-### MIN_RESCUE_DELAY
-Minimum allowed rescue delay
-
-
-```solidity
-uint64 public constant MIN_RESCUE_DELAY = 1 days
-```
-
-
-### MAX_RESCUE_DELAY
-Maximum allowed rescue delay
-
-
-```solidity
-uint64 public constant MAX_RESCUE_DELAY = 30 days
 ```
 
 
@@ -627,15 +712,6 @@ address[] public defaultQueue
 ```
 
 
-### MAX_QUEUE
-Maximum queue size
-
-
-```solidity
-uint256 public constant MAX_QUEUE = 10
-```
-
-
 ### useDefaultQueue
 Force use of default queue (ignore custom queue in withdrawals)
 
@@ -710,6 +786,189 @@ address internal _strategiesModule
 
 ```solidity
 address internal _adminModule
+```
+
+
+### strategyMaxAssets
+Governance-enforced per-strategy cap on assets recognised by the vault.
+
+Appended to preserve storage layout. 0 == uncapped. When non-zero, the value
+clamps `_getStrategyAssetsSafe()` so a misreporting strategy (oracle poisoning,
+direct-balance donation accounting, etc.) cannot inflate `totalAssets()` beyond
+the cap governance approved. See OpenZeppelin and Euler analyses of ERC-4626
+inflation/donation attacks (docs/runbooks/strategy-onboarding-checklist.md).
+
+
+```solidity
+mapping(address => uint256) public strategyMaxAssets
+```
+
+
+### managementFee
+
+```solidity
+uint16 public managementFee
+```
+
+
+### managementFeeRecipient
+
+```solidity
+address public managementFeeRecipient
+```
+
+
+### riskConfigDelay
+
+```solidity
+uint64 public riskConfigDelay
+```
+
+
+### pendingRiskKind
+
+```solidity
+uint8 public pendingRiskKind
+```
+
+
+### pendingRiskTarget
+
+```solidity
+address public pendingRiskTarget
+```
+
+
+### pendingRiskValue
+
+```solidity
+uint256 public pendingRiskValue
+```
+
+
+### pendingRiskUnlockTime
+
+```solidity
+uint64 public pendingRiskUnlockTime
+```
+
+
+### valuationMissThreshold
+
+```solidity
+uint8 public valuationMissThreshold
+```
+
+
+### strategyValuationMisses
+
+```solidity
+mapping(address => uint8) public strategyValuationMisses
+```
+
+
+### sharePermitNonces
+
+```solidity
+mapping(address => uint256) public sharePermitNonces
+```
+
+
+### vaultMode
+
+```solidity
+VaultMode public vaultMode
+```
+
+
+### activeImpairmentEpoch
+
+```solidity
+uint256 public activeImpairmentEpoch
+```
+
+
+### nextImpairmentEpochId
+
+```solidity
+uint256 public nextImpairmentEpochId
+```
+
+
+### impairmentChallengeWindow
+
+```solidity
+uint64 public impairmentChallengeWindow
+```
+
+
+### impairmentEpochs
+
+```solidity
+mapping(uint256 => ImpairmentEpoch) public impairmentEpochs
+```
+
+
+### strategyImpaired
+
+```solidity
+mapping(address => bool) public strategyImpaired
+```
+
+
+### impairmentAmountClaimed
+
+```solidity
+mapping(uint256 => mapping(address => uint256)) public impairmentAmountClaimed
+```
+
+
+### impairmentClaimMinted
+
+```solidity
+mapping(uint256 => mapping(address => bool)) public impairmentClaimMinted
+```
+
+
+### impairmentRootUnlockTime
+
+```solidity
+mapping(uint256 => uint64) public impairmentRootUnlockTime
+```
+
+
+### impairmentRootChallenged
+
+```solidity
+mapping(uint256 => bool) public impairmentRootChallenged
+```
+
+
+### impairmentGuardian
+
+```solidity
+address public impairmentGuardian
+```
+
+
+### impairmentClaims
+
+```solidity
+address public impairmentClaims
+```
+
+
+### impairmentRecoveryEscrow
+
+```solidity
+address public impairmentRecoveryEscrow
+```
+
+
+### ccaLaunchStrategy
+
+```solidity
+address public ccaLaunchStrategy
 ```
 
 
@@ -965,6 +1224,13 @@ function _firstStrategyValuationNotReady() internal view returns (address bad);
 function _requireStrategyValuationsReady() internal view;
 ```
 
+### _isCcaAuctionLive
+
+
+```solidity
+function _isCcaAuctionLive() internal view returns (bool);
+```
+
 ### deposit
 
 Deposit Creator Coin into vault
@@ -1087,6 +1353,114 @@ Cancel a queued withdrawal and get shares back
 function cancelQueuedWithdrawal() external nonReentrant returns (uint256 shares);
 ```
 
+### setImpairmentChallengeWindow
+
+
+```solidity
+function setImpairmentChallengeWindow(uint64 window) external onlyManagement;
+```
+
+### setImpairmentGuardian
+
+
+```solidity
+function setImpairmentGuardian(address guardian) external onlyOwner;
+```
+
+### setImpairmentClaims
+
+
+```solidity
+function setImpairmentClaims(address claims) external onlyOwner;
+```
+
+### setImpairmentRecoveryEscrow
+
+
+```solidity
+function setImpairmentRecoveryEscrow(address escrow) external onlyOwner;
+```
+
+### tripImpairment
+
+
+```solidity
+function tripImpairment(address strategy, uint256 reasonCode)
+    external
+    nonReentrant
+    onlyEmergencyAuthorized
+    returns (uint256 epochId);
+```
+
+### clearImpairmentTrip
+
+
+```solidity
+function clearImpairmentTrip(uint256 epochId) external nonReentrant onlyEmergencyAuthorized;
+```
+
+### proposeImpairmentRoot
+
+
+```solidity
+function proposeImpairmentRoot(
+    uint256 epochId,
+    bytes32 snapshotRoot,
+    uint256 totalClaimSupply,
+    address recoveryAsset
+) external nonReentrant onlyManagement;
+```
+
+### challengeImpairmentRoot
+
+
+```solidity
+function challengeImpairmentRoot(uint256 epochId, string calldata reason)
+    external
+    nonReentrant
+    onlyEmergencyAuthorized;
+```
+
+### clearImpairmentRootAfterChallenge
+
+
+```solidity
+function clearImpairmentRootAfterChallenge(uint256 epochId) external nonReentrant onlyManagement;
+```
+
+### finalizeImpairment
+
+
+```solidity
+function finalizeImpairment(uint256 epochId) external nonReentrant onlyManagement;
+```
+
+### mintImpairmentClaim
+
+
+```solidity
+function mintImpairmentClaim(uint256 epochId, address account, uint256 amount, bytes32[] calldata proof)
+    external
+    nonReentrant;
+```
+
+### notifyImpairmentRecovery
+
+
+```solidity
+function notifyImpairmentRecovery(uint256 epochId, uint256 amount) external nonReentrant onlyKeepers;
+```
+
+### claimImpairmentRecovery
+
+
+```solidity
+function claimImpairmentRecovery(uint256 epochId, address receiver, uint256 claimUnits)
+    external
+    nonReentrant
+    returns (uint256 amountOut);
+```
+
 ### previewRedeem
 
 Preview redeem (ERC-4626 override)
@@ -1157,7 +1531,7 @@ that the vault's balance increases by exactly `amount`.
 
 
 ```solidity
-function _pullCreatorCoinExact(address from, uint256 amount) internal returns (uint256 received);
+function _pullCreatorCoinExact(uint256 amount) internal returns (uint256 received);
 ```
 
 ### _pushCreatorCoinExact
@@ -1288,6 +1662,13 @@ function removeStrategy(address strategy) external nonReentrant onlyManagement;
 function forceRemoveStrategy(address strategy) external nonReentrant onlyManagement;
 ```
 
+### reinstateImpairedStrategy
+
+
+```solidity
+function reinstateImpairedStrategy(address strategy, uint256 epochId) external nonReentrant onlyManagement;
+```
+
 ### _removeFromQueue
 
 Remove a strategy from the default queue
@@ -1402,6 +1783,21 @@ Perform maintenance without full report
 ```solidity
 function tend() external nonReentrant onlyKeepers;
 ```
+
+### rebalanceStrategies
+
+Rebalance overweight strategies back to idle, then redeploy by weight.
+
+
+```solidity
+function rebalanceStrategies(uint256 minDeviationBps) external nonReentrant onlyKeepers;
+```
+**Parameters**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`minDeviationBps`|`uint256`|Minimum overweight drift (bps of target) before withdrawing excess.|
+
 
 ### burnSharesForPriceIncrease
 
@@ -1549,6 +1945,15 @@ function setPaused(bool _paused) external onlyOwner;
 function setGaugeController(address _gaugeController) external onlyOwner;
 ```
 
+### setCCALaunchStrategy
+
+Link or clear the vault CCA strategy used for auction-time deposit gating.
+
+
+```solidity
+function setCCALaunchStrategy(address _ccaLaunchStrategy) external onlyOwner;
+```
+
 ### setBurnStream
 
 Set the burn stream contract (ONE-TIME).
@@ -1559,6 +1964,13 @@ Once set, vault shares minted to the burn stream cannot be withdrawn — only bu
 
 ```solidity
 function setBurnStream(address _burnStream) external onlyOwner;
+```
+
+### setBurnStreamAuthorizedQueuer
+
+
+```solidity
+function setBurnStreamAuthorizedQueuer(address queuer, bool authorized) external onlyOwner;
 ```
 
 ### setKeeper
@@ -1702,9 +2114,74 @@ function finalizeOwnershipRescue() external onlyProtocolRescue;
 
 ### setPerformanceFee
 
+When `riskConfigDelay > 0`, use `scheduleSetPerformanceFee` + `executePendingRiskConfig`.
+
 
 ```solidity
 function setPerformanceFee(uint16 _performanceFee) external onlyManagement;
+```
+
+### scheduleSetPerformanceFee
+
+
+```solidity
+function scheduleSetPerformanceFee(uint16 _performanceFee) external onlyManagement;
+```
+
+### scheduleSetManagementFee
+
+
+```solidity
+function scheduleSetManagementFee(uint16 _managementFee) external onlyManagement;
+```
+
+### scheduleSetStrategyMaxAssets
+
+
+```solidity
+function scheduleSetStrategyMaxAssets(address strategy, uint256 cap) external onlyManagement;
+```
+
+### scheduleSetManagementFeeRecipient
+
+
+```solidity
+function scheduleSetManagementFeeRecipient(address recipient) external onlyManagement;
+```
+
+### executePendingRiskConfig
+
+
+```solidity
+function executePendingRiskConfig() external onlyManagement;
+```
+
+### cancelPendingRiskConfig
+
+
+```solidity
+function cancelPendingRiskConfig() external onlyManagement;
+```
+
+### setRiskConfigDelay
+
+
+```solidity
+function setRiskConfigDelay(uint64 delay) external onlyOwner;
+```
+
+### setManagementFeeRecipient
+
+
+```solidity
+function setManagementFeeRecipient(address recipient) external onlyManagement;
+```
+
+### setValuationMissThreshold
+
+
+```solidity
+function setValuationMissThreshold(uint8 threshold) external onlyManagement;
 ```
 
 ### setPerformanceFeeRecipient
@@ -1747,6 +2224,30 @@ function setDeploymentParams(uint256 _threshold, uint256 _interval) external onl
 
 ```solidity
 function setMaxTotalSupply(uint256 _maxTotalSupply) external onlyOwner;
+```
+
+### setStrategyMaxAssets
+
+Set the governance-enforced asset cap for a strategy.
+
+0 == uncapped. Non-zero clamps strategy contribution to `totalAssets()`.
+See docs/runbooks/strategy-onboarding-checklist.md.
+
+
+```solidity
+function setStrategyMaxAssets(address strategy, uint256 cap) external onlyManagement;
+```
+
+### migrateStrategy
+
+Atomically replace a strategy (withdraw old, register new).
+
+
+```solidity
+function migrateStrategy(address oldStrategy, address newStrategy, uint256 weight, bool addToQueue)
+    external
+    nonReentrant
+    onlyManagement;
 ```
 
 ### setFlashLoanProtection
@@ -1816,6 +2317,65 @@ Track the latest share acquisition block for delay enforcement.
 function _update(address from, address to, uint256 value) internal override;
 ```
 
+### permit
+
+Sets `value` as the allowance of `spender` over ``owner``'s tokens,
+given ``owner``'s signed approval.
+IMPORTANT: The same issues {IERC20-approve} has related to transaction
+ordering also apply here.
+Emits an {Approval} event.
+Requirements:
+- `spender` cannot be the zero address.
+- `deadline` must be a timestamp in the future.
+- `v`, `r` and `s` must be a valid `secp256k1` signature from `owner`
+over the EIP712-formatted function arguments.
+- the signature must use ``owner``'s current nonce (see {nonces}).
+For more information on the signature format, see the
+https://eips.ethereum.org/EIPS/eip-2612#specification[relevant EIP
+section].
+CAUTION: See Security Considerations above.
+
+
+```solidity
+function permit(address owner_, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
+    public;
+```
+
+### nonces
+
+Returns the current nonce for `owner`. This value must be
+included whenever a signature is generated for {permit}.
+Every successful call to {permit} increases ``owner``'s nonce by one. This
+prevents a signature from being used multiple times.
+
+
+```solidity
+function nonces(address owner_) public view returns (uint256);
+```
+
+### DOMAIN_SEPARATOR
+
+Returns the domain separator used in the encoding of the signature for {permit}, as defined by {EIP712}.
+
+
+```solidity
+function DOMAIN_SEPARATOR() external view returns (bytes32);
+```
+
+### strategyCount
+
+
+```solidity
+function strategyCount() external view returns (uint256);
+```
+
+### liquiditySnapshot
+
+
+```solidity
+function liquiditySnapshot() external view returns (CreatorOVaultLiquidityLib.LiquiditySnapshot memory);
+```
+
 ### pricePerShare
 
 Get price per share (1e18 scale)
@@ -1859,6 +2419,136 @@ function _decimalsOffset() internal pure override returns (uint8);
 event Reported(uint256 profit, uint256 loss, uint256 performanceFees, uint256 totalAssets);
 ```
 
+### ManagementFeeAccrued
+
+```solidity
+event ManagementFeeAccrued(uint256 feeAssets, uint256 feeShares, uint256 elapsedSeconds);
+```
+
+### StrategyValuationAutoDisabled
+
+```solidity
+event StrategyValuationAutoDisabled(address indexed strategy, uint8 consecutiveMisses);
+```
+
+### ImpairmentChallengeWindowUpdated
+
+```solidity
+event ImpairmentChallengeWindowUpdated(uint64 newWindow);
+```
+
+### ImpairmentTripped
+
+```solidity
+event ImpairmentTripped(
+    uint256 indexed epochId,
+    address indexed strategy,
+    uint256 indexed reasonCode,
+    uint256 tripBlock,
+    uint256 totalSharesAtTrip
+);
+```
+
+### ImpairmentTripCleared
+
+```solidity
+event ImpairmentTripCleared(uint256 indexed epochId, address indexed strategy);
+```
+
+### ImpairmentRootProposed
+
+```solidity
+event ImpairmentRootProposed(uint256 indexed epochId, bytes32 indexed root, uint64 unlockTime);
+```
+
+### ImpairmentRootChallenged
+
+```solidity
+event ImpairmentRootChallenged(uint256 indexed epochId, address indexed challenger, string reason);
+```
+
+### ImpairmentRootCleared
+
+```solidity
+event ImpairmentRootCleared(uint256 indexed epochId);
+```
+
+### ImpairmentRootFinalized
+
+```solidity
+event ImpairmentRootFinalized(uint256 indexed epochId, bytes32 indexed root, uint256 totalClaimSupply);
+```
+
+### ImpairmentFinalized
+
+```solidity
+event ImpairmentFinalized(
+    uint256 indexed epochId, address indexed strategy, bytes32 indexed root, uint256 excludedBookValue
+);
+```
+
+### ImpairmentRecoveryNotified
+
+```solidity
+event ImpairmentRecoveryNotified(uint256 indexed epochId, address indexed asset, uint256 amount);
+```
+
+### ImpairmentRecoveryClaimed
+
+```solidity
+event ImpairmentRecoveryClaimed(
+    uint256 indexed epochId, address indexed account, address indexed receiver, uint256 amount
+);
+```
+
+### ImpairmentResolved
+
+```solidity
+event ImpairmentResolved(uint256 indexed epochId);
+```
+
+### UpdateManagementFee
+
+```solidity
+event UpdateManagementFee(uint16 newManagementFee);
+```
+
+### UpdateManagementFeeRecipient
+
+```solidity
+event UpdateManagementFeeRecipient(address indexed newRecipient);
+```
+
+### UpdateRiskConfigDelay
+
+```solidity
+event UpdateRiskConfigDelay(uint64 newDelay);
+```
+
+### RiskConfigScheduled
+
+```solidity
+event RiskConfigScheduled(uint8 kind, address indexed target, uint256 value, uint64 unlockTime);
+```
+
+### RiskConfigExecuted
+
+```solidity
+event RiskConfigExecuted(uint8 kind, address indexed target, uint256 value);
+```
+
+### RiskConfigCancelled
+
+```solidity
+event RiskConfigCancelled(uint8 kind);
+```
+
+### UpdateValuationMissThreshold
+
+```solidity
+event UpdateValuationMissThreshold(uint8 newThreshold);
+```
+
 ### StrategyAdded
 
 ```solidity
@@ -1887,6 +2577,12 @@ event StrategyWithdrawn(address indexed strategy, uint256 amount);
 
 ```solidity
 event StrategyWithdrawFailed(address indexed strategy, uint256 amount, bytes revertData);
+```
+
+### UpdateStrategyMaxAssets
+
+```solidity
+event UpdateStrategyMaxAssets(address indexed strategy, uint256 oldCap, uint256 newCap);
 ```
 
 ### UpdateManagement
@@ -2330,10 +3026,166 @@ error OnlyDebtPurchaser();
 error OperatorPermitExpired(uint256 deadline);
 ```
 
+### PermitExpired
+
+```solidity
+error PermitExpired(uint256 deadline);
+```
+
+### InvalidPermitSignature
+
+```solidity
+error InvalidPermitSignature();
+```
+
+### RiskConfigDelayOutOfBounds
+
+```solidity
+error RiskConfigDelayOutOfBounds(uint64 provided, uint64 min, uint64 max);
+```
+
+### PendingRiskConfigExists
+
+```solidity
+error PendingRiskConfigExists(uint8 kind);
+```
+
+### NoPendingRiskConfig
+
+```solidity
+error NoPendingRiskConfig();
+```
+
+### RiskConfigTooEarly
+
+```solidity
+error RiskConfigTooEarly(uint64 unlockTime);
+```
+
+### InvalidRiskConfigKind
+
+```solidity
+error InvalidRiskConfigKind(uint8 kind);
+```
+
 ### InvalidOperatorSignature
 
 ```solidity
 error InvalidOperatorSignature();
+```
+
+### VaultNotNormal
+
+```solidity
+error VaultNotNormal();
+```
+
+### VaultNotSuspect
+
+```solidity
+error VaultNotSuspect();
+```
+
+### NoActiveImpairment
+
+```solidity
+error NoActiveImpairment();
+```
+
+### ImpairmentAlreadyActive
+
+```solidity
+error ImpairmentAlreadyActive(uint256 epochId);
+```
+
+### InvalidImpairmentEpoch
+
+```solidity
+error InvalidImpairmentEpoch(uint256 epochId);
+```
+
+### InvalidImpairmentTransition
+
+```solidity
+error InvalidImpairmentTransition(uint256 epochId);
+```
+
+### StrategyAlreadyImpaired
+
+```solidity
+error StrategyAlreadyImpaired(address strategy);
+```
+
+### StrategyNotImpaired
+
+```solidity
+error StrategyNotImpaired(address strategy);
+```
+
+### InvalidImpairmentReason
+
+```solidity
+error InvalidImpairmentReason(uint256 reasonCode);
+```
+
+### ImpairmentRootNotReady
+
+```solidity
+error ImpairmentRootNotReady(uint64 unlockTime);
+```
+
+### ImpairmentRootRequired
+
+```solidity
+error ImpairmentRootRequired(uint256 epochId);
+```
+
+### ImpairmentRootAlreadyFinalized
+
+```solidity
+error ImpairmentRootAlreadyFinalized(uint256 epochId);
+```
+
+### ImpairmentRootChallengedErr
+
+```solidity
+error ImpairmentRootChallengedErr(uint256 epochId);
+```
+
+### ChallengeWindowNotConfigured
+
+```solidity
+error ChallengeWindowNotConfigured();
+```
+
+### ClaimAlreadyMinted
+
+```solidity
+error ClaimAlreadyMinted(uint256 epochId, address account);
+```
+
+### InvalidClaimProof
+
+```solidity
+error InvalidClaimProof(uint256 epochId, address account);
+```
+
+### NothingToClaim
+
+```solidity
+error NothingToClaim(uint256 epochId, address account);
+```
+
+### RecoveryEscrowNotConfigured
+
+```solidity
+error RecoveryEscrowNotConfigured();
+```
+
+### ClaimSupplyExceeded
+
+```solidity
+error ClaimSupplyExceeded(uint256 epochId, uint256 totalClaimSupply, uint256 requested);
 ```
 
 ### RescueNotConfigured
@@ -2435,6 +3287,27 @@ error InvalidModuleAddress();
 ```
 
 ## Structs
+### ImpairmentEpoch
+
+```solidity
+struct ImpairmentEpoch {
+    ImpairmentEpochStatus status;
+    address strategy;
+    address recoveryAsset;
+    uint256 reasonCode;
+    uint256 tripBlock;
+    uint64 trippedAt;
+    uint64 finalizedAt;
+    uint64 resolvedAt;
+    uint256 totalSharesAtTrip;
+    uint256 totalClaimSupply;
+    uint256 excludedBookValue;
+    bytes32 snapshotRoot;
+    uint256 totalRecovered;
+    uint256 totalClaimed;
+}
+```
+
 ### QueuedWithdrawal
 Queued large withdrawals
 
@@ -2444,6 +3317,27 @@ struct QueuedWithdrawal {
     uint256 shares;
     uint256 unlockBlock;
     address receiver;
+}
+```
+
+## Enums
+### VaultMode
+
+```solidity
+enum VaultMode {
+    Normal,
+    Suspect
+}
+```
+
+### ImpairmentEpochStatus
+
+```solidity
+enum ImpairmentEpochStatus {
+    None,
+    Tripped,
+    Finalized,
+    Resolved
 }
 ```
 

@@ -5,7 +5,7 @@
 OApp, OAppOptionsType3, ReentrancyGuard, Pausable
 
 
-## State Variables
+## Constants
 ### MIN_SWAP_USD
 
 ```solidity
@@ -63,6 +63,23 @@ ICreatorRegistryLottery public immutable registry
 ```
 
 
+### _self
+
+```solidity
+address private immutable _self
+```
+
+
+### BOOST_SOURCE_TIMELOCK
+Mirror of main-contract `BOOST_SOURCE_TIMELOCK`.
+
+
+```solidity
+uint256 public constant BOOST_SOURCE_TIMELOCK = 24 hours
+```
+
+
+## State Variables
 ### authorizedSwapContracts
 
 ```solidity
@@ -350,10 +367,60 @@ uint256 private _payoutLock
 ```
 
 
-### _self
+### baseCeilingPPM
+Pre-boost win-chance ceiling (PPM). Default 40_000 = 4%.
+
 
 ```solidity
-address private immutable _self
+uint256 public baseCeilingPPM
+```
+
+
+### authorizedAmoeRelayer
+Trusted relayer authorized to call `processAmoeEntry`.
+
+
+```solidity
+address public authorizedAmoeRelayer
+```
+
+
+### _pendingBoostManager
+Pending replacement for `boostManager`. Public view via `getPendingBoostSources()`.
+
+
+```solidity
+address internal _pendingBoostManager
+```
+
+
+### _pendingBoostManagerEffectiveAt
+
+```solidity
+uint256 internal _pendingBoostManagerEffectiveAt
+```
+
+
+### _pendingVaultGaugeVoting
+
+```solidity
+address internal _pendingVaultGaugeVoting
+```
+
+
+### _pendingVaultGaugeVotingEffectiveAt
+
+```solidity
+uint256 internal _pendingVaultGaugeVotingEffectiveAt
+```
+
+
+### _timelockArmed
+Once true, legacy single-call setters revert. Read via `isTimelockArmed()`.
+
+
+```solidity
+bool internal _timelockArmed
 ```
 
 
@@ -454,6 +521,14 @@ function setSponsorshipRateLimits(
 
 ### setBoostManager
 
+Legacy single-call setter for `boostManager`.
+
+Disabled once `armBoostSourceTimelock()` has been called. Until
+then, this preserves the original ops bootstrap path so initial
+deploys can wire up the boost source without going through the
+24h timelock dance. Once armed, callers must use
+`proposeBoostManager` + `commitBoostManager`.
+
 
 ```solidity
 function setBoostManager(address _manager) external onlyDelegateCall onlyOwner;
@@ -461,9 +536,156 @@ function setBoostManager(address _manager) external onlyDelegateCall onlyOwner;
 
 ### setVaultGaugeVoting
 
+Legacy single-call setter for `vaultGaugeVoting`.
+
+Disabled once `armBoostSourceTimelock()` has been called.
+
 
 ```solidity
 function setVaultGaugeVoting(address _vaultGaugeVoting) external onlyDelegateCall onlyOwner;
+```
+
+### armBoostSourceTimelock
+
+Engage the boost-source timelock. One-way switch.
+
+After this is called, `setBoostManager` / `setVaultGaugeVoting`
+revert with `LegacySetterDisabled` and the only path forward is
+`proposeBoostManager` + (24h delay) + `commitBoostManager`
+(and the symmetric pair for `vaultGaugeVoting`). The emergency
+`disableBoostSources()` circuit breaker remains available with no
+timelock.
+
+
+```solidity
+function armBoostSourceTimelock() external onlyDelegateCall onlyOwner;
+```
+
+### proposeBoostManager
+
+Propose a new `boostManager`. Effective after `BOOST_SOURCE_TIMELOCK`
+has elapsed, via `commitBoostManager()`. Owner can cancel during
+the window via `cancelBoostManagerProposal()`.
+
+Requires `timelockArmed`. Pass `address(0)` to propose disabling the
+personal boost source entirely (still subject to the same delay).
+
+
+```solidity
+function proposeBoostManager(address _manager) external onlyDelegateCall onlyOwner;
+```
+
+### commitBoostManager
+
+Commit a previously proposed `boostManager` once the timelock has elapsed.
+
+
+```solidity
+function commitBoostManager() external onlyDelegateCall onlyOwner;
+```
+
+### proposeVaultGaugeVoting
+
+Propose a new `vaultGaugeVoting`. Symmetric to `proposeBoostManager`.
+
+
+```solidity
+function proposeVaultGaugeVoting(address _gauge) external onlyDelegateCall onlyOwner;
+```
+
+### commitVaultGaugeVoting
+
+Commit a previously proposed `vaultGaugeVoting` once the timelock has elapsed.
+
+
+```solidity
+function commitVaultGaugeVoting() external onlyDelegateCall onlyOwner;
+```
+
+### cancelBoostManagerProposal
+
+Cancel an in-flight `boostManager` proposal during the timelock window.
+
+
+```solidity
+function cancelBoostManagerProposal() external onlyDelegateCall onlyOwner;
+```
+
+### cancelVaultGaugeVotingProposal
+
+Cancel an in-flight `vaultGaugeVoting` proposal during the timelock window.
+
+
+```solidity
+function cancelVaultGaugeVotingProposal() external onlyDelegateCall onlyOwner;
+```
+
+### disableBoostSources
+
+Emergency circuit breaker: zero out both boost sources atomically,
+no timelock. Use during incident response when a malicious
+proposal has already been committed and the next safe state is
+"no boost at all".
+
+Also clears any in-flight pending proposals so a queued malicious
+address can't be committed after the breaker is pulled.
+
+
+```solidity
+function disableBoostSources() external onlyDelegateCall onlyOwner;
+```
+
+### getBoostSourceTimelockState
+
+Read the entire boost-source timelock state in one call.
+
+
+```solidity
+function getBoostSourceTimelockState()
+    external
+    view
+    returns (
+        address pendingBoostMgr,
+        uint256 boostMgrEffectiveAt,
+        address pendingGauge,
+        uint256 gaugeEffectiveAt,
+        bool armed
+    );
+```
+**Returns**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`pendingBoostMgr`|`address`|The pending replacement for `boostManager`, or address(0).|
+|`boostMgrEffectiveAt`|`uint256`|Timestamp at which `commitBoostManager` may run, or 0 if no proposal.|
+|`pendingGauge`|`address`|The pending replacement for `vaultGaugeVoting`, or address(0).|
+|`gaugeEffectiveAt`|`uint256`|Timestamp at which `commitVaultGaugeVoting` may run, or 0 if no proposal.|
+|`armed`|`bool`|Whether the timelock has been armed (legacy setters disabled).|
+
+
+### setAuthorizedAmoeRelayer
+
+Set the trusted off-chain relayer for AMOE entries.
+
+Single-address allowlist. Pass address(0) to disable AMOE entirely.
+
+
+```solidity
+function setAuthorizedAmoeRelayer(address _relayer) external onlyDelegateCall onlyOwner;
+```
+
+### setBaseCeilingPPM
+
+Set the pre-boost win-chance ceiling (PPM).
+
+Bounded by `lotteryConfig.maxWinChance` (so a misconfigured ceiling
+cannot widen the absolute cap) and by 100_000 PPM (10%) as a hard
+sanity ceiling on the *unboosted* chance — if you ever need more,
+raise this constant deliberately in a future audit.
+
+
+```solidity
+function setBaseCeilingPPM(uint256 _ceilingPPM) external onlyDelegateCall onlyOwner;
 ```
 
 ### setLotteryConfig
@@ -653,6 +875,66 @@ event SponsorshipRateLimitsUpdated(
 event SponsoredVrfMinSwapUpdated(uint256 minSwapAmountUSD);
 ```
 
+### AuthorizedAmoeRelayerUpdated
+
+```solidity
+event AuthorizedAmoeRelayerUpdated(address indexed previousRelayer, address indexed newRelayer);
+```
+
+### BaseCeilingPPMUpdated
+
+```solidity
+event BaseCeilingPPMUpdated(uint256 previousCeilingPPM, uint256 newCeilingPPM);
+```
+
+### BoostManagerProposed
+
+```solidity
+event BoostManagerProposed(address indexed previous, address indexed proposed, uint256 effectiveAt);
+```
+
+### BoostManagerProposalCancelled
+
+```solidity
+event BoostManagerProposalCancelled(address indexed cancelled);
+```
+
+### BoostManagerUpdated
+
+```solidity
+event BoostManagerUpdated(address indexed previous, address indexed newManager);
+```
+
+### VaultGaugeVotingProposed
+
+```solidity
+event VaultGaugeVotingProposed(address indexed previous, address indexed proposed, uint256 effectiveAt);
+```
+
+### VaultGaugeVotingProposalCancelled
+
+```solidity
+event VaultGaugeVotingProposalCancelled(address indexed cancelled);
+```
+
+### VaultGaugeVotingUpdated
+
+```solidity
+event VaultGaugeVotingUpdated(address indexed previous, address indexed newGauge);
+```
+
+### BoostSourceTimelockArmed
+
+```solidity
+event BoostSourceTimelockArmed();
+```
+
+### BoostSourcesDisabled
+
+```solidity
+event BoostSourcesDisabled(address indexed previousBoostManager, address indexed previousVaultGaugeVoting);
+```
+
 ## Errors
 ### ZeroAddress
 
@@ -670,6 +952,36 @@ error InvalidAmount();
 
 ```solidity
 error OnlyDelegateCall();
+```
+
+### TimelockNotArmed
+
+```solidity
+error TimelockNotArmed();
+```
+
+### TimelockAlreadyArmed
+
+```solidity
+error TimelockAlreadyArmed();
+```
+
+### TimelockNotExpired
+
+```solidity
+error TimelockNotExpired();
+```
+
+### NoPendingProposal
+
+```solidity
+error NoPendingProposal();
+```
+
+### LegacySetterDisabled
+
+```solidity
+error LegacySetterDisabled();
 ```
 
 ## Structs

@@ -2,7 +2,7 @@
 [Git Source](https://github.com/wenakita/4626/blob/main/contracts/vault/strategies/CCALaunchStrategyEncodingHelper.sol)
 
 
-## State Variables
+## Constants
 ### MPS
 
 ```solidity

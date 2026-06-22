@@ -15,7 +15,7 @@ Bridge adapter for 4626 assets between Base and Solana.
 Used to register bridge tokens and route bridge + lottery actions.
 
 
-## State Variables
+## Constants
 ### BRIDGE
 Base-Solana Bridge on Base Mainnet
 
@@ -55,6 +55,7 @@ bytes32 public constant NATIVE_SOL_PUBKEY =
 ```
 
 
+## State Variables
 ### registry
 Registry for looking up vault addresses
 
@@ -242,7 +243,11 @@ Bridge a registered Base token from Base to Solana
 
 
 ```solidity
-function bridgeToSolana(address token, uint256 amount, bytes32 solanaDestination) external payable nonReentrant;
+function bridgeToSolana(address token, uint256 amount, bytes32 solanaDestination)
+    external
+    payable
+    nonReentrant
+    returns (bool success);
 ```
 **Parameters**
 
@@ -251,6 +256,12 @@ function bridgeToSolana(address token, uint256 amount, bytes32 solanaDestination
 |`token`|`address`|The Base token to bridge|
 |`amount`|`uint256`|Amount to bridge|
 |`solanaDestination`|`bytes32`|Destination address on Solana (as bytes32)|
+
+**Returns**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`success`|`bool`|Always true on the happy path. The underlying `IBaseSolanaBridge.bridgeToken` reverts on failure, so reaching the return statement implies the bridge submitted the transfer. The bool exists so callers (e.g. `SolanaBridgeStrategy`) can enforce an explicit success check at the interface boundary instead of relying on revert-only semantics, in case a future adapter variant introduces a non-reverting failure branch. See FIX: H-06 (4626-438).|
 
 
 ### bridgeToSolanaWithIxs

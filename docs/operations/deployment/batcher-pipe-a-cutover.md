@@ -149,15 +149,15 @@ pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
 
 **LZ Base↔Solana wire (2026-05-27) — operator correction required**
 
-Solana share-mesh infra (oftStore `G3rfXFKv…`, mint `5puVV8…`, batcher `solanaShareOftPeer` bytes32) is live. **Do not treat legacy `wsAKITA` (`0x4df30fFf…`) as the Base mesh wire target** — it is the grandfathered vault ShareOFT (old bytecode, `totalSupply = 0`). A mistaken scaffold stub (`AkitaShareOFT.json` → that address) caused `lz:oapp:wire` to run ULN + `setPeer(30168)` against the legacy token. That peer set is **not** the intended Pipe A mesh leg.
+Solana share-mesh infra (oftStore `G3rfXFKv…`, mint `5puVV8…`, batcher `solanaShareOftPeer` bytes32) is live. The Base mesh wire target must be the new ShareOFT on the `■AKITA` path. A scaffold stub (`AkitaShareOFT.json`) previously pointed to `0x4df30fFf…` and ran `lz:oapp:wire` + `setPeer(30168)` on that contract; that peer set is not the intended Pipe A mesh leg.
 
 | Item | Status |
 |------|--------|
 | Solana oftStore + mint + batcher default peer bytes32 | ✅ Platform infra |
 | Solana ULN 6-of-9 on oftStore | ✅ (init-config + wire touched Solana side) |
 | Solana mint metadata `■AKITA` | ✅ |
-| Base wire target | ❌ **Wrong** — legacy `wsAKITA` `0x4df30…`; use a **new** Base mesh OFT (scaffold `MyOFT` at `0x60F44…` or fresh deploy with `■AKITA` naming), not grandfathered ShareOFT |
-| Legacy `wsAKITA` `peers(30168)` | ⚠️ Set by mistake — do not bridge from this token; greenfield finalize uses **new** `CreatorShareOFT` per vault |
+| Base wire target | ❌ **Wrong** — `0x4df30…`; use a **new** Base mesh OFT (scaffold `MyOFT` at `0x60F44…` or fresh deploy with `■AKITA` naming) |
+| `0x4df30…` `peers(30168)` | ⚠️ Set by mistake — do not bridge from this token; greenfield finalize uses **new** `CreatorShareOFT` per vault (`■AKITA`) |
 | Registry `getRemoteOFTPeerBytes32(AKITA, 30168)` | Zero until AKITA registered on registry |
 | `configureCreatorMesh` | Blocked — grandfathered wrapper lacks beneficiary-operator wiring |
 

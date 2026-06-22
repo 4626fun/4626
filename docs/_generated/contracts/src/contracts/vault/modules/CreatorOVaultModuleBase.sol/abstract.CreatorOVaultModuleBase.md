@@ -7,7 +7,7 @@
 Shared helpers for CreatorOVault delegatecall modules.
 
 
-## State Variables
+## Constants
 ### _self
 
 ```solidity

@@ -12,7 +12,7 @@ CREATE2 deployer using bytecode stored on-chain.
 Used with `UniversalBytecodeStore` to keep calldata small.
 
 
-## State Variables
+## Constants
 ### store
 
 ```solidity
@@ -27,6 +27,7 @@ address public immutable owner
 ```
 
 
+## State Variables
 ### authorizedDeployers
 
 ```solidity
@@ -39,7 +40,7 @@ mapping(address => bool) public authorizedDeployers
 
 
 ```solidity
-constructor(address _store) ;
+constructor(address _store, address _owner) ;
 ```
 
 ### setAuthorizedDeployer

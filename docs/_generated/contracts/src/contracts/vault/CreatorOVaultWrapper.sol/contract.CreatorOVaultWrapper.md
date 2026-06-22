@@ -38,7 +38,7 @@ Constructor only takes immutables
 Chain-specific shareOFT set via setShareOFT() after deployment
 
 
-## State Variables
+## Constants
 ### NORMALIZATION_FACTOR
 Normalization factor to offset the vault's 10^3 decimals offset
 
@@ -73,6 +73,21 @@ IERC4626 public immutable vault
 ```
 
 
+### MAX_FEE
+
+```solidity
+uint256 public constant MAX_FEE = 1000
+```
+
+
+### BASIS_POINTS
+
+```solidity
+uint256 public constant BASIS_POINTS = 10000
+```
+
+
+## State Variables
 ### shareOFT
 ShareOFT token (e.g., ■AKITA) - set post-deploy
 
@@ -139,20 +154,6 @@ uint256 public wrapFee
 
 ```solidity
 uint256 public unwrapFee
-```
-
-
-### MAX_FEE
-
-```solidity
-uint256 public constant MAX_FEE = 1000
-```
-
-
-### BASIS_POINTS
-
-```solidity
-uint256 public constant BASIS_POINTS = 10000
 ```
 
 
@@ -686,6 +687,28 @@ function _requireBeneficiaryOperator(address beneficiary) internal view;
 function _requireWrapperCooldown(address user) internal view;
 ```
 
+### propagateCooldownOnTransfer
+
+FIX: M-08 — propagate the wrapper cooldown on ShareOFT transfers.
+
+Called by CreatorShareOFT._update on every non-mint/non-burn ERC20 movement
+(including LayerZero credit/debit via the OFT transfer hooks). Propagates
+`lastWrapperDepositBlock[from]` forward to `to` so a user cannot deposit,
+transfer the resulting ShareOFT to a fresh address, and withdraw in the
+same block.
+Only the registered `shareOFT` may call this function. The hook is a
+monotonically-increasing max-propagator: it never decreases an existing
+cooldown on the recipient, so stacking deposits from multiple sources
+behaves correctly.
+Mint (from == 0) and burn (to == 0) are skipped: deposit paths in this
+contract already record `lastWrapperDepositBlock[msg.sender] = block.number`
+on the original depositor, and burns have no recipient.
+
+
+```solidity
+function propagateCooldownOnTransfer(address from, address to) external;
+```
+
 ### _requireSynchronousRedemption
 
 
@@ -746,6 +769,12 @@ event FeeRecipientUpdated(address indexed recipient);
 
 ```solidity
 event BeneficiaryOperatorUpdated(address indexed operator, bool status);
+```
+
+### CooldownPropagated
+
+```solidity
+event CooldownPropagated(address indexed from, address indexed to, uint256 propagatedBlock);
 ```
 
 ## Errors
@@ -835,6 +864,12 @@ error AmountTooSmallToNormalize();
 
 ```solidity
 error WrapperWithdrawTooSoon(uint256 currentBlock, uint256 requiredBlock);
+```
+
+### CooldownHookUnauthorizedCaller
+
+```solidity
+error CooldownHookUnauthorizedCaller(address caller);
 ```
 
 ### UnauthorizedBeneficiaryOperator

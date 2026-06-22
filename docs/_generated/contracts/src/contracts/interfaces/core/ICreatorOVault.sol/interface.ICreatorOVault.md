@@ -34,6 +34,13 @@ function setModulesOnce(address coreModule, address strategiesModule, address ad
 function setGaugeController(address _controller) external;
 ```
 
+### setCCALaunchStrategy
+
+
+```solidity
+function setCCALaunchStrategy(address _ccaLaunchStrategy) external;
+```
+
 ### setWhitelist
 
 

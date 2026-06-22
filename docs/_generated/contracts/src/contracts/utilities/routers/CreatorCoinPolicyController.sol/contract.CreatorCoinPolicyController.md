@@ -13,11 +13,17 @@ CreatorCoinPolicyController
 Protocol-owned policy controller for CreatorCoin admin actions.
 
 This contract is intended to hold CreatorCoin ownership after deployment.
-It only permits setting payoutRecipient to the configured router and
-supports an explicit ownership handoff for controlled upgrades/migrations.
+It only permits setting the creatorCoinPayoutRecipient (external earnings lane)
+to the configured PayoutRouter and supports an explicit ownership handoff for
+controlled upgrades/migrations.
+Per AGENTS.md "Canonical Lane Terminology":
+- creatorCoinPayoutRecipient = CreatorCoin external earnings lane (routes to
+PayoutRouter → VaultShareBurnStream in router mode, or direct treasury).
+- This is distinct from tradeFeeCollector (ShareOFT/hook trade-fee lane).
+See docs/audits/creatorvault-business-logic-core-structure-audit.md.
 
 
-## State Variables
+## Constants
 ### creatorCoin
 
 ```solidity
@@ -32,6 +38,7 @@ address public immutable payoutRouter
 ```
 
 
+## State Variables
 ### pendingCreatorCoinOwner
 
 ```solidity
@@ -49,7 +56,9 @@ constructor(address _creatorCoin, address _payoutRouter, address _owner) Ownable
 
 ### enforcePayoutRouter
 
-Enforce payout recipient to the configured payout router.
+Enforce creatorCoinPayoutRecipient (external earnings lane) to the configured PayoutRouter.
+The on-chain CreatorCoin function is still named setPayoutRecipient (ABI compatibility).
+All prose, docs, and higher-level comments use the canonical AGENTS.md term.
 
 
 ```solidity

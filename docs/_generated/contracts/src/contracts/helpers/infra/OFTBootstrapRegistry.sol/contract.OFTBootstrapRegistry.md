@@ -16,13 +16,31 @@ permitted — this contract is intentionally write-free to eliminate the
 endpoint poisoning attack surface.
 
 
-## State Variables
+## Constants
 ### LZ_COMMON_ENDPOINT
 LayerZero v2 EndpointV2 — identical address on all EVM chains.
 
 
 ```solidity
 address public constant LZ_COMMON_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c
+```
+
+
+### BASE_CHAIN_ID
+Base mainnet chain id.
+
+
+```solidity
+uint256 public constant BASE_CHAIN_ID = 8453
+```
+
+
+### BASE_EID
+LayerZero EID for Base mainnet.
+
+
+```solidity
+uint32 public constant BASE_EID = 30184
 ```
 
 
@@ -44,5 +62,17 @@ function getLayerZeroEndpoint(
     external
     pure
     returns (address);
+```
+
+### getEidForChainId
+
+Return the LayerZero EID for the provided chain id.
+
+The deployment lane currently targets Base only; returning 0 for
+unknown chain IDs preserves CreatorShareOFT's constructor guard.
+
+
+```solidity
+function getEidForChainId(uint256 chainId) external pure returns (uint32);
 ```
 

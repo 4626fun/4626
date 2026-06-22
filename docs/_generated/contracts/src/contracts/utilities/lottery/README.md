@@ -1,7 +1,9 @@
 
 
 # Contents
+- [randomness](/contracts/utilities/lottery/randomness)
 - [vrf](/contracts/utilities/lottery/vrf)
+- [zk](/contracts/utilities/lottery/zk)
 - [ICreatorRegistryLottery](CreatorLotteryManager.sol/interface.ICreatorRegistryLottery.md)
 - [ICreatorGaugeControllerLottery](CreatorLotteryManager.sol/interface.ICreatorGaugeControllerLottery.md)
 - [ICreatorVRFConsumer](CreatorLotteryManager.sol/interface.ICreatorVRFConsumer.md)

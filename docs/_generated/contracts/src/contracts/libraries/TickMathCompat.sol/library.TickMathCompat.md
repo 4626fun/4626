@@ -12,7 +12,7 @@ Math helpers for tick <-> sqrtPriceX96 conversions.
 Vendored from Uniswap v3-core with 0.8.x compatibility fixes.
 
 
-## State Variables
+## Constants
 ### MIN_TICK
 The minimum tick that may be passed to #getSqrtRatioAtTick computed from log base 1.0001 of 2**-128
 

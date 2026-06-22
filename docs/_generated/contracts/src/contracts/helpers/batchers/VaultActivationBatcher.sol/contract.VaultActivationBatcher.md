@@ -5,7 +5,7 @@
 ReentrancyGuard
 
 
-## State Variables
+## Constants
 ### OP_ACTIVATE
 Bitmask permission (must match `CreatorOVault.OP_ACTIVATE`)
 

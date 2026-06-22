@@ -12,7 +12,7 @@ Minimal bytecode storage helper.
 Internal library used by UniversalBytecodeStore.
 
 
-## State Variables
+## Constants
 ### DATA_OFFSET
 
 ```solidity

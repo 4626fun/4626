@@ -14,7 +14,7 @@ owner action (`bridgeToSolana`) so vault withdrawals are not implicitly coupled 
 cross-chain return path.
 
 
-## State Variables
+## Constants
 ### vault
 
 ```solidity
@@ -29,6 +29,7 @@ IERC20 public immutable ASSET
 ```
 
 
+## State Variables
 ### bridgeAdapter
 
 ```solidity
@@ -212,5 +213,11 @@ error BridgeConfigMissing();
 
 ```solidity
 error BridgeCallNotConsumed(uint256 expected, uint256 actual);
+```
+
+### BridgeAdapterReportedFailure
+
+```solidity
+error BridgeAdapterReportedFailure();
 ```
 

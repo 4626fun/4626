@@ -12,7 +12,7 @@ Minimal CREATE2 deployer for deterministic deployments.
 Used by deployment tooling that passes init code via calldata.
 
 
-## State Variables
+## Constants
 ### owner
 
 ```solidity
@@ -20,6 +20,7 @@ address public immutable owner
 ```
 
 
+## State Variables
 ### authorizedDeployers
 
 ```solidity

@@ -5,7 +5,7 @@
 Ownable, ReentrancyGuard
 
 
-## State Variables
+## Constants
 ### MIN_TICK
 Full range tick bounds (Uniswap V4 max)
 
@@ -40,6 +40,16 @@ IERC20 public immutable PAIRED_TOKEN
 ```
 
 
+### hookRegistry
+Governance-managed hook allowlist for V4 pool configuration.
+
+
+```solidity
+IApprovedV4HooksRegistry public immutable hookRegistry
+```
+
+
+## State Variables
 ### lpManager
 LP Manager that controls this strategy
 
@@ -100,15 +110,6 @@ Permit2 contract used by PosM for token pulls into PoolManager
 
 ```solidity
 address public permit2
-```
-
-
-### hookRegistry
-Governance-managed hook allowlist for V4 pool configuration.
-
-
-```solidity
-IApprovedV4HooksRegistry public immutable hookRegistry
 ```
 
 

@@ -5,7 +5,7 @@
 Ownable
 
 
-## State Variables
+## Constants
 ### TAX_HOOK
 The existing tax hook on Base
 

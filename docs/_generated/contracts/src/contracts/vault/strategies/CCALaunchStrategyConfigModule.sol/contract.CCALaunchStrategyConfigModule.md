@@ -5,7 +5,7 @@
 Ownable, ReentrancyGuard
 
 
-## State Variables
+## Constants
 ### BPS_DENOMINATOR
 
 ```solidity
@@ -104,6 +104,14 @@ IERC20 public immutable auctionToken
 ```
 
 
+### _self
+
+```solidity
+address private immutable _self
+```
+
+
+## State Variables
 ### currency
 
 ```solidity
@@ -332,13 +340,6 @@ uint64 public defaultSweepDelayBlocks
 
 ```solidity
 bool public simpleLaunchEnabled
-```
-
-
-### _self
-
-```solidity
-address private immutable _self
 ```
 
 

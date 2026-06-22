@@ -5,7 +5,7 @@
 Ownable, ReentrancyGuard
 
 
-## State Variables
+## Constants
 ### BPS
 
 ```solidity
@@ -27,6 +27,7 @@ ICreatorRegistryForVoterRewards public immutable registry
 ```
 
 
+## State Variables
 ### protocolTreasury
 Where zero-vote epoch rewards are swept after the grace period.
 

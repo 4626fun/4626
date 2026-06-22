@@ -27,7 +27,7 @@ WHY CCA?
 CCA Factory is chain-specific; configure via `CCA_FACTORY`.
 
 
-## State Variables
+## Constants
 ### UNISWAP_CCA_FACTORY_V110
 Uniswap v1.1.0 CCA factory (canonical on Base/Mainnet/Unichain/Sepolia)
 
@@ -102,6 +102,21 @@ IERC20 public immutable auctionToken
 ```
 
 
+### _configModule
+
+```solidity
+address private immutable _configModule
+```
+
+
+### _encodingHelper
+
+```solidity
+CCALaunchStrategyEncodingHelper private immutable _encodingHelper
+```
+
+
+## State Variables
 ### currency
 Currency to raise (address(0) for ETH)
 
@@ -402,20 +417,6 @@ If false, `launchAuctionSimple` is disabled.
 
 ```solidity
 bool public simpleLaunchEnabled
-```
-
-
-### _configModule
-
-```solidity
-address private immutable _configModule
-```
-
-
-### _encodingHelper
-
-```solidity
-CCALaunchStrategyEncodingHelper private immutable _encodingHelper
 ```
 
 

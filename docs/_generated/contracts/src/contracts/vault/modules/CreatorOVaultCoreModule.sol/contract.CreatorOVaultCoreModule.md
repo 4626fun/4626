@@ -9,7 +9,7 @@ Core ERC-4626 + queue + profit unlocking + reporting logic for CreatorOVault.
 Must be invoked via delegatecall from CreatorOVault.
 
 
-## State Variables
+## Constants
 ### MODULE_KIND
 
 ```solidity
@@ -20,7 +20,7 @@ bytes32 internal constant MODULE_KIND = keccak256("CreatorOVaultModule.core")
 ### MODULE_STORAGE_VERSION
 
 ```solidity
-bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.current")
+bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v3")
 ```
 
 
@@ -35,6 +35,13 @@ uint16 internal constant MAX_FEE = 2_000
 
 ```solidity
 uint256 internal constant MAX_BPS = 10_000
+```
+
+
+### SECONDS_PER_YEAR
+
+```solidity
+uint256 internal constant SECONDS_PER_YEAR = 31_556_952
 ```
 
 
@@ -56,6 +63,27 @@ uint256 internal constant MAX_PRICE_CHANGE_BPS = 1000
 
 ```solidity
 uint256 internal constant MINIMUM_FIRST_DEPOSIT = 50_000_000e18
+```
+
+
+### MAX_VALUATION_MISS_THRESHOLD
+
+```solidity
+uint8 internal constant MAX_VALUATION_MISS_THRESHOLD = 30
+```
+
+
+### IMPAIR_REASON_MAX
+
+```solidity
+uint256 internal constant IMPAIR_REASON_MAX = 7
+```
+
+
+### CCA_PHASE_AUCTION_LIVE
+
+```solidity
+uint8 internal constant CCA_PHASE_AUCTION_LIVE = 1
 ```
 
 
@@ -120,14 +148,21 @@ function _getStrategyAssetsSafe(address strategy) internal view returns (uint256
 
 
 ```solidity
-function _firstStrategyValuationNotReady() internal view returns (address bad);
+function _firstStrategyValuationNotReady(bool allowMissGrace) internal view returns (address bad);
 ```
 
 ### _requireStrategyValuationsReady
 
 
 ```solidity
-function _requireStrategyValuationsReady() internal view;
+function _requireStrategyValuationsReady(bool allowMissGrace) internal view;
+```
+
+### _isCcaAuctionLive
+
+
+```solidity
+function _isCcaAuctionLive() internal view returns (bool);
 ```
 
 ### deposit
@@ -283,6 +318,34 @@ function pricePerShare() public view onlyDelegateCall returns (uint256);
 function report() external onlyDelegateCall returns (uint256 profit, uint256 loss);
 ```
 
+### _accrueManagementFee
+
+
+```solidity
+function _accrueManagementFee(uint256 currentTotalAssets) internal;
+```
+
+### _processValuationHealth
+
+
+```solidity
+function _processValuationHealth() internal;
+```
+
+### _ejectDisabledStrategy
+
+
+```solidity
+function _ejectDisabledStrategy(address strategy) internal;
+```
+
+### _isValuationReady
+
+
+```solidity
+function _isValuationReady(address strategy) internal view returns (bool);
+```
+
 ### _increaseReportBaselineForPrincipalInflow
 
 
@@ -309,6 +372,97 @@ function burnSharesForPriceIncrease(uint256 shares) external onlyDelegateCall;
 
 ```solidity
 function injectCapital(uint256 amount) external onlyDelegateCall;
+```
+
+### setImpairmentChallengeWindow
+
+
+```solidity
+function setImpairmentChallengeWindow(uint64 window) external onlyDelegateCall;
+```
+
+### tripImpairment
+
+
+```solidity
+function tripImpairment(address strategy, uint256 reasonCode) external onlyDelegateCall returns (uint256 epochId);
+```
+
+### clearImpairmentTrip
+
+
+```solidity
+function clearImpairmentTrip(uint256 epochId) external onlyDelegateCall;
+```
+
+### proposeImpairmentRoot
+
+
+```solidity
+function proposeImpairmentRoot(
+    uint256 epochId,
+    bytes32 snapshotRoot,
+    uint256 totalClaimSupply,
+    address recoveryAsset
+) external onlyDelegateCall;
+```
+
+### challengeImpairmentRoot
+
+
+```solidity
+function challengeImpairmentRoot(uint256 epochId, string calldata reason) external onlyDelegateCall;
+```
+
+### clearImpairmentRootAfterChallenge
+
+
+```solidity
+function clearImpairmentRootAfterChallenge(uint256 epochId) external onlyDelegateCall;
+```
+
+### finalizeImpairment
+
+
+```solidity
+function finalizeImpairment(uint256 epochId) external onlyDelegateCall;
+```
+
+### mintImpairmentClaim
+
+
+```solidity
+function mintImpairmentClaim(uint256 epochId, address account, uint256 amount, bytes32[] calldata proof)
+    external
+    onlyDelegateCall;
+```
+
+### notifyImpairmentRecovery
+
+
+```solidity
+function notifyImpairmentRecovery(uint256 epochId, uint256 amount) external onlyDelegateCall;
+```
+
+### claimImpairmentRecovery
+
+
+```solidity
+function claimImpairmentRecovery(
+    uint256 epochId,
+    address receiver,
+    uint256 /*claimUnits*/
+)
+    external
+    onlyDelegateCall
+    returns (uint256 amountOut);
+```
+
+### _isStrategyListed
+
+
+```solidity
+function _isStrategyListed(address strategy) internal view returns (bool);
 ```
 
 ### _revertBytes
@@ -339,6 +493,18 @@ event Withdraw(
 event Reported(uint256 profit, uint256 loss, uint256 performanceFees, uint256 totalAssets);
 ```
 
+### ManagementFeeAccrued
+
+```solidity
+event ManagementFeeAccrued(uint256 feeAssets, uint256 feeShares, uint256 elapsedSeconds);
+```
+
+### StrategyValuationAutoDisabled
+
+```solidity
+event StrategyValuationAutoDisabled(address indexed strategy, uint8 consecutiveMisses);
+```
+
 ### CapitalInjected
 
 ```solidity
@@ -367,6 +533,82 @@ event WithdrawalClaimed(address indexed user, uint256 assets);
 
 ```solidity
 event WithdrawalCancelled(address indexed user, uint256 shares);
+```
+
+### ImpairmentChallengeWindowUpdated
+
+```solidity
+event ImpairmentChallengeWindowUpdated(uint64 newWindow);
+```
+
+### ImpairmentTripped
+
+```solidity
+event ImpairmentTripped(
+    uint256 indexed epochId,
+    address indexed strategy,
+    uint256 indexed reasonCode,
+    uint256 tripBlock,
+    uint256 totalSharesAtTrip
+);
+```
+
+### ImpairmentTripCleared
+
+```solidity
+event ImpairmentTripCleared(uint256 indexed epochId, address indexed strategy);
+```
+
+### ImpairmentRootProposed
+
+```solidity
+event ImpairmentRootProposed(uint256 indexed epochId, bytes32 indexed root, uint64 unlockTime);
+```
+
+### ImpairmentRootChallenged
+
+```solidity
+event ImpairmentRootChallenged(uint256 indexed epochId, address indexed challenger, string reason);
+```
+
+### ImpairmentRootCleared
+
+```solidity
+event ImpairmentRootCleared(uint256 indexed epochId);
+```
+
+### ImpairmentRootFinalized
+
+```solidity
+event ImpairmentRootFinalized(uint256 indexed epochId, bytes32 indexed root, uint256 totalClaimSupply);
+```
+
+### ImpairmentFinalized
+
+```solidity
+event ImpairmentFinalized(
+    uint256 indexed epochId, address indexed strategy, bytes32 indexed root, uint256 excludedBookValue
+);
+```
+
+### ImpairmentRecoveryNotified
+
+```solidity
+event ImpairmentRecoveryNotified(uint256 indexed epochId, address indexed asset, uint256 amount);
+```
+
+### ImpairmentRecoveryClaimed
+
+```solidity
+event ImpairmentRecoveryClaimed(
+    uint256 indexed epochId, address indexed account, address indexed receiver, uint256 amount
+);
+```
+
+### ImpairmentResolved
+
+```solidity
+event ImpairmentResolved(uint256 indexed epochId);
 ```
 
 ## Errors
@@ -500,5 +742,125 @@ error ModulesNotSet();
 
 ```solidity
 error OnlyGaugeController();
+```
+
+### VaultNotNormal
+
+```solidity
+error VaultNotNormal();
+```
+
+### VaultNotSuspect
+
+```solidity
+error VaultNotSuspect();
+```
+
+### NoActiveImpairment
+
+```solidity
+error NoActiveImpairment();
+```
+
+### ImpairmentAlreadyActive
+
+```solidity
+error ImpairmentAlreadyActive(uint256 epochId);
+```
+
+### InvalidImpairmentEpoch
+
+```solidity
+error InvalidImpairmentEpoch(uint256 epochId);
+```
+
+### InvalidImpairmentTransition
+
+```solidity
+error InvalidImpairmentTransition(uint256 epochId);
+```
+
+### StrategyAlreadyImpaired
+
+```solidity
+error StrategyAlreadyImpaired(address strategy);
+```
+
+### StrategyNotImpaired
+
+```solidity
+error StrategyNotImpaired(address strategy);
+```
+
+### InvalidImpairmentReason
+
+```solidity
+error InvalidImpairmentReason(uint256 reasonCode);
+```
+
+### ImpairmentRootNotReady
+
+```solidity
+error ImpairmentRootNotReady(uint64 unlockTime);
+```
+
+### ImpairmentRootRequired
+
+```solidity
+error ImpairmentRootRequired(uint256 epochId);
+```
+
+### ImpairmentRootAlreadyFinalized
+
+```solidity
+error ImpairmentRootAlreadyFinalized(uint256 epochId);
+```
+
+### ImpairmentRootChallengedErr
+
+```solidity
+error ImpairmentRootChallengedErr(uint256 epochId);
+```
+
+### ChallengeWindowNotConfigured
+
+```solidity
+error ChallengeWindowNotConfigured();
+```
+
+### ClaimAlreadyMinted
+
+```solidity
+error ClaimAlreadyMinted(uint256 epochId, address account);
+```
+
+### InvalidClaimProof
+
+```solidity
+error InvalidClaimProof(uint256 epochId, address account);
+```
+
+### NothingToClaim
+
+```solidity
+error NothingToClaim(uint256 epochId, address account);
+```
+
+### RecoveryEscrowNotConfigured
+
+```solidity
+error RecoveryEscrowNotConfigured();
+```
+
+### ClaimSupplyExceeded
+
+```solidity
+error ClaimSupplyExceeded(uint256 epochId, uint256 totalClaimSupply, uint256 requested);
+```
+
+### CcaAuctionDepositBlocked
+
+```solidity
+error CcaAuctionDepositBlocked();
 ```
 

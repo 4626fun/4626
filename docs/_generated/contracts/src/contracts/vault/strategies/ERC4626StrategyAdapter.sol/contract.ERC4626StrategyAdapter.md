@@ -15,7 +15,7 @@ Adapts an ERC-4626 vault to the `IStrategy` interface.
 Used by CreatorOVault to integrate ERC-4626 yield sources.
 
 
-## State Variables
+## Constants
 ### vault
 CreatorOVault that owns this strategy.
 
@@ -43,6 +43,7 @@ IERC4626 public immutable ERC4626_VAULT
 ```
 
 
+## State Variables
 ### _isActive
 Strategy active flag.
 

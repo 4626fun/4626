@@ -9,7 +9,7 @@ Admin + emergency + rescue + config logic for CreatorOVault.
 Must be invoked via delegatecall from CreatorOVault.
 
 
-## State Variables
+## Constants
 ### MODULE_KIND
 
 ```solidity
@@ -20,7 +20,7 @@ bytes32 internal constant MODULE_KIND = keccak256("CreatorOVaultModule.admin")
 ### MODULE_STORAGE_VERSION
 
 ```solidity
-bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.current")
+bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v3")
 ```
 
 
@@ -38,10 +38,73 @@ uint16 internal constant MAX_FEE = 2_000
 ```
 
 
+### MAX_MANAGEMENT_FEE
+
+```solidity
+uint16 internal constant MAX_MANAGEMENT_FEE = 500
+```
+
+
 ### SECONDS_PER_YEAR
 
 ```solidity
 uint256 internal constant SECONDS_PER_YEAR = 365 days
+```
+
+
+### MIN_RISK_CONFIG_DELAY
+
+```solidity
+uint64 internal constant MIN_RISK_CONFIG_DELAY = 1 days
+```
+
+
+### MAX_RISK_CONFIG_DELAY
+
+```solidity
+uint64 internal constant MAX_RISK_CONFIG_DELAY = 30 days
+```
+
+
+### RISK_KIND_NONE
+
+```solidity
+uint8 internal constant RISK_KIND_NONE = 0
+```
+
+
+### RISK_KIND_PERFORMANCE_FEE
+
+```solidity
+uint8 internal constant RISK_KIND_PERFORMANCE_FEE = 1
+```
+
+
+### RISK_KIND_MANAGEMENT_FEE
+
+```solidity
+uint8 internal constant RISK_KIND_MANAGEMENT_FEE = 2
+```
+
+
+### RISK_KIND_STRATEGY_MAX_ASSETS
+
+```solidity
+uint8 internal constant RISK_KIND_STRATEGY_MAX_ASSETS = 3
+```
+
+
+### RISK_KIND_MANAGEMENT_FEE_RECIPIENT
+
+```solidity
+uint8 internal constant RISK_KIND_MANAGEMENT_FEE_RECIPIENT = 4
+```
+
+
+### MAX_VALUATION_MISS_THRESHOLD
+
+```solidity
+uint8 internal constant MAX_VALUATION_MISS_THRESHOLD = 30
 ```
 
 
@@ -109,6 +172,17 @@ function setPaused(bool _paused) external onlyDelegateCall;
 function setGaugeController(address _gaugeController) external onlyDelegateCall;
 ```
 
+### setCCALaunchStrategy
+
+Link/unlink the vault's CCA strategy used for auction-time deposit gating.
+
+Zero address clears the gate linkage.
+
+
+```solidity
+function setCCALaunchStrategy(address _ccaLaunchStrategy) external onlyDelegateCall;
+```
+
 ### setBurnStream
 
 Update the vault's burn stream address.
@@ -130,6 +204,17 @@ Emits UpdateBurnStream(oldBurnStream, newBurnStream).
 
 ```solidity
 function setBurnStream(address _burnStream) external onlyDelegateCall;
+```
+
+### setBurnStreamAuthorizedQueuer
+
+Authorize or revoke a burn-stream share queuer (for example PayoutRouter).
+
+Only the vault may call `VaultShareBurnStream.setAuthorizedQueuer`; this bridges owner intent.
+
+
+```solidity
+function setBurnStreamAuthorizedQueuer(address queuer, bool authorized) external onlyDelegateCall;
 ```
 
 ### setKeeper
@@ -209,6 +294,104 @@ function finalizeOwnershipRescue() external onlyDelegateCall;
 function setPerformanceFee(uint16 _performanceFee) external onlyDelegateCall;
 ```
 
+### scheduleSetPerformanceFee
+
+
+```solidity
+function scheduleSetPerformanceFee(uint16 _performanceFee) external onlyDelegateCall;
+```
+
+### scheduleSetManagementFee
+
+
+```solidity
+function scheduleSetManagementFee(uint16 _managementFee) external onlyDelegateCall;
+```
+
+### scheduleSetStrategyMaxAssets
+
+
+```solidity
+function scheduleSetStrategyMaxAssets(address strategy, uint256 cap) external onlyDelegateCall;
+```
+
+### scheduleSetManagementFeeRecipient
+
+
+```solidity
+function scheduleSetManagementFeeRecipient(address recipient) external onlyDelegateCall;
+```
+
+### setManagementFeeRecipient
+
+
+```solidity
+function setManagementFeeRecipient(address recipient) external onlyDelegateCall;
+```
+
+### executePendingRiskConfig
+
+
+```solidity
+function executePendingRiskConfig() external onlyDelegateCall;
+```
+
+### cancelPendingRiskConfig
+
+
+```solidity
+function cancelPendingRiskConfig() external onlyDelegateCall;
+```
+
+### setRiskConfigDelay
+
+
+```solidity
+function setRiskConfigDelay(uint64 delay) external onlyDelegateCall;
+```
+
+### setValuationMissThreshold
+
+
+```solidity
+function setValuationMissThreshold(uint8 threshold) external onlyDelegateCall;
+```
+
+### setImpairmentGuardian
+
+
+```solidity
+function setImpairmentGuardian(address guardian) external onlyDelegateCall;
+```
+
+### setImpairmentClaims
+
+
+```solidity
+function setImpairmentClaims(address claims) external onlyDelegateCall;
+```
+
+### setImpairmentRecoveryEscrow
+
+
+```solidity
+function setImpairmentRecoveryEscrow(address escrow) external onlyDelegateCall;
+```
+
+### _scheduleRiskChange
+
+
+```solidity
+function _scheduleRiskChange(uint8 kind, address target, uint256 value) internal;
+```
+
+### _executeRiskChange
+
+
+```solidity
+function _executeRiskChange(uint8 kind, address target, uint256 value) internal;
+```
+
 ### setPerformanceFeeRecipient
 
 
@@ -256,6 +439,18 @@ function setDeploymentParams(uint256 _threshold, uint256 _interval) external onl
 
 ```solidity
 function setMaxTotalSupply(uint256 _maxTotalSupply) external onlyDelegateCall;
+```
+
+### setStrategyMaxAssets
+
+Set the governance-enforced asset cap for a strategy.
+
+Pass 0 to disable the cap (uncapped). The cap clamps the strategy's
+contribution to `totalAssets()` so misreporting cannot inflate share price.
+
+
+```solidity
+function setStrategyMaxAssets(address strategy, uint256 cap) external onlyDelegateCall;
 ```
 
 ### setFlashLoanProtection
@@ -321,10 +516,22 @@ event UpdateEmergencyAdmin(address indexed newEmergencyAdmin);
 event UpdateGaugeController(address indexed oldController, address indexed newController);
 ```
 
+### UpdateCcaLaunchStrategy
+
+```solidity
+event UpdateCcaLaunchStrategy(address indexed oldStrategy, address indexed newStrategy);
+```
+
 ### UpdateBurnStream
 
 ```solidity
 event UpdateBurnStream(address indexed oldBurnStream, address indexed newBurnStream);
+```
+
+### BurnStreamQueuerUpdated
+
+```solidity
+event BurnStreamQueuerUpdated(address indexed queuer, bool authorized);
 ```
 
 ### UpdatePerformanceFee
@@ -417,6 +624,72 @@ event RescueCancelled(address indexed oldOwner);
 event RescueFinalized(address indexed oldOwner, address indexed newOwner);
 ```
 
+### UpdateStrategyMaxAssets
+
+```solidity
+event UpdateStrategyMaxAssets(address indexed strategy, uint256 oldCap, uint256 newCap);
+```
+
+### UpdateManagementFee
+
+```solidity
+event UpdateManagementFee(uint16 newManagementFee);
+```
+
+### UpdateManagementFeeRecipient
+
+```solidity
+event UpdateManagementFeeRecipient(address indexed newRecipient);
+```
+
+### UpdateRiskConfigDelay
+
+```solidity
+event UpdateRiskConfigDelay(uint64 newDelay);
+```
+
+### RiskConfigScheduled
+
+```solidity
+event RiskConfigScheduled(uint8 kind, address indexed target, uint256 value, uint64 unlockTime);
+```
+
+### RiskConfigExecuted
+
+```solidity
+event RiskConfigExecuted(uint8 kind, address indexed target, uint256 value);
+```
+
+### RiskConfigCancelled
+
+```solidity
+event RiskConfigCancelled(uint8 kind);
+```
+
+### UpdateValuationMissThreshold
+
+```solidity
+event UpdateValuationMissThreshold(uint8 newThreshold);
+```
+
+### ImpairmentGuardianUpdated
+
+```solidity
+event ImpairmentGuardianUpdated(address indexed guardian);
+```
+
+### ImpairmentClaimsUpdated
+
+```solidity
+event ImpairmentClaimsUpdated(address indexed claims);
+```
+
+### ImpairmentRecoveryEscrowUpdated
+
+```solidity
+event ImpairmentRecoveryEscrowUpdated(address indexed escrow);
+```
+
 ## Errors
 ### ZeroAddress
 
@@ -500,5 +773,41 @@ error CannotRescueCreatorCoin();
 
 ```solidity
 error ETHTransferFailed();
+```
+
+### RiskConfigDelayOutOfBounds
+
+```solidity
+error RiskConfigDelayOutOfBounds(uint64 provided, uint64 min, uint64 max);
+```
+
+### PendingRiskConfigExists
+
+```solidity
+error PendingRiskConfigExists(uint8 kind);
+```
+
+### NoPendingRiskConfig
+
+```solidity
+error NoPendingRiskConfig();
+```
+
+### RiskConfigTooEarly
+
+```solidity
+error RiskConfigTooEarly(uint64 unlockTime);
+```
+
+### InvalidRiskConfigKind
+
+```solidity
+error InvalidRiskConfigKind(uint8 kind);
+```
+
+### InvalidImpairmentConfig
+
+```solidity
+error InvalidImpairmentConfig(address provided);
 ```
 

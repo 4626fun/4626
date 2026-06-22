@@ -35,7 +35,7 @@ BUILDS ON TOP OF ZORAS CREATOR COINS
 Each creator deploys their own ShareOFT (e.g., ■AKITA for AKITA vault)
 
 
-## State Variables
+## Constants
 ### BASIS_POINTS
 
 ```solidity
@@ -84,21 +84,22 @@ uint128 public constant DEFAULT_FLUSH_GAS_LIMIT = 200_000
 ```
 
 
-### registry
-CreatorRegistry for ecosystem contracts
-
-
-```solidity
-ICreatorRegistry public registry
-```
-
-
 ### chainEid
 Chain EID for this deployment
 
 
 ```solidity
 uint32 public immutable chainEid
+```
+
+
+## State Variables
+### registry
+CreatorRegistry for ecosystem contracts
+
+
+```solidity
+ICreatorRegistry public registry
 ```
 
 
@@ -169,6 +170,13 @@ Minter permissions (for wrapper integration)
 
 ```solidity
 mapping(address => bool) public isMinter
+```
+
+
+### wrapper
+
+```solidity
+address public wrapper
 ```
 
 
@@ -400,6 +408,18 @@ function setMinter(address minter, bool status) external onlyOwner;
 |`status`|`bool`|True to grant, false to revoke|
 
 
+### setWrapper
+
+FIX: M-08 — register the CreatorOVaultWrapper so its per-user wrapper
+cooldown (`lastWrapperDepositBlock`) is propagated on ShareOFT transfers.
+Passing address(0) disables the hook. Exempts the wrapper from fees since
+wrap/unwrap should not be treated as a fee-bearing trade.
+
+
+```solidity
+function setWrapper(address _wrapper) external onlyOwner;
+```
+
 ### mint
 
 Mint shares (vault/minter only)
@@ -475,6 +495,22 @@ Process buy with fees. Follows CEI pattern.
 
 ```solidity
 function _processBuy(address from, address to, uint256 amount) internal nonReentrant returns (bool);
+```
+
+### _update
+
+FIX: M-08 — hook every ERC20 balance change (mints, burns, transfers,
+LayerZero credit/debit via the OFT base _credit/_debit which ultimately
+call _update) to propagate the wrapper’s per-user flash-loan cooldown.
+The hook is a no-op when no wrapper is registered (setWrapper(0)), for
+mints (`from == 0`), burns (`to == 0`), and self-transfers. The wrapper
+call is wrapped in try/catch: a revert in the hook must NOT freeze token
+transfers. Failures are surfaced via `WrapperCooldownHookFailed` so
+operators can page on persistent hook regressions.
+
+
+```solidity
+function _update(address from, address to, uint256 value) internal virtual override;
 ```
 
 ### _routeFees
@@ -909,95 +945,16 @@ On remote chains (vault == address(0)), returns shares 1:1
 function convertToAssets(uint256 shares) public view returns (uint256);
 ```
 
-### previewFee
-
-Preview fee for a transfer
-
-
-```solidity
-function previewFee(address from, address to, uint256 amount) external view returns (bool isBuy, uint256 fee);
-```
-
-### isTradingVenue
-
-Check if address is a trading venue
-
-
-```solidity
-function isTradingVenue(address addr) external view returns (bool);
-```
-
-### canTransfer
-
-Confirm transfers are always allowed
-
-
-```solidity
-function canTransfer(address, address, uint256) external pure returns (bool);
-```
-
-### checkMinter
-
-Check if address is a minter
-
-
-```solidity
-function checkMinter(address account) external view returns (bool);
-```
-
 ### version
 
 Get contract version
 
+Kept as a deliberate part of the runtime ABI — indexers and
+audit tooling commonly check `version()` on deployed OFTs.
+
 
 ```solidity
 function version() external pure returns (string memory);
-```
-
-### category
-
-Get token category
-
-
-```solidity
-function category() external pure returns (string memory);
-```
-
-### description
-
-Get token description
-
-
-```solidity
-function description() external pure returns (string memory);
-```
-
-### canFlush
-
-Check if fees can be flushed (remote chains only)
-
-
-```solidity
-function canFlush() external view returns (bool);
-```
-
-### getRemoteStatus
-
-Get remote chain status
-
-
-```solidity
-function getRemoteStatus()
-    external
-    view
-    returns (
-        uint256 _pendingFees,
-        uint256 _totalFeesFlushed,
-        uint256 _totalLotteryEntriesSent,
-        bool _isHub,
-        uint32 _hubEid,
-        address _hubGaugeReceiver
-    );
 ```
 
 ### contractURI
@@ -1049,27 +1006,6 @@ HTTP GET request to display the correct token image.
 
 ```solidity
 function _buildOnchainContractURI() internal view returns (string memory);
-```
-
-### _buildContractMetadataJson
-
-
-```solidity
-function _buildContractMetadataJson() internal view returns (string memory);
-```
-
-### _jsonAddressOrNull
-
-
-```solidity
-function _jsonAddressOrNull(address addr) internal pure returns (string memory);
-```
-
-### _buildRendererImageUrl
-
-
-```solidity
-function _buildRendererImageUrl(string memory format) internal view returns (string memory);
 ```
 
 ### tradeFeeCollector
@@ -1213,6 +1149,20 @@ event BuyFeeUpdated(uint16 oldFee, uint16 newFee);
 event MinterUpdated(address indexed minter, bool status);
 ```
 
+### WrapperSet
+
+```solidity
+event WrapperSet(address indexed wrapper);
+```
+
+### WrapperCooldownHookFailed
+
+```solidity
+event WrapperCooldownHookFailed(
+    address indexed wrapper, address indexed from, address indexed to, bytes revertData
+);
+```
+
 ### TaxConfigDelegateSet
 
 ```solidity
@@ -1348,6 +1298,12 @@ error NothingToFlush();
 
 ```solidity
 error HubNotConfigured();
+```
+
+### HubGaugeControllerUnset
+
+```solidity
+error HubGaugeControllerUnset();
 ```
 
 ### NotHub

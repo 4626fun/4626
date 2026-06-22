@@ -17,3 +17,10 @@ function __withdrawFromStrategies(uint256 amountNeeded) external returns (uint25
 function __autoAllocateToStrategy() external;
 ```
 
+### __ejectDisabledStrategy
+
+
+```solidity
+function __ejectDisabledStrategy(address strategy) external;
+```
+

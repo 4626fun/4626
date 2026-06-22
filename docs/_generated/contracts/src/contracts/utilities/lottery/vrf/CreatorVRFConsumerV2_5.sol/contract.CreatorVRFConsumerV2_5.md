@@ -5,25 +5,11 @@
 OApp, ReentrancyGuard
 
 
-## State Variables
-### vrfCoordinator
-
-```solidity
-IVRFCoordinatorV2Plus public vrfCoordinator
-```
-
-
+## Constants
 ### registry
 
 ```solidity
 ICreatorRegistry public immutable registry
-```
-
-
-### priceOracle
-
-```solidity
-ICreatorOracle public priceOracle
 ```
 
 
@@ -33,6 +19,81 @@ Base EID (hub chain where VRF lives)
 
 ```solidity
 uint32 public immutable BASE_EID
+```
+
+
+### MAX_PRICE_REPORTING_CHAINS
+Maximum number of distinct remote chains permitted to
+push price updates. Bounds the cost of
+`getAggregatedCreatorPrice()` which iterates
+`priceReportingChains` in O(N).
+
+FIX: L-09 (4626-357) — previously unbounded; a malicious
+set of LayerZero sources could register arbitrarily many EIDs
+and DoS the aggregation read path.
+
+
+```solidity
+uint256 public constant MAX_PRICE_REPORTING_CHAINS = 20
+```
+
+
+### PRICE_STALENESS
+Staleness threshold (2 hours)
+
+
+```solidity
+uint256 public constant PRICE_STALENESS = 7200
+```
+
+
+### IGNORE_REASON_DUPLICATE_SEQUENCE
+
+```solidity
+uint8 private constant IGNORE_REASON_DUPLICATE_SEQUENCE = 1
+```
+
+
+### IGNORE_REASON_VRF_NOT_CONFIGURED
+
+```solidity
+uint8 private constant IGNORE_REASON_VRF_NOT_CONFIGURED = 2
+```
+
+
+### IGNORE_REASON_INVALID_PAYLOAD
+
+```solidity
+uint8 private constant IGNORE_REASON_INVALID_PAYLOAD = 3
+```
+
+
+### IGNORE_REASON_RATE_LIMITED
+
+```solidity
+uint8 private constant IGNORE_REASON_RATE_LIMITED = 4
+```
+
+
+### VRF_COORDINATOR_TIMELOCK
+
+```solidity
+uint256 public constant VRF_COORDINATOR_TIMELOCK = 2 days
+```
+
+
+## State Variables
+### vrfCoordinator
+
+```solidity
+IVRFCoordinatorV2Plus public vrfCoordinator
+```
+
+
+### priceOracle
+
+```solidity
+ICreatorOracle public priceOracle
 ```
 
 
@@ -216,22 +277,6 @@ uint32 public defaultGasLimit = 2500000
 ```
 
 
-### MAX_PRICE_REPORTING_CHAINS
-Maximum number of distinct remote chains permitted to
-push price updates. Bounds the cost of
-`getAggregatedCreatorPrice()` which iterates
-`priceReportingChains` in O(N).
-
-FIX: L-09 (4626-357) — previously unbounded; a malicious
-set of LayerZero sources could register arbitrarily many EIDs
-and DoS the aggregation read path.
-
-
-```solidity
-uint256 public constant MAX_PRICE_REPORTING_CHAINS = 20
-```
-
-
 ### chainPrices
 
 ```solidity
@@ -289,43 +334,6 @@ uint32 public twapPeriod = 300
 ```
 
 
-### PRICE_STALENESS
-Staleness threshold (2 hours)
-
-
-```solidity
-uint256 public constant PRICE_STALENESS = 7200
-```
-
-
-### IGNORE_REASON_DUPLICATE_SEQUENCE
-
-```solidity
-uint8 private constant IGNORE_REASON_DUPLICATE_SEQUENCE = 1
-```
-
-
-### IGNORE_REASON_VRF_NOT_CONFIGURED
-
-```solidity
-uint8 private constant IGNORE_REASON_VRF_NOT_CONFIGURED = 2
-```
-
-
-### IGNORE_REASON_INVALID_PAYLOAD
-
-```solidity
-uint8 private constant IGNORE_REASON_INVALID_PAYLOAD = 3
-```
-
-
-### IGNORE_REASON_RATE_LIMITED
-
-```solidity
-uint8 private constant IGNORE_REASON_RATE_LIMITED = 4
-```
-
-
 ### pendingVrfCoordinator
 
 ```solidity
@@ -337,13 +345,6 @@ address public pendingVrfCoordinator
 
 ```solidity
 uint256 public vrfCoordinatorTimelockExpiry
-```
-
-
-### VRF_COORDINATOR_TIMELOCK
-
-```solidity
-uint256 public constant VRF_COORDINATOR_TIMELOCK = 2 days
 ```
 
 

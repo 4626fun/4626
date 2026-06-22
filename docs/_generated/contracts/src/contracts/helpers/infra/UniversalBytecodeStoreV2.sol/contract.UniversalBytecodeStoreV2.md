@@ -16,7 +16,7 @@ Why v2 exists:
 - v2 splits large bytecode into multiple SSTORE2 pointers and reconstructs it on read.
 
 
-## State Variables
+## Constants
 ### CHUNK_SIZE
 Safe chunk size under EIP-170 (leaves headroom for STOP prefix).
 
@@ -26,6 +26,7 @@ uint256 internal constant CHUNK_SIZE = 24_000
 ```
 
 
+## State Variables
 ### pointers
 codeId => "exists" pointer (first chunk pointer).
 

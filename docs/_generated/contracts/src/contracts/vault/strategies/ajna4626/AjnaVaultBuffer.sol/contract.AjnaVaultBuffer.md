@@ -11,7 +11,7 @@ separate from Ajna bucket positions so outer withdrawals can inspect a
 single reserve balance.
 
 
-## State Variables
+## Constants
 ### asset
 
 ```solidity

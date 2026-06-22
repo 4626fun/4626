@@ -12,7 +12,7 @@ Liquidity math helpers for Uniswap v3-style sqrtPriceX96 values.
 Local implementation mirroring Uniswap's LiquidityAmounts formulas.
 
 
-## State Variables
+## Constants
 ### RESOLUTION
 
 ```solidity

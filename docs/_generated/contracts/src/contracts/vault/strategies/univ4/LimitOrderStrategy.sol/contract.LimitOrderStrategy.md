@@ -5,22 +5,13 @@
 Ownable, ReentrancyGuard
 
 
-## State Variables
+## Constants
 ### MAX_ORDERS
 Maximum number of active limit orders
 
 
 ```solidity
 uint256 public constant MAX_ORDERS = 10
-```
-
-
-### tickSpacing
-Tick spacing (depends on pool fee tier)
-
-
-```solidity
-int24 public tickSpacing = 60
 ```
 
 
@@ -39,6 +30,25 @@ Paired token (WETH)
 
 ```solidity
 IERC20 public immutable PAIRED_TOKEN
+```
+
+
+### hookRegistry
+Governance-managed hook allowlist for V4 pool configuration.
+
+
+```solidity
+IApprovedV4HooksRegistry public immutable hookRegistry
+```
+
+
+## State Variables
+### tickSpacing
+Tick spacing (depends on pool fee tier)
+
+
+```solidity
+int24 public tickSpacing = 60
 ```
 
 
@@ -102,15 +112,6 @@ Permit2 contract used by PosM for token pulls into PoolManager
 
 ```solidity
 address public permit2
-```
-
-
-### hookRegistry
-Governance-managed hook allowlist for V4 pool configuration.
-
-
-```solidity
-IApprovedV4HooksRegistry public immutable hookRegistry
 ```
 
 

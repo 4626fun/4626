@@ -2,7 +2,7 @@
 [Git Source](https://github.com/wenakita/4626/blob/main/contracts/factories/BribesFactory.sol)
 
 
-## State Variables
+## Constants
 ### gaugeVoting
 
 ```solidity
@@ -10,6 +10,7 @@ address public immutable gaugeVoting
 ```
 
 
+## State Variables
 ### bribeDepotOf
 
 ```solidity

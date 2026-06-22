@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
 # Smoke-test the deploy dry-run API against a local fork.
 # Prerequisites: pnpm -C frontend dev:deploy-dry-run must be running.
-# Uses dev bypass (DEPLOY_DRY_RUN_DEV_BYPASS=1) for unauthenticated request.
+#
+# Authenticates with a REAL local session token minted from AUTH_SESSION_SECRET
+# (scripts/mint-dev-session-token.mjs) — the legacy X-Deploy-Dry-Run-Dev bypass
+# header was removed and must not be reintroduced (see deploySessionDryRun.test.ts).
+#
+# The placeholder creator token (0x…0003) has no on-chain authority on the fork,
+# so the handler correctly stops at the creator-token authority check (403). Reaching
+# that check proves the full plumbing: server up -> DB configured -> auth passed ->
+# rate-limit passed -> body parsed -> fork RPC resolved -> creator-authority validation
+# reached. A full phase simulation requires a real creator token owned by the session
+# wallet on the fork and is covered by the vitest dry-run suite (deploySessionDryRun).
 
 set -euo pipefail
 
@@ -10,6 +20,17 @@ OWNER="0x0000000000000000000000000000000000000002"
 ORIGIN="http://localhost:${PORT}"
 HOST_HEADER="localhost:${PORT}"
 URL="http://127.0.0.1:${PORT}/api/deploy/v2/session/dry-run"
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "node is required to mint the dev session token." >&2
+  exit 2
+fi
+
+TOKEN="$(node scripts/mint-dev-session-token.mjs "${OWNER}")"
+if [[ -z "${TOKEN}" ]]; then
+  echo "Failed to mint dev session token (is AUTH_SESSION_SECRET set in frontend/.env?)." >&2
+  exit 2
+fi
 
 BODY='{
   "smartWallet": "0x0000000000000000000000000000000000000002",
@@ -23,10 +44,10 @@ BODY='{
   "version": "vtest"
 }'
 
-echo "Smoke-testing deploy dry-run at ${URL}..."
+echo "Smoke-testing deploy dry-run at ${URL} (authenticated session: ${OWNER})..."
 RESP=$(curl -sS -w "\n%{http_code}" -X POST "$URL" \
   -H 'Content-Type: application/json' \
-  -H "X-Deploy-Dry-Run-Dev: ${OWNER}" \
+  -H "Authorization: Bearer ${TOKEN}" \
   -H "Host: ${HOST_HEADER}" \
   -H "Origin: ${ORIGIN}" \
   -d "$BODY")
@@ -48,8 +69,8 @@ if [[ "$HTTP_CODE" == "200" ]]; then
   fi
 fi
 
-if [[ "$HTTP_CODE" == "403" ]] && echo "$BODY_OUT" | grep -q "Creator access required"; then
-  echo "PASS: Dry-run handler reached allowlist check (auth + origin OK). Full flow requires approved creator wallet."
+if [[ "$HTTP_CODE" == "403" ]] && echo "$BODY_OUT" | grep -q "Creator token authority mismatch"; then
+  echo "PASS: Dry-run handler reached creator-token authority check (auth + DB + fork plumbing OK). Full phase simulation requires a real creator token owned by the session wallet on the fork."
   exit 0
 fi
 

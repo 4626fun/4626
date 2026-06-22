@@ -5,7 +5,7 @@
 [Ive4626](/contracts/governance/VaultGaugeVoting.sol/interface.Ive4626.md), Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyGuard
 
 
-## State Variables
+## Constants
 ### MIN_LOCK_DURATION
 
 ```solidity
@@ -29,6 +29,7 @@ address public immutable wrappedShareOFT
 ```
 
 
+## State Variables
 ### vault
 Vault for calculating underlying value
 

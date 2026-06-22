@@ -9,17 +9,17 @@ Related:
 - [solana-share-mesh-creator-provisioning.md](./solana-share-mesh-creator-provisioning.md)
 - [akita-solana-share-mesh-audit.md](./akita-solana-share-mesh-audit.md)
 
-## What changes vs legacy
+## Target redeploy state
 
-| | Legacy (grandfathered) | After redeploy |
+| | Current snapshot | After redeploy |
 |--|------------------------|----------------|
 | Creator coin | `0x5b674196812451b7cec024fe9d22d2c0b172fa75` | **Same** |
-| Vault / wrapper / ShareOFT | `0x82C06…` / `0x58Cd1…` / `0x4df30…` (`wsAKITA`) | **New CREATE2 addresses** |
+| Vault / wrapper / ShareOFT | `0x82C06…` / `0x58Cd1…` / `0x4df30…` | **New CREATE2 addresses (`■AKITA`)** |
 | Registry row | Absent until finalize | Registered during Phase 2 finalize |
 | Solana mesh | Platform oftStore already live | Reuse batcher default peer (below) |
-| Keeper DB | Points at legacy vault | **Re-backfill** after new addresses |
+| Keeper DB | Points at current vault | **Re-backfill** after new addresses |
 
-**Do not** wire LayerZero to legacy `wsAKITA` (`0x4df30…`). Finalize bridges from the **new** `CreatorShareOFT` deployed in Phase 1.
+Wire LayerZero to the **new** `CreatorShareOFT` deployed in Phase 1 (`■AKITA` symbol).
 
 ## Smooth launch timeline
 
@@ -110,7 +110,7 @@ Pre-deploy Vultr defaults (keep as-is):
 - `SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0`
 - `KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay` on Vercel (no `relay_entries` yet)
 
-**Expected deferral (not a launch blocker):** `pnpm -C kpr preflight-orchestrator` fails on legacy `wsAKITA` adapter registration — Pipe A share mesh does not use `SolanaBridgeAdapter` for the 30% finalize bridge. Re-run preflight **after** redeploy with new ShareOFT in `SOLANA_SHARE_OFT_MAPPING`.
+**Expected deferral (not a launch blocker):** `pnpm -C kpr preflight-orchestrator` can fail on adapter registration while `SOLANA_SHARE_OFT_MAPPING` still points at the current ShareOFT. Pipe A share mesh does not use `SolanaBridgeAdapter` for the 30% finalize bridge. Re-run preflight **after** redeploy with new ShareOFT (`■AKITA`) in `SOLANA_SHARE_OFT_MAPPING`.
 
 ## Vercel production env (Solana deploy lane)
 
@@ -144,7 +144,7 @@ No new Solana OFT deploy is required for AKITA redeploy if you keep this mesh id
    Legacy operator comps with separate `charm_active_lp` + `ajna_sleeve` +
    `solana_ovault_mesh` rows still satisfy deploy (AKITA path).
 4. **Deploy UI** — `https://app.4626.fun/deploy/vault` with creator `0x5b6741…`.
-5. **Fresh salts** — new `deploymentVersion` so CREATE2 addresses differ from legacy stack.
+5. **Fresh salts** — new `deploymentVersion` so CREATE2 addresses differ from current stack.
 6. **Optional** — `pnpm -C frontend run dev:deploy-dry-run` on a fork first.
 
 Enable **Solana OVault mesh** in the deploy session when you want Pipe A 30% ShareOFT auto-bridge at finalize.
@@ -187,7 +187,7 @@ When Phase 1 completes, record the **new ShareOFT address** from session events 
 | `SOLANA_SHARE_OFT_MAPPING` | Map share mesh mint → **new** ShareOFT (not `0x4df30…`) |
 | Orchestrator | `seed-solana-orchestrator-env.sh --hook-schema auto`; keep `RELAY_ENTRIES_ENABLED=0` until B2 pool |
 | Meteora B1 | Optional after Path 1 supply on Solana — `kpr solana:create-dlmm-pool` on share mesh mint |
-| Legacy stack | Mark deprecated in docs; do not delete onchain — avoid confusing explorers/users |
+| Prior stack | Keep documented for explorer traceability; avoid removing onchain history |
 
 ## Explicitly not required before Base vault live
 

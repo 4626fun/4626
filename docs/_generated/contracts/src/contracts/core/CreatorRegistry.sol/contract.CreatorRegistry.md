@@ -15,7 +15,7 @@ Registry for 4626 deployments and configs.
 Used by factories, vaults, and OFTs to resolve ecosystem addresses.
 
 
-## State Variables
+## Constants
 ### MAX_SUPPORTED_CHAINS
 
 ```solidity
@@ -30,6 +30,16 @@ uint256 public constant MAX_CREATOR_COINS = 999999
 ```
 
 
+### layerZeroCommonEndpoint
+Common LZ endpoint (fallback)
+
+
+```solidity
+address public immutable layerZeroCommonEndpoint
+```
+
+
+## State Variables
 ### creatorCoins
 Creator Coin info by token address
 
@@ -247,15 +257,6 @@ Default LZ config for standard chains
 
 ```solidity
 LzConfig public defaultLzConfig
-```
-
-
-### layerZeroCommonEndpoint
-Common LZ endpoint (fallback)
-
-
-```solidity
-address public immutable layerZeroCommonEndpoint
 ```
 
 

@@ -11,7 +11,7 @@ outer CreatorOVault integration can swap operators without redeploying
 strategy logic.
 
 
-## State Variables
+## Constants
 ### MAX_AJNA_BUCKET_INDEX
 
 ```solidity
@@ -19,6 +19,7 @@ uint256 internal constant MAX_AJNA_BUCKET_INDEX = 7_388
 ```
 
 
+## State Variables
 ### admin
 
 ```solidity

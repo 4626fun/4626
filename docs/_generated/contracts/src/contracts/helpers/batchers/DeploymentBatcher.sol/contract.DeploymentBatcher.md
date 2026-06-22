@@ -19,7 +19,7 @@ This contract splits deployment into multiple calls:
 - Phase 2b: deposit + vesting + ownership transfers (plus optional deferred auction)
 
 
-## State Variables
+## Constants
 ### CHARM_FACTORY
 Charm Finance Alpha Vault Factory on Base.
 
@@ -39,11 +39,15 @@ uint256 public constant MIN_DEPOSIT = 50_000_000e18
 
 
 ### MAX_DEPOSIT
-Maximum deposit amount (50M tokens, 18 decimals)
+Maximum deposit amount (100M tokens, 18 decimals)
+
+Enforcement lives in DeploymentBatcherPhase2Module._validateFinalizePhase2
+(hot-swappable). The live shell at 0xa99058… predates the 100M widening and
+still reports 50M here; these getters are informational only.
 
 
 ```solidity
-uint256 public constant MAX_DEPOSIT = 50_000_000e18
+uint256 public constant MAX_DEPOSIT = 100_000_000e18
 ```
 
 
@@ -52,7 +56,7 @@ Percentage of ■TOKENs allocated to CCA auction
 
 
 ```solidity
-uint8 public constant AUCTION_PERCENT = 40
+uint8 public constant AUCTION_PERCENT = 30
 ```
 
 
@@ -61,7 +65,16 @@ Percentage of ■TOKENs vested to the creator
 
 
 ```solidity
-uint8 public constant VESTING_PERCENT = 40
+uint8 public constant VESTING_PERCENT = 30
+```
+
+
+### SOLANA_ALLOC_PERCENT
+Percentage of ■TOKENs auto-bridged to Solana share mesh at finalize
+
+
+```solidity
+uint8 public constant SOLANA_ALLOC_PERCENT = 30
 ```
 
 
@@ -70,7 +83,7 @@ Percentage of ■TOKENs reserved on strategy for LP migration
 
 
 ```solidity
-uint8 public constant LP_RESERVE_PERCENT = 20
+uint8 public constant LP_RESERVE_PERCENT = 10
 ```
 
 
@@ -204,10 +217,25 @@ address public immutable vaultStrategiesModule
 ```
 
 
+## State Variables
+### vaultRolePolicyManager
+
+```solidity
+address public vaultRolePolicyManager
+```
+
+
+### vaultRolePolicyId
+
+```solidity
+uint256 public vaultRolePolicyId
+```
+
+
 ### vaultAdminModule
 
 ```solidity
-address public immutable vaultAdminModule
+address public vaultAdminModule
 ```
 
 
@@ -254,6 +282,15 @@ bytes32 public solanaDestination
 ```
 
 
+### solanaShareOftPeer
+Default LayerZero remote ShareOFT peer (bytes32) for greenfield finalize wiring.
+
+
+```solidity
+bytes32 public solanaShareOftPeer
+```
+
+
 ### ovaultRuntimeConfig
 OVault runtime wiring used for Solana compose orchestration.
 
@@ -268,7 +305,7 @@ Dedicated phase-3 execution helper to keep this contract under EIP-170 runtime l
 
 
 ```solidity
-DeploymentBatcherPhase3Helper public immutable phase3Helper
+DeploymentBatcherPhase3Helper public phase3Helper
 ```
 
 
@@ -277,7 +314,16 @@ Dedicated phase-2 execution helper (delegatecall) to keep this contract under EI
 
 
 ```solidity
-DeploymentBatcherPhase2Module public immutable phase2Module
+DeploymentBatcherPhase2Module public phase2Module
+```
+
+
+### phase1Module
+Dedicated phase-1 execution helper (delegatecall) to keep initcode under EIP-3860 limits.
+
+
+```solidity
+DeploymentBatcherPhase1Module public phase1Module
 ```
 
 
@@ -286,7 +332,7 @@ Dedicated UniV4 execution helper to keep this contract under EIP-170 runtime lim
 
 
 ```solidity
-DeploymentBatcherUniV4Helper public immutable uniV4Helper
+DeploymentBatcherUniV4Helper public uniV4Helper
 ```
 
 
@@ -295,11 +341,18 @@ String/salt/hash helper contract to keep this contract under EIP-170 runtime lim
 
 
 ```solidity
-DeploymentBatcherUtilsHelper public immutable utilsHelper
+DeploymentBatcherUtilsHelper public utilsHelper
 ```
 
 
 ## Functions
+### onlyProtocolTreasury
+
+
+```solidity
+modifier onlyProtocolTreasury() ;
+```
+
 ### constructor
 
 
@@ -309,6 +362,7 @@ constructor(
     address _bytecodeStore,
     address _create2Deployer,
     address _protocolTreasury,
+    address _protocolAutomation,
     address _poolManager,
     address _taxHook,
     address _chainlinkEthUsd,
@@ -321,7 +375,11 @@ constructor(
     address _ajnaFactory,
     address _vaultCoreModule,
     address _vaultStrategiesModule,
-    address _vaultAdminModule
+    address _vaultAdminModule,
+    address _phase2Module,
+    address _phase3Helper,
+    address _uniV4Helper,
+    address _utilsHelper
 ) ;
 ```
 
@@ -351,18 +409,22 @@ function finalizePhase1WithSalt(
 
 
 ```solidity
-function _deployPhase1CoreInternal(Phase1Params calldata params, CodeIds calldata codeIds)
-    internal
-    returns (Phase1Result memory out);
+function _deployPhase1CoreInternal(
+    Phase1Params calldata params,
+    CodeIds calldata codeIds,
+    bytes32 shareOftSaltOverride
+) internal returns (Phase1Result memory out);
 ```
 
 ### _finalizePhase1InternalSplit
 
 
 ```solidity
-function _finalizePhase1InternalSplit(Phase1Params calldata params, CodeIds calldata codeIds)
-    internal
-    returns (Phase1Result memory out);
+function _finalizePhase1InternalSplit(
+    Phase1Params calldata params,
+    CodeIds calldata codeIds,
+    bytes32 shareOftSaltOverride
+) internal returns (Phase1Result memory out);
 ```
 
 ### deployPhase2Core
@@ -375,12 +437,38 @@ function deployPhase2Core(Phase2CoreParams calldata params, CodeIds calldata cod
     returns (Phase2Result memory out);
 ```
 
+### deployPhase2CoreWithRolePolicy
+
+Optional policy-aware variant for deploy-session guarded flows.
+
+Existing `deployPhase2Core` behavior remains unchanged and uses the
+globally configured `vaultRolePolicyId`.
+
+
+```solidity
+function deployPhase2CoreWithRolePolicy(
+    Phase2CoreParams calldata params,
+    CodeIds calldata codeIds,
+    uint256 rolePolicyId
+) external nonReentrant returns (Phase2Result memory out);
+```
+
+### _deployPhase2CoreInternal
+
+
+```solidity
+function _deployPhase2CoreInternal(Phase2CoreParams calldata params, CodeIds calldata codeIds, uint256 rolePolicyId)
+    internal
+    returns (Phase2Result memory out);
+```
+
 ### finalizePhase2
 
 
 ```solidity
 function finalizePhase2(Phase2FinalizeParams calldata params)
     external
+    payable
     nonReentrant
     returns (Phase2Result memory out);
 ```
@@ -393,7 +481,19 @@ function finalizePhase2WithPermit2(
     Phase2FinalizeParams calldata params,
     ISignatureTransfer.PermitTransferFrom calldata permit,
     bytes calldata signature
-) external nonReentrant returns (Phase2Result memory out);
+) external payable nonReentrant returns (Phase2Result memory out);
+```
+
+### _recordFinalizePhase2Effects
+
+
+```solidity
+function _recordFinalizePhase2Effects(
+    Phase2FinalizeParams calldata params,
+    bytes32 baseSalt,
+    Phase2Result memory out,
+    DeploymentBatcherPhase2Module.FinalizeExecutionResult memory execution
+) internal;
 ```
 
 ### launchDeferredAuction
@@ -406,18 +506,11 @@ function launchDeferredAuction(DeferredAuctionParams calldata params)
     returns (address auction);
 ```
 
-### _finalizePhase2Internal
-
-
-```solidity
-function _finalizePhase2Internal(Phase2FinalizeParams memory params) internal returns (Phase2Result memory out);
-```
-
 ### deployPhase3Strategies
 
-Deploy + register initial yield strategies (Charm + Ajna + SolanaStrategy).
+Deploy + register initial yield strategies (Charm + Ajna).
 
-Uses UniversalBytecodeStore + CREATE2 deployer to avoid embedding initcode in this batcher.
+Solana share liquidity is seeded at finalizePhase2 via ShareOFT auto-bridge.
 
 
 ```solidity
@@ -446,11 +539,57 @@ function deployUniV4Strategies(UniV4DeployParams calldata params, UniV4CodeIds c
 
 Set Solana bridge adapter + destination configuration.
 
-finalizePhase2 no longer bridges ShareOFT; Solana routing is handled separately.
+`solanaDestination` is the LayerZero recipient for the 30% share allocation
+auto-bridge executed during finalizePhase2 (Solana seed wallet / mesh custody).
 
 
 ```solidity
-function setSolanaConfig(address _adapter, bytes32 _destination) external;
+function setSolanaConfig(address _adapter, bytes32 _destination) external onlyProtocolTreasury;
+```
+
+### setSolanaShareOftPeer
+
+Set the platform default Solana ShareOFT peer used when registry peer is unset.
+
+Finalize auto-registers the creator coin, seeds registry from this default, then setPeer on ShareOFT.
+
+
+```solidity
+function setSolanaShareOftPeer(bytes32 _peer) external onlyProtocolTreasury;
+```
+
+### wireDeploymentHelpers
+
+Wire CREATE2-deployed helper modules after the batcher shell is live.
+
+One-shot Safe batch for initial cutover; `setPhase2Module` remains for hot-swap.
+
+
+```solidity
+function wireDeploymentHelpers(
+    address _phase2Module,
+    address _phase3Helper,
+    address _uniV4Helper,
+    address _utilsHelper
+) external onlyProtocolTreasury;
+```
+
+### setPhase2Module
+
+Hot-swap the Phase 2 delegatecall module after deploying a replacement `DeploymentBatcherPhase2Module`.
+
+The replacement module must declare this batcher as its immutable `batcher` context.
+
+
+```solidity
+function setPhase2Module(address _phase2Module) external onlyProtocolTreasury;
+```
+
+### setPhase1Module
+
+
+```solidity
+function setPhase1Module(address _phase1Module) external onlyProtocolTreasury;
 ```
 
 ### setOVaultRuntimeConfig
@@ -461,7 +600,9 @@ Enabled configs require a non-zero composer and EID.
 
 
 ```solidity
-function setOVaultRuntimeConfig(address _hubComposer, uint32 _solanaEid, bool _enabled) external;
+function setOVaultRuntimeConfig(address _hubComposer, uint32 _solanaEid, bool _enabled)
+    external
+    onlyProtocolTreasury;
 ```
 
 ### getOVaultRuntimeConfig
@@ -471,11 +612,24 @@ function setOVaultRuntimeConfig(address _hubComposer, uint32 _solanaEid, bool _e
 function getOVaultRuntimeConfig() external view returns (OVaultRuntimeConfig memory);
 ```
 
+### setVaultRolePolicyConfig
+
+Configure optional role-policy validation for phase-2 deployment.
+
+Set `manager = address(0)` to disable policy checks entirely.
+
+
+```solidity
+function setVaultRolePolicyConfig(address manager, uint256 policyId) external onlyProtocolTreasury;
+```
+
 ### resetPhase1State
 
 
 ```solidity
-function resetPhase1State(bytes32 baseSalt) external;
+function resetPhase1State(address creatorToken, address owner, string calldata version)
+    external
+    onlyProtocolTreasury;
 ```
 
 ### _requireOwner
@@ -485,45 +639,11 @@ function resetPhase1State(bytes32 baseSalt) external;
 function _requireOwner(address owner) internal view;
 ```
 
-### _pullCreatorTokens
+### _delegatePhase1
 
 
 ```solidity
-function _pullCreatorTokens(address creatorToken, address owner, uint256 amount) internal;
-```
-
-### _permit2Pull
-
-
-```solidity
-function _permit2Pull(
-    address creatorToken,
-    address owner,
-    uint256 amount,
-    ISignatureTransfer.PermitTransferFrom calldata permit,
-    bytes calldata signature
-) internal;
-```
-
-### _requirePhase1CodeIds
-
-
-```solidity
-function _requirePhase1CodeIds(CodeIds calldata codeIds) internal pure;
-```
-
-### _requirePhase2CodeIds
-
-
-```solidity
-function _requirePhase2CodeIds(CodeIds calldata codeIds) internal pure;
-```
-
-### _requireUniV4CodeIds
-
-
-```solidity
-function _requireUniV4CodeIds(UniV4CodeIds calldata codeIds) internal pure;
+function _delegatePhase1(bytes memory callData) internal returns (bytes memory result);
 ```
 
 ### _delegatePhase2
@@ -531,13 +651,6 @@ function _requireUniV4CodeIds(UniV4CodeIds calldata codeIds) internal pure;
 
 ```solidity
 function _delegatePhase2(bytes memory callData) internal returns (bytes memory result);
-```
-
-### _deriveInitCodeHash
-
-
-```solidity
-function _deriveInitCodeHash(bytes32 codeId, bytes memory constructorArgs) internal view returns (bytes32);
 ```
 
 ## Events
@@ -668,6 +781,18 @@ event CreatorShareVestingDeployed(
 );
 ```
 
+### ShareAllocationBridgedToSolana
+
+```solidity
+event ShareAllocationBridgedToSolana(
+    address indexed creatorToken,
+    address indexed owner,
+    address indexed shareOFT,
+    uint256 amount,
+    bytes32 solanaDestination
+);
+```
+
 ### SolanaConfigSet
 
 ```solidity
@@ -678,6 +803,12 @@ event SolanaConfigSet(address indexed adapter, bytes32 solanaDestination);
 
 ```solidity
 event OVaultRuntimeConfigSet(address indexed hubComposer, uint32 indexed solanaEid, bool enabled);
+```
+
+### VaultRolePolicyConfigSet
+
+```solidity
+event VaultRolePolicyConfigSet(address indexed manager, uint256 indexed policyId);
 ```
 
 ## Errors
@@ -721,12 +852,6 @@ error Phase1CoreMissing();
 
 ```solidity
 error Phase1StateMismatch();
-```
-
-### SaltOverrideDisabled
-
-```solidity
-error SaltOverrideDisabled();
 ```
 
 ### InvalidWeight
@@ -795,18 +920,6 @@ error InvalidSolanaEid();
 error InvalidSolanaBridgeConfig();
 ```
 
-### PermitTokenMismatch
-
-```solidity
-error PermitTokenMismatch();
-```
-
-### PermitAmountTooLow
-
-```solidity
-error PermitAmountTooLow();
-```
-
 ### Phase1ShareOFTMissing
 
 ```solidity
@@ -837,10 +950,22 @@ error Phase1StateNotStuck();
 error InvalidCreatorTreasury(address provided);
 ```
 
-### InvalidPayoutRecipient
+### InvalidCreatorCoinPayoutRecipient
 
 ```solidity
-error InvalidPayoutRecipient();
+error InvalidCreatorCoinPayoutRecipient();
+```
+
+### DeprecatedFinalizeSolanaParams
+
+```solidity
+error DeprecatedFinalizeSolanaParams();
+```
+
+### Phase3ManagementMismatch
+
+```solidity
+error Phase3ManagementMismatch(address expected, address actual);
 ```
 
 ### CharmFactoryGovernanceMismatch
@@ -871,6 +996,30 @@ error InvalidTickSpacing();
 
 ```solidity
 error InvalidPoolCurrencies();
+```
+
+### InvalidRolePolicyManager
+
+```solidity
+error InvalidRolePolicyManager();
+```
+
+### InvalidPhase2Module
+
+```solidity
+error InvalidPhase2Module();
+```
+
+### InvalidPhase1Module
+
+```solidity
+error InvalidPhase1Module();
+```
+
+### Phase1ModuleMissing
+
+```solidity
+error Phase1ModuleMissing();
 ```
 
 ## Structs
@@ -909,7 +1058,7 @@ struct Phase2Params {
     address creatorToken;
     address owner;
     address creatorTreasury;
-    address payoutRecipient; // CreatorCoin payout recipient.
+    address payoutRecipient; // creatorCoinPayoutRecipient (external earnings lane per AGENTS.md canonical terminology)
     address vault;
     address wrapper;
     address shareOFT;
@@ -929,7 +1078,7 @@ struct Phase2CoreParams {
     address creatorToken;
     address owner;
     address creatorTreasury;
-    address payoutRecipient; // CreatorCoin payout recipient.
+    address payoutRecipient; // creatorCoinPayoutRecipient (external earnings lane per AGENTS.md canonical terminology)
     address vault;
     address wrapper;
     address shareOFT;

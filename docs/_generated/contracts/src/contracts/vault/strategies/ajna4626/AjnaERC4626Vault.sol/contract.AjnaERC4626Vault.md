@@ -14,7 +14,7 @@ This vault is intended to sit behind `ERC4626StrategyAdapter`, with
 `CreatorOVault` remaining the public product vault.
 
 
-## State Variables
+## Constants
 ### MAX_BUCKETS
 
 ```solidity
@@ -50,6 +50,25 @@ IERC20 public immutable ASSET_TOKEN
 ```
 
 
+### DEVIATION_MAX_WITHDRAW_UNDER_REPORTS
+Bit 0: maxWithdraw intentionally under-reports vs ERC-4626 spec.
+
+
+```solidity
+uint256 public constant DEVIATION_MAX_WITHDRAW_UNDER_REPORTS = 1 << 0
+```
+
+
+### DEVIATION_MAX_REDEEM_UNDER_REPORTS
+Bit 1: maxRedeem intentionally under-reports vs ERC-4626 spec.
+
+
+```solidity
+uint256 public constant DEVIATION_MAX_REDEEM_UNDER_REPORTS = 1 << 1
+```
+
+
+## State Variables
 ### _buckets
 
 ```solidity
@@ -84,6 +103,13 @@ modifier notPaused() ;
 
 ```solidity
 modifier onlyAdapterAuthorized() ;
+```
+
+### onlySwapperOrKeeper
+
+
+```solidity
+modifier onlySwapperOrKeeper() ;
 ```
 
 ### constructor
@@ -135,6 +161,38 @@ without a new contract deployment.
 function isPartialWithdrawVault() external pure returns (bool);
 ```
 
+### erc4626DeviationFlags
+
+Bitmap of ERC-4626 deviations this vault knowingly takes.
+
+FIX: F-19 (4626-442). Stable ABI: bits only change via a new
+contract deployment. Interpret against the shared convention in
+`docs/contracts/ERC4626_DEVIATION_FLAGS.md`.
+Bit 0 = maxWithdraw under-reports (capped at idle buffer)
+Bit 1 = maxRedeem under-reports (capped at idle buffer)
+Bits 2..255 = reserved for future deviations; always zero here.
+
+
+```solidity
+function erc4626DeviationFlags() external pure returns (uint256);
+```
+
+### hasConservativeMaxWithdraw
+
+Human-readable convenience: true iff maxWithdraw / maxRedeem
+are capped below the share-entitlement value.
+
+Equivalent to `erc4626DeviationFlags() & 0x3 != 0` for this vault.
+Kept separate from `isPartialWithdrawVault()` for semantic clarity:
+`isPartialWithdrawVault` is a vault-wide behavioural flag ("partial
+withdraw semantics"); `hasConservativeMaxWithdraw` is a narrower
+assertion about the maxWithdraw / maxRedeem return values.
+
+
+```solidity
+function hasConservativeMaxWithdraw() external pure returns (bool);
+```
+
 ### maxWithdraw
 
 Returns the maximum assets withdrawable by `owner` from the idle buffer only.
@@ -142,7 +200,8 @@ Returns the maximum assets withdrawable by `owner` from the idle buffer only.
 FIX: F-19 — ERC-4626 deviation: this intentionally understates available assets
 because bucket LP positions require an on-chain Ajna pool interaction to liquidate.
 Off-chain integrators should query bucket positions separately for total availability.
-See also `isPartialWithdrawVault()`.
+Probe `erc4626DeviationFlags()` (bit 0) or `hasConservativeMaxWithdraw()` to detect
+this deviation without parsing NatSpec. See also `isPartialWithdrawVault()`.
 
 
 ```solidity
@@ -153,7 +212,8 @@ function maxWithdraw(address owner) public view override returns (uint256);
 
 Returns the maximum shares redeemable by `owner` backed by idle buffer only.
 
-FIX: F-19 — see maxWithdraw; same ERC-4626 deviation applies.
+FIX: F-19 — see maxWithdraw; same ERC-4626 deviation applies. Probe
+`erc4626DeviationFlags()` (bit 1) or `hasConservativeMaxWithdraw()` to detect.
 
 
 ```solidity
@@ -246,7 +306,8 @@ function redeem(uint256 shares, address receiver, address owner)
 ```solidity
 function moveFromBuffer(uint256 toIndex, uint256 assets)
     external
-    onlyAdapterAuthorized
+    onlySwapperOrKeeper
+    notPaused
     nonReentrant
     returns (uint256 movedAssets, uint256 mintedBucketLp);
 ```
@@ -257,7 +318,8 @@ function moveFromBuffer(uint256 toIndex, uint256 assets)
 ```solidity
 function moveToBuffer(uint256 fromIndex, uint256 bucketLpAmount)
     external
-    onlyAdapterAuthorized
+    onlySwapperOrKeeper
+    notPaused
     nonReentrant
     returns (uint256 pulledAssets, uint256 burnedBucketLp);
 ```
@@ -268,7 +330,8 @@ function moveToBuffer(uint256 fromIndex, uint256 bucketLpAmount)
 ```solidity
 function move(uint256 fromIndex, uint256 toIndex, uint256 bucketLpAmount)
     external
-    onlyAdapterAuthorized
+    onlySwapperOrKeeper
+    notPaused
     nonReentrant
     returns (uint256 fromBucketLp, uint256 toBucketLp);
 ```

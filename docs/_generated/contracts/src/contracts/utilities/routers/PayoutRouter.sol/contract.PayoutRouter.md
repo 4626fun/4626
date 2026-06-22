@@ -10,10 +10,11 @@ PayoutRouter
 **Author:**
 0xakita.eth
 
-Receives external revenue and routes value into the vault via an enforceable burn stream.
+Receives creatorCoinPayoutRecipient (external earnings lane) revenue and routes value
+into the vault via an enforceable burn stream (VaultShareBurnStream).
 
 Design goals:
-- Safe CreatorCoin payoutRecipient path: never reverts on ERC20 transfers (no hooks needed).
+- Safe creatorCoinPayoutRecipient (external earnings lane) path: never reverts on ERC20 transfers (no hooks needed). Per AGENTS.md canonical terminology.
 - Can accept ETH: wraps to WETH (kept until processed).
 - Converts payout tokens → creator coin via Uniswap V3 (exactInput path), deposits into the vault,
 and queues the minted vault shares into a burn stream (dripped/burned over time).
@@ -25,7 +26,7 @@ Notes:
 "not trust me bro" enforceability.
 
 
-## State Variables
+## Constants
 ### creatorCoin
 
 ```solidity
@@ -61,13 +62,35 @@ address public immutable weth
 ```
 
 
-### PROTOCOL_REWARDS
+### DEFAULT_PROTOCOL_REWARDS
+Default Zora Protocol Rewards address on Base mainnet. Used as
+the default value for the `protocolRewards` immutable when the
+deployer passes `address(0)` to the constructor. Kept as a
+public constant so existing tooling that reads it continues to
+work.
+
 
 ```solidity
-address public constant PROTOCOL_REWARDS = 0x7777777F279eba3d3Ad8F4E708545291A6fDBA8B
+address public constant DEFAULT_PROTOCOL_REWARDS = 0x7777777F279eba3d3Ad8F4E708545291A6fDBA8B
 ```
 
 
+### protocolRewards
+Address of the protocol rewards contract this router claims
+from. M-04 (audit 2026-04-25): previously a hardcoded constant
+that, when deployed to a chain where the address has no code,
+would silently no-op (`(bool ok,) = addr.call(...)` returns
+`(true, "")` for an EOA). Now an immutable parameter, with a
+constructor-time `code.length > 0` guard so a chain mismatch
+is caught at deploy time rather than corrupting routing state.
+
+
+```solidity
+address public immutable protocolRewards
+```
+
+
+## State Variables
 ### keeper
 Optional keeper (bot/operator) allowed to process swaps.
 
@@ -131,7 +154,8 @@ constructor(
     address _burnStream,
     address _owner,
     address _swapRouter,
-    address _weth
+    address _weth,
+    address _protocolRewards
 ) Ownable(_owner);
 ```
 
@@ -471,6 +495,19 @@ error ExternalSwapCallFailed();
 
 ```solidity
 error ProtocolRewardsClaimFailed();
+```
+
+### ProtocolRewardsHasNoCode
+M-04 (audit 2026-04-25): the constructor-supplied
+`_protocolRewards` (or its default fallback) had no code at
+deploy time. Without code, `.call(...)` to an EOA succeeds
+silently (returns `(true, "")`) and the claim path no-ops
+while `claimProtocolRewards()` reports success. Failing the
+deploy is the correct response.
+
+
+```solidity
+error ProtocolRewardsHasNoCode(address candidate);
 ```
 
 ## Structs

@@ -1,6 +1,7 @@
 
 
 # Contents
+- [alfaclub](/contracts/alfaclub)
 - [core](/contracts/core)
 - [factories](/contracts/factories)
 - [governance](/contracts/governance)

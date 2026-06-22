@@ -7,6 +7,9 @@
 
 
 ```solidity
-function bridgeToSolana(address token, uint256 amount, bytes32 solanaDestination) external payable;
+function bridgeToSolana(address token, uint256 amount, bytes32 solanaDestination)
+    external
+    payable
+    returns (bool success);
 ```
 

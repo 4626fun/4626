@@ -15,7 +15,7 @@ Vault-scoped bribe depot for ve(3,3) voting epochs.
 Deployed per-vault by BribesFactory using CREATE2.
 
 
-## State Variables
+## Constants
 ### vault
 Vault this depot is tied to
 
@@ -34,6 +34,7 @@ IVaultGaugeVotingForBribeDepot public immutable gaugeVoting
 ```
 
 
+## State Variables
 ### totalBribes
 epoch => token => total bribe amount
 

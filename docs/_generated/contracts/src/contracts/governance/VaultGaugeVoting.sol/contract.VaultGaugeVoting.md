@@ -5,7 +5,7 @@
 [IVaultGaugeVoting](/contracts/governance/CreatorGaugeController.sol/interface.IVaultGaugeVoting.md), Ownable, ReentrancyGuard
 
 
-## State Variables
+## Constants
 ### EPOCH_DURATION
 
 ```solidity
@@ -65,6 +65,7 @@ Ive4626 public immutable ve4626
 ```
 
 
+## State Variables
 ### registry
 Optional registry for auto-whitelisting vaults
 
