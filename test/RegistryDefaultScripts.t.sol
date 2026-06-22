@@ -33,9 +33,9 @@ contract DeployBaseMainnetDeployerHarness is DeployBaseMainnetDeployer {
 }
 
 contract RegistryDefaultScriptsTest is Test {
-    address internal constant LIVE_REGISTRY = 0x3f64087dc361Ad52300409E5873b26941D6418B6;
-    address internal constant LIVE_VAULT_ACT_BATCHER = 0x5036FB536f53b15307825eB2006B21E22f0F3193;
-    address internal constant LIVE_LOTTERY_MANAGER = 0x5c0115589d7F4930A0dc93417aE409f44186f4E7;
+    address internal constant LIVE_REGISTRY = 0xDD7B106a15540bA2F59464590222bF47D8C9394E;
+    address internal constant LIVE_VAULT_ACT_BATCHER = 0x5EaFfa41f07a1aAf6ecd38833fd128C53fD8669A;
+    address internal constant LIVE_LOTTERY_MANAGER = 0x29F901864D65Eb848BC548ebCEAcD6dAD39EFd26;
     DeployTier1UpgradeHarness internal tier1Upgrade;
     DeployRewardsEcosystemHarness internal rewardsEcosystem;
     DeployBaseMainnetDeployerHarness internal baseMainnetDeployer;

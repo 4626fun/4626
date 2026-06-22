@@ -51,7 +51,7 @@ contract DeployTier1Upgrade is Script {
     // ═══════════════════════════════════════════════════════════════════
 
     /// @notice Existing CreatorRegistry on Base (current live registry)
-    address constant REGISTRY = 0x3f64087dc361Ad52300409E5873b26941D6418B6;
+    address constant REGISTRY = 0xDD7B106a15540bA2F59464590222bF47D8C9394E;
 
     /// @notice Existing VRF Consumer on Base (unchanged, just needs configuration)
     address constant VRF_CONSUMER = 0xE4AcDD5316EcF4D98301509968F0728EEDaaB68E;

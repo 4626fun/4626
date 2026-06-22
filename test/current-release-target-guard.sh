@@ -8,23 +8,23 @@ INVENTORY_DOC="$ROOT_DIR/docs/reference/current-contract-inventory.md"
 DEFAULTS="$ROOT_DIR/frontend/src/config/contracts.defaults.ts"
 SEED_REGISTRY="$ROOT_DIR/script/SeedCreatorRegistry.s.sol"
 
-registry="0x3f64087dc361Ad52300409E5873b26941D6418B6"
-factory="0x09a2fd817F30D2599fb13520d06751259b6AdcFE"
-activation_batcher="0x5036FB536f53b15307825eB2006B21E22f0F3193"
-solana_adapter="0x700b4BBAf965c013123bAd02a6562FBa487aC0f1"
-bytecode_store="0x8B51E6784A0C6681F5de25bAC4f9B2fDCEDE72b4"
-create2_from_store="0x4760216AFd59B843671E0FdFCe6498Ec8CFf38a7"
-batcher="0xa99058f424FB3ACC639F59355C65C40149030651"
-phase1_module="0xE83876c67E1E845A199f64fb33D76ADC62EAaB9D"
-phase2_module="0x67FD8A34E5b26F875a9513DFf37521A1ca92d80f"
-phase3_helper="0x674a2D5EE33e184e2120B373a9AcB3fef640885c"
-univ4_helper="0xF71a6236586077CD29C971443D2cce37B543DcBB"
-utils_helper="0xD71C4910C7bB38FB1089Cca42b0883F1BFFfa28D"
+registry="0xDD7B106a15540bA2F59464590222bF47D8C9394E"
+factory="0xf4a4d70D9fB3b29c56eB2aaE264FBd3DF9221A6a"
+activation_batcher="0x5EaFfa41f07a1aAf6ecd38833fd128C53fD8669A"
+solana_adapter="0x8e99bb0270bbdf2d64ff6854509CD2410A28fBae"
+bytecode_store="0xb3712E84F123e7C5390913E30FC6BBD5AEd2a314"
+create2_from_store="0x2fA570Cb17925Da86b303D4651f06b83057a10c4"
+batcher="0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1"
+phase1_module="0x0fac3F8040879eF1ca6cc4572cc27f0908a8f266"
+phase2_module="0xde192645Fb02dD05f586930e55D709E89c320435"
+phase3_helper="0xE0971a924E33251556fE73a4025166701b772dBe"
+univ4_helper="0xD2c68F175FB4DB4069A2ebBc3f02B31C635438eb"
+utils_helper="0xE41231e399511baaDa8844C9D1c83C096e3f2E60"
 
-deprecated_batchers='0x56E8527Bf0824155e1556aED5740366f248B68ca|0x32403a647e73e04ae42b02bdd1ade9c88698fd0c|0xe3F9490CfD6bd3D68010405d18Bf772C167E7178|0xcDbEeB764df9878ebAFbf101cc818370f703bC4F|0x004684670d284EF607E1B2424fcf8ccBda8ef828|0x271Ab2C53D79d52ddB14506a44133Fe3FA395332|0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8'
+deprecated_batchers='0x56E8527Bf0824155e1556aED5740366f248B68ca|0x32403a647e73e04ae42b02bdd1ade9c88698fd0c|0xe3F9490CfD6bd3D68010405d18Bf772C167E7178|0xcDbEeB764df9878ebAFbf101cc818370f703bC4F|0x004684670d284EF607E1B2424fcf8ccBda8ef828|0x271Ab2C53D79d52ddB14506a44133Fe3FA395332|0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8|0xa99058f424FB3ACC639F59355C65C40149030651'
 deprecated_solana_adapters='0x2414b595c4f18532A5836B6e2E6d536832c572e8|0x3a9dC0b2c11b348E4bD60D9605dc3D4Be9bB6cf5|0x90F578A4e23c1cB8DDFE63fd496ED7F4474f2b00'
 
-rg -F 'Current Live Infrastructure (`v1.14.0` greenfield deploy target)' "$ADDRESSES_DOC" >/dev/null
+rg -F 'Current Live Infrastructure (`v1.14.1` greenfield deploy target)' "$ADDRESSES_DOC" >/dev/null
 rg -F "CreatorRegistry | \`$registry\`" "$ADDRESSES_DOC" >/dev/null
 rg -F "CreatorOVaultFactory | \`$factory\`" "$ADDRESSES_DOC" >/dev/null
 rg -F "VaultActivationBatcher | \`$activation_batcher\`" "$ADDRESSES_DOC" >/dev/null
@@ -38,7 +38,7 @@ rg -F "DeploymentBatcherPhase3Helper | \`$phase3_helper\`" "$ADDRESSES_DOC" >/de
 rg -F "DeploymentBatcherUniV4Helper | \`$univ4_helper\`" "$ADDRESSES_DOC" >/dev/null
 rg -F "DeploymentBatcherUtilsHelper | \`$utils_helper\`" "$ADDRESSES_DOC" >/dev/null
 
-rg -F 'Scope: current live Base infra addresses plus the canonical `v1.14.0` greenfield deploy target' "$INVENTORY_DOC" >/dev/null
+rg -F 'Scope: current live Base infra addresses plus the canonical `v1.14.1` greenfield deploy target' "$INVENTORY_DOC" >/dev/null
 rg -F "\`solanaBridgeAdapter\` | \`$solana_adapter\`" "$INVENTORY_DOC" >/dev/null
 rg -F "\`bytecodeStore\` | \`$bytecode_store\`" "$INVENTORY_DOC" >/dev/null
 rg -F "\`create2DeployerFromStore\` | \`$create2_from_store\`" "$INVENTORY_DOC" >/dev/null
@@ -80,7 +80,8 @@ if [[ -n "$stale_adapter_hits" ]]; then
 fi
 
 if command -v pnpm >/dev/null 2>&1; then
-  pnpm -C "$ROOT_DIR/frontend" exec tsx scripts/ops/verify-v1140-deploy-versioning.ts >/dev/null
+  BYTECODE_MANIFEST="$ROOT_DIR/deployments/base/v1.14.1-bytecode-manifest.json" \
+    pnpm -C "$ROOT_DIR/frontend" exec tsx scripts/ops/verify-v1140-deploy-versioning.ts >/dev/null
 fi
 
 echo "current split Phase-1 release target guard passed"
