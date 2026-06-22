@@ -77,6 +77,21 @@ jobs:
         id: manager_size_warn
         continue-on-error: true
 
+      - name: Guard CreatorOVault delegate-epilogue invariant
+        # Static guard: any external/public function with nonReentrant
+        # must call _delegateAndReturn(), never _delegate(). Prevents
+        # the P1 DoS where assembly return bypasses the nonReentrant
+        # epilogue (commit 19ad35b21 fixed the last violation).
+        # See docs/operations/ovault-module-immutability-and-recovery.md
+        run: node scripts/check-ovault-delegate-epilogues.mjs
+
+      - name: CreatorOVault size warn/fail gate
+        # Defence-in-depth on top of the EIP-170 hard gate above.
+        # WARN at 23,500 B (informational). FAIL at 24,000 B (blocking).
+        # Keeps ~576 B safety margin under the 24,576 B EIP-170 cap.
+        # See docs/operations/ovault-module-immutability-and-recovery.md
+        run: amoe/tools/ci/check_ovault_size_warn.sh
+
       - name: Run Forge tests
         run: forge test -vvv
         id: test

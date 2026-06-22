@@ -11,6 +11,7 @@
     "docs:audit-hygiene:strict-stale": "node apps/docs-site/scripts/audit-docs-hygiene.mjs --strict-stale",
     "security:local": "bash scripts/security-audit-local.sh",
     "guard:vault-strategy-reallocator": "node scripts/check-vault-strategy-reallocator-wiring.mjs",
+    "guard:ovault-delegate-epilogues": "node scripts/check-ovault-delegate-epilogues.mjs",
     "docs:guard-source-link-pin": "node scripts/check-docs-source-link-pin.mjs",
     "docs:test-release-ref": "node apps/docs-site/scripts/__tests__/source-link-ref-e2e.test.mjs",
     "docs:refresh": "node scripts/check-docs-source-link-pin.mjs && node apps/docs-site/scripts/docs-refresh.mjs",
