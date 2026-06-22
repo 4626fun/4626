@@ -31,52 +31,40 @@ describe('resolveWaitlistChatEligibilitySnapshot', () => {
     expect(result.joinBlockedReason).toBeNull()
   })
 
-  it('allows sub-account users on the app wallet inbox when the flow is enabled', () => {
-    const result = resolveWaitlistChatEligibilitySnapshot({
-      canonicalCswAddress: CSW,
-      embeddedEoaAddress: EOA,
-      baseSubAccountAddress: SUB,
-      embeddedIsOwnerOfParent: false,
-      subAccountFlowEnabled: true,
-    })
-    expect(result.executionTrack).toBe('sub-account')
-    expect(result.xmtpMemberAddress).toBe(SUB)
-    expect(result.chatReady).toBe(true)
-    expect(result.joinBlockedReason).toBeNull()
-  })
-
-  it('prefers legacy-owner over sub-account when both are available', () => {
+  it('prefers legacy-owner-install when the embedded EOA is a CSW owner even if a sub-account is present', () => {
     const result = resolveWaitlistChatEligibilitySnapshot({
       canonicalCswAddress: CSW,
       embeddedEoaAddress: EOA,
       baseSubAccountAddress: SUB,
       embeddedIsOwnerOfParent: true,
-      subAccountFlowEnabled: true,
     })
     expect(result.executionTrack).toBe('legacy-owner-install')
     expect(result.xmtpMemberAddress).toBe(CSW)
+    expect(result.chatReady).toBe(true)
   })
 
-  it('blocks Base App users without sub-account registration when the flow is enabled', () => {
+  it('blocks sub-account-only users until the embedded EOA is installed as a CSW owner', () => {
     const result = resolveWaitlistChatEligibilitySnapshot({
       canonicalCswAddress: CSW,
       embeddedEoaAddress: EOA,
-      baseSubAccountAddress: null,
+      baseSubAccountAddress: SUB,
       embeddedIsOwnerOfParent: false,
-      subAccountFlowEnabled: true,
     })
     expect(result.executionTrack).toBe('none-yet')
-    expect(result.joinBlockedReason).toBe('sub_account_not_registered')
+    expect(result.xmtpMemberAddress).toBeNull()
+    expect(result.chatReady).toBe(false)
+    expect(result.joinBlockedReason).toBe('embedded_owner_not_installed')
   })
 
-  it('blocks Zora-style users without parent owner install when sub-account flow is disabled', () => {
+  it('blocks users without embedded-owner install when no sub-account is present', () => {
     const result = resolveWaitlistChatEligibilitySnapshot({
       canonicalCswAddress: CSW,
       embeddedEoaAddress: EOA,
       baseSubAccountAddress: null,
       embeddedIsOwnerOfParent: false,
-      subAccountFlowEnabled: false,
     })
+    expect(result.executionTrack).toBe('none-yet')
+    expect(result.chatReady).toBe(false)
     expect(result.joinBlockedReason).toBe('embedded_owner_not_installed')
   })
 })

@@ -29,7 +29,7 @@ type WaitlistXmtpJoinResponse = {
   actionId: number
   groupId: string
   identityAddress: `0x${string}`
-  executionTrack: 'legacy-owner-install' | 'sub-account'
+  executionTrack: 'legacy-owner-install'
   execution: 'executed' | 'deferred'
   executionError: string | null
 }
@@ -41,7 +41,6 @@ function joinBlockedStatusCode(reason: string | null): number {
     case 'canonical_csw_missing':
     case 'embedded_eoa_missing':
       return 409
-    case 'sub_account_not_registered':
     case 'embedded_owner_not_installed':
       return 403
     default:
@@ -103,7 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  if (executionTrack !== 'legacy-owner-install' && executionTrack !== 'sub-account') {
+  if (executionTrack !== 'legacy-owner-install') {
     return res.status(403).json({
       success: false,
       error: 'chat_not_ready',
@@ -113,10 +112,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const actionPayload = {
     action: 'xmtp.group.add_member',
     wallet: xmtpMemberAddress,
-    reason:
-      executionTrack === 'sub-account'
-        ? 'waitlist_subaccount_auto_join'
-        : 'waitlist_owner_gated_auto_join',
+    reason: 'waitlist_owner_gated_auto_join',
   }
   const dedupeKey = buildWaitlistChatDedupeKey(groupId, xmtpMemberAddress)
 

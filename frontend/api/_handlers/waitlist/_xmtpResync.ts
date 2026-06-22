@@ -39,7 +39,6 @@ function joinBlockedStatusCode(reason: string | null): number {
     case 'canonical_csw_missing':
     case 'embedded_eoa_missing':
       return 409
-    case 'sub_account_not_registered':
     case 'embedded_owner_not_installed':
       return 403
     default:
@@ -101,7 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  if (executionTrack !== 'legacy-owner-install' && executionTrack !== 'sub-account') {
+  if (executionTrack !== 'legacy-owner-install') {
     return res.status(403).json({
       success: false,
       error: 'chat_not_ready',

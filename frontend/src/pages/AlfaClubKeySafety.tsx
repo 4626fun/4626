@@ -364,7 +364,7 @@ export function AlfaClubKeySafety() {
   const safety = statusPresentation(safetyStatus)
   const SafetyIcon = safety.icon
   const recoveryPercent = Math.round(evaluation.recovery.donationRecoveryFraction * 100)
-  const showResults = unlockedStep >= 4
+  const showResults = true
   const fallbackClubRiskRows = useMemo<ClubRiskRow[]>(() => {
     const supplyCandidates = [20, 40, 60, 80, 100]
     const ownershipCandidates = [10, 20, 30, 40, 50]
