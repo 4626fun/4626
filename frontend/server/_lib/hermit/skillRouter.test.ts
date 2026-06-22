@@ -10,6 +10,7 @@ import {
 } from './skillRouter'
 import * as arenaStore from '../arena/arenaIdentityMappingStore.js'
 import * as arenaClient from '../arena/arenaClient.js'
+import * as virtualsBacktestJobs from '../../agents/eliza/plugins/virtuals/backtestJobs.js'
 import * as counterTradeStore from '../alfaclub/counterTradeStore.js'
 
 describe('executeHermitCommand', () => {
@@ -238,6 +239,40 @@ describe('executeHermitCommand', () => {
     expect(result.reply).toContain('enabled=true')
     expect(result.reply).toContain('agentId=')
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('supports /arena backtest and routes to Virtuals backtest runner', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+    })
+    const runBacktestSpy = vi
+      .spyOn(virtualsBacktestJobs, 'runRealBacktestJob')
+      .mockResolvedValue({
+        responseText: 'Backtest complete for BTC (2160h).',
+        resolvedInterval: '1m',
+      })
+
+    const result = await executeHermitCommand({
+      commandText:
+        '/arena backtest BTC leveragePercent 50 rebalanceHealthPercent 75 rebalanceSizePercent 35 capital 4000',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toContain('Backtest complete for BTC')
+    expect(runBacktestSpy).toHaveBeenCalledTimes(1)
+    expect(runBacktestSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        symbol: 'BTC',
+        leveragePercent: 50,
+        rebalanceHealthPercent: 75,
+        rebalanceSizePercent: 35,
+      }),
+    )
   })
 
   it('supports /arena identity show with resolver fallback', async () => {

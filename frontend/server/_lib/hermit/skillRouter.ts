@@ -72,6 +72,11 @@ import {
   runArenaTrade,
 } from '../arena/arenaClient.js'
 import {
+  parseBacktestRequestFromText,
+  runRealBacktestJob,
+  type VirtualsBacktestRequest,
+} from '../../agents/eliza/plugins/virtuals/backtestJobs.js'
+import {
   clearArenaIdentityMapping,
   resolveArenaIdentityForContext,
   upsertArenaIdentityMapping,
@@ -162,6 +167,7 @@ function parseHermitDraftMode(args: string): { mode: HermitDraftMode; prompt: st
 
 type ParsedArenaCommand =
   | { kind: 'help' | 'status' | 'assets' | 'join' | 'activate' | 'add-api-wallet' }
+  | { kind: 'backtest'; request: VirtualsBacktestRequest }
   | { kind: 'auth'; mode: 'status' | 'refresh' }
   | { kind: 'identity-show' }
   | {
@@ -216,6 +222,13 @@ function parseArenaCommandArgs(args: string): ParsedArenaCommand | null {
   if (sub === 'join') return { kind: 'join' }
   if (sub === 'activate' || sub === 'activate-unified-account') return { kind: 'activate' }
   if (sub === 'add-api-wallet' || sub === 'api-wallet') return { kind: 'add-api-wallet' }
+  if (sub === 'backtest' || sub === 'bt') {
+    const payload = parts.slice(1).join(' ').trim()
+    const requestText = payload ? `backtest ${payload}` : 'backtest BTC'
+    const request = parseBacktestRequestFromText(requestText)
+    if (!request) return null
+    return { kind: 'backtest', request }
+  }
 
   if (sub === 'identity') {
     const action = (parts[1] ?? '').toLowerCase()
@@ -416,6 +429,7 @@ function formatArenaUsage(): string {
     '',
     '**Most useful**',
     '- `/arena status`',
+    '- `/arena backtest BTC leveragePercent 50 rebalanceHealthPercent 75 rebalanceSizePercent 35 capital 4000`',
     '- `/arena auth` / `/arena auth status`',
     '- `/arena long <pair> <sizeUsd> <leverage>`',
     '- `/arena short <pair> <sizeUsd> <leverage>`',
@@ -2730,6 +2744,28 @@ export async function executeHermitCommand(
         kind: 'hermit',
         provider: 'local',
         reply: formatArenaUsage(),
+      }
+    }
+    if (parsed.kind === 'backtest') {
+      try {
+        const backtest = await runRealBacktestJob(parsed.request)
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: backtest.responseText,
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Backtest failed due to an unknown runtime error'
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply:
+            `Arena backtest failed: ${message}. ` +
+            'Try BTC/ETH or reduce constraints if 1m coverage is unavailable.',
+        }
       }
     }
     if (parsed.kind === 'identity-show') {

@@ -13,9 +13,12 @@ type SnapshotRow = {
   room_id: string
   room_name: string | null
   creator_twitter_username: string | null
+  volume_col_raw: string | null
   volume_raw: string | null
   pnl_pct_raw: string | null
+  supply_col_raw: string | null
   supply_raw: string | null
+  fund_size_raw: string | null
   pot_raw: string | null
 }
 
@@ -69,10 +72,6 @@ function curveCost(supply: number, amount: number, divisor: number): number {
   const s = Math.max(0, Math.floor(supply))
   const a = Math.floor(amount)
   return (sumOfSquares(s + a - 1) - sumOfSquares(s - 1)) / divisor
-}
-
-function poolFeeBaselineUsdcForClubTrading(keySupply: number): number {
-  return POOL_FEE_FRACTION * curveCost(0, keySupply, CLUB_DIVISOR)
 }
 
 function attackerKeysToPassVote(keySupply: number, yourKeys: number): number {
@@ -180,8 +179,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           nullif(s.raw->'room'->>'title', '')
         ) as room_name,
         s.creator_twitter_username,
+        s.volume::text as volume_col_raw,
         nullif(s.raw->'room'->>'volume', '') as volume_raw,
         nullif(s.raw->'room'->>'pnlPercentageAllTime', '') as pnl_pct_raw,
+        s.current_supply::text as supply_col_raw,
         coalesce(
           nullif(s.raw->'room'->>'keySupply', ''),
           nullif(s.raw->'room'->>'keysSupply', ''),
@@ -189,6 +190,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           nullif(s.raw->'room'->>'holders', ''),
           nullif(s.raw->'room'->>'holdersCount', '')
         ) as supply_raw,
+        s.fund_size::text as fund_size_raw,
         coalesce(
           nullif(s.raw->'room'->>'tradingFundBalance', ''),
           nullif(s.raw->'room'->>'poolBalance', ''),
@@ -198,24 +200,68 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       from public.alfaclub_rooms_snapshot s
       where lower(coalesce(s.room_type, '')) = 'trading'
         and lower(coalesce(s.tier, '')) = 'club'
-        and (s.raw->'room'->>'volume') ~ '^[0-9]+(\\.[0-9]+)?$'
-      order by (s.raw->'room'->>'volume')::numeric desc nulls last
+        and (
+          (s.current_supply is not null and s.current_supply > 0)
+          or (
+            coalesce(
+              nullif(s.raw->'room'->>'keySupply', ''),
+              nullif(s.raw->'room'->>'keysSupply', ''),
+              nullif(s.raw->'room'->>'totalSupply', ''),
+              nullif(s.raw->'room'->>'holders', ''),
+              nullif(s.raw->'room'->>'holdersCount', '')
+            ) ~ '^[0-9]+(\\.[0-9]+)?$'
+            and (
+              coalesce(
+                nullif(s.raw->'room'->>'keySupply', ''),
+                nullif(s.raw->'room'->>'keysSupply', ''),
+                nullif(s.raw->'room'->>'totalSupply', ''),
+                nullif(s.raw->'room'->>'holders', ''),
+                nullif(s.raw->'room'->>'holdersCount', '')
+              )::numeric > 0
+            )
+          )
+        )
+        and (
+          (s.volume is not null and s.volume >= 0)
+          or nullif(s.raw->'room'->>'volume', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+        )
+        and (
+          s.fund_size is not null
+          or coalesce(
+            nullif(s.raw->'room'->>'tradingFundBalance', ''),
+            nullif(s.raw->'room'->>'poolBalance', ''),
+            nullif(s.raw->'room'->>'fundBalance', ''),
+            nullif(s.raw->'room'->>'stakingPoolBalance', '')
+          ) ~ '^[0-9]+(\\.[0-9]+)?$'
+        )
+      order by coalesce(
+        s.volume,
+        case
+          when nullif(s.raw->'room'->>'volume', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+            then (s.raw->'room'->>'volume')::numeric
+          else null
+        end
+      ) desc nulls last
       limit ${limit};
     `
 
     const rows = (result.rows ?? []) as SnapshotRow[]
-    const responseRows = rows.map((row) => {
-      const supplyRaw = parseNumber(row.supply_raw)
-      const supply = Math.max(1, Math.floor(supplyRaw ?? 30))
+    const responseRows = rows.flatMap((row) => {
+      const supplyRaw = parseNumber(row.supply_col_raw) ?? parseNumber(row.supply_raw)
+      if (!Number.isFinite(supplyRaw) || (supplyRaw ?? 0) <= 0) return []
+      const supply = Math.max(1, Math.floor(supplyRaw))
       const keysHeld = Math.round((ownerSharePercent / 100) * supply)
 
-      const volumeRaw = parseNumber(row.volume_raw)
-      const volumeUsdc = normalizeMaybeUsdc(volumeRaw) ?? 0
+      const volumeRaw = parseNumber(row.volume_col_raw) ?? parseNumber(row.volume_raw)
+      const volumeUsdc = normalizeMaybeUsdc(volumeRaw)
+      if (!Number.isFinite(volumeUsdc ?? NaN) || (volumeUsdc ?? 0) < 0) return []
 
-      const potFromSnapshot = normalizeMaybeUsdc(parseNumber(row.pot_raw))
-      const potSource: 'snapshot' | 'curve_baseline' =
-        potFromSnapshot !== null ? 'snapshot' : 'curve_baseline'
-      const potUsdc = potFromSnapshot ?? poolFeeBaselineUsdcForClubTrading(supply)
+      const potFromSnapshot = normalizeMaybeUsdc(
+        parseNumber(row.fund_size_raw) ?? parseNumber(row.pot_raw),
+      )
+      if (!Number.isFinite(potFromSnapshot ?? NaN) || (potFromSnapshot ?? 0) < 0) return []
+      const potSource = 'snapshot' as const
+      const potUsdc = potFromSnapshot
       const potAtRiskUsdc = Math.max(0, potUsdc + donationUsdc)
 
       const risk = estimateClubRisk({

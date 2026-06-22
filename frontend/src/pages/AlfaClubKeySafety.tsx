@@ -365,42 +365,9 @@ export function AlfaClubKeySafety() {
   const SafetyIcon = safety.icon
   const recoveryPercent = Math.round(evaluation.recovery.donationRecoveryFraction * 100)
   const showResults = true
-  const fallbackClubRiskRows = useMemo<ClubRiskRow[]>(() => {
-    const supplyCandidates = [20, 40, 60, 80, 100]
-    const ownershipCandidates = [10, 20, 30, 40, 50]
-    return supplyCandidates.map((supply) => {
-      const ownershipPercent = ownershipCandidates.find((candidate) => candidate >= sharePercent) ?? 50
-      const keysHeld = Math.round((ownershipPercent / 100) * supply)
-      const clubEvaluation = evaluateKeyDefense({
-        roomType: 'trading',
-        roomTier: 'club',
-        keySupply: supply,
-        yourKeys: keysHeld,
-        potUsdc,
-        donationUsdc,
-        targetRecoveryFraction: 0.5,
-      })
-      return {
-        roomId: `modeled-${supply}`,
-        roomName: `Modeled club room (${supply} supply)`,
-        creatorHandle: null,
-        supply,
-        ownerSharePercent: ownershipPercent,
-        keysHeld,
-        volumeUsdc: 0,
-        pnlPctAllTime: null,
-        modeledPotUsdc: potUsdc,
-        potSource: 'curve_baseline' as const,
-        status: resolveSafetyStatus(clubEvaluation, Math.max(0, potUsdc + donationUsdc)),
-        minAttackKeys: clubEvaluation.raid.minAttackKeys,
-        minAttackCostUsdc: clubEvaluation.raid.minAttackKeysCostUsdc,
-      }
-    })
-  }, [donationUsdc, potUsdc, sharePercent])
-  const [liveClubRiskRows, setLiveClubRiskRows] = useState<ClubRiskRow[] | null>(null)
+  const [liveClubRiskRows, setLiveClubRiskRows] = useState<ClubRiskRow[]>([])
   const [liveClubRiskLoading, setLiveClubRiskLoading] = useState(false)
   const [liveClubRiskError, setLiveClubRiskError] = useState<string | null>(null)
-  const clubRiskRows = liveClubRiskRows ?? fallbackClubRiskRows
 
   useEffect(() => {
     if (!showResults) return
@@ -433,7 +400,7 @@ export function AlfaClubKeySafety() {
         if (controller.signal.aborted) return
         const message = error instanceof Error ? error.message : 'risk_data_fetch_failed'
         setLiveClubRiskError(message)
-        setLiveClubRiskRows(null)
+        setLiveClubRiskRows([])
       } finally {
         if (!controller.signal.aborted) setLiveClubRiskLoading(false)
       }
@@ -763,64 +730,64 @@ export function AlfaClubKeySafety() {
                   </div>
 
                   <div className="rounded-3xl bg-black/35 p-5 shadow-[0_16px_36px_rgba(0,0,0,0.35),inset_0_0_0_1px_rgba(255,255,255,0.04)]">
-                    <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-400">
-                      Club room risk scan (model)
-                    </p>
+                    <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-400">Club room risk scan</p>
                     <p className="mt-2 text-xs text-zinc-500">
-                      Uses live club-room snapshots when available; otherwise falls back to modeled rows. Owner share assumption is {sharePercent}%.
+                      Uses live AlfaClub room snapshots only. Owner share assumption is {sharePercent}%.
                     </p>
                     {liveClubRiskLoading ? (
                       <p className="mt-2 text-xs text-zinc-500">Refreshing live room risk rows…</p>
                     ) : null}
                     {liveClubRiskError ? (
-                      <p className="mt-2 text-xs text-amber-300">
-                        Live room data unavailable ({liveClubRiskError}); showing modeled rows.
-                      </p>
+                      <p className="mt-2 text-xs text-amber-300">Live room data unavailable ({liveClubRiskError}).</p>
                     ) : null}
-                    <div className="mt-3 overflow-x-auto">
-                      <table className="min-w-full border-separate border-spacing-y-1 text-xs text-zinc-300">
-                        <thead>
-                          <tr className="text-zinc-500">
-                            <th className="px-2 py-1 text-left font-medium">Room</th>
-                            <th className="px-2 py-1 text-left font-medium">Volume</th>
-                            <th className="px-2 py-1 text-left font-medium">Supply</th>
-                            <th className="px-2 py-1 text-left font-medium">Owner %</th>
-                            <th className="px-2 py-1 text-left font-medium">Keys held</th>
-                            <th className="px-2 py-1 text-left font-medium">Attacker buys</th>
-                            <th className="px-2 py-1 text-left font-medium">Buy cost</th>
-                            <th className="px-2 py-1 text-left font-medium">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {clubRiskRows.map((row) => (
-                            <tr key={row.roomId} className="bg-white/[0.03]">
-                              <td className="rounded-l-lg px-2 py-1.5">
-                                <p className="max-w-[16rem] truncate font-medium text-zinc-100">{row.roomName}</p>
-                                {row.creatorHandle ? (
-                                  <p className="text-[11px] text-zinc-500">@{row.creatorHandle}</p>
-                                ) : null}
-                              </td>
-                              <td className="px-2 py-1.5 font-mono">{formatUsd(row.volumeUsdc)}</td>
-                              <td className="px-2 py-1.5 font-mono">{row.supply}</td>
-                              <td className="px-2 py-1.5 font-mono">{row.ownerSharePercent}%</td>
-                              <td className="px-2 py-1.5 font-mono">{row.keysHeld.toLocaleString()}</td>
-                              <td className="px-2 py-1.5 font-mono">{row.minAttackKeys.toLocaleString()}</td>
-                              <td className="px-2 py-1.5 font-mono">{formatUsd(row.minAttackCostUsdc)}</td>
-                              <td
-                                className={cn(
-                                  'rounded-r-lg px-2 py-1.5 font-medium',
-                                  row.status === 'at-risk' && 'text-red-200',
-                                  row.status === 'caution' && 'text-amber-200',
-                                  row.status === 'safe' && 'text-sky-200',
-                                )}
-                              >
-                                {row.status}
-                              </td>
+                    {liveClubRiskRows.length > 0 ? (
+                      <div className="mt-3 overflow-x-auto">
+                        <table className="min-w-full border-separate border-spacing-y-1 text-xs text-zinc-300">
+                          <thead>
+                            <tr className="text-zinc-500">
+                              <th className="px-2 py-1 text-left font-medium">Room</th>
+                              <th className="px-2 py-1 text-left font-medium">Volume</th>
+                              <th className="px-2 py-1 text-left font-medium">Supply</th>
+                              <th className="px-2 py-1 text-left font-medium">Owner %</th>
+                              <th className="px-2 py-1 text-left font-medium">Keys held</th>
+                              <th className="px-2 py-1 text-left font-medium">Attacker buys</th>
+                              <th className="px-2 py-1 text-left font-medium">Buy cost</th>
+                              <th className="px-2 py-1 text-left font-medium">Status</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                          </thead>
+                          <tbody>
+                            {liveClubRiskRows.map((row) => (
+                              <tr key={row.roomId} className="bg-white/[0.03]">
+                                <td className="rounded-l-lg px-2 py-1.5">
+                                  <p className="max-w-[16rem] truncate font-medium text-zinc-100">{row.roomName}</p>
+                                  {row.creatorHandle ? (
+                                    <p className="text-[11px] text-zinc-500">@{row.creatorHandle}</p>
+                                  ) : null}
+                                </td>
+                                <td className="px-2 py-1.5 font-mono">{formatUsd(row.volumeUsdc)}</td>
+                                <td className="px-2 py-1.5 font-mono">{row.supply}</td>
+                                <td className="px-2 py-1.5 font-mono">{row.ownerSharePercent}%</td>
+                                <td className="px-2 py-1.5 font-mono">{row.keysHeld.toLocaleString()}</td>
+                                <td className="px-2 py-1.5 font-mono">{row.minAttackKeys.toLocaleString()}</td>
+                                <td className="px-2 py-1.5 font-mono">{formatUsd(row.minAttackCostUsdc)}</td>
+                                <td
+                                  className={cn(
+                                    'rounded-r-lg px-2 py-1.5 font-medium',
+                                    row.status === 'at-risk' && 'text-red-200',
+                                    row.status === 'caution' && 'text-amber-200',
+                                    row.status === 'safe' && 'text-sky-200',
+                                  )}
+                                >
+                                  {row.status}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : !liveClubRiskLoading && !liveClubRiskError ? (
+                      <p className="mt-2 text-xs text-zinc-500">No live club rooms matched the required snapshot fields.</p>
+                    ) : null}
                   </div>
                 </>
               ) : null}
