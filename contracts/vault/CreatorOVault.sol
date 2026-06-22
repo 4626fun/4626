@@ -2080,7 +2080,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         nonReentrant
         onlyManagement
     {
-        _delegate(_strategiesModule);
+        _delegateAndReturn(_strategiesModule);
     }
 
     /**
