@@ -180,7 +180,23 @@ export function WaitlistFlow(props: { sectionId?: string }) {
         read: privy.getAccessToken?.bind(privy) ?? null,
       })
       if (!privyToken) {
-        throw new Error('Could not verify your email session. Please try again.')
+        // Diagnostic logging to help identify the root cause when
+        // getAccessToken() returns empty after OTP. The most common cause is
+        // the privy-session marker cookie being a blocked third-party cookie
+        // (see loopbackSessionMarkerShim.ts). Browser wallet extensions can
+        // also destabilize Privy's embedded wallet initialization.
+        console.warn('[waitlist] getAccessToken returned empty after OTP', {
+          origin: typeof window !== 'undefined' ? window.location.origin : 'ssr',
+          hostname: typeof window !== 'undefined' ? window.location.hostname : 'ssr',
+          hasMarkerCookie:
+            typeof document !== 'undefined' ? document.cookie.includes('privy-session') : false,
+          authenticated: privy.authenticated,
+          ready: privy.ready,
+          hasGetAccessToken: typeof privy.getAccessToken === 'function',
+        })
+        throw new Error(
+          'Could not verify your email session. Please try again. If the issue persists, try an incognito/private window or temporarily disable browser wallet extensions.',
+        )
       }
 
       bridged = await bridgePrivySession(privyToken)

@@ -10,7 +10,8 @@ import { applyLoopbackPrivySessionMarkerShim } from './loopbackSessionMarkerShim
 import { PrivyWalletHooksContextProvider } from './walletHooksContext'
 
 // Must run before the Privy SDK's first getAccessToken() call — see the shim
-// module for why localhost needs the first-party `privy-session` marker.
+// module for why loopback and *.4626.fun origins need the first-party
+// `privy-session` marker cookie.
 applyLoopbackPrivySessionMarkerShim()
 
 // One-time dev guidance for the common "401 on oauth/link" / "Missing auth token" on custom domain.
