@@ -24,6 +24,11 @@ const pending = new Map<number, PendingRequest>()
 
 export function isVanityWasmWorkerEnabled(): boolean {
   if (typeof Worker === 'undefined') return false
+  // Direct import.meta.env access is required for Vite's static replacement
+  // (which vi.stubEnv relies on in tests). The @ts-ignore handles build
+  // environments that type-check against the root tsconfig.json (mocha/chai
+  // types only, no vite/client) — import.meta.env IS available at runtime.
+  // @ts-ignore — ImportMeta.env augmentation from vite-env.d.ts not in root tsconfig
   const raw = String(import.meta.env.VITE_VANITY_WASM_WORKER ?? '').trim().toLowerCase()
   if (raw === '0' || raw === 'false' || raw === 'no') return false
   return true
