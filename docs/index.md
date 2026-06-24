@@ -120,7 +120,7 @@ The architecture stays organized around two system lenses:
 - **Four compressions** — deployment, geography (multichain), distribution (launch), and engagement (game loop).
 - **Three primitives** — account, market, and game loop.
 
-If you read nothing else first, read the [wallet architecture](/wallet-architecture) — it defines the canonical CSW, sub-account, and signer roles every other surface depends on.
+If you read nothing else first, read the [wallet architecture](/wallet-architecture) — it defines the canonical CSW and signer roles every other surface depends on. The default user path is the parent CSW with a Privy embedded-owner signer; the Base sub-account is a dormant, flag-gated, swap-only fallback and is not part of onboarding or deploy.
 
 ## Tech stack
 

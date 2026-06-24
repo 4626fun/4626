@@ -21,10 +21,16 @@ This page explains every wallet role used for one 4626 user and how those roles 
 The resulting split is intentional:
 
 - Parent CSW preserves canonical identity, custody, and default sponsored swap execution.
-- Embedded signer authorizes parent-CSW sponsored UserOps without repeated passkey prompts.
-- Sub-account remains optional app-scoped infrastructure for routes that explicitly send from it.
+- Embedded signer authorizes parent-CSW sponsored UserOps without repeated passkey prompts — this is the default user execution path (`legacy-owner-install`).
+- Sub-account is a **dormant, flag-gated, swap-only fallback** (enabled only when `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` / `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED=1`). It is **not** created during onboarding and is **never** the deploy sender.
 - External EOA remains a fallback/override path.
 - Server wallet enables automation on the parent CSW without redefining canonical ownership.
+
+:::note Current model
+
+Onboarding and deploy use the **parent CSW + Privy embedded-owner signer**. The Base sub-account lane is off by default and only activates as a swap-only fallback behind an explicit feature flag — you will not encounter it in standard account setup or vault deployment.
+
+:::
 
 ## Unified wallet-role chart
 
@@ -68,7 +74,7 @@ The role badge in the `Wallet` column matches the Mermaid node color.
 |---|---|---|---|---|---|
 | <span style="background:#DBEAFE;color:#1E3A8A;border:1px solid #2563EB;border-radius:999px;padding:2px 8px;font-size:12px;font-weight:600;">Identity + Execution</span><br/>Canonical CSW (parent) | Identity, custody source of truth, and default sponsored swap sender | Stable ownership, no balance split, and cross-surface continuity (Base/Zora/app) | Coinbase/Base owner validation and parent semantics are correct; canonical mapping remains consistent | Canonical drift; ownership confusion; wrong account shown as primary | Enforce canonical CSW invariants; explicit canonical fields; canonical repair/verification flows |
 | <span style="background:#DCFCE7;color:#14532D;border:1px solid #16A34A;border-radius:999px;padding:2px 8px;font-size:12px;font-weight:600;">Signer</span><br/>Privy embedded EOA | Primary signer for parent-CSW sponsored UserOps | Reduce repeated passkey prompts for normal usage | Embedded key custody and owner status are reliable | Signer lane interruption; signer-role confusion in sessions/UI | Explicit signer status messaging; reconnect handling; keep custody vs signer copy clearly separated |
-| <span style="background:#ECFEFF;color:#164E63;border:1px solid #0891B2;border-radius:999px;padding:2px 8px;font-size:12px;font-weight:600;">Optional</span><br/>Base sub-account | Optional app-scoped sender for routes that explicitly opt in | Future high-frequency execution lane if provider support is reliable | Sub-account derivation and enforcement are correct; stored `base_sub_account` matches live execution account | Balance split; wrong execution address; visible account confusion | Keep hidden unless actively used as sender; verify provider readiness before routing |
+| <span style="background:#ECFEFF;color:#164E63;border:1px solid #0891B2;border-radius:999px;padding:2px 8px;font-size:12px;font-weight:600;">Dormant / flag-gated</span><br/>Base sub-account | Swap-only fallback sender, **off by default** (flag-gated; never created during onboarding or used for deploy) | Reserved high-frequency execution lane for if/when provider support is reliable | Only routed when `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1`; stored `base_sub_account` matches live execution account | Balance split; wrong execution address; visible account confusion | Keep hidden unless the active route actually sends from it; verify provider readiness before routing |
 | <span style="background:#FEF3C7;color:#78350F;border:1px solid #D97706;border-radius:999px;padding:2px 8px;font-size:12px;font-weight:600;">Fallback</span><br/>Connected external EOA | Fallback signer and explicit override path | Recovery path and user-controlled manual signing | Wallet connector integrity and session binding are correct | Multi-signer race/collision; accidental use as unintended primary signer | Treat as fallback/override in routing/copy; signer diagnostics; explicit user confirmation cues |
 | <span style="background:#F3E8FF;color:#581C87;border:1px solid #9333EA;border-radius:999px;padding:2px 8px;font-size:12px;font-weight:600;">Automation</span><br/>Privy server wallet | Delegated signer for server-side operations on parent CSW | Headless automation without changing canonical custody | Server key custody is secure; API authorization/policy scope is correctly enforced | Unauthorized server-side mutation if delegated path is abused | Scoped delegated-owner model; strict auth gates; audit logs and privileged-path monitoring |
 
