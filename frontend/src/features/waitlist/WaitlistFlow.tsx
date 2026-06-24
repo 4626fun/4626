@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   ArrowRight,
@@ -16,6 +15,7 @@ import { Button } from '@/components/ui/Button'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import { APP_ORIGIN } from '@/lib/env/host'
 import { bridgePrivySession } from '@/features/waitlist/waitlistHandoff'
 import { isAlreadyLoggedInAuthError, runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 
@@ -285,7 +285,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
         throw new Error('Sign-in finished but session is still syncing. Please try once more.')
       }
       setSessionAddress(confirmedSessionAddress)
-      setStatus('You are on the waitlist. You can now continue to app sign-in anytime.')
+      setStatus('You are on the list.')
     } catch (signupError) {
       // R4 fix: if the Privy->4626 session bridge succeeded but a later step
       // (e.g. bootstrap) failed, clear the stale HttpOnly session cookie so
@@ -389,13 +389,13 @@ export function WaitlistFlow(props: { sectionId?: string }) {
               variants={staggerContainer}
               initial="hidden"
               animate="show"
-              className="mt-7 flex flex-wrap gap-2"
+              className="mt-6 flex flex-wrap gap-2"
             >
               {TRUST_CHIPS.map((chip) => (
                 <motion.li
                   key={chip}
                   variants={staggerItem}
-                  className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium tracking-wide text-zinc-300"
+                  className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-medium tracking-[0.5px] text-zinc-300"
                 >
                   {chip}
                 </motion.li>
@@ -407,16 +407,16 @@ export function WaitlistFlow(props: { sectionId?: string }) {
               variants={staggerContainer}
               initial="hidden"
               animate="show"
-              className="mt-8 space-y-4"
+              className="mt-7 space-y-3"
             >
               {VALUE_PROPS.map((vp) => {
                 const Icon = vp.icon
                 return (
-                  <motion.li key={vp.title} variants={staggerItem} className="flex items-start gap-3.5">
-                    <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03]">
-                      <Icon className="size-3.5 text-[rgb(var(--brand-primary))]" aria-hidden="true" />
+                  <motion.li key={vp.title} variants={staggerItem} className="flex items-start gap-3">
+                    <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.03]">
+                      <Icon className="size-3 text-[rgb(var(--brand-primary))]" aria-hidden="true" />
                     </span>
-                    <span className="text-sm leading-relaxed text-zinc-300">
+                    <span className="text-[13px] leading-snug text-zinc-300">
                       <span className="font-medium text-zinc-100">{vp.title}</span>
                       <span className="text-zinc-400"> — {vp.desc}</span>
                     </span>
@@ -502,41 +502,67 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                 </h2>
                 <p className="mt-2 text-sm leading-relaxed text-zinc-400">
                   {sessionAddress
-                    ? 'Your spot is reserved. Continue into the app to explore vaults.'
+                    ? 'Spot reserved. Enter the app to continue. Some areas require approval.'
                     : 'Use email OTP to create or recover your 4626 account. No wallet required to join.'}
                 </p>
               </div>
 
-              {/* CTA */}
+              {/* Primary action — context aware. When you can enter the app, we do not show "Join with email". */}
               <div className="relative mt-6">
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="lg"
-                  className="w-full transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
-                  onClick={() => void handleEmailSignup()}
-                  disabled={isBusy || !privy.ready}
-                >
-                  {emailBusy ? (
-                    <span className="inline-flex items-center gap-2">
-                      <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.9)" />
-                      Securing access…
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-2">
-                      Join with email
-                      <ArrowRight className="size-4" aria-hidden="true" />
-                    </span>
-                  )}
-                </Button>
-                <p className="mt-3 text-center text-[11px] leading-relaxed text-zinc-500">
-                  {!privy.ready
-                    ? 'Preparing secure session…'
-                    : 'Email verification opens automatically. If the pop-up does not appear, use the button above.'}
-                </p>
+                {!sessionAddress ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="lg"
+                      className="w-full transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
+                      onClick={() => void handleEmailSignup()}
+                      disabled={isBusy || !privy.ready}
+                    >
+                      {emailBusy ? (
+                        <span className="inline-flex items-center gap-2">
+                          <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.9)" />
+                          Securing access…
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-2">
+                          Join with email
+                          <ArrowRight className="size-4" aria-hidden="true" />
+                        </span>
+                      )}
+                    </Button>
+                    <p className="mt-3 text-center text-[11px] leading-relaxed text-zinc-500">
+                      {!privy.ready
+                        ? 'Preparing secure session…'
+                        : 'Email verification opens automatically. If the pop-up does not appear, use the button above.'}
+                    </p>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-stretch gap-2">
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      className="w-full transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
+                      asChild
+                    >
+                      <a href={`${APP_ORIGIN}/swap`}>
+                        Enter app
+                        <ArrowRight className="size-4" aria-hidden="true" />
+                      </a>
+                    </Button>
+                    <button
+                      type="button"
+                      className="self-center text-sm text-red-300/80 transition hover:text-red-200 disabled:opacity-50"
+                      onClick={() => void handleSignOut()}
+                      disabled={isBusy}
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {/* success — with icon */}
+              {/* status / error feedback — only transient confirmations */}
               {status ? (
                 <div
                   className="mt-5 flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3"
@@ -553,27 +579,6 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                 >
                   <AlertCircle className="mt-0.5 size-4 shrink-0 text-rose-400" aria-hidden="true" />
                   <p className="text-sm leading-relaxed text-rose-200">{error}</p>
-                </div>
-              ) : null}
-
-              {/* session actions */}
-              {sessionAddress ? (
-                <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-white/5 pt-6">
-                  <Link
-                    to="/swap"
-                    className="inline-flex h-10 items-center gap-2 rounded-xl bg-[rgb(var(--brand-primary))] px-4 text-sm font-medium text-white transition hover:bg-[rgb(var(--brand-hover))]"
-                  >
-                    Enter app
-                    <ArrowRight className="size-4" aria-hidden="true" />
-                  </Link>
-                  <button
-                    type="button"
-                    className="text-sm text-red-300/90 transition hover:text-red-200"
-                    onClick={() => void handleSignOut()}
-                    disabled={isBusy}
-                  >
-                    Sign out
-                  </button>
                 </div>
               ) : null}
             </div>

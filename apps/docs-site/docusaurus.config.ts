@@ -24,6 +24,13 @@ const config: Config = {
     locales: ['en'],
   },
 
+  stylesheets: [
+    {
+      href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap',
+      rel: 'stylesheet',
+    },
+  ],
+
   markdown: {
     mermaid: true,
     format: 'md',  // Use standard markdown, not MDX
@@ -66,6 +73,10 @@ const config: Config = {
 
   themeConfig: {
     image: 'brand/logo.svg',
+    colorMode: {
+      defaultMode: 'dark',
+      respectPrefersColorScheme: true,
+    },
     navbar: {
       hideOnScroll: true,
       title: '4626.fun',
@@ -116,88 +127,11 @@ const config: Config = {
     },
     footer: {
       style: 'dark',
-      logo: {
-        alt: '4626.fun',
-        src: 'brand/logo.svg',
-        href: 'https://4626.fun',
-        width: 36,
-        height: 36,
-      },
-      links: [
-        {
-          title: 'Build',
-          items: [
-            {
-              label: 'Getting Started',
-              to: '/getting-started',
-            },
-            {
-              label: 'Wallet Architecture',
-              to: '/wallet-architecture',
-            },
-            {
-              label: 'Contracts',
-              to: '/contracts',
-            },
-            {
-              label: 'API Reference',
-              to: '/api',
-            },
-          ],
-        },
-        {
-          title: 'Operate',
-          items: [
-            {
-              label: 'Deployment & Ops',
-              to: '/operators',
-            },
-            {
-              label: 'Automation / KPR',
-              to: '/operations/automation',
-            },
-            {
-              label: 'Security',
-              to: '/security',
-            },
-            {
-              label: 'Audits',
-              to: '/audits',
-            },
-          ],
-        },
-        {
-          title: 'Network',
-          items: [
-            {
-              label: 'Built on Base',
-              href: 'https://base.org',
-            },
-            {
-              label: 'Base Block Explorer',
-              href: 'https://basescan.org',
-            },
-          ],
-        },
-        {
-          title: 'Community',
-          items: [
-            {
-              label: '4626.fun',
-              href: 'https://4626.fun',
-            },
-            {
-              label: 'GitHub',
-              href: 'https://github.com/wenakita/4626',
-            },
-          ],
-        },
-      ],
       copyright: `© ${new Date().getFullYear()} 4626.fun · Built on Base`,
     },
     prism: {
       theme: prismThemes.github,
-      darkTheme: prismThemes.dracula,
+      darkTheme: prismThemes.oneDark,
       additionalLanguages: ['solidity', 'bash', 'json'],
     },
     mermaid: {

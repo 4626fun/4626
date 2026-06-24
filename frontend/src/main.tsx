@@ -48,6 +48,7 @@ function stabilizeScrollMeasurementRoots() {
 const EXTENSION_ETHEREUM_ERROR_PATTERNS: RegExp[] = [
   /Cannot redefine property:\s*ethereum/i,
   /Cannot set property ethereum of #<Window> which has only a getter/i,
+  /injected is not defined/i,
   /websocket error 1006/i,
   /MetaMask encountered an error setting the global Ethereum provider/i,
   /Failed to add embedded wallet connector:\s*Wallet proxy not initialized/i,
@@ -68,6 +69,7 @@ function hasExtensionOriginSignal(text: string): boolean {
     lower.includes('evmask.js') ||
     lower.includes('requestrelay.js') ||
     lower.includes('requestprovider.js') ||
+    lower.includes('injected.js') ||
     lower.includes('inpage.js')
   )
 }
@@ -86,6 +88,7 @@ function shouldSuppressWalletNoise(args: unknown[]): boolean {
   const ethereumCollisionSignal =
     joined.includes('cannot set property ethereum of #<window> which has only a getter') ||
     joined.includes('cannot redefine property: ethereum')
+  const injectedUndefinedSignal = joined.includes('injected is not defined')
   return (
     joined.includes('unable to initialize all expected connectors before timeout') ||
     joined.includes('unable to refresh tokens - token is missing or no longer valid') ||
@@ -98,6 +101,7 @@ function shouldSuppressWalletNoise(args: unknown[]): boolean {
     joined.includes('[deployvault] creator_coin_owner_unresolved') ||
     joined.includes('failed to add embedded wallet connector: wallet proxy not initialized') ||
     (ethereumCollisionSignal && hasExtensionOriginSignal(joined)) ||
+    (injectedUndefinedSignal && hasExtensionOriginSignal(joined)) ||
     joined.includes('embedded1193provider.request() called with args') ||
     joined.includes('eth_accounts for privy') ||
     joined.includes('unable to migrate wallets') ||
