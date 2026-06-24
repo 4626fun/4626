@@ -1,6 +1,6 @@
 import type React from 'react';
 import DocItemHeader from '@theme-original/DocItem/Header';
-import {useDoc} from '@docusaurus/theme-common';
+import {useDoc} from '@docusaurus/plugin-content-docs/client';
 import DocMetaBar from '@site/src/components/DocMetaBar';
 
 export default function DocItemHeaderWrapper(

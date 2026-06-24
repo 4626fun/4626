@@ -40,7 +40,25 @@ const config: Config = {
     },
   },
 
-  themes: ['@docusaurus/theme-mermaid'],
+  themes: [
+    '@docusaurus/theme-mermaid',
+    [
+      require.resolve('@easyops-cn/docusaurus-search-local'),
+      {
+        hashed: true,
+        language: ['en'],
+        indexDocs: true,
+        indexBlog: false,
+        indexPages: false,
+        docsRouteBasePath: '/',
+        highlightSearchTermsOnTargetPage: true,
+        explicitSearchResultPath: true,
+        searchBarShortcut: true,
+        searchBarShortcutHint: true,
+        searchBarPosition: 'right',
+      },
+    ],
+  ],
 
   plugins: [
     [
@@ -58,6 +76,7 @@ const config: Config = {
         docs: {
           sidebarPath: './sidebars.ts',
           routeBasePath: '/',
+          breadcrumbs: true,
           editUrl:
             'https://github.com/wenakita/4626/tree/main/apps/docs-site/docs/',
           remarkPlugins: [remarkWrapTables],

@@ -634,6 +634,170 @@ details > :not(summary) {
 }
 
 /* ============================================
+   BREADCRUMBS
+   ============================================ */
+
+.theme-doc-breadcrumbs {
+  margin-bottom: 12px;
+}
+
+.breadcrumbs {
+  padding: 0;
+}
+
+.breadcrumbs__item {
+  font-size: 0.8125rem;
+}
+
+.breadcrumbs__link {
+  color: var(--ifm-font-color-tertiary);
+  transition: color 150ms ease;
+}
+
+.breadcrumbs__link:hover {
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+.breadcrumbs__item--active .breadcrumbs__link {
+  color: var(--ifm-font-color-secondary);
+}
+
+/* ============================================
+   PERSONA SWITCHER
+   ============================================ */
+
+.persona-switcher {
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid var(--docs-border-subtle, var(--ifm-border-color));
+  margin-bottom: 8px;
+}
+
+.persona-switcher__label {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ifm-font-color-tertiary);
+  margin-bottom: 8px;
+}
+
+.persona-switcher__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.persona-switcher__pill {
+  appearance: none;
+  border: 1px solid var(--docs-border-default, var(--ifm-border-color-strong));
+  background: transparent;
+  color: var(--ifm-font-color-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1;
+  padding: 6px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.persona-switcher__pill:hover {
+  color: var(--ifm-font-color-base);
+  background: var(--docs-surface-2, var(--ifm-background-surface-color));
+}
+
+.persona-switcher__pill--active {
+  color: var(--ifm-color-primary);
+  border-color: var(--docs-accent-border, rgba(75, 139, 245, 0.35));
+  background: var(--docs-accent-muted, var(--ifm-color-primary-soft));
+}
+
+.doc-sidebar-mobile-shell .persona-switcher {
+  padding-top: 8px;
+}
+
+/* ============================================
+   TOC RAIL + PAGE ACTIONS
+   ============================================ */
+
+.doc-toc-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.doc-page-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--docs-border-subtle, var(--ifm-border-color));
+}
+
+.doc-page-actions__button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--docs-border-subtle, var(--ifm-border-color));
+  background: transparent;
+  color: var(--ifm-font-color-secondary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.doc-page-actions__button:hover {
+  color: var(--ifm-font-color-base);
+  background: var(--docs-surface-2, var(--ifm-background-surface-color));
+  text-decoration: none;
+}
+
+.doc-page-actions__button--link {
+  text-align: left;
+}
+
+/* ============================================
+   LOCAL SEARCH (Cmd+K)
+   ============================================ */
+
+:root {
+  --search-local-modal-background: var(--docs-surface-2, #16181B);
+  --search-local-modal-width: 560px;
+  --search-local-hit-background: var(--docs-surface-1, #101113);
+  --search-local-hit-color: var(--docs-text-primary, #ECEDEE);
+  --search-local-highlight-color: var(--docs-accent, #4B8BF5);
+  --search-local-muted-color: var(--docs-text-tertiary, #8A8C90);
+  --search-local-input-active-border-color: var(--docs-accent, #4B8BF5);
+}
+
+:root[data-theme='light'] {
+  --search-local-modal-background: #ffffff;
+  --search-local-hit-background: #f8f9fa;
+  --search-local-hit-color: #1c1e21;
+}
+
+.navbar__search-input {
+  border-radius: 8px !important;
+  border: 1px solid var(--docs-border-subtle, var(--ifm-border-color)) !important;
+  background: var(--docs-surface-1, var(--ifm-background-surface-color)) !important;
+  font-size: 0.875rem !important;
+}
+
+.navbar__search-input:focus {
+  border-color: var(--ifm-color-primary) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px var(--docs-accent-muted, rgba(75, 139, 245, 0.12));
+}
+
+/* ============================================
    GLOBAL POLISH — surfaces, navbar, depth
    ============================================ */
 
