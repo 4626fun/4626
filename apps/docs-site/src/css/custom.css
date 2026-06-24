@@ -343,6 +343,11 @@
 
 /* GitHub icon link in navbar */
 .header-github-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   padding: 0 var(--ifm-navbar-item-padding-horizontal);
   font-size: 0;
   line-height: 0;
@@ -360,6 +365,22 @@
 [data-theme='dark'] .header-github-link::before {
   background: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='%23ECEDEE' d='M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.33C3.78 14.36 3.32 13 3.32 13c-.36-.92-.89-1.16-.89-1.16-.73-.5.05-.49.05-.49.81.06 1.24.83 1.24.83.71 1.22 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.58.82-2.14-.08-.2-.36-1.01.08-2.11 0 0 .67-.21 2.2.82A7.62 7.62 0 0 1 8 4.77c.68 0 1.37.09 2.01.26 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.91.08 2.11.51.56.82 1.27.82 2.14 0 3.07-1.87 3.75-3.66 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z'/%3E%3C/svg%3E")
     center / contain no-repeat;
+}
+
+/* Prevent Docusaurus external-link glyph from stacking next to custom GitHub icon */
+.header-github-link .iconExternalLink_Evra,
+.header-github-link svg[class*='iconExternalLink'] {
+  display: none !important;
+}
+
+/* Keep dark/light mode toggle legible in both themes */
+.navbar button[class*='toggleButton'] {
+  color: var(--ifm-navbar-link-color);
+}
+
+.navbar button[class*='toggleButton']:hover {
+  color: var(--ifm-navbar-link-hover-color);
+  background: var(--ifm-menu-color-background-active);
 }
 
 /* Sidebar styling */
@@ -1077,9 +1098,20 @@ details > :not(summary) {
 }
 
 .home-card__icon {
-  font-size: 1.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   line-height: 1;
   color: var(--ifm-color-primary);
+}
+
+.home-card__icon img,
+.home-card__icon svg {
+  display: block;
+  width: 20px;
+  height: 20px;
 }
 
 .home-card__tag {
@@ -1196,4 +1228,103 @@ details > :not(summary) {
   .home-btn:hover {
     transform: none;
   }
+}
+
+/* ============================================
+   EDITION BANNER + PAGE TEMPLATES
+   ============================================ */
+
+.doc-edition-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 1rem;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--docs-border-default, var(--ifm-border-color-strong));
+  background: var(--docs-surface-1, var(--ifm-background-surface-color));
+  font-size: 0.8125rem;
+}
+
+.doc-edition-banner__label {
+  color: var(--ifm-font-color-tertiary);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.doc-edition-banner__value {
+  color: var(--ifm-font-color-base);
+  font-weight: 600;
+  font-family: var(--ifm-font-family-monospace);
+}
+
+.doc-template--runbook .markdown > h2:first-of-type {
+  margin-top: 1rem;
+}
+
+.doc-template--runbook .markdown h2:not(:first-of-type):not(.section-major)::before {
+  background: linear-gradient(
+    90deg,
+    var(--ifm-color-primary-soft),
+    var(--docs-border-subtle, var(--ifm-border-color))
+  );
+}
+
+.doc-template--audit .markdown > blockquote:first-of-type {
+  border-left-color: #d97706;
+  background: rgba(217, 119, 6, 0.08);
+}
+
+.doc-template--reference .markdown table {
+  font-size: 0.875rem;
+}
+
+.doc-template--reference .markdown th {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.8125rem;
+  letter-spacing: 0.01em;
+}
+
+/* ============================================
+   LIGHT MODE — ADMONITIONS + CODE CONTRAST
+   ============================================ */
+
+:root[data-theme='light'] .alert {
+  border: 1px solid var(--ifm-border-color-strong);
+}
+
+:root[data-theme='light'] .alert--info {
+  --ifm-alert-background-color: rgba(0, 82, 255, 0.06);
+  --ifm-alert-border-color: rgba(0, 82, 255, 0.22);
+  --ifm-alert-foreground-color: #1c1e21;
+}
+
+:root[data-theme='light'] .alert--warning {
+  --ifm-alert-background-color: rgba(217, 119, 6, 0.08);
+  --ifm-alert-border-color: rgba(217, 119, 6, 0.28);
+  --ifm-alert-foreground-color: #1c1e21;
+}
+
+:root[data-theme='light'] .alert--danger {
+  --ifm-alert-background-color: rgba(220, 38, 38, 0.07);
+  --ifm-alert-border-color: rgba(220, 38, 38, 0.24);
+  --ifm-alert-foreground-color: #1c1e21;
+}
+
+:root[data-theme='light'] .alert--success {
+  --ifm-alert-background-color: rgba(22, 163, 74, 0.08);
+  --ifm-alert-border-color: rgba(22, 163, 74, 0.24);
+  --ifm-alert-foreground-color: #1c1e21;
+}
+
+:root[data-theme='light'] .theme-code-block pre,
+:root[data-theme='light'] pre {
+  border: 1px solid var(--ifm-code-border);
+  background: #f6f8fa;
+}
+
+:root[data-theme='light'] :not(pre) > code {
+  border: 1px solid var(--ifm-code-border);
+  color: #24292f;
+  background: #f6f8fa;
 }

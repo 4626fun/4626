@@ -17,7 +17,7 @@
     "start": "pnpm api:postprocess && docusaurus start",
     "build": "pnpm api:postprocess && docusaurus build",
     "build:full": "pnpm prepare:content && docusaurus build",
-    "build:slim": "DOCS_SKIP_FORGE=1 DOCS_SKIP_TYPEDOC=1 pnpm run build",
+    "build:slim": "DOCS_SKIP_FORGE=1 DOCS_SKIP_TYPEDOC=1 NODE_OPTIONS=--max-old-space-size=8192 pnpm run build",
     "build:quick": "pnpm sync-docs && pnpm api:postprocess && docusaurus build",
     "build:strict": "pnpm sync-docs:strict && pnpm api:postprocess:strict && docusaurus build",
     "bundle:strict": "pnpm sync-docs:strict && pnpm api:postprocess:strict && docusaurus build --no-minify",

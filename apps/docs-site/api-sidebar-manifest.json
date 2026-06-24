@@ -1,0 +1,198 @@
+{
+  "domains": [
+    {
+      "id": "accounts",
+      "label": "Accounts"
+    },
+    {
+      "id": "admin",
+      "label": "Admin"
+    },
+    {
+      "id": "agent",
+      "label": "Agent"
+    },
+    {
+      "id": "agents",
+      "label": "Agents"
+    },
+    {
+      "id": "analytics",
+      "label": "Analytics"
+    },
+    {
+      "id": "arch-b",
+      "label": "Arch B"
+    },
+    {
+      "id": "auth",
+      "label": "Auth"
+    },
+    {
+      "id": "cdp",
+      "label": "Cdp"
+    },
+    {
+      "id": "creator",
+      "label": "Creator"
+    },
+    {
+      "id": "creator-access",
+      "label": "Creator Access"
+    },
+    {
+      "id": "debank",
+      "label": "Debank"
+    },
+    {
+      "id": "deploy",
+      "label": "Deploy"
+    },
+    {
+      "id": "flags",
+      "label": "Flags"
+    },
+    {
+      "id": "health",
+      "label": "Health"
+    },
+    {
+      "id": "image",
+      "label": "Image"
+    },
+    {
+      "id": "keeper",
+      "label": "Keeper"
+    },
+    {
+      "id": "keepr",
+      "label": "Keepr"
+    },
+    {
+      "id": "lens",
+      "label": "Lens"
+    },
+    {
+      "id": "onboarding",
+      "label": "Onboarding"
+    },
+    {
+      "id": "onchain",
+      "label": "Onchain"
+    },
+    {
+      "id": "paymaster",
+      "label": "Paymaster"
+    },
+    {
+      "id": "portfolio",
+      "label": "Portfolio"
+    },
+    {
+      "id": "rpc",
+      "label": "Rpc"
+    },
+    {
+      "id": "seo",
+      "label": "Seo"
+    },
+    {
+      "id": "social",
+      "label": "Social"
+    },
+    {
+      "id": "status",
+      "label": "Status"
+    },
+    {
+      "id": "telegram",
+      "label": "Telegram"
+    },
+    {
+      "id": "token",
+      "label": "Token"
+    },
+    {
+      "id": "uniswap",
+      "label": "Uniswap"
+    },
+    {
+      "id": "v1",
+      "label": "V1"
+    },
+    {
+      "id": "vaults",
+      "label": "Vaults"
+    },
+    {
+      "id": "waitlist",
+      "label": "Waitlist"
+    },
+    {
+      "id": "wallet",
+      "label": "Wallet"
+    },
+    {
+      "id": "zora",
+      "label": "Zora"
+    }
+  ],
+  "routeMaps": [
+    {
+      "id": "_routeLoader",
+      "label": "Route loader"
+    },
+    {
+      "id": "_routes.auth",
+      "label": "Routes · Auth"
+    },
+    {
+      "id": "_routes.cdp",
+      "label": "Routes · Cdp"
+    },
+    {
+      "id": "_routes.deploy",
+      "label": "Routes · Deploy"
+    },
+    {
+      "id": "_routes.image",
+      "label": "Routes · Image"
+    },
+    {
+      "id": "_routes.keepr",
+      "label": "Routes · Keepr"
+    },
+    {
+      "id": "_routes.lens",
+      "label": "Routes · Lens"
+    },
+    {
+      "id": "_routes.telegram",
+      "label": "Routes · Telegram"
+    },
+    {
+      "id": "_routes.uniswap",
+      "label": "Routes · Uniswap"
+    },
+    {
+      "id": "_routes.v1",
+      "label": "Routes · V1"
+    },
+    {
+      "id": "_routes.waitlist",
+      "label": "Routes · Waitlist"
+    },
+    {
+      "id": "_routes.wallet.solana",
+      "label": "Routes · Wallet.Solana"
+    },
+    {
+      "id": "_routes.zora",
+      "label": "Routes · Zora"
+    },
+    {
+      "id": "_routes",
+      "label": "Routes (root)"
+    }
+  ]
+}

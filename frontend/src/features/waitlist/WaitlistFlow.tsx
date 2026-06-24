@@ -196,7 +196,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   const [sessionAddress, setSessionAddress] = useState<string | null>(null)
   const [sessionHydrated, setSessionHydrated] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [status, setStatus] = useState<string | null>(null)
+  const [listCount, setListCount] = useState<number | null>(null)
   const autoPromptAttemptedRef = useRef(false)
   const signupInFlightRef = useRef(false)
 
@@ -214,13 +214,31 @@ export function WaitlistFlow(props: { sectionId?: string }) {
     }
   }, [privy.ready])
 
+  // Lightweight social proof — only used for quiet display when real data exists.
+  // Never fabricates "full" or capacity states.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await apiFetch('/api/waitlist/stats', { headers: { Accept: 'application/json' } })
+        if (!res?.ok || cancelled) return
+        const json = (await res.json().catch(() => null)) as ApiEnvelope<{ signedUpCount?: number }> | null
+        if (json?.success && typeof json.data?.signedUpCount === 'number' && json.data.signedUpCount > 0) {
+          setListCount(json.data.signedUpCount)
+        }
+      } catch {
+        // fail open — no stats shown
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
   const handleEmailSignup = useCallback(async () => {
     // R5 fix: in-flight guard prevents concurrent execution when the
     // auto-prompt effect and a manual button click overlap on the same tick.
     if (signupInFlightRef.current) return
     signupInFlightRef.current = true
     setError(null)
-    setStatus(null)
     setEmailBusy(true)
     let bridged = false
     try {
@@ -285,7 +303,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
         throw new Error('Sign-in finished but session is still syncing. Please try once more.')
       }
       setSessionAddress(confirmedSessionAddress)
-      setStatus('You are on the list.')
+      // No banner needed — the card itself transforms into the confirmed state.
     } catch (signupError) {
       // R4 fix: if the Privy->4626 session bridge succeeded but a later step
       // (e.g. bootstrap) failed, clear the stale HttpOnly session cookie so
@@ -307,7 +325,6 @@ export function WaitlistFlow(props: { sectionId?: string }) {
     if (signOutBusy) return
     setSignOutBusy(true)
     setError(null)
-    setStatus(null)
     try {
       await runWaitlistPrivyLogout({
         logout: privy.logout ?? null,
@@ -355,8 +372,8 @@ export function WaitlistFlow(props: { sectionId?: string }) {
         />
       </div>
 
-      <div className="relative mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:py-20">
-        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
+      <div className="relative mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 sm:py-14 lg:py-16">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_0.95fr] lg:gap-12">
           {/* ─── Left column — hero copy ─── */}
           <motion.div
             initial={{ opacity: 0, y: 18 }}
@@ -364,24 +381,24 @@ export function WaitlistFlow(props: { sectionId?: string }) {
             transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
             className="flex flex-col justify-center"
           >
-            <div className="flex items-center gap-3 self-start">
+            <div className="flex items-center gap-2 self-start">
               <div className="status-active">
                 <span className="label">Creator vault launch · Base</span>
               </div>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/[0.06] px-2.5 py-1 text-[10px] font-medium tracking-wide text-amber-300/80">
-                <Sparkles className="size-2.5" aria-hidden="true" />
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/15 bg-amber-500/[0.05] px-2 py-0.5 text-[9px] font-medium tracking-wide text-amber-300/70">
+                <Sparkles className="size-2" aria-hidden="true" />
                 Limited early access
               </span>
             </div>
 
-            <h1 className="headline mt-6 text-4xl leading-[0.98] tracking-[-0.04em] sm:text-5xl lg:text-[3.4rem]">
+            <h1 className="headline mt-4 text-4xl leading-[0.98] tracking-[-0.04em] sm:text-5xl lg:text-[3.25rem]">
               Early access to
               <br />
               <span className="glow-brand">creator-owned vaults.</span>
             </h1>
 
-            <p className="mt-5 max-w-md text-[15px] font-light leading-relaxed text-zinc-400">
-              Join the first wave of creators and holders turning creator coins into redeemable vault shares on Base. Email gets you in — no wallet needed yet.
+            <p className="mt-4 max-w-md text-[14px] font-light leading-relaxed text-zinc-400">
+              The first wave of creators turning their coins into redeemable onchain vault shares. Email gets you on the list. No wallet required to start.
             </p>
 
             {/* trust chips — staggered entrance */}
@@ -389,7 +406,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
               variants={staggerContainer}
               initial="hidden"
               animate="show"
-              className="mt-6 flex flex-wrap gap-2"
+              className="mt-5 flex flex-wrap gap-1.5"
             >
               {TRUST_CHIPS.map((chip) => (
                 <motion.li
@@ -407,18 +424,18 @@ export function WaitlistFlow(props: { sectionId?: string }) {
               variants={staggerContainer}
               initial="hidden"
               animate="show"
-              className="mt-7 space-y-3"
+              className="mt-5 space-y-2.5"
             >
               {VALUE_PROPS.map((vp) => {
                 const Icon = vp.icon
                 return (
-                  <motion.li key={vp.title} variants={staggerItem} className="flex items-start gap-3">
-                    <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.03]">
-                      <Icon className="size-3 text-[rgb(var(--brand-primary))]" aria-hidden="true" />
+                  <motion.li key={vp.title} variants={staggerItem} className="flex items-start gap-2.5">
+                    <span className="mt-px flex size-5 shrink-0 items-center justify-center rounded border border-white/10 bg-white/[0.02]">
+                      <Icon className="size-2.5 text-[rgb(var(--brand-primary))]" aria-hidden="true" />
                     </span>
-                    <span className="text-[13px] leading-snug text-zinc-300">
-                      <span className="font-medium text-zinc-100">{vp.title}</span>
-                      <span className="text-zinc-400"> — {vp.desc}</span>
+                    <span className="text-[12.5px] leading-snug text-zinc-400">
+                      <span className="font-medium text-zinc-200">{vp.title}</span>
+                      <span> — {vp.desc}</span>
                     </span>
                   </motion.li>
                 )
@@ -433,7 +450,13 @@ export function WaitlistFlow(props: { sectionId?: string }) {
             transition={{ duration: 0.7, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
             className="flex items-center justify-center lg:justify-end"
           >
-            <div className="glass-card relative w-full max-w-md overflow-hidden p-6 ring-1 ring-white/5 shadow-[0_30px_80px_rgba(0,0,0,0.6)] sm:p-8">
+            <div
+              className={`glass-card relative w-full max-w-md overflow-hidden p-6 ring-1 shadow-[0_30px_80px_rgba(0,0,0,0.6)] sm:p-8 ${
+                sessionAddress
+                  ? 'ring-[rgb(var(--brand-primary)/0.18)] shadow-[0_30px_90px_rgba(0,0,0,0.65)]'
+                  : 'ring-white/5'
+              }`}
+            >
               {/* card top accent — gradient hairline */}
               <div
                 className="pointer-events-none absolute inset-x-0 top-0 h-px"
@@ -453,37 +476,49 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                 aria-hidden="true"
               />
 
-              {/* vault preview visual — concentric rings with animated pulse */}
-              <div className="relative mb-6 flex justify-center" aria-hidden="true">
-                <div className="relative size-24">
-                  {/* outer ring */}
-                  <div className="absolute inset-0 rounded-full border border-white/10" />
-                  {/* animated pulse ring */}
-                  <motion.div
-                    className="absolute inset-0 rounded-full border border-[rgb(var(--brand-primary)/0.3)]"
-                    animate={{ scale: [1, 1.18, 1], opacity: [0.5, 0, 0.5] }}
-                    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                  />
-                  {/* mid ring */}
-                  <div className="absolute inset-[12px] rounded-full border border-[rgb(var(--brand-primary)/0.35)]" />
-                  {/* inner glow */}
-                  <div
-                    className="absolute inset-[22px] rounded-full"
-                    style={{
-                      background: 'radial-gradient(circle, rgb(var(--brand-primary) / 0.22) 0%, transparent 72%)',
-                    }}
-                  />
-                  {/* core symbol */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span
-                      className="font-mono text-lg font-light"
-                      style={{ color: 'rgb(var(--brand-primary))' }}
-                    >
-                      ■
-                    </span>
+              {/* vault preview — prominent only before joining for visual interest */}
+              {!sessionAddress && (
+                <div className="relative mb-6 flex justify-center" aria-hidden="true">
+                  <div className="relative size-24">
+                    {/* outer ring */}
+                    <div className="absolute inset-0 rounded-full border border-white/10" />
+                    {/* animated pulse */}
+                    <motion.div
+                      className="absolute inset-0 rounded-full border border-[rgb(var(--brand-primary)/0.3)]"
+                      animate={{ scale: [1, 1.18, 1], opacity: [0.5, 0, 0.5] }}
+                      transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+                    {/* mid ring */}
+                    <div className="absolute inset-[12px] rounded-full border border-[rgb(var(--brand-primary)/0.35)]" />
+                    {/* inner glow */}
+                    <div
+                      className="absolute inset-[22px] rounded-full"
+                      style={{
+                        background: 'radial-gradient(circle, rgb(var(--brand-primary) / 0.22) 0%, transparent 72%)',
+                      }}
+                    />
+                    {/* core symbol */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span
+                        className="font-mono text-lg font-light"
+                        style={{ color: 'rgb(var(--brand-primary))' }}
+                      >
+                        ■
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
+
+              {/* minimal confirmation for joined state */}
+              {sessionAddress && (
+                <div className="mb-2 flex justify-center">
+                  <div className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/5 px-2 py-0.5 text-[9px] uppercase tracking-[1px] text-emerald-400">
+                    <CheckCircle2 className="size-2.5" aria-hidden="true" />
+                    <span>Confirmed</span>
+                  </div>
+                </div>
+              )}
 
               {/* card header */}
               <div className="relative">
@@ -497,18 +532,24 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                   </span>
                 </div>
 
-                <h2 className="mt-4 text-lg font-medium tracking-tight text-white">
+                <h2 className="mt-2 text-lg font-medium tracking-tight text-white">
                   {sessionAddress ? 'You are on the list' : 'Join the launch list'}
                 </h2>
                 <p className="mt-2 text-sm leading-relaxed text-zinc-400">
                   {sessionAddress
-                    ? 'Spot reserved. Enter the app to continue. Some areas require approval.'
+                    ? 'Early access confirmed. Enter the app to explore and set up.'
                     : 'Use email OTP to create or recover your 4626 account. No wallet required to join.'}
                 </p>
+
+                {sessionAddress && listCount != null && listCount > 0 ? (
+                  <div className="mt-1 text-[10px] text-zinc-500 tracking-[0.2px]">
+                    {listCount.toLocaleString()} creators on the list
+                  </div>
+                ) : null}
               </div>
 
               {/* Primary action — context aware. When you can enter the app, we do not show "Join with email". */}
-              <div className="relative mt-6">
+              <div className={`relative ${sessionAddress ? 'mt-7' : 'mt-6'}`}>
                 {!sessionAddress ? (
                   <>
                     <Button
@@ -534,11 +575,11 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                     <p className="mt-3 text-center text-[11px] leading-relaxed text-zinc-500">
                       {!privy.ready
                         ? 'Preparing secure session…'
-                        : 'Email verification opens automatically. If the pop-up does not appear, use the button above.'}
+                        : 'A secure code will be sent to your email.'}
                     </p>
                   </>
                 ) : (
-                  <div className="flex flex-col items-stretch gap-2">
+                  <div className="flex flex-col items-stretch gap-4">
                     <Button
                       variant="primary"
                       size="lg"
@@ -552,7 +593,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                     </Button>
                     <button
                       type="button"
-                      className="self-center text-sm text-red-300/80 transition hover:text-red-200 disabled:opacity-50"
+                      className="self-center text-xs tracking-wide text-zinc-500 transition hover:text-zinc-300 disabled:opacity-50"
                       onClick={() => void handleSignOut()}
                       disabled={isBusy}
                     >
@@ -562,16 +603,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                 )}
               </div>
 
-              {/* status / error feedback — only transient confirmations */}
-              {status ? (
-                <div
-                  className="mt-5 flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3"
-                  role="status"
-                >
-                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-400" aria-hidden="true" />
-                  <p className="text-sm leading-relaxed text-emerald-200">{status}</p>
-                </div>
-              ) : null}
+              {/* error feedback only — success is communicated by the card transforming */}
               {error ? (
                 <div
                   className="mt-5 flex items-start gap-2.5 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3"
@@ -586,7 +618,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
         </div>
 
         {/* footer trust line */}
-        <p className="mt-12 text-center text-[11px] font-light tracking-wide text-zinc-600">
+        <p className="mt-8 text-center text-[11px] font-light tracking-wide text-zinc-600">
           {FOOTER_TRUST}
         </p>
       </div>
