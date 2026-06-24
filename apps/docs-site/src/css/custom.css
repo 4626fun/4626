@@ -14,8 +14,36 @@
 
 /* Light mode defaults */
 :root {
+  /* Docs design tokens (canonical) */
+  --docs-accent: #0052FF;
+  --docs-accent-soft: rgba(0, 82, 255, 0.10);
+  --docs-accent-ring: rgba(0, 82, 255, 0.35);
+  --docs-canvas: #ffffff;
+  --docs-surface-1: #f8f9fa;
+  --docs-surface-2: #f0f1f3;
+  --docs-text-primary: #1c1e21;
+  --docs-text-secondary: #525860;
+  --docs-text-tertiary: #6c7077;
+  --docs-border-subtle: #e3e3e3;
+  --docs-border-default: #d1d5db;
+  --docs-radius-lg: 16px;
+  --docs-card-bg: #ffffff;
+  --docs-card-border: #e6e8eb;
+  --docs-card-border-hover: rgba(0, 82, 255, 0.45);
+  --docs-muted: #525860;
+
+  /* Homepage aliases (same tokens) */
+  --home-accent: var(--docs-accent);
+  --home-accent-soft: var(--docs-accent-soft);
+  --home-radius: var(--docs-radius-lg);
+  --home-card-bg: var(--docs-card-bg);
+  --home-card-border: var(--docs-card-border);
+  --home-card-border-hover: var(--docs-card-border-hover);
+  --home-muted: var(--docs-muted);
+  --home-ring: var(--docs-accent-ring);
+
   /* Primary - Electric Blue */
-  --ifm-color-primary: #0052FF;
+  --ifm-color-primary: var(--docs-accent);
   --ifm-color-primary-dark: #004AD9;
   --ifm-color-primary-darker: #0044CC;
   --ifm-color-primary-darkest: #0033A8;
@@ -71,14 +99,48 @@
   /* Typography */
   --ifm-font-family-base: 'Inter', system-ui, -apple-system, sans-serif;
   --ifm-font-family-monospace: 'JetBrains Mono', 'Fira Code', monospace;
+  --ifm-navbar-height: 56px;
+  --ifm-font-size-base: 16px;
+  --ifm-line-height-base: 1.7;
+  --ifm-h1-font-size: 2.25rem;
+  --ifm-h2-font-size: 1.5rem;
+  --ifm-h3-font-size: 1.125rem;
+  --ifm-heading-font-weight: 600;
 }
 
 /* Dark mode — :root[data-theme='dark'] gives (0,2,0) specificity so it beats
    both Infima's html[data-theme='dark'] (0,1,1) and the merged :root light
    block (0,1,0) after lightningcss strips html from html[data-theme='dark']. */
 :root[data-theme='dark'] {
+  /* Docs design tokens (canonical) */
+  --docs-accent: #4B8BF5;
+  --docs-accent-soft: rgba(75, 139, 245, 0.12);
+  --docs-accent-ring: rgba(75, 139, 245, 0.4);
+  --docs-canvas: #08090A;
+  --docs-surface-1: #101113;
+  --docs-surface-2: #16181B;
+  --docs-text-primary: #ECEDEE;
+  --docs-text-secondary: #B4B6BA;
+  --docs-text-tertiary: #8A8C90;
+  --docs-border-subtle: #1E2024;
+  --docs-border-default: #2A2D33;
+  --docs-radius-lg: 16px;
+  --docs-card-bg: linear-gradient(165deg, #121315, #0a0b0c);
+  --docs-card-border: #1E2024;
+  --docs-card-border-hover: rgba(75, 139, 245, 0.5);
+  --docs-muted: #B4B6BA;
+
+  --home-accent: var(--docs-accent);
+  --home-accent-soft: rgba(75, 139, 245, 0.14);
+  --home-radius: var(--docs-radius-lg);
+  --home-card-bg: var(--docs-card-bg);
+  --home-card-border: var(--docs-card-border);
+  --home-card-border-hover: var(--docs-card-border-hover);
+  --home-muted: var(--docs-muted);
+  --home-ring: var(--docs-accent-ring);
+
   /* Accent */
-  --ifm-color-primary: #4B8BF5;
+  --ifm-color-primary: var(--docs-accent);
   --ifm-color-primary-dark: #3A78E8;
   --ifm-color-primary-darker: #2E66D4;
   --ifm-color-primary-darkest: #2455B0;
@@ -90,14 +152,14 @@
   --docusaurus-highlighted-code-line-bg: rgba(75, 139, 245, 0.10);
 
   /* Surfaces */
-  --ifm-background-color: #08090A;
-  --ifm-background-surface-color: #101113;
-  --ifm-background-elevated: #16181B;
+  --ifm-background-color: var(--docs-canvas);
+  --ifm-background-surface-color: var(--docs-surface-1);
+  --ifm-background-elevated: var(--docs-surface-2);
 
   /* Text — AA verified (secondary was #999 = 2.85:1, FAILED) */
-  --ifm-font-color-base: #ECEDEE;
-  --ifm-font-color-secondary: #B4B6BA;
-  --ifm-font-color-tertiary: #8A8C90;
+  --ifm-font-color-base: var(--docs-text-primary);
+  --ifm-font-color-secondary: var(--docs-text-secondary);
+  --ifm-font-color-tertiary: var(--docs-text-tertiary);
 
   /* Links */
   --ifm-link-color: #4B8BF5;
@@ -120,10 +182,10 @@
   --ifm-menu-color-background-active: rgba(75, 139, 245, 0.10);
 
   /* Borders */
-  --ifm-border-color: #1E2024;
-  --ifm-border-color-strong: #2A2D33;
-  --ifm-toc-border-color: #1E2024;
-  --ifm-hr-border-color: #1E2024;
+  --ifm-border-color: var(--docs-border-subtle);
+  --ifm-border-color-strong: var(--docs-border-default);
+  --ifm-toc-border-color: var(--docs-border-subtle);
+  --ifm-hr-border-color: var(--docs-border-subtle);
 
   /* Code */
   --ifm-code-background: #0C0D0F;
@@ -147,18 +209,61 @@
   font-feature-settings: "liga" 1, "calt" 1;
 }
 
+.theme-doc-markdown {
+  max-width: 720px;
+}
+
+/* Wide assets break out of prose measure */
+.markdown :is(
+  pre,
+  .theme-code-block,
+  .docusaurus-mermaid-container,
+  .table-wrap
+) {
+  max-width: min(960px, 100%);
+}
+
+@media (min-width: 1280px) {
+  .table-of-contents {
+    top: calc(var(--ifm-navbar-height) + 24px);
+    max-height: calc(100vh - var(--ifm-navbar-height) - 48px);
+    padding-left: 16px;
+    border-left: 1px solid var(--docs-border-subtle, var(--ifm-border-color));
+  }
+}
+
 /* Line height for body text */
 .markdown p,
 .markdown li {
   line-height: 1.7;
 }
 
-/* Vertical rhythm — accent tick, no full rule */
+/* Vertical rhythm — section dividers instead of left stripe */
 .markdown h2 {
   margin-top: 3rem;
   margin-bottom: 1rem;
+  padding-left: 0;
+  border-left: none;
+  letter-spacing: -0.02em;
+}
+
+.markdown h2.section-major {
   padding-left: 12px;
   border-left: 3px solid var(--ifm-color-primary-soft);
+}
+
+.markdown h2:not(:first-of-type):not(.section-major)::before {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 1px;
+  margin-bottom: 1.5rem;
+  background: var(--docs-border-subtle, var(--ifm-border-color));
+}
+
+.markdown > p:first-of-type {
+  font-size: 1.0625rem;
+  color: var(--ifm-font-color-secondary);
 }
 
 .markdown h3 {
@@ -204,7 +309,7 @@
   border-radius: 12px;
   padding: 1.5rem;
   margin: 1.5rem auto;
-  max-width: 900px;
+  max-width: min(960px, 100%);
 }
 
 [data-theme='dark'] .docusaurus-mermaid-container {
@@ -328,8 +433,72 @@ code {
 }
 
 /* ============================================
+   DOC META BAR
+   ============================================ */
+
+.doc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 24px;
+  max-width: 720px;
+}
+
+.doc-meta__badge {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--docs-border-default, var(--ifm-border-color-strong));
+  color: var(--ifm-font-color-secondary);
+  background: var(--docs-surface-1, var(--ifm-background-surface-color));
+  text-transform: none;
+}
+
+.doc-meta__badge--current {
+  border-color: rgba(52, 211, 153, 0.35);
+  color: #34D399;
+}
+
+.doc-meta__badge--warn {
+  border-color: rgba(251, 191, 36, 0.35);
+  color: #FBBF24;
+}
+
+.doc-meta__badge--danger {
+  border-color: rgba(248, 113, 113, 0.35);
+  color: #F87171;
+}
+
+.doc-meta__badge--muted {
+  color: var(--ifm-font-color-tertiary);
+  border-color: var(--docs-border-subtle, var(--ifm-border-color));
+}
+
+/* ============================================
    TABLES — horizontal rules only, no vertical grid
    ============================================ */
+
+.table-wrap {
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  border: 1px solid var(--docs-border-subtle, var(--ifm-border-color));
+  border-radius: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-wrap table {
+  margin: 0;
+  min-width: 640px;
+}
+
+.table-wrap table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
 /* Tables — horizontal rules only, no vertical grid */
 .markdown table {
   border-collapse: separate;
@@ -468,27 +637,6 @@ details > :not(summary) {
    GLOBAL POLISH — surfaces, navbar, depth
    ============================================ */
 
-:root {
-  --home-accent: #0052ff;
-  --home-accent-soft: rgba(0, 82, 255, 0.14);
-  --home-radius: 16px;
-  --home-card-bg: #ffffff;
-  --home-card-border: #e6e8eb;
-  --home-card-border-hover: rgba(0, 82, 255, 0.45);
-  --home-muted: #525860;
-  --home-ring: rgba(0, 82, 255, 0.35);
-}
-
-:root[data-theme='dark'] {
-  --home-accent: #4B8BF5;
-  --home-accent-soft: rgba(75, 139, 245, 0.14);
-  --home-card-bg: linear-gradient(165deg, #121315, #0a0b0c);
-  --home-card-border: #1E2024;
-  --home-card-border-hover: rgba(75, 139, 245, 0.5);
-  --home-muted: #B4B6BA;
-  --home-ring: rgba(75, 139, 245, 0.4);
-}
-
 /* Smooth, slightly translucent navbar with subtle depth */
 .navbar {
   backdrop-filter: saturate(140%) blur(10px);
@@ -508,7 +656,8 @@ details > :not(summary) {
 .menu__link:focus-visible,
 .home-card:focus-visible,
 .home-btn:focus-visible,
-.footer__link-item:focus-visible {
+.footer__link-item:focus-visible,
+.doc-meta__badge:focus-visible {
   outline: 2px solid var(--ifm-color-primary);
   outline-offset: 2px;
   border-radius: 6px;
@@ -522,10 +671,28 @@ details > :not(summary) {
   box-shadow: inset 2px 0 0 var(--ifm-color-primary);
 }
 
+.menu__list-item-collapsible .menu__link--active {
+  color: var(--ifm-font-color-base);
+  background: transparent;
+  box-shadow: none;
+}
+
 /* Sidebar hover */
 .menu__link:hover:not(.menu__link--active) {
   background-color: var(--ifm-background-surface-color);
   color: var(--ifm-font-color-base);
+}
+
+.footer__links {
+  margin-bottom: 1rem;
+}
+
+.footer__title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ifm-font-color-tertiary);
 }
 
 /* ============================================

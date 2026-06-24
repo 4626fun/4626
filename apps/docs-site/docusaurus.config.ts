@@ -2,6 +2,7 @@ import {themes as prismThemes} from 'prism-react-renderer';
 import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 import {redirects} from './redirects';
+import remarkWrapTables from './src/remark/wrapTables';
 
 const enableGitLastUpdate = process.env.DOCS_USE_GIT_LAST_UPDATE === '1';
 
@@ -57,6 +58,9 @@ const config: Config = {
         docs: {
           sidebarPath: './sidebars.ts',
           routeBasePath: '/',
+          editUrl:
+            'https://github.com/wenakita/4626/tree/main/apps/docs-site/docs/',
+          remarkPlugins: [remarkWrapTables],
           // Prefer synced frontmatter `last_updated`; Git metadata is optional.
           showLastUpdateTime: enableGitLastUpdate,
           showLastUpdateAuthor: false,
@@ -86,27 +90,6 @@ const config: Config = {
       },
       items: [
         {
-          type: 'docSidebar',
-          sidebarId: 'docs',
-          position: 'left',
-          label: 'Docs',
-        },
-        {
-          to: '/wallet-architecture',
-          label: 'Wallet Architecture',
-          position: 'left',
-        },
-        {
-          to: '/contracts',
-          label: 'Contracts',
-          position: 'left',
-        },
-        {
-          to: '/api',
-          label: 'API',
-          position: 'left',
-        },
-        {
           to: '/operations/deployment/releases',
           label: 'Change Log',
           position: 'right',
@@ -127,6 +110,35 @@ const config: Config = {
     },
     footer: {
       style: 'dark',
+      links: [
+        {
+          title: 'Docs',
+          items: [
+            {label: 'Getting started', to: '/getting-started'},
+            {label: 'Wallet architecture', to: '/wallet-architecture'},
+            {label: 'Contracts', to: '/contracts'},
+            {label: 'API reference', to: '/api'},
+          ],
+        },
+        {
+          title: 'Trust',
+          items: [
+            {label: 'Security', to: '/security'},
+            {label: 'Audits', to: '/audits/README'},
+            {label: 'Change log', to: '/operations/deployment/releases'},
+          ],
+        },
+        {
+          title: 'Links',
+          items: [
+            {label: '4626.fun', href: 'https://4626.fun'},
+            {
+              label: 'GitHub',
+              href: 'https://github.com/wenakita/4626',
+            },
+          ],
+        },
+      ],
       copyright: `© ${new Date().getFullYear()} 4626.fun · Built on Base`,
     },
     prism: {
