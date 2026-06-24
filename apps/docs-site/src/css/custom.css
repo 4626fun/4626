@@ -73,8 +73,10 @@
   --ifm-font-family-monospace: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
-/* Dark mode */
-html[data-theme='dark'] {
+/* Dark mode — :root[data-theme='dark'] gives (0,2,0) specificity so it beats
+   both Infima's html[data-theme='dark'] (0,1,1) and the merged :root light
+   block (0,1,0) after lightningcss strips html from html[data-theme='dark']. */
+:root[data-theme='dark'] {
   /* Accent */
   --ifm-color-primary: #4B8BF5;
   --ifm-color-primary-dark: #3A78E8;
@@ -477,7 +479,7 @@ details > :not(summary) {
   --home-ring: rgba(0, 82, 255, 0.35);
 }
 
-html[data-theme='dark'] {
+:root[data-theme='dark'] {
   --home-accent: #4B8BF5;
   --home-accent-soft: rgba(75, 139, 245, 0.14);
   --home-card-bg: linear-gradient(165deg, #121315, #0a0b0c);
