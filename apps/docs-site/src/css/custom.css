@@ -383,6 +383,29 @@
   background: var(--ifm-menu-color-background-active);
 }
 
+/* ----------------------------------------------------------------
+   Mobile sidebar drawer height fix
+   With `hideOnScroll: true`, the hideable navbar becomes the containing
+   block for the position:fixed `.navbar-sidebar` (its `top:0; bottom:0`
+   resolve against the ~56px navbar box instead of the viewport). That
+   collapses the drawer to navbar height and leaves `.navbar-sidebar__items`
+   at height 0, so the menu never "comes out". Pin the drawer to the full
+   viewport height so the items area (height: calc(100% - navbar-height))
+   fills correctly and scrolls.
+   ---------------------------------------------------------------- */
+@media (max-width: 996px) {
+  .navbar-sidebar {
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  /* Each menu panel scrolls independently when the nav is taller than the drawer */
+  .navbar-sidebar__item {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+}
+
 /* Sidebar styling */
 .menu__link {
   font-weight: 400;
