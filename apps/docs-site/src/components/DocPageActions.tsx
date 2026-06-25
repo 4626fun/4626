@@ -1,7 +1,14 @@
 import {useCallback, useState} from 'react';
+import clsx from 'clsx';
 import {useDoc} from '@docusaurus/plugin-content-docs/client';
 
-export default function DocPageActions(): React.JSX.Element | null {
+type DocPageActionsProps = {
+  variant?: 'desktop' | 'mobile';
+};
+
+export default function DocPageActions({
+  variant = 'desktop',
+}: DocPageActionsProps): React.JSX.Element | null {
   const {metadata, frontMatter} = useDoc();
   const [copied, setCopied] = useState(false);
 
@@ -21,7 +28,12 @@ export default function DocPageActions(): React.JSX.Element | null {
   }
 
   return (
-    <div className="doc-page-actions" aria-label="Page actions">
+    <div
+      className={clsx(
+        'doc-page-actions',
+        variant === 'mobile' && 'doc-page-actions--mobile',
+      )}
+      aria-label="Page actions">
       <button
         type="button"
         className="doc-page-actions__button"

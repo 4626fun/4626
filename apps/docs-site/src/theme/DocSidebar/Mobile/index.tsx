@@ -1,6 +1,7 @@
 import type React from 'react';
 import DocSidebarMobile from '@theme-original/DocSidebar/Mobile';
 import PersonaSwitcher from '@site/src/components/PersonaSwitcher';
+import SidebarCollapseControls from '@site/src/components/SidebarCollapseControls';
 import {usePersona} from '@site/src/hooks/usePersona';
 import {filterSidebarByPersona} from '@site/src/lib/personas';
 
@@ -13,6 +14,7 @@ export default function DocSidebarMobileWrapper(
   return (
     <div className="doc-sidebar-mobile-shell">
       <PersonaSwitcher value={persona} onChange={setPersona} />
+      <SidebarCollapseControls />
       <DocSidebarMobile {...props} sidebar={sidebar} />
     </div>
   );

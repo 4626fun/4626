@@ -56,6 +56,9 @@ const config: Config = {
         searchBarShortcut: true,
         searchBarShortcutHint: true,
         searchBarPosition: 'right',
+        // Prefer curated hubs over deep generated symbol pages in result titles.
+        searchResultLimits: 12,
+        searchResultContextMaxLength: 80,
       },
     ],
   ],
@@ -96,6 +99,12 @@ const config: Config = {
 
   themeConfig: {
     image: 'brand/logo.svg',
+    docs: {
+      sidebar: {
+        autoCollapseCategories: true,
+        hideable: true,
+      },
+    },
     colorMode: {
       defaultMode: 'dark',
       respectPrefersColorScheme: true,
@@ -145,6 +154,8 @@ const config: Config = {
             {label: 'Security', to: '/security'},
             {label: 'Audits', to: '/audits/README'},
             {label: 'Change log', to: '/operations/deployment/releases'},
+            {label: 'Terms', to: '/legal/terms'},
+            {label: 'Privacy', to: '/legal/privacy'},
           ],
         },
         {
