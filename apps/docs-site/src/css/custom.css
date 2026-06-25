@@ -383,6 +383,29 @@
   background: var(--ifm-menu-color-background-active);
 }
 
+/* ----------------------------------------------------------------
+   Mobile sidebar drawer height fix
+   With `hideOnScroll: true`, the hideable navbar becomes the containing
+   block for the position:fixed `.navbar-sidebar` (its `top:0; bottom:0`
+   resolve against the ~56px navbar box instead of the viewport). That
+   collapses the drawer to navbar height and leaves `.navbar-sidebar__items`
+   at height 0, so the menu never "comes out". Pin the drawer to the full
+   viewport height so the items area (height: calc(100% - navbar-height))
+   fills correctly and scrolls.
+   ---------------------------------------------------------------- */
+@media (max-width: 996px) {
+  .navbar-sidebar {
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  /* Each menu panel scrolls independently when the nav is taller than the drawer */
+  .navbar-sidebar__item {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+}
+
 /* Sidebar styling */
 .menu__link {
   font-weight: 400;
@@ -537,18 +560,79 @@
 }
 
 /* ============================================
-   FOOTER
+   FOOTER — color-coded columns
    ============================================ */
 
+/* Per-column accent hues (cycled across footer columns).
+   The footer is always dark (`style: 'dark'`), so tuned for a dark surface. */
+:root {
+  --footer-accent-1: #4B8BF5; /* Docs   — brand blue */
+  --footer-accent-2: #34D399; /* Trust  — emerald */
+  --footer-accent-3: #A78BFA; /* Links  — violet */
+}
+
 .footer {
+  position: relative;
   border-top: 1px solid var(--ifm-border-color);
-  padding: 32px 0;
+  padding: 48px 0 36px;
   font-size: 0.8125rem;
+}
+
+/* Thin gradient accent line spanning the three column hues */
+.footer::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--footer-accent-1) 0%,
+    var(--footer-accent-2) 50%,
+    var(--footer-accent-3) 100%
+  );
+  opacity: 0.85;
+}
+
+[data-theme='dark'] .footer {
+  background: linear-gradient(180deg, #0a0b0c, var(--docs-canvas, #08090A));
+}
+
+/* Assign an accent per footer column and expose it as --col-accent */
+.footer__col {
+  --col-accent: var(--footer-accent-1);
+  position: relative;
+  padding-left: 14px;
+}
+
+.footer__col:nth-child(3n + 2) {
+  --col-accent: var(--footer-accent-2);
+}
+
+.footer__col:nth-child(3n) {
+  --col-accent: var(--footer-accent-3);
+}
+
+/* Colored rail down the left edge of each column */
+.footer__col::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 2px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--col-accent);
+  opacity: 0.55;
 }
 
 .footer__copyright {
   text-align: center;
   color: var(--ifm-font-color-tertiary);
+  margin-top: 8px;
+  padding-top: 20px;
+  border-top: 1px solid var(--ifm-border-color);
 }
 
 /* ============================================
@@ -1029,15 +1113,47 @@ details > :not(summary) {
 }
 
 .footer__links {
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
 
+/* Color-coded column titles with a leading marker dot */
 .footer__title {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ifm-font-color-tertiary);
+  color: var(--col-accent, var(--ifm-font-color-tertiary));
+  margin-bottom: 14px;
+}
+
+.footer__title::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--col-accent, var(--ifm-color-primary));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--col-accent, var(--ifm-color-primary)) 18%, transparent);
+  flex: none;
+}
+
+.footer__item {
+  margin: 2px 0;
+}
+
+.footer__link-item {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ifm-footer-link-color);
+  transition: color 150ms ease, transform 150ms ease;
+}
+
+.footer__link-item:hover {
+  color: var(--col-accent, var(--ifm-color-primary));
+  text-decoration: none;
+  transform: translateX(2px);
 }
 
 /* ============================================

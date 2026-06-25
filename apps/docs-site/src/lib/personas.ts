@@ -59,11 +59,11 @@ function categoryAllowed(label: string, persona: PersonaId): boolean {
 }
 
 export function filterSidebarByPersona(
-  items: PropSidebarItem[],
+  items: readonly PropSidebarItem[],
   persona: PersonaId,
 ): PropSidebarItem[] {
   if (persona === 'all') {
-    return items;
+    return [...items];
   }
 
   return items.filter((item) => {

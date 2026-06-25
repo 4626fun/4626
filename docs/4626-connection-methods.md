@@ -1,8 +1,16 @@
-# 4626 Batched Passkey Ceremony Architecture
+# 4626 Connection Methods & Passkey Ceremony Architecture
 
 **Internal Documentation — 4626 Project Team**
 
 > **Canonical reference:** [docs/ACCOUNT_MODEL.md](./ACCOUNT_MODEL.md) is the single source of truth for the 4626 account model — user populations, invariants, schema. This doc covers the *batched passkey ceremony* mechanics in detail; for the higher-level account model read ACCOUNT_MODEL.md first.
+
+:::warning Current model — sub-accounts are dormant
+
+The default user path is the **parent CSW + Privy embedded-owner signer** (`legacy-owner-install`), and signup is **email-only Privy**. Onboarding does **not** create a Base sub-account, and deploy **never** sends from one.
+
+The Base sub-account lane described in the deeper sections below (the two-popup "batched ceremony", Phase 2 sub-account creation, etc.) is a **flag-gated, swap-only fallback** that only activates when both `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` and `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` are set. Treat those sections as reference for that optional lane, not the live default flow.
+
+:::
 
 ---
 
@@ -37,7 +45,7 @@ This is secure but disruptive for an app that sends frequent transactions. 4626 
 - **Optional app-scoped transactions** may use a **sub-account** derived from the CSW when a route explicitly opts into that provider.
 - **Server-side agent operations** (XMTP messaging, ERC-8004 identity, deploy-session automation) use the **CSW directly** as the ERC-4337 sender, signed by a Privy server-managed wallet added as a CSW owner via `addOwnerAddress`.
 
-Both require a one-time passkey authorization from the user. Previously, these were separate ceremonies at different points in the user journey. The batched ceremony consolidates them into a single onboarding session — the user sees two passkey popups back-to-back during account setup, then never again.
+Both require a one-time authorization from the user. In the **current default flow**, the user signs in with email-only Privy and the embedded EOA is installed as a parent-CSW owner (`legacy-owner-install`) — no sub-account is created. The **batched two-popup ceremony** documented below (sub-account creation + agent owner install back-to-back) belongs to the flag-gated sub-account lane and is not part of standard onboarding.
 
 ---
 
