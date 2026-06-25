@@ -979,6 +979,13 @@ details > :not(summary) {
   background: var(--docs-accent-muted, var(--ifm-color-primary-soft));
 }
 
+.persona-switcher__desc {
+  margin: 8px 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--ifm-font-color-secondary);
+}
+
 .doc-sidebar-mobile-shell .persona-switcher {
   padding-top: 8px;
 }
@@ -1066,17 +1073,28 @@ details > :not(summary) {
    GLOBAL POLISH — surfaces, navbar, depth
    ============================================ */
 
-/* Smooth, slightly translucent navbar with subtle depth */
+/* Translucent navbar blur on ::before — never on .navbar itself.
+   backdrop-filter on the nav creates a containing block that clips
+   position:fixed .navbar-sidebar to the 56px navbar height on mobile. */
 .navbar {
+  background-color: transparent;
+}
+
+.navbar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   backdrop-filter: saturate(140%) blur(10px);
   -webkit-backdrop-filter: saturate(140%) blur(10px);
 }
 
-[data-theme='dark'] .navbar {
+[data-theme='dark'] .navbar::before {
   background-color: rgba(8, 9, 10, 0.80);
 }
 
-[data-theme='light'] .navbar {
+[data-theme='light'] .navbar::before {
   background-color: rgba(255, 255, 255, 0.82);
 }
 
@@ -1651,14 +1669,30 @@ details > :not(summary) {
     top: calc(var(--ifm-navbar-height) + env(safe-area-inset-top, 0px));
   }
 
+  .navbar-sidebar,
+  .navbar-sidebar__backdrop {
+    z-index: var(--ifm-z-index-overlay);
+  }
+
   .navbar-sidebar {
     max-height: 100dvh;
     overflow-y: auto;
     overscroll-behavior: contain;
+    /* Opaque drawer — navbar token is translucent for the top bar blur */
+    background-color: var(--ifm-background-color);
   }
 
   .navbar-sidebar .menu {
     padding-bottom: 1rem;
+  }
+
+  .mobile-navbar-docs-entry {
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font: inherit;
   }
 
   .footer {
@@ -1930,4 +1964,25 @@ details > :not(summary) {
   .markdown a[href^='#']::after {
     content: '';
   }
+}
+
+/* Historical / archived doc banner */
+.doc-historical-banner {
+  margin: 0 0 1.25rem;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  background: rgba(234, 179, 8, 0.08);
+  color: var(--docs-text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.doc-historical-banner strong {
+  color: var(--docs-text-primary);
+}
+
+/* Docs | API navbar tabs */
+.navbar__item.navbar__link--active {
+  font-weight: 600;
 }

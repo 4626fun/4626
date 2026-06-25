@@ -118,6 +118,18 @@ const config: Config = {
       },
       items: [
         {
+          type: 'docSidebar',
+          sidebarId: 'docs',
+          label: 'Docs',
+          position: 'left',
+        },
+        {
+          type: 'docSidebar',
+          sidebarId: 'api',
+          label: 'API',
+          position: 'left',
+        },
+        {
           to: '/operations/deployment/releases',
           label: 'Change Log',
           position: 'right',
@@ -142,8 +154,11 @@ const config: Config = {
         {
           title: 'Docs',
           items: [
+            {label: 'Reading order', to: '/reading-order'},
+            {label: 'Guides', to: '/guides'},
+            {label: 'Product', to: '/product'},
             {label: 'Getting started', to: '/getting-started'},
-            {label: 'Wallet architecture', to: '/wallet-architecture'},
+            {label: 'Account model', to: '/ACCOUNT_MODEL'},
             {label: 'Contracts', to: '/contracts'},
             {label: 'API reference', to: '/api'},
           ],

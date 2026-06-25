@@ -6,11 +6,12 @@ import {
 } from '@docusaurus/theme-common';
 import {useNavbarMobileSidebar} from '@docusaurus/theme-common/internal';
 import DocSidebarItems from '@theme/DocSidebarItems';
-import type {Props} from '@theme/DocSidebar/Mobile';
 import PersonaSwitcher from '@site/src/components/PersonaSwitcher';
 import SidebarCollapseControls from '@site/src/components/SidebarCollapseControls';
 import {usePersona} from '@site/src/hooks/usePersona';
-import {filterSidebarByPersona} from '@site/src/lib/personas';
+import {useLocation} from '@docusaurus/router';
+import {filterSidebarByPersona, shouldApplyPersonaSidebarFilter} from '@site/src/lib/personas';
+import type {Props} from '@theme/DocSidebar/Mobile';
 
 /**
  * The mobile sidebar is rendered into the navbar's slide-out secondary menu via
@@ -27,13 +28,30 @@ import {filterSidebarByPersona} from '@site/src/lib/personas';
 function DocSidebarMobileSecondaryMenu({sidebar, path}: Props): React.JSX.Element {
   const mobileSidebar = useNavbarMobileSidebar();
   const [persona, setPersona] = usePersona();
-  const filteredSidebar = filterSidebarByPersona(sidebar, persona);
+  const {pathname} = useLocation();
+  const filteredSidebar = shouldApplyPersonaSidebarFilter(pathname)
+    ? filterSidebarByPersona(sidebar, persona)
+    : sidebar;
 
   return (
     <div className="doc-sidebar-mobile-shell">
       <PersonaSwitcher value={persona} onChange={setPersona} />
       <SidebarCollapseControls />
-      <DocSidebarMobile {...props} sidebar={sidebar} />
+      <ul className={clsx(ThemeClassNames.docs.docSidebarMenu, 'menu__list')}>
+        <DocSidebarItems
+          items={filteredSidebar}
+          activePath={path}
+          onItemClick={(item) => {
+            if (item.type === 'category' && item.href) {
+              mobileSidebar.toggle();
+            }
+            if (item.type === 'link') {
+              mobileSidebar.toggle();
+            }
+          }}
+          level={1}
+        />
+      </ul>
     </div>
   );
 }

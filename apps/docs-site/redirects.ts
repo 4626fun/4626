@@ -46,6 +46,7 @@ export const redirects: ClientRedirect[] = [
   { from: '/audits/npm-advisories-triage', to: '/audits' },
   { from: '/audits/production-parity-checklist', to: '/audits' },
   { from: '/compressions/reading-order', to: '/compressions' },
+  { from: '/overview/reading-order', to: '/reading-order' },
   {
     from: '/primitives/game-loop/lottery-amoe-test-matrix',
     to: '/primitives/game-loop/lottery',

@@ -2,6 +2,7 @@ import {useCallback, useEffect, useState} from 'react';
 import {useLocation} from '@docusaurus/router';
 import {
   detectPersonaFromPath,
+  normalizeStoredPersona,
   type PersonaId,
 } from '@site/src/lib/personas';
 
@@ -11,21 +12,7 @@ function readStoredPersona(): PersonaId | null {
   if (typeof window === 'undefined') {
     return null;
   }
-  const stored = window.localStorage.getItem(STORAGE_KEY);
-  if (
-    stored === 'all' ||
-    stored === 'overview' ||
-    stored === 'users' ||
-    stored === 'creators' ||
-    stored === 'developers' ||
-    stored === 'integrators' ||
-    stored === 'operators' ||
-    stored === 'trust' ||
-    stored === 'reference'
-  ) {
-    return stored;
-  }
-  return null;
+  return normalizeStoredPersona(window.localStorage.getItem(STORAGE_KEY));
 }
 
 export function usePersona(): [PersonaId, (next: PersonaId) => void] {

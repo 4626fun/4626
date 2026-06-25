@@ -1,5 +1,6 @@
 import clsx from 'clsx';
 import {
+  getPersonaOption,
   PERSONA_OPTIONS,
   type PersonaId,
 } from '@site/src/lib/personas';
@@ -13,6 +14,8 @@ export default function PersonaSwitcher({
   value,
   onChange,
 }: PersonaSwitcherProps): React.JSX.Element {
+  const activePersona = getPersonaOption(value);
+
   return (
     <div className="persona-switcher" role="navigation" aria-label="Docs persona">
       <span className="persona-switcher__label">Browse as</span>
@@ -26,12 +29,13 @@ export default function PersonaSwitcher({
               value === option.id && 'persona-switcher__pill--active',
             )}
             aria-pressed={value === option.id}
-            title={option.label}
+            title={option.description}
             onClick={() => onChange(option.id)}>
             {option.shortLabel}
           </button>
         ))}
       </div>
+      <p className="persona-switcher__desc">{activePersona.description}</p>
     </div>
   );
 }
