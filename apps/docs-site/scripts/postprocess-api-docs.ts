@@ -617,12 +617,58 @@ interface ApiSidebarManifest {
 const HANDLERS_DIR = path.join(DOCS_DIR, 'api/frontend/api/_handlers');
 const MANIFEST_PATH = path.resolve(__dirname, '../api-sidebar-manifest.json');
 const HANDLERS_HUB_PATH = path.join(DOCS_DIR, 'api/handlers/index.md');
+const DOMAIN_LANDING_DIR = path.join(DOCS_DIR, 'api/domains');
 
 function formatRouteMapLabel(fileBase: string): string {
   if (fileBase === '_routes') return 'Routes (root)';
   if (fileBase === '_routeLoader') return 'Route loader';
   const suffix = fileBase.replace(/^_routes\./, '').replace(/_/g, ' ');
   return `Routes · ${toTitleCase(suffix)}`;
+}
+
+async function syncDomainLandingPages(domains: ApiSidebarDomain[]): Promise<number> {
+  await fs.mkdir(DOMAIN_LANDING_DIR, {recursive: true});
+  const keep = new Set(domains.map((domain) => `${domain.id}.md`));
+
+  for (const file of await fs.readdir(DOMAIN_LANDING_DIR)) {
+    if (file.endsWith('.md') && !keep.has(file)) {
+      await fs.unlink(path.join(DOMAIN_LANDING_DIR, file));
+    }
+  }
+
+  for (const domain of domains) {
+    const handlerPath = `/api/frontend/api/_handlers/${domain.id}/`;
+    const lines = [
+      '---',
+      `title: ${domain.label} API`,
+      `description: Vercel HTTP handlers for the ${domain.label} API domain.`,
+      `slug: /api/${domain.id}`,
+      'generated: true',
+      `keywords: [api, ${domain.id}, handlers, ${domain.label.toLowerCase()}]`,
+      '---',
+      '',
+      `# ${domain.label} API`,
+      '',
+      `Short-path index for [\`${domain.id}\`](${handlerPath}) handlers on the 4626 Vercel API surface.`,
+      '',
+      '## Quick links',
+      '',
+      `- [Handler index](${handlerPath})`,
+      '- [All HTTP handlers](/api/handlers)',
+      '- [API overview](/api)',
+      '',
+      '---',
+      '',
+      '*This page is auto-generated. Do not edit directly.*',
+      '',
+    ];
+    await fs.writeFile(
+      path.join(DOMAIN_LANDING_DIR, `${domain.id}.md`),
+      lines.join('\n'),
+    );
+  }
+
+  return domains.length;
 }
 
 async function generateApiSidebarManifest(): Promise<void> {
@@ -653,6 +699,7 @@ async function generateApiSidebarManifest(): Promise<void> {
     'title: HTTP Handlers',
     'sidebar_label: Handlers hub',
     'generated: true',
+    'keywords: [api, handlers, routes, vercel, http]',
     '---',
     '',
     '# HTTP Handlers',
@@ -662,11 +709,11 @@ async function generateApiSidebarManifest(): Promise<void> {
     '',
     '## Domains',
     '',
-    '| Domain | Entry |',
-    '|--------|-------|',
+    '| Domain | Short path | Handler index |',
+    '|--------|------------|---------------|',
     ...domains.map(
       (domain) =>
-        `| **${domain.label}** | [Open domain](/api/frontend/api/_handlers/${domain.id}/) |`,
+        `| **${domain.label}** | [/api/${domain.id}](/api/${domain.id}) | [Handlers](/api/frontend/api/_handlers/${domain.id}/) |`,
     ),
     '',
     '## Route maps',
@@ -686,8 +733,9 @@ async function generateApiSidebarManifest(): Promise<void> {
 
   await fs.mkdir(path.dirname(HANDLERS_HUB_PATH), {recursive: true});
   await fs.writeFile(HANDLERS_HUB_PATH, hubLines.join('\n'));
+  const landingCount = await syncDomainLandingPages(domains);
   console.log(
-    `   ✓ API sidebar manifest (${domains.length} domains, ${routeMaps.length} route maps)`,
+    `   ✓ API sidebar manifest (${domains.length} domains, ${routeMaps.length} route maps, ${landingCount} landing pages)`,
   );
 }
 

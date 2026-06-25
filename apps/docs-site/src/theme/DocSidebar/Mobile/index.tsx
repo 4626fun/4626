@@ -8,6 +8,7 @@ import {useNavbarMobileSidebar} from '@docusaurus/theme-common/internal';
 import DocSidebarItems from '@theme/DocSidebarItems';
 import type {Props} from '@theme/DocSidebar/Mobile';
 import PersonaSwitcher from '@site/src/components/PersonaSwitcher';
+import SidebarCollapseControls from '@site/src/components/SidebarCollapseControls';
 import {usePersona} from '@site/src/hooks/usePersona';
 import {filterSidebarByPersona} from '@site/src/lib/personas';
 
@@ -31,22 +32,8 @@ function DocSidebarMobileSecondaryMenu({sidebar, path}: Props): React.JSX.Elemen
   return (
     <div className="doc-sidebar-mobile-shell">
       <PersonaSwitcher value={persona} onChange={setPersona} />
-      <ul className={clsx(ThemeClassNames.docs.docSidebarMenu, 'menu__list')}>
-        <DocSidebarItems
-          items={filteredSidebar}
-          activePath={path}
-          onItemClick={(item) => {
-            // Mobile sidebar should only be closed if the category has a link
-            if (item.type === 'category' && item.href) {
-              mobileSidebar.toggle();
-            }
-            if (item.type === 'link') {
-              mobileSidebar.toggle();
-            }
-          }}
-          level={1}
-        />
-      </ul>
+      <SidebarCollapseControls />
+      <DocSidebarMobile {...props} sidebar={sidebar} />
     </div>
   );
 }

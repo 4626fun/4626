@@ -1,6 +1,7 @@
 import type React from 'react';
 import DocSidebarDesktopContent from '@theme-original/DocSidebar/Desktop/Content';
 import PersonaSwitcher from '@site/src/components/PersonaSwitcher';
+import SidebarCollapseControls from '@site/src/components/SidebarCollapseControls';
 import {usePersona} from '@site/src/hooks/usePersona';
 import {filterSidebarByPersona} from '@site/src/lib/personas';
 
@@ -13,6 +14,7 @@ export default function DocSidebarDesktopContentWrapper(
   return (
     <>
       <PersonaSwitcher value={persona} onChange={setPersona} />
+      <SidebarCollapseControls />
       <DocSidebarDesktopContent {...props} sidebar={sidebar} />
     </>
   );

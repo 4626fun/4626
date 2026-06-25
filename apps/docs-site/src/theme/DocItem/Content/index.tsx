@@ -1,6 +1,7 @@
 import type React from 'react';
 import DocItemContent from '@theme-original/DocItem/Content';
 import {useDoc} from '@docusaurus/plugin-content-docs/client';
+import DocFeedback from '@site/src/components/DocFeedback';
 
 const DOC_TEMPLATES = new Set(['runbook', 'audit', 'reference']);
 
@@ -14,13 +15,10 @@ export default function DocItemContentWrapper(
       ? rawTemplate
       : null;
 
-  if (!template) {
-    return <DocItemContent {...props} />;
-  }
-
   return (
-    <div className={`doc-template doc-template--${template}`}>
+    <div className={template ? `doc-template doc-template--${template}` : undefined}>
       <DocItemContent {...props} />
+      <DocFeedback />
     </div>
   );
 }
