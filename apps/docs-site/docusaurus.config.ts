@@ -159,9 +159,9 @@ const config: Config = {
           title: 'Trust',
           items: [
             {label: 'Security', to: '/security'},
-            {label: 'Audits', to: '/audits/README'},
-            {label: 'Terms', to: '/legal/terms'},
-            {label: 'Privacy', to: '/legal/privacy'},
+            {label: 'Audits', to: '/audits'},
+            {label: 'Terms', to: '/terms'},
+            {label: 'Privacy', to: '/privacy'},
           ],
         },
         {

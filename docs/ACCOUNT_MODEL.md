@@ -126,9 +126,14 @@ drift independently:
 
 - **`addOwnerAddress` from a third-party dapp is dead** for Base
   App-managed CSWs. Base App's session-key middleware refuses to
-  construct UserOps for owner-mutating selectors. Use Sub Accounts +
-  Spend Permissions for that population. Use `addOwnerAddress` only for
-  Zora-CSW users where an EOA owner is already known (population (c)).
+  construct UserOps for owner-mutating selectors. The default user-side
+  path for population (b) is **parent CSW + Privy embedded-owner signer**
+  (`legacy-owner-install`) — the embedded EOA is installed as a direct
+  owner of the parent CSW, which becomes the `canonical4337` sender. The
+  optional **sub-account** lane (`WAITLIST_SUBACCOUNT_FLOW_ENABLED`) is a
+  flag-gated, swap-only fallback, not the default. Use `addOwnerAddress`
+  only for Zora-CSW users where an EOA owner is already known (population
+  (c)).
   Source: [docs/owner-mutation-decision-2026-05.md](./owner-mutation-decision-2026-05.md).
 
 ---
@@ -218,7 +223,12 @@ a working pre-flight gate. The only thing left is copy for population
 ### 5.2 Owner-mutation on parent CSW from third-party dapp — BLOCKED
 
 **Decision.** Drop "add owner to a Base App-managed CSW" as a product
-flow. Use Sub Accounts + Spend Permissions for population (b). Source:
+flow. The default user-side path for population (b) is **parent CSW +
+Privy embedded-owner signer** (`legacy-owner-install`) — the embedded EOA
+installed as a direct owner of the parent CSW, which becomes the
+`canonical4337` sender. The optional sub-account lane
+(`WAITLIST_SUBACCOUNT_FLOW_ENABLED`) is a flag-gated, swap-only fallback,
+not the default. Source:
 [docs/owner-mutation-decision-2026-05.md](./owner-mutation-decision-2026-05.md).
 
 **Diagnostic lanes still exist.** `/dev/csw-signature-probe` retains

@@ -26,7 +26,7 @@ The resulting split is intentional:
 - External EOA remains a fallback/override path.
 - Server wallet enables automation on the parent CSW without redefining canonical ownership.
 
-> **Retired design notes:** Historical sub-account exploration lives in [arch-b-sub-account-design-addendum](./arch-b-sub-account-design-addendum.md) and [sub-accounts-baseapp-design](./sub-accounts-baseapp-design.md).
+> **Retired design notes** for sub-account exploration live in `docs/_internal/design/` (repo-only, not published).
 
 :::note Current model
 
@@ -78,4 +78,4 @@ The role badge in the `Wallet` column matches the Mermaid node color.
 - [Account Model (canonical)](./ACCOUNT_MODEL.md)
 - [4626 Connection Methods](./4626-connection-methods.md)
 - [ERC-4337 Debugging](./reference/erc4337-debugging.md)
-- [Owner-Install Reference Methods](./operations/owner-install-reference-methods.md)
+- [Owner-install reference](/operations/wallet/owner-install-reference-methods)

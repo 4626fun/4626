@@ -83,6 +83,7 @@ const sidebars: SidebarsConfig = {
         },
         'developers/api-reference',
         'reference/erc4337-debugging',
+        'PUBLISHING',
       ],
     },
 

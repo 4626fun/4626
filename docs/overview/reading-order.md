@@ -27,4 +27,4 @@ Read top to bottom once; skip steps that do not match your job.
 
 - [Addresses](/reference/addresses) — canonical live infra
 - [Glossary](/reference/glossary)
-- [Security](/security) · [Audits](/audits/README)
+- [Security](/security) · [Audits](/audits)

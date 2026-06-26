@@ -139,13 +139,17 @@ These are not interchangeable. Each path exists because the other cannot serve i
 
 Sub-accounts are scoped to a browser domain (`app.4626.fun`) and controlled by the Privy embedded EOA, which lives in the user's browser session. Server-side processes (XMTP agent, deploy-session) run headless — they have no browser, no embedded EOA access, and no sub-account context. They need to sign as the CSW directly using a server-held key.
 
-### Why direct owner delegation isn't ideal for user transactions
+### Why the user-side path uses the parent CSW directly
 
-While `addOwnerAddress` works at the contract level, the Base Account infrastructure (SDK, wallet provider, RPC layer) is designed around sub-accounts as the path for app-level signing. Sub-accounts give 4626:
+The default user-side execution path installs the Privy embedded EOA as a **direct owner** of the parent CSW (`legacy-owner-install`). The embedded EOA then signs `canonical4337` UserOps where the parent CSW is the sender — fully silent, no passkey popups after the one-time owner install. This keeps balances, approvals, and swap receipts on the same canonical account and is the proven production swap path.
+
+The optional **sub-account** lane (flag-gated via `WAITLIST_SUBACCOUNT_FLOW_ENABLED` / `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED`) remains available as a swap-only fallback. Sub-accounts give 4626:
 
 - **Domain scoping** — isolated from other apps using the same CSW.
 - **Silent signing** — the embedded EOA signs without any popup.
 - **SDK integration** — `wallet_prepareCalls` / `wallet_sendPreparedCalls` handle nonces, gas, and submission.
+
+These properties make sub-accounts useful as an optional app-scoped lane, but they are **not the default** and deploy never sends from one.
 
 ### The result: a dual-path model
 
@@ -155,23 +159,30 @@ While `addOwnerAddress` works at the contract level, the Base Account infrastruc
                     │  MultiOwnable    │
                     │  owners:         │
                     │   [0] passkey    │
-                    │   [1] agent EOA  │  ← server wallet (addOwnerAddress)
+                    │   [1] embedded   │  ← legacy-owner-install (default user signer)
+                    │   [2] agent EOA  │  ← server wallet (addOwnerAddress)
                     └────────┬─────────┘
                              │
                ┌─────────────┼─────────────┐
                │                           │
-        Sub-Account                   CSW Direct
+        Parent CSW (direct)           CSW Direct
     (user-side execution)         (server-side execution)
+    legacy-owner-install
                │                           │
      Privy embedded EOA            Privy server wallet
       (silent, browser)             (API, headless)
                │                           │
     swaps, vaults, deposits     XMTP, ERC-8004, deploy
+
+    [optional] Sub-Account — flag-gated, swap-only fallback
+               (dormant unless WAITLIST_SUBACCOUNT_FLOW_ENABLED=1)
 ```
 
 ---
 
 ## 4. The Batched Ceremony
+
+> **Default vs optional lane.** In the **current default flow** the user signs in with email-only Privy and the embedded EOA is installed as a parent-CSW owner via `legacy-owner-install` — a single owner install, no sub-account, no batched two-popup ceremony. The ceremony documented below belongs to the **flag-gated sub-account lane** (`WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` / `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED=1`) and is reference for that optional lane, not the live default.
 
 ### Before (two separate ceremonies)
 
@@ -189,7 +200,7 @@ Both installations now happen during account setup, back-to-back:
 1. **Passkey popup 1** — `wallet_addSubAccount` creates the sub-account.
 2. **Passkey popup 2** — `eth_sendTransaction` submits `addOwnerAddress(agentWalletAddress)` to install the server wallet as a CSW owner.
 
-The user sees two popups in rapid succession during onboarding. After that, both execution paths are fully operational with zero further passkey prompts.
+The user sees two popups in rapid succession during onboarding. After that, both execution paths are fully operational with zero further passkey prompts. In the default `legacy-owner-install` flow only the embedded-owner install step runs — the sub-account popup is skipped entirely.
 
 ### Why they can't be one popup
 
@@ -482,33 +493,35 @@ Deploy-session already checks `isOwnerOnChain()` before attempting to add the se
 
 When asked about the relationship between the sub-account model and the direct-owner-delegation model, the correct answer is:
 
-### Answer: C — Sub-account replaces delegation only for user-initiated frontend transactions. Server-side agent operations still use direct owner delegation on the parent CSW.
+### Answer: C — The default user-initiated frontend path uses the parent CSW directly via `legacy-owner-install` (embedded EOA as direct owner). The optional sub-account lane is a flag-gated swap-only fallback. Server-side agent operations use direct owner delegation on the parent CSW.
 
 ### Why C
 
-The sub-account and direct owner delegation are **not alternatives** — they serve different purposes and coexist:
+The parent-CSW direct path and direct owner delegation are **not alternatives** — they serve different purposes and coexist:
 
-- **Sub-account** handles user-initiated transactions (swaps, vaults) via the Privy embedded EOA. The sub-account is the execution address and `msg.sender` on-chain. No passkey popups after initial setup.
+- **Parent CSW + embedded-owner signer** (default user-side path, `legacy-owner-install`) handles user-initiated transactions (swaps, vaults) via the Privy embedded EOA installed as a direct owner of the parent CSW. The parent CSW is the execution address and `msg.sender` on-chain via `canonical4337`. No passkey popups after the one-time owner install.
+
+- **Sub-account** (optional, flag-gated swap-only fallback) may handle user-initiated swaps via the Privy embedded EOA when `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1`. The sub-account is the execution address and `msg.sender` on-chain. This is not the default and deploy never uses it.
 
 - **Direct owner delegation** handles server-initiated operations (XMTP, ERC-8004, deploy-session) via a Privy server-managed wallet. The CSW itself is the execution address and `msg.sender` on-chain. The server wallet signs via Privy's API.
 
 ### How to Think About It
 
 ```
-Before sub-accounts:
-  User txs  → addOwnerAddress(embeddedEOA) → EOA signs for CSW
-  Agent ops → addOwnerAddress(serverWallet) → server signs for CSW
+Default user-side path (legacy-owner-install):
+  User txs  → embedded EOA installed as direct owner of parent CSW → EOA signs canonical4337 → CSW is sender  ✓ DEFAULT
+  Agent ops → addOwnerAddress(serverWallet) → server signs for CSW                                              ✓ UNCHANGED
 
-After sub-accounts:
-  User txs  → wallet_addSubAccount → embedded EOA signs for sub-account  ✓ CHANGED
-  Agent ops → addOwnerAddress(serverWallet) → server signs for CSW       ✓ UNCHANGED
+Optional sub-account lane (flag-gated, swap-only):
+  User txs  → wallet_addSubAccount → embedded EOA signs for sub-account                                          ✓ OPTIONAL FALLBACK
+  Agent ops → addOwnerAddress(serverWallet) → server signs for CSW                                              ✓ UNCHANGED
 ```
 
 ---
 
 ## 11. Architecture Diagram
 
-### Full Account Setup Ceremony
+### Default Account Setup (legacy-owner-install)
 
 ```
 User arrives at app.4626.fun
@@ -520,7 +533,40 @@ User arrives at app.4626.fun
          │
          ▼
 ┌─────────────────────────────────────────────┐
-│  PHASE 1: Sub-Account Creation              │
+│  EMBEDDED-OWNER INSTALL                     │
+│                                             │
+│  Privy embedded EOA installed as direct     │
+│  owner of parent CSW (legacy-owner-install) │
+│  → canonical4337 sender = parent CSW        │
+│  → no sub-account created                   │
+│  → no batched two-popup ceremony            │
+└─────────────────┬───────────────────────────┘
+                  │
+                  ▼
+         Setup complete.
+         Parent CSW operational for user-side
+         canonical4337 execution.
+         Zero passkeys from here on.
+
+  Server-side owner (agent wallet) installed
+  lazily via deploy-session / XMTP first use.
+```
+
+### Optional Batched Ceremony (flag-gated sub-account lane)
+
+> Only applies when `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` and `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED=1`. Not the default onboarding flow.
+
+```
+User arrives at app.4626.fun
+         │
+         ▼
+   Privy email login
+   → embedded EOA created
+   → CSW detected
+         │
+         ▼
+┌─────────────────────────────────────────────┐
+│  SUB-ACCOUNT CREATION                     │
 │                                             │
 │  wallet_getSubAccounts → none found         │
 │  wallet_addSubAccount                       │
@@ -569,10 +615,12 @@ User arrives at app.4626.fun
 │                    MultiOwnable contract                  │
 │                                                          │
 │  owners[0]: passkey (original WebAuthn credential)       │
-│  owners[1]: agent server wallet (Privy-managed EOA)      │
+│  owners[1]: embedded EOA (legacy-owner-install)          │
+│  owners[2]: agent server wallet (Privy-managed EOA)      │
 │                                                          │
-│  Sub-accounts:                                           │
+│  Sub-accounts (optional, flag-gated):                    │
 │    app.4626.fun → sub-account (signer: embedded EOA)     │
+│    [dormant unless WAITLIST_SUBACCOUNT_FLOW_ENABLED=1]   │
 └────────────────────┬────────────────────┬────────────────┘
                      │                    │
           ┌──────────┘                    └──────────┐
@@ -580,27 +628,37 @@ User arrives at app.4626.fun
           ▼                                          ▼
 ┌───────────────────────┐              ┌───────────────────────┐
 │  USER-SIDE PATH       │              │  SERVER-SIDE PATH     │
-│                       │              │                       │
-│  Trigger: user clicks │              │  Trigger: XMTP msg,  │
-│  swap/deposit/vault   │              │  deploy, ERC-8004     │
+│  (default)            │              │                       │
+│                       │              │  Trigger: XMTP msg,  │
+│  Trigger: user clicks │              │  deploy, ERC-8004     │
+│  swap/deposit/vault   │              │                       │
 │                       │              │                       │
 │  Execution address:   │              │  Execution address:   │
-│  sub-account          │              │  CSW (parent)         │
-│                       │              │                       │
-│  Signer:              │              │  Signer:              │
-│  Privy embedded EOA   │              │  Privy server wallet  │
-│  (browser, silent)    │              │  (API, headless)      │
-│                       │              │                       │
-│  Flow:                │              │  Flow:                │
-│  wallet_prepareCalls  │              │  Build UserOp         │
-│  → EOA signs          │              │  → Privy API signs    │
-│  → wallet_send...     │              │  → CDP Bundler sends  │
-│                       │              │                       │
-│  msg.sender:          │              │  msg.sender:          │
-│  sub-account addr     │              │  CSW address          │
-│                       │              │                       │
-│  Passkey needed: NO   │              │  Passkey needed: NO   │
-└───────────────────────┘              └───────────────────────┘
+│  parent CSW           │              │  CSW (parent)         │
+│  (canonical4337)      │              │                       │
+│                       │              │  Signer:              │
+│  Signer:              │              │  Privy server wallet  │
+│  Privy embedded EOA   │              │  (API, headless)      │
+│  (browser, silent)    │              │                       │
+│  (direct owner)       │              │  Flow:                │
+│                       │              │  Build UserOp         │
+│  Flow:                │              │  → Privy API signs    │
+│  canonical4337 UserOp │              │  → CDP Bundler sends  │
+│  → EOA signs          │              │                       │
+│  → CDP Bundler sends  │              │  msg.sender:          │
+│                       │              │  CSW address          │
+│  msg.sender:          │              │                       │
+│  CSW address          │              │  Passkey needed: NO   │
+│                       │              └───────────────────────┘
+│  Passkey needed: NO   │
+│                       │
+│  [optional fallback]  │
+│  Sub-account lane     │
+│  (sendCalls) when     │
+│  flag-gated + enabled │
+│  → msg.sender:        │
+│    sub-account addr   │
+└───────────────────────┘
 ```
 
 ---
@@ -628,11 +686,12 @@ These invariants are enforced in `.cursor/rules/ERC-4337-Wallet-Invariants.mdc` 
 
 ### Owner Installation Invariants
 
-- `wallet_addSubAccount` creates the sub-account (passkey popup 1) and is the readiness gate for user-initiated frontend execution.
-- `addOwnerAddress(agentWalletAddress)` via **`eth_sendTransaction`** can opportunistically install the server wallet in the same session (passkey popup 2), but it must not block sub-account readiness.
+- The default user-side readiness gate is the **parent CSW owner confirmation** — Privy embedded EOA installed as a direct owner of the parent CSW via `legacy-owner-install`. Once confirmed, the parent CSW is operational for `canonical4337` user-initiated frontend execution.
+- `wallet_addSubAccount` creates an optional sub-account (passkey popup) only in the flag-gated sub-account lane. It is **not** the default readiness checkpoint for user-initiated frontend execution.
+- `addOwnerAddress(agentWalletAddress)` via **`eth_sendTransaction`** can opportunistically install the server wallet in the same session (passkey popup 2 in the optional batched ceremony), but it must not block parent-CSW readiness.
 - **Never use `wallet_sendCalls` for `addOwnerAddress`** — the Coinbase popup's `eGe` function blocks self-calls.
 - Deploy-session and XMTP agent rely on the server wallet already being an owner.
-- If popup 2 fails or is canceled, deploy-session handles installation on first use (non-blocking fallback).
+- If the server-wallet install fails or is canceled, deploy-session handles installation on first use (non-blocking fallback).
 
 ### Security Invariants
 

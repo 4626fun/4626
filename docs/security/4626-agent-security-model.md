@@ -1,5 +1,6 @@
 ---
 title: 4626 Agent Security Model
+id: agent-security-model
 sidebar_position: 1
 ---
 

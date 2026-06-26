@@ -8,9 +8,13 @@ Status: **decided** · Author: computer · Date: 2026-05-05
 
 **Drop "add owner to a Base App-managed CSW" as a product flow.**
 
-Use Sub Accounts + Spend Permissions for that population, per the existing
-[Arch B Sub-Account Design Addendum](./arch-b-sub-account-design-addendum.md).
-Keep `addOwnerAddress` only as a path for **Zora-CSW users where an EOA owner
+The default user-side path for Base App users (passkey-owned CSW) is
+**parent CSW + Privy embedded-owner signer** (`legacy-owner-install`) —
+the embedded EOA is installed as a direct owner of the parent CSW, which
+becomes the `canonical4337` sender. The optional sub-account lane
+(`WAITLIST_SUBACCOUNT_FLOW_ENABLED` / `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED`)
+is a flag-gated, swap-only fallback, not the default. Keep
+`addOwnerAddress` only as a path for **Zora-CSW users where an EOA owner
 is already known** (per the Supabase mapping).
 
 ## Why we ended up here
@@ -46,7 +50,7 @@ cause is **architectural, not a bug**:
 
 | User population | Path | Status |
 |---|---|---|
-| Base App users (passkey-owned CSW) | Sub Accounts + Spend Permissions | not yet implemented; design exists in `arch-b-sub-account-design-addendum.md` |
+| Base App users (passkey-owned CSW) | Parent CSW + embedded-owner signer (`legacy-owner-install`); optional sub-account is flag-gated swap-only fallback | shipped (default path); sub-account lane ships dark behind `WAITLIST_SUBACCOUNT_FLOW_ENABLED` |
 | Privy email-signup users (no CSW) | Use embedded EOA directly; vault accepts any `msg.sender` | should already work |
 | Zora CSW users with a known EOA owner | `CSW.executeBatch([{target=CSW, data=addOwnerAddress(...)}])` from the EOA | shipped on PR #523 (March-9 lane) |
 | Zora CSW users with no EOA owner | Spend Permissions only, or unreachable | depends on Zora exposure |
@@ -74,13 +78,16 @@ The PR remains open. Useful pieces to keep:
 
 What does **not** ship:
 
-- ❌ Any user-facing flow that asks a Base App user to "add an owner to your wallet from this dapp." That's the wrong primitive for that population.
+- ❌ Any user-facing flow that asks a Base App user to "add an owner to your wallet from this dapp." That's the wrong primitive for that population. The default path is `legacy-owner-install` (embedded EOA as direct parent-CSW owner); the optional sub-account lane is flag-gated swap-only fallback.
 
 ## Next work (separate PRs)
 
+> The default user-side path (`legacy-owner-install`) is already shipped. The items below are for the **optional** sub-account lane and its supporting infrastructure, not the default onboarding.
+
 1. **Sub Account provisioning** per `arch-b-sub-account-design-addendum.md` —
    `wallet_addSubAccount` integration, deterministic salt scheme, DB columns
-   on `command_issuer_execution_context`.
+   on `command_issuer_execution_context`. This is the flag-gated swap-only
+   fallback lane, not the default user-side path.
 2. **Spend Permission issuance UX** — single typed-data signature from the
    parent CSW (Base App allows EIP-712 signing fine; only owner mutations
    are blocked).

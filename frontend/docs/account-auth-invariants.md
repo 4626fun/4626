@@ -193,7 +193,7 @@ Owner-install completion on the server-side track is evaluated by `/api/wallet/c
 
 Server-side features requiring canonical execution remain gated until `owner_confirmed`.
 
-This endpoint is not part of the user-initiated frontend track — user-initiated frontend readiness is determined by sub-account persistence + signer configuration, not by `/api/wallet/confirm-owner`.
+This endpoint is not part of the user-initiated frontend track — user-initiated frontend readiness is determined by parent CSW + embedded EOA owner confirmation (`legacy-owner-install`), not by `/api/wallet/confirm-owner`.
 
 ### Server-side owner-approval observability
 

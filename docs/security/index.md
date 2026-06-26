@@ -13,7 +13,7 @@ sidebar_position: 5
 - [Mutable Surface Inventory](./mutable-surface-inventory.md)
 - Canonical disclosure policy: [SECURITY.md](https://github.com/wenakita/4626/blob/main/SECURITY.md)
 
-For operational rollout posture (including deferred feature surfaces), see [Roadmap](/roadmap).
+For operational rollout posture, see [Operators hub](/operators).
 
 ## Anti-Inflation Attack
 
