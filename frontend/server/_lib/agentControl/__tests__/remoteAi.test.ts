@@ -48,6 +48,9 @@ describe('agent control remote ai helpers', () => {
     expect(assertRemoteAiEndpoint('https://api.groq.com/openai/v1/chat/completions')).toBe(
       'https://api.groq.com/openai/v1/chat/completions',
     )
+    expect(assertRemoteAiEndpoint('https://compute.virtuals.io/v1/chat/completions')).toBe(
+      'https://compute.virtuals.io/v1/chat/completions',
+    )
     expect(() => assertRemoteAiEndpoint('http://api.openai.com/v1/responses')).toThrow(
       /https/i,
     )

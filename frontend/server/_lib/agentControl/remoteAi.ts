@@ -13,6 +13,7 @@ const ALLOWED_REMOTE_AI_HOSTS = new Set([
   'api.anthropic.com',
   'api.groq.com',
   'api.openai.com',
+  'compute.virtuals.io',
   'openrouter.ai',
 ])
 

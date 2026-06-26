@@ -24,6 +24,7 @@
 import http from 'node:http'
 
 import { checkVirtualsAcpConfig, readVirtualsAcpConfig } from './config.js'
+import { checkVirtualsAcpRuntimeReadiness } from './readiness.js'
 import { getVirtualsAcpService } from './service.js'
 
 function log(message: string, extra?: Record<string, unknown>): void {
@@ -33,11 +34,27 @@ function log(message: string, extra?: Record<string, unknown>): void {
 
 async function main(): Promise<void> {
   const config = readVirtualsAcpConfig()
+  const readiness = await checkVirtualsAcpRuntimeReadiness({ pingCompute: true })
+  if (!readiness.ok) {
+    console.error(`[virtuals-acp-runner] readiness check failed: ${readiness.reason}`)
+    process.exitCode = 1
+    return
+  }
+
   const check = checkVirtualsAcpConfig(config)
   if (!check.ok) {
     console.error(`[virtuals-acp-runner] config invalid: ${check.reason}`)
     process.exitCode = 1
     return
+  }
+
+  if (readiness.computePing?.ok) {
+    log('virtuals compute ping ok', {
+      model: readiness.computePing.model,
+      providers: readiness.llmProviders.join(', '),
+    })
+  } else if (readiness.computePing) {
+    log('virtuals compute ping skipped or failed', { error: readiness.computePing.error })
   }
 
   const service = getVirtualsAcpService()

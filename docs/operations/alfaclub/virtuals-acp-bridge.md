@@ -20,6 +20,8 @@ brand.
 | Service | `frontend/server/agents/eliza/plugins/virtuals/service.ts` | `VirtualsAcpService` singleton — `AcpAgent` lifecycle, `entry` handler, LLM decision execution |
 | Eliza plugin | `frontend/server/agents/eliza/plugins/virtuals/index.ts` | Chat commands `/virtuals status`, `/virtuals browse <keyword>` |
 | Standalone runner | `frontend/server/agents/eliza/plugins/virtuals/runner.ts` | `pnpm -C frontend agent:virtuals` — runs the bridge as its own process |
+| Preflight doctor | `frontend/scripts/agent/virtuals-acp-doctor.ts` | `pnpm -C frontend agent:virtuals:preflight` — validates ACP env + Virtuals compute |
+| Compute ping | `frontend/server/agents/eliza/plugins/virtuals/computePing.ts` | `pnpm -C frontend virtuals:compute-ping` — one-shot inference credit check |
 
 The LLM lane reuses the existing `ElizaLlmService` (`server/agents/eliza/llm.ts`)
 with its provider fallback, retry, and budget machinery. Since that service has
@@ -53,14 +55,19 @@ never guessed.
    - agent wallet address → `VIRTUALS_ACP_WALLET_ADDRESS`
    - Privy wallet id → `VIRTUALS_ACP_WALLET_ID`
    - session signer private key → `VIRTUALS_ACP_SIGNER_PRIVATE_KEY`
-2. Make sure at least one Eliza LLM provider key is set (`GROQ_API_KEY`,
-   `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENROUTER_API_KEY`).
+2. For Virtuals compute credits, set `VIRTUALS_API_KEY` from the agent's
+   **Compute** tab on [app.virtuals.io](https://app.virtuals.io). Optionally
+   add a fallback provider (`GROQ_API_KEY`, `OPENAI_API_KEY`, etc.).
 3. Set the `VIRTUALS_ACP_*` block in `.env` (see `frontend/.env.example`).
-4. For revenue-first credit usage, set:
-   - `VIRTUALS_API_KEY` (Virtuals compute key)
-   - optional `ELIZA_LLM_VIRTUALS_ACP_PROVIDER_PRIORITY` to keep
-     `VirtualsCompute` first for `agentKey=virtuals-acp`.
-4. Start it:
+4. For revenue-first credit usage, keep:
+   - `ELIZA_LLM_VIRTUALS_ACP_PROVIDER_PRIORITY=VirtualsCompute,Groq,OpenAI,Anthropic,OpenRouter`
+     (default) so `agentKey=virtuals-acp` spends Virtuals credits first.
+5. Preflight before starting:
+   ```bash
+   pnpm -C frontend agent:virtuals:preflight
+   pnpm -C frontend virtuals:compute-ping   # optional one-shot API check
+   ```
+6. Start it:
    - **Standalone (recommended):** `pnpm -C frontend agent:virtuals`.
      Optional `VIRTUALS_ACP_HEALTH_PORT` exposes `/healthz` + `/readyz` for
      hosted deploys.
@@ -68,6 +75,31 @@ never guessed.
      runtime — the service boots after `runtime_ready` and the
      `/virtuals` chat commands become available. Keep this off on the Railway
      Keepr primary unless product explicitly wants the ACP loop co-resident.
+
+## Railway deploy (dedicated service)
+
+Run the ACP bridge on a **separate Railway service** from the XMTP Keepr
+primary. Use `frontend/Dockerfile.agent` with:
+
+| Variable | Value |
+| --- | --- |
+| `AGENT_PROCESS` | `virtuals` |
+| `VIRTUALS_ACP_ENABLED` | `1` |
+| `VIRTUALS_ACP_AUTO_LLM` | `0` for first rollout, then `1` |
+| `VIRTUALS_ACP_AUTO_FUND` | `0` |
+| `VIRTUALS_ACP_HEALTH_PORT` | `8080` (optional probe) |
+| `ELIZA_LLM_VIRTUALS_ACP_PROVIDER_PRIORITY` | `VirtualsCompute,Groq,OpenAI,Anthropic,OpenRouter` |
+
+Store these as **runtime secrets** (not committed env files):
+
+- `VIRTUALS_API_KEY`
+- `VIRTUALS_ACP_WALLET_ADDRESS`
+- `VIRTUALS_ACP_WALLET_ID`
+- `VIRTUALS_ACP_SIGNER_PRIVATE_KEY`
+
+After deploy, run preflight from a shell with the same secrets (or inspect
+startup logs — the runner pings Virtuals compute on boot when
+`VIRTUALS_API_KEY` is set and `AUTO_LLM=1`).
 
 ## Operating
 
