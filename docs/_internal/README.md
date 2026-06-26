@@ -5,6 +5,7 @@ Working papers, design specs, research drafts, and operator tracking notes live 
 | Folder | Contents |
 |--------|----------|
 | `audits-workpapers/` | In-progress audit matrices, deep-risk logs, website audit drafts |
+| `deployment-v1.10.1/` | Historical v1.10.1 broadcast runbooks and AMOE evidence |
 | `operations-tracking/` | CI tracking, chart SQL snippets, schema duplication reports |
 | `design/` | UX/design specs not yet productized |
 | `research/` | RFCs and implementation plans |

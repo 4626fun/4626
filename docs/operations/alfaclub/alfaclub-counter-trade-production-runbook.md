@@ -1,5 +1,13 @@
 # AlfaClub Counter-Trade Production Runbook
 
+## Launch checklist
+
+1. **Executor:** Railway **4626-inverseakita** / Hermit only — `ALFACLUB_COUNTER_TRADE_RUNNER_ENABLED=1`; unset on Vercel and XMTP primary.
+2. **Engine:** `ALFACLUB_COUNTER_TRADE_ENABLED=1` + validated `ARENA_*` env ([Virtuals runbook](./virtuals-arena-railway-runbook.md)).
+3. **Room 1659:** at most one active strategy actor (runner auto-pauses extras).
+4. **Smoke:** Hermit `/healthz` shows `counterTrade` ticker; `GET /api/v1/alfaclub/counter-trade-status` for room state.
+5. **No Vercel cron** for this lane — ticker interval `ALFACLUB_COUNTER_TRADE_RUNNER_INTERVAL_MS` (default 120s).
+
 This runbook covers production launch and steady-state operations for the AlfaClub counter-trade engine:
 
 - Runtime loop: `frontend/server/_lib/alfaclub/counterTradeRunner.ts`

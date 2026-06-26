@@ -1,11 +1,19 @@
 # AlfaClub Auth Hardening — Operator Runbook
 
+## Checklist
+
+1. Confirm **single writer**: only Vercel cron `privy-token-refresher` or admin `POST /api/v1/alfaclub/chat-token` updates `alfaclub_runtime_secret`.
+2. Probe health: `GET /api/v1/alfaclub/chat-auth-health` with `CRON_SECRET` (or GitHub monitor workflow).
+3. On failure → [Token rotation](./token-rotation.md) (DB + env, fresh triplet).
+4. If `cf-mitigated=challenge` → Cloudflare proxy env, not token rotation alone.
+5. Railway Hermit: keep `ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED=0` (cron is canonical writer).
+
 This runbook covers the AlfaClub Privy/JWT bridge after the hardening
 work in this PR. Read it together with:
 
 - [`docs/operations/alfaclub-creative-architecture.md`](./alfaclub-creative-architecture.md) —
   the canonical creative-vs-auth boundary (PR #463).
-- [`docs/operations/alfaclub-token-rotation.md`](./alfaclub-token-rotation.md) —
+- [`token-rotation.md`](./token-rotation.md) —
   mint browser triplet → DB + Vercel env → cron smoke (P0 recovery).
 - [`docs/operations/deployment/eliza-runtime.md`](./deployment/eliza-runtime.md) —
   PR #458's gate on the in-process refresher (`ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED`).

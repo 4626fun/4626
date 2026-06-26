@@ -1,5 +1,13 @@
 # Creator strategy features
 
+## Operator checklist
+
+1. Creator pays **`vault_full_deploy`** ($499 USDC) via USDC transfer, x402, or Stripe → row in `creator_strategy_features`.
+2. `/api/creator/strategy/list` shows `deployPlan.deployable = true` when bundle is active.
+3. Deploy UI gates on paid bundle before dry-run ([vault deploy paywall](/vault/creator-strategy-features)).
+4. Phase 3 weights: Charm 45% + Ajna 45% + 10% idle (Solana mesh is Phase 2b Pipe A, not Phase 3 TVL).
+5. Post-activation provisioning is operator/async — `pending` rows are valid for deploy.
+
 **Status:** v1 (MVP) — database + payment verification + activation API shipped. UI and automated provisioning are follow-ups.
 
 **Canonical code paths:**

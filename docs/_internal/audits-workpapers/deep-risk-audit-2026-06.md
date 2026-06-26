@@ -1200,3 +1200,101 @@ LAUNCH-001 matches P0 stop condition #1: "production launch-readiness probe show
 ### No code changes applied (audit-only)
 
 This launch readiness audit is audit-only. No product/code fixes were applied. The local .env fix (LAUNCH-003) was a local env file correction to unblock the dry-run smoke, not a product code change. All findings are recorded for the maintainer to triage.
+
+---
+
+## Current P0/P1 Launch Decisions
+
+Consolidated 2026-06-26. All P0 and P1 findings from the deep-risk-audit-2026-06 audit cycle. Audit-only — no product/code fixes applied. LAUNCH-003 (local .env precondition) included as a note because the user asked to verify its git impact.
+
+### Classification summary
+
+| Finding ID | Current severity | Launch decision | Owner | Audit can continue before remediation? |
+|------------|-----------------|-----------------|-------|---------------------------------------|
+| DRIFT-001 | P0 | fix before launch | docs | Yes — broader audit may continue; launch docs must be corrected before release |
+| DRIFT-002 | P1 | fix before launch | docs | Yes — broader audit may continue; launch docs must be corrected before release |
+| DRIFT-003 | P1 | fix before launch | docs | Yes — broader audit may continue; launch docs must be corrected before release |
+| DRIFT-004 | P1 | fix before launch | docs | Yes — broader audit may continue; launch docs must be corrected before release |
+| LAUNCH-001 | P0 | block launch | external DNS/infra | Yes — audit may continue; launch is blocked until DNS is corrected |
+
+Note: LAUNCH-003 (P2, local .env bare ALFACLUB line) is not a P0/P1 blocker. Verified: `frontend/.env` is gitignored (`git check-ignore frontend/.env` confirms). The local fix created no dirty tracked file — 0 unstaged, 0 staged changes after the fix. It is a local development precondition only, no production impact.
+
+### DRIFT-001
+
+- **Finding ID**: DRIFT-001
+- **Current severity**: P0 (canonical account model contradiction)
+- **Launch decision**: fix before launch
+- **Owner**: docs
+- **Classification**: docs-only — implementation is correct, the doc is wrong
+- **What's wrong**: `frontend/docs/waitlist-accounts-architecture.md:41` states "the canonical path is sub-account setup, not direct owner delegation" and "the parent CSW remains the canonical asset-holding account but is not the execution address." This contradicts `frontend/server/_lib/wallet/executionTrack.ts:6-9` which routes user-initiated frontend execution through the parent CSW only via canonical4337, and 5 other docs that confirm parent CSW as the default execution address.
+- **Exact unblock condition**: Correct `frontend/docs/waitlist-accounts-architecture.md:41` to state that the canonical path is parent CSW + embedded-owner signing (legacy-owner-install / canonical4337), not sub-account setup. Remove or qualify the claim that the parent CSW "is not the execution address."
+- **Exact validation command after remediation**: `grep -n 'canonical path is sub-account\|parent CSW.*not the execution address' frontend/docs/waitlist-accounts-architecture.md` — must return 0 matches after fix.
+- **Broader audit can continue before remediation**: Yes. This is a docs-only drift; the implementation is correct. Broader audit work is not blocked. Launch docs must be corrected before release.
+
+### DRIFT-002
+
+- **Finding ID**: DRIFT-002
+- **Current severity**: P1 (same root cause as DRIFT-001, different lines)
+- **Launch decision**: fix before launch
+- **Owner**: docs
+- **Classification**: docs-only — implementation is correct, the doc is wrong
+- **What's wrong**: `frontend/docs/waitlist-accounts-architecture.md:43` says "resume sub-account setup" — AGENTS.md says "resume embedded-owner signing setup for the canonical parent CSW" and "Do not make waitlist onboarding explicitly create a sub-account." Line 44 says readiness = "sub-account persisted + signer configured" — AGENTS.md says readiness = parent CSW + embedded EOA owner confirmation.
+- **Exact unblock condition**: Correct lines 43-44 to say "resume embedded-owner signing setup for the canonical parent CSW" and gate readiness on "parent CSW recorded + embedded EOA confirmed as owner/signing authority."
+- **Exact validation command after remediation**: `grep -n 'resume sub-account setup\|sub-account persisted.*signer configured' frontend/docs/waitlist-accounts-architecture.md` — must return 0 matches after fix.
+- **Broader audit can continue before remediation**: Yes. Same docs-only root cause as DRIFT-001.
+
+### DRIFT-003
+
+- **Finding ID**: DRIFT-003
+- **Current severity**: P1 (internal contradiction within a single canonical doc)
+- **Launch decision**: fix before launch
+- **Owner**: docs
+- **Classification**: docs-only — internal contradiction within `docs/4626-connection-methods.md`
+- **What's wrong**: The warning banner (lines 14-20) says "sub-accounts are dormant... Onboarding does not create a Base sub-account, and deploy never sends from one." But the body §3-§11 still describe sub-account as the default user execution path, with diagrams showing "Execution address: sub-account" and "PHASE 1: Sub-Account Creation" as a default onboarding step.
+- **Exact unblock condition**: Update §3, §4, §10, §11, and §12 of `docs/4626-connection-methods.md` to align with the warning banner — describe parent CSW + embedded-owner signing as the default user execution path, and mark sub-account as flag-gated swap-only fallback. Remove or qualify "Execution address: sub-account" and "PHASE 1: Sub-Account Creation" as default.
+- **Exact validation command after remediation**: `grep -n 'Execution address: sub-account\|PHASE 1: Sub-Account Creation\|wallet_addSubAccount.*readiness gate' docs/4626-connection-methods.md` — must return 0 unqualified matches after fix.
+- **Broader audit can continue before remediation**: Yes. Docs-only internal contradiction.
+
+### DRIFT-004
+
+- **Finding ID**: DRIFT-004
+- **Current severity**: P1 (canonical reference doc recommends superseded path)
+- **Launch decision**: fix before launch
+- **Owner**: docs
+- **Classification**: docs-only — the §5.2 recommendation is superseded; §2 of the same doc is correct
+- **What's wrong**: `docs/ACCOUNT_MODEL.md` §5.2 (lines 220-222) recommends "Use Sub Accounts + Spend Permissions for population (b)." The actual solution shipped was `legacy-owner-install` — Privy embedded EOA as direct owner of parent CSW. Sub-accounts became flag-gated fallback, not the recommended path. §5.2 was not updated when the model shifted. The §2 population table in the same document correctly describes the current model, creating an internal contradiction. Same issue in `docs/owner-mutation-decision-2026-05.md` lines 9-13.
+- **Exact unblock condition**: Update `docs/ACCOUNT_MODEL.md` §5.2 to reflect the shipped legacy-owner-install solution as the decision for population (b), and mark the "Use Sub Accounts + Spend Permissions" recommendation as superseded. Update `docs/owner-mutation-decision-2026-05.md` lines 9-13 to match. The "drop addOwnerAddress from third-party dapp" part of §5.2 remains valid and should be preserved.
+- **Exact validation command after remediation**: `grep -n 'Use Sub Accounts + Spend Permissions for population' docs/ACCOUNT_MODEL.md docs/owner-mutation-decision-2026-05.md` — must return 0 unqualified matches after fix (or matches must be clearly marked as superseded).
+- **Broader audit can continue before remediation**: Yes. Docs-only; implementation is correct.
+
+### LAUNCH-001
+
+- **Finding ID**: LAUNCH-001
+- **Current severity**: P0 (production launch-readiness probe — real non-local blockers)
+- **Launch decision**: block launch
+- **Owner**: external DNS/infra
+- **Classification**: external DNS/infra — the 4626 repo code is correct; the prelaunch script correctly probes and reports the blockers. The fix is DNS A-record configuration, not a code change.
+- **What's wrong**: `orchestrator.4626.fun` and `provisioner.4626.fun` DNS A-records point at Vercel, not the Vultr hosts where the actual orchestrator and provisioner services run. Both domains return Vercel SPA HTML (`<div id="root"></div>`) instead of service JSON. POST /reconcile returns 405 because the Vercel SPA doesn't accept POST. 7 of 15 prelaunch gates fail, all tracing to this root cause.
+- **Passing gates (not blocked)**: Platform contracts (pipe_a_batcher, release_target_guard, hook_mainnet_canonical, 53 vitest tests, 6 forge tests), Vercel infra status (readyForAutoRegistration=true, blockers=[]), Solana share mesh deferral, creator entitlements (ajna_sleeve, charm_active_lp, solana_bridge_strategy, solana_ovault_mesh) — ALL PASS.
+- **Exact unblock condition**: Correct DNS A-records for `orchestrator.4626.fun` and `provisioner.4626.fun` to point at the Vultr hosts where the orchestrator and provisioner services run (not Vercel). Verify `curl https://orchestrator.4626.fun/healthz` returns JSON `{ok: true}` and `curl https://provisioner.4626.fun/healthz` returns JSON with `payerHealthy: true`.
+- **Exact validation command after remediation**: `pnpm -C frontend ops:verify-akita-prelaunch --production` — must exit 0 with 0 blockers.
+- **Broader audit can continue before remediation**: Yes. This is an external infrastructure issue, not a repo code issue. Audit work on the repo is not blocked. Launch is blocked until DNS is corrected.
+
+### LAUNCH-003 note (P2 — local precondition, not a P0/P1 blocker)
+
+- **Finding ID**: LAUNCH-003
+- **Current severity**: P2 (local env file issue)
+- **Launch decision**: accepted risk (local dev only)
+- **Owner**: N/A (local env)
+- **Git impact verified**: `git check-ignore frontend/.env` confirms the file is gitignored. After the local fix (commenting out bare `ALFACLUB` line at .env:504), `git diff --name-only` shows 0 unstaged changes and `git diff --cached --name-only` shows 0 staged changes. No dirty tracked file was created. The fix is a local precondition for running `dev:deploy-dry-run` only.
+- **Broader audit can continue**: Yes. No production impact, no git impact.
+
+### Cross-finding notes
+
+1. **DRIFT-001 through DRIFT-004 share a common root cause**: the sub-account execution model was superseded by the parent-CSW legacy-owner-install model, but 4 docs (waitlist-accounts-architecture.md, 4626-connection-methods.md body sections, ACCOUNT_MODEL.md §5.2, owner-mutation-decision-2026-05.md) were not updated. All 4 are docs-only — the implementation correctly uses parent CSW + canonical4337. They can be fixed in a single docs sweep.
+
+2. **LAUNCH-001 is independent of DRIFT-001–004**: the DNS issue is external infrastructure, unrelated to the docs drift. Both must be resolved before launch, but they can be remediated in parallel by different owners (docs team vs ops/infra team).
+
+3. **No P0/P1 findings in APIAUTH, WALLET, or RACE namespaces**: all APIAUTH findings (001–019) are Medium/Low/Low-Medium/Very Low. All WALLET findings (001–004) are Low. All RACE findings (001–004) are below P1. These do not appear in this consolidation.
+
+4. **All positive LAUNCH findings (004–008) confirmed no drift**: dry-run 403 PASS gate, legacy bypass header rejection, read-only status/preflight, local-fork-only invariant, typecheck + lint clean. These are not blockers.

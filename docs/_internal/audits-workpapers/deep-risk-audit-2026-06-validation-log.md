@@ -951,3 +951,50 @@ $ curl -sS -w '\n%{http_code}' -X POST http://127.0.0.1:5174/api/deploy/v2/sessi
 ### No code changes applied (audit-only)
 
 No product/code fixes were applied. The local .env fix (LAUNCH-003) was a local env file correction to unblock the dry-run smoke, not a product code change. All 8 LAUNCH findings are recorded for the maintainer to triage.
+
+---
+
+## P0/P1 Launch Decisions Consolidation — 2026-06-26
+
+### Commands executed
+
+| # | Command | Exit code | Result |
+|---|---------|-----------|--------|
+| 1 | `git status --short --branch` | 0 | `## main...origin/main` — working tree clean (0 unstaged, 0 staged) |
+| 2 | `git diff --name-only` | 0 | 0 unstaged files |
+| 3 | `git diff --cached --name-only` | 0 | 0 staged files |
+| 4 | `git diff --cached --name-only \| wc -l` | 0 | 0 (confirmed clean index) |
+| 5 | `git check-ignore frontend/.env` | 0 | Returns `frontend/.env` — file is gitignored |
+| 6 | `git status --short frontend/.env` | 0 | No output — .env changes not tracked by git |
+| 7 | `grep -n 'Severity.*P0\|Severity.*P1' docs/_internal/audits-workpapers/deep-risk-audit-2026-06.md` | 0 | 5 matches: DRIFT-001 (P0), DRIFT-002 (P1), DRIFT-003 (P1), DRIFT-004 (P1), LAUNCH-001 (P0) |
+| 8 | `ls docs/audits/deep-risk-audit-2026-06.md` | 2 | No such file — audit docs moved to `docs/_internal/audits-workpapers/` (staged rename in prior docs reorg commit) |
+
+### LAUNCH-003 dirty file verification
+
+The user asked to verify whether the local .env fix (LAUNCH-003) created a new dirty tracked file.
+
+- `git check-ignore frontend/.env` → returns `frontend/.env` (exit 0) — the file is gitignored.
+- `git status --short frontend/.env` → no output — git does not track changes to this file.
+- `git diff --name-only` → 0 files — no unstaged changes.
+- `git diff --cached --name-only` → 0 files — no staged changes.
+
+**Conclusion**: The local .env fix created no dirty tracked file. `frontend/.env` is gitignored. The fix is a local development precondition only. No git impact, no production impact.
+
+### Audit doc path change
+
+The audit docs were moved from `docs/audits/` to `docs/_internal/audits-workpapers/` as part of a prior docs reorganization commit. The files I edited earlier in this session at `docs/audits/` were automatically resolved to the new path. Current canonical paths:
+- `docs/_internal/audits-workpapers/deep-risk-audit-2026-06.md`
+- `docs/_internal/audits-workpapers/deep-risk-audit-2026-06-validation-log.md`
+- `docs/_internal/audits-workpapers/deep-risk-audit-2026-06-endpoint-matrix.md`
+
+### P0/P1 finding inventory
+
+| Finding ID | Severity | Owner | Classification |
+|------------|----------|-------|----------------|
+| DRIFT-001 | P0 | docs | docs-only (implementation correct) |
+| DRIFT-002 | P1 | docs | docs-only (same root cause as DRIFT-001) |
+| DRIFT-003 | P1 | docs | docs-only (internal contradiction in 4626-connection-methods.md) |
+| DRIFT-004 | P1 | docs | docs-only (superseded recommendation in ACCOUNT_MODEL.md §5.2) |
+| LAUNCH-001 | P0 | external DNS/infra | external (repo code correct, DNS A-records wrong) |
+
+No P0/P1 findings in APIAUTH (001–019), WALLET (001–004), or RACE (001–004) namespaces — all are Medium/Low or below.

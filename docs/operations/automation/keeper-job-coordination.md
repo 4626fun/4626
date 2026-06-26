@@ -5,6 +5,14 @@ sidebar_position: 5
 
 # Keeper Job Coordination
 
+## Checklist
+
+1. Migration applied: `public.keeper_jobs` exists with deny-all RLS.
+2. API + worker share `KPR_API_KEY` and `KEEPER_COORDINATION_BASE_URL=https://app.4626.fun`.
+3. Run worker: `pnpm -C frontend keeper:jobs:worker` (or Vercel cron `/api/keeper/jobs/run` every 5 min).
+4. Enable workflows via `KEEPER_ACTIVE_VAULT_WORKFLOWS` (include `payout`, `rebalance` as needed).
+5. Pick **one** payout executor: Vercel job fan-out **or** Railway KPR harvest — not both on the same router.
+
 The keeper job queue is the fallback lane for operational work that must remain live even when the primary path is unavailable or constrained.
 
 ## Boundary

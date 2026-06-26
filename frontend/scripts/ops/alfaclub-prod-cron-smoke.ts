@@ -152,7 +152,7 @@ async function main(): Promise<void> {
 
   console.log('')
   if (failures > 0) {
-    console.log(`${failures} step(s) failed. See docs/operations/alfaclub-token-rotation.md`)
+    console.log(`${failures} step(s) failed. See docs/operations/alfaclub/token-rotation.md`)
     process.exit(1)
   }
   console.log('All cron endpoints returned 2xx. Run room checks: /help, /gmeow, /alfa brief post')

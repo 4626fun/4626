@@ -62,7 +62,7 @@ export const redirects: ClientRedirect[] = [
   { from: '/operations/alfaclub-auth-hardening', to: '/operations/alfaclub/alfaclub-auth-hardening' },
   { from: '/operations/alfaclub-creative-architecture', to: '/operations/alfaclub/alfaclub-creative-architecture' },
   { from: '/operations/alfaclub-hermit-personalization', to: '/operations/alfaclub/alfaclub-hermit-personalization' },
-  { from: '/operations/alfaclub-token-rotation', to: '/operations/alfaclub/alfaclub-token-rotation' },
+  { from: '/operations/alfaclub-token-rotation', to: '/operations/alfaclub/token-rotation' },
   { from: '/operations/agent-lane-policy-matrix', to: '/operations/alfaclub/agent-lane-policy-matrix' },
   { from: '/operations/hermit-pinata-agent-rebuild', to: '/operations/alfaclub/hermit-pinata-agent-rebuild' },
   { from: '/operations/virtuals-arena-railway-runbook', to: '/operations/alfaclub/virtuals-arena-railway-runbook' },
@@ -90,7 +90,9 @@ export const redirects: ClientRedirect[] = [
   { from: '/operations/xmtp-browser-connect-canary', to: '/operations/messaging/xmtp-browser-connect-canary' },
   { from: '/operations/alfaclub-gmeow-outage-postmortem-2026-05-02', to: '/operations/incidents/alfaclub-gmeow-outage-postmortem-2026-05-02' },
   { from: '/operations/cre-keeper-rollout', to: '/operations/archive/cre-keeper-rollout' },
-  { from: '/operations/arch-b-sub-account-alignment-contract', to: '/operations/archive/arch-b-sub-account-alignment-contract' },
+  { from: '/operations/deployment/v1.10.1/deployment-instructions', to: '/operations/deployment/releases/v1.10.1-mainnet' },
+  { from: '/operations/deployment/v1.10.1/pre-broadcast-cleanup', to: '/operations/deployment/releases/v1.10.1-pre-broadcast-checklist' },
+  { from: '/operations/deployment/v1.10.1/post-broadcast-orphan-finalization', to: '/operations/deployment/releases/v1.10.1-mainnet' },
 
   {
     from: '/creator-workspace',

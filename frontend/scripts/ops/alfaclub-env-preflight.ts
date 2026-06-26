@@ -122,7 +122,7 @@ const MANUAL_REMINDERS = [
   'Railway XMTP primary: leave ALFACLUB_CHAT_BRIDGE_ENABLED and ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED unset.',
   'Vercel production: ALFACLUB_CHAT_BRIDGE_ENABLED=1; token refresh via cron only.',
   'After Privy/Telegram rotation: sync alfaclub_runtime_secret + Vercel env, then redeploy.',
-  'GitHub ALFACLUB_HEALTH_CRON_SECRET must match Vercel CRON_SECRET (see docs/operations/alfaclub-token-rotation.md).',
+  'GitHub ALFACLUB_HEALTH_CRON_SECRET must match Vercel CRON_SECRET (see docs/operations/alfaclub/token-rotation.md).',
   'Prod smoke: CRON_SECRET=… pnpm -C frontend exec tsx scripts/ops/alfaclub-prod-cron-smoke.ts',
 ]
 
