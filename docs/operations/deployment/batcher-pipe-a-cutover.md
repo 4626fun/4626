@@ -1,5 +1,7 @@
 # Batcher Pipe A cutover (payable finalize + ShareOFT auto-bridge)
 
+**Live batcher (v1.14.1):** `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1` — see [current release](/operations/deployment/releases/current).
+
 Operator runbook for greenfield vault deploys that auto-bridge **30% of ShareOFT** to Solana during `finalizePhase2` (Pipe A). Policy: [solana-share-mesh-lottery-policy.md](../solana-share-mesh-lottery-policy.md). Budget paths: [solana-share-mesh-budget-paths.md](../solana-share-mesh-budget-paths.md).
 
 ## What “ready” means
@@ -19,7 +21,7 @@ Registry peer OR batcher default peer must resolve before finalize; the module s
 
 ```bash
 pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
-  --batcher 0xa99058f424FB3ACC639F59355C65C40149030651
+  --batcher 0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1
 ```
 
 Exit `0` = ready. Exit `2` = blocked (typical failure: `solana_share_oft_peer_selector` on pre-Pipe-A batcher).

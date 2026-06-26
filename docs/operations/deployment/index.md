@@ -11,10 +11,10 @@ Guides for deploying 4626 infrastructure on Base.
 
 | Guide | Description |
 |-------|-------------|
-| [Release notes](/operations/deployment/releases) | Current bytecode epochs (v1.11+) |
+| [Current release (v1.14.1)](/operations/deployment/releases/current) | Active greenfield deploy target |
 | [Greenfield launch readiness](/operations/vault/greenfield-launch-readiness) | Pre-deploy readiness gate |
 | [Deploy dry-run (local fork)](/operations/deployment/deploy-dry-run-local-fork-invariants) | Local Anvil fork invariants |
-| [Pipe A batcher cutover](/operations/deployment/batcher-pipe-a-cutover) | Live greenfield batcher + ShareOFT peer |
+| [Pipe A batcher cutover](/operations/deployment/batcher-pipe-a-cutover) | Payable finalize + ShareOFT peer wiring |
 | [Eliza runtime](/operations/deployment/eliza-runtime) | XMTP Railway primary |
 
 ## Checklists
@@ -35,4 +35,4 @@ Guides for deploying 4626 infrastructure on Base.
 | [Deploy with multisig](/operations/deployment/multisig/deployment) | Multisig deploy flow |
 | [Owner setup](/operations/deployment/multisig/owner-setup) | Configure ownership |
 
-Legacy release packets (v1.7–v1.10) are in `docs/_internal/deployment-releases-legacy/` — repo-only.
+Prior release packets (v1.7–v1.14.0) are in `docs/_internal/deployment-releases-legacy/` — repo-only.

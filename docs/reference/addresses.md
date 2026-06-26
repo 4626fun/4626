@@ -8,9 +8,9 @@ sidebar_position: 1
 Deployed contract addresses for 4626.
 
 > **Canonical source.** This file is the single source of truth for live deployed
-> addresses. Per-release notes under `docs/operations/deployment/releases/` are
-> frozen point-in-time records; when those disagree with this file, **this file
-> wins**. (Fix H-16 consolidation — 4626-308.)
+> addresses. The [current release](/operations/deployment/releases/current) doc
+> summarizes the active epoch; when anything disagrees with this file, **this file
+> wins**.
 
 ## Base (Hub Chain)
 

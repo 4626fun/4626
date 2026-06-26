@@ -124,14 +124,8 @@ const config: Config = {
           position: 'left',
         },
         {
-          type: 'docSidebar',
-          sidebarId: 'api',
-          label: 'API',
-          position: 'left',
-        },
-        {
-          to: '/operations/deployment/releases',
-          label: 'Change Log',
+          to: '/operations/deployment/releases/current',
+          label: 'Release',
           position: 'right',
         },
         {
@@ -154,13 +148,11 @@ const config: Config = {
         {
           title: 'Docs',
           items: [
-            {label: 'Reading order', to: '/reading-order'},
+            {label: 'Start', to: '/reading-order'},
             {label: 'Guides', to: '/guides'},
-            {label: 'Product', to: '/product'},
-            {label: 'Getting started', to: '/getting-started'},
-            {label: 'Account model', to: '/ACCOUNT_MODEL'},
-            {label: 'Contracts', to: '/contracts'},
-            {label: 'API reference', to: '/api'},
+            {label: 'Reference', to: '/reference'},
+            {label: 'Operators', to: '/operators'},
+            {label: 'Current release', to: '/operations/deployment/releases/current'},
           ],
         },
         {
@@ -168,7 +160,6 @@ const config: Config = {
           items: [
             {label: 'Security', to: '/security'},
             {label: 'Audits', to: '/audits/README'},
-            {label: 'Change log', to: '/operations/deployment/releases'},
             {label: 'Terms', to: '/legal/terms'},
             {label: 'Privacy', to: '/legal/privacy'},
           ],

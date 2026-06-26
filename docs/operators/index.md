@@ -1,28 +1,32 @@
 ---
-title: Operators and SRE
-sidebar_position: 6
+title: Operators
+sidebar_position: 1
 slug: /operators
 ---
 
-# Operators and SRE
+# Operators
 
-Start here for production operations. The [Operations](/operations) sidebar groups runbooks into lane subfolders — this page is the curated on-ramp.
+Curated runbooks for production. The sidebar lists the essentials; more pages under `docs/operations/` are searchable on this site.
 
-## Start here (8 links)
+## Start here
 
-| # | Topic | Link |
-|---|--------|------|
-| 1 | **Operations hub** | [Operations index](/operations) |
-| 2 | **Deploy & release** | [Deployment runbooks](/operations/deployment) · [Release notes](/operations/deployment/releases) |
-| 3 | **Automation & keepers** | [Automation](/operations/automation) · [Keeper HTTP API](/operations/automation/keeper-http-api) |
-| 4 | **Greenfield readiness** | [Greenfield launch readiness](/operations/vault/greenfield-launch-readiness) |
-| 5 | **Wallet & signing ops** | [CSW recovery playbook](/operations/wallet/csw-recovery-playbook) · [Sponsored canonical swap pattern](/operations/wallet/sponsored-canonical-swap-pattern) |
-| 6 | **Solana & share mesh** | [Solana share mesh policy](/operations/solana/solana-share-mesh-lottery-policy) |
-| 7 | **Metrics & observability** | [Explore metrics operations](/operations/analytics/explore-metrics-operations) · [Dune analytics runbook](/operations/analytics/dune-analytics-runbook) |
-| 8 | **Trust & infra** | [Security](/security) · [Domain setup](/operations/platform/domain-setup) · [Supabase setup](/operations/platform/supabase-setup) |
+| Topic | Link |
+|-------|------|
+| **Current release** | [v1.14.1 greenfield target](/operations/deployment/releases/current) |
+| **Live addresses** | [Contract addresses](/reference/addresses) |
+| **Greenfield gate** | [Launch readiness](/operations/vault/greenfield-launch-readiness) |
+| **Deploy runbooks** | [Deployment hub](/operations/deployment) |
+| **Keepers** | [Keeper HTTP API](/operations/automation/keeper-http-api) |
+| **Wallet incidents** | [CSW recovery](/operations/wallet/csw-recovery-playbook) |
+| **Solana policy** | [Share mesh + lottery](/operations/solana/solana-share-mesh-lottery-policy) |
+| **Platform** | [Supabase setup](/operations/platform/supabase-setup) |
 
-## Browse everything
+## Preflight (copy/paste)
 
-Use **Browse as → Operators / SRE** in the sidebar. Each lane is a subfolder under `docs/operations/` (deploy, automation, wallet, vault, Solana, analytics, archive).
+```bash
+./test/current-release-target-guard.sh
+pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
+  --batcher 0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1
+```
 
-Historical runbooks live under [operations/archive](/operations/archive).
+Historical release packets and WIP notes live in `docs/_internal/` (repo-only, not published).

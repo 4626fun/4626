@@ -4,38 +4,27 @@ sidebar_position: 1
 slug: /reading-order
 ---
 
-# Suggested Reading Order
+# Reading order
 
-Use this spine the first time you read the docs. Each step links forward; you can stop when your job is clear.
+Read top to bottom once; skip steps that do not match your job.
 
-## 1. Orientation (everyone)
+## 1. Everyone
 
-1. [Welcome](/) — what 4626 is and where to go next
-2. [Product hub](/product) — compressions, primitives, architecture, tokenomics, and governance
+1. [Getting started](/getting-started) — what 4626 is
+2. [Wallet architecture](/wallet-architecture) — CSW, embedded signer, execution tracks
+3. [Account model](/ACCOUNT_MODEL) — populations and invariants
 
-## 2. Accounts and execution (app + wallet work)
+## 2. By role
 
-3. [Wallet architecture](/wallet-architecture) — parent CSW, embedded signer, server automation roles
-4. [Account model](/ACCOUNT_MODEL) — canonical reference for populations, invariants, and existing flows
-5. [Connection methods](/4626-connection-methods) — batched passkey ceremony, UserOp paths, and execution tracks
+| Role | Next steps |
+|------|------------|
+| **Holder / swap user** | [Explore analytics](/users/explore-analytics) |
+| **Creator deploying a vault** | [Launch token](/guides/launch-token) → [Activate vault](/guides/activate-vault) → [Greenfield readiness](/operations/vault/greenfield-launch-readiness) |
+| **Integrator / engineer** | [Contracts](/contracts) → [Addresses](/reference/addresses) → [API reference (local)](/developers/api-reference) |
+| **Operator / SRE** | [Operators hub](/operators) → [Current release](/operations/deployment/releases/current) |
 
-## 3. Pick your lane
+## 3. Lookup
 
-| If you are… | Continue with… |
-|---|---|
-| Holding or swapping | [Guides](/guides) → [Getting started](/getting-started) → [Explore analytics](/users/explore-analytics) |
-| Launching or deploying a vault | [Guides](/guides) → [Launch token](/guides/launch-token) → [Activate vault](/guides/activate-vault) |
-| Understanding the system | [Product](/product) → [Four compressions](/compressions) → [Three primitives](/primitives) |
-| Building in the monorepo | [Developers](/developers) → [Architecture](/architecture) → [API reference](/api) |
-| Integrating contracts or OFT | [Protocol integrators](/protocols) → [Contracts](/contracts) → [Integrations](/integrations) |
-| Running production | [Operators / SRE](/operators) → [Deployment runbooks](/operations/deployment) |
-| Reviewing trust | [Security](/security) → [Audits](/audits/README) |
-
-## 4. Lookup (when you need a fact)
-
-- [Reference index](/reference) — addresses, glossary, chains, contract inventory
-- [Change log](/operations/deployment/releases) — release targets and bytecode epochs
-
----
-
-**Tip:** Use **Browse as → Start** in the sidebar to hide everything except this spine while you onboard.
+- [Addresses](/reference/addresses) — canonical live infra
+- [Glossary](/reference/glossary)
+- [Security](/security) · [Audits](/audits/README)

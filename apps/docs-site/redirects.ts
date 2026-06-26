@@ -127,6 +127,16 @@ export const redirects: ClientRedirect[] = [
   { from: '/audits/npm-advisories-triage', to: '/audits' },
   { from: '/audits/production-parity-checklist', to: '/audits' },
   { from: '/compressions/reading-order', to: '/compressions' },
+  { from: '/operations/deployment/releases/v1.11.0-protocol-contract-readiness', to: '/operations/deployment/releases/current' },
+  { from: '/operations/deployment/releases/v1.11.1-protocol-contract-readiness', to: '/operations/deployment/releases/current' },
+  { from: '/operations/deployment/releases/v1.12.0-bytecode-epoch', to: '/operations/deployment/releases/current' },
+  { from: '/operations/deployment/releases/v1.12.1-bytecode-epoch', to: '/operations/deployment/releases/current' },
+  { from: '/operations/deployment/releases/v1.13.0-bytecode-epoch', to: '/operations/deployment/releases/current' },
+  { from: '/operations/deployment/releases/v1.14.0-bytecode-epoch', to: '/operations/deployment/releases/current' },
+
+  { from: '/api', to: '/developers/api-reference' },
+  { from: '/api/index', to: '/developers/api-reference' },
+
   { from: '/overview/reading-order', to: '/reading-order' },
   {
     from: '/primitives/game-loop/lottery-amoe-test-matrix',
