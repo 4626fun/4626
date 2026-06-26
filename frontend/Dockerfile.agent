@@ -91,4 +91,4 @@ EXPOSE 8080
 ENV XMTP_DB_DIRECTORY=/data/.xmtp-data
 
 # Entrypoint: volume permissions, then bootstrap.ts (health listener before heavy imports).
-CMD ["bash", "-lc", "if [ \"${AGENT_PROCESS:-keepr}\" = \"hermit\" ]; then exec ./node_modules/.bin/tsx server/agents/hermit/bootstrap.ts; fi; install -d -m 0755 /data/.xmtp-data && find /data/.xmtp-data -xdev -exec chown -h node:node {} + && exec gosu node ./node_modules/.bin/tsx server/agents/eliza/bootstrap.ts"]
+CMD ["bash", "-lc", "if [ \"${AGENT_PROCESS:-keepr}\" = \"hermit\" ]; then exec ./node_modules/.bin/tsx server/agents/hermit/bootstrap.ts; fi; if [ \"${AGENT_PROCESS:-keepr}\" = \"virtuals\" ]; then exec ./node_modules/.bin/tsx server/agents/eliza/plugins/virtuals/runner.ts; fi; install -d -m 0755 /data/.xmtp-data && find /data/.xmtp-data -xdev -exec chown -h node:node {} + && exec gosu node ./node_modules/.bin/tsx server/agents/eliza/bootstrap.ts"]

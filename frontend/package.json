@@ -71,6 +71,8 @@
     "agent:eliza": "tsx --env-file=.env server/agents/eliza/index.ts",
     "agent:eliza:doctor": "tsx --env-file=.env scripts/agent/eliza-doctor.ts",
     "agent:virtuals": "tsx --env-file=.env server/agents/eliza/plugins/virtuals/runner.ts",
+    "agent:virtuals:preflight": "tsx --env-file=.env scripts/agent/virtuals-acp-doctor.ts",
+    "virtuals:compute-ping": "tsx --env-file=.env scripts/agent/virtuals-compute-ping.ts",
     "agent:eliza:standby:smoke": "bash -lc 'tmp_xmtp_db_dir=$(mktemp -d); trap \"rm -rf \\\"$tmp_xmtp_db_dir\\\"\" EXIT; timeout 20s env PORT=${PORT:-8081} AGENT_RUNTIME_ROLE=standby AGENT_CONSUME_XMTP=false XMTP_DB_DIRECTORY=\"$tmp_xmtp_db_dir\" pnpm agent:eliza; code=$?; if [ \"$code\" -eq 124 ]; then exit 0; fi; exit \"$code\"'",
     "keeper:jobs:worker": "tsx --env-file=.env scripts/keeper-job-worker.ts",
     "ops:1659-risk-watcher": "tsx ../scripts/ops/1659-risk-watcher.ts",
