@@ -5,7 +5,7 @@ This directory tracks committed deployment artifacts and ABI snapshots used by t
 ## Current Canonical Release
 
 - Base mainnet release target / deploy namespace is now `v1.9.2`.
-- Last completed infra release packet: `docs/operations/deployment/releases/v1.8.3-mainnet.md`
+- Last completed infra release packet: `docs/_internal/deployment-releases-legacy/v1.8.3-mainnet.md` (historical). Current line: [releases index](../docs/operations/deployment/releases/index.md).
 - Last completed bytecode / codeId manifest: `deployments/base/v1.8.3-bytecode-manifest.json`
 - Live Base deployment snapshots under `deployments/base/contracts/**/*.json` reflect the onchain `v1.8.3` Base epoch broadcast on `2026-04-11`; the `v1.9.2` namespace is the fresh deploy target for new creator vaults.
 

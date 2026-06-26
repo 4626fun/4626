@@ -14,8 +14,8 @@ readonly ORPHAN_ADDRS=(
 )
 
 readonly WHITELIST=(
-  "docs/operations/deployment/releases/v1.10.1-mainnet.md"
-  "docs/operations/deployment/releases/v1.8.3-mainnet.md"
+  "docs/_internal/deployment-releases-legacy/v1.10.1-mainnet.md"
+  "docs/_internal/deployment-releases-legacy/v1.8.3-mainnet.md"
   "docs/operations/deployment/amoe-deploy-evidence-2026-05-01.md"
   "docs/operations/deployment/orphan-registry.md"
   "amoe/tools/ci/check_manager_amoe_surface.sh"

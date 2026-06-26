@@ -1,5 +1,7 @@
 ---
 title: Coinbase In-App SignatureWrapper Bug
+status: historical
+doc_template: runbook
 ---
 
 # Coinbase Wallet in-app browser: wrong owner index/signer wrapper

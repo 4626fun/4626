@@ -55,4 +55,4 @@ Coinbase Wallet / Base App in-app browsers can block or substitute popup signing
 ## Related
 
 - `docs/operations/relay-sponsored-owner-mutation-flow.md`
-- `docs/operations/coinbase-inapp-signaturewrapper-bug.md`
+- `docs/operations/archive/coinbase-inapp-signaturewrapper-bug.md`

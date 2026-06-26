@@ -1,4 +1,12 @@
+---
+title: Virtuals Arena staging checklist
+status: historical
+doc_template: runbook
+---
+
 # Virtuals Arena Staging Checklist
+
+> **Use the production runbook instead:** [Virtuals Arena Railway runbook](./virtuals-arena-railway-runbook.md)
 
 Use this exact sequence before enabling live Arena trading from room `1659`.
 

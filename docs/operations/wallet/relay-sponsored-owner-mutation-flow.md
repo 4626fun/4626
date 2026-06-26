@@ -1,8 +1,12 @@
 ---
 title: Relay-Sponsored Owner Mutation Flow
+status: historical
+doc_template: runbook
 ---
 
 # Relay-sponsored CSW owner-mutation flow
+
+> **Current runbook:** [Relay owner-mutation kit guide](./relay-owner-mutation-kit-guide.md)
 
 This document is migrated from root `RELAY_OWNER_MUTATION_FLOW.md` so runbooks live under `docs/operations`.
 
@@ -71,5 +75,5 @@ This avoids requiring in-app `wallet_prepareCalls` from the funding side.
 
 - `docs/operations/relay-owner-mutation-kit-guide.md` — relay-kit + Privy example mapping, quote body templates, lane selection
 - `docs/operations/csw-recovery-playbook.md`
-- `docs/operations/coinbase-inapp-signaturewrapper-bug.md`
+- `docs/operations/archive/coinbase-inapp-signaturewrapper-bug.md`
 - `docs/owner-mutation-decision-2026-05.md`
