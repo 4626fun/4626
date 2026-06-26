@@ -46,7 +46,7 @@ const SOURCES = {
     dir: path.join(REPO_ROOT, 'docs'),
     destPrefix: '',
     include: ['**/*.md', '**/*.mdx', '**/_category_.json'],
-    exclude: ['_generated/**', '_archive/**', 'drafts/**', '_drafts/**', '_internal/**', 'plans/**'],
+    exclude: ['_generated/**', '_archive/**', 'drafts/**', '_drafts/**', '_internal/**', 'plans/**', 'runbooks/**'],
     label: 'Manual docs',
   },
   contracts: {

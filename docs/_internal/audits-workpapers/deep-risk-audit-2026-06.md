@@ -631,3 +631,572 @@ All three agent management endpoints use in-memory `checkRateLimit` with no dura
 - `build/gauge/vote` (`_vote.ts`) — POST, `guardAgentApiRequest` auth, build-only. PASS (rate limit gap noted in APIAUTH-018).
 - `build/ve4626/lock` (`_lock.ts`) — POST, `guardAgentApiRequest` auth, build-only. PASS (rate limit gap noted in APIAUTH-018).
 - `build/ajna/borrow` (`_borrow.ts`) — POST, `guardAgentApiRequest` auth, build-only. PASS (rate limit gap noted in APIAUTH-018).
+
+---
+
+## Wallet/Identity Pass (2026-06-25)
+
+**Scope**: canonical wallet policy, parent CSW vs embedded EOA vs external EOA, canonical4337 sender/signer invariants, execution router behavior, wallet sync and identity merging, tombstoned profile handling, stale external primary wallet behavior, canonical CSW persistence, wallet disconnect behavior.
+
+**P0 stop-condition checks — all PASS (no stop triggered)**:
+
+1. **Sponsored canonical swaps routing from non-parent-CSW under canonical4337** — PASS. `sendViaCanonical4337` (`txRouter.ts:686-700`) resolves `canonicalIdentity = resolveCanonicalIdentityAddress(context)` via `resolvePolicyCanonicalAddress`, which maps to the canonical CSW (parent CSW) for all canonical-mode contexts. The ERC-4337 sender is always `canonicalIdentity`, never the embedded EOA or external EOA. `assertCanonicalPolicyContext` (`txRouter.ts:361-392`) additionally blocks non-canonical execution addresses (line 377-381).
+
+2. **Fallback signer path activating for CANONICAL_CSW_ADDRESS without execution signer policy** — PASS. `Swap.tsx:405-409` guards the external EOA fallback with `!isCanonicalCsw(canonicalAddress)` — the fallback never activates when the canonical address is the platform CSW. `sendViaCanonical4337:699-700` hard-blocks signers not on `isAllowedCanonicalCswExecutionSigner` when `canonicalIdentity === CANONICAL_CSW_ADDRESS`. The `sendCalls` and `canonicalDirect` paths use the broader `isAllowedCanonicalSigner` check, but the practical signer set is a subset of the execution set (see WALLET-002 for the defense-in-depth gap).
+
+3. **Wallet sync writing Privy identity onto tombstoned profiles** — PASS. `walletSync.ts` `findExistingProfileByAddress` (lines 104-131) and `findExistingProfile` (lines 159-166) both follow `merged_into_profile_id` tombstone pointers via `JOIN profiles p ON p.id = COALESCE(m.merged_into_profile_id, m.id) WHERE p.merged_into_profile_id IS NULL`. `resolvePrimaryProfileIdForPrivyUser` (`server-core/profileIdForPrivyUser.ts:40-58`) follows the same pattern. Writes go to the resolved live profile ID. (See WALLET-001 for a fallback path gap.)
+
+4. **External EOA frozen as primary when embedded owner/canonical CSW path is ready** — PASS. `resolveProfilesPrimaryWalletColumn` (`disconnectExternalWallet.ts:23-34`) returns `embedded` when `canonical && embedded` are both present, and `canonical` when only canonical is present. The walletSync UPDATE path (`walletSync.ts:805`: `primary_wallet = COALESCE(${primary}, primary_wallet)`) overwrites the external EOA with the resolved value when it is non-null. `disconnectExternalWallet.nextPrimary` (line 75: `embedded ?? canonical ?? ...`) also correctly prioritizes embedded/canonical. (See WALLET-004 for a canonical-absent edge case.)
+
+### WALLET-001
+
+**Severity**: Medium
+**Domain**: Identity / tombstone integrity
+**File**: `frontend/server/_lib/wallet/canonicalCswDelegation.ts:170-210` — `recoverProfileIdFromPrivyHints`
+**Route/function**: `resolveCanonicalCsw` fallback path (lines 449-451, 459-461)
+
+**Trigger/precondition**: A Privy user whose `privy_user_id` does not resolve via `readProfileIdByPrivyUserId` (e.g. alias table missing or not yet migrated) AND whose profile was previously merged into another profile (tombstoned with `merged_into_profile_id` set). The user triggers a wallet bootstrap or owner confirmation endpoint (`/api/wallet/confirm-owner`, `/api/wallet/prepare-add-privy-owner`).
+
+**Expected invariant**: All profile ID resolution paths must follow `merged_into_profile_id` tombstone pointers to the live canonical profile, preventing writes onto tombstoned rows.
+
+**Observed behavior**: `recoverProfileIdFromPrivyHints` performs three lookups that do NOT follow tombstones:
+1. Email lookup (line 159-164): `SELECT id FROM profiles WHERE LOWER(email) = ${normalized} LIMIT 1` — no `merged_into_profile_id IS NULL` filter.
+2. Wallet address lookup in `profile_wallets` (lines 184-193): `SELECT profile_id FROM profile_wallets WHERE LOWER(address) = ${address}` — no tombstone join.
+3. Profiles column lookup (lines 195-207): `SELECT id FROM profiles WHERE LOWER(COALESCE(primary_wallet, '')) = ${address} ...` — no tombstone filter.
+
+Any of these can return a tombstoned profile ID. In `resolveCanonicalCsw`, this ID is used at lines 528-535 to write `privy_user_id`, `csw_address`, and `primary_smart_wallet` onto the tombstoned row, and at lines 520-526 to call `ensureCanonicalWalletRow` — resurrecting the merged fragment.
+
+**Evidence**: `canonicalCswDelegation.ts:159` `SELECT id FROM profiles WHERE LOWER(email) = ${normalized} LIMIT 1` — no `merged_into_profile_id IS NULL`. Compare with `walletSync.ts:129-130` and `profileIdForPrivyUser.ts:52-53` which both apply `COALESCE(m.merged_into_profile_id, m.id)` + `WHERE p.merged_into_profile_id IS NULL`.
+
+**Pass/Fail criterion**: PASS if `recoverProfileIdFromPrivyHints` follows tombstone pointers (COALESCE + IS NULL filter) on all three lookup paths. FAIL if any lookup can return a tombstoned profile ID.
+
+**Minimal remediation**: Add `AND merged_into_profile_id IS NULL` to the email and profiles-column lookups. For the `profile_wallets` lookup, join `profiles` and apply the same COALESCE + IS NULL filter as `findExistingProfileByAddress`.
+
+**Launch impact**: Low-medium. The primary resolver (`readProfileIdByPrivyUserId`) correctly follows tombstones, so this only triggers in the fallback path (alias table missing or stale Privy user ID). The consequence is delegation state divergence between the tombstone and the live profile, which could cause the user's canonical CSW / embedded EOA to appear unset on the live profile.
+
+### WALLET-002
+
+**Severity**: Low
+**Domain**: Canonical CSW execution signer policy / defense-in-depth
+**File**: `frontend/src/lib/tx/txRouter.ts:361-392` — `assertCanonicalPolicyContext`; `frontend/src/wallet/canonicalWalletPolicy.ts:79-81` — `isAllowedCanonicalSigner`
+
+**Trigger/precondition**: The platform canonical CSW (`CANONICAL_CSW_ADDRESS`) is the execution identity. A signer address that is in `CANONICAL_CSW_ALLOWED_OWNER_EOAS` but NOT in `CANONICAL_CSW_EXECUTION_OWNER_ADDRESSES` attempts to route via `sendCalls` or `canonicalDirect`.
+
+**Expected invariant**: All canonical execution paths for the platform CSW should enforce the same execution-signer allowlist (`isAllowedCanonicalCswExecutionSigner`), not the broader owner-EOA allowlist (`isAllowedCanonicalSigner`).
+
+**Observed behavior**: `assertCanonicalPolicyContext` (line 383) checks `isAllowedCanonicalSigner(context.signerAddress)` — which is `isCanonicalCsw(value) || isAllowedOwnerEoa(value)` (the broader set). This is the only signer check for `sendCalls` (line 560) and `canonicalDirect` (line 879). `sendViaCanonical4337` (line 699-700) adds a separate hard block via `isAllowedCanonicalCswExecutionSigner` (the stricter execution set), but only in the canonical4337 path.
+
+Currently, `CANONICAL_CSW_ALLOWED_OWNER_EOAS` = `['0x858c...']` and `CANONICAL_CSW_EXECUTION_OWNER_ADDRESSES` = `['0xceca...', '0x858c...', '0xb05c...']`. The broader set's only non-CSW member (`0x858c...`) is also in the execution set. So no signer can currently bypass canonical4337 via sendCalls/canonicalDirect. The gap becomes exploitable only if a future owner EOA is added to `CANONICAL_CSW_ALLOWED_OWNER_EOAS` without also adding it to `CANONICAL_CSW_EXECUTION_OWNER_ADDRESSES`.
+
+The on-chain CSW `isOwner` check is the ultimate enforcement for `canonicalDirect` (the external EOA must be an on-chain owner to call `executeBatch`). For `sendCalls`, the wallet provider validates ownership. This makes the gap defense-in-depth, not a primary enforcement failure.
+
+**Evidence**: `txRouter.ts:383` `if (!isAllowedCanonicalSigner(context.signerAddress))` — broader check. `txRouter.ts:700` `if (!isAllowedCanonicalCswExecutionSigner(context.signerAddress))` — stricter check, only in canonical4337. `canonicalWalletPolicy.ts:79-81` `isAllowedCanonicalSigner = isCanonicalCsw(value) || isAllowedOwnerEoa(value)`.
+
+**Pass/Fail criterion**: PASS if `assertCanonicalPolicyContext` checks `isAllowedCanonicalCswExecutionSigner` when the canonical identity is `CANONICAL_CSW_ADDRESS`, or if the sendCalls/canonicalDirect paths add the same execution-signer hard block. FAIL if the broader check is the only signer gate for sendCalls/canonicalDirect.
+
+**Minimal remediation**: In `assertCanonicalPolicyContext`, after resolving `canonicalIdentity`, add: `if (isCanonicalCsw(canonicalIdentity) && !isAllowedCanonicalCswExecutionSigner(context.signerAddress)) throw new Error(...)`. This centralizes the execution-signer check for all canonical paths.
+
+**Launch impact**: Low. No current exploitable gap. The two allowlists are kept in sync by convention (comment at `canonicalWalletPolicy.ts:29-30` instructs adding to both). Defense-in-depth hardening recommended before adding new owner EOAs.
+
+### WALLET-003
+
+**Severity**: Low
+**Domain**: Wallet API rate limiting
+**Files**: `frontend/api/_handlers/wallet/_sync.ts:60`, `_confirm-owner.ts:68`, `_prepare-add-privy-owner.ts:54`, `_disconnect-external.ts:43`
+
+**Trigger/precondition**: Any of the four wallet-linking endpoints receives repeated requests from the same IP within the rate-limit window.
+
+**Expected invariant**: Sensitive wallet-linking endpoints (Privy token verification, DB writes, on-chain owner checks, profile mutation) should use `checkDurableRateLimit` (persisted, fail-closed) per the project standard established by AMOE lottery handlers.
+
+**Observed behavior**: All four handlers use `checkRateLimit` (in-memory) with `RATE_LIMITS.cswLink`. In-memory rate limiters reset on Vercel serverless cold starts and do not protect across concurrent invocations. A determined attacker can bypass the limiter by triggering cold starts or distributing requests across invocation instances.
+
+**Evidence**: `_sync.ts:60` `checkRateLimit(rateLimitKey('wallet-sync', getClientIp(req)), RATE_LIMITS.cswLink)`. Same pattern in all four handlers. Compare with AMOE handlers (`_amoeSubmit.ts`) which layer `checkDurableRateLimit` on top of `checkRateLimit`.
+
+**Pass/Fail criterion**: PASS if all four handlers use `checkDurableRateLimit` (or layer it on top of `checkRateLimit`). FAIL if any uses in-memory only.
+
+**Minimal remediation**: Add `checkDurableRateLimit` with `failClosed: true` to each handler, keyed by `getClientIp(req)` (and optionally `authorizedPrincipal.profileId` where available). Use a dedicated durable limit (e.g. `RATE_LIMITS.durableWalletLink`) with a conservative window (e.g. 10/hour per IP).
+
+**Launch impact**: Low. All four endpoints require authentication (Privy JWT or SIWE + authorized principal), so unauthenticated abuse is blocked. The in-memory limiter provides best-effort protection within a single invocation instance. Durable limiting is defense-in-depth against credential-stuffing or owner-check flooding.
+
+### WALLET-004
+
+**Severity**: Low
+**Domain**: Wallet sync / primary_wallet column precedence
+**File**: `frontend/server/_lib/wallet/disconnectExternalWallet.ts:23-34` — `resolveProfilesPrimaryWalletColumn`
+
+**Trigger/precondition**: A user has an embedded EOA and an external EOA connected, but NO canonical CSW (e.g. CSW setup not yet completed). Wallet sync runs, then the user disconnects the external EOA, then wallet sync runs again.
+
+**Expected invariant**: `profiles.primary_wallet` should consistently track the embedded signer when embedded is present, regardless of canonical CSW presence. The function's own comment (line 29-31) states the column "should track the embedded signer (or CSW when embedded is absent)."
+
+**Observed behavior**: `resolveProfilesPrimaryWalletColumn` returns:
+- `embedded` when `canonical && embedded` (both present)
+- `canonical` when `canonical` only
+- `activeOwner ?? embedded ?? classificationPrimary` when neither canonical branch matches
+
+When canonical is absent but embedded is present, the third branch returns `activeOwner ?? embedded` — the external EOA (`activeOwner`) wins over `embedded`. This contradicts the function's comment and is inconsistent with `disconnectExternalWallet`'s `nextPrimary` logic (line 75: `embedded ?? canonical ?? ...`), which prioritizes embedded unconditionally.
+
+Result: `profiles.primary_wallet` flip-flops between the external EOA (after sync, when canonical is absent) and the embedded EOA (after disconnect). This is a display/lookup column inconsistency, not an execution-path issue — the actual execution address is determined by `executionMode` in Swap.tsx, which is independent of `primary_wallet`.
+
+**Evidence**: `disconnectExternalWallet.ts:32` `if (input.canonical && input.embedded) return input.embedded` — requires canonical. Compare with line 75: `const nextPrimary = embedded ?? canonical ?? ...` — does not require canonical.
+
+**Pass/Fail criterion**: PASS if `resolveProfilesPrimaryWalletColumn` returns `embedded` when embedded is present, regardless of canonical. FAIL if `activeOwner` takes priority over `embedded` when canonical is absent.
+
+**Minimal remediation**: Change the third branch to `return input.embedded ?? input.activeOwner ?? input.classificationPrimary ?? null` — prioritize embedded over activeOwner when canonical is absent, matching the comment and the `nextPrimary` logic.
+
+**Launch impact**: Low. The `primary_wallet` column is legacy display/lookup, not the execution address. The flip-flop is cosmetic and does not affect swap routing or custody. It could cause stale wallet display in account UI when canonical setup is incomplete.
+
+---
+
+## Race-Condition Audit Pass (RACE-NNN)
+
+Audit date: 2026-06-26
+Scope: client auth/session, Telegram link, server identity/wallet, deploy-session state machine, swap/paymaster, keeper/backtest/counter-trade orchestration.
+Method: Selective file reads targeting concurrent-modification, state-transition, lock/lease, and dedup patterns. No code changes applied (audit-only).
+
+### RACE-001
+
+**Severity**: Low-Medium
+**Domain**: Deploy session / concurrent worker transitions
+**Files**:
+- `frontend/server/_lib/deploy/deploySessions.ts:378-480` — `transitionDeploySession`
+- `frontend/api/_handlers/deploy/v2/session/_statusCore.ts:2282-2291` — status-poll triggered transition
+- `frontend/server/_lib/deploy/workflow/runner.ts:116` — workflow runner lease claim
+
+**Trigger/precondition**: A deploy session is being processed by the workflow runner (which holds a lease via `claimDeploySessionLease`). Simultaneously, a status poll request hits `_statusCore.ts` and triggers a step transition via `transitionDeploySession`.
+
+**Expected invariant**: Only the worker holding the active lease should be able to transition the session's step, or transitions from other paths should coordinate with the lease.
+
+**Observed behavior**: `transitionDeploySession` uses CAS on `step = fromStep` (`WHERE id = ${params.id} AND step = ${params.fromStep}`) but does NOT check `lock_owner` or `lock_expires_at`. The status-poll path in `_statusCore.ts:2282` calls `transitionDeploySession` directly, bypassing the lease. If the workflow runner holds a lease and the status poll transitions the step, the runner's subsequent transition will fail with `CONCURRENT_MODIFICATION` (CAS miss on fromStep).
+
+**Why it is not worse**: The CAS on step prevents data corruption — two concurrent transitions to different toSteps from the same fromStep will serialize at the Postgres row level, and only the first will match. The second gets 0 rows and returns false. The `_statusCore.ts` code properly throws on `!transitioned`. The system is self-healing: the next status poll reads the updated step.
+
+**Pass/Fail criterion**: PASS if `transitionDeploySession` either checks `lock_owner` or the status-poll path coordinates with the lease. FAIL if transitions can bypass active leases without coordination.
+
+**Minimal remediation**: Either (a) add `AND (lock_owner IS NULL OR lock_owner = ${callerWorkerId} OR lock_expires_at <= NOW())` to `transitionDeploySession`'s WHERE clause, or (b) have `_statusCore.ts` claim a short-lived lease before transitioning. Option (a) is simpler but requires threading a workerId through.
+
+**Launch impact**: Low-Medium. In practice, the workflow runner and status poll are unlikely to target the same step transition simultaneously — the status poll typically advances stages (e.g., `stageUserOpHash`), while the runner advances phases. The CAS prevents corruption. The risk is spurious `CONCURRENT_MODIFICATION` errors that trigger retries, adding latency but not data loss.
+
+### RACE-002
+
+**Severity**: Low
+**Domain**: Swap execution / ERC-4337 nonce coordination
+**Files**:
+- `frontend/src/lib/aa/coinbaseErc4337.ts:809-851` — `resolvePriorPendingUserOpForSubmit`, `readAnyPendingUserOpHashForWallet`
+- `frontend/src/hooks/useSwapExecution.ts:2724-2731` — receipt polling with AbortController
+
+**Trigger/precondition**: User has two browser tabs open on the 4626 swap page, both connected to the same canonical CSW. Both tabs initiate a swap simultaneously.
+
+**Expected invariant**: A new canonical swap should wait for any pending UserOp from the same smart wallet to confirm, preventing nonce conflicts and Permit2 nonce reuse.
+
+**Observed behavior**: `readAnyPendingUserOpHashForWallet` reads from `sessionStorage` (per-tab). Tab A's pending UserOp hash is not visible to Tab B. Both tabs submit UserOps concurrently. The ERC-4337 bundler receives two UserOps with potentially conflicting nonces. One will be rejected by the bundler/paymaster.
+
+**Why it is not worse**: The CDP paymaster/bundler is the final arbiter — it will reject the second UserOp with a nonce error. No double-spend is possible because the bundler enforces nonce ordering. The failed swap surfaces an error to the user. The `swapSubmitEpochRef` + `swapReceiptPollRef` AbortController pattern correctly handles stale completions within a single tab.
+
+**Pass/Fail criterion**: PASS if cross-tab concurrent swaps are either coordinated or safely rejected. FAIL if cross-tab swaps can corrupt nonce state.
+
+**Minimal remediation**: Use `BroadcastChannel` or `localStorage` storage event to share pending UserOp hashes across tabs for the same smart wallet. Alternatively, document this as a known limitation and rely on bundler rejection (current behavior).
+
+**Launch impact**: Low. Multi-tab swap from the same CSW is an edge case. The bundler rejection prevents fund loss. UX impact is a confusing error message on the second tab.
+
+### RACE-003
+
+**Severity**: Low
+**Domain**: Identity / email collision profile merge
+**Files**:
+- `frontend/server/_lib/identity/emailCollisionAdoption.ts:109-123` — `mergePlaceholderProfiles` (SELECT then iterate)
+- `frontend/api/_handlers/waitlist/_bootstrap.ts:39` — caller (no transaction wrapper found)
+
+**Trigger/precondition**: The same Privy user triggers two concurrent bootstrap requests (e.g., double-submit, or two tabs). Both fail with email collision and both enter the adoption path. Both call `mergePlaceholderProfiles` which reads placeholder profiles then modifies them one-by-one.
+
+**Expected invariant**: The placeholder profile merge should be atomic — either all placeholders are merged into the target profile or none are.
+
+**Observed behavior**: `mergePlaceholderProfiles` does `SELECT id FROM profiles WHERE privy_user_id = ... AND id <> targetProfileId` then iterates the rows, performing individual UPDATEs. The sequence is not wrapped in `BEGIN/COMMIT`. Between the SELECT and the UPDATEs, another concurrent adoption could modify the same placeholder rows.
+
+**Why it is not worse**: The individual UPDATEs in the merge are likely idempotent (reassigning data to the target profile, then nulling out the placeholder). The `upsertPrivyUserAlias` uses `ON CONFLICT DO NOTHING`. Concurrent adoptions for the same Privy user processing the same placeholders would result in redundant UPDATEs, not data corruption. The `assertNoEmailPrivyCollision` guard catches cross-user email collisions (different Privy users, same email) and forces recovery UX, so the adoption path is only for same-Privy-user placeholder cleanup.
+
+**Pass/Fail criterion**: PASS if `mergePlaceholderProfiles` is wrapped in a DB transaction or the individual operations are idempotent. FAIL if concurrent adoptions can corrupt profile data.
+
+**Minimal remediation**: Wrap the `mergePlaceholderProfiles` call in `withDbTransaction` (the helper already exists in `walletSync.ts:38-50`). Or wrap the entire `runWithWaitlistEmailCollisionAdoption` retry path in a transaction.
+
+**Launch impact**: Low. The scenario requires the same Privy user to trigger two concurrent bootstraps — a rare edge case. The `ON CONFLICT DO NOTHING` patterns and idempotent UPDATEs provide informal safety. The transaction would add formal atomicity.
+
+### RACE-004
+
+**Severity**: Very Low (informational)
+**Domain**: AlfaClub counter-trade / multi-actor enforcement
+**Files**:
+- `frontend/server/_lib/alfaclub/counterTradeRunner.ts:126-143` — `listActiveCounterTradeOptIns` then `enforceSingleActiveCounterTradeActor`
+
+**Trigger/precondition**: Room 1659 has multiple active counter-trade opt-ins. Two ticks run back-to-back (not concurrently — the `inFlight` guard prevents overlap). Between the list and the enforcement, an opt-in status could change.
+
+**Observed behavior**: `listActiveCounterTradeOptIns` returns active opt-ins, then `enforceSingleActiveCounterTradeActor` pauses all but the first. If an opt-in becomes active between the list and the enforcement, it will not be paused until the next tick.
+
+**Why it is not worse**: The `inFlight` boolean guard in `counterTradeTicker.ts:107` ensures only one tick runs at a time. The enforcement is idempotent and runs every tick. Any missed opt-in is caught on the next tick. The `spotSweepAttempted` Set prevents double-sweeps within a tick.
+
+**Pass/Fail criterion**: PASS (informational — the inFlight guard and idempotent enforcement make this self-healing).
+
+**Launch impact**: None. This is an informational note about a benign TOCTOU that is self-correcting.
+
+### Patterns Verified as Safe (no finding)
+
+1. **Deploy session lease acquisition** (`claimDeploySessionLease`): Atomic `UPDATE ... WHERE lock_expires_at IS NULL OR lock_expires_at <= now RETURNING id` — correct optimistic lease. Multiple workers can list the same sessions, but only one claims each.
+2. **Telegram link-start token consumption** (`claimAndConsumeTelegramLinkStartToken`): `INSERT ... ON CONFLICT DO NOTHING RETURNING` for the primary path, `UPDATE ... WHERE consumed_at IS NULL RETURNING` for the legacy-claim path — both atomic. The SELECT-then-UPDATE in the legacy path has a TOCTOU window, but the UPDATE's `WHERE consumed_at IS NULL` makes it safe.
+3. **Counter-trade event dedup** (`registerCounterTradeEventIfNew`): `INSERT ... ON CONFLICT (room_id, sender_address, event_key) DO NOTHING RETURNING` — atomic dedup. The `inFlight` guard in the ticker prevents tick overlap.
+4. **useSiweAuth shared session fetch** (`authMeInFlight` Promise): Module-level in-flight Promise deduplication across hook instances within the same tab. The 1.5s cache + 30s snapshot TTL prevents redundant fetches. Cross-tab is expected to be independent (each tab manages its own session).
+5. **KPR runner** (`runner.ts`): Single-workflow CLI execution, no concurrency.
+6. **Solana keeper orchestrator** (`solana-keeper-orchestrator.ts`): Stateless HTTP dispatch, no shared mutable state.
+7. **Counter-trade ticker overlap guard** (`counterTradeTicker.ts`): `inFlight` boolean with `finally` cleanup — correct single-executor guard.
+8. **Deploy session transition CAS** (`transitionDeploySession`): `WHERE id = ... AND step = fromStep RETURNING id` — correct optimistic concurrency control. Prevents double-advancement.
+9. **walletSync.ts withDbTransaction**: Proper `BEGIN/COMMIT` with rollback. Used for wallet sync operations that need atomicity.
+10. **Swap submit epoch ref** (`useSwapExecution.ts`): `swapSubmitEpochRef` increments on HMR and submit, discarding stale async results. `swapReceiptPollRef` AbortController cancels stale polling.
+
+---
+
+## Documentation-vs-Implementation Drift Audit
+
+Audit conducted 2026-06-26. Scope: account/wallet docs, parent CSW canonical identity/custody, embedded/external EOA roles, sub-account role, API/runbook route drift, launch-readiness runbook, Telegram Mini App link docs, Solana/KPR ops docs, retired env references. Audit-only — no code or doc fixes applied.
+
+### P0 Stop Condition Assessment
+
+Four P0 stop conditions checked:
+
+| # | Condition | Result |
+|---|-----------|--------|
+| 1 | Docs say sub-account is default canonical/deploy account | **TRIGGERED** — DRIFT-001 |
+| 2 | Docs describe separate agent CSW as canonical 4626 account | NOT triggered — all docs correctly describe roles on CANONICAL_CSW_ADDRESS |
+| 3 | Runbooks instruct retired envs as active production paths | NOT triggered — all docs correctly mark XMTP_AGENT_CSW_*, VITE_AGENT_XMTP_ADDRESS, SOLANA_AUTO_POOL as retired |
+| 4 | Deploy dry-run docs treat expected 403 creator-token authority mismatch as failure | NOT triggered — smoke-deploy-dry-run.sh correctly treats 403 as PASS |
+
+### DRIFT-001
+
+**Severity**: P0 (canonical account model contradiction)
+**Domain**: Account model / wallet execution path
+**Docs inspected**:
+- `frontend/docs/waitlist-accounts-architecture.md:41` — states "the canonical path is sub-account setup, not direct owner delegation" and "the parent CSW remains the canonical asset-holding account but is not the execution address"
+**Implementation inspected**:
+- `frontend/server/_lib/wallet/executionTrack.ts:6-9` — "User-initiated frontend execution routes through the parent CSW only" via canonical4337
+- `frontend/src/lib/uniswap/walletMode.ts` — executionMode 'canonical' = parent CSW path
+- `frontend/src/wallet/canonicalWalletPolicy.ts` — CANONICAL_CSW_ADDRESS = single wallet, multiple roles
+**Contradicting docs (correct)**:
+- `docs/ACCOUNT_MODEL.md` §2 population table (line 36): "Privy embedded EOA as direct owner of parent CSW (legacy-owner-install); sub-account is flag-gated swap-only fallback"
+- `docs/4626-connection-methods.md` warning banner (line 14-20): "sub-accounts are dormant... the default user path is the parent CSW + Privy embedded-owner signer"
+- `docs/4626-connection-methods.md` §2 table (line 66): "Execution address: Canonical parent CSW"
+- `docs/4626-connection-methods.md` §12 (line 623): "User-initiated frontend execution defaults to the parent CSW via legacy-owner-install / canonical4337"
+- `frontend/docs/account-auth-invariants.md` — parent CSW = execution address
+- `AGENTS.md` (line 208): "Sponsored swaps use canonical4337 with the parent CSW as ERC-4337 sender"
+
+**Drift**: waitlist-accounts-architecture.md:41 explicitly calls sub-account setup "the canonical path" and states the parent CSW "is not the execution address." This directly contradicts executionTrack.ts which routes user-initiated frontend execution through the parent CSW only, and 5 other docs that confirm parent CSW as the default execution address. A developer following this doc would incorrectly gate frontend execution readiness on sub-account creation rather than parent-CSW embedded-owner confirmation.
+
+**Launch impact**: High — could cause incorrect readiness gating in new waitlist/onboarding code, routing execution through sub-accounts when the production path uses parent CSW + canonical4337.
+
+### DRIFT-002
+
+**Severity**: P1 (same root cause as DRIFT-001, different lines)
+**Domain**: Account model / wallet execution path / readiness gating
+**Docs inspected**:
+- `frontend/docs/waitlist-accounts-architecture.md:43` — "If the user does not yet have a CSW, route them to Base app referral flow, then resume sub-account setup on return."
+- `frontend/docs/waitlist-accounts-architecture.md:44` — "Wallet-dependent execution should stay gated until the appropriate track's readiness check succeeds — sub-account persisted + signer configured for the CSW track"
+**Implementation inspected**:
+- `AGENTS.md` (line 212): "If the user does not yet have a CSW, route them to Base app with the referral flow, then resume embedded-owner signing setup for the canonical parent CSW when they return. Do not make waitlist onboarding explicitly create a sub-account."
+- `AGENTS.md` (line 208): readiness = "canonical parent CSW recorded in profiles.csw_address, Privy embedded EOA present in profiles.primary_embedded_eoa, and the embedded EOA confirmed as an owner/signing authority for the parent CSW"
+
+**Drift**: Line 43 says "resume sub-account setup" — AGENTS.md says "resume embedded-owner signing setup for the canonical parent CSW" and explicitly says "Do not make waitlist onboarding explicitly create a sub-account." Line 44 says readiness = "sub-account persisted + signer configured" — AGENTS.md says readiness = parent CSW + embedded EOA owner confirmation. Both lines use the superseded sub-account model.
+
+**Launch impact**: Medium — new waitlist code following this doc would create sub-accounts during onboarding and gate execution on sub-account persistence, contradicting the production parent-CSW path.
+
+### DRIFT-003
+
+**Severity**: P1 (internal contradiction within a single canonical doc)
+**Domain**: Account model / wallet execution path
+**Docs inspected**:
+- `docs/4626-connection-methods.md` §3 (lines 138-169) — describes sub-account as the user-side execution path: "Sub-Account (user-side execution) → Privy embedded EOA (silent, browser) → swaps, vaults, deposits"
+- `docs/4626-connection-methods.md` §4 (lines 174-196) — describes "The Batched Ceremony" with sub-account creation as a default onboarding step (passkey popup 1)
+- `docs/4626-connection-methods.md` §10 (lines 479-505) — "Sub-account handles user-initiated transactions (swaps, vaults) via the Privy embedded EOA. The sub-account is the execution address and msg.sender on-chain."
+- `docs/4626-connection-methods.md` §11 (lines 509-604) — architecture diagram shows "PHASE 1: Sub-Account Creation" as a default onboarding step and "Execution address: sub-account" for the user-side path
+- `docs/4626-connection-methods.md` §12 (line 631) — "wallet_addSubAccount creates the sub-account (passkey popup 1) and is the readiness gate for user-initiated frontend execution"
+**Contradicting sections in the same doc**:
+- Warning banner (lines 14-20): "sub-accounts are dormant... Onboarding does not create a Base sub-account, and deploy never sends from one."
+- §2 table (line 66): "Execution address: Canonical parent CSW"
+- §12 Execution Path Invariants (line 623-624): "User-initiated frontend execution defaults to the parent CSW via legacy-owner-install / canonical4337... Optional sub-account is flag-gated and swap-only — not the deploy default"
+
+**Drift**: The warning banner was added to the top of the document to indicate the sub-account model is dormant, but the body sections (§3-§12) were not rewritten. §3 still describes sub-account as the user-side execution path. §4 still describes the batched ceremony with sub-account creation as default. §10 still says "the sub-account is the execution address and msg.sender." §11 diagram still shows sub-account creation as PHASE 1 and "Execution address: sub-account." §12 Owner Installation Invariants still says wallet_addSubAccount "is the readiness gate." The document is internally contradictory — the banner and §2/§12 invariants say parent CSW is default, but §3-§11 body text and diagrams say sub-account is default.
+
+**Launch impact**: Medium — a developer reading the body sections (not just the banner) would implement sub-account-based execution, contradicting the production parent-CSW path.
+
+### DRIFT-004
+
+**Severity**: P1 (canonical reference doc recommends superseded path)
+**Domain**: Account model / owner-mutation decision
+**Docs inspected**:
+- `docs/ACCOUNT_MODEL.md` §5.2 (lines 220-222) — "Decision. Drop 'add owner to a Base App-managed CSW' as a product flow. Use Sub Accounts + Spend Permissions for population (b)."
+- `docs/owner-mutation-decision-2026-05.md` (lines 9-13) — same recommendation: "Use Sub Accounts + Spend Permissions for that population"
+**Implementation inspected**:
+- `docs/ACCOUNT_MODEL.md` §2 population table (line 36) — for population (b): "Frontend: Privy embedded EOA as direct owner of parent CSW (legacy-owner-install); sub-account via setToOwnerAccount() is flag-gated swap-only fallback"
+- `frontend/server/_lib/wallet/executionTrack.ts:6-9` — parent CSW only for user-initiated execution
+- `AGENTS.md` (line 186): "Base sub-account = optional app-scoped execution lane; keep hidden unless a route is actively using it (flag-gated swap-only fallback, not deploy)"
+
+**Drift**: §5.2 recommends "Use Sub Accounts + Spend Permissions for population (b)" as the solution to the blocked owner-mutation path. However, the actual solution shipped was `legacy-owner-install` — installing the Privy embedded EOA as a direct owner of the parent CSW, making the parent CSW the execution address via canonical4337. Sub-accounts became the flag-gated fallback, not the recommended path. §5.2 was not updated when the model shifted. The §2 population table in the same document correctly describes the current model, creating an internal contradiction.
+
+Note: The "drop addOwnerAddress from third-party dapp" part of the §5.2 decision is still valid. Only the "Use Sub Accounts + Spend Permissions" recommendation is superseded.
+
+**Launch impact**: Medium — a developer reading §5.2 would design sub-account-based flows for Base App users instead of the legacy-owner-install path that is actually in production.
+
+### DRIFT-005
+
+**Severity**: P2 (stale file paths in canonical reference doc)
+**Domain**: File path drift / developer guidance
+**Docs inspected**:
+- `docs/4626-connection-methods.md` §5 (line 214) — references `onboardingWallet.ts` (lines 464-478)
+- `docs/4626-connection-methods.md` §5 (line 234) — references `onboardingWallet.ts` fallback chain
+- `docs/4626-connection-methods.md` §9 (line 473) — references `frontend/api/_handlers/deploy/session/_create.ts`
+- `docs/4626-connection-methods.md` §13 (line 690) — references `frontend/src/lib/wallet/onboardingWallet.ts`
+- `docs/4626-connection-methods.md` §13 (line 696) — references `frontend/server/_lib/privyXmtpSigner.ts`
+- `docs/4626-connection-methods.md` §13 (line 697) — references `frontend/server/_lib/agentRegistration.ts`
+- `docs/4626-connection-methods.md` §13 (line 698) — references `frontend/api/_handlers/deploy/session/_create.ts`
+**Actual file locations** (verified via filesystem):
+- `onboardingWallet.ts` → does NOT exist. Split into: `frontend/src/lib/wallet/onboardingWalletDelegation.ts`, `onboardingWalletPrepared.ts`, `onboardingWalletReplayable.ts`
+- `deploy/session/_create.ts` → actual: `frontend/api/_handlers/deploy/v2/session/_create.ts`
+- `privyXmtpSigner.ts` → actual: `frontend/server/_lib/wallet/privyXmtpSigner.ts`
+- `agentRegistration.ts` → actual: `frontend/server/_lib/agent/agentRegistration.ts`
+
+**Drift**: 4 file paths in 4626-connection-methods.md are stale due to file reorganization (directory moves and file splits). A developer following these paths would not find the referenced files.
+
+**Launch impact**: Low — developer friction, not a production issue. But the onboardingWallet.ts split means the line-number references (464-478, 812-916) are also invalid.
+
+### DRIFT-006
+
+**Severity**: P2 (stale file paths in operations runbook)
+**Domain**: File path drift / operator guidance
+**Docs inspected**:
+- `docs/operations/telegram-canonical-link-preservation.md` line 45 — references `frontend/src/lib/telegramMiniAppLink.ts`
+- `docs/operations/telegram-canonical-link-preservation.md` line 67 — references `frontend/src/lib/telegramWebApp.ts`
+- `docs/operations/telegram-canonical-link-preservation.md` line 110 — references `frontend/server/_lib/accountsIdentity.ts`
+- `docs/operations/telegram-canonical-link-preservation.md` line 156 — references `frontend/server/_lib/accountsIdentity.ts`
+- `docs/operations/telegram-canonical-link-preservation.md` line 157 — references `frontend/server/_lib/walletSync.ts`
+- `docs/operations/telegram-canonical-link-preservation.md` line 158 — references `frontend/server/_lib/telegramTrading.ts`
+**Actual file locations** (verified via filesystem):
+- `telegramMiniAppLink.ts` → actual: `frontend/src/lib/telegram/telegramMiniAppLink.ts`
+- `telegramWebApp.ts` → actual: `frontend/src/lib/telegram/telegramWebApp.ts`
+- `accountsIdentity.ts` → actual: `frontend/server/_lib/identity/accountsIdentity.ts`
+- `walletSync.ts` → actual: `frontend/server/_lib/wallet/walletSync.ts`
+- `telegramTrading.ts` → actual: `frontend/server/_lib/messaging/telegramTrading.ts`
+
+**Drift**: 5 file paths in telegram-canonical-link-preservation.md are stale due to directory reorganization (files moved into subdirectories). All 5 files exist at their new locations.
+
+**Launch impact**: Low — operator/developer friction when trying to locate files during Telegram link flow debugging.
+
+### DRIFT-007
+
+**Severity**: P2 (stale file path in frontend architecture doc)
+**Domain**: File path drift / developer guidance
+**Docs inspected**:
+- `frontend/docs/waitlist-accounts-architecture.md:65` — references `frontend/src/features/waitlist/WaitlistSetupWorkspace.tsx` as a file new product work should build on
+**Actual file location** (verified via filesystem):
+- `WaitlistSetupWorkspace.tsx` → does NOT exist in `frontend/src/features/waitlist/`. The directory contains: `WaitlistFlow.tsx`, `WaitlistConnectBaseApp.tsx`, `LaunchCoinCard.tsx`, `LeaderboardAccountBadge.tsx`, `LeaderboardIdentityCell.tsx`, `SubAccountOwnerInstallPanel.tsx`, `SubAccountOwnerInstallRecovery.tsx`, `WaitlistBaseAppWalletNudge.tsx`, `leaderboardUi.tsx`
+
+**Drift**: WaitlistSetupWorkspace.tsx was removed or renamed during a refactoring pass. The doc's "Legacy note" section says "The older heavy waitlist flow and its private step/hook files were removed after the thin waitlist convergence pass" — but then lists WaitlistSetupWorkspace.tsx as a file to build on, contradicting its own removal note.
+
+**Launch impact**: Low — developer friction. A developer would search for a file that no longer exists.
+
+### Drift Audit Summary
+
+| ID | Severity | Domain | Drift type |
+|----|----------|--------|------------|
+| DRIFT-001 | P0 | Account model / execution path | Doc says sub-account = canonical path; implementation says parent CSW |
+| DRIFT-002 | P1 | Account model / readiness gating | Doc says "resume sub-account setup" + gate on sub-account; AGENTS.md says "resume embedded-owner setup" + gate on parent CSW owner |
+| DRIFT-003 | P1 | Account model / execution path | 4626-connection-methods.md body (§3-§11) describes sub-account as default; own banner + §2/§12 say parent CSW |
+| DRIFT-004 | P1 | Account model / owner-mutation | ACCOUNT_MODEL.md §5.2 recommends sub-accounts; superseded by legacy-owner-install on parent CSW |
+| DRIFT-005 | P2 | File path drift | 4626-connection-methods.md: 4 stale paths (onboardingWallet.ts split, deploy/session → deploy/v2/session, privyXmtpSigner.ts, agentRegistration.ts) |
+| DRIFT-006 | P2 | File path drift | telegram-canonical-link-preservation.md: 5 stale paths (files moved into subdirectories) |
+| DRIFT-007 | P2 | File path drift | waitlist-accounts-architecture.md: WaitlistSetupWorkspace.tsx removed |
+
+### P0 Stop Condition #1 — Confirmed
+
+DRIFT-001 matches P0 stop condition #1: "docs say sub-account is default canonical/deploy account." The finding is confirmed at `frontend/docs/waitlist-accounts-architecture.md:41`. The implementation (`executionTrack.ts:6-9`) and 5 other docs confirm parent CSW is the default execution address. Per audit-only constraint, no fixes applied.
+
+### No code changes applied (audit-only)
+
+This drift audit is audit-only. No documentation or code fixes were applied. All findings are recorded for the maintainer to triage and fix.
+
+---
+
+## Launch Readiness + Deploy Dry-Run Smoke Audit
+
+Audit conducted 2026-06-26. Scope: verify-akita-prelaunch --production behavior, deploy dry-run smoke behavior, expected 403 creator-token authority mismatch, legacy dev-bypass headers, deploy status/preflight read-only behavior, contract/deploy smoke invariants, production vs localhost false blockers. Audit-only — no product/code fixes applied.
+
+### P0 Stop Condition Assessment
+
+| # | Condition | Result |
+|---|-----------|--------|
+| 1 | Production launch-readiness probe shows real non-local blockers | **TRIGGERED** — LAUNCH-001 |
+| 2 | Deploy dry-run accepts legacy bypass headers | NOT triggered — LAUNCH-005 confirms rejection |
+| 3 | Deploy status/preflight mutates chain, DB, or infrastructure | NOT triggered — LAUNCH-006 confirms read-only |
+| 4 | Dry-run smoke expected 403 behavior is missing or misclassified | NOT triggered — LAUNCH-004 confirms correct 403 PASS |
+
+### LAUNCH-001
+
+**Severity**: P0 (production launch-readiness probe — real non-local blockers)
+**Domain**: Vultr orchestrator + provisioner infrastructure / DNS routing
+**Command**: `pnpm -C frontend ops:verify-akita-prelaunch --production`
+**Exit code**: 1 (ELIFECYCLE Command failed)
+
+**Passing gates (8/15)**:
+- Platform: pipe_a_batcher, release_target_guard, hook_mainnet_canonical, vitest_pipe_a_wiring (53 tests), forge_share_oft_peer (6 tests) — ALL PASS
+- Vercel: vercel_solana_infra_status (readyForAutoRegistration=true, blockers=[]) — PASS
+- Solana: kpr_preflight_share_mesh_deferral — PASS (expected deferral)
+- DB: strategy_entitlement (ajna_sleeve, charm_active_lp, solana_bridge_strategy, solana_ovault_mesh), strategy_solana_mesh — ALL PASS
+
+**Failing gates (7/15)** — all Vultr/Vercel external infrastructure:
+- vultr_orchestrator_health: HTTP 200 but body is Vercel SPA HTML, not JSON `{ok: true}`
+- vultr_orchestrator_settle_fees: HTTP 405 (SPA doesn't accept POST /reconcile)
+- vultr_orchestrator_winner_relay: HTTP 405 (same root cause)
+- vultr_relay_entries_paused: Expected 503 action_disabled:relay_entries, got 405 (same root cause)
+- vultr_provisioner_health: payerHealthy=undefined (provisioner returns SPA HTML)
+- vultr_provisioner_dns: "Provisioner may be pointing at Vercel SPA — fix DNS A-record to Vultr host"
+- vercel_solana_reconcile_chain: HTTP 200 with success:true but status≠completed/executed≠true (upstream orchestrator returns 405)
+
+**Root cause**: Both `orchestrator.4626.fun` and `provisioner.4626.fun` are returning Vercel SPA HTML (`<div id="root"></div>`) instead of service JSON. Verified by direct curl:
+- `curl https://orchestrator.4626.fun/healthz` → 200 + HTML SPA body
+- `curl https://provisioner.4626.fun/healthz` → 200 + HTML SPA body
+
+Both domains' DNS A-records are pointing at Vercel, not the Vultr hosts where the actual orchestrator and provisioner services run. The 405 errors on POST /reconcile occur because the Vercel SPA doesn't accept POST requests.
+
+**Impact**: The Solana bridge orchestrator and route provisioner are not accessible via their public HTTPS URLs. The prelaunch probe cannot verify the full bridge chain. This is a real non-local blocker — not a localhost false blocker (confirmed: `--production` flag was used, `VITE_APP_ORIGIN` not consulted for Vultr checks).
+
+**Classification**: External infrastructure/DNS issue. The 4626 repo code is correct — the prelaunch script correctly probes the expected URLs and correctly reports the blockers. The fix is DNS A-record configuration on the Vultr/Vercel side, not a code change.
+
+**Launch impact**: Blocks launch until DNS is fixed. The platform contracts, tests, Vercel infra status, and creator entitlements are all ready. Only the Vultr orchestrator/provisioner bridge is inaccessible.
+
+### LAUNCH-002
+
+**Severity**: P2 (informational — prelaunch script not strictly read-only)
+**Domain**: Prelaunch script behavior / keeper control-plane
+**Files inspected**:
+- `frontend/scripts/ops/verify-akita-prelaunch-readiness.ts:162-223` — sends POST to orchestrator with `action: 'settle_fees'`, `action: 'winner_relay'`, `action: 'relay_entries'`
+- `frontend/scripts/ops/verify-akita-prelaunch-readiness.ts:268-282` — sends POST to `/api/keeper/solana/reconcile` with `action: 'settle_fees'`
+- `frontend/api/_handlers/keeper/_solanaReconcile.ts:239-312` — calls upstream orchestrator, writes `INSERT INTO keepr_workflow_checkpoints ... ON CONFLICT DO UPDATE`
+
+**Observation**: The prelaunch script header says "read-only by default" but it triggers:
+1. DB writes: The keeper reconcile endpoint writes to `keepr_workflow_checkpoints` (INSERT/UPDATE) to track workflow execution state.
+2. Upstream orchestrator actions: `settle_fees` and `winner_relay` are sent to the orchestrator. The endpoint returns `executed: true` when the upstream call succeeds, indicating the action was performed (not just checked).
+
+**Context**: These are keeper operations (Solana↔Base bridge fee settlement, winner relay), not deploy mutations. The endpoint is idempotent (checkpoint-based — if already processed, returns `already_processed` without re-executing). The `relay_entries` action is correctly disabled during prelaunch (expected 503 `action_disabled:relay_entries`). The script exercises the bridge to verify it's working, which is closer to "gather config and report readiness" than "perform onchain mutation as a side effect."
+
+**Assessment**: Not a P0 stop condition. The deploy status/preflight endpoints themselves (`_status.ts`, `_solanaInfraStatus.ts`) are confirmed read-only (see LAUNCH-006). The prelaunch script's bridge exercise is a keeper control-plane operation, not a deploy mutation. However, the "read-only by default" header is slightly misleading — the script does write to the DB and trigger upstream actions when the bridge is accessible.
+
+**Launch impact**: Low — informational. The DB writes are checkpoint records (not deploy state). The orchestrator actions are normal keeper operations. No deploy state is mutated.
+
+### LAUNCH-003
+
+**Severity**: P2 (local env file issue — blocked prerequisite)
+**Domain**: Local development environment / .env file
+**File**: `frontend/.env:504` — bare `ALFACLUB` line (no `=` sign)
+
+**Observation**: Line 504 of `frontend/.env` contains `ALFACLUB` without an `=` sign. When `dev-deploy-dry-run.sh` sources the .env file, the shell interprets `ALFACLUB` as a command, producing `ALFACLUB: command not found` and causing the script to exit with error.
+
+**Fix applied (local only)**: Commented out the bare line: `# ALFACLUB (bare line removed — was causing shell syntax error in dev:deploy-dry-run)`. This is a local env file fix, not a product/code fix. The .env file is not committed to git.
+
+**Launch impact**: None — local development issue only. Does not affect production.
+
+### LAUNCH-004
+
+**Severity**: Positive finding (no drift — expected behavior confirmed)
+**Domain**: Deploy dry-run smoke / 403 PASS gate
+**Command**: `pnpm -C frontend smoke:deploy-dry-run`
+**Exit code**: 0 (PASS)
+
+**Output**:
+```
+HTTP 403
+{
+  "success": false,
+  "error": "Creator token authority mismatch: active session or canonical smart wallet must control the creator token."
+}
+PASS: Dry-run handler reached creator-token authority check (auth + DB + fork plumbing OK).
+```
+
+**Verification**: The 403 "Creator token authority mismatch" is the expected PASS gate. The placeholder creator token (`0x…0003`) has no on-chain authority on the fork, so the handler correctly stops at the creator-token authority check. Reaching this 403 proves the full plumbing chain: server up → DB configured → auth passed → rate-limit passed → body parsed → fork RPC resolved → creator-authority validation reached.
+
+**Source trace**: The 403 is thrown by `assertCreatorTokenAuthority` (`_createCore.ts:2386-2411`) via `validateDeploySessionRequest` (`_createCore.ts:2593`), called from `_dryRunCore.ts:2113`. The catch block at `_dryRunCore.ts:2660-2662` returns `res.status(error.status).json({ success: false, error: error.message })` — correctly returning HTTP 403 with the error message. The smoke script's grep matches "Creator token authority mismatch" and treats it as PASS.
+
+**Launch impact**: None — this is the expected PASS behavior. Stop condition #4 NOT triggered.
+
+### LAUNCH-005
+
+**Severity**: Positive finding (no drift — bypass surface removed)
+**Domain**: Deploy dry-run auth / legacy dev-bypass header
+**Command**: `curl` with `x-deploy-dry-run-dev` header (no session token)
+**Result**: HTTP 401 "Not authenticated"
+
+**Verification**: The legacy `X-Deploy-Dry-Run-Dev` bypass header is fully rejected. The dry-run handler (`_dryRunCore.ts:2090`) calls `readDeployAuthFromRequest(req)` which only accepts:
+1. Session cookie/bearer token via `readSessionFromRequest`
+2. SIWA agent receipt via `readSiwaAgentFromRequest`
+
+No bypass header path exists in production code. The only references to `x-deploy-dry-run-dev` are:
+- `deploySessionDryRun.test.ts:465` — test that locks in the rejection ("requires authenticated deploy auth even when legacy dev-bypass header is present")
+- Comments in `mint-dev-session-token.mjs` and `smoke-deploy-dry-run.sh` explaining the removal
+
+The smoke script authenticates via a real session token minted from `AUTH_SESSION_SECRET` using the same HMAC-SHA256 format as `makeSessionToken` in `server/auth/_shared.ts`.
+
+**Launch impact**: None — security invariant intact. Stop condition #2 NOT triggered.
+
+### LAUNCH-006
+
+**Severity**: Positive finding (no drift — read-only confirmed)
+**Domain**: Deploy status/preflight read-only invariant
+**Files inspected**:
+- `frontend/api/_handlers/deploy/v2/session/_status.ts` — only imports `getDeploySessionById` (DB read). No `transitionDeploySession`, `updateDeploySession`, `sendUserOperation`, or `sendTransaction` calls.
+- `frontend/api/_handlers/deploy/_solanaInfraStatus.ts` — uses `createPublicClient` (read-only) with view-only ABI (`stateMutability: 'view'`). Probes provisioner health via HTTP GET. No mutation calls.
+- `frontend/api/_handlers/deploy/v2/session/_statusCore.ts` — DOES contain mutations (`transitionDeploySession`, `updateDeploySession`, `sendUserOperation`) but is imported by `_resume.ts` (execution path), NOT by `_status.ts` (status path).
+
+**Verification**: The deploy status endpoint (`_status.ts`) is strictly read-only. The preflight endpoint (`_solanaInfraStatus.ts`) is strictly read-only. The execution path (`_resume.ts` → `_statusCore.ts`) is correctly separated and requires its own auth + execution context.
+
+**Launch impact**: None — read-only invariant intact. Stop condition #3 NOT triggered for deploy endpoints. (See LAUNCH-002 for the prelaunch script's keeper bridge exercise, which is a separate concern.)
+
+### LAUNCH-007
+
+**Severity**: Positive finding (no drift — local-fork-only invariant confirmed)
+**Domain**: Deploy dry-run handler / mainnet safety
+**File**: `frontend/api/_handlers/deploy/v2/session/_dryRunCore.ts:2122-2124`
+
+**Verification**: The dry-run handler explicitly rejects non-local-fork RPC URLs:
+```typescript
+if (!isLocalFork) {
+  throw new DeploySessionRequestError(400, LOCAL_FORK_ONLY_ERROR)
+}
+```
+
+All `sendTransaction` calls (line 1916) and fork manipulation calls (`anvil_reset`, `anvil_impersonateAccount`, `anvil_snapshot`) go to the local Anvil fork only. No mainnet mutation is possible via the dry-run endpoint.
+
+**Launch impact**: None — mainnet safety invariant intact.
+
+### LAUNCH-008
+
+**Severity**: Positive finding (supplementary gates clean)
+**Domain**: Typecheck + lint
+**Commands**:
+- `pnpm -C frontend typecheck` → exit 0 (tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json)
+- `pnpm -C frontend lint` → exit 0 (eslint . --ext ts,tsx --max-warnings 0)
+
+**Launch impact**: None — code quality gates clean.
+
+### Launch Audit Summary
+
+| ID | Severity | Domain | Finding |
+|----|----------|--------|---------|
+| LAUNCH-001 | P0 | Vultr orchestrator + provisioner DNS | 7 prelaunch blockers — orchestrator.4626.fun and provisioner.4626.fun return Vercel SPA HTML; DNS A-records point at Vercel not Vultr; POST /reconcile returns 405 |
+| LAUNCH-002 | P2 | Prelaunch script read-only behavior | Script triggers DB writes (keepr_workflow_checkpoints) + orchestrator actions (settle_fees, winner_relay) via keeper reconcile; not strictly read-only but these are keeper operations, not deploy mutations |
+| LAUNCH-003 | P2 | Local .env file | Bare `ALFACLUB` line at .env:504 blocks dev:deploy-dry-run; fixed locally |
+| LAUNCH-004 | Positive | Dry-run smoke 403 PASS gate | Confirmed: HTTP 403 "Creator token authority mismatch" correctly returned and treated as PASS |
+| LAUNCH-005 | Positive | Legacy dev-bypass header | Confirmed: `x-deploy-dry-run-dev` header rejected (401); no bypass surface in production code |
+| LAUNCH-006 | Positive | Deploy status/preflight read-only | Confirmed: _status.ts and _solanaInfraStatus.ts are read-only; _statusCore.ts mutations are in _resume.ts execution path only |
+| LAUNCH-007 | Positive | Dry-run local-fork-only | Confirmed: _dryRunCore.ts:2122 rejects non-local-fork RPC; all sendTransaction calls go to Anvil fork only |
+| LAUNCH-008 | Positive | Typecheck + lint | Both exit 0 — clean |
+
+### P0 Stop Condition #1 — Confirmed
+
+LAUNCH-001 matches P0 stop condition #1: "production launch-readiness probe shows real non-local blockers." The `--production` flag was used (not a localhost false blocker). 7 of 15 gates fail, all tracing to Vultr orchestrator/provisioner DNS pointing at Vercel SPA. Platform contracts, tests, Vercel infra status, Solana share mesh, and creator entitlements all PASS. Per audit-only constraint, no fixes applied.
+
+### No code changes applied (audit-only)
+
+This launch readiness audit is audit-only. No product/code fixes were applied. The local .env fix (LAUNCH-003) was a local env file correction to unblock the dry-run smoke, not a product code change. All findings are recorded for the maintainer to triage.

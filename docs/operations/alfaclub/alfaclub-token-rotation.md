@@ -9,7 +9,7 @@
 
 - [`alfaclub-auth-hardening.md`](./alfaclub-auth-hardening.md) — single-writer
   invariant, health endpoint, GitHub monitor.
-- [`alfaclub-gmeow-outage-postmortem-2026-05-02.md`](./alfaclub-gmeow-outage-postmortem-2026-05-02.md) —
+- [`alfaclub-gmeow-outage-postmortem-2026-05-02.md`](../incidents/alfaclub-gmeow-outage-postmortem-2026-05-02.md) —
   Cloudflare proxy + token cliff context.
 - [`alfaclub-creative-architecture.md`](./alfaclub-creative-architecture.md) —
   what must **not** touch auth (Pinata/Railway).

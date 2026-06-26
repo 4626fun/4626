@@ -12,5 +12,7 @@ Superseded runbooks kept for audit and incident archaeology. **Do not use for cu
 ## Archived pages
 
 - [Adding a Privy embedded EOA as CSW owner (legacy flow)](/operations/archive/adding-a-privy-provided-embedded-eoa-as-an-owner-of-a-zora-csw-on-base)
+- [CRE keeper rollout (historical)](/operations/archive/cre-keeper-rollout)
+- [Sub-account alignment contract (historical)](/operations/archive/arch-b-sub-account-alignment-contract)
 
 When retiring a runbook, move it under `docs/operations/archive/` (or tag `status: historical`) and link the replacement from this index.

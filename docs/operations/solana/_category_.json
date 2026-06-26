@@ -1,0 +1,9 @@
+{
+  "label": "Solana & share mesh",
+  "position": 5,
+  "link": {
+    "type": "generated-index",
+    "title": "Solana & share mesh",
+    "description": "Share mesh policy, provisioning, hooks, and bridge naming."
+  }
+}

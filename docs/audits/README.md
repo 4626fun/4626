@@ -3,40 +3,19 @@ title: Audits
 sidebar_position: 4
 ---
 
-# Audits (4626)
+# Audits
 
-Security and trust artifacts for the public docs audience. These are **not** a substitute for an external smart-contract audit.
+Published security and trust artifacts. For working papers and in-progress reviews, see `docs/_internal/` in the repo (not on this site).
 
 | Doc | Purpose |
 |-----|---------|
-| [bug-audit-worksheet.md](./bug-audit-worksheet.md) | **Start here** for bug audits — lane order, file checklists, tests, regression signals. |
-| [system.md](./system.md) | Protocol/system economic and governance review (long-form). |
-| [general-audit-2026-05.md](./general-audit-2026-05.md) | Consolidated audit findings and remediation guidance. |
-| [charm/](./charm/) | Charm V2 adversarial audit, executive brief, and master Q&A. |
-| [codex/](./codex/) | Codex security review records and archival finding exports. |
-| [4626/acceptances/L-32-L-33-audit-reconciliation.md](./4626/acceptances/L-32-L-33-audit-reconciliation.md) | Current acceptance/reconciliation log for recent audit follow-ups. |
-| [x-ray/](./x-ray/) | Internal x-ray security review framework. Live contract audit checklist in `review-todo.md`. |
-| [x-ray/contract-audit-pass-2026-06.md](./x-ray/contract-audit-pass-2026-06.md) | **June 2026 x-ray contract audit pass completed** ("for all" P0/P1 review + P2 tests + follow-ups). Full checklist execution, sizes/Slither/tests/invariants/Codex alignment. Follow-ups: hardened CLM size guard (with PR policy), SC hygiene in security-local (size + canonical terms), new deploy retry test, lint fixes, re-run verification (exit 0, clean). See updated `review-todo.md` (all [x]) and `docs/operations/contract-size-gate.md`. |
-| [token-image/](./token-image/) | Token-image renderer research and breakout analysis notes. |
-| [../security/mutable-surface-inventory.md](../security/mutable-surface-inventory.md) | Maintainer inventory of write-capable contract/API/schema surfaces and required guardrails/rollback posture. |
-| [../security/historical-risk-review.md](../security/historical-risk-review.md) | Quarterly historical-risk checklist for env/authority/schema/runbook drift across long-lived systems. |
-| [../security/transactional-integrity-audit.md](../security/transactional-integrity-audit.md) | Transaction-boundary inventory for multi-write server mutations, with prioritized atomicity backlog. |
+| [Charm audits](./charm/) | Charm V2 adversarial review and executive brief |
+| [Codex reconciliation](./codex/AUDIT_RECONCILIATION) | Codex findings and remediation status |
+| [Ajna findings](./codex/audit_findings_factories_batchers_ajna) | Factory/batcher/Ajna audit export |
+| [Token image research](./token-image/) | Renderer research notes |
+| [x-ray contract pass (June 2026)](./x-ray/contract-audit-pass-2026-06.md) | Latest full contract checklist execution |
+| [CreatorVault business logic audit](./creatorvault-business-logic-core-structure-audit.md) | Lane terminology and completion invariants |
 
-Internal process runbooks (supply-chain setup, advisories triage, production parity checklists) are intentionally kept in the internal docs lane.
+**Related (Security lane):** [mutable surface inventory](../security/mutable-surface-inventory.md) · [historical risk review](../security/historical-risk-review.md)
 
-**Automation**
-
-- `.github/workflows/security-scanning.yml` — gitleaks (incremental), pnpm audit summaries (root, `frontend/`, `kpr/`, `apps/docs-site/`), blocking Semgrep on `frontend/api` + `frontend/server/_lib` + `frontend/packages/server-core/src`, Slither (report-only).
-- `.github/workflows/security-scanning.yml` — launch branches (`launch/*`) also run a **blocking** Slither gate that fails on **high-impact** findings.
-- `.github/workflows/dependency-review.yml` — on PRs, blocks **new** **high** or **critical** vulnerabilities in **runtime and development** dependencies.
-- `.github/workflows/test.yml` — Forge tests, frontend lint/typecheck/tests, **strategy-reallocator-guards** (KPR pass-loop + Foundry rebalance wiring).
-- `gitleaks.toml` — allowlists for vendored snapshots and test/doc noise.
-- `slither.config.json` — `filter_paths` to reduce vendored noise in Slither reports.
-
-**Local**
-
-- `pnpm security:local` at repo root — `scripts/security-audit-local.sh`.
-
-**Supply chain**
-
-- [`.github/dependabot.yml`](https://github.com/wenakita/4626/blob/main/.github/dependabot.yml) — weekly npm updates for `/`, `/frontend`, and `/kpr`; weekly Bun updates for `kpr/kpr-workflows` packages that commit `bun.lock`; monthly GitHub Actions bumps.
+**Automation:** `.github/workflows/security-scanning.yml`, `pnpm security:local` at repo root.

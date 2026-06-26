@@ -1,0 +1,9 @@
+{
+  "label": "Platform & database",
+  "position": 9,
+  "link": {
+    "type": "generated-index",
+    "title": "Platform & database",
+    "description": "Domains, Supabase, schema, and database maintenance."
+  }
+}

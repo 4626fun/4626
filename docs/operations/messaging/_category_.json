@@ -1,0 +1,9 @@
+{
+  "label": "Telegram & XMTP",
+  "position": 10,
+  "link": {
+    "type": "generated-index",
+    "title": "Telegram & XMTP",
+    "description": "Telegram link preservation and XMTP browser canary."
+  }
+}

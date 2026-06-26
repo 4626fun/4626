@@ -1,0 +1,8 @@
+{
+  "label": "Incidents",
+  "position": 11,
+  "link": {
+    "type": "generated-index",
+    "title": "Incident postmortems"
+  }
+}

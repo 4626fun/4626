@@ -22,164 +22,51 @@ function category(
   };
 }
 
-/** Curated Ops sidebar — subfolders autogenerate; root runbooks grouped by lane. */
+/** Ops sidebar — one autogen lane per subfolder under docs/operations/. */
 export function buildOperationsSidebarItems(): SidebarItemConfig[] {
   return [
     doc('operations/index', 'Overview'),
 
-    category('Deploy & release', [autogen('operations/deployment')], 'operations/deployment/index'),
+    category(
+      'Deploy & release',
+      [autogen('operations/deployment')],
+      'operations/deployment/index',
+    ),
 
     category(
       'Automation & keepers',
-      [
-        autogen('operations/automation'),
-        autogen('operations/kpr'),
-        doc('operations/keeper-http-api'),
-        doc('operations/vercel-cron-production-fixes'),
-        doc('operations/control-plane-operator-cheatsheet'),
-        doc('operations/control-plane-verification'),
-        doc('operations/burn-stream-monitoring'),
-        doc('operations/vault-strategy-reallocation'),
-      ],
+      [autogen('operations/automation'), autogen('operations/kpr')],
       'operations/automation/index',
     ),
 
-    category(
-      'Wallet & signing',
-      [
-        doc('operations/owner-install-reference-methods'),
-        doc('operations/csw-recovery-playbook'),
-        doc('operations/sponsored-canonical-swap-pattern'),
-        doc('operations/coinbase-smart-wallet-capabilities'),
-        doc('operations/privy-wallet-lanes'),
-        doc('operations/relay-owner-mutation-kit-guide'),
-        doc('operations/relay-sponsored-owner-mutation-flow'),
-        doc('operations/base-app-session-key-relay-part1-recipe'),
-        doc('operations/coinbase-inapp-signaturewrapper-bug'),
-        doc('operations/base-app-icon-refresh'),
-      ],
-    ),
+    category('Wallet & signing', [autogen('operations/wallet')]),
 
-    category(
-      'Vault & greenfield',
-      [
-        doc('operations/greenfield-launch-readiness'),
-        doc('operations/oracle-post-deploy-qa'),
-        doc('operations/creator-strategy-features'),
-        doc('operations/impairment-side-pocket-lifecycle-drill'),
-        doc('operations/creator-oVault-vault-gaps-v2'),
-        doc('operations/ovault-module-immutability-and-recovery'),
-        doc('operations/contract-size-gate'),
-        doc('operations/ajna-vault-manager-p0-runbook'),
-        doc('operations/yearn-inspired-p0-role-policy-apr-runbook'),
-      ],
-    ),
+    category('Vault & greenfield', [autogen('operations/vault')]),
 
-    category(
-      'Solana & share mesh',
-      [
-        doc('operations/solana-share-mesh-lottery-policy'),
-        doc('operations/solana-share-mesh-budget-paths'),
-        doc('operations/solana-share-mesh-creator-provisioning'),
-        doc('operations/solana-bridge-naming-invariant'),
-        doc('operations/creator-share-hook-mainnet-upgrade'),
-        doc('operations/akita-solana-share-mesh-audit'),
-      ],
-    ),
+    category('Solana & share mesh', [autogen('operations/solana')]),
 
-    category(
-      'AKITA (grandfathered)',
-      [
-        doc('operations/akita-full-stack-prelaunch'),
-        doc('operations/akita-keeper-stack-activation'),
-      ],
-    ),
+    category('AKITA (grandfathered)', [autogen('operations/akita')]),
 
-    category(
-      'AlfaClub, Hermit & agents',
-      [
-        autogen('operations/alfaclub'),
-        doc('operations/alfaclub-counter-trade-production-runbook'),
-        doc('operations/alfaclub-auth-hardening'),
-        doc('operations/alfaclub-creative-architecture'),
-        doc('operations/alfaclub-hermit-personalization'),
-        doc('operations/alfaclub-token-rotation'),
-        doc('operations/agent-lane-policy-matrix'),
-        doc('operations/hermit-pinata-agent-rebuild'),
-        doc('operations/virtuals-arena-railway-runbook'),
-        doc('operations/virtuals-arena-staging-checklist'),
-        doc('operations/virtuals-acp-bridge'),
-        doc('operations/acp-daily-market-news-automation'),
-        doc('operations/counter-trade-code-map'),
-        doc('operations/bot-registry'),
-      ],
-    ),
+    category('AlfaClub, Hermit & agents', [autogen('operations/alfaclub')]),
 
-    category(
-      'Analytics & Explore',
-      [
-        doc('operations/explore-metrics-operations'),
-        doc('operations/dune-analytics-runbook'),
-        doc('operations/looker-studio-widget-recipe'),
-        doc('operations/ethos-canonical-score-cache'),
-        doc('operations/zora-profiles-refresh-runbook'),
-        doc('operations/ethos-chart-system-overview'),
-        doc('operations/ethos-chart-ops-guide'),
-        doc('operations/chart-query-review-2026'),
-      ],
-    ),
+    category('Analytics & Explore', [autogen('operations/analytics')]),
 
-    category(
-      'Platform & database',
-      [
-        doc('operations/domain-setup'),
-        doc('operations/supabase-setup'),
-        doc('operations/supabase-schema-condensation'),
-        doc('operations/supabase-zora-db-optimization'),
-        doc('operations/supabase-chart-optimization'),
-        doc('operations/dead-tables-analysis-2026-05'),
-      ],
-    ),
+    category('Platform & database', [autogen('operations/platform')]),
 
     category(
       'Telegram & XMTP',
-      [
-        doc('operations/telegram-canonical-link-preservation'),
-        doc('operations/xmtp-browser-connect-canary'),
-        autogen('operations/agent-runtime'),
-      ],
+      [autogen('operations/messaging'), autogen('operations/agent-runtime')],
       'operations/deployment/eliza-runtime',
     ),
 
     category('Services', [autogen('operations/services')]),
 
-    category(
-      'Incidents',
-      [doc('operations/alfaclub-gmeow-outage-postmortem-2026-05-02')],
-    ),
+    category('Incidents', [autogen('operations/incidents')]),
 
     category(
       'Archive & retired',
-      [
-        autogen('operations/archive'),
-        doc('operations/cre-keeper-rollout', 'CRE keeper rollout (historical)'),
-        doc('operations/arch-b-sub-account-alignment-contract', 'Sub-account alignment (historical)'),
-      ],
+      [autogen('operations/archive')],
       'operations/archive/index',
-    ),
-
-    category(
-      'Internal & tracking',
-      [
-        doc('operations/red-ci-tracking'),
-        doc('operations/pragma-pinning-todo'),
-        doc('operations/obsidian-vault-pipeline'),
-        doc('operations/ethos-chart-sql-snippets'),
-        doc('operations/ethos-chart-unified-design-note'),
-        doc('operations/supabase-schema-duplication-report'),
-        doc('operations/supabase-native-chart-recommendations'),
-        doc('operations/hermit-pinata-spanish'),
-      ],
     ),
   ];
 }

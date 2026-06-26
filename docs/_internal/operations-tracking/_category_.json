@@ -1,0 +1,9 @@
+{
+  "label": "Internal & tracking",
+  "position": 13,
+  "link": {
+    "type": "generated-index",
+    "title": "Internal & tracking",
+    "description": "CI tracking, design notes, and work-in-progress operator docs."
+  }
+}

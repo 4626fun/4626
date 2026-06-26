@@ -1,0 +1,9 @@
+{
+  "label": "Analytics & Explore",
+  "position": 8,
+  "link": {
+    "type": "generated-index",
+    "title": "Analytics & Explore",
+    "description": "Dune, Ethos, Explore metrics, and chart operations."
+  }
+}

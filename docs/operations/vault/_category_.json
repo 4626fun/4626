@@ -1,0 +1,9 @@
+{
+  "label": "Vault & greenfield",
+  "position": 4,
+  "link": {
+    "type": "generated-index",
+    "title": "Vault & greenfield runbooks",
+    "description": "Deploy readiness, oracle QA, strategy features, and vault modules."
+  }
+}

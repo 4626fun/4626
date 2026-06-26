@@ -632,3 +632,322 @@ All 8 gates run on 2026-06-25. No product/code fixes were applied before or afte
 - **Gate 4 (guard:api-nonv1-hardening)**: Confirms `_backtest-run.ts:114` uses `readJsonBody` instead of `readBoundedJsonObjectBody` — an unbounded body read on a mutating endpoint. This is an additional hardening gap beyond the in-memory rate limit noted in APIAUTH-014. The guard script is the authoritative check for this pattern.
 - **Gate 5 (accountsWalletRateLimitHardening)**: Tests for `/accounts/link`, `/accounts/unlink`, and `/wallet/sync` fail because the handlers return 503 (DB not configured) or 401 (auth before rate limit) instead of 429 when rate-limited. This suggests the rate-limit check ordering in these handlers may not match the test expectations, or the test mock setup does not match the handler's dependency path. Relates to APIAUTH-004 and APIAUTH-010.
 - **Gate 8 (paymasterRateLimit)**: The paymaster handler returns JSON-RPC error code `-32000` (generic) instead of `-32005` (rate-limit specific) when the limiter rejects. Relates to APIAUTH-008.
+
+---
+
+## Wallet/Identity Pass — Validation Log (2026-06-25)
+
+### Inspected files
+
+**Docs and rules (Phase 0 excerpts — targeted reads, not full AGENTS.md)**:
+- `docs/ACCOUNT_MODEL.md` — full read (23,599 chars)
+- `docs/4626-connection-methods.md` — full read (25,571 chars)
+- `.cursor/rules/ERC-4337-Wallet-Invariants.mdc` — full read (6,305 chars)
+- `.cursor/rules/csw-agent-lifecycle.mdc` — full read (12,880 chars)
+
+**Server wallet libs**:
+- `frontend/src/wallet/canonicalWalletPolicy.ts` — full read (6,075 chars)
+- `frontend/server/_lib/wallet/executionTrack.ts` — full read (3,566 chars)
+- `frontend/server/_lib/wallet/walletSync.ts` — full read (1,058 lines, 40,923 chars)
+- `frontend/server/_lib/wallet/walletMapping.ts` — full read (19,084 chars)
+- `frontend/server/_lib/wallet/canonicalCswPersistence.ts` — full read (2,478 chars)
+- `frontend/server/_lib/wallet/disconnectExternalWallet.ts` — full read (3,889 chars)
+- `frontend/server/_lib/wallet/canonicalCswEnv.ts` — full read (3,614 chars)
+- `frontend/server/_lib/wallet/canonicalCswDelegation.ts` — full read (871 lines, 30,578 chars)
+- `frontend/server/_lib/identity/accountsIdentity.ts` — full read (19,149 + 7,936 chars)
+- `frontend/packages/server-core/src/profileIdForPrivyUser.ts` — full read (3,333 chars)
+
+**API handlers**:
+- `frontend/api/_handlers/wallet/_sync.ts` — full read (4,814 chars)
+- `frontend/api/_handlers/wallet/_confirm-owner.ts` — full read (4,052 chars)
+- `frontend/api/_handlers/wallet/_prepare-add-privy-owner.ts` — full read (3,424 chars)
+- `frontend/api/_handlers/wallet/_disconnect-external.ts` — full read (3,947 chars)
+
+**Frontend swap/tx**:
+- `frontend/src/lib/tx/txRouter.ts` — full read (1,218 lines, 42,221 chars)
+- `frontend/src/lib/uniswap/walletMode.ts` — full read (1,049 chars)
+- `frontend/src/lib/uniswap/canonicalSignerGate.ts` — full read (5,782 chars)
+- `frontend/src/lib/swap/resolveSwapBalanceOwner.ts` — full read (1,332 chars)
+- `frontend/src/hooks/useSwapExecution.ts` — partial read (200 lines, 7,789 chars)
+- `frontend/src/pages/Swap.tsx` — targeted grep (executionMode, canonicalAddress, signerAddress, useExternalEoaCanonicalSigner)
+
+### Commands and exit codes
+
+| # | Command | Exit | Result |
+|---|---------|------|--------|
+| 1 | `pnpm -C frontend guard:canonical-csw` | 0 | PASS — no retired CSW env keys, no stray pre-migration literals, no retired env reads outside canonicalCswEnv.ts |
+| 2 | `pnpm -C frontend exec vitest run src/wallet/canonicalWalletPolicy.test.ts` | 0 | PASS — canonical wallet policy tests green |
+| 3 | `pnpm -C frontend exec vitest run src/lib/tx/txRouter.test.ts` | 0 | PASS — txRouter routing and canonical enforcement tests green |
+| 4 | `pnpm -C frontend exec vitest run src/lib/uniswap/canonicalSignerGate.test.ts` | 0 | PASS — canonical signer gate evaluation tests green |
+| 5 | `pnpm -C frontend exec vitest run src/lib/swap/resolveSwapBalanceOwner.test.ts` | 0 | PASS — swap balance owner resolution tests green |
+| 6 | `pnpm -C frontend exec vitest run api/__tests__/walletSync.test.ts api/__tests__/walletSyncEndpoint.test.ts api/__tests__/canonicalCswPersistence.test.ts api/__tests__/repointCanonicalCsw.test.ts api/__tests__/authPrivyWalletSync.test.ts` | 0 | PASS — all 5 wallet sync / canonical CSW persistence / repoint / auth Privy wallet sync test suites green |
+
+### P0 stop-condition assessment
+
+All 4 P0 stop conditions checked and cleared (no stop triggered):
+
+1. **Sponsored canonical swaps routing from non-parent-CSW under canonical4337** — NOT triggered. `sendViaCanonical4337` sender is always `resolveCanonicalIdentityAddress(context)` which maps to the canonical CSW. `assertCanonicalPolicyContext` blocks non-canonical execution addresses.
+2. **Fallback signer path for CANONICAL_CSW_ADDRESS without execution signer policy** — NOT triggered. `Swap.tsx:409` `!isCanonicalCsw(canonicalAddress)` blocks external EOA fallback for platform CSW. `sendViaCanonical4337:700` hard-blocks non-execution signers. Defense-in-depth gap noted in WALLET-002 but no current exploitable path.
+3. **Wallet sync writing Privy identity onto tombstoned profiles** — NOT triggered. `walletSync.ts` and `resolvePrimaryProfileIdForPrivyUser` both follow tombstone pointers. Fallback path gap noted in WALLET-001 but primary resolver is correct.
+4. **External EOA frozen as primary when embedded/canonical ready** — NOT triggered. `resolveProfilesPrimaryWalletColumn` returns embedded when canonical+embedded present. UPDATE path overwrites external EOA. Canonical-absent edge case noted in WALLET-004.
+
+### Blockers
+
+None. All 6 test suites and the canonical-csw guard pass. All inspected files were found and read successfully. No P0 stop conditions triggered.
+
+### Findings issued
+
+| ID | Severity | Domain | Summary |
+|----|----------|--------|---------|
+| WALLET-001 | Medium | Identity / tombstone integrity | `recoverProfileIdFromPrivyHints` does not follow tombstone pointers — fallback path can write delegation state onto tombstoned profiles |
+| WALLET-002 | Low | Canonical CSW execution signer policy | `assertCanonicalPolicyContext` uses broader `isAllowedCanonicalSigner` for sendCalls/canonicalDirect, missing execution-signer hard block present in canonical4337 |
+| WALLET-003 | Low | Wallet API rate limiting | All 4 wallet handlers use in-memory `checkRateLimit` instead of `checkDurableRateLimit` |
+| WALLET-004 | Low | Wallet sync / primary_wallet precedence | `resolveProfilesPrimaryWalletColumn` requires canonical for embedded to win over activeOwner — contradicts comment and disconnect logic |
+
+---
+
+## Race-Condition Audit Pass — 2026-06-26
+
+### Scope
+
+Audit-only pass targeting race conditions and async/concurrent-flow hazards across:
+- Client auth/session restoration (`useSiweAuth.ts`, `useAccountMe.ts`, `routeGuards.tsx`, `RootRouter.tsx`)
+- Waitlist flow (`WaitlistFlow.tsx`, `waitlistHandoff.ts`)
+- Telegram link (`TelegramLink.tsx`, `_link-complete.ts`, `_link-ready.ts`, `telegramTrading.ts`)
+- Server identity/wallet (`walletSync.ts`, `accountsIdentity.ts`, `emailCollisionAdoption.ts`, `waitlistSchema.ts`)
+- Deploy-session state machine (`deploySessions.ts`, `_createCore.ts`, `_statusCore.ts`, `_sessionAccess.ts`, `workflow/runner.ts`)
+- Swap/paymaster (`useSwapExecution.ts`, `coinbaseErc4337.ts`, `_paymaster.ts`)
+- Keeper/backtest/counter-trade (`counterTradeTicker.ts`, `counterTradeRunner.ts`, `counterTradeStore.ts`, `backtestJobs.ts`, `kpr/runner.ts`, `kpr/solana-keeper-orchestrator.ts`)
+
+### P0 stop-condition assessment
+
+No P0 stop conditions triggered. All findings are Low or Low-Medium severity. No race condition was found that could cause fund loss, account takeover, or double-spend.
+
+1. **Deploy session double-transition / data corruption** — NOT triggered. `transitionDeploySession` uses CAS (`WHERE step = fromStep RETURNING id`). Postgres row-level locking serializes concurrent transitions. Only the first matches; the second gets 0 rows. RACE-001 notes the missing lock-owner check but confirms CAS prevents corruption.
+2. **Cross-tab swap double-spend / nonce corruption** — NOT triggered. `readAnyPendingUserOpHashForWallet` uses sessionStorage (per-tab), but the CDP bundler/paymaster is the final arbiter and rejects nonce conflicts. RACE-002 notes the cross-tab coordination gap but confirms no fund loss path.
+3. **Email collision adoption profile corruption** — NOT triggered. `mergePlaceholderProfiles` is not transactional, but `ON CONFLICT DO NOTHING` and idempotent UPDATEs provide informal safety. `assertNoEmailPrivyCollision` blocks cross-user collisions. RACE-003 notes the missing transaction wrapper.
+4. **Counter-trade tick overlap / double execution** — NOT triggered. `counterTradeTicker.ts` `inFlight` boolean guard with `finally` cleanup ensures single-executor invariant. RACE-004 is informational only.
+
+### Findings issued
+
+| ID | Severity | Domain | Summary |
+|----|----------|--------|---------|
+| RACE-001 | Low-Medium | Deploy session / concurrent worker transitions | `transitionDeploySession` does not verify `lock_owner` — status-poll transitions can bypass active workflow-runner leases, causing spurious `CONCURRENT_MODIFICATION` failures (CAS prevents corruption) |
+| RACE-002 | Low | Swap execution / ERC-4337 nonce coordination | `readAnyPendingUserOpHashForWallet` uses sessionStorage (per-tab) — cross-tab concurrent swaps from same CSW are uncoordinated; bundler rejection prevents fund loss but UX is confusing |
+| RACE-003 | Low | Identity / email collision profile merge | `mergePlaceholderProfiles` SELECT-then-iterate-UPDATE is not wrapped in a DB transaction — concurrent same-Privy-user adoptions could race; `ON CONFLICT DO NOTHING` and idempotent UPDATEs provide informal safety |
+| RACE-004 | Very Low (informational) | AlfaClub counter-trade / multi-actor enforcement | Room 1659 `listActiveCounterTradeOptIns` → `enforceSingleActiveCounterTradeActor` has a benign TOCTOU; `inFlight` guard and idempotent enforcement make it self-healing |
+
+### Patterns verified as safe (no finding)
+
+10 concurrent/async patterns were inspected and confirmed safe:
+1. Deploy session lease acquisition (`claimDeploySessionLease`) — atomic UPDATE with expiry check
+2. Telegram link-start token consumption — `ON CONFLICT DO NOTHING` + conditional UPDATE
+3. Counter-trade event dedup — `ON CONFLICT DO NOTHING RETURNING`
+4. useSiweAuth shared session fetch — module-level in-flight Promise dedup
+5. KPR runner — single-workflow CLI, no concurrency
+6. Solana keeper orchestrator — stateless HTTP dispatch
+7. Counter-trade ticker overlap guard — `inFlight` boolean with `finally` cleanup
+8. Deploy session transition CAS — `WHERE step = fromStep RETURNING id`
+9. walletSync.ts `withDbTransaction` — proper BEGIN/COMMIT with rollback
+10. Swap submit epoch ref — stale async result discard + AbortController
+
+### Blockers
+
+None. All findings are Low or Low-Medium. No P0 stop conditions triggered. No code changes applied (audit-only).
+
+---
+
+## Documentation-vs-Implementation Drift Audit — 2026-06-26
+
+### Inspected files
+
+**Documentation (read complete or targeted sections)**:
+- `docs/audits/deep-risk-audit-2026-06-endpoint-matrix.md` — full read (lines 1-200)
+- `docs/ACCOUNT_MODEL.md` — full read (lines 1-380)
+- `docs/4626-connection-methods.md` — full read (lines 1-718)
+- `docs/owner-mutation-decision-2026-05.md` — full read (lines 1-96)
+- `docs/sub-accounts-baseapp-design.md` — full read (lines 1-200+)
+- `docs/arch-b-sub-account-design-addendum.md` — full read (lines 1-200+)
+- `docs/architecture-b-design.md` — full read (lines 1-200+)
+- `docs/security/mutable-surface-inventory.md` — full read (lines 1-100)
+- `docs/security/historical-risk-review.md` — full read (lines 1-58)
+- `docs/operations/sponsored-canonical-swap-pattern.md` — full read (lines 1-120)
+- `docs/operations/solana-share-mesh-lottery-policy.md` — full read (lines 1-100)
+- `docs/operations/solana-share-mesh-budget-paths.md` — full read (lines 1-100)
+- `docs/operations/telegram-canonical-link-preservation.md` — full read (lines 1-200+)
+- `frontend/docs/account-auth-invariants.md` — full read (lines 1-200)
+- `frontend/docs/waitlist-accounts-architecture.md` — full read (lines 1-97)
+
+**Implementation (read complete or targeted sections)**:
+- `frontend/server/_lib/wallet/executionTrack.ts` — full read (lines 1-100)
+- `frontend/src/lib/uniswap/walletMode.ts` — full read (lines 1-30)
+- `frontend/src/wallet/canonicalWalletPolicy.ts` — full read (lines 1-200)
+- `frontend/api/_handlers/_routes.ts` — full read (lines 1-220)
+- `frontend/api/_handlers/_routes.v1.ts` — full read (lines 1-258)
+- `frontend/api/_handlers/_routes.telegram.ts` — full read
+- `frontend/scripts/ops/verify-akita-prelaunch-readiness.ts` — full read (lines 1-548)
+- `frontend/scripts/smoke-deploy-dry-run.sh` — full read (lines 1-78)
+
+**AGENTS.md** — targeted grep only (retired envs, sub-account defaults, agent CSW references)
+
+**Filesystem verification** — 20 file paths checked for existence across 3 docs
+
+### Findings
+
+| ID | Severity | Domain | Drift type |
+|----|----------|--------|------------|
+| DRIFT-001 | P0 | Account model / execution path | waitlist-accounts-architecture.md:41 says sub-account = canonical path; executionTrack.ts says parent CSW only |
+| DRIFT-002 | P1 | Account model / readiness gating | waitlist-accounts-architecture.md:43-44 says "resume sub-account setup" + gate on sub-account; AGENTS.md says "resume embedded-owner setup" + gate on parent CSW owner |
+| DRIFT-003 | P1 | Account model / execution path | 4626-connection-methods.md body (§3-§11) describes sub-account as default; own banner + §2/§12 say parent CSW |
+| DRIFT-004 | P1 | Account model / owner-mutation | ACCOUNT_MODEL.md §5.2 recommends sub-accounts for population (b); superseded by legacy-owner-install on parent CSW |
+| DRIFT-005 | P2 | File path drift | 4626-connection-methods.md: 4 stale paths (onboardingWallet.ts split, deploy/session → deploy/v2/session, privyXmtpSigner.ts, agentRegistration.ts) |
+| DRIFT-006 | P2 | File path drift | telegram-canonical-link-preservation.md: 5 stale paths (files moved into subdirectories) |
+| DRIFT-007 | P2 | File path drift | waitlist-accounts-architecture.md:65: WaitlistSetupWorkspace.tsx removed |
+
+### P0 Stop Condition Assessment
+
+| # | Condition | Result |
+|---|-----------|--------|
+| 1 | Docs say sub-account is default canonical/deploy account | **TRIGGERED** — DRIFT-001 |
+| 2 | Docs describe separate agent CSW as canonical 4626 account | NOT triggered |
+| 3 | Runbooks instruct retired envs as active production paths | NOT triggered |
+| 4 | Deploy dry-run docs treat expected 403 as failure | NOT triggered |
+
+### No code changes applied (audit-only)
+
+No documentation or code fixes were applied. All 7 DRIFT findings are recorded for the maintainer to triage and fix.
+
+---
+
+## Launch Readiness + Deploy Dry-Run Smoke Audit — 2026-06-26
+
+### Commands executed
+
+| # | Command | Exit code | Result |
+|---|---------|-----------|--------|
+| 1 | `pnpm -C frontend ops:verify-akita-prelaunch --production` | 1 | 7/15 blockers (Vultr/Vercel external infra); platform + entitlements PASS |
+| 2 | `pnpm -C frontend dev:deploy-dry-run` | 0 (server started) | Anvil :8545 + Vite :5174 up; initial failure on bare .env:504 fixed locally |
+| 3 | `pnpm -C frontend smoke:deploy-dry-run` | 0 (PASS) | HTTP 403 "Creator token authority mismatch" — expected PASS gate |
+| 4 | `curl -X POST … -H 'x-deploy-dry-run-dev: …'` (no auth token) | 401 | Legacy bypass header rejected — "Not authenticated" |
+| 5 | `pnpm -C frontend typecheck` | 0 | tsc --noEmit (app + node) clean |
+| 6 | `pnpm -C frontend lint` | 0 | eslint clean, 0 warnings |
+| 7 | `curl https://orchestrator.4626.fun/healthz` | 200 | Body = Vercel SPA HTML, not JSON `{ok: true}` |
+| 8 | `curl https://provisioner.4626.fun/healthz` | 200 | Body = Vercel SPA HTML, not JSON `{ok: true}` |
+
+### Command 1 — full output (key lines)
+
+```
+> tsx scripts/ops/verify-akita-prelaunch-readiness.ts --production
+
+=== AKITA full-stack pre-launch readiness ===
+
+--- Platform (contracts + tests) ---
+✓ pipe_a_batcher:   ] | } | Pipe A batcher readiness: PASS
+✓ release_target_guard: current split Phase-1 release target guard passed
+✓ hook_mainnet_canonical: Recommended SOLANA_HOOK_IX_SCHEMA: canonical | PASS
+✓ vitest_pipe_a_wiring:       Tests  53 passed (53) | Duration  990ms
+✓ forge_share_oft_peer: Suite result: ok. 6 passed; 0 failed; 0 skipped
+
+--- Vultr (orchestrator + provisioner via public HTTPS) ---
+✗ vultr_orchestrator_health: HTTP 200
+✗ vultr_orchestrator_settle_fees: HTTP 405: ""
+✗ vultr_orchestrator_winner_relay: HTTP 405: ""
+✗ vultr_relay_entries_paused: Expected action_disabled:relay_entries, got 405 ""
+✗ vultr_provisioner_health: provisioner payerHealthy=undefined
+✗ vultr_provisioner_dns: Provisioner may be pointing at Vercel SPA — fix DNS A-record to Vultr host
+
+--- Vercel → Vultr control plane ---
+✗ vercel_solana_reconcile_chain: HTTP 200: {"success":true,"data":{"workflow":"solana-orchestrator","action":"settle_fees","checkpointKey":"prelaunch-...
+✓ vercel_solana_infra_status: readyForAutoRegistration=true blockers=[]
+
+--- Creator entitlements (DB) ---
+✓ strategy_entitlement: active/pending: ajna_sleeve, charm_active_lp, solana_bridge_strategy, solana_ovault_mesh
+✓ strategy_solana_mesh: Solana mesh entitlement present
+
+Blockers: vultr_orchestrator_health, vultr_orchestrator_settle_fees, vultr_orchestrator_winner_relay,
+          vultr_relay_entries_paused, vultr_provisioner_health, vultr_provisioner_dns,
+          vercel_solana_reconcile_chain
+
+ ELIFECYCLE  Command failed with exit code 1.
+EXIT_CODE=1
+```
+
+### Command 3 — full output
+
+```
+> bash scripts/smoke-deploy-dry-run.sh
+
+Smoke-testing deploy dry-run at http://127.0.0.1:5174/api/deploy/v2/session/dry-run (authenticated session: 0x0000000000000000000000000000000000000002)...
+HTTP 403
+{
+  "success": false,
+  "error": "Creator token authority mismatch: active session or canonical smart wallet must control the creator token."
+}
+PASS: Dry-run handler reached creator-token authority check (auth + DB + fork plumbing OK). Full phase simulation requires a real creator token owned by the session wallet on the fork.
+EXIT_CODE=0
+```
+
+### Command 4 — legacy bypass header test
+
+```
+$ curl -sS -w '\n%{http_code}' -X POST http://127.0.0.1:5174/api/deploy/v2/session/dry-run \
+    -H 'Content-Type: application/json' \
+    -H 'x-deploy-dry-run-dev: 0x00000000000000000000000000000000000000ff' \
+    -d '{…deploy payload…}'
+{"success":false,"error":"Not authenticated"}
+401
+```
+
+### Blocked prerequisites
+
+| Prerequisite | Status | Notes |
+|--------------|--------|-------|
+| Foundry (anvil, forge) | Available | `$HOME/.foundry/bin` on PATH |
+| Node + pnpm | Available | pnpm 10.x |
+| `frontend/.env` | Required local fix | Bare `ALFACLUB` line at :504 caused shell syntax error; commented out locally (LAUNCH-003) |
+| `frontend/.env.deploy-dry-run.local` | Present | Pre-configured with fork RPC, local batcher, strict phase4 |
+| `AUTH_SESSION_SECRET` | Present in .env | Used by mint-dev-session-token.mjs to mint HMAC-SHA256 token |
+| `SOLANA_ORCHESTRATOR_API_KEY` | Present in .env | Used for Vultr orchestrator /reconcile probes |
+| `KPR_API_KEY` | Present in .env | Used for Vercel keeper/solana/reconcile chain probe |
+
+### Files inspected (source code)
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| `frontend/api/_handlers/deploy/v2/session/_dryRunCore.ts` | 2080-2665 | Dry-run handler: auth, 403 catch, local-fork-only guard, sendTransaction to Anvil only |
+| `frontend/api/_handlers/deploy/v2/session/_dryRun.ts` | 1 | Re-export to _dryRunCore |
+| `frontend/api/_handlers/deploy/v2/session/_createCore.ts` | 2386-2425 | `assertCreatorTokenAuthority` — throws DeploySessionRequestError(403) |
+| `frontend/api/_handlers/deploy/v2/session/_status.ts` | full | Deploy status endpoint — read-only (getDeploySessionById only) |
+| `frontend/api/_handlers/deploy/v2/session/_statusCore.ts` | full | Execution-path mutations (transitionDeploySession, sendUserOperation) — imported by _resume.ts, NOT _status.ts |
+| `frontend/api/_handlers/deploy/_solanaInfraStatus.ts` | full | Preflight endpoint — createPublicClient read-only, view-only ABI |
+| `frontend/api/_handlers/keeper/_solanaReconcile.ts` | 1-380 | Keeper reconcile — writes keepr_workflow_checkpoints (INSERT/UPDATE), calls upstream orchestrator |
+| `frontend/scripts/ops/verify-akita-prelaunch-readiness.ts` | 1-548 | Prelaunch probe script — 15 checks, POST to orchestrator + keeper reconcile |
+| `frontend/scripts/dev-deploy-dry-run.sh` | 1-30+ | Dev dry-run server bootstrap — sources .env, starts anvil + vite |
+| `frontend/scripts/smoke-deploy-dry-run.sh` | full | Smoke test — mints token, POSTs dry-run, greps for 403 PASS |
+| `frontend/api/__tests__/deploySessionDryRun.test.ts` | :465-472 | Test: legacy dev-bypass header rejection locked in |
+
+### Finding summary
+
+| ID | Severity | Domain |
+|----|----------|--------|
+| LAUNCH-001 | P0 | Vultr orchestrator + provisioner DNS — 7 blockers |
+| LAUNCH-002 | P2 | Prelaunch script triggers DB writes + orchestrator actions (keeper ops, not deploy mutations) |
+| LAUNCH-003 | P2 | Local .env bare ALFACLUB line — fixed locally |
+| LAUNCH-004 | Positive | Dry-run smoke 403 PASS gate confirmed |
+| LAUNCH-005 | Positive | Legacy dev-bypass header rejected (401) |
+| LAUNCH-006 | Positive | Deploy status/preflight read-only confirmed |
+| LAUNCH-007 | Positive | Dry-run local-fork-only invariant confirmed |
+| LAUNCH-008 | Positive | Typecheck + lint clean |
+
+### P0 Stop Condition Assessment
+
+| # | Condition | Result |
+|---|-----------|--------|
+| 1 | Production launch-readiness probe shows real non-local blockers | TRIGGERED (LAUNCH-001) |
+| 2 | Deploy dry-run accepts legacy bypass headers | NOT triggered (LAUNCH-005) |
+| 3 | Deploy status/preflight mutates chain, DB, or infrastructure | NOT triggered (LAUNCH-006) |
+| 4 | Dry-run smoke expected 403 behavior is missing or misclassified | NOT triggered (LAUNCH-004) |
+
+### No code changes applied (audit-only)
+
+No product/code fixes were applied. The local .env fix (LAUNCH-003) was a local env file correction to unblock the dry-run smoke, not a product code change. All 8 LAUNCH findings are recorded for the maintainer to triage.

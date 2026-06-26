@@ -1,0 +1,9 @@
+{
+  "label": "Wallet & signing",
+  "position": 3,
+  "link": {
+    "type": "generated-index",
+    "title": "Wallet & signing runbooks",
+    "description": "CSW owner-install, Relay, Base App signing, and recovery."
+  }
+}
