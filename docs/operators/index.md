@@ -2,30 +2,27 @@
 title: Operators and SRE
 sidebar_position: 6
 slug: /operators
-last_updated: '2026-04-11'
 ---
 
 # Operators and SRE
 
-This lane is for production operations, deployments, and service reliability.
+Start here for production operations. The [Operations](/operations) sidebar groups runbooks into lanes (deploy, keepers, wallet, Solana, analytics, archive) — this page is the curated on-ramp.
 
-## Run and Deploy
+## Start here (8 links)
 
-- [Operations Index](/operations)
-- [Deployment Runbooks](/operations/deployment)
-- [Release Notes](/operations/deployment/releases)
-- [Multisig Procedures](/operations/deployment/multisig/guide)
+| # | Topic | Link |
+|---|--------|------|
+| 1 | **Operations hub** | [Operations index](/operations) |
+| 2 | **Deploy & release** | [Deployment runbooks](/operations/deployment) · [Release notes](/operations/deployment/releases) |
+| 3 | **Automation & keepers** | [Automation](/operations/automation) · [Keeper HTTP API](/operations/keeper-http-api) |
+| 4 | **Greenfield readiness** | [Greenfield launch readiness](/operations/greenfield-launch-readiness) |
+| 5 | **Wallet & signing ops** | [CSW recovery playbook](/operations/csw-recovery-playbook) · [Sponsored canonical swap pattern](/operations/sponsored-canonical-swap-pattern) |
+| 6 | **Solana & share mesh** | [Solana share mesh policy](/operations/solana-share-mesh-lottery-policy) |
+| 7 | **Metrics & observability** | [Explore metrics operations](/operations/explore-metrics-operations) · [Dune analytics runbook](/operations/dune-analytics-runbook) |
+| 8 | **Trust & infra** | [Security](/security) · [Domain setup](/operations/domain-setup) · [Supabase setup](/operations/supabase-setup) |
 
-## Automation and Services
+## Browse everything
 
-- [Automation](/operations/automation)
-- [Eliza Runtime Service](/operations/services/agent/eliza)
-- [Solana Provisioner Service](/operations/services/solana-provisioner)
+Use **Browse as → Operators / SRE** in the sidebar. Runbooks are grouped into lanes (deploy, keepers, wallet, Solana, analytics, archive). Subfolders autogenerate from the repo.
 
-## Environment and Reliability
-
-- [Domain Setup](/operations/domain-setup)
-- [Supabase Setup](/operations/supabase-setup)
-- [Telegram Canonical Link Preservation](/operations/telegram-canonical-link-preservation)
-- [Security](/security)
-
+Historical runbooks live under [operations/archive](/operations/archive).

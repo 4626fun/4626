@@ -1,3 +1,9 @@
+---
+title: CRE Keeper Rollout (80/20)
+status: historical
+doc_template: runbook
+---
+
 # CRE Keeper Rollout (80/20)
 
 This runbook defines the repo-native rollout for external attestations (for example AWS + CRE) without replacing the existing 4626 keeper and contract guardrails.

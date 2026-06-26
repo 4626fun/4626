@@ -1,3 +1,9 @@
+---
+title: Arch-B Sub-Account Alignment Contract (Post-PR302)
+status: historical
+doc_template: runbook
+---
+
 # Arch-B Sub-Account Alignment Contract (Post-PR302)
 
 > **Canonical reference:** [docs/ACCOUNT_MODEL.md](../ACCOUNT_MODEL.md). The Arch-B sub-account flow is documented as §5.4 ("Arch B agent commands — server-side spend-permission flow").

@@ -1,3 +1,10 @@
+---
+title: 4626 Connection Methods & Passkey Ceremony Architecture
+sidebar_position: 1
+id: connection-methods
+slug: /4626-connection-methods
+---
+
 # 4626 Connection Methods & Passkey Ceremony Architecture
 
 **Internal Documentation — 4626 Project Team**

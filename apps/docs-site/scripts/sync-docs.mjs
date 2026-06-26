@@ -45,7 +45,8 @@ const SOURCES = {
   manual: {
     dir: path.join(REPO_ROOT, 'docs'),
     destPrefix: '',
-    exclude: ['_generated/**', '_archive/**', 'archive/**', 'drafts/**', '_drafts/**', '_internal/**', 'plans/**'],
+    include: ['**/*.md', '**/*.mdx', '**/_category_.json'],
+    exclude: ['_generated/**', '_archive/**', 'drafts/**', '_drafts/**', '_internal/**', 'plans/**'],
     label: 'Manual docs',
   },
   contracts: {
@@ -564,6 +565,17 @@ async function processSource(sourceKey, options = {}) {
     const destPath = path.join(DEST_DIR, destRelative);
     
     try {
+      if (file.endsWith('_category_.json')) {
+        await fs.mkdir(path.dirname(destPath), { recursive: true });
+        await fs.copyFile(sourcePath, destPath);
+        stats.copied++;
+        stats.bySource[sourceKey]++;
+        if (sourceKey === 'manual') {
+          console.log(`   ✓ ${file}`);
+        }
+        continue;
+      }
+
       // Read source file
       const content = await fs.readFile(sourcePath, 'utf-8');
       

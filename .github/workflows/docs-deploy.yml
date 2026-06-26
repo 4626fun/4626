@@ -1,0 +1,55 @@
+name: Docs Deploy
+
+# Production deploy for docs.4626.fun (Vercel project: akita-llc/4626-docs).
+# Git push alone does not always trigger this project on monorepo — this workflow
+# mirrors apps/docs-site/scripts/vercel-ignore.sh path rules.
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'apps/docs-site/**'
+      - 'docs/**'
+      - 'kpr/**'
+      - 'frontend/docs/**'
+      - 'frontend/README.md'
+      - 'frontend/public/brand/**'
+      - 'script/agent-runtime/skills/**'
+      - '.github/workflows/docs-deploy.yml'
+
+concurrency:
+  group: docs-deploy-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+          cache-dependency-path: apps/docs-site/pnpm-lock.yaml
+
+      - name: Install Vercel CLI
+        run: pnpm add -g vercel@latest
+
+      - name: Deploy to Vercel production
+        env:
+          VERCEL_ORG_ID: team_vwFyCLfPwJ8GfxE2yGHIkRJm
+          VERCEL_PROJECT_ID: prj_QianKYUgclEpCdGFDguSAJL2KiRy
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "${VERCEL_TOKEN}" ]; then
+            echo "::error::VERCEL_TOKEN secret is not set — add it in GitHub repo secrets to enable docs auto-deploy."
+            exit 1
+          fi
+          vercel deploy --prod --yes --archive=tgz --token "$VERCEL_TOKEN"

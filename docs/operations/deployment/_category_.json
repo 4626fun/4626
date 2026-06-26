@@ -1,0 +1,8 @@
+{
+  "label": "Deploy & release",
+  "position": 2,
+  "link": {
+    "type": "doc",
+    "id": "operations/deployment/index"
+  }
+}

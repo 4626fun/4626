@@ -1,7 +1,12 @@
-> **HISTORICAL — DO NOT USE.** This guide describes a flow we have explicitly retired. Per [docs/owner-mutation-decision-2026-05.md](../../owner-mutation-decision-2026-05.md) and [docs/ACCOUNT_MODEL.md](../../ACCOUNT_MODEL.md) §3, **`addOwnerAddress` from a third-party dapp is dead** for Base App-managed CSWs (the population most users are in). The supported paths today are: Sub Accounts + Spend Permissions for Base App users, and the EOA-owner submit lane only when an EOA owner is already known (population (c)). This file is retained for archival/operator-debug context only.
+---
+title: Adding a Privy embedded EOA as CSW owner (legacy)
+status: historical
+doc_template: runbook
+---
 
-Adding a Privy‑provided Embedded EOA as an Owner of a Zora Contract‑Smart‑Wallet (CSW) on Base
-This guide walks you through the complete flow for a user who:
+> **HISTORICAL — DO NOT USE.** This guide describes a flow we have explicitly retired. Per [docs/owner-mutation-decision-2026-05.md](/owner-mutation-decision-2026-05) and [Account model](/ACCOUNT_MODEL) §3, **`addOwnerAddress` from a third-party dapp is dead** for Base App-managed CSWs. This file is retained for archival/operator-debug context only.
+
+# Adding a Privy embedded EOA as an owner of a Zora CSW on Base
 
 Signs up / logs in with Privy (email → embedded EOA).
 
