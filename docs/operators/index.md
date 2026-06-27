@@ -1,12 +1,6 @@
----
-title: Operators
-sidebar_position: 1
-slug: /operators
----
-
 # Operators
 
-Curated runbooks for production. The sidebar lists the essentials; more pages under `docs/operations/` are searchable on this site.
+Curated runbooks for production — **~70 pages** on [docs.4626.fun](https://docs.4626.fun), listed in the sidebar.
 
 ## Start here
 
@@ -29,4 +23,4 @@ pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
   --batcher 0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1
 ```
 
-Historical release packets and WIP notes live in `docs/_internal/` (repo-only, not published).
+AlfaClub, analytics, AKITA prelaunch, incidents, and historical archive notes live in `docs/_internal/operations/` (repo-only).

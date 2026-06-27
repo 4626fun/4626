@@ -5,7 +5,7 @@ sidebar_position: 9
 
 # Reference
 
-Canonical lookups — prefer [addresses](/reference/addresses) for live infra over release narrative.
+Canonical lookups — prefer [addresses](/reference/addresses) for live infra.
 
 ## Core
 
@@ -13,12 +13,12 @@ Canonical lookups — prefer [addresses](/reference/addresses) for live infra ov
 |-----|----------|
 | [Addresses](/reference/addresses) | Live batcher, modules, treasury |
 | [Contract inventory](/reference/current-contract-inventory) | Defaults snapshot |
-| [Glossary](/reference/glossary) | Lane terminology (`tradeFeeCollector`, etc.) |
+| [Glossary](/reference/glossary) | Lane terminology |
 | [Chains](/reference/chains) | Chain IDs and LZ EIDs |
 
 ## Contracts & concepts
 
-- [Contracts hub](/contracts) — narrative per core contract
+- [Contracts hub](/contracts) — six core contract narratives
 - [Architecture](/overview/architecture) · [Token model](/overview/token-model) · [Fee flow](/overview/fee-flow)
 
 ## Engineering
@@ -27,7 +27,4 @@ Canonical lookups — prefer [addresses](/reference/addresses) for live infra ov
 |-----|----------|
 | [API reference (local)](/developers/api-reference) | Regenerating TypeDoc / forge doc |
 | [ERC-4337 debugging](/reference/erc4337-debugging) | UserOp traces |
-| [Impairment disclosures](/reference/impairment-v1-disclosures) | Side-pocket v1 caveats |
 | [Publishing](/publishing) | How this site is built |
-
-Optional deep refs (searchable when synced): [coins metadata](/reference/coins-metadata), [token image](/reference/token-image), [account context](/reference/account-context).

@@ -79,6 +79,5 @@ export function buildOperationsSidebarItems(): SidebarItemConfig[] {
 
     doc('operations/messaging/telegram-canonical-link-preservation', 'Telegram linking'),
     doc('operations/deployment/eliza-runtime', 'XMTP / Eliza runtime'),
-    doc('operations/archive/index', 'Archive & retired'),
   ];
 }

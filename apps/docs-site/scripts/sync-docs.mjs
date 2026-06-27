@@ -20,6 +20,7 @@ import { fileURLToPath } from 'url';
 import { execFileSync } from 'node:child_process';
 import fg from 'fast-glob';
 import matter from 'gray-matter';
+import {CURATED_PUBLISH_GLOBS} from '../curatedPublishAllowlist.mjs';
 
 // ESM __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -197,6 +198,20 @@ const MANUAL_DEFAULT_OWNER = process.env.DOCS_DEFAULT_OWNER || 'docs-team';
 
 function normalizeRelPath(filePath) {
   return filePath.split(path.sep).join('/');
+}
+
+function isCuratedPublishPath(relativePath) {
+  const normalized = normalizeRelPath(relativePath);
+  if (normalized.endsWith('_category_.json')) {
+    return false;
+  }
+  return CURATED_PUBLISH_GLOBS.some((pattern) => {
+    if (pattern.endsWith('/**')) {
+      const base = pattern.slice(0, -3);
+      return normalized === base || normalized.startsWith(`${base}/`);
+    }
+    return normalized === pattern;
+  });
 }
 
 function buildGitLastUpdatedIndex() {
@@ -581,7 +596,9 @@ async function processSource(sourceKey, options = {}) {
     return;
   }
   
-  const files = await getSourceFiles(source.dir, source.include, source.exclude);
+  const files = (await getSourceFiles(source.dir, source.include, source.exclude)).filter(
+    (file) => sourceKey !== 'manual' || !CURATED_PUBLISH || isCuratedPublishPath(file),
+  );
   
   if (files.length === 0) {
     stats.warnings.push(`${source.label}: No markdown files found`);
@@ -808,6 +825,7 @@ async function sync() {
   console.log('📚 Multi-Source Documentation Sync');
   if (CURATED_PUBLISH) {
     console.log('   Mode: curated (manual docs only — DOCS_PUBLISH_CURATED=1)');
+    console.log(`   Allowlist: ${CURATED_PUBLISH_GLOBS.length} path patterns`);
   }
   console.log('════════════════════════════════════════════════════════════');
 
