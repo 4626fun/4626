@@ -66,7 +66,7 @@ function report(uint256 gain, uint256 loss) external onlyKeeper;
 | Feature | Description |
 |---------|-------------|
 | **Virtual shares** | 1e3 offset prevents inflation attacks |
-| **Minimum deposit** | 5M tokens on first deposit |
+| **Minimum deposit** | 50M tokens on first deposit (activation finalize enforces 50M–100M via batcher) |
 | **Price limits** | 10% max change per transaction |
 | **Block delay** | Prevents flash loan attacks |
 | **Strict transfer accounting** | Reverts if vault does not receive the exact requested amount |

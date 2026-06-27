@@ -1,7 +1,7 @@
 import type { Hex } from 'viem'
 
 import { ensureSignatureHex } from '@/lib/aa/coinbaseErc4337Signature'
-import { isPrivyEmbeddedSignerAuthError } from '@/lib/wallet/privyEmbeddedSignerAuthErrors'
+import { isPrivyEmbeddedSignerAuthError } from '@/lib/auth/privyEmbeddedSignerAuthErrors'
 
 const RAW_DIGEST_RE = /^0x[0-9a-fA-F]{64}$/
 
@@ -17,10 +17,6 @@ type WalletClientWithRequest = {
   }) => Promise<Hex | string>
   /** Provider-aware session refresh (e.g. Privy access-token refresh + provider re-acquire). */
   refreshSession?: () => Promise<unknown>
-}
-
-function isRefreshableSignerSessionError(message: string): boolean {
-  return isPrivyEmbeddedSignerAuthError(message)
 }
 
 function isDisconnectedWalletSessionError(message: string): boolean {
@@ -113,7 +109,7 @@ export async function signRawEcdsaDigest(params: {
 
     const hasRefreshableSessionFailure = firstPass.failures.some(
       (failure) =>
-        isRefreshableSignerSessionError(failure.message) || isDisconnectedWalletSessionError(failure.message),
+        isPrivyEmbeddedSignerAuthError(failure.message) || isDisconnectedWalletSessionError(failure.message),
     )
     if (hasRefreshableSessionFailure) {
       attemptedSessionRefresh = true

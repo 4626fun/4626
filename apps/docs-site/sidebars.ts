@@ -36,6 +36,7 @@ const sidebars: SidebarsConfig = {
           label: 'Quick reference',
           collapsed: false,
           items: [
+            'reference/index',
             'reference/addresses',
             'reference/glossary',
             'reference/impairment-v1-disclosures',

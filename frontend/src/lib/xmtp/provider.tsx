@@ -33,6 +33,7 @@ import {
 } from '@/wallet/canonicalWalletPolicy'
 import { resolveClientAgentXmtpAddress } from '@/lib/xmtp/agentXmtpAddress'
 import { CANONICAL_SCW_CHAIN_ID, decideXmtpSignerType, resolveXmtpChainId } from '@/lib/xmtp/signerUtils'
+import { isPrivyEmbeddedSignerAuthError } from '@/lib/auth/privyEmbeddedSignerAuthErrors'
 import {
   buildNotRegisteredDmMessage,
   encodeWireContent,
@@ -43,7 +44,6 @@ import {
   isInstallationLimitError,
   isLocalXmtpStateInvalidError,
   isOpfsAccessHandleError,
-  isPrivyEmbeddedSignerAuthError,
   isScwSignatureValidationError,
   isTransientXmtpStreamNetworkError,
   isXmtpRateLimitError,
@@ -140,6 +140,8 @@ export type ChatMessageActions = {
   buttons: ChatMessageActionButton[]
 }
 
+export type ChatMessageKind = 'message' | 'reaction'
+
 export type ChatMessage = {
   id: string
   conversationId: string
@@ -150,6 +152,7 @@ export type ChatMessage = {
   replyToId?: string | null
   actions?: ChatMessageActions | null
   reactionEmoji?: string | null
+  kind?: ChatMessageKind
   status: ChatMessageStatus
   error: string | null
   sentAt: Date
@@ -159,6 +162,12 @@ export type ChatMessage = {
 export type SendChatMessageOptions = {
   replyToId?: string | null
   replyToSenderInboxId?: string | null
+}
+
+export type SendReactionOptions = {
+  referenceMessageId: string
+  referenceInboxId: string
+  emoji: string
 }
 
 export type StartDmOptions = {
@@ -207,6 +216,10 @@ type XmtpContextValue = {
     text: string,
     options?: SendChatMessageOptions,
   ) => Promise<ChatMessage>
+  sendReaction: (
+    conversationId: string,
+    options: SendReactionOptions,
+  ) => Promise<void>
   sendIntent: (
     conversationId: string,
     params: { promptId: string; actionId: string },
@@ -360,11 +373,13 @@ const XmtpContext = createContext<XmtpContextValue>({
     senderInboxId: '',
     content: '',
     contentType: 'text',
+    kind: 'message',
     status: 'failed',
     error: 'not_connected',
     sentAt: new Date(),
     isSelf: true,
   }),
+  sendReaction: async () => {},
   sendIntent: async () => {},
   startDm: async () => ({
     ok: false,
@@ -3002,8 +3017,9 @@ export function XmtpChatProvider({
         id: msg.id,
         conversationId: msg.conversationId,
         senderInboxId: msg.senderInboxId,
-        content: String(reaction?.content ?? '👍'),
+        content: '',
         contentType: 'text',
+        kind: 'reaction',
         replyToId: String(reaction?.reference ?? '').trim() || null,
         reactionEmoji: String(reaction?.content ?? '👍'),
         status: 'sent',
@@ -3152,6 +3168,7 @@ export function XmtpChatProvider({
         replyToId: replyToId ?? optimisticParsed.replyToId,
         actions: null,
         reactionEmoji: null,
+        kind: 'message',
         status: 'sent',
         error: null,
         sentAt,
@@ -3166,6 +3183,66 @@ export function XmtpChatProvider({
         )
       }
       console.error('[xmtp] sendMessage error:', e)
+      throw e
+    }
+  }, [evictConversationFromCache, markLocalStateInvalid])
+
+  const sendReaction = useCallback(async (
+    conversationId: string,
+    options: SendReactionOptions,
+  ): Promise<void> => {
+    const client = clientRef.current
+    const emoji = options.emoji.trim()
+    const referenceMessageId = options.referenceMessageId.trim()
+    const referenceInboxId = options.referenceInboxId.trim()
+    if (!client || !emoji || !referenceMessageId || !referenceInboxId) {
+      throw new Error('not_connected')
+    }
+
+    try {
+      const conversationsApi = client.conversations as {
+        sync: () => Promise<unknown>
+        syncAll?: (consentStates?: import('@xmtp/browser-sdk').ConsentState[]) => Promise<unknown>
+        getConversationById: (id: string) => Promise<Conversation | Dm | Group | null>
+        list: (options?: { consentStates?: import('@xmtp/browser-sdk').ConsentState[] }) => Promise<
+          Array<Conversation | Dm | Group>
+        >
+        listGroups?: (options?: { consentStates?: import('@xmtp/browser-sdk').ConsentState[] }) => Promise<
+          Array<Conversation | Dm | Group>
+        >
+      }
+
+      let convo: Conversation | Dm | Group | null | undefined =
+        await client.conversations.getConversationById(conversationId)
+      if (!convo) {
+        evictConversationFromCache(conversationId)
+        const resolved = await resolveConversationByIdWithSyncRetries(conversationsApi, conversationId, {
+          rounds: 8,
+          delayMs: 600,
+          preferencesApi: client.preferences,
+        })
+        if (resolved) {
+          convo = resolved as Conversation | Dm | Group
+        }
+      }
+      if (!convo) throw new Error('conversation_not_found')
+
+      await convo.sendReaction({
+        action: 1,
+        reference: referenceMessageId,
+        referenceInboxId,
+        schema: 1,
+        content: emoji,
+      })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      if (isLocalXmtpStateInvalidError(msg)) {
+        markLocalStateInvalid(msg)
+        throw new Error(
+          'XMTP local messaging state is out of sync. Reset local messaging state, then reconnect.',
+        )
+      }
+      console.error('[xmtp] sendReaction error:', e)
       throw e
     }
   }, [evictConversationFromCache, markLocalStateInvalid])
@@ -3392,6 +3469,7 @@ export function XmtpChatProvider({
         conversations,
         loadMessages,
         sendMessage,
+        sendReaction,
         sendIntent,
         startDm,
         startDmByInbox,

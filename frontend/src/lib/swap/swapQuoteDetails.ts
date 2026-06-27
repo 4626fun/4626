@@ -2,6 +2,7 @@ import { formatUnits, getAddress, isAddress } from 'viem'
 
 import { parsePositiveHumanAmount, formatSwapUsd } from '@/lib/swap/swapAmountUsd'
 import { formatSwapDisplayAmount, parseSwapDisplayNumber } from '@/lib/swap/swapDisplayAmount'
+import { formatUniswapSwapTradeAmount } from '@/lib/swap/uniswapNumberFormat'
 import { isZoraProviderQuote } from '@/lib/zora/zoraTradeApi'
 import { pickQuote, type TradeQuoteResponse } from '@/lib/uniswap/tradingApi'
 
@@ -295,7 +296,7 @@ export function formatSwapExchangeRate(params: {
   const rate = outAmt / inAmt
   if (!Number.isFinite(rate) || rate <= 0) return null
 
-  const formattedRate = formatSwapDisplayAmount(String(rate), outSym)
+  const formattedRate = formatUniswapSwapTradeAmount(rate)
   return `1 ${inSym} = ${formattedRate} ${outSym}`
 }
 

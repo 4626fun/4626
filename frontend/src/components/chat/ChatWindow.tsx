@@ -19,12 +19,14 @@ import {
   RotateCcw,
   Send,
   ShieldCheck,
+  Smile,
   UserRound,
   X,
   XCircle,
 } from 'lucide-react'
 import { useAccount } from 'wagmi'
 import { useXmtp, type ChatMessage } from '@/lib/xmtp/provider'
+import { aggregateReactionsByMessageId, filterDisplayChatMessages } from '@/lib/xmtp/xmtpHelpers'
 import { apiFetch } from '@/lib/api/apiBase'
 import { trackEvent } from '@/lib/analytics/analytics'
 import { fetchZoraProfile } from '@/lib/zora/client'
@@ -47,6 +49,8 @@ import {
   getChatCommandById,
 } from './commandCenter'
 import { resolveCommandCenterVisibility, shouldAttemptGroupConversationRecovery, shouldAttemptInactiveDmRecovery } from './chatWindowState'
+
+const QUICK_REACTION_EMOJIS = ['👍', '❤️', '😂', '👀', '🔥', '🎉'] as const
 
 type Props = {
   conversationId: string
@@ -276,6 +280,7 @@ export function ChatWindow({
   const {
     loadMessages,
     sendMessage,
+    sendReaction,
     sendIntent,
     startDm,
     startDmByInbox,
@@ -296,6 +301,8 @@ export function ChatWindow({
   const [pendingCommand, setPendingCommand] = useState<ChatCommandDefinition | null>(null)
   const [lastCommandId, setLastCommandId] = useState<string | null>(null)
   const [replyToMessageId, setReplyToMessageId] = useState<string | null>(null)
+  const [reactionPickerMessageId, setReactionPickerMessageId] = useState<string | null>(null)
+  const [reactionBusy, setReactionBusy] = useState(false)
   const [commandHint, setCommandHint] = useState<string | null>(null)
   const [commandGuards, setCommandGuards] = useState<Record<string, CommandGuardResult>>({})
   const [desktopCommandsOpen, setDesktopCommandsOpen] = useState(false)
@@ -479,6 +486,17 @@ export function ChatWindow({
     const unsub = subscribeToMessages(conversationId, (msg) => {
       setMessages((prev) => {
         if (prev.find((m) => m.id === msg.id)) return prev
+        if (msg.kind === 'reaction') {
+          const withoutSameSenderReaction = prev.filter(
+            (candidate) =>
+              !(
+                candidate.kind === 'reaction' &&
+                candidate.replyToId === msg.replyToId &&
+                candidate.senderInboxId === msg.senderInboxId
+              ),
+          )
+          return [...withoutSameSenderReaction, msg]
+        }
         if (msg.isSelf) {
           const optimisticIdx = prev.findIndex(
             (candidate) =>
@@ -844,7 +862,29 @@ export function ChatWindow({
     () => new Map(messages.map((msg) => [msg.id, msg])),
     [messages],
   )
+  const displayMessages = useMemo(() => filterDisplayChatMessages(messages), [messages])
+  const reactionsByMessageId = useMemo(() => aggregateReactionsByMessageId(messages), [messages])
   const replyingToMessage = replyToMessageId ? (messageById.get(replyToMessageId) ?? null) : null
+
+  const handleSendReaction = useCallback(
+    async (targetMessage: ChatMessage, emoji: string) => {
+      if (reactionBusy || status !== 'connected' || targetMessage.id.startsWith('local-')) return
+      setReactionPickerMessageId(null)
+      setReactionBusy(true)
+      try {
+        await sendReaction(conversationId, {
+          referenceMessageId: targetMessage.id,
+          referenceInboxId: targetMessage.senderInboxId,
+          emoji,
+        })
+      } catch (error) {
+        console.error('[chat] reaction error:', error)
+      } finally {
+        setReactionBusy(false)
+      }
+    },
+    [conversationId, reactionBusy, sendReaction, status],
+  )
 
   const writeSendCommands = useMemo(
     () => allCommands.filter((command) => command.risk === 'write' && command.mode === 'send'),
@@ -874,7 +914,7 @@ export function ChatWindow({
   }, [categoryActions, emitTelemetry, followUpActions, quickActions, showCommandCenter])
 
   useEffect(() => {
-    const latestAgentMessage = [...messages].reverse().find((msg) => !msg.isSelf)
+    const latestAgentMessage = [...messages].reverse().find((msg) => !msg.isSelf && msg.kind !== 'reaction')
     if (!latestAgentMessage) return
     const inferred = inferCommandIdFromAgentText(latestAgentMessage.content)
     if (inferred) setLastCommandId(inferred)
@@ -1428,12 +1468,14 @@ export function ChatWindow({
               <div className="flex items-center justify-center py-8">
                 <Spinner className="text-zinc-500" size="md" />
               </div>
-            ) : messages.length === 0 ? (
+            ) : displayMessages.length === 0 ? (
               <div className="flex items-center justify-center py-8 text-xs text-zinc-500">
                 No messages yet. Say hello!
               </div>
             ) : (
-              messages.map((msg) => (
+              displayMessages.map((msg) => {
+                const messageReactions = reactionsByMessageId.get(msg.id) ?? []
+                return (
                 <div
                   key={msg.id}
                   className={`flex flex-col ${msg.isSelf ? 'items-end' : 'items-start'} gap-0.5`}
@@ -1489,12 +1531,26 @@ export function ChatWindow({
                         ))}
                       </div>
                     )}
-                    {msg.reactionEmoji && (
-                      <div className="mt-1 text-[11px] text-zinc-400">
-                        Reacted {msg.reactionEmoji}
-                      </div>
-                    )}
                   </div>
+                  {messageReactions.length > 0 ? (
+                    <div
+                      className={`mt-1 flex max-w-[86%] flex-wrap gap-1 px-1 ${
+                        msg.isSelf ? 'justify-end' : 'justify-start'
+                      }`}
+                    >
+                      {messageReactions.map((reaction) => (
+                        <span
+                          key={`${msg.id}-${reaction.emoji}`}
+                          className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.06] px-2 py-0.5 text-[11px] text-zinc-100"
+                        >
+                          <span aria-hidden="true">{reaction.emoji}</span>
+                          {reaction.count > 1 ? (
+                            <span className="text-[10px] text-zinc-400">{reaction.count}</span>
+                          ) : null}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                   <div className="mt-1 flex items-center gap-2 px-1">
                     <span className="text-[10px] text-zinc-500">
                       {formatTimestamp(msg.sentAt)}
@@ -1513,12 +1569,50 @@ export function ChatWindow({
                       </span>
                     )}
                   </div>
-                  <div className="mt-0.5 flex items-center gap-1 px-1">
+                  <div className="relative mt-0.5 flex items-center gap-1 px-1">
+                    {!msg.id.startsWith('local-') && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReactionPickerMessageId((current) => (current === msg.id ? null : msg.id))
+                          }}
+                          disabled={reactionBusy}
+                          className="inline-flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-50"
+                          aria-label="React to message"
+                          aria-expanded={reactionPickerMessageId === msg.id}
+                        >
+                          <Smile className="w-3 h-3" />
+                          React
+                        </button>
+                        {reactionPickerMessageId === msg.id ? (
+                          <div
+                            className={`absolute top-full z-20 mt-1 flex items-center gap-0.5 rounded-full border border-white/10 bg-zinc-900/95 p-1 shadow-[0_12px_32px_-16px_rgba(0,0,0,0.95)] backdrop-blur-xl ${
+                              msg.isSelf ? 'right-1' : 'left-1'
+                            }`}
+                          >
+                            {QUICK_REACTION_EMOJIS.map((emoji) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                disabled={reactionBusy}
+                                onClick={() => void handleSendReaction(msg, emoji)}
+                                className="rounded-full px-1.5 py-1 text-sm transition-colors hover:bg-white/10 disabled:opacity-50"
+                                aria-label={`React with ${emoji}`}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </>
+                    )}
                     {!msg.id.startsWith('local-') && (
                       <button
                         type="button"
                         onClick={() => {
                           setReplyToMessageId(msg.id)
+                          setReactionPickerMessageId(null)
                           inputRef.current?.focus()
                         }}
                         className="inline-flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
@@ -1539,7 +1633,7 @@ export function ChatWindow({
                     )}
                   </div>
                 </div>
-              ))
+              )})
             )}
           </div>
 

@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { isLocalXmtpStateInvalidError, isTransientXmtpStreamNetworkError, isXmtpRateLimitError, shouldFallbackToOriginalXmtpRecipient } from './xmtpHelpers'
+import {
+  aggregateReactionsByMessageId,
+  filterDisplayChatMessages,
+  isLocalXmtpStateInvalidError,
+  isTransientXmtpStreamNetworkError,
+  isXmtpRateLimitError,
+  shouldFallbackToOriginalXmtpRecipient,
+} from './xmtpHelpers'
 import { resetXmtpSyncCoordinatorForTests } from './xmtpSyncCoordinator'
 
 beforeEach(() => {
@@ -147,5 +154,51 @@ describe('isXmtpRateLimitError', () => {
         "api client at endpoint \"/xmtp.mls.api.v1.MlsApi/QueryWelcomeMessages\" has error status: 'Some resource has been exhausted'",
       ),
     ).toBe(true)
+  })
+})
+
+describe('filterDisplayChatMessages', () => {
+  it('removes reaction-only rows from the visible transcript', () => {
+    const visible = filterDisplayChatMessages([
+      { id: 'm1', kind: 'message' as const },
+      { id: 'r1', kind: 'reaction' as const },
+    ])
+    expect(visible.map((entry) => entry.id)).toEqual(['m1'])
+  })
+})
+
+describe('aggregateReactionsByMessageId', () => {
+  it('groups reactions under their target message and keeps the latest reaction per sender', () => {
+    const grouped = aggregateReactionsByMessageId([
+      {
+        kind: 'reaction',
+        replyToId: 'm1',
+        reactionEmoji: '👍',
+        senderInboxId: 'alice',
+      },
+      {
+        kind: 'reaction',
+        replyToId: 'm1',
+        reactionEmoji: '👀',
+        senderInboxId: 'alice',
+      },
+      {
+        kind: 'reaction',
+        replyToId: 'm1',
+        reactionEmoji: '🔥',
+        senderInboxId: 'bob',
+      },
+      {
+        kind: 'message',
+        replyToId: null,
+        reactionEmoji: null,
+        senderInboxId: 'alice',
+      },
+    ])
+
+    expect(grouped.get('m1')).toEqual([
+      { emoji: '👀', count: 1 },
+      { emoji: '🔥', count: 1 },
+    ])
   })
 })

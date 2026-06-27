@@ -42,6 +42,7 @@ import {
 } from '@/lib/swap/swapAutoSlippage'
 import { normalizePriceImpactPercent } from '@/lib/swap/swapQuoteDetails'
 import { SWAP_PREPARE_STATUS, swapPermitProgressStatus } from '@/lib/swap/swapStatusCopy'
+import { refreshWalletClientSession } from '@/lib/wallet/refreshWalletClientSession'
 import { signPermit2ForExecutionWallet } from '@/lib/swap/permit2CswSign'
 import { normalizeUniswapError, type NormalizedUniswapError, type UniswapErrorCode } from '@/lib/uniswap/error'
 import { areEquivalentSwapTokens, BASE_CHAIN_ID, getNestedAmountOut, NATIVE_TOKEN_ADDRESS } from '@/lib/uniswap/swapUtils'
@@ -162,12 +163,6 @@ type CanonicalSubmitSessionResult =
     }
 
 type EnsureCanonicalSessionResult = boolean | string | null
-
-async function refreshWalletClientSession(walletClient: unknown): Promise<void> {
-  const refreshSession = (walletClient as { refreshSession?: () => Promise<unknown> } | null)?.refreshSession
-  if (typeof refreshSession !== 'function') return
-  await refreshSession().catch(() => null)
-}
 
 type SwapSessionGateInput = {
   sessionHydrated?: boolean

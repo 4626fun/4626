@@ -899,7 +899,7 @@ export function ChatAvailabilityRail(props: { onExpandedChange?: (expanded: bool
             setExpanded(true)
             if (status === 'idle') void connect('user')
           }}
-          className="group relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/65 text-zinc-300 shadow-[0_18px_46px_-24px_rgba(0,0,0,0.9)] backdrop-blur-xl transition-[border-color,background,transform] duration-200 hover:-translate-y-px hover:border-brand-primary/35 hover:bg-black/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary/60"
+          className="group relative flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-black/65 text-zinc-300 shadow-[0_18px_46px_-24px_rgba(0,0,0,0.9)] backdrop-blur-xl transition-[border-color,background,transform] duration-200 hover:-translate-y-px hover:border-brand-primary/35 hover:bg-black/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary/60"
           aria-label="Open XMTP chat"
         >
           <span aria-hidden="true" className="absolute inset-x-2 top-0 h-px bg-linear-to-r from-transparent via-white/18 to-transparent" />
@@ -910,7 +910,7 @@ export function ChatAvailabilityRail(props: { onExpandedChange?: (expanded: bool
             draggable={false}
           />
           {totalUnread > 0 ? (
-            <span className="absolute -right-1 -top-1 min-w-5 rounded-full border border-black bg-brand-primary px-1.5 py-0.5 text-[10px] font-semibold text-white">
+            <span className="absolute -right-1 -top-1 z-10 min-w-5 rounded-full border border-black bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-[0_0_0_1px_rgba(0,0,0,0.35)]">
               {totalUnread > 99 ? '99+' : totalUnread}
             </span>
           ) : null}

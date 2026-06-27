@@ -14,6 +14,7 @@ Plain-language names used in public docs, with internal or onchain identifiers w
 | **Launch bundle ($499 USDC)** | `vault_full_deploy` | Unlocks deploy; includes strategies + optional Solana entitlement |
 | **New vault launch** | *Greenfield* | New deploy on current release (v1.14.1), not legacy vaults |
 | **Fair-launch auction** | CCA | Uniswap V4 price discovery at activation |
+| **Auction schedule** | Thursday 00:00 UTC epoch | CCA bids open on the next weekly epoch after `launchDeferredAuction` |
 | **Optional Solana trading** | *Solana share mesh*, `solana_ovault_mesh` | Same `■` share may trade on Solana after finalize |
 | **Post-auction Solana bridge** | *Pipe A* | ~30% of `■` supply bridged at finalize (LayerZero) |
 | **Share allocation at finalize** | 30/30/30/10 split | 30% CCA · 30% vesting · 30% Solana bridge · 10% LP reserve |

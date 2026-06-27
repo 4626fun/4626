@@ -154,10 +154,6 @@ export function SwapCard(props: SwapCardProps) {
       >
         {primaryActionLabel}
       </Button>
-      {props.primaryActionHint ? <div className="mt-2 text-xs text-vault-subtext">{props.primaryActionHint}</div> : null}
-
-      {props.error ? <Alert variant="error" className="mt-3">{props.error}</Alert> : null}
-      {props.status && !props.error ? <div className="mt-2 text-xs text-vault-subtext">{props.status}</div> : null}
 
       <SwapDetails
         routeSummary={props.routeSummary}
@@ -183,6 +179,11 @@ export function SwapCard(props: SwapCardProps) {
         sponsoredExecution={props.executionMode === 'canonical'}
         showUniswapBranding={showUniswapBranding}
       />
+
+      {props.primaryActionHint ? <div className="mt-2 text-xs text-vault-subtext">{props.primaryActionHint}</div> : null}
+
+      {props.error ? <Alert variant="error" className="mt-3">{props.error}</Alert> : null}
+      {props.status && !props.error ? <div className="mt-2 text-xs text-vault-subtext">{props.status}</div> : null}
     </div>
   )
 }

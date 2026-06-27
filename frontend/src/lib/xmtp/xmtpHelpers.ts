@@ -118,6 +118,53 @@ export type SendChatMessageOptions = {
   replyToSenderInboxId?: string | null
 }
 
+export type ChatMessageKind = 'message' | 'reaction'
+
+export type AggregatedMessageReaction = {
+  emoji: string
+  count: number
+}
+
+export function filterDisplayChatMessages<T extends { kind?: ChatMessageKind }>(messages: T[]): T[] {
+  return messages.filter((message) => message.kind !== 'reaction')
+}
+
+export function aggregateReactionsByMessageId(
+  messages: Array<{
+    kind?: ChatMessageKind
+    replyToId?: string | null
+    reactionEmoji?: string | null
+    senderInboxId: string
+  }>,
+): Map<string, AggregatedMessageReaction[]> {
+  const latestByTargetAndSender = new Map<string, Map<string, string>>()
+
+  for (const message of messages) {
+    if (message.kind !== 'reaction') continue
+    const targetId = message.replyToId?.trim()
+    const emoji = message.reactionEmoji?.trim()
+    if (!targetId || !emoji) continue
+
+    const senderMap = latestByTargetAndSender.get(targetId) ?? new Map<string, string>()
+    senderMap.set(message.senderInboxId, emoji)
+    latestByTargetAndSender.set(targetId, senderMap)
+  }
+
+  const aggregated = new Map<string, AggregatedMessageReaction[]>()
+  for (const [targetId, senderMap] of latestByTargetAndSender) {
+    const counts = new Map<string, number>()
+    for (const emoji of senderMap.values()) {
+      counts.set(emoji, (counts.get(emoji) ?? 0) + 1)
+    }
+    aggregated.set(
+      targetId,
+      [...counts.entries()].map(([emoji, count]) => ({ emoji, count })),
+    )
+  }
+
+  return aggregated
+}
+
 /** Legacy wire prefix — prefer native XMTP Reply when both clients support it. */
 export function encodeWireContent(text: string, options?: SendChatMessageOptions): string {
   const body = text.trim()
@@ -176,8 +223,6 @@ export function isScwSignatureValidationError(message: string): boolean {
     (m.includes('signature') && m.includes('validation failed'))
   )
 }
-
-export { isPrivyEmbeddedSignerAuthError } from '@/lib/wallet/privyEmbeddedSignerAuthErrors'
 
 export function isOpfsAccessHandleError(message: string): boolean {
   const m = String(message || '').toLowerCase()

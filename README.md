@@ -168,7 +168,7 @@ flowchart TD
   class Blocked blocked;
 ```
 
-Greenfield deploy is gated on paid **`vault_full_deploy`** ($499 USDC, all-or-nothing at `/creator/strategy/features`). That bundle expands to Charm + Ajna Phase 3 strategies (45%/45%), Solana mesh (Pipe A finalize bridge), and Meteora entitlement. Legacy per-key comp rows still resolve for grandfathered creators. Canonical spec: [`docs/operations/creator-strategy-features.md`](docs/operations/creator-strategy-features.md).
+New vault launches are gated on paid **launch bundle** (`vault_full_deploy`, $499 USDC, all-or-nothing at `/creator/strategy/features`). That bundle expands to Charm + Ajna Phase 3 strategies (45%/45%), optional Solana bridge at finalize (~30% `■`), and Meteora entitlement. Legacy per-key comp rows still resolve for grandfathered creators. Operator spec: [`docs/_internal/operations/operations/vault/creator-strategy-features.md`](docs/_internal/operations/operations/vault/creator-strategy-features.md).
 
 ### 3) Fee + Incentive Routing
 

@@ -33,6 +33,7 @@ import { usePrivyClientStatus } from '@/lib/privy/client'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 
 import { deriveSwapConnectGate, isConnectorAlreadyConnectedError } from '@/lib/swap/connectGate'
+import { isSigningSessionRecoveryRequired } from '@/lib/auth/privyEmbeddedSignerAuthErrors'
 
 import { deriveSwapUsdEstimates, isNativeEthToken, isUsdStablecoinToken } from '@/lib/swap/swapAmountUsd'
 import { formatSlippagePctForDisplay } from '@/lib/swap/swapAutoSlippage'
@@ -742,20 +743,12 @@ export function Swap() {
     ensureCanonicalSession,
   })
 
-  // ─── Stale embedded-signer session recovery ──────────────────────────────
-  // "Missing auth token" from the Privy embedded-wallet iframe cannot be fixed
-  // by page-side token refresh (custom auth-domain cookies are third-party on
-  // localhost). Only a real Privy logout + fresh interactive login re-seeds
-  // the iframe session.
-  const signingSessionExpired = useMemo(() => {
-    const text = String(error ?? '')
-    return (
-      /signing session (was refreshed but|could not be refreshed)/i.test(text) ||
-      /missing auth token/i.test(text) ||
-      /no valid authorization signatures/i.test(text) ||
-      (/401/i.test(text) && /authorization signatures/i.test(text))
-    )
-  }, [error])
+  // Embedded-wallet signing can fail when the Privy iframe provider channel is stale.
+  // We retry via refreshSession first; if that still fails, only interactive re-login helps.
+  const signingSessionExpired = useMemo(
+    () => isSigningSessionRecoveryRequired(String(error ?? '')),
+    [error],
+  )
   const [signingRecoveryBusy, setSigningRecoveryBusy] = useState(false)
   const handleSigningSessionRecovery = useCallback(async () => {
     if (signingRecoveryBusy) return

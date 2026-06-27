@@ -1,5 +1,5 @@
 import { Client, type Signer } from '@xmtp/browser-sdk'
-import { isPrivyEmbeddedSignerAuthError } from '@/lib/xmtp/xmtpHelpers'
+import { isPrivyEmbeddedSignerAuthError } from '@/lib/auth/privyEmbeddedSignerAuthErrors'
 
 type XmtpClient = Client
 

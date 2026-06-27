@@ -5,7 +5,7 @@ sidebar_position: 4
 
 # Impairment v1 disclosures
 
-Public behavior summary for `CreatorOVault` **impairment side-pocketing v1** (greenfield vaults on module storage v3).
+Public behavior summary for `CreatorOVault` **impairment side-pocketing v1** (new vault launches on module storage v3).
 
 ## What v1 does
 

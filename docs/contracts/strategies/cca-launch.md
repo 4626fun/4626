@@ -42,7 +42,18 @@ If failed: finalizeFailedAuction() / sweepUnsoldTokens() clears strategy state f
 
 **Deposit bounds:** first activation deposit must be **50M–100M** creator coin (18 decimals). The split applies to **wrapped share tokens** minted from that deposit, not raw creator coin units 1:1.
 
-**Auction seed pair:** the CCA itself is seeded **99% creator coin / 1% USDC** for price discovery — separate from the 30/30/30/10 share allocation above.
+## Auction timing
+
+The CCA strategy schedules auctions on the **next Thursday 00:00 UTC** weekly epoch (`CCALaunchStrategy._deriveScheduledStartBlock`). After Phase 2 finalize, the app typically calls **`launchDeferredAuction`** (Phase 4) with the 30% auction leg plus 10% LP reserve metadata.
+
+| Phase | Meaning |
+|-------|---------|
+| **AuctionScheduled** | Auction created; bids not open until `startBlock` |
+| **AuctionLive** | Bids accepted until `endBlock` |
+| **Graduated** | `sweepCurrency()` → `migrate()` eligible after delays |
+| **Failed** | `finalizeFailedAuction()` / `sweepUnsoldTokens()` clears state for relaunch |
+
+**Charm 99/1 bootstrap (not CCA):** when the Charm strategy first seeds an empty LP, it targets ~**99% creator coin / 1% USDC** — this runs in **Phase 3**, separate from the fair-launch auction.
 
 ## Key Functions
 

@@ -5,7 +5,7 @@ sidebar_position: 5
 
 # Step 4: After activation
 
-What happens **after** [Step 3: Activate vault](/guides/activate-vault). Activation starts the auction; it does **not** open secondary DEX trading.
+What happens **after** [Step 3: Activate vault](/guides/activate-vault). Activation finalizes your deposit and share split; it does **not** immediately open secondary DEX trading.
 
 <div class="docs-at-a-glance">
 
@@ -22,7 +22,7 @@ What happens **after** [Step 3: Activate vault](/guides/activate-vault). Activat
 | Item | State |
 |------|--------|
 | Vault | Funded (50M–100M creator coin) |
-| Fair-launch auction | **In progress** |
+| Fair-launch auction | **Scheduled or live** (Thursday 00:00 UTC epoch) |
 | `■` ShareOFT on DEX | **Not yet** |
 | Lottery | **Not yet** (needs qualifying live **buys**) |
 | Milestone | **Activated** |
@@ -44,10 +44,11 @@ Solana is optional for Base trading — the 30% bridge leg may complete after fi
 
 | Phase | What happens | Your action | Milestone |
 |-------|----------------|-------------|-----------|
-| **Auction running** | Uniswap V4 auction finds clearing price | Monitor app | Activated |
-| **Auction complete** | Finalize orchestration runs | Usually none | → Finalize |
-| **Finalize** | Base settlement; optional Solana bridge (~30% `■`) | Follow app if prompted | → **Trading live** |
-| **Strategies** | Charm 45% · Ajna 45% · idle buffer | Automatic (launch bundle) | Trading live |
+| **Auction scheduled** | CCA created; bids open at next Thursday 00:00 UTC | Monitor app | Activated |
+| **Auction live** | Uniswap V4 auction finds clearing price | Monitor app | Activated |
+| **Auction complete** | Graduation / settlement orchestration | Usually none | → Finalize |
+| **Finalize** | Base settlement; `■` split 30/30/30/10 applied | Follow app if prompted | → **Trading live** |
+| **Strategies** | Charm 45% · Ajna 45% · 10% idle | Automatic (launch bundle) | Trading live |
 | **Solana (optional)** | Bridged `■` + Meteora may follow | None | Optional |
 
 ## Trading live on Base

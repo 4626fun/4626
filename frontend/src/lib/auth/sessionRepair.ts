@@ -1,4 +1,5 @@
-import { isLocalXmtpStateInvalidError, isPrivyEmbeddedSignerAuthError } from '@/lib/xmtp/xmtpHelpers'
+import { isLocalXmtpStateInvalidError } from '@/lib/xmtp/xmtpHelpers'
+import { isPrivyEmbeddedSignerAuthError } from '@/lib/auth/privyEmbeddedSignerAuthErrors'
 
 /**
  * Shared, bounded session-repair primitive used by the waitlist login flow,

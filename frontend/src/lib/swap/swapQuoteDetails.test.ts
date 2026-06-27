@@ -115,6 +115,19 @@ describe('swapQuoteDetails', () => {
     ).toBe('1 USDC = 95840.4 akita')
   })
 
+  it('formats tiny execution rates without scientific notation', () => {
+    const rate = formatSwapExchangeRate({
+      amountIn: '1',
+      tokenInSymbol: 'OS',
+      amountOut: '0.0000002993133619015909',
+      tokenOutSymbol: 'ETH',
+    })
+    expect(rate).toBeTruthy()
+    expect(rate).not.toMatch(/e[-+]/i)
+    expect(rate).toContain('1 OS =')
+    expect(rate).toContain('ETH')
+  })
+
   it('summarizes mixed v3/v4 route protocols', () => {
     expect(
       summarizeRouteProtocols([
