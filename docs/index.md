@@ -1,7 +1,9 @@
 ---
 title: 4626
-sidebar_position: 1
+sidebar_label: Home
+sidebar_position: 0
 slug: /
+hide_title: true
 hide_table_of_contents: true
 ---
 
@@ -40,6 +42,12 @@ hide_table_of_contents: true
   </a>
 </div>
 
-**App:** [app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault) · **Addresses:** [v1.14.1](/reference/addresses)
-
-[4626.fun](https://4626.fun) · [GitHub](https://github.com/wenakita/4626)
+<div class="home-links">
+  <a class="home-links__item" href="https://app.4626.fun/deploy/vault">Launch app</a>
+  <span class="home-links__sep" aria-hidden="true">·</span>
+  <a class="home-links__item" href="/reference/addresses">Addresses (v1.14.1)</a>
+  <span class="home-links__sep" aria-hidden="true">·</span>
+  <a class="home-links__item" href="https://4626.fun">4626.fun</a>
+  <span class="home-links__sep" aria-hidden="true">·</span>
+  <a class="home-links__item" href="https://github.com/wenakita/4626">GitHub</a>
+</div>
