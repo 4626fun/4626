@@ -1,5 +1,5 @@
 # CCALaunchStrategy
-[Git Source](https://github.com/wenakita/4626/blob/main/contracts/vault/strategies/CCALaunchStrategy.sol)
+[Git Source](https://github.com/wenakita/4626/blob/2951e17122326ff4a23b28e80356c44121ebf59c/contracts/vault/strategies/CCALaunchStrategy.sol)
 
 **Inherits:**
 Ownable, ReentrancyGuard
@@ -25,6 +25,10 @@ WHY CCA?
 - Graduates to Uniswap V4 pool automatically
 
 CCA Factory is chain-specific; configure via `CCA_FACTORY`.
+
+Vault share allocation (30/30/30/10 at finalize) is enforced by `DeploymentBatcher`
+— this strategy receives explicit `amount` and `lpReserveAmount` from the batcher;
+it does not compute global vault splits internally.
 
 
 ## Constants
@@ -63,33 +67,6 @@ Basis points denominator.
 
 ```solidity
 uint256 public constant BPS_DENOMINATOR = 10_000
-```
-
-
-### AUCTION_SPLIT_MPS
-Auction allocation: 40%
-
-
-```solidity
-uint24 public constant AUCTION_SPLIT_MPS = 4_000_000
-```
-
-
-### VESTING_SPLIT_MPS
-Creator vesting allocation: 40%
-
-
-```solidity
-uint24 public constant VESTING_SPLIT_MPS = 4_000_000
-```
-
-
-### LP_RESERVE_SPLIT_MPS
-LP reserve allocation: 20%
-
-
-```solidity
-uint24 public constant LP_RESERVE_SPLIT_MPS = 2_000_000
 ```
 
 
@@ -565,9 +542,10 @@ function launchAuction(uint256 amount, uint256 floorPrice, uint128 requiredRaise
 
 ### launchAuctionWithReserve
 
-Launch auction with explicit LP reserve metadata (for 40/40/20 batch flows).
+Launch auction with explicit LP reserve metadata from the batcher.
 
-`lpReserveAmount` is expected to remain in the strategy for post-auction migration.
+`lpReserveAmount` stays in the strategy for post-auction migration. Amounts are
+computed by `DeploymentBatcher` (30% auction / 30% vesting / 30% Solana / 10% LP reserve).
 
 
 ```solidity

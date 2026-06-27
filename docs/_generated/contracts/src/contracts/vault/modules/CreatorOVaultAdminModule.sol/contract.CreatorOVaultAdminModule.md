@@ -1,5 +1,5 @@
 # CreatorOVaultAdminModule
-[Git Source](https://github.com/wenakita/4626/blob/main/contracts/vault/modules/CreatorOVaultAdminModule.sol)
+[Git Source](https://github.com/wenakita/4626/blob/2951e17122326ff4a23b28e80356c44121ebf59c/contracts/vault/modules/CreatorOVaultAdminModule.sol)
 
 **Inherits:**
 [CreatorOVaultModuleBase](/contracts/vault/modules/CreatorOVaultModuleBase.sol/abstract.CreatorOVaultModuleBase.md), [ICreatorOVaultModuleIdentity](/contracts/vault/modules/ICreatorOVaultModuleIdentity.sol/interface.ICreatorOVaultModuleIdentity.md)

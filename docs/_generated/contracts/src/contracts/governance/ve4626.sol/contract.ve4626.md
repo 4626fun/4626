@@ -1,5 +1,5 @@
 # ve4626
-[Git Source](https://github.com/wenakita/4626/blob/main/contracts/governance/ve4626.sol)
+[Git Source](https://github.com/wenakita/4626/blob/2951e17122326ff4a23b28e80356c44121ebf59c/contracts/governance/ve4626.sol)
 
 **Inherits:**
 [Ive4626](/contracts/governance/VaultGaugeVoting.sol/interface.Ive4626.md), Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyGuard

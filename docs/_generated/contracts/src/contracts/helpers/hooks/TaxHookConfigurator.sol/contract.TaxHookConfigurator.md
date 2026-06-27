@@ -1,5 +1,5 @@
 # TaxHookConfigurator
-[Git Source](https://github.com/wenakita/4626/blob/main/contracts/helpers/hooks/TaxHookConfigurator.sol)
+[Git Source](https://github.com/wenakita/4626/blob/2951e17122326ff4a23b28e80356c44121ebf59c/contracts/helpers/hooks/TaxHookConfigurator.sol)
 
 **Inherits:**
 Ownable

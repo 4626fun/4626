@@ -102,6 +102,10 @@ interface IVaultTelemetry {
  *      - Graduates to Uniswap V4 pool automatically
  *
  * @dev CCA Factory is chain-specific; configure via `CCA_FACTORY`.
+ *
+ * @dev Vault share allocation (30/30/30/10 at finalize) is enforced by `DeploymentBatcher`
+ *      — this strategy receives explicit `amount` and `lpReserveAmount` from the batcher;
+ *      it does not compute global vault splits internally.
  */
 contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -122,12 +126,6 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     uint256 public constant Q96 = 2 ** 96;
     /// @notice Basis points denominator.
     uint256 public constant BPS_DENOMINATOR = 10_000;
-    /// @notice Auction allocation: 40%
-    uint24 public constant AUCTION_SPLIT_MPS = 4_000_000;
-    /// @notice Creator vesting allocation: 40%
-    uint24 public constant VESTING_SPLIT_MPS = 4_000_000;
-    /// @notice LP reserve allocation: 20%
-    uint24 public constant LP_RESERVE_SPLIT_MPS = 2_000_000;
     enum LifecyclePhase {
         Idle,
         AuctionLive,
@@ -567,8 +565,9 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Launch auction with explicit LP reserve metadata (for 40/40/20 batch flows).
-     * @dev `lpReserveAmount` is expected to remain in the strategy for post-auction migration.
+     * @notice Launch auction with explicit LP reserve metadata from the batcher.
+     * @dev `lpReserveAmount` stays in the strategy for post-auction migration. Amounts are
+     *      computed by `DeploymentBatcher` (30% auction / 30% vesting / 30% Solana / 10% LP reserve).
      */
     function launchAuctionWithReserve(
         uint256 amount,

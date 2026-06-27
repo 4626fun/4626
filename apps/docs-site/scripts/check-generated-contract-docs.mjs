@@ -22,13 +22,6 @@ const STALE_PATTERNS = [
   { pattern: /5M\s+tokens/i, label: '5M deposit minimum' },
 ];
 
-/** Strategy-local split constants — not the batcher finalize 30/30/30/10 product split. */
-const STRATEGY_LOCAL_SPLIT_ALLOWLIST = /CCALaunchStrategy/i;
-
-function isBatcherDoc(filePath) {
-  return /DeploymentBatcher/i.test(filePath);
-}
-
 function main() {
   if (!existsSync(GENERATED_ROOT)) {
     console.log('[check:generated-contract-docs] skip — no docs/_generated/contracts (run forge doc first)');
@@ -42,28 +35,15 @@ function main() {
   }
 
   const violations = [];
-  const warnings = [];
 
   for (const file of files) {
     const text = readFileSync(file, 'utf8');
     const rel = path.relative(REPO_ROOT, file);
-    const batcherDoc = isBatcherDoc(rel);
-    const strategyLocal = STRATEGY_LOCAL_SPLIT_ALLOWLIST.test(rel);
 
     for (const { pattern, label } of STALE_PATTERNS) {
-      if (!pattern.test(text)) continue;
-      if (strategyLocal && !batcherDoc) {
-        warnings.push({ file: rel, label: `${label} (strategy-local constants — see docs/_generated/README.md)` });
-        continue;
+      if (pattern.test(text)) {
+        violations.push({ file: rel, label });
       }
-      violations.push({ file: rel, label });
-    }
-  }
-
-  if (warnings.length > 0) {
-    console.warn('[check:generated-contract-docs] informational warnings:');
-    for (const w of warnings) {
-      console.warn(`  - ${w.file}: ${w.label}`);
     }
   }
 

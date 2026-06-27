@@ -35,6 +35,6 @@ pnpm -C apps/docs-site check:contract-facts
 
 ## Known drift risks
 
-Forge doc output reflects **NatSpec comments** in Solidity, which can lag refactors (e.g. retired 40/40/20 split language). The guard script flags stale split/deposit claims in generated contract markdown when present.
+Forge doc output reflects **NatSpec comments** in Solidity. Regenerate after contract changes (`pnpm -C apps/docs-site generate:contracts`). The guard script flags retired split/deposit language (e.g. 40/40/20, 5M deposit) in generated contract markdown.
 
-**Exception:** `CCALaunchStrategy` still exposes strategy-local `AUCTION_SPLIT_MPS` / `VESTING_SPLIT_MPS` / `LP_RESERVE_SPLIT_MPS` (40/40/20 MPS) in source — that is **not** the vault finalize split. Creator-facing **30/30/30/10** lives in `DeploymentBatcher` at `finalizePhase2`. Do not copy CCA strategy constants into public launch guides.
+**Vault finalize split (30/30/30/10)** is defined on `DeploymentBatcher` — not on `CCALaunchStrategy`. Public launch guides must cite the batcher split, not forge doc from unrelated contracts.

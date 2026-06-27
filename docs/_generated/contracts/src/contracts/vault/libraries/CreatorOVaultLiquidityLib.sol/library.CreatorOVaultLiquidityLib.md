@@ -1,5 +1,5 @@
 # CreatorOVaultLiquidityLib
-[Git Source](https://github.com/wenakita/4626/blob/main/contracts/vault/libraries/CreatorOVaultLiquidityLib.sol)
+[Git Source](https://github.com/wenakita/4626/blob/2951e17122326ff4a23b28e80356c44121ebf59c/contracts/vault/libraries/CreatorOVaultLiquidityLib.sol)
 
 Read-only liquidity transparency for CreatorOVault (P0 / P2 integrator surface).
 
