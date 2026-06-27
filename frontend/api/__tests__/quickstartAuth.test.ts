@@ -94,6 +94,7 @@ vi.mock('@4626/server-core', () => ({
     creatorQuickstart: { windowMs: 60_000, maxRequests: 20 },
   },
   checkRateLimit: checkRateLimitMock,
+  checkDurableRateLimit: checkRateLimitMock,
   rateLimitKey: rateLimitKeyMock,
   enableCswAgent: enableCswAgentMock,
   getOrCreateCreatorXmtpAgent: getOrCreateCreatorXmtpAgentMock,

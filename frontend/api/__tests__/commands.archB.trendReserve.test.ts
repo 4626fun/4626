@@ -43,6 +43,7 @@ vi.mock('@4626/server-core', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
+    checkDurableRateLimit: vi.fn(async () => ({ allowed: true, remaining: 999, resetAt: Date.now() + 60_000, source: 'memory' })),
     resolveCommandIssuerContextByAddress: (...args: unknown[]) => resolveContextMock(...args),
     isExecutionReady: (resolution: { status: string }) => resolution.status === 'ready',
   }

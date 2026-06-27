@@ -87,6 +87,7 @@ vi.mock('@4626/server-core', () => ({
   isDbConfigured: isDbConfiguredMock,
   getDb: getDbMock,
   checkRateLimit: checkRateLimitMock,
+  checkDurableRateLimit: checkRateLimitMock,
   RATE_LIMITS: {
     deployCreate: { limit: 3, windowMs: 60_000 },
     deploySessionDryRun: { windowMs: 60_000, maxRequests: 10 },

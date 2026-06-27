@@ -35,6 +35,7 @@ vi.mock('@4626/server-core', () => ({
   isAdminAddress: isAdminAddressMock,
   RATE_LIMITS: { adminAction: { windowMs: 60_000, maxRequests: 30 } },
   checkRateLimit: checkRateLimitMock,
+  checkDurableRateLimit: checkRateLimitMock,
   rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
   getClientIp: vi.fn(() => '127.0.0.1'),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },

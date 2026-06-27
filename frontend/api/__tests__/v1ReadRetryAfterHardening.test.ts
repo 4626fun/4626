@@ -24,6 +24,7 @@ vi.mock('@4626/server-core', () => ({
   guardAgentApiRequest: mocks.guardAgentApiRequest,
   getClientIp: mocks.getClientIp,
   checkRateLimit: mocks.checkRateLimit,
+  checkDurableRateLimit: mocks.checkRateLimit,
   rateLimitKey: mocks.rateLimitKey,
   getDb: mocks.getDb,
   isDbConfigured: mocks.isDbConfigured,

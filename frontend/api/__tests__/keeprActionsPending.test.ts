@@ -8,7 +8,7 @@ const { ensureKeeprSchemaMock, getDbMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('@4626/server-core', () => ({
-  handleOptions: () => false,
+  checkDurableRateLimit: vi.fn(async () => ({ allowed: true, remaining: 999, resetAt: Date.now() + 60_000, source: 'memory' })),  handleOptions: () => false,
   setCors: () => undefined,
   setNoStore: () => undefined,
   getDb: getDbMock,

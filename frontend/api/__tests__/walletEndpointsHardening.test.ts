@@ -45,6 +45,7 @@ vi.mock('@4626/server-core', () => ({
   readRequestPrincipalAddress: readRequestPrincipalAddressMock,
   resolveAuthorizedRequestPrincipal: resolveAuthorizedRequestPrincipalMock,
   checkRateLimit: checkRateLimitMock,
+  checkDurableRateLimit: checkRateLimitMock,
   RATE_LIMITS: {
     cswLink: { windowMs: 60_000, maxRequests: 20 },
     solanaSetCanonical: { windowMs: 60_000, maxRequests: 30 },

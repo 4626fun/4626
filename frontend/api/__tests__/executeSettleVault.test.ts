@@ -15,6 +15,7 @@ vi.mock('@4626/server-core', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('@4626/server-core')
   return {
     ...actual,
+    checkDurableRateLimit: vi.fn(async () => ({ allowed: true, remaining: 999, resetAt: Date.now() + 60_000, source: 'memory' })),
     getDb: getDbMock,
     isDbConfigured: () => true,
   }

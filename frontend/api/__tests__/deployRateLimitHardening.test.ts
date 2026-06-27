@@ -25,6 +25,7 @@ vi.mock('@4626/server-core', () => ({
   readJsonBody: mocks.readJsonBody,
   readBoundedJsonObjectBody: mocks.readBoundedJsonObjectBody,
   checkRateLimit: mocks.checkRateLimit,
+  checkDurableRateLimit: mocks.checkRateLimit,
   getClientIp: mocks.getClientIp,
   rateLimitKey: mocks.rateLimitKey,
   logger: mocks.logger,

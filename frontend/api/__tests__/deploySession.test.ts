@@ -73,6 +73,7 @@ vi.mock('@4626/server-core', () => ({
     error: vi.fn(),
   },
   checkRateLimit: checkRateLimitMock,
+  checkDurableRateLimit: checkRateLimitMock,
   RATE_LIMITS: {
     deploySessionStatus: { windowMs: 60_000, maxRequests: 240 },
     deploySessionContinue: { windowMs: 60_000, maxRequests: 30 },

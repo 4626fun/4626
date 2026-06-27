@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@4626/server-core', () => ({
   guardAgentApiRequest: mocks.guardAgentApiRequest,
   checkRateLimit: mocks.checkRateLimit,
+  checkDurableRateLimit: mocks.checkRateLimit,
   getClientIp: mocks.getClientIp,
   rateLimitKey: mocks.rateLimitKey,
   RATE_LIMITS: {

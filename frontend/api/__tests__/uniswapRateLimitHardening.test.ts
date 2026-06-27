@@ -18,6 +18,7 @@ vi.mock('@4626/server-core', async () => {
   return {
     ...actual,
     checkRateLimit: checkRateLimitMock,
+    checkDurableRateLimit: checkRateLimitMock,
     getClientIp: vi.fn(() => '198.51.100.77'),
     rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
     readRequestPrincipalAddress: readRequestPrincipalAddressMock,

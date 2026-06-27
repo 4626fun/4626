@@ -11,19 +11,10 @@ import {
   rateLimitKey,
   getClientIp,
 } from '@4626/server-core'
-
-const DEFAULT_BASE_RPCS = [
-  'https://mainnet.base.org',
-  'https://base.llamarpc.com',
-]
-
-function getBaseRpcUrls(): string[] {
-  const raw = (process.env.BASE_RPC_URL ?? '').trim()
-  if (!raw) return DEFAULT_BASE_RPCS
-  const parts = raw.split(',').map((s) => s.trim()).filter(Boolean)
-  const urls = parts.length > 0 ? [...parts, ...DEFAULT_BASE_RPCS] : [...DEFAULT_BASE_RPCS]
-  return [...new Set(urls)]
-}
+import {
+  resolveServerBaseRpcUrls,
+  summarizeRpcFailure,
+} from '../../../server/_lib/onchain/baseRpcUrl.js'
 
 const COINBASE_SMART_WALLET_ABI = [
   {
@@ -83,7 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Invalid ownerAddress' } satisfies ApiEnvelope<never>)
   }
 
-  const rpcs = getBaseRpcUrls()
+  const rpcs = resolveServerBaseRpcUrls()
   const { createPublicClient, encodeAbiParameters, http } = await import('viem')
   const { base } = await import('viem/chains')
 
@@ -155,10 +146,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (lastError) {
-    console.error('[smartWalletOwner] All RPC attempts failed:', lastError)
+    console.error('[smartWalletOwner] All RPC attempts failed:', summarizeRpcFailure(lastError))
   }
-  return res.status(500).json({
+  return res.status(503).json({
     success: false,
-    error: 'Failed to check ownership',
+    error: 'Failed to check ownership (Base RPC unavailable)',
   } satisfies ApiEnvelope<never>)
 }

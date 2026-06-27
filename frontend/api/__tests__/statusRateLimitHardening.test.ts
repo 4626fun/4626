@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@4626/server-core', () => ({
-  handleOptions: mocks.handleOptions,
+  checkDurableRateLimit: vi.fn(async () => ({ allowed: true, remaining: 999, resetAt: Date.now() + 60_000, source: 'memory' })),  handleOptions: mocks.handleOptions,
   setCors: mocks.setCors,
 }))
 

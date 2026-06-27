@@ -24,7 +24,7 @@ const {
 }))
 
 vi.mock('@4626/server-core', () => ({
-  handleOptions: vi.fn(() => false),
+  checkDurableRateLimit: vi.fn(async () => ({ allowed: true, remaining: 999, resetAt: Date.now() + 60_000, source: 'memory' })),  handleOptions: vi.fn(() => false),
   setCors: vi.fn(),
   setNoStore: vi.fn(),
   getApiContracts: getApiContractsMock,

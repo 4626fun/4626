@@ -61,6 +61,7 @@ vi.mock('@4626/server-core', () => ({
   readBoundedJsonObjectBody: readBoundedJsonObjectBodyMock,
   guardAgentApiRequest: guardAgentApiRequestMock,
   checkRateLimit: checkRateLimitMock,
+  checkDurableRateLimit: checkRateLimitMock,
   getClientIp: getClientIpMock,
   rateLimitKey: rateLimitKeyMock,
   requireKeeprApiKey: requireKeeprApiKeyMock,

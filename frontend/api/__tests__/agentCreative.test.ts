@@ -48,6 +48,7 @@ vi.mock('@4626/server-core', () => ({
     agentCreative: { windowMs: 60_000, maxRequests: 20 },
   },
   checkRateLimit: checkRateLimitMock,
+  checkDurableRateLimit: checkRateLimitMock,
   createCorrelationId: vi.fn(() => 'creative-correlation-id'),
   getClientIp: getClientIpMock,
   handleOptions: vi.fn(() => false),

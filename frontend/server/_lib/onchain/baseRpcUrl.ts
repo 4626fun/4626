@@ -1,10 +1,24 @@
 const DEFAULT_BASE_RPC = 'https://mainnet.base.org'
 
+/** Public fallbacks safe for Vercel/Railway server-side reads (no browser CF challenges). */
 const DEFAULT_BASE_RPCS = [
   DEFAULT_BASE_RPC,
-  'https://base.llamarpc.com',
   'https://base-mainnet.public.blastapi.io',
 ] as const
+
+/** LlamaRPC and similar endpoints often return Cloudflare challenges to datacenter IPs. */
+export function isServerBlockedRpcUrl(rpcUrl: string): boolean {
+  try {
+    const host = new URL(rpcUrl.trim()).hostname.toLowerCase()
+    return host === 'llamarpc.com' || host.endsWith('.llamarpc.com')
+  } catch {
+    return false
+  }
+}
+
+function filterServerRpcUrls(urls: readonly string[]): string[] {
+  return urls.filter((url) => !isServerBlockedRpcUrl(url))
+}
 
 /** True when the URL targets a local Anvil/Hardhat fork (deploy dry-run only). */
 export function isLocalForkRpcUrl(rpcUrl: string): boolean {
@@ -35,10 +49,23 @@ function splitConfiguredBaseRpcUrls(): string[] {
  */
 export function resolveServerBaseRpcUrls(options?: { allowLocalFork?: boolean }): string[] {
   const allowLocalFork = options?.allowLocalFork === true
-  const configured = splitConfiguredBaseRpcUrls().filter(
-    (url) => allowLocalFork || !isLocalForkRpcUrl(url),
+  const configured = filterServerRpcUrls(
+    splitConfiguredBaseRpcUrls().filter((url) => allowLocalFork || !isLocalForkRpcUrl(url)),
   )
-  return Array.from(new Set([...configured, ...DEFAULT_BASE_RPCS]))
+  return Array.from(new Set([...configured, ...filterServerRpcUrls(DEFAULT_BASE_RPCS)]))
+}
+
+/** Short, log-safe RPC failure summary (avoids dumping Cloudflare HTML bodies). */
+export function summarizeRpcFailure(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err)
+  if (
+    message.includes('Just a moment')
+    || message.includes('cf-mitigated')
+    || /Status:\s*403/.test(message)
+  ) {
+    return 'RPC access denied (Cloudflare-protected endpoint from server IP)'
+  }
+  return message.length > 240 ? `${message.slice(0, 237)}…` : message
 }
 
 export function resolveServerBaseRpcUrl(options?: { allowLocalFork?: boolean }): string {

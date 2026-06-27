@@ -28,6 +28,7 @@ vi.mock('@4626/server-core', () => ({
   getDb: mocks.getDb,
   getClientIp: mocks.getClientIp,
   checkRateLimit: mocks.checkRateLimit,
+  checkDurableRateLimit: mocks.checkRateLimit,
   rateLimitKey: mocks.rateLimitKey,
   readRequestPrincipalAddress: mocks.readRequestPrincipalAddress,
   makeSessionToken: mocks.makeSessionToken,

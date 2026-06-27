@@ -39,6 +39,7 @@ vi.mock('@4626/server-core', async () => {
   )
   return {
     ...actual,
+    checkDurableRateLimit: vi.fn(async () => ({ allowed: true, remaining: 999, resetAt: Date.now() + 60_000, source: 'memory' })),
     readRequestPrincipal: (req: any) => readRequestPrincipalMock(req),
   }
 })

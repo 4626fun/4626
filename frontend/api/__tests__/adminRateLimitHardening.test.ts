@@ -33,6 +33,7 @@ vi.mock('@4626/server-core', () => ({
   isAdminAddress: mocks.isAdminAddress,
   getClientIp: mocks.getClientIp,
   checkRateLimit: mocks.checkRateLimit,
+  checkDurableRateLimit: mocks.checkRateLimit,
   rateLimitKey: mocks.rateLimitKey,
   RATE_LIMITS: { adminAction: { windowMs: 60_000, maxRequests: 30 } },
 }))

@@ -39,6 +39,7 @@ vi.mock('@4626/server-core', () => ({
   readRequestPrincipalAddress: readRequestPrincipalAddressMock,
   resolveAuthorizedRequestPrincipal: resolveAuthorizedRequestPrincipalMock,
   checkRateLimit: checkRateLimitMock,
+  checkDurableRateLimit: checkRateLimitMock,
   getClientIp: getClientIpMock,
   rateLimitKey: rateLimitKeyMock,
   RATE_LIMITS: {

@@ -46,6 +46,7 @@ vi.mock('@4626/server-core', () => ({
   isDbConfigured: mocks.isDbConfigured,
   getClientIp: mocks.getClientIp,
   checkRateLimit: mocks.checkRateLimit,
+  checkDurableRateLimit: mocks.checkRateLimit,
   rateLimitKey: mocks.rateLimitKey,
   resolveAuthorizedRequestPrincipal: mocks.resolveAuthorizedRequestPrincipal,
   provisionCommandIssuerContext: mocks.provisionCommandIssuerContext,

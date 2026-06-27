@@ -63,6 +63,7 @@ vi.mock('@4626/server-core', () => ({
   getClientIp: getClientIpMock,
   rateLimitKey: rateLimitKeyMock,
   checkRateLimit: checkRateLimitMock,
+  checkDurableRateLimit: checkRateLimitMock,
   RATE_LIMITS: {
     lotteryRead: { windowMs: 60_000, maxRequests: 120 },
     lotteryWrite: { windowMs: 60_000, maxRequests: 40 },

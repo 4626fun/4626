@@ -66,6 +66,7 @@ vi.mock('@4626/server-core', async (importOriginal) => {
       agentsRead: { limit: 120, windowMs: 60_000 },
     },
     checkRateLimit: checkRateLimitMock,
+    checkDurableRateLimit: checkRateLimitMock,
     rateLimitKey: rateLimitKeyMock,
     readBoundedJsonObjectBody: readBoundedJsonObjectBodyMock,
     buildWalletIntelligence: buildWalletIntelligenceMock,

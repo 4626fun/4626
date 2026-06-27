@@ -20,6 +20,7 @@ vi.mock('@4626/server-core', async () => {
     setNoStore: vi.fn(),
     getDb: getDbMock,
     checkRateLimit: checkRateLimitMock,
+    checkDurableRateLimit: checkRateLimitMock,
     getClientIp: vi.fn(() => '127.0.0.1'),
     rateLimitKey: vi.fn((scope: string, ip: string) => `${scope}:${ip}`),
   }

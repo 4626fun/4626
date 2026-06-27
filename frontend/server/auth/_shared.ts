@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { getTrustedRequestOrigins, normalizeOrigin } from '../_lib/infra/trust.js'
 import { ensureAuthNonceHandoffSchema } from '../_lib/db/schemaBootstrap.js'
+import { resolveServerBaseRpcUrls } from '../_lib/onchain/baseRpcUrl.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -72,39 +73,11 @@ const eip1271Abi = [
   },
 ] as const
 
-const DEFAULT_BASE_RPCS = [
-  // Public community RPCs (best-effort)
-  'https://base-mainnet.public.blastapi.io',
-  'https://base.llamarpc.com',
-  // Official public endpoint (rate limited)
-  'https://mainnet.base.org',
-] as const
-
-function normalizeRpcUrl(raw: string): string | null {
-  const t = raw.trim()
-  if (!t) return null
-  // Accept bare hostnames pasted by accident.
-  if (!t.startsWith('http://') && !t.startsWith('https://')) return `https://${t}`
-  return t
-}
-
-function getBaseRpcUrls(): string[] {
-  const raw = (process.env.BASE_RPC_URL ?? '').trim()
-  const parts = raw
-    ? raw
-        .split(/[\s,]+/g)
-        .map(normalizeRpcUrl)
-        .filter((x): x is string => Boolean(x))
-    : []
-  const urls = parts.length > 0 ? [...parts, ...DEFAULT_BASE_RPCS] : [...DEFAULT_BASE_RPCS]
-  return Array.from(new Set(urls))
-}
-
 async function verifyEip1271(params: { contract: `0x${string}`; message: string; signature: `0x${string}` }): Promise<boolean> {
   const { createPublicClient, hashMessage, http } = await import('viem')
   const { base } = await import('viem/chains')
 
-  const urls = getBaseRpcUrls()
+  const urls = resolveServerBaseRpcUrls()
   const digest = hashMessage(params.message)
 
   for (const url of urls) {
@@ -142,7 +115,7 @@ async function verifySmartWalletSignature(params: {
   const { createPublicClient, http } = await import('viem')
   const { base } = await import('viem/chains')
 
-  for (const url of getBaseRpcUrls()) {
+  for (const url of resolveServerBaseRpcUrls()) {
     try {
       const client = createPublicClient({
         chain: base,

@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import {
   isLocalForkRpcUrl,
+  isServerBlockedRpcUrl,
   normalizeViemHttpRpcUrl,
   resolveServerBaseRpcUrl,
   resolveServerBaseRpcUrls,
   resolveDeploySessionRpcUrl,
+  summarizeRpcFailure,
 } from './baseRpcUrl.js'
 
 describe('baseRpcUrl', () => {
@@ -49,5 +51,25 @@ describe('baseRpcUrl', () => {
     expect(resolveServerBaseRpcUrl()).toBe('https://base.example/rpc')
     expect(resolveDeploySessionRpcUrl()).toBe('http://127.0.0.1:8545')
     delete process.env.DEPLOY_DRY_RUN_LOCAL_RPC_URL
+  })
+
+  it('excludes Cloudflare-challenged LlamaRPC from server defaults', () => {
+    delete process.env.BASE_RPC_URL
+    expect(resolveServerBaseRpcUrls().some(isServerBlockedRpcUrl)).toBe(false)
+    expect(isServerBlockedRpcUrl('https://base.llamarpc.com/')).toBe(true)
+  })
+
+  it('drops configured LlamaRPC URLs for server-side reads', () => {
+    process.env.BASE_RPC_URL = 'https://base.llamarpc.com,https://base.example/rpc'
+    expect(resolveServerBaseRpcUrls()).toEqual([
+      'https://base.example/rpc',
+      'https://mainnet.base.org',
+      'https://base-mainnet.public.blastapi.io',
+    ])
+  })
+
+  it('summarizes Cloudflare HTML RPC failures without dumping HTML', () => {
+    const summary = summarizeRpcFailure(new Error('HTTP request failed. Status: 403 <!DOCTYPE html>Just a moment'))
+    expect(summary).toBe('RPC access denied (Cloudflare-protected endpoint from server IP)')
   })
 })

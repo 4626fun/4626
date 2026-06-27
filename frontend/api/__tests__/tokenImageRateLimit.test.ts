@@ -24,6 +24,7 @@ vi.mock('../../server/zora/_shared.js', () => ({
 
 vi.mock('@4626/server-core', () => ({
   checkRateLimit: (...args: unknown[]) => mocks.checkRateLimitMock(...args),
+  checkDurableRateLimit: (...args: unknown[]) => mocks.checkRateLimitMock(...args),
   getClientIp: (...args: unknown[]) => mocks.getClientIpMock(...args),
   rateLimitKey: (...parts: string[]) => parts.join(':'),
 }))

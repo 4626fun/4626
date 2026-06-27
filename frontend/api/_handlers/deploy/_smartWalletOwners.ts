@@ -11,11 +11,10 @@ import {
   rateLimitKey,
   getClientIp,
 } from '@4626/server-core'
-
-const DEFAULT_BASE_RPCS = [
-  'https://mainnet.base.org',
-  'https://base.llamarpc.com',
-]
+import {
+  resolveServerBaseRpcUrls,
+  summarizeRpcFailure,
+} from '../../../server/_lib/onchain/baseRpcUrl.js'
 
 const COINBASE_SMART_WALLET_OWNERS_ABI = [
   { type: 'function', name: 'ownerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -39,14 +38,6 @@ type ResponseData = {
   ownerCount: number
   nextOwnerIndex: number | null
   owners: OwnerEntry[]
-}
-
-function getBaseRpcUrls(): string[] {
-  const raw = (process.env.BASE_RPC_URL ?? '').trim()
-  if (!raw) return DEFAULT_BASE_RPCS
-  const parts = raw.split(',').map((s) => s.trim()).filter(Boolean)
-  const urls = parts.length > 0 ? [...parts, ...DEFAULT_BASE_RPCS] : [...DEFAULT_BASE_RPCS]
-  return [...new Set(urls)]
 }
 
 function isAddressLike(v: unknown): v is `0x${string}` {
@@ -97,7 +88,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { createPublicClient, getAddress, http } = await import('viem')
   const { base } = await import('viem/chains')
 
-  const rpcs = getBaseRpcUrls()
+  const rpcs = resolveServerBaseRpcUrls()
   let lastError: Error | null = null
   for (const rpc of rpcs) {
     try {
@@ -172,8 +163,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  return res.status(500).json({
+  if (lastError) {
+    console.error('[smartWalletOwners] All RPC attempts failed:', summarizeRpcFailure(lastError))
+  }
+  return res.status(503).json({
     success: false,
-    error: lastError?.message || 'Failed to read smart wallet owners',
+    error: 'Failed to read smart wallet owners (Base RPC unavailable)',
   } satisfies ApiEnvelope<never>)
 }

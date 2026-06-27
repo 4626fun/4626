@@ -54,6 +54,7 @@ vi.mock('@4626/server-core', async (importOriginal) => {
     resolveAuthorizedRequestPrincipal: resolveAuthorizedRequestPrincipalMock,
     syncUserWallets: syncUserWalletsMock,
     checkRateLimit: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
+    checkDurableRateLimit: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
     getClientIp: vi.fn(() => '127.0.0.1'),
     rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
     RATE_LIMITS: { cswLink: { limit: 50, windowMs: 60_000 } },

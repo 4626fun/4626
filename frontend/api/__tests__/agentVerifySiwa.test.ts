@@ -72,6 +72,7 @@ vi.mock('@4626/server-core', () => ({
     authAgentWrite: { limit: 10, windowMs: 60_000 },
   },
   checkRateLimit: checkRateLimitMock,
+  checkDurableRateLimit: checkRateLimitMock,
   getClientIp: getClientIpMock,
   rateLimitKey: rateLimitKeyMock,
 }))

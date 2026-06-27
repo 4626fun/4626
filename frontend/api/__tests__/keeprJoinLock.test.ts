@@ -41,6 +41,7 @@ vi.mock('@4626/server-core', () => ({
   getClientIp: vi.fn(() => '127.0.0.1'),
   rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
   checkRateLimit: vi.fn(() => ({ allowed: true, remaining: 100, resetAt: Date.now() + 60_000 })),
+  checkDurableRateLimit: vi.fn(() => ({ allowed: true, remaining: 100, resetAt: Date.now() + 60_000 })),
   RATE_LIMITS: {
     creatorQuickstart: { windowMs: 60_000, maxRequests: 20 },
   },

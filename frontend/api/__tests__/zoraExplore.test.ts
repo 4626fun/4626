@@ -44,7 +44,7 @@ const {
 }))
 
 vi.mock('@4626/server-core', () => ({
-  getDb: getDbMock,
+  checkDurableRateLimit: vi.fn(async () => ({ allowed: true, remaining: 999, resetAt: Date.now() + 60_000, source: 'memory' })),  getDb: getDbMock,
 }))
 
 vi.mock('../../server/_lib/zora/creatorEthosProjection.js', async (importOriginal) => {

@@ -35,6 +35,7 @@ vi.mock('@4626/server-core', async () => {
   return {
     ...actual,
     checkRateLimit: checkRateLimitMock,
+    checkDurableRateLimit: checkRateLimitMock,
     getClientIp: getClientIpMock,
     rateLimitKey: rateLimitKeyMock,
     readSessionFromRequest: readSessionFromRequestMock,

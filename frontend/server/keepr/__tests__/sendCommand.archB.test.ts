@@ -46,7 +46,7 @@ vi.mock('../../_lib/agent/teeAttestationGate.js', () => ({
 }))
 
 vi.mock('@4626/server-core', () => ({
-  resolveCommandIssuerContextByAddress: (...args: unknown[]) => resolveContextMock(...args),
+  checkDurableRateLimit: vi.fn(async () => ({ allowed: true, remaining: 999, resetAt: Date.now() + 60_000, source: 'memory' })),  resolveCommandIssuerContextByAddress: (...args: unknown[]) => resolveContextMock(...args),
   isExecutionReady: (resolution: { status: string }) => resolution.status === 'ready',
 }))
 
