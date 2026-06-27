@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRight, AlertCircle, Layers, Shield, TrendingUp } from 'lucide-react'
-import { useLogin, usePrivy } from '@privy-io/react-auth'
+import { ArrowLeft, ArrowRight, AlertCircle } from 'lucide-react'
+import { useLoginWithEmail, usePrivy } from '@privy-io/react-auth'
 
 import { Button } from '@/components/ui/Button'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
@@ -9,7 +9,7 @@ import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { APP_ORIGIN } from '@/lib/env/host'
 import { bridgePrivySession } from '@/features/waitlist/waitlistHandoff'
-import { isAlreadyLoggedInAuthError, runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
+import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 
 type WaitlistBootstrapResponse = {
   requiresPrivyAuth: boolean
@@ -22,15 +22,25 @@ type AuthMeResponse = {
 const PRIVY_ACCESS_TOKEN_TIMEOUT_MS = 4_000
 const PRIVY_ACCESS_TOKEN_ATTEMPTS = 8
 const PRIVY_ACCESS_TOKEN_RETRY_DELAY_MS = 250
+const OTP_RESEND_DELAY_MS = 30_000
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-function useSafeWaitlistLogin() {
+function isValidEmail(value: string): boolean {
+  return EMAIL_PATTERN.test(value.trim())
+}
+
+type SafeLoginWithEmail = {
+  sendCode: (input: { email: string }) => Promise<unknown>
+  loginWithCode: (input: { code: string }) => Promise<unknown>
+}
+
+function useSafeLoginWithEmail(): SafeLoginWithEmail {
   try {
-    return useLogin() as {
-      login: (options?: unknown) => Promise<void>
-    }
+    return useLoginWithEmail() as unknown as SafeLoginWithEmail
   } catch {
     return {
-      login: async () => {},
+      sendCode: async () => {},
+      loginWithCode: async () => {},
     }
   }
 }
@@ -129,32 +139,32 @@ async function bootstrapWaitlist(privyAccessToken: string): Promise<WaitlistBoot
   return payload.data
 }
 
-const FEATURES = [
-  { icon: Layers, label: 'Creator vaults' },
-  { icon: Shield, label: 'Non-custodial' },
-  { icon: TrendingUp, label: 'Early access' },
-] as const
-
-const FOOTER_TRUST = 'Built on Base · Non-custodial · ERC-4626 standard' as const
+type SignupStep = 'email' | 'code'
 
 export function WaitlistFlow(props: { sectionId?: string }) {
   const sectionId = props.sectionId ?? 'waitlist-page'
-  const { login } = useSafeWaitlistLogin()
   const privy = useSafePrivyHook()
+  const { sendCode, loginWithCode } = useSafeLoginWithEmail()
 
+  const [step, setStep] = useState<SignupStep>('email')
+  const [email, setEmail] = useState('')
+  const [code, setCode] = useState('')
   const [emailBusy, setEmailBusy] = useState(false)
+  const [codeBusy, setCodeBusy] = useState(false)
   const [signOutBusy, setSignOutBusy] = useState(false)
   const [sessionAddress, setSessionAddress] = useState<string | null>(null)
-  const [sessionChecked, setSessionChecked] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [listCount, setListCount] = useState<number | null>(null)
-  const [autoJoinResolved, setAutoJoinResolved] = useState(false)
+  const [resendAvailableAt, setResendAvailableAt] = useState<number | null>(null)
+  const [nowMs, setNowMs] = useState(() => Date.now())
   const signupInFlightRef = useRef(false)
-  const autoJoinAttemptedRef = useRef(false)
+  const emailInputRef = useRef<HTMLInputElement | null>(null)
+  const codeInputRef = useRef<HTMLInputElement | null>(null)
 
   // Intentional entry from the marketing "Join waitlist" CTA (`/waitlist?join=1`).
-  // Captured once on mount so a later URL cleanup does not re-trigger the popup
-  // on refresh. A passive arrival (no flag) never auto-opens — preserves UX-002.
+  // Used only to auto-focus the inline email field. The email/OTP entry renders
+  // inside the card, so there is no modal to auto-open (preserves UX-002: a
+  // passive arrival just shows the card).
   const joinIntent = useMemo(() => {
     if (typeof window === 'undefined') return false
     try {
@@ -171,7 +181,6 @@ export function WaitlistFlow(props: { sectionId?: string }) {
       const address = await readAuthSessionAddress()
       if (cancelled) return
       setSessionAddress(address)
-      setSessionChecked(true)
     })()
     return () => {
       cancelled = true
@@ -197,35 +206,38 @@ export function WaitlistFlow(props: { sectionId?: string }) {
     return () => { cancelled = true }
   }, [])
 
-  const handleEmailSignup = useCallback(async () => {
-    // R5 fix: in-flight guard prevents concurrent execution when a user
-    // double-clicks the "Join with email" button on the same tick.
-    if (signupInFlightRef.current) return
-    signupInFlightRef.current = true
-    setError(null)
-    setEmailBusy(true)
+  // Auto-focus the email field on intentional CTA arrival.
+  useEffect(() => {
+    if (!joinIntent || !privy.ready || sessionAddress || step !== 'email') return
+    emailInputRef.current?.focus()
+  }, [joinIntent, privy.ready, sessionAddress, step])
+
+  // Focus the code field as soon as we advance to the OTP step.
+  useEffect(() => {
+    if (step === 'code') codeInputRef.current?.focus()
+  }, [step])
+
+  // Tick the resend countdown while it is pending.
+  useEffect(() => {
+    if (resendAvailableAt == null || resendAvailableAt <= Date.now()) return
+    const timer = globalThis.setInterval(() => setNowMs(Date.now()), 1_000)
+    return () => globalThis.clearInterval(timer)
+  }, [resendAvailableAt])
+
+  // Shared post-authentication tail: once Privy is authenticated (after
+  // `loginWithCode`), bridge it into a 4626 session, bootstrap the waitlist row,
+  // and confirm the HttpOnly session. Identical to the prior modal path — only
+  // the trigger changed (inline OTP instead of a popup).
+  const finishJoinAfterPrivyAuth = useCallback(async () => {
     let bridged = false
     try {
-      const needsInteractiveLogin = !privy.authenticated
-      if (needsInteractiveLogin) {
-        try {
-          await login({ loginMethods: ['email'] } as any)
-        } catch (loginError) {
-          if (!isAlreadyLoggedInAuthError(loginError)) {
-            throw loginError
-          }
-        }
-      }
-
       const privyToken = await readPrivyAccessTokenWithRetries({
         read: privy.getAccessToken?.bind(privy) ?? null,
       })
       if (!privyToken) {
-        // Diagnostic logging to help identify the root cause when
-        // getAccessToken() returns empty after OTP. The most common cause is
-        // the privy-session marker cookie being a blocked third-party cookie
-        // (see loopbackSessionMarkerShim.ts). Browser wallet extensions can
-        // also destabilize Privy's embedded wallet initialization.
+        // Most common cause: the `privy-session` marker cookie is blocked as a
+        // third-party cookie (see loopbackSessionMarkerShim.ts), or a wallet
+        // extension destabilized embedded-wallet init.
         console.warn('[waitlist] getAccessToken returned empty after OTP', {
           origin: typeof window !== 'undefined' ? window.location.origin : 'ssr',
           hostname: typeof window !== 'undefined' ? window.location.hostname : 'ssr',
@@ -247,8 +259,6 @@ export function WaitlistFlow(props: { sectionId?: string }) {
 
       let bootstrap = await bootstrapWaitlist(privyToken)
       if (bootstrap.requiresPrivyAuth) {
-        // One bounded retry handles the post-OTP session race where the first
-        // token read can be transiently empty even after Privy sign-in succeeds.
         const retryToken = await readPrivyAccessTokenWithRetries({
           read: privy.getAccessToken?.bind(privy) ?? null,
           attempts: 4,
@@ -267,23 +277,78 @@ export function WaitlistFlow(props: { sectionId?: string }) {
         throw new Error('Sign-in finished but session is still syncing. Please try once more.')
       }
       setSessionAddress(confirmedSessionAddress)
-      // No banner needed — the card itself transforms into the confirmed state.
-    } catch (signupError) {
-      // R4 fix: if the Privy->4626 session bridge succeeded but a later step
-      // (e.g. bootstrap) failed, clear the stale HttpOnly session cookie so
-      // a retry does not inherit a session for an incomplete account.
+    } catch (joinError) {
+      // R4: if the Privy->4626 bridge succeeded but a later step failed, clear
+      // the stale HttpOnly session so a retry does not inherit a session for an
+      // incomplete account.
       if (bridged) {
         await runWaitlistPrivyLogout({
           logout: privy.logout ?? null,
           readToken: privy.getAccessToken ?? null,
         }).catch(() => {})
       }
-      setError(signupError instanceof Error ? signupError.message : 'Email signup failed.')
+      throw joinError
+    }
+  }, [privy])
+
+  // Step 1 — send the 6-digit OTP to the entered email (inline, no modal).
+  const handleSendCode = useCallback(
+    async (resend = false) => {
+      if (signupInFlightRef.current) return
+      const normalizedEmail = email.trim()
+      if (!isValidEmail(normalizedEmail)) {
+        setError('Enter a valid email address.')
+        return
+      }
+      signupInFlightRef.current = true
+      setError(null)
+      setEmailBusy(true)
+      try {
+        await sendCode({ email: normalizedEmail })
+        setStep('code')
+        setCode('')
+        setResendAvailableAt(Date.now() + OTP_RESEND_DELAY_MS)
+      } catch (sendError) {
+        setError(
+          sendError instanceof Error
+            ? sendError.message
+            : `Could not ${resend ? 'resend' : 'send'} the verification code. Please try again.`,
+        )
+      } finally {
+        signupInFlightRef.current = false
+        setEmailBusy(false)
+      }
+    },
+    [email, sendCode],
+  )
+
+  // Step 2 — verify the OTP, then bridge + bootstrap the waitlist session.
+  const handleVerifyCode = useCallback(async () => {
+    if (signupInFlightRef.current) return
+    const normalizedCode = code.replace(/\s+/g, '')
+    if (normalizedCode.length < 6) {
+      setError('Enter the 6-digit code from your email.')
+      return
+    }
+    signupInFlightRef.current = true
+    setError(null)
+    setCodeBusy(true)
+    try {
+      await loginWithCode({ code: normalizedCode })
+      await finishJoinAfterPrivyAuth()
+    } catch (verifyError) {
+      setError(verifyError instanceof Error ? verifyError.message : 'Could not verify the code. Please try again.')
     } finally {
       signupInFlightRef.current = false
-      setEmailBusy(false)
+      setCodeBusy(false)
     }
-  }, [login, privy])
+  }, [code, loginWithCode, finishJoinAfterPrivyAuth])
+
+  const handleEditEmail = useCallback(() => {
+    setStep('email')
+    setCode('')
+    setError(null)
+  }, [])
 
   const handleSignOut = useCallback(async () => {
     if (signOutBusy) return
@@ -295,67 +360,36 @@ export function WaitlistFlow(props: { sectionId?: string }) {
         readToken: privy.getAccessToken ?? null,
       })
       setSessionAddress(null)
+      setStep('email')
+      setEmail('')
+      setCode('')
     } finally {
       setSignOutBusy(false)
     }
   }, [privy.getAccessToken, privy.logout, signOutBusy])
 
-  // UX-002: Never auto-open the Privy modal on *passive* page load (e.g. an
-  // unauthenticated visitor redirected from /swap to /waitlist). It only opens
-  // automatically when the user explicitly clicked the marketing "Join waitlist"
-  // CTA, which carries `?join=1`. We wait for the initial session check so an
-  // already-listed user lands on the "Enter app" state instead of a popup, and
-  // we fire exactly once. After attempting, the `join` flag is stripped from the
-  // URL so a refresh does not re-trigger the popup.
-  useEffect(() => {
-    if (!joinIntent) return
-    if (!privy.ready || !sessionChecked) return
-    if (autoJoinAttemptedRef.current) return
-    if (sessionAddress) {
-      setAutoJoinResolved(true)
-      return
-    }
-    autoJoinAttemptedRef.current = true
-    if (typeof window !== 'undefined') {
-      try {
-        const url = new URL(window.location.href)
-        url.searchParams.delete('join')
-        window.history.replaceState(window.history.state, '', url.toString())
-      } catch {
-        // non-fatal — URL cleanup is best-effort
-      }
-    }
-    void (async () => {
-      try {
-        await handleEmailSignup()
-      } finally {
-        setAutoJoinResolved(true)
-      }
-    })()
-  }, [joinIntent, privy.ready, sessionChecked, sessionAddress, handleEmailSignup])
+  const handleEmailFormSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    void handleSendCode(false)
+  }
 
-  const isBusy = emailBusy || signOutBusy
+  const handleCodeFormSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    void handleVerifyCode()
+  }
 
-  // While the CTA-triggered popup is opening, keep the page as a quiet backdrop
-  // (just the ambient background + a small status line) instead of the full
-  // hero card. If the user cancels or an error occurs, the card is revealed so
-  // they can retry with the button.
-  const autoJoinActive = joinIntent && !autoJoinResolved && !sessionAddress && !error
+  const isBusy = emailBusy || codeBusy || signOutBusy
+  const canResend = resendAvailableAt == null || resendAvailableAt <= nowMs
+  const resendSeconds =
+    resendAvailableAt != null && resendAvailableAt > nowMs ? Math.ceil((resendAvailableAt - nowMs) / 1_000) : 0
 
   return (
     <section
       id={sectionId}
       className="relative flex min-h-[100dvh] w-full items-center justify-center overflow-hidden"
     >
-      {/* Ambient background — radial brand glow + faint wire grid + bottom fade */}
+      {/* Ambient background — faint wire grid + bottom fade */}
       <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'radial-gradient(ellipse 70% 55% at 50% 0%, rgb(var(--brand-primary) / 0.14) 0%, transparent 65%)',
-          }}
-        />
         <div className="absolute inset-0 bg-wire-grid opacity-[0.035]" />
         <div
           className="absolute inset-x-0 bottom-0 h-32"
@@ -365,119 +399,40 @@ export function WaitlistFlow(props: { sectionId?: string }) {
         />
       </div>
 
-      {autoJoinActive ? (
-        <div className="relative flex flex-col items-center justify-center gap-4 px-6 text-center">
-          <PixelWaveLoader name="wave-lr" size={18} color="rgba(255,255,255,0.85)" />
-          <p className="text-sm font-light tracking-wide text-zinc-400">
-            {privy.ready ? 'Opening secure email sign-in…' : 'Preparing secure session…'}
-          </p>
-        </div>
-      ) : (
       <div className="relative mx-auto w-full max-w-md px-4 py-10 sm:px-6 sm:py-14">
-        {/* ─── Single access-pass card — hero copy + signup in one ─── */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className={`glass-card relative w-full overflow-hidden p-6 ring-1 shadow-[0_30px_80px_rgba(0,0,0,0.6)] sm:p-8 ${
-            sessionAddress
-              ? 'ring-[rgb(var(--brand-primary)/0.18)] shadow-[0_30px_90px_rgba(0,0,0,0.65)]'
-              : 'ring-white/5'
-          }`}
+          className="relative w-full space-y-6 sm:space-y-7"
         >
-          {/* top accent hairline + corner glow */}
-          <div
-            className="pointer-events-none absolute inset-x-0 top-0 h-px"
-            style={{
-              background: 'linear-gradient(90deg, transparent, rgb(var(--brand-primary) / 0.4), transparent)',
-            }}
-            aria-hidden="true"
-          />
-          <div
-            className="pointer-events-none absolute -right-20 -top-24 h-48 w-48 rounded-full"
-            style={{
-              background: 'radial-gradient(circle, rgb(var(--brand-primary) / 0.16) 0%, transparent 70%)',
-            }}
-            aria-hidden="true"
-          />
-
-          {/* status row */}
-          <div className="relative flex items-center justify-between gap-3">
-            <div className="status-active">
-              <span className="label">Creator vault launch · Base</span>
-            </div>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-medium text-zinc-400">
-              <span className={`size-1.5 rounded-full ${sessionAddress ? 'bg-emerald-400' : 'bg-zinc-500'}`} />
-              {sessionAddress ? 'On the list' : 'Open'}
-            </span>
+          <div className="space-y-2 text-center">
+            <h1 className="headline text-3xl leading-[1.02] tracking-[-0.03em] sm:text-4xl">
+              {sessionAddress ? "You're on the list" : 'Join the waitlist'}
+            </h1>
+            {sessionAddress ? (
+              <p className="text-sm leading-relaxed text-zinc-400">
+                Finish setup in the app, then start swapping.
+              </p>
+            ) : null}
+            {sessionAddress && listCount != null && listCount > 0 ? (
+              <p className="text-[11px] tracking-[0.2px] text-zinc-500">
+                {listCount.toLocaleString()} creators on the list
+              </p>
+            ) : null}
           </div>
 
-          {/* headline + subcopy */}
-          <h1 className="headline relative mt-4 text-3xl leading-[1.02] tracking-[-0.03em] sm:text-4xl">
+          <div className="relative">
+            <div
+              className="relative rounded-2xl p-5 sm:p-6"
+              style={{
+                background:
+                  'linear-gradient(165deg, rgb(var(--vault-card)), rgb(var(--vault-card-raised)))',
+                boxShadow:
+                  '0 18px 45px -24px rgba(0, 0, 0, 0.65), 0 0 0 1px rgb(var(--brand-primary) / 0.1), 0 0 28px 4px rgb(var(--brand-primary) / 0.16), 0 0 52px 14px rgb(var(--brand-primary) / 0.1), 0 0 84px 28px rgb(var(--brand-primary) / 0.05)',
+              }}
+            >
             {sessionAddress ? (
-              "You're on the list"
-            ) : (
-              <>
-                Early access to <span className="glow-brand">creator-owned vaults.</span>
-              </>
-            )}
-          </h1>
-          <p className="relative mt-3 text-sm leading-relaxed text-zinc-400">
-            {sessionAddress
-              ? 'Enter the app to finish one-time wallet setup and start swapping.'
-              : 'Creators turning their coins into redeemable onchain vault shares. Email gets you on the list — no wallet required to join.'}
-          </p>
-
-          {sessionAddress && listCount != null && listCount > 0 ? (
-            <div className="relative mt-2 text-[10px] tracking-[0.2px] text-zinc-500">
-              {listCount.toLocaleString()} creators on the list
-            </div>
-          ) : null}
-
-          {/* compact feature strip — only before joining */}
-          {!sessionAddress && (
-            <ul className="relative mt-5 flex flex-wrap gap-1.5">
-              {FEATURES.map(({ icon: Icon, label }) => (
-                <li
-                  key={label}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-medium tracking-[0.5px] text-zinc-300"
-                >
-                  <Icon className="size-2.5 text-[rgb(var(--brand-primary))]" aria-hidden="true" />
-                  {label}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {/* primary action — context aware */}
-          <div className="relative mt-6">
-            {!sessionAddress ? (
-              <>
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="lg"
-                  className="w-full transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
-                  onClick={() => void handleEmailSignup()}
-                  disabled={isBusy || !privy.ready}
-                >
-                  {emailBusy ? (
-                    <span className="inline-flex items-center gap-2">
-                      <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.9)" />
-                      Securing access…
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-2">
-                      Join with email
-                      <ArrowRight className="size-4" aria-hidden="true" />
-                    </span>
-                  )}
-                </Button>
-                <p className="mt-3 text-center text-[11px] leading-relaxed text-zinc-500">
-                  {!privy.ready ? 'Preparing secure session…' : 'A secure code will be sent to your email.'}
-                </p>
-              </>
-            ) : (
               <div className="flex flex-col items-stretch gap-4">
                 <Button
                   variant="primary"
@@ -499,27 +454,139 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                   Sign out
                 </button>
               </div>
+            ) : step === 'email' ? (
+              <form className="space-y-4" onSubmit={handleEmailFormSubmit}>
+                <div className="space-y-2">
+                  <label htmlFor="waitlist-email" className="block text-xs font-medium tracking-wide text-zinc-400">
+                    Email address
+                  </label>
+                  <input
+                    ref={emailInputRef}
+                    id="waitlist-email"
+                    type="email"
+                    autoComplete="email"
+                    inputMode="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    enterKeyHint="go"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="name@example.com"
+                    disabled={emailBusy || !privy.ready}
+                    className="block h-12 w-full rounded-xl border border-white/10 bg-[rgb(var(--vault-bg))] px-4 text-[15px] text-white outline-none transition placeholder:text-zinc-600 focus:border-[rgb(var(--brand-primary)/0.7)] disabled:opacity-60"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  className="w-full transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
+                  disabled={emailBusy || !privy.ready || !isValidEmail(email)}
+                >
+                  {emailBusy ? (
+                    <span className="inline-flex items-center gap-2">
+                      <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.9)" />
+                      Sending code…
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-2">
+                      Join with email
+                      <ArrowRight className="size-4" aria-hidden="true" />
+                    </span>
+                  )}
+                </Button>
+                <p className="text-center text-[11px] leading-relaxed text-zinc-500">
+                  {!privy.ready ? 'Preparing secure session…' : 'We’ll send a 6-digit code to your email.'}
+                </p>
+              </form>
+            ) : (
+              <form className="space-y-3" onSubmit={handleCodeFormSubmit}>
+                <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-500">
+                  <span className="truncate">
+                    Code sent to <span className="font-mono text-zinc-300">{email.trim()}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleEditEmail}
+                    disabled={isBusy}
+                    className="inline-flex shrink-0 items-center gap-1 tracking-wide text-zinc-400 transition hover:text-zinc-200 disabled:opacity-50"
+                  >
+                    <ArrowLeft className="size-3" aria-hidden="true" />
+                    Edit
+                  </button>
+                </div>
+                <label htmlFor="waitlist-code" className="sr-only">
+                  Email verification code
+                </label>
+                <input
+                  ref={codeInputRef}
+                  id="waitlist-code"
+                  type="text"
+                  autoComplete="one-time-code"
+                  inputMode="numeric"
+                  enterKeyHint="go"
+                  value={code}
+                  onChange={(event) => setCode(event.target.value.replace(/\s+/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  disabled={codeBusy}
+                  className="block h-12 w-full rounded-xl border border-white/10 bg-[rgb(var(--vault-bg))] px-4 text-center font-mono text-lg tracking-[0.4em] text-white outline-none transition placeholder:text-zinc-600 focus:border-[rgb(var(--brand-primary)/0.7)] disabled:opacity-60"
+                />
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  className="w-full transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
+                  disabled={codeBusy || code.replace(/\s+/g, '').length < 6}
+                >
+                  {codeBusy ? (
+                    <span className="inline-flex items-center gap-2">
+                      <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.9)" />
+                      Verifying…
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-2">
+                      Verify &amp; join
+                      <ArrowRight className="size-4" aria-hidden="true" />
+                    </span>
+                  )}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => void handleSendCode(true)}
+                  disabled={emailBusy || !canResend}
+                  className="block w-full text-center text-[11px] tracking-wide text-zinc-500 transition hover:text-zinc-300 disabled:opacity-50"
+                >
+                  {canResend ? 'Resend code' : `Resend in ${resendSeconds}s`}
+                </button>
+              </form>
             )}
+            </div>
           </div>
 
-          {/* error feedback only — success is communicated by the card transforming */}
           {error ? (
             <div
-              className="relative mt-5 flex items-start gap-2.5 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3"
+              className="flex items-start gap-2.5 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3"
               role="alert"
             >
               <AlertCircle className="mt-0.5 size-4 shrink-0 text-rose-400" aria-hidden="true" />
               <p className="text-sm leading-relaxed text-rose-200">{error}</p>
             </div>
           ) : null}
-        </motion.div>
 
-        {/* footer trust line */}
-        <p className="mt-6 text-center text-[11px] font-light tracking-wide text-zinc-600">
-          {FOOTER_TRUST}
-        </p>
+          <p className="text-center text-[10px] tracking-wide text-zinc-600">
+            <span className="text-zinc-500">Powered by</span>{' '}
+            <a
+              href="https://privy.io"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-zinc-400 transition hover:text-zinc-300"
+            >
+              Privy
+            </a>
+          </p>
+        </motion.div>
       </div>
-      )}
     </section>
   )
 }
