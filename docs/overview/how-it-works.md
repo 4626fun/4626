@@ -5,48 +5,55 @@ sidebar_position: 2
 
 # How 4626 works
 
-4626 turns a **Zora creator coin** into an **ERC-4626 vault** on Base with a fair-launch auction, cross-chain **share tokens**, and onchain fee routing to holders.
+4626 wraps your **Zora creator coin** in an **ERC-4626 vault** on Base, sells vault shares through a **CCA auction**, and routes trading fees plus external creator revenue to **share holders**.
 
-## Two tokens per creator
+## The two-token rule
 
-| Token | Role |
-|-------|------|
-| **Creator coin** | Your existing Zora ERC-20 — vault **deposit asset** |
-| **Vault share** (`▢TICKER`) | ERC-4626 share — represents ownership of vault TVL |
-| **Share OFT** (`■TICKER`) | LayerZero OFT — tradable share representation; Solana mesh uses the bridged share |
+| Token | What it is |
+|-------|------------|
+| **Creator coin** | Your existing Zora ERC-20 — vault **deposit asset** only |
+| **Vault share (`▢TICKER`)** | ERC-4626 claim on vault TVL |
+| **Share OFT (`■TICKER`)** | Tradable cross-chain share (LayerZero); **this** is what DEX buyers hold |
 
-Creator coin address ≠ share token address. Never treat them as interchangeable.
+Creator coin address **≠** share token address. Never treat them as the same asset.
 
-## Launch flow (high level)
+## End-to-end phases
 
-1. **Deploy** — one greenfield batch deploys vault, wrapper, ShareOFT, gauge, oracle, and CCA strategy ([launch guide](/guides/launch-token)).
-2. **Activate** — deposit creator coin, wrap shares, seed the CCA auction ([activate guide](/guides/activate-vault)).
-3. **Auction** — continuous clearing auction (CCA) sells vault shares for USDC.
-4. **Strategies** — paid bundle deploys Charm + Ajna sleeves; Solana share mesh bridges a slice at finalize.
-5. **Fees & lottery** — trade fees and external creator-coin revenue accrue to holders via the gauge and payout router ([glossary](/reference/glossary) for lane names).
+| Phase | You do | Onchain result |
+|-------|--------|----------------|
+| **0** | Pay [strategy bundle](/guides/strategy-bundle) | Deploy gate opens ($499 USDC bundle) |
+| **1** | [Launch vault](/guides/launch-token) | Vault, wrapper, ShareOFT, gauge, oracle, CCA deploy |
+| **2** | [Activate vault](/guides/activate-vault) | Creator coin deposited; CCA auction seeded |
+| **2b** | App/finalize after auction | Pipe A may bridge ~30% ShareOFT to [Solana mesh](/overview/solana-share-mesh) |
+| **3** | Automatic with bundle | Charm (45%) + Ajna (45%) + 10% idle CREATOR |
 
-## Core contracts (one stack per creator)
+Printable checklist: [Greenfield checklist](/guides/greenfield-checklist).
 
-| Contract | Purpose |
-|----------|---------|
-| [CreatorOVault](/contracts/core/creator-ovault) | ERC-4626 vault — holds creator coin, mints shares |
-| [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) | Wraps vault shares for OFT bridging |
-| [CreatorShareOFT](/contracts/core/creator-share-oft) | Cross-chain share token |
-| [CreatorGaugeController](/contracts/governance/gauge-controller) | Routes trade fees and jackpot reserves |
-| [CCA launch strategy](/contracts/strategies/cca-launch) | Fair-launch auction |
-| [CreatorLotteryManager](/contracts/utilities/lottery-manager) | Instant lottery payouts |
+## Core contracts (per creator)
 
-Shared factories, batcher, and registry addresses: [live addresses](/reference/addresses).
+| Contract | Role |
+|----------|------|
+| [CreatorRegistry](/contracts/core/creator-registry) | Maps creator coin → vault stack addresses |
+| [CreatorOVault](/contracts/core/creator-ovault) | Holds creator coin; mints ▢ shares |
+| [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) | Wraps ▢ → ■ 1:1 |
+| [CreatorShareOFT](/contracts/core/creator-share-oft) | Tradable ■ share; trade fees → gauge |
+| [CreatorGaugeController](/contracts/governance/gauge-controller) | Fee split, jackpot custody |
+| [CCA strategy](/contracts/strategies/cca-launch) | Fair-launch auction |
+| [CreatorLotteryManager](/contracts/utilities/lottery-manager) | Instant lottery on hub-chain ShareOFT **buys** |
+| [CreatorOracle](/contracts/utilities/creator-oracle) | TWAP for lottery USD sizing |
 
-## Fee lanes (short)
+Shared factories and batcher: [live addresses](/reference/addresses) (v1.14.1).
 
-- **Trade fees** — ShareOFT / hook transfers route to `tradeFeeCollector` (gauge); part burns vault shares.
+## Fee lanes (holder-facing)
+
+- **Trade fees** — ShareOFT transfers on DEX routes to `tradeFeeCollector` (gauge); part burns vault shares.
 - **External creator revenue** — Zora `payoutRecipient` → payout router → holder PPS accretion.
-- **Jackpot** — gauge custodies reserves; lottery manager selects winners.
+- **Jackpot** — Gauge **custodies** reserves; lottery manager **picks winners** and pays out.
 
-Details and exact identifiers: [glossary](/reference/glossary).
+Qualified lane names: [glossary](/reference/glossary).
 
-## Where to go next
+## Next steps
 
-- [Launch a vault](/guides/launch-token) · [Activate after deploy](/guides/activate-vault)
-- [Contract addresses](/reference/addresses) · [Contract docs](/contracts)
+- New vault: [Getting started](/getting-started) → [Greenfield checklist](/guides/greenfield-checklist)
+- Contract detail: [Contracts hub](/contracts)
+- Integrators / impairment: [Impairment disclosures](/reference/impairment-v1-disclosures)

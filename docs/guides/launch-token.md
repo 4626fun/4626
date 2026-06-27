@@ -1,24 +1,20 @@
 ---
 title: Launch a vault
-sidebar_position: 1
+sidebar_position: 3
 ---
 
 # Launch a vault
 
-Greenfield deploy creates your per-creator contract stack in one atomic batch.
+**Phase 1** — greenfield deploy creates your per-creator contract stack in one atomic batch.
+
+Full journey: [Greenfield checklist](/guides/greenfield-checklist).
 
 ## Before you start
 
+- [Strategy bundle](/guides/strategy-bundle) active (`vault_full_deploy`)
 - Creator coin live on Base (typically via Zora)
 - **50M–100M** creator coin on your execution wallet
-- **`vault_full_deploy`** active — see [Strategy bundle](/guides/strategy-bundle)
 - Wallet signing ready in the app
-
-## Strategy bundle ($499)
-
-Deploy is gated on **`vault_full_deploy`**: one USDC payment unlocks Charm + Ajna strategies, Solana share mesh (Pipe A), and Meteora entitlement. Pay at **[app.4626.fun/creator/strategy/features](https://app.4626.fun/creator/strategy/features)** before the deploy page will run.
-
-Details: [Strategy bundle](/guides/strategy-bundle).
 
 ## Steps
 
@@ -31,6 +27,7 @@ Details: [Strategy bundle](/guides/strategy-bundle).
 
 | Contract | Role |
 |----------|------|
+| [CreatorRegistry](/contracts/core/creator-registry) entry | Maps creator coin → this stack |
 | CreatorOVault | ERC-4626 vault |
 | CreatorOVaultWrapper | Share wrapping for OFT |
 | CreatorShareOFT | Cross-chain share token |
@@ -42,6 +39,6 @@ Contract details: [Contracts hub](/contracts).
 
 ## After deploy
 
-Continue with [Activate vault](/guides/activate-vault) to deposit creator coin and start the auction.
+**Phase 2** — [Activate vault](/guides/activate-vault) to deposit creator coin and start the CCA auction.
 
 Shared batcher and factories: [addresses](/reference/addresses) (v1.14.1).

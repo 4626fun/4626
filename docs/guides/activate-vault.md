@@ -1,11 +1,13 @@
 ---
 title: Activate a vault
-sidebar_position: 2
+sidebar_position: 4
 ---
 
 # Activate a vault
 
-Activation deposits creator coin into your vault, wraps shares for the ShareOFT, and seeds the **CCA auction**.
+**Phase 2** — activation deposits creator coin into your vault, wraps shares for the ShareOFT, and seeds the **CCA auction**.
+
+Prerequisites: [Phase 1 deploy](/guides/launch-token) complete. Journey map: [Greenfield checklist](/guides/greenfield-checklist).
 
 ## Preferred path: Permit2
 
@@ -25,9 +27,13 @@ The app falls back automatically when Permit2 signing is unavailable.
 
 ## After activation
 
-- Monitor the CCA auction in the app
-- Phase 2 finalize bridges a Solana share slice when Pipe A is wired (see [How it works](/overview/how-it-works))
-- Paid strategies (Charm + Ajna) deploy in Phase 3 when entitlements are active
+| Step | What happens |
+|------|----------------|
+| **CCA auction** | Monitor in the app until the fair-launch completes |
+| **Phase 2b finalize** | Pipe A may bridge ~30% ShareOFT to [Solana mesh](/overview/solana-share-mesh) |
+| **Phase 3** | Charm + Ajna strategies attach (included in [strategy bundle](/guides/strategy-bundle)) |
+
+Base ShareOFT trading and lottery can work without waiting on Solana relay.
 
 ## Related
 

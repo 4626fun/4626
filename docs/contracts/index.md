@@ -11,6 +11,7 @@ sidebar_position: 1
 
 | Contract | Doc |
 |----------|-----|
+| CreatorRegistry | [Registry](/contracts/core/creator-registry) — creator coin → vault stack |
 | CreatorOVault | [Vault](/contracts/core/creator-ovault) — ERC-4626, strategies, shares |
 | CreatorOVaultWrapper | [Wrapper](/contracts/core/creator-ovault-wrapper) — share wrapping |
 | CreatorShareOFT | [ShareOFT](/contracts/core/creator-share-oft) — LayerZero share token |

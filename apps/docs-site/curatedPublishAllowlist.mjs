@@ -1,5 +1,5 @@
 /**
- * Public docs allowlist — product + contracts only (~21 pages).
+ * Public docs allowlist — product + contracts only (~24 pages).
  * Keep aligned with `sidebars.ts`.
  */
 export const CURATED_PUBLISH_GLOBS = [
@@ -7,9 +7,11 @@ export const CURATED_PUBLISH_GLOBS = [
 
   'getting-started/index.md',
   'overview/how-it-works.md',
+  'overview/solana-share-mesh.md',
 
   'guides/index.md',
   'guides/strategy-bundle.md',
+  'guides/greenfield-checklist.md',
   'guides/launch-token.md',
   'guides/activate-vault.md',
 
@@ -19,6 +21,7 @@ export const CURATED_PUBLISH_GLOBS = [
   'reference/impairment-v1-disclosures.md',
 
   'contracts/index.md',
+  'contracts/core/creator-registry.md',
   'contracts/core/creator-ovault.md',
   'contracts/core/creator-share-oft.md',
   'contracts/core/creator-ovault-wrapper.md',

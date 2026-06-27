@@ -8,7 +8,11 @@ const sidebars: SidebarsConfig = {
       label: 'Product',
       collapsed: false,
       link: {type: 'doc', id: 'index'},
-      items: ['getting-started/index', 'overview/how-it-works'],
+      items: [
+        'getting-started/index',
+        'overview/how-it-works',
+        'overview/solana-share-mesh',
+      ],
     },
     {
       type: 'category',
@@ -16,6 +20,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       link: {type: 'doc', id: 'guides/index'},
       items: [
+        'guides/greenfield-checklist',
         'guides/strategy-bundle',
         'guides/launch-token',
         'guides/activate-vault',
@@ -28,6 +33,7 @@ const sidebars: SidebarsConfig = {
       link: {type: 'doc', id: 'contracts/index'},
       items: [
         'reference/addresses',
+        'contracts/core/creator-registry',
         'contracts/core/creator-ovault',
         'contracts/core/creator-share-oft',
         'contracts/core/creator-ovault-wrapper',

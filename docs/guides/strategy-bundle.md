@@ -1,11 +1,13 @@
 ---
 title: Strategy bundle
-sidebar_position: 3
+sidebar_position: 1
 ---
 
 # Strategy bundle
 
-Greenfield vault deploy requires a paid **`vault_full_deploy`** bundle before the app unlocks deploy.
+**Phase 0** — greenfield vault deploy requires a paid **`vault_full_deploy`** bundle before the app unlocks deploy.
+
+Full path: [Greenfield checklist](/guides/greenfield-checklist).
 
 ## What you buy
 
@@ -15,7 +17,7 @@ One **$499 USDC** payment on Base activates:
 |----------|------|
 | **Charm active LP** | CREATOR/USDC liquidity strategy |
 | **Ajna sleeve** | CREATOR lending sleeve |
-| **Solana share mesh** | Phase 2b Pipe A — bridged ■ share slice at finalize (not Phase 3 TVL) |
+| **Solana share mesh** | Phase 2b Pipe A — bridged ■ share slice at finalize ([details](/overview/solana-share-mesh)) |
 | **Meteora entitlement** | Operator-provisioned Solana pool infra post-deploy |
 
 Phase 3 weights with the bundle: **45% Charm · 45% Ajna · 10% idle** CREATOR buffer on the vault.
@@ -38,6 +40,8 @@ The deploy page blocks dry-run until the bundle is active.
 
 ## Related
 
+- [Greenfield checklist](/guides/greenfield-checklist)
 - [Launch vault](/guides/launch-token)
-- [How it works — strategies & fees](/overview/how-it-works)
+- [Solana share mesh](/overview/solana-share-mesh)
+- [How it works](/overview/how-it-works)
 - [CreatorOVault](/contracts/core/creator-ovault)

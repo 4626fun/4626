@@ -23,10 +23,10 @@ hide_table_of_contents: true
     <span class="home-card__title">How it works</span>
     <span class="home-card__desc">Two-token model, launch flow, and fee lanes.</span>
   </a>
-  <a class="home-card" href="/guides/launch-token">
+  <a class="home-card" href="/guides/greenfield-checklist">
     <span class="home-card__tag">Creators</span>
-    <span class="home-card__title">Deploy a vault</span>
-    <span class="home-card__desc">Greenfield deploy at app.4626.fun.</span>
+    <span class="home-card__title">Greenfield checklist</span>
+    <span class="home-card__desc">Bundle → deploy → activate → Solana mesh.</span>
   </a>
   <a class="home-card" href="/contracts">
     <span class="home-card__tag">Contracts</span>
