@@ -5,7 +5,7 @@ sidebar_position: 2
 
 # CreatorOVault
 
-**Product role:** Holds your Zora **creator coin**, mints **▢ vault shares**, and routes TVL to paid strategies (Charm, Ajna). Holders deposit creator coin and redeem by burning shares — one ERC-4626 vault per creator.
+**Product role:** Holds the creator's Zora **creator coin**, mints **▢ vault shares**, and routes TVL to paid strategies (Charm, Ajna). Holders deposit creator coin and redeem by burning shares — one ERC-4626 vault per creator.
 
 ERC-4626 compliant vault based on Yearn V3 architecture.
 

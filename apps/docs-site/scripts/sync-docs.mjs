@@ -15,6 +15,7 @@
  */
 
 import * as fs from 'fs/promises';
+import { existsSync } from 'node:fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { execFileSync } from 'node:child_process';
@@ -26,10 +27,36 @@ import {CURATED_PUBLISH_GLOBS} from '../curatedPublishAllowlist.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const MANUAL_DOCS_MARKER = path.join('docs', 'getting-started', 'index.md');
+
+/**
+ * Resolve monorepo root — walk up from script dir and cwd when default `../../..`
+ * misses (e.g. alternate checkout layouts).
+ */
+function resolveRepoRoot() {
+  if (process.env.DOCS_REPO_ROOT) {
+    return path.resolve(process.env.DOCS_REPO_ROOT);
+  }
+
+  const candidates = [
+    path.resolve(__dirname, '../../..'),
+    path.resolve(process.cwd(), '../..'),
+    path.resolve(process.cwd(), '..'),
+    process.cwd(),
+  ];
+
+  for (const candidate of candidates) {
+    const marker = path.join(candidate, MANUAL_DOCS_MARKER);
+    if (existsSync(marker)) {
+      return candidate;
+    }
+  }
+
+  return path.resolve(__dirname, '../../..');
+}
+
 // Configuration
-const REPO_ROOT = process.env.DOCS_REPO_ROOT
-  ? path.resolve(process.env.DOCS_REPO_ROOT)
-  : path.resolve(__dirname, '../../..');
+const REPO_ROOT = resolveRepoRoot();
 const DEST_DIR = path.resolve(__dirname, '../docs');
 const STATIC_DIR = path.resolve(__dirname, '../static');
 const BRAND_SOURCE = path.join(REPO_ROOT, 'frontend/public/brand');
@@ -838,6 +865,11 @@ async function sync() {
   // Clean destination unless we are in an isolated build that only has docs-site.
   if (preserveBundledSnapshot) {
     console.log('\n📦 Preserving bundled docs snapshot (repo-root docs unavailable in this build context).');
+    if (process.env.DOCS_REQUIRE_MANUAL_SOURCE === '1') {
+      stats.errors.push(
+        `${SOURCES.manual.label}: Source directory not found (bundled snapshot fallback disabled)`,
+      );
+    }
   } else {
     console.log('\n🗑️  Cleaning destination...');
     await cleanDestination();

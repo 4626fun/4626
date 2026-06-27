@@ -19,31 +19,31 @@ $499 USDC entitlement activating deploy plus Charm, Ajna, Solana share mesh (Pip
 
 ### CCA (Continuous Clearing Auction)
 
-Uniswap V4 fair-launch auction for share price discovery at activation. [CCA strategy](/contracts/strategies/cca-launch).
+Uniswap V4 fair-launch auction for share price discovery at activation. See [CCA strategy](/contracts/strategies/cca-launch).
 
 ### Pipe A
 
-Post-auction finalize step bridging approximately 30% of ShareOFT supply to Solana (share mesh). [Solana share mesh](/overview/solana-share-mesh).
+Post-auction finalize step bridging approximately 30% of ShareOFT supply to Solana (share mesh). See [Solana share mesh](/overview/solana-share-mesh).
 
 ## Tokens
 
-**Creator coin** — Your Zora ERC-20; the vault **deposit asset**. Not the same address as share tokens.
+**Creator coin** — The Zora ERC-20 deposited into the vault; the vault **deposit asset**. Not the same address as share tokens.
 
-**Vault shares (`▢TICKER`)** — ERC-4626 shares from [CreatorOVault](/contracts/core/creator-ovault); claim on vault TVL.
+**Vault shares (`▢TICKER`)** — ERC-4626 shares from [CreatorOVault](/contracts/core/creator-ovault); pro-rata claim on vault TVL.
 
-**Share OFT (`■TICKER`)** — LayerZero omnichain token from [CreatorShareOFT](/contracts/core/creator-share-oft); tradable cross-chain share.
+**Share OFT (`■TICKER`)** — LayerZero omnichain token from [CreatorShareOFT](/contracts/core/creator-share-oft); primary DEX-facing tradable share.
 
-**Wrapper** — [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper); converts ▢ → ■ 1:1.
+**Wrapper** — [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper); converts ▢ → ■ at 1:1.
 
-## Launch & vault
-
-**CCA (Continuous Clearing Auction)** — Uniswap V4 fair-launch auction; see [CCA strategy](/contracts/strategies/cca-launch).
+## Launch and vault
 
 **ERC-4626** — Vault standard: deposit assets, receive shares, redeem assets.
 
 **PPS (price per share)** — Vault assets ÷ share supply; accretes when fees and revenue enter the vault.
 
-**Pipe A** — After the auction, finalize can bridge ~30% of shares to Solana ([share mesh](/overview/solana-share-mesh)).
+**Greenfield** — A new vault deploy on the current release ([addresses](/reference/addresses), v1.14.1). See [Launch checklist](/guides/greenfield-checklist).
+
+**Deployed / Activated / Trading live** — Launch milestones defined in [Getting started](/getting-started#launch-milestones).
 
 ## Fee lanes
 
@@ -74,5 +74,3 @@ Use qualified names — bare `payoutRecipient` is ambiguous.
 ## Integrators
 
 **Impairment epoch** — Side-pocket when a strategy is impaired; see [impairment disclosures](/reference/impairment-v1-disclosures).
-
-**Greenfield** — A **brand-new** vault deploy on the current release ([addresses](/reference/addresses), v1.14.1). See [Launch checklist](/guides/greenfield-checklist).

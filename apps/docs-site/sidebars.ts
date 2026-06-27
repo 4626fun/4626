@@ -33,6 +33,8 @@ const sidebars: SidebarsConfig = {
       link: {type: 'doc', id: 'contracts/index'},
       items: [
         'reference/addresses',
+        'reference/glossary',
+        'reference/impairment-v1-disclosures',
         'contracts/core/creator-registry',
         'contracts/core/creator-ovault',
         'contracts/core/creator-share-oft',
@@ -41,7 +43,6 @@ const sidebars: SidebarsConfig = {
         'contracts/strategies/cca-launch',
         'contracts/utilities/lottery-manager',
         'contracts/utilities/creator-oracle',
-        'reference/impairment-v1-disclosures',
         'reference/glossary',
       ],
     },

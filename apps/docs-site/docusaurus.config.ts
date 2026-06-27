@@ -80,8 +80,7 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           routeBasePath: '/',
           breadcrumbs: true,
-          editUrl:
-            'https://github.com/wenakita/4626/tree/main/apps/docs-site/docs/',
+          editUrl: 'https://github.com/wenakita/4626/tree/main/docs/',
           remarkPlugins: [remarkWrapTables],
           // Prefer synced frontmatter `last_updated`; Git metadata is optional.
           showLastUpdateTime: enableGitLastUpdate,
@@ -124,6 +123,11 @@ const config: Config = {
           position: 'left',
         },
         {
+          to: '/guides/greenfield-checklist',
+          label: 'Launch',
+          position: 'right',
+        },
+        {
           to: '/reference/addresses',
           label: 'Addresses',
           position: 'right',
@@ -150,6 +154,7 @@ const config: Config = {
           items: [
             {label: 'Getting started', to: '/getting-started'},
             {label: 'How it works', to: '/overview/how-it-works'},
+            {label: 'Launch checklist', to: '/guides/greenfield-checklist'},
             {label: 'Deploy', to: '/guides/launch-token'},
             {label: 'Contracts', to: '/contracts'},
             {label: 'Addresses', to: '/reference/addresses'},

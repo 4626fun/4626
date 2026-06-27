@@ -74,7 +74,24 @@ target
 /kpr
 /design
 /deployments
-/docs
+# Manual docs at repo-root `docs/` are required for apps/docs-site sync (4626-docs).
+# Exclude internal/generated bulk only — curated publish reads ~24 public pages.
+/docs/_internal/**
+/docs/_generated/**
+/docs/runbooks/**
+/docs/plans/**
+/docs/llms/**
+/docs/architecture/**
+/docs/compressions/**
+/docs/integrations/**
+/docs/roadmap/**
+/docs/tokenomics/**
+/docs/alfaclub/**
+/docs/creators/**
+/docs/governance/**
+/docs/product/**
+/docs/protocols/**
+/docs/primitives/**
 /lib
 /out
 /output

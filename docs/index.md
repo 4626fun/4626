@@ -23,6 +23,11 @@ hide_table_of_contents: true
     <span class="home-card__title">Getting started</span>
     <span class="home-card__desc">Prerequisites, token model, and launch sequence.</span>
   </a>
+  <a class="home-card" href="/guides/greenfield-checklist">
+    <span class="home-card__tag">Deploy</span>
+    <span class="home-card__title">Launch checklist</span>
+    <span class="home-card__desc">Step-by-step procedure from bundle payment through trading live.</span>
+  </a>
   <a class="home-card" href="/overview/how-it-works">
     <span class="home-card__tag">Product</span>
     <span class="home-card__title">How it works</span>
