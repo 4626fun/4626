@@ -11,7 +11,7 @@ Step-by-step path to launch a **new vault on Base** (release **v1.14.1**). Legac
 
 **You do:** steps 1–3 in the app (pay → deploy → activate).
 
-**4626 / chain does:** fair-launch auction, finalize, strategy attachment, optional Solana bridge.
+**4626 / chain does:** fair-launch auction, finalize (including Solana bridge), strategy attachment.
 
 **Done when:** milestone **Trading live** — `■` shares tradable on Base.
 
@@ -33,7 +33,7 @@ Step-by-step path to launch a **new vault on Base** (release **v1.14.1**). Legac
 
 No secondary DEX trading until the auction completes and finalize succeeds. See [After activation](/guides/after-activation).
 
-Optional Solana: [Optional: Solana trading](/overview/solana-share-mesh)
+Solana share bridge: [Solana share bridge](/overview/solana-share-mesh)
 
 ## Understand the product
 

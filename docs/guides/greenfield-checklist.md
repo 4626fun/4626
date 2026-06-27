@@ -51,15 +51,16 @@ Activation alone is **not** trading live. DEX secondary trading starts after the
 - Qualifying **buys** may enter [CreatorLotteryManager](/contracts/utilities/lottery-manager)
 - Trade fees route via [CreatorGaugeController](/contracts/governance/gauge-controller)
 
-## Optional: Solana
+## Solana share bridge
 
-Not required for Base launch or lottery:
+Included in the launch bundle — not a separate add-on:
 
-- Only **`■` share** may bridge — not creator coin
-- Bridge may complete after finalize; Meteora may lag
-- Base lottery stays authoritative until Solana buy-relay is live
+- **~30% of `■`** bridges at Phase 2 finalize (LayerZero Pipe A)
+- Only the **share** crosses — not creator coin
+- Meteora pool setup may complete after finalize
+- Base trading and lottery do not wait for Meteora
 
-Details: [Optional: Solana trading](/overview/solana-share-mesh)
+Details: [Solana share bridge](/overview/solana-share-mesh)
 
 ## Contracts
 

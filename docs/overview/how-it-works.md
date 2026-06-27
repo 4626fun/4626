@@ -80,16 +80,16 @@ The batcher wraps the activation deposit into `■` ShareOFT, then allocates sup
 |-----|---|--------------|
 | CCA auction | 30% | Fair-launch price discovery |
 | Creator vesting | 30% | 365-day linear vest to creator |
-| Solana bridge | 30% | LayerZero bridge of `■` (optional lane) |
+| Solana bridge | 30% | LayerZero bridge of `■` (at finalize) |
 | LP reserve | 10% | Held on CCA strategy for v4 migration after graduation |
 
 Details: [CCA launch strategy](/contracts/strategies/cca-launch) · [Glossary](/reference/glossary#share-allocation-at-finalize)
 
-## Optional: Solana
+## Solana share bridge
 
-Base is the **primary chain**. Solana is optional: same `■` share may bridge after finalize. Creator coin stays on Base.
+Base is the **primary chain** for deploy, auction, and lottery. **Solana is still part of every greenfield deployment:** ~30% of `■` supply bridges at Phase 2 finalize (included in the launch bundle). Creator coin stays on Base.
 
-[Optional: Solana trading](/overview/solana-share-mesh)
+[Solana share bridge](/overview/solana-share-mesh)
 
 ## Core contracts
 

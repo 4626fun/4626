@@ -59,7 +59,7 @@ export function partitionCreatorStrategyCatalog(catalog: CatalogDto[]): {
       id: 'deploy',
       title: 'Vault deploy',
       subtitle:
-        'One $499 payment unlocks the full stack: Charm + Ajna on Base, optional Solana bridge, and Meteora pool entitlement.',
+        'One $499 payment unlocks the full stack: Charm + Ajna on Base, Solana share bridge at finalize, and Meteora pool entitlement.',
       features: deploy,
     })
   }

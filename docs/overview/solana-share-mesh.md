@@ -1,45 +1,53 @@
 ---
-title: 'Optional: Solana trading'
+title: 'Solana share bridge'
+sidebar_label: Solana share bridge
 sidebar_position: 3
 slug: /overview/solana-share-mesh
 ---
 
-# Optional: Solana trading
+# Solana share bridge
 
-How **tradable shares (`■TICKER`)** may appear on Solana after a new vault launch — and what stays on Base only.
+How **tradable shares (`■TICKER`)** reach Solana as part of a new vault deployment — and what stays on Base only.
 
 <div class="docs-at-a-glance">
 
-**In one sentence:** Base is required; Solana is optional distribution of the **same share token** after the fair-launch auction completes and finalize runs.
+**In one sentence:** Every greenfield launch includes a **Solana share bridge** at Phase 2 finalize — ~30% of `■` supply crosses to Solana via LayerZero. Creator coin stays on Base.
 
-**Internal names:** *Solana share mesh*, *Pipe A* (post-auction bridge). See [Glossary](/reference/glossary).
+**Internal names:** *Solana share mesh*, *Pipe A*. See [Glossary](/reference/glossary).
 
 </div>
 
 [Launch checklist](/guides/greenfield-checklist) · [After activation](/guides/after-activation)
 
-## Is Solana required?
+## Part of deployment, not an add-on
 
-**No.** Base is the **primary chain** for deploy, fair-launch auction, secondary trading, and lottery on new vaults. Solana is an optional follow-on for the same tradable share.
+The **$499 launch bundle** includes Solana mesh + Meteora entitlement. There is no separate “enable Solana” purchase and no extra app step.
+
+| What | When | Creator action |
+|------|------|----------------|
+| **Solana bridge leg** (~30% of `■`) | **Phase 2 finalize** (same activation session) | None — automatic |
+| **Meteora pool** on bridged `■` | Operator-provisioned after finalize | None — included in bundle |
+
+Base DEX trading and lottery do **not** wait for Meteora — they follow auction graduation on Base. The Solana bridge still runs at finalize as part of the standard deploy path.
 
 ## What exists on each chain
 
 | Asset | Base | Solana |
 |-------|------|--------|
 | Creator coin (`$TICKER`) | Yes — vault deposit asset | **No** — creator coin stays on Base |
-| Tradable share (`■TICKER`) | Yes — after trading is live | **Optional** — ~30% of supply may bridge after finalize |
+| Tradable share (`■TICKER`) | Yes — after trading is live | Yes — bridged share at finalize (~30% of split) |
 
-Solana receives a bridged **ShareOFT**, not a separate creator-coin SPL token. Symbol stays `■TICKER` on both chains when bridged (e.g. `■AKITA`).
+Solana receives a bridged **ShareOFT**, not a separate creator-coin SPL token. Symbol stays `■TICKER` on both chains (e.g. `■AKITA`).
 
 ## Timeline (after activation)
 
 | Order | Event | Creator action |
 |-------|--------|----------------|
 | 1 | [Deploy](/guides/launch-token) and [activate](/guides/activate-vault) on Base | Required |
-| 2 | Fair-launch auction runs | Monitor in app |
-| 3 | **Finalize** completes on Base | Usually automatic / in-app |
-| 4 | **Solana bridge leg** (~30% of `■` from the finalize split) may land on Solana | None — part of Phase 2 finalize |
-| 5 | Meteora pool setup may follow | None — operator-assisted (included in launch bundle) |
+| 2 | **Phase 2 finalize** — **30/30/30/10** split includes Solana bridge | Sign in app |
+| 3 | Fair-launch auction runs | Monitor in app |
+| 4 | Settlement → **trading live** on Base | Usually automatic / in-app |
+| 5 | Meteora pool on bridged `■` may complete | None — operator-assisted |
 
 There is no separate “deploy to Solana” step in the application.
 

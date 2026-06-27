@@ -55,9 +55,7 @@ The app sends these as **separate sponsored UserOps** in order: finalize → Pha
 | Auction scheduled or live | Monitor in app · **no** open DEX trading yet |
 | Phase 3 complete | Strategies funded; auction may still be pending or live |
 | Auction graduates + migrate | **Trading live** on Base · lottery on qualifying buys |
-| Optional Solana | Bridge may follow finalize — [Optional: Solana trading](/overview/solana-share-mesh) |
-
-Base trading does **not** require Solana.
+| Solana bridge | Bridge runs at Phase 2 finalize — [Solana share bridge](/overview/solana-share-mesh) |
 
 ## Next
 

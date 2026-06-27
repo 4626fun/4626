@@ -11,11 +11,11 @@ Plain-language names used in public docs, with internal or onchain identifiers w
 
 | Public name (docs & app) | Internal / onchain | Notes |
 |--------------------------|-------------------|--------|
-| **Launch bundle ($499 USDC)** | `vault_full_deploy` | Unlocks deploy; includes strategies + optional Solana entitlement |
+| **Launch bundle ($499 USDC)** | `vault_full_deploy` | Unlocks deploy; includes Charm + Ajna + Solana mesh + Meteora |
 | **New vault launch** | *Greenfield* | New deploy on current release (v1.14.1), not legacy vaults |
 | **Fair-launch auction** | CCA | Uniswap V4 price discovery at activation |
 | **Auction schedule** | Thursday 00:00 UTC epoch | CCA bids open on the next weekly epoch after `launchDeferredAuction` |
-| **Optional Solana trading** | *Solana share mesh*, `solana_ovault_mesh` | Same `■` share may trade on Solana after finalize |
+| **Solana share bridge** | *Solana share mesh*, `solana_ovault_mesh`, *Pipe A* | ~30% of `■` bridged at Phase 2 finalize (LayerZero) |
 | **Post-auction Solana bridge** | *Pipe A* | ~30% of `■` supply bridged at finalize (LayerZero) |
 | **Share allocation at finalize** | 30/30/30/10 split | 30% CCA · 30% vesting · 30% Solana bridge · 10% LP reserve |
 | **Base (primary chain)** | *Hub chain* | Deploy, auction, trading, and lottery for new vaults |
@@ -49,7 +49,7 @@ When the batcher **finalizes** activation, wrapped `■` supply from the deposit
 |-----|--------------|-------------|
 | Fair-launch auction | 30% | CCA price discovery (launched with 10% LP reserve on strategy) |
 | Creator vesting | 30% | `CreatorLinearVesting` (365-day linear unlock) |
-| Solana bridge | 30% | LayerZero OFT bridge (optional trading lane) |
+| Solana bridge | 30% | LayerZero OFT bridge (part of finalize) |
 | LP reserve | 10% | Held on [CCA strategy](/contracts/strategies/cca-launch) for post-auction v4 migration |
 
 Onchain constants: `AUCTION_PERCENT`, `VESTING_PERCENT`, `SOLANA_ALLOC_PERCENT`, `LP_RESERVE_PERCENT` on `DeploymentBatcher`. See [CCA launch strategy](/contracts/strategies/cca-launch) for auction graduation, migration, and failed-auction paths.

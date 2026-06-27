@@ -28,7 +28,7 @@ Creator deposits creator coin → wrapper mints ■ ShareOFT
 Batcher enforces 30/30/30/10 split (of wrapped ■ supply)
   - 30% fair-launch CCA auction (pending launch)
   - 30% creator linear vesting (365 days)
-  - 30% LayerZero bridge to Solana (optional lane; same ■ ticker)
+  - 30% LayerZero bridge to Solana (part of finalize; same ■ ticker)
   - 10% LP reserve held on CCA strategy for post-auction migration
    ↓
 Fair-launch auction runs (30% auction leg + 10% LP reserve metadata)

@@ -35,10 +35,10 @@ When activation **finalizes**, the batcher wraps the deposit into `■` and enfo
 |-----|---|--------|
 | CCA auction | 30% | Fair-launch price discovery |
 | Creator vesting | 30% | Linear unlock over 365 days |
-| Solana bridge | 30% | LayerZero OFT bridge (optional) |
+| Solana bridge | 30% | LayerZero OFT bridge (part of finalize) |
 | LP reserve | 10% | Held on CCA strategy for v4 migration |
 
-Solana is optional for Base trading — the 30% bridge leg may complete after finalize. [Optional: Solana trading](/overview/solana-share-mesh)
+The 30% Solana bridge leg runs at **Phase 2 finalize** as part of deployment — no separate Solana step. [Solana share bridge](/overview/solana-share-mesh)
 
 ## Timeline
 
@@ -58,7 +58,7 @@ After Phase 4, the **auction runs** on its own schedule:
 | **Auction live** | Uniswap V4 auction finds clearing price | Monitor app | Activated |
 | **Auction graduates** | Minimum raise met; settlement eligible | Usually none | → Settlement |
 | **Settlement** | `sweepCurrency()` → `migrate()` (Uniswap v4 LP) | Keeper / app if prompted | → **Trading live** |
-| **Solana (optional)** | Bridged `■` + Meteora may follow | None | Optional |
+| **Solana bridge + Meteora** | Bridged `■` at finalize; pool may follow | None — included in bundle |
 
 ## Trading live on Base
 
@@ -84,13 +84,11 @@ Once live:
 
 [How fees and lottery work](/overview/how-it-works)
 
-## Optional: Solana
+## Solana share bridge
 
-Solana is **not** required for Base trading or lottery.
+The Solana bridge is **included in every greenfield launch** and runs at Phase 2 finalize (~30% of `■` supply). Creator coin stays on Base. Meteora pools are operator-provisioned and may complete after finalize.
 
-After finalize, the **post-auction Solana bridge** may send ~30% of `■` supply to Solana (same ticker). Creator coin stays on Base. Meteora pools are operator-provisioned and may complete later.
-
-[Optional: Solana trading](/overview/solana-share-mesh)
+[Solana share bridge](/overview/solana-share-mesh)
 
 ## FAQ
 
