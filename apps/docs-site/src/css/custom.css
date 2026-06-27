@@ -347,6 +347,15 @@
   letter-spacing: -0.01em;
 }
 
+.navbar__brand {
+  margin-right: 0.75rem;
+}
+
+.navbar__brand:hover {
+  opacity: 0.92;
+  text-decoration: none;
+}
+
 /* GitHub icon link in navbar */
 .header-github-link {
   display: inline-flex;

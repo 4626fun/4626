@@ -112,16 +112,11 @@ const config: Config = {
       hideOnScroll: true,
       title: '4626.fun',
       logo: {
-        alt: '4626.fun Logo',
+        alt: '4626.fun Docs home',
         src: 'brand/logo.svg',
+        href: '/',
       },
       items: [
-        {
-          type: 'docSidebar',
-          sidebarId: 'docs',
-          label: 'Menu',
-          position: 'left',
-        },
         {
           to: '/getting-started',
           label: 'Learn',
