@@ -1186,3 +1186,169 @@ No new DRIFT finding needed. account-auth-invariants.md:196 was the only remaini
 ### Launch safety assessment
 
 Docs are safe for launch. All four confirmed P0/P1 DRIFT findings (DRIFT-001 through DRIFT-004) are cleared and verified. The out-of-scope stale reference (account-auth-invariants.md:196) has been resolved. No implementation code was modified. The remediated docs now consistently describe the shipped model: parent CSW + embedded EOA owner confirmation (`legacy-owner-install`) as the default user-side path, sub-account as optional flag-gated swap-only fallback.
+
+---
+
+## Recheck #2 — DRIFT-001 through DRIFT-004 (2026-06-27, verification mode)
+
+Verification mode: no new fixes applied. All four DRIFT findings and the account-auth-invariants.md:196 fix from the prior recheck confirmed still cleared after docs reorganization commit.
+
+### Git state
+
+- `git status --short --branch`: `main...origin/main`; 1 modified file: `frontend/src/lib/privy/client.tsx` (uncommitted, +29/-1 lines — dev-only loopback Privy init watchdog, unrelated to DRIFT remediation, not introduced by this audit).
+- `git diff --check`: exit 0 — no whitespace errors.
+- Docs reorganization committed (commits `c9cad9aa1`, `4aee665d3`, `87644fa02`, `6f1a4e0b2`, `7bac2b8e4`): remediated docs moved to `docs/_internal/` paths. Fixes survived the move.
+
+### DRIFT-001 through DRIFT-004 recheck
+
+| DRIFT | Audit-specified grep (updated paths) | Result |
+|---|---|---|
+| DRIFT-001 | `grep -n 'canonical path is sub-account\|parent CSW.*not the execution address' frontend/docs/waitlist-accounts-architecture.md` | 0 matches (exit 1) — CLEARED |
+| DRIFT-002 | `grep -n 'resume sub-account setup\|sub-account persisted.*signer configured' frontend/docs/waitlist-accounts-architecture.md` | 0 matches (exit 1) — CLEARED |
+| DRIFT-003 | `grep -n 'Execution address: sub-account\|PHASE 1: Sub-Account Creation\|wallet_addSubAccount.*readiness gate' docs/_internal/4626-connection-methods.md` | 0 matches (exit 1) — CLEARED |
+| DRIFT-004 | `grep -n 'Use Sub Accounts + Spend Permissions for population' docs/_internal/ACCOUNT_MODEL.md docs/_internal/wallet-notes/owner-mutation-decision-2026-05.md` | 0 matches (exit 1) — CLEARED |
+
+### Full validation grep
+
+`grep -R -n -E "canonical path is sub-account|parent CSW.*not the execution address|Execution address: sub-account|resume sub-account setup|sub-account persistence|Use Sub Accounts + Spend Permissions" frontend/docs docs` — all matches are in `docs/_internal/audits-workpapers/` only (audit finding records, expected). Zero matches in actual documentation files.
+
+### account-auth-invariants.md:196 — still fixed
+
+Line 196 reads: "user-initiated frontend readiness is determined by parent CSW + embedded EOA owner confirmation (`legacy-owner-install`), not by `/api/wallet/confirm-owner`." Fix from prior recheck is intact. `grep -n 'sub-account persistence' frontend/docs/account-auth-invariants.md` — 0 matches (exit 1).
+
+### Implementation file note
+
+`frontend/src/lib/privy/client.tsx` has uncommitted changes (+29/-1) adding a dev-only loopback Privy init watchdog (`useLoopbackPrivyInitWatchdog`, 20s timeout). This is unrelated to the DRIFT docs remediation — not introduced by this audit, not reverted. No other implementation files modified.
+
+### Launch safety assessment
+
+Docs are safe for launch. All four P0/P1 DRIFT findings cleared and verified across two rechecks. The account-auth-invariants.md:196 fix is intact. No implementation code was modified by the DRIFT remediation. The uncommitted `client.tsx` change is a separate dev-environment watchdog feature, not a DRIFT remediation artifact.
+
+---
+
+## UX Safety Audit (2026-06-27, audit-only)
+
+Audit-only mode. No product/code fixes applied. Source inspection + live app observation.
+
+### Commands run
+
+| Command | Exit code | Result |
+|---------|-----------|--------|
+| `pnpm -C frontend lint:a11y` | 0 | Clean — 0 warnings, 0 errors |
+| `A11Y_BASE_URL=https://4626.fun pnpm -C frontend smoke:a11y -- --serve` | 0 | Passed — no serious/critical violations on /faq, /faq/how-it-works, /waitlist, /swap |
+| `git status --short --branch` | 0 | `main...origin/main`; 1 modified: `frontend/src/lib/privy/client.tsx` (pre-existing, unrelated) |
+| `git diff --check` | 0 | No whitespace errors |
+
+### Files inspected (source)
+
+- `frontend/src/features/waitlist/WaitlistFlow.tsx` (627 lines)
+- `frontend/src/pages/Waitlist.tsx` (35 lines)
+- `frontend/src/pages/Swap.tsx` (1215 lines)
+- `frontend/src/components/swap/SwapCard.tsx` (189 lines)
+- `frontend/src/components/swap/SwapDetails.tsx` (333 lines)
+- `frontend/src/components/swap/SwapStatusAlerts.tsx` (191 lines)
+- `frontend/src/lib/wallet/userExecutionTrack.ts` (205 lines)
+- `frontend/src/pages/deploy/DeployVault.tsx` (9596 lines — phase timeline, error boundary, error sanitization)
+- `frontend/src/components/deploy/PhaseTimeline.tsx` (125 lines)
+- `frontend/src/pages/telegram/TelegramLink.tsx` (2026 lines)
+- `frontend/src/pages/Arena.tsx` (1559 lines)
+- `frontend/src/components/account/CanonicalIdentityCard.tsx`
+- `frontend/src/components/wallet/AddOwnerConnectionStatusPanel.tsx`
+- `frontend/src/components/wallet/BaseAppCanonicalWalletLinkPanel.tsx`
+- `frontend/src/components/layout/AdminLayout.tsx`
+
+### Live app inspection
+
+- Navigated to `https://app.4626.fun/swap` (unauthenticated) — redirected to waitlist, auto-opened login modal confirmed via browser snapshot
+- Navigated to `https://app.4626.fun/waitlist` — waitlist card rendered, login modal auto-opened
+- Browser console: 0 JS errors, 0 console messages on both pages
+
+### Findings written
+
+UX-001 (P2): Waitlist "Confirmed" status conflates waitlist-joined with wallet-ready. WaitlistFlow.tsx:514-542, 589. `sessionAddress` from /api/auth/me = waitlist-joined, not execution-ready. "Confirmed" badge + "Enter app" → user hits canonical setup gate at /swap with no prior warning.
+
+UX-002 (P2): Auto-opened Privy login modal on unauthenticated /swap redirect. Confirmed via browser — page renders waitlist card AND login modal simultaneously without user click. Two overlapping surfaces create ambiguity.
+
+UX-003 (P2): Arena sidebar nav invisible on mobile/tablet. Arena.tsx:248 `hidden lg:block` — no nav below 1024px. No hamburger/drawer fallback. Mobile users cannot navigate between Arena sub-pages.
+
+UX-004 (P3): No global sign-out in main app shell. Sign-out exists only in contextual panels (WaitlistFlow:597, CanonicalIdentityCard:301, AddOwnerConnectionStatusPanel:140, BaseAppCanonicalWalletLinkPanel:95, AdminLayout:157). No account header/dropdown with sign-out on /swap or /arena.
+
+UX-005 (P3): Deploy error boundary replaces phase context with generic message. DeployVault.tsx:874-920. Render crash → "Something went wrong" + generic sanitized message, PhaseTimeline lost. Edge case only — normal transaction failures preserve phase context.
+
+### Areas checked and found adequate
+
+- Swap sender/balance/quote clarity: swapSenderLabel "Sending from your Coinbase Smart Wallet" shown as primaryActionHint; SwapDetails has exchange rate, network cost (Sponsored badge), route legs, LP/protocol fee, price impact, quoteUpdatedAt — all behind collapsible disclosure. No issue.
+- Deploy stage/failure clarity (normal flows): PhaseTimeline + PhaseCard with per-phase status badges + dry-run pass/fail. Error sanitization (L-16) maps known reverts to friendly messages. Adequate.
+- Telegram link flow: reducer-backed state machine, explicit states, state-scoped effects, inline OTP (no Privy modal), progress steps labeled. Follows AGENTS.md Telegram Mini App rules. No issue.
+- Optional Base/Zora/signing steps blocking waitlist join: waitlist join requires only email OTP. Base/Zora are alternative login paths. No blocking issue found.
+- Accessibility: lint:a11y + smoke:a11y both clean. No WCAG violations.
+
+### Blockers
+
+None. All UX findings are P2/P3 — none block launch or indicate safety/correctness violations. No implementation code was modified.
+
+### No implementation code modified
+
+This audit was source-inspection and live-app-observation only. No files were edited. The pre-existing uncommitted `frontend/src/lib/privy/client.tsx` change was not introduced by this audit.
+
+---
+
+## Audit finalization — merged consolidated report (2026-06-27)
+
+Date: 2026-06-27
+Mode: audit-only — no product/code fixes applied.
+
+### Actions performed
+
+1. **DRIFT-001 through DRIFT-004 recheck (finalization)**: Ran audit-specified grep patterns against actual documentation files to confirm remediation is intact.
+   - `grep -n 'canonical path is sub-account\|parent CSW.*not the execution address' frontend/docs/waitlist-accounts-architecture.md` → 0 matches (exit 1). DRIFT-001 CLEARED.
+   - `grep -n 'resume sub-account setup\|sub-account persisted.*signer configured' frontend/docs/waitlist-accounts-architecture.md` → 0 matches (exit 1). DRIFT-002 CLEARED.
+   - `grep -n 'Execution address: sub-account\|PHASE 1: Sub-Account Creation' docs/_internal/4626-connection-methods.md` → 0 matches (exit 1). DRIFT-003 CLEARED.
+   - `grep -n 'Use Sub Accounts + Spend Permissions for population' docs/_internal/ACCOUNT_MODEL.md docs/_internal/wallet-notes/owner-mutation-decision-2026-05.md` → 0 matches (exit 1). DRIFT-004 CLEARED.
+   - All 4 DRIFT findings verified clean. Files moved during docs reorganization (to `docs/_internal/`) — fixes confirmed intact at new locations.
+
+2. **WALLET-001 through WALLET-004 + RACE-001 detail capture**: Read `deep-risk-audit-2026-06.md:651-780` to capture full WALLET and RACE finding details for the merged report.
+
+3. **APIAUTH-001 through APIAUTH-019 detail capture**: Read `deep-risk-audit-2026-06.md:1-625` (shards A, B, C) to capture all APIAUTH finding details for the merged report.
+
+4. **Final consolidated report written**: `docs/_internal/audits-workpapers/deep-risk-audit-2026-06-final-report.md` (74,734 bytes).
+   - Merged all finding families: APIAUTH-001–019, WALLET-001–004, RACE-001–004, DRIFT-001–007, LAUNCH-001–008, BACKTEST-001–005, UX-001–005, validation-gate failures (VG-001–003).
+   - Deduplication: BACKTEST-001 merged into APIAUTH-016; WALLET-003 merged into APIAUTH-010.
+   - Severity normalization: APIAUTH-001 normalized from "High/launch blocker" to P2 (high-end) with "fix before launch" — no APIAUTH finding meets P0/P1 bar (all require auth, none allow fund loss or anonymous mutation).
+   - Risk-ordered globally: P0 (2) → P1 (3) → P2 (22) → P3 (21). Not grouped by domain only.
+   - Every P0/P1 has explicit launch decision: LAUNCH-001 = block launch; DRIFT-001–004 = closed (remediated + verified).
+   - Required per-finding fields present: ID, Severity, Domain, Finding, Evidence, Pass/Fail Criterion, Recommended Fix, Launch Impact.
+   - Positive findings (LAUNCH-004–008) listed separately. Validation gate summary table included. Cross-finding notes included.
+
+5. **Followups file written**: `docs/_internal/audits-workpapers/deep-risk-audit-2026-06-followups.md` (13,839 bytes).
+   - 19 open followups across 3 tiers + 1 closed item (DRIFT-001–004).
+   - Tier 1 (launch path): F-001 (LAUNCH-001 DNS, external), F-002 (APIAUTH-001 unthrottled GET).
+   - Tier 2 (pre-launch hardening): F-003 through F-009 (systemic rate-limit sweep, relay auth, tombstone gap, deploy lease, bootstrap atomicity, unlink asymmetry, docs path drift).
+   - Tier 3 (post-launch/backlog): F-010 through F-019 (validation gates, deploy auth, defense-in-depth, UX polish, backtest hardening).
+   - Highest-leverage action identified: F-003 (durable rate-limit sweep) closes 13 of 19 APIAUTH findings.
+
+### Final finding count
+
+| Severity | Count | Launch-blocking |
+|----------|-------|-----------------|
+| P0 | 2 (1 active, 1 remediated) | 1 (LAUNCH-001) |
+| P1 | 3 (all remediated) | 0 |
+| P2 | 22 | 0 |
+| P3 | 21 | 0 |
+| **Total** | **48** | **1** |
+
+### Final launch posture
+
+- **Active launch blockers**: 1 (LAUNCH-001 — external DNS configuration, ops/infra-owned, no code change).
+- **Remediated and verified**: 4 (DRIFT-001 through DRIFT-004 — all grep patterns return 0 matches, verified 2026-06-27).
+- **Fix-before-launch (non-blocking)**: 1 (APIAUTH-001 — unthrottled mutating GET, should be fixed before public launch).
+- **No product/code fixes applied** — audit-only mode throughout all phases.
+
+### Files created in finalization
+
+- `docs/_internal/audits-workpapers/deep-risk-audit-2026-06-final-report.md` — merged consolidated report (74,734 bytes).
+- `docs/_internal/audits-workpapers/deep-risk-audit-2026-06-followups.md` — followups tracker (13,839 bytes).
+
+### No implementation code modified
+
+No product/code files were modified during finalization. The only files created are audit workpaper documents. The pre-existing uncommitted `frontend/src/lib/privy/client.tsx` change was not introduced by this audit.

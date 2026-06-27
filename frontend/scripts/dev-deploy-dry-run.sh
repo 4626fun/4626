@@ -223,6 +223,11 @@ export VITE_DEV_SERVER_HOST="localhost"
 # collide with live Base deployments that share the repo's normal version tag.
 export VITE_DEPLOYMENT_VERSION="${VITE_DEPLOYMENT_VERSION:-v1.14.0-dryrun}"
 export VITE_DEPLOY_DRY_RUN_REQUEST_TIMEOUT_MS="${VITE_DEPLOY_DRY_RUN_REQUEST_TIMEOUT_MS:-300000}"
+# Loopback Privy must use the App Client lane. Without it, the production app id
+# routes session bootstrap to privy.4626.fun and POST /api/v1/sessions 400s on
+# localhost — the bootstrap overlay never clears and the page looks blank.
+export VITE_PRIVY_CLIENT_ID_ENABLED="${VITE_PRIVY_CLIENT_ID_ENABLED:-1}"
+export VITE_PRIVY_CLIENT_ID_ON_LOOPBACK="${VITE_PRIVY_CLIENT_ID_ON_LOOPBACK:-1}"
 
 ANVIL_PID=""
 DEV_REDIRECT_PID=""

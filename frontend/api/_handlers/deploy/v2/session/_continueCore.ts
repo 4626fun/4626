@@ -29,6 +29,7 @@ import { parseGrant, validateCallsAgainstGrant } from '../../../../../server/_li
 import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deployAuth.js'
 import { ensureLaunchImageReady } from '../../../../../server/_lib/deploy/deployLaunchImage.js'
 import { verifyDeployPhase2Invariants } from '../../../../../server/_lib/deploy/deployPhase2Invariants.js'
+import { assertDeploySessionPhaseBoundaries } from '../../../../../server/_lib/deploy/deploySessionPhaseBoundaries.js'
 import { maybeAutoSetupPayoutRouterTreasury } from '../../../../../server/_lib/onchain/payoutRouterTreasurySetup.js'
 import { upsertSolanaShareMeshMapping } from '../../../../../server/_lib/onchain/solanaShareMeshMappings.js'
 import { enqueueKeeperJob } from '../../../../../server/_lib/keeperJobs/keeperJobs.js'
@@ -955,6 +956,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (hasPhase2Finalize && phase2FinalizeCalls.length === 0) throw new Error('phase2_finalize_calls_invalid')
     if (hasPhase3 && phase3Calls.length === 0) throw new Error('phase3_calls_invalid')
     if (hasPhase4 && phase4Calls.length === 0) throw new Error('phase4_calls_invalid')
+    assertDeploySessionPhaseBoundaries({
+      phase2FinalizeCalls,
+      phase3Calls,
+      phase4Calls,
+      hasPhase3,
+      hasPhase4,
+    })
 
     // FIX: FINDING-08 — re-validate all calls from the DB payload against the paymaster
     // selector allowlist. The payload was validated at session creation, but a gap in grant

@@ -1391,3 +1391,91 @@ All 4 P0 stop conditions checked and cleared:
 4. **Unit test coverage is adequate for the chat path but absent for the core engine**: `backtestJobs.test.ts` (7 tests) covers `parseBacktestRequestFromText` and `runRealBacktestJob` with mocked engine. The full alfaclub+virtuals suite (404 tests) passes. However, `backtestCounterRebalance.ts`, `backtestMarketBars.ts`, `backtestIntervalPolicy.ts`, and `backtestSeriesDownsample.ts` have no dedicated unit test files. The engine is exercised only via CLI runs. This is a test-coverage gap, not a correctness finding — the CLI runs produce correct results.
 
 5. **No-commingle invariant is structurally enforced**: The rebalance audit CSV `noCrossLegTransfer` column is `true` in every row of both test runs. The `requireNoCommingle` flag defaults to `true` in the API and is respected by the engine. The invariant holds.
+
+## UX Safety Audit
+
+### Scope
+
+Exploratory UX safety audit of 4626 user-facing flows. Audit-only — no product/code fixes applied. Focus areas: waitlist signup UX, account setup status accuracy, sign-out availability, wallet-ready vs waitlist-joined copy, optional Base/Zora/signing steps not blocking waitlist join, swap sender/balance/quote clarity, deploy stage/failure clarity, Telegram link user journey, Arena/backtest user journey, mobile/desktop breakage, accessibility smoke.
+
+### Validation commands
+
+| Command | Exit | Result |
+|---------|------|--------|
+| `pnpm -C frontend lint:a11y` | 0 | Clean — 0 warnings, 0 errors |
+| `A11Y_BASE_URL=https://4626.fun pnpm -C frontend smoke:a11y -- --serve` | 0 | Passed — no serious/critical violations on /faq, /faq/how-it-works, /waitlist, /swap |
+
+### Inspected files
+
+- `frontend/src/features/waitlist/WaitlistFlow.tsx` (627 lines) — waitlist signup card, status display, sign-out
+- `frontend/src/pages/Waitlist.tsx` (35 lines) — waitlist page wrapper
+- `frontend/src/pages/Swap.tsx` (1215 lines) — swap UI, primary action labels, sender hint
+- `frontend/src/components/swap/SwapCard.tsx` (189 lines) — swap form
+- `frontend/src/components/swap/SwapDetails.tsx` (333 lines) — exchange rate, network cost, route details
+- `frontend/src/components/swap/SwapStatusAlerts.tsx` (191 lines) — Privy auth, chain mismatch, session guard alerts
+- `frontend/src/lib/wallet/userExecutionTrack.ts` (205 lines) — execution track → account chrome derivation
+- `frontend/src/pages/deploy/DeployVault.tsx` (9596 lines) — deploy UI, phase timeline, error boundary
+- `frontend/src/components/deploy/PhaseTimeline.tsx` (125 lines) — phase card/timeline components
+- `frontend/src/pages/telegram/TelegramLink.tsx` (2026 lines) — Telegram link state machine
+- `frontend/src/pages/Arena.tsx` (1559 lines) — Arena intro, status, chart, backtest, how-it-works
+- `frontend/src/components/account/CanonicalIdentityCard.tsx` — contextual sign-out
+- `frontend/src/components/wallet/AddOwnerConnectionStatusPanel.tsx` — contextual sign-out
+- `frontend/src/components/wallet/BaseAppCanonicalWalletLinkPanel.tsx` — contextual sign-out
+- `frontend/src/components/layout/AdminLayout.tsx` — admin sign-out
+
+### Live app inspection
+
+- Navigated to `https://app.4626.fun/swap` (unauthenticated) — redirected to waitlist page with auto-opened login modal
+- Navigated to `https://app.4626.fun/waitlist` — waitlist card rendered, login modal auto-opened
+- Browser console: 0 JS errors, 0 console messages on both pages
+
+### Findings
+
+#### UX-001 — Waitlist "Confirmed" status conflates waitlist-joined with wallet-ready
+
+- **Severity**: P2 (Medium)
+- **Component**: `frontend/src/features/waitlist/WaitlistFlow.tsx:514-542, 589`
+- **Description**: The waitlist card shows "Confirmed" status badge (line 516-519), "You are on the list" heading (line 536), and "Enter app" button linking to `/swap` (line 589) when `sessionAddress` is present. `sessionAddress` is sourced from `/api/auth/me` (line 64-73), which returns the session address after email OTP verification — this is waitlist-joined status, NOT execution-ready/wallet-ready status. Per AGENTS.md account invariants: "linked / waitlist-joined is not the same as wallet-ready" and "execution-ready / wallet-ready is defined per execution track." A user who completed email OTP but has not completed `legacy-owner-install` (parent CSW + embedded EOA owner confirmation) sees "Confirmed" and "Enter app" with no indication that swap execution will be gated. The copy "Enter the app to explore and set up" (line 540) hints at remaining setup, but the "Confirmed" status badge overstates readiness. When the user clicks "Enter app" and lands on /swap, they encounter a canonical setup gate (`primaryActionHint: 'Finish one-time account setup before canonical swaps can execute'` per Swap.tsx:1108-1109) with no prior warning from the waitlist card.
+- **Recommendation**: Differentiate the status badge — use "On the list" instead of "Confirmed" when execution-ready is not yet achieved, or add a secondary status line like "Wallet setup remaining" below the "Enter app" button. Do not change the button (entering the app is correct); change the status framing so users are not surprised by the setup gate.
+
+#### UX-002 — Auto-opened login modal on unauthenticated /swap redirect
+
+- **Severity**: P2 (Medium)
+- **Component**: `frontend/src/features/waitlist/WaitlistFlow.tsx` (page-level effect); live app behavior confirmed via browser
+- **Description**: When an unauthenticated user navigates to `app.4626.fun/swap`, they are redirected to the waitlist page. On the waitlist page, a Privy login modal ("Continue to 4626" / "Use verified email first, or continue with your wallet-native path") auto-opens on page load without any user click. Confirmed via browser snapshot: the page rendered both the waitlist card ("Join the launch list" / "Securing access…") AND a `dialog "log in or sign up"` overlay simultaneously. The modal has a "close modal" button, so it is dismissible, but a modal appearing without user action on a redirect is jarring. The user sees two overlapping surfaces: the waitlist card's own "Join with email" button AND the auto-opened Privy modal's email input. This creates ambiguity about which surface to use.
+- **Recommendation**: Do not auto-open the Privy modal on redirect. Let the redirected user see the waitlist card and click "Join with email" themselves. If auto-open is intentional for conversion, add a brief "You were redirected — sign in to continue" message above or instead of the raw modal.
+
+#### UX-003 — Arena sidebar navigation invisible on mobile/tablet
+
+- **Severity**: P2 (Medium)
+- **Component**: `frontend/src/pages/Arena.tsx:248`
+- **Description**: The Arena navigation sidebar uses `hidden lg:block` (line 248), making it invisible below the `lg` breakpoint (1024px). This means on mobile phones and small tablets, there is NO way to navigate between Arena sub-pages (Introduction, Live counter-trade status, View chart, Backtest workspace, How the pieces fit together, Positions). No hamburger menu, mobile drawer, or bottom navigation fallback exists in the Arena component. The main content area adjusts padding for `lg:pl-[16rem]` vs `lg:pl-[6rem]` (line 290) but provides no mobile nav alternative. A mobile user landing on `/arena` can only see the Introduction page — they cannot reach the Status, Backtest, or Positions pages without manually typing URLs.
+- **Recommendation**: Add a mobile navigation affordance for Arena sub-pages — a collapsible hamburger menu, a top dropdown, or a horizontal scrollable tab bar visible below `lg`.
+
+#### UX-004 — No global sign-out in main app shell
+
+- **Severity**: P3 (Low)
+- **Component**: `frontend/src/components/layout/` (no global sign-out found); sign-out exists only in contextual panels
+- **Description**: Sign-out is available only in scoped panels: the waitlist card (`WaitlistFlow.tsx:597`), `CanonicalIdentityCard.tsx:301`, `AddOwnerConnectionStatusPanel.tsx:140`, `BaseAppCanonicalWalletLinkPanel.tsx:95`, and `AdminLayout.tsx:157`. There is no global account header, dropdown, or tray with a "Sign out" action accessible from any authenticated page (e.g., `/swap`, `/arena`, `/accounts`). A user on `/swap` who wants to switch accounts or sign out must know to navigate to a specific settings or account-setup page to find a contextual sign-out button. The `Swap.tsx` logout (line 757) is for signing-session recovery, not general sign-out.
+- **Recommendation**: Add a global account menu (header avatar/dropdown or settings link) with a "Sign out" action visible on all authenticated app-shell pages. Low priority for launch but relevant for multi-account testing and user trust.
+
+#### UX-005 — Deploy error boundary replaces phase context with generic message
+
+- **Severity**: P3 (Low)
+- **Component**: `frontend/src/pages/deploy/DeployVault.tsx:874-920` (`DeployVaultErrorBoundary`)
+- **Description**: When a React render error occurs during deploy, the `DeployVaultErrorBoundary` (line 874) replaces the entire deploy view with "Something went wrong" (line 907), a generic sanitized error message (line 909), and a Retry button (line 917). The `PhaseTimeline` with phase-specific status badges (`PhaseCard` components showing Phase 1-4 state) is unmounted and lost. For a multi-phase deploy where the user was mid-way through phases, this removes all visual context about which phase was in progress or completed. Raw error text is dev-only (`import.meta.env.DEV`, line 901). Note: this only affects React render crashes, not deploy transaction failures — dry-run and on-chain transaction failures DO preserve phase context via `PhaseCard` `state` and `dryRunPhaseStatusByName` badges (line 6329, 6419-6422). The error sanitization itself is good practice (L-16, line 845-848: raw error.message may leak contract storage slot names).
+- **Recommendation**: Consider preserving the PhaseTimeline above the error boundary fallback, or include the last-known phase state in the error fallback view. Low priority since render crashes are rare and the retry restores the full view.
+
+### Cross-finding notes (UX)
+
+1. **No P0/P1 UX safety issues found**: All UX findings are P2 or P3. No finding blocks launch or indicates a safety/correctness violation. The waitlist status conflation (UX-001) is the most user-impactful but does not bypass any execution-ready gate — the swap page correctly gates canonical execution regardless of waitlist card status.
+
+2. **Accessibility smoke is clean**: Both `lint:a11y` (ESLint jsx-a11y rules at error) and `smoke:a11y` (Playwright + axe on /faq, /faq/how-it-works, /waitlist, /swap) pass with zero serious/critical violations. The UX findings above are design/flow issues, not WCAG violations.
+
+3. **Swap sender/balance/quote clarity is adequate**: The swap UI shows `swapSenderLabel: 'Sending from your Coinbase Smart Wallet'` (userExecutionTrack.ts:160) as `primaryActionHint` on the swap button (Swap.tsx:1110-1111). Exchange rate, network cost (with "Sponsored" badge), route legs, LP fee, protocol fee, and price impact are in `SwapDetails.tsx` behind a collapsible disclosure. Quote staleness is handled via `quoteUpdatedAt` timestamp. No sender/balance/quote clarity issue found.
+
+4. **Deploy stage/failure clarity is adequate for normal flows**: The `PhaseTimeline` with `PhaseCard` components provides clear per-phase status (pending/inProgress/done/disabled) with dry-run pass/fail badges. Transaction error sanitization (L-16) correctly maps known revert reasons to user-friendly messages. The only gap is the error-boundary crash path (UX-005), which is an edge case.
+
+5. **Telegram link flow follows the state machine correctly**: The `TelegramLink` component uses a reducer-backed state machine (`telegramLinkReducer`) with explicit states (collect_email, sending_email_code, verifying_email_code, wait_for_privy_sync, bind_telegram, etc.) and state-scoped effects. The progress steps (Telegram → Email → Code → Link) are clearly labeled (line 142-147). No state regression or multiple-sources-of-truth issue observed in source inspection. Inline OTP handling (no Privy modal popup) is correctly implemented per AGENTS.md Telegram Mini App rules.
+
+6. **No implementation code was modified**: This audit was source-inspection and live-app-observation only. No files were edited.

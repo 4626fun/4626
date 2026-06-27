@@ -195,6 +195,26 @@ function main() {
     failures.push('docs/contracts/strategies/cca-launch.md: must document Thursday 00:00 UTC auction schedule');
   }
 
+  if (!cca.includes('What finalize does **not** do')) {
+    failures.push('docs/contracts/strategies/cca-launch.md: must document deferred Phase 3 strategies and post-auction migrate');
+  }
+  if (!cca.includes('deployPhase3Strategies')) {
+    failures.push('docs/contracts/strategies/cca-launch.md: must reference Phase 3 deployPhase3Strategies');
+  }
+  if (!cca.includes('launchDeferredAuction')) {
+    failures.push('docs/contracts/strategies/cca-launch.md: must reference Phase 4 launchDeferredAuction');
+  }
+
+  const activateVault = readFileSync(path.join(REPO_ROOT, 'docs/guides/activate-vault.md'), 'utf8');
+  if (!activateVault.includes('What finalize does **not** do')) {
+    failures.push('docs/guides/activate-vault.md: must document what finalize does not do');
+  }
+
+  const afterActivation = readFileSync(path.join(REPO_ROOT, 'docs/guides/after-activation.md'), 'utf8');
+  if (!afterActivation.includes('Phase 3 strategies') || !afterActivation.includes('sweepCurrency')) {
+    failures.push('docs/guides/after-activation.md: must separate Phase 3 strategies from post-auction settlement');
+  }
+
   const ovaultPath = path.join(REPO_ROOT, 'docs/contracts/core/creator-ovault.md');
   const ovault = readFileSync(ovaultPath, 'utf8');
   if (!ovault.includes('50M')) {

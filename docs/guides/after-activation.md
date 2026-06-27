@@ -42,13 +42,22 @@ Solana is optional for Base trading — the 30% bridge leg may complete after fi
 
 ## Timeline
 
+Deploy-session steps (sponsored UserOps, same activation flow):
+
+| Step | What happens | Your action | Milestone |
+|------|----------------|-------------|-----------|
+| **Phase 2 finalize** | Wrap deposit; **30/30/30/10** split | Sign in app | Activated |
+| **Phase 3 strategies** | Charm **45%** · Ajna **45%** · **10% idle** TVL | Sign in app (automatic bundle) | Activated |
+| **Phase 4 launch** | `launchDeferredAuction` — auction scheduled | Sign in app | Activated |
+
+After Phase 4, the **auction runs** on its own schedule:
+
 | Phase | What happens | Your action | Milestone |
 |-------|----------------|-------------|-----------|
 | **Auction scheduled** | CCA created; bids open at next Thursday 00:00 UTC | Monitor app | Activated |
 | **Auction live** | Uniswap V4 auction finds clearing price | Monitor app | Activated |
-| **Auction complete** | Graduation / settlement orchestration | Usually none | → Finalize |
-| **Finalize** | Base settlement; `■` split 30/30/30/10 applied | Follow app if prompted | → **Trading live** |
-| **Strategies** | Charm 45% · Ajna 45% · 10% idle | Automatic (launch bundle) | Trading live |
+| **Auction graduates** | Minimum raise met; settlement eligible | Usually none | → Settlement |
+| **Settlement** | `sweepCurrency()` → `migrate()` (Uniswap v4 LP) | Keeper / app if prompted | → **Trading live** |
 | **Solana (optional)** | Bridged `■` + Meteora may follow | None | Optional |
 
 ## Trading live on Base

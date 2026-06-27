@@ -105,6 +105,8 @@ class PrivyProviderSafetyBoundary extends Component<
   }
 }
 
+const LOOPBACK_PRIVY_INIT_WATCHDOG_MS = 8_000
+
 function PrivyStatusObserver(props: { onStatus: (status: PrivyClientStatus) => void }) {
   const { ready } = usePrivy()
   const { onStatus } = props
@@ -112,6 +114,25 @@ function PrivyStatusObserver(props: { onStatus: (status: PrivyClientStatus) => v
     onStatus(ready ? 'ready' : 'loading')
   }, [onStatus, ready])
   return null
+}
+
+/** Dev-only: Privy connector init can hang forever on loopback when EVM extensions race `window.ethereum`. */
+function useLoopbackPrivyInitWatchdog(active: boolean, onForceReady: () => void) {
+  useEffect(() => {
+    if (!active || typeof window === 'undefined') return
+    if (!isLoopbackHostname(window.location.hostname)) return
+
+    const id = window.setTimeout(() => {
+      console.warn(
+        '[privy] Init still pending after 8s on loopback — unblocking route shell so /deploy/vault can render.\n' +
+          'If auth or signing fails next, retry in a private window with wallet extensions disabled,\n' +
+          'confirm http://localhost:5174 is in Privy Allowed Origins, then hard-reload.',
+      )
+      onForceReady()
+    }, LOOPBACK_PRIVY_INIT_WATCHDOG_MS)
+
+    return () => window.clearTimeout(id)
+  }, [active, onForceReady])
 }
 
 /**
@@ -138,13 +159,20 @@ export function PrivyClientProvider(props: {
   const apiUrl = enabled ? getPrivyApiUrl() : null
   const hasRuntimeConfig = Boolean(enabled && appId)
   const [runtimeStatus, setRuntimeStatus] = useState<PrivyClientStatus>('loading')
+  const [forcedReady, setForcedReady] = useState(false)
   const handleRuntimeStatus = useCallback((next: PrivyClientStatus) => {
     setRuntimeStatus((prev) => (prev === next ? prev : next))
   }, [])
+  const forcePrivyReady = useCallback(() => {
+    setForcedReady(true)
+    setRuntimeStatus('ready')
+  }, [])
+  useLoopbackPrivyInitWatchdog(hasRuntimeConfig && runtimeStatus === 'loading' && !forcedReady, forcePrivyReady)
   const ctx = useMemo<PrivyClientStatus>(
     () => (hasRuntimeConfig ? runtimeStatus : 'disabled'),
     [hasRuntimeConfig, runtimeStatus],
   )
+  const bootstrapActive = hasRuntimeConfig && runtimeStatus === 'loading' && !forcedReady
 
   // Keep hooks unconditional; the objects are only consumed when Privy is enabled.
   const solanaConnectors = useMemo(
@@ -253,7 +281,7 @@ export function PrivyClientProvider(props: {
         safeConfig={safeConfig}
       >
         <PrivyStatusObserver onStatus={handleRuntimeStatus} />
-        <AppLoadingBootstrapGate active={runtimeStatus === 'loading'} label="privy-init">
+        <AppLoadingBootstrapGate active={bootstrapActive} label="privy-init">
           <PrivyWalletHooksContextProvider enabled>{children}</PrivyWalletHooksContextProvider>
         </AppLoadingBootstrapGate>
       </PrivyProviderSafetyBoundary>

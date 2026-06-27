@@ -28,10 +28,10 @@ End-to-end checklist for a **new vault on Base** (v1.14.1). For legacy vaults, i
 |------|--------|---------|-------|
 | 1 | Pay **launch bundle** | Deploy unlocked in app | [Pay launch fee](/guides/strategy-bundle) |
 | 2 | Deploy contract stack | Vault, shares, gauge, oracle, auction live | [Deploy contracts](/guides/launch-token) |
-| 3 | Activate vault | Deposit + **fair-launch auction** started | [Activate vault](/guides/activate-vault) |
-| 4 | Auction runs | Price discovery (scheduled → live) | [After activation](/guides/after-activation) |
-| 5 | Finalize | Base settlement; `■` split 30/30/30/10 (incl. optional Solana bridge) | [After activation](/guides/after-activation) |
-| 6 | Strategies attach | Charm 45% · Ajna 45% · 10% idle (automatic) | [How fees work](/overview/how-it-works) |
+| 3 | Activate vault | Deposit + fair-launch auction **scheduled** (Phase 2–4 UserOps) | [Activate vault](/guides/activate-vault) |
+| 4 | Phase 3 strategies | Charm **45%** · Ajna **45%** · **10% idle** (same activation session) | [Activate vault](/guides/activate-vault) |
+| 5 | Auction runs | Price discovery (scheduled → live → graduate) | [After activation](/guides/after-activation) |
+| 6 | Settlement | `sweepCurrency()` + `migrate()` → Uniswap v4 LP | [After activation](/guides/after-activation#when-is-trading-live-on-base) |
 
 **Trading live** requires auction graduation + sweep + migrate + hook alignment — not activation alone. [After activation](/guides/after-activation#when-is-trading-live-on-base)
 
@@ -40,8 +40,8 @@ End-to-end checklist for a **new vault on Base** (v1.14.1). For legacy vaults, i
 | Stage | State | Public trading on Base? |
 |-------|-------|-------------------------|
 | **Deployed** | Contracts onchain; vault unfunded | No |
-| **Activated** | Deposited; **auction scheduled or live** | No |
-| **Trading live** | Auction + finalize complete | Yes — fees & lottery on qualifying **buys** |
+| **Activated** | Deposited; **Phase 2–4 complete**; auction scheduled or live | No |
+| **Trading live** | Auction graduated + `migrate()` complete | Yes — fees & lottery on qualifying **buys** |
 
 Activation alone is **not** trading live. DEX secondary trading starts after the auction completes.
 

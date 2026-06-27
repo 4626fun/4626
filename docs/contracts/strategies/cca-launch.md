@@ -42,6 +42,17 @@ If failed: finalizeFailedAuction() / sweepUnsoldTokens() clears strategy state f
 
 **Deposit bounds:** first activation deposit must be **50M–100M** creator coin (18 decimals). The split applies to **wrapped share tokens** minted from that deposit, not raw creator coin units 1:1.
 
+## What finalize does **not** do
+
+Phase 2 `finalizePhase2` (batcher) only wraps the deposit and enforces the **30/30/30/10** split. It does **not**:
+
+| Deferred step | When it runs | Onchain surface |
+|---------------|--------------|-----------------|
+| **Charm / Ajna strategy TVL** | Deploy-session **Phase 3** (next UserOp after finalize) | `deployPhase3Strategies` + vault `deployToStrategies()` at **45% / 45% / 10% idle** |
+| **CCA graduation / `migrate()`** | **After the auction runs and succeeds** | Keeper settlement: `sweepCurrency()` → `migrate()` on this strategy |
+
+Phase 4 `launchDeferredAuction` **schedules** the auction (30% leg + 10% LP reserve metadata) — it does not graduate or migrate. Public DEX trading starts only after graduation + migration succeed.
+
 ## Auction timing
 
 The CCA strategy schedules auctions on the **next Thursday 00:00 UTC** weekly epoch (`CCALaunchStrategy._deriveScheduledStartBlock`). After Phase 2 finalize, the app typically calls **`launchDeferredAuction`** (Phase 4) with the 30% auction leg plus 10% LP reserve metadata.
