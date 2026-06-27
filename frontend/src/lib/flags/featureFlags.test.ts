@@ -89,6 +89,27 @@ describe('resolvePrivyApiUrl', () => {
     expect(resolvePrivyApiUrl()).toBe('https://auth.privy.io')
   })
 
+  it('enables Privy on WSL LAN dev origins in DEV mode', async () => {
+    vi.stubEnv('DEV', true)
+    vi.stubEnv('VITE_PRIVY_ENABLED', 'true')
+    vi.stubEnv('VITE_PRIVY_ALLOWED_ORIGINS', 'https://4626.fun')
+    vi.stubGlobal('window', {
+      location: { origin: 'http://172.19.135.21:5174', hostname: '172.19.135.21' },
+    } as unknown as Window & typeof globalThis)
+    const hostModule = await import('@/lib/env/host')
+    const hostSpy = vi.spyOn(hostModule, 'getHostMode').mockReturnValue('app')
+    expect(privyEnabledFlag()).toBe(true)
+    hostSpy.mockRestore()
+  })
+
+  it('auto-resolves auth.privy.io on WSL LAN dev origin', () => {
+    vi.stubEnv('DEV', true)
+    vi.stubGlobal('window', {
+      location: { hostname: '172.19.135.21', origin: 'http://172.19.135.21:5174' },
+    } as unknown as Window & typeof globalThis)
+    expect(resolvePrivyApiUrl()).toBe('https://auth.privy.io')
+  })
+
   it('returns null when API URL mode is disabled on non-loopback non-4626.fun origins', () => {
     vi.stubEnv('VITE_PRIVY_API_URL_ENABLED', '')
     vi.stubEnv('VITE_PRIVY_API_URL', 'https://auth.privy.io')

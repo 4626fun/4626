@@ -262,7 +262,15 @@ ANVIL_LOG_FILE="${TMPDIR:-/tmp}/4626-deploy-dry-run-anvil.log"
 DEV_REDIRECT_LOG_FILE="${TMPDIR:-/tmp}/4626-deploy-dry-run-redirect.log"
 export VITE_ALLOW_CONTRACT_OVERRIDES="${VITE_ALLOW_CONTRACT_OVERRIDES:-0}"
 export ALLOW_API_CONTRACT_OVERRIDES="${ALLOW_API_CONTRACT_OVERRIDES:-0}"
-export VITE_DEV_SERVER_HOST="localhost"
+# WSL2: bind 0.0.0.0 so Windows browsers can reach the dev server via localhost
+# forwarding. Override with VITE_DEV_SERVER_HOST=localhost to keep loopback-only.
+if [[ -z "${VITE_DEV_SERVER_HOST-}" ]]; then
+  if grep -qi microsoft /proc/version 2>/dev/null || [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
+    export VITE_DEV_SERVER_HOST="true"
+  else
+    export VITE_DEV_SERVER_HOST="localhost"
+  fi
+fi
 # Use a dedicated deterministic namespace on local forks so dry-runs do not
 # collide with live Base deployments that share the repo's normal version tag.
 export VITE_DEPLOYMENT_VERSION="${VITE_DEPLOYMENT_VERSION:-v1.14.0-dryrun}"
@@ -466,6 +474,15 @@ if [[ -n "${VITE_MARKETING_ORIGIN:-}" ]]; then
   export VITE_MARKETING_ORIGIN="$(normalize_local_origin_port "$VITE_MARKETING_ORIGIN" "$DEV_PORT")"
 fi
 
+# WSL→Windows: pin client env to the LAN IP Vite prints under "Network:" so
+# Privy/OAuth redirects match the URL Windows browsers actually open.
+WSL_LAN_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+if [[ -n "$WSL_LAN_IP" ]] && { [[ "${VITE_DEV_SERVER_HOST:-}" == "true" ]] || [[ "${VITE_DEV_SERVER_HOST:-}" == "1" ]]; }; then
+  export VITE_APP_ORIGIN="http://${WSL_LAN_IP}:${DEV_PORT}"
+  export VITE_MARKETING_ORIGIN="http://${WSL_LAN_IP}:${DEV_PORT}"
+  export VITE_PRIVY_ALLOWED_ORIGINS="http://localhost:${DEV_PORT} http://127.0.0.1:${DEV_PORT} http://${WSL_LAN_IP}:${DEV_PORT}"
+fi
+
 DEFAULT_DRY_RUN_PORT=5174
 if [[ "$DEV_PORT" != "$DEFAULT_DRY_RUN_PORT" ]] && ! port_in_use "$DEFAULT_DRY_RUN_PORT" && command -v python3 >/dev/null 2>&1; then
   REDIRECT_FROM_PORT="$DEFAULT_DRY_RUN_PORT" REDIRECT_TO_PORT="$DEV_PORT" python3 - <<'PY' >"$DEV_REDIRECT_LOG_FILE" 2>&1 &
@@ -499,6 +516,40 @@ PY
   echo "Redirecting stale http://localhost:${DEFAULT_DRY_RUN_PORT} links to http://localhost:${DEV_PORT}."
 fi
 
+resolve_vite_host_arg() {
+  local raw="${VITE_DEV_SERVER_HOST:-localhost}"
+  local normalized
+  normalized="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')"
+  case "$normalized" in
+    true | yes | 1) printf '%s\n' '0.0.0.0' ;;
+    false | no | 0 | '') printf '%s\n' 'localhost' ;;
+    *) printf '%s\n' "$raw" ;;
+  esac
+}
+
+print_local_dev_access_hints() {
+  local port="$1"
+  local host_arg="$2"
+  local wsl_ip
+  wsl_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  echo ""
+  if [[ -n "$wsl_ip" && "$host_arg" == "0.0.0.0" ]]; then
+    echo "PRIMARY (WSL→Windows): http://${wsl_ip}:${port}/waitlist"
+    echo "Also try:            http://localhost:${port}/waitlist"
+  else
+    echo "Open: http://localhost:${port}/waitlist"
+  fi
+  echo "Vite bind host: ${host_arg} (VITE_DEV_SERVER_HOST=${VITE_DEV_SERVER_HOST})"
+  if grep -qi microsoft /proc/version 2>/dev/null || [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
+    echo "WSL: use the PRIMARY URL above if Windows localhost is blank or refused."
+    echo "     Optional: [wsl2] networkingMode=mirrored in %UserProfile%\\.wslconfig, then wsl --shutdown."
+  fi
+  echo ""
+}
+
+VITE_HOST_ARG="$(resolve_vite_host_arg)"
+print_local_dev_access_hints "$DEV_PORT" "$VITE_HOST_ARG"
+
 echo "Starting frontend dev server on port ${DEV_PORT} (node $(node -v), VITE_LOW_MEMORY=${VITE_LOW_MEMORY}, VITE_WATCH_POLLING=${VITE_WATCH_POLLING}, DEPLOY_DRY_RUN_KEEP_DB_ENV=${DEPLOY_DRY_RUN_KEEP_DB_ENV}) with DEPLOY_DRY_RUN_LOCAL_RPC_URL=${DEPLOY_DRY_RUN_LOCAL_RPC_URL}, BASE_READ_RPC_URL=${BASE_READ_RPC_URL}, BASE_RPC_URL=${BASE_RPC_URL}, VITE_BASE_RPC=${VITE_BASE_RPC}"
 if port_in_use 5173; then
   echo "Warning: localhost:5173 is in use — stop pnpm dev before deploy dry-run to avoid esbuild OOM on WSL." >&2
@@ -513,7 +564,7 @@ while true; do
   : > "$VITE_BOOTSTRAP_LOG_FILE"
 
   set +e
-  pnpm exec vite --host localhost --port "$DEV_PORT" --strictPort 2>&1 | tee "$VITE_BOOTSTRAP_LOG_FILE"
+  pnpm exec vite --host "$VITE_HOST_ARG" --port "$DEV_PORT" --strictPort 2>&1 | tee "$VITE_BOOTSTRAP_LOG_FILE"
   vite_exit_code=${PIPESTATUS[0]}
   set -e
 

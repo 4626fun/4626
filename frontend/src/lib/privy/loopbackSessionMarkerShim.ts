@@ -1,5 +1,7 @@
+import { isLocalDevOrigin } from '@/lib/flags/flags'
+
 /**
- * Privy session marker shim for loopback and *.4626.fun origins.
+ * Privy session marker shim for local dev and *.4626.fun origins.
  *
  * Apps with `custom_api_url` (ours: https://privy.4626.fun) put the Privy SDK
  * into server-cookie mode (`useServerCookies = true`). In that mode the SDK's
@@ -21,7 +23,7 @@
  *
  * Setting the marker ourselves on the app origin makes the SDK serve the
  * in-storage access token for its lifetime (~1h). The shim runs on:
- * - Loopback origins (localhost, 127.0.0.1) — for local dev
+ * - Local dev origins (localhost, 127.0.0.1, WSL LAN IP on :5173/:5174)
  * - *.4626.fun origins (4626.fun, www.4626.fun, app.4626.fun) — for production
  *
  * The marker must be RE-asserted on an interval, not just set once: the SDK's
@@ -71,10 +73,9 @@ function writeMarkerCookie(): void {
 
 export function applyLoopbackPrivySessionMarkerShim(): void {
   if (typeof window === 'undefined' || typeof document === 'undefined') return
-  const host = window.location.hostname.toLowerCase()
-  const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]'
-  const is4626Fun = is4626FunDomain(host)
-  if (!isLoopback && !is4626Fun) return
+  const is4626Fun = is4626FunDomain(window.location.hostname.toLowerCase())
+  const isLocalDev = isLocalDevOrigin(window.location.origin)
+  if (!isLocalDev && !is4626Fun) return
   writeMarkerCookie()
   if (intervalStarted) return
   intervalStarted = true

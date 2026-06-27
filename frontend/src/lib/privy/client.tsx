@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Component, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { getPrivyApiUrl, getPrivyAppId, getPrivyClientId, isPrivyClientEnabled } from '@/lib/flags/flags'
+import { getPrivyApiUrl, getPrivyAppId, getPrivyClientId, isPrivyClientEnabled, isLocalDevOrigin } from '@/lib/flags/flags'
 import { CONFIGURED_APP_ORIGIN, resolveAuthRedirectOrigin } from '@/lib/env/host'
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth'
 import { base } from 'viem/chains'
@@ -120,13 +120,13 @@ function PrivyStatusObserver(props: { onStatus: (status: PrivyClientStatus) => v
 function useLoopbackPrivyInitWatchdog(active: boolean, onForceReady: () => void) {
   useEffect(() => {
     if (!active || typeof window === 'undefined') return
-    if (!isLoopbackHostname(window.location.hostname)) return
+    if (!isLocalDevOrigin(window.location.origin)) return
 
     const id = window.setTimeout(() => {
       console.warn(
-        '[privy] Init still pending after 3s on loopback — unblocking route shell so /deploy/vault can render.\n' +
+        '[privy] Init still pending after 3s on local dev — unblocking route shell so /deploy/vault can render.\n' +
           'If auth or signing fails next, retry in a private window with wallet extensions disabled,\n' +
-          'confirm http://localhost:5174 is in Privy Allowed Origins, then hard-reload.',
+          'confirm your dev URL is allowlisted (localhost:5174 or WSL IP:5174), then hard-reload.',
       )
       onForceReady()
     }, LOOPBACK_PRIVY_INIT_WATCHDOG_MS)

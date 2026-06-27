@@ -111,6 +111,38 @@ function isLoopbackOrigin(raw: string): boolean {
   }
 }
 
+const LOCAL_DEV_PORTS = new Set(['5173', '5174', '3000', '4173'])
+
+function isPrivateLanHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase().trim()
+  if (host.startsWith('10.')) return true
+  if (host.startsWith('192.168.')) return true
+  const match = /^172\.(\d{1,2})\./.exec(host)
+  if (match) {
+    const second = Number(match[1])
+    return second >= 16 && second <= 31
+  }
+  return false
+}
+
+/** WSL2 / LAN dev URLs (e.g. http://172.x.x.x:5174) used when Windows cannot reach WSL localhost. */
+export function isLocalDevOrigin(raw: string): boolean {
+  if (!import.meta.env.DEV) return false
+  const origin = normalizeOrigin(raw)
+  if (!origin) return false
+  try {
+    const url = new URL(origin)
+    if (url.protocol !== 'http:') return false
+    const port = url.port || '80'
+    if (!LOCAL_DEV_PORTS.has(port)) return false
+    const host = url.hostname.toLowerCase()
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]') return true
+    return isPrivateLanHostname(host)
+  } catch {
+    return false
+  }
+}
+
 function getCurrentOrigin(): string | null {
   if (typeof window === 'undefined') return null
   return normalizeOrigin(window.location.origin)
@@ -130,6 +162,7 @@ function isPrivyOriginAllowed(): boolean {
   const origin = getCurrentOrigin()
   if (!origin) return true
   if (getPrivyAllowedOrigins().has(origin)) return true
+  if (isLocalDevOrigin(origin)) return true
   return false
 }
 
@@ -334,6 +367,8 @@ export function resolvePrivyClientId(): string | null {
   // custom-domain client configs that reject localhost frame ancestors.
   if (typeof window !== 'undefined' && isLoopbackOrigin(window.location.origin)) {
     if (!isTruthyEnv(import.meta.env.VITE_PRIVY_CLIENT_ID_ON_LOOPBACK)) return null
+  } else if (typeof window !== 'undefined' && isLocalDevOrigin(window.location.origin)) {
+    if (!isTruthyEnv(import.meta.env.VITE_PRIVY_CLIENT_ID_ON_LOOPBACK)) return null
   }
   return clientId
 }
@@ -356,9 +391,9 @@ export function resolvePrivyApiUrl(): string | null {
     }
 
     const loopbackOrigin = getCurrentOrigin()
-    if (loopbackOrigin && isLoopbackOrigin(loopbackOrigin)) {
+    if (loopbackOrigin && isLocalDevOrigin(loopbackOrigin)) {
       // Local dev must not hit the production custom Privy domain — POST
-      // /api/v1/sessions 400s on localhost and the bootstrap overlay never clears.
+      // /api/v1/sessions 400s on localhost/WSL-LAN and the bootstrap overlay never clears.
       return 'https://auth.privy.io'
     }
   }

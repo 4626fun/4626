@@ -6,6 +6,7 @@
  */
 
 export {
+  isLocalDevOrigin,
   isPrivyHostModeAllowed,
   resolvePrivyAppId as getPrivyAppId,
   resolvePrivyClientId as getPrivyClientId,
