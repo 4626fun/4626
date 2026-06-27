@@ -123,13 +123,13 @@ const config: Config = {
           position: 'left',
         },
         {
-          to: '/guides/greenfield-checklist',
-          label: 'Launch',
+          to: '/getting-started',
+          label: 'Learn',
           position: 'right',
         },
         {
-          to: '/getting-started',
-          label: 'Learn',
+          to: '/guides/greenfield-checklist',
+          label: 'Launch',
           position: 'right',
         },
         {
@@ -162,8 +162,8 @@ const config: Config = {
         {
           title: 'Docs',
           items: [
-            {label: 'Launch checklist', to: '/guides/greenfield-checklist'},
             {label: 'What is 4626?', to: '/getting-started'},
+            {label: 'Launch checklist', to: '/guides/greenfield-checklist'},
             {label: 'Fees & lottery', to: '/overview/how-it-works'},
             {label: 'Glossary', to: '/reference/glossary'},
             {label: 'Addresses', to: '/reference/addresses'},

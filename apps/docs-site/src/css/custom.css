@@ -947,6 +947,13 @@ details > :not(summary) {
   gap: 16px;
 }
 
+/* Mobile TOC + page actions sit above the article; hide on desktop (right rail owns actions). */
+@media (min-width: 997px) {
+  .doc-mobile-toc-shell {
+    display: none;
+  }
+}
+
 .doc-page-actions {
   display: flex;
   flex-direction: column;
