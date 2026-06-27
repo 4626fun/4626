@@ -6,7 +6,6 @@ import {
   recordImageGenerationAttempt,
   updateImageGenerationProject,
 } from './imageProjects.js'
-import { composeLockedFrameImage } from './imageCompositor.js'
 import {
   buildImageGenerationPrompt,
   evaluateImageGenerationOutput,
@@ -14,7 +13,6 @@ import {
   getRetryReasonsFromEvaluation,
   shouldRunImageEvaluation,
 } from './openaiImage.js'
-import { extractForegroundFromArtwork } from './imageForegroundExtraction.js'
 
 function selectLatestAssetByRole(
   assets: Array<{ role: string; blobPathname: string; blobUrl: string; mimeType: string }>,
@@ -107,29 +105,24 @@ export async function processImageGenerationJob(jobId: string): Promise<{ id: st
           })
 
       const generation = await generateImageWithOpenAi({
-        subjectBytes: subject.bytes,
-        subjectContentType: subject.contentType ?? subjectAsset.mimeType,
+        targetBytes: subject.bytes,
+        targetContentType: subject.contentType ?? subjectAsset.mimeType,
+        referenceBytes: frame.bytes,
+        referenceContentType: frame.contentType ?? frameAsset.mimeType,
         prompt,
-        previousResponseId: leased.kind === 'refine' ? project.lastResponseId : null,
-      })
-      const extractedForegroundBytes = await extractForegroundFromArtwork(generation.imageBytes)
-      const composited = await composeLockedFrameImage({
-        artworkBytes: generation.imageBytes,
-        frameBytes: frame.bytes,
-        extractedForegroundBytes,
       })
 
       const outputAsset = await createOutputImageGenerationAsset({
         projectId: leased.projectId,
         filename: `${leased.kind}-${leased.attempts}.png`,
         contentType: 'image/png',
-        bytes: composited.imageBytes,
+        bytes: generation.imageBytes,
       })
 
       const evaluation = shouldRunImageEvaluation()
         ? await evaluateImageGenerationOutput({
             brief: project.instruction,
-            outputBytes: composited.imageBytes,
+            outputBytes: generation.imageBytes,
             outputContentType: 'image/png',
             frameBytes: frame.bytes,
             frameContentType: frame.contentType ?? frameAsset.mimeType,
@@ -148,7 +141,7 @@ export async function processImageGenerationJob(jobId: string): Promise<{ id: st
           }
       const evaluationWithComposition = {
         ...evaluation,
-        breakoutApplied: composited.breakoutApplied,
+        breakoutApplied: generation.breakoutApplied,
       }
 
       const score = sumEvaluationScore(evaluation)
@@ -175,7 +168,7 @@ export async function processImageGenerationJob(jobId: string): Promise<{ id: st
             outputAssetId: outputAsset.id,
             score,
             evaluation: evaluationWithComposition,
-            breakoutApplied: composited.breakoutApplied,
+            breakoutApplied: generation.breakoutApplied,
           },
           completed: true,
         })
@@ -198,7 +191,7 @@ export async function processImageGenerationJob(jobId: string): Promise<{ id: st
           outputAssetId: outputAsset.id,
           score,
           evaluation: evaluationWithComposition,
-          breakoutApplied: composited.breakoutApplied,
+          breakoutApplied: generation.breakoutApplied,
         },
         completed: !shouldRetry,
       })

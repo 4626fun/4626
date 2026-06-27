@@ -1,32 +1,21 @@
 import { Canvas, useFrame } from '@react-three/fiber'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as THREE from 'three'
 
+import { VaultModel } from '@/marketing/VaultModel'
 import { ZORA_TOKEN_LOGO_URL } from '@/lib/tokens/tokenLogo'
 
+const VAULT_POSTER_URL = '/immersive/assets/vault/ethereum_vault_poster.png'
+
 /**
- * Cinematic "trace-sculpt" chooser for the Deploy landing.
+ * Deploy flow chooser cards.
  *
- * Faithful re-creation of the Trace Cards 3D interaction
- * (docs/animations/cursor_3d_animated_card_concept.md — live reference:
- * experiments.thisiswhitespace.com/trace-cards). Each card holds a dot
- * formation that, on hover, sculpts a glowing 3D form by streaming a depth
- * layer away from the live plane and connecting the two with trace wires and
- * semi-transparent faceted faces:
+ *   - Coin  -> Zora creator-coin mark (/brands/zora-token.svg)
+ *   - Vault -> obsidian vault GLB from the 4626.fun landing hero (VaultModel)
  *
- *   - Coin (ERC-20)            -> Zora creator-coin mark (/brands/zora-token.svg)
- *   - Vault (ERC-20 + ERC-4626) -> glass octahedron with soft edge traces
- *
- * The whole card surface is a real WebGL panel (MeshPhysicalMaterial) lit by a
- * 3-point rig with VSM soft shadows; it tilts toward the cursor in true 3D and
- * the formed sculpt slowly spins. HTML chrome (Coordinates readout, LIVE badge,
- * big title, mono spec line) floats above the canvas and quiets on hover so the
- * sculpt is the focus.
- *
- * The card is an accessible navigation link. The 3D layer is decorative and is
- * skipped under prefers-reduced-motion or when WebGL is unavailable, falling
- * back to a static brand-styled card.
+ * The vault card reuses the landing-page lighting rig and turntable motion.
+ * Decorative 3D is skipped under prefers-reduced-motion or when WebGL is unavailable.
  */
 
 type Variant = 'coin' | 'vault'
@@ -97,69 +86,7 @@ function hasWebGL(): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Sculpt topology
-// ---------------------------------------------------------------------------
-
-const ETH_R = 0.78 // Ethereum octahedron girdle half-extent
-const ETH_TOP = 1.22 // upper pyramid apex height
-const ETH_BOT = 0.96 // lower pyramid apex depth
-
-/** A tier is a single center point (count 1) or an n-gon ring (count >= 3). */
-interface Tier {
-  verts: THREE.Vector3[]
-}
-
-const isRing = (t: Tier) => t.verts.length >= 3
-
-/** Horizontal (XZ-plane) ring of n points at height h. */
-function ring(r: number, h: number, n: number, phase = 0): THREE.Vector3[] {
-  const out: THREE.Vector3[] = []
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2 + phase
-    out.push(new THREE.Vector3(Math.cos(a) * r, h, Math.sin(a) * r))
-  }
-  return out
-}
-
-/**
- * Returns the ordered tiers for a variant at sculpt progress p (0..1).
- *
- *   vault -> Ethereum-style octahedron: two square pyramids joined base-to-base
- *            (lower apex -> girdle -> upper apex).
- */
-function tiersAt(p: number): Tier[] {
-  const lower: Tier = { verts: [new THREE.Vector3(0, -ETH_BOT * p, 0)] }
-  const girdle: Tier = { verts: ring(ETH_R * p, 0, 4, 0) }
-  const upper: Tier = { verts: [new THREE.Vector3(0, ETH_TOP * p, 0)] }
-  return [lower, girdle, upper]
-}
-
-/** Counts that stay fixed for the vault sculpt (used to size buffers + instances). */
-function topology() {
-  const tiers = tiersAt(1)
-  const dotCount = tiers.reduce((n, t) => n + t.verts.length, 0)
-
-  // Wire segments: ring perimeters + spokes between consecutive tiers.
-  let segCount = 0
-  for (const t of tiers) if (isRing(t)) segCount += t.verts.length
-  for (let i = 0; i < tiers.length - 1; i++) {
-    segCount += Math.max(tiers[i]!.verts.length, tiers[i + 1]!.verts.length)
-  }
-
-  // Face triangles: point->ring fan (n tris) or ring->ring band (2n tris).
-  let triCount = 0
-  for (let i = 0; i < tiers.length - 1; i++) {
-    const a = tiers[i]!
-    const b = tiers[i + 1]!
-    if (isRing(a) && isRing(b)) triCount += 2 * a.verts.length
-    else triCount += Math.max(a.verts.length, b.verts.length)
-  }
-
-  return { dotCount, segCount, triCount }
-}
-
-// ---------------------------------------------------------------------------
-// Sculpt (imperative per-frame geometry under the tilt group)
+// Vault card 3D (landing-page obsidian gem)
 // ---------------------------------------------------------------------------
 
 interface SharedRefs {
@@ -167,8 +94,81 @@ interface SharedRefs {
   hover: React.MutableRefObject<boolean>
 }
 
-function easeInOut(t: number): number {
-  return t * t * (3 - 2 * t)
+function makeStudioEnvTexture(renderer: THREE.WebGLRenderer) {
+  const c = document.createElement('canvas')
+  c.width = 512
+  c.height = 256
+  const ctx = c.getContext('2d')!
+  const base = ctx.createLinearGradient(0, 0, 0, 256)
+  base.addColorStop(0, '#1a2030')
+  base.addColorStop(0.5, '#0c1018')
+  base.addColorStop(1, '#05070e')
+  ctx.fillStyle = base
+  ctx.fillRect(0, 0, 512, 256)
+  const key = ctx.createRadialGradient(256, 56, 8, 256, 56, 240)
+  key.addColorStop(0, 'rgba(220, 232, 255, 0.85)')
+  key.addColorStop(0.5, 'rgba(130, 162, 222, 0.24)')
+  key.addColorStop(1, 'rgba(0, 0, 0, 0)')
+  ctx.fillStyle = key
+  ctx.fillRect(0, 0, 512, 256)
+  const tex = new THREE.CanvasTexture(c)
+  tex.mapping = THREE.EquirectangularReflectionMapping
+  tex.colorSpace = THREE.SRGBColorSpace
+  const pmrem = new THREE.PMREMGenerator(renderer)
+  const env = pmrem.fromEquirectangular(tex).texture
+  pmrem.dispose()
+  tex.dispose()
+  return env
+}
+
+function VaultCardModel({ shared }: { shared: SharedRefs }) {
+  const root = useRef<THREE.Group>(null)
+
+  useFrame((_state, dt) => {
+    if (!root.current) return
+    const on = shared.hover.current
+    const px = on ? shared.pointer.current.x : 0
+    const py = on ? shared.pointer.current.y : 0
+    root.current.rotation.y += dt * (on ? 0.22 : 0.12)
+    root.current.rotation.x = THREE.MathUtils.damp(root.current.rotation.x, -0.12 + py * 0.12, 4, dt)
+    root.current.position.x = THREE.MathUtils.damp(root.current.position.x, 0.12 + px * 0.1, 4, dt)
+    const targetScale = on ? 1.05 : 1
+    const s = THREE.MathUtils.damp(root.current.scale.x, targetScale, 5, dt)
+    root.current.scale.setScalar(s)
+  })
+
+  return (
+    <group ref={root} position={[0.1, 0.02, 0]}>
+      <Suspense fallback={null}>
+        <VaultModel />
+      </Suspense>
+    </group>
+  )
+}
+
+function CardScene({ shared }: { shared: SharedRefs }) {
+  return (
+    <Canvas
+      className="absolute inset-0 z-0"
+      gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
+      dpr={[1, 2]}
+      camera={{ position: [0, 0.28, 5.8], fov: 24, near: 0.05, far: 100 }}
+      onCreated={({ gl, scene }) => {
+        gl.toneMapping = THREE.ACESFilmicToneMapping
+        gl.toneMappingExposure = 1.08
+        scene.environment = makeStudioEnvTexture(gl)
+        gl.setClearColor(0x000000, 0)
+      }}
+    >
+      <ambientLight intensity={0.45} color="#1a2233" />
+      <directionalLight position={[2.6, 3.2, 3.2]} intensity={1.5} color="#eef2ff" />
+      <directionalLight position={[-2.8, 1.2, -1.4]} intensity={0.65} color="#9fb4d8" />
+      <directionalLight position={[0, -2.6, 1.8]} intensity={0.55} color="#7088b8" />
+      <directionalLight position={[-1.4, 2.6, -3.8]} intensity={1.45} color="#e9eef6" />
+      <directionalLight position={[1.8, -1.0, -3.4]} intensity={0.8} color="#dde4f0" />
+      <VaultCardModel shared={shared} />
+    </Canvas>
+  )
 }
 
 /** Zora creator-coin mark — crisp SVG with stage glow and cursor parallax. */
@@ -196,252 +196,6 @@ function ZoraLogoMark() {
         </div>
       </div>
     </div>
-  )
-}
-
-function VaultSculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) {
-  const { accent } = config
-  const tilt = useRef<THREE.Group>(null)
-  const spin = useRef<THREE.Group>(null)
-  const dots = useRef<THREE.InstancedMesh>(null)
-  const wires = useRef<THREE.LineSegments>(null)
-  const faces = useRef<THREE.Mesh>(null)
-
-  const p = useRef(0)
-  const spinAngle = useRef(0)
-  const glowT = useRef(0)
-
-  const topo = useMemo(() => topology(), [])
-
-  const FLOOR_Y = -1.0
-  const yOffset = FLOOR_Y + ETH_BOT * 1.05
-  const baseScale = 1.05
-
-  const wireGeo = useMemo(() => {
-    const g = new THREE.BufferGeometry()
-    g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(topo.segCount * 6), 3))
-    return g
-  }, [topo.segCount])
-
-  const faceGeo = useMemo(() => {
-    const g = new THREE.BufferGeometry()
-    g.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(topo.triCount * 9), 3))
-    g.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(topo.triCount * 9), 3))
-    return g
-  }, [topo.triCount])
-
-  const dummy = useMemo(() => new THREE.Object3D(), [])
-
-  useEffect(() => {
-    return () => {
-      wireGeo.dispose()
-      faceGeo.dispose()
-    }
-  }, [wireGeo, faceGeo])
-
-  useFrame((_state, dt) => {
-    const d = Math.min(dt, 0.05)
-
-    if (tilt.current) {
-      const on = shared.hover.current
-      const px = on ? shared.pointer.current.x : 0
-      const py = on ? shared.pointer.current.y : 0
-      const REST_PITCH = -0.34
-      const targetX = REST_PITCH - py * 0.26
-      const targetY = px * 0.42
-      tilt.current.rotation.x = THREE.MathUtils.damp(tilt.current.rotation.x, targetX, 7, d)
-      tilt.current.rotation.y = THREE.MathUtils.damp(tilt.current.rotation.y, targetY, 7, d)
-      tilt.current.rotation.z = THREE.MathUtils.damp(tilt.current.rotation.z, on ? px * 0.06 : 0, 6, d)
-    }
-
-    const REST = 0.72
-    p.current = THREE.MathUtils.damp(p.current, shared.hover.current ? 1 : REST, 4, d)
-    const prog = easeInOut(Math.min(1, Math.max(0, p.current)))
-
-    // Gentle idle spin at rest, accelerating as the form blooms on hover.
-    spinAngle.current += d * (0.08 + 0.45 * Math.max(0, (prog - REST) / (1 - REST)))
-    if (spin.current) {
-      spin.current.rotation.y = spinAngle.current
-      spin.current.scale.setScalar(baseScale * (1 + 0.04 * glowT.current))
-    }
-
-    glowT.current = THREE.MathUtils.damp(glowT.current, shared.hover.current ? 1 : 0, 6, d)
-    const g = glowT.current
-    if (dots.current) {
-      ;(dots.current.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.35 + 0.45 * g
-    }
-    if (wires.current) {
-      ;(wires.current.material as THREE.LineBasicMaterial).opacity = 0.22 + 0.38 * g
-    }
-    if (faces.current) {
-      const m = faces.current.material as THREE.MeshPhysicalMaterial
-      m.opacity = 0.14 + 0.12 * g
-      m.emissiveIntensity = 0.15 + 0.2 * g
-      m.transmission = 0.72 + 0.12 * g
-    }
-
-    const tiers = tiersAt(prog)
-    const flat: THREE.Vector3[] = []
-    for (const t of tiers) for (const vert of t.verts) flat.push(vert)
-
-    // --- dots ---
-    if (dots.current) {
-      const dotScale = 0.028 + 0.014 * prog
-      for (let i = 0; i < flat.length; i++) {
-        dummy.position.copy(flat[i]!)
-        dummy.scale.setScalar(dotScale)
-        dummy.updateMatrix()
-        dots.current.setMatrixAt(i, dummy.matrix)
-      }
-      dots.current.count = flat.length
-      dots.current.instanceMatrix.needsUpdate = true
-    }
-
-    // --- wires ---
-    if (wires.current) {
-      const arr = (wireGeo.getAttribute('position') as THREE.BufferAttribute).array as Float32Array
-      let o = 0
-      const push = (a: THREE.Vector3, b: THREE.Vector3) => {
-        arr[o++] = a.x; arr[o++] = a.y; arr[o++] = a.z
-        arr[o++] = b.x; arr[o++] = b.y; arr[o++] = b.z
-      }
-      // ring perimeters
-      for (const t of tiers) {
-        if (isRing(t)) {
-          const n = t.verts.length
-          for (let i = 0; i < n; i++) push(t.verts[i]!, t.verts[(i + 1) % n]!)
-        }
-      }
-      for (let i = 0; i < tiers.length - 1; i++) {
-        const a = tiers[i]!
-        const b = tiers[i + 1]!
-        if (a.verts.length === 1) {
-          for (let k = 0; k < b.verts.length; k++) push(a.verts[0]!, b.verts[k]!)
-        } else if (b.verts.length === 1) {
-          for (let k = 0; k < a.verts.length; k++) push(a.verts[k]!, b.verts[0]!)
-        } else {
-          const n = a.verts.length
-          for (let k = 0; k < n; k++) push(a.verts[k]!, b.verts[k]!)
-        }
-      }
-      wireGeo.getAttribute('position').needsUpdate = true
-      wireGeo.setDrawRange(0, o / 3)
-    }
-
-    // --- faces ---
-    if (faces.current) {
-      const arr = (faceGeo.getAttribute('position') as THREE.BufferAttribute).array as Float32Array
-      let o = 0
-      const tri = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3) => {
-        arr[o++] = a.x; arr[o++] = a.y; arr[o++] = a.z
-        arr[o++] = b.x; arr[o++] = b.y; arr[o++] = b.z
-        arr[o++] = c.x; arr[o++] = c.y; arr[o++] = c.z
-      }
-      for (let i = 0; i < tiers.length - 1; i++) {
-        const a = tiers[i]!
-        const b = tiers[i + 1]!
-        if (a.verts.length === 1) {
-          const n = b.verts.length
-          for (let k = 0; k < n; k++) tri(a.verts[0]!, b.verts[k]!, b.verts[(k + 1) % n]!)
-        } else if (b.verts.length === 1) {
-          const n = a.verts.length
-          for (let k = 0; k < n; k++) tri(a.verts[k]!, a.verts[(k + 1) % n]!, b.verts[0]!)
-        } else {
-          const n = a.verts.length
-          for (let k = 0; k < n; k++) {
-            const k2 = (k + 1) % n
-            tri(a.verts[k]!, a.verts[k2]!, b.verts[k2]!)
-            tri(a.verts[k]!, b.verts[k2]!, b.verts[k]!)
-          }
-        }
-      }
-      faceGeo.getAttribute('position').needsUpdate = true
-      faceGeo.setDrawRange(0, topo.triCount * 3)
-      faceGeo.computeVertexNormals()
-    }
-  })
-
-  return (
-    <group ref={tilt}>
-      {/* invisible floor that only catches the soft contact shadow */}
-      <mesh position={[0, FLOOR_Y - 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[9, 9]} />
-        <shadowMaterial transparent opacity={0.45} />
-      </mesh>
-      <group ref={spin} position={[0.15, yOffset, 0]} scale={baseScale}>
-        <instancedMesh ref={dots} args={[undefined, undefined, topo.dotCount]} castShadow>
-          <sphereGeometry args={[1, 10, 10]} />
-          <meshStandardMaterial
-            color="#f8fbff"
-            emissive={accent}
-            emissiveIntensity={0.45}
-            roughness={0.15}
-            metalness={0.05}
-            toneMapped={false}
-          />
-        </instancedMesh>
-
-        <lineSegments ref={wires} geometry={wireGeo}>
-          <lineBasicMaterial color={accent} transparent opacity={0.35} toneMapped={false} />
-        </lineSegments>
-
-        <mesh ref={faces} geometry={faceGeo} castShadow>
-          <meshPhysicalMaterial
-            color={config.core}
-            emissive={config.core}
-            emissiveIntensity={0.18}
-            metalness={0.08}
-            roughness={0.06}
-            transmission={0.78}
-            thickness={0.55}
-            ior={1.42}
-            transparent
-            opacity={0.18}
-            side={THREE.DoubleSide}
-            depthWrite={false}
-            toneMapped={false}
-          />
-        </mesh>
-      </group>
-    </group>
-  )
-}
-
-function CardScene({ config, shared }: { config: CardConfig; shared: SharedRefs }) {
-  return (
-    <Canvas
-      className="absolute inset-0 z-0"
-      shadows
-      gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
-      dpr={[1, 2]}
-      camera={{ position: [0, 0.05, 5.6], fov: 40, near: 0.1, far: 50 }}
-      onCreated={({ gl }) => {
-        gl.shadowMap.type = THREE.VSMShadowMap
-        gl.setClearColor(0x000000, 0)
-      }}
-    >
-      <ambientLight intensity={0.55} color="#eef4ff" />
-      <directionalLight
-        position={[2.2, 4.8, 4.5]}
-        intensity={2.2}
-        color="#fff8f0"
-        castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
-        shadow-bias={-0.002}
-        shadow-normalBias={0.02}
-        shadow-radius={18}
-        shadow-camera-near={0.1}
-        shadow-camera-far={20}
-        shadow-camera-left={-3.5}
-        shadow-camera-right={3.5}
-        shadow-camera-top={3.5}
-        shadow-camera-bottom={-3.5}
-      />
-      <directionalLight position={[-2.8, 2.6, 3.2]} intensity={1.1} color="#c8e0ff" />
-      <pointLight position={[0, 1.2, 2.4]} intensity={0.6} color={config.accent} distance={8} decay={2} />
-      <VaultSculpt config={config} shared={shared} />
-    </Canvas>
   )
 }
 
@@ -550,7 +304,7 @@ function TraceCard({ config }: { config: CardConfig }) {
       {isCoin ? (
         <ZoraLogoMark />
       ) : (
-        <CardScene config={config} shared={{ pointer, hover }} />
+        <CardScene shared={{ pointer, hover }} />
       )}
       {/* interactive cursor-following spotlight */}
       <div
@@ -599,7 +353,19 @@ function StaticCard({ config }: { config: CardConfig }) {
             className="relative h-[148px] w-[148px] translate-x-[8%] -translate-y-[18%] rounded-full object-cover shadow-[0_24px_80px_-24px_rgba(77,143,255,0.55)] ring-1 ring-white/10"
           />
         </div>
-      ) : null}
+      ) : (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden>
+          <img
+            src={VAULT_POSTER_URL}
+            alt=""
+            width={220}
+            height={220}
+            decoding="async"
+            draggable={false}
+            className="relative h-[52%] max-h-[220px] w-auto translate-x-[6%] -translate-y-[16%] object-contain opacity-90"
+          />
+        </div>
+      )}
       <div
         className="pointer-events-none absolute inset-0"
         style={{ boxShadow: 'inset 0 0 90px 12px rgba(0,0,0,0.5)' }}
