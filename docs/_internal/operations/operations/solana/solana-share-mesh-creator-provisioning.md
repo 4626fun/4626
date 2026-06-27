@@ -1,5 +1,7 @@
 # Solana share mesh — per-creator provisioning
 
+> **Plain language:** optional Solana trading for the vault share token (`■<TICKER>`). **Pipe A** = 30% share bridge at finalize. **Release:** v1.14.1 batcher `0x660B251F…61c1`. [Operator terminology](../../OPERATOR-TERMINOLOGY.md)
+
 Operator checklist to wire **creator N** (not only the first platform mesh) for Pipe A: Solana LZ OFT → DVN wire → registry peer → preflight → `finalizePhase2` bridge.
 
 Related:
@@ -23,7 +25,7 @@ Each creator gets their own Base `CreatorShareOFT` at vault deploy. Solana trada
 ## Prerequisites
 
 - [ ] Creator paid **`vault_full_deploy`** (includes `solana_ovault_mesh`) — row in `creator_strategy_features`
-- [ ] Platform Pipe A shell ready: `pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts --batcher 0xa99058f424FB3ACC639F59355C65C40149030651` → exit **0** (after first mesh peer is set for creator #1)
+- [ ] Platform Pipe A shell ready: `pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts --batcher 0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1` → exit **0** (after first mesh peer is set for creator #1)
 - [ ] `SOLANA_PRIVATE_KEY` funded on mainnet (~4+ SOL Path 1 per creator; see budget doc)
 - [ ] Paid Solana RPC (`SOLANA_RPC_URL` / `RPC_URL_SOLANA_TESTNET` for rehearsal)
 

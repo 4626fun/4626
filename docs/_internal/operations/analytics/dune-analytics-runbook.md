@@ -26,18 +26,18 @@ Redeploy production after setting the variable so the app shows **Verify on Dune
 
 ## Canonical contract addresses (Base)
 
-Use [Contract addresses](/reference/addresses) as source of truth. Current greenfield infrastructure (v1.11.2-pipe-a epoch) includes:
+Use [Contract addresses](/reference/addresses) as source of truth. Current greenfield infrastructure (**v1.14.1**) includes:
 
 | Contract | Address |
 |----------|---------|
-| DeploymentBatcher | `0xa99058f424FB3ACC639F59355C65C40149030651` |
-| CreatorRegistry | `0x3f64087dc361Ad52300409E5873b26941D6418B6` |
-| CreatorOVaultFactory | `0x09a2fd817F30D2599fb13520d06751259b6AdcFE` |
-| CreatorLotteryManager | `0x5c0115589d7F4930A0dc93417aE409f44186f4E7` |
-| SolanaBridgeAdapter | `0x700b4BBAf965c013123bAd02a6562FBa487aC0f1` |
+| DeploymentBatcher | `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1` |
+| CreatorRegistry | `0xDD7B106a15540bA2F59464590222bF47D8C9394E` |
+| CreatorOVaultFactory | `0xf4a4d70D9fB3b29c56eB2aaE264FBd3DF9221A6a` |
+| CreatorLotteryManager | `0x29F901864D65Eb848BC548ebCEAcD6dAD39EFd26` |
+| SolanaBridgeAdapter | `0x8e99bb0270bbdf2d64ff6854509CD2410A28fBae` |
 | Zora factory (coin creates) | `0x777777751622c0d3258f214f9df38e35bf45baf3` |
 
-Deprecated batcher `0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8` — include only for historical AKITA / legacy vault charts.
+Deprecated batchers (`0xa99058…`, `0x16aEA8…`) — use `02-legacy-batcher-tx-volume.sql` for historical charts only.
 
 ## Starter SQL (Dune SQL editor)
 
@@ -57,7 +57,7 @@ SELECT
   date_trunc('day', block_time) AS day,
   count(*) AS tx_count
 FROM base.transactions
-WHERE "to" = 0xa99058f424fb3acc639f59355c65c40149030651
+WHERE "to" = 0x660b251f2feb28f61a8e23e65c66f9b917ee61c1
   AND block_time >= now() - interval '90' day
 GROUP BY 1
 ORDER BY 1

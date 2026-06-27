@@ -1,5 +1,7 @@
 # Creator strategy features
 
+> **Creator-facing name:** launch bundle ($499 USDC). **Code key:** `vault_full_deploy`. **Share split at finalize:** 30/30/30/10 (auction / vesting / Solana bridge / LP reserve). [Operator terminology](../../OPERATOR-TERMINOLOGY.md)
+
 ## Operator checklist
 
 1. Creator pays **`vault_full_deploy`** ($499 USDC) via USDC transfer, x402, or Stripe → row in `creator_strategy_features`.

@@ -1,8 +1,10 @@
 # Solana share mesh — budget & runbook
 
+> **Release truth:** v1.14.1 batcher `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1`. [Operator terminology](../../OPERATOR-TERMINOLOGY.md)
+
 Operator costs and sequencing for **Pipe A** (30% ShareOFT auto-bridge at `finalizePhase2`) and optional **Path 2** (Meteora + lottery).
 
-Policy: [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-policy.md). Batcher: `0xa99058f424FB3ACC639F59355C65C40149030651`.
+Policy: [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-policy.md). Current batcher: `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1` (legacy `0xa99058…` — historical charts only).
 
 ## Scope
 
@@ -95,7 +97,7 @@ Rent formula matches mainnet. Reproduce: `pnpm -C kpr solana:cost-probe-devnet` 
 3. **Verify:**
    ```bash
    pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
-     --batcher 0xa99058f424FB3ACC639F59355C65C40149030651
+     --batcher 0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1
    ```
 4. Creator pays **`vault_full_deploy`** ($499); deploy preflight uses share-mesh OVault checks (not legacy creator-SPL registration). `finalizePhase2` bridges 30% ShareOFT.
 5. Keeper until Path 2: `KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay`, `SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0`.
@@ -175,7 +177,7 @@ Wrong-grain warning: do not point share-mesh Meteora or `relay_entries` at bridg
 
 | Role | Address |
 |------|---------|
-| DeploymentBatcher | `0xa99058f424FB3ACC639F59355C65C40149030651` |
+| DeploymentBatcher (v1.14.1) | `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1` |
 | OVaultHubComposer | `0x7dF44cBB93a5191837a988f0Cc441E3811C39CD1` |
 | Solana EID | `30168` |
 | creator-share-hook | `EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU` (upgrade: [creator-share-hook-mainnet-upgrade.md](./creator-share-hook-mainnet-upgrade.md)) |

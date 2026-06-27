@@ -1,5 +1,7 @@
 # Greenfield launch readiness
 
+> **Plain language:** checklist for **new vault launches** (not grandfather migrations). **Release:** v1.14.1 batcher `0x660B251F…61c1`. [Operator terminology](../../OPERATOR-TERMINOLOGY.md)
+
 Repeatable gate for **new vault deploys** (not grandfather migrations). Policy: [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-policy.md).
 
 **AKITA full-stack redeploy:** use the dedicated checklist and one-command gate in [akita-full-stack-prelaunch.md](./akita-full-stack-prelaunch.md) (`pnpm -C frontend ops:verify-akita-prelaunch --production`).
@@ -29,7 +31,7 @@ Also verify:
 | Check | Command / URL |
 |-------|----------------|
 | Batcher OVault runtime | `cast call $BATCHER "getOVaultRuntimeConfig()(address,uint32,bool)"` → hub + EID `30168` + `true` |
-| Pipe A batcher readiness | `pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts` → exit 0 |
+| Pipe A batcher readiness | `pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts --batcher 0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1` → exit 0 |
 | Provisioner | `curl -H "Authorization: Bearer $SECRET" https://provisioner.4626.fun/healthz` → `ok: true`, payer healthy |
 | Orchestrator | `curl https://orchestrator.4626.fun/healthz` → `ok: true` |
 | Release target | `bash test/current-release-target-guard.sh` |

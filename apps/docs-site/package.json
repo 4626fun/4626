@@ -10,11 +10,12 @@
     "sync-docs:strict": "node scripts/sync-docs.mjs --strict",
     "check:curated-allowlist": "node scripts/check-curated-allowlist.mjs",
     "check:contract-facts": "node scripts/check-docs-contract-facts.mjs",
+    "check:generated-contract-docs": "node scripts/check-generated-contract-docs.mjs",
     "check-links": "node scripts/check-doc-links.mjs",
     "api:postprocess": "tsx scripts/postprocess-api-docs.ts",
     "api:postprocess:strict": "tsx scripts/postprocess-api-docs.ts --strict",
     "docusaurus": "docusaurus",
-    "prepare:content": "pnpm generate:all && pnpm sync-docs && pnpm api:postprocess",
+    "prepare:content": "pnpm generate:all && pnpm check:generated-contract-docs && pnpm sync-docs && pnpm api:postprocess",
     "start": "pnpm api:postprocess && NODE_OPTIONS=--max-old-space-size=8192 docusaurus start",
     "build": "pnpm api:postprocess && docusaurus build",
     "build:full": "pnpm prepare:content && docusaurus build",
@@ -71,7 +72,7 @@
     ]
   },
   "engines": {
-    "node": "20.x"
+    "node": "24.x"
   },
   "pnpm": {
     "overrides": {

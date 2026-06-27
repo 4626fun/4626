@@ -1,5 +1,7 @@
 # AKITA full-stack redeploy — pre-launch checklist
 
+> **Release truth:** v1.14.1 batcher `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1`. Terminology: [Operator terminology](../OPERATOR-TERMINOLOGY.md).
+
 Use this before **you** launch AKITA’s new vault stack on `https://app.4626.fun/deploy/vault`. Platform ops can finish everything here; the deploy session itself stays with the creator/operator wallet.
 
 Related:
@@ -64,7 +66,7 @@ That inserts `vault_full_deploy` (bundles Charm + Ajna + Solana mesh + Meteora e
 
 | Check | Expect |
 |-------|--------|
-| Pipe A batcher | `verify-batcher-pipe-a-readiness.ts` exit **0** on `0xa99058…` |
+| Pipe A batcher | `verify-batcher-pipe-a-readiness.ts` exit **0** on `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1` |
 | Production `solanaInfraStatus` | `readyForAutoRegistration: true`, `blockers: []` |
 | Release target | `bash test/current-release-target-guard.sh` |
 | Hook bytecode | `ops:verify-hook-mainnet-bytecode` → **PASS (canonical)** |
