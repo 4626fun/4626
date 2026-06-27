@@ -29,8 +29,8 @@ Creators with a **creator coin on Base** (typically via Zora) who want to:
 
 1. Pay the **launch bundle** ($499 USDC) — unlocks deploy.
 2. **Deploy** vault, share, gauge, oracle, and auction contracts.
-3. **Activate** — deposit 50M–100M creator coin and start the auction.
-4. After the auction **finalizes**, `■` shares trade on Base; lottery and fees apply to qualifying **buys**.
+3. **Activate** — deposit 50M–100M creator coin; batcher wraps `■` and schedules the fair-launch auction (Thursday 00:00 UTC epoch).
+4. After the auction **graduates** and settlement completes, `■` shares trade on Base; lottery and fees apply to qualifying **buys**.
 5. **Solana is optional** — same `■` share may bridge later; creator coin stays on Base.
 
 Full timeline: [Launch checklist](/guides/greenfield-checklist) · [After activation](/guides/after-activation)
@@ -60,7 +60,7 @@ Full timeline: [Launch checklist](/guides/greenfield-checklist) · [After activa
 |------|--------|-------|
 | 1 | Pay launch bundle ($499 USDC) | [Pay launch fee](/guides/strategy-bundle) |
 | 2 | Deploy contracts | [Deploy contracts](/guides/launch-token) |
-| 3 | Activate vault (deposit + auction) | [Activate vault](/guides/activate-vault) |
+| 3 | Activate vault (deposit + share split + auction) | [Activate vault](/guides/activate-vault) |
 | 4 | Auction → finalize → trading live | [After activation](/guides/after-activation) |
 | 5 | Optional Solana share bridge | [Optional: Solana trading](/overview/solana-share-mesh) |
 
@@ -69,7 +69,7 @@ Full timeline: [Launch checklist](/guides/greenfield-checklist) · [After activa
 | Milestone | You are here when… | Trading on Base? |
 |-----------|-------------------|------------------|
 | **Deployed** | Contracts exist; vault empty | No |
-| **Activated** | Deposit done; **auction running** | No |
+| **Activated** | Deposit done; **auction scheduled or live** | No |
 | **Trading live** | Auction done + finalize complete | Yes |
 
 ## FAQ

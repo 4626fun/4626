@@ -2,7 +2,7 @@
 
 Source-of-truth list of every strategy considered for `CreatorOVault`. Each row pins the valuation mode (per [the onboarding checklist](./strategy-onboarding-checklist.md)) and the cap rationale, if any.
 
-**Greenfield deploy:** creators pay **`vault_full_deploy`** ($499), which bundles Charm + Ajna Phase 3 strategies (45%/45%) plus Solana mesh / Meteora entitlements. Individual feature keys below are resolver/DB identifiers, not separate public SKUs.
+**New vault launch:** creators pay **`vault_full_deploy`** ($499), which bundles Charm + Ajna Phase 3 strategies (45%/45%) plus optional Solana bridge + Meteora entitlements. Individual feature keys below are resolver/DB identifiers, not separate public SKUs.
 
 `solana_ovault_mesh` is not a `CreatorOVault` strategy. It is a Phase 2b routing entitlement for Solana OVault compose/peer wiring and must not be included in `addStrategy` or `strategyMaxAssets` cap batches.
 
@@ -23,7 +23,7 @@ Update this file in the same PR that adds, classifies, or re-caps a strategy.
 
 | Strategy | Feature flag | Notes |
 | --- | --- | --- |
-| Solana bridge strategy | `solana_bridge_strategy` | Retired — replaced by Pipe A 30% ShareOFT finalize bridge. Historical AKITA vaults may still have on-chain `SolanaBridgeStrategy`. |
+| Solana bridge strategy | `solana_bridge_strategy` | Retired — replaced by post-auction ShareOFT finalize bridge (~30% at Phase 2). Historical AKITA vaults may still have on-chain `SolanaBridgeStrategy`. |
 
 ## How to update
 

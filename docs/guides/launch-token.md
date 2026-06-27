@@ -49,6 +49,19 @@ Sponsored smart-wallet execution may apply where configured.
 
 [Contracts](/contracts) · [Addresses](/reference/addresses)
 
+## Onchain phases (what happens next)
+
+Deploy is **Phase 1** only. Later app steps map to batcher phases:
+
+| Phase | App step | Effect |
+|-------|----------|--------|
+| 1 | **Deploy** (this page) | Stack exists; vault unfunded |
+| 2 | [Activate](/guides/activate-vault) | Deposit + wrap `■` + **30/30/30/10** split |
+| 3 | Automatic | Charm 45% · Ajna 45% · 10% idle |
+| 4 | After activation | CCA auction (Thursday 00:00 UTC schedule) |
+
+[Deploy phases overview](/contracts#deploy-phases)
+
 ## Next
 
 [Step 3: Activate vault](/guides/activate-vault)

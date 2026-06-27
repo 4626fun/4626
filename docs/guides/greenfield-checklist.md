@@ -33,6 +33,8 @@ End-to-end checklist for a **new vault on Base** (v1.14.1). For legacy vaults, i
 | 5 | Finalize | Base settlement; `■` split 30/30/30/10 (incl. optional Solana bridge) | [After activation](/guides/after-activation) |
 | 6 | Strategies attach | Charm 45% · Ajna 45% · 10% idle (automatic) | [How fees work](/overview/how-it-works) |
 
+**Trading live** requires auction graduation + sweep + migrate + hook alignment — not activation alone. [After activation](/guides/after-activation#when-is-trading-live-on-base)
+
 ## Milestones
 
 | Stage | State | Public trading on Base? |

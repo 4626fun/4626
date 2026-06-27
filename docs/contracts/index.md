@@ -28,4 +28,15 @@ Onchain reference for 4626 vault infrastructure. For the launch journey, start w
 
 Impairment: [disclosures](/reference/impairment-v1-disclosures) · Terminology: [Glossary](/reference/glossary)
 
+## Deploy phases
+
+| Phase | Creator-facing step | Onchain effect |
+|-------|---------------------|----------------|
+| 1 | [Deploy contracts](/guides/launch-token) | Per-creator stack deployed; vault unfunded |
+| 2 | [Activate vault](/guides/activate-vault) | Deposit + wrap + **30/30/30/10** share split |
+| 3 | Automatic (launch bundle) | Charm 45% · Ajna 45% · 10% idle |
+| 4 | After activation | CCA auction scheduled (Thursday 00:00 UTC) → live → graduate |
+
+Launch is **complete on Base** only after the auction graduates, `sweepCurrency()` / `migrate()` succeed, and hook config aligns with the intended fee collector — see [After activation](/guides/after-activation#when-is-trading-live-on-base).
+
 Source: [github.com/wenakita/4626/contracts](https://github.com/wenakita/4626/tree/main/contracts)

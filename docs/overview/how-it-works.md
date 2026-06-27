@@ -70,6 +70,8 @@ Lane names: [Glossary](/reference/glossary).
 
 Steps 1–3 are manual in the app. Steps 4–6 follow activation.
 
+**Trading live on Base** requires auction graduation, sweep, migrate, and hook alignment — not activation alone. [Completion checklist](/guides/after-activation#when-is-trading-live-on-base)
+
 ### Share allocation at finalize
 
 The batcher wraps the activation deposit into `■` ShareOFT, then allocates supply **30/30/30/10**:

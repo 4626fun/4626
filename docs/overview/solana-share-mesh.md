@@ -38,7 +38,7 @@ Solana receives a bridged **ShareOFT**, not a separate creator-coin SPL token. S
 | 1 | [Deploy](/guides/launch-token) and [activate](/guides/activate-vault) on Base | Required |
 | 2 | Fair-launch auction runs | Monitor in app |
 | 3 | **Finalize** completes on Base | Usually automatic / in-app |
-| 4 | **Post-auction Solana bridge** may send ~30% of `■` supply to Solana | None — part of finalize |
+| 4 | **Solana bridge leg** (~30% of `■` from the finalize split) may land on Solana | None — part of Phase 2 finalize |
 | 5 | Meteora pool setup may follow | None — operator-assisted (included in launch bundle) |
 
 There is no separate “deploy to Solana” step in the application.

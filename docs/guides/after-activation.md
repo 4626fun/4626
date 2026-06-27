@@ -53,6 +53,21 @@ Solana is optional for Base trading — the 30% bridge leg may complete after fi
 
 ## Trading live on Base
 
+<a id="when-is-trading-live-on-base"></a>
+
+Public DEX trading and lottery are **not** guaranteed the moment activation finalizes. Base is **trading live** when all of the following have succeeded:
+
+| Step | Onchain action | Notes |
+|------|----------------|-------|
+| 1 | CCA auction **graduates** | Minimum raise met; clearing price set |
+| 2 | `sweepCurrency()` | Auction proceeds swept per CCA lifecycle |
+| 3 | `migrate()` | Uniswap v4 LP position created from auction + LP reserve |
+| 4 | Hook config aligned | Tax hook / `tradeFeeCollector` must match intended gauge routing — separate from `migrate()` |
+
+If the auction **fails**, `finalizeFailedAuction()` / `sweepUnsoldTokens()` clears strategy state so a relaunch can proceed. Details: [CCA launch strategy](/contracts/strategies/cca-launch).
+
+Once live:
+
 - `■` shares tradable on Base DEXs
 - Fees on qualifying **buys** → [CreatorGaugeController](/contracts/governance/gauge-controller)
 - Lottery entries on qualifying **buys** → [CreatorLotteryManager](/contracts/utilities/lottery-manager)
