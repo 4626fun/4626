@@ -10,6 +10,16 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Learn',
+      collapsed: false,
+      items: [
+        'getting-started/index',
+        'overview/how-it-works',
+        'overview/solana-share-mesh',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Launch a vault',
       collapsed: false,
       link: {type: 'doc', id: 'guides/index'},
@@ -19,16 +29,6 @@ const sidebars: SidebarsConfig = {
         'guides/launch-token',
         'guides/activate-vault',
         'guides/after-activation',
-      ],
-    },
-    {
-      type: 'category',
-      label: 'Understand 4626',
-      collapsed: false,
-      items: [
-        'getting-started/index',
-        'overview/how-it-works',
-        'overview/solana-share-mesh',
       ],
     },
     {
