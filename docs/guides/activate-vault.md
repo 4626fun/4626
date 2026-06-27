@@ -1,44 +1,50 @@
 ---
-title: Activate a vault
+title: 'Step 3: Activate vault'
 sidebar_position: 4
 ---
 
-# Activate a vault
+# Step 3: Activate vault
 
-**Launch step 3:** deposit creator coin into the vault and seed the **Continuous Clearing Auction (CCA)** for tradable `■` shares.
+Deposit creator coin and start the **fair-launch auction** for `■` tradable shares.
 
-Prerequisites: [Strategy bundle](/guides/strategy-bundle) · [Launch vault](/guides/launch-token) · [Launch checklist](/guides/greenfield-checklist)
+<div class="docs-at-a-glance">
 
-## Overview
+| | |
+|---|---|
+| **You do** | Sign activate (Permit2 or approve + activate) |
+| **4626 does** | Deposit · mint shares · seed Uniswap V4 auction |
+| **Done when** | Milestone **Activated** (auction running) |
+| **Deposit** | 50M–100M creator coin · auction seed 99% coin / 1% USDC |
 
-Activation transfers **50M–100M** creator coin from the execution wallet into [CreatorOVault](/contracts/core/creator-ovault), mints vault shares, wraps ShareOFT, and allocates supply to the [CCA strategy](/contracts/strategies/cca-launch) on Uniswap V4. This constitutes open price discovery — not a private presale.
+</div>
 
-## Application execution paths
+[Launch checklist](/guides/greenfield-checklist) · [Step 2: Deploy contracts](/guides/launch-token)
 
-**Permit2 (preferred):** Single typed-data signature and batcher call — deposit, wrap, and CCA seeding in one transaction when the wallet supports Permit2.
+## What activation does
 
-**Approve + activate (fallback):** Approve the batcher for the deposit amount, then submit the activate call. The application selects the path automatically.
+Transfers **50M–100M** creator coin into [CreatorOVault](/contracts/core/creator-ovault), mints vault shares, wraps ShareOFT, and allocates supply to the [fair-launch auction](/contracts/strategies/cca-launch). This is **open price discovery**, not a private sale.
 
-## Deposit parameters
+## Execution paths
 
-- **50M–100M** creator coin (application displays configured minimum for deployment version)
-- CCA seed composition: **99% creator coin / 1% USDC** (not a balanced pair)
+**Permit2 (preferred):** One signature · deposit + wrap + auction in one batch.
 
-## Post-activation timeline
+**Approve + activate:** Approve batcher, then activate. App picks the path.
 
-| Phase | Expected state |
+## After activation
+
+| Phase | What to expect |
 |-------|----------------|
-| CCA in progress | Monitor auction in application; secondary trading not yet live |
-| CCA complete + finalize | `■` shares tradable on Base; qualifying **buys** may enter lottery |
-| Solana (optional) | Pipe A bridge and Meteora may follow finalize — [Solana share mesh](/overview/solana-share-mesh) |
-| Strategies | Charm + Ajna attach per bundle weights (automatic) |
+| Auction in progress | Monitor in app · **no** open DEX trading yet |
+| Auction + finalize complete | **Trading live** on Base · lottery on qualifying buys |
+| Optional Solana | Bridge may follow finalize — [Optional: Solana trading](/overview/solana-share-mesh) |
+| Strategies | Charm + Ajna attach automatically from launch bundle |
 
-Base trading and lottery do not require Solana finalization.
+Base trading does **not** require Solana.
 
-## Next step
+## Next
 
-[After activation](/guides/after-activation) — CCA monitoring, finalize, trading live, and optional Solana.
+[Step 4: After activation](/guides/after-activation) — auction, finalize, trading live.
 
-## Related documentation
+## Related
 
-[Launch vault](/guides/launch-token) · [After activation](/guides/after-activation) · [How it works](/overview/how-it-works) · [CCA contract](/contracts/strategies/cca-launch) · [Addresses](/reference/addresses)
+[How fees and lottery work](/overview/how-it-works) · [CCA contract](/contracts/strategies/cca-launch)

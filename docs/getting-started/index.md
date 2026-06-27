@@ -1,110 +1,104 @@
 ---
-title: Getting started
+title: What is 4626?
 sidebar_position: 1
 ---
 
-# Getting started
+# What is 4626?
 
-This page introduces the 4626 product model, launch prerequisites, and recommended reading order. For step-by-step execution, use the [Launch checklist](/guides/greenfield-checklist). For fee and lottery mechanics, see [How it works](/overview/how-it-works).
+4626 lets creators deposit a **Zora creator coin** into an **ERC-4626 vault** on Base, sell **tradable shares** through a **fair-launch auction**, and route trading fees and external revenue to share holders.
 
-## Audience
+<div class="docs-at-a-glance">
 
-4626 is designed for creators with a **creator coin on Base** (typically issued via Zora) who intend to:
+**Start here if:** you have a creator coin on Base and want to launch a vault.
 
-- Deposit creator coin into an **ERC-4626 vault**
-- Distribute **tradable shares** through a **Continuous Clearing Auction (CCA)**
-- Route **trade fees** and **external creator revenue** to share holders via onchain infrastructure
+**Launch path:** [Launch checklist](/guides/greenfield-checklist) → five steps from bundle payment through trading live.
 
-## Product overview
+**Deep dive:** [Fees, auction, and lottery](/overview/how-it-works).
 
-1. Creator coin is **deposited** into a vault smart contract.
-2. The vault mints **vault shares** representing pro-rata claims on vault assets.
-3. A portion of supply is allocated to a **fair-launch auction** for price discovery.
-4. After the auction, **tradable shares** (`■TICKER`) are available on Base DEXs (Solana bridging is optional and may follow finalize).
-5. **Trade fees** and qualified **creator revenue** can accrue to the vault, benefiting share holders through price-per-share (PPS) accretion and gauge mechanics.
+</div>
 
-The **creator coin** and **share tokens** are separate assets with distinct contract addresses.
+## Who this is for
 
-## Token model {#three-names-youll-see}
+Creators with a **creator coin on Base** (typically via Zora) who want to:
 
-| Token | Description | Example |
-|-------|-------------|---------|
-| **Creator coin** | Existing Zora ERC-20; vault deposit asset | `$JESSE` |
-| **Vault share (`▢TICKER`)** | ERC-4626 share minted by the vault | `▢JESSE` |
-| **Tradable share (`■TICKER`)** | LayerZero ShareOFT; primary DEX-facing asset | `■JESSE` |
+- Deposit creator coin into a **vault**
+- Run **open price discovery** (fair-launch auction — not a private presale)
+- Share **trade fees** and qualified **creator revenue** with share holders onchain
 
-The [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) converts vault shares to tradable shares at **1:1**. Do not conflate creator coin addresses with share token addresses.
+## How it works (short)
 
-Further detail: [How it works — token model](/overview/how-it-works#three-tokens-one-vault).
+1. Pay the **launch bundle** ($499 USDC) — unlocks deploy.
+2. **Deploy** vault, share, gauge, oracle, and auction contracts.
+3. **Activate** — deposit 50M–100M creator coin and start the auction.
+4. After the auction **finalizes**, `■` shares trade on Base; lottery and fees apply to qualifying **buys**.
+5. **Solana is optional** — same `■` share may bridge later; creator coin stays on Base.
 
-## Prerequisites
+Full timeline: [Launch checklist](/guides/greenfield-checklist) · [After activation](/guides/after-activation)
 
-| Requirement | Purpose |
-|-------------|---------|
-| Creator coin **deployed on Base** | Vault deposit asset |
-| **50M–100M** creator coin available at activation | Required vault deposit (minimum shown in app) |
-| **4626 account** with execution-ready wallet signing | Deploy and activate transactions |
-| **`vault_full_deploy` active** ($499 USDC) | Deploy gate; includes strategy and Solana entitlements — [Strategy bundle](/guides/strategy-bundle) |
+## Three tokens (do not mix addresses)
 
-## Launch sequence
+| Token | What it is | Example |
+|-------|------------|---------|
+| **Creator coin** | Zora ERC-20; vault deposit | `$JESSE` |
+| **Vault share (`▢`)** | ERC-4626 claim on the vault | `▢JESSE` |
+| **Tradable share (`■`)** | DEX + cross-chain ShareOFT | `■JESSE` |
 
-The sequence below matches the [Launch checklist](/guides/greenfield-checklist).
+[CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) wraps ▢ → ■ at 1:1. Creator coin address **≠** share token address.
 
-| Step | Action | Documentation |
-|------|--------|---------------|
-| 1 | Activate **`vault_full_deploy`** ($499 USDC) | [Strategy bundle](/guides/strategy-bundle) |
-| 2 | Deploy per-creator contract stack | [Launch vault](/guides/launch-token) |
-| 3 | Activate vault (deposit + auction seed) | [Activate vault](/guides/activate-vault) |
-| 4 | Monitor CCA until completion | [After activation](/guides/after-activation) |
-| 5 | Finalize (onchain completion; optional Solana bridge via Pipe A) | [Solana share mesh](/overview/solana-share-mesh) |
-| 6 | Strategy attachment (Charm + Ajna from bundle) | [How it works](/overview/how-it-works) |
+## Before you launch
 
-Solana integration is **optional**. Base serves as the hub chain for launch, trading, and lottery for new vaults.
+| Requirement | Why |
+|-------------|-----|
+| Creator coin on **Base** | Vault deposit asset |
+| **50M–100M** creator coin for activation | Shown in app for your release version |
+| **4626 account** with signing ready | Deploy and activate transactions |
+| **Launch bundle active** ($499 USDC) | [Pay launch fee](/guides/strategy-bundle) |
 
-## Launch milestones
+## Launch steps
 
-| Milestone | Definition |
-|-----------|------------|
-| **Deployed** | Per-creator contracts deployed; vault not yet funded |
-| **Activated** | Creator coin deposited; CCA **in progress** |
-| **Trading live** | CCA **complete**; `■` shares tradable on Base; qualifying **buys** may enter the lottery |
+| Step | Action | Guide |
+|------|--------|-------|
+| 1 | Pay launch bundle ($499 USDC) | [Pay launch fee](/guides/strategy-bundle) |
+| 2 | Deploy contracts | [Deploy contracts](/guides/launch-token) |
+| 3 | Activate vault (deposit + auction) | [Activate vault](/guides/activate-vault) |
+| 4 | Auction → finalize → trading live | [After activation](/guides/after-activation) |
+| 5 | Optional Solana share bridge | [Optional: Solana trading](/overview/solana-share-mesh) |
 
-Public secondary trading on Base begins after the auction completes, not at activation alone.
+## Milestones
 
-## Frequently asked questions
+| Milestone | You are here when… | Trading on Base? |
+|-----------|-------------------|------------------|
+| **Deployed** | Contracts exist; vault empty | No |
+| **Activated** | Deposit done; **auction running** | No |
+| **Trading live** | Auction done + finalize complete | Yes |
 
-### What does the $499 USDC fee cover?
+## FAQ
 
-The **`vault_full_deploy`** bundle unlocks deploy and enables Charm active LP, Ajna sleeve, Solana share mesh (Pipe A), and Meteora entitlement. It does **not** include the creator coin vault deposit. See [Strategy bundle](/guides/strategy-bundle).
+### What does the $499 fee cover?
 
-### Why is the activation deposit 50M–100M creator coin?
+The **launch bundle** unlocks deploy plus Charm LP, Ajna lending, optional Solana bridge entitlement, and Meteora provisioning. It does **not** include the creator coin deposit. Details: [Pay launch fee](/guides/strategy-bundle).
 
-Greenfield vaults require a substantial creator coin deposit at activation, allocated to the vault and CCA seeding. The application displays the configured minimum and maximum for your deployment version.
+### What do buyers get?
 
-### What asset do buyers receive?
-
-Buyers receive **`■` tradable shares** (ShareOFT), not the Zora creator coin. Creator coin is the vault deposit asset; shares represent claims on vault value.
+**Tradable shares (`■`)**, not the Zora creator coin.
 
 ### Is Solana required?
 
-No. Base is the hub chain. Solana receives a bridged **`■` share** slice after finalize when Pipe A is enabled; creator coin remains on Base. See [Solana share mesh](/overview/solana-share-mesh).
+No. See [Optional: Solana trading](/overview/solana-share-mesh).
 
-### What wallet configuration is required?
+### What wallet do I need?
 
-A 4626 account with execution-ready signing in the application (including Coinbase Smart Wallet / Base App paths where applicable). Complete wallet setup before deploy if prompted.
+A 4626 account with execution-ready signing (including Coinbase Smart Wallet / Base App where applicable).
 
-## Application entry point
+## Application
 
-**[app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)**
+**[app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)** — confirm launch bundle is active, then deploy and activate.
 
-Sign in, confirm `vault_full_deploy` is active, then proceed through Deploy and Activate.
-
-## Related documentation
+## More reading
 
 | Topic | Page |
 |-------|------|
-| Fee lanes and lottery | [How it works](/overview/how-it-works) |
-| Launch procedure | [Launch checklist](/guides/greenfield-checklist) |
-| After activation | [After activation](/guides/after-activation) |
-| Shared contract addresses | [Addresses](/reference/addresses) |
+| Step-by-step launch | [Launch checklist](/guides/greenfield-checklist) |
+| Fees & lottery | [How fees and lottery work](/overview/how-it-works) |
 | Terminology | [Glossary](/reference/glossary) |
+| Contract addresses | [Addresses](/reference/addresses) (v1.14.1) |

@@ -13,7 +13,7 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 
 ## Base (Hub Chain)
 
-### Current Live Infrastructure (`v1.14.1` greenfield deploy target)
+### Current live infrastructure (v1.14.1 — new vault launches)
 
 | Contract | Address |
 |----------|---------|
@@ -38,9 +38,9 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 Notes:
 - **v1.14.1** is a full shared/global + split Phase-1 refresh that keeps CreatorOVault `CreatorOVaultModuleStorage.v3` and rotates the batcher shell, helper modules, registry, and store/deployer pair.
 - `DeploymentBatcher` deploys as a slim shell; helpers and `DeploymentBatcherPhase1Module` wire post-deploy via protocol treasury Safe (`wireDeploymentHelpers` + `setPhase1Module`).
-- Greenfield Phase 1 reads **Phase1Module immutables** (`phase1Module()` → `0x0fac…`), not batcher-shell module getters (shell may still expose legacy `.current` modules).
-- Retired v1.13.0 v2 Phase1Module (`0x19Bd8…`) is for grandfathered vaults only — do not restore for new greenfield deploys after the v1.14.1 cutover.
-- Pre-v1.14.1 batchers (`0xa99058…` and older) are deprecated for new greenfield deploys.
+- **New vault launches** read **Phase1Module immutables** (`phase1Module()` → `0x0fac…`), not batcher-shell module getters (shell may still expose legacy `.current` modules).
+- Retired v1.13.0 Phase1Module (`0x19Bd8…`) is for **legacy vaults** only — not for new launches after the v1.14.1 cutover.
+- Pre-v1.14.1 batchers (`0xa99058…` and older) are deprecated for new vault launches.
 
 ### Per-Creator Deployments
 

@@ -2159,3 +2159,33 @@ details > :not(summary) {
   font-weight: 600;
   letter-spacing: -0.01em;
 }
+
+/* At-a-glance callout — plain-language summary at top of launch/product pages */
+.theme-doc-markdown .docs-at-a-glance {
+  margin: 1.25rem 0 1.75rem;
+  padding: 1rem 1.25rem;
+  border-radius: var(--docs-radius-lg, 12px);
+  border: 1px solid var(--docs-border-default, var(--ifm-color-emphasis-300));
+  background: var(--docs-surface-1, var(--ifm-background-surface-color));
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+
+.theme-doc-markdown .docs-at-a-glance p {
+  margin: 0.35rem 0;
+}
+
+.theme-doc-markdown .docs-at-a-glance strong {
+  color: var(--ifm-font-color-base);
+}
+
+.theme-doc-markdown .docs-at-a-glance table {
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
+}
+
+.theme-doc-markdown .docs-at-a-glance table td {
+  padding: 0.35rem 0.75rem 0.35rem 0;
+  border: none;
+  vertical-align: top;
+}

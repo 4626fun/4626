@@ -1,49 +1,54 @@
 ---
-title: Launch a vault
+title: 'Step 2: Deploy contracts'
 sidebar_position: 3
 ---
 
-# Launch a vault
+# Step 2: Deploy contracts
 
-**Launch step 2:** deploy the per-creator contract stack in a single atomic transaction. Creator coin is **not** transferred at this stage — funding occurs at [Activate vault](/guides/activate-vault) (step 3).
+Deploy the per-creator contract stack in one transaction. **No creator coin moves yet** — funding is [Step 3](/guides/activate-vault).
 
-Prerequisites: [Strategy bundle](/guides/strategy-bundle) active · [Launch checklist](/guides/greenfield-checklist)
+<div class="docs-at-a-glance">
 
-## Overview
+| | |
+|---|---|
+| **You do** | Configure names · submit Deploy in app |
+| **4626 does** | Deploy vault, shares, gauge, oracle, auction via shared batcher (v1.14.1) |
+| **Done when** | Milestone **Deployed** (vault exists, unfunded) |
+| **Requires** | Launch bundle active |
 
-The application invokes shared 4626 deployment infrastructure (`DeploymentBatcher`, v1.14.1) to deploy vault, wrapper, ShareOFT, gauge, oracle, and CCA contracts for your creator coin. You configure vault and share naming (e.g. `▢AKITA`, `■AKITA`).
+</div>
 
-At completion, the vault is **deployed** but **unfunded** until activation.
+[Launch checklist](/guides/greenfield-checklist) · [Step 1: Pay launch fee](/guides/strategy-bundle)
 
-## Pre-deploy verification
+## Before deploy
 
-- `vault_full_deploy` entitlement **active**
-- Creator coin address confirmed in application
-- **50M–100M** creator coin available in execution wallet (for subsequent activation)
-- Wallet signing execution-ready per application prompts
+- Launch bundle **active**
+- Creator coin address confirmed in app
+- **50M–100M** creator coin available for step 3
+- Wallet signing ready
 
-## Application procedure
+## In the app
 
-1. Navigate to **[app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)**
-2. Authenticate and confirm creator coin address
-3. Configure vault and share names and symbols
-4. Submit **Deploy** and await onchain confirmation
+1. **[app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)**
+2. Sign in · confirm creator coin
+3. Set vault / share names (e.g. `▢AKITA`, `■AKITA`)
+4. Submit **Deploy** · wait for confirmation
 
-Canonical smart-wallet execution may route through sponsored ERC-4337 UserOps where paymaster policy allows.
+Sponsored smart-wallet execution may apply where configured.
 
-## Deployed components
+## What gets deployed
 
 | Component | Role |
 |-----------|------|
-| CreatorOVault | ERC-4626 vault (deposit asset: creator coin) |
-| Share tokens | `▢` vault shares and `■` ShareOFT |
-| CreatorRegistry entry | Maps creator coin → deployed stack |
-| CreatorGaugeController | Trade fee and jackpot routing |
+| CreatorOVault | ERC-4626 vault |
+| Share tokens | `▢` vault shares + `■` ShareOFT |
+| CreatorRegistry | Maps creator coin → stack |
+| CreatorGaugeController | Fees & jackpot routing |
 | CreatorOracle | TWAP pricing |
-| CCA launch strategy | Fair-launch auction |
+| CCA strategy | Fair-launch auction |
 
-Contract reference: [Contracts hub](/contracts) · Shared addresses: [v1.14.1](/reference/addresses)
+[Contracts](/contracts) · [Addresses](/reference/addresses)
 
-## Next step
+## Next
 
-[Activate vault](/guides/activate-vault) — deposit creator coin and seed the CCA (launch step 3).
+[Step 3: Activate vault](/guides/activate-vault)

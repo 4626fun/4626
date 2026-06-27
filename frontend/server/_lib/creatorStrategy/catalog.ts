@@ -187,17 +187,17 @@ export const CREATOR_STRATEGY_FEATURE_CATALOG: Record<
   vault_full_deploy: {
     key: 'vault_full_deploy',
     displayName: 'Full vault deploy',
-    tagline: 'One payment unlocks your complete 4626 vault on Base + Solana share mesh.',
+    tagline: 'One payment unlocks your complete vault on Base, with optional Solana trading.',
     description:
-      'The all-in-one deploy package: Charm active LP and Ajna lending on Base, Solana OVault ' +
-      'composer mesh with 30% ShareOFT auto-bridge at finalizePhase2, and Meteora DLMM entitlement ' +
-      'on the share-mesh mint. Pay once, deploy once — no separate strategy SKUs.',
+      'The all-in-one launch bundle: Charm active LP and Ajna lending on Base, optional post-auction ' +
+      'Solana bridge for tradable shares (~30% supply at finalize), and Meteora pool entitlement ' +
+      'on the bridged share. Pay once, deploy once — no separate strategy purchases.',
     priceUsdc: FULL_VAULT_DEPLOY_PRICE_USDC,
     provisionerTag: 'vault_full_deploy_bundle',
     requires: [
       'Creator coin must be deployable before payment',
-      'Includes Charm + Ajna Phase 3 strategies (45% / 45% productive split, 10% idle)',
-      'Includes Solana share mesh + Meteora add-on entitlement',
+      'Includes Charm + Ajna strategies (45% / 45% productive split, 10% idle)',
+      'Includes optional Solana bridge + Meteora pool entitlement',
       'Vanity address tiers remain optional add-ons',
     ],
     estimatedActivationWindow: 'Instant — deploy unlocks as soon as payment is verified.',

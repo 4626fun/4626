@@ -128,6 +128,11 @@ const config: Config = {
           position: 'right',
         },
         {
+          to: '/reference/glossary',
+          label: 'Glossary',
+          position: 'right',
+        },
+        {
           to: '/reference/addresses',
           label: 'Addresses',
           position: 'right',
@@ -152,12 +157,12 @@ const config: Config = {
         {
           title: 'Docs',
           items: [
-            {label: 'Getting started', to: '/getting-started'},
-            {label: 'How it works', to: '/overview/how-it-works'},
             {label: 'Launch checklist', to: '/guides/greenfield-checklist'},
-            {label: 'Deploy', to: '/guides/launch-token'},
-            {label: 'Contracts', to: '/contracts'},
+            {label: 'What is 4626?', to: '/getting-started'},
+            {label: 'Fees & lottery', to: '/overview/how-it-works'},
+            {label: 'Glossary', to: '/reference/glossary'},
             {label: 'Addresses', to: '/reference/addresses'},
+            {label: 'Contracts', to: '/contracts'},
           ],
         },
         {

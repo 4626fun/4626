@@ -118,6 +118,11 @@ export const redirects: ClientRedirect[] = [
   { from: '/operations/deployment/eliza-runtime', to: '/getting-started' },
   { from: '/operations/deployment/multisig/guide', to: '/reference/addresses' },
   { from: '/operations/vault/greenfield-launch-readiness', to: '/guides/greenfield-checklist' },
+  { from: '/operations/greenfield-launch-readiness', to: '/guides/greenfield-checklist' },
+  { from: '/greenfield', to: '/guides/greenfield-checklist' },
+  { from: '/guides/greenfield', to: '/guides/greenfield-checklist' },
+  { from: '/strategy-bundle', to: '/guides/strategy-bundle' },
+  { from: '/launch-bundle', to: '/guides/strategy-bundle' },
   { from: '/operations/vault/creator-strategy-features', to: '/guides/strategy-bundle' },
   { from: '/creator-strategy-features', to: '/guides/strategy-bundle' },
   { from: '/operations/vault/oracle-post-deploy-qa', to: '/contracts/utilities/creator-oracle' },
@@ -150,7 +155,6 @@ export const redirects: ClientRedirect[] = [
   // Flat legacy operation slugs
   { from: '/operations/keeper-http-api', to: '/getting-started' },
   { from: '/operations/vercel-cron-production-fixes', to: '/getting-started' },
-  { from: '/operations/greenfield-launch-readiness', to: '/guides/greenfield-checklist' },
   { from: '/operations/creator-strategy-features', to: '/guides/strategy-bundle' },
   { from: '/operations/solana-share-mesh-lottery-policy', to: '/overview/solana-share-mesh' },
   { from: '/operations/privy-wallet-lanes', to: '/getting-started' },
@@ -168,4 +172,9 @@ export const redirects: ClientRedirect[] = [
   { from: '/lens', to: '/overview/how-it-works' },
   { from: '/lens-grove', to: '/overview/how-it-works' },
   { from: '/farcaster-close-gap-phases', to: '/overview/how-it-works' },
+
+  // Terminology / legacy product slugs (unique entries only)
+  { from: '/solana-share-mesh', to: '/overview/solana-share-mesh' },
+  { from: '/overview/solana', to: '/overview/solana-share-mesh' },
+  { from: '/how-it-works', to: '/overview/how-it-works' },
 ];

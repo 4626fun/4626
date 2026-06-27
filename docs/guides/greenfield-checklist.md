@@ -1,63 +1,69 @@
 ---
 title: Launch checklist
-sidebar_position: 2
+sidebar_position: 1
 ---
 
 # Launch checklist
 
-End-to-end launch procedure for a **new** vault on Base (**v1.14.1**). Grandfathered vaults (e.g. AKITA) may follow prior deployment versions.
+End-to-end checklist for a **new vault on Base** (v1.14.1). For legacy vaults, infrastructure may differ.
 
-Overview: [Getting started](/getting-started) · Application: [app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)
+<div class="docs-at-a-glance">
+
+**Prerequisites:** creator coin on Base · 50M–100M tokens for activation · signing ready · **launch bundle paid**.
+
+**App:** [app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)
+
+</div>
 
 ## Prerequisites
 
-- [ ] Creator coin **live on Base** (typically via Zora)
-- [ ] **50M–100M** creator coin available for activation deposit
-- [ ] **4626 account** with execution-ready wallet signing
-- [ ] **`vault_full_deploy` active** — [Strategy bundle](/guides/strategy-bundle) ($499 USDC); deploy remains gated until confirmed
+- [ ] Creator coin **live on Base** (typically Zora)
+- [ ] **50M–100M** creator coin for activation deposit
+- [ ] **4626 account** with execution-ready signing
+- [ ] **Launch bundle active** ($499 USDC) — [Pay launch fee](/guides/strategy-bundle)
 
 ## Launch procedure
 
 | Step | Action | Outcome | Guide |
 |------|--------|---------|-------|
-| 1 | Pay **`vault_full_deploy`** | Deploy unlocked in application | [Strategy bundle](/guides/strategy-bundle) |
-| 2 | Deploy contract stack | Vault, ShareOFT, gauge, oracle, CCA deployed | [Launch vault](/guides/launch-token) |
-| 3 | Activate vault | Creator coin deposited; CCA started | [Activate vault](/guides/activate-vault) |
-| 4 | CCA auction | Price discovery in progress | [After activation](/guides/after-activation) |
-| 5 | Finalize | Onchain completion; optional Pipe A Solana bridge | [Solana share mesh](/overview/solana-share-mesh) |
-| 6 | Strategy attachment | Charm + Ajna deployed per bundle weights | [How it works](/overview/how-it-works) |
+| 1 | Pay **launch bundle** | Deploy unlocked in app | [Pay launch fee](/guides/strategy-bundle) |
+| 2 | Deploy contract stack | Vault, shares, gauge, oracle, auction live | [Deploy contracts](/guides/launch-token) |
+| 3 | Activate vault | Deposit + **fair-launch auction** started | [Activate vault](/guides/activate-vault) |
+| 4 | Auction runs | Price discovery in progress | [After activation](/guides/after-activation) |
+| 5 | Finalize | Base completion; optional Solana bridge (~30% `■`) | [After activation](/guides/after-activation) |
+| 6 | Strategies attach | Charm 45% · Ajna 45% · 10% idle (automatic) | [How fees work](/overview/how-it-works) |
 
 ## Milestones
 
-| Stage | State | Public trading on Base |
-|-------|-------|------------------------|
+| Stage | State | Public trading on Base? |
+|-------|-------|-------------------------|
 | **Deployed** | Contracts onchain; vault unfunded | No |
-| **Activated** | Deposit complete; CCA **in progress** | No — auction must complete |
-| **Trading live** | CCA **complete**; `■` shares on DEX | Yes — fees and lottery on qualifying **buys** |
+| **Activated** | Deposited; **auction in progress** | No |
+| **Trading live** | Auction + finalize complete | Yes — fees & lottery on qualifying **buys** |
 
-Activation alone does not constitute a trading-live state. Public secondary trading begins after the CCA completes.
+Activation alone is **not** trading live. DEX secondary trading starts after the auction completes.
 
-## Base (hub chain) readiness
+## When trading is live on Base
 
-When trading live on Base:
+- `■` ShareOFT tradable on Base DEXs
+- Qualifying **buys** may enter [CreatorLotteryManager](/contracts/utilities/lottery-manager)
+- Trade fees route via [CreatorGaugeController](/contracts/governance/gauge-controller)
 
-- `■` ShareOFT is tradable on Base DEXs
-- Qualifying ShareOFT **buys** may enter [CreatorLotteryManager](/contracts/utilities/lottery-manager)
-- Trade fees route through [CreatorGaugeController](/contracts/governance/gauge-controller)
+## Optional: Solana
 
-## Solana (optional)
+Not required for Base launch or lottery:
 
-Solana integration may follow Base launch and is not required for Base trading or lottery:
+- Only **`■` share** may bridge — not creator coin
+- Bridge may complete after finalize; Meteora may lag
+- Base lottery stays authoritative until Solana buy-relay is live
 
-- Bridged asset is **`■` share**, not creator coin
-- Pipe A bridge and Meteora provisioning may lag finalize
-- Base lottery remains authoritative until Solana buy-relay is fully operational
+Details: [Optional: Solana trading](/overview/solana-share-mesh)
 
-## Contract reference
+## Contracts
 
-- Per-creator stack registered in [CreatorRegistry](/contracts/core/creator-registry) at deploy
-- Shared infrastructure: [Contract addresses](/reference/addresses) (v1.14.1)
+- Per-creator stack: [CreatorRegistry](/contracts/core/creator-registry)
+- Shared infra: [Addresses](/reference/addresses) (v1.14.1)
 
-## Related documentation
+## Related
 
-[Getting started](/getting-started) · [After activation](/guides/after-activation) · [How it works](/overview/how-it-works)
+[What is 4626?](/getting-started) · [After activation](/guides/after-activation) · [Glossary](/reference/glossary)

@@ -1,83 +1,82 @@
 ---
-title: After activation
+title: 'Step 4: After activation'
 sidebar_position: 5
 ---
 
-# After activation
+# Step 4: After activation
 
-What happens onchain and in the application **after** [Activate vault](/guides/activate-vault) (launch step 3). Activation deposits creator coin and starts the CCA; it does **not** by itself make `■` shares tradable on secondary markets.
+What happens **after** [Step 3: Activate vault](/guides/activate-vault). Activation starts the auction; it does **not** open secondary DEX trading.
 
-Overview: [Getting started](/getting-started) · [Launch checklist](/guides/greenfield-checklist) · [How it works](/overview/how-it-works)
+<div class="docs-at-a-glance">
 
-## Immediate state
+**Activated ≠ trading live.** Public DEX trading starts after the **fair-launch auction** completes and **finalize** succeeds on Base.
 
-After a successful activation transaction:
+**Monitor:** [app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)
+
+</div>
+
+[Launch checklist](/guides/greenfield-checklist) · [What is 4626?](/getting-started)
+
+## Right after activation
 
 | Item | State |
 |------|--------|
-| Vault | Funded with the activation deposit (50M–100M creator coin) |
-| CCA | **In progress** — fair-launch auction seeded (99% creator coin / 1% USDC) |
-| `■` ShareOFT | Not yet freely tradable on Base DEXs |
-| Lottery | Not yet active for public secondary **buys** |
-| Milestone | **Activated** (not **Trading live**) |
+| Vault | Funded (50M–100M creator coin) |
+| Fair-launch auction | **In progress** |
+| `■` ShareOFT on DEX | **Not yet** |
+| Lottery | **Not yet** (needs qualifying live **buys**) |
+| Milestone | **Activated** |
 
-Monitor auction progress in **[app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)**. No further creator action is required during the auction unless the application surfaces an error or retry.
+## Timeline
 
-## Phase timeline
-
-| Phase | What happens | Creator action | Milestone |
-|-------|----------------|----------------|-----------|
-| **CCA in progress** | Uniswap V4 continuous clearing auction discovers clearing price | Monitor in app | Activated |
-| **CCA complete** | Auction graduates; finalize orchestration runs | Usually none — application/keeper path | → Finalize |
-| **Finalize** | Onchain completion; optional Pipe A Solana bridge (~30% share slice) | Confirm finalize when prompted if required | → Trading live (Base) |
-| **Strategy attachment** | Charm (45%) + Ajna (45%) + idle buffer deploy per bundle | Automatic with `vault_full_deploy` | Trading live |
-| **Solana (optional)** | Bridged `■` share + Meteora provisioning may follow finalize | None — operator-assisted per bundle | Optional |
-
-Public secondary trading on Base begins after the **CCA completes and finalize succeeds**, not at activation alone.
+| Phase | What happens | Your action | Milestone |
+|-------|----------------|-------------|-----------|
+| **Auction running** | Uniswap V4 auction finds clearing price | Monitor app | Activated |
+| **Auction complete** | Finalize orchestration runs | Usually none | → Finalize |
+| **Finalize** | Base settlement; optional Solana bridge (~30% `■`) | Follow app if prompted | → **Trading live** |
+| **Strategies** | Charm 45% · Ajna 45% · idle buffer | Automatic (launch bundle) | Trading live |
+| **Solana (optional)** | Bridged `■` + Meteora may follow | None | Optional |
 
 ## Trading live on Base
 
-When the vault reaches **Trading live**:
+- `■` shares tradable on Base DEXs
+- Fees on qualifying **buys** → [CreatorGaugeController](/contracts/governance/gauge-controller)
+- Lottery entries on qualifying **buys** → [CreatorLotteryManager](/contracts/utilities/lottery-manager)
+- Zora creator revenue can accrue vault PPS via payout router
 
-- `■` ShareOFT is tradable on Base DEXs
-- ShareOFT transfer fees on qualifying **buys** route to [CreatorGaugeController](/contracts/governance/gauge-controller)
-- Qualifying ShareOFT **buys** may enter [CreatorLotteryManager](/contracts/utilities/lottery-manager)
-- Zora **creator coin** external revenue (`creatorCoinPayoutRecipient`) can accrue holder value via the payout router and vault PPS
+[How fees and lottery work](/overview/how-it-works)
 
-Fee and lane detail: [How it works](/overview/how-it-works) · [Glossary](/reference/glossary)
+## Optional: Solana
 
-## Solana (optional)
+Solana is **not** required for Base trading or lottery.
 
-Solana is **not** required for Base trading or lottery at launch.
+After finalize, the **post-auction Solana bridge** may send ~30% of `■` supply to Solana (same ticker). Creator coin stays on Base. Meteora pools are operator-provisioned and may complete later.
 
-After finalize, **Pipe A** may bridge approximately **30%** of ShareOFT supply to Solana as the same `■TICKER` symbol. Creator coin remains on Base. Meteora pool setup is operator-provisioned under the strategy bundle entitlement and may complete after Base is already trading live.
+[Optional: Solana trading](/overview/solana-share-mesh)
 
-Policy: [Solana share mesh](/overview/solana-share-mesh)
+## FAQ
 
-## Common questions
+### Why isn’t trading live yet?
 
-### Why is secondary trading not live yet?
-
-Activation seeds the CCA. Buyers receive `■` shares through the auction mechanism first. Open DEX secondary trading follows auction completion and finalize.
+Buyers receive shares through the **auction** first. Open DEX trading follows auction completion + finalize.
 
 ### When does the lottery start?
 
-On hub-chain ShareOFT DEX **buys** after trading is live — not on activation, wraps, or bridge receipts. See [Lottery manager](/contracts/utilities/lottery-manager).
+After **trading live**, on qualifying ShareOFT DEX **buys** on Base — not on activation, wraps, or bridge receipts.
 
-### Do I need to run finalize manually?
+### Do I run finalize manually?
 
-Greenfield flows are application-orchestrated. If the deploy UI shows finalize pending, follow in-app prompts. Settlement completion is gated on onchain invariants documented for operators in internal runbooks.
+New vault flows are app-orchestrated. Follow in-app prompts if finalize is pending.
 
-### What if the CCA fails or stalls?
+### Auction stuck or failed?
 
-Contact support through application channels. Failed-auction handling is contract-level; the [CCA launch strategy](/contracts/strategies/cca-launch) documents relaunch and finalization semantics.
+Use in-app support. Onchain relaunch semantics: [CCA strategy](/contracts/strategies/cca-launch).
 
-## Related documentation
+## Related
 
 | Topic | Page |
 |-------|------|
-| Full launch procedure | [Launch checklist](/guides/greenfield-checklist) |
-| Fee routing and economics | [How it works](/overview/how-it-works) |
-| CCA contract | [CCA launch strategy](/contracts/strategies/cca-launch) |
-| Share token and fees | [CreatorShareOFT](/contracts/core/creator-share-oft) |
-| Contract addresses | [Addresses](/reference/addresses) (v1.14.1) |
+| Full checklist | [Launch checklist](/guides/greenfield-checklist) |
+| Economics | [How fees and lottery work](/overview/how-it-works) |
+| Share token | [CreatorShareOFT](/contracts/core/creator-share-oft) |
+| Addresses | [Addresses](/reference/addresses) |

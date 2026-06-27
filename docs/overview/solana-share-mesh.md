@@ -1,45 +1,57 @@
 ---
-title: Solana share mesh
+title: 'Optional: Solana trading'
 sidebar_position: 3
+slug: /overview/solana-share-mesh
 ---
 
-# Solana share mesh
+# Optional: Solana trading
 
-Policy for **ShareOFT (`■TICKER`)** bridging to Solana and its relationship to lottery and trading on new vaults.
+How **tradable shares (`■TICKER`)** may appear on Solana after a new vault launch — and what stays on Base only.
 
-[Getting started](/getting-started) · [Launch checklist](/guides/greenfield-checklist)
+<div class="docs-at-a-glance">
 
-## Solana requirement
+**In one sentence:** Base is required; Solana is optional distribution of the **same share token** after the fair-launch auction completes and finalize runs.
 
-**Solana is not required to launch on Base.** Base is the hub chain for deploy, CCA, secondary trading, and lottery for new vaults. Solana provides optional distribution for the **same tradable share** after finalize.
+**Internal names:** *Solana share mesh*, *Pipe A* (post-auction bridge). See [Glossary](/reference/glossary).
 
-## Token mapping
+</div>
 
-| Asset | Solana presence |
-|-------|-----------------|
-| Creator coin (`$TICKER`) | **None** — remains on Base |
-| Tradable share (`■TICKER`) | **Conditional** — ~30% of supply may bridge via Pipe A after finalize (LayerZero) |
+[Launch checklist](/guides/greenfield-checklist) · [After activation](/guides/after-activation)
 
-Solana receives a bridged **ShareOFT**, not a separate creator-coin SPL. Symbol convention: `■TICKER` on both chains when bridged (e.g. `■AKITA`).
+## Is Solana required?
 
-## Sequence
+**No.** Base is the **primary chain** for deploy, fair-launch auction, secondary trading, and lottery on new vaults. Solana is an optional follow-on for the same tradable share.
 
-1. [Deploy](/guides/launch-token) and [activate](/guides/activate-vault) on Base
-2. CCA completes
-3. **Finalize** executes onchain; **Pipe A** may bridge a share slice to Solana
-4. **Meteora** pool provisioning may follow (operator-assisted; included in [strategy bundle](/guides/strategy-bundle))
+## What exists on each chain
 
-There is no separate creator-facing Solana deploy action — bridging is part of the post-auction finalize path.
+| Asset | Base | Solana |
+|-------|------|--------|
+| Creator coin (`$TICKER`) | Yes — vault deposit asset | **No** — creator coin stays on Base |
+| Tradable share (`■TICKER`) | Yes — after trading is live | **Optional** — ~30% of supply may bridge after finalize |
+
+Solana receives a bridged **ShareOFT**, not a separate creator-coin SPL token. Symbol stays `■TICKER` on both chains when bridged (e.g. `■AKITA`).
+
+## Timeline (after activation)
+
+| Order | Event | Creator action |
+|-------|--------|----------------|
+| 1 | [Deploy](/guides/launch-token) and [activate](/guides/activate-vault) on Base | Required |
+| 2 | Fair-launch auction runs | Monitor in app |
+| 3 | **Finalize** completes on Base | Usually automatic / in-app |
+| 4 | **Post-auction Solana bridge** may send ~30% of `■` supply to Solana | None — part of finalize |
+| 5 | Meteora pool setup may follow | None — operator-assisted (included in launch bundle) |
+
+There is no separate “deploy to Solana” step in the application.
 
 ## Lottery: Base vs Solana
 
 | Chain | Status (new vaults) |
 |-------|---------------------|
-| **Base** | **Operational at launch** — ShareOFT DEX **buys** (`SwapOnly → non-SwapOnly`) may enter [CreatorLotteryManager](/contracts/utilities/lottery-manager) |
-| **Solana** | **Planned** — policy targets secondary pool **buys** of the share mesh mint; Base lottery remains authoritative until relay is live |
+| **Base** | **Live when trading is live** — qualifying ShareOFT DEX **buys** may enter [CreatorLotteryManager](/contracts/utilities/lottery-manager) |
+| **Solana** | **Planned** — policy targets pool **buys** of the bridged share; Base lottery stays authoritative until relay is live |
 
-Wraps, deposits, and bridge receipts do **not** generate lottery entries. Qualifying **buys** do.
+Wraps, deposits, and bridge receipts do **not** create lottery entries. Qualifying **buys** do.
 
 ## Contract reference
 
-[CreatorShareOFT](/contracts/core/creator-share-oft) · [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) · [Contract addresses](/reference/addresses)
+[CreatorShareOFT](/contracts/core/creator-share-oft) · [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) · [Addresses](/reference/addresses)
