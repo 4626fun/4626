@@ -105,7 +105,7 @@ class PrivyProviderSafetyBoundary extends Component<
   }
 }
 
-const LOOPBACK_PRIVY_INIT_WATCHDOG_MS = 8_000
+const LOOPBACK_PRIVY_INIT_WATCHDOG_MS = 3_000
 
 function PrivyStatusObserver(props: { onStatus: (status: PrivyClientStatus) => void }) {
   const { ready } = usePrivy()
@@ -124,7 +124,7 @@ function useLoopbackPrivyInitWatchdog(active: boolean, onForceReady: () => void)
 
     const id = window.setTimeout(() => {
       console.warn(
-        '[privy] Init still pending after 8s on loopback — unblocking route shell so /deploy/vault can render.\n' +
+        '[privy] Init still pending after 3s on loopback — unblocking route shell so /deploy/vault can render.\n' +
           'If auth or signing fails next, retry in a private window with wallet extensions disabled,\n' +
           'confirm http://localhost:5174 is in Privy Allowed Origins, then hard-reload.',
       )

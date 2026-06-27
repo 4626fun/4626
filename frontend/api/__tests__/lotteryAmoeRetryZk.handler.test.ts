@@ -63,7 +63,7 @@ vi.mock('@4626/server-core', () => ({
   getClientIp: getClientIpMock,
   rateLimitKey: rateLimitKeyMock,
   checkRateLimit: checkRateLimitMock,
-  checkDurableRateLimit: checkRateLimitMock,
+  checkDurableRateLimit: checkDurableRateLimitMock,
   RATE_LIMITS: {
     lotteryRead: { windowMs: 60_000, maxRequests: 120 },
     lotteryWrite: { windowMs: 60_000, maxRequests: 40 },
@@ -258,10 +258,10 @@ describe('feature flag', () => {
 // ---------------------------------------------------------------------------
 
 describe('rate limiting', () => {
-  it('returns 429 with Retry-After when in-memory rate limit denies', async () => {
+  it('returns 429 with Retry-After when endpoint durable rate limit denies', async () => {
     const restore = setEnabledEnv()
     try {
-      checkRateLimitMock.mockReturnValueOnce({
+      checkDurableRateLimitMock.mockResolvedValueOnce({
         allowed: false,
         remaining: 0,
         resetAt: Date.now() + 30_000,
@@ -281,6 +281,11 @@ describe('rate limiting', () => {
   it('returns 429 Rate limited when durable rate limit denies', async () => {
     const restore = setEnabledEnv()
     try {
+      checkDurableRateLimitMock.mockResolvedValueOnce({
+        allowed: true,
+        remaining: 39,
+        resetAt: Date.now() + 60_000,
+      })
       checkDurableRateLimitMock.mockResolvedValueOnce({
         allowed: false,
         remaining: 0,

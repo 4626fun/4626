@@ -275,12 +275,6 @@ const NO_EOA_STRICT_BLOCKER =
   'No-EOA deploy requires Privy owner signer readiness on your canonical CSW. Complete one-time Base Account owner approval (or use Base App prolink), then retry.'
 type DeployMode = 'default' | 'no_eoa_strict'
 
-function scrollToCreatorStrategyFeatures(section: 'deploy' | 'vanity' = 'deploy') {
-  if (typeof document === 'undefined') return
-  const id = section === 'vanity' ? 'creator-strategy-vanity' : 'creator-strategy-features'
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-}
-
 function resolveDeployMode(): DeployMode {
   // Deploy defaults to no-external-EOA mode.
   // Allowed lanes: canonical self-auth + Privy embedded/smart-wallet owners.
@@ -1596,9 +1590,6 @@ function DeployVaultBatcher({
     [ensurePaymasterSession, postSessionRequest],
   )
   const switchAuthLabel = typeof switchAuthCta?.label === 'string' && switchAuthCta.label.trim().length > 0 ? switchAuthCta.label.trim() : null
-  const scrollToStrategyFeatures = useCallback((section: 'deploy' | 'vanity' = 'vanity') => {
-    scrollToCreatorStrategyFeatures(section)
-  }, [])
   const isVanityPaidFeatureError = useCallback((message: string | null | undefined): boolean => {
     const lower = String(message ?? '').toLowerCase()
     if (!lower) return false
@@ -1783,7 +1774,7 @@ function DeployVaultBatcher({
       return (
         'Custom vanity deploy options are a paid feature. ' +
         'Default vanity remains free (vault prefix 0x4626, share suffix 4626). ' +
-        'Activate vanity access in the optional address vanity section on this page, then retry.'
+        'Remove custom vanity env overrides or contact support to activate custom vanity access, then retry.'
       )
     }
     if (isOvaultMeshPaidFeatureError(lower)) {
@@ -6979,17 +6970,7 @@ function DeployVaultBatcher({
             ok={dryRunResult ? dryRunResult.ok : null}
             forkMode={dryRunResult?.forkMode ?? null}
             errorText={dryRunError}
-            errorAction={
-              dryRunError && isVanityPaidFeatureError(dryRunError) ? (
-                <button
-                  type="button"
-                  className="inline-flex text-[11px] text-blue-300 hover:text-blue-200 underline underline-offset-2"
-                  onClick={() => scrollToStrategyFeatures('vanity')}
-                >
-                  Activate vanity feature access
-                </button>
-              ) : null
-            }
+            errorAction={null}
             failureDetail={
               dryRunResult?.failure ? (
                 <div className="text-[11px] text-zinc-400 leading-relaxed">
@@ -7252,15 +7233,6 @@ function DeployVaultBatcher({
             <Button type="button" variant="primary" className="w-full" onClick={switchAuthCta.onClick}>
               {switchAuthCta.label}
             </Button>
-          ) : null}
-          {isVanityPaidFeatureError(error) ? (
-            <button
-              type="button"
-              className="inline-flex text-[11px] text-blue-300 hover:text-blue-200 underline underline-offset-2"
-              onClick={() => scrollToStrategyFeatures('vanity')}
-            >
-              Activate vanity feature access
-            </button>
           ) : null}
           {isProviderCollisionErrorMessage(error) ? (
             <div className="text-[11px] text-amber-300/80">
@@ -9624,33 +9596,6 @@ function DeployVaultMain() {
               ) : (
                 <BlockedStateCard tone="info" title={deployBlocker || 'Enter token address to continue'} />
               )}
-
-              {tokenIsValid && zoraCoin && isCreatorCoin && deployFeatureActivated ? (
-                <CreatorStrategyFeaturesPanel
-                  creatorToken={creatorToken as Address}
-                  variant="deploy"
-                  showDeploySection={false}
-                  panelId="creator-strategy-vanity"
-                  data={creatorStrategyDeployGateQuery.data ?? null}
-                  loading={
-                    creatorStrategyDeployGateQuery.isLoading || creatorStrategyDeployGateQuery.isFetching
-                  }
-                  loadError={
-                    creatorStrategyDeployGateQuery.isError
-                      ? creatorStrategyDeployGateQuery.error instanceof Error
-                        ? creatorStrategyDeployGateQuery.error.message
-                        : 'Failed to load deployment features'
-                      : null
-                  }
-                  onReload={async () => {
-                    await creatorStrategyDeployGateQuery.refetch()
-                  }}
-                  onActivationComplete={async () => {
-                    await creatorStrategyDeployGateQuery.refetch()
-                  }}
-                />
-              ) : null}
-
 
               {!canDeploy && deployBlocker ? (
                 <div className="space-y-2">

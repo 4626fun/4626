@@ -70,7 +70,7 @@ export function CreatorStrategyFeaturesPanel({
   onReload,
   onActivationComplete,
   showDeploySection = true,
-  showVanity = true,
+  showVanity = variant !== 'deploy',
   panelId = 'creator-strategy-features',
 }: CreatorStrategyFeaturesPanelProps) {
   const { address: connectedAddress } = useAccount()

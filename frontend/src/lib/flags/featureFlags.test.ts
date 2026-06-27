@@ -80,9 +80,21 @@ describe('resolvePrivyClientId', () => {
 })
 
 describe('resolvePrivyApiUrl', () => {
-  it('returns null when API URL mode is disabled on non-4626.fun origins', () => {
+  it('auto-resolves auth.privy.io on loopback origin regardless of env', () => {
+    vi.stubEnv('VITE_PRIVY_API_URL_ENABLED', '')
+    vi.stubEnv('VITE_PRIVY_API_URL', 'https://privy.4626.fun')
+    vi.stubGlobal('window', {
+      location: { hostname: 'localhost', origin: 'http://localhost:5174' },
+    } as unknown as Window & typeof globalThis)
+    expect(resolvePrivyApiUrl()).toBe('https://auth.privy.io')
+  })
+
+  it('returns null when API URL mode is disabled on non-loopback non-4626.fun origins', () => {
     vi.stubEnv('VITE_PRIVY_API_URL_ENABLED', '')
     vi.stubEnv('VITE_PRIVY_API_URL', 'https://auth.privy.io')
+    vi.stubGlobal('window', {
+      location: { hostname: 'preview.vercel.app', origin: 'https://preview.vercel.app' },
+    } as unknown as Window & typeof globalThis)
     expect(resolvePrivyApiUrl()).toBeNull()
   })
 

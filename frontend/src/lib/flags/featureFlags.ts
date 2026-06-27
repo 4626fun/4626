@@ -354,9 +354,16 @@ export function resolvePrivyApiUrl(): string | null {
     if (host === '4626.fun' || host.endsWith('.4626.fun')) {
       return 'https://privy.4626.fun'
     }
+
+    const loopbackOrigin = getCurrentOrigin()
+    if (loopbackOrigin && isLoopbackOrigin(loopbackOrigin)) {
+      // Local dev must not hit the production custom Privy domain — POST
+      // /api/v1/sessions 400s on localhost and the bootstrap overlay never clears.
+      return 'https://auth.privy.io'
+    }
   }
 
-  // For non-4626.fun origins (e.g. localhost), use explicit env config.
+  // For other non-4626.fun origins, use explicit env config.
   // Fail-safe: custom Privy API domains are opt-in behind an explicit enable flag.
   if (!isTruthyEnv(import.meta.env.VITE_PRIVY_API_URL_ENABLED)) return null
   const raw = String(import.meta.env.VITE_PRIVY_API_URL ?? '').trim()

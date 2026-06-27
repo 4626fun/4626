@@ -135,6 +135,50 @@ port_in_use() {
   return 1
 }
 
+listener_pid_for_port() {
+  local port="$1"
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -t -iTCP:"$port" -sTCP:LISTEN -n -P 2>/dev/null | head -1
+    return 0
+  fi
+  if command -v ss >/dev/null 2>&1; then
+    ss -tlnp 2>/dev/null | awk -v port=":${port}" '
+      $4 ~ port "$" {
+        if (match($0, /pid=[0-9]+/)) {
+          print substr($0, RSTART + 4, RLENGTH - 4)
+          exit
+        }
+      }
+    '
+  fi
+}
+
+# Stop a stale standalone Vite dev server so deploy dry-run can bind strictPort.
+reclaim_stale_vite_port() {
+  local port="$1"
+  local pid cmd
+  pid="$(listener_pid_for_port "$port")"
+  if [[ -z "$pid" ]]; then
+    return 1
+  fi
+  cmd="$(ps -p "$pid" -o args= 2>/dev/null || true)"
+  if [[ "$cmd" != *vite* ]]; then
+    return 1
+  fi
+  if [[ "$cmd" != *"${port}"* ]]; then
+    return 1
+  fi
+  echo "Reclaiming localhost:${port} from stale Vite (pid ${pid})..."
+  kill "$pid" 2>/dev/null || true
+  for _ in $(seq 1 10); do
+    if ! port_in_use "$port"; then
+      return 0
+    fi
+    sleep 0.2
+  done
+  return 1
+}
+
 normalize_local_origin_port() {
   local origin="$1"
   local to_port="$2"
@@ -223,11 +267,12 @@ export VITE_DEV_SERVER_HOST="localhost"
 # collide with live Base deployments that share the repo's normal version tag.
 export VITE_DEPLOYMENT_VERSION="${VITE_DEPLOYMENT_VERSION:-v1.14.0-dryrun}"
 export VITE_DEPLOY_DRY_RUN_REQUEST_TIMEOUT_MS="${VITE_DEPLOY_DRY_RUN_REQUEST_TIMEOUT_MS:-300000}"
-# Loopback Privy must use the App Client lane. Without it, the production app id
-# routes session bootstrap to privy.4626.fun and POST /api/v1/sessions 400s on
-# localhost — the bootstrap overlay never clears and the page looks blank.
+# Loopback Privy uses app-id auth at auth.privy.io (see resolvePrivyApiUrl in
+# featureFlags.ts). Do NOT enable the Local Dev client id on loopback — that
+# client is wired to privy.4626.fun and POST /api/v1/sessions 400s on localhost,
+# leaving the bootstrap overlay stuck.
 export VITE_PRIVY_CLIENT_ID_ENABLED="${VITE_PRIVY_CLIENT_ID_ENABLED:-1}"
-export VITE_PRIVY_CLIENT_ID_ON_LOOPBACK="${VITE_PRIVY_CLIENT_ID_ON_LOOPBACK:-1}"
+export VITE_PRIVY_CLIENT_ID_ON_LOOPBACK="${VITE_PRIVY_CLIENT_ID_ON_LOOPBACK:-0}"
 
 ANVIL_PID=""
 DEV_REDIRECT_PID=""
@@ -385,9 +430,12 @@ is_transient_vite_esbuild_failure() {
 
 DEV_PORT="${DEPLOY_DRY_RUN_PORT:-5174}"
 ALLOW_DEV_PORT_FALLBACK="${DEPLOY_DRY_RUN_ALLOW_PORT_FALLBACK:-0}"
+RECLAIM_DEV_PORT="${DEPLOY_DRY_RUN_RECLAIM_PORT:-1}"
 ORIG_DEV_PORT="$DEV_PORT"
 if port_in_use "$DEV_PORT"; then
-  if [[ "$ALLOW_DEV_PORT_FALLBACK" == "1" ]]; then
+  if [[ "$RECLAIM_DEV_PORT" == "1" ]] && reclaim_stale_vite_port "$DEV_PORT"; then
+    :
+  elif [[ "$ALLOW_DEV_PORT_FALLBACK" == "1" ]]; then
     for candidate in 5173 5174; do
       if [[ "$candidate" != "$ORIG_DEV_PORT" ]] && ! port_in_use "$candidate"; then
         DEV_PORT="$candidate"

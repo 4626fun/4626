@@ -103,6 +103,23 @@ vi.mock('../../server/_lib/infra/durableRateLimit.js', () => ({
   checkDurableRateLimit: checkDurableRateLimitMock,
 }))
 
+vi.mock('@4626/server-core', async () => {
+  const actual = await vi.importActual<typeof import('@4626/server-core')>('@4626/server-core')
+  return {
+    ...actual,
+    guardAgentApiRequest: guardMock,
+    getClientIp: getClientIpMock,
+    rateLimitKey: rateLimitKeyMock,
+    checkRateLimit: checkRateLimitMock,
+    checkDurableRateLimit: checkDurableRateLimitMock,
+    RATE_LIMITS: {
+      ...actual.RATE_LIMITS,
+      lotteryRead: { windowMs: 60_000, maxRequests: 120 },
+      lotteryWrite: { windowMs: 60_000, maxRequests: 40 },
+    },
+  }
+})
+
 vi.mock('../../server/_lib/lottery/amoeWalletResolver.js', () => ({
   resolveAmoeWallet: resolveAmoeWalletMock,
 }))
@@ -1166,10 +1183,10 @@ describe('AmoeAuthorityError mapping (resolver returns ok:false)', () => {
 // ---------------------------------------------------------------------------
 
 describe('rate limiting', () => {
-  it('returns 429 when in-process rate limit denies', async () => {
+  it('returns 429 when endpoint durable rate limit denies', async () => {
     const restore = setEnabledEnv()
     try {
-      checkRateLimitMock.mockReturnValueOnce({
+      checkDurableRateLimitMock.mockResolvedValueOnce({
         allowed: false,
         remaining: 0,
         resetAt: Date.now() + 60_000,
@@ -1187,6 +1204,11 @@ describe('rate limiting', () => {
   it('returns 429 when durable rate limit denies', async () => {
     const restore = setEnabledEnv()
     try {
+      checkDurableRateLimitMock.mockResolvedValueOnce({
+        allowed: true,
+        remaining: 39,
+        resetAt: Date.now() + 60_000,
+      })
       checkDurableRateLimitMock.mockResolvedValueOnce({
         allowed: false,
         remaining: 0,

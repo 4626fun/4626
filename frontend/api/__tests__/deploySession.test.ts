@@ -212,7 +212,7 @@ function makeDeploySession(step: string) {
     deployToken: 'token',
     sessionSignerKeyEnc: 'encrypted',
     payload: {
-      phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x' }],
+      phase2FinalizeCalls: [{ to: '0x10000000000000000000000000000000000000aa', value: '0', data: PHASE2_FINALIZE_SELECTOR }],
       phase3Calls: [],
     },
     step,
@@ -225,8 +225,29 @@ function makeDeploySession(step: string) {
   }
 }
 
-function makeCall(to: string, data = '0x12345678') {
-  return { to, value: '0', data }
+const PHASE2_FINALIZE_SELECTOR = '0xcafc9348'
+const PHASE3_DEPLOY_SELECTOR = '0x881d4960'
+const PHASE3_DEPLOY_TO_STRATEGIES_SELECTOR = '0x355aa867'
+const PHASE4_LAUNCH_SELECTOR = '0x02afdbcb'
+
+function normalizeDeployTestCalldata(data: string): string {
+  if (data === '0xphase2finalize' || data === '0xphase2finalizewithvault') return PHASE2_FINALIZE_SELECTOR
+  if (data.startsWith('0xphase3deploy')) return PHASE3_DEPLOY_SELECTOR
+  if (data === '0xphase3deploytostrategies') return PHASE3_DEPLOY_TO_STRATEGIES_SELECTOR
+  if (data === '0xphase3setminidle') return `${PHASE3_DEPLOY_TO_STRATEGIES_SELECTOR}01`
+  if (data === '0xphase4launch') return PHASE4_LAUNCH_SELECTOR
+  return data
+}
+
+function makeCall(to: string, data = PHASE2_FINALIZE_SELECTOR) {
+  return { to, value: '0', data: normalizeDeployTestCalldata(data) }
+}
+
+function makeGenericPhase3Calls() {
+  return [
+    makeCall('0x3000000000000000000000000000000000000003', PHASE3_DEPLOY_SELECTOR),
+    makeCall('0x3000000000000000000000000000000000000003', PHASE3_DEPLOY_TO_STRATEGIES_SELECTOR),
+  ]
 }
 
 describe('deploy session optimistic concurrency', () => {
@@ -550,8 +571,8 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('phase2_confirmed'),
       payload: {
-        phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x12345678' }],
-        phase3Calls: [makeCall('0xphase3target')],
+        phase2FinalizeCalls: [{ to: '0x10000000000000000000000000000000000000aa', value: '0', data: PHASE2_FINALIZE_SELECTOR }],
+        phase3Calls: makeGenericPhase3Calls(),
       },
     }
     getDeploySessionByIdMock.mockResolvedValue(rec)
@@ -607,8 +628,8 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('phase2_confirmed'),
       payload: {
-        phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x12345678' }],
-        phase3Calls: [makeCall('0xphase3target')],
+        phase2FinalizeCalls: [{ to: '0x10000000000000000000000000000000000000aa', value: '0', data: PHASE2_FINALIZE_SELECTOR }],
+        phase3Calls: makeGenericPhase3Calls(),
       },
     }
     getDeploySessionByIdMock
@@ -670,7 +691,7 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('created'),
       payload: {
-        phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x12345678' }],
+        phase2FinalizeCalls: [{ to: '0x10000000000000000000000000000000000000aa', value: '0', data: PHASE2_FINALIZE_SELECTOR }],
         phase3Calls: [],
         erc7712Grant: {
           version: 'erc7712-v1',
@@ -698,7 +719,7 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('created'),
       payload: {
-        phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x12345678' }],
+        phase2FinalizeCalls: [{ to: '0x10000000000000000000000000000000000000aa', value: '0', data: PHASE2_FINALIZE_SELECTOR }],
         phase3Calls: [],
         erc7712Grant: {
           version: 'erc7712-v1',
@@ -706,7 +727,7 @@ describe('deploy session optimistic concurrency', () => {
           validAfter: new Date(Date.now() - 60_000).toISOString(),
           validUntil: new Date(Date.now() + 60_000).toISOString(),
           sessionId: 'other_session',
-          allowedTargets: ['0xcalltarget'],
+          allowedTargets: ['0x10000000000000000000000000000000000000aa'],
           allowedSelectors: ['0x12345678'],
         },
       },
@@ -725,7 +746,7 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('created'),
       sessionSignerWalletId: null,
       sessionSignerKeyEnc: null,
-      payload: { phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x' }], phase3Calls: [] },
+      payload: { phase2FinalizeCalls: [{ to: '0x10000000000000000000000000000000000000aa', value: '0', data: '0x' }], phase3Calls: [] },
     }
     getDeploySessionByIdMock.mockResolvedValue(rec)
 
@@ -742,7 +763,7 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('created'),
       payload: {
-        phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x12345678' }],
+        phase2FinalizeCalls: [{ to: '0x10000000000000000000000000000000000000aa', value: '0', data: PHASE2_FINALIZE_SELECTOR }],
         phase3Calls: [],
         deploySignerWalletId: 'agent_123',
         persistSessionOwner: true,
@@ -760,7 +781,7 @@ describe('deploy session optimistic concurrency', () => {
     const args = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
     expect(Array.isArray(args?.calls)).toBe(true)
     expect(args.calls).toHaveLength(1)
-    expect(String(args.calls[0]?.to)).toBe('0xcalltarget')
+    expect(String(args.calls[0]?.to)).toBe('0x10000000000000000000000000000000000000aa')
   })
 
   it('cancel marks session cancelled when owner credentials are unavailable', async () => {
@@ -768,7 +789,7 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('created'),
       sessionSignerWalletId: null,
       sessionSignerKeyEnc: null,
-      payload: { phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x' }], phase3Calls: [] },
+      payload: { phase2FinalizeCalls: [{ to: '0x10000000000000000000000000000000000000aa', value: '0', data: '0x' }], phase3Calls: [] },
     }
     getDeploySessionByIdMock.mockResolvedValue(rec)
 
@@ -788,7 +809,7 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('created'),
       payload: {
-        phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x' }],
+        phase2FinalizeCalls: [{ to: '0x10000000000000000000000000000000000000aa', value: '0', data: '0x' }],
         phase3Calls: [],
         deploySignerWalletId: 'agent_123',
         persistSessionOwner: true,
@@ -814,8 +835,8 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase3_confirmed'),
       payload: {
         phase2FinalizeCalls: [],
-        phase3Calls: [makeCall('0xphase3target')],
-        phase4Calls: [makeCall('0xphase4target')],
+        phase3Calls: makeGenericPhase3Calls(),
+        phase4Calls: [makeCall('0x4000000000000000000000000000000000000004', PHASE4_LAUNCH_SELECTOR)],
       },
     }
     getDeploySessionByIdMock.mockResolvedValue(rec)
@@ -854,8 +875,8 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase3_confirmed'),
       payload: {
         phase2FinalizeCalls: [],
-        phase3Calls: [makeCall('0xphase3target')],
-        phase4Calls: [makeCall('0xphase4target')],
+        phase3Calls: makeGenericPhase3Calls(),
+        phase4Calls: [makeCall('0x4000000000000000000000000000000000000004', PHASE4_LAUNCH_SELECTOR)],
       },
     }
     getDeploySessionByIdMock
@@ -957,7 +978,7 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase2_confirmed'),
       sessionSignerWalletId: null,
       sessionSignerKeyEnc: null,
-      payload: { phase2FinalizeCalls: [{ to: '0xcalltarget', value: '0', data: '0x' }], phase3Calls: [] },
+      payload: { phase2FinalizeCalls: [{ to: '0x10000000000000000000000000000000000000aa', value: '0', data: '0x' }], phase3Calls: [] },
     }
     getDeploySessionByIdMock.mockResolvedValue(rec)
     transitionDeploySessionMock.mockResolvedValue(true)
@@ -975,8 +996,8 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase2_confirmed'),
       payload: {
         phase2FinalizeCalls: [],
-        phase3Calls: [makeCall('0xphase3target')],
-        phase4Calls: [makeCall('0xphase4target')],
+        phase3Calls: makeGenericPhase3Calls(),
+        phase4Calls: [makeCall('0x4000000000000000000000000000000000000004', PHASE4_LAUNCH_SELECTOR)],
       },
     }
     getDeploySessionByIdMock.mockResolvedValue(rec)
@@ -989,7 +1010,7 @@ describe('deploy session optimistic concurrency', () => {
     expect(res.statusCode).toBe(200)
     expect(sendUserOperationMock).toHaveBeenCalledTimes(1)
     const args = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
-    expect(String(args.calls[0]?.to)).toBe('0xphase3target')
+    expect(String(args.calls[0]?.to)).toBe('0x3000000000000000000000000000000000000003')
     expect(updateDeploySessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'sess_1', step: 'phase3_sent' }),
     )
@@ -1000,8 +1021,8 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase3_confirmed'),
       payload: {
         phase2FinalizeCalls: [],
-        phase3Calls: [makeCall('0xphase3target')],
-        phase4Calls: [makeCall('0xphase4target')],
+        phase3Calls: makeGenericPhase3Calls(),
+        phase4Calls: [makeCall('0x4000000000000000000000000000000000000004', PHASE4_LAUNCH_SELECTOR)],
       },
     }
     getDeploySessionByIdMock.mockResolvedValue(rec)
@@ -1014,7 +1035,7 @@ describe('deploy session optimistic concurrency', () => {
     expect(res.statusCode).toBe(200)
     expect(sendUserOperationMock).toHaveBeenCalledTimes(1)
     const args = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
-    expect(String(args.calls[0]?.to)).toBe('0xphase4target')
+    expect(String(args.calls[0]?.to)).toBe('0x4000000000000000000000000000000000000004')
     expect(ensureLaunchImageReadyMock).toHaveBeenCalledTimes(1)
     expect(updateDeploySessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'sess_1', step: 'phase4_sent' }),
@@ -1026,8 +1047,8 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase3_confirmed'),
       payload: {
         phase2FinalizeCalls: [],
-        phase3Calls: [makeCall('0xphase3target')],
-        phase4Calls: [makeCall('0xphase4target')],
+        phase3Calls: makeGenericPhase3Calls(),
+        phase4Calls: [makeCall('0x4000000000000000000000000000000000000004', PHASE4_LAUNCH_SELECTOR)],
       },
     }
     ensureLaunchImageReadyMock.mockRejectedValueOnce(
@@ -1049,9 +1070,9 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('phase3_confirmed'),
       payload: {
-        phase2FinalizeCalls: [makeCall('0xphase2target')],
-        phase3Calls: [makeCall('0xphase3target')],
-        phase4Calls: [makeCall('0xphase4target')],
+        phase2FinalizeCalls: [makeCall('0x2000000000000000000000000000000000000002')],
+        phase3Calls: makeGenericPhase3Calls(),
+        phase4Calls: [makeCall('0x4000000000000000000000000000000000000004', PHASE4_LAUNCH_SELECTOR)],
       },
     }
     ensureLaunchImageReadyMock.mockRejectedValueOnce(
@@ -1081,8 +1102,8 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase3_sent'),
       payload: {
         phase2FinalizeCalls: [],
-        phase3Calls: [makeCall('0xphase3target')],
-        phase4Calls: [makeCall('0xphase4target')],
+        phase3Calls: makeGenericPhase3Calls(),
+        phase4Calls: [makeCall('0x4000000000000000000000000000000000000004', PHASE4_LAUNCH_SELECTOR)],
       },
     }
     getDeploySessionByIdMock
@@ -1143,7 +1164,7 @@ describe('deploy session optimistic concurrency', () => {
     }
     const viem = await import('viem')
     ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
-      if (String(data) === '0xphase3deployv2') {
+      if (String(data) === PHASE3_DEPLOY_SELECTOR) {
         return {
           functionName: 'deployPhase3Strategies',
           args: [
@@ -1159,19 +1180,19 @@ describe('deploy session optimistic concurrency', () => {
           ],
         }
       }
-      if (String(data) === '0xphase3setminidle') {
+      if (String(data) === `${PHASE3_DEPLOY_TO_STRATEGIES_SELECTOR}01`) {
         return {
           functionName: 'setMinimumTotalIdle',
           args: [1000n],
         }
       }
-      if (String(data) === '0xphase3deploytostrategies') {
+      if (String(data) === PHASE3_DEPLOY_TO_STRATEGIES_SELECTOR) {
         return {
           functionName: 'deployToStrategies',
           args: [],
         }
       }
-      if (String(data) === '0xphase2finalize') {
+      if (String(data) === PHASE2_FINALIZE_SELECTOR) {
         return {
           functionName: 'finalizePhase2',
           args: [
@@ -1187,7 +1208,7 @@ describe('deploy session optimistic concurrency', () => {
           ],
         }
       }
-      if (String(data) === '0xphase4launch') {
+      if (String(data) === PHASE4_LAUNCH_SELECTOR) {
         return {
           functionName: 'launchDeferredAuction',
           args: [
@@ -1322,9 +1343,9 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('phase2_core_confirmed'),
       payload: JSON.stringify({
-        phase2FinalizeCalls: [makeCall('0xphase2target')],
-        phase3Calls: [makeCall('0xphase3target')],
-        phase4Calls: [makeCall('0xphase4target')],
+        phase2FinalizeCalls: [makeCall('0x2000000000000000000000000000000000000002')],
+        phase3Calls: makeGenericPhase3Calls(),
+        phase4Calls: [makeCall('0x4000000000000000000000000000000000000004', PHASE4_LAUNCH_SELECTOR)],
       }),
     }
     getDeploySessionByIdMock.mockResolvedValue(rec)
@@ -1337,7 +1358,7 @@ describe('deploy session optimistic concurrency', () => {
     expect(res.statusCode).toBe(200)
     expect(sendUserOperationMock).toHaveBeenCalledTimes(1)
     const args = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
-    expect(String(args.calls[0]?.to)).toBe('0xphase2target')
+    expect(String(args.calls[0]?.to)).toBe('0x2000000000000000000000000000000000000002')
     expect(updateDeploySessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'sess_1', step: 'phase2_finalize_sent' }),
     )
@@ -1347,8 +1368,8 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('phase2_core_sent'),
       payload: JSON.stringify({
-        phase2FinalizeCalls: [makeCall('0xphase2target')],
-        phase3Calls: [makeCall('0xphase3target')],
+        phase2FinalizeCalls: [makeCall('0x2000000000000000000000000000000000000002')],
+        phase3Calls: makeGenericPhase3Calls(),
       }),
     }
     getDeploySessionByIdMock
@@ -1371,7 +1392,7 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('phase1_finalize_confirmed'),
       payload: JSON.stringify({
-        phase2CoreCalls: [makeCall('0xphase2coretarget')],
+        phase2CoreCalls: [makeCall('0x2100000000000000000000000000000000000002')],
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
       }),
     }
@@ -1418,8 +1439,8 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase2_core_sent'),
       lastUserOpHash: null,
       payload: JSON.stringify({
-        phase2CoreCalls: [makeCall('0xphase2coretarget')],
-        phase2FinalizeCalls: [makeCall('0xphase2target')],
+        phase2CoreCalls: [makeCall('0x2100000000000000000000000000000000000002')],
+        phase2FinalizeCalls: [makeCall('0x2000000000000000000000000000000000000002')],
       }),
     }
     const viem = await import('viem')
@@ -1459,7 +1480,7 @@ describe('deploy session optimistic concurrency', () => {
     expect(res.body?.data?.step).toBe('phase2_sent')
     expect(sendUserOperationMock).toHaveBeenCalledTimes(1)
     const args = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
-    expect(String(args.calls[0]?.to)).toBe('0xphase2target')
+    expect(String(args.calls[0]?.to)).toBe('0x2000000000000000000000000000000000000002')
     expect(transitionDeploySessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'sess_1', fromStep: 'phase2_core_sent', toStep: 'phase2_core_confirmed' }),
     )
@@ -1470,7 +1491,7 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase2_confirmed'),
       payload: JSON.stringify({
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
-        phase3Calls: [makeCall('0xphase3target')],
+        phase3Calls: makeGenericPhase3Calls(),
       }),
     }
     const originalFetch = globalThis.fetch
@@ -1544,7 +1565,7 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase2_confirmed'),
       payload: JSON.stringify({
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
-        phase3Calls: [makeCall('0xphase3target')],
+        phase3Calls: makeGenericPhase3Calls(),
       }),
     }
     const originalFetch = globalThis.fetch
@@ -1619,7 +1640,7 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase2_confirmed'),
       payload: JSON.stringify({
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
-        phase3Calls: [makeCall('0xphase3target')],
+        phase3Calls: makeGenericPhase3Calls(),
       }),
     }
     const originalFetch = globalThis.fetch
@@ -1692,7 +1713,7 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase2_confirmed'),
       payload: JSON.stringify({
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
-        phase3Calls: [makeCall('0xphase3target')],
+        phase3Calls: makeGenericPhase3Calls(),
       }),
     }
     const originalFetch = globalThis.fetch
@@ -1750,7 +1771,7 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase2_confirmed'),
       payload: JSON.stringify({
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
-        phase3Calls: [makeCall('0xphase3target')],
+        phase3Calls: makeGenericPhase3Calls(),
       }),
     }
     const previous = process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
@@ -1804,7 +1825,7 @@ describe('deploy session optimistic concurrency', () => {
         method: 'POST',
         headers: {
           'x-siwa-receipt': 'siwa-receipt-token',
-          'x-privy-token': 'privy-auth-token',
+          'x-privy-token': makeFreshPrivyJwt(),
         },
         body: { sessionId: 'sess_1' },
       })
@@ -1830,7 +1851,7 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase2_confirmed'),
       payload: JSON.stringify({
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
-        phase3Calls: [makeCall('0xphase3target')],
+        phase3Calls: makeGenericPhase3Calls(),
       }),
     }
     const originalFetch = globalThis.fetch
@@ -1888,7 +1909,7 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase2_confirmed'),
       payload: JSON.stringify({
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
-        phase3Calls: [makeCall('0xphase3target')],
+        phase3Calls: makeGenericPhase3Calls(),
       }),
     }
     const previous = process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
@@ -1943,7 +1964,7 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase2_confirmed'),
       payload: JSON.stringify({
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
-        phase3Calls: [makeCall('0xphase3target')],
+        phase3Calls: makeGenericPhase3Calls(),
       }),
     }
     const originalFetch = globalThis.fetch
@@ -2017,13 +2038,13 @@ describe('deploy session optimistic concurrency', () => {
       payload: JSON.stringify({
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
         phase3Calls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase3deploy')],
-        phase4Calls: [makeCall('0xphase4target')],
+        phase4Calls: [makeCall('0x4000000000000000000000000000000000000004', PHASE4_LAUNCH_SELECTOR)],
       }),
       lastUserOpHash: `0x${'2'.repeat(64)}`,
     }
     const viem = await import('viem')
     ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
-      if (String(data) === '0xphase3deploy') {
+      if (String(data) === PHASE3_DEPLOY_SELECTOR) {
         return {
           functionName: 'deployPhase3Strategies',
           args: [
@@ -2038,7 +2059,7 @@ describe('deploy session optimistic concurrency', () => {
           ],
         }
       }
-      if (String(data) === '0xphase2finalize') {
+      if (String(data) === PHASE2_FINALIZE_SELECTOR) {
         return {
           functionName: 'finalizePhase2',
           args: [
@@ -2104,7 +2125,7 @@ describe('deploy session optimistic concurrency', () => {
           makeCall('0x3000000000000000000000000000000000000003', '0xphase3setminidle'),
           makeCall('0x3000000000000000000000000000000000000003', '0xphase3deploytostrategies'),
         ],
-        phase4Calls: [makeCall('0xphase4target')],
+        phase4Calls: [makeCall('0x4000000000000000000000000000000000000004', PHASE4_LAUNCH_SELECTOR)],
       }),
       lastUserOpHash: `0x${'2'.repeat(64)}`,
     }
@@ -2122,7 +2143,7 @@ describe('deploy session optimistic concurrency', () => {
     const v3Pool = '0x1410000000000000000000000000000000000014'
     const vault = '0x3000000000000000000000000000000000000003'
     ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
-      if (String(data) === '0xphase3deployv4') {
+      if (String(data) === PHASE3_DEPLOY_SELECTOR) {
         return {
           functionName: 'deployPhase3Strategies',
           args: [
@@ -2138,19 +2159,19 @@ describe('deploy session optimistic concurrency', () => {
           ],
         }
       }
-      if (String(data) === '0xphase3setminidle') {
+      if (String(data) === `${PHASE3_DEPLOY_TO_STRATEGIES_SELECTOR}01`) {
         return {
           functionName: 'setMinimumTotalIdle',
           args: [1000n],
         }
       }
-      if (String(data) === '0xphase3deploytostrategies') {
+      if (String(data) === PHASE3_DEPLOY_TO_STRATEGIES_SELECTOR) {
         return {
           functionName: 'deployToStrategies',
           args: [],
         }
       }
-      if (String(data) === '0xphase2finalize') {
+      if (String(data) === PHASE2_FINALIZE_SELECTOR) {
         return {
           functionName: 'finalizePhase2',
           args: [
@@ -2258,14 +2279,14 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase4_sent'),
       payload: JSON.stringify({
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
-        phase3Calls: [makeCall('0xphase3target')],
+        phase3Calls: makeGenericPhase3Calls(),
         phase4Calls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase4launch')],
       }),
       lastUserOpHash: `0x${'3'.repeat(64)}`,
     }
     const viem = await import('viem')
     ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
-      if (String(data) === '0xphase4launch') {
+      if (String(data) === PHASE4_LAUNCH_SELECTOR) {
         return {
           functionName: 'launchDeferredAuction',
           args: [
@@ -2281,7 +2302,7 @@ describe('deploy session optimistic concurrency', () => {
           ],
         }
       }
-      if (String(data) === '0xphase2finalize') {
+      if (String(data) === PHASE2_FINALIZE_SELECTOR) {
         return {
           functionName: 'finalizePhase2',
           args: [
@@ -2361,7 +2382,7 @@ describe('deploy session optimistic concurrency', () => {
     const v3Pool = '0xd00000000000000000000000000000000000000d'
     const vault = '0x3000000000000000000000000000000000000003'
     ;(viem.decodeFunctionData as any).mockImplementation(({ abi, data }: { abi: unknown; data: string }) => {
-      if (String(data) === '0xphase3deploy') {
+      if (String(data) === PHASE3_DEPLOY_SELECTOR) {
         expect(JSON.stringify(abi)).not.toContain('ajnaStrategy')
         return {
           functionName: 'deployPhase3Strategies',
@@ -2384,19 +2405,19 @@ describe('deploy session optimistic concurrency', () => {
           ],
         }
       }
-      if (String(data) === '0xphase3setminidle') {
+      if (String(data) === `${PHASE3_DEPLOY_TO_STRATEGIES_SELECTOR}01`) {
         return {
           functionName: 'setMinimumTotalIdle',
           args: [1000n],
         }
       }
-      if (String(data) === '0xphase3deploytostrategies') {
+      if (String(data) === PHASE3_DEPLOY_TO_STRATEGIES_SELECTOR) {
         return {
           functionName: 'deployToStrategies',
           args: [],
         }
       }
-      if (String(data) === '0xphase2finalize') {
+      if (String(data) === PHASE2_FINALIZE_SELECTOR) {
         return {
           functionName: 'finalizePhase2',
           args: [
@@ -2520,7 +2541,7 @@ describe('deploy session optimistic concurrency', () => {
     const v3Pool = '0x1110000000000000000000000000000000000011'
     const vault = '0x3000000000000000000000000000000000000003'
     ;(viem.decodeFunctionData as any).mockImplementation(({ abi, data }: { abi: unknown; data: string }) => {
-      if (String(data) === '0xphase3deployv2') {
+      if (String(data) === PHASE3_DEPLOY_SELECTOR) {
         expect(JSON.stringify(abi)).not.toContain('ajnaStrategy')
         return {
           functionName: 'deployPhase3Strategies',
@@ -2537,19 +2558,19 @@ describe('deploy session optimistic concurrency', () => {
           ],
         }
       }
-      if (String(data) === '0xphase3setminidle') {
+      if (String(data) === `${PHASE3_DEPLOY_TO_STRATEGIES_SELECTOR}01`) {
         return {
           functionName: 'setMinimumTotalIdle',
           args: [1000n],
         }
       }
-      if (String(data) === '0xphase3deploytostrategies') {
+      if (String(data) === PHASE3_DEPLOY_TO_STRATEGIES_SELECTOR) {
         return {
           functionName: 'deployToStrategies',
           args: [],
         }
       }
-      if (String(data) === '0xphase2finalize') {
+      if (String(data) === PHASE2_FINALIZE_SELECTOR) {
         return {
           functionName: 'finalizePhase2',
           args: [
@@ -2671,7 +2692,7 @@ describe('deploy session optimistic concurrency', () => {
     const v3Pool = '0x1110000000000000000000000000000000000011'
     const vault = '0x3000000000000000000000000000000000000003'
     ;(viem.decodeFunctionData as any).mockImplementation(({ abi, data }: { abi: unknown; data: string }) => {
-      if (String(data) === '0xphase3deployv2') {
+      if (String(data) === PHASE3_DEPLOY_SELECTOR) {
         expect(JSON.stringify(abi)).not.toContain('ajnaStrategy')
         return {
           functionName: 'deployPhase3Strategies',
@@ -2688,13 +2709,13 @@ describe('deploy session optimistic concurrency', () => {
           ],
         }
       }
-      if (String(data) === '0xphase3deploytostrategies') {
+      if (String(data) === PHASE3_DEPLOY_TO_STRATEGIES_SELECTOR) {
         return {
           functionName: 'deployToStrategies',
           args: [],
         }
       }
-      if (String(data) === '0xphase2finalize') {
+      if (String(data) === PHASE2_FINALIZE_SELECTOR) {
         return {
           functionName: 'finalizePhase2',
           args: [
@@ -2870,7 +2891,7 @@ describe('deploy session optimistic concurrency', () => {
     const v3Pool = '0x1210000000000000000000000000000000000012'
     const vault = '0x3000000000000000000000000000000000000003'
     ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
-      if (String(data) === '0xphase3deployv3') {
+      if (String(data) === PHASE3_DEPLOY_SELECTOR) {
         return {
           functionName: 'deployPhase3Strategies',
           args: [
@@ -2886,19 +2907,19 @@ describe('deploy session optimistic concurrency', () => {
           ],
         }
       }
-      if (String(data) === '0xphase3setminidle') {
+      if (String(data) === `${PHASE3_DEPLOY_TO_STRATEGIES_SELECTOR}01`) {
         return {
           functionName: 'setMinimumTotalIdle',
           args: [1000n],
         }
       }
-      if (String(data) === '0xphase3deploytostrategies') {
+      if (String(data) === PHASE3_DEPLOY_TO_STRATEGIES_SELECTOR) {
         return {
           functionName: 'deployToStrategies',
           args: [],
         }
       }
-      if (String(data) === '0xphase2finalize') {
+      if (String(data) === PHASE2_FINALIZE_SELECTOR) {
         return {
           functionName: 'finalizePhase2',
           args: [
@@ -3011,7 +3032,7 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase4_sent'),
       payload: JSON.stringify({
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
-        phase3Calls: [makeCall('0xphase3target')],
+        phase3Calls: makeGenericPhase3Calls(),
         phase4Calls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase4launch')],
       }),
       lastUserOpHash: `0x${'5'.repeat(64)}`,
@@ -3022,7 +3043,7 @@ describe('deploy session optimistic concurrency', () => {
     const auction = '0xe00000000000000000000000000000000000000e'
     const ccaFactory = '0xf00000000000000000000000000000000000000f'
     ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
-      if (String(data) === '0xphase4launch') {
+      if (String(data) === PHASE4_LAUNCH_SELECTOR) {
         return {
           functionName: 'launchDeferredAuction',
           args: [
@@ -3038,7 +3059,7 @@ describe('deploy session optimistic concurrency', () => {
           ],
         }
       }
-      if (String(data) === '0xphase2finalize') {
+      if (String(data) === PHASE2_FINALIZE_SELECTOR) {
         return {
           functionName: 'finalizePhase2',
           args: [
@@ -3111,7 +3132,7 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase4_sent'),
       payload: JSON.stringify({
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
-        phase3Calls: [makeCall('0xphase3target')],
+        phase3Calls: makeGenericPhase3Calls(),
         phase4Calls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase4launch')],
       }),
       lastUserOpHash: `0x${'7'.repeat(64)}`,
@@ -3122,7 +3143,7 @@ describe('deploy session optimistic concurrency', () => {
     const auction = '0xe00000000000000000000000000000000000000e'
     const ccaFactory = '0xf00000000000000000000000000000000000000f'
     ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
-      if (String(data) === '0xphase4launch') {
+      if (String(data) === PHASE4_LAUNCH_SELECTOR) {
         return {
           functionName: 'launchDeferredAuction',
           args: [
@@ -3138,7 +3159,7 @@ describe('deploy session optimistic concurrency', () => {
           ],
         }
       }
-      if (String(data) === '0xphase2finalize') {
+      if (String(data) === PHASE2_FINALIZE_SELECTOR) {
         return {
           functionName: 'finalizePhase2',
           args: [
@@ -3223,7 +3244,7 @@ describe('deploy session optimistic concurrency', () => {
     const auction = '0xe00000000000000000000000000000000000000e'
     const ccaFactory = '0xf00000000000000000000000000000000000000f'
     ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
-      if (String(data) === '0xphase4launch') {
+      if (String(data) === PHASE4_LAUNCH_SELECTOR) {
         return {
           functionName: 'launchDeferredAuction',
           args: [
@@ -3317,8 +3338,8 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase4_sent'),
       payload: {
         phase2FinalizeCalls: [],
-        phase3Calls: [makeCall('0xphase3target')],
-        phase4Calls: [makeCall('0xphase4target')],
+        phase3Calls: makeGenericPhase3Calls(),
+        phase4Calls: [makeCall('0x4000000000000000000000000000000000000004', '0x12345678')],
       },
     }
     getDeploySessionByIdMock
@@ -3341,7 +3362,7 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase2_confirmed'),
       payload: {
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
-        phase3Calls: [makeCall('0xphase3target')],
+        phase3Calls: makeGenericPhase3Calls(),
         phase4Calls: [],
         solanaOvault: { enabled: true },
       },
@@ -3374,7 +3395,7 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('ovault_mesh_sent'),
       payload: {
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
-        phase3Calls: [makeCall('0xphase3target')],
+        phase3Calls: makeGenericPhase3Calls(),
         phase4Calls: [],
         solanaOvault: { enabled: true },
       },
@@ -3402,7 +3423,7 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase2_confirmed'),
       payload: {
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
-        phase3Calls: [makeCall('0xphase3target')],
+        phase3Calls: makeGenericPhase3Calls(),
         phase4Calls: [],
         solanaOvault: { enabled: true },
       },
@@ -3435,7 +3456,7 @@ describe('deploy session optimistic concurrency', () => {
         method: 'POST',
         headers: {
           'x-siwa-receipt': 'siwa-receipt-token',
-          'x-privy-token': 'privy-auth-token',
+          'x-privy-token': makeFreshPrivyJwt(),
         },
         body: { sessionId: 'sess_1' },
       })
@@ -3464,7 +3485,7 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase2_confirmed'),
       payload: {
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
-        phase3Calls: [makeCall('0xphase3target')],
+        phase3Calls: makeGenericPhase3Calls(),
         phase4Calls: [],
         solanaOvault: { enabled: true },
       },
@@ -3496,13 +3517,13 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase2_confirmed'),
       payload: {
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalizewithvault')],
-        phase3Calls: [makeCall('0xphase3target'), makeCall(vault, '0x355aa867')],
+        phase3Calls: [makeCall('0x3000000000000000000000000000000000000003', PHASE3_DEPLOY_SELECTOR), makeCall(vault, '0x355aa867')],
         phase4Calls: [],
       },
     }
     const viem = await import('viem')
     ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
-      if (String(data) === '0xphase2finalizewithvault') {
+      if (String(data) === PHASE2_FINALIZE_SELECTOR) {
         return {
           functionName: 'finalizePhase2',
           args: [
@@ -3552,13 +3573,13 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase3_confirmed'),
       payload: {
         phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalizewithvault')],
-        phase3Calls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase3deployv2')],
+        phase3Calls: makeGenericPhase3Calls(),
         phase4Calls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase4launch')],
       },
     }
     const viem = await import('viem')
     ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
-      if (String(data) === '0xphase2finalizewithvault') {
+      if (String(data) === PHASE2_FINALIZE_SELECTOR) {
         return {
           functionName: 'finalizePhase2',
           args: [
@@ -3574,7 +3595,7 @@ describe('deploy session optimistic concurrency', () => {
           ],
         }
       }
-      if (String(data) === '0xphase3deployv2') {
+      if (String(data) === PHASE3_DEPLOY_SELECTOR) {
         return {
           functionName: 'deployPhase3Strategies',
           args: [
@@ -3590,7 +3611,7 @@ describe('deploy session optimistic concurrency', () => {
           ],
         }
       }
-      if (String(data) === '0xphase4launch') {
+      if (String(data) === PHASE4_LAUNCH_SELECTOR) {
         return {
           functionName: 'launchDeferredAuction',
           args: [
@@ -3660,14 +3681,14 @@ describe('deploy session optimistic concurrency', () => {
     const options = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
     expect(Array.isArray(options?.calls)).toBe(true)
     expect(options.calls).toHaveLength(2)
-    expect(options.calls[0]?.data).toBe('0xphase4launch')
+    expect(options.calls[0]?.data).toBe(PHASE4_LAUNCH_SELECTOR)
   })
 
   it('persists server-side revert debug on continue reverts (no debug blob leaked)', async () => {
     const rec = {
       ...makeDeploySession('created'),
       payload: {
-        phase2FinalizeCalls: [makeCall('0xcalltarget', '0x12345678')],
+        phase2FinalizeCalls: [makeCall('0x10000000000000000000000000000000000000aa', PHASE2_FINALIZE_SELECTOR)],
         phase3Calls: [],
       },
     }
@@ -3707,7 +3728,7 @@ describe('deploy session optimistic concurrency', () => {
       ...makeDeploySession('phase2_confirmed'),
       payload: {
         phase2FinalizeCalls: [],
-        phase3Calls: [makeCall('0xphase3target', '0x12345678')],
+        phase3Calls: makeGenericPhase3Calls(),
         phase4Calls: [],
       },
     }

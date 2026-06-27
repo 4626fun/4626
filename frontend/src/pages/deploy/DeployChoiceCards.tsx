@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as THREE from 'three'
 
+import { ZORA_TOKEN_LOGO_URL } from '@/lib/tokens/tokenLogo'
+
 /**
  * Cinematic "trace-sculpt" chooser for the Deploy landing.
  *
@@ -13,7 +15,7 @@ import * as THREE from 'three'
  * layer away from the live plane and connecting the two with trace wires and
  * semi-transparent faceted faces:
  *
- *   - Coin (ERC-20)            -> frosted glass disc with a thin luminous edge ring
+ *   - Coin (ERC-20)            -> Zora creator-coin mark (/brands/zora-token.svg)
  *   - Vault (ERC-20 + ERC-4626) -> glass octahedron with soft edge traces
  *
  * The whole card surface is a real WebGL panel (MeshPhysicalMaterial) lit by a
@@ -98,8 +100,6 @@ function hasWebGL(): boolean {
 // Sculpt topology
 // ---------------------------------------------------------------------------
 
-const R = 1.0 // coin circle radius
-const COIN_RING_SEGMENTS = 8 // minimal ring — cleaner silhouette than dense hub-and-spoke
 const ETH_R = 0.78 // Ethereum octahedron girdle half-extent
 const ETH_TOP = 1.22 // upper pyramid apex height
 const ETH_BOT = 0.96 // lower pyramid apex depth
@@ -124,32 +124,19 @@ function ring(r: number, h: number, n: number, phase = 0): THREE.Vector3[] {
 /**
  * Returns the ordered tiers for a variant at sculpt progress p (0..1).
  *
- *   coin  -> flat 2D circle: a center hub fanned out to a ring (no depth).
  *   vault -> Ethereum-style octahedron: two square pyramids joined base-to-base
  *            (lower apex -> girdle -> upper apex).
  */
-function tiersAt(variant: Variant, p: number): Tier[] {
-  if (variant === 'coin') {
-    // Flat circle in the XY plane, facing the camera (a true 2D coin disc).
-    const r = R * p
-    const center: Tier = { verts: [new THREE.Vector3(0, 0, 0)] }
-    const ringVerts: THREE.Vector3[] = []
-    for (let i = 0; i < COIN_RING_SEGMENTS; i++) {
-      const a = (i / COIN_RING_SEGMENTS) * Math.PI * 2
-      ringVerts.push(new THREE.Vector3(Math.cos(a) * r, Math.sin(a) * r, 0))
-    }
-    const outer: Tier = { verts: ringVerts }
-    return [center, outer]
-  }
+function tiersAt(p: number): Tier[] {
   const lower: Tier = { verts: [new THREE.Vector3(0, -ETH_BOT * p, 0)] }
   const girdle: Tier = { verts: ring(ETH_R * p, 0, 4, 0) }
   const upper: Tier = { verts: [new THREE.Vector3(0, ETH_TOP * p, 0)] }
   return [lower, girdle, upper]
 }
 
-/** Counts that stay fixed for a variant (used to size buffers + instances). */
-function topology(variant: Variant) {
-  const tiers = tiersAt(variant, 1)
+/** Counts that stay fixed for the vault sculpt (used to size buffers + instances). */
+function topology() {
+  const tiers = tiersAt(1)
   const dotCount = tiers.reduce((n, t) => n + t.verts.length, 0)
 
   // Wire segments: ring perimeters + spokes between consecutive tiers.
@@ -184,26 +171,51 @@ function easeInOut(t: number): number {
   return t * t * (3 - 2 * t)
 }
 
-function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) {
-  const { variant, core, accent } = config
+/** Zora creator-coin mark — crisp SVG with stage glow and cursor parallax. */
+function ZoraLogoMark() {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-[5] flex items-center justify-center" aria-hidden>
+      <div className="relative translate-x-[8%] -translate-y-[14%] transition-transform duration-500 ease-out group-hover:scale-[1.05]">
+        <div
+          className="relative will-change-transform"
+          style={{
+            transform:
+              'perspective(900px) rotateX(calc((var(--my) - 50%) * 0.1deg)) rotateY(calc((var(--mx) - 50%) * -0.14deg))',
+          }}
+        >
+          <div className="absolute inset-[-35%] rounded-full bg-[rgba(77,143,255,0.24)] opacity-70 blur-3xl transition-opacity duration-500 group-hover:opacity-100" />
+          <img
+            src={ZORA_TOKEN_LOGO_URL}
+            alt=""
+            width={168}
+            height={168}
+            decoding="async"
+            draggable={false}
+            className="relative h-[148px] w-[148px] rounded-full object-cover shadow-[0_28px_90px_-24px_rgba(77,143,255,0.65)] ring-1 ring-white/12 sm:h-[168px] sm:w-[168px]"
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function VaultSculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) {
+  const { accent } = config
   const tilt = useRef<THREE.Group>(null)
   const spin = useRef<THREE.Group>(null)
   const dots = useRef<THREE.InstancedMesh>(null)
   const wires = useRef<THREE.LineSegments>(null)
   const faces = useRef<THREE.Mesh>(null)
-  const coinDisc = useRef<THREE.Mesh>(null)
-  const coinRing = useRef<THREE.Mesh>(null)
 
-  const p = useRef(0) // eased sculpt progress
+  const p = useRef(0)
   const spinAngle = useRef(0)
-  const glowT = useRef(0) // eased hover glow (0 rest -> 1 hover)
+  const glowT = useRef(0)
 
-  const topo = useMemo(() => topology(variant), [variant])
+  const topo = useMemo(() => topology(), [])
 
   const FLOOR_Y = -1.0
-  const isCoin = variant === 'coin'
-  const yOffset = isCoin ? -0.05 : FLOOR_Y + ETH_BOT * 1.05
-  const baseScale = isCoin ? 1.15 : 1.05
+  const yOffset = FLOOR_Y + ETH_BOT * 1.05
+  const baseScale = 1.05
 
   const wireGeo = useMemo(() => {
     const g = new THREE.BufferGeometry()
@@ -230,22 +242,18 @@ function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) 
   useFrame((_state, dt) => {
     const d = Math.min(dt, 0.05)
 
-    // Pointer-following tilt of the whole card content (true 3D, not CSS).
-    // A gentle default look-down (REST_PITCH) keeps the standing form readable
-    // at rest; the cursor adds parallax on hover.
     if (tilt.current) {
       const on = shared.hover.current
       const px = on ? shared.pointer.current.x : 0
       const py = on ? shared.pointer.current.y : 0
-      const REST_PITCH = -0.34 // ~19° looking down onto the sculpt
-      const targetX = REST_PITCH - py * 0.26 // cursor up -> tip toward viewer
+      const REST_PITCH = -0.34
+      const targetX = REST_PITCH - py * 0.26
       const targetY = px * 0.42
       tilt.current.rotation.x = THREE.MathUtils.damp(tilt.current.rotation.x, targetX, 7, d)
       tilt.current.rotation.y = THREE.MathUtils.damp(tilt.current.rotation.y, targetY, 7, d)
       tilt.current.rotation.z = THREE.MathUtils.damp(tilt.current.rotation.z, on ? px * 0.06 : 0, 6, d)
     }
 
-    // Sculpt progress — subtle at rest, full bloom on hover.
     const REST = 0.72
     p.current = THREE.MathUtils.damp(p.current, shared.hover.current ? 1 : REST, 4, d)
     const prog = easeInOut(Math.min(1, Math.max(0, p.current)))
@@ -253,7 +261,7 @@ function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) 
     // Gentle idle spin at rest, accelerating as the form blooms on hover.
     spinAngle.current += d * (0.08 + 0.45 * Math.max(0, (prog - REST) / (1 - REST)))
     if (spin.current) {
-      spin.current.rotation.y = isCoin ? 0 : spinAngle.current
+      spin.current.rotation.y = spinAngle.current
       spin.current.scale.setScalar(baseScale * (1 + 0.04 * glowT.current))
     }
 
@@ -271,21 +279,8 @@ function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) 
       m.emissiveIntensity = 0.15 + 0.2 * g
       m.transmission = 0.72 + 0.12 * g
     }
-    if (coinDisc.current) {
-      const m = coinDisc.current.material as THREE.MeshPhysicalMaterial
-      const discScale = R * prog
-      coinDisc.current.scale.set(discScale, discScale, 1)
-      m.opacity = 0.18 + 0.14 * g
-      m.transmission = 0.78 + 0.14 * g
-      m.emissiveIntensity = 0.12 + 0.18 * g
-    }
-    if (coinRing.current) {
-      const m = coinRing.current.material as THREE.MeshBasicMaterial
-      m.opacity = 0.28 + 0.32 * g
-      coinRing.current.scale.set(prog, prog, prog)
-    }
 
-    const tiers = tiersAt(variant, prog)
+    const tiers = tiersAt(prog)
     const flat: THREE.Vector3[] = []
     for (const t of tiers) for (const vert of t.verts) flat.push(vert)
 
@@ -294,9 +289,7 @@ function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) 
       const dotScale = 0.028 + 0.014 * prog
       for (let i = 0; i < flat.length; i++) {
         dummy.position.copy(flat[i]!)
-        // Outer ring nodes stay slightly smaller than the hub for hierarchy.
-        const isHub = i === 0 && isCoin
-        dummy.scale.setScalar(isHub ? dotScale * 1.35 : dotScale * (isCoin ? 0.82 : 1))
+        dummy.scale.setScalar(dotScale)
         dummy.updateMatrix()
         dots.current.setMatrixAt(i, dummy.matrix)
       }
@@ -304,8 +297,8 @@ function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) 
       dots.current.instanceMatrix.needsUpdate = true
     }
 
-    // --- wires (vault only — coin uses glass disc + torus edge) ---
-    if (wires.current && !isCoin) {
+    // --- wires ---
+    if (wires.current) {
       const arr = (wireGeo.getAttribute('position') as THREE.BufferAttribute).array as Float32Array
       let o = 0
       const push = (a: THREE.Vector3, b: THREE.Vector3) => {
@@ -335,8 +328,8 @@ function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) 
       wireGeo.setDrawRange(0, o / 3)
     }
 
-    // --- faces (vault only — coin uses glass disc + ring) ---
-    if (faces.current && !isCoin) {
+    // --- faces ---
+    if (faces.current) {
       const arr = (faceGeo.getAttribute('position') as THREE.BufferAttribute).array as Float32Array
       let o = 0
       const tri = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3) => {
@@ -376,34 +369,7 @@ function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) 
         <shadowMaterial transparent opacity={0.45} />
       </mesh>
       <group ref={spin} position={[0.15, yOffset, 0]} scale={baseScale}>
-        {isCoin ? (
-          <>
-            <mesh ref={coinDisc}>
-              <circleGeometry args={[1, 48]} />
-              <meshPhysicalMaterial
-                color={core}
-                emissive={core}
-                emissiveIntensity={0.12}
-                metalness={0.05}
-                roughness={0.08}
-                transmission={0.82}
-                thickness={0.35}
-                ior={1.35}
-                transparent
-                opacity={0.22}
-                side={THREE.DoubleSide}
-                depthWrite={false}
-                toneMapped={false}
-              />
-            </mesh>
-            <mesh ref={coinRing}>
-              <torusGeometry args={[R, 0.011, 8, 64]} />
-              <meshBasicMaterial color={accent} transparent opacity={0.35} toneMapped={false} />
-            </mesh>
-          </>
-        ) : null}
-
-        <instancedMesh ref={dots} args={[undefined, undefined, topo.dotCount]} castShadow={!isCoin}>
+        <instancedMesh ref={dots} args={[undefined, undefined, topo.dotCount]} castShadow>
           <sphereGeometry args={[1, 10, 10]} />
           <meshStandardMaterial
             color="#f8fbff"
@@ -415,31 +381,27 @@ function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) 
           />
         </instancedMesh>
 
-        {!isCoin ? (
-          <lineSegments ref={wires} geometry={wireGeo}>
-            <lineBasicMaterial color={accent} transparent opacity={0.35} toneMapped={false} />
-          </lineSegments>
-        ) : null}
+        <lineSegments ref={wires} geometry={wireGeo}>
+          <lineBasicMaterial color={accent} transparent opacity={0.35} toneMapped={false} />
+        </lineSegments>
 
-        {!isCoin ? (
-          <mesh ref={faces} geometry={faceGeo} castShadow>
-            <meshPhysicalMaterial
-              color={core}
-              emissive={core}
-              emissiveIntensity={0.18}
-              metalness={0.08}
-              roughness={0.06}
-              transmission={0.78}
-              thickness={0.55}
-              ior={1.42}
-              transparent
-              opacity={0.18}
-              side={THREE.DoubleSide}
-              depthWrite={false}
-              toneMapped={false}
-            />
-          </mesh>
-        ) : null}
+        <mesh ref={faces} geometry={faceGeo} castShadow>
+          <meshPhysicalMaterial
+            color={config.core}
+            emissive={config.core}
+            emissiveIntensity={0.18}
+            metalness={0.08}
+            roughness={0.06}
+            transmission={0.78}
+            thickness={0.55}
+            ior={1.42}
+            transparent
+            opacity={0.18}
+            side={THREE.DoubleSide}
+            depthWrite={false}
+            toneMapped={false}
+          />
+        </mesh>
       </group>
     </group>
   )
@@ -478,7 +440,7 @@ function CardScene({ config, shared }: { config: CardConfig; shared: SharedRefs 
       />
       <directionalLight position={[-2.8, 2.6, 3.2]} intensity={1.1} color="#c8e0ff" />
       <pointLight position={[0, 1.2, 2.4]} intensity={0.6} color={config.accent} distance={8} decay={2} />
-      <Sculpt config={config} shared={shared} />
+      <VaultSculpt config={config} shared={shared} />
     </Canvas>
   )
 }
@@ -585,7 +547,11 @@ function TraceCard({ config }: { config: CardConfig }) {
         className="pointer-events-none absolute inset-0 transition-opacity duration-700 group-hover:opacity-100"
         style={{ background: `radial-gradient(58% 52% at 58% 38%, ${stageGlow}, transparent 72%)`, opacity: 0.55 }}
       />
-      <CardScene config={config} shared={{ pointer, hover }} />
+      {isCoin ? (
+        <ZoraLogoMark />
+      ) : (
+        <CardScene config={config} shared={{ pointer, hover }} />
+      )}
       {/* interactive cursor-following spotlight */}
       <div
         className="pointer-events-none absolute inset-0 z-10 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
@@ -617,10 +583,23 @@ function StaticCard({ config }: { config: CardConfig }) {
         style={{
           background:
             config.variant === 'coin'
-              ? 'radial-gradient(68% 58% at 64% 32%, rgba(77,143,255,0.12), transparent 70%)'
+              ? 'radial-gradient(58% 52% at 58% 38%, rgba(77,143,255,0.16), transparent 72%)'
               : 'radial-gradient(68% 58% at 64% 32%, rgba(30,202,211,0.12), transparent 70%)',
         }}
       />
+      {config.variant === 'coin' ? (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden>
+          <img
+            src={ZORA_TOKEN_LOGO_URL}
+            alt=""
+            width={148}
+            height={148}
+            decoding="async"
+            draggable={false}
+            className="relative h-[148px] w-[148px] translate-x-[8%] -translate-y-[18%] rounded-full object-cover shadow-[0_24px_80px_-24px_rgba(77,143,255,0.55)] ring-1 ring-white/10"
+          />
+        </div>
+      ) : null}
       <div
         className="pointer-events-none absolute inset-0"
         style={{ boxShadow: 'inset 0 0 90px 12px rgba(0,0,0,0.5)' }}
@@ -654,17 +633,18 @@ export default function DeployChoiceCards() {
     return () => cancelAnimationFrame(raf)
   }, [])
 
-  const interactive = mounted && !reducedMotion && hasWebGL()
+  const interactive = mounted && !reducedMotion
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      {CARDS.map((config) =>
-        interactive ? (
+      {CARDS.map((config) => {
+        const canAnimate = interactive && (config.variant === 'coin' || hasWebGL())
+        return canAnimate ? (
           <TraceCard key={config.variant} config={config} />
         ) : (
           <StaticCard key={config.variant} config={config} />
-        ),
-      )}
+        )
+      })}
     </div>
   )
 }

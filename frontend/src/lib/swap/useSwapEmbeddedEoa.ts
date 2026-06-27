@@ -106,19 +106,23 @@ function createEmbeddedSignerWalletClient({
   return {
     refreshSession,
     signSecp256k1Digest,
-    request: async (args: { method: string; params?: any[] }) => {
+    request: async (args: { method: string; params?: any[] | Record<string, unknown> }) => {
       const provider = await getProvider()
       if (!provider?.request) throw new Error('Privy embedded EOA provider not available')
       await ensureProviderOnBase({ provider, label: 'Privy embedded EOA' })
       if (args?.method === 'secp256k1_sign' && typeof signSecp256k1Digest === 'function') {
         const params = Array.isArray(args.params) ? args.params : []
+        const paramsRecord =
+          args.params && !Array.isArray(args.params) && typeof args.params === 'object'
+            ? (args.params as Record<string, unknown>)
+            : null
         const hashCandidate =
           typeof params[0] === 'string'
             ? params[0]
             : params[1] && typeof params[1] === 'string'
               ? params[1]
-              : typeof (args.params as Record<string, unknown> | undefined)?.hash === 'string'
-                ? String((args.params as Record<string, unknown>).hash)
+              : typeof paramsRecord?.hash === 'string'
+                ? String(paramsRecord.hash)
                 : ''
         if (isRawEcdsaDigest(hashCandidate)) {
           return signSecp256k1Digest(hashCandidate as `0x${string}`)

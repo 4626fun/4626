@@ -60,9 +60,10 @@ describe('deploy session create rate limits', () => {
     expect(res.statusCode).toBe(429)
     expect(String(res.body?.error ?? '')).toContain('Too many deploy preflight checks')
     expect(rateLimitKeyMock).toHaveBeenCalledWith('deploy-preflight', '0x0000000000000000000000000000000000000001')
-    expect(checkRateLimitMock).toHaveBeenCalledWith(
+    expect(checkDurableRateLimitMock).toHaveBeenCalledWith(
       'deploy-preflight:0x0000000000000000000000000000000000000001',
       { windowMs: 60_000, maxRequests: 20 },
+      { failClosed: true },
     )
     expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })

@@ -9,6 +9,7 @@ const readRequestPrincipalMock = vi.fn()
 const getCanonicalOriginMock = vi.fn((_: unknown) => 'https://4626.fun')
 const getErc8004PublicOriginMock = vi.fn((_: unknown) => 'https://4626.fun')
 const checkRateLimitMock = vi.fn(() => ({ allowed: true, remaining: 10, resetAt: Date.now() + 60_000 }))
+const checkDurableRateLimitMock = vi.fn(async () => ({ allowed: true, remaining: 10, resetAt: Date.now() + 60_000, source: 'memory' }))
 
 vi.mock('../../server/_lib/agent/agentRegistration.js', () => ({
   buildAgentRegistration: (origin: string) => buildAgentRegistrationMock(origin),
@@ -39,7 +40,7 @@ vi.mock('@4626/server-core', async () => {
   )
   return {
     ...actual,
-    checkDurableRateLimit: vi.fn(async () => ({ allowed: true, remaining: 999, resetAt: Date.now() + 60_000, source: 'memory' })),
+    checkDurableRateLimit: checkDurableRateLimitMock,
     readRequestPrincipal: (req: any) => readRequestPrincipalMock(req),
   }
 })
@@ -53,7 +54,9 @@ describe('v1/agents/publish', () => {
     getCanonicalOriginMock.mockReset()
     getErc8004PublicOriginMock.mockReset()
     checkRateLimitMock.mockReset()
+    checkDurableRateLimitMock.mockReset()
     checkRateLimitMock.mockReturnValue({ allowed: true, remaining: 10, resetAt: Date.now() + 60_000 })
+    checkDurableRateLimitMock.mockResolvedValue({ allowed: true, remaining: 10, resetAt: Date.now() + 60_000, source: 'memory' })
     getCanonicalOriginMock.mockReturnValue('https://4626.fun')
     getErc8004PublicOriginMock.mockReturnValue('https://4626.fun')
     readRequestPrincipalMock.mockReturnValue({ type: 'session', address: '0x1111111111111111111111111111111111111111' })
@@ -186,7 +189,7 @@ describe('v1/agents/publish', () => {
   })
 
   it('returns 429 when publish requests exceed the endpoint rate limit', async () => {
-    checkRateLimitMock.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+    checkDurableRateLimitMock.mockResolvedValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000, source: 'memory' })
 
     const { default: handler } = await import('../_handlers/v1/agents/_publish.ts')
     const req = createMockReq({ method: 'POST', body: { storeOnGrove: true }, url: '/api/v1/agents/publish' })
