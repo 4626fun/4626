@@ -71,7 +71,7 @@ function report(uint256 gain, uint256 loss) external onlyKeeper;
 | **Block delay** | Prevents flash loan attacks |
 | **Strict transfer accounting** | Reverts if vault does not receive the exact requested amount |
 
-## Token Compatibility (Important)
+## Token compatibility
 
 `CreatorOVault` assumes the creator coin behaves like a standard ERC-20 where `transfer`/`transferFrom` move the exact amount requested.
 

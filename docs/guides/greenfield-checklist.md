@@ -9,9 +9,9 @@ End-to-end checklist for a **new vault on Base** (v1.14.1). For legacy vaults, i
 
 <div class="docs-at-a-glance">
 
-**Prerequisites:** creator coin on Base · 50M–100M tokens for activation · signing ready · **launch bundle paid**.
+Creator coin on Base · 50M–100M tokens for activation · signing ready · launch bundle paid.
 
-**App:** [app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)
+[app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)
 
 </div>
 

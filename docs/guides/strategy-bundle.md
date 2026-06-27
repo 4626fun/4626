@@ -12,7 +12,7 @@ Pay the **launch bundle** ($499 USDC on Base) before deploy appears in the appli
 | | |
 |---|---|
 | **You do** | Pay once at strategy features |
-| **4626 does** | Marks `vault_full_deploy` active (internal bundle id) |
+| **4626 does** | Marks `vault_full_deploy` active |
 | **Done when** | Deploy page unlocks |
 | **Not included** | 50M–100M creator coin activation deposit |
 

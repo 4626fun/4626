@@ -13,7 +13,7 @@ Deploy the per-creator contract stack in one transaction. **No creator coin move
 |---|---|
 | **You do** | Configure names · submit Deploy in app |
 | **4626 does** | Deploy vault, shares, gauge, oracle, auction via shared batcher (v1.14.1) |
-| **Done when** | Milestone **Deployed** (vault exists, unfunded) |
+| **Done when** | Milestone **Deployed** — vault exists, unfunded |
 | **Requires** | Launch bundle active |
 
 </div>
@@ -49,7 +49,7 @@ Sponsored smart-wallet execution may apply where configured.
 
 [Contracts](/contracts) · [Addresses](/reference/addresses)
 
-## Onchain phases (what happens next)
+## Onchain phases
 
 Deploy is **Phase 1** only. Later app steps map to batcher phases:
 

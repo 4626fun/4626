@@ -9,9 +9,9 @@ What happens **after** [Step 3: Activate vault](/guides/activate-vault). Activat
 
 <div class="docs-at-a-glance">
 
-**Activated ≠ trading live.** Public DEX trading starts after the **fair-launch auction** completes and **finalize** succeeds on Base.
+Activation finalizes your deposit and share split. Public DEX trading starts after the fair-launch auction completes and finalize succeeds on Base.
 
-**Monitor:** [app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)
+Monitor progress in the [deploy app](https://app.4626.fun/deploy/vault).
 
 </div>
 
@@ -27,7 +27,7 @@ What happens **after** [Step 3: Activate vault](/guides/activate-vault). Activat
 | Lottery | **Not yet** (needs qualifying live **buys**) |
 | Milestone | **Activated** |
 
-### Share allocation (on finalize)
+### Share allocation at finalize
 
 When activation **finalizes**, the batcher wraps the deposit into `■` and enforces a fixed split:
 

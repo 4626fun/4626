@@ -9,9 +9,7 @@ How a **Zora creator coin** becomes a vault with **tradable shares**, fair-launc
 
 <div class="docs-at-a-glance">
 
-**Launch path:** [Launch checklist](/guides/greenfield-checklist)
-
-**Tokens:** creator coin (`$`) · vault share (`▢`) · tradable share (`■`) — three different addresses.
+[Launch checklist](/guides/greenfield-checklist) · Creator coin, vault share, and tradable share are three separate token addresses.
 
 </div>
 
@@ -57,7 +55,7 @@ A creator coin alone does not provide:
 
 Lane names: [Glossary](/reference/glossary).
 
-## Launch sequence (same on every launch doc)
+## Launch sequence
 
 | Step | Creator action | Result |
 |------|----------------|--------|

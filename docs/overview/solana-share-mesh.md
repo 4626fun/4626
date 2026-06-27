@@ -11,9 +11,7 @@ How **tradable shares (`■TICKER`)** reach Solana as part of a new vault deploy
 
 <div class="docs-at-a-glance">
 
-**In one sentence:** Every greenfield launch includes a **Solana share bridge** at Phase 2 finalize — ~30% of `■` supply crosses to Solana via LayerZero. Creator coin stays on Base.
-
-**Internal names:** *Solana share mesh*, *Pipe A*. See [Glossary](/reference/glossary).
+Every greenfield launch bridges ~30% of `■` supply to Solana at Phase 2 finalize via LayerZero. Creator coin stays on Base. Terminology: [Glossary](/reference/glossary).
 
 </div>
 
@@ -39,7 +37,7 @@ Base DEX trading and lottery do **not** wait for Meteora — they follow auction
 
 Solana receives a bridged **ShareOFT**, not a separate creator-coin SPL token. Symbol stays `■TICKER` on both chains (e.g. `■AKITA`).
 
-## Timeline (after activation)
+## Timeline
 
 | Order | Event | Creator action |
 |-------|--------|----------------|

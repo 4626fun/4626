@@ -117,7 +117,7 @@ function finalizeFailedAuction() external;
   - migrate success,
   - hook config active and aligned to the intended `tradeFeeCollector`.
 
-## Launch Pricing (Hard Onchain)
+## Launch pricing
 
 - Launch floor is derived onchain from `CreatorOracle` (`getCreatorPrice` and `getEthPrice`), then converted to Q96.
 - Strategy applies a configurable launch discount (`launchDiscountBps`) and aligns floor to configurable spacing (`launchTickSpacingBps`).

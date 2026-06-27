@@ -117,7 +117,7 @@ DEX aggregators are marked as `SwapOnly`:
 
 The final recipient receives the lottery entry, not the aggregator.
 
-## Sell-side fees (conditional)
+## Sell-side fees
 
 Native ShareOFT transfer fees apply on the **buy** path (`SwapOnly` → non-`SwapOnly`) by default. **Sell-side** fees require an enabled tax hook aligned to the same `tradeFeeCollector` — do not assume sell fees are active unless hook configuration is verified onchain.
 

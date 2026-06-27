@@ -9,11 +9,7 @@ sidebar_position: 1
 
 <div class="docs-at-a-glance">
 
-**Start here if:** you have a creator coin on Base and want to launch a vault.
-
-**Launch path:** [Launch checklist](/guides/greenfield-checklist) → five steps from bundle payment through trading live.
-
-**Deep dive:** [Fees, auction, and lottery](/overview/how-it-works).
+You have a creator coin on Base and want to launch a vault. Start with the [Launch checklist](/guides/greenfield-checklist), then read [Fees, auction, and lottery](/overview/how-it-works) for the full product model.
 
 </div>
 
@@ -25,7 +21,7 @@ Creators with a **creator coin on Base** (typically via Zora) who want to:
 - Run **open price discovery** (fair-launch auction — not a private presale)
 - Share **trade fees** and qualified **creator revenue** with share holders onchain
 
-## How it works (short)
+## How it works
 
 1. Pay the **launch bundle** ($499 USDC) — unlocks deploy.
 2. **Deploy** vault, share, gauge, oracle, and auction contracts.
@@ -35,7 +31,7 @@ Creators with a **creator coin on Base** (typically via Zora) who want to:
 
 Full timeline: [Launch checklist](/guides/greenfield-checklist) · [After activation](/guides/after-activation)
 
-## Three tokens (do not mix addresses)
+## Three tokens
 
 | Token | What it is | Example |
 |-------|------------|---------|
@@ -101,4 +97,4 @@ A 4626 account with execution-ready signing (including Coinbase Smart Wallet / B
 | Step-by-step launch | [Launch checklist](/guides/greenfield-checklist) |
 | Fees & lottery | [How fees and lottery work](/overview/how-it-works) |
 | Terminology | [Glossary](/reference/glossary) |
-| Contract addresses | [Addresses](/reference/addresses) (v1.14.1) |
+| Contract addresses | [Addresses](/reference/addresses) |

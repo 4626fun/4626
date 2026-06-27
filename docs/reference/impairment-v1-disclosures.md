@@ -40,7 +40,7 @@ If your shares are held by another contract at `tripBlock` (for example a wrappe
 - Claims cannot mint before root finalization.
 - Finalization cannot occur before challenge-window unlock.
 
-## Claim and recovery caps (June 2026 audit remediation)
+## Claim and recovery caps
 
 These guards were added in the June 2026 audit pass (C-2 / C-3 / H-1) and are
 enforced on-chain by `CreatorOVaultCoreModule` and `CreatorORecoveryEscrow`:

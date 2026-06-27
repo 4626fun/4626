@@ -11,9 +11,9 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 
 > **Canonical source.** When documentation or tooling disagrees with this file, **this file wins**.
 
-## Base (Hub Chain)
+## Base
 
-### Current live infrastructure (v1.14.1 — new vault launches)
+### Current infrastructure
 
 | Contract | Address |
 |----------|---------|

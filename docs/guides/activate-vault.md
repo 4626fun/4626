@@ -13,7 +13,7 @@ Deposit creator coin and start the **fair-launch auction** for `■` tradable sh
 |---|---|
 | **You do** | Sign activate (Permit2 or approve + activate) |
 | **4626 does** | Deposit · mint shares · seed Uniswap V4 auction |
-| **Done when** | Milestone **Activated** (deposit finalized; auction scheduled or live) |
+| **Done when** | Milestone **Activated** — deposit finalized; auction scheduled or live |
 | **Deposit** | 50M–100M creator coin |
 
 </div>
@@ -41,7 +41,7 @@ The app sends these as **separate sponsored UserOps** in order: finalize → Pha
 
 **Approve + activate:** Approve batcher, then activate. App picks the path.
 
-## After activation (deploy session order)
+## After activation
 
 | Deploy step | Onchain action | Outcome |
 |-------------|----------------|---------|

@@ -9,11 +9,11 @@ Step-by-step path to launch a **new vault on Base** (release **v1.14.1**). Legac
 
 <div class="docs-at-a-glance">
 
-**You do:** steps 1–3 in the app (pay → deploy → activate).
-
-**4626 / chain does:** fair-launch auction, finalize (including Solana bridge), strategy attachment.
-
-**Done when:** milestone **Trading live** — `■` shares tradable on Base.
+| | |
+|---|---|
+| **You do** | Pay, deploy, and activate in the app |
+| **4626 does** | Fair-launch auction, finalize, Solana bridge, strategy attachment |
+| **Done when** | Milestone **Trading live** — `■` shares tradable on Base |
 
 </div>
 
