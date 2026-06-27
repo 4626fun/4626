@@ -215,6 +215,20 @@ function ChatWidgetInner() {
       return
     }
 
+    if (request.kind === 'existing') {
+      handleOpenChat({
+        id: request.conversationId,
+        type: request.type,
+        name: request.name,
+        peerInboxId: request.peerInboxId,
+        peerAddress: request.peerAddress,
+        imageUrl: request.imageUrl ?? undefined,
+        unreadCount: 0,
+        seedCommandId: request.seedCommandId ?? null,
+      } as ChatConversation)
+      return
+    }
+
     const dmResult = await startDm(request.peerAddress, {
       nameHint: request.nameHint ?? undefined,
       imageUrl: request.imageUrl ?? undefined,

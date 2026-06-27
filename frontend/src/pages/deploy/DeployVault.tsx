@@ -202,10 +202,11 @@ import {
   type RolePolicySourceLabel,
 } from './deployVaultRolePolicy'
 
-const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 100_000_000n
+const MIN_FIRST_DEPOSIT_TOKENS = 50_000_000n
+const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = MIN_FIRST_DEPOSIT_TOKENS
 // Batcher Phase2Module accepts a first-deposit range of [50M, 100M] creator tokens.
 const MAX_FIRST_DEPOSIT_TOKENS = 100_000_000n
-const MIN_FIRST_DEPOSIT = DEFAULT_MIN_FIRST_DEPOSIT_TOKENS * 10n ** 18n
+const MIN_FIRST_DEPOSIT = MIN_FIRST_DEPOSIT_TOKENS * 10n ** 18n
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
 const ZERO_ADDRESS = addr('0000000000000000000000000000000000000000')
 const normalizeConfiguredAddress = (value: unknown): Address | null => {
@@ -7421,7 +7422,7 @@ function DeployVaultMain() {
     // Honor query/env overrides inside that range; clamp anything else so a drifted
     // override cannot fail late at finalizePhase2.
     if (requestedMinFirstDepositTokens === null) return DEFAULT_MIN_FIRST_DEPOSIT_TOKENS
-    if (requestedMinFirstDepositTokens < DEFAULT_MIN_FIRST_DEPOSIT_TOKENS) return DEFAULT_MIN_FIRST_DEPOSIT_TOKENS
+    if (requestedMinFirstDepositTokens < MIN_FIRST_DEPOSIT_TOKENS) return MIN_FIRST_DEPOSIT_TOKENS
     if (requestedMinFirstDepositTokens > MAX_FIRST_DEPOSIT_TOKENS) return MAX_FIRST_DEPOSIT_TOKENS
     return requestedMinFirstDepositTokens
   }, [requestedMinFirstDepositTokens])
@@ -7430,7 +7431,7 @@ function DeployVaultMain() {
       logger.debug('[DeployVault] clamped minFirstDepositTokens override to the supported range', {
         requested: requestedMinFirstDepositTokens.toString(),
         applied: minFirstDepositTokens.toString(),
-        min: DEFAULT_MIN_FIRST_DEPOSIT_TOKENS.toString(),
+        min: MIN_FIRST_DEPOSIT_TOKENS.toString(),
         max: MAX_FIRST_DEPOSIT_TOKENS.toString(),
       })
     }

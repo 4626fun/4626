@@ -13,6 +13,7 @@ import { useAccountContext } from '@/wallet/accountContext'
 import { LoadingInline } from '@/components/ui/LoadingState'
 import { EthosAvatarScoreForAddress } from './EthosScorePill'
 import { useChatIdentity } from './useChatIdentity'
+import { useResolvedDmPeer } from './useResolvedDmPeer'
 
 type Props = {
   expanded: boolean
@@ -50,51 +51,20 @@ function ConversationItem({
   convo: ChatConversation
   onOpenChat: (convo: ChatConversation) => void
 }) {
-  const { resolveInboxAddress } = useXmtp()
-  const [resolvedPeer, setResolvedPeer] = useState<{ inboxId: string; address: string | null } | null>(null)
-  const resolvingInboxIdRef = useRef<string | null>(null)
+  const { peerAddress } = useResolvedDmPeer({
+    peerAddress: convo.type === 'dm' ? convo.peerAddress : null,
+    peerInboxId: convo.type === 'dm' ? convo.peerInboxId : null,
+    enabled: convo.type === 'dm',
+  })
 
-  useEffect(() => {
-    if (convo.type !== 'dm') return
-    if (convo.peerAddress) return
-    if (!convo.peerInboxId) return
-    let cancelled = false
-    const inboxId = convo.peerInboxId
-    if (resolvedPeer?.inboxId === inboxId) return
-    if (resolvingInboxIdRef.current === inboxId) return
-    resolvingInboxIdRef.current = inboxId
-    resolveInboxAddress(inboxId)
-      .then((addr) => {
-        if (cancelled) return
-        const normalizedAddr = typeof addr === 'string' ? addr.toLowerCase() : null
-        setResolvedPeer((prev) => {
-          if (prev?.inboxId === inboxId && prev.address === normalizedAddr) return prev
-          return { inboxId, address: normalizedAddr }
-        })
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (resolvingInboxIdRef.current === inboxId) {
-          resolvingInboxIdRef.current = null
-        }
-      })
-    return () => { cancelled = true }
-  }, [convo.type, convo.peerAddress, convo.peerInboxId, resolveInboxAddress, resolvedPeer?.inboxId])
-
-  const peerAddress =
-    convo.peerAddress ??
-    (convo.peerInboxId && resolvedPeer?.inboxId === convo.peerInboxId ? resolvedPeer.address : null)
-
-  const identity = useChatIdentity(convo.type === 'dm' ? peerAddress : null, { fallbackName: convo.name ?? null })
+  const identity = useChatIdentity(convo.type === 'dm' ? peerAddress : null, {
+    fallbackName: convo.name ?? null,
+    fallbackAvatar: convo.imageUrl ?? null,
+  })
   const agentIdentity = convo.type === 'dm' ? getAgentIdentity(peerAddress) : null
-  const identityDisplayName = identity.source !== 'address' ? identity.displayName : null
-  const conversationNameLabel =
-    convo.name && !/^0x[a-fA-F0-9]{4}(?:…|\.{3})[a-fA-F0-9]{4}$/i.test(convo.name.trim())
-      ? convo.name
-      : null
   const displayName =
-    convo.type === 'dm' && peerAddress
-      ? (agentIdentity?.name ?? identityDisplayName ?? conversationNameLabel ?? convo.name)
+    convo.type === 'dm'
+      ? (agentIdentity?.name ?? identity.displayName)
       : convo.name
   const displaySecondary =
     convo.type === 'dm' && peerAddress
@@ -148,7 +118,7 @@ function ConversationItem({
             {subtitle}
           </span>
           {convo.unreadCount > 0 && (
-            <span className="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-[#2374e1] px-1 text-[10px] font-bold text-white">
+            <span className="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
               {convo.unreadCount}
             </span>
           )}
@@ -241,7 +211,7 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
       >
         <MessageSquare className="w-5 h-5" />
         {totalUnread > 0 && (
-          <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-brand-primary text-[10px] font-bold text-black px-1">
+          <span className="absolute -top-1 -right-1 z-10 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-black bg-red-500 px-1 text-[10px] font-bold text-white shadow-[0_0_0_1px_rgba(0,0,0,0.35)]">
             {totalUnread > 99 ? '99+' : totalUnread}
           </span>
         )}
@@ -269,7 +239,7 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
             <MessageSquare className="w-4 h-4" />
             <span className="text-sm font-medium">Chats</span>
             {totalUnread > 0 && (
-              <span className="flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-brand-primary text-[10px] font-bold text-black px-1">
+              <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
                 {totalUnread > 99 ? '99+' : totalUnread}
               </span>
             )}

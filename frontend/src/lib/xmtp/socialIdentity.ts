@@ -6,6 +6,7 @@ import {
   getBasenameProfileByName,
   resolveBasenameAddress,
 } from '@/lib/basename/basename-api'
+import { fetchZoraProfile } from '@/lib/zora/client'
 
 const OPTIONAL_LOOKUP_TIMEOUT_MS = 1_200
 
@@ -57,28 +58,54 @@ export type PeerChatPresentation = {
  * Resolve DM peer label + avatar for chat list/header at XMTP connect time.
  * Uses Basename profile (display name + ENS avatar) with a bounded timeout.
  */
+function resolveZoraPresentation(
+  profile: Awaited<ReturnType<typeof fetchZoraProfile>> | null | undefined,
+): { name?: string; imageUrl?: string } | null {
+  if (!profile) return null
+  const handle = String(profile.handle ?? profile.username ?? profile.displayName ?? '').trim()
+  const avatar = String(profile.avatar?.medium ?? profile.avatar?.small ?? '').trim()
+  if (!handle && !avatar) return null
+  return {
+    ...(handle ? { name: handle } : {}),
+    ...(avatar ? { imageUrl: avatar } : {}),
+  }
+}
+
 export async function resolvePeerChatPresentation(
   address: string,
   truncateFallback: (address: string) => string,
 ): Promise<PeerChatPresentation> {
-  const profile = await withTimeout(
-    getBasenameProfile(address).catch(() => EMPTY_BASENAME_PROFILE),
-    OPTIONAL_LOOKUP_TIMEOUT_MS,
-    EMPTY_BASENAME_PROFILE,
-  )
+  const [profile, zoraProfile] = await Promise.all([
+    withTimeout(
+      getBasenameProfile(address).catch(() => EMPTY_BASENAME_PROFILE),
+      OPTIONAL_LOOKUP_TIMEOUT_MS,
+      EMPTY_BASENAME_PROFILE,
+    ),
+    withTimeout(fetchZoraProfile(address).catch(() => null), OPTIONAL_LOOKUP_TIMEOUT_MS, null),
+  ])
 
   const basename = profile.name?.trim() ?? null
+  const zoraPresentation = resolveZoraPresentation(zoraProfile)
+
   if (basename?.toLowerCase().endsWith('.base.eth')) {
     const shortHandle = basename.replace(/\.base\.eth$/i, '').trim()
-    const displayName = profile.displayName?.trim() || shortHandle
+    const displayName = profile.displayName?.trim() || shortHandle || zoraPresentation?.name
     return {
       name: displayName || truncateFallback(address),
-      imageUrl: profile.avatar?.trim() || undefined,
+      imageUrl: profile.avatar?.trim() || zoraPresentation?.imageUrl || undefined,
+    }
+  }
+
+  if (zoraPresentation?.name) {
+    return {
+      name: zoraPresentation.name,
+      imageUrl: zoraPresentation.imageUrl,
     }
   }
 
   return {
     name: truncateFallback(address),
+    imageUrl: zoraPresentation?.imageUrl,
   }
 }
 

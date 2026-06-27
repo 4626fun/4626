@@ -17,6 +17,16 @@ export type ChatOpenRequest =
       imageUrl?: string | null
       seedCommandId?: string | null
     }
+  | {
+      kind: 'existing'
+      conversationId: string
+      type: 'dm' | 'group'
+      name: string
+      peerInboxId?: string
+      peerAddress?: string
+      imageUrl?: string | null
+      seedCommandId?: string | null
+    }
 
 export function requestOpenChat(request: ChatOpenRequest): void {
   if (typeof window === 'undefined') return
@@ -40,6 +50,9 @@ export function isChatOpenRequest(value: unknown): value is ChatOpenRequest {
     return typeof candidate.peerAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(candidate.peerAddress)
   }
   if (candidate.kind === 'group') {
+    return typeof candidate.conversationId === 'string' && candidate.conversationId.trim().length > 0
+  }
+  if (candidate.kind === 'existing') {
     return typeof candidate.conversationId === 'string' && candidate.conversationId.trim().length > 0
   }
   return false

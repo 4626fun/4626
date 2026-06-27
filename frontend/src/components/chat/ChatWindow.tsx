@@ -35,6 +35,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { getAgentIdentity } from './agentIdentity'
 import { EthosAvatarScoreForAddress } from './EthosScorePill'
 import { useChatIdentity } from './useChatIdentity'
+import { useResolvedDmPeer } from './useResolvedDmPeer'
 import {
   CHAT_COMMAND_CATEGORIES,
   type ChatCommandCategoryId,
@@ -99,11 +100,6 @@ function initials(value: string): string {
 function truncateAddress(addr: string): string {
   if (addr.length <= 10) return addr
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
-}
-
-function isAddressDisplay(value: string | null | undefined): boolean {
-  const trimmed = (value ?? '').trim()
-  return /^0x[a-fA-F0-9]{4}(?:…|\.{3})[a-fA-F0-9]{4}$/.test(trimmed) || /^0x[a-fA-F0-9]{40}$/.test(trimmed)
 }
 
 function isDuplicateAddressLabel(value: string | null | undefined, addressValue: string | null | undefined): boolean {
@@ -288,7 +284,6 @@ export function ChatWindow({
     status,
     localStateResetRequired,
     resetLocalState,
-    resolveInboxAddress,
     inboxId,
   } = useXmtp()
 
@@ -296,7 +291,6 @@ export function ChatWindow({
   const [loading, setLoading] = useState(true)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
-  const [resolvedPeer, setResolvedPeer] = useState<{ inboxId: string; address: string | null } | null>(null)
   const [activeCategoryId, setActiveCategoryId] = useState<ChatCommandCategoryId>('vault')
   const [pendingCommand, setPendingCommand] = useState<ChatCommandDefinition | null>(null)
   const [lastCommandId, setLastCommandId] = useState<string | null>(null)
@@ -314,48 +308,24 @@ export function ChatWindow({
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const headerMenuRef = useRef<HTMLDivElement>(null)
-  const resolvingPeerInboxIdRef = useRef<string | null>(null)
   const localMessageSeqRef = useRef(0)
   const trackedShownButtonsRef = useRef<Set<string>>(new Set())
   const pendingCompletionRef = useRef<{ commandId: string; source: string } | null>(null)
 
-  useEffect(() => {
-    if (conversationType !== 'dm') return
-    if (peerAddress) return
-    if (!peerInboxId) return
-    let cancelled = false
-    if (resolvedPeer?.inboxId === peerInboxId) return
-    if (resolvingPeerInboxIdRef.current === peerInboxId) return
-    resolvingPeerInboxIdRef.current = peerInboxId
-    resolveInboxAddress(peerInboxId)
-      .then((addr) => {
-        if (cancelled) return
-        const normalizedAddr = typeof addr === 'string' ? addr.toLowerCase() : null
-        setResolvedPeer((prev) => {
-          if (prev?.inboxId === peerInboxId && prev.address === normalizedAddr) return prev
-          return { inboxId: peerInboxId, address: normalizedAddr }
-        })
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (resolvingPeerInboxIdRef.current === peerInboxId) {
-          resolvingPeerInboxIdRef.current = null
-        }
-      })
-    return () => { cancelled = true }
-  }, [conversationType, peerInboxId, peerAddress, resolveInboxAddress, resolvedPeer?.inboxId])
-
-  const dmPeerAddress =
-    conversationType === 'dm'
-      ? (peerAddress ?? (peerInboxId && resolvedPeer?.inboxId === peerInboxId ? resolvedPeer.address : null))
-      : null
-  const dmIdentity = useChatIdentity(dmPeerAddress, { fallbackName: conversationName })
+  const { peerAddress: resolvedDmPeerAddress } = useResolvedDmPeer({
+    peerAddress: conversationType === 'dm' ? peerAddress : null,
+    peerInboxId: conversationType === 'dm' ? peerInboxId : null,
+    enabled: conversationType === 'dm',
+  })
+  const dmPeerAddress = conversationType === 'dm' ? resolvedDmPeerAddress : null
+  const dmIdentity = useChatIdentity(dmPeerAddress, {
+    fallbackName: conversationName,
+    fallbackAvatar: conversationImageUrl ?? null,
+  })
   const agentIdentity = getAgentIdentity(dmPeerAddress)
-  const identityDisplayName = dmIdentity.source !== 'address' ? dmIdentity.displayName : null
-  const conversationNameLabel = !isAddressDisplay(conversationName) ? conversationName : null
   const headerName =
-    conversationType === 'dm' && dmPeerAddress
-      ? (agentIdentity?.name ?? identityDisplayName ?? conversationNameLabel ?? 'XMTP contact')
+    conversationType === 'dm'
+      ? (agentIdentity?.name ?? dmIdentity.displayName)
       : conversationName
   const identitySecondary = conversationType === 'dm' && dmPeerAddress && !isDuplicateAddressLabel(dmIdentity.secondary, dmPeerAddress)
     ? dmIdentity.secondary
@@ -368,7 +338,7 @@ export function ChatWindow({
   const peerCreatorCoinHref = peerCreatorCoinAddress ? `/explore/creators/base/${peerCreatorCoinAddress}` : null
   const peerProfileHref = peerCreatorCoinHref ?? (copyablePeerAddress ? `https://basescan.org/address/${copyablePeerAddress}` : null)
   const headerAvatar = conversationType === 'dm'
-    ? (conversationImageUrl ?? agentIdentity?.avatar ?? dmIdentity.avatar ?? null)
+    ? (agentIdentity?.avatar ?? dmIdentity.avatar ?? conversationImageUrl ?? null)
     : (conversationImageUrl ?? null)
   const headerInitials = initials(headerName)
   const normalizedSenderWallet = useMemo(() => {

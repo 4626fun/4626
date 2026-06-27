@@ -1,7 +1,9 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useIdentity } from '@/hooks/useIdentity'
+import { getBasenameProfileByName } from '@/lib/basename/basename-api'
 import { fetchZoraProfile } from '@/lib/zora/client'
+import { getBasenameAutocompleteCandidate } from '@/lib/xmtp/socialIdentity'
 
 type ChatIdentitySource = 'zora' | 'basename' | 'ens' | 'address'
 
@@ -15,6 +17,18 @@ type ChatIdentityResult = {
   avatar: string | null
   secondary: string | null
   source: ChatIdentitySource
+  loading: boolean
+}
+
+export function isTruncatedAddressLabel(value: string | null | undefined): boolean {
+  const trimmed = (value ?? '').trim()
+  return /^0x[a-fA-F0-9]{4}(?:…|\.{3})[a-fA-F0-9]{4}$/i.test(trimmed) || /^0x[a-fA-F0-9]{40}$/i.test(trimmed)
+}
+
+function resolveMeaningfulFallbackName(value: string | null | undefined): string | null {
+  const trimmed = String(value ?? '').trim()
+  if (!trimmed || isTruncatedAddressLabel(trimmed)) return null
+  return trimmed
 }
 
 function shortAddress(address: string): string {
@@ -60,12 +74,29 @@ function resolveZoraAvatar(profile: Awaited<ReturnType<typeof fetchZoraProfile>>
   return null
 }
 
+function resolveBasenameLabelFromProfile(
+  profile: Awaited<ReturnType<typeof getBasenameProfileByName>> | null | undefined,
+): string | null {
+  const rawName = String(profile?.name ?? '').trim()
+  if (!rawName) return null
+  const displayName = String(profile?.displayName ?? '').trim()
+  if (displayName) return displayName
+  if (rawName.toLowerCase().endsWith('.base.eth')) {
+    const shortHandle = rawName.replace(/\.base\.eth$/i, '').trim()
+    if (shortHandle) return shortHandle
+  }
+  return rawName
+}
+
 export function useChatIdentity(
   address: string | null | undefined,
   options: UseChatIdentityOptions = {},
 ): ChatIdentityResult {
   const normalizedAddress = normalizeAddress(address)
   const identity = useIdentity(normalizedAddress)
+  const meaningfulFallbackName = resolveMeaningfulFallbackName(options.fallbackName)
+  const basenameHandle = meaningfulFallbackName ? getBasenameAutocompleteCandidate(meaningfulFallbackName) : null
+
   const zoraProfile = useQuery({
     queryKey: ['chatIdentityZoraProfile', normalizedAddress],
     queryFn: async () => {
@@ -76,47 +107,105 @@ export function useChatIdentity(
     staleTime: 5 * 60_000,
   })
 
+  const basenameProfileByName = useQuery({
+    queryKey: ['chatIdentityBasenameProfileByName', basenameHandle],
+    queryFn: async () => {
+      if (!basenameHandle) return null
+      return getBasenameProfileByName(basenameHandle)
+    },
+    enabled: Boolean(basenameHandle),
+    staleTime: 5 * 60_000,
+  })
+
   return useMemo(() => {
     const fallbackAddress = normalizedAddress ? shortAddress(normalizedAddress) : 'XMTP contact'
-    const fallbackName = String(options.fallbackName ?? '').trim() || fallbackAddress
+    const fallbackName = meaningfulFallbackName ?? fallbackAddress
     const zoraName = resolveZoraDisplayName(zoraProfile.data)
     const zoraAvatar = resolveZoraAvatar(zoraProfile.data)
-    const basenameName = identity.basenameDisplayName ?? identity.basename
+    const basenameFromFallbackName = resolveBasenameLabelFromProfile(basenameProfileByName.data)
+    const basenameFromFallbackAvatar = String(basenameProfileByName.data?.avatar ?? '').trim() || null
+    const basenameName = identity.basenameDisplayName ?? identity.basename ?? basenameFromFallbackName
     const ensName = identity.ensName
     const addressName = fallbackAddress
+    const loading = Boolean(normalizedAddress && identity.loading) || zoraProfile.isLoading || basenameProfileByName.isLoading
+
+    const avatarFromFallbacks =
+      zoraAvatar ??
+      identity.basenameAvatar ??
+      identity.avatar ??
+      options.fallbackAvatar ??
+      basenameFromFallbackAvatar ??
+      null
 
     if (zoraName) {
       return {
         displayName: zoraName,
-        avatar: zoraAvatar ?? identity.basenameAvatar ?? identity.avatar ?? options.fallbackAvatar ?? null,
+        avatar: avatarFromFallbacks,
         secondary: compactUnique([basenameName, ensName, addressName]),
         source: 'zora',
+        loading,
       }
     }
 
     if (basenameName) {
       return {
         displayName: basenameName,
-        avatar: identity.basenameAvatar ?? identity.avatar ?? options.fallbackAvatar ?? null,
+        avatar: avatarFromFallbacks,
         secondary: compactUnique([ensName, addressName]),
         source: 'basename',
+        loading,
       }
     }
 
     if (ensName) {
       return {
         displayName: ensName,
-        avatar: identity.avatar ?? options.fallbackAvatar ?? null,
+        avatar: avatarFromFallbacks,
         secondary: compactUnique([addressName]),
         source: 'ens',
+        loading,
+      }
+    }
+
+    if (loading) {
+      return {
+        displayName: meaningfulFallbackName ?? (normalizedAddress ? addressName : fallbackName),
+        avatar: avatarFromFallbacks,
+        secondary: normalizedAddress && meaningfulFallbackName
+          ? compactUnique([meaningfulFallbackName, addressName])
+          : normalizedAddress
+            ? null
+            : meaningfulFallbackName,
+        source: 'address',
+        loading,
       }
     }
 
     return {
-      displayName: normalizedAddress ? addressName : fallbackName,
-      avatar: identity.avatar ?? options.fallbackAvatar ?? null,
-      secondary: normalizedAddress ? null : fallbackName,
+      displayName: meaningfulFallbackName ?? (normalizedAddress ? addressName : fallbackName),
+      avatar: avatarFromFallbacks,
+      secondary:
+        normalizedAddress && meaningfulFallbackName && lc(meaningfulFallbackName) !== lc(addressName)
+          ? compactUnique([meaningfulFallbackName, addressName])
+          : normalizedAddress
+            ? null
+            : meaningfulFallbackName,
       source: 'address',
+      loading,
     }
-  }, [identity.avatar, identity.basename, identity.basenameAvatar, identity.basenameDisplayName, identity.ensName, normalizedAddress, options.fallbackAvatar, options.fallbackName, zoraProfile.data])
+  }, [
+    basenameProfileByName.data,
+    basenameProfileByName.isLoading,
+    identity.avatar,
+    identity.basename,
+    identity.basenameAvatar,
+    identity.basenameDisplayName,
+    identity.ensName,
+    identity.loading,
+    meaningfulFallbackName,
+    normalizedAddress,
+    options.fallbackAvatar,
+    zoraProfile.data,
+    zoraProfile.isLoading,
+  ])
 }

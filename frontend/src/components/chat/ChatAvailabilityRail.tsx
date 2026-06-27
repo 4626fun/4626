@@ -24,6 +24,7 @@ import { toast } from '@/components/ui/Toast'
 import { CANONICAL_CSW_ADDRESS, CANONICAL_CSW_ALLOWED_OWNER_EOAS } from '@/wallet/canonicalWalletPolicy'
 import { EthosAvatarScoreBadge, EthosAvatarScoreForAddress, getEthosScorePalette, useEthosScore } from './EthosScorePill'
 import { useChatIdentity } from './useChatIdentity'
+import { useResolvedDmPeer } from './useResolvedDmPeer'
 
 type AgentRow = {
   creatorAddress: string
@@ -364,18 +365,40 @@ function ConversationUserRow(props: {
   onFriendAction?: (address: `0x${string}`, action: FriendAction) => void
 }) {
   const { conversation, onOpen, friendState = 'none', onFriendAction } = props
-  const peerAddress = isAddress(conversation.peerAddress) ? conversation.peerAddress : null
-  const identity = useChatIdentity(peerAddress ?? null, { fallbackName: conversation.name ?? null })
+  const { peerAddress: resolvedPeerAddress } = useResolvedDmPeer({
+    peerAddress: conversation.peerAddress,
+    peerInboxId: conversation.peerInboxId,
+    enabled: true,
+  })
+  const peerAddress = isAddress(resolvedPeerAddress ?? '') ? (resolvedPeerAddress as `0x${string}`) : null
+  const identity = useChatIdentity(peerAddress ?? resolvedPeerAddress, {
+    fallbackName: conversation.name ?? null,
+    fallbackAvatar: conversation.imageUrl ?? null,
+  })
   const name = identity.displayName || conversation.name || (peerAddress ? shortAddress(peerAddress) : 'XMTP contact')
+  const avatar = identity.avatar ?? conversation.imageUrl ?? null
 
   return (
     <RowShell
       label={`Open chat with ${name}`}
       onClick={() => {
         if (peerAddress) {
-          requestOpenChat({ kind: 'dm', peerAddress, nameHint: name, imageUrl: identity.avatar ?? conversation.imageUrl ?? null })
+          requestOpenChat({
+            kind: 'dm',
+            peerAddress,
+            nameHint: name,
+            imageUrl: avatar,
+          })
         } else {
-          requestOpenChat({ kind: 'group', conversationId: conversation.id, name: conversation.name || 'Conversation' })
+          requestOpenChat({
+            kind: 'existing',
+            conversationId: conversation.id,
+            type: conversation.type,
+            name,
+            peerInboxId: conversation.peerInboxId,
+            peerAddress: conversation.peerAddress,
+            imageUrl: avatar,
+          })
         }
         onOpen?.()
       }}
@@ -388,15 +411,15 @@ function ConversationUserRow(props: {
     >
       <RailAvatar
         name={name}
-        imageUrl={identity.avatar ?? conversation.imageUrl ?? null}
+        imageUrl={avatar}
         status="conversation"
-        ethosAddress={peerAddress}
+        ethosAddress={peerAddress ?? resolvedPeerAddress}
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <div className="truncate text-[12.5px] font-semibold text-zinc-100">{name}</div>
           {conversation.unreadCount > 0 ? (
-            <span className="rounded-full bg-brand-primary px-1.5 py-0.5 text-[9px] font-semibold text-white">
+            <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-semibold text-white">
               {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
             </span>
           ) : null}
