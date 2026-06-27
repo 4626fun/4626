@@ -429,34 +429,43 @@
   font-weight: 500;
 }
 
-/* Sidebar collapse controls */
+/* Sidebar collapse controls — compact footer row */
 .sidebar-collapse-controls {
   display: flex;
-  gap: 6px;
-  padding: 0 0.75rem 0.5rem;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem 0.75rem;
+  border-top: 1px solid var(--docs-border-subtle, var(--ifm-border-color));
 }
 
 .sidebar-collapse-controls__button {
   appearance: none;
-  flex: 1;
-  border: 1px solid var(--docs-border-subtle, var(--ifm-border-color));
+  border: none;
   background: transparent;
   color: var(--ifm-font-color-tertiary);
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 500;
   line-height: 1;
-  padding: 6px 8px;
-  border-radius: 6px;
+  padding: 0;
   cursor: pointer;
-  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+  transition: color 150ms ease;
 }
 
 .sidebar-collapse-controls__button:hover {
-  color: var(--ifm-font-color-base);
-  background: var(--docs-surface-2, var(--ifm-background-surface-color));
-  border-color: var(--docs-border-default, var(--ifm-border-color-strong));
+  color: var(--ifm-color-primary);
+}
+
+.sidebar-collapse-controls__sep {
+  color: var(--ifm-font-color-tertiary);
+  font-size: 0.75rem;
+  user-select: none;
+}
+
+.doc-sidebar-mobile-shell .sidebar-collapse-controls {
+  margin-top: 0.25rem;
+  padding-bottom: 0.5rem;
 }
 
 /* ============================================
@@ -929,68 +938,6 @@ details > :not(summary) {
 }
 
 /* ============================================
-   PERSONA SWITCHER
-   ============================================ */
-
-.persona-switcher {
-  padding: 12px 12px 10px;
-  border-bottom: 1px solid var(--docs-border-subtle, var(--ifm-border-color));
-  margin-bottom: 8px;
-}
-
-.persona-switcher__label {
-  display: block;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ifm-font-color-tertiary);
-  margin-bottom: 8px;
-}
-
-.persona-switcher__pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.persona-switcher__pill {
-  appearance: none;
-  border: 1px solid var(--docs-border-default, var(--ifm-border-color-strong));
-  background: transparent;
-  color: var(--ifm-font-color-secondary);
-  font-size: 0.75rem;
-  font-weight: 500;
-  line-height: 1;
-  padding: 6px 8px;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
-}
-
-.persona-switcher__pill:hover {
-  color: var(--ifm-font-color-base);
-  background: var(--docs-surface-2, var(--ifm-background-surface-color));
-}
-
-.persona-switcher__pill--active {
-  color: var(--ifm-color-primary);
-  border-color: var(--docs-accent-border, rgba(75, 139, 245, 0.35));
-  background: var(--docs-accent-muted, var(--ifm-color-primary-soft));
-}
-
-.persona-switcher__desc {
-  margin: 8px 0 0;
-  font-size: 0.75rem;
-  line-height: 1.45;
-  color: var(--ifm-font-color-secondary);
-}
-
-.doc-sidebar-mobile-shell .persona-switcher {
-  padding-top: 8px;
-}
-
-/* ============================================
    TOC RAIL + PAGE ACTIONS
    ============================================ */
 
@@ -1240,18 +1187,6 @@ details > :not(summary) {
     text-align: center;
   }
 
-  .doc-sidebar-mobile-shell .persona-switcher__pills {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    padding-bottom: 2px;
-  }
-
-  .doc-sidebar-mobile-shell .persona-switcher__pills::-webkit-scrollbar {
-    display: none;
-  }
-
   .table-wrap table th:first-child,
   .table-wrap table td:first-child {
     position: static;
@@ -1331,10 +1266,6 @@ details > :not(summary) {
 
   .doc-page-actions--mobile .doc-page-actions__button {
     flex-basis: 100%;
-  }
-
-  .sidebar-collapse-controls {
-    flex-direction: column;
   }
 }
 
@@ -1535,7 +1466,6 @@ details > :not(summary) {
   .table-of-contents,
   .doc-page-actions,
   .doc-feedback,
-  .persona-switcher,
   .reading-progress,
   .doc-meta,
   .doc-edition-banner,

@@ -119,7 +119,7 @@ const config: Config = {
         {
           type: 'docSidebar',
           sidebarId: 'docs',
-          label: 'Docs',
+          label: 'Menu',
           position: 'left',
         },
         {
@@ -128,8 +128,13 @@ const config: Config = {
           position: 'right',
         },
         {
-          to: '/reference/glossary',
-          label: 'Glossary',
+          to: '/getting-started',
+          label: 'Learn',
+          position: 'right',
+        },
+        {
+          to: '/contracts',
+          label: 'Contracts',
           position: 'right',
         },
         {

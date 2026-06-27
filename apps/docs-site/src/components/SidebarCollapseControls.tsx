@@ -29,6 +29,7 @@ export function setAllSidebarCategories(collapsed: boolean): void {
   }
 }
 
+/** Collapse / expand all sidebar categories — compact utility row at sidebar bottom. */
 export default function SidebarCollapseControls(): React.JSX.Element | null {
   const isBrowser = useIsBrowser();
 
@@ -42,13 +43,16 @@ export default function SidebarCollapseControls(): React.JSX.Element | null {
         type="button"
         className="sidebar-collapse-controls__button"
         onClick={() => setAllSidebarCategories(true)}>
-        Collapse all
+        Collapse
       </button>
+      <span className="sidebar-collapse-controls__sep" aria-hidden="true">
+        ·
+      </span>
       <button
         type="button"
         className="sidebar-collapse-controls__button"
         onClick={() => setAllSidebarCategories(false)}>
-        Expand all
+        Expand
       </button>
     </div>
   );

@@ -14,7 +14,6 @@ function DocSidebarMobileSecondaryMenu({sidebar, path}: Props): React.JSX.Elemen
 
   return (
     <div className="doc-sidebar-mobile-shell">
-      <SidebarCollapseControls />
       <ul className={clsx(ThemeClassNames.docs.docSidebarMenu, 'menu__list')}>
         <DocSidebarItems
           items={sidebar}
@@ -30,6 +29,7 @@ function DocSidebarMobileSecondaryMenu({sidebar, path}: Props): React.JSX.Elemen
           level={1}
         />
       </ul>
+      <SidebarCollapseControls />
     </div>
   );
 }
