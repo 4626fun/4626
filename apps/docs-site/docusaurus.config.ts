@@ -160,35 +160,35 @@ const config: Config = {
       style: 'dark',
       links: [
         {
-          title: 'Docs',
+          title: 'Learn',
           items: [
             {label: 'What is 4626?', to: '/getting-started'},
-            {label: 'Launch checklist', to: '/guides/greenfield-checklist'},
             {label: 'Fees & lottery', to: '/overview/how-it-works'},
+            {label: 'Solana share bridge', to: '/overview/solana-share-mesh'},
             {label: 'Glossary', to: '/reference/glossary'},
-            {label: 'Addresses', to: '/reference/addresses'},
-            {label: 'Contracts', to: '/contracts'},
           ],
         },
         {
-          title: 'Legal',
+          title: 'Launch',
           items: [
+            {label: 'Launch checklist', to: '/guides/greenfield-checklist'},
+            {label: 'Strategy bundle', to: '/guides/strategy-bundle'},
+            {label: 'Contract addresses', to: '/reference/addresses'},
+            {label: 'Smart contracts', to: '/contracts'},
+          ],
+        },
+        {
+          title: 'Connect',
+          items: [
+            {label: '4626.fun', href: 'https://4626.fun'},
+            {label: 'Launch app', href: 'https://app.4626.fun/deploy/vault'},
+            {label: 'GitHub', href: 'https://github.com/wenakita/4626'},
             {label: 'Terms', to: '/terms'},
             {label: 'Privacy', to: '/privacy'},
           ],
         },
-        {
-          title: 'Links',
-          items: [
-            {label: '4626.fun', href: 'https://4626.fun'},
-            {
-              label: 'GitHub',
-              href: 'https://github.com/wenakita/4626',
-            },
-          ],
-        },
       ],
-      copyright: `© ${new Date().getFullYear()} 4626.fun · Built on Base`,
+      copyright: `© ${new Date().getFullYear()} 4626.fun`,
     },
     prism: {
       theme: prismThemes.github,
