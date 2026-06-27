@@ -1416,3 +1416,115 @@ Mode: audit-only consolidation. No product/code fixes applied.
 | Python whitespace/conflict-marker checker over all four allowed audit docs | 0 | PASS — checked 4 files; 0 trailing-whitespace errors, 0 conflict markers, all files have final newlines. |
 
 No implementation test suites were rerun in this consolidation because the task was report consolidation, not remediation, and the existing validation log already records the relevant gate outcomes.
+---
+
+## LAUNCH-001 focused recheck — 2026-06-27
+
+Mode: LAUNCH-001 only. No implementation code modified. P2/P3 findings were not remediated.
+
+### Evidence inspected
+
+- `docs/audits/deep-risk-audit-2026-06.md` LAUNCH-001 entry.
+- `docs/audits/deep-risk-audit-2026-06-validation-log.md` prior launch-readiness output.
+- `frontend/scripts/ops/verify-akita-prelaunch-readiness.ts` production check implementation.
+- `docs/_internal/operations/akita/akita-full-stack-prelaunch.md` expected Vultr/Vercel env/runbook state.
+- `frontend/server/solana-provisioner/README.md` provisioner reverse-proxy/tunnel runbook.
+- `frontend/.env.example` Vercel/provisioner/orchestrator env references.
+
+### Fresh direct diagnostics
+
+| Command | Exit | Result |
+|---------|------|--------|
+| `curl -sS -D - https://orchestrator.4626.fun/healthz` | 0 | HTTP 200 from `server: Vercel`; `content-disposition: inline; filename="index.html"`; body begins `<!doctype html>`. This is Vercel SPA HTML, not orchestrator JSON. |
+| `curl -sS -D - https://provisioner.4626.fun/healthz` | 0 | HTTP 200 from `server: Vercel`; `content-disposition: inline; filename="index.html"`; body begins `<!doctype html>`. This is Vercel SPA HTML, not provisioner JSON. |
+| Python `socket.getaddrinfo` for both hostnames | 0 | Both `orchestrator.4626.fun` and `provisioner.4626.fun` resolve to Vercel IPs `216.150.1.193` and `216.150.16.193`. |
+| `pnpm -C frontend ops:verify-akita-prelaunch --production` | 1 | Fails. LAUNCH-001 symptoms still present: orchestrator health HTTP 200 but not JSON, orchestrator `/reconcile` POSTs return 405, provisioner health has `payerHealthy=undefined`, provisioner DNS says it may point at Vercel SPA, Vercel chain reconcile does not reach completed/executed state. |
+
+### Fresh prelaunch command output
+
+```text
+> 4626-web@1.12.0 ops:verify-akita-prelaunch /home/akitav2/projects/4626/frontend
+> tsx scripts/ops/verify-akita-prelaunch-readiness.ts --production
+
+
+=== AKITA full-stack pre-launch readiness ===
+
+Creator coin (unchanged): 0x5b674196812451b7cec024fe9d22d2c0b172fa75
+Current stack snapshot: vault 0x82C06EaAE27B1Ca31fA29F22341A162A670A4471 / share 0x4df30fFfDA1D4A81bcf4DC778292Be8Ff9752a57
+Pipe A batcher: 0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1
+
+--- Platform (contracts + tests) ---
+✓ pipe_a_batcher:   ] | } | Pipe A batcher readiness: PASS
+✗ release_target_guard: (exit 1)
+✓ hook_mainnet_canonical: Recommended SOLANA_HOOK_IX_SCHEMA: canonical |  | PASS: live program uses relay_entries / settle_fees
+✓ vitest_pipe_a_wiring:       Tests  53 passed (53) |    Start at  14:09:23 |    Duration  918ms (transform 119ms, setup 35ms, import 508ms, tests 826ms, environment 0ms)
+✓ forge_share_oft_peer: Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 8.00ms (1.54ms CPU time) |  | Ran 1 test suite in 15.05ms (8.00ms CPU time): 6 tests passed, 0 failed, 0 skipped (6 total tests)
+
+--- Vultr (orchestrator + provisioner via public HTTPS) ---
+✗ vultr_orchestrator_health: HTTP 200
+✗ vultr_orchestrator_settle_fees: HTTP 405: ""
+✗ vultr_orchestrator_winner_relay: HTTP 405: ""
+✗ vultr_relay_entries_paused: Expected action_disabled:relay_entries, got 405 ""
+✗ vultr_provisioner_health: provisioner payerHealthy=undefined
+✗ vultr_provisioner_dns: Provisioner may be pointing at Vercel SPA — fix DNS A-record to Vultr host
+
+--- Vercel → Vultr control plane ---
+✗ vercel_solana_reconcile_chain: HTTP 200: {"success":true,"data":{"workflow":"solana-orchestrator","action":"settle_fees","checkpointKey":"prelaunch-1782594564801
+✓ vercel_solana_infra_status: readyForAutoRegistration=true blockers=[]
+
+--- Solana share mesh (reuse for AKITA redeploy finalize) ---
+  oftStore:     G3rfXFKvARH8emUVkiu6RrdSkXZQFGfsqKbF9P7EqXeN
+  share mint:   5puVV8bQZp4YoEfGq4RitQFRVC3SJiHBSydFuFZUXHQv (■AKITA)
+  peer bytes32: 0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f
+
+--- Deferred until after redeploy (informational) ---
+✓ kpr_preflight_share_mesh_deferral: EXPECTED deferral: current ShareOFT mapping is not on SolanaBridgeAdapter; Pipe A share mesh does not need adapter registration pre-deploy
+
+--- Creator entitlements (DB) ---
+✓ strategy_entitlement: active/pending: ajna_sleeve, charm_active_lp, solana_bridge_strategy, solana_ovault_mesh
+✓ strategy_solana_mesh: Solana mesh entitlement present
+
+--- Your checklist (before you launch deploy) ---
+  1. Execution-ready wallet (parent CSW + embedded owner on app track)
+  2. ≥100,000,000 AKITA creator tokens approved for vault deposit
+  3. **`vault_full_deploy`** active/pending (or equivalent comp: charm + ajna + solana_ovault_mesh)
+  4. Optional fork dry-run: pnpm -C frontend run dev:deploy-dry-run
+  5. Launch at https://app.4626.fun/deploy/vault with AKITA creator coin
+  6. Use a NEW deploymentVersion salt (not grandfathered addresses)
+
+--- After Phase 1 (new ShareOFT address known) — operator ---
+  • LZ Base init-config + wire on the NEW CreatorShareOFT (symbol ■AKITA)
+  • Safe: configureCreatorMesh on OVaultHubComposer
+  • Vultr: update SOLANA_SHARE_OFT_MAPPING to new ShareOFT + share mesh mint; restart orchestrator
+  • Update AKITA_DEFAULTS + keeper backfill + Vercel env
+  • Docs: docs/operations/akita-full-stack-prelaunch.md
+
+Blockers: release_target_guard, vultr_orchestrator_health, vultr_orchestrator_settle_fees, vultr_orchestrator_winner_relay, vultr_relay_entries_paused, vultr_provisioner_health, vultr_provisioner_dns, vercel_solana_reconcile_chain
+
+ ELIFECYCLE  Command failed with exit code 1.
+```
+
+Note: `release_target_guard` also failed in the fresh run, but that is outside LAUNCH-001 and was not investigated or remediated in this LAUNCH-001-only pass.
+
+### Classification
+
+LAUNCH-001 is confirmed **external DNS/infra**, not repo-side code. The repo-side prelaunch script is correctly detecting that public service hostnames route to Vercel instead of the Vultr/provisioner services.
+
+### External remediation steps recorded
+
+1. Verify local Vultr services:
+   - `solana-keeper-orchestrator` on `127.0.0.1:8789/healthz` returns JSON `ok: true`.
+   - `solana-route-provisioner` on `127.0.0.1:8788/healthz` returns JSON `ok: true` and `payerHealthy: true`.
+2. Configure nginx/Caddy/Cloudflare Tunnel:
+   - `orchestrator.4626.fun` routes HTTPS to the orchestrator service on port 8789.
+   - `provisioner.4626.fun` routes HTTPS to the provisioner service on port 8788.
+3. Update DNS away from Vercel to the Vultr/proxy/tunnel targets.
+4. Verify public `/healthz` endpoints return JSON, not Vercel `index.html`:
+   - `curl https://orchestrator.4626.fun/healthz`
+   - `curl https://provisioner.4626.fun/healthz`
+5. Verify authenticated orchestrator `/reconcile` behavior:
+   - `settle_fees` and `winner_relay` return 200.
+   - `relay_entries` returns 503 `action_disabled:relay_entries` until B2 pool live.
+6. Rerun `pnpm -C frontend ops:verify-akita-prelaunch --production` and require exit 0 for LAUNCH-001.
+
+No repo implementation code was changed.

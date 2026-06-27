@@ -18,9 +18,10 @@ Canonical finalization note: followups below are tiered from the merged, dedupli
 ### F-001 — LAUNCH-001: DNS A-records for orchestrator + provisioner (P0, block launch — external DNS/infra-owned until production prelaunch probe passes)
 
 - **Owner**: ops / infrastructure (external, not repo code)
-- **Action**: Correct DNS A-records for `orchestrator.4626.fun` and `provisioner.4626.fun` to point at the Vultr hosts, not Vercel.
-- **Verification**: `curl https://orchestrator.4626.fun/healthz` returns JSON `{ok: true}`. `curl https://provisioner.4626.fun/healthz` returns JSON with `payerHealthy: true`. `pnpm -C frontend ops:verify-akita-prelaunch --production` exits 0 with 0 blockers.
-- **Status**: open — only active launch blocker. All 7 failing prelaunch gates trace to this root cause.
+- **Confirmed cause (2026-06-27)**: external DNS/infra, not repo-side code. `orchestrator.4626.fun/healthz` returns Vercel SPA HTML (`index.html`) instead of orchestrator JSON. `provisioner.4626.fun/healthz` returns Vercel SPA HTML instead of provisioner JSON. Both hostnames resolve to Vercel IPs `216.150.1.193` and `216.150.16.193`. `pnpm -C frontend ops:verify-akita-prelaunch --production` exits 1.
+- **Action**: Do not patch repo code for this blocker. Verify local Vultr services first: `solana-keeper-orchestrator` reachable on `127.0.0.1:8789/healthz` and `solana-route-provisioner` reachable on `127.0.0.1:8788/healthz`. Configure nginx/Caddy/Cloudflare Tunnel so `orchestrator.4626.fun` routes to port 8789 and `provisioner.4626.fun` routes to port 8788. Update DNS away from Vercel to the Vultr/proxy/tunnel targets.
+- **Verification**: Public `curl https://orchestrator.4626.fun/healthz` returns JSON `{ok: true}` rather than Vercel `index.html`. Public `curl https://provisioner.4626.fun/healthz` returns JSON with `ok: true` and `payerHealthy: true`, not Vercel `index.html`. Authenticated orchestrator `/reconcile` checks work (`settle_fees` and `winner_relay` 200; `relay_entries` 503 `action_disabled:relay_entries`). `pnpm -C frontend ops:verify-akita-prelaunch --production` exits 0 for LAUNCH-001.
+- **Status**: open — only active P0 launch blocker. Fresh production verification still exits 1 with LAUNCH-001 symptoms confirmed. A separate fresh `release_target_guard` failure also appeared, but that is outside LAUNCH-001 and is not remediated here.
 
 ### F-002 — APIAUTH-001: Unthrottled mutating GET on /api/accounts/me (P2, fix before launch)
 
