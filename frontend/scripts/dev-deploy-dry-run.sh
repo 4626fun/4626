@@ -262,14 +262,11 @@ ANVIL_LOG_FILE="${TMPDIR:-/tmp}/4626-deploy-dry-run-anvil.log"
 DEV_REDIRECT_LOG_FILE="${TMPDIR:-/tmp}/4626-deploy-dry-run-redirect.log"
 export VITE_ALLOW_CONTRACT_OVERRIDES="${VITE_ALLOW_CONTRACT_OVERRIDES:-0}"
 export ALLOW_API_CONTRACT_OVERRIDES="${ALLOW_API_CONTRACT_OVERRIDES:-0}"
-# WSL2: bind 0.0.0.0 so Windows browsers can reach the dev server via localhost
-# forwarding. Override with VITE_DEV_SERVER_HOST=localhost to keep loopback-only.
+# WSL2: bind localhost so Windows http://localhost:5174 forwards into WSL (secure
+# context for Privy embedded wallets). Set VITE_DEV_SERVER_HOST=true only when
+# you need the WSL LAN IP fallback (DEPLOY_DRY_RUN_USE_WSL_LAN_ORIGIN=1).
 if [[ -z "${VITE_DEV_SERVER_HOST-}" ]]; then
-  if grep -qi microsoft /proc/version 2>/dev/null || [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
-    export VITE_DEV_SERVER_HOST="true"
-  else
-    export VITE_DEV_SERVER_HOST="localhost"
-  fi
+  export VITE_DEV_SERVER_HOST="localhost"
 fi
 # Use a dedicated deterministic namespace on local forks so dry-runs do not
 # collide with live Base deployments that share the repo's normal version tag.
@@ -474,13 +471,21 @@ if [[ -n "${VITE_MARKETING_ORIGIN:-}" ]]; then
   export VITE_MARKETING_ORIGIN="$(normalize_local_origin_port "$VITE_MARKETING_ORIGIN" "$DEV_PORT")"
 fi
 
-# WSL→Windows: pin client env to the LAN IP Vite prints under "Network:" so
-# Privy/OAuth redirects match the URL Windows browsers actually open.
+# Deploy dry-run: keep browser URL, OAuth redirects, and Privy on localhost unless
+# explicitly opting into the WSL LAN IP fallback lane.
+USE_WSL_LAN_ORIGIN="${DEPLOY_DRY_RUN_USE_WSL_LAN_ORIGIN:-0}"
 WSL_LAN_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
-if [[ -n "$WSL_LAN_IP" ]] && { [[ "${VITE_DEV_SERVER_HOST:-}" == "true" ]] || [[ "${VITE_DEV_SERVER_HOST:-}" == "1" ]]; }; then
+if [[ "$USE_WSL_LAN_ORIGIN" == "1" && -n "$WSL_LAN_IP" ]]; then
+  export VITE_DEV_SERVER_HOST="${VITE_DEV_SERVER_HOST:-true}"
   export VITE_APP_ORIGIN="http://${WSL_LAN_IP}:${DEV_PORT}"
   export VITE_MARKETING_ORIGIN="http://${WSL_LAN_IP}:${DEV_PORT}"
   export VITE_PRIVY_ALLOWED_ORIGINS="http://localhost:${DEV_PORT} http://127.0.0.1:${DEV_PORT} http://${WSL_LAN_IP}:${DEV_PORT}"
+else
+  export APP_ORIGIN="http://localhost:${DEV_PORT}"
+  export VITE_APP_ORIGIN="http://localhost:${DEV_PORT}"
+  export VITE_MARKETING_ORIGIN="http://localhost:${DEV_PORT}"
+  export VITE_PRIVY_ALLOWED_ORIGINS="http://localhost:${DEV_PORT} http://127.0.0.1:${DEV_PORT}"
+  export VITE_PRIVY_CLIENT_ID_ON_LOOPBACK="0"
 fi
 
 DEFAULT_DRY_RUN_PORT=5174
@@ -533,20 +538,17 @@ print_local_dev_access_hints() {
   local wsl_ip
   wsl_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
   echo ""
+  echo "Open: http://localhost:${port}/waitlist"
   if [[ -n "$wsl_ip" && "$host_arg" == "0.0.0.0" ]]; then
-    echo "PRIMARY (WSL→Windows): http://${wsl_ip}:${port}/waitlist"
-    echo "Also try:            http://localhost:${port}/waitlist"
-    echo ""
-    echo "Privy embedded wallet (deploy/swap signing) needs a secure browser context."
-    echo "  • Prefer http://localhost:${port} with WSL mirrored networking, OR"
-    echo "  • Use the WSL IP URL above for waitlist/email OTP (embedded wallet auto-disabled)."
-  else
-    echo "Open: http://localhost:${port}/waitlist"
+    echo "LAN fallback: http://${wsl_ip}:${port}/waitlist (HTTP LAN IP disables Privy embedded wallet)"
   fi
   echo "Vite bind host: ${host_arg} (VITE_DEV_SERVER_HOST=${VITE_DEV_SERVER_HOST})"
   if grep -qi microsoft /proc/version 2>/dev/null || [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
-    echo "WSL: use the PRIMARY URL above if Windows localhost is blank or refused."
-    echo "     Optional: [wsl2] networkingMode=mirrored in %UserProfile%\\.wslconfig, then wsl --shutdown."
+    echo "WSL: open http://localhost:${port} in your Windows browser (WSL localhost forwarding)."
+    echo "If connection refused, add to %UserProfile%\\.wslconfig:"
+    echo "  [wsl2]"
+    echo "  networkingMode=mirrored"
+    echo "Then run: wsl --shutdown"
   fi
   echo ""
 }
