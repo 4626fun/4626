@@ -7,7 +7,17 @@ sidebar_position: 3
 
 Product and onchain terms for 4626 vaults.
 
-**New here?** Read [Getting started](/getting-started) first — it explains creator coin vs shares in plain language.
+**New here?** Read [Getting started](/getting-started) first.
+
+## Common questions
+
+**Creator coin vs share?** — Creator coin is your Zora token (goes *into* the vault). Shares (`▢` / `■`) are *claims on* the vault. Different addresses. See [Getting started — three names](/getting-started#three-names-youll-see).
+
+**What’s the $499 bundle?** — Pays to unlock deploy plus Charm, Ajna, Solana bridge entitlement, and Meteora setup. Not your token deposit. [Strategy bundle](/guides/strategy-bundle).
+
+**Fair auction / CCA?** — Continuous Clearing Auction: open price discovery for shares at launch. [CCA strategy](/contracts/strategies/cca-launch).
+
+**Pipe A?** — Post-auction step that bridges ~30% of shares to Solana. [Solana share mesh](/overview/solana-share-mesh).
 
 ## Tokens
 
@@ -27,7 +37,7 @@ Product and onchain terms for 4626 vaults.
 
 **PPS (price per share)** — Vault assets ÷ share supply; accretes when fees and revenue enter the vault.
 
-**Pipe A** — Greenfield Phase 2b step that bridges a slice of shares to Solana at finalize (share mesh).
+**Pipe A** — After the auction, finalize can bridge ~30% of shares to Solana ([share mesh](/overview/solana-share-mesh)).
 
 ## Fee lanes
 

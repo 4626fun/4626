@@ -5,11 +5,11 @@ sidebar_position: 1
 
 # Contract Addresses
 
-Deployed contract addresses for 4626.
+Deployed contract addresses for 4626 on Base mainnet (**v1.14.1**).
 
-> **Canonical source.** This file is the single source of truth for live deployed
-> addresses on Base mainnet (**v1.14.1** greenfield target). When anything else
-> disagrees with this file, **this file wins**.
+**New here?** You don’t need this page to launch — use [Getting started](/getting-started). Come here when you need **shared infrastructure** addresses (batcher, factories, registry). **Your** vault, wrapper, and share addresses are unique per creator and appear in the app / onchain events after deploy.
+
+> **Canonical source.** When anything disagrees with this file, **this file wins**.
 
 ## Base (Hub Chain)
 

@@ -998,3 +998,191 @@ The audit docs were moved from `docs/audits/` to `docs/_internal/audits-workpape
 | LAUNCH-001 | P0 | external DNS/infra | external (repo code correct, DNS A-records wrong) |
 
 No P0/P1 findings in APIAUTH (001–019), WALLET (001–004), or RACE (001–004) namespaces — all are Medium/Low or below.
+
+---
+
+## Backtest Feature Deep Audit — Validation Log
+
+### Commands run
+
+#### 1. Unit tests: backtestJobs
+
+```
+cd /home/akitav2/projects/4626 && pnpm -C frontend exec vitest run server/agents/eliza/plugins/virtuals/backtestJobs.test.ts
+```
+- Exit code: 0
+- Result: 1 test file, 7 tests passed (7ms)
+- Output: `✓ server/agents/eliza/plugins/virtuals/backtestJobs.test.ts (7 tests) 7ms`
+
+#### 2. Unit tests: alfaclub + virtuals suite
+
+```
+cd /home/akitav2/projects/4626 && pnpm -C frontend exec vitest run server/_lib/alfaclub server/agents/eliza/plugins/virtuals
+```
+- Exit code: 0
+- Result: 32 test files, 404 tests passed (506ms)
+- Notable: counterTradeTicker.test.ts (4), keeprAlfaClubSplit.test.ts (3), alfaclubChatHelp.test.ts (5), counterTradeRunner.test.ts (5), positionProximity.test.ts (5), refreshTokenRetirement.test.ts (4), creatorRoomLinks.test.ts (5), paymentGate.test.ts (4), creatorDisplayLabels.test.ts (3), hermitCommandCooldown.test.ts (3), hermitRoomWelcome.test.ts (2), backtestJobs.test.ts (7), plus 20 other files
+- No failures, no skips
+
+#### 3. CLI backtest: 24h BTC
+
+```
+cd /home/akitav2/projects/4626/frontend && pnpm exec tsx scripts/backtest-counter-rebalance.ts --symbol BTC --interval auto --window-hours 24 --leverage 20
+```
+- Exit code: 0
+- Output: `interval=1m windowHours=24 candles=1440 source=hyperliquid_chunked coverage=100.0%`
+- Artifacts:
+  - `tmp/backtests/counter-rebalance-BTC-x20-1782496538151.csv` — 136 lines (135 sweep rows + header), commingleViolationCount=0 in all rows
+  - `tmp/backtests/counter-rebalance-BTC-x20-1782496538151-rebalances.csv` — 490 lines, all rows have noCrossLegTransfer=true
+  - `tmp/backtests/counter-rebalance-BTC-x20-1782496538151-series.json` — 1440 data points, dataQuality.source=hyperliquid_chunked, coveragePct=1, summary.commingleViolationCount=0, summary.liquidationCount=0
+
+#### 4. CLI backtest: 90-day BTC
+
+```
+cd /home/akitav2/projects/4626/frontend && pnpm exec tsx scripts/backtest-counter-rebalance.ts --symbol BTC --interval auto --window-hours 2160 --leverage 20
+```
+- Exit code: 0
+- Output: `interval=1m windowHours=2160 candles=123448 source=supabase coverage=95.3%`
+- Artifacts:
+  - `tmp/backtests/counter-rebalance-BTC-x20-1782496641627.csv` — 136 lines (135 sweep rows + header), commingleViolationCount=0 in all rows, liquidationCount=1 in top rows (valid simulation outcome)
+  - `tmp/backtests/counter-rebalance-BTC-x20-1782496641627-rebalances.csv` — 412 lines, all rows have noCrossLegTransfer=true
+  - `tmp/backtests/counter-rebalance-BTC-x20-1782496641627-series.json` — 123,448 data points, dataQuality.source=supabase, coveragePct=0.953
+
+### Source files inspected
+
+- `frontend/api/_handlers/v1/alfaclub/_backtest-run.ts` — full read (220 lines)
+- `frontend/api/_handlers/v1/alfaclub/_backtest-sweep.ts` — full read (161 lines)
+- `frontend/api/_handlers/v1/alfaclub/_backtest-series.ts` — full read
+- `frontend/api/_handlers/v1/alfaclub/_backtest-audit.ts` — full read
+- `frontend/api/_handlers/v1/alfaclub/_backtest-markets.ts` — full read
+- `frontend/server/_lib/alfaclub/backtestCounterRebalance.ts` — full read (~880 lines)
+- `frontend/server/_lib/alfaclub/backtestIntervalPolicy.ts` — full read (55 lines)
+- `frontend/server/_lib/alfaclub/backtestMarketBars.ts` — full read (~270 lines)
+- `frontend/server/_lib/alfaclub/backtestSeriesDownsample.ts` — full read (26 lines)
+- `frontend/server/_lib/alfaclub/bybitKlines.ts` — full read
+- `frontend/server/_lib/alfaclub/binanceKlines.ts` — read lines 1-100
+- `frontend/scripts/backtest-counter-rebalance.ts` — full read
+- `frontend/scripts/cache-backtest-minute-bars.ts` — read lines 220-250
+- `frontend/server/agents/eliza/plugins/virtuals/backtestJobs.ts` — full read
+- `frontend/server/agents/eliza/plugins/virtuals/service.ts` — read lines 220-277
+- `frontend/server/agents/eliza/plugins/virtuals/paymentGate.ts` — grep results
+- `frontend/src/pages/Arena.tsx` — read lines 60-79, 880-1040
+- `frontend/src/components/arena/ArenaBacktestAnalysis.tsx` — read lines 140-195
+
+### Endpoint matrix cross-reference
+
+The endpoint matrix (`deep-risk-audit-2026-06-endpoint-matrix.md`, Shard C, lines 149-153) already classifies all 5 backtest routes:
+- `alfaclub/backtest-run` — APIAUTH-014 (PASS — rate limit gap, 5/min per user+IP)
+- `alfaclub/backtest-sweep` — APIAUTH-016 (PASS — rate limit gap, IP-only)
+- `alfaclub/backtest-series` — APIAUTH-016 (PASS — rate limit gap, IP-only)
+- `alfaclub/backtest-audit` — APIAUTH-016 (PASS — rate limit gap, IP-only)
+- `alfaclub/backtest-markets` — APIAUTH-016 (PASS — rate limit gap, IP-only)
+
+BACKTEST-001 confirms these classifications are accurate. No new APIAUTH findings issued.
+
+### P0 stop condition results
+
+| Stop condition | Triggered? | Evidence |
+|---|---|---|
+| Anonymous callers trigger compute-heavy backtest | NO | `_backtest-run.ts:94-100` requires `verifyPrivyForAccounts`; 401 on failure; rate limit 5/min per user+IP |
+| 90-day minute cache misses silently present as minute-fidelity | NO | `resolvedInterval` surfaced in API response + Arena UI; 90-day CLI test showed source=supabase coverage=95.3% with interval=1m |
+| No-commingle invariant violated | NO | All rebalance CSV rows have noCrossLegTransfer=true; all sweep rows have commingleViolationCount=0 |
+| Artifacts empty or series has zero points without reason | NO | All 6 artifacts non-empty; sweep CSVs 136 lines, rebalance CSVs 490/412 lines, series JSON 1440/123448 points |
+
+### Backtest finding inventory
+
+| Finding ID | Severity | Owner | Classification |
+|---|---|---|---|
+| BACKTEST-001 | P2 (Low-Medium) | repo/code | GET endpoints unauthenticated (already APIAUTH-016) |
+| BACKTEST-002 | P2 (Low-Medium) | repo/code | No timeout on Eliza chat backtest path |
+| BACKTEST-003 | P2 (Low) | repo/code | CLI script missing loadEnvFile() |
+| BACKTEST-004 | P2 (Low) | repo/code | API stdout trimmed to 8000 chars |
+| BACKTEST-005 | P3 (Informational) | repo/code | 5m/15m degradation display labeling |
+
+No P0 or P1 findings in the BACKTEST namespace. All P2/P3 findings are hardening and UX improvements, not correctness or launch blockers.
+
+---
+
+## Remediation status — DRIFT-001 through DRIFT-004 (2026-06-26)
+
+Remediation mode: documentation-only fixes for confirmed P0/P1 drift findings. No implementation code or product behavior changed.
+
+### Files edited
+
+| DRIFT | File | What changed |
+|---|---|---|
+| DRIFT-001 | `frontend/docs/waitlist-accounts-architecture.md:41` | Replaced "canonical path is sub-account setup" with "canonical path is parent CSW + Privy embedded-owner signer (`legacy-owner-install`)"; removed "parent CSW is not the execution address"; marked sub-account as flag-gated swap-only fallback |
+| DRIFT-002 | `frontend/docs/waitlist-accounts-architecture.md:43-44` | Changed "resume sub-account setup" → "resume embedded-owner signing setup for the canonical parent CSW"; changed readiness gate from "sub-account persisted + signer configured" to parent CSW + embedded EOA owner confirmation |
+| DRIFT-003 | `docs/4626-connection-methods.md` §3,§4,§10,§11,§12 | Rewrote §3 "Why direct owner delegation isn't ideal" → "Why the user-side path uses the parent CSW directly"; added default-flow callout to §4 batched ceremony; rewrote §10 answer to frame parent CSW as default, sub-account as optional fallback; added default setup diagram to §11 and fixed post-setup paths diagram (execution address: parent CSW, sub-account as optional fallback); fixed §12 owner installation invariants (readiness gate = parent CSW owner confirmation, not wallet_addSubAccount) |
+| DRIFT-004 | `docs/ACCOUNT_MODEL.md` §3 + §5.2; `docs/owner-mutation-decision-2026-05.md` | Replaced "Use Sub Accounts + Spend Permissions for population (b)" with "parent CSW + Privy embedded-owner signer (`legacy-owner-install`)" in both the §3 invariant and §5.2 decision; updated owner-mutation-decision-2026-05.md decision text, practice table, and next-work section to reflect shipped legacy-owner-install as default |
+
+### Validation commands run
+
+| Command | Result |
+|---|---|
+| `git diff --check` | exit 0 — no whitespace errors |
+| `grep -n 'canonical path is sub-account\|parent CSW.*not the execution address' frontend/docs/waitlist-accounts-architecture.md` | 0 matches (exit 1) |
+| `grep -n 'resume sub-account setup\|sub-account persisted.*signer configured' frontend/docs/waitlist-accounts-architecture.md` | 0 matches (exit 1) |
+| `grep -n 'Execution address: sub-account\|PHASE 1: Sub-Account Creation\|wallet_addSubAccount.*readiness gate' docs/4626-connection-methods.md` | 0 matches (exit 1) |
+| `grep -n 'Use Sub Accounts + Spend Permissions for population' docs/ACCOUNT_MODEL.md docs/owner-mutation-decision-2026-05.md` | 0 matches (exit 1) |
+
+### Out-of-scope note
+
+`frontend/docs/account-auth-invariants.md:196` contains "sub-account persistence" language similar to DRIFT-002, but was not flagged in the confirmed DRIFT-001–004 scope. Left unchanged per remediation scope constraint.
+
+### Audit finding history
+
+No audit finding history was modified. This note is appended only.
+
+---
+
+## Recheck status — DRIFT-001 through DRIFT-004 (2026-06-26, verification mode)
+
+Verification mode: no new fixes applied except account-auth-invariants.md:196 (same remediation family as DRIFT-002, explicitly authorized in recheck instructions). No implementation code or product behavior changed.
+
+### Git state
+
+- `git status --short --branch`: `main...origin/main`; 6 remediation files modified (5 tracked + 1 moved/untracked), plus pre-existing docs reorganization changes (file moves to `docs/_internal/`) unrelated to this remediation.
+- `git diff --check`: exit 0 — no whitespace errors.
+
+### DRIFT-001 through DRIFT-004 recheck
+
+| DRIFT | Audit-specified grep | Result |
+|---|---|---|
+| DRIFT-001 | `grep -n 'canonical path is sub-account\|parent CSW.*not the execution address' frontend/docs/waitlist-accounts-architecture.md` | 0 matches (exit 1) — CLEARED |
+| DRIFT-002 | `grep -n 'resume sub-account setup\|sub-account persisted.*signer configured' frontend/docs/waitlist-accounts-architecture.md` | 0 matches (exit 1) — CLEARED |
+| DRIFT-003 | `grep -n 'Execution address: sub-account\|PHASE 1: Sub-Account Creation\|wallet_addSubAccount.*readiness gate' docs/4626-connection-methods.md` | 0 matches (exit 1) — CLEARED |
+| DRIFT-004 | `grep -n 'Use Sub Accounts + Spend Permissions for population' docs/ACCOUNT_MODEL.md docs/_internal/wallet-notes/owner-mutation-decision-2026-05.md` | 0 matches (exit 1) — CLEARED |
+
+Note: `docs/owner-mutation-decision-2026-05.md` was moved to `docs/_internal/wallet-notes/owner-mutation-decision-2026-05.md` by a separate docs reorganization. The DRIFT-004 fix survived the move — confirmed by reading the moved file (lines 11-18, 53, 81, 85, 89-90 all contain corrected `legacy-owner-install` text).
+
+### Full validation grep
+
+`grep -R -n -E "canonical path is sub-account|parent CSW.*not the execution address|Execution address: sub-account|resume sub-account setup|sub-account persistence|Use Sub Accounts + Spend Permissions" frontend/docs docs --exclude-dir='_internal'` — 0 matches (exit 1). Also ran against `docs/_internal/wallet-notes` and `docs/_internal/design` — 0 matches (exit 1).
+
+### account-auth-invariants.md:196 — fixed
+
+The previous "Out-of-scope note" (line 1129 above) flagged `frontend/docs/account-auth-invariants.md:196` as containing "sub-account persistence" language. Recheck classification: **stale — same remediation family as DRIFT-002**.
+
+Evidence: `executionTrack.ts` defines `ExecutionTrack = 'legacy-owner-install' | 'none-yet'` — no sub-account track exists. The same file (account-auth-invariants.md) lines 143-150 already correctly describe the current model (parent CSW as sender, embedded EOA as direct owner via `legacy-owner-install`, sub-account as flag-gated swap-only fallback). Line 196 contradicted lines 143-150 of the same file.
+
+Fix applied: changed "sub-account persistence + signer configuration" to "parent CSW + embedded EOA owner confirmation (`legacy-owner-install`)" — one line, same remediation family as DRIFT-002, explicitly authorized in recheck instructions.
+
+Post-fix grep: `grep -n 'sub-account persistence' frontend/docs/account-auth-invariants.md` — 0 matches (exit 1).
+
+### Implementation files — no code changed
+
+Confirmed no implementation files in `git status`:
+- `frontend/server/_lib/wallet/executionTrack.ts` — unchanged; `ExecutionTrack = 'legacy-owner-install' | 'none-yet'` (no sub-account track)
+- `frontend/src/wallet/canonicalWalletPolicy.ts` — unchanged; one canonical CSW, embedded EOA (slot 18) for frontend, server wallet (slot 15) for Railway
+- `frontend/src/lib/uniswap/walletMode.ts` — unchanged; `WalletMode = 'canonical' | 'eoa'` (no sub-account mode)
+
+All three implementation files confirm the source of truth: parent CSW is canonical identity/custody and default `canonical4337` sender; Privy embedded EOA is the signer/owner path; sub-account is optional, flag-gated, swap-only fallback.
+
+### New DRIFT finding?
+
+No new DRIFT finding needed. account-auth-invariants.md:196 was the only remaining stale reference and has been fixed. No other instances of the drift phrases exist in non-audit files.
+
+### Launch safety assessment
+
+Docs are safe for launch. All four confirmed P0/P1 DRIFT findings (DRIFT-001 through DRIFT-004) are cleared and verified. The out-of-scope stale reference (account-auth-invariants.md:196) has been resolved. No implementation code was modified. The remediated docs now consistently describe the shipped model: parent CSW + embedded EOA owner confirmation (`legacy-owner-install`) as the default user-side path, sub-account as optional flag-gated swap-only fallback.

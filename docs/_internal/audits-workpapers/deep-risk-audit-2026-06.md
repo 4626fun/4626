@@ -1298,3 +1298,96 @@ Note: LAUNCH-003 (P2, local .env bare ALFACLUB line) is not a P0/P1 blocker. Ver
 3. **No P0/P1 findings in APIAUTH, WALLET, or RACE namespaces**: all APIAUTH findings (001–019) are Medium/Low/Low-Medium/Very Low. All WALLET findings (001–004) are Low. All RACE findings (001–004) are below P1. These do not appear in this consolidation.
 
 4. **All positive LAUNCH findings (004–008) confirmed no drift**: dry-run 403 PASS gate, legacy bypass header rejection, read-only status/preflight, local-fork-only invariant, typecheck + lint clean. These are not blockers.
+
+---
+
+## Backtest Feature Deep Audit
+
+Audited 2026-06-26. Audit-only — no product/code fixes applied. All source files read, unit tests run, CLI backtests executed and artifacts verified.
+
+### Scope
+
+Files deep-inspected:
+- `frontend/api/_handlers/v1/alfaclub/_backtest-run.ts` (220 lines) — POST compute-heavy backtest API
+- `frontend/api/_handlers/v1/alfaclub/_backtest-sweep.ts` (161 lines) — GET sweep CSV listing
+- `frontend/api/_handlers/v1/alfaclub/_backtest-series.ts` (GET series JSON)
+- `frontend/api/_handlers/v1/alfaclub/_backtest-audit.ts` (GET rebalance audit CSV)
+- `frontend/api/_handlers/v1/alfaclub/_backtest-markets.ts` (GET available markets)
+- `frontend/server/_lib/alfaclub/backtestCounterRebalance.ts` (~880 lines) — core simulation engine
+- `frontend/server/_lib/alfaclub/backtestIntervalPolicy.ts` (55 lines) — interval selection + coverage thresholds
+- `frontend/server/_lib/alfaclub/backtestMarketBars.ts` (~270 lines) — bar loader with degradation fallback
+- `frontend/server/_lib/alfaclub/backtestSeriesDownsample.ts` (26 lines) — series point downsampling
+- `frontend/server/_lib/alfaclub/bybitKlines.ts` (~200 lines) — Bybit kline fetcher
+- `frontend/server/_lib/alfaclub/binanceKlines.ts` (154 lines) — Binance kline fetcher
+- `frontend/scripts/backtest-counter-rebalance.ts` — CLI entry point
+- `frontend/scripts/cache-backtest-minute-bars.ts` — 1m cache backfill script
+- `frontend/server/agents/eliza/plugins/virtuals/backtestJobs.ts` — Eliza chat backtest job runner
+- `frontend/server/agents/eliza/plugins/virtuals/service.ts` — chat entry point (lines 220–277)
+- `frontend/server/agents/eliza/plugins/virtuals/paymentGate.ts` — payment gate for ACP backtests
+- `frontend/src/pages/Arena.tsx` (lines 60–79, 880–1040) — Arena UI payload + interval display
+- `frontend/src/components/arena/ArenaBacktestAnalysis.tsx` (lines 140–195) — series analysis UI
+
+### P0 stop condition check
+
+All 4 P0 stop conditions checked and cleared:
+
+1. **Anonymous callers can trigger compute-heavy backtest API**: NOT triggered. `_backtest-run.ts:94-100` requires `verifyPrivyForAccounts(req)` — unauthenticated callers get 401 "Privy authentication required" before any compute. Rate limit (5/min per privyUserId + IP) at line 102-110. Anonymous access is blocked. No P0.
+
+2. **90-day minute cache misses silently present as minute-fidelity results**: NOT triggered. `backtestIntervalPolicy.ts:8` returns `'1m'` only when `windowHours <= 24*90` (2160). `backtestMarketBars.ts` resolves actual bars from Supabase cache; if coverage falls below `minCoverageRatio` (92% for 1m at 30+ days, 85% for shorter 1m), the interval degrades to `'5m'` / `'15m'` / `'1h'` and the resolved interval is surfaced in the API response (`_backtest-run.ts:171` `resolvedInterval`) and the Arena UI (`Arena.tsx:1026-1035` `setLastResolvedInterval`). The 90-day CLI test confirmed: `source=supabese coverage=95.3%` with `interval=1m` — honest. If the cache were incomplete, the interval would degrade and be reported. No P0.
+
+3. **No-commingle invariant is violated**: NOT triggered. The rebalance audit CSV (`-rebalances.csv`) has a `noCrossLegTransfer` column. Every rebalance row in both the 24h and 90-day test runs has `noCrossLegTransfer=true`. The sweep CSV `commingleViolationCount` column is 0 in all 135 parameter rows for both runs. The `requireNoCommingle` flag defaults to `true` (`_backtest-run.ts:139`) and is passed through to the engine. No P0.
+
+4. **Generated artifacts are empty or series has zero points without explicit expected reason**: NOT triggered. All 6 artifacts (3 per run) are non-empty: sweep CSVs have 136 lines (135 data rows + header), rebalance CSVs have 490/412 lines, series JSON has 1440/123448 data points. The series JSON includes `dataQuality.source`, `dataQuality.barCount`, `dataQuality.coveragePct`, and `summary` fields. No empty artifacts. No P0.
+
+### Findings
+
+#### BACKTEST-001 — Backtest GET endpoints (sweep, series, audit, markets) are unauthenticated
+
+- **Severity**: P2 (Low-Medium)
+- **Component**: `frontend/api/_handlers/v1/alfaclub/_backtest-sweep.ts`, `_backtest-series.ts`, `_backtest-audit.ts`, `_backtest-markets.ts`
+- **Description**: The 4 GET backtest endpoints have IP-only rate limits (`smartWalletOwnerRead` / `creatorQuickstart`) but no auth gate. Any caller can list sweep CSVs, read series JSON, read rebalance audit CSVs, and fetch available markets. The data exposed is simulation output (not user PII or secrets), and the sweep handler uses `path.basename()` validation (line 78-83) to prevent path traversal. However, the sweep/series/audit endpoints read from the server filesystem (`tmp/backtests/`), and the markets endpoint makes an external API call (Hyperliquid). An anonymous caller can enumerate and read all backtest results.
+- **Classification**: This is already documented as APIAUTH-016 in the endpoint matrix (PASS — rate limit gap). Not a new finding; confirmed consistent.
+- **Recommendation**: Consider adding session auth for sweep/series/audit if backtest results should be operator-scoped. Markets endpoint is low-risk (public market data).
+
+#### BACKTEST-002 — No explicit timeout on Eliza chat backtest execution path
+
+- **Severity**: P2 (Low-Medium)
+- **Component**: `frontend/server/agents/eliza/plugins/virtuals/service.ts:247-275`, `frontend/server/agents/eliza/plugins/virtuals/backtestJobs.ts`
+- **Description**: The chat entry point calls `await runRealBacktestJob(backtestRequest)` (service.ts:248) with no `AbortController`, `setTimeout`, or explicit timeout wrapper. If the backtest engine hangs (e.g. Hyperliquid API stalls, Supabase query deadlock), the Eliza session tool execution blocks indefinitely. The Binance/Bybit/Hyperliquid fetchers each have their own 15s/10s fetch timeouts, but the overall `executeBacktestCounterRebalance` call has no outer timeout. The API path (`_backtest-run.ts`) is similarly unbounded but benefits from Vercel function timeout. The Eliza/chat path runs in a Railway process with no platform-enforced per-call timeout.
+- **Stop condition check**: This does NOT meet the P0 bar (anonymous compute trigger) because the chat path requires a paid/funded ACP job signal (`paymentGate.ts` — `config.requirePaidBacktests` defaults to `true`, service.ts:228-244 blocks unpaid requests). The entry point is not anonymous.
+- **Recommendation**: Wrap `runRealBacktestJob` in a `Promise.race` with a configurable timeout (e.g. 60s) that returns a user-friendly error message instead of hanging the session.
+
+#### BACKTEST-003 — CLI script does not call loadEnvFile(), relies on ambient env
+
+- **Severity**: P2 (Low)
+- **Component**: `frontend/scripts/backtest-counter-rebalance.ts`
+- **Description**: The CLI script imports `executeBacktestCounterRebalance` directly but does not call `loadEnvFile()` or `dotenv.config()`. It relies on either (a) ambient shell env vars (exported before invocation) or (b) Vite's env loading if run through a Vite-aware runner. When `DATABASE_URL` is not in the ambient env, the 90-day backtest silently falls back from `supabase` source to `hyperliquid_chunked` (which only has ~3.5 days of 1m data), producing a degraded result without an explicit warning that the DB cache was not consulted. The 24h test worked because Hyperliquid has sufficient 1m data for short windows. The 90-day test worked because `DATABASE_URL` was present in `frontend/.env` and the script was run from the `frontend/` directory where tsx picks up `.env`. But this is fragile — if run from repo root or without `.env`, the DB cache is silently skipped.
+- **Note**: This is consistent with the existing memory note: "4626 tsx scripts don't get Vite .env loading — must call loadEnvFile(). Without it getDb() returns null silently."
+- **Recommendation**: Add explicit `loadEnvFile()` at the top of the CLI script, or emit a warning when `DATABASE_URL` is not found and the window exceeds 24*7 hours (where Hyperliquid 1m data is insufficient).
+
+#### BACKTEST-004 — Backtest run API trims stdout to 8000 chars, losing sweep detail
+
+- **Severity**: P2 (Low)
+- **Component**: `frontend/api/_handlers/v1/alfaclub/_backtest-run.ts:77-80` (`trimOutput`), line 163 (`trimmedStdout`)
+- **Description**: The API handler trims `result.stdout` to the last 8000 characters before returning it to the client. For large sweep outputs (135 parameter rows × ~200 chars/row = ~27,000 chars), the top-ranked configurations are truncated and only the last ~40 rows are visible in `stdout`. The full sweep data is available via the `sweepFile` field and the separate `_backtest-sweep` endpoint, so this is a UX issue, not a data-loss issue. The Arena UI reads `payload.data.stdout` (Arena.tsx:1021) for inline display but also calls `sweep.refetch()` to load the full CSV (Arena.tsx:1037).
+- **Recommendation**: Consider returning only the top-N rows in `stdout` instead of tail-truncating, or increase the limit to 16,000 chars. Low priority since the full data is accessible via the sweep endpoint.
+
+#### BACKTEST-005 — Interval degradation honesty is correct but display labeling could be clearer for 5m/15m
+
+- **Severity**: P3 (Informational)
+- **Component**: `frontend/src/pages/Arena.tsx:64-79` (`describeLastRunBarSize`), `frontend/src/components/arena/ArenaBacktestAnalysis.tsx:145-195`
+- **Description**: The Arena UI correctly surfaces `resolvedInterval` from the API response and displays it. The 90-day coarse case (`1h` bars for 90-day window) gets an explicit amber warning banner (`ArenaBacktestAnalysis.tsx:191-195`). However, the intermediate degradation cases (1m → 5m or 1m → 15m) only show the resolved interval label ("5-minute" / "15-minute") without explaining that the 1m cache was insufficient. A user seeing "5-minute price snapshots" may not realize this is a degradation from the requested 1m fidelity. The `dataQuality.coveragePct` and `dataQuality.source` badges are displayed, which provides indirect signal, but there is no explicit "degraded from 1m" callout for the 5m/15m cases.
+- **Classification**: Informational. The data is honest — the resolved interval is always reported. This is a UX clarity suggestion, not a correctness issue.
+- **Recommendation**: Add a subtle "(degraded from 1m — cache coverage was {coveragePct}%)" suffix when `resolvedInterval !== '1m'` and the requested interval was `'auto'` or `'1m'`.
+
+### Cross-finding notes (backtest)
+
+1. **No P0 stop conditions triggered**: All 4 P0 criteria checked and cleared. Anonymous compute is blocked (Privy auth gate), interval degradation is honest (resolved interval + coverage surfaced), no-commingle invariant holds (0 violations in all test runs), and all artifacts are non-empty with valid data.
+
+2. **BACKTEST-001 is not a new finding**: The unauthenticated GET endpoints are already classified as APIAUTH-016 in the endpoint matrix. The backtest audit confirms this classification is accurate — the endpoints are low-risk (simulation data, path-traversal-safe) but lack auth.
+
+3. **BACKTEST-002 and BACKTEST-003 are operational hardening, not correctness bugs**: The missing timeout (BACKTEST-002) and missing env loading (BACKTEST-003) affect reliability under adverse conditions (API stalls, missing env) but do not produce incorrect results under normal operation. Both are P2.
+
+4. **Unit test coverage is adequate for the chat path but absent for the core engine**: `backtestJobs.test.ts` (7 tests) covers `parseBacktestRequestFromText` and `runRealBacktestJob` with mocked engine. The full alfaclub+virtuals suite (404 tests) passes. However, `backtestCounterRebalance.ts`, `backtestMarketBars.ts`, `backtestIntervalPolicy.ts`, and `backtestSeriesDownsample.ts` have no dedicated unit test files. The engine is exercised only via CLI runs. This is a test-coverage gap, not a correctness finding — the CLI runs produce correct results.
+
+5. **No-commingle invariant is structurally enforced**: The rebalance audit CSV `noCrossLegTransfer` column is `true` in every row of both test runs. The `requireNoCommingle` flag defaults to `true` in the API and is respected by the engine. The invariant holds.
