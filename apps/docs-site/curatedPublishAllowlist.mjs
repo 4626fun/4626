@@ -14,6 +14,7 @@ export const CURATED_PUBLISH_GLOBS = [
   'guides/greenfield-checklist.md',
   'guides/launch-token.md',
   'guides/activate-vault.md',
+  'guides/after-activation.md',
 
   'reference/index.md',
   'reference/addresses.md',

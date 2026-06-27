@@ -35,6 +35,10 @@ Activation transfers **50M–100M** creator coin from the execution wallet into 
 
 Base trading and lottery do not require Solana finalization.
 
+## Next step
+
+[After activation](/guides/after-activation) — CCA monitoring, finalize, trading live, and optional Solana.
+
 ## Related documentation
 
-[Launch vault](/guides/launch-token) · [How it works](/overview/how-it-works) · [CCA contract](/contracts/strategies/cca-launch) · [Addresses](/reference/addresses)
+[Launch vault](/guides/launch-token) · [After activation](/guides/after-activation) · [How it works](/overview/how-it-works) · [CCA contract](/contracts/strategies/cca-launch) · [Addresses](/reference/addresses)

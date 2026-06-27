@@ -5,7 +5,7 @@ sidebar_position: 1
 
 # CreatorRegistry
 
-**Product role:** Onchain **index** from your creator coin address to that vault’s stack (vault, wrapper, ShareOFT, gauge). Integrators and the app resolve “which contracts belong to this coin?” via the registry.
+**Product role:** Onchain **index** from a creator coin address to that vault’s contract stack (vault, wrapper, ShareOFT, gauge). Integrators and the application resolve which contracts belong to a given coin via the registry.
 
 Central registry for platform contract lookups and shared chain config.
 

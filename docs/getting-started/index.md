@@ -55,7 +55,7 @@ The sequence below matches the [Launch checklist](/guides/greenfield-checklist).
 | 1 | Activate **`vault_full_deploy`** ($499 USDC) | [Strategy bundle](/guides/strategy-bundle) |
 | 2 | Deploy per-creator contract stack | [Launch vault](/guides/launch-token) |
 | 3 | Activate vault (deposit + auction seed) | [Activate vault](/guides/activate-vault) |
-| 4 | Monitor CCA until completion | — |
+| 4 | Monitor CCA until completion | [After activation](/guides/after-activation) |
 | 5 | Finalize (onchain completion; optional Solana bridge via Pipe A) | [Solana share mesh](/overview/solana-share-mesh) |
 | 6 | Strategy attachment (Charm + Ajna from bundle) | [How it works](/overview/how-it-works) |
 
@@ -105,5 +105,6 @@ Sign in, confirm `vault_full_deploy` is active, then proceed through Deploy and 
 |-------|------|
 | Fee lanes and lottery | [How it works](/overview/how-it-works) |
 | Launch procedure | [Launch checklist](/guides/greenfield-checklist) |
+| After activation | [After activation](/guides/after-activation) |
 | Shared contract addresses | [Addresses](/reference/addresses) |
 | Terminology | [Glossary](/reference/glossary) |

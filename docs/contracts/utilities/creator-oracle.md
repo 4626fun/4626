@@ -5,9 +5,9 @@ sidebar_position: 2
 
 # CreatorOracle
 
-**Product role:** **TWAP price feed** for creator and share tokens — sizes lottery trade value in USD and supports vault/gauge slippage guardrails.
+**Product role:** **TWAP price feed** for creator and share tokens — sizes lottery trade value in USD and supports vault and gauge slippage guardrails.
 
-Price oracle for creator tokens using Uniswap V4 TWAP.
+Price oracle for creator and share tokens using Uniswap V4 TWAP.
 
 ## Purpose
 

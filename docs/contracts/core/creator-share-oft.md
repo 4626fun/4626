@@ -5,17 +5,17 @@ sidebar_position: 4
 
 # CreatorShareOFT
 
-**Product role:** The tradable **■ share token** on Base (and bridged chains). DEX trades pay fees routed to the gauge; hub-chain buys can enter the instant lottery.
+**Product role:** The tradable **■ share token** on Base (and, when bridged, on remote chains). DEX trades may incur ShareOFT transfer fees routed to the gauge; qualifying hub-chain **buys** may enter the instant lottery.
 
-LayerZero V2 Omnichain Fungible Token for cross-chain transfers and fee collection.
+LayerZero V2 omnichain fungible token (OFT) for cross-chain share transfers and fee collection.
 
 ## Purpose
 
 The CreatorShareOFT:
 - Enables cross-chain transfers via LayerZero V2
-- Collects 6.9% fee on all DEX trades
-- Routes fees to GaugeController
-- Triggers lottery entries for traders on hub
+- Collects a **6.9%** transfer fee on qualifying DEX routes (SwapOnly → non-SwapOnly)
+- Routes collected fees to [CreatorGaugeController](/contracts/governance/gauge-controller)
+- Emits lottery entries for qualifying hub-chain **buys**
 - Queues remote-chain lottery entries for explicit buyer-paid submission
 
 ## Key Functions

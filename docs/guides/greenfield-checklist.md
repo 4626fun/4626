@@ -23,7 +23,7 @@ Overview: [Getting started](/getting-started) · Application: [app.4626.fun/depl
 | 1 | Pay **`vault_full_deploy`** | Deploy unlocked in application | [Strategy bundle](/guides/strategy-bundle) |
 | 2 | Deploy contract stack | Vault, ShareOFT, gauge, oracle, CCA deployed | [Launch vault](/guides/launch-token) |
 | 3 | Activate vault | Creator coin deposited; CCA started | [Activate vault](/guides/activate-vault) |
-| 4 | CCA auction | Price discovery in progress | — |
+| 4 | CCA auction | Price discovery in progress | [After activation](/guides/after-activation) |
 | 5 | Finalize | Onchain completion; optional Pipe A Solana bridge | [Solana share mesh](/overview/solana-share-mesh) |
 | 6 | Strategy attachment | Charm + Ajna deployed per bundle weights | [How it works](/overview/how-it-works) |
 
@@ -60,4 +60,4 @@ Solana integration may follow Base launch and is not required for Base trading o
 
 ## Related documentation
 
-[Getting started](/getting-started) · [How it works](/overview/how-it-works)
+[Getting started](/getting-started) · [After activation](/guides/after-activation) · [How it works](/overview/how-it-works)

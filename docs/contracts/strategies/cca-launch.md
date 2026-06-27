@@ -5,9 +5,9 @@ sidebar_position: 2
 
 # CCA Launch Strategy
 
-**Product role:** Runs the **fair-launch auction** that sells vault shares for USDC at a clearing price before secondary trading — your vault’s public price discovery step.
+**Product role:** Runs the **fair-launch auction** that sells vault shares for USDC at a clearing price before secondary trading — the vault’s public price-discovery step.
 
-Uniswap Continuous Clearing Auction integration for fair launch price discovery.
+Uniswap Continuous Clearing Auction (CCA) integration for fair-launch price discovery on Uniswap V4.
 
 ## Purpose
 

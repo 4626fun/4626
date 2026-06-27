@@ -24,6 +24,7 @@ const sidebars: SidebarsConfig = {
         'guides/strategy-bundle',
         'guides/launch-token',
         'guides/activate-vault',
+        'guides/after-activation',
       ],
     },
     {

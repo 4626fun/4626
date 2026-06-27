@@ -5,18 +5,18 @@ sidebar_position: 1
 
 # CreatorLotteryManager
 
-**Product role:** **Instant lottery** on hub-chain ShareOFT buys (Chainlink VRF) plus attested no-purchase AMOE entries — prizes paid from gauge jackpot reserves.
+**Product role:** **Instant lottery** on hub-chain ShareOFT **buys** (Chainlink VRF) plus attested no-purchase AMOE entries — prizes paid from gauge jackpot reserves.
 
-Shared lottery service for ALL Creator Coins, supporting both trade-triggered entries and no-purchase AMOE entries.
+Shared lottery service deployed once per chain; serves all creator coins by resolving contract addresses from [CreatorRegistry](/contracts/core/creator-registry).
 
 ## Purpose
 
 The CreatorLotteryManager:
-- Processes lottery entries from DEX trades
+- Processes lottery entries from qualifying ShareOFT DEX **buys**
 - Processes AMOE entries from server attestations (no purchase required)
-- Integrates Chainlink VRF 2.5 for randomness
-- Manages cross-chain winner notifications
-- Distributes prizes from ALL active vaults
+- Integrates Chainlink VRF 2.5 for verifiable randomness
+- Manages cross-chain winner notifications where configured
+- Distributes prizes from active vault jackpot reserves
 
 ## Architecture
 
