@@ -8,6 +8,8 @@ import {
   privyAnalyticsFlag,
   injectedConnectorFlag,
   isPrivyHostModeAllowed,
+  isLocalDevOrigin,
+  canUsePrivyEmbeddedWallets,
   resolvePrivyClientId,
   resolvePrivyAppId,
   resolvePrivyApiUrl,
@@ -108,6 +110,11 @@ describe('resolvePrivyApiUrl', () => {
       location: { hostname: '172.19.135.21', origin: 'http://172.19.135.21:5174' },
     } as unknown as Window & typeof globalThis)
     expect(resolvePrivyApiUrl()).toBe('https://auth.privy.io')
+  })
+
+  it('treats https WSL LAN dev origins as local dev', () => {
+    vi.stubEnv('DEV', true)
+    expect(isLocalDevOrigin('https://172.19.135.21:5174')).toBe(true)
   })
 
   it('returns null when API URL mode is disabled on non-loopback non-4626.fun origins', () => {
@@ -286,6 +293,22 @@ describe('privyAnalyticsFlag', () => {
     vi.stubEnv('VITE_PRIVY_ENABLE_ANALYTICS', 'true')
     vi.stubEnv('VITE_PRIVY_DISABLE_ANALYTICS', 'true')
     expect(privyAnalyticsFlag()).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// canUsePrivyEmbeddedWallets
+// ---------------------------------------------------------------------------
+
+describe('canUsePrivyEmbeddedWallets', () => {
+  it('returns true when window.isSecureContext is true', () => {
+    vi.stubGlobal('window', { isSecureContext: true } as unknown as Window & typeof globalThis)
+    expect(canUsePrivyEmbeddedWallets()).toBe(true)
+  })
+
+  it('returns false when window.isSecureContext is false (HTTP on WSL LAN IP)', () => {
+    vi.stubGlobal('window', { isSecureContext: false } as unknown as Window & typeof globalThis)
+    expect(canUsePrivyEmbeddedWallets()).toBe(false)
   })
 })
 

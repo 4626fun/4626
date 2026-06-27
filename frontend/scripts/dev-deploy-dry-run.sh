@@ -536,6 +536,10 @@ print_local_dev_access_hints() {
   if [[ -n "$wsl_ip" && "$host_arg" == "0.0.0.0" ]]; then
     echo "PRIMARY (WSL→Windows): http://${wsl_ip}:${port}/waitlist"
     echo "Also try:            http://localhost:${port}/waitlist"
+    echo ""
+    echo "Privy embedded wallet (deploy/swap signing) needs a secure browser context."
+    echo "  • Prefer http://localhost:${port} with WSL mirrored networking, OR"
+    echo "  • Use the WSL IP URL above for waitlist/email OTP (embedded wallet auto-disabled)."
   else
     echo "Open: http://localhost:${port}/waitlist"
   fi

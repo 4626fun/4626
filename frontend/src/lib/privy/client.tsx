@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Component, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { getPrivyApiUrl, getPrivyAppId, getPrivyClientId, isPrivyClientEnabled, isLocalDevOrigin } from '@/lib/flags/flags'
+import { getPrivyApiUrl, getPrivyAppId, getPrivyClientId, isPrivyClientEnabled, isLocalDevOrigin, canUsePrivyEmbeddedWallets } from '@/lib/flags/flags'
 import { CONFIGURED_APP_ORIGIN, resolveAuthRedirectOrigin } from '@/lib/env/host'
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth'
 import { base } from 'viem/chains'
@@ -25,6 +25,15 @@ if (typeof window !== 'undefined') {
         '  • In Privy dashboard (Local Dev client): allowlist http://localhost:5173 + :5174 + 127.0.0.1 variants in Allowed Origins.\n' +
         '  • Allow the redirect URLs your VITE_APP_ORIGIN / VITE_MARKETING_ORIGIN resolve to.\n' +
         '  • Restart the dev server. See .env.example section "Privy Local Dev with custom domain".'
+    )
+  }
+  if (isLocalDevOrigin(window.location.origin) && !window.isSecureContext && ! (window as any).__cv_privy_insecure_origin_logged) {
+    ;(window as any).__cv_privy_insecure_origin_logged = true
+    console.info(
+      '[privy] Embedded wallets are disabled on this URL (HTTP on a non-localhost host).\n' +
+        '  • Waitlist email OTP still works.\n' +
+        '  • For embedded-wallet signing (deploy/swap), open http://localhost:5174 with WSL mirrored networking,\n' +
+        '    or connect an external wallet on this page.',
     )
   }
 }
@@ -229,6 +238,19 @@ export function PrivyClientProvider(props: {
   // verified email first, wallet-native Base second. Zora uses cross-app auth.
   const loginMethods = mode === 'waitlist-email-only' ? (['email'] as const) : (['email', 'wallet'] as const)
 
+  const embeddedWalletsSupported = canUsePrivyEmbeddedWallets()
+  const embeddedWallets =
+    !embeddedWalletsSupported
+      ? undefined
+      : mode === 'waitlist-email-only'
+        ? {
+            ethereum: { createOnLogin: 'all-users' },
+          }
+        : {
+            ethereum: { createOnLogin: 'all-users' },
+            solana: { createOnLogin: 'all-users' },
+          }
+
   // Privy OAuth redirects are validated against an allowlist and must match exactly.
   // Use the bare origin so transient search/hash state on the current page never breaks OAuth init.
   const customOAuthRedirectUrl =
@@ -245,16 +267,7 @@ export function PrivyClientProvider(props: {
   const baseConfig: PrivyProviderConfig = {
     appearance,
     ...(customOAuthRedirectUrl ? { customOAuthRedirectUrl } : {}),
-    // Enable embedded wallets - this is the signer for the Coinbase Smart Wallet
-    embeddedWallets:
-      mode === 'waitlist-email-only'
-        ? {
-            ethereum: { createOnLogin: 'all-users' },
-          }
-        : {
-            ethereum: { createOnLogin: 'all-users' },
-            solana: { createOnLogin: 'all-users' },
-          },
+    ...(embeddedWallets ? { embeddedWallets } : {}),
     loginMethods,
     defaultChain: base,
     supportedChains: [base],

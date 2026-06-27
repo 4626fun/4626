@@ -132,8 +132,8 @@ export function isLocalDevOrigin(raw: string): boolean {
   if (!origin) return false
   try {
     const url = new URL(origin)
-    if (url.protocol !== 'http:') return false
-    const port = url.port || '80'
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false
+    const port = url.port || (url.protocol === 'https:' ? '443' : '80')
     if (!LOCAL_DEV_PORTS.has(port)) return false
     const host = url.hostname.toLowerCase()
     if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]') return true
@@ -141,6 +141,12 @@ export function isLocalDevOrigin(raw: string): boolean {
   } catch {
     return false
   }
+}
+
+/** Privy embedded wallets require a secure browser context (HTTPS or localhost HTTP). */
+export function canUsePrivyEmbeddedWallets(): boolean {
+  if (typeof window === 'undefined') return true
+  return window.isSecureContext
 }
 
 function getCurrentOrigin(): string | null {

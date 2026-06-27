@@ -7,6 +7,7 @@
 
 export {
   isLocalDevOrigin,
+  canUsePrivyEmbeddedWallets,
   isPrivyHostModeAllowed,
   resolvePrivyAppId as getPrivyAppId,
   resolvePrivyClientId as getPrivyClientId,
