@@ -10,7 +10,7 @@ import {
   isDbConfigured,
   getSessionAddress,
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   getClientIp,
   rateLimitKey,
   runInTransaction,
@@ -75,9 +75,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   const sessionAddress = getAddress(sessionAddressRaw as Address)
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('creator-strategy-activate', sessionAddress.toLowerCase(), getClientIp(req)),
     RATE_LIMITS.creatorQuickstart,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     res.setHeader(

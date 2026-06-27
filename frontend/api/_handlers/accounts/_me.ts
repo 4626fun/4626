@@ -6,6 +6,10 @@ import {
   setCors,
   setNoStore,
   getDb,
+  checkDurableRateLimit,
+  getClientIp,
+  rateLimitKey,
+  RATE_LIMITS,
 } from '@4626/server-core'
 
 
@@ -26,6 +30,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+
+  // APIAUTH-001: /api/accounts/me performs DB writes (syncEmailIdentity) and
+  // external Privy API calls on every authenticated GET. Rate-limit before any
+  // DB or Privy work to prevent amplification attacks.
+  const limiter = await checkDurableRateLimit(
+    rateLimitKey('accounts-me', getClientIp(req)),
+    RATE_LIMITS.accountsMe,
+    { failClosed: true },
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
   const db = await getDb()

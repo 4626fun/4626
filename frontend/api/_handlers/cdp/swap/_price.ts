@@ -5,7 +5,7 @@ import {
   setCors,
   setNoStore,
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   getClientIp,
   rateLimitKey,
   readRequestPrincipalAddress,
@@ -35,9 +35,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const clientIp = getClientIp(req)
-  const rate = checkRateLimit(
+  const rate = await checkDurableRateLimit(
     rateLimitKey('cdp-swap-price', principalAddress.toLowerCase(), clientIp),
     RATE_LIMITS.general,
+    { failClosed: true },
   )
   if (!rate.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))))

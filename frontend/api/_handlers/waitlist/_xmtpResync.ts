@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import {
   type ApiEnvelope,
-  checkRateLimit,
+  checkDurableRateLimit,
   getClientIp,
   getDb,
   handleOptions,
@@ -60,9 +60,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Authentication required' } satisfies ApiEnvelope<never>)
   }
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('waitlist-xmtp-resync', String(authorizedPrincipal.profileId), getClientIp(req)),
     RATE_LIMITS.workspaceActions,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))

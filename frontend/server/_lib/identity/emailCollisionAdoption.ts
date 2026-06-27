@@ -3,7 +3,10 @@ import { type IdentityRecoveryRequiredError, isIdentityRecoveryRequiredError } f
 import { extractPrivyVerifiedEmail } from '../infra/trust.js'
 import { classifyLinkedAccounts, type PrivyUserLike } from '../wallet/walletMapping.js'
 
-type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
+type Db = {
+  sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
+  query?: (text: string, values?: any[]) => Promise<{ rows: any[] }>
+}
 
 function normalizeLower(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
@@ -112,35 +115,52 @@ async function mergePlaceholderProfiles(params: {
   privyUserId: string
   targetProfileId: number
 }): Promise<void> {
-  const placeholderProfiles = await params.db.sql`
-    SELECT id
-    FROM profiles
-    WHERE privy_user_id = ${params.privyUserId}
-      AND id <> ${params.targetProfileId}
-    ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC;
-  `
+  // RACE-003: Wrap the entire merge in a transaction so a mid-loop failure
+  // doesn't leave placeholder profiles in a partially-merged state.
+  const canTransaction = typeof params.db.query === 'function'
+  if (canTransaction) {
+    await params.db.query!('BEGIN')
+  }
+  try {
+    const placeholderProfiles = await params.db.sql`
+      SELECT id
+      FROM profiles
+      WHERE privy_user_id = ${params.privyUserId}
+        AND id <> ${params.targetProfileId}
+      ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC;
+    `
 
-  for (const row of placeholderProfiles.rows ?? []) {
-    const placeholderIdRaw = (row as { id?: unknown })?.id
-    const placeholderId = typeof placeholderIdRaw === 'number' ? placeholderIdRaw : Number(placeholderIdRaw)
-    if (!Number.isFinite(placeholderId) || placeholderId <= 0) continue
+    for (const row of placeholderProfiles.rows ?? []) {
+      const placeholderIdRaw = (row as { id?: unknown })?.id
+      const placeholderId = typeof placeholderIdRaw === 'number' ? placeholderIdRaw : Number(placeholderIdRaw)
+      if (!Number.isFinite(placeholderId) || placeholderId <= 0) continue
 
-    await params.db.sql`
-      INSERT INTO points (signup_id, source, source_id, amount, created_at)
-      SELECT ${params.targetProfileId}, source, source_id, amount, created_at
-      FROM points
-      WHERE signup_id = ${placeholderId}
-      ON CONFLICT DO NOTHING;
-    `
-    await params.db.sql`
-      DELETE FROM points
-      WHERE signup_id = ${placeholderId};
-    `
-    await params.db.sql`
-      UPDATE profiles
-      SET privy_user_id = NULL, updated_at = NOW()
-      WHERE id = ${placeholderId};
-    `
+      await params.db.sql`
+        INSERT INTO points (signup_id, source, source_id, amount, created_at)
+        SELECT ${params.targetProfileId}, source, source_id, amount, created_at
+        FROM points
+        WHERE signup_id = ${placeholderId}
+        ON CONFLICT DO NOTHING;
+      `
+      await params.db.sql`
+        DELETE FROM points
+        WHERE signup_id = ${placeholderId};
+      `
+      await params.db.sql`
+        UPDATE profiles
+        SET privy_user_id = NULL, updated_at = NOW()
+        WHERE id = ${placeholderId};
+      `
+    }
+
+    if (canTransaction) {
+      await params.db.query!('COMMIT')
+    }
+  } catch (error) {
+    if (canTransaction) {
+      try { await params.db.query!('ROLLBACK') } catch {}
+    }
+    throw error
   }
 }
 

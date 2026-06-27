@@ -26,12 +26,14 @@ export function resolveProfilesPrimaryWalletColumn(input: {
   activeOwner: string | null
   classificationPrimary: string | null
 }): string | null {
-  // Canonical CSW accounts should not treat a transient wagmi extension as
-  // profiles.primary_wallet — that column is legacy display/lookup and should
-  // track the embedded signer (or CSW when embedded is absent).
-  if (input.canonical && input.embedded) return input.embedded
+  // WALLET-004: Embedded EOA should always win over activeOwner, even when
+  // canonical is absent. The column tracks the embedded signer (or CSW when
+  // embedded is absent) — not a transient wagmi extension. Previously, embedded
+  // only won when canonical was also present, contradicting the comment and
+  // disconnect logic.
+  if (input.embedded) return input.embedded
   if (input.canonical) return input.canonical
-  return input.activeOwner ?? input.embedded ?? input.classificationPrimary ?? null
+  return input.activeOwner ?? input.classificationPrimary ?? null
 }
 
 export async function disconnectExternalWalletFromProfile(params: {

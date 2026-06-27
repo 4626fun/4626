@@ -13,9 +13,8 @@ import * as THREE from 'three'
  * layer away from the live plane and connecting the two with trace wires and
  * semi-transparent faceted faces:
  *
- *   - Coin (ERC-20)            -> a flat 2D circle (center hub fanned to a ring)
- *   - Vault (ERC-20 + ERC-4626) -> an Ethereum-style octahedron (two square
- *                                  pyramids joined base-to-base)
+ *   - Coin (ERC-20)            -> frosted glass disc with a thin luminous edge ring
+ *   - Vault (ERC-20 + ERC-4626) -> glass octahedron with soft edge traces
  *
  * The whole card surface is a real WebGL panel (MeshPhysicalMaterial) lit by a
  * 3-point rig with VSM soft shadows; it tilts toward the cursor in true 3D and
@@ -49,8 +48,8 @@ const CARDS: CardConfig[] = [
     desc: 'Launch your Creator Coin',
     standards: ['ERC-20'],
     to: '/deploy/coin',
-    core: '#2f7bff',
-    accent: '#bcd8ff',
+    core: '#4d8fff',
+    accent: '#a8c8ff',
   },
   {
     variant: 'vault',
@@ -59,8 +58,8 @@ const CARDS: CardConfig[] = [
     standards: ['ERC-20', 'ERC-4626'],
     requires: 'Requires a Zora Creator Coin',
     to: '/deploy/vault',
-    core: '#22d3ee',
-    accent: '#a5f3fc',
+    core: '#1ecad3',
+    accent: '#8ee8f0',
   },
 ]
 
@@ -100,10 +99,10 @@ function hasWebGL(): boolean {
 // ---------------------------------------------------------------------------
 
 const R = 1.0 // coin circle radius
-const COIN_RING_SEGMENTS = 16
-const ETH_R = 0.82 // Ethereum octahedron girdle half-extent
-const ETH_TOP = 1.3 // upper pyramid apex height
-const ETH_BOT = 1.02 // lower pyramid apex depth
+const COIN_RING_SEGMENTS = 8 // minimal ring — cleaner silhouette than dense hub-and-spoke
+const ETH_R = 0.78 // Ethereum octahedron girdle half-extent
+const ETH_TOP = 1.22 // upper pyramid apex height
+const ETH_BOT = 0.96 // lower pyramid apex depth
 
 /** A tier is a single center point (count 1) or an n-gon ring (count >= 3). */
 interface Tier {
@@ -192,6 +191,8 @@ function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) 
   const dots = useRef<THREE.InstancedMesh>(null)
   const wires = useRef<THREE.LineSegments>(null)
   const faces = useRef<THREE.Mesh>(null)
+  const coinDisc = useRef<THREE.Mesh>(null)
+  const coinRing = useRef<THREE.Mesh>(null)
 
   const p = useRef(0) // eased sculpt progress
   const spinAngle = useRef(0)
@@ -200,11 +201,9 @@ function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) 
   const topo = useMemo(() => topology(variant), [variant])
 
   const FLOOR_Y = -1.0
-  // Flat coin disc floats near card center casting a shadow below; the 3D
-  // octahedron rests its lower apex on the floor.
   const isCoin = variant === 'coin'
-  const yOffset = isCoin ? -0.05 : FLOOR_Y + ETH_BOT * 1.1
-  const baseScale = isCoin ? 1.2 : 1.1
+  const yOffset = isCoin ? -0.05 : FLOOR_Y + ETH_BOT * 1.05
+  const baseScale = isCoin ? 1.15 : 1.05
 
   const wireGeo = useMemo(() => {
     const g = new THREE.BufferGeometry()
@@ -246,36 +245,44 @@ function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) 
       tilt.current.rotation.z = THREE.MathUtils.damp(tilt.current.rotation.z, on ? px * 0.06 : 0, 6, d)
     }
 
-    // Sculpt progress — the form is always visible (rest ~0.8) and blooms to
-    // full on hover, where it also tilts and spins.
-    const REST = 0.8
+    // Sculpt progress — subtle at rest, full bloom on hover.
+    const REST = 0.72
     p.current = THREE.MathUtils.damp(p.current, shared.hover.current ? 1 : REST, 4, d)
     const prog = easeInOut(Math.min(1, Math.max(0, p.current)))
 
     // Gentle idle spin at rest, accelerating as the form blooms on hover.
-    // The coin is a flat 2D circle facing the camera, so it stays unspun
-    // (a Y-spin would turn it edge-on); only the 3D octahedron rotates.
-    spinAngle.current += d * (0.12 + 0.55 * Math.max(0, (prog - REST) / (1 - REST)))
+    spinAngle.current += d * (0.08 + 0.45 * Math.max(0, (prog - REST) / (1 - REST)))
     if (spin.current) {
-      spin.current.rotation.y = variant === 'coin' ? 0 : spinAngle.current
-      // Subtle hover lift/scale of the form itself for drama.
-      spin.current.scale.setScalar(baseScale * (1 + 0.06 * glowT.current))
+      spin.current.rotation.y = isCoin ? 0 : spinAngle.current
+      spin.current.scale.setScalar(baseScale * (1 + 0.04 * glowT.current))
     }
 
-    // Brighten the dots / wires / faces as the cursor enters — the form
-    // "charges up" on hover.
     glowT.current = THREE.MathUtils.damp(glowT.current, shared.hover.current ? 1 : 0, 6, d)
     const g = glowT.current
     if (dots.current) {
-      ;(dots.current.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.55 + 0.6 * g
+      ;(dots.current.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.35 + 0.45 * g
     }
     if (wires.current) {
-      ;(wires.current.material as THREE.LineBasicMaterial).opacity = 0.55 + 0.4 * g
+      ;(wires.current.material as THREE.LineBasicMaterial).opacity = 0.22 + 0.38 * g
     }
     if (faces.current) {
-      const m = faces.current.material as THREE.MeshStandardMaterial
-      m.opacity = 0.26 + 0.18 * g
-      m.emissiveIntensity = 0.3 + 0.35 * g
+      const m = faces.current.material as THREE.MeshPhysicalMaterial
+      m.opacity = 0.14 + 0.12 * g
+      m.emissiveIntensity = 0.15 + 0.2 * g
+      m.transmission = 0.72 + 0.12 * g
+    }
+    if (coinDisc.current) {
+      const m = coinDisc.current.material as THREE.MeshPhysicalMaterial
+      const discScale = R * prog
+      coinDisc.current.scale.set(discScale, discScale, 1)
+      m.opacity = 0.18 + 0.14 * g
+      m.transmission = 0.78 + 0.14 * g
+      m.emissiveIntensity = 0.12 + 0.18 * g
+    }
+    if (coinRing.current) {
+      const m = coinRing.current.material as THREE.MeshBasicMaterial
+      m.opacity = 0.28 + 0.32 * g
+      coinRing.current.scale.set(prog, prog, prog)
     }
 
     const tiers = tiersAt(variant, prog)
@@ -284,10 +291,12 @@ function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) 
 
     // --- dots ---
     if (dots.current) {
-      const dotScale = 0.045 + 0.025 * prog
+      const dotScale = 0.028 + 0.014 * prog
       for (let i = 0; i < flat.length; i++) {
         dummy.position.copy(flat[i]!)
-        dummy.scale.setScalar(dotScale)
+        // Outer ring nodes stay slightly smaller than the hub for hierarchy.
+        const isHub = i === 0 && isCoin
+        dummy.scale.setScalar(isHub ? dotScale * 1.35 : dotScale * (isCoin ? 0.82 : 1))
         dummy.updateMatrix()
         dots.current.setMatrixAt(i, dummy.matrix)
       }
@@ -295,8 +304,8 @@ function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) 
       dots.current.instanceMatrix.needsUpdate = true
     }
 
-    // --- wires ---
-    if (wires.current) {
+    // --- wires (vault only — coin uses glass disc + torus edge) ---
+    if (wires.current && !isCoin) {
       const arr = (wireGeo.getAttribute('position') as THREE.BufferAttribute).array as Float32Array
       let o = 0
       const push = (a: THREE.Vector3, b: THREE.Vector3) => {
@@ -310,7 +319,6 @@ function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) 
           for (let i = 0; i < n; i++) push(t.verts[i]!, t.verts[(i + 1) % n]!)
         }
       }
-      // spokes between tiers
       for (let i = 0; i < tiers.length - 1; i++) {
         const a = tiers[i]!
         const b = tiers[i + 1]!
@@ -324,11 +332,11 @@ function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) 
         }
       }
       wireGeo.getAttribute('position').needsUpdate = true
-      wireGeo.setDrawRange(0, topo.segCount * 2)
+      wireGeo.setDrawRange(0, o / 3)
     }
 
-    // --- faces ---
-    if (faces.current) {
+    // --- faces (vault only — coin uses glass disc + ring) ---
+    if (faces.current && !isCoin) {
       const arr = (faceGeo.getAttribute('position') as THREE.BufferAttribute).array as Float32Array
       let o = 0
       const tri = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3) => {
@@ -368,35 +376,70 @@ function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) 
         <shadowMaterial transparent opacity={0.45} />
       </mesh>
       <group ref={spin} position={[0.15, yOffset, 0]} scale={baseScale}>
-        <instancedMesh ref={dots} args={[undefined, undefined, topo.dotCount]} castShadow>
-          <sphereGeometry args={[1, 14, 14]} />
+        {isCoin ? (
+          <>
+            <mesh ref={coinDisc}>
+              <circleGeometry args={[1, 48]} />
+              <meshPhysicalMaterial
+                color={core}
+                emissive={core}
+                emissiveIntensity={0.12}
+                metalness={0.05}
+                roughness={0.08}
+                transmission={0.82}
+                thickness={0.35}
+                ior={1.35}
+                transparent
+                opacity={0.22}
+                side={THREE.DoubleSide}
+                depthWrite={false}
+                toneMapped={false}
+              />
+            </mesh>
+            <mesh ref={coinRing}>
+              <torusGeometry args={[R, 0.011, 8, 64]} />
+              <meshBasicMaterial color={accent} transparent opacity={0.35} toneMapped={false} />
+            </mesh>
+          </>
+        ) : null}
+
+        <instancedMesh ref={dots} args={[undefined, undefined, topo.dotCount]} castShadow={!isCoin}>
+          <sphereGeometry args={[1, 10, 10]} />
           <meshStandardMaterial
-            color="#f2f8ff"
+            color="#f8fbff"
             emissive={accent}
-            emissiveIntensity={0.7}
-            roughness={0.3}
-            metalness={0.1}
+            emissiveIntensity={0.45}
+            roughness={0.15}
+            metalness={0.05}
             toneMapped={false}
           />
         </instancedMesh>
 
-        <lineSegments ref={wires} geometry={wireGeo}>
-          <lineBasicMaterial color={accent} transparent opacity={0.85} toneMapped={false} />
-        </lineSegments>
+        {!isCoin ? (
+          <lineSegments ref={wires} geometry={wireGeo}>
+            <lineBasicMaterial color={accent} transparent opacity={0.35} toneMapped={false} />
+          </lineSegments>
+        ) : null}
 
-        <mesh ref={faces} geometry={faceGeo} castShadow>
-          <meshStandardMaterial
-            color={core}
-            emissive={core}
-            emissiveIntensity={0.35}
-            metalness={0.35}
-            roughness={0.28}
-            transparent
-            opacity={0.34}
-            side={THREE.DoubleSide}
-            depthWrite={false}
-          />
-        </mesh>
+        {!isCoin ? (
+          <mesh ref={faces} geometry={faceGeo} castShadow>
+            <meshPhysicalMaterial
+              color={core}
+              emissive={core}
+              emissiveIntensity={0.18}
+              metalness={0.08}
+              roughness={0.06}
+              transmission={0.78}
+              thickness={0.55}
+              ior={1.42}
+              transparent
+              opacity={0.18}
+              side={THREE.DoubleSide}
+              depthWrite={false}
+              toneMapped={false}
+            />
+          </mesh>
+        ) : null}
       </group>
     </group>
   )
@@ -415,17 +458,17 @@ function CardScene({ config, shared }: { config: CardConfig; shared: SharedRefs 
         gl.setClearColor(0x000000, 0)
       }}
     >
-      <ambientLight intensity={0.42} color="#ffffff" />
+      <ambientLight intensity={0.55} color="#eef4ff" />
       <directionalLight
-        position={[2.5, 5.5, 5]}
-        intensity={3}
-        color="#fff5eb"
+        position={[2.2, 4.8, 4.5]}
+        intensity={2.2}
+        color="#fff8f0"
         castShadow
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
         shadow-bias={-0.002}
         shadow-normalBias={0.02}
-        shadow-radius={14}
+        shadow-radius={18}
         shadow-camera-near={0.1}
         shadow-camera-far={20}
         shadow-camera-left={-3.5}
@@ -433,7 +476,8 @@ function CardScene({ config, shared }: { config: CardConfig; shared: SharedRefs 
         shadow-camera-top={3.5}
         shadow-camera-bottom={-3.5}
       />
-      <directionalLight position={[-3.5, 3.4, 3.6]} intensity={1.8} color="#c7e4ff" />
+      <directionalLight position={[-2.8, 2.6, 3.2]} intensity={1.1} color="#c8e0ff" />
+      <pointLight position={[0, 1.2, 2.4]} intensity={0.6} color={config.accent} distance={8} decay={2} />
       <Sculpt config={config} shared={shared} />
     </Canvas>
   )
@@ -517,8 +561,8 @@ function TraceCard({ config }: { config: CardConfig }) {
 
   const isCoin = config.variant === 'coin'
   // Dramatic stage glow behind the form + interactive cursor spotlight.
-  const stageGlow = isCoin ? 'rgba(60,120,255,0.18)' : 'rgba(34,211,238,0.18)'
-  const cursorGlow = isCoin ? 'rgba(120,170,255,0.20)' : 'rgba(120,235,250,0.20)'
+  const stageGlow = isCoin ? 'rgba(77,143,255,0.12)' : 'rgba(30,202,211,0.12)'
+  const cursorGlow = isCoin ? 'rgba(140,180,255,0.14)' : 'rgba(120,235,245,0.14)'
 
   return (
     <Link
@@ -539,21 +583,21 @@ function TraceCard({ config }: { config: CardConfig }) {
       {/* dramatic stage spotlight behind the sculpt (painted under the canvas) */}
       <div
         className="pointer-events-none absolute inset-0 transition-opacity duration-700 group-hover:opacity-100"
-        style={{ background: `radial-gradient(62% 58% at 58% 38%, ${stageGlow}, transparent 70%)`, opacity: 0.65 }}
+        style={{ background: `radial-gradient(58% 52% at 58% 38%, ${stageGlow}, transparent 72%)`, opacity: 0.55 }}
       />
       <CardScene config={config} shared={{ pointer, hover }} />
       {/* interactive cursor-following spotlight */}
       <div
         className="pointer-events-none absolute inset-0 z-10 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
-        style={{ background: `radial-gradient(280px circle at var(--mx) var(--my), ${cursorGlow}, transparent 68%)` }}
+        style={{ background: `radial-gradient(240px circle at var(--mx) var(--my), ${cursorGlow}, transparent 72%)` }}
       />
       {/* cinematic edge vignette */}
       <div
         className="pointer-events-none absolute inset-0 z-10"
-        style={{ boxShadow: 'inset 0 0 90px 12px rgba(0,0,0,0.55)' }}
+        style={{ boxShadow: 'inset 0 0 72px 8px rgba(0,0,0,0.45)' }}
       />
       {/* legibility scrim under the title */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-1/2 bg-gradient-to-t from-[#05070b] via-[#05070b]/55 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[42%] bg-gradient-to-t from-[#05070b] via-[#05070b]/40 to-transparent" />
       {/* glassy top highlight + inner hairline ring */}
       <div className="pointer-events-none absolute inset-x-5 top-0 z-30 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
       <div className="pointer-events-none absolute inset-0 z-30 rounded-[22px] ring-1 ring-inset ring-white/[0.06]" />
@@ -573,8 +617,8 @@ function StaticCard({ config }: { config: CardConfig }) {
         style={{
           background:
             config.variant === 'coin'
-              ? 'radial-gradient(70% 60% at 64% 30%, rgba(60,120,255,0.18), transparent 68%)'
-              : 'radial-gradient(70% 60% at 64% 30%, rgba(34,211,238,0.18), transparent 68%)',
+              ? 'radial-gradient(68% 58% at 64% 32%, rgba(77,143,255,0.12), transparent 70%)'
+              : 'radial-gradient(68% 58% at 64% 32%, rgba(30,202,211,0.12), transparent 70%)',
         }}
       />
       <div

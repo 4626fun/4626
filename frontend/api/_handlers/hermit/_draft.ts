@@ -9,7 +9,7 @@ import {
   setNoStore,
   getClientIp,
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   rateLimitKey,
   logger,
 } from '@4626/server-core'
@@ -186,9 +186,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('hermit-draft', getClientIp(req)),
     RATE_LIMITS.chatCommandPreflight,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))

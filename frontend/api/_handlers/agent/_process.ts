@@ -23,7 +23,7 @@ import {
   isDbConfigured,
   getDb,
   logger,
-  checkRateLimit,
+  checkDurableRateLimit,
   getClientIp,
   rateLimitKey,
   RATE_LIMITS,
@@ -471,7 +471,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Use POST' } satisfies ApiEnvelope<never>)
   }
 
-  const limiter = checkRateLimit(rateLimitKey('agent:process', getClientIp(req as any)), RATE_LIMITS.adminAction)
+  const limiter = await checkDurableRateLimit(rateLimitKey('agent:process', getClientIp(req as any)), RATE_LIMITS.adminAction, { failClosed: true })
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)

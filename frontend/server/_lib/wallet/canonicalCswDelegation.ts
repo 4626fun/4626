@@ -156,10 +156,12 @@ async function readProfileIdByPrivyUserId(db: Db, privyUserId: string): Promise<
 async function readProfileIdByEmail(db: Db, email: string): Promise<number | null> {
   const normalized = String(email ?? '').trim().toLowerCase()
   if (!normalized) return null
+  // WALLET-001: Follow tombstone pointers — exclude merged/deleted profiles.
   const result = await db.sql`
     SELECT id
     FROM profiles
     WHERE LOWER(email) = ${normalized}
+      AND merged_into_profile_id IS NULL
     LIMIT 1;
   `
   const idRaw = result.rows?.[0]?.id
@@ -182,10 +184,12 @@ async function recoverProfileIdFromPrivyHints(db: Db, privyUser: PrivyUserLike):
   )
   for (const address of walletAddresses) {
     const byProfileWallet = await db.sql`
-      SELECT profile_id
-      FROM profile_wallets
-      WHERE LOWER(address) = ${address}
-      ORDER BY updated_at DESC
+      SELECT pw.profile_id
+      FROM profile_wallets pw
+      JOIN profiles p ON p.id = pw.profile_id
+      WHERE LOWER(pw.address) = ${address}
+        AND p.merged_into_profile_id IS NULL
+      ORDER BY pw.updated_at DESC
       LIMIT 1;
     `
     const profileIdRaw = byProfileWallet.rows?.[0]?.profile_id
@@ -195,11 +199,13 @@ async function recoverProfileIdFromPrivyHints(db: Db, privyUser: PrivyUserLike):
     const byProfiles = await db.sql`
       SELECT id
       FROM profiles
-      WHERE
+      WHERE (
         LOWER(COALESCE(primary_wallet, '')) = ${address}
         OR LOWER(COALESCE(primary_smart_wallet, '')) = ${address}
         OR LOWER(COALESCE(csw_address, '')) = ${address}
         OR LOWER(COALESCE(base_sub_account, '')) = ${address}
+      )
+      AND merged_into_profile_id IS NULL
       LIMIT 1;
     `
     const idRaw = byProfiles.rows?.[0]?.id

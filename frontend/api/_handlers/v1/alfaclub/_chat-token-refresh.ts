@@ -17,7 +17,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import {
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   getClientIp,
   rateLimitKey,
 } from '@4626/server-core'
@@ -72,9 +72,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Unauthorized' })
   }
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('alfaclub-chat-token-refresh', getClientIp(req)),
     RATE_LIMITS.adminAction,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     res.setHeader(

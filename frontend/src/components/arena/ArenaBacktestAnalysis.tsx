@@ -144,6 +144,11 @@ export function ArenaBacktestAnalysis({
   const dataSource = series?.dataQuality.source
   const resolvedInterval = series?.interval ?? row.interval
   const isCoarse90d = row.windowHours >= 24 * 90 && resolvedInterval === '1h'
+  // Intermediate degradation (1m → 5m / 15m): the 1m cache was insufficient
+  // for the full horizon. Surface an explicit callout instead of only showing
+  // the resolved interval label (the 1h + 90d case is handled by isCoarse90d).
+  // BACKTEST-005.
+  const isDegradedInterval = resolvedInterval === '5m' || resolvedInterval === '15m'
 
   return (
     <motion.div
@@ -193,6 +198,16 @@ export function ArenaBacktestAnalysis({
           Full 90-day horizon replays on <span className="font-medium text-amber-50">1h bars</span> until the 1m
           Supabase cache reaches ~92% coverage. Hyperliquid only exposes ~3.5 days of 1m history per request — run
           the daily cache script to accumulate minute bars over time.
+        </div>
+      ) : null}
+
+      {isDegradedInterval ? (
+        <div className="rounded-xl border border-amber-900/40 bg-amber-950/20 px-4 py-3 text-xs text-amber-100/90">
+          This replay used <span className="font-medium text-amber-50">{resolvedInterval} bars</span> because the 1m
+          Supabase cache was insufficient for the full horizon — the run degraded from 1m to a coarser resolution.
+          Run{' '}
+          <code className="rounded bg-amber-950/60 px-1 py-0.5 text-amber-100">cache-backtest-minute-bars.ts</code>{' '}
+          to accumulate 1m data and re-run for finer-grained rebalance opportunities.
         </div>
       ) : null}
 

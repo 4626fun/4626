@@ -866,6 +866,32 @@ function sanitizeDeployVaultError(err: Error | null): string {
   return 'Unexpected error. Please retry or reload the page.'
 }
 
+// UX-005: Last-known deploy phase snapshot. DeployVaultBatcher records its
+// current phase state on every successful commit via <DeployPhaseRecorder />.
+// If a later render crashes, DeployVaultErrorBoundary reads this snapshot so
+// the fallback can surface which phase was in progress instead of a bare
+// "Something went wrong". The store is module-level: a render crash inside
+// DeployVaultBatcher cannot reach the recorder's effect, so the value always
+// reflects the last successfully committed phase state.
+type DeployPhaseSnapshotEntry = {
+  label: string
+  state: 'disabled' | 'inProgress' | 'done' | 'pending'
+}
+type DeployPhaseSnapshot = {
+  entries: DeployPhaseSnapshotEntry[]
+  completed: number
+  total: number
+  remaining: number
+}
+let lastDeployPhaseSnapshot: DeployPhaseSnapshot | null = null
+
+function DeployPhaseRecorder(props: { snapshot: DeployPhaseSnapshot | null }) {
+  useEffect(() => {
+    if (props.snapshot) lastDeployPhaseSnapshot = props.snapshot
+  }, [props.snapshot])
+  return null
+}
+
 // Error boundary to catch React rendering errors (like #426) and allow retry
 class DeployVaultErrorBoundary extends Component<
   { children: ReactNode },
@@ -895,6 +921,7 @@ class DeployVaultErrorBoundary extends Component<
     if (this.state.hasError) {
       const userMessage = sanitizeDeployVaultError(this.state.error)
       const showRawForDev = import.meta.env.DEV && this.state.error?.message
+      const snapshot = lastDeployPhaseSnapshot
       return (
         <div className="vault-shell min-h-0 bg-transparent text-white">
           <section className="max-w-[1400px] mx-auto px-6 py-16">
@@ -904,6 +931,30 @@ class DeployVaultErrorBoundary extends Component<
               <div className="text-sm text-zinc-400 leading-relaxed">
                 {userMessage}
               </div>
+              {snapshot && snapshot.entries.length > 0 ? (
+                <div className="rounded-xl border border-white/8 bg-black/20 p-4 space-y-2">
+                  <div className="text-[11px] font-medium text-zinc-400">
+                    Last-known deploy progress
+                    {snapshot.total > 0
+                      ? ` · ${snapshot.completed}/${snapshot.total} phases complete`
+                      : ''}
+                  </div>
+                  <ul className="space-y-1.5">
+                    {snapshot.entries.map((entry) => (
+                      <li
+                        key={entry.label}
+                        className="flex items-center justify-between gap-3 text-[12px]"
+                      >
+                        <span className="text-zinc-300">{entry.label}</span>
+                        <PhaseProgressBadge state={entry.state} />
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="text-[10px] text-zinc-600 leading-relaxed">
+                    Phase state captured before the error. Retry to resume from your last committed step.
+                  </div>
+                </div>
+              ) : null}
               {showRawForDev ? (
                 <div className="text-xs text-zinc-600 font-mono break-all">
                   [dev-only] {this.state.error?.message}
@@ -6197,6 +6248,25 @@ function DeployVaultBatcher({
       remaining: Math.max(total - completed, 0),
     }
   }, [isTimelineStageEnabled, timelineProgressState])
+  // UX-005: snapshot of the current phase states, recorded on each commit so
+  // the error-boundary fallback can show which phase was in progress.
+  const deployPhaseSnapshot = useMemo<DeployPhaseSnapshot>(
+    () => ({
+      entries: [
+        { label: 'Setup approval', state: timelineProgressState('setupOwnerApproval') },
+        { label: 'Phase 1 · Vault core', state: timelineProgressState('phase1Core') },
+        { label: 'Phase 2 · Gauge, CCA, oracle', state: timelineProgressState('phase2Core') },
+        { label: 'Phase 2b · Ovault mesh', state: timelineProgressState('phase2bOvaultMesh') },
+        { label: 'Phase 3 · Strategies', state: timelineProgressState('phase3Strategies') },
+        { label: 'Phase 4 · Launch auction', state: timelineProgressState('phase4Launch') },
+        { label: 'Cleanup', state: timelineProgressState('cleanup') },
+      ],
+      completed: phaseProgressSummary.completed,
+      total: phaseProgressSummary.total,
+      remaining: phaseProgressSummary.remaining,
+    }),
+    [phaseProgressSummary.completed, phaseProgressSummary.remaining, phaseProgressSummary.total, timelineProgressState],
+  )
   const timelineRemainingText =
     phaseProgressSummary.remaining > 0 ? `${phaseProgressSummary.remaining} remaining` : 'No phases remaining'
   const solanaDestinationPubkey = bytes32ToSolanaAddress(batcherSharedInfraQuery.data?.solanaDestination)
@@ -6239,6 +6309,7 @@ function DeployVaultBatcher({
 
   return (
     <div className="space-y-3">
+      <DeployPhaseRecorder snapshot={deployPhaseSnapshot} />
       <div className="text-[11px] text-zinc-400 leading-relaxed">
         {useServerContinue ? (
           <>

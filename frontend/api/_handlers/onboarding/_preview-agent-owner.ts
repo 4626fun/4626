@@ -36,7 +36,7 @@ import {
   setNoStore,
   readJsonBody,
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   getClientIp,
   rateLimitKey,
 } from '@4626/server-core'
@@ -192,9 +192,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Rate-limit aggressively: this endpoint can trigger Privy wallet creation
   // and we do not want arbitrary IPs to spam CSW addresses.
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('onboarding-preview-agent-owner', getClientIp(req)),
     RATE_LIMITS.cswLink,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))

@@ -7,7 +7,7 @@ import {
   guardAgentApiRequest,
   getClientIp,
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   rateLimitKey,
   readBoundedJsonObjectBody,
   buildWalletIntelligence,
@@ -107,13 +107,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   })
   if (!guard.ok) return
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey(
       'v1-agents-wallet-intelligence',
       guard.auth?.address?.toLowerCase() ?? 'anon',
       getClientIp(req),
     ),
     RATE_LIMITS.agentsRead,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     setRetryAfterHeader(res, limiter.resetAt)

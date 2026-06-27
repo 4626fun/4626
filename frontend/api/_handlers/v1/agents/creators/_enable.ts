@@ -6,7 +6,7 @@ import {
   guardAgentApiRequest,
   getClientIp,
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   rateLimitKey,
   getOrCreateCreatorXmtpAgent,
   enableCswAgent,
@@ -46,9 +46,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/agents/creators/enable', kind: 'build' })
   if (!g.ok) return
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('v1-agents-creators-enable', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
     RATE_LIMITS.agentsWrite,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     setRetryAfterHeader(res, limiter.resetAt)

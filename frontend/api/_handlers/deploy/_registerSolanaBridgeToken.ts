@@ -15,7 +15,7 @@ import {
   setNoStore,
   logger,
   getApiContracts,
-  checkRateLimit,
+  checkDurableRateLimit,
   getClientIp,
   rateLimitKey,
   isAdminAddress,
@@ -1013,12 +1013,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ? 'internal:solana-registration-secret'
     : (callerAddress ?? 'unknown-admin')
   const clientIp = getClientIp(req)
-  const rate = checkRateLimit(
+  const rate = await checkDurableRateLimit(
     rateLimitKey('deploy-register-solana-bridge-token', callerTag, clientIp),
     {
       windowMs: 60_000,
       maxRequests: internalAuthorized ? 120 : 20,
     },
+    { failClosed: true },
   )
   if (!rate.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))))

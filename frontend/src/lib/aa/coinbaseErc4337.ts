@@ -779,7 +779,10 @@ function pendingUserOpStorageKey(smartWallet: Address, ownerIndex: number): stri
 function storePendingUserOpHash(smartWallet: Address, ownerIndex: number, userOpHash: Hex): void {
   if (typeof window === 'undefined') return
   try {
-    sessionStorage.setItem(pendingUserOpStorageKey(smartWallet, ownerIndex), userOpHash)
+    // RACE-002: Use localStorage instead of sessionStorage so pending UserOp
+    // hashes are shared across tabs for the same smart wallet, preventing
+    // cross-tab concurrent swaps with conflicting nonces.
+    localStorage.setItem(pendingUserOpStorageKey(smartWallet, ownerIndex), userOpHash)
   } catch {
     // ignore quota / private mode
   }
@@ -788,7 +791,7 @@ function storePendingUserOpHash(smartWallet: Address, ownerIndex: number, userOp
 function clearPendingUserOpHash(smartWallet: Address, ownerIndex: number): void {
   if (typeof window === 'undefined') return
   try {
-    sessionStorage.removeItem(pendingUserOpStorageKey(smartWallet, ownerIndex))
+    localStorage.removeItem(pendingUserOpStorageKey(smartWallet, ownerIndex))
   } catch {
     // ignore
   }
@@ -798,7 +801,7 @@ function clearPendingUserOpHash(smartWallet: Address, ownerIndex: number): void 
 export function readPendingUserOpHash(smartWallet: Address, ownerIndex: number): Hex | null {
   if (typeof window === 'undefined') return null
   try {
-    const raw = sessionStorage.getItem(pendingUserOpStorageKey(smartWallet, ownerIndex))
+    const raw = localStorage.getItem(pendingUserOpStorageKey(smartWallet, ownerIndex))
     if (!raw || !raw.startsWith('0x')) return null
     return raw as Hex
   } catch {

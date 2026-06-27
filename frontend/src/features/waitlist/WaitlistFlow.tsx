@@ -194,10 +194,8 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   const [emailBusy, setEmailBusy] = useState(false)
   const [signOutBusy, setSignOutBusy] = useState(false)
   const [sessionAddress, setSessionAddress] = useState<string | null>(null)
-  const [sessionHydrated, setSessionHydrated] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [listCount, setListCount] = useState<number | null>(null)
-  const autoPromptAttemptedRef = useRef(false)
   const signupInFlightRef = useRef(false)
 
   useEffect(() => {
@@ -207,7 +205,6 @@ export function WaitlistFlow(props: { sectionId?: string }) {
       const address = await readAuthSessionAddress()
       if (cancelled) return
       setSessionAddress(address)
-      setSessionHydrated(true)
     })()
     return () => {
       cancelled = true
@@ -234,8 +231,8 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   }, [])
 
   const handleEmailSignup = useCallback(async () => {
-    // R5 fix: in-flight guard prevents concurrent execution when the
-    // auto-prompt effect and a manual button click overlap on the same tick.
+    // R5 fix: in-flight guard prevents concurrent execution when a user
+    // double-clicks the "Join with email" button on the same tick.
     if (signupInFlightRef.current) return
     signupInFlightRef.current = true
     setError(null)
@@ -331,22 +328,17 @@ export function WaitlistFlow(props: { sectionId?: string }) {
         readToken: privy.getAccessToken ?? null,
       })
       setSessionAddress(null)
-      setSessionHydrated(true)
     } finally {
       setSignOutBusy(false)
     }
   }, [privy.getAccessToken, privy.logout, signOutBusy])
 
-  useEffect(() => {
-    if (autoPromptAttemptedRef.current) return
-    if (!sessionHydrated) return
-    if (!privy.ready) return
-    if (sessionAddress || emailBusy || signOutBusy) return
-
-    autoPromptAttemptedRef.current = true
-    void handleEmailSignup()
-  }, [emailBusy, handleEmailSignup, privy.ready, sessionAddress, sessionHydrated, signOutBusy])
-
+  // UX-002: Do not auto-open the Privy login modal on page load. Previously
+  // this effect fired handleEmailSignup() as soon as the session hydrated with
+  // no address, which auto-opened the Privy "log in or sign up" dialog on top
+  // of the waitlist card — most visibly when an unauthenticated visitor was
+  // redirected from /swap to /waitlist. The card's "Join with email" button is
+  // the intended entry point; let the user click it themselves.
   const isBusy = emailBusy || signOutBusy
 
   return (
@@ -515,7 +507,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                 <div className="mb-2 flex justify-center">
                   <div className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/5 px-2 py-0.5 text-[9px] uppercase tracking-[1px] text-emerald-400">
                     <CheckCircle2 className="size-2.5" aria-hidden="true" />
-                    <span>Confirmed</span>
+                    <span>On the list</span>
                   </div>
                 </div>
               )}
@@ -528,7 +520,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                     <span
                       className={`size-1.5 rounded-full ${sessionAddress ? 'bg-emerald-400' : 'bg-zinc-500'}`}
                     />
-                    {sessionAddress ? 'Confirmed' : 'Open'}
+                    {sessionAddress ? 'On the list' : 'Open'}
                   </span>
                 </div>
 
@@ -537,7 +529,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                 </h2>
                 <p className="mt-2 text-sm leading-relaxed text-zinc-400">
                   {sessionAddress
-                    ? 'Early access confirmed. Enter the app to explore and set up.'
+                    ? "You're on the launch list. Enter the app to finish one-time wallet setup and start swapping."
                     : 'Use email OTP to create or recover your 4626 account. No wallet required to join.'}
                 </p>
 
@@ -591,6 +583,9 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                         <ArrowRight className="size-4" aria-hidden="true" />
                       </a>
                     </Button>
+                    <p className="text-center text-[11px] leading-relaxed text-zinc-500">
+                      You're on the list. One-time wallet setup remains before swaps can execute.
+                    </p>
                     <button
                       type="button"
                       className="self-center text-xs tracking-wide text-zinc-500 transition hover:text-zinc-300 disabled:opacity-50"

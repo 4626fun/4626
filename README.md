@@ -45,7 +45,7 @@ This monorepo includes:
 
 ## Account Model
 
-The single source of truth for who-signs-what, which address is canonical, and which flows are already shipped is [`docs/ACCOUNT_MODEL.md`](docs/ACCOUNT_MODEL.md). Read it before writing any design doc that touches account, wallet, signer, or paymaster behaviour.
+The single source of truth for who-signs-what, which address is canonical, and which flows are already shipped is [`docs/_internal/ACCOUNT_MODEL.md`](docs/_internal/ACCOUNT_MODEL.md). Read it before writing any design doc that touches account, wallet, signer, or paymaster behaviour.
 
 ## Per-User Wallet Architecture
 
@@ -484,7 +484,7 @@ For complete env references, see `frontend/README.md`.
 - Runtime skills source: `script/agent-runtime/skills/`
 - Frontend guide: `frontend/README.md`
 - Swap integration/runtime notes: `frontend/docs/uniswap-integration-notes.md`
-- **Canonical account model (read first for any account/wallet design)**: `docs/ACCOUNT_MODEL.md`
+- **Canonical account model (read first for any account/wallet design)**: `docs/_internal/ACCOUNT_MODEL.md`
 - Account + onboarding architecture: `frontend/docs/account-auth-invariants.md`, `frontend/docs/waitlist-accounts-architecture.md`
 - Telegram Mini App link/onboarding architecture: `frontend/docs/telegram-miniapp-link-architecture.md`
 

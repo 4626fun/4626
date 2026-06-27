@@ -753,6 +753,17 @@ export function ConnectButton({
                   >
                     <span className="label block text-zinc-300">Settings</span>
                   </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void auth.signOut()
+                      setShowMenu(false)
+                    }}
+                    disabled={auth.busy}
+                    className="block w-full py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-60"
+                  >
+                    <span className="label block text-zinc-300">{auth.busy ? 'Signing out…' : 'Sign out'}</span>
+                  </button>
                 </div>
               ) : null}
               {auth.error ? <div className="px-4 text-[11px] text-red-400/90">{auth.error}</div> : null}
@@ -896,6 +907,17 @@ export function ConnectButton({
                 >
                   <span className="label block text-zinc-300">Settings</span>
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void auth.signOut()
+                    setShowMenu(false)
+                  }}
+                  disabled={auth.busy}
+                  className="block w-full py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-60"
+                >
+                  <span className="label block text-zinc-300">{auth.busy ? 'Signing out…' : 'Sign out'}</span>
+                </button>
               </div>
           </AccountTray>
         )}

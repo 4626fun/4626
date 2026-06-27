@@ -1,6 +1,6 @@
 # Thin Waitlist And Accounts Architecture
 
-> **Repo-wide canonical:** [docs/ACCOUNT_MODEL.md](../../docs/ACCOUNT_MODEL.md) is the single source of truth for the account model (populations, invariants, schema). This file remains authoritative for *waitlist + accounts product behaviour* specifically, but the underlying account model it builds on is in ACCOUNT_MODEL.md.
+> **Repo-wide canonical:** [docs/_internal/ACCOUNT_MODEL.md](../../docs/_internal/ACCOUNT_MODEL.md) is the single source of truth for the account model (populations, invariants, schema). This file remains authoritative for *waitlist + accounts product behaviour* specifically, but the underlying account model it builds on is in ACCOUNT_MODEL.md.
 
 This is the canonical product model for identity onboarding:
 
@@ -10,7 +10,7 @@ This is the canonical product model for identity onboarding:
 - No account is fully created until email OTP verification completes.
 - Privy is the auth/session backend and should create the embedded EOA during signup/auth.
 - Every fully onboarded account must have a Privy embedded EOA.
-- After verified email + embedded EOA creation, signed-in users stay on `/waitlist` for the setup-first workspace: Zora linking, canonical CSW detection, sub-account setup status (for CSW users — per [docs/4626-connection-methods.md](../../docs/4626-connection-methods.md) Section 2), and the gated `Enter App` handoff.
+- After verified email + embedded EOA creation, signed-in users stay on `/waitlist` for the setup-first workspace: Zora linking, canonical CSW detection, sub-account setup status (for CSW users — per [docs/_internal/4626-connection-methods.md](../../docs/_internal/4626-connection-methods.md) Section 2), and the gated `Enter App` handoff.
 - `frontend/src/pages/accounts/AccountsPage.tsx` is now the advanced settings and recovery backstop: linked identities, Telegram/browser escapes, secondary owner actions, and recovery-only tooling.
 - Accepted users who choose `Enter App` continue through `frontend/src/features/waitlist/WaitlistFlow.tsx` + `frontend/src/features/waitlist/waitlistHandoff.ts`, and `frontend/src/hooks/useSiweAuth.ts` redeems the `cv_handoff` code before routing to the canonical app landing route.
 - Telegram, Base app, and website must all converge into the same verified-email-based account model.
@@ -19,7 +19,7 @@ This is the canonical product model for identity onboarding:
 Source of truth by concern:
 
 - Waitlist entry + email capture: `frontend/api/_handlers/_routes.waitlist.ts` and `frontend/api/_handlers/waitlist/_bootstrap.ts`
-- Signed-in setup workspace shell: `frontend/src/features/waitlist/WaitlistFlow.tsx` and `frontend/src/features/waitlist/WaitlistSetupWorkspace.tsx`
+- Signed-in setup workspace shell: `frontend/src/features/waitlist/WaitlistFlow.tsx`
 - Shared setup-first account modules: `frontend/src/features/accountSetup/AccountSetupWorkspaceView.tsx`, `frontend/src/features/accountSetup/useAccountSetupController.ts`, and `frontend/src/features/accountSetup/shared.ts`
 - Linked identity state + scoring: `frontend/api/_handlers/accounts/_me.ts` and `frontend/server/_lib/identity/accountsIdentity.ts`
 - Zora discovery + canonical CSW refresh: `frontend/api/_handlers/_routes.zora.ts` and `frontend/api/_handlers/zora/_resolve.ts`
@@ -46,9 +46,9 @@ Wallet invariants:
 
 Architecture and operational references:
 
-- Canonical architecture: [docs/4626-connection-methods.md](../../docs/4626-connection-methods.md)
-- Owner-install reference methods runbook (legacy/server lanes and current relay path): `docs/operations/owner-install-reference-methods.md`
-- User-initiated troubleshooting: `docs/guides/troubleshooting/activate-account-signing.md`
+- Canonical architecture: [docs/_internal/4626-connection-methods.md](../../docs/_internal/4626-connection-methods.md)
+- Owner-install reference methods runbook (legacy/server lanes and current relay path): `docs/_internal/operations/wallet/owner-install-reference-methods.md`
+- User-initiated troubleshooting: `docs/_internal/troubleshooting/activate-account-signing.md`
 
 Implementation posture:
 
@@ -62,7 +62,7 @@ Legacy note:
 
 - The older heavy waitlist flow and its private step/hook files were removed after the thin waitlist convergence pass.
 - New product work should treat `/waitlist` as the default post-auth setup surface and `/accounts` as the advanced backstop.
-- New product work should build on `frontend/src/features/waitlist/WaitlistFlow.tsx`, `frontend/src/features/waitlist/WaitlistSetupWorkspace.tsx`, `frontend/src/features/accountSetup/AccountSetupWorkspaceView.tsx`, `frontend/src/features/accountSetup/useAccountSetupController.ts`, `frontend/src/pages/Waitlist.tsx`, and `frontend/src/pages/accounts/AccountsPage.tsx`.
+- New product work should build on `frontend/src/features/waitlist/WaitlistFlow.tsx`, `frontend/src/features/accountSetup/AccountSetupWorkspaceView.tsx`, `frontend/src/features/accountSetup/useAccountSetupController.ts`, `frontend/src/pages/Waitlist.tsx`, and `frontend/src/pages/accounts/AccountsPage.tsx`.
 - If an older auth path conflicts with `frontend/docs/account-auth-invariants.md`, remove or migrate it rather than preserving it.
 
 ## Telegram Flow Routing Boundary

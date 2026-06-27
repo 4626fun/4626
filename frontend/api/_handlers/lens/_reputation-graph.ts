@@ -19,7 +19,7 @@ import {
   setNoStore,
   readRequestPrincipal,
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   getClientIp,
   rateLimitKey,
 } from '@4626/server-core'
@@ -79,9 +79,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('lens-reputation-graph', req.method.toLowerCase(), getClientIp(req)),
     req.method === 'GET' ? RATE_LIMITS.specRead : RATE_LIMITS.agentsWrite,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))

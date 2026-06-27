@@ -7,7 +7,7 @@ import {
   guardAgentApiRequest,
   getClientIp,
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   rateLimitKey,
 } from '@4626/server-core'
 
@@ -32,9 +32,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/build/charm/setAutoFeeTier', kind: 'build' })
   if (!g.ok) return
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('v1-build-charm-set-auto-fee-tier', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
     RATE_LIMITS.buildCharmCalldata,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     setRateLimitRetryAfter(res, limiter.resetAt)

@@ -11,7 +11,7 @@ import {
   isDbConfigured,
   getSessionAddress,
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   getClientIp,
   rateLimitKey,
 } from '@4626/server-core'
@@ -65,9 +65,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Normalize to lowercase for case-insensitive matching
   const sessionAddress = sessionAddressRaw.toLowerCase()
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('creator-access-request', sessionAddress, getClientIp(req)),
     RATE_LIMITS.creatorQuickstart,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))

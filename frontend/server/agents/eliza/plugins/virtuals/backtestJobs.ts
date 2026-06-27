@@ -1,6 +1,23 @@
 import { executeBacktestCounterRebalance } from '../../../../_lib/alfaclub/backtestCounterRebalance.js'
 import { getPerpMarkets } from '../../../../_lib/alfaclub/hyperliquid.js'
 
+declare const process: { env: Record<string, string | undefined> }
+
+/**
+ * Outer timeout for a real backtest job. A 90-day 1m run with cached bars
+ * finishes in ~5-10s, but Hyperliquid chunked fallback (or a stalled API /
+ * Supabase deadlock) can block the Eliza chat consumer indefinitely. This
+ * races the job against a configurable deadline (default 60s) so a hung
+ * backtest surfaces a user-friendly error instead of blocking forever.
+ * BACKTEST-002.
+ */
+const DEFAULT_BACKTEST_JOB_TIMEOUT_MS = 60_000
+
+function backtestJobTimeoutMs(): number {
+  const raw = Number(process.env.BACKTEST_JOB_TIMEOUT_MS)
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_BACKTEST_JOB_TIMEOUT_MS
+}
+
 export type VirtualsBacktestRequest = {
   symbol: string
   leveragePercent: number
@@ -162,6 +179,67 @@ export async function runRealBacktestJob(
     resolveLeverage?: typeof resolveAppliedLeverage
   },
 ): Promise<VirtualsBacktestResult> {
+  // BACKTEST-002: race the job against a configurable deadline so a stalled
+  // backtest (Hyperliquid API hang, Supabase deadlock) cannot block the Eliza
+  // chat / XMTP consumer indefinitely. The underlying job keeps running, but
+  // this call surfaces a user-friendly timeout error instead of hanging.
+  // This covers the service.ts chat entry point (service.ts:248) and any other
+  // caller; the skillRouter also applies its own outer 60s race (harmless).
+  const timeoutMs = backtestJobTimeoutMs()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      executeBacktestJob(request, deps),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`Backtest timed out after ${Math.round(timeoutMs / 1000)}s`)),
+          timeoutMs,
+        )
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
+/**
+ * BACKTEST-004: Extract the meaningful rows from a backtest stdout instead of
+ * tail-truncating. The CLI prints "Top parameter sets (by objective):" near the
+ * top (the actual sweep results) and "Saved ..." / "No-commingle ..." lines at
+ * the tail. A naive `slice(-8)` keeps only the file-path lines and drops the
+ * results. This helper pulls the top-N block plus the saved-file lines, falling
+ * back to the tail when the marker is absent (e.g. unit-test mocks).
+ */
+const BACKTEST_STDOUT_MAX_CHARS = 4000
+
+function formatBacktestStdoutSummary(stdout: string): string {
+  const lines = stdout.split('\n')
+  const topIdx = lines.findIndex((l) => l.includes('Top parameter sets'))
+  if (topIdx >= 0) {
+    const block: string[] = []
+    // Capture the top-N block (header through the next blank line).
+    for (let i = topIdx; i < lines.length; i++) {
+      const l = lines[i]
+      if (i > topIdx && l.trim() === '') break
+      block.push(l)
+    }
+    // Append the saved-file and no-commingle status lines from the tail.
+    for (const l of lines) {
+      if (l.startsWith('Saved ') || l.startsWith('No-commingle requirement')) block.push(l)
+    }
+    return block.join('\n').slice(0, BACKTEST_STDOUT_MAX_CHARS)
+  }
+  // Fallback: no recognized marker — keep the tail (preserves prior behaviour).
+  return lines.slice(-8).join('\n').slice(0, BACKTEST_STDOUT_MAX_CHARS)
+}
+
+async function executeBacktestJob(
+  request: VirtualsBacktestRequest,
+  deps?: {
+    run?: typeof executeBacktestCounterRebalance
+    resolveLeverage?: typeof resolveAppliedLeverage
+  },
+): Promise<VirtualsBacktestResult> {
   const run = deps?.run ?? executeBacktestCounterRebalance
   const resolveLeverage = deps?.resolveLeverage ?? resolveAppliedLeverage
   const { appliedLeverage, maxLeverage } = await resolveLeverage({
@@ -203,18 +281,18 @@ export async function runRealBacktestJob(
     // populated yet (requires `cache-backtest-minute-bars.ts` to run).
     // Coarser intervals (5m, 15m, 1h) still produce valid backtest results,
     // just with fewer rebalance opportunities per bar.
-    const tail = result.stdout.split('\n').slice(-8).join('\n').slice(0, 1200)
+    const summary = formatBacktestStdoutSummary(result.stdout)
     const responseText =
       `Backtest complete for ${request.symbol} (${FIXED_WINDOW_HOURS}h, ${appliedLeverage.toFixed(2)}x from ${request.leveragePercent}% of max ${maxLeverage}x, long $${Math.round(request.initialLongUsd)}, short $${Math.round(request.initialShortUsd)}, health ${request.rebalanceHealthPercent}%, size ${request.rebalanceSizePercent}%). ` +
       `Resolved interval: ${result.resolvedInterval} (WARNING: 1m cache unavailable — results use coarser candles; run cache-backtest-minute-bars.ts for 1m fidelity).\n\n` +
-      `Recent output:\n${tail || '(no stdout output captured)'}`
+      `Top results:\n${summary || '(no stdout output captured)'}`
     return { responseText, resolvedInterval: result.resolvedInterval }
   }
 
-  const tail = result.stdout.split('\n').slice(-8).join('\n').slice(0, 1200)
+  const summary = formatBacktestStdoutSummary(result.stdout)
   const responseText =
     `Backtest complete for ${request.symbol} (${FIXED_WINDOW_HOURS}h, ${appliedLeverage.toFixed(2)}x from ${request.leveragePercent}% of max ${maxLeverage}x, long $${Math.round(request.initialLongUsd)}, short $${Math.round(request.initialShortUsd)}, health ${request.rebalanceHealthPercent}%, size ${request.rebalanceSizePercent}%). ` +
     `Resolved interval: ${result.resolvedInterval}.\n\n` +
-    `Recent output:\n${tail || '(no stdout output captured)'}`
+    `Top results:\n${summary || '(no stdout output captured)'}`
   return { responseText, resolvedInterval: result.resolvedInterval }
 }

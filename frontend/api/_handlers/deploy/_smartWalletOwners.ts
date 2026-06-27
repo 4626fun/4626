@@ -6,7 +6,7 @@ import {
   readBoundedJsonObjectBody,
   setCors,
   setNoStore,
-  checkRateLimit,
+  checkDurableRateLimit,
   RATE_LIMITS,
   rateLimitKey,
   getClientIp,
@@ -73,9 +73,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('smart-wallet-owners-read', getClientIp(req)),
     RATE_LIMITS.smartWalletOwnerRead,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))

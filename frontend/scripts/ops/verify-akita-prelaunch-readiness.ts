@@ -1,12 +1,18 @@
 #!/usr/bin/env tsx
 /**
- * AKITA full-stack redeploy — platform + Vultr + Vercel prep gate (read-only by default).
+ * AKITA full-stack redeploy — platform + Vultr + Vercel prep gate.
  *
  *   pnpm -C frontend ops:verify-akita-prelaunch --production
  *   pnpm -C frontend ops:verify-akita-prelaunch --production --ssh-vultr
  *
  * Does NOT deploy the vault. Surfaces what is ready vs what you / ops must still do
  * before launching AKITA via app.4626.fun/deploy.
+ *
+ * LAUNCH-002: Deploy status and preflight checks are read-only — they do NOT
+ * mutate deploy state. However, this script DOES exercise the keeper
+ * control-plane (Solana bridge fee settlement, winner relay, entry relay) via
+ * the keeper reconcile endpoint. These are normal idempotent keeper operations
+ * (checkpoint-based), not deploy mutations.
  */
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'

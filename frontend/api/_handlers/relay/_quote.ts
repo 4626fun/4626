@@ -6,12 +6,13 @@ import {
   readJsonBody,
   setCors,
   setNoStore,
-  checkRateLimit,
+  checkDurableRateLimit,
   getClientIp,
   rateLimitKey,
   RATE_LIMITS,
   logger,
 } from '../../../packages/server-core/src/index.js'
+import { readRequestPrincipalAddress } from '../../../server/_lib/auth/requestPrincipal.js'
 import { RELAY_OWNER_MUTATION_ORIGIN_GAS_OVERHEAD } from '../../../server/_lib/relay/getQuote.js'
 
 const RELAY_QUOTE_BODY_MAX_BYTES = 262_144
@@ -81,13 +82,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('relay:quote', getClientIp(req)),
     RATE_LIMITS.creatorQuickstart,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
+  }
+
+  // APIAUTH-007: Require authenticated principal — prevents anonymous API key
+  // consumption and fee subsidy abuse on the relay proxy.
+  const principalAddress = readRequestPrincipalAddress(req)
+  if (!principalAddress) {
+    return res.status(401).json({ success: false, error: 'Authentication required' } satisfies ApiEnvelope<never>)
   }
 
   let body: RelayQuoteRequest

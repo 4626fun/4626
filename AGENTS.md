@@ -29,7 +29,7 @@ Path-scoped or topic-scoped rules in `.cursor/rules/*.mdc` are authoritative ins
 - `.cursor/rules/csw-agent-lifecycle.mdc` owns CSW delegation, XMTP identity, ERC-8004 identity, and deploy-session wallet mechanics.
 - `.cursor/rules/waitlist-onboarding-simplicity.mdc` owns waitlist/signup simplification inside its scoped auth and waitlist files.
 - `.cursor/rules/frontend-seo-core.mdc` and `.cursor/rules/frontend-seo-internal-linking.mdc` own frontend SEO policy inside `frontend/`.
-- **`docs/ACCOUNT_MODEL.md` is the canonical reference for the 4626 account model** — user populations, identity invariants, the `command_issuer_execution_context` schema, and the existing-flows inventory (e.g. `setPayoutRecipient` is already part of the deploy phase-2 batch). Read it before writing any design doc that touches account, wallet, signer, sub-account, or paymaster behaviour.
+- **`docs/_internal/ACCOUNT_MODEL.md` is the canonical reference for the 4626 account model** — user populations, identity invariants, the `command_issuer_execution_context` schema, and the existing-flows inventory (e.g. `setPayoutRecipient` is already part of the deploy phase-2 batch). Read it before writing any design doc that touches account, wallet, signer, sub-account, or paymaster behaviour.
 
 Do not preserve legacy routes, aliases, or compatibility shims just for backward compatibility. When replacing a path or interface, migrate active callers and remove the old surface unless product explicitly requires a staged rollout.
 
@@ -156,8 +156,8 @@ See `docs/audits/x-ray/contract-audit-pass-2026-06.md`, updated `review-todo.md`
 - **`/swap` should not background-refresh idle quotes**: quote on input changes, then rebuild stale quotes during review/submit if needed. Avoid reintroducing timer-driven idle re-quote loops.
 - **Do not add new ad hoc session polling around `useSiweAuth()`**: session restoration already dedupes shared `/api/auth/me` work and keeps a short-lived shared in-memory session snapshot so SPA route/provider remounts do not briefly fall back to signed out. New auth consumers should reuse the existing hook/provider path instead of layering separate refresh effects.
 - **Railway primary must fail fast if misconfigured**: standby mode or `AGENT_CONSUME_XMTP=false` on Railway is a startup error, not a healthy passive mode. When Postgres is configured, the DB-backed runtime lease lock is expected to stay enabled for the Railway primary.
-- **Transaction routing has two `executionMode` values and four send modes.** User-initiated frontend code paths branch on `executionMode: 'canonical' | 'eoa'` (exported from `frontend/src/lib/uniswap/walletMode.ts`). `txRouter` (`frontend/src/lib/tx/txRouter.ts`) selects one of: `sendCalls` (EIP-5792 atomic batching on CSW sub-account connectors), `canonical4337` (ERC-4337 UserOp via CDP paymaster — strongest fallback for CSW), `canonicalDirect` (direct `executeBatch` on the CSW contract), or `eoaDirect` (standard `eth_sendTransaction`, one tx at a time). Only `eoaDirect` is non-atomic (approval and swap sequential). Canonical approval+swap and parent-CSW fallback paths must stay locked to `canonical4337`; do not fall back to direct gas sends when sponsorship is denied. Full routing table: Section 5 of `docs/4626-connection-methods.md`.
-- **Known-good sponsored ETH→token canonical swap shape:** `canonical4337` + `eth_sendUserOperation`; canonical CSW is the sender/asset owner; Privy embedded EOA signs as CSW owner; calls are `WETH.deposit()` → `WETH.approve(...)` → Uniswap swap proxy `execute(address,address,uint256,bytes,bytes[],uint256)` at `0x02E5be68D46DAc0B524905bfF209cf47EE6dB2a9` (`0x2894adf9`). The router/proxy call must have zero native value; native ETH enters only via WETH deposit. Runbook: `docs/operations/sponsored-canonical-swap-pattern.md`.
+- **Transaction routing has two `executionMode` values and four send modes.** User-initiated frontend code paths branch on `executionMode: 'canonical' | 'eoa'` (exported from `frontend/src/lib/uniswap/walletMode.ts`). `txRouter` (`frontend/src/lib/tx/txRouter.ts`) selects one of: `sendCalls` (EIP-5792 atomic batching on CSW sub-account connectors), `canonical4337` (ERC-4337 UserOp via CDP paymaster — strongest fallback for CSW), `canonicalDirect` (direct `executeBatch` on the CSW contract), or `eoaDirect` (standard `eth_sendTransaction`, one tx at a time). Only `eoaDirect` is non-atomic (approval and swap sequential). Canonical approval+swap and parent-CSW fallback paths must stay locked to `canonical4337`; do not fall back to direct gas sends when sponsorship is denied. Full routing table: Section 5 of `docs/_internal/4626-connection-methods.md`.
+- **Known-good sponsored ETH→token canonical swap shape:** `canonical4337` + `eth_sendUserOperation`; canonical CSW is the sender/asset owner; Privy embedded EOA signs as CSW owner; calls are `WETH.deposit()` → `WETH.approve(...)` → Uniswap swap proxy `execute(address,address,uint256,bytes,bytes[],uint256)` at `0x02E5be68D46DAc0B524905bfF209cf47EE6dB2a9` (`0x2894adf9`). The router/proxy call must have zero native value; native ETH enters only via WETH deposit. Runbook: `docs/_internal/operations/operations/wallet/sponsored-canonical-swap-pattern.md`.
 
 ### Token identity invariants
 
@@ -175,7 +175,7 @@ These are product-level rules, not implementation suggestions. Future auth/onboa
 
 Canonical wallet/account selection is defined in `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`, and delegated signer / agent lifecycle mechanics are defined in `.cursor/rules/csw-agent-lifecycle.mdc`. This section defines the product-facing account states layered on top of those rules.
 
-Canonical architecture reference: `docs/4626-connection-methods.md` — describes the three connection methods (CSW, external EOA, Telegram), the CSW address model, and the `executionMode` / send-mode routing table.
+Canonical architecture reference: `docs/_internal/4626-connection-methods.md` — describes the three connection methods (CSW, external EOA, Telegram), the CSW address model, and the `executionMode` / send-mode routing table.
 
 Wallet-role model for user-facing docs and copy:
 
@@ -289,7 +289,7 @@ The Telegram Mini App account-link/onboarding flow must follow strict architectu
 ### Current Preserved Link Path
 
 The currently working Telegram -> Privy -> canonical-account path is preserved in
-`docs/operations/telegram-canonical-link-preservation.md`.
+`docs/_internal/operations/operations/messaging/telegram-canonical-link-preservation.md`.
 
 Any simplification must keep this semantic order:
 
@@ -318,7 +318,7 @@ resolution.
 
 Authoritative implementation notes live in:
 
-- `docs/operations/telegram-canonical-link-preservation.md`
+- `docs/_internal/operations/operations/messaging/telegram-canonical-link-preservation.md`
 - `frontend/docs/account-auth-invariants.md`
 - `frontend/docs/waitlist-accounts-architecture.md`
 

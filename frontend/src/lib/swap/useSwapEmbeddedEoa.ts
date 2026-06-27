@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useActiveWallet, useWallets } from '@privy-io/react-auth'
+import { useActiveWallet, useAuthorizationSignature, useWallets } from '@privy-io/react-auth'
 import { Address, getAddress, isAddress, toHex, type Hex } from 'viem'
 
 import { extractPrivyWalletsFromUser } from '@/lib/privy/embeddedWallet'
+import {
+  isPrivyUnifiedStackWallet,
+  privyAuthorizedWalletSecp256k1Sign,
+  resolvePrivyUnifiedWalletId,
+  type PrivyAuthorizationSignatureGenerator,
+} from '@/lib/privy/privyAuthorizedWalletRpc'
 import { refreshPrivyEmbeddedSignerSession } from '@/lib/privy/refreshEmbeddedSignerSession'
 import { isRawEcdsaDigest, signRawEcdsaDigest } from '@/lib/wallet/signRawEcdsaDigest'
 import { ensureProviderOnBase } from '@/lib/wallet/safeSwitchToBase'
@@ -82,6 +88,7 @@ function createEmbeddedSignerWalletClient({
   ensureSignatureHex,
   isRawEcdsaDigest,
   signRawEcdsaDigest,
+  signSecp256k1Digest,
 }: {
   address: Address
   getProvider: () => Promise<any | null>
@@ -95,9 +102,11 @@ function createEmbeddedSignerWalletClient({
     label: string
     refreshSession?: () => Promise<unknown>
   }) => Promise<Hex>
+  signSecp256k1Digest?: (digest: Hex) => Promise<Hex>
 }) {
   return {
     refreshSession,
+    signSecp256k1Digest,
     request: async (args: { method: string; params?: any[] }) => {
       const provider = await getProvider()
       if (!provider?.request) throw new Error('Privy embedded EOA provider not available')
@@ -134,6 +143,7 @@ function createEmbeddedSignerWalletClient({
           signerAddress: address,
           walletClient: {
             refreshSession,
+            signSecp256k1Digest,
             // Re-resolve the provider per request so retries after a session
             // refresh do not reuse a stale provider channel.
             request: async (requestArgs: any) => {
@@ -181,6 +191,7 @@ export function useSwapEmbeddedEoa(params: {
     canonicalAddress,
   } = params
   const { wallets: privyLiveWallets } = useWallets()
+  const { generateAuthorizationSignature } = useAuthorizationSignature()
   const privyWallets = useMemo(() => {
     const metadataWallets = extractPrivyWalletsFromUser(privyUser)
     const liveByAddress = new Map<string, any>()
@@ -351,6 +362,36 @@ export function useSwapEmbeddedEoa(params: {
     })
   }, [privyEmbeddedEoaWallet, setActivePrivyWallet])
 
+  const privyUnifiedWalletId = useMemo(() => {
+    if (!privyEmbeddedEoaAddress) return null
+    return resolvePrivyUnifiedWalletId({
+      wallet: privyEmbeddedEoaWallet,
+      user: privyUser,
+      address: privyEmbeddedEoaAddress,
+    })
+  }, [privyEmbeddedEoaAddress, privyEmbeddedEoaWallet, privyUser])
+
+  const usePrivyAuthorizedSecp256k1 = useMemo(() => {
+    if (!privyUnifiedWalletId) return false
+    return isPrivyUnifiedStackWallet(privyEmbeddedEoaWallet)
+  }, [privyEmbeddedEoaWallet, privyUnifiedWalletId])
+
+  const signPrivyAuthorizedSecp256k1Digest = useCallback(
+    async (digest: Hex) => {
+      if (!privyUnifiedWalletId) {
+        throw new Error('Privy embedded wallet id is not available for authorized signing.')
+      }
+      const generateAuthSig = generateAuthorizationSignature as PrivyAuthorizationSignatureGenerator
+      return privyAuthorizedWalletSecp256k1Sign({
+        walletId: privyUnifiedWalletId,
+        hash: digest,
+        generateAuthorizationSignature: generateAuthSig,
+        refreshSession: refreshEmbeddedSignerSession,
+      })
+    },
+    [generateAuthorizationSignature, privyUnifiedWalletId, refreshEmbeddedSignerSession],
+  )
+
   const privyEmbeddedCanonicalWalletClient = useMemo(() => {
     if (!privyEmbeddedEoaAddress) return null
     return createEmbeddedSignerWalletClient({
@@ -360,8 +401,15 @@ export function useSwapEmbeddedEoa(params: {
       ensureSignatureHex,
       isRawEcdsaDigest,
       signRawEcdsaDigest,
+      signSecp256k1Digest: usePrivyAuthorizedSecp256k1 ? signPrivyAuthorizedSecp256k1Digest : undefined,
     })
-  }, [getPrivyEmbeddedEoaProvider, privyEmbeddedEoaAddress, refreshEmbeddedSignerSession])
+  }, [
+    getPrivyEmbeddedEoaProvider,
+    privyEmbeddedEoaAddress,
+    refreshEmbeddedSignerSession,
+    signPrivyAuthorizedSecp256k1Digest,
+    usePrivyAuthorizedSecp256k1,
+  ])
 
   const manualRecover = useCallback(() => {
     if (!privyEmbeddedEoaWallet || privyEmbeddedEoaCanSign) return

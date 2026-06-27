@@ -13,6 +13,7 @@ import {
   parseBacktestInterval,
 } from './backtestIntervalPolicy.js'
 import { loadFinestBacktestMarketBars } from './backtestMarketBars.js'
+import { isDbConfigured } from '../db/postgres.js'
 import {
   downsampleBacktestSeries,
   type BacktestSeriesPoint,
@@ -829,6 +830,19 @@ export async function executeBacktestCounterRebalance(
 export async function runBacktestCounterRebalanceCli(argv: string[]): Promise<void> {
   const args = parseArgs(argv)
   const windowHours = toNum(args.get('window-hours'), 24 * 7)
+  // BACKTEST-003: tsx scripts don't get Vite's automatic .env loading, so the
+  // CLI entry (backtest-counter-rebalance.ts) calls loadEnvFile() first. If the
+  // DB is still unconfigured and the window exceeds 7 days, warn loudly —
+  // without this, getDb() returns null silently and the 1m Supabase cache is
+  // skipped, silently degrading long-horizon runs to ~3.5 days of 1m data.
+  if (windowHours > 24 * 7 && !isDbConfigured()) {
+    console.warn(
+      `[backtest-counter-rebalance] WARNING: DATABASE_URL not configured — Supabase 1m cache is unavailable. ` +
+        `For a ${windowHours}h (>7d) window the backtest will skip the 1m cache and fall back to Hyperliquid ` +
+        `chunked 1m (~3.5 days) or coarser intervals. Run from frontend/ with frontend/.env present (or ensure ` +
+        `loadEnvFile() loads it) to enable the full 1m cache.`,
+    )
+  }
   await executeBacktestCounterRebalance({
     symbol: (args.get('symbol') ?? 'BTC').toUpperCase(),
     interval: (args.get('interval') ?? 'auto').trim().toLowerCase(),

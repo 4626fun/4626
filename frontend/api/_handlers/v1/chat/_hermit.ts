@@ -9,7 +9,7 @@ import {
   setNoStore,
   getClientIp,
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   rateLimitKey,
 } from '@4626/server-core'
 import { isKeeperWriteCommandText } from '../../../../server/agents/eliza/plugins/keeperOps/index.js'
@@ -54,9 +54,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('v1-chat-hermit', getClientIp(req)),
     RATE_LIMITS.chatCommandPreflight,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))

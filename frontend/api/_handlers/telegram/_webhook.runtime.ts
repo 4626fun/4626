@@ -11,7 +11,7 @@ import {
   setCors,
   setNoStore,
   getDb,
-  checkRateLimit,
+  checkDurableRateLimit,
   rateLimitKey,
   getClientIp,
   RATE_LIMITS,
@@ -7199,7 +7199,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
-  const limiter = checkRateLimit(rateLimitKey('telegram:webhook', getClientIp(req as any)), RATE_LIMITS.telegramWebhookIngest)
+  const limiter = await checkDurableRateLimit(rateLimitKey('telegram:webhook', getClientIp(req as any)), RATE_LIMITS.telegramWebhookIngest, { failClosed: true })
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)

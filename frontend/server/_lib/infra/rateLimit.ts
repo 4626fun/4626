@@ -201,6 +201,8 @@ export const RATE_LIMITS = {
   general: { windowMs: 60_000, maxRequests: 60 },
   // AlfaClub backtest run: 5 per minute per privy user + IP (compute-intensive)
   alfaclubBacktestRun: { windowMs: 60_000, maxRequests: 5 },
+  // /api/accounts/me: 30 per minute per IP (performs DB writes + external Privy calls on GET)
+  accountsMe: { windowMs: 60_000, maxRequests: 30 },
 } as const
 
 /**

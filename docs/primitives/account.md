@@ -6,7 +6,7 @@ slug: /primitives/account
 
 # Account Primitive
 
-> **Canonical reference:** [docs/ACCOUNT_MODEL.md](../ACCOUNT_MODEL.md). This page is the docs-site primitive overview; the canonical doc holds the load-bearing invariants and the as-shipped schema.
+> **Canonical reference:** [docs/_internal/ACCOUNT_MODEL.md](../_internal/ACCOUNT_MODEL.md). This page is the docs-site primitive overview; the canonical doc holds the load-bearing invariants and the as-shipped schema.
 
 The Account primitive is the execution surface: it determines how users authorize multi-step actions and how the system falls back when wallet capabilities are missing.
 

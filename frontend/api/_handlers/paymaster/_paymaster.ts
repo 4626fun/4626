@@ -27,7 +27,7 @@ import {
   setNoStore,
   readRequestPrincipalAddress,
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   getClientIp,
   rateLimitKey,
 } from '@4626/server-core'
@@ -3549,6 +3549,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return await handlePaymasterRequest(req, res)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
+    // VG-003: Return rate-limit-specific JSON-RPC error code (-32005) instead
+    // of the generic -32000 for rate-limited requests.
+    if (msg === 'rate_limited') {
+      return res.status(200).json(jsonRpcError(null, -32005, 'rate_limited'))
+    }
     logger.error('[paymaster-proxy] unhandled handler error', { msg: msg || 'unknown_error' })
     return res.status(200).json(jsonRpcError(null, -32000, 'paymaster_proxy_internal_error'))
   }
@@ -3605,9 +3610,10 @@ async function handlePaymasterRequest(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(jsonRpcError(null, -32600, 'Method not allowed'))
   }
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('paymaster-rpc', getClientIp(req)),
     RATE_LIMITS.paymasterRpc,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))

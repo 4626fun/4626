@@ -17,6 +17,8 @@ type WalletClientWithRequest = {
   }) => Promise<Hex | string>
   /** Provider-aware session refresh (e.g. Privy access-token refresh + provider re-acquire). */
   refreshSession?: () => Promise<unknown>
+  /** Privy unified Wallet API path with user authorization signature (owner_id wallets). */
+  signSecp256k1Digest?: (digest: Hex) => Promise<Hex>
 }
 
 function isDisconnectedWalletSessionError(message: string): boolean {
@@ -48,8 +50,9 @@ export async function signRawEcdsaDigest(params: {
   const label = params.label ?? 'signRawEcdsaDigest'
   const request = params.walletClient.request
   const refreshSession = params.refreshSession ?? params.walletClient.refreshSession
+  const signSecp256k1Digest = params.walletClient.signSecp256k1Digest
 
-  if (typeof request === 'function') {
+  if (typeof signSecp256k1Digest === 'function' || typeof request === 'function') {
     const signerAddress = String(params.signerAddress ?? '').trim()
     const requestAttempts: Array<{ method: string; params: unknown[] | Record<string, unknown>; suffix: string }> = [
       {
@@ -102,6 +105,20 @@ export async function signRawEcdsaDigest(params: {
 
     const runRawSigningAttemptSet = async () => {
       const failures: Array<{ method: string; message: string }> = []
+      if (typeof signSecp256k1Digest === 'function') {
+        try {
+          return {
+            signature: await signSecp256k1Digest(params.digest),
+            failures,
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error ?? 'unknown_error')
+          failures.push({ method: 'privy_authorized_secp256k1_sign', message })
+        }
+      }
+      if (typeof request !== 'function') {
+        return { signature: null as Hex | null, failures }
+      }
       for (const attempt of requestAttempts) {
         try {
           const rawSig = await request({
@@ -135,10 +152,12 @@ export async function signRawEcdsaDigest(params: {
           // Provider-aware refresh (Privy access-token refresh + provider re-acquire) —
           // a stale Privy auth token cannot be fixed by eth_requestAccounts alone.
           await refreshSession()
-        } else {
+        } else if (typeof request === 'function') {
           // Generic fallback: lightweight account/session hydration, then a full account request.
           await request({ method: 'eth_accounts' }).catch(() => null)
           await request({ method: 'eth_requestAccounts' })
+        } else {
+          refreshAttemptError = 'walletClient.request unavailable for session refresh'
         }
       } catch (refreshError) {
         refreshAttemptError =

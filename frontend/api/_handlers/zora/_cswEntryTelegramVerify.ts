@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import {
   type ApiEnvelope,
-  checkRateLimit,
+  checkDurableRateLimit,
   ensureTelegramTradingSchema,
   getDb,
   getClientIp,
@@ -79,7 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const limiter = checkRateLimit(rateLimitKey('zora-csw-entry-telegram-verify', getClientIp(req)), RATE_LIMITS.telegramLinkWrite)
+  const limiter = await checkDurableRateLimit(rateLimitKey('zora-csw-entry-telegram-verify', getClientIp(req)), RATE_LIMITS.telegramLinkWrite, { failClosed: true })
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)

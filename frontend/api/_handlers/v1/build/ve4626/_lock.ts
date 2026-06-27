@@ -8,7 +8,7 @@ import {
   guardAgentApiRequest,
   getClientIp,
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   rateLimitKey,
 } from '@4626/server-core'
 
@@ -47,9 +47,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/build/ve4626/lock', kind: 'build' })
   if (!g.ok) return
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('v1-build-ve4626-lock', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
     RATE_LIMITS.buildVe4626Calldata,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     setRateLimitRetryAfter(res, limiter.resetAt)

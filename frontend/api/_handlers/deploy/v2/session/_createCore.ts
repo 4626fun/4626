@@ -38,7 +38,6 @@ import {
   setNoStore,
   isDbConfigured,
   getDb,
-  checkRateLimit,
   checkDurableRateLimit,
   RATE_LIMITS,
   rateLimitKey,
@@ -3074,7 +3073,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // across warm serverless instances. Preflight remains on the in-memory
   // limiter because it is idempotent and low-risk.
   const rateLimit = preflightOnly
-    ? checkRateLimit(rateLimitKey('deploy-preflight', auth.address.toLowerCase()), { windowMs: 60_000, maxRequests: 20 })
+    ? await checkDurableRateLimit(rateLimitKey('deploy-preflight', auth.address.toLowerCase()), { windowMs: 60_000, maxRequests: 20 }, { failClosed: true })
     : await checkDurableRateLimit(
         rateLimitKey('deploy', auth.address.toLowerCase()),
         RATE_LIMITS.deployCreate,

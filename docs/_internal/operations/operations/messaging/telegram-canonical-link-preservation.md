@@ -42,7 +42,7 @@ Authoritative files:
 - `frontend/src/App.tsx` (route admission + Privy route boundary for authenticated app routes)
 - `frontend/src/app/accessRuntime.tsx`
 - `frontend/src/app/accessShared.tsx`
-- `frontend/src/lib/telegramMiniAppLink.ts`
+- `frontend/src/lib/telegram/telegramMiniAppLink.ts`
 - `frontend/src/pages/telegram/TelegramLink.tsx`
 
 Required behavior:
@@ -64,13 +64,13 @@ for a short-lived server session token before doing anything else.
 
 Frontend:
 
-- `frontend/src/lib/telegramWebApp.ts`
+- `frontend/src/lib/telegram/telegramWebApp.ts`
 - `frontend/src/pages/telegram/TelegramLink.tsx`
 
 Backend:
 
 - `frontend/api/_handlers/telegram/_miniapp-session.ts`
-- `frontend/server/_lib/telegramTrading.ts`
+- `frontend/server/_lib/messaging/telegramTrading.ts`
 
 Current contract:
 
@@ -107,7 +107,7 @@ Authoritative files:
 
 - `frontend/src/pages/telegram/TelegramLink.tsx`
 - `frontend/api/_handlers/telegram/_link-ready.ts`
-- `frontend/server/_lib/accountsIdentity.ts`
+- `frontend/server/_lib/identity/accountsIdentity.ts`
 
 Current behavior:
 
@@ -153,9 +153,9 @@ Frontend:
 Backend:
 
 - `frontend/api/_handlers/telegram/_link-complete.ts`
-- `frontend/server/_lib/accountsIdentity.ts`
-- `frontend/server/_lib/walletSync.ts`
-- `frontend/server/_lib/telegramTrading.ts`
+- `frontend/server/_lib/identity/accountsIdentity.ts`
+- `frontend/server/_lib/wallet/walletSync.ts`
+- `frontend/server/_lib/messaging/telegramTrading.ts`
 
 Current behavior in `POST /api/telegram/link/complete`:
 
@@ -188,9 +188,9 @@ complete.
 
 Authoritative files:
 
-- `frontend/server/_lib/walletSync.ts`
-- `frontend/server/_lib/canonicalCswDelegation.ts`
-- `frontend/server/_lib/telegramTrading.ts`
+- `frontend/server/_lib/wallet/walletSync.ts`
+- `frontend/server/_lib/wallet/canonicalCswDelegation.ts`
+- `frontend/server/_lib/messaging/telegramTrading.ts`
 
 Current meaning:
 
@@ -217,14 +217,14 @@ If one of these changes, review the whole chain:
 - `frontend/src/app/accessShared.tsx`
 - `frontend/src/pages/telegram/TelegramLink.tsx`
 - `frontend/src/features/telegram-link/telegramLinkFlow.ts`
-- `frontend/src/lib/telegramMiniAppLink.ts`
-- `frontend/src/lib/telegramWebApp.ts`
+- `frontend/src/lib/telegram/telegramMiniAppLink.ts`
+- `frontend/src/lib/telegram/telegramWebApp.ts`
 - `frontend/api/_handlers/telegram/_link-ready.ts`
 - `frontend/api/_handlers/telegram/_miniapp-session.ts`
 - `frontend/api/_handlers/telegram/_link-complete.ts`
-- `frontend/server/_lib/telegramTrading.ts`
-- `frontend/server/_lib/accountsIdentity.ts`
-- `frontend/server/_lib/walletSync.ts`
+- `frontend/server/_lib/messaging/telegramTrading.ts`
+- `frontend/server/_lib/identity/accountsIdentity.ts`
+- `frontend/server/_lib/wallet/walletSync.ts`
 
 ## Maintenance rules
 

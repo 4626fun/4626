@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import {
-  checkRateLimit,
+  checkDurableRateLimit,
   getClientIp,
   guardAgentApiRequest,
   handleOptions,
@@ -38,9 +38,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!g.ok) return
 
   const requester = normalizeChatAddress(g.auth?.address)
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('v1-chat-search', requester ?? 'anon', getClientIp(req)),
     RATE_LIMITS.agentsRead,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))

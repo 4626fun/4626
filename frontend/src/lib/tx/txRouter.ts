@@ -383,6 +383,13 @@ function assertCanonicalPolicyContext(context: TxRouterContext): void {
   if (!isAllowedCanonicalSigner(context.signerAddress)) {
     throw new Error('Canonical CSW policy requires an allowed owner signer')
   }
+  // WALLET-002: Defense-in-depth — also enforce the stricter execution-signer
+  // allowlist when the canonical identity is the platform CSW. This prevents a
+  // future owner EOA added to the broader allowlist from bypassing the
+  // execution-signer gate on sendCalls/canonicalDirect paths.
+  if (isCanonicalCsw(canonicalIdentity) && !isAllowedCanonicalCswExecutionSigner(context.signerAddress)) {
+    throw new Error('Canonical CSW execution signer policy blocks non-execution signer')
+  }
   if (
     context.signerType === 'SMART_WALLET' &&
     !isCanonicalCsw(context.signerAddress)

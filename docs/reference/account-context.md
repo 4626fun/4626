@@ -5,7 +5,7 @@ sidebar_position: 10
 
 # Account Context Hardening
 
-> **Canonical reference:** [docs/ACCOUNT_MODEL.md](../ACCOUNT_MODEL.md). This page focuses on signer/CSW/active-account behavior after auth; the canonical doc covers the full account model including invariants and existing flows.
+> **Canonical reference:** [docs/_internal/ACCOUNT_MODEL.md](../_internal/ACCOUNT_MODEL.md). This page focuses on signer/CSW/active-account behavior after auth; the canonical doc covers the full account model including invariants and existing flows.
 
 ## Purpose
 

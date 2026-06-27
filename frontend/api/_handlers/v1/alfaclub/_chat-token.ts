@@ -13,7 +13,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import {
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   getClientIp,
   rateLimitKey,
   readBoundedJsonObjectBody,
@@ -102,9 +102,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const rateLimitIdentity = cronBootstrap
     ? 'cron-bootstrap'
     : (admin ?? 'unknown').toLowerCase()
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('alfaclub-chat-token', rateLimitIdentity, getClientIp(req)),
     RATE_LIMITS.adminAction,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))

@@ -33,7 +33,7 @@ import {
   setNoStore,
   getClientIp,
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   rateLimitKey,
   readBoundedJsonObjectBody,
   getDb,
@@ -108,9 +108,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const principalAddress = principal.address
 
-  const rate = checkRateLimit(
+  const rate = await checkDurableRateLimit(
     rateLimitKey('arch-b-enroll', principalAddress, getClientIp(req)),
     RATE_LIMITS.adminAction,
+    { failClosed: true },
   )
   if (!rate.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))))

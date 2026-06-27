@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { isAddress } from 'viem'
 import sharp from 'sharp'
 
-import { checkRateLimit, getClientIp, rateLimitKey, RATE_LIMITS } from '@4626/server-core'
+import { checkDurableRateLimit, getClientIp, rateLimitKey, RATE_LIMITS } from '@4626/server-core'
 import { requireServerKey } from '../../../server/zora/_shared.js'
 import { fetchBytes } from '../../../server/_lib/infra/blob.js'
 import { attachImageGenerationAsset, getImageGenerationProject } from '../../../server/_lib/image/imageProjects.js'
@@ -180,7 +180,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' })
   const actor = getImageApiActor(req)
   if (!actor) return res.status(401).json({ success: false, error: 'Sign in required' })
-  const limiter = checkRateLimit(rateLimitKey('image:auto-assets', getClientIp(req)), RATE_LIMITS.agentCreative)
+  const limiter = await checkDurableRateLimit(rateLimitKey('image:auto-assets', getClientIp(req)), RATE_LIMITS.agentCreative, { failClosed: true })
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' })

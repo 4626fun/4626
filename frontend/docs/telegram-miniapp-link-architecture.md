@@ -8,7 +8,7 @@ This flow must work inside Telegram WebView and preserve the 4626 identity model
 
 Current implementation-preservation notes live in:
 
-- `docs/operations/telegram-canonical-link-preservation.md`
+- `docs/_internal/operations/operations/messaging/telegram-canonical-link-preservation.md`
 - `frontend/docs/account-auth-invariants.md`
 
 ---

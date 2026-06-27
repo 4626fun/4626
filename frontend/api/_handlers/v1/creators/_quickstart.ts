@@ -28,7 +28,7 @@ import {
   logger,
   getClientIp,
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   rateLimitKey,
   enableCswAgent,
   getOrCreateCreatorXmtpAgent,
@@ -212,9 +212,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  const quickstartRate = checkRateLimit(
+  const quickstartRate = await checkDurableRateLimit(
     rateLimitKey('v1-creators-quickstart', principalAddress.toLowerCase(), getClientIp(req)),
     RATE_LIMITS.creatorQuickstart,
+    { failClosed: true },
   )
   if (!quickstartRate.allowed) {
     setRetryAfterHeader(res, quickstartRate.resetAt)

@@ -13,7 +13,7 @@ import {
   setCors,
   setNoStore,
   logger,
-  checkRateLimit,
+  checkDurableRateLimit,
   RATE_LIMITS,
   rateLimitKey,
 } from '@4626/server-core'
@@ -145,9 +145,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<null>)
   }
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('deploy-session-cancel', auth.address.toLowerCase()),
     RATE_LIMITS.deploySessionCancel,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
@@ -165,6 +166,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       req,
       sessionId,
       getDeploySessionById,
+      requireFreshPrivyJwt: true, // APIAUTH-012
     })
     rec = access.rec
     sessionAddress = access.sessionAddress

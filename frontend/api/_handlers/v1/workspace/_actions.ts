@@ -10,7 +10,7 @@ import {
   getDb,
   getClientIp,
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   rateLimitKey,
   ensureTelegramTradingSchema,
   upsertHolderRoomPolicy,
@@ -188,9 +188,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   })
   if (!g.ok) return
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('v1-workspace-actions', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
     RATE_LIMITS.workspaceActions,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))

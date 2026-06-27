@@ -9,7 +9,7 @@ slug: /4626-connection-methods
 
 **Internal Documentation — 4626 Project Team**
 
-> **Canonical reference:** [docs/ACCOUNT_MODEL.md](./ACCOUNT_MODEL.md) is the single source of truth for the 4626 account model — user populations, invariants, schema. This doc covers the *batched passkey ceremony* mechanics in detail; for the higher-level account model read ACCOUNT_MODEL.md first.
+> **Canonical reference:** [docs/_internal/ACCOUNT_MODEL.md](./ACCOUNT_MODEL.md) is the single source of truth for the 4626 account model — user populations, invariants, schema. This doc covers the *batched passkey ceremony* mechanics in detail; for the higher-level account model read ACCOUNT_MODEL.md first.
 
 :::warning Current model — sub-accounts are dormant
 
@@ -222,7 +222,7 @@ The Coinbase Smart Wallet popup uses an internal function called `eGe` that expl
 "Self calls are not allowed"
 ```
 
-This is documented in `onboardingWallet.ts` (lines 464–478):
+This is documented in the onboarding wallet modules (`onboardingWalletPrepared.ts`, `onboardingWalletReplayable.ts`):
 
 ```typescript
 // WHY: The popup's eGe function blocks wallet_sendCalls when target === sender
@@ -242,7 +242,7 @@ The standard transaction approval UI that `eth_sendTransaction` uses does not ha
 
 ### The Fallback Chain
 
-The existing codebase in `onboardingWallet.ts` uses a cascading fallback for self-authenticated CSW sessions:
+The existing codebase in the onboarding wallet modules (`onboardingWalletPrepared.ts`, `onboardingWalletReplayable.ts`) uses a cascading fallback for self-authenticated CSW sessions:
 
 ```
 eth_sendTransaction (primary — no self-call guard)
@@ -481,7 +481,7 @@ In every failure case, the sub-account (user-side execution) remains fully funct
 
 ### Deploy-Session Idempotency Check
 
-**File:** `frontend/api/_handlers/deploy/session/_create.ts`
+**File:** `frontend/api/_handlers/deploy/v2/session/_create.ts`
 
 Deploy-session already checks `isOwnerOnChain()` before attempting to add the server wallet. If the batched ceremony succeeded, deploy-session finds the wallet is already an owner and skips installation entirely. If the batched ceremony was skipped or failed, deploy-session falls back to its original flow.
 
@@ -746,15 +746,15 @@ Guardrails:
 
 | File | Description |
 |---|---|
-| `frontend/src/lib/wallet/onboardingWallet.ts` | Lines 464–478: documents the `eGe` self-call guard. Lines 812–916: `eth_sendTransaction` fallback chain for self-authenticated CSW sessions. |
+| `frontend/src/lib/wallet/onboardingWalletPrepared.ts` · `onboardingWalletReplayable.ts` · `onboardingWalletDelegation.ts` | Formerly `onboardingWallet.ts` (split into three modules). `onboardingWalletPrepared.ts` handles `wallet_sendCalls`/self-call submission; `onboardingWalletReplayable.ts` handles signature parsing and `addOwnerAddress` calldata; `onboardingWalletDelegation.ts` handles owner-delegation flags/errors. |
 
 ### Agent Consumers (Use the Installed Owner)
 
 | File | Description |
 |---|---|
-| `frontend/server/_lib/privyXmtpSigner.ts` | XMTP agent signer — signs messages via Privy API, presents as CSW address. |
-| `frontend/server/_lib/agentRegistration.ts` | ERC-8004 agent registration — binds CSW as the verified agent wallet. |
-| `frontend/api/_handlers/deploy/session/_create.ts` | Deploy-session — validates CSW ownership, uses Privy wallet as `sessionOwner`. |
+| `frontend/server/_lib/wallet/privyXmtpSigner.ts` | XMTP agent signer — signs messages via Privy API, presents as CSW address. |
+| `frontend/server/_lib/agent/agentRegistration.ts` | ERC-8004 agent registration — binds CSW as the verified agent wallet. |
+| `frontend/api/_handlers/deploy/v2/session/_create.ts` | Deploy-session — validates CSW ownership, uses Privy wallet as `sessionOwner`. |
 
 ### Cursor Rules
 

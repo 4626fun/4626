@@ -5,11 +5,11 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   getClientIp,
   handleOptions,
   rateLimitKey,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
 } from '../../../../packages/server-core/src/index.js'
@@ -74,9 +74,16 @@ function resolveFrontendCwd(): string {
   return existsSync(frontendDir) ? frontendDir : root
 }
 
-function trimOutput(raw: string, maxChars = 8000): string {
+function trimOutput(raw: string, maxChars = 16_000): string {
   if (raw.length <= maxChars) return raw
-  return raw.slice(raw.length - maxChars)
+  // Preserve the HEAD of stdout. The top-ranked parameter sets and the
+  // interval/source/coverage summary are logged first; the previous
+  // tail-truncation (last 8000 chars) silently dropped the most important
+  // rows for large sweeps, leaving only the trailing ~40 rows visible.
+  // The full sweep remains available via the `sweepFile` field. BACKTEST-004.
+  const head = raw.slice(0, maxChars)
+  const omitted = raw.length - maxChars
+  return `${head}\n…[output truncated: ${omitted} more characters omitted — see sweepFile for the full results]`
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -100,9 +107,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Rate limit: 5 per minute per privy user + IP (backtest is expensive)
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('alfaclub-backtest-run', privyUserId, getClientIp(req)),
     RATE_LIMITS.alfaclubBacktestRun,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
@@ -111,7 +119,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let body: BacktestRunBody
   try {
-    body = (await readJsonBody(req, { maxBytes: BACKTEST_RUN_BODY_MAX_BYTES })) as BacktestRunBody
+    body = (await readBoundedJsonObjectBody(req, { maxBytes: BACKTEST_RUN_BODY_MAX_BYTES })) as BacktestRunBody
   } catch {
     return res.status(400).json({ success: false, error: 'Invalid JSON body' } satisfies ApiEnvelope<never>)
   }
@@ -141,24 +149,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const frontendCwd = resolveFrontendCwd()
   const outDir = path.resolve(frontendCwd, 'tmp/backtests')
 
+  const backtestTimeoutMs = (() => {
+    const raw = Number(process.env.BACKTEST_RUN_TIMEOUT_MS)
+    return Number.isFinite(raw) && raw > 0 ? raw : 60_000
+  })()
+
+  // BACKTEST-002: outer timeout so a hung backtest (API stall, Supabase
+  // deadlock) cannot block the API handler indefinitely. Returns 504 on
+  // timeout instead of hanging the request.
+  let timeoutTimer: ReturnType<typeof setTimeout> | undefined
   try {
-    const result = await executeBacktestCounterRebalance({
-      symbol,
-      interval,
-      windowHours,
-      leverage,
-      initialLongMarginUsd,
-      initialShortMarginUsd,
-      initialLongBufferUsd,
-      initialShortBufferUsd,
-      healthFloor,
-      deadband,
-      minChunkUsd,
-      maxChunkUsd,
-      cooldownBars,
-      requireNoCommingle,
-      outDir,
-    })
+    const result = await Promise.race([
+      executeBacktestCounterRebalance({
+        symbol,
+        interval,
+        windowHours,
+        leverage,
+        initialLongMarginUsd,
+        initialShortMarginUsd,
+        initialLongBufferUsd,
+        initialShortBufferUsd,
+        healthFloor,
+        deadband,
+        minChunkUsd,
+        maxChunkUsd,
+        cooldownBars,
+        requireNoCommingle,
+        outDir,
+      }),
+      new Promise<never>((_, reject) => {
+        timeoutTimer = setTimeout(
+          () => reject(new Error(`Backtest timed out after ${Math.round(backtestTimeoutMs / 1000)}s`)),
+          backtestTimeoutMs,
+        )
+      }),
+    ])
 
     const trimmedStdout = trimOutput(result.stdout)
 
@@ -212,9 +237,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }>)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Backtest execution failed'
-    return res.status(500).json({
+    const isTimeout = message.includes('timed out')
+    return res.status(isTimeout ? 504 : 500).json({
       success: false,
       error: message,
     } satisfies ApiEnvelope<never>)
+  } finally {
+    if (timeoutTimer) clearTimeout(timeoutTimer)
   }
 }

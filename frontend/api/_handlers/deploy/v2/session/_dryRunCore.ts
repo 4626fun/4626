@@ -23,7 +23,7 @@ import {
   setCors,
   setNoStore,
   isDbConfigured,
-  checkRateLimit,
+  checkDurableRateLimit,
   RATE_LIMITS,
   rateLimitKey,
 } from '@4626/server-core'
@@ -2094,9 +2094,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<null>)
   }
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('deploy-session-dry-run', auth.address.toLowerCase()),
     RATE_LIMITS.deploySessionDryRun,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))

@@ -1,6 +1,6 @@
 # Account And Auth Invariants
 
-> **Repo-wide canonical:** [docs/ACCOUNT_MODEL.md](../../docs/ACCOUNT_MODEL.md) folds the invariants in this file together with the user-population taxonomy, schema, and existing-flows inventory. This file remains the authoritative source for the *invariants themselves* (ACCOUNT_MODEL.md cites these verbatim); for end-to-end account-model decisions consult ACCOUNT_MODEL.md.
+> **Repo-wide canonical:** [docs/_internal/ACCOUNT_MODEL.md](../../docs/_internal/ACCOUNT_MODEL.md) folds the invariants in this file together with the user-population taxonomy, schema, and existing-flows inventory. This file remains the authoritative source for the *invariants themselves* (ACCOUNT_MODEL.md cites these verbatim); for end-to-end account-model decisions consult ACCOUNT_MODEL.md.
 
 This document is the authoritative product model for 4626 account creation, sign-in, recovery, and identity linking.
 
@@ -118,7 +118,7 @@ If a user authenticates through Base or Zora but still has no verified email, th
 
 Account identity and execution wallet topology are separate concerns.
 
-Canonical architecture reference: `docs/4626-connection-methods.md`. Canonical wallet invariants: `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`. Server-side delegation mechanics: `.cursor/rules/csw-agent-lifecycle.mdc`.
+Canonical architecture reference: `docs/_internal/4626-connection-methods.md`. Canonical wallet invariants: `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`. Server-side delegation mechanics: `.cursor/rules/csw-agent-lifecycle.mdc`.
 
 Shared prerequisites (apply to every connection method):
 
@@ -207,9 +207,9 @@ This telemetry is required for production diagnosis of the server-side track and
 
 ### Related docs
 
-- User-initiated and server-side architecture overview: `docs/4626-connection-methods.md`
-- Owner-install reference methods runbook (legacy/server lanes and current relay path): `docs/operations/owner-install-reference-methods.md`
-- User-initiated troubleshooting: `docs/guides/troubleshooting/activate-account-signing.md`
+- User-initiated and server-side architecture overview: `docs/_internal/4626-connection-methods.md`
+- Owner-install reference methods runbook (legacy/server lanes and current relay path): `docs/_internal/operations/wallet/owner-install-reference-methods.md`
+- User-initiated troubleshooting: `docs/_internal/troubleshooting/activate-account-signing.md`
 
 ### Session implementation notes
 
@@ -250,7 +250,7 @@ The Telegram Mini App flow must follow these implementation-level guarantees:
 
 The current preserved implementation is documented in:
 
-- `docs/operations/telegram-canonical-link-preservation.md`
+- `docs/_internal/operations/operations/messaging/telegram-canonical-link-preservation.md`
 - `frontend/docs/telegram-miniapp-link-architecture.md`
 
 ### Required States

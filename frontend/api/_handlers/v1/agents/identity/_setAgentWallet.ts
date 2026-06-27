@@ -33,7 +33,7 @@ import {
   guardAgentApiRequest,
   getClientIp,
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   rateLimitKey,
 } from '@4626/server-core'
 
@@ -82,9 +82,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/agents/identity/set-agent-wallet', kind: 'write' })
   if (!g.ok) return
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('v1-agent-identity-set-wallet', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
     RATE_LIMITS.agentIdentitySetWallet,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     setRetryAfterHeader(res, limiter.resetAt)

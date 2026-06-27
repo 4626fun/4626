@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { isAddress } from 'viem'
 
-import { checkRateLimit, getClientIp, rateLimitKey, RATE_LIMITS } from '@4626/server-core'
+import { checkDurableRateLimit, getClientIp, rateLimitKey, RATE_LIMITS } from '@4626/server-core'
 import { getImageApiActor, parseRequiredString, prepareImageApiAuthenticated, readBody } from './_shared.js'
 import { getImageGenerationProject, setImageProjectVaultAddress } from '../../../server/_lib/image/imageProjects.js'
 import { resolveCoinPartiesAndOwner } from '../../../server/_lib/onchain/coinParties.js'
@@ -28,7 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!actor) {
     return res.status(401).json({ success: false, error: 'Sign in required' })
   }
-  const limiter = checkRateLimit(rateLimitKey('image:associate-vault', getClientIp(req)), RATE_LIMITS.agentCreative)
+  const limiter = await checkDurableRateLimit(rateLimitKey('image:associate-vault', getClientIp(req)), RATE_LIMITS.agentCreative, { failClosed: true })
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' })

@@ -44,7 +44,7 @@ import {
   setNoStore,
   getClientIp,
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   rateLimitKey,
   readBoundedJsonObjectBody,
   resolveAuthorizedRequestPrincipal,
@@ -82,9 +82,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .json({ success: false, error: 'profile_not_ready' } satisfies ApiEnvelope<never>)
   }
 
-  const rate = checkRateLimit(
+  const rate = await checkDurableRateLimit(
     rateLimitKey('arch-b-subacct-revoke', principal.address, getClientIp(req)),
     RATE_LIMITS.adminAction,
+    { failClosed: true },
   )
   if (!rate.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))))

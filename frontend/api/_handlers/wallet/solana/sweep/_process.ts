@@ -7,7 +7,7 @@ import {
   setCors,
   setNoStore,
   getDb,
-  checkRateLimit,
+  checkDurableRateLimit,
   RATE_LIMITS,
   rateLimitKey,
   getClientIp,
@@ -50,9 +50,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Unauthorized' } satisfies ApiEnvelope<never>)
   }
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('solana-sweep-process', getClientIp(req)),
     RATE_LIMITS.solanaSweepProcess,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))

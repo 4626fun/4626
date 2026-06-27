@@ -11,7 +11,7 @@ import {
   setCors,
   setNoStore,
   getClientIp,
-  checkRateLimit,
+  checkDurableRateLimit,
   rateLimitKey,
 } from '@4626/server-core'
 
@@ -49,11 +49,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Unauthorized' })
   }
   const clientIp = getClientIp(req)
-  const principalRate = checkRateLimit(
+  const principalRate = await checkDurableRateLimit(
     rateLimitKey('agent-stream-principal', sessionAddress),
     STREAM_RATE_LIMIT,
+    { failClosed: true },
   )
-  const ipRate = checkRateLimit(rateLimitKey('agent-stream-ip', clientIp), STREAM_IP_RATE_LIMIT)
+  const ipRate = await checkDurableRateLimit(rateLimitKey('agent-stream-ip', clientIp), STREAM_IP_RATE_LIMIT, { failClosed: true })
   const rateRemaining = Math.min(principalRate.remaining, ipRate.remaining)
   const rateResetAt = Math.min(principalRate.resetAt, ipRate.resetAt)
   res.setHeader('X-RateLimit-Limit', String(STREAM_RATE_LIMIT.maxRequests))

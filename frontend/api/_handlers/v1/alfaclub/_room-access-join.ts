@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import {
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   getClientIp,
   getSessionAddress,
   isAdminAddress,
@@ -69,9 +69,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!roomId) return res.status(400).json({ success: false, error: 'roomId is required' })
   if (!walletAddress) return res.status(401).json({ success: false, error: 'Authentication required' })
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('v1-alfaclub-room-access-join', walletAddress, roomId, getClientIp(req)),
     RATE_LIMITS.workspaceActions,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))

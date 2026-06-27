@@ -12,6 +12,23 @@ describe('signRawEcdsaDigest', () => {
     expect(isRawEcdsaDigest('0x1234')).toBe(false)
   })
 
+  it('prefers authorized secp256k1 path when wired', async () => {
+    const request = vi.fn(async () => {
+      throw new Error('provider should not be called')
+    })
+    const signSecp256k1Digest = vi.fn(async () => SIG)
+
+    const out = await signRawEcdsaDigest({
+      digest: DIGEST,
+      signerAddress: SIGNER,
+      walletClient: { request, signSecp256k1Digest },
+    })
+
+    expect(out).toBe(SIG)
+    expect(signSecp256k1Digest).toHaveBeenCalledWith(DIGEST)
+    expect(request).not.toHaveBeenCalled()
+  })
+
   it('prefers secp256k1_sign over personal_sign', async () => {
     const request = vi.fn(async (args: { method: string }) => {
       if (args.method === 'secp256k1_sign') return SIG

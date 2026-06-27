@@ -447,6 +447,12 @@ export async function transitionDeploySession(params: {
             updated_at = NOW()
           WHERE id = ${params.id}
             AND step = ${params.fromStep}
+            AND (
+              lock_owner IS NULL
+              OR lock_expires_at IS NULL
+              OR lock_expires_at < NOW()
+              OR ${params.lockOwner ? db.sql`lock_owner = ${params.lockOwner}` : db.sql`FALSE`}
+            )
           RETURNING id;
         `
       : await db.sql`
@@ -473,6 +479,12 @@ export async function transitionDeploySession(params: {
             updated_at = NOW()
           WHERE id = ${params.id}
             AND step = ${params.fromStep}
+            AND (
+              lock_owner IS NULL
+              OR lock_expires_at IS NULL
+              OR lock_expires_at < NOW()
+              OR ${params.lockOwner ? db.sql`lock_owner = ${params.lockOwner}` : db.sql`FALSE`}
+            )
           RETURNING id;
         `
 

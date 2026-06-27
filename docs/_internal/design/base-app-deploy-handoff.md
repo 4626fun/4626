@@ -36,7 +36,7 @@ Ship **Option A** now (Phase 0 + Phase 1). Spec Option B with Base team before b
 
 ## Related docs
 
-- `docs/ACCOUNT_MODEL.md` — populations (a)–(d)
-- `docs/owner-mutation-decision-2026-05.md` — why browser owner mutations are retired
-- `docs/sub-accounts-baseapp-design.md` — sub-account swap lane
+- `docs/_internal/ACCOUNT_MODEL.md` — populations (a)–(d)
+- `docs/_internal/wallet-notes/owner-mutation-decision-2026-05.md` — why browser owner mutations are retired
+- `docs/_internal/design/sub-accounts-baseapp-design.md` — sub-account swap lane
 - `frontend/src/lib/deploy/deployEligibility.ts` — deploy gating helper

@@ -26,7 +26,7 @@ Branch: `main`
 2. **WALLET-003 merged into APIAUTH-010** — Both cover the same four wallet handler endpoints (`_sync`, `_confirm-owner`, `_prepare-add-privy-owner`, `_disconnect-external`) with the same in-memory rate-limit gap. WALLET-003 was the wallet/identity audit pass rediscovery of the same finding. Single merged entry retained as APIAUTH-010.
 3. **Validation-gate failures** promoted to standalone findings VG-001 through VG-003, cross-referenced to their related APIAUTH findings. They represent distinct guard/test failures, not duplicates of the APIAUTH findings.
 4. **APIAUTH-001 severity normalized** — Original finding classified as "High" with "Launch blocker" language. The P0/P1 consolidation (2026-06-26) determined no APIAUTH finding meets the P0/P1 bar because all require authentication and none allow fund loss or anonymous mutation. APIAUTH-001 is normalized to P2 (high-end) with launch decision "fix before launch" — it is the most serious APIAUTH finding but does not block the launch gate.
-5. **DRIFT-001 through DRIFT-004** remediated and verified clean (2026-06-27). Grep patterns return 0 matches in actual documentation files. Launch decision updated to "closed (remediated + verified)."
+5. **DRIFT-001 through DRIFT-004** remediated and verified clean (2026-06-27). Grep patterns return 0 matches in actual documentation files. Launch decision: cleared after remediation/recheck.
 6. **LAUNCH-004 through LAUNCH-008** are positive findings (verified safe). Listed in the Positive Findings section, not in the risk-ordered finding list.
 
 ## Executive summary
@@ -39,8 +39,8 @@ Branch: `main`
 | P3 | 21 | 0 |
 | **Total findings** | **48** | **1** |
 
-Active launch blockers: **1** (LAUNCH-001 — external DNS configuration).
-Remediated pending closure: **0** (DRIFT-001–004 all verified clean 2026-06-27).
+Active launch blockers: **1** (LAUNCH-001 — external DNS/infra-owned, until production prelaunch probe passes).
+Cleared after remediation/recheck: **4** (DRIFT-001–004, verified 2026-06-27).
 Fix-before-launch (non-blocking): **1** (APIAUTH-001 — unthrottled mutating GET, should be fixed before public launch but does not block the current gate).
 
 ---
@@ -52,7 +52,7 @@ Fix-before-launch (non-blocking): **1** (APIAUTH-001 — unthrottled mutating GE
 - **ID**: LAUNCH-001
 - **Severity**: P0
 - **Domain**: Vultr orchestrator + provisioner infrastructure / DNS routing
-- **Launch decision**: block launch
+- **Launch decision**: block launch — external DNS/infra-owned until production prelaunch probe passes
 - **Finding**: `orchestrator.4626.fun` and `provisioner.4626.fun` DNS A-records point at Vercel, not the Vultr hosts where the actual orchestrator and provisioner services run. Both domains return Vercel SPA HTML (`<div id="root"></div>`) instead of service JSON. POST /reconcile returns 405 because the Vercel SPA does not accept POST. 7 of 15 prelaunch gates fail, all tracing to this root cause. The 4626 repo code is correct — the prelaunch script correctly probes and reports the blockers. The fix is DNS A-record configuration, not a code change.
 - **Evidence**: `pnpm -C frontend ops:verify-akita-prelaunch --production` exit 1. `curl https://orchestrator.4626.fun/healthz` returns 200 + HTML SPA body. `curl https://provisioner.4626.fun/healthz` returns 200 + HTML SPA body. Failing gates: vultr_orchestrator_health, vultr_orchestrator_settle_fees (405), vultr_orchestrator_winner_relay (405), vultr_relay_entries_paused (405 vs expected 503), vultr_provisioner_health (payerHealthy=undefined), vultr_provisioner_dns, vercel_solana_reconcile_chain (upstream 405). Passing gates (8/15): pipe_a_batcher, release_target_guard, hook_mainnet_canonical, vitest (53 tests), forge (6 tests), vercel_solana_infra_status, kpr_preflight_share_mesh_deferral, strategy_entitlement (ajna/charm/solana).
 - **Pass/Fail Criterion**: PASS when `curl https://orchestrator.4626.fun/healthz` returns JSON `{ok: true}` and `curl https://provisioner.4626.fun/healthz` returns JSON with `payerHealthy: true`, and `pnpm -C frontend ops:verify-akita-prelaunch --production` exits 0 with 0 blockers.
@@ -64,7 +64,7 @@ Fix-before-launch (non-blocking): **1** (APIAUTH-001 — unthrottled mutating GE
 - **ID**: DRIFT-001
 - **Severity**: P0 (remediated)
 - **Domain**: Account model / wallet execution path
-- **Launch decision**: closed (remediated + verified 2026-06-27)
+- **Launch decision**: cleared after remediation/recheck
 - **Finding**: `frontend/docs/waitlist-accounts-architecture.md:41` stated "the canonical path is sub-account setup, not direct owner delegation" and "the parent CSW remains the canonical asset-holding account but is not the execution address." This contradicted `executionTrack.ts:6-9` which routes user-initiated frontend execution through the parent CSW only via canonical4337, and 5 other docs confirming parent CSW as the default execution address.
 - **Evidence**: Remediation applied: line 41 now reads "canonical path is parent CSW + Privy embedded-owner signer (`legacy-owner-install`), not sub-account setup" with sub-account marked as flag-gated swap-only fallback. Verification: `grep -n 'canonical path is sub-account\|parent CSW.*not the execution address' frontend/docs/waitlist-accounts-architecture.md` returns 0 matches (exit 1).
 - **Pass/Fail Criterion**: PASS — 0 matches for drift patterns in actual documentation files.
@@ -80,7 +80,7 @@ Fix-before-launch (non-blocking): **1** (APIAUTH-001 — unthrottled mutating GE
 - **ID**: DRIFT-002
 - **Severity**: P1 (remediated)
 - **Domain**: Account model / wallet execution path / readiness gating
-- **Launch decision**: closed (remediated + verified 2026-06-27)
+- **Launch decision**: cleared after remediation/recheck
 - **Finding**: `frontend/docs/waitlist-accounts-architecture.md:43-44` said "resume sub-account setup" and gated readiness on "sub-account persisted + signer configured." AGENTS.md says "resume embedded-owner signing setup for the canonical parent CSW" and "Do not make waitlist onboarding explicitly create a sub-account." Readiness = parent CSW + embedded EOA owner confirmation.
 - **Evidence**: Remediation applied: line 43 now reads "resume embedded-owner signing setup for the canonical parent CSW"; readiness gate changed to "parent CSW + embedded EOA owner confirmation." Verification: `grep -n 'resume sub-account setup\|sub-account persisted.*signer configured' frontend/docs/waitlist-accounts-architecture.md` returns 0 matches (exit 1).
 - **Pass/Fail Criterion**: PASS — 0 matches for drift patterns.
@@ -92,7 +92,7 @@ Fix-before-launch (non-blocking): **1** (APIAUTH-001 — unthrottled mutating GE
 - **ID**: DRIFT-003
 - **Severity**: P1 (remediated)
 - **Domain**: Account model / wallet execution path
-- **Launch decision**: closed (remediated + verified 2026-06-27)
+- **Launch decision**: cleared after remediation/recheck
 - **Finding**: `docs/_internal/4626-connection-methods.md` (formerly `docs/4626-connection-methods.md`) had an internal contradiction — the warning banner (lines 14-20) said "sub-accounts are dormant" but body sections §3-§11 still described sub-account as the default user execution path, with diagrams showing "Execution address: sub-account" and "PHASE 1: Sub-Account Creation" as default onboarding steps.
 - **Evidence**: Remediation applied: §3, §4, §10, §11, §12 rewritten to describe parent CSW + embedded-owner signing as the default path; sub-account marked as flag-gated swap-only fallback; execution address in post-setup diagram changed to parent CSW; §12 readiness checkpoint = parent CSW owner confirmation; "PHASE 1: Sub-Account Creation" renamed to "SUB-ACCOUNT CREATION." Verification: `grep -n 'Execution address: sub-account\|PHASE 1: Sub-Account Creation' docs/_internal/4626-connection-methods.md` returns 0 matches (exit 1).
 - **Pass/Fail Criterion**: PASS — 0 matches for drift patterns.
@@ -104,7 +104,7 @@ Fix-before-launch (non-blocking): **1** (APIAUTH-001 — unthrottled mutating GE
 - **ID**: DRIFT-004
 - **Severity**: P1 (remediated)
 - **Domain**: Account model / owner-mutation decision
-- **Launch decision**: closed (remediated + verified 2026-06-27)
+- **Launch decision**: cleared after remediation/recheck
 - **Finding**: `docs/_internal/ACCOUNT_MODEL.md` §5.2 (lines 220-222) recommended "Use Sub Accounts + Spend Permissions for population (b)." The actual shipped solution was `legacy-owner-install` — Privy embedded EOA as direct owner of parent CSW. Sub-accounts became flag-gated fallback. Same issue in `docs/_internal/wallet-notes/owner-mutation-decision-2026-05.md` (formerly `docs/owner-mutation-decision-2026-05.md`).
 - **Evidence**: Remediation applied: ACCOUNT_MODEL.md §3 invariant removed "Use Sub Accounts + Spend Permissions"; §5.2 updated to reflect legacy-owner-install as the shipped decision; owner-mutation-decision-2026-05.md decision text, practice table, "What does not ship" section, and "Next work" section all updated. Verification: `grep -n 'Use Sub Accounts + Spend Permissions for population' docs/_internal/ACCOUNT_MODEL.md docs/_internal/wallet-notes/owner-mutation-decision-2026-05.md` returns 0 matches (exit 1).
 - **Pass/Fail Criterion**: PASS — 0 matches for drift patterns.
@@ -708,7 +708,7 @@ These were checked during the audit and confirmed safe. No finding issued.
 - **Date finalized**: 2026-06-27
 - **Total findings**: 48 (including 3 validation-gate findings, excluding 5 positive findings)
 - **Active launch blockers**: 1 (LAUNCH-001)
-- **Remediated and verified**: 4 (DRIFT-001 through DRIFT-004)
+- **Cleared after remediation/recheck**: 4 (DRIFT-001 through DRIFT-004)
 - **Fix-before-launch (non-blocking)**: 1 (APIAUTH-001)
 - **Followups tracked**: see `deep-risk-audit-2026-06-followups.md`
 - **No product/code fixes applied** — audit-only mode throughout.

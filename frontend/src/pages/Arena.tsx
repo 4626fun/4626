@@ -74,6 +74,13 @@ function describeLastRunBarSize(resolvedInterval: string | null, windowHours: nu
   let detail = `Last backtest replayed on ${intervalLabel} price snapshots`
   if (resolvedInterval === '1h' && windowHours >= 24 * 90) {
     detail += ' (90-day minute cache still filling — hourly is the finest full-horizon option today)'
+  } else if (resolvedInterval === '5m' || resolvedInterval === '15m') {
+    // Intermediate degradation (1m → 5m / 15m): the 1m Supabase cache was
+    // insufficient for this horizon, so coarser candles were used. Surface
+    // this explicitly instead of only showing the resolved interval label.
+    // BACKTEST-005.
+    detail +=
+      ' (1m cache insufficient for this horizon — coarser candles used; run cache-backtest-minute-bars.ts for 1m fidelity)'
   }
   return detail
 }
@@ -282,6 +289,35 @@ export function Arena() {
             </nav>
           </div>
         </aside>
+
+        {/* Mobile/tablet nav — horizontal scrollable tab bar visible below lg.
+            The fixed sidebar above is `hidden lg:block`, so without this fallback
+            sub-pages (Introduction, Backtest, Positions, …) are unreachable below
+            1024px. UX-003. */}
+        <nav
+          aria-label="Arena section navigation"
+          className="lg:hidden sticky top-0 z-30 -mx-4 mb-4 border-b border-zinc-900/80 bg-black/60 backdrop-blur-md sm:-mx-6"
+        >
+          <div className="flex items-center gap-1 overflow-x-auto whitespace-nowrap scrollbar-hide px-4 py-2 sm:px-6">
+            {docsPages.map((page) => {
+              const active = location.pathname === page.path
+              return (
+                <Link
+                  key={page.key}
+                  to={page.path}
+                  aria-current={active ? 'page' : undefined}
+                  className={`inline-flex shrink-0 items-center rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                    active
+                      ? 'bg-zinc-900/80 text-zinc-100'
+                      : 'text-zinc-400 hover:bg-zinc-900/70 hover:text-zinc-100'
+                  }`}
+                >
+                  {page.label}
+                </Link>
+              )
+            })}
+          </div>
+        </nav>
 
         <div
           className={

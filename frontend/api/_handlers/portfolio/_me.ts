@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import {
   type ApiEnvelope,
-  checkRateLimit,
+  checkDurableRateLimit,
   getClientIp,
   handleOptions,
   RATE_LIMITS,
@@ -451,9 +451,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!isAddressLike(addressQuery)) {
         return res.status(400).json({ success: false, error: 'Invalid address' } satisfies ApiEnvelope<never>)
       }
-      const publicRateLimit = checkRateLimit(
+      const publicRateLimit = await checkDurableRateLimit(
         rateLimitKey('portfolio-public', getClientIp(req)),
         PUBLIC_PORTFOLIO_RATE_LIMIT,
+        { failClosed: true },
       )
       res.setHeader('X-RateLimit-Limit', String(PUBLIC_PORTFOLIO_RATE_LIMIT.maxRequests))
       res.setHeader('X-RateLimit-Remaining', String(Math.max(0, publicRateLimit.remaining)))
@@ -492,9 +493,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!principalAddress) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<never>)
   }
-  const patchLimiter = checkRateLimit(
+  const patchLimiter = await checkDurableRateLimit(
     rateLimitKey('portfolio-self-patch', principalAddress.toLowerCase(), getClientIp(req)),
     RATE_LIMITS.cswLink,
+    { failClosed: true },
   )
   res.setHeader('X-RateLimit-Limit', String(RATE_LIMITS.cswLink.maxRequests))
   res.setHeader('X-RateLimit-Remaining', String(Math.max(0, patchLimiter.remaining)))

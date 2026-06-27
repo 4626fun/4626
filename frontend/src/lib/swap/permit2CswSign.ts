@@ -21,7 +21,7 @@ import { toPermitSignPayload } from '@/lib/uniswap/tradingApi'
 type Permit2WalletClient = {
   signTypedData: (args: Record<string, unknown>) => Promise<Hex | string>
   signMessage?: (args: Record<string, unknown>) => Promise<Hex | string>
-  request?: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+  request?: (args: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown>
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

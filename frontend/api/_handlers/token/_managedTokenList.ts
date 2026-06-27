@@ -3,7 +3,7 @@ import type { Address, PublicClient } from 'viem'
 import { createPublicClient, getAddress, http, isAddress } from 'viem'
 
 import {
-  checkRateLimit,
+  checkDurableRateLimit,
   getClientIp,
   RATE_LIMITS,
   rateLimitKey,
@@ -171,7 +171,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === 'POST') {
-    const limiter = checkRateLimit(rateLimitKey('token:managed-list:post', getClientIp(req)), RATE_LIMITS.adminAction)
+    const limiter = await checkDurableRateLimit(rateLimitKey('token:managed-list:post', getClientIp(req)), RATE_LIMITS.adminAction, { failClosed: true })
     if (!limiter.allowed) {
       res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
       return res.status(429).json({ error: 'Rate limit exceeded' })

@@ -571,7 +571,7 @@ async function signOneZoraQuotePermit(params: {
   walletClient: {
     signTypedData: (args: Record<string, unknown>) => Promise<Hex | string>
     signMessage?: (args: Record<string, unknown>) => Promise<Hex | string>
-    request?: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+    request?: (args: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown>
   }
   publicClient: {
     readContract: (args: Record<string, unknown>) => Promise<unknown>
@@ -679,7 +679,7 @@ export async function signZoraQuotePermits(params: {
   walletClient: {
     signTypedData: (args: Record<string, unknown>) => Promise<Hex | string>
     signMessage?: (args: Record<string, unknown>) => Promise<Hex | string>
-    request?: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+    request?: (args: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown>
   }
   publicClient: {
     readContract: (args: Record<string, unknown>) => Promise<unknown>
@@ -723,7 +723,7 @@ export async function signZoraQuotePermits(params: {
 type ZoraCswWalletClient = {
   signTypedData: (args: Record<string, unknown>) => Promise<Hex | string>
   signMessage?: (args: Record<string, unknown>) => Promise<Hex | string>
-  request?: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+  request?: (args: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown>
 }
 
 /**

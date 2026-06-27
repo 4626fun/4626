@@ -14,7 +14,7 @@ Mode: audit-only — no product/code fixes applied. This file tracks actionable 
 
 ## Tier 1 — Launch path
 
-### F-001 — LAUNCH-001: DNS A-records for orchestrator + provisioner (P0, block launch)
+### F-001 — LAUNCH-001: DNS A-records for orchestrator + provisioner (P0, block launch — external DNS/infra-owned until production prelaunch probe passes)
 
 - **Owner**: ops / infrastructure (external, not repo code)
 - **Action**: Correct DNS A-records for `orchestrator.4626.fun` and `provisioner.4626.fun` to point at the Vultr hosts, not Vercel.
@@ -175,7 +175,7 @@ Mode: audit-only — no product/code fixes applied. This file tracks actionable 
 
 ### C-001 — DRIFT-001 through DRIFT-004: Account model docs drift (P0/P1, remediated)
 
-- **Status**: closed 2026-06-27
+- **Status**: cleared after remediation/recheck (2026-06-27)
 - **Verification**: Grep patterns return 0 matches in actual documentation files. `git diff --check` exit 0. Two rechecks performed (2026-06-26, 2026-06-27). All fixes survived docs reorganization (files moved to `docs/_internal/`).
 - **Details**: See final report DRIFT-001 through DRIFT-004 entries.
 

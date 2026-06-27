@@ -11,7 +11,7 @@ import {
   setNoStore,
   getDb,
   getClientIp,
-  checkRateLimit,
+  checkDurableRateLimit,
   rateLimitKey,
 } from '@4626/server-core'
 
@@ -83,10 +83,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const ip = getClientIp(req as any)
-  const limit = checkRateLimit(rateLimitKey('auth_handoff_redeem', ip), {
+  const limit = await checkDurableRateLimit(rateLimitKey('auth_handoff_redeem', ip), {
     windowMs: 60_000,
     maxRequests: 30,
-  })
+  },
+    { failClosed: true },)
   if (!limit.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)

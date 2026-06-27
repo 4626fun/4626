@@ -3,7 +3,7 @@ import { z } from 'zod'
 
 import {
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   createCorrelationId,
   getClientIp,
   handleOptions,
@@ -744,10 +744,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const clientIp = getClientIp(req)
-  const rate = checkRateLimit(rateLimitKey('agent-creative', clientIp), RATE_LIMITS.agentCreative)
-  const principalRate = checkRateLimit(
+  const rate = await checkDurableRateLimit(rateLimitKey('agent-creative', clientIp), RATE_LIMITS.agentCreative, { failClosed: true })
+  const principalRate = await checkDurableRateLimit(
     rateLimitKey('agent-creative-principal', sessionAddress),
     RATE_LIMITS.agentCreative,
+    { failClosed: true },
   )
   const rateRemaining = Math.min(rate.remaining, principalRate.remaining)
   const rateResetAt = Math.min(rate.resetAt, principalRate.resetAt)

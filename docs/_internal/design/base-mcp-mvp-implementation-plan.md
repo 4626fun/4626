@@ -4,7 +4,7 @@ Status: draft execution plan · Date: 2026-05-26
 
 ## 1) Scope
 
-This plan operationalizes a two-week MVP to make 4626 Base MCP-native while preserving current account/auth/execution invariants in `docs/ACCOUNT_MODEL.md` and `frontend/docs/account-auth-invariants.md`.
+This plan operationalizes a two-week MVP to make 4626 Base MCP-native while preserving current account/auth/execution invariants in `docs/_internal/ACCOUNT_MODEL.md` and `frontend/docs/account-auth-invariants.md`.
 
 Primary objective: enable agent-mediated, user-approved transaction flows for a narrow safe subset (portfolio reads, transfers, swaps) with explicit policy gating and execution-track correctness.
 

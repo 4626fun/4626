@@ -3,7 +3,7 @@ import { getAddress, isAddress } from 'viem'
 
 import {
   type ApiEnvelope,
-  checkRateLimit,
+  checkDurableRateLimit,
   getClientIp,
   getDb,
   RATE_LIMITS,
@@ -74,7 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Reuse the existing CSW-link rate limit bucket. Issuing a challenge is
   // cheap on the server but we don't want address-enumeration fishing.
-  const limiter = checkRateLimit(rateLimitKey('zora-csw-entry-challenge', getClientIp(req)), RATE_LIMITS.cswLink)
+  const limiter = await checkDurableRateLimit(rateLimitKey('zora-csw-entry-challenge', getClientIp(req)), RATE_LIMITS.cswLink, { failClosed: true })
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)

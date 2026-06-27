@@ -7,7 +7,7 @@ import {
   setCors,
   setNoStore,
   getDb,
-  checkRateLimit,
+  checkDurableRateLimit,
   getClientIp as getRateLimitIp,
   rateLimitKey,
   RATE_LIMITS,
@@ -109,17 +109,24 @@ function readPrivyToken(req: VercelRequest): string | null {
 async function runBootstrapTransaction<T>(
   db: BootstrapDb,
   action: (txDb: BootstrapDb) => Promise<T>,
+  lockKey?: string,
 ): Promise<T> {
   const query = typeof db.query === 'function' ? db.query.bind(db) : null
   if (!query) {
-    // R6: When db.query is unavailable (Supabase sql-only path), the
-    // transaction is skipped. ON CONFLICT clauses in upsertBootstrapProfile
-    // handle duplicate inserts, but rebindEmailProfileToPrivyUser (which
-    // moves referral points between profiles) is NOT atomic without a
-    // transaction. Concurrent bootstrap calls for the same privyUserId can
-    // interleave point moves. For production safety, callers should serialize
-    // using pg_advisory_lock(hash(privyUserId)) before calling this function
-    // when db.query is not available.
+    // APIAUTH-006: When db.query is unavailable (Supabase sql-only path), use
+    // pg_advisory_lock to serialize concurrent bootstrap calls for the same
+    // privyUserId, preventing interleaved point moves and profile upserts.
+    if (lockKey) {
+      await db.sql`SELECT pg_advisory_lock(hashtext(${lockKey}))`
+      try {
+        return await action(db)
+      } finally {
+        await db.sql`SELECT pg_advisory_unlock(hashtext(${lockKey}))`
+      }
+    }
+    // R6: Without a lockKey or db.query, the transaction is skipped. ON
+    // CONFLICT clauses in upsertBootstrapProfile handle duplicate inserts,
+    // but rebindEmailProfileToPrivyUser is NOT atomic without a transaction.
     return action(db)
   }
   await query('BEGIN')
@@ -517,7 +524,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
-  const limiter = checkRateLimit(rateLimitKey('waitlist:bootstrap', getRateLimitIp(req)), RATE_LIMITS.general)
+  const limiter = await checkDurableRateLimit(rateLimitKey('waitlist:bootstrap', getRateLimitIp(req)), RATE_LIMITS.general, { failClosed: true })
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
@@ -716,7 +723,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 message: err instanceof Error ? err.message : String(err),
               })
             }
-          }),
+          }, context.privyUserId),
       })
     }
 

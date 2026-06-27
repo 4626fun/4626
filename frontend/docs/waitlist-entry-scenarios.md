@@ -1,6 +1,6 @@
 # Waitlist Entry & Email Rules Matrix
 
-> **Canonical reference:** [docs/ACCOUNT_MODEL.md](../../docs/ACCOUNT_MODEL.md). The user-population taxonomy in §2 is the canonical view; this matrix is the entry-path layer over it.
+> **Canonical reference:** [docs/_internal/ACCOUNT_MODEL.md](../../docs/_internal/ACCOUNT_MODEL.md). The user-population taxonomy in §2 is the canonical view; this matrix is the entry-path layer over it.
 
 This document maps the main onboarding/waitlist entry paths and how email requirements are enforced.
 
@@ -12,7 +12,7 @@ We have multiple entry points (web, Base app, Zora, Telegram) and multiple ident
 
 - **Real email**: any normal user email address.
 - **Verified email**: an email confirmed through Privy OTP. This is the canonical 4626 identity and recovery key.
-- **Wallet finalization**: the stage where the user's execution wallet becomes ready on the appropriate track. For CSW users (`executionMode === 'canonical'`), this means the canonical CSW is resolved and an app-scoped sub-account is created + signer-configured per [docs/4626-connection-methods.md](../../docs/4626-connection-methods.md) Section 2. For external EOA users (`executionMode === 'eoa'`), this means the EOA is connected via wagmi. The separate server-side owner-delegation track (deploy-session, agent) is governed by `.cursor/rules/csw-agent-lifecycle.mdc`.
+- **Wallet finalization**: the stage where the user's execution wallet becomes ready on the appropriate track. For CSW users (`executionMode === 'canonical'`), this means the canonical CSW is resolved and an app-scoped sub-account is created + signer-configured per [docs/_internal/4626-connection-methods.md](../../docs/_internal/4626-connection-methods.md) Section 2. For external EOA users (`executionMode === 'eoa'`), this means the EOA is connected via wagmi. The separate server-side owner-delegation track (deploy-session, agent) is governed by `.cursor/rules/csw-agent-lifecycle.mdc`.
 
 ## Entry-path matrix
 
@@ -32,7 +32,7 @@ We have multiple entry points (web, Base app, Zora, Telegram) and multiple ident
 1. Basic email shape must be valid.
 2. Only Privy-verified email can become the canonical account email.
 3. Base, Zora, Telegram, and wallet signals may enrich the account, but they do not replace verified email.
-4. Wallet-dependent actions stay gated until the appropriate execution-track readiness check succeeds — sub-account persisted + signer configured for CSW users, or connected EOA for external-EOA users, per [docs/4626-connection-methods.md](../../docs/4626-connection-methods.md).
+4. Wallet-dependent actions stay gated until the appropriate execution-track readiness check succeeds — sub-account persisted + signer configured for CSW users, or connected EOA for external-EOA users, per [docs/_internal/4626-connection-methods.md](../../docs/_internal/4626-connection-methods.md).
 
 ## Future changes checklist
 

@@ -8,7 +8,7 @@ import {
   setNoStore,
   getDb,
   RATE_LIMITS,
-  checkRateLimit,
+  checkDurableRateLimit,
   getClientIp,
   rateLimitKey,
 } from '@4626/server-core'
@@ -66,9 +66,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('accounts-unlink', getClientIp(req)),
     RATE_LIMITS.cswLink,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
@@ -103,7 +104,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       db: db as any,
       privyUserId: context.privyUserId,
       provider,
-      value: normalizedValue.value,
+      // APIAUTH-004: Never trust caller-supplied identity values — match
+      // _link.ts which passes value: null. The unlink is keyed by privyUserId +
+      // provider, not by caller-supplied value.
+      value: null,
     })
 
     const data = await buildAccountsMePayload({
@@ -114,6 +118,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<AccountsUnlinkResponse>)
   } catch (error: any) {
     const message = typeof error?.message === 'string' ? error.message : 'Failed to unlink provider'
+    // APIAUTH-004: Handle identity recovery required errors with 409 Conflict,
+    // matching the pattern in _link.ts.
+    if (typeof error?.code === 'string' && error.code === 'IDENTITY_RECOVERY_REQUIRED') {
+      return res.status(409).json({ success: false, error: message } satisfies ApiEnvelope<never>)
+    }
     const status = /token|unauthorized|forbidden|privy/i.test(message) ? 401 : 500
     return res.status(status).json({ success: false, error: message } satisfies ApiEnvelope<never>)
   }

@@ -4,7 +4,7 @@ import {
   runCreatorMetricsHotSync,
   runCreatorMetricsSync,
 } from '../../../server/_lib/zora/creatorMetricsSync.js'
-import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '@4626/server-core'
+import { RATE_LIMITS, checkDurableRateLimit, getClientIp, rateLimitKey } from '@4626/server-core'
 declare const process: { env: Record<string, string | undefined> }
 
 function readSyncMode(req: VercelRequest): 'hot' | 'explore' | 'backfill' {
@@ -64,9 +64,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Unauthorized' })
   }
 
-  const limiter = checkRateLimit(
+  const limiter = await checkDurableRateLimit(
     rateLimitKey('sync-creator-metrics', getClientIp(req)),
     RATE_LIMITS.adminAction,
+    { failClosed: true },
   )
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))

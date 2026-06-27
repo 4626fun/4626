@@ -1316,7 +1316,7 @@ Mode: audit-only — no product/code fixes applied.
    - Deduplication: BACKTEST-001 merged into APIAUTH-016; WALLET-003 merged into APIAUTH-010.
    - Severity normalization: APIAUTH-001 normalized from "High/launch blocker" to P2 (high-end) with "fix before launch" — no APIAUTH finding meets P0/P1 bar (all require auth, none allow fund loss or anonymous mutation).
    - Risk-ordered globally: P0 (2) → P1 (3) → P2 (22) → P3 (21). Not grouped by domain only.
-   - Every P0/P1 has explicit launch decision: LAUNCH-001 = block launch; DRIFT-001–004 = closed (remediated + verified).
+   - Every P0/P1 has explicit launch decision: LAUNCH-001 = block launch — external DNS/infra-owned until production prelaunch probe passes; DRIFT-001–004 = cleared after remediation/recheck.
    - Required per-finding fields present: ID, Severity, Domain, Finding, Evidence, Pass/Fail Criterion, Recommended Fix, Launch Impact.
    - Positive findings (LAUNCH-004–008) listed separately. Validation gate summary table included. Cross-finding notes included.
 
@@ -1339,8 +1339,8 @@ Mode: audit-only — no product/code fixes applied.
 
 ### Final launch posture
 
-- **Active launch blockers**: 1 (LAUNCH-001 — external DNS configuration, ops/infra-owned, no code change).
-- **Remediated and verified**: 4 (DRIFT-001 through DRIFT-004 — all grep patterns return 0 matches, verified 2026-06-27).
+- **Active launch blockers**: 1 (LAUNCH-001 — external DNS/infra-owned, until production prelaunch probe passes, no code change).
+- **Cleared after remediation/recheck**: 4 (DRIFT-001 through DRIFT-004 — all grep patterns return 0 matches, verified 2026-06-27).
 - **Fix-before-launch (non-blocking)**: 1 (APIAUTH-001 — unthrottled mutating GET, should be fixed before public launch).
 - **No product/code fixes applied** — audit-only mode throughout all phases.
 

@@ -1,7 +1,7 @@
 import { formatUnits, getAddress, isAddress } from 'viem'
 
 import { parsePositiveHumanAmount, formatSwapUsd } from '@/lib/swap/swapAmountUsd'
-import { formatSwapDisplayAmount, parseSwapDisplayNumber } from '@/lib/swap/swapDisplayAmount'
+import { parseSwapDisplayNumber } from '@/lib/swap/swapDisplayAmount'
 import { formatUniswapSwapTradeAmount } from '@/lib/swap/uniswapNumberFormat'
 import { isZoraProviderQuote } from '@/lib/zora/zoraTradeApi'
 import { pickQuote, type TradeQuoteResponse } from '@/lib/uniswap/tradingApi'
