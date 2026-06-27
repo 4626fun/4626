@@ -4,6 +4,7 @@ import { isRawEcdsaDigest, signRawEcdsaDigest } from '@/lib/wallet/signRawEcdsaD
 
 const DIGEST = `0x${'ab'.repeat(32)}` as const
 const SIG = `0x${'11'.repeat(65)}` as const
+const SIGNER = '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9'
 
 describe('signRawEcdsaDigest', () => {
   it('recognizes 32-byte digests', () => {
@@ -20,7 +21,7 @@ describe('signRawEcdsaDigest', () => {
 
     const out = await signRawEcdsaDigest({
       digest: DIGEST,
-      signerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9',
+      signerAddress: SIGNER,
       walletClient: { request, signMessage },
     })
 
@@ -30,7 +31,7 @@ describe('signRawEcdsaDigest', () => {
   })
 
   it('falls back to eth_sign when secp256k1_sign is unavailable', async () => {
-    const request = vi.fn(async (args: { method: string; params?: unknown[] }) => {
+    const request = vi.fn(async (args: { method: string; params?: unknown[] | Record<string, unknown> }) => {
       if (args.method === 'secp256k1_sign') throw new Error('unsupported method')
       if (args.method === 'eth_sign') return SIG
       throw new Error('unexpected method')
@@ -38,19 +39,20 @@ describe('signRawEcdsaDigest', () => {
 
     const out = await signRawEcdsaDigest({
       digest: DIGEST,
-      signerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9',
+      signerAddress: SIGNER,
       walletClient: { request },
     })
 
     expect(out).toBe(SIG)
     expect(request).toHaveBeenNthCalledWith(1, { method: 'secp256k1_sign', params: [DIGEST] })
-    expect(request).toHaveBeenNthCalledWith(2, {
-      method: 'secp256k1_sign',
-      params: ['0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9', DIGEST],
-    })
+    expect(request).toHaveBeenNthCalledWith(2, { method: 'secp256k1_sign', params: { hash: DIGEST } })
     expect(request).toHaveBeenNthCalledWith(3, {
+      method: 'secp256k1_sign',
+      params: [SIGNER, DIGEST],
+    })
+    expect(request).toHaveBeenNthCalledWith(4, {
       method: 'eth_sign',
-      params: ['0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9', DIGEST],
+      params: [SIGNER, DIGEST],
     })
   })
 
@@ -62,14 +64,14 @@ describe('signRawEcdsaDigest', () => {
     await expect(
       signRawEcdsaDigest({
         digest: DIGEST,
-        signerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9',
+        signerAddress: SIGNER,
         walletClient: { request },
       }),
     ).rejects.toThrow(/Raw digest signing is unavailable/)
     await expect(
       signRawEcdsaDigest({
         digest: DIGEST,
-        signerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9',
+        signerAddress: SIGNER,
         walletClient: { request },
       }),
     ).rejects.toThrow(/Method failures:/)
@@ -87,20 +89,37 @@ describe('signRawEcdsaDigest', () => {
       }
       if (args.method === 'eth_requestAccounts') {
         refreshed = true
-        return ['0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9']
+        return [SIGNER]
       }
       throw new Error('unexpected method')
     })
 
     const out = await signRawEcdsaDigest({
       digest: DIGEST,
-      signerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9',
+      signerAddress: SIGNER,
       walletClient: { request },
     })
 
     expect(out).toBe(SIG)
     expect(request).toHaveBeenCalledWith({ method: 'eth_requestAccounts' })
     expect(request.mock.calls.filter(([call]) => call.method === 'secp256k1_sign').length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('refreshes proactively when refreshSession is wired', async () => {
+    const request = vi.fn(async (args: { method: string }) => {
+      if (args.method === 'secp256k1_sign') return SIG
+      throw new Error(`unexpected method ${args.method}`)
+    })
+    const refreshSession = vi.fn(async () => true)
+
+    const out = await signRawEcdsaDigest({
+      digest: DIGEST,
+      signerAddress: SIGNER,
+      walletClient: { request, refreshSession },
+    })
+
+    expect(out).toBe(SIG)
+    expect(refreshSession).toHaveBeenCalledTimes(1)
   })
 
   it('prefers the provided refreshSession callback over eth_requestAccounts on auth failure', async () => {
@@ -120,7 +139,7 @@ describe('signRawEcdsaDigest', () => {
 
     const out = await signRawEcdsaDigest({
       digest: DIGEST,
-      signerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9',
+      signerAddress: SIGNER,
       walletClient: { request },
       refreshSession,
     })
@@ -147,7 +166,7 @@ describe('signRawEcdsaDigest', () => {
 
     const out = await signRawEcdsaDigest({
       digest: DIGEST,
-      signerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9',
+      signerAddress: SIGNER,
       walletClient: { request, refreshSession },
     })
 
@@ -168,7 +187,7 @@ describe('signRawEcdsaDigest', () => {
     await expect(
       signRawEcdsaDigest({
         digest: DIGEST,
-        signerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9',
+        signerAddress: SIGNER,
         walletClient: { request },
         refreshSession,
       }),
@@ -187,14 +206,14 @@ describe('signRawEcdsaDigest', () => {
     await expect(
       signRawEcdsaDigest({
         digest: DIGEST,
-        signerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9',
+        signerAddress: SIGNER,
         walletClient: { request },
       }),
     ).rejects.toThrow(/Your signing session could not be refreshed: Missing auth token/)
     await expect(
       signRawEcdsaDigest({
         digest: DIGEST,
-        signerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9',
+        signerAddress: SIGNER,
         walletClient: { request },
       }),
     ).rejects.toThrow(/Sign out and sign in again/)
@@ -217,7 +236,7 @@ describe('signRawEcdsaDigest', () => {
 
     const out = await signRawEcdsaDigest({
       digest: DIGEST,
-      signerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9',
+      signerAddress: SIGNER,
       walletClient: { request },
       refreshSession,
     })
@@ -248,7 +267,7 @@ describe('signRawEcdsaDigest', () => {
 
     const out = await signRawEcdsaDigest({
       digest: DIGEST,
-      signerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9',
+      signerAddress: SIGNER,
       walletClient: { request },
       refreshSession,
     })

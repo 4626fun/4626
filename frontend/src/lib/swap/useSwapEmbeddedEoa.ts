@@ -133,6 +133,7 @@ function createEmbeddedSignerWalletClient({
           digest: msgHex as `0x${string}`,
           signerAddress: address,
           walletClient: {
+            refreshSession,
             // Re-resolve the provider per request so retries after a session
             // refresh do not reuse a stale provider channel.
             request: async (requestArgs: any) => {

@@ -13,7 +13,7 @@ import * as THREE from 'three'
  * layer away from the live plane and connecting the two with trace wires and
  * semi-transparent faceted faces:
  *
- *   - Coin (ERC-20)            -> a flat 2D square (center hub fanned to 4 corners)
+ *   - Coin (ERC-20)            -> a flat 2D circle (center hub fanned to a ring)
  *   - Vault (ERC-20 + ERC-4626) -> an Ethereum-style octahedron (two square
  *                                  pyramids joined base-to-base)
  *
@@ -99,7 +99,8 @@ function hasWebGL(): boolean {
 // Sculpt topology
 // ---------------------------------------------------------------------------
 
-const R = 1.0 // coin square half-diagonal
+const R = 1.0 // coin circle radius
+const COIN_RING_SEGMENTS = 16
 const ETH_R = 0.82 // Ethereum octahedron girdle half-extent
 const ETH_TOP = 1.3 // upper pyramid apex height
 const ETH_BOT = 1.02 // lower pyramid apex depth
@@ -124,24 +125,22 @@ function ring(r: number, h: number, n: number, phase = 0): THREE.Vector3[] {
 /**
  * Returns the ordered tiers for a variant at sculpt progress p (0..1).
  *
- *   coin  -> flat 2D square: a center hub fanned out to 4 corners (no depth).
+ *   coin  -> flat 2D circle: a center hub fanned out to a ring (no depth).
  *   vault -> Ethereum-style octahedron: two square pyramids joined base-to-base
  *            (lower apex -> girdle -> upper apex).
  */
 function tiersAt(variant: Variant, p: number): Tier[] {
   if (variant === 'coin') {
-    // Flat square in the XY plane, facing the camera (a true 2D panel).
-    const s = R * p
+    // Flat circle in the XY plane, facing the camera (a true 2D coin disc).
+    const r = R * p
     const center: Tier = { verts: [new THREE.Vector3(0, 0, 0)] }
-    const corners: Tier = {
-      verts: [
-        new THREE.Vector3(s, s, 0),
-        new THREE.Vector3(-s, s, 0),
-        new THREE.Vector3(-s, -s, 0),
-        new THREE.Vector3(s, -s, 0),
-      ],
+    const ringVerts: THREE.Vector3[] = []
+    for (let i = 0; i < COIN_RING_SEGMENTS; i++) {
+      const a = (i / COIN_RING_SEGMENTS) * Math.PI * 2
+      ringVerts.push(new THREE.Vector3(Math.cos(a) * r, Math.sin(a) * r, 0))
     }
-    return [center, corners]
+    const outer: Tier = { verts: ringVerts }
+    return [center, outer]
   }
   const lower: Tier = { verts: [new THREE.Vector3(0, -ETH_BOT * p, 0)] }
   const girdle: Tier = { verts: ring(ETH_R * p, 0, 4, 0) }
@@ -201,7 +200,7 @@ function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) 
   const topo = useMemo(() => topology(variant), [variant])
 
   const FLOOR_Y = -1.0
-  // Flat square floats near card center casting a shadow below; the 3D
+  // Flat coin disc floats near card center casting a shadow below; the 3D
   // octahedron rests its lower apex on the floor.
   const isCoin = variant === 'coin'
   const yOffset = isCoin ? -0.05 : FLOOR_Y + ETH_BOT * 1.1
@@ -254,7 +253,7 @@ function Sculpt({ config, shared }: { config: CardConfig; shared: SharedRefs }) 
     const prog = easeInOut(Math.min(1, Math.max(0, p.current)))
 
     // Gentle idle spin at rest, accelerating as the form blooms on hover.
-    // The coin is a flat 2D square facing the camera, so it stays unspun
+    // The coin is a flat 2D circle facing the camera, so it stays unspun
     // (a Y-spin would turn it edge-on); only the 3D octahedron rotates.
     spinAngle.current += d * (0.12 + 0.55 * Math.max(0, (prog - REST) / (1 - REST)))
     if (spin.current) {

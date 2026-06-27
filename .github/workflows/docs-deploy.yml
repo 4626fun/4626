@@ -1,0 +1,39 @@
+name: Docs Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - 'docs/**'
+      - 'apps/docs-site/**'
+      - 'frontend/public/brand/**'
+      - 'README.md'
+
+concurrency:
+  group: docs-deploy-production
+  cancel-in-progress: true
+
+jobs:
+  deploy-docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Install Vercel CLI
+        run: npm i -g vercel@latest
+
+      - name: Deploy docs.4626.fun (4626-docs project)
+        env:
+          VERCEL_ORG_ID: team_vwFyCLfPwJ8GfxE2yGHIkRJm
+          VERCEL_PROJECT_ID: prj_QianKYUgclEpCdGFDguSAJL2KiRy
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "${VERCEL_TOKEN}" ]; then
+            echo "::error::VERCEL_TOKEN secret is not set — cannot deploy docs.4626.fun."
+            exit 1
+          fi
+          # Project rootDirectory is apps/docs-site — deploy from monorepo root.
+          vercel deploy --prod --yes --archive=tgz --token "$VERCEL_TOKEN"

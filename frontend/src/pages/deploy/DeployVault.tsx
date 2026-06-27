@@ -66,7 +66,9 @@ import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { safePrivyLogout } from '@/lib/privy/logout'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
+import { CreatorStrategyFeaturesPanel } from '@/components/creatorStrategy/CreatorStrategyFeaturesPanel'
 import { RequestCreatorAccess } from '@/components/deploy/RequestCreatorAccess'
+import type { FeatureListResponse } from '@/pages/CreatorStrategyFeatures.types'
 import { LaunchCoinCard } from '@/features/waitlist/LaunchCoinCard'
 import { CONTRACTS } from '@/config/contracts'
 import { wagmiConfig } from '@/config/wagmi'
@@ -273,16 +275,10 @@ const NO_EOA_STRICT_BLOCKER =
   'No-EOA deploy requires Privy owner signer readiness on your canonical CSW. Complete one-time Base Account owner approval (or use Base App prolink), then retry.'
 type DeployMode = 'default' | 'no_eoa_strict'
 
-type CreatorStrategyDeployGateResponse = {
-  deployPlan?: {
-    deployable?: boolean
-    blockedReason?: string | null
-    activeFeatureKeys?: string[]
-  }
-  catalog?: Array<{
-    key: string
-    priceUsdcDisplay?: string
-  }>
+function scrollToCreatorStrategyFeatures(section: 'deploy' | 'vanity' = 'deploy') {
+  if (typeof document === 'undefined') return
+  const id = section === 'vanity' ? 'creator-strategy-vanity' : 'creator-strategy-features'
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
 function resolveDeployMode(): DeployMode {
@@ -1549,10 +1545,9 @@ function DeployVaultBatcher({
     [ensurePaymasterSession, postSessionRequest],
   )
   const switchAuthLabel = typeof switchAuthCta?.label === 'string' && switchAuthCta.label.trim().length > 0 ? switchAuthCta.label.trim() : null
-  const creatorStrategyFeaturesHref = useMemo(
-    () => `/creator/strategy/features?creator=${creatorToken}`,
-    [creatorToken],
-  )
+  const scrollToStrategyFeatures = useCallback((section: 'deploy' | 'vanity' = 'vanity') => {
+    scrollToCreatorStrategyFeatures(section)
+  }, [])
   const isVanityPaidFeatureError = useCallback((message: string | null | undefined): boolean => {
     const lower = String(message ?? '').toLowerCase()
     if (!lower) return false
@@ -1737,13 +1732,13 @@ function DeployVaultBatcher({
       return (
         'Custom vanity deploy options are a paid feature. ' +
         'Default vanity remains free (vault prefix 0x4626, share suffix 4626). ' +
-        `Activate vanity access in Creator Strategy features (${creatorStrategyFeaturesHref}), then retry.`
+        'Activate vanity access in the optional address vanity section on this page, then retry.'
       )
     }
     if (isOvaultMeshPaidFeatureError(lower)) {
       return (
         'OVault mesh alignment is a paid feature. ' +
-        `Activate it in Creator Strategy features (${creatorStrategyFeaturesHref}), then retry.`
+        'Activate the paid OVault mesh feature on this page, then retry.'
       )
     }
     if (lower.includes('0xe7fdf838') || lower.includes('saltoverridedisabled')) {
@@ -1810,7 +1805,7 @@ function DeployVaultBatcher({
       return deploymentBatcherNotConfiguredMessage()
     }
     return msg
-  }, [creatorStrategyFeaturesHref, isOvaultMeshPaidFeatureError, isVanityPaidFeatureError, switchAuthLabel])
+  }, [isOvaultMeshPaidFeatureError, isVanityPaidFeatureError, switchAuthLabel])
 
   const ensureDeploySessionSignerInstalled = useCallback(async (sessionSigner: Address): Promise<void> => {
     let installed = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: sessionSigner })
@@ -6915,9 +6910,13 @@ function DeployVaultBatcher({
             errorText={dryRunError}
             errorAction={
               dryRunError && isVanityPaidFeatureError(dryRunError) ? (
-                <Link to={creatorStrategyFeaturesHref} className="inline-flex text-[11px] text-blue-300 hover:text-blue-200">
+                <button
+                  type="button"
+                  className="inline-flex text-[11px] text-blue-300 hover:text-blue-200 underline underline-offset-2"
+                  onClick={() => scrollToStrategyFeatures('vanity')}
+                >
                   Activate vanity feature access
-                </Link>
+                </button>
               ) : null
             }
             failureDetail={
@@ -7184,9 +7183,13 @@ function DeployVaultBatcher({
             </Button>
           ) : null}
           {isVanityPaidFeatureError(error) ? (
-            <Link to={creatorStrategyFeaturesHref} className="inline-flex text-[11px] text-blue-300 hover:text-blue-200">
+            <button
+              type="button"
+              className="inline-flex text-[11px] text-blue-300 hover:text-blue-200 underline underline-offset-2"
+              onClick={() => scrollToStrategyFeatures('vanity')}
+            >
               Activate vanity feature access
-            </Link>
+            </button>
           ) : null}
           {isProviderCollisionErrorMessage(error) ? (
             <div className="text-[11px] text-amber-300/80">
@@ -7763,6 +7766,13 @@ function DeployVaultMain() {
 
   const autofillRef = useRef<{ tokenFor?: string }>({})
   const addressLc = (address ?? '').toLowerCase()
+
+  useEffect(() => {
+    const fromQuery = (searchParams.get('creator') ?? searchParams.get('creatorToken') ?? '').trim()
+    if (!fromQuery || !isAddress(fromQuery)) return
+    if (creatorToken.trim().length > 0) return
+    setCreatorToken(getAddress(fromQuery))
+  }, [creatorToken, searchParams])
 
   useEffect(() => {
     if (!isConnected || !addressLc) return
@@ -8359,7 +8369,7 @@ function DeployVaultMain() {
       }
       const raw = (await res.json()) as {
         success?: boolean
-        data?: CreatorStrategyDeployGateResponse
+        data?: FeatureListResponse
         error?: string
       }
       if (!raw.success || !raw.data) {
@@ -8368,11 +8378,6 @@ function DeployVaultMain() {
       return raw.data
     },
   })
-
-  const deployBundlePriceUsdc = useMemo(() => {
-    const entry = creatorStrategyDeployGateQuery.data?.catalog?.find((item) => item.key === 'vault_full_deploy')
-    return entry?.priceUsdcDisplay ?? null
-  }, [creatorStrategyDeployGateQuery.data?.catalog])
 
   const deployFeatureActivated = useMemo(() => {
     const plan = creatorStrategyDeployGateQuery.data?.deployPlan
@@ -9037,9 +9042,9 @@ function DeployVaultMain() {
                   : creatorStrategyDeployGateQuery.isLoading || creatorStrategyDeployGateQuery.isFetching
                     ? 'Checking USDC deployment feature activation…'
                     : creatorStrategyDeployGateQuery.isError
-                      ? `Could not verify deployment feature activation. Open Creator Strategy features (/creator/strategy/features?creator=${creatorToken}) and confirm vault_full_deploy is active.`
+                      ? 'Could not verify deployment feature activation. Use the activation panel below and confirm vault_full_deploy is active.'
                       : !deployFeatureActivated
-                        ? `Vault deploy requires paid feature activation (USDC-denominated). Activate vault_full_deploy in Creator Strategy features (/creator/strategy/features?creator=${creatorToken}).`
+                        ? 'Vault deploy requires paid feature activation (USDC-denominated). Activate vault_full_deploy below.'
                   : !isAuthorizedDeployerOrOperator
                     ? 'Connect the creator or CreatorCoin payout recipient wallet.'
                     : !fundingGateOk
@@ -9460,25 +9465,36 @@ function DeployVaultMain() {
                   description={`Creator smart wallet needs ${minFirstDepositDisplay} ${underlyingSymbolUpper || 'TOKENS'} to deploy & launch.`}
                 />
               ) : tokenIsValid && zoraCoin && isCreatorCoin && !deployFeatureActivated ? (
-                <BlockedStateCard
-                  tone={creatorStrategyDeployGateQuery.isError ? 'warning' : 'info'}
-                  title={
-                    creatorStrategyDeployGateQuery.isError
-                      ? 'Could not verify deployment feature activation'
-                      : 'Activate deploy feature first'
-                  }
-                  description={
-                    creatorStrategyDeployGateQuery.isError
-                      ? 'Vault deploy is USDC-denominated and requires an active vault_full_deploy entitlement, but this check failed.'
-                      : `Vault deploy is USDC-denominated and gated until vault_full_deploy is active${
-                          deployBundlePriceUsdc ? ` (${deployBundlePriceUsdc} USDC)` : ''
-                        }.`
-                  }
-                >
-                  <Button asChild type="button" variant="primary">
-                    <Link to={`/creator/strategy/features?creator=${creatorToken}`}>Activate in Creator Strategy</Link>
-                  </Button>
-                </BlockedStateCard>
+                <div className="space-y-4">
+                  {creatorStrategyDeployGateQuery.isError ? (
+                    <BlockedStateCard
+                      tone="warning"
+                      title="Could not verify deployment feature activation"
+                      description="Vault deploy is USDC-denominated and requires an active vault_full_deploy entitlement, but this check failed."
+                    />
+                  ) : null}
+                  <CreatorStrategyFeaturesPanel
+                    creatorToken={creatorToken as Address}
+                    variant="deploy"
+                    data={creatorStrategyDeployGateQuery.data ?? null}
+                    loading={
+                      creatorStrategyDeployGateQuery.isLoading || creatorStrategyDeployGateQuery.isFetching
+                    }
+                    loadError={
+                      creatorStrategyDeployGateQuery.isError
+                        ? creatorStrategyDeployGateQuery.error instanceof Error
+                          ? creatorStrategyDeployGateQuery.error.message
+                          : 'Failed to load deployment features'
+                        : null
+                    }
+                    onReload={async () => {
+                      await creatorStrategyDeployGateQuery.refetch()
+                    }}
+                    onActivationComplete={async () => {
+                      await creatorStrategyDeployGateQuery.refetch()
+                    }}
+                  />
+                </div>
               ) : oneTimePrivyOwnerApprovalNeeded ? (
                 <BlockedStateCard
                   tone="info"
@@ -9537,6 +9553,32 @@ function DeployVaultMain() {
               ) : (
                 <BlockedStateCard tone="info" title={deployBlocker || 'Enter token address to continue'} />
               )}
+
+              {tokenIsValid && zoraCoin && isCreatorCoin && deployFeatureActivated ? (
+                <CreatorStrategyFeaturesPanel
+                  creatorToken={creatorToken as Address}
+                  variant="deploy"
+                  showDeploySection={false}
+                  panelId="creator-strategy-vanity"
+                  data={creatorStrategyDeployGateQuery.data ?? null}
+                  loading={
+                    creatorStrategyDeployGateQuery.isLoading || creatorStrategyDeployGateQuery.isFetching
+                  }
+                  loadError={
+                    creatorStrategyDeployGateQuery.isError
+                      ? creatorStrategyDeployGateQuery.error instanceof Error
+                        ? creatorStrategyDeployGateQuery.error.message
+                        : 'Failed to load deployment features'
+                      : null
+                  }
+                  onReload={async () => {
+                    await creatorStrategyDeployGateQuery.refetch()
+                  }}
+                  onActivationComplete={async () => {
+                    await creatorStrategyDeployGateQuery.refetch()
+                  }}
+                />
+              ) : null}
 
 
               {!canDeploy && deployBlocker ? (

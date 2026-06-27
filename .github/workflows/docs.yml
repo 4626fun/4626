@@ -170,30 +170,3 @@ jobs:
           if [ -f /tmp/docs-hygiene.json ]; then
             node -e "const fs=require('node:fs'); const r=JSON.parse(fs.readFileSync('/tmp/docs-hygiene.json','utf8')); console.log('- Duplicate paragraph groups: ' + r.duplicateParagraphGroupCount); console.log('- Stale docs (> ' + r.staleThresholdDays + 'd): ' + r.staleFileCount);" >> "$GITHUB_STEP_SUMMARY"
           fi
-
-  deploy-docs:
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-    needs: [docs]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    concurrency:
-      group: docs-deploy-production
-      cancel-in-progress: true
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Install Vercel CLI
-        run: npm i -g vercel@latest
-
-      - name: Deploy docs.4626.fun to Vercel production
-        env:
-          VERCEL_ORG_ID: team_vwFyCLfPwJ8GfxE2yGHIkRJm
-          VERCEL_PROJECT_ID: prj_QianKYUgclEpCdGFDguSAJL2KiRy
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: |
-          if [ -z "${VERCEL_TOKEN}" ]; then
-            echo "::warning::VERCEL_TOKEN secret is not set — skipping docs production deploy."
-            exit 0
-          fi
-          vercel deploy --prod --yes --archive=tgz --token "$VERCEL_TOKEN"

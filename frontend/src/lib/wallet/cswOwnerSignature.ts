@@ -76,7 +76,8 @@ export async function readCswReplaySafeHash(params: {
 type CswOwnerWalletClient = {
   signTypedData?: (args: Record<string, unknown>) => Promise<Hex | string>
   signMessage?: (args: Record<string, unknown>) => Promise<Hex | string>
-  request?: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+  request?: (args: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown>
+  refreshSession?: () => Promise<unknown>
 }
 
 /**
@@ -104,6 +105,7 @@ export async function signOwnerSignatureForCswErc1271(params: {
     digest: replaySafeHash,
     signerAddress: params.signerAddress,
     walletClient: params.walletClient,
+    refreshSession: params.walletClient.refreshSession,
     label: 'cswErc1271',
   })
   return wrapCswOwnerSignature(ownerSig, params.ownerIndex)

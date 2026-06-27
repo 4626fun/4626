@@ -10,7 +10,7 @@ export function isRawEcdsaDigest(value: unknown): value is Hex {
 }
 
 type WalletClientWithRequest = {
-  request?: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+  request?: (args: { method: string; params?: unknown[] | Record<string, unknown> }) => Promise<unknown>
   signMessage?: (args: {
     account?: string
     message: { raw: Hex } | Hex | string
@@ -47,14 +47,21 @@ export async function signRawEcdsaDigest(params: {
 
   const label = params.label ?? 'signRawEcdsaDigest'
   const request = params.walletClient.request
+  const refreshSession = params.refreshSession ?? params.walletClient.refreshSession
 
   if (typeof request === 'function') {
     const signerAddress = String(params.signerAddress ?? '').trim()
-    const requestAttempts: Array<{ method: string; params: unknown[]; suffix: string }> = [
+    const requestAttempts: Array<{ method: string; params: unknown[] | Record<string, unknown>; suffix: string }> = [
       {
         method: 'secp256k1_sign',
         params: [params.digest],
         suffix: 'secp256k1_sign',
+      },
+      // Privy Wallet API / some embedded providers expect `{ hash }` instead of `[hash]`.
+      {
+        method: 'secp256k1_sign',
+        params: { hash: params.digest },
+        suffix: 'secp256k1_sign_object',
       },
       // Some providers require `address` in params for secp256k1_sign.
       {
@@ -82,6 +89,16 @@ export async function signRawEcdsaDigest(params: {
     ]
     let attemptedSessionRefresh = false
     let refreshAttemptError: string | null = null
+
+    // Privy embedded `secp256k1_sign` authorizes against the live access token.
+    // Refresh proactively before the first attempt when a provider-aware hook is wired.
+    if (typeof refreshSession === 'function') {
+      try {
+        await refreshSession()
+      } catch (refreshError) {
+        console.warn(`[${label}] proactive signing session refresh failed:`, refreshError)
+      }
+    }
 
     const runRawSigningAttemptSet = async () => {
       const failures: Array<{ method: string; message: string }> = []
@@ -113,7 +130,6 @@ export async function signRawEcdsaDigest(params: {
     )
     if (hasRefreshableSessionFailure) {
       attemptedSessionRefresh = true
-      const refreshSession = params.refreshSession ?? params.walletClient.refreshSession
       try {
         if (typeof refreshSession === 'function') {
           // Provider-aware refresh (Privy access-token refresh + provider re-acquire) —

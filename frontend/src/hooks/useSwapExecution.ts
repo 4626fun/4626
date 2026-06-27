@@ -1424,6 +1424,9 @@ export function useSwapExecution(params: {
 
     setStatus(swapPermitProgressStatus(params.executionMode))
     try {
+      if (params.executionMode === 'canonical') {
+        await refreshWalletClientSession(params.walletClient)
+      }
       const signed = await signPermit2ForExecutionWallet({
         permitData,
         signerAddress: params.signerAddress,
