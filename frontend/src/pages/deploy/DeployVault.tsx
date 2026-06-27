@@ -8734,17 +8734,32 @@ function DeployVaultMain() {
     return MIN_FIRST_DEPOSIT
   }, [minFirstDepositTokens, resolvedTokenDecimals])
 
-  const minFirstDepositDisplay = useMemo(() => {
-    const decimals =
-      typeof resolvedTokenDecimals === 'number' && resolvedTokenDecimals >= 0
-        ? resolvedTokenDecimals
-        : 18
-    const raw = formatUnits(minFirstDeposit, decimals)
-    const [whole, fraction = ''] = raw.split('.')
-    const groupedWhole = (whole ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-    const trimmedFraction = fraction.replace(/0+$/, '')
-    return trimmedFraction ? `${groupedWhole}.${trimmedFraction}` : groupedWhole
-  }, [minFirstDeposit, resolvedTokenDecimals])
+  const formatWholeTokenDisplay = useCallback(
+    (amount: bigint) => {
+      const decimals =
+        typeof resolvedTokenDecimals === 'number' && resolvedTokenDecimals >= 0
+          ? resolvedTokenDecimals
+          : 18
+      const raw = formatUnits(amount, decimals)
+      const [whole, fraction = ''] = raw.split('.')
+      const groupedWhole = (whole ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+      const trimmedFraction = fraction.replace(/0+$/, '')
+      return trimmedFraction ? `${groupedWhole}.${trimmedFraction}` : groupedWhole
+    },
+    [resolvedTokenDecimals],
+  )
+
+  const minFirstDepositDisplay = useMemo(
+    () => formatWholeTokenDisplay(minFirstDeposit),
+    [formatWholeTokenDisplay, minFirstDeposit],
+  )
+
+  const deploySenderBalanceDisplay = useMemo(() => {
+    if (typeof deploySenderTokenBalance !== 'bigint') return null
+    return formatWholeTokenDisplay(deploySenderTokenBalance)
+  }, [deploySenderTokenBalance, formatWholeTokenDisplay])
+
+  const depositSymbolLabel = underlyingSymbolUpper || 'TOKENS'
 
   const walletHasMinDeposit =
     typeof deploySenderTokenBalance === 'bigint' && deploySenderTokenBalance >= minFirstDeposit
@@ -9030,7 +9045,9 @@ function DeployVaultMain() {
       hint: authReady
         ? fundingReady
           ? 'ready'
-          : `needs ${minFirstDepositDisplay} ${underlyingSymbolUpper || 'TOKENS'}`
+          : deploySenderBalanceDisplay
+            ? `needs ${minFirstDepositDisplay} ${depositSymbolLabel} (has ${deploySenderBalanceDisplay})`
+            : `needs ${minFirstDepositDisplay} ${depositSymbolLabel}`
         : 'not authorized',
     },
     {
@@ -9091,7 +9108,9 @@ function DeployVaultMain() {
                   : !isAuthorizedDeployerOrOperator
                     ? 'Connect the creator or CreatorCoin payout recipient wallet.'
                     : !fundingGateOk
-                      ? `Needs ${minFirstDepositDisplay} ${underlyingSymbolUpper || 'TOKENS'} to deploy.`
+                      ? deploySenderBalanceDisplay
+                        ? `Needs ${minFirstDepositDisplay} ${depositSymbolLabel} to deploy (you have ${deploySenderBalanceDisplay}).`
+                        : `Needs ${minFirstDepositDisplay} ${depositSymbolLabel} to deploy.`
                       : strictNoEoaEnforced && !strictNoEoaEligibility
                         ? NO_EOA_STRICT_BLOCKER
                       : deployEligibility.blockerMessage
@@ -9505,7 +9524,11 @@ function DeployVaultMain() {
                 <BlockedStateCard
                   tone="warning"
                   title="Deposit required"
-                  description={`Creator smart wallet needs ${minFirstDepositDisplay} ${underlyingSymbolUpper || 'TOKENS'} to deploy & launch.`}
+                  description={
+                    deploySenderBalanceDisplay
+                      ? `Creator smart wallet needs ${minFirstDepositDisplay} ${depositSymbolLabel} to deploy & launch. You have ${deploySenderBalanceDisplay} ${depositSymbolLabel}.`
+                      : `Creator smart wallet needs ${minFirstDepositDisplay} ${depositSymbolLabel} to deploy & launch. Checking your balance…`
+                  }
                 />
               ) : tokenIsValid && zoraCoin && isCreatorCoin && !deployFeatureActivated ? (
                 <div className="space-y-4">
@@ -9640,7 +9663,9 @@ function DeployVaultMain() {
               ) : null}
 
               <div className="text-xs text-zinc-600">
-                Requires a {minFirstDepositDisplay} {underlyingSymbolUpper || 'TOKENS'} deposit. Some wallets may prompt multiple confirmations.
+                Requires a {minFirstDepositDisplay} {depositSymbolLabel} deposit
+                {deploySenderBalanceDisplay ? ` (you have ${deploySenderBalanceDisplay})` : ''}. Some wallets may
+                prompt multiple confirmations.
               </div>
             </div>
             </div>

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { readPrivyAccessTokenWithRetries } from './WaitlistFlow'
+import { readPrivyAccessTokenWithRetries } from './waitlistPrivyToken'
 
 describe('readPrivyAccessTokenWithRetries', () => {
   it('returns token after transient empty reads', async () => {

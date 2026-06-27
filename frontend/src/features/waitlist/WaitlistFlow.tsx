@@ -10,6 +10,11 @@ import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { APP_ORIGIN } from '@/lib/env/host'
 import { bridgePrivySession } from '@/features/waitlist/waitlistHandoff'
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
+import { WaitlistTwitterLinkPanel } from '@/features/waitlist/WaitlistTwitterLinkPanel'
+import { useWaitlistTwitterLink } from '@/features/waitlist/useWaitlistTwitterLink'
+import { readPrivyAccessTokenWithRetries } from '@/features/waitlist/waitlistPrivyToken'
+import { computeAcceptedFromAppAccessStatus } from '@/app/accessShared'
+import { useAccountMe } from '@/hooks/useAccountMe'
 
 type WaitlistBootstrapResponse = {
   requiresPrivyAuth: boolean
@@ -19,9 +24,6 @@ type AuthMeResponse = {
   address: string
 } | null
 
-const PRIVY_ACCESS_TOKEN_TIMEOUT_MS = 4_000
-const PRIVY_ACCESS_TOKEN_ATTEMPTS = 8
-const PRIVY_ACCESS_TOKEN_RETRY_DELAY_MS = 250
 const OTP_RESEND_DELAY_MS = 30_000
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -74,49 +76,6 @@ async function readAuthSessionAddress(): Promise<string | null> {
   return address || null
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timeoutId = globalThis.setTimeout(() => reject(new Error(message)), timeoutMs)
-    promise
-      .then(resolve)
-      .catch(reject)
-      .finally(() => globalThis.clearTimeout(timeoutId))
-  })
-}
-
-async function sleep(ms: number): Promise<void> {
-  await new Promise((resolve) => globalThis.setTimeout(resolve, ms))
-}
-
-export async function readPrivyAccessTokenWithRetries(params: {
-  read: (() => Promise<string | null>) | null | undefined
-  attempts?: number
-  retryDelayMs?: number
-  timeoutMs?: number
-}): Promise<string> {
-  const read = params.read
-  if (typeof read !== 'function') return ''
-  const attempts = Math.max(1, Number(params.attempts ?? PRIVY_ACCESS_TOKEN_ATTEMPTS))
-  const retryDelayMs = Math.max(0, Number(params.retryDelayMs ?? PRIVY_ACCESS_TOKEN_RETRY_DELAY_MS))
-  const timeoutMs = Math.max(1, Number(params.timeoutMs ?? PRIVY_ACCESS_TOKEN_TIMEOUT_MS))
-
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const token = await withTimeout(
-      Promise.resolve()
-        .then(() => read())
-        .then((value) => String(value ?? '').trim())
-        .catch(() => ''),
-      timeoutMs,
-      'Privy access token read timed out.',
-    ).catch(() => '')
-    if (token) return token
-    if (attempt < attempts - 1 && retryDelayMs > 0) {
-      await sleep(retryDelayMs)
-    }
-  }
-  return ''
-}
-
 async function bootstrapWaitlist(privyAccessToken: string): Promise<WaitlistBootstrapResponse> {
   const token = privyAccessToken.trim()
   if (!token) {
@@ -140,6 +99,12 @@ async function bootstrapWaitlist(privyAccessToken: string): Promise<WaitlistBoot
 }
 
 type SignupStep = 'email' | 'code'
+
+const WAITLIST_PANEL_STYLE = {
+  background: 'linear-gradient(165deg, rgb(var(--vault-card)), rgb(var(--vault-card-raised)))',
+  boxShadow:
+    '0 18px 45px -24px rgba(0, 0, 0, 0.65), 0 0 0 1px rgb(var(--brand-primary) / 0.1), 0 0 28px 4px rgb(var(--brand-primary) / 0.16), 0 0 52px 14px rgb(var(--brand-primary) / 0.1), 0 0 84px 28px rgb(var(--brand-primary) / 0.05)',
+} as const
 
 export function WaitlistFlow(props: { sectionId?: string }) {
   const sectionId = props.sectionId ?? 'waitlist-page'
@@ -383,6 +348,17 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   const resendSeconds =
     resendAvailableAt != null && resendAvailableAt > nowMs ? Math.ceil((resendAvailableAt - nowMs) / 1_000) : 0
 
+  const { me: accountMe, refresh: refreshAccountMe } = useAccountMe()
+  const {
+    busy: twitterBusy,
+    error: twitterError,
+    linkTwitter,
+    clearError: clearTwitterError,
+  } = useWaitlistTwitterLink(privy, () => refreshAccountMe())
+
+  const appAccepted = computeAcceptedFromAppAccessStatus(accountMe?.appAccessStatus ?? null)
+  const twitterLinked = (accountMe?.linkedMethods?.twitter ?? []).length > 0
+
   return (
     <section
       id={sectionId}
@@ -406,55 +382,74 @@ export function WaitlistFlow(props: { sectionId?: string }) {
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           className="relative w-full space-y-6 sm:space-y-7"
         >
-          <div className="space-y-2 text-center">
-            <h1 className="headline text-3xl leading-[1.02] tracking-[-0.03em] sm:text-4xl">
-              {sessionAddress ? "You're on the list" : 'Join the waitlist'}
-            </h1>
-            {sessionAddress ? (
-              <p className="text-sm leading-relaxed text-zinc-400">
-                Finish setup in the app, then start swapping.
-              </p>
-            ) : null}
-            {sessionAddress && listCount != null && listCount > 0 ? (
-              <p className="text-[11px] tracking-[0.2px] text-zinc-500">
-                {listCount.toLocaleString()} creators on the list
-              </p>
-            ) : null}
-          </div>
+          {sessionAddress ? (
+            <div className="relative">
+              <div className="relative rounded-2xl p-6 text-center sm:p-8" style={WAITLIST_PANEL_STYLE}>
+                <div className="space-y-3">
+                  <h1 className="headline text-2xl leading-tight tracking-[-0.03em] sm:text-3xl">
+                    {appAccepted ? "You're approved" : "You're on the list"}
+                  </h1>
+                  <p className="text-sm leading-relaxed text-zinc-400">
+                    {appAccepted
+                      ? 'Open the app to continue.'
+                      : "We'll notify you when your spot opens."}
+                  </p>
+                  {listCount != null && listCount > 0 ? (
+                    <p className="text-[11px] text-zinc-500">
+                      {listCount.toLocaleString()} creators on the list
+                    </p>
+                  ) : null}
+                </div>
 
-          <div className="relative">
-            <div
-              className="relative rounded-2xl p-5 sm:p-6"
-              style={{
-                background:
-                  'linear-gradient(165deg, rgb(var(--vault-card)), rgb(var(--vault-card-raised)))',
-                boxShadow:
-                  '0 18px 45px -24px rgba(0, 0, 0, 0.65), 0 0 0 1px rgb(var(--brand-primary) / 0.1), 0 0 28px 4px rgb(var(--brand-primary) / 0.16), 0 0 52px 14px rgb(var(--brand-primary) / 0.1), 0 0 84px 28px rgb(var(--brand-primary) / 0.05)',
-              }}
-            >
-            {sessionAddress ? (
-              <div className="flex flex-col items-stretch gap-4">
-                <Button
-                  variant="primary"
-                  size="lg"
-                  className="w-full transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
-                  asChild
-                >
-                  <a href={`${APP_ORIGIN}/swap`}>
-                    Enter app
-                    <ArrowRight className="size-4" aria-hidden="true" />
-                  </a>
-                </Button>
-                <button
-                  type="button"
-                  className="self-center text-xs tracking-wide text-zinc-500 transition hover:text-zinc-300 disabled:opacity-50"
-                  onClick={() => void handleSignOut()}
-                  disabled={isBusy}
-                >
-                  Sign out
-                </button>
+                {!appAccepted && !twitterLinked ? (
+                  <WaitlistTwitterLinkPanel
+                    linked={twitterLinked}
+                    busy={twitterBusy}
+                    onConnect={() => {
+                      clearTwitterError()
+                      void linkTwitter()
+                    }}
+                  />
+                ) : null}
+
+                {twitterError ? (
+                  <p className="mt-3 text-left text-[11px] leading-relaxed text-rose-300">{twitterError}</p>
+                ) : null}
+
+                <div className="mt-6 flex flex-col items-stretch gap-3">
+                  {appAccepted ? (
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      className="w-full transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
+                      asChild
+                    >
+                      <a href={`${APP_ORIGIN}/swap`}>
+                        Enter app
+                        <ArrowRight className="size-4" aria-hidden="true" />
+                      </a>
+                    </Button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="text-xs tracking-wide text-zinc-500 transition hover:text-zinc-300 disabled:opacity-50"
+                    onClick={() => void handleSignOut()}
+                    disabled={isBusy}
+                  >
+                    Sign out
+                  </button>
+                </div>
               </div>
-            ) : step === 'email' ? (
+            </div>
+          ) : (
+            <>
+              <h1 className="headline text-center text-3xl leading-[1.02] tracking-[-0.03em] sm:text-4xl">
+                Join the waitlist
+              </h1>
+
+              <div className="relative">
+                <div className="relative rounded-2xl p-5 sm:p-6" style={WAITLIST_PANEL_STYLE}>
+                  {step === 'email' ? (
               <form className="space-y-4" onSubmit={handleEmailFormSubmit}>
                 <div className="space-y-2">
                   <label htmlFor="waitlist-email" className="block text-xs font-medium tracking-wide text-zinc-400">
@@ -560,9 +555,11 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                   {canResend ? 'Resend code' : `Resend in ${resendSeconds}s`}
                 </button>
               </form>
-            )}
-            </div>
-          </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
 
           {error ? (
             <div
