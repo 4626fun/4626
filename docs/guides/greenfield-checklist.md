@@ -1,56 +1,55 @@
 ---
-title: Greenfield checklist
+title: Launch checklist
 sidebar_position: 2
 ---
 
-# Greenfield checklist
+# Launch checklist
 
-End-to-end path for a **new** creator vault on Base (v1.14.1). Grandfathered vaults (e.g. AKITA) may differ.
+Use this as your **printable path** for launching a **brand-new** vault on Base. (Existing vaults like AKITA may follow older rules.)
 
-## Before the app
+**New to 4626?** Read [Getting started](/getting-started) first for context.
 
-| # | Requirement |
-|---|-------------|
-| 1 | **Creator coin** live on Base (typically via Zora) |
-| 2 | **50M–100M** creator coin available for the vault deposit |
-| 3 | **4626 account** with wallet signing ready in the app |
-| 4 | **`vault_full_deploy`** active — [Strategy bundle](/guides/strategy-bundle) ($499 USDC) |
+## Before you open the app
 
-## Deploy journey
+- [ ] Creator coin is **live on Base** (usually from Zora)  
+- [ ] You hold **50M–100M** of that coin for the vault deposit  
+- [ ] You have a **4626 account** and wallet signing works in the app  
+- [ ] You paid the **[strategy bundle](/guides/strategy-bundle)** ($499 USDC) — deploy stays locked until this shows active  
 
-| Phase | What happens | Guide |
-|-------|----------------|-------|
-| **0 — Pay** | Activate strategy bundle in app | [Strategy bundle](/guides/strategy-bundle) |
-| **1 — Deploy** | Atomic batch: vault, wrapper, ShareOFT, gauge, oracle, CCA | [Launch vault](/guides/launch-token) |
-| **2 — Activate** | Deposit creator coin, wrap shares, start CCA auction | [Activate vault](/guides/activate-vault) |
-| **2b — Finalize** | Auction completes; **~30% ShareOFT** can bridge to Solana (Pipe A) | [Solana share mesh](/overview/solana-share-mesh) |
-| **3 — Strategies** | Charm + Ajna sleeves attach (paid bundle weights) | [How it works](/overview/how-it-works) |
+## Launch steps
 
-Phases 1–2 are creator-driven in the app. Finalize and strategy attachment are onchain steps the app orchestrates after activation.
+| # | Step | What happens | Guide |
+|---|------|--------------|-------|
+| 1 | **Pay bundle** | Unlock deploy in the app | [Strategy bundle](/guides/strategy-bundle) |
+| 2 | **Deploy** | One transaction creates vault, shares, auction, etc. | [Launch vault](/guides/launch-token) |
+| 3 | **Activate** | Deposit creator coin; fair auction starts | [Activate vault](/guides/activate-vault) |
+| 4 | **Auction runs** | Buyers discover price; you watch in the app | — |
+| 5 | **Finalize** | Onchain wrap-up; optional Solana bridge | [Solana share mesh](/overview/solana-share-mesh) |
+| 6 | **Strategies attach** | Charm + Ajna from your bundle (automatic) | [How it works](/overview/how-it-works) |
 
-## What “live” means
+**App link:** [app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)
 
-**Base (always the hub)**
+## How you know you’re live
 
-- Vault accepts deposits and mints ▢ shares
-- CCA auction ran or is running
-- **■ ShareOFT** trades on Base — **buys** can enter the [instant lottery](/contracts/utilities/lottery-manager)
-- Trade fees route through the [gauge](/contracts/governance/gauge-controller)
+**On Base (this is the main milestone)**
 
-**Solana (share mesh, optional depth)**
+- Vault accepts deposits and mints shares  
+- Auction completed or in progress  
+- **■ shares** trade on Base  
+- **Buys** on Base can trigger the [lottery](/contracts/utilities/lottery-manager)  
+- Trade fees flow through the [gauge](/contracts/governance/gauge-controller)  
 
-- Tradable Solana token is the **bridged ■ share**, not your creator coin
-- Meteora pool + trading may follow Pipe A finalize
-- Solana pool **buys** mirroring Base lottery is a later milestone — see [Solana share mesh](/overview/solana-share-mesh)
+**On Solana (optional, can come later)**
 
-You do **not** need Solana lottery relay to launch on Base.
+- Bridged **■ share** (not your creator coin) may appear after finalize  
+- Meteora pool trading may follow  
+- You **don’t** need Solana lottery to count as live on Base  
 
-## Lookup & addresses
+## Quick reference
 
-- Per-creator vault stack is registered in [CreatorRegistry](/contracts/core/creator-registry) at deploy
-- Shared batcher, factories, modules: [live addresses](/reference/addresses) (v1.14.1)
+- **Your vault’s contracts** — registered in [CreatorRegistry](/contracts/core/creator-registry) at deploy  
+- **Shared infra (batcher, factories)** — [Live addresses](/reference/addresses) v1.14.1  
 
 ## Related
 
 - [Getting started](/getting-started) · [How it works](/overview/how-it-works)
-- [Impairment disclosures](/reference/impairment-v1-disclosures) (integrators)

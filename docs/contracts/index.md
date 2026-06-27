@@ -5,25 +5,27 @@ sidebar_position: 1
 
 # Smart contracts
 
-4626 deploys **shared infrastructure once per chain** and a **per-creator stack** for each vault launch.
+**New to 4626?** Start with [Getting started](/getting-started) and [How it works](/overview/how-it-works). This section is for **onchain detail** after you understand the product.
+
+4626 uses **shared infrastructure** (one batcher and factories per chain) plus a **per-creator stack** each time someone launches a vault.
 
 ## Per-creator stack
 
 | Contract | Doc |
 |----------|-----|
-| CreatorRegistry | [Registry](/contracts/core/creator-registry) — creator coin → vault stack |
-| CreatorOVault | [Vault](/contracts/core/creator-ovault) — ERC-4626, strategies, shares |
-| CreatorOVaultWrapper | [Wrapper](/contracts/core/creator-ovault-wrapper) — share wrapping |
-| CreatorShareOFT | [ShareOFT](/contracts/core/creator-share-oft) — LayerZero share token |
-| CreatorGaugeController | [Gauge](/contracts/governance/gauge-controller) — fees & jackpot custody |
-| CCA launch strategy | [CCA](/contracts/strategies/cca-launch) — fair launch auction |
-| CreatorLotteryManager | [Lottery](/contracts/utilities/lottery-manager) — instant lottery |
-| CreatorOracle | [Oracle](/contracts/utilities/creator-oracle) — TWAP pricing |
+| CreatorRegistry | [Registry](/contracts/core/creator-registry) — find vault addresses from creator coin |
+| CreatorOVault | [Vault](/contracts/core/creator-ovault) — holds creator coin; mints ▢ shares |
+| CreatorOVaultWrapper | [Wrapper](/contracts/core/creator-ovault-wrapper) — ▢ → ■ wrapping |
+| CreatorShareOFT | [ShareOFT](/contracts/core/creator-share-oft) — tradable ■ share |
+| CreatorGaugeController | [Gauge](/contracts/governance/gauge-controller) — fees and jackpot |
+| CCA launch strategy | [CCA](/contracts/strategies/cca-launch) — fair auction |
+| CreatorLotteryManager | [Lottery](/contracts/utilities/lottery-manager) — instant lottery on buys |
+| CreatorOracle | [Oracle](/contracts/utilities/creator-oracle) — pricing |
 
 ## Shared infrastructure
 
-Factories, deployment batcher, registry, bridge adapter, and module addresses: **[live addresses](/reference/addresses)**.
+Factories, deployment batcher, bridge adapter: **[live addresses](/reference/addresses)** (v1.14.1).
 
-Impairment side-pocket behavior: [impairment v1 disclosures](/reference/impairment-v1-disclosures).
+Impairment (strategy failure): [impairment v1 disclosures](/reference/impairment-v1-disclosures).
 
-Source: [github.com/wenakita/4626/contracts](https://github.com/wenakita/4626/tree/main/contracts)
+Source code: [github.com/wenakita/4626/contracts](https://github.com/wenakita/4626/tree/main/contracts)

@@ -7,6 +7,8 @@ sidebar_position: 3
 
 Product and onchain terms for 4626 vaults.
 
+**New here?** Read [Getting started](/getting-started) first — it explains creator coin vs shares in plain language.
+
 ## Tokens
 
 **Creator coin** — Your Zora ERC-20; the vault **deposit asset**. Not the same address as share tokens.
@@ -57,4 +59,4 @@ Use qualified names — bare `payoutRecipient` is ambiguous.
 
 **Impairment epoch** — Side-pocket when a strategy is impaired; see [impairment disclosures](/reference/impairment-v1-disclosures).
 
-**Greenfield** — New vault deploy via current batcher ([addresses](/reference/addresses), v1.14.1).
+**Greenfield** — A **brand-new** vault deploy on the current release ([addresses](/reference/addresses), v1.14.1). See [Launch checklist](/guides/greenfield-checklist).

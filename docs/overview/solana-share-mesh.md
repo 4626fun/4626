@@ -5,48 +5,47 @@ sidebar_position: 3
 
 # Solana share mesh
 
-How **■ share tokens** reach Solana and how that relates to lottery and trading.
+**Do I need this to launch?** **No.** Base is the hub. Most creators go live on Base first; Solana is extra reach for the **same share token**.
 
-## One sentence
+Read [Getting started](/getting-started) if you’re new.
 
-Solana gets a **bridged copy of your Base ShareOFT** (`■TICKER`) — not a separate creator-coin SPL and not a re-deposit of creator coin.
+## The one thing to remember
 
-## What creators should know
+Solana gets a **copy of your tradable share** (`■TICKER`) — **not** a copy of your Zora **creator coin**.
 
-| Topic | Policy |
-|-------|--------|
-| **Symbol** | `■` + ticker on Base and Solana (e.g. `■AKITA`) |
-| **When it bridges** | **Pipe A** at Phase 2 **finalize** — about **30%** of ShareOFT supply can auto-bridge when batcher OVault runtime is enabled |
-| **Creator coin on Solana** | Your Zora creator coin stays **Base-only** today; do not expect `$TICKER` creator SPL as the tradable share |
-| **Meteora** | Pools use the **share mesh mint**; operator-provisioned post-deploy (included in [strategy bundle](/guides/strategy-bundle)) |
+| Token | On Solana? |
+|-------|------------|
+| Creator coin (`$TICKER`) | **No** — stays on Base |
+| Tradable share (`■TICKER`) | **Maybe** — after launch finalize bridges ~30% via LayerZero |
+
+Same symbol idea: `■AKITA` on Base and `■AKITA` on Solana when bridged.
+
+## When it happens
+
+After your **auction finishes**, finalize can run **Pipe A**: part of your share supply bridges to Solana. **Meteora** pool setup (included in your [strategy bundle](/guides/strategy-bundle)) may follow so people can trade there.
+
+You don’t click a separate “Solana deploy” — it’s part of the post-auction onchain path.
 
 ## Lottery: Base vs Solana
 
-**Base (live at launch)** — [CreatorLotteryManager](/contracts/utilities/lottery-manager) entries fire on **ShareOFT DEX buys** on Base (`SwapOnly → non-SwapOnly`). Wraps, deposits, and bridge receipts do **not** enter.
+| Chain | Status for new vaults |
+|-------|------------------------|
+| **Base** | **Live at launch** — buying ■ shares on a Base DEX can enter the [lottery](/contracts/utilities/lottery-manager) |
+| **Solana** | **Later** — goal is to mirror lottery on Solana pool **buys**; until then, use Base |
 
-**Solana (later milestone)** — Policy is to mirror **secondary pool buys** of the tradable share mesh token, not primary mint or bridge receipt. Until that relay path is fully live, treat **Base lottery as canonical** for your vault.
+Wraps, deposits, and “I received bridged tokens” do **not** count as lottery entries — **buys** do.
 
-Details: [Greenfield checklist — what live means](/guides/greenfield-checklist#what-live-means).
-
-## Two lanes (do not mix them)
-
-```text
-Share mesh (active)     Base ShareOFT ──LayerZero──► Solana ■ share ──► Meteora trading
-Compose deposit (dormant) Would bridge creator coin → Base shares; not configured for greenfield today
-```
-
-Legacy bridge-wrapped **creator SPL** (old adapter path) is **not** the share-lottery surface.
-
-## Creator checklist tie-in
+## Simple timeline
 
 1. [Deploy](/guides/launch-token) + [activate](/guides/activate-vault) on Base  
-2. CCA auction completes → finalize can run Pipe A bridge  
-3. Solana pool/trading may follow (operator + Meteora entitlement)  
-4. Base ShareOFT trading + lottery work without waiting on Solana relay  
+2. Auction completes  
+3. Finalize may bridge shares to Solana  
+4. Meteora trading may go live (operator-assisted)  
+5. Base trading + lottery work the whole time  
 
-Full deploy order: [Greenfield checklist](/guides/greenfield-checklist).
+Full checklist: [Launch checklist](/guides/greenfield-checklist).
 
-## Contracts & infra
+## For developers
 
-- [CreatorShareOFT](/contracts/core/creator-share-oft) · [Wrapper](/contracts/core/creator-ovault-wrapper)
-- Shared adapter + batcher: [addresses](/reference/addresses)
+- [CreatorShareOFT](/contracts/core/creator-share-oft) · [Wrapper](/contracts/core/creator-ovault-wrapper)  
+- [Contract addresses](/reference/addresses)

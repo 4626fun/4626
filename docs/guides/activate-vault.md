@@ -5,38 +5,39 @@ sidebar_position: 4
 
 # Activate a vault
 
-**Phase 2** — activation deposits creator coin into your vault, wraps shares for the ShareOFT, and seeds the **CCA auction**.
+**Step 3 of launch:** put creator coin **into** the vault and **start the fair auction**.
 
-Prerequisites: [Phase 1 deploy](/guides/launch-token) complete. Journey map: [Greenfield checklist](/guides/greenfield-checklist).
+Prerequisites: [Deploy](/guides/launch-token) finished · [Launch checklist](/guides/greenfield-checklist)
 
-## Preferred path: Permit2
+## What “activate” means
 
-One typed-data signature + one batcher call pulls creator coin, deposits to the vault, wraps shares, and allocates the auction slice to the CCA strategy. The app uses this path when your wallet supports Permit2.
+Activation pulls **50M–100M** of your creator coin from your wallet into the vault, mints shares, and seeds the **CCA auction** — the open price-discovery sale for your tradable **■** shares.
 
-## Fallback: approve + activate
+After this, buyers participate in the auction through the app / onchain flow.
 
-1. Approve the batcher for your deposit amount
-2. Call the batcher activate function with vault, wrapper, CCA strategy, and deposit parameters
+## In the app
 
-The app falls back automatically when Permit2 signing is unavailable.
+Most users sign **once** (Permit2 path): the app pulls coin, deposits, wraps, and starts the auction in one batch.
+
+If your wallet doesn’t support that, the app falls back to **approve**, then **activate** — two steps instead of one.
 
 ## Deposit rules
 
-- **50M–100M** creator coin for greenfield launches (see app for your configured minimum)
-- Auction seed is **99% creator coin / 1% USDC** — not a balanced pair
+- **50M–100M** creator coin (exact minimum shown in app)  
+- Auction starts as **99% creator coin / 1% USDC** — not a 50/50 pair  
 
-## After activation
+## After you activate
 
-| Step | What happens |
+| What | What to expect |
 |------|----------------|
-| **CCA auction** | Monitor in the app until the fair-launch completes |
-| **Phase 2b finalize** | Pipe A may bridge ~30% ShareOFT to [Solana mesh](/overview/solana-share-mesh) |
-| **Phase 3** | Charm + Ajna strategies attach (included in [strategy bundle](/guides/strategy-bundle)) |
+| **Auction** | Runs until complete — monitor in the app |
+| **Trading on Base** | ■ shares become tradable; buys can enter the lottery |
+| **Solana** | Optional later — share bridge after finalize ([explainer](/overview/solana-share-mesh)) |
+| **Strategies** | Charm + Ajna from your bundle attach automatically |
 
-Base ShareOFT trading and lottery can work without waiting on Solana relay.
+You **don’t** need to wait for Solana to be “live” on Base.
 
 ## Related
 
-- [Launch a vault](/guides/launch-token)
-- [CCA strategy contract](/contracts/strategies/cca-launch)
-- [Live addresses](/reference/addresses)
+- [Launch vault](/guides/launch-token) · [How it works](/overview/how-it-works)  
+- [Auction contract](/contracts/strategies/cca-launch) · [Addresses](/reference/addresses)
