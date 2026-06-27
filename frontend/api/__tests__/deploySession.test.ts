@@ -3,7 +3,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import cancelHandler from '../_handlers/deploy/v2/session/_cancelCore.ts'
 import continueHandler from '../_handlers/deploy/v2/session/_continueCore.ts'
 import statusHandler from '../_handlers/deploy/v2/session/_statusCore.ts'
-import { createMockReq, createMockRes } from './helpers'
+import { createMockReq as createBaseMockReq, createMockRes } from './helpers'
+
+function makeFreshPrivyJwt(): string {
+  const payload = Buffer.from(JSON.stringify({ iat: Math.floor(Date.now() / 1000) })).toString('base64url')
+  return `test.${payload}.sig`
+}
+
+function createMockReq(options: Parameters<typeof createBaseMockReq>[0] = {}) {
+  return createBaseMockReq({
+    ...options,
+    headers: {
+      'x-privy-token': makeFreshPrivyJwt(),
+      ...(options.headers ?? {}),
+    },
+  })
+}
 
 const {
   readJsonBodyMock,

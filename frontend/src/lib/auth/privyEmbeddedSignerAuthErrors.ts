@@ -15,6 +15,8 @@ export function isPrivyEmbeddedSignerAuthError(message: string): boolean {
     (m.includes('unknownrpcerror') && m.includes('auth token')) ||
     (m.includes('signer') && m.includes('auth token')) ||
     (m.includes('embedded wallet') && m.includes('auth')) ||
+    m.includes('privy wallet secp256k1_sign failed (401)') ||
+    (m.includes('401') && m.includes('privy wallet secp256k1_sign')) ||
     (m.includes('privy') && m.includes('missing auth'))
   )
 }

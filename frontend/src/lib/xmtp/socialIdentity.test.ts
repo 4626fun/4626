@@ -5,6 +5,7 @@ const getBasenameProfileMock = vi.fn()
 const getBasenameProfileByNameMock = vi.fn()
 const resolveBasenameAddressMock = vi.fn()
 const apiFetchMock = vi.fn()
+const fetchZoraProfileMock = vi.fn()
 
 vi.mock('@/lib/basename/basename-api', () => ({
   getBasename: (...args: unknown[]) => getBasenameMock(...args),
@@ -15,6 +16,10 @@ vi.mock('@/lib/basename/basename-api', () => ({
 
 vi.mock('@/lib/api/apiBase', () => ({
   apiFetch: (...args: unknown[]) => apiFetchMock(...args),
+}))
+
+vi.mock('@/lib/zora/client', () => ({
+  fetchZoraProfile: (...args: unknown[]) => fetchZoraProfileMock(...args),
 }))
 
 import { getBasenameAutocompleteCandidate, resolveDmRecipient, resolvePeerChatPresentation } from './socialIdentity'
@@ -192,6 +197,8 @@ describe('resolvePeerChatPresentation', () => {
 
   beforeEach(() => {
     getBasenameProfileMock.mockReset()
+    fetchZoraProfileMock.mockReset()
+    fetchZoraProfileMock.mockResolvedValue(null)
   })
 
   it('returns basename display name and avatar when profile resolves', async () => {

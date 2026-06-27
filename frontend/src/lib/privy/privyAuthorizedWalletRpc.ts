@@ -19,6 +19,16 @@ function walletRpcPath(walletId: string): string {
   return `/api/v1/wallets/${walletId}/rpc`
 }
 
+/** Full request URL for Wallet API RPC — must match fetch target and auth-signature payload. */
+export function resolvePrivyWalletRpcAuthorizationUrl(walletId: string): string {
+  const id = String(walletId ?? '').trim()
+  if (!id) {
+    throw new Error('Privy wallet id is required for wallet RPC authorization URL.')
+  }
+  const apiBase = (getPrivyApiUrl() ?? 'https://auth.privy.io').replace(/\/$/, '')
+  return `${apiBase}${walletRpcPath(id)}`
+}
+
 function parseWalletRpcSignature(payload: unknown, context: string): Hex {
   if (typeof payload === 'string' && /^0x[0-9a-fA-F]+$/.test(payload)) {
     return payload as Hex
@@ -69,7 +79,7 @@ export async function privyAuthorizedWalletSecp256k1Sign(params: {
     throw new Error('Privy access token missing — sign in again with email OTP.')
   }
 
-  const rpcPath = walletRpcPath(walletId)
+  const rpcAuthorizationUrl = resolvePrivyWalletRpcAuthorizationUrl(walletId)
   const body = {
     chain_type: 'ethereum',
     method: 'secp256k1_sign',
@@ -79,13 +89,12 @@ export async function privyAuthorizedWalletSecp256k1Sign(params: {
   const { signature: authorizationSignature } = await params.generateAuthorizationSignature({
     version: 1,
     method: 'POST',
-    url: rpcPath,
+    url: rpcAuthorizationUrl,
     body,
     headers: { 'privy-app-id': appId },
   })
 
-  const apiBase = (getPrivyApiUrl() ?? 'https://auth.privy.io').replace(/\/$/, '')
-  const response = await fetch(`${apiBase}${rpcPath}`, {
+  const response = await fetch(rpcAuthorizationUrl, {
     method: 'POST',
     credentials: 'include',
     headers: {
@@ -153,18 +162,48 @@ export function resolvePrivyUnifiedWalletId(params: {
   return null
 }
 
-export function isPrivyUnifiedStackWallet(wallet: unknown): boolean {
+export function isPrivyUnifiedStackWallet(wallet: unknown, user?: unknown): boolean {
   const record = wallet && typeof wallet === 'object' ? (wallet as Record<string, unknown>) : null
-  if (!record) return false
-  const id = typeof record.id === 'string' ? record.id.trim() : ''
-  if (!id) return false
-  const recoveryMethod = String(record.recovery_method ?? record.recoveryMethod ?? '')
-    .trim()
-    .toLowerCase()
-  if (recoveryMethod === 'privy-v2') return true
-  // Wallets with server-side owner_id still route through the unified Wallet API.
-  const ownerId = String(record.owner_id ?? record.ownerId ?? '').trim()
-  return ownerId.length > 0
+  if (record) {
+    const id = typeof record.id === 'string' ? record.id.trim() : ''
+    if (id) {
+      const recoveryMethod = String(record.recovery_method ?? record.recoveryMethod ?? '')
+        .trim()
+        .toLowerCase()
+      if (recoveryMethod === 'privy-v2') return true
+      const ownerId = String(record.owner_id ?? record.ownerId ?? '').trim()
+      if (ownerId.length > 0) return true
+    }
+  }
+
+  const targetAddress = String(record?.address ?? '').trim().toLowerCase()
+  if (!targetAddress) return false
+
+  const userRecord = user && typeof user === 'object' ? (user as Record<string, unknown>) : null
+  const candidates: unknown[] = []
+  if (userRecord?.wallet) candidates.push(userRecord.wallet)
+  if (Array.isArray(userRecord?.wallets)) candidates.push(...userRecord.wallets)
+  const linked = Array.isArray(userRecord?.linkedAccounts)
+    ? userRecord.linkedAccounts
+    : Array.isArray(userRecord?.linked_accounts)
+      ? userRecord.linked_accounts
+      : []
+  candidates.push(...linked)
+
+  for (const candidate of candidates) {
+    const linkedRecord = candidate && typeof candidate === 'object' ? (candidate as Record<string, unknown>) : null
+    if (!linkedRecord) continue
+    const address = String(linkedRecord.address ?? '').trim().toLowerCase()
+    if (address !== targetAddress) continue
+    const recoveryMethod = String(linkedRecord.recovery_method ?? linkedRecord.recoveryMethod ?? '')
+      .trim()
+      .toLowerCase()
+    if (recoveryMethod === 'privy-v2') return true
+    const ownerId = String(linkedRecord.owner_id ?? linkedRecord.ownerId ?? '').trim()
+    if (ownerId.length > 0) return true
+  }
+
+  return false
 }
 
 export async function refreshPrivyEmbeddedSignerSessionDefault(input: {

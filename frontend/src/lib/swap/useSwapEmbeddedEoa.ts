@@ -4,7 +4,6 @@ import { Address, getAddress, isAddress, toHex, type Hex } from 'viem'
 
 import { extractPrivyWalletsFromUser } from '@/lib/privy/embeddedWallet'
 import {
-  isPrivyUnifiedStackWallet,
   privyAuthorizedWalletSecp256k1Sign,
   resolvePrivyUnifiedWalletId,
   type PrivyAuthorizationSignatureGenerator,
@@ -111,6 +110,20 @@ function createEmbeddedSignerWalletClient({
       const provider = await getProvider()
       if (!provider?.request) throw new Error('Privy embedded EOA provider not available')
       await ensureProviderOnBase({ provider, label: 'Privy embedded EOA' })
+      if (args?.method === 'secp256k1_sign' && typeof signSecp256k1Digest === 'function') {
+        const params = Array.isArray(args.params) ? args.params : []
+        const hashCandidate =
+          typeof params[0] === 'string'
+            ? params[0]
+            : params[1] && typeof params[1] === 'string'
+              ? params[1]
+              : typeof (args.params as Record<string, unknown> | undefined)?.hash === 'string'
+                ? String((args.params as Record<string, unknown>).hash)
+                : ''
+        if (isRawEcdsaDigest(hashCandidate)) {
+          return signSecp256k1Digest(hashCandidate as `0x${string}`)
+        }
+      }
       if (args?.method === 'eth_sign') {
         const params = Array.isArray(args.params) ? args.params : []
         const hashCandidate = typeof params[1] === 'string' ? params[1] : ''
@@ -371,10 +384,7 @@ export function useSwapEmbeddedEoa(params: {
     })
   }, [privyEmbeddedEoaAddress, privyEmbeddedEoaWallet, privyUser])
 
-  const usePrivyAuthorizedSecp256k1 = useMemo(() => {
-    if (!privyUnifiedWalletId) return false
-    return isPrivyUnifiedStackWallet(privyEmbeddedEoaWallet)
-  }, [privyEmbeddedEoaWallet, privyUnifiedWalletId])
+  const usePrivyAuthorizedSecp256k1 = Boolean(privyUnifiedWalletId)
 
   const signPrivyAuthorizedSecp256k1Digest = useCallback(
     async (digest: Hex) => {

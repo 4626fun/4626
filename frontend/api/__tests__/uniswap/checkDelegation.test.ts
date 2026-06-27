@@ -2,6 +2,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { applyEnv, createMockReq, createMockRes, withAuthHeader } from '../helpers'
 
+vi.mock('@4626/server-core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@4626/server-core')>()
+  return {
+    ...actual,
+    checkDurableRateLimit: vi.fn(async () => ({
+      allowed: true,
+      remaining: 999,
+      resetAt: Date.now() + 60_000,
+      source: 'memory' as const,
+    })),
+  }
+})
+
 async function loadHandler() {
   const mod = await import('../../_handlers/uniswap/_checkDelegation.ts')
   return mod.default

@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('@/lib/flags/flags', () => ({
+  getPrivyAppId: () => 'cltestappid000000000000000',
+  getPrivyApiUrl: () => 'https://privy.4626.fun',
+  getPrivyClientId: () => null,
+  isPrivyHostModeAllowed: () => true,
+}))
+
 import {
   isPrivyUnifiedStackWallet,
   privyAuthorizedWalletSecp256k1Sign,
@@ -37,8 +44,17 @@ describe('isPrivyUnifiedStackWallet', () => {
     expect(isPrivyUnifiedStackWallet({ id: WALLET_ID, recovery_method: 'privy-v2' })).toBe(true)
   })
 
-  it('detects owner_id wallets on unified API', () => {
+  it('detects owner_id on the wallet record', () => {
     expect(isPrivyUnifiedStackWallet({ id: WALLET_ID, owner_id: 'g2ws6oixx80rw412h8kxvcia' })).toBe(true)
+  })
+
+  it('detects owner_id from user linked account metadata', () => {
+    expect(
+      isPrivyUnifiedStackWallet(
+        { id: WALLET_ID, address: ADDRESS },
+        { linkedAccounts: [{ type: 'wallet', address: ADDRESS, owner_id: 'g2ws6oixx80rw412h8kxvcia' }] },
+      ),
+    ).toBe(true)
   })
 })
 
@@ -73,7 +89,7 @@ describe('privyAuthorizedWalletSecp256k1Sign', () => {
       expect.objectContaining({
         version: 1,
         method: 'POST',
-        url: `/api/v1/wallets/${WALLET_ID}/rpc`,
+        url: `https://privy.4626.fun/api/v1/wallets/${WALLET_ID}/rpc`,
         body: {
           chain_type: 'ethereum',
           method: 'secp256k1_sign',
@@ -83,7 +99,7 @@ describe('privyAuthorizedWalletSecp256k1Sign', () => {
     )
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining(`/api/v1/wallets/${WALLET_ID}/rpc`),
+      `https://privy.4626.fun/api/v1/wallets/${WALLET_ID}/rpc`,
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({

@@ -27,6 +27,10 @@ vi.mock('../infra/logger.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
 
+vi.mock('@4626/server-core/commandIssuerContext', async () => {
+  return await import('../../../packages/server-core/src/commandIssuerContext.ts')
+})
+
 // Lazy import AFTER mocks are set up.
 async function importModule() {
   return await import('./commandIssuerContext.js')
