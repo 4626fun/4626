@@ -3,6 +3,7 @@ import { getAccessToken, useActiveWallet, useWallets } from '@privy-io/react-aut
 import { Address, getAddress, isAddress, toHex, type Hex } from 'viem'
 
 import { extractPrivyWalletsFromUser } from '@/lib/privy/embeddedWallet'
+import { assertPrivySessionMarkerCookie } from '@/lib/privy/loopbackSessionMarkerShim'
 import { isRawEcdsaDigest, signRawEcdsaDigest } from '@/lib/wallet/signRawEcdsaDigest'
 import { ensureProviderOnBase } from '@/lib/wallet/safeSwitchToBase'
 
@@ -356,9 +357,13 @@ export function useSwapEmbeddedEoa(params: {
   }, [authAddress, ensureEmbeddedWallet, privyAuthenticated, privyEmbeddedEoaAddress, privyEmbeddedEoaWallet])
 
   const refreshEmbeddedSignerSession = useCallback(async () => {
-    // "Missing auth token" from Privy's embedded provider means the Privy
-    // access token is stale; force a token refresh, then re-acquire the
-    // provider so the refreshed auth context is live for retries.
+    // Re-assert the first-party marker cookie so Privy's server-cookie mode keeps
+    // serving access tokens on loopback and *.4626.fun origins.
+    assertPrivySessionMarkerCookie()
+
+    // "Missing auth token" / wallet-RPC 401 from Privy's embedded provider means
+    // the access token or iframe provider channel is stale; force a token refresh,
+    // re-select the embedded wallet, then re-acquire the provider for retries.
     let refreshedToken: string | null = null
     try {
       refreshedToken = await getAccessToken()
@@ -385,11 +390,18 @@ export function useSwapEmbeddedEoa(params: {
       )
     }
     const walletAny: any = privyEmbeddedEoaWallet as any
+    if (walletAny && typeof setActivePrivyWallet === 'function') {
+      try {
+        await Promise.resolve(setActivePrivyWallet(walletAny as any))
+      } catch (err) {
+        console.warn('[swap] setActiveWallet during embedded signer refresh failed:', err)
+      }
+    }
     if (walletAny && typeof walletAny.getEthereumProvider === 'function') {
       await walletAny.getEthereumProvider().catch(() => null)
     }
     return true
-  }, [privyEmbeddedEoaWallet])
+  }, [privyEmbeddedEoaWallet, setActivePrivyWallet])
 
   const privyEmbeddedCanonicalWalletClient = useMemo(() => {
     if (!privyEmbeddedEoaAddress) return null

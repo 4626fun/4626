@@ -22,7 +22,9 @@ Deposit creator coin and start the **fair-launch auction** for `■` tradable sh
 
 ## What activation does
 
-Transfers **50M–100M** creator coin into [CreatorOVault](/contracts/core/creator-ovault), mints vault shares, wraps ShareOFT, and allocates supply to the [fair-launch auction](/contracts/strategies/cca-launch). This is **open price discovery**, not a private sale.
+Transfers **50M–100M** creator coin into [CreatorOVault](/contracts/core/creator-ovault), mints vault shares, wraps into `■` ShareOFT, and starts the [fair-launch auction](/contracts/strategies/cca-launch). This is **open price discovery**, not a private sale.
+
+On finalize, wrapped `■` supply is allocated **30/30/30/10**: 30% auction · 30% creator vesting (365 days) · 30% Solana bridge · 10% LP reserve on the CCA strategy. See [Share allocation](/reference/glossary#share-allocation-at-finalize).
 
 ## Execution paths
 

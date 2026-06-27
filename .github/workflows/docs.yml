@@ -104,6 +104,10 @@ jobs:
         if: steps.detect.outputs.docs_sensitive == 'true'
         run: node apps/docs-site/scripts/check-curated-allowlist.mjs
 
+      - name: Verify docs match onchain contract facts
+        if: steps.detect.outputs.docs_sensitive == 'true'
+        run: node apps/docs-site/scripts/check-docs-contract-facts.mjs
+
       - name: Verify authored docs links
         if: steps.detect.outputs.docs_sensitive == 'true'
         run: node apps/docs-site/scripts/check-doc-links.mjs

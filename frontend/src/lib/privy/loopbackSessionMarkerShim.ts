@@ -53,7 +53,7 @@ function is4626FunDomain(hostname: string): boolean {
   return h === '4626.fun' || h.endsWith('.4626.fun')
 }
 
-function writeMarkerCookie(): void {
+export function assertPrivySessionMarkerCookie(): void {
   try {
     // Mirrors the SDK's own localStorage-mode marker (`privy-session=t`,
     // 30-day expiry). Add Secure flag on HTTPS origins for production safety.
@@ -63,6 +63,10 @@ function writeMarkerCookie(): void {
     // Cookie writes can throw in exotic embedded contexts; the shim is
     // best-effort and the normal stale-session recovery path still applies.
   }
+}
+
+function writeMarkerCookie(): void {
+  assertPrivySessionMarkerCookie()
 }
 
 export function applyLoopbackPrivySessionMarkerShim(): void {

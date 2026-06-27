@@ -1,6 +1,7 @@
 import type { Hex } from 'viem'
 
 import { ensureSignatureHex } from '@/lib/aa/coinbaseErc4337Signature'
+import { isPrivyEmbeddedSignerAuthError } from '@/lib/wallet/privyEmbeddedSignerAuthErrors'
 
 const RAW_DIGEST_RE = /^0x[0-9a-fA-F]{64}$/
 
@@ -18,14 +19,8 @@ type WalletClientWithRequest = {
   refreshSession?: () => Promise<unknown>
 }
 
-function isMissingAuthTokenError(message: string): boolean {
-  const normalized = String(message ?? '').trim().toLowerCase()
-  return (
-    normalized.includes('missing auth token') ||
-    normalized.includes('auth token missing') ||
-    normalized.includes('not authenticated') ||
-    normalized.includes('authentication required')
-  )
+function isRefreshableSignerSessionError(message: string): boolean {
+  return isPrivyEmbeddedSignerAuthError(message)
 }
 
 function isDisconnectedWalletSessionError(message: string): boolean {
@@ -118,7 +113,7 @@ export async function signRawEcdsaDigest(params: {
 
     const hasRefreshableSessionFailure = firstPass.failures.some(
       (failure) =>
-        isMissingAuthTokenError(failure.message) || isDisconnectedWalletSessionError(failure.message),
+        isRefreshableSignerSessionError(failure.message) || isDisconnectedWalletSessionError(failure.message),
     )
     if (hasRefreshableSessionFailure) {
       attemptedSessionRefresh = true

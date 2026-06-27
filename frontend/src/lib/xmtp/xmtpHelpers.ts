@@ -177,16 +177,7 @@ export function isScwSignatureValidationError(message: string): boolean {
   )
 }
 
-export function isPrivyEmbeddedSignerAuthError(message: string): boolean {
-  const m = String(message || '').toLowerCase()
-  return (
-    m.includes('missing auth token') ||
-    (m.includes('unknownrpcerror') && m.includes('auth token')) ||
-    (m.includes('signer') && m.includes('auth token')) ||
-    m.includes('embedded wallet') && m.includes('auth') ||
-    m.includes('privy') && m.includes('missing auth')
-  )
-}
+export { isPrivyEmbeddedSignerAuthError } from '@/lib/wallet/privyEmbeddedSignerAuthErrors'
 
 export function isOpfsAccessHandleError(message: string): boolean {
   const m = String(message || '').toLowerCase()

@@ -163,6 +163,12 @@ type CanonicalSubmitSessionResult =
 
 type EnsureCanonicalSessionResult = boolean | string | null
 
+async function refreshWalletClientSession(walletClient: unknown): Promise<void> {
+  const refreshSession = (walletClient as { refreshSession?: () => Promise<unknown> } | null)?.refreshSession
+  if (typeof refreshSession !== 'function') return
+  await refreshSession().catch(() => null)
+}
+
 type SwapSessionGateInput = {
   sessionHydrated?: boolean
   hasSession?: boolean
@@ -2189,6 +2195,7 @@ export function useSwapExecution(params: {
         if (!sessionGuard.ok) {
           throw new Error(sessionGuard.message)
         }
+        await refreshWalletClientSession(params.walletClient)
       }
       if (
         params.executionMode === 'canonical' &&

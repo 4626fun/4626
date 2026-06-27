@@ -225,4 +225,35 @@ describe('signRawEcdsaDigest', () => {
     expect(out).toBe(SIG)
     expect(refreshSession).toHaveBeenCalledTimes(1)
   })
+
+  it('retries after Privy wallet RPC authorization signature 401 by refreshing the session', async () => {
+    let refreshed = false
+    const auth401 =
+      'No valid authorization signatures were provided. Your payload may be malformed or your signing keys may be incorrect or expired.'
+    const request = vi.fn(async (args: { method: string }) => {
+      if (args.method === 'secp256k1_sign') {
+        if (!refreshed) throw new Error(auth401)
+        return SIG
+      }
+      if (args.method === 'eth_sign') {
+        if (!refreshed) throw new Error(auth401)
+        return SIG
+      }
+      throw new Error(`unexpected method ${args.method}`)
+    })
+    const refreshSession = vi.fn(async () => {
+      refreshed = true
+      return true
+    })
+
+    const out = await signRawEcdsaDigest({
+      digest: DIGEST,
+      signerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9',
+      walletClient: { request },
+      refreshSession,
+    })
+
+    expect(out).toBe(SIG)
+    expect(refreshSession).toHaveBeenCalledTimes(1)
+  })
 })

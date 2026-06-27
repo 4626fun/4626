@@ -16,6 +16,7 @@ Plain-language names used in public docs, with internal or onchain identifiers w
 | **Fair-launch auction** | CCA | Uniswap V4 price discovery at activation |
 | **Optional Solana trading** | *Solana share mesh*, `solana_ovault_mesh` | Same `■` share may trade on Solana after finalize |
 | **Post-auction Solana bridge** | *Pipe A* | ~30% of `■` supply bridged at finalize (LayerZero) |
+| **Share allocation at finalize** | 30/30/30/10 split | 30% CCA · 30% vesting · 30% Solana bridge · 10% LP reserve |
 | **Base (primary chain)** | *Hub chain* | Deploy, auction, trading, and lottery for new vaults |
 | **Tradable share** | ShareOFT, `■TICKER` | DEX-facing token; not the Zora creator coin |
 | **Vault share** | ERC-4626 share, `▢TICKER` | Internal vault accounting token |
@@ -38,6 +39,19 @@ Plain-language names used in public docs, with internal or onchain identifiers w
 | **Deployed** | Contracts onchain; vault not yet funded |
 | **Activated** | Creator coin deposited; **fair-launch auction in progress** |
 | **Trading live** | Auction complete and finalize done; `■` shares tradable on Base DEXs |
+
+## Share allocation at finalize
+
+When the batcher **finalizes** activation, wrapped `■` supply from the deposit is split **30/30/30/10**:
+
+| Leg | Share of `■` | Destination |
+|-----|--------------|-------------|
+| Fair-launch auction | 30% | CCA price discovery (launched with 10% LP reserve on strategy) |
+| Creator vesting | 30% | `CreatorLinearVesting` (365-day linear unlock) |
+| Solana bridge | 30% | LayerZero OFT bridge (optional trading lane) |
+| LP reserve | 10% | Held on [CCA strategy](/contracts/strategies/cca-launch) for post-auction v4 migration |
+
+Onchain constants: `AUCTION_PERCENT`, `VESTING_PERCENT`, `SOLANA_ALLOC_PERCENT`, `LP_RESERVE_PERCENT` on `DeploymentBatcher`. See [CCA launch strategy](/contracts/strategies/cca-launch) for auction graduation, migration, and failed-auction paths.
 
 ## Fee lanes
 

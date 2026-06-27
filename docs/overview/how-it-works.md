@@ -63,12 +63,25 @@ Lane names: [Glossary](/reference/glossary).
 |------|----------------|--------|
 | 1 | [Pay launch fee](/guides/strategy-bundle) ($499 bundle) | Deploy unlocked |
 | 2 | [Deploy contracts](/guides/launch-token) | Vault stack onchain |
-| 3 | [Activate vault](/guides/activate-vault) | Deposit + auction seeded |
+| 3 | [Activate vault](/guides/activate-vault) | Deposit + fair-launch auction seeded |
 | 4 | Monitor auction | Price discovery |
-| 5 | Finalize (app/chain) | Optional Solana bridge (~30% `■`) |
+| 5 | Finalize (app/chain) | `■` split 30% auction · 30% vesting · 30% Solana · 10% LP reserve |
 | 6 | Strategies (automatic) | Charm 45% · Ajna 45% · 10% idle |
 
 Steps 1–3 are manual in the app. Steps 4–6 follow activation.
+
+### Share allocation at finalize
+
+The batcher wraps the activation deposit into `■` ShareOFT, then allocates supply **30/30/30/10**:
+
+| Leg | % | What happens |
+|-----|---|--------------|
+| CCA auction | 30% | Fair-launch price discovery |
+| Creator vesting | 30% | 365-day linear vest to creator |
+| Solana bridge | 30% | LayerZero bridge of `■` (optional lane) |
+| LP reserve | 10% | Held on CCA strategy for v4 migration after graduation |
+
+Details: [CCA launch strategy](/contracts/strategies/cca-launch) · [Glossary](/reference/glossary#share-allocation-at-finalize)
 
 ## Optional: Solana
 

@@ -30,7 +30,7 @@ End-to-end checklist for a **new vault on Base** (v1.14.1). For legacy vaults, i
 | 2 | Deploy contract stack | Vault, shares, gauge, oracle, auction live | [Deploy contracts](/guides/launch-token) |
 | 3 | Activate vault | Deposit + **fair-launch auction** started | [Activate vault](/guides/activate-vault) |
 | 4 | Auction runs | Price discovery in progress | [After activation](/guides/after-activation) |
-| 5 | Finalize | Base completion; optional Solana bridge (~30% `■`) | [After activation](/guides/after-activation) |
+| 5 | Finalize | Base settlement; `■` split 30/30/30/10 (incl. optional Solana bridge) | [After activation](/guides/after-activation) |
 | 6 | Strategies attach | Charm 45% · Ajna 45% · 10% idle (automatic) | [How fees work](/overview/how-it-works) |
 
 ## Milestones

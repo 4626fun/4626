@@ -751,7 +751,9 @@ export function Swap() {
     const text = String(error ?? '')
     return (
       /signing session (was refreshed but|could not be refreshed)/i.test(text) ||
-      /missing auth token/i.test(text)
+      /missing auth token/i.test(text) ||
+      /no valid authorization signatures/i.test(text) ||
+      (/401/i.test(text) && /authorization signatures/i.test(text))
     )
   }, [error])
   const [signingRecoveryBusy, setSigningRecoveryBusy] = useState(false)

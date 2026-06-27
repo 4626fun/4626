@@ -20,22 +20,29 @@ The CCA Launch Strategy:
 
 ## Auction Flow
 
-```
-Creator deposits/wraps into ShareOFT
+On **finalize** (after the creator deposits creator coin and the batcher wraps into `■` ShareOFT), the batcher enforces a fixed **four-way split** of wrapped share supply. Constants live on `DeploymentBatcher` / `DeploymentBatcherPhase2Module` (`AUCTION_PERCENT`, `VESTING_PERCENT`, `SOLANA_ALLOC_PERCENT`, `LP_RESERVE_PERCENT`).
+
+```text
+Creator deposits creator coin → wrapper mints ■ ShareOFT
    ↓
-Batcher enforces 40/40/20 split
-  - 40% CCA auction
-  - 40% creator vesting
-  - 20% strategy LP reserve
+Batcher enforces 30/30/30/10 split (of wrapped ■ supply)
+  - 30% fair-launch CCA auction (pending launch)
+  - 30% creator linear vesting (365 days)
+  - 30% LayerZero bridge to Solana (optional lane; same ■ ticker)
+  - 10% LP reserve held on CCA strategy for post-auction migration
    ↓
-Auction runs
+Fair-launch auction runs (30% auction leg + 10% LP reserve metadata)
    ↓
-If graduated: sweepCurrency() → migrate() (v4 LP migration primitive)
+If graduated: sweepCurrency() → migrate() (Uniswap v4 LP migration)
    ↓
-Hook config/alignment step (separate) before declaring launch complete
+Hook config / alignment (separate step) before declaring launch complete
    ↓
 If failed: finalizeFailedAuction() / sweepUnsoldTokens() clears strategy state for relaunch
 ```
+
+**Deposit bounds:** first activation deposit must be **50M–100M** creator coin (18 decimals). The split applies to **wrapped share tokens** minted from that deposit, not raw creator coin units 1:1.
+
+**Auction seed pair:** the CCA itself is seeded **99% creator coin / 1% USDC** for price discovery — separate from the 30/30/30/10 share allocation above.
 
 ## Key Functions
 

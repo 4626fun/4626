@@ -27,6 +27,19 @@ What happens **after** [Step 3: Activate vault](/guides/activate-vault). Activat
 | Lottery | **Not yet** (needs qualifying live **buys**) |
 | Milestone | **Activated** |
 
+### Share allocation (on finalize)
+
+When activation **finalizes**, the batcher wraps the deposit into `■` and enforces a fixed split:
+
+| Leg | % | Notes |
+|-----|---|--------|
+| CCA auction | 30% | Fair-launch price discovery |
+| Creator vesting | 30% | Linear unlock over 365 days |
+| Solana bridge | 30% | LayerZero OFT bridge (optional) |
+| LP reserve | 10% | Held on CCA strategy for v4 migration |
+
+Solana is optional for Base trading — the 30% bridge leg may complete after finalize. [Optional: Solana trading](/overview/solana-share-mesh)
+
 ## Timeline
 
 | Phase | What happens | Your action | Milestone |
