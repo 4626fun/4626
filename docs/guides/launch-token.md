@@ -11,8 +11,14 @@ Greenfield deploy creates your per-creator contract stack in one atomic batch.
 
 - Creator coin live on Base (typically via Zora)
 - **50M–100M** creator coin on your execution wallet
-- **`vault_full_deploy`** active ([strategy features](https://app.4626.fun/creator/strategy/features))
+- **`vault_full_deploy`** active — see [Strategy bundle](/guides/strategy-bundle)
 - Wallet signing ready in the app
+
+## Strategy bundle ($499)
+
+Deploy is gated on **`vault_full_deploy`**: one USDC payment unlocks Charm + Ajna strategies, Solana share mesh (Pipe A), and Meteora entitlement. Pay at **[app.4626.fun/creator/strategy/features](https://app.4626.fun/creator/strategy/features)** before the deploy page will run.
+
+Details: [Strategy bundle](/guides/strategy-bundle).
 
 ## Steps
 

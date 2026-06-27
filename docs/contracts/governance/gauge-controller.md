@@ -5,6 +5,8 @@ sidebar_position: 1
 
 # CreatorGaugeController
 
+**Product role:** Receives ShareOFT **trade fees** and splits them across vault-share burn, jackpot reserve, optional creator treasury, and protocol/voter branches — the onchain fee router for holders.
+
 Fee splitter and gauge controller for creator vaults.
 
 ## Purpose

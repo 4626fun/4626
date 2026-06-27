@@ -20,7 +20,7 @@ Read [How it works](/overview/how-it-works) for the full picture.
 
 1. Open **[app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)**
 2. Sign in and complete wallet signing when prompted
-3. Activate **`vault_full_deploy`** at [strategy features](https://app.4626.fun/creator/strategy/features) ($499 USDC bundle)
+3. Activate **`vault_full_deploy`** — [Strategy bundle](/guides/strategy-bundle) ($499 USDC)
 4. Hold **50M–100M** creator coin on your canonical smart wallet
 5. Run deploy — current greenfield batcher is **[v1.14.1](/reference/addresses)**
 
@@ -31,6 +31,7 @@ Then follow [Launch token](/guides/launch-token) and [Activate vault](/guides/ac
 | Topic | Page |
 |-------|------|
 | Product model | [How it works](/overview/how-it-works) |
+| Strategy bundle | [Strategy bundle](/guides/strategy-bundle) |
 | Deploy steps | [Launch](/guides/launch-token) · [Activate](/guides/activate-vault) |
 | Contracts | [Contracts hub](/contracts) |
 | Live addresses | [Addresses](/reference/addresses) |

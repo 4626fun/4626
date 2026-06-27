@@ -5,6 +5,8 @@ sidebar_position: 1
 
 # CreatorLotteryManager
 
+**Product role:** **Instant lottery** on hub-chain ShareOFT buys (Chainlink VRF) plus attested no-purchase AMOE entries — prizes paid from gauge jackpot reserves.
+
 Shared lottery service for ALL Creator Coins, supporting both trade-triggered entries and no-purchase AMOE entries.
 
 ## Purpose

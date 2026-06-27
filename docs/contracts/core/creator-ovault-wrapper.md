@@ -5,6 +5,8 @@ sidebar_position: 3
 
 # CreatorOVaultWrapper
 
+**Product role:** Converts **▢ vault shares** into **■ Share OFT** 1:1 so shares can bridge via LayerZero without diluting vault ownership.
+
 Wraps vault shares into LayerZero OFT tokens for cross-chain transfers.
 
 ## Purpose

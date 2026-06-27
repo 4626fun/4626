@@ -1,72 +1,60 @@
 ---
 title: Glossary
-sidebar_position: 2
+sidebar_position: 3
 ---
 
 # Glossary
 
-Key terms and definitions for 4626.
+Product and onchain terms for 4626 vaults.
 
-## A
+## Tokens
 
-**Account Abstraction (AA)**: ERC-4337 standard enabling smart contract wallets with features like gas sponsorship and batched transactions.
+**Creator coin** — Your Zora ERC-20; the vault **deposit asset**. Not the same address as share tokens.
 
-## B
+**Vault shares (`▢TICKER`)** — ERC-4626 shares from [CreatorOVault](/contracts/core/creator-ovault); claim on vault TVL.
 
-**Basis Points (BPS)**: Unit of measurement where 10,000 BPS = 100%. Used for fee calculations.
+**Share OFT (`■TICKER`)** — LayerZero omnichain token from [CreatorShareOFT](/contracts/core/creator-share-oft); tradable cross-chain share.
 
-## C
+**Wrapper** — [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper); converts ▢ → ■ 1:1.
 
-**CCA (Continuous Clearing Auction)**: Uniswap V4 auction mechanism for fair price discovery.
+## Launch & vault
 
-**Creator Coin**: Underlying token created by a creator (e.g., via Zora).
+**CCA (Continuous Clearing Auction)** — Uniswap V4 fair-launch auction; see [CCA strategy](/contracts/strategies/cca-launch).
 
-## E
+**ERC-4626** — Vault standard: deposit assets, receive shares, redeem assets.
 
-**ERC-4626**: Token vault standard defining deposit, withdraw, and share mechanics.
+**PPS (price per share)** — Vault assets ÷ share supply; accretes when fees and revenue enter the vault.
 
-**ERC-4337**: Account abstraction standard for smart contract wallets.
+**Pipe A** — Greenfield Phase 2b step that bridges a slice of shares to Solana at finalize (share mesh).
 
-## G
+## Fee lanes
 
-**Gauge Controller**: Contract that receives trading fees and splits them according to configuration.
+Use qualified names — bare `payoutRecipient` is ambiguous.
 
-## L
+**`tradeFeeCollector`** — ShareOFT/hook **trade-fee** destination (often the gauge). Native transfer-fee plane + optional hook plane.
 
-**LayerZero**: Cross-chain messaging protocol enabling omnichain tokens.
+**`creatorCoinPayoutRecipient`** — Creator coin **external earnings** (`payoutRecipient` on Zora); in router mode feeds holder PPS accretion.
 
-**Lottery**: Instant win system powered by Chainlink VRF.
+**`creatorTreasury`** — Optional **creator ongoing** slice from gauge split (`creatorShareBps`; default 0).
 
-## O
+**Jackpot custodian** — Gauge reserve (`jackpotReserve`) in vault-share units; holds funds, does not pick winners.
 
-**OFT (Omnichain Fungible Token)**: LayerZero standard for cross-chain tokens.
+**Jackpot payout authority** — [CreatorLotteryManager](/contracts/utilities/lottery-manager); selects winners and calls `payJackpot`.
 
-## P
+**Voter / protocol branch** — `protocolShareBps` from gauge split; preferred route is voter rewards distributor.
 
-**PPS (Price Per Share)**: Value of one vault share in terms of underlying tokens.
+## Cross-chain & lottery
 
-**Paymaster**: ERC-4337 contract that sponsors gas fees for users.
+**LayerZero (LZ)** — Messaging for ShareOFT bridging.
 
-## S
+**OFT** — Omnichain fungible token standard (ShareOFT).
 
-**ShareOFT**: The OFT-wrapped vault shares (■TOKEN).
+**VRF** — Chainlink verifiable randomness for lottery draws.
 
-**Smart Wallet**: ERC-4337 compatible wallet (e.g., Coinbase Smart Wallet).
+**AMOE** — Alternative method of entry for lottery (no purchase required; attested offchain).
 
-## T
+## Integrators
 
-**TWAP (Time-Weighted Average Price)**: Price oracle mechanism resistant to manipulation.
+**Impairment epoch** — Side-pocket when a strategy is impaired; see [impairment disclosures](/reference/impairment-v1-disclosures).
 
-## V
-
-**Vault**: ERC-4626 contract holding creator coins and minting shares.
-
-**Vault Shares**: ERC-20 tokens representing ownership of vault (▢TOKEN).
-
-**ve4626**: Vote-escrow token for governance participation.
-
-**VRF (Verifiable Random Function)**: Chainlink service providing provably fair randomness.
-
-## W
-
-**Wrapper**: Contract that converts vault shares (▢TOKEN) to OFT tokens (■TOKEN).
+**Greenfield** — New vault deploy via current batcher ([addresses](/reference/addresses), v1.14.1).

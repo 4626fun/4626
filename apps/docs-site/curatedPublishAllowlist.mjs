@@ -1,5 +1,5 @@
 /**
- * Public docs allowlist — product + contracts only (~18 pages).
+ * Public docs allowlist — product + contracts only (~21 pages).
  * Keep aligned with `sidebars.ts`.
  */
 export const CURATED_PUBLISH_GLOBS = [
@@ -9,12 +9,14 @@ export const CURATED_PUBLISH_GLOBS = [
   'overview/how-it-works.md',
 
   'guides/index.md',
+  'guides/strategy-bundle.md',
   'guides/launch-token.md',
   'guides/activate-vault.md',
 
   'reference/index.md',
   'reference/addresses.md',
   'reference/glossary.md',
+  'reference/impairment-v1-disclosures.md',
 
   'contracts/index.md',
   'contracts/core/creator-ovault.md',
@@ -23,6 +25,7 @@ export const CURATED_PUBLISH_GLOBS = [
   'contracts/governance/gauge-controller.md',
   'contracts/strategies/cca-launch.md',
   'contracts/utilities/lottery-manager.md',
+  'contracts/utilities/creator-oracle.md',
 
   'legal/terms.md',
   'legal/privacy.md',

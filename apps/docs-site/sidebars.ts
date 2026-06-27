@@ -15,7 +15,11 @@ const sidebars: SidebarsConfig = {
       label: 'Deploy',
       collapsed: false,
       link: {type: 'doc', id: 'guides/index'},
-      items: ['guides/launch-token', 'guides/activate-vault'],
+      items: [
+        'guides/strategy-bundle',
+        'guides/launch-token',
+        'guides/activate-vault',
+      ],
     },
     {
       type: 'category',
@@ -30,6 +34,8 @@ const sidebars: SidebarsConfig = {
         'contracts/governance/gauge-controller',
         'contracts/strategies/cca-launch',
         'contracts/utilities/lottery-manager',
+        'contracts/utilities/creator-oracle',
+        'reference/impairment-v1-disclosures',
         'reference/glossary',
       ],
     },

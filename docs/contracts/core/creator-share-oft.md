@@ -5,6 +5,8 @@ sidebar_position: 4
 
 # CreatorShareOFT
 
+**Product role:** The tradable **■ share token** on Base (and bridged chains). DEX trades pay fees routed to the gauge; hub-chain buys can enter the instant lottery.
+
 LayerZero V2 Omnichain Fungible Token for cross-chain transfers and fee collection.
 
 ## Purpose

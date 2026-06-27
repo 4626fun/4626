@@ -1,6 +1,11 @@
-# Impairment v1 Disclosures (Users + Integrators)
+---
+title: Impairment v1 disclosures
+sidebar_position: 4
+---
 
-This document is the public trust-boundary and behavior disclosure for `CreatorOVault` impairment side-pocketing v1.
+# Impairment v1 disclosures
+
+Public behavior summary for `CreatorOVault` **impairment side-pocketing v1** (greenfield vaults on module storage v3).
 
 ## What v1 does
 
