@@ -16,14 +16,12 @@ Canonical lookups — prefer [addresses](/reference/addresses) for live infra.
 | [Glossary](/reference/glossary) | Lane terminology |
 | [Chains](/reference/chains) | Chain IDs and LZ EIDs |
 
-## Contracts & concepts
+## Contracts & system model
 
 - [Contracts hub](/contracts) — six core contract narratives
 - [Architecture](/overview/architecture) · [Token model](/overview/token-model) · [Fee flow](/overview/fee-flow)
 
 ## Engineering
-
-| Doc | Use when |
 |-----|----------|
 | [API reference (local)](/developers/api-reference) | Regenerating TypeDoc / forge doc |
 | [ERC-4337 debugging](/reference/erc4337-debugging) | UserOp traces |

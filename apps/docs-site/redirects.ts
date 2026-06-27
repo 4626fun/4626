@@ -156,10 +156,18 @@ export const redirects: ClientRedirect[] = [
   { from: '/api/index', to: '/developers/api-reference' },
 
   { from: '/overview/reading-order', to: '/reading-order' },
+  { from: '/concepts', to: '/reference' },
+  { from: '/concepts/vault', to: '/contracts/core/creator-ovault' },
+  { from: '/concepts/lottery', to: '/contracts/utilities/lottery-manager' },
+  { from: '/concepts/auction', to: '/contracts/strategies/cca-launch' },
   {
     from: '/primitives/game-loop/lottery-amoe-test-matrix',
-    to: '/concepts/lottery',
+    to: '/contracts/utilities/lottery-manager',
   },
+  { from: '/primitives', to: '/reference' },
+  { from: '/primitives/market/vault', to: '/contracts/core/creator-ovault' },
+  { from: '/primitives/market/auction', to: '/contracts/strategies/cca-launch' },
+  { from: '/primitives/game-loop/lottery', to: '/contracts/utilities/lottery-manager' },
   { from: ['/zora/MONOREPO_ARCHITECTURE', '/zora/monorepo_architecture'], to: '/overview/architecture' },
   { from: ['/zora/PROTOCOL_KNOWLEDGE', '/zora/protocol_knowledge'], to: '/overview/architecture' },
 

@@ -2,11 +2,12 @@
 
 Working papers, design specs, migration logs, and operator tracking. **Not published** to [docs.4626.fun](https://docs.4626.fun).
 
-Public site uses an explicit allowlist: `apps/docs-site/curatedPublishAllowlist.mjs` (~70 pages).
+Public site uses an explicit allowlist: `apps/docs-site/curatedPublishAllowlist.mjs` (~69 pages). CI runs `check-curated-allowlist.mjs` to keep the sidebar aligned.
 
 | Folder | Contents |
 |--------|----------|
-| `operations/` | AlfaClub, analytics, AKITA, incidents, archive history, niche runbooks |
+| `operations/` | Unpublished deployment/vault/wallet/solana runbooks, dune SQL, archive |
+| `concepts/` | Legacy concept stubs (redirect to contract narratives) |
 | `operations-tracking/` | Railway/Keepr checklists, CI tracking |
 | `guides/` | Featured-guidelines working notes |
 | `indexer/` | Zora CSW indexer cron spec and runbook |

@@ -1,6 +1,6 @@
 # Operators
 
-Curated runbooks for production — **~70 pages** on [docs.4626.fun](https://docs.4626.fun), listed in the sidebar.
+Curated runbooks for production — **~69 pages** on [docs.4626.fun](https://docs.4626.fun), listed in the sidebar.
 
 ## Start here
 

@@ -21,7 +21,7 @@ Edit markdown under `docs/`, never under `apps/docs-site/docs/`.
 
 ## Production build (curated)
 
-Public site publishes **~70 allowlisted pages**, not the full `docs/` tree or TypeDoc/forge mirrors.
+Public site publishes **~69 allowlisted pages**, not the full `docs/` tree or TypeDoc/forge mirrors.
 
 ```bash
 pnpm -C apps/docs-site run build:production

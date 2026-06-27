@@ -42,10 +42,6 @@ export const CURATED_PUBLISH_GLOBS = [
   'contracts/strategies/cca-launch.md',
   'contracts/utilities/lottery-manager.md',
 
-  'concepts/vault.md',
-  'concepts/lottery.md',
-  'concepts/auction.md',
-
   'developers/api-reference.md',
 
   'operators/index.md',
