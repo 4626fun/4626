@@ -124,12 +124,12 @@ const config: Config = {
           position: 'left',
         },
         {
-          to: '/operations/deployment/releases/current',
-          label: 'Release',
+          to: '/reference/addresses',
+          label: 'Addresses',
           position: 'right',
         },
         {
-          href: 'https://4626.fun',
+          href: 'https://app.4626.fun',
           label: 'App',
           position: 'right',
         },
@@ -148,18 +148,16 @@ const config: Config = {
         {
           title: 'Docs',
           items: [
-            {label: 'Start', to: '/reading-order'},
-            {label: 'Guides', to: '/guides'},
-            {label: 'Reference', to: '/reference'},
-            {label: 'Operators', to: '/operators'},
-            {label: 'Current release', to: '/operations/deployment/releases/current'},
+            {label: 'Getting started', to: '/getting-started'},
+            {label: 'How it works', to: '/overview/how-it-works'},
+            {label: 'Deploy', to: '/guides/launch-token'},
+            {label: 'Contracts', to: '/contracts'},
+            {label: 'Addresses', to: '/reference/addresses'},
           ],
         },
         {
-          title: 'Trust',
+          title: 'Legal',
           items: [
-            {label: 'Security', to: '/security'},
-            {label: 'Audits', to: '/audits'},
             {label: 'Terms', to: '/terms'},
             {label: 'Privacy', to: '/privacy'},
           ],

@@ -1,67 +1,41 @@
 ---
-title: Launch Token
+title: Launch a vault
 sidebar_position: 1
 ---
 
-# Launch Your Token
+# Launch a vault
 
-Guide to launching a new creator token with 4626.
+Greenfield deploy creates your per-creator contract stack in one atomic batch.
 
-## Prerequisites
+## Before you start
 
-- Creator Coin deployed (e.g., via Zora)
-- 50,000,000 tokens for initial CCA deposit
-- Coinbase Smart Wallet (recommended) or EOA
+- Creator coin live on Base (typically via Zora)
+- **50M–100M** creator coin on your execution wallet
+- **`vault_full_deploy`** active ([strategy features](https://app.4626.fun/creator/strategy/features))
+- Wallet signing ready in the app
 
-## Step 1: Prepare Your Tokens
+## Steps
 
-Ensure you have at least 50M tokens in your wallet for the initial CCA deposit.
+1. Go to **[app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)**
+2. Connect and confirm your creator coin address
+3. Set vault / share names and symbols (e.g. `▢AKITA`, `■AKITA`)
+4. Submit **Deploy** — canonical smart wallet paths use sponsored ERC-4337 UserOps when configured
 
-## Step 2: Navigate to Deploy
+## What deploys
 
-Go to [app.4626.fun/deploy](https://app.4626.fun/deploy)
-
-## Step 3: Connect Wallet
-
-Connect your Coinbase Smart Wallet (or other EIP-4337 wallet).
-
-## Step 4: Enter Token Address
-
-Enter your Creator Coin contract address.
-
-## Step 5: Configure Vault
-
-- **Vault Name**: e.g., "akita Vault"
-- **Vault Symbol**: e.g., "▢AKITA"
-- **OFT Name**: e.g., "akita Share"
-- **OFT Symbol**: e.g., "■AKITA"
-
-## Step 6: Deploy
-
-Click **"Deploy + Launch"** and sign the transaction.
-
-With Coinbase Smart Wallet:
-- Single signature for all contracts
-- Gas sponsored by CDP paymaster
-- Atomic deployment (all-or-nothing)
-
-## Step 7: Start Auction
-
-After deployment, your CCA auction will automatically start.
-
-## What Gets Deployed
-
-| Contract | Purpose |
-|----------|---------|
+| Contract | Role |
+|----------|------|
 | CreatorOVault | ERC-4626 vault |
-| CreatorOVaultWrapper | OFT wrapping |
-| CreatorShareOFT | Cross-chain token |
-| CreatorGaugeController | Fee distribution |
-| CreatorOracle | Price tracking |
-| CCA Strategy | Fair launch auction |
+| CreatorOVaultWrapper | Share wrapping for OFT |
+| CreatorShareOFT | Cross-chain share token |
+| CreatorGaugeController | Fee routing |
+| CreatorOracle | NAV / pricing |
+| CCA launch strategy | Fair-launch auction |
 
-## Next Steps
+Contract details: [Contracts hub](/contracts).
 
-- Monitor your auction at `/auction/{token}`
-- Configure additional strategies
-- Set up voter rewards (optional)
+## After deploy
+
+Continue with [Activate vault](/guides/activate-vault) to deposit creator coin and start the auction.
+
+Shared batcher and factories: [addresses](/reference/addresses) (v1.14.1).

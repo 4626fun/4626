@@ -1,32 +1,25 @@
 ---
 title: Contracts
-sidebar_position: 3
+sidebar_position: 1
 ---
 
-# Smart Contracts
+# Smart contracts
 
-Technical documentation for 4626 smart contracts.
+4626 deploys **shared infrastructure once per chain** and a **per-creator stack** for each vault launch.
 
-## Contract Categories
+## Per-creator stack
 
-| Category | Description |
-|----------|-------------|
-| **[Core](/contracts/core)** | Registry, Vault, Wrapper, ShareOFT |
-| **[Governance](/contracts/governance)** | GaugeController, Voting, ve4626 |
-| **[Strategies](/contracts/strategies)** | Yield strategies, CCA launch |
-| **[Utilities](/contracts/utilities)** | Lottery, Oracle |
+| Contract | Doc |
+|----------|-----|
+| CreatorOVault | [Vault](/contracts/core/creator-ovault) — ERC-4626, strategies, shares |
+| CreatorOVaultWrapper | [Wrapper](/contracts/core/creator-ovault-wrapper) — share wrapping |
+| CreatorShareOFT | [ShareOFT](/contracts/core/creator-share-oft) — LayerZero share token |
+| CreatorGaugeController | [Gauge](/contracts/governance/gauge-controller) — fees & jackpot custody |
+| CCA launch strategy | [CCA](/contracts/strategies/cca-launch) — fair launch auction |
+| CreatorLotteryManager | [Lottery](/contracts/utilities/lottery-manager) — instant lottery |
 
-## Architecture
+## Shared infrastructure
 
-4626 consists of:
-- **Shared infrastructure** - Deployed once per chain
-- **Per-creator stack** - Deployed per creator coin
-- **Optional incentives** - ve(3,3) layer
+Factories, deployment batcher, registry, bridge adapter, and module addresses: **[live addresses](/reference/addresses)**.
 
-## Deployment Addresses
-
-See [Reference > Addresses](/reference/addresses) for all deployed contract addresses.
-
-## API Reference
-
-Auto-generated contract API documentation is not yet published. For now, consult the Solidity NatSpec in `contracts/` directly, or browse the source on [GitHub](https://github.com/wenakita/4626/tree/main/contracts).
+Source: [github.com/wenakita/4626/contracts](https://github.com/wenakita/4626/tree/main/contracts)

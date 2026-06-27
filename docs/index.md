@@ -8,56 +8,33 @@ hide_table_of_contents: true
 <div class="docs-home">
   <section class="home-hero">
     <span class="home-hero__eyebrow"><span class="home-hero__dot"></span>Base · ERC-4626 creator vaults</span>
-    <h1 class="home-hero__title">Docs for <span class="home-hero__title-accent">4626</span></h1>
-    <p class="home-hero__subtitle">How creator vaults deploy on Base, how accounts and signing work, and how to run production. Curated guides — not a mirror of the whole monorepo.</p>
+    <h1 class="home-hero__title">Creator vaults on <span class="home-hero__title-accent">Base</span></h1>
+    <p class="home-hero__subtitle">Deploy an ERC-4626 vault around your creator coin, run a fair-launch auction, and route fees to share holders — documented here at the contract and product level.</p>
     <div class="home-hero__actions">
-      <a class="home-btn home-btn--primary" href="/reading-order">Reading order<span class="home-btn__arrow" aria-hidden="true">→</span></a>
+      <a class="home-btn home-btn--primary" href="/getting-started">Get started<span class="home-btn__arrow" aria-hidden="true">→</span></a>
       <a class="home-btn home-btn--ghost" href="/reference/addresses">Live addresses</a>
     </div>
   </section>
 </div>
 
-## Pick a lane
-
 <div class="home-cards">
-  <a class="home-card" href="/getting-started">
-    <span class="home-card__tag">New</span>
-    <span class="home-card__title">Getting started</span>
-    <span class="home-card__desc">What 4626 is and the first documents to read.</span>
+  <a class="home-card" href="/overview/how-it-works">
+    <span class="home-card__tag">Product</span>
+    <span class="home-card__title">How it works</span>
+    <span class="home-card__desc">Two-token model, launch flow, and fee lanes.</span>
   </a>
   <a class="home-card" href="/guides/launch-token">
     <span class="home-card__tag">Creators</span>
-    <span class="home-card__title">Launch a vault</span>
-    <span class="home-card__desc">Deploy flow, strategy features, and greenfield readiness.</span>
+    <span class="home-card__title">Deploy a vault</span>
+    <span class="home-card__desc">Greenfield deploy at app.4626.fun.</span>
   </a>
-  <a class="home-card" href="/wallet-architecture">
-    <span class="home-card__tag">Accounts</span>
-    <span class="home-card__title">Wallet & signing</span>
-    <span class="home-card__desc">Canonical CSW, embedded owner, and execution tracks.</span>
-  </a>
-  <a class="home-card" href="/operators">
-    <span class="home-card__tag">Ops</span>
-    <span class="home-card__title">Operators</span>
-    <span class="home-card__desc">Deploy, keepers, Solana mesh, and platform runbooks.</span>
-  </a>
-  <a class="home-card" href="/reference/addresses">
-    <span class="home-card__tag">Reference</span>
-    <span class="home-card__title">Addresses & contracts</span>
-    <span class="home-card__desc">Live infra (v1.14.1) and narrative contract docs.</span>
-  </a>
-  <a class="home-card" href="/security">
-    <span class="home-card__tag">Trust</span>
-    <span class="home-card__title">Security & audits</span>
-    <span class="home-card__desc">Threat surfaces, review summaries, and legal.</span>
+  <a class="home-card" href="/contracts">
+    <span class="home-card__tag">Contracts</span>
+    <span class="home-card__title">Smart contracts</span>
+    <span class="home-card__desc">Vault, ShareOFT, gauge, CCA, and lottery.</span>
   </a>
 </div>
 
-## Current release
+**Live infra:** [v1.14.1](/reference/addresses) · Deployment batcher `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1`
 
-Greenfield deploy target: **[v1.14.1](/operations/deployment/releases/current)** · Batcher `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1`
-
-Full address table: [reference/addresses](/reference/addresses).
-
-## Links
-
-- [4626.fun](https://4626.fun) · [App](https://app.4626.fun) · [GitHub](https://github.com/wenakita/4626)
+[4626.fun](https://4626.fun) · [App](https://app.4626.fun) · [GitHub](https://github.com/wenakita/4626)

@@ -8,9 +8,8 @@ sidebar_position: 1
 Deployed contract addresses for 4626.
 
 > **Canonical source.** This file is the single source of truth for live deployed
-> addresses. The [current release](/operations/deployment/releases/current) doc
-> summarizes the active epoch; when anything disagrees with this file, **this file
-> wins**.
+> addresses on Base mainnet (**v1.14.1** greenfield target). When anything else
+> disagrees with this file, **this file wins**.
 
 ## Base (Hub Chain)
 
