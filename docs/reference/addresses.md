@@ -5,11 +5,11 @@ sidebar_position: 1
 
 # Contract Addresses
 
-Deployed contract addresses for 4626 on Base mainnet (**v1.14.1**).
+Canonical deployed contract addresses for 4626 on Base mainnet (**v1.14.1**).
 
-**New here?** You don’t need this page to launch — use [Getting started](/getting-started). Come here when you need **shared infrastructure** addresses (batcher, factories, registry). **Your** vault, wrapper, and share addresses are unique per creator and appear in the app / onchain events after deploy.
+For launch procedures, see [Getting started](/getting-started). This page lists **shared infrastructure** (batcher, factories, registry). Per-creator vault, wrapper, and ShareOFT addresses are emitted at deploy and available in the application and onchain events.
 
-> **Canonical source.** When anything disagrees with this file, **this file wins**.
+> **Canonical source.** When documentation or tooling disagrees with this file, **this file wins**.
 
 ## Base (Hub Chain)
 

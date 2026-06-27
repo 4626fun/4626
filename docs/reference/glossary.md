@@ -5,19 +5,25 @@ sidebar_position: 3
 
 # Glossary
 
-Product and onchain terms for 4626 vaults.
+Product and onchain terminology for 4626 vaults. For introduction and launch flow, see [Getting started](/getting-started).
 
-**New here?** Read [Getting started](/getting-started) first.
+## Overview
 
-## Common questions
+### Creator coin vs share token
 
-**Creator coin vs share?** — Creator coin is your Zora token (goes *into* the vault). Shares (`▢` / `■`) are *claims on* the vault. Different addresses. See [Getting started — three names](/getting-started#three-names-youll-see).
+**Creator coin** is the Zora ERC-20 deposited into the vault. **Vault shares** (`▢`) and **ShareOFT** (`■`) represent claims on vault value. These are distinct contract addresses. See [Token model](/getting-started#three-names-youll-see).
 
-**What’s the $499 bundle?** — Pays to unlock deploy plus Charm, Ajna, Solana bridge entitlement, and Meteora setup. Not your token deposit. [Strategy bundle](/guides/strategy-bundle).
+### `vault_full_deploy` bundle
 
-**Fair auction / CCA?** — Continuous Clearing Auction: open price discovery for shares at launch. [CCA strategy](/contracts/strategies/cca-launch).
+$499 USDC entitlement activating deploy plus Charm, Ajna, Solana share mesh (Pipe A), and Meteora provisioning. Does not include the activation deposit. [Strategy bundle](/guides/strategy-bundle).
 
-**Pipe A?** — Post-auction step that bridges ~30% of shares to Solana. [Solana share mesh](/overview/solana-share-mesh).
+### CCA (Continuous Clearing Auction)
+
+Uniswap V4 fair-launch auction for share price discovery at activation. [CCA strategy](/contracts/strategies/cca-launch).
+
+### Pipe A
+
+Post-auction finalize step bridging approximately 30% of ShareOFT supply to Solana (share mesh). [Solana share mesh](/overview/solana-share-mesh).
 
 ## Tokens
 

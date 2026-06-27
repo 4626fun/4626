@@ -5,87 +5,87 @@ sidebar_position: 2
 
 # How it works
 
-4626 turns a **Zora creator coin** into a **vault with tradable shares** on Base. Share holders benefit from trading activity and from creator revenue that flows into the vault.
+4626 wraps a **Zora creator coin** in an **ERC-4626 vault** on Base, distributes **tradable shares** through a **Continuous Clearing Auction (CCA)**, and routes trade fees and external creator revenue to share holders.
 
-**Launching now?** Use the [Launch checklist](/guides/greenfield-checklist). **Brand new?** Start with [Getting started](/getting-started).
+For launch procedures, see the [Launch checklist](/guides/greenfield-checklist). For product introduction, see [Getting started](/getting-started).
 
-## What problem this solves
+## Product scope
 
-A creator coin by itself doesn’t give buyers:
+A standalone creator coin does not, by itself, provide:
 
-- A clear **ownership receipt** tied to vault value  
-- A **fair, open launch** (vs opaque presales)  
-- Automatic **fee sharing** with holders  
+- Standardized **ERC-4626 claims** on vault total value locked (TVL)
+- **Open price discovery** via a fair-launch auction
+- Onchain **fee sharing** with share holders
 
-4626 adds a vault, a fair auction, tradable shares, and onchain fee routing.
+4626 deploys a per-creator vault stack, CCA launch strategy, ShareOFT, gauge, oracle, and lottery manager to address these requirements.
 
-## Three tokens, one vault {#three-tokens-one-vault}
+## Token model {#three-tokens-one-vault}
 
 ```text
   Creator coin ($TICKER)          Vault share (▢TICKER)         Tradable share (■TICKER)
   ─────────────────────          ─────────────────────         ───────────────────────
-  Your Zora token                Receipt inside the vault      What people buy & sell
-  Goes IN the vault              Minted when you deposit       Wrapped 1:1 from ▢ shares
-  Same address as before         Not the main DEX token        This is the DEX token
+  Zora ERC-20 deposit asset      ERC-4626 vault share          LayerZero ShareOFT (DEX)
+  Deposited into vault           Minted on deposit             Wrapped 1:1 from ▢ shares
+  Original token address         Internal accounting token     Cross-chain tradable share
 ```
 
-**Rule:** creator coin address **≠** share token address.
+**Invariant:** creator coin contract address **≠** share token contract address.
 
-## What happens after launch
+## Post-launch economics
 
 ```text
-  Buyer swaps on Base DEX
+  DEX buy of ■ share on Base
            │
            ▼
-  Buys ■ share ──► Trade fee ──► Gauge (split / jackpot / burn)
+  ShareOFT transfer fee ──► tradeFeeCollector (gauge) ──► split / jackpot / burn
            │
-           └──► May enter instant lottery (buys only — not wraps or deposits)
+           └──► Qualifying buy may enter CreatorLotteryManager
 
-  Zora creator payouts ──► Payout router ──► Vault ──► Each share worth more (PPS rises)
+  Zora creatorCoinPayoutRecipient ──► PayoutRouter ──► Vault ──► PPS accretion for holders
 ```
 
-- **Trade fees** — On share transfers; part returns to holders via the gauge (including burn mechanics).  
-- **Creator revenue** — External Zora earnings can enter the vault so **price per share** rises for everyone.  
-- **Jackpot** — Fees build a pool; the lottery manager picks winners on qualifying **buys**.  
+- **Trade fees** — ShareOFT transfer fees on DEX routes flow to the gauge (`tradeFeeCollector` domain). A portion may burn vault shares on distribute.
+- **External creator revenue** — Zora `payoutRecipient` earnings in router mode feed holder accretion via the payout router and vault PPS.
+- **Jackpot** — The gauge **custodies** reserves (`jackpotCustodian`); [CreatorLotteryManager](/contracts/utilities/lottery-manager) (**jackpot payout authority**) selects winners on qualifying ShareOFT **buys**.
 
-Integrator lane names: [Glossary](/reference/glossary).
+Qualified lane terminology: [Glossary](/reference/glossary).
 
-## Launch journey
+## Launch sequence
 
-| Step | You do | Result |
-|------|--------|--------|
-| **1 — Pay** | [Strategy bundle](/guides/strategy-bundle) | App unlocks deploy |
-| **2 — Deploy** | [Launch vault](/guides/launch-token) | Contracts exist |
-| **3 — Activate** | [Activate vault](/guides/activate-vault) | Coin in vault; auction starts |
-| **4 — Auction** | Wait / monitor in app | Price discovery completes |
-| **5 — Finalize** | Automatic onchain | Optional ~30% of shares → [Solana](/overview/solana-share-mesh) |
-| **6 — Strategies** | Automatic with bundle | Charm 45% · Ajna 45% · 10% idle CREATOR |
+| Step | Creator action | Onchain result |
+|------|----------------|----------------|
+| 1 — Pay | [Strategy bundle](/guides/strategy-bundle) (`vault_full_deploy`, $499 USDC) | Deploy gate opens |
+| 2 — Deploy | [Launch vault](/guides/launch-token) | Vault, wrapper, ShareOFT, gauge, oracle, CCA deployed |
+| 3 — Activate | [Activate vault](/guides/activate-vault) | Creator coin deposited; CCA seeded (99% creator coin / 1% USDC) |
+| 4 — Auction | Monitor in application | CCA price discovery completes |
+| 5 — Finalize | Application-orchestrated | Pipe A may bridge ~30% ShareOFT to [Solana](/overview/solana-share-mesh) |
+| 6 — Strategies | Automatic with bundle | Charm 45% · Ajna 45% · 10% idle CREATOR in vault |
 
-Steps 2–3 are what you click in the app. Steps 4–6 happen after activation.
+Steps 2–3 require creator action in the application. Steps 4–6 proceed onchain after activation.
 
 ## Solana (optional)
 
-Base is the hub. You do **not** need Solana to trade or run the lottery on Base.
+Base is the **hub chain**. Solana is not required for Base launch, trading, or lottery participation.
 
-After finalize, shares **may** bridge to Solana as the same `■TICKER` for Meteora trading. Creator coin stays on Base. [Solana share mesh](/overview/solana-share-mesh).
+After finalize, approximately **30%** of ShareOFT supply may bridge to Solana as the same `■TICKER` symbol (Pipe A). Creator coin remains on Base. Meteora pool provisioning is operator-assisted per bundle entitlement. Details: [Solana share mesh](/overview/solana-share-mesh).
 
-## Core contracts (developers)
+## Core contracts
 
-Shared batcher and factories: [addresses](/reference/addresses) (v1.14.1). Each creator also gets:
+Shared infrastructure (batcher, factories, registry): [addresses](/reference/addresses) (**v1.14.1**). Each creator deployment includes:
 
 | Contract | Role |
 |----------|------|
-| [CreatorRegistry](/contracts/core/creator-registry) | Creator coin → vault stack lookup |
-| [CreatorOVault](/contracts/core/creator-ovault) | Holds creator coin; mints ▢ shares |
-| [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) | Wraps ▢ → ■ |
-| [CreatorShareOFT](/contracts/core/creator-share-oft) | Tradable ■ share |
-| [CreatorGaugeController](/contracts/governance/gauge-controller) | Fees and jackpot custody |
-| [CCA strategy](/contracts/strategies/cca-launch) | Fair-launch auction |
-| [CreatorLotteryManager](/contracts/utilities/lottery-manager) | Lottery on share buys |
-| [CreatorOracle](/contracts/utilities/creator-oracle) | Pricing for lottery |
+| [CreatorRegistry](/contracts/core/creator-registry) | Creator coin → vault stack resolution |
+| [CreatorOVault](/contracts/core/creator-ovault) | ERC-4626 vault; holds creator coin |
+| [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) | ▢ → ■ wrapping (1:1) |
+| [CreatorShareOFT](/contracts/core/creator-share-oft) | Tradable ■ share; LayerZero OFT |
+| [CreatorGaugeController](/contracts/governance/gauge-controller) | Fee split; jackpot custody |
+| [CCA launch strategy](/contracts/strategies/cca-launch) | Uniswap V4 fair-launch auction |
+| [CreatorLotteryManager](/contracts/utilities/lottery-manager) | Instant lottery on ShareOFT buys |
+| [CreatorOracle](/contracts/utilities/creator-oracle) | TWAP pricing for lottery sizing |
 
-Strategy impairment: [disclosures](/reference/impairment-v1-disclosures).
+Strategy impairment disclosures: [impairment v1](/reference/impairment-v1-disclosures).
 
-## Next steps
+## Related documentation
 
 [Getting started](/getting-started) · [Launch checklist](/guides/greenfield-checklist) · [Contracts](/contracts)

@@ -8,7 +8,7 @@ const enableGitLastUpdate = process.env.DOCS_USE_GIT_LAST_UPDATE === '1';
 
 const config: Config = {
   title: '4626.fun Docs',
-  tagline: 'Creator vault docs — launch on Base',
+  tagline: '4626 creator vault documentation',
   favicon: 'brand/favicon.svg',
 
   url: 'https://docs.4626.fun',

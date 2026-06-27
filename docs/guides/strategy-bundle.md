@@ -5,43 +5,41 @@ sidebar_position: 1
 
 # Strategy bundle
 
-**Step 1 of launch:** pay once to unlock deploy and the full launch package.
+**Launch step 1:** activate **`vault_full_deploy`** before the deploy flow is available in the application.
 
 [Getting started](/getting-started) · [Launch checklist](/guides/greenfield-checklist)
 
-## Why there’s a fee
+## Purpose
 
-A new vault needs more than a single contract — liquidity management, lending, and optional Solana infra. **`vault_full_deploy`** is one **$499 USDC** payment on Base that enables all of it.
+Greenfield vault deployments require paid entitlements beyond the core vault contract: liquidity strategies, lending, and optional Solana share mesh infrastructure. **`vault_full_deploy`** is a single **$499 USDC** payment on Base that activates the full bundle.
 
-This is **separate** from the **50M–100M creator coin** you deposit at activation.
+This fee is **independent** of the **50M–100M creator coin** activation deposit.
 
-## What’s included
+## Entitlements
 
-| Piece | What it does |
-|-------|----------------|
-| **Charm active LP** | CREATOR/USDC liquidity |
-| **Ajna sleeve** | CREATOR lending |
-| **Solana share mesh** | Part of shares can bridge to Solana after launch ([details](/overview/solana-share-mesh)) |
-| **Meteora entitlement** | Solana pool setup when you’re ready |
+| Entitlement | Function |
+|-------------|----------|
+| **Charm active LP** (`charm_active_lp`) | CREATOR/USDC liquidity management |
+| **Ajna sleeve** (`ajna_sleeve`) | CREATOR lending strategy |
+| **Solana share mesh** (`solana_ovault_mesh`) | Pipe A ShareOFT bridge at finalize ([policy](/overview/solana-share-mesh)) |
+| **Meteora entitlement** (`solana_meteora_alpha_vault`) | Operator-provisioned Solana pool infrastructure |
 
-After launch, vault CREATOR is split ~**45% Charm · 45% Ajna · 10% idle**.
+Post-launch, vault CREATOR allocation targets approximately **45% Charm · 45% Ajna · 10% idle** buffer. Individual strategy keys are not sold separately for new vaults.
 
-New vaults buy the **bundle only** — not individual strategy add-ons.
+## Activation procedure
 
-## How to pay
+1. Open **[app.4626.fun/creator/strategy/features](https://app.4626.fun/creator/strategy/features)**
+2. Complete payment via **USDC transfer**, **x402**, or **Stripe checkout** (as offered in the application)
+3. Confirm **`vault_full_deploy`** status is **active**
+4. Proceed to [Launch vault](/guides/launch-token)
 
-1. **[app.4626.fun/creator/strategy/features](https://app.4626.fun/creator/strategy/features)**  
-2. Pay via **USDC**, **x402**, or **Stripe** (app shows options)  
-3. Confirm **`vault_full_deploy`** is **active**  
-4. Continue to [Launch vault](/guides/launch-token)  
+The deploy page remains blocked until step 3 is confirmed.
 
-Deploy stays blocked until step 3 shows active.
+## Exclusions
 
-## Not included
+- Creator coin activation deposit (50M–100M tokens)
+- Network gas (sponsored canonical smart-wallet paths may apply where configured)
 
-- Creator coin deposit at activation  
-- Gas (some smart-wallet paths may be sponsored in-app)  
+## Next step
 
-## Next
-
-**[Launch vault](/guides/launch-token)** — Step 2: deploy your contracts.
+[Launch vault](/guides/launch-token) — deploy the per-creator contract stack (launch step 2).

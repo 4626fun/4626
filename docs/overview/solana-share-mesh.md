@@ -5,37 +5,41 @@ sidebar_position: 3
 
 # Solana share mesh
 
-**Do I need Solana to launch?** **No.** Launch and trade on Base first. Solana is optional extra reach for the **same ■ share**.
+Policy for **ShareOFT (`■TICKER`)** bridging to Solana and its relationship to lottery and trading on new vaults.
 
 [Getting started](/getting-started) · [Launch checklist](/guides/greenfield-checklist)
 
-## Remember this
+## Solana requirement
 
-| Token | On Solana? |
-|-------|------------|
-| Creator coin (`$TICKER`) | **No** — stays on Base |
-| Tradable share (`■TICKER`) | **Maybe** — ~30% can bridge after finalize |
+**Solana is not required to launch on Base.** Base is the hub chain for deploy, CCA, secondary trading, and lottery for new vaults. Solana provides optional distribution for the **same tradable share** after finalize.
 
-Solana gets a **bridged copy of your share**, not your Zora creator coin. Example: `■AKITA` on both chains when bridged.
+## Token mapping
 
-## When it happens
+| Asset | Solana presence |
+|-------|-----------------|
+| Creator coin (`$TICKER`) | **None** — remains on Base |
+| Tradable share (`■TICKER`) | **Conditional** — ~30% of supply may bridge via Pipe A after finalize (LayerZero) |
 
-1. You [deploy](/guides/launch-token) and [activate](/guides/activate-vault) on Base  
-2. The **auction finishes**  
-3. **Finalize** runs onchain — part of share supply can bridge via LayerZero  
-4. **Meteora** pool trading may follow (included in [launch bundle](/guides/strategy-bundle))  
+Solana receives a bridged **ShareOFT**, not a separate creator-coin SPL. Symbol convention: `■TICKER` on both chains when bridged (e.g. `■AKITA`).
 
-There is no separate “Solana deploy” button — this follows the auction.
+## Sequence
+
+1. [Deploy](/guides/launch-token) and [activate](/guides/activate-vault) on Base
+2. CCA completes
+3. **Finalize** executes onchain; **Pipe A** may bridge a share slice to Solana
+4. **Meteora** pool provisioning may follow (operator-assisted; included in [strategy bundle](/guides/strategy-bundle))
+
+There is no separate creator-facing Solana deploy action — bridging is part of the post-auction finalize path.
 
 ## Lottery: Base vs Solana
 
-| Chain | For new vaults |
-|-------|----------------|
-| **Base** | **Live** — DEX **buys** of ■ shares can enter the [lottery](/contracts/utilities/lottery-manager) |
-| **Solana** | **Later** — target is pool **buys** on Solana; until then use Base |
+| Chain | Status (new vaults) |
+|-------|---------------------|
+| **Base** | **Operational at launch** — ShareOFT DEX **buys** (`SwapOnly → non-SwapOnly`) may enter [CreatorLotteryManager](/contracts/utilities/lottery-manager) |
+| **Solana** | **Planned** — policy targets secondary pool **buys** of the share mesh mint; Base lottery remains authoritative until relay is live |
 
-Wraps, deposits, and receiving bridged tokens are **not** lottery entries. **Buys** are.
+Wraps, deposits, and bridge receipts do **not** generate lottery entries. Qualifying **buys** do.
 
-## Developers
+## Contract reference
 
-[CreatorShareOFT](/contracts/core/creator-share-oft) · [Wrapper](/contracts/core/creator-ovault-wrapper) · [Addresses](/reference/addresses)
+[CreatorShareOFT](/contracts/core/creator-share-oft) · [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) · [Contract addresses](/reference/addresses)

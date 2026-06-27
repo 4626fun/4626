@@ -5,55 +5,59 @@ sidebar_position: 2
 
 # Launch checklist
 
-Printable path for a **new** vault on Base (v1.14.1). Older vaults (e.g. AKITA) may differ.
+End-to-end launch procedure for a **new** vault on Base (**v1.14.1**). Grandfathered vaults (e.g. AKITA) may follow prior deployment versions.
 
-Context: [Getting started](/getting-started) · App: [deploy/vault](https://app.4626.fun/deploy/vault)
+Overview: [Getting started](/getting-started) · Application: [app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)
 
-## Before the app
+## Prerequisites
 
-- [ ] Creator coin **live on Base** (usually Zora)  
-- [ ] **50M–100M** creator coin in wallet for activation  
-- [ ] **4626 account** + wallet signing works  
-- [ ] **[Launch bundle](/guides/strategy-bundle) paid** ($499 USDC) — deploy locked until active  
+- [ ] Creator coin **live on Base** (typically via Zora)
+- [ ] **50M–100M** creator coin available for activation deposit
+- [ ] **4626 account** with execution-ready wallet signing
+- [ ] **`vault_full_deploy` active** — [Strategy bundle](/guides/strategy-bundle) ($499 USDC); deploy remains gated until confirmed
 
-## Steps
+## Launch procedure
 
-| # | Step | What happens | Guide |
-|---|------|--------------|-------|
-| 1 | **Pay** | Unlock deploy | [Strategy bundle](/guides/strategy-bundle) |
-| 2 | **Deploy** | Vault, shares, auction contracts created | [Launch vault](/guides/launch-token) |
-| 3 | **Activate** | Deposit coin; fair auction starts | [Activate vault](/guides/activate-vault) |
-| 4 | **Auction** | Buyers set price; you monitor in app | — |
-| 5 | **Finalize** | Onchain completion; optional Solana bridge | [Solana share mesh](/overview/solana-share-mesh) |
-| 6 | **Strategies** | Charm + Ajna attach (automatic) | [How it works](/overview/how-it-works) |
+| Step | Action | Outcome | Guide |
+|------|--------|---------|-------|
+| 1 | Pay **`vault_full_deploy`** | Deploy unlocked in application | [Strategy bundle](/guides/strategy-bundle) |
+| 2 | Deploy contract stack | Vault, ShareOFT, gauge, oracle, CCA deployed | [Launch vault](/guides/launch-token) |
+| 3 | Activate vault | Creator coin deposited; CCA started | [Activate vault](/guides/activate-vault) |
+| 4 | CCA auction | Price discovery in progress | — |
+| 5 | Finalize | Onchain completion; optional Pipe A Solana bridge | [Solana share mesh](/overview/solana-share-mesh) |
+| 6 | Strategy attachment | Charm + Ajna deployed per bundle weights | [How it works](/overview/how-it-works) |
 
-## Milestones: deployed → activated → live
+## Milestones
 
-| Stage | You have… | Public trading? |
-|-------|-----------|-----------------|
-| **Deployed** | Contracts onchain | No — no coin in vault yet |
-| **Activated** | Coin in vault; auction **running** | Not yet — auction must finish |
-| **Live on Base** | Auction **done**; ■ shares on DEX | Yes — fees + lottery on **buys** |
+| Stage | State | Public trading on Base |
+|-------|-------|------------------------|
+| **Deployed** | Contracts onchain; vault unfunded | No |
+| **Activated** | Deposit complete; CCA **in progress** | No — auction must complete |
+| **Trading live** | CCA **complete**; `■` shares on DEX | Yes — fees and lottery on qualifying **buys** |
 
-Treat **“live”** as auction complete + Base trading, not merely “I clicked activate.”
+Activation alone does not constitute a trading-live state. Public secondary trading begins after the CCA completes.
 
-## After you’re live on Base
+## Base (hub chain) readiness
 
-- **■ shares** trade on Base DEXs  
-- **Buys** can enter the [lottery](/contracts/utilities/lottery-manager)  
-- Trade fees flow through the [gauge](/contracts/governance/gauge-controller)  
+When trading live on Base:
 
-## Solana (optional, can lag Base)
+- `■` ShareOFT is tradable on Base DEXs
+- Qualifying ShareOFT **buys** may enter [CreatorLotteryManager](/contracts/utilities/lottery-manager)
+- Trade fees route through [CreatorGaugeController](/contracts/governance/gauge-controller)
 
-- Bridged **■ share** (not creator coin) may appear after finalize  
-- Meteora pool trading may follow  
-- Base lottery and trading do **not** require Solana  
+## Solana (optional)
 
-## Reference
+Solana integration may follow Base launch and is not required for Base trading or lottery:
 
-- Your stack → [CreatorRegistry](/contracts/core/creator-registry) at deploy  
-- Shared infra → [Addresses](/reference/addresses) v1.14.1  
+- Bridged asset is **`■` share**, not creator coin
+- Pipe A bridge and Meteora provisioning may lag finalize
+- Base lottery remains authoritative until Solana buy-relay is fully operational
 
-## Related
+## Contract reference
+
+- Per-creator stack registered in [CreatorRegistry](/contracts/core/creator-registry) at deploy
+- Shared infrastructure: [Contract addresses](/reference/addresses) (v1.14.1)
+
+## Related documentation
 
 [Getting started](/getting-started) · [How it works](/overview/how-it-works)

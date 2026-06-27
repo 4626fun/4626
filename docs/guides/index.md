@@ -5,17 +5,17 @@ sidebar_position: 1
 
 # Deploy a creator vault
 
-**New here?** Start with [Getting started](/getting-started), then come back here when you’re ready to launch.
+Documentation for the greenfield vault launch flow on Base. For product context, see [Getting started](/getting-started).
 
-## Order of operations
+## Recommended order
 
-1. **[Launch checklist](/guides/greenfield-checklist)** — requirements and “am I live?”  
-2. **[Strategy bundle](/guides/strategy-bundle)** — pay $499 USDC to unlock deploy  
-3. **[Launch vault](/guides/launch-token)** — create contracts  
-4. **[Activate vault](/guides/activate-vault)** — deposit coin and start auction  
+1. [Launch checklist](/guides/greenfield-checklist) — prerequisites and milestones
+2. [Strategy bundle](/guides/strategy-bundle) — activate `vault_full_deploy` ($499 USDC)
+3. [Launch vault](/guides/launch-token) — deploy per-creator contracts
+4. [Activate vault](/guides/activate-vault) — deposit creator coin and seed CCA
 
-**App:** [app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)
+**Application:** [app.4626.fun/deploy/vault](https://app.4626.fun/deploy/vault)
 
-After the auction, see [How it works](/overview/how-it-works) and [Solana share mesh](/overview/solana-share-mesh) for what happens next.
+Post-auction behavior (finalize, Solana, strategies): [How it works](/overview/how-it-works) · [Solana share mesh](/overview/solana-share-mesh)
 
 **Contract addresses:** [v1.14.1](/reference/addresses)
