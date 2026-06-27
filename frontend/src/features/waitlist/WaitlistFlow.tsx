@@ -1,14 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import {
-  ArrowRight,
-  CheckCircle2,
-  AlertCircle,
-  Layers,
-  Shield,
-  TrendingUp,
-  Sparkles,
-} from 'lucide-react'
+import { ArrowRight, AlertCircle, Layers, Shield, TrendingUp } from 'lucide-react'
 import { useLogin, usePrivy } from '@privy-io/react-auth'
 
 import { Button } from '@/components/ui/Button'
@@ -137,54 +129,13 @@ async function bootstrapWaitlist(privyAccessToken: string): Promise<WaitlistBoot
   return payload.data
 }
 
-const TRUST_CHIPS = [
-  'Email-only access',
-  'Base-native',
-  'Creator vault launch',
-  'No wallet required to join',
-] as const
-
-const VALUE_PROPS = [
-  {
-    icon: Layers,
-    title: 'Creator vaults',
-    desc: 'Turn creator coins into redeemable onchain shares.',
-  },
-  {
-    icon: Shield,
-    title: 'Non-custodial',
-    desc: 'Transparent, self-sovereign ownership on Base.',
-  },
-  {
-    icon: TrendingUp,
-    title: 'Early access',
-    desc: 'Position before public vaults open to everyone.',
-  },
-  {
-    icon: Sparkles,
-    title: '4626 rollout',
-    desc: 'Be first in line for the ERC-4626 launch wave.',
-  },
+const FEATURES = [
+  { icon: Layers, label: 'Creator vaults' },
+  { icon: Shield, label: 'Non-custodial' },
+  { icon: TrendingUp, label: 'Early access' },
 ] as const
 
 const FOOTER_TRUST = 'Built on Base · Non-custodial · ERC-4626 standard' as const
-
-/* Staggered entrance — children fade in one by one after the container mounts */
-const staggerContainer = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: { staggerChildren: 0.07, delayChildren: 0.15 },
-  },
-}
-const staggerItem = {
-  hidden: { opacity: 0, y: 14 },
-  show: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] as const },
-  },
-}
 
 export function WaitlistFlow(props: { sectionId?: string }) {
   const sectionId = props.sectionId ?? 'waitlist-page'
@@ -194,9 +145,24 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   const [emailBusy, setEmailBusy] = useState(false)
   const [signOutBusy, setSignOutBusy] = useState(false)
   const [sessionAddress, setSessionAddress] = useState<string | null>(null)
+  const [sessionChecked, setSessionChecked] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [listCount, setListCount] = useState<number | null>(null)
+  const [autoJoinResolved, setAutoJoinResolved] = useState(false)
   const signupInFlightRef = useRef(false)
+  const autoJoinAttemptedRef = useRef(false)
+
+  // Intentional entry from the marketing "Join waitlist" CTA (`/waitlist?join=1`).
+  // Captured once on mount so a later URL cleanup does not re-trigger the popup
+  // on refresh. A passive arrival (no flag) never auto-opens — preserves UX-002.
+  const joinIntent = useMemo(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      return new URLSearchParams(window.location.search).get('join') === '1'
+    } catch {
+      return false
+    }
+  }, [])
 
   useEffect(() => {
     if (!privy.ready) return
@@ -205,6 +171,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
       const address = await readAuthSessionAddress()
       if (cancelled) return
       setSessionAddress(address)
+      setSessionChecked(true)
     })()
     return () => {
       cancelled = true
@@ -333,13 +300,47 @@ export function WaitlistFlow(props: { sectionId?: string }) {
     }
   }, [privy.getAccessToken, privy.logout, signOutBusy])
 
-  // UX-002: Do not auto-open the Privy login modal on page load. Previously
-  // this effect fired handleEmailSignup() as soon as the session hydrated with
-  // no address, which auto-opened the Privy "log in or sign up" dialog on top
-  // of the waitlist card — most visibly when an unauthenticated visitor was
-  // redirected from /swap to /waitlist. The card's "Join with email" button is
-  // the intended entry point; let the user click it themselves.
+  // UX-002: Never auto-open the Privy modal on *passive* page load (e.g. an
+  // unauthenticated visitor redirected from /swap to /waitlist). It only opens
+  // automatically when the user explicitly clicked the marketing "Join waitlist"
+  // CTA, which carries `?join=1`. We wait for the initial session check so an
+  // already-listed user lands on the "Enter app" state instead of a popup, and
+  // we fire exactly once. After attempting, the `join` flag is stripped from the
+  // URL so a refresh does not re-trigger the popup.
+  useEffect(() => {
+    if (!joinIntent) return
+    if (!privy.ready || !sessionChecked) return
+    if (autoJoinAttemptedRef.current) return
+    if (sessionAddress) {
+      setAutoJoinResolved(true)
+      return
+    }
+    autoJoinAttemptedRef.current = true
+    if (typeof window !== 'undefined') {
+      try {
+        const url = new URL(window.location.href)
+        url.searchParams.delete('join')
+        window.history.replaceState(window.history.state, '', url.toString())
+      } catch {
+        // non-fatal — URL cleanup is best-effort
+      }
+    }
+    void (async () => {
+      try {
+        await handleEmailSignup()
+      } finally {
+        setAutoJoinResolved(true)
+      }
+    })()
+  }, [joinIntent, privy.ready, sessionChecked, sessionAddress, handleEmailSignup])
+
   const isBusy = emailBusy || signOutBusy
+
+  // While the CTA-triggered popup is opening, keep the page as a quiet backdrop
+  // (just the ambient background + a small status line) instead of the full
+  // hero card. If the user cancels or an error occurs, the card is revealed so
+  // they can retry with the button.
+  const autoJoinActive = joinIntent && !autoJoinResolved && !sessionAddress && !error
 
   return (
     <section
@@ -364,259 +365,161 @@ export function WaitlistFlow(props: { sectionId?: string }) {
         />
       </div>
 
-      <div className="relative mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 sm:py-14 lg:py-16">
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_0.95fr] lg:gap-12">
-          {/* ─── Left column — hero copy ─── */}
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-            className="flex flex-col justify-center"
-          >
-            <div className="flex items-center gap-2 self-start">
-              <div className="status-active">
-                <span className="label">Creator vault launch · Base</span>
-              </div>
-              <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/15 bg-amber-500/[0.05] px-2 py-0.5 text-[9px] font-medium tracking-wide text-amber-300/70">
-                <Sparkles className="size-2" aria-hidden="true" />
-                Limited early access
-              </span>
-            </div>
-
-            <h1 className="headline mt-4 text-4xl leading-[0.98] tracking-[-0.04em] sm:text-5xl lg:text-[3.25rem]">
-              Early access to
-              <br />
-              <span className="glow-brand">creator-owned vaults.</span>
-            </h1>
-
-            <p className="mt-4 max-w-md text-[14px] font-light leading-relaxed text-zinc-400">
-              The first wave of creators turning their coins into redeemable onchain vault shares. Email gets you on the list. No wallet required to start.
-            </p>
-
-            {/* trust chips — staggered entrance */}
-            <motion.ul
-              variants={staggerContainer}
-              initial="hidden"
-              animate="show"
-              className="mt-5 flex flex-wrap gap-1.5"
-            >
-              {TRUST_CHIPS.map((chip) => (
-                <motion.li
-                  key={chip}
-                  variants={staggerItem}
-                  className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-medium tracking-[0.5px] text-zinc-300"
-                >
-                  {chip}
-                </motion.li>
-              ))}
-            </motion.ul>
-
-            {/* value props — staggered entrance with icons */}
-            <motion.ul
-              variants={staggerContainer}
-              initial="hidden"
-              animate="show"
-              className="mt-5 space-y-2.5"
-            >
-              {VALUE_PROPS.map((vp) => {
-                const Icon = vp.icon
-                return (
-                  <motion.li key={vp.title} variants={staggerItem} className="flex items-start gap-2.5">
-                    <span className="mt-px flex size-5 shrink-0 items-center justify-center rounded border border-white/10 bg-white/[0.02]">
-                      <Icon className="size-2.5 text-[rgb(var(--brand-primary))]" aria-hidden="true" />
-                    </span>
-                    <span className="text-[12.5px] leading-snug text-zinc-400">
-                      <span className="font-medium text-zinc-200">{vp.title}</span>
-                      <span> — {vp.desc}</span>
-                    </span>
-                  </motion.li>
-                )
-              })}
-            </motion.ul>
-          </motion.div>
-
-          {/* ─── Right column — access pass card ─── */}
-          <motion.div
-            initial={{ opacity: 0, y: 22 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
-            className="flex items-center justify-center lg:justify-end"
-          >
-            <div
-              className={`glass-card relative w-full max-w-md overflow-hidden p-6 ring-1 shadow-[0_30px_80px_rgba(0,0,0,0.6)] sm:p-8 ${
-                sessionAddress
-                  ? 'ring-[rgb(var(--brand-primary)/0.18)] shadow-[0_30px_90px_rgba(0,0,0,0.65)]'
-                  : 'ring-white/5'
-              }`}
-            >
-              {/* card top accent — gradient hairline */}
-              <div
-                className="pointer-events-none absolute inset-x-0 top-0 h-px"
-                style={{
-                  background:
-                    'linear-gradient(90deg, transparent, rgb(var(--brand-primary) / 0.4), transparent)',
-                }}
-                aria-hidden="true"
-              />
-
-              {/* card accent glow */}
-              <div
-                className="pointer-events-none absolute -right-20 -top-24 h-48 w-48 rounded-full"
-                style={{
-                  background: 'radial-gradient(circle, rgb(var(--brand-primary) / 0.16) 0%, transparent 70%)',
-                }}
-                aria-hidden="true"
-              />
-
-              {/* vault preview — prominent only before joining for visual interest */}
-              {!sessionAddress && (
-                <div className="relative mb-6 flex justify-center" aria-hidden="true">
-                  <div className="relative size-24">
-                    {/* outer ring */}
-                    <div className="absolute inset-0 rounded-full border border-white/10" />
-                    {/* animated pulse */}
-                    <motion.div
-                      className="absolute inset-0 rounded-full border border-[rgb(var(--brand-primary)/0.3)]"
-                      animate={{ scale: [1, 1.18, 1], opacity: [0.5, 0, 0.5] }}
-                      transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                    />
-                    {/* mid ring */}
-                    <div className="absolute inset-[12px] rounded-full border border-[rgb(var(--brand-primary)/0.35)]" />
-                    {/* inner glow */}
-                    <div
-                      className="absolute inset-[22px] rounded-full"
-                      style={{
-                        background: 'radial-gradient(circle, rgb(var(--brand-primary) / 0.22) 0%, transparent 72%)',
-                      }}
-                    />
-                    {/* core symbol */}
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span
-                        className="font-mono text-lg font-light"
-                        style={{ color: 'rgb(var(--brand-primary))' }}
-                      >
-                        ■
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* minimal confirmation for joined state */}
-              {sessionAddress && (
-                <div className="mb-2 flex justify-center">
-                  <div className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/5 px-2 py-0.5 text-[9px] uppercase tracking-[1px] text-emerald-400">
-                    <CheckCircle2 className="size-2.5" aria-hidden="true" />
-                    <span>On the list</span>
-                  </div>
-                </div>
-              )}
-
-              {/* card header */}
-              <div className="relative">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="label">Access pass</span>
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-medium text-zinc-400">
-                    <span
-                      className={`size-1.5 rounded-full ${sessionAddress ? 'bg-emerald-400' : 'bg-zinc-500'}`}
-                    />
-                    {sessionAddress ? 'On the list' : 'Open'}
-                  </span>
-                </div>
-
-                <h2 className="mt-2 text-lg font-medium tracking-tight text-white">
-                  {sessionAddress ? 'You are on the list' : 'Join the launch list'}
-                </h2>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-                  {sessionAddress
-                    ? "You're on the launch list. Enter the app to finish one-time wallet setup and start swapping."
-                    : 'Use email OTP to create or recover your 4626 account. No wallet required to join.'}
-                </p>
-
-                {sessionAddress && listCount != null && listCount > 0 ? (
-                  <div className="mt-1 text-[10px] text-zinc-500 tracking-[0.2px]">
-                    {listCount.toLocaleString()} creators on the list
-                  </div>
-                ) : null}
-              </div>
-
-              {/* Primary action — context aware. When you can enter the app, we do not show "Join with email". */}
-              <div className={`relative ${sessionAddress ? 'mt-7' : 'mt-6'}`}>
-                {!sessionAddress ? (
-                  <>
-                    <Button
-                      type="button"
-                      variant="primary"
-                      size="lg"
-                      className="w-full transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
-                      onClick={() => void handleEmailSignup()}
-                      disabled={isBusy || !privy.ready}
-                    >
-                      {emailBusy ? (
-                        <span className="inline-flex items-center gap-2">
-                          <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.9)" />
-                          Securing access…
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-2">
-                          Join with email
-                          <ArrowRight className="size-4" aria-hidden="true" />
-                        </span>
-                      )}
-                    </Button>
-                    <p className="mt-3 text-center text-[11px] leading-relaxed text-zinc-500">
-                      {!privy.ready
-                        ? 'Preparing secure session…'
-                        : 'A secure code will be sent to your email.'}
-                    </p>
-                  </>
-                ) : (
-                  <div className="flex flex-col items-stretch gap-4">
-                    <Button
-                      variant="primary"
-                      size="lg"
-                      className="w-full transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
-                      asChild
-                    >
-                      <a href={`${APP_ORIGIN}/swap`}>
-                        Enter app
-                        <ArrowRight className="size-4" aria-hidden="true" />
-                      </a>
-                    </Button>
-                    <p className="text-center text-[11px] leading-relaxed text-zinc-500">
-                      You're on the list. One-time wallet setup remains before swaps can execute.
-                    </p>
-                    <button
-                      type="button"
-                      className="self-center text-xs tracking-wide text-zinc-500 transition hover:text-zinc-300 disabled:opacity-50"
-                      onClick={() => void handleSignOut()}
-                      disabled={isBusy}
-                    >
-                      Sign out
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* error feedback only — success is communicated by the card transforming */}
-              {error ? (
-                <div
-                  className="mt-5 flex items-start gap-2.5 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3"
-                  role="alert"
-                >
-                  <AlertCircle className="mt-0.5 size-4 shrink-0 text-rose-400" aria-hidden="true" />
-                  <p className="text-sm leading-relaxed text-rose-200">{error}</p>
-                </div>
-              ) : null}
-            </div>
-          </motion.div>
+      {autoJoinActive ? (
+        <div className="relative flex flex-col items-center justify-center gap-4 px-6 text-center">
+          <PixelWaveLoader name="wave-lr" size={18} color="rgba(255,255,255,0.85)" />
+          <p className="text-sm font-light tracking-wide text-zinc-400">
+            {privy.ready ? 'Opening secure email sign-in…' : 'Preparing secure session…'}
+          </p>
         </div>
+      ) : (
+      <div className="relative mx-auto w-full max-w-md px-4 py-10 sm:px-6 sm:py-14">
+        {/* ─── Single access-pass card — hero copy + signup in one ─── */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          className={`glass-card relative w-full overflow-hidden p-6 ring-1 shadow-[0_30px_80px_rgba(0,0,0,0.6)] sm:p-8 ${
+            sessionAddress
+              ? 'ring-[rgb(var(--brand-primary)/0.18)] shadow-[0_30px_90px_rgba(0,0,0,0.65)]'
+              : 'ring-white/5'
+          }`}
+        >
+          {/* top accent hairline + corner glow */}
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 h-px"
+            style={{
+              background: 'linear-gradient(90deg, transparent, rgb(var(--brand-primary) / 0.4), transparent)',
+            }}
+            aria-hidden="true"
+          />
+          <div
+            className="pointer-events-none absolute -right-20 -top-24 h-48 w-48 rounded-full"
+            style={{
+              background: 'radial-gradient(circle, rgb(var(--brand-primary) / 0.16) 0%, transparent 70%)',
+            }}
+            aria-hidden="true"
+          />
+
+          {/* status row */}
+          <div className="relative flex items-center justify-between gap-3">
+            <div className="status-active">
+              <span className="label">Creator vault launch · Base</span>
+            </div>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-medium text-zinc-400">
+              <span className={`size-1.5 rounded-full ${sessionAddress ? 'bg-emerald-400' : 'bg-zinc-500'}`} />
+              {sessionAddress ? 'On the list' : 'Open'}
+            </span>
+          </div>
+
+          {/* headline + subcopy */}
+          <h1 className="headline relative mt-4 text-3xl leading-[1.02] tracking-[-0.03em] sm:text-4xl">
+            {sessionAddress ? (
+              "You're on the list"
+            ) : (
+              <>
+                Early access to <span className="glow-brand">creator-owned vaults.</span>
+              </>
+            )}
+          </h1>
+          <p className="relative mt-3 text-sm leading-relaxed text-zinc-400">
+            {sessionAddress
+              ? 'Enter the app to finish one-time wallet setup and start swapping.'
+              : 'Creators turning their coins into redeemable onchain vault shares. Email gets you on the list — no wallet required to join.'}
+          </p>
+
+          {sessionAddress && listCount != null && listCount > 0 ? (
+            <div className="relative mt-2 text-[10px] tracking-[0.2px] text-zinc-500">
+              {listCount.toLocaleString()} creators on the list
+            </div>
+          ) : null}
+
+          {/* compact feature strip — only before joining */}
+          {!sessionAddress && (
+            <ul className="relative mt-5 flex flex-wrap gap-1.5">
+              {FEATURES.map(({ icon: Icon, label }) => (
+                <li
+                  key={label}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-medium tracking-[0.5px] text-zinc-300"
+                >
+                  <Icon className="size-2.5 text-[rgb(var(--brand-primary))]" aria-hidden="true" />
+                  {label}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* primary action — context aware */}
+          <div className="relative mt-6">
+            {!sessionAddress ? (
+              <>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="lg"
+                  className="w-full transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
+                  onClick={() => void handleEmailSignup()}
+                  disabled={isBusy || !privy.ready}
+                >
+                  {emailBusy ? (
+                    <span className="inline-flex items-center gap-2">
+                      <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.9)" />
+                      Securing access…
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-2">
+                      Join with email
+                      <ArrowRight className="size-4" aria-hidden="true" />
+                    </span>
+                  )}
+                </Button>
+                <p className="mt-3 text-center text-[11px] leading-relaxed text-zinc-500">
+                  {!privy.ready ? 'Preparing secure session…' : 'A secure code will be sent to your email.'}
+                </p>
+              </>
+            ) : (
+              <div className="flex flex-col items-stretch gap-4">
+                <Button
+                  variant="primary"
+                  size="lg"
+                  className="w-full transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
+                  asChild
+                >
+                  <a href={`${APP_ORIGIN}/swap`}>
+                    Enter app
+                    <ArrowRight className="size-4" aria-hidden="true" />
+                  </a>
+                </Button>
+                <button
+                  type="button"
+                  className="self-center text-xs tracking-wide text-zinc-500 transition hover:text-zinc-300 disabled:opacity-50"
+                  onClick={() => void handleSignOut()}
+                  disabled={isBusy}
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* error feedback only — success is communicated by the card transforming */}
+          {error ? (
+            <div
+              className="relative mt-5 flex items-start gap-2.5 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3"
+              role="alert"
+            >
+              <AlertCircle className="mt-0.5 size-4 shrink-0 text-rose-400" aria-hidden="true" />
+              <p className="text-sm leading-relaxed text-rose-200">{error}</p>
+            </div>
+          ) : null}
+        </motion.div>
 
         {/* footer trust line */}
-        <p className="mt-8 text-center text-[11px] font-light tracking-wide text-zinc-600">
+        <p className="mt-6 text-center text-[11px] font-light tracking-wide text-zinc-600">
           {FOOTER_TRUST}
         </p>
       </div>
+      )}
     </section>
   )
 }

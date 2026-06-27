@@ -262,11 +262,16 @@ ANVIL_LOG_FILE="${TMPDIR:-/tmp}/4626-deploy-dry-run-anvil.log"
 DEV_REDIRECT_LOG_FILE="${TMPDIR:-/tmp}/4626-deploy-dry-run-redirect.log"
 export VITE_ALLOW_CONTRACT_OVERRIDES="${VITE_ALLOW_CONTRACT_OVERRIDES:-0}"
 export ALLOW_API_CONTRACT_OVERRIDES="${ALLOW_API_CONTRACT_OVERRIDES:-0}"
-# WSL2: bind localhost so Windows http://localhost:5174 forwards into WSL (secure
-# context for Privy embedded wallets). Set VITE_DEV_SERVER_HOST=true only when
-# you need the WSL LAN IP fallback (DEPLOY_DRY_RUN_USE_WSL_LAN_ORIGIN=1).
+# WSL2: bind all interfaces so Windows can reach the dev server, but keep Privy/OAuth
+# origins on http://localhost:5174 (secure context + redirect match). Classic WSL
+# localhost forwarding is flaky; mirrored networking (.wslconfig) fixes Windows
+# http://localhost after `wsl --shutdown`.
 if [[ -z "${VITE_DEV_SERVER_HOST-}" ]]; then
-  export VITE_DEV_SERVER_HOST="localhost"
+  if grep -qi microsoft /proc/version 2>/dev/null || [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
+    export VITE_DEV_SERVER_HOST="true"
+  else
+    export VITE_DEV_SERVER_HOST="localhost"
+  fi
 fi
 # Use a dedicated deterministic namespace on local forks so dry-runs do not
 # collide with live Base deployments that share the repo's normal version tag.
@@ -542,19 +547,72 @@ print_local_dev_access_hints() {
   if [[ -n "$wsl_ip" && "$host_arg" == "0.0.0.0" ]]; then
     echo "LAN fallback: http://${wsl_ip}:${port}/waitlist (HTTP LAN IP disables Privy embedded wallet)"
   fi
+  if command -v /mnt/c/Windows/System32/netstat.exe >/dev/null 2>&1; then
+    if /mnt/c/Windows/System32/netstat.exe -ano 2>/dev/null | grep -q "127.0.0.1:${port}.*LISTENING"; then
+      local win_pid
+      win_pid="$(/mnt/c/Windows/System32/netstat.exe -ano 2>/dev/null | awk -v p=":${port}" '$2 ~ p && $4 == "LISTENING" {print $5; exit}')"
+      if [[ -n "$win_pid" ]] && /mnt/c/Windows/System32/tasklist.exe /FI "PID eq ${win_pid}" 2>/dev/null | grep -qi Cursor; then
+        echo ""
+        echo "WARNING: Cursor.exe is listening on Windows 127.0.0.1:${port} (broken port forward)."
+        echo "  In Cursor: open the Ports panel and stop/remove forwarded port ${port}."
+        echo "  Then hard-refresh http://localhost:${port}/waitlist — or use the LAN URL above."
+      fi
+    fi
+  fi
   echo "Vite bind host: ${host_arg} (VITE_DEV_SERVER_HOST=${VITE_DEV_SERVER_HOST})"
   if grep -qi microsoft /proc/version 2>/dev/null || [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
-    echo "WSL: open http://localhost:${port} in your Windows browser (WSL localhost forwarding)."
-    echo "If connection refused, add to %UserProfile%\\.wslconfig:"
-    echo "  [wsl2]"
-    echo "  networkingMode=mirrored"
-    echo "Then run: wsl --shutdown"
+    echo "WSL: mirrored networking is in %UserProfile%\\.wslconfig — run wsl --shutdown once if localhost still hangs."
   fi
   echo ""
 }
 
+windows_cursor_listener_pid_for_port() {
+  local port="$1"
+  if ! command -v /mnt/c/Windows/System32/netstat.exe >/dev/null 2>&1; then
+    return 1
+  fi
+  local win_pid
+  win_pid="$(/mnt/c/Windows/System32/netstat.exe -ano 2>/dev/null | awk -v p="127.0.0.1:${port}" '$2 == p && $4 == "LISTENING" {print $5; exit}')"
+  if [[ -z "$win_pid" ]]; then
+    return 1
+  fi
+  if /mnt/c/Windows/System32/tasklist.exe /FI "PID eq ${win_pid}" 2>/dev/null | grep -qi Cursor; then
+    printf '%s\n' "$win_pid"
+    return 0
+  fi
+  return 1
+}
+
+require_windows_localhost_lane_ready() {
+  local port="$1"
+  if ! grep -qi microsoft /proc/version 2>/dev/null && [[ -z "${WSL_DISTRO_NAME:-}" ]]; then
+    return 0
+  fi
+  local cursor_pid
+  local next_port=$((port + 1))
+  cursor_pid="$(windows_cursor_listener_pid_for_port "$port" || true)"
+  if [[ -n "$cursor_pid" ]]; then
+    echo ""
+    echo "ERROR: Windows localhost lane is hijacked before startup."
+    echo "  Cursor.exe (pid ${cursor_pid}) is listening on 127.0.0.1:${port}."
+    echo "  This breaks Windows -> http://localhost:${port} forwarding into WSL."
+    echo ""
+    echo "Fix once, then rerun:"
+    echo "  1) Cursor Ports panel -> stop/remove forwarded ${port} (and ${next_port} if present)."
+    echo "  2) Windows PowerShell: wsl --shutdown"
+    echo "  3) Restart deploy dry-run: pnpm -C frontend run dev:deploy-dry-run"
+    echo ""
+    echo "Temporary bypass (not recommended): DEPLOY_DRY_RUN_ALLOW_CURSOR_PORT_HIJACK=1"
+    echo ""
+    if [[ "${DEPLOY_DRY_RUN_ALLOW_CURSOR_PORT_HIJACK:-0}" != "1" ]]; then
+      exit 1
+    fi
+  fi
+}
+
 VITE_HOST_ARG="$(resolve_vite_host_arg)"
 print_local_dev_access_hints "$DEV_PORT" "$VITE_HOST_ARG"
+require_windows_localhost_lane_ready "$DEV_PORT"
 
 echo "Starting frontend dev server on port ${DEV_PORT} (node $(node -v), VITE_LOW_MEMORY=${VITE_LOW_MEMORY}, VITE_WATCH_POLLING=${VITE_WATCH_POLLING}, DEPLOY_DRY_RUN_KEEP_DB_ENV=${DEPLOY_DRY_RUN_KEEP_DB_ENV}) with DEPLOY_DRY_RUN_LOCAL_RPC_URL=${DEPLOY_DRY_RUN_LOCAL_RPC_URL}, BASE_READ_RPC_URL=${BASE_READ_RPC_URL}, BASE_RPC_URL=${BASE_RPC_URL}, VITE_BASE_RPC=${VITE_BASE_RPC}"
 if port_in_use 5173; then
@@ -564,18 +622,49 @@ cd "$FRONTEND_DIR"
 VITE_BOOTSTRAP_LOG_FILE="${TMPDIR:-/tmp}/4626-deploy-dry-run-vite-bootstrap.log"
 MAX_VITE_EPIPE_RETRIES="${DEPLOY_DRY_RUN_VITE_EPIPE_RETRIES:-3}"
 vite_attempt=0
+VITE_EXIT_CURSOR_HIJACK=86
+
+run_vite_once() {
+  local log_file="$1"
+  : > "$log_file"
+  set +e
+  if grep -qi microsoft /proc/version 2>/dev/null || [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
+    pnpm exec vite --host "$VITE_HOST_ARG" --port "$DEV_PORT" --strictPort > >(tee "$log_file") 2>&1 &
+    local vite_pid=$!
+    if [[ "${DEPLOY_DRY_RUN_ALLOW_CURSOR_PORT_HIJACK:-0}" != "1" ]]; then
+      sleep 2
+      local cursor_pid
+      cursor_pid="$(windows_cursor_listener_pid_for_port "$DEV_PORT" || true)"
+      if [[ -n "$cursor_pid" ]]; then
+        echo "" | tee -a "$log_file"
+        echo "ERROR: Cursor auto-forward re-attached to Windows localhost:${DEV_PORT} (pid ${cursor_pid})." | tee -a "$log_file"
+        echo "Stop/remove forwarded port ${DEV_PORT} in Cursor Ports panel, run 'wsl --shutdown', then restart dry-run." | tee -a "$log_file"
+        kill "$vite_pid" >/dev/null 2>&1 || true
+        wait "$vite_pid" >/dev/null 2>&1 || true
+        set -e
+        return "$VITE_EXIT_CURSOR_HIJACK"
+      fi
+    fi
+    wait "$vite_pid"
+    local vite_exit_code=$?
+    set -e
+    return "$vite_exit_code"
+  fi
+  pnpm exec vite --host "$VITE_HOST_ARG" --port "$DEV_PORT" --strictPort 2>&1 | tee "$log_file"
+  local vite_exit_code=${PIPESTATUS[0]}
+  set -e
+  return "$vite_exit_code"
+}
 
 while true; do
   vite_attempt=$((vite_attempt + 1))
-  : > "$VITE_BOOTSTRAP_LOG_FILE"
-
-  set +e
-  pnpm exec vite --host "$VITE_HOST_ARG" --port "$DEV_PORT" --strictPort 2>&1 | tee "$VITE_BOOTSTRAP_LOG_FILE"
-  vite_exit_code=${PIPESTATUS[0]}
-  set -e
-
-  if [[ "$vite_exit_code" -eq 0 ]]; then
+  if run_vite_once "$VITE_BOOTSTRAP_LOG_FILE"; then
     exit 0
+  fi
+  vite_exit_code=$?
+
+  if [[ "$vite_exit_code" -eq "$VITE_EXIT_CURSOR_HIJACK" ]]; then
+    exit 1
   fi
 
   if [[ "$vite_attempt" -gt "$MAX_VITE_EPIPE_RETRIES" ]]; then

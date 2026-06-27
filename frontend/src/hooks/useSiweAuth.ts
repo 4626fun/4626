@@ -8,6 +8,7 @@ import {
 } from '@/lib/privy/walletHooksContext'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import { isTokenLive } from '@/lib/auth/sessionRepair'
 import { BASE_ACCOUNT_WALLET_LOGIN_LIST } from '@/lib/privy/clientAppearance'
 
 type MeResponse = { address: string } | null
@@ -426,7 +427,7 @@ async function readPrivyAccessTokenWithRetry(
     try {
       const token = await getPrivyAccessToken()
       const normalized = typeof token === 'string' ? token.trim() : ''
-      if (normalized) return normalized
+      if (normalized && isTokenLive(normalized)) return normalized
     } catch {
       // Ignore transient token-read failures and retry below.
     }
@@ -830,15 +831,17 @@ export function useSiweAuth() {
           await connectBaseAccountWalletForSignIn()
         }
 
-        // Check if Privy already has a valid session before calling login().
-        // The `authenticated` flag can lag behind the actual session state,
-        // causing Privy to reject the login() call with "already logged in".
-        let alreadyHasPrivySession = privyAuthenticated
-        if (privyReady && !alreadyHasPrivySession && getPrivyAccessToken) {
+        // Check if Privy already has a live access token before calling login().
+        // `authenticated` can lag or remain true while the underlying token is stale.
+        let alreadyHasPrivySession = false
+        if (privyReady && getPrivyAccessToken) {
           try {
             const existingToken = await getPrivyAccessToken()
-            if (existingToken) alreadyHasPrivySession = true
+            if (isTokenLive(existingToken)) alreadyHasPrivySession = true
           } catch { /* no existing session */ }
+        } else if (privyAuthenticated) {
+          // Fallback when token reader is unavailable in this runtime context.
+          alreadyHasPrivySession = true
         }
 
         if (privyReady && !alreadyHasPrivySession && typeof login === 'function') {
@@ -854,7 +857,7 @@ export function useSiweAuth() {
           if (getPrivyAccessToken) {
             try {
               const tokenAfterLogin = await getPrivyAccessToken()
-              if (tokenAfterLogin) alreadyHasPrivySession = true
+              if (isTokenLive(tokenAfterLogin)) alreadyHasPrivySession = true
             } catch { /* ignore */ }
           }
         }
