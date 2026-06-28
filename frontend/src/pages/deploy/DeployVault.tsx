@@ -1874,9 +1874,10 @@ function DeployVaultBatcher({
               request: async (args: { method: string; params?: any[] }) => {
                 if (args?.method === 'eth_sign') {
                   const p = Array.isArray(args.params) ? args.params : []
-                  const hashCandidate = typeof p[1] === 'string' ? p[1] : ''
-                  const isHash = /^0x[0-9a-fA-F]{64}$/.test(hashCandidate)
-                  if (isHash) {
+                  const hashCandidate =
+                    p.find((value): value is string => typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)) ??
+                    ''
+                  if (hashCandidate) {
                     try {
                       const rawSig = await embeddedProvider.request({
                         method: 'secp256k1_sign',
@@ -5520,9 +5521,10 @@ function DeployVaultBatcher({
                   // secp256k1_sign for raw 32-byte digests (ideal for UserOp hashes).
                   if (args?.method === 'eth_sign') {
                     const p = Array.isArray(args.params) ? args.params : []
-                    const hashCandidate = typeof p[1] === 'string' ? p[1] : ''
-                    const isHash = /^0x[0-9a-fA-F]{64}$/.test(hashCandidate)
-                    if (isHash) {
+                    const hashCandidate =
+                      p.find((value): value is string => typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)) ??
+                      ''
+                    if (hashCandidate) {
                       try {
                         const rawSig = await embeddedProvider.request({
                           method: 'secp256k1_sign',

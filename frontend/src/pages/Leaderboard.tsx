@@ -184,6 +184,7 @@ export function Leaderboard() {
                   <LeaderboardIdentityCell
                     display={formatLeaderboardDisplayName(data.me.display)}
                     cswAddress={data.me.cswAddress}
+                    eoaAddress={data.me.eoaAddress}
                     labelHint={data.me.labelHint}
                     avatarUrl={data.me.avatarUrl}
                     showZoraBadge={data.me.showZoraBadge}

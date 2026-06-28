@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, ArrowRight, AlertCircle } from 'lucide-react'
 import { useLoginWithEmail, usePrivy } from '@privy-io/react-auth'
@@ -11,10 +12,12 @@ import { APP_ORIGIN } from '@/lib/env/host'
 import { bridgePrivySession } from '@/features/waitlist/waitlistHandoff'
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import { WaitlistTwitterLinkPanel } from '@/features/waitlist/WaitlistTwitterLinkPanel'
+import { computeProgress } from '@/features/waitlist/waitlistTiers'
 import { useWaitlistTwitterLink } from '@/features/waitlist/useWaitlistTwitterLink'
 import { readPrivyAccessTokenWithRetries } from '@/features/waitlist/waitlistPrivyToken'
 import { computeAcceptedFromAppAccessStatus } from '@/app/accessShared'
 import { useAccountMe } from '@/hooks/useAccountMe'
+import { fetchAccountTrayPoints } from '@/lib/waitlist/accountTrayPoints'
 
 type WaitlistBootstrapResponse = {
   requiresPrivyAuth: boolean
@@ -349,15 +352,44 @@ export function WaitlistFlow(props: { sectionId?: string }) {
     resendAvailableAt != null && resendAvailableAt > nowMs ? Math.ceil((resendAvailableAt - nowMs) / 1_000) : 0
 
   const { me: accountMe, refresh: refreshAccountMe } = useAccountMe()
+  const [pointsTotal, setPointsTotal] = useState<number | null>(null)
+  const [pointsRefreshKey, setPointsRefreshKey] = useState(0)
   const {
     busy: twitterBusy,
     error: twitterError,
     linkTwitter,
     clearError: clearTwitterError,
-  } = useWaitlistTwitterLink(privy, () => refreshAccountMe())
+  } = useWaitlistTwitterLink(privy, () => {
+    refreshAccountMe()
+    setPointsRefreshKey((key) => key + 1)
+  })
+
+  // Real waitlist points come from the scored snapshot (`/api/accounts/me/points`).
+  // `/api/accounts/me` does not populate `score`, so reading `accountMe.score`
+  // always returned 0 — fetch the snapshot directly once the session exists.
+  const getPointsAccessToken = privy.getAccessToken ?? null
+  useEffect(() => {
+    if (!sessionAddress || !getPointsAccessToken) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const token = await getPointsAccessToken().catch(() => null)
+        if (!token || cancelled) return
+        const snapshot = await fetchAccountTrayPoints(40, token)
+        if (!cancelled) setPointsTotal(snapshot.points.total)
+      } catch {
+        // auth-required or transient — keep any prior value
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [sessionAddress, getPointsAccessToken, pointsRefreshKey])
 
   const appAccepted = computeAcceptedFromAppAccessStatus(accountMe?.appAccessStatus ?? null)
   const twitterLinked = (accountMe?.linkedMethods?.twitter ?? []).length > 0
+  const points = pointsTotal ?? accountMe?.score?.points ?? 0
+  const progress = computeProgress(points)
 
   return (
     <section
@@ -394,14 +426,27 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                       ? 'Open the app to continue.'
                       : "We'll notify you when your spot opens."}
                   </p>
-                  {listCount != null && listCount > 0 ? (
-                    <p className="text-[11px] text-zinc-500">
-                      {listCount.toLocaleString()} creators on the list
-                    </p>
-                  ) : null}
                 </div>
 
-                {!appAccepted && !twitterLinked ? (
+                {!appAccepted ? (
+                  <div className="mt-7 flex flex-col items-center">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-400">
+                      <span
+                        className="size-1.5 rounded-full bg-[rgb(var(--brand-primary))]"
+                        aria-hidden="true"
+                      />
+                      {progress.currentTier.name}
+                    </span>
+                    <div className="mt-3 flex items-baseline gap-1.5">
+                      <span className="bg-gradient-to-b from-white to-zinc-400/90 bg-clip-text text-[40px] font-semibold leading-none tracking-tight tabular-nums text-transparent">
+                        {points.toLocaleString()}
+                      </span>
+                      <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">pts</span>
+                    </div>
+                  </div>
+                ) : null}
+
+                {!appAccepted ? (
                   <WaitlistTwitterLinkPanel
                     linked={twitterLinked}
                     busy={twitterBusy}
@@ -414,6 +459,27 @@ export function WaitlistFlow(props: { sectionId?: string }) {
 
                 {twitterError ? (
                   <p className="mt-3 text-left text-[11px] leading-relaxed text-rose-300">{twitterError}</p>
+                ) : null}
+
+                {!appAccepted ? (
+                  <div className="mt-6 flex items-center justify-center gap-2 text-[11px] text-zinc-500">
+                    {listCount != null && listCount > 0 ? (
+                      <>
+                        <span>{listCount.toLocaleString()} on the list</span>
+                        <span aria-hidden="true">·</span>
+                      </>
+                    ) : null}
+                    <Link
+                      to="/leaderboard"
+                      className="group inline-flex items-center gap-1 font-medium text-zinc-400 transition hover:text-white"
+                    >
+                      See leaderboard
+                      <ArrowRight
+                        className="size-3 transition group-hover:translate-x-0.5"
+                        aria-hidden="true"
+                      />
+                    </Link>
+                  </div>
                 ) : null}
 
                 <div className="mt-6 flex flex-col items-stretch gap-3">

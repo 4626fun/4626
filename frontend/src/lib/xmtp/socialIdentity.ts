@@ -63,7 +63,13 @@ function resolveZoraPresentation(
 ): { name?: string; imageUrl?: string } | null {
   if (!profile) return null
   const handle = String(profile.handle ?? profile.username ?? profile.displayName ?? '').trim()
-  const avatar = String(profile.avatar?.medium ?? profile.avatar?.small ?? '').trim()
+  const avatar = String(
+    profile.avatar?.previewImage?.medium ??
+      profile.avatar?.previewImage?.small ??
+      profile.avatar?.medium ??
+      profile.avatar?.small ??
+      '',
+  ).trim()
   if (!handle && !avatar) return null
   return {
     ...(handle ? { name: handle } : {}),

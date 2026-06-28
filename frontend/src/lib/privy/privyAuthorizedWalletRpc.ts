@@ -4,6 +4,8 @@ import type { Hex } from 'viem'
 import { getPrivyApiUrl, getPrivyAppId } from '@/lib/flags/flags'
 import { refreshPrivyEmbeddedSignerSession } from '@/lib/privy/refreshEmbeddedSignerSession'
 
+const RAW_DIGEST_RE = /^0x[0-9a-fA-F]{64}$/
+
 export type PrivyAuthorizationSignatureGenerator = (input: {
   version: 1
   method: 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -19,13 +21,31 @@ function walletRpcPath(walletId: string): string {
   return `/api/v1/wallets/${walletId}/rpc`
 }
 
+function resolvePrivyWalletRpcBaseUrl(): string {
+  const resolved = (getPrivyApiUrl() ?? 'https://auth.privy.io').replace(/\/$/, '')
+  // Wallet RPC auth-signature verification can fail behind first-party proxy hosts
+  // when upstream verification canonicalizes against auth.privy.io URL forms.
+  // Keep session/bootstrap traffic on custom domains, but pin this signing lane
+  // to the canonical Privy origin whenever we're on the 4626 proxy host family.
+  try {
+    const parsed = new URL(resolved)
+    const host = parsed.hostname.toLowerCase()
+    if (host === 'privy.4626.fun' || host === 'privy.app.4626.fun') {
+      return 'https://auth.privy.io'
+    }
+    return parsed.origin
+  } catch {
+    return 'https://auth.privy.io'
+  }
+}
+
 /** Full request URL for Wallet API RPC — must match fetch target and auth-signature payload. */
 export function resolvePrivyWalletRpcAuthorizationUrl(walletId: string): string {
   const id = String(walletId ?? '').trim()
   if (!id) {
     throw new Error('Privy wallet id is required for wallet RPC authorization URL.')
   }
-  const apiBase = (getPrivyApiUrl() ?? 'https://auth.privy.io').replace(/\/$/, '')
+  const apiBase = resolvePrivyWalletRpcBaseUrl()
   return `${apiBase}${walletRpcPath(id)}`
 }
 
@@ -62,6 +82,9 @@ export async function privyAuthorizedWalletSecp256k1Sign(params: {
   const walletId = String(params.walletId ?? '').trim()
   if (!walletId) {
     throw new Error('Privy wallet id is required for authorized secp256k1 signing.')
+  }
+  if (!RAW_DIGEST_RE.test(String(params.hash ?? ''))) {
+    throw new Error('Privy secp256k1_sign requires a 32-byte digest hash (0x + 64 hex chars).')
   }
 
   if (typeof params.refreshSession === 'function') {

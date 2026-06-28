@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Address } from 'viem'
 import { isAddress } from 'viem'
 
@@ -10,6 +11,8 @@ import { resolveLeaderboardAccountKind } from './leaderboardAccountKind'
 type LeaderboardIdentityCellProps = {
   display: string
   cswAddress: string | null
+  /** External (user-controlled) EOA, used only when there is no canonical CSW. Never the Privy embedded EOA. */
+  eoaAddress?: string | null
   labelHint?: string | null
   avatarUrl?: string | null
   showZoraBadge?: boolean
@@ -36,6 +39,11 @@ function basescanUrl(address: string): string {
   return `https://basescan.org/address/${address}`
 }
 
+/**
+ * Avatar for a leaderboard row. When a real profile image (Zora/basename) is
+ * available it is shown on its own — the deterministic Jazzicon is only used as
+ * a fallback when there is no image or the image fails to load.
+ */
 function LeaderboardAvatar({
   address,
   imageUrl,
@@ -45,34 +53,41 @@ function LeaderboardAvatar({
   imageUrl: string | null | undefined
   size?: number
 }) {
-  if (imageUrl) {
-    return (
-      <span className="relative shrink-0" style={{ width: size, height: size }}>
-        <JazziconAvatar address={address} size={size} className="rounded-full opacity-35" />
+  const [failed, setFailed] = useState(false)
+  const showImage = Boolean(imageUrl) && !failed
+
+  return (
+    <span
+      className="relative shrink-0 overflow-hidden rounded-full"
+      style={{ width: size, height: size }}
+    >
+      {showImage ? (
         <img
-          src={imageUrl}
+          src={imageUrl as string}
           alt=""
           width={size}
           height={size}
-          className="absolute inset-0 rounded-full object-cover"
+          className="block size-full rounded-full object-cover"
           style={{ width: size, height: size }}
-          onError={(event) => {
-            event.currentTarget.style.display = 'none'
-          }}
+          onError={() => setFailed(true)}
         />
-      </span>
-    )
-  }
-  return <JazziconAvatar address={address} size={size} className="shrink-0 rounded-full" />
+      ) : (
+        <JazziconAvatar address={address} size={size} className="rounded-full" />
+      )}
+    </span>
+  )
 }
 
 /**
- * Public waitlist leaderboard identity — basename on CSW when available,
- * otherwise shortened CSW. Never surfaces Privy embedded EOAs or persona labels.
+ * Public waitlist leaderboard identity. Resolution order:
+ * Zora handle → basename → ENS → short canonical CSW → short external EOA →
+ * anonymous member label. Resolves from the canonical CSW when present,
+ * otherwise the user's external EOA. Never surfaces Privy embedded EOAs.
  */
 export function LeaderboardIdentityCell({
   display,
   cswAddress,
+  eoaAddress = null,
   labelHint = null,
   avatarUrl = null,
   showZoraBadge = false,
@@ -81,12 +96,16 @@ export function LeaderboardIdentityCell({
   layout = 'inline',
 }: LeaderboardIdentityCellProps) {
   const csw = cswAddress && isAddress(cswAddress) ? (cswAddress as Address) : null
-  const identity = useChatIdentity(csw, {
+  const eoa = !csw && eoaAddress && isAddress(eoaAddress) ? (eoaAddress as Address) : null
+  // The public address we resolve identity from and link to: canonical CSW
+  // first, otherwise the user's external EOA. Never the embedded EOA.
+  const resolveAddress = csw ?? eoa
+  const identity = useChatIdentity(resolveAddress, {
     fallbackName: display,
     fallbackAvatar: avatarUrl,
   })
 
-  const cswShortLabel = csw ? formatShortAddress(csw) : null
+  const addrShortLabel = resolveAddress ? formatShortAddress(resolveAddress) : null
   const zoraHandle = labelHint && showZoraBadge ? `@${labelHint.replace(/^@/, '')}` : null
   const zoraProfileName = identity.source === 'zora' ? identity.displayName : null
   const basenameOrEns = identity.source !== 'address' ? identity.displayName : null
@@ -94,26 +113,26 @@ export function LeaderboardIdentityCell({
   const ensName =
     basenameOrEns && !baseName && basenameOrEns.toLowerCase().endsWith('.eth') ? basenameOrEns : null
   const primaryLabel =
-    zoraHandle ?? zoraProfileName ?? baseName ?? ensName ?? cswShortLabel ?? (csw ? null : display)
-  const resolvedLabel = primaryLabel ?? cswShortLabel ?? display
+    zoraHandle ?? zoraProfileName ?? baseName ?? ensName ?? addrShortLabel ?? (resolveAddress ? null : display)
+  const resolvedLabel = primaryLabel ?? addrShortLabel ?? display
   const secondaryIdentityLabel =
     zoraHandle && (baseName ?? ensName)
       ? (baseName ?? ensName)
-      : identity.secondary && cswShortLabel && lc(identity.secondary) !== lc(cswShortLabel)
-        ? cswShortLabel
+      : identity.secondary && addrShortLabel && lc(identity.secondary) !== lc(addrShortLabel)
+        ? addrShortLabel
         : null
-  const title = cswAddress ?? resolvedLabel
+  const title = resolveAddress ?? resolvedLabel
   const resolvedAvatar = identity.avatar ?? avatarUrl ?? null
   const monospaceLabel = isHexLabel(resolvedLabel)
   const labelTextClass = monospaceLabel ? 'font-mono' : 'font-medium'
 
-  const labelNode = cswAddress ? (
+  const labelNode = resolveAddress ? (
     <a
-      href={basescanUrl(cswAddress)}
+      href={basescanUrl(resolveAddress)}
       target="_blank"
       rel="noopener noreferrer"
       className={`truncate ${labelTextClass} text-zinc-100 hover:text-brand-300 transition-colors`}
-      title={cswAddress}
+      title={resolveAddress}
     >
       {resolvedLabel}
     </a>
@@ -142,8 +161,8 @@ export function LeaderboardIdentityCell({
       }
     >
       <div className="relative shrink-0">
-        {csw ? (
-          <LeaderboardAvatar address={csw} imageUrl={resolvedAvatar} size={avatarSize} />
+        {resolveAddress ? (
+          <LeaderboardAvatar address={resolveAddress} imageUrl={resolvedAvatar} size={avatarSize} />
         ) : (
           <span
             className="inline-flex shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-xs font-semibold text-zinc-400"
@@ -176,7 +195,7 @@ export function LeaderboardIdentityCell({
                 ? `mt-1 ${secondaryIdentityLabel.startsWith('0x') ? 'font-mono' : 'font-medium'} text-[10px] text-zinc-400 truncate max-w-full`
                 : `mt-0.5 ${secondaryIdentityLabel.startsWith('0x') ? 'font-mono' : 'font-medium'} text-[10px] sm:text-[11px] text-zinc-400 truncate`
             }
-            title={cswAddress ?? undefined}
+            title={resolveAddress ?? undefined}
           >
             {secondaryIdentityLabel}
           </div>

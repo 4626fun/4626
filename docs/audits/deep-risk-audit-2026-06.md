@@ -36,15 +36,15 @@ No new broad audit was run. This report only merges, deduplicates, severity-norm
 
 | Severity | Count | Active launch-blocking |
 |----------|-------|------------------------|
-| P0 | 2 (1 active, 1 remediated) | 1 (`LAUNCH-001`) |
+| P0 | 2 (all remediated) | 0 |
 | P1 | 3 (all remediated) | 0 |
 | P2 | 22 | 0 |
 | P3 | 21 | 0 |
-| **Total findings** | **48** | **1** |
+| **Total findings** | **48** | **0** |
 
-Active P0 blocker: `LAUNCH-001` only. `DRIFT-001` through `DRIFT-004` were remediated and verified clean before this consolidation. `APIAUTH-001` is the highest-risk non-blocking fix-before-launch item.
+Active P0 blocker: none. `LAUNCH-001` and `DRIFT-001` through `DRIFT-004` are remediated and verified clean. `APIAUTH-001` is the highest-risk non-blocking fix-before-launch item.
 
-Final launch recommendation: **unsafe to launch now** because `LAUNCH-001` is an active P0 external DNS/infra blocker. After `LAUNCH-001` passes production prelaunch verification, the codebase is **safe only after listed launch-path fixes** for public launch: at minimum fix/accept `APIAUTH-001`, and schedule the P2/P3 hardening followups.
+Final launch-readiness state: **prelaunch gate is green**. `pnpm -C frontend ops:verify-akita-prelaunch --production` exits 0 with `ALL GATES PASS — platform, Vultr, Vercel chain, and entitlements ready.` Public launch readiness still requires addressing or explicitly accepting listed launch-path fixes (at minimum `APIAUTH-001`) and scheduling P2/P3 hardening followups. Operational caveat: post-phase-1 LZ wire + composer mesh are still required before finalize bridge.
 
 ---
 
@@ -57,7 +57,7 @@ Final launch recommendation: **unsafe to launch now** because `LAUNCH-001` is an
 - **ID**: LAUNCH-001
 - **Severity**: P0
 - **Domain**: Vultr orchestrator + provisioner infrastructure / DNS routing
-- **Launch decision**: block launch — external DNS/infra-owned until production prelaunch probe passes
+- **Launch decision**: remediated — external DNS/infra fixed and production prelaunch probe passes
 - **Exact file path(s)**: `frontend/scripts/verify-akita-prelaunch-readiness.ts`; external DNS records for `orchestrator.4626.fun` and `provisioner.4626.fun`
 - **Function / component / route**: Production prelaunch probe routes: `GET /healthz`, `POST /reconcile`, Vercel `/api/keeper/solana/reconcile` upstream checks
 - **Trigger or precondition**: Run `pnpm -C frontend ops:verify-akita-prelaunch --production` or curl the orchestrator/provisioner health endpoints.
@@ -66,7 +66,8 @@ Final launch recommendation: **unsafe to launch now** because `LAUNCH-001` is an
 - **Severity rationale**: P0 because it is an active launch-blocking infrastructure failure. No repo code defect identified; DNS prevents required production services from being reachable.
 - **Pass/Fail criterion**: PASS when both health endpoints return service JSON (`ok: true` / `payerHealthy: true`) instead of Vercel `index.html`, DNS no longer resolves both service subdomains to Vercel IPs, authenticated orchestrator `/reconcile` probes behave as expected, and `pnpm -C frontend ops:verify-akita-prelaunch --production` exits 0 with no LAUNCH-001 blockers.
 - **Minimal remediation recommendation**: External infra only — no repo-side code patch. Verify the Vultr services locally (`solana-keeper-orchestrator` on port 8789 and `solana-route-provisioner` on port 8788), configure nginx/Caddy/Cloudflare Tunnel so `orchestrator.4626.fun` routes to port 8789 and `provisioner.4626.fun` routes to port 8788, update DNS away from Vercel, verify public `/healthz` returns JSON not `index.html`, then rerun `pnpm -C frontend ops:verify-akita-prelaunch --production`.
-- **Launch impact**: Unsafe to launch until fixed; all 7 failing prelaunch gates trace to this external DNS root cause.
+- **Launch impact**: Remediated. LAUNCH-001 no longer blocks launch readiness; all 7 prior DNS/infra blockers now pass.
+- **Final verification update (2026-06-28)**: `orchestrator.4626.fun` and `provisioner.4626.fun` both resolve to Vultr IP `45.63.52.50`, not Vercel. Orchestrator `/healthz` returns nginx/Vultr JSON `{"ok":true,...}`. Unauthenticated provisioner `/healthz` returns expected JSON `401 Unauthorized`, proving it is no longer Vercel SPA HTML; the authenticated prelaunch probe verifies `payerHealthy=true`. `pnpm -C frontend ops:verify-akita-prelaunch --production` exits 0 with `ALL GATES PASS — platform, Vultr, Vercel chain, and entitlements ready.` `release_target_guard` also passes. Operational caveat: post-phase-1 LZ wire + composer mesh are still required before finalize bridge.
 
 ### DRIFT-001
 
@@ -868,6 +869,9 @@ Additional safe patterns verified during race/UX/API passes: deploy lease acquis
 | 17 | DRIFT-002 grep recheck | 1 | 0 matches = PASS/cleared. | DRIFT-002 |
 | 18 | DRIFT-003 grep recheck | 1 | 0 matches = PASS/cleared at `docs/_internal/4626-connection-methods.md`. | DRIFT-003 |
 | 19 | DRIFT-004 grep recheck | 1 | 0 matches = PASS/cleared at moved `docs/_internal/` files. | DRIFT-004 |
+| 20 | `bash test/current-release-target-guard.sh` | 0 | PASS — `current split Phase-1 release target guard passed`. | release-target guard |
+| 21 | `pnpm -C frontend ops:verify-akita-prelaunch --production` | 1 | `release_target_guard` now PASS; command still FAILS only on LAUNCH-001 external DNS/infra checks. | LAUNCH-001 |
+| 22 | `pnpm -C frontend ops:verify-akita-prelaunch --production` | 0 | PASS — `ALL GATES PASS — platform, Vultr, Vercel chain, and entitlements ready.` All prior LAUNCH-001 blockers pass. | LAUNCH-001 |
 
 Three validation gates are currently failed and tracked as `VG-001` through `VG-003`. They were pre-existing; this consolidation did not modify implementation code.
 
@@ -877,7 +881,7 @@ Three validation gates are currently failed and tracked as `VG-001` through `VG-
 
 ### 1. P0 blockers
 
-- `LAUNCH-001` — active P0 blocker. DNS for `orchestrator.4626.fun` and `provisioner.4626.fun` must point to the real Vultr services and production prelaunch verification must exit 0.
+- `LAUNCH-001` — remediated and verified. DNS for `orchestrator.4626.fun` and `provisioner.4626.fun` now points to `45.63.52.50`, service probes reach nginx/Vultr JSON endpoints, and production prelaunch verification exits 0.
 - `DRIFT-001` — original P0 docs drift is remediated and verified; no active block remains.
 
 ### 2. P1 high-risk fixes
@@ -904,7 +908,7 @@ See the validation table above and `docs/audits/deep-risk-audit-2026-06-validati
 
 ### 6. Final launch recommendation
 
-**Unsafe to launch now** because `LAUNCH-001` is an active P0 production infrastructure blocker. Once `LAUNCH-001` is fixed and `pnpm -C frontend ops:verify-akita-prelaunch --production` exits 0, launch is **safe only after listed launch-path fixes are addressed or explicitly accepted**, especially `APIAUTH-001` for public launch readiness. P2/P3 items are not launch blockers but should be scheduled as pre-launch hardening/backlog according to `docs/audits/deep-risk-audit-2026-06-followups.md`.
+**Prelaunch gate is green**: `LAUNCH-001` is remediated and `pnpm -C frontend ops:verify-akita-prelaunch --production` exits 0. Public launch remains **safe only after listed launch-path fixes are addressed or explicitly accepted**, especially `APIAUTH-001` for public launch readiness. P2/P3 items are not launch blockers but should be scheduled as pre-launch hardening/backlog according to `docs/audits/deep-risk-audit-2026-06-followups.md`. Post-phase-1 LZ wire + composer mesh are still required before finalize bridge.
 
 ---
 

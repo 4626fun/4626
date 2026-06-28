@@ -110,7 +110,7 @@ export function LeaderboardAccountBadge({
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-full bg-vault-bg ring-1 ring-white/15',
+        'inline-flex shrink-0 items-center justify-center rounded-full bg-vault-bg',
         className,
       )}
       style={{ width: size + 4, height: size + 4 }}

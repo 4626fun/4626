@@ -1528,3 +1528,116 @@ LAUNCH-001 is confirmed **external DNS/infra**, not repo-side code. The repo-sid
 6. Rerun `pnpm -C frontend ops:verify-akita-prelaunch --production` and require exit 0 for LAUNCH-001.
 
 No repo implementation code was changed.
+---
+
+## Release target guard remediation verification — 2026-06-27
+
+Mode: release-target guard only. The code-side stale guard false positive was fixed in `test/current-release-target-guard.sh`; no LAUNCH-001 DNS/infra remediation, APIAUTH-001 remediation, P2/P3 remediation, auth/session, deploy UI, or waitlist code changes are part of this validation entry.
+
+### Commands executed
+
+| Command | Exit | Result |
+|---------|------|--------|
+| `bash test/current-release-target-guard.sh` | 0 | PASS — output: `current split Phase-1 release target guard passed`. |
+| `pnpm -C frontend ops:verify-akita-prelaunch --production` | 1 | Expected remaining FAIL because LAUNCH-001 DNS/infra remains unresolved. `release_target_guard` now passes in the platform section. |
+
+### Prelaunch platform evidence
+
+```text
+--- Platform (contracts + tests) ---
+✓ pipe_a_batcher:   ] | } | Pipe A batcher readiness: PASS
+✓ release_target_guard: current split Phase-1 release target guard passed
+✓ hook_mainnet_canonical: Recommended SOLANA_HOOK_IX_SCHEMA: canonical |  | PASS: live program uses relay_entries / settle_fees
+✓ vitest_pipe_a_wiring:       Tests  53 passed (53) |    Start at  15:06:31 |    Duration  1.01s (transform 132ms, setup 28ms, import 580ms, tests 905ms, environment 0ms)
+✓ forge_share_oft_peer: Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 2.34ms (1.08ms CPU time) |  | Ran 1 test suite in 6.54ms (2.34ms CPU time): 6 tests passed, 0 failed, 0 skipped (6 total tests)
+```
+
+### Remaining blockers after release-target guard fix
+
+The full prelaunch command still exits 1, but the remaining blockers are only LAUNCH-001 external DNS/infra checks:
+
+```text
+Blockers: vultr_orchestrator_health, vultr_orchestrator_settle_fees, vultr_orchestrator_winner_relay, vultr_relay_entries_paused, vultr_provisioner_health, vultr_provisioner_dns, vercel_solana_reconcile_chain
+```
+
+Expanded lines:
+
+```text
+✗ vultr_orchestrator_health: HTTP 200
+✗ vultr_orchestrator_settle_fees: HTTP 405: ""
+✗ vultr_orchestrator_winner_relay: HTTP 405: ""
+✗ vultr_relay_entries_paused: Expected action_disabled:relay_entries, got 405 ""
+✗ vultr_provisioner_health: provisioner payerHealthy=undefined
+✗ vultr_provisioner_dns: Provisioner may be pointing at Vercel SPA — fix DNS A-record to Vultr host
+✗ vercel_solana_reconcile_chain: HTTP 200: {"success":true,"data":{"workflow":"solana-orchestrator","action":"settle_fees","checkpointKey":"prelaunch-1782597992554
+```
+
+### Classification update
+
+`release_target_guard` is remediated and verified. It is no longer an active prelaunch blocker. The only active P0 launch blocker remains LAUNCH-001 external DNS/infra.
+---
+
+## LAUNCH-001 final green verification — 2026-06-28
+
+Mode: final LAUNCH-001 production verification after external DNS/infra remediation. No implementation code modified by this documentation update.
+
+### DNS and direct service probes
+
+| Probe | Result |
+|-------|--------|
+| `orchestrator.4626.fun` DNS | resolves to `45.63.52.50` |
+| `provisioner.4626.fun` DNS | resolves to `45.63.52.50` |
+| `curl -sS -D - https://orchestrator.4626.fun/healthz` | HTTP 200 from `Server: nginx/1.24.0 (Ubuntu)`, `Content-Type: application/json`; body `{"ok":true,"now":"2026-06-28T00:02:23.261Z"}` |
+| `curl -sS -D - https://provisioner.4626.fun/healthz` without bearer | HTTP 401 from `Server: nginx/1.24.0 (Ubuntu)`, `Content-Type: application/json`; body `{"ok":false,"service":"solana-route-provisioner","error":"Unauthorized"}` — expected unauthenticated response and proof this is no longer Vercel SPA HTML |
+
+### Production prelaunch verification
+
+Command:
+
+```bash
+pnpm -C frontend ops:verify-akita-prelaunch --production
+```
+
+Exit: `0`
+
+Key output:
+
+```text
+--- Platform (contracts + tests) ---
+✓ pipe_a_batcher:   ] | } | Pipe A batcher readiness: PASS
+✓ release_target_guard: current split Phase-1 release target guard passed
+✓ hook_mainnet_canonical: Recommended SOLANA_HOOK_IX_SCHEMA: canonical |  | PASS: live program uses relay_entries / settle_fees
+✓ vitest_pipe_a_wiring:       Tests  53 passed (53) |    Start at  17:02:36 |    Duration  944ms (transform 132ms, setup 35ms, import 548ms, tests 846ms, environment 0ms)
+✓ forge_share_oft_peer: Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 2.24ms (1.07ms CPU time) |  | Ran 1 test suite in 6.56ms (2.24ms CPU time): 6 tests passed, 0 failed, 0 skipped (6 total tests)
+
+--- Vultr (orchestrator + provisioner via public HTTPS) ---
+✓ vultr_orchestrator_health: HTTP 200
+✓ vultr_orchestrator_settle_fees: settle_fees reconcile OK
+✓ vultr_orchestrator_winner_relay: winner_relay reconcile OK
+✓ vultr_relay_entries_paused: relay_entries correctly disabled until B2 pool live
+✓ vultr_provisioner_health: solana-route-provisioner payerHealthy=true
+✓ vultr_provisioner_dns: DNS routes to Vultr/nginx (Server: nginx/1.24.0 (Ubuntu))
+
+--- Vercel → Vultr control plane ---
+✓ vercel_solana_reconcile_chain: Vercel → orchestrator: status=completed executed=true
+✓ vercel_solana_infra_status: readyForAutoRegistration=true blockers=[]
+
+ALL GATES PASS — platform, Vultr, Vercel chain, and entitlements ready.
+You can launch the deploy session. Post-phase-1 LZ wire + composer mesh still required before finalize bridge.
+```
+
+### LAUNCH-001 blocker status
+
+All prior LAUNCH-001 blockers now pass:
+
+- `vultr_orchestrator_health`
+- `vultr_orchestrator_settle_fees`
+- `vultr_orchestrator_winner_relay`
+- `vultr_relay_entries_paused`
+- `vultr_provisioner_health`
+- `vultr_provisioner_dns`
+- `vercel_solana_reconcile_chain`
+
+`release_target_guard` also passes.
+
+Final launch-readiness state: **prelaunch gate is green**. Caveat: post-phase-1 LZ wire + composer mesh are still required before finalize bridge.
