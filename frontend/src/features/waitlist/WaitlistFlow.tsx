@@ -1,9 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react'
 import { Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { ArrowLeft, ArrowRight, AlertCircle } from 'lucide-react'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { ArrowLeft, ArrowRight, AlertCircle, Check } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { InputOTP } from '@/components/ui/InputOTP'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
+import { cn } from '@/lib/shared/utils'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { APP_ORIGIN } from '@/lib/env/host'
@@ -76,6 +86,109 @@ const WAITLIST_PANEL_STYLE = {
     '0 18px 45px -24px rgba(0, 0, 0, 0.65), 0 0 0 1px rgb(var(--brand-primary) / 0.1), 0 0 28px 4px rgb(var(--brand-primary) / 0.16), 0 0 52px 14px rgb(var(--brand-primary) / 0.1), 0 0 84px 28px rgb(var(--brand-primary) / 0.05)',
 } as const
 
+// Card shell with a slow brand-colored "border beam" that travels around the
+// edge. The opaque card sits on top of the rotating conic layer, leaving only a
+// ~1px animated ring. Honors prefers-reduced-motion (static arc, no rotation).
+function BeamCard({ children, className }: { children: ReactNode; className?: string }) {
+  const reduceMotion = useReducedMotion()
+  return (
+    <div className="relative">
+      <motion.div
+        aria-hidden="true"
+        className="pointer-events-none absolute -inset-px rounded-[1.05rem] opacity-50"
+        style={{
+          background:
+            'conic-gradient(from 0deg, transparent 0deg, rgb(var(--brand-hover)) 55deg, transparent 130deg, transparent 360deg)',
+        }}
+        animate={reduceMotion ? undefined : { rotate: 360 }}
+        transition={reduceMotion ? undefined : { duration: 9, ease: 'linear', repeat: Infinity }}
+      />
+      <div className={cn('relative rounded-2xl', className)} style={WAITLIST_PANEL_STYLE}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+// A single avatar in the social-proof stack. Renders a real member PFP when
+// available, falling back to a brand gradient disc (used for placeholders and
+// when an image fails to load) so the stack always looks intentional.
+function AvatarDot({ src, index }: { src: string | null; index: number }) {
+  const [failed, setFailed] = useState(false)
+  const showImage = Boolean(src) && !failed
+  return (
+    <span
+      className="relative size-6 overflow-hidden rounded-full ring-2 ring-[rgb(var(--vault-bg))]"
+      style={
+        showImage
+          ? undefined
+          : {
+              background: 'linear-gradient(135deg, rgb(var(--brand-hover)), rgb(var(--brand-primary)))',
+              opacity: 1 - index * 0.13,
+            }
+      }
+    >
+      {showImage ? (
+        <img
+          src={src as string}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          className="size-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      ) : null}
+    </span>
+  )
+}
+
+// Overlapping avatar stack. Uses real member PFPs when present, otherwise four
+// brand gradient placeholders (preserves the look when stats have no avatars).
+function JoinedAvatars({ avatars }: { avatars: string[] }) {
+  const slots: (string | null)[] = avatars.length > 0 ? avatars.slice(0, 4) : [null, null, null, null]
+  return (
+    <div className="flex -space-x-2" aria-hidden="true">
+      {slots.map((src, index) => (
+        <AvatarDot key={src ?? `placeholder-${index}`} src={src} index={index} />
+      ))}
+    </div>
+  )
+}
+
+// One-time light sweep across a primary button on hover. Hidden for reduced motion.
+function ButtonSheen() {
+  return (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 ease-out group-hover/btn:translate-x-full motion-reduce:hidden"
+    />
+  )
+}
+
+// Eased count-up for the social-proof number. Reduced motion / disabled paths
+// return the target directly (no animation, no synchronous setState in effect).
+function useCountUp(target: number | null, enabled: boolean): number {
+  const reduceMotion = useReducedMotion()
+  const animate = enabled && !reduceMotion && target != null
+  const [display, setDisplay] = useState(0)
+  useEffect(() => {
+    if (!animate || target == null) return
+    let raf = 0
+    const start = performance.now()
+    const duration = 900
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - start) / duration)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setDisplay(Math.round(target * eased))
+      if (progress < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [animate, target])
+  return animate ? display : (target ?? 0)
+}
+
 export function WaitlistFlow(props: { sectionId?: string }) {
   const sectionId = props.sectionId ?? 'waitlist-page'
   const privy = useSafePrivy()
@@ -91,11 +204,14 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   const [sessionAddress, setSessionAddress] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [listCount, setListCount] = useState<number | null>(null)
+  const [memberAvatars, setMemberAvatars] = useState<string[]>([])
   const [resendAvailableAt, setResendAvailableAt] = useState<number | null>(null)
   const [nowMs, setNowMs] = useState(() => Date.now())
   const signupInFlightRef = useRef(false)
   const emailInputRef = useRef<HTMLInputElement | null>(null)
   const codeInputRef = useRef<HTMLInputElement | null>(null)
+  const autoSubmittedCodeRef = useRef<string | null>(null)
+  const reduceMotion = useReducedMotion()
 
   // Intentional entry from the marketing "Join waitlist" CTA (`/waitlist?join=1`).
   // Used only to auto-focus the inline email field. The email/OTP entry renders
@@ -131,9 +247,15 @@ export function WaitlistFlow(props: { sectionId?: string }) {
       try {
         const res = await apiFetch('/api/waitlist/stats', { headers: { Accept: 'application/json' } })
         if (!res?.ok || cancelled) return
-        const json = (await res.json().catch(() => null)) as ApiEnvelope<{ signedUpCount?: number }> | null
+        const json = (await res.json().catch(() => null)) as ApiEnvelope<{
+          signedUpCount?: number
+          avatars?: string[]
+        }> | null
         if (json?.success && typeof json.data?.signedUpCount === 'number' && json.data.signedUpCount > 0) {
           setListCount(json.data.signedUpCount)
+        }
+        if (json?.success && Array.isArray(json.data?.avatars)) {
+          setMemberAvatars(json.data.avatars.filter((url): url is string => typeof url === 'string' && url.length > 0))
         }
       } catch {
         // fail open — no stats shown
@@ -280,6 +402,20 @@ export function WaitlistFlow(props: { sectionId?: string }) {
     }
   }, [code, loginWithCode, finishJoinAfterPrivyAuth])
 
+  // Auto-submit once all 6 digits are present (one verify per distinct code).
+  // Resets when leaving the code step or when the user edits a digit.
+  useEffect(() => {
+    if (step !== 'code') {
+      autoSubmittedCodeRef.current = null
+      return
+    }
+    const normalized = code.replace(/\s+/g, '')
+    if (normalized.length === 6 && !codeBusy && autoSubmittedCodeRef.current !== normalized) {
+      autoSubmittedCodeRef.current = normalized
+      void handleVerifyCode()
+    }
+  }, [code, step, codeBusy, handleVerifyCode])
+
   const handleEditEmail = useCallback(() => {
     setStep('email')
     setCode('')
@@ -390,6 +526,12 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   const twitterLinked = (accountMe?.linkedMethods?.twitter ?? []).length > 0
   const points = pointsTotal ?? accountMe?.score?.points ?? 0
   const progress = computeProgress(points)
+  const joinedCount = useCountUp(listCount, !sessionAddress)
+  const stepVariants = {
+    initial: reduceMotion ? { opacity: 0 } : { opacity: 0, x: 12 },
+    animate: { opacity: 1, x: 0 },
+    exit: reduceMotion ? { opacity: 0 } : { opacity: 0, x: -12 },
+  }
 
   return (
     <section
@@ -415,8 +557,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
           className="relative w-full space-y-6 sm:space-y-7"
         >
           {sessionAddress ? (
-            <div className="relative">
-              <div className="relative rounded-2xl p-6 text-center sm:p-8" style={WAITLIST_PANEL_STYLE}>
+            <BeamCard className="p-6 text-center sm:p-8">
                 <div className="space-y-3">
                   <h1 className="headline text-2xl leading-tight tracking-[-0.03em] sm:text-3xl">
                     {appAccepted ? "You're approved" : "You're on the list"}
@@ -457,7 +598,8 @@ export function WaitlistFlow(props: { sectionId?: string }) {
 
                 {twitterLinked ? (
                   <WaitlistTwitterEngagementSteps
-                    scopeId={accountMe?.privyUserId ?? (privy.user as { id?: string } | null)?.id ?? null}
+                    getAccessToken={privy.getAccessToken?.bind(privy) ?? null}
+                    onProgressVerified={() => setPointsRefreshKey((key) => key + 1)}
                   />
                 ) : null}
 
@@ -491,12 +633,15 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                     <Button
                       variant="primary"
                       size="lg"
-                      className="w-full transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
+                      className="group/btn relative w-full overflow-hidden transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
                       asChild
                     >
                       <a href={`${APP_ORIGIN}/swap?restorePrivy=1`}>
-                        Enter app
-                        <ArrowRight className="size-4" aria-hidden="true" />
+                        <ButtonSheen />
+                        <span className="relative z-10 inline-flex items-center gap-2">
+                          Enter app
+                          <ArrowRight className="size-4" aria-hidden="true" />
+                        </span>
                       </a>
                     </Button>
                   ) : null}
@@ -509,125 +654,182 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                     Sign out
                   </button>
                 </div>
-              </div>
-            </div>
+            </BeamCard>
           ) : (
             <>
-              <h1 className="headline text-center text-3xl leading-[1.02] tracking-[-0.03em] sm:text-4xl">
-                Join the waitlist
-              </h1>
-
-              <div className="relative">
-                <div className="relative rounded-2xl p-5 sm:p-6" style={WAITLIST_PANEL_STYLE}>
-                  {step === 'email' ? (
-              <form className="space-y-4" onSubmit={handleEmailFormSubmit}>
-                <div className="space-y-2">
-                  <label htmlFor="waitlist-email" className="block text-xs font-medium tracking-wide text-zinc-400">
-                    Email address
-                  </label>
-                  <input
-                    ref={emailInputRef}
-                    id="waitlist-email"
-                    type="email"
-                    autoComplete="email"
-                    inputMode="email"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    enterKeyHint="go"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    placeholder="name@example.com"
-                    disabled={emailBusy || !privy.ready}
-                    className="block h-12 w-full rounded-xl border border-white/10 bg-[rgb(var(--vault-bg))] px-4 text-[15px] text-white outline-none transition placeholder:text-zinc-600 focus:border-[rgb(var(--brand-primary)/0.7)] disabled:opacity-60"
+              <div className="space-y-3 text-center">
+                <span className="mx-auto inline-flex items-center gap-1.5 rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-400">
+                  <span
+                    className="size-1.5 rounded-full bg-[rgb(var(--brand-primary))]"
+                    aria-hidden="true"
                   />
-                </div>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="lg"
-                  className="w-full transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
-                  disabled={emailBusy || !privy.ready || !isValidEmail(email)}
-                >
-                  {emailBusy ? (
-                    <span className="inline-flex items-center gap-2">
-                      <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.9)" />
-                      Sending code…
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-2">
-                      Join with email
-                      <ArrowRight className="size-4" aria-hidden="true" />
-                    </span>
-                  )}
-                </Button>
-                <p className="text-center text-[11px] leading-relaxed text-zinc-500">
-                  {!privy.ready ? 'Preparing secure session…' : 'We’ll send a 6-digit code to your email.'}
+                  Early access
+                </span>
+                <h1 className="headline text-3xl leading-[1.02] tracking-[-0.03em] sm:text-4xl">
+                  Join the waitlist
+                </h1>
+                <p className="mx-auto max-w-xs text-sm leading-relaxed text-zinc-400">
+                  Claim your spot and start earning points.
                 </p>
-              </form>
-            ) : (
-              <form className="space-y-3" onSubmit={handleCodeFormSubmit}>
-                <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-500">
-                  <span className="truncate">
-                    Code sent to <span className="font-mono text-zinc-300">{email.trim()}</span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleEditEmail}
-                    disabled={isBusy}
-                    className="inline-flex shrink-0 items-center gap-1 tracking-wide text-zinc-400 transition hover:text-zinc-200 disabled:opacity-50"
-                  >
-                    <ArrowLeft className="size-3" aria-hidden="true" />
-                    Edit
-                  </button>
-                </div>
-                <label htmlFor="waitlist-code" className="sr-only">
-                  Email verification code
-                </label>
-                <input
-                  ref={codeInputRef}
-                  id="waitlist-code"
-                  type="text"
-                  autoComplete="one-time-code"
-                  inputMode="numeric"
-                  enterKeyHint="go"
-                  value={code}
-                  onChange={(event) => setCode(event.target.value.replace(/\s+/g, '').slice(0, 6))}
-                  placeholder="000000"
-                  disabled={codeBusy}
-                  className="block h-12 w-full rounded-xl border border-white/10 bg-[rgb(var(--vault-bg))] px-4 text-center font-mono text-lg tracking-[0.4em] text-white outline-none transition placeholder:text-zinc-600 focus:border-[rgb(var(--brand-primary)/0.7)] disabled:opacity-60"
-                />
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="lg"
-                  className="w-full transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
-                  disabled={codeBusy || code.replace(/\s+/g, '').length < 6}
-                >
-                  {codeBusy ? (
-                    <span className="inline-flex items-center gap-2">
-                      <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.9)" />
-                      Verifying…
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-2">
-                      Verify &amp; join
-                      <ArrowRight className="size-4" aria-hidden="true" />
-                    </span>
-                  )}
-                </Button>
-                <button
-                  type="button"
-                  onClick={() => void handleSendCode(true)}
-                  disabled={emailBusy || !canResend}
-                  className="block w-full text-center text-[11px] tracking-wide text-zinc-500 transition hover:text-zinc-300 disabled:opacity-50"
-                >
-                  {canResend ? 'Resend code' : `Resend in ${resendSeconds}s`}
-                </button>
-              </form>
-                  )}
-                </div>
               </div>
+
+              <BeamCard className="p-5 sm:p-6">
+                <AnimatePresence mode="wait" initial={false}>
+                  {step === 'email' ? (
+                    <motion.form
+                      key="email"
+                      className="space-y-4"
+                      onSubmit={handleEmailFormSubmit}
+                      variants={stepVariants}
+                      initial="initial"
+                      animate="animate"
+                      exit="exit"
+                      transition={{ duration: 0.25, ease: 'easeOut' }}
+                    >
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="waitlist-email"
+                          className="block text-xs font-medium tracking-wide text-zinc-400"
+                        >
+                          Email address
+                        </label>
+                        <div className="relative">
+                          <input
+                            ref={emailInputRef}
+                            id="waitlist-email"
+                            type="email"
+                            autoComplete="email"
+                            inputMode="email"
+                            autoCapitalize="none"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            enterKeyHint="go"
+                            value={email}
+                            onChange={(event) => setEmail(event.target.value)}
+                            placeholder="name@example.com"
+                            disabled={emailBusy || !privy.ready}
+                            className="block h-12 w-full rounded-xl border border-white/10 bg-[rgb(var(--vault-bg))] px-4 pr-10 text-[15px] text-white outline-none transition placeholder:text-zinc-600 focus:border-[rgb(var(--brand-primary)/0.7)] focus:shadow-[0_0_0_3px_rgb(var(--brand-primary)/0.14)] disabled:opacity-60"
+                          />
+                          <AnimatePresence>
+                            {isValidEmail(email) && !emailBusy ? (
+                              <motion.span
+                                key="email-ok"
+                                initial={reduceMotion ? false : { scale: 0.5, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={reduceMotion ? undefined : { scale: 0.5, opacity: 0 }}
+                                transition={{ duration: 0.15, ease: 'easeOut' }}
+                                className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-emerald-400"
+                                aria-hidden="true"
+                              >
+                                <Check className="size-4" />
+                              </motion.span>
+                            ) : null}
+                          </AnimatePresence>
+                        </div>
+                      </div>
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        size="lg"
+                        className="group/btn relative w-full overflow-hidden transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
+                        disabled={emailBusy || !privy.ready || !isValidEmail(email)}
+                      >
+                        <ButtonSheen />
+                        {emailBusy ? (
+                          <span className="relative z-10 inline-flex items-center gap-2">
+                            <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.9)" />
+                            Sending code…
+                          </span>
+                        ) : (
+                          <span className="relative z-10 inline-flex items-center gap-2">
+                            Join with email
+                            <ArrowRight className="size-4" aria-hidden="true" />
+                          </span>
+                        )}
+                      </Button>
+                      <p className="text-center text-[11px] leading-relaxed text-zinc-500">
+                        {!privy.ready ? 'Preparing secure session…' : 'We’ll send a 6-digit code to your email.'}
+                      </p>
+                    </motion.form>
+                  ) : (
+                    <motion.form
+                      key="code"
+                      className="space-y-3"
+                      onSubmit={handleCodeFormSubmit}
+                      variants={stepVariants}
+                      initial="initial"
+                      animate="animate"
+                      exit="exit"
+                      transition={{ duration: 0.25, ease: 'easeOut' }}
+                    >
+                      <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-500">
+                        <span className="truncate">
+                          Code sent to <span className="font-mono text-zinc-300">{email.trim()}</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleEditEmail}
+                          disabled={isBusy}
+                          className="inline-flex shrink-0 items-center gap-1 tracking-wide text-zinc-400 transition hover:text-zinc-200 disabled:opacity-50"
+                        >
+                          <ArrowLeft className="size-3" aria-hidden="true" />
+                          Edit
+                        </button>
+                      </div>
+                      <label htmlFor="waitlist-code" className="sr-only">
+                        Email verification code
+                      </label>
+                      <InputOTP
+                        ref={codeInputRef}
+                        id="waitlist-code"
+                        value={code}
+                        onChange={setCode}
+                        disabled={codeBusy}
+                      />
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        size="lg"
+                        className="group/btn relative w-full overflow-hidden transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
+                        disabled={codeBusy || code.replace(/\s+/g, '').length < 6}
+                      >
+                        <ButtonSheen />
+                        {codeBusy ? (
+                          <span className="relative z-10 inline-flex items-center gap-2">
+                            <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.9)" />
+                            Verifying…
+                          </span>
+                        ) : (
+                          <span className="relative z-10 inline-flex items-center gap-2">
+                            Verify &amp; join
+                            <ArrowRight className="size-4" aria-hidden="true" />
+                          </span>
+                        )}
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => void handleSendCode(true)}
+                        disabled={emailBusy || !canResend}
+                        className="block w-full text-center text-[11px] tracking-wide text-zinc-500 transition hover:text-zinc-300 disabled:opacity-50"
+                      >
+                        {canResend ? 'Resend code' : `Resend in ${resendSeconds}s`}
+                      </button>
+                    </motion.form>
+                  )}
+                </AnimatePresence>
+              </BeamCard>
+
+              {listCount != null && listCount > 0 ? (
+                <div className="flex items-center justify-center gap-2.5">
+                  <JoinedAvatars avatars={memberAvatars} />
+                  <p className="text-[11px] text-zinc-400">
+                    <span className="font-semibold tabular-nums text-zinc-200">
+                      {joinedCount.toLocaleString()}
+                    </span>{' '}
+                    already joined
+                  </p>
+                </div>
+              ) : null}
             </>
           )}
 

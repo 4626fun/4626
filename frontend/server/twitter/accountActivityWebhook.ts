@@ -1,4 +1,7 @@
+import { getDb } from '@4626/server-core'
+
 import { logger } from '../_lib/infra/logger.js'
+import { handleWaitlistTwitterAccountActivityPayload } from '../_lib/onboarding/waitlistTwitterEngagementServer.js'
 
 type AccountActivityPayload = {
   follow_events?: unknown[]
@@ -27,6 +30,18 @@ export async function handleAccountActivityWebhookPayload(payload: unknown): Pro
     logger.info('[x/account-activity] webhook received with no engagement events', summary)
     return
   }
+
   logger.info('[x/account-activity] webhook engagement events', summary)
-  // Waitlist step verification will match Privy-linked X ids to these events in a follow-up.
+
+  const db = await getDb()
+  if (!db) {
+    logger.warn('[x/account-activity] webhook engagement ignored — DB unavailable')
+    return
+  }
+
+  try {
+    await handleWaitlistTwitterAccountActivityPayload(db as any, payload)
+  } catch (error) {
+    logger.error('[x/account-activity] waitlist engagement processing failed', error)
+  }
 }

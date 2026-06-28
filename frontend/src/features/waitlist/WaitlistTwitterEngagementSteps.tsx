@@ -1,7 +1,9 @@
-import { useCallback, useMemo, useState } from 'react'
-import { ArrowRight, Check, Heart, MessageCircle, Repeat2, UserPlus } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowRight, Check, Heart, Loader2, MessageCircle, Repeat2, UserPlus } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
+import { apiFetch } from '@/lib/api/apiBase'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import {
   WAITLIST_X_ENGAGEMENT_COMMENT,
   WAITLIST_X_ENGAGEMENT_STEPS,
@@ -9,21 +11,30 @@ import {
   buildWaitlistTwitterFollowIntentUrl,
   buildWaitlistTwitterLikeIntentUrl,
   buildWaitlistTwitterRetweetIntentUrl,
-  markWaitlistTwitterEngagementStepComplete,
+  emptyWaitlistTwitterEngagementProgress,
   openWaitlistTwitterIntent,
-  readWaitlistTwitterEngagementProgress,
   resolveActiveWaitlistTwitterEngagementStep,
   resolveWaitlistTwitterEngagementStepCopy,
   resolveWaitlistTwitterEngagementTweetId,
   resolveWaitlistTwitterFollowHandle,
   waitlistTwitterEngagementStepIndex,
+  type WaitlistTwitterEngagementProgress,
   type WaitlistTwitterEngagementStepId,
 } from '@/features/waitlist/waitlistTwitterEngagement'
 
 type WaitlistTwitterEngagementStepsProps = {
-  /** Privy user id (or profile scope) so progress survives reloads per account. */
-  scopeId: string | null | undefined
+  getAccessToken: (() => Promise<string | null>) | null | undefined
+  onProgressVerified?: () => void
 }
+
+type WaitlistXEngagementApiResponse = {
+  campaignKey: string
+  progress: WaitlistTwitterEngagementProgress
+  activeStep: WaitlistTwitterEngagementStepId | 'complete'
+  verified: boolean
+}
+
+const POLL_INTERVAL_MS = 3_000
 
 function StepIcon(props: { step: WaitlistTwitterEngagementStepId; className?: string }) {
   const { step, className } = props
@@ -33,20 +44,76 @@ function StepIcon(props: { step: WaitlistTwitterEngagementStepId; className?: st
   return <MessageCircle className={className} aria-hidden="true" />
 }
 
+async function fetchVerifiedEngagementProgress(
+  getAccessToken: (() => Promise<string | null>) | null | undefined,
+): Promise<WaitlistTwitterEngagementProgress | null> {
+  const token = await getAccessToken?.().catch(() => null)
+  if (!token) return null
+  const response = await apiFetch('/api/waitlist/x-engagement', {
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+  }).catch(() => null)
+  if (!response?.ok) return null
+  const payload = (await response.json().catch(() => null)) as ApiEnvelope<WaitlistXEngagementApiResponse> | null
+  if (!payload?.success || !payload.data?.progress) return null
+  return payload.data.progress
+}
+
 export function WaitlistTwitterEngagementSteps(props: WaitlistTwitterEngagementStepsProps) {
-  const { scopeId } = props
+  const { getAccessToken, onProgressVerified } = props
   const followHandle = resolveWaitlistTwitterFollowHandle()
   const tweetId = resolveWaitlistTwitterEngagementTweetId()
 
-  const [progress, setProgress] = useState(() => readWaitlistTwitterEngagementProgress(scopeId))
+  const [progress, setProgress] = useState<WaitlistTwitterEngagementProgress>(
+    emptyWaitlistTwitterEngagementProgress(),
+  )
+  const [awaitingVerification, setAwaitingVerification] = useState(false)
+  const [syncError, setSyncError] = useState<string | null>(null)
+  const lastCompleteRef = useRef(false)
 
-  // Re-read persisted progress when the account scope (or campaign config) changes.
-  const progressKey = `${scopeId ?? ''}::${followHandle}::${tweetId ?? ''}`
-  const [lastProgressKey, setLastProgressKey] = useState(progressKey)
-  if (lastProgressKey !== progressKey) {
-    setLastProgressKey(progressKey)
-    setProgress(readWaitlistTwitterEngagementProgress(scopeId))
-  }
+  const applyProgressUpdate = useCallback(
+    (next: WaitlistTwitterEngagementProgress) => {
+      setProgress(next)
+      setSyncError(null)
+      const active = resolveActiveWaitlistTwitterEngagementStep(next)
+      if (active === 'complete' && !lastCompleteRef.current) {
+        lastCompleteRef.current = true
+        onProgressVerified?.()
+      }
+      if (active === 'complete') {
+        setAwaitingVerification(false)
+      }
+    },
+    [onProgressVerified],
+  )
+
+  const refreshProgress = useCallback(async () => {
+    const next = await fetchVerifiedEngagementProgress(getAccessToken)
+    if (!next) return
+    applyProgressUpdate(next)
+  }, [applyProgressUpdate, getAccessToken])
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const next = await fetchVerifiedEngagementProgress(getAccessToken)
+      if (!next || cancelled) return
+      applyProgressUpdate(next)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [applyProgressUpdate, getAccessToken])
+
+  useEffect(() => {
+    if (!awaitingVerification) return
+    const timer = window.setInterval(() => {
+      void refreshProgress()
+    }, POLL_INTERVAL_MS)
+    return () => window.clearInterval(timer)
+  }, [awaitingVerification, refreshProgress])
 
   const activeStep = useMemo(() => resolveActiveWaitlistTwitterEngagementStep(progress), [progress])
 
@@ -69,11 +136,14 @@ export function WaitlistTwitterEngagementSteps(props: WaitlistTwitterEngagementS
     [followHandle, tweetId],
   )
 
-  const completeStep = useCallback(
+  const handleOpenStep = useCallback(
     (step: WaitlistTwitterEngagementStepId) => {
-      setProgress(markWaitlistTwitterEngagementStepComplete(scopeId, step))
+      setSyncError(null)
+      setAwaitingVerification(true)
+      openStepIntent(step)
+      void refreshProgress()
     },
-    [scopeId],
+    [openStepIntent, refreshProgress],
   )
 
   if (activeStep === 'complete') {
@@ -86,7 +156,7 @@ export function WaitlistTwitterEngagementSteps(props: WaitlistTwitterEngagementS
           <Check className="size-3.5" aria-hidden="true" />
         </span>
         <span className="min-w-0 text-[12px] leading-relaxed text-emerald-100/90">
-          Thanks — you completed all {WAITLIST_X_ENGAGEMENT_STEPS.length} X steps.
+          Thanks — X verified all {WAITLIST_X_ENGAGEMENT_STEPS.length} steps.
         </span>
       </div>
     )
@@ -124,7 +194,9 @@ export function WaitlistTwitterEngagementSteps(props: WaitlistTwitterEngagementS
         </span>
         <div className="min-w-0 flex-1 space-y-1">
           <p className="text-sm font-semibold text-white">{copy.title}</p>
-          <p className="text-[11px] leading-relaxed text-zinc-400">{copy.description}</p>
+          <p className="text-[11px] leading-relaxed text-zinc-400">
+            {copy.description} We verify each step automatically through X.
+          </p>
         </div>
       </div>
 
@@ -141,19 +213,22 @@ export function WaitlistTwitterEngagementSteps(props: WaitlistTwitterEngagementS
           variant="primary"
           size="sm"
           className="w-full sm:w-auto"
-          onClick={() => openStepIntent(activeStep)}
+          onClick={() => handleOpenStep(activeStep)}
         >
           {copy.actionLabel}
           <ArrowRight className="size-3.5" aria-hidden="true" />
         </Button>
-        <button
-          type="button"
-          className="text-[11px] font-medium text-zinc-400 transition hover:text-zinc-200"
-          onClick={() => completeStep(activeStep)}
-        >
-          {copy.doneLabel}
-        </button>
+        {awaitingVerification ? (
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400">
+            <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+            Waiting for X to confirm…
+          </span>
+        ) : null}
       </div>
+
+      {syncError ? (
+        <p className="text-[11px] leading-relaxed text-rose-300">{syncError}</p>
+      ) : null}
     </div>
   )
 }

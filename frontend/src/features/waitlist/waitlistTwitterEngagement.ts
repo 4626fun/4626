@@ -17,11 +17,9 @@ export const WAITLIST_X_FOLLOW_HANDLE = '4626fun'
 export const WAITLIST_X_ENGAGEMENT_TWEET_URL =
   'https://x.com/wenakita/status/2031118597704265790'
 
-const STORAGE_PREFIX = 'cv:waitlist-x-engagement'
-
 export type WaitlistTwitterEngagementProgress = Record<WaitlistTwitterEngagementStepId, boolean>
 
-function emptyProgress(): WaitlistTwitterEngagementProgress {
+export function emptyWaitlistTwitterEngagementProgress(): WaitlistTwitterEngagementProgress {
   return { follow: false, like: false, retweet: false, comment: false }
 }
 
@@ -85,53 +83,6 @@ export function buildWaitlistTwitterCommentIntentUrl(tweetId: string, text: stri
 
 export function buildWaitlistTwitterStatusUrl(tweetId: string): string {
   return `https://x.com/i/status/${tweetId}`
-}
-
-export function readWaitlistTwitterEngagementStorageKey(scopeId: string | null | undefined): string {
-  const scope = String(scopeId ?? '').trim() || 'anonymous'
-  const followHandle = resolveWaitlistTwitterFollowHandle()
-  const tweetId = resolveWaitlistTwitterEngagementTweetId()
-  return `${STORAGE_PREFIX}:${scope}:${followHandle}:${tweetId}`
-}
-
-export function readWaitlistTwitterEngagementProgress(
-  scopeId: string | null | undefined,
-): WaitlistTwitterEngagementProgress {
-  if (typeof localStorage === 'undefined') return emptyProgress()
-  try {
-    const raw = localStorage.getItem(readWaitlistTwitterEngagementStorageKey(scopeId))
-    if (!raw) return emptyProgress()
-    const parsed = JSON.parse(raw) as Partial<WaitlistTwitterEngagementProgress>
-    return {
-      follow: parsed.follow === true,
-      like: parsed.like === true,
-      retweet: parsed.retweet === true,
-      comment: parsed.comment === true,
-    }
-  } catch {
-    return emptyProgress()
-  }
-}
-
-export function writeWaitlistTwitterEngagementProgress(
-  scopeId: string | null | undefined,
-  progress: WaitlistTwitterEngagementProgress,
-): void {
-  if (typeof localStorage === 'undefined') return
-  try {
-    localStorage.setItem(readWaitlistTwitterEngagementStorageKey(scopeId), JSON.stringify(progress))
-  } catch {
-    // ignore quota / private mode
-  }
-}
-
-export function markWaitlistTwitterEngagementStepComplete(
-  scopeId: string | null | undefined,
-  step: WaitlistTwitterEngagementStepId,
-): WaitlistTwitterEngagementProgress {
-  const next = { ...readWaitlistTwitterEngagementProgress(scopeId), [step]: true }
-  writeWaitlistTwitterEngagementProgress(scopeId, next)
-  return next
 }
 
 export function resolveActiveWaitlistTwitterEngagementStep(

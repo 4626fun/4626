@@ -265,6 +265,19 @@ function valuesForProviderFromPrivy(user: PrivyUserLike, provider: AccountLinkPr
     return out
   }
 
+  if (provider === 'twitter') {
+    for (const account of linked) {
+      const type = normalizeLower((account as any)?.type)
+      if (!type.includes('twitter') && type !== 'x') continue
+      push(normalizeString((account as any)?.subject))
+      push(normalizeString((account as any)?.userId ?? (account as any)?.user_id))
+      const username = normalizeString((account as any)?.username)
+      if (username) push(username.replace(/^@/, ''))
+      push(readAccountIdentifier(account))
+    }
+    return out
+  }
+
   const typeMatchers: Record<Exclude<AccountLinkProvider, 'external_eoa' | 'email' | 'zora_cross_app'>, (type: string) => boolean> = {
     google: (type) => type.includes('google'),
     apple: (type) => type.includes('apple'),

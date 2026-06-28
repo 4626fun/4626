@@ -11,6 +11,7 @@ export const waitlistRouteLoaders: ApiRouteLoaders = {
   'points-activity': () => import('./waitlist/_pointsActivity.js'),
   'referrer': () => import('./waitlist/_referrer.js'),
   'stats': () => import('./waitlist/_stats.js'),
+  'x-engagement': () => import('./waitlist/_xEngagement.js'),
   'xmtp-join': () => import('./waitlist/_xmtpJoin.js'),
   'xmtp-resync': () => import('./waitlist/_xmtpResync.js'),
   'xmtp-status': () => import('./waitlist/_xmtpStatus.js'),

@@ -44,7 +44,9 @@ export function weightedWaitlistPoints(source: unknown, amount: unknown): number
   ) {
     return Math.round(normalizedAmount * 0.6)
   }
-  if (normalizedSource.startsWith('social_')) return Math.round(normalizedAmount * 0.5)
+  if (normalizedSource.startsWith('social_') || normalizedSource.startsWith('x_engagement_')) {
+    return Math.round(normalizedAmount * 0.5)
+  }
   if (normalizedSource.startsWith('bonus_') || normalizedSource === 'task') return Math.round(normalizedAmount * 0.3)
   if (
     normalizedSource === 'agent_feedback' ||
@@ -89,7 +91,9 @@ export function weightedAmoeEligiblePoints(source: unknown, amount: unknown): nu
     return normalizedAmount
   }
   if (normalizedSource === 'resolve_csw') return Math.round(normalizedAmount * 0.6)
-  if (normalizedSource.startsWith('social_')) return Math.round(normalizedAmount * 0.5)
+  if (normalizedSource.startsWith('social_') || normalizedSource.startsWith('x_engagement_')) {
+    return Math.round(normalizedAmount * 0.5)
+  }
   if (normalizedSource.startsWith('bonus_') || normalizedSource === 'task') {
     return Math.round(normalizedAmount * 0.3)
   }
@@ -122,7 +126,7 @@ export const WAITLIST_POINTS_WEIGHT_CASE_SQL = `
     WHEN source IN ('amoe_entry_spend', 'amoe_twitter_daily', 'amoe_xmtp_daily', 'amoe_entry_refund') THEN 0
     WHEN source IN ('waitlist_signup', 'referral_passthrough', 'csw_link', 'amoe_checkin') THEN amount * 1.00
     WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
-    WHEN source LIKE 'social_%' THEN amount * 0.50
+    WHEN source LIKE 'social_%' OR source LIKE 'x_engagement_%' THEN amount * 0.50
     WHEN source LIKE 'bonus_%' OR source = 'task' THEN amount * 0.30
     WHEN source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN amount * 0.40
     WHEN source IN (
@@ -181,7 +185,7 @@ export async function readWaitlistPointsBreakdown(
                 WHEN source IN ('amoe_entry_spend', 'amoe_twitter_daily', 'amoe_xmtp_daily', 'amoe_entry_refund') THEN 0
                 WHEN source IN ('waitlist_signup', 'referral_passthrough', 'csw_link', 'amoe_checkin') THEN amount * 1.00
                 WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
-                WHEN source LIKE 'social_%' THEN amount * 0.50
+                WHEN source LIKE 'social_%' OR source LIKE 'x_engagement_%' THEN amount * 0.50
                 WHEN source LIKE 'bonus_%' OR source = 'task' THEN amount * 0.30
                 WHEN source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN amount * 0.40
                 WHEN source IN (
@@ -219,7 +223,7 @@ export async function readWaitlistPointsBreakdown(
           ELSE 0
         END
       )), 0)::int AS csw,
-      COALESCE(ROUND(SUM(CASE WHEN source LIKE 'social_%' THEN amount * 0.50 ELSE 0 END)), 0)::int AS social,
+      COALESCE(ROUND(SUM(CASE WHEN source LIKE 'social_%' OR source LIKE 'x_engagement_%' THEN amount * 0.50 ELSE 0 END)), 0)::int AS social,
       COALESCE(ROUND(SUM(CASE WHEN source = 'amoe_checkin' THEN amount * 1.00 ELSE 0 END)), 0)::int AS checkins,
       COALESCE(ROUND(SUM(CASE WHEN source LIKE 'bonus_%' THEN amount * 0.30 ELSE 0 END)), 0)::int AS bonus,
       COALESCE(ROUND(SUM(
@@ -277,6 +281,10 @@ export function labelForPointsSource(source: string): string {
   if (normalized === 'link_google') return 'Google linked'
   if (normalized === 'link_apple') return 'Apple linked'
   if (normalized === 'link_twitter') return 'X linked'
+  if (normalized === 'x_engagement_follow') return 'Followed @4626fun on X'
+  if (normalized === 'x_engagement_like') return 'Liked campaign post on X'
+  if (normalized === 'x_engagement_repost') return 'Reposted campaign post on X'
+  if (normalized === 'x_engagement_comment') return 'Commented on campaign post on X'
   if (normalized === 'link_telegram') return 'Telegram linked'
   if (normalized === 'link_tiktok') return 'TikTok linked'
   if (normalized === 'link_external_eoa') return 'Wallet linked'

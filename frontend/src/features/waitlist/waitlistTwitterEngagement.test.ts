@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import {
   WAITLIST_X_ENGAGEMENT_COMMENT,
@@ -8,35 +8,14 @@ import {
   buildWaitlistTwitterFollowIntentUrl,
   buildWaitlistTwitterLikeIntentUrl,
   buildWaitlistTwitterRetweetIntentUrl,
-  markWaitlistTwitterEngagementStepComplete,
+  emptyWaitlistTwitterEngagementProgress,
   parseTweetIdFromUrl,
-  readWaitlistTwitterEngagementProgress,
   resolveActiveWaitlistTwitterEngagementStep,
   resolveWaitlistTwitterEngagementStepCopy,
   resolveWaitlistTwitterEngagementTweetId,
   resolveWaitlistTwitterEngagementTweetUrl,
   resolveWaitlistTwitterFollowHandle,
 } from './waitlistTwitterEngagement'
-
-beforeEach(() => {
-  const storage = new Map<string, string>()
-  vi.stubGlobal('localStorage', {
-    getItem: (key: string) => storage.get(key) ?? null,
-    setItem: (key: string, value: string) => {
-      storage.set(key, value)
-    },
-    removeItem: (key: string) => {
-      storage.delete(key)
-    },
-    clear: () => {
-      storage.clear()
-    },
-  })
-})
-
-afterEach(() => {
-  vi.unstubAllGlobals()
-})
 
 describe('waitlistTwitterEngagement', () => {
   it('uses repo constants for follow handle and campaign post', () => {
@@ -68,27 +47,34 @@ describe('waitlistTwitterEngagement', () => {
     )
   })
 
-  it('advances one engagement step at a time', () => {
-    expect(resolveActiveWaitlistTwitterEngagementStep(readWaitlistTwitterEngagementProgress('user-a'))).toBe('follow')
+  it('advances one engagement step at a time from verified progress', () => {
+    expect(resolveActiveWaitlistTwitterEngagementStep(emptyWaitlistTwitterEngagementProgress())).toBe('follow')
 
-    markWaitlistTwitterEngagementStepComplete('user-a', 'follow')
-    expect(resolveActiveWaitlistTwitterEngagementStep(readWaitlistTwitterEngagementProgress('user-a'))).toBe('like')
+    expect(
+      resolveActiveWaitlistTwitterEngagementStep({
+        follow: true,
+        like: false,
+        retweet: false,
+        comment: false,
+      }),
+    ).toBe('like')
 
-    markWaitlistTwitterEngagementStepComplete('user-a', 'like')
-    expect(resolveActiveWaitlistTwitterEngagementStep(readWaitlistTwitterEngagementProgress('user-a'))).toBe('retweet')
+    expect(
+      resolveActiveWaitlistTwitterEngagementStep({
+        follow: true,
+        like: true,
+        retweet: true,
+        comment: false,
+      }),
+    ).toBe('comment')
 
-    markWaitlistTwitterEngagementStepComplete('user-a', 'retweet')
-    expect(resolveActiveWaitlistTwitterEngagementStep(readWaitlistTwitterEngagementProgress('user-a'))).toBe('comment')
-
-    markWaitlistTwitterEngagementStepComplete('user-a', 'comment')
-    expect(readWaitlistTwitterEngagementProgress('user-a')).toEqual({
-      follow: true,
-      like: true,
-      retweet: true,
-      comment: true,
-    })
-    expect(resolveActiveWaitlistTwitterEngagementStep(readWaitlistTwitterEngagementProgress('user-a'))).toBe(
-      'complete',
-    )
+    expect(
+      resolveActiveWaitlistTwitterEngagementStep({
+        follow: true,
+        like: true,
+        retweet: true,
+        comment: true,
+      }),
+    ).toBe('complete')
   })
 })

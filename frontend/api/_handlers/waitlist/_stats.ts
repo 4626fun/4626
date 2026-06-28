@@ -12,6 +12,8 @@ type WaitlistStatsResponse = {
   signedUpCount: number
   capacity: number
   spotsRemaining: number
+  /** A few recent member profile pictures (Zora/basename), for social-proof avatar stacks. */
+  avatars: string[]
 }
 
 function emptyStats(): WaitlistStatsResponse {
@@ -19,6 +21,71 @@ function emptyStats(): WaitlistStatsResponse {
     signedUpCount: 0,
     capacity: 0,
     spotsRemaining: 0,
+    avatars: [],
+  }
+}
+
+// How many recent profiles to scan for usable avatars, and how many to surface.
+const RECENT_PROFILE_SCAN = 300
+const AVATAR_FETCH_LIMIT = 6
+
+/**
+ * Recent waitlist members that have a real profile image. Mirrors the
+ * leaderboard avatar resolution (Zora basename avatar → Zora avatar →
+ * profile avatar → preprov Farcaster pfp) but exposes the image URL only —
+ * no address, handle, or identity. Fails open (returns []) so a missing
+ * `zora_profiles` table or transient error never breaks the count.
+ */
+async function fetchRecentMemberAvatars(db: any): Promise<string[]> {
+  try {
+    const result = await db.sql`
+      WITH recent AS (
+        SELECT
+          p.id,
+          COALESCE(
+            NULLIF(TRIM(zp_av.basename_avatar), ''),
+            NULLIF(TRIM(zp_av.avatar_image_url), ''),
+            NULLIF(TRIM(p.avatar_url), ''),
+            NULLIF(TRIM(p.preprov_farcaster_pfp), '')
+          ) AS avatar_url
+        FROM profiles p
+        LEFT JOIN LATERAL (
+          SELECT zp.basename_avatar, zp.avatar_image_url
+          FROM zora_profiles zp
+          WHERE (
+            NULLIF(TRIM(p.primary_embedded_eoa), '') IS NOT NULL
+            AND (
+              lower(zp.privy_wallet_address) = lower(TRIM(p.primary_embedded_eoa))
+              OR lower(zp.signing_eoa) = lower(TRIM(p.primary_embedded_eoa))
+            )
+          )
+          OR (
+            NULLIF(TRIM(p.primary_wallet), '') IS NOT NULL
+            AND lower(zp.primary_wallet) = lower(TRIM(p.primary_wallet))
+          )
+          OR (
+            NULLIF(TRIM(p.csw_address), '') IS NOT NULL
+            AND lower(zp.smart_wallet_address) = lower(TRIM(p.csw_address))
+          )
+          ORDER BY zp.last_refreshed_at DESC NULLS LAST
+          LIMIT 1
+        ) zp_av ON true
+        WHERE p.email IS NOT NULL
+          AND p.merged_into_profile_id IS NULL
+        ORDER BY p.id DESC
+        LIMIT ${RECENT_PROFILE_SCAN}
+      )
+      SELECT avatar_url
+      FROM recent
+      WHERE avatar_url IS NOT NULL
+      LIMIT ${AVATAR_FETCH_LIMIT};
+    `
+    const rows = Array.isArray(result?.rows) ? result.rows : []
+    return rows
+      .map((row: any) => (typeof row?.avatar_url === 'string' ? row.avatar_url.trim() : ''))
+      .filter((url: string) => /^https?:\/\//i.test(url))
+  } catch {
+    return []
   }
 }
 
@@ -81,11 +148,13 @@ export default async function handler(req: any, res: any) {
     const signedUpCount = Number.isFinite(signedUpCountRaw) ? Math.max(0, Math.floor(signedUpCountRaw)) : 0
     const capacity = resolveCapacity(signedUpCount)
     const spotsRemaining = Math.max(0, capacity - signedUpCount)
+    const avatars = await fetchRecentMemberAvatars(db)
 
     const data: WaitlistStatsResponse = {
       signedUpCount,
       capacity,
       spotsRemaining,
+      avatars,
     }
 
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<WaitlistStatsResponse>)
