@@ -74,6 +74,13 @@ const BATCHER_ABI = [
 const PHASE3_HELPER_IMMUTABLES_ABI = [
   {
     type: 'function',
+    name: 'batcher',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
     name: 'protocolAutomation',
     stateMutability: 'view',
     inputs: [],
@@ -228,7 +235,14 @@ function deployPhase3HelperViaForge(params: {
 export async function readPhase3HelperBytecodeAligned(params: {
   publicClient: ReadContractClient
   batcher: Address
-}): Promise<{ aligned: boolean; phase3Helper: Address; localDeployedBytecode: string; onChainBytecode: string }> {
+}): Promise<{
+  aligned: boolean
+  batcherImmutableAligned: boolean
+  phase3Helper: Address
+  wiredBatcher: Address
+  localDeployedBytecode: string
+  onChainBytecode: string
+}> {
   const batcher = getAddress(params.batcher)
   const phase3Helper = getAddress(
     (await params.publicClient.readContract({
@@ -237,17 +251,28 @@ export async function readPhase3HelperBytecodeAligned(params: {
       functionName: 'phase3Helper',
     })) as Address,
   )
+  const wiredBatcher = getAddress(
+    (await params.publicClient.readContract({
+      address: phase3Helper,
+      abi: PHASE3_HELPER_IMMUTABLES_ABI,
+      functionName: 'batcher',
+    })) as Address,
+  )
   const { deployedBytecode: localDeployedBytecode, immutableReferences } = readLocalPhase3HelperArtifact()
   const onChainBytecode = normalizeRuntimeBytecode(
     await params.publicClient.getBytecode({ address: phase3Helper }),
   )
+  const bytecodeAligned = comparePhase3HelperRuntimeBytecode({
+    onChainBytecode,
+    localDeployedBytecode,
+    immutableReferences,
+  })
+  const batcherImmutableAligned = wiredBatcher.toLowerCase() === batcher.toLowerCase()
   return {
-    aligned: comparePhase3HelperRuntimeBytecode({
-      onChainBytecode,
-      localDeployedBytecode,
-      immutableReferences,
-    }),
+    aligned: bytecodeAligned && batcherImmutableAligned,
+    batcherImmutableAligned,
     phase3Helper,
+    wiredBatcher,
     localDeployedBytecode,
     onChainBytecode,
   }

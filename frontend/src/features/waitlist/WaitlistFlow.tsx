@@ -86,6 +86,14 @@ const WAITLIST_PANEL_STYLE = {
     '0 18px 45px -24px rgba(0, 0, 0, 0.65), 0 0 0 1px rgb(var(--brand-primary) / 0.1), 0 0 28px 4px rgb(var(--brand-primary) / 0.16), 0 0 52px 14px rgb(var(--brand-primary) / 0.1), 0 0 84px 28px rgb(var(--brand-primary) / 0.05)',
 } as const
 
+// A recent member in the social-proof avatar stack. `label` is the hover name
+// (Zora handle / basename / short address); `href` links to their profile.
+type WaitlistAvatar = {
+  src: string
+  label: string | null
+  href: string | null
+}
+
 // Card shell with a slow brand-colored "border beam" that travels around the
 // edge. The opaque card sits on top of the rotating conic layer, leaving only a
 // ~1px animated ring. Honors prefers-reduced-motion (static arc, no rotation).
@@ -110,15 +118,12 @@ function BeamCard({ children, className }: { children: ReactNode; className?: st
   )
 }
 
-// A single avatar in the social-proof stack. Renders a real member PFP when
-// available, falling back to a brand gradient disc (used for placeholders and
-// when an image fails to load) so the stack always looks intentional.
-function AvatarDot({ src, index }: { src: string | null; index: number }) {
-  const [failed, setFailed] = useState(false)
-  const showImage = Boolean(src) && !failed
+// The circular image/gradient disc shared by interactive and placeholder dots.
+function AvatarDisc({ src, index, onError }: { src: string | null; index: number; onError: () => void }) {
+  const showImage = Boolean(src)
   return (
     <span
-      className="relative size-6 overflow-hidden rounded-full ring-2 ring-[rgb(var(--vault-bg))]"
+      className="relative block size-6 overflow-hidden rounded-full ring-2 ring-[rgb(var(--vault-bg))]"
       style={
         showImage
           ? undefined
@@ -136,21 +141,72 @@ function AvatarDot({ src, index }: { src: string | null; index: number }) {
           decoding="async"
           referrerPolicy="no-referrer"
           className="size-full object-cover"
-          onError={() => setFailed(true)}
+          onError={onError}
         />
       ) : null}
     </span>
   )
 }
 
-// Overlapping avatar stack. Uses real member PFPs when present, otherwise four
-// brand gradient placeholders (preserves the look when stats have no avatars).
-function JoinedAvatars({ avatars }: { avatars: string[] }) {
-  const slots: (string | null)[] = avatars.length > 0 ? avatars.slice(0, 4) : [null, null, null, null]
+// A single avatar in the social-proof stack. Real members with a resolved
+// identity become a link to their profile with a hover tooltip showing their
+// name; placeholders (and failed images) fall back to a brand gradient disc.
+function AvatarDot({ avatar, index }: { avatar: WaitlistAvatar | null; index: number }) {
+  const [failed, setFailed] = useState(false)
+  const src = avatar && !failed ? avatar.src : null
+  const label = avatar?.label ?? null
+  const href = avatar?.href ?? null
+  const disc = <AvatarDisc src={src} index={index} onError={() => setFailed(true)} />
+
+  // Non-interactive: placeholder, or a real image with no public identity.
+  if (!href && !label) {
+    return (
+      <span className="relative block" aria-hidden="true">
+        {disc}
+      </span>
+    )
+  }
+
+  const tooltip = label ? (
+    <span className="pointer-events-none absolute -top-1 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-white/10 bg-[rgb(var(--vault-card-raised))] px-2 py-1 text-[10px] font-medium text-zinc-100 opacity-0 shadow-lg transition-opacity duration-150 group-hover/avatar:opacity-100 group-focus-visible/avatar:opacity-100">
+      {label}
+    </span>
+  ) : null
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={label ?? 'Member profile'}
+        title={label ?? undefined}
+        className="group/avatar relative block rounded-full transition-transform duration-150 hover:z-10 hover:-translate-y-0.5 focus-visible:z-10 focus-visible:-translate-y-0.5 focus-visible:outline-none"
+      >
+        {disc}
+        {tooltip}
+      </a>
+    )
+  }
+
   return (
-    <div className="flex -space-x-2" aria-hidden="true">
-      {slots.map((src, index) => (
-        <AvatarDot key={src ?? `placeholder-${index}`} src={src} index={index} />
+    <span className="group/avatar relative block" title={label ?? undefined}>
+      {disc}
+      {tooltip}
+    </span>
+  )
+}
+
+// Overlapping avatar stack. Uses real member PFPs (linked, with hover names)
+// when present, otherwise four brand gradient placeholders (preserves the look
+// when stats have no avatars).
+function JoinedAvatars({ avatars }: { avatars: WaitlistAvatar[] }) {
+  const slots: (WaitlistAvatar | null)[] =
+    avatars.length > 0 ? avatars.slice(0, 4) : [null, null, null, null]
+  return (
+    <div className="flex -space-x-2">
+      {slots.map((avatar, index) => (
+        <AvatarDot key={avatar?.src ?? `placeholder-${index}`} avatar={avatar} index={index} />
       ))}
     </div>
   )
@@ -204,7 +260,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   const [sessionAddress, setSessionAddress] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [listCount, setListCount] = useState<number | null>(null)
-  const [memberAvatars, setMemberAvatars] = useState<string[]>([])
+  const [memberAvatars, setMemberAvatars] = useState<WaitlistAvatar[]>([])
   const [resendAvailableAt, setResendAvailableAt] = useState<number | null>(null)
   const [nowMs, setNowMs] = useState(() => Date.now())
   const signupInFlightRef = useRef(false)
@@ -249,13 +305,18 @@ export function WaitlistFlow(props: { sectionId?: string }) {
         if (!res?.ok || cancelled) return
         const json = (await res.json().catch(() => null)) as ApiEnvelope<{
           signedUpCount?: number
-          avatars?: string[]
+          avatars?: WaitlistAvatar[]
         }> | null
         if (json?.success && typeof json.data?.signedUpCount === 'number' && json.data.signedUpCount > 0) {
           setListCount(json.data.signedUpCount)
         }
         if (json?.success && Array.isArray(json.data?.avatars)) {
-          setMemberAvatars(json.data.avatars.filter((url): url is string => typeof url === 'string' && url.length > 0))
+          setMemberAvatars(
+            json.data.avatars.filter(
+              (avatar): avatar is WaitlistAvatar =>
+                Boolean(avatar) && typeof avatar.src === 'string' && avatar.src.length > 0,
+            ),
+          )
         }
       } catch {
         // fail open — no stats shown

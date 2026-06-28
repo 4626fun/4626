@@ -104,6 +104,7 @@ const DRY_RUN_GAS_BUFFER_BPS = 2_000n
 const DRY_RUN_MIN_GAS_BUFFER = 100_000n
 const DEPLOY_FAILED_SELECTOR = '0xb4f54111'
 const NOT_AUTHORIZED_SELECTOR = '0xea8e4eb5'
+const NOT_BATCHER_SELECTOR = '0xd1c41351'
 const UNAUTHORIZED_SELECTOR = '0x82b42900'
 const ERC20_INSUFFICIENT_BALANCE_SELECTOR = '0xe450d38c'
 /** CCALaunchStrategy.LaunchOracleInvalidPrice(int256,int256) — not a raise hint. */
@@ -380,6 +381,12 @@ function formatDryRunError(error: unknown): string {
         'Unauthorized(): vault strategy registration was attempted from a non-management caller. ' +
         'Phase 3 requires the DeploymentBatcher shell (management) to call addStrategy after the helper deploys strategies. ' +
         'Local dry-runs auto-upgrade the Phase3 helper and register strategies from the batcher; restart `pnpm -C frontend dev:deploy-dry-run` if this persists.'
+      )
+    }
+    if (raw.toLowerCase().includes(NOT_BATCHER_SELECTOR)) {
+      return (
+        'NotBatcher(): the wired Phase3 helper still authorizes the mainnet batcher address, not the local fork batcher. ' +
+        'Local dry-runs redeploy and wire a fresh helper when bytecode or batcher immutables drift; rerun dry-run once (or restart `pnpm -C frontend dev:deploy-dry-run`).'
       )
     }
     const insufficientBalance = formatErc20InsufficientBalanceError(raw)
