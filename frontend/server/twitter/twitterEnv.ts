@@ -26,6 +26,12 @@ export function readTwitterBearerToken(): string | null {
   return token.length > 0 ? token : null
 }
 
+/** Consumer secret (API secret key) for X Account Activity webhook CRC. */
+export function readTwitterConsumerSecret(): string | null {
+  const secret = readTwitterOauth1Credentials().apiSecret.trim()
+  return secret.length > 0 ? secret : null
+}
+
 export function isHermitTwitterStrictModeEnabled(): boolean {
   const raw = String(process.env.HERMIT_TWITTER_STRICT ?? '')
     .trim()
