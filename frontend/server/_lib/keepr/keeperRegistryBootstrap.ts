@@ -4,6 +4,7 @@ import { upsertAjnaVaultRegistryEntry } from '../ajnaVaultManager/registry.js'
 import {
   createVaultStrategyPublicClient,
   enrichVaultArtifactsFromOnChain,
+  pickAjnaRegistryCandidate,
   scanVaultStrategyDetails,
   type VaultStrategyScan,
 } from '../onchain/vaultStrategyOnchain.js'
@@ -52,9 +53,7 @@ async function seedAjnaRegistry(params: {
   source: string
 }): Promise<{ seeded: boolean; warnings: string[] }> {
   const warnings: string[] = []
-  const ajna =
-    params.strategyDetails.find((entry) => Boolean(entry.ajna.ajnaPool)) ??
-    params.strategyDetails.find((entry) => entry.ajna.innerVault && entry.ajna.auth && !entry.bridgeAddress)
+  const ajna = pickAjnaRegistryCandidate(params.strategyDetails)
 
   if (!ajna?.ajna.innerVault || !ajna.ajna.ajnaPool) {
     warnings.push('ajna_registry_seed_skipped_missing_onchain_wiring')

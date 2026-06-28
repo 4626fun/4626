@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { applyKnownVaultDefaults } from '../../server/_lib/onchain/vaultStrategyOnchain.js'
+import {
+  applyKnownVaultDefaults,
+  pickAjnaRegistryCandidate,
+  type VaultStrategyScan,
+} from '../../server/_lib/onchain/vaultStrategyOnchain.js'
 import { buildKeeprConfig, normalizeKeeprAddress } from '../../server/_lib/keepr/keeprConfigBuilder.js'
 
 describe('keeprConfigBuilder', () => {
@@ -40,6 +44,37 @@ describe('vaultStrategyOnchain AKITA defaults', () => {
     expect(artifacts.creatorToken).toBe('0x5b674196812451b7cec024fe9d22d2c0b172fa75')
     expect(artifacts.shareOFT).toBe('0x4df30fFfDA1D4A81bcf4DC778292Be8Ff9752a57')
     expect(artifacts.oracle).toBe('0x8C044aeF10d05bcC53912869db89f6e1f37bC6fC')
+  })
+
+  it('prefers managed nested Ajna adapter over direct pool exposure without auth', () => {
+    const directPoolOnly: VaultStrategyScan = {
+      strategy: '0x1111111111111111111111111111111111111111',
+      weight: 7000n,
+      charmVault: '0x2222222222222222222222222222222222222222',
+      bridgeAddress: null,
+      ajna: {
+        ajnaPool: '0x3333333333333333333333333333333333333333',
+        innerVault: '0x1111111111111111111111111111111111111111',
+        auth: null,
+        bufferRatioBps: null,
+        minBucketIndex: null,
+      },
+    }
+    const managedNested: VaultStrategyScan = {
+      strategy: '0x4444444444444444444444444444444444444444',
+      weight: 2000n,
+      charmVault: null,
+      bridgeAddress: null,
+      ajna: {
+        ajnaPool: '0x5555555555555555555555555555555555555555',
+        innerVault: '0x6666666666666666666666666666666666666666',
+        auth: '0x7777777777777777777777777777777777777777',
+        bufferRatioBps: 1500,
+        minBucketIndex: 4156,
+      },
+    }
+
+    expect(pickAjnaRegistryCandidate([directPoolOnly, managedNested])?.strategy).toBe(managedNested.strategy)
   })
 })
 
