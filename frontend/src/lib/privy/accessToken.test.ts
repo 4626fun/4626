@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { readPrivyAccessTokenWithRetries } from './waitlistPrivyToken'
+import { readPrivyAccessTokenOrNull, readPrivyAccessTokenWithRetries } from '@/lib/privy/accessToken'
 
 describe('readPrivyAccessTokenWithRetries', () => {
   it('returns token after transient empty reads', async () => {
@@ -34,6 +34,7 @@ describe('readPrivyAccessTokenWithRetries', () => {
     expect(token).toBe('')
     expect(read).toHaveBeenCalledTimes(3)
   })
+
   it('times out on a hung getAccessToken without blocking', async () => {
     const read = vi.fn(() => new Promise<string>(() => {}))
     const token = await readPrivyAccessTokenWithRetries({
@@ -45,5 +46,34 @@ describe('readPrivyAccessTokenWithRetries', () => {
     expect(token).toBe('')
     expect(read).toHaveBeenCalledTimes(2)
   })
+})
 
+describe('readPrivyAccessTokenOrNull', () => {
+  it('returns null when no token is available', async () => {
+    const token = await readPrivyAccessTokenOrNull({
+      read: async () => '',
+      attempts: 1,
+      retryDelayMs: 0,
+      timeoutMs: 50,
+    })
+    expect(token).toBeNull()
+  })
+
+  it('skips tokens that fail validation', async () => {
+    const read = vi
+      .fn<() => Promise<string | null>>()
+      .mockResolvedValueOnce('expired-token')
+      .mockResolvedValueOnce('live-token')
+
+    const token = await readPrivyAccessTokenOrNull({
+      read,
+      attempts: 3,
+      retryDelayMs: 0,
+      timeoutMs: null,
+      validate: (value) => value === 'live-token',
+    })
+
+    expect(token).toBe('live-token')
+    expect(read).toHaveBeenCalledTimes(2)
+  })
 })

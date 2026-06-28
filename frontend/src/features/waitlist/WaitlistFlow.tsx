@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, ArrowRight, AlertCircle } from 'lucide-react'
-import { useLoginWithEmail, usePrivy } from '@privy-io/react-auth'
-
 import { Button } from '@/components/ui/Button'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { apiFetch } from '@/lib/api/apiBase'
@@ -13,8 +11,10 @@ import { bridgePrivySession } from '@/features/waitlist/waitlistHandoff'
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import { WaitlistTwitterLinkPanel } from '@/features/waitlist/WaitlistTwitterLinkPanel'
 import { computeProgress } from '@/features/waitlist/waitlistTiers'
-import { useWaitlistTwitterLink } from '@/features/waitlist/useWaitlistTwitterLink'
-import { readPrivyAccessTokenWithRetries } from '@/features/waitlist/waitlistPrivyToken'
+import { readPrivyAccessTokenWithRetries } from '@/lib/privy/accessToken'
+import { linkAndSyncPrivyProvider } from '@/lib/privy/providerLink'
+import { usePrivyOAuthReturnBackendSync } from '@/lib/privy/usePrivyOAuthReturnBackendSync'
+import { useSafeLogin, useSafeLoginWithEmail, useSafePrivy } from '@/lib/privy/safeHooks'
 import { computeAcceptedFromAppAccessStatus } from '@/app/accessShared'
 import { useAccountMe } from '@/hooks/useAccountMe'
 import { fetchAccountTrayPoints } from '@/lib/waitlist/accountTrayPoints'
@@ -32,40 +32,6 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function isValidEmail(value: string): boolean {
   return EMAIL_PATTERN.test(value.trim())
-}
-
-type SafeLoginWithEmail = {
-  sendCode: (input: { email: string }) => Promise<unknown>
-  loginWithCode: (input: { code: string }) => Promise<unknown>
-}
-
-function useSafeLoginWithEmail(): SafeLoginWithEmail {
-  try {
-    return useLoginWithEmail() as unknown as SafeLoginWithEmail
-  } catch {
-    return {
-      sendCode: async () => {},
-      loginWithCode: async () => {},
-    }
-  }
-}
-
-function useSafePrivyHook() {
-  try {
-    return usePrivy() as {
-      ready?: boolean
-      authenticated?: boolean
-      getAccessToken?: (() => Promise<string | null>) | null
-      logout?: (() => Promise<void>) | null
-    }
-  } catch {
-    return {
-      ready: false,
-      authenticated: false,
-      getAccessToken: null as null | (() => Promise<string | null>),
-      logout: null as null | (() => Promise<void>),
-    }
-  }
 }
 
 async function readAuthSessionAddress(): Promise<string | null> {
@@ -111,8 +77,9 @@ const WAITLIST_PANEL_STYLE = {
 
 export function WaitlistFlow(props: { sectionId?: string }) {
   const sectionId = props.sectionId ?? 'waitlist-page'
-  const privy = useSafePrivyHook()
+  const privy = useSafePrivy()
   const { sendCode, loginWithCode } = useSafeLoginWithEmail()
+  const { login } = useSafeLogin()
 
   const [step, setStep] = useState<SignupStep>('email')
   const [email, setEmail] = useState('')
@@ -354,14 +321,46 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   const { me: accountMe, refresh: refreshAccountMe } = useAccountMe()
   const [pointsTotal, setPointsTotal] = useState<number | null>(null)
   const [pointsRefreshKey, setPointsRefreshKey] = useState(0)
-  const {
-    busy: twitterBusy,
-    error: twitterError,
-    linkTwitter,
-    clearError: clearTwitterError,
-  } = useWaitlistTwitterLink(privy, () => {
-    refreshAccountMe()
-    setPointsRefreshKey((key) => key + 1)
+  const [twitterBusy, setTwitterBusy] = useState(false)
+  const [twitterError, setTwitterError] = useState<string | null>(null)
+
+  const handleLinkTwitter = useCallback(async () => {
+    if (twitterBusy) return
+    setTwitterBusy(true)
+    setTwitterError(null)
+    try {
+      const data = await linkAndSyncPrivyProvider({
+        privy,
+        provider: 'twitter',
+        login: login ?? null,
+        getAccessToken: privy.getAccessToken?.bind(privy) ?? null,
+      })
+      if (data) {
+        refreshAccountMe()
+        setPointsRefreshKey((key) => key + 1)
+      }
+    } catch (linkError) {
+      setTwitterError(linkError instanceof Error ? linkError.message : 'Could not connect Twitter.')
+    } finally {
+      setTwitterBusy(false)
+    }
+  }, [login, privy, refreshAccountMe, twitterBusy])
+
+  usePrivyOAuthReturnBackendSync({
+    providers: ['twitter'],
+    privyReady: privy.ready,
+    privyAuthenticated: privy.authenticated,
+    privyUser: privy.user,
+    linkedMethods: accountMe?.linkedMethods,
+    getAccessToken: privy.getAccessToken?.bind(privy) ?? null,
+    onSynced: () => {
+      refreshAccountMe()
+      setPointsRefreshKey((key) => key + 1)
+    },
+    onError: (syncError, provider) => {
+      if (provider !== 'twitter') return
+      setTwitterError(syncError instanceof Error ? syncError.message : 'Could not sync Twitter link.')
+    },
   })
 
   // Real waitlist points come from the scored snapshot (`/api/accounts/me/points`).
@@ -451,8 +450,8 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                     linked={twitterLinked}
                     busy={twitterBusy}
                     onConnect={() => {
-                      clearTwitterError()
-                      void linkTwitter()
+                      setTwitterError(null)
+                      void handleLinkTwitter()
                     }}
                   />
                 ) : null}

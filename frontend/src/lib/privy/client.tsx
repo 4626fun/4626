@@ -236,7 +236,8 @@ export function PrivyClientProvider(props: {
   })
   // Keep generic web login methods aligned with the canonical account model:
   // verified email first, wallet-native Base second. Zora uses cross-app auth.
-  const loginMethods = mode === 'waitlist-email-only' ? (['email'] as const) : (['email', 'wallet'] as const)
+  const loginMethods =
+    mode === 'waitlist-email-only' ? (['email', 'twitter'] as const) : (['email', 'wallet'] as const)
 
   const embeddedWalletsSupported = canUsePrivyEmbeddedWallets()
   const embeddedWallets =
@@ -255,13 +256,21 @@ export function PrivyClientProvider(props: {
   // Use the bare origin so transient search/hash state on the current page never breaks OAuth init.
   const customOAuthRedirectUrl =
     typeof window !== 'undefined'
-      ? coerceLoopbackAuthRedirectOrigin({
-          resolvedOrigin: resolveAuthRedirectOrigin({
-            configuredOrigin: CONFIGURED_APP_ORIGIN,
+      ? (() => {
+          const resolvedOrigin = coerceLoopbackAuthRedirectOrigin({
+            resolvedOrigin: resolveAuthRedirectOrigin({
+              configuredOrigin: CONFIGURED_APP_ORIGIN,
+              currentOrigin: window.location.origin,
+            }),
             currentOrigin: window.location.origin,
-          }),
-          currentOrigin: window.location.origin,
-        })
+          })
+          if (mode !== 'waitlist-email-only') return resolvedOrigin
+          try {
+            return new URL('/waitlist', resolvedOrigin).toString()
+          } catch {
+            return `${window.location.origin}/waitlist`
+          }
+        })()
       : null
 
   const baseConfig: PrivyProviderConfig = {

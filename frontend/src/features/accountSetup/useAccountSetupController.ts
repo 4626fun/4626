@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { useActiveWallet, useConnectWallet, useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
 import { getAddress } from 'viem'
 import { base } from 'viem/chains'
 import { useAccount, useConnections, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
@@ -16,6 +15,14 @@ import {
 } from '@/lib/privy/zoraCrossApp'
 import { isInjectedWalletCollisionMessage } from '@/lib/auth/sessionRepair'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
+import {
+  linkAndSyncPrivyProvider,
+  unlinkAndSyncPrivyProvider,
+  type PrivyOAuthProvider,
+} from '@/lib/privy/providerLink'
+import { usePrivyOAuthReturnBackendSync } from '@/lib/privy/usePrivyOAuthReturnBackendSync'
+import { buildPrivyAuthHeaders, readPrivyAccessTokenOrNull } from '@/lib/privy/accessToken'
+import { useSafeActiveWallet, useSafeConnectWallet, useSafeCrossApp, useSafeLogin, useSafePrivy } from '@/lib/privy/safeHooks'
 import { isTelegramMiniAppContext, readPrivyTelegramLaunchParams } from '@/lib/telegram/telegramWebApp'
 import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
 
@@ -123,29 +130,6 @@ async function withOperationTimeout<T>(promise: Promise<T>, ms: number, label: s
   })
 }
 
-async function resolvePrivyAccessTokenWithRetry(
-  readToken: () => Promise<string | null>,
-  options?: { attempts?: number; delayMs?: number },
-): Promise<string | null> {
-  const attempts = Math.max(1, Number(options?.attempts ?? 6))
-  const delayMs = Math.max(0, Number(options?.delayMs ?? 200))
-
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    try {
-      const token = await readToken()
-      if (typeof token === 'string' && token.trim().length > 0) return token
-    } catch {
-      // Privy token hydration can race briefly after OAuth return.
-      // Retry before surfacing a blocking auth-token error.
-    }
-    if (attempt < attempts - 1 && delayMs > 0) {
-      await sleep(delayMs)
-    }
-  }
-
-  return null
-}
-
 function isPrivyExternalEthereumWallet(wallet: any): boolean {
   if (!wallet || typeof wallet !== 'object') return false
   const chainType = String(wallet.chainType ?? wallet.chain_type ?? wallet.type ?? '').toLowerCase().trim()
@@ -155,17 +139,6 @@ function isPrivyExternalEthereumWallet(wallet: any): boolean {
     return false
   }
   return /^0x[a-fA-F0-9]{40}$/.test(String(wallet.address ?? '').trim())
-}
-
-async function maybeCallMethod(target: any, methodNames: string[], args: unknown[] = []): Promise<boolean> {
-  if (!target) return false
-  for (const methodName of methodNames) {
-    if (typeof target[methodName] === 'function') {
-      await target[methodName](...args)
-      return true
-    }
-  }
-  return false
 }
 
 function selectLinkedValues(me: AccountSetupMe | null, provider: string): string[] {
@@ -192,54 +165,6 @@ export function readOptionalZoraStatus(params: {
   if (!params.responseOk) return null
   if (!params.payload?.success || !params.payload.data) return null
   return params.payload.data
-}
-
-function useSafePrivy() {
-  try {
-    return usePrivy() as any
-  } catch {
-    return {
-      authenticated: false,
-      ready: false,
-      getAccessToken: async () => null,
-      linkWallet: null,
-    } as any
-  }
-}
-
-function useSafeLogin() {
-  try {
-    return useLogin() as any
-  } catch {
-    return { login: async () => {} } as any
-  }
-}
-
-function useSafeCrossApp() {
-  try {
-    return useCrossAppAccounts() as any
-  } catch {
-    return {
-      loginWithCrossAppAccount: null,
-      linkCrossAppAccount: null,
-    } as any
-  }
-}
-
-function useSafeConnectWallet() {
-  try {
-    return useConnectWallet() as any
-  } catch {
-    return { connectWallet: () => {} } as any
-  }
-}
-
-function useSafeActiveWallet() {
-  try {
-    return useActiveWallet() as any
-  } catch {
-    return { wallet: undefined, setActiveWallet: async () => {} } as any
-  }
 }
 
 export function useAccountSetupController(params: {
@@ -412,17 +337,12 @@ export function useAccountSetupController(params: {
   )
 
   const authHeaders = useCallback(
-    async (): Promise<Record<string, string>> => {
-      const token = await resolvePrivyAccessTokenWithRetry(() => getAccessToken(), {
+    async (): Promise<Record<string, string>> =>
+      buildPrivyAuthHeaders({
+        getAccessToken,
         attempts: 6,
-        delayMs: 200,
-      })
-      if (!token) throw new Error('Missing Privy auth token. Sign in and retry.')
-      return {
-        'Content-Type': 'application/json',
-        'X-Privy-Token': token,
-      }
-    },
+        retryDelayMs: 200,
+      }),
     [getAccessToken],
   )
 
@@ -447,9 +367,10 @@ export function useAccountSetupController(params: {
       }
       setErrorGuarded(null)
       try {
-        const token = await resolvePrivyAccessTokenWithRetry(getAccessTokenNow, {
+        const token = await readPrivyAccessTokenOrNull({
+          read: getAccessTokenNow,
           attempts: 8,
-          delayMs: 250,
+          retryDelayMs: 250,
         })
         if (!token) throw new Error('Missing Privy auth token. Sign in and retry.')
         let canonicalization = await runCanonicalizationPipeline({
@@ -512,6 +433,20 @@ export function useAccountSetupController(params: {
     // Intentionally stable — all external objects are read via refs inside the callback.
     []
   )
+
+  const loadMeRef = useRef(loadMe)
+  loadMeRef.current = loadMe
+
+  usePrivyOAuthReturnBackendSync({
+    privyReady: privy?.ready,
+    privyAuthenticated: privyAuthed,
+    privyUser: privy?.user,
+    linkedMethods: me?.linkedMethods,
+    getAccessToken,
+    onSynced: () => {
+      void loadMeRef.current({ showSpinner: false })
+    },
+  })
 
   useEffect(() => {
     if (hasInitialDataRef.current) return
@@ -675,42 +610,6 @@ export function useAccountSetupController(params: {
     }
   }, [connectWallet, prefersWalletConnectQr, setActiveWallet])
 
-  const callLinkEndpoint = useCallback(
-    async (provider: string, value?: string | null) => {
-      const headers = await authHeaders()
-      const response = await apiFetch('/api/accounts/link', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ provider, value: value ?? null }),
-      })
-      const payload = (await response.json().catch(() => null)) as ApiEnvelope<AccountSetupMe> | null
-      if (!response.ok || !payload?.success || !payload.data) {
-        throw new Error(readApiError(payload, `Failed to link ${provider}.`))
-      }
-      setMeGuarded(payload.data)
-      setNoticeGuarded(`${provider.replace(/_/g, ' ')} linked.`)
-    },
-    [authHeaders],
-  )
-
-  const callUnlinkEndpoint = useCallback(
-    async (provider: string, value?: string | null) => {
-      const headers = await authHeaders()
-      const response = await apiFetch('/api/accounts/unlink', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ provider, value: value ?? null }),
-      })
-      const payload = (await response.json().catch(() => null)) as ApiEnvelope<AccountSetupMe> | null
-      if (!response.ok || !payload?.success || !payload.data) {
-        throw new Error(readApiError(payload, `Failed to unlink ${provider}.`))
-      }
-      setMeGuarded(payload.data)
-      setNoticeGuarded(`${provider.replace(/_/g, ' ')} unlinked in 4626.`)
-    },
-    [authHeaders],
-  )
-
   const resolveZoraReadOnlySignals = useCallback(
     async (headers: Record<string, string>) => {
       const response = await withOperationTimeout(
@@ -730,69 +629,6 @@ export function useAccountSetupController(params: {
     },
     [],
   )
-
-  const performClientSideLink = useCallback(
-    async (provider: string) => {
-      if (provider === 'zora_cross_app') {
-        // Read-only mode: no Privy cross-app linking for Zora.
-        return
-      }
-
-      if (provider === 'external_eoa') {
-        const called = await maybeCallMethod(privy, ['linkWallet'])
-        if (!called && typeof login === 'function') {
-          await login({ loginMethods: ['wallet'] } as any)
-        }
-        return
-      }
-
-      if (provider === 'telegram') {
-        const launchParams = readPrivyTelegramLaunchParams()
-        if (!launchParams?.initDataRaw) {
-          throw new Error('Telegram linking must start from Telegram. Run /link in the bot, then open the Mini App.')
-        }
-        const calledWithLaunchParams = await maybeCallMethod(privy, ['linkTelegram'], [{ launchParams }])
-        if (!calledWithLaunchParams) {
-          throw new Error('Telegram linking is unavailable in this client. Re-open from Telegram and retry.')
-        }
-        return
-      }
-
-      const linkMethods: Record<string, string[]> = {
-        email: ['linkEmail', 'linkEmailAccount'],
-        google: ['linkGoogle', 'linkGoogleAccount'],
-        apple: ['linkApple', 'linkAppleAccount'],
-        twitter: ['linkTwitter', 'linkTwitterAccount'],
-        telegram: ['linkTelegram'],
-        tiktok: ['linkTiktok', 'linkTikTok', 'linkTiktokAccount', 'linkTikTokAccount'],
-        external_eoa: ['linkWallet'],
-        zora_cross_app: [],
-      }
-      const called = await maybeCallMethod(privy, linkMethods[provider] ?? [])
-      if (!called && typeof login === 'function') {
-        if (provider === 'email') {
-          await login({ loginMethods: ['email'] } as any)
-        } else {
-          throw new Error(`${provider.replace(/_/g, ' ')} linking is unavailable in this client.`)
-        }
-      }
-    },
-    [login, privy],
-  )
-
-  const performClientSideUnlink = useCallback(async (provider: string, value?: string | null) => {
-    const unlinkMethods: Record<string, string[]> = {
-      email: ['unlinkEmail', 'unlinkEmailAccount'],
-      google: ['unlinkGoogle', 'unlinkGoogleAccount'],
-      apple: ['unlinkApple', 'unlinkAppleAccount'],
-      twitter: ['unlinkTwitter', 'unlinkTwitterAccount'],
-      telegram: ['unlinkTelegram'],
-      tiktok: ['unlinkTiktok', 'unlinkTikTok', 'unlinkTiktokAccount', 'unlinkTikTokAccount'],
-      external_eoa: ['unlinkWallet'],
-      zora_cross_app: [],
-    }
-    await maybeCallMethod(privy, unlinkMethods[provider] ?? [], value ? [{ value }] : [])
-  }, [privy])
 
   const onLinkProvider = useCallback(async (provider: string) => {
     // Read via ref; guarded sets for the long link flow.
@@ -866,30 +702,17 @@ export function useAccountSetupController(params: {
         await loadMe({ showSpinner: false })
         return
       }
-      await performClientSideLink(provider)
-      if (provider === 'external_eoa') {
-        let linked = false
-        for (let attempt = 0; attempt < 4; attempt += 1) {
-          try {
-            await callLinkEndpoint(provider)
-            linked = true
-            break
-          } catch (linkError: any) {
-            const message = typeof linkError?.message === 'string' ? linkError.message : ''
-            if (!/No linked value found for provider "external_eoa"\./i.test(message)) {
-              throw linkError
-            }
-            await sleep(500)
-          }
-        }
-        if (!linked) {
-          await loadMe({ showSpinner: false })
-          throw new Error(
-            'External wallet link is still syncing. Connect Base App (or your external wallet) again and retry in a moment.',
-          )
-        }
+      const data = await linkAndSyncPrivyProvider({
+        privy: privyRef.current,
+        provider: provider as PrivyOAuthProvider,
+        login,
+        getAccessToken,
+      })
+      if (data) {
+        setMeGuarded(data)
+        setNoticeGuarded(`${provider.replace(/_/g, ' ')} linked.`)
       } else {
-        await callLinkEndpoint(provider)
+        setNoticeGuarded(`Continue in the ${provider.replace(/_/g, ' ')} window, then return here.`)
       }
       await loadMe({ showSpinner: false })
     } catch (linkError: any) {
@@ -905,7 +728,7 @@ export function useAccountSetupController(params: {
     } finally {
       setBusyProviderGuarded(null)
     }
-  }, [authHeaders, callLinkEndpoint, loadMe, performClientSideLink, resolveZoraReadOnlySignals, linkCrossAppAccount, loginWithCrossAppAccount])
+  }, [authHeaders, getAccessToken, loadMe, resolveZoraReadOnlySignals, linkCrossAppAccount, loginWithCrossAppAccount, login])
 
   const onUnlinkProvider = useCallback(async (provider: string) => {
     const privyAuthedNow = Boolean(privyRef.current?.authenticated)
@@ -915,15 +738,21 @@ export function useAccountSetupController(params: {
     setNoticeGuarded(null)
     try {
       const currentValue = selectLinkedValues(me, provider)[0] ?? null
-      await performClientSideUnlink(provider, currentValue)
-      await callUnlinkEndpoint(provider, currentValue)
+      const data = await unlinkAndSyncPrivyProvider({
+        privy: privyRef.current,
+        provider: provider as PrivyOAuthProvider,
+        getAccessToken,
+        value: currentValue,
+      })
+      setMeGuarded(data)
+      setNoticeGuarded(`${provider.replace(/_/g, ' ')} unlinked in 4626.`)
       await loadMe({ showSpinner: false })
     } catch (unlinkError: any) {
       setErrorGuarded(typeof unlinkError?.message === 'string' ? unlinkError.message : `Failed to unlink ${provider}.`)
     } finally {
       setBusyProviderGuarded(null)
     }
-  }, [callUnlinkEndpoint, loadMe, me, performClientSideUnlink, privyAuthed])
+  }, [getAccessToken, loadMe, me, privyAuthed])
 
   const onLinkZora = useCallback(async () => {
     setBusyProviderGuarded('zora_cross_app')
@@ -993,7 +822,7 @@ export function useAccountSetupController(params: {
         logout: async () => {
           await (privyNow?.logout ? privyNow.logout().catch(() => null) : Promise.resolve())
         },
-        readToken: typeof privyNow?.getAccessToken === 'function' ? (() => privyNow.getAccessToken()) : undefined,
+        readToken: typeof privyNow?.getAccessToken === 'function' ? () => privyNow.getAccessToken!() : undefined,
         shouldLogout: true,
       })
       if (typeof window !== 'undefined') {

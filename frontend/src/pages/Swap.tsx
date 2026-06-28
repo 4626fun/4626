@@ -3,15 +3,13 @@ import { useSearchParams } from 'react-router-dom'
 import { getAddress, isAddress, parseUnits, type Address } from 'viem'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAccount, useConnect, usePublicClient, useReconnect, useSwitchChain, useWalletClient } from 'wagmi'
-import {
-  usePrivy,
-} from '@privy-io/react-auth'
 import { useDebounceValue } from 'usehooks-ts'
 import { AnimatePresence, motion } from 'framer-motion'
 
 import { META, PageMeta } from '@/components/seo/PageMeta'
 import { SwapSettingsModal } from '@/components/trade/SwapSettingsModal'
 import { ExternalWalletOptions } from '@/components/account/ConnectButton'
+import { useSafePrivy } from '@/lib/privy/safeHooks'
 
 import { SwapCard } from '@/components/swap/SwapCard'
 import { SwapConnectGate } from '@/components/swap/SwapConnectGate'
@@ -74,33 +72,6 @@ function warnSwapPrivyHookFailure(scope: string, error: unknown) {
   console.warn(`[swap] Privy hook unavailable in ${scope}; falling back to non-Privy mode`, error)
 }
 
-function useSafeSwapPrivyHook(enabled: boolean) {
-  try {
-    const value = usePrivy() as any
-    if (!enabled) {
-      return {
-        ready: false,
-        authenticated: false,
-        user: null,
-        getAccessToken: null as null | (() => Promise<string | null>),
-      } as any
-    }
-    return value
-  } catch (error) {
-    warnSwapPrivyHookFailure('usePrivy', error)
-    return {
-      ready: false,
-      authenticated: false,
-      user: null,
-      getAccessToken: null as null | (() => Promise<string | null>),
-    } as any
-  }
-}
-
-
-
-
-
 
 function fmtBalFromAmount(amount: string | null | undefined, symbol: string): string | undefined {
   if (amount == null || amount === '') return undefined
@@ -138,7 +109,10 @@ export function Swap() {
     user: privyUser,
     getAccessToken,
     logout: privyLogout,
-  } = useSafeSwapPrivyHook(privyHooksEnabled)
+  } = useSafePrivy({
+    enabled: privyHooksEnabled,
+    onUnavailable: (error) => warnSwapPrivyHookFailure('usePrivy', error),
+  })
   const { connectors: wagmiConnectors } = useConnect()
   const { reconnectAsync } = useReconnect()
   const [swapConnectBusy, setSwapConnectBusy] = useState(false)
@@ -251,7 +225,7 @@ export function Swap() {
   // hydration recovery effect, ensure effect, and the custom signer client from the main component.
   const embeddedEoa = useSwapEmbeddedEoa({
     privyUser,
-    privyAuthenticated,
+    privyAuthenticated: privyAuthenticated ?? null,
     ensuredEmbeddedEoaAddress,
     ensureEmbeddedWallet,
     authAddress: authAddress as Address | null,

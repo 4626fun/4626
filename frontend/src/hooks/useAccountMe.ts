@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { usePrivy } from '@privy-io/react-auth'
 
 import { apiFetch } from '@/lib/api/apiBase'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
+import { useSafePrivyAccessToken } from '@/lib/privy/safeHooks'
 import {
   fetchBootstrapExecutionSignals,
   mergeBootstrapSignals,
@@ -74,26 +74,6 @@ async function fetchAccountMe(getAccessToken: GetAccessTokenFn | null): Promise<
 function clearAccountMeCache(): void {
   cached = undefined
   inFlight = null
-}
-
-// `usePrivy()` can throw when it runs outside a `PrivyProvider`. Some
-// surfaces (marketing-host pages, test shells) render above the Privy
-// provider boundary and still import this hook, so guard against the
-// throw and fall back to a no-auth stub. The hook returns `null` in that
-// case, which is the correct behavior for a user who isn't authed.
-function useSafePrivyAccessToken(): GetAccessTokenFn | null {
-  try {
-    const privy = usePrivy() as any
-    const getAccessToken = typeof privy?.getAccessToken === 'function'
-      ? (privy.getAccessToken as GetAccessTokenFn)
-      : null
-    if (!getAccessToken) return null
-    if (privy?.ready === false) return null
-    if (privy?.authenticated === false) return null
-    return getAccessToken
-  } catch {
-    return null
-  }
 }
 
 export function useAccountMe(): {
