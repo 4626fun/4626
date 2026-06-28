@@ -49,8 +49,8 @@ const CARDS: CardConfig[] = [
     standards: ['ERC-20', 'ERC-4626'],
     requires: 'Requires a Zora Creator Coin',
     to: '/deploy/vault',
-    core: '#1ecad3',
-    accent: '#8ee8f0',
+    core: '#5588ff',
+    accent: '#a8c8ff',
   },
 ]
 
@@ -277,8 +277,8 @@ function TraceCard({ config }: { config: CardConfig }) {
 
   const isCoin = config.variant === 'coin'
   // Dramatic stage glow behind the form + interactive cursor spotlight.
-  const stageGlow = isCoin ? 'rgba(77,143,255,0.12)' : 'rgba(30,202,211,0.12)'
-  const cursorGlow = isCoin ? 'rgba(140,180,255,0.14)' : 'rgba(120,235,245,0.14)'
+  const stageGlow = isCoin ? 'rgba(77,143,255,0.12)' : 'rgba(77,143,255,0.08)'
+  const cursorGlow = isCoin ? 'rgba(140,180,255,0.14)' : 'rgba(120,165,255,0.12)'
 
   return (
     <Link
@@ -299,7 +299,10 @@ function TraceCard({ config }: { config: CardConfig }) {
       {/* dramatic stage spotlight behind the sculpt (painted under the canvas) */}
       <div
         className="pointer-events-none absolute inset-0 transition-opacity duration-700 group-hover:opacity-100"
-        style={{ background: `radial-gradient(58% 52% at 58% 38%, ${stageGlow}, transparent 72%)`, opacity: 0.55 }}
+        style={{
+          background: `radial-gradient(58% 52% at 58% 38%, ${stageGlow}, transparent 72%)`,
+          opacity: isCoin ? 0.55 : 0.35,
+        }}
       />
       {isCoin ? (
         <ZoraLogoMark />
@@ -338,7 +341,7 @@ function StaticCard({ config }: { config: CardConfig }) {
           background:
             config.variant === 'coin'
               ? 'radial-gradient(58% 52% at 58% 38%, rgba(77,143,255,0.16), transparent 72%)'
-              : 'radial-gradient(68% 58% at 64% 32%, rgba(30,202,211,0.12), transparent 70%)',
+              : 'radial-gradient(58% 52% at 58% 38%, rgba(77,143,255,0.08), transparent 72%)',
         }}
       />
       {config.variant === 'coin' ? (

@@ -9,6 +9,7 @@ export type LeaderboardEntry = {
   signupId: number
   display: string
   cswAddress: string | null
+  eoaAddress: string | null
   labelHint: string | null
   avatarUrl: string | null
   showZoraBadge: boolean
@@ -112,6 +113,7 @@ function PodiumSlot({ entry, rank, isMe }: PodiumSlotProps) {
           <LeaderboardIdentityCell
             display={formatLeaderboardDisplayName(entry.display)}
             cswAddress={entry.cswAddress}
+            eoaAddress={entry.eoaAddress}
             labelHint={entry.labelHint}
             avatarUrl={entry.avatarUrl}
             showZoraBadge={entry.showZoraBadge}
@@ -194,6 +196,7 @@ export function LeaderboardListRow({
           <LeaderboardIdentityCell
             display={formatLeaderboardDisplayName(row.display)}
             cswAddress={row.cswAddress}
+            eoaAddress={row.eoaAddress}
             labelHint={row.labelHint}
             avatarUrl={row.avatarUrl}
             showZoraBadge={row.showZoraBadge}

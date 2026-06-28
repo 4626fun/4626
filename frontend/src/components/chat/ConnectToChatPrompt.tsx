@@ -1,21 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAccount } from 'wagmi'
-import { useLogin } from '@privy-io/react-auth'
 import { MessageSquare } from 'lucide-react'
 import { CHAT_OPEN_REQUEST_EVENT, CHAT_TOGGLE_REQUEST_EVENT } from '@/lib/chat/openChat'
-
-function useSafeChatLogin() {
-  try {
-    return useLogin() as { login: (options?: unknown) => Promise<void> }
-  } catch {
-    return {
-      login: async () => {},
-    }
-  }
-}
+import { useSafeLogin } from '@/lib/privy/safeHooks'
 
 export function ConnectToChatPrompt(props: { onActivate?: (() => void) | null }) {
-  const { login } = useSafeChatLogin()
+  const { login } = useSafeLogin()
   const { isConnected } = useAccount()
   const [busy, setBusy] = useState(false)
   const onActivate = props.onActivate ?? null

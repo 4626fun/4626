@@ -311,7 +311,7 @@
 /* Mermaid diagram containers */
 .docusaurus-mermaid-container {
   background-color: var(--ifm-background-surface-color);
-  border: 1px solid var(--ifm-border-color);
+  border: none;
   border-radius: 12px;
   padding: 1.5rem;
   margin: 1.5rem auto;
@@ -882,7 +882,7 @@ code {
 .table-wrap {
   overflow-x: auto;
   margin: 1.5rem 0;
-  border: 1px solid var(--docs-border-subtle, var(--ifm-border-color));
+  border: none;
   border-radius: 8px;
   -webkit-overflow-scrolling: touch;
   background:

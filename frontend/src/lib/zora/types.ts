@@ -107,6 +107,13 @@ export type ZoraProfile = {
     tiktok?: { username?: string; displayName?: string; followerCount?: number; id?: string | null } | null
   } | null
   avatar?: {
+    // Current Zora Coins SDK shape: `avatar.previewImage.{small,medium}`.
+    previewImage?: {
+      small?: string
+      medium?: string
+      blurhash?: string
+    }
+    // Legacy/flat fallback retained for older cached payloads.
     small?: string
     medium?: string
     blurhash?: string

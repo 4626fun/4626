@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount, useSignMessage } from 'wagmi'
 import { base } from 'wagmi/chains'
-import { useLogin, usePrivy } from '@privy-io/react-auth'
+import { readPrivyAccessTokenOrNull } from '@/lib/privy/accessToken'
+import { useSafeLogin, useSafePrivy } from '@/lib/privy/safeHooks'
 import {
   usePrivyConnectWalletFromContext,
   usePrivySetActiveWalletFromContext,
 } from '@/lib/privy/walletHooksContext'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import { isTokenLive } from '@/lib/auth/sessionRepair'
 import { BASE_ACCOUNT_WALLET_LOGIN_LIST } from '@/lib/privy/clientAppearance'
 
 type MeResponse = { address: string } | null
@@ -415,47 +417,6 @@ export function writeStoredSessionToken(token: string | null) {
   if (persisted) notifyStoredSessionTokenChanged()
 }
 
-async function readPrivyAccessTokenWithRetry(
-  getPrivyAccessToken: (() => Promise<string | null>) | null,
-  opts?: { attempts?: number; delayMs?: number },
-): Promise<string | null> {
-  if (typeof getPrivyAccessToken !== 'function') return null
-  const attempts = Math.max(1, Number(opts?.attempts ?? 1))
-  const delayMs = Math.max(0, Number(opts?.delayMs ?? 0))
-  for (let i = 0; i < attempts; i++) {
-    try {
-      const token = await getPrivyAccessToken()
-      const normalized = typeof token === 'string' ? token.trim() : ''
-      if (normalized) return normalized
-    } catch {
-      // Ignore transient token-read failures and retry below.
-    }
-    if (i < attempts - 1 && delayMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, delayMs))
-    }
-  }
-  return null
-}
-
-function useSafePrivyHook() {
-  try {
-    return usePrivy() as any
-  } catch {
-    return {
-      ready: false,
-      authenticated: false,
-      getAccessToken: null as null | (() => Promise<string | null>),
-    } as any
-  }
-}
-
-function useSafeLoginHook() {
-  try {
-    return useLogin() as any
-  } catch {
-    return { login: async () => {} } as any
-  }
-}
 
 export function useSiweAuth() {
   // IMPORTANT:
@@ -466,8 +427,8 @@ export function useSiweAuth() {
   // It is NOT a social identity signal and should not be mapped to any external profile ID.
   const { address, isConnected } = useAccount()
   const { signMessageAsync } = useSignMessage()
-  const privyAny = useSafePrivyHook()
-  const { login } = useSafeLoginHook()
+  const privyAny = useSafePrivy()
+  const { login } = useSafeLogin()
   const connectWallet = usePrivyConnectWalletFromContext()
   const setActiveWallet = usePrivySetActiveWalletFromContext()
   const privyReady = Boolean(privyAny?.ready)
@@ -830,15 +791,17 @@ export function useSiweAuth() {
           await connectBaseAccountWalletForSignIn()
         }
 
-        // Check if Privy already has a valid session before calling login().
-        // The `authenticated` flag can lag behind the actual session state,
-        // causing Privy to reject the login() call with "already logged in".
-        let alreadyHasPrivySession = privyAuthenticated
-        if (privyReady && !alreadyHasPrivySession && getPrivyAccessToken) {
+        // Check if Privy already has a live access token before calling login().
+        // `authenticated` can lag or remain true while the underlying token is stale.
+        let alreadyHasPrivySession = false
+        if (privyReady && getPrivyAccessToken) {
           try {
             const existingToken = await getPrivyAccessToken()
-            if (existingToken) alreadyHasPrivySession = true
+            if (isTokenLive(existingToken)) alreadyHasPrivySession = true
           } catch { /* no existing session */ }
+        } else if (privyAuthenticated) {
+          // Fallback when token reader is unavailable in this runtime context.
+          alreadyHasPrivySession = true
         }
 
         if (privyReady && !alreadyHasPrivySession && typeof login === 'function') {
@@ -854,7 +817,7 @@ export function useSiweAuth() {
           if (getPrivyAccessToken) {
             try {
               const tokenAfterLogin = await getPrivyAccessToken()
-              if (tokenAfterLogin) alreadyHasPrivySession = true
+              if (isTokenLive(tokenAfterLogin)) alreadyHasPrivySession = true
             } catch { /* ignore */ }
           }
         }
@@ -863,9 +826,12 @@ export function useSiweAuth() {
           try {
             // Privy auth state can lag for a short moment after login/cross-app return.
             // Retry a few times for explicit methods so we don't surface false "cancelled".
-            const privyToken = await readPrivyAccessTokenWithRetry(getPrivyAccessToken, {
+            const privyToken = await readPrivyAccessTokenOrNull({
+              read: getPrivyAccessToken,
               attempts: method === 'auto' ? 1 : preferBaseAccountWallet ? 12 : 8,
-              delayMs: method === 'auto' ? 0 : preferBaseAccountWallet ? 250 : 250,
+              retryDelayMs: method === 'auto' ? 0 : 250,
+              timeoutMs: null,
+              validate: isTokenLive,
             })
             if (privyToken) {
               const addr = await signInWithPrivyToken(privyToken)

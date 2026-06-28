@@ -507,11 +507,7 @@ export async function enrichVaultArtifactsFromOnChain(params: {
     }
 
     const charm = strategyDetails.find((entry: VaultStrategyScan) => Boolean(entry.charmVault))
-    const ajna =
-      strategyDetails.find((entry: VaultStrategyScan) => Boolean(entry.ajna.ajnaPool)) ??
-      strategyDetails.find(
-        (entry: VaultStrategyScan) => entry.ajna.innerVault && entry.ajna.auth && !entry.bridgeAddress,
-      )
+    const ajna = pickAjnaRegistryCandidate(strategyDetails)
     const solana = strategyDetails.find((entry: VaultStrategyScan) => Boolean(entry.bridgeAddress))
 
     if (charm?.charmVault) {
@@ -547,8 +543,9 @@ export async function enrichVaultArtifactsFromOnChain(params: {
 
 export function pickAjnaRegistryCandidate(strategyDetails: VaultStrategyScan[]): VaultStrategyScan | null {
   return (
-    strategyDetails.find((entry) => Boolean(entry.ajna.ajnaPool)) ??
+    strategyDetails.find((entry) => entry.ajna.innerVault && entry.ajna.auth && entry.ajna.ajnaPool) ??
     strategyDetails.find((entry) => entry.ajna.innerVault && entry.ajna.auth && !entry.bridgeAddress) ??
+    strategyDetails.find((entry) => Boolean(entry.ajna.ajnaPool)) ??
     null
   )
 }

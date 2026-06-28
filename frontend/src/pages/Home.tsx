@@ -116,7 +116,7 @@ export function Home() {
               className="pt-2 sm:pt-4"
             >
               <Button variant="primary" size="lg" className={heroCtaClass} asChild>
-                <Link to="/waitlist">
+                <Link to="/waitlist?join=1">
                   Join waitlist
                   <ArrowRight className="h-4 w-4" />
                 </Link>

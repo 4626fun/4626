@@ -64,7 +64,7 @@ describe('privyAuthorizedWalletSecp256k1Sign', () => {
     vi.restoreAllMocks()
   })
 
-  it('sends privy-authorization-signature on wallet RPC', async () => {
+  it('sends privy-authorization-signature on wallet RPC via canonical Privy origin', async () => {
     vi.stubEnv('VITE_PRIVY_APP_ID', 'cltestappid000000000000000')
     vi.stubEnv('VITE_PRIVY_API_URL', 'https://privy.4626.fun')
 
@@ -89,7 +89,7 @@ describe('privyAuthorizedWalletSecp256k1Sign', () => {
       expect.objectContaining({
         version: 1,
         method: 'POST',
-        url: `https://privy.4626.fun/api/v1/wallets/${WALLET_ID}/rpc`,
+        url: `https://auth.privy.io/api/v1/wallets/${WALLET_ID}/rpc`,
         body: {
           chain_type: 'ethereum',
           method: 'secp256k1_sign',
@@ -99,7 +99,7 @@ describe('privyAuthorizedWalletSecp256k1Sign', () => {
     )
 
     expect(fetchMock).toHaveBeenCalledWith(
-      `https://privy.4626.fun/api/v1/wallets/${WALLET_ID}/rpc`,
+      `https://auth.privy.io/api/v1/wallets/${WALLET_ID}/rpc`,
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({
@@ -108,5 +108,23 @@ describe('privyAuthorizedWalletSecp256k1Sign', () => {
         }),
       }),
     )
+  })
+
+  it('rejects malformed non-32-byte hash before calling Privy', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const generateAuthorizationSignature = vi.fn(async () => ({ signature: 'auth-sig-base64' }))
+
+    await expect(
+      privyAuthorizedWalletSecp256k1Sign({
+        walletId: WALLET_ID,
+        hash: ADDRESS as `0x${string}`,
+        generateAuthorizationSignature,
+        getToken: async () => 'access-token',
+      }),
+    ).rejects.toThrow('requires a 32-byte digest hash')
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(generateAuthorizationSignature).not.toHaveBeenCalled()
   })
 })

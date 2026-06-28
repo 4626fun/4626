@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useCreateWallet, usePrivy } from '@privy-io/react-auth'
 import { getAddress, isAddress, type Address } from 'viem'
+
+import { useSafeCreateWallet, useSafePrivy } from '@/lib/privy/safeHooks'
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
@@ -324,27 +325,6 @@ type EmbeddedWalletSnapshot = {
   user: unknown
   wallets: unknown[]
   createWallet: CreateWalletFn
-}
-
-function useSafePrivy() {
-  try {
-    return usePrivy() as any
-  } catch {
-    return {
-      authenticated: false,
-      user: null,
-    } as any
-  }
-}
-
-function useSafeCreateWallet() {
-  try {
-    return useCreateWallet() as any
-  } catch {
-    return {
-      createWallet: null,
-    } as any
-  }
 }
 
 export function useEnsurePrivyEmbeddedWallet() {

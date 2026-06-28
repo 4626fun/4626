@@ -616,8 +616,10 @@ export function AgentRegister() {
                 request: async (args: { method: string; params?: any[] }) => {
                   if (args?.method === 'eth_sign') {
                     const params = Array.isArray(args.params) ? args.params : []
-                    const hashCandidate = typeof params[1] === 'string' ? params[1] : ''
-                    if (/^0x[0-9a-fA-F]{64}$/.test(hashCandidate)) {
+                    const hashCandidate =
+                      params.find((value): value is string => typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)) ??
+                      ''
+                    if (hashCandidate) {
                       try {
                         const rawSig = await embeddedProvider.request({
                           method: 'secp256k1_sign',

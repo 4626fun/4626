@@ -11,6 +11,8 @@ export type WaitlistLeaderboardRow = {
   signupId: number
   display: string
   cswAddress: string | null
+  /** External (user-controlled) EOA, exposed only when there is no canonical CSW. Never the Privy embedded EOA. */
+  eoaAddress: string | null
   labelHint: string | null
   avatarUrl: string | null
   showZoraBadge: boolean
@@ -68,7 +70,13 @@ function toLeaderboardRow(raw: any, options?: { includeReferralCode?: boolean })
   const signupId = safeInt(raw?.signup_id)
   const referralCodeRaw = typeof raw?.referral_code === 'string' ? String(raw.referral_code) : null
   const cswRaw = resolveCanonicalCswAddress(raw)
-  const display = shortAddr(cswRaw) ?? `user#${signupId}`
+  // External EOA fallback identity — only when there is no canonical CSW. This is
+  // the user's own connected wallet (primary_wallet), never the Privy embedded EOA.
+  const eoaRaw =
+    !cswRaw && typeof raw?.eoa_address === 'string' && raw.eoa_address.trim()
+      ? String(raw.eoa_address).trim()
+      : null
+  const display = shortAddr(cswRaw) ?? shortAddr(eoaRaw) ?? `user#${signupId}`
   const referralCode = options?.includeReferralCode ? referralCodeRaw : null
   const avatarRaw = typeof raw?.avatar_url === 'string' ? String(raw.avatar_url).trim() : ''
   return {
@@ -76,6 +84,7 @@ function toLeaderboardRow(raw: any, options?: { includeReferralCode?: boolean })
     signupId,
     display,
     cswAddress: cswRaw,
+    eoaAddress: eoaRaw,
     labelHint: normalizeLeaderboardLabelHint(
       typeof raw?.label_hint === 'string' ? raw.label_hint : null,
     ),
@@ -163,6 +172,7 @@ export async function getWaitlistLeaderboardData(params: {
           NULLIF(TRIM(azs.canonical_csw_address), ''),
           NULLIF(TRIM(zp_row.smart_wallet_address), '')
         ) AS canonical_csw,
+        NULLIF(TRIM(p.primary_wallet), '') AS primary_wallet_raw,
         COALESCE(
           NULLIF(TRIM(zp_row.basename), ''),
           NULLIF(TRIM(azs.zora_handle), ''),
@@ -257,6 +267,7 @@ export async function getWaitlistLeaderboardData(params: {
       SELECT
         e.id::bigint AS signup_id,
         e.canonical_csw,
+        CASE WHEN e.canonical_csw IS NOT NULL THEN NULL ELSE e.primary_wallet_raw END AS eoa_address,
         e.label_hint,
         e.avatar_url,
         e.show_zora_badge,
@@ -290,6 +301,7 @@ export async function getWaitlistLeaderboardData(params: {
       GROUP BY
         e.id,
         e.canonical_csw,
+        e.primary_wallet_raw,
         e.label_hint,
         e.avatar_url,
         e.show_zora_badge,
@@ -303,6 +315,7 @@ export async function getWaitlistLeaderboardData(params: {
       SELECT
         signup_id,
         canonical_csw,
+        eoa_address,
         label_hint,
         avatar_url,
         show_zora_badge,
@@ -338,6 +351,7 @@ export async function getWaitlistLeaderboardData(params: {
       rank,
       signup_id,
       canonical_csw,
+      eoa_address,
       label_hint,
       avatar_url,
       show_zora_badge,
@@ -408,6 +422,7 @@ export async function getWaitlistLeaderboardData(params: {
             NULLIF(TRIM(azs.canonical_csw_address), ''),
             NULLIF(TRIM(zp_row.smart_wallet_address), '')
           ) AS canonical_csw,
+          NULLIF(TRIM(p.primary_wallet), '') AS primary_wallet_raw,
           COALESCE(
             NULLIF(TRIM(zp_row.basename), ''),
             NULLIF(TRIM(azs.zora_handle), ''),
@@ -502,6 +517,7 @@ export async function getWaitlistLeaderboardData(params: {
         SELECT
           e.id::bigint AS signup_id,
           e.canonical_csw,
+          CASE WHEN e.canonical_csw IS NOT NULL THEN NULL ELSE e.primary_wallet_raw END AS eoa_address,
           e.label_hint,
           e.avatar_url,
           e.show_zora_badge,
@@ -535,6 +551,7 @@ export async function getWaitlistLeaderboardData(params: {
         GROUP BY
           e.id,
           e.canonical_csw,
+          e.primary_wallet_raw,
           e.label_hint,
           e.avatar_url,
           e.show_zora_badge,
@@ -548,6 +565,7 @@ export async function getWaitlistLeaderboardData(params: {
         SELECT
           signup_id,
           canonical_csw,
+          eoa_address,
           label_hint,
           avatar_url,
           show_zora_badge,
@@ -583,6 +601,7 @@ export async function getWaitlistLeaderboardData(params: {
         rank,
         signup_id,
         canonical_csw,
+        eoa_address,
         label_hint,
         avatar_url,
         show_zora_badge,
