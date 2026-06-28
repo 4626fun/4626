@@ -10,6 +10,7 @@ import { APP_ORIGIN } from '@/lib/env/host'
 import { bridgePrivySession } from '@/features/waitlist/waitlistHandoff'
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import { WaitlistTwitterLinkPanel } from '@/features/waitlist/WaitlistTwitterLinkPanel'
+import { WaitlistTwitterEngagementSteps } from '@/features/waitlist/WaitlistTwitterEngagementSteps'
 import { computeProgress } from '@/features/waitlist/waitlistTiers'
 import { readPrivyAccessTokenWithRetries } from '@/lib/privy/accessToken'
 import { linkAndSyncPrivyProvider } from '@/lib/privy/providerLink'
@@ -445,14 +446,18 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                   </div>
                 ) : null}
 
-                {!appAccepted ? (
-                  <WaitlistTwitterLinkPanel
-                    linked={twitterLinked}
-                    busy={twitterBusy}
-                    onConnect={() => {
-                      setTwitterError(null)
-                      void handleLinkTwitter()
-                    }}
+                <WaitlistTwitterLinkPanel
+                  linked={twitterLinked}
+                  busy={twitterBusy}
+                  onConnect={() => {
+                    setTwitterError(null)
+                    void handleLinkTwitter()
+                  }}
+                />
+
+                {twitterLinked ? (
+                  <WaitlistTwitterEngagementSteps
+                    scopeId={accountMe?.privyUserId ?? (privy.user as { id?: string } | null)?.id ?? null}
                   />
                 ) : null}
 
@@ -489,7 +494,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                       className="w-full transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
                       asChild
                     >
-                      <a href={`${APP_ORIGIN}/swap`}>
+                      <a href={`${APP_ORIGIN}/swap?restorePrivy=1`}>
                         Enter app
                         <ArrowRight className="size-4" aria-hidden="true" />
                       </a>
