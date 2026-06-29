@@ -1,7 +1,7 @@
 import { Address, createPublicClient, http } from 'viem'
 import { base } from 'viem/chains'
 import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/api/apiEnvelope'
-import { getBrowserBaseReadRpcUrl } from '@/lib/base/baseReadRpcPolicy'
+import { getBrowserBaseReadRpcUrl, buildSameOriginRpcProxyTransport } from '@/lib/base/baseReadRpcPolicy'
 
 const PROTOCOL_REWARDS_ADDRESS = `0x${'7777777F279eba3d3Ad8F4E708545291A6fDBA8B'}` as Address
 
@@ -32,10 +32,7 @@ function getBaseRpcUrl(): string {
 function getBasePublicClient() {
   const rpcUrl = getBaseRpcUrl()
   const transport = rpcUrl.startsWith('/api/rpc')
-    ? http(rpcUrl, {
-        retryCount: 0,
-        retryDelay: 150,
-      })
+    ? buildSameOriginRpcProxyTransport(rpcUrl)
     : http(rpcUrl)
   return createPublicClient({
     chain: base,

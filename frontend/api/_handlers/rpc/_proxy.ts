@@ -67,7 +67,7 @@ const EXPECTED_CHAIN_ID_HEX: Record<RpcChain, string> = {
 }
 
 const RETRYABLE_STATUS = new Set([429])
-const ENV_RPC_FAILOVER_STATUS = new Set([401, 403, 404, 405])
+const ENV_RPC_FAILOVER_STATUS = new Set([401, 403, 404, 405, 426])
 const MAX_ATTEMPTS_PER_RPC = 2
 const RETRY_BACKOFF_MS = [0, 150]
 const RPC_CHAIN_ID_CACHE_TTL_MS = 5 * 60_000
@@ -198,8 +198,10 @@ async function fetchWithTimeout(
 function normalizeRpcUrl(raw: string): string | null {
   const t = raw.trim()
   if (!t) return null
-  if (!t.startsWith('http://') && !t.startsWith('https://')) return `https://${t}`
-  return t
+  let url = t
+  if (!url.startsWith('http://') && !url.startsWith('https://')) url = `https://${url}`
+  if (url.startsWith('http://')) url = `https://${url.slice('http://'.length)}`
+  return url
 }
 
 function readRpcHost(raw: string): string | null {

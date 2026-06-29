@@ -153,6 +153,57 @@ describe('/api/rpc proxy rate-limit contract', () => {
     expect(res.getHeader('x-ratelimit-remaining')).toBe('119')
   })
 
+  it('falls back to default RPC when env RPC returns non-retryable 426', async () => {
+    const restoreEnv = applyEnv({
+      BASE_READ_RPC_URL: 'http://env-rpc.example',
+    })
+    const fetchMock = vi.fn().mockImplementation((input: unknown, init?: RequestInit) => {
+      const url = String(input)
+      const bodyRaw = typeof init?.body === 'string' ? init.body : ''
+      const method =
+        bodyRaw && bodyRaw.includes('"method"')
+          ? String((JSON.parse(bodyRaw) as { method?: string }).method ?? '')
+          : ''
+
+      if (url.includes('env-rpc.example') && method === 'eth_chainId') {
+        return new Response(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            result: '0x2105',
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )
+      }
+
+      if (url.includes('env-rpc.example')) {
+        return new Response('Use HTTPS. HTTP is not supported.', {
+          status: 426,
+          headers: { 'Content-Type': 'text/plain' },
+        })
+      }
+
+      return okRpcResponse()
+    })
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
+
+    try {
+      const handler = await loadHandler()
+      const req = createRpcReq()
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(String(res.body)).toContain('"result":"0x123"')
+      expect(fetchMock.mock.calls.some(([input]) => String(input).startsWith('https://env-rpc.example'))).toBe(true)
+    } finally {
+      restoreEnv()
+    }
+  })
+
   it('falls back to default RPC when env RPC returns non-retryable 403', async () => {
     const restoreEnv = applyEnv({
       BASE_READ_RPC_URL: 'https://env-rpc.example',

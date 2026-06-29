@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useAccount } from 'wagmi'
-import { createPublicClient, http, isAddress, type Address } from 'viem'
+import { createPublicClient, fallback, http, isAddress, type Address } from 'viem'
 import { base } from 'viem/chains'
-
-import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { base } from 'viem/chains'
 import { useAccountMe } from '@/hooks/useAccountMe'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import { useEmbeddedOwnerOnCsw } from '@/features/waitlist/useEmbeddedOwnerOnCsw'
@@ -14,6 +13,10 @@ import {
   type UserFrontendExecutionTrack,
 } from '@/lib/wallet/userExecutionTrack'
 import { BASE_DEFAULTS } from '@/config/contracts.defaults'
+import {
+  BROWSER_BASE_PUBLIC_RPC_FALLBACK,
+  buildSameOriginRpcProxyTransport,
+} from '@/lib/base/baseReadRpcPolicy'
 
 /**
  * Consolidated identity snapshot for the signed-in user. Composes:
@@ -135,12 +138,18 @@ const CREATOR_REGISTRY_ABI = [
  */
 function getBaseReadClient() {
   const isBrowser = typeof window !== 'undefined'
+  if (!isBrowser) {
+    return createPublicClient({
+      chain: base,
+      transport: http('https://mainnet.base.org', { retryCount: 1, timeout: 20_000 }),
+    })
+  }
   return createPublicClient({
     chain: base,
-    transport: http(isBrowser ? '/api/rpc?chain=base' : 'https://mainnet.base.org', {
-      retryCount: 1,
-      timeout: 20_000,
-    }),
+    transport: fallback([
+      buildSameOriginRpcProxyTransport('/api/rpc?chain=base'),
+      http(BROWSER_BASE_PUBLIC_RPC_FALLBACK, { retryCount: 1, timeout: 20_000 }),
+    ]),
   })
 }
 

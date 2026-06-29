@@ -1,6 +1,8 @@
 import { createPublicClient, fallback, http, type PublicClient } from 'viem'
 import { base } from 'viem/chains'
 
+import { buildSameOriginRpcProxyTransport } from '@/lib/base/baseReadRpcPolicy'
+
 /** Same-origin Base reads that skip deploy-dry-run Anvil fork when present. */
 export const PRODUCTION_BASE_RPC_PROXY = '/api/rpc?chain=base&skipLocalFork=1'
 
@@ -15,11 +17,7 @@ export function getProductionBaseReadClient(): PublicClient {
     cached = createPublicClient({
       chain: base,
       transport: fallback([
-        http(PRODUCTION_BASE_RPC_PROXY, {
-          retryCount: 1,
-          timeout: 20_000,
-          fetchOptions: { credentials: 'include' },
-        }),
+        buildSameOriginRpcProxyTransport(PRODUCTION_BASE_RPC_PROXY, { retryCount: 1 }),
         http('https://mainnet.base.org', { retryCount: 1, timeout: 20_000 }),
       ]),
     }) as PublicClient

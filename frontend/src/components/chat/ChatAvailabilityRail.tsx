@@ -15,7 +15,7 @@ import {
 import { useAccount } from 'wagmi'
 
 import { apiFetch } from '@/lib/api/apiBase'
-import { BASE_XMTP_AGENTS, type BaseXmtpAgent } from '@/lib/chat/baseXmtpAgents'
+import { BASE_XMTP_AGENTS, type BaseXmtpAgent, type BaseXmtpAgentBadgeTone } from '@/lib/chat/baseXmtpAgents'
 import { CHAT_TOGGLE_REQUEST_EVENT, requestNewDm, requestOpenChat } from '@/lib/chat/openChat'
 import { canMessageAddressOnCurrentEnv, useXmtp, type ChatConversation } from '@/lib/xmtp/provider'
 import { getBasenameProfileByName, resolveBasenameAddress } from '@/lib/basename/basename-api'
@@ -304,6 +304,19 @@ function FriendActionButton(props: {
   )
 }
 
+function agentBadgeClass(tone: BaseXmtpAgentBadgeTone): string {
+  switch (tone) {
+    case 'zora':
+      return 'border-pink-300/35 bg-pink-400/10 text-pink-100'
+    case 'base':
+      return 'border-brand-primary/20 bg-brand-primary/10 text-blue-200'
+    default: {
+      const _exhaustive: never = tone
+      return _exhaustive
+    }
+  }
+}
+
 function BaseAgentLogo({ agent }: { agent: BaseXmtpAgent }) {
   const toneClass: Record<BaseXmtpAgent['logoTone'], string> = {
     blue: 'border-blue-400/45 bg-blue-500/15 text-blue-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]',
@@ -577,8 +590,13 @@ function BaseAgentRow({ agent, onOpen }: { agent: BaseXmtpAgent; onOpen?: () => 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <div className="truncate text-[12.5px] font-semibold text-zinc-100">{displayName}</div>
-          <span className="shrink-0 rounded-full border border-brand-primary/20 bg-brand-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-blue-200">
-            Base
+          <span
+            className={cn(
+              'shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em]',
+              agentBadgeClass(agent.badgeTone ?? 'base'),
+            )}
+          >
+            {agent.badgeLabel ?? 'Base'}
           </span>
         </div>
         <div className="truncate text-[10.5px] leading-tight text-zinc-400">

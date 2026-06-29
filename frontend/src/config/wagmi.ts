@@ -2,7 +2,12 @@ import { http, createConfig, fallback } from 'wagmi'
 import { base, mainnet, arbitrum, optimism, polygon } from 'wagmi/chains'
 import { coinbaseWallet, injected, metaMask } from 'wagmi/connectors'
 import { DATA_SUFFIX, warnGlobalWagmiDataSuffixBehavior } from '@/lib/base/baseBuilderCodes'
-import { BASE_RPC_PROXY_PATH, isBrowserRestrictedBaseRpc } from '@/lib/base/baseReadRpcPolicy'
+import {
+  BASE_RPC_PROXY_PATH,
+  BROWSER_BASE_PUBLIC_RPC_FALLBACK,
+  buildSameOriginRpcProxyTransport,
+  isBrowserRestrictedBaseRpc,
+} from '@/lib/base/baseReadRpcPolicy'
 import { injectedConnectorFlag } from '@/lib/flags/featureFlags'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 
@@ -74,14 +79,7 @@ function buildReadTransport(url: string) {
   const normalized = String(url || '').trim()
   if (normalized.startsWith(RPC_PROXY_PREFIX)) {
     // Same-origin proxy already retries upstream; keep client retries minimal.
-    return http(normalized, {
-      retryCount: 0,
-      retryDelay: 150,
-      // Deploy page can fire bursts of `eth_getCode`; allow enough time for
-      // proxy-side failover before viem aborts the request.
-      timeout: 20_000,
-      fetchOptions: { credentials: 'include' },
-    })
+    return buildSameOriginRpcProxyTransport(normalized)
   }
   return http(normalized)
 }
@@ -182,7 +180,7 @@ function findTargetedEip6963Provider(target: 'rabby' | 'metamask'): any | undefi
 const BASE_READ_RPC_URLS = uniqueNonEmptyStrings(
   [
     BASE_RPC_PROXY,
-    ...(IS_BROWSER ? [] : [BASE_RPC_URL]),
+    ...(IS_BROWSER ? [BROWSER_BASE_PUBLIC_RPC_FALLBACK] : [BASE_RPC_URL]),
     // Base public RPCs (best-effort fallbacks)
     ...(IS_BROWSER
       ? []

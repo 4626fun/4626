@@ -1,3 +1,5 @@
+export type BaseXmtpAgentBadgeTone = 'base' | 'zora'
+
 export type BaseXmtpAgent = {
   id: string
   name: string
@@ -7,9 +9,25 @@ export type BaseXmtpAgent = {
   logoTone: 'blue' | 'green' | 'violet' | 'gold' | 'cyan' | 'pink' | 'orange' | 'slate'
   description: string
   category: 'trading' | 'creator' | 'prediction' | 'research' | 'sovereign' | 'launch'
+  badgeLabel?: string
+  badgeTone?: BaseXmtpAgentBadgeTone
 }
 
+export const ZORA_XMTP_AGENT_ADDRESS =
+  '0x363ba1a1ac1903ffbce5383d1b1865f64946eea8' as const satisfies `0x${string}`
+
 export const BASE_XMTP_AGENTS: BaseXmtpAgent[] = [
+  {
+    id: 'zora',
+    name: 'Zora',
+    address: ZORA_XMTP_AGENT_ADDRESS,
+    logoText: 'Z',
+    logoTone: 'pink',
+    description: 'Creator coins, trading, and Zora agent actions',
+    category: 'creator',
+    badgeLabel: 'Zora',
+    badgeTone: 'zora',
+  },
   {
     id: 'jessexbt',
     name: 'jesseXBT',
