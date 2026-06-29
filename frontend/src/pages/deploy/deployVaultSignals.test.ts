@@ -109,9 +109,9 @@ describe('deploy vault signals', () => {
     })
 
     expect(summary).toEqual({
-      enabledStageCount: 8,
+      enabledStageCount: 9,
       completedEnabledStageCount: 3,
-      pendingStageCount: 4,
+      pendingStageCount: 5,
     })
   })
 })

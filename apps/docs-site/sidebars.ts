@@ -71,6 +71,18 @@ const sidebars: SidebarsConfig = {
       collapsed: true,
       items: ['legal/terms', 'legal/privacy'],
     },
+    {
+      type: 'category',
+      label: 'Audits',
+      collapsed: false,
+      link: {type: 'doc', id: 'audits/index'},
+      items: [
+        'audits/fable/index',
+        'audits/fable/full-repo-review-2026-06',
+        'audits/fable/sessions-index',
+        'audits/fable/transcripts/index',
+      ],
+    },
   ],
 };
 

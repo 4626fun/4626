@@ -7,6 +7,7 @@
     "generate:frontend": "cd ../../frontend && ([ \"$DOCS_SKIP_TYPEDOC\" = \"1\" ] && echo 'Skipping typedoc (DOCS_SKIP_TYPEDOC=1)' || ([ -d node_modules/typedoc ] && pnpm exec typedoc || echo 'Skipping typedoc (dependencies not installed)'))",
     "generate:all": "pnpm generate:contracts; pnpm generate:frontend; true",
     "sync-docs": "node scripts/sync-docs.mjs",
+    "export:fable-transcripts": "node scripts/export-fable-transcripts.mjs",
     "sync-docs:strict": "node scripts/sync-docs.mjs --strict",
     "check:curated-allowlist": "node scripts/check-curated-allowlist.mjs",
     "check:contract-facts": "node scripts/check-docs-contract-facts.mjs",

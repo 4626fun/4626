@@ -8,6 +8,7 @@ export type DeployTimelineStageId =
   | 'phase3Strategies'
   | 'phase4Launch'
   | 'cleanup'
+  | 'phase5SolanaMeteora'
 
 export type DeployTimelineStage = {
   id: DeployTimelineStageId
@@ -60,6 +61,11 @@ export const DEPLOY_TIMELINE_STAGES: ReadonlyArray<DeployTimelineStage> = [
     id: 'cleanup',
     label: 'Cleanup',
     description: 'Remove temporary deploy signer and leave canonical ownership clean.',
+  },
+  {
+    id: 'phase5SolanaMeteora',
+    label: 'Phase 5 Solana / Meteora',
+    description: 'Post-deploy share-mesh mapping sync and Meteora DLMM pool provisioning (async keeper lane).',
   },
 ]
 
@@ -117,5 +123,6 @@ export function txSlotFromTimelineStage(stage: DeployTimelineStageId): 'tx1' | '
   }
   if (stage === 'phase3Strategies') return 'tx3'
   if (stage === 'phase4Launch') return 'tx4'
+  if (stage === 'phase5SolanaMeteora') return null
   return null
 }

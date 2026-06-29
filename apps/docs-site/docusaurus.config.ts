@@ -138,6 +138,11 @@ const config: Config = {
           position: 'right',
         },
         {
+          to: '/audits/fable',
+          label: 'Audits',
+          position: 'right',
+        },
+        {
           href: 'https://app.4626.fun',
           label: 'App',
           position: 'right',
@@ -169,6 +174,7 @@ const config: Config = {
             {label: 'Launch checklist', to: '/guides/greenfield-checklist'},
             {label: 'Strategy bundle', to: '/guides/strategy-bundle'},
             {label: 'Contract addresses', to: '/reference/addresses'},
+            {label: 'Fable audit', to: '/audits/fable'},
             {label: 'Smart contracts', to: '/contracts'},
           ],
         },

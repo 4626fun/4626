@@ -40,12 +40,19 @@ hide_table_of_contents: true
     <span class="home-card__title">Glossary</span>
     <span class="home-card__desc">Plain names vs internal terms (bundle, Pipe A, greenfield, …).</span>
   </a>
+  <a class="home-card" href="/audits/fable">
+    <span class="home-card__tag">Security</span>
+    <span class="home-card__title">Fable audit (Jun 2026)</span>
+    <span class="home-card__desc">Full-codebase review, findings, and published session transcripts.</span>
+  </a>
 </div>
 
 <div class="home-links">
   <a class="home-links__item" href="https://app.4626.fun/deploy/vault">Launch app</a>
   <span class="home-links__sep" aria-hidden="true">·</span>
   <a class="home-links__item" href="/reference/addresses">Addresses (v1.14.1)</a>
+  <span class="home-links__sep" aria-hidden="true">·</span>
+  <a class="home-links__item" href="/audits/fable">Fable audit</a>
   <span class="home-links__sep" aria-hidden="true">·</span>
   <a class="home-links__item" href="https://4626.fun">4626.fun</a>
   <span class="home-links__sep" aria-hidden="true">·</span>

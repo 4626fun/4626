@@ -31,6 +31,12 @@ export const CURATED_PUBLISH_GLOBS = [
   'contracts/utilities/lottery-manager.md',
   'contracts/utilities/creator-oracle.md',
 
-  'legal/terms.md',
+    'legal/terms.md',
   'legal/privacy.md',
+
+  'audits/index.md',
+  'audits/fable/index.md',
+  'audits/fable/full-repo-review-2026-06.md',
+  'audits/fable/sessions-index.md',
+  'audits/fable/transcripts/**',
 ];

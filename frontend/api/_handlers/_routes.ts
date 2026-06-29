@@ -89,6 +89,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'deploy/v2/session/resume': () => import('./deploy/v2/session/_resume.js'),
   'deploy/v2/session/start': () => import('./deploy/v2/session/_start.js'),
   'deploy/v2/session/status': () => import('./deploy/v2/session/_status.js'),
+  'deploy/v2/session/solana-post-deploy-status': () => import('./deploy/v2/session/_solanaPostDeployStatus.js'),
   'deploy/config': () => import('./deploy/_config.js'),
   'deploy/vanity/per-vault-version': () => import('./deploy/_vanityPerVaultVersion.js'),
   'deploy/vanity/share-oft-salt': () => import('./deploy/_vanityShareOftSalt.js'),

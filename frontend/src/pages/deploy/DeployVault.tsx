@@ -105,7 +105,7 @@ import { DeployHero } from '@/components/deploy/DeployHero'
 import { ReadinessPanel } from '@/components/deploy/ReadinessPanel'
 import { CreatorCoinCard, type CreatorCoinTypeTone } from '@/components/deploy/CreatorCoinCard'
 import { BlockedStateCard } from '@/components/deploy/ui/BlockedStateCard'
-import { AddressRow as DeployUiAddressRow } from '@/components/deploy/ui/AddressRow'
+import { AddressRow as DeployUiAddressRow, type AddressRowTag } from '@/components/deploy/ui/AddressRow'
 import { PROTOCOL_LOGOS } from '@/components/deploy/ui/protocolLogos'
 import { AddressTable } from '@/components/deploy/ui/AddressTable'
 import { AdvancedDetails } from '@/components/deploy/ui/AdvancedDetails'
@@ -148,6 +148,10 @@ import { buildPermit2SignatureTransfer, createPermit2Deadline, createPermit2Nonc
 import {
   type DeploySessionStatusData,
 } from '@/lib/deploy/sessionClient'
+import {
+  fetchSolanaPostDeployStatus,
+  solanaPostDeployProgressLabel,
+} from '@/lib/deploy/solanaPostDeployStatus'
 import { useDeploySessionV2 } from '@/features/deploy-vault/useDeploySessionV2'
 import {
   deployTimelineProgressLabel,
@@ -1119,9 +1123,11 @@ function AddressRow({
   simulating,
   dryRunCheckDelayMs,
   iconSrc,
+  explorerHref,
+  tags,
 }: {
   label: string
-  address: Address | null | undefined
+  address: Address | string | null | undefined
   deployed?: boolean | null
   forkOnly?: boolean
   variant?: 'default' | 'shared'
@@ -1133,6 +1139,8 @@ function AddressRow({
   dryRunCheckDelayMs?: number
   /** Optional protocol logo rendered before the label. */
   iconSrc?: string
+  explorerHref?: string | null
+  tags?: AddressRowTag[]
 }) {
   return (
     <DeployUiAddressRow
@@ -1145,6 +1153,8 @@ function AddressRow({
       simulating={simulating}
       dryRunCheckDelayMs={dryRunCheckDelayMs}
       iconSrc={iconSrc}
+      explorerHref={explorerHref}
+      tags={tags}
     />
   )
 }
@@ -1365,6 +1375,7 @@ function DeployVaultBatcher({
   const [txId, setTxId] = useState<string | null>(null)
   const [phase, setPhase] = useState<'idle' | 'phase1' | 'phase2' | 'phase3' | 'phase4' | 'done'>('idle')
   const [lastSessionStep, setLastSessionStep] = useState<string>('')
+  const [activeDeploySessionId, setActiveDeploySessionId] = useState<string | null>(null)
   const [seenOvaultMeshStep, setSeenOvaultMeshStep] = useState<boolean>(false)
   const [ovaultMeshStatus, setOvaultMeshStatus] = useState<OvaultMeshStatus | null>(null)
   const [phaseTxs, setPhaseTxs] = useState<{
@@ -1496,6 +1507,7 @@ function DeployVaultBatcher({
   }, [creatorToken, deploySessionBatcherAddress, deploymentVersion, owner])
   const persistDeploySession = useCallback(
     (sessionId: string) => {
+      setActiveDeploySessionId(sessionId)
       if (typeof window === 'undefined') return
       try {
         localStorage.setItem(
@@ -1516,6 +1528,7 @@ function DeployVaultBatcher({
     [creatorToken, deploySessionBatcherAddress, deploySessionStorageKey, deploymentVersion, owner],
   )
   const clearDeploySession = useCallback(() => {
+    setActiveDeploySessionId(null)
     if (typeof window === 'undefined') return
     try {
       localStorage.removeItem(deploySessionStorageKey)
@@ -1541,6 +1554,10 @@ function DeployVaultBatcher({
       return null
     }
   }, [deploySessionBatcherAddress, deploySessionStorageKey, deploymentVersion])
+  useEffect(() => {
+    const sessionId = loadDeploySession()
+    if (sessionId) setActiveDeploySessionId(sessionId)
+  }, [loadDeploySession])
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
@@ -6112,11 +6129,67 @@ function DeployVaultBatcher({
     ovaultMeshStatus !== null ||
     String(deploymentVersion).toLowerCase().includes('ovault')
   const isTimelineStageEnabled = useCallback(
-    (stage: DeployTimelineStageId) => (stage === 'phase2bOvaultMesh' ? ovaultMeshEnabledForSession : true),
+    (stage: DeployTimelineStageId) =>
+      stage === 'phase2bOvaultMesh' || stage === 'phase5SolanaMeteora'
+        ? ovaultMeshEnabledForSession
+        : true,
     [ovaultMeshEnabledForSession],
   )
+  const solanaPostDeployStatusQuery = useQuery({
+    queryKey: ['deploy', 'solanaPostDeployStatus', activeDeploySessionId],
+    enabled:
+      Boolean(activeDeploySessionId) &&
+      ovaultMeshEnabledForSession &&
+      (phase === 'done' || lastSessionStep === 'completed'),
+    queryFn: async () => fetchSolanaPostDeployStatus(activeDeploySessionId!),
+    refetchInterval: (query) => {
+      const overall = query.state.data?.overall
+      if (!overall || overall === 'complete' || overall === 'disabled' || overall === 'waiting') return false
+      return 30_000
+    },
+  })
+  const solanaPostDeployOverall = solanaPostDeployStatusQuery.data?.overall ?? null
+  const phase5ShareMeshMint = solanaPostDeployStatusQuery.data?.shareMeshMapping?.shareMeshMint ?? null
+  const phase5ShareOft =
+    normalizeAddressLike(
+      solanaPostDeployStatusQuery.data?.shareMeshMapping?.shareOft ?? expected?.shareOFT ?? null,
+    ) ?? null
+  const phase5PoolAddress = solanaPostDeployStatusQuery.data?.meteoraPool?.poolAddress ?? null
+  const phase5MappingStatus = solanaPostDeployStatusQuery.data?.shareMeshMapping?.status ?? null
+  const phase5PoolStatus = solanaPostDeployStatusQuery.data?.meteoraPool?.status ?? null
+  const phase5ShareMeshMintDeployed = phase5ShareMeshMint
+    ? phase5MappingStatus === 'applied'
+      ? true
+      : phase5MappingStatus === 'failed'
+        ? false
+        : null
+    : phase === 'done' || lastSessionStep === 'completed'
+      ? false
+      : null
+  const phase5PoolDeployed = phase5PoolAddress
+    ? phase5PoolStatus === 'created'
+      ? true
+      : phase5PoolStatus === 'creating' || phase5PoolStatus === 'pending'
+        ? null
+        : false
+    : phase5PoolStatus === 'creating'
+      ? null
+      : phase5PoolStatus === 'failed' || phase5PoolStatus === 'skipped'
+        ? false
+        : phase === 'done' || lastSessionStep === 'completed'
+          ? false
+          : null
   const timelineCurrentStage = useMemo<DeployTimelineStageId | null>(() => {
-    if (phase === 'done') return 'cleanup'
+    if (phase === 'done' || lastSessionStep === 'completed') {
+      if (
+        ovaultMeshEnabledForSession &&
+        solanaPostDeployOverall !== 'complete' &&
+        solanaPostDeployOverall !== 'disabled'
+      ) {
+        return 'phase5SolanaMeteora'
+      }
+      return 'cleanup'
+    }
     if (lastSessionStep) return timelineStageFromDeployStep(lastSessionStep)
     if (phase === 'phase1') return 'phase1Core'
     if (phase === 'phase2') return 'phase2Core'
@@ -6124,13 +6197,24 @@ function DeployVaultBatcher({
     if (phase === 'phase4') return 'phase4Launch'
     if (busy) return 'setupOwnerApproval'
     return null
-  }, [busy, lastSessionStep, phase])
+  }, [busy, lastSessionStep, ovaultMeshEnabledForSession, phase, solanaPostDeployOverall])
   const timelineCurrentStageMeta = useMemo<DeployTimelineStage | null>(() => {
     if (!timelineCurrentStage) return null
     return DEPLOY_TIMELINE_STAGES.find((stage) => stage.id === timelineCurrentStage) ?? null
   }, [timelineCurrentStage])
   const workflowStatus = useMemo(() => {
-    if (phase === 'done') {
+    if (phase === 'done' || lastSessionStep === 'completed') {
+      if (
+        ovaultMeshEnabledForSession &&
+        solanaPostDeployOverall &&
+        solanaPostDeployOverall !== 'complete' &&
+        solanaPostDeployOverall !== 'disabled'
+      ) {
+        return {
+          label: 'Post-deploy',
+          detail: `Phase 5 · Solana / Meteora (${solanaPostDeployProgressLabel(solanaPostDeployOverall)})`,
+        }
+      }
       return {
         label: 'Completed',
         detail: 'All deploy phases and cleanup are confirmed on-chain.',
@@ -6152,12 +6236,24 @@ function DeployVaultBatcher({
       label: 'Ready',
       detail: 'Waiting for deploy start.',
     }
-  }, [busy, lastSessionStep, phase, timelineCurrentStageMeta])
+  }, [busy, lastSessionStep, ovaultMeshEnabledForSession, phase, solanaPostDeployOverall, timelineCurrentStageMeta])
   const workflowStatusToneClass = useMemo(() => {
-    if (phase === 'done') return 'border-emerald-400/35 bg-emerald-500/12 text-emerald-200'
+    if (phase === 'done' || lastSessionStep === 'completed') {
+      if (
+        ovaultMeshEnabledForSession &&
+        solanaPostDeployOverall &&
+        solanaPostDeployOverall !== 'complete' &&
+        solanaPostDeployOverall !== 'disabled'
+      ) {
+        return solanaPostDeployOverall === 'failed'
+          ? 'border-amber-400/35 bg-amber-500/10 text-amber-200'
+          : 'border-sky-400/35 bg-sky-500/10 text-sky-200'
+      }
+      return 'border-emerald-400/35 bg-emerald-500/12 text-emerald-200'
+    }
     if (busy) return 'border-blue-400/35 bg-blue-500/10 text-blue-200'
     return 'border-zinc-600 bg-zinc-800/70 text-zinc-200'
-  }, [busy, phase])
+  }, [busy, lastSessionStep, ovaultMeshEnabledForSession, phase, solanaPostDeployOverall])
   const setupOwnerApprovalCompleted = useMemo(() => {
     if (phase === 'done') return true
     if (hasDeploySignerPath) return true
@@ -6169,6 +6265,15 @@ function DeployVaultBatcher({
   }, [hasDeploySignerPath, lastSessionStep, phase, phaseTxs.tx1, phaseTxs.tx2, phaseTxs.tx3, phaseTxs.tx4, txId])
   const timelineProgressState = useCallback(
     (stage: DeployTimelineStageId): 'disabled' | 'inProgress' | 'done' | 'pending' => {
+      if (stage === 'phase5SolanaMeteora') {
+        if (!ovaultMeshEnabledForSession) return 'disabled'
+        if (phase !== 'done' && lastSessionStep !== 'completed') return 'pending'
+        const overall = solanaPostDeployOverall
+        if (!overall || solanaPostDeployStatusQuery.isFetching) return 'inProgress'
+        if (overall === 'complete') return 'done'
+        if (overall === 'disabled' || overall === 'waiting') return 'pending'
+        return 'inProgress'
+      }
       if (stage === 'setupOwnerApproval' && setupOwnerApprovalCompleted && !busy) return 'done'
       return deriveDeployTimelineProgressState({
         stage,
@@ -6178,14 +6283,15 @@ function DeployVaultBatcher({
         stageIndexMap: DEPLOY_TIMELINE_STAGE_INDEX,
       })
     },
-    [busy, isTimelineStageEnabled, phase, setupOwnerApprovalCompleted, timelineCurrentStage],
+    [busy, isTimelineStageEnabled, lastSessionStep, ovaultMeshEnabledForSession, phase, setupOwnerApprovalCompleted, solanaPostDeployOverall, solanaPostDeployStatusQuery.isFetching, timelineCurrentStage],
   )
   const phaseProgressSummary = useMemo(() => {
-    const phaseGroups: Array<{ id: 'phase1' | 'phase2' | 'phase3' | 'phase4'; stages: DeployTimelineStageId[] }> = [
+    const phaseGroups: Array<{ id: string; stages: DeployTimelineStageId[] }> = [
       { id: 'phase1', stages: ['phase1Core', 'phase1Finalize'] },
       { id: 'phase2', stages: ['phase2Core', 'phase2Finalize', 'phase2bOvaultMesh'] },
       { id: 'phase3', stages: ['phase3Strategies'] },
       { id: 'phase4', stages: ['phase4Launch', 'cleanup'] },
+      { id: 'phase5', stages: ['phase5SolanaMeteora'] },
     ]
     const completed = phaseGroups.reduce((count, group) => {
       const enabledStages = group.stages.filter((stage) => isTimelineStageEnabled(stage))
@@ -6212,6 +6318,7 @@ function DeployVaultBatcher({
         { label: 'Phase 3 · Strategies', state: timelineProgressState('phase3Strategies') },
         { label: 'Phase 4 · Launch auction', state: timelineProgressState('phase4Launch') },
         { label: 'Cleanup', state: timelineProgressState('cleanup') },
+        { label: 'Phase 5 · Solana / Meteora', state: timelineProgressState('phase5SolanaMeteora') },
       ],
       completed: phaseProgressSummary.completed,
       total: phaseProgressSummary.total,
@@ -6888,7 +6995,6 @@ function DeployVaultBatcher({
                 </a>
               ) : null
             }
-            isLast
           >
             <AddressTable
               title="Your contracts · created this phase"
@@ -6924,6 +7030,120 @@ function DeployVaultBatcher({
               <PhaseProgressBadge state={timelineProgressState('cleanup')} />
             </div>
           </PhaseCard>
+
+          {ovaultMeshEnabledForSession ? (
+            <PhaseCard
+              index="5"
+              title="Phase 5 · Solana / Meteora"
+              purpose="Post-deploy automation: sync the share-mesh mint mapping and create the Meteora DLMM pool. This runs asynchronously after on-chain deploy completes."
+              state={timelineProgressState('phase5SolanaMeteora')}
+              isLast
+            >
+              <div className="rounded-xl bg-sky-500/[0.04] px-3.5 py-3 space-y-3">
+                <div className="text-[11px] text-sky-100/80 leading-relaxed">
+                  Base deploy can finish before the Solana pool exists. Keeper jobs usually complete this within a few
+                  minutes. Seeding initial DLMM liquidity remains a separate step after the pool is created.
+                </div>
+                {solanaPostDeployStatusQuery.isLoading && phase !== 'done' && lastSessionStep !== 'completed' ? (
+                  <div className="text-[11px] text-zinc-500">Waiting for on-chain deploy to complete…</div>
+                ) : null}
+                {solanaPostDeployStatusQuery.isLoading &&
+                (phase === 'done' || lastSessionStep === 'completed') ? (
+                  <div className="text-[11px] text-zinc-500">Loading Solana post-deploy status…</div>
+                ) : null}
+                {solanaPostDeployStatusQuery.error ? (
+                  <div className="text-[11px] text-amber-300/90">
+                    Could not load post-deploy status:{' '}
+                    {solanaPostDeployStatusQuery.error instanceof Error
+                      ? solanaPostDeployStatusQuery.error.message
+                      : 'unknown error'}
+                  </div>
+                ) : null}
+                {solanaPostDeployStatusQuery.data ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                    <div className="text-zinc-500">
+                      Overall
+                      <div className="font-mono text-zinc-200">
+                        {solanaPostDeployProgressLabel(solanaPostDeployStatusQuery.data.overall)}
+                      </div>
+                    </div>
+                    <div className="text-zinc-500">
+                      Share-mesh sync
+                      <div className="font-mono text-zinc-200">{phase5MappingStatus ?? 'pending'}</div>
+                    </div>
+                    <div className="text-zinc-500">
+                      Pool provisioning
+                      <div className="font-mono text-zinc-200">{phase5PoolStatus ?? 'not started'}</div>
+                    </div>
+                  </div>
+                ) : null}
+                {solanaPostDeployStatusQuery.data?.nextStep ? (
+                  <div className="text-[11px] text-zinc-400 leading-relaxed">
+                    {solanaPostDeployStatusQuery.data.nextStep}
+                  </div>
+                ) : null}
+                {(solanaPostDeployStatusQuery.data?.shareMeshMapping?.lastError ||
+                  solanaPostDeployStatusQuery.data?.meteoraPool?.lastError) && (
+                  <div className="text-[11px] text-amber-300/90 leading-relaxed">
+                    {solanaPostDeployStatusQuery.data?.meteoraPool?.lastError ??
+                      solanaPostDeployStatusQuery.data?.shareMeshMapping?.lastError}
+                  </div>
+                )}
+              </div>
+              <div className="grid gap-x-10 gap-y-4 md:grid-cols-2">
+                <AddressTable title="Base side · bridged asset" tone="yours" iconSrc={PROTOCOL_LOGOS.base}>
+                  <AddressRow
+                    label="Share OFT"
+                    address={phase5ShareOft}
+                    deployed={expectedAddressDeployment?.shareOFT ?? null}
+                    forkOnly={isForkOnlyAddress(phase5ShareOft, expectedAddressDeployment?.shareOFT ?? null)}
+                    iconSrc={PROTOCOL_LOGOS.fun4626}
+                  />
+                </AddressTable>
+                <AddressTable title="Solana side · share mesh" tone="yours" iconSrc={PROTOCOL_LOGOS.solana}>
+                  <AddressRow
+                    label="LZ share-mesh mint"
+                    address={phase5ShareMeshMint}
+                    deployed={phase5ShareMeshMintDeployed}
+                    explorerHref={phase5ShareMeshMint ? solanaExplorerAddressUrl(phase5ShareMeshMint) : null}
+                    tags={
+                      phase5MappingStatus === 'applied'
+                        ? ['live']
+                        : phase5ShareMeshMint || phase === 'done' || lastSessionStep === 'completed'
+                          ? ['pending']
+                          : undefined
+                    }
+                    iconSrc={PROTOCOL_LOGOS.solana}
+                  />
+                </AddressTable>
+                <AddressTable
+                  title="Meteora · DLMM pool"
+                  tone="yours"
+                  iconSrc={PROTOCOL_LOGOS.meteora}
+                  className="md:col-span-2"
+                >
+                  <AddressRow
+                    label="Meteora DLMM pool"
+                    address={phase5PoolAddress}
+                    deployed={phase5PoolDeployed}
+                    explorerHref={phase5PoolAddress ? solanaExplorerAddressUrl(phase5PoolAddress) : null}
+                    tags={
+                      phase5PoolStatus === 'created'
+                        ? ['live']
+                        : phase5PoolStatus === 'creating' || phase5PoolStatus === 'pending'
+                          ? ['pending']
+                          : phase5PoolStatus === 'failed'
+                            ? ['pending']
+                            : phase === 'done' || lastSessionStep === 'completed'
+                              ? ['pending']
+                              : undefined
+                    }
+                    iconSrc={PROTOCOL_LOGOS.meteora}
+                  />
+                </AddressTable>
+              </div>
+            </PhaseCard>
+          ) : null}
           </PhaseTimeline>
 
           <DryRunPanel
