@@ -19,11 +19,11 @@ status: current
 | Field | Value |
 | --- | --- |
 | Session ID | `f2b45214-e1b0-4d22-85f9-8a7f49492e69` |
-| Review model | Cursor Fable 5 (`claude-fable-5-thinking-high`) |
+| Record type | Lead review session export |
 :::note Appendix record
-Readable export of an agent-assisted review session. Tool outputs and system context blocks are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
+Readable export of a supplementary review session. Tool outputs and system context are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
 :::
-## User
+## Engagement brief
 
 <timestamp>Friday, Jun 12, 2026, 12:56 AM (UTC-7)</timestamp>
 consoleNoisePatch.ts:33 [app-loading] overlay still active after 8s — held by: waitlist-auth-bootstrap
@@ -78,7 +78,7 @@ Version: viem@2.45.1
 (anonymous) @ consoleNoisePatch.ts:37
 consoleNoisePatch.ts:37 Cannot update a component (`WaitlistGroupChatSurface`) while rendering a different component (`Hydrate`). To locate the bad setState() call inside `Hydrate`, follow the stack trace as described in https://react.dev/link/setstate-in-render
 
-## Assistant
+## Analysis
 
 I'll dig into the waitlist group chat / XMTP wiring to diagnose these errors — the setState-during-`Hydrate` warning and the "Missing auth token" XMTP signer failures look related to how the waitlist chat surface mounts.
 
@@ -88,11 +88,11 @@ The React warning about setState during render in `WaitlistGroupChatSurface` whi
 
 *Tools invoked:* Grep, Grep
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Read, Read
 
-## Assistant
+## Analysis
 
 Looking at the console errors, I'm seeing authentication issues with the Privy embedded wallet provider—the signer flow is failing because the Privy session is missing an auth token, which is causing both the SCW and EOA signer attempts to fail with "Missing auth token" errors. This suggests the localhost dev session might not have the proper authentication set up.
 
@@ -100,7 +100,7 @@ Beyond that, there's the OPFS lock contention from multiple XMTP workers, and mo
 
 *Tools invoked:* Read, Read
 
-## Assistant
+## Analysis
 
 The issue is that `WaitlistGroupChatSurface` is triggering state updates while wagmi's `Hydrate` component is rendering, which violates React's rules. The chat surface depends on wagmi hooks like `useAccount`, `useWalletClient`, and `useConnect` through `usePrepareWaitlistMessagingWallet`, and when wagmi reconnects during hydration, it synchronously updates the store, causing the conflict. The fix is to defer these wagmi hook consumers until after the commit phase using `useDeferUntilAfterCommit`.
 
@@ -110,13 +110,13 @@ There's also an OPFS lock contention issue from another tab or worker, and the o
 
 *Tools invoked:* Grep, Grep
 
-## Assistant
+## Analysis
 
 I need to check how `WaitlistSetupWorkspace` mounts the panel and verify that the waitlist route's wagmi providers properly wrap it—specifically looking for `WalletProviders` and whether it defers hook consumers as expected.
 
 *Tools invoked:* Grep, Grep
 
-## Assistant
+## Analysis
 
 The chat panel is nested inside `WalletProviders` and `DeferWagmiConsumers`, which delays rendering by one commit after WagmiProvider mounts. But I'm seeing a warning that `WaitlistGroupChatSurface` is being updated while `Hydrate` is rendering — that shouldn't happen if the deferral is working. Let me check how `useDeferUntilAfterCommit` actually works; it looks like it uses a module-level shared store to track the first client commit.
 
@@ -126,7 +126,7 @@ This matches the documented workspace pattern. Let me check `useDeferUntilMounte
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 So `deferAfterCommitStore` is a one-shot mechanism that locks in after the first commit, making `DeferWagmiConsumers` ineffective once the waitlist setup workspace mounts later. Since the children render in the same pass as wagmi's `Hydrate`, the hydration logic runs regardless of the `reconnectOnMount` setting.
 
@@ -150,7 +150,7 @@ My hypothesis: the deploy-dry-run is running on port 5174, but the Privy app's a
 
 *Tools invoked:* Grep, Shell
 
-## Assistant
+## Analysis
 
 App-side env allows 5174. Now let me look at how the XMTP connect path builds its signers, and whether "Missing auth token" is a known failure mode.
 
@@ -160,7 +160,7 @@ The "Missing auth token" error is actually coming from within Privy's bundle whe
 
 *Tools invoked:* Grep, Grep
 
-## Assistant
+## Analysis
 
 The Swap page has a documented recovery pattern for exactly this Privy "Missing auth token" failure. Let me read it.
 
@@ -170,13 +170,13 @@ Now I'm checking the Swap.tsx code around line 726 to see if there's already a r
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 I'm checking how the waitlist chat error formatting handles missing auth tokens and whether there's a recovery hint available. Since the user shared console output without explicitly asking for changes, I should focus on diagnosing what they've shown rather than proposing improvements they didn't request.
 
 *Tools invoked:* Grep
 
-## Assistant
+## Analysis
 
 Here's my read of that console dump. One real failure, the rest is known noise.
 

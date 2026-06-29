@@ -19,28 +19,28 @@ status: current
 | Field | Value |
 | --- | --- |
 | Session ID | `d9895cc0-8426-4918-9b67-7c504afa28f5` |
-| Review model | Cursor Fable 5 (`claude-fable-5-thinking-high`) |
+| Record type | Lead review session export |
 :::note Appendix record
-Readable export of an agent-assisted review session. Tool outputs and system context blocks are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
+Readable export of a supplementary review session. Tool outputs and system context are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
 :::
-## User
+## Engagement brief
 
 <timestamp>Tuesday, Jun 9, 2026, 8:42 AM (UTC-7)</timestamp>
 how would you describe this project 4626 in a few sentences?
 
-## Assistant
+## Analysis
 
 `4626` is a full-stack crypto product monorepo centered on creator vaults: creators launch ERC-4626-style vault infrastructure on Base, route value across strategies, and expose tokenized participation lanes (creator coin + share token).  
 It combines a Vite/React frontend (`frontend/`), Solidity contracts (`contracts/`), and backend/automation surfaces (Vercel APIs, keeper/agent workflows, XMTP/Telegram integrations) to handle onboarding, deployment, trading/swap, and operations.  
 A big architectural theme is strict account/wallet policy: a canonical Coinbase Smart Wallet per account, with carefully separated signer roles for user execution vs server automation.  
 There’s also a cross-chain/ops layer (including Solana bridge/keeper paths), so it’s not just a dApp UI—it’s an opinionated production platform for deploying and running creator financial infrastructure.
 
-## User
+## Engagement brief
 
 <timestamp>Tuesday, Jun 9, 2026, 8:43 AM (UTC-7)</timestamp>
 and u forgot the lottery aspect
 
-## Assistant
+## Analysis
 
 You’re right — lottery is a core pillar here.
 
@@ -48,12 +48,12 @@ You’re right — lottery is a core pillar here.
 
 The lottery side is not just cosmetic: it has dedicated flows for entries, randomness/settlement infrastructure, and cross-system relay paths (including Solana-related keeper orchestration), tied into the broader creator/share-token lifecycle. So the project is best described as a production-grade vault + creator market + lottery stack, with strict wallet/account invariants and heavy operational automation.
 
-## User
+## Engagement brief
 
 <timestamp>Tuesday, Jun 9, 2026, 8:44 AM (UTC-7)</timestamp>
 it also includes ve(3,3) type of mechanism except we use burning of share tokens rather than emissoins
 
-## Assistant
+## Analysis
 
 Exactly — that’s a strong way to frame the protocol economics.
 

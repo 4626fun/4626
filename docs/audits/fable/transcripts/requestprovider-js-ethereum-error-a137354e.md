@@ -19,11 +19,11 @@ status: current
 | Field | Value |
 | --- | --- |
 | Session ID | `a137354e-3778-4401-9e5e-2bd4be691a10` |
-| Review model | Cursor Fable 5 (`claude-fable-5-thinking-high`) |
+| Record type | Lead review session export |
 :::note Appendix record
-Readable export of an agent-assisted review session. Tool outputs and system context blocks are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
+Readable export of a supplementary review session. Tool outputs and system context are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
 :::
-## User
+## Engagement brief
 
 <timestamp>Wednesday, Jun 10, 2026, 10:42 AM (UTC-7)</timestamp>
 requestProvider.js:2 Uncaught TypeError: Cannot set property ethereum of #<Window> which has only a getter
@@ -80,113 +80,113 @@ bindings_wasm.js:3013 ERROR xmtp_mls::groups::welcome_sync: failed to create gro
 (anonymous) @ bindings_wasm.js:3013
 consoleNoisePatch.ts:37 Cannot update a component (`DeployVaultMain`) while rendering a different component (`Hydrate`). To locate the bad setState() call inside `Hydrate`, follow the stack trace as described in https://react.dev/link/setstate-in-render
 
-## Assistant
+## Analysis
 
 I’m going to trace these as two separate regressions: wallet-provider injection collisions (`window.ethereum` redefine/getter) and the React `setState` during `Hydrate` in `DeployVault`. I’ll inspect the relevant hooks/config and patch both so the app ignores hostile extension injection and defers state updates until after hydration.
 
 *Tools invoked:* rg, rg, rg, rg
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ReadFile, ReadFile, ReadFile, ReadFile, ReadFile
 
-## Assistant
+## Analysis
 
 I found existing guards for extension collisions, so the wallet errors are mostly extension-side noise, but the `Hydrate` warning likely comes from a render-phase update inside `DeployVault`. I’m now inspecting the top-level deploy page initialization path for any setter called during render and will patch it to run in an effect.
 
 *Tools invoked:* ReadFile
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ReadFile
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ReadFile, ReadFile, ReadFile, ReadFile
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ReadFile
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ReadFile
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ReadFile
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ReadFile
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ReadFile
 
-## Assistant
+## Analysis
 
 *Tools invoked:* rg
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ReadFile
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ReadFile
 
-## Assistant
+## Analysis
 
 I’ve identified a low-risk mitigation path: gate EIP-6963 `requestProvider` dispatch when `window.ethereum` is already locked, and mount the heavy deploy surface only after first commit to avoid the `Hydrate` render-phase update warning. I’m applying both now.
 
 *Tools invoked:* ApplyPatch
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ApplyPatch
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 *Tools invoked:* AwaitShell
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ReadFile
 
-## Assistant
+## Analysis
 
 *Tools invoked:* rg
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ReadFile
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ApplyPatch
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 *Tools invoked:* AwaitShell
 
-## Assistant
+## Analysis
 
 *Tools invoked:* AwaitShell
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ReadLints
 
-## Assistant
+## Analysis
 
 Patched both problem lanes in app code:
 

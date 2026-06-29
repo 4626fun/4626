@@ -19,16 +19,16 @@ status: current
 | Field | Value |
 | --- | --- |
 | Session ID | `8eaaa66b-7a56-4236-9907-febd642048c5` |
-| Review model | Cursor Fable 5 (`claude-fable-5-thinking-high`) |
+| Record type | Lead review session export |
 :::note Appendix record
-Readable export of an agent-assisted review session. Tool outputs and system context blocks are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
+Readable export of a supplementary review session. Tool outputs and system context are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
 :::
-## User
+## Engagement brief
 
 <timestamp>Friday, Jun 12, 2026, 12:03 AM (UTC-7)</timestamp>
 i just want to ensure that the solana side is completely ready to go when a user presses the deploy vault button
 
-## Assistant
+## Analysis
 
 I'll verify the Solana-side readiness for vault deploys — starting with the Pipe A readiness script the repo provides, then checking the provisioner and peer wiring.
 
@@ -36,11 +36,11 @@ I'll verify the Solana-side readiness for vault deploys — starting with the Pi
 
 *Tools invoked:* Shell, Glob
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 Running the on-chain Pipe A readiness check against the live batcher now.
 
@@ -48,7 +48,7 @@ Running the on-chain Pipe A readiness check against the live batcher now.
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 The public Base RPC rate-limited the check. Let me find a configured RPC in the local env and retry.
 
@@ -56,11 +56,11 @@ The public Base RPC rate-limited the check. Let me find a configured RPC in the 
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 Pipe A is ready to go with all checks passing, including the Solana peer configuration and registry auth. On the Solana side, I need to verify the native fee quoting logic that runs during finalization—since the peer is now set, the quoting should resolve properly, though I should test this live to confirm.
 
@@ -70,7 +70,7 @@ I should also verify the production Vercel environment has the right config—th
 
 *Tools invoked:* Grep, Shell
 
-## Assistant
+## Analysis
 
 The provisioner is returning a 401 on the healthz endpoint even though it's up and responding with actual data, not an error page. The orchestrator is healthy at 200. I need to trace through the deploy session continuation logic in `_continueCore.ts` to see how it handles the Solana bridge token registration and whether the deploy process blocks waiting for the Solana side, then check if there's a deploy-time status endpoint I can use to monitor Solana infrastructure.
 
@@ -78,7 +78,7 @@ Looking at what happens during the finalizePhase2 step where the Pipe A fee gets
 
 *Tools invoked:* Grep
 
-## Assistant
+## Analysis
 
 The deploy continuation path for OVault mesh on Solana requires verifying the batcher runtime config is enabled on-chain, ensuring the `DEPLOY_SOLANA_REGISTRATION_SECRET` environment variable exists for internal checks, and successfully calling the bridge token registration endpoint to reach the provisioner.
 
@@ -86,7 +86,7 @@ There's also a LayerZero fee attachment step at finalization, and a read-only st
 
 *Tools invoked:* Read, Read
 
-## Assistant
+## Analysis
 
 There's a dedicated admin endpoint at `GET /api/deploy/solanaInfraStatus` that checks the `readyForAutoRegistration` status and any blockers — this is the production server view I need to hit with machine authentication. The endpoint accepts machine auth via either an `Authorization: Bearer KPR_API_KEY` header or the `X-CV-Solana-Registration-Secret` header.
 
@@ -94,29 +94,29 @@ I should check if I have the necessary credentials locally in `frontend/.env` �
 
 *Tools invoked:* Grep, Shell
 
-## Assistant
+## Analysis
 
 I have both secrets available locally, so I'll call the production endpoint to check the Solana infrastructure status using the bearer token, without revealing the secret in the output.I'm checking the production Solana infrastructure status to see the current provisioner config, signer, and OVault mesh eligibility as they appear in the live environment.
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 The grep command is probably exiting with code 2 because the `.env.local` file doesn't exist, and the command substitution might be failing silently in a way that prevents the echo from executing at all.  Let me check if those files are actually present before trying to grep them.
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 The shell seems to have `set -e` enabled, so it stops executing after the `ls` command fails. I need to adjust my approach and use commands that will succeed instead.
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 Everything on the Solana side is green for a deploy-button press. I verified it at three layers:
 
@@ -150,12 +150,12 @@ The Solana keeper orchestrator is responding with a healthy status and has recon
 
 Everything checks out across the three layers: on-chain batcher readiness is fully green with all 12 checks passing, the production registration path is ready with no blockers and the provisioner is healthy and funded, and the ops services are up and responding. The Meteora per-creator infrastructure gets provisioned after deployment as an optional step, and the LayerZero finalize fee gets quoted and attached at deploy time, so those aren't blocking factors. The relay entries lane is intentionally paused but that doesn't affect deployments.
 
-## User
+## Engagement brief
 
 <timestamp>Friday, Jun 12, 2026, 12:05 AM (UTC-7)</timestamp>
 what is pipe-A and pipe-B and can we just combine them into just one single flow?
 
-## Assistant
+## Analysis
 
 Let me look at the canonical policy doc and the two rehearsal scripts to give you an accurate picture before answering.
 
@@ -163,17 +163,17 @@ Let me look at the canonical policy doc and the two rehearsal scripts to give yo
 
 *Tools invoked:* Shell, Grep
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 I need to review the policy documentation and the pipe-b rehearsal script to get a precise definition of Pipe B, which according to the budget doc is the compose deposit lane operation.
 
 *Tools invoked:* Read, Shell
 
-## Assistant
+## Analysis
 
 ## What they are
 
@@ -218,12 +218,12 @@ What *is* unified is the operational provisioning layer—a single vault purchas
 
 I should lead with clear definitions, then address whether combining makes sense with a recommendation, and note the naming drift between B1 and B2 briefly.
 
-## User
+## Engagement brief
 
 <timestamp>Friday, Jun 12, 2026, 12:11 AM (UTC-7)</timestamp>
 ok i think pipe b needs to be taken out because the $akita token will only live in base and only the share token will exist on solana. if a user withdraws from solana, they shouldn't receive $akita tokens in solana right?
 
-## Assistant
+## Analysis
 
 Let me check what's actually implemented for the compose-deposit lane (Pipe B) before recommending what to remove — particularly whether any Solana-side redeem path could ever hand out the underlying creator coin.
 
@@ -231,17 +231,17 @@ Let me check what's actually implemented for the compose-deposit lane (Pipe B) b
 
 *Tools invoked:* Grep, Grep
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 I'm looking at how `OVaultHubComposer` handles two different compose actions — deposits bring asset mesh tokens from Solana into the wrapper and generate shares, while redeems take share mesh tokens and withdraw from the wrapper to produce creator coins. I need to trace through the redeem handler to see what actually happens to those creator coins after they're withdrawn.
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 Your instinct is right, and there's a reassuring detail in the code: **even as designed, a Solana withdrawal never delivers $AKITA on Solana.** I read the live `OVaultHubComposer` redeem path to confirm.
 
@@ -281,12 +281,12 @@ However, there's a constraint: `configureCreatorMesh` requires a non-zero `asset
 
 So the user's concern is already addressed by design—redeeming from Solana delivers the creator coin on Base, not on Solana. The practical path forward is to keep the redeem lane (it settles on Base anyway and aligns with the "AKITA only on Base" constraint) but disable deposits by never configuring the asset mesh—that requires zero code changes. If they want hard removal later, the scope is clear: modify the composer to drop ACTION_DEPOSIT, strip the depositEligible checks, and update docs. Since this is a question asking for assessment rather than immediate action, I should confirm the recommendation and clarify that the infra flags governing preflight eligibility are just env hints, not the actual mesh configuration.
 
-## User
+## Engagement brief
 
 <timestamp>Friday, Jun 12, 2026, 12:18 AM (UTC-7)</timestamp>
 yes
 
-## Assistant
+## Analysis
 
 I'll do the follow-through now: retire the compose-deposit lane in the docs and strip the deposit-eligibility/asset-mesh hints from the deploy preflight. First, let me map the full surface.
 
@@ -296,17 +296,17 @@ Now I need to examine the compatibility file to understand all the places where 
 
 *Tools invoked:* TodoWrite, Read, Grep
 
-## Assistant
+## Analysis
 
 Now the session-status response normalization near line 3013.
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 *Tools invoked:* StrReplace
 
-## Assistant
+## Analysis
 
 Now `_createCore.ts` — drop the `assetMeshMint` (asset-mesh) field from the session request surface.
 
@@ -314,26 +314,26 @@ Now `_createCore.ts` — drop the `assetMeshMint` (asset-mesh) field from the se
 
 *Tools invoked:* StrReplace
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 *Tools invoked:* StrReplace
 
-## Assistant
+## Analysis
 
 Looking at the test file around line 864 to see how `assetMeshMint` is being passed through and whether the normalize function preserves it.
 
 *Tools invoked:* Read
 
-## User
+## Engagement brief
 
 <timestamp>Friday, Jun 12, 2026, 12:24 AM (UTC-7)</timestamp>
 i mean.... could we have this pipe b open? in case we do open up the bridge for $akita to be bridged from base to solana? if this is possible, then how do we ensure that the $akita token is bridgable to toher chains and from the other chains like tehereum to solana?  maybe we can use chainlink ccip for this ?
 
-## Assistant
+## Analysis
 
 The user is pivoting to ask whether we should keep Pipe B available for future $AKITA bridging between Base and Solana, and how to set up cross-chain bridging more broadly—maybe using Chainlink CCIP. This is shifting away from the deposit-eligibility work I was doing toward a higher-level architecture decision about multi-chain support.
 
@@ -353,7 +353,7 @@ Before finalizing the recommendation, I need to verify two things: whether CCIP 
 
 *Tools invoked:* Shell, WebSearch
 
-## Assistant
+## Analysis
 
 The `owner()` call failed because AKITA is a Zora Creator Coin without standard Ownable functionality. For CCIP cross-chain token transfers on EVM, I need to set up a lock/release pool instead of modifying the token contract itself — this involves creating a token pool and registering it as the CCIP admin through Chainlink, either via `getCCIPAdmin()` or manual registration if admin proof isn't available.
 
@@ -363,11 +363,11 @@ Pipe B can stay open as a dormant feature — it only activates when `configureC
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 AKITA lacks both `owner()` and `getCCIPAdmin()` methods, which means it can't use CCIP's self-service registration flow on EVM chains—it would need Chainlink to handle the registration manually through governance instead.
 
@@ -379,15 +379,15 @@ Now I'm working through the DeployVault UI changes — removing depositEligible 
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 *Tools invoked:* StrReplace, StrReplace
 
-## Assistant
+## Analysis
 
 *Tools invoked:* StrReplace
 
-## Assistant
+## Analysis
 
 Looking at the session-create payload in DeployVault and the type definitions, there's a mismatch with `assetMintOrigin` — the server expects 'existing' or 'new', but the client type has 'wrapped' which isn't even valid server-side. I need to decide whether to keep this field or align the types properly.
 
@@ -395,27 +395,27 @@ The simplest fix is to remove `assetMintOrigin` from the client type and payload
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 *Tools invoked:* StrReplace, StrReplace
 
-## Assistant
+## Analysis
 
 I'm removing deposit-eligibility/asset-mesh from the `readyForAutoRegistration` gate and response in the infra-status endpoint.
 
 *Tools invoked:* Grep
 
-## Assistant
+## Analysis
 
 I need to search through the file for any blockers related to deposit eligibility or mint/ovault, specifically looking for instances where blockers are being pushed.
 
 *Tools invoked:* Grep
 
-## Assistant
+## Analysis
 
 *Tools invoked:* StrReplace, StrReplace, StrReplace, StrReplace
 
-## Assistant
+## Analysis
 
 Now updating the tests to match.
 
@@ -423,45 +423,45 @@ Now updating the tests to match.
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 *Tools invoked:* StrReplace, StrReplace, StrReplace, StrReplace
 
-## Assistant
+## Analysis
 
 Looking at the test file to find where those fetch-mock responses are set up for the legacy register endpoint, then checking whether the test assertions actually verify that `depositEligible` appears in the handler's response or just in the mocked endpoint data.
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 The depositEligible mocks are properly scoped within legacy-flag tests that mock the register endpoint, so those assertions should hold up fine. I'm also considering whether to clean up `deploySessionOwnership.test.ts:864` by removing the `assetMeshMint` field from the request body since it gets ignored during normalization anyway — it's a minor cleanup that wouldn't affect the test outcome.
 
 *Tools invoked:* StrReplace
 
-## Assistant
+## Analysis
 
 I need to update the documentation to reflect that pipe B is dormant rather than retired, so I'm marking the "Two lanes" section in the solana-share-mesh-lottery-policy file to show that lane B has no asset mesh token configured currently but will activate if a canonical $AKITA bridge gets established.Code is done. I'm marking the compose-deposit lane as dormant rather than deleted, and now I'll review the current documentation sections.
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 *Tools invoked:* StrReplace, StrReplace
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 *Tools invoked:* StrReplace
 
-## Assistant
+## Analysis
 
 Docs done. Now verifying — lints, typecheck, and the targeted test files.
 
@@ -469,17 +469,17 @@ Docs done. Now verifying — lints, typecheck, and the targeted test files.
 
 *Tools invoked:* ReadLints, Shell
 
-## Assistant
+## Analysis
 
 Typecheck clean. Running the four affected test suites.
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 *Tools invoked:* TodoWrite
 
-## Assistant
+## Analysis
 
 Done — and your question changed the framing mid-flight: I marked the compose-deposit lane **dormant instead of retired**, so the door stays open exactly the way you're describing. All code/doc changes are in, typecheck is clean, and all 142 tests across the five affected deploy suites pass.
 
@@ -515,12 +515,12 @@ For $AKITA specifically, it's a Zora creator coin with no `owner()` or `getCCIPA
 
 Once AKITA becomes bridgeable to Solana, the composer just needs the resulting Solana mint set as `assetMeshToken`, and while the "creator coin never leaves Base" statement technically changes, the lottery policy stays unaffected since compose deposits still aren't lottery-eligible. The work shipped includes code, docs, and tests.
 
-## User
+## Engagement brief
 
 <timestamp>Friday, Jun 12, 2026, 1:36 AM (UTC-7)</timestamp>
 ok
 
-## Assistant
+## Analysis
 
 I'll write the design note now. Gathering the repo facts to ground it first.
 
@@ -530,7 +530,7 @@ Now I'm gathering the concrete details to ground this in actual repo facts: the 
 
 *Tools invoked:* Grep, Read
 
-## Assistant
+## Analysis
 
 Looking at the configureCreatorMesh function signature to understand its parameters — it takes creatorToken, vault, assetMeshToken, shareMeshToken, solanaEid, and the Solana peer addresses.
 
@@ -540,7 +540,7 @@ For the compose deposit setup, the assetMeshToken points to the Base OFTAdapter 
 
 *Tools invoked:* Write
 
-## Assistant
+## Analysis
 
 Adding a pointer from the policy doc so the design note is discoverable from where the dormant lane is defined.
 
@@ -548,7 +548,7 @@ Adding a pointer from the policy doc so the design note is discoverable from whe
 
 *Tools invoked:* StrReplace
 
-## Assistant
+## Analysis
 
 The design note is written at `docs/research/akita-oft-adapter-lockbox.md`, cross-linked from the lottery-policy doc's dormant-lane section.
 
@@ -562,12 +562,12 @@ It captures everything we established, ready to pick up whenever you decide to o
 
 Everything from this session is uncommitted in the working tree — say the word if you want it committed and pushed.
 
-## User
+## Engagement brief
 
 <timestamp>Friday, Jun 12, 2026, 2:01 AM (UTC-7)</timestamp>
 forget chainlink, lets just stick with layerzero  oft t
 
-## Assistant
+## Analysis
 
 Locking that in — I'll remove CCIP from the design note and policy doc so LayerZero OFT is the committed bridge choice, not one of two options.
 
@@ -575,7 +575,7 @@ Locking that in — I'll remove CCIP from the design note and policy doc so Laye
 
 *Tools invoked:* StrReplace, StrReplace, StrReplace, StrReplace, StrReplace
 
-## Assistant
+## Analysis
 
 Done. The decision is now recorded as **LayerZero OFT only**:
 

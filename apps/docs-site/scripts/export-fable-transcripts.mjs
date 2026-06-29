@@ -43,6 +43,28 @@ function auditPathNav(currentHref) {
   return `<nav class="audit-path" aria-label="Report sections">\n  ${steps.join('\n  ')}\n</nav>`;
 }
 
+function formalizeAuditLine(line) {
+  return line
+    .replace(/\| Chat \|/g, '| Session |')
+    .replace(/\| Subagents \|/g, '| Workstreams |')
+    .replace(/\| Opening prompt \|/g, '| Engagement scope |')
+    .replace(/\| Subagent \|/g, '| Workstream |')
+    .replace(/Repo review subagents/g, 'Parallel workstreams')
+    .replace(/Other 4626 chats/g, 'Supplementary sessions')
+    .replace(/Full-codebase review prompt \(Fable 5[^)]*\)/g, 'Full-codebase security review')
+    .replace(/\bsubagents?\b/gi, (match) =>
+      /^subagents$/i.test(match) ? 'workstreams' : 'workstream',
+    )
+    .replace(/\bSubagents\b/g, 'Workstreams')
+    .replace(/\bSubagent\b/g, 'Workstream')
+    .replace(/\(parent `/g, '(lead session `')
+}
+
+function roleHeading(role) {
+  if (role === 'user') return '## Engagement brief';
+  if (role === 'assistant') return '## Analysis';
+  return '## Record';
+}
 function linkUuidInLine(line, slugByUuid) {
   return line.replace(/\[([0-9a-f-]{36})\]\(([0-9a-f-]{36})\)/g, (_match, _label, uuid) => {
     const slug = slugByUuid.get(uuid);
@@ -73,7 +95,7 @@ function buildPublicSessionsIndex(sourceBody, slugByUuid, stats) {
     '| Period | Review activity |',
     '| --- | --- |',
     '| 9–13 June 2026 | ' +
-      `${stats.parents} primary sessions · ${stats.subagents} subagent lanes · ${stats.total} published transcripts |`,
+      `${stats.parents} lead sessions · ${stats.subagents} parallel workstreams · ${stats.total} published records |`,
     '',
     '---',
     '',
@@ -143,7 +165,7 @@ function buildPublicSessionsIndex(sourceBody, slugByUuid, stats) {
       continue;
     }
 
-    out.push(linkUuidInLine(line, slugByUuid));
+    out.push(formalizeAuditLine(linkUuidInLine(line, slugByUuid)));
   }
 
   while (out[out.length - 1] === '') out.pop();
@@ -213,8 +235,8 @@ const SESSION_LABELS = {
   'af8b98af-4d55-40da-a68a-4e11a707065f': 'Continual-learning memory update',
   'f83f9e53-e4c5-481d-801c-a16939d00efa': 'Swap page refresh loop',
   'fb86041c-25d5-4cd0-a318-e815df1c39b7': 'Continual-learning memory update',
-  '11502b9b-3fec-4e23-b352-9f81c31f7aa5': 'Full-codebase review subagent',
-  'fba285d6-1444-4d1a-a56c-0a74fb4deeaf': 'Full-codebase review subagent',
+  '11502b9b-3fec-4e23-b352-9f81c31f7aa5': 'Supplementary analysis lane',
+  'fba285d6-1444-4d1a-a56c-0a74fb4deeaf': 'Supplementary analysis lane',
 };
 
 function stripNoise(text) {
@@ -235,9 +257,18 @@ function stripNoise(text) {
     .trim();
 }
 
+function linkEvmAddressesInMarkdown(text) {
+  if (!text) return '';
+  return text.replace(/\b(0x[a-fA-F0-9]{40})\b/g, (addr) => {
+    const label = `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+    return `[${label}](https://basescan.org/address/${addr} "${addr}")`;
+  });
+}
+
 function sanitizeForPublish(text) {
   if (!text) return '';
-  return text
+  return linkEvmAddressesInMarkdown(
+    text
     .replace(/!\[([^\]]*)]\(([^)]+)\)/g, (match, alt, url) => {
       const trimmed = url.trim();
       if (/^https?:\/\//i.test(trimmed)) return match;
@@ -246,7 +277,8 @@ function sanitizeForPublish(text) {
       }
       return `*(image omitted: ${alt || 'screenshot'} — see raw JSONL archive)*`;
     })
-    .trim();
+    .trim(),
+  );
 }
 
 function extractTextBlocks(content) {
@@ -299,7 +331,7 @@ function slugForUuid(uuid) {
 }
 
 async function writeTranscriptMd({ uuid, relPath, turns, isSubagent, parentUuid }) {
-  const label = SESSION_LABELS[uuid] ?? (isSubagent ? 'Analysis subagent' : 'Review session');
+  const label = SESSION_LABELS[uuid] ?? (isSubagent ? 'Parallel analysis lane' : 'Review session');
   const slug = slugForUuid(uuid);
   const outPath = path.join(OUT_DIR, `${slug}.md`);
   const lines = [
@@ -329,17 +361,17 @@ async function writeTranscriptMd({ uuid, relPath, turns, isSubagent, parentUuid 
     '| Field | Value |',
     '| --- | --- |',
     `| Session ID | \`${uuid}\` |`,
-    isSubagent ? `| Parent session | \`${parentUuid}\` |` : '',
-    '| Review model | Cursor Fable 5 (`claude-fable-5-thinking-high`) |',
+    isSubagent ? `| Lead session | \`${parentUuid}\` |` : '',
+    '| Record type | ' + (isSubagent ? 'Parallel workstream export' : 'Lead review session export') + ' |',
     '',
     ':::note Appendix record',
-    'Readable export of an agent-assisted review session. Tool outputs and system context blocks are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.',
+    'Readable export of a supplementary review session. Tool outputs and system context are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.',
     ':::',
     '',
   ].filter(Boolean);
 
   for (const turn of turns) {
-    const heading = turn.role === 'user' ? '## User' : '## Assistant';
+    const heading = roleHeading(turn.role);
     lines.push(heading, '');
     if (turn.text) {
       lines.push(turn.text, '');
@@ -455,11 +487,11 @@ async function main() {
     '',
     '# Appendix C — Transcript archive',
     '',
-    'Complete readable exports of every **4626** Fable review session (9–13 June 2026). Start with the [executive summary](/audits/fable/findings-summary) and [source sessions](/audits/fable/key-sessions) appendix.',
+    'Complete readable exports of every **4626** review session (9–13 June 2026). Start with the [executive summary](/audits/fable/findings-summary) and [source sessions](/audits/fable/key-sessions) appendix.',
     '',
     '**Machine-readable logs:** [fable-chats-4626-2026-06.zip](/audits/fable-chats-4626-2026-06.zip)',
     '',
-    `**${transcriptStats.total} sessions** (${transcriptStats.parents} parent · ${transcriptStats.subagents} subagent)`,
+    `**${transcriptStats.total} session records** (${transcriptStats.parents} lead · ${transcriptStats.subagents} parallel workstream)`,
     '',
     '## Featured',
     '',
@@ -477,7 +509,7 @@ async function main() {
   ];
 
   for (const e of uniqueEntries) {
-    const type = e.isSubagent ? 'Subagent' : 'Parent';
+    const type = e.isSubagent ? 'Workstream' : 'Lead';
     indexLines.push(`| [${e.label}](./${e.outPath.replace(/\.md$/, '')}) | \`${e.uuid.slice(0, 8)}…\` | ${type} |`);
   }
 

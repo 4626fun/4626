@@ -19,11 +19,11 @@ status: current
 | Field | Value |
 | --- | --- |
 | Session ID | `c16ed264-3756-401a-b489-7e5cd345462c` |
-| Review model | Cursor Fable 5 (`claude-fable-5-thinking-high`) |
+| Record type | Lead review session export |
 :::note Appendix record
-Readable export of an agent-assisted review session. Tool outputs and system context blocks are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
+Readable export of a supplementary review session. Tool outputs and system context are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
 :::
-## User
+## Engagement brief
 
 <timestamp>Friday, Jun 12, 2026, 2:47 AM (UTC-7)</timestamp>
 Navigated to chrome-error://chromewebdata/
@@ -1068,7 +1068,7 @@ wp @ vendor-CPvvbQqE.js:8
 (anonymous) @ vendor-CPvvbQqE.js:8
 main-DHCqnWBR.js:2 [app-loading] overlay still active after 8s — held by: privy-init
 
-## Assistant
+## Analysis
 
 The smoking gun here is the CSP block on `https://privy.4626.fun/api/v1/sessions` — the custom Privy auth domain is missing from the production `connect-src`, so Privy can never restore its session and the loading overlay hangs on `privy-init`. The wallet-extension errors (`evmAsk.js`, `requestProvider.js`) are the known multi-extension provider-collision noise and not the cause. Let me find where the CSP is defined.
 
@@ -1078,11 +1078,11 @@ The wallet extension errors are just noise from provider collisions and aren't c
 
 *Tools invoked:* Grep, Grep
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Grep
 
-## Assistant
+## Analysis
 
 The grep truncated the long CSP line. Let me read it fully.
 
@@ -1090,7 +1090,7 @@ The grep truncated the long CSP line. Let me read it fully.
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 So the issue is that the Privy SDK's custom auth domain endpoints aren't in the `connect-src` directive—they're only allowed in `child-src` and `frame-src`—which blocks the XHR/fetch requests to `https://privy.4626.fun/api/v1/sessions`. I need to add both `https://privy.4626.fun` and `https://privy.app.4626.fun` to `connect-src` to fix this.
 
@@ -1098,17 +1098,17 @@ Before applying the fix, I should check the git history of the vercel.json file 
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 The connect-src directive never included privy.4626.fun in the first place, so this isn't a recent regression. The site must have worked before with a different Privy endpoint, possibly auth.privy.io, and something changed either in the SDK's connection behavior or the dashboard configuration. I should also check if there's a separate CSP header for the app subdomain since this route pattern suggests there might be different policies for app.4626.fun versus 4626.fun — let me look through vercel.json for other CSP entries.I found that `connect-src` is missing `privy.4626.fun` even though the frame/child directives have it, so the CSP cutover was incomplete. I'll check for duplicate CSP blocks in `vercel.json` and add the missing origin.
 
 *Tools invoked:* Shell, Read
 
-## Assistant
+## Analysis
 
 There's a single CSP policy across all routes, and `connect-src` is missing the custom Privy domains (`https://privy.4626.fun` and possibly `https://privy.app.4626.fun`), even though `frame-src` and `child-src` include them. When the custom auth domain was added in 2026, only the frame/child directives were updated, leaving `connect-src` behind. This likely worked before because the Privy SDK probably only used the custom domain for iframe embedding, but a newer version now routes session API calls through it as well.
 
@@ -1118,7 +1118,7 @@ Since this is a production outage and the user's preferences indicate they expec
 
 *Tools invoked:* StrReplace
 
-## Assistant
+## Analysis
 
 Now a regression test next to the existing CSP assertions, so the custom Privy auth domain can't silently drop out of `connect-src` again.
 
@@ -1126,11 +1126,11 @@ Now a regression test next to the existing CSP assertions, so the custom Privy a
 
 *Tools invoked:* StrReplace
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 All 11 tests pass and the JSON is valid. Production is broken and deploys are `main`-only, so I'll commit and push the fix now.
 
@@ -1138,13 +1138,13 @@ All 11 tests pass and the JSON is valid. Production is broken and deploys are `m
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 I've got some unrelated changes sitting around—deploy hero stuff, NetworkBadge deletion, and an untracked migration—but I'm just going to commit my two files to keep things clean.I found unrelated local changes in the working tree, so I'll commit only the CSP fix and its test.
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 Fixed and pushed to `main` (commit `5e7656ef9`), which triggers the Vercel production deploy.
 

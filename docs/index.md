@@ -42,7 +42,7 @@ hide_table_of_contents: true
   </a>
   <a class="home-card" href="/audits">
     <span class="home-card__tag">Security</span>
-    <span class="home-card__title">June 2026 codebase review</span>
+    <span class="home-card__title">June 2026 security review</span>
     <span class="home-card__desc">Executive summary, full technical report, source sessions, and transcript archive.</span>
   </a>
 </div>

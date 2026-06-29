@@ -19,12 +19,12 @@ status: current
 | Field | Value |
 | --- | --- |
 | Session ID | `5a3eda06-c544-4d15-b56a-16f6c832cc10` |
-| Parent session | `0a513245-3ae2-4076-a9b0-bc1de524c38f` |
-| Review model | Cursor Fable 5 (`claude-fable-5-thinking-high`) |
+| Lead session | `0a513245-3ae2-4076-a9b0-bc1de524c38f` |
+| Record type | Parallel workstream export |
 :::note Appendix record
-Readable export of an agent-assisted review session. Tool outputs and system context blocks are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
+Readable export of a supplementary review session. Tool outputs and system context are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
 :::
-## User
+## Engagement brief
 
 <timestamp>Tuesday, Jun 9, 2026, 11:45 AM (UTC-7)</timestamp>
 You are doing the data-layer/concurrency pass of a full-codebase review of the 4626 monorepo at /home/akitav2/projects/4626. READ-ONLY: do not modify files. Stack: Supabase Postgres (single project), migrations in supabase/migrations/, server data access via pg in frontend/server/_lib/ (getDb / getDbForCron in frontend/server/_lib/db/), serverless on Vercel with POSTGRES_POOL_MAX=1 and a transaction pooler.
@@ -43,7 +43,7 @@ Checklist:
 
 Return findings sorted by severity, plus verified-sound items. Be rigorous.
 
-## User
+## Engagement brief
 
 <timestamp>Tuesday, Jun 9, 2026, 11:45 AM (UTC-7)</timestamp>
 You are doing the data-layer/concurrency pass of a full-codebase review of the 4626 monorepo at /home/akitav2/projects/4626. READ-ONLY: do not modify files. Stack: Supabase Postgres (single project), migrations in supabase/migrations/, server data access via pg in frontend/server/_lib/ (getDb / getDbForCron in frontend/server/_lib/db/), serverless on Vercel with POSTGRES_POOL_MAX=1 and a transaction pooler.
@@ -62,25 +62,25 @@ Checklist:
 
 Return findings sorted by severity, plus verified-sound items. Be rigorous.
 
-## Assistant
+## Analysis
 
 The loop is stopping prematurely when ripgrep returns a non-zero exit code, which is causing the iteration to halt after finding files with no matches. I need to add `|| true` to prevent the exit code from terminating the loop.
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 Looking at the migration files, most of them have proper RLS setup with ENABLE RLS and RESTRICTIVE deny policies, and there's one documented safe DROP TABLE. I need to verify that the alfaclub_command_reply_ledger migration has a restrictive policy since the preview cut off mid-way, and also confirm the counter_trade_engine and the three tables in the 20260709 migration all have proper RLS in place.
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 Moving on to check the tombstone and alias patterns, unbounded queries, numeric handling, and unique constraint assumptions. I also need to verify the `_activate.ts` handler and revisit the daily check-in race condition, particularly around the `x402_authorization_nonce` unique constraint in the `insertPendingActivation` function and its migration. Starting with a search for any direct `profiles.privy_user_id` references that might indicate tombstone issues.
 
 *Tools invoked:* UpdateCurrentStep, Grep, Grep
 
-## Assistant
+## Analysis
 
 I'm checking whether the `insertPendingActivation` function properly extracts the x402 nonce from the metadata object and maps it to the database column, since the nonce is being passed nested inside metadata rather than as a direct parameter.
 
@@ -88,7 +88,7 @@ Now I need to trace through several suspect locations to understand how tombston
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 Looking at the account resolver in `accountResolver.ts`, I'm seeing that it filters out tombstones but doesn't actually follow the alias chain when a Privy user has been merged—it just returns null instead of resolving to the canonical profile. This violates the requirement that all profile lookups by Privy user ID need to traverse the alias cascade, so merged users end up losing their Base MCP account resolution.
 
@@ -100,7 +100,7 @@ I should also verify the activation logic in `activations.ts` — specifically h
 
 *Tools invoked:* Grep, Read
 
-## Assistant
+## Analysis
 
 Looking at the activation code, I'm noticing a critical gap between the documented replay protection and what's actually implemented. The migration set up a unique constraint on the `x402_authorization_nonce` column, but the insert function never actually populates that column—it only stores the nonce in the metadata JSON, leaving the column null and rendering the database-level constraint ineffective.
 
@@ -112,7 +112,7 @@ Let me verify that the `hasLiveActivationForFeature` function is looping correct
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 The `x402_authorization_nonce` column is never actually written to, making the unique index on it dead code—the nonce only exists in the metadata JSON, so the documented protection in the docs isn't enforced at the database level. I'm now checking the remaining issues, starting with those unbounded queries in the creatorEthosProjection function around lines 301-407, which look like they might be part of a cron job with limits already in place.
 
@@ -120,7 +120,7 @@ I also need to verify the creator_co selects in the request handlers, the numeri
 
 *Tools invoked:* Shell, Read
 
-## Assistant
+## Analysis
 
 I've clarified the unique index behavior for `points_unique_source_full`: it's defined as `ON points (signup_id, source, source_id)` without `NULLS NOT DISTINCT`, which means PostgreSQL treats NULL values as distinct by default, allowing multiple rows with `source_id IS NULL` for the same signup and source combination—except for `csw_link` entries, which are protected by the `points_csw_link_single_shot` constraint. This affects how `awardWaitlistPoints` callers need to handle their inputs.
 
@@ -128,11 +128,11 @@ Now I need to search through the codebase to find which sources are calling `awa
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 All the `awardWaitlistPoints` call sites are passing non-null `sourceId` values, and while `csw_link` gets force-nulled, it's covered by a dedicated partial index, so the NULL `source_id` double-award risk is really just a theoretical concern at the current call sites—though I should note this as a low-priority design hazard since the helper function allows null sourceId for non-csw_link sources without constraint protection. Other points writers like `recordReferralPassthrough` build composite keys that are non-null, and `amoe` points use ON CONFLICT handling...
 
@@ -140,63 +140,63 @@ For the remaining checks: I need to verify numeric handling around `Math.trunc(n
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Shell, Grep
 
-## Assistant
+## Analysis
 
 Looking at the Number conversion in x402.ts around line 296, and I notice usdcPayment.ts doesn't seem to have any BigInt or Number operations — need to check what value comparisons are actually happening there. The zora metrics are using SUM aggregates which makes sense for hero metrics (probably cached despite the full table scans), and I see the _explore.ts query at line 528 does have a LIMIT clause.
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 The numeric handling looks solid across payments and points — bigint comparisons are consistent, small values like signature bytes are fine as numbers, and ID conversions work. Now I need to check how the alfaclub chat-bridge-run handler uses the cron database, along with the query limits in the explore module and metrics calculations.
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 The `rg` command with word boundaries might be causing issues — the first search returned no matches and exited with code 1, which seems to have suppressed the echo output entirely. Let me try running simpler commands separately to isolate the problem.
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 I've confirmed that `_chat-bridge-run.ts` is another CRON_SECRET-protected handler with the same violation—its backing stores use plain `getDb()` instead of adhering to the getDbForCron policy, matching the pattern I found in the AMOE cron libraries. I have enough for the report now, but let me quickly verify `_x402-activate.ts` to be thorough.
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 I need to verify whether the x402 handler checks for live activation before settling the payment. Looking through the _x402-activate.ts file, I don't see that check being called, so I'm examining the code around lines 150-225 to see if there's a pre-check before the settlement happens.
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 I've confirmed the High severity issue: there's no `hasLiveActivationForFeature` check before the on-chain USDC transfer at line 206, so funds are already sent before the database insert happens—if `live_activation_exists` is true, the money's already gone. The nonce is only stored in metadata at line 240, making that unique index ineffective. I'm now compiling the full set of findings and need to check how the system handles failures when `insertResult.ok` is false.
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 I have enough verified material now. Let me pin exact line numbers in `postgres.ts` for the transaction helper findings.
 
@@ -216,13 +216,13 @@ Now I need to double-check the postgres.ts line numbers for the runInTransaction
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 Everything checks out, so I'm ready to put together the final report.
 
 *Tools invoked:* UpdateCurrentStep
 
-## Assistant
+## Analysis
 
 # Data-layer / Concurrency Review — 4626 monorepo
 

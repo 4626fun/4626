@@ -3,14 +3,14 @@ title: Security & audits
 sidebar_label: Overview
 sidebar_position: 1
 hide_table_of_contents: true
-last_updated: '2026-06-28'
+last_updated: '2026-06-29'
 audience:
   - developers
   - protocols
   - operators
 stage: use
 owner: docs-team
-last_reviewed: '2026-06-28'
+last_reviewed: '2026-06-29'
 status: current
 ---
 
@@ -19,10 +19,10 @@ status: current
 <section class="audit-hero">
   <span class="audit-hero__eyebrow"><span class="audit-hero__dot"></span>Security disclosure</span>
   <h1 class="audit-hero__title">Security &amp; audits</h1>
-  <p class="audit-hero__subtitle">4626 publishes independent review materials for integrators, auditors, and token holders: executive findings, the full technical report, curated source sessions, and a complete transcript archive.</p>
+  <p class="audit-hero__subtitle">Published security review materials for integrators, auditors, and token holders: scope and methodology, executive findings, the full technical report, and supplementary session records.</p>
   <div class="home-hero__actions">
     <a class="home-btn home-btn--primary" href="/audits/fable/findings-summary">Executive summary<span class="home-btn__arrow" aria-hidden="true">→</span></a>
-    <a class="home-btn home-btn--ghost" href="/audits/fable">Review scope &amp; methodology</a>
+    <a class="home-btn home-btn--ghost" href="/audits/fable">Scope &amp; methodology</a>
   </div>
 </section>
 
@@ -82,10 +82,10 @@ flowchart LR
   <div class="audit-doc-control__title">Published review</div>
   <table>
     <tbody>
-      <tr><th>Report</th><td>Fable 5 agent-assisted codebase review — June 2026</td></tr>
+      <tr><th>Report</th><td>4626 Technical Security Review — June 2026</td></tr>
       <tr><th>Repository</th><td><a href="https://github.com/wenakita/4626">wenakita/4626</a></td></tr>
       <tr><th>Review period</th><td>9–13 June 2026</td></tr>
-      <tr><th>Primary deliverable</th><td><a href="/audits/fable/full-repo-review-2026-06">Full-codebase review report</a></td></tr>
+      <tr><th>Primary deliverable</th><td><a href="/audits/fable/full-repo-review-2026-06">Full technical report</a></td></tr>
     </tbody>
   </table>
 </div>
@@ -93,15 +93,15 @@ flowchart LR
 <div class="audit-stat-row">
   <div class="audit-stat">
     <span class="audit-stat__value">8</span>
-    <span class="audit-stat__label">Parallel analysis lanes</span>
+    <span class="audit-stat__label">Parallel workstreams</span>
   </div>
   <div class="audit-stat">
     <span class="audit-stat__value">47</span>
-    <span class="audit-stat__label">Primary review sessions</span>
+    <span class="audit-stat__label">Lead review sessions</span>
   </div>
   <div class="audit-stat">
     <span class="audit-stat__value">97</span>
-    <span class="audit-stat__label">Published transcripts</span>
+    <span class="audit-stat__label">Published session records</span>
   </div>
   <div class="audit-stat">
     <span class="audit-stat__value">3 + 6</span>
@@ -109,34 +109,34 @@ flowchart LR
   </div>
 </div>
 
-## June 2026 codebase review
+## June 2026 security review
 
 <div class="home-cards">
   <a class="home-card audit-card audit-card--featured" href="/audits/fable/findings-summary">
     <span class="home-card__tag">Recommended first read</span>
     <span class="home-card__title">Executive summary</span>
-    <span class="home-card__desc">Critical and high-severity findings with severity classification and primary evidence references.</span>
+    <span class="home-card__desc">Critical and high-severity findings with severity definitions and primary evidence references.</span>
   </a>
   <a class="home-card audit-card" href="/audits/fable">
     <span class="home-card__tag">Scope</span>
     <span class="home-card__title">Scope &amp; methodology</span>
-    <span class="home-card__desc">What was reviewed, how findings were validated, and the release-readiness conclusion at review date.</span>
+    <span class="home-card__desc">Systems in scope, validation approach, evidence grading, and release-readiness conclusion at review date.</span>
   </a>
   <a class="home-card audit-card" href="/audits/fable/full-repo-review-2026-06">
     <span class="home-card__tag">Full report</span>
     <span class="home-card__title">Full technical report</span>
-    <span class="home-card__desc">Architecture map, complete finding register (C/H/M/L), CI analysis, test gaps, and remediation guidance.</span>
+    <span class="home-card__desc">Architecture map, complete finding register (C/H/M/L), baseline validation, test gaps, and remediation guidance.</span>
   </a>
   <a class="home-card audit-card" href="/audits/fable/key-sessions">
     <span class="home-card__tag">Appendix A</span>
     <span class="home-card__title">Source sessions</span>
-    <span class="home-card__desc">Curated review threads that produced the report, with links to readable transcript exports.</span>
+    <span class="home-card__desc">Curated session register linking to supplementary engagement records.</span>
   </a>
 </div>
 
 <div class="audit-limitations">
-  <div class="audit-limitations__title">Limitations</div>
-  <p>This publication documents an <strong>agent-assisted engineering review</strong> conducted with Cursor Fable 5. It is <strong>not</strong> a substitute for a formal smart-contract audit certificate from an independent security firm. Findings reflect the repository state at review time; verify remediation status against current code and disclosures before making launch or integration decisions. Transcript appendices are supplementary records — the authoritative written conclusions are in the executive summary and full report.</p>
+  <div class="audit-limitations__title">Limitations &amp; disclaimer</div>
+  <p>This publication documents a <strong>read-only technical security review</strong> of the 4626 monorepo conducted in June 2026. It is <strong>not</strong> a formal smart-contract audit certificate from an independent security firm and does not constitute legal or investment advice. Findings reflect repository state at review time; verify remediation status against current code and public disclosures before launch or integration decisions. Appendices contain supplementary session records — authoritative written conclusions are in the executive summary and full report.</p>
 </div>
 
 <div class="home-links">

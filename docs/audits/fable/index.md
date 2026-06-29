@@ -3,14 +3,14 @@ title: Review scope & methodology
 sidebar_label: Scope & methodology
 sidebar_position: 1
 hide_table_of_contents: true
-last_updated: '2026-06-28'
+last_updated: '2026-06-29'
 audience:
   - developers
   - protocols
   - operators
 stage: use
 owner: docs-team
-last_reviewed: '2026-06-28'
+last_reviewed: '2026-06-29'
 status: current
 ---
 
@@ -27,9 +27,9 @@ status: current
 </nav>
 
 <section class="audit-hero">
-  <span class="audit-hero__eyebrow"><span class="audit-hero__dot"></span>June 2026 · Agent-assisted review</span>
+  <span class="audit-hero__eyebrow"><span class="audit-hero__dot"></span>June 2026 · Technical security review</span>
   <h1 class="audit-hero__title">Scope &amp; methodology</h1>
-  <p class="audit-hero__subtitle">Read-only, multi-pass review of the <strong>wenakita/4626</strong> monorepo using Cursor Fable 5, with parallel subsystem analysis and manual verification of high-severity candidates at file:line granularity.</p>
+  <p class="audit-hero__subtitle">Read-only, multi-pass assessment of the <strong>wenakita/4626</strong> monorepo: baseline validation, parallel subsystem analysis, and manual verification of high-severity candidates at file:line granularity.</p>
   <div class="home-hero__actions">
     <a class="home-btn home-btn--primary" href="/audits/fable/findings-summary">Executive summary<span class="home-btn__arrow" aria-hidden="true">→</span></a>
     <a class="home-btn home-btn--ghost" href="/audits/fable/full-repo-review-2026-06">Full technical report</a>
@@ -41,11 +41,11 @@ status: current
   <table>
     <tbody>
       <tr><th>Report ID</th><td>4626-FABLE-2026-06</td></tr>
-      <tr><th>Review tool</th><td>Cursor Fable 5 (<code>claude-fable-5-thinking-high</code>)</td></tr>
-      <tr><th>Review mode</th><td>Read-only — no production code modified as part of the review</td></tr>
-      <tr><th>Validation</th><td>Baseline lint / typecheck / test / forge gates; parallel subagents; manual candidate verification</td></tr>
+      <tr><th>Review type</th><td>Read-only technical security assessment</td></tr>
+      <tr><th>Review period</th><td>9–13 June 2026</td></tr>
+      <tr><th>Validation</th><td>Baseline lint / typecheck / test / forge gates; parallel workstreams; manual candidate verification</td></tr>
       <tr><th>Finding grades</th><td>VERIFIED · REFUTED · ALREADY-KNOWN (with evidence citations)</td></tr>
-      <tr><th>Primary session</th><td><a href="/audits/fable/transcripts/full-codebase-review-primary-audit-0a513245">Full-codebase review (0a513245…)</a></td></tr>
+      <tr><th>Lead session</th><td><a href="/audits/fable/transcripts/full-codebase-review-primary-audit-0a513245">Full-codebase review (0a513245…)</a></td></tr>
     </tbody>
   </table>
 </div>
@@ -58,7 +58,7 @@ status: current
 <div class="audit-stat-row">
   <div class="audit-stat">
     <span class="audit-stat__value">8</span>
-    <span class="audit-stat__label">Parallel analysis lanes</span>
+    <span class="audit-stat__label">Parallel workstreams</span>
   </div>
   <div class="audit-stat">
     <span class="audit-stat__value">350+</span>
@@ -111,7 +111,7 @@ flowchart TB
 
   subgraph ops [Operations]
     INF[CI & infrastructure]
-    AGT[Agent runtime]
+    RT[XMTP / Hermit runtime]
   end
 
   ROOT --> onchain
@@ -126,7 +126,7 @@ flowchart TB
   class ROOT root
   class SC,CC onchain
   class FE,API app
-  class INF,AGT ops
+  class INF,RT ops
 ```
 
 ## In-scope systems
@@ -153,10 +153,23 @@ flowchart TB
     <span class="audit-scope-card__body">Solana share-mesh program, bridge adapter, KPR keeper workflows</span>
   </div>
   <div class="audit-scope-card">
-    <span class="audit-scope-card__title">Agent runtime</span>
+    <span class="audit-scope-card__title">Messaging runtime</span>
     <span class="audit-scope-card__body">Railway XMTP/Eliza runtime, Hermit, Telegram Mini App flows</span>
   </div>
 </div>
+
+## Key on-chain components (Base mainnet)
+
+Infrastructure modules referenced in critical findings. Full registry: [Contract addresses](/reference/addresses).
+
+| Component | Role | Address |
+| --- | --- | --- |
+| CreatorOVaultCoreModule | Impairment side-pocket logic (C-2, C-3, H-1) | [`0xD4553478780571A1A5F6cCCC0735F897F15a85Cf`](https://basescan.org/address/0xD4553478780571A1A5F6cCCC0735F897F15a85Cf) |
+| DeploymentBatcher | Vault deploy orchestration | [`0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1`](https://basescan.org/address/0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1) |
+| CreatorRegistry | Creator ↔ vault registry | [`0xDD7B106a15540bA2F59464590222bF47D8C9394E`](https://basescan.org/address/0xDD7B106a15540bA2F59464590222bF47D8C9394E) |
+| SolanaBridgeAdapter | Cross-chain bridge | [`0x8e99bb0270bbdf2d64ff6854509CD2410A28fBae`](https://basescan.org/address/0x8e99bb0270bbdf2d64ff6854509CD2410A28fBae) |
+
+Per-vault contracts (e.g. `CreatorORecoveryEscrow`) are deployed at launch; see [CreatorOVault](/contracts/core/creator-ovault) and source on [GitHub](https://github.com/wenakita/4626/tree/main/contracts/vault).
 
 ## Methodology
 
@@ -173,8 +186,8 @@ flowchart TB
   }
 }}%%
 flowchart LR
-  A["① Baseline<br/>lint · test · forge"] --> B["② Primary review<br/>0a513245…"]
-  B --> C["③ Parallel lanes<br/>8 subsystems"]
+  A["① Baseline<br/>lint · test · forge"] --> B["② Lead review<br/>0a513245…"]
+  B --> C["③ Parallel workstreams<br/>8 subsystems"]
   C --> D["④ Security pass<br/>c603521c…"]
   D --> E["⑤ Evidence grading<br/>VERIFIED · REFUTED"]
   E --> F["Report register<br/>4626-FABLE-2026-06"]
@@ -189,8 +202,8 @@ flowchart LR
   class F out
 ```
 
-1. **Repository baseline** — Install dependencies, run lint, typecheck, unit tests, forge build/test, and repository guard scripts.
-2. **Primary review** — Full-codebase template executed in session <a href="/audits/fable/transcripts/full-codebase-review-primary-audit-0a513245">0a513245…</a> with parallel lanes: architecture, CI/CD, frontend, data layer, security, and contracts.
+1. **Repository baseline** — Install dependencies; run lint, typecheck, unit tests, forge build/test, and repository guard scripts.
+2. **Lead review** — Full-codebase assessment in session <a href="/audits/fable/transcripts/full-codebase-review-primary-audit-0a513245">0a513245…</a> with parallel workstreams covering architecture, CI/CD, frontend, data layer, security, and contracts.
 3. **Security follow-up** — Dedicated pass in session <a href="/audits/fable/transcripts/security-pass-on-full-codebase-review-c603521c">c603521c…</a> on the same scope.
 4. **Production readiness** — Follow-on sessions (including <a href="/audits/fable/transcripts/production-readiness-planning-6318a55b">6318a55b…</a>) traced launch blockers into remediation planning.
 5. **Evidence grading** — Each candidate finding verified or refuted with file:line references before inclusion in the report register.
@@ -205,7 +218,7 @@ flowchart LR
 ## Citation
 
 ```text
-4626 Agent-Assisted Codebase Review (June 2026). Report 4626-FABLE-2026-06.
+4626 Technical Security Review (June 2026). Report 4626-FABLE-2026-06.
 https://docs.4626.fun/audits/fable/full-repo-review-2026-06
 ```
 

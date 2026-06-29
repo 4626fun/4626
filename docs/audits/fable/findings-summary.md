@@ -3,14 +3,14 @@ title: Executive summary
 sidebar_label: Executive summary
 sidebar_position: 2
 hide_table_of_contents: true
-last_updated: '2026-06-28'
+last_updated: '2026-06-29'
 audience:
   - developers
   - protocols
   - operators
 stage: use
 owner: docs-team
-last_reviewed: '2026-06-28'
+last_reviewed: '2026-06-29'
 status: current
 ---
 
@@ -148,7 +148,9 @@ sequenceDiagram
   </div>
   <h3 class="audit-finding__title">x402 payment settles before entitlement validation</h3>
   <p class="audit-finding__body">Strategy activation broadcasts an on-chain USDC transfer before confirming no live activation exists. A subsequent database failure can leave a settled on-chain payment with no corresponding entitlement record.</p>
-  <p class="audit-finding__meta"><code>frontend/api/_handlers/creator/strategy/_x402-activate.ts</code></p>
+  <p class="audit-finding__meta">
+    <a class="repo-path-link" href="https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/creator/strategy/_x402-activate.ts" target="_blank" rel="noopener noreferrer">frontend/api/_handlers/creator/strategy/_x402-activate.ts</a>
+  </p>
 </div>
 
 <div class="audit-finding audit-finding--critical">
@@ -158,7 +160,13 @@ sequenceDiagram
   </div>
   <h3 class="audit-finding__title">Impairment claims lack cumulative supply cap enforcement</h3>
   <p class="audit-finding__body">On-chain logic does not enforce that cumulative minted claims remain within <code>totalClaimSupply</code>. Shared escrow holds multiple epochs; over-claim in one epoch can drain tokens reserved for another.</p>
-  <p class="audit-finding__meta"><code>CreatorOVaultCoreModule.sol</code> · <code>CreatorORecoveryEscrow.sol</code></p>
+  <p class="audit-finding__meta">
+    <a class="repo-path-link" href="https://github.com/wenakita/4626/blob/main/contracts/vault/modules/CreatorOVaultCoreModule.sol" target="_blank" rel="noopener noreferrer">CreatorOVaultCoreModule.sol</a>
+    <span class="audit-evidence__sep">·</span>
+    <a class="evm-address-link" href="https://basescan.org/address/0xD4553478780571A1A5F6cCCC0735F897F15a85Cf" target="_blank" rel="noopener noreferrer" title="0xD4553478780571A1A5F6cCCC0735F897F15a85Cf">0xD455…85Cf</a>
+    <span class="audit-evidence__sep">·</span>
+    <a class="repo-path-link" href="https://github.com/wenakita/4626/blob/main/contracts/vault/CreatorORecoveryEscrow.sol" target="_blank" rel="noopener noreferrer">CreatorORecoveryEscrow.sol</a>
+  </p>
 </div>
 
 <div class="audit-finding audit-finding--critical">
@@ -168,7 +176,13 @@ sequenceDiagram
   </div>
   <h3 class="audit-finding__title">Impairment root persists after false-alarm resolution</h3>
   <p class="audit-finding__body"><code>clearImpairmentTrip</code> marks an epoch resolved but leaves snapshot root and claim supply active, preserving a claim surface inconsistent with public impairment disclosures.</p>
-  <p class="audit-finding__meta"><code>CreatorOVaultCoreModule.sol</code> · <a href="/reference/impairment-v1-disclosures">Impairment v1 disclosures</a></p>
+  <p class="audit-finding__meta">
+    <a class="repo-path-link" href="https://github.com/wenakita/4626/blob/main/contracts/vault/modules/CreatorOVaultCoreModule.sol" target="_blank" rel="noopener noreferrer">CreatorOVaultCoreModule.sol</a>
+    <span class="audit-evidence__sep">·</span>
+    <a class="evm-address-link" href="https://basescan.org/address/0xD4553478780571A1A5F6cCCC0735F897F15a85Cf" target="_blank" rel="noopener noreferrer" title="0xD4553478780571A1A5F6cCCC0735F897F15a85Cf">0xD455…85Cf</a>
+    <span class="audit-evidence__sep">·</span>
+    <a href="/reference/impairment-v1-disclosures">Impairment v1 disclosures</a>
+  </p>
 </div>
 
 ## High findings
@@ -189,7 +203,9 @@ sequenceDiagram
   </div>
   <h3 class="audit-finding__title">Live deploy not blocked during dry-run</h3>
   <p class="audit-finding__body">The deploy flow can submit a live transaction while a dry-run is in progress — the <code>dryRunBusy</code> guard is missing from submit logic and button disabled state.</p>
-  <p class="audit-finding__meta"><code>DeployVault.tsx</code></p>
+  <p class="audit-finding__meta">
+    <a class="repo-path-link" href="https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/DeployVault.tsx" target="_blank" rel="noopener noreferrer">DeployVault.tsx</a>
+  </p>
 </div>
 
 <div class="audit-finding audit-finding--high">
@@ -199,7 +215,11 @@ sequenceDiagram
   </div>
   <h3 class="audit-finding__title">Swap auto-quote can interrupt review/submit</h3>
   <p class="audit-finding__body">Background re-quoting during <code>review</code> or <code>quote</code> states invalidates in-flight work and can abort submission after partial signing steps.</p>
-  <p class="audit-finding__meta"><code>Swap.tsx</code> · <code>useSwapExecution.ts</code></p>
+  <p class="audit-finding__meta">
+    <a class="repo-path-link" href="https://github.com/wenakita/4626/blob/main/frontend/src/pages/Swap.tsx" target="_blank" rel="noopener noreferrer">Swap.tsx</a>
+    <span class="audit-evidence__sep">·</span>
+    <a class="repo-path-link" href="https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts" target="_blank" rel="noopener noreferrer">useSwapExecution.ts</a>
+  </p>
 </div>
 
 <div class="audit-finding audit-finding--high">
@@ -226,9 +246,9 @@ sequenceDiagram
 
 The full report registers **9 medium** and **12 low** findings covering cron database access patterns, x402 nonce persistence, Stripe webhook body handling, CSP configuration, alias resolution gaps, and related items. See [Section 4 — Prioritized findings](/audits/fable/full-repo-review-2026-06#4-prioritized-findings).
 
-## Source material
+## Evidence & appendices
 
-Primary analysis: [Full-codebase review session](/audits/fable/transcripts/full-codebase-review-primary-audit-0a513245) (eight parallel lanes). Security follow-up: [dedicated security pass](/audits/fable/transcripts/security-pass-on-full-codebase-review-c603521c).
+Lead review session: [Full-codebase review](/audits/fable/transcripts/full-codebase-review-primary-audit-0a513245) (eight parallel workstreams). Independent security pass: [c603521c…](/audits/fable/transcripts/security-pass-on-full-codebase-review-c603521c). Full session register: [Appendix A](/audits/fable/key-sessions).
 
 <nav class="audit-flow-nav" aria-label="Continue reading">
   <a class="audit-flow-nav__link audit-flow-nav__link--prev" href="/audits/fable">← Scope &amp; methodology</a>

@@ -2,14 +2,14 @@
 title: Full-codebase review (June 2026)
 sidebar_label: Full report
 sidebar_position: 3
-last_updated: '2026-06-28'
+last_updated: '2026-06-29'
 audience:
   - developers
   - protocols
   - operators
 stage: use
 owner: docs-team
-last_reviewed: '2026-06-28'
+last_reviewed: '2026-06-29'
 status: current
 ---
 
@@ -23,7 +23,7 @@ status: current
   <a class="audit-path__step" href="/audits/fable/transcripts">Transcript archive</a>
 </nav>
 
-# Full-codebase review — wenakita/4626
+# Full technical report — wenakita/4626
 
 <div class="audit-doc-control">
   <div class="audit-doc-control__title">Report 4626-FABLE-2026-06</div>
@@ -32,37 +32,36 @@ status: current
       <tr><th>Report ID</th><td>4626-FABLE-2026-06</td></tr>
       <tr><th>Date</th><td>June 2026</td></tr>
       <tr><th>Repository</th><td><a href="https://github.com/wenakita/4626">wenakita/4626</a></td></tr>
-      <tr><th>Review type</th><td>Agent-assisted read-only codebase review (Cursor Fable 5)</td></tr>
-      <tr><th>Reviewer role</th><td>Senior staff engineer / security reviewer / QA lead / release engineer</td></tr>
-      <tr><th>Primary session</th><td><a href="/audits/fable/transcripts/full-codebase-review-primary-audit-0a513245">0a513245…</a></td></tr>
+      <tr><th>Review type</th><td>Read-only technical security assessment</td></tr>
+      <tr><th>Lead session</th><td><a href="/audits/fable/transcripts/full-codebase-review-primary-audit-0a513245">0a513245…</a></td></tr>
     </tbody>
   </table>
 </div>
 
 <div class="docs-at-a-glance">
 
-**Executive summary available:** For a concise register of critical and high findings, read the [executive summary](/audits/fable/findings-summary) first. This document is the complete technical report.
+**Executive summary available:** For critical and high findings only, read the [executive summary](/audits/fable/findings-summary) first. This document is the complete technical report.
 
 </div>
 
-**Method:** Multi-pass read-only review. Baseline validation commands, parallel subsystem subagents, manual verification of high-severity candidates. Findings graded VERIFIED / REFUTED / ALREADY-KNOWN with file:line evidence.
+**Method:** Multi-pass read-only review. Baseline validation commands, parallel subsystem workstreams, manual verification of high-severity candidates. Findings graded VERIFIED / REFUTED / ALREADY-KNOWN with file:line evidence.
 
-**Scope:** Full monorepo — frontend SPA, ~350 Vercel API handlers, Foundry contracts, KPR keepers, Solana program, Railway agents.
+**Scope:** Full monorepo — frontend SPA, ~350 Vercel API handlers, Foundry contracts, KPR keepers, Solana program, Railway messaging runtime.
 
 ---
 
 ## 1. Executive summary
 
-The repo is a large, mature monorepo (frontend SPA + ~350 Vercel API handlers, Foundry contracts, KPR keepers, Solana program, Railway agents). Engineering hygiene is **above average**: SHA-pinned CI actions, no `pull_request_target`, RLS on every new table, transactional profile-merge, race-safe keeper-job claiming, tombstone/alias cascades on most identity lookups, and a documented canonical-CSW invariant enforced by a CI guard.
+The repository is a large, mature monorepo with engineering hygiene **above average**: SHA-pinned CI actions, no `pull_request_target`, RLS on every new table, transactional profile-merge, race-safe keeper-job claiming, tombstone/alias cascades on identity lookups, and a documented canonical-CSW invariant enforced by CI.
 
-The review found **no remotely-exploitable unauthenticated RCE / fund-drain in the web tier**. The most material risks are:
+**No remotely exploitable unauthenticated RCE or web-tier fund-drain was identified.** Material risks concentrate in:
 
-1. **Contracts — impairment side-pocket v1** has three real on-chain issues (no `totalClaimSupply` cap enforcement + uncapped shared escrow → cross-epoch drain; `notifyImpairmentRecovery` coin-balance accounting gap; stale-root lifecycle after `clearImpairmentTrip`). These require a malicious/buggy **manager or keeper** (semi-trusted), so they are governance-trust escalations, not anonymous exploits — but the side-pocket is new code with thin test coverage.
-2. **`x402` paid-strategy activation settles USDC on-chain *before* any entitlement check**, and a post-settlement insert failure rolls back *all* payment rows — a real-money path that can take a payment and leave zero DB record.
-3. **CI enforcement gaps**: Semgrep is documented as blocking but the `| tee` pipe likely masks its exit code; two guards that fail on committed code (`guard:frontend-boundaries`, `guard:server-core-boundary`) and `guard:schema` are **not** all wired into `test.yml`; a cron workflow (`control-plane-stuck-scan.yml`) is broken (npm/lockfile mismatch) and silently red.
-4. **Working-tree drift**: typecheck (6 errors) and Vitest (78 failures / 19 files) are red on the current dirty tree — uncommitted WIP, not a shipped regression, but it means the local tree is not release-clean.
+1. **Impairment side-pocket v1** — three on-chain issues (missing `totalClaimSupply` cap + uncapped shared escrow; coin-balance accounting gap on recovery; stale-root lifecycle after `clearImpairmentTrip`). These require a malicious or faulty **manager or keeper** (semi-trusted roles), not anonymous exploitation. Side-pocket code has thin test coverage.
+2. **x402 strategy activation** — USDC settles on-chain before entitlement validation; a post-settlement database failure can leave a settled payment with no entitlement record.
+3. **CI enforcement gaps** — Semgrep likely non-blocking due to pipe behavior; boundary guards not fully wired into gating CI; a control-plane cron workflow fails at install (lockfile mismatch).
+4. **Working-tree drift** — typecheck (6 errors) and Vitest (78 failures) were red on the dirty tree at review time (uncommitted WIP, not a shipped regression).
 
-**Release-readiness verdict: NOT READY to tag a clean release from the current working tree.** The tree is dirty with failing typecheck/tests; the impairment contract findings and the x402 ordering bug should be resolved (or explicitly risk-accepted with disclosures updated) before any deploy that exercises those paths. The web tier itself is in good shape once the working tree is committed/cleaned and CI gates are repaired.
+**Release-readiness verdict: NOT READY** to tag a clean release from the reviewed working tree. Resolve or explicitly risk-accept impairment and x402 findings (with updated disclosures) before deploying those paths. Repair CI gates and commit/clean the tree before tagging.
 
 ---
 
@@ -99,7 +98,7 @@ Three Vercel HTML shells share one React bundle; host decided at runtime:
 
 **Auth lanes:** Privy `X-Privy-Token` (verifyAuthToken); HttpOnly `cv_auth_session` HMAC cookie (SIWE); Vercel cron `CRON_SECRET`; machine `KPR_API_KEY` (constant-time); admin (session address/email, `ADMIN_API_TOKEN`, or dual session+`CRON_SECRET` for profile merge). `cv_auth_session` uses `Domain=.4626.fun` so sessions survive marketing↔app navigation.
 
-**Background:** 31 Vercel crons (creator metrics, AlfaClub bridge, AMOE, Zora/Ethos sync, keeper-job enqueue) using `getDbForCron`; `keeper_jobs` queue (claim/run/complete) with allowlisted outbound; 16 KPR workflows + Solana orchestrator; Railway Eliza/XMTP + Hermit runtimes.
+**Background:** 31 Vercel crons (creator metrics, AlfaClub bridge, AMOE, Zora/Ethos sync, keeper-job enqueue) using `getDbForCron`; `keeper_jobs` queue (claim/run/complete) with allowlisted outbound; 16 KPR workflows + Solana orchestrator; Railway XMTP/Eliza + Hermit runtimes.
 
 **Data:** 127 Supabase migrations (SSoT); runtime `schemaBootstrap.ts` delegates via `ensureMigrationApplied` (no raw DDL allowed); profile-merge + tombstone/alias infra.
 
@@ -137,7 +136,7 @@ flowchart TB
   subgraph data [Data & automation]
     PG[("Supabase Postgres")]
     KPR["KPR keepers"]
-    RAIL["Railway agents"]
+    RAIL["XMTP / Hermit runtime"]
   end
 
   subgraph chain [On-chain]
@@ -216,7 +215,7 @@ flowchart LR
 - Line ~206 `settleX402Payment(parsed.payment)` broadcasts the EIP-3009 `transferWithAuthorization` (creator USDC → treasury) **before** any `hasLiveActivationForFeature` pre-check.
 - Lines ~225–247 only then run `insertPendingActivation` inside `runInTransaction`. A `live_activation_exists` conflict returns 409 — but USDC is already moved.
 - `upsertPaymentOrder` (~249) and `recordPaymentEvent` (~262) share the **same** transaction as the failing insert, so rollback erases them too. Net: a settled on-chain payment with **zero rows in any payment table** — only the on-chain tx and a 409 response. The `db_error` catch (~279–285) has the same property.
-- The plain-USDC path (`_activate.ts`) is safer because the *user* broadcasts the transfer; here the **server** initiates the irreversible move.
+- The plain-USDC path (`_activate.ts`) is safer because the **creator** broadcasts the transfer; here the **server** initiates the irreversible move.
 
 **Fix:** call `hasLiveActivationForFeature` (exists at `activations.ts:114`) before `settleX402Payment`; on any post-settlement failure, durably record the orphaned settlement **outside** the rolled-back tx for refund ops.
 **Regression test:** unit test on `_x402-activate` with a mocked settle that succeeds and an `insertPendingActivation` that throws `live_activation_exists`; assert (a) settle is **not** reached when a live activation already exists, and (b) when an orphan does occur, a durable `payment_event`/orphan row survives.
@@ -302,7 +301,7 @@ flowchart LR
 **Fix:** match the specific constraint name only.
 
 #### M-4 — Two profile lookups skip the alias cascade
-**Status: VERIFIED** · `server/_lib/agents/base-mcp/accountResolver.ts:73-76` (direct `WHERE privy_user_id = ... AND merged_into_profile_id IS NULL`, no `privy_user_aliases` consult → aliased merged user resolves null, Base MCP sees no execution context); `api/_handlers/auth/_privy.ts:168` (`resolvePersistedSessionAddress` direct lookup, no alias, no tombstone filter).
+**Status: VERIFIED** · `server/_lib/agents/base-mcp/accountResolver.ts:73-76` (direct `WHERE privy_user_id = ... AND merged_into_profile_id IS NULL`, no `privy_user_aliases` consult → merged account resolves null, Base MCP sees no execution context); `api/_handlers/auth/_privy.ts:168` (`resolvePersistedSessionAddress` direct lookup, no alias, no tombstone filter).
 **Fix:** route both through `listProfileIdsForPrivyUser` / the alias cascade.
 
 #### M-5 — `runInTransaction` silent atomicity drop + single-client starvation under `POSTGRES_POOL_MAX=1`
@@ -403,13 +402,11 @@ pnpm -C kpr typecheck
 
 ## 10. Release-readiness verdict
 
-**NOT READY for a clean release tag from the current working tree.**
+**NOT READY for a clean release tag from the reviewed working tree.**
 
-- **Blockers for a clean tag:** dirty working tree with failing typecheck (6) and Vitest (78) — commit/clean first; repair CI gates (H-4, H-5, H-6) so green CI means something.
-- **Blockers for deploying impairment / x402 paths:** resolve or explicitly risk-accept (with updated disclosures) C-1 (x402 ordering), C-2/C-3/H-1 (impairment). These paths should not go to production unaddressed.
-- **Otherwise:** the web tier, auth model, identity/merge, keeper-job queue, and migration/RLS posture are in good shape. No anonymous unauthenticated fund-drain or RCE was found in the application tier.
-
-> Next steps (separate, explicitly-approved passes per the agreed workflow): a focused bug-hunt pass and regression-test implementation for C-1/C-2/C-3/H-1/H-2/H-3 — none performed in this read-only review.
+- **Blockers for a clean tag:** dirty working tree with failing typecheck (6) and Vitest (78) — commit/clean first; repair CI gates (H-4, H-5, H-6) so green CI reflects enforced guards.
+- **Blockers for impairment / x402 paths:** resolve or explicitly risk-accept (with updated disclosures) C-1, C-2, C-3, and H-1 before production deployment on those paths.
+- **Otherwise:** web tier, auth model, identity/merge, keeper-job queue, and migration/RLS posture are in good shape. No anonymous unauthenticated fund-drain or RCE was found in the application tier.
 
 <nav class="audit-flow-nav" aria-label="Continue reading">
   <a class="audit-flow-nav__link audit-flow-nav__link--prev" href="/audits/fable/findings-summary">← Executive summary</a>

@@ -19,12 +19,12 @@ status: current
 | Field | Value |
 | --- | --- |
 | Session ID | `6c9354f7-23f9-4069-8ad6-106b0e138461` |
-| Parent session | `0a513245-3ae2-4076-a9b0-bc1de524c38f` |
-| Review model | Cursor Fable 5 (`claude-fable-5-thinking-high`) |
+| Lead session | `0a513245-3ae2-4076-a9b0-bc1de524c38f` |
+| Record type | Parallel workstream export |
 :::note Appendix record
-Readable export of an agent-assisted review session. Tool outputs and system context blocks are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
+Readable export of a supplementary review session. Tool outputs and system context are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
 :::
-## User
+## Engagement brief
 
 You are doing the frontend-correctness pass of a full-codebase review of the 4626 monorepo at /home/akitav2/projects/4626. READ-ONLY: do not modify files. Stack: Vite 7 + React 19 + TypeScript SPA in frontend/src/, wagmi + Privy auth, two host shells (marketing 4626.fun, app app.4626.fun).
 
@@ -43,7 +43,7 @@ Find CONCRETE bugs/risks with file:line evidence and severity. Focus on correctn
 
 Return findings sorted by severity with file:line, plus verified-sound items. Thoroughness: very thorough.
 
-## Assistant
+## Analysis
 
 Running a read-only frontend correctness pass across the checklist areas.
 
@@ -51,181 +51,181 @@ Running a read-only frontend correctness pass across the checklist areas.
 
 *Tools invoked:* UpdateCurrentStep, Grep, Grep, Grep, Grep, Glob
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Grep, Grep, Grep, Grep, Glob, Glob
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Read, Read, Read, Grep, Grep
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Read, Read, Grep, Read, Grep
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Read, Read, Read, Read, Grep
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Grep, Read, Read, Grep, Read
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Grep, Glob, Read, Read, Read, Read
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Grep, Grep, Grep, Grep, Read, Read
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Read, Read, Grep, Read, Read, Grep
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Read, Read, Read, Read, Read, Grep
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Read, Grep, Grep, Read, Grep
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Grep, Read, Grep, Read, Read, Grep
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Read, Grep, Read, Grep, Read
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Read, Read, Grep, Grep, Read
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Read, Read, Read, Read, Grep
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Read, Read, Grep, Read, Grep
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Read, Read, Grep, Read
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Read, Grep, Read, Grep, Read
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Grep, Glob, Grep, Read
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Grep, Read, Read, Read
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Grep, Read, Grep
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Grep, Read
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Grep
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Grep
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Grep, Grep, Grep, Read
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Read, Grep, Read
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Read, Grep
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* Grep, Read
 
-## Assistant
+## Analysis
 
 [REDACTED]
 
 *Tools invoked:* UpdateCurrentStep
 
-## Assistant
+## Analysis
 
 ## Critical / High
 

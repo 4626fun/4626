@@ -19,17 +19,17 @@ status: current
 | Field | Value |
 | --- | --- |
 | Session ID | `ca7317af-9c86-4fde-a453-5b3c220ff600` |
-| Review model | Cursor Fable 5 (`claude-fable-5-thinking-high`) |
+| Record type | Lead review session export |
 :::note Appendix record
-Readable export of an agent-assisted review session. Tool outputs and system context blocks are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
+Readable export of a supplementary review session. Tool outputs and system context are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
 :::
-## User
+## Engagement brief
 
 <timestamp>Friday, Jun 12, 2026, 12:28 AM (UTC-7)</timestamp>
 Authentication failed
 There was an issue connecting your Zora account. Please try again.
 
-## Assistant
+## Analysis
 
 The user is seeing a Zora account connection failure. Let me find where that error message comes from in the codebase.
 
@@ -37,11 +37,11 @@ The user is seeing a Zora account connection failure. Let me find where that err
 
 *Tools invoked:* Grep, Grep
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 This looks like a Privy integration issue with Zora's cross-app authentication. The generic error message suggests the user is encountering this in real-time, so I need to trace where `performZoraCrossAppAuth` is being called and check the related `siweAuthCrossApp` logic. I should also investigate common culprits like an outdated Privy client ID, misconfigured allowed origins, or issues with the dev server setup.
 
@@ -49,7 +49,7 @@ Since the user is running the dev server on port 5174 with `pnpm -C frontend run
 
 *Tools invoked:* Grep, Read
 
-## Assistant
+## Analysis
 
 The error is Privy's generic cross-app failure copy from the Zora linking flow. Let me look at how the account-setup controller invokes it and what configuration it depends on.
 
@@ -57,7 +57,7 @@ The error is Privy's generic cross-app failure copy from the Zora linking flow. 
 
 *Tools invoked:* Grep, Grep
 
-## Assistant
+## Analysis
 
 Let me look at the Privy app ID config, the redirect sanitizer, and the rest of the error-handling branch.
 
@@ -67,11 +67,11 @@ The most likely culprits are Privy's allowed origins configuration—if localhos
 
 *Tools invoked:* Read, Read
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Grep, Grep
 
-## Assistant
+## Analysis
 
 I'm tracing through where the user encountered this error—they likely clicked "Connect Zora" on the waitlist or account setup page, either locally or in production. The error message they're seeing maps to our authentication failure handler, which displays specific copy about the Zora connection issue.
 
@@ -81,11 +81,11 @@ Since they're probably testing locally on the deploy-dry-run server at 5174, I s
 
 *Tools invoked:* Grep, Grep
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Grep
 
-## Assistant
+## Analysis
 
 Let me check the local Privy env configuration since the dev server is running on the deploy-dry-run port.
 
@@ -97,7 +97,7 @@ I should check the frontend environment variables to see if the Privy client ID 
 
 *Tools invoked:* Shell, Read
 
-## Assistant
+## Analysis
 
 Here's what that error is and what to do about it. The copy "Authentication failed / There was an issue connecting your Zora account" is **Privy's own generic failure message** from the cross-app OAuth handshake — it fires when `linkCrossAppAccount` / `loginWithCrossAppAccount({ appId: ZORA_PRIVY_APP_ID })` can't complete the round trip to Zora's Privy app. It is not a 4626 server error, and our code already treats it as recoverable: `performZoraCrossAppAuth` retries on the companion lane (link ↔ login), and `useAccountSetupController.onLinkZora` re-checks `/api/zora/resolve` afterward — if your Zora signals (handle / canonical CSW / creator coin) already resolve, the link completes without cross-app auth at all, and otherwise it redirects to the Zora handoff page.
 

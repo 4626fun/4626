@@ -3,14 +3,14 @@ title: Source sessions
 sidebar_label: Source sessions
 sidebar_position: 4
 hide_table_of_contents: true
-last_updated: '2026-06-28'
+last_updated: '2026-06-29'
 audience:
   - developers
   - protocols
   - operators
 stage: use
 owner: docs-team
-last_reviewed: '2026-06-28'
+last_reviewed: '2026-06-29'
 status: current
 ---
 
@@ -26,11 +26,11 @@ status: current
 
 # Appendix A — Source sessions
 
-Curated review threads that produced Report **4626-FABLE-2026-06**. Read the [executive summary](/audits/fable/findings-summary) and [full report](/audits/fable/full-repo-review-2026-06) first; use this appendix to inspect primary source material.
+Curated session register for Report **4626-FABLE-2026-06**. Read the [executive summary](/audits/fable/findings-summary) and [full report](/audits/fable/full-repo-review-2026-06) first; use this appendix for supplementary engagement records.
 
 <div class="docs-at-a-glance">
 
-Each link opens a readable transcript export (tool output omitted for clarity). For complete machine-readable logs, download [fable-chats-4626-2026-06.zip](/audits/fable-chats-4626-2026-06.zip).
+Each link opens a readable session export (tool output omitted). For complete machine-readable logs, download [fable-chats-4626-2026-06.zip](/audits/fable-chats-4626-2026-06.zip).
 
 </div>
 
@@ -71,7 +71,7 @@ gantt
   Deploy UX · Solana · Ethos      :done, rem3, 2026-06-12, 1d
 ```
 
-## Primary review fan-out
+## Parallel workstream structure
 
 ```mermaid
 %%{init: {
@@ -94,7 +94,7 @@ flowchart TB
   LEAD --> DATA["Data layer"]
   LEAD --> CONT["Contracts"]
   LEAD --> SEC["Security pass · c603521c"]
-  LEAD --> SUB["Additional subagent lanes"]
+  LEAD --> SUP["Supplementary lanes"]
 
   LEAD --> REPORT["Full report<br/>4626-FABLE-2026-06"]
 
@@ -103,20 +103,20 @@ flowchart TB
   classDef deliver fill:#fff9eb,stroke:#E8B964,stroke-width:2px,color:#1c1e21
 
   class LEAD lead
-  class ARCH,CICD,FE,DATA,CONT,SEC,SUB lane
+  class ARCH,CICD,FE,DATA,CONT,SEC,SUP lane
   class REPORT deliver
 ```
 
 ## Primary review (9 June 2026)
 
-| Session | Role | Transcript |
+| Session | Role | Record |
 | --- | --- | --- |
-| `0a513245…` | **Lead full-codebase review** — produced the [full report](/audits/fable/full-repo-review-2026-06) with eight parallel analysis lanes | [View transcript](/audits/fable/transcripts/full-codebase-review-primary-audit-0a513245) |
-| `c603521c…` | **Independent security pass** on the same scope | [View transcript](/audits/fable/transcripts/security-pass-on-full-codebase-review-c603521c) |
+| `0a513245…` | **Lead full-codebase review** — produced the [full report](/audits/fable/full-repo-review-2026-06) with eight parallel workstreams | [View](/audits/fable/transcripts/full-codebase-review-primary-audit-0a513245) |
+| `c603521c…` | **Independent security pass** on the same scope | [View](/audits/fable/transcripts/security-pass-on-full-codebase-review-c603521c) |
 
-### Parallel analysis lanes (parent `0a513245…`)
+### Parallel workstreams (lead session `0a513245…`)
 
-| Lane | Transcript |
+| Workstream | Record |
 | --- | --- |
 | Architecture | [View](/audits/fable/transcripts/architecture-analysis-lane-b8ddd1b3) |
 | CI/CD | [View](/audits/fable/transcripts/ci-cd-analysis-lane-c1a231e1) |
@@ -126,7 +126,7 @@ flowchart TB
 
 ## Remediation & launch readiness (10–12 June 2026)
 
-| Session | Subject | Transcript |
+| Session | Subject | Record |
 | --- | --- | --- |
 | `6318a55b…` | Production readiness assessment | [View](/audits/fable/transcripts/production-readiness-planning-6318a55b) |
 | `059adbec…` | Follow-up on report findings | [View](/audits/fable/transcripts/full-repo-review-follow-up-059adbec) |
@@ -139,7 +139,7 @@ flowchart TB
 
 ## Supplementary review (9 June 2026)
 
-| Session | Subject | Transcript |
+| Session | Subject | Record |
 | --- | --- | --- |
 | `2f3a0cb7…` | Static analysis follow-up | [View](/audits/fable/transcripts/static-scan-deeper-review-2f3a0cb7) |
 | `db706ee8…` | security.txt program | [View](/audits/fable/transcripts/security-txt-program-db706ee8) |

@@ -1,5 +1,5 @@
 ---
-title: Full-codebase review subagent
+title: Supplementary analysis lane
 sidebar_label: 11502b9b…
 sidebar_position: 99
 hide_table_of_contents: true
@@ -15,16 +15,16 @@ status: current
 <div class="audit-transcript-meta">
 [← Source sessions](/audits/fable/key-sessions) · [Transcript archive](/audits/fable/transcripts) · [Executive summary](/audits/fable/findings-summary)
 </div>
-# Full-codebase review subagent
+# Supplementary analysis lane
 | Field | Value |
 | --- | --- |
 | Session ID | `11502b9b-3fec-4e23-b352-9f81c31f7aa5` |
-| Parent session | `0a513245-3ae2-4076-a9b0-bc1de524c38f` |
-| Review model | Cursor Fable 5 (`claude-fable-5-thinking-high`) |
+| Lead session | `0a513245-3ae2-4076-a9b0-bc1de524c38f` |
+| Record type | Parallel workstream export |
 :::note Appendix record
-Readable export of an agent-assisted review session. Tool outputs and system context blocks are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
+Readable export of a supplementary review session. Tool outputs and system context are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
 :::
-## User
+## Engagement brief
 
 <timestamp>Tuesday, Jun 9, 2026, 11:45 AM (UTC-7)</timestamp>
 You are doing the smart-contracts pass of a full-codebase review of the 4626 monorepo at /home/akitav2/projects/4626. READ-ONLY: do not modify files. Foundry project: contracts/ (sources), test/ (Solidity tests), script/, foundry.toml.
@@ -41,27 +41,27 @@ Specifically check:
 
 Report findings with severity + file:line + evidence + suggested fix, sorted by severity, plus a verified-sound list. Only report what you trace in code.
 
-## Assistant
+## Analysis
 
 I'm going to start by reviewing the audit documentation and understanding how the contract is structured.
 
 *Tools invoked:* UpdateCurrentStep, Shell, Read
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Shell, Read
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Read, Shell
 
-## Assistant
+## Analysis
 
 Now I'm diving into the core contract files—starting with CreatorOVault and working through the modules, claims, and escrow logic, plus the alfaclub contracts. I'll need to examine these in parallel to understand the full architecture.
 
 *Tools invoked:* UpdateCurrentStep, Read, Read
 
-## Assistant
+## Analysis
 
 Looking at two security considerations in the smart contract code. The first is about the `mintFromVault` function in CreatorOImpairmentClaims — if the vault address isn't set, the condition fails safely since `msg.sender` can never be address(0), so no one can mint, which is the right fail-closed behavior. The second is about `claimRecovery` in CreatorORecoveryEscrow, which is vault-gated but doesn't verify that claimed amounts don't exceed what was actually recovered, instead relying on the vault's internal accounting to enforce this constraint.
 
@@ -69,7 +69,7 @@ The escrow also lacks any mechanism for the owner to recover stuck funds, though
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 Now let me read the core module's impairment implementation and the strategies module.
 
@@ -81,11 +81,11 @@ Now I need to examine the CoreModule and StrategiesModule implementations to see
 
 *Tools invoked:* Shell
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 Looking at how impairment claims are structured in the Merkle tree — the leaf is computed from the epoch ID, account, and amount using a single hash, which creates a 96-byte preimage. Since internal nodes are only 64 bytes, there's no risk of an internal node being mistaken for a leaf due to the length difference, so second-preimage attacks aren't a concern here.
 

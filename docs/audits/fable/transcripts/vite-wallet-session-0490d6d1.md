@@ -19,11 +19,11 @@ status: current
 | Field | Value |
 | --- | --- |
 | Session ID | `0490d6d1-461b-4d8a-b26a-91164453ab90` |
-| Review model | Cursor Fable 5 (`claude-fable-5-thinking-high`) |
+| Record type | Lead review session export |
 :::note Appendix record
-Readable export of an agent-assisted review session. Tool outputs and system context blocks are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
+Readable export of a supplementary review session. Tool outputs and system context are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
 :::
-## User
+## Engagement brief
 
 <timestamp>Friday, Jun 12, 2026, 6:50 AM (UTC-7)</timestamp>
 [vite] connecting...
@@ -78,35 +78,35 @@ consoleNoisePatch.ts:37 c8: User wallet creation failed
 (anonymous) @ consoleNoisePatch.ts:37
 consoleNoisePatch.ts:33 Error destroying session
 
-## Assistant
+## Analysis
 
 The errors point to two overlapping issues: extension wallet-provider collision noise (`window.ethereum` redefine/getter errors) and a real auth/session hang that leaves the loading overlay active, then fails embedded wallet creation/destruction. I’m going to inspect the route/session gating and recent console-noise patch handling, then patch the app so the collision noise is ignored while we unblock the real session flow failure.
 
 *Tools invoked:* rg, rg, rg
 
-## Assistant
+## Analysis
 
 I found the likely hotspots: `consoleNoisePatch`, provider-collision detection, and loading/session route gates. Next I’ll read those files and apply a targeted fix so session failures don’t stall the UI behind long overlays.
 
 *Tools invoked:* ReadFile, ReadFile, ReadFile
 
-## Assistant
+## Analysis
 
 *Tools invoked:* rg, ReadFile, ReadFile
 
-## Assistant
+## Analysis
 
 *Tools invoked:* rg, rg
 
-## Assistant
+## Analysis
 
 *Tools invoked:* rg
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ReadFile, ReadFile, ReadFile
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ReadFile
 

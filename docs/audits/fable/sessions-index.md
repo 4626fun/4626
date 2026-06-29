@@ -38,7 +38,7 @@ status: current
 
 | Period | Review activity |
 | --- | --- |
-| 9–13 June 2026 | 47 primary sessions · 50 subagent lanes · 97 published transcripts |
+| 9–13 June 2026 | 47 lead sessions · 50 parallel workstreams · 97 published records |
 
 ---
 
@@ -46,14 +46,14 @@ status: current
 
 ### Repo review (main audit)
 
-| Chat | Msgs | Subagents | Opening prompt |
+| Session | Msgs | Workstreams | Engagement scope |
 | --- | ---: | ---: | --- |
-| [0a513245…](/audits/fable/transcripts/full-codebase-review-primary-audit-0a513245) | 155 | 8 | Full-codebase review prompt (Fable 5 / Claude Code template) → `full-repo-review-2026-06.md` |
+| [0a513245…](/audits/fable/transcripts/full-codebase-review-primary-audit-0a513245) | 155 | 8 | Full-codebase security review → `full-repo-review-2026-06.md` |
 | [c603521c…](/audits/fable/transcripts/security-pass-on-full-codebase-review-c603521c) | 88 | 0 | Security pass of full-codebase review |
 
-**Repo review subagents** (parent `0a513245…`):
+**Parallel workstreams** (lead session `0a513245…`):
 
-| Subagent | ID |
+| Workstream | ID |
 | --- | --- |
 | Architecture | [b8ddd1b3…](/audits/fable/transcripts/architecture-analysis-lane-b8ddd1b3) |
 | CI/CD | [c1a231e1…](/audits/fable/transcripts/ci-cd-analysis-lane-c1a231e1) |
@@ -61,12 +61,12 @@ status: current
 | Data layer | [5a3eda06…](/audits/fable/transcripts/data-layer-analysis-lane-5a3eda06) |
 | Security | [c603521c…](/audits/fable/transcripts/security-pass-on-full-codebase-review-c603521c) |
 | Contracts | [071ad150…](/audits/fable/transcripts/contracts-analysis-lane-071ad150) |
-| Other | [11502b9b…](/audits/fable/transcripts/full-codebase-review-subagent-11502b9b) |
-| Other | [fba285d6…](/audits/fable/transcripts/full-codebase-review-subagent-fba285d6) |
+| Other | [11502b9b…](/audits/fable/transcripts/supplementary-analysis-lane-11502b9b) |
+| Other | [fba285d6…](/audits/fable/transcripts/supplementary-analysis-lane-fba285d6) |
 
-### Other 4626 chats (same day)
+### Supplementary sessions (same day)
 
-| Chat | Msgs | Opening prompt |
+| Session | Msgs | Engagement scope |
 | --- | ---: | --- |
 | [2f3a0cb7…](/audits/fable/transcripts/static-scan-deeper-review-2f3a0cb7) | 332 | Static scan / deeper review question |
 | [db706ee8…](/audits/fable/transcripts/security-txt-program-db706ee8) | 249 | Program has no security.txt |
@@ -79,7 +79,7 @@ status: current
 
 ## 2026-06-10
 
-| Chat | Msgs | Sub | Opening prompt |
+| Session | Msgs | Sub | Engagement scope |
 | --- | ---: | ---: | --- |
 | [6318a55b…](/audits/fable/transcripts/production-readiness-planning-6318a55b) | 1233 | 6 | **How do I get from where we are now, to full production?** |
 | [059adbec…](/audits/fable/transcripts/full-repo-review-follow-up-059adbec) | 461 | 6 | Follow-up on `@docs/audits/full-repo-review-2026-06.md` |
@@ -91,9 +91,9 @@ status: current
 | [511645df…](/audits/fable/transcripts/xmtp-agent-identity-511645df) | 15 | 0 | CI report — main @ wenakita/4626 |
 | [f83f9e53…](/audits/fable/transcripts/swap-page-refresh-loop-f83f9e53) | 10 | 0 | Fix swap please |
 
-**Production-readiness subagents** (parent `6318a55b…`):
+**Production-readiness workstreams** (lead session `6318a55b…`):
 
-| Subagent ID |
+| workstream ID |
 | --- |
 | [3cbcf31b…](/audits/fable/transcripts/3cbcf31b-1c21-4d31-8061-bb9f497bd366) |
 | [8890649f…](/audits/fable/transcripts/8890649f-7a9f-4a75-aa17-47844d45d5e8) |
@@ -104,7 +104,7 @@ status: current
 
 ## 2026-06-11
 
-| Chat | Msgs | Notes |
+| Session | Msgs | Notes |
 | --- | ---: | --- |
 | [683bffa0…](/audits/fable/transcripts/counter-trading-bot-683bffa0) | 1584 | Counter-trading bot (Jun 10–13; transcript mtime Jun 13) |
 | [7afad2db…](/audits/fable/transcripts/privy-csp-frame-ancestors-7afad2db) | 544 | Privy CSP / `frame-ancestors` |
@@ -114,7 +114,7 @@ status: current
 
 ## 2026-06-12
 
-| Chat | Msgs | Sub | Opening prompt |
+| Session | Msgs | Sub | Engagement scope |
 | --- | ---: | ---: | --- |
 | [7afad2db…](/audits/fable/transcripts/privy-csp-frame-ancestors-7afad2db) | 544 | 5 | Privy CSP framing error |
 | [d6b4e576…](/audits/fable/transcripts/deploy-vault-page-redesign-d6b4e576) | 365 | 2 | Deploy Vault page redesign |

@@ -19,29 +19,29 @@ status: current
 | Field | Value |
 | --- | --- |
 | Session ID | `f83f9e53-e4c5-481d-801c-a16939d00efa` |
-| Review model | Cursor Fable 5 (`claude-fable-5-thinking-high`) |
+| Record type | Lead review session export |
 :::note Appendix record
-Readable export of an agent-assisted review session. Tool outputs and system context blocks are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
+Readable export of a supplementary review session. Tool outputs and system context are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
 :::
-## User
+## Engagement brief
 
 <timestamp>Wednesday, Jun 10, 2026, 1:27 AM (UTC-7)</timestamp>
 fix swap please 
 
 Successfully verified access token.
-main.tsx:235 [swap][tx-router] {event: 'route_selected', mode: 'canonical4337', fallbackMode: 'canonical4337', chainId: 8453, sender: '0xab6d5c10b03300326cd7fab7267ae192842967b5', …}
-main.tsx:235 [swap][send][swap] {chainId: 8453, executionMode: 'canonical', selectedAddress: '0xAb6d5C10b03300326CD7fAb7267Ae192842967b5', signerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9', canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5', …}
+main.tsx:235 [swap][tx-router] {event: 'route_selected', mode: 'canonical4337', fallbackMode: 'canonical4337', chainId: 8453, sender: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', …}
+main.tsx:235 [swap][send][swap] {chainId: 8453, executionMode: 'canonical', selectedAddress: '[0xAb6d…67b5](https://basescan.org/address/0xAb6d5C10b03300326CD7fAb7267Ae192842967b5 "0xAb6d5C10b03300326CD7fAb7267Ae192842967b5")', signerAddress: '[0xcECa…85e9](https://basescan.org/address/0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9 "0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9")', canonicalAddress: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', …}
 1112-660f1d62ce5d05d2.js?dpl=dpl_7Jr3Wze56ZRisszcwUoLmn7TNkRE:1 Successfully verified access token.
-main.tsx:235 [swap][tx-router] {event: 'route_selected', mode: 'canonical4337', fallbackMode: 'canonical4337', chainId: 8453, sender: '0xab6d5c10b03300326cd7fab7267ae192842967b5', …}
+main.tsx:235 [swap][tx-router] {event: 'route_selected', mode: 'canonical4337', fallbackMode: 'canonical4337', chainId: 8453, sender: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', …}
 main.tsx:235 [swap][tx-router] {event: 'send_attempt', mode: 'canonical4337', fallbackMode: 'canonical4337', method: 'eth_sendUserOperation', chainId: 8453, …}
-main.tsx:231 [DEBUG] [Builder] Universal Router call detected {target: '0x6fF5693b99212Da76ad316178A184AB56D299b43', originalDataPrefix: '0x3593564c00000000000000000000', cleanedDataPrefix: '0x3593564c00000000000000000000', willPreserveCanonical: true, routerExecuteVariant: 'uniswap', …}
+main.tsx:231 [DEBUG] [Builder] Universal Router call detected {target: '[0x6fF5…9b43](https://basescan.org/address/0x6fF5693b99212Da76ad316178A184AB56D299b43 "0x6fF5693b99212Da76ad316178A184AB56D299b43")', originalDataPrefix: '0x3593564c00000000000000000000', cleanedDataPrefix: '0x3593564c00000000000000000000', willPreserveCanonical: true, routerExecuteVariant: 'uniswap', …}
 main.tsx:231 [INFO] [Builder] Preserving canonical Universal Router calldata (no suffix) 
 main.tsx:231 [DEBUG] [ERC-4337] Resolved endpoints {bundlerUrlInput: 'http://localhost:5174/api/paymaster', bundlerUrlForBundler: 'http://localhost:5174/api/paymaster', paymasterUrl: 'http://localhost:5174/api/paymaster', canFallbackBundlerProbeToProxy: false, shouldSendSessionToBundler: true, …}
-main.tsx:231 [DEBUG] [ERC-4337] Owner index lookup {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9', ownerAddressForLookup: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9', ownerIndex: 18, ownerCount: 9}
+main.tsx:231 [DEBUG] [ERC-4337] Owner index lookup {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerAddress: '[0xcECa…85e9](https://basescan.org/address/0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9 "0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9")', ownerAddressForLookup: '[0xcECa…85e9](https://basescan.org/address/0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9 "0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9")', ownerIndex: 18, ownerCount: 9}
 main.tsx:231 [DEBUG] [ERC-4337] verificationGasLimit {ownerIsContract: false, verificationGasLimit: '400000'}
-main.tsx:231 [DEBUG] [ERC-4337] Using ephemeral nonce lane up front {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerIndex: 18, ephemeralNonceKey: '1867597717849351226', reason: 'preferEphemeralNonceLane', pendingOwnerLaneHash: null}
-main.tsx:231 [DEBUG] [ERC-4337] EntryPoint nonce read {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerIndex: 18, nonce: '34451097133811003013848702704959881216', nonceKey: '1867597717849351226'}
-main.tsx:231 [DEBUG] [ERC-4337] smart wallet balance {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', balance: '50168652461172663'}
+main.tsx:231 [DEBUG] [ERC-4337] Using ephemeral nonce lane up front {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerIndex: 18, ephemeralNonceKey: '1867597717849351226', reason: 'preferEphemeralNonceLane', pendingOwnerLaneHash: null}
+main.tsx:231 [DEBUG] [ERC-4337] EntryPoint nonce read {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerIndex: 18, nonce: '34451097133811003013848702704959881216', nonceKey: '1867597717849351226'}
+main.tsx:231 [DEBUG] [ERC-4337] smart wallet balance {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', balance: '50168652461172663'}
 consoleNoisePatch.ts:33 [ERC-4337] estimateUserOperationGas advisory skip; using Zora callGas floor {error: 'Execution reverted for an unknown reason.', errorName: undefined, revertData: '0x34fcd5be0000000000000000000000000000000000000000…0000000000000000000000000000000000000000000000000', callGasLimit: '5500000', bundlerUsesProxy: true}
 (anonymous) @ consoleNoisePatch.ts:33
 (anonymous) @ main.tsx:239
@@ -256,7 +256,7 @@ commitPassiveMountOnFiber @ react-dom-client.development.js:15476
 recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:15439
 commitPassiveMountOnFiber @ react-dom-client.development.js:15718
 main.tsx:231 [DEBUG] [ERC-4337] send callGasLimit {sendCallGasLimit: '8250000', swapRouterFloor: '5500000', fromEstimate: '5500000'}
-consoleNoisePatch.ts:37 [ERC-4337] UserOp failed: Execution reverted for an unknown reason. (execution reverted) {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9', ownerIsContract: false, userOpSignMode: 'auto', calls: Array(3), …}
+consoleNoisePatch.ts:37 [ERC-4337] UserOp failed: Execution reverted for an unknown reason. (execution reverted) {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerAddress: '[0xcECa…85e9](https://basescan.org/address/0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9 "0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9")', ownerIsContract: false, userOpSignMode: 'auto', calls: Array(3), …}
 (anonymous) @ consoleNoisePatch.ts:37
 (anonymous) @ main.tsx:243
 (anonymous) @ coinbaseErc4337.ts:2516
@@ -466,16 +466,16 @@ commitPassiveMountOnFiber @ react-dom-client.development.js:15476
 recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:15439
 commitPassiveMountOnFiber @ react-dom-client.development.js:15718
 1112-660f1d62ce5d05d2.js?dpl=dpl_7Jr3Wze56ZRisszcwUoLmn7TNkRE:1 Successfully verified access token.
-main.tsx:235 [swap][tx-router] {event: 'route_selected', mode: 'canonical4337', fallbackMode: 'canonical4337', chainId: 8453, sender: '0xab6d5c10b03300326cd7fab7267ae192842967b5', …}
+main.tsx:235 [swap][tx-router] {event: 'route_selected', mode: 'canonical4337', fallbackMode: 'canonical4337', chainId: 8453, sender: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', …}
 main.tsx:235 [swap][tx-router] {event: 'send_attempt', mode: 'canonical4337', fallbackMode: 'canonical4337', method: 'eth_sendUserOperation', chainId: 8453, …}
-main.tsx:231 [DEBUG] [Builder] Universal Router call detected {target: '0x6fF5693b99212Da76ad316178A184AB56D299b43', originalDataPrefix: '0x3593564c00000000000000000000', cleanedDataPrefix: '0x3593564c00000000000000000000', willPreserveCanonical: true, routerExecuteVariant: 'uniswap', …}
+main.tsx:231 [DEBUG] [Builder] Universal Router call detected {target: '[0x6fF5…9b43](https://basescan.org/address/0x6fF5693b99212Da76ad316178A184AB56D299b43 "0x6fF5693b99212Da76ad316178A184AB56D299b43")', originalDataPrefix: '0x3593564c00000000000000000000', cleanedDataPrefix: '0x3593564c00000000000000000000', willPreserveCanonical: true, routerExecuteVariant: 'uniswap', …}
 main.tsx:231 [INFO] [Builder] Preserving canonical Universal Router calldata (no suffix) 
 main.tsx:231 [DEBUG] [ERC-4337] Resolved endpoints {bundlerUrlInput: 'http://localhost:5174/api/paymaster', bundlerUrlForBundler: 'http://localhost:5174/api/paymaster', paymasterUrl: 'http://localhost:5174/api/paymaster', canFallbackBundlerProbeToProxy: false, shouldSendSessionToBundler: true, …}
-main.tsx:231 [DEBUG] [ERC-4337] Owner index lookup {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9', ownerAddressForLookup: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9', ownerIndex: 18, ownerCount: 9}
+main.tsx:231 [DEBUG] [ERC-4337] Owner index lookup {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerAddress: '[0xcECa…85e9](https://basescan.org/address/0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9 "0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9")', ownerAddressForLookup: '[0xcECa…85e9](https://basescan.org/address/0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9 "0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9")', ownerIndex: 18, ownerCount: 9}
 main.tsx:231 [DEBUG] [ERC-4337] verificationGasLimit {ownerIsContract: false, verificationGasLimit: '400000'}
-main.tsx:231 [DEBUG] [ERC-4337] Using ephemeral nonce lane up front {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerIndex: 18, ephemeralNonceKey: '1867597724672760403', reason: 'preferEphemeralNonceLane', pendingOwnerLaneHash: null}
-main.tsx:231 [DEBUG] [ERC-4337] EntryPoint nonce read {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerIndex: 18, nonce: '34451097259680685812168821634129461248', nonceKey: '1867597724672760403'}
-main.tsx:231 [DEBUG] [ERC-4337] smart wallet balance {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', balance: '50168652461172663'}
+main.tsx:231 [DEBUG] [ERC-4337] Using ephemeral nonce lane up front {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerIndex: 18, ephemeralNonceKey: '1867597724672760403', reason: 'preferEphemeralNonceLane', pendingOwnerLaneHash: null}
+main.tsx:231 [DEBUG] [ERC-4337] EntryPoint nonce read {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerIndex: 18, nonce: '34451097259680685812168821634129461248', nonceKey: '1867597724672760403'}
+main.tsx:231 [DEBUG] [ERC-4337] smart wallet balance {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', balance: '50168652461172663'}
 consoleNoisePatch.ts:33 [ERC-4337] estimateUserOperationGas advisory skip; using Zora callGas floor {error: 'Execution reverted for an unknown reason.', errorName: undefined, revertData: '0x34fcd5be0000000000000000000000000000000000000000…0000000000000000000000000000000000000000000000000', callGasLimit: '5500000', bundlerUsesProxy: true}
 (anonymous) @ consoleNoisePatch.ts:33
 (anonymous) @ main.tsx:239
@@ -690,7 +690,7 @@ commitPassiveMountOnFiber @ react-dom-client.development.js:15476
 recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:15439
 commitPassiveMountOnFiber @ react-dom-client.development.js:15718
 main.tsx:231 [DEBUG] [ERC-4337] send callGasLimit {sendCallGasLimit: '8250000', swapRouterFloor: '5500000', fromEstimate: '5500000'}
-consoleNoisePatch.ts:37 [ERC-4337] UserOp failed: Execution reverted for an unknown reason. (execution reverted) {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9', ownerIsContract: false, userOpSignMode: 'auto', calls: Array(3), …}
+consoleNoisePatch.ts:37 [ERC-4337] UserOp failed: Execution reverted for an unknown reason. (execution reverted) {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerAddress: '[0xcECa…85e9](https://basescan.org/address/0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9 "0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9")', ownerIsContract: false, userOpSignMode: 'auto', calls: Array(3), …}
 (anonymous) @ consoleNoisePatch.ts:37
 (anonymous) @ main.tsx:243
 (anonymous) @ coinbaseErc4337.ts:2516
@@ -900,16 +900,16 @@ commitPassiveMountOnFiber @ react-dom-client.development.js:15476
 recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:15439
 commitPassiveMountOnFiber @ react-dom-client.development.js:15718
 1112-660f1d62ce5d05d2.js?dpl=dpl_7Jr3Wze56ZRisszcwUoLmn7TNkRE:1 Successfully verified access token.
-main.tsx:235 [swap][tx-router] {event: 'route_selected', mode: 'canonical4337', fallbackMode: 'canonical4337', chainId: 8453, sender: '0xab6d5c10b03300326cd7fab7267ae192842967b5', …}
+main.tsx:235 [swap][tx-router] {event: 'route_selected', mode: 'canonical4337', fallbackMode: 'canonical4337', chainId: 8453, sender: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', …}
 main.tsx:235 [swap][tx-router] {event: 'send_attempt', mode: 'canonical4337', fallbackMode: 'canonical4337', method: 'eth_sendUserOperation', chainId: 8453, …}
-main.tsx:231 [DEBUG] [Builder] Universal Router call detected {target: '0x6fF5693b99212Da76ad316178A184AB56D299b43', originalDataPrefix: '0x3593564c00000000000000000000', cleanedDataPrefix: '0x3593564c00000000000000000000', willPreserveCanonical: true, routerExecuteVariant: 'uniswap', …}
+main.tsx:231 [DEBUG] [Builder] Universal Router call detected {target: '[0x6fF5…9b43](https://basescan.org/address/0x6fF5693b99212Da76ad316178A184AB56D299b43 "0x6fF5693b99212Da76ad316178A184AB56D299b43")', originalDataPrefix: '0x3593564c00000000000000000000', cleanedDataPrefix: '0x3593564c00000000000000000000', willPreserveCanonical: true, routerExecuteVariant: 'uniswap', …}
 main.tsx:231 [INFO] [Builder] Preserving canonical Universal Router calldata (no suffix) 
 main.tsx:231 [DEBUG] [ERC-4337] Resolved endpoints {bundlerUrlInput: 'http://localhost:5174/api/paymaster', bundlerUrlForBundler: 'http://localhost:5174/api/paymaster', paymasterUrl: 'http://localhost:5174/api/paymaster', canFallbackBundlerProbeToProxy: false, shouldSendSessionToBundler: true, …}
-main.tsx:231 [DEBUG] [ERC-4337] Owner index lookup {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9', ownerAddressForLookup: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9', ownerIndex: 18, ownerCount: 9}
+main.tsx:231 [DEBUG] [ERC-4337] Owner index lookup {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerAddress: '[0xcECa…85e9](https://basescan.org/address/0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9 "0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9")', ownerAddressForLookup: '[0xcECa…85e9](https://basescan.org/address/0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9 "0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9")', ownerIndex: 18, ownerCount: 9}
 main.tsx:231 [DEBUG] [ERC-4337] verificationGasLimit {ownerIsContract: false, verificationGasLimit: '400000'}
-main.tsx:231 [DEBUG] [ERC-4337] Using ephemeral nonce lane up front {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerIndex: 18, ephemeralNonceKey: '1867597730045951859', reason: 'preferEphemeralNonceLane', pendingOwnerLaneHash: null}
-main.tsx:231 [DEBUG] [ERC-4337] EntryPoint nonce read {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerIndex: 18, nonce: '34451097358798573460043618602811654144', nonceKey: '1867597730045951859'}
-main.tsx:231 [DEBUG] [ERC-4337] smart wallet balance {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', balance: '50168652461172663'}
+main.tsx:231 [DEBUG] [ERC-4337] Using ephemeral nonce lane up front {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerIndex: 18, ephemeralNonceKey: '1867597730045951859', reason: 'preferEphemeralNonceLane', pendingOwnerLaneHash: null}
+main.tsx:231 [DEBUG] [ERC-4337] EntryPoint nonce read {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerIndex: 18, nonce: '34451097358798573460043618602811654144', nonceKey: '1867597730045951859'}
+main.tsx:231 [DEBUG] [ERC-4337] smart wallet balance {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', balance: '50168652461172663'}
 consoleNoisePatch.ts:33 [ERC-4337] estimateUserOperationGas advisory skip; using Zora callGas floor {error: 'Execution reverted for an unknown reason.', errorName: undefined, revertData: '0x34fcd5be0000000000000000000000000000000000000000…0000000000000000000000000000000000000000000000000', callGasLimit: '5500000', bundlerUsesProxy: true}
 (anonymous) @ consoleNoisePatch.ts:33
 (anonymous) @ main.tsx:239
@@ -1124,7 +1124,7 @@ commitPassiveMountOnFiber @ react-dom-client.development.js:15476
 recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:15439
 commitPassiveMountOnFiber @ react-dom-client.development.js:15718
 main.tsx:231 [DEBUG] [ERC-4337] send callGasLimit {sendCallGasLimit: '8250000', swapRouterFloor: '5500000', fromEstimate: '5500000'}
-consoleNoisePatch.ts:37 [ERC-4337] UserOp failed: Execution reverted for an unknown reason. (execution reverted) {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9', ownerIsContract: false, userOpSignMode: 'auto', calls: Array(3), …}
+consoleNoisePatch.ts:37 [ERC-4337] UserOp failed: Execution reverted for an unknown reason. (execution reverted) {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerAddress: '[0xcECa…85e9](https://basescan.org/address/0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9 "0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9")', ownerIsContract: false, userOpSignMode: 'auto', calls: Array(3), …}
 (anonymous) @ consoleNoisePatch.ts:37
 (anonymous) @ main.tsx:243
 (anonymous) @ coinbaseErc4337.ts:2516
@@ -1334,16 +1334,16 @@ commitPassiveMountOnFiber @ react-dom-client.development.js:15476
 recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:15439
 commitPassiveMountOnFiber @ react-dom-client.development.js:15718
 1112-660f1d62ce5d05d2.js?dpl=dpl_7Jr3Wze56ZRisszcwUoLmn7TNkRE:1 Successfully verified access token.
-main.tsx:235 [swap][tx-router] {event: 'route_selected', mode: 'canonical4337', fallbackMode: 'canonical4337', chainId: 8453, sender: '0xab6d5c10b03300326cd7fab7267ae192842967b5', …}
+main.tsx:235 [swap][tx-router] {event: 'route_selected', mode: 'canonical4337', fallbackMode: 'canonical4337', chainId: 8453, sender: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', …}
 main.tsx:235 [swap][tx-router] {event: 'send_attempt', mode: 'canonical4337', fallbackMode: 'canonical4337', method: 'eth_sendUserOperation', chainId: 8453, …}
-main.tsx:231 [DEBUG] [Builder] Universal Router call detected {target: '0x6fF5693b99212Da76ad316178A184AB56D299b43', originalDataPrefix: '0x3593564c00000000000000000000', cleanedDataPrefix: '0x3593564c00000000000000000000', willPreserveCanonical: true, routerExecuteVariant: 'uniswap', …}
+main.tsx:231 [DEBUG] [Builder] Universal Router call detected {target: '[0x6fF5…9b43](https://basescan.org/address/0x6fF5693b99212Da76ad316178A184AB56D299b43 "0x6fF5693b99212Da76ad316178A184AB56D299b43")', originalDataPrefix: '0x3593564c00000000000000000000', cleanedDataPrefix: '0x3593564c00000000000000000000', willPreserveCanonical: true, routerExecuteVariant: 'uniswap', …}
 main.tsx:231 [INFO] [Builder] Preserving canonical Universal Router calldata (no suffix) 
 main.tsx:231 [DEBUG] [ERC-4337] Resolved endpoints {bundlerUrlInput: 'http://localhost:5174/api/paymaster', bundlerUrlForBundler: 'http://localhost:5174/api/paymaster', paymasterUrl: 'http://localhost:5174/api/paymaster', canFallbackBundlerProbeToProxy: false, shouldSendSessionToBundler: true, …}
-main.tsx:231 [DEBUG] [ERC-4337] Owner index lookup {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9', ownerAddressForLookup: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9', ownerIndex: 18, ownerCount: 9}
+main.tsx:231 [DEBUG] [ERC-4337] Owner index lookup {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerAddress: '[0xcECa…85e9](https://basescan.org/address/0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9 "0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9")', ownerAddressForLookup: '[0xcECa…85e9](https://basescan.org/address/0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9 "0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9")', ownerIndex: 18, ownerCount: 9}
 main.tsx:231 [DEBUG] [ERC-4337] verificationGasLimit {ownerIsContract: false, verificationGasLimit: '400000'}
-main.tsx:231 [DEBUG] [ERC-4337] Using ephemeral nonce lane up front {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerIndex: 18, ephemeralNonceKey: '1867597735020989946', reason: 'preferEphemeralNonceLane', pendingOwnerLaneHash: null}
-main.tsx:231 [DEBUG] [ERC-4337] EntryPoint nonce read {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerIndex: 18, nonce: '34451097450571827807890173268104052736', nonceKey: '1867597735020989946'}
-main.tsx:231 [DEBUG] [ERC-4337] smart wallet balance {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', balance: '50168652461172663'}
+main.tsx:231 [DEBUG] [ERC-4337] Using ephemeral nonce lane up front {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerIndex: 18, ephemeralNonceKey: '1867597735020989946', reason: 'preferEphemeralNonceLane', pendingOwnerLaneHash: null}
+main.tsx:231 [DEBUG] [ERC-4337] EntryPoint nonce read {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerIndex: 18, nonce: '34451097450571827807890173268104052736', nonceKey: '1867597735020989946'}
+main.tsx:231 [DEBUG] [ERC-4337] smart wallet balance {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', balance: '50168652461172663'}
 consoleNoisePatch.ts:33 [ERC-4337] estimateUserOperationGas advisory skip; using Zora callGas floor {error: 'Execution reverted for an unknown reason.', errorName: undefined, revertData: '0x34fcd5be0000000000000000000000000000000000000000…0000000000000000000000000000000000000000000000000', callGasLimit: '5500000', bundlerUsesProxy: true}
 (anonymous) @ consoleNoisePatch.ts:33
 (anonymous) @ main.tsx:239
@@ -1558,7 +1558,7 @@ commitPassiveMountOnFiber @ react-dom-client.development.js:15476
 recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:15439
 commitPassiveMountOnFiber @ react-dom-client.development.js:15718
 main.tsx:231 [DEBUG] [ERC-4337] send callGasLimit {sendCallGasLimit: '8250000', swapRouterFloor: '5500000', fromEstimate: '5500000'}
-consoleNoisePatch.ts:37 [ERC-4337] UserOp failed: Execution reverted for an unknown reason. (execution reverted) {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9', ownerIsContract: false, userOpSignMode: 'auto', calls: Array(3), …}
+consoleNoisePatch.ts:37 [ERC-4337] UserOp failed: Execution reverted for an unknown reason. (execution reverted) {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerAddress: '[0xcECa…85e9](https://basescan.org/address/0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9 "0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9")', ownerIsContract: false, userOpSignMode: 'auto', calls: Array(3), …}
 (anonymous) @ consoleNoisePatch.ts:37
 (anonymous) @ main.tsx:243
 (anonymous) @ coinbaseErc4337.ts:2516
@@ -1768,16 +1768,16 @@ commitPassiveMountOnFiber @ react-dom-client.development.js:15476
 recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:15439
 commitPassiveMountOnFiber @ react-dom-client.development.js:15718
 1112-660f1d62ce5d05d2.js?dpl=dpl_7Jr3Wze56ZRisszcwUoLmn7TNkRE:1 Successfully verified access token.
-main.tsx:235 [swap][tx-router] {event: 'route_selected', mode: 'canonical4337', fallbackMode: 'canonical4337', chainId: 8453, sender: '0xab6d5c10b03300326cd7fab7267ae192842967b5', …}
+main.tsx:235 [swap][tx-router] {event: 'route_selected', mode: 'canonical4337', fallbackMode: 'canonical4337', chainId: 8453, sender: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', …}
 main.tsx:235 [swap][tx-router] {event: 'send_attempt', mode: 'canonical4337', fallbackMode: 'canonical4337', method: 'eth_sendUserOperation', chainId: 8453, …}
-main.tsx:231 [DEBUG] [Builder] Universal Router call detected {target: '0x6fF5693b99212Da76ad316178A184AB56D299b43', originalDataPrefix: '0x3593564c00000000000000000000', cleanedDataPrefix: '0x3593564c00000000000000000000', willPreserveCanonical: true, routerExecuteVariant: 'uniswap', …}
+main.tsx:231 [DEBUG] [Builder] Universal Router call detected {target: '[0x6fF5…9b43](https://basescan.org/address/0x6fF5693b99212Da76ad316178A184AB56D299b43 "0x6fF5693b99212Da76ad316178A184AB56D299b43")', originalDataPrefix: '0x3593564c00000000000000000000', cleanedDataPrefix: '0x3593564c00000000000000000000', willPreserveCanonical: true, routerExecuteVariant: 'uniswap', …}
 main.tsx:231 [INFO] [Builder] Preserving canonical Universal Router calldata (no suffix) 
 main.tsx:231 [DEBUG] [ERC-4337] Resolved endpoints {bundlerUrlInput: 'http://localhost:5174/api/paymaster', bundlerUrlForBundler: 'http://localhost:5174/api/paymaster', paymasterUrl: 'http://localhost:5174/api/paymaster', canFallbackBundlerProbeToProxy: false, shouldSendSessionToBundler: true, …}
-main.tsx:231 [DEBUG] [ERC-4337] Owner index lookup {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9', ownerAddressForLookup: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9', ownerIndex: 18, ownerCount: 9}
+main.tsx:231 [DEBUG] [ERC-4337] Owner index lookup {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerAddress: '[0xcECa…85e9](https://basescan.org/address/0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9 "0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9")', ownerAddressForLookup: '[0xcECa…85e9](https://basescan.org/address/0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9 "0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9")', ownerIndex: 18, ownerCount: 9}
 main.tsx:231 [DEBUG] [ERC-4337] verificationGasLimit {ownerIsContract: false, verificationGasLimit: '400000'}
-main.tsx:231 [DEBUG] [ERC-4337] Using ephemeral nonce lane up front {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerIndex: 18, ephemeralNonceKey: '1867597740017669246', reason: 'preferEphemeralNonceLane', pendingOwnerLaneHash: null}
-main.tsx:231 [DEBUG] [ERC-4337] EntryPoint nonce read {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerIndex: 18, nonce: '34451097542744292073392364040052801536', nonceKey: '1867597740017669246'}
-main.tsx:231 [DEBUG] [ERC-4337] smart wallet balance {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', balance: '50168652461172663'}
+main.tsx:231 [DEBUG] [ERC-4337] Using ephemeral nonce lane up front {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerIndex: 18, ephemeralNonceKey: '1867597740017669246', reason: 'preferEphemeralNonceLane', pendingOwnerLaneHash: null}
+main.tsx:231 [DEBUG] [ERC-4337] EntryPoint nonce read {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerIndex: 18, nonce: '34451097542744292073392364040052801536', nonceKey: '1867597740017669246'}
+main.tsx:231 [DEBUG] [ERC-4337] smart wallet balance {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', balance: '50168652461172663'}
 consoleNoisePatch.ts:33 [ERC-4337] estimateUserOperationGas advisory skip; using Zora callGas floor {error: 'Execution reverted for an unknown reason.', errorName: undefined, revertData: '0x34fcd5be0000000000000000000000000000000000000000…0000000000000000000000000000000000000000000000000', callGasLimit: '5500000', bundlerUsesProxy: true}
 (anonymous) @ consoleNoisePatch.ts:33
 (anonymous) @ main.tsx:239
@@ -3067,7 +3067,7 @@ recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:15439
 commitPassiveMountOnFiber @ react-dom-client.development.js:15476
 recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:15439
 commitPassiveMountOnFiber @ react-dom-client.development.js:15718
-main.tsx:231 [DEBUG] [ERC-4337] EntryPoint nonce read {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerIndex: 18, nonce: '34451097542744292073392364040052801536', nonceKey: '1867597740017669246'}
+main.tsx:231 [DEBUG] [ERC-4337] EntryPoint nonce read {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerIndex: 18, nonce: '34451097542744292073392364040052801536', nonceKey: '1867597740017669246'}
 consoleNoisePatch.ts:33 [ERC-4337] estimateUserOperationGas advisory skip; using Zora callGas floor {error: 'Execution reverted for an unknown reason.', errorName: undefined, revertData: '0x34fcd5be0000000000000000000000000000000000000000…0000000000000000000000000000000000000000000000000', callGasLimit: '5500000', bundlerUsesProxy: true}
 (anonymous) @ consoleNoisePatch.ts:33
 (anonymous) @ main.tsx:239
@@ -4146,7 +4146,7 @@ commitPassiveMountOnFiber @ react-dom-client.development.js:15476
 recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:15439
 commitPassiveMountOnFiber @ react-dom-client.development.js:15718
 main.tsx:231 [DEBUG] [ERC-4337] send callGasLimit {sendCallGasLimit: '8250000', swapRouterFloor: '5500000', fromEstimate: '5500000'}
-consoleNoisePatch.ts:37 [ERC-4337] UserOp failed: Execution reverted for an unknown reason. (execution reverted) {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9', ownerIsContract: false, userOpSignMode: 'auto', calls: Array(3), …}
+consoleNoisePatch.ts:37 [ERC-4337] UserOp failed: Execution reverted for an unknown reason. (execution reverted) {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerAddress: '[0xcECa…85e9](https://basescan.org/address/0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9 "0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9")', ownerIsContract: false, userOpSignMode: 'auto', calls: Array(3), …}
 (anonymous) @ consoleNoisePatch.ts:37
 (anonymous) @ main.tsx:243
 (anonymous) @ coinbaseErc4337.ts:2516
@@ -4356,16 +4356,16 @@ commitPassiveMountOnFiber @ react-dom-client.development.js:15476
 recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:15439
 commitPassiveMountOnFiber @ react-dom-client.development.js:15718
 1112-660f1d62ce5d05d2.js?dpl=dpl_7Jr3Wze56ZRisszcwUoLmn7TNkRE:1 Successfully verified access token.
-main.tsx:235 [swap][tx-router] {event: 'route_selected', mode: 'canonical4337', fallbackMode: 'canonical4337', chainId: 8453, sender: '0xab6d5c10b03300326cd7fab7267ae192842967b5', …}
+main.tsx:235 [swap][tx-router] {event: 'route_selected', mode: 'canonical4337', fallbackMode: 'canonical4337', chainId: 8453, sender: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', …}
 main.tsx:235 [swap][tx-router] {event: 'send_attempt', mode: 'canonical4337', fallbackMode: 'canonical4337', method: 'eth_sendUserOperation', chainId: 8453, …}
-main.tsx:231 [DEBUG] [Builder] Universal Router call detected {target: '0x6fF5693b99212Da76ad316178A184AB56D299b43', originalDataPrefix: '0x3593564c00000000000000000000', cleanedDataPrefix: '0x3593564c00000000000000000000', willPreserveCanonical: true, routerExecuteVariant: 'uniswap', …}
+main.tsx:231 [DEBUG] [Builder] Universal Router call detected {target: '[0x6fF5…9b43](https://basescan.org/address/0x6fF5693b99212Da76ad316178A184AB56D299b43 "0x6fF5693b99212Da76ad316178A184AB56D299b43")', originalDataPrefix: '0x3593564c00000000000000000000', cleanedDataPrefix: '0x3593564c00000000000000000000', willPreserveCanonical: true, routerExecuteVariant: 'uniswap', …}
 main.tsx:231 [INFO] [Builder] Preserving canonical Universal Router calldata (no suffix) 
 main.tsx:231 [DEBUG] [ERC-4337] Resolved endpoints {bundlerUrlInput: 'http://localhost:5174/api/paymaster', bundlerUrlForBundler: 'http://localhost:5174/api/paymaster', paymasterUrl: 'http://localhost:5174/api/paymaster', canFallbackBundlerProbeToProxy: false, shouldSendSessionToBundler: true, …}
-main.tsx:231 [DEBUG] [ERC-4337] Owner index lookup {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerAddress: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9', ownerAddressForLookup: '0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9', ownerIndex: 18, ownerCount: 9}
+main.tsx:231 [DEBUG] [ERC-4337] Owner index lookup {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerAddress: '[0xcECa…85e9](https://basescan.org/address/0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9 "0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9")', ownerAddressForLookup: '[0xcECa…85e9](https://basescan.org/address/0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9 "0xcECa13F2686ed061c57620Ecdf67E1b8C0F285e9")', ownerIndex: 18, ownerCount: 9}
 main.tsx:231 [DEBUG] [ERC-4337] verificationGasLimit {ownerIsContract: false, verificationGasLimit: '400000'}
-main.tsx:231 [DEBUG] [ERC-4337] Using ephemeral nonce lane up front {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerIndex: 18, ephemeralNonceKey: '1867597766235039067', reason: 'preferEphemeralNonceLane', pendingOwnerLaneHash: null}
-main.tsx:231 [DEBUG] [ERC-4337] EntryPoint nonce read {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerIndex: 18, nonce: '34451098026369403447175762096812982272', nonceKey: '1867597766235039067'}
-main.tsx:231 [DEBUG] [ERC-4337] smart wallet balance {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', balance: '50168652461172663'}
+main.tsx:231 [DEBUG] [ERC-4337] Using ephemeral nonce lane up front {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerIndex: 18, ephemeralNonceKey: '1867597766235039067', reason: 'preferEphemeralNonceLane', pendingOwnerLaneHash: null}
+main.tsx:231 [DEBUG] [ERC-4337] EntryPoint nonce read {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerIndex: 18, nonce: '34451098026369403447175762096812982272', nonceKey: '1867597766235039067'}
+main.tsx:231 [DEBUG] [ERC-4337] smart wallet balance {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', balance: '50168652461172663'}
 consoleNoisePatch.ts:33 [ERC-4337] estimateUserOperationGas advisory skip; using Zora callGas floor {error: 'Execution reverted for an unknown reason.', errorName: undefined, revertData: '0x34fcd5be0000000000000000000000000000000000000000…0000000000000000000000000000000000000000000000000', callGasLimit: '5500000', bundlerUsesProxy: true}
 (anonymous) @ consoleNoisePatch.ts:33
 (anonymous) @ main.tsx:239
@@ -4580,9 +4580,9 @@ commitPassiveMountOnFiber @ react-dom-client.development.js:15476
 recursivelyTraversePassiveMountEffects @ react-dom-client.development.js:15439
 commitPassiveMountOnFiber @ react-dom-client.development.js:15718
 main.tsx:231 [DEBUG] [ERC-4337] send callGasLimit {sendCallGasLimit: '8250000', swapRouterFloor: '5500000', fromEstimate: '5500000'}
-consoleNoisePatch.ts:37 [ERC-4337] UserOp failed: Execution reverted for an unknown reason. (execution reverted) {smartWallet: '0xab6d5c10b03300326cd7fab7267ae192842967b5', ownerAddress: '0xcECa13F2686ed061
+consoleNoisePatch.ts:37 [ERC-4337] UserOp failed: Execution reverted for an unknown reason. (execution reverted) {smartWallet: '[0xab6d…67b5](https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5 "0xab6d5c10b03300326cd7fab7267ae192842967b5")', ownerAddress: '0xcECa13F2686ed061
 
-## Assistant
+## Analysis
 
 I'll dig into the swap execution path to find why the canonical4337 UserOp reverts.
 
@@ -4594,13 +4594,13 @@ I need to dig into the swap execution code and how the Universal Router calldata
 
 *Tools invoked:* Grep, Grep
 
-## Assistant
+## Analysis
 
 I need to focus on a few critical sections: the advisory skip logic in the bundler user op gas estimate check, where the transaction amount gets calculated around line 2244, and the prefund and balance validation in the swap spend balance preflight.
 
 *Tools invoked:* Read, Read
 
-## Assistant
+## Analysis
 
 The user's swap has a balance of 0.0502 ETH, and when wrapping with an amount close to the full balance, both unsponsored and sponsored retries are failing. Looking at the logs, the revert data starts with the executeBatch selector, which matches the exact scenario the advisory skip was designed to handle — yet the actual transaction still reverts with an execution error.
 
@@ -4610,7 +4610,7 @@ I need to check where `eth_estimateUserOperationGas` and `eth_sendUserOperation`
 
 *Tools invoked:* Grep, Grep
 
-## Assistant
+## Analysis
 
 I've now got the full picture confirmed in code. Summary of what the logs + code show:
 
@@ -4636,7 +4636,7 @@ For the `simulateSmartWalletCalls` issue, the multi-call is masking failures by 
 
 *Tools invoked:* CreatePlan
 
-## User
+## Engagement brief
 
 <timestamp>Wednesday, Jun 10, 2026, 2:03 AM (UTC-7)</timestamp>
 Fix canonical4337 swap execution revert (0x34fcd5be echoed batch)
@@ -4645,11 +4645,11 @@ Implement the plan as specified, it is attached for your reference. Do NOT edit 
 
 To-do's from the plan have already been created. Do not create them again. Mark them as in_progress as you work, starting with the first one. Don't stop until you have completed all the to-dos.
 
-## Assistant
+## Analysis
 
 *Tools invoked:* TodoWrite
 
-## Assistant
+## Analysis
 
 All five todos are complete. Summary of what shipped in `frontend/src/lib/aa/coinbaseErc4337.ts` and its test file:
 

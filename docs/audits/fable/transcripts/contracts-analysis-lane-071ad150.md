@@ -19,12 +19,12 @@ status: current
 | Field | Value |
 | --- | --- |
 | Session ID | `071ad150-5d45-4752-a7e4-bb06af78f8b8` |
-| Parent session | `0a513245-3ae2-4076-a9b0-bc1de524c38f` |
-| Review model | Cursor Fable 5 (`claude-fable-5-thinking-high`) |
+| Lead session | `0a513245-3ae2-4076-a9b0-bc1de524c38f` |
+| Record type | Parallel workstream export |
 :::note Appendix record
-Readable export of an agent-assisted review session. Tool outputs and system context blocks are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
+Readable export of a supplementary review session. Tool outputs and system context are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
 :::
-## User
+## Engagement brief
 
 <timestamp>Tuesday, Jun 9, 2026, 11:44 AM (UTC-7)</timestamp>
 You are doing the API security pass of a full-codebase review of the 4626 monorepo at /home/akitav2/projects/4626. READ-ONLY: do not modify files. This is a Vercel serverless API under frontend/api/ with handlers in frontend/api/_handlers/ and shared libs in frontend/server/_lib/.
@@ -47,43 +47,43 @@ Checklist (verify each in code):
 
 Return findings sorted by severity, plus a short list of things you verified as SOUND (so the parent doesn't re-check). Be rigorous: only report things you traced in code.
 
-## Assistant
+## Analysis
 
 Starting a comprehensive API security audit as the read-only subagent. I'll work through the routes files and authentication helpers first, then systematically check each security requirement, parallelizing reads where I can to move efficiently through this large task.
 
 *Tools invoked:* UpdateCurrentStep
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 Looking at the Telegram webhook implementation, the secret token validation uses a non-constant-time comparison, but a timing attack over the network isn't practical here, so it's a low-risk issue. The fail-closed behavior is solid—returning 503 in relay mode or ignoring otherwise when the secret isn't configured. Now I need to dig into the paymaster logic, which sounds like the critical piece.
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Grep
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 Looking at the Paymaster's validation flow—it requires an authenticated principal or signed deploy-session token, then validates the entryPoint, chainId, sender, and per-sender sponsorship limits before running the deep validation logic through `validateSponsoredSmartWalletCalls`. This validation function is extensive, checking call shapes against different modes like swap and deploy phases, so I need to verify that it properly binds the sender to the session to ensure the sponsorship is legitimate.
 
 *Tools invoked:* Grep
 
-## Assistant
+## Analysis
 
 Paymaster's security looks good—it requires authenticated principals, validates sender-to-session ownership through on-chain checks, enforces allowlists for deployments, applies strategy weight gates per workspace, and implements per-sender sponsorship limits. I need to trace through the sponsored smart wallet call validation logic to confirm the swap mode allowlists are properly gated.
 
 *Tools invoked:* Grep
 
-## Assistant
+## Analysis
 
 The paymaster validation checks out. When `deploySessionOwner` is set, the `assertSessionOwnsSender` function runs with the deploy session's address, ensuring the sender is owned by that session. The deploy session path validates this ownership check at line 1465 using the creator's contract session wallet address.
 
@@ -93,53 +93,53 @@ Now I need to work through the remaining security checklist items: admin routes,
 
 *Tools invoked:* UpdateCurrentStep, Glob, Grep
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 I'm noticing the profile merge endpoint uses multiple auth layers—admin session, CRON_SECRET, confirmation string, rate limiting, and audit logging—but there's a timing attack vulnerability where the CRON_SECRET comparison uses strict equality instead of constant-time comparison, whereas the dedicated cronAuth module handles it correctly. I should check how the admin address validation and session auth work, then compare against other admin handlers like the waitlist approval endpoint to see if this pattern is consistent.
 
 *Tools invoked:* Grep
 
-## Assistant
+## Analysis
 
 I'm verifying the admin authentication pattern where the SIWE session address must be in the `CREATOR_ACCESS_ADMIN_ADDRESSES` environment variable, then I'll check a few other admin endpoints like the waitlist approval and control-plane provisioning handlers to confirm they follow the same auth pattern. After that, I need to review rate limiting on public endpoints, potential SSRF vulnerabilities, secret leakage risks, and open redirect issues.
 
 *Tools invoked:* Shell, Grep
 
-## Assistant
+## Analysis
 
 I'm noticing that the admin handlers all use the same gating pattern with `getSessionAddress` and `isAdminAddress`, but I should verify whether `_recoverStrandedCswResolveOwner.ts` is actually missing from the output.
 
 *Tools invoked:* Grep
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 Now I'm checking the security posture of the public endpoints—rate limiting on the waitlist join, bootstrap, AMOE submit, and telegram link flows, plus looking for SSRF vulnerabilities, secret leakage, and open redirect issues across those same routes.
 
 *Tools invoked:* UpdateCurrentStep, Grep, Grep
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 The Hermit implementation looks solid with bearer token gating, constant-time comparison, rate limiting, and fail-closed behavior. Now I'm shifting focus to potential SSRF vulnerabilities—there are several handlers that fetch user-supplied URLs: image proxies, token icon sources, Zora coin metadata, relay notifications, OG image fetches, and webhook URLs. I need to search the codebase for fetch calls that accept user-controlled input.
 
 *Tools invoked:* Grep, Grep
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 The image proxy is well-hardened against SSRF. Let me check the hermit-meme-save URL handler and waitlist/AMOE rate limiting.
 
@@ -147,21 +147,21 @@ The image proxy is well-hardened against SSRF. Let me check the hermit-meme-save
 
 *Tools invoked:* Read
 
-## Assistant
+## Analysis
 
 The URL persistence is a database operation, not a server fetch, so no SSRF vulnerability there. Authentication checks out with sessionAddress and room ownership validation. Now I need to verify rate limiting across the waitlist join and bootstrap flows — I can see `checkRateLimit` being used in both `_bootstrap.ts` and `_lead.ts`. For the AMOE submission handlers in the lottery endpoints, I should check if rate limiting is properly applied there too. I also need to scan for open redirect vulnerabilities by looking for `res.redirect` calls or Location headers in the handlers, and verify that secrets aren't being exposed.
 
 *Tools invoked:* Grep
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Grep
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Grep
 
-## Assistant
+## Analysis
 
 No open redirects found in the API surface, which is good. Now I'm checking for secret leakage in logs and error responses — the codebase generally returns generic error messages, though there's one case where profile merge operations expose the raw error message to dual-authenticated admin callers, which seems acceptable. I need to search for any token logging patterns in the code. I need to verify there are no redirects in the API handlers, check the x402 settlement logic, and make sure the session start fetch URL isn't vulnerable to SSRF attacks—particularly that the `url` variable isn't user-controlled and that the Solana token machine auth was properly confirmed.
 

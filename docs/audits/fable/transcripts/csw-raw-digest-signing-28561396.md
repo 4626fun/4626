@@ -19,87 +19,87 @@ status: current
 | Field | Value |
 | --- | --- |
 | Session ID | `28561396-9d5f-4896-aabd-a3facc865cc4` |
-| Review model | Cursor Fable 5 (`claude-fable-5-thinking-high`) |
+| Record type | Lead review session export |
 :::note Appendix record
-Readable export of an agent-assisted review session. Tool outputs and system context blocks are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
+Readable export of a supplementary review session. Tool outputs and system context are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
 :::
-## User
+## Engagement brief
 
 <timestamp>Thursday, Jun 11, 2026, 11:17 PM (UTC-7)</timestamp>
 Sending from your Coinbase Smart Wallet
 Your wallet must support raw digest signing (secp256k1_sign) for smart-wallet Permit2. Reconnect and try again.
 
-## Assistant
+## Analysis
 
 I’m going to trace where that exact error string is raised in the swap/signing flow, then patch the wallet capability check so Coinbase Smart Wallet paths don’t get blocked incorrectly if they can use the supported signing lane.
 
 *Tools invoked:* rg, rg, rg
 
-## Assistant
+## Analysis
 
 I found the exact throw site and the label source; next I’m checking the signer fallback logic and where this gets invoked in `/swap` so we can fix the false failure path for Coinbase Smart Wallet sends.
 
 *Tools invoked:* ReadFile, ReadFile, ReadFile
 
-## Assistant
+## Analysis
 
 *Tools invoked:* rg
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ReadFile, rg, rg
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ReadFile
 
-## Assistant
+## Analysis
 
 *Tools invoked:* rg
 
-## Assistant
+## Analysis
 
 *Tools invoked:* rg
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ReadFile
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ReadFile
 
-## Assistant
+## Analysis
 
 *Tools invoked:* rg
 
-## Assistant
+## Analysis
 
 I’ve isolated the failing helper; now I’m checking `Swap.tsx` wiring to confirm whether canonical CSW Permit2 is accidentally using the wrong signer wallet client (which would explain this exact error).
 
 *Tools invoked:* rg
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ReadFile
 
-## Assistant
+## Analysis
 
 I found the likely root cause: raw-signing currently only tries a narrow parameter shape, so some CSW-compatible providers can still fail and trigger that exact message. I’m patching `signRawEcdsaDigest` to try additional compatible RPC shapes and updating the user-facing error copy.
 
 *Tools invoked:* ApplyPatch
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ApplyPatch
 
-## Assistant
+## Analysis
 
 I’ve applied the fix and a regression test; next I’ll run the targeted test file and quick lints on touched files to verify this is clean.
 
 *Tools invoked:* Shell, ReadLints
 
-## Assistant
+## Analysis
 
 Adjusted the swap signer path so Coinbase Smart Wallet Permit2 signing is more tolerant and no longer fails on one narrow RPC shape.
 
@@ -115,28 +115,28 @@ Validation:
 
 Try the same swap again from the Coinbase Smart Wallet lane. If it still fails, I can add debug-level error capture for which exact method/shape your provider rejects so we can pinpoint the remaining provider-specific mismatch quickly.
 
-## User
+## Engagement brief
 
 <timestamp>Thursday, Jun 11, 2026, 11:19 PM (UTC-7)</timestamp>
 Your wallet must support raw digest signing (secp256k1_sign or eth_sign) for smart-wallet Permit2. Reconnect and try again.
 
-## Assistant
+## Analysis
 
 I’ll inspect the live dev logs now to capture the exact RPC method failures behind this message, then I’ll patch the signer helper to support the provider’s actual method shape.
 
 *Tools invoked:* ReadFile
 
-## Assistant
+## Analysis
 
 I found a second likely cause: we currently treat some embedded wallets as “can sign” even when they only expose `signMessage` and no RPC provider, which still fails for raw digest signing at runtime. I’m tightening that gate now so this fails earlier with the correct setup prompt instead of this Permit2 error.
 
 *Tools invoked:* ApplyPatch
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ReadLints, Shell
 
-## Assistant
+## Analysis
 
 Pushed another fix for this exact runtime path.
 
@@ -154,26 +154,26 @@ Validation:
 Please refresh and retry the swap flow once.  
 If it still fails, paste the new error text (or first console error line) and I’ll wire exact per-method failure telemetry so we can identify the provider mismatch immediately.
 
-## User
+## Engagement brief
 
 <timestamp>Thursday, Jun 11, 2026, 11:26 PM (UTC-7)</timestamp>
 Your wallet must support raw digest signing (secp256k1_sign or eth_sign) for smart-wallet Permit2. Reconnect and try again.
 
-## Assistant
+## Analysis
 
 I’m going to make this error actionable instead of generic by surfacing the actual method failures (`secp256k1_sign`/`eth_sign`) and adding a targeted reconnect hint for the Base/Privy signer lane.
 
 *Tools invoked:* ApplyPatch
 
-## Assistant
+## Analysis
 
 *Tools invoked:* ApplyPatch
 
-## Assistant
+## Analysis
 
 *Tools invoked:* Shell, ReadLints
 
-## Assistant
+## Analysis
 
 Made another targeted fix so this failure is no longer opaque.
 
