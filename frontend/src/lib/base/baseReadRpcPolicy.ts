@@ -5,6 +5,11 @@ export const BASE_RPC_PROXY_PATH = '/api/rpc?chain=base'
 /** CSP-allowed public Base read fallback when the session-protected proxy is unavailable. */
 export const BROWSER_BASE_PUBLIC_RPC_FALLBACK = 'https://mainnet.base.org'
 
+/** Loopback Anvil fork from dev-deploy-dry-run (VITE_BASE_RPC / DEPLOY_DRY_RUN_LOCAL_RPC_URL). */
+export function isLocalForkBaseRpcUrl(url: string): boolean {
+  return /^https?:\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0)(:\d+)?(\/|$)/i.test(String(url || '').trim())
+}
+
 const ALCHEMY_BASE_RPC_PATTERN = /(^|\/\/)base-mainnet\.g\.alchemy\.com/i
 const ANY_ALCHEMY_RPC_PATTERN = /\.g\.alchemy\.com\//i
 const COINBASE_DEVELOPER_BASE_RPC_PATTERN = /^https:\/\/api\.developer\.coinbase\.com\/rpc\/v1\/base\//i

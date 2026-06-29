@@ -34,7 +34,7 @@ const MODULE_IDENTITY_ABI = [
   {
     type: 'function',
     name: 'moduleStorageVersion',
-    stateMutability: 'view',
+    stateMutability: 'pure',
     inputs: [],
     outputs: [{ type: 'bytes32' }],
   },

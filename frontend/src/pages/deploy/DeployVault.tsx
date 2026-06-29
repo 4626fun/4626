@@ -110,6 +110,8 @@ import { PROTOCOL_LOGOS } from '@/components/deploy/ui/protocolLogos'
 import { SOLANA_NATIVE_MINT, SOLANA_PROTOCOL_PROGRAMS } from '@/config/solanaProtocol'
 import { AddressTable } from '@/components/deploy/ui/AddressTable'
 import { AdvancedDetails } from '@/components/deploy/ui/AdvancedDetails'
+import { StatusBadge } from '@/components/deploy/ui/StatusBadge'
+import type { DeployStatus } from '@/components/deploy/ui/statusModel'
 import { DeploymentOverview, OverviewRow } from '@/components/deploy/DeploymentOverview'
 import { MeshPreflightPanel } from '@/components/deploy/MeshPreflightPanel'
 import { PhaseTimeline, PhaseCard, PhaseProgressBadge } from '@/components/deploy/PhaseTimeline'
@@ -153,6 +155,7 @@ import {
   fetchSolanaPostDeployStatus,
   solanaPostDeployProgressLabel,
   solanaQuoteMintLabel,
+  type SolanaPostDeployOverall,
 } from '@/lib/deploy/solanaPostDeployStatus'
 import { useDeploySessionV2 } from '@/features/deploy-vault/useDeploySessionV2'
 import {
@@ -1119,6 +1122,55 @@ const DRY_RUN_CHECK_REVEAL_DELAY_MS: Partial<Record<DeploySessionDryRunPhase['na
  * existing call sites keep their `address`/`variant` API while rendering
  * the new truncate/copy/explorer treatment.
  */
+/** Map the async Solana post-deploy overall state to a status-badge tone. */
+function solanaOverallBadgeStatus(overall: SolanaPostDeployOverall | null): DeployStatus {
+  if (!overall) return 'pending'
+  switch (overall) {
+    case 'complete':
+      return 'success'
+    case 'failed':
+      return 'warning'
+    case 'in_progress':
+      return 'checking'
+    case 'waiting':
+      return 'pending'
+    case 'disabled':
+      return 'disabled'
+    default: {
+      const exhaustive: never = overall
+      return exhaustive
+    }
+  }
+}
+
+/** Map the share-mesh mapping status string to a status-badge tone. */
+function solanaMappingBadgeStatus(status: string | null): DeployStatus {
+  switch (status) {
+    case 'applied':
+      return 'live'
+    case 'failed':
+      return 'warning'
+    default:
+      return 'pending'
+  }
+}
+
+/** Map the Meteora pool provisioning status string to a status-badge tone. */
+function solanaPoolBadgeStatus(status: string | null): DeployStatus {
+  switch (status) {
+    case 'created':
+      return 'live'
+    case 'creating':
+      return 'checking'
+    case 'failed':
+      return 'warning'
+    case 'skipped':
+      return 'disabled'
+    default:
+      return 'pending'
+  }
+}
+
 function AddressRow({
   label,
   address,
@@ -7079,21 +7131,19 @@ function DeployVaultBatcher({
                   </div>
                 ) : null}
                 {solanaPostDeployStatusQuery.data ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
-                    <div className="text-zinc-500">
-                      Overall
-                      <div className="font-mono text-zinc-200">
-                        {solanaPostDeployProgressLabel(solanaPostDeployStatusQuery.data.overall)}
-                      </div>
-                    </div>
-                    <div className="text-zinc-500">
-                      Share-mesh sync
-                      <div className="font-mono text-zinc-200">{phase5MappingStatus ?? 'pending'}</div>
-                    </div>
-                    <div className="text-zinc-500">
-                      Pool provisioning
-                      <div className="font-mono text-zinc-200">{phase5PoolStatus ?? 'not started'}</div>
-                    </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <StatusBadge
+                      status={solanaOverallBadgeStatus(solanaPostDeployStatusQuery.data.overall)}
+                      label={`Overall · ${solanaPostDeployProgressLabel(solanaPostDeployStatusQuery.data.overall)}`}
+                    />
+                    <StatusBadge
+                      status={solanaMappingBadgeStatus(phase5MappingStatus)}
+                      label={`Share-mesh · ${phase5MappingStatus ?? 'pending'}`}
+                    />
+                    <StatusBadge
+                      status={solanaPoolBadgeStatus(phase5PoolStatus)}
+                      label={`Pool · ${phase5PoolStatus ?? 'not started'}`}
+                    />
                   </div>
                 ) : null}
                 {solanaPostDeployStatusQuery.data?.nextStep ? (
@@ -7109,6 +7159,10 @@ function DeployVaultBatcher({
                   </div>
                 )}
               </div>
+              <AdvancedDetails
+                summary="Addresses & program IDs · LayerZero, share-mesh, Meteora pool, lottery hook"
+                className="mt-3"
+              >
               <div className="grid gap-x-10 gap-y-4 md:grid-cols-2">
                 <AddressTable
                   title="Protocol · shared on Solana"
@@ -7346,6 +7400,7 @@ function DeployVaultBatcher({
                   <div className="text-[10px] text-zinc-600 leading-relaxed pt-1">{phase5LpSeedingNote}</div>
                 </AddressTable>
               </div>
+              </AdvancedDetails>
             </PhaseCard>
           ) : null}
           </PhaseTimeline>

@@ -373,6 +373,51 @@ describe('/api/rpc proxy rate-limit contract', () => {
     }
   })
 
+  it('falls back to the next default RPC when the first public RPC returns 403', async () => {
+    const fetchMock = vi.fn().mockImplementation((input: unknown, init?: RequestInit) => {
+      const url = String(input)
+      const bodyRaw = typeof init?.body === 'string' ? init.body : ''
+      const method =
+        bodyRaw && bodyRaw.includes('"method"')
+          ? String((JSON.parse(bodyRaw) as { method?: string }).method ?? '')
+          : ''
+
+      if (url.includes('mainnet.base.org') && method === 'eth_chainId') {
+        return new Response(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            result: '0x2105',
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )
+      }
+
+      if (url.includes('mainnet.base.org')) {
+        return new Response('forbidden', {
+          status: 403,
+          headers: { 'Content-Type': 'text/plain' },
+        })
+      }
+
+      return okRpcResponse()
+    })
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
+
+    const handler = await loadHandler()
+    const req = createRpcReq()
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(String(res.body)).toContain('"result":"0x123"')
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes('mainnet.base.org'))).toBe(true)
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes('base.llamarpc.com'))).toBe(true)
+  })
+
   it('redacts sensitive upstream details from client errors', async () => {
     const fetchMock = vi.fn().mockImplementation(
       () =>
@@ -392,7 +437,7 @@ describe('/api/rpc proxy rate-limit contract', () => {
     expect(res.body).toEqual({
       success: false,
       error: 'Upstream RPC request failed',
-      code: 'rpc_upstream_rejected',
+      code: 'rpc_proxy_failed',
     })
     expect(String(res.body?.error ?? '').toLowerCase()).not.toContain('private-rpc.example.com')
     expect(String(res.body?.error ?? '').toLowerCase()).not.toContain('apikey')

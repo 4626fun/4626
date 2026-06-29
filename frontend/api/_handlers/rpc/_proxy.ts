@@ -14,6 +14,7 @@ import {
 
 import {
   filterDevelopmentRpcUrls,
+  isDeployDryRunContext,
   resolveLocalDryRunRpcUrl,
 } from '../../../server/_lib/dev/localDevEnv.js'
 
@@ -67,7 +68,7 @@ const EXPECTED_CHAIN_ID_HEX: Record<RpcChain, string> = {
 }
 
 const RETRYABLE_STATUS = new Set([429])
-const ENV_RPC_FAILOVER_STATUS = new Set([401, 403, 404, 405, 426])
+const UPSTREAM_FAILOVER_STATUS = new Set([401, 403, 404, 405, 426])
 const MAX_ATTEMPTS_PER_RPC = 2
 const RETRY_BACKOFF_MS = [0, 150]
 const RPC_CHAIN_ID_CACHE_TTL_MS = 5 * 60_000
@@ -463,12 +464,8 @@ function parseRetryAfterSeconds(value: string | null | undefined): number | null
   return Math.ceil(diffMs / 1000)
 }
 
-function shouldFailoverFromEnvRpc(params: {
-  status: number
-  rpcUrl: string
-  envRpcUrls: Set<string>
-}): boolean {
-  return params.envRpcUrls.has(params.rpcUrl) && ENV_RPC_FAILOVER_STATUS.has(params.status)
+function shouldFailoverToNextRpc(status: number): boolean {
+  return UPSTREAM_FAILOVER_STATUS.has(status)
 }
 
 function isEnvRpcTemporarilyRejected(rpcUrl: string): boolean {
@@ -664,13 +661,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const chain = resolveRpcChain(req)
     telemetry.chain = chain
 
-    const principalAddress = readRequestPrincipalAddress(req)
+    const skipLocalFork =
+      firstQueryValue(req.query?.skipLocalFork as string | string[] | undefined) === '1'
+    const localForkRpc =
+      chain === 'base' && !skipLocalFork ? resolveLocalDryRunRpcUrl() : null
+    const allowUnauthenticatedLocalFork =
+      isDeployDryRunContext() && Boolean(localForkRpc)
+
+    const clientIp = getClientIp(req)
+    const principalAddress =
+      readRequestPrincipalAddress(req) ??
+      (allowUnauthenticatedLocalFork ? `local-fork:${clientIp}` : null)
     if (!principalAddress) {
       logger.info('[rpc-proxy][local-guard] unauthenticated request', { chain })
       finalizeTelemetry(401, 'unauthenticated')
       return res.status(401).json({ success: false, error: 'Authentication required' })
     }
-    const clientIp = getClientIp(req)
     const hasClientIp = clientIp.trim().toLowerCase() !== 'unknown'
     const principalRateLimit = consumeRateLimitBucket(
       buildRateLimitKey(principalAddress, chain),
@@ -736,8 +742,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       finalizeTelemetry(400, 'blocked_method')
       return res.status(400).json({ success: false, error: 'Unsupported JSON-RPC method' })
     }
-    const skipLocalFork =
-      firstQueryValue(req.query?.skipLocalFork as string | string[] | undefined) === '1'
     const envRpcUrls = new Set(readChainRpcUrlsFromEnv(chain))
     const rpcUrls = filterActiveRpcUrls(getRpcUrls(chain, { skipLocalFork }), envRpcUrls)
     const expectedChainId = EXPECTED_CHAIN_ID_HEX[chain]
@@ -804,13 +808,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             break
           }
 
-          if (shouldFailoverFromEnvRpc({ status, rpcUrl: rpc, envRpcUrls })) {
+          if (shouldFailoverToNextRpc(status)) {
             lastStatus = status
             lastError = text || `Upstream RPC fallback candidate (${status})`
-            const alreadyRejected = isEnvRpcTemporarilyRejected(rpc)
-            markEnvRpcRejected(rpc)
-            if (!alreadyRejected) {
-              logger.warn('[rpc-proxy][upstream-env-fallback] skipping rejected env RPC', {
+            if (envRpcUrls.has(rpc)) {
+              const alreadyRejected = isEnvRpcTemporarilyRejected(rpc)
+              markEnvRpcRejected(rpc)
+              if (!alreadyRejected) {
+                logger.warn('[rpc-proxy][upstream-env-fallback] skipping rejected env RPC', {
+                  chain,
+                  status,
+                  upstreamHost: readRpcHost(rpc),
+                  bodyPreview: (text || '').slice(0, 240),
+                })
+              }
+            } else {
+              logger.warn('[rpc-proxy][upstream-fallback] trying next rpc candidate', {
                 chain,
                 status,
                 upstreamHost: readRpcHost(rpc),

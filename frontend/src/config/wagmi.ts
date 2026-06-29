@@ -7,6 +7,7 @@ import {
   BROWSER_BASE_PUBLIC_RPC_FALLBACK,
   buildSameOriginRpcProxyTransport,
   isBrowserRestrictedBaseRpc,
+  isLocalForkBaseRpcUrl,
 } from '@/lib/base/baseReadRpcPolicy'
 import { injectedConnectorFlag } from '@/lib/flags/featureFlags'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
@@ -177,8 +178,11 @@ function findTargetedEip6963Provider(target: 'rabby' | 'metamask'): any | undefi
 
 // Browser RPC reality: some providers (or API keys) block browser `fetch` via CORS / allowlists.
 // Use a fallback list so reads don't hard-fail when a single endpoint is unreachable.
+const USE_DIRECT_LOCAL_FORK_IN_BROWSER =
+  IS_BROWSER && Boolean(BASE_RPC_URL) && isLocalForkBaseRpcUrl(BASE_RPC_URL)
 const BASE_READ_RPC_URLS = uniqueNonEmptyStrings(
   [
+    ...(USE_DIRECT_LOCAL_FORK_IN_BROWSER ? [BASE_RPC_URL] : []),
     BASE_RPC_PROXY,
     ...(IS_BROWSER ? [BROWSER_BASE_PUBLIC_RPC_FALLBACK] : [BASE_RPC_URL]),
     // Base public RPCs (best-effort fallbacks)

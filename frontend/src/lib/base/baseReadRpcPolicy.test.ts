@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { BASE_RPC_PROXY_PATH, getBrowserBaseReadRpcUrl, isBrowserRestrictedBaseRpc } from '@/lib/base/baseReadRpcPolicy'
+import { BASE_RPC_PROXY_PATH, getBrowserBaseReadRpcUrl, isBrowserRestrictedBaseRpc, isLocalForkBaseRpcUrl } from '@/lib/base/baseReadRpcPolicy'
 
 describe('baseReadRpcPolicy', () => {
   it('flags Coinbase Developer Base RPC URLs as browser-restricted', () => {
@@ -23,5 +23,11 @@ describe('baseReadRpcPolicy', () => {
 
   it('falls back to the same-origin proxy when no browser URL is configured', () => {
     expect(getBrowserBaseReadRpcUrl('')).toBe(BASE_RPC_PROXY_PATH)
+  })
+
+  it('detects loopback Anvil fork URLs for deploy dry-run', () => {
+    expect(isLocalForkBaseRpcUrl('http://127.0.0.1:8545')).toBe(true)
+    expect(isLocalForkBaseRpcUrl('http://localhost:8546/')).toBe(true)
+    expect(isLocalForkBaseRpcUrl('https://mainnet.base.org')).toBe(false)
   })
 })
