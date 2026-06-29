@@ -10,15 +10,28 @@ export type SolanaPostDeployStatus = {
   shareMeshMapping: {
     shareOft: string
     shareMeshMint: string
+    shareMeshOftStore: string | null
     status: string
     lastError: string | null
   } | null
   meteoraPool: {
     status: 'pending' | 'creating' | 'created' | 'failed' | 'skipped' | 'not_started'
     poolAddress: string | null
+    tokenMintX: string | null
+    tokenMintY: string | null
+    quoteMint: string | null
+    pairLabel: string | null
     lastError: string | null
     lastSignature: string | null
   } | null
+  meteoraAlphaVault: string | null
+  hookLane: {
+    hookMint: string | null
+    creatorConfig: string | null
+    pendingEntries: string | null
+    winnerRecord: string | null
+  } | null
+  lpSeedingNote: string
   nextStep: string | null
 }
 
@@ -48,4 +61,9 @@ export function solanaPostDeployProgressLabel(overall: SolanaPostDeployOverall):
     default:
       return 'in progress'
   }
+}
+
+export function solanaQuoteMintLabel(quoteMint: string | null | undefined): string {
+  if (!quoteMint) return 'SOL'
+  return quoteMint === 'So11111111111111111111111111111111111111112' ? 'SOL' : quoteMint
 }

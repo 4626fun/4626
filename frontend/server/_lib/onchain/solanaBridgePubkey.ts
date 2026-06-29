@@ -3,6 +3,38 @@ import type { Hex } from 'viem'
 const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 const BASE58_MAP = new Map(BASE58_ALPHABET.split('').map((ch, idx) => [ch, idx]))
 
+export function encodeBase58(bytes: Uint8Array): string {
+  if (bytes.length === 0) return ''
+  let num = 0n
+  for (const byte of bytes) num = num * 256n + BigInt(byte)
+  let encoded = ''
+  while (num > 0n) {
+    const remainder = Number(num % 58n)
+    num /= 58n
+    encoded = BASE58_ALPHABET[remainder] + encoded
+  }
+  for (const byte of bytes) {
+    if (byte === 0) encoded = `1${encoded}`
+    else break
+  }
+  return encoded
+}
+
+export function bytes32HexToSolanaPubkey(value: string | null | undefined): string | null {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  if (!raw) return null
+  const normalized = raw.toLowerCase()
+  if (!/^0x[0-9a-f]{64}$/.test(normalized)) return null
+  if (normalized === `0x${'0'.repeat(64)}`) return null
+  try {
+    const bytes = Uint8Array.from(Buffer.from(normalized.slice(2), 'hex'))
+    if (bytes.length !== 32) return null
+    return encodeBase58(bytes)
+  } catch {
+    return null
+  }
+}
+
 export function decodeBase58(value: string): Uint8Array {
   if (!value || typeof value !== 'string') throw new Error('Invalid base58 input')
   let num = 0n

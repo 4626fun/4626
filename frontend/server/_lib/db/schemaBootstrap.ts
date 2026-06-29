@@ -566,6 +566,13 @@ export async function ensureSolanaMeteoraPoolStatusSchema(db: Db): Promise<void>
   })
 }
 
+/** Solana creator-share-hook (Token-2022 lottery lane) provisioning status. */
+export async function ensureSolanaHookStatusSchema(db: Db): Promise<void> {
+  await withEnsureOnce('solanaHookStatus', async () => {
+    await ensureMigrationApplied(db, '20260713140000_solana_hook_status.sql').catch(() => {})
+  })
+}
+
 /** Base MCP human-approval requests (durable approval flow store). */
 export async function ensureBaseMcpApprovalSchema(db: Db): Promise<void> {
   await withEnsureOnce('baseMcpApproval', async () => {

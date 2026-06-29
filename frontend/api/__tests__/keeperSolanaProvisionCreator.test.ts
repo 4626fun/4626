@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getAddress } from 'viem'
 
 import handler from '../_handlers/keeper/_solanaProvisionCreator.ts'
 import { applyEnv, createMockReq, createMockRes } from './helpers'
@@ -17,6 +18,8 @@ const {
   creatorHasSolanaShareMeshEntitlementMock,
   ensureSolanaShareMeshMappingsSchemaMock,
   ensureSolanaMeteoraPoolStatusSchemaMock,
+  ensureSolanaHookStatusSchemaMock,
+  readSolanaHookStatusByCreatorTokenMock,
 } = vi.hoisted(() => ({
   getDbForCronMock: vi.fn(),
   isDbConfiguredMock: vi.fn(() => true),
@@ -26,6 +29,8 @@ const {
   creatorHasSolanaShareMeshEntitlementMock: vi.fn(async () => true),
   ensureSolanaShareMeshMappingsSchemaMock: vi.fn(async () => {}),
   ensureSolanaMeteoraPoolStatusSchemaMock: vi.fn(async () => {}),
+  ensureSolanaHookStatusSchemaMock: vi.fn(async () => {}),
+  readSolanaHookStatusByCreatorTokenMock: vi.fn(async () => null),
 }))
 
 vi.mock('@4626/server-core', () => ({
@@ -49,7 +54,17 @@ vi.mock('../../server/_lib/creatorStrategy/solanaShareMeshProvisioning.js', () =
 vi.mock('../../server/_lib/db/schemaBootstrap.js', () => ({
   ensureSolanaShareMeshMappingsSchema: ensureSolanaShareMeshMappingsSchemaMock,
   ensureSolanaMeteoraPoolStatusSchema: ensureSolanaMeteoraPoolStatusSchemaMock,
+  ensureSolanaHookStatusSchema: ensureSolanaHookStatusSchemaMock,
 }))
+
+vi.mock('../../server/_lib/onchain/solanaHookStatus.js', () => ({
+  readSolanaHookStatusByCreatorToken: readSolanaHookStatusByCreatorTokenMock,
+}))
+
+const HOOK_MINT = 'HookMint111111111111111111111111111111111'
+const CREATOR_CONFIG = 'CreatorConfig111111111111111111111111111111'
+const PENDING_ENTRIES = 'PendingEntries111111111111111111111111111'
+const WINNER_RECORD = 'WinnerRecord11111111111111111111111111111'
 
 function makeDb(mappingRows: any[] = []) {
   return {
@@ -87,14 +102,31 @@ describe('keeper solana provision creator handler', () => {
       },
     ])
     getDbForCronMock.mockResolvedValue(db)
-    const fetchMock = vi.fn(async () =>
-      new Response(JSON.stringify({ success: true, data: { poolAddress: 'Pool1111111111111111111111111111111111111' } }), {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/setup-creator')) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            mint: HOOK_MINT,
+            pdas: {
+              creatorConfig: CREATOR_CONFIG,
+              pendingEntries: PENDING_ENTRIES,
+              winnerRecord: WINNER_RECORD,
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        )
+      }
+      return new Response(JSON.stringify({ success: true, data: { poolAddress: 'Pool1111111111111111111111111111111111111' } }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-      }),
-    )
+      })
+    })
     vi.stubGlobal('fetch', fetchMock)
     const restoreEnv = applyEnv({
+      SOLANA_HOOK_PROVISIONING_ENABLED: '1',
+      SOLANA_HOOK_PROVISIONER_URL: 'https://provisioner.4626.fun/setup-creator',
+      SOLANA_HOOK_PROVISIONER_SECRET: 'hook-secret',
       SOLANA_METEORA_POOL_PROVISIONING_ENABLED: '1',
       SOLANA_METEORA_POOL_PROVISIONER_URL: 'https://provisioner.4626.fun/create-pool',
       SOLANA_METEORA_POOL_PROVISIONER_SECRET: 'pool-secret',
@@ -115,13 +147,27 @@ describe('keeper solana provision creator handler', () => {
         shareOft: SHARE_OFT,
         shareMeshMint: SHARE_MESH_MINT,
       })
+      expect(res.body?.data?.hookLane).toMatchObject({
+        status: 'completed',
+        hookMint: HOOK_MINT,
+        creatorConfig: CREATOR_CONFIG,
+      })
       expect(res.body?.data?.meteoraPool).toMatchObject({
         status: 'completed',
         tokenMintX: SHARE_MESH_MINT,
         tokenMintY: SOL_MINT,
       })
-      expect(fetchMock).toHaveBeenCalledTimes(1)
-      const [url, init] = (fetchMock.mock.calls as any[])[0] as [string, { headers?: Record<string, string>; body?: string }]
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      const setupCall = (fetchMock.mock.calls as any[]).find(([url]) => String(url).includes('/setup-creator'))
+      expect(setupCall?.[0]).toBe('https://provisioner.4626.fun/setup-creator')
+      expect(JSON.parse(String(setupCall?.[1]?.body))).toMatchObject({
+        hubCreatorCoin: getAddress(CREATOR_TOKEN),
+        hubShareToken: SHARE_OFT,
+      })
+      const [url, init] = (fetchMock.mock.calls as any[]).find(([callUrl]) => String(callUrl).includes('/create-pool')) as [
+        string,
+        { headers?: Record<string, string>; body?: string },
+      ]
       expect(url).toBe('https://provisioner.4626.fun/create-pool')
       expect(init.headers?.Authorization).toBe('Bearer pool-secret')
       expect(JSON.parse(String(init.body))).toMatchObject({
@@ -130,7 +176,14 @@ describe('keeper solana provision creator handler', () => {
         binStep: 25,
         activeId: 0,
       })
+      expect(ensureSolanaHookStatusSchemaMock).toHaveBeenCalled()
       expect(ensureSolanaMeteoraPoolStatusSchemaMock).toHaveBeenCalled()
+      const createdHookStatusCall = db.sql.mock.calls.find(
+        (call) =>
+          String(call[0]?.join?.('') ?? '').includes('solana_hook_status') &&
+          call.some((arg) => arg === 'created'),
+      )
+      expect(createdHookStatusCall).toBeDefined()
       const createdPoolStatusCall = db.sql.mock.calls.find(
         (call) =>
           String(call[0]?.join?.('') ?? '').includes('solana_meteora_pool_status') &&
@@ -148,6 +201,7 @@ describe('keeper solana provision creator handler', () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     const restoreEnv = applyEnv({
+      SOLANA_HOOK_PROVISIONING_ENABLED: '1',
       SOLANA_METEORA_POOL_PROVISIONING_ENABLED: '1',
       SOLANA_METEORA_POOL_PROVISIONER_URL: 'https://provisioner.4626.fun/create-pool',
       SOLANA_METEORA_POOL_PROVISIONER_SECRET: 'pool-secret',
@@ -161,6 +215,7 @@ describe('keeper solana provision creator handler', () => {
       expect(res.statusCode).toBe(200)
       expect(res.body?.success).toBe(true)
       expect(res.body?.data?.shareMeshMapping).toEqual({ status: 'missing' })
+      expect(res.body?.data?.hookLane).toMatchObject({ status: 'waiting_for_share_oft' })
       expect(res.body?.data?.meteoraPool).toMatchObject({ status: 'waiting_for_share_mesh_mint' })
       expect(fetchMock).not.toHaveBeenCalled()
     } finally {

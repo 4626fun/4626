@@ -107,6 +107,7 @@ import { CreatorCoinCard, type CreatorCoinTypeTone } from '@/components/deploy/C
 import { BlockedStateCard } from '@/components/deploy/ui/BlockedStateCard'
 import { AddressRow as DeployUiAddressRow, type AddressRowTag } from '@/components/deploy/ui/AddressRow'
 import { PROTOCOL_LOGOS } from '@/components/deploy/ui/protocolLogos'
+import { SOLANA_NATIVE_MINT, SOLANA_PROTOCOL_PROGRAMS } from '@/config/solanaProtocol'
 import { AddressTable } from '@/components/deploy/ui/AddressTable'
 import { AdvancedDetails } from '@/components/deploy/ui/AdvancedDetails'
 import { DeploymentOverview, OverviewRow } from '@/components/deploy/DeploymentOverview'
@@ -151,6 +152,7 @@ import {
 import {
   fetchSolanaPostDeployStatus,
   solanaPostDeployProgressLabel,
+  solanaQuoteMintLabel,
 } from '@/lib/deploy/solanaPostDeployStatus'
 import { useDeploySessionV2 } from '@/features/deploy-vault/useDeploySessionV2'
 import {
@@ -780,6 +782,10 @@ function bytes32ToSolanaAddress(value: string | null | undefined): string | null
 
 function solanaExplorerAddressUrl(address: string): string {
   return `https://explorer.solana.com/address/${address}?cluster=mainnet-beta`
+}
+
+function solanaExplorerTxUrl(signature: string): string {
+  return `https://explorer.solana.com/tx/${signature}?cluster=mainnet-beta`
 }
 
 function formatEthPerTokenForUi(weiPerToken: bigint): string {
@@ -6137,10 +6143,7 @@ function DeployVaultBatcher({
   )
   const solanaPostDeployStatusQuery = useQuery({
     queryKey: ['deploy', 'solanaPostDeployStatus', activeDeploySessionId],
-    enabled:
-      Boolean(activeDeploySessionId) &&
-      ovaultMeshEnabledForSession &&
-      (phase === 'done' || lastSessionStep === 'completed'),
+    enabled: Boolean(activeDeploySessionId) && ovaultMeshEnabledForSession,
     queryFn: async () => fetchSolanaPostDeployStatus(activeDeploySessionId!),
     refetchInterval: (query) => {
       const overall = query.state.data?.overall
@@ -6157,6 +6160,20 @@ function DeployVaultBatcher({
   const phase5PoolAddress = solanaPostDeployStatusQuery.data?.meteoraPool?.poolAddress ?? null
   const phase5MappingStatus = solanaPostDeployStatusQuery.data?.shareMeshMapping?.status ?? null
   const phase5PoolStatus = solanaPostDeployStatusQuery.data?.meteoraPool?.status ?? null
+  const phase5QuoteMint =
+    solanaPostDeployStatusQuery.data?.meteoraPool?.quoteMint ?? SOLANA_NATIVE_MINT
+  const phase5PairLabel =
+    solanaPostDeployStatusQuery.data?.meteoraPool?.pairLabel ??
+    (phase5ShareMeshMint ? `Share mesh / ${solanaQuoteMintLabel(phase5QuoteMint)}` : `Share mesh / SOL`)
+  const phase5PoolSignature = solanaPostDeployStatusQuery.data?.meteoraPool?.lastSignature ?? null
+  const phase5OftStore = solanaPostDeployStatusQuery.data?.shareMeshMapping?.shareMeshOftStore ?? null
+  const phase5MeteoraAlphaVaultPubkey =
+    solanaPostDeployStatusQuery.data?.meteoraAlphaVault ??
+    bytes32ToSolanaAddress(ovaultMeshStatus?.meteoraAlphaVault ?? null)
+  const phase5HookLane = solanaPostDeployStatusQuery.data?.hookLane ?? null
+  const phase5LpSeedingNote =
+    solanaPostDeployStatusQuery.data?.lpSeedingNote ??
+    'Pool creation is automated after deploy. Initial DLMM liquidity seeding (typically in SOL) is a separate manual step — part of the launch bundle may fund SOL used to seed the Meteora pair so the pool is tradable.'
   const phase5ShareMeshMintDeployed = phase5ShareMeshMint
     ? phase5MappingStatus === 'applied'
       ? true
@@ -7041,8 +7058,10 @@ function DeployVaultBatcher({
             >
               <div className="rounded-xl bg-sky-500/[0.04] px-3.5 py-3 space-y-3">
                 <div className="text-[11px] text-sky-100/80 leading-relaxed">
-                  Base deploy can finish before the Solana pool exists. Keeper jobs usually complete this within a few
-                  minutes. Seeding initial DLMM liquidity remains a separate step after the pool is created.
+                  DLMM pools pair your share-mesh mint with <span className="text-sky-50">SOL</span> by default.
+                  Base deploy can finish before the Solana pool exists — keeper jobs usually complete pool creation within a
+                  few minutes. Initial liquidity seeding in SOL is separate; part of the{' '}
+                  <span className="text-sky-50">$499 launch bundle</span> may fund that SOL deposit so the pair is tradable.
                 </div>
                 {solanaPostDeployStatusQuery.isLoading && phase !== 'done' && lastSessionStep !== 'completed' ? (
                   <div className="text-[11px] text-zinc-500">Waiting for on-chain deploy to complete…</div>
@@ -7091,7 +7110,33 @@ function DeployVaultBatcher({
                 )}
               </div>
               <div className="grid gap-x-10 gap-y-4 md:grid-cols-2">
-                <AddressTable title="Base side · bridged asset" tone="yours" iconSrc={PROTOCOL_LOGOS.base}>
+                <AddressTable
+                  title="Protocol · shared on Solana"
+                  tone="shared"
+                  iconSrc={PROTOCOL_LOGOS.solana}
+                  className="md:col-span-2"
+                  description="Live mainnet programs — not created per deploy. Each vault gets its own share-mesh mint and Meteora pool below."
+                >
+                  <AddressRow
+                    label="LayerZero OFT program"
+                    address={SOLANA_PROTOCOL_PROGRAMS.layerZeroOft}
+                    deployed
+                    variant="shared"
+                    explorerHref={solanaExplorerAddressUrl(SOLANA_PROTOCOL_PROGRAMS.layerZeroOft)}
+                    tags={['live']}
+                    iconSrc={PROTOCOL_LOGOS.layerzero}
+                  />
+                  <AddressRow
+                    label="Creator share hook"
+                    address={SOLANA_PROTOCOL_PROGRAMS.creatorShareHook}
+                    deployed
+                    variant="shared"
+                    explorerHref={solanaExplorerAddressUrl(SOLANA_PROTOCOL_PROGRAMS.creatorShareHook)}
+                    tags={['live']}
+                    iconSrc={PROTOCOL_LOGOS.fun4626}
+                  />
+                </AddressTable>
+                <AddressTable title="Base · LZ wiring" tone="yours" iconSrc={PROTOCOL_LOGOS.base}>
                   <AddressRow
                     label="Share OFT"
                     address={phase5ShareOft}
@@ -7099,8 +7144,28 @@ function DeployVaultBatcher({
                     forkOnly={isForkOnlyAddress(phase5ShareOft, expectedAddressDeployment?.shareOFT ?? null)}
                     iconSrc={PROTOCOL_LOGOS.fun4626}
                   />
+                  <AddressRow
+                    label="Share OFT peer (Solana)"
+                    address={solanaShareOftPeerPubkey}
+                    deployed={solanaShareOftPeerPubkey ? (ovaultMeshStatus?.sharePeerSet ? true : false) : null}
+                    explorerHref={solanaShareOftPeerPubkey ? solanaExplorerAddressUrl(solanaShareOftPeerPubkey) : null}
+                    iconSrc={PROTOCOL_LOGOS.layerzero}
+                    tags={ovaultMeshStatus?.sharePeerSet ? ['live'] : solanaShareOftPeerPubkey ? ['pending'] : undefined}
+                  />
+                  <div className="text-[10px] text-zinc-600 leading-relaxed pt-1">
+                    Finalize peer wiring is configured in{' '}
+                    <span className="text-zinc-400">Phase 2 · OVault mesh preflight</span> (ShareBridge finalize panel).
+                  </div>
                 </AddressTable>
-                <AddressTable title="Solana side · share mesh" tone="yours" iconSrc={PROTOCOL_LOGOS.solana}>
+                <AddressTable title="Solana · share mesh" tone="yours" iconSrc={PROTOCOL_LOGOS.solana}>
+                  <AddressRow
+                    label="LZ OFT store"
+                    address={phase5OftStore}
+                    deployed={phase5OftStore ? (phase5MappingStatus === 'applied' ? true : null) : null}
+                    explorerHref={phase5OftStore ? solanaExplorerAddressUrl(phase5OftStore) : null}
+                    iconSrc={PROTOCOL_LOGOS.layerzero}
+                    tags={phase5OftStore ? ['pending'] : undefined}
+                  />
                   <AddressRow
                     label="LZ share-mesh mint"
                     address={phase5ShareMeshMint}
@@ -7117,11 +7182,27 @@ function DeployVaultBatcher({
                   />
                 </AddressTable>
                 <AddressTable
-                  title="Meteora · DLMM pool"
+                  title="Meteora · DLMM pool (SOL pair)"
                   tone="yours"
                   iconSrc={PROTOCOL_LOGOS.meteora}
                   className="md:col-span-2"
+                  description={`Expected pair: ${phase5PairLabel}. Quote leg defaults to wrapped SOL on mainnet.`}
                 >
+                  <AddressRow
+                    label="Pool pair"
+                    address={phase5PairLabel}
+                    deployed={phase5PoolAddress ? true : phase5PoolStatus === 'creating' ? null : false}
+                    explorerHref={null}
+                    iconSrc={PROTOCOL_LOGOS.meteora}
+                  />
+                  <AddressRow
+                    label={`Quote mint (${solanaQuoteMintLabel(phase5QuoteMint)})`}
+                    address={phase5QuoteMint}
+                    deployed
+                    explorerHref={solanaExplorerAddressUrl(phase5QuoteMint)}
+                    iconSrc={PROTOCOL_LOGOS.solana}
+                    tags={['live']}
+                  />
                   <AddressRow
                     label="Meteora DLMM pool"
                     address={phase5PoolAddress}
@@ -7140,6 +7221,129 @@ function DeployVaultBatcher({
                     }
                     iconSrc={PROTOCOL_LOGOS.meteora}
                   />
+                  <AddressRow
+                    label="Pool creation tx"
+                    address={phase5PoolSignature}
+                    deployed={phase5PoolSignature ? true : phase5PoolStatus === 'created' ? false : null}
+                    explorerHref={phase5PoolSignature ? solanaExplorerTxUrl(phase5PoolSignature) : null}
+                    iconSrc={PROTOCOL_LOGOS.solana}
+                  />
+                </AddressTable>
+                <AddressTable
+                  title="Meteora Alpha Vault (bundle · operator step)"
+                  tone="yours"
+                  iconSrc={PROTOCOL_LOGOS.meteora}
+                  className="md:col-span-2"
+                  description="Included in vault_full_deploy and provisioned by ops after deploy. This is Meteora’s deposit vault — not the DLMM trading pool above."
+                >
+                  <AddressRow
+                    label="Meteora Alpha Vault"
+                    address={phase5MeteoraAlphaVaultPubkey}
+                    deployed={phase5MeteoraAlphaVaultPubkey ? null : false}
+                    explorerHref={
+                      phase5MeteoraAlphaVaultPubkey
+                        ? solanaExplorerAddressUrl(phase5MeteoraAlphaVaultPubkey)
+                        : null
+                    }
+                    iconSrc={PROTOCOL_LOGOS.meteora}
+                    tags={phase5MeteoraAlphaVaultPubkey ? ['pending'] : undefined}
+                  />
+                </AddressTable>
+                <AddressTable
+                  title="Solana · lottery hook"
+                  tone="yours"
+                  iconSrc={PROTOCOL_LOGOS.fun4626}
+                  className="md:col-span-2"
+                  description="Required Solana lottery surface: Token-2022 transfer-hook mint plus creator-share-hook PDAs (setup-creator). Uses a separate mint from the LZ share-mesh DLMM leg because Meteora rejects TransferHook on the trading mint."
+                >
+                  <AddressRow
+                    label="Transfer-hook mint (Token-2022)"
+                    address={phase5HookLane?.hookMint ?? null}
+                    deployed={phase5HookLane?.hookMint ? null : false}
+                    explorerHref={
+                      phase5HookLane?.hookMint
+                        ? solanaExplorerAddressUrl(phase5HookLane.hookMint)
+                        : null
+                    }
+                    iconSrc={PROTOCOL_LOGOS.solana}
+                    tags={
+                      phase5HookLane?.hookMint
+                        ? ['live']
+                        : phase === 'done' || lastSessionStep === 'completed'
+                          ? ['pending']
+                          : undefined
+                    }
+                  />
+                  <AddressRow
+                    label="CreatorConfig PDA"
+                    address={phase5HookLane?.creatorConfig ?? null}
+                    deployed={phase5HookLane?.creatorConfig ? null : false}
+                    explorerHref={
+                      phase5HookLane?.creatorConfig
+                        ? solanaExplorerAddressUrl(phase5HookLane.creatorConfig)
+                        : null
+                    }
+                    iconSrc={PROTOCOL_LOGOS.fun4626}
+                    tags={
+                      phase5HookLane?.creatorConfig
+                        ? ['live']
+                        : phase5HookLane?.hookMint || phase === 'done' || lastSessionStep === 'completed'
+                          ? ['pending']
+                          : undefined
+                    }
+                  />
+                  <AddressRow
+                    label="PendingEntries PDA"
+                    address={phase5HookLane?.pendingEntries ?? null}
+                    deployed={phase5HookLane?.pendingEntries ? null : false}
+                    explorerHref={
+                      phase5HookLane?.pendingEntries
+                        ? solanaExplorerAddressUrl(phase5HookLane.pendingEntries)
+                        : null
+                    }
+                    iconSrc={PROTOCOL_LOGOS.fun4626}
+                    tags={
+                      phase5HookLane?.pendingEntries
+                        ? ['live']
+                        : phase5HookLane?.hookMint || phase === 'done' || lastSessionStep === 'completed'
+                          ? ['pending']
+                          : undefined
+                    }
+                  />
+                  <AddressRow
+                    label="WinnerRecord PDA"
+                    address={phase5HookLane?.winnerRecord ?? null}
+                    deployed={phase5HookLane?.winnerRecord ? null : false}
+                    explorerHref={
+                      phase5HookLane?.winnerRecord
+                        ? solanaExplorerAddressUrl(phase5HookLane.winnerRecord)
+                        : null
+                    }
+                    iconSrc={PROTOCOL_LOGOS.fun4626}
+                    tags={
+                      phase5HookLane?.winnerRecord
+                        ? ['live']
+                        : phase5HookLane?.hookMint || phase === 'done' || lastSessionStep === 'completed'
+                          ? ['pending']
+                          : undefined
+                    }
+                  />
+                </AddressTable>
+                <AddressTable
+                  title="Post-deploy · LP seeding"
+                  tone="yours"
+                  iconSrc={PROTOCOL_LOGOS.meteora}
+                  className="md:col-span-2"
+                >
+                  <AddressRow
+                    label="Initial DLMM liquidity (SOL)"
+                    address={phase5PoolStatus === 'created' ? 'Manual step after pool creation' : null}
+                    deployed={phase5PoolStatus === 'created' ? false : null}
+                    explorerHref={null}
+                    iconSrc={PROTOCOL_LOGOS.solana}
+                    tags={phase5PoolStatus === 'created' ? ['pending'] : undefined}
+                  />
+                  <div className="text-[10px] text-zinc-600 leading-relaxed pt-1">{phase5LpSeedingNote}</div>
                 </AddressTable>
               </div>
             </PhaseCard>

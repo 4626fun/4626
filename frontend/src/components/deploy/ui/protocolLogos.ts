@@ -12,6 +12,7 @@ export const PROTOCOL_LOGOS = {
   charm: '/protocols/charm.png',
   chainlink: '/protocols/chainlink.svg',
   safe: '/protocols/safe.png',
+  layerzero: '/protocols/layerzero-official.svg',
   meteora: '/immersive/assets/brand/meteora-v2.svg',
   zora: '/brands/zora-token.svg',
 } as const

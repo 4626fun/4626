@@ -12,6 +12,7 @@ import {
 
 import { getDeploySessionById } from '../../../../../server/_lib/deploy/deploySessions.js'
 import { readSolanaPostDeployStatus } from '../../../../../server/_lib/deploy/solanaPostDeployStatus.js'
+import { bytes32HexToSolanaPubkey } from '../../../../../server/_lib/onchain/solanaBridgePubkey.js'
 import {
   DeploySessionAccessError,
   loadAuthorizedDeploySession,
@@ -38,6 +39,13 @@ function readShareMeshMintHint(payload: unknown): string | null {
   const ovault = (payload as Record<string, unknown>).ovault
   if (!ovault || typeof ovault !== 'object' || Array.isArray(ovault)) return null
   return readString((ovault as Record<string, unknown>).shareMeshMint)
+}
+
+function readOvaultString(payload: unknown, key: string): string | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null
+  const ovault = (payload as Record<string, unknown>).ovault
+  if (!ovault || typeof ovault !== 'object' || Array.isArray(ovault)) return null
+  return readString((ovault as Record<string, unknown>)[key])
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -97,6 +105,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       creatorToken,
       shareOft,
       shareMeshMintHint: readShareMeshMintHint(payload),
+      shareMeshOftStoreHint: readOvaultString(payload, 'shareMeshOftStore'),
+      hookMintHint: readOvaultString(payload, 'hookMint') ?? readOvaultString(payload, 'transferHookMint'),
+      meteoraAlphaVaultHint:
+        readOvaultString(payload, 'meteoraAlphaVaultPubkey') ??
+        bytes32HexToSolanaPubkey(readOvaultString(payload, 'meteoraAlphaVault')),
       ovaultEnabled: readOvaultEnabled(payload),
     })
 
