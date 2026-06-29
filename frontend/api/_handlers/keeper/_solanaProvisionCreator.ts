@@ -21,6 +21,12 @@ import {
 
 import { listActivationsForCreator } from '../../../server/_lib/creatorStrategy/activations.js'
 import { creatorHasSolanaShareMeshEntitlement } from '../../../server/_lib/creatorStrategy/solanaShareMeshProvisioning.js'
+import {
+  ensureSolanaMeteoraPoolStatusSchema,
+  ensureSolanaShareMeshMappingsSchema,
+} from '../../../server/_lib/db/schemaBootstrap.js'
+import { SOLANA_NATIVE_MINT } from '../../../server/_lib/onchain/meteoraAlphaVaultConfig.js'
+import { listSolanaShareMeshMappingsForCreator } from '../../../server/_lib/onchain/solanaShareMeshMappings.js'
 
 type Body = {
   creatorToken?: unknown
@@ -29,7 +35,21 @@ type Body = {
   trigger?: unknown
   vaultAddress?: unknown
   deploySessionId?: unknown
+  shareMeshMint?: unknown
+  shareOft?: unknown
 }
+
+type ShareMeshMappingSummary =
+  | { status: 'found'; shareOft: string; shareMeshMint: string; sourceSessionId: string | null; mappingStatus: string }
+  | { status: 'provided'; shareOft: string | null; shareMeshMint: string; sourceSessionId: string | null; mappingStatus: 'provided' }
+  | { status: 'missing' }
+
+type MeteoraPoolProvisionResult =
+  | { status: 'disabled'; reason: string }
+  | { status: 'waiting_for_share_mesh_mint' }
+  | { status: 'skipped_unconfigured'; reason: string; tokenMintX: string; tokenMintY: string }
+  | { status: 'completed'; tokenMintX: string; tokenMintY: string; poolAddress: string | null; signature: string | null; response: unknown }
+  | { status: 'failed'; tokenMintX: string; tokenMintY: string; error: string; upstreamStatusCode?: number; response?: unknown }
 
 type ProvisionChecklist = {
   creatorToken: Address
@@ -37,12 +57,85 @@ type ProvisionChecklist = {
   orchestratorConfigured: boolean
   orchestratorHealthy: boolean | null
   entitlementConfirmed: boolean
+  shareMeshMapping: ShareMeshMappingSummary
+  meteoraPool: MeteoraPoolProvisionResult
   nextSteps: string[]
   runbook: string
 }
 
 function env(name: string): string {
   return String(process.env[name] ?? '').trim()
+}
+
+function envFlag(name: string, fallback = false): boolean {
+  const raw = env(name).toLowerCase()
+  if (!raw) return fallback
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
+}
+
+function readIntEnv(name: string, fallback: number, min: number, max: number): number {
+  const parsed = Number.parseInt(env(name), 10)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(max, Math.max(min, parsed))
+}
+
+function isSolanaPubkey(value: unknown): value is string {
+  const s = typeof value === 'string' ? value.trim() : ''
+  return s.length >= 32 && s.length <= 44 && /^[1-9A-HJ-NP-Za-km-z]+$/.test(s)
+}
+
+function normalizeOptionalAddress(value: unknown): Address | null {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  if (!raw || !isAddress(raw)) return null
+  return getAddress(raw as Address)
+}
+
+function deriveCreatePoolUrl(): string {
+  const explicit = env('SOLANA_METEORA_POOL_PROVISIONER_URL')
+  if (explicit) return explicit
+  const dynamic = env('SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL')
+  if (dynamic) return dynamic.replace(/\/provision\/?$/, '/create-pool')
+  return ''
+}
+
+function readCreatePoolSecret(): string {
+  return (
+    env('SOLANA_METEORA_POOL_PROVISIONER_SECRET') ||
+    env('SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET') ||
+    env('METEORA_IX_PROVISIONER_SECRET')
+  )
+}
+
+function readObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null
+}
+
+function readPoolAddress(response: unknown): string | null {
+  const raw = readObject(response)
+  if (!raw) return null
+  const data = readObject(raw.data)
+  const candidates = [raw.poolAddress, raw.pool, data?.poolAddress, data?.pool]
+  for (const candidate of candidates) {
+    const value = typeof candidate === 'string' ? candidate.trim() : ''
+    if (isSolanaPubkey(value)) return value
+  }
+  const output = typeof raw.output === 'string' ? raw.output : typeof data?.output === 'string' ? data.output : ''
+  const match = output.match(/Pool(?:\s*\(PDA\))?:\s*([1-9A-HJ-NP-Za-km-z]{32,44})/i)
+  return match?.[1] ?? null
+}
+
+function readSignature(response: unknown): string | null {
+  const raw = readObject(response)
+  if (!raw) return null
+  const data = readObject(raw.data)
+  const candidates = [raw.signature, data?.signature]
+  for (const candidate of candidates) {
+    const value = typeof candidate === 'string' ? candidate.trim() : ''
+    if (value) return value.slice(0, 160)
+  }
+  const output = typeof raw.output === 'string' ? raw.output : typeof data?.output === 'string' ? data.output : ''
+  const match = output.match(/Signature:\s*([^\s]+)/i)
+  return match?.[1] ? match[1].slice(0, 160) : null
 }
 
 async function pingOrchestratorHealth(): Promise<boolean | null> {
@@ -57,6 +150,182 @@ async function pingOrchestratorHealth(): Promise<boolean | null> {
   } catch {
     return false
   }
+}
+
+async function readShareMeshMapping(params: {
+  db: { sql: any }
+  creatorToken: Address
+  body: Body
+}): Promise<ShareMeshMappingSummary> {
+  const providedMint = typeof params.body.shareMeshMint === 'string' ? params.body.shareMeshMint.trim() : ''
+  if (isSolanaPubkey(providedMint)) {
+    const providedShareOft = normalizeOptionalAddress(params.body.shareOft)
+    return {
+      status: 'provided',
+      shareOft: providedShareOft ? providedShareOft.toLowerCase() : null,
+      shareMeshMint: providedMint,
+      sourceSessionId: typeof params.body.deploySessionId === 'string' ? params.body.deploySessionId.trim() || null : null,
+      mappingStatus: 'provided',
+    }
+  }
+
+  await ensureSolanaShareMeshMappingsSchema(params.db as any)
+  const mappings = await listSolanaShareMeshMappingsForCreator({
+    db: params.db as any,
+    creatorToken: params.creatorToken,
+  })
+  const selected =
+    mappings.find((row) => row.status === 'applied') ??
+    mappings.find((row) => row.status === 'pending') ??
+    mappings[0]
+  if (!selected) return { status: 'missing' }
+  return {
+    status: 'found',
+    shareOft: selected.shareOft,
+    shareMeshMint: selected.shareMeshMint,
+    sourceSessionId: selected.sourceSessionId,
+    mappingStatus: selected.status,
+  }
+}
+
+async function recordMeteoraPoolAttempt(params: {
+  db: { sql: any }
+  creatorToken: Address
+  mapping: Extract<ShareMeshMappingSummary, { status: 'found' | 'provided' }>
+  quoteMint: string
+  status: 'creating' | 'created' | 'failed' | 'skipped'
+  poolAddress?: string | null
+  signature?: string | null
+  error?: string | null
+  response?: unknown
+}): Promise<void> {
+  await ensureSolanaMeteoraPoolStatusSchema(params.db as any)
+  await params.db.sql`
+    INSERT INTO solana_meteora_pool_status (
+      creator_token,
+      share_oft,
+      share_mesh_mint,
+      quote_mint,
+      pool_address,
+      status,
+      provision_attempt_count,
+      last_signature,
+      last_error,
+      response_json,
+      source_session_id,
+      updated_at
+    ) VALUES (
+      ${params.creatorToken.toLowerCase()},
+      ${params.mapping.shareOft},
+      ${params.mapping.shareMeshMint},
+      ${params.quoteMint},
+      ${params.poolAddress ?? null},
+      ${params.status},
+      1,
+      ${params.signature ?? null},
+      ${params.error ?? null},
+      ${JSON.stringify(params.response ?? null)}::jsonb,
+      ${params.mapping.sourceSessionId ?? null},
+      NOW()
+    )
+    ON CONFLICT (share_mesh_mint, quote_mint)
+    DO UPDATE SET
+      creator_token = EXCLUDED.creator_token,
+      share_oft = COALESCE(EXCLUDED.share_oft, solana_meteora_pool_status.share_oft),
+      pool_address = COALESCE(EXCLUDED.pool_address, solana_meteora_pool_status.pool_address),
+      status = EXCLUDED.status,
+      provision_attempt_count = solana_meteora_pool_status.provision_attempt_count + 1,
+      last_signature = COALESCE(EXCLUDED.last_signature, solana_meteora_pool_status.last_signature),
+      last_error = EXCLUDED.last_error,
+      response_json = EXCLUDED.response_json,
+      source_session_id = COALESCE(EXCLUDED.source_session_id, solana_meteora_pool_status.source_session_id),
+      updated_at = NOW();
+  `
+}
+
+async function maybeCreateMeteoraPool(params: {
+  db: { sql: any }
+  creatorToken: Address
+  mapping: ShareMeshMappingSummary
+}): Promise<MeteoraPoolProvisionResult> {
+  if (params.mapping.status === 'missing') return { status: 'waiting_for_share_mesh_mint' }
+  if (!envFlag('SOLANA_METEORA_POOL_PROVISIONING_ENABLED', false)) {
+    return { status: 'disabled', reason: 'SOLANA_METEORA_POOL_PROVISIONING_ENABLED is not enabled' }
+  }
+
+  const tokenMintX = params.mapping.shareMeshMint
+  const tokenMintY = envFlag('SOLANA_STRICT_SOL_PAIR', false)
+    ? SOLANA_NATIVE_MINT
+    : env('SOLANA_METEORA_POOL_QUOTE_MINT') || SOLANA_NATIVE_MINT
+  const url = deriveCreatePoolUrl()
+  const secret = readCreatePoolSecret()
+  if (!url || !secret) {
+    const reason = !url ? 'create_pool_provisioner_url_missing' : 'create_pool_provisioner_secret_missing'
+    await recordMeteoraPoolAttempt({
+      db: params.db,
+      creatorToken: params.creatorToken,
+      mapping: params.mapping,
+      quoteMint: tokenMintY,
+      status: 'skipped',
+      error: reason,
+    })
+    return { status: 'skipped_unconfigured', reason, tokenMintX, tokenMintY }
+  }
+
+  await recordMeteoraPoolAttempt({
+    db: params.db,
+    creatorToken: params.creatorToken,
+    mapping: params.mapping,
+    quoteMint: tokenMintY,
+    status: 'creating',
+  })
+
+  const requestBody = {
+    tokenMintX,
+    tokenMintY,
+    binStep: readIntEnv('SOLANA_METEORA_POOL_BIN_STEP', 25, 1, 10_000),
+    activeId: readIntEnv('SOLANA_METEORA_POOL_ACTIVE_ID', 0, -8_388_608, 8_388_607),
+    baseFactor: readIntEnv('SOLANA_METEORA_POOL_BASE_FACTOR', 10_000, 1, 1_000_000),
+  }
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: `Bearer ${secret}`,
+    },
+    body: JSON.stringify(requestBody),
+    signal: AbortSignal.timeout(readIntEnv('SOLANA_METEORA_POOL_PROVISIONER_TIMEOUT_MS', 300_000, 30_000, 600_000)),
+  })
+  const payload = await response.json().catch(async () => ({ text: await response.text().catch(() => '') }))
+  if (!response.ok || (readObject(payload)?.success === false)) {
+    const objectPayload = readObject(payload)
+    const error = typeof objectPayload?.error === 'string' ? objectPayload.error : `create_pool_failed:${response.status}`
+    await recordMeteoraPoolAttempt({
+      db: params.db,
+      creatorToken: params.creatorToken,
+      mapping: params.mapping,
+      quoteMint: tokenMintY,
+      status: 'failed',
+      error,
+      response: payload,
+    })
+    return { status: 'failed', tokenMintX, tokenMintY, error, upstreamStatusCode: response.status, response: payload }
+  }
+
+  const poolAddress = readPoolAddress(payload)
+  const signature = readSignature(payload)
+  await recordMeteoraPoolAttempt({
+    db: params.db,
+    creatorToken: params.creatorToken,
+    mapping: params.mapping,
+    quoteMint: tokenMintY,
+    status: 'created',
+    poolAddress,
+    signature,
+    response: payload,
+  })
+  return { status: 'completed', tokenMintX, tokenMintY, poolAddress, signature, response: payload }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -101,7 +370,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const rows = await listActivationsForCreator(db as any, creatorToken)
     const row = rows.find((r) => r.id === activationId)
     if (row) {
-      const metadata = { ...(row.metadata ?? {}), solanaShareMeshProvisioningQueuedAt: new Date().toISOString(), solanaShareMeshTrigger: trigger }
+      const metadata = {
+        ...(row.metadata ?? {}),
+        solanaShareMeshProvisioningQueuedAt: new Date().toISOString(),
+        solanaShareMeshTrigger: trigger,
+      }
       await (db as any).sql`
         UPDATE creator_strategy_features
         SET metadata = ${JSON.stringify(metadata)}::jsonb, updated_at = NOW()
@@ -112,12 +385,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const orchestratorConfigured = Boolean(env('SOLANA_ORCHESTRATOR_URL'))
   const orchestratorHealthy = orchestratorConfigured ? await pingOrchestratorHealth() : null
+  const shareMeshMapping = await readShareMeshMapping({ db: db as any, creatorToken, body })
+  const meteoraPool = await maybeCreateMeteoraPool({ db: db as any, creatorToken, mapping: shareMeshMapping })
 
   const nextSteps = [
     'Confirm Path 1 platform readiness: verify-batcher-pipe-a-readiness.ts exit 0',
     'After finalizePhase2, bridge 30% ShareOFT seeds the LZ share-mesh mint on Solana',
-    'Run kpr solana:create-dlmm-pool with TOKEN_MINT_X=<share_mesh_mint> for Meteora (Path 2 B1)',
-    'Upsert creator_meteora_alpha_vaults when pool + Alpha Vault exist',
+    shareMeshMapping.status === 'missing'
+      ? 'Wait for deploy-session finalize to persist solana_share_mesh_mappings.share_mesh_mint'
+      : 'Meteora DLMM pool provisioning is recorded in solana_meteora_pool_status',
+    'Seed initial DLMM liquidity after the pool exists; empty pools do not swap or browse reliably',
     'Keep relay_entries disabled until B2 hook path is verified (policy doc)',
   ]
   if (!orchestratorConfigured) {
@@ -132,6 +409,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     orchestratorConfigured,
     orchestratorHealthy,
     entitlementConfirmed: true,
+    shareMeshMapping,
+    meteoraPool,
     nextSteps,
     runbook: 'docs/operations/solana-share-mesh-budget-paths.md',
   }
@@ -142,6 +421,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     activationId: Number.isInteger(activationId) ? activationId : null,
     orchestratorConfigured,
     orchestratorHealthy,
+    shareMeshMappingStatus: shareMeshMapping.status,
+    meteoraPoolStatus: meteoraPool.status,
     vaultAddress: typeof body.vaultAddress === 'string' ? body.vaultAddress : null,
     deploySessionId: typeof body.deploySessionId === 'string' ? body.deploySessionId : null,
   })

@@ -92,9 +92,38 @@ describe('enqueueSolanaShareMeshProvisioning', () => {
       expect.objectContaining({
         kind: 'internal_api',
         source: 'creator-strategy.solana-share-mesh',
+        dedupeKey: `solana-provision:${CREATOR.toLowerCase()}:payment`,
         payload: expect.objectContaining({
           path: '/api/keeper/solana/provision-creator',
           method: 'POST',
+        }),
+      }),
+    )
+  })
+
+  it('uses mint-scoped dedupe when shareMeshMint is provided', async () => {
+    const shareMeshMint = 'ShareMesh111111111111111111111111111111111'
+    const shareOft = '0x2222222222222222222222222222222222222222'
+    const result = await enqueueSolanaShareMeshProvisioning({
+      creatorToken: CREATOR,
+      activationId: 0,
+      paymentSource: 'post_deploy',
+      trigger: 'post_deploy',
+      shareMeshMint,
+      shareOft,
+      deploySessionId: 'dep_123',
+    })
+    expect(result).toEqual({ enqueued: true, jobId: 99 })
+    expect(enqueueKeeperJobMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'creator-strategy.solana-share-mesh-pool',
+        dedupeKey: `solana-provision-pool:${shareMeshMint.toLowerCase()}`,
+        payload: expect.objectContaining({
+          body: expect.objectContaining({
+            shareMeshMint,
+            shareOft,
+            trigger: 'post_deploy',
+          }),
         }),
       }),
     )

@@ -559,6 +559,13 @@ export async function ensureSolanaShareMeshMappingsSchema(db: Db): Promise<void>
   })
 }
 
+/** Solana Meteora DLMM pool provisioning status for share-mesh launch automation. */
+export async function ensureSolanaMeteoraPoolStatusSchema(db: Db): Promise<void> {
+  await withEnsureOnce('solanaMeteoraPoolStatus', async () => {
+    await ensureMigrationApplied(db, '20260711010000_solana_meteora_pool_status.sql').catch(() => {})
+  })
+}
+
 /** Base MCP human-approval requests (durable approval flow store). */
 export async function ensureBaseMcpApprovalSchema(db: Db): Promise<void> {
   await withEnsureOnce('baseMcpApproval', async () => {

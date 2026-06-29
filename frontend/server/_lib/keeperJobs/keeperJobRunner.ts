@@ -163,7 +163,17 @@ function readInternalApiPayload(job: KeeperJob): {
   return { path, method, body }
 }
 
-function readInternalApiTimeoutMs(): number {
+function readInternalApiTimeoutMs(path?: string): number {
+  const normalizedPath = typeof path === 'string' ? path.trim() : ''
+  if (normalizedPath === '/api/keeper/solana/provision-creator') {
+    const parsed = Number(
+      process.env.KEEPER_METEORA_POOL_PROVISION_TIMEOUT_MS ??
+        process.env.SOLANA_METEORA_POOL_PROVISIONER_TIMEOUT_MS ??
+        300_000,
+    )
+    if (!Number.isFinite(parsed)) return 310_000
+    return Math.min(310_000, Math.max(30_000, Math.floor(parsed) + 10_000))
+  }
   const parsed = Number(process.env.KEEPER_INTERNAL_API_TIMEOUT_MS ?? 52_000)
   if (!Number.isFinite(parsed)) return 52_000
   return Math.min(55_000, Math.max(5_000, Math.floor(parsed)))
@@ -175,7 +185,7 @@ async function callInternalApi(params: {
   job: KeeperJob
 }): Promise<Record<string, unknown>> {
   const apiJob = readInternalApiPayload(params.job)
-  const timeoutMs = readInternalApiTimeoutMs()
+  const timeoutMs = readInternalApiTimeoutMs(apiJob.path)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
@@ -299,6 +309,67 @@ async function enqueueSolanaMappingFollowUpIfNeeded(job: KeeperJob): Promise<num
   return followUp.id
 }
 
+function readSyncMappingProvisionFollowUp(job: KeeperJob): {
+  creatorToken: string
+  shareOft: string
+  shareMeshMint: string
+  sourceSessionId: string | null
+} | null {
+  const path = typeof job.payload.path === 'string' ? job.payload.path.trim() : ''
+  if (path !== '/api/keeper/solana/sync-mapping') return null
+  const body =
+    job.payload.body && typeof job.payload.body === 'object' && !Array.isArray(job.payload.body)
+      ? (job.payload.body as Record<string, unknown>)
+      : null
+  const creatorToken = typeof body?.creatorToken === 'string' ? body.creatorToken.trim() : ''
+  const shareOft = typeof body?.shareOft === 'string' ? body.shareOft.trim() : ''
+  const shareMeshMint = typeof body?.shareMeshMint === 'string' ? body.shareMeshMint.trim() : ''
+  if (!creatorToken || !shareOft || !shareMeshMint) return null
+  const sourceSessionId = typeof body?.sourceSessionId === 'string' ? body.sourceSessionId.trim() : ''
+  return {
+    creatorToken,
+    shareOft,
+    shareMeshMint,
+    sourceSessionId: sourceSessionId || null,
+  }
+}
+
+function shouldEnqueueMeteoraPoolAfterSyncMapping(result: Record<string, unknown>): boolean {
+  const status = typeof result.status === 'string' ? result.status.trim() : ''
+  return status === 'completed' || status === 'skipped_unconfigured'
+}
+
+async function enqueueSolanaProvisionCreatorFollowUpIfNeeded(
+  job: KeeperJob,
+  result: Record<string, unknown>,
+): Promise<number | undefined> {
+  const mapping = readSyncMappingProvisionFollowUp(job)
+  if (!mapping) return undefined
+  if (!shouldEnqueueMeteoraPoolAfterSyncMapping(result)) return undefined
+
+  const followUp = await enqueueKeeperJob({
+    kind: 'internal_api',
+    dedupeKey: `solana-provision-pool:${mapping.shareMeshMint.toLowerCase()}`,
+    source: 'keeper-solana-sync-mapping-follow-up',
+    priority: 65,
+    payload: {
+      path: '/api/keeper/solana/provision-creator',
+      method: 'POST',
+      body: {
+        creatorToken: mapping.creatorToken,
+        activationId: 0,
+        paymentSource: 'post_deploy',
+        trigger: 'post_deploy',
+        deploySessionId: mapping.sourceSessionId,
+        shareOft: mapping.shareOft,
+        shareMeshMint: mapping.shareMeshMint,
+      },
+    },
+    maxAttempts: 5,
+  })
+  return followUp.id
+}
+
 async function runOneJob(params: {
   baseUrl: string
   apiKey: string
@@ -393,6 +464,15 @@ async function runOneJob(params: {
       if (!followUpJobId && mappingFollowUpId) followUpJobId = mappingFollowUpId
     } catch (error) {
       console.warn('[keeper/jobs] solana mapping follow-up enqueue failed', {
+        jobId: params.job.id,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+    try {
+      const poolFollowUpId = await enqueueSolanaProvisionCreatorFollowUpIfNeeded(params.job, result)
+      if (!followUpJobId && poolFollowUpId) followUpJobId = poolFollowUpId
+    } catch (error) {
+      console.warn('[keeper/jobs] solana provision-creator follow-up enqueue failed', {
         jobId: params.job.id,
         error: error instanceof Error ? error.message : String(error),
       })

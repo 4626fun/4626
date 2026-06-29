@@ -119,6 +119,26 @@ export async function listPendingSolanaShareMeshMappings(params: {
   return (result.rows ?? []).map(mapRow)
 }
 
+export async function listSolanaShareMeshMappingsForCreator(params: {
+  db: Db
+  creatorToken: string
+  limit?: number
+}): Promise<SolanaShareMeshMapping[]> {
+  await ensureSolanaShareMeshMappingsSchema(params.db)
+  const creatorToken = normalizeEthAddress(params.creatorToken, 'creator_token')
+  const limit = Math.max(1, Math.min(Number(params.limit ?? 10), 50))
+  const result = await params.db.sql`
+    SELECT *
+    FROM solana_share_mesh_mappings
+    WHERE LOWER(creator_token) = ${creatorToken}
+    ORDER BY
+      CASE status WHEN 'applied' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END,
+      updated_at DESC
+    LIMIT ${limit};
+  `
+  return (result.rows ?? []).map(mapRow)
+}
+
 export async function markSolanaShareMeshMappingApplied(params: {
   db: Db
   shareOft: string

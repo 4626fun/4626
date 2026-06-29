@@ -33,6 +33,7 @@ import { assertDeploySessionPhaseBoundaries } from '../../../../../server/_lib/d
 import { maybeAutoSetupPayoutRouterTreasury } from '../../../../../server/_lib/onchain/payoutRouterTreasurySetup.js'
 import { upsertSolanaShareMeshMapping } from '../../../../../server/_lib/onchain/solanaShareMeshMappings.js'
 import { enqueueKeeperJob } from '../../../../../server/_lib/keeperJobs/keeperJobs.js'
+import { enqueueSolanaShareMeshProvisioning } from '../../../../../server/_lib/creatorStrategy/solanaShareMeshProvisioning.js'
 import { attachFinalizeShareBridgeValueToCalls } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
 import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../../server/_lib/onchain/solanaOvaultCompatibility.js'
 import {
@@ -686,6 +687,22 @@ async function persistAndQueueSolanaShareMeshMapping(params: {
     },
     maxAttempts: 5,
   })
+
+  const poolQueue = await enqueueSolanaShareMeshProvisioning({
+    creatorToken: getAddress(creatorToken as Address),
+    activationId: 0,
+    paymentSource: 'post_deploy',
+    trigger: 'post_deploy',
+    deploySessionId: params.recId,
+    shareOft: mapping.shareOft,
+    shareMeshMint: mapping.shareMeshMint,
+  })
+  if (!poolQueue.enqueued) {
+    logger.info('[deploy/session] solana pool provisioning queue skipped', {
+      sessionId: params.recId,
+      reason: poolQueue.reason ?? 'unknown',
+    })
+  }
 }
 
 function asOwnerBytes(owner: Address): Hex {

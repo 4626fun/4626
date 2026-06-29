@@ -87,6 +87,7 @@ import {
   parseCallValue,
   type FinalizePhase2Params,
 } from '@/lib/deploy/finalizeShareBridgeFee'
+import { planCreatorCoinPolicyControllerOwnershipGrant } from '@/lib/deploy/creatorCoinOwnership'
 import {
   mergePipeAFinalizeParams,
   readDeployedPhase1CoreAddresses,
@@ -179,7 +180,6 @@ import {
   CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI,
   CHARM_FACTORY_ABI,
   COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
-  COIN_OWNERSHIP_ABI,
   COIN_PAYOUT_RECIPIENT_ABI,
   CREATE2_DEPLOYER_STORE_ABI,
   CREATOR_COIN_OWNERS_ABI,
@@ -1557,7 +1557,6 @@ function DeployVaultBatcher({
     outcome?: DeploymentVanityVersionSearchOutcome
   } | null>(null)
   const shareOftVanitySkipLogKeyRef = useRef<string | null>(null)
-  const creatorCoinOwnerUnresolvedLogKeyRef = useRef<string | null>(null)
   const ensurePaymasterSession = useCallback(async () => {
     if (!getAccessToken || typeof signInWithPrivyToken !== 'function') return
     try {
@@ -4147,37 +4146,13 @@ function DeployVaultBatcher({
         functionName: 'setPayoutRecipient',
         args: [expectedPayoutRouter],
       })
-      const coinTransferOwnershipCallData = encodeFunctionData({
-        abi: COIN_OWNERSHIP_ABI,
-        functionName: 'transferOwnership',
-        args: [expectedCreatorCoinPolicyController],
-      })
-      const currentCoinOwner = await (async () => {
-        try {
-          const value = await publicClient.readContract({
-            address: creatorToken,
-            abi: COIN_OWNERSHIP_ABI,
-            functionName: 'owner',
-          })
-          if (typeof value === 'string' && isAddress(value)) return getAddress(value as Address)
-          return null
-        } catch {
-          return null
-        }
-      })()
-      if (!currentCoinOwner) {
-        const unresolvedLogKey = `${creatorToken.toLowerCase()}:${batcherAddress.toLowerCase()}`
-        if (creatorCoinOwnerUnresolvedLogKeyRef.current !== unresolvedLogKey) {
-          creatorCoinOwnerUnresolvedLogKeyRef.current = unresolvedLogKey
-          logger.debug('[DeployVault] creator_coin_owner_unresolved', {
-            creatorToken,
-            batcher: batcherAddress,
-          })
-        }
-      }
-      const coinOwnershipNeedsTransfer = currentCoinOwner
-        ? !sameAddress(currentCoinOwner, expectedCreatorCoinPolicyController)
-        : false
+      const creatorCoinPolicyControllerOwnershipPlan =
+        await planCreatorCoinPolicyControllerOwnershipGrant({
+          publicClient,
+          creatorToken,
+          deploySender: owner,
+          policyController: expectedCreatorCoinPolicyController,
+        })
       const canSetPayoutRecipientFromOwner = await (async () => {
         if (!payoutMismatch) return false
         try {
@@ -4191,21 +4166,6 @@ function DeployVaultBatcher({
           return false
         }
       })()
-      const canTransferCoinOwnershipFromOwner = await (async () => {
-        if (!coinOwnershipNeedsTransfer) return false
-        if (currentCoinOwner && !sameAddress(currentCoinOwner, owner)) return false
-        try {
-          await publicClient.call({
-            to: creatorToken,
-            data: coinTransferOwnershipCallData,
-            account: owner,
-          })
-          return true
-        } catch {
-          return false
-        }
-      })()
-
       // ===========================
       // Two-step batcher (Phase 1 + Phase 2) path
       // ===========================
@@ -4979,24 +4939,23 @@ function DeployVaultBatcher({
             data: payoutRecipientCallData,
           })
         }
-        if (coinOwnershipNeedsTransfer) {
-          if (!canTransferCoinOwnershipFromOwner) {
-            const ownerDisplay = currentCoinOwner ? shortAddress(currentCoinOwner) : 'unknown'
+        if (creatorCoinPolicyControllerOwnershipPlan.needsGrant) {
+          if (!creatorCoinPolicyControllerOwnershipPlan.grantCallData) {
+            const ownersDisplay =
+              creatorCoinPolicyControllerOwnershipPlan.coinOwners?.length
+                ? creatorCoinPolicyControllerOwnershipPlan.coinOwners.map(shortAddress).join(', ')
+                : creatorCoinPolicyControllerOwnershipPlan.legacyCoinOwner
+                  ? shortAddress(creatorCoinPolicyControllerOwnershipPlan.legacyCoinOwner)
+                  : 'unknown'
             throw new Error(
-              `Cannot transfer CreatorCoin ownership to policy controller ${shortAddress(expectedCreatorCoinPolicyController)} ` +
-                `from current owner ${ownerDisplay}.`,
+              `Cannot grant CreatorCoin admin to policy controller ${shortAddress(expectedCreatorCoinPolicyController)} ` +
+                `from deploy sender ${shortAddress(owner)} (current coin owners: ${ownersDisplay}).`,
             )
           }
           phase2Calls.push({
             target: creatorToken,
             value: 0n,
-            data: coinTransferOwnershipCallData,
-          })
-        } else if (!currentCoinOwner) {
-          logger.info('[DeployVault] creator_coin_owner_unresolved_skip_transfer', {
-            creatorToken,
-            owner,
-            policyController: expectedCreatorCoinPolicyController,
+            data: creatorCoinPolicyControllerOwnershipPlan.grantCallData,
           })
         }
 

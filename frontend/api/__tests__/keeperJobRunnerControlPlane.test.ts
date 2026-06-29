@@ -7,6 +7,7 @@ const {
   beginOperationExecutionMock,
   transitionOperationStatusMock,
   transitionStageStatusMock,
+  enqueueKeeperJobMock,
 } = vi.hoisted(() => ({
   claimDueKeeperJobsMock: vi.fn<() => Promise<any[]>>(async () => []),
   completeKeeperJobMock: vi.fn(async () => true),
@@ -14,12 +15,13 @@ const {
   beginOperationExecutionMock: vi.fn(async () => ({ status: 'running', resumedFromTerminal: false })),
   transitionOperationStatusMock: vi.fn(async () => undefined),
   transitionStageStatusMock: vi.fn(async () => undefined),
+  enqueueKeeperJobMock: vi.fn(async () => ({ id: 77 })),
 }))
 
 vi.mock('../../server/_lib/keeperJobs/keeperJobs.js', () => ({
   claimDueKeeperJobs: claimDueKeeperJobsMock,
   completeKeeperJob: completeKeeperJobMock,
-  enqueueKeeperJob: vi.fn(async () => ({ id: 0 })),
+  enqueueKeeperJob: enqueueKeeperJobMock,
   releaseExpiredKeeperJobClaims: releaseExpiredKeeperJobClaimsMock,
 }))
 
@@ -100,6 +102,58 @@ describe('runKeeperJobTick control-plane internal_api jobs', () => {
         operationId: 'op_cp_1',
         nextStatus: 'manual_review',
         reason: 'keeper_job_partial_success',
+      }),
+    )
+  })
+
+  it('enqueues provision-creator after solana sync-mapping completes', async () => {
+    const shareMeshMint = 'ShareMesh111111111111111111111111111111111'
+    claimDueKeeperJobsMock.mockResolvedValueOnce([
+      {
+        id: 51,
+        kind: 'internal_api',
+        payload: {
+          path: '/api/keeper/solana/sync-mapping',
+          method: 'POST',
+          body: {
+            creatorToken: '0x1111111111111111111111111111111111111111',
+            shareOft: '0x2222222222222222222222222222222222222222',
+            shareMeshMint,
+            sourceSessionId: 'dep_abc',
+          },
+        },
+      },
+    ])
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          data: { status: 'completed', mappingId: 9 },
+        }),
+      })),
+    )
+
+    const tick = await runKeeperJobTick({
+      baseUrl: 'https://example.test',
+      apiKey: 'test-key',
+      workerId: 'worker-1',
+    })
+
+    expect(tick.results[0]?.status).toBe('succeeded')
+    expect(enqueueKeeperJobMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'keeper-solana-sync-mapping-follow-up',
+        dedupeKey: `solana-provision-pool:${shareMeshMint.toLowerCase()}`,
+        payload: expect.objectContaining({
+          path: '/api/keeper/solana/provision-creator',
+          body: expect.objectContaining({
+            shareMeshMint,
+            trigger: 'post_deploy',
+          }),
+        }),
       }),
     )
   })

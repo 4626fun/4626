@@ -40,6 +40,23 @@ export async function creatorHasSolanaShareMeshEntitlement(
   return keys.includes('solana_ovault_mesh') || keys.includes('solana_meteora_alpha_vault')
 }
 
+function isSolanaPubkey(value: unknown): value is string {
+  const s = typeof value === 'string' ? value.trim() : ''
+  return s.length >= 32 && s.length <= 44 && /^[1-9A-HJ-NP-Za-km-z]+$/.test(s)
+}
+
+function buildProvisionCreatorDedupeKey(params: {
+  creatorToken: Address
+  trigger: 'payment' | 'post_deploy'
+  shareMeshMint?: string | null
+}): string {
+  const mint = typeof params.shareMeshMint === 'string' ? params.shareMeshMint.trim() : ''
+  if (isSolanaPubkey(mint)) {
+    return `solana-provision-pool:${mint.toLowerCase()}`
+  }
+  return `solana-provision:${params.creatorToken.toLowerCase()}:${params.trigger}`
+}
+
 export async function enqueueSolanaShareMeshProvisioning(params: {
   creatorToken: Address
   activationId: number
@@ -47,6 +64,8 @@ export async function enqueueSolanaShareMeshProvisioning(params: {
   trigger: 'payment' | 'post_deploy'
   vaultAddress?: Address | null
   deploySessionId?: string | null
+  shareMeshMint?: string | null
+  shareOft?: string | null
 }): Promise<SolanaShareMeshProvisioningEnqueueResult> {
   if (!isEnabled()) {
     return { enqueued: false, jobId: null, reason: 'disabled' }
@@ -65,10 +84,19 @@ export async function enqueueSolanaShareMeshProvisioning(params: {
     return { enqueued: false, jobId: null, reason: 'no_solana_entitlement' }
   }
 
-  const dedupeKey = `solana-provision:${creatorToken.toLowerCase()}:${params.trigger}`
+  const shareMeshMint = isSolanaPubkey(params.shareMeshMint) ? params.shareMeshMint.trim() : null
+  const shareOft =
+    typeof params.shareOft === 'string' && /^0x[a-fA-F0-9]{40}$/.test(params.shareOft.trim())
+      ? getAddress(params.shareOft.trim() as Address)
+      : null
+  const dedupeKey = buildProvisionCreatorDedupeKey({
+    creatorToken,
+    trigger: params.trigger,
+    shareMeshMint,
+  })
   const job = await enqueueKeeperJob({
     kind: 'internal_api',
-    source: 'creator-strategy.solana-share-mesh',
+    source: shareMeshMint ? 'creator-strategy.solana-share-mesh-pool' : 'creator-strategy.solana-share-mesh',
     dedupeKey,
     priority: params.trigger === 'payment' ? 40 : 60,
     payload: {
@@ -81,8 +109,11 @@ export async function enqueueSolanaShareMeshProvisioning(params: {
         trigger: params.trigger,
         vaultAddress: params.vaultAddress ?? null,
         deploySessionId: params.deploySessionId ?? null,
+        ...(shareMeshMint ? { shareMeshMint } : null),
+        ...(shareOft ? { shareOft } : null),
       },
     },
+    maxAttempts: shareMeshMint ? 5 : 3,
   })
 
   return { enqueued: true, jobId: job.id }

@@ -135,17 +135,25 @@ export async function dispatchProvisioning(
       }
 
     case 'solana_meteora':
-      return {
-        ok: true,
-        outcome: 'enqueued',
-        ref: null,
-        note:
-          `Meteora add-on for ${request.creatorToken} needs share-mesh Path 1 live, then ` +
-          `(a) Meteora DLMM pool on the LZ share mint via ` +
-          `\`pnpm -C kpr solana:create-dlmm-pool\`, (b) optional Alpha Vault, ` +
-          `(c) row in \`creator_meteora_alpha_vaults\` when used. See ` +
-          `docs/operations/solana-share-mesh-budget-paths.md and ` +
-          `docs/operations/creator-strategy-features.md § "solana_meteora_alpha_vault".`,
+      {
+        const queue = await enqueueSolanaShareMeshProvisioning({
+          creatorToken: request.creatorToken,
+          activationId: request.activationId,
+          paymentSource: request.paymentSource,
+          trigger: 'payment',
+        })
+        return {
+          ok: true,
+          outcome: 'enqueued',
+          ref: queue.jobId ? String(queue.jobId) : null,
+          note:
+            queue.enqueued
+              ? `Meteora add-on for ${request.creatorToken} queued share-mesh + DLMM pool provisioning ` +
+                `(keeper job ${queue.jobId ?? 'pending'}). Pool creation runs post-deploy when ` +
+                'SOLANA_METEORA_POOL_PROVISIONING_ENABLED=1 and the share-mesh mint is known.'
+              : `Meteora add-on active for ${request.creatorToken}; keeper queue skipped (${queue.reason ?? 'unknown'}). ` +
+                'Follow docs/operations/solana-share-mesh-budget-paths.md for manual Path 2 steps.',
+        }
       }
 
     default:

@@ -48,4 +48,12 @@ describe('DeployVault dry run wiring', () => {
     expect(pageSource).toContain('privyEmbeddedEoaIsCanonicalOwner && privyEmbeddedEoaCanSign')
     expect(pageSource).toContain('!canUseWalletSendCalls && !canUseEmbeddedOwnerSigner')
   })
+
+  it('plans Zora coin addOwner grant for policy controller instead of Ownable transferOwnership', () => {
+    const pageSource = fs.readFileSync(path.resolve(__dirname, './DeployVault.tsx'), 'utf8')
+
+    expect(pageSource).toContain('planCreatorCoinPolicyControllerOwnershipGrant')
+    expect(pageSource).toContain('creatorCoinPolicyControllerOwnershipPlan.needsGrant')
+    expect(pageSource).not.toContain('creator_coin_owner_unresolved_skip_transfer')
+  })
 })
