@@ -3,6 +3,8 @@ import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 import {redirects} from './redirects';
 import remarkWrapTables from './src/remark/wrapTables';
+import remarkLinkEvmAddresses from './src/remark/linkEvmAddresses';
+import remarkLinkRepoPaths from './src/remark/linkRepoPaths';
 
 const enableGitLastUpdate = process.env.DOCS_USE_GIT_LAST_UPDATE === '1';
 
@@ -81,7 +83,7 @@ const config: Config = {
           routeBasePath: '/',
           breadcrumbs: true,
           editUrl: 'https://github.com/wenakita/4626/tree/main/docs/',
-          remarkPlugins: [remarkWrapTables],
+          remarkPlugins: [remarkWrapTables, remarkLinkEvmAddresses, remarkLinkRepoPaths],
           // Prefer synced frontmatter `last_updated`; Git metadata is optional.
           showLastUpdateTime: enableGitLastUpdate,
           showLastUpdateAuthor: false,
@@ -174,7 +176,7 @@ const config: Config = {
             {label: 'Launch checklist', to: '/guides/launch-checklist'},
             {label: 'Strategy bundle', to: '/guides/strategy-bundle'},
             {label: 'Contract addresses', to: '/reference/addresses'},
-            {label: 'Fable audit', to: '/audits/fable'},
+            {label: 'Security review', to: '/audits/fable'},
             {label: 'Smart contracts', to: '/contracts'},
           ],
         },

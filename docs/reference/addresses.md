@@ -11,7 +11,7 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 
 > **Terms:** **New vault launch** = fresh deploy on the current release (internal: *greenfield*). **Solana bridge at finalize** = ~30% of `■` bridged during activation (internal: *Pipe A*). See [Glossary](/reference/glossary#quick-definitions).
 
-> **Canonical source.** When documentation or tooling disagrees with this file, **this file wins**.
+> **Canonical source.** When documentation or tooling disagrees with this file, **this file wins**. Addresses link to [BaseScan](https://basescan.org) on Base mainnet.
 
 ## Base
 

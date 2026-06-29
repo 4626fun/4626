@@ -2139,8 +2139,11 @@ details > :not(summary) {
 }
 
 .audit-finding__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
   font-size: 0.8125rem;
-  font-family: var(--ifm-font-family-monospace);
   color: var(--ifm-font-color-tertiary);
   margin: 0;
 }
@@ -2472,4 +2475,68 @@ details > :not(summary) {
 [data-theme='dark'] .theme-doc-markdown:has(.audit-path) .docusaurus-mermaid-container,
 [data-theme='dark'] .audit-hub .docusaurus-mermaid-container {
   background: transparent;
+}
+
+/* EVM address + repo source links (site-wide) */
+.evm-address-link,
+.repo-path-link {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.875em;
+  font-weight: 500;
+  text-decoration: none !important;
+  border-bottom: 1px dotted var(--ifm-color-primary);
+  transition: color 150ms ease, border-color 150ms ease;
+}
+
+.evm-address-link:hover,
+.repo-path-link:hover {
+  color: var(--ifm-color-primary-lightest, var(--ifm-color-primary));
+  border-bottom-color: var(--ifm-color-primary);
+}
+
+.evm-address-link::after,
+.repo-path-link::after {
+  content: '↗';
+  display: inline-block;
+  margin-left: 0.2em;
+  font-size: 0.75em;
+  opacity: 0.55;
+  text-decoration: none;
+}
+
+.theme-doc-markdown:has(.audit-path) .evm-address-link::after,
+.theme-doc-markdown:has(.audit-path) .repo-path-link::after {
+  opacity: 0.45;
+}
+
+/* Finding evidence row */
+.audit-evidence__sep {
+  color: var(--ifm-font-color-tertiary);
+  user-select: none;
+}
+
+.audit-finding__meta a:not(.evm-address-link):not(.repo-path-link) {
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+/* Address tables — elegant monospace cells */
+.theme-doc-markdown table .evm-address-link {
+  font-size: 0.8125rem;
+  letter-spacing: -0.01em;
+}
+
+.theme-doc-markdown:has(.audit-path) h2 {
+  margin-top: 2.25rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--docs-border-subtle, var(--ifm-border-color));
+}
+
+.theme-doc-markdown:has(.audit-path) h2:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.audit-hub .audit-hero + .audit-path + h2 {
+  border-top: none;
 }
