@@ -23,7 +23,22 @@ const frontendRoot = path.resolve(scriptDir, '../..')
 const origin = (process.env.ERC8004_PUBLIC_ORIGIN || 'https://4626.fun').replace(/\/+$/, '')
 const agentId = Number(process.env.ERC8004_AGENT_ID || '2205')
 const registry = (process.env.ERC8004_AGENT_REGISTRY || '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432').trim()
-const rpcUrl = (process.env.BASE_RPC_URL || 'https://mainnet.base.org').trim()
+const rpcCandidates = [
+  (process.env.BASE_RPC_URL || '').trim(),
+  'https://mainnet.base.org',
+].filter(Boolean)
+
+function createBasePublicClient() {
+  let lastError: unknown
+  for (const rpcUrl of rpcCandidates) {
+    try {
+      return createPublicClient({ chain: base, transport: http(rpcUrl) })
+    } catch (error) {
+      lastError = error
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('No usable Base RPC URL configured.')
+}
 const privateKey = (process.env.PRIVATE_KEY || '').trim()
 const dryRun = process.argv.includes('--dry-run')
 const submitCsw = process.argv.includes('--submit-csw')
@@ -87,7 +102,7 @@ async function submitViaCanonicalCsw(dataUri: string): Promise<void> {
 
   const smartWallet = getAddress(smartWalletRaw) as Address
   const registryAddress = getAddress(registry) as Address
-  const publicClient = createPublicClient({ chain: base, transport: http(rpcUrl) })
+  const publicClient = createBasePublicClient()
   const callData = encodeFunctionData({
     abi: IDENTITY_REGISTRY_ABI,
     functionName: 'setAgentURI',
@@ -139,7 +154,7 @@ async function submitViaEoa(dataUri: string): Promise<void> {
     String(agentId),
     dataUri,
     '--rpc-url',
-    rpcUrl,
+    rpcCandidates[0] || 'https://mainnet.base.org',
     '--private-key',
     privateKey,
   ]

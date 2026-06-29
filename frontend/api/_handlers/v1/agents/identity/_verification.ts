@@ -100,6 +100,29 @@ function stableJsonStringify(value: unknown): string {
   return JSON.stringify(stableClone(value))
 }
 
+/** Volatile fields that differ between mirror sync time and live API builds. */
+const REGISTRATION_VOLATILE_KEYS = new Set(['updatedAt'])
+
+function registrationPayloadForComparison(payload: RegistrationFile | null | undefined): unknown {
+  if (!payload || typeof payload !== 'object') return payload
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(payload)) {
+    if (REGISTRATION_VOLATILE_KEYS.has(key)) continue
+    out[key] = stableClone(value)
+  }
+  return out
+}
+
+function registrationPayloadsMatch(
+  left: RegistrationFile | null | undefined,
+  right: RegistrationFile | null | undefined,
+): boolean {
+  return (
+    stableJsonStringify(registrationPayloadForComparison(left)) ===
+    stableJsonStringify(registrationPayloadForComparison(right))
+  )
+}
+
 function buildRegistrationProbe(agentId: number, source: RegistrationProbe['source'], rawUrl: string | null, payload: RegistrationFile | null, finalUrl: string | null, error: string | null): RegistrationProbe {
   const services = Array.isArray(payload?.services) ? payload.services : []
   const registrations = Array.isArray(payload?.registrations) ? payload.registrations : []
@@ -147,7 +170,7 @@ async function fetchMirrorProbe(params: {
     url: params.url,
     reachable: Boolean(fetched.payload && !fetched.error),
     finalUrl: fetched.finalUrl,
-    matchesCanonical: Boolean(payload && stableJsonStringify(payload) === stableJsonStringify(params.canonicalPayload)),
+    matchesCanonical: Boolean(payload && registrationPayloadsMatch(payload, params.canonicalPayload)),
     agentIdMatches,
     error: fetched.error,
   }
@@ -410,7 +433,7 @@ export async function buildAgentVerificationData(req?: VercelRequest): Promise<A
   const tokenUriIsStrictImmutable = isStrictImmutableUri(onchain.tokenUri)
   const tokenUriMatchesCanonical = Boolean(
     onchainRegistration.payload &&
-      stableJsonStringify(onchainRegistration.payload) === stableJsonStringify(registration.payload),
+      registrationPayloadsMatch(onchainRegistration.payload, registration.payload),
   )
   const checks = buildChecks({
     agentRegistered: onchain.agentRegistered,

@@ -29,8 +29,9 @@
     },
     {
       "name": "OASF",
-      "endpoint": "https://github.com/agntcy/oasf/",
+      "endpoint": "https://4626.fun/api/v1/spec.json",
       "version": "0.8.0",
+      "taxonomy": "https://github.com/agntcy/oasf/",
       "skills": [
         "analytical_skills/data_analysis/blockchain_analysis",
         "natural_language_processing/information_retrieval_synthesis/search",
@@ -105,6 +106,6 @@
     "crypto-economic",
     "tee-attestation"
   ],
-  "updatedAt": 1782724518,
+  "updatedAt": 1782730343,
   "reputationRegistry": "eip155:8453:0x8004baa17c55a88189ae136b182e5fda19de9b63"
 }

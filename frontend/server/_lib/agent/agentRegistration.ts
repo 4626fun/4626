@@ -78,8 +78,9 @@ const fallbackRegistration: RegistrationFile = {
     },
     {
       name: 'OASF',
-      endpoint: 'https://github.com/agntcy/oasf/',
+      endpoint: 'https://4626.fun/api/v1/spec.json',
       version: '0.8.0',
+      taxonomy: 'https://github.com/agntcy/oasf/',
       skills: [...OASF_SKILLS],
       domains: [...OASF_DOMAINS],
     },
