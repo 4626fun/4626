@@ -1,0 +1,38 @@
+{
+  "name": "4626 Agent",
+  "description": "Keepr agent for 4626 on Base. Chat over XMTP, call the public REST API, request x402-gated ERC-8004 wallet reviews, and query vault, lottery, and reputation data for creator coins and share tokens.",
+  "url": "https://4626.fun",
+  "version": "1.0.0",
+  "defaultInputModes": [
+    "text"
+  ],
+  "defaultOutputModes": [
+    "text"
+  ],
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false
+  },
+  "skills": [
+    {
+      "id": "vault-intelligence",
+      "name": "Vault and wallet intelligence",
+      "description": "Query creator vaults, wallet reputation, and ERC-8004 feedback on Base.",
+      "tags": [
+        "blockchain",
+        "defi",
+        "reputation",
+        "base"
+      ]
+    },
+    {
+      "id": "xmtp-chat",
+      "name": "XMTP chat",
+      "description": "Message the Keepr agent over XMTP from any compatible client.",
+      "tags": [
+        "xmtp",
+        "messaging"
+      ]
+    }
+  ]
+}

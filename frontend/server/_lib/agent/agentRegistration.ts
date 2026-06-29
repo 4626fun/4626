@@ -1,6 +1,3 @@
-import fs from 'node:fs'
-import path from 'node:path'
-
 import siteConfig from '../../../shared/site-config.json' with { type: 'json' }
 
 import {
@@ -28,6 +25,7 @@ export type RegistrationFile = {
   services?: RegistrationService[]
   x402Support?: boolean
   active?: boolean
+  updatedAt?: number
   registrations?: Array<{ agentId: number; agentRegistry: string }>
   reputationRegistry?: string
   supportedTrust?: string[]
@@ -43,13 +41,48 @@ const CANONICAL_AGENT_WALLET_CAIP10 = `eip155:8453:${CANONICAL_CSW_ADDRESS}` as 
 const BRAND_ASSET_VERSION = Number(siteConfig.brandAssetVersion ?? 3)
 const BASE_APP_ICON_URL = `https://4626.fun/assets/base-app-icon-1024.png?v=${BRAND_ASSET_VERSION}`
 
+const OASF_SKILLS = [
+  'analytical_skills/data_analysis/blockchain_analysis',
+  'natural_language_processing/information_retrieval_synthesis/search',
+  'tool_interaction/workflow_automation',
+  'tool_interaction/api_schema_understanding',
+] as const
+
+const OASF_DOMAINS = [
+  'technology/blockchain',
+  'technology/blockchain/cryptocurrency',
+  'finance_and_business/investment_services',
+] as const
+
+const A2A_SKILLS = [
+  'analytical_skills/data_analysis/blockchain_analysis',
+  'tool_interaction/workflow_automation',
+  'natural_language_processing/information_retrieval_synthesis/search',
+] as const
+
 const fallbackRegistration: RegistrationFile = {
   type: REGISTRATION_TYPE,
   name: '4626 Agent',
-  description: 'Agent API for 4626 on Base. Reachable via XMTP messaging, REST API, and MCP tools. Provides vault management, wallet intelligence, ERC-8004 reputation queries, and keeper automation.',
+  description:
+    'Keepr agent for 4626 on Base. Chat over XMTP, call the public REST API, request x402-gated ERC-8004 wallet reviews, and query vault, lottery, and reputation data for creator coins and share tokens.',
   image: BASE_APP_ICON_URL,
   services: [
     { name: 'web', endpoint: 'https://4626.fun' },
+    { name: 'email', endpoint: 'hello@4626.fun' },
+    { name: 'ENS', endpoint: '4626.base.eth', version: 'v1' },
+    {
+      name: 'A2A',
+      endpoint: 'https://4626.fun/.well-known/agent-card.json',
+      version: '0.3.0',
+      a2aSkills: [...A2A_SKILLS],
+    },
+    {
+      name: 'OASF',
+      endpoint: 'https://github.com/agntcy/oasf/',
+      version: '0.8.0',
+      skills: [...OASF_SKILLS],
+      domains: [...OASF_DOMAINS],
+    },
     {
       name: 'XMTP',
       endpoint: `https://xmtp.chat/dm/${CANONICAL_CSW_ADDRESS}`,
@@ -91,12 +124,6 @@ const fallbackRegistration: RegistrationFile = {
   supportedTrust: ['reputation', 'crypto-economic', 'tee-attestation'],
 }
 
-const registrationPaths = [
-  path.join(process.cwd(), 'public', '.well-known', 'agent-registration.json'),
-  path.join(process.cwd(), '..', 'public', '.well-known', 'agent-registration.json'),
-  path.join(process.cwd(), 'frontend', 'public', '.well-known', 'agent-registration.json'),
-]
-
 function parseRegistration(raw: string): RegistrationFile | null {
   try {
     const parsed = JSON.parse(raw) as RegistrationFile
@@ -113,20 +140,6 @@ function readRegistrationFromEnv(): RegistrationFile | null {
   const raw = (process.env.ERC8004_AGENT_REGISTRATION_JSON || '').trim()
   if (!raw) return null
   return parseRegistration(raw)
-}
-
-function readRegistrationFromDisk(): RegistrationFile | null {
-  for (const candidate of registrationPaths) {
-    try {
-      const body = fs.readFileSync(candidate, 'utf8')
-      if (!body || !body.trim()) continue
-      const parsed = parseRegistration(body)
-      if (parsed) return parsed
-    } catch {
-      // Ignore missing path and try the next candidate.
-    }
-  }
-  return null
 }
 
 function normalizeUrl(value: string, origin: string): string {
@@ -200,11 +213,30 @@ function addressExplorerUrl(chainId: number, address: string): string {
   return `https://etherscan.io/address/${normalizedAddress}`
 }
 
+function isEmailEndpoint(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
+}
+
+function isEnsEndpoint(value: string): boolean {
+  const raw = value.trim().toLowerCase()
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)*\.(eth|base\.eth)$/.test(raw)
+}
+
 function normalizeService(service: RegistrationService, origin: string): RegistrationService {
   const name = String(service.name ?? '').trim()
   const endpointRaw = String(service.endpoint ?? '').trim()
   const endpointNormalized = normalizeUrl(endpointRaw, origin)
   const normalized: RegistrationService = { ...service, name }
+
+  if (name === 'email' && isEmailEndpoint(endpointRaw)) {
+    normalized.endpoint = endpointRaw
+    return normalized
+  }
+
+  if (name === 'ENS' && isEnsEndpoint(endpointRaw)) {
+    normalized.endpoint = endpointRaw
+    return normalized
+  }
 
   if (isSupportedEndpointUri(endpointNormalized)) {
     normalized.endpoint = endpointNormalized
@@ -291,7 +323,7 @@ export function buildAgentRegistration(origin: string): {
   error?: string
   missing?: string[]
 } {
-  const base = readRegistrationFromEnv() ?? readRegistrationFromDisk() ?? fallbackRegistration
+  const base = readRegistrationFromEnv() ?? fallbackRegistration
   const registryConfig = readRegistryConfig(base)
   if ('error' in registryConfig) {
     return { error: registryConfig.error, missing: registryConfig.missing }
@@ -379,6 +411,7 @@ export function buildAgentRegistration(origin: string): {
     services,
     x402Support,
     active: typeof base.active === 'boolean' ? base.active : true,
+    updatedAt: Math.floor(Date.now() / 1000),
     registrations: [
       {
         agentId: registryConfig.agentId,
@@ -390,4 +423,18 @@ export function buildAgentRegistration(origin: string): {
   }
 
   return { payload }
+}
+
+/** Canonical inline `data:` tokenURI for ERC-8004 Identity Registry `setAgentURI`. */
+export function buildAgentRegistrationDataUri(origin: string): {
+  dataUri?: string
+  payload?: RegistrationFile
+  error?: string
+  missing?: string[]
+} {
+  const result = buildAgentRegistration(origin)
+  if (!result.payload) return result
+  const json = JSON.stringify(result.payload)
+  const dataUri = `data:application/json;base64,${Buffer.from(json, 'utf8').toString('base64')}`
+  return { ...result, dataUri }
 }

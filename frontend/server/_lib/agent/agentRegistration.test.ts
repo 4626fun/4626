@@ -69,6 +69,19 @@ describe('buildAgentRegistration', () => {
     expect(result.payload?.registrations?.[0]?.agentId).toBe(0)
   })
 
+  it('preserves email and ENS service endpoints without origin rewriting', () => {
+    process.env.ERC8004_AGENT_REGISTRY = '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432'
+    process.env.ERC8004_AGENT_CHAIN_ID = '8453'
+    process.env.ERC8004_AGENT_ID = '2205'
+
+    const result = buildAgentRegistration('https://4626.fun')
+    const email = result.payload?.services?.find((service) => service.name === 'email')
+    const ens = result.payload?.services?.find((service) => service.name === 'ENS')
+
+    expect(email?.endpoint).toBe('hello@4626.fun')
+    expect(ens?.endpoint).toBe('4626.base.eth')
+  })
+
   it('stays aligned with the checked-in public registration mirror for agent 2205', () => {
     delete process.env.ERC8004_AGENT_REGISTRATION_JSON
     delete process.env.ERC8004_AGENT_REGISTRY

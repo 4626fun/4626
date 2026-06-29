@@ -8,8 +8,8 @@ import {
   getDb,
   checkDurableRateLimit,
   getClientIp,
-  rateLimitKey,
   RATE_LIMITS,
+  enforceDualRateLimit,
 } from '@4626/server-core'
 
 
@@ -35,11 +35,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // APIAUTH-001: /api/accounts/me performs DB writes (syncEmailIdentity) and
   // external Privy API calls on every authenticated GET. Rate-limit before any
   // DB or Privy work to prevent amplification attacks.
-  const limiter = await checkDurableRateLimit(
-    rateLimitKey('accounts-me', getClientIp(req)),
-    RATE_LIMITS.accountsMe,
-    { failClosed: true },
-  )
+  const clientIp = getClientIp(req)
+  const limiter = await enforceDualRateLimit({
+    scope: 'accounts-me',
+    req,
+    ip: clientIp,
+    sessionConfig: RATE_LIMITS.accountsMeSession,
+    ipConfig: RATE_LIMITS.accountsMe,
+    check: (key, config) => checkDurableRateLimit(key, config, { failClosed: true }),
+  })
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)

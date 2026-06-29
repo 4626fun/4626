@@ -87,6 +87,19 @@ function validatePayload(payload, expectedAgentId, expectedAgentRegistry) {
     throw new Error(`Expected agentRegistry ${expectedAgentRegistry}, received ${agentRegistry}.`)
   }
 
+  const serviceNames = Array.isArray(payload.services)
+    ? payload.services.map((service) => String(service?.name ?? '')).filter(Boolean)
+    : []
+  for (const required of ['email', 'ENS', 'A2A', 'erc8004-review']) {
+    if (!serviceNames.includes(required)) {
+      throw new Error(`Missing required service \`${required}\` in registration payload.`)
+    }
+  }
+
+  if (payload.x402Support !== true) {
+    throw new Error('`x402Support` must be true for the current agent profile.')
+  }
+
   return { agentId, agentRegistry }
 }
 

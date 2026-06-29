@@ -256,6 +256,61 @@ describe('/api/rpc proxy rate-limit contract', () => {
     }
   })
 
+  it('does not re-hit temporarily rejected env RPC on subsequent requests', async () => {
+    const restoreEnv = applyEnv({
+      BASE_READ_RPC_URL: 'https://env-rpc.example',
+    })
+    const fetchMock = vi.fn().mockImplementation((input: unknown, init?: RequestInit) => {
+      const url = String(input)
+      const bodyRaw = typeof init?.body === 'string' ? init.body : ''
+      const method =
+        bodyRaw && bodyRaw.includes('"method"')
+          ? String((JSON.parse(bodyRaw) as { method?: string }).method ?? '')
+          : ''
+
+      if (url.includes('env-rpc.example') && method === 'eth_chainId') {
+        return new Response(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            result: '0x2105',
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )
+      }
+
+      if (url.includes('env-rpc.example')) {
+        return new Response('Upgrade Required', {
+          status: 426,
+          headers: { 'Content-Type': 'text/plain' },
+        })
+      }
+
+      return okRpcResponse()
+    })
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
+
+    try {
+      const handler = await loadHandler()
+      const firstRes = createMockRes()
+      await handler(createRpcReq(), firstRes)
+      const callsAfterFirst = fetchMock.mock.calls.length
+
+      const secondRes = createMockRes()
+      await handler(createRpcReq(), secondRes)
+
+      expect(firstRes.statusCode).toBe(200)
+      expect(secondRes.statusCode).toBe(200)
+      expect(fetchMock.mock.calls.some(([input]) => String(input).includes('env-rpc.example'))).toBe(true)
+      expect(fetchMock.mock.calls.length).toBeLessThan(callsAfterFirst + 3)
+    } finally {
+      restoreEnv()
+    }
+  })
+
   it('fast-paths eth_getCode with one attempt per upstream endpoint', async () => {
     const restoreEnv = applyEnv({
       BASE_READ_RPC_URL: 'https://env-rpc.example',

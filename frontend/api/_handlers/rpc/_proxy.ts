@@ -71,6 +71,8 @@ const ENV_RPC_FAILOVER_STATUS = new Set([401, 403, 404, 405, 426])
 const MAX_ATTEMPTS_PER_RPC = 2
 const RETRY_BACKOFF_MS = [0, 150]
 const RPC_CHAIN_ID_CACHE_TTL_MS = 5 * 60_000
+const REJECTED_ENV_RPC_CACHE_TTL_MS = 15 * 60_000
+const rejectedEnvRpcUntil = new Map<string, number>()
 const RPC_CHAIN_ID_TIMEOUT_MS = 750
 const RPC_FORWARD_TIMEOUT_MS = 5_000
 const RPC_FORWARD_TOTAL_BUDGET_MS = 8_500
@@ -469,6 +471,31 @@ function shouldFailoverFromEnvRpc(params: {
   return params.envRpcUrls.has(params.rpcUrl) && ENV_RPC_FAILOVER_STATUS.has(params.status)
 }
 
+function isEnvRpcTemporarilyRejected(rpcUrl: string): boolean {
+  const expiresAt = rejectedEnvRpcUntil.get(rpcUrl)
+  if (typeof expiresAt !== 'number') return false
+  if (expiresAt <= Date.now()) {
+    rejectedEnvRpcUntil.delete(rpcUrl)
+    return false
+  }
+  return true
+}
+
+function markEnvRpcRejected(rpcUrl: string): void {
+  rejectedEnvRpcUntil.set(rpcUrl, Date.now() + REJECTED_ENV_RPC_CACHE_TTL_MS)
+  if (rejectedEnvRpcUntil.size > 64) {
+    const now = Date.now()
+    for (const [url, expiresAt] of rejectedEnvRpcUntil) {
+      if (expiresAt <= now) rejectedEnvRpcUntil.delete(url)
+      if (rejectedEnvRpcUntil.size <= 32) break
+    }
+  }
+}
+
+function filterActiveRpcUrls(urls: string[], envRpcUrls: Set<string>): string[] {
+  return urls.filter((url) => !(envRpcUrls.has(url) && isEnvRpcTemporarilyRejected(url)))
+}
+
 function toRetryAfterSeconds(resetAt: number): number {
   return Math.max(1, Math.ceil((resetAt - Date.now()) / 1000))
 }
@@ -711,8 +738,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const skipLocalFork =
       firstQueryValue(req.query?.skipLocalFork as string | string[] | undefined) === '1'
-    const rpcUrls = getRpcUrls(chain, { skipLocalFork })
     const envRpcUrls = new Set(readChainRpcUrlsFromEnv(chain))
+    const rpcUrls = filterActiveRpcUrls(getRpcUrls(chain, { skipLocalFork }), envRpcUrls)
     const expectedChainId = EXPECTED_CHAIN_ID_HEX[chain]
     const candidateRpcUrls =
       Number.isFinite(forwardPolicy.maxRpcUrls) && forwardPolicy.maxRpcUrls > 0
@@ -780,12 +807,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (shouldFailoverFromEnvRpc({ status, rpcUrl: rpc, envRpcUrls })) {
             lastStatus = status
             lastError = text || `Upstream RPC fallback candidate (${status})`
-            logger.warn('[rpc-proxy][upstream-env-fallback] skipping rejected env RPC', {
-              chain,
-              status,
-              upstreamHost: readRpcHost(rpc),
-              bodyPreview: (text || '').slice(0, 240),
-            })
+            const alreadyRejected = isEnvRpcTemporarilyRejected(rpc)
+            markEnvRpcRejected(rpc)
+            if (!alreadyRejected) {
+              logger.warn('[rpc-proxy][upstream-env-fallback] skipping rejected env RPC', {
+                chain,
+                status,
+                upstreamHost: readRpcHost(rpc),
+                bodyPreview: (text || '').slice(0, 240),
+              })
+            }
             break
           }
 

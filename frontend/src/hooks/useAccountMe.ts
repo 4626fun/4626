@@ -5,6 +5,7 @@ import type { AccountSetupMe } from '@/features/accountSetup/types'
 import { useSafePrivyAccessToken } from '@/lib/privy/safeHooks'
 import {
   fetchBootstrapExecutionSignals,
+  invalidateBootstrapExecutionSignalsCache,
   mergeBootstrapSignals,
 } from '@/lib/account/mergeAccountMeBootstrap'
 
@@ -34,8 +35,21 @@ import {
 
 type GetAccessTokenFn = () => Promise<string | null>
 
+const ACCOUNTS_ME_RATE_LIMIT_BACKOFF_MS = 8_000
+
 let inFlight: Promise<AccountSetupMe | null> | null = null
 let cached: AccountSetupMe | null | undefined = undefined
+let accountsMeRateLimitedUntil = 0
+
+function readRetryAfterMs(res: Response): number {
+  const raw = res.headers.get('retry-after')
+  if (!raw) return ACCOUNTS_ME_RATE_LIMIT_BACKOFF_MS
+  const seconds = Number(raw)
+  if (Number.isFinite(seconds) && seconds > 0) return Math.ceil(seconds * 1_000)
+  const at = Date.parse(raw)
+  if (Number.isFinite(at)) return Math.max(1_000, at - Date.now())
+  return ACCOUNTS_ME_RATE_LIMIT_BACKOFF_MS
+}
 
 async function fetchAccountMe(getAccessToken: GetAccessTokenFn | null): Promise<AccountSetupMe | null> {
   if (inFlight) return inFlight
@@ -45,12 +59,17 @@ async function fetchAccountMe(getAccessToken: GetAccessTokenFn | null): Promise<
       // No token → user isn't authenticated yet. Skip the request rather
       // than burn a predictable 401 that pollutes logs and browser tabs.
       if (!token) return null
+      if (Date.now() < accountsMeRateLimitedUntil) return null
 
       let payload: AccountSetupMe | null = null
       const res = await apiFetch('/api/accounts/me', {
         method: 'GET',
         headers: { 'X-Privy-Token': token },
       })
+      if (res.status === 429) {
+        accountsMeRateLimitedUntil = Date.now() + readRetryAfterMs(res)
+        return null
+      }
       if (res.ok) {
         const body = (await res.json().catch(() => null)) as
           | { success: boolean; data: AccountSetupMe | null }
@@ -74,6 +93,7 @@ async function fetchAccountMe(getAccessToken: GetAccessTokenFn | null): Promise<
 function clearAccountMeCache(): void {
   cached = undefined
   inFlight = null
+  invalidateBootstrapExecutionSignalsCache()
 }
 
 export function useAccountMe(): {
@@ -119,9 +139,13 @@ export function useAccountMe(): {
       setMe(result)
       setSettledCounter(refreshCounter)
       if (result === null && refreshCounter < 3) {
+        const retryDelay =
+          Date.now() < accountsMeRateLimitedUntil
+            ? Math.max(1_500, accountsMeRateLimitedUntil - Date.now())
+            : 1_500
         retryTimeout = window.setTimeout(() => {
           if (!cancelled) setRefreshCounter((count) => count + 1)
-        }, 1_500)
+        }, retryDelay)
       }
     })
     return () => {

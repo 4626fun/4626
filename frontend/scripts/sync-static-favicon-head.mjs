@@ -7,6 +7,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
+import { spawnSync } from 'node:child_process'
 
 const frontendRoot = path.resolve(process.cwd())
 const publicRoot = path.join(frontendRoot, 'public')
@@ -109,11 +110,16 @@ async function syncFarcasterManifest() {
   await fs.writeFile(farcasterPath, `${JSON.stringify(manifest, null, 2)}\n`)
 }
 
-async function syncAgentRegistrationImage() {
-  const registrationPath = path.join(publicRoot, '.well-known/agent-registration.json')
-  const registration = JSON.parse(await fs.readFile(registrationPath, 'utf8'))
-  registration.image = miniappTileUrl
-  await fs.writeFile(registrationPath, `${JSON.stringify(registration, null, 2)}\n`)
+function syncAgentRegistrationMirror() {
+  const syncScript = path.join(frontendRoot, 'scripts/sync-agent-registration.ts')
+  const result = spawnSync('pnpm', ['exec', 'tsx', syncScript], {
+    cwd: frontendRoot,
+    stdio: 'inherit',
+    encoding: 'utf8',
+  })
+  if (result.status !== 0) {
+    throw new Error('sync-agent-registration failed while refreshing ERC-8004 mirror files')
+  }
 }
 
 async function syncManifestFiles() {
@@ -175,7 +181,7 @@ async function main() {
 
   await syncManifestFiles()
   await syncFarcasterManifest()
-  await syncAgentRegistrationImage()
+  syncAgentRegistrationMirror()
 
   // eslint-disable-next-line no-console
   console.log(`synced favicon head on ${updated} static html file(s)`)

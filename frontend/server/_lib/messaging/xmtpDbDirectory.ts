@@ -4,7 +4,17 @@ import path from 'node:path'
 
 declare const process: { env: Record<string, string | undefined>; cwd: () => string }
 
+const RAILWAY_PERSISTENT_XMTP_DIR = '/data/.xmtp-data'
 const warnedNonWritableEnvXmtpDirs = new Set<string>()
+
+function isServerlessRuntime(): boolean {
+  return Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.VERCEL_ENV)
+}
+
+function isRailwayPersistentXmtpPath(dirPath: string): boolean {
+  const resolved = path.resolve(dirPath).replace(/[\\/]+$/, '')
+  return resolved === RAILWAY_PERSISTENT_XMTP_DIR
+}
 
 function countDbFiles(dirPath: string): number {
   try {
@@ -149,7 +159,9 @@ export function resolveXmtpDbDirectory(): string {
   const fromEnv = (process.env.XMTP_DB_DIRECTORY ?? '').trim()
   if (fromEnv) {
     if (ensureWritableDir(fromEnv)) return fromEnv
-    if (!warnedNonWritableEnvXmtpDirs.has(fromEnv)) {
+    const expectedServerlessRailwayPath =
+      isServerlessRuntime() && isRailwayPersistentXmtpPath(fromEnv)
+    if (!expectedServerlessRailwayPath && !warnedNonWritableEnvXmtpDirs.has(fromEnv)) {
       warnedNonWritableEnvXmtpDirs.add(fromEnv)
       console.warn(
         `[xmtp] XMTP_DB_DIRECTORY is not writable: ${fromEnv}. Falling back to auto-detected writable path.`,

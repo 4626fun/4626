@@ -10,11 +10,65 @@ export type BootstrapExecutionSignals = {
   baseSubAccount: AccountSetupMe['accountSignals']['baseSubAccount']
 }
 
-export async function fetchBootstrapExecutionSignals(
-  getAccessToken: () => Promise<string | null>,
-): Promise<BootstrapExecutionSignals | null> {
-  const token = await getAccessToken().catch(() => null)
-  if (!token) return null
+const BOOTSTRAP_CACHE_TTL_MS = 30_000
+const BOOTSTRAP_RATE_LIMIT_BACKOFF_MS = 8_000
+
+let bootstrapInFlight: Promise<BootstrapExecutionSignals | null> | null = null
+let bootstrapCached:
+  | {
+      tokenFingerprint: string
+      value: BootstrapExecutionSignals | null
+      expiresAt: number
+    }
+  | null = null
+let bootstrapRateLimitedUntil = 0
+
+function readTokenFingerprint(token: string): string {
+  return token.length <= 24 ? token : `${token.slice(0, 12)}:${token.slice(-8)}`
+}
+
+function parseBootstrapResponse(body: unknown): BootstrapExecutionSignals | null {
+  const payload = body as
+    | {
+        success: boolean
+        data: {
+          canonicalCswAddress?: string
+          privyEmbeddedEoaAddress?: string
+          executionTrack?: AccountSetupMe['accountSignals']['executionTrack']
+          privyEmbeddedEoaIsOwnerOfCanonicalCsw?: boolean
+          privyIsOwner?: boolean
+          baseSubAccount?: AccountSetupMe['accountSignals']['baseSubAccount']
+        } | null
+      }
+    | null
+  if (!payload?.success || !payload.data) return null
+  const ownerFlag =
+    payload.data.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true || payload.data.privyIsOwner === true
+  return {
+    canonicalCswAddress: String(payload.data.canonicalCswAddress ?? ''),
+    privyEmbeddedEoaAddress: String(payload.data.privyEmbeddedEoaAddress ?? ''),
+    executionTrack: payload.data.executionTrack ?? 'none-yet',
+    privyEmbeddedEoaIsOwnerOfCanonicalCsw: ownerFlag,
+    baseSubAccount: payload.data.baseSubAccount ?? {
+      address: null,
+      registered: false,
+      isDistinctFromCsw: false,
+    },
+  }
+}
+
+function readRetryAfterMs(res: Response): number {
+  const raw = res.headers.get('retry-after')
+  if (!raw) return BOOTSTRAP_RATE_LIMIT_BACKOFF_MS
+  const seconds = Number(raw)
+  if (Number.isFinite(seconds) && seconds > 0) return Math.ceil(seconds * 1_000)
+  const at = Date.parse(raw)
+  if (Number.isFinite(at)) return Math.max(1_000, at - Date.now())
+  return BOOTSTRAP_RATE_LIMIT_BACKOFF_MS
+}
+
+async function requestBootstrapExecutionSignals(token: string): Promise<BootstrapExecutionSignals | null> {
+  if (Date.now() < bootstrapRateLimitedUntil) return null
   try {
     const res = await apiFetch('/api/onboarding/bootstrap', {
       method: 'POST',
@@ -25,36 +79,54 @@ export async function fetchBootstrapExecutionSignals(
       },
       body: JSON.stringify({}),
     })
-    const body = (await res.json().catch(() => null)) as
-      | {
-          success: boolean
-          data: {
-            canonicalCswAddress?: string
-            privyEmbeddedEoaAddress?: string
-            executionTrack?: AccountSetupMe['accountSignals']['executionTrack']
-            privyEmbeddedEoaIsOwnerOfCanonicalCsw?: boolean
-            privyIsOwner?: boolean
-            baseSubAccount?: AccountSetupMe['accountSignals']['baseSubAccount']
-          } | null
-        }
-      | null
-    if (!res.ok || !body?.success || !body.data) return null
-    const ownerFlag =
-      body.data.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true || body.data.privyIsOwner === true
-    return {
-      canonicalCswAddress: String(body.data.canonicalCswAddress ?? ''),
-      privyEmbeddedEoaAddress: String(body.data.privyEmbeddedEoaAddress ?? ''),
-      executionTrack: body.data.executionTrack ?? 'none-yet',
-      privyEmbeddedEoaIsOwnerOfCanonicalCsw: ownerFlag,
-      baseSubAccount: body.data.baseSubAccount ?? {
-        address: null,
-        registered: false,
-        isDistinctFromCsw: false,
-      },
+    if (res.status === 429) {
+      bootstrapRateLimitedUntil = Date.now() + readRetryAfterMs(res)
+      return null
     }
+    const body = await res.json().catch(() => null)
+    if (!res.ok) return null
+    return parseBootstrapResponse(body)
   } catch {
     return null
   }
+}
+
+export function invalidateBootstrapExecutionSignalsCache(): void {
+  bootstrapCached = null
+  bootstrapInFlight = null
+}
+
+export async function fetchBootstrapExecutionSignals(
+  getAccessToken: () => Promise<string | null>,
+): Promise<BootstrapExecutionSignals | null> {
+  const token = await getAccessToken().catch(() => null)
+  if (!token) return null
+
+  const tokenFingerprint = readTokenFingerprint(token)
+  const now = Date.now()
+  if (
+    bootstrapCached &&
+    bootstrapCached.tokenFingerprint === tokenFingerprint &&
+    bootstrapCached.expiresAt > now
+  ) {
+    return bootstrapCached.value
+  }
+  if (bootstrapInFlight) return bootstrapInFlight
+
+  bootstrapInFlight = requestBootstrapExecutionSignals(token)
+    .then((value) => {
+      bootstrapCached = {
+        tokenFingerprint,
+        value,
+        expiresAt: Date.now() + BOOTSTRAP_CACHE_TTL_MS,
+      }
+      return value
+    })
+    .finally(() => {
+      bootstrapInFlight = null
+    })
+
+  return bootstrapInFlight
 }
 
 export function mergeBootstrapSignals(

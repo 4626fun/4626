@@ -208,9 +208,11 @@ export function buildExpectedVerifiedEndpoints(origin: string): string[] {
     canonicalOrigin,
     `${canonicalOrigin}/api/v1/spec.json`,
     `${canonicalOrigin}/api/v1/agents/feedback`,
+    `${canonicalOrigin}/api/v1/agents/feedback/review`,
     `${canonicalOrigin}/api/lens/reputation-graph`,
     `${canonicalOrigin}/api/lens/feedback-payload`,
     `${canonicalOrigin}/api/v1/agents/wallet-intelligence`,
+    `${canonicalOrigin}/.well-known/agent-card.json`,
   ]
 }
 

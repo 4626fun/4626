@@ -1,7 +1,7 @@
 {
   "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
   "name": "4626 Agent",
-  "description": "Agent API for 4626 on Base. Reachable via XMTP messaging, REST API, and MCP tools. Provides vault management, wallet intelligence, ERC-8004 reputation queries, and keeper automation.",
+  "description": "Keepr agent for 4626 on Base. Chat over XMTP, call the public REST API, request x402-gated ERC-8004 wallet reviews, and query vault, lottery, and reputation data for creator coins and share tokens.",
   "image": "https://4626.fun/assets/base-app-icon-1024.png?v=21",
   "services": [
     {
@@ -9,11 +9,46 @@
       "endpoint": "https://4626.fun"
     },
     {
+      "name": "email",
+      "endpoint": "hello@4626.fun"
+    },
+    {
+      "name": "ENS",
+      "endpoint": "4626.base.eth",
+      "version": "v1"
+    },
+    {
+      "name": "A2A",
+      "endpoint": "https://4626.fun/.well-known/agent-card.json",
+      "version": "0.3.0",
+      "a2aSkills": [
+        "analytical_skills/data_analysis/blockchain_analysis",
+        "tool_interaction/workflow_automation",
+        "natural_language_processing/information_retrieval_synthesis/search"
+      ]
+    },
+    {
+      "name": "OASF",
+      "endpoint": "https://github.com/agntcy/oasf/",
+      "version": "0.8.0",
+      "skills": [
+        "analytical_skills/data_analysis/blockchain_analysis",
+        "natural_language_processing/information_retrieval_synthesis/search",
+        "tool_interaction/workflow_automation",
+        "tool_interaction/api_schema_understanding"
+      ],
+      "domains": [
+        "technology/blockchain",
+        "technology/blockchain/cryptocurrency",
+        "finance_and_business/investment_services"
+      ]
+    },
+    {
       "name": "XMTP",
-      "endpoint": "https://xmtp.chat/dm/0xab6d5c10b03300326cd7fab7267ae192842967b5",
+      "endpoint": "https://xmtp.chat/dm/0xAb6d5C10b03300326CD7fAb7267Ae192842967b5",
+      "address": "0xAb6d5C10b03300326CD7fAb7267Ae192842967b5",
       "version": "production",
-      "address": "0xab6d5c10b03300326cd7fab7267ae192842967b5",
-      "description": "XMTP messaging endpoint — DM or group chat with the agent. Identity is a Coinbase Smart Wallet on Base (chain 8453)."
+      "description": "XMTP messaging endpoint — DM or group chat with the agent. Identity is a Coinbase Smart Wallet on chain 8453."
     },
     {
       "name": "agentWallet",
@@ -65,10 +100,11 @@
       "agentRegistry": "eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432"
     }
   ],
-  "reputationRegistry": "eip155:8453:0x8004baa17c55a88189ae136b182e5fda19de9b63",
   "supportedTrust": [
     "reputation",
     "crypto-economic",
     "tee-attestation"
-  ]
+  ],
+  "updatedAt": 1782724518,
+  "reputationRegistry": "eip155:8453:0x8004baa17c55a88189ae136b182e5fda19de9b63"
 }

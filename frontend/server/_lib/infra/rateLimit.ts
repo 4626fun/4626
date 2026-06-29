@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 /**
  * Simple in-memory rate limiter for serverless functions.
  * Uses a sliding window approach with automatic cleanup.
@@ -135,8 +137,10 @@ export const RATE_LIMITS = {
   workspaceActions: { windowMs: 60_000, maxRequests: 40 },
   // Workspace read endpoints: 120 per minute per principal
   workspaceRead: { windowMs: 60_000, maxRequests: 120 },
-  // Creator quickstart onboarding: 20 per minute per principal
+  // Creator quickstart onboarding: 20 per minute per IP (abuse guard)
   creatorQuickstart: { windowMs: 60_000, maxRequests: 20 },
+  // Authenticated onboarding bootstrap: 60 per minute per Privy session
+  onboardingBootstrapSession: { windowMs: 60_000, maxRequests: 60 },
   // Relay owner-mutation status polling: up to ~30 polls/min for 8 minutes
   relayIntentStatus: { windowMs: 60_000, maxRequests: 300 },
   // Keeper machine-auth ingest reads: 120 per minute per client IP
@@ -201,8 +205,10 @@ export const RATE_LIMITS = {
   general: { windowMs: 60_000, maxRequests: 60 },
   // AlfaClub backtest run: 5 per minute per privy user + IP (compute-intensive)
   alfaclubBacktestRun: { windowMs: 60_000, maxRequests: 5 },
-  // /api/accounts/me: 30 per minute per IP (performs DB writes + external Privy calls on GET)
+  // /api/accounts/me: 30 per minute per IP (abuse guard; performs DB writes + Privy calls)
   accountsMe: { windowMs: 60_000, maxRequests: 30 },
+  // /api/accounts/me: 90 per minute per authenticated Privy session
+  accountsMeSession: { windowMs: 60_000, maxRequests: 90 },
 } as const
 
 /**
@@ -255,4 +261,56 @@ export function getClientIp(req: { headers?: Record<string, any> }): string {
  */
 export function rateLimitKey(...parts: string[]): string {
   return parts.filter(Boolean).join(':')
+}
+
+function readHeaderValue(req: { headers?: Record<string, unknown> }, name: string): string {
+  const key = name.toLowerCase()
+  const headers = req?.headers ?? {}
+  const raw = (headers[key] ?? headers[name]) as string | string[] | undefined
+  if (Array.isArray(raw)) return String(raw[0] ?? '').trim()
+  return typeof raw === 'string' ? raw.trim() : ''
+}
+
+/** Read Privy bearer material for session-scoped rate limits without verifying JWT. */
+export function readPrivyTokenForRateLimit(req: { headers?: Record<string, unknown> }): string | null {
+  const fromHeader = readHeaderValue(req, 'x-privy-token')
+  if (fromHeader) return fromHeader
+  const auth = readHeaderValue(req, 'authorization')
+  if (auth.toLowerCase().startsWith('bearer ')) {
+    const token = auth.slice('bearer '.length).trim()
+    if (token) return token
+  }
+  return null
+}
+
+export function buildPrivySessionRateLimitKey(scope: string, req: { headers?: Record<string, unknown> }, ip: string): string {
+  const token = readPrivyTokenForRateLimit(req)
+  if (token) {
+    const fingerprint = createHash('sha256').update(token).digest('hex').slice(0, 24)
+    return rateLimitKey(scope, `privy:${fingerprint}`)
+  }
+  return rateLimitKey(scope, ip)
+}
+
+export async function enforceDualRateLimit(params: {
+  scope: string
+  req: { headers?: Record<string, unknown> }
+  ip: string
+  sessionConfig: RateLimitConfig
+  ipConfig: RateLimitConfig
+  check: (key: string, config: RateLimitConfig) => Promise<RateLimitResult> | RateLimitResult
+}): Promise<RateLimitResult> {
+  const sessionKey = buildPrivySessionRateLimitKey(params.scope, params.req, params.ip)
+  const sessionResult = await params.check(sessionKey, params.sessionConfig)
+  if (!sessionResult.allowed) return sessionResult
+
+  const ipKey = rateLimitKey(params.scope, params.ip)
+  const ipResult = await params.check(ipKey, params.ipConfig)
+  if (!ipResult.allowed) return ipResult
+
+  return {
+    allowed: true,
+    remaining: Math.min(sessionResult.remaining, ipResult.remaining),
+    resetAt: Math.min(sessionResult.resetAt, ipResult.resetAt),
+  }
 }
