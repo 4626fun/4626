@@ -1,11 +1,12 @@
 export type WaitlistTwitterEngagementStepId = 'follow' | 'like' | 'retweet' | 'comment'
 
-export const WAITLIST_X_ENGAGEMENT_STEPS: readonly WaitlistTwitterEngagementStepId[] = [
-  'follow',
-  'like',
-  'retweet',
-  'comment',
-] as const
+// Active quest steps. Temporarily follow-only: like/retweet/comment require a
+// campaign tweet authored by @4626fun (the subscribed Account Activity account)
+// so engagement events are delivered for the right author. Re-add 'like',
+// 'retweet', 'comment' here once that tweet exists and WAITLIST_X_ENGAGEMENT_TWEET_URL
+// points at it. Keep this list in sync with WAITLIST_X_ENGAGEMENT_STEP_ORDER
+// (server) and STEP_ORDER (api/_handlers/waitlist/_xEngagement.ts).
+export const WAITLIST_X_ENGAGEMENT_STEPS: readonly WaitlistTwitterEngagementStepId[] = ['follow'] as const
 
 export const WAITLIST_X_ENGAGEMENT_COMMENT =
   'a good project and strong team in a predictable and transparent roadmap, planned and projected, i think in the near future we will see an unprecedented growth of this project'

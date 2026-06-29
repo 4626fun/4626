@@ -100,6 +100,61 @@ async function fetchVerifiedEngagementProgress(
   return xEngagementInFlight
 }
 
+type VerifyResult =
+  | { ok: true; progress: WaitlistTwitterEngagementProgress }
+  | { ok: false; error: string; progress?: WaitlistTwitterEngagementProgress }
+
+// Map a server verification reason to a short, user-facing message.
+function messageForReason(reason: string | undefined): string {
+  switch (reason) {
+    case 'out_of_order':
+      return 'Finish the earlier steps first.'
+    case 'not_found':
+      return "We couldn't find that on X yet. Give it a few seconds, then verify again."
+    case 'not_linked':
+      return 'Link your X account first, then verify.'
+    case 'rate_limited':
+      return 'X is rate-limiting checks right now. Try again in a moment.'
+    case 'lookup_unavailable':
+    case 'credentials_unavailable':
+      return "Automatic X checking isn't available right now — we'll auto-verify once X reports it."
+    case 'network_error':
+      return "We couldn't reach X to verify. Try again."
+    default:
+      return 'Could not verify that step. Try again.'
+  }
+}
+
+// User-driven "Verify on X" check. The push webhook remains authoritative; this
+// asks the server to confirm the step against the live X API and award it. The
+// server enforces sequential, idempotent awards, so this can never double-count.
+async function verifyEngagementStep(
+  getAccessToken: (() => Promise<string | null>) | null | undefined,
+  step: WaitlistTwitterEngagementStepId,
+): Promise<VerifyResult> {
+  const token = await getAccessToken?.().catch(() => null)
+  if (!token) return { ok: false, error: 'Sign in again to verify this step.' }
+  const response = await apiFetch('/api/waitlist/x-engagement', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ step }),
+  }).catch(() => null)
+  if (!response) return { ok: false, error: 'Could not reach the server. Try again.' }
+  const payload = (await response.json().catch(() => null)) as ApiEnvelope<WaitlistXEngagementApiResponse> | null
+  if (response.ok && payload?.success && payload.data?.progress) {
+    return { ok: true, progress: payload.data.progress }
+  }
+  return {
+    ok: false,
+    error: messageForReason(payload?.reason),
+    progress: payload?.data?.progress,
+  }
+}
+
 // Animated XP meter — a brand-gradient fill with a slow shimmer sweep. The fill
 // width animates whenever a quest is verified, giving a "level up" beat.
 function XpMeter({ percent, reduceMotion }: { percent: number; reduceMotion: boolean }) {
@@ -154,10 +209,12 @@ function QuestRow(props: {
   state: QuestRowState
   index: number
   awaitingVerification: boolean
+  confirming: boolean
   reduceMotion: boolean
   onOpen: (step: WaitlistTwitterEngagementStepId) => void
+  onConfirm: (step: WaitlistTwitterEngagementStepId) => void
 }) {
-  const { step, state, index, awaitingVerification, reduceMotion, onOpen } = props
+  const { step, state, index, awaitingVerification, confirming, reduceMotion, onOpen, onConfirm } = props
   const copy = resolveWaitlistTwitterEngagementStepCopy(step)
   const points = WAITLIST_X_ENGAGEMENT_STEP_POINTS[step]
   const isComment = step === 'comment'
@@ -255,7 +312,27 @@ function QuestRow(props: {
               {copy.actionLabel}
               <ArrowRight className="size-3.5" aria-hidden="true" />
             </Button>
-            {awaitingVerification ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="w-full sm:w-auto"
+              disabled={confirming}
+              onClick={() => onConfirm(step)}
+            >
+              {confirming ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                  Checking on X…
+                </>
+              ) : (
+                <>
+                  <Check className="size-3.5" aria-hidden="true" />
+                  Verify on X
+                </>
+              )}
+            </Button>
+            {awaitingVerification && !confirming ? (
               <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400">
                 <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
                 Verifying on X…
@@ -278,6 +355,7 @@ export function WaitlistTwitterEngagementSteps(props: WaitlistTwitterEngagementS
     emptyWaitlistTwitterEngagementProgress(),
   )
   const [awaitingVerification, setAwaitingVerification] = useState(false)
+  const [confirmingStep, setConfirmingStep] = useState<WaitlistTwitterEngagementStepId | null>(null)
   const [syncError, setSyncError] = useState<string | null>(null)
   const lastCompleteRef = useRef(false)
 
@@ -382,6 +460,26 @@ export function WaitlistTwitterEngagementSteps(props: WaitlistTwitterEngagementS
     [openStepIntent, refreshProgress],
   )
 
+  const handleConfirmStep = useCallback(
+    (step: WaitlistTwitterEngagementStepId) => {
+      setSyncError(null)
+      setConfirmingStep(step)
+      void (async () => {
+        const result = await verifyEngagementStep(getAccessTokenRef.current, step)
+        if (result.ok) {
+          applyProgressUpdateRef.current(result.progress)
+        } else {
+          // Keep the UI in sync if the server returned current progress
+          // (e.g. the webhook already advanced a step), then surface the reason.
+          if (result.progress) applyProgressUpdateRef.current(result.progress)
+          setSyncError(result.error)
+        }
+        setConfirmingStep((current) => (current === step ? null : current))
+      })()
+    },
+    [],
+  )
+
   return (
     <div className="relative mt-3 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4 text-left">
       {/* Faint grid texture for the "mission board" feel. */}
@@ -465,8 +563,10 @@ export function WaitlistTwitterEngagementSteps(props: WaitlistTwitterEngagementS
                     state={state}
                     index={index}
                     awaitingVerification={awaitingVerification && state === 'active'}
+                    confirming={confirmingStep === step}
                     reduceMotion={reduceMotion}
                     onOpen={handleOpenStep}
+                    onConfirm={handleConfirmStep}
                   />
                 )
               })}

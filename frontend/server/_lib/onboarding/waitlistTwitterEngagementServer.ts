@@ -1,4 +1,8 @@
 import { applyPointEvent } from '../identity/accountsIdentity.js'
+import {
+  verifyTwitterEngagementStep,
+  type TwitterEngagementVerifyReason,
+} from '../../twitter/verifyEngagement.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> }
 
@@ -134,6 +138,101 @@ export async function awardVerifiedWaitlistTwitterEngagementStep(params: {
     points,
   })
   return result.awarded
+}
+
+// Active quest steps (server source of truth for active-step/verified math).
+// Temporarily follow-only — see WAITLIST_X_ENGAGEMENT_STEPS in
+// frontend/src/features/waitlist/waitlistTwitterEngagement.ts for why. Re-add
+// the remaining steps here (and in the client + endpoint lists) together.
+export const WAITLIST_X_ENGAGEMENT_STEP_ORDER: readonly WaitlistTwitterEngagementStepId[] = ['follow'] as const
+
+function resolveActiveStep(
+  progress: WaitlistTwitterEngagementProgress,
+): WaitlistTwitterEngagementStepId | 'complete' {
+  for (const step of WAITLIST_X_ENGAGEMENT_STEP_ORDER) {
+    if (!progress[step]) return step
+  }
+  return 'complete'
+}
+
+/** Read the linked X identity (numeric id + username) for a Privy user. */
+export async function readLinkedTwitterIdentityForPrivyUser(
+  db: Db,
+  privyUserId: string,
+): Promise<{ id: string | null; username: string | null }> {
+  const result = await db.sql`
+    SELECT account_linked_methods.value AS value
+    FROM account_linked_methods
+    WHERE account_linked_methods.privy_user_id = ${privyUserId}
+      AND account_linked_methods.type = 'twitter';
+  `
+  let id: string | null = null
+  let username: string | null = null
+  for (const row of result.rows ?? []) {
+    const raw = typeof row?.value === 'string' ? row.value.trim() : ''
+    if (!raw) continue
+    if (!id && /^\d+$/.test(raw)) {
+      id = raw
+    } else if (!username) {
+      username = raw.replace(/^@/, '').toLowerCase()
+    }
+  }
+  return { id, username }
+}
+
+export type WaitlistTwitterEngagementVerifyFailureReason =
+  | 'out_of_order'
+  | Exclude<TwitterEngagementVerifyReason, 'verified'>
+
+export type WaitlistTwitterEngagementVerifyOutcome =
+  | { ok: true; awarded: boolean; progress: WaitlistTwitterEngagementProgress }
+  | {
+      ok: false
+      reason: WaitlistTwitterEngagementVerifyFailureReason
+      progress: WaitlistTwitterEngagementProgress
+    }
+
+/**
+ * Verify a waitlist X engagement step against the live X API, then award it.
+ *
+ * This is the authoritative on-demand verifier used by the "Verify on X"
+ * action. It complements the push-based Account Activity webhook and awards the
+ * SAME idempotent point event (same source + source_id), so a webhook delivery
+ * and an on-demand verification can never double-award. Steps must be verified
+ * in order to mirror the gated quest UI.
+ */
+export async function verifyAndAwardWaitlistTwitterEngagementStep(params: {
+  db: Db
+  privyUserId: string
+  step: WaitlistTwitterEngagementStepId
+}): Promise<WaitlistTwitterEngagementVerifyOutcome> {
+  const progress = await readWaitlistTwitterEngagementProgressForPrivyUser(params.db, params.privyUserId)
+
+  // Already recorded — idempotent success, no double award, no API call.
+  if (progress[params.step]) return { ok: true, awarded: false, progress }
+
+  // Enforce sequential completion to mirror the gated quest UI.
+  const active = resolveActiveStep(progress)
+  if (active !== params.step) return { ok: false, reason: 'out_of_order', progress }
+
+  const actor = await readLinkedTwitterIdentityForPrivyUser(params.db, params.privyUserId)
+  if (!actor.id && !actor.username) return { ok: false, reason: 'not_linked', progress }
+
+  const verification = await verifyTwitterEngagementStep({
+    step: params.step,
+    actor,
+    tweetId: WAITLIST_X_ENGAGEMENT_TWEET_ID,
+    followHandle: WAITLIST_X_FOLLOW_HANDLE,
+  })
+  if (!verification.verified) return { ok: false, reason: verification.reason, progress }
+
+  const awarded = await awardVerifiedWaitlistTwitterEngagementStep({
+    db: params.db,
+    privyUserId: params.privyUserId,
+    step: params.step,
+  })
+  const nextProgress = await readWaitlistTwitterEngagementProgressForPrivyUser(params.db, params.privyUserId)
+  return { ok: true, awarded, progress: nextProgress }
 }
 
 async function verifyStepForTwitterActor(params: {
