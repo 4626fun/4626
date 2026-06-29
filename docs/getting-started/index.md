@@ -9,7 +9,7 @@ sidebar_position: 1
 
 <div class="docs-at-a-glance">
 
-You have a creator coin on Base and want to launch a vault. Start with the [Launch checklist](/guides/greenfield-checklist), then read [Fees, auction, and lottery](/overview/how-it-works) for the full product model.
+You have a creator coin on Base and want to launch a vault. Start with the [Launch checklist](/guides/launch-checklist), then read [Fees, auction, and lottery](/overview/how-it-works) for the full product model.
 
 </div>
 
@@ -29,7 +29,7 @@ Creators with a **creator coin on Base** (typically via Zora) who want to:
 4. After the auction **graduates** and settlement completes, `■` shares trade on Base; lottery and fees apply to qualifying **buys**.
 5. **Solana share bridge at finalize** — ~30% of `■` bridges to Solana (included in launch bundle); creator coin stays on Base.
 
-Full timeline: [Launch checklist](/guides/greenfield-checklist) · [After activation](/guides/after-activation)
+Full timeline: [Launch checklist](/guides/launch-checklist) · [After activation](/guides/after-activation)
 
 ## Three tokens
 
@@ -94,7 +94,7 @@ A 4626 account with execution-ready signing (including Coinbase Smart Wallet / B
 
 | Topic | Page |
 |-------|------|
-| Step-by-step launch | [Launch checklist](/guides/greenfield-checklist) |
+| Step-by-step launch | [Launch checklist](/guides/launch-checklist) |
 | Fees & lottery | [How fees and lottery work](/overview/how-it-works) |
 | Terminology | [Glossary](/reference/glossary) |
 | Contract addresses | [Addresses](/reference/addresses) |

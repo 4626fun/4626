@@ -11,11 +11,11 @@ How **tradable shares (`■TICKER`)** reach Solana as part of a new vault deploy
 
 <div class="docs-at-a-glance">
 
-Every greenfield launch bridges ~30% of `■` supply to Solana at Phase 2 finalize via LayerZero. Creator coin stays on Base. Terminology: [Glossary](/reference/glossary).
+Every **new vault launch** bridges ~30% of `■` supply to Solana at Phase 2 finalize via LayerZero. Creator coin stays on Base. Terminology: [Glossary](/reference/glossary#quick-definitions).
 
 </div>
 
-[Launch checklist](/guides/greenfield-checklist) · [After activation](/guides/after-activation)
+[Launch checklist](/guides/launch-checklist) · [After activation](/guides/after-activation)
 
 ## Part of deployment, not an add-on
 

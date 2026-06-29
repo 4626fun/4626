@@ -2,6 +2,7 @@
 title: Full-codebase review (primary audit)
 sidebar_label: 0a513245…
 sidebar_position: 99
+hide_table_of_contents: true
 last_updated: '2026-06-28'
 audience:
   - developers
@@ -11,14 +12,16 @@ owner: docs-team
 last_reviewed: '2026-06-28'
 status: current
 ---
+<div class="audit-transcript-meta">
+[← Source sessions](/audits/fable/key-sessions) · [Transcript archive](/audits/fable/transcripts) · [Executive summary](/audits/fable/findings-summary)
+</div>
 # Full-codebase review (primary audit)
 | Field | Value |
 | --- | --- |
 | Session ID | `0a513245-3ae2-4076-a9b0-bc1de524c38f` |
-| Source file | `4626/0a513245-3ae2-4076-a9b0-bc1de524c38f/0a513245-3ae2-4076-a9b0-bc1de524c38f.jsonl` |
-| Model | `claude-fable-5-thinking-high` (Cursor on-demand) |
-:::note
-This page is an auto-export of the original Fable agent transcript. Tool outputs and system context blocks are omitted for readability; download the [raw JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
+| Review model | Cursor Fable 5 (`claude-fable-5-thinking-high`) |
+:::note Appendix record
+Readable export of an agent-assisted review session. Tool outputs and system context blocks are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
 :::
 ## User
 

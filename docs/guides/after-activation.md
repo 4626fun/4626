@@ -15,7 +15,7 @@ Monitor progress in the [deploy app](https://app.4626.fun/deploy/vault).
 
 </div>
 
-[Launch checklist](/guides/greenfield-checklist) · [What is 4626?](/getting-started)
+[Launch checklist](/guides/launch-checklist) · [What is 4626?](/getting-started)
 
 ## Right after activation
 
@@ -86,7 +86,7 @@ Once live:
 
 ## Solana share bridge
 
-The Solana bridge is **included in every greenfield launch** and runs at Phase 2 finalize (~30% of `■` supply). Creator coin stays on Base. Meteora pools are operator-provisioned and may complete after finalize.
+The Solana bridge is **included in every new vault launch** and runs at Phase 2 finalize (~30% of `■` supply). Creator coin stays on Base. Meteora pools are operator-provisioned and may complete after finalize.
 
 [Solana share bridge](/overview/solana-share-mesh)
 
@@ -112,7 +112,7 @@ Use in-app support. Onchain relaunch semantics: [CCA strategy](/contracts/strate
 
 | Topic | Page |
 |-------|------|
-| Full checklist | [Launch checklist](/guides/greenfield-checklist) |
+| Full checklist | [Launch checklist](/guides/launch-checklist) |
 | Economics | [How fees and lottery work](/overview/how-it-works) |
 | Share token | [CreatorShareOFT](/contracts/core/creator-share-oft) |
 | Addresses | [Addresses](/reference/addresses) |

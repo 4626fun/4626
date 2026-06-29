@@ -5,6 +5,8 @@ import { OperationType } from '@safe-global/types-kit'
 import { createPublicClient, getAddress, http, isAddress, type Address, type Hex } from 'viem'
 import { base } from 'viem/chains'
 
+import { SPLIT_PHASE1_DEPLOYMENT_BATCHER } from '../../src/config/contracts.defaults.js'
+
 declare const process: {
   argv: string[]
   env: Record<string, string | undefined>
@@ -29,7 +31,7 @@ function normalizePrivateKey(value: string): `0x${string}` {
 
 async function main() {
   const batcher = getAddress(
-    getArg('--batcher', '0xa99058f424FB3ACC639F59355C65C40149030651') as Address,
+    getArg('--batcher', SPLIT_PHASE1_DEPLOYMENT_BATCHER) as Address,
   )
   const safeAddress = getAddress(
     getArg('--safe-address', process.env.PROTOCOL_TREASURY || '') as Address,

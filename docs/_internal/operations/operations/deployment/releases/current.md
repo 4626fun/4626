@@ -5,13 +5,15 @@ sidebar_position: 1
 
 # Current release — v1.14.1
 
-**Status:** active greenfield deploy target on Base mainnet (`8453`).
+**Status:** active target for **new vault launches** on Base mainnet (`8453`). *(Internal: greenfield deploy target.)*
 
 This is the only published release note. Live addresses and inventory live in [Contract addresses](/reference/addresses) — when anything disagrees, **that page wins**.
 
 ## What v1.14.1 is
 
-Full shared/global + split Phase-1 refresh on `CreatorOVaultModuleStorage.v3` (impairment-capable modules). Rotates batcher shell, helper modules, registry, and store/deployer pair. Pre-v1.14.1 batchers (including `0xa99058…`) are **deprecated** for new greenfield deploys.
+Infrastructure refresh for **new vault launches**: impairment-capable vault modules, new batcher shell, registry, and chunked bytecode store. Older batchers (including `0xa99058…`) are **deprecated** — use only for **legacy vaults**, not new launches.
+
+> **Reader note:** [Glossary — quick definitions](/reference/glossary#quick-definitions) explains *greenfield* and *Pipe A* in plain language.
 
 | Role | Address |
 |------|---------|
@@ -21,13 +23,17 @@ Full shared/global + split Phase-1 refresh on `CreatorOVaultModuleStorage.v3` (i
 | CREATE2 deployer | `0x2fA570Cb17925Da86b303D4651f06b83057a10c4` |
 | SolanaBridgeAdapter | `0x8e99bb0270bbdf2d64ff6854509CD2410A28fBae` |
 
-Full infra table: [addresses.md](/reference/addresses#current-live-infrastructure-v1141-greenfield-deploy-target).
+Full infra table: [addresses.md](/reference/addresses#current-infrastructure).
 
 ## CREATE2 namespace
 
-`VITE_DEPLOYMENT_VERSION` (and dry-run `*-dryrun` variants) is the **salt namespace** for per-creator CREATE2 — separate from the bytecode epoch label. New greenfield deploys should use a fresh namespace under `v1.14.1` (e.g. `v1.14.1` or `v1.14.1-*`).
+`VITE_DEPLOYMENT_VERSION` (and dry-run `*-dryrun` variants) is the **salt namespace** for per-creator CREATE2 — separate from the bytecode epoch label. **New vault launches** should use a fresh namespace under `v1.14.1` (e.g. `v1.14.1` or `v1.14.1-*`).
 
 Bytecode manifest: `deployments/base/v1.14.1-bytecode-manifest.json`
+
+## Env cutover
+
+After infra deploy, align local + Vercel env to [Environment cutover (v1.14.1)](/reference/addresses#environment-cutover-v1141). Redeploy the app so bundled `VITE_*` values refresh.
 
 ## Preflight
 
@@ -41,7 +47,7 @@ BYTECODE_MANIFEST=../../deployments/base/v1.14.1-bytecode-manifest.json \
 ./test/current-release-target-guard.sh
 ```
 
-Pipe A readiness (payable finalize + ShareOFT peer):
+**Solana bridge readiness** *(internal: Pipe A)* — payable finalize + ShareOFT peer wiring:
 
 ```bash
 pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \

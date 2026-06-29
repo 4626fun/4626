@@ -28,10 +28,10 @@ Optional:
 
 ## 1) Choose Epoch Tag
 
-Pick an immutable epoch token (example: `v1.9.2`) and keep it in release notes.
+Pick an immutable epoch token (example: `v1.14.1`) and keep it in release notes.
 
 ```bash
-export DEPLOYMENT_EPOCH_TAG="v1.9.2"
+export DEPLOYMENT_EPOCH_TAG="v1.14.1"
 ```
 
 Deployment scripts derive `base-release:*` salt tags from this epoch automatically unless raw `INFRA_*_SALT` values are provided.
@@ -101,18 +101,19 @@ Repeat for:
 
 Record the release hash snapshot after regenerating deploy bytecode:
 
-- `deployments/base/v1.7.1-bytecode-manifest.json`
-- `deployments/base/v1.8.2-bytecode-manifest.json`
-- `deployments/base/v1.8.3-bytecode-manifest.json`
+- `deployments/base/v1.14.1-bytecode-manifest.json`
 
 ## 6) App/API Cutover
 
-Update environment/config to the new epoch addresses:
+Update environment/config to the new epoch addresses. For **v1.14.1**, canonical values are in [Contract addresses](/reference/addresses#environment-cutover-v1141).
 
 - server env:
   - `CREATOR_REGISTRY`
-  - `UNIVERSAL_BYTECODE_STORE`
+  - `CREATOR_FACTORY`
+  - `VAULT_ACTIVATION_BATCHER`
+  - `UNIVERSAL_BYTECODE_STORE` (chunked `UniversalBytecodeStoreV2`)
   - `UNIVERSAL_CREATE2_FROM_STORE`
+  - `UNIVERSAL_CREATE2_DEPLOYER` (legacy alias; same value as `UNIVERSAL_CREATE2_FROM_STORE`)
   - `CREATOR_VAULT_BATCHER`
   - `CREATOR_VAULT_BATCHER_AUTO_HANDOFF`
   - `DEPLOYMENT_BATCHER`
@@ -121,15 +122,18 @@ Update environment/config to the new epoch addresses:
   - `SOLANA_BRIDGE_ADAPTER`
 - frontend env:
   - `VITE_REGISTRY`
+  - `VITE_FACTORY`
+  - `VITE_VAULT_ACTIVATION_BATCHER`
   - `VITE_UNIVERSAL_BYTECODE_STORE`
   - `VITE_UNIVERSAL_CREATE2_DEPLOYER`
   - `VITE_CREATOR_VAULT_BATCHER`
   - `VITE_CREATOR_VAULT_BATCHER_AUTO_HANDOFF`
   - `VITE_LOTTERY_MANAGER`
+  - `VITE_SOLANA_BRIDGE_ADAPTER`
 - bump deploy namespace:
-  - `VITE_DEPLOYMENT_VERSION` (new value for this epoch)
+  - `VITE_DEPLOYMENT_VERSION` (e.g. `v1.14.1` for greenfield CREATE2 namespace)
 
-Apply these in both local env files and Vercel project env scopes (`production`, `preview`, `development`) before traffic cutover.
+Apply these in both local env files (`/.env`, `frontend/.env`) and Vercel project env scopes (`production`, `preview`, `development`) before traffic cutover. **Redeploy** after Vercel env updates — bundled `VITE_*` values are baked at build time unless the route uses runtime config (`/api/deploy/config`).
 
 If running with repo defaults in production, also update:
 

@@ -11,7 +11,7 @@ export const CURATED_PUBLISH_GLOBS = [
 
   'guides/index.md',
   'guides/strategy-bundle.md',
-  'guides/greenfield-checklist.md',
+  'guides/launch-checklist.md',
   'guides/launch-token.md',
   'guides/activate-vault.md',
   'guides/after-activation.md',
@@ -36,7 +36,9 @@ export const CURATED_PUBLISH_GLOBS = [
 
   'audits/index.md',
   'audits/fable/index.md',
+  'audits/fable/findings-summary.md',
   'audits/fable/full-repo-review-2026-06.md',
+  'audits/fable/key-sessions.md',
   'audits/fable/sessions-index.md',
   'audits/fable/transcripts/**',
 ];

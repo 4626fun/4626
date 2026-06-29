@@ -2,9 +2,10 @@
 import { createPublicClient, http, keccak256, type Hex } from 'viem'
 import { base } from 'viem/chains'
 
+import { BASE_DEFAULTS } from '../../src/config/contracts.defaults.js'
 import { DEPLOY_BYTECODE } from '../../src/deploy/bytecode.generated.js'
 
-const STORE = '0x8B51E6784A0C6681F5de25bAC4f9B2fDCEDE72b4' as const
+const STORE = BASE_DEFAULTS.universalBytecodeStore
 const STORE_ABI = [
   {
     type: 'function',

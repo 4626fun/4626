@@ -356,9 +356,9 @@ The deployment batcher is configured for Solana bridging:
 
 | Contract                              | Config                | Value                                         |
 | ------------------------------------- | --------------------- | --------------------------------------------- |
-| Batcher (`0x16aEA8…F1D8`)            | `solanaBridgeAdapter` | `0x700b4BBAf965c013123bAd02a6562FBa487aC0f1`  |
+| Batcher (`0x660B25…61c1`, v1.14.1)   | `solanaBridgeAdapter` | `0x8e99bb0270bbdf2d64ff6854509CD2410A28fBae`  |
 |                                       | `solanaDestination`   | `0x5f38e34e...d4d1`                           |
-| SolanaBridgeAdapter (`0x700b4B…C0f1`) | `owner`               | `0xB05Cf0...FdD` (= `PRIVATE_KEY` secret)     |
+| SolanaBridgeAdapter (`0x8e99bb…fBae`) | `owner`               | `0xB05Cf0...FdD` (= `PRIVATE_KEY` secret)     |
 | Protocol treasury (Safe 1-of-2)       | address               | `0x7d429e...f2d3`                             |
 |                                       | owners                | `0xB05Cf0...` (`PRIVATE_KEY`), `0x2C1Af6B...` |
 

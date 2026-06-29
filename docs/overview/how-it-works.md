@@ -9,7 +9,7 @@ How a **Zora creator coin** becomes a vault with **tradable shares**, fair-launc
 
 <div class="docs-at-a-glance">
 
-[Launch checklist](/guides/greenfield-checklist) · Creator coin, vault share, and tradable share are three separate token addresses.
+[Launch checklist](/guides/launch-checklist) · Creator coin, vault share, and tradable share are three separate token addresses.
 
 </div>
 
@@ -108,4 +108,4 @@ Impairment: [disclosures](/reference/impairment-v1-disclosures).
 
 ## Related
 
-[Launch checklist](/guides/greenfield-checklist) · [Contracts](/contracts) · [Glossary](/reference/glossary)
+[Launch checklist](/guides/launch-checklist) · [Contracts](/contracts) · [Glossary](/reference/glossary)

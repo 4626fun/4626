@@ -24,11 +24,25 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       link: {type: 'doc', id: 'guides/index'},
       items: [
-        'guides/greenfield-checklist',
+        'guides/launch-checklist',
         'guides/strategy-bundle',
         'guides/launch-token',
         'guides/activate-vault',
         'guides/after-activation',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Security & audits',
+      collapsed: false,
+      link: {type: 'doc', id: 'audits/index'},
+      items: [
+        'audits/fable/index',
+        'audits/fable/findings-summary',
+        'audits/fable/full-repo-review-2026-06',
+        'audits/fable/key-sessions',
+        'audits/fable/sessions-index',
+        'audits/fable/transcripts/index',
       ],
     },
     {
@@ -70,18 +84,6 @@ const sidebars: SidebarsConfig = {
       label: 'Legal',
       collapsed: true,
       items: ['legal/terms', 'legal/privacy'],
-    },
-    {
-      type: 'category',
-      label: 'Audits',
-      collapsed: false,
-      link: {type: 'doc', id: 'audits/index'},
-      items: [
-        'audits/fable/index',
-        'audits/fable/full-repo-review-2026-06',
-        'audits/fable/sessions-index',
-        'audits/fable/transcripts/index',
-      ],
     },
   ],
 };

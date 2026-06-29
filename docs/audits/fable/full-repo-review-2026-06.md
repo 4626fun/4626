@@ -1,7 +1,7 @@
 ---
 title: Full-codebase review (June 2026)
-sidebar_label: Full review report
-sidebar_position: 2
+sidebar_label: Full report
+sidebar_position: 3
 last_updated: '2026-06-28'
 audience:
   - developers
@@ -13,14 +13,41 @@ last_reviewed: '2026-06-28'
 status: current
 ---
 
-# Full-Codebase Review — wenakita/4626
+<nav class="audit-path" aria-label="Report sections">
+  <a class="audit-path__step" href="/audits">Overview</a>
+  <a class="audit-path__step" href="/audits/fable">Scope</a>
+  <a class="audit-path__step" href="/audits/fable/findings-summary">Executive summary</a>
+  <a class="audit-path__step audit-path__step--current" href="/audits/fable/full-repo-review-2026-06">Full report</a>
+  <a class="audit-path__step" href="/audits/fable/key-sessions">Source sessions</a>
+  <a class="audit-path__step" href="/audits/fable/sessions-index">Session chronology</a>
+  <a class="audit-path__step" href="/audits/fable/transcripts">Transcript archive</a>
+</nav>
 
-**Auditor:** Cursor **Fable 5** (`claude-fable-5-thinking-high`) — multi-pass agentic review
-**Reviewer role:** senior staff engineer / security reviewer / QA lead / release engineer
-**Scope:** entire monorepo (frontend SPA, ~350 Vercel API handlers, Foundry contracts, KPR keepers, Solana program, Railway agents)
-**Method:** multi-pass, read-only. Baseline commands, parallel explore subagents per subsystem, then manual runtime-path verification of high-severity candidates. Findings are graded VERIFIED / REFUTED / ALREADY-KNOWN with file:line evidence.
-**Date:** June 2026
-**Primary session:** [`0a513245…`](/audits/fable/transcripts/full-codebase-review-primary-audit-0a513245) (see [session index](/audits/fable/sessions-index))
+# Full-codebase review — wenakita/4626
+
+<div class="audit-doc-control">
+  <div class="audit-doc-control__title">Report 4626-FABLE-2026-06</div>
+  <table>
+    <tbody>
+      <tr><th>Report ID</th><td>4626-FABLE-2026-06</td></tr>
+      <tr><th>Date</th><td>June 2026</td></tr>
+      <tr><th>Repository</th><td><a href="https://github.com/wenakita/4626">wenakita/4626</a></td></tr>
+      <tr><th>Review type</th><td>Agent-assisted read-only codebase review (Cursor Fable 5)</td></tr>
+      <tr><th>Reviewer role</th><td>Senior staff engineer / security reviewer / QA lead / release engineer</td></tr>
+      <tr><th>Primary session</th><td><a href="/audits/fable/transcripts/full-codebase-review-primary-audit-0a513245">0a513245…</a></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="docs-at-a-glance">
+
+**Executive summary available:** For a concise register of critical and high findings, read the [executive summary](/audits/fable/findings-summary) first. This document is the complete technical report.
+
+</div>
+
+**Method:** Multi-pass read-only review. Baseline validation commands, parallel subsystem subagents, manual verification of high-severity candidates. Findings graded VERIFIED / REFUTED / ALREADY-KNOWN with file:line evidence.
+
+**Scope:** Full monorepo — frontend SPA, ~350 Vercel API handlers, Foundry contracts, KPR keepers, Solana program, Railway agents.
 
 ---
 
@@ -79,44 +106,67 @@ Three Vercel HTML shells share one React bundle; host decided at runtime:
 **Riskiest boundaries (judgment):** `/api/paymaster` JSON-RPC proxy (~3.8k lines, sponsors UserOps), machine-auth keeper surface, webhook ingress (Telegram/Stripe), `POST /api/admin/profiles/merge`, deploy-session owner delegation, Privy-token-vs-session split, Solana provisioner/orchestrator, AlfaClub chat-bridge cron.
 
 ```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'fontFamily': 'Inter, system-ui, sans-serif',
+    'fontSize': '12px',
+    'primaryColor': '#eef3ff',
+    'primaryTextColor': '#1c1e21',
+    'primaryBorderColor': '#0052FF',
+    'secondaryColor': '#f0fdf4',
+    'tertiaryColor': '#fff9eb',
+    'lineColor': '#9ca3af',
+    'clusterBkg': '#fafafa',
+    'clusterBorder': '#e3e3e3'
+  }
+}}%%
 flowchart TB
-  subgraph hosts [Vercel]
-    MF[4626.fun immersive + SPA]
-    APP[app.4626.fun app.html]
-    API[api catch-all ~350 handlers]
+  subgraph client [Client]
+    MF["4626.fun<br/>marketing + waitlist"]
+    APP["app.4626.fun<br/>swap · deploy"]
+    MAIN["React SPA"]
+    PRIVY["Privy · Wagmi · XMTP"]
   end
-  subgraph client [Browser]
-    MAIN[main.tsx -> RootRouter -> App]
-    PRIVY[Privy + Wagmi + XMTP]
+
+  subgraph vercel [Vercel]
+    API["API layer<br/>~350 handlers"]
+    CRON["31 cron jobs"]
   end
-  subgraph data [Data]
-    PG[(Supabase Postgres)]
-    MIG[supabase/migrations 127]
+
+  subgraph data [Data & automation]
+    PG[("Supabase Postgres")]
+    KPR["KPR keepers"]
+    RAIL["Railway agents"]
   end
-  subgraph bg [Background]
-    CRON[31 Vercel crons]
-    KJ[keeper_jobs worker]
-    KPR[16 KPR workflows]
-    RAIL[Railway Eliza + Hermit]
+
+  subgraph chain [On-chain]
+    BATCH["DeploymentBatcher"]
+    VAULT["CreatorOVault<br/>+ impairment"]
   end
-  subgraph chain [On-chain Base + Solana]
-    BATCH[DeploymentBatcher]
-    VAULT[CreatorOVault + impairment side-pocket]
-  end
+
   MF --> MAIN
   APP --> MAIN
   MAIN --> PRIVY
   MAIN --> API
   API --> PG
-  MIG --> PG
   CRON --> API
-  KJ --> API
   KPR --> API
   RAIL --> API
   RAIL --> PG
   API --> BATCH
   API --> VAULT
   PRIVY --> API
+
+  classDef client fill:#eef3ff,stroke:#0052FF,stroke-width:1.5px,color:#1c1e21
+  classDef platform fill:#fafafa,stroke:#d1d5db,stroke-width:1.5px,color:#525860
+  classDef data fill:#f0fdf4,stroke:#22c55e,stroke-width:1.5px,color:#1c1e21
+  classDef chain fill:#fff9eb,stroke:#E8B964,stroke-width:1.5px,color:#1c1e21
+
+  class MF,APP,MAIN,PRIVY client
+  class API,CRON platform
+  class PG,KPR,RAIL data
+  class BATCH,VAULT chain
 ```
 
 ---
@@ -124,6 +174,40 @@ flowchart TB
 ## 4. Prioritized findings
 
 Severity reflects exploitability **and** trust assumptions. "Manager/keeper" = semi-trusted protocol roles (not anonymous).
+
+```mermaid
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'fontFamily': 'Inter, system-ui, sans-serif',
+    'fontSize': '12px',
+    'primaryColor': '#eef3ff',
+    'primaryBorderColor': '#0052FF',
+    'lineColor': '#9ca3af'
+  }
+}}%%
+flowchart LR
+  subgraph P0 [P0 · before production]
+    C1["C-1 x402 ordering"]
+    C2["C-2 claim supply cap"]
+    C3["C-3 impairment root"]
+  end
+
+  subgraph P1 [P1 · release hygiene]
+    H1["H-1 recovery accounting"]
+    H2["H-2 deploy dry-run"]
+    H3["H-3 swap re-quote"]
+    H4["H-4–H-6 CI gates"]
+  end
+
+  P0 --> P1
+
+  classDef p0 fill:#fef2f2,stroke:#ef4444,stroke-width:2px,color:#1c1e21
+  classDef p1 fill:#fffbeb,stroke:#f59e0b,stroke-width:1.5px,color:#1c1e21
+
+  class C1,C2,C3 p0
+  class H1,H2,H3,H4 p1
+```
 
 ### CRITICAL
 
@@ -326,3 +410,9 @@ pnpm -C kpr typecheck
 - **Otherwise:** the web tier, auth model, identity/merge, keeper-job queue, and migration/RLS posture are in good shape. No anonymous unauthenticated fund-drain or RCE was found in the application tier.
 
 > Next steps (separate, explicitly-approved passes per the agreed workflow): a focused bug-hunt pass and regression-test implementation for C-1/C-2/C-3/H-1/H-2/H-3 — none performed in this read-only review.
+
+<nav class="audit-flow-nav" aria-label="Continue reading">
+  <a class="audit-flow-nav__link audit-flow-nav__link--prev" href="/audits/fable/findings-summary">← Executive summary</a>
+  <span class="audit-flow-nav__step">Full report</span>
+  <a class="audit-flow-nav__link audit-flow-nav__link--next" href="/audits/fable/key-sessions">Source sessions →</a>
+</nav>

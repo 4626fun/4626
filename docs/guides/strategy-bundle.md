@@ -18,7 +18,7 @@ Pay the **launch bundle** ($499 USDC on Base) before deploy appears in the appli
 
 </div>
 
-[Launch checklist](/guides/greenfield-checklist) · [What is 4626?](/getting-started)
+[Launch checklist](/guides/launch-checklist) · [What is 4626?](/getting-started)
 
 ## What the bundle includes
 

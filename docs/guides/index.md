@@ -21,7 +21,7 @@ Step-by-step path to launch a **new vault on Base** (release **v1.14.1**). Legac
 
 | Step | Page | Outcome |
 |------|------|---------|
-| Overview | [Launch checklist](/guides/greenfield-checklist) | Prerequisites + full timeline |
+| Overview | [Launch checklist](/guides/launch-checklist) | Prerequisites + full timeline |
 | 1 | [Pay launch fee](/guides/strategy-bundle) | Deploy unlocked ($499 USDC bundle) |
 | 2 | [Deploy contracts](/guides/launch-token) | Vault stack onchain, unfunded |
 | 3 | [Activate vault](/guides/activate-vault) | Deposit finalized; auction scheduled or live |

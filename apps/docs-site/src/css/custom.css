@@ -1938,3 +1938,538 @@ details > :not(summary) {
   border: none;
   vertical-align: top;
 }
+
+/* ============================================
+   AUDIT HUB (Fable 5 · June 2026)
+   ============================================ */
+
+.audit-hub {
+  margin-bottom: 2rem;
+}
+
+.audit-hero {
+  padding: 1.5rem 0 1.75rem;
+  max-width: 720px;
+}
+
+.audit-hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ifm-font-color-tertiary);
+  margin-bottom: 0.875rem;
+}
+
+.audit-hero__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--docs-gold, #E8B964);
+  box-shadow: 0 0 10px var(--docs-gold-soft, rgba(232, 185, 100, 0.35));
+}
+
+.audit-hero__title {
+  font-size: clamp(1.75rem, 3.5vw, 2.5rem);
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+  margin: 0 0 0.875rem;
+}
+
+.audit-hero__subtitle {
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  color: var(--ifm-font-color-secondary);
+  margin: 0 0 1.25rem;
+  max-width: 58ch;
+}
+
+.audit-stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin: 0 0 1.75rem;
+}
+
+.audit-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 1rem 0;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+}
+
+.audit-stat__value {
+  font-size: 1.375rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--ifm-font-color-base);
+  font-variant-numeric: tabular-nums;
+}
+
+.audit-stat__label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ifm-font-color-secondary);
+  line-height: 1.35;
+}
+
+.audit-verdict {
+  margin: 0 0 1.75rem;
+  padding: 0 0 0 1rem;
+  border-radius: 0;
+  border: none;
+  border-left: 3px solid var(--docs-gold, #E8B964);
+  background: transparent;
+}
+
+.audit-verdict__label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--docs-gold, #E8B964);
+  margin-bottom: 0.35rem;
+}
+
+.audit-verdict__text {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--ifm-font-color-secondary);
+  margin: 0;
+}
+
+.audit-scope-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 2rem;
+}
+
+.audit-scope-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.75rem 0;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+}
+
+.audit-scope-card__title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ifm-font-color-base);
+}
+
+.audit-scope-card__body {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--ifm-font-color-secondary);
+}
+
+.audit-card--featured {
+  background: transparent;
+}
+
+.audit-disclaimer {
+  margin: 0.5rem 0 1.25rem;
+  padding: 0 0 0 1rem;
+  border-radius: 0;
+  border: none;
+  border-left: 3px solid var(--ifm-color-primary);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--ifm-font-color-secondary);
+}
+
+.audit-disclaimer strong {
+  color: var(--ifm-font-color-base);
+}
+
+/* Finding cards (findings-summary page) */
+.audit-finding {
+  margin: 0 0 1.25rem;
+  padding: 0 0 0 1rem;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+}
+
+.audit-finding--critical {
+  border-left: 3px solid #ef4444;
+}
+
+.audit-finding--high {
+  border-left: 3px solid #f59e0b;
+}
+
+.audit-finding__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.audit-finding__id {
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: var(--ifm-font-family-monospace);
+  color: var(--ifm-font-color-tertiary);
+}
+
+.audit-finding__title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.01em;
+}
+
+.audit-finding__body {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--ifm-font-color-secondary);
+  margin: 0 0 0.35rem;
+}
+
+.audit-finding__meta {
+  font-size: 0.8125rem;
+  font-family: var(--ifm-font-family-monospace);
+  color: var(--ifm-font-color-tertiary);
+  margin: 0;
+}
+
+.audit-severity {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.audit-severity--critical {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.audit-severity--high {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+[data-theme='light'] .audit-severity--critical {
+  color: #b91c1c;
+}
+
+[data-theme='light'] .audit-severity--high {
+  color: #b45309;
+}
+
+/* Sidebar: highlight Security & audits category label */
+.theme-doc-sidebar-item-category-level-1 > .menu__list-item-collapsible > .menu__link {
+  font-weight: 600;
+}
+
+/* Reading path strip (steps 0–5) */
+.audit-path {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0 0 1.75rem;
+  padding: 0;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+}
+
+.audit-path__step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ifm-font-color-secondary);
+  text-decoration: none !important;
+  border: 1px solid transparent;
+  transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
+}
+
+.audit-path__step:hover {
+  color: var(--ifm-color-primary);
+  border-color: var(--docs-accent-soft, rgba(75, 139, 245, 0.2));
+  background: var(--ifm-background-color);
+}
+
+.audit-path__step--current {
+  color: var(--ifm-font-color-base);
+  font-weight: 600;
+  border-color: var(--ifm-color-primary-soft, rgba(75, 139, 245, 0.35));
+  background: var(--docs-accent-soft, rgba(75, 139, 245, 0.08));
+}
+
+.audit-path__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  background: var(--ifm-background-color);
+  color: var(--ifm-font-color-tertiary);
+}
+
+.audit-path__step--current .audit-path__num {
+  background: var(--ifm-color-primary);
+  color: #fff;
+}
+
+/* Prev / next footer navigation */
+.audit-flow-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 2.5rem 0 0;
+  padding: 1rem 0 0;
+  border-top: 1px solid var(--docs-border-subtle, var(--ifm-border-color));
+}
+
+.audit-flow-nav__spacer {
+  flex: 1;
+}
+
+.audit-flow-nav__step {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ifm-font-color-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.audit-flow-nav__link {
+  flex: 1;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none !important;
+  color: var(--ifm-color-primary);
+}
+
+.audit-flow-nav__link--prev {
+  text-align: left;
+}
+
+.audit-flow-nav__link--next {
+  text-align: right;
+}
+
+.audit-flow-nav__link:hover {
+  text-decoration: underline !important;
+}
+
+.audit-transcript-meta {
+  margin: 0 0 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--docs-border-subtle, var(--ifm-border-color));
+  font-size: 0.8125rem;
+  color: var(--ifm-font-color-secondary);
+}
+
+.audit-transcript-meta a {
+  font-weight: 500;
+}
+
+/* Document control tables (report metadata) */
+.audit-doc-control {
+  margin: 1.5rem 0 2rem;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.audit-doc-control__title {
+  margin: 0 0 0.875rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ifm-font-color-tertiary);
+}
+
+.audit-doc-control table {
+  width: 100%;
+  margin: 0;
+  border: none;
+  font-size: 0.875rem;
+  border-collapse: collapse;
+}
+
+.audit-doc-control th {
+  width: 9rem;
+  padding: 0.375rem 1rem 0.375rem 0 !important;
+  border: none !important;
+  background: transparent !important;
+  font-weight: 500 !important;
+  font-size: 0.875rem !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  color: var(--ifm-font-color-secondary);
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.audit-doc-control td {
+  padding: 0.375rem 0 !important;
+  border: none !important;
+  background: transparent !important;
+  color: var(--ifm-font-color-base);
+}
+
+.audit-doc-control tr + tr th,
+.audit-doc-control tr + tr td {
+  padding-top: 0.5rem;
+}
+
+/* Formal limitations block */
+.audit-limitations {
+  margin: 2rem 0 1.5rem;
+  padding: 0 0 0 1rem;
+  border: none;
+  border-left: 3px solid var(--ifm-color-primary);
+  border-radius: 0;
+  background: transparent;
+}
+
+.audit-limitations__title {
+  margin: 0 0 0.625rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ifm-font-color-secondary);
+}
+
+.audit-limitations p {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.65;
+  color: var(--ifm-font-color-secondary);
+}
+
+/* Audit pages — borderless cards, cleaner register tables */
+.audit-hub .home-card {
+  padding: 1rem 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.audit-hub .home-card:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: transparent;
+  color: inherit;
+}
+
+.audit-hub .home-card:hover .home-card__title {
+  color: var(--ifm-color-primary);
+}
+
+.theme-doc-markdown:has(.audit-path) .docs-at-a-glance {
+  margin: 1rem 0 1.5rem;
+  padding: 0 0 0 1rem;
+  border: none;
+  border-left: 3px solid var(--ifm-color-primary);
+  border-radius: 0;
+  background: transparent;
+}
+
+.theme-doc-markdown:has(.audit-path) .docs-at-a-glance table th,
+.theme-doc-markdown:has(.audit-path) .docs-at-a-glance table td {
+  border: none !important;
+  background: transparent !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  font-size: 0.875rem !important;
+  padding: 0.35rem 0.75rem 0.35rem 0 !important;
+}
+
+.theme-doc-markdown:has(.audit-path) table {
+  margin: 1rem 0 1.75rem;
+  border-collapse: collapse;
+}
+
+.theme-doc-markdown:has(.audit-path) table th {
+  border: none !important;
+  border-bottom: 1px solid var(--docs-border-subtle, var(--ifm-border-color)) !important;
+  background: transparent !important;
+  font-weight: 600 !important;
+  font-size: 0.8125rem !important;
+  letter-spacing: 0.02em !important;
+  text-transform: none !important;
+  color: var(--ifm-font-color-secondary) !important;
+  padding: 0.625rem 1rem 0.625rem 0 !important;
+}
+
+.theme-doc-markdown:has(.audit-path) table td {
+  border: none !important;
+  border-bottom: 1px solid var(--docs-border-subtle, var(--ifm-border-color)) !important;
+  background: transparent !important;
+  padding: 0.625rem 1rem 0.625rem 0 !important;
+  vertical-align: top;
+}
+
+.theme-doc-markdown:has(.audit-path) table tr:last-child td {
+  border-bottom: none !important;
+}
+
+.theme-doc-markdown:has(.audit-path) table th:not(:last-child),
+.theme-doc-markdown:has(.audit-path) table td:not(:last-child) {
+  padding-right: 1.25rem !important;
+}
+
+.theme-doc-markdown:has(.audit-path) .audit-stat-row {
+  border-bottom: 1px solid var(--docs-border-subtle, var(--ifm-border-color));
+  padding-bottom: 0.5rem;
+}
+
+.theme-doc-markdown:has(.audit-path) .audit-scope-grid {
+  border-top: 1px solid var(--docs-border-subtle, var(--ifm-border-color));
+  padding-top: 0.75rem;
+}
+
+/* Audit pages — elegant borderless Mermaid */
+.theme-doc-markdown:has(.audit-path) .docusaurus-mermaid-container,
+.audit-hub .docusaurus-mermaid-container {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0.25rem 0 1.75rem;
+  margin: 1rem 0 1.5rem;
+  max-width: min(880px, 100%);
+}
+
+.theme-doc-markdown:has(.audit-path) .docusaurus-mermaid-container svg,
+.audit-hub .docusaurus-mermaid-container svg {
+  max-width: 100%;
+  height: auto;
+}
+
+[data-theme='dark'] .theme-doc-markdown:has(.audit-path) .docusaurus-mermaid-container,
+[data-theme='dark'] .audit-hub .docusaurus-mermaid-container {
+  background: transparent;
+}

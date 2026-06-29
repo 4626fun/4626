@@ -2,6 +2,7 @@
 title: Swap failures investigation
 sidebar_label: 5596f8da…
 sidebar_position: 99
+hide_table_of_contents: true
 last_updated: '2026-06-28'
 audience:
   - developers
@@ -11,14 +12,16 @@ owner: docs-team
 last_reviewed: '2026-06-28'
 status: current
 ---
+<div class="audit-transcript-meta">
+[← Source sessions](/audits/fable/key-sessions) · [Transcript archive](/audits/fable/transcripts) · [Executive summary](/audits/fable/findings-summary)
+</div>
 # Swap failures investigation
 | Field | Value |
 | --- | --- |
 | Session ID | `5596f8da-a287-460b-bebb-11a92c627832` |
-| Source file | `4626/5596f8da-a287-460b-bebb-11a92c627832/5596f8da-a287-460b-bebb-11a92c627832.jsonl` |
-| Model | `claude-fable-5-thinking-high` (Cursor on-demand) |
-:::note
-This page is an auto-export of the original Fable agent transcript. Tool outputs and system context blocks are omitted for readability; download the [raw JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
+| Review model | Cursor Fable 5 (`claude-fable-5-thinking-high`) |
+:::note Appendix record
+Readable export of an agent-assisted review session. Tool outputs and system context blocks are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
 :::
 ## User
 

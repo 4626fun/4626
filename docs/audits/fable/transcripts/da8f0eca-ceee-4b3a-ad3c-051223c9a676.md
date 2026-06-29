@@ -1,7 +1,8 @@
 ---
-title: Subagent session
+title: Analysis subagent
 sidebar_label: da8f0eca…
 sidebar_position: 99
+hide_table_of_contents: true
 last_updated: '2026-06-28'
 audience:
   - developers
@@ -11,15 +12,17 @@ owner: docs-team
 last_reviewed: '2026-06-28'
 status: current
 ---
-# Subagent session
+<div class="audit-transcript-meta">
+[← Source sessions](/audits/fable/key-sessions) · [Transcript archive](/audits/fable/transcripts) · [Executive summary](/audits/fable/findings-summary)
+</div>
+# Analysis subagent
 | Field | Value |
 | --- | --- |
 | Session ID | `da8f0eca-ceee-4b3a-ad3c-051223c9a676` |
-| Source file | `4626/059adbec-9820-45a8-9c18-399e4a7f9870/subagents/da8f0eca-ceee-4b3a-ad3c-051223c9a676.jsonl` |
 | Parent session | `059adbec-9820-45a8-9c18-399e4a7f9870` |
-| Model | `claude-fable-5-thinking-high` (Cursor on-demand) |
-:::note
-This page is an auto-export of the original Fable agent transcript. Tool outputs and system context blocks are omitted for readability; download the [raw JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
+| Review model | Cursor Fable 5 (`claude-fable-5-thinking-high`) |
+:::note Appendix record
+Readable export of an agent-assisted review session. Tool outputs and system context blocks are omitted; download the [JSONL archive](/audits/fable-chats-4626-2026-06.zip) for the complete log.
 :::
 ## User
 

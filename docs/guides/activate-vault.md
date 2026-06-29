@@ -18,7 +18,7 @@ Deposit creator coin and start the **fair-launch auction** for `■` tradable sh
 
 </div>
 
-[Launch checklist](/guides/greenfield-checklist) · [Step 2: Deploy contracts](/guides/launch-token)
+[Launch checklist](/guides/launch-checklist) · [Step 2: Deploy contracts](/guides/launch-token)
 
 ## What activation does
 

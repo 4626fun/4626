@@ -123,7 +123,7 @@ const config: Config = {
           position: 'right',
         },
         {
-          to: '/guides/greenfield-checklist',
+          to: '/guides/launch-checklist',
           label: 'Launch',
           position: 'right',
         },
@@ -138,7 +138,7 @@ const config: Config = {
           position: 'right',
         },
         {
-          to: '/audits/fable',
+          to: '/audits',
           label: 'Audits',
           position: 'right',
         },
@@ -171,11 +171,20 @@ const config: Config = {
         {
           title: 'Launch',
           items: [
-            {label: 'Launch checklist', to: '/guides/greenfield-checklist'},
+            {label: 'Launch checklist', to: '/guides/launch-checklist'},
             {label: 'Strategy bundle', to: '/guides/strategy-bundle'},
             {label: 'Contract addresses', to: '/reference/addresses'},
             {label: 'Fable audit', to: '/audits/fable'},
             {label: 'Smart contracts', to: '/contracts'},
+          ],
+        },
+        {
+          title: 'Trust',
+          items: [
+            {label: 'June 2026 review', to: '/audits/fable'},
+            {label: 'Executive summary', to: '/audits/fable/findings-summary'},
+            {label: 'Full report', to: '/audits/fable/full-repo-review-2026-06'},
+            {label: 'Impairment disclosures', to: '/reference/impairment-v1-disclosures'},
           ],
         },
         {

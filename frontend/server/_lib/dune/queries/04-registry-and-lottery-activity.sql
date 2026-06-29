@@ -1,6 +1,6 @@
 -- Protocol touchpoints: CreatorRegistry + CreatorLotteryManager (Base)
--- Registry: 0x3f64087dc361Ad52300409E5873b26941D6418B6
--- Lottery: 0x5c0115589d7F4930A0dc93417aE409f44186f4E7
+-- Registry (v1.14.1): 0xDD7B106a15540bA2F59464590222bF47D8C9394E
+-- Lottery (v1.14.1): 0x29F901864D65Eb848BC548ebCEAcD6dAD39EFd26
 --
 -- Replace decoded event tables after ABI upload.
 

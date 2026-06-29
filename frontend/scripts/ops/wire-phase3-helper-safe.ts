@@ -5,7 +5,7 @@
  * Usage:
  *   pnpm -C frontend exec tsx scripts/ops/wire-phase3-helper-safe.ts \
  *     --phase3-helper 0x... \
- *     --batcher 0xa99058f424FB3ACC639F59355C65C40149030651
+ *     --batcher 0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1
  */
 
 import Safe from '@safe-global/protocol-kit'

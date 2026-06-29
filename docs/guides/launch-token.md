@@ -18,7 +18,7 @@ Deploy the per-creator contract stack in one transaction. **No creator coin move
 
 </div>
 
-[Launch checklist](/guides/greenfield-checklist) · [Step 1: Pay launch fee](/guides/strategy-bundle)
+[Launch checklist](/guides/launch-checklist) · [Step 1: Pay launch fee](/guides/strategy-bundle)
 
 ## Before deploy
 
