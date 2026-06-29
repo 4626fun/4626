@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { ArrowRight, Check } from 'lucide-react'
+import { ArrowRight, Check, Sparkles } from 'lucide-react'
 
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
@@ -50,6 +50,10 @@ export function WaitlistTwitterLinkPanel(props: WaitlistTwitterLinkPanelProps) {
         <span className="relative min-w-0 flex-1">
           <span className="block text-sm font-semibold text-emerald-100">X connected</span>
           <span className="block text-[11px] text-emerald-300/70">+{X_REWARD_POINTS} points earned</span>
+        </span>
+        <span className="relative inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-400/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-emerald-300">
+          <Sparkles className="size-2.5" aria-hidden="true" />
+          Unlocked
         </span>
       </div>
     )

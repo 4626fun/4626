@@ -25,11 +25,13 @@ export function usePrivyOAuthReturnBackendSync(params: {
   const syncAttemptRef = useRef<Partial<Record<OAuthReturnSyncProvider, boolean>>>({})
   const onSyncedRef = useRef(params.onSynced)
   const onErrorRef = useRef(params.onError)
+  const getAccessTokenRef = useRef(params.getAccessToken)
 
   useEffect(() => {
     onSyncedRef.current = params.onSynced
     onErrorRef.current = params.onError
-  }, [params.onError, params.onSynced])
+    getAccessTokenRef.current = params.getAccessToken
+  }, [params.getAccessToken, params.onError, params.onSynced])
 
   useEffect(() => {
     if (params.enabled === false) return
@@ -60,7 +62,7 @@ export function usePrivyOAuthReturnBackendSync(params: {
         try {
           await syncAccountsProviderLink({
             provider,
-            getAccessToken: params.getAccessToken,
+            getAccessToken: getAccessTokenRef.current,
           })
           if (!cancelled) onSyncedRef.current?.()
         } catch (error) {
@@ -75,7 +77,6 @@ export function usePrivyOAuthReturnBackendSync(params: {
     }
   }, [
     params.enabled,
-    params.getAccessToken,
     params.linkedMethods,
     params.privyAuthenticated,
     params.privyReady,

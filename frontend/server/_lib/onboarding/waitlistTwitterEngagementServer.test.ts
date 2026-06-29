@@ -11,6 +11,7 @@ vi.mock('../identity/accountsIdentity.js', () => ({
 import {
   WAITLIST_X_ENGAGEMENT_TWEET_ID,
   WAITLIST_X_FOLLOW_HANDLE,
+  awardVerifiedWaitlistTwitterEngagementStep,
   processWaitlistTwitterFavoriteEvent,
   processWaitlistTwitterFollowEvent,
   processWaitlistTwitterTweetCreateEvent,
@@ -96,5 +97,26 @@ describe('waitlistTwitterEngagementServer', () => {
       text: 'great post',
     })
     expect(replied).toBe(true)
+  })
+
+  it('does not re-award engagement steps already recorded', async () => {
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ').toLowerCase()
+        if (text.includes('x_engagement_follow')) {
+          return { rows: [{ source: 'x_engagement_follow' }] }
+        }
+        return { rows: [] }
+      }),
+    }
+
+    const awarded = await awardVerifiedWaitlistTwitterEngagementStep({
+      db,
+      privyUserId: 'did:privy:abc',
+      step: 'follow',
+    })
+
+    expect(awarded).toBe(false)
+    expect(applyPointEvent).not.toHaveBeenCalled()
   })
 })

@@ -25,7 +25,7 @@ import { computeProgress } from '@/features/waitlist/waitlistTiers'
 import { readPrivyAccessTokenWithRetries } from '@/lib/privy/accessToken'
 import { linkAndSyncPrivyProvider } from '@/lib/privy/providerLink'
 import { usePrivyOAuthReturnBackendSync } from '@/lib/privy/usePrivyOAuthReturnBackendSync'
-import { useSafeLogin, useSafeLoginWithEmail, useSafePrivy } from '@/lib/privy/safeHooks'
+import { useSafeLogin, useSafeLoginWithEmail, useSafePrivy, useSafePrivyAccessToken } from '@/lib/privy/safeHooks'
 import { computeAcceptedFromAppAccessStatus } from '@/app/accessShared'
 import { useAccountMe } from '@/hooks/useAccountMe'
 import { fetchAccountTrayPoints } from '@/lib/waitlist/accountTrayPoints'
@@ -40,20 +40,51 @@ type AuthMeResponse = {
 
 const OTP_RESEND_DELAY_MS = 30_000
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const AUTH_SESSION_READ_BACKOFF_MS = 8_000
 
 function isValidEmail(value: string): boolean {
   return EMAIL_PATTERN.test(value.trim())
 }
 
+let authSessionReadInFlight: Promise<string | null> | null = null
+let authSessionReadBackoffUntil = 0
+
+function readAuthSessionRetryAfterMs(response: Response): number {
+  const raw = response.headers.get('retry-after')
+  if (!raw) return AUTH_SESSION_READ_BACKOFF_MS
+  const seconds = Number(raw)
+  if (Number.isFinite(seconds) && seconds > 0) return Math.ceil(seconds * 1_000)
+  const at = Date.parse(raw)
+  if (Number.isFinite(at)) return Math.max(1_000, at - Date.now())
+  return AUTH_SESSION_READ_BACKOFF_MS
+}
+
 async function readAuthSessionAddress(): Promise<string | null> {
-  const response = await apiFetch('/api/auth/me', {
-    headers: { Accept: 'application/json' },
-  }).catch(() => null)
-  if (!response?.ok) return null
-  const payload = (await response.json().catch(() => null)) as ApiEnvelope<AuthMeResponse> | null
-  if (!payload?.success) return null
-  const address = payload.data && typeof payload.data.address === 'string' ? payload.data.address.trim() : ''
-  return address || null
+  if (Date.now() < authSessionReadBackoffUntil) return null
+  if (authSessionReadInFlight) return authSessionReadInFlight
+
+  authSessionReadInFlight = (async () => {
+    try {
+      const response = await apiFetch('/api/auth/me', {
+        headers: { Accept: 'application/json' },
+      }).catch(() => null)
+      if (!response) return null
+      if (response.status === 429) {
+        authSessionReadBackoffUntil = Date.now() + readAuthSessionRetryAfterMs(response)
+        return null
+      }
+      if (!response.ok) return null
+      const payload = (await response.json().catch(() => null)) as ApiEnvelope<AuthMeResponse> | null
+      if (!payload?.success) return null
+      const address =
+        payload.data && typeof payload.data.address === 'string' ? payload.data.address.trim() : ''
+      return address || null
+    } finally {
+      authSessionReadInFlight = null
+    }
+  })()
+
+  return authSessionReadInFlight
 }
 
 async function bootstrapWaitlist(privyAccessToken: string): Promise<WaitlistBootstrapResponse> {
@@ -250,6 +281,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   const privy = useSafePrivy()
   const { sendCode, loginWithCode } = useSafeLoginWithEmail()
   const { login } = useSafeLogin()
+  const getPrivyAccessToken = useSafePrivyAccessToken()
 
   const [step, setStep] = useState<SignupStep>('email')
   const [email, setEmail] = useState('')
@@ -522,8 +554,10 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   const [twitterBusy, setTwitterBusy] = useState(false)
   const [twitterError, setTwitterError] = useState<string | null>(null)
 
+  const twitterLinked = (accountMe?.linkedMethods?.twitter ?? []).length > 0
+
   const handleLinkTwitter = useCallback(async () => {
-    if (twitterBusy) return
+    if (twitterBusy || twitterLinked) return
     setTwitterBusy(true)
     setTwitterError(null)
     try {
@@ -531,7 +565,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
         privy,
         provider: 'twitter',
         login: login ?? null,
-        getAccessToken: privy.getAccessToken?.bind(privy) ?? null,
+        getAccessToken: getPrivyAccessToken,
       })
       if (data) {
         refreshAccountMe()
@@ -542,7 +576,16 @@ export function WaitlistFlow(props: { sectionId?: string }) {
     } finally {
       setTwitterBusy(false)
     }
-  }, [login, privy, refreshAccountMe, twitterBusy])
+  }, [getPrivyAccessToken, login, privy, refreshAccountMe, twitterBusy, twitterLinked])
+
+  const handleEngagementProgressVerified = useCallback(() => {
+    setPointsRefreshKey((key) => key + 1)
+  }, [])
+
+  const handleOAuthTwitterSynced = useCallback(() => {
+    refreshAccountMe()
+    setPointsRefreshKey((key) => key + 1)
+  }, [refreshAccountMe])
 
   usePrivyOAuthReturnBackendSync({
     providers: ['twitter'],
@@ -550,11 +593,8 @@ export function WaitlistFlow(props: { sectionId?: string }) {
     privyAuthenticated: privy.authenticated,
     privyUser: privy.user,
     linkedMethods: accountMe?.linkedMethods,
-    getAccessToken: privy.getAccessToken?.bind(privy) ?? null,
-    onSynced: () => {
-      refreshAccountMe()
-      setPointsRefreshKey((key) => key + 1)
-    },
+    getAccessToken: getPrivyAccessToken,
+    onSynced: handleOAuthTwitterSynced,
     onError: (syncError, provider) => {
       if (provider !== 'twitter') return
       setTwitterError(syncError instanceof Error ? syncError.message : 'Could not sync Twitter link.')
@@ -564,13 +604,12 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   // Real waitlist points come from the scored snapshot (`/api/accounts/me/points`).
   // `/api/accounts/me` does not populate `score`, so reading `accountMe.score`
   // always returned 0 — fetch the snapshot directly once the session exists.
-  const getPointsAccessToken = privy.getAccessToken ?? null
   useEffect(() => {
-    if (!sessionAddress || !getPointsAccessToken) return
+    if (!sessionAddress) return
     let cancelled = false
     void (async () => {
       try {
-        const token = await getPointsAccessToken().catch(() => null)
+        const token = await getPrivyAccessToken?.()
         if (!token || cancelled) return
         const snapshot = await fetchAccountTrayPoints(40, token)
         if (!cancelled) setPointsTotal(snapshot.points.total)
@@ -581,10 +620,9 @@ export function WaitlistFlow(props: { sectionId?: string }) {
     return () => {
       cancelled = true
     }
-  }, [sessionAddress, getPointsAccessToken, pointsRefreshKey])
+  }, [sessionAddress, getPrivyAccessToken, pointsRefreshKey])
 
   const appAccepted = computeAcceptedFromAppAccessStatus(accountMe?.appAccessStatus ?? null)
-  const twitterLinked = (accountMe?.linkedMethods?.twitter ?? []).length > 0
   const points = pointsTotal ?? accountMe?.score?.points ?? 0
   const progress = computeProgress(points)
   const joinedCount = useCountUp(listCount, !sessionAddress)
@@ -659,8 +697,8 @@ export function WaitlistFlow(props: { sectionId?: string }) {
 
                 {twitterLinked ? (
                   <WaitlistTwitterEngagementSteps
-                    getAccessToken={privy.getAccessToken?.bind(privy) ?? null}
-                    onProgressVerified={() => setPointsRefreshKey((key) => key + 1)}
+                    getAccessToken={getPrivyAccessToken}
+                    onProgressVerified={handleEngagementProgressVerified}
                   />
                 ) : null}
 

@@ -120,6 +120,9 @@ export async function awardVerifiedWaitlistTwitterEngagementStep(params: {
   privyUserId: string
   step: WaitlistTwitterEngagementStepId
 }): Promise<boolean> {
+  const progress = await readWaitlistTwitterEngagementProgressForPrivyUser(params.db, params.privyUserId)
+  if (progress[params.step]) return false
+
   const source = STEP_TO_POINT_SOURCE[params.step]
   const sourceId = stepSourceId(params.step)
   const points = WAITLIST_X_ENGAGEMENT_POINTS[params.step]

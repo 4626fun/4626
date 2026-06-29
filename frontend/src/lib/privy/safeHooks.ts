@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef } from 'react'
 import {
   useActiveWallet,
   useConnectWallet,
@@ -53,9 +54,24 @@ export function useSafePrivy(options?: {
 
 export function useSafePrivyAccessToken(): (() => Promise<string | null>) | null {
   const privy = useSafePrivy()
-  if (privy.ready === false) return null
-  if (privy.authenticated === false) return null
-  return typeof privy.getAccessToken === 'function' ? privy.getAccessToken.bind(privy) : null
+  const privyRef = useRef(privy)
+
+  useEffect(() => {
+    privyRef.current = privy
+  })
+
+  const tokenReady =
+    privy.ready !== false &&
+    privy.authenticated !== false &&
+    typeof privy.getAccessToken === 'function'
+
+  const getAccessToken = useCallback(async (): Promise<string | null> => {
+    const current = privyRef.current
+    if (typeof current.getAccessToken !== 'function') return null
+    return current.getAccessToken().catch(() => null)
+  }, [])
+
+  return tokenReady ? getAccessToken : null
 }
 
 export function useSafeLogin(): SafeLoginClient {

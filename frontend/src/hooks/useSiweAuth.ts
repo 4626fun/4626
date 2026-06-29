@@ -54,12 +54,14 @@ let lastPrivyBridgeFailureAt = 0
 let lastPrivyBridgeFailureReason = ''
 let autoPrivyBridgeInFlight = false
 const AUTH_ME_CACHE_TTL_MS = 1_500
+const AUTH_ME_RATE_LIMIT_BACKOFF_MS = 8_000
 const AUTH_SESSION_SNAPSHOT_TTL_MS = 30_000
 let authMeCacheToken: string | null = null
 let authMeCacheAddress: string | null = null
 let authMeCacheResolvedAt = 0
 let authMeInFlightToken: string | null = null
 let authMeInFlight: Promise<string | null> | null = null
+let authMeRateLimitedUntil = 0
 let autoPrivyBridgeAttempted = false
 let authHandoffRedeemInFlightCode: string | null = null
 let authHandoffRedeemInFlight: Promise<AuthHandoffRedeemResponse | null> | null = null
@@ -348,9 +350,23 @@ function primeAuthMeCacheIfFresh(token: string | null, address: string | null) {
   primeAuthMeCache(token, address)
 }
 
+function readAuthMeRetryAfterMs(res: Response): number {
+  const raw = res.headers.get('retry-after')
+  if (!raw) return AUTH_ME_RATE_LIMIT_BACKOFF_MS
+  const seconds = Number(raw)
+  if (Number.isFinite(seconds) && seconds > 0) return Math.ceil(seconds * 1_000)
+  const at = Date.parse(raw)
+  if (Number.isFinite(at)) return Math.max(1_000, at - Date.now())
+  return AUTH_ME_RATE_LIMIT_BACKOFF_MS
+}
+
 async function fetchAuthMeAddress(): Promise<string | null> {
   const token = getStoredSessionToken()
   const now = Date.now()
+
+  if (now < authMeRateLimitedUntil) {
+    return authMeCacheToken === token ? authMeCacheAddress : null
+  }
 
   if (authMeInFlight && authMeInFlightToken === token) {
     return authMeInFlight
@@ -369,6 +385,10 @@ async function fetchAuthMeAddress(): Promise<string | null> {
           ...(token ? { Authorization: `Bearer ${token}` } : null),
         },
       })
+      if (res.status === 429) {
+        authMeRateLimitedUntil = Date.now() + readAuthMeRetryAfterMs(res)
+        return authMeCacheToken === token ? authMeCacheAddress : null
+      }
       const json = (await res.json().catch(() => null)) as ApiEnvelope<MeResponse> | null
       const nextAddress =
         json?.data && typeof (json.data as any)?.address === 'string' ? String((json.data as any).address) : null

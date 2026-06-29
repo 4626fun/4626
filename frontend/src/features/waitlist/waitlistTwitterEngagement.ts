@@ -10,6 +10,19 @@ export const WAITLIST_X_ENGAGEMENT_STEPS: readonly WaitlistTwitterEngagementStep
 export const WAITLIST_X_ENGAGEMENT_COMMENT =
   'a good project and strong team in a predictable and transparent roadmap, planned and projected, i think in the near future we will see an unprecedented growth of this project'
 
+/**
+ * Per-step XP reward shown in the quest UI. Mirrors the server-side
+ * `WAITLIST_X_ENGAGEMENT_POINTS` in
+ * `frontend/server/_lib/onboarding/waitlistTwitterEngagementServer.ts` so the
+ * gamified reward badges match the points actually awarded on verification.
+ */
+export const WAITLIST_X_ENGAGEMENT_STEP_POINTS: Record<WaitlistTwitterEngagementStepId, number> = {
+  follow: 4,
+  like: 4,
+  retweet: 4,
+  comment: 4,
+}
+
 /** Waitlist X account users follow before like/repost/comment steps. */
 export const WAITLIST_X_FOLLOW_HANDLE = '4626fun'
 

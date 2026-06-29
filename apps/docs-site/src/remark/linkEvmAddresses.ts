@@ -55,7 +55,11 @@ const remarkLinkEvmAddresses: Plugin<[], Root> = () => {
         return;
       }
 
-      parent.children.splice(index, 1, makeAddressLink(node.value, node.value));
+      parent.children.splice(
+        index,
+        1,
+        makeAddressLink(node.value, shortenEvmAddress(node.value)),
+      );
     });
 
     visit(tree, 'text', (node, index, parent) => {

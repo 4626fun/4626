@@ -27,11 +27,14 @@ describe('useAccountMe', () => {
   })
 
   it('refetches after Privy access token becomes available', async () => {
-    let getAccessToken: (() => Promise<string | null>) | null = null
+    let tokenGetter: (() => Promise<string | null>) | undefined
     usePrivyMock.mockImplementation(() => ({
       ready: true,
       authenticated: true,
-      getAccessToken: () => (getAccessToken ? getAccessToken() : Promise.resolve(null)),
+      getAccessToken:
+        typeof tokenGetter === 'function'
+          ? tokenGetter
+          : undefined,
     }))
 
     apiFetchMock.mockResolvedValue({
@@ -56,7 +59,7 @@ describe('useAccountMe', () => {
       expect(apiFetchMock).not.toHaveBeenCalled()
     })
 
-    getAccessToken = async () => 'privy-access-token'
+    tokenGetter = async () => 'privy-access-token'
     rerender()
 
     await waitFor(() => {
@@ -69,5 +72,52 @@ describe('useAccountMe', () => {
     expect(accountsMeCall?.[1]?.headers).toMatchObject({
       'X-Privy-Token': 'privy-access-token',
     })
+  })
+
+  it('does not refetch /api/accounts/me on rerender when auth is stable', async () => {
+    usePrivyMock.mockImplementation(() => ({
+      ready: true,
+      authenticated: true,
+      getAccessToken: async () => 'privy-access-token',
+    }))
+
+    apiFetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: {
+          accountSignals: {
+            executionTrack: 'legacy-owner-install',
+            privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
+            canonicalCswAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+          },
+        },
+      }),
+    })
+
+    const { useAccountMe } = await import('./useAccountMe')
+    const { result, rerender } = renderHook(() => useAccountMe())
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+
+    const accountsMeCallsAfterFirstLoad = apiFetchMock.mock.calls.filter(
+      (call) => call[0] === '/api/accounts/me',
+    ).length
+    expect(accountsMeCallsAfterFirstLoad).toBeGreaterThan(0)
+
+    rerender()
+    rerender()
+    rerender()
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+
+    const accountsMeCallsAfterRerenders = apiFetchMock.mock.calls.filter(
+      (call) => call[0] === '/api/accounts/me',
+    ).length
+    expect(accountsMeCallsAfterRerenders).toBe(accountsMeCallsAfterFirstLoad)
   })
 })

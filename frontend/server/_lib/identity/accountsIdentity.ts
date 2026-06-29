@@ -767,7 +767,7 @@ export async function resolveAndPersistZoraSignals(params: {
     })
   }
 
-  if (zoraLinked) {
+  if (zoraLinked && !existing.zoraLinked) {
     await applyPointEvent({
       db,
       privyUserId,
@@ -1009,6 +1009,29 @@ function toEventType(provider: AccountLinkProvider): string {
   }
 }
 
+async function providerWasAlreadyLinked(
+  db: Db,
+  privyUserId: string,
+  provider: AccountLinkProvider,
+): Promise<boolean> {
+  const result = await db.sql`
+    SELECT 1
+    FROM account_linked_methods
+    WHERE privy_user_id = ${privyUserId}
+      AND type = ${provider}
+    LIMIT 1;
+  `
+  return Array.isArray(result.rows) && result.rows.length > 0
+}
+
+function resolveLinkPointEventKey(provider: AccountLinkProvider, methodValue: string): string {
+  const eventType = toEventType(provider)
+  if (provider === 'external_eoa') {
+    return `${eventType}:${methodValue.toLowerCase()}`
+  }
+  return eventType
+}
+
 export async function recordProviderLink(params: {
   db: Db
   privyUserId: string
@@ -1022,6 +1045,8 @@ export async function recordProviderLink(params: {
   if (targetValues.length === 0 && provider !== 'zora_cross_app') {
     throw new Error(`No linked value found for provider "${provider}".`)
   }
+
+  const wasAlreadyLinked = await providerWasAlreadyLinked(db, privyUserId, provider)
 
   if (provider === 'email') {
     const email = extractPrivyVerifiedEmail(privyUser)
@@ -1076,7 +1101,7 @@ export async function recordProviderLink(params: {
   }
 
   const points = LINK_POINTS[provider] ?? 0
-  if (points > 0) {
+  if (points > 0 && !wasAlreadyLinked) {
     if (provider === 'zora_cross_app') {
       await applyPointEvent({
         db,
@@ -1091,9 +1116,10 @@ export async function recordProviderLink(params: {
           db,
           privyUserId,
           eventType: toEventType(provider),
-          eventKey: `${toEventType(provider)}:${methodValue.toLowerCase()}`,
+          eventKey: resolveLinkPointEventKey(provider, methodValue),
           points,
         })
+        if (provider !== 'external_eoa') break
       }
     }
   }

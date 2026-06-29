@@ -105,11 +105,13 @@ export function useAccountMe(): {
   const [refreshCounter, setRefreshCounter] = useState(0)
   const [settledCounter, setSettledCounter] = useState<number>(() => (cached !== undefined ? 0 : -1))
   const getAccessToken = useSafePrivyAccessToken()
+  const accessTokenReady = getAccessToken != null
+
   const loading = useMemo(() => {
     if (cached != null && refreshCounter === 0) return false
-    if (!getAccessToken) return true
+    if (!accessTokenReady) return true
     return settledCounter !== refreshCounter
-  }, [getAccessToken, refreshCounter, settledCounter])
+  }, [accessTokenReady, refreshCounter, settledCounter])
 
   useEffect(() => {
     let cancelled = false
@@ -122,9 +124,18 @@ export function useAccountMe(): {
         cancelled = true
       }
     }
-    if (!getAccessToken) {
+    if (!accessTokenReady) {
       return () => {
         cancelled = true
+      }
+    }
+    if (Date.now() < accountsMeRateLimitedUntil && refreshCounter === 0) {
+      retryTimeout = window.setTimeout(() => {
+        if (!cancelled) setRefreshCounter((count) => count + 1)
+      }, Math.max(500, accountsMeRateLimitedUntil - Date.now()))
+      return () => {
+        cancelled = true
+        if (retryTimeout !== undefined) window.clearTimeout(retryTimeout)
       }
     }
     fetchAccountMe(getAccessToken).then((result) => {
@@ -139,20 +150,17 @@ export function useAccountMe(): {
       setMe(result)
       setSettledCounter(refreshCounter)
       if (result === null && refreshCounter < 3) {
-        const retryDelay =
-          Date.now() < accountsMeRateLimitedUntil
-            ? Math.max(1_500, accountsMeRateLimitedUntil - Date.now())
-            : 1_500
+        if (Date.now() < accountsMeRateLimitedUntil) return
         retryTimeout = window.setTimeout(() => {
           if (!cancelled) setRefreshCounter((count) => count + 1)
-        }, retryDelay)
+        }, 1_500)
       }
     })
     return () => {
       cancelled = true
       if (retryTimeout !== undefined) window.clearTimeout(retryTimeout)
     }
-  }, [getAccessToken, refreshCounter])
+  }, [accessTokenReady, getAccessToken, refreshCounter])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
