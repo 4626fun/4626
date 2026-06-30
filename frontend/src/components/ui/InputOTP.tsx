@@ -3,12 +3,15 @@ import { motion, useReducedMotion } from 'framer-motion'
 
 import { cn } from '@/lib/shared/utils'
 
+export type InputOTPStatus = 'default' | 'success' | 'error'
+
 export interface InputOTPProps {
   value: string
   onChange: (value: string) => void
   onComplete?: (value: string) => void
   length?: number
   disabled?: boolean
+  status?: InputOTPStatus
   id?: string
   className?: string
   'aria-label'?: string
@@ -30,6 +33,7 @@ export const InputOTP = forwardRef<HTMLInputElement, InputOTPProps>(function Inp
     onComplete,
     length = 6,
     disabled = false,
+    status = 'default',
     id,
     className,
     'aria-label': ariaLabel,
@@ -57,9 +61,19 @@ export const InputOTP = forwardRef<HTMLInputElement, InputOTPProps>(function Inp
 
   const cells = Array.from({ length }, (_, index) => value[index] ?? '')
   const activeIndex = Math.min(value.length, length - 1)
+  const isSuccess = status === 'success'
+  const isError = status === 'error'
 
   return (
-    <div className={cn('relative', className)}>
+    <motion.div
+      className={cn('relative', className)}
+      animate={
+        isError && !reduceMotion
+          ? { x: [0, -6, 6, -4, 4, 0] }
+          : { x: 0 }
+      }
+      transition={{ duration: 0.42, ease: 'easeInOut' }}
+    >
       <input
         ref={setRefs}
         id={inputId}
@@ -84,19 +98,34 @@ export const InputOTP = forwardRef<HTMLInputElement, InputOTPProps>(function Inp
       />
       <div className="flex items-center gap-2 sm:gap-2.5" aria-hidden="true">
         {cells.map((digit, index) => {
-          const isActive = focused && index === activeIndex && !disabled
+          const isActive = focused && index === activeIndex && !disabled && !isSuccess
           const isFilled = digit !== ''
           return (
-            <div
+            <motion.div
               key={index}
+              initial={false}
+              animate={
+                isSuccess && !reduceMotion
+                  ? { scale: [1, 1.06, 1], borderColor: 'rgba(52, 211, 153, 0.65)' }
+                  : { scale: 1 }
+              }
+              transition={
+                isSuccess && !reduceMotion
+                  ? { duration: 0.32, ease: 'easeOut', delay: index * 0.05 }
+                  : { duration: 0.15 }
+              }
               className={cn(
-                'relative flex h-14 flex-1 items-center justify-center rounded-[10px] border text-xl font-semibold tabular-nums text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.05)] transition-[border-color,box-shadow,background-color] duration-150',
-                isActive
-                  ? 'border-[rgb(var(--brand-primary)/0.85)] bg-[rgb(var(--brand-primary)/0.08)] shadow-[0_0_0_3px_rgb(var(--brand-primary)/0.18),inset_0_1px_0_rgb(255_255_255/0.06)]'
-                  : isFilled
-                    ? 'border-white/20 bg-white/[0.05]'
-                    : 'border-white/10 bg-white/[0.02]',
-                disabled && 'opacity-60',
+                'relative flex h-14 flex-1 items-center justify-center rounded-[10px] border text-xl font-semibold tabular-nums shadow-[inset_0_1px_0_rgb(255_255_255/0.05)] transition-[border-color,box-shadow,background-color,color] duration-200',
+                isSuccess
+                  ? 'border-emerald-400/70 bg-emerald-400/[0.16] text-emerald-50'
+                  : isError
+                    ? 'border-rose-400/50 bg-rose-400/[0.08] text-rose-100'
+                    : isActive
+                      ? 'border-[rgb(var(--brand-primary)/0.85)] bg-[rgb(var(--brand-primary)/0.08)] text-white shadow-[0_0_0_3px_rgb(var(--brand-primary)/0.18),inset_0_1px_0_rgb(255_255_255/0.06)]'
+                      : isFilled
+                        ? 'border-white/20 bg-white/[0.05] text-white'
+                        : 'border-white/10 bg-white/[0.02] text-white',
+                disabled && !isSuccess && 'opacity-60',
               )}
             >
               {isFilled ? (
@@ -112,10 +141,10 @@ export const InputOTP = forwardRef<HTMLInputElement, InputOTPProps>(function Inp
               ) : (
                 <span className="size-1.5 rounded-full bg-white/15" />
               )}
-            </div>
+            </motion.div>
           )
         })}
       </div>
-    </div>
+    </motion.div>
   )
 })

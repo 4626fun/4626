@@ -1,12 +1,14 @@
 export type WaitlistTwitterEngagementStepId = 'follow' | 'like' | 'retweet' | 'comment'
 
-// Active quest steps. Temporarily follow-only: like/retweet/comment require a
-// campaign tweet authored by @4626fun (the subscribed Account Activity account)
-// so engagement events are delivered for the right author. Re-add 'like',
-// 'retweet', 'comment' here once that tweet exists and WAITLIST_X_ENGAGEMENT_TWEET_URL
-// points at it. Keep this list in sync with WAITLIST_X_ENGAGEMENT_STEP_ORDER
-// (server) and STEP_ORDER (api/_handlers/waitlist/_xEngagement.ts).
-export const WAITLIST_X_ENGAGEMENT_STEPS: readonly WaitlistTwitterEngagementStepId[] = ['follow'] as const
+/** Full quest chain once the server has a campaign tweet configured (no Like — not verifiable on app-only bearer). */
+export const WAITLIST_X_ENGAGEMENT_ALL_STEPS: readonly WaitlistTwitterEngagementStepId[] = [
+  'follow',
+  'retweet',
+  'comment',
+] as const
+
+/** Default until the API reports a configured campaign tweet. */
+export const WAITLIST_X_ENGAGEMENT_DEFAULT_STEPS: readonly WaitlistTwitterEngagementStepId[] = ['follow'] as const
 
 export const WAITLIST_X_ENGAGEMENT_COMMENT =
   'a good project and strong team in a predictable and transparent roadmap, planned and projected, i think in the near future we will see an unprecedented growth of this project'
@@ -24,12 +26,8 @@ export const WAITLIST_X_ENGAGEMENT_STEP_POINTS: Record<WaitlistTwitterEngagement
   comment: 4,
 }
 
-/** Waitlist X account users follow before like/repost/comment steps. */
+/** Waitlist X account users follow before repost/comment steps. */
 export const WAITLIST_X_FOLLOW_HANDLE = '4626fun'
-
-/** Campaign post for like → repost → comment steps on /waitlist. */
-export const WAITLIST_X_ENGAGEMENT_TWEET_URL =
-  'https://x.com/wenakita/status/2031118597704265790'
 
 export type WaitlistTwitterEngagementProgress = Record<WaitlistTwitterEngagementStepId, boolean>
 
@@ -39,10 +37,6 @@ export function emptyWaitlistTwitterEngagementProgress(): WaitlistTwitterEngagem
 
 export function resolveWaitlistTwitterFollowHandle(): string {
   return WAITLIST_X_FOLLOW_HANDLE
-}
-
-export function resolveWaitlistTwitterEngagementTweetUrl(): string {
-  return WAITLIST_X_ENGAGEMENT_TWEET_URL
 }
 
 /** Extract a numeric tweet id from an x.com / twitter.com status URL. */
@@ -62,12 +56,6 @@ export function parseTweetIdFromUrl(input: string): string | null {
   } catch {
     return null
   }
-}
-
-export function resolveWaitlistTwitterEngagementTweetId(): string {
-  const id = parseTweetIdFromUrl(WAITLIST_X_ENGAGEMENT_TWEET_URL)
-  if (!id) throw new Error('waitlist_twitter_engagement_tweet_url_invalid')
-  return id
 }
 
 export function buildWaitlistTwitterFollowIntentUrl(screenName: string): string {
@@ -101,15 +89,25 @@ export function buildWaitlistTwitterStatusUrl(tweetId: string): string {
 
 export function resolveActiveWaitlistTwitterEngagementStep(
   progress: WaitlistTwitterEngagementProgress,
+  steps: readonly WaitlistTwitterEngagementStepId[] = WAITLIST_X_ENGAGEMENT_DEFAULT_STEPS,
 ): WaitlistTwitterEngagementStepId | 'complete' {
-  for (const step of WAITLIST_X_ENGAGEMENT_STEPS) {
+  for (const step of steps) {
     if (!progress[step]) return step
   }
   return 'complete'
 }
 
-export function waitlistTwitterEngagementStepIndex(step: WaitlistTwitterEngagementStepId): number {
-  return WAITLIST_X_ENGAGEMENT_STEPS.indexOf(step)
+export function waitlistTwitterEngagementStepIndex(
+  step: WaitlistTwitterEngagementStepId,
+  steps: readonly WaitlistTwitterEngagementStepId[] = WAITLIST_X_ENGAGEMENT_DEFAULT_STEPS,
+): number {
+  return steps.indexOf(step)
+}
+
+export function totalWaitlistTwitterEngagementXp(
+  steps: readonly WaitlistTwitterEngagementStepId[],
+): number {
+  return steps.reduce((sum, step) => sum + WAITLIST_X_ENGAGEMENT_STEP_POINTS[step], 0)
 }
 
 export const WAITLIST_X_ENGAGEMENT_STEP_COPY: Record<
@@ -117,43 +115,34 @@ export const WAITLIST_X_ENGAGEMENT_STEP_COPY: Record<
   { title: string; description: string; actionLabel: string; doneLabel: string }
 > = {
   follow: {
-    title: 'Follow us on X',
-    description: 'Follow our X account first. Come back here when you are done.',
-    actionLabel: 'Open on X to follow',
-    doneLabel: 'I followed',
+    title: 'Follow on X',
+    description: '',
+    actionLabel: 'Follow on X',
+    doneLabel: 'Followed',
   },
   like: {
-    title: 'Like our post',
-    description: 'Open the post on X and tap Like. Come back here when you are done.',
-    actionLabel: 'Open on X to like',
-    doneLabel: 'I liked the post',
+    title: 'Like on X',
+    description: '',
+    actionLabel: 'Like on X',
+    doneLabel: 'Liked',
   },
   retweet: {
-    title: 'Retweet',
-    description: 'Share the post with your followers. We will show the comment step next.',
-    actionLabel: 'Open on X to repost',
-    doneLabel: 'I reposted',
+    title: 'Repost on X',
+    description: '',
+    actionLabel: 'Repost on X',
+    doneLabel: 'Reposted',
   },
   comment: {
-    title: 'Leave a comment',
-    description: 'We pre-filled a comment for you — review it on X, then post.',
-    actionLabel: 'Open comment on X',
-    doneLabel: 'I posted my comment',
+    title: 'Comment on X',
+    description: '',
+    actionLabel: 'Comment on X',
+    doneLabel: 'Commented',
   },
 }
 
 export function resolveWaitlistTwitterEngagementStepCopy(
   step: WaitlistTwitterEngagementStepId,
 ): { title: string; description: string; actionLabel: string; doneLabel: string } {
-  if (step === 'follow') {
-    const handle = resolveWaitlistTwitterFollowHandle()
-    return {
-      title: `Follow @${handle}`,
-      description: `Follow @${handle} on X first. Come back here when you are done.`,
-      actionLabel: `Open @${handle} on X`,
-      doneLabel: `I followed @${handle}`,
-    }
-  }
   return WAITLIST_X_ENGAGEMENT_STEP_COPY[step]
 }
 

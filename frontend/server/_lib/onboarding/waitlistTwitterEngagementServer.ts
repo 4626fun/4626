@@ -3,14 +3,24 @@ import {
   verifyTwitterEngagementStep,
   type TwitterEngagementVerifyReason,
 } from '../../twitter/verifyEngagement.js'
+import {
+  readWaitlistXEngagementCampaignKey,
+  readWaitlistXEngagementStepOrder,
+  readWaitlistXEngagementTweetId,
+  WAITLIST_X_FOLLOW_HANDLE,
+  type WaitlistTwitterEngagementStepId,
+} from './waitlistTwitterEngagementConfig.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> }
 
-export type WaitlistTwitterEngagementStepId = 'follow' | 'like' | 'retweet' | 'comment'
-
-export const WAITLIST_X_FOLLOW_HANDLE = '4626fun'
-export const WAITLIST_X_ENGAGEMENT_TWEET_ID = '2031118597704265790'
-export const WAITLIST_X_ENGAGEMENT_CAMPAIGN_KEY = `${WAITLIST_X_FOLLOW_HANDLE}:${WAITLIST_X_ENGAGEMENT_TWEET_ID}`
+export type { WaitlistTwitterEngagementStepId } from './waitlistTwitterEngagementConfig.js'
+export {
+  readWaitlistXEngagementCampaignKey,
+  readWaitlistXEngagementStepOrder,
+  readWaitlistXEngagementTweetId,
+  readWaitlistXEngagementTweetUrl,
+  WAITLIST_X_FOLLOW_HANDLE,
+} from './waitlistTwitterEngagementConfig.js'
 
 export const WAITLIST_X_ENGAGEMENT_POINTS: Record<WaitlistTwitterEngagementStepId, number> = {
   follow: 4,
@@ -41,7 +51,9 @@ function emptyProgress(): WaitlistTwitterEngagementProgress {
 
 function stepSourceId(step: WaitlistTwitterEngagementStepId): string {
   if (step === 'follow') return WAITLIST_X_FOLLOW_HANDLE
-  return WAITLIST_X_ENGAGEMENT_TWEET_ID
+  const tweetId = readWaitlistXEngagementTweetId()
+  if (!tweetId) throw new Error('waitlist_x_engagement_campaign_tweet_unconfigured')
+  return tweetId
 }
 
 function normalizeTwitterUsername(value: unknown): string | null {
@@ -140,16 +152,12 @@ export async function awardVerifiedWaitlistTwitterEngagementStep(params: {
   return result.awarded
 }
 
-// Active quest steps (server source of truth for active-step/verified math).
-// Temporarily follow-only — see WAITLIST_X_ENGAGEMENT_STEPS in
-// frontend/src/features/waitlist/waitlistTwitterEngagement.ts for why. Re-add
-// the remaining steps here (and in the client + endpoint lists) together.
-export const WAITLIST_X_ENGAGEMENT_STEP_ORDER: readonly WaitlistTwitterEngagementStepId[] = ['follow'] as const
+// Active quest steps come from env (`WAITLIST_X_ENGAGEMENT_TWEET_URL` / `_TWEET_ID`).
 
 function resolveActiveStep(
   progress: WaitlistTwitterEngagementProgress,
 ): WaitlistTwitterEngagementStepId | 'complete' {
-  for (const step of WAITLIST_X_ENGAGEMENT_STEP_ORDER) {
+  for (const step of readWaitlistXEngagementStepOrder()) {
     if (!progress[step]) return step
   }
   return 'complete'
@@ -221,7 +229,7 @@ export async function verifyAndAwardWaitlistTwitterEngagementStep(params: {
   const verification = await verifyTwitterEngagementStep({
     step: params.step,
     actor,
-    tweetId: WAITLIST_X_ENGAGEMENT_TWEET_ID,
+    tweetId: readWaitlistXEngagementTweetId() ?? '',
     followHandle: WAITLIST_X_FOLLOW_HANDLE,
   })
   if (!verification.verified) return { ok: false, reason: verification.reason, progress }
@@ -263,27 +271,32 @@ export async function processWaitlistTwitterFavoriteEvent(
   db: Db,
   event: { user: unknown; favorited_status: unknown },
 ): Promise<boolean> {
+  const campaignTweetId = readWaitlistXEngagementTweetId()
+  if (!campaignTweetId) return false
   const actor = readUserObject(event.user)
   const tweetId = readTweetId(event.favorited_status)
-  if (tweetId !== WAITLIST_X_ENGAGEMENT_TWEET_ID) return false
+  if (tweetId !== campaignTweetId) return false
   return verifyStepForTwitterActor({ db, actor, step: 'like' })
 }
 
 export async function processWaitlistTwitterTweetCreateEvent(db: Db, tweet: unknown): Promise<boolean> {
+  const campaignTweetId = readWaitlistXEngagementTweetId()
+  if (!campaignTweetId) return false
+
   const record = tweet && typeof tweet === 'object' ? (tweet as Record<string, unknown>) : null
   if (!record) return false
 
   const actor = readUserObject(record.user)
   const retweetedStatus = record.retweeted_status
   const retweetedId = readTweetId(retweetedStatus)
-  if (retweetedId === WAITLIST_X_ENGAGEMENT_TWEET_ID) {
+  if (retweetedId === campaignTweetId) {
     return verifyStepForTwitterActor({ db, actor, step: 'retweet' })
   }
 
   const replyTo =
     normalizeTwitterUserId(record.in_reply_to_status_id_str) ??
     normalizeTwitterUserId(record.in_reply_to_status_id)
-  if (replyTo === WAITLIST_X_ENGAGEMENT_TWEET_ID) {
+  if (replyTo === campaignTweetId) {
     return verifyStepForTwitterActor({ db, actor, step: 'comment' })
   }
 

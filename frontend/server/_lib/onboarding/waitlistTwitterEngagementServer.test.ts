@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { applyPointEvent, verifyTwitterEngagementStep } = vi.hoisted(() => ({
   applyPointEvent: vi.fn(async () => ({ awarded: true, score: { points: 4, tier: 'Bronze' } })),
@@ -16,7 +16,7 @@ vi.mock('../../twitter/verifyEngagement.js', () => ({
 }))
 
 import {
-  WAITLIST_X_ENGAGEMENT_TWEET_ID,
+  readWaitlistXEngagementTweetId,
   WAITLIST_X_FOLLOW_HANDLE,
   awardVerifiedWaitlistTwitterEngagementStep,
   processWaitlistTwitterFavoriteEvent,
@@ -35,9 +35,14 @@ function createDb(rows: Record<string, unknown>[]) {
 
 describe('waitlistTwitterEngagementServer', () => {
   beforeEach(() => {
+    vi.stubEnv('WAITLIST_X_ENGAGEMENT_TWEET_ID', '2031118597704265790')
     applyPointEvent.mockClear()
     verifyTwitterEngagementStep.mockClear()
     verifyTwitterEngagementStep.mockResolvedValue({ verified: true, reason: 'verified' as const })
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   it('resolves privy users by twitter id or username', async () => {
@@ -79,32 +84,36 @@ describe('waitlistTwitterEngagementServer', () => {
   })
 
   it('awards like for the campaign tweet', async () => {
+    const campaignTweetId = readWaitlistXEngagementTweetId()
+    expect(campaignTweetId).toBeTruthy()
     const db = createDb([{ privy_user_id: 'did:privy:abc' }])
     const awarded = await processWaitlistTwitterFavoriteEvent(db, {
       user: { id_str: '999', screen_name: 'fan' },
-      favorited_status: { id_str: WAITLIST_X_ENGAGEMENT_TWEET_ID },
+      favorited_status: { id_str: campaignTweetId },
     })
     expect(awarded).toBe(true)
     expect(applyPointEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: 'x_engagement_like',
-        eventKey: WAITLIST_X_ENGAGEMENT_TWEET_ID,
+        eventKey: campaignTweetId,
       }),
     )
   })
 
   it('awards retweet and comment from tweet_create_events', async () => {
+    const campaignTweetId = readWaitlistXEngagementTweetId()
+    expect(campaignTweetId).toBeTruthy()
     const db = createDb([{ privy_user_id: 'did:privy:abc' }])
 
     const retweeted = await processWaitlistTwitterTweetCreateEvent(db, {
       user: { id_str: '999', screen_name: 'fan' },
-      retweeted_status: { id_str: WAITLIST_X_ENGAGEMENT_TWEET_ID },
+      retweeted_status: { id_str: campaignTweetId },
     })
     expect(retweeted).toBe(true)
 
     const replied = await processWaitlistTwitterTweetCreateEvent(db, {
       user: { id_str: '999', screen_name: 'fan' },
-      in_reply_to_status_id_str: WAITLIST_X_ENGAGEMENT_TWEET_ID,
+      in_reply_to_status_id_str: campaignTweetId,
       text: 'great post',
     })
     expect(replied).toBe(true)
@@ -212,7 +221,7 @@ describe('waitlistTwitterEngagementServer', () => {
       expect(verifyTwitterEngagementStep).toHaveBeenCalledWith(
         expect.objectContaining({
           step: 'follow',
-          tweetId: WAITLIST_X_ENGAGEMENT_TWEET_ID,
+          tweetId: readWaitlistXEngagementTweetId() ?? '',
           followHandle: WAITLIST_X_FOLLOW_HANDLE,
           actor: expect.objectContaining({ id: '123' }),
         }),

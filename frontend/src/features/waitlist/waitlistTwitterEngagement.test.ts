@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  WAITLIST_X_ENGAGEMENT_ALL_STEPS,
   WAITLIST_X_ENGAGEMENT_COMMENT,
-  WAITLIST_X_ENGAGEMENT_TWEET_URL,
+  WAITLIST_X_ENGAGEMENT_DEFAULT_STEPS,
   WAITLIST_X_FOLLOW_HANDLE,
   buildWaitlistTwitterCommentIntentUrl,
   buildWaitlistTwitterFollowIntentUrl,
@@ -12,17 +13,16 @@ import {
   parseTweetIdFromUrl,
   resolveActiveWaitlistTwitterEngagementStep,
   resolveWaitlistTwitterEngagementStepCopy,
-  resolveWaitlistTwitterEngagementTweetId,
-  resolveWaitlistTwitterEngagementTweetUrl,
   resolveWaitlistTwitterFollowHandle,
+  totalWaitlistTwitterEngagementXp,
 } from './waitlistTwitterEngagement'
 
 describe('waitlistTwitterEngagement', () => {
-  it('uses repo constants for follow handle and campaign post', () => {
+  it('uses repo constants for follow handle and step copy', () => {
     expect(resolveWaitlistTwitterFollowHandle()).toBe(WAITLIST_X_FOLLOW_HANDLE)
-    expect(resolveWaitlistTwitterEngagementTweetUrl()).toBe(WAITLIST_X_ENGAGEMENT_TWEET_URL)
-    expect(resolveWaitlistTwitterEngagementTweetId()).toBe('2031118597704265790')
-    expect(resolveWaitlistTwitterEngagementStepCopy('follow').title).toBe('Follow @4626fun')
+    expect(resolveWaitlistTwitterEngagementStepCopy('follow').title).toBe('Follow on X')
+    expect(totalWaitlistTwitterEngagementXp(WAITLIST_X_ENGAGEMENT_DEFAULT_STEPS)).toBe(4)
+    expect(totalWaitlistTwitterEngagementXp(WAITLIST_X_ENGAGEMENT_ALL_STEPS)).toBe(12)
   })
 
   it('parses tweet ids from status URLs', () => {
@@ -51,30 +51,39 @@ describe('waitlistTwitterEngagement', () => {
     expect(resolveActiveWaitlistTwitterEngagementStep(emptyWaitlistTwitterEngagementProgress())).toBe('follow')
 
     expect(
-      resolveActiveWaitlistTwitterEngagementStep({
-        follow: true,
-        like: false,
-        retweet: false,
-        comment: false,
-      }),
-    ).toBe('like')
+      resolveActiveWaitlistTwitterEngagementStep(
+        {
+          follow: true,
+          like: false,
+          retweet: false,
+          comment: false,
+        },
+        WAITLIST_X_ENGAGEMENT_ALL_STEPS,
+      ),
+    ).toBe('retweet')
 
     expect(
-      resolveActiveWaitlistTwitterEngagementStep({
-        follow: true,
-        like: true,
-        retweet: true,
-        comment: false,
-      }),
+      resolveActiveWaitlistTwitterEngagementStep(
+        {
+          follow: true,
+          like: false,
+          retweet: true,
+          comment: false,
+        },
+        WAITLIST_X_ENGAGEMENT_ALL_STEPS,
+      ),
     ).toBe('comment')
 
     expect(
-      resolveActiveWaitlistTwitterEngagementStep({
-        follow: true,
-        like: true,
-        retweet: true,
-        comment: true,
-      }),
+      resolveActiveWaitlistTwitterEngagementStep(
+        {
+          follow: true,
+          like: true,
+          retweet: true,
+          comment: true,
+        },
+        WAITLIST_X_ENGAGEMENT_ALL_STEPS,
+      ),
     ).toBe('complete')
   })
 })

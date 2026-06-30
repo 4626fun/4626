@@ -53,6 +53,8 @@
     "src/lib/xmtp/xmtpInteractive.ts",
     "src/lib/xmtp/xmtpHelpers.ts",
     "src/lib/xmtp/xmtpSyncCoordinator.ts",
+    "src/lib/alfaclub/keyDefense.ts",
+    "src/lib/alfaclub/roomLabel.ts",
     "src/lib/api/**/*.ts",
     "src/lib/auth/**/*.ts",
     "src/lib/debank/**/*.ts",

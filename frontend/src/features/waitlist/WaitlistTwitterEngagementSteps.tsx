@@ -3,14 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
   ArrowRight,
   Check,
-  Heart,
-  Loader2,
   Lock,
-  MessageCircle,
-  Repeat2,
-  Sparkles,
-  Trophy,
-  UserPlus,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
@@ -19,8 +12,8 @@ import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import {
   WAITLIST_X_ENGAGEMENT_COMMENT,
+  WAITLIST_X_ENGAGEMENT_DEFAULT_STEPS,
   WAITLIST_X_ENGAGEMENT_STEP_POINTS,
-  WAITLIST_X_ENGAGEMENT_STEPS,
   buildWaitlistTwitterCommentIntentUrl,
   buildWaitlistTwitterFollowIntentUrl,
   buildWaitlistTwitterLikeIntentUrl,
@@ -29,8 +22,8 @@ import {
   openWaitlistTwitterIntent,
   resolveActiveWaitlistTwitterEngagementStep,
   resolveWaitlistTwitterEngagementStepCopy,
-  resolveWaitlistTwitterEngagementTweetId,
   resolveWaitlistTwitterFollowHandle,
+  totalWaitlistTwitterEngagementXp,
   type WaitlistTwitterEngagementProgress,
   type WaitlistTwitterEngagementStepId,
 } from '@/features/waitlist/waitlistTwitterEngagement'
@@ -38,39 +31,133 @@ import {
 type WaitlistTwitterEngagementStepsProps = {
   getAccessToken: (() => Promise<string | null>) | null | undefined
   onProgressVerified?: () => void
+  onSkip?: () => void
 }
 
 type WaitlistXEngagementApiResponse = {
   campaignKey: string
+  campaignTweetUrl: string | null
+  campaignTweetId: string | null
+  steps: WaitlistTwitterEngagementStepId[]
   progress: WaitlistTwitterEngagementProgress
   activeStep: WaitlistTwitterEngagementStepId | 'complete'
   verified: boolean
 }
 
+type WaitlistXEngagementState = {
+  steps: WaitlistTwitterEngagementStepId[]
+  campaignTweetId: string | null
+  progress: WaitlistTwitterEngagementProgress
+}
+
 const POLL_INTERVAL_MS = 3_000
 const X_ENGAGEMENT_BACKOFF_MS = 10_000
 
-let xEngagementInFlight: Promise<WaitlistTwitterEngagementProgress | null> | null = null
+let xEngagementInFlight: Promise<WaitlistXEngagementState | null> | null = null
 let xEngagementRateLimitedUntil = 0
-
-const TOTAL_QUEST_XP = WAITLIST_X_ENGAGEMENT_STEPS.reduce(
-  (sum, step) => sum + WAITLIST_X_ENGAGEMENT_STEP_POINTS[step],
-  0,
-)
 
 type QuestRowState = 'done' | 'active' | 'locked'
 
-function StepIcon(props: { step: WaitlistTwitterEngagementStepId; className?: string }) {
-  const { step, className } = props
-  if (step === 'follow') return <UserPlus className={className} aria-hidden="true" />
-  if (step === 'like') return <Heart className={className} aria-hidden="true" />
-  if (step === 'retweet') return <Repeat2 className={className} aria-hidden="true" />
-  return <MessageCircle className={className} aria-hidden="true" />
+function QuestRow(props: {
+  step: WaitlistTwitterEngagementStepId
+  state: QuestRowState
+  index: number
+  confirming: boolean
+  reduceMotion: boolean
+  onOpen: (step: WaitlistTwitterEngagementStepId) => void
+  onConfirm: (step: WaitlistTwitterEngagementStepId) => void
+}) {
+  const { step, state, index, confirming, reduceMotion, onOpen, onConfirm } = props
+  const copy = resolveWaitlistTwitterEngagementStepCopy(step)
+  const points = WAITLIST_X_ENGAGEMENT_STEP_POINTS[step]
+
+  if (state === 'active') {
+    return (
+      <motion.li
+        layout={!reduceMotion}
+        initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: 'easeOut', delay: reduceMotion ? 0 : index * 0.03 }}
+        className="py-1"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm font-semibold text-white">{copy.title}</span>
+          <span className="shrink-0 text-[11px] font-medium tabular-nums text-emerald-300/80">
+            +{points} XP
+          </span>
+        </div>
+        <div className="mt-2.5 flex items-center gap-3">
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            className="min-h-[38px] flex-1"
+            onClick={() => onOpen(step)}
+          >
+            {copy.actionLabel}
+            <ArrowRight className="size-3.5" aria-hidden="true" />
+          </Button>
+          <button
+            type="button"
+            className="shrink-0 text-[11px] font-medium text-zinc-400 transition hover:text-white disabled:opacity-50"
+            disabled={confirming}
+            onClick={() => onConfirm(step)}
+          >
+            {confirming ? 'Checking…' : 'Verify'}
+          </button>
+        </div>
+      </motion.li>
+    )
+  }
+
+  return (
+    <motion.li
+      layout={!reduceMotion}
+      initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: 'easeOut', delay: reduceMotion ? 0 : index * 0.03 }}
+      className={cn(
+        'flex items-center justify-between gap-3 py-2',
+        state === 'locked' && 'opacity-45',
+      )}
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <span
+          className={cn(
+            'flex size-5 shrink-0 items-center justify-center',
+            state === 'done' ? 'text-emerald-300' : 'text-zinc-600',
+          )}
+        >
+          {state === 'done' ? (
+            <Check className="size-3.5" aria-hidden="true" />
+          ) : (
+            <Lock className="size-3" aria-hidden="true" />
+          )}
+        </span>
+        <span
+          className={cn(
+            'truncate text-sm font-medium',
+            state === 'done' ? 'text-zinc-300' : 'text-zinc-500',
+          )}
+        >
+          {copy.title}
+        </span>
+      </div>
+      <span
+        className={cn(
+          'shrink-0 text-[11px] font-medium tabular-nums',
+          state === 'done' ? 'text-emerald-300/80' : 'text-zinc-600',
+        )}
+      >
+        {state === 'done' ? `+${points} XP` : `+${points} XP`}
+      </span>
+    </motion.li>
+  )
 }
 
-async function fetchVerifiedEngagementProgress(
+async function fetchEngagementState(
   getAccessToken: (() => Promise<string | null>) | null | undefined,
-): Promise<WaitlistTwitterEngagementProgress | null> {
+): Promise<WaitlistXEngagementState | null> {
   if (Date.now() < xEngagementRateLimitedUntil) return null
   if (xEngagementInFlight) return xEngagementInFlight
 
@@ -91,7 +178,13 @@ async function fetchVerifiedEngagementProgress(
       if (!response?.ok) return null
       const payload = (await response.json().catch(() => null)) as ApiEnvelope<WaitlistXEngagementApiResponse> | null
       if (!payload?.success || !payload.data?.progress) return null
-      return payload.data.progress
+      const steps =
+        payload.data.steps.length > 0 ? payload.data.steps : [...WAITLIST_X_ENGAGEMENT_DEFAULT_STEPS]
+      return {
+        steps,
+        campaignTweetId: payload.data.campaignTweetId,
+        progress: payload.data.progress,
+      }
     } finally {
       xEngagementInFlight = null
     }
@@ -186,171 +279,15 @@ function XpMeter({ percent, reduceMotion }: { percent: number; reduceMotion: boo
   )
 }
 
-// Compact +N XP reward chip used on each quest row.
-function XpReward({ points, state }: { points: number; state: QuestRowState }) {
-  return (
-    <span
-      className={cn(
-        'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums',
-        state === 'done'
-          ? 'bg-emerald-400/15 text-emerald-300'
-          : state === 'active'
-            ? 'bg-[rgb(var(--brand-primary)/0.18)] text-[rgb(var(--brand-primary))]'
-            : 'bg-white/[0.04] text-zinc-500',
-      )}
-    >
-      <Sparkles className="size-2.5" aria-hidden="true" />+{points} XP
-    </span>
-  )
-}
-
-function QuestRow(props: {
-  step: WaitlistTwitterEngagementStepId
-  state: QuestRowState
-  index: number
-  awaitingVerification: boolean
-  confirming: boolean
-  reduceMotion: boolean
-  onOpen: (step: WaitlistTwitterEngagementStepId) => void
-  onConfirm: (step: WaitlistTwitterEngagementStepId) => void
-}) {
-  const { step, state, index, awaitingVerification, confirming, reduceMotion, onOpen, onConfirm } = props
-  const copy = resolveWaitlistTwitterEngagementStepCopy(step)
-  const points = WAITLIST_X_ENGAGEMENT_STEP_POINTS[step]
-  const isComment = step === 'comment'
-
-  return (
-    <motion.li
-      layout={!reduceMotion}
-      initial={reduceMotion ? false : { opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, ease: 'easeOut', delay: reduceMotion ? 0 : index * 0.04 }}
-      className={cn(
-        'relative overflow-hidden rounded-xl border px-3 py-2.5 transition-colors',
-        state === 'active'
-          ? 'border-[rgb(var(--brand-primary)/0.45)] bg-[rgb(var(--brand-primary)/0.06)] shadow-[0_0_0_1px_rgb(var(--brand-primary)/0.18),0_12px_30px_-16px_rgb(var(--brand-primary)/0.7)]'
-          : state === 'done'
-            ? 'border-emerald-400/15 bg-emerald-400/[0.04]'
-            : 'border-white/[0.05] bg-white/[0.015]',
-      )}
-    >
-      {/* Animated edge glow on the active quest only. */}
-      {state === 'active' && !reduceMotion ? (
-        <motion.span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-xl"
-          style={{ boxShadow: 'inset 0 0 22px 0 rgb(var(--brand-primary) / 0.18)' }}
-          animate={{ opacity: [0.35, 0.85, 0.35] }}
-          transition={{ duration: 2.4, ease: 'easeInOut', repeat: Infinity }}
-        />
-      ) : null}
-
-      <div className="relative flex items-center gap-3">
-        <span
-          className={cn(
-            'flex size-8 shrink-0 items-center justify-center rounded-full',
-            state === 'done'
-              ? 'bg-emerald-400/20 text-emerald-300'
-              : state === 'active'
-                ? 'bg-[rgb(var(--brand-primary)/0.2)] text-[rgb(var(--brand-primary))]'
-                : 'bg-white/[0.04] text-zinc-600',
-          )}
-        >
-          {state === 'done' ? (
-            <Check className="size-4" aria-hidden="true" />
-          ) : state === 'locked' ? (
-            <Lock className="size-3.5" aria-hidden="true" />
-          ) : (
-            <StepIcon step={step} className="size-4" />
-          )}
-        </span>
-
-        <span className="min-w-0 flex-1">
-          <span
-            className={cn(
-              'block truncate text-sm font-semibold',
-              state === 'locked' ? 'text-zinc-500' : 'text-white',
-            )}
-          >
-            {copy.title}
-          </span>
-          {state === 'active' ? (
-            <span className="mt-0.5 block text-[11px] leading-snug text-zinc-400">
-              {copy.description} We verify each step automatically through X.
-            </span>
-          ) : (
-            <span className="mt-0.5 block text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-600">
-              {state === 'done' ? 'Cleared' : 'Locked'}
-            </span>
-          )}
-        </span>
-
-        <XpReward points={points} state={state} />
-      </div>
-
-      {state === 'active' ? (
-        <div className="relative mt-3 space-y-3">
-          {isComment ? (
-            <div className="rounded-lg border border-white/[0.06] bg-[rgb(var(--vault-bg)/0.55)] px-3 py-2">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-                Pre-filled comment
-              </p>
-              <p className="mt-1 text-[11px] leading-relaxed text-zinc-300">
-                {WAITLIST_X_ENGAGEMENT_COMMENT}
-              </p>
-            </div>
-          ) : null}
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              className="w-full sm:w-auto"
-              onClick={() => onOpen(step)}
-            >
-              {copy.actionLabel}
-              <ArrowRight className="size-3.5" aria-hidden="true" />
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="w-full sm:w-auto"
-              disabled={confirming}
-              onClick={() => onConfirm(step)}
-            >
-              {confirming ? (
-                <>
-                  <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-                  Checking on X…
-                </>
-              ) : (
-                <>
-                  <Check className="size-3.5" aria-hidden="true" />
-                  Verify on X
-                </>
-              )}
-            </Button>
-            {awaitingVerification && !confirming ? (
-              <span className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400">
-                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-                Verifying on X…
-              </span>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-    </motion.li>
-  )
-}
-
 export function WaitlistTwitterEngagementSteps(props: WaitlistTwitterEngagementStepsProps) {
-  const { getAccessToken, onProgressVerified } = props
+  const { getAccessToken, onProgressVerified, onSkip } = props
   const followHandle = resolveWaitlistTwitterFollowHandle()
-  const tweetId = resolveWaitlistTwitterEngagementTweetId()
   const reduceMotion = useReducedMotion() ?? false
 
+  const [questSteps, setQuestSteps] = useState<WaitlistTwitterEngagementStepId[]>([
+    ...WAITLIST_X_ENGAGEMENT_DEFAULT_STEPS,
+  ])
+  const [campaignTweetId, setCampaignTweetId] = useState<string | null>(null)
   const [progress, setProgress] = useState<WaitlistTwitterEngagementProgress>(
     emptyWaitlistTwitterEngagementProgress(),
   )
@@ -366,10 +303,12 @@ export function WaitlistTwitterEngagementSteps(props: WaitlistTwitterEngagementS
   }, [getAccessToken])
 
   const applyProgressUpdate = useCallback(
-    (next: WaitlistTwitterEngagementProgress) => {
+    (next: WaitlistTwitterEngagementProgress, steps?: WaitlistTwitterEngagementStepId[]) => {
+      if (steps) setQuestSteps(steps)
       setProgress(next)
       setSyncError(null)
-      const active = resolveActiveWaitlistTwitterEngagementStep(next)
+      const activeSteps = steps ?? questSteps
+      const active = resolveActiveWaitlistTwitterEngagementStep(next, activeSteps)
       if (active === 'complete' && !lastCompleteRef.current) {
         lastCompleteRef.current = true
         onProgressVerified?.()
@@ -378,27 +317,35 @@ export function WaitlistTwitterEngagementSteps(props: WaitlistTwitterEngagementS
         setAwaitingVerification(false)
       }
     },
-    [onProgressVerified],
+    [onProgressVerified, questSteps],
   )
 
-  const applyProgressUpdateRef = useRef(applyProgressUpdate)
+  const applyEngagementState = useCallback(
+    (state: WaitlistXEngagementState) => {
+      setCampaignTweetId(state.campaignTweetId)
+      applyProgressUpdate(state.progress, state.steps)
+    },
+    [applyProgressUpdate],
+  )
+
+  const applyEngagementStateRef = useRef(applyEngagementState)
   useEffect(() => {
-    applyProgressUpdateRef.current = applyProgressUpdate
-  }, [applyProgressUpdate])
+    applyEngagementStateRef.current = applyEngagementState
+  }, [applyEngagementState])
 
   const refreshProgress = useCallback(async () => {
-    const next = await fetchVerifiedEngagementProgress(getAccessTokenRef.current)
+    const next = await fetchEngagementState(getAccessTokenRef.current)
     if (!next) return
-    applyProgressUpdateRef.current(next)
+    applyEngagementStateRef.current(next)
   }, [])
 
   useEffect(() => {
     if (!accessTokenReady) return
     let cancelled = false
     void (async () => {
-      const next = await fetchVerifiedEngagementProgress(getAccessTokenRef.current)
+      const next = await fetchEngagementState(getAccessTokenRef.current)
       if (!next || cancelled) return
-      applyProgressUpdateRef.current(next)
+      applyEngagementStateRef.current(next)
     })()
     return () => {
       cancelled = true
@@ -413,22 +360,27 @@ export function WaitlistTwitterEngagementSteps(props: WaitlistTwitterEngagementS
     return () => window.clearInterval(timer)
   }, [awaitingVerification, refreshProgress])
 
-  const activeStep = useMemo(() => resolveActiveWaitlistTwitterEngagementStep(progress), [progress])
+  const activeStep = useMemo(
+    () => resolveActiveWaitlistTwitterEngagementStep(progress, questSteps),
+    [progress, questSteps],
+  )
+
+  const totalQuestXp = useMemo(() => totalWaitlistTwitterEngagementXp(questSteps), [questSteps])
 
   const completedCount = useMemo(
-    () => WAITLIST_X_ENGAGEMENT_STEPS.filter((step) => progress[step]).length,
-    [progress],
+    () => questSteps.filter((step) => progress[step]).length,
+    [progress, questSteps],
   )
-  const totalSteps = WAITLIST_X_ENGAGEMENT_STEPS.length
+  const totalSteps = questSteps.length
   const earnedXp = useMemo(
     () =>
-      WAITLIST_X_ENGAGEMENT_STEPS.reduce(
+      questSteps.reduce(
         (sum, step) => sum + (progress[step] ? WAITLIST_X_ENGAGEMENT_STEP_POINTS[step] : 0),
         0,
       ),
-    [progress],
+    [progress, questSteps],
   )
-  const xpPercent = TOTAL_QUEST_XP > 0 ? Math.round((earnedXp / TOTAL_QUEST_XP) * 100) : 0
+  const xpPercent = totalQuestXp > 0 ? Math.round((earnedXp / totalQuestXp) * 100) : 0
   const allComplete = activeStep === 'complete'
 
   const openStepIntent = useCallback(
@@ -437,17 +389,21 @@ export function WaitlistTwitterEngagementSteps(props: WaitlistTwitterEngagementS
         openWaitlistTwitterIntent(buildWaitlistTwitterFollowIntentUrl(followHandle))
         return
       }
+      if (!campaignTweetId) {
+        setSyncError('Campaign post is not live yet. Follow @4626fun for now — repost and comment unlock soon.')
+        return
+      }
       if (step === 'like') {
-        openWaitlistTwitterIntent(buildWaitlistTwitterLikeIntentUrl(tweetId))
+        openWaitlistTwitterIntent(buildWaitlistTwitterLikeIntentUrl(campaignTweetId))
         return
       }
       if (step === 'retweet') {
-        openWaitlistTwitterIntent(buildWaitlistTwitterRetweetIntentUrl(tweetId))
+        openWaitlistTwitterIntent(buildWaitlistTwitterRetweetIntentUrl(campaignTweetId))
         return
       }
-      openWaitlistTwitterIntent(buildWaitlistTwitterCommentIntentUrl(tweetId, WAITLIST_X_ENGAGEMENT_COMMENT))
+      openWaitlistTwitterIntent(buildWaitlistTwitterCommentIntentUrl(campaignTweetId, WAITLIST_X_ENGAGEMENT_COMMENT))
     },
-    [followHandle, tweetId],
+    [campaignTweetId, followHandle],
   )
 
   const handleOpenStep = useCallback(
@@ -467,40 +423,39 @@ export function WaitlistTwitterEngagementSteps(props: WaitlistTwitterEngagementS
       void (async () => {
         const result = await verifyEngagementStep(getAccessTokenRef.current, step)
         if (result.ok) {
-          applyProgressUpdateRef.current(result.progress)
+          applyProgressUpdate(result.progress, questSteps)
         } else {
           // Keep the UI in sync if the server returned current progress
           // (e.g. the webhook already advanced a step), then surface the reason.
-          if (result.progress) applyProgressUpdateRef.current(result.progress)
+          if (result.progress) applyProgressUpdate(result.progress, questSteps)
           setSyncError(result.error)
         }
         setConfirmingStep((current) => (current === step ? null : current))
       })()
     },
-    [],
+    [applyProgressUpdate, questSteps],
   )
 
   return (
-    <div className="relative mt-3 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4 text-left">
-      {/* Faint grid texture for the "mission board" feel. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-wire-grid opacity-[0.04]"
-      />
-
-      <div className="relative">
+    <div className="relative mt-3 text-left">
+      <div className="relative space-y-3">
         <div className="flex items-center justify-between gap-3">
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-300">
-            <Sparkles className="size-3.5 text-[rgb(var(--brand-primary))]" aria-hidden="true" />
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
             X Quests
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] font-bold tabular-nums text-zinc-200">
-            <span className="text-[rgb(var(--brand-primary))]">{earnedXp}</span>
-            <span className="text-zinc-500">/ {TOTAL_QUEST_XP} XP</span>
+          <span className="text-[11px] font-medium tabular-nums text-emerald-300/80">
+            {allComplete ? (
+              <>+{totalQuestXp} XP</>
+            ) : (
+              <>
+                <span className="text-[rgb(var(--brand-primary))]">{earnedXp}</span>
+                <span className="text-zinc-500"> / {totalQuestXp} XP</span>
+              </>
+            )}
           </span>
         </div>
 
-        <div className="mt-3">
+        <div>
           <XpMeter percent={xpPercent} reduceMotion={reduceMotion} />
           <p className="mt-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">
             {completedCount} / {totalSteps} quests cleared
@@ -509,48 +464,22 @@ export function WaitlistTwitterEngagementSteps(props: WaitlistTwitterEngagementS
 
         <AnimatePresence mode="wait" initial={false}>
           {allComplete ? (
-            <motion.div
+            <motion.p
               key="quest-complete"
-              initial={reduceMotion ? false : { opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-              className="relative mt-4 flex items-center gap-3 overflow-hidden rounded-xl px-4 py-3.5"
-              style={{
-                background:
-                  'linear-gradient(135deg, rgba(16,185,129,0.16), rgba(16,185,129,0.02))',
-                boxShadow: 'inset 0 0 0 1px rgba(16,185,129,0.18)',
-              }}
+              initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+              className="text-[13px] font-semibold text-emerald-100"
             >
-              {!reduceMotion ? (
-                <motion.span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-0"
-                  style={{
-                    background:
-                      'linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.18) 50%, transparent 70%)',
-                  }}
-                  initial={{ x: '-120%' }}
-                  animate={{ x: '120%' }}
-                  transition={{ duration: 1.1, ease: 'easeOut', delay: 0.15 }}
-                />
-              ) : null}
-              <span className="relative flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-400/20 text-emerald-300">
-                <Trophy className="size-5" aria-hidden="true" />
-              </span>
-              <span className="relative min-w-0">
-                <span className="block text-sm font-bold text-emerald-100">All quests cleared</span>
-                <span className="block text-[11px] text-emerald-300/80">
-                  +{TOTAL_QUEST_XP} XP earned · verified on X
-                </span>
-              </span>
-            </motion.div>
+              All quests cleared
+            </motion.p>
           ) : (
             <motion.ul
               key="quest-list"
               initial={false}
               className="mt-4 space-y-2"
             >
-              {WAITLIST_X_ENGAGEMENT_STEPS.map((step, index) => {
+              {questSteps.map((step, index) => {
                 const state: QuestRowState = progress[step]
                   ? 'done'
                   : step === activeStep
@@ -562,7 +491,6 @@ export function WaitlistTwitterEngagementSteps(props: WaitlistTwitterEngagementS
                     step={step}
                     state={state}
                     index={index}
-                    awaitingVerification={awaitingVerification && state === 'active'}
                     confirming={confirmingStep === step}
                     reduceMotion={reduceMotion}
                     onOpen={handleOpenStep}
@@ -575,7 +503,18 @@ export function WaitlistTwitterEngagementSteps(props: WaitlistTwitterEngagementS
         </AnimatePresence>
 
         {syncError ? (
-          <p className="mt-3 text-[11px] leading-relaxed text-rose-300">{syncError}</p>
+          <p className="text-[11px] leading-relaxed text-rose-300">{syncError}</p>
+        ) : null}
+
+        {!allComplete && onSkip ? (
+          <button
+            type="button"
+            onClick={onSkip}
+            disabled={confirmingStep != null}
+            className="block w-full pt-1 text-center text-[11px] font-medium tracking-wide text-zinc-500 transition hover:text-zinc-300 disabled:opacity-50"
+          >
+            Skip for now
+          </button>
         ) : null}
       </div>
     </div>

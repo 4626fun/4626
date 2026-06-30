@@ -42,14 +42,25 @@ export type TradingRoomCurvePreviewProps = {
   maxKeys?: number
   heightClassName?: string
   withFrame?: boolean
+  /**
+   * Supply the attack analytics (control threshold, attack-net curve) are anchored to.
+   * Defaults to `activeKeyIndex`. Pass the real current supply so dragging the active
+   * marker simulates a buyer without shifting the analytical threshold.
+   */
+  attackBaseKeyIndex?: number
+  /** Show the whole curve from 0 instead of centering a window on the active marker. */
+  fullRange?: boolean
 }
 
 function formatUsdShort(value: number): string {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}k`
-  if (value >= 1) return `$${value.toFixed(0)}`
-  if (value >= 0.01) return `$${value.toFixed(2)}`
-  return `$${value.toFixed(4)}`
+  const sign = value < 0 ? '-' : ''
+  const abs = Math.abs(value)
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`
+  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(1)}k`
+  if (abs >= 1) return `${sign}$${abs.toFixed(0)}`
+  if (abs >= 0.01) return `${sign}$${abs.toFixed(2)}`
+  if (abs === 0) return '$0'
+  return `${sign}$${abs.toFixed(2)}`
 }
 
 function formatUsdLong(value: number): string {
@@ -145,9 +156,11 @@ export function TradingRoomCurvePreview({
   maxKeys = 60,
   heightClassName = 'h-44',
   withFrame = true,
+  attackBaseKeyIndex,
+  fullRange = false,
 }: TradingRoomCurvePreviewProps) {
   const [isDragging, setIsDragging] = useState(false)
-  const attackXOffset = activeKeyIndex ?? 0
+  const attackXOffset = attackBaseKeyIndex ?? activeKeyIndex ?? 0
   const selectedDivisor = curveDivisor('trading', selectedTier)
   const selectedCurveLabel = `${selectedTier.charAt(0).toUpperCase()}${selectedTier.slice(1)} cumulative raw USD`
   const selectedCurveColor =
@@ -184,11 +197,6 @@ export function TradingRoomCurvePreview({
     return raidCurve[0] ?? null
   }, [raidCurve])
 
-  const minVotePassBuySpendUsdc = useMemo(() => {
-    if (!minVotePassPoint) return null
-    return minVotePassPoint.averageBuyCostPerKeyUsdc * minVotePassPoint.keysBought
-  }, [minVotePassPoint])
-
   const minVotePassProfitUsdc = minVotePassPoint?.profitUsdc ?? null
 
   const breakEvenX = useMemo(() => {
@@ -215,6 +223,15 @@ export function TradingRoomCurvePreview({
   const [xMin, xMax] = useMemo((): [number, number] => {
     let min = 0
     let max = maxKeys
+    if (fullRange) {
+      // Show the curve from 0 out to the meaningful range — the point where a
+      // lone attacker would seize control — plus a little headroom. We avoid
+      // stretching all the way to the attack curve's expensive tail, which
+      // squashes the readable part of the curve.
+      if (minVotePassX !== null) max = Math.max(max, minVotePassX + 8)
+      if (clampedActiveKeyIndex !== undefined) max = Math.max(max, clampedActiveKeyIndex + 4)
+      return [0, max]
+    }
     if (clampedActiveKeyIndex !== undefined && clampedActiveKeyIndex >= 5) {
       const halfWindow = Math.max(25, Math.round(maxKeys * 0.45))
       min = Math.max(0, clampedActiveKeyIndex - halfWindow)
@@ -226,7 +243,7 @@ export function TradingRoomCurvePreview({
       max = Math.max(max, attackMaxX)
     }
     return [min, max]
-  }, [clampedActiveKeyIndex, hasAttackCurve, maxKeys, raidByKeys])
+  }, [clampedActiveKeyIndex, fullRange, hasAttackCurve, maxKeys, minVotePassX, raidByKeys])
 
   // Only generate rows inside the visible window so Recharts cannot expand
   // the X domain back out to the full data range.
@@ -253,18 +270,22 @@ export function TradingRoomCurvePreview({
 
   const [yMin, yMax] = useMemo((): [number, number] => {
     const curveMax = Math.max(...data.map((row) => row.cumulativeRawSpendUsdc), 1)
-    const floorPad = curveMax * 0.95
+    // A small lift keeps low values off the bottom axis without pushing the
+    // curve into the top half of the chart.
+    const floorPad = curveMax * 0.12
     if (!hasAttackCurve) {
-      // Lift the baseline so low values are not glued to the bottom axis.
-      return [-floorPad, curveMax * 1.2]
+      return [-floorPad, curveMax * 1.15]
     }
     const attackValues = data
       .map((row) => row.attackNet)
       .filter((value): value is number => value !== null)
     const attackMin = attackValues.length > 0 ? Math.min(...attackValues) : 0
-    const bottom = Math.min(-floorPad, attackMin * 2)
-    const top = Math.max(curveMax * 1.2, 1)
-    return [bottom, top]
+    // Clamp how deep the negative (attacker-loss) region can go so it doesn't
+    // squash the bonding curve. The attack line may clip below; the tooltip
+    // still reports exact values.
+    const bottom = Math.max(attackMin * 1.1, -curveMax * 0.9)
+    const top = Math.max(curveMax * 1.15, 1)
+    return [Math.min(bottom, -floorPad), top]
   }, [data, hasAttackCurve])
 
   const chartIsInteractive = typeof onActiveKeyChange === 'function'
@@ -415,12 +436,12 @@ export function TradingRoomCurvePreview({
               <stop offset="100%" stopColor={selectedCurveColor} stopOpacity={0.06} />
             </linearGradient>
             <linearGradient id="ownerCurveFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.34} />
-              <stop offset="100%" stopColor="#22d3ee" stopOpacity={0.08} />
+              <stop offset="0%" stopColor="#34d399" stopOpacity={0.34} />
+              <stop offset="100%" stopColor="#34d399" stopOpacity={0.08} />
             </linearGradient>
             <linearGradient id="nonOwnerCurveFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#6366f1" stopOpacity={0.28} />
-              <stop offset="100%" stopColor="#6366f1" stopOpacity={0.06} />
+              <stop offset="0%" stopColor="#38bdf8" stopOpacity={0.28} />
+              <stop offset="100%" stopColor="#38bdf8" stopOpacity={0.06} />
             </linearGradient>
           </defs>
 
@@ -481,7 +502,7 @@ export function TradingRoomCurvePreview({
               type="monotone"
               dataKey="attackNet"
               name="Attack net USD"
-              stroke="#f59e0b"
+              stroke="#ef4444"
               strokeWidth={2}
               strokeDasharray="5 4"
               dot={false}
@@ -507,38 +528,19 @@ export function TradingRoomCurvePreview({
       {progressiveStage >= 3 ? (
         <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-zinc-500">
           <span className="inline-flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-cyan-400/90" />
+            <span className="h-2 w-2 rounded-full bg-emerald-400/90" />
             Owner {ownerSharePercent.toFixed(0)}%
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-indigo-400/90" />
-            Non-owners {(100 - ownerSharePercent).toFixed(0)}%
+            <span className="h-2 w-2 rounded-full bg-sky-400/90" />
+            Others {(100 - ownerSharePercent).toFixed(0)}%
           </span>
-        </div>
-      ) : null}
-      {chartIsInteractive ? (
-        <p className="mt-1 text-[11px] text-zinc-600">
-          Drag horizontally to test different total key supply.
-        </p>
-      ) : null}
-      {hasAttackCurve ? (
-        <p className="mt-1 text-[11px] text-zinc-600">
-          Yellow line = control threshold. Below zero = attacker loses money. Above zero = attacker profits.
-        </p>
-      ) : null}
-      {hasAttackCurve && minVotePassPoint && minVotePassBuySpendUsdc !== null ? (
-        <div className="mt-1.5 flex flex-wrap gap-2 text-[11px]">
-          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-amber-200 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.25)]">
-            Control threshold
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.04] px-2.5 py-1 text-zinc-300 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
-            Keys needed:{' '}
-            <span className="font-mono text-zinc-100">{minVotePassPoint.keysBought.toLocaleString()}</span>
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.04] px-2.5 py-1 text-zinc-300 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
-            Buy cost:{' '}
-            <span className="font-mono text-zinc-100">{formatUsdLong(minVotePassBuySpendUsdc)}</span>
-          </span>
+          {hasAttackCurve ? (
+            <span className="inline-flex items-center gap-1">
+              <span className="h-0.5 w-3 rounded-full bg-red-500" />
+              Attacker net
+            </span>
+          ) : null}
         </div>
       ) : null}
     </div>

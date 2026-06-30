@@ -7,12 +7,23 @@ import {
   rateLimitKey,
 } from '@4626/server-core'
 
+import { materializeRoomDisplayFields } from '../../../../server/_lib/alfaclub/roomDisplayLabels.js'
+import { resolveKeySafetyRoomContext } from '../../../../server/_lib/alfaclub/keySafetyRoomContext.js'
+import {
+  curveDivisor,
+  poolFeeFraction,
+  tradeFeeFraction,
+  type AlfaRoomTier,
+} from '../../../../src/lib/alfaclub/keyDefense.js'
+
 type RiskStatus = 'safe' | 'caution' | 'at-risk'
 
 type SnapshotRow = {
   room_id: string
   room_name: string | null
   creator_twitter_username: string | null
+  cached_display_label: string | null
+  tier: string | null
   volume_col_raw: string | null
   volume_raw: string | null
   pnl_pct_raw: string | null
@@ -22,9 +33,7 @@ type SnapshotRow = {
   pot_raw: string | null
 }
 
-const CLUB_DIVISOR = 40
-const TRADE_FEE_FRACTION = 0.1
-const POOL_FEE_FRACTION = 0.06
+const TRADE_ROOM_TYPE = 'trading' as const
 const NET_PAYOUT_FACTOR = 0.72
 const VOTE_THRESHOLD = 0.66
 
@@ -67,6 +76,19 @@ function sumOfSquares(n: number): number {
   return (n * (n + 1) * (2 * n + 1)) / 6
 }
 
+function normalizeTier(raw: string | null): AlfaRoomTier {
+  const value = (raw ?? '').trim().toLowerCase()
+  switch (value) {
+    case 'casual':
+      return 'casual'
+    case 'exclusive':
+      return 'exclusive'
+    case 'club':
+    default:
+      return 'club'
+  }
+}
+
 function curveCost(supply: number, amount: number, divisor: number): number {
   if (amount <= 0) return 0
   const s = Math.max(0, Math.floor(supply))
@@ -81,11 +103,14 @@ function attackerKeysToPassVote(keySupply: number, yourKeys: number): number {
   return Math.max(0, Math.ceil(needed - 1e-9))
 }
 
-function buyCostAfterFee(supply: number, amount: number): number {
-  return curveCost(supply, amount, CLUB_DIVISOR) * (1 + TRADE_FEE_FRACTION)
+function buyCostAfterFee(supply: number, amount: number, roomTier: AlfaRoomTier): number {
+  const divisor = curveDivisor(TRADE_ROOM_TYPE, roomTier)
+  const tradeFee = tradeFeeFraction(TRADE_ROOM_TYPE)
+  return curveCost(supply, amount, divisor) * (1 + tradeFee)
 }
 
 function estimateClubRisk(params: {
+  roomTier: AlfaRoomTier
   keySupply: number
   yourKeys: number
   potAtRiskUsdc: number
@@ -99,15 +124,18 @@ function estimateClubRisk(params: {
   const hostile = params.keySupply - params.yourKeys
   const hasVeto = hostile < VOTE_THRESHOLD * params.keySupply
   const minAttackKeys = Math.max(1, attackerKeysToPassVote(params.keySupply, params.yourKeys))
-  const minAttackCostUsdc = buyCostAfterFee(params.keySupply, minAttackKeys)
+  const minAttackCostUsdc = buyCostAfterFee(params.keySupply, minAttackKeys, params.roomTier)
+  const divisor = curveDivisor(TRADE_ROOM_TYPE, params.roomTier)
+  const tradeFee = tradeFeeFraction(TRADE_ROOM_TYPE)
+  const poolFee = poolFeeFraction(TRADE_ROOM_TYPE)
 
-  const rawAttackCost = curveCost(params.keySupply, minAttackKeys, CLUB_DIVISOR)
-  const poolFeeAddedUsdc = POOL_FEE_FRACTION * rawAttackCost
+  const rawAttackCost = curveCost(params.keySupply, minAttackKeys, divisor)
+  const poolFeeAddedUsdc = poolFee * rawAttackCost
   const potAfterAttack = Math.max(0, params.potAtRiskUsdc) + poolFeeAddedUsdc
   const eligibleKeys = params.keySupply + minAttackKeys
   const attackerPayoutUsdc =
     eligibleKeys > 0 ? (NET_PAYOUT_FACTOR * potAfterAttack * minAttackKeys) / eligibleKeys : 0
-  const feeDragUsdc = 2 * TRADE_FEE_FRACTION * rawAttackCost
+  const feeDragUsdc = 2 * tradeFee * rawAttackCost
   const raidUnprofitable = attackerPayoutUsdc - feeDragUsdc <= 0
 
   const payoutMultiplier =
@@ -163,6 +191,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const limit = clamp(parseNumber(req.query.limit), 20, 5, 40)
   const ownerSharePercent = clamp(parseNumber(req.query.ownerSharePercent), 20, 1, 99)
   const donationUsdc = clamp(parseNumber(req.query.donationUsdc), 0, 0, 1_000_000)
+  const roomId = parseString(req.query.roomId)
+  const tradingWallet = parseString(req.query.tradingWallet)
+
+  if (roomId) {
+    try {
+      const room = await resolveKeySafetyRoomContext(roomId, {
+        tradingWalletOverride: tradingWallet,
+      })
+      if (!room) {
+        return res.status(404).json({ success: false, error: 'room_not_found' })
+      }
+      res.setHeader('Cache-Control', 'public, s-maxage=45, stale-while-revalidate=120')
+      return res.status(200).json({
+        success: true,
+        data: { room },
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'key_safety_room_failed'
+      return res.status(500).json({ success: false, error: message })
+    }
+  }
 
   const db = await getDb()
   if (!db) {
@@ -174,11 +223,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       select
         s.room_id::text as room_id,
         coalesce(
-          nullif(s.room_name, ''),
-          nullif(s.raw->'room'->>'name', ''),
-          nullif(s.raw->'room'->>'title', '')
+          nullif(trim(s.room_name), ''),
+          nullif(trim(s.raw->'metadata'->>'name'), ''),
+          nullif(trim(s.raw->'room'->>'name'), ''),
+          nullif(trim(s.raw->'room'->>'title'), ''),
+          nullif(trim(e.room_name), ''),
+          nullif(trim(lc.display_label), ''),
+          case
+            when nullif(trim(s.sn), '') is not null and nullif(trim(s.sn), '') !~ '^[0-9]+$'
+              then nullif(trim(s.sn), '')
+            else null
+          end
         ) as room_name,
-        s.creator_twitter_username,
+        coalesce(
+          nullif(trim(s.creator_twitter_username), ''),
+          nullif(trim(s.raw->'creator'->>'twitter_username'), ''),
+          nullif(trim(s.raw->'creator'->>'username'), ''),
+          nullif(trim(s.raw->'room'->>'creatorUsername'), ''),
+          nullif(trim(s.raw->'room'->>'username'), ''),
+          nullif(trim(e.creator_twitter_username), ''),
+          nullif(trim(chat.username), '')
+        ) as creator_twitter_username,
+        lc.display_label as cached_display_label,
+        s.tier,
         s.volume::text as volume_col_raw,
         nullif(s.raw->'room'->>'volume', '') as volume_raw,
         nullif(s.raw->'room'->>'pnlPercentageAllTime', '') as pnl_pct_raw,
@@ -198,8 +265,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           nullif(s.raw->'room'->>'stakingPoolBalance', '')
         ) as pot_raw
       from public.alfaclub_rooms_snapshot s
+      left join alfaclub.room_label_cache lc on lc.room_id = s.room_id::text
+      left join lateral (
+        select e2.creator_twitter_username, e2.room_name
+        from public.alfaclub_explore_latest e2
+        where e2.room_id = s.room_id
+        order by e2.ingested_at desc nulls last
+        limit 1
+      ) e on true
+      left join lateral (
+        select ci.username
+        from alfaclub.chat_ingest ci
+        where ci.room_id = s.room_id::text
+          and lower(ci.sender_address) = lower(s.creator_address)
+          and ci.username is not null
+          and length(trim(ci.username)) > 0
+        order by ci.message_date desc nulls last, ci.ingested_at desc
+        limit 1
+      ) chat on true
       where lower(coalesce(s.room_type, '')) = 'trading'
-        and lower(coalesce(s.tier, '')) = 'club'
         and (
           (s.current_supply is not null and s.current_supply > 0)
           or (
@@ -251,6 +335,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!Number.isFinite(supplyRaw) || (supplyRaw ?? 0) <= 0) return []
       const supply = Math.max(1, Math.floor(supplyRaw!))
       const keysHeld = Math.round((ownerSharePercent / 100) * supply)
+      const roomTier = normalizeTier(row.tier)
 
       const volumeRaw = parseNumber(row.volume_col_raw) ?? parseNumber(row.volume_raw)
       const volumeUsdc = normalizeMaybeUsdc(volumeRaw)
@@ -265,15 +350,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const potAtRiskUsdc = Math.max(0, potUsdc + donationUsdc)
 
       const risk = estimateClubRisk({
+        roomTier,
         keySupply: supply,
         yourKeys: keysHeld,
         potAtRiskUsdc,
       })
 
+      const labels = materializeRoomDisplayFields({
+        roomId: row.room_id,
+        roomName: row.room_name,
+        creatorHandle: row.creator_twitter_username,
+        cachedDisplayLabel: row.cached_display_label,
+      })
+
       return {
         roomId: row.room_id,
-        roomName: row.room_name ?? row.creator_twitter_username ?? `Room #${row.room_id}`,
-        creatorHandle: row.creator_twitter_username ?? null,
+        roomName: labels.roomName,
+        displayLabel: labels.displayLabel,
+        creatorHandle: labels.creatorHandle,
+        tier: roomTier,
         supply,
         ownerSharePercent,
         keysHeld,
@@ -297,7 +392,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       data: {
         assumptions: {
-          roomTier: 'club',
+          roomType: 'trading',
           ownerSharePercent,
           donationUsdc,
         },

@@ -122,3 +122,80 @@ export function resolveWaitlistVerifiedEmailHint(user: unknown): string | null {
 export function resolveWaitlistPrivyDisplayEmail(user: unknown): string | null {
   return extractPrivyVerifiedEmailFromUser(user) ?? extractPrivyLinkedEmailFromUser(user)
 }
+
+// ----------------------------- Onboarding step skips -----------------------------
+export const WAITLIST_X_PHASE_DONE_STORAGE_KEY = 'cv:waitlist:x-phase-done'
+export const WAITLIST_WALLET_SKIPPED_STORAGE_KEY = 'cv:waitlist:wallet-skipped'
+export const WAITLIST_ZORA_SKIPPED_STORAGE_KEY = 'cv:waitlist:zora-skipped'
+
+export function readWaitlistXPhaseDone(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.sessionStorage.getItem(WAITLIST_X_PHASE_DONE_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function writeWaitlistXPhaseDone(done: boolean): void {
+  if (typeof window === 'undefined') return
+  try {
+    if (done) {
+      window.sessionStorage.setItem(WAITLIST_X_PHASE_DONE_STORAGE_KEY, '1')
+    } else {
+      window.sessionStorage.removeItem(WAITLIST_X_PHASE_DONE_STORAGE_KEY)
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export function readWaitlistWalletSkipped(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.sessionStorage.getItem(WAITLIST_WALLET_SKIPPED_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function writeWaitlistWalletSkipped(skipped: boolean): void {
+  if (typeof window === 'undefined') return
+  try {
+    if (skipped) {
+      window.sessionStorage.setItem(WAITLIST_WALLET_SKIPPED_STORAGE_KEY, '1')
+    } else {
+      window.sessionStorage.removeItem(WAITLIST_WALLET_SKIPPED_STORAGE_KEY)
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export function readWaitlistZoraSkipped(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.sessionStorage.getItem(WAITLIST_ZORA_SKIPPED_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function writeWaitlistZoraSkipped(skipped: boolean): void {
+  if (typeof window === 'undefined') return
+  try {
+    if (skipped) {
+      window.sessionStorage.setItem(WAITLIST_ZORA_SKIPPED_STORAGE_KEY, '1')
+    } else {
+      window.sessionStorage.removeItem(WAITLIST_ZORA_SKIPPED_STORAGE_KEY)
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export function clearWaitlistOnboardingStepFlags(): void {
+  writeWaitlistXPhaseDone(false)
+  writeWaitlistWalletSkipped(false)
+  writeWaitlistZoraSkipped(false)
+}

@@ -12,27 +12,28 @@ import { verifyPrivyForAccounts } from '../../../server/_lib/identity/accountsId
 import {
   readWaitlistTwitterEngagementProgressForPrivyUser,
   verifyAndAwardWaitlistTwitterEngagementStep,
-  WAITLIST_X_ENGAGEMENT_CAMPAIGN_KEY,
+  readWaitlistXEngagementCampaignKey,
+  readWaitlistXEngagementStepOrder,
+  readWaitlistXEngagementTweetId,
+  readWaitlistXEngagementTweetUrl,
   type WaitlistTwitterEngagementProgress,
   type WaitlistTwitterEngagementStepId,
   type WaitlistTwitterEngagementVerifyOutcome,
 } from '../../../server/_lib/onboarding/waitlistTwitterEngagementServer.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 
-// Active quest steps. Temporarily follow-only (POST rejects other steps as
-// invalid). Keep in sync with WAITLIST_X_ENGAGEMENT_STEPS (client) and
-// WAITLIST_X_ENGAGEMENT_STEP_ORDER (server) when re-enabling like/retweet/comment.
-const STEP_ORDER = ['follow'] as const
-
 type WaitlistXEngagementResponse = {
   campaignKey: string
+  campaignTweetUrl: string | null
+  campaignTweetId: string | null
+  steps: WaitlistTwitterEngagementStepId[]
   progress: WaitlistTwitterEngagementProgress
   activeStep: WaitlistTwitterEngagementStepId | 'complete'
   verified: boolean
 }
 
 function resolveActiveStep(progress: WaitlistTwitterEngagementProgress) {
-  for (const step of STEP_ORDER) {
+  for (const step of readWaitlistXEngagementStepOrder()) {
     if (!progress[step]) return step
   }
   return 'complete' as const
@@ -41,7 +42,10 @@ function resolveActiveStep(progress: WaitlistTwitterEngagementProgress) {
 function buildResponse(progress: WaitlistTwitterEngagementProgress): WaitlistXEngagementResponse {
   const activeStep = resolveActiveStep(progress)
   return {
-    campaignKey: WAITLIST_X_ENGAGEMENT_CAMPAIGN_KEY,
+    campaignKey: readWaitlistXEngagementCampaignKey(),
+    campaignTweetUrl: readWaitlistXEngagementTweetUrl(),
+    campaignTweetId: readWaitlistXEngagementTweetId(),
+    steps: [...readWaitlistXEngagementStepOrder()],
     progress,
     activeStep,
     verified: activeStep === 'complete',
@@ -49,7 +53,8 @@ function buildResponse(progress: WaitlistTwitterEngagementProgress): WaitlistXEn
 }
 
 function parseStep(value: unknown): WaitlistTwitterEngagementStepId | null {
-  return STEP_ORDER.includes(value as (typeof STEP_ORDER)[number])
+  const steps = readWaitlistXEngagementStepOrder()
+  return steps.includes(value as WaitlistTwitterEngagementStepId)
     ? (value as WaitlistTwitterEngagementStepId)
     : null
 }

@@ -92,6 +92,7 @@ export type AlfaClubHoldingsResult = {
 export type AlfaClubPublicClientLike = {
   getLogs: (args: unknown) => Promise<ReadonlyArray<unknown>>
   readContract: (args: unknown) => Promise<unknown>
+  getStorageAt?: (args: { address: Address; slot: `0x${string}` }) => Promise<`0x${string}`>
   multicall?: (args: unknown) => Promise<ReadonlyArray<unknown>>
 }
 
@@ -357,15 +358,19 @@ let cachedClient: AlfaClubPublicClientLike | null = null
 
 /**
  * Build (or reuse) a viem PublicClient pinned to Base for AlfaClub reads.
- * Resolution order: BASE_LOGS_RPC_URL > BASE_RPC_URL > public.
+ * Prefer live Base RPC for room/key state — deploy dry-run points BASE_LOGS_RPC_URL
+ * at a local fork, which is wrong for AlfaClub portfolio reads.
+ * Resolution order: ALFACLUB_RPC_URL > BASE_RPC_URL > BASE_READ_RPC_URL > BASE_LOGS_RPC_URL > public.
  */
 export async function getAlfaClubPublicClient(): Promise<AlfaClubPublicClientLike> {
   if (cachedClient) return cachedClient
   const { createPublicClient, http } = await import('viem')
   const { base } = await import('viem/chains')
   const rpcUrl =
-    (process.env.BASE_LOGS_RPC_URL ?? '').trim() ||
+    (process.env.ALFACLUB_RPC_URL ?? '').trim() ||
     (process.env.BASE_RPC_URL ?? '').trim() ||
+    (process.env.BASE_READ_RPC_URL ?? '').trim() ||
+    (process.env.BASE_LOGS_RPC_URL ?? '').trim() ||
     'https://mainnet.base.org'
   cachedClient = createPublicClient({
     chain: base,

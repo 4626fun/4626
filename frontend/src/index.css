@@ -397,6 +397,115 @@
       0 0 0 1px rgb(var(--brand-primary) / 0.2);
   }
 
+  /* Tactile primary CTA — a real, pressable button used in high-intent flows
+     (waitlist email / verify / enter app). A solid colored cap sits on a solid
+     darker "side" (the 0 Npx 0 ledge), grounded by a small neutral drop shadow.
+     No colored glow. Hover nudges the cap up; press sinks it onto its base. */
+  .btn-accent.btn-3d {
+    margin-bottom: 4px;
+    transform: translateY(0);
+    transition:
+      transform 110ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 120ms ease-out,
+      background 120ms ease-out;
+    background: linear-gradient(180deg, rgb(var(--brand-hover)) 0%, rgb(var(--brand-primary)) 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.3),
+      0 4px 0 0 rgb(19 64 168),
+      0 6px 9px -3px rgba(0, 0, 0, 0.38);
+  }
+
+  .btn-accent.btn-3d:hover {
+    transform: translateY(-1px);
+    background: linear-gradient(180deg, rgb(86 146 255) 0%, rgb(var(--brand-hover)) 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.38),
+      0 5px 0 0 rgb(19 64 168),
+      0 9px 14px -4px rgba(0, 0, 0, 0.42);
+  }
+
+  .btn-accent.btn-3d:focus-visible {
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.38),
+      0 5px 0 0 rgb(19 64 168),
+      0 9px 14px -4px rgba(0, 0, 0, 0.42),
+      0 0 0 3px rgb(var(--brand-primary) / 0.4);
+  }
+
+  .btn-accent.btn-3d:active {
+    transform: translateY(4px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      0 0 0 0 rgb(19 64 168),
+      0 2px 5px -2px rgba(0, 0, 0, 0.4);
+  }
+
+  .btn-accent.btn-3d:disabled {
+    transform: none;
+    background: linear-gradient(180deg, rgb(var(--brand-hover)) 0%, rgb(var(--brand-primary)) 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      0 3px 0 0 rgb(19 64 168 / 0.55),
+      0 4px 7px -3px rgba(0, 0, 0, 0.3);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .btn-accent.btn-3d,
+    .btn-accent.btn-3d:hover,
+    .btn-accent.btn-3d:focus-visible,
+    .btn-accent.btn-3d:active {
+      transition: box-shadow 120ms ease-out, background 120ms ease-out;
+      transform: none;
+    }
+  }
+
+  /* Hero CTA — light, airy solid pill. Flat fill, hairline edge, barely-there lift. */
+  .btn-accent.btn-game-cta {
+    min-height: 48px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    letter-spacing: 0.005em;
+    transform: translateY(0);
+    transition:
+      transform 150ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 150ms ease-out;
+    background: rgb(var(--brand-primary));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+
+  .btn-accent.btn-game-cta:hover {
+    transform: translateY(-1px);
+    background: rgb(var(--brand-hover));
+  }
+
+  .btn-accent.btn-game-cta:focus-visible {
+    outline: none;
+    background: rgb(var(--brand-hover));
+    box-shadow: 0 0 0 3px rgb(var(--brand-primary) / 0.3);
+  }
+
+  .btn-accent.btn-game-cta:active {
+    transform: translateY(0);
+    transition-duration: 70ms;
+    background: rgb(var(--brand-primary));
+  }
+
+  .btn-accent.btn-game-cta:disabled {
+    transform: none;
+    opacity: 0.5;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .btn-accent.btn-game-cta,
+    .btn-accent.btn-game-cta:hover,
+    .btn-accent.btn-game-cta:focus-visible,
+    .btn-accent.btn-game-cta:active {
+      transition: box-shadow 120ms ease-out, background 120ms ease-out;
+      transform: none;
+    }
+  }
+
   .btn-compact {
     min-height: 34px;
     padding: 0.4rem 0.85rem;

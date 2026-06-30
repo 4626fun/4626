@@ -109,10 +109,22 @@ describe('veto math', () => {
     expect(keysToBuyForVeto(30, 11)).toBe(0)
   })
 
-  it('attacker keys to pass vote reflects the 66% threshold', () => {
-    expect(attackerKeysToPassVote(30, 16)).toBe(18)
-    expect(attackerKeysToPassVote(30, 15)).toBe(15)
-    expect(attackerKeysToPassVote(30, 10)).toBe(0)
+  it('lone outside attacker must dilute supply to own 66% alone', () => {
+    // a ≥ (0.66·S)/(1 − 0.66). S=59 → 38.94/0.34 = 114.5 → 115 (over 100 keys).
+    expect(attackerKeysToPassVote(59)).toBe(115)
+    expect(attackerKeysToPassVote(30)).toBe(59)
+    // Boundary check: 115 buys reach ≥66%, 114 do not.
+    expect(115 / (59 + 115)).toBeGreaterThanOrEqual(0.66)
+    expect(114 / (59 + 114)).toBeLessThan(0.66)
+  })
+
+  it('an existing holder turning hostile needs fewer buys than an outsider', () => {
+    // e = keys already controlled lowers the requirement by 1/(1−T) ≈ 2.94 each.
+    expect(attackerKeysToPassVote(59, 4)).toBe(103)
+    expect(attackerKeysToPassVote(59, 4)).toBeLessThan(attackerKeysToPassVote(59, 0))
+    expect(attackerKeysToPassVote(30, 16)).toBe(12)
+    // Worst case: a holder already past the threshold needs no buys.
+    expect(attackerKeysToPassVote(30, 20)).toBe(0)
   })
 })
 
@@ -162,12 +174,23 @@ describe('raid economics', () => {
   })
 
   it('finds the profitable raid and reports min attack size', () => {
+    // Lone-attacker model: a fresh buyer must dilute S=30 to own 66% → 59 keys.
     const analysis = analyzeRaid(scenario)
-    expect(analysis.minAttackKeys).toBe(18)
+    expect(analysis.minAttackKeys).toBe(59)
     expect(analysis.raidUnprofitable).toBe(false)
     expect(analysis.bestAttack).not.toBeNull()
     expect(analysis.bestAttack!.profitUsdc).toBeGreaterThan(0)
     expect(analysis.curve.length).toBeGreaterThan(0)
+  })
+
+  it('an existing holder needs fewer buys and is paid on all their keys', () => {
+    const outsider = analyzeRaid(scenario)
+    const insider = analyzeRaid({ ...scenario, attackerExistingKeys: 16 })
+    expect(insider.minAttackKeys).toBeLessThan(outsider.minAttackKeys)
+    // Insider payout counts existing + bought keys, so a same-size buy pays more.
+    const insiderPoint = raidProfit({ ...scenario, attackerExistingKeys: 16 }, 4)
+    const outsiderPoint = raidProfit(scenario, 4)
+    expect(insiderPoint.payoutUsdc).toBeGreaterThan(outsiderPoint.payoutUsdc)
   })
 
   it('empty pot is never raidable', () => {

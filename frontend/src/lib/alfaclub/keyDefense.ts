@@ -208,19 +208,35 @@ export function keysToBuyForVeto(
 }
 
 /**
- * Minimum keys an attacker must buy so that hostile existing keys plus the
- * bought keys reach the vote threshold against your `k` non-distribute keys:
- * (S − k + a) ≥ T·(S + a). For T = 0.66 this requires materially more attacker buys.
+ * Minimum keys a SINGLE, uncoordinated attacker must buy to control the vote
+ * threshold by themselves.
+ *
+ * We assume other holders are independent actors who do not coordinate with the
+ * attacker, so the attacker cannot borrow anyone else's votes. They must dilute
+ * the supply by minting fresh keys until the keys they personally control are
+ * at least `T` of the new total:
+ *
+ *   (e + a) ≥ T·(S + a)   ⟺   a ≥ (T·S − e) / (1 − T)
+ *
+ * where S is the current supply, e is the keys the attacker already holds
+ * (0 for a fresh outside buyer), and a is the keys they must buy. Because each
+ * buy also inflates the denominator, the required buys grow steeply: for
+ * T = 0.66 a fresh attacker on a 59-key room must buy 115 keys to reach 66%.
+ *
+ * Every key the attacker already owns lowers the requirement by 1/(1 − T) buys
+ * (≈ 2.94 at T = 0.66), so an existing holder turning hostile needs fewer keys
+ * than an outsider starting from zero.
  */
 export function attackerKeysToPassVote(
   keySupply: number,
-  yourKeys: number,
+  attackerExistingKeys = 0,
   policy: DistributionPolicy = DEFAULT_DISTRIBUTION_POLICY,
 ): number {
   const t = policy.voteThresholdFraction
   const oneMinusT = 1 - t
   if (oneMinusT <= 0) return Number.POSITIVE_INFINITY
-  const needed = (yourKeys - oneMinusT * keySupply) / oneMinusT
+  const e = Math.max(0, Math.floor(attackerExistingKeys))
+  const needed = (t * keySupply - e) / oneMinusT
   return Math.max(0, Math.ceil(needed - 1e-9))
 }
 
@@ -237,6 +253,12 @@ export type RaidScenarioInputs = {
   yourKeys: number
   /** Trading fund balance B in USDC at distribution time. */
   potUsdc: number
+  /**
+   * Keys the lone attacker already controls before this attack (default 0 for a
+   * fresh outside buyer). An existing holder turning hostile starts with e > 0,
+   * needs fewer buys to reach the threshold, and is paid out on all e + a keys.
+   */
+  attackerExistingKeys?: number
   policy?: DistributionPolicy
 }
 
@@ -281,6 +303,7 @@ export function raidProfit(inputs: RaidScenarioInputs, keysBought: number): Raid
   const fee = tradeFeeFraction(roomType)
   const poolFee = poolFeeFraction(roomType)
   const a = Math.max(0, Math.floor(keysBought))
+  const existing = Math.max(0, Math.floor(inputs.attackerExistingKeys ?? 0))
   const rawCurveCost = curveCost(keySupply, a, divisor)
   const rawMarginalCurveCost = a > 0 ? curveCost(keySupply + a - 1, 1, divisor) : 0
   const buyCostWithFee = rawCurveCost * (1 + fee)
@@ -290,10 +313,11 @@ export function raidProfit(inputs: RaidScenarioInputs, keysBought: number): Raid
   const eligibleAfterBuy = keySupply + a // worst case: every key staked & eligible
   const distributedPerKeyUsdc =
     eligibleAfterBuy > 0 ? (netPayoutFactor(policy) * potAfterAttackBuy) / eligibleAfterBuy : 0
+  // The attacker is paid on every key they control after the buy (e + a). Only
+  // the freshly bought keys carry this attack's incremental round-trip fee.
+  const payoutKeys = existing + a
   const payoutUsdc =
-    a > 0 && eligibleAfterBuy > 0
-      ? distributedPerKeyUsdc * a
-      : 0
+    payoutKeys > 0 && eligibleAfterBuy > 0 ? distributedPerKeyUsdc * payoutKeys : 0
   return {
     keysBought: a,
     poolFeeAddedUsdc,
@@ -335,9 +359,10 @@ export function analyzeRaid(inputs: RaidScenarioInputs, maxCurvePoints = 120): R
   const factor = netPayoutFactor(policy)
   const maxPayoutFromExistingPot = factor * Math.max(0, inputs.potUsdc)
 
+  const attackerExisting = Math.max(0, Math.floor(inputs.attackerExistingKeys ?? 0))
   const minAttackKeys = Math.max(
     1,
-    attackerKeysToPassVote(inputs.keySupply, inputs.yourKeys, policy),
+    attackerKeysToPassVote(inputs.keySupply, attackerExisting, policy),
   )
   const minAttackKeysCostUsdc = buyCostAfterFee(inputs.keySupply, minAttackKeys, divisor, fee)
 

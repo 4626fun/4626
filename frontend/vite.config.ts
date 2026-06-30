@@ -492,6 +492,8 @@ function localApiRoutesPlugin(): Plugin {
         '/api/v1/chat/search': apiImport('./api/_handlers/v1/chat/_search'),
         '/api/v1/chat/agents': apiImport('./api/_handlers/v1/chat/_agents'),
         '/api/v1/chat/telemetry': apiImport('./api/_handlers/v1/chat/_telemetry'),
+        '/api/v1/alfaclub/key-safety-room': apiImport('./api/_handlers/v1/alfaclub/_key-safety-room'),
+        '/api/v1/alfaclub/key-safety-club-risk': apiImport('./api/_handlers/v1/alfaclub/_key-safety-club-risk'),
       }
       const patternRoutes: Array<{
         pattern: RegExp

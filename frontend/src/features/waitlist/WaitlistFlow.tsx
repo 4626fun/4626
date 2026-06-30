@@ -11,9 +11,10 @@ import { Link } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { ArrowLeft, ArrowRight, AlertCircle, Check } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { InputOTP } from '@/components/ui/InputOTP'
+import { InputOTP, type InputOTPStatus } from '@/components/ui/InputOTP'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { cn } from '@/lib/shared/utils'
+import { siteAssets } from '@/config/site'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { APP_ORIGIN } from '@/lib/env/host'
@@ -21,11 +22,24 @@ import { bridgePrivySession } from '@/features/waitlist/waitlistHandoff'
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import { WaitlistTwitterLinkPanel } from '@/features/waitlist/WaitlistTwitterLinkPanel'
 import { WaitlistTwitterEngagementSteps } from '@/features/waitlist/WaitlistTwitterEngagementSteps'
+import { WaitlistWalletConnectPanel } from '@/features/waitlist/WaitlistWalletConnectPanel'
+import { WaitlistZoraConnectPanel } from '@/features/waitlist/WaitlistZoraConnectPanel'
+import {
+  clearWaitlistOnboardingStepFlags,
+  readWaitlistWalletSkipped,
+  readWaitlistXPhaseDone,
+  readWaitlistZoraSkipped,
+  writeWaitlistWalletSkipped,
+  writeWaitlistXPhaseDone,
+  writeWaitlistZoraSkipped,
+} from '@/features/waitlist/waitlistStorage'
+import { performZoraCrossAppAuth, isUserRejectedCrossAppAuthError } from '@/lib/privy/zoraCrossApp'
+import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { computeProgress } from '@/features/waitlist/waitlistTiers'
 import { readPrivyAccessTokenWithRetries } from '@/lib/privy/accessToken'
-import { linkAndSyncPrivyProvider } from '@/lib/privy/providerLink'
+import { linkAndSyncPrivyProvider, syncAccountsProviderLink } from '@/lib/privy/providerLink'
 import { usePrivyOAuthReturnBackendSync } from '@/lib/privy/usePrivyOAuthReturnBackendSync'
-import { useSafeLogin, useSafeLoginWithEmail, useSafePrivy, useSafePrivyAccessToken } from '@/lib/privy/safeHooks'
+import { useSafeCrossApp, useSafeLogin, useSafeLoginWithEmail, useSafePrivy, useSafePrivyAccessToken } from '@/lib/privy/safeHooks'
 import { computeAcceptedFromAppAccessStatus } from '@/app/accessShared'
 import { useAccountMe } from '@/hooks/useAccountMe'
 import { fetchAccountTrayPoints } from '@/lib/waitlist/accountTrayPoints'
@@ -39,6 +53,7 @@ type AuthMeResponse = {
 } | null
 
 const OTP_RESEND_DELAY_MS = 30_000
+const OTP_SUCCESS_HOLD_MS = 320
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const AUTH_SESSION_READ_BACKOFF_MS = 8_000
 
@@ -125,26 +140,11 @@ type WaitlistAvatar = {
   href: string | null
 }
 
-// Card shell with a slow brand-colored "border beam" that travels around the
-// edge. The opaque card sits on top of the rotating conic layer, leaving only a
-// ~1px animated ring. Honors prefers-reduced-motion (static arc, no rotation).
+// Card shell — static brand-tinted ring (no rotating beam; keeps focus on content).
 function BeamCard({ children, className }: { children: ReactNode; className?: string }) {
-  const reduceMotion = useReducedMotion()
   return (
-    <div className="relative">
-      <motion.div
-        aria-hidden="true"
-        className="pointer-events-none absolute -inset-px rounded-[1.05rem] opacity-50"
-        style={{
-          background:
-            'conic-gradient(from 0deg, transparent 0deg, rgb(var(--brand-hover)) 55deg, transparent 130deg, transparent 360deg)',
-        }}
-        animate={reduceMotion ? undefined : { rotate: 360 }}
-        transition={reduceMotion ? undefined : { duration: 9, ease: 'linear', repeat: Infinity }}
-      />
-      <div className={cn('relative rounded-2xl', className)} style={WAITLIST_PANEL_STYLE}>
-        {children}
-      </div>
+    <div className={cn('relative rounded-2xl', className)} style={WAITLIST_PANEL_STYLE}>
+      {children}
     </div>
   )
 }
@@ -286,6 +286,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   const [step, setStep] = useState<SignupStep>('email')
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
+  const [codeStatus, setCodeStatus] = useState<InputOTPStatus>('default')
   const [emailBusy, setEmailBusy] = useState(false)
   const [codeBusy, setCodeBusy] = useState(false)
   const [signOutBusy, setSignOutBusy] = useState(false)
@@ -295,6 +296,9 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   const [memberAvatars, setMemberAvatars] = useState<WaitlistAvatar[]>([])
   const [resendAvailableAt, setResendAvailableAt] = useState<number | null>(null)
   const [nowMs, setNowMs] = useState(() => Date.now())
+  const [xPhaseDone, setXPhaseDone] = useState(() => readWaitlistXPhaseDone())
+  const [walletSkipped, setWalletSkipped] = useState(() => readWaitlistWalletSkipped())
+  const [zoraSkipped, setZoraSkipped] = useState(() => readWaitlistZoraSkipped())
   const signupInFlightRef = useRef(false)
   const emailInputRef = useRef<HTMLInputElement | null>(null)
   const codeInputRef = useRef<HTMLInputElement | null>(null)
@@ -327,8 +331,9 @@ export function WaitlistFlow(props: { sectionId?: string }) {
     }
   }, [privy.ready])
 
-  // Lightweight social proof — only used for quiet display when real data exists.
-  // Never fabricates "full" or capacity states.
+  // Lightweight social proof — avatars always render (placeholders when empty).
+  // Refetch when auth state changes so signed-in views still get stats if the
+  // initial mount fetch raced or failed.
   useEffect(() => {
     let cancelled = false
     void (async () => {
@@ -351,11 +356,13 @@ export function WaitlistFlow(props: { sectionId?: string }) {
           )
         }
       } catch {
-        // fail open — no stats shown
+        // fail open — placeholders still render
       }
     })()
-    return () => { cancelled = true }
-  }, [])
+    return () => {
+      cancelled = true
+    }
+  }, [sessionAddress])
 
   // Auto-focus the email field on intentional CTA arrival.
   useEffect(() => {
@@ -473,7 +480,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
     [email, sendCode],
   )
 
-  // Step 2 — verify the OTP, then bridge + bootstrap the waitlist session.
+  // Step 2 — verify the OTP, flash green on success, then bridge + bootstrap.
   const handleVerifyCode = useCallback(async () => {
     if (signupInFlightRef.current) return
     const normalizedCode = code.replace(/\s+/g, '')
@@ -483,17 +490,28 @@ export function WaitlistFlow(props: { sectionId?: string }) {
     }
     signupInFlightRef.current = true
     setError(null)
+    setCodeStatus('default')
     setCodeBusy(true)
+    let otpAccepted = false
     try {
       await loginWithCode({ code: normalizedCode })
+      otpAccepted = true
+      setCodeStatus('success')
+      if (!reduceMotion) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, OTP_SUCCESS_HOLD_MS)
+        })
+      }
       await finishJoinAfterPrivyAuth()
     } catch (verifyError) {
+      setCodeStatus(otpAccepted ? 'default' : 'error')
+      if (!otpAccepted) autoSubmittedCodeRef.current = null
       setError(verifyError instanceof Error ? verifyError.message : 'Could not verify the code. Please try again.')
     } finally {
       signupInFlightRef.current = false
       setCodeBusy(false)
     }
-  }, [code, loginWithCode, finishJoinAfterPrivyAuth])
+  }, [code, loginWithCode, finishJoinAfterPrivyAuth, reduceMotion])
 
   // Auto-submit once all 6 digits are present (one verify per distinct code).
   // Resets when leaving the code step or when the user edits a digit.
@@ -512,6 +530,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   const handleEditEmail = useCallback(() => {
     setStep('email')
     setCode('')
+    setCodeStatus('default')
     setError(null)
   }, [])
 
@@ -524,10 +543,15 @@ export function WaitlistFlow(props: { sectionId?: string }) {
         logout: privy.logout ?? null,
         readToken: privy.getAccessToken ?? null,
       })
+      clearWaitlistOnboardingStepFlags()
       setSessionAddress(null)
       setStep('email')
       setEmail('')
       setCode('')
+      setCodeStatus('default')
+      setXPhaseDone(false)
+      setWalletSkipped(false)
+      setZoraSkipped(false)
     } finally {
       setSignOutBusy(false)
     }
@@ -553,8 +577,40 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   const [pointsRefreshKey, setPointsRefreshKey] = useState(0)
   const [twitterBusy, setTwitterBusy] = useState(false)
   const [twitterError, setTwitterError] = useState<string | null>(null)
+  const [walletBusy, setWalletBusy] = useState(false)
+  const [walletError, setWalletError] = useState<string | null>(null)
+  const [zoraBusy, setZoraBusy] = useState(false)
+  const [zoraError, setZoraError] = useState<string | null>(null)
+  const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossApp()
 
   const twitterLinked = (accountMe?.linkedMethods?.twitter ?? []).length > 0
+  const externalEoaLinked = (accountMe?.linkedMethods?.external_eoa ?? []).length > 0
+  const linkedEoaAddress = accountMe?.linkedMethods?.external_eoa?.[0] ?? null
+  const zoraLinked =
+    (accountMe?.linkedMethods?.zora_cross_app ?? []).length > 0 ||
+    Boolean(accountMe?.accountSignals?.linked)
+
+  const markXPhaseDone = useCallback(() => {
+    setXPhaseDone(true)
+    writeWaitlistXPhaseDone(true)
+  }, [])
+
+  const handleSkipXPhase = useCallback(() => {
+    setTwitterError(null)
+    markXPhaseDone()
+  }, [markXPhaseDone])
+
+  const handleSkipWallet = useCallback(() => {
+    setWalletError(null)
+    setWalletSkipped(true)
+    writeWaitlistWalletSkipped(true)
+  }, [])
+
+  const handleSkipZora = useCallback(() => {
+    setZoraError(null)
+    setZoraSkipped(true)
+    writeWaitlistZoraSkipped(true)
+  }, [])
 
   const handleLinkTwitter = useCallback(async () => {
     if (twitterBusy || twitterLinked) return
@@ -580,7 +636,71 @@ export function WaitlistFlow(props: { sectionId?: string }) {
 
   const handleEngagementProgressVerified = useCallback(() => {
     setPointsRefreshKey((key) => key + 1)
-  }, [])
+    markXPhaseDone()
+  }, [markXPhaseDone])
+
+  const handleLinkWallet = useCallback(async () => {
+    if (walletBusy || externalEoaLinked) return
+    setWalletBusy(true)
+    setWalletError(null)
+    try {
+      const data = await linkAndSyncPrivyProvider({
+        privy,
+        provider: 'external_eoa',
+        login: login ?? null,
+        getAccessToken: getPrivyAccessToken,
+      })
+      if (data) {
+        refreshAccountMe()
+        setPointsRefreshKey((key) => key + 1)
+      }
+    } catch (linkError) {
+      setWalletError(linkError instanceof Error ? linkError.message : 'Could not connect wallet.')
+    } finally {
+      setWalletBusy(false)
+    }
+  }, [
+    externalEoaLinked,
+    getPrivyAccessToken,
+    login,
+    privy,
+    refreshAccountMe,
+    walletBusy,
+  ])
+
+  const handleLinkZora = useCallback(async () => {
+    if (zoraBusy || zoraLinked) return
+    setZoraBusy(true)
+    setZoraError(null)
+    try {
+      await performZoraCrossAppAuth({
+        privyAuthed: Boolean(privy.authenticated),
+        appId: ZORA_PRIVY_APP_ID,
+        linkCrossAppAccount,
+        loginWithCrossAppAccount,
+      })
+      await syncAccountsProviderLink({
+        provider: 'zora_cross_app',
+        getAccessToken: getPrivyAccessToken,
+      }).catch(() => null)
+      refreshAccountMe()
+      setPointsRefreshKey((key) => key + 1)
+    } catch (linkError) {
+      if (!isUserRejectedCrossAppAuthError(linkError)) {
+        setZoraError(linkError instanceof Error ? linkError.message : 'Could not connect Zora.')
+      }
+    } finally {
+      setZoraBusy(false)
+    }
+  }, [
+    getPrivyAccessToken,
+    linkCrossAppAccount,
+    loginWithCrossAppAccount,
+    privy.authenticated,
+    refreshAccountMe,
+    zoraBusy,
+    zoraLinked,
+  ])
 
   const handleOAuthTwitterSynced = useCallback(() => {
     refreshAccountMe()
@@ -626,10 +746,25 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   const points = pointsTotal ?? accountMe?.score?.points ?? 0
   const progress = computeProgress(points)
   const joinedCount = useCountUp(listCount, !sessionAddress)
+  const showXLinkPanel = !xPhaseDone && !twitterLinked
+  const showXConnectedRow = twitterLinked
+  const showXEngagement = twitterLinked && !xPhaseDone
+  const showWalletStep = xPhaseDone && !externalEoaLinked && !walletSkipped
+  const walletPhaseDone = externalEoaLinked || walletSkipped
+  const showZoraStep = xPhaseDone && walletPhaseDone && !zoraLinked && !zoraSkipped
   const stepVariants = {
     initial: reduceMotion ? { opacity: 0 } : { opacity: 0, x: 12 },
     animate: { opacity: 1, x: 0 },
     exit: reduceMotion ? { opacity: 0 } : { opacity: 0, x: -12 },
+  }
+  const phaseVariants = {
+    initial: reduceMotion
+      ? { opacity: 0 }
+      : { opacity: 0, y: 20, scale: 0.97, filter: 'blur(6px)' },
+    animate: { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' },
+    exit: reduceMotion
+      ? { opacity: 0 }
+      : { opacity: 0, y: -14, scale: 0.98, filter: 'blur(4px)' },
   }
 
   return (
@@ -655,21 +790,80 @@ export function WaitlistFlow(props: { sectionId?: string }) {
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           className="relative w-full space-y-6 sm:space-y-7"
         >
-          {sessionAddress ? (
+          <AnimatePresence mode="wait" initial={false}>
+            {sessionAddress ? (
+              <motion.div
+                key="waitlist-joined"
+                variants={phaseVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                className="space-y-6 sm:space-y-7"
+              >
             <BeamCard className="p-6 text-center sm:p-8">
-                <div className="space-y-3">
-                  <h1 className="headline text-2xl leading-tight tracking-[-0.03em] sm:text-3xl">
-                    {appAccepted ? "You're approved" : "You're on the list"}
-                  </h1>
-                  <p className="text-sm leading-relaxed text-zinc-400">
-                    {appAccepted
-                      ? 'Open the app to continue.'
-                      : "We'll notify you when your spot opens."}
-                  </p>
+                <div className="flex flex-col items-center gap-4">
+                  <div className="relative flex items-center justify-center">
+                    {appAccepted && !reduceMotion ? (
+                      <motion.span
+                        aria-hidden="true"
+                        className="absolute inset-0 rounded-full"
+                        initial={{ boxShadow: '0 0 0 0 rgb(var(--brand-primary) / 0.5)' }}
+                        animate={{
+                          boxShadow: [
+                            '0 0 0 0 rgb(var(--brand-primary) / 0.45)',
+                            '0 0 0 16px rgb(var(--brand-primary) / 0)',
+                          ],
+                        }}
+                        transition={{ duration: 2.1, ease: 'easeOut', repeat: Infinity }}
+                      />
+                    ) : null}
+                    {appAccepted ? (
+                      <motion.span
+                        initial={reduceMotion ? false : { scale: 0.6, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                        className="relative flex size-14 items-center justify-center rounded-full"
+                        style={{
+                          background:
+                            'linear-gradient(160deg, rgb(var(--brand-hover)), rgb(var(--brand-primary)))',
+                          boxShadow:
+                            'inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -2px 4px rgba(0,0,0,0.25), 0 10px 24px -8px rgb(var(--brand-primary) / 0.7)',
+                        }}
+                      >
+                        <Check className="size-7 text-white" aria-hidden="true" />
+                      </motion.span>
+                    ) : (
+                      <motion.img
+                        src={siteAssets.logo}
+                        alt=""
+                        aria-hidden="true"
+                        width={48}
+                        height={48}
+                        draggable={false}
+                        initial={reduceMotion ? false : { scale: 0.85, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                        className="size-12 select-none object-contain"
+                      />
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <h1 className="headline text-2xl leading-tight tracking-[-0.03em] sm:text-3xl">
+                      {appAccepted ? "You're approved" : "You're on the list"}
+                    </h1>
+                    <p className="text-sm leading-relaxed text-zinc-400">
+                      {appAccepted
+                        ? 'Open the app to continue.'
+                        : "We'll notify you when your spot opens."}
+                    </p>
+                  </div>
                 </div>
 
-                {!appAccepted ? (
-                  <div className="mt-7 flex flex-col items-center">
+                {/* Points — always shown; the score is the heart of the waitlist. */}
+                <div className="mt-7 rounded-2xl bg-white/[0.03] px-5 py-5">
+                  <div className="flex items-center justify-between gap-3">
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-400">
                       <span
                         className="size-1.5 rounded-full bg-[rgb(var(--brand-primary))]"
@@ -677,54 +871,126 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                       />
                       {progress.currentTier.name}
                     </span>
-                    <div className="mt-3 flex items-baseline gap-1.5">
-                      <span className="bg-gradient-to-b from-white to-zinc-400/90 bg-clip-text text-[40px] font-semibold leading-none tracking-tight tabular-nums text-transparent">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-[28px] font-semibold leading-none tracking-tight tabular-nums text-white">
                         {points.toLocaleString()}
                       </span>
-                      <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">pts</span>
+                      <span className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">pts</span>
                     </div>
                   </div>
-                ) : null}
+                  {progress.nextTier ? (
+                    <div className="mt-4">
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+                        <motion.div
+                          className="h-full rounded-full"
+                          style={{
+                            background:
+                              'linear-gradient(90deg, rgb(var(--brand-primary)), rgb(var(--brand-hover)))',
+                          }}
+                          initial={false}
+                          animate={{ width: `${progress.progressPercent}%` }}
+                          transition={
+                            reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 140, damping: 24 }
+                          }
+                        />
+                      </div>
+                      <p className="mt-2 text-[11px] text-zinc-500">
+                        <span className="font-medium tabular-nums text-zinc-300">
+                          {progress.pointsToNext.toLocaleString()}
+                        </span>{' '}
+                        pts to {progress.nextTier.name}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-[11px] text-zinc-500">Top tier reached — you’re at the front.</p>
+                  )}
+                </div>
 
-                <WaitlistTwitterLinkPanel
-                  linked={twitterLinked}
-                  busy={twitterBusy}
-                  onConnect={() => {
-                    setTwitterError(null)
-                    void handleLinkTwitter()
-                  }}
-                />
-
-                {twitterLinked ? (
-                  <WaitlistTwitterEngagementSteps
-                    getAccessToken={getPrivyAccessToken}
-                    onProgressVerified={handleEngagementProgressVerified}
-                  />
-                ) : null}
-
-                {twitterError ? (
-                  <p className="mt-3 text-left text-[11px] leading-relaxed text-rose-300">{twitterError}</p>
-                ) : null}
-
-                {!appAccepted ? (
-                  <div className="mt-6 flex items-center justify-center gap-2 text-[11px] text-zinc-500">
-                    {listCount != null && listCount > 0 ? (
-                      <>
-                        <span>{listCount.toLocaleString()} on the list</span>
-                        <span aria-hidden="true">·</span>
-                      </>
-                    ) : null}
-                    <Link
-                      to="/leaderboard"
-                      className="group inline-flex items-center gap-1 font-medium text-zinc-400 transition hover:text-white"
-                    >
-                      See leaderboard
-                      <ArrowRight
-                        className="size-3 transition group-hover:translate-x-0.5"
-                        aria-hidden="true"
-                      />
-                    </Link>
+                {/* Earn points — optional identity links, each worth waitlist points. */}
+                <div className="mt-7">
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                      Earn points
+                    </span>
+                    <span className="h-px flex-1 bg-white/[0.06]" aria-hidden="true" />
                   </div>
+
+                  {showXLinkPanel ? (
+                    <WaitlistTwitterLinkPanel
+                      linked={false}
+                      busy={twitterBusy}
+                      onConnect={() => {
+                        setTwitterError(null)
+                        void handleLinkTwitter()
+                      }}
+                      onSkip={handleSkipXPhase}
+                    />
+                  ) : null}
+
+                  {showXConnectedRow ? (
+                    <WaitlistTwitterLinkPanel
+                      linked
+                      busy={false}
+                      onConnect={() => undefined}
+                    />
+                  ) : null}
+
+                  {showXEngagement ? (
+                    <WaitlistTwitterEngagementSteps
+                      getAccessToken={getPrivyAccessToken}
+                      onProgressVerified={handleEngagementProgressVerified}
+                      onSkip={handleSkipXPhase}
+                    />
+                  ) : null}
+
+                  {showWalletStep ? (
+                    <WaitlistWalletConnectPanel
+                      linked={false}
+                      busy={walletBusy}
+                      onConnect={() => {
+                        setWalletError(null)
+                        void handleLinkWallet()
+                      }}
+                      onSkip={handleSkipWallet}
+                    />
+                  ) : null}
+
+                  {externalEoaLinked ? (
+                    <WaitlistWalletConnectPanel
+                      linked
+                      linkedAddress={linkedEoaAddress}
+                      busy={false}
+                      onConnect={() => undefined}
+                      onSkip={() => undefined}
+                    />
+                  ) : null}
+
+                  {showZoraStep ? (
+                    <WaitlistZoraConnectPanel
+                      linked={false}
+                      busy={zoraBusy}
+                      onConnect={() => {
+                        setZoraError(null)
+                        void handleLinkZora()
+                      }}
+                      onSkip={handleSkipZora}
+                    />
+                  ) : null}
+
+                  {zoraLinked ? (
+                    <WaitlistZoraConnectPanel
+                      linked
+                      busy={false}
+                      onConnect={() => undefined}
+                      onSkip={() => undefined}
+                    />
+                  ) : null}
+                </div>
+
+                {twitterError || walletError || zoraError ? (
+                  <p className="mt-4 text-center text-[11px] leading-relaxed text-rose-300/90">
+                    {twitterError ?? walletError ?? zoraError}
+                  </p>
                 ) : null}
 
                 <div className="mt-6 flex flex-col items-stretch gap-3">
@@ -732,14 +998,16 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                     <Button
                       variant="primary"
                       size="lg"
-                      className="group/btn relative w-full overflow-hidden transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
+                      className="btn-game-cta group/btn relative w-full !rounded-full !min-h-[56px] !text-base !font-bold !tracking-wide"
                       asChild
                     >
                       <a href={`${APP_ORIGIN}/swap?restorePrivy=1`}>
-                        <ButtonSheen />
-                        <span className="relative z-10 inline-flex items-center gap-2">
+                        <span className="relative z-10 inline-flex items-center gap-2.5">
                           Enter app
-                          <ArrowRight className="size-4" aria-hidden="true" />
+                          <ArrowRight
+                            className="size-[18px] transition-transform duration-200 ease-out group-hover/btn:translate-x-0.5"
+                            aria-hidden="true"
+                          />
                         </span>
                       </a>
                     </Button>
@@ -748,13 +1016,23 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                     type="button"
                     className="text-xs tracking-wide text-zinc-500 transition hover:text-zinc-300 disabled:opacity-50"
                     onClick={() => void handleSignOut()}
-                    disabled={isBusy}
+                    disabled={isBusy || twitterBusy || walletBusy || zoraBusy}
                   >
                     Sign out
                   </button>
                 </div>
             </BeamCard>
-          ) : (
+              </motion.div>
+            ) : (
+              <motion.div
+                key="waitlist-signup"
+                variants={phaseVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                className="space-y-6 sm:space-y-7"
+              >
             <>
               <div className="space-y-3 text-center">
                 <span className="mx-auto inline-flex items-center gap-1.5 rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-400">
@@ -830,7 +1108,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                         type="submit"
                         variant="primary"
                         size="lg"
-                        className="group/btn relative w-full overflow-hidden transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
+                        className="btn-3d group/btn relative w-full overflow-hidden !rounded-full !min-h-[52px] text-[15px] font-semibold"
                         disabled={emailBusy || !privy.ready || !isValidEmail(email)}
                       >
                         <ButtonSheen />
@@ -882,18 +1160,31 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                         ref={codeInputRef}
                         id="waitlist-code"
                         value={code}
-                        onChange={setCode}
-                        disabled={codeBusy}
+                        onChange={(next) => {
+                          setCode(next)
+                          if (codeStatus === 'error') setCodeStatus('default')
+                        }}
+                        status={codeStatus}
+                        disabled={codeBusy || codeStatus === 'success'}
                       />
                       <Button
                         type="submit"
                         variant="primary"
                         size="lg"
-                        className="group/btn relative w-full overflow-hidden transition-shadow hover:shadow-[0_0_28px_rgb(var(--brand-primary)/0.25)]"
-                        disabled={codeBusy || code.replace(/\s+/g, '').length < 6}
+                        className={cn(
+                          'btn-3d group/btn relative w-full overflow-hidden !rounded-full !min-h-[52px] text-[15px] font-semibold',
+                          codeStatus === 'success' &&
+                            '!bg-emerald-500 !shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_0_0_rgb(4,120,87),0_6px_9px_-3px_rgba(0,0,0,0.38)]',
+                        )}
+                        disabled={codeBusy || code.replace(/\s+/g, '').length < 6 || codeStatus === 'success'}
                       >
                         <ButtonSheen />
-                        {codeBusy ? (
+                        {codeStatus === 'success' ? (
+                          <span className="relative z-10 inline-flex items-center gap-2">
+                            <Check className="size-4" aria-hidden="true" />
+                            Verified
+                          </span>
+                        ) : codeBusy ? (
                           <span className="relative z-10 inline-flex items-center gap-2">
                             <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.9)" />
                             Verifying…
@@ -917,20 +1208,10 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                   )}
                 </AnimatePresence>
               </BeamCard>
-
-              {listCount != null && listCount > 0 ? (
-                <div className="flex items-center justify-center gap-2.5">
-                  <JoinedAvatars avatars={memberAvatars} />
-                  <p className="text-[11px] text-zinc-400">
-                    <span className="font-semibold tabular-nums text-zinc-200">
-                      {joinedCount.toLocaleString()}
-                    </span>{' '}
-                    already joined
-                  </p>
-                </div>
-              ) : null}
             </>
-          )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {error ? (
             <div
@@ -942,14 +1223,52 @@ export function WaitlistFlow(props: { sectionId?: string }) {
             </div>
           ) : null}
 
-          <p className="text-center text-[10px] tracking-wide text-zinc-600">
-            <span className="text-zinc-500">Powered by</span>{' '}
+          {/* Persistent social proof — PFP stack stays present across the whole
+              flow (sign-up, on-list, approved). Count appears when stats load. */}
+          <div className="flex flex-col items-center gap-3">
+            <div className="flex items-center justify-center gap-2.5">
+              <JoinedAvatars avatars={memberAvatars} />
+              {listCount != null && listCount > 0 ? (
+                <p className="text-[11px] text-zinc-400">
+                  <span className="font-semibold tabular-nums text-zinc-200">
+                    {joinedCount.toLocaleString()}
+                  </span>{' '}
+                  already joined
+                </p>
+              ) : null}
+            </div>
+            {sessionAddress && !appAccepted ? (
+              <Link
+                to="/leaderboard"
+                className="group inline-flex items-center gap-1 text-[11px] font-medium text-zinc-500 transition hover:text-white"
+              >
+                See leaderboard
+                <ArrowRight
+                  className="size-3 transition group-hover:translate-x-0.5"
+                  aria-hidden="true"
+                />
+              </Link>
+            ) : null}
+          </div>
+
+          <p className="flex items-center justify-center gap-1.5 text-center text-[10px] tracking-wide text-zinc-600">
+            <span className="text-zinc-500">Powered by</span>
             <a
               href="https://privy.io"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-zinc-400 transition hover:text-zinc-300"
+              className="inline-flex items-center gap-1 text-zinc-400 transition hover:text-zinc-200"
             >
+              <img
+                src="/brands/privy-symbol-white.svg"
+                alt=""
+                aria-hidden="true"
+                width={9}
+                height={12}
+                className="h-3 w-auto opacity-70"
+                loading="lazy"
+                decoding="async"
+              />
               Privy
             </a>
           </p>
