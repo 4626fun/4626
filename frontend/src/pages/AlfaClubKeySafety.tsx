@@ -226,6 +226,7 @@ export function AlfaClubKeySafety() {
   const modeledPotUsdc =
     roomContext?.attackModelPotUsdc ?? roomContext?.feeBaselinePotUsdc ?? 0
   const potAtRiskUsdc = Math.max(0, modeledPotUsdc + donationUsdc)
+  const distributionPerKeyUsdc = keySupply > 0 ? modeledPotUsdc / keySupply : 0
   const selectedLabel = roomContext ? roomDisplayLabel(roomContext) : null
   const stakedPercent = keySupply > 0 ? Math.round((stakedSupply / keySupply) * 100) : 0
   const creatorHandle = (roomContext?.creatorHandle ?? '').trim().replace(/^@+/, '')
@@ -473,19 +474,30 @@ export function AlfaClubKeySafety() {
 
                 <p className="mt-3 text-sm leading-relaxed text-zinc-300">{statusMeta.headline}</p>
 
-                <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {[
-                    { label: 'Total keys', value: keySupply.toLocaleString() },
-                    { label: 'Staked', value: `${stakedPercent}%` },
-                    { label: 'Owner share', value: `${sharePercent}%` },
-                    { label: 'Trading pot', value: formatUsd(modeledPotUsdc) },
-                  ].map((stat) => (
-                    <div
-                      key={stat.label}
-                      className="rounded-xl bg-black/30 px-3 py-2 ring-1 ring-inset ring-white/[0.05]"
-                    >
-                      <dt className="text-[10px] uppercase tracking-wide text-zinc-500">
+                <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                  {(
+                    [
+                      { label: 'Total keys', value: keySupply.toLocaleString(), hint: null },
+                      { label: 'Staked', value: `${stakedPercent}%`, hint: null },
+                      { label: 'Owner share', value: `${sharePercent}%`, hint: null },
+                      { label: 'Trading pot', value: formatUsd(modeledPotUsdc), hint: null },
+                      {
+                        label: 'Per key',
+                        value: formatUsd(distributionPerKeyUsdc),
+                        hint: (
+                          <p>
+                            The trading fund ({formatUsd(modeledPotUsdc)}) divided by all{' '}
+                            {keySupply.toLocaleString()} current keys — a rough "if distributed now"
+                            value per key, before the performance fee and 10% reserve.
+                          </p>
+                        ),
+                      },
+                    ] as const
+                  ).map((stat) => (
+                    <div key={stat.label} className="rounded-xl bg-black/30 px-3 py-2">
+                      <dt className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-zinc-500">
                         {stat.label}
+                        {stat.hint ? <InfoHint label={`About ${stat.label}`} content={stat.hint} /> : null}
                       </dt>
                       <dd className="mt-0.5 font-mono text-base text-zinc-100 tabular-nums">
                         {stat.value}
@@ -578,7 +590,7 @@ export function AlfaClubKeySafety() {
                       progressiveStage={4}
                       ownerSharePercent={sharePercent}
                       maxKeys={Math.max(80, keySupply + 10)}
-                      heightClassName="h-[20rem] sm:h-[24rem]"
+                      heightClassName="h-[22rem] sm:h-[28rem]"
                       withFrame={false}
                     />
                   </div>

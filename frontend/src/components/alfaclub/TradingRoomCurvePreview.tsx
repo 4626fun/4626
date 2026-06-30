@@ -283,7 +283,7 @@ export function TradingRoomCurvePreview({
     // Clamp how deep the negative (attacker-loss) region can go so it doesn't
     // squash the bonding curve. The attack line may clip below; the tooltip
     // still reports exact values.
-    const bottom = Math.max(attackMin * 1.1, -curveMax * 0.9)
+    const bottom = Math.max(attackMin * 1.08, -curveMax * 1.1)
     const top = Math.max(curveMax * 1.15, 1)
     return [Math.min(bottom, -floorPad), top]
   }, [data, hasAttackCurve])
@@ -303,10 +303,11 @@ export function TradingRoomCurvePreview({
     <div
       className={
         withFrame
-          ? `mt-3 w-full rounded-2xl bg-black/35 p-3 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)] ${heightClassName}`
-          : `w-full ${heightClassName}`
+          ? 'mt-3 w-full rounded-2xl bg-black/35 p-3 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]'
+          : 'w-full'
       }
     >
+      <div className={`w-full ${heightClassName}`}>
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart
           data={data}
@@ -525,6 +526,7 @@ export function TradingRoomCurvePreview({
           ) : null}
         </ComposedChart>
       </ResponsiveContainer>
+      </div>
       {progressiveStage >= 3 ? (
         <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-zinc-500">
           <span className="inline-flex items-center gap-1">

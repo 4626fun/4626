@@ -146,7 +146,6 @@ export function KeyOwnershipSunburst({
   ownerStakedKeys,
   stakedSupply,
   ownerLabel,
-  ownerWalletKeys,
   dataSource,
   othersHolders,
   takeoverKeys = 0,
@@ -169,7 +168,6 @@ export function KeyOwnershipSunburst({
   const ownerName = ownerLabel?.trim() ? ownerLabel.trim() : 'Owner'
   const ownerSharePercent = Math.round((owner / supply) * 100)
   const stakedPercent = Math.round((stakedTotal / supply) * 100)
-  const ownerWallet = clamp(Math.floor(ownerWalletKeys ?? owner - ownerStaked), 0, owner)
   const stakeAttributionGap = owner === 0 && stakedTotal > 0
 
   // Simulated hostile takeover (driven by dragging the bonding curve).
@@ -414,7 +412,7 @@ export function KeyOwnershipSunburst({
                 className="absolute top-1.5 -translate-x-1/2 whitespace-nowrap text-[9px] font-medium uppercase tracking-wide text-zinc-300"
                 style={{ left: `${stakedRegionStartPct + stakedRegionWidthPct / 2}%` }}
               >
-                Staked · can vote
+                Can vote
               </span>
             ) : null}
           </div>
@@ -446,22 +444,14 @@ export function KeyOwnershipSunburst({
               </button>
             ) : null}
           </div>
-        ) : (
-          <p className="mt-2 text-xs leading-relaxed text-zinc-400">
-            <span className="font-medium text-zinc-200">{stakedPercent}%</span> of all keys are
-            staked and can vote.{' '}
-            <span className="text-zinc-500">
-              {ownerName} holds {ownerSharePercent}% of the supply.
-            </span>
-          </p>
-        )}
+        ) : null}
       </div>
 
       {/* Compact key — the counts live on the bar itself */}
       <p className="text-[11px] leading-relaxed text-zinc-500">
         <span className="font-medium text-emerald-300">Green</span> = {ownerName},{' '}
-        <span className="font-medium text-sky-300">blue</span> = others. Bright ={' '}
-        <span className="text-zinc-300">staked</span> (can vote), dim = unstaked.
+        <span className="font-medium text-sky-300">blue</span> = others · bright ={' '}
+        <span className="text-zinc-300">staked</span>, dim = unstaked.
         {others > 0 ? (
           <>
             {' '}
@@ -485,17 +475,9 @@ export function KeyOwnershipSunburst({
         <OthersHolderList holders={holders} others={others} supply={supply} />
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-zinc-600">
-        <span>
-          {ownerName}: {ownerWallet.toLocaleString()} wallet + {ownerStaked.toLocaleString()} staked
-        </span>
-        {dataSource ? (
-          <>
-            <span aria-hidden>·</span>
-            <span>{dataSource}</span>
-          </>
-        ) : null}
-      </div>
+      {dataSource ? (
+        <p className="text-[11px] text-zinc-600">{dataSource}</p>
+      ) : null}
 
       {stakeAttributionGap ? (
         <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-100 ring-1 ring-amber-500/20">
