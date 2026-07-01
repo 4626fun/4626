@@ -42,13 +42,13 @@ type KeySafetyAttackPanelProps = {
 function attackPotSourceLabel(source: KeySafetyAttackPanelProps['attackPotSource']): string {
   switch (source) {
     case 'treasury':
-      return 'live trading fund (on-chain + Hyperliquid)'
+      return 'live · on-chain + Hyperliquid'
     case 'distribution_fund':
-      return 'snapshot trading fund'
+      return 'from snapshot'
     case 'fee_baseline':
-      return 'fee baseline for this tier & supply'
+      return 'fee baseline estimate'
     default:
-      return 'fee baseline for this tier & supply'
+      return 'fee baseline estimate'
   }
 }
 
@@ -137,14 +137,14 @@ export function KeySafetyAttackPanel({
       <div className="rounded-2xl bg-black/35 p-4">
         <div className="flex items-center gap-1.5">
           <label htmlFor={donationInputId} className="text-sm text-zinc-300">
-            What-if donation to the pot
+            Test a bigger fund
           </label>
           <InfoHint
-            label="About the modeled pot"
+            label="Why test a bigger fund"
             content={
               <p>
-                The bigger the trading fund, the more a takeover pays. Add a hypothetical donation to
-                see how much fund the room can safely hold.
+                A bigger trading fund pays a takeover more. Add a what-if amount to see how large the
+                fund can grow before an attack becomes profitable.
               </p>
             }
           />
@@ -166,13 +166,14 @@ export function KeySafetyAttackPanel({
             />
           </div>
           <p className="text-sm text-zinc-400">
-            Modeled pot:{' '}
+            Modeled fund:{' '}
             <span className="font-mono font-medium text-zinc-100">{formatUsd(potAtRiskUsdc)}</span>
-            {donationUsdc > 0 ? (
-              <span className="text-zinc-500"> (trading fund {formatUsd(modeledPotUsdc)} + donation)</span>
-            ) : (
-              <span className="text-zinc-500"> ({attackPotSourceLabel(attackPotSource)})</span>
-            )}
+            <span className="text-zinc-500">
+              {' · '}
+              {donationUsdc > 0
+                ? `${formatUsd(modeledPotUsdc)} + your what-if`
+                : attackPotSourceLabel(attackPotSource)}
+            </span>
           </p>
         </div>
       </div>
@@ -214,7 +215,7 @@ export function KeySafetyAttackPanel({
               ? 'Positive = attack pays off after distribution.'
               : 'Negative = attack loses money at this pot size.'
           }
-          tone={minAttackBreakdown && minAttackBreakdown.attackerNetUsdc > 0 ? 'risk' : 'good'}
+          tone={minAttackBreakdown && minAttackBreakdown.attackerNetUsdc < 0 ? 'risk' : 'good'}
         />
       </div>
 

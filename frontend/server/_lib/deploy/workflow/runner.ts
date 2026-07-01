@@ -64,6 +64,8 @@ const stageExecutors: Record<DeploySessionStep, WorkflowStageExecutor> = {
   phase1_finalize_confirmed: statusExecutor,
   phase2_core_sent: statusExecutor,
   phase2_core_confirmed: statusExecutor,
+  phase2_pre_finalize_sent: statusExecutor,
+  phase2_pre_finalize_confirmed: statusExecutor,
   phase2_finalize_sent: statusExecutor,
   phase2_finalize_confirmed: statusExecutor,
   phase2_sent: statusExecutor,

@@ -243,6 +243,11 @@ export async function sendDailyBriefToCommandRooms(params: {
   flags?: ReturnType<typeof readAlfaClubChatBridgeFlags>
 }): Promise<{ posted: DailyBriefPostedRoom[]; commandRoomIds: string[] }> {
   const flags = params.flags ?? readAlfaClubChatBridgeFlags()
+  if (!flags.botToken) {
+    throw new Error(
+      'alfaclub_bot_token_missing: daily brief must post via ALFACLUB_API_KEY (hermit4626 bot), not Privy JWT',
+    )
+  }
   const commandRoomIds = listDailyBriefPostRoomIds(flags)
   const posted: DailyBriefPostedRoom[] = []
   let lastError: unknown = null

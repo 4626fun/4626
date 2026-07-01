@@ -67,6 +67,8 @@ const REPLAY_SKIP_PHASE2_FINALIZE_REASON_KEY = 'replaySkipPhase2FinalizeReason'
 const PHASE3_AJNA_ADMIN_ALIGNMENT_KEY = 'phase3AjnaAdminAlignment'
 const PHASE2_INVARIANT_GATE_KEY = 'phase2InvariantGate'
 const PHASE2_INVARIANT_GATE_CHECKED_AT_KEY = 'phase2InvariantGateCheckedAt'
+const PHASE2_PRE_FINALIZE_SENT_STEP = 'phase2_pre_finalize_sent'
+const PHASE2_PRE_FINALIZE_CONFIRMED_STEP = 'phase2_pre_finalize_confirmed'
 const PHASE2_FINALIZE_SENT_STEP = 'phase2_finalize_sent'
 const PHASE2_FINALIZE_CONFIRMED_STEP = 'phase2_finalize_confirmed'
 
@@ -2006,6 +2008,8 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       'phase1_finalize_confirmed',
       'phase2_core_sent',
       'phase2_core_confirmed',
+      PHASE2_PRE_FINALIZE_SENT_STEP,
+      PHASE2_PRE_FINALIZE_CONFIRMED_STEP,
       PHASE2_FINALIZE_SENT_STEP,
       PHASE2_FINALIZE_CONFIRMED_STEP,
       'phase2_sent',
@@ -2025,6 +2029,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     'phase1_sent',
     'phase1_finalize_sent',
     'phase2_core_sent',
+    PHASE2_PRE_FINALIZE_SENT_STEP,
     PHASE2_FINALIZE_SENT_STEP,
     'phase2_sent',
     'phase3_sent',
@@ -2096,7 +2101,12 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   const phase1Calls = normalizeCalls(rawPhase1Calls)
   const phase1FinalizeCalls = phase1Calls.length > 1 ? phase1Calls.slice(1) : []
   const phase2CoreCalls = normalizeCalls(Array.isArray(payload.phase2CoreCalls) ? payload.phase2CoreCalls : [])
+  const phase2PreFinalizeCalls = normalizeCalls(
+    Array.isArray(payload.phase2PreFinalizeCalls) ? payload.phase2PreFinalizeCalls : [],
+  )
   const expectedStages = isPlainObject(payload.expectedStages) ? payload.expectedStages : {}
+  const hasPhase2PreFinalize =
+    expectedStages.hasPhase2PreFinalize === true || phase2PreFinalizeCalls.length > 0
   const rawPhase2FinalizeCalls = Array.isArray(payload.phase2FinalizeCalls) ? payload.phase2FinalizeCalls : []
   const hasPhase2Finalize = expectedStages.hasPhase2Finalize === true || rawPhase2FinalizeCalls.length > 0
   const phase2FinalizeCalls = normalizeCalls(rawPhase2FinalizeCalls)
@@ -2110,6 +2120,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   if (hasPhase3 && phase3Calls.length === 0) throw new Error('phase3_calls_invalid')
   if (hasPhase4 && phase4Calls.length === 0) throw new Error('phase4_calls_invalid')
   assertDeploySessionPhaseBoundaries({
+    phase2PreFinalizeCalls,
     phase2FinalizeCalls,
     phase3Calls,
     phase4Calls,
@@ -2417,14 +2428,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     if (!completed) throw new Error(CONCURRENT_MODIFICATION)
   }
 
-  const startFromPhase2 = async (fromStep: string): Promise<void> => {
-    if (phase2CoreCalls.length > 0) {
-      if (!shouldSkipPhase2Core) {
-        await startStage(fromStep, 'phase2_core_sent', phase2CoreCalls, !hasPhase2Finalize && !hasPostPhase2)
-        return
-      }
-      await markReplaySkip('phase2Core')
-    }
+  const startAfterPhase2PreFinalize = async (fromStep: string): Promise<void> => {
     if (hasPhase2Finalize) {
       if (!shouldSkipPhase2Finalize) {
         await startStage(fromStep, PHASE2_FINALIZE_SENT_STEP, phase2FinalizeCalls, !hasPostPhase2)
@@ -2436,6 +2440,25 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   }
 
   const startAfterPhase2Core = async (fromStep: string): Promise<void> => {
+    if (hasPhase2PreFinalize && phase2PreFinalizeCalls.length > 0) {
+      await startStage(fromStep, PHASE2_PRE_FINALIZE_SENT_STEP, phase2PreFinalizeCalls, false)
+      return
+    }
+    await startAfterPhase2PreFinalize(fromStep)
+  }
+
+  const startFromPhase2 = async (fromStep: string): Promise<void> => {
+    if (phase2CoreCalls.length > 0) {
+      if (!shouldSkipPhase2Core) {
+        await startStage(fromStep, 'phase2_core_sent', phase2CoreCalls, !hasPhase2PreFinalize && !hasPhase2Finalize && !hasPostPhase2)
+        return
+      }
+      await markReplaySkip('phase2Core')
+    }
+    if (hasPhase2PreFinalize && phase2PreFinalizeCalls.length > 0) {
+      await startStage(fromStep, PHASE2_PRE_FINALIZE_SENT_STEP, phase2PreFinalizeCalls, false)
+      return
+    }
     if (hasPhase2Finalize) {
       if (!shouldSkipPhase2Finalize) {
         await startStage(fromStep, PHASE2_FINALIZE_SENT_STEP, phase2FinalizeCalls, !hasPostPhase2)
@@ -2465,7 +2488,13 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     if (sentStep === 'phase2_core_sent') {
       return {
         calls: phase2CoreCalls,
-        attachCleanup: !hasPhase2Finalize && !hasPostPhase2,
+        attachCleanup: !hasPhase2PreFinalize && !hasPhase2Finalize && !hasPostPhase2,
+      }
+    }
+    if (sentStep === PHASE2_PRE_FINALIZE_SENT_STEP) {
+      return {
+        calls: phase2PreFinalizeCalls,
+        attachCleanup: false,
       }
     }
     if (sentStep === PHASE2_FINALIZE_SENT_STEP || sentStep === 'phase2_sent') {
@@ -2658,6 +2687,18 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     return
   }
 
+  if (step === PHASE2_PRE_FINALIZE_SENT_STEP) {
+    const confirmed = await transitionDeploySession({
+      id: rec.id,
+      fromStep: PHASE2_PRE_FINALIZE_SENT_STEP,
+      toStep: PHASE2_PRE_FINALIZE_CONFIRMED_STEP,
+      lastTxHash: txHash,
+    })
+    if (!confirmed) throw new Error(CONCURRENT_MODIFICATION)
+    await startAfterPhase2PreFinalize(PHASE2_PRE_FINALIZE_CONFIRMED_STEP)
+    return
+  }
+
   if (step === PHASE2_FINALIZE_SENT_STEP || step === 'phase2_sent') {
     const confirmed = await transitionDeploySession({
       id: rec.id,
@@ -2785,6 +2826,11 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
 
   if (step === 'phase2_core_confirmed') {
     await startAfterPhase2Core('phase2_core_confirmed')
+    return
+  }
+
+  if (step === PHASE2_PRE_FINALIZE_CONFIRMED_STEP) {
+    await startAfterPhase2PreFinalize(PHASE2_PRE_FINALIZE_CONFIRMED_STEP)
     return
   }
 

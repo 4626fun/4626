@@ -192,13 +192,16 @@ import {
   COIN_PAYOUT_RECIPIENT_ABI,
   CREATE2_DEPLOYER_STORE_ABI,
   CREATOR_COIN_OWNERS_ABI,
+  CREATOR_SHARE_OFT_ADMIN_ABI,
   CREATOR_VAULT_ADMIN_ABI,
+  CREATOR_OVAULT_WRAPPER_ADMIN_ABI,
   CREATOR_VAULT_BATCHER_ABI,
   CREATOR_VAULT_BATCHER_PENDING_AUCTION_ABI,
   CREATOR_VAULT_BATCHER_PHASE1_STATE_ABI,
   IMPAIRMENT_AUX_OWNED_ABI,
   PAYOUT_ROUTER_ADMIN_ABI,
   PHASE3_HELPER_VIEW_ABI,
+  SHARE_OFT_OPERATION_NO_FEES,
   UNISWAP_V3_FACTORY_ABI,
   UNIVERSAL_BYTECODE_STORE_CHUNKCOUNT_ABI,
   UNIVERSAL_BYTECODE_STORE_POINTERS_ABI,
@@ -232,7 +235,7 @@ const BASE_USDC = addr('833589fCD6eDb6E08f4c7C32D4f71b54bdA02913')
 const BASE_CHAINLINK_ETH_USD = addr('71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70')
 const CHARM_FACTORY = addr('5B7B8b487D05F77977b7ABEec5F922925B9b2aFa')
 const DEFAULT_PAYOUT_ROUTER_ZORA_WETH_FEE = 10_000
-const DEFAULT_PAYOUT_ROUTER_WETH_CREATOR_FEE = 10_000
+const DEFAULT_PAYOUT_ROUTER_WETH_SHARE_FEE = 10_000
 const DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE = 3_000
 
 // Uniswap CCA uses Q96 fixed-point prices + a compact step schedule.
@@ -455,7 +458,7 @@ type DeployRuntimeConfigResponse = {
   payoutRouterApprovedExternalSwapSpenders: Address[]
   zoraToken: Address | null
   payoutRouterZoraWethFee: number
-  payoutRouterWethCreatorFee: number
+  payoutRouterWethShareFee: number
   impairmentClaims: Address | null
   impairmentRecoveryEscrow: Address | null
   impairmentGuardian: Address | null
@@ -543,6 +546,7 @@ type DeploySessionCreateRequest = {
   preflightOnly?: boolean
   phase1Calls: DeploySessionCall[]
   phase2CoreCalls: DeploySessionCall[]
+  phase2PreFinalizeCalls?: DeploySessionCall[]
   phase2FinalizeCalls: DeploySessionCall[]
   phase3Calls: DeploySessionCall[]
   phase4Calls: DeploySessionCall[]
@@ -553,7 +557,7 @@ type DeploySessionCreateRequest = {
   version: string
 }
 type DeploySessionDryRunPhase = {
-  name: 'phase1' | 'phase2Core' | 'phase2Finalize' | 'phase3' | 'phase4'
+  name: 'phase1' | 'phase2Core' | 'phase2PreFinalize' | 'phase2Finalize' | 'phase3' | 'phase4'
   status: 'passed' | 'failed' | 'skipped'
   callCount: number
   reason?: string
@@ -714,6 +718,7 @@ type DeployPlanExport = {
   phaseCounts: {
     phase1: number
     phase2Core: number
+    phase2PreFinalize: number
     phase2Finalize: number
     phase3: number
     phase4: number
@@ -3536,8 +3541,8 @@ function DeployVaultBatcher({
         normalizeAddressLike(runtimeConfig?.zoraToken) ?? normalizeAddressLike(CONTRACTS.zora)
       const payoutRouterZoraWethFee =
         parseUniswapV3Fee(runtimeConfig?.payoutRouterZoraWethFee) ?? DEFAULT_PAYOUT_ROUTER_ZORA_WETH_FEE
-      const payoutRouterWethCreatorFee =
-        parseUniswapV3Fee(runtimeConfig?.payoutRouterWethCreatorFee) ?? DEFAULT_PAYOUT_ROUTER_WETH_CREATOR_FEE
+      const payoutRouterWethShareFee =
+        parseUniswapV3Fee(runtimeConfig?.payoutRouterWethShareFee) ?? DEFAULT_PAYOUT_ROUTER_WETH_SHARE_FEE
       const impairmentGuardianAddress = normalizeConfiguredAddress(
         runtimeConfig?.impairmentGuardian ?? (CONTRACTS as any).impairmentGuardian ?? null,
       )
@@ -3628,6 +3633,8 @@ function DeployVaultBatcher({
                   creatorToken,
                   owner,
                   vault: expected.vault,
+                  shareOFT: expected.shareOFT,
+                  wrapper: expected.wrapper,
                   swapRouter: getAddress(BASE_SWAP_ROUTER as Address),
                   weth,
                   protocolRewards: ZERO_ADDRESS,
@@ -3643,7 +3650,7 @@ function DeployVaultBatcher({
         : null
 
       const senderCanAdminPayoutRouter = sameAddress(owner, expectedProtocolTreasury)
-      const payoutRouterDesiredSwapPaths: Array<{ tokenIn: Address; path: Hex; label: 'WETH' | 'ZORA' }> = []
+      const payoutRouterDesiredSwapPaths: Array<{ tokenIn: Address; path: Hex; label: 'WETH' | 'ZORA' | 'USDC' }> = []
       if (senderCanAdminPayoutRouter) {
         const uniswapV3Factory = normalizeAddressLike(CONTRACTS.uniswapV3Factory)
         const hasV3Pool = async (tokenA: Address, tokenB: Address, fee: number): Promise<boolean> => {
@@ -3676,68 +3683,69 @@ function DeployVaultBatcher({
           }
           return null
         }
-        const usdcCreatorFee = !sameAddress(usdc, creatorToken)
-          ? await resolveV3Fee(usdc, creatorToken, DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE)
+        const shareOft = expected.shareOFT
+        const usdcShareFee = !sameAddress(usdc, shareOft)
+          ? await resolveV3Fee(usdc, shareOft, DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE)
           : null
 
-        if (!sameAddress(weth, creatorToken)) {
-          const directWethCreatorFee = await resolveV3Fee(weth, creatorToken, payoutRouterWethCreatorFee)
-          if (directWethCreatorFee !== null) {
+        if (!sameAddress(weth, shareOft)) {
+          const directWethShareFee = await resolveV3Fee(weth, shareOft, payoutRouterWethShareFee)
+          if (directWethShareFee !== null) {
             payoutRouterDesiredSwapPaths.push({
               tokenIn: weth,
-              path: encodeUniswapV3Path([weth, creatorToken], [directWethCreatorFee]),
+              path: encodeUniswapV3Path([weth, shareOft], [directWethShareFee]),
               label: 'WETH',
             })
           } else {
             const wethUsdcFee = await resolveV3Fee(weth, usdc, DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE)
-            if (wethUsdcFee !== null && usdcCreatorFee !== null) {
+            if (wethUsdcFee !== null && usdcShareFee !== null) {
               payoutRouterDesiredSwapPaths.push({
                 tokenIn: weth,
                 path: encodeUniswapV3Path(
-                  [weth, usdc, creatorToken],
-                  [wethUsdcFee, usdcCreatorFee],
+                  [weth, usdc, shareOft],
+                  [wethUsdcFee, usdcShareFee],
                 ),
                 label: 'WETH',
               })
             } else {
-              logger.warn('[DeployVault] No viable WETH->creator V3 route found; skipping WETH swap-path auto-config', {
-                directWethCreatorFee,
+              logger.warn('[DeployVault] No viable WETH->ShareOFT V3 route found; skipping WETH swap-path auto-config', {
+                directWethShareFee,
                 wethUsdcFee,
-                usdcCreatorFee,
-                creatorToken,
+                usdcShareFee,
+                shareOft,
               })
             }
           }
         }
         if (payoutRouterZoraToken) {
           if (
-            !sameAddress(payoutRouterZoraToken, creatorToken) &&
+            !sameAddress(payoutRouterZoraToken, shareOft) &&
             !sameAddress(payoutRouterZoraToken, weth) &&
             !sameAddress(payoutRouterZoraToken, usdc)
           ) {
-            const directZoraCreatorFee = await resolveV3Fee(
+            const directZoraShareFee = await resolveV3Fee(
               payoutRouterZoraToken,
-              creatorToken,
+              shareOft,
               DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE,
             )
-            if (directZoraCreatorFee !== null) {
+            if (directZoraShareFee !== null) {
               payoutRouterDesiredSwapPaths.push({
                 tokenIn: payoutRouterZoraToken,
                 path: encodeUniswapV3Path(
-                  [payoutRouterZoraToken, creatorToken],
-                  [directZoraCreatorFee],
+                  [payoutRouterZoraToken, shareOft],
+                  [directZoraShareFee],
                 ),
                 label: 'ZORA',
               })
             } else {
               const zoraWethFee = await resolveV3Fee(payoutRouterZoraToken, weth, payoutRouterZoraWethFee)
-              const wethCreatorFee = await resolveV3Fee(weth, creatorToken, payoutRouterWethCreatorFee)
-              if (zoraWethFee !== null && wethCreatorFee !== null) {
+              const wethShareFee = await resolveV3Fee(weth, shareOft, payoutRouterWethShareFee)
+              if (zoraWethFee !== null && wethShareFee !== null) {
                 payoutRouterDesiredSwapPaths.push({
                   tokenIn: payoutRouterZoraToken,
                   path: encodeUniswapV3Path(
-                    [payoutRouterZoraToken, weth, creatorToken],
-                    [zoraWethFee, wethCreatorFee],
+                    [payoutRouterZoraToken, weth, shareOft],
+                    [zoraWethFee, wethShareFee],
                   ),
                   label: 'ZORA',
                 })
@@ -3747,24 +3755,24 @@ function DeployVaultBatcher({
                   usdc,
                   DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE,
                 )
-                if (zoraUsdcFee !== null && usdcCreatorFee !== null) {
+                if (zoraUsdcFee !== null && usdcShareFee !== null) {
                   payoutRouterDesiredSwapPaths.push({
                     tokenIn: payoutRouterZoraToken,
                     path: encodeUniswapV3Path(
-                      [payoutRouterZoraToken, usdc, creatorToken],
-                      [zoraUsdcFee, usdcCreatorFee],
+                      [payoutRouterZoraToken, usdc, shareOft],
+                      [zoraUsdcFee, usdcShareFee],
                     ),
                     label: 'ZORA',
                   })
                 } else {
-                  logger.warn('[DeployVault] No viable ZORA->creator V3 route found; skipping ZORA swap-path auto-config', {
-                    directZoraCreatorFee,
+                  logger.warn('[DeployVault] No viable ZORA->ShareOFT V3 route found; skipping ZORA swap-path auto-config', {
+                    directZoraShareFee,
                     zoraWethFee,
-                    wethCreatorFee,
+                    wethShareFee,
                     zoraUsdcFee,
-                    usdcCreatorFee,
+                    usdcShareFee,
                     zoraToken: payoutRouterZoraToken,
-                    creatorToken,
+                    shareOft,
                   })
                 }
               }
@@ -3773,14 +3781,45 @@ function DeployVaultBatcher({
         } else {
           logger.warn('[DeployVault] Missing runtime ZORA token address; skipping payout router ZORA swap-path auto-config')
         }
+        if (
+          !sameAddress(usdc, shareOft) &&
+          !sameAddress(usdc, weth)
+        ) {
+          const directUsdcShareFee = await resolveV3Fee(usdc, shareOft, DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE)
+          if (directUsdcShareFee !== null) {
+            payoutRouterDesiredSwapPaths.push({
+              tokenIn: usdc,
+              path: encodeUniswapV3Path([usdc, shareOft], [directUsdcShareFee]),
+              label: 'USDC',
+            })
+          } else {
+            const usdcWethFee = await resolveV3Fee(usdc, weth, DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE)
+            const wethShareFeeForUsdc = await resolveV3Fee(weth, shareOft, payoutRouterWethShareFee)
+            if (usdcWethFee !== null && wethShareFeeForUsdc !== null) {
+              payoutRouterDesiredSwapPaths.push({
+                tokenIn: usdc,
+                path: encodeUniswapV3Path([usdc, weth, shareOft], [usdcWethFee, wethShareFeeForUsdc]),
+                label: 'USDC',
+              })
+            } else {
+              logger.warn('[DeployVault] No viable USDC->ShareOFT V3 route found; skipping USDC swap-path auto-config', {
+                directUsdcShareFee,
+                usdcWethFee,
+                wethShareFeeForUsdc,
+                usdc,
+                shareOft,
+              })
+            }
+          }
+        }
         if (payoutRouterZoraToken) {
-          const isCreatorToken = sameAddress(payoutRouterZoraToken, creatorToken)
+          const isShareOftToken = sameAddress(payoutRouterZoraToken, shareOft)
           const isWethToken = sameAddress(payoutRouterZoraToken, weth)
           const isUsdcToken = sameAddress(payoutRouterZoraToken, usdc)
-          if (isCreatorToken || isWethToken || isUsdcToken) {
-            logger.warn('[DeployVault] Runtime ZORA token overlaps with creator/WETH/USDC; skipping ZORA swap-path auto-config', {
+          if (isShareOftToken || isWethToken || isUsdcToken) {
+            logger.warn('[DeployVault] Runtime ZORA token overlaps with ShareOFT/WETH/USDC; skipping ZORA swap-path auto-config', {
               zoraToken: payoutRouterZoraToken,
-              creatorToken,
+              shareOft,
               weth,
               usdc,
             })
@@ -3812,7 +3851,7 @@ function DeployVaultBatcher({
               const raw = await publicClient.readContract({
                 address: expectedPayoutRouter,
                 abi: PAYOUT_ROUTER_ADMIN_ABI,
-                functionName: 'swapPathToCreator',
+                functionName: 'swapPathToShareOFT',
                 args: [tokenIn],
               })
               const normalized = typeof raw === 'string' && raw.startsWith('0x') ? (raw as Hex) : ('0x' as Hex)
@@ -3931,6 +3970,121 @@ function DeployVaultBatcher({
               }),
             }))
         : []
+
+      const payoutRouterWrapperWhitelisted = await (async () => {
+        if (!expected.wrapper || !expectedPayoutRouter) return false
+        try {
+          return await publicClient.readContract({
+            address: expected.wrapper,
+            abi: CREATOR_OVAULT_WRAPPER_ADMIN_ABI,
+            functionName: 'isWhitelisted',
+            args: [expectedPayoutRouter],
+          })
+        } catch {
+          return false
+        }
+      })()
+
+      const wrapperOwnerAddress = await (async () => {
+        try {
+          const value = await publicClient.readContract({
+            address: expected.wrapper,
+            abi: CREATOR_OVAULT_WRAPPER_ADMIN_ABI,
+            functionName: 'owner',
+          })
+          return typeof value === 'string' && isAddress(value) ? getAddress(value as Address) : null
+        } catch {
+          return null
+        }
+      })()
+
+      const wrapperWhitelistPayoutRouterCall =
+        senderCanAdminPayoutRouter && !payoutRouterWrapperWhitelisted
+          ? ({
+              target: expected.wrapper,
+              value: 0n,
+              data: encodeFunctionData({
+                abi: CREATOR_OVAULT_WRAPPER_ADMIN_ABI,
+                functionName: 'setWhitelist',
+                args: [expectedPayoutRouter, true],
+              }),
+            } as const)
+          : null
+
+      const batcherWhitelistPayoutRouterCall =
+        expectedPayoutRouter &&
+        expected.wrapper &&
+        wrapperOwnerAddress &&
+        sameAddress(wrapperOwnerAddress, batcherAddress) &&
+        !payoutRouterWrapperWhitelisted
+          ? ({
+              target: batcherAddress,
+              value: 0n,
+              data: encodeFunctionData({
+                abi: CREATOR_VAULT_BATCHER_ABI,
+                functionName: 'whitelistPayoutRouterOnWrapper',
+                args: [expected.wrapper, expectedPayoutRouter],
+              }),
+            } as const)
+          : null
+
+      const payoutRouterShareOftNoFees = await (async () => {
+        if (!expected.shareOFT || !expectedPayoutRouter) return false
+        try {
+          const opType = await publicClient.readContract({
+            address: expected.shareOFT,
+            abi: CREATOR_SHARE_OFT_ADMIN_ABI,
+            functionName: 'addressType',
+            args: [expectedPayoutRouter],
+          })
+          return Number(opType) === SHARE_OFT_OPERATION_NO_FEES
+        } catch {
+          return false
+        }
+      })()
+
+      const shareOftOwnerAddress = await (async () => {
+        try {
+          const value = await publicClient.readContract({
+            address: expected.shareOFT,
+            abi: CREATOR_SHARE_OFT_ADMIN_ABI,
+            functionName: 'owner',
+          })
+          return typeof value === 'string' && isAddress(value) ? getAddress(value as Address) : null
+        } catch {
+          return null
+        }
+      })()
+
+      const batcherSetPayoutRouterShareOftNoFeesCall =
+        expectedPayoutRouter &&
+        expected.shareOFT &&
+        shareOftOwnerAddress &&
+        sameAddress(shareOftOwnerAddress, batcherAddress) &&
+        !payoutRouterShareOftNoFees
+          ? ({
+              target: batcherAddress,
+              value: 0n,
+              data: encodeFunctionData({
+                abi: CREATOR_VAULT_BATCHER_ABI,
+                functionName: 'setPayoutRouterShareOftNoFees',
+                args: [expected.shareOFT, expectedPayoutRouter],
+              }),
+            } as const)
+          : null
+
+      const treasurySetPayoutRouterShareOftNoFeesCall =
+        senderCanAdminPayoutRouter && expected.shareOFT && expectedPayoutRouter && !payoutRouterShareOftNoFees
+          ? ({
+              target: expected.shareOFT,
+              value: 0n,
+              data: encodeFunctionData({
+                abi: CREATOR_SHARE_OFT_ADMIN_ABI,
+                functionName: 'setAddressType',
+                args: [expectedPayoutRouter, SHARE_OFT_OPERATION_NO_FEES],
+              }),
+            } as const)
+          : null
 
       if (!payoutRouterKeeperAddress) {
         logger.warn('[DeployVault] Missing payoutRouter keeper runtime config; skipping setKeeper auto-config')
@@ -4835,6 +4989,7 @@ function DeployVaultBatcher({
         const phase2Calls: Array<{ target: Address; value: bigint; data: Hex }> = []
         const phase2ApproveCalls: Array<{ target: Address; value: bigint; data: Hex }> = []
         let phase2UsesPermit2 = false
+        let phase2DeferredFinalizeCall: { target: Address; value: bigint; data: Hex } | null = null
         if (!planOnly && supportsPhase2Permit2 && CONTRACTS.permit2) {
           try {
             const permit2Address = getAddress(CONTRACTS.permit2 as Address)
@@ -4878,7 +5033,7 @@ function DeployVaultBatcher({
                 args: [phase2FinalizeParams, permit, signature],
               }),
             } as const
-            phase2Calls.push(phase2FinalizeCall)
+            phase2DeferredFinalizeCall = phase2FinalizeCall
           } catch (permit2Err) {
             if (isUserRejectedErrorMessage(permit2Err)) {
               throw permit2Err
@@ -4963,20 +5118,20 @@ function DeployVaultBatcher({
           }),
         } as const
 
-        const phase2FinalizeCall = phase2UsesPermit2
-          ? (phase2Calls[0] as { target: Address; value: bigint; data: Hex })
-          : ({
-              target: batcherAddress,
-              value: finalizeBridgeNativeFee,
-              data: finalizePhase2Calldata,
-            } as const)
+        if (!phase2DeferredFinalizeCall) {
+          phase2DeferredFinalizeCall = {
+            target: batcherAddress,
+            value: finalizeBridgeNativeFee,
+            data: finalizePhase2Calldata,
+          } as const
+        }
 
         const phase2CoreNeeded = !phase2CoreAll
         if (phase2CoreNeeded) {
           if (phase2UsesPermit2) {
             phase2Calls.unshift(phase2CoreCall)
           } else {
-            phase2Calls.push(...phase2ApproveCalls, phase2CoreCall, phase2FinalizeCall)
+            phase2Calls.push(...phase2ApproveCalls, phase2CoreCall)
           }
         } else {
           logger.info('[DeployVault] phase2.core already deployed; skipping deployPhase2Core call', {
@@ -4985,11 +5140,15 @@ function DeployVaultBatcher({
             expectedOracle: expected.oracle,
           })
           if (!phase2UsesPermit2) {
-            phase2Calls.push(...phase2ApproveCalls, phase2FinalizeCall)
+            phase2Calls.push(...phase2ApproveCalls)
           }
         }
 
         if (phase2AuxiliaryDeployCall) phase2Calls.push(phase2AuxiliaryDeployCall)
+        if (batcherWhitelistPayoutRouterCall) phase2Calls.push(batcherWhitelistPayoutRouterCall)
+        if (batcherSetPayoutRouterShareOftNoFeesCall) phase2Calls.push(batcherSetPayoutRouterShareOftNoFeesCall)
+        phase2Calls.push(phase2DeferredFinalizeCall)
+
         if (!burnStreamAlreadyConfigured) phase2Calls.push(vaultSetBurnStreamCall)
         phase2Calls.push(vaultWhitelistRouterCall)
         if (!payoutRouterQueuerAlreadyAuthorized) phase2Calls.push(vaultAuthorizeBurnStreamQueuerCall)
@@ -5001,6 +5160,8 @@ function DeployVaultBatcher({
           phase2Calls.push(...payoutRouterSetExternalSwapSpenderApprovalCalls)
         }
         if (payoutRouterSetSwapPathCalls.length > 0) phase2Calls.push(...payoutRouterSetSwapPathCalls)
+        if (wrapperWhitelistPayoutRouterCall) phase2Calls.push(wrapperWhitelistPayoutRouterCall)
+        if (treasurySetPayoutRouterShareOftNoFeesCall) phase2Calls.push(treasurySetPayoutRouterShareOftNoFeesCall)
         if (payoutMismatch) {
           if (!canSetPayoutRecipientFromOwner) {
             throw new Error(
@@ -5096,7 +5257,7 @@ function DeployVaultBatcher({
         assertSafe(phase4Calls)
 
         const phase2PostCalls = phase2Calls.filter(
-          (c) => c !== phase2CoreCall && c !== phase2FinalizeCall && !phase2ApproveCalls.includes(c),
+          (c) => c !== phase2CoreCall && c !== phase2DeferredFinalizeCall && !phase2ApproveCalls.includes(c),
         )
         const phase2Create2Calls = phase2PostCalls.filter(
           (c) => String(c.target).toLowerCase() === String(expectedCreate2Deployer).toLowerCase(),
@@ -5104,10 +5265,20 @@ function DeployVaultBatcher({
         if (phase2Create2Calls.length > 0) {
           throw new Error('Deploy plan still contains direct create2 deploy calls. Refresh and retry with the deploy-capable batcher path.')
         }
-        const phase2ConfigCalls = phase2PostCalls
-        // Keep phase2 deterministic: finalize-only (deposit + split + ownership transfer).
-        // Move CREATE2 + post-config behind a batcher-primary phase3 UserOp.
-        const phase2FinalizeCalls = [phase2FinalizeCall]
+        const phase2PreFinalizeCalls = [
+          phase2AuxiliaryDeployCall,
+          batcherWhitelistPayoutRouterCall,
+          batcherSetPayoutRouterShareOftNoFeesCall,
+        ].filter((call) => call != null)
+        const phase2PreFinalizeKeys = new Set(
+          phase2PreFinalizeCalls.map((call) => `${String(call.target).toLowerCase()}:${call.data.toLowerCase()}`),
+        )
+        const phase2ConfigCalls = phase2PostCalls.filter(
+          (call) => !phase2PreFinalizeKeys.has(`${String(call.target).toLowerCase()}:${call.data.toLowerCase()}`),
+        )
+        // Keep phase2 deterministic: pre-finalize wiring, then finalize-only (deposit + split + ownership transfer).
+        // Move post-finalize config behind a batcher-primary phase3 UserOp.
+        const phase2FinalizeCalls = [phase2DeferredFinalizeCall]
         const phase3Calls: Array<{ target: Address; value: bigint; data: Hex }> = [
           ...phase3StrategyCalls,
           vaultSetMinimumIdleCall,
@@ -5136,6 +5307,9 @@ function DeployVaultBatcher({
           phase2CoreCalls: serializeSessionCalls(
             phase2CoreNeeded ? [...phase2ApproveCalls, phase2CoreCall] : [...phase2ApproveCalls],
           ),
+          ...(phase2PreFinalizeCalls.length > 0
+            ? { phase2PreFinalizeCalls: serializeSessionCalls(phase2PreFinalizeCalls) }
+            : {}),
           phase2FinalizeCalls: serializeSessionCalls(phase2FinalizeCalls),
           phase3Calls: serializeSessionCalls(phase3Calls),
           phase4Calls: serializeSessionCalls(phase4Calls),
@@ -5170,6 +5344,7 @@ function DeployVaultBatcher({
           phaseCounts: {
             phase1: sessionCreatePayload.phase1Calls.length,
             phase2Core: sessionCreatePayload.phase2CoreCalls.length,
+            phase2PreFinalize: sessionCreatePayload.phase2PreFinalizeCalls?.length ?? 0,
             phase2Finalize: sessionCreatePayload.phase2FinalizeCalls.length,
             phase3: sessionCreatePayload.phase3Calls.length,
             phase4: sessionCreatePayload.phase4Calls.length,

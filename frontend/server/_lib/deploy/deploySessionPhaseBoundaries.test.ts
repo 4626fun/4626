@@ -283,4 +283,34 @@ describe('assertDeploySessionPhaseBoundaries', () => {
       }),
     ).toThrow(/phase3_missing_deploy_to_strategies/)
   })
+
+  it('accepts phase2 pre-finalize aux/whitelist/no-fees before finalize', () => {
+    expect(() =>
+      assertDeploySessionPhaseBoundaries({
+        phase2PreFinalizeCalls: [
+          { data: ('0xafe8d7e9' + '00'.repeat(32)) as `0x${string}` },
+          { data: ('0x4689260b' + '00'.repeat(64)) as `0x${string}` },
+          { data: ('0x8522016e' + '00'.repeat(64)) as `0x${string}` },
+        ],
+        phase2FinalizeCalls: [{ data: finalizeData() }],
+        phase3Calls: [],
+        phase4Calls: [],
+        hasPhase3: false,
+        hasPhase4: false,
+      }),
+    ).not.toThrow()
+  })
+
+  it('rejects finalizePhase2 inside phase2 pre-finalize', () => {
+    expect(() =>
+      assertDeploySessionPhaseBoundaries({
+        phase2PreFinalizeCalls: [{ data: finalizeData() }],
+        phase2FinalizeCalls: [],
+        phase3Calls: [],
+        phase4Calls: [],
+        hasPhase3: false,
+        hasPhase4: false,
+      }),
+    ).toThrow(/phase2_pre_finalize_boundary_violation:finalize/)
+  })
 })

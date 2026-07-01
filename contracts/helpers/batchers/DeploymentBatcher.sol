@@ -530,7 +530,12 @@ interface ICreatorOVaultWrapper {
     function setShareOFT(address _shareOFT) external;
     function deposit(uint256 amount) external returns (uint256 shareTokens);
     function wrap(uint256 amount) external returns (uint256 shareTokens);
+    function setWhitelist(address user, bool status) external;
     function transferOwnership(address newOwner) external;
+}
+
+interface IOwnableView {
+    function owner() external view returns (address);
 }
 
 interface ICreatorShareOFT {
@@ -539,6 +544,7 @@ interface ICreatorShareOFT {
     function setMinter(address minter, bool status) external;
     function setGaugeController(address _controller) external;
     function setHubConfig(bool _isHub, uint32 _hubEid, address _hubGaugeReceiver) external;
+    function setAddressType(address addr, uint8 opType) external;
     function transferOwnership(address newOwner) external;
 }
 
@@ -572,10 +578,6 @@ interface ICCALaunchStrategy {
 
 interface IOwnableTransfer {
     function transferOwnership(address newOwner) external;
-}
-
-interface IOwnableView {
-    function owner() external view returns (address);
 }
 
 interface IOFTBootstrapRegistry {
@@ -1604,6 +1606,8 @@ contract DeploymentBatcher is ReentrancyGuard {
     // code and docs must use the five mandated lane names.
     error InvalidCreatorCoinPayoutRecipient();
     error DeprecatedFinalizeSolanaParams();
+    error WrapperOwnerMismatch(address wrapper, address owner);
+    error ShareOftOwnerMismatch(address shareOft, address owner);
     error Phase3ManagementMismatch(address expected, address actual);
     error CharmFactoryGovernanceMismatch(address expected, address actual);
     error CharmFactoryProtocolFeeMismatch(uint256 expected, uint256 actual);
@@ -2004,6 +2008,24 @@ contract DeploymentBatcher is ReentrancyGuard {
             )
         );
         out = abi.decode(outData, (Phase2Result));
+    }
+
+    /// @notice Whitelist the payout router on the wrapper while the batcher still owns it.
+    /// @dev Must run after payout router CREATE2 deploy and before finalizePhase2 ownership transfer.
+    function whitelistPayoutRouterOnWrapper(address wrapper, address payoutRouter) external {
+        if (wrapper == address(0) || payoutRouter == address(0)) revert ZeroAddress();
+        address wrapperOwner = IOwnableView(wrapper).owner();
+        if (wrapperOwner != address(this)) revert WrapperOwnerMismatch(wrapper, wrapperOwner);
+        ICreatorOVaultWrapper(wrapper).setWhitelist(payoutRouter, true);
+    }
+
+    /// @notice Mark the payout router ShareOFT fee-exempt while the batcher still owns ShareOFT.
+    /// @dev OperationType.NoFees = 2. Must run before finalizePhase2 transfers ShareOFT to treasury.
+    function setPayoutRouterShareOftNoFees(address shareOFT, address payoutRouter) external {
+        if (shareOFT == address(0) || payoutRouter == address(0)) revert ZeroAddress();
+        address shareOwner = IOwnableView(shareOFT).owner();
+        if (shareOwner != address(this)) revert ShareOftOwnerMismatch(shareOFT, shareOwner);
+        ICreatorShareOFT(shareOFT).setAddressType(payoutRouter, 2);
     }
 
     function finalizePhase2(Phase2FinalizeParams calldata params)

@@ -61,6 +61,8 @@ const REPLAY_SKIP_PHASE2_FINALIZE_AT_KEY = 'replaySkipPhase2FinalizeAt'
 const REPLAY_SKIP_PHASE2_FINALIZE_REASON_KEY = 'replaySkipPhase2FinalizeReason'
 const PHASE2_INVARIANT_GATE_KEY = 'phase2InvariantGate'
 const PHASE2_INVARIANT_GATE_CHECKED_AT_KEY = 'phase2InvariantGateCheckedAt'
+const PHASE2_PRE_FINALIZE_SENT_STEP = 'phase2_pre_finalize_sent'
+const PHASE2_PRE_FINALIZE_CONFIRMED_STEP = 'phase2_pre_finalize_confirmed'
 const PHASE2_FINALIZE_SENT_STEP = 'phase2_finalize_sent'
 const PHASE2_FINALIZE_CONFIRMED_STEP = 'phase2_finalize_confirmed'
 
@@ -962,7 +964,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const phase1CoreCalls = phase1Calls.length > 1 ? phase1Calls.slice(0, 1) : phase1Calls
     const phase1FinalizeCalls = phase1Calls.length > 1 ? phase1Calls.slice(1) : []
     const phase2CoreCalls = normalizeCalls(Array.isArray(payload.phase2CoreCalls) ? payload.phase2CoreCalls : [])
+    const phase2PreFinalizeCalls = normalizeCalls(
+      Array.isArray(payload.phase2PreFinalizeCalls) ? payload.phase2PreFinalizeCalls : [],
+    )
     const expectedStages = isPlainObject(payload.expectedStages) ? payload.expectedStages : {}
+    const hasPhase2PreFinalize =
+      expectedStages.hasPhase2PreFinalize === true || phase2PreFinalizeCalls.length > 0
     const rawPhase2FinalizeCalls = Array.isArray(payload.phase2FinalizeCalls) ? payload.phase2FinalizeCalls : []
     const hasPhase2Finalize = expectedStages.hasPhase2Finalize === true || rawPhase2FinalizeCalls.length > 0
     const phase2FinalizeCalls = normalizeCalls(rawPhase2FinalizeCalls)
@@ -976,6 +983,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (hasPhase3 && phase3Calls.length === 0) throw new Error('phase3_calls_invalid')
     if (hasPhase4 && phase4Calls.length === 0) throw new Error('phase4_calls_invalid')
     assertDeploySessionPhaseBoundaries({
+      phase2PreFinalizeCalls,
       phase2FinalizeCalls,
       phase3Calls,
       phase4Calls,
@@ -986,7 +994,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // FIX: FINDING-08 — re-validate all calls from the DB payload against the paymaster
     // selector allowlist. The payload was validated at session creation, but a gap in grant
     // validation could allow broader calls than intended; defense-in-depth re-check here.
-    const allReconstructedCalls = [...phase1Calls, ...phase2CoreCalls, ...phase2FinalizeCalls, ...phase3Calls, ...phase4Calls]
+    const allReconstructedCalls = [
+      ...phase1Calls,
+      ...phase2CoreCalls,
+      ...phase2PreFinalizeCalls,
+      ...phase2FinalizeCalls,
+      ...phase3Calls,
+      ...phase4Calls,
+    ]
     if (allReconstructedCalls.length > 0) {
       try {
         await validateSponsoredSmartWalletCalls({
@@ -1005,6 +1020,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       'phase1_sent',
       'phase1_finalize_sent',
       'phase2_core_sent',
+      PHASE2_PRE_FINALIZE_SENT_STEP,
       PHASE2_FINALIZE_SENT_STEP,
       'phase2_sent',
       'phase3_sent',
@@ -1297,14 +1313,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return completeFrom(fromStep)
     }
 
-    const runFromPhase2 = async (fromStep: string) => {
-      if (phase2CoreCalls.length > 0) {
-        if (!shouldSkipPhase2Core) {
-          const attachCleanup = !hasPhase2Finalize && !hasPostPhase2
-          return sendStage('phase2_core_sent', phase2CoreCalls, attachCleanup)
-        }
-        await markReplaySkip('phase2Core')
-      }
+    const runAfterPhase2PreFinalize = async (fromStep: string) => {
       if (hasPhase2Finalize) {
         if (!shouldSkipPhase2Finalize) {
           const attachCleanup = !hasPostPhase2
@@ -1317,6 +1326,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const runAfterPhase2Core = async (fromStep: string) => {
+      if (hasPhase2PreFinalize && phase2PreFinalizeCalls.length > 0) {
+        return sendStage(PHASE2_PRE_FINALIZE_SENT_STEP, phase2PreFinalizeCalls, false)
+      }
+      return runAfterPhase2PreFinalize(fromStep)
+    }
+
+    const runFromPhase2 = async (fromStep: string) => {
+      if (phase2CoreCalls.length > 0) {
+        if (!shouldSkipPhase2Core) {
+          const attachCleanup = !hasPhase2PreFinalize && !hasPhase2Finalize && !hasPostPhase2
+          return sendStage('phase2_core_sent', phase2CoreCalls, attachCleanup)
+        }
+        await markReplaySkip('phase2Core')
+      }
+      if (hasPhase2PreFinalize && phase2PreFinalizeCalls.length > 0) {
+        return sendStage(PHASE2_PRE_FINALIZE_SENT_STEP, phase2PreFinalizeCalls, false)
+      }
       if (hasPhase2Finalize) {
         if (!shouldSkipPhase2Finalize) {
           const attachCleanup = !hasPostPhase2
@@ -1376,6 +1402,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (rec.step === 'phase2_core_confirmed') {
       const started = await runFromPhase2CoreConfirmed()
+      if (started) return started
+    }
+    if (rec.step === PHASE2_PRE_FINALIZE_CONFIRMED_STEP) {
+      const started = await runAfterPhase2PreFinalize(PHASE2_PRE_FINALIZE_CONFIRMED_STEP)
       if (started) return started
     }
     if ((rec.step === PHASE2_FINALIZE_CONFIRMED_STEP || rec.step === 'phase2_confirmed') && hasPostPhase2) {

@@ -75,6 +75,7 @@ import {
   isDeprecatedCreatorVaultBatcherAddress,
 } from '../../../../../src/config/contracts.defaults.js'
 import { deploymentBatcherNotConfiguredMessage } from '../../../../../server/_lib/onchain/deploymentBatcherConfigError.js'
+import { assertDeploySessionPhaseBoundaries } from '../../../../../server/_lib/deploy/deploySessionPhaseBoundaries.js'
 import { DEPLOY_BYTECODE } from '../../../../../src/deploy/bytecode.generated.js'
 
 export type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
@@ -110,6 +111,7 @@ export type CreateDeploySessionRequest = {
   // New (preferred): split Phase 2 into multiple UserOps server-side.
   phase1Calls?: Call[]
   phase2CoreCalls?: Call[]
+  phase2PreFinalizeCalls?: Call[]
   phase2FinalizeCalls?: Call[]
   // Phase 3 (strategies) + Phase 4 (deferred auction) are also executed server-side.
   phase3Calls?: Call[]
@@ -156,6 +158,7 @@ export type ValidatedDeploySessionRequest = {
   authType: 'session' | 'siwa'
   phase1Calls: Call[]
   phase2CoreCalls: Call[]
+  phase2PreFinalizeCalls: Call[]
   phase2FinalizeCalls: Call[]
   phase3Calls: Call[]
   phase4Calls: Call[]
@@ -2675,6 +2678,27 @@ export async function validateDeploySessionRequest(params: {
   }
   const phase3Calls = Array.isArray(params.body.phase3Calls) ? params.body.phase3Calls : []
   const phase4Calls = Array.isArray(params.body.phase4Calls) ? params.body.phase4Calls : []
+  const phase2PreFinalizeCalls = Array.isArray(params.body.phase2PreFinalizeCalls)
+    ? params.body.phase2PreFinalizeCalls
+    : []
+  const hasPhase3 = phase3Calls.length > 0
+  const hasPhase4 = phase4Calls.length > 0
+  assertDeploySessionPhaseBoundaries({
+    phase2PreFinalizeCalls: phase2PreFinalizeCalls.map((call) => ({
+      data: typeof call.data === 'string' ? (call.data as Hex) : ('0x' as Hex),
+    })),
+    phase2FinalizeCalls: phase2FinalizeCalls.map((call) => ({
+      data: typeof call.data === 'string' ? (call.data as Hex) : ('0x' as Hex),
+    })),
+    phase3Calls: phase3Calls.map((call) => ({
+      data: typeof call.data === 'string' ? (call.data as Hex) : ('0x' as Hex),
+    })),
+    phase4Calls: phase4Calls.map((call) => ({
+      data: typeof call.data === 'string' ? (call.data as Hex) : ('0x' as Hex),
+    })),
+    hasPhase3,
+    hasPhase4,
+  })
   const solanaOvault = normalizeSolanaOvaultConfig(params.body.solanaOvault)
   const vanity = normalizeDeployVanityRequest(params.body.vanity)
   const phase1UsesSaltOverride = hasPhase1SaltOverrideCalls(phase1Calls)
@@ -2906,6 +2930,7 @@ export async function validateDeploySessionRequest(params: {
     const allSubmittedCalls = [
       ...phase1Calls,
       ...phase2CoreCalls,
+      ...phase2PreFinalizeCalls,
       ...phase2FinalizeCalls,
       ...phase3Calls,
       ...phase4Calls,
@@ -2938,6 +2963,7 @@ export async function validateDeploySessionRequest(params: {
     const hasAnyWork =
       phase1Calls.length > 0 ||
       phase2CoreCalls.length > 0 ||
+      phase2PreFinalizeCalls.length > 0 ||
       phase2FinalizeCalls.length > 0 ||
       phase3Calls.length > 0 ||
       phase4Calls.length > 0
@@ -3032,6 +3058,7 @@ export async function validateDeploySessionRequest(params: {
     authType: params.authType,
     phase1Calls,
     phase2CoreCalls,
+    phase2PreFinalizeCalls,
     phase2FinalizeCalls,
     phase3Calls,
     phase4Calls,
@@ -3098,6 +3125,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       authType,
       phase1Calls,
       phase2CoreCalls,
+      phase2PreFinalizeCalls,
       phase2FinalizeCalls,
       phase3Calls,
       phase4Calls,
@@ -3262,6 +3290,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           hasPhase1Core: phase1Calls.length > 0,
           hasPhase1Finalize: phase1Calls.length > 1,
           hasPhase2Core: phase2CoreCalls.length > 0,
+          hasPhase2PreFinalize: phase2PreFinalizeCalls.length > 0,
           hasPhase2Finalize,
           hasPhase3: phase3Calls.length > 0,
           hasPhase4: phase4Calls.length > 0,
@@ -3271,6 +3300,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         vanity,
         phase1Calls,
         phase2CoreCalls,
+        phase2PreFinalizeCalls,
         phase2FinalizeCalls,
         phase3Calls,
         phase4Calls,

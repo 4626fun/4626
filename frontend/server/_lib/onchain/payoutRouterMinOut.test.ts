@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyShareOftBuyFeeHaircut,
   deriveMinOutFromQuote,
-  resolveHarvestMinCreatorOut,
+  resolveHarvestMinOut,
   resolvePayoutRouterQuoterAddress,
   resolvePayoutRouterV3SlippageBps,
   type QuoterReader,
@@ -62,42 +63,52 @@ describe('deriveMinOutFromQuote', () => {
   })
 })
 
-describe('resolveHarvestMinCreatorOut', () => {
+describe('applyShareOftBuyFeeHaircut', () => {
+  it('applies the default 6.9% buy fee haircut', () => {
+    expect(applyShareOftBuyFeeHaircut(10_000n)).toBe(9_310n)
+  })
+
+  it('returns the full amount when buy fee bps is zero (NoFees recipient)', () => {
+    expect(applyShareOftBuyFeeHaircut(10_000n, 0)).toBe(10_000n)
+  })
+})
+
+describe('resolveHarvestMinOut', () => {
   it('derives min-out from the quote when available', async () => {
-    const result = await resolveHarvestMinCreatorOut({
+    const result = await resolveHarvestMinOut({
       publicClient: quoterReturning(10_000n),
       path: PATH,
       amountIn: 1_000n,
       configuredMinOut: 0n,
       env: {},
     })
-    expect(result).toEqual({ ok: true, minCreatorOut: 9_700n, source: 'quote' })
+    expect(result).toEqual({ ok: true, minOut: 9_030n, source: 'quote' })
   })
 
   it('keeps a higher configured floor over the derived value', async () => {
-    const result = await resolveHarvestMinCreatorOut({
+    const result = await resolveHarvestMinOut({
       publicClient: quoterReturning(10_000n),
       path: PATH,
       amountIn: 1_000n,
       configuredMinOut: 9_900n,
       env: {},
     })
-    expect(result).toEqual({ ok: true, minCreatorOut: 9_900n, source: 'quote+floor' })
+    expect(result).toEqual({ ok: true, minOut: 9_900n, source: 'quote+floor' })
   })
 
   it('falls back to the configured floor when the quote fails', async () => {
-    const result = await resolveHarvestMinCreatorOut({
+    const result = await resolveHarvestMinOut({
       publicClient: quoterReturning(new Error('quote_failed')),
       path: PATH,
       amountIn: 1_000n,
       configuredMinOut: 123n,
       env: {},
     })
-    expect(result).toEqual({ ok: true, minCreatorOut: 123n, source: 'floor' })
+    expect(result).toEqual({ ok: true, minOut: 123n, source: 'floor' })
   })
 
   it('fails closed when no quote and no floor are available', async () => {
-    const result = await resolveHarvestMinCreatorOut({
+    const result = await resolveHarvestMinOut({
       publicClient: quoterReturning(new Error('quote_failed')),
       path: PATH,
       amountIn: 1_000n,
@@ -108,7 +119,7 @@ describe('resolveHarvestMinCreatorOut', () => {
   })
 
   it('fails closed for an empty path', async () => {
-    const result = await resolveHarvestMinCreatorOut({
+    const result = await resolveHarvestMinOut({
       publicClient: quoterReturning(10_000n),
       path: '0x',
       amountIn: 1_000n,

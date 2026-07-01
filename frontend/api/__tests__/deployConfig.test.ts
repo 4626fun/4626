@@ -58,7 +58,7 @@ describe('deploy config handler', () => {
     })
     resolvePayoutRouterFeeConfigMock.mockReturnValue({
       zoraWethFee: 123,
-      wethCreatorFee: 456,
+      wethShareFee: 456,
     })
     resolvePayoutRouterZoraTokenMock.mockReturnValue('0x3333333333333333333333333333333333333333')
     delete process.env.ALLOW_API_CONTRACT_OVERRIDES
@@ -124,7 +124,7 @@ describe('deploy config handler', () => {
       payoutRouterApprovedExternalSwapSpenders: [getAddress('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')],
       zoraToken: '0x3333333333333333333333333333333333333333',
       payoutRouterZoraWethFee: 123,
-      payoutRouterWethCreatorFee: 456,
+      payoutRouterWethShareFee: 456,
     })
   })
 

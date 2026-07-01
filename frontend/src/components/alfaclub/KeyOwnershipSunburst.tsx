@@ -29,7 +29,6 @@ export type KeyOwnershipSunburstProps = {
 }
 
 const VOTE_THRESHOLD = DEFAULT_DISTRIBUTION_POLICY.voteThresholdFraction
-const VETO_FRACTION = 1 - VOTE_THRESHOLD
 
 type CategoryKey = 'unstakedOwner' | 'stakedOwner' | 'stakedOthers' | 'unstakedOthers'
 
@@ -234,11 +233,6 @@ export function KeyOwnershipSunburst({
   const stakedRegionStartPct = (ownerUnstaked / denom) * 100
   const stakedRegionWidthPct = (stakedKeysTotal / denom) * 100
 
-  const thresholds = [
-    { key: 'veto', fraction: VETO_FRACTION, label: '34% veto' },
-    { key: 'distribute', fraction: VOTE_THRESHOLD, label: '66% distribute' },
-  ]
-
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
@@ -258,8 +252,6 @@ export function KeyOwnershipSunburst({
                   <span className="text-sky-300">blue</span> = everyone else.
                 </p>
                 <p>
-                  The ticks are the <span className="text-zinc-300">34%</span> veto and{' '}
-                  <span className="text-amber-200">66%</span> distribute lines (share of supply).
                   Drag the bonding curve below to simulate a hostile buyer and watch the{' '}
                   <span className="text-rose-300">takeover</span> block grow here.
                 </p>
@@ -297,19 +289,6 @@ export function KeyOwnershipSunburst({
 
       {/* Control bar */}
       <div>
-        <div className="relative mb-4 h-0">
-          {thresholds.map((t) => (
-            <span
-              key={`label-${t.key}`}
-              className="absolute -top-0.5 -translate-x-1/2 whitespace-nowrap text-[10px] font-medium"
-              style={{ left: `${t.fraction * 100}%` }}
-            >
-              <span className={t.key === 'distribute' ? 'text-amber-200' : 'text-zinc-400'}>
-                {t.label}
-              </span>
-            </span>
-          ))}
-        </div>
         <div
           className="relative h-12 w-full overflow-hidden rounded-xl bg-white/[0.04] ring-1 ring-inset ring-white/5"
           role="group"
@@ -348,12 +327,16 @@ export function KeyOwnershipSunburst({
                       {pct >= 15 ? (
                         <span
                           className={cn(
-                            'mt-0.5 text-[9px] font-medium uppercase tracking-wide',
+                            'mt-0.5 text-[9px] uppercase tracking-wide',
                             cat.numberClass,
                             cat.staked ? 'opacity-90' : 'opacity-70',
                           )}
                         >
-                          {cat.holderShort} · {cat.staked ? 'staked' : 'idle'}
+                          <span className="font-bold">{cat.holderShort}</span>
+                          <span className="mx-0.5">·</span>
+                          <span className="font-medium italic">
+                            {cat.staked ? 'staked' : 'idle'}
+                          </span>
                         </span>
                       ) : null}
                     </span>
@@ -383,20 +366,6 @@ export function KeyOwnershipSunburst({
                 ) : null}
               </div>
             ) : null}
-          </div>
-
-          {/* Threshold markers drawn over the bar */}
-          <div className="pointer-events-none absolute inset-0">
-            {thresholds.map((t) => (
-              <span
-                key={`tick-${t.key}`}
-                className={cn(
-                  'absolute top-0 bottom-0 w-px',
-                  t.key === 'distribute' ? 'bg-amber-300' : 'bg-white/70',
-                )}
-                style={{ left: `${t.fraction * 100}%` }}
-              />
-            ))}
           </div>
         </div>
 

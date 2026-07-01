@@ -71,6 +71,7 @@ contract VaultAuxiliaryDeployBatcherTest is Test {
     address internal swapRouter;
     MockAuxiliaryVault internal vault;
     MockAuxiliaryCreatorToken internal creatorToken;
+    MockAuxiliaryCreatorToken internal shareOftToken;
     UniversalBytecodeStoreV2 internal store;
     MockAuxiliaryCreate2Deployer internal create2;
     VaultAuxiliaryDeployBatcher internal auxBatcher;
@@ -85,6 +86,7 @@ contract VaultAuxiliaryDeployBatcherTest is Test {
         swapRouter = makeAddr("swapRouter");
         vault = new MockAuxiliaryVault(owner);
         creatorToken = new MockAuxiliaryCreatorToken();
+        shareOftToken = new MockAuxiliaryCreatorToken();
 
         store = new UniversalBytecodeStoreV2();
         create2 = new MockAuxiliaryCreate2Deployer(address(store), protocolTreasury);
@@ -119,6 +121,8 @@ contract VaultAuxiliaryDeployBatcherTest is Test {
             creatorToken: address(creatorToken),
             owner: owner,
             vault: address(vault),
+            shareOFT: address(shareOftToken),
+            wrapper: makeAddr("wrapper"),
             swapRouter: swapRouter,
             weth: BASE_WETH,
             protocolRewards: address(0)
@@ -143,6 +147,8 @@ contract VaultAuxiliaryDeployBatcherTest is Test {
             creatorToken: address(creatorToken),
             owner: makeAddr("notOwner"),
             vault: address(vault),
+            shareOFT: address(shareOftToken),
+            wrapper: makeAddr("wrapper"),
             swapRouter: swapRouter,
             weth: BASE_WETH,
             protocolRewards: address(0)
@@ -162,6 +168,8 @@ contract VaultAuxiliaryDeployBatcherTest is Test {
             creatorToken: address(creatorToken),
             owner: owner,
             vault: address(vault),
+            shareOFT: address(shareOftToken),
+            wrapper: makeAddr("wrapper"),
             swapRouter: makeAddr("unapprovedRouter"),
             weth: BASE_WETH,
             protocolRewards: address(0)

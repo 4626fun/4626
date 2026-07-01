@@ -28,6 +28,8 @@
     "api/_handlers/**/*.d.ts",
     "server/_lib/**/*.ts",
     "server/_lib/**/*.d.ts",
+    "../shared/payout-router/harvestCommon.ts",
+    "../shared/payout-router/harvestExecute.ts",
     "server/auth/**/*.ts",
     "server/debank/**/*.ts",
     "server/dexscreener/**/*.ts",

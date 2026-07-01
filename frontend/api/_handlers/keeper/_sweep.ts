@@ -22,6 +22,8 @@ import {
   rateLimitKey,
 } from '@4626/server-core'
 import { createVaultControlPlane } from '../../../server/_lib/controlPlane/vaultControlPlane.js'
+import { verifyPayoutRouterHarvestReadiness } from '../../../server/_lib/onchain/payoutRouterHarvestReadiness.js'
+import { resolvePayoutRouterSwapPathTokens } from '../../../server/_lib/onchain/payoutRouterHarvestTokens.js'
 import { createPublicClient, createWalletClient, http, type Abi, zeroAddress } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
@@ -429,16 +431,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             functionName: 'burnStream',
           }) as `0x${string}`).toLowerCase()
           invariantChecksRun++
-          if (routerBurnStream !== invariantInput.burnStreamAddress) {
-            recordInvariantViolation(
-              'router_burn_stream_mismatch',
-              'PayoutRouter burnStream does not match expected burn stream',
-              invariantInput.burnStreamAddress,
-              routerBurnStream,
-            )
+        if (routerBurnStream !== invariantInput.burnStreamAddress) {
+          recordInvariantViolation(
+            'router_burn_stream_mismatch',
+            'PayoutRouter burnStream does not match expected burn stream',
+            invariantInput.burnStreamAddress,
+            routerBurnStream,
+          )
+        }
+
+        if (invariantInput.shareTokenAddress) {
+          const swapPathTokens = await resolvePayoutRouterSwapPathTokens({
+            publicClient,
+            shareOft: invariantInput.shareTokenAddress,
+          })
+          const readiness = await verifyPayoutRouterHarvestReadiness({
+            publicClient,
+            payoutRouter: invariantInput.payoutRouterAddress,
+            burnStream: invariantInput.burnStreamAddress,
+            swapPathTokens,
+          })
+          invariantChecksRun += readiness.checksRun
+          for (const issue of readiness.violations) {
+            if (issue.severity !== 'critical') continue
+            recordInvariantViolation(issue.code, issue.message)
           }
         }
       }
+    }
     }
 
     let lifecycle = await readLifecycle()

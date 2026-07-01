@@ -33,6 +33,8 @@ contract VaultAuxiliaryDeployBatcher {
         address creatorToken;
         address owner;
         address vault;
+        address shareOFT;
+        address wrapper;
         address swapRouter;
         address weth;
         address protocolRewards;
@@ -74,7 +76,10 @@ contract VaultAuxiliaryDeployBatcher {
         external
         returns (Result memory out)
     {
-        if (params.creatorToken == address(0) || params.owner == address(0) || params.vault == address(0)) {
+        if (
+            params.creatorToken == address(0) || params.owner == address(0) || params.vault == address(0)
+                || params.shareOFT == address(0) || params.wrapper == address(0)
+        ) {
             revert ZeroAddress();
         }
         if (
@@ -105,6 +110,8 @@ contract VaultAuxiliaryDeployBatcher {
             params.creatorToken,
             params.vault,
             out.burnStream,
+            params.shareOFT,
+            params.wrapper,
             protocolTreasury,
             params.swapRouter,
             params.weth,

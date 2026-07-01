@@ -39,7 +39,7 @@ type DeployConfigResponse = {
   payoutRouterApprovedExternalSwapSpenders: `0x${string}`[]
   zoraToken: `0x${string}` | null
   payoutRouterZoraWethFee: number
-  payoutRouterWethCreatorFee: number
+  payoutRouterWethShareFee: number
   impairmentClaims: `0x${string}` | null
   impairmentRecoveryEscrow: `0x${string}` | null
   impairmentGuardian: `0x${string}` | null
@@ -102,7 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     payoutRouterApprovedExternalSwapSpenders: hexAddresses(payoutRouterExternalApprovals.spenders),
     zoraToken: hexAddressOrNull(resolvePayoutRouterZoraToken(contracts.zora ?? null)),
     payoutRouterZoraWethFee: payoutRouterFees.zoraWethFee,
-    payoutRouterWethCreatorFee: payoutRouterFees.wethCreatorFee,
+    payoutRouterWethShareFee: payoutRouterFees.wethShareFee,
     impairmentClaims: hexAddressOrNull(contracts.impairmentClaims ?? null),
     impairmentRecoveryEscrow: hexAddressOrNull(contracts.impairmentRecoveryEscrow ?? null),
     impairmentGuardian: hexAddressOrNull(contracts.impairmentGuardian ?? null),

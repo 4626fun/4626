@@ -13,8 +13,13 @@ import { GaugeControllerABI } from '../kpr-workflows/contracts/abi/GaugeControll
 import { BurnStreamABI } from '../kpr-workflows/contracts/abi/BurnStream.js';
 import { CreatorCoinABI } from '../kpr-workflows/contracts/abi/CreatorCoin.js';
 import { ShareOFTABI } from '../kpr-workflows/contracts/abi/ShareOFT.js';
-import { PayoutRouterABI } from '../kpr-workflows/contracts/abi/PayoutRouter.js';
+import { PayoutRouterABI, CreatorOVaultWrapperABI } from '../kpr-workflows/contracts/abi/PayoutRouter.js';
 import { ERC20ABI } from '../kpr-workflows/contracts/abi/ERC20.js';
+
+const DEFAULT_ZORA_TOKEN = '0x1111111111166b7fe7bd91427724b487980afc69' as const;
+const DEFAULT_WETH = '0x4200000000000000000000000000000000000006' as const;
+const DEFAULT_USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as const;
+const DEFAULT_ROUTER_STALE_MIN_WEI = 1_000_000_000_000_000n;
 
 type VaultInfo = {
   vaultAddress: `0x${string}`;
@@ -70,6 +75,72 @@ type MonitorConfig = {
   expectedTradeFeeCollector?: string;
   enforceTradeFeeCollectorAlignment: boolean;
 };
+
+function parseBigIntEnv(key: string, fallback: bigint): bigint {
+  const raw = String(process.env[key] ?? '').trim();
+  if (!raw) return fallback;
+  try {
+    const parsed = BigInt(raw);
+    return parsed >= 0n ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizeHexAddress(value: string | undefined): `0x${string}` | null {
+  const trimmed = String(value ?? '').trim().toLowerCase();
+  if (!/^0x[0-9a-f]{40}$/.test(trimmed)) return null;
+  return trimmed as `0x${string}`;
+}
+
+function resolveMonitorWethToken(): `0x${string}` {
+  return normalizeHexAddress(process.env.WETH) ?? (DEFAULT_WETH as `0x${string}`);
+}
+
+function resolveMonitorZoraToken(): `0x${string}` {
+  return (
+    normalizeHexAddress(process.env.PAYOUT_ROUTER_ZORA_TOKEN) ??
+    normalizeHexAddress(process.env.ZORA_TOKEN) ??
+    (DEFAULT_ZORA_TOKEN as `0x${string}`)
+  );
+}
+
+function resolveMonitorUsdcToken(): `0x${string}` {
+  return (
+    normalizeHexAddress(process.env.PAYOUT_ROUTER_USDC_TOKEN) ??
+    normalizeHexAddress(process.env.USDC) ??
+    (DEFAULT_USDC as `0x${string}`)
+  );
+}
+
+function resolveMonitorPayoutMode(params: {
+  configMode: 'gauge' | 'payout_router';
+  payoutRouterAddress?: `0x${string}`;
+  onchainPayoutRecipient: string;
+}): 'gauge' | 'payout_router' {
+  const envRaw = String(process.env.PAYOUT_EXPECTED_PAYOUT_RECIPIENT_MODE ?? '').trim().toLowerCase();
+  if (envRaw === 'payout_router') return 'payout_router';
+  if (envRaw === 'gauge') return 'gauge';
+  if (
+    params.payoutRouterAddress &&
+    params.onchainPayoutRecipient === params.payoutRouterAddress.toLowerCase()
+  ) {
+    return 'payout_router';
+  }
+  return params.configMode;
+}
+
+function resolveRouterStaleBalanceMinWei(): bigint {
+  const explicit = parseBigIntEnv('PAYOUT_INTEGRITY_ROUTER_STALE_MIN_WEI', 0n);
+  if (explicit > 0n) return explicit;
+  const harvestMin = parseBigIntEnv('PAYOUT_ROUTER_MIN_BALANCE_WEI', 0n);
+  if (harvestMin > 0n) return harvestMin;
+  return DEFAULT_ROUTER_STALE_MIN_WEI;
+}
+
+function isConfiguredSwapPath(path: unknown): boolean {
+  return typeof path === 'string' && path !== '0x' && path.length > 2;
+}
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const n = Number(value);
@@ -225,21 +296,29 @@ export async function executePayoutIntegrityMonitor(): Promise<PayoutIntegrityMo
   const burnStreamAddr = selected.burnStreamAddress;
   const pendingAlerts: AlertInfo[] = [];
   let checksRun = 0;
+  let onchainPayoutRecipient = '';
+  let monitorPayoutMode: 'gauge' | 'payout_router' = config.expectedPayoutRecipientMode;
 
   try {
-    const payoutRecipient = (await readAddress(coinAddr, CreatorCoinABI, 'payoutRecipient')).toLowerCase();
+    onchainPayoutRecipient = (await readAddress(coinAddr, CreatorCoinABI, 'payoutRecipient')).toLowerCase();
     checksRun += 1;
-    const mode = config.expectedPayoutRecipientMode;
+    monitorPayoutMode = resolveMonitorPayoutMode({
+      configMode: config.expectedPayoutRecipientMode,
+      payoutRouterAddress: selected.payoutRouterAddress,
+      onchainPayoutRecipient,
+    });
     const modeExpected =
-      mode === 'payout_router' ? selected.payoutRouterAddress?.toLowerCase() : gaugeAddr.toLowerCase();
+      monitorPayoutMode === 'payout_router'
+        ? selected.payoutRouterAddress?.toLowerCase()
+        : gaugeAddr.toLowerCase();
     const expected = config.expectedPayoutRecipient?.toLowerCase() ?? modeExpected;
-    if (!expected || payoutRecipient !== expected) {
+    if (!expected || onchainPayoutRecipient !== expected) {
       pendingAlerts.push({
         vaultAddress: vaultAddr,
         alertType: 'creator_coin_payout_recipient_mismatch',
         severity: 'critical',
-        message: `Creator coin creatorCoinPayoutRecipient (external earnings lane) (${payoutRecipient}) != expected (${expected ?? 'unset'})`,
-        details: { mode, payoutRecipient, expected: expected ?? null },
+        message: `Creator coin creatorCoinPayoutRecipient (external earnings lane) (${onchainPayoutRecipient}) != expected (${expected ?? 'unset'})`,
+        details: { mode: monitorPayoutMode, payoutRecipient: onchainPayoutRecipient, expected: expected ?? null },
       });
     }
   } catch {
@@ -401,6 +480,135 @@ export async function executePayoutIntegrityMonitor(): Promise<PayoutIntegrityMo
         }
       } catch {
         // noop
+      }
+    }
+
+    if (monitorPayoutMode === 'payout_router') {
+      try {
+        const wrapperAddr = (await readAddress(payoutRouterAddr, PayoutRouterABI, 'wrapper')).toLowerCase();
+        checksRun += 1;
+        if (wrapperAddr === zeroAddress) {
+          pendingAlerts.push({
+            vaultAddress: vaultAddr,
+            alertType: 'payout_router_wrapper_unset',
+            severity: 'critical',
+            message: 'PayoutRouter.wrapper is unset; ShareOFT unwrap harvest path cannot run',
+            details: { payoutRouterAddress: payoutRouterAddr },
+          });
+        } else {
+          const whitelisted = await readContract<boolean>({
+            address: wrapperAddr as `0x${string}`,
+            abi: CreatorOVaultWrapperABI,
+            functionName: 'isWhitelisted',
+            args: [payoutRouterAddr],
+          });
+          checksRun += 1;
+          if (!whitelisted) {
+            pendingAlerts.push({
+              vaultAddress: vaultAddr,
+              alertType: 'payout_router_wrapper_not_whitelisted',
+              severity: 'critical',
+              message: 'PayoutRouter is not whitelisted on CreatorOVaultWrapper; convertAndQueue share path will revert on unwrap',
+              details: { payoutRouterAddress: payoutRouterAddr, wrapperAddress: wrapperAddr },
+            });
+          }
+        }
+      } catch {
+        // noop
+      }
+
+      try {
+        const shareOftAddr = (await readAddress(payoutRouterAddr, PayoutRouterABI, 'shareOFT')).toLowerCase();
+        if (shareOftAddr !== zeroAddress) {
+          const opType = await readContract<number>({
+            address: shareOftAddr as `0x${string}`,
+            abi: [
+              {
+                type: 'function',
+                name: 'addressType',
+                stateMutability: 'view',
+                inputs: [{ name: 'addr', type: 'address' }],
+                outputs: [{ type: 'uint8' }],
+              },
+            ],
+            functionName: 'addressType',
+            args: [payoutRouterAddr],
+          });
+          checksRun += 1;
+          if (Number(opType) !== 2) {
+            pendingAlerts.push({
+              vaultAddress: vaultAddr,
+              alertType: 'payout_router_share_oft_not_no_fees',
+              severity: 'warning',
+              message: 'PayoutRouter is not ShareOFT NoFees; external earnings swaps lose buy-side fee to gauge instead of full burn',
+              details: { payoutRouterAddress: payoutRouterAddr, shareOftAddress: shareOftAddr, addressType: Number(opType) },
+            });
+          }
+        }
+      } catch {
+        // noop
+      }
+
+      const harvestTokens: Array<{ token: `0x${string}`; label: string }> = [
+        { token: coinAddr, label: 'creatorCoin' },
+        { token: resolveMonitorZoraToken(), label: 'ZORA' },
+        { token: resolveMonitorWethToken(), label: 'WETH' },
+        { token: resolveMonitorUsdcToken(), label: 'USDC' },
+      ];
+      const staleMinWei = resolveRouterStaleBalanceMinWei();
+      const staleBalances: Array<{ label: string; token: string; balance: string }> = [];
+
+      for (const entry of harvestTokens) {
+        try {
+          if (entry.label !== 'creatorCoin') {
+            const path = await readContract<string>({
+              address: payoutRouterAddr,
+              abi: PayoutRouterABI,
+              functionName: 'swapPathToShareOFT',
+              args: [entry.token],
+            });
+            checksRun += 1;
+            if (!isConfiguredSwapPath(path)) {
+              pendingAlerts.push({
+                vaultAddress: vaultAddr,
+                alertType: 'payout_router_swap_path_missing',
+                severity: 'warning',
+                message: `PayoutRouter has no V3 swap path configured for ${entry.label}`,
+                details: {
+                  payoutRouterAddress: payoutRouterAddr,
+                  tokenIn: entry.token,
+                  label: entry.label,
+                },
+              });
+            }
+          }
+
+          const balance = await readBigInt(entry.token, ERC20ABI, 'balanceOf', [payoutRouterAddr]);
+          checksRun += 1;
+          if (balance > staleMinWei) {
+            staleBalances.push({
+              label: entry.label,
+              token: entry.token,
+              balance: balance.toString(),
+            });
+          }
+        } catch {
+          // noop
+        }
+      }
+
+      if (staleBalances.length > 0) {
+        pendingAlerts.push({
+          vaultAddress: vaultAddr,
+          alertType: 'payout_router_stale_balances',
+          severity: 'warning',
+          message: `PayoutRouter holds unharvested token balances above ${staleMinWei.toString()} wei`,
+          details: {
+            payoutRouterAddress: payoutRouterAddr,
+            staleMinWei: staleMinWei.toString(),
+            balances: staleBalances,
+          },
+        });
       }
     }
   }

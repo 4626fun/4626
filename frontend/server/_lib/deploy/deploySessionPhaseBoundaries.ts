@@ -7,6 +7,11 @@ const SELECTOR_FINALIZE_PHASE2 = new Set([
   '0xab56c176',
   '0xcafc9348',
 ])
+const PHASE2_PRE_FINALIZE_SELECTORS = new Set([
+  '0x4689260b', // whitelistPayoutRouterOnWrapper(address,address)
+  '0x8522016e', // setPayoutRouterShareOftNoFees(address,address)
+  '0xafe8d7e9', // deployPhase2Auxiliaries(...)
+])
 const SELECTOR_DEPLOY_PHASE3_STRATEGIES = '0x881d4960'
 const SELECTOR_LAUNCH_DEFERRED_AUCTION = '0x02afdbcb'
 const SELECTOR_DEPLOY_TO_STRATEGIES = '0x355aa867'
@@ -34,17 +39,31 @@ function assertNoPostAuctionCcaCalls(calls: DeploySessionPhaseCall[], phaseLabel
 
 /**
  * Ensures deploy-session UserOps stay phase-isolated:
+ * - Phase 2 pre-finalize: aux deploy + batcher wrapper whitelist + ShareOFT NoFees (before ownership transfer)
  * - Phase 2 finalize: split + ownership only (no strategies, no auction launch, no CCA graduation)
  * - Phase 3: deployPhase3Strategies + deployToStrategies (Charm/Ajna TVL), never launchDeferredAuction or migrate
  * - Phase 4: launchDeferredAuction only (schedules CCA; graduation/migrate runs later via keeper)
  */
 export function assertDeploySessionPhaseBoundaries(params: {
+  phase2PreFinalizeCalls?: DeploySessionPhaseCall[]
   phase2FinalizeCalls: DeploySessionPhaseCall[]
   phase3Calls: DeploySessionPhaseCall[]
   phase4Calls: DeploySessionPhaseCall[]
   hasPhase3: boolean
   hasPhase4: boolean
 }): void {
+  const phase2PreFinalizeCalls = params.phase2PreFinalizeCalls ?? []
+  for (const call of phase2PreFinalizeCalls) {
+    const selector = readSelector(call.data)
+    if (SELECTOR_FINALIZE_PHASE2.has(selector)) {
+      throw new Error(`phase2_pre_finalize_boundary_violation:finalize:${selector}`)
+    }
+    if (!PHASE2_PRE_FINALIZE_SELECTORS.has(selector)) {
+      throw new Error(`phase2_pre_finalize_boundary_violation:${selector}`)
+    }
+  }
+  assertNoPostAuctionCcaCalls(phase2PreFinalizeCalls, 'phase2_pre_finalize')
+
   for (const call of params.phase2FinalizeCalls) {
     const selector = readSelector(call.data)
     if (!SELECTOR_FINALIZE_PHASE2.has(selector)) {

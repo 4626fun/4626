@@ -3,40 +3,46 @@
  *
  * Per vault (when payoutRouterAddress is configured):
  *   1) Optionally claim protocol rewards into the router (claimAllProtocolRewards)
- *   2) Run convertAndQueue for creatorCoin
- *   3) Run convertAndQueue for ZORA
- *   4) Optionally run convertAndQueue for WETH (to process claimed protocol rewards)
+ *   2) Plan all token conversions and execute via processBatch (single tx)
+ *   3) Optionally checkpoint the burn stream
  */
 
 import { CHAINS } from '../config.js';
 import { readContract, writeContract, type WriteResult } from '../utils/onchain.js';
-import { deriveMinOutFromQuote, resolveHarvestMinCreatorOut } from '../utils/payoutRouterMinOut.js';
-import { alertCritical, alertInfo, alertWarning, formatTokens } from '../utils/alerts.js';
+import { alertCritical, alertInfo, alertWarning } from '../utils/alerts.js';
 import {
   fetchActiveVaults,
   filterVaultsForWorkflow,
   verifyVaultRegistryBinding,
   type VaultConfig,
 } from '../utils/registry.js';
+import {
+  PAYOUT_ROUTER_HARVEST_ABI,
+  parseHarvestBoolEnv,
+  parseHarvestBpsEnv,
+  planPayoutRouterHarvestConversions,
+} from '../utils/payoutRouterHarvestPlan.js';
+import {
+  executePlannedHarvestConversions,
+  parseHarvestPerTokenFallbackEnv,
+} from '../utils/payoutRouterHarvestExecute.js';
+import { buildPayoutRouterHarvestTokenPlan } from '../utils/payoutRouterHarvestTokens.js';
+import { maybeExecutePayoutRouterTreasurySetup } from '../utils/payoutRouterTreasurySetupClient.js';
 
 const WORKFLOW_NAME = 'payout-router-harvest';
 
-const DEFAULT_ZORA_TOKEN = '0x1111111111166b7fe7bd91427724b487980afc69' as const;
-const DEFAULT_WETH = '0x4200000000000000000000000000000000000006' as const;
-const DEFAULT_DEFILLAMA_API_BASE = 'https://api.llama.fi' as const;
-const EXTERNAL_QUOTE_TIMEOUT_MS = 15_000;
-
-const ERC20_ABI = [
+const PAYOUT_ROUTER_SWAP_PATH_ABI = [
   {
     type: 'function',
-    name: 'balanceOf',
+    name: 'swapPathToShareOFT',
     stateMutability: 'view',
-    inputs: [{ name: 'account', type: 'address' }],
-    outputs: [{ type: 'uint256' }],
+    inputs: [{ name: 'tokenIn', type: 'address' }],
+    outputs: [{ type: 'bytes' }],
   },
 ] as const;
 
 const PAYOUT_ROUTER_ABI = [
+  ...PAYOUT_ROUTER_HARVEST_ABI,
   {
     type: 'function',
     name: 'protocolRewardsClaimable',
@@ -53,61 +59,10 @@ const PAYOUT_ROUTER_ABI = [
   },
   {
     type: 'function',
-    name: 'convertAndQueue',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'tokenIn', type: 'address' },
-      { name: 'amountIn', type: 'uint256' },
-      { name: 'minCreatorOut', type: 'uint256' },
-    ],
-    outputs: [
-      { name: 'creatorOut', type: 'uint256' },
-      { name: 'sharesQueued', type: 'uint256' },
-    ],
-  },
-  {
-    type: 'function',
-    name: 'convertViaExternalAndQueue',
-    stateMutability: 'nonpayable',
-    inputs: [
-      {
-        name: 'params',
-        type: 'tuple',
-        components: [
-          { name: 'tokenIn', type: 'address' },
-          { name: 'amountIn', type: 'uint256' },
-          { name: 'minCreatorOut', type: 'uint256' },
-          { name: 'spender', type: 'address' },
-          { name: 'swapTarget', type: 'address' },
-          { name: 'swapCallData', type: 'bytes' },
-        ],
-      },
-    ],
-    outputs: [
-      { name: 'creatorOut', type: 'uint256' },
-      { name: 'sharesQueued', type: 'uint256' },
-    ],
-  },
-  {
-    type: 'function',
-    name: 'approvedExternalSwapTargets',
+    name: 'shareOFT',
     stateMutability: 'view',
-    inputs: [{ name: 'target', type: 'address' }],
-    outputs: [{ type: 'bool' }],
-  },
-  {
-    type: 'function',
-    name: 'approvedExternalSwapSpenders',
-    stateMutability: 'view',
-    inputs: [{ name: 'spender', type: 'address' }],
-    outputs: [{ type: 'bool' }],
-  },
-  {
-    type: 'function',
-    name: 'swapPathToCreator',
-    stateMutability: 'view',
-    inputs: [{ name: 'tokenIn', type: 'address' }],
-    outputs: [{ type: 'bytes' }],
+    inputs: [],
+    outputs: [{ type: 'address' }],
   },
 ] as const;
 
@@ -123,10 +78,10 @@ const BURN_STREAM_CHECKPOINT_ABI = [
 
 export interface RouterTokenResult {
   token: `0x${string}`;
-  label: 'creatorCoin' | 'ZORA' | 'WETH';
+  label: 'creatorCoin' | 'ZORA' | 'WETH' | 'USDC' | string;
   balance: bigint;
   converted: boolean;
-  route?: 'v3' | 'external';
+  route?: 'v3' | 'external' | 'direct';
   txHash?: `0x${string}`;
   error?: string;
   skippedReason?: string;
@@ -138,6 +93,7 @@ export interface RouterVaultResult {
   claimedProtocolRewards: boolean;
   claimableBefore: bigint;
   claimResult?: WriteResult;
+  batchTxHash?: `0x${string}`;
   tokens: RouterTokenResult[];
   skippedReason?: string;
 }
@@ -152,14 +108,6 @@ export interface BatchPayoutRouterHarvestResult {
   results: RouterVaultResult[];
 }
 
-function parseBoolEnv(key: string, fallback: boolean): boolean {
-  const raw = String(process.env[key] ?? '').trim().toLowerCase();
-  if (!raw) return fallback;
-  if (raw === '1' || raw === 'true' || raw === 'yes') return true;
-  if (raw === '0' || raw === 'false' || raw === 'no') return false;
-  return fallback;
-}
-
 function parseBigIntEnv(key: string, fallback: bigint): bigint {
   const raw = String(process.env[key] ?? '').trim();
   if (!raw) return fallback;
@@ -171,227 +119,22 @@ function parseBigIntEnv(key: string, fallback: bigint): bigint {
   }
 }
 
-function parseBpsEnv(key: string, fallback: number): number {
-  const raw = String(process.env[key] ?? '').trim();
-  if (!raw) return fallback;
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) return fallback;
-  if (parsed < 1 || parsed > 5_000) return fallback;
-  return parsed;
-}
-
-function normalizeAddressMaybe(value: string): `0x${string}` | null {
-  const raw = String(value || '').trim().toLowerCase();
-  if (!/^0x[0-9a-f]{40}$/.test(raw)) return null;
-  return raw as `0x${string}`;
-}
-
-function parseAddressListEnv(key: string): Array<`0x${string}`> {
-  const raw = String(process.env[key] ?? '').trim();
-  if (!raw) return [];
-  const out: Array<`0x${string}`> = [];
-  for (const token of raw.split(/[\s,]+/g).map((s) => s.trim()).filter(Boolean)) {
-    const normalized = normalizeAddressMaybe(token);
-    if (normalized) out.push(normalized);
-  }
-  return out;
-}
-
-function resolveZoraTokens(): Array<`0x${string}`> {
-  const primary =
-    normalizeAddressMaybe(String(process.env.PAYOUT_ROUTER_ZORA_TOKEN ?? '')) ??
-    normalizeAddressMaybe(String(process.env.ZORA_TOKEN ?? '')) ??
-    (DEFAULT_ZORA_TOKEN as `0x${string}`);
-  const fallback = parseAddressListEnv('PAYOUT_ROUTER_ZORA_TOKEN_FALLBACKS');
-
-  const out: Array<`0x${string}`> = [];
-  const seen = new Set<string>();
-  for (const token of [primary, ...fallback]) {
-    const normalized = normalizeAddressMaybe(token) ?? token;
-    const key = normalized.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(normalized);
-  }
-  return out;
-}
-
 function short(addr: `0x${string}`): string {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function isHexData(value: unknown): value is `0x${string}` {
-  return typeof value === 'string' && /^0x[0-9a-fA-F]+$/.test(value) && value !== '0x';
-}
-
-function parseJsonText(text: string): unknown {
-  if (!text.trim()) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { message: text.slice(0, 1_000) };
-  }
-}
-
-async function fetchJson(url: string, init: RequestInit): Promise<{ status: number; payload: unknown }> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), EXTERNAL_QUOTE_TIMEOUT_MS);
-  try {
-    const response = await fetch(url, { ...init, signal: controller.signal });
-    const raw = await response.text();
-    return { status: response.status, payload: parseJsonText(raw) };
-  } catch (error: any) {
-    const aborted = String(error?.name ?? '').toLowerCase() === 'aborterror';
-    return {
-      status: aborted ? 504 : 502,
-      payload: { error: aborted ? 'upstream_timeout' : String(error?.message ?? 'upstream_unreachable') },
-    };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function extractSwapTransaction(
-  payload: unknown,
-  fallbackFrom: `0x${string}`,
-): { to: `0x${string}`; from: `0x${string}`; data: `0x${string}`; value: string } | null {
-  if (!isObject(payload)) return null;
-
-  let candidate: Record<string, unknown> | null = null;
-  for (const key of ['transaction', 'tx', 'swap'] as const) {
-    const value = payload[key];
-    if (isObject(value)) {
-      candidate = value as Record<string, unknown>;
-      break;
-    }
-  }
-  if (!candidate && isObject(payload.route)) {
-    const routeObj = payload.route as Record<string, unknown>;
-    if (isObject(routeObj.tx)) candidate = routeObj.tx as Record<string, unknown>;
-    else if (isObject(routeObj.transaction)) candidate = routeObj.transaction as Record<string, unknown>;
-  }
-  if (!candidate && typeof payload.to === 'string' && payload.data != null) {
-    candidate = payload as Record<string, unknown>;
-  }
-  if (!candidate) return null;
-
-  const to = normalizeAddressMaybe(String(candidate.to ?? ''));
-  const from = normalizeAddressMaybe(String(candidate.from ?? '')) ?? fallbackFrom;
-  const data = candidate.data;
-  const value = candidate.value == null ? '0' : String(candidate.value);
-  if (!to || !from || !isHexData(data)) return null;
-
-  return { to, from, data, value };
-}
-
-function readDefiLlamaApiBase(): string {
-  const raw = String(process.env.DEFILLAMA_SWAP_API_BASE ?? '').trim();
-  return raw ? raw.replace(/\/+$/, '') : DEFAULT_DEFILLAMA_API_BASE;
-}
-
-type DefiLlamaExternalQuote = {
-  swapTarget: `0x${string}`;
-  spender: `0x${string}`;
-  swapCallData: `0x${string}`;
-  amountOut?: bigint;
-  error?: string;
-};
-
-/** Best-effort expected-output extraction from an aggregator quote payload. */
-function extractQuoteAmountOut(payload: Record<string, unknown>): bigint | undefined {
-  const candidates: unknown[] = [
-    payload.amountReturned,
-    payload.outAmount,
-    payload.toAmount,
-    payload.buyAmount,
-    isObject(payload.rawQuote) ? (payload.rawQuote as Record<string, unknown>).outAmount : undefined,
-    isObject(payload.rawQuote) ? (payload.rawQuote as Record<string, unknown>).buyAmount : undefined,
-  ];
-  for (const candidate of candidates) {
-    const raw = typeof candidate === 'number' ? String(Math.floor(candidate)) : String(candidate ?? '').trim();
-    if (!/^\d+$/.test(raw)) continue;
-    try {
-      const parsed = BigInt(raw);
-      if (parsed > 0n) return parsed;
-    } catch {
-      // keep scanning
-    }
-  }
-  return undefined;
-}
-
-async function fetchDefiLlamaExternalQuote(params: {
-  payoutRouterAddress: `0x${string}`;
-  tokenIn: `0x${string}`;
-  tokenOut: `0x${string}`;
-  amountIn: bigint;
-  slippageBps: number;
-}): Promise<DefiLlamaExternalQuote | null> {
-  const quoteRequest = {
-    chain: 'base',
-    from: params.tokenIn,
-    to: params.tokenOut,
-    amount: params.amountIn.toString(),
-    fromAddress: params.payoutRouterAddress,
-    slippage: (params.slippageBps / 100).toString(),
-  };
-
-  const url = new URL(`${readDefiLlamaApiBase()}/swap/quote`);
-  for (const [key, value] of Object.entries(quoteRequest)) {
-    url.searchParams.set(key, value);
-  }
-
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  const apiKey = String(process.env.DEFILLAMA_API_KEY ?? '').trim();
-  if (apiKey) headers['x-api-key'] = apiKey;
-
-  const upstream = await fetchJson(url.toString(), { method: 'GET', headers });
-  if (upstream.status >= 400) {
-    return { swapTarget: params.payoutRouterAddress, spender: params.payoutRouterAddress, swapCallData: '0x', error: String((upstream.payload as any)?.error ?? `http_${upstream.status}`) };
-  }
-
-  const tx = extractSwapTransaction(upstream.payload, params.payoutRouterAddress);
-  if (!tx) {
-    return {
-      swapTarget: params.payoutRouterAddress,
-      spender: params.payoutRouterAddress,
-      swapCallData: '0x',
-      error: 'defillama_missing_swap_tx',
-    };
-  }
-
-  const payloadObj = isObject(upstream.payload) ? (upstream.payload as Record<string, unknown>) : {};
-  const spender =
-    normalizeAddressMaybe(String(payloadObj.allowanceTarget ?? '')) ??
-    normalizeAddressMaybe(String(payloadObj.approvalAddress ?? '')) ??
-    normalizeAddressMaybe(String(payloadObj.spender ?? '')) ??
-    tx.to;
-
-  return {
-    swapTarget: tx.to,
-    spender,
-    swapCallData: tx.data,
-    amountOut: extractQuoteAmountOut(payloadObj),
-  };
-}
-
 export async function executePayoutRouterHarvest(): Promise<BatchPayoutRouterHarvestResult> {
-  const zoraTokens = resolveZoraTokens();
-  const wethToken = (process.env.WETH?.trim() || DEFAULT_WETH) as `0x${string}`;
-  const claimProtocolRewards = parseBoolEnv('PAYOUT_ROUTER_CLAIM_PROTOCOL_REWARDS', true);
-  const processWeth = parseBoolEnv('PAYOUT_ROUTER_PROCESS_WETH', true);
-  const allowExternalSwaps = parseBoolEnv('PAYOUT_ROUTER_ALLOW_EXTERNAL_SWAPS', false);
-  const preferExternalSwaps = parseBoolEnv('PAYOUT_ROUTER_PREFER_EXTERNAL_SWAPS', false);
-  const externalSwapSlippageBps = parseBpsEnv('PAYOUT_ROUTER_EXTERNAL_SWAP_SLIPPAGE_BPS', 100);
+  const processWeth = parseHarvestBoolEnv('PAYOUT_ROUTER_PROCESS_WETH', true);
+  const claimProtocolRewards = parseHarvestBoolEnv('PAYOUT_ROUTER_CLAIM_PROTOCOL_REWARDS', true);
+  const allowExternalSwaps = parseHarvestBoolEnv('PAYOUT_ROUTER_ALLOW_EXTERNAL_SWAPS', false);
+  const preferExternalSwaps = parseHarvestBoolEnv('PAYOUT_ROUTER_PREFER_EXTERNAL_SWAPS', false);
+  const externalSwapSlippageBps = parseHarvestBpsEnv('PAYOUT_ROUTER_EXTERNAL_SWAP_SLIPPAGE_BPS', 100);
 
   const minBalance = parseBigIntEnv('PAYOUT_ROUTER_MIN_BALANCE_WEI', 0n);
-  const minCreatorOutDefault = parseBigIntEnv('PAYOUT_ROUTER_MIN_CREATOR_OUT_WEI', 0n);
-  const minCreatorOutZora = parseBigIntEnv('PAYOUT_ROUTER_MIN_CREATOR_OUT_ZORA_WEI', minCreatorOutDefault);
-  const minCreatorOutWeth = parseBigIntEnv('PAYOUT_ROUTER_MIN_CREATOR_OUT_WETH_WEI', minCreatorOutDefault);
+  const minOutDefault = parseBigIntEnv('PAYOUT_ROUTER_MIN_OUT_WEI', parseBigIntEnv('PAYOUT_ROUTER_MIN_CREATOR_OUT_WEI', 0n));
+  const minOutZora = parseBigIntEnv('PAYOUT_ROUTER_MIN_OUT_ZORA_WEI', parseBigIntEnv('PAYOUT_ROUTER_MIN_CREATOR_OUT_ZORA_WEI', minOutDefault));
+  const minOutWeth = parseBigIntEnv('PAYOUT_ROUTER_MIN_OUT_WETH_WEI', parseBigIntEnv('PAYOUT_ROUTER_MIN_CREATOR_OUT_WETH_WEI', minOutDefault));
+  const minOutUsdc = parseBigIntEnv('PAYOUT_ROUTER_MIN_OUT_USDC_WEI', parseBigIntEnv('PAYOUT_ROUTER_MIN_CREATOR_OUT_USDC_WEI', minOutDefault));
 
   let vaults: VaultConfig[];
   try {
@@ -444,19 +187,21 @@ export async function executePayoutRouterHarvest(): Promise<BatchPayoutRouterHar
       continue;
     }
 
-    const tokenPlan: Array<{
-      token: `0x${string}`;
-      label: RouterTokenResult['label'];
-      minCreatorOut: bigint;
-    }> = [
-      { token: creatorCoin, label: 'creatorCoin', minCreatorOut: 0n },
-      ...zoraTokens.map((token) => ({ token, label: 'ZORA' as const, minCreatorOut: minCreatorOutZora })),
-      ...(processWeth ? [{ token: wethToken, label: 'WETH' as const, minCreatorOut: minCreatorOutWeth }] : []),
-    ];
-
-    const dedupedTokenPlan = tokenPlan.filter((entry, index, all) => {
-      return all.findIndex((candidate) => candidate.token.toLowerCase() === entry.token.toLowerCase()) === index;
+    const shareOft = await readContract<`0x${string}`>({
+      address: payoutRouterAddress,
+      abi: PAYOUT_ROUTER_ABI,
+      functionName: 'shareOFT',
     });
+
+    const tokenPlan = buildPayoutRouterHarvestTokenPlan({
+      creatorCoin,
+      processWeth,
+      minOutZora,
+      minOutWeth,
+      minOutUsdc,
+    });
+
+    const dedupedTokenPlan = tokenPlan;
 
     const result: RouterVaultResult = {
       vaultAddress: vault.vaultAddress,
@@ -467,6 +212,31 @@ export async function executePayoutRouterHarvest(): Promise<BatchPayoutRouterHar
     };
 
     try {
+      let treasurySetupAttempted = false
+      const readSwapPath = async (tokenIn: `0x${string}`): Promise<`0x${string}`> => {
+        const path = await readContract<`0x${string}`>({
+          address: payoutRouterAddress,
+          abi: PAYOUT_ROUTER_SWAP_PATH_ABI,
+          functionName: 'swapPathToShareOFT',
+          args: [tokenIn],
+        })
+        if (path && path !== '0x') return path
+        if (treasurySetupAttempted) return '0x'
+        treasurySetupAttempted = true
+        const setup = await maybeExecutePayoutRouterTreasurySetup({
+          payoutRouter: payoutRouterAddress,
+          creatorToken: creatorCoin,
+        })
+        console.info(`[${short(vault.vaultAddress)}] payout_router.treasury_auto_setup`, setup)
+        if (!setup.executed) return '0x'
+        return readContract<`0x${string}`>({
+          address: payoutRouterAddress,
+          abi: PAYOUT_ROUTER_SWAP_PATH_ABI,
+          functionName: 'swapPathToShareOFT',
+          args: [tokenIn],
+        }).catch(() => '0x' as `0x${string}`)
+      }
+
       if (claimProtocolRewards) {
         try {
           const claimableBefore = await readContract<bigint>({
@@ -497,219 +267,93 @@ export async function executePayoutRouterHarvest(): Promise<BatchPayoutRouterHar
         }
       }
 
-      for (const token of dedupedTokenPlan) {
-        const balance = await readContract<bigint>({
-          address: token.token,
-          abi: ERC20_ABI,
-          functionName: 'balanceOf',
-          args: [payoutRouterAddress],
-        });
+      const { conversions, skipped } = await planPayoutRouterHarvestConversions({
+        payoutRouterAddress,
+        shareOft,
+        tokenPlan: dedupedTokenPlan,
+        minBalance,
+        allowExternalSwaps,
+        preferExternalSwaps,
+        externalSwapSlippageBps,
+        resolveSwapPath: readSwapPath,
+      });
 
-        if (balance <= minBalance) {
-          result.tokens.push({
-            token: token.token,
-            label: token.label,
-            balance,
-            converted: false,
-            skippedReason: 'balance_below_threshold',
-          });
-          continue;
-        }
-
-        let hasV3Path = true;
-        let v3Path: `0x${string}` = '0x';
-        if (token.label !== 'creatorCoin') {
-          v3Path = await readContract<`0x${string}`>({
-            address: payoutRouterAddress,
-            abi: PAYOUT_ROUTER_ABI,
-            functionName: 'swapPathToCreator',
-            args: [token.token],
-          });
-          hasV3Path = Boolean(v3Path && v3Path !== '0x');
-        }
-
-        const shouldTryExternal =
-          allowExternalSwaps && token.label !== 'creatorCoin' && (preferExternalSwaps || !hasV3Path);
-
-        if (shouldTryExternal) {
-          const quote = await fetchDefiLlamaExternalQuote({
-            payoutRouterAddress,
-            tokenIn: token.token,
-            tokenOut: creatorCoin,
-            amountIn: balance,
-            slippageBps: externalSwapSlippageBps,
-          });
-
-          if (!quote || quote.error || quote.swapCallData === '0x') {
-            if (!hasV3Path) {
-              result.tokens.push({
-                token: token.token,
-                label: token.label,
-                balance,
-                converted: false,
-                skippedReason: quote?.error ?? 'external_quote_unavailable',
-              });
-              continue;
-            }
-          } else {
-            const [targetApproved, spenderApproved] = await Promise.all([
-              readContract<boolean>({
-                address: payoutRouterAddress,
-                abi: PAYOUT_ROUTER_ABI,
-                functionName: 'approvedExternalSwapTargets',
-                args: [quote.swapTarget],
-              }),
-              readContract<boolean>({
-                address: payoutRouterAddress,
-                abi: PAYOUT_ROUTER_ABI,
-                functionName: 'approvedExternalSwapSpenders',
-                args: [quote.spender],
-              }),
-            ]);
-
-            if (!targetApproved || !spenderApproved) {
-              if (!hasV3Path) {
-                result.tokens.push({
-                  token: token.token,
-                  label: token.label,
-                  balance,
-                  converted: false,
-                  skippedReason: !targetApproved
-                    ? `external_target_not_approved:${quote.swapTarget}`
-                    : `external_spender_not_approved:${quote.spender}`,
-                });
-                continue;
-              }
-            } else {
-              // The external route reverts on-chain when minCreatorOut == 0,
-              // so derive a slippage-bounded min-out from the aggregator quote
-              // and skip the external lane cleanly when neither a quote-derived
-              // value nor an env floor is available.
-              let externalMinOut = token.minCreatorOut;
-              if (typeof quote.amountOut === 'bigint' && quote.amountOut > 0n) {
-                const derived = deriveMinOutFromQuote(quote.amountOut, externalSwapSlippageBps);
-                if (derived > externalMinOut) externalMinOut = derived;
-              }
-              if (externalMinOut <= 0n) {
-                if (!hasV3Path) {
-                  result.tokens.push({
-                    token: token.token,
-                    label: token.label,
-                    balance,
-                    converted: false,
-                    skippedReason: 'external_min_out_unavailable',
-                  });
-                  continue;
-                }
-                // fall through to the V3 route below
-              } else {
-                const externalConvertResult = await writeContract({
-                  address: payoutRouterAddress,
-                  abi: PAYOUT_ROUTER_ABI,
-                  functionName: 'convertViaExternalAndQueue',
-                  args: [
-                    {
-                      tokenIn: token.token,
-                      amountIn: balance,
-                      minCreatorOut: externalMinOut,
-                      spender: quote.spender,
-                      swapTarget: quote.swapTarget,
-                      swapCallData: quote.swapCallData,
-                    },
-                  ],
-                });
-
-                result.tokens.push({
-                  token: token.token,
-                  label: token.label,
-                  balance,
-                  converted: externalConvertResult.success,
-                  route: 'external',
-                  txHash: externalConvertResult.success ? externalConvertResult.txHash : undefined,
-                  error: externalConvertResult.success ? undefined : externalConvertResult.error,
-                });
-
-                if (externalConvertResult.success) {
-                  batch.converted += 1;
-                  console.log(
-                    `[${short(vault.vaultAddress)}] convertViaExternalAndQueue(${token.label}) succeeded; amount=${formatTokens(balance, token.label)}`,
-                  );
-                  continue;
-                }
-
-                if (!hasV3Path) {
-                  batch.errors += 1;
-                  continue;
-                }
-              }
-            }
-          }
-        }
-
-        if (token.label !== 'creatorCoin' && !hasV3Path) {
-          result.tokens.push({
-            token: token.token,
-            label: token.label,
-            balance,
-            converted: false,
-            skippedReason: 'path_not_configured',
-          });
-          continue;
-        }
-
-        // Slippage guard: the V3 route does not enforce min-out on-chain, so
-        // never submit a swap with min-out 0 — quote it, or skip (fail closed).
-        let v3MinCreatorOut = token.minCreatorOut;
-        if (token.label !== 'creatorCoin') {
-          const minOut = await resolveHarvestMinCreatorOut({
-            path: v3Path,
-            amountIn: balance,
-            configuredMinOut: token.minCreatorOut,
-          });
-          if (!minOut.ok) {
-            result.tokens.push({
-              token: token.token,
-              label: token.label,
-              balance,
-              converted: false,
-              skippedReason: minOut.reason,
-            });
-            continue;
-          }
-          v3MinCreatorOut = minOut.minCreatorOut;
-        }
-
-        const convertResult = await writeContract({
-          address: payoutRouterAddress,
-          abi: PAYOUT_ROUTER_ABI,
-          functionName: 'convertAndQueue',
-          args: [token.token, balance, v3MinCreatorOut],
-        });
-
+      for (const entry of skipped) {
         result.tokens.push({
-          token: token.token,
-          label: token.label,
-          balance,
-          converted: convertResult.success,
-          route: 'v3',
-          txHash: convertResult.success ? convertResult.txHash : undefined,
-          error: convertResult.success ? undefined : convertResult.error,
+          token: entry.token,
+          label: entry.label,
+          balance: entry.balance,
+          converted: false,
+          skippedReason: entry.skippedReason,
+        });
+      }
+
+      let batchSucceeded = false
+      if (conversions.length > 0) {
+        const execution = await executePlannedHarvestConversions({
+          conversions,
+          perTokenFallback: parseHarvestPerTokenFallbackEnv(),
+          submitBatch: async (actions) => {
+            const batchResult = await writeContract({
+              address: payoutRouterAddress,
+              abi: PAYOUT_ROUTER_ABI,
+              functionName: 'processBatch',
+              args: [actions],
+            });
+            return {
+              success: batchResult.success,
+              txHash: batchResult.success ? batchResult.txHash : undefined,
+              error: batchResult.success ? undefined : batchResult.error,
+            };
+          },
         });
 
-        if (convertResult.success) {
-          batch.converted += 1;
+        result.batchTxHash = execution.primaryBatchTxHash ?? execution.converted[0]?.txHash;
+
+        for (const success of execution.converted) {
+          result.tokens.push({
+            token: success.conversion.token,
+            label: success.conversion.label,
+            balance: success.conversion.balance,
+            converted: true,
+            route: success.conversion.route,
+            txHash: success.txHash ?? execution.primaryBatchTxHash,
+          });
+        }
+
+        for (const failure of execution.failed) {
+          result.tokens.push({
+            token: failure.conversion.token,
+            label: failure.conversion.label,
+            balance: failure.conversion.balance,
+            converted: false,
+            route: failure.conversion.route,
+            error: failure.error,
+          });
+        }
+
+        if (execution.converted.length > 0) {
+          batchSucceeded = true;
+          batch.converted += execution.converted.length;
           console.log(
-            `[${short(vault.vaultAddress)}] convertAndQueue(${token.label}) succeeded; amount=${formatTokens(balance, token.label)}`,
+            `[${short(vault.vaultAddress)}] processBatch converted ${execution.converted.length}/${conversions.length}` +
+              (execution.usedPerTokenFallback ? ' via per-token fallback' : ''),
           );
-        } else {
-          batch.errors += 1;
+        }
+
+        if (execution.failed.length > 0) {
+          batch.errors += execution.failed.length;
           console.error(
-            `[${short(vault.vaultAddress)}] convertAndQueue(${token.label}) failed: ${convertResult.error ?? 'unknown'}`,
+            `[${short(vault.vaultAddress)}] processBatch failed for ${execution.failed.length} token(s)`,
           );
         }
       }
 
-      if (parseBoolEnv('PAYOUT_ROUTER_DRIP_BURN_STREAM', true) && vault.burnStreamAddress) {
+      if (
+        batchSucceeded &&
+        parseHarvestBoolEnv('PAYOUT_ROUTER_DRIP_BURN_STREAM', true) &&
+        vault.burnStreamAddress
+      ) {
         const dripResult = await writeContract({
           address: vault.burnStreamAddress,
           abi: BURN_STREAM_CHECKPOINT_ABI,

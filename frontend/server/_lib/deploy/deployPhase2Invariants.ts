@@ -1,5 +1,7 @@
 import { decodeFunctionData, getAddress, isAddress, type Address, type Hex } from 'viem'
 
+import { verifyPayoutRouterHarvestReadiness } from '../onchain/payoutRouterHarvestReadiness.js'
+
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
 
 const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI = [
@@ -332,6 +334,29 @@ export async function verifyDeployPhase2Invariants(
       'non-zero treasury address',
       creatorTreasury,
     )
+  }
+
+  if (mode === 'payout_router' && expectedPayoutRecipient) {
+    const { resolvePayoutRouterSwapPathTokens } = await import('../onchain/payoutRouterHarvestTokens.js')
+    const swapPathTokens = await resolvePayoutRouterSwapPathTokens({
+      publicClient: params.publicClient,
+      shareOft: info.shareToken,
+    })
+    const readiness = await verifyPayoutRouterHarvestReadiness({
+      publicClient: params.publicClient as Parameters<typeof verifyPayoutRouterHarvestReadiness>[0]['publicClient'],
+      payoutRouter: expectedPayoutRecipient,
+      burnStream: normalizeAddress(payload?.expectedBurnStream),
+      swapPathTokens,
+    })
+    checksRun += readiness.checksRun
+    for (const issue of readiness.violations) {
+      recordViolation(
+        issue.code,
+        issue.message,
+        issue.severity === 'critical' ? 'required' : 'recommended',
+        issue.severity,
+      )
+    }
   }
 
   return {

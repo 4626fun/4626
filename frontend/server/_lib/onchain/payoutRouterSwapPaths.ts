@@ -24,7 +24,7 @@ const UNISWAP_V3_FACTORY_ABI = [
 export type PayoutRouterSwapPathPlan = {
   tokenIn: Address
   path: Hex
-  label: 'WETH' | 'ZORA'
+  label: 'WETH' | 'ZORA' | 'USDC'
 }
 
 type PublicClientReader = {
@@ -86,36 +86,36 @@ async function resolveV3Fee(
 
 export async function resolvePayoutRouterSwapPaths(params: {
   publicClient: PublicClientReader
-  creatorToken: Address
+  shareOft: Address
 }): Promise<PayoutRouterSwapPathPlan[]> {
   const contracts = getApiContracts()
   const weth = getAddress(contracts.weth)
   const usdc = getAddress(contracts.usdc)
-  const creatorToken = getAddress(params.creatorToken)
+  const shareOft = getAddress(params.shareOft)
   const factory = getAddress(contracts.uniswapV3Factory)
-  const { zoraWethFee, wethCreatorFee } = resolvePayoutRouterFeeConfig()
+  const { zoraWethFee, wethShareFee } = resolvePayoutRouterFeeConfig()
   const zoraToken = resolvePayoutRouterZoraToken(getAddress(contracts.zora))
 
   const out: PayoutRouterSwapPathPlan[] = []
 
-  const usdcCreatorFee = !sameAddress(usdc, creatorToken)
-    ? await resolveV3Fee(params.publicClient, factory, usdc, creatorToken, DEFAULT_ROUTE_FALLBACK_FEE)
+  const usdcShareFee = !sameAddress(usdc, shareOft)
+    ? await resolveV3Fee(params.publicClient, factory, usdc, shareOft, DEFAULT_ROUTE_FALLBACK_FEE)
     : null
 
-  if (!sameAddress(weth, creatorToken)) {
-    const directWethCreatorFee = await resolveV3Fee(params.publicClient, factory, weth, creatorToken, wethCreatorFee)
-    if (directWethCreatorFee !== null) {
+  if (!sameAddress(weth, shareOft)) {
+    const directWethShareFee = await resolveV3Fee(params.publicClient, factory, weth, shareOft, wethShareFee)
+    if (directWethShareFee !== null) {
       out.push({
         tokenIn: weth,
-        path: encodeUniswapV3Path([weth, creatorToken], [directWethCreatorFee]),
+        path: encodeUniswapV3Path([weth, shareOft], [directWethShareFee]),
         label: 'WETH',
       })
     } else {
       const wethUsdcFee = await resolveV3Fee(params.publicClient, factory, weth, usdc, DEFAULT_ROUTE_FALLBACK_FEE)
-      if (wethUsdcFee !== null && usdcCreatorFee !== null) {
+      if (wethUsdcFee !== null && usdcShareFee !== null) {
         out.push({
           tokenIn: weth,
-          path: encodeUniswapV3Path([weth, usdc, creatorToken], [wethUsdcFee, usdcCreatorFee]),
+          path: encodeUniswapV3Path([weth, usdc, shareOft], [wethUsdcFee, usdcShareFee]),
           label: 'WETH',
         })
       }
@@ -124,30 +124,30 @@ export async function resolvePayoutRouterSwapPaths(params: {
 
   if (
     zoraToken &&
-    !sameAddress(zoraToken, creatorToken) &&
+    !sameAddress(zoraToken, shareOft) &&
     !sameAddress(zoraToken, weth) &&
     !sameAddress(zoraToken, usdc)
   ) {
-    const directZoraCreatorFee = await resolveV3Fee(
+    const directZoraShareFee = await resolveV3Fee(
       params.publicClient,
       factory,
       zoraToken,
-      creatorToken,
+      shareOft,
       DEFAULT_ROUTE_FALLBACK_FEE,
     )
-    if (directZoraCreatorFee !== null) {
+    if (directZoraShareFee !== null) {
       out.push({
         tokenIn: zoraToken,
-        path: encodeUniswapV3Path([zoraToken, creatorToken], [directZoraCreatorFee]),
+        path: encodeUniswapV3Path([zoraToken, shareOft], [directZoraShareFee]),
         label: 'ZORA',
       })
     } else {
       const zoraWethResolvedFee = await resolveV3Fee(params.publicClient, factory, zoraToken, weth, zoraWethFee)
-      const wethCreatorResolvedFee = await resolveV3Fee(params.publicClient, factory, weth, creatorToken, wethCreatorFee)
-      if (zoraWethResolvedFee !== null && wethCreatorResolvedFee !== null) {
+      const wethShareResolvedFee = await resolveV3Fee(params.publicClient, factory, weth, shareOft, wethShareFee)
+      if (zoraWethResolvedFee !== null && wethShareResolvedFee !== null) {
         out.push({
           tokenIn: zoraToken,
-          path: encodeUniswapV3Path([zoraToken, weth, creatorToken], [zoraWethResolvedFee, wethCreatorResolvedFee]),
+          path: encodeUniswapV3Path([zoraToken, weth, shareOft], [zoraWethResolvedFee, wethShareResolvedFee]),
           label: 'ZORA',
         })
       } else {
@@ -158,15 +158,27 @@ export async function resolvePayoutRouterSwapPaths(params: {
           usdc,
           DEFAULT_ROUTE_FALLBACK_FEE,
         )
-        if (zoraUsdcFee !== null && usdcCreatorFee !== null) {
+        if (zoraUsdcFee !== null && usdcShareFee !== null) {
           out.push({
             tokenIn: zoraToken,
-            path: encodeUniswapV3Path([zoraToken, usdc, creatorToken], [zoraUsdcFee, usdcCreatorFee]),
+            path: encodeUniswapV3Path([zoraToken, usdc, shareOft], [zoraUsdcFee, usdcShareFee]),
             label: 'ZORA',
           })
         }
       }
     }
+  }
+
+  if (
+    !sameAddress(usdc, shareOft) &&
+    !sameAddress(usdc, weth) &&
+    usdcShareFee !== null
+  ) {
+    out.push({
+      tokenIn: usdc,
+      path: encodeUniswapV3Path([usdc, shareOft], [usdcShareFee]),
+      label: 'USDC',
+    })
   }
 
   return out

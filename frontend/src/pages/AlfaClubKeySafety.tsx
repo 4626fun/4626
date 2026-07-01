@@ -17,9 +17,11 @@ import { TooltipProvider } from '@/components/ui/Tooltip'
 import {
   attackerKeysToPassVote,
   buyCostAfterFee,
+  curveCost,
   curveDivisor,
   evaluateKeyDefense,
   raidProfit,
+  sellProceedsAfterFee,
   tradeFeeFraction,
   type AlfaRoomTier,
   type KeyDefenseEvaluation,
@@ -227,6 +229,19 @@ export function AlfaClubKeySafety() {
     roomContext?.attackModelPotUsdc ?? roomContext?.feeBaselinePotUsdc ?? 0
   const potAtRiskUsdc = Math.max(0, modeledPotUsdc + donationUsdc)
   const distributionPerKeyUsdc = keySupply > 0 ? modeledPotUsdc / keySupply : 0
+
+  // Live curve pricing for the next key at the current supply. "Current" is the
+  // raw curve price; buy adds the trade fee, sell nets it out.
+  const curvePricing = useMemo(() => {
+    if (keySupply <= 0) return null
+    const divisor = curveDivisor('trading', roomTier)
+    const fee = tradeFeeFraction('trading')
+    return {
+      currentUsdc: curveCost(keySupply, 1, divisor),
+      buyUsdc: buyCostAfterFee(keySupply, 1, divisor, fee),
+      sellUsdc: sellProceedsAfterFee(keySupply, 1, divisor, fee),
+    }
+  }, [keySupply, roomTier])
   const selectedLabel = roomContext ? roomDisplayLabel(roomContext) : null
   const stakedPercent = keySupply > 0 ? Math.round((stakedSupply / keySupply) * 100) : 0
   const creatorHandle = (roomContext?.creatorHandle ?? '').trim().replace(/^@+/, '')
@@ -430,10 +445,9 @@ export function AlfaClubKeySafety() {
             {showResults && roomContext && statusMeta && StatusIcon ? (
               <header
                 className={cn(
-                  'rounded-3xl p-5 ring-1 ring-inset transition-colors',
+                  'rounded-3xl p-5 transition-colors',
                   'bg-[radial-gradient(120%_140%_at_0%_0%,var(--tw-gradient-from),transparent)]',
                   statusMeta.glow,
-                  statusMeta.ring,
                 )}
                 role="status"
               >
@@ -577,6 +591,27 @@ export function AlfaClubKeySafety() {
                   <p className="mt-0.5 text-sm text-zinc-300">
                     Cost to acquire keys at current tier — drag to test a takeover
                   </p>
+                  {curvePricing ? (
+                    <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      {(
+                        [
+                          { label: 'Current price', value: formatUsd(curvePricing.currentUsdc) },
+                          { label: 'Buy next key', value: formatUsd(curvePricing.buyUsdc) },
+                          { label: 'Sell 1 key', value: formatUsd(curvePricing.sellUsdc) },
+                          { label: 'Trading fund', value: formatUsd(modeledPotUsdc) },
+                        ] as const
+                      ).map((stat) => (
+                        <div key={stat.label} className="rounded-xl bg-black/30 px-3 py-2">
+                          <dt className="text-[10px] uppercase tracking-wide text-zinc-500">
+                            {stat.label}
+                          </dt>
+                          <dd className="mt-0.5 font-mono text-sm text-zinc-100 tabular-nums">
+                            {stat.value}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : null}
                   <div className="mt-3">
                     <TradingRoomCurvePreview
                       selectedTier={roomTier}

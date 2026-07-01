@@ -81,7 +81,14 @@ export function timelineStageFromDeployStep(stepRaw: string): DeployTimelineStag
   if (step === 'created') return 'setupOwnerApproval'
   if (step === 'phase1_sent' || step === 'phase1_confirmed') return 'phase1Core'
   if (step === 'phase1_finalize_sent' || step === 'phase1_finalize_confirmed') return 'phase1Finalize'
-  if (step === 'phase2_core_sent' || step === 'phase2_core_confirmed') return 'phase2Core'
+  if (
+    step === 'phase2_core_sent' ||
+    step === 'phase2_core_confirmed' ||
+    step === 'phase2_pre_finalize_sent' ||
+    step === 'phase2_pre_finalize_confirmed'
+  ) {
+    return 'phase2Core'
+  }
   if (
     step === 'phase2_sent' ||
     step === 'phase2_confirmed' ||

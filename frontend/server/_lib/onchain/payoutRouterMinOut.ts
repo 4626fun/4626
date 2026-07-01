@@ -3,14 +3,11 @@ import { getAddress, isAddress, type Address, type Hex } from 'viem'
 declare const process: { env: Record<string, string | undefined> }
 
 /**
- * Quote-derived `minCreatorOut` for PayoutRouter V3 harvest swaps.
+ * Quote-derived `minOut` for PayoutRouter V3 harvest swaps.
  *
- * The PayoutRouter contract only enforces `minCreatorOut > 0` on the external
- * aggregator route, not on the V3 `convertAndQueue` route. Harvest executors
- * previously defaulted min-out to 0 there, which makes large ZORA/WETH
- * conversions sandwichable. This module derives a min-out from a Uniswap V3
- * QuoterV2 quote over the router's stored swap path and fails closed (skip the
- * conversion) when no quote and no explicit floor are available.
+ * Harvest executors must derive a net ShareOFT min-out from a Uniswap V3
+ * QuoterV2 quote (after ShareOFT buy-fee haircut) and fail closed when no
+ * quote and no explicit floor are available.
  */
 
 /** Canonical Uniswap V3 QuoterV2 on Base mainnet. */
@@ -73,6 +70,58 @@ export function resolvePayoutRouterQuoterAddress(
   return BASE_QUOTER_V2
 }
 
+/** Default ShareOFT buy fee when pool (SwapOnly) sends to a non-exempt recipient. */
+export const DEFAULT_SHARE_OFT_BUY_FEE_BPS = 690
+
+/** CreatorShareOFT.OperationType.NoFees */
+export const SHARE_OFT_OPERATION_NO_FEES = 2
+
+export const SHARE_OFT_ADDRESS_TYPE_ABI = [
+  {
+    type: 'function',
+    name: 'addressType',
+    stateMutability: 'view',
+    inputs: [{ name: 'addr', type: 'address' }],
+    outputs: [{ type: 'uint8' }],
+  },
+] as const
+
+/** Haircut quoted ShareOFT output for the on-chain buy fee applied on DEX purchases. */
+export function applyShareOftBuyFeeHaircut(amount: bigint, buyFeeBps = DEFAULT_SHARE_OFT_BUY_FEE_BPS): bigint {
+  if (amount <= 0n || buyFeeBps <= 0) return amount > 0n ? amount : 0n
+  const bps = BigInt(Math.min(Math.max(buyFeeBps, 0), 10_000))
+  const net = (amount * (BPS_DENOMINATOR - bps)) / BPS_DENOMINATOR
+  return net > 0n ? net : 0n
+}
+
+export async function resolveShareOftBuyFeeBpsForRecipient(params: {
+  publicClient: { readContract: (args: Record<string, unknown>) => Promise<unknown> }
+  shareOft: Address
+  recipient: Address
+  env?: Record<string, string | undefined>
+}): Promise<number> {
+  const env = params.env ?? process.env
+  const rawOverride = String(env.PAYOUT_ROUTER_SHARE_OFT_BUY_FEE_BPS ?? '').trim()
+  if (rawOverride) {
+    const parsed = Number(rawOverride)
+    if (Number.isFinite(parsed) && Number.isInteger(parsed) && parsed >= 0 && parsed <= 10_000) {
+      return parsed
+    }
+  }
+  try {
+    const opType = await params.publicClient.readContract({
+      address: params.shareOft,
+      abi: SHARE_OFT_ADDRESS_TYPE_ABI,
+      functionName: 'addressType',
+      args: [params.recipient],
+    })
+    if (Number(opType) === SHARE_OFT_OPERATION_NO_FEES) return 0
+  } catch {
+    // fall through to default buy fee for legacy routers
+  }
+  return DEFAULT_SHARE_OFT_BUY_FEE_BPS
+}
+
 /** Apply slippage to a quoted output. Never returns 0 for a nonzero quote. */
 export function deriveMinOutFromQuote(quotedOut: bigint, slippageBps: number): bigint {
   if (quotedOut <= 0n) return 0n
@@ -103,7 +152,7 @@ export async function quoteV3PathOut(params: {
 }
 
 export type HarvestMinOutResolution =
-  | { ok: true; minCreatorOut: bigint; source: 'quote' | 'quote+floor' | 'floor' }
+  | { ok: true; minOut: bigint; source: 'quote' | 'quote+floor' | 'floor' }
   | { ok: false; reason: 'min_out_unavailable' }
 
 /**
@@ -113,12 +162,15 @@ export type HarvestMinOutResolution =
  * - Quote unavailable but explicit floor configured: use the floor.
  * - Neither: fail closed — the caller must skip the conversion.
  */
-export async function resolveHarvestMinCreatorOut(params: {
+export async function resolveHarvestMinOut(params: {
   publicClient: QuoterReader
   path: Hex
   amountIn: bigint
   configuredMinOut: bigint
   env?: Record<string, string | undefined>
+  shareOft?: Address
+  payoutRouter?: Address
+  shareOftBuyFeeBps?: number
 }): Promise<HarvestMinOutResolution> {
   const env = params.env ?? process.env
   const quoted = await quoteV3PathOut({
@@ -128,16 +180,28 @@ export async function resolveHarvestMinCreatorOut(params: {
     env,
   })
 
+  const buyFeeBps =
+    params.shareOftBuyFeeBps ??
+    (params.shareOft && params.payoutRouter
+      ? await resolveShareOftBuyFeeBpsForRecipient({
+          publicClient: params.publicClient as { readContract: (args: Record<string, unknown>) => Promise<unknown> },
+          shareOft: params.shareOft,
+          recipient: params.payoutRouter,
+          env,
+        })
+      : DEFAULT_SHARE_OFT_BUY_FEE_BPS)
+
   if (quoted !== null) {
-    const derived = deriveMinOutFromQuote(quoted, resolvePayoutRouterV3SlippageBps(env))
+    const afterBuyFee = applyShareOftBuyFeeHaircut(quoted, buyFeeBps)
+    const derived = deriveMinOutFromQuote(afterBuyFee, resolvePayoutRouterV3SlippageBps(env))
     if (params.configuredMinOut > derived) {
-      return { ok: true, minCreatorOut: params.configuredMinOut, source: 'quote+floor' }
+      return { ok: true, minOut: params.configuredMinOut, source: 'quote+floor' }
     }
-    return { ok: true, minCreatorOut: derived, source: 'quote' }
+    return { ok: true, minOut: derived, source: 'quote' }
   }
 
   if (params.configuredMinOut > 0n) {
-    return { ok: true, minCreatorOut: params.configuredMinOut, source: 'floor' }
+    return { ok: true, minOut: params.configuredMinOut, source: 'floor' }
   }
 
   return { ok: false, reason: 'min_out_unavailable' }

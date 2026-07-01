@@ -129,6 +129,8 @@ export const VAULT_AUXILIARY_DEPLOY_BATCHER_ABI = [
           { name: 'creatorToken', type: 'address' },
           { name: 'owner', type: 'address' },
           { name: 'vault', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'wrapper', type: 'address' },
           { name: 'swapRouter', type: 'address' },
           { name: 'weth', type: 'address' },
           { name: 'protocolRewards', type: 'address' },
@@ -158,6 +160,63 @@ export const VAULT_AUXILIARY_DEPLOY_BATCHER_ABI = [
   },
 ] as const
 
+/** CreatorShareOFT.OperationType.NoFees (fee-exempt DEX recipient). */
+export const SHARE_OFT_OPERATION_NO_FEES = 2
+
+export const CREATOR_SHARE_OFT_ADMIN_ABI = [
+  {
+    type: 'function',
+    name: 'owner',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'addressType',
+    stateMutability: 'view',
+    inputs: [{ name: 'addr', type: 'address' }],
+    outputs: [{ type: 'uint8' }],
+  },
+  {
+    type: 'function',
+    name: 'setAddressType',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'addr', type: 'address' },
+      { name: 'opType', type: 'uint8' },
+    ],
+    outputs: [],
+  },
+] as const
+
+export const CREATOR_OVAULT_WRAPPER_ADMIN_ABI = [
+  {
+    type: 'function',
+    name: 'owner',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'isWhitelisted',
+    stateMutability: 'view',
+    inputs: [{ name: 'user', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'setWhitelist',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'user', type: 'address' },
+      { name: 'status', type: 'bool' },
+    ],
+    outputs: [],
+  },
+] as const
+
 export const PAYOUT_ROUTER_ADMIN_ABI = [
   {
     type: 'function',
@@ -168,7 +227,7 @@ export const PAYOUT_ROUTER_ADMIN_ABI = [
   },
   {
     type: 'function',
-    name: 'swapPathToCreator',
+    name: 'swapPathToShareOFT',
     stateMutability: 'view',
     inputs: [{ name: 'tokenIn', type: 'address' }],
     outputs: [{ name: '', type: 'bytes' }],
@@ -928,6 +987,26 @@ export const CREATOR_VAULT_BATCHER_ABI = [
         ],
       },
     ],
+  },
+  {
+    type: 'function',
+    name: 'whitelistPayoutRouterOnWrapper',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'wrapper', type: 'address' },
+      { name: 'payoutRouter', type: 'address' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'setPayoutRouterShareOftNoFees',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'shareOFT', type: 'address' },
+      { name: 'payoutRouter', type: 'address' },
+    ],
+    outputs: [],
   },
   {
     type: 'function',

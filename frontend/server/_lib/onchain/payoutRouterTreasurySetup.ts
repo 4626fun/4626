@@ -21,6 +21,55 @@ const OWNABLE_ABI = [
   },
 ] as const
 
+const WRAPPER_ADMIN_ABI = [
+  {
+    type: 'function',
+    name: 'isWhitelisted',
+    stateMutability: 'view',
+    inputs: [{ name: 'user', type: 'address' }],
+    outputs: [{ type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'setWhitelist',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'user', type: 'address' },
+      { name: 'status', type: 'bool' },
+    ],
+    outputs: [],
+  },
+] as const
+
+const SHARE_OFT_ADMIN_ABI = [
+  {
+    type: 'function',
+    name: 'owner',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'addressType',
+    stateMutability: 'view',
+    inputs: [{ name: 'addr', type: 'address' }],
+    outputs: [{ type: 'uint8' }],
+  },
+  {
+    type: 'function',
+    name: 'setAddressType',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'addr', type: 'address' },
+      { name: 'opType', type: 'uint8' },
+    ],
+    outputs: [],
+  },
+] as const
+
+const SHARE_OFT_OPERATION_NO_FEES = 2
+
 const PAYOUT_ROUTER_ADMIN_ABI = [
   {
     type: 'function',
@@ -31,7 +80,21 @@ const PAYOUT_ROUTER_ADMIN_ABI = [
   },
   {
     type: 'function',
-    name: 'swapPathToCreator',
+    name: 'shareOFT',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'wrapper',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'swapPathToShareOFT',
     stateMutability: 'view',
     inputs: [{ name: 'tokenIn', type: 'address' }],
     outputs: [{ type: 'bytes' }],
@@ -102,7 +165,7 @@ export type PayoutRouterTreasurySetupPlan = {
   ownerMatchesTreasury: boolean
   desiredKeeper: Address | null
   currentKeeper: Address
-  swapPaths: Array<{ tokenIn: Address; path: Hex; label: 'WETH' | 'ZORA'; currentPath: Hex }>
+  swapPaths: Array<{ tokenIn: Address; path: Hex; label: 'WETH' | 'ZORA' | 'USDC'; currentPath: Hex }>
   externalTargets: Address[]
   externalSpenders: Address[]
   calls: PayoutRouterTreasurySetupCall[]
@@ -149,7 +212,7 @@ async function readSwapPath(publicClient: ReaderClient, router: Address, tokenIn
     const raw = await publicClient.readContract({
       address: router,
       abi: PAYOUT_ROUTER_ADMIN_ABI,
-      functionName: 'swapPathToCreator',
+      functionName: 'swapPathToShareOFT',
       args: [tokenIn],
     })
     return typeof raw === 'string' && raw.startsWith('0x') ? (raw as Hex) : ('0x' as Hex)
@@ -184,6 +247,20 @@ export async function buildPayoutRouterTreasurySetupPlan(params: {
 }): Promise<PayoutRouterTreasurySetupPlan> {
   const payoutRouter = getAddress(params.payoutRouter)
   const creatorToken = getAddress(params.creatorToken)
+  const shareOft = getAddress(
+    (await params.publicClient.readContract({
+      address: payoutRouter,
+      abi: PAYOUT_ROUTER_ADMIN_ABI,
+      functionName: 'shareOFT',
+    })) as string,
+  )
+  const wrapper = getAddress(
+    (await params.publicClient.readContract({
+      address: payoutRouter,
+      abi: PAYOUT_ROUTER_ADMIN_ABI,
+      functionName: 'wrapper',
+    })) as string,
+  )
   const protocolTreasury = resolveProtocolTreasuryAddress()
   const owner = await readOwner(params.publicClient, payoutRouter)
   const ownerMatchesTreasury =
@@ -193,7 +270,7 @@ export async function buildPayoutRouterTreasurySetupPlan(params: {
   const currentKeeper = await readKeeper(params.publicClient, payoutRouter)
   const external = resolvePayoutRouterExternalSwapApprovals()
   const desiredPaths = ownerMatchesTreasury
-    ? await resolvePayoutRouterSwapPaths({ publicClient: params.publicClient, creatorToken })
+    ? await resolvePayoutRouterSwapPaths({ publicClient: params.publicClient, shareOft })
     : []
 
   const swapPaths: PayoutRouterTreasurySetupPlan['swapPaths'] = []
@@ -271,6 +348,53 @@ export async function buildPayoutRouterTreasurySetupPlan(params: {
         args: [spender, true],
       }),
     })
+  }
+
+  try {
+    const whitelisted = await params.publicClient.readContract({
+      address: wrapper,
+      abi: WRAPPER_ADMIN_ABI,
+      functionName: 'isWhitelisted',
+      args: [payoutRouter],
+    })
+    if (whitelisted !== true) {
+      calls.push({
+        to: wrapper,
+        label: 'setWhitelist:payoutRouter',
+        data: encodeFunctionData({
+          abi: WRAPPER_ADMIN_ABI,
+          functionName: 'setWhitelist',
+          args: [payoutRouter, true],
+        }),
+      })
+    }
+  } catch {
+    // Wrapper may not be configured yet during early deploy windows.
+  }
+
+  try {
+    const shareOftOwner = await readOwner(params.publicClient, shareOft)
+    if (shareOftOwner && shareOftOwner.toLowerCase() === protocolTreasury.toLowerCase()) {
+      const opType = await params.publicClient.readContract({
+        address: shareOft,
+        abi: SHARE_OFT_ADMIN_ABI,
+        functionName: 'addressType',
+        args: [payoutRouter],
+      })
+      if (Number(opType) !== SHARE_OFT_OPERATION_NO_FEES) {
+        calls.push({
+          to: shareOft,
+          label: 'setAddressType:payoutRouterNoFees',
+          data: encodeFunctionData({
+            abi: SHARE_OFT_ADMIN_ABI,
+            functionName: 'setAddressType',
+            args: [payoutRouter, SHARE_OFT_OPERATION_NO_FEES],
+          }),
+        })
+      }
+    }
+  } catch {
+    // ShareOFT may not be configured yet during early deploy windows.
   }
 
   return {

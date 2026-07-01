@@ -3,7 +3,8 @@
  *
  * HTTP bridge for payout-router harvest lane:
  * - optionally claimAllProtocolRewards()
- * - convertAndQueue creatorCoin, ZORA, and/or WETH balances
+ * - plan + processBatch for creatorCoin, ZORA, WETH, and USDC balances
+ * - optional DefiLlama external swap fallback (parity with KPR)
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
@@ -20,29 +21,31 @@ import {
   RATE_LIMITS,
 } from '@4626/server-core'
 import { resolvePayoutRouterKeeperPrivateKey } from '../../../server/_lib/onchain/payoutRouterRuntime.js'
-import { resolveHarvestMinCreatorOut } from '../../../server/_lib/onchain/payoutRouterMinOut.js'
 import {
   executePayoutRouterTreasurySetup,
   payoutRouterTreasuryAutoSetupEnabled,
 } from '../../../server/_lib/onchain/payoutRouterTreasurySetup.js'
-import { createPublicClient, createWalletClient, getAddress, http, isAddress, type Abi, type Hex } from 'viem'
+import {
+  PAYOUT_ROUTER_HARVEST_ABI,
+  planPayoutRouterHarvestConversions,
+  type HarvestPlanReader,
+  type HarvestTokenPlanEntry,
+} from '../../../server/_lib/onchain/payoutRouterHarvestPlan.js'
+import { buildDefaultPayoutRouterHarvestTokenPlan } from '../../../server/_lib/onchain/payoutRouterHarvestTokens.js'
+import {
+  executePlannedHarvestConversions,
+  parseHarvestPerTokenFallbackEnv,
+} from '../../../server/_lib/onchain/payoutRouterHarvestExecute.js'
+import { createPublicClient, createWalletClient, getAddress, http, isAddress, type Abi, type Address, type Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
 
 const DEFAULT_ZORA_TOKEN = '0x1111111111166b7fe7bd91427724b487980afc69' as const
 const DEFAULT_WETH = '0x4200000000000000000000000000000000000006' as const
-
-const ERC20_ABI = [
-  {
-    type: 'function',
-    name: 'balanceOf',
-    stateMutability: 'view',
-    inputs: [{ name: 'account', type: 'address' }],
-    outputs: [{ type: 'uint256' }],
-  },
-] as const
+const DEFAULT_USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as const
 
 const PAYOUT_ROUTER_ABI = [
+  ...PAYOUT_ROUTER_HARVEST_ABI,
   {
     type: 'function',
     name: 'protocolRewardsClaimable',
@@ -59,24 +62,10 @@ const PAYOUT_ROUTER_ABI = [
   },
   {
     type: 'function',
-    name: 'convertAndQueue',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'tokenIn', type: 'address' },
-      { name: 'amountIn', type: 'uint256' },
-      { name: 'minCreatorOut', type: 'uint256' },
-    ],
-    outputs: [
-      { name: 'creatorOut', type: 'uint256' },
-      { name: 'sharesQueued', type: 'uint256' },
-    ],
-  },
-  {
-    type: 'function',
-    name: 'swapPathToCreator',
+    name: 'shareOFT',
     stateMutability: 'view',
-    inputs: [{ name: 'tokenIn', type: 'address' }],
-    outputs: [{ type: 'bytes' }],
+    inputs: [],
+    outputs: [{ type: 'address' }],
   },
 ] as const
 
@@ -95,7 +84,9 @@ type TokenResult = {
   label: string
   balance: string
   converted: boolean
+  route?: 'v3' | 'external' | 'direct'
   txHash?: `0x${string}`
+  batchTxHash?: `0x${string}`
   skippedReason?: string
   error?: string
 }
@@ -105,6 +96,7 @@ type HarvestResponse = {
   claimedProtocolRewards: boolean
   claimableBefore: string
   claimTxHash: `0x${string}` | null
+  batchTxHash?: `0x${string}` | null
   burnStreamCheckpointTxHash?: `0x${string}` | null
   tokens: TokenResult[]
 }
@@ -119,8 +111,8 @@ type HarvestBody = {
   claimProtocolRewards?: boolean
   dripBurnStream?: boolean
   minBalanceWei?: string
-  minCreatorOutWei?: string
-  tokens?: Array<{ token?: string; label?: string; minCreatorOutWei?: string }>
+  minOutWei?: string
+  tokens?: Array<{ token?: string; label?: string; minOutWei?: string }>
 }
 
 function normalizeAddress(value: unknown): `0x${string}` | null {
@@ -139,23 +131,41 @@ function parseNonNegativeBigInt(value: unknown, fallback = 0n): bigint {
   }
 }
 
-function readTokenPlan(body: HarvestBody): Array<{ token: `0x${string}`; label: string; minCreatorOut: bigint }> {
-  const minCreatorOut = parseNonNegativeBigInt(body.minCreatorOutWei)
-  const out: Array<{ token: `0x${string}`; label: string; minCreatorOut: bigint }> = []
-  const seen = new Set<string>()
-  const add = (token: `0x${string}` | null, label: string, minOut = minCreatorOut) => {
-    if (!token) return
-    const key = token.toLowerCase()
-    if (seen.has(key)) return
-    seen.add(key)
-    out.push({ token, label, minCreatorOut: minOut })
+function readTokenPlan(body: HarvestBody): HarvestTokenPlanEntry[] {
+  const defaultMinOut = parseNonNegativeBigInt(body.minOutWei)
+  const creatorCoin = normalizeAddress(body.creatorCoinAddress)
+  const hasCustomTokens = Array.isArray(body.tokens) && body.tokens.length > 0
+  if (creatorCoin && !hasCustomTokens) {
+    return buildDefaultPayoutRouterHarvestTokenPlan({
+      creatorCoin,
+      includeWeth: body.includeWeth !== false,
+      minOutDefault: defaultMinOut,
+      minOutZora: parseNonNegativeBigInt(process.env.PAYOUT_ROUTER_MIN_OUT_ZORA_WEI, defaultMinOut),
+      minOutWeth: parseNonNegativeBigInt(process.env.PAYOUT_ROUTER_MIN_OUT_WETH_WEI, defaultMinOut),
+      minOutUsdc: parseNonNegativeBigInt(process.env.PAYOUT_ROUTER_MIN_OUT_USDC_WEI, defaultMinOut),
+    }).map((entry) => ({
+      ...entry,
+      token: getAddress(entry.token) as `0x${string}`,
+    }))
   }
 
-  add(normalizeAddress(body.creatorCoinAddress), 'creatorCoin', 0n)
+  const out: HarvestTokenPlanEntry[] = []
+  const seen = new Set<string>()
+  const add = (token: `0x${string}` | null, label: string, minOut = defaultMinOut) => {
+    if (!token) return
+    const normalized = getAddress(token) as `0x${string}`
+    const key = normalized.toLowerCase()
+    if (seen.has(key)) return
+    seen.add(key)
+    out.push({ token: normalized, label, minOut })
+  }
+
+  add(creatorCoin, 'creatorCoin', 0n)
   if (body.includeZora !== false) add(normalizeAddress(process.env.PAYOUT_ROUTER_ZORA_TOKEN) ?? DEFAULT_ZORA_TOKEN, 'ZORA')
   if (body.includeWeth !== false) add(normalizeAddress(process.env.WETH) ?? DEFAULT_WETH, 'WETH')
+  add(normalizeAddress(process.env.USDC ?? process.env.PAYOUT_ROUTER_USDC_TOKEN) ?? DEFAULT_USDC, 'USDC')
   for (const entry of Array.isArray(body.tokens) ? body.tokens : []) {
-    add(normalizeAddress(entry.token), entry.label || 'custom', parseNonNegativeBigInt(entry.minCreatorOutWei, minCreatorOut))
+    add(normalizeAddress(entry.token), entry.label || 'custom', parseNonNegativeBigInt(entry.minOutWei, defaultMinOut))
   }
   return out
 }
@@ -198,7 +208,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const rpcUrl = process.env.BASE_RPC_URL || 'https://mainnet.base.org'
     const account = privateKeyToAccount(keeperPk as `0x${string}`)
-    const publicClient = createPublicClient({ chain: base, transport: http(rpcUrl, { timeout: 30_000 }) }) as any
+    const publicClient = createPublicClient({ chain: base, transport: http(rpcUrl, { timeout: 30_000 }) })
+    const planClient = publicClient as unknown as HarvestPlanReader
     const walletClient = createWalletClient({ account, chain: base, transport: http(rpcUrl, { timeout: 30_000 }) })
     const minBalance = parseNonNegativeBigInt(body.minBalanceWei)
     const claimProtocolRewards = body.claimProtocolRewards !== false
@@ -206,11 +217,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let claimTxHash: `0x${string}` | null = null
     let claimedProtocolRewards = false
     const claimableBefore = claimProtocolRewards
-      ? await publicClient.readContract({
+      ? (await publicClient.readContract({
           address: payoutRouterAddress,
           abi: PAYOUT_ROUTER_ABI as unknown as Abi,
           functionName: 'protocolRewardsClaimable',
-        }) as bigint
+        }) as bigint)
       : 0n
 
     if (claimProtocolRewards && claimableBefore > 0n) {
@@ -228,27 +239,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const creatorCoinAddress = normalizeAddress(body.creatorCoinAddress)
     let treasurySetupAttempted = false
 
-    const readSwapPath = async (tokenIn: `0x${string}`): Promise<Hex> => {
+    const readSwapPath = async (tokenIn: Address): Promise<Hex> => {
       const path = await publicClient.readContract({
         address: payoutRouterAddress,
         abi: PAYOUT_ROUTER_ABI as unknown as Abi,
-        functionName: 'swapPathToCreator',
+        functionName: 'swapPathToShareOFT',
         args: [tokenIn],
-      }) as `0x${string}`
-      return (path && path !== '0x' ? path : '0x') as Hex
+      }) as Hex
+      return path && path !== '0x' ? path : '0x'
     }
 
-    // Self-heal: when a swap path is missing and treasury auto-setup is
-    // enabled, run the Safe-batched setup plan (setKeeper/setSwapPath/external
-    // approvals) once per request, then re-read the path.
-    const maybeSelfHealSwapPath = async (tokenIn: `0x${string}`): Promise<Hex> => {
+    const maybeSelfHealSwapPath = async (tokenIn: Address): Promise<Hex> => {
       if (treasurySetupAttempted || !creatorCoinAddress || !payoutRouterTreasuryAutoSetupEnabled()) {
-        return '0x' as Hex
+        return '0x'
       }
       treasurySetupAttempted = true
       try {
         const setup = await executePayoutRouterTreasurySetup({
-          publicClient,
+          publicClient: publicClient as Parameters<typeof executePayoutRouterTreasurySetup>[0]['publicClient'],
           rpcUrl,
           payoutRouter: payoutRouterAddress,
           creatorToken: creatorCoinAddress,
@@ -259,71 +267,108 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           txHash: setup.txHash ?? null,
           skipReason: setup.plan.skipReason ?? null,
         })
-        if (!setup.executed) return '0x' as Hex
+        if (!setup.executed) return '0x'
       } catch (error) {
         console.warn('[keeper/payout-router-harvest] treasury setup self-heal failed', {
           payoutRouterAddress,
           message: error instanceof Error ? error.message : String(error),
         })
-        return '0x' as Hex
+        return '0x'
       }
       return readSwapPath(tokenIn)
     }
 
-    const tokens: TokenResult[] = []
-    for (const token of tokenPlan) {
-      const balance = await publicClient.readContract({
-        address: token.token,
-        abi: ERC20_ABI as unknown as Abi,
-        functionName: 'balanceOf',
-        args: [payoutRouterAddress],
-      }) as bigint
-      if (balance <= minBalance) {
-        tokens.push({ token: token.token, label: token.label, balance: balance.toString(), converted: false, skippedReason: 'balance_below_threshold' })
-        continue
-      }
-      let minCreatorOut = token.minCreatorOut
-      if (token.label !== 'creatorCoin') {
-        let path = await readSwapPath(token.token)
-        if (path === '0x') {
-          path = await maybeSelfHealSwapPath(token.token)
-        }
-        if (path === '0x') {
-          tokens.push({ token: token.token, label: token.label, balance: balance.toString(), converted: false, skippedReason: 'path_not_configured' })
-          continue
-        }
-        // Slippage guard: the V3 route does not enforce min-out on-chain, so
-        // never submit a swap with min-out 0 — quote it, or skip (fail closed).
-        const minOut = await resolveHarvestMinCreatorOut({
-          publicClient,
-          path,
-          amountIn: balance,
-          configuredMinOut: token.minCreatorOut,
-        })
-        if (!minOut.ok) {
-          tokens.push({ token: token.token, label: token.label, balance: balance.toString(), converted: false, skippedReason: minOut.reason })
-          continue
-        }
-        minCreatorOut = minOut.minCreatorOut
-      }
-      try {
-        const txHash = await walletClient.writeContract({
-          address: payoutRouterAddress,
-          abi: PAYOUT_ROUTER_ABI as unknown as Abi,
-          functionName: 'convertAndQueue',
-          args: [token.token, balance, minCreatorOut],
-          chain: base,
-          account,
-        })
-        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 })
-        tokens.push({ token: token.token, label: token.label, balance: balance.toString(), converted: receipt.status === 'success', txHash })
-      } catch (error) {
+    const shareOft = await publicClient.readContract({
+      address: payoutRouterAddress,
+      abi: PAYOUT_ROUTER_ABI as unknown as Abi,
+      functionName: 'shareOFT',
+    }) as Address
+
+    const { conversions, skipped } = await planPayoutRouterHarvestConversions({
+      publicClient: planClient,
+      payoutRouterAddress,
+      shareOft,
+      tokenPlan,
+      minBalance,
+      env: process.env,
+      resolveSwapPath: async (tokenIn) => {
+        let path = await readSwapPath(tokenIn)
+        if (path === '0x') path = await maybeSelfHealSwapPath(tokenIn)
+        return path
+      },
+    })
+
+    const tokens: TokenResult[] = skipped.map((entry) => ({
+      token: entry.token as `0x${string}`,
+      label: entry.label,
+      balance: entry.balance.toString(),
+      converted: false,
+      skippedReason: entry.skippedReason,
+    }))
+
+    let batchTxHash: `0x${string}` | null = null
+    let batchSucceeded = false
+    if (conversions.length > 0) {
+      const perTokenFallback = parseHarvestPerTokenFallbackEnv(process.env)
+      const execution = await executePlannedHarvestConversions({
+        conversions,
+        perTokenFallback,
+        submitBatch: async (actions) => {
+          try {
+            const hash = await walletClient.writeContract({
+              address: payoutRouterAddress,
+              abi: PAYOUT_ROUTER_ABI as unknown as Abi,
+              functionName: 'processBatch',
+              args: [actions],
+              chain: base,
+              account,
+            })
+            const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 120_000 })
+            if (receipt.status === 'success') {
+              return { success: true, txHash: hash }
+            }
+            return { success: false, txHash: hash, error: 'process_batch_reverted' }
+          } catch (error) {
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : 'process_batch_failed',
+            }
+          }
+        },
+      })
+
+      batchTxHash = execution.primaryBatchTxHash ?? null
+      batchSucceeded = execution.converted.length > 0
+
+      for (const success of execution.converted) {
         tokens.push({
-          token: token.token,
-          label: token.label,
-          balance: balance.toString(),
+          token: success.conversion.token as `0x${string}`,
+          label: success.conversion.label,
+          balance: success.conversion.balance.toString(),
+          converted: true,
+          route: success.conversion.route,
+          txHash: success.txHash ?? execution.primaryBatchTxHash,
+          batchTxHash: success.txHash ?? execution.primaryBatchTxHash,
+        })
+      }
+
+      for (const failure of execution.failed) {
+        tokens.push({
+          token: failure.conversion.token as `0x${string}`,
+          label: failure.conversion.label,
+          balance: failure.conversion.balance.toString(),
           converted: false,
-          error: error instanceof Error ? error.message : 'convert_failed',
+          route: failure.conversion.route,
+          batchTxHash: failure.txHash ?? execution.primaryBatchTxHash,
+          error: failure.error ?? 'process_batch_failed',
+        })
+      }
+
+      if (execution.usedPerTokenFallback && execution.converted.length > 0) {
+        console.info('[keeper/payout-router-harvest] per-token fallback converted partial batch', {
+          payoutRouterAddress,
+          converted: execution.converted.length,
+          failed: execution.failed.length,
         })
       }
     }
@@ -331,7 +376,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let burnStreamCheckpointTxHash: `0x${string}` | null = null
     const dripBurnStream = body.dripBurnStream !== false
     const burnStreamAddress = normalizeAddress(body.burnStreamAddress)
-    if (dripBurnStream && burnStreamAddress) {
+    if (batchSucceeded && dripBurnStream && burnStreamAddress) {
       try {
         burnStreamCheckpointTxHash = await walletClient.writeContract({
           address: burnStreamAddress,
@@ -357,6 +402,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         claimedProtocolRewards,
         claimableBefore: claimableBefore.toString(),
         claimTxHash,
+        batchTxHash,
         burnStreamCheckpointTxHash,
         tokens,
       },

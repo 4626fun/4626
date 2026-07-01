@@ -4,7 +4,7 @@ import { privateKeyToAccount } from 'viem/accounts'
 declare const process: { env: Record<string, string | undefined> }
 
 const DEFAULT_PAYOUT_ROUTER_ZORA_WETH_FEE = 10_000
-const DEFAULT_PAYOUT_ROUTER_WETH_CREATOR_FEE = 10_000
+const DEFAULT_PAYOUT_ROUTER_WETH_SHARE_FEE = 10_000
 const DEFAULT_PAYOUT_ROUTER_ZORA_TOKEN = getAddress('0x1111111111166b7fe7bd91427724b487980afc69')
 const BASE_SWAP_ROUTER_CURRENT = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43')
 const BASE_PERMIT2 = getAddress('0x000000000022D473030F116dDEE9F6B43aC78BA3')
@@ -93,19 +93,20 @@ function parseAddressListFromEnv(keys: string[]): Address[] {
 
 export type PayoutRouterFeeConfig = {
   zoraWethFee: number
-  wethCreatorFee: number
+  wethShareFee: number
+}
+
+export function resolvePayoutRouterFeeConfig(): PayoutRouterFeeConfig {
+  const wethShareFee = parseFeeEnv('PAYOUT_ROUTER_WETH_SHARE_FEE', DEFAULT_PAYOUT_ROUTER_WETH_SHARE_FEE)
+  return {
+    zoraWethFee: parseFeeEnv('PAYOUT_ROUTER_ZORA_WETH_FEE', DEFAULT_PAYOUT_ROUTER_ZORA_WETH_FEE),
+    wethShareFee,
+  }
 }
 
 export type PayoutRouterExternalSwapApprovals = {
   targets: Address[]
   spenders: Address[]
-}
-
-export function resolvePayoutRouterFeeConfig(): PayoutRouterFeeConfig {
-  return {
-    zoraWethFee: parseFeeEnv('PAYOUT_ROUTER_ZORA_WETH_FEE', DEFAULT_PAYOUT_ROUTER_ZORA_WETH_FEE),
-    wethCreatorFee: parseFeeEnv('PAYOUT_ROUTER_WETH_CREATOR_FEE', DEFAULT_PAYOUT_ROUTER_WETH_CREATOR_FEE),
-  }
 }
 
 export function resolvePayoutRouterZoraToken(fallback?: Address | null): Address | null {

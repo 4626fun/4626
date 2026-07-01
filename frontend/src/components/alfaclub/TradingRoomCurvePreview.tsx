@@ -281,9 +281,10 @@ export function TradingRoomCurvePreview({
       .filter((value): value is number => value !== null)
     const attackMin = attackValues.length > 0 ? Math.min(...attackValues) : 0
     // Clamp how deep the negative (attacker-loss) region can go so it doesn't
-    // squash the bonding curve. The attack line may clip below; the tooltip
-    // still reports exact values.
-    const bottom = Math.max(attackMin * 1.08, -curveMax * 1.1)
+    // squash the bonding curve. Keeping the floor near ~half of the curve height
+    // leaves the readable positive curve in roughly the top two-thirds. The
+    // attack line may clip below; the tooltip still reports exact values.
+    const bottom = Math.max(attackMin * 1.05, -curveMax * 0.55)
     const top = Math.max(curveMax * 1.15, 1)
     return [Math.min(bottom, -floorPad), top]
   }, [data, hasAttackCurve])
@@ -423,8 +424,17 @@ export function TradingRoomCurvePreview({
           {clampedActiveKeyIndex !== undefined ? (
             <ReferenceLine
               x={clampedActiveKeyIndex}
-              stroke="rgba(96,165,250,0.35)"
+              stroke="rgba(96,165,250,0.55)"
               strokeDasharray="3 3"
+              label={{
+                value:
+                  attackBaseKeyIndex !== undefined && clampedActiveKeyIndex > attackBaseKeyIndex
+                    ? `Simulated · ${clampedActiveKeyIndex} keys`
+                    : `Now · ${clampedActiveKeyIndex} keys`,
+                position: 'top',
+                fill: 'rgba(96,165,250,0.95)',
+                fontSize: 10,
+              }}
             />
           ) : null}
           <defs>

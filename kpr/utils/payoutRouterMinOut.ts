@@ -1,9 +1,9 @@
 /**
- * Quote-derived `minCreatorOut` for PayoutRouter V3 harvest swaps (KPR lane).
+ * Quote-derived `minOut` for PayoutRouter V3 harvest swaps (KPR lane).
  *
- * Mirrors frontend/server/_lib/onchain/payoutRouterMinOut.ts: the PayoutRouter
- * contract does not enforce min-out on the V3 `convertAndQueue` route, so the
- * keeper must never submit a conversion with min-out 0. Derive it from a
+ * Mirrors frontend/server/_lib/onchain/payoutRouterMinOut.ts: harvest executors
+ * must never submit a V3 conversion with min-out 0. Derive net ShareOFT min-out
+ * from a
  * Uniswap V3 QuoterV2 quote over the router's stored swap path and fail closed
  * (skip the conversion) when no quote and no explicit env floor are available.
  */
@@ -56,6 +56,53 @@ function resolveQuoterAddress(): `0x${string}` {
   return BASE_QUOTER_V2 as `0x${string}`;
 }
 
+const DEFAULT_SHARE_OFT_BUY_FEE_BPS = 690;
+
+/** CreatorShareOFT.OperationType.NoFees */
+export const SHARE_OFT_OPERATION_NO_FEES = 2;
+
+const SHARE_OFT_ADDRESS_TYPE_ABI = [
+  {
+    type: 'function',
+    name: 'addressType',
+    stateMutability: 'view',
+    inputs: [{ name: 'addr', type: 'address' }],
+    outputs: [{ type: 'uint8' }],
+  },
+] as const;
+
+export function applyShareOftBuyFeeHaircut(amount: bigint, buyFeeBps = DEFAULT_SHARE_OFT_BUY_FEE_BPS): bigint {
+  if (amount <= 0n || buyFeeBps <= 0) return amount > 0n ? amount : 0n;
+  const bps = BigInt(Math.min(Math.max(buyFeeBps, 0), 10_000));
+  const net = (amount * (BPS_DENOMINATOR - bps)) / BPS_DENOMINATOR;
+  return net > 0n ? net : 0n;
+}
+
+export async function resolveShareOftBuyFeeBpsForRecipient(params: {
+  shareOft: `0x${string}`;
+  recipient: `0x${string}`;
+}): Promise<number> {
+  const rawOverride = String(process.env.PAYOUT_ROUTER_SHARE_OFT_BUY_FEE_BPS ?? '').trim();
+  if (rawOverride) {
+    const parsed = Number(rawOverride);
+    if (Number.isFinite(parsed) && Number.isInteger(parsed) && parsed >= 0 && parsed <= 10_000) {
+      return parsed;
+    }
+  }
+  try {
+    const opType = await readContract<number>({
+      address: params.shareOft,
+      abi: SHARE_OFT_ADDRESS_TYPE_ABI,
+      functionName: 'addressType',
+      args: [params.recipient],
+    });
+    if (Number(opType) === SHARE_OFT_OPERATION_NO_FEES) return 0;
+  } catch {
+    // legacy routers without NoFees
+  }
+  return DEFAULT_SHARE_OFT_BUY_FEE_BPS;
+}
+
 /** Apply slippage to a quoted output. Never returns 0 for a nonzero quote. */
 export function deriveMinOutFromQuote(quotedOut: bigint, slippageBps: number): bigint {
   if (quotedOut <= 0n) return 0n;
@@ -81,7 +128,7 @@ export async function quoteV3PathOut(path: `0x${string}`, amountIn: bigint): Pro
 }
 
 export type HarvestMinOutResolution =
-  | { ok: true; minCreatorOut: bigint; source: 'quote' | 'quote+floor' | 'floor' }
+  | { ok: true; minOut: bigint; source: 'quote' | 'quote+floor' | 'floor' }
   | { ok: false; reason: 'min_out_unavailable' };
 
 /**
@@ -91,23 +138,36 @@ export type HarvestMinOutResolution =
  * - Quote unavailable but explicit floor configured: use the floor.
  * - Neither: fail closed — the caller must skip the conversion.
  */
-export async function resolveHarvestMinCreatorOut(params: {
+export async function resolveHarvestMinOut(params: {
   path: `0x${string}`;
   amountIn: bigint;
   configuredMinOut: bigint;
+  shareOft?: `0x${string}`;
+  payoutRouter?: `0x${string}`;
+  shareOftBuyFeeBps?: number;
 }): Promise<HarvestMinOutResolution> {
   const quoted = await quoteV3PathOut(params.path, params.amountIn);
 
+  const buyFeeBps =
+    params.shareOftBuyFeeBps ??
+    (params.shareOft && params.payoutRouter
+      ? await resolveShareOftBuyFeeBpsForRecipient({
+          shareOft: params.shareOft,
+          recipient: params.payoutRouter,
+        })
+      : DEFAULT_SHARE_OFT_BUY_FEE_BPS);
+
   if (quoted !== null) {
-    const derived = deriveMinOutFromQuote(quoted, resolvePayoutRouterV3SlippageBps());
+    const afterBuyFee = applyShareOftBuyFeeHaircut(quoted, buyFeeBps);
+    const derived = deriveMinOutFromQuote(afterBuyFee, resolvePayoutRouterV3SlippageBps());
     if (params.configuredMinOut > derived) {
-      return { ok: true, minCreatorOut: params.configuredMinOut, source: 'quote+floor' };
+      return { ok: true, minOut: params.configuredMinOut, source: 'quote+floor' };
     }
-    return { ok: true, minCreatorOut: derived, source: 'quote' };
+    return { ok: true, minOut: derived, source: 'quote' };
   }
 
   if (params.configuredMinOut > 0n) {
-    return { ok: true, minCreatorOut: params.configuredMinOut, source: 'floor' };
+    return { ok: true, minOut: params.configuredMinOut, source: 'floor' };
   }
 
   return { ok: false, reason: 'min_out_unavailable' };

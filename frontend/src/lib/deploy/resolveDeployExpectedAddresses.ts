@@ -115,6 +115,18 @@ export async function resolveDeployExpectedAddresses(
     initCode: shareOftInitCode,
   })
 
+  const wrapperArgs = encodeAbiParameters(parseAbiParameters('address,address,address'), [
+    params.creatorToken,
+    vaultAddress,
+    tempOwner,
+  ])
+  const wrapperInitCode = concatHex([DEPLOY_BYTECODE.CreatorOVaultWrapper as Hex, wrapperArgs])
+  const wrapperAddress = predictCreate2AddressFromInitCode({
+    create2Deployer,
+    salt: wrapperSalt,
+    initCode: wrapperInitCode,
+  })
+
   const weth = getAddress(params.wethAddress)
   const burnStreamSalt = deriveVaultShareBurnStreamSalt({
     creatorToken: params.creatorToken,
@@ -139,11 +151,13 @@ export async function resolveDeployExpectedAddresses(
     })
     let payoutRouterAddress = (() => {
       const args = encodeAbiParameters(
-        parseAbiParameters('address,address,address,address,address,address,address'),
+        parseAbiParameters('address,address,address,address,address,address,address,address,address'),
         [
           params.creatorToken,
           vaultAddress,
           burnStreamAddress,
+          shareOftAddress,
+          wrapperAddress,
           protocolTreasury,
           getAddress(BASE_SWAP_ROUTER),
           weth,
@@ -218,11 +232,13 @@ export async function resolveDeployExpectedAddresses(
         })
 
         const routerArgsFixed = encodeAbiParameters(
-          parseAbiParameters('address,address,address,address,address,address,address'),
+          parseAbiParameters('address,address,address,address,address,address,address,address,address'),
           [
             params.creatorToken,
             vaultAddress,
             burnStreamAddress,
+            shareOftAddress,
+            wrapperAddress,
             protocolTreasury,
             getAddress(BASE_SWAP_ROUTER),
             weth,
@@ -260,18 +276,6 @@ export async function resolveDeployExpectedAddresses(
       creatorCoinPolicyControllerAddress,
     }
   })()
-
-  const wrapperArgs = encodeAbiParameters(parseAbiParameters('address,address,address'), [
-    params.creatorToken,
-    vaultAddress,
-    tempOwner,
-  ])
-  const wrapperInitCode = concatHex([DEPLOY_BYTECODE.CreatorOVaultWrapper as Hex, wrapperArgs])
-  const wrapperAddress = predictCreate2AddressFromInitCode({
-    create2Deployer,
-    salt: wrapperSalt,
-    initCode: wrapperInitCode,
-  })
 
   const gaugeArgs = encodeAbiParameters(parseAbiParameters('address,address,address,address'), [
     shareOftAddress,

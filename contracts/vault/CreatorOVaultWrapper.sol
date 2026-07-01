@@ -770,6 +770,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
 
     // FIX: M-01 — enforce per-user cooldown at the wrapper level
     function _requireWrapperCooldown(address user) internal view {
+        if (isWhitelisted[user] || isBeneficiaryOperator[user]) return;
         uint256 requiredBlock = lastWrapperDepositBlock[user] + wrapperWithdrawDelayBlocks;
         if (block.number < requiredBlock) revert WrapperWithdrawTooSoon(block.number, requiredBlock);
     }
