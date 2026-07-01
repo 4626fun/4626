@@ -3,7 +3,7 @@ import { runArenaTrade } from '../arena/arenaClient.js'
 import { logger } from '../infra/logger.js'
 import { type CounterTradeFillAction, findCounterPositionForCoin } from './counterTradeEngine.js'
 import { findCoinLeverageFromState } from './counterTradeLeverage.js'
-import { postCounterTradeRoomUpdate } from './counterTradeRoomPosting.js'
+import { postCounterTradeRoomUpdate, postCounterTradeMonitorAlert } from './counterTradeRoomPosting.js'
 import { recordCounterTradeAction } from './counterTradeStore.js'
 import {
   getClearinghouseState,
@@ -141,6 +141,23 @@ export async function executeCounterTradeEntryFlow(params: {
       subaccount: params.strategySubaccount,
     reason: tradeResult.message,
   })
+  if (params.chatPostEnabled) {
+    try {
+      await postCounterTradeMonitorAlert({
+        runtimeRoomId: params.roomId,
+        postRoomId: params.chatPostRoomId,
+        kind: 'failed',
+        reason: String(tradeResult.message ?? 'arena_trade_failed'),
+        pair: params.pair,
+      })
+    } catch (postError) {
+      logger.warn('counter_trade.monitor_alert_failed', {
+        roomId: params.roomId,
+        reason: 'execution_failed',
+        message: postError instanceof Error ? postError.message : String(postError),
+      })
+    }
+  }
   return {
     executedDelta: 0,
     failedDelta: 1,

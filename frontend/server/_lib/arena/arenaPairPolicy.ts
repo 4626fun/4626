@@ -70,3 +70,21 @@ export function validateArenaPair(pairInput: string, config: ArenaConfig): Arena
   }
   return { ok: true, normalizedPair, market: 'crypto' }
 }
+
+/** Normalize a coin symbol for allowlist membership checks. */
+export function normalizeAllowlistKey(symbol: string): string {
+  const trimmed = symbol.trim()
+  if (!trimmed) return ''
+  if (trimmed.includes(':')) {
+    const [prefix, sym] = trimmed.split(':')
+    return `${prefix.toLowerCase()}:${sym.toUpperCase()}`
+  }
+  return trimmed.toUpperCase()
+}
+
+/** When allowlist is null/empty, all coins pass. */
+export function isAssetAllowlisted(coin: string, allowlist: Set<string> | null | undefined): boolean {
+  if (!allowlist || allowlist.size === 0) return true
+  const key = normalizeAllowlistKey(coin)
+  return allowlist.has(key) || allowlist.has(key.toUpperCase())
+}

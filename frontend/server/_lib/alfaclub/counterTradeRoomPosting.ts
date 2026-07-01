@@ -4,6 +4,80 @@ import type { CounterTradeFillAction } from './counterTradeEngine.js'
 import { type BankedCloseSummary, formatSignedUsd } from './counterTradeHarvest.js'
 import type { HyperliquidUserFillDetailed } from './hyperliquid.js'
 
+declare const process: { env: Record<string, string | undefined> }
+
+const DEFAULT_MONITOR_ALERT_COOLDOWN_MS = 30 * 60_000
+const monitorAlertLastSentAt = new Map<string, number>()
+
+export type CounterTradeMonitorAlertKind = 'blocked' | 'failed'
+
+function readMonitorAlertCooldownMs(): number {
+  const raw = Number(process.env.ALFACLUB_COUNTER_TRADE_MONITOR_ALERT_COOLDOWN_MS ?? DEFAULT_MONITOR_ALERT_COOLDOWN_MS)
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MONITOR_ALERT_COOLDOWN_MS
+}
+
+function formatCounterTradeMonitorAlert(params: {
+  kind: CounterTradeMonitorAlertKind
+  reason: string
+  pair?: string | null
+}): string {
+  const pairLine = params.pair ? `${params.pair}/USDC · ` : ''
+  if (params.kind === 'blocked' && params.reason === 'buffer_floor') {
+    return [
+      '⚠️ **Counter-trade monitor** — entries paused',
+      '',
+      `${pairLine}InverseAKITA margin buffer is below the safety floor (\`buffer_floor\`).`,
+      'New opposite-leg entries will not open until agent wallet free margin recovers.',
+      '',
+      'Check \`/strategy status\` · top up the Arena agent wallet if needed.',
+    ].join('\n')
+  }
+  if (params.kind === 'failed') {
+    return [
+      '⚠️ **Counter-trade monitor** — execution failed',
+      '',
+      `${pairLine}Reason: ${params.reason}`,
+      '',
+      'Check \`/strategy status\` and the Arena agent wallet.',
+    ].join('\n')
+  }
+  return [
+    '⚠️ **Counter-trade monitor**',
+    '',
+    `${pairLine}${params.kind}: ${params.reason}`,
+  ].join('\n')
+}
+
+export async function postCounterTradeMonitorAlert(params: {
+  runtimeRoomId: string
+  postRoomId: string
+  kind: CounterTradeMonitorAlertKind
+  reason: string
+  pair?: string | null
+}): Promise<boolean> {
+  const cooldownMs = readMonitorAlertCooldownMs()
+  const dedupeKey = `${params.postRoomId}:${params.kind}:${params.reason}:${params.pair ?? '*'}`
+  const nowMs = Date.now()
+  const lastSentAt = monitorAlertLastSentAt.get(dedupeKey) ?? 0
+  if (nowMs - lastSentAt < cooldownMs) return false
+
+  const message = formatCounterTradeMonitorAlert(params)
+  const send = await sendAlfaClubRoomText({
+    roomId: params.postRoomId,
+    text: message,
+  })
+  monitorAlertLastSentAt.set(dedupeKey, nowMs)
+  logger.info('counter_trade.monitor_alert_posted', {
+    roomId: params.runtimeRoomId,
+    postRoomId: params.postRoomId,
+    lane: send.lane,
+    kind: params.kind,
+    reason: params.reason,
+    pair: params.pair ?? null,
+  })
+  return true
+}
+
 function formatCounterTradeRoomPost(params: {
   pair: string
   userFill: HyperliquidUserFillDetailed

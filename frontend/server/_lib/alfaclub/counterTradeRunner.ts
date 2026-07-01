@@ -1,5 +1,6 @@
 import { logger } from '../infra/logger.js'
 import { readArenaConfig } from '../arena/arenaConfig.js'
+import { isAssetAllowlisted } from '../arena/arenaPairPolicy.js'
 import { resolveArenaIdentityForContext } from '../arena/arenaIdentityMappingStore.js'
 import { runArenaSpotPerpTransfer } from '../arena/arenaClient.js'
 import { sendAlfaClubRoomText } from './chatBridge.js'
@@ -27,6 +28,7 @@ import {
 import { findCoinLeverageFromState } from './counterTradeLeverage.js'
 import {
   formatSpotSweepRoomPost,
+  postCounterTradeMonitorAlert,
 } from './counterTradeRoomPosting.js'
 import { computeBufferRatio, runCounterTradeDefenseForIdentity } from './counterTradeDefense.js'
 import {
@@ -156,6 +158,7 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
   }
 
   const baseArenaConfig = readArenaConfig()
+  const assetAllowlist = baseArenaConfig.assetAllowlist
   const startTimeMs = Date.now() - runtime.eventLookbackMs
   let scannedEvents = 0
   let newEvents = 0
@@ -269,6 +272,7 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
           identityConfig,
           counterWalletState,
           silo: 'bot',
+          assetAllowlist,
         })
         executed += defense.executed
         failed += defense.failed
@@ -304,6 +308,7 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
               counterWalletState: userWalletState,
               silo: 'user',
               mode: userSiloKey ? 'execute' : 'alert',
+              assetAllowlist,
             })
             executed += userDefense.executed
             failed += userDefense.failed
@@ -349,6 +354,23 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
         })
         if (!isNewEvent) continue
         newEvents += 1
+
+        const fillCoin = String(fill.coin ?? '').trim()
+        if (!isAssetAllowlisted(fillCoin, assetAllowlist)) {
+          skipped += 1
+          await recordCounterTradeAction({
+            roomId: runtime.roomId,
+            senderAddress: optIn.senderAddress,
+            eventKey,
+            status: 'skipped',
+            reason: 'pair_not_allowlisted',
+            counterSide: null,
+            counterNotionalUsd: null,
+            counterLeverage: null,
+          })
+          continue
+        }
+
         const strategyKey = resolveCounterTradeStrategyForPreset(optIn.preset)
         const strategySubaccount = resolveStrategySubaccount({
           strategyKey,
@@ -440,6 +462,24 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
             counterNotionalUsd: null,
             counterLeverage: null,
           })
+          if (runtime.chatPostEnabled) {
+            const pairForAlert = String(fill.coin ?? '').trim()
+            try {
+              await postCounterTradeMonitorAlert({
+                runtimeRoomId: runtime.roomId,
+                postRoomId: runtime.chatPostRoomId,
+                kind: 'blocked',
+                reason: 'buffer_floor',
+                pair: pairForAlert || null,
+              })
+            } catch (postError) {
+              logger.warn('counter_trade.monitor_alert_failed', {
+                roomId: runtime.roomId,
+                reason: 'buffer_floor',
+                message: postError instanceof Error ? postError.message : String(postError),
+              })
+            }
+          }
           continue
         }
 

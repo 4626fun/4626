@@ -178,6 +178,12 @@ action cap, or daily notional cap. Each action posts a `🛡️ Defense` /
 
 Env knobs (Railway InverseAKITA executor):
 
+- **`ARENA_ASSET_ALLOWLIST`** — optional comma-separated HL perp symbols. When set
+  (e.g. `HYPE` for room 1659 HYPE-only), the counter-trade loop skips non-listed
+  fills (`pair_not_allowlisted`), defense/harvest ignore other legs, and
+  `runArenaTrade` rejects other pairs at execution time. Set on **Railway** —
+  Vercel env alone does not affect the ticker executor.
+
 - `ALFACLUB_COUNTER_TRADE_DEFENSE_ENABLED` — master switch (default 1).
 - `ALFACLUB_COUNTER_TRADE_DEFEND_LIQ_DISTANCE_PCT` — defend trigger (default 12).
 - `ALFACLUB_COUNTER_TRADE_DEFEND_REDUCE_FRACTION` — shave per action (default 0.25, capped 0.75).

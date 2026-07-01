@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { ArenaConfig } from './arenaConfig.js'
-import { validateArenaPair } from './arenaPairPolicy.js'
+import { isAssetAllowlisted, validateArenaPair } from './arenaPairPolicy.js'
 
 function mockConfig(overrides: Partial<ArenaConfig> = {}): ArenaConfig {
   return {
@@ -65,5 +65,19 @@ describe('validateArenaPair', () => {
     if (!result.ok) {
       expect(result.reason).toBe('asset_not_allowlisted')
     }
+  })
+})
+
+describe('isAssetAllowlisted', () => {
+  it('allows all coins when allowlist is unset', () => {
+    expect(isAssetAllowlisted('BTC', null)).toBe(true)
+    expect(isAssetAllowlisted('HYPE', undefined)).toBe(true)
+  })
+
+  it('allows only listed coins', () => {
+    const allowlist = new Set(['HYPE'])
+    expect(isAssetAllowlisted('HYPE', allowlist)).toBe(true)
+    expect(isAssetAllowlisted('hype', allowlist)).toBe(true)
+    expect(isAssetAllowlisted('BTC', allowlist)).toBe(false)
   })
 })

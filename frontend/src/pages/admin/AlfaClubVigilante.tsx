@@ -275,7 +275,7 @@ function BadgePill({
 }
 
 export function AlfaClubVigilante() {
-  const counterTradeStatus = useCounterTradeStatus()
+  const counterTradeStatus = useCounterTradeStatus({ refetchIntervalMs: 60_000 })
   const leaderboard = useQuery({
     queryKey: ['alfaclub-vigilante-leaderboard'],
     queryFn: fetchLeaderboard,

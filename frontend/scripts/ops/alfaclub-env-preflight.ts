@@ -33,7 +33,13 @@ function runChecks(): Check[] {
     ['ALFACLUB_API_KEY', 'Bot-token sends (preferred over WS-only)'],
   ]
   for (const [key, note] of requiredControl) {
-    checks.push({ id: key, required: true, present: envPresent(key), note })
+    const present =
+      key === 'ALFACLUB_API_KEY'
+        ? envPresent('ALFACLUB_API_KEY') ||
+          envPresent('ALFACLUB_BOT_TOKEN') ||
+          envPresent('alfaclub_api_key')
+        : envPresent(key)
+    checks.push({ id: key, required: true, present, note })
   }
 
   const bridgeRecommended: Array<[string, string]> = [

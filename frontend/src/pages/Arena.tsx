@@ -655,7 +655,7 @@ export function ArenaGettingStartedPage() {
 }
 
 export function ArenaStatusPage() {
-  const counterTradeStatus = useCounterTradeStatus()
+  const counterTradeStatus = useCounterTradeStatus({ refetchIntervalMs: 60_000 })
   const flowState = useMemo(() => {
     if (!counterTradeStatus.data) return null
     const data = counterTradeStatus.data
@@ -711,8 +711,8 @@ export function ArenaStatusPage() {
           <div className="label">Live counter-trade status</div>
           <h2 className="headline text-3xl sm:text-4xl mt-2">Runtime status</h2>
           <p className="mt-3 text-base text-zinc-400 max-w-4xl leading-relaxed">
-            This page reflects the live API response. If chat commands succeed but this page does not change, refresh
-            and confirm you are signed into the profile linked to the same wallet context.
+            This page auto-refreshes every 60 seconds from the live API. If chat commands succeed but this page does
+            not change, confirm you are signed into the profile linked to the same wallet context.
           </p>
         </div>
         <button

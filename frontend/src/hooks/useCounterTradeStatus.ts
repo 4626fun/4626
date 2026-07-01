@@ -5,17 +5,19 @@ import {
   type CounterTradeStatusPayload,
 } from '@/lib/alfaclub/counterTradeStatus'
 
-export function useCounterTradeStatus(params?: { enabled?: boolean }) {
+export function useCounterTradeStatus(params?: { enabled?: boolean; refetchIntervalMs?: number }) {
+  const refetchIntervalMs = params?.refetchIntervalMs
   const query = useQuery<CounterTradeStatusPayload>({
     queryKey: ['alfaclub', 'counter-trade', 'status'],
     queryFn: fetchCounterTradeStatus,
     enabled: params?.enabled ?? true,
     staleTime: 30_000,
+    refetchInterval: refetchIntervalMs != null && refetchIntervalMs > 0 ? refetchIntervalMs : false,
     retry: (failureCount, error) => {
       if (isCounterTradeStatusAuthError(error)) return false
       return failureCount < 1
     },
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: refetchIntervalMs != null && refetchIntervalMs > 0,
   })
 
   return {

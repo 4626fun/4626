@@ -24,6 +24,7 @@ import { runArenaTrade } from '../arena/arenaClient.js'
 import { sendAlfaClubRoomText } from './chatBridge.js'
 import type { HyperliquidClearinghouseState } from './hyperliquid.js'
 import type { CounterTradeRuntimeConfig, CounterTradeSide } from './counterTradeConfig.js'
+import { isAssetAllowlisted } from '../arena/arenaPairPolicy.js'
 import { computeLegLiqDistancePct, type CounterWalletPositionLeg } from './counterTradeEngine.js'
 import {
   COUNTER_TRADE_DEFENSE_ALERT_REASON,
@@ -133,6 +134,7 @@ function clampReduce(params: {
 export function deriveCounterTradeDefenseActions(params: {
   state: HyperliquidClearinghouseState | null
   runtime: CounterTradeRuntimeConfig
+  assetAllowlist?: Set<string> | null
 }): CounterTradeDefenseAction[] {
   const { state, runtime } = params
   if (!runtime.defenseEnabled) return []
@@ -145,6 +147,7 @@ export function deriveCounterTradeDefenseActions(params: {
     if (leg.positionValue == null || !Number.isFinite(leg.positionValue) || leg.positionValue <= 0) continue
     const coin = String(leg.coin ?? '').trim()
     if (!coin) continue
+    if (!isAssetAllowlisted(coin, params.assetAllowlist)) continue
 
     const liqDistancePct = computeLegLiqDistancePct(leg)
     const unrealizedRoiPct = computeLegRoiPct(leg)
@@ -297,6 +300,7 @@ export async function runCounterTradeDefenseForIdentity(params: {
   silo?: CounterTradeDefenseSilo
   mode?: CounterTradeDefenseMode
   nowMs?: number
+  assetAllowlist?: Set<string> | null
 }): Promise<CounterTradeDefenseRunOutcome> {
   const { runtime, senderAddress, identityConfig, counterWalletState } = params
   const silo: CounterTradeDefenseSilo = params.silo ?? 'bot'
@@ -309,7 +313,11 @@ export async function runCounterTradeDefenseForIdentity(params: {
   }
   if (!runtime.defenseEnabled) return outcome
 
-  const actions = deriveCounterTradeDefenseActions({ state: counterWalletState, runtime })
+  const actions = deriveCounterTradeDefenseActions({
+    state: counterWalletState,
+    runtime,
+    assetAllowlist: params.assetAllowlist,
+  })
   if (actions.length === 0) return outcome
 
   const bufferRatio = computeBufferRatio(counterWalletState)

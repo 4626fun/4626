@@ -43,6 +43,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/v1/alfaclub/position-alerts",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/v1/alfaclub/chat-token-refresh",
       "schedule": "*/10 * * * *"
     },
