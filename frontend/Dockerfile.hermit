@@ -102,9 +102,10 @@ COPY frontend/shared ./shared
 # - dgclaw-skill workspace containing `dgclaw.sh` + scripts/*
 # - local acp-cli checkout at ACP_CLI_DIR (dgclaw join)
 #
-# Install order matters: global @virtuals-protocol/acp-cli bundles an older esbuild
-# binary that can poison npm cache and break `npm install` in the cloned acp-cli
-# repo (tsx/esbuild postinstall: Expected "0.28.1" but got "0.27.7").
+# Install order matters: global @virtuals-protocol/acp-cli supplies the runtime
+# `acp` binary (trade.ts prefers ACP_BIN / PATH). The git checkout is kept for
+# ACP_CLI_DIR compatibility only — do not npm install inside it (tsx/esbuild
+# postinstall fails reliably in this image).
 RUN git clone --depth=1 --branch "${DGCLAW_SKILL_REF}" "${DGCLAW_SKILL_REPO}" /app/dgclaw-skill \
   && cd /app/dgclaw-skill \
   && npm install --omit=dev \
@@ -113,11 +114,7 @@ RUN git clone --depth=1 --branch "${DGCLAW_SKILL_REF}" "${DGCLAW_SKILL_REPO}" /a
   # wallet key instead of acp-cli). Upstream dgclaw does not depend on it.
   && npm install --no-save --omit=dev viem@^2
 
-RUN git clone --depth=1 --branch "${ACP_CLI_REF}" "${ACP_CLI_REPO}" /app/acp-cli \
-  && cd /app/acp-cli \
-  && npm cache clean --force \
-  && npm install --omit=dev --ignore-scripts \
-  && npm rebuild esbuild
+RUN git clone --depth=1 --branch "${ACP_CLI_REF}" "${ACP_CLI_REPO}" /app/acp-cli
 
 RUN npm install -g @virtuals-protocol/acp-cli
 
@@ -131,6 +128,7 @@ COPY patches/dgclaw/trade.ts /app/dgclaw-skill/scripts/trade.ts
 # Health check port
 ENV PORT=8080
 ENV ACP_CLI_DIR=/app/acp-cli
+ENV ACP_BIN=acp
 EXPOSE 8080
 
 # The absolute simplest possible startup for maximum reliability on Railway.

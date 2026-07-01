@@ -13,6 +13,18 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ACP_DIR = process.env.ACP_CLI_DIR || resolve(__dirname, '..', '..', 'acp-cli');
 
 function getAcpBin(): string {
+  const fromEnv = String(process.env.ACP_BIN ?? process.env.ARENA_ACP_BIN ?? '').trim()
+  if (fromEnv) return fromEnv
+  try {
+    execSync('command -v acp', {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      shell: '/bin/sh',
+    })
+    return 'acp'
+  } catch {
+    // fall through to dev checkout
+  }
   const bin = resolve(ACP_DIR, 'bin', 'acp.ts');
   if (!existsSync(bin)) {
     console.error(`acp-cli not found at ${bin}`);
