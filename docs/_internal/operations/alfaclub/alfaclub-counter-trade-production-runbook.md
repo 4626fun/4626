@@ -2,7 +2,7 @@
 
 ## Launch checklist
 
-1. **Executor:** Railway **4626-inverseakita** / Hermit only — `ALFACLUB_COUNTER_TRADE_RUNNER_ENABLED=1`; unset on Vercel and XMTP primary.
+1. **Executor:** Railway **`4626-inverseakita`** / service **`4626-inverseakita-agent`** only — `ALFACLUB_COUNTER_TRADE_RUNNER_ENABLED=1`; unset on Vercel, main Hermit (`4626-hermit-agent`), and XMTP primary.
 2. **Engine:** `ALFACLUB_COUNTER_TRADE_ENABLED=1` + validated `ARENA_*` env ([Virtuals runbook](./virtuals-arena-railway-runbook.md)).
 3. **Room 1659:** at most one active strategy actor (runner auto-pauses extras).
 4. **Smoke:** Hermit `/healthz` shows `counterTrade` ticker; `GET /api/v1/alfaclub/counter-trade-status` for room state.
