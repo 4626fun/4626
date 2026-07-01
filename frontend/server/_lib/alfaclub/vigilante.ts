@@ -43,7 +43,7 @@ import {
   REPUTATION_REGISTRY_ABI,
   getReputationRegistryAddress,
 } from '../agent/erc8004.js'
-import { listAllCreators, runCreatorIndexer, type AlfaClubCreator } from './creators.js'
+import { listAllCreators, runCreatorIndexer, readVigilanteScoringCursor, writeVigilanteScoringCursor, type AlfaClubCreator } from './creators.js'
 import {
   getHyperliquidSnapshot,
   type HyperliquidSnapshot,
@@ -63,6 +63,7 @@ import {
 import {
   attachErc8004TxHash,
   bucketWindowStart,
+  getLatestMetricsByCreator,
   hasPublication,
   insertMetricsSnapshot,
   makePublicationKey,
@@ -70,6 +71,10 @@ import {
   type MetricsSnapshotRow,
   type PublicationKind,
 } from './publicationLedger.js'
+import {
+  lookupRoomTradingWalletHint,
+  lookupTradingWalletFromEnv,
+} from './keySafetyRoomContext.js'
 import { ensureAlfaClubVigilanteSchema } from './schema.js'
 import { tryUploadImmutableJson } from '../lens/lensGrove.js'
 
@@ -87,10 +92,14 @@ export type VigilanteFlags = {
   topN: number
   cooldownHours: number
   maxCreatorsPerRun: number | null
+  scoringBatchSize: number
 }
 
 const DEFAULT_TOP_N = 20
 const DEFAULT_COOLDOWN_HOURS = 24
+const DEFAULT_SCORING_BATCH_SIZE = 250
+const METRICS_CAPTURE_CONCURRENCY = 16
+const LIGHT_METRICS_CONCURRENCY = 32
 
 function parseBoolFlag(raw: string | undefined): boolean {
   const v = (raw ?? '').trim().toLowerCase()
@@ -115,6 +124,12 @@ function parseOptionalPositiveIntEnv(key: string, max = 10_000): number | null {
 }
 
 export function readVigilanteFlags(): VigilanteFlags {
+  const scoringBatchSize = parsePositiveIntEnv(
+    'ALFACLUB_VIGILANTE_SCORING_BATCH_SIZE',
+    DEFAULT_SCORING_BATCH_SIZE,
+    500,
+  )
+  const maxCreatorsPerRun = parseOptionalPositiveIntEnv('ALFACLUB_VIGILANTE_MAX_CREATORS_PER_RUN')
   return {
     killSwitch: parseBoolFlag(process.env.ALFACLUB_VIGILANTE_KILL_SWITCH),
     readEnabled: parseBoolFlag(process.env.ALFACLUB_VIGILANTE_READ_ENABLED),
@@ -122,8 +137,101 @@ export function readVigilanteFlags(): VigilanteFlags {
     feedbackEnabled: parseBoolFlag(process.env.ALFACLUB_VIGILANTE_FEEDBACK_ENABLED),
     topN: parsePositiveIntEnv('ALFACLUB_VIGILANTE_TOP_N', DEFAULT_TOP_N, 200),
     cooldownHours: parsePositiveIntEnv('ALFACLUB_VIGILANTE_POST_COOLDOWN_HOURS', DEFAULT_COOLDOWN_HOURS, 720),
-    maxCreatorsPerRun: parseOptionalPositiveIntEnv('ALFACLUB_VIGILANTE_MAX_CREATORS_PER_RUN'),
+    maxCreatorsPerRun,
+    scoringBatchSize: maxCreatorsPerRun ? Math.min(scoringBatchSize, maxCreatorsPerRun) : scoringBatchSize,
   }
+}
+
+export function resolveScoringBatchSize(flags: VigilanteFlags = readVigilanteFlags()): number {
+  return flags.scoringBatchSize
+}
+
+export function selectRotatingScoringBatch(
+  creators: readonly AlfaClubCreator[],
+  offset: number,
+  batchSize: number,
+): { batch: AlfaClubCreator[]; nextOffset: number } {
+  if (creators.length === 0 || batchSize <= 0) {
+    return { batch: [], nextOffset: 0 }
+  }
+  const sorted = [...creators].sort((a, b) => {
+    if (a.tokenId === b.tokenId) {
+      return a.creatorAddress.localeCompare(b.creatorAddress)
+    }
+    return a.tokenId < b.tokenId ? -1 : 1
+  })
+  const start = ((offset % sorted.length) + sorted.length) % sorted.length
+  const take = Math.min(batchSize, sorted.length)
+  const batch: AlfaClubCreator[] = []
+  for (let index = 0; index < take; index += 1) {
+    batch.push(sorted[(start + index) % sorted.length]!)
+  }
+  return { batch, nextOffset: (start + take) % sorted.length }
+}
+
+export function mergeCreatorMetricsForSnapshot(params: {
+  allCreators: readonly AlfaClubCreator[]
+  batchMetrics: readonly CreatorMetricsInput[]
+  cachedByCreator: ReadonlyMap<string, MetricsSnapshotRow>
+  lightMetrics: readonly CreatorMetricsInput[]
+}): CreatorMetricsInput[] {
+  const batchByAddress = new Map(
+    params.batchMetrics.map((metric) => [metric.creatorAddress.toLowerCase(), metric]),
+  )
+  const lightByAddress = new Map(
+    params.lightMetrics.map((metric) => [metric.creatorAddress.toLowerCase(), metric]),
+  )
+  return params.allCreators.map((creator) => {
+    const address = creator.creatorAddress.toLowerCase()
+    const fresh = batchByAddress.get(address)
+    if (fresh) return fresh
+
+    const cached = params.cachedByCreator.get(address)
+    if (cached) {
+      return {
+        tokenId: creator.tokenId,
+        creatorAddress: creator.creatorAddress,
+        totalSupply: cached.totalSupply,
+        stakedSupply: cached.stakedSupply,
+        hyperliquid: {
+          accountValueUsd: cached.hlAccountValueUsd,
+          pnl30dUsd: cached.pnl30dUsd,
+        },
+      }
+    }
+
+    return (
+      lightByAddress.get(address) ?? {
+        tokenId: creator.tokenId,
+        creatorAddress: creator.creatorAddress,
+        totalSupply: 0n,
+        stakedSupply: 0n,
+        hyperliquid: null,
+      }
+    )
+  })
+}
+
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const out: R[] = []
+  for (let index = 0; index < items.length; index += concurrency) {
+    const chunk = items.slice(index, index + concurrency)
+    out.push(...(await Promise.all(chunk.map(fn))))
+  }
+  return out
+}
+
+async function resolveHyperliquidAddress(creator: AlfaClubCreator): Promise<string> {
+  const roomId = creator.tokenId.toString()
+  return (
+    lookupTradingWalletFromEnv(roomId) ??
+    (await lookupRoomTradingWalletHint(roomId)) ??
+    creator.creatorAddress
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -174,20 +282,20 @@ async function captureMetricsForCreators(
   opts: {
     skipHyperliquid?: boolean
     getHyperliquid?: (address: string) => Promise<HyperliquidSnapshot>
+    concurrency?: number
   } = {},
 ): Promise<CreatorMetricsInput[]> {
   const hl = opts.getHyperliquid ?? getHyperliquidSnapshot
-  const out: CreatorMetricsInput[] = []
-  for (const c of creators) {
-    const totalSupply = await readSupply(client, c.tokenId)
-    const stakedSupply = await readStakedSupply(client, c.stakingPool, c.tokenId)
-    // Only hit Hyperliquid for active rooms — rooms with zero supply are either
-    // not launched or fully exited, either way no PnL to fetch.
+  const concurrency = opts.concurrency ?? METRICS_CAPTURE_CONCURRENCY
+  return mapWithConcurrency(creators, concurrency, async (creator) => {
+    const totalSupply = await readSupply(client, creator.tokenId)
+    const stakedSupply = await readStakedSupply(client, creator.stakingPool, creator.tokenId)
     const shouldFetchHl = !opts.skipHyperliquid && totalSupply > 0n
-    const snapshot = shouldFetchHl ? await hl(c.creatorAddress) : null
-    out.push({
-      tokenId: c.tokenId,
-      creatorAddress: c.creatorAddress,
+    const hlAddress = shouldFetchHl ? await resolveHyperliquidAddress(creator) : null
+    const snapshot = shouldFetchHl && hlAddress ? await hl(hlAddress) : null
+    return {
+      tokenId: creator.tokenId,
+      creatorAddress: creator.creatorAddress,
       totalSupply,
       stakedSupply,
       hyperliquid: snapshot
@@ -196,9 +304,25 @@ async function captureMetricsForCreators(
             pnl30dUsd: snapshot.pnl30dUsd,
           }
         : null,
-    })
-  }
-  return out
+    }
+  })
+}
+
+async function captureLightMetricsForCreators(
+  creators: readonly AlfaClubCreator[],
+  client: AlfaClubPublicClientLike,
+): Promise<CreatorMetricsInput[]> {
+  return mapWithConcurrency(creators, LIGHT_METRICS_CONCURRENCY, async (creator) => {
+    const totalSupply = await readSupply(client, creator.tokenId)
+    const stakedSupply = await readStakedSupply(client, creator.stakingPool, creator.tokenId)
+    return {
+      tokenId: creator.tokenId,
+      creatorAddress: creator.creatorAddress,
+      totalSupply,
+      stakedSupply,
+      hyperliquid: null,
+    }
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -486,7 +610,12 @@ export type VigilanteRunResult = {
   snapshotTs: string
   windowStart: string
   indexedNewCreators: number | null
+  creatorsIndexed: number
   rankedCreators: number
+  scoringBatchSize: number
+  scoringBatchCount: number
+  scoringCursorBefore: number
+  scoringCursorAfter: number
   topN: number
   publications: VigilantePublishResult[]
   signerAddress: string | null
@@ -509,7 +638,12 @@ export async function runVigilante(
     snapshotTs,
     windowStart,
     indexedNewCreators: null,
+    creatorsIndexed: 0,
     rankedCreators: 0,
+    scoringBatchSize: flags.scoringBatchSize,
+    scoringBatchCount: 0,
+    scoringCursorBefore: 0,
+    scoringCursorAfter: 0,
     topN: flags.topN,
     publications: [],
     signerAddress: null,
@@ -546,15 +680,32 @@ export async function runVigilante(
     return empty('no_creators')
   }
 
-  const boundedCreators =
-    flags.maxCreatorsPerRun && creators.length > flags.maxCreatorsPerRun
-      ? creators.slice(0, flags.maxCreatorsPerRun)
-      : creators
+  const scoringCursorBefore = await readVigilanteScoringCursor()
+  const { batch, nextOffset } = selectRotatingScoringBatch(
+    creators,
+    scoringCursorBefore,
+    flags.scoringBatchSize,
+  )
+  const batchAddressSet = new Set(batch.map((creator) => creator.creatorAddress.toLowerCase()))
+  const cachedByCreator = await getLatestMetricsByCreator()
+  const lightTargets = creators.filter((creator) => {
+    const address = creator.creatorAddress.toLowerCase()
+    return !batchAddressSet.has(address) && !cachedByCreator.has(address)
+  })
 
-  // 2. Capture metrics.
-  const metrics = await captureMetricsForCreators(boundedCreators, client, {
-    skipHyperliquid: opts.skipHyperliquid,
-    getHyperliquid: opts.getHyperliquid,
+  const [batchMetrics, lightMetrics] = await Promise.all([
+    captureMetricsForCreators(batch, client, {
+      skipHyperliquid: opts.skipHyperliquid,
+      getHyperliquid: opts.getHyperliquid,
+    }),
+    captureLightMetricsForCreators(lightTargets, client),
+  ])
+
+  const metrics = mergeCreatorMetricsForSnapshot({
+    allCreators: creators,
+    batchMetrics,
+    cachedByCreator,
+    lightMetrics,
   })
 
   // 3. Rank.
@@ -573,6 +724,7 @@ export async function runVigilante(
     rank: r.rank,
   }))
   await insertMetricsSnapshot(snapshotRows)
+  await writeVigilanteScoringCursor(nextOffset)
 
   // 5. Publish if enabled.
   const publications: VigilantePublishResult[] = []
@@ -618,7 +770,12 @@ export async function runVigilante(
     snapshotTs,
     windowStart,
     indexedNewCreators: indexedNew,
+    creatorsIndexed: creators.length,
     rankedCreators: ranked.length,
+    scoringBatchSize: flags.scoringBatchSize,
+    scoringBatchCount: batch.length,
+    scoringCursorBefore,
+    scoringCursorAfter: nextOffset,
     topN: flags.topN,
     publications,
     signerAddress: signer?.signerAddress ?? null,

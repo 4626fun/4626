@@ -108,7 +108,11 @@ function normalizeEvmAddress(raw: string | null | undefined): string | null {
   return value.toLowerCase()
 }
 
-/** Trading fund wallet from snapshot/explore ingest when the room row exists but is incomplete. */
+/** Best-effort trading fund wallet from snapshot/explore ingest. */
+export async function lookupRoomTradingWalletHint(roomId: string): Promise<string | null> {
+  return lookupTradingWalletHint(roomId)
+}
+
 async function lookupTradingWalletHint(roomId: string): Promise<string | null> {
   const db = await getDb()
   if (!db) return null
@@ -158,6 +162,36 @@ export function lookupTradingWalletFromEnv(roomId: string): string | null {
     return typeof value === 'string' ? normalizeEvmAddress(value) : null
   } catch {
     return null
+  }
+}
+
+/**
+ * Operator-maintained roomId → display metadata override for rooms whose real
+ * name/creator handle is not present in snapshot/explore ingest (e.g. rooms that
+ * only ever report a generic "Room #<id>" label). Mirrors the trading-wallet map.
+ *
+ * `ALFACLUB_ROOM_META_JSON='{"1659":{"name":"AKITA","creatorHandle":"wenakita"}}'`
+ */
+export function lookupRoomMetaFromEnv(roomId: string): {
+  name: string | null
+  creatorHandle: string | null
+} {
+  const raw = (process.env.ALFACLUB_ROOM_META_JSON ?? '').trim()
+  if (!raw) return { name: null, creatorHandle: null }
+  try {
+    const map = JSON.parse(raw) as Record<string, unknown>
+    const entry = (map[roomId] ?? map[String(roomId)]) as
+      | { name?: unknown; creatorHandle?: unknown }
+      | undefined
+    if (!entry || typeof entry !== 'object') return { name: null, creatorHandle: null }
+    const name = typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim() : null
+    const creatorHandle =
+      typeof entry.creatorHandle === 'string' && entry.creatorHandle.trim()
+        ? entry.creatorHandle.trim().replace(/^@+/, '')
+        : null
+    return { name, creatorHandle }
+  } catch {
+    return { name: null, creatorHandle: null }
   }
 }
 
@@ -557,10 +591,13 @@ async function readTreasuryUsd(walletAddress: string | null): Promise<{
 function resolveRoomLabelFields(
   row: Pick<SnapshotRow, 'room_id' | 'room_name' | 'creator_twitter_username' | 'cached_display_label'>,
 ) {
+  // Operator override wins over ingest-derived labels so rooms that only report
+  // a generic "Room #<id>" can still surface their real name/creator handle.
+  const override = lookupRoomMetaFromEnv(row.room_id)
   return materializeRoomDisplayFields({
     roomId: row.room_id,
-    roomName: parseString(row.room_name),
-    creatorHandle: parseString(row.creator_twitter_username),
+    roomName: override.name ?? parseString(row.room_name),
+    creatorHandle: override.creatorHandle ?? parseString(row.creator_twitter_username),
     cachedDisplayLabel: parseString(row.cached_display_label),
   })
 }

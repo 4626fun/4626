@@ -6,6 +6,7 @@ import {
   formatAlfaClubDailyBrief,
   formatAlfaClubLeaderboardChat,
   formatIndexedScopeLine,
+  type TopRoomMarketStats,
 } from './dailyBrief.js'
 
 function row(params: {
@@ -46,6 +47,32 @@ describe('formatAlfaClubDailyBrief', () => {
     ]
     const labels = new Map<string, string>([[ADDR_A.toLowerCase(), '@Flip_Research']])
     const roomIds = new Map<string, string>([[ADDR_A.toLowerCase(), '2']])
+    const roomDisplayByRoomId = new Map<string, string>([
+      ['2', 'Flip Research by Flip_Research'],
+      ['19', 'Alpha Room by wenakita'],
+    ])
+    const topRoomStatsByCreator = new Map<string, TopRoomMarketStats>([
+      [
+        ADDR_A.toLowerCase(),
+        {
+          roomId: '2',
+          buyOneKeyUsd: 3.4,
+          sellOneKeyUsd: 3.15,
+          tradingFundUsd: 4200,
+          impliedPayoutPerKeyUsd: 51.22,
+        },
+      ],
+      [
+        ADDR_B.toLowerCase(),
+        {
+          roomId: '19',
+          buyOneKeyUsd: 1.2,
+          sellOneKeyUsd: 1.1,
+          tradingFundUsd: 900,
+          impliedPayoutPerKeyUsd: 33.33,
+        },
+      ],
+    ])
 
     const text = formatAlfaClubDailyBrief({
       snapshotTs: '2026-05-26T12:01:18.477Z',
@@ -64,28 +91,38 @@ describe('formatAlfaClubDailyBrief', () => {
       compact: true,
       labels,
       roomIds,
+      roomDisplayByRoomId,
+      topRoomStatsByCreator,
     })
 
     expect(text).toContain('**AlfaClub Daily**')
     expect(text).toContain('May 26')
     expect(text).toContain('**HyperCore**')
-    expect(text).toContain('**AlfaClub creator flow**')
-    expect(text).toContain('Regime unavailable')
-    expect(text).toContain('Watchlist: BTC $75.6k')
-    expect(text).toContain('Signal pressure: no recent ProLiquid scored signals.')
-    expect(text).toContain('@Flip_Research')
+    expect(text).toContain('**Creators**')
+    expect(text).toContain('Market mood:')
+    expect(text).toContain('• **BTC**')
+    expect(text).toContain('Bot signals: nothing notable in the last 24h.')
+    expect(text).toContain('@Flip_Research · Room #2')
+    expect(text).toContain('@wenakita · Room #19')
     expect(text).toContain('https://alfaclub.app/room/2')
     expect(text).not.toContain('/room/1043')
     expect(text).not.toContain('app.4626.fun')
     expect(text).not.toContain('Actionable breakouts')
     expect(text).not.toContain('Watch next (24h)')
     expect(text).not.toContain('Compared with:')
+    expect(text).not.toContain('Watchlist:')
+    expect(text).not.toContain('Execution:')
+    expect(text).not.toContain('Signal pressure:')
+    expect(text).not.toContain('Room economics (')
+    expect(text).not.toContain('**AlfaClub creator flow**')
     expect(text).toContain('↓ dropped top-5')
     expect(text).toContain(ADDR_C.slice(0, 6))
-    expect(text).toContain('partial leaderboard')
-    expect(text).toContain('leads at score')
-    expect(text).toContain('score 0.148')
-    expect(text.indexOf('**HyperCore**')).toBeLessThan(text.indexOf('**AlfaClub creator flow**'))
+    expect(text).toContain('FriendKey rooms indexed on-chain')
+    expect(text).toContain('Room #1659 is one room')
+    expect(text).toContain('trading fund $4,200')
+    expect(text).toContain('leads today')
+    expect(text).toContain('74.4% keys staked')
+    expect(text.indexOf('**HyperCore**')).toBeLessThan(text.indexOf('**Creators**'))
   })
 
   it('ops room footer clarifies digest vs creator trading rooms', () => {

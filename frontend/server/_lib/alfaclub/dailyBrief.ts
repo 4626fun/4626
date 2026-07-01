@@ -24,13 +24,26 @@ import {
   readAutoSyncRoomPoliciesEnabled,
   syncCreatorRoomPoliciesFromSnapshot,
 } from './roomPolicySync.js'
+import { readRoomLabelStatus } from './roomLabelCache.js'
 import { readScoredProliquidSignalsForRoom } from './proliquidSignals.js'
 import { getClearinghouseState } from './hyperliquid.js'
 import {
   ALFACLUB_API_COMMON_BROWSER_HEADERS,
   readAlfaClubApiAuthFlags,
 } from './apiAuth.js'
-import { resolveRoom1659MarketContext, resolveRoom1659HyperliquidPortfolioUser } from './room1659Market.js'
+import {
+  resolveRoom1659MarketContext,
+  resolveRoom1659HyperliquidPortfolioUser,
+} from './room1659Market.js'
+import {
+  lookupRoomTradingWalletHint,
+  lookupTradingWalletFromEnv,
+} from './keySafetyRoomContext.js'
+import {
+  ALFACLUB,
+  FRIEND_KEY_ABI,
+  getAlfaClubPublicClient,
+} from '../wallet/alfaclub.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -47,6 +60,7 @@ const DEFAULT_PROLIQUID_SAMPLE_LIMIT = 200
 const DEFAULT_HYPERLIQUID_INFO_URL = 'https://api.hyperliquid.xyz/info'
 const SCORE_MOVE_EPSILON = 0.005
 const MAX_MOVE_LINES = 6
+const COMPACT_HYPERCORE_ASSET_LIMIT = 5
 
 type DailyBriefFlags = {
   enabled: boolean
@@ -127,6 +141,14 @@ type RoomEconomicsBrief = {
   roomKeySupply: number | null
   impliedPayoutPerKeyUsd: number | null
 } | null
+
+export type TopRoomMarketStats = {
+  roomId: string
+  buyOneKeyUsd: number | null
+  sellOneKeyUsd: number | null
+  tradingFundUsd: number | null
+  impliedPayoutPerKeyUsd: number | null
+}
 
 type SnapshotDelta = {
   current: MetricsSnapshotRow
@@ -469,6 +491,80 @@ function creatorIdentity(row: MetricsSnapshotRow, labels: CreatorLabelMap): stri
   return creatorLabel(row)
 }
 
+function normalizeCreatorHandle(raw: string): string {
+  const trimmed = raw.trim().replace(/^@+/, '')
+  return trimmed ? `@${trimmed}` : ''
+}
+
+function extractCreatorHandleFromLabel(label: string): string | null {
+  const trimmed = label.trim()
+  if (!trimmed) return null
+  if (trimmed.startsWith('@')) return normalizeCreatorHandle(trimmed)
+  const byMatch = trimmed.match(/\sby\s@?([\w.]+)\s*$/i)
+  if (byMatch?.[1]) return normalizeCreatorHandle(byMatch[1])
+  return null
+}
+
+function resolveBriefRoomId(
+  row: MetricsSnapshotRow,
+  roomIds: Map<string, string>,
+): string {
+  return roomIds.get(row.creatorAddress.toLowerCase()) ?? row.tokenId.toString()
+}
+
+function formatBriefCreatorIdentity(
+  row: MetricsSnapshotRow,
+  labels: CreatorLabelMap,
+  roomIds: Map<string, string>,
+  roomDisplayByRoomId: Map<string, string>,
+): string {
+  const address = row.creatorAddress.toLowerCase()
+  const roomId = resolveBriefRoomId(row, roomIds)
+  const label = labels.get(address)
+  const roomDisplay = roomDisplayByRoomId.get(roomId)
+
+  const handle =
+    (label ? extractCreatorHandleFromLabel(label) : null) ??
+    (roomDisplay ? extractCreatorHandleFromLabel(roomDisplay) : null)
+  if (handle) return `${handle} · Room #${roomId}`
+
+  const displayName = label ?? roomDisplay
+  if (displayName) return `${displayName} · Room #${roomId}`
+
+  return `Room #${roomId} · ${shortAddress(row.creatorAddress)}`
+}
+
+function enrichBriefRoomLabels(params: {
+  labels: CreatorLabelMap
+  roomIds: Map<string, string>
+  currentRows: MetricsSnapshotRow[]
+  topRows: number
+  economicsRoomId: string | null
+}): Promise<Map<string, string>> {
+  const roomIdSet = new Set<string>()
+  if (params.economicsRoomId) roomIdSet.add(params.economicsRoomId)
+  for (const row of params.currentRows.slice(0, params.topRows)) {
+    roomIdSet.add(resolveBriefRoomId(row, params.roomIds))
+  }
+
+  return readRoomLabelStatus([...roomIdSet]).then((rows) => {
+    const roomDisplayByRoomId = new Map<string, string>()
+    for (const row of rows) {
+      if (!row.displayLabel) continue
+      roomDisplayByRoomId.set(row.roomId, row.displayLabel)
+      if (!row.creatorAddress) continue
+      const handle = extractCreatorHandleFromLabel(row.displayLabel)
+      const existing = params.labels.get(row.creatorAddress)
+      if (handle && (!existing || !existing.startsWith('@'))) {
+        params.labels.set(row.creatorAddress, handle)
+      } else if (!existing) {
+        params.labels.set(row.creatorAddress, row.displayLabel)
+      }
+    }
+    return roomDisplayByRoomId
+  })
+}
+
 function formatPct(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return 'n/a'
   const sign = value > 0 ? '+' : ''
@@ -619,6 +715,50 @@ function buildHyperCoreRegimeLine(rows: HyperCoreAssetContext[]): string {
   const fundingLabel =
     avgFundingRate == null ? 'funding n/a' : `avg funding ${avgFundingRate >= 0 ? '+' : ''}${(avgFundingRate * 100).toFixed(3)}%`
   return `Regime: ${riskLabel} · breadth ${breadthLabel} · ${fundingLabel}`
+}
+
+function buildHyperCoreMoodLine(rows: HyperCoreAssetContext[]): string {
+  if (rows.length === 0) return 'Market read: no live perp data this run.'
+  const withChange = rows.filter((row) => row.change24hPct !== null)
+  const upCount = withChange.filter((row) => (row.change24hPct ?? 0) > 0).length
+  const breadthPct = withChange.length > 0 ? (upCount / withChange.length) * 100 : null
+  const avgFunding = rows
+    .map((row) => row.fundingRate)
+    .filter((value): value is number => value !== null && Number.isFinite(value))
+  const avgFundingRate =
+    avgFunding.length > 0 ? avgFunding.reduce((sum, value) => sum + value, 0) / avgFunding.length : null
+
+  const mood =
+    breadthPct == null
+      ? 'mixed'
+      : breadthPct >= 60
+        ? 'bullish tilt'
+        : breadthPct <= 40
+          ? 'defensive'
+          : 'choppy / range-bound'
+  const tape =
+    breadthPct == null
+      ? 'mixed tape'
+      : breadthPct >= 55
+        ? 'most names green'
+        : breadthPct <= 45
+          ? 'most names red'
+          : 'split tape'
+  const funding =
+    avgFundingRate == null || Math.abs(avgFundingRate) < 0.00001
+      ? 'funding flat'
+      : avgFundingRate > 0
+        ? 'longs paying shorts'
+        : 'shorts paying longs'
+
+  return `Market mood: ${mood} · ${tape} · ${funding}`
+}
+
+function describeSpreadQuality(spreadBps: number | null): string | null {
+  if (spreadBps == null) return null
+  if (spreadBps <= 10) return null
+  if (spreadBps <= 25) return 'ok liquidity'
+  return 'thin book — watch slippage'
 }
 
 function parseL2ExecutionRow(symbol: string, raw: unknown): HyperCoreExecutionRow {
@@ -864,6 +1004,189 @@ export function formatIndexedScopeLine(params: {
   return `${base}${partial} · ${tail}. Score is a 0–1 composite (staking depth, key supply, recent activity).`
 }
 
+function formatCompactBriefScopeLine(params: {
+  creatorsTracked: number
+  rankedCount: number
+  newCreators: number
+  activeCreators24h: number
+  publications24h: number
+}): string {
+  const pubs =
+    params.publications24h > 0
+      ? ` · ${params.publications24h} post${params.publications24h === 1 ? '' : 's'} today`
+      : ''
+  const coverage =
+    params.rankedCount >= params.creatorsTracked
+      ? ' · full leaderboard snapshot'
+      : ` · ${params.rankedCount.toLocaleString('en-US')} ranked now`
+  const refresh =
+    params.rankedCount >= params.creatorsTracked
+      ? ''
+      : ' · Hyperliquid refresh runs in rotating batches across all rooms'
+  return `${params.creatorsTracked.toLocaleString('en-US')} FriendKey rooms indexed on-chain${coverage}${refresh}${pubs}. Room #1659 is one room — not the platform total.`
+}
+
+function usdc6ToUsd(raw: bigint | null | undefined): number | null {
+  if (raw == null) return null
+  const value = Number(raw) / 1_000_000
+  return Number.isFinite(value) ? value : null
+}
+
+function formatKeyUsd(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) return 'n/a'
+  if (value >= 100) return `$${value.toFixed(0)}`
+  if (value >= 1) return `$${value.toFixed(2)}`
+  return `$${value.toFixed(4)}`
+}
+
+async function resolveTopRoomTradingWallet(params: {
+  roomId: string
+  creatorAddress: string
+}): Promise<string | null> {
+  return (
+    lookupTradingWalletFromEnv(params.roomId) ??
+    (await lookupRoomTradingWalletHint(params.roomId)) ??
+    params.creatorAddress
+  )
+}
+
+async function buildTopRoomMarketStatsMap(params: {
+  rows: MetricsSnapshotRow[]
+  roomIds: Map<string, string>
+  limit: number
+}): Promise<Map<string, TopRoomMarketStats>> {
+  const out = new Map<string, TopRoomMarketStats>()
+  const slice = params.rows.slice(0, params.limit)
+  if (slice.length === 0) return out
+
+  let client: Awaited<ReturnType<typeof getAlfaClubPublicClient>> | null = null
+  try {
+    client = await getAlfaClubPublicClient()
+  } catch {
+    client = null
+  }
+
+  await Promise.all(
+    slice.map(async (row) => {
+      const address = row.creatorAddress.toLowerCase()
+      const roomId = resolveBriefRoomId(row, params.roomIds)
+      const [buyRaw, sellRaw, tradingWallet] = await Promise.all([
+        client
+          ? client
+              .readContract({
+                address: ALFACLUB.friendKey,
+                abi: FRIEND_KEY_ABI,
+                functionName: 'getBuyPriceAfterFee',
+                args: [row.tokenId, 1n],
+              })
+              .catch(() => null)
+          : Promise.resolve(null),
+        client
+          ? client
+              .readContract({
+                address: ALFACLUB.friendKey,
+                abi: FRIEND_KEY_ABI,
+                functionName: 'getSellPriceAfterFee',
+                args: [row.tokenId, 1n],
+              })
+              .catch(() => null)
+          : Promise.resolve(null),
+        resolveTopRoomTradingWallet({ roomId, creatorAddress: address }),
+      ])
+
+      const buyOneKeyUsd = usdc6ToUsd(buyRaw as bigint | null)
+      const sellOneKeyUsd = usdc6ToUsd(sellRaw as bigint | null)
+
+      let tradingFundUsd = row.hlAccountValueUsd
+      if (tradingWallet) {
+        const hlState = await getClearinghouseState(tradingWallet).catch(() => null)
+        const walletFund = parseNumber(hlState?.accountValueUsd)
+        if (walletFund != null) tradingFundUsd = walletFund
+      }
+
+      const supply = Number(row.totalSupply)
+      const impliedPayoutPerKeyUsd =
+        tradingFundUsd != null && Number.isFinite(supply) && supply > 0
+          ? tradingFundUsd / supply
+          : null
+
+      out.set(address, {
+        roomId,
+        buyOneKeyUsd,
+        sellOneKeyUsd,
+        tradingFundUsd,
+        impliedPayoutPerKeyUsd,
+      })
+    }),
+  )
+
+  return out
+}
+
+function formatTopRoomEconomicsFragment(stats: TopRoomMarketStats | null | undefined): string | null {
+  if (!stats) return null
+  const parts: string[] = []
+  if (stats.tradingFundUsd != null) parts.push(`trading fund ${formatUsdReadable(stats.tradingFundUsd)}`)
+  if (stats.buyOneKeyUsd != null) parts.push(`buy 1 key ${formatKeyUsd(stats.buyOneKeyUsd)}`)
+  if (stats.sellOneKeyUsd != null) parts.push(`sell 1 key ${formatKeyUsd(stats.sellOneKeyUsd)}`)
+  if (stats.impliedPayoutPerKeyUsd != null) {
+    parts.push(`~${formatKeyUsd(stats.impliedPayoutPerKeyUsd)}/key if fund paid out`)
+  }
+  return parts.length > 0 ? parts.join(' · ') : null
+}
+
+function formatRelatableHyperCoreAssetLine(
+  asset: HyperCoreAssetContext,
+  execution: HyperCoreExecutionRow | null,
+): string {
+  const change = asset.change24hPct
+  const move = formatPct(change)
+  const tone =
+    change == null ? '' : change >= 10 ? ' · strong day' : change <= -10 ? ' · weak day' : ''
+  const liquidity = execution ? describeSpreadQuality(execution.spreadBps) : null
+  const parts = [`**${asset.symbol}** ${formatUsdCompact(asset.priceUsd)} (${move} today${tone})`]
+  if (liquidity) parts.push(liquidity)
+  return `• ${parts.join(' · ')}`
+}
+
+function formatCompactSignedUsd(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return 'n/a'
+  const formatted = formatUsdReadable(Math.abs(value))
+  if (value > 0) return `+${formatted}`
+  if (value < 0) return `-${formatted}`
+  return formatted
+}
+
+function formatCompactRoomEconomicsLines(
+  room: NonNullable<RoomEconomicsBrief>,
+  roomDisplayLabel?: string | null,
+): string[] {
+  const lines: string[] = []
+  lines.push(`**${roomDisplayLabel ?? `Room #${room.roomId}`}**`)
+  lines.push(
+    `• ${formatUsdReadable(room.accountValueUsd)} in the book · ${formatUsdReadable(room.withdrawableUsd)} withdrawable · ${formatUsdReadable(room.totalNotionalUsd)} on perps`,
+  )
+
+  const valueParts: string[] = [`~${formatUsdReadable(room.combinedValueUsd)} total room value`]
+  if (room.roomKeySupply != null && room.impliedPayoutPerKeyUsd != null) {
+    valueParts.push(
+      `~${formatUsdReadable(room.impliedPayoutPerKeyUsd)}/key if paid today (${room.roomKeySupply.toLocaleString('en-US')} keys)`,
+    )
+  } else if (room.roomKeySupply != null) {
+    valueParts.push(`${room.roomKeySupply.toLocaleString('en-US')} keys`)
+  }
+  lines.push(`• ${valueParts.join(' · ')}`)
+
+  for (const position of room.openPositions.slice(0, 3)) {
+    const side = position.side === 'short' ? 'Short' : position.side === 'long' ? 'Long' : 'Open'
+    lines.push(
+      `• ${side} ${position.coin} · ${formatUsdReadable(position.notionalUsd)} · ${formatCompactSignedUsd(position.unrealizedPnlUsd)} open PnL`,
+    )
+  }
+
+  return lines
+}
+
 function formatBriefSnapshotDate(iso: string): string {
   const parsed = Date.parse(iso)
   if (!Number.isFinite(parsed)) return iso
@@ -911,11 +1234,18 @@ function formatCompactRankLine(
   row: MetricsSnapshotRow,
   labels: CreatorLabelMap,
   roomIds: Map<string, string>,
+  roomDisplayByRoomId: Map<string, string>,
+  topRoomStatsByCreator: Map<string, TopRoomMarketStats>,
 ): string {
   const stake = formatRatioPct(stakeRatio(row))
   const roomUrl = formatCreatorRoomLink(row.creatorAddress, roomIds)
-  const core = `${row.rank}. ${creatorIdentity(row, labels)} — score ${formatScore(row.score)} · ${stake} of keys staked · ${formatSupplyCount(row.totalSupply)} keys`
-  return roomUrl ? `${core}\n   ${roomUrl}` : core
+  const identity = formatBriefCreatorIdentity(row, labels, roomIds, roomDisplayByRoomId)
+  const core = `${row.rank}. ${identity} · ${stake} keys staked · ${formatSupplyCount(row.totalSupply)} keys`
+  const economics = formatTopRoomEconomicsFragment(
+    topRoomStatsByCreator.get(row.creatorAddress.toLowerCase()),
+  )
+  const withEconomics = economics ? `${core}\n   ${economics}` : core
+  return roomUrl ? `${withEconomics} · ${roomUrl}` : withEconomics
 }
 
 function buildCompactMoveLines(params: {
@@ -925,6 +1255,7 @@ function buildCompactMoveLines(params: {
   topRows: number
   labels: CreatorLabelMap
   roomIds: Map<string, string>
+  roomDisplayByRoomId: Map<string, string>
 }): string[] {
   const lines: string[] = []
   const previousTopSet = new Set(
@@ -940,7 +1271,7 @@ function buildCompactMoveLines(params: {
   for (const row of entrants) {
     lines.push(
       appendCreatorRoomLink(
-        `↑ entered top-${params.topRows}: ${creatorIdentity(row, params.labels)} (${formatScore(row.score)})`,
+        `↑ entered top-${params.topRows}: ${formatBriefCreatorIdentity(row, params.labels, params.roomIds, params.roomDisplayByRoomId)} (${formatScore(row.score)})`,
         row.creatorAddress,
         params.roomIds,
       ),
@@ -953,7 +1284,7 @@ function buildCompactMoveLines(params: {
   for (const row of exits) {
     lines.push(
       appendCreatorRoomLink(
-        `↓ dropped top-${params.topRows}: was #${row.rank} ${creatorIdentity(row, params.labels)}`,
+        `↓ dropped top-${params.topRows}: was #${row.rank} ${formatBriefCreatorIdentity(row, params.labels, params.roomIds, params.roomDisplayByRoomId)}`,
         row.creatorAddress,
         params.roomIds,
       ),
@@ -974,7 +1305,7 @@ function buildCompactMoveLines(params: {
         : `score ${delta.scoreDelta > 0 ? '+' : ''}${delta.scoreDelta.toFixed(3)}`
     lines.push(
       appendCreatorRoomLink(
-        `• ${creatorIdentity(delta.current, params.labels)} — ${formatRankDelta(delta.rankDelta)} · ${scorePart}`,
+        `• ${formatBriefCreatorIdentity(delta.current, params.labels, params.roomIds, params.roomDisplayByRoomId)} — ${formatRankDelta(delta.rankDelta)} · ${scorePart}`,
         delta.current.creatorAddress,
         params.roomIds,
       ),
@@ -989,6 +1320,8 @@ function buildCompactLeadSummary(params: {
   previousRows: MetricsSnapshotRow[]
   topRows: number
   labels: CreatorLabelMap
+  roomIds: Map<string, string>
+  roomDisplayByRoomId: Map<string, string>
   entrantCount: number
   exitCount: number
   newCreators: number
@@ -997,12 +1330,12 @@ function buildCompactLeadSummary(params: {
   if (!leader) return 'No ranked creators in this snapshot yet.'
 
   const previousLeader = params.previousRows[0]
-  const leaderLabel = creatorIdentity(leader, params.labels)
-  const parts: string[] = [`${leaderLabel} leads at score ${formatScore(leader.score)}`]
+  const leaderLabel = formatBriefCreatorIdentity(leader, params.labels, params.roomIds, params.roomDisplayByRoomId)
+  const parts: string[] = [`${leaderLabel} leads today`]
 
   if (previousLeader && previousLeader.creatorAddress !== leader.creatorAddress) {
     parts.push(
-      `replacing ${creatorIdentity(previousLeader, params.labels)} from the prior snapshot`,
+      `replacing ${formatBriefCreatorIdentity(previousLeader, params.labels, params.roomIds, params.roomDisplayByRoomId)}`,
     )
   }
 
@@ -1072,6 +1405,8 @@ function buildCompactBriefText(params: {
   majorRows: number
   labels: CreatorLabelMap
   roomIds: Map<string, string>
+  roomDisplayByRoomId: Map<string, string>
+  topRoomStatsByCreator: Map<string, TopRoomMarketStats>
 }): string {
   const deltas = buildDeltas(params.currentRows, params.previousRows)
   const newCreators = deltas.filter((delta) => delta.isNew).length
@@ -1099,39 +1434,22 @@ function buildCompactBriefText(params: {
   const prevLabel = params.previousSnapshotTs ? formatBriefSnapshotDate(params.previousSnapshotTs) : null
   lines.push(`**AlfaClub Daily** · ${snapLabel}${prevLabel ? ` vs ${prevLabel}` : ''}`)
 
-  // Keep market context contiguous and first so the brief reads top-down.
   lines.push('')
   lines.push('**HyperCore**')
-  lines.push(params.hyperCore.regimeLine)
+  lines.push(
+    params.hyperCore.watchlist.length > 0
+      ? buildHyperCoreMoodLine(params.hyperCore.watchlist)
+      : params.hyperCore.regimeLine,
+  )
+  const watchLimit = Math.min(params.majorRows, COMPACT_HYPERCORE_ASSET_LIMIT)
   if (params.hyperCore.watchlist.length > 0) {
-    const watchlistLine = params.hyperCore.watchlist
-      .slice(0, params.majorRows)
-      .map((row) => {
-        const oi = row.openInterestUsd == null ? 'OI n/a' : `OI ${formatUsdCompact(row.openInterestUsd)}`
-        const funding =
-          row.fundingRate == null
-            ? 'fund n/a'
-            : `fund ${row.fundingRate >= 0 ? '+' : ''}${(row.fundingRate * 100).toFixed(3)}%`
-        return `${row.symbol} ${formatUsdCompact(row.priceUsd)} (${formatPct(row.change24hPct)}) · ${oi} · ${funding}`
-      })
-      .join(' | ')
-    lines.push(`Watchlist: ${watchlistLine}`)
+    for (let index = 0; index < Math.min(params.hyperCore.watchlist.length, watchLimit); index += 1) {
+      const asset = params.hyperCore.watchlist[index]
+      const execution = params.hyperCore.execution[index] ?? null
+      lines.push(formatRelatableHyperCoreAssetLine(asset, execution))
+    }
   } else {
-    lines.push('Watchlist: unavailable.')
-  }
-  if (params.hyperCore.execution.length > 0) {
-    const executionLine = params.hyperCore.execution
-      .slice(0, 4)
-      .map((row) => {
-        const spread = row.spreadBps == null ? 'spread n/a' : `spread ${row.spreadBps.toFixed(1)}bps`
-        const depth =
-          row.topBidDepthUsd == null || row.topAskDepthUsd == null
-            ? 'depth n/a'
-            : `depth ${formatUsdCompact(Math.min(row.topBidDepthUsd, row.topAskDepthUsd))}`
-        return `${row.symbol} ${spread} · ${depth}`
-      })
-      .join(' | ')
-    lines.push(`Execution: ${executionLine}`)
+    lines.push('• No live movers to show this run.')
   }
   if (params.proliquidSummary) {
     const topKinds = params.proliquidSummary.byKind
@@ -1142,66 +1460,63 @@ function buildCompactBriefText(params: {
       .map((signal) => `${signal.kind}/${signal.confidence}${signal.scoreValue != null ? `:${signal.scoreValue}` : ''}`)
       .join(', ')
     lines.push(
-      `Signal pressure (${params.proliquidSummary.scoredCount} scored, ${params.proliquidSummary.highConfidenceCount} high): ${topKinds || 'n/a'}${topSignals ? ` · top ${topSignals}` : ''}`,
+      `Bot signals: ${params.proliquidSummary.scoredCount} flagged (${params.proliquidSummary.highConfidenceCount} high confidence) · ${topKinds || 'n/a'}${topSignals ? ` · ${topSignals}` : ''}`,
     )
   } else {
-    lines.push('Signal pressure: no recent ProLiquid scored signals.')
+    lines.push('Bot signals: nothing notable in the last 24h.')
   }
   if (params.roomEconomics) {
-    const room = params.roomEconomics
-    lines.push(`Room economics (${room.roomId}):`)
+    lines.push('')
     lines.push(
-      `- HL notional ${formatUsdReadable(room.totalNotionalUsd)} · All-in notional ${formatUsdReadable(room.totalNotionalIncludingAkitaUsd)}`,
+      ...formatCompactRoomEconomicsLines(
+        params.roomEconomics,
+        params.roomDisplayByRoomId.get(params.roomEconomics.roomId) ?? null,
+      ),
     )
-    lines.push(
-      `- Account ${formatUsdReadable(room.accountValueUsd)} · Withdrawable ${formatUsdReadable(room.withdrawableUsd)}`,
-    )
-    lines.push(
-      `- AKITA ${room.akitaAmount == null ? 'n/a' : room.akitaAmount.toLocaleString('en-US', { maximumFractionDigits: 2 })} @ ${formatUsdReadable(room.akitaAvgBuyPriceUsd)} · Est ${formatUsdReadable(room.akitaEstimatedValueUsd)} · Cost ${formatUsdReadable(room.akitaCostBasisUsd)}`,
-    )
-    lines.push(`- Combined est ${formatUsdReadable(room.combinedValueUsd)}`)
-    if (room.roomKeySupply != null) {
-      lines.push(
-        `- Key supply ${room.roomKeySupply.toLocaleString('en-US')} · Implied payout/key ${formatUsdReadable(room.impliedPayoutPerKeyUsd)}`,
-      )
-    }
-    if (room.openPositions.length > 0) {
-      lines.push('- Open positions:')
-      const openLines = room.openPositions
-        .slice(0, 3)
-        .map((position) => {
-          const side = position.side ? position.side.toUpperCase() : 'N/A'
-          return `  • ${position.coin} ${side} ${formatUsdReadable(position.notionalUsd)} (uPnL ${formatUsdReadable(position.unrealizedPnlUsd)})`
-        })
-      lines.push(...openLines)
-    }
   }
 
   lines.push('')
-  lines.push('**AlfaClub creator flow**')
+  lines.push('**Creators**')
   lines.push(
-    formatIndexedScopeLine({
+    formatCompactBriefScopeLine({
       creatorsTracked: params.creatorsTracked,
       rankedCount: params.currentRows.length,
       newCreators,
       activeCreators24h,
+      publications24h: pubs24h.length,
     }),
   )
-  lines.push(
-    buildCompactLeadSummary({
-      currentRows: params.currentRows,
-      previousRows: params.previousRows,
-      topRows: params.topRows,
-      labels: params.labels,
-      entrantCount,
-      exitCount,
-      newCreators,
-    }),
-  )
+  const leaderChanged =
+    params.previousRows[0] != null &&
+    params.currentRows[0] != null &&
+    params.previousRows[0].creatorAddress !== params.currentRows[0].creatorAddress
+  if (leaderChanged || entrantCount > 0 || exitCount > 0 || newCreators > 0) {
+    lines.push(
+      buildCompactLeadSummary({
+        currentRows: params.currentRows,
+        previousRows: params.previousRows,
+        topRows: params.topRows,
+        labels: params.labels,
+        roomIds: params.roomIds,
+        roomDisplayByRoomId: params.roomDisplayByRoomId,
+        entrantCount,
+        exitCount,
+        newCreators,
+      }),
+    )
+  }
   lines.push('')
   lines.push(`**Top ${params.topRows}**`)
   for (const row of params.currentRows.slice(0, params.topRows)) {
-    lines.push(formatCompactRankLine(row, params.labels, params.roomIds))
+    lines.push(
+      formatCompactRankLine(
+        row,
+        params.labels,
+        params.roomIds,
+        params.roomDisplayByRoomId,
+        params.topRoomStatsByCreator,
+      ),
+    )
   }
 
   const moveLines = buildCompactMoveLines({
@@ -1211,6 +1526,7 @@ function buildCompactBriefText(params: {
     topRows: params.topRows,
     labels: params.labels,
     roomIds: params.roomIds,
+    roomDisplayByRoomId: params.roomDisplayByRoomId,
   })
   if (moveLines.length > 0) {
     lines.push('')
@@ -1227,8 +1543,16 @@ function buildCompactBriefText(params: {
     entrantCount,
     exitCount,
   })
-  lines.push('')
-  lines.push(narrative)
+  const narrativeDuplicatesScope =
+    pubs24h.length > 0 &&
+    (narrative.startsWith(`${pubs24h.length} publication`) ||
+      narrative.startsWith(`${pubs24h.length} post`)) &&
+    !narrative.includes('Largest score swing') &&
+    newCreators === 0
+  if (!narrativeDuplicatesScope) {
+    lines.push('')
+    lines.push(narrative)
+  }
 
   return lines.join('\n')
 }
@@ -1507,6 +1831,8 @@ export type AlfaClubDailyBriefFormatInput = {
   compact: boolean
   labels: CreatorLabelMap
   roomIds: Map<string, string>
+  roomDisplayByRoomId?: Map<string, string>
+  topRoomStatsByCreator?: Map<string, TopRoomMarketStats>
 }
 
 export function formatAlfaClubLeaderboardChat(
@@ -1537,8 +1863,12 @@ export function formatAlfaClubLeaderboardChat(
   )
   lines.push('')
   lines.push(`**Top ${input.topRows}**`)
+  const roomDisplayByRoomId = input.roomDisplayByRoomId ?? new Map<string, string>()
+  const topRoomStatsByCreator = input.topRoomStatsByCreator ?? new Map<string, TopRoomMarketStats>()
   for (const row of input.currentRows.slice(0, input.topRows)) {
-    lines.push(formatCompactRankLine(row, input.labels, input.roomIds))
+    lines.push(
+      formatCompactRankLine(row, input.labels, input.roomIds, roomDisplayByRoomId, topRoomStatsByCreator),
+    )
   }
   if (disclaimer) {
     lines.push('')
@@ -1625,6 +1955,18 @@ export async function buildAlfaClubBriefContext(params?: {
     tokenId,
   }))
   const roomIds = await resolveCreatorRoomLinks(roomLinkHints)
+  const roomDisplayByRoomId = await enrichBriefRoomLabels({
+    labels,
+    roomIds,
+    currentRows,
+    topRows,
+    economicsRoomId: roomId,
+  })
+  const topRoomStatsByCreator = await buildTopRoomMarketStatsMap({
+    rows: currentRows,
+    roomIds,
+    limit: topRows,
+  })
 
   return {
     ok: true,
@@ -1647,6 +1989,8 @@ export async function buildAlfaClubBriefContext(params?: {
       compact: params?.compact ?? flags.compact,
       labels,
       roomIds,
+      roomDisplayByRoomId,
+      topRoomStatsByCreator,
     },
   }
 }
@@ -1685,6 +2029,8 @@ export function formatAlfaClubDailyBrief(input: AlfaClubDailyBriefFormatInput): 
       majorRows: input.majorRows,
       labels: input.labels,
       roomIds: input.roomIds,
+      roomDisplayByRoomId: input.roomDisplayByRoomId ?? new Map<string, string>(),
+      topRoomStatsByCreator: input.topRoomStatsByCreator ?? new Map<string, TopRoomMarketStats>(),
     })
   }
   return buildLegacyBriefText({

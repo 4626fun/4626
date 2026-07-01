@@ -489,3 +489,54 @@ export async function getSnapshotAt(snapshotTs: string): Promise<MetricsSnapshot
     return []
   }
 }
+
+/** Latest known score row per creator across all snapshots (for batched rescoring merges). */
+export async function getLatestMetricsByCreator(): Promise<Map<string, MetricsSnapshotRow>> {
+  const db = await getDb()
+  if (!db) return new Map()
+  try {
+    const result = await db.sql`
+      SELECT DISTINCT ON (creator_address)
+        snapshot_ts::text AS snapshot_ts,
+        creator_address,
+        token_id::text AS token_id,
+        total_supply::text AS total_supply,
+        staked_supply::text AS staked_supply,
+        pnl_30d_usd::text AS pnl_30d_usd,
+        hl_account_value::text AS hl_account_value,
+        score::text AS score,
+        rank
+      FROM alfaclub_metrics_snapshot
+      ORDER BY creator_address, snapshot_ts DESC, rank ASC;
+    `
+    const rows = (result.rows ?? []) as Array<{
+      snapshot_ts: string
+      creator_address: string
+      token_id: string
+      total_supply: string
+      staked_supply: string
+      pnl_30d_usd: string | null
+      hl_account_value: string | null
+      score: string
+      rank: number
+    }>
+    const out = new Map<string, MetricsSnapshotRow>()
+    for (const row of rows) {
+      const address = row.creator_address.toLowerCase()
+      out.set(address, {
+        snapshotTs: row.snapshot_ts,
+        creatorAddress: address as Address,
+        tokenId: BigInt(row.token_id),
+        totalSupply: BigInt(row.total_supply),
+        stakedSupply: BigInt(row.staked_supply),
+        pnl30dUsd: row.pnl_30d_usd !== null ? Number.parseFloat(row.pnl_30d_usd) : null,
+        hlAccountValueUsd: row.hl_account_value !== null ? Number.parseFloat(row.hl_account_value) : null,
+        score: Number.parseFloat(row.score),
+        rank: row.rank,
+      })
+    }
+    return out
+  } catch {
+    return new Map()
+  }
+}

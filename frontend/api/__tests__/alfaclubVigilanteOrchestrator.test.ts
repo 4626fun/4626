@@ -9,6 +9,9 @@ const {
   recordPublicationMock,
   insertMetricsSnapshotMock,
   hasPublicationMock,
+  getLatestMetricsByCreatorMock,
+  readVigilanteScoringCursorMock,
+  writeVigilanteScoringCursorMock,
 } = vi.hoisted(() => ({
   listAllCreatorsMock: vi.fn(),
   runCreatorIndexerMock: vi.fn(),
@@ -18,11 +21,16 @@ const {
   recordPublicationMock: vi.fn(),
   insertMetricsSnapshotMock: vi.fn(),
   hasPublicationMock: vi.fn(),
+  getLatestMetricsByCreatorMock: vi.fn(),
+  readVigilanteScoringCursorMock: vi.fn(),
+  writeVigilanteScoringCursorMock: vi.fn(),
 }))
 
 vi.mock('../../server/_lib/alfaclub/creators.js', () => ({
   listAllCreators: listAllCreatorsMock,
   runCreatorIndexer: runCreatorIndexerMock,
+  readVigilanteScoringCursor: readVigilanteScoringCursorMock,
+  writeVigilanteScoringCursor: writeVigilanteScoringCursorMock,
 }))
 
 vi.mock('../../server/_lib/alfaclub/hyperliquid.js', () => ({
@@ -48,8 +56,14 @@ vi.mock('../../server/_lib/alfaclub/publicationLedger.js', async () => {
     recordPublication: recordPublicationMock,
     insertMetricsSnapshot: insertMetricsSnapshotMock,
     hasPublication: hasPublicationMock,
+    getLatestMetricsByCreator: getLatestMetricsByCreatorMock,
   }
 })
+
+vi.mock('../../server/_lib/alfaclub/keySafetyRoomContext.js', () => ({
+  lookupTradingWalletFromEnv: vi.fn(() => null),
+  lookupRoomTradingWalletHint: vi.fn(async () => null),
+}))
 
 // Mock alfaclub's FriendKey readContract for supply / staked-supply lookups.
 vi.mock('../../server/_lib/wallet/alfaclub.js', async () => {
@@ -83,6 +97,7 @@ const BASE_FLAGS = {
   topN: 5,
   cooldownHours: 24,
   maxCreatorsPerRun: null,
+  scoringBatchSize: 250,
 }
 
 const CREATORS = [
@@ -133,6 +148,9 @@ beforeEach(() => {
   recordPublicationMock.mockResolvedValue(true)
   insertMetricsSnapshotMock.mockResolvedValue(CREATORS.length)
   hasPublicationMock.mockResolvedValue(false)
+  getLatestMetricsByCreatorMock.mockResolvedValue(new Map())
+  readVigilanteScoringCursorMock.mockResolvedValue(0)
+  writeVigilanteScoringCursorMock.mockResolvedValue(undefined)
 })
 
 describe('vigilante orchestrator — flag gating', () => {
@@ -151,11 +169,15 @@ describe('vigilante orchestrator — flag gating', () => {
     expect(insertMetricsSnapshotMock).not.toHaveBeenCalled()
   })
 
-  it('read-only run persists snapshot but never publishes', async () => {
+  it('read-only run persists a full snapshot for every indexed creator', async () => {
     const result = await runVigilante({ flags: BASE_FLAGS })
     expect(result.ok).toBe(true)
+    expect(result.creatorsIndexed).toBe(CREATORS.length)
     expect(result.rankedCreators).toBe(CREATORS.length)
     expect(insertMetricsSnapshotMock).toHaveBeenCalledTimes(1)
+    const rows = insertMetricsSnapshotMock.mock.calls[0]?.[0] as Array<{ creatorAddress: string }>
+    expect(rows).toHaveLength(CREATORS.length)
+    expect(writeVigilanteScoringCursorMock).toHaveBeenCalled()
     expect(recordPublicationMock).not.toHaveBeenCalled()
     expect(result.publications).toHaveLength(0)
   })

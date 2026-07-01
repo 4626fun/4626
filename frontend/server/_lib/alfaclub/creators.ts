@@ -54,6 +54,7 @@ const DEFAULT_MAX_CHUNKS_PER_RUN = 24
 const MAX_POOL_LOOKUPS_PER_RUN = 100
 
 const CURSOR_KEY = 'friend_key_transfer_single_from_zero'
+const SCORING_CURSOR_KEY = 'vigilante_scoring_offset'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -106,18 +107,52 @@ async function readCursor(): Promise<bigint | null> {
 }
 
 async function writeCursor(block: bigint): Promise<void> {
+  await writeNumericCursor(CURSOR_KEY, block)
+}
+
+async function readNumericCursor(cursorKey: string): Promise<number> {
+  const db = await getDb()
+  if (!db) return 0
+  try {
+    const result = await db.sql`
+      SELECT last_block::text AS last_block
+      FROM alfaclub_indexer_cursor
+      WHERE cursor_key = ${cursorKey}
+      LIMIT 1;
+    `
+    const rows = (result.rows ?? []) as Array<{ last_block: string }>
+    const row = rows[0]
+    if (!row) return 0
+    const n = Number.parseInt(row.last_block, 10)
+    return Number.isFinite(n) && n >= 0 ? n : 0
+  } catch {
+    return 0
+  }
+}
+
+async function writeNumericCursor(cursorKey: string, value: number | bigint): Promise<void> {
   const db = await getDb()
   if (!db) return
+  const normalized = typeof value === 'bigint' ? value.toString() : String(Math.max(0, Math.trunc(value)))
   try {
     await db.sql`
       INSERT INTO alfaclub_indexer_cursor (cursor_key, last_block, updated_at)
-      VALUES (${CURSOR_KEY}, ${block.toString()}, NOW())
+      VALUES (${cursorKey}, ${normalized}, NOW())
       ON CONFLICT (cursor_key) DO UPDATE
       SET last_block = EXCLUDED.last_block, updated_at = NOW();
     `
   } catch {
     // Best-effort cursor write.
   }
+}
+
+/** Rotating offset for batched vigilante scoring across all indexed creators. */
+export async function readVigilanteScoringCursor(): Promise<number> {
+  return readNumericCursor(SCORING_CURSOR_KEY)
+}
+
+export async function writeVigilanteScoringCursor(offset: number): Promise<void> {
+  await writeNumericCursor(SCORING_CURSOR_KEY, offset)
 }
 
 // ---------------------------------------------------------------------------
