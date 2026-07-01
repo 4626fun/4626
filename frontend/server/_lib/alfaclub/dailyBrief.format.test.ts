@@ -6,6 +6,7 @@ import {
   formatAlfaClubDailyBrief,
   formatAlfaClubLeaderboardChat,
   formatIndexedScopeLine,
+  buildCompactBriefThreadBundle,
   type TopRoomMarketStats,
 } from './dailyBrief.js'
 
@@ -123,6 +124,55 @@ describe('formatAlfaClubDailyBrief', () => {
     expect(text).toContain('leads today')
     expect(text).toContain('74.4% keys staked')
     expect(text.indexOf('**HyperCore**')).toBeLessThan(text.indexOf('**Creators**'))
+  })
+
+  it('thread bundle splits digest into a parent pulse plus section replies', () => {
+    const currentRows = [
+      row({ rank: 1, address: ADDR_A, tokenId: 2, score: 0.148 }),
+      row({ rank: 2, address: ADDR_B, tokenId: 19, score: 0.112, totalSupply: 27n, stakedSupply: 22n }),
+    ]
+    const bundle = buildCompactBriefThreadBundle({
+      snapshotTs: '2026-05-26T12:01:18.477Z',
+      previousSnapshotTs: '2026-05-25T12:01:36.638Z',
+      currentRows,
+      previousRows: [],
+      creatorsTracked: 1655,
+      recentPublications: [],
+      marketRows: [{ symbol: 'BTC', priceUsd: 75572, change24hPct: -1.8 }],
+      hyperCore: {
+        watchlist: [
+          {
+            symbol: 'BTC',
+            priceUsd: 75572,
+            change24hPct: -1.8,
+            fundingRate: null,
+            openInterestUsd: null,
+            volume24hUsd: null,
+          },
+        ],
+        regimeLine: 'Regime unavailable',
+        execution: [],
+        unavailableReason: null,
+      },
+      proliquidSummary: null,
+      roomEconomics: null,
+      topRows: 5,
+      majorRows: 6,
+      labels: new Map([[ADDR_A.toLowerCase(), '@Flip_Research']]),
+      roomIds: new Map([[ADDR_A.toLowerCase(), '2']]),
+      roomDisplayByRoomId: new Map([['2', 'Flip Research by Flip_Research']]),
+      topRoomStatsByCreator: new Map(),
+    })
+
+    expect(bundle.parent).toContain('**AlfaClub Daily**')
+    expect(bundle.parent).toContain('Market mood:')
+    expect(bundle.parent).toContain('**Creators**')
+    expect(bundle.parent).toContain('thread replies')
+    expect(bundle.parent).not.toContain('**Top 5**')
+    expect(bundle.replies.length).toBeGreaterThanOrEqual(2)
+    expect(bundle.replies[0]).toContain('**HyperCore**')
+    expect(bundle.replies.some((reply) => reply.includes('**Top 5**'))).toBe(true)
+    expect(bundle.replies.join('\n')).toContain('@Flip_Research')
   })
 
   it('ops room footer clarifies digest vs creator trading rooms', () => {

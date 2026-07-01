@@ -69,6 +69,8 @@ type DailyBriefFlags = {
   moverRows: number
   majorRows: number
   compact: boolean
+  /** Post compact digest as a parent message plus section replies (room threads). */
+  threads: boolean
   forceSend: boolean
   marketTimeoutMs: number
   hyperCoreEnabled: boolean
@@ -226,16 +228,25 @@ export type DailyBriefPostedRoom = {
   roomId: string
   lane: string
   messageText: string
+  threadReplyCount?: number
+}
+
+export type AlfaClubDailyBriefThreadBundle = {
+  parent: string
+  replies: string[]
 }
 
 export async function sendDailyBriefToCommandRooms(params: {
   text: string
+  threadBundle?: AlfaClubDailyBriefThreadBundle | null
+  snapshotTs?: string | null
   flags?: ReturnType<typeof readAlfaClubChatBridgeFlags>
 }): Promise<{ posted: DailyBriefPostedRoom[]; commandRoomIds: string[] }> {
   const flags = params.flags ?? readAlfaClubChatBridgeFlags()
   const commandRoomIds = listDailyBriefPostRoomIds(flags)
   const posted: DailyBriefPostedRoom[] = []
   let lastError: unknown = null
+  const snapshotKey = (params.snapshotTs ?? 'unknown').replace(/[^\dTZ:.-]/g, '')
 
   for (const roomId of commandRoomIds) {
     let messageText = params.text
@@ -244,7 +255,62 @@ export async function sendDailyBriefToCommandRooms(params: {
       messageText = `${messageText}\n\n${opsFooter}`
     }
     try {
-      const send = await sendAlfaClubRoomText({ text: messageText, roomId, flags })
+      const bundle = params.threadBundle
+      if (bundle && bundle.replies.length > 0) {
+        const parentText = opsFooter ? `${bundle.parent}\n\n${opsFooter}` : bundle.parent
+        const parentSend = await sendAlfaClubRoomText({
+          text: parentText,
+          roomId,
+          flags,
+          clientMessageId: `daily-brief:${snapshotKey}:${roomId}:parent`,
+        })
+        let threadReplyCount = 0
+        if (parentSend.messageId) {
+          for (let index = 0; index < bundle.replies.length; index += 1) {
+            const replyText = bundle.replies[index]
+            if (!replyText?.trim()) continue
+            await sendAlfaClubRoomText({
+              text: replyText,
+              roomId,
+              flags,
+              replyToMessageId: parentSend.messageId,
+              clientMessageId: `daily-brief:${snapshotKey}:${roomId}:reply:${index}`,
+            })
+            threadReplyCount += 1
+          }
+        } else {
+          messageText = [bundle.parent, ...bundle.replies].join('\n\n')
+          if (opsFooter) {
+            messageText = `${messageText}\n\n${opsFooter}`
+          }
+          const fallback = await sendAlfaClubRoomText({
+            text: messageText,
+            roomId,
+            flags,
+            clientMessageId: `daily-brief:${snapshotKey}:${roomId}:flat`,
+          })
+          posted.push({
+            roomId,
+            lane: `${fallback.lane}:thread_fallback`,
+            messageText,
+          })
+          continue
+        }
+        posted.push({
+          roomId,
+          lane: `${parentSend.lane}:thread_parent+${threadReplyCount}`,
+          messageText: parentText,
+          threadReplyCount,
+        })
+        continue
+      }
+
+      const send = await sendAlfaClubRoomText({
+        text: messageText,
+        roomId,
+        flags,
+        clientMessageId: `daily-brief:${snapshotKey}:${roomId}:single`,
+      })
       posted.push({ roomId, lane: send.lane, messageText })
     } catch (error) {
       lastError = error
@@ -301,6 +367,7 @@ export function readAlfaClubDailyBriefFlags(): DailyBriefFlags {
       20,
     ),
     compact: parseBool(process.env.ALFACLUB_DAILY_BRIEF_COMPACT ?? '1'),
+    threads: parseBool(process.env.ALFACLUB_DAILY_BRIEF_THREADS ?? '1'),
     forceSend: parseBool(process.env.ALFACLUB_DAILY_BRIEF_FORCE_SEND),
     marketTimeoutMs: parsePositiveInt(
       process.env.ALFACLUB_DAILY_BRIEF_MARKET_TIMEOUT_MS,
@@ -1390,14 +1457,13 @@ function buildCompactNarrative(params: {
   return parts.join(' · ') + '.'
 }
 
-function buildCompactBriefText(params: {
+function buildCompactBriefSections(params: {
   snapshotTs: string
   previousSnapshotTs: string | null
   currentRows: MetricsSnapshotRow[]
   previousRows: MetricsSnapshotRow[]
   creatorsTracked: number
   recentPublications: PublicationRecord[]
-  marketRows: MarketRow[]
   hyperCore: HyperCoreMarketBrief
   proliquidSummary: ProliquidSignalPressureSummary
   roomEconomics: RoomEconomicsBrief
@@ -1407,7 +1473,15 @@ function buildCompactBriefText(params: {
   roomIds: Map<string, string>
   roomDisplayByRoomId: Map<string, string>
   topRoomStatsByCreator: Map<string, TopRoomMarketStats>
-}): string {
+}): {
+  header: string
+  hyperCore: string
+  roomEconomics: string | null
+  creatorsPulse: string
+  topFive: string
+  moves: string | null
+  fullText: string
+} {
   const deltas = buildDeltas(params.currentRows, params.previousRows)
   const newCreators = deltas.filter((delta) => delta.isNew).length
   const pubs24h = params.recentPublications.filter((pub) => {
@@ -1429,14 +1503,12 @@ function buildCompactBriefText(params: {
     (row) => row.rank <= params.topRows && !currentTopSet.has(row.creatorAddress.toLowerCase()),
   ).length
 
-  const lines: string[] = []
   const snapLabel = formatBriefSnapshotDate(params.snapshotTs)
   const prevLabel = params.previousSnapshotTs ? formatBriefSnapshotDate(params.previousSnapshotTs) : null
-  lines.push(`**AlfaClub Daily** · ${snapLabel}${prevLabel ? ` vs ${prevLabel}` : ''}`)
+  const header = `**AlfaClub Daily** · ${snapLabel}${prevLabel ? ` vs ${prevLabel}` : ''}`
 
-  lines.push('')
-  lines.push('**HyperCore**')
-  lines.push(
+  const hyperCoreLines: string[] = ['**HyperCore**']
+  hyperCoreLines.push(
     params.hyperCore.watchlist.length > 0
       ? buildHyperCoreMoodLine(params.hyperCore.watchlist)
       : params.hyperCore.regimeLine,
@@ -1446,10 +1518,10 @@ function buildCompactBriefText(params: {
     for (let index = 0; index < Math.min(params.hyperCore.watchlist.length, watchLimit); index += 1) {
       const asset = params.hyperCore.watchlist[index]
       const execution = params.hyperCore.execution[index] ?? null
-      lines.push(formatRelatableHyperCoreAssetLine(asset, execution))
+      hyperCoreLines.push(formatRelatableHyperCoreAssetLine(asset, execution))
     }
   } else {
-    lines.push('• No live movers to show this run.')
+    hyperCoreLines.push('• No live movers to show this run.')
   }
   if (params.proliquidSummary) {
     const topKinds = params.proliquidSummary.byKind
@@ -1459,25 +1531,23 @@ function buildCompactBriefText(params: {
     const topSignals = params.proliquidSummary.topSignals
       .map((signal) => `${signal.kind}/${signal.confidence}${signal.scoreValue != null ? `:${signal.scoreValue}` : ''}`)
       .join(', ')
-    lines.push(
+    hyperCoreLines.push(
       `Bot signals: ${params.proliquidSummary.scoredCount} flagged (${params.proliquidSummary.highConfidenceCount} high confidence) · ${topKinds || 'n/a'}${topSignals ? ` · ${topSignals}` : ''}`,
     )
   } else {
-    lines.push('Bot signals: nothing notable in the last 24h.')
-  }
-  if (params.roomEconomics) {
-    lines.push('')
-    lines.push(
-      ...formatCompactRoomEconomicsLines(
-        params.roomEconomics,
-        params.roomDisplayByRoomId.get(params.roomEconomics.roomId) ?? null,
-      ),
-    )
+    hyperCoreLines.push('Bot signals: nothing notable in the last 24h.')
   }
 
-  lines.push('')
-  lines.push('**Creators**')
-  lines.push(
+  const roomEconomics =
+    params.roomEconomics != null
+      ? formatCompactRoomEconomicsLines(
+          params.roomEconomics,
+          params.roomDisplayByRoomId.get(params.roomEconomics.roomId) ?? null,
+        ).join('\n')
+      : null
+
+  const creatorsPulseLines: string[] = ['**Creators**']
+  creatorsPulseLines.push(
     formatCompactBriefScopeLine({
       creatorsTracked: params.creatorsTracked,
       rankedCount: params.currentRows.length,
@@ -1491,7 +1561,7 @@ function buildCompactBriefText(params: {
     params.currentRows[0] != null &&
     params.previousRows[0].creatorAddress !== params.currentRows[0].creatorAddress
   if (leaderChanged || entrantCount > 0 || exitCount > 0 || newCreators > 0) {
-    lines.push(
+    creatorsPulseLines.push(
       buildCompactLeadSummary({
         currentRows: params.currentRows,
         previousRows: params.previousRows,
@@ -1505,10 +1575,10 @@ function buildCompactBriefText(params: {
       }),
     )
   }
-  lines.push('')
-  lines.push(`**Top ${params.topRows}**`)
+
+  const topFiveLines: string[] = [`**Top ${params.topRows}**`]
   for (const row of params.currentRows.slice(0, params.topRows)) {
-    lines.push(
+    topFiveLines.push(
       formatCompactRankLine(
         row,
         params.labels,
@@ -1528,33 +1598,113 @@ function buildCompactBriefText(params: {
     roomIds: params.roomIds,
     roomDisplayByRoomId: params.roomDisplayByRoomId,
   })
+  let moves: string | null = null
   if (moveLines.length > 0) {
-    lines.push('')
-    lines.push('**Moves**')
-    lines.push(...moveLines)
+    const narrative = buildCompactNarrative({
+      deltas,
+      labels: params.labels,
+      newCreators,
+      activeCreators24h,
+      publications24h: pubs24h.length,
+      entrantCount,
+      exitCount,
+    })
+    const narrativeDuplicatesScope =
+      pubs24h.length > 0 &&
+      (narrative.startsWith(`${pubs24h.length} publication`) ||
+        narrative.startsWith(`${pubs24h.length} post`)) &&
+      !narrative.includes('Largest score swing') &&
+      newCreators === 0
+    const movesLines = ['**Moves**', ...moveLines]
+    if (!narrativeDuplicatesScope) {
+      movesLines.push('', narrative)
+    }
+    moves = movesLines.join('\n')
   }
 
-  const narrative = buildCompactNarrative({
-    deltas,
-    labels: params.labels,
-    newCreators,
-    activeCreators24h,
-    publications24h: pubs24h.length,
-    entrantCount,
-    exitCount,
-  })
-  const narrativeDuplicatesScope =
-    pubs24h.length > 0 &&
-    (narrative.startsWith(`${pubs24h.length} publication`) ||
-      narrative.startsWith(`${pubs24h.length} post`)) &&
-    !narrative.includes('Largest score swing') &&
-    newCreators === 0
-  if (!narrativeDuplicatesScope) {
-    lines.push('')
-    lines.push(narrative)
-  }
+  const blocks = [
+    header,
+    hyperCoreLines.join('\n'),
+    roomEconomics,
+    creatorsPulseLines.join('\n'),
+    topFiveLines.join('\n'),
+    moves,
+  ].filter((block): block is string => Boolean(block && block.trim()))
 
-  return lines.join('\n')
+  return {
+    header,
+    hyperCore: hyperCoreLines.join('\n'),
+    roomEconomics,
+    creatorsPulse: creatorsPulseLines.join('\n'),
+    topFive: topFiveLines.join('\n'),
+    moves,
+    fullText: blocks.join('\n\n'),
+  }
+}
+
+export function buildCompactBriefThreadBundle(params: {
+  snapshotTs: string
+  previousSnapshotTs: string | null
+  currentRows: MetricsSnapshotRow[]
+  previousRows: MetricsSnapshotRow[]
+  creatorsTracked: number
+  recentPublications: PublicationRecord[]
+  marketRows: MarketRow[]
+  hyperCore: HyperCoreMarketBrief
+  proliquidSummary: ProliquidSignalPressureSummary
+  roomEconomics: RoomEconomicsBrief
+  topRows: number
+  majorRows: number
+  labels: CreatorLabelMap
+  roomIds: Map<string, string>
+  roomDisplayByRoomId: Map<string, string>
+  topRoomStatsByCreator: Map<string, TopRoomMarketStats>
+}): AlfaClubDailyBriefThreadBundle {
+  const sections = buildCompactBriefSections(params)
+  const moodLine =
+    params.hyperCore.watchlist.length > 0
+      ? buildHyperCoreMoodLine(params.hyperCore.watchlist)
+      : params.hyperCore.regimeLine
+  const parentLines = [
+    sections.header,
+    '',
+    moodLine,
+    sections.creatorsPulse,
+    '',
+    '_Details in thread replies: HyperCore · your room · top rooms · moves_',
+  ]
+  const replies = [sections.hyperCore, sections.topFive]
+  if (sections.roomEconomics) {
+    replies.splice(1, 0, sections.roomEconomics)
+  }
+  if (sections.moves) {
+    replies.push(sections.moves)
+  }
+  return {
+    parent: parentLines.join('\n'),
+    replies,
+  }
+}
+
+function buildCompactBriefText(params: {
+  snapshotTs: string
+  previousSnapshotTs: string | null
+  currentRows: MetricsSnapshotRow[]
+  previousRows: MetricsSnapshotRow[]
+  creatorsTracked: number
+  recentPublications: PublicationRecord[]
+  marketRows: MarketRow[]
+  hyperCore: HyperCoreMarketBrief
+  proliquidSummary: ProliquidSignalPressureSummary
+  roomEconomics: RoomEconomicsBrief
+  topRows: number
+  majorRows: number
+  labels: CreatorLabelMap
+  roomIds: Map<string, string>
+  roomDisplayByRoomId: Map<string, string>
+  topRoomStatsByCreator: Map<string, TopRoomMarketStats>
+}): string {
+  return buildCompactBriefSections(params).fullText
 }
 
 function buildLegacyNarrative(params: {
@@ -2129,8 +2279,49 @@ export async function runAlfaClubDailyBrief(params: {
   }
 
   let messageText = formatAlfaClubDailyBrief(built.formatInput)
+  const hyperCore: HyperCoreMarketBrief =
+    built.formatInput.hyperCore ??
+    {
+      watchlist: built.formatInput.marketRows.map((row) => ({
+        symbol: row.symbol,
+        priceUsd: row.priceUsd,
+        change24hPct: row.change24hPct,
+        fundingRate: null,
+        openInterestUsd: null,
+        volume24hUsd: null,
+      })),
+      regimeLine: 'Regime unavailable (legacy market row input).',
+      execution: [],
+      unavailableReason: 'legacy_input',
+    }
+  const threadBundle =
+    flags.compact && flags.threads
+      ? buildCompactBriefThreadBundle({
+          snapshotTs: built.formatInput.snapshotTs,
+          previousSnapshotTs: built.formatInput.previousSnapshotTs,
+          currentRows: built.formatInput.currentRows,
+          previousRows: built.formatInput.previousRows,
+          creatorsTracked: built.formatInput.creatorsTracked,
+          recentPublications: built.formatInput.recentPublications,
+          marketRows: built.formatInput.marketRows,
+          hyperCore,
+          proliquidSummary: built.formatInput.proliquidSummary ?? null,
+          roomEconomics: built.formatInput.roomEconomics ?? null,
+          topRows: built.formatInput.topRows,
+          majorRows: built.formatInput.majorRows,
+          labels: built.formatInput.labels,
+          roomIds: built.formatInput.roomIds,
+          roomDisplayByRoomId: built.formatInput.roomDisplayByRoomId ?? new Map<string, string>(),
+          topRoomStatsByCreator:
+            built.formatInput.topRoomStatsByCreator ?? new Map<string, TopRoomMarketStats>(),
+        })
+      : null
   try {
-    const send = await sendDailyBriefToCommandRooms({ text: messageText })
+    const send = await sendDailyBriefToCommandRooms({
+      text: messageText,
+      threadBundle,
+      snapshotTs,
+    })
     messageText = send.posted[0]?.messageText ?? messageText
     for (const post of send.posted) {
       await recordDailyBriefDispatch({

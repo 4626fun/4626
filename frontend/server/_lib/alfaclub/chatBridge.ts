@@ -4000,14 +4000,21 @@ export async function _sendRoomMessageViaWebSocketForTests(params: {
   return sendRoomMessageViaWebSocket(params)
 }
 
+export type AlfaClubRoomSendResult = {
+  lane: string
+  messageId: string | null
+}
+
 export async function sendAlfaClubRoomText(params: {
   text: string
   roomId?: string | null
   replyToMessageId?: string
+  /** Stable id for bot-token idempotency keys (cron retries). */
+  clientMessageId?: string
   flags?: AlfaClubChatBridgeFlags
   jwt?: string | null
   attachments?: unknown
-}): Promise<{ lane: string }> {
+}): Promise<AlfaClubRoomSendResult> {
   const flags = params.flags ?? readAlfaClubChatBridgeFlags()
   const roomId = (params.roomId ?? flags.roomId ?? '').trim()
   if (!roomId) throw new Error('alfaclub_room_id_missing')
@@ -4017,12 +4024,15 @@ export async function sendAlfaClubRoomText(params: {
   const jwt = (await resolveBridgeJwt(params.jwt ?? flags.jwt ?? null))?.trim() ?? ''
   const idempotencyKey = buildBotMessageIdempotencyKey({
     roomId,
-    messageId: params.replyToMessageId ?? `room-text-${Date.now()}`,
+    messageId:
+      params.clientMessageId?.trim() ||
+      params.replyToMessageId ||
+      `room-text-${Date.now()}`,
   })
 
   if (flags.botToken) {
     try {
-      await sendRoomMessageViaBotTokenWithProxyFallback({
+      const sendResult = await sendRoomMessageViaBotTokenWithProxyFallback({
         apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
         directApiBaseUrl: flags.apiBaseUrl,
         botToken: flags.botToken,
@@ -4035,6 +4045,7 @@ export async function sendAlfaClubRoomText(params: {
       })
       return {
         lane: params.replyToMessageId ? 'bot_token_with_reply_id' : 'bot_token_without_reply_id',
+        messageId: sendResult.messageId,
       }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
@@ -4060,6 +4071,7 @@ export async function sendAlfaClubRoomText(params: {
           lane: params.replyToMessageId
             ? 'jwt_http_with_reply_id_after_bot_forbidden'
             : 'jwt_http_without_reply_id_after_bot_forbidden',
+          messageId: null,
         }
       } catch (jwtHttpError) {
         let lastJwtHttpError: unknown = jwtHttpError
@@ -4090,6 +4102,7 @@ export async function sendAlfaClubRoomText(params: {
                 lane: params.replyToMessageId
                   ? 'jwt_http_with_reply_id_after_refresh'
                   : 'jwt_http_without_reply_id_after_refresh',
+                messageId: null,
               }
             } catch (retryError) {
               lastJwtHttpError = retryError
@@ -4127,6 +4140,7 @@ export async function sendAlfaClubRoomText(params: {
   const jwtLane = wsLane === 'ws_proxy_http' ? 'ws_proxy_http_primary' : 'websocket_primary'
   return {
     lane: flags.botToken ? `${jwtLane}_after_bot_forbidden` : jwtLane,
+    messageId: null,
   }
 }
 
