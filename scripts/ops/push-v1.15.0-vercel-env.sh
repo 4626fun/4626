@@ -43,15 +43,15 @@ upsert_env() {
   local key="$1"
   local value="$2"
   local env_name="$3"
-  if vercel env update "$key" "$env_name" --value "$value" --yes --force >/dev/null 2>&1; then
+  if vercel env update "$key" "$env_name" --value "$value" --yes </dev/null >/dev/null 2>&1; then
     echo "  $env_name: updated $key"
     return 0
   fi
-  vercel env rm "$key" "$env_name" --yes >/dev/null 2>&1 || true
+  vercel env rm "$key" "$env_name" --yes </dev/null >/dev/null 2>&1 || true
   if [[ "$env_name" == "preview" ]]; then
-    vercel env add "$key" preview --value "$value" --yes --force >/dev/null
+    vercel env add "$key" preview "" --value "$value" --yes </dev/null >/dev/null
   else
-    vercel env add "$key" "$env_name" --value "$value" --yes --force >/dev/null
+    vercel env add "$key" "$env_name" --value "$value" --yes --force </dev/null >/dev/null
   fi
   echo "  $env_name: added $key"
 }
