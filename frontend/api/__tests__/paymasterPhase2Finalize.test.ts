@@ -134,7 +134,6 @@ vi.mock('../../src/deploy/bytecode.generated.js', () => ({
       AjnaVaultAuth: mockBytecode,
       AjnaERC4626Vault: mockBytecode,
       ERC4626StrategyAdapter: mockBytecode,
-      SolanaStrategy: mockBytecode,
     }
   })(),
 }))

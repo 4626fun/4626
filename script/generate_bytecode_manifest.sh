@@ -49,7 +49,6 @@ contracts=(
   "AjnaVaultAuth"
   "AjnaERC4626Vault"
   "ERC4626StrategyAdapter"
-  "SolanaStrategy"
   "DeploymentBatcher"
   "DeploymentBatcherPhase2Module"
   "DeploymentBatcherPhase3Helper"

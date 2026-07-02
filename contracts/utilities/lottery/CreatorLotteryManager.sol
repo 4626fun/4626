@@ -75,6 +75,7 @@ interface ICreatorRegistryLottery {
 
 interface ICreatorGaugeControllerLottery {
     function getJackpotReserve() external view returns (uint256);
+    function availableJackpotReserve() external view returns (uint256);
     function payJackpot(address winner, uint256 shares) external;
 }
 
@@ -1674,7 +1675,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
 
             // slither-disable-next-line calls-loop
             uint256 jackpotShares;
-            try gaugeController.getJackpotReserve() returns (uint256 result) {
+            try gaugeController.availableJackpotReserve() returns (uint256 result) {
                 jackpotShares = result;
             } catch {
                 continue;

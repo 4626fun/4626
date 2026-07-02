@@ -11,7 +11,6 @@ import { executeSolanaFeeSettlement } from './actions/keepr-solana-settle-fees.a
 import { executeSolanaWinnerRelay } from './actions/keepr-solana-winner-relay.action.js'
 import { executeSolanaPriceMonitor } from './actions/keepr-solana-price-monitor.action.js'
 import { executeSolanaGraduation } from './actions/keepr-solana-graduation.action.js'
-import { executeSolanaRebalance } from './actions/keepr-solana-rebalance.action.js'
 import { executeSolanaSyncMapping } from './actions/keepr-solana-sync-mapping.action.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -30,7 +29,6 @@ export type SolanaOrchestratorAction =
   | 'winner_relay'
   | 'price_monitor'
   | 'graduation'
-  | 'rebalance'
   | 'sync_mapping'
 
 export type ReconcileOutcome = {
@@ -91,7 +89,6 @@ export function normalizeSolanaOrchestratorAction(value: unknown): SolanaOrchest
     case 'winner_relay':
     case 'price_monitor':
     case 'graduation':
-    case 'rebalance':
     case 'sync_mapping':
       return action
     default:
@@ -141,9 +138,6 @@ export async function executeSolanaOrchestratorAction(params: {
       break
     case 'graduation':
       result = await executeSolanaGraduation()
-      break
-    case 'rebalance':
-      result = await executeSolanaRebalance()
       break
     case 'sync_mapping':
       result = await executeSolanaSyncMapping(params.payload ?? {})

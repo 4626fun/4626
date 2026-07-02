@@ -285,7 +285,7 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
      * @return success Always true on the happy path. The underlying
      *         `IBaseSolanaBridge.bridgeToken` reverts on failure, so reaching
      *         the return statement implies the bridge submitted the transfer.
-     *         The bool exists so callers (e.g. `SolanaBridgeStrategy`) can
+     *         The bool exists so callers can detect adapter failure.
      *         enforce an explicit success check at the interface boundary
      *         instead of relying on revert-only semantics, in case a future
      *         adapter variant introduces a non-reverting failure branch.

@@ -543,6 +543,10 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
 
         emit AuctionCreated(auction, address(auctionToken), amount, startBlock, endBlock);
         emit LaunchPricingResolved(auction, floorPriceQ96, tickSpacingQ96, creatorUsdPrice, ethUsdPrice);
+
+        // FIX: AUDIT-2026-07-01-L06 — trade fee recipient is immutable after first launch.
+        (bool locked,) = _configModule.delegatecall(abi.encodeWithSignature("lockFeeRecipient()"));
+        locked;
     }
 
     /**

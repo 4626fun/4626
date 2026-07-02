@@ -1130,7 +1130,7 @@ describe('deploy session optimistic concurrency', () => {
     const ajnaStrategy = '0x9100000000000000000000000000000000000009'
     const ajnaInnerVault = '0x9200000000000000000000000000000000000009'
     const ajnaAuth = '0x9300000000000000000000000000000000000009'
-    const solanaStrategy = '0xa10000000000000000000000000000000000000a'
+    const bridgeBackedStrategy = '0xa10000000000000000000000000000000000000a'
     const charmVault = '0xb10000000000000000000000000000000000000b'
     const ajnaPool = '0xc10000000000000000000000000000000000000c'
     const bridgeAddress = '0xd10000000000000000000000000000000000000d'
@@ -1243,12 +1243,12 @@ describe('deploy session optimistic concurrency', () => {
           case 'strategyList':
             if (Number(args?.[0] ?? 0n) === 0) return charmStrategy
             if (Number(args?.[0] ?? 0n) === 1) return ajnaStrategy
-            if (Number(args?.[0] ?? 0n) === 2) return solanaStrategy
+            if (Number(args?.[0] ?? 0n) === 2) return bridgeBackedStrategy
             return '0xownerbytes'
           case 'strategyWeights':
             if (String(args?.[0] ?? '').toLowerCase() === charmStrategy.toLowerCase()) return 3000n
             if (String(args?.[0] ?? '').toLowerCase() === ajnaStrategy.toLowerCase()) return 3000n
-            if (String(args?.[0] ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return 3000n
+            if (String(args?.[0] ?? '').toLowerCase() === bridgeBackedStrategy.toLowerCase()) return 3000n
             return 0n
           case 'charmVault':
             if (String(address ?? '').toLowerCase() === charmStrategy.toLowerCase()) return charmVault
@@ -1268,8 +1268,8 @@ describe('deploy session optimistic concurrency', () => {
             }
             throw new Error('not_ajna_auth')
           case 'bridgeAddress':
-            if (String(address ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return bridgeAddress
-            throw new Error('not_solana_strategy')
+            if (String(address ?? '').toLowerCase() === bridgeBackedStrategy.toLowerCase()) return bridgeAddress
+            throw new Error('not_bridge_strategy')
           case 'uniswapV3Factory':
             return v3Factory
           case 'usdc':
@@ -1301,7 +1301,7 @@ describe('deploy session optimistic concurrency', () => {
           ajnaStrategy.toLowerCase(),
           ajnaInnerVault.toLowerCase(),
           ajnaAuth.toLowerCase(),
-          solanaStrategy.toLowerCase(),
+          bridgeBackedStrategy.toLowerCase(),
           charmVault.toLowerCase(),
           ajnaPool.toLowerCase(),
           bridgeAddress.toLowerCase(),
@@ -2135,7 +2135,7 @@ describe('deploy session optimistic concurrency', () => {
     const ajnaInnerVault = '0x9500000000000000000000000000000000000009'
     const ajnaAuth = '0x9600000000000000000000000000000000000009'
     const ajnaPool = '0x9700000000000000000000000000000000000009'
-    const solanaStrategy = '0xa40000000000000000000000000000000000000a'
+    const bridgeBackedStrategy = '0xa40000000000000000000000000000000000000a'
     const charmVault = '0xb40000000000000000000000000000000000000b'
     const bridgeAddress = '0xd40000000000000000000000000000000000000d'
     const v3Factory = '0xe40000000000000000000000000000000000000e'
@@ -2202,12 +2202,12 @@ describe('deploy session optimistic concurrency', () => {
           case 'strategyList':
             if (Number(args?.[0] ?? 0n) === 0) return charmStrategy
             if (Number(args?.[0] ?? 0n) === 1) return ajnaAdapter
-            if (Number(args?.[0] ?? 0n) === 2) return solanaStrategy
+            if (Number(args?.[0] ?? 0n) === 2) return bridgeBackedStrategy
             return '0xownerbytes'
           case 'strategyWeights':
             if (String(args?.[0] ?? '').toLowerCase() === charmStrategy.toLowerCase()) return 3000n
             if (String(args?.[0] ?? '').toLowerCase() === ajnaAdapter.toLowerCase()) return 3000n
-            if (String(args?.[0] ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return 3000n
+            if (String(args?.[0] ?? '').toLowerCase() === bridgeBackedStrategy.toLowerCase()) return 3000n
             return 0n
           case 'charmVault':
             if (String(address ?? '').toLowerCase() === charmStrategy.toLowerCase()) return charmVault
@@ -2227,8 +2227,8 @@ describe('deploy session optimistic concurrency', () => {
             }
             throw new Error('not_ajna_auth')
           case 'bridgeAddress':
-            if (String(address ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return bridgeAddress
-            throw new Error('not_solana_strategy')
+            if (String(address ?? '').toLowerCase() === bridgeBackedStrategy.toLowerCase()) return bridgeAddress
+            throw new Error('not_bridge_strategy')
           case 'uniswapV3Factory':
             return v3Factory
           case 'usdc':
@@ -2249,7 +2249,7 @@ describe('deploy session optimistic concurrency', () => {
           ajnaInnerVault.toLowerCase(),
           ajnaAuth.toLowerCase(),
           ajnaPool.toLowerCase(),
-          solanaStrategy.toLowerCase(),
+          bridgeBackedStrategy.toLowerCase(),
           charmVault.toLowerCase(),
           bridgeAddress.toLowerCase(),
           v3Pool.toLowerCase(),
@@ -2532,7 +2532,7 @@ describe('deploy session optimistic concurrency', () => {
     const ajnaAdapter = '0x9100000000000000000000000000000000000009'
     const ajnaInnerVault = '0x9200000000000000000000000000000000000009'
     const ajnaAuth = '0x9300000000000000000000000000000000000009'
-    const solanaStrategy = '0xa10000000000000000000000000000000000000a'
+    const bridgeBackedStrategy = '0xa10000000000000000000000000000000000000a'
     const charmVault = '0xb10000000000000000000000000000000000000b'
     const ajnaPool = '0xc10000000000000000000000000000000000000c'
     const bridgeAddress = '0xd10000000000000000000000000000000000000d'
@@ -2601,12 +2601,12 @@ describe('deploy session optimistic concurrency', () => {
           case 'strategyList':
             if (Number(args?.[0] ?? 0n) === 0) return charmStrategy
             if (Number(args?.[0] ?? 0n) === 1) return ajnaAdapter
-            if (Number(args?.[0] ?? 0n) === 2) return solanaStrategy
+            if (Number(args?.[0] ?? 0n) === 2) return bridgeBackedStrategy
             return '0xownerbytes'
           case 'strategyWeights':
             if (String(args?.[0] ?? '').toLowerCase() === charmStrategy.toLowerCase()) return 3000n
             if (String(args?.[0] ?? '').toLowerCase() === ajnaAdapter.toLowerCase()) return 3000n
-            if (String(args?.[0] ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return 3000n
+            if (String(args?.[0] ?? '').toLowerCase() === bridgeBackedStrategy.toLowerCase()) return 3000n
             return 0n
           case 'charmVault':
             if (String(address ?? '').toLowerCase() === charmStrategy.toLowerCase()) return charmVault
@@ -2621,8 +2621,8 @@ describe('deploy session optimistic concurrency', () => {
             if (String(address ?? '').toLowerCase() === ajnaInnerVault.toLowerCase()) return ajnaAuth
             throw new Error('not_ajna_inner_vault')
           case 'bridgeAddress':
-            if (String(address ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return bridgeAddress
-            throw new Error('not_solana_strategy')
+            if (String(address ?? '').toLowerCase() === bridgeBackedStrategy.toLowerCase()) return bridgeAddress
+            throw new Error('not_bridge_strategy')
           case 'uniswapV3Factory':
             return v3Factory
           case 'usdc':
@@ -2642,7 +2642,7 @@ describe('deploy session optimistic concurrency', () => {
           ajnaAdapter.toLowerCase(),
           ajnaInnerVault.toLowerCase(),
           ajnaAuth.toLowerCase(),
-          solanaStrategy.toLowerCase(),
+          bridgeBackedStrategy.toLowerCase(),
           charmVault.toLowerCase(),
           ajnaPool.toLowerCase(),
           bridgeAddress.toLowerCase(),
@@ -2683,7 +2683,7 @@ describe('deploy session optimistic concurrency', () => {
     const ajnaAdapter = '0x9100000000000000000000000000000000000009'
     const ajnaInnerVault = '0x9200000000000000000000000000000000000009'
     const ajnaAuth = '0x9300000000000000000000000000000000000009'
-    const solanaStrategy = '0xa10000000000000000000000000000000000000a'
+    const bridgeBackedStrategy = '0xa10000000000000000000000000000000000000a'
     const charmVault = '0xb10000000000000000000000000000000000000b'
     const ajnaPool = '0xc10000000000000000000000000000000000000c'
     const bridgeAddress = '0xd10000000000000000000000000000000000000d'
@@ -2746,12 +2746,12 @@ describe('deploy session optimistic concurrency', () => {
           case 'strategyList':
             if (Number(args?.[0] ?? 0n) === 0) return charmStrategy
             if (Number(args?.[0] ?? 0n) === 1) return ajnaAdapter
-            if (Number(args?.[0] ?? 0n) === 2) return solanaStrategy
+            if (Number(args?.[0] ?? 0n) === 2) return bridgeBackedStrategy
             return '0xownerbytes'
           case 'strategyWeights':
             if (String(args?.[0] ?? '').toLowerCase() === charmStrategy.toLowerCase()) return 3000n
             if (String(args?.[0] ?? '').toLowerCase() === ajnaAdapter.toLowerCase()) return 3000n
-            if (String(args?.[0] ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return 3000n
+            if (String(args?.[0] ?? '').toLowerCase() === bridgeBackedStrategy.toLowerCase()) return 3000n
             return 0n
           case 'charmVault':
             if (String(address ?? '').toLowerCase() === charmStrategy.toLowerCase()) return charmVault
@@ -2766,8 +2766,8 @@ describe('deploy session optimistic concurrency', () => {
             if (String(address ?? '').toLowerCase() === ajnaInnerVault.toLowerCase()) return ajnaAuth
             throw new Error('not_ajna_inner_vault')
           case 'bridgeAddress':
-            if (String(address ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return bridgeAddress
-            throw new Error('not_solana_strategy')
+            if (String(address ?? '').toLowerCase() === bridgeBackedStrategy.toLowerCase()) return bridgeAddress
+            throw new Error('not_bridge_strategy')
           case 'uniswapV3Factory':
             return v3Factory
           case 'usdc':
@@ -2785,7 +2785,7 @@ describe('deploy session optimistic concurrency', () => {
           ajnaAdapter.toLowerCase(),
           ajnaInnerVault.toLowerCase(),
           ajnaAuth.toLowerCase(),
-          solanaStrategy.toLowerCase(),
+          bridgeBackedStrategy.toLowerCase(),
           charmVault.toLowerCase(),
           ajnaPool.toLowerCase(),
           bridgeAddress.toLowerCase(),
@@ -2862,7 +2862,7 @@ describe('deploy session optimistic concurrency', () => {
     })
   })
 
-  it('status blocks phase3_sent with extra active strategies when SolanaStrategy exposes bridgeAddress', async () => {
+  it('status blocks phase3_sent when vault has undeclared bridge-backed strategy', async () => {
     const rec = {
       ...makeDeploySession('phase3_sent'),
       payload: JSON.stringify({
@@ -2882,7 +2882,7 @@ describe('deploy session optimistic concurrency', () => {
     const ajnaStrategy = '0x9200000000000000000000000000000000000009'
     const ajnaInnerVault = '0x9300000000000000000000000000000000000009'
     const ajnaAuth = '0x9400000000000000000000000000000000000009'
-    const solanaStrategy = '0xa20000000000000000000000000000000000000a'
+    const bridgeBackedStrategy = '0xa20000000000000000000000000000000000000a'
     const charmVault = '0xb20000000000000000000000000000000000000b'
     const ajnaPool = '0xc20000000000000000000000000000000000000c'
     const bridgeAddress = '0xd20000000000000000000000000000000000000d'
@@ -2951,13 +2951,13 @@ describe('deploy session optimistic concurrency', () => {
             if (Number(args?.[0] ?? 0n) === 0) return charmStrategy
             if (Number(args?.[0] ?? 0n) === 1) return extraStrategy
             if (Number(args?.[0] ?? 0n) === 2) return ajnaStrategy
-            if (Number(args?.[0] ?? 0n) === 3) return solanaStrategy
+            if (Number(args?.[0] ?? 0n) === 3) return bridgeBackedStrategy
             return '0xownerbytes'
           case 'strategyWeights':
             if (String(args?.[0] ?? '').toLowerCase() === charmStrategy.toLowerCase()) return 3000n
             if (String(args?.[0] ?? '').toLowerCase() === extraStrategy.toLowerCase()) return 100n
             if (String(args?.[0] ?? '').toLowerCase() === ajnaStrategy.toLowerCase()) return 3000n
-            if (String(args?.[0] ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return 3000n
+            if (String(args?.[0] ?? '').toLowerCase() === bridgeBackedStrategy.toLowerCase()) return 3000n
             return 0n
           case 'charmVault':
             if (String(address ?? '').toLowerCase() === charmStrategy.toLowerCase()) return charmVault
@@ -2977,8 +2977,8 @@ describe('deploy session optimistic concurrency', () => {
             }
             throw new Error('not_ajna_auth')
           case 'bridgeAddress':
-            if (String(address ?? '').toLowerCase() === solanaStrategy.toLowerCase()) return bridgeAddress
-            throw new Error('not_solana_strategy')
+            if (String(address ?? '').toLowerCase() === bridgeBackedStrategy.toLowerCase()) return bridgeAddress
+            throw new Error('not_bridge_strategy')
           case 'bridgeAdapter':
             throw new Error('bridge_adapter_not_exposed')
           case 'uniswapV3Factory':
@@ -3001,7 +3001,7 @@ describe('deploy session optimistic concurrency', () => {
           ajnaStrategy.toLowerCase(),
           ajnaInnerVault.toLowerCase(),
           ajnaAuth.toLowerCase(),
-          solanaStrategy.toLowerCase(),
+          bridgeBackedStrategy.toLowerCase(),
           charmVault.toLowerCase(),
           ajnaPool.toLowerCase(),
           bridgeAddress.toLowerCase(),

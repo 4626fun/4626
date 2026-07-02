@@ -719,8 +719,15 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     // ================================
 
     /**
+     * @notice Jackpot shares available for lottery payout (conservative view for sizing).
+     */
+    function availableJackpotReserve() public view returns (uint256) {
+        return jackpotReserve;
+    }
+
+    /**
      * @notice Pay jackpot to lottery winner
-     * @dev Only callable by lottery manager
+     * @dev Only callable by lottery manager; reverts when reserve is insufficient (M-02).
      * @param winner Winner's address
      * @param shares Amount of vault shares to pay
      */
@@ -740,6 +747,13 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
      */
     function getJackpotReserve() external view returns (uint256) {
         return jackpotReserve;
+    }
+
+    /**
+     * @notice Legacy alias — returns unreserved jackpot capacity for lottery sizing.
+     */
+    function getAvailableJackpotReserve() external view returns (uint256) {
+        return availableJackpotReserve();
     }
 
     // ================================

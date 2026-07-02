@@ -564,7 +564,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           : isNestedAjna
             ? 'Ajna lending (adapter-backed inner vault)'
             : hasSolanaRoute
-              ? 'Solana bridge (SolanaBridgeStrategy)'
+              ? 'Solana bridge (adapter route)'
             : `Strategy #${i + 1}`
 
         const assetOk = asset && isAddress(asset) ? asset.toLowerCase() === creatorToken.toLowerCase() : null

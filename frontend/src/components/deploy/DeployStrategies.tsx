@@ -259,14 +259,14 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
       <div>
         <h3 className="text-xl font-semibold text-white mb-1">Deploy Yield Strategies (Legacy)</h3>
         <p className="text-sm text-zinc-500">
-          Manual two-strategy helper for Charm + Ajna only. The canonical `/deploy` flow is the only path that deploys
-          Charm, Ajna, and `SolanaStrategy` together with Solana preflight.
+          Manual two-strategy helper for Charm + Ajna only. The canonical `/deploy` flow deploys Charm and Ajna;
+          Solana exposure is seeded via ShareOFT auto-bridge at finalize (Pipe A), not a Phase-3 vault strategy.
         </p>
       </div>
 
       <Alert variant="warning" title="Legacy Admin Helper">
-        This page does not deploy `SolanaStrategy` and does not run the Solana route/OVault preflight. Use `/deploy`
-        for the production three-strategy launch flow.
+        This page does not run the full production deploy flow or ShareOFT mesh preflight. Use `/deploy` for
+        greenfield vault launches (Charm + Ajna + Pipe A ShareOFT bridge).
       </Alert>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

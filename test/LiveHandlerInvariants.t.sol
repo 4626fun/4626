@@ -23,7 +23,7 @@ import {
     MockUniswapV3FactoryForPhase3,
     MockUniswapV3PoolForPhase3,
     MockVaultStrategyManagerForPhase3
-} from "./DeploymentBatcher.SolanaStrategyPhase3.t.sol";
+} from "./helpers/DeploymentBatcherPhase3Mocks.sol";
 import {DeploymentBatcherPhase2Module} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
 import {IBaseSolanaBridge} from "../contracts/interfaces/IBaseSolanaBridge.sol";
 import {OFTBootstrapRegistry} from "../contracts/helpers/infra/OFTBootstrapRegistry.sol";
@@ -177,9 +177,14 @@ contract LiveMockGauge {
         return jackpot;
     }
 
+    function availableJackpotReserve() external view returns (uint256) {
+        return jackpot;
+    }
+
     function payJackpot(address, uint256 shares) external {
+        require(shares <= jackpot, "InsufficientJackpot");
         payCount++;
-        jackpot = shares >= jackpot ? 0 : jackpot - shares;
+        jackpot -= shares;
     }
 }
 

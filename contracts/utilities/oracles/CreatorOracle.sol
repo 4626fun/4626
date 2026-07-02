@@ -94,6 +94,9 @@ contract CreatorOracle is OApp {
 
     /// @notice Chainlink ETH/USD feed address
     address public chainlinkFeed;
+    /// @notice Optional Base L2 sequencer uptime feed (Chainlink). Zero disables the guard.
+    /// Base mainnet reference: 0x4C4814aa04433e0FB313CB0895b582569eF52253
+    address public sequencerUptimeFeed;
 
     // ================================
     // STATE - V4 POOL
@@ -228,6 +231,7 @@ contract CreatorOracle is OApp {
     event MaxTicksUpdated(int24 oldMaxTicks, int24 newMaxTicks, bool autoTuned);
     event TickWasCapped(int24 rawTick, int24 truncatedTick, int24 movement);
     event ChainlinkFeedSet(address indexed feed);
+    event SequencerUptimeFeedSet(address indexed feed);
     // FIX: M-3 (4626-439) — emitted (via the deprecated entrypoint's revert path in tests / off-chain
     // call-simulation) so tooling can pick up migrations to broadcastCreatorPriceWithFees.
     event BroadcastEqualSplitCallAttempted(address indexed caller, uint256 msgValue, uint32[] dstEids);
@@ -245,6 +249,7 @@ contract CreatorOracle is OApp {
     error UnsupportedDecimals();
     error NeedMoreObservations();
     error StalePrice();
+    error SequencerDown();
     error InvalidDuration();
     error PriceUpdateCooldown();
     error PriceDeviationTooHigh();
@@ -309,6 +314,12 @@ contract CreatorOracle is OApp {
         if (_feed == address(0)) revert ZeroAddress();
         chainlinkFeed = _feed;
         emit ChainlinkFeedSet(_feed);
+    }
+
+    /// @notice Configure optional Base sequencer uptime feed (fail-closed when down).
+    function setSequencerUptimeFeed(address _feed) external onlyOwner {
+        sequencerUptimeFeed = _feed;
+        emit SequencerUptimeFeedSet(_feed);
     }
 
     /**
@@ -471,6 +482,7 @@ contract CreatorOracle is OApp {
      * @return timestamp Last update timestamp
      */
     function getEthPrice() external view returns (int256 price, uint256 timestamp) {
+        if (!_sequencerIsUp()) return (0, 0);
         if (chainlinkFeed == address(0)) return (0, 0);
 
         (uint80 roundId, int256 answer,, uint256 updatedAt, uint80 answeredInRound) = IChainlinkFeed(chainlinkFeed).latestRoundData();
@@ -1001,6 +1013,7 @@ contract CreatorOracle is OApp {
 
         // Get ETH/USD from Chainlink
         if (chainlinkFeed == address(0)) return;
+        if (!_sequencerIsUp()) return;
 
         try IChainlinkFeed(chainlinkFeed).latestRoundData() returns (
             uint80 roundId, int256 ethUSD, uint256, uint256 updatedAt, uint80 answeredInRound
@@ -1052,6 +1065,7 @@ contract CreatorOracle is OApp {
         if (creatorPerEth == 0) revert InvalidPrice();
 
         if (chainlinkFeed == address(0)) revert ZeroAddress();
+        if (!_sequencerIsUp()) revert SequencerDown();
 
         (uint80 roundId, int256 ethUSD,, uint256 updatedAt, uint80 answeredInRound) = IChainlinkFeed(chainlinkFeed).latestRoundData();
 
@@ -1262,6 +1276,15 @@ contract CreatorOracle is OApp {
      */
     function isPriceFresh() external view returns (bool) {
         return creatorPriceUSD > 0 && block.timestamp - creatorPriceTimestamp < MAX_STALENESS;
+    }
+
+    /// @dev Chainlink sequencer feeds return 0 when the sequencer is up, 1 when down.
+    function _sequencerIsUp() internal view returns (bool) {
+        address feed = sequencerUptimeFeed;
+        if (feed == address(0)) return true;
+        (, int256 answer,, uint256 updatedAt,) = IChainlinkFeed(feed).latestRoundData();
+        if (block.timestamp - updatedAt > MAX_STALENESS) return false;
+        return answer == 0;
     }
 }
 

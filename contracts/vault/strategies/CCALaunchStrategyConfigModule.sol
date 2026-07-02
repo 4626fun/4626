@@ -89,6 +89,10 @@ contract CCALaunchStrategyConfigModule is Ownable, ReentrancyGuard {
     uint64 public migrationDelayBlocks;
     uint64 public defaultSweepDelayBlocks;
     bool public simpleLaunchEnabled;
+    /// @dev FIX: AUDIT-2026-07-01-L06 — fee recipient is locked after the first launch.
+    bool public feeRecipientLocked;
+
+    error FeeRecipientLocked();
 
     address private immutable _self;
 
@@ -289,8 +293,13 @@ contract CCALaunchStrategyConfigModule is Ownable, ReentrancyGuard {
     }
 
     function setFeeRecipient(address _feeRecipient) external onlyDelegateCall onlyOwner {
+        if (feeRecipientLocked) revert FeeRecipientLocked();
         if (_feeRecipient == address(0)) revert ZeroAddress();
         feeRecipient = _feeRecipient;
+    }
+
+    function lockFeeRecipient() external onlyDelegateCall onlyOwner {
+        feeRecipientLocked = true;
     }
 
     function setTaxRate(uint256 _taxRateBps) external onlyDelegateCall onlyOwner {

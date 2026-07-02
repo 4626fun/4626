@@ -12,13 +12,13 @@
 | Domain | Key contracts |
 |--------|----------------|
 | ERC-4626 vault | `CreatorOVault`, modules (`Core`/`Admin`/`Strategies`), `CreatorOVaultWrapper`, impairment/escrow |
-| Strategies | `CCALaunchStrategy`, `ERC4626StrategyAdapter`, `SolanaStrategy`, `SolanaBridgeStrategy` |
+| Strategies | `CCALaunchStrategy`, `ERC4626StrategyAdapter`, Charm/Ajna bundle |
 | Lottery / gauge / oracle | `CreatorLotteryManager`, `CreatorGaugeController`, `CreatorOracle`, `VoterRewardsDistributor` |
 | ve(3,3) | `ve4626`, `ve4626BoostManager`, `VaultGaugeVoting`, `BribeDepot` |
 | Cross-chain | `CreatorShareOFT`, `OVaultHubComposer`, `SolanaBridgeAdapter` |
 | Deploy / periphery | `DeploymentBatcher`, `PayoutRouter`, `VaultShareBurnStream`, `CreatorRegistry`, factories, alfaclub |
 
-**Architecture:** Hub-centric (Base); vault uses **delegatecall modules** with `MODULE_STORAGE_VERSION` gate; jackpot **custody** (`CreatorGaugeController`) vs **authority** (`CreatorLotteryManager`) correctly split.
+**Architecture:** Hub-centric (Base); vault uses **delegatecall modules** with `MODULE_STORAGE_VERSION` gate; jackpot **custody** (`CreatorGaugeController`) vs **authority** (`CreatorLotteryManager`) correctly split. Greenfield Solana exposure is ShareOFT mesh at finalize (`solana_ovault_mesh`).
 
 ---
 
@@ -113,7 +113,7 @@
 | Zero mesh compose peers | **Fixed** |
 | Solana relay premature consume | **Fixed** |
 | Composer/OFT stuck funds | **Partial** |
-| SolanaStrategy remote NAV | **Deferred** |
+| Remote Solana NAV in vault strategy | **Not applicable** — ShareOFT mesh at finalize |
 | Voter reward sweep centralization | **Deferred** |
 | Boost timelock not armed | **Deferred** (deploy script) |
 | Activation batcher registry | **Deferred** |

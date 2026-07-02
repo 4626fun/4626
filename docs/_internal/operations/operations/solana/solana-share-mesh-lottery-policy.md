@@ -9,7 +9,7 @@ Related: [budget paths](./solana-share-mesh-budget-paths.md) (costs + runbooks),
 | # | Policy |
 |---|--------|
 | 1 | Tradable Solana shares = **ShareOFT bridged from Base** (`solana_ovault_mesh` + `OVaultHubComposer`). Not creator re-deposit, not bridge-wrapped creator SPL. |
-| 2 | **30% ShareOFT auto-bridges at `finalizePhase2`** when batcher OVault runtime is enabled (replaces deprecated `solana_bridge_strategy`). |
+| 2 | **30% ShareOFT auto-bridges at `finalizePhase2`** when batcher OVault runtime is enabled. |
 | 3 | **Lottery = pool buy of tradable share token only** — not compose deposit, bridge receipt, or creator-coin trades. |
 | 4 | **Meteora base asset = share mesh mint** — not `wrap-token` creator SPL. |
 | 5 | **`relay_entries` off** until share-mesh pool exists **and** a live detection path is wired (**B2 hook today**; B1 off-chain relay not shipped). |
@@ -28,7 +28,7 @@ B — Compose deposit (DORMANT, no lottery) Solana asset mesh ──► OVaultHu
 - Deposit-eligibility / asset-mesh readiness hints are **excluded from deploy preflight and infra status** (`depositEligible`, `solanaAssetMeshReady`, `assetPeerSet` removed) — the dormant lane must never gate or confuse vault deploys.
 - Compose **redeem** (Solana shares → composer → creator coin paid out **on Base**) remains the supported share exit; the creator coin itself never leaves Base through this lane.
 
-Do not use bridge-wrapped creator SPL (e.g. AKITA `9JWh…` via `SolanaBridgeAdapter`) as the share-lottery token. That legacy adapter/provisioner grain is out of scope for share-mesh policy.
+Do not use bridge-wrapped creator SPL (e.g. AKITA `9JWh…` via `SolanaBridgeAdapter`) as the share-lottery token. That adapter/provisioner grain is out of scope for share-mesh policy.
 
 ## B1 vs B2 (Phase B fork)
 
@@ -81,13 +81,13 @@ Execution steps, costs, and commands: [solana-share-mesh-budget-paths.md](./sola
 
 **B2 hook upgrade (canonical ix names):** [creator-share-hook-mainnet-upgrade.md](./creator-share-hook-mainnet-upgrade.md) — required before enabling `relay_entries` against live mainnet bytecode.
 
-## Deprecated (not share lottery)
+## Out of scope (not share lottery)
 
 | Path | Why |
 |------|-----|
 | `SOLANA_CREATOR_MINTS` = creator SPL + `relay_entries` | Wrong grain |
-| `POST /provision` DLMM on creator SPL | Legacy provisioner / Alpha Vault — not share lottery |
-| `solana_bridge_strategy` / `SolanaBridgeStrategy` TVL | Removed for greenfield; use Pipe A 30% finalize bridge |
+| `POST /provision` DLMM on creator SPL | Creator SPL provisioner / Alpha Vault — not share lottery |
+| Phase-3 Solana vault strategy TVL | Greenfield uses Pipe A 30% finalize bridge |
 | Compose deposit | Dormant (no asset mesh configured; creator coin is Base-only). Would be a valid vault entry if a creator-coin bridge ever launches; never lottery-eligible |
 | `SolanaBridgeAdapter.buyAndEnterLottery` | Non-canonical alternate |
 

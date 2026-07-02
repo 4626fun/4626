@@ -194,6 +194,8 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
 
     /**
      * @notice Extend lock duration
+     * @dev Intentionally allows extending an expired lock ("revive") so users can
+     *      restore voting power without unlocking and re-locking (AUDIT-2026-07-01-L07).
      */
     function extendLock(uint256 newEnd) external override nonReentrant returns (uint256 newVotingPower) {
         Lock storage userLock = _locks[msg.sender];

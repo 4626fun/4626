@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Smoke-test AKITA keeper stack wiring (read-only unless KPR_SOLANA_REBALANCE_EXECUTE=1).
+# Smoke-test AKITA keeper stack wiring (read-only dry runs).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -72,7 +72,7 @@ echo
 echo "-- KPR dry workflows --"
 cd "$KPR_DIR"
 pnpm exec tsx runner.ts vault-keeper --dry-run || echo "WARN: vault-keeper dry-run failed"
-pnpm exec tsx runner.ts keepr-solana-rebalance --dry-run || echo "WARN: solana rebalance dry-run failed"
+# Solana orchestrator smoke (share mesh — no legacy strategy rebalance)
 pnpm preflight-orchestrator || echo "WARN: solana preflight reported blockers (expected until prod env is aligned)"
 
 echo

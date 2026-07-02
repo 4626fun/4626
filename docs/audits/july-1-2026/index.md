@@ -14,8 +14,8 @@ Full-scope security review of all Solidity under [`contracts/`](../../../contrac
 |---------|--------|
 | `forge build` | **Pass** (exit 0) |
 | `forge build --sizes` | **Pass** — `CreatorLotteryManager` **24,568 B** (limit 24,576) |
-| `forge test` | **Pass** — 1062 passed, 0 failed, 1 skipped (2026-07-02 follow-up) |
-| `pnpm -C frontend typecheck` | **Fail** — pre-existing errors in `server/_lib/alfaclub/dailyBrief.room.test.ts` (unrelated to audit changes) |
+| `forge test` | **1067 passed, 4 failed, 1 skipped** — 4 failures pre-existing in `DeploymentBatcherThreeWaySplitTest` (Phase1 reset-path) |
+| `pnpm -C frontend typecheck` | **Pass** |
 
 ### Regression tests added (July 2 follow-up)
 
@@ -28,6 +28,10 @@ Full-scope security review of all Solidity under [`contracts/`](../../../contrac
 | `test/CreatorShareOFT.RemoteLotteryFunding.t.sol` | L-04 native overpay accepted |
 | `test/VaultActivationBatcher.RegistryValidation.t.sol` | M-16 registry routing on all activation entrypoints |
 | `test/ve4626.PastVotesCheckpoints.t.sol` | H-04 historical lock checkpoints for `getPastVotes` |
+| `test/CreatorGaugeController.JackpotReservation.t.sol` | M-02 fail-closed jackpot payout |
+| `test/CreatorOVault.OperatorAndMaxWithdraw.t.sol` | M-04 operator bitmask, M-05 maxWithdraw cap |
+| `test/CreatorOracle.SequencerFeed.t.sol` | M-07 sequencer uptime guard |
+| `frontend/server/_lib/onchain/payoutRouterProductionReadiness.test.ts` | H-07 PayoutRouter owner ops gate |
 
 ### Known remaining gate
 

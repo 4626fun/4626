@@ -23,8 +23,9 @@ The vault is the balance sheet of a creator economy.
 Strategies sit underneath the vault:
 
 - `CreatorCharmStrategy` for Uniswap/Charm LP management
-- `SolanaStrategy` for Base-side accounting of remote Solana allocation
 - canonical Ajna path: `ERC4626StrategyAdapter -> AjnaERC4626Vault -> AjnaVaultAuth + AjnaVaultBuffer`
+
+Solana-side tradable shares use **ShareOFT** bridged from Base (`solana_ovault_mesh` at finalize).
 
 The old direct Ajna contract path has been removed from the repo. The only supported Ajna sleeve is the nested adapter-backed bundle registered on `CreatorOVault`.
 

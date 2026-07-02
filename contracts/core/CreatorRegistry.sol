@@ -48,6 +48,10 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
 
     /// @notice Authorized factories that can register Creator Coins
     mapping(address => bool) public authorizedFactories;
+    /// @dev FIX: AUDIT-2026-07-01-M17 — optional codehash pin for authorized factories.
+    mapping(address => bytes32) public approvedFactoryCodehashes;
+
+    error FactoryCodehashMismatch(address factory, bytes32 expected, bytes32 actual);
 
     // =================================
     // REMOTE OFT PEER TRACKING (Hub-Centric)
@@ -189,8 +193,21 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
      */
     function setAuthorizedFactory(address _factory, bool _authorized) external onlyOwner {
         if (_factory == address(0)) revert ZeroAddress();
+        bytes32 expected = approvedFactoryCodehashes[_factory];
+        if (expected != bytes32(0)) {
+            bytes32 actual;
+            assembly {
+                actual := extcodehash(_factory)
+            }
+            if (actual != expected) revert FactoryCodehashMismatch(_factory, expected, actual);
+        }
         authorizedFactories[_factory] = _authorized;
         emit FactoryAuthorized(_factory, _authorized);
+    }
+
+    function approveFactoryCodehash(address factory, bytes32 codehash) external onlyOwner {
+        if (factory == address(0)) revert ZeroAddress();
+        approvedFactoryCodehashes[factory] = codehash;
     }
 
     // =================================

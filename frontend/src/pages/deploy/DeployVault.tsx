@@ -2421,7 +2421,7 @@ function DeployVaultBatcher({
       ajnaVaultAuth: keccak256(DEPLOY_BYTECODE.AjnaVaultAuth as Hex),
       ajnaVault: keccak256(DEPLOY_BYTECODE.AjnaERC4626Vault as Hex),
       erc4626StrategyAdapter: keccak256(DEPLOY_BYTECODE.ERC4626StrategyAdapter as Hex),
-      solanaStrategy: keccak256(DEPLOY_BYTECODE.SolanaStrategy as Hex),
+      solanaStrategy: ZERO_BYTES32 as Hex,
     } as const
   }, [])
 
@@ -2818,7 +2818,6 @@ function DeployVaultBatcher({
       const fallbackUniswapRouter = normalizeAddressLike((CONTRACTS as any).swapRouter ?? BASE_SWAP_ROUTER)
       const fallbackUniswapV3Factory = normalizeAddressLike((CONTRACTS as any).uniswapV3Factory ?? null)
       const fallbackAjnaFactory = normalizeAddressLike((CONTRACTS as any).ajnaErc20Factory ?? null)
-      const fallbackSolanaBridge = normalizeAddressLike((CONTRACTS as any).solanaBridgeAdapter ?? null)
 
       const [phase3HelperRaw, usdcRaw, uniswapRouterRaw, uniswapV3FactoryRaw, ajnaFactoryRaw] = await Promise.all([
         publicClient!
@@ -2878,7 +2877,6 @@ function DeployVaultBatcher({
       const uniswapRouterAddress = normalizeAddressLike(uniswapRouterRaw) ?? fallbackUniswapRouter
       const uniswapV3FactoryAddress = normalizeAddressLike(uniswapV3FactoryRaw) ?? fallbackUniswapV3Factory
       const ajnaFactoryAddress = normalizeAddressLike(ajnaFactoryRaw) ?? fallbackAjnaFactory
-      const solanaBridgeAddress = fallbackSolanaBridge
 
       let v3PoolAddress: Address | null = null
       if (uniswapV3FactoryAddress && usdcAddress) {
@@ -2995,14 +2993,12 @@ function DeployVaultBatcher({
       const ajnaVaultAuthSalt = saltFor(baseSalt, 'ajnaVaultAuth')
       const ajnaVaultSalt = saltFor(baseSalt, 'ajnaVault')
       const ajnaStrategySalt = saltFor(baseSalt, 'ajnaStrategyAdapter')
-      const solanaStrategySalt = saltFor(baseSalt, 'solanaStrategy')
       const charmStrategySalt = saltFor(baseSalt, 'charmStrategyV3')
 
       let creatorCharmStrategyAddress: Address | null = null
       let ajnaVaultAuthAddress: Address | null = null
       let ajnaVaultAddress: Address | null = null
       let erc4626StrategyAdapterAddress: Address | null = null
-      let solanaStrategyAddress: Address | null = null
 
       if (phase3HelperAddress && expectedCreate2Deployer) {
         const ajnaAuthArgs = encodeAbiParameters(parseAbiParameters('address'), [phase3HelperAddress])
@@ -3044,28 +3040,6 @@ function DeployVaultBatcher({
           })
         }
 
-        if (solanaBridgeAddress && expectedProtocolTreasury) {
-          const solanaStrategyArgs = encodeAbiParameters(
-            parseAbiParameters('address,address,address,address,uint64,uint16,uint16,address'),
-            [
-              expectedPhase.vault,
-              creatorToken,
-              phase3HelperAddress,
-              expectedProtocolTreasury,
-              DEFAULT_SOLANA_MAX_NAV_AGE,
-              DEFAULT_SOLANA_MAX_NAV_DELTA_BPS,
-              DEFAULT_SOLANA_MIN_BASE_LIQUIDITY_BPS,
-              solanaBridgeAddress,
-            ],
-          )
-          const solanaStrategyInitCode = concatHex([DEPLOY_BYTECODE.SolanaStrategy as Hex, solanaStrategyArgs])
-          solanaStrategyAddress = predictCreate2Address({
-            create2Deployer: expectedCreate2Deployer,
-            salt: solanaStrategySalt,
-            initCode: solanaStrategyInitCode,
-          })
-        }
-
         if (usdcAddress && uniswapRouterAddress && charmVaultAddress && v3PoolAddress) {
           const charmStrategyArgs = encodeAbiParameters(
             parseAbiParameters('address,address,address,address,address,address,address'),
@@ -3097,7 +3071,6 @@ function DeployVaultBatcher({
         ajnaVaultAuth: ajnaVaultAuthAddress,
         ajnaVault: ajnaVaultAddress,
         erc4626StrategyAdapter: erc4626StrategyAdapterAddress,
-        solanaStrategy: solanaStrategyAddress,
       }
     },
   })
@@ -3115,7 +3088,6 @@ function DeployVaultBatcher({
       phase3Expected?.ajnaVaultAuth,
       phase3Expected?.ajnaVault,
       phase3Expected?.erc4626StrategyAdapter,
-      phase3Expected?.solanaStrategy,
       phase,
     ],
     enabled: !!publicClient && !!phase3Expected,
@@ -3133,7 +3105,6 @@ function DeployVaultBatcher({
             ajnaVaultAuth: boolean | null
             ajnaVault: boolean | null
             erc4626StrategyAdapter: boolean | null
-            solanaStrategy: boolean | null
           }
         | undefined
       if (!data) return 5_000
@@ -3152,7 +3123,6 @@ function DeployVaultBatcher({
         ajnaVaultAuth: boolean | null
         ajnaVault: boolean | null
         erc4626StrategyAdapter: boolean | null
-        solanaStrategy: boolean | null
       } = {
         v3Pool: null,
         charmVault: null,
@@ -3161,7 +3131,6 @@ function DeployVaultBatcher({
         ajnaVaultAuth: null,
         ajnaVault: null,
         erc4626StrategyAdapter: null,
-        solanaStrategy: null,
       }
 
       const entries = Object.entries(phase3Expected ?? {}) as Array<[keyof typeof out, Address | null]>
@@ -3185,8 +3154,7 @@ function DeployVaultBatcher({
       !phase3Expected.creatorCharmStrategy &&
       !phase3Expected.ajnaVaultAuth &&
       !phase3Expected.ajnaVault &&
-      !phase3Expected.erc4626StrategyAdapter &&
-      !phase3Expected.solanaStrategy
+      !phase3Expected.erc4626StrategyAdapter
     return hasPools && missingHelperDependent
   }, [phase3Expected])
 
@@ -9120,7 +9088,7 @@ function DeployVaultMain() {
       ajnaVaultAuth: keccak256(DEPLOY_BYTECODE.AjnaVaultAuth as Hex),
       ajnaVault: keccak256(DEPLOY_BYTECODE.AjnaERC4626Vault as Hex),
       erc4626StrategyAdapter: keccak256(DEPLOY_BYTECODE.ERC4626StrategyAdapter as Hex),
-      solanaStrategy: keccak256(DEPLOY_BYTECODE.SolanaStrategy as Hex),
+      solanaStrategy: ZERO_BYTES32 as Hex,
     } as const
   }, [])
 
@@ -9143,7 +9111,6 @@ function DeployVaultMain() {
       deployCodeIds.ajnaVaultAuth,
       deployCodeIds.ajnaVault,
       deployCodeIds.erc4626StrategyAdapter,
-      deployCodeIds.solanaStrategy,
     ],
     enabled: Boolean(publicClient && creatorVaultBatcherAddress),
     staleTime: 15_000,
@@ -9261,7 +9228,6 @@ function DeployVaultMain() {
           label: 'ERC4626StrategyAdapter',
           codeId: deployCodeIds.erc4626StrategyAdapter,
         },
-        { key: 'solanaStrategy', label: 'SolanaStrategy', codeId: deployCodeIds.solanaStrategy },
       ] as const
 
       const pointerResults = await readClient.multicall({

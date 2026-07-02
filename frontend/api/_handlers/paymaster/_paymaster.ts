@@ -929,7 +929,6 @@ const CREATOR_CHARM_STRATEGY_CODE_ID = keccak256(DEPLOY_BYTECODE.CreatorCharmStr
 const AJNA_VAULT_AUTH_CODE_ID = keccak256(DEPLOY_BYTECODE.AjnaVaultAuth as Hex)
 const AJNA_ERC4626_VAULT_CODE_ID = keccak256(DEPLOY_BYTECODE.AjnaERC4626Vault as Hex)
 const ERC4626_STRATEGY_ADAPTER_CODE_ID = keccak256(DEPLOY_BYTECODE.ERC4626StrategyAdapter as Hex)
-const SOLANA_STRATEGY_CODE_ID = keccak256(DEPLOY_BYTECODE.SolanaStrategy as Hex)
 const CHARM_ALPHA_VAULT_DEPLOY_SENTINEL_CODE_ID = keccak256(toBytes('charm-factory-sentinel-v1'))
 
 const BYTECODE_STORE_ABI = [
@@ -2407,7 +2406,7 @@ async function validateInnerCalls(params: {
             ajnaVaultAuth: AJNA_VAULT_AUTH_CODE_ID,
             ajnaVault: AJNA_ERC4626_VAULT_CODE_ID,
             erc4626StrategyAdapter: ERC4626_STRATEGY_ADAPTER_CODE_ID,
-            solanaStrategy: SOLANA_STRATEGY_CODE_ID,
+            solanaStrategy: ZERO_BYTES32,
           } as const
           // Skipped strategies can pass `bytes32(0)` for their codeId per
           // the contract patch. Only require + validate the codeIds whose

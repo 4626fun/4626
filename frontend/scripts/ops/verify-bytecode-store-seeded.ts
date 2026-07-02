@@ -62,7 +62,6 @@ const REQUIRED_MANIFEST_KEYS = [
   'AjnaVaultAuth',
   'AjnaERC4626Vault',
   'ERC4626StrategyAdapter',
-  'SolanaStrategy',
 ] as const
 
 const FRONTEND_DEPLOY_KEYS = [
@@ -77,7 +76,6 @@ const FRONTEND_DEPLOY_KEYS = [
   'AjnaVaultAuth',
   'AjnaERC4626Vault',
   'ERC4626StrategyAdapter',
-  'SolanaStrategy',
 ] as const
 
 type Manifest = {

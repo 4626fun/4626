@@ -112,6 +112,13 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
     error ResidualBalanceInvariantFailed(address token, uint256 beforeBalance, uint256 afterBalance);
     // FIX: OZ-Critical — ETH rescue error
     error ETHTransferFailed();
+    error ComposeRescueDisabled();
+    error RescueExceedsReservedBalance(address token, uint256 freeBalance, uint256 requested);
+
+    /// @dev FIX: AUDIT-2026-07-01-M12 — owner rescue only when explicitly enabled and
+    ///      cannot withdraw tokens reserved for tracked compose liabilities.
+    bool public composeRescueEnabled;
+    mapping(address => uint256) public composeReservedBalances;
 
     constructor(address _registry, address _owner) Ownable(_owner) {
         if (_registry == address(0) || _owner == address(0)) revert ZeroAddress();
@@ -132,8 +139,22 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
 
     /// @notice Rescue ERC-20 tokens stuck after a failed compose delivery.
     function rescueERC20(address token, address to, uint256 amount) external onlyOwner {
+        if (!composeRescueEnabled) revert ComposeRescueDisabled();
         if (token == address(0) || to == address(0)) revert ZeroAddress();
+        uint256 balance = IERC20(token).balanceOf(address(this));
+        uint256 reserved = composeReservedBalances[token];
+        uint256 freeBalance = balance > reserved ? balance - reserved : 0;
+        if (amount > freeBalance) revert RescueExceedsReservedBalance(token, freeBalance, amount);
         IERC20(token).safeTransfer(to, amount);
+    }
+
+    function setComposeRescueEnabled(bool enabled) external onlyOwner {
+        composeRescueEnabled = enabled;
+    }
+
+    /// @notice Record compose liability after a failed/stuck delivery is identified operationally.
+    function setComposeReservedBalance(address token, uint256 amount) external onlyOwner {
+        composeReservedBalances[token] = amount;
     }
 
     function setAllowedComposeSender(address sender, bool allowed) external onlyOwner {

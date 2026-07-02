@@ -51,7 +51,6 @@ const deployCodeIds = {
   ajnaVaultAuth: keccak256(DEPLOY_BYTECODE.AjnaVaultAuth as Hex),
   ajnaVault: keccak256(DEPLOY_BYTECODE.AjnaERC4626Vault as Hex),
   erc4626StrategyAdapter: keccak256(DEPLOY_BYTECODE.ERC4626StrategyAdapter as Hex),
-  solanaStrategy: keccak256(DEPLOY_BYTECODE.SolanaStrategy as Hex),
 } as const
 
 const codeEntries = [
@@ -69,7 +68,6 @@ const codeEntries = [
   { label: 'AjnaVaultAuth', codeId: deployCodeIds.ajnaVaultAuth },
   { label: 'AjnaERC4626Vault', codeId: deployCodeIds.ajnaVault },
   { label: 'ERC4626StrategyAdapter', codeId: deployCodeIds.erc4626StrategyAdapter },
-  { label: 'SolanaStrategy', codeId: deployCodeIds.solanaStrategy },
 ] as const
 
 async function run(rpc: string): Promise<void> {

@@ -89,7 +89,6 @@ vi.mock('../../src/deploy/bytecode.generated.js', () => ({
     AjnaVaultAuth: ('0x' + '00'.repeat(32)) as `0x${string}`,
     AjnaERC4626Vault: ('0x' + '00'.repeat(32)) as `0x${string}`,
     ERC4626StrategyAdapter: ('0x' + '00'.repeat(32)) as `0x${string}`,
-    SolanaStrategy: ('0x' + '00'.repeat(32)) as `0x${string}`,
   },
 }))
 

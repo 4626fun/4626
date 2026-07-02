@@ -96,9 +96,9 @@ weight with **10% idle** — not pick-one lanes:
 4. **Meteora (`solana_meteora_alpha_vault`)** — entitled post-deploy; operator
    provisions DLMM + Alpha Vault on the **share-mesh mint** after vault live
 
-**Retired:** `solana_bridge_strategy` (legacy Phase-3 `SolanaBridgeStrategy` TVL).
-New purchases are blocked (HTTP 410). Greenfield Solana share liquidity is
-seeded by the 30% ShareOFT auto-bridge at finalizePhase2.
+Greenfield vaults seed Solana share liquidity via Pipe A (30% ShareOFT
+auto-bridge at finalizePhase2). See
+`docs/operations/solana-share-mesh-lottery-policy.md`.
 
 All payments are one-time USDC on Base to the protocol treasury (or Stripe /
 x402 equivalents for the bundle price). Operator discounts use
@@ -300,8 +300,8 @@ on-chain and rebalances weights.
   operator), and deployment pushes from vault idle into the new
   strategy. The creator's share price is preserved across the
   rebalance (minus normal strategy exit costs: LP impermanent loss
-  realization, Ajna interest accrual). **`solana_bridge_strategy` post-deploy
-  addition is retired** — use Pipe A share mesh at deploy instead.
+  realization, Ajna interest accrual). Post-deploy Solana share exposure uses
+  Pipe A at deploy (`solana_ovault_mesh`), not Phase 3 strategy weight.
 
 ### Operator script
 
@@ -379,12 +379,6 @@ finalize. **Not** Phase 3 TVL (`solanaWeightBps` always 0 on greenfield).
 
 Meteora DLMM + Alpha Vault on the **share-mesh mint** (`■<TICKER>`).
 Included in the bundle; operator provisions after vault is live.
-
-### `solana_bridge_strategy` — RETIRED
-
-Legacy Phase-3 `SolanaBridgeStrategy` TVL lane. **Not purchasable.**
-Greenfield vaults seed Solana via Pipe A (30% ShareOFT auto-bridge at
-finalizePhase2). See `docs/operations/solana-share-mesh-lottery-policy.md`.
 
 ### Meteora operator runbook (post-deploy)
 

@@ -643,7 +643,10 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     }
 
     modifier onlyEmergencyAuthorized() {
-        if (msg.sender != emergencyAdmin && msg.sender != management && msg.sender != owner()) {
+        if (
+            msg.sender != emergencyAdmin && msg.sender != management && msg.sender != owner()
+                && msg.sender != impairmentGuardian
+        ) {
             revert Unauthorized();
         }
         _;

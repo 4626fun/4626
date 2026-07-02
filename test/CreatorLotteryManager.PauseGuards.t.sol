@@ -34,7 +34,13 @@ contract MockGaugeControllerPauseGuards {
         return jackpot;
     }
 
+    function availableJackpotReserve() external view returns (uint256) {
+        return jackpot;
+    }
+
     function payJackpot(address winner, uint256 shares) external {
+        require(shares <= jackpot, "InsufficientJackpot");
+        jackpot -= shares;
         payCount++;
         lastWinner = winner;
         lastShares = shares;

@@ -227,7 +227,11 @@ contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
     }
 
     // FIX: G-18 — sweep path for unclaimed rewards in non-zero-vote epochs after extended grace
-    event StaleEpochSwept(uint256 indexed epoch, address indexed vault, address indexed token, uint256 amount);
+    /// @dev Grace window defaults to ~6 months (`staleSweepGraceEpochs` epochs). Operators
+    ///      should verify `previewClaim` totals before sweeping (AUDIT-2026-07-01-M14).
+    event StaleEpochSwept(
+        uint256 indexed epoch, address indexed vault, address indexed token, uint256 amount, uint256 graceEpochs
+    );
 
     function sweepStaleEpochRewards(address vault, uint256 epoch) external onlyOwner nonReentrant returns (uint256 amount) {
         if (vault == address(0)) revert ZeroAddress();
@@ -251,7 +255,7 @@ contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
         epochVaultRewards[epoch][vault] = 0;
         IERC20(token).safeTransfer(treasury, amount);
 
-        emit StaleEpochSwept(epoch, vault, token, amount);
+        emit StaleEpochSwept(epoch, vault, token, amount, staleSweepGraceEpochs);
     }
 
     // ================================

@@ -16,7 +16,7 @@ import {
     MockUniswapV3FactoryForPhase3,
     MockUniswapV3PoolForPhase3,
     MockVaultStrategyManagerForPhase3
-} from "./DeploymentBatcher.SolanaStrategyPhase3.t.sol";
+} from "./helpers/DeploymentBatcherPhase3Mocks.sol";
 
 contract DeploymentBatcherPhase3WeightHandler is Test {
     address internal constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa;

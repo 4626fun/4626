@@ -204,9 +204,8 @@ contract DeploymentBatcherPhase3Helper {
             IOwnableTransfer(out.charmStrategy).transferOwnership(protocolTreasury);
         }
 
-        // SolanaBridgeStrategy Phase-3 lane removed for greenfield deploys.
         // Solana share liquidity is seeded via the 30% ShareOFT auto-bridge at
-        // finalizePhase2 instead of a Phase-3 SolanaBridgeStrategy allocation.
+        // finalizePhase2 (Pipe A / solana_ovault_mesh).
         if (params.solanaWeightBps != 0) revert InvalidWeight();
     }
 
@@ -1622,6 +1621,10 @@ contract DeploymentBatcher is ReentrancyGuard {
     error InvalidRolePolicyManager();
     error InvalidPhase2Module();
     error InvalidPhase1Module();
+    error ModuleCodehashMismatch(address module, bytes32 expected, bytes32 actual);
+
+    /// @dev FIX: AUDIT-2026-07-01-M17 — optional codehash allowlist for hot-swapped modules.
+    mapping(address => bytes32) public approvedPhaseModuleCodehashes;
     error Phase1ModuleMissing();
 
     ICreatorRegistry public immutable registry;
@@ -2286,14 +2289,31 @@ contract DeploymentBatcher is ReentrancyGuard {
      */
     function setPhase2Module(address _phase2Module) external onlyProtocolTreasury {
         if (_phase2Module == address(0)) revert ZeroAddress();
+        _validatePhaseModuleCodehash(_phase2Module);
         if (DeploymentBatcherPhase2Module(_phase2Module).batcher() != address(this)) revert InvalidPhase2Module();
         phase2Module = DeploymentBatcherPhase2Module(_phase2Module);
     }
 
     function setPhase1Module(address _phase1Module) external onlyProtocolTreasury {
         if (_phase1Module == address(0)) revert ZeroAddress();
+        _validatePhaseModuleCodehash(_phase1Module);
         if (DeploymentBatcherPhase1Module(_phase1Module).batcher() != address(this)) revert InvalidPhase1Module();
         phase1Module = DeploymentBatcherPhase1Module(_phase1Module);
+    }
+
+    function approvePhaseModuleCodehash(address module, bytes32 codehash) external onlyProtocolTreasury {
+        if (module == address(0)) revert ZeroAddress();
+        approvedPhaseModuleCodehashes[module] = codehash;
+    }
+
+    function _validatePhaseModuleCodehash(address module) internal view {
+        bytes32 expected = approvedPhaseModuleCodehashes[module];
+        if (expected == bytes32(0)) return;
+        bytes32 actual;
+        assembly {
+            actual := extcodehash(module)
+        }
+        if (actual != expected) revert ModuleCodehashMismatch(module, expected, actual);
     }
 
     /**

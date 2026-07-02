@@ -12,7 +12,9 @@ import {IStrategy} from "../../interfaces/IStrategy.sol";
 import {IStrategyValuation} from "../../interfaces/IStrategyValuation.sol";
 
 import {CreatorOVaultModuleBase} from "./CreatorOVaultModuleBase.sol";
+import {CreatorOVaultLiquidityLib} from "../libraries/CreatorOVaultLiquidityLib.sol";
 import {ICreatorOVaultModuleIdentity} from "./ICreatorOVaultModuleIdentity.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 interface ICreatorOVaultStrategiesModuleInternal {
     function __withdrawFromStrategies(uint256 amountNeeded) external returns (uint256 totalWithdrawn);
@@ -60,6 +62,10 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     uint8 internal constant MAX_VALUATION_MISS_THRESHOLD = 30;
     uint256 internal constant IMPAIR_REASON_MAX = 7;
     uint8 internal constant CCA_PHASE_AUCTION_LIVE = 1;
+    uint256 internal constant OP_DEPOSIT = 1 << 0;
+    uint256 internal constant OP_WITHDRAW = 1 << 1;
+
+    error OperatorPermissionDenied(address operator, uint256 requiredPerm);
 
     // ---- events (must match vault signatures) ----
     event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares);
@@ -309,6 +315,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     }
 
     function deposit(uint256 assets, address receiver) external onlyDelegateCall returns (uint256 shares) {
+        _enforceOperatorPermIfGranted(OP_DEPOSIT);
         if (vaultMode != VaultMode.Normal) revert VaultNotNormal();
         if (_isCcaAuctionLive()) revert CcaAuctionDepositBlocked();
         if (assets == 0) revert ZeroAmount();
@@ -354,6 +361,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     }
 
     function mint(uint256 shares, address receiver) external onlyDelegateCall returns (uint256 assets) {
+        _enforceOperatorPermIfGranted(OP_DEPOSIT);
         if (vaultMode != VaultMode.Normal) revert VaultNotNormal();
         if (_isCcaAuctionLive()) revert CcaAuctionDepositBlocked();
         if (shares == 0) revert ZeroShares();
@@ -395,6 +403,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     }
 
     function redeem(uint256 shares, address receiver, address owner_) external onlyDelegateCall returns (uint256 assets) {
+        _enforceOperatorPermIfGranted(OP_WITHDRAW);
         if (vaultMode != VaultMode.Normal) revert VaultNotNormal();
         // FIX: L-01 — enforce pause on redeem to align with maxWithdraw/maxRedeem returning 0
         if (paused) revert Paused();
@@ -426,6 +435,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     }
 
     function withdraw(uint256 assets, address receiver, address owner_) external onlyDelegateCall returns (uint256 shares) {
+        _enforceOperatorPermIfGranted(OP_WITHDRAW);
         if (vaultMode != VaultMode.Normal) revert VaultNotNormal();
         // FIX: L-01 — enforce pause on withdraw to align with maxWithdraw/maxRedeem returning 0
         if (paused) revert Paused();
@@ -461,6 +471,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     // =================================
 
     function queueWithdrawal(uint256 shares, address receiver) external onlyDelegateCall {
+        _enforceOperatorPermIfGranted(OP_WITHDRAW);
         if (shares == 0) revert ZeroShares();
         if (receiver == address(0)) revert ZeroAddress();
         _processProfitUnlock();
@@ -572,6 +583,9 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         uint256 userShares = _balances[owner_];
         if (userShares == 0) return 0;
         uint256 assetsFromShares = IERC4626(address(this)).previewRedeem(userShares);
+        CreatorOVaultLiquidityLib.LiquiditySnapshot memory snap = CreatorOVaultLiquidityLib.snapshot(address(this));
+        uint256 liquidityCap = CreatorOVaultLiquidityLib.maxInstantWithdrawAssets(snap);
+        if (assetsFromShares > liquidityCap) assetsFromShares = liquidityCap;
         if (largeWithdrawalThreshold == 0) return assetsFromShares;
         uint256 maxSyncAssets = largeWithdrawalThreshold - 1;
         return assetsFromShares > maxSyncAssets ? maxSyncAssets : assetsFromShares;
@@ -582,11 +596,25 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         if (paused) return 0;
         uint256 userShares = _balances[owner_];
         if (userShares == 0) return 0;
-        if (largeWithdrawalThreshold == 0) return userShares;
 
-        uint256 maxSyncAssets = largeWithdrawalThreshold - 1;
-        uint256 syncShares = IERC4626(address(this)).previewWithdraw(maxSyncAssets);
-        return syncShares > userShares ? userShares : syncShares;
+        CreatorOVaultLiquidityLib.LiquiditySnapshot memory snap = CreatorOVaultLiquidityLib.snapshot(address(this));
+        uint256 liquidityCap = CreatorOVaultLiquidityLib.maxInstantWithdrawAssets(snap);
+        uint256 maxAssetWithdraw = liquidityCap;
+        if (largeWithdrawalThreshold > 0) {
+            uint256 syncCap = largeWithdrawalThreshold - 1;
+            if (maxAssetWithdraw > syncCap) maxAssetWithdraw = syncCap;
+        }
+        if (maxAssetWithdraw == 0) return 0;
+
+        uint256 liquidityShares = IERC4626(address(this)).previewWithdraw(maxAssetWithdraw);
+        return liquidityShares > userShares ? userShares : liquidityShares;
+    }
+
+    function _enforceOperatorPermIfGranted(uint256 perm) internal view {
+        if (msg.sender == Ownable(address(this)).owner()) return;
+        uint256 granted = _operatorPerms[operatorEpoch][msg.sender];
+        if (granted == 0) return;
+        if ((granted & perm) == 0) revert OperatorPermissionDenied(msg.sender, perm);
     }
 
     // =================================
@@ -891,6 +919,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     }
 
     function injectCapital(uint256 amount) external onlyDelegateCall {
+        _enforceOperatorPermIfGranted(OP_DEPOSIT);
         if (amount == 0) revert ZeroAmount();
 
         uint256 priceBefore = pricePerShare();
