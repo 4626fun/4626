@@ -6,7 +6,7 @@ sidebar_position: 5
 # Current Contract Inventory (Base)
 
 Generated on: 2026-06-22
-Scope: current live Base infra addresses plus the canonical `v1.14.1` greenfield deploy target for new per-creator vaults.
+Scope: current live Base infra addresses plus the canonical `v1.15.0` greenfield deploy target for new per-creator vaults.
 
 ## Sources
 
@@ -25,18 +25,18 @@ Scope: current live Base infra addresses plus the canonical `v1.14.1` greenfield
 | `vaultActivationBatcher` | `0x5EaFfa41f07a1aAf6ecd38833fd128C53fD8669A` |
 | `lotteryManager` | `0x29F901864D65Eb848BC548ebCEAcD6dAD39EFd26` |
 | `vrfConsumer` | `0x86B605400DBb67cc4756493c7791422184e4dC59` |
-| `solanaBridgeAdapter` | `0x8e99bb0270bbdf2d64ff6854509CD2410A28fBae` |
-| `bytecodeStore` | `0xb3712E84F123e7C5390913E30FC6BBD5AEd2a314` |
-| `create2DeployerFromStore` | `0x2fA570Cb17925Da86b303D4651f06b83057a10c4` |
+| `solanaBridgeAdapter` | `0x363662F9728A9fd12c7CA398e5A6d1d9E7De07F1` |
+| `bytecodeStore` | `0x7D1029a832E2BEd2C961bC912b623b763862Ad3C` |
+| `create2DeployerFromStore` | `0xdC75A18C521f6Ae1ACa112A98E46c8231F431BC0` |
 | `creatorOVaultCoreModule` | `0xD4553478780571A1A5F6cCCC0735F897F15a85Cf` |
 | `creatorOVaultStrategiesModule` | `0x4036e3D2d029451cEB68d521a5D0233F56518681` |
 | `creatorOVaultAdminModule` | `0xDd136c20F8f6688089e55a6CA8709718c5183307` |
-| `deploymentBatcher` | `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1` |
-| `deploymentBatcherPhase1Module` | `0x0fac3F8040879eF1ca6cc4572cc27f0908a8f266` |
-| `deploymentBatcherPhase2Module` | `0xde192645Fb02dD05f586930e55D709E89c320435` |
-| `deploymentBatcherPhase3Helper` | `0xE0971a924E33251556fE73a4025166701b772dBe` |
-| `deploymentBatcherUniV4Helper` | `0xD2c68F175FB4DB4069A2ebBc3f02B31C635438eb` |
-| `deploymentBatcherUtilsHelper` | `0xE41231e399511baaDa8844C9D1c83C096e3f2E60` |
+| `deploymentBatcher` | `0x17163e67dED6B45bd2A7E6a509A32fB7b0cB6D33` |
+| `deploymentBatcherPhase1Module` | `0x829D0096fF18F096469Ae9D440f58Ae0D106ff06` |
+| `deploymentBatcherPhase2Module` | `0x362495324370f68b30a57743254b154eD6115524` |
+| `deploymentBatcherPhase3Helper` | `0xa5Ba1121214b9187749dfeb1382393c1941e0Da8` |
+| `deploymentBatcherUniV4Helper` | `0xa2D06A329eD7b413646509845412f8C73CbbeDBF` |
+| `deploymentBatcherUtilsHelper` | `0x5B59219683b748a321f84eFDfe5A29d3bB945B27` |
 | `permit2` | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
 | `usdc` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 

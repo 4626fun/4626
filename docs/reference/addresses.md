@@ -5,7 +5,7 @@ sidebar_position: 1
 
 # Contract Addresses
 
-Canonical deployed contract addresses for 4626 on Base mainnet (**v1.14.1**).
+Canonical deployed contract addresses for 4626 on Base mainnet (**v1.15.0**).
 
 For launch procedures, see [Getting started](/getting-started). This page lists **shared infrastructure** (batcher, factories, registry). Per-creator vault, wrapper, and ShareOFT addresses are emitted at deploy and available in the application and onchain events.
 
@@ -19,53 +19,52 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 
 | Contract | Address |
 |----------|---------|
-| CreatorRegistry | `0xDD7B106a15540bA2F59464590222bF47D8C9394E` |
-| CreatorOVaultFactory | `0xf4a4d70D9fB3b29c56eB2aaE264FBd3DF9221A6a` |
-| VaultActivationBatcher | `0x5EaFfa41f07a1aAf6ecd38833fd128C53fD8669A` |
-| CreatorLotteryManager | `0x29F901864D65Eb848BC548ebCEAcD6dAD39EFd26` |
-| CreatorVRFConsumerV2_5 | `0x86B605400DBb67cc4756493c7791422184e4dC59` |
-| SolanaBridgeAdapter | `0x8e99bb0270bbdf2d64ff6854509CD2410A28fBae` |
-| UniversalBytecodeStoreV2 | `0xb3712E84F123e7C5390913E30FC6BBD5AEd2a314` |
-| UniversalCreate2DeployerFromStore | `0x2fA570Cb17925Da86b303D4651f06b83057a10c4` |
-| CreatorOVaultCoreModule | `0xD4553478780571A1A5F6cCCC0735F897F15a85Cf` |
-| CreatorOVaultStrategiesModule | `0x4036e3D2d029451cEB68d521a5D0233F56518681` |
-| CreatorOVaultAdminModule | `0xDd136c20F8f6688089e55a6CA8709718c5183307` |
-| DeploymentBatcher | `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1` |
-| DeploymentBatcherPhase1Module | `0x0fac3F8040879eF1ca6cc4572cc27f0908a8f266` |
-| DeploymentBatcherPhase2Module | `0xde192645Fb02dD05f586930e55D709E89c320435` |
-| DeploymentBatcherPhase3Helper | `0xE0971a924E33251556fE73a4025166701b772dBe` |
-| DeploymentBatcherUniV4Helper | `0xD2c68F175FB4DB4069A2ebBc3f02B31C635438eb` |
-| DeploymentBatcherUtilsHelper | `0xE41231e399511baaDa8844C9D1c83C096e3f2E60` |
+| CreatorRegistry | `0x1eb9A364a3E763dD9249ba3413Dc19E13c1F4461` |
+| CreatorOVaultFactory | `0x26b74b1d3AadD17e714068d259051409C9f942d1` |
+| VaultActivationBatcher | `0xB06d99c81994F5829ba462c4afA78eCff75bC281` |
+| CreatorLotteryManager | `0xD62a8a2F4c25587FA80ED5782b50Af6654122b0b` |
+| CreatorVRFConsumerV2_5 | `0x933A3BE4a4BF00dD3B71c50Dee4972539a32bE47` |
+| SolanaBridgeAdapter | `0x363662F9728A9fd12c7CA398e5A6d1d9E7De07F1` |
+| UniversalBytecodeStoreV2 | `0x7D1029a832E2BEd2C961bC912b623b763862Ad3C` |
+| UniversalCreate2DeployerFromStore | `0xdC75A18C521f6Ae1ACa112A98E46c8231F431BC0` |
+| CreatorOVaultCoreModule | `0x396cF02c219cfA5288C3e472Fbc9634fe4D44B68` |
+| CreatorOVaultStrategiesModule | `0x21BCC0461fC5890ca2a3C06707EAaea30736e8f7` |
+| CreatorOVaultAdminModule | `0xba261a7B732f0a743Ea7187567ff93Ea3C9af93f` |
+| DeploymentBatcher | `0x17163e67dED6B45bd2A7E6a509A32fB7b0cB6D33` |
+| DeploymentBatcherPhase1Module | `0x829D0096fF18F096469Ae9D440f58Ae0D106ff06` |
+| DeploymentBatcherPhase2Module | `0x362495324370f68b30a57743254b154eD6115524` |
+| DeploymentBatcherPhase3Helper | `0xa5Ba1121214b9187749dfeb1382393c1941e0Da8` |
+| DeploymentBatcherUniV4Helper | `0xa2D06A329eD7b413646509845412f8C73CbbeDBF` |
+| DeploymentBatcherUtilsHelper | `0x5B59219683b748a321f84eFDfe5A29d3bB945B27` |
 
 Notes:
-- **v1.14.1** is a full shared/global + split Phase-1 refresh that keeps CreatorOVault `CreatorOVaultModuleStorage.v3` and rotates the batcher shell, helper modules, registry, and store/deployer pair.
+- **v1.15.0** is a full shared/global + split Phase-1 refresh with July 2026 audit fixes. Phase 3 is **45% Charm + 45% Ajna + 10% idle**; Solana is **ShareOFT mesh at Phase 2 finalize** (~30% via Pipe A).
 - `DeploymentBatcher` deploys as a slim shell; helpers and `DeploymentBatcherPhase1Module` wire post-deploy via protocol treasury Safe (`wireDeploymentHelpers` + `setPhase1Module`).
-- **New vault launches** (greenfield) use **Phase1Module immutables** (`phase1Module()` → `0x0fac…`), not batcher-shell module getters (shell may still expose legacy `.current` modules).
-- Retired v1.13.0 Phase1Module (`0x19Bd8…`) is for **legacy vaults** only — not for new launches after the v1.14.1 cutover.
-- Pre-v1.14.1 batchers (`0xa99058…` and older) are deprecated for **new vault launches**.
+- **New vault launches** use **Phase1Module immutables** (`phase1Module()` → `0x829D…`), not batcher-shell module getters.
+- Pre-v1.15.0 batchers (`0x660B25…`, `0xa99058…`, and older) are deprecated for **new vault launches**.
 
-## Environment cutover (v1.14.1)
+## Environment cutover (v1.15.0)
 
 After an infra epoch deploy, update **local `.env`**, **Vercel** (`production`, `preview`, `development`), and any operator host env to these keys. Canonical values:
 
-| Server env | Client (Vite) env | v1.14.1 value |
+| Server env | Client (Vite) env | v1.15.0 value |
 |------------|-------------------|----------------|
-| `CREATOR_REGISTRY` | `VITE_REGISTRY` | `0xDD7B106a15540bA2F59464590222bF47D8C9394E` |
-| `CREATOR_FACTORY` | `VITE_FACTORY` | `0xf4a4d70D9fB3b29c56eB2aaE264FBd3DF9221A6a` |
-| `VAULT_ACTIVATION_BATCHER` | `VITE_VAULT_ACTIVATION_BATCHER` | `0x5EaFfa41f07a1aAf6ecd38833fd128C53fD8669A` |
+| `CREATOR_REGISTRY` | `VITE_REGISTRY` | `0x1eb9A364a3E763dD9249ba3413Dc19E13c1F4461` |
+| `CREATOR_FACTORY` | `VITE_FACTORY` | `0x26b74b1d3AadD17e714068d259051409C9f942d1` |
+| `VAULT_ACTIVATION_BATCHER` | `VITE_VAULT_ACTIVATION_BATCHER` | `0xB06d99c81994F5829ba462c4afA78eCff75bC281` |
 | `LOTTERY_MANAGER` | `VITE_LOTTERY_MANAGER` | `0x29F901864D65Eb848BC548ebCEacD6dAD39EFd26` |
-| `UNIVERSAL_BYTECODE_STORE` | `VITE_UNIVERSAL_BYTECODE_STORE` | `0xb3712E84F123e7C5390913E30FC6BBD5AEd2a314` |
-| `UNIVERSAL_CREATE2_FROM_STORE`, `UNIVERSAL_CREATE2_DEPLOYER` | `VITE_UNIVERSAL_CREATE2_DEPLOYER` | `0x2fA570Cb17925Da86b303D4651f06b83057a10c4` |
-| `DEPLOYMENT_BATCHER`, `CREATOR_VAULT_BATCHER` | `VITE_CREATOR_VAULT_BATCHER` | `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1` |
-| `CREATOR_VAULT_BATCHER_AUTO_HANDOFF` | `VITE_CREATOR_VAULT_BATCHER_AUTO_HANDOFF` | `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1` |
-| `SOLANA_BRIDGE_ADAPTER` | `VITE_SOLANA_BRIDGE_ADAPTER` | `0x8e99bb0270bbdf2d64ff6854509CD2410A28fBae` |
-| — | `VITE_DEPLOYMENT_VERSION` | `v1.14.1` |
+| `UNIVERSAL_BYTECODE_STORE` | `VITE_UNIVERSAL_BYTECODE_STORE` | `0x7D1029a832E2BEd2C961bC912b623b763862Ad3C` |
+| `UNIVERSAL_CREATE2_FROM_STORE`, `UNIVERSAL_CREATE2_DEPLOYER` | `VITE_UNIVERSAL_CREATE2_DEPLOYER` | `0xdC75A18C521f6Ae1ACa112A98E46c8231F431BC0` |
+| `DEPLOYMENT_BATCHER`, `CREATOR_VAULT_BATCHER` | `VITE_CREATOR_VAULT_BATCHER` | `0x17163e67dED6B45bd2A7E6a509A32fB7b0cB6D33` |
+| `CREATOR_VAULT_BATCHER_AUTO_HANDOFF` | `VITE_CREATOR_VAULT_BATCHER_AUTO_HANDOFF` | `0x17163e67dED6B45bd2A7E6a509A32fB7b0cB6D33` |
+| `SOLANA_BRIDGE_ADAPTER` | `VITE_SOLANA_BRIDGE_ADAPTER` | `0x363662F9728A9fd12c7CA398e5A6d1d9E7De07F1` |
+| — | `VITE_DEPLOYMENT_VERSION` | `v1.15.0` |
 
 `VITE_DEPLOYMENT_VERSION` pins the CREATE2 namespace for **new vault launches**.
 
-**Deploy script env overrides:** when running `./script/deploy-infra-v2.sh`, pin `REGISTRY=0xDD7B106…`, `VAULT_ACTIVATION_BATCHER=0x5EaFfa41…`, and `PROTOCOL_AUTOMATION` to the protocol treasury Safe (`0x7d429e…`) if not already in `.env` — stale local values predict the wrong CREATE2 batcher address.
+**Deploy script env overrides:** when running `./script/deploy-infra-v2.sh`, pin `REGISTRY=0x1eb9A3…`, `VAULT_ACTIVATION_BATCHER=0xB06d99…`, and `PROTOCOL_AUTOMATION_SAFE=0x7d429e…` if not already in `.env`.
 
-Redeploy the Vercel app after env changes; run `pnpm -C frontend ops:verify-akita-prelaunch --production` and `verify-bytecode-store-seeded.ts` against `deployments/base/v1.14.1-bytecode-manifest.json` before traffic cutover.
+Redeploy the Vercel app after env changes; run `pnpm -C frontend ops:verify-akita-prelaunch --production` and `verify-bytecode-store-seeded.ts` against `deployments/base/v1.15.0-bytecode-manifest.json` before traffic cutover.
 
 ### Per-Creator Deployments
 

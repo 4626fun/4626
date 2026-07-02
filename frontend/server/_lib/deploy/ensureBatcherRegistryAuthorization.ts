@@ -1,7 +1,7 @@
 import { encodeFunctionData, getAddress, type Address, type Hex } from 'viem'
 
 /** Base mainnet CreatorRegistry — see docs/reference/addresses.md */
-export const BASE_MAINNET_CREATOR_REGISTRY = '0xDD7B106a15540bA2F59464590222bF47D8C9394E' as const
+export const BASE_MAINNET_CREATOR_REGISTRY = '0x1eb9A364a3E763dD9249ba3413Dc19E13c1F4461' as const
 
 const CREATOR_REGISTRY_ABI = [
   {

@@ -162,8 +162,6 @@ contract DeployBaseMainnetDeployer is Script {
         return keccak256(bytes(tag));
     }
 
-    // Shell initcode ~53KB ⇒ ~10.6M deposit + constructor; keep under Base 25M tx cap (~24.8M stipend).
-    uint256 constant DEFAULT_DEPLOYMENT_BATCHER_CREATE2_GAS = 20_000_000;
 
     function _predictBatcherShellAddress(
         Config memory cfg,
@@ -193,10 +191,6 @@ contract DeployBaseMainnetDeployer is Script {
         return address(deployer.phase1Module()) != address(0) && address(deployer.phase2Module()) != address(0)
             && address(deployer.phase3Helper()) != address(0) && address(deployer.uniV4Helper()) != address(0)
             && address(deployer.utilsHelper()) != address(0);
-    }
-
-    function _deploymentBatcherCreate2Gas() internal returns (uint256) {
-        return vm.envOr("DEPLOYMENT_BATCHER_CREATE2_GAS", DEFAULT_DEPLOYMENT_BATCHER_CREATE2_GAS);
     }
 
     function _deployCreate2IfMissing(bytes32 salt, bytes memory initCode) internal {
@@ -586,12 +580,7 @@ contract DeployBaseMainnetDeployer is Script {
                 address(0),
                 address(0)
             );
-            uint256 batcherCreate2Gas = _deploymentBatcherCreate2Gas();
-            console2.log("DeploymentBatcher CREATE2 gas stipend:", batcherCreate2Gas);
-            (bool ok,) = CREATE2_FACTORY_ADDR.call{gas: batcherCreate2Gas}(
-                abi.encodePacked(salts.deploymentBatcher, deployerInit)
-            );
-            require(ok, "DEPLOYMENT_BATCHER deploy failed");
+            _deployCreate2IfMissing(salts.deploymentBatcher, deployerInit);
         }
 
         // Authorize deploy-capable callers on the create2 deployer (after helpers are wired).

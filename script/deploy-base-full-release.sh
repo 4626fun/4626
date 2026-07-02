@@ -32,7 +32,21 @@ load_env_file() {
     if [[ "$line" != *=* ]]; then
       continue
     fi
-    export "$line"
+    key="${line%%=*}"
+    value="${line#*=}"
+    key="${key#"${key%%[![:space:]]*}"}"
+    key="${key%"${key##*[![:space:]]}"}"
+    if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      continue
+    fi
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+    if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+      value="${value:1:-1}"
+    elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
+      value="${value:1:-1}"
+    fi
+    export "$key=$value"
   done < "$path"
 }
 
