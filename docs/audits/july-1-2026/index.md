@@ -12,8 +12,10 @@ Full-scope security review of all Solidity under [`contracts/`](../../../contrac
 
 | Command | Result |
 |---------|--------|
-| `forge build` | **Pass** (exit 0, 2026-07-01) |
-| `forge test` | **1044 passed / 1 failed** (2026-07-02) — see note below |
+| `forge build` | **Pass** (exit 0) |
+| `forge build --sizes` | **Pass** — `CreatorLotteryManager` **24,568 B** (limit 24,576) |
+| `forge test` | **Pass** — 1062 passed, 0 failed, 1 skipped (2026-07-02 follow-up) |
+| `pnpm -C frontend typecheck` | **Fail** — pre-existing errors in `server/_lib/alfaclub/dailyBrief.room.test.ts` (unrelated to audit changes) |
 
 ### Regression tests added (July 2 follow-up)
 
@@ -24,6 +26,8 @@ Full-scope security review of all Solidity under [`contracts/`](../../../contrac
 | `test/Bribes.t.sol` | H-03 emergency reset stale bribe weight |
 | `test/CreatorLinearVesting.SeedAuth.t.sol` | H-05 seeder-gated `seed()` |
 | `test/CreatorShareOFT.RemoteLotteryFunding.t.sol` | L-04 native overpay accepted |
+| `test/VaultActivationBatcher.RegistryValidation.t.sol` | M-16 registry routing on all activation entrypoints |
+| `test/ve4626.PastVotesCheckpoints.t.sol` | H-04 historical lock checkpoints for `getPastVotes` |
 
 ### Known remaining gate
 
@@ -53,3 +57,4 @@ Full-scope security review of all Solidity under [`contracts/`](../../../contrac
 - `contracts/utilities/bridge/SolanaBridgeAdapter.sol`
 - `contracts/vault/strategies/ERC4626StrategyAdapter.sol`
 - `contracts/helpers/batchers/DeploymentBatcher.sol`
+- `contracts/helpers/batchers/VaultActivationBatcher.sol`

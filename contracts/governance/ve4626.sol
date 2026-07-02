@@ -106,8 +106,20 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
     }
     SupplyCheckpoint[] private _totalSupplyCheckpoints;
 
+    // FIX: AUDIT-2026-07-01-H04 — per-user lock checkpoints so getPastVotes and
+    // votingPowerAt resolve the lock amount/end in effect at a past timestamp
+    // instead of always reading the current _locks[user] snapshot.
+    struct LockCheckpoint {
+        uint48 clockTime;
+        uint128 amount;
+        uint48 end;
+    }
+    mapping(address => LockCheckpoint[]) private _lockCheckpoints;
+
     error FutureSupplyLookup(uint256 timepoint, uint48 clockNow);
+    error FutureVotesLookup(uint256 timepoint, uint48 clockNow);
     error SupplyCheckpointOverflow(uint256 supply);
+    error LockCheckpointOverflow(uint256 value);
 
     // ================================
     // CONSTRUCTOR
@@ -177,6 +189,7 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
         _notifyBoostManager(msg.sender);
 
         emit Locked(msg.sender, _token, amount, lockEnd, votingPowerAmount);
+        _writeLockCheckpoint(msg.sender);
     }
 
     /**
@@ -212,6 +225,7 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
         _notifyBoostManager(msg.sender);
 
         emit LockExtended(msg.sender, oldEnd, newEnd, newVotingPower);
+        _writeLockCheckpoint(msg.sender);
     }
 
     /**
@@ -248,6 +262,7 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
         _notifyBoostManager(msg.sender);
 
         emit LockIncreased(msg.sender, amount, userLock.amount, newVotingPower);
+        _writeLockCheckpoint(msg.sender);
     }
 
     /**
@@ -270,6 +285,7 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
 
         // Clear lock
         delete _locks[msg.sender];
+        _writeLockCheckpoint(msg.sender);
 
         // Return tokens
         IERC20(tokenToReturn).safeTransfer(msg.sender, amount);
@@ -357,12 +373,8 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
     }
 
     function votingPowerAt(address user, uint256 timestamp) external view returns (uint256) {
-        Lock memory userLock = _locks[user];
-        if (userLock.amount == 0) return 0;
-        if (timestamp >= userLock.end) return 0;
-
-        uint256 duration = userLock.end - timestamp;
-        return (userLock.amount * duration) / MAX_LOCK_DURATION;
+        (uint256 amount, uint256 end) = _lockAt(user, timestamp);
+        return _votingPowerAt(amount, end, timestamp);
     }
 
     function getTotalVotingPower() external view override returns (uint256) {
@@ -441,6 +453,65 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
     }
 
     /**
+     * @dev FIX: AUDIT-2026-07-01-H04 — append the user's lock amount/end after
+     *      every lock mutation, coalescing writes within the same clock tick.
+     */
+    function _writeLockCheckpoint(address user) internal {
+        Lock memory userLock = _locks[user];
+        if (userLock.amount > type(uint128).max) revert LockCheckpointOverflow(userLock.amount);
+        if (userLock.end > type(uint48).max) revert LockCheckpointOverflow(userLock.end);
+
+        uint48 nowClock = SafeCastUint48(clock());
+        uint256 len = _lockCheckpoints[user].length;
+        LockCheckpoint memory checkpoint = LockCheckpoint({
+            clockTime: nowClock,
+            amount: uint128(userLock.amount),
+            end: userLock.amount == 0 ? uint48(0) : uint48(userLock.end)
+        });
+
+        if (len > 0 && _lockCheckpoints[user][len - 1].clockTime == nowClock) {
+            _lockCheckpoints[user][len - 1] = checkpoint;
+        } else {
+            _lockCheckpoints[user].push(checkpoint);
+        }
+    }
+
+    function _lockAt(address account, uint256 timepoint) internal view returns (uint256 amount, uint256 end) {
+        uint256 len = _lockCheckpoints[account].length;
+        if (len == 0) return (0, 0);
+
+        if (_lockCheckpoints[account][len - 1].clockTime <= timepoint) {
+            LockCheckpoint storage latest = _lockCheckpoints[account][len - 1];
+            return (latest.amount, latest.end);
+        }
+
+        uint256 lo = 0;
+        uint256 hi = len;
+        while (lo < hi) {
+            uint256 mid = (lo + hi) >> 1;
+            if (_lockCheckpoints[account][mid].clockTime > timepoint) {
+                hi = mid;
+            } else {
+                lo = mid + 1;
+            }
+        }
+        if (lo == 0) return (0, 0);
+        LockCheckpoint storage prior = _lockCheckpoints[account][lo - 1];
+        return (prior.amount, prior.end);
+    }
+
+    function _votingPowerAt(uint256 amount, uint256 end, uint256 timepoint)
+        internal
+        pure
+        returns (uint256)
+    {
+        if (amount == 0) return 0;
+        if (timepoint >= end) return 0;
+        uint256 duration = end - timepoint;
+        return (amount * duration) / MAX_LOCK_DURATION;
+    }
+
+    /**
      * @dev FIX: H-06 — tiny local helper because we do not want to import
      *      OZ SafeCast just for one uint48 cast.
      */
@@ -462,11 +533,11 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
     // FIX: G-07 — override getPastVotes to return time-decayed voting power
     // instead of raw ERC20 balance checkpoints, preventing stale governance snapshots
     function getPastVotes(address account, uint256 timepoint) public view override returns (uint256) {
-        Lock memory userLock = _locks[account];
-        if (userLock.amount == 0) return 0;
-        if (timepoint >= userLock.end) return 0;
-        uint256 duration = userLock.end - timepoint;
-        return (userLock.amount * duration) / MAX_LOCK_DURATION;
+        uint48 currentClock = SafeCastUint48(clock());
+        if (timepoint >= currentClock) revert FutureVotesLookup(timepoint, currentClock);
+
+        (uint256 amount, uint256 end) = _lockAt(account, timepoint);
+        return _votingPowerAt(amount, end, timepoint);
     }
 
     // FIX: H-06 (supersedes G-07) — binary search the checkpoint array to

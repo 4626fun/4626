@@ -74,7 +74,7 @@ describe('daily brief room resolution', () => {
     vi.mocked(sendAlfaClubRoomText).mockReset()
     vi.mocked(sendAlfaClubRoomText)
       .mockRejectedValueOnce(new Error('bot_message_failed:403'))
-      .mockResolvedValueOnce({ lane: 'bot_token_without_reply_id' })
+      .mockResolvedValueOnce({ lane: 'bot_token_without_reply_id', messageId: null })
 
     const result = await sendDailyBriefToCommandRooms({
       text: 'hello',
@@ -91,7 +91,7 @@ describe('daily brief room resolution', () => {
   it('sendDailyBriefToCommandRooms posts to all command rooms when all succeed', async () => {
     const { sendAlfaClubRoomText } = await import('./chatBridge.js')
     vi.mocked(sendAlfaClubRoomText).mockReset()
-    vi.mocked(sendAlfaClubRoomText).mockResolvedValue({ lane: 'bot_token_without_reply_id' })
+    vi.mocked(sendAlfaClubRoomText).mockResolvedValue({ lane: 'bot_token_without_reply_id', messageId: null })
 
     const result = await sendDailyBriefToCommandRooms({
       text: 'hello',
@@ -109,7 +109,7 @@ describe('daily brief room resolution', () => {
     restoreEnv = applyEnv({ ALFACLUB_DAILY_BRIEF_ROOM_ID: '1659' })
     const { sendAlfaClubRoomText } = await import('./chatBridge.js')
     vi.mocked(sendAlfaClubRoomText).mockReset()
-    vi.mocked(sendAlfaClubRoomText).mockResolvedValue({ lane: 'bot_token_without_reply_id' })
+    vi.mocked(sendAlfaClubRoomText).mockResolvedValue({ lane: 'bot_token_without_reply_id', messageId: null })
 
     const result = await sendDailyBriefToCommandRooms({
       text: 'hello',

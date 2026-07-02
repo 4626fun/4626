@@ -9,9 +9,9 @@ Maps each audit finding to fix status. **Fixed** = merged in this pass; **Partia
 | ID | Title | Status | Fix |
 |----|-------|--------|-----|
 | H-01 | `report()` treats full NAV as profit when baseline is zero but shares remain | **Fixed** | `CreatorOVaultCoreModule.sol` — reset baseline with zero profit when `previousTotalAssets == 0 && _totalSupply > 0` |
-| H-02 | Owner can cherry-pick deferred VRF outcomes while paused | **Fixed** | `CreatorLotteryManager.sol` — `_deferredVrfRequestIds` queue; `unpause()` calls `_processAllDeferredVrfResults()` FIFO |
+| H-02 | Owner can cherry-pick deferred VRF outcomes while paused | **Fixed** | Admin-module `unpause()` FIFO-flushes via `applyDeferredVrf()`; `processPendingVrfResult` removed |
 | H-03 | Emergency vote reset → stale bribe over-claim | **Fixed** | `VaultGaugeVoting.sol` — `getUserVoteWeightAtEpoch` returns 0 when vote generation ≠ epoch reset generation |
-| H-04 | `getPastVotes` / clock unit mismatch | **Partial** | `ve4626.sol` — `clock()` / `CLOCK_MODE()` set to timestamp mode. **Remaining:** historical lock checkpoints (still reads current lock state at past timepoint) |
+| H-04 | `getPastVotes` / clock unit mismatch | **Fixed** | `ve4626.sol` — timestamp `clock()` + per-user lock checkpoints; `getPastVotes` / `votingPowerAt` binary-search historical lock amount/end |
 | H-05 | Permissionless `CreatorLinearVesting.seed()` griefing | **Fixed** | `CreatorLinearVesting.sol` — `seeder` immutable; `DeploymentBatcher.sol` — atomic `seed()` after funding |
 | H-06 | Remote `MSG_TYPE_LOTTERY_ENTRY` not handled on hub ShareOFT | **Fixed** | `CreatorShareOFT.sol` — forward to `receiveRemoteLotteryEntry`; `CreatorLotteryManager.sol` — hub forwarder allowlist |
 | H-07 | `PayoutRouter.emergencyWithdraw` drains routed revenue | **Partial** | `PayoutRouter.sol` — blocks withdraw of `creatorCoin` / `shareOFT`. **Remaining:** timelock/multisig on owner (operational) |
@@ -23,7 +23,7 @@ Maps each audit finding to fix status. **Fixed** = merged in this pass; **Partia
 | ID | Title | Status | Fix |
 |----|-------|--------|-----|
 | M-01 | Gauge `emergencyWithdraw` bypasses jackpot custody | **Fixed** | `CreatorGaugeController.sol` — `JackpotReserveProtected` when `jackpotReserve > 0` |
-| M-02 | Concurrent lottery wins over-commit reserve | **Deferred** | Requires reserve-at-request or per-gauge mutex — design change; document race in ops runbook |
+| M-02 | Concurrent lottery wins over-commit reserve | **Partial** | Ops runbook: monitor `jackpotReserve`; known race until reserve-at-request design lands |
 | M-03 | `injectCapital` skips report baseline | **Fixed** | `CreatorOVaultCoreModule.sol` — `_increaseReportBaselineForPrincipalInflow(amount)` |
 | M-04 | Operator bitmask never enforced | **Deferred** | Enforce `isAuthorizedOperator` in core paths or remove dead API — product decision |
 | M-05 | `maxWithdraw` overstates strategy-bound liquidity | **Deferred** | Cap by liquidity snapshot in `CreatorOVaultLiquidityLib` — ERC-4626 composability follow-up |
@@ -36,8 +36,8 @@ Maps each audit finding to fix status. **Fixed** = merged in this pass; **Partia
 | M-12 | Stuck tokens in composer / hub pending fees | **Partial** | `OVaultHubComposer.sol` — `rescueERC20`; `CreatorShareOFT.sol` — `flushPendingFeesToGauge()`. **Remaining:** liability tracking before rescue |
 | M-13 | `SolanaStrategy` remote NAV vs Base withdraw | **Deferred** | Cap `remoteNav` by reconciled bridge receipts — keeper policy + tests |
 | M-14 | `sweepStaleEpochRewards` centralization | **Deferred** | Document grace window; consider governance timelock (operational) |
-| M-15 | Boost timelock not armed by default | **Deferred** | Deploy script must call `armBoostSourceTimelock()` before traffic |
-| M-16 | Activation batcher missing registry validation | **Deferred** | Add registry checks to all `VaultActivationBatcher` entrypoints |
+| M-15 | Boost timelock not armed by default | **Partial** | Ops gate: `verifyLotteryProductionReadiness()` + post-deploy `armBoostSourceTimelock()` before traffic |
+| M-16 | Activation batcher missing registry validation | **Fixed** | `VaultActivationBatcher.sol` — `_validateRegistryRouting()` in `_executeActivateAndLaunch` (all 6 entrypoints) |
 | M-17 | Registry factories / hot-swappable modules | **Deferred** | Timelock + codehash allowlist — operational |
 | M-18 | `ERC4626StrategyAdapter` silent deposit failure | **Fixed** | Revert `InnerDepositFailed` when inner 4626 deposit fails |
 
@@ -70,6 +70,22 @@ After hub ShareOFT deploy / upgrade:
 1. Call `CreatorLotteryManager.setAuthorizedHubShareOftForwarder(hubShareOFT, true)` for each hub ShareOFT that receives remote lottery entries.
 2. Confirm remote chains still peer to hub ShareOFT (unchanged wiring).
 3. End-to-end test: remote `submitPendingLotteryEntry` → hub lottery VRF request.
+4. Smoke: pause → defer VRF callback → `unpause()` → verify FIFO settlement (no manual per-request processing).
+
+### Before enabling production lottery traffic
+
+5. Call `armBoostSourceTimelock()` on the lottery manager (**M-15**).
+6. Confirm `PayoutRouter` owner is multisig/timelock, not a hot EOA (**H-07** partial).
+7. Run `verifyLotteryProductionReadiness()` (`frontend/server/_lib/lottery/lotteryProductionReadiness.ts`) with required hub ShareOFT addresses — must report zero critical violations.
+
+### M-02 — concurrent lottery win reserve race (ops)
+
+Multiple VRF callbacks can finalize in the same block before reserve accounting catches up, over-committing jackpot reserve in edge cases. **Mitigation (current):** monitor `jackpotReserve` vs pending winner payouts; pause lottery if reserve utilization spikes; treat as known race until reserve-at-request lands. Do not claim "fully reserved" without keeper monitoring.
+
+### ABI note (2026-07-02 size trim)
+
+- **`getGlobalStats()` removed** — indexers and API clients should read public `totalLotteryEntries`, `totalWinners`, `totalRewardsPaid`.
+- **`processPendingVrfResult()` removed** — deferred VRF is flushed automatically on `unpause()`.
 
 ---
 
@@ -81,9 +97,11 @@ forge test --match-contract CreatorLotteryManagerPauseGuardsTest
 forge test --match-contract BribesTest
 forge test --match-contract CreatorLinearVestingSeedAuthTest
 forge test --match-contract CreatorShareOFTRemoteLotteryFundingTest
+forge test --match-contract VaultActivationBatcherRegistryValidationTest
+forge test --match-contract Ve4626PastVotesCheckpointsTest
 ```
 
-**Status (2026-07-02):** All of the above suites pass. `CreatorLotteryManager.SizeLimit.t.sol` still fails — see [index.md](./index.md) deploy-blocker note.
+**Status (2026-07-02):** All of the above suites pass, including `CreatorLotteryManager.SizeLimit.t.sol` (runtime 24,568 B). Full `forge test`: 1062 passed, 0 failed, 1 skipped.
 
 Suggested cases (implemented):
 
