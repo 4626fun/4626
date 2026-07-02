@@ -120,6 +120,7 @@ contract BribeDepot is Ownable, ReentrancyGuard {
 
         uint256 totalAmount = totalBribes[epoch][token];
         amount = (totalAmount * userWeight) / totalWeight;
+        if (amount == 0 && userWeight > 0) revert NoUserVotes();
 
         claimed[epoch][token][msg.sender] = true;
         claimedAmount[epoch][token] += amount;

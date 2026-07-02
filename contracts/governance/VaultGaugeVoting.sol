@@ -432,6 +432,9 @@ contract VaultGaugeVoting is IVaultGaugeVoting, Ownable, ReentrancyGuard {
     }
 
     function getUserVoteWeightAtEpoch(uint256 epoch, address user, address vault) external view returns (uint256) {
+        // FIX: AUDIT-2026-07-01-H03 — stale per-user weights after emergencyResetAllVotes must
+        // not count toward bribe claims once the epoch generation has advanced.
+        if (_userVoteGeneration[epoch][user] != _epochResetGeneration[epoch]) return 0;
         return _epochUserVaultVotes[epoch][user][vault];
     }
 

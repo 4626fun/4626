@@ -142,6 +142,7 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
     error ExternalSwapCallFailed();
     error ProtocolRewardsClaimFailed();
     error ProtocolRewardsHasNoCode(address candidate);
+    error ProtectedPayoutAsset(address token);
 
     modifier onlyOwnerOrKeeper() {
         if (msg.sender != owner() && msg.sender != keeper) revert NotAuthorized();
@@ -302,9 +303,10 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
         emit BatchProcessed(actions.length, totalTokenOut, totalSharesQueued);
     }
 
-    function emergencyWithdraw(address token, address to, uint256 amount) external onlyOwner nonReentrant {
+    function emergencyWithdraw(address token, uint256 amount, address to) external onlyOwner nonReentrant {
         if (to == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
+        if (token == address(creatorCoin) || token == address(shareOFT)) revert ProtectedPayoutAsset(token);
 
         if (token == address(0)) {
             (bool ok,) = to.call{value: amount}("");

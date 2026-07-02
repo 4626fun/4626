@@ -29,6 +29,7 @@ interface ICreatorOVaultWrapperComposer {
  */
 contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
+    using SafeERC20 for IERC20;
 
     uint8 public constant ACTION_DEPOSIT = 1;
     uint8 public constant ACTION_REDEEM = 2;
@@ -129,6 +130,12 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
         if (!ok) revert ETHTransferFailed();
     }
 
+    /// @notice Rescue ERC-20 tokens stuck after a failed compose delivery.
+    function rescueERC20(address token, address to, uint256 amount) external onlyOwner {
+        if (token == address(0) || to == address(0)) revert ZeroAddress();
+        IERC20(token).safeTransfer(to, amount);
+    }
+
     function setAllowedComposeSender(address sender, bool allowed) external onlyOwner {
         if (sender == address(0)) revert ZeroAddress();
         allowedComposeSenders[sender] = allowed;
@@ -149,6 +156,7 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
         ) {
             revert ZeroAddress();
         }
+        if (solanaAssetPeer == bytes32(0) || solanaSharePeer == bytes32(0)) revert ZeroAddress();
         // FIX: C-1 — verify composer is registered as beneficiary operator on the wrapper
         // before allowing mesh configuration; prevents permanent compose DoS
         address wrapper = registry.getWrapperForToken(creatorToken);
@@ -371,7 +379,7 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
 
         if (action == ACTION_DEPOSIT) {
             if (sourceOft != mesh.assetMeshToken) revert CreatorMeshAssetTokenMismatch(mesh.assetMeshToken, sourceOft);
-            if (mesh.solanaAssetPeer != bytes32(0) && composeFrom != mesh.solanaAssetPeer) {
+            if (composeFrom != mesh.solanaAssetPeer) {
                 revert CreatorMeshPeerMismatch(mesh.solanaAssetPeer, composeFrom);
             }
             return;
@@ -379,7 +387,7 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
 
         if (action == ACTION_REDEEM) {
             if (sourceOft != mesh.shareMeshToken) revert CreatorMeshShareTokenMismatch(mesh.shareMeshToken, sourceOft);
-            if (mesh.solanaSharePeer != bytes32(0) && composeFrom != mesh.solanaSharePeer) {
+            if (composeFrom != mesh.solanaSharePeer) {
                 revert CreatorMeshPeerMismatch(mesh.solanaSharePeer, composeFrom);
             }
             return;

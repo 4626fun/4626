@@ -492,6 +492,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     }
 
     function claimQueuedWithdrawal() external onlyDelegateCall returns (uint256 assets) {
+        if (vaultMode != VaultMode.Normal) revert VaultNotNormal();
         _processProfitUnlock();
         QueuedWithdrawal storage queued = queuedWithdrawals[msg.sender];
 
@@ -711,6 +712,16 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
             return (0, 0);
         }
 
+        // FIX: AUDIT-2026-07-01-H01 — when baseline is zero but shares remain (locked profit,
+        // fee-recipient dust, etc.), reset baseline without treating full NAV as profit.
+        if (previousTotalAssets == 0 && _totalSupply > 0) {
+            lastReport = uint96(block.timestamp);
+            totalAssetsAtLastReport = currentTotalAssets;
+            trustedPpsCheckpoint = pricePerShare();
+            emit Reported(0, 0, 0, currentTotalAssets);
+            return (0, 0);
+        }
+
         if (currentTotalAssets > previousTotalAssets) {
             profit = currentTotalAssets - previousTotalAssets;
 
@@ -886,6 +897,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         _pullCreatorCoinExact(msg.sender, amount);
         uint256 priceAfter = pricePerShare();
         _checkPriceChange(priceBefore, priceAfter);
+        _increaseReportBaselineForPrincipalInflow(amount);
 
         emit CapitalInjected(msg.sender, amount, priceAfter);
     }

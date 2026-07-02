@@ -285,7 +285,7 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
         assertGt(requestId, 0, "expected VRF request");
 
         (,, uint256 amountUSD, uint256 effectiveWinChancePPM,,,) = lotteryManager.vrfRequests(requestId);
-        uint256 baseWinChance = lotteryManager.getWinChance(amountUSD);
+        uint256 baseWinChance = lotteryManager.calculateWinChance(amountUSD);
         // PR 1 — linear formula: $1.05 / 250_000 (1e6 units) = 4 PPM. With 2x boost → 8 PPM.
         assertEq(baseWinChance, 4, "expected $1 trade to use base odds (linear)");
         assertEq(effectiveWinChancePPM, 8, "request should store boosted odds snapshot");
@@ -312,7 +312,7 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
         assertGt(requestId, 0, "expected VRF request");
 
         (,, uint256 amountUSD, uint256 effectiveWinChancePPM,,,) = lotteryManager.vrfRequests(requestId);
-        uint256 baseWinChance = lotteryManager.getWinChance(amountUSD);
+        uint256 baseWinChance = lotteryManager.calculateWinChance(amountUSD);
         // PR 1 — linear formula: $1.05 / 250_000 = 4 PPM. With 2x boost → 8 PPM.
         assertEq(baseWinChance, 4, "expected $1 trade to use base odds (linear)");
         assertEq(effectiveWinChancePPM, 8, "request should store boosted odds snapshot");
@@ -337,17 +337,55 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
         vm.prank(owner);
         lotteryManager.unpause();
 
-        // CLM-08: processPendingVrfResult is now onlyOwner
-        vm.prank(owner);
-        (bool ok,) =
-            address(lotteryManager).call(abi.encodeWithSignature("processPendingVrfResult(uint256)", requestId));
-        assertTrue(ok, "processPendingVrfResult should succeed after unpause");
-
-        assertEq(gauge.payCount(), 1, "payout should occur after unpause processing");
+        assertEq(gauge.payCount(), 1, "unpause should auto-settle deferred VRF FIFO");
         assertEq(gauge.lastWinner(), buyer, "winner should match buyer");
 
         (address userAfter,,,,,,) = lotteryManager.vrfRequests(requestId);
         assertEq(userAfter, address(0), "request should be cleared after processing");
+
+        vm.prank(owner);
+        lotteryManager.applyDeferredVrf(requestId);
+        assertEq(gauge.payCount(), 1, "second apply should no-op when pending word cleared");
+    }
+
+    function test_VrfCallback_DefersMultipleWhilePaused_AndUnpauseSettlesFifo() public {
+        address buyer2 = makeAddr("buyer2");
+        shareToken.mint(buyer2, 100 ether);
+        ve4626.setLock(buyer2, shareOFT, 100 ether, 100 ether);
+
+        uint256 rawVrfId1 = localVrfConsumer.nextRequestId();
+        vm.prank(authorizedSwap);
+        uint256 requestId1 = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 100 ether);
+
+        uint256 rawVrfId2 = localVrfConsumer.nextRequestId();
+        vm.prank(authorizedSwap);
+        uint256 requestId2 = lotteryManager.processSwapLottery(buyer2, shareOFT, 1 ether, 100 ether);
+
+        vm.prank(owner);
+        lotteryManager.pause();
+
+        uint256[] memory randomWords1 = new uint256[](1);
+        randomWords1[0] = 0;
+        vm.prank(address(localVrfConsumer));
+        lotteryManager.receiveRandomWords(rawVrfId1, randomWords1);
+
+        uint256[] memory randomWords2 = new uint256[](1);
+        randomWords2[0] = 0;
+        vm.prank(address(localVrfConsumer));
+        lotteryManager.receiveRandomWords(rawVrfId2, randomWords2);
+
+        assertEq(gauge.payCount(), 0, "both payouts should remain deferred while paused");
+
+        vm.prank(owner);
+        lotteryManager.unpause();
+
+        assertEq(gauge.payCount(), 2, "unpause should settle every deferred VRF result");
+        assertEq(gauge.lastWinner(), buyer2, "second deferred request should settle last in FIFO order");
+
+        (address userAfter1,,,,,,) = lotteryManager.vrfRequests(requestId1);
+        (address userAfter2,,,,,,) = lotteryManager.vrfRequests(requestId2);
+        assertEq(userAfter1, address(0));
+        assertEq(userAfter2, address(0));
     }
 
     function test_VrfCallback_UsesStoredAdditiveProbabilityBoost() public {
@@ -359,7 +397,7 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
         assertGt(requestId, 0, "expected VRF request");
 
         (,, uint256 amountUSD, uint256 effectiveWinChancePPM,,,) = lotteryManager.vrfRequests(requestId);
-        uint256 baseWinChance = lotteryManager.getWinChance(amountUSD);
+        uint256 baseWinChance = lotteryManager.calculateWinChance(amountUSD);
         // PR 1 — linear: $1.05 → 4 PPM base. Probability boost adds 1*100 = 100 PPM → 104.
         assertEq(baseWinChance, 4, "expected $1 trade to use base odds (linear)");
         assertEq(effectiveWinChancePPM, 104, "request should include additive probability boost");
@@ -387,7 +425,7 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
         assertGt(requestId, 0, "expected VRF request");
 
         (,, uint256 amountUSD, uint256 effectiveWinChancePPM,,,) = lotteryManager.vrfRequests(requestId);
-        uint256 baseWinChance = lotteryManager.getWinChance(amountUSD);
+        uint256 baseWinChance = lotteryManager.calculateWinChance(amountUSD);
         uint256 expectedGaugeBoost = (10_000 * (amountUSD - 1_000_000)) / 9_999_000_000;
         assertGt(expectedGaugeBoost, 0, "expected scaled gauge boost");
         assertEq(

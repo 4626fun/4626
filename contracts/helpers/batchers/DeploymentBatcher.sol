@@ -1122,10 +1122,15 @@ contract DeploymentBatcherPhase2Module {
             result.vestingDurationSeconds = uint64(365 days);
             bytes32 vestingSalt = keccak256(abi.encodePacked(baseSalt, "vesting"));
             CreatorLinearVesting vesting = new CreatorLinearVesting{salt: vestingSalt}(
-                params.shareOFT, params.owner, result.vestingStartTimestamp, result.vestingDurationSeconds
+                params.shareOFT,
+                params.owner,
+                result.vestingStartTimestamp,
+                result.vestingDurationSeconds,
+                batcher
             );
             result.vestingAddress = address(vesting);
             IERC20(params.shareOFT).safeTransfer(result.vestingAddress, result.vestingAmount);
+            CreatorLinearVesting(result.vestingAddress).seed();
         }
 
         ICreatorOVault(params.vault).setProtocolRescue(protocolTreasury);

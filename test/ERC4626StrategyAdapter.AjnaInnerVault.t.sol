@@ -151,16 +151,12 @@ contract ERC4626StrategyAdapterAjnaInnerVaultTest is Test {
         asset.approve(address(adapter), type(uint256).max);
     }
 
-    function testDepositKeepsAssetsIdleWhenInnerVaultIsPaused() public {
+    function testDepositRevertsWhenInnerVaultIsPaused() public {
         auth.pause();
 
         vm.prank(address(outerVault));
-        uint256 deposited = adapter.deposit(100e18);
-
-        assertEq(deposited, 100e18);
-        assertEq(asset.balanceOf(address(adapter)), 100e18);
-        assertEq(innerVault.totalAssets(), 0);
-        assertEq(adapter.getTotalAssets(), 100e18);
+        vm.expectRevert(ERC4626StrategyAdapter.InnerDepositFailed.selector);
+        adapter.deposit(100e18);
     }
 
     function testWithdrawReturnsOnlyAdapterIdleWhenInnerBufferIsEmpty() public {

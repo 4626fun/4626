@@ -672,7 +672,6 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
             if (entry.solanaTxSig == bytes32(0) || processedSolanaTxs[entry.solanaTxSig]) {
                 continue;
             }
-            processedSolanaTxs[entry.solanaTxSig] = true;
 
             if (!isRegistered[entry.shareOFT]) {
                 continue;
@@ -698,15 +697,14 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
             // entire batch; previously a revert in processSwapLottery (e.g., requiring
             // nonzero msg.value for VRF fee) would brick all entries
             try ICreatorLotteryManager(lotteryManager).processSwapLottery(buyerTwin, entry.shareOFT, amount18, 0) {
-                // success
+                processedSolanaTxs[entry.solanaTxSig] = true;
+                emit SolanaLotteryEntryRelayed(
+                    msg.sender, entry.buyerSolanaPubkey, entry.shareOFT, entry.amountSolanaUnits, amount18, buyerTwin
+                );
             } catch (bytes memory reason) {
                 emit LotteryEntryFailed(buyerTwin, entry.shareOFT, amount18, reason);
                 continue;
             }
-
-            emit SolanaLotteryEntryRelayed(
-                msg.sender, entry.buyerSolanaPubkey, entry.shareOFT, entry.amountSolanaUnits, amount18, buyerTwin
-            );
         }
     }
 

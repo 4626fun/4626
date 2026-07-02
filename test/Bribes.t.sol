@@ -427,15 +427,17 @@ contract BribesTest is Test {
         _voteSingle(alice, vault1);
         _voteSingle(bob, vault1);
 
-        // Finalize epoch 0, then both claim (each gets 0).
+        // Finalize epoch 0 — dust rounds to zero payout, so claims revert (L-02).
         vm.warp(voting.genesisEpochStart() + WEEK + 1);
         assertEq(voting.currentEpoch(), 1);
 
         vm.prank(alice);
-        assertEq(depot.claim(0, address(bribeToken)), 0);
+        vm.expectRevert(BribeDepot.NoUserVotes.selector);
+        depot.claim(0, address(bribeToken));
 
         vm.prank(bob);
-        assertEq(depot.claim(0, address(bribeToken)), 0);
+        vm.expectRevert(BribeDepot.NoUserVotes.selector);
+        depot.claim(0, address(bribeToken));
 
         // Dust is still in the contract.
         assertEq(bribeToken.balanceOf(address(depot)), amount);
@@ -493,6 +495,38 @@ contract BribesTest is Test {
         vm.prank(alice);
         vm.expectRevert(BribeDepot.EpochClosed.selector);
         depot.claim(0, address(bribeToken));
+    }
+
+    function testClaimBribe_EmergencyResetBlocksStaleWeightUntilRevote() public {
+        uint256 genesis = voting.genesisEpochStart();
+
+        vm.warp(genesis - WEEK);
+        _lock(alice, 100 ether, FOUR_YEARS);
+        _lock(bob, 100 ether, FOUR_YEARS);
+
+        vm.warp(genesis + 1);
+        assertEq(voting.currentEpoch(), 0);
+
+        uint256 amount = 1_000 ether;
+        vm.startPrank(briber);
+        bribeToken.approve(address(depot), amount);
+        depot.bribe(address(bribeToken), amount);
+        vm.stopPrank();
+
+        _voteSingle(alice, vault1);
+        voting.emergencyResetAllVotes();
+        _voteSingle(bob, vault1);
+
+        vm.warp(genesis + WEEK + 1);
+        assertEq(voting.currentEpoch(), 1);
+
+        vm.prank(alice);
+        vm.expectRevert(BribeDepot.NoUserVotes.selector);
+        depot.claim(0, address(bribeToken));
+
+        vm.prank(bob);
+        uint256 bobClaim = depot.claim(0, address(bribeToken));
+        assertEq(bobClaim, amount);
     }
 }
 

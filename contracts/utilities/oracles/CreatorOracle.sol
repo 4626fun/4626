@@ -1003,10 +1003,11 @@ contract CreatorOracle is OApp {
         if (chainlinkFeed == address(0)) return;
 
         try IChainlinkFeed(chainlinkFeed).latestRoundData() returns (
-            uint80, int256 ethUSD, uint256, uint256 updatedAt, uint80
+            uint80 roundId, int256 ethUSD, uint256, uint256 updatedAt, uint80 answeredInRound
         ) {
             if (ethUSD <= 0) return;
             if (block.timestamp - updatedAt > MAX_STALENESS) return;
+            if (answeredInRound < roundId) return;
 
             // Convert Chainlink 8 decimals to 18
             uint256 ethUSD18 = uint256(ethUSD) * 1e10;

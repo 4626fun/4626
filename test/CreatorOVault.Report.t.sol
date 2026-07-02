@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
+import {stdStorage} from "forge-std/StdStorage.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import "../contracts/vault/CreatorOVault.sol";
@@ -159,7 +160,7 @@ contract CreatorOVaultReportTest is Test {
         assertEq(vault.totalAssetsAtLastReport(), redepositAssets);
     }
 
-    function test_reportAfterBaselineZero_countsSubsequentProfit() public {
+    function test_injectCapital_afterBaselineZero_doesNotCountAsProfit() public {
         uint256 assetsBefore = vault.totalAssets();
         vault.setFlashLoanProtection(0, type(uint256).max, 0);
 
@@ -170,7 +171,6 @@ contract CreatorOVaultReportTest is Test {
         assertEq(vault.totalAssetsAtLastReport(), 0);
 
         uint256 donatedAssets = 100_000e18;
-        // injectCapital now requires onlyManagement (M-04 fix); call as owner
         vm.prank(donor);
         creatorCoin.transfer(address(this), donatedAssets);
         creatorCoin.approve(address(vault), donatedAssets);
@@ -178,8 +178,25 @@ contract CreatorOVaultReportTest is Test {
 
         (uint256 profit, uint256 loss) = vault.report();
 
-        assertEq(profit, donatedAssets);
+        assertEq(profit, 0);
         assertEq(loss, 0);
+        assertEq(vault.totalAssetsAtLastReport(), vault.totalAssets());
+    }
+
+    function test_report_withZeroBaselineAndOutstandingShares_resetsBaselineWithoutProfit() public {
+        _writeReportBaseline(0);
+        assertEq(vault.totalAssetsAtLastReport(), 0);
+        assertGt(vault.totalSupply(), 0);
+
+        uint256 supplyBefore = vault.totalSupply();
+        uint256 feeSharesBefore = vault.balanceOf(feeRecipient);
+
+        (uint256 profit, uint256 loss) = vault.report();
+
+        assertEq(profit, 0);
+        assertEq(loss, 0);
+        assertEq(vault.totalSupply(), supplyBefore);
+        assertEq(vault.balanceOf(feeRecipient), feeSharesBefore);
         assertEq(vault.totalAssetsAtLastReport(), vault.totalAssets());
     }
 
@@ -301,14 +318,23 @@ contract CreatorOVaultReportTest is Test {
     }
 
     function _lockProfit(uint256 profitAssets) internal returns (uint256 locked) {
-        // injectCapital now requires onlyManagement (M-04 fix).
-        // Transfer tokens from donor to this contract (owner), then inject as owner.
         vm.prank(donor);
         creatorCoin.transfer(address(this), profitAssets);
         creatorCoin.approve(address(vault), profitAssets);
         vault.injectCapital(profitAssets);
+
+        // injectCapital is principal inflow (M-03); restore prior baseline so report() recognizes yield.
+        _writeReportBaseline(vault.totalAssetsAtLastReport() - profitAssets);
+
         vault.report();
         locked = vault.totalLockedShares();
+    }
+
+    function _writeReportBaseline(uint256 baseline) internal {
+        stdStorage.checked_write(
+            stdStorage.sig(stdStorage.target(stdstore, address(vault)), "totalAssetsAtLastReport()"),
+            baseline
+        );
     }
 
     function _newVaultForBaselineTests() internal returns (CreatorOVault freshVault) {

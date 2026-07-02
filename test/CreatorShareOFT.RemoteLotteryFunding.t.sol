@@ -177,12 +177,22 @@ contract CreatorShareOFTRemoteLotteryFundingTest is Test {
         ICreatorShareOFTRemoteLottery(address(shareOFT)).submitPendingLotteryEntry{value: QUOTED_NATIVE_FEE - 1}(
             entryId
         );
+    }
 
-        vm.expectRevert(abi.encodeWithSelector(invalidFeeSelector, QUOTED_NATIVE_FEE + 1, QUOTED_NATIVE_FEE));
+    function test_SubmitPendingLotteryEntry_AcceptsNativeOverpay() public {
+        vm.deal(buyer, 1 ether);
+        (uint256 entryId,) = _queueEntry();
+        _mockLzFeeAndSend(QUOTED_NATIVE_FEE);
+
+        uint256 overpay = QUOTED_NATIVE_FEE + 1;
+
         vm.prank(buyer);
-        ICreatorShareOFTRemoteLottery(address(shareOFT)).submitPendingLotteryEntry{value: QUOTED_NATIVE_FEE + 1}(
-            entryId
-        );
+        ICreatorShareOFTRemoteLottery(address(shareOFT)).submitPendingLotteryEntry{value: overpay}(entryId);
+
+        (address entryBuyer,) =
+            ICreatorShareOFTRemoteLottery(address(shareOFT)).pendingLotteryEntries(entryId);
+        assertEq(entryBuyer, address(0), "entry consumed");
+        assertEq(shareOFT.totalLotteryEntriesSent(), 1, "message sent");
     }
 
     function test_SubmitPendingLotteryEntry_ExactFee_SucceedsAndConsumesEntry() public {

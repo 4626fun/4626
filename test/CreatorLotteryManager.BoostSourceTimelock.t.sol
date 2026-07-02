@@ -103,11 +103,11 @@ contract CreatorLotteryManagerBoostSourceTimelockTest is Test {
     // Storage slot indices (verified via `forge inspect storageLayout`).
     uint256 internal constant SLOT_BOOST_MANAGER = 9;
     uint256 internal constant SLOT_VAULT_GAUGE = 10;
-    uint256 internal constant SLOT_PENDING_BOOST_MGR = 58;
-    uint256 internal constant SLOT_PENDING_BOOST_MGR_EFFECTIVE_AT = 59;
-    uint256 internal constant SLOT_PENDING_GAUGE = 60;
-    uint256 internal constant SLOT_PENDING_GAUGE_EFFECTIVE_AT = 61;
-    uint256 internal constant SLOT_TIMELOCK_ARMED = 62;
+    uint256 internal constant SLOT_PENDING_BOOST_MGR = 60;
+    uint256 internal constant SLOT_PENDING_BOOST_MGR_EFFECTIVE_AT = 61;
+    uint256 internal constant SLOT_PENDING_GAUGE = 62;
+    uint256 internal constant SLOT_PENDING_GAUGE_EFFECTIVE_AT = 63;
+    uint256 internal constant SLOT_TIMELOCK_ARMED = 64;
 
     uint256 internal constant TIMELOCK_DELAY = 24 hours;
 

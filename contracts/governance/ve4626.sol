@@ -449,6 +449,16 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
         return uint48(v);
     }
 
+    // FIX: AUDIT-2026-07-01-H04 — use timestamp clock so lock.end comparisons in
+    // getPastVotes share the same unit as ERC20Votes historical queries.
+    function clock() public view override returns (uint48) {
+        return uint48(block.timestamp);
+    }
+
+    function CLOCK_MODE() public pure override returns (string memory) {
+        return "mode=timestamp";
+    }
+
     // FIX: G-07 — override getPastVotes to return time-decayed voting power
     // instead of raw ERC20 balance checkpoints, preventing stale governance snapshots
     function getPastVotes(address account, uint256 timepoint) public view override returns (uint256) {

@@ -277,6 +277,11 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     /// @dev While paused, callbacks store randomness and do not settle wins/losses.
     mapping(uint256 => uint256) public pendingRandomWord;
     mapping(uint256 => bool) public hasPendingRandomWord;
+    /// @dev FIFO queue of requestIds deferred during pause; flushed atomically on unpause.
+    uint256[] internal _deferredVrfRequestIds;
+
+    /// @notice Hub ShareOFT contracts authorized to forward remote lottery entries.
+    mapping(address => bool) public authorizedHubShareOftForwarders;
 
     /// @notice Funding policy for cross-chain VRF requests and winner callbacks.
     SponsorshipPolicy public vrfSponsorshipPolicy;
@@ -436,7 +441,6 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     event TargetEidUpdated(uint32 indexed targetEid);
     event VRFIntegratorUpdated(address indexed integrator, bool trusted);
     event VrfResultDeferred(uint256 indexed requestId, uint256 randomWord);
-    event PendingVrfResultProcessed(uint256 indexed requestId);
     event SponsorshipPolicyUpdated(
         bytes32 indexed context, bool enabled, uint256 maxFeePerMessage, uint256 budgetPerEpoch, uint256 epochDuration
     );
@@ -492,7 +496,6 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     error Unauthorized();
     error InvalidAmount();
     error CallerFeeMismatch(uint256 provided, uint256 required);
-    error NoPendingVrfResult(uint256 requestId);
     error ETHRefundFailed();
 
     // PR 3 — Boost-source timelock errors.
@@ -806,12 +809,11 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     }
 
     /**
-     * @notice Process a deferred VRF result after unpausing.
-     * @dev While paused, callbacks store randomness and skip settlement to halt jackpot outflows.
+     * @notice Apply one deferred VRF result (used by admin `unpause()` FIFO flush).
      */
-    // FIX: CLM-08 — restrict to owner to prevent adversarial front-running of pending results on unpause
-    function processPendingVrfResult(uint256 requestId) external onlyOwner whenNotPaused nonReentrant {
-        if (!hasPendingRandomWord[requestId]) revert NoPendingVrfResult(requestId);
+    function applyDeferredVrf(uint256 requestId) external {
+        if (msg.sender != owner() && msg.sender != address(this)) revert Unauthorized();
+        if (!hasPendingRandomWord[requestId]) return;
 
         uint256 word = pendingRandomWord[requestId];
         delete pendingRandomWord[requestId];
@@ -820,8 +822,26 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         uint256[] memory randomWords = new uint256[](1);
         randomWords[0] = word;
         _processVRFResult(requestId, randomWords);
+    }
 
-        emit PendingVrfResultProcessed(requestId);
+    /**
+     * @notice Receive a remote lottery entry forwarded by a hub ShareOFT peer.
+     * @dev Remote chains deliver to the hub ShareOFT; the OFT forwards here with the
+     *      original LayerZero origin preserved for `authorizedRemoteOFTs` checks.
+     */
+    function receiveRemoteLotteryEntry(uint32 srcEid, bytes32 originSender, bytes calldata payload)
+        external
+        nonReentrant
+    {
+        if (!authorizedHubShareOftForwarders[msg.sender]) revert Unauthorized();
+        _requireNotPaused();
+        _handleLotteryEntry(srcEid, originSender, payload);
+    }
+
+    function setAuthorizedHubShareOftForwarder(address shareOft, bool authorized) external {
+        shareOft;
+        authorized;
+        _delegateAdmin();
     }
 
     function _processVRFResult(uint256 requestId, uint256[] memory randomWords) internal {
@@ -843,6 +863,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
             if (!hasPendingRandomWord[requestId]) {
                 pendingRandomWord[requestId] = randomWords[0];
                 hasPendingRandomWord[requestId] = true;
+                _deferredVrfRequestIds.push(requestId);
                 emit VrfResultDeferred(requestId, randomWords[0]);
             }
             return;
@@ -1937,36 +1958,16 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     // VIEW FUNCTIONS
     // ================================
 
-    function getWinChance(uint256 swapAmountUSD) external view returns (uint256) {
-        return calculateWinChance(swapAmountUSD);
-    }
-
-    /**
-     * @notice Get global lottery stats
-     */
-    function getGlobalStats() external view returns (uint256 entries, uint256 winners, uint256 rewards) {
-        return (totalLotteryEntries, totalWinners, totalRewardsPaid);
-    }
-
-    /**
-     * @notice Get lottery stats for a specific creator coin
-     */
     function getCreatorLotteryStats(address creatorCoin)
         external
         view
         returns (uint256 entries, uint256 winners, uint256 rewardsPaid, uint256 jackpotBalance)
     {
         CreatorStats storage stats = creatorStats[creatorCoin];
-
-        // Get jackpot balance from per-creator contracts
-        address vaultAddr = registry.getVaultForToken(creatorCoin);
         address gaugeAddr = registry.getGaugeControllerForToken(creatorCoin);
-
-        if (vaultAddr != address(0) && gaugeAddr != address(0)) {
-            ICreatorGaugeControllerLottery gaugeController = ICreatorGaugeControllerLottery(gaugeAddr);
-            jackpotBalance = gaugeController.getJackpotReserve();
+        if (gaugeAddr != address(0)) {
+            jackpotBalance = ICreatorGaugeControllerLottery(gaugeAddr).getJackpotReserve();
         }
-
         return (stats.entries, stats.winners, stats.rewardsPaid, jackpotBalance);
     }
 
@@ -2063,6 +2064,8 @@ contract CreatorLotteryManagerAdminModule is OApp, OAppOptionsType3, ReentrancyG
     mapping(uint256 => VRFRequest) public vrfRequests;
     mapping(uint256 => uint256) public pendingRandomWord;
     mapping(uint256 => bool) public hasPendingRandomWord;
+    uint256[] internal _deferredVrfRequestIds;
+    mapping(address => bool) public authorizedHubShareOftForwarders;
 
     SponsorshipPolicy public vrfSponsorshipPolicy;
     SponsorshipPolicy public callbackSponsorshipPolicy;
@@ -2557,8 +2560,21 @@ contract CreatorLotteryManagerAdminModule is OApp, OAppOptionsType3, ReentrancyG
         _pause();
     }
 
-    function unpause() external onlyDelegateCall onlyOwner {
+    function unpause() external onlyDelegateCall onlyOwner nonReentrant {
         _unpause();
+        uint256 len = _deferredVrfRequestIds.length;
+        for (uint256 i; i < len;) {
+            CreatorLotteryManager(payable(address(this))).applyDeferredVrf(_deferredVrfRequestIds[i]);
+            unchecked {
+                ++i;
+            }
+        }
+        delete _deferredVrfRequestIds;
+    }
+
+    function setAuthorizedHubShareOftForwarder(address shareOft, bool authorized) external onlyDelegateCall onlyOwner {
+        if (shareOft == address(0)) revert ZeroAddress();
+        authorizedHubShareOftForwarders[shareOft] = authorized;
     }
 
     function emergencyWithdraw(address token, uint256 amount) external onlyDelegateCall onlyOwner whenPaused {

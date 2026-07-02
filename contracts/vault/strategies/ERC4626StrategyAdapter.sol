@@ -35,6 +35,7 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
     error InvalidWindow();
     // FIX: S-C04 — block deposits during active rebalance
     error RebalanceInProgress();
+    error InnerDepositFailed();
 
     // ================================
     // STATE
@@ -202,9 +203,13 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
         uint256 toDeposit = idle > desiredIdle ? idle - desiredIdle : 0;
 
         if (toDeposit > 0) {
-            // Best-effort: if the ERC4626 deposit reverts, keep funds idle (never brick vault ops).
             ASSET.forceApprove(address(ERC4626_VAULT), toDeposit);
-            try ERC4626_VAULT.deposit(toDeposit, address(this)) {} catch {}
+            try ERC4626_VAULT.deposit(toDeposit, address(this)) returns (uint256 shares) {
+                shares;
+            } catch {
+                ASSET.forceApprove(address(ERC4626_VAULT), 0);
+                revert InnerDepositFailed();
+            }
         }
 
         deposited = amount;

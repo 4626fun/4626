@@ -272,6 +272,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     error MinOutputUnavailable();
     error NotAuthorized();
     error CreatorTreasuryRequired();
+    error JackpotReserveProtected();
 
     // ================================
     // CONSTRUCTOR
@@ -685,8 +686,18 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
         // Voter rewards (9.61% default): route to ve4626 voters (bribes/fees)
         if (toProtocol > 0 && address(voterRewardsDistributor) != address(0)) {
             vaultShares.forceApprove(address(voterRewardsDistributor), toProtocol);
-            voterRewardsDistributor.notifyRewards(address(vault), address(vaultShares), toProtocol);
-            totalProtocolEarned += toProtocol; // legacy name: tracks total voter rewards routed
+            try voterRewardsDistributor.notifyRewards(address(vault), address(vaultShares), toProtocol) {
+                totalProtocolEarned += toProtocol;
+            } catch {
+                vaultShares.forceApprove(address(voterRewardsDistributor), 0);
+                if (protocolTreasury != address(0)) {
+                    vaultShares.safeTransfer(protocolTreasury, toProtocol);
+                    totalProtocolEarned += toProtocol;
+                } else {
+                    jackpotReserve += toProtocol;
+                    toLottery += toProtocol;
+                }
+            }
         } else if (toProtocol > 0 && protocolTreasury != address(0)) {
             // Fallback: if distributor isn't configured, send to protocol treasury
             vaultShares.safeTransfer(protocolTreasury, toProtocol);
@@ -761,6 +772,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
      * @param _lotteryManager Lottery manager address
      */
     function setLotteryManager(address _lotteryManager) external onlyOwner {
+        if (_lotteryManager == address(0)) revert ZeroAddress();
         lotteryManager = ICreatorLotteryManager(_lotteryManager);
         emit LotteryManagerSet(_lotteryManager);
     }
@@ -1084,6 +1096,10 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
      */
     function emergencyWithdraw(address token, uint256 amount, address to) external onlyOwner {
         if (to == address(0)) revert ZeroAddress();
+        // FIX: AUDIT-2026-07-01-M01 — block jackpot custody drain while reserves remain.
+        if (token == address(vaultShares) && address(vaultShares) != address(0) && jackpotReserve > 0) {
+            revert JackpotReserveProtected();
+        }
         // FIX: G-15 — adjust jackpotReserve when withdrawing vault shares
         if (token == address(vaultShares) && address(vaultShares) != address(0)) {
             if (amount >= jackpotReserve) {

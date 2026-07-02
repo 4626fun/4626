@@ -21,6 +21,7 @@ interface ICreatorLotteryManager {
         external
         payable
         returns (uint256);
+    function receiveRemoteLotteryEntry(uint32 srcEid, bytes32 originSender, bytes calldata payload) external;
 }
 
 /**
@@ -581,6 +582,17 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     }
 
     /**
+     * @notice Retry delivery of hub fees accumulated when `receiveFees` previously reverted.
+     */
+    function flushPendingFeesToGauge() external nonReentrant {
+        if (!isHub) revert NotHub();
+        uint256 amount = pendingFees;
+        if (amount == 0) revert NothingToFlush();
+        pendingFees = 0;
+        _sendFeesToGauge(amount);
+    }
+
+    /**
      * @notice Bridge accumulated fees back to the hub chain GaugeController
      * @dev Permissionless — anyone can trigger this (keeper, user, protocol)
      *      Uses OFT send() to burn tokens on this chain and mint on Base,
@@ -742,7 +754,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         (bytes memory payload, bytes memory options, MessagingFee memory fee) =
             _prepareLotteryEntryMessage(entry.buyer, entry.amount);
 
-        if (msg.value != fee.nativeFee) {
+        if (msg.value < fee.nativeFee) {
             revert InvalidLotteryEntryFee(msg.value, fee.nativeFee);
         }
 
@@ -750,6 +762,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         delete pendingLotteryEntries[entryId];
         pendingLotteryEntryCount[entry.buyer] -= 1;
 
+        // Excess native overpay is returned by the LZ endpoint to `_refundAddress`.
         _lzSend(hubEid, payload, options, fee, payable(_msgSender()));
         totalLotteryEntriesSent++;
 
@@ -848,6 +861,16 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     }
 
     // ================================
+    // LAYERZERO FEE PAYMENT
+    // ================================
+
+    /// @dev Allow buyer-funded lottery submits to overpay; LZ endpoint refunds excess to `_refundAddress`.
+    function _payNative(uint256 _nativeFee) internal virtual override returns (uint256 nativeFee) {
+        if (msg.value < _nativeFee) revert NotEnoughNative(msg.value);
+        return _nativeFee;
+    }
+
+    // ================================
     // WINNER CALLBACK RECEIVER (REMOTE ONLY)
     // ================================
 
@@ -865,6 +888,15 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         address _executor,
         bytes calldata _extraData
     ) internal virtual override {
+        // FIX: AUDIT-2026-07-01-H06 — remote lottery entries arrive at the hub ShareOFT peer;
+        // forward to the hub LotteryManager with the original LZ origin preserved.
+        if (isHub && _isRemoteLotteryEntryMessage(_message)) {
+            address mgr = address(uint160(uint256(hubLotteryPeer)));
+            if (mgr == address(0)) revert HubNotConfigured();
+            ICreatorLotteryManager(mgr).receiveRemoteLotteryEntry(_origin.srcEid, _origin.sender, _message);
+            return;
+        }
+
         // Winner callback messages are ONLY accepted when:
         // - they come from `hubLotteryPeer`, and
         // - the payload is exactly the ABI encoding of (uint16,address,address,uint256) (128 bytes).
@@ -923,6 +955,16 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         if (word3 == 0) return false;
 
         return true;
+    }
+
+    function _isRemoteLotteryEntryMessage(bytes calldata message) internal pure returns (bool) {
+        if (message.length != 160 && message.length != 192) return false;
+        uint256 word0;
+        assembly {
+            word0 := calldataload(message.offset)
+        }
+        if (word0 >> 16 != 0) return false;
+        return uint16(word0) == MSG_TYPE_LOTTERY_ENTRY;
     }
 
     /**

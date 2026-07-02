@@ -34,7 +34,9 @@ function getReadRpcUrl(): string {
 }
 
 const LOTTERY_ABI = [
-  { type: 'function', name: 'getGlobalStats', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }] },
+  { type: 'function', name: 'totalLotteryEntries', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'totalWinners', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'totalRewardsPaid', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   {
     type: 'function',
     name: 'lotteryConfig',
@@ -99,9 +101,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       transport: http(getReadRpcUrl(), { timeout: 20_000 }),
     })
 
-    const [stats, cfg, minVaultWeightBps, amoeEnabled, amoeSigner, amoeMaxEntries, amoeEpochDuration, totalTradeEntries, totalAmoeEntries] =
+    const [totalLotteryEntries, totalWinners, totalRewardsPaid, cfg, minVaultWeightBps, amoeEnabled, amoeSigner, amoeMaxEntries, amoeEpochDuration, totalTradeEntries, totalAmoeEntries] =
       await Promise.all([
-      client.readContract({ address: lotteryManager as any, abi: LOTTERY_ABI, functionName: 'getGlobalStats' }),
+      client.readContract({ address: lotteryManager as any, abi: LOTTERY_ABI, functionName: 'totalLotteryEntries' }),
+      client.readContract({ address: lotteryManager as any, abi: LOTTERY_ABI, functionName: 'totalWinners' }),
+      client.readContract({ address: lotteryManager as any, abi: LOTTERY_ABI, functionName: 'totalRewardsPaid' }),
       client.readContract({ address: lotteryManager as any, abi: LOTTERY_ABI, functionName: 'lotteryConfig' }),
       client.readContract({ address: lotteryManager as any, abi: LOTTERY_ABI, functionName: 'minVaultWeightBps' }).catch(() => null),
       client.readContract({ address: lotteryManager as any, abi: LOTTERY_ABI, functionName: 'amoeEnabled' }).catch(() => null),
@@ -116,9 +120,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       client.readContract({ address: lotteryManager as any, abi: LOTTERY_ABI, functionName: 'totalAmoeEntries' }).catch(() => null),
     ])
 
-    const entries = BigInt((stats as any)?.[0] ?? 0n).toString()
-    const winners = BigInt((stats as any)?.[1] ?? 0n).toString()
-    const rewardsPaid = BigInt((stats as any)?.[2] ?? 0n).toString()
+    const entries = BigInt(totalLotteryEntries ?? 0n).toString()
+    const winners = BigInt(totalWinners ?? 0n).toString()
+    const rewardsPaid = BigInt(totalRewardsPaid ?? 0n).toString()
 
     const minSwapAmount = BigInt((cfg as any)?.minSwapAmount ?? (cfg as any)?.[0] ?? 0n).toString()
     const rewardPercentageBps = BigInt((cfg as any)?.rewardPercentage ?? (cfg as any)?.[1] ?? 0n).toString()

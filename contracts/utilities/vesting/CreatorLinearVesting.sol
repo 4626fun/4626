@@ -30,20 +30,32 @@ contract CreatorLinearVesting {
     error ZeroDuration();
     // FIX: CLV-02 — error for unauthorized release-to
     error NotBeneficiary();
+    error NotSeeder();
     error AlreadySeeded();
     error NotSeeded();
 
-    constructor(address token_, address beneficiary_, uint64 startTimestamp_, uint64 durationSeconds_) {
-        if (token_ == address(0) || beneficiary_ == address(0)) revert ZeroAddress();
+    /// @notice Only this address may call `seed()` (typically the deployment batcher).
+    address public immutable seeder;
+
+    constructor(
+        address token_,
+        address beneficiary_,
+        uint64 startTimestamp_,
+        uint64 durationSeconds_,
+        address seeder_
+    ) {
+        if (token_ == address(0) || beneficiary_ == address(0) || seeder_ == address(0)) revert ZeroAddress();
         if (durationSeconds_ == 0) revert ZeroDuration();
         token = IERC20(token_);
         beneficiary = beneficiary_;
         startTimestamp = startTimestamp_;
         durationSeconds = durationSeconds_;
+        seeder = seeder_;
     }
 
     // FIX: CLV-01 — record total allocation from current balance (call once after funding)
     function seed() external {
+        if (msg.sender != seeder) revert NotSeeder();
         if (seeded) revert AlreadySeeded();
         uint256 bal = token.balanceOf(address(this));
         if (bal == 0) revert ZeroDuration();

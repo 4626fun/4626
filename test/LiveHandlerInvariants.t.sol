@@ -282,9 +282,8 @@ contract LotteryManagerLiveHandler is Test {
         try manager.receiveRandomWords(_word(randomWord), key) {} catch {}
     }
 
-    function processPending(uint64 sequence) external {
-        uint256 key = uint256(keccak256(abi.encode("CROSS_CHAIN", uint256(sequence))));
-        try manager.processPendingVrfResult(key) {} catch {}
+    function processPending(uint64) external {
+        try manager.applyDeferredVrf(0) {} catch {}
     }
 
     function _word(uint256 value) internal pure returns (uint256[] memory words) {
