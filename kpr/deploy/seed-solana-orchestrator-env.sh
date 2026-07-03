@@ -193,7 +193,9 @@ classify_hook_schema() {
     echo "legacy"
     return
   fi
-  if strings "${tmp}/hook.so" | rg -q 'relay_entries|RelayEntries' && ! strings "${tmp}/hook.so" | rg -q 'drain_entries|DrainEntries'; then
+  # Use grep (not rg) — Vultr ops hosts often lack ripgrep.
+  if strings "${tmp}/hook.so" | grep -Eq 'relay_entries|RelayEntries' \
+    && ! strings "${tmp}/hook.so" | grep -Eq 'drain_entries|DrainEntries'; then
     rm -rf "${tmp}"
     echo "canonical"
     return
