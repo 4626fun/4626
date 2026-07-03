@@ -28,7 +28,7 @@ import { getPublicClient } from '../utils/onchain.js';
 import { alertInfo, alertWarning, alertCritical } from '../utils/alerts.js';
 import { loadKeeperKeypair, sendConfirmedSolanaTransaction } from '../utils/solana.js';
 // FIX: HGH-03 — Import isAddress for log.args field validation
-import { isAddress } from 'viem';
+import { isAddress, type GetLogsReturnType } from 'viem';
 import {
   compareWinnerRelayCheckpoint,
   getWinnerRelayCheckpoint,
@@ -39,6 +39,38 @@ import {
 
 const WORKFLOW_NAME = 'keepr-solana-winner-relay';
 const INITIAL_LOOKBACK_BLOCKS = 100n;
+const DEFAULT_MAX_GET_LOGS_BLOCK_RANGE = 99_999n;
+
+function readMaxGetLogsBlockRange(): bigint {
+  const parsed = Number.parseInt(String(process.env.KPR_GET_LOGS_MAX_BLOCK_RANGE ?? '99999'), 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_MAX_GET_LOGS_BLOCK_RANGE;
+  return BigInt(Math.min(parsed, 99999));
+}
+
+async function getWinnerNotificationLogs(params: {
+  publicClient: ReturnType<typeof getPublicClient>;
+  lotteryManager: `0x${string}`;
+  fromBlock: bigint;
+  toBlock: bigint;
+}) {
+  const maxRange = readMaxGetLogsBlockRange();
+  // Typed via the event ABI so downstream consumers see decoded `args`.
+  const logs: GetLogsReturnType<(typeof LOTTERY_WINNER_EVENT_ABI)[0]> = [];
+  let cursor = params.fromBlock;
+  while (cursor <= params.toBlock) {
+    const rangeEnd = cursor + maxRange <= params.toBlock ? cursor + maxRange : params.toBlock;
+    const chunk = await params.publicClient.getLogs({
+      address: params.lotteryManager,
+      event: LOTTERY_WINNER_EVENT_ABI[0],
+      fromBlock: cursor,
+      toBlock: rangeEnd,
+    });
+    logs.push(...chunk);
+    if (rangeEnd >= params.toBlock) break;
+    cursor = rangeEnd + 1n;
+  }
+  return logs;
+}
 
 export interface WinnerRelayResult {
   eventsProcessed: number;
@@ -144,10 +176,10 @@ export async function executeSolanaWinnerRelay(): Promise<WinnerRelayResult> {
       checkpointLogIndex = -1;
     }
 
-    // Query for winner events.
-    const logs = await publicClient.getLogs({
-      address: lotteryManager,
-      event: LOTTERY_WINNER_EVENT_ABI[0],
+    // Query for winner events (chunked to respect RPC max block range, e.g. Matrixed 100k).
+    const logs = await getWinnerNotificationLogs({
+      publicClient,
+      lotteryManager,
       fromBlock: checkpointBlock,
       toBlock: currentBlock,
     });

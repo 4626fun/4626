@@ -437,8 +437,16 @@ function makeRequestBody() {
     ownerAddress: TEST_OWNER,
     phase1Calls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x12345678' }],
     phase2CoreCalls: [{ to: '0x0000000000000000000000000000000000000011', value: '0', data: '0x23456789' }],
-    phase2FinalizeCalls: [{ to: '0x0000000000000000000000000000000000000012', value: '0', data: '0x34567890' }],
-    phase3Calls: [{ to: '0x0000000000000000000000000000000000000013', value: '0', data: '0x45678901' }],
+    // Phase boundary enforcement (assertDeploySessionPhaseBoundaries) requires
+    // real selectors: finalizePhase2 for phase 2 finalize, and phase 3 starting
+    // with deployPhase3Strategies (0x881d4960) plus deployToStrategies (0x355aa867).
+    phase2FinalizeCalls: [
+      { to: '0x0000000000000000000000000000000000000012', value: '0', data: makeFinalizePhase2Data() },
+    ],
+    phase3Calls: [
+      { to: '0x0000000000000000000000000000000000000013', value: '0', data: '0x881d4960' },
+      { to: '0x0000000000000000000000000000000000000013', value: '0', data: '0x355aa867' },
+    ],
     phase4Calls: [],
     version: 'vtest',
   }
@@ -606,7 +614,10 @@ describe('deploy session dry run', () => {
         ...makeRequestBody(),
         phase2CoreCalls: [],
         phase2FinalizeCalls: [],
-        phase3Calls: [{ to: '0x0000000000000000000000000000000000000013', value: '0', data: '0x45678901' }],
+        phase3Calls: [
+          { to: '0x0000000000000000000000000000000000000013', value: '0', data: '0x881d4960' },
+          { to: '0x0000000000000000000000000000000000000013', value: '0', data: '0x355aa867' },
+        ],
       },
     })
     const res = createMockRes()

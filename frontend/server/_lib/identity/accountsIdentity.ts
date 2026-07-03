@@ -1046,12 +1046,16 @@ export async function recordProviderLink(params: {
     throw new Error(`No linked value found for provider "${provider}".`)
   }
 
+  // Reject unverified email before doing any DB work.
+  const verifiedEmail = provider === 'email' ? extractPrivyVerifiedEmail(privyUser) : null
+  if (provider === 'email' && !verifiedEmail) {
+    throw new Error('Email is not verified in Privy yet.')
+  }
+
   const wasAlreadyLinked = await providerWasAlreadyLinked(db, privyUserId, provider)
 
-  if (provider === 'email') {
-    const email = extractPrivyVerifiedEmail(privyUser)
-    if (!email) throw new Error('Email is not verified in Privy yet.')
-    await upsertAccount({ db, privyUserId, email, emailVerified: true })
+  if (provider === 'email' && verifiedEmail) {
+    await upsertAccount({ db, privyUserId, email: verifiedEmail, emailVerified: true })
   }
 
   if (provider === 'zora_cross_app') {

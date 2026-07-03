@@ -53,6 +53,7 @@ const ENV_KEYS = [
   'SOLANA_TWIN_TO_PUBKEY_MAPPING',
   'SOLANA_CREATOR_COIN_TO_MINT_MAPPING_FILE',
   'SOLANA_TWIN_TO_PUBKEY_MAPPING_FILE',
+  'KPR_GET_LOGS_MAX_BLOCK_RANGE',
 ] as const
 
 const ORIGINAL_ENV = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]])) as Record<string, string | undefined>
@@ -122,6 +123,24 @@ describe('keepr solana winner relay', () => {
     expect(second.eventsProcessed).toBe(0)
     expect(second.winnersRecorded).toBe(0)
     expect(sendAndConfirmTransactionMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('chunks eth_getLogs when checkpoint lag exceeds RPC block range', async () => {
+    setEnv('KPR_GET_LOGS_MAX_BLOCK_RANGE', '1000')
+    await writeFile(
+      join(tempDir, 'winner-relay.json'),
+      JSON.stringify({ checkpointBlock: '100', checkpointLogIndex: -1 }, null, 2),
+      'utf8',
+    )
+    getBlockNumberMock.mockResolvedValue(2500n)
+    getLogsMock.mockResolvedValue([])
+
+    await executeSolanaWinnerRelay()
+
+    expect(getLogsMock).toHaveBeenCalledTimes(3)
+    expect(getLogsMock.mock.calls[0]?.[0]).toMatchObject({ fromBlock: 100n, toBlock: 1100n })
+    expect(getLogsMock.mock.calls[1]?.[0]).toMatchObject({ fromBlock: 1101n, toBlock: 2101n })
+    expect(getLogsMock.mock.calls[2]?.[0]).toMatchObject({ fromBlock: 2102n, toBlock: 2500n })
   })
 
   it('supports file-backed creator/twin mappings', async () => {

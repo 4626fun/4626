@@ -114,28 +114,35 @@ vi.mock('../../server/_lib/infra/logger.js', () => ({
   logger: { warn: vi.fn(), error: vi.fn() },
 }))
 
+function makeMockDeployBytecode() {
+  const mockBytecode = ('0x' + '00'.repeat(32)) as `0x${string}`
+  return {
+    CreatorOVault: mockBytecode,
+    CreatorOVaultWrapper: mockBytecode,
+    CreatorShareOFT: mockBytecode,
+    OFTBootstrapRegistry: mockBytecode,
+    CreatorGaugeController: mockBytecode,
+    CCALaunchStrategy: mockBytecode,
+    CreatorOracle: mockBytecode,
+    PayoutRouter: mockBytecode,
+    VaultShareBurnStream: mockBytecode,
+    CreatorCoinPolicyController: mockBytecode,
+    CreatorCharmStrategy: mockBytecode,
+    CreatorOImpairmentClaims: mockBytecode,
+    CreatorORecoveryEscrow: mockBytecode,
+    AjnaVaultAuth: mockBytecode,
+    AjnaERC4626Vault: mockBytecode,
+    ERC4626StrategyAdapter: mockBytecode,
+  }
+}
+
 vi.mock('../../src/deploy/bytecode.generated.js', () => ({
-  DEPLOY_BYTECODE: (() => {
-    const mockBytecode = ('0x' + '00'.repeat(32)) as `0x${string}`
-    return {
-      CreatorOVault: mockBytecode,
-      CreatorOVaultWrapper: mockBytecode,
-      CreatorShareOFT: mockBytecode,
-      OFTBootstrapRegistry: mockBytecode,
-      CreatorGaugeController: mockBytecode,
-      CCALaunchStrategy: mockBytecode,
-      CreatorOracle: mockBytecode,
-      PayoutRouter: mockBytecode,
-      VaultShareBurnStream: mockBytecode,
-      CreatorCoinPolicyController: mockBytecode,
-      CreatorCharmStrategy: mockBytecode,
-      CreatorOImpairmentClaims: mockBytecode,
-      CreatorORecoveryEscrow: mockBytecode,
-      AjnaVaultAuth: mockBytecode,
-      AjnaERC4626Vault: mockBytecode,
-      ERC4626StrategyAdapter: mockBytecode,
-    }
-  })(),
+  DEPLOY_BYTECODE: makeMockDeployBytecode(),
+}))
+
+// The paymaster reads code IDs from shared/deploy/bytecode.generated.js.
+vi.mock('../../shared/deploy/bytecode.generated.js', () => ({
+  DEPLOY_BYTECODE: makeMockDeployBytecode(),
 }))
 
 vi.mock('viem', async (importOriginal) => {
@@ -783,7 +790,9 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
           ajnaVaultSymbol: 'aCRT',
           charmWeightBps: 3_000n,
           ajnaWeightBps: 3_000n,
-          solanaWeightBps: 3_000n,
+          // v1.15.0 removed Solana strategies from phase 3: weight must be 0
+          // and the solanaStrategy codeId must be bytes32(0).
+          solanaWeightBps: 0n,
           ajnaBufferRatioBps: 1_000n,
           ajnaMinBucketIndex: 4_156n,
           ajnaKeeper: protocolAjnaKeeper,
@@ -801,7 +810,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
           ajnaVaultAuth: MOCK_CODE_ID,
           ajnaVault: MOCK_CODE_ID,
           erc4626StrategyAdapter: MOCK_CODE_ID,
-          solanaStrategy: MOCK_CODE_ID,
+          solanaStrategy: ZERO_BYTES32,
         },
       ],
     })
@@ -1059,7 +1068,9 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
           ajnaVaultSymbol: 'aCRT',
           charmWeightBps: 3_000n,
           ajnaWeightBps: 3_000n,
-          solanaWeightBps: 3_000n,
+          // v1.15.0 removed Solana strategies from phase 3: weight must be 0
+          // and the solanaStrategy codeId must be bytes32(0).
+          solanaWeightBps: 0n,
           ajnaBufferRatioBps: 1_000n,
           ajnaMinBucketIndex: 4_156n,
           ajnaKeeper: protocolAjnaKeeper,
@@ -1077,7 +1088,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
           ajnaVaultAuth: MOCK_CODE_ID,
           ajnaVault: MOCK_CODE_ID,
           erc4626StrategyAdapter: MOCK_CODE_ID,
-          solanaStrategy: MOCK_CODE_ID,
+          solanaStrategy: ZERO_BYTES32,
         },
       ],
     })
@@ -1206,7 +1217,9 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
           charmVaultSymbol: 'CHARM',
           charmWeightBps: 3_000n,
           ajnaWeightBps: 3_000n,
-          solanaWeightBps: 3_000n,
+          // v1.15.0 removed Solana strategies from phase 3: weight must be 0
+          // and the solanaStrategy codeId must be bytes32(0).
+          solanaWeightBps: 0n,
           solanaKeeper: sender,
           solanaMaxNavAge: 86_400n,
           solanaMaxNavDeltaBpsPerUpdate: 500,

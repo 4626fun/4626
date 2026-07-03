@@ -1985,12 +1985,6 @@ function appendUniqueCalls(base: Call[], extras: Call[]): Call[] {
   return out
 }
 
-function prependPhase2FinalizeApprovals(calls: Call[]): Call[] {
-  if (!Array.isArray(calls) || calls.length === 0) return []
-  const approvals = derivePhase2FinalizeApprovalCalls(calls)
-  return appendUniqueCalls(approvals, calls)
-}
-
 async function findNonIndexedCharmPool(calls: Call[]): Promise<Address | null> {
   if (!Array.isArray(calls) || calls.length === 0) return null
   const uniquePools = new Map<string, Address>()
@@ -2021,17 +2015,13 @@ function distributePhase2FinalizeApprovals(params: {
   if (approvals.length === 0) {
     return { phase2CoreCalls, phase2FinalizeCalls }
   }
-  if (phase2CoreCalls.length > 0) {
-    // Keep phase2 finalize focused on batcher finalize calls. Approval executes in phase2 core,
-    // so allowance is already persisted before finalize is submitted.
-    return {
-      phase2CoreCalls: appendUniqueCalls(phase2CoreCalls, approvals),
-      phase2FinalizeCalls,
-    }
-  }
+  // Keep phase2 finalize focused on batcher finalize calls (enforced by
+  // assertDeploySessionPhaseBoundaries). Approval executes in phase2 core —
+  // synthesized from the approvals alone when no core calls were provided —
+  // so allowance is already persisted before finalize is submitted.
   return {
-    phase2CoreCalls,
-    phase2FinalizeCalls: prependPhase2FinalizeApprovals(phase2FinalizeCalls),
+    phase2CoreCalls: appendUniqueCalls(phase2CoreCalls, approvals),
+    phase2FinalizeCalls,
   }
 }
 

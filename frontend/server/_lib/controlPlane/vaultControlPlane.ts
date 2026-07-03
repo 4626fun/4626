@@ -14,6 +14,7 @@ import { buildControlPlaneJobSpec, type AsyncVerbKind } from './controlPlaneJobS
 import {
   parseSettleVaultInput,
   SettleVaultExecutionError,
+  type SettledTruthAuthority,
 } from './executors/executeSettleVault.js'
 import {
   enforceMutatingDegradation,
@@ -52,6 +53,11 @@ export type SettleVaultRequest = {
   graduatedAt?: string
   settledAt?: string
   settlementStage?: SettlementStage
+  /**
+   * Required to write settledAt or settlementStage="completed". Only the
+   * sweep completion path may assert it (audit §5.1 invariant 5).
+   */
+  settledAtAuthority?: SettledTruthAuthority
   requestedBy?: string
   idempotencyKey?: string
 }
@@ -396,6 +402,7 @@ export function createVaultControlPlane(): VaultControlPlane {
           graduatedAt: request.graduatedAt,
           settledAt: request.settledAt,
           settlementStage: request.settlementStage,
+          settledAtAuthority: request.settledAtAuthority,
         })
       } catch (error) {
         if (error instanceof SettleVaultExecutionError) {
@@ -420,6 +427,7 @@ export function createVaultControlPlane(): VaultControlPlane {
           graduatedAt: parsed.graduatedAt || null,
           settledAt: parsed.settledAt || null,
           settlementStage: parsed.normalizedStage || null,
+          settledAtAuthority: request.settledAtAuthority ?? null,
         },
       })
 

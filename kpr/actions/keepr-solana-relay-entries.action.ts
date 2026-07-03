@@ -32,6 +32,21 @@ export interface EntryRelayResult {
 
 const RELAY_ENTRIES_DISCRIMINATOR = relayEntriesInstructionDiscriminator();
 
+/**
+ * Default-deny gate for the lottery-entry relay lane (audit H2-08 / C-01).
+ *
+ * The relay lane must stay off unless `SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED`
+ * is explicitly truthy. Global execute flags, workflow config re-seeds, or
+ * running the standalone workflow do NOT enable it — enabling B2 relay is an
+ * explicit product decision gated on the hardened transfer-hook deploy.
+ */
+export function isRelayEntriesLaneEnabled(): boolean {
+  const normalized = String(process.env.SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED ?? '')
+    .trim()
+    .toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes';
+}
+
 function deriveSolanaEntryDedupeId(params: {
   creatorMint: string;
   buyerBytes: Buffer;
@@ -56,6 +71,14 @@ export async function executeSolanaRelayEntries(): Promise<EntryRelayResult> {
     overflowCount: 0,
     emergencyRelay: false,
   };
+
+  if (!isRelayEntriesLaneEnabled()) {
+    await alertWarning(
+      WORKFLOW_NAME,
+      'Relay-entries lane is default-deny (SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED not truthy) — skipping without reading or relaying entries',
+    );
+    return result;
+  }
 
   const solanaRpcUrl = requireEnv('SOLANA_RPC_URL');
   const programId = CHAINS.solana.programId;

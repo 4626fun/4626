@@ -75,6 +75,7 @@ describe('executeSettleVault', () => {
       vaultAddress: VAULT,
       settledAt,
       settlementStage: 'completed',
+      settledAtAuthority: 'sweep-completion',
     })
 
     expect(result.updated).toBe(true)
@@ -93,10 +94,39 @@ describe('executeSettleVault', () => {
         vaultAddress: VAULT,
         settlementStage: 'completed',
         settledAt: new Date().toISOString(),
+        settledAtAuthority: 'sweep-completion',
       }),
     ).rejects.toMatchObject({
       code: 'vault_not_found_in_keepr_registry',
       statusCode: 404,
     })
+  })
+
+  it('rejects settledAt without the sweep-completion authority (audit H2-04)', async () => {
+    await expect(
+      executeSettleVault({
+        vaultAddress: VAULT,
+        settlementStage: 'completed',
+        settledAt: new Date().toISOString(),
+      }),
+    ).rejects.toMatchObject({
+      code: 'settled_truth_requires_sweep_completion',
+      statusCode: 403,
+    })
+    // The gate rejects before any DB write is attempted.
+    const sqlTexts = dbSqlMock.mock.calls.map((call) => {
+      const first = call[0] as TemplateStringsArray | undefined
+      return String(first?.[0] ?? '')
+    })
+    expect(sqlTexts.some((text) => text.includes('UPDATE keepr_vaults'))).toBe(false)
+  })
+
+  it('rejects settlementStage="completed" without the sweep-completion authority', () => {
+    expect(() =>
+      parseSettleVaultInput({
+        vaultAddress: VAULT,
+        settlementStage: 'completed',
+      }),
+    ).toThrow(SettleVaultExecutionError)
   })
 })

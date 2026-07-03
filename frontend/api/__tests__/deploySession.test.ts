@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import cancelHandler from '../_handlers/deploy/v2/session/_cancelCore.ts'
 import continueHandler from '../_handlers/deploy/v2/session/_continueCore.ts'
-import statusHandler from '../_handlers/deploy/v2/session/_statusCore.ts'
+import statusHandler from '../_handlers/deploy/v2/session/_advanceCore.ts'
 import { createMockReq as createBaseMockReq, createMockRes } from './helpers'
 
 function makeFreshPrivyJwt(): string {

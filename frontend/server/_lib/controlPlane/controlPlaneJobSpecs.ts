@@ -58,6 +58,7 @@ export function buildControlPlaneJobSpec(input: {
           graduatedAt: input.payload.graduatedAt ?? null,
           settledAt: input.payload.settledAt ?? null,
           settlementStage: input.payload.settlementStage ?? null,
+          settledAtAuthority: input.payload.settledAtAuthority ?? null,
         },
       }
     case 'operator.action': {

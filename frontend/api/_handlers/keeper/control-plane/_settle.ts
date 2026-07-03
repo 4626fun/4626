@@ -34,6 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       graduatedAt: typeof body?.graduatedAt === 'string' ? body.graduatedAt : undefined,
       settledAt: typeof body?.settledAt === 'string' ? body.settledAt : undefined,
       settlementStage: typeof body?.settlementStage === 'string' ? body.settlementStage : undefined,
+      settledAtAuthority: typeof body?.settledAtAuthority === 'string' ? body.settledAtAuthority : undefined,
     })
     return res.status(200).json({ success: true, data: result } satisfies ApiEnvelope<typeof result>)
   } catch (error) {

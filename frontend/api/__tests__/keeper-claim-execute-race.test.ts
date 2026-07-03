@@ -83,6 +83,7 @@ describe('keeper explicit intent: claim/execute race settlement gate', () => {
       vaultAddress: VAULT,
       settledAt: new Date().toISOString(),
       settlementStage: 'completed',
+      settledAtAuthority: 'sweep-completion',
     })
 
     expect(res.statusCode).toBe(202)

@@ -39,4 +39,15 @@ if strings "$SO" | rg -q 'drain_entries|DrainEntries|flush_fees|FlushFees'; then
   exit 1
 fi
 
+# C-01/H2-06 hardening (July 2026): mid-transfer + mint binding gate
+if ! strings "$SO" | rg -q 'No Token-2022 transfer in progress'; then
+  echo "WARN: $SO missing C-01 transfer-in-progress gate strings — verify execute_hook.rs checkout" >&2
+  exit 1
+fi
+if ! strings "$SO" | rg -q 'Token account mint does not match the hooked mint'; then
+  echo "WARN: $SO missing C-01 mint-mismatch gate strings — verify execute_hook.rs checkout" >&2
+  exit 1
+fi
+echo "OK: C-01 transfer/mint hardening strings present"
+
 ls -la "$SO"

@@ -15,6 +15,16 @@ export class SettleVaultExecutionError extends Error {
   }
 }
 
+/**
+ * The only authority allowed to write terminal settlement truth
+ * (`settledAt` / `settlementStage="completed"`). It is asserted exclusively by
+ * the sweep completion path after the on-chain completion invariants pass
+ * (audit §5.1 invariant 5).
+ */
+export const SWEEP_COMPLETION_AUTHORITY = 'sweep-completion' as const
+
+export type SettledTruthAuthority = typeof SWEEP_COMPLETION_AUTHORITY
+
 export type ParsedSettleVaultInput = {
   vaultAddress: `0x${string}`
   graduatedAt: string
@@ -27,6 +37,7 @@ export function parseSettleVaultInput(input: {
   graduatedAt?: string
   settledAt?: string
   settlementStage?: string
+  settledAtAuthority?: string
 }): ParsedSettleVaultInput {
   const vaultAddress = String(input.vaultAddress || '').trim().toLowerCase()
   if (!/^0x[a-f0-9]{40}$/.test(vaultAddress)) {
@@ -50,6 +61,17 @@ export function parseSettleVaultInput(input: {
   }
   if (settledAt) {
     validateSettledAt({ settledAt, normalizedStage })
+  }
+  if (
+    (settledAt || normalizedStage.toLowerCase() === 'completed') &&
+    input.settledAtAuthority !== SWEEP_COMPLETION_AUTHORITY
+  ) {
+    throw new SettleVaultExecutionError({
+      statusCode: 403,
+      code: 'settled_truth_requires_sweep_completion',
+      message:
+        'settledAt / settlementStage="completed" may only be written by the sweep completion path after on-chain invariants pass',
+    })
   }
 
   return {
@@ -115,6 +137,7 @@ export async function executeSettleVault(input: {
   graduatedAt?: string
   settledAt?: string
   settlementStage?: string
+  settledAtAuthority?: string
 }): Promise<ExecuteSettleVaultResult> {
   const parsed = parseSettleVaultInput(input)
 

@@ -1,5 +1,9 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_2022;
+use anchor_spl::token_2022::spl_token_2022::{
+    extension::{transfer_hook::TransferHookAccount, BaseStateWithExtensions, StateWithExtensions},
+    state::Account as SplTokenAccount,
+};
 
 use crate::constants::*;
 use crate::errors::CreatorShareHookError;
@@ -69,6 +73,38 @@ fn is_allowlisted_buy(config: &CreatorConfig, authority: &Pubkey, source_owner: 
     config.is_known_amm(authority) && authority == source_owner
 }
 
+/// Prove the account is a live Token-2022 token account of the hooked mint
+/// that is *currently mid-transfer*.
+///
+/// Token-2022 sets the `TransferHookAccount.transferring` flag on both source
+/// and destination immediately before CPI-ing into the hook and clears it
+/// after, and no other program can set it. Requiring it (plus the mint
+/// binding) means lottery entries can only be recorded during a genuine
+/// transfer of this share mint — direct invocations of `transfer_hook` or the
+/// raw SPL `execute` discriminator with fabricated accounts fail here
+/// (audit C-01 / H2-06).
+fn require_transferring_token_account(
+    account_info: &AccountInfo,
+    expected_mint: &Pubkey,
+) -> Result<Pubkey> {
+    let data = account_info.try_borrow_data()?;
+    let state = StateWithExtensions::<SplTokenAccount>::unpack(&data)
+        .map_err(|_| CreatorShareHookError::InvalidTokenAccount)?;
+    require_keys_eq!(
+        state.base.mint,
+        *expected_mint,
+        CreatorShareHookError::MintMismatch
+    );
+    let hook_ext = state
+        .get_extension::<TransferHookAccount>()
+        .map_err(|_| CreatorShareHookError::TransferNotInProgress)?;
+    require!(
+        bool::from(hook_ext.transferring),
+        CreatorShareHookError::TransferNotInProgress
+    );
+    Ok(state.base.owner)
+}
+
 pub fn handler(mut ctx: Context<TransferHook>, amount: u64) -> Result<()> {
     process_transfer_hook(&mut ctx.accounts, amount)
 }
@@ -84,23 +120,21 @@ pub fn process_transfer_hook(accounts: &mut TransferHook, amount: u64) -> Result
         return Ok(());
     }
 
-    let source_data = accounts.source_token_account.try_borrow_data()?;
-
-    if source_data.len() < 64 {
-        return Ok(());
-    }
-    let source_owner = Pubkey::try_from(&source_data[32..64]).unwrap_or_default();
+    // Both token accounts must be genuine Token-2022 accounts of this mint
+    // with the runtime `transferring` flag set — i.e. we are inside a real
+    // Token-2022 transfer of the hooked share mint, not a forged direct
+    // invocation (audit C-01 / H2-06).
+    let mint_key = accounts.mint.key();
+    let source_owner =
+        require_transferring_token_account(&accounts.source_token_account, &mint_key)?;
     // Treat as AMM buy only when runtime transfer authority is allowlisted AND
     // matches the source token-account owner field.
     if !is_allowlisted_buy(config, &authority, &source_owner) {
         return Ok(());
     }
 
-    let dest_data = accounts.destination_token_account.try_borrow_data()?;
-    if dest_data.len() < 64 {
-        return Ok(());
-    }
-    let buyer = Pubkey::try_from(&dest_data[32..64]).unwrap_or_default();
+    let buyer =
+        require_transferring_token_account(&accounts.destination_token_account, &mint_key)?;
     if buyer == Pubkey::default() {
         return Ok(());
     }
@@ -177,5 +211,115 @@ mod tests {
         let config = config_with_known_amm(amm);
 
         assert!(is_allowlisted_buy(&config, &amm, &amm));
+    }
+
+    // ── Adversarial tests for require_transferring_token_account (C-01/H2-06) ──
+
+    use anchor_spl::token_2022::spl_token_2022::{
+        extension::{BaseStateWithExtensionsMut, ExtensionType, StateWithExtensionsMut},
+        state::AccountState,
+    };
+
+    fn make_token_account_data(
+        mint: &Pubkey,
+        owner: &Pubkey,
+        transferring: Option<bool>,
+    ) -> Vec<u8> {
+        let extensions: Vec<ExtensionType> = if transferring.is_some() {
+            vec![ExtensionType::TransferHookAccount]
+        } else {
+            vec![]
+        };
+        let len =
+            ExtensionType::try_calculate_account_len::<SplTokenAccount>(&extensions).unwrap();
+        let mut data = vec![0u8; len];
+        let mut state =
+            StateWithExtensionsMut::<SplTokenAccount>::unpack_uninitialized(&mut data).unwrap();
+        if let Some(is_transferring) = transferring {
+            let ext = state.init_extension::<TransferHookAccount>(true).unwrap();
+            ext.transferring = is_transferring.into();
+        }
+        state.base.mint = *mint;
+        state.base.owner = *owner;
+        state.base.state = AccountState::Initialized;
+        state.pack_base();
+        state.init_account_type().unwrap();
+        data
+    }
+
+    fn check_account(
+        mint: &Pubkey,
+        owner: &Pubkey,
+        transferring: Option<bool>,
+        expected_mint: &Pubkey,
+    ) -> Result<Pubkey> {
+        let key = Pubkey::new_unique();
+        let program_owner = token_2022::ID;
+        let mut lamports = 1_000_000u64;
+        let mut data = make_token_account_data(mint, owner, transferring);
+        let account_info = AccountInfo::new(
+            &key,
+            false,
+            false,
+            &mut lamports,
+            &mut data,
+            &program_owner,
+            false,
+        );
+        require_transferring_token_account(&account_info, expected_mint)
+    }
+
+    #[test]
+    fn accepts_mid_transfer_account_of_hooked_mint() {
+        let mint = Pubkey::new_unique();
+        let owner = Pubkey::new_unique();
+        let resolved = check_account(&mint, &owner, Some(true), &mint).unwrap();
+        assert_eq!(resolved, owner);
+    }
+
+    #[test]
+    fn rejects_account_of_wrong_mint() {
+        let mint = Pubkey::new_unique();
+        let other_mint = Pubkey::new_unique();
+        let owner = Pubkey::new_unique();
+        let err = check_account(&other_mint, &owner, Some(true), &mint).unwrap_err();
+        assert_eq!(err, CreatorShareHookError::MintMismatch.into());
+    }
+
+    #[test]
+    fn rejects_account_not_mid_transfer() {
+        let mint = Pubkey::new_unique();
+        let owner = Pubkey::new_unique();
+        let err = check_account(&mint, &owner, Some(false), &mint).unwrap_err();
+        assert_eq!(err, CreatorShareHookError::TransferNotInProgress.into());
+    }
+
+    #[test]
+    fn rejects_account_without_transfer_hook_extension() {
+        let mint = Pubkey::new_unique();
+        let owner = Pubkey::new_unique();
+        let err = check_account(&mint, &owner, None, &mint).unwrap_err();
+        assert_eq!(err, CreatorShareHookError::TransferNotInProgress.into());
+    }
+
+    #[test]
+    fn rejects_garbage_account_data() {
+        let key = Pubkey::new_unique();
+        let program_owner = token_2022::ID;
+        let mut lamports = 1_000_000u64;
+        let mut data = vec![0u8; 64]; // fabricated blob mimicking mint+owner bytes only
+        let mint = Pubkey::new_unique();
+        data[0..32].copy_from_slice(mint.as_ref());
+        let account_info = AccountInfo::new(
+            &key,
+            false,
+            false,
+            &mut lamports,
+            &mut data,
+            &program_owner,
+            false,
+        );
+        let err = require_transferring_token_account(&account_info, &mint).unwrap_err();
+        assert_eq!(err, CreatorShareHookError::InvalidTokenAccount.into());
     }
 }

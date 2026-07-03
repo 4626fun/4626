@@ -12,7 +12,8 @@ describe('solana keeper orchestrator', () => {
     expect(normalizeSolanaOrchestratorAction('winner-relay')).toBe('winner_relay')
     expect(normalizeSolanaOrchestratorAction('price_monitor')).toBe('price_monitor')
     expect(normalizeSolanaOrchestratorAction('graduation')).toBe('graduation')
-    expect(normalizeSolanaOrchestratorAction('rebalance')).toBe('rebalance')
+    // Solana rebalance was retired with the v1.15.0 strategy removal.
+    expect(normalizeSolanaOrchestratorAction('rebalance')).toBeNull()
     expect(normalizeSolanaOrchestratorAction('unknown')).toBeNull()
   })
 

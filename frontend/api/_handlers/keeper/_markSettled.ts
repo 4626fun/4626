@@ -23,6 +23,7 @@ import {
   createVaultControlPlane,
   VaultControlPlaneError,
 } from '../../../server/_lib/controlPlane/vaultControlPlane.js'
+import { SWEEP_COMPLETION_AUTHORITY } from '../../../server/_lib/controlPlane/executors/executeSettleVault.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -49,11 +50,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     graduatedAt?: string
     settledAt?: string
     settlementStage?: string
+    settledAtAuthority?: string
   } | null
   const vaultAddress = typeof body?.vaultAddress === 'string' ? body.vaultAddress.trim() : ''
   const graduatedAt = typeof body?.graduatedAt === 'string' ? body.graduatedAt.trim() : ''
   const settledAt = typeof body?.settledAt === 'string' ? body.settledAt.trim() : ''
   const settlementStage = typeof body?.settlementStage === 'string' ? body.settlementStage.trim() : ''
+  // Only the sweep-completion follow-up job may assert settled-truth authority
+  // (audit §5.1 invariant 5); any other value is dropped so the control plane
+  // rejects the write.
+  const settledAtAuthority =
+    body?.settledAtAuthority === SWEEP_COMPLETION_AUTHORITY ? SWEEP_COMPLETION_AUTHORITY : undefined
 
   try {
     if (!isDbConfigured()) {
@@ -65,6 +72,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       graduatedAt,
       settledAt,
       settlementStage,
+      settledAtAuthority,
       requestedBy: 'api:keeper/mark-settled',
     })
 

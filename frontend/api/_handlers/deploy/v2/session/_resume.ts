@@ -13,7 +13,10 @@ import {
 } from '../../../../../server/_lib/deploy/deploySessions.js'
 import { runDeployWorkflow } from '../../../../../server/_lib/deploy/workflow/runner.js'
 import continueCoreHandler from './_continueCore.js'
-import statusCoreHandler from './_statusCore.js'
+// Advancing core (sends UserOps / progresses stages). Only reachable through
+// this explicit resume action — the public `session/status` route stays
+// read-only per AGENTS.md trust-boundary rules (audit H2-03).
+import advanceCoreHandler from './_advanceCore.js'
 import {
   DeploySessionAccessError,
   loadAuthorizedDeploySession,
@@ -62,7 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           invokeHandler({
             req,
             body: { sessionId },
-            handler: statusCoreHandler as any,
+            handler: advanceCoreHandler as any,
           }),
       },
     })

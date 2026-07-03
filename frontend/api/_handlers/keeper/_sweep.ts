@@ -22,6 +22,7 @@ import {
   rateLimitKey,
 } from '@4626/server-core'
 import { createVaultControlPlane } from '../../../server/_lib/controlPlane/vaultControlPlane.js'
+import { SWEEP_COMPLETION_AUTHORITY } from '../../../server/_lib/controlPlane/executors/executeSettleVault.js'
 import { verifyPayoutRouterHarvestReadiness } from '../../../server/_lib/onchain/payoutRouterHarvestReadiness.js'
 import { resolvePayoutRouterSwapPathTokens } from '../../../server/_lib/onchain/payoutRouterHarvestTokens.js'
 import { createPublicClient, createWalletClient, http, type Abi, zeroAddress } from 'viem'
@@ -220,7 +221,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = (await readBoundedJsonObjectBody(req, { maxBytes: 16_384 })) as {
     ccaStrategyAddress?: string
-    enforceInvariants?: boolean
     markSettled?: {
       vaultAddress?: string
     }
@@ -233,7 +233,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       payoutRecipientMode?: PayoutRecipientMode
     }
   } | null
-  const { ccaStrategyAddress, enforceInvariants, invariants } = body ?? {}
+  const { ccaStrategyAddress, invariants } = body ?? {}
   const markSettled = parseMarkSettledInput(body?.markSettled)
   if (!ccaStrategyAddress || !ccaStrategyAddress.startsWith('0x') || ccaStrategyAddress.length !== 42) {
     return res.status(400).json({ success: false, error: 'Invalid ccaStrategyAddress' } satisfies ApiEnvelope<never>)
@@ -268,10 +268,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       hookStrategyAllowlist.size > 0 &&
       hookStrategyAllowlist.has(normalizedStrategyAddress)
     const shouldAttemptHookConfig = hookFlagFromEnv && strategyAllowedForHookConfig
-    const enforceCompletionInvariants =
-      typeof enforceInvariants === 'boolean'
-        ? enforceInvariants
-        : process.env.KEEPER_ENFORCE_COMPLETION_INVARIANTS !== 'false'
+    // Completion invariants are enforced by env only — there is intentionally
+    // no per-request bypass (audit H2-05). Disabling via env is an emergency
+    // override and must page operations.
+    const enforceCompletionInvariants = process.env.KEEPER_ENFORCE_COMPLETION_INVARIANTS !== 'false'
+    if (!enforceCompletionInvariants) {
+      console.error('[keeper/sweep] ALERT: KEEPER_ENFORCE_COMPLETION_INVARIANTS=false — completion invariants disabled via env override', {
+        ccaStrategyAddress: normalizedStrategyAddress,
+      })
+    }
 
     let sweepTxHash: `0x${string}` | null = null
     let migrateTxHash: `0x${string}` | null = null
@@ -622,6 +627,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           vaultAddress: markSettled.vaultAddress,
           settledAt: new Date().toISOString(),
           settlementStage: 'completed',
+          settledAtAuthority: SWEEP_COMPLETION_AUTHORITY,
           requestedBy: 'api:keeper/sweep',
           idempotencyKey: `sweep-complete:${markSettled.vaultAddress}`,
         })

@@ -55,18 +55,29 @@ resolve_keypair() {
     local tmp
     tmp="$(mktemp /tmp/creator-share-hook-upgrade.XXXXXX.json)"
     REPO_ROOT="$(cd "$ROOT/../.." && pwd)"
-    pnpm -C "$REPO_ROOT/kpr" exec node - <<'NODE' "$tmp"
+    SOLANA_KEYPAIR_OUT="$tmp" pnpm -C "$REPO_ROOT/kpr" exec node - <<'NODE'
 const fs = require('node:fs')
-const bs58 = require('bs58')
-const out = process.argv[1]
+const bs58Mod = require('bs58')
+const decode = bs58Mod.decode ?? bs58Mod.default?.decode
+if (typeof decode !== 'function') {
+  console.error('bs58 decode unavailable')
+  process.exit(1)
+}
+const out = process.env.SOLANA_KEYPAIR_OUT
+if (!out) process.exit(1)
 const raw = String(process.env.SOLANA_PRIVATE_KEY ?? '').trim()
 if (!raw) process.exit(1)
 let sk
 if (raw.startsWith('[')) sk = Uint8Array.from(JSON.parse(raw))
 else if (fs.existsSync(raw)) sk = Uint8Array.from(JSON.parse(fs.readFileSync(raw, 'utf8')))
-else sk = bs58.decode(raw)
+else sk = decode(raw)
 fs.writeFileSync(out, JSON.stringify(Array.from(sk)))
 NODE
+    if [[ ! -s "$tmp" ]]; then
+      echo "Failed to decode SOLANA_PRIVATE_KEY to keypair JSON" >&2
+      rm -f "$tmp"
+      exit 1
+    fi
     echo "$tmp"
     return
   fi
@@ -122,6 +133,16 @@ if [[ "$AUTHORITY" != "$EXPECTED_AUTHORITY" ]]; then
 fi
 
 PUBKEY=$(solana address)
+BALANCE=$(solana balance "$PUBKEY" | awk '{print $1}')
+echo "Deployer balance: $BALANCE SOL (need ~2.5–3 SOL buffer rent for deploy; mostly refunded after upgrade)"
+if [[ "$EXECUTE" -eq 1 ]]; then
+  # Rough floor — solana program deploy needs a temporary buffer ~program size.
+  if awk "BEGIN { exit !($BALANCE < 2.0) }"; then
+    echo "Insufficient SOL on upgrade authority $PUBKEY ($BALANCE SOL). Fund to >= 3 SOL before --execute." >&2
+    exit 1
+  fi
+fi
+
 if [[ "$PUBKEY" != "$EXPECTED_AUTHORITY" ]]; then
   if [[ "$EXECUTE" -eq 1 ]]; then
     echo "Keypair pubkey $PUBKEY != upgrade authority $EXPECTED_AUTHORITY" >&2
@@ -172,10 +193,11 @@ DUMP="$ARTIFACTS/post-upgrade-${POST_SLOT}.so"
 solana program dump "$PROGRAM_ID" "$DUMP"
 
 if strings "$DUMP" | rg -q 'relay_entries|RelayEntries|SettleFees' \
-  && ! strings "$DUMP" | rg -q 'drain_entries|DrainEntries|FlushFees'; then
-  echo "Post-upgrade verify: canonical relay_entries / settle_fees bytecode OK"
+  && ! strings "$DUMP" | rg -q 'drain_entries|DrainEntries|FlushFees' \
+  && strings "$DUMP" | rg -q 'No Token-2022 transfer in progress'; then
+  echo "Post-upgrade verify: canonical relay_entries / settle_fees + C-01 hardening bytecode OK"
 else
-  echo "Post-upgrade verify inconclusive — run: pnpm -C frontend ops:verify-hook-mainnet-bytecode" >&2
+  echo "Post-upgrade verify inconclusive — inspect dump at $DUMP" >&2
   exit 1
 fi
 

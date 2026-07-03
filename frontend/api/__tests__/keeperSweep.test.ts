@@ -110,7 +110,6 @@ describe('keeper sweep handler', () => {
         body: {
           ccaStrategyAddress: STRATEGY,
           attemptHookConfig: false,
-          enforceInvariants: true,
           invariants: {
             creatorCoinAddress: CREATOR_COIN,
             shareTokenAddress: SHARE_OFT,
@@ -152,12 +151,85 @@ describe('keeper sweep handler', () => {
     }
   })
 
-  it('skips invariant evaluation entirely when invariant enforcement is disabled', async () => {
+  it('ignores per-request enforceInvariants:false — invariants still run (audit H2-05)', async () => {
     const restoreEnv = applyEnv({
       KPR_API_KEY: 'test-key',
       KPR_PRIVATE_KEY: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       KEEPER_ENABLE_HOOK_CONFIG: 'false',
       KEEPER_ENFORCE_COMPLETION_INVARIANTS: 'true',
+      BASE_RPC_URL: 'https://mainnet.base.org',
+    })
+    try {
+      const publicClient = {
+        readContract: vi.fn(async (args: any) => {
+          switch (args.functionName) {
+            case 'getLifecycleStatus':
+              return createLifecycle()
+            case 'feeRecipient':
+              return GAUGE
+            case 'payoutRecipient':
+              return PAYOUT_ROUTER
+            case 'gaugeController':
+              return GAUGE
+            case 'creatorShareBps':
+              return 0n
+            case 'creatorTreasury':
+              return CREATOR_TREASURY
+            case 'burnStream':
+              return ACTUAL_BURN_STREAM
+            default:
+              throw new Error(`Unexpected read ${String(args.functionName)}`)
+          }
+        }),
+        waitForTransactionReceipt: vi.fn(async () => ({ status: 'success' })),
+        getBlockNumber: vi.fn(async () => 200n),
+      }
+      const walletClient = {
+        writeContract: vi.fn(async () => SWEEP_UNSOLD_HASH),
+        sendTransaction: vi.fn(),
+      }
+      createPublicClientMock.mockReturnValue(publicClient as any)
+      createWalletClientMock.mockReturnValue(walletClient as any)
+
+      const req = createMockReq({
+        method: 'POST',
+        headers: { authorization: 'Bearer test-key' },
+        body: {
+          ccaStrategyAddress: STRATEGY,
+          attemptHookConfig: false,
+          // Attempted per-request bypass — must be ignored.
+          enforceInvariants: false,
+          invariants: {
+            creatorCoinAddress: CREATOR_COIN,
+            shareTokenAddress: SHARE_OFT,
+            gaugeControllerAddress: GAUGE,
+            burnStreamAddress: EXPECTED_BURN_STREAM,
+            payoutRouterAddress: PAYOUT_ROUTER,
+            payoutRecipientMode: 'payout_router',
+          },
+        },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.success).toBe(false)
+      expect(res.body?.error).toBe('completion_invariant_failed')
+      expect(res.body?.data?.completionStage).toBe('invariant_failed')
+      expect(res.body?.data?.invariantsEnforced).toBe(true)
+      expect(res.body?.data?.invariantChecksRun).toBeGreaterThan(0)
+    } finally {
+      restoreEnv()
+    }
+  })
+
+  it('skips invariant evaluation only via the env emergency override', async () => {
+    const restoreEnv = applyEnv({
+      KPR_API_KEY: 'test-key',
+      KPR_PRIVATE_KEY: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      KEEPER_ENABLE_HOOK_CONFIG: 'false',
+      KEEPER_ENFORCE_COMPLETION_INVARIANTS: 'false',
       BASE_RPC_URL: 'https://mainnet.base.org',
     })
     try {
@@ -186,7 +258,6 @@ describe('keeper sweep handler', () => {
         body: {
           ccaStrategyAddress: STRATEGY,
           attemptHookConfig: false,
-          enforceInvariants: false,
           invariants: {
             creatorCoinAddress: CREATOR_COIN,
             shareTokenAddress: SHARE_OFT,

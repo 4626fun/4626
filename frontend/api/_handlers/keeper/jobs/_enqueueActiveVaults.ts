@@ -86,10 +86,6 @@ function payoutRecipientMode(): 'gauge' | 'payout_router' {
   return env('KEEPER_ACTIVE_VAULT_PAYOUT_RECIPIENT_MODE') === 'payout_router' ? 'payout_router' : 'gauge'
 }
 
-function enforceInvariants(): boolean {
-  return env('KEEPER_ACTIVE_VAULT_ENFORCE_INVARIANTS').toLowerCase() !== 'false'
-}
-
 function chainIdFilter(): number {
   const parsed = Number(env('KEEPER_ACTIVE_VAULT_CHAIN_ID') || 8453)
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 8453
@@ -203,7 +199,6 @@ function sweepPayload(row: ActiveVaultRow): Record<string, unknown> | null {
     path: '/api/keeper/sweep',
     body: {
       ccaStrategyAddress,
-      enforceInvariants: enforceInvariants(),
       markSettled: { vaultAddress },
       invariants,
     },

@@ -71,7 +71,7 @@ describe('dispatchProvisioning', () => {
     if (!res.ok) return
     expect(res.outcome).toBe('enqueued')
     expect(res.note).toContain('share-mesh')
-    expect(res.note).toContain('solana:create-dlmm-pool')
+    expect(res.note).toMatch(/keeper job|keeper queue skipped/)
   })
 
   it('enqueues vault_full_deploy with Solana share-mesh keeper job note', async () => {

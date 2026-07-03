@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  executeSolanaRelayEntries,
+  isRelayEntriesLaneEnabled,
+} from '../actions/keepr-solana-relay-entries.action.js'
+import {
   relayEntriesInstructionDiscriminator,
   settleFeesInstructionDiscriminator,
 } from '../utils/hookInstructionDiscriminators.js'
@@ -11,6 +15,45 @@ import {
   PENDING_ENTRIES_ENTRY_SIZE,
   parsePendingEntriesBuffer,
 } from '../utils/pendingEntriesBuffer.js'
+
+describe('relay-entries default-deny lane gate (audit H2-08 / C-01)', () => {
+  function withRelayFlag<T>(value: string | undefined, fn: () => T): T {
+    const prev = process.env.SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED
+    if (value === undefined) delete process.env.SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED
+    else process.env.SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED = value
+    try {
+      return fn()
+    } finally {
+      if (prev === undefined) delete process.env.SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED
+      else process.env.SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED = prev
+    }
+  }
+
+  it('is disabled when the flag is unset, "0", or garbage', () => {
+    withRelayFlag(undefined, () => expect(isRelayEntriesLaneEnabled()).toBe(false))
+    withRelayFlag('0', () => expect(isRelayEntriesLaneEnabled()).toBe(false))
+    withRelayFlag('false', () => expect(isRelayEntriesLaneEnabled()).toBe(false))
+    withRelayFlag('enabled-maybe', () => expect(isRelayEntriesLaneEnabled()).toBe(false))
+  })
+
+  it('is enabled only for explicit truthy values', () => {
+    withRelayFlag('1', () => expect(isRelayEntriesLaneEnabled()).toBe(true))
+    withRelayFlag('true', () => expect(isRelayEntriesLaneEnabled()).toBe(true))
+  })
+
+  it('executeSolanaRelayEntries skips before touching any RPC/env config when denied', async () => {
+    // No SOLANA_RPC_URL / adapter env is configured in this test run — if the
+    // deny gate did not fire first, requireEnv would throw instead of
+    // resolving with an all-zero result.
+    const result = await withRelayFlag(undefined, () => executeSolanaRelayEntries())
+    expect(result).toEqual({
+      entriesQueued: 0,
+      entriesRelayed: 0,
+      overflowCount: 0,
+      emergencyRelay: false,
+    })
+  })
+})
 
 describe('hook instruction discriminators', () => {
   it('defaults to canonical relay_entries / settle_fees names', () => {

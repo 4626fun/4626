@@ -1,3 +1,14 @@
+/**
+ * Deploy-session ADVANCE core (formerly `_statusCore`).
+ *
+ * This handler is NOT a read-only status/preflight surface: on each tick it
+ * may send ERC-4337 UserOps, transition deploy stages, run Solana OVault
+ * preflight gates, and write Ajna registry rows. Per AGENTS.md trust-boundary
+ * rules ("deploy status and preflight paths must be read-only"), it must only
+ * be reachable through the explicit `session/resume` action — never wired to
+ * the public `session/status` route (`_status.ts`), which stays read-only.
+ * Audit reference: 4626-FABLE-2026-07-FINAL H2-03.
+ */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { decodeEventLog, decodeFunctionData, getAddress, isAddress, type Address, type Hex, type SignableMessage } from 'viem'

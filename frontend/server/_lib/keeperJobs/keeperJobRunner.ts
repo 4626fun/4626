@@ -18,6 +18,7 @@ import {
   transitionStageStatus,
 } from '../controlPlane/operations.js'
 import { emitControlPlaneMetric } from '../controlPlane/metrics.js'
+import { SWEEP_COMPLETION_AUTHORITY } from '../controlPlane/executors/executeSettleVault.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -235,10 +236,13 @@ function readSweepFollowUpMarkSettled(job: KeeperJob, result: Record<string, unk
   if (!/^0x[a-f0-9]{40}$/.test(vaultAddress)) return null
   if (result.completed !== true || result.completionStage !== 'completed') return null
 
+  // Authority is asserted only because the sweep handler itself reported
+  // completed status (which requires the completion invariants to have passed).
   return {
     vaultAddress,
     settledAt: new Date().toISOString(),
     settlementStage: 'completed',
+    settledAtAuthority: SWEEP_COMPLETION_AUTHORITY,
   }
 }
 

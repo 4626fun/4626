@@ -137,7 +137,11 @@ function makeRequestBody() {
     creatorToken: '0x0000000000000000000000000000000000000003',
     // Handler invariant: ownerAddress must match smartWallet (canonical deploy sender)
     ownerAddress: '0x0000000000000000000000000000000000000002',
-    phase2FinalizeCalls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x' }],
+    // Phase boundary enforcement requires real finalizePhase2 selectors in the
+    // phase 2 finalize stage (assertDeploySessionPhaseBoundaries).
+    phase2FinalizeCalls: [
+      { to: '0x0000000000000000000000000000000000000010', value: '0', data: makeFinalizePhase2Data() },
+    ],
     phase3Calls: [],
   }
 }
@@ -597,7 +601,7 @@ describe('deploy session ownership guardrails', () => {
     expect(insertDeploySessionMock).not.toHaveBeenCalled()
   })
 
-  it('prepends creatorToken approval before phase2 finalize and whitelists selector', async () => {
+  it('routes creatorToken approval into a synthesized phase2 core stage and whitelists selector', async () => {
     getDbMock.mockResolvedValue(makeCanonicalDb())
     const finalizeData = makeFinalizePhase2Data()
 
@@ -619,12 +623,17 @@ describe('deploy session ownership guardrails', () => {
 
     expect(res.statusCode).toBe(200)
     const insertArgs = (insertDeploySessionMock.mock.calls as any[])[0]?.[0] as any
+    const phase2CoreCalls = insertArgs.payload?.phase2CoreCalls as Array<{ to: string; data: string }>
     const phase2FinalizeCalls = insertArgs.payload?.phase2FinalizeCalls as Array<{ to: string; data: string }>
+    expect(Array.isArray(phase2CoreCalls)).toBe(true)
     expect(Array.isArray(phase2FinalizeCalls)).toBe(true)
-    expect(phase2FinalizeCalls.length).toBe(2)
-    expect(phase2FinalizeCalls[0]?.to?.toLowerCase()).toBe('0x0000000000000000000000000000000000000003')
-    expect(String(phase2FinalizeCalls[0]?.data || '').toLowerCase().startsWith('0x095ea7b3')).toBe(true)
-    expect(String(phase2FinalizeCalls[1]?.data || '').toLowerCase()).toBe(finalizeData.toLowerCase())
+    // Approval must never sit in the finalize stage (phase boundary invariant):
+    // with no user-provided core calls, the core stage is synthesized from it.
+    expect(phase2CoreCalls.length).toBe(1)
+    expect(phase2CoreCalls[0]?.to?.toLowerCase()).toBe('0x0000000000000000000000000000000000000003')
+    expect(String(phase2CoreCalls[0]?.data || '').toLowerCase().startsWith('0x095ea7b3')).toBe(true)
+    expect(phase2FinalizeCalls.length).toBe(1)
+    expect(String(phase2FinalizeCalls[0]?.data || '').toLowerCase()).toBe(finalizeData.toLowerCase())
 
     const decodedApprove = decodeFunctionData({
       abi: [
@@ -639,7 +648,7 @@ describe('deploy session ownership guardrails', () => {
           outputs: [{ type: 'bool' }],
         },
       ] as const,
-      data: phase2FinalizeCalls[0]!.data as `0x${string}`,
+      data: phase2CoreCalls[0]!.data as `0x${string}`,
     })
     expect(decodedApprove.functionName).toBe('approve')
     expect((decodedApprove.args?.[0] as string).toLowerCase()).toBe('0x0000000000000000000000000000000000000010')
@@ -857,7 +866,8 @@ describe('deploy session ownership guardrails', () => {
           },
         ],
         phase3Calls: [],
-        phase4Calls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x12345678' }],
+        // Phase 4 may only contain launchDeferredAuction (0x02afdbcb).
+        phase4Calls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x02afdbcb' }],
         solanaOvault: {
           enabled: true,
           assetMintOrigin: 'existing',

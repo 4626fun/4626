@@ -30,10 +30,6 @@ function payoutRecipientMode(): PayoutRecipientMode {
   return env('KEEPER_SWEEP_CANARY_PAYOUT_RECIPIENT_MODE') === 'payout_router' ? 'payout_router' : 'gauge'
 }
 
-function enforceInvariants(): boolean {
-  return env('KEEPER_SWEEP_CANARY_ENFORCE_INVARIANTS').toLowerCase() !== 'false'
-}
-
 function readInvariantConfig():
   | {
       ok: true
@@ -111,9 +107,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<SweepCanaryResponse>)
   }
 
-  const shouldEnforceInvariants = enforceInvariants()
-  const invariantConfig = shouldEnforceInvariants ? readInvariantConfig() : null
-  if (invariantConfig && !invariantConfig.ok) {
+  // Completion invariants are always enforced by the sweep handler (env-only
+  // override, audit H2-05), so the canary must always ship invariant config.
+  const invariantConfig = readInvariantConfig()
+  if (!invariantConfig.ok) {
     return res.status(503).json({
       success: false,
       error: invariantConfig.reason,
@@ -122,8 +119,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = {
     ccaStrategyAddress,
-    enforceInvariants: shouldEnforceInvariants,
-    ...(invariantConfig?.ok ? { invariants: invariantConfig.invariants } : null),
+    invariants: invariantConfig.invariants,
     ...(markSettledConfig() ? { markSettled: markSettledConfig() } : null),
   }
   const job = await enqueueKeeperJob({

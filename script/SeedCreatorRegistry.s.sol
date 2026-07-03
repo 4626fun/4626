@@ -33,7 +33,8 @@ contract SeedCreatorRegistry is Script {
     //                    DEPLOYED REGISTRY
     // ═══════════════════════════════════════════════════════════════════
 
-    address internal constant DEFAULT_REGISTRY = 0xDD7B106a15540bA2F59464590222bF47D8C9394E;
+    // v1.15.0 greenfield cutover (tmp/base-v1.15.0-handoff.env)
+    address internal constant DEFAULT_REGISTRY = 0x1eb9A364a3E763dD9249ba3413Dc19E13c1F4461;
 
     // ═══════════════════════════════════════════════════════════════════
     //                    CHAIN CONSTANTS
@@ -89,8 +90,9 @@ contract SeedCreatorRegistry is Script {
     // ═══════════════════════════════════════════════════════════════════
 
     address constant CHAINLINK_ETH_USD = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
-    address constant CREATOR_FACTORY = 0xf4a4d70D9fB3b29c56eB2aaE264FBd3DF9221A6a;
-    address constant LOTTERY_MANAGER = 0x29F901864D65Eb848BC548ebCEAcD6dAD39EFd26;
+    // v1.15.0 greenfield cutover (tmp/base-v1.15.0-handoff.env)
+    address constant CREATOR_FACTORY = 0x26b74b1d3AadD17e714068d259051409C9f942d1;
+    address constant LOTTERY_MANAGER = 0xD62a8a2F4c25587FA80ED5782b50Af6654122b0b;
     address constant VAULT_BATCHER = 0x17163e67dED6B45bd2A7E6a509A32fB7b0cB6D33;
     address constant VAULT_ACT_BATCHER = 0xB06d99c81994F5829ba462c4afA78eCff75bC281;
 

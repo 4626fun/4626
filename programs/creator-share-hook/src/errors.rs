@@ -34,4 +34,13 @@ pub enum CreatorShareHookError {
 
     #[msg("Extra account meta list already initialized")]
     MetaListAlreadyInitialized,
+
+    #[msg("Token account could not be unpacked as a Token-2022 account")]
+    InvalidTokenAccount,
+
+    #[msg("Token account mint does not match the hooked mint")]
+    MintMismatch,
+
+    #[msg("No Token-2022 transfer in progress — hook invoked outside a real transfer")]
+    TransferNotInProgress,
 }

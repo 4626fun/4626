@@ -81,6 +81,7 @@ describe('daily brief room resolution', () => {
       flags: {
         roomId: '1043',
         hermitCommandRoomIds: ['2001', '1043'],
+        botToken: 'test-bot-token',
       } as ReturnType<typeof import('./chatBridge.js').readAlfaClubChatBridgeFlags>,
     })
 
@@ -98,6 +99,7 @@ describe('daily brief room resolution', () => {
       flags: {
         roomId: '1043',
         hermitCommandRoomIds: ['1043', '1659'],
+        botToken: 'test-bot-token',
       } as ReturnType<typeof import('./chatBridge.js').readAlfaClubChatBridgeFlags>,
     })
 
@@ -116,6 +118,7 @@ describe('daily brief room resolution', () => {
       flags: {
         roomId: '1043',
         hermitCommandRoomIds: ['1043', '1659'],
+        botToken: 'test-bot-token',
       } as ReturnType<typeof import('./chatBridge.js').readAlfaClubChatBridgeFlags>,
     })
 

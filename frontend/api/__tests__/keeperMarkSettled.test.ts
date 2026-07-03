@@ -103,14 +103,44 @@ describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
     expect(res.body?.success).toBe(true)
   })
 
-  it('accepts settledAt paired with settlementStage="completed"', async () => {
+  it('accepts settledAt paired with settlementStage="completed" from the sweep-completion authority', async () => {
+    const res = await postBody({
+      vaultAddress: VAULT,
+      settledAt: NOW_ISO,
+      settlementStage: 'completed',
+      settledAtAuthority: 'sweep-completion',
+    })
+    expect(res.statusCode).toBe(202)
+    expect(res.body?.success).toBe(true)
+  })
+
+  it('rejects settledAt without the sweep-completion authority (audit H2-04)', async () => {
     const res = await postBody({
       vaultAddress: VAULT,
       settledAt: NOW_ISO,
       settlementStage: 'completed',
     })
-    expect(res.statusCode).toBe(202)
-    expect(res.body?.success).toBe(true)
+    expect(res.statusCode).toBe(403)
+    expect(String(res.body?.error ?? '')).toContain('sweep completion')
+  })
+
+  it('rejects settlementStage="completed" without the sweep-completion authority (audit H2-04)', async () => {
+    const res = await postBody({
+      vaultAddress: VAULT,
+      settlementStage: 'completed',
+    })
+    expect(res.statusCode).toBe(403)
+    expect(String(res.body?.error ?? '')).toContain('sweep completion')
+  })
+
+  it('rejects a forged settledAtAuthority value', async () => {
+    const res = await postBody({
+      vaultAddress: VAULT,
+      settledAt: NOW_ISO,
+      settlementStage: 'completed',
+      settledAtAuthority: 'admin-override',
+    })
+    expect(res.statusCode).toBe(403)
   })
 
   it('rejects settledAt without any settlementStage', async () => {
@@ -134,6 +164,7 @@ describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
       vaultAddress: VAULT,
       settledAt: 'not-a-timestamp',
       settlementStage: 'completed',
+      settledAtAuthority: 'sweep-completion',
     })
     expect(res.statusCode).toBe(400)
     expect(String(res.body?.error ?? '')).toContain('ISO-8601')
@@ -145,6 +176,7 @@ describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
       vaultAddress: VAULT,
       settledAt: farFuture,
       settlementStage: 'completed',
+      settledAtAuthority: 'sweep-completion',
     })
     expect(res.statusCode).toBe(400)
     expect(String(res.body?.error ?? '')).toContain('future')
@@ -156,6 +188,7 @@ describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
       vaultAddress: VAULT,
       settledAt: nearFuture,
       settlementStage: 'completed',
+      settledAtAuthority: 'sweep-completion',
     })
     expect(res.statusCode).toBe(202)
     expect(res.body?.success).toBe(true)

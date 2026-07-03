@@ -81,6 +81,7 @@ describe('vaultControlPlane queueAsyncVerb', () => {
       vaultAddress: '0x1111111111111111111111111111111111111111',
       settlementStage: 'completed',
       settledAt: new Date().toISOString(),
+      settledAtAuthority: 'sweep-completion',
     })
 
     expect(enqueueKeeperJobMock).toHaveBeenCalledWith(
@@ -89,8 +90,26 @@ describe('vaultControlPlane queueAsyncVerb', () => {
         payload: expect.objectContaining({
           path: '/api/keeper/control-plane/settle',
           method: 'POST',
+          body: expect.objectContaining({
+            settledAtAuthority: 'sweep-completion',
+          }),
         }),
       }),
     )
+  })
+
+  it('rejects vault.settle settledAt writes without the sweep-completion authority', async () => {
+    const cp = createVaultControlPlane()
+    await expect(
+      cp.settleVault({
+        vaultAddress: '0x1111111111111111111111111111111111111111',
+        settlementStage: 'completed',
+        settledAt: new Date().toISOString(),
+      }),
+    ).rejects.toMatchObject({
+      code: 'settled_truth_requires_sweep_completion',
+      statusCode: 403,
+    })
+    expect(enqueueKeeperJobMock).not.toHaveBeenCalled()
   })
 })

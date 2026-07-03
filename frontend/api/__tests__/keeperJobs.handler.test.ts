@@ -165,7 +165,6 @@ describe('keeper job coordination handlers', () => {
               path: '/api/keeper/sweep',
               body: {
                 ccaStrategyAddress: '0x1111111111111111111111111111111111111111',
-                enforceInvariants: true,
                 markSettled: {
                   vaultAddress: '0x5555555555555555555555555555555555555555',
                 },
