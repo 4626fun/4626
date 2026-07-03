@@ -4,7 +4,10 @@ import {
   useMemo,
   useRef,
   useState,
-import type { CSSProperties, FormEvent, ReactNode } from 'react'
+  type CSSProperties,
+  type FormEvent,
+  type ReactNode,
+} from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { ArrowLeft, ArrowRight, AlertCircle, Check } from 'lucide-react'
@@ -47,7 +50,8 @@ import { usePrivyOAuthReturnBackendSync } from '@/lib/privy/usePrivyOAuthReturnB
 import { useSafeCrossApp, useSafeLogin, useSafeLoginWithEmail, useSafePrivy, useSafePrivyAccessToken } from '@/lib/privy/safeHooks'
 import { computeAcceptedFromAppAccessStatus } from '@/app/accessShared'
 import { useAccountMe } from '@/hooks/useAccountMe'
-import { fetchAccountTrayPoints } from '@/lib/waitlist/accountTrayPoints' = 30_000
+
+const OTP_RESEND_DELAY_MS = 30_000
 const OTP_SUCCESS_HOLD_MS = 320
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const noop = () => {}
@@ -74,6 +78,14 @@ const WAITLIST_PANEL_STYLE = {
     '0 18px 45px -24px rgba(0, 0, 0, 0.65), 0 0 0 1px rgb(var(--brand-primary) / 0.1), 0 0 28px 4px rgb(var(--brand-primary) / 0.16), 0 0 52px 14px rgb(var(--brand-primary) / 0.1), 0 0 84px 28px rgb(var(--brand-primary) / 0.05)',
 } as const
 
+const WAITLIST_PANEL_SUCCESS_STYLE: CSSProperties = {
+  background: WAITLIST_PANEL_STYLE.background,
+  boxShadow:
+    '0 18px 45px -24px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(52, 211, 153, 0.22), 0 0 28px 4px rgba(52, 211, 153, 0.2), 0 0 52px 14px rgba(52, 211, 153, 0.1), 0 0 84px 28px rgba(52, 211, 153, 0.05)',
+}
+
+type BeamCardAccent = 'default' | 'success'
+
 // A recent member in the social-proof avatar stack. `label` is the hover name
 // (Zora handle / basename / short address); `href` links to their profile.
 type WaitlistAvatar = {
@@ -83,9 +95,20 @@ type WaitlistAvatar = {
 }
 
 // Card shell — static brand-tinted ring (no rotating beam; keeps focus on content).
-function BeamCard({ children, className }: { children: ReactNode; className?: string }) {
+function BeamCard({
+  children,
+  className,
+  accent = 'default',
+}: {
+  children: ReactNode
+  className?: string
+  accent?: BeamCardAccent
+}) {
   return (
-    <div className={cn('relative rounded-2xl', className)} style={WAITLIST_PANEL_STYLE}>
+    <div
+      className={cn('relative rounded-2xl', className)}
+      style={accent === 'success' ? WAITLIST_PANEL_SUCCESS_STYLE : WAITLIST_PANEL_STYLE}
+    >
       {children}
     </div>
   )
@@ -542,8 +565,6 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     resendAvailableAt != null && resendAvailableAt > nowMs ? Math.ceil((resendAvailableAt - nowMs) / 1_000) : 0
 
   const { me: accountMe, refresh: refreshAccountMe } = useAccountMe()
-  const [pointsTotal, setPointsTotal] = useState<number | null>(null)
-  const [pointsRefreshKey, setPointsRefreshKey] = useState(0)
   const [twitterBusy, setTwitterBusy] = useState(false)
   const [twitterError, setTwitterError] = useState<string | null>(null)
   const [walletBusy, setWalletBusy] = useState(false)
@@ -563,7 +584,6 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     if (!props.walletSessionAddress) return
     if (!privy.ready || privy.authenticated !== true) return
     refreshAccountMe()
-    setPointsRefreshKey((key) => key + 1)
   }, [privy.authenticated, privy.ready, props.walletSessionAddress, refreshAccountMe])
 
   const markXPhaseDone = useCallback(() => {
@@ -601,7 +621,6 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
       })
       if (data) {
         refreshAccountMe()
-        setPointsRefreshKey((key) => key + 1)
       }
     } catch (linkError) {
       setTwitterError(linkError instanceof Error ? linkError.message : 'Could not connect Twitter.')
@@ -611,7 +630,6 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   }, [getPrivyAccessToken, privy, refreshAccountMe, twitterBusy, twitterLinked])
 
   const handleEngagementProgressVerified = useCallback(() => {
-    setPointsRefreshKey((key) => key + 1)
     markXPhaseDone()
   }, [markXPhaseDone])
 
@@ -628,7 +646,6 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
       })
       if (data) {
         refreshAccountMe()
-        setPointsRefreshKey((key) => key + 1)
       }
     } catch (linkError) {
       setWalletError(linkError instanceof Error ? linkError.message : 'Could not connect wallet.')
@@ -659,7 +676,6 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
         getAccessToken: getPrivyAccessToken,
       }).catch(() => null)
       refreshAccountMe()
-      setPointsRefreshKey((key) => key + 1)
     } catch (linkError) {
       if (!isUserRejectedCrossAppAuthError(linkError)) {
         setZoraError(linkError instanceof Error ? linkError.message : 'Could not connect Zora.')
@@ -679,7 +695,6 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
 
   const handleOAuthTwitterSynced = useCallback(() => {
     refreshAccountMe()
-    setPointsRefreshKey((key) => key + 1)
   }, [refreshAccountMe])
 
   usePrivyOAuthReturnBackendSync({
@@ -696,30 +711,12 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     },
   })
 
-  // Real waitlist points come from the scored snapshot (`/api/accounts/me/points`).
-  // `/api/accounts/me` does not populate `score`, so reading `accountMe.score`
-  // always returned 0 — fetch the snapshot directly once the session exists.
-  useEffect(() => {
-    if (!joinedSessionAddress) return
-    let cancelled = false
-    void (async () => {
-      try {
-        const token = await getPrivyAccessToken?.()
-        if (!token || cancelled) return
-        const snapshot = await fetchAccountTrayPoints(40, token)
-        if (!cancelled) setPointsTotal(snapshot.points.total)
-      } catch {
-        // auth-required or transient — keep any prior value
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [joinedSessionAddress, getPrivyAccessToken, pointsRefreshKey])
-
   const appAccepted = computeAcceptedFromAppAccessStatus(accountMe?.appAccessStatus ?? null)
-  const points = pointsTotal ?? accountMe?.score?.points ?? 0
-  const progress = computeProgress(points)
+  const returningViaWallet = useMemo(() => {
+    const wallet = props.walletSessionAddress?.trim().toLowerCase()
+    const joined = joinedSessionAddress?.trim().toLowerCase()
+    return Boolean(wallet && joined && wallet === joined)
+  }, [joinedSessionAddress, props.walletSessionAddress])
   const joinedCount = useCountUp(listCount, !joinedSessionAddress)
 
   const socialProof = (
@@ -853,6 +850,13 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                     )}
                   </div>
 
+                  <WaitlistWelcomeGreeting
+                    accountMe={accountMe}
+                    sessionAddress={joinedSessionAddress}
+                    linkedEoaAddress={linkedEoaAddress}
+                    returningViaWallet={returningViaWallet}
+                  />
+
                   <div className="space-y-2">
                     <h1 className="headline text-2xl leading-tight tracking-[-0.03em] sm:text-3xl">
                       {appAccepted ? "You're approved" : "You're on the list"}
@@ -864,8 +868,6 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                     </p>
                   </div>
                 </div>
-
-                <WaitlistPointsProgress progress={progress} points={points} className="mt-7" />
 
                 {/* Earn points — optional identity links, each worth waitlist points. */}
                 <div className="mt-7">
@@ -1011,7 +1013,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                 </p>
               </div>
 
-              <BeamCard className="p-5 sm:p-6">
+              <BeamCard className="p-5 sm:p-6" accent={codeStatus === 'success' ? 'success' : 'default'}>
                 <AnimatePresence mode="wait" initial={false}>
                   {step === 'email' ? (
                     <motion.form
