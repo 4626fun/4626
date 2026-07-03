@@ -4,6 +4,7 @@ import { isAddress } from 'viem'
 import { useChatIdentity } from '@/components/chat/useChatIdentity'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
 import {
+  isValidWaitlistZoraHandle,
   isWaitlistAddressLabel,
   resolveWaitlistWelcomeCopy,
 } from '@/features/waitlist/waitlistWelcomeIdentity'
@@ -24,11 +25,15 @@ function normalizeAddress(value: string | null | undefined): `0x${string}` | nul
 
 export function WaitlistWelcomeGreeting(props: WaitlistWelcomeGreetingProps) {
   const cswAddress = props.accountMe?.accountSignals?.canonicalCswAddress ?? null
-  const zoraHandle = props.accountMe?.accountSignals?.zoraHandle ?? null
+  const zoraHandleRaw = props.accountMe?.accountSignals?.zoraHandle ?? null
+  const zoraHandle = isValidWaitlistZoraHandle(zoraHandleRaw) ? zoraHandleRaw : null
+  const zoraCrossAppAddress = props.accountMe?.linkedMethods?.zora_cross_app?.[0] ?? null
   const resolveAddress =
-    normalizeAddress(cswAddress) ??
+    normalizeAddress(zoraCrossAppAddress) ??
     normalizeAddress(props.linkedEoaAddress) ??
-    normalizeAddress(props.sessionAddress)
+    (props.returningViaWallet ? normalizeAddress(props.sessionAddress) : null) ??
+    normalizeAddress(props.sessionAddress) ??
+    normalizeAddress(cswAddress)
 
   const identity = useChatIdentity(resolveAddress)
 

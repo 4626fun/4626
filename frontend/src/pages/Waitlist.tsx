@@ -5,6 +5,7 @@ import { META, PageMeta } from '@/components/seo/PageMeta'
 import { WaitlistReturningWalletSignInRunner } from '@/features/waitlist/WaitlistReturningWalletSignInRunner'
 import { invalidateAccountMeCache } from '@/hooks/useAccountMe'
 import { PrivyClientProvider, usePrivyClientStatus } from '@/lib/privy/client'
+import { AppQueryProvider } from '@/web3/AppQueryProvider'
 
 const LazyWaitlistFlow = lazy(async () => {
   const mod = await import('@/features/waitlist/WaitlistFlow')
@@ -18,6 +19,7 @@ type WaitlistFlowGateProps = {
   onRequestWalletSignIn: () => void
   onCancelWalletSignIn: () => void
   onClearWalletSignInError: () => void
+  onClearWalletSession: () => void
 }
 
 function WaitlistFlowGate(props: WaitlistFlowGateProps) {
@@ -33,6 +35,7 @@ function WaitlistFlowGate(props: WaitlistFlowGateProps) {
         onRequestWalletSignIn={props.onRequestWalletSignIn}
         onCancelWalletSignIn={props.onCancelWalletSignIn}
         onClearWalletSignInError={props.onClearWalletSignInError}
+        onClearWalletSession={props.onClearWalletSession}
       />
     </Suspense>
   )
@@ -70,17 +73,25 @@ export function Waitlist() {
     setWalletSignInError(null)
   }, [])
 
+  const onClearWalletSession = useCallback(() => {
+    setWalletSessionAddress(null)
+  }, [])
+
+  const waitlistWalletPrivyMode = walletSignInPending
+
   return (
-    <>
+    <AppQueryProvider>
       <PageMeta title={META.waitlist.title} description={META.waitlist.description} canonicalPath="/waitlist" />
       <PrivyClientProvider
+        key={walletSignInPending ? `wallet-${walletSignInAttempt}` : 'waitlist-email'}
         showWalletLoginFirst={walletSignInPending}
-        mode={walletSignInPending ? 'waitlist-returning-wallet' : 'waitlist-email-only'}
-        walletChainType={walletSignInPending ? 'ethereum-only' : undefined}
+        mode={waitlistWalletPrivyMode ? 'waitlist-returning-wallet' : 'waitlist-email-only'}
+        walletChainType={waitlistWalletPrivyMode ? 'ethereum-only' : undefined}
       >
         {walletSignInPending ? (
           <WaitlistReturningWalletSignInRunner
             key={walletSignInAttempt}
+            signInAttempt={walletSignInAttempt}
             onSuccess={onWalletSignInSuccess}
             onFailure={onWalletSignInFailure}
           />
@@ -92,8 +103,9 @@ export function Waitlist() {
           onRequestWalletSignIn={onRequestWalletSignIn}
           onCancelWalletSignIn={onCancelWalletSignIn}
           onClearWalletSignInError={onClearWalletSignInError}
+          onClearWalletSession={onClearWalletSession}
         />
       </PrivyClientProvider>
-    </>
+    </AppQueryProvider>
   )
 }

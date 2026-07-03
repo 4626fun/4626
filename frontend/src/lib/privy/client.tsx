@@ -5,7 +5,7 @@ import { CONFIGURED_APP_ORIGIN, resolveAuthRedirectOrigin } from '@/lib/env/host
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth'
 import { base } from 'viem/chains'
 import { AppLoadingBootstrapGate } from '@/components/layout/AppLoadingOverlay'
-import { createPrivyAppearance } from './clientAppearance'
+import { createPrivyAppearance, WAITLIST_RETURNING_WALLET_LOGIN_LIST } from './clientAppearance'
 import { applyLoopbackPrivySessionMarkerShim } from './loopbackSessionMarkerShim'
 import { PrivyWalletHooksContextProvider } from './walletHooksContext'
 
@@ -20,11 +20,11 @@ if (typeof window !== 'undefined') {
   if ((h === 'localhost' || h === '127.0.0.1') && ! (window as any).__cv_privy_local_guidance_logged) {
     ;(window as any).__cv_privy_local_guidance_logged = true
     console.info(
-      '[privy] Using custom domain privy.4626.fun on localhost.\n' +
-        'If you hit 401 on /oauth/link or "Missing auth token" for embedded signing/XMTP:\n' +
-        '  • In Privy dashboard (Local Dev client): allowlist http://localhost:5173 + :5174 + 127.0.0.1 variants in Allowed Origins.\n' +
-        '  • Allow the redirect URLs your VITE_APP_ORIGIN / VITE_MARKETING_ORIGIN resolve to.\n' +
-        '  • Restart the dev server. See .env.example section "Privy Local Dev with custom domain".'
+      '[privy] Local dev strips Privy custom_api_url and rewrites privy.4626.fun API calls (see privyLoopbackFetchRewrite).\n' +
+        'Waitlist localhost routes omit clientId so wallet/email sessions use localStorage, not server cookies.\n' +
+        'If you hit 401 on /oauth/link outside waitlist:\n' +
+        '  • Allowlist http://localhost:5173 + :5174 in Privy dashboard (Local Dev client).\n' +
+        '  • See .env.example section "Privy Local Dev with custom domain".',
     )
   }
   if (isLocalDevOrigin(window.location.origin) && !window.isSecureContext && ! (window as any).__cv_privy_insecure_origin_logged) {
@@ -41,6 +41,18 @@ if (typeof window !== 'undefined') {
 type PrivyClientStatus = 'disabled' | 'loading' | 'ready'
 export const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
 type PrivyClientMode = 'default' | 'waitlist-email-only' | 'waitlist-returning-wallet'
+
+/** Waitlist routes must not inherit dashboard embedded-wallet defaults (privy.4626.fun iframe → server-cookie mode). */
+const WAITLIST_EMBEDDED_WALLETS_OFF = {
+  ethereum: { createOnLogin: 'off' as const },
+  solana: { createOnLogin: 'off' as const },
+  showWalletUIs: false,
+}
+
+function isLocalDevPrivyApiBypass(): boolean {
+  if (typeof window === 'undefined') return false
+  return isLocalDevOrigin(window.location.origin)
+}
 
 const PrivyClientContext = createContext<PrivyClientStatus>('disabled')
 
@@ -168,6 +180,12 @@ export function PrivyClientProvider(props: {
   const appId = enabled ? getPrivyAppId() : null
   const clientId = enabled ? getPrivyClientId() : null
   const apiUrl = enabled ? getPrivyApiUrl() : null
+  const bypassCustomPrivyDomain = isLocalDevPrivyApiBypass()
+  // Localhost: omit clientId and pin apiUrl to auth.privy.io so Privy never enters
+  // server-cookie mode (refresh_token:"deprecated"). Fetch rewrite strips custom_api_url
+  // from app config and no-ops stray deprecated session refresh POSTs.
+  const resolvedClientId = bypassCustomPrivyDomain ? null : clientId
+  const resolvedApiUrl = bypassCustomPrivyDomain ? (apiUrl ?? 'https://auth.privy.io') : apiUrl
   const hasRuntimeConfig = Boolean(enabled && appId)
   const [runtimeStatus, setRuntimeStatus] = useState<PrivyClientStatus>('loading')
   const [forcedReady, setForcedReady] = useState(false)
@@ -246,7 +264,11 @@ export function PrivyClientProvider(props: {
   const appearance = createPrivyAppearance({
     showWalletLoginFirst:
       mode === 'waitlist-returning-wallet' ? true : showWalletLoginFirst,
-    ...(walletList ? { walletList } : null),
+    ...(walletList
+      ? { walletList }
+      : mode === 'waitlist-returning-wallet'
+        ? { walletList: WAITLIST_RETURNING_WALLET_LOGIN_LIST }
+        : null),
     ...(walletChainType ? { walletChainType } : null),
   })
   // Keep generic web login methods aligned with the canonical account model:
@@ -259,11 +281,13 @@ export function PrivyClientProvider(props: {
         : (['email', 'wallet'] as const)
 
   const embeddedWalletsSupported = canUsePrivyEmbeddedWallets()
+  const isWaitlistPrivyMode = mode === 'waitlist-email-only' || mode === 'waitlist-returning-wallet'
   // Waitlist routes defer embedded-wallet provisioning to account-setup surfaces.
-  // Returning wallet sign-in must stay external-wallet only — auto-create triggers
-  // EmbeddedWalletOnAccountCreateScreen, /api/v1/wallets 401, and logout 400 noise.
-  const embeddedWallets =
-    !embeddedWalletsSupported || mode === 'waitlist-email-only' || mode === 'waitlist-returning-wallet'
+  // Explicit off + showWalletUIs:false — omitting embeddedWallets inherits dashboard
+  // defaults and loads privy.4626.fun/embedded-wallets (server-cookie mode on localhost).
+  const embeddedWallets = isWaitlistPrivyMode
+    ? WAITLIST_EMBEDDED_WALLETS_OFF
+    : !embeddedWalletsSupported
       ? undefined
       : {
           ethereum: { createOnLogin: 'all-users' },
@@ -315,8 +339,8 @@ export function PrivyClientProvider(props: {
     <PrivyClientContext.Provider value={ctx}>
       <PrivyProviderSafetyBoundary
         appId={appId}
-        clientId={clientId}
-        apiUrl={apiUrl}
+        clientId={resolvedClientId}
+        apiUrl={resolvedApiUrl}
         baseConfig={baseConfig}
         safeConfig={safeConfig}
       >

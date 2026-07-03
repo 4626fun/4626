@@ -1,5 +1,6 @@
 import { apiFetch } from '@/lib/api/apiBase'
 import { clearWaitlistRecoveryGate } from '@/features/waitlist/waitlistStorage'
+import { clearPrivySessionMarkerCookie, isLocalDevPrivySessionMarkerMode } from '@/lib/privy/loopbackSessionMarkerShim'
 import { safePrivyLogout } from '@/lib/privy/logout'
 
 const SESSION_TOKEN_KEY = 'cv_siwe_session_token'
@@ -90,6 +91,9 @@ export async function runWaitlistPrivyLogout(params: {
 }): Promise<void> {
   clearStoredWaitlistSessionToken()
   clearWaitlistRecoveryGate()
+  if (isLocalDevPrivySessionMarkerMode()) {
+    clearPrivySessionMarkerCookie()
+  }
   const clearServerSessionPromise = clearServerWaitlistSession()
   const logout = params.logout
   const shouldLogout = params.shouldLogout !== false

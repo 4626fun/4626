@@ -12,6 +12,29 @@ export function isWaitlistAddressLabel(label: string): boolean {
   )
 }
 
+/** Reject wallet addresses (including embedded EOAs) masquerading as Zora handles. */
+export function isValidWaitlistZoraHandle(value: string | null | undefined): boolean {
+  const trimmed = value?.trim()
+  if (!trimmed) return false
+  const withoutAt = trimmed.replace(/^@+/, '')
+  if (withoutAt.startsWith('0x')) return false
+  if (/^0x[a-fA-F0-9]{40}$/i.test(withoutAt)) return false
+  if (isWaitlistAddressLabel(withoutAt)) return false
+  return true
+}
+
+function isWaitlistNamedIdentityLabel(
+  label: string | null | undefined,
+  source: WaitlistIdentitySource | null | undefined,
+): boolean {
+  const trimmed = label?.trim()
+  if (!trimmed || !source || source === 'address') return false
+  if (isWaitlistAddressLabel(trimmed)) return false
+  if (/^0x[a-fA-F0-9]{40}$/i.test(trimmed)) return false
+  if (source === 'zora' && !isValidWaitlistZoraHandle(trimmed)) return false
+  return true
+}
+
 type WaitlistIdentitySource = 'zora' | 'basename' | 'ens' | 'address'
 
 export function formatWaitlistNamedIdentityLabel(
@@ -47,7 +70,7 @@ export function resolveWaitlistWelcomeCopy(input: {
   sessionAddress?: string | null
   returningViaWallet?: boolean
 }): { prefix: 'Welcome back' | 'Welcome'; label: string } | null {
-  const zoraRaw = input.zoraHandle?.trim()
+  const zoraRaw = isValidWaitlistZoraHandle(input.zoraHandle) ? input.zoraHandle?.trim() : null
   const zoraLabel = zoraRaw ? `@${zoraRaw.replace(/^@/, '')}` : null
 
   let label: string | null = null
@@ -57,19 +80,21 @@ export function resolveWaitlistWelcomeCopy(input: {
     label = zoraLabel
     isNamedIdentity = true
   } else if (
-    input.identitySource &&
-    input.identitySource !== 'address' &&
-    input.identityDisplayName?.trim()
+    isWaitlistNamedIdentityLabel(input.identityDisplayName, input.identitySource)
   ) {
     label = formatWaitlistNamedIdentityLabel(
-      input.identityDisplayName,
-      input.identitySource,
+      input.identityDisplayName!.trim(),
+      input.identitySource as Exclude<WaitlistIdentitySource, 'address'>,
     )
     isNamedIdentity = true
   }
 
   if (!label) {
-    const address = input.linkedEoaAddress ?? input.cswAddress ?? input.sessionAddress
+    const address =
+      input.linkedEoaAddress ??
+      (input.returningViaWallet ? input.sessionAddress : null) ??
+      input.sessionAddress ??
+      input.cswAddress
     if (address?.trim()) {
       label = formatWaitlistShortAddress(address)
     }

@@ -70,6 +70,7 @@ type WaitlistFlowProps = {
   onRequestWalletSignIn?: () => void
   onCancelWalletSignIn?: () => void
   onClearWalletSignInError?: () => void
+  onClearWalletSession?: () => void
 }
 
 const WAITLIST_PANEL_STYLE = {
@@ -246,6 +247,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   const onRequestWalletSignIn = props.onRequestWalletSignIn ?? noop
   const onCancelWalletSignIn = props.onCancelWalletSignIn ?? noop
   const onClearWalletSignInError = props.onClearWalletSignInError ?? noop
+  const onClearWalletSession = props.onClearWalletSession ?? noop
   const walletSignInPending = props.walletSignInPending === true
   const privy = useSafePrivy()
   const { sendCode, loginWithCode } = useSafeLoginWithEmail()
@@ -319,12 +321,6 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   )
 
   useEffect(() => {
-    if (!props.walletSessionAddress) return
-    if (privy.ready !== true || privy.authenticated !== true) return
-    setLocalSessionAddress(props.walletSessionAddress)
-  }, [props.walletSessionAddress, privy.authenticated, privy.ready])
-
-  useEffect(() => {
     if (!props.walletSignInError) return
     setError(props.walletSignInError)
     onClearWalletSignInError()
@@ -357,6 +353,8 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
       walletSignInPending,
       signupInProgress,
       serverSessionAddress,
+      walletSessionAddress: props.walletSessionAddress ?? null,
+      localSessionAddress,
     })
 
     if (!shouldClear) {
@@ -374,6 +372,8 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
         walletSignInPending,
         signupInProgress: step === 'code' || emailBusy || codeBusy,
         serverSessionAddress,
+        walletSessionAddress: props.walletSessionAddress ?? null,
+        localSessionAddress,
       })
       if (!stillShouldClear || orphanSessionCleanupRef.current) return
       orphanSessionCleanupRef.current = true
@@ -398,6 +398,8 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     step,
     emailBusy,
     codeBusy,
+    localSessionAddress,
+    props.walletSessionAddress,
   ])
 
   // Lightweight social proof — fetch once on mount (not on every auth transition).
@@ -567,6 +569,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
       orphanSessionCleanupRef.current = false
       setServerSessionAddress(null)
       setLocalSessionAddress(null)
+      onClearWalletSession()
       setStep('email')
       setEmail('')
       setCode('')
@@ -577,7 +580,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     } finally {
       setSignOutBusy(false)
     }
-  }, [privy.getAccessToken, privy.logout, signOutBusy])
+  }, [onClearWalletSession, privy.getAccessToken, privy.logout, signOutBusy])
 
   const handleEmailFormSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()

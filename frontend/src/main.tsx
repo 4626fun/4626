@@ -18,6 +18,7 @@ import {
   isPrivyPasswordlessInitRequest,
   normalizeFetchMethod,
 } from '@/lib/privy/passwordlessFetchGuard'
+import { installPrivyLoopbackFetchRewrite } from '@/lib/privy/privyLoopbackFetchRewrite'
 import '@4626/brand-kit/styles'
 import './index.css'
 import '@google/model-viewer' // registers <model-viewer>; bundled so devtools don't resolve CDN maps under webRoot
@@ -233,6 +234,7 @@ function tryRecoverFromViteOptimizeDepError(message: string, source: string): bo
 
 if (typeof window !== 'undefined') {
   try {
+    installPrivyLoopbackFetchRewrite()
     stabilizeScrollMeasurementRoots()
 
     if (!(window as any).__cvWalletNoisePatched) {

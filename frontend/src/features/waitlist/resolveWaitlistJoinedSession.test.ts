@@ -34,6 +34,46 @@ describe('resolveWaitlistJoinedSessionAddress', () => {
     ).toBeNull()
   })
 
+  it('returns local session during wallet handoff when Privy is briefly unauthenticated', () => {
+    expect(
+      resolveWaitlistJoinedSessionAddress({
+        ...BASE,
+        privyAuthenticated: false,
+        localSessionAddress: '0xWallet',
+        walletSessionAddress: '0xwallet',
+        serverSessionAddress: '0xserver',
+      }),
+    ).toBe('0xWallet')
+  })
+
+  it('returns parent wallet session before local state syncs', () => {
+    expect(
+      resolveWaitlistJoinedSessionAddress({
+        ...BASE,
+        sessionProbeComplete: false,
+        privyReady: false,
+        privyAuthenticated: false,
+        localSessionAddress: null,
+        walletSessionAddress: '0xwallet',
+        serverSessionAddress: '0xserver',
+      }),
+    ).toBe('0xwallet')
+  })
+
+  it('returns parent wallet session when Privy remounts after wallet sign-in', () => {
+    expect(
+      resolveWaitlistJoinedSessionAddress({
+        ...BASE,
+        sessionProbeComplete: true,
+        privyReady: false,
+        privyAuthenticated: false,
+        localSessionAddress: null,
+        walletSessionAddress: '0xabc',
+        serverSessionAddress: null,
+      }),
+    ).toBe('0xabc')
+  })
+
   it('returns null while returning wallet sign-in overlay is active', () => {
     expect(
       resolveWaitlistJoinedSessionAddress({
@@ -110,6 +150,34 @@ describe('shouldClearOrphanWaitlistServerSession', () => {
         privyAuthenticated: true,
         walletSignInPending: false,
         serverSessionAddress: '0xabc',
+      }),
+    ).toBe(false)
+  })
+
+  it('does not clear during wallet handoff when Privy is briefly unauthenticated', () => {
+    expect(
+      shouldClearOrphanWaitlistServerSession({
+        sessionProbeComplete: true,
+        privyReady: true,
+        privyAuthenticated: false,
+        walletSignInPending: false,
+        serverSessionAddress: '0xwallet',
+        walletSessionAddress: '0xwallet',
+        localSessionAddress: '0xWallet',
+      }),
+    ).toBe(false)
+  })
+
+  it('does not clear when parent holds wallet session before local sync', () => {
+    expect(
+      shouldClearOrphanWaitlistServerSession({
+        sessionProbeComplete: true,
+        privyReady: true,
+        privyAuthenticated: false,
+        walletSignInPending: false,
+        serverSessionAddress: '0xwallet',
+        walletSessionAddress: '0xwallet',
+        localSessionAddress: null,
       }),
     ).toBe(false)
   })

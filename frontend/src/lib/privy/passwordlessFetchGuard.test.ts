@@ -4,11 +4,14 @@ import {
   getPrivyPasswordlessBackoffMs,
   getPrivyPasswordlessFailureBackoffMs,
   getPrivyPasswordlessInitUrl,
+  isPrivyAppConfigRequest,
+  isPrivyDeprecatedSessionRefreshRequest,
   isPrivyPasswordlessFailure,
   isPrivyPasswordlessInitRequest,
   normalizeFetchMethod,
   rewritePrivyLegacyRequestInput,
   rewritePrivyLegacyRequestUrl,
+  sanitizePrivyAppConfigPayload,
 } from './passwordlessFetchGuard'
 
 describe('passwordlessFetchGuard', () => {
@@ -34,6 +37,9 @@ describe('passwordlessFetchGuard', () => {
   it('rewrites legacy Privy custom-domain API requests to auth.privy.io', () => {
     expect(rewritePrivyLegacyRequestUrl('https://privy.4626.fun/api/v1/passwordless/init')).toBe(
       'https://auth.privy.io/api/v1/passwordless/init',
+    )
+    expect(rewritePrivyLegacyRequestUrl('https://privy.4626.fun/api/v1/sessions')).toBe(
+      'https://auth.privy.io/api/v1/sessions',
     )
     expect(rewritePrivyLegacyRequestUrl('https://privy.4626.fun/healthz')).toBe('https://privy.4626.fun/healthz')
     expect(rewritePrivyLegacyRequestUrl('https://auth.privy.io/api/v1/passwordless/init')).toBe(
@@ -68,6 +74,36 @@ describe('passwordlessFetchGuard', () => {
   it('falls back to the default cooldown when retry-after is absent', () => {
     const response = new Response(null, { status: 429 })
     expect(getPrivyPasswordlessBackoffMs(response)).toBe(30_000)
+  })
+
+  it('matches Privy app config GET requests', () => {
+    expect(
+      isPrivyAppConfigRequest('https://auth.privy.io/api/v1/apps/cmk411efm034jl50cs618o8cy', 'GET'),
+    ).toBe(true)
+    expect(
+      isPrivyAppConfigRequest('https://auth.privy.io/api/v1/apps/cmk411efm034jl50cs618o8cy/clients', 'GET'),
+    ).toBe(false)
+    expect(
+      isPrivyAppConfigRequest('https://auth.privy.io/api/v1/apps/cmk411efm034jl50cs618o8cy', 'POST'),
+    ).toBe(false)
+  })
+
+  it('strips custom_api_url from Privy app config payloads', () => {
+    const sanitized = sanitizePrivyAppConfigPayload({
+      id: 'app',
+      custom_api_url: 'https://privy.4626.fun',
+    }) as { custom_api_url?: string; id: string }
+    expect(sanitized.id).toBe('app')
+    expect(sanitized.custom_api_url).toBeUndefined()
+  })
+
+  it('matches deprecated server-cookie session refresh POSTs only', () => {
+    const url = 'https://auth.privy.io/api/v1/sessions'
+    const deprecatedBody = JSON.stringify({ refresh_token: 'deprecated' })
+    const realBody = JSON.stringify({ refresh_token: 'abc123' })
+    expect(isPrivyDeprecatedSessionRefreshRequest(url, 'POST', deprecatedBody)).toBe(true)
+    expect(isPrivyDeprecatedSessionRefreshRequest(url, 'POST', realBody)).toBe(false)
+    expect(isPrivyDeprecatedSessionRefreshRequest(url, 'GET', deprecatedBody)).toBe(false)
   })
 
   it('recognizes the rate-limit and browser-network failures Privy surfaces for OTP init', () => {

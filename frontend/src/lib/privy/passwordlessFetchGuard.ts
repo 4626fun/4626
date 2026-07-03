@@ -18,6 +18,10 @@ export function normalizeFetchMethod(value: string | null | undefined): string {
 
 const PRIVY_PASSWORDLESS_INIT_PATH = '/api/v1/passwordless/init'
 const PRIVY_PASSWORDLESS_INIT_HOSTS = ['auth.privy.io', 'privy.4626.fun']
+const PRIVY_APP_CONFIG_PATH = /^\/api\/v1\/apps\/[^/]+$/
+const PRIVY_SESSIONS_PATH = '/api/v1/sessions'
+const PRIVY_PRIVY_IO_HOSTS = ['auth.privy.io', 'privy.4626.fun']
+const PRIVY_DEPRECATED_REFRESH_TOKEN = 'deprecated'
 
 export function isPrivyPasswordlessInitRequest(url: string, method: string): boolean {
   if (normalizeFetchMethod(method) !== 'POST') return false
@@ -29,6 +33,70 @@ export function isPrivyPasswordlessInitRequest(url: string, method: string): boo
     )
   } catch {
     return false
+  }
+}
+
+export function isPrivyDeprecatedSessionRefreshRequest(
+  url: string,
+  method: string,
+  bodyText: string | null | undefined,
+): boolean {
+  if (normalizeFetchMethod(method) !== 'POST') return false
+  try {
+    const parsed = new URL(url)
+    if (!PRIVY_PRIVY_IO_HOSTS.includes(parsed.hostname.toLowerCase())) return false
+    if (parsed.pathname !== PRIVY_SESSIONS_PATH) return false
+    if (!bodyText) return false
+    const json = JSON.parse(bodyText) as { refresh_token?: unknown }
+    return json?.refresh_token === PRIVY_DEPRECATED_REFRESH_TOKEN
+  } catch {
+    return false
+  }
+}
+
+export function isPrivyAppConfigRequest(url: string, method: string): boolean {
+  if (normalizeFetchMethod(method) !== 'GET') return false
+  try {
+    const parsed = new URL(url)
+    return (
+      PRIVY_PRIVY_IO_HOSTS.includes(parsed.hostname.toLowerCase()) &&
+      PRIVY_APP_CONFIG_PATH.test(parsed.pathname)
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Privy dashboard sets `custom_api_url` to https://privy.4626.fun. On init the SDK
+ * calls updateApiUrl() which enables server-cookie mode (`refresh_token: "deprecated"`).
+ * Localhost cannot use those HttpOnly cookies — strip the field so the SDK stays on
+ * auth.privy.io localStorage sessions.
+ */
+export function sanitizePrivyAppConfigPayload(payload: unknown): unknown {
+  if (!payload || typeof payload !== 'object') return payload
+  const record = payload as Record<string, unknown>
+  if (!record.custom_api_url) return payload
+  const next = { ...record }
+  delete next.custom_api_url
+  return next
+}
+
+export async function sanitizePrivyAppConfigResponse(response: Response): Promise<Response> {
+  if (!response.ok) return response
+  try {
+    const payload = await response.clone().json()
+    const sanitized = sanitizePrivyAppConfigPayload(payload)
+    if (sanitized === payload) return response
+    const headers = new Headers(response.headers)
+    headers.delete('content-length')
+    return new Response(JSON.stringify(sanitized), {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    })
+  } catch {
+    return response
   }
 }
 

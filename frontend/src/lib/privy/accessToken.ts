@@ -1,3 +1,8 @@
+import {
+  assertPrivySessionMarkerCookie,
+  isLocalDevPrivySessionMarkerMode,
+} from '@/lib/privy/loopbackSessionMarkerShim'
+
 const PRIVY_ACCESS_TOKEN_TIMEOUT_MS = 4_000
 const PRIVY_ACCESS_TOKEN_ATTEMPTS = 8
 const PRIVY_ACCESS_TOKEN_RETRY_DELAY_MS = 250
@@ -31,6 +36,9 @@ export async function readPrivyAccessTokenWithRetries(params: {
   const validate = params.validate
 
   async function readValidatedToken(): Promise<string> {
+    if (!isLocalDevPrivySessionMarkerMode()) {
+      assertPrivySessionMarkerCookie()
+    }
     const value = await read!().catch(() => null)
     const token = String(value ?? '').trim()
     if (!token) return ''

@@ -12,6 +12,7 @@ vi.mock('@/features/waitlist/waitlistHandoff', () => ({
 
 vi.mock('@/features/waitlist/waitlistAuthState', () => ({
   runWaitlistPrivyLogout: vi.fn(async () => undefined),
+  isAlreadyLoggedInAuthError: vi.fn(() => false),
 }))
 
 vi.mock('@/lib/privy/accessToken', () => ({
@@ -76,15 +77,25 @@ describe('waitlistPrivySession', () => {
     )
   })
 
-  it('runWaitlistReturningWalletSignIn reuses a live Privy token without wallet modal', async () => {
+  it('runWaitlistReturningWalletSignIn clears an existing Privy token before wallet modal', async () => {
     const login = vi.fn()
+    let tokenReads = 0
+    vi.mocked(readPrivyAccessTokenWithRetries).mockImplementation(async () => {
+      tokenReads += 1
+      return tokenReads === 1 ? 'privy-token' : 'privy-token'
+    })
+
     const address = await runWaitlistReturningWalletSignIn({
       privy: { ...mockPrivy, authenticated: true },
       login,
     })
     expect(address).toBe('0xabc1234567890123456789012345678901234567')
-    expect(login).not.toHaveBeenCalled()
-    expect(runWaitlistPrivyLogout).not.toHaveBeenCalled()
+    expect(runWaitlistPrivyLogout).toHaveBeenCalledWith(
+      expect.objectContaining({ shouldLogout: true }),
+    )
+    expect(login).toHaveBeenCalledWith(
+      expect.objectContaining({ loginMethods: ['wallet'] }),
+    )
   })
 
   it('runWaitlistReturningWalletSignIn opens wallet login when unauthenticated', async () => {
@@ -104,6 +115,30 @@ describe('waitlistPrivySession', () => {
       expect.objectContaining({ loginMethods: ['wallet'] }),
     )
     expect(runWaitlistPrivyLogout).not.toHaveBeenCalled()
+  })
+
+  it('runWaitlistReturningWalletSignIn deduplicates concurrent calls', async () => {
+    const login = vi.fn()
+    let tokenReads = 0
+    vi.mocked(readPrivyAccessTokenWithRetries).mockImplementation(async () => {
+      tokenReads += 1
+      return tokenReads <= 1 ? null : 'privy-token'
+    })
+
+    const [first, second] = await Promise.all([
+      runWaitlistReturningWalletSignIn({
+        privy: { ...mockPrivy, authenticated: false },
+        login,
+      }),
+      runWaitlistReturningWalletSignIn({
+        privy: { ...mockPrivy, authenticated: false },
+        login,
+      }),
+    ])
+
+    expect(first).toBe('0xabc1234567890123456789012345678901234567')
+    expect(second).toBe(first)
+    expect(login).toHaveBeenCalledTimes(1)
   })
 
   it('isWaitlistWalletSignInCancellation detects user cancellation', () => {

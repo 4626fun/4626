@@ -6,13 +6,17 @@ import {
   runWaitlistReturningWalletSignIn,
 } from '@/features/waitlist/waitlistPrivySession'
 import { usePrivyClientStatus } from '@/lib/privy/client'
+import {
+  clearPrivySessionMarkerCookie,
+  isLocalDevPrivySessionMarkerMode,
+} from '@/lib/privy/loopbackSessionMarkerShim'
 import { useSafeLogin, useSafePrivy } from '@/lib/privy/safeHooks'
 
 const WALLET_SIGN_IN_TIMEOUT_MS = 90_000
 const WALLET_READY_POLL_MS = 100
-const WALLET_READY_FORCE_MS = 4_000
-
+const WALLET_READY_FORCE_MS = 8_000
 type WaitlistReturningWalletSignInRunnerProps = {
+  signInAttempt: number
   onSuccess: (address: string) => void
   onFailure: (message: string | null) => void
 }
@@ -26,7 +30,7 @@ export function WaitlistReturningWalletSignInRunner(props: WaitlistReturningWall
   const privyClientStatusRef = useRef(privyClientStatus)
   const onSuccessRef = useRef(props.onSuccess)
   const onFailureRef = useRef(props.onFailure)
-  const signInStartedRef = useRef(false)
+  const activeAttemptRef = useRef(props.signInAttempt)
 
   useEffect(() => {
     privyRef.current = privy
@@ -34,24 +38,40 @@ export function WaitlistReturningWalletSignInRunner(props: WaitlistReturningWall
     privyClientStatusRef.current = privyClientStatus
     onSuccessRef.current = props.onSuccess
     onFailureRef.current = props.onFailure
+    activeAttemptRef.current = props.signInAttempt
   })
 
   useEffect(() => {
-    let active = true
+    const attempt = props.signInAttempt
     let readyPollId = 0
     let timeoutId = 0
+    let disposed = false
+
+    const isActiveAttempt = () => !disposed && activeAttemptRef.current === attempt
 
     const isPrivyRuntimeReady = () =>
       privyClientStatusRef.current === 'ready' || privyRef.current.ready === true
 
+    const failAttempt = (message: string | null) => {
+      if (!isActiveAttempt()) return
+      window.clearTimeout(timeoutId)
+      if (isLocalDevPrivySessionMarkerMode()) {
+        clearPrivySessionMarkerCookie()
+      }
+      onFailureRef.current(message)
+    }
+
+    const succeedAttempt = (address: string) => {
+      if (!isActiveAttempt()) return
+      window.clearTimeout(timeoutId)
+      onSuccessRef.current(address)
+    }
+
     const runSignIn = () => {
-      if (!active || signInStartedRef.current) return
-      signInStartedRef.current = true
+      if (!isActiveAttempt()) return
 
       timeoutId = window.setTimeout(() => {
-        if (!active) return
-        active = false
-        onFailureRef.current(
+        failAttempt(
           'Wallet sign-in timed out. Try a private window with one wallet extension enabled, or sign in with email.',
         )
       }, WALLET_SIGN_IN_TIMEOUT_MS)
@@ -62,15 +82,9 @@ export function WaitlistReturningWalletSignInRunner(props: WaitlistReturningWall
             privy: privyRef.current,
             login: (input) => loginRef.current(input),
           })
-          if (!active) return
-          active = false
-          window.clearTimeout(timeoutId)
-          onSuccessRef.current(address)
+          succeedAttempt(address)
         } catch (signInError) {
-          if (!active) return
-          active = false
-          window.clearTimeout(timeoutId)
-          onFailureRef.current(
+          failAttempt(
             isWaitlistWalletSignInCancellation(signInError)
               ? null
               : mapWaitlistWalletSignInError(signInError),
@@ -82,7 +96,7 @@ export function WaitlistReturningWalletSignInRunner(props: WaitlistReturningWall
     const waitForReadyThenRun = () => {
       const startedAt = Date.now()
       const poll = () => {
-        if (!active) return
+        if (!isActiveAttempt()) return
         if (isPrivyRuntimeReady() || Date.now() - startedAt >= WALLET_READY_FORCE_MS) {
           runSignIn()
           return
@@ -95,11 +109,11 @@ export function WaitlistReturningWalletSignInRunner(props: WaitlistReturningWall
     waitForReadyThenRun()
 
     return () => {
-      active = false
+      disposed = true
       window.clearTimeout(readyPollId)
       window.clearTimeout(timeoutId)
     }
-  }, [])
+  }, [props.signInAttempt])
 
   return null
 }
