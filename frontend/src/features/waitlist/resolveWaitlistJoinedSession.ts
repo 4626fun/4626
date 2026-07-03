@@ -26,15 +26,19 @@ export function resolveWaitlistJoinedSessionAddress(input: WaitlistJoinedSession
   )
 }
 
+export type OrphanWaitlistServerSessionInput = Pick<
+  WaitlistJoinedSessionInput,
+  'sessionProbeComplete' | 'privyReady' | 'privyAuthenticated' | 'walletSignInPending' | 'serverSessionAddress'
+> & {
+  /** True while email OTP send/verify or post-auth bootstrap is in flight. */
+  signupInProgress?: boolean
+}
+
 /** Server session cookie without Privy auth — stale wallet/bootstrap handoff. */
-export function shouldClearOrphanWaitlistServerSession(
-  input: Pick<
-    WaitlistJoinedSessionInput,
-    'sessionProbeComplete' | 'privyReady' | 'privyAuthenticated' | 'walletSignInPending' | 'serverSessionAddress'
-  >,
-): boolean {
+export function shouldClearOrphanWaitlistServerSession(input: OrphanWaitlistServerSessionInput): boolean {
   if (!input.sessionProbeComplete || !input.privyReady) return false
   if (input.walletSignInPending) return false
+  if (input.signupInProgress) return false
   if (input.privyAuthenticated) return false
   return Boolean(trimAddress(input.serverSessionAddress))
 }

@@ -39,7 +39,10 @@ describe('waitlistPrivySession', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(readPrivyAccessTokenWithRetries).mockResolvedValue('privy-token')
-    vi.mocked(bridgePrivySession).mockResolvedValue(true)
+    vi.mocked(bridgePrivySession).mockResolvedValue({
+      ok: true,
+      address: '0xabc1234567890123456789012345678901234567',
+    })
     vi.mocked(apiFetch).mockImplementation(async (path: string) => {
       if (path === '/api/waitlist/bootstrap') {
         return {
@@ -57,10 +60,11 @@ describe('waitlistPrivySession', () => {
     })
   })
 
-  it('establishWaitlistSessionAfterPrivyAuth returns confirmed session address', async () => {
+  it('establishWaitlistSessionAfterPrivyAuth returns bridged address without auth/me round-trip', async () => {
     const address = await establishWaitlistSessionAfterPrivyAuth({ privy: mockPrivy })
     expect(address).toBe('0xabc1234567890123456789012345678901234567')
     expect(bridgePrivySession).toHaveBeenCalledWith('privy-token')
+    expect(vi.mocked(apiFetch).mock.calls.some(([path]) => path === '/api/auth/me')).toBe(false)
   })
 
   it('mapWaitlistWalletSignInError maps wallet-bound recovery', () => {

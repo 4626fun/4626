@@ -37,7 +37,10 @@ describe('waitlist handoff helpers', () => {
       }),
     )
 
-    await expect(bridgePrivySession('privy-token-123')).resolves.toBe(true)
+    await expect(bridgePrivySession('privy-token-123')).resolves.toEqual({
+      ok: true,
+      address: '0xceca13f2686ed061c57620ecdf67e1b8c0f285e9',
+    })
 
     expect(apiFetchMock).toHaveBeenCalledWith(
       '/api/auth/privy',
@@ -70,13 +73,13 @@ describe('waitlist handoff helpers', () => {
 
   it('does not touch sessionStorage when Privy bridge fails', async () => {
     apiFetchMock.mockResolvedValueOnce(jsonResponse({ success: false, error: 'nope' }, { status: 401 }))
-    await expect(bridgePrivySession('privy-token-123')).resolves.toBe(false)
+    await expect(bridgePrivySession('privy-token-123')).resolves.toEqual({ ok: false })
     expect(writeStoredSessionTokenMock).not.toHaveBeenCalled()
   })
 
   it('returns false on an empty/invalid privy token without hitting the network', async () => {
-    await expect(bridgePrivySession('')).resolves.toBe(false)
-    await expect(bridgePrivySession(null)).resolves.toBe(false)
+    await expect(bridgePrivySession('')).resolves.toEqual({ ok: false })
+    await expect(bridgePrivySession(null)).resolves.toEqual({ ok: false })
     expect(apiFetchMock).not.toHaveBeenCalled()
     expect(writeStoredSessionTokenMock).not.toHaveBeenCalled()
   })

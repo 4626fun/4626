@@ -19,15 +19,20 @@ type HandoffCreateResponse = {
   expiresAt: string
 }
 
+export type BridgePrivySessionResult =
+  | { ok: true; address: string }
+  | { ok: false; address?: null }
+
 /**
  * Exchange a Privy access token for a 4626 session on the current origin.
- * The session itself lives in the HttpOnly `cv_auth_session` cookie; this
- * function just signals whether that cookie was successfully established
- * so the caller knows the next same-origin request will be authenticated.
+ * The session lives in the HttpOnly `cv_auth_session` cookie; the bridged
+ * address is returned from `/api/auth/privy` so callers do not need an
+ * immediate `/api/auth/me` round-trip (which can race cookie propagation,
+ * client read backoff, or stale Bearer shadowing).
  */
-export async function bridgePrivySession(privyToken: string | null): Promise<boolean> {
+export async function bridgePrivySession(privyToken: string | null): Promise<BridgePrivySessionResult> {
   const token = typeof privyToken === 'string' ? privyToken.trim() : ''
-  if (!token) return false
+  if (!token) return { ok: false }
 
   const authRes = await apiFetch('/api/auth/privy', {
     method: 'POST',
@@ -39,7 +44,7 @@ export async function bridgePrivySession(privyToken: string | null): Promise<boo
   }).catch(() => null)
 
   const payload = authRes
-    ? ((await authRes.json().catch(() => null)) as ApiEnvelope<unknown> | null)
+    ? ((await authRes.json().catch(() => null)) as ApiEnvelope<{ address?: unknown }> | null)
     : null
 
   if (authRes?.status === 409) {
@@ -59,18 +64,22 @@ export async function bridgePrivySession(privyToken: string | null): Promise<boo
     }
   }
 
-  const ok = Boolean(authRes?.ok)
-  if (ok) {
-    // FINDING-02: the 4626 session is now in the HttpOnly cv_auth_session
-    // cookie. Clear any stale cv_siwe_session_token in sessionStorage so
-    // apiBase.ts does not inject a mismatched Authorization header on
-    // subsequent /api/* calls. Server prefers Bearer over cookie, so a
-    // stale token would shadow the fresh cookie and surface as "logged
-    // out on /swap" after a same-origin navigation (where the cross-origin
-    // handoff redeem — which already clears sessionStorage — is skipped).
-    writeStoredSessionToken(null)
-  }
-  return ok
+  const ok = Boolean(authRes?.ok && payload?.success)
+  if (!ok) return { ok: false }
+
+  const address =
+    payload?.data && typeof payload.data.address === 'string' ? payload.data.address.trim() : ''
+  if (!address) return { ok: false }
+
+  // FINDING-02: the 4626 session is now in the HttpOnly cv_auth_session
+  // cookie. Clear any stale cv_siwe_session_token in sessionStorage so
+  // apiBase.ts does not inject a mismatched Authorization header on
+  // subsequent /api/* calls. Server prefers Bearer over cookie, so a
+  // stale token would shadow the fresh cookie and surface as "logged
+  // out on /swap" after a same-origin navigation (where the cross-origin
+  // handoff redeem — which already clears sessionStorage — is skipped).
+  writeStoredSessionToken(null)
+  return { ok: true, address }
 }
 
 /**

@@ -343,30 +343,42 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     }
   }, [privy.ready])
 
+  const signupInProgress = step === 'code' || emailBusy || codeBusy || signupInFlightRef.current
+
   useEffect(() => {
-    if (
-      !shouldClearOrphanWaitlistServerSession({
-        sessionProbeComplete,
-        privyReady: privy.ready === true,
-        privyAuthenticated: privy.authenticated === true,
-        walletSignInPending,
-        serverSessionAddress,
-      })
-    ) {
+    const shouldClear = shouldClearOrphanWaitlistServerSession({
+      sessionProbeComplete,
+      privyReady: privy.ready === true,
+      privyAuthenticated: privy.authenticated === true,
+      walletSignInPending,
+      signupInProgress,
+      serverSessionAddress,
+    })
+
+    if (!shouldClear) {
+      orphanSessionCleanupRef.current = false
       return
     }
     if (orphanSessionCleanupRef.current) return
     orphanSessionCleanupRef.current = true
+
+    let cleanupStale = false
     void runWaitlistPrivyLogout({ logout: null, shouldLogout: false }).finally(() => {
+      // A user can finish email OTP while this POST is in flight — never wipe a fresh handoff.
+      if (cleanupStale) return
       setServerSessionAddress(null)
-      setLocalSessionAddress(null)
     })
+
+    return () => {
+      cleanupStale = true
+    }
   }, [
     sessionProbeComplete,
     privy.ready,
     privy.authenticated,
     serverSessionAddress,
     walletSignInPending,
+    signupInProgress,
   ])
 
   // Lightweight social proof — avatars always render (placeholders when empty).
@@ -431,6 +443,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
         'Could not verify your email session. Please try again. If the issue persists, try an incognito/private window or temporarily disable browser wallet extensions.',
     })
     setLocalSessionAddress(confirmedSessionAddress)
+    setServerSessionAddress(confirmedSessionAddress)
   }, [privy])
 
   const handleSignInWithLinkedWallet = useCallback(() => {
@@ -803,71 +816,71 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                 className="space-y-6 sm:space-y-7"
               >
             <BeamCard className="p-6 text-center sm:p-8">
-                <div className="flex flex-col items-center gap-4">
-                  <div className="relative flex items-center justify-center">
-                    {appAccepted && !reduceMotion ? (
-                      <motion.span
-                        aria-hidden="true"
-                        className="absolute inset-0 rounded-full"
-                        initial={{ boxShadow: '0 0 0 0 rgb(var(--brand-primary) / 0.5)' }}
-                        animate={{
-                          boxShadow: [
-                            '0 0 0 0 rgb(var(--brand-primary) / 0.45)',
-                            '0 0 0 16px rgb(var(--brand-primary) / 0)',
-                          ],
-                        }}
-                        transition={{ duration: 2.1, ease: 'easeOut', repeat: Infinity }}
-                      />
-                    ) : null}
-                    {appAccepted ? (
-                      <motion.span
-                        initial={reduceMotion ? false : { scale: 0.6, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-                        className="relative flex size-14 items-center justify-center rounded-full"
-                        style={{
-                          background:
-                            'linear-gradient(160deg, rgb(var(--brand-hover)), rgb(var(--brand-primary)))',
-                          boxShadow:
-                            'inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -2px 4px rgba(0,0,0,0.25), 0 10px 24px -8px rgb(var(--brand-primary) / 0.7)',
-                        }}
-                      >
-                        <Check className="size-7 text-white" aria-hidden="true" />
-                      </motion.span>
-                    ) : (
-                      <motion.img
-                        src={siteAssets.logo}
-                        alt=""
-                        aria-hidden="true"
-                        width={48}
-                        height={48}
-                        draggable={false}
-                        initial={reduceMotion ? false : { scale: 0.85, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-                        className="size-12 select-none object-contain"
-                      />
-                    )}
-                  </div>
-
-                  <WaitlistWelcomeGreeting
-                    accountMe={accountMe}
-                    sessionAddress={joinedSessionAddress}
-                    linkedEoaAddress={linkedEoaAddress}
-                    returningViaWallet={returningViaWallet}
-                  />
-
-                  <div className="space-y-2">
-                    <h1 className="headline text-2xl leading-tight tracking-[-0.03em] sm:text-3xl">
-                      {appAccepted ? "You're approved" : "You're on the list"}
-                    </h1>
-                    <p className="text-sm leading-relaxed text-zinc-400">
-                      {appAccepted
-                        ? 'Open the app to continue.'
-                        : "We'll notify you when your spot opens."}
-                    </p>
-                  </div>
+              <div className="flex flex-col items-center gap-4">
+                <div className="relative flex items-center justify-center">
+                  {appAccepted && !reduceMotion ? (
+                    <motion.span
+                      aria-hidden="true"
+                      className="absolute inset-0 rounded-full"
+                      initial={{ boxShadow: '0 0 0 0 rgb(var(--brand-primary) / 0.5)' }}
+                      animate={{
+                        boxShadow: [
+                          '0 0 0 0 rgb(var(--brand-primary) / 0.45)',
+                          '0 0 0 16px rgb(var(--brand-primary) / 0)',
+                        ],
+                      }}
+                      transition={{ duration: 2.1, ease: 'easeOut', repeat: Infinity }}
+                    />
+                  ) : null}
+                  {appAccepted ? (
+                    <motion.span
+                      initial={reduceMotion ? false : { scale: 0.6, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                      className="relative flex size-14 items-center justify-center rounded-full"
+                      style={{
+                        background:
+                          'linear-gradient(160deg, rgb(var(--brand-hover)), rgb(var(--brand-primary)))',
+                        boxShadow:
+                          'inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -2px 4px rgba(0,0,0,0.25), 0 10px 24px -8px rgb(var(--brand-primary) / 0.7)',
+                      }}
+                    >
+                      <Check className="size-7 text-white" aria-hidden="true" />
+                    </motion.span>
+                  ) : (
+                    <motion.img
+                      src={siteAssets.logo}
+                      alt=""
+                      aria-hidden="true"
+                      width={48}
+                      height={48}
+                      draggable={false}
+                      initial={reduceMotion ? false : { scale: 0.85, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                      className="size-12 select-none object-contain"
+                    />
+                  )}
                 </div>
+
+                <WaitlistWelcomeGreeting
+                  accountMe={accountMe}
+                  sessionAddress={joinedSessionAddress}
+                  linkedEoaAddress={linkedEoaAddress}
+                  returningViaWallet={returningViaWallet}
+                />
+
+                <div className="space-y-2">
+                  <h1 className="headline text-2xl leading-tight tracking-[-0.03em] sm:text-3xl">
+                    {appAccepted ? "You're approved" : "You're on the list"}
+                  </h1>
+                  <p className="text-sm leading-relaxed text-zinc-400">
+                    {appAccepted
+                      ? 'Open the app to continue.'
+                      : "We'll notify you when your spot opens."}
+                  </p>
+                </div>
+              </div>
 
                 {/* Earn points — optional identity links, each worth waitlist points. */}
                 <div className="mt-7">

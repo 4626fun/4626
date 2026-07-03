@@ -89,6 +89,19 @@ describe('shouldClearOrphanWaitlistServerSession', () => {
     ).toBe(false)
   })
 
+  it('does not clear while email signup is in progress', () => {
+    expect(
+      shouldClearOrphanWaitlistServerSession({
+        sessionProbeComplete: true,
+        privyReady: true,
+        privyAuthenticated: false,
+        walletSignInPending: false,
+        signupInProgress: true,
+        serverSessionAddress: '0xorphan',
+      }),
+    ).toBe(false)
+  })
+
   it('does not clear when Privy is authenticated', () => {
     expect(
       shouldClearOrphanWaitlistServerSession({

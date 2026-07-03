@@ -13,7 +13,7 @@ vi.mock('@privy-io/react-auth', () => ({
 }))
 
 vi.mock('@/features/waitlist/waitlistHandoff', () => ({
-  bridgePrivySession: async () => null,
+  bridgePrivySession: async () => ({ ok: false as const }),
   createAuthHandoffCode: async () => '',
 }))
 

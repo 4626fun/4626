@@ -16,9 +16,20 @@ type AuthMeResponse = {
 } | null
 
 const AUTH_SESSION_READ_BACKOFF_MS = 8_000
+const AUTH_SESSION_CONFIRM_ATTEMPTS = 6
+const AUTH_SESSION_CONFIRM_DELAY_MS = 150
 
 let authSessionReadInFlight: Promise<string | null> | null = null
 let authSessionReadBackoffUntil = 0
+
+type ReadAuthSessionAddressOptions = {
+  bypassBackoff?: boolean
+  bypassSharedInflight?: boolean
+}
+
+export function resetAuthSessionReadBackoff(): void {
+  authSessionReadBackoffUntil = 0
+}
 
 function readAuthSessionRetryAfterMs(response: Response): number {
   const raw = response.headers.get('retry-after')
@@ -30,32 +41,56 @@ function readAuthSessionRetryAfterMs(response: Response): number {
   return AUTH_SESSION_READ_BACKOFF_MS
 }
 
-export async function readAuthSessionAddress(): Promise<string | null> {
-  if (Date.now() < authSessionReadBackoffUntil) return null
-  if (authSessionReadInFlight) return authSessionReadInFlight
+async function fetchAuthSessionAddress(options: ReadAuthSessionAddressOptions = {}): Promise<string | null> {
+  if (!options.bypassBackoff && Date.now() < authSessionReadBackoffUntil) return null
 
-  authSessionReadInFlight = (async () => {
-    try {
-      const response = await apiFetch('/api/auth/me', {
-        headers: { Accept: 'application/json' },
-      }).catch(() => null)
-      if (!response) return null
-      if (response.status === 429) {
-        authSessionReadBackoffUntil = Date.now() + readAuthSessionRetryAfterMs(response)
-        return null
-      }
-      if (!response.ok) return null
-      const payload = (await response.json().catch(() => null)) as ApiEnvelope<AuthMeResponse> | null
-      if (!payload?.success) return null
-      const address =
-        payload.data && typeof payload.data.address === 'string' ? payload.data.address.trim() : ''
-      return address || null
-    } finally {
-      authSessionReadInFlight = null
+  const response = await apiFetch('/api/auth/me', {
+    withCredentials: true,
+    headers: { Accept: 'application/json' },
+  }).catch(() => null)
+  if (!response) return null
+  if (response.status === 429) {
+    authSessionReadBackoffUntil = Date.now() + readAuthSessionRetryAfterMs(response)
+    return null
+  }
+  if (!response.ok) return null
+  const payload = (await response.json().catch(() => null)) as ApiEnvelope<AuthMeResponse> | null
+  if (!payload?.success) return null
+  const address = payload.data && typeof payload.data.address === 'string' ? payload.data.address.trim() : ''
+  return address || null
+}
+
+export async function readAuthSessionAddress(options: ReadAuthSessionAddressOptions = {}): Promise<string | null> {
+  if (!options.bypassSharedInflight && authSessionReadInFlight) return authSessionReadInFlight
+
+  const readPromise = fetchAuthSessionAddress(options).finally(() => {
+    if (authSessionReadInFlight === readPromise) authSessionReadInFlight = null
+  })
+
+  if (!options.bypassSharedInflight) authSessionReadInFlight = readPromise
+  return readPromise
+}
+
+async function confirmAuthSessionAddressAfterBridge(
+  bridgedAddress: string | null,
+): Promise<string | null> {
+  const normalizedBridge = bridgedAddress?.trim()
+  if (normalizedBridge) return normalizedBridge
+
+  resetAuthSessionReadBackoff()
+  for (let attempt = 0; attempt < AUTH_SESSION_CONFIRM_ATTEMPTS; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise<void>((resolve) => {
+        globalThis.setTimeout(resolve, AUTH_SESSION_CONFIRM_DELAY_MS * attempt)
+      })
     }
-  })()
-
-  return authSessionReadInFlight
+    const address = await readAuthSessionAddress({
+      bypassBackoff: true,
+      bypassSharedInflight: true,
+    })
+    if (address) return address
+  }
+  return null
 }
 
 async function bootstrapWaitlist(privyAccessToken: string): Promise<WaitlistBootstrapResponse> {
@@ -227,10 +262,12 @@ export async function establishWaitlistSessionAfterPrivyAuth(
       )
     }
 
-    bridged = await bridgePrivySession(privyToken)
-    if (!bridged) {
+    const bridgeResult = await bridgePrivySession(privyToken)
+    if (!bridgeResult.ok) {
       throw new Error('Could not create your app session. Please try again.')
     }
+    bridged = true
+    const bridgedSessionAddress = bridgeResult.address
 
     let bootstrap = await bootstrapWaitlist(privyToken)
     if (bootstrap.requiresPrivyAuth) {
@@ -247,7 +284,7 @@ export async function establishWaitlistSessionAfterPrivyAuth(
       throw new Error('No account found for this wallet. Join with email first.')
     }
 
-    const confirmedSessionAddress = await readAuthSessionAddress()
+    const confirmedSessionAddress = await confirmAuthSessionAddressAfterBridge(bridgedSessionAddress)
     if (!confirmedSessionAddress) {
       throw new Error('Sign-in finished but session is still syncing. Please try once more.')
     }

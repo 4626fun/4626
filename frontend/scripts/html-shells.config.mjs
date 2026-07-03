@@ -63,6 +63,8 @@ const BASE_HTML_SHELL_CONFIG = {
   baseAppId: '695a49dc4d3a403912ed8ca5',
   talentappProjectVerification:
     '4b7b5b97d054b1a85c4d9635e53e928824fe96da81482cdecc54993bbe539de3df58eba944a698e62a7e6d5bad8b974254b2770354f4f3521c083c74a74af0da',
+  // Virtuals Protocol agent website verification (InverseAKITA /app.4626.fun/arena/introduction)
+  virtualProtocolSiteVerification: 'a9444dd8655bb6af95ea6bf9140dfc78',
   miniappLaunchName: '4626.fun',
   miniappSplashBackgroundColor: SHARED_SITE_CONFIG.themeColor,
   faviconIcoPath: `${SHARED_SITE_CONFIG.assets.faviconIco}?v=${BRAND_ASSET_VERSION}`,
@@ -179,6 +181,7 @@ export const HTML_SHELL_TEMPLATE_VARS = {
   TELEGRAM_LINK_URL: HTML_SHELL_CONFIG.telegramLinkUrl,
   BASE_APP_ID: HTML_SHELL_CONFIG.baseAppId,
   TALENTAPP_PROJECT_VERIFICATION: HTML_SHELL_CONFIG.talentappProjectVerification,
+  VIRTUAL_PROTOCOL_SITE_VERIFICATION: HTML_SHELL_CONFIG.virtualProtocolSiteVerification,
   MINIAPP_LAUNCH_NAME: HTML_SHELL_CONFIG.miniappLaunchName,
   MINIAPP_SPLASH_BACKGROUND_COLOR: HTML_SHELL_CONFIG.miniappSplashBackgroundColor,
   CANVAS_BG: CANVAS_TOKENS.bg,

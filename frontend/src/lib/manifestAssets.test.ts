@@ -98,6 +98,9 @@ describe('public manifest assets', () => {
     expect(appHtml).not.toContain('rel="mask-icon"')
     expect(appHtml).toContain('<link rel="manifest" href="/site.webmanifest" crossorigin="use-credentials" />')
     expect(appHtml).toContain('<meta name="theme-color" content="#000000" />')
+    expect(appHtml).toContain(
+      '<meta name="virtual-protocol-site-verification" content="a9444dd8655bb6af95ea6bf9140dfc78" />',
+    )
   })
 
   it('keeps shell-level social assets aligned with their intended surfaces', () => {
