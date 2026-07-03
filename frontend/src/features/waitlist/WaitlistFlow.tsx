@@ -268,6 +268,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   const [serverSessionAddress, setServerSessionAddress] = useState<string | null>(null)
   const [sessionProbeComplete, setSessionProbeComplete] = useState(false)
   const orphanSessionCleanupRef = useRef(false)
+  const sessionProbeStartedRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const [listCount, setListCount] = useState<number | null>(null)
   const [memberAvatars, setMemberAvatars] = useState<WaitlistAvatar[]>([])
@@ -331,6 +332,8 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
 
   useEffect(() => {
     if (!privy.ready) return
+    if (sessionProbeStartedRef.current) return
+    sessionProbeStartedRef.current = true
     let cancelled = false
     void (async () => {
       const address = await readAuthSessionAddress()
@@ -344,6 +347,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   }, [privy.ready])
 
   const signupInProgress = step === 'code' || emailBusy || codeBusy || signupInFlightRef.current
+  const ORPHAN_SESSION_CLEANUP_DELAY_MS = 2_000
 
   useEffect(() => {
     const shouldClear = shouldClearOrphanWaitlistServerSession({
@@ -356,21 +360,33 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     })
 
     if (!shouldClear) {
-      orphanSessionCleanupRef.current = false
       return
     }
     if (orphanSessionCleanupRef.current) return
-    orphanSessionCleanupRef.current = true
 
-    let cleanupStale = false
-    void runWaitlistPrivyLogout({ logout: null, shouldLogout: false }).finally(() => {
-      // A user can finish email OTP while this POST is in flight — never wipe a fresh handoff.
-      if (cleanupStale) return
-      setServerSessionAddress(null)
-    })
+    let cancelled = false
+    const timer = globalThis.setTimeout(() => {
+      if (cancelled) return
+      const stillShouldClear = shouldClearOrphanWaitlistServerSession({
+        sessionProbeComplete,
+        privyReady: privy.ready === true,
+        privyAuthenticated: privy.authenticated === true,
+        walletSignInPending,
+        signupInProgress: step === 'code' || emailBusy || codeBusy,
+        serverSessionAddress,
+      })
+      if (!stillShouldClear || orphanSessionCleanupRef.current) return
+      orphanSessionCleanupRef.current = true
+
+      void runWaitlistPrivyLogout({ logout: null, shouldLogout: false }).finally(() => {
+        if (cancelled) return
+        setServerSessionAddress(null)
+      })
+    }, ORPHAN_SESSION_CLEANUP_DELAY_MS)
 
     return () => {
-      cleanupStale = true
+      cancelled = true
+      globalThis.clearTimeout(timer)
     }
   }, [
     sessionProbeComplete,
@@ -379,11 +395,12 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     serverSessionAddress,
     walletSignInPending,
     signupInProgress,
+    step,
+    emailBusy,
+    codeBusy,
   ])
 
-  // Lightweight social proof — avatars always render (placeholders when empty).
-  // Refetch when auth state changes so signed-in views still get stats if the
-  // initial mount fetch raced or failed.
+  // Lightweight social proof — fetch once on mount (not on every auth transition).
   useEffect(() => {
     let cancelled = false
     void (async () => {
@@ -412,7 +429,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     return () => {
       cancelled = true
     }
-  }, [joinedSessionAddress])
+  }, [])
 
   // Auto-focus the email field on intentional CTA arrival.
   useEffect(() => {
@@ -577,7 +594,9 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   const resendSeconds =
     resendAvailableAt != null && resendAvailableAt > nowMs ? Math.ceil((resendAvailableAt - nowMs) / 1_000) : 0
 
-  const { me: accountMe, refresh: refreshAccountMe } = useAccountMe()
+  const { me: accountMe, refresh: refreshAccountMe } = useAccountMe({
+    enabled: Boolean(joinedSessionAddress),
+  })
   const [twitterBusy, setTwitterBusy] = useState(false)
   const [twitterError, setTwitterError] = useState<string | null>(null)
   const [walletBusy, setWalletBusy] = useState(false)
@@ -711,6 +730,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   }, [refreshAccountMe])
 
   usePrivyOAuthReturnBackendSync({
+    enabled: Boolean(joinedSessionAddress),
     providers: ['twitter'],
     privyReady: privy.ready,
     privyAuthenticated: privy.authenticated,

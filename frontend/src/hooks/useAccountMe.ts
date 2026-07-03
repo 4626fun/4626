@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { apiFetch } from '@/lib/api/apiBase'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
@@ -101,11 +101,12 @@ export function invalidateAccountMeCache(): void {
   clearAccountMeCache()
 }
 
-export function useAccountMe(): {
+export function useAccountMe(options?: { enabled?: boolean }): {
   me: AccountSetupMe | null
   loading: boolean
   refresh: () => void
 } {
+  const enabled = options?.enabled !== false
   const [me, setMe] = useState<AccountSetupMe | null>(cached ?? null)
   const [refreshCounter, setRefreshCounter] = useState(0)
   const [settledCounter, setSettledCounter] = useState<number>(() => (cached !== undefined ? 0 : -1))
@@ -113,12 +114,14 @@ export function useAccountMe(): {
   const accessTokenReady = getAccessToken != null
 
   const loading = useMemo(() => {
+    if (!enabled) return false
     if (cached != null && refreshCounter === 0) return false
     if (!accessTokenReady) return true
     return settledCounter !== refreshCounter
-  }, [accessTokenReady, refreshCounter, settledCounter])
+  }, [accessTokenReady, enabled, refreshCounter, settledCounter])
 
   useEffect(() => {
+    if (!enabled) return
     let cancelled = false
     let retryTimeout: number | undefined
     // Reuse a successful module cache on first mount only. Do not skip when
@@ -165,9 +168,10 @@ export function useAccountMe(): {
       cancelled = true
       if (retryTimeout !== undefined) window.clearTimeout(retryTimeout)
     }
-  }, [accessTokenReady, getAccessToken, refreshCounter])
+  }, [accessTokenReady, enabled, getAccessToken, refreshCounter])
 
   useEffect(() => {
+    if (!enabled) return
     if (typeof window === 'undefined') return
     const onFocus = () => {
       clearAccountMeCache()
@@ -175,14 +179,16 @@ export function useAccountMe(): {
     }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
+  }, [enabled])
+
+  const refresh = useCallback(() => {
+    clearAccountMeCache()
+    setRefreshCounter((c) => c + 1)
   }, [])
 
   return {
     me,
     loading,
-    refresh: () => {
-      clearAccountMeCache()
-      setRefreshCounter((c) => c + 1)
-    },
+    refresh,
   }
 }

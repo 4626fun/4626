@@ -176,19 +176,17 @@ async function readExistingPrivyAccessToken(privy: SafePrivyClient): Promise<str
 }
 
 /**
- * Returning waitlist wallet sign-in:
- * 1. Reuse an existing Privy session/token when present (never call login() twice).
- * 2. Open the wallet picker only when unauthenticated and token-less.
- * 3. Poll for a live access token after the user finishes in the Privy modal.
+ * Drop stale SDK/auth shell before opening the wallet picker.
+ * Never logout a live Privy token — returning sign-in reuses it when valid.
  */
 async function clearStalePrivySessionBeforeWalletLogin(privy: SafePrivyClient): Promise<void> {
   const existingToken = await readExistingPrivyAccessToken(privy)
-  if (!privy.authenticated && !existingToken) return
+  if (existingToken) return
+  if (!privy.authenticated) return
 
   await runWaitlistPrivyLogout({
-    logout: privy.logout ?? null,
-    readToken: privy.getAccessToken ?? null,
-    timeoutMs: 2_000,
+    logout: null,
+    shouldLogout: false,
   })
 }
 
@@ -198,21 +196,42 @@ export async function runWaitlistReturningWalletSignIn(params: {
 }): Promise<string> {
   const { privy, login } = params
 
-  await clearStalePrivySessionBeforeWalletLogin(privy)
+  const existingToken = await readExistingPrivyAccessToken(privy)
+  if (existingToken) {
+    assertPrivySessionMarkerCookie()
+    try {
+      return await establishWaitlistSessionAfterPrivyAuth({
+        privy,
+        missingTokenMessage: 'No account found for this wallet. Join with email first.',
+        tokenAttempts: 8,
+        tokenRetryDelayMs: 250,
+        tokenTimeoutMs: null,
+      })
+    } catch (error) {
+      if (!isAlreadyLoggedInAuthError(error)) throw error
+      await runWaitlistPrivyLogout({
+        logout: privy.logout ?? null,
+        readToken: privy.getAccessToken ?? null,
+        timeoutMs: 2_000,
+      })
+    }
+  } else {
+    await clearStalePrivySessionBeforeWalletLogin(privy)
+  }
 
   login({
     loginMethods: ['wallet'],
     walletList: WAITLIST_RETURNING_WALLET_LOGIN_LIST,
   })
 
-  const existingToken = await readPrivyAccessTokenWithRetries({
+  const walletLoginToken = await readPrivyAccessTokenWithRetries({
     read: privy.getAccessToken?.bind(privy) ?? null,
     attempts: 60,
     retryDelayMs: 500,
     timeoutMs: null,
   })
 
-  if (!existingToken) {
+  if (!walletLoginToken) {
     throw new Error('Sign-in cancelled.')
   }
 
@@ -228,7 +247,12 @@ export async function runWaitlistReturningWalletSignIn(params: {
     })
   } catch (error) {
     if (isAlreadyLoggedInAuthError(error)) {
-      await clearStalePrivySessionBeforeWalletLogin(privy)
+      await runWaitlistPrivyLogout({
+        logout: privy.logout ?? null,
+        readToken: privy.getAccessToken ?? null,
+        timeoutMs: 2_000,
+        shouldLogout: false,
+      })
     }
     throw error
   }
@@ -294,6 +318,7 @@ export async function establishWaitlistSessionAfterPrivyAuth(
       await runWaitlistPrivyLogout({
         logout: privy.logout ?? null,
         readToken: privy.getAccessToken ?? null,
+        shouldLogout: false,
       }).catch(() => {})
     }
     throw joinError

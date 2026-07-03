@@ -20,6 +20,7 @@ vi.mock('@/lib/privy/accessToken', () => ({
 
 import { apiFetch } from '@/lib/api/apiBase'
 import { bridgePrivySession } from '@/features/waitlist/waitlistHandoff'
+import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import { readPrivyAccessTokenWithRetries } from '@/lib/privy/accessToken'
 import {
   establishWaitlistSessionAfterPrivyAuth,
@@ -75,21 +76,24 @@ describe('waitlistPrivySession', () => {
     )
   })
 
-  it('runWaitlistReturningWalletSignIn always opens wallet login after clearing stale session', async () => {
+  it('runWaitlistReturningWalletSignIn reuses a live Privy token without wallet modal', async () => {
     const login = vi.fn()
     const address = await runWaitlistReturningWalletSignIn({
       privy: { ...mockPrivy, authenticated: true },
       login,
     })
     expect(address).toBe('0xabc1234567890123456789012345678901234567')
-    expect(login).toHaveBeenCalledWith(
-      expect.objectContaining({ loginMethods: ['wallet'] }),
-    )
+    expect(login).not.toHaveBeenCalled()
+    expect(runWaitlistPrivyLogout).not.toHaveBeenCalled()
   })
 
   it('runWaitlistReturningWalletSignIn opens wallet login when unauthenticated', async () => {
     const login = vi.fn()
-    vi.mocked(readPrivyAccessTokenWithRetries).mockResolvedValue('privy-token')
+    let tokenReads = 0
+    vi.mocked(readPrivyAccessTokenWithRetries).mockImplementation(async () => {
+      tokenReads += 1
+      return tokenReads === 1 ? null : 'privy-token'
+    })
 
     const address = await runWaitlistReturningWalletSignIn({
       privy: { ...mockPrivy, authenticated: false },
@@ -99,6 +103,7 @@ describe('waitlistPrivySession', () => {
     expect(login).toHaveBeenCalledWith(
       expect.objectContaining({ loginMethods: ['wallet'] }),
     )
+    expect(runWaitlistPrivyLogout).not.toHaveBeenCalled()
   })
 
   it('isWaitlistWalletSignInCancellation detects user cancellation', () => {

@@ -98,7 +98,6 @@ export function WaitlistReturningWalletSignInRunner(props: WaitlistReturningWall
       active = false
       window.clearTimeout(readyPollId)
       window.clearTimeout(timeoutId)
-      signInStartedRef.current = false
     }
   }, [])
 

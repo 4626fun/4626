@@ -259,17 +259,16 @@ export function PrivyClientProvider(props: {
         : (['email', 'wallet'] as const)
 
   const embeddedWalletsSupported = canUsePrivyEmbeddedWallets()
+  // Waitlist routes defer embedded-wallet provisioning to account-setup surfaces.
+  // Returning wallet sign-in must stay external-wallet only — auto-create triggers
+  // EmbeddedWalletOnAccountCreateScreen, /api/v1/wallets 401, and logout 400 noise.
   const embeddedWallets =
-    !embeddedWalletsSupported
+    !embeddedWalletsSupported || mode === 'waitlist-email-only' || mode === 'waitlist-returning-wallet'
       ? undefined
-      : mode === 'waitlist-email-only' || mode === 'waitlist-returning-wallet'
-        ? {
-            ethereum: { createOnLogin: 'all-users' },
-          }
-        : {
-            ethereum: { createOnLogin: 'all-users' },
-            solana: { createOnLogin: 'all-users' },
-          }
+      : {
+          ethereum: { createOnLogin: 'all-users' },
+          solana: { createOnLogin: 'all-users' },
+        }
 
   // Privy OAuth redirects are validated against an allowlist and must match exactly.
   // Use the bare origin so transient search/hash state on the current page never breaks OAuth init.
