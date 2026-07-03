@@ -21,6 +21,7 @@ import {
 
 import { listActivationsForCreator } from '../../../server/_lib/creatorStrategy/activations.js'
 import { creatorHasSolanaShareMeshEntitlement } from '../../../server/_lib/creatorStrategy/solanaShareMeshProvisioning.js'
+import { enqueueSolanaB2ReadinessVerification } from '../../../server/_lib/onchain/solanaRelayConfigSync.js'
 import {
   ensureSolanaHookStatusSchema,
   ensureSolanaMeteoraPoolStatusSchema,
@@ -643,6 +644,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const hookLane = await maybeSetupCreator({ db: db as any, creatorToken, mapping: shareMeshMapping, body })
   const meteoraPool = await maybeCreateMeteoraPool({ db: db as any, creatorToken, mapping: shareMeshMapping })
 
+  const b2PrerequisitesMet =
+    shareMeshMapping.status !== 'missing' &&
+    hookLane.status === 'completed' &&
+    (meteoraPool.status === 'completed' || meteoraPool.status === 'skipped_unconfigured')
+  let b2ReadinessQueued = false
+  if (b2PrerequisitesMet && envFlag('SOLANA_B2_READINESS_VERIFICATION_ENABLED', true)) {
+    try {
+      const shareMeshMint =
+        shareMeshMapping.status !== 'missing' ? shareMeshMapping.shareMeshMint : null
+      const queue = await enqueueSolanaB2ReadinessVerification({
+        creatorToken,
+        shareMeshMint,
+        deploySessionId: typeof body.deploySessionId === 'string' ? body.deploySessionId.trim() || null : null,
+        autoEnableRelay: envFlag('SOLANA_B2_AUTO_ENABLE_RELAY', false),
+      })
+      b2ReadinessQueued = queue.enqueued
+    } catch (error) {
+      console.warn('[keeper/solana/provision-creator] b2 readiness queue failed', {
+        creatorToken: creatorToken.toLowerCase(),
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
   const nextSteps = [
     'Confirm Path 1 platform readiness: verify-batcher-pipe-a-readiness.ts exit 0',
     'After finalizePhase2, bridge 30% ShareOFT seeds the LZ share-mesh mint on Solana',
@@ -652,6 +677,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     hookLane.status === 'completed'
       ? 'Solana lottery hook mint + PDAs are recorded in solana_hook_status'
       : 'Provision the required Solana lottery hook lane (setup-creator) before enabling relay_entries',
+    b2ReadinessQueued
+      ? 'B2 readiness verification queued — solana_creator_relay_config updated when checks pass'
+      : 'Run POST /api/keeper/solana/verify-b2-readiness after pool + hook provisioning',
     'Seed initial DLMM liquidity after the pool exists; empty pools do not swap or browse reliably',
   ]
   if (!orchestratorConfigured) {
@@ -682,6 +710,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     shareMeshMappingStatus: shareMeshMapping.status,
     hookLaneStatus: hookLane.status,
     meteoraPoolStatus: meteoraPool.status,
+    b2ReadinessQueued,
     vaultAddress: typeof body.vaultAddress === 'string' ? body.vaultAddress : null,
     deploySessionId: typeof body.deploySessionId === 'string' ? body.deploySessionId : null,
   })

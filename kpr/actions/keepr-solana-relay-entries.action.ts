@@ -18,6 +18,7 @@ import { alertInfo, alertWarning, alertCritical } from '../utils/alerts.js';
 import { loadKeeperKeypair, solanaPubkeyToBytes32 } from '../utils/solana.js';
 import { collectKeeperBaseWritePreflight, formatKeeperPreflightSummary } from '../utils/solanaKeeperPreflight.js';
 import { relayEntriesInstructionDiscriminator } from '../utils/hookInstructionDiscriminators.js';
+import { isMintRelayEnabled } from '../utils/solanaRelayMintGate.js';
 import { parsePendingEntriesBuffer } from '../utils/pendingEntriesBuffer.js';
 import { isAddress } from 'viem';
 
@@ -115,6 +116,11 @@ export async function executeSolanaRelayEntries(): Promise<EntryRelayResult> {
     }> = [];
 
     for (const mintStr of creatorMints) {
+      if (!isMintRelayEnabled(mintStr)) {
+        await alertInfo(WORKFLOW_NAME, `Relay disabled for mint ${mintStr} (per-mint gating) — skipping`);
+        continue;
+      }
+
       const mint = new PublicKey(mintStr);
       const shareOFT = shareOFTMapping[mintStr] as `0x${string}` | undefined;
 

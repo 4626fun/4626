@@ -573,6 +573,13 @@ export async function ensureSolanaHookStatusSchema(db: Db): Promise<void> {
   })
 }
 
+/** Per-creator B2 relay readiness and enablement (orchestrator mint gating). */
+export async function ensureSolanaCreatorRelayConfigSchema(db: Db): Promise<void> {
+  await withEnsureOnce('solanaCreatorRelayConfig', async () => {
+    await ensureMigrationApplied(db, '20260714000000_solana_creator_relay_config.sql').catch(() => {})
+  })
+}
+
 /** Base MCP human-approval requests (durable approval flow store). */
 export async function ensureBaseMcpApprovalSchema(db: Db): Promise<void> {
   await withEnsureOnce('baseMcpApproval', async () => {
