@@ -4,9 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
-  type FormEvent,
-  type ReactNode,
-} from 'react'
+import type { CSSProperties, FormEvent, ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { ArrowLeft, ArrowRight, AlertCircle, Check } from 'lucide-react'
@@ -18,8 +16,16 @@ import { siteAssets } from '@/config/site'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { APP_ORIGIN } from '@/lib/env/host'
-import { bridgePrivySession } from '@/features/waitlist/waitlistHandoff'
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
+import {
+  establishWaitlistSessionAfterPrivyAuth,
+  readAuthSessionAddress,
+} from '@/features/waitlist/waitlistPrivySession'
+import {
+  resolveWaitlistJoinedSessionAddress,
+  shouldClearOrphanWaitlistServerSession,
+} from '@/features/waitlist/resolveWaitlistJoinedSession'
+import { WaitlistReturningWalletSignIn } from '@/features/waitlist/WaitlistReturningWalletSignIn'
 import { WaitlistTwitterLinkPanel } from '@/features/waitlist/WaitlistTwitterLinkPanel'
 import { WaitlistTwitterEngagementSteps } from '@/features/waitlist/WaitlistTwitterEngagementSteps'
 import { WaitlistWalletConnectPanel } from '@/features/waitlist/WaitlistWalletConnectPanel'
@@ -35,96 +41,32 @@ import {
 } from '@/features/waitlist/waitlistStorage'
 import { performZoraCrossAppAuth, isUserRejectedCrossAppAuthError } from '@/lib/privy/zoraCrossApp'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
-import { computeProgress } from '@/features/waitlist/waitlistTiers'
-import { readPrivyAccessTokenWithRetries } from '@/lib/privy/accessToken'
+import { WaitlistWelcomeGreeting } from '@/features/waitlist/WaitlistWelcomeGreeting'
 import { linkAndSyncPrivyProvider, syncAccountsProviderLink } from '@/lib/privy/providerLink'
 import { usePrivyOAuthReturnBackendSync } from '@/lib/privy/usePrivyOAuthReturnBackendSync'
 import { useSafeCrossApp, useSafeLogin, useSafeLoginWithEmail, useSafePrivy, useSafePrivyAccessToken } from '@/lib/privy/safeHooks'
 import { computeAcceptedFromAppAccessStatus } from '@/app/accessShared'
 import { useAccountMe } from '@/hooks/useAccountMe'
-import { fetchAccountTrayPoints } from '@/lib/waitlist/accountTrayPoints'
-
-type WaitlistBootstrapResponse = {
-  requiresPrivyAuth: boolean
-}
-
-type AuthMeResponse = {
-  address: string
-} | null
-
-const OTP_RESEND_DELAY_MS = 30_000
+import { fetchAccountTrayPoints } from '@/lib/waitlist/accountTrayPoints' = 30_000
 const OTP_SUCCESS_HOLD_MS = 320
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const AUTH_SESSION_READ_BACKOFF_MS = 8_000
+const noop = () => {}
 
 function isValidEmail(value: string): boolean {
   return EMAIL_PATTERN.test(value.trim())
 }
 
-let authSessionReadInFlight: Promise<string | null> | null = null
-let authSessionReadBackoffUntil = 0
-
-function readAuthSessionRetryAfterMs(response: Response): number {
-  const raw = response.headers.get('retry-after')
-  if (!raw) return AUTH_SESSION_READ_BACKOFF_MS
-  const seconds = Number(raw)
-  if (Number.isFinite(seconds) && seconds > 0) return Math.ceil(seconds * 1_000)
-  const at = Date.parse(raw)
-  if (Number.isFinite(at)) return Math.max(1_000, at - Date.now())
-  return AUTH_SESSION_READ_BACKOFF_MS
-}
-
-async function readAuthSessionAddress(): Promise<string | null> {
-  if (Date.now() < authSessionReadBackoffUntil) return null
-  if (authSessionReadInFlight) return authSessionReadInFlight
-
-  authSessionReadInFlight = (async () => {
-    try {
-      const response = await apiFetch('/api/auth/me', {
-        headers: { Accept: 'application/json' },
-      }).catch(() => null)
-      if (!response) return null
-      if (response.status === 429) {
-        authSessionReadBackoffUntil = Date.now() + readAuthSessionRetryAfterMs(response)
-        return null
-      }
-      if (!response.ok) return null
-      const payload = (await response.json().catch(() => null)) as ApiEnvelope<AuthMeResponse> | null
-      if (!payload?.success) return null
-      const address =
-        payload.data && typeof payload.data.address === 'string' ? payload.data.address.trim() : ''
-      return address || null
-    } finally {
-      authSessionReadInFlight = null
-    }
-  })()
-
-  return authSessionReadInFlight
-}
-
-async function bootstrapWaitlist(privyAccessToken: string): Promise<WaitlistBootstrapResponse> {
-  const token = privyAccessToken.trim()
-  if (!token) {
-    throw new Error('Missing Privy auth token.')
-  }
-  const response = await apiFetch('/api/waitlist/bootstrap', {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({}),
-  })
-
-  const payload = (await response.json().catch(() => null)) as ApiEnvelope<WaitlistBootstrapResponse> | null
-  if (!response.ok || !payload?.success || !payload.data) {
-    throw new Error(payload?.error || 'Could not finish waitlist signup.')
-  }
-  return payload.data
-}
-
 type SignupStep = 'email' | 'code'
+
+type WaitlistFlowProps = {
+  sectionId?: string
+  walletSignInPending?: boolean
+  walletSessionAddress?: string | null
+  walletSignInError?: string | null
+  onRequestWalletSignIn?: () => void
+  onCancelWalletSignIn?: () => void
+  onClearWalletSignInError?: () => void
+}
 
 const WAITLIST_PANEL_STYLE = {
   background: 'linear-gradient(165deg, rgb(var(--vault-card)), rgb(var(--vault-card-raised)))',
@@ -276,12 +218,21 @@ function useCountUp(target: number | null, enabled: boolean): number {
   return animate ? display : (target ?? 0)
 }
 
-export function WaitlistFlow(props: { sectionId?: string }) {
+export function WaitlistFlow(props: WaitlistFlowProps) {
   const sectionId = props.sectionId ?? 'waitlist-page'
+  const onRequestWalletSignIn = props.onRequestWalletSignIn ?? noop
+  const onCancelWalletSignIn = props.onCancelWalletSignIn ?? noop
+  const onClearWalletSignInError = props.onClearWalletSignInError ?? noop
+  const walletSignInPending = props.walletSignInPending === true
   const privy = useSafePrivy()
   const { sendCode, loginWithCode } = useSafeLoginWithEmail()
   const { login } = useSafeLogin()
   const getPrivyAccessToken = useSafePrivyAccessToken()
+  const loginRef = useRef(login)
+
+  useEffect(() => {
+    loginRef.current = login
+  })
 
   const [step, setStep] = useState<SignupStep>('email')
   const [email, setEmail] = useState('')
@@ -290,7 +241,10 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   const [emailBusy, setEmailBusy] = useState(false)
   const [codeBusy, setCodeBusy] = useState(false)
   const [signOutBusy, setSignOutBusy] = useState(false)
-  const [sessionAddress, setSessionAddress] = useState<string | null>(null)
+  const [localSessionAddress, setLocalSessionAddress] = useState<string | null>(null)
+  const [serverSessionAddress, setServerSessionAddress] = useState<string | null>(null)
+  const [sessionProbeComplete, setSessionProbeComplete] = useState(false)
+  const orphanSessionCleanupRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const [listCount, setListCount] = useState<number | null>(null)
   const [memberAvatars, setMemberAvatars] = useState<WaitlistAvatar[]>([])
@@ -318,18 +272,79 @@ export function WaitlistFlow(props: { sectionId?: string }) {
     }
   }, [])
 
+  const joinedSessionAddress = useMemo(
+    () =>
+      resolveWaitlistJoinedSessionAddress({
+        sessionProbeComplete,
+        privyReady: privy.ready === true,
+        privyAuthenticated: privy.authenticated === true,
+        walletSignInPending,
+        serverSessionAddress,
+        localSessionAddress,
+        walletSessionAddress: props.walletSessionAddress ?? null,
+      }),
+    [
+      sessionProbeComplete,
+      privy.ready,
+      privy.authenticated,
+      walletSignInPending,
+      serverSessionAddress,
+      localSessionAddress,
+      props.walletSessionAddress,
+    ],
+  )
+
+  useEffect(() => {
+    if (!props.walletSessionAddress) return
+    if (privy.ready !== true || privy.authenticated !== true) return
+    setLocalSessionAddress(props.walletSessionAddress)
+  }, [props.walletSessionAddress, privy.authenticated, privy.ready])
+
+  useEffect(() => {
+    if (!props.walletSignInError) return
+    setError(props.walletSignInError)
+    onClearWalletSignInError()
+  }, [onClearWalletSignInError, props.walletSignInError])
+
   useEffect(() => {
     if (!privy.ready) return
     let cancelled = false
     void (async () => {
       const address = await readAuthSessionAddress()
       if (cancelled) return
-      setSessionAddress(address)
+      setServerSessionAddress(address)
+      setSessionProbeComplete(true)
     })()
     return () => {
       cancelled = true
     }
   }, [privy.ready])
+
+  useEffect(() => {
+    if (
+      !shouldClearOrphanWaitlistServerSession({
+        sessionProbeComplete,
+        privyReady: privy.ready === true,
+        privyAuthenticated: privy.authenticated === true,
+        walletSignInPending,
+        serverSessionAddress,
+      })
+    ) {
+      return
+    }
+    if (orphanSessionCleanupRef.current) return
+    orphanSessionCleanupRef.current = true
+    void runWaitlistPrivyLogout({ logout: null, shouldLogout: false }).finally(() => {
+      setServerSessionAddress(null)
+      setLocalSessionAddress(null)
+    })
+  }, [
+    sessionProbeComplete,
+    privy.ready,
+    privy.authenticated,
+    serverSessionAddress,
+    walletSignInPending,
+  ])
 
   // Lightweight social proof — avatars always render (placeholders when empty).
   // Refetch when auth state changes so signed-in views still get stats if the
@@ -362,13 +377,13 @@ export function WaitlistFlow(props: { sectionId?: string }) {
     return () => {
       cancelled = true
     }
-  }, [sessionAddress])
+  }, [joinedSessionAddress])
 
   // Auto-focus the email field on intentional CTA arrival.
   useEffect(() => {
-    if (!joinIntent || !privy.ready || sessionAddress || step !== 'email') return
+    if (!joinIntent || !privy.ready || joinedSessionAddress || step !== 'email') return
     emailInputRef.current?.focus()
-  }, [joinIntent, privy.ready, sessionAddress, step])
+  }, [joinIntent, privy.ready, joinedSessionAddress, step])
 
   // Focus the code field as soon as we advance to the OTP step.
   useEffect(() => {
@@ -387,67 +402,19 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   // and confirm the HttpOnly session. Identical to the prior modal path — only
   // the trigger changed (inline OTP instead of a popup).
   const finishJoinAfterPrivyAuth = useCallback(async () => {
-    let bridged = false
-    try {
-      const privyToken = await readPrivyAccessTokenWithRetries({
-        read: privy.getAccessToken?.bind(privy) ?? null,
-      })
-      if (!privyToken) {
-        // Most common cause: the `privy-session` marker cookie is blocked as a
-        // third-party cookie (see loopbackSessionMarkerShim.ts), or a wallet
-        // extension destabilized embedded-wallet init.
-        console.warn('[waitlist] getAccessToken returned empty after OTP', {
-          origin: typeof window !== 'undefined' ? window.location.origin : 'ssr',
-          hostname: typeof window !== 'undefined' ? window.location.hostname : 'ssr',
-          hasMarkerCookie:
-            typeof document !== 'undefined' ? document.cookie.includes('privy-session') : false,
-          authenticated: privy.authenticated,
-          ready: privy.ready,
-          hasGetAccessToken: typeof privy.getAccessToken === 'function',
-        })
-        throw new Error(
-          'Could not verify your email session. Please try again. If the issue persists, try an incognito/private window or temporarily disable browser wallet extensions.',
-        )
-      }
-
-      bridged = await bridgePrivySession(privyToken)
-      if (!bridged) {
-        throw new Error('Could not create your app session. Please try again.')
-      }
-
-      let bootstrap = await bootstrapWaitlist(privyToken)
-      if (bootstrap.requiresPrivyAuth) {
-        const retryToken = await readPrivyAccessTokenWithRetries({
-          read: privy.getAccessToken?.bind(privy) ?? null,
-          attempts: 4,
-          retryDelayMs: 200,
-        })
-        if (retryToken) {
-          bootstrap = await bootstrapWaitlist(retryToken)
-        }
-      }
-      if (bootstrap.requiresPrivyAuth) {
-        throw new Error('Could not verify waitlist signup. Please try again.')
-      }
-
-      const confirmedSessionAddress = await readAuthSessionAddress()
-      if (!confirmedSessionAddress) {
-        throw new Error('Sign-in finished but session is still syncing. Please try once more.')
-      }
-      setSessionAddress(confirmedSessionAddress)
-    } catch (joinError) {
-      // R4: if the Privy->4626 bridge succeeded but a later step failed, clear
-      // the stale HttpOnly session so a retry does not inherit a session for an
-      // incomplete account.
-      if (bridged) {
-        await runWaitlistPrivyLogout({
-          logout: privy.logout ?? null,
-          readToken: privy.getAccessToken ?? null,
-        }).catch(() => {})
-      }
-      throw joinError
-    }
+    const confirmedSessionAddress = await establishWaitlistSessionAfterPrivyAuth({
+      privy,
+      missingTokenMessage:
+        'Could not verify your email session. Please try again. If the issue persists, try an incognito/private window or temporarily disable browser wallet extensions.',
+    })
+    setLocalSessionAddress(confirmedSessionAddress)
   }, [privy])
+
+  const handleSignInWithLinkedWallet = useCallback(() => {
+    if (signupInFlightRef.current || walletSignInPending) return
+    setError(null)
+    onRequestWalletSignIn()
+  }, [onRequestWalletSignIn, walletSignInPending])
 
   // Step 1 — send the 6-digit OTP to the entered email (inline, no modal).
   const handleSendCode = useCallback(
@@ -544,7 +511,9 @@ export function WaitlistFlow(props: { sectionId?: string }) {
         readToken: privy.getAccessToken ?? null,
       })
       clearWaitlistOnboardingStepFlags()
-      setSessionAddress(null)
+      orphanSessionCleanupRef.current = false
+      setServerSessionAddress(null)
+      setLocalSessionAddress(null)
       setStep('email')
       setEmail('')
       setCode('')
@@ -590,6 +559,13 @@ export function WaitlistFlow(props: { sectionId?: string }) {
     (accountMe?.linkedMethods?.zora_cross_app ?? []).length > 0 ||
     Boolean(accountMe?.accountSignals?.linked)
 
+  useEffect(() => {
+    if (!props.walletSessionAddress) return
+    if (!privy.ready || privy.authenticated !== true) return
+    refreshAccountMe()
+    setPointsRefreshKey((key) => key + 1)
+  }, [privy.authenticated, privy.ready, props.walletSessionAddress, refreshAccountMe])
+
   const markXPhaseDone = useCallback(() => {
     setXPhaseDone(true)
     writeWaitlistXPhaseDone(true)
@@ -620,7 +596,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
       const data = await linkAndSyncPrivyProvider({
         privy,
         provider: 'twitter',
-        login: login ?? null,
+        login: loginRef.current ?? null,
         getAccessToken: getPrivyAccessToken,
       })
       if (data) {
@@ -632,7 +608,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
     } finally {
       setTwitterBusy(false)
     }
-  }, [getPrivyAccessToken, login, privy, refreshAccountMe, twitterBusy, twitterLinked])
+  }, [getPrivyAccessToken, privy, refreshAccountMe, twitterBusy, twitterLinked])
 
   const handleEngagementProgressVerified = useCallback(() => {
     setPointsRefreshKey((key) => key + 1)
@@ -647,7 +623,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
       const data = await linkAndSyncPrivyProvider({
         privy,
         provider: 'external_eoa',
-        login: login ?? null,
+        login: loginRef.current ?? null,
         getAccessToken: getPrivyAccessToken,
       })
       if (data) {
@@ -662,7 +638,6 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   }, [
     externalEoaLinked,
     getPrivyAccessToken,
-    login,
     privy,
     refreshAccountMe,
     walletBusy,
@@ -725,7 +700,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
   // `/api/accounts/me` does not populate `score`, so reading `accountMe.score`
   // always returned 0 — fetch the snapshot directly once the session exists.
   useEffect(() => {
-    if (!sessionAddress) return
+    if (!joinedSessionAddress) return
     let cancelled = false
     void (async () => {
       try {
@@ -740,12 +715,41 @@ export function WaitlistFlow(props: { sectionId?: string }) {
     return () => {
       cancelled = true
     }
-  }, [sessionAddress, getPrivyAccessToken, pointsRefreshKey])
+  }, [joinedSessionAddress, getPrivyAccessToken, pointsRefreshKey])
 
   const appAccepted = computeAcceptedFromAppAccessStatus(accountMe?.appAccessStatus ?? null)
   const points = pointsTotal ?? accountMe?.score?.points ?? 0
   const progress = computeProgress(points)
-  const joinedCount = useCountUp(listCount, !sessionAddress)
+  const joinedCount = useCountUp(listCount, !joinedSessionAddress)
+
+  const socialProof = (
+    <div className="flex flex-col items-center gap-3">
+      <div className="flex items-center justify-center gap-2.5">
+        <JoinedAvatars avatars={memberAvatars} />
+        {listCount != null && listCount > 0 ? (
+          <p className="text-[11px] text-zinc-400">
+            <span className="font-semibold tabular-nums text-zinc-200">
+              {joinedCount.toLocaleString()}
+            </span>{' '}
+            already joined
+          </p>
+        ) : null}
+      </div>
+      {joinedSessionAddress && !appAccepted ? (
+        <Link
+          to="/leaderboard"
+          className="group inline-flex items-center gap-1 text-[11px] font-medium text-zinc-500 transition hover:text-white"
+        >
+          See leaderboard
+          <ArrowRight
+            className="size-3 transition group-hover:translate-x-0.5"
+            aria-hidden="true"
+          />
+        </Link>
+      ) : null}
+    </div>
+  )
+
   const showXLinkPanel = !xPhaseDone && !twitterLinked
   const showXConnectedRow = twitterLinked
   const showXEngagement = twitterLinked && !xPhaseDone
@@ -791,7 +795,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
           className="relative w-full space-y-6 sm:space-y-7"
         >
           <AnimatePresence mode="wait" initial={false}>
-            {sessionAddress ? (
+            {joinedSessionAddress ? (
               <motion.div
                 key="waitlist-joined"
                 variants={phaseVariants}
@@ -861,50 +865,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                   </div>
                 </div>
 
-                {/* Points — always shown; the score is the heart of the waitlist. */}
-                <div className="mt-7 rounded-2xl bg-white/[0.03] px-5 py-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-400">
-                      <span
-                        className="size-1.5 rounded-full bg-[rgb(var(--brand-primary))]"
-                        aria-hidden="true"
-                      />
-                      {progress.currentTier.name}
-                    </span>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-[28px] font-semibold leading-none tracking-tight tabular-nums text-white">
-                        {points.toLocaleString()}
-                      </span>
-                      <span className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">pts</span>
-                    </div>
-                  </div>
-                  {progress.nextTier ? (
-                    <div className="mt-4">
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
-                        <motion.div
-                          className="h-full rounded-full"
-                          style={{
-                            background:
-                              'linear-gradient(90deg, rgb(var(--brand-primary)), rgb(var(--brand-hover)))',
-                          }}
-                          initial={false}
-                          animate={{ width: `${progress.progressPercent}%` }}
-                          transition={
-                            reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 140, damping: 24 }
-                          }
-                        />
-                      </div>
-                      <p className="mt-2 text-[11px] text-zinc-500">
-                        <span className="font-medium tabular-nums text-zinc-300">
-                          {progress.pointsToNext.toLocaleString()}
-                        </span>{' '}
-                        pts to {progress.nextTier.name}
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="mt-3 text-[11px] text-zinc-500">Top tier reached — you’re at the front.</p>
-                  )}
-                </div>
+                <WaitlistPointsProgress progress={progress} points={points} className="mt-7" />
 
                 {/* Earn points — optional identity links, each worth waitlist points. */}
                 <div className="mt-7">
@@ -1171,11 +1132,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                         type="submit"
                         variant="primary"
                         size="lg"
-                        className={cn(
-                          'btn-3d group/btn relative w-full overflow-hidden !rounded-full !min-h-[52px] text-[15px] font-semibold',
-                          codeStatus === 'success' &&
-                            '!bg-emerald-500 !shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_0_0_rgb(4,120,87),0_6px_9px_-3px_rgba(0,0,0,0.38)]',
-                        )}
+                        className="btn-3d group/btn relative w-full overflow-hidden !rounded-full !min-h-[52px] text-[15px] font-semibold"
                         disabled={codeBusy || code.replace(/\s+/g, '').length < 6 || codeStatus === 'success'}
                       >
                         <ButtonSheen />
@@ -1208,6 +1165,16 @@ export function WaitlistFlow(props: { sectionId?: string }) {
                   )}
                 </AnimatePresence>
               </BeamCard>
+
+              <div className="text-center">{socialProof}</div>
+
+              {step === 'email' ? (
+                <WaitlistReturningWalletSignIn
+                  busy={walletSignInPending}
+                  onSignIn={handleSignInWithLinkedWallet}
+                  onCancel={onCancelWalletSignIn}
+                />
+              ) : null}
             </>
               </motion.div>
             )}
@@ -1223,33 +1190,7 @@ export function WaitlistFlow(props: { sectionId?: string }) {
             </div>
           ) : null}
 
-          {/* Persistent social proof — PFP stack stays present across the whole
-              flow (sign-up, on-list, approved). Count appears when stats load. */}
-          <div className="flex flex-col items-center gap-3">
-            <div className="flex items-center justify-center gap-2.5">
-              <JoinedAvatars avatars={memberAvatars} />
-              {listCount != null && listCount > 0 ? (
-                <p className="text-[11px] text-zinc-400">
-                  <span className="font-semibold tabular-nums text-zinc-200">
-                    {joinedCount.toLocaleString()}
-                  </span>{' '}
-                  already joined
-                </p>
-              ) : null}
-            </div>
-            {sessionAddress && !appAccepted ? (
-              <Link
-                to="/leaderboard"
-                className="group inline-flex items-center gap-1 text-[11px] font-medium text-zinc-500 transition hover:text-white"
-              >
-                See leaderboard
-                <ArrowRight
-                  className="size-3 transition group-hover:translate-x-0.5"
-                  aria-hidden="true"
-                />
-              </Link>
-            ) : null}
-          </div>
+          {joinedSessionAddress ? socialProof : null}
 
           <p className="flex items-center justify-center gap-1.5 text-center text-[10px] tracking-wide text-zinc-600">
             <span className="text-zinc-500">Powered by</span>

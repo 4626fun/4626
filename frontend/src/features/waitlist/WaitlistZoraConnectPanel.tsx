@@ -4,21 +4,26 @@ import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
 
 const ZORA_REWARD_POINTS = PROVIDER_POINTS.zora_cross_app
-
-function ZoraMark({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="none">
-      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2.4" />
-      <circle cx="12" cy="12" r="3.4" fill="currentColor" />
-    </svg>
-  )
-}
+const ZORA_LOGO_SRC = '/brands/zora-token.svg'
 
 type WaitlistZoraConnectPanelProps = {
   linked: boolean
   busy: boolean
   onConnect: () => void
   onSkip: () => void
+}
+
+function ZoraLogo(props: { className?: string }) {
+  return (
+    <img
+      src={ZORA_LOGO_SRC}
+      alt=""
+      aria-hidden="true"
+      draggable={false}
+      className={props.className}
+      decoding="async"
+    />
+  )
 }
 
 export function WaitlistZoraConnectPanel(props: WaitlistZoraConnectPanelProps) {
@@ -28,10 +33,11 @@ export function WaitlistZoraConnectPanel(props: WaitlistZoraConnectPanelProps) {
     return (
       <div className="mt-6 flex items-center justify-between gap-3 py-1 text-left">
         <div className="flex min-w-0 items-center gap-2.5">
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-emerald-400/20 text-emerald-300">
-            <Check className="size-3.5" aria-hidden="true" />
-          </span>
+          <ZoraLogo className="size-7 shrink-0 rounded-full object-cover" />
           <span className="text-[13px] font-semibold text-emerald-100">Zora connected</span>
+          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-emerald-400/20 text-emerald-300">
+            <Check className="size-3" aria-hidden="true" />
+          </span>
         </div>
         <span className="shrink-0 text-[11px] font-medium tabular-nums text-emerald-300/80">
           +{ZORA_REWARD_POINTS} pts
@@ -50,26 +56,31 @@ export function WaitlistZoraConnectPanel(props: WaitlistZoraConnectPanelProps) {
         className="group relative flex w-full items-center justify-between gap-3 rounded-2xl px-5 py-4 transition-[transform,box-shadow] duration-150 ease-out shadow-[0_5px_0_0_rgba(0,0,0,0.5),0_14px_26px_-10px_rgba(99,102,241,0.4),inset_0_1px_0_0_rgba(255,255,255,0.14)] hover:-translate-y-0.5 hover:shadow-[0_6px_0_0_rgba(0,0,0,0.5),0_20px_36px_-10px_rgba(99,102,241,0.6),inset_0_1px_0_0_rgba(255,255,255,0.18)] active:translate-y-[5px] active:shadow-[0_1px_0_0_rgba(0,0,0,0.5),0_6px_14px_-8px_rgba(99,102,241,0.4),inset_0_1px_0_0_rgba(255,255,255,0.1)] disabled:translate-y-0 disabled:opacity-60"
         style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.1), rgba(255,255,255,0.025))' }}
       >
-        <ZoraMark className="pointer-events-none absolute -bottom-8 -right-8 size-40 text-white/[0.08] transition-transform duration-500 ease-out group-hover:rotate-12 group-hover:scale-105" />
+        <ZoraLogo className="pointer-events-none absolute -bottom-10 -right-10 size-44 rounded-full opacity-[0.14] transition-transform duration-500 ease-out group-hover:rotate-6 group-hover:scale-105" />
 
-        <span className="relative min-w-0">
-          <span className="block text-[15px] font-semibold text-white">
-            {busy ? 'Connecting…' : 'Connect Zora'}
+        <span className="relative flex min-w-0 items-center gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black/20 ring-1 ring-white/10">
+            <ZoraLogo className="size-full object-cover" />
           </span>
-          <span className="mt-1 flex items-center gap-1.5 text-[11px] leading-snug">
-            {busy ? (
-              <span className="text-zinc-400">Opening Zora…</span>
-            ) : (
-              <>
-                <span className="font-semibold text-[rgb(var(--brand-primary))]">
-                  +{ZORA_REWARD_POINTS} pts
-                </span>
-                <span className="text-zinc-600" aria-hidden="true">
-                  ·
-                </span>
-                <span className="text-zinc-400">biggest boost</span>
-              </>
-            )}
+          <span className="min-w-0">
+            <span className="block text-[15px] font-semibold text-white">
+              {busy ? 'Connecting…' : 'Connect Zora'}
+            </span>
+            <span className="mt-1 flex items-center gap-1.5 text-[11px] leading-snug">
+              {busy ? (
+                <span className="text-zinc-400">Opening Zora…</span>
+              ) : (
+                <>
+                  <span className="font-semibold text-[rgb(var(--brand-primary))]">
+                    +{ZORA_REWARD_POINTS} pts
+                  </span>
+                  <span className="text-zinc-600" aria-hidden="true">
+                    ·
+                  </span>
+                  <span className="text-zinc-400">biggest boost</span>
+                </>
+              )}
+            </span>
           </span>
         </span>
 

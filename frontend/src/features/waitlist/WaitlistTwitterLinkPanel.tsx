@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { ArrowRight, Check } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
@@ -39,9 +39,7 @@ export function WaitlistTwitterLinkPanel(props: WaitlistTwitterLinkPanelProps) {
     return (
       <div className="mt-6 flex items-center justify-between gap-3 py-1 text-left">
         <div className="flex min-w-0 items-center gap-2.5">
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-emerald-400/20 text-emerald-300">
-            <Check className="size-3.5" aria-hidden="true" />
-          </span>
+          <XLogo className="size-7 shrink-0 text-white" />
           <span className="text-[13px] font-semibold text-emerald-100">X connected</span>
         </div>
         <span className="shrink-0 text-[11px] font-medium tabular-nums text-emerald-300/80">

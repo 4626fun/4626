@@ -24,4 +24,11 @@ describe('createPrivyAppearance', () => {
       theme: '#0f1117',
     })
   })
+
+  it('prioritizes detected ethereum wallets for waitlist returning sign-in', () => {
+    expect(createPrivyAppearance({ walletList: ['detected_ethereum_wallets', 'metamask'] }).walletList).toEqual([
+      'detected_ethereum_wallets',
+      'metamask',
+    ])
+  })
 })

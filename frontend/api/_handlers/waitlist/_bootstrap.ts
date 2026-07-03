@@ -40,6 +40,7 @@ import { runWithWaitlistEmailCollisionAdoption, runWithWaitlistWalletCollisionAd
 import { resolveBasenameHandle } from '../../../server/_lib/identity/basenameResolver.js'
 import { loadPrivyUserWithVerifiedEmailRetry } from '../../../server/_lib/infra/privyUserLoad.js'
 import { extractPrivyVerifiedEmail } from '../../../server/_lib/infra/trust.js'
+import { classifyLinkedAccounts } from '../../../server/_lib/wallet/walletMapping.js'
 
 type BootstrapBody = { email?: string; referralCode?: string }
 type BootstrapDb = {
@@ -516,6 +517,55 @@ async function lookupVerifiedAccountEmailForPrivyUser(
   return normalizeEmail(result.rows?.[0]?.email)
 }
 
+async function lookupProfileEmailForPrivyUser(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  privyUserId: string,
+): Promise<string | null> {
+  const result = await db.sql`
+    SELECT email
+    FROM profiles
+    WHERE LOWER(privy_user_id) = LOWER(${privyUserId})
+      AND email IS NOT NULL
+      AND email <> ''
+      AND LOWER(email) NOT LIKE '%@wallet.4626.fun'
+      AND LOWER(email) NOT LIKE '%@noemail.4626.fun'
+    ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
+    LIMIT 1;
+  `
+  return normalizeEmail(result.rows?.[0]?.email)
+}
+
+async function lookupProfileEmailByLinkedWallets(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  evmAddresses: readonly string[],
+): Promise<string | null> {
+  if (evmAddresses.length === 0) return null
+  const result = await db.sql`
+    SELECT p.email
+    FROM profiles p
+    WHERE p.merged_into_profile_id IS NULL
+      AND p.email IS NOT NULL
+      AND p.email <> ''
+      AND LOWER(p.email) NOT LIKE '%@wallet.4626.fun'
+      AND LOWER(p.email) NOT LIKE '%@noemail.4626.fun'
+      AND (
+        LOWER(p.primary_wallet) = ANY(${evmAddresses})
+        OR LOWER(p.embedded_wallet) = ANY(${evmAddresses})
+        OR LOWER(p.csw_address) = ANY(${evmAddresses})
+        OR LOWER(p.primary_embedded_eoa) = ANY(${evmAddresses})
+        OR EXISTS (
+          SELECT 1
+          FROM profile_wallets pw
+          WHERE pw.profile_id = p.id
+            AND LOWER(pw.address) = ANY(${evmAddresses})
+        )
+      )
+    ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
+    LIMIT 1;
+  `
+  return normalizeEmail(result.rows?.[0]?.email)
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -639,7 +689,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       resolvedEmail =
         normalizeEmail(extractPrivyVerifiedEmail(resolvedPrivyUser)) ??
         bootstrapEmailHint ??
-        (await lookupVerifiedAccountEmailForPrivyUser(db, context.privyUserId))
+        (await lookupVerifiedAccountEmailForPrivyUser(db, context.privyUserId)) ??
+        (await lookupProfileEmailForPrivyUser(db, context.privyUserId)) ??
+        (await lookupProfileEmailByLinkedWallets(
+          db,
+          Array.from(
+            new Set(
+              classifyLinkedAccounts(resolvedPrivyUser)
+                .allWallets.filter((wallet) => wallet.chain === 'evm')
+                .map((wallet) => wallet.address.trim().toLowerCase())
+                .filter((address) => /^0x[a-f0-9]{40}$/.test(address)),
+            ),
+          ),
+        ))
     }
 
     // Only Privy's verified email is allowed to become the canonical account email.

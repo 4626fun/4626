@@ -40,7 +40,7 @@ if (typeof window !== 'undefined') {
 
 type PrivyClientStatus = 'disabled' | 'loading' | 'ready'
 export const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
-type PrivyClientMode = 'default' | 'waitlist-email-only'
+type PrivyClientMode = 'default' | 'waitlist-email-only' | 'waitlist-returning-wallet'
 
 const PrivyClientContext = createContext<PrivyClientStatus>('disabled')
 
@@ -160,8 +160,10 @@ export function PrivyClientProvider(props: {
   children: ReactNode
   showWalletLoginFirst?: boolean
   mode?: PrivyClientMode
+  walletList?: readonly string[]
+  walletChainType?: 'all' | 'ethereum-only' | 'solana-only' | 'ethereum-and-solana'
 }) {
-  const { children, showWalletLoginFirst = false, mode = 'default' } = props
+  const { children, showWalletLoginFirst = false, mode = 'default', walletList, walletChainType } = props
   const enabled = isPrivyClientEnabled()
   const appId = enabled ? getPrivyAppId() : null
   const clientId = enabled ? getPrivyClientId() : null
@@ -215,6 +217,16 @@ export function PrivyClientProvider(props: {
       }
     }
 
+    // Returning waitlist wallet sign-in: WalletConnect + EIP-6963 only. Skip the
+    // Coinbase Wallet SDK here — it races extensions on localhost and triggers
+    // failed COOP HEAD probes against /waitlist during init.
+    if (mode === 'waitlist-returning-wallet') {
+      return {
+        walletConnect: { enabled: true },
+        solana: { connectors: solanaConnectors },
+      }
+    }
+
     return {
       ...sharedWalletConnectors,
       crossApp: {
@@ -232,18 +244,25 @@ export function PrivyClientProvider(props: {
   }
 
   const appearance = createPrivyAppearance({
-    showWalletLoginFirst,
+    showWalletLoginFirst:
+      mode === 'waitlist-returning-wallet' ? true : showWalletLoginFirst,
+    ...(walletList ? { walletList } : null),
+    ...(walletChainType ? { walletChainType } : null),
   })
   // Keep generic web login methods aligned with the canonical account model:
   // verified email first, wallet-native Base second. Zora uses cross-app auth.
   const loginMethods =
-    mode === 'waitlist-email-only' ? (['email', 'twitter'] as const) : (['email', 'wallet'] as const)
+    mode === 'waitlist-email-only'
+      ? (['email', 'twitter'] as const)
+      : mode === 'waitlist-returning-wallet'
+        ? (['wallet'] as const)
+        : (['email', 'wallet'] as const)
 
   const embeddedWalletsSupported = canUsePrivyEmbeddedWallets()
   const embeddedWallets =
     !embeddedWalletsSupported
       ? undefined
-      : mode === 'waitlist-email-only'
+      : mode === 'waitlist-email-only' || mode === 'waitlist-returning-wallet'
         ? {
             ethereum: { createOnLogin: 'all-users' },
           }

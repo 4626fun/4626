@@ -15,6 +15,7 @@ This is the canonical product model for identity onboarding:
 - Accepted users who choose `Enter App` continue through `frontend/src/features/waitlist/WaitlistFlow.tsx` + `frontend/src/features/waitlist/waitlistHandoff.ts`, and `frontend/src/hooks/useSiweAuth.ts` redeems the `cv_handoff` code before routing to the canonical app landing route.
 - Telegram, Base app, and website must all converge into the same verified-email-based account model.
 - Normal web auth should expose email first, then Base and Zora as optional native entry paths.
+- Returning waitlist users who already linked an external EOA during the earn-points step may sign back in on `/waitlist` via **Sign in with linked wallet**. This path re-authenticates an existing Privy account only — it does not replace email-first signup for new members. Wallet connector SDKs load only after the user explicitly chooses that action (the page stays email-only on first render to avoid extension conflicts during OTP).
 
 Source of truth by concern:
 

@@ -96,6 +96,11 @@ function clearAccountMeCache(): void {
   invalidateBootstrapExecutionSignalsCache()
 }
 
+/** Call after wallet sign-in remounts Privy so `/api/accounts/me` refetches. */
+export function invalidateAccountMeCache(): void {
+  clearAccountMeCache()
+}
+
 export function useAccountMe(): {
   me: AccountSetupMe | null
   loading: boolean
