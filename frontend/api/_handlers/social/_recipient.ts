@@ -42,14 +42,12 @@ async function resolveCanonicalSmartWallet(
   const match = await db.sql`
     SELECT
       p.id,
-      p.primary_smart_wallet,
       p.csw_address,
       p.base_sub_account
     FROM profiles p
     WHERE LOWER(p.primary_wallet) = ${address}
        OR LOWER(p.embedded_wallet) = ${address}
        OR LOWER(p.primary_embedded_eoa) = ${address}
-       OR LOWER(p.primary_smart_wallet) = ${address}
        OR LOWER(p.csw_address) = ${address}
        OR LOWER(p.base_sub_account) = ${address}
        OR p.id IN (
@@ -77,7 +75,7 @@ async function resolveCanonicalSmartWallet(
   const canonicalFromGraph = normalizeAddress(canonicalWallet.rows?.[0]?.address)
   if (canonicalFromGraph) return canonicalFromGraph
 
-  const fallbackCandidates = [row.primary_smart_wallet, row.csw_address, row.base_sub_account]
+  const fallbackCandidates = [row.csw_address, row.csw_address, row.base_sub_account]
   for (const candidate of fallbackCandidates) {
     const normalized = normalizeAddress(candidate)
     if (normalized) return normalized

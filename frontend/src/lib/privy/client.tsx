@@ -20,8 +20,8 @@ if (typeof window !== 'undefined') {
   if ((h === 'localhost' || h === '127.0.0.1') && ! (window as any).__cv_privy_local_guidance_logged) {
     ;(window as any).__cv_privy_local_guidance_logged = true
     console.info(
-      '[privy] Local dev strips Privy custom_api_url and rewrites privy.4626.fun API calls (see privyLoopbackFetchRewrite).\n' +
-        'Waitlist localhost routes omit clientId so wallet/email sessions use localStorage, not server cookies.\n' +
+      '[privy] Local dev pins auth.privy.io, strips custom_api_url, and rewrites privy.4626.fun API calls.\n' +
+        'Waitlist localhost omits clientId so sessions stay in localStorage, not server cookies.\n' +
         'If you hit 401 on /oauth/link outside waitlist:\n' +
         '  • Allowlist http://localhost:5173 + :5174 in Privy dashboard (Local Dev client).\n' +
         '  • See .env.example section "Privy Local Dev with custom domain".',

@@ -17,8 +17,6 @@ import {
 } from '@4626/server-core'
 
 import { ensureKeeprSchema } from '../../../../server/_lib/keepr/keeprSchema.js'
-
-import { normalizeKeeprActionStatusForWorkspace } from '../../../../server/_lib/workspace/normalizer.js'
 import {
   KPR_TRUST_ZONE_KEY_HEADER,
   getKeeprTrustZoneEnvKey,
@@ -190,13 +188,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         RETURNING id;
       `
       const updated = (result.rows?.length ?? 0) > 0
-      if (updated) {
-        await normalizeKeeprActionStatusForWorkspace({
-          actionId: id,
-          status: 'executing',
-          errorMessage,
-        }).catch(() => undefined)
-      }
       return res.status(200).json({
         success: true,
         data: { id, status, trustZone, updated },
@@ -231,13 +222,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(500).json({ success: false, error: 'Database not configured' } satisfies ApiEnvelope<never>)
       }
       const { updated } = txResult
-      if (updated) {
-        await normalizeKeeprActionStatusForWorkspace({
-          actionId: id,
-          status: 'executed',
-          errorMessage,
-        }).catch(() => undefined)
-      }
       return res.status(200).json({
         success: true,
         data: { id, status, trustZone, updated },
@@ -272,13 +256,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(500).json({ success: false, error: 'Database not configured' } satisfies ApiEnvelope<never>)
       }
       const { updated } = txResult
-      if (updated) {
-        await normalizeKeeprActionStatusForWorkspace({
-          actionId: id,
-          status: 'failed',
-          errorMessage,
-        }).catch(() => undefined)
-      }
       return res.status(200).json({
         success: true,
         data: { id, status, trustZone, updated },
@@ -350,13 +327,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(500).json({ success: false, error: 'Database not configured' } satisfies ApiEnvelope<never>)
       }
       const { updated, effectiveStatus } = txResult
-      if (updated) {
-        await normalizeKeeprActionStatusForWorkspace({
-          actionId: id,
-          status: effectiveStatus,
-          errorMessage,
-        }).catch(() => undefined)
-      }
       return res.status(200).json({
         success: true,
         data: { id, status: effectiveStatus, trustZone, updated },

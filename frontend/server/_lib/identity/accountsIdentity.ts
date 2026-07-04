@@ -19,7 +19,9 @@ import {
   type ExecutionTrack,
 } from '../wallet/executionTrack.js'
 import { sanitizePersistedSubAccountAddress } from '../wallet/sanitizeBaseSubAccount.js'
-import { fetchZoraProfile } from '../zora/zoraProfile.js'
+import { buildZoraProfileSeeds, fetchZoraProfileWithSeeds, splitZoraProfileHandle } from '../zora/zoraProfileIdentifier.js'
+import { getBasenameName } from './basenameResolver.js'
+import { syncUserWallets } from '../wallet/walletSync.js'
 import { buildAccountScoreFromBreakdown } from '../onboarding/accountScore.js'
 import {
   readWaitlistPointsBreakdown,
@@ -69,6 +71,9 @@ export type AccountsMePayload = {
     canonicalCswAddress: string | null
     creatorCoin: { address: string } | null
     zoraHandle: string | null
+    basename: string | null
+    primaryWalletAddress: string | null
+    embeddedEoaAddress: string | null
     lastResolvedAt: string | null
     /**
      * Sub-account status on the user-initiated frontend execution track.
@@ -347,9 +352,16 @@ export async function ensureAccountsIdentitySchema(db: Db): Promise<void> {
     try {
       const preflight = await db.sql`
         SELECT
-          to_regclass('public.accounts') IS NOT NULL AS has_accounts,
+          to_regclass('public.profiles') IS NOT NULL AS has_profiles,
           to_regclass('public.account_linked_methods') IS NOT NULL AS has_account_linked_methods,
           to_regclass('public.account_zora_signals') IS NOT NULL AS has_account_zora_signals,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'profiles'
+              AND column_name = 'email_verified'
+          ) AS has_email_verified,
           EXISTS (
             SELECT 1
             FROM information_schema.columns
@@ -360,16 +372,18 @@ export async function ensureAccountsIdentitySchema(db: Db): Promise<void> {
       `
       const status = preflight.rows?.[0] ?? {}
       if (
-        Boolean(status.has_accounts) &&
+        Boolean(status.has_profiles) &&
         Boolean(status.has_account_linked_methods) &&
         Boolean(status.has_account_zora_signals) &&
+        Boolean(status.has_email_verified) &&
         Boolean(status.has_canonical_csw_address)
       ) {
         accountsIdentitySchemaEnsured = true
         return
       }
       const missing: string[] = []
-      if (!Boolean(status.has_accounts)) missing.push('public.accounts')
+      if (!Boolean(status.has_profiles)) missing.push('public.profiles')
+      if (!Boolean(status.has_email_verified)) missing.push('public.profiles.email_verified')
       if (!Boolean(status.has_account_linked_methods)) missing.push('public.account_linked_methods')
       if (!Boolean(status.has_account_zora_signals)) missing.push('public.account_zora_signals')
       if (!Boolean(status.has_canonical_csw_address)) {
@@ -407,25 +421,18 @@ export async function upsertAccount(params: {
     privyUserId,
   })
   await db.sql`
-    INSERT INTO accounts (
-      privy_user_id,
-      email,
-      email_verified,
-      created_at,
-      updated_at
-    )
-    VALUES (
-      ${privyUserId},
-      ${normalizedEmail},
-      ${verified},
-      NOW(),
-      NOW()
-    )
-    ON CONFLICT (privy_user_id) DO UPDATE
+    UPDATE profiles
     SET
-      email = COALESCE(EXCLUDED.email, accounts.email),
-      email_verified = accounts.email_verified OR EXCLUDED.email_verified,
-      updated_at = NOW();
+      email = COALESCE(${normalizedEmail}, email),
+      email_verified = profiles.email_verified OR ${verified},
+      updated_at = NOW()
+    WHERE privy_user_id = ${privyUserId};
+
+    INSERT INTO profiles (privy_user_id, email, email_verified, created_at, updated_at)
+    SELECT ${privyUserId}, ${normalizedEmail}, ${verified}, NOW(), NOW()
+    WHERE NOT EXISTS (
+      SELECT 1 FROM profiles WHERE privy_user_id = ${privyUserId}
+    );
   `
 }
 
@@ -801,24 +808,51 @@ export async function resolveAndPersistZoraSignals(params: {
   const allEvmEoas = classification.allWallets
     .filter((w) => w.chain === 'evm' && w.walletType === 'external_eoa')
     .map((w) => w.address)
-  const profileSeeds = dedupe([
-    ...zoraCrossApp.map((item) => item.address),
-    canonical,
-    ...allEvmEoas,
-    classification.primaryWalletAddress ?? null,
-    classification.embeddedEoa?.address ?? null,
-  ])
+  const profileSeeds = buildZoraProfileSeeds({
+    zoraCrossAppAddresses: zoraCrossApp.map((item) => item.address),
+    canonicalCswAddress: canonical,
+    externalEoas: allEvmEoas,
+    primaryWalletAddress: classification.primaryWalletAddress ?? null,
+    embeddedEoaAddress: classification.embeddedEoa?.address ?? null,
+  })
 
-  let zoraProfile: any | null = null
-  for (const seed of profileSeeds) {
-    zoraProfile = await fetchZoraProfile(seed).catch(() => null)
-    if (zoraProfile) break
+  const { profile: zoraProfile } = await fetchZoraProfileWithSeeds(profileSeeds)
+
+  const splitHandle = splitZoraProfileHandle((zoraProfile as any)?.handle)
+  const creatorCoinAddress = normalizeEvmAddress((zoraProfile as any)?.creatorCoin?.address) ?? existing.creatorCoinAddress
+  const existingHandle = splitZoraProfileHandle(existing.zoraHandle).zoraHandle
+  const zoraHandle = splitHandle.zoraHandle ?? existingHandle
+
+  const profileWalletForBasename =
+    normalizeEvmAddress(classification.embeddedEoa?.address) ??
+    normalizeEvmAddress(classification.primaryWalletAddress) ??
+    null
+  let basename = splitHandle.basename
+  if (!basename && profileWalletForBasename) {
+    try {
+      basename = (await getBasenameName(profileWalletForBasename))?.toLowerCase() ?? null
+    } catch {
+      basename = null
+    }
+  }
+  if (basename) {
+    await upsertLinkedMethod({
+      db,
+      privyUserId,
+      type: 'basename',
+      value: basename,
+      verified: true,
+    })
   }
 
-  if (zoraProfile) zoraLinked = true
+  if (zoraCrossApp.length > 0 || zoraHandle || creatorCoinAddress) {
+    zoraLinked = true
+  } else if (zoraProfile && basename) {
+    zoraLinked = false
+  } else if (zoraProfile) {
+    zoraLinked = Boolean(splitHandle.zoraHandle)
+  }
 
-  const zoraHandle = normalizeString((zoraProfile as any)?.handle)
-  const creatorCoinAddress = normalizeEvmAddress((zoraProfile as any)?.creatorCoin?.address) ?? existing.creatorCoinAddress
   const creatorCoin = creatorCoinAddress ? await fetchCreatorCoinSummary(creatorCoinAddress) : null
 
   const nowIso = new Date().toISOString()
@@ -844,7 +878,7 @@ export async function resolveAndPersistZoraSignals(params: {
     ON CONFLICT (privy_user_id) DO UPDATE
     SET
       zora_linked = EXCLUDED.zora_linked,
-      zora_handle = COALESCE(EXCLUDED.zora_handle, account_zora_signals.zora_handle),
+      zora_handle = EXCLUDED.zora_handle,
       canonical_csw_address = COALESCE(EXCLUDED.canonical_csw_address, account_zora_signals.canonical_csw_address),
       creator_coin_address = COALESCE(EXCLUDED.creator_coin_address, account_zora_signals.creator_coin_address),
       last_resolved_at = EXCLUDED.last_resolved_at,
@@ -852,6 +886,18 @@ export async function resolveAndPersistZoraSignals(params: {
   `
 
   if (canonical) {
+    const profileId = await resolvePrimaryProfileIdForPrivyUser(db, privyUserId)
+    if (profileId) {
+      await db.sql`
+        UPDATE profiles
+        SET
+          csw_address = COALESCE(NULLIF(btrim(csw_address), ''), ${canonical}),
+          updated_at = NOW()
+        WHERE id = ${profileId}
+          AND (csw_address IS NULL OR btrim(csw_address) = '');
+      `
+    }
+
     await applyPointEvent({
       db,
       privyUserId,
@@ -882,6 +928,65 @@ export async function resolveAndPersistZoraSignals(params: {
   }
 }
 
+function logRefineAccountIdentityFailure(stage: string, error: unknown, privyUserId: string): void {
+  console.warn('refine_account_identity_failed', {
+    stage,
+    privyUserId,
+    message: error instanceof Error ? error.message : String(error ?? ''),
+  })
+}
+
+export function hasLinkedExternalEoa(privyUser: PrivyUserLike): boolean {
+  return classifyLinkedAccounts(privyUser).allWallets.some(
+    (wallet) => wallet.chain === 'evm' && wallet.walletType === 'external_eoa',
+  )
+}
+
+/**
+ * Best-effort DB refresh after Privy auth (email OTP or returning external wallet).
+ * Syncs linked wallets, persists external EOA links, and resolves canonical CSW +
+ * Zora handle into profiles + account_zora_signals before serving accountMe.
+ */
+export async function refineAccountIdentityFromPrivy(params: {
+  db: Db
+  privyUserId: string
+  privyUser: PrivyUserLike
+  forceZoraRefresh?: boolean
+}): Promise<void> {
+  const { db, privyUserId, privyUser, forceZoraRefresh = false } = params
+
+  try {
+    await syncUserWallets(db, privyUser)
+  } catch (error) {
+    logRefineAccountIdentityFailure('wallet_sync', error, privyUserId)
+  }
+
+  const hasExternalEoa = hasLinkedExternalEoa(privyUser)
+  if (hasExternalEoa) {
+    try {
+      await recordProviderLink({
+        db,
+        privyUserId,
+        provider: 'external_eoa',
+        privyUser,
+      })
+    } catch (error) {
+      logRefineAccountIdentityFailure('external_eoa_link', error, privyUserId)
+    }
+  }
+
+  try {
+    await resolveAndPersistZoraSignals({
+      db,
+      privyUserId,
+      privyUser,
+      forceRefresh: forceZoraRefresh,
+    })
+  } catch (error) {
+    logRefineAccountIdentityFailure('zora_signals', error, privyUserId)
+  }
+}
+
 export async function buildAccountsMePayload(params: {
   db: Db
   privyUserId: string
@@ -891,8 +996,10 @@ export async function buildAccountsMePayload(params: {
   await ensureAccountsIdentitySchema(db)
   const accountRowResult = await db.sql`
     SELECT email, email_verified
-    FROM accounts
+    FROM profiles
     WHERE privy_user_id = ${privyUserId}
+      AND merged_into_profile_id IS NULL
+    ORDER BY updated_at DESC NULLS LAST, id DESC
     LIMIT 1;
   `
   const accountRow = accountRowResult.rows?.[0] ?? null
@@ -904,7 +1011,6 @@ export async function buildAccountsMePayload(params: {
           app_access_status,
           base_sub_account,
           csw_address,
-          primary_smart_wallet,
           primary_embedded_eoa,
           primary_wallet
         FROM profiles
@@ -922,7 +1028,7 @@ export async function buildAccountsMePayload(params: {
 
   const rawBaseSubAccount = normalizeString(profileStatusRow?.base_sub_account)
   const profileCswAddress = normalizeEvmAddress(profileStatusRow?.csw_address)
-  const profilePrimarySmartWallet = normalizeEvmAddress(profileStatusRow?.primary_smart_wallet)
+  const profilePrimarySmartWallet = profileCswAddress
   const profileEmbeddedEoa =
     normalizeEvmAddress(delegationState?.privyEmbeddedEoaAddress) ??
     normalizeEvmAddress(profileStatusRow?.primary_embedded_eoa)
@@ -930,8 +1036,7 @@ export async function buildAccountsMePayload(params: {
   const rawCanonicalCswAddress =
     delegationState?.canonicalCswAddress ??
     zoraRow.canonicalCswAddress ??
-    profileCswAddress ??
-    profilePrimarySmartWallet
+    profileCswAddress
   const canonicalCswAddressForTrack =
     resolveStoredCanonicalCswAddress({
       candidate: rawCanonicalCswAddress,
@@ -965,6 +1070,12 @@ export async function buildAccountsMePayload(params: {
     privyEmbeddedEoaIsOwnerOfCanonicalCsw: privyEmbeddedEoaIsOwnerOfCanonicalCsw === true,
   })
 
+  const basenameFromLinks = linkedMethods.basename?.[0] ?? null
+  const basename =
+    typeof basenameFromLinks === 'string' && basenameFromLinks.trim()
+      ? basenameFromLinks.trim().toLowerCase()
+      : splitZoraProfileHandle(zoraRow.zoraHandle).basename
+
   return {
     privyUserId,
     email: normalizeEmail(accountRow?.email),
@@ -976,7 +1087,10 @@ export async function buildAccountsMePayload(params: {
       linked: zoraRow.zoraLinked,
       canonicalCswAddress: canonicalCswAddressForTrack ?? zoraRow.canonicalCswAddress,
       creatorCoin: zoraRow.creatorCoinAddress ? { address: zoraRow.creatorCoinAddress } : null,
-      zoraHandle: zoraRow.zoraHandle,
+      zoraHandle: splitZoraProfileHandle(zoraRow.zoraHandle).zoraHandle,
+      basename,
+      primaryWalletAddress: profilePrimaryWallet,
+      embeddedEoaAddress: profileEmbeddedEoa,
       lastResolvedAt: zoraRow.lastResolvedAt,
       baseSubAccount: baseSubAccountSummary,
       executionTrack,

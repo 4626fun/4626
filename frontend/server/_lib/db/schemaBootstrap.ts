@@ -385,17 +385,6 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
 }
 
 /**
- * Workspace / creator strategy management tables.
- *
- * Central implementation (all callers now use this directly).
- */
-export async function ensureWorkspaceSchema(db: Db): Promise<void> {
-  await withEnsureOnce('workspace', async () => {
-    await ensureMigrationApplied(db, '20260529000000_workspace_schema.sql').catch(() => {})
-  })
-}
-
-/**
  * Agent memory tables (Eliza / runtimeBridge).
  */
 export async function ensureAgentMemorySchema(db: Db): Promise<void> {
@@ -405,13 +394,13 @@ export async function ensureAgentMemorySchema(db: Db): Promise<void> {
 }
 
 /**
- * Chat directory, presence, friend requests, and vault chat tables.
+ * Chat presence and friend requests.
  *
  * Central implementation (all callers now use this directly).
  */
 export async function ensureChatSchema(db: Db): Promise<void> {
   await withEnsureOnce('chat', async () => {
-    await ensureMigrationApplied(db, '20260531000000_chat_schema.sql').catch(() => {})
+    await ensureMigrationApplied(db, '20260714101000_chat_schema_bootstrap_slim.sql').catch(() => {})
   })
 }
 
@@ -494,7 +483,7 @@ export async function ensureAgentRuntimeAuditLedgerSchema(db: Db): Promise<void>
  */
 export async function ensureWalletOnchainOpsAuditSchema(db: Db): Promise<void> {
   await withEnsureOnce('walletOnchainOpsAudit', async () => {
-    await ensureMigrationApplied(db, '20260608000000_wallet_onchain_ops_audit_schema.sql').catch(() => {})
+    await ensureMigrationApplied(db, '20260714061000_wallet_onchain_ops_bootstrap_slim.sql').catch(() => {})
   })
 }
 

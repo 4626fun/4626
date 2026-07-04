@@ -152,7 +152,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     // PROFIT UNLOCKING
     // =================================
 
-    function moduleKind() external pure returns (bytes32) {
+    function moduleKind() external pure virtual returns (bytes32) {
         return MODULE_KIND;
     }
 
@@ -314,7 +314,13 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         }
     }
 
-    function deposit(uint256 assets, address receiver) external onlyDelegateCall returns (uint256 shares) {
+    /// @dev Virtual accounting seam: CreatorOVault keeps strict exact-transfer accounting here
+    ///      (fee-on-transfer / rebasing / deflationary tokens revert via `_pullCreatorCoinExact`).
+    ///      AgentOVaultCoreModule overrides this with measured-transfer accounting for
+    ///      AgentTokenV4-style fee-on-transfer assets. Do not relax the exact-transfer
+    ///      behavior in this base implementation.
+    ///      Adding a new ecosystem flavor: see `docs/_internal/ovault-ecosystem-flavors.md`.
+    function deposit(uint256 assets, address receiver) external virtual onlyDelegateCall returns (uint256 shares) {
         _enforceOperatorPermIfGranted(OP_DEPOSIT);
         if (vaultMode != VaultMode.Normal) revert VaultNotNormal();
         if (_isCcaAuctionLive()) revert CcaAuctionDepositBlocked();

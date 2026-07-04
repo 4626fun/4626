@@ -2251,7 +2251,7 @@ async function isOnchainSmartWalletOwner(params: { smartWallet: Address; ownerAd
   }
 }
 
-type CreatorAllowlistMatch = 'admin' | 'allowlist' | 'creator_wallets' | 'none'
+type CreatorAllowlistMatch = 'admin' | 'allowlist' | 'none'
 
 type CreatorAllowlistCheck = {
   allowed: boolean
@@ -2326,15 +2326,6 @@ async function checkCreatorAllowlist(params: {
         return { allowed: true, matchedBy: 'allowlist', checkedAddresses: addressFilters }
       }
 
-      const walletRes = await supabase
-        .from('creator_wallets')
-        .select('id')
-        .or(buildSupabaseOrFilters(['wallet_address'], addressFilters))
-        .limit(1)
-      if (!walletRes.error && Array.isArray(walletRes.data) && walletRes.data.length > 0) {
-        return { allowed: true, matchedBy: 'creator_wallets', checkedAddresses: addressFilters }
-      }
-
       return { allowed: false, matchedBy: 'none', checkedAddresses: addressFilters }
     } catch {
       // Fall through to Postgres
@@ -2356,17 +2347,6 @@ async function checkCreatorAllowlist(params: {
     )
     if (Array.isArray(allowlisted.rows) && allowlisted.rows.length > 0) {
       return { allowed: true, matchedBy: 'allowlist', checkedAddresses: addressFilters }
-    }
-
-    const linked = await db.query(
-      `SELECT 1
-       FROM creator_wallets
-       WHERE LOWER(wallet_address) = ANY($1)
-       LIMIT 1;`,
-      [addressFilters],
-    )
-    if (Array.isArray(linked.rows) && linked.rows.length > 0) {
-      return { allowed: true, matchedBy: 'creator_wallets', checkedAddresses: addressFilters }
     }
 
     return { allowed: false, matchedBy: 'none', checkedAddresses: addressFilters }

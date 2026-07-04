@@ -79,7 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const ownedProfile = await db.sql`
-    SELECT p.id, p.solana_wallet
+    SELECT p.id
     FROM profiles p
     WHERE p.id = ${authorizedPrincipal.profileId}
     LIMIT 1;
@@ -93,10 +93,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const linkedSolana = await db.sql`
     SELECT pw.address
     FROM profile_wallets pw
-    LEFT JOIN wallets w ON LOWER(w.address) = LOWER(pw.address)
     WHERE pw.profile_id = ${profileId}
       AND (
-        LOWER(COALESCE(w.chain, '')) = 'solana'
+        LOWER(COALESCE(pw.chain, '')) = 'solana'
         OR pw.address = ${requestedWallet}
       );
   `
@@ -105,10 +104,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .map((row: any) => (typeof row?.address === 'string' ? row.address.trim() : ''))
       .filter(Boolean),
   )
-  const profileSolanaFallback =
-    typeof ownedProfile?.rows?.[0]?.solana_wallet === 'string' ? ownedProfile.rows[0].solana_wallet.trim() : ''
-
-  if (!linkedSolanaSet.has(requestedWallet) && requestedWallet !== profileSolanaFallback) {
+  if (!linkedSolanaSet.has(requestedWallet)) {
     return res.status(403).json({
       success: false,
       error: 'Requested Solana wallet is not linked to this profile.',
@@ -126,17 +122,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       UPDATE profile_wallets
       SET is_canonical_solana_wallet = true,
           is_operational_solana_wallet = false,
+          chain = 'solana',
           verified_at = COALESCE(verified_at, NOW()),
           updated_at = NOW()
       WHERE profile_id = ${profileId}
         AND address = ${requestedWallet};
-    `
-    await txDb.sql`
-      UPDATE profiles
-      SET canonical_solana_wallet = ${requestedWallet},
-          solana_wallet = ${requestedWallet},
-          updated_at = NOW()
-      WHERE id = ${profileId};
     `
   })
 

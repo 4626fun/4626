@@ -15,7 +15,6 @@ import { upsertKeeprVaultAutomation } from '../../keepr/keeprAutomation.js'
 import { ensureKeeprSchema } from '../../keepr/keeprSchema.js'
 import {
   enableCswAgent,
-  getOrCreateCreatorXmtpAgent,
 } from '../../messaging/creatorXmtpAgents.js'
 import { enrichVaultArtifactsFromOnChain } from '../../onchain/vaultStrategyOnchain.js'
 import { resolveStrategyProfile } from './strategyRegistry.js'
@@ -184,25 +183,21 @@ export async function provisionVaultEconomy(
   }
 
   if (!agentInboxId) {
-    try {
-      const agentRow = await getOrCreateCreatorXmtpAgent({
-        creatorAddress,
-        listedPublicly: true,
-      })
-      agentInboxId = agentRow.xmtpAgentAddress
-    } catch (error) {
-      warnings.push(`agent_bootstrap_failed:${error instanceof Error ? error.message : String(error)}`)
+    const privyWalletId = readKeeprString(artifacts.privyWalletId)
+    if (privyWalletId) {
       try {
         const cswRow = await enableCswAgent({
           creatorAddress,
           cswAddress: creatorAddress,
-          privyWalletId: readKeeprString(artifacts.privyWalletId) || 'control-plane-bootstrap',
+          privyWalletId,
           listedPublicly: true,
         })
         agentInboxId = cswRow.xmtpAgentAddress
       } catch (inner) {
         warnings.push(`csw_agent_bootstrap_failed:${inner instanceof Error ? inner.message : String(inner)}`)
       }
+    } else {
+      warnings.push('agent_bootstrap_skipped:missing_privy_wallet_id')
     }
   }
 

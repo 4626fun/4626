@@ -28,6 +28,18 @@ contract SeedCreatorRegistryHarness is SeedCreatorRegistry {
     function exposedMonadEid() external pure returns (uint32) {
         return MONAD_EID;
     }
+
+    function exposedRobinhoodChainId() external pure returns (uint256) {
+        return ROBINHOOD_CHAIN_ID;
+    }
+
+    function exposedRobinhoodEid() external pure returns (uint32) {
+        return ROBINHOOD_EID;
+    }
+
+    function exposedRobinhoodLzEndpoint() external pure returns (address) {
+        return ROBINHOOD_LZ_ENDPOINT;
+    }
 }
 
 contract SeedCreatorRegistryConfigTest is Test {
@@ -55,5 +67,11 @@ contract SeedCreatorRegistryConfigTest is Test {
     function testMonadUsesCurrentMainnetMapping() external view {
         assertEq(harness.exposedMonadChainId(), 143);
         assertEq(harness.exposedMonadEid(), 30390);
+    }
+
+    function testRobinhoodUsesCurrentMainnetMapping() external view {
+        assertEq(harness.exposedRobinhoodChainId(), 4663);
+        assertEq(harness.exposedRobinhoodEid(), 30416);
+        assertEq(harness.exposedRobinhoodLzEndpoint(), 0x6F475642a6e85809B1c36Fa62763669b1b48DD5B);
     }
 }

@@ -13,7 +13,6 @@ export type CswMixupReason =
   | 'csw_is_allowed_owner_eoa'
   | 'csw_has_no_bytecode'
   | 'csw_equals_embedded_eoa'
-  | 'csw_mismatch_primary_smart_wallet'
   | 'profile_wallet_canonical_flag_on_eoa'
   | 'zora_signal_canonical_is_eoa'
   | 'policy_resolved_csw_differs'
@@ -23,7 +22,6 @@ export type ProfileCswAuditRow = {
   email: string | null
   privyUserId: string | null
   currentCsw: string | null
-  currentPrimarySmartWallet: string | null
   embeddedEoa: string | null
   primaryWallet: string | null
   expectedCsw: string | null
@@ -66,7 +64,6 @@ export async function auditProfileCswRow(params: {
     email?: unknown
     privy_user_id?: unknown
     csw_address?: unknown
-    primary_smart_wallet?: unknown
     primary_embedded_eoa?: unknown
     embedded_wallet?: unknown
     primary_wallet?: unknown
@@ -79,12 +76,11 @@ export async function auditProfileCswRow(params: {
   if (!Number.isInteger(profileId) || profileId <= 0) return null
 
   const currentCsw = normalizeAddress(params.row.csw_address)
-  const currentPrimarySmartWallet = normalizeAddress(params.row.primary_smart_wallet)
   const embeddedEoa =
     normalizeAddress(params.row.primary_embedded_eoa) ?? normalizeAddress(params.row.embedded_wallet)
   const primaryWallet = normalizeAddress(params.row.primary_wallet)
   const expectedCsw = resolveStoredCanonicalCswAddress({
-    candidate: currentCsw ?? currentPrimarySmartWallet,
+    candidate: currentCsw,
     embeddedEoa,
     activeOwnerEoa: primaryWallet,
   })
@@ -99,13 +95,6 @@ export async function auditProfileCswRow(params: {
   }
   if (currentCsw && embeddedEoa && currentCsw === embeddedEoa) {
     reasons.push('csw_equals_embedded_eoa')
-  }
-  if (
-    currentCsw &&
-    currentPrimarySmartWallet &&
-    currentCsw !== currentPrimarySmartWallet
-  ) {
-    reasons.push('csw_mismatch_primary_smart_wallet')
   }
   if (expectedCsw !== currentCsw) {
     reasons.push('policy_resolved_csw_differs')
@@ -135,7 +124,6 @@ export async function auditProfileCswRow(params: {
     email: typeof params.row.email === 'string' ? params.row.email : null,
     privyUserId: typeof params.row.privy_user_id === 'string' ? params.row.privy_user_id : null,
     currentCsw,
-    currentPrimarySmartWallet,
     embeddedEoa,
     primaryWallet,
     expectedCsw,
@@ -180,7 +168,6 @@ export async function repairProfileCswMixup(params: {
       UPDATE profiles
       SET
         csw_address = NULL,
-        primary_smart_wallet = NULL,
         base_sub_account = CASE
           WHEN lower(base_sub_account) = lower(${beforeCsw}) THEN NULL
           ELSE base_sub_account
@@ -265,23 +252,21 @@ export async function auditAllProfileCswMixups(params: {
 
   const profiles = limit
     ? await params.db.sql`
-        SELECT id, email, privy_user_id, csw_address, primary_smart_wallet, primary_embedded_eoa, embedded_wallet, primary_wallet
+        SELECT id, email, privy_user_id, csw_address, primary_embedded_eoa, embedded_wallet, primary_wallet
         FROM profiles
         WHERE merged_into_profile_id IS NULL
           AND (
             csw_address IS NOT NULL
-            OR primary_smart_wallet IS NOT NULL
           )
         ORDER BY id ASC
         LIMIT ${limit};
       `
     : await params.db.sql`
-        SELECT id, email, privy_user_id, csw_address, primary_smart_wallet, primary_embedded_eoa, embedded_wallet, primary_wallet
+        SELECT id, email, privy_user_id, csw_address, primary_embedded_eoa, embedded_wallet, primary_wallet
         FROM profiles
         WHERE merged_into_profile_id IS NULL
           AND (
             csw_address IS NOT NULL
-            OR primary_smart_wallet IS NOT NULL
           )
         ORDER BY id ASC;
       `

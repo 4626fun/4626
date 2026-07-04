@@ -55,6 +55,7 @@ const MAX_POOL_LOOKUPS_PER_RUN = 100
 
 const CURSOR_KEY = 'friend_key_transfer_single_from_zero'
 const SCORING_CURSOR_KEY = 'vigilante_scoring_offset'
+const ROOMS_SNAPSHOT_CURSOR_KEY = 'rooms_snapshot_sync_offset'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -153,6 +154,31 @@ export async function readVigilanteScoringCursor(): Promise<number> {
 
 export async function writeVigilanteScoringCursor(offset: number): Promise<void> {
   await writeNumericCursor(SCORING_CURSOR_KEY, offset)
+}
+
+/** Rotating offset for batched AlfaClub room snapshot refresh. */
+export async function readRoomsSnapshotSyncCursor(): Promise<number> {
+  return readNumericCursor(ROOMS_SNAPSHOT_CURSOR_KEY)
+}
+
+export async function writeRoomsSnapshotSyncCursor(offset: number): Promise<void> {
+  await writeNumericCursor(ROOMS_SNAPSHOT_CURSOR_KEY, offset)
+}
+
+/** Return indexed FriendKey room ids in ascending order. */
+export async function listCreatorRoomIds(): Promise<string[]> {
+  const db = await getDb()
+  if (!db) return []
+  try {
+    const result = await db.sql`
+      SELECT token_id::text AS room_id
+      FROM alfaclub_creators
+      ORDER BY token_id::bigint ASC;
+    `
+    return ((result.rows ?? []) as Array<{ room_id: string }>).map((row) => String(row.room_id))
+  } catch {
+    return []
+  }
 }
 
 // ---------------------------------------------------------------------------

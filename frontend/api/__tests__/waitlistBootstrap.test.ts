@@ -12,6 +12,7 @@ const {
   upsertAccountMock,
   upsertLinkedMethodMock,
   buildAccountsMePayloadMock,
+  refineAccountIdentityFromPrivyMock,
   assertNoEmailPrivyCollisionMock,
   assertNoWalletPrivyCollisionMock,
   classifyLinkedAccountsMock,
@@ -25,6 +26,7 @@ const {
   upsertAccountMock: vi.fn(),
   upsertLinkedMethodMock: vi.fn(),
   buildAccountsMePayloadMock: vi.fn(),
+  refineAccountIdentityFromPrivyMock: vi.fn(),
   assertNoEmailPrivyCollisionMock: vi.fn(),
   assertNoWalletPrivyCollisionMock: vi.fn(),
   classifyLinkedAccountsMock: vi.fn(),
@@ -46,6 +48,7 @@ vi.mock('../../server/_lib/identity/accountsIdentity.js', () => ({
   upsertAccount: upsertAccountMock,
   upsertLinkedMethod: upsertLinkedMethodMock,
   buildAccountsMePayload: buildAccountsMePayloadMock,
+  refineAccountIdentityFromPrivy: refineAccountIdentityFromPrivyMock,
 }))
 
 vi.mock('../../server/_lib/wallet/walletMapping.js', () => ({
@@ -114,6 +117,7 @@ describe('POST /api/waitlist/bootstrap', () => {
       accountSignals: defaultAccountSignals(),
       score: { points: 0, tier: 0 },
     })
+    refineAccountIdentityFromPrivyMock.mockResolvedValue(undefined)
     awardWaitlistPointsMock.mockResolvedValue(true)
   })
 
@@ -221,13 +225,9 @@ describe('POST /api/waitlist/bootstrap', () => {
                 id: 42,
                 privy_user_id: 'did:privy:old-user',
                 primary_wallet: '0xAbC1230000000000000000000000000000000000',
-                solana_wallet: null,
-                canonical_solana_wallet: null,
-                operational_solana_wallet: null,
                 embedded_wallet: null,
                 base_sub_account: null,
                 csw_address: null,
-                primary_smart_wallet: null,
                 primary_embedded_eoa: null,
               },
             ],
@@ -308,13 +308,9 @@ describe('POST /api/waitlist/bootstrap', () => {
                 id: 42,
                 privy_user_id: 'did:privy:old-user',
                 primary_wallet: '0xAbC1230000000000000000000000000000000000',
-                solana_wallet: null,
-                canonical_solana_wallet: null,
-                operational_solana_wallet: null,
                 embedded_wallet: null,
                 base_sub_account: null,
                 csw_address: null,
-                primary_smart_wallet: null,
                 primary_embedded_eoa: null,
               },
             ],

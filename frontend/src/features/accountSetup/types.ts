@@ -33,6 +33,9 @@ export type AccountSignals = {
   privyEmbeddedEoaIsOwnerOfCanonicalCsw: boolean | null
   creatorCoin: AccountCreatorCoin | null
   zoraHandle: string | null
+  basename: string | null
+  primaryWalletAddress: string | null
+  embeddedEoaAddress: string | null
   lastResolvedAt: string | null
 }
 

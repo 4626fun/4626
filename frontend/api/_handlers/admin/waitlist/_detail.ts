@@ -34,6 +34,8 @@ type WalletGraphItem = {
   isPrimary: boolean
   isCanonicalSmartWallet: boolean
   isEmbeddedEoa: boolean
+  isCanonicalSolanaWallet: boolean
+  isOperationalSolanaWallet: boolean
 }
 
 type PrivyWalletContext = {
@@ -224,11 +226,12 @@ async function fetchWalletGraph(db: any, profileId: number): Promise<WalletGraph
          pw.is_primary,
          pw.is_canonical_smart_wallet,
          pw.is_embedded_eoa,
-         w.wallet_type,
-         w.provider,
-         w.chain
+         pw.is_canonical_solana_wallet,
+         pw.is_operational_solana_wallet,
+         pw.wallet_type,
+         pw.provider,
+         pw.chain
        FROM profile_wallets pw
-       LEFT JOIN wallets w ON LOWER(w.address) = LOWER(pw.address)
        WHERE pw.profile_id = $1
        ORDER BY pw.is_primary DESC, pw.is_canonical_smart_wallet DESC, pw.updated_at DESC;`,
       [profileId],
@@ -246,6 +249,8 @@ async function fetchWalletGraph(db: any, profileId: number): Promise<WalletGraph
           isPrimary: Boolean(row.is_primary),
           isCanonicalSmartWallet: Boolean(row.is_canonical_smart_wallet),
           isEmbeddedEoa: Boolean(row.is_embedded_eoa),
+          isCanonicalSolanaWallet: Boolean(row.is_canonical_solana_wallet),
+          isOperationalSolanaWallet: Boolean(row.is_operational_solana_wallet),
         } satisfies WalletGraphItem
       })
       .filter(Boolean) as WalletGraphItem[]
@@ -254,37 +259,27 @@ async function fetchWalletGraph(db: any, profileId: number): Promise<WalletGraph
 
   const { data: profileWalletRows, error: pwError } = await db
     .from('profile_wallets')
-    .select('address,is_primary,is_canonical_smart_wallet,is_embedded_eoa,updated_at')
+    .select('address,is_primary,is_canonical_smart_wallet,is_embedded_eoa,is_canonical_solana_wallet,is_operational_solana_wallet,wallet_type,provider,chain,updated_at')
     .eq('profile_id', profileId)
     .order('is_primary', { ascending: false })
     .order('is_canonical_smart_wallet', { ascending: false })
     .order('updated_at', { ascending: false })
   if (pwError) return []
 
-  const addresses = uniqueAddresses((profileWalletRows ?? []).map((row: any) => row?.address))
-  const walletMap = new Map<string, any>()
-  if (addresses.length > 0) {
-    const { data: walletRows } = await db.from('wallets').select('address,wallet_type,provider,chain').in('address', addresses)
-    for (const row of walletRows ?? []) {
-      const address = normalizeAddress((row as any)?.address)
-      if (!address) continue
-      walletMap.set(address, row)
-    }
-  }
-
   return (profileWalletRows ?? [])
     .map((row: any) => {
       const address = normalizeAddress(row?.address)
       if (!address) return null
-      const wallet = walletMap.get(address) ?? {}
       return {
         address,
-        walletType: typeof wallet.wallet_type === 'string' ? wallet.wallet_type : null,
-        provider: typeof wallet.provider === 'string' ? wallet.provider : null,
-        chain: typeof wallet.chain === 'string' ? wallet.chain : null,
+        walletType: typeof row?.wallet_type === 'string' ? row.wallet_type : null,
+        provider: typeof row?.provider === 'string' ? row.provider : null,
+        chain: typeof row?.chain === 'string' ? row.chain : null,
         isPrimary: Boolean(row?.is_primary),
         isCanonicalSmartWallet: Boolean(row?.is_canonical_smart_wallet),
         isEmbeddedEoa: Boolean(row?.is_embedded_eoa),
+        isCanonicalSolanaWallet: Boolean(row?.is_canonical_solana_wallet),
+        isOperationalSolanaWallet: Boolean(row?.is_operational_solana_wallet),
       } satisfies WalletGraphItem
     })
     .filter(Boolean) as WalletGraphItem[]
@@ -412,7 +407,7 @@ async function resolveIdentity(params: {
     candidateScores.set(address, Math.max(current, score))
   }
 
-  addCandidate(row.primary_smart_wallet, 4)
+  addCandidate(row.csw_address, 4)
   addCandidate(row.csw_address, 4)
   addCandidate(row.base_sub_account, 3)
   addCandidate(privyContext.privySmartWallet, 2)
@@ -583,7 +578,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     email: typeof row.email === 'string' ? row.email : String(row.email || ''),
     persona: typeof row.persona === 'string' ? row.persona : null,
     primaryWallet: typeof row.primary_wallet === 'string' ? row.primary_wallet : null,
-    solanaWallet: typeof row.solana_wallet === 'string' ? row.solana_wallet : null,
+    solanaWallet:
+      walletGraph.find((wallet) => wallet.isCanonicalSolanaWallet)?.address ??
+      walletGraph.find((wallet) => wallet.chain === 'solana')?.address ??
+      null,
     privyUserId: typeof row.privy_user_id === 'string' ? row.privy_user_id : null,
     embeddedWallet: typeof row.embedded_wallet === 'string' ? row.embedded_wallet : null,
     embeddedWalletChain: typeof row.embedded_wallet_chain === 'string' ? row.embedded_wallet_chain : null,

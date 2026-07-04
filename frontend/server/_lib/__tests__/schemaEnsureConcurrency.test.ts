@@ -21,20 +21,18 @@ function createDb() {
     sql: vi.fn(async (strings: TemplateStringsArray) => {
       const text = strings.join('')
 
-      if (text.includes("to_regclass('public.profiles') IS NOT NULL AS has_profiles")) {
+      if (text.includes("to_regclass('public.profiles') IS NOT NULL AS has_profiles") && text.includes('has_referral_conversions')) {
         return {
           rows: [
             {
               has_profiles: true,
-              has_referral_clicks: true,
               has_referral_conversions: true,
               has_points: true,
-              has_wallets: true,
               has_profile_wallets: true,
               has_app_access_status: true,
               has_verifications: true,
               has_profile_completed_at: true,
-              has_primary_smart_wallet: true,
+              has_csw_address: true,
               has_primary_embedded_eoa: true,
             },
           ],
@@ -42,13 +40,14 @@ function createDb() {
         }
       }
 
-      if (text.includes("to_regclass('public.accounts') IS NOT NULL AS has_accounts")) {
+      if (text.includes("to_regclass('public.profiles') IS NOT NULL AS has_profiles") && text.includes('has_email_verified')) {
         return {
           rows: [
             {
-              has_accounts: true,
+              has_profiles: true,
               has_account_linked_methods: true,
               has_account_zora_signals: true,
+              has_email_verified: true,
               has_canonical_csw_address: true,
             },
           ],

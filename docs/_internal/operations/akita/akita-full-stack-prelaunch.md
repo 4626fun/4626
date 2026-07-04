@@ -1,15 +1,16 @@
 # AKITA full-stack redeploy — pre-launch checklist
 
-> **Release truth:** v1.14.1 batcher `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1`. Terminology: [Operator terminology](../OPERATOR-TERMINOLOGY.md).
+> **Release truth:** v1.14.1 batcher `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1`. Terminology: [Operator terminology](../../OPERATOR-TERMINOLOGY.md).
 
 Use this before **you** launch AKITA’s new vault stack on `https://app.4626.fun/deploy/vault`. Platform ops can finish everything here; the deploy session itself stays with the creator/operator wallet.
 
 Related:
 
-- [greenfield-launch-readiness.md](./greenfield-launch-readiness.md)
-- [batcher-pipe-a-cutover.md](./deployment/batcher-pipe-a-cutover.md)
-- [solana-share-mesh-creator-provisioning.md](./solana-share-mesh-creator-provisioning.md)
-- [akita-solana-share-mesh-audit.md](./akita-solana-share-mesh-audit.md)
+- **[akita-launch-operator-pack.md](./akita-launch-operator-pack.md) — deterministic in-order operator run sheet (start here on launch day)**
+- [greenfield-launch-readiness.md](../operations/vault/greenfield-launch-readiness.md)
+- [batcher-pipe-a-cutover.md](../deployment/batcher-pipe-a-cutover.md)
+- [solana-share-mesh-creator-provisioning.md](../operations/solana/solana-share-mesh-creator-provisioning.md)
+- [akita-solana-share-mesh-audit.md](../solana/akita-solana-share-mesh-audit.md)
 
 ## Target redeploy state
 

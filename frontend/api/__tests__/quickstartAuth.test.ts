@@ -152,7 +152,6 @@ function createDb() {
               id: 1,
               primary_wallet: '0x00000000000000000000000000000000000000aa',
               primary_embedded_eoa: null,
-              primary_smart_wallet: '0x00000000000000000000000000000000000000aa',
               csw_address: '0x00000000000000000000000000000000000000aa',
               base_sub_account: '0x00000000000000000000000000000000000000aa',
               canonical_wallet: '0x00000000000000000000000000000000000000aa',

@@ -99,7 +99,6 @@ async function findLinkedProfileId(db: Db, wallet: `0x${string}`): Promise<numbe
          OR LOWER(p.embedded_wallet) = ${wallet}
          OR LOWER(p.primary_embedded_eoa) = ${wallet}
          OR LOWER(p.csw_address) = ${wallet}
-         OR LOWER(p.primary_smart_wallet) = ${wallet}
          OR LOWER(p.base_sub_account) = ${wallet}
          OR EXISTS (
            SELECT 1

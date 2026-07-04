@@ -61,14 +61,14 @@ async function resolveFromProfiles(userId: string): Promise<BaseMcpAccountExecut
     const profileId = parseProfileId(userId)
     const result = profileId
       ? await db.sql`
-          SELECT id, primary_wallet, primary_embedded_eoa, primary_smart_wallet, csw_address
+          SELECT id, primary_wallet, primary_embedded_eoa, csw_address, csw_address
           FROM profiles
           WHERE id = ${profileId}
             AND merged_into_profile_id IS NULL
           LIMIT 1;
         `
       : await db.sql`
-          SELECT id, primary_wallet, primary_embedded_eoa, primary_smart_wallet, csw_address
+          SELECT id, primary_wallet, primary_embedded_eoa, csw_address, csw_address
           FROM profiles
           WHERE privy_user_id = ${userId}
             AND merged_into_profile_id IS NULL
@@ -78,7 +78,7 @@ async function resolveFromProfiles(userId: string): Promise<BaseMcpAccountExecut
     const row = result.rows?.[0] as Record<string, unknown> | undefined
     if (!row) return null
 
-    const canonicalSender = normalizeAddress(row.csw_address) ?? normalizeAddress(row.primary_smart_wallet)
+    const canonicalSender = normalizeAddress(row.csw_address) ?? normalizeAddress(row.csw_address)
     const embeddedOwner = normalizeAddress(row.primary_embedded_eoa)
 
     return {

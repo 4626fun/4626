@@ -16,6 +16,7 @@ import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { signInWithSiwaAgent } from '@/lib/auth/siwaAgentAuth'
 import { ensureProviderOnBase, ensureWagmiChainOnBase } from '@/lib/wallet/safeSwitchToBase'
 import { useZoraProfile } from '@/lib/zora/hooks'
+import { pickAccountZoraProfileSeed } from '@/lib/zora/zoraProfileIdentifier'
 import { Spinner } from '@/components/ui/Spinner'
 
 const DEFAULT_ERC8004_IDENTITY_REGISTRY = '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432'
@@ -65,6 +66,8 @@ const COINBASE_SMART_WALLET_EXECUTE_BATCH_ABI = [
 type WaitlistMeData = {
   profileId: number
   primaryWallet?: string | null
+  primaryEmbeddedEoa?: string | null
+  embeddedWallet?: string | null
   cswAddress?: string | null
   primarySmartWallet?: string | null
   baseSubAccount?: string | null
@@ -109,12 +112,6 @@ function shortAddress(address: string): string {
   if (!value) return '—'
   if (value.length < 12) return value
   return `${value.slice(0, 6)}…${value.slice(-4)}`
-}
-
-function normalizeHandle(value: string | null | undefined): string | null {
-  const raw = typeof value === 'string' ? value.trim() : ''
-  if (!raw) return null
-  return raw.startsWith('@') ? raw.slice(1) : raw
 }
 
 function readErrorMessage(value: unknown, fallback: string): string {
@@ -253,10 +250,14 @@ export function AgentRegister() {
 
   const zoraCanonicalSeedIdentifier = useMemo(() => {
     const row = waitlistMeQuery.data
-    const fromHandle = normalizeHandle(row?.preprovZoraHandle)
-    if (fromHandle) return fromHandle
-    if (isAddressLike(row?.primaryWallet)) return row.primaryWallet
-    return undefined
+    if (!row) return undefined
+    return pickAccountZoraProfileSeed({
+      preprovZoraHandle: row.preprovZoraHandle,
+      canonicalCswAddress: row.cswAddress,
+      primarySmartWallet: row.primarySmartWallet,
+      primaryWalletAddress: row.primaryWallet,
+      embeddedEoaAddress: row.primaryEmbeddedEoa ?? row.embeddedWallet,
+    })
   }, [waitlistMeQuery.data])
   const zoraCanonicalSeedQuery = useZoraProfile(zoraCanonicalSeedIdentifier)
   const zoraCanonicalSeedProfile = zoraCanonicalSeedQuery.data ?? null

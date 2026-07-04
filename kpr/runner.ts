@@ -85,6 +85,9 @@ async function main() {
       case 'vault-strategy-reallocator':
         workflow = await import('./workflows/vault-strategy-reallocator.workflow.js');
         break;
+      case 'keepr-remote-fee-flush':
+        workflow = await import('./workflows/keepr-remote-fee-flush.workflow.js');
+        break;
       default:
         console.error(`Unknown workflow: ${workflowName}`);
         console.error('');
@@ -101,6 +104,7 @@ async function main() {
         console.error('  strategy-signal-listener — always-on WS listener for Ajna/Charm triggers');
         console.error('  bridge-integrity-monitor — monitor Solana bridge route/liveness integrity');
         console.error('  vault-strategy-reallocator — cross-strategy Charm/Ajna TVL rebalance');
+        console.error('  keepr-remote-fee-flush — bridge remote ShareOFT buy fees to Base gauge');
         process.exit(1);
     }
 

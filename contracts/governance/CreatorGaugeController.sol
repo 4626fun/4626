@@ -17,6 +17,7 @@ interface ICreatorOVault {
 }
 
 interface ICreatorOVaultWrapper {
+    function wrap(uint256 amount) external returns (uint256);
     function unwrap(uint256 amount) external returns (uint256);
     function vaultShares() external view returns (address);
 }
@@ -65,8 +66,13 @@ interface IVoterRewardsDistributor {
 /**
  * @title CreatorGaugeController
  * @author 0xakita.eth
- * @notice Fee splitter and gauge controller for creator vaults.
- * @dev Routes swap fees to lottery, burn, and protocol allocations.
+ * @notice Per-creator `tradeFeeCollector` — receives ShareOFT buy fees, unwraps, and splits value
+ * @dev Hub-only (Base). ShareOFT buy fees arrive via receiveFees() or bridged OFT via receiveBridgedFees().
+ *      Split (all paths):
+ *      - 69% ■ ShareOFT → jackpotCustodian reserve (CreatorLotteryManager is jackpotPayoutAuthority)
+ *      - 21.39% ■ ShareOFT → VoterRewardsDistributor (ve4626 voter lane)
+ *      - 9.61% ▢ vault shares burned (PPS accrual for all holders)
+ *      - 0% creatorTreasury ongoing lane (disabled by default; creatorShareBps = 0)
  */
 contract CreatorGaugeController is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -141,7 +147,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     /// @notice VaultGaugeVoting for ve(3,3) probability direction
     IVaultGaugeVoting public vaultGaugeVoting;
 
-    /// @notice Voter rewards distributor (receives the 9.61% voter slice)
+    /// @notice Voter rewards distributor (receives the 21.39% voter slice as ShareOFT)
     IVoterRewardsDistributor public voterRewardsDistributor;
 
     // ================================
@@ -150,17 +156,17 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     /// @dev Public constant names preserve legacy getter selectors (`burnShareBps()`, etc.) for
     ///      off-chain monitors (e.g. KPR payout-integrity) and integrators. Do not rename.
 
-    /// @notice Percentage to burn (increases PPS for all holders)
-    uint256 public constant burnShareBps = 2139; // 21.39% - ve(3,3) passive value accrual
+    /// @notice Percentage burned as vault shares (increases PPS for all holders)
+    uint256 public constant burnShareBps = 961; // 9.61%
 
-    /// @notice Percentage to lottery reserve (jackpot)
-    uint256 public constant lotteryShareBps = 6900; // 69% - vote-directed probability pool
+    /// @notice Percentage to lottery reserve (ShareOFT units)
+    uint256 public constant lotteryShareBps = 6900; // 69%
 
     /// @notice Percentage to creator treasury
     uint256 public constant creatorShareBps = 0; // 0% - creators earn via appreciation + bribes
 
-    /// @notice Voter / protocol slice (routed via voterRewardsDistributor or treasury fallbacks)
-    uint256 public constant protocolShareBps = 961; // 9.61%
+    /// @notice Voter slice (ShareOFT units via voterRewardsDistributor or treasury fallbacks)
+    uint256 public constant protocolShareBps = 2139; // 21.39%
 
     // ================================
     // ACCUMULATION & DISTRIBUTION
@@ -182,7 +188,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     // JACKPOT RESERVE
     // ================================
 
-    /// @notice Vault shares held as jackpot reserve
+    /// @notice ShareOFT (■) held as jackpot reserve for lottery payouts
     uint256 public jackpotReserve;
 
     // ================================
@@ -368,7 +374,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
         uint256 balance = shareOFT.balanceOf(address(this));
 
         // FIX: G-11 — use explicit accounted OFT balance instead of just pendingFees
-        // This prevents jackpotReserve (vault shares) from being confused with OFT
+        // This prevents jackpot ShareOFT from being swept as bridged fees
         uint256 accounted = accountedOFTBalance;
         if (balance <= accounted) return;
 
@@ -622,28 +628,42 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     }
 
     function _distributeInternal() internal {
-        if (address(wrapper) == address(0)) revert WrapperNotSet();
         if (address(vault) == address(0)) revert VaultNotSet();
 
         uint256 oftAmount = pendingFees;
         pendingFees = 0;
-        // FIX: G-11 — decrement OFT accounting when consumed
         accountedOFTBalance -= oftAmount;
         lastDistribution = block.timestamp;
 
-        // Step 1: Unwrap OFT → vault shares
-        shareOFT.forceApprove(address(wrapper), oftAmount);
-        uint256 vaultSharesReceived = wrapper.unwrap(oftAmount);
+        (uint256 toLottery, uint256 toVoters, uint256 toCreator, uint256 toBurnOft) =
+            _splitShareOftAmount(oftAmount);
 
-        // Step 2: Distribute the vault shares
-        _distributeVaultShares(vaultSharesReceived);
+        if (toLottery > 0) {
+            jackpotReserve += toLottery;
+            totalLotteryFunded += toLottery;
+            accountedOFTBalance += toLottery;
+        }
+
+        if (toCreator > 0 && creatorTreasury != address(0)) {
+            shareOFT.safeTransfer(creatorTreasury, toCreator);
+            totalCreatorEarned += toCreator;
+        } else if (toCreator > 0) {
+            jackpotReserve += toCreator;
+            totalLotteryFunded += toCreator;
+            toLottery += toCreator;
+            accountedOFTBalance += toCreator;
+            toCreator = 0;
+        }
+
+        uint256 vaultSharesBurned = _burnShareOftSlice(toBurnOft);
+        _routeVoterShareOft(toVoters);
+
+        emit FeesDistributed(vaultSharesBurned, toLottery, toCreator, toVoters, vault.pricePerShare());
     }
 
     /**
-     * @notice Internal function to distribute vault shares according to fee split
-     * @dev Called from both OFT fee path and WETH fee path
-     *      DEFAULT SPLIT (bps): burn=2139, lottery=6900, creator=0, protocol=961
-     * @param vaultSharesReceived Amount of vault shares to distribute
+     * @notice Internal function to distribute vault shares from the WETH/tax-hook path
+     * @dev Wraps lottery + voter slices to ShareOFT; burns the burn slice as vault shares.
      */
     function _distributeVaultShares(uint256 vaultSharesReceived) internal {
         if (vaultSharesReceived == 0) return;
@@ -651,67 +671,110 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
 
         lastDistribution = block.timestamp;
 
-        // Calculate splits (in vault shares)
         uint256 toBurn = (vaultSharesReceived * burnShareBps) / MAX_BPS;
-        uint256 toLottery = (vaultSharesReceived * lotteryShareBps) / MAX_BPS;
-        uint256 toCreator = (vaultSharesReceived * creatorShareBps) / MAX_BPS;
-        uint256 toProtocol = vaultSharesReceived - toBurn - toLottery - toCreator;
+        uint256 toLotteryVs = (vaultSharesReceived * lotteryShareBps) / MAX_BPS;
+        uint256 toCreatorVs = (vaultSharesReceived * creatorShareBps) / MAX_BPS;
+        uint256 toVotersVs = vaultSharesReceived - toBurn - toLotteryVs - toCreatorVs;
 
-        // Burn shares (increases PPS for all holders) - disabled by default
+        uint256 toLotteryOft;
+        uint256 toVotersOft;
+
+        if (toLotteryVs > 0) {
+            toLotteryOft = _wrapVaultSharesToShareOft(toLotteryVs);
+            if (toLotteryOft > 0) {
+                jackpotReserve += toLotteryOft;
+                totalLotteryFunded += toLotteryOft;
+                accountedOFTBalance += toLotteryOft;
+            }
+        }
+
+        if (toCreatorVs > 0 && creatorTreasury != address(0)) {
+            vaultShares.safeTransfer(creatorTreasury, toCreatorVs);
+            totalCreatorEarned += toCreatorVs;
+        } else if (toCreatorVs > 0) {
+            uint256 creatorOft = _wrapVaultSharesToShareOft(toCreatorVs);
+            if (creatorOft > 0) {
+                jackpotReserve += creatorOft;
+                totalLotteryFunded += creatorOft;
+                accountedOFTBalance += creatorOft;
+                toLotteryOft += creatorOft;
+            }
+        }
+
+        if (toVotersVs > 0) {
+            toVotersOft = _wrapVaultSharesToShareOft(toVotersVs);
+            _routeVoterShareOft(toVotersOft);
+        }
+
         if (toBurn > 0) {
             vaultShares.forceApprove(address(vault), toBurn);
             vault.burnSharesForPriceIncrease(toBurn);
             totalSharesBurned += toBurn;
-
             emit SharesBurned(toBurn, vault.pricePerShare());
         }
 
-        // Add to jackpot reserve (lotteryShareBps default: 6900)
-        if (toLottery > 0) {
-            jackpotReserve += toLottery;
-            totalLotteryFunded += toLottery;
-        }
+        emit FeesDistributed(toBurn, toLotteryOft, toCreatorVs, toVotersOft, vault.pricePerShare());
+    }
 
-        // Send to creator (creatorShareBps default: 0)
-        if (toCreator > 0 && creatorTreasury != address(0)) {
-            vaultShares.safeTransfer(creatorTreasury, toCreator);
-            totalCreatorEarned += toCreator;
-        } else if (toCreator > 0) {
-            // If no treasury set, add to jackpot
-            jackpotReserve += toCreator;
-            toLottery += toCreator;
-            toCreator = 0;
-        }
+    function _splitShareOftAmount(uint256 oftAmount)
+        internal
+        pure
+        returns (uint256 toLottery, uint256 toVoters, uint256 toCreator, uint256 toBurnOft)
+    {
+        toLottery = (oftAmount * lotteryShareBps) / MAX_BPS;
+        toVoters = (oftAmount * protocolShareBps) / MAX_BPS;
+        toCreator = (oftAmount * creatorShareBps) / MAX_BPS;
+        toBurnOft = oftAmount - toLottery - toVoters - toCreator;
+    }
 
-        // Voter rewards (9.61% default): route to ve4626 voters (bribes/fees)
-        if (toProtocol > 0 && address(voterRewardsDistributor) != address(0)) {
-            vaultShares.forceApprove(address(voterRewardsDistributor), toProtocol);
-            try voterRewardsDistributor.notifyRewards(address(vault), address(vaultShares), toProtocol) {
-                totalProtocolEarned += toProtocol;
+    function _wrapVaultSharesToShareOft(uint256 vaultShareAmount) internal returns (uint256 oftOut) {
+        if (vaultShareAmount == 0) return 0;
+        if (address(wrapper) == address(0)) revert WrapperNotSet();
+
+        vaultShares.forceApprove(address(wrapper), vaultShareAmount);
+        oftOut = ICreatorOVaultWrapper(address(wrapper)).wrap(vaultShareAmount);
+    }
+
+    function _burnShareOftSlice(uint256 oftAmount) internal returns (uint256 vaultSharesBurned) {
+        if (oftAmount == 0) return 0;
+        if (address(wrapper) == address(0)) revert WrapperNotSet();
+
+        shareOFT.forceApprove(address(wrapper), oftAmount);
+        vaultSharesBurned = wrapper.unwrap(oftAmount);
+
+        vaultShares.forceApprove(address(vault), vaultSharesBurned);
+        vault.burnSharesForPriceIncrease(vaultSharesBurned);
+        totalSharesBurned += vaultSharesBurned;
+
+        emit SharesBurned(vaultSharesBurned, vault.pricePerShare());
+    }
+
+    function _routeVoterShareOft(uint256 toVoters) internal {
+        if (toVoters == 0) return;
+
+        if (address(voterRewardsDistributor) != address(0)) {
+            shareOFT.forceApprove(address(voterRewardsDistributor), toVoters);
+            try voterRewardsDistributor.notifyRewards(address(vault), address(shareOFT), toVoters) {
+                totalProtocolEarned += toVoters;
             } catch {
-                vaultShares.forceApprove(address(voterRewardsDistributor), 0);
+                shareOFT.forceApprove(address(voterRewardsDistributor), 0);
                 if (protocolTreasury != address(0)) {
-                    vaultShares.safeTransfer(protocolTreasury, toProtocol);
-                    totalProtocolEarned += toProtocol;
+                    shareOFT.safeTransfer(protocolTreasury, toVoters);
+                    totalProtocolEarned += toVoters;
                 } else {
-                    jackpotReserve += toProtocol;
-                    toLottery += toProtocol;
+                    jackpotReserve += toVoters;
+                    totalLotteryFunded += toVoters;
+                    accountedOFTBalance += toVoters;
                 }
             }
-        } else if (toProtocol > 0 && protocolTreasury != address(0)) {
-            // Fallback: if distributor isn't configured, send to protocol treasury
-            vaultShares.safeTransfer(protocolTreasury, toProtocol);
-            totalProtocolEarned += toProtocol;
-        } else if (toProtocol > 0) {
-            // Final fallback: add to jackpot
-            jackpotReserve += toProtocol;
-            toLottery += toProtocol;
-            toProtocol = 0;
+        } else if (protocolTreasury != address(0)) {
+            shareOFT.safeTransfer(protocolTreasury, toVoters);
+            totalProtocolEarned += toVoters;
+        } else {
+            jackpotReserve += toVoters;
+            totalLotteryFunded += toVoters;
+            accountedOFTBalance += toVoters;
         }
-
-        uint256 newPPS = vault.pricePerShare();
-
-        emit FeesDistributed(toBurn, toLottery, toCreator, toProtocol, newPPS);
     }
 
     // ================================
@@ -719,27 +782,28 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     // ================================
 
     /**
-     * @notice Jackpot shares available for lottery payout (conservative view for sizing).
+     * @notice Jackpot ShareOFT available for lottery payout (conservative view for sizing).
      */
     function availableJackpotReserve() public view returns (uint256) {
         return jackpotReserve;
     }
 
     /**
-     * @notice Pay jackpot to lottery winner
+     * @notice Pay jackpot to lottery winner in ShareOFT (■)
      * @dev Only callable by lottery manager; reverts when reserve is insufficient (M-02).
      * @param winner Winner's address
-     * @param shares Amount of vault shares to pay
+     * @param amount Amount of ShareOFT to pay
      */
-    function payJackpot(address winner, uint256 shares) external nonReentrant {
+    function payJackpot(address winner, uint256 amount) external nonReentrant {
         if (msg.sender != address(lotteryManager)) revert OnlyLotteryManager();
-        if (shares > jackpotReserve) revert InsufficientJackpot();
+        if (amount > jackpotReserve) revert InsufficientJackpot();
         if (winner == address(0)) revert ZeroAddress();
 
-        jackpotReserve -= shares;
-        vaultShares.safeTransfer(winner, shares);
+        jackpotReserve -= amount;
+        accountedOFTBalance -= amount;
+        shareOFT.safeTransfer(winner, amount);
 
-        emit JackpotPaid(winner, shares);
+        emit JackpotPaid(winner, amount);
     }
 
     /**
@@ -894,7 +958,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Set the voter rewards distributor to receive the 9.61% voter slice.
+     * @notice Set the voter rewards distributor to receive the 21.39% ShareOFT voter slice.
      * @dev If unset, we fall back to protocolTreasury (or jackpot if that is unset).
      */
     function setVoterRewardsDistributor(address _distributor) external onlyOwner {
@@ -931,20 +995,18 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Preview how pending fees would be distributed
-     * @dev Returns in vault shares (after unwrapping)
+     * @notice Preview how pending ShareOFT fees would be distributed
+     * @dev Lottery and voter amounts are ShareOFT (■); burn preview is approximate vault-share units after unwrap.
      */
     function previewDistribution()
         external
         view
         returns (uint256 toBurn, uint256 toLottery, uint256 toCreator, uint256 toProtocol)
     {
-        // Note: In reality, unwrap may have fees, so this is approximate
-        uint256 estimatedShares = pendingFees; // 1:1 if no unwrap fee
-        toBurn = (estimatedShares * burnShareBps) / MAX_BPS;
-        toLottery = (estimatedShares * lotteryShareBps) / MAX_BPS;
-        toCreator = (estimatedShares * creatorShareBps) / MAX_BPS;
-        toProtocol = estimatedShares - toBurn - toLottery - toCreator;
+        toLottery = (pendingFees * lotteryShareBps) / MAX_BPS;
+        toCreator = (pendingFees * creatorShareBps) / MAX_BPS;
+        toProtocol = (pendingFees * protocolShareBps) / MAX_BPS;
+        toBurn = pendingFees - toLottery - toCreator - toProtocol;
     }
 
     /**
@@ -1111,15 +1173,14 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     function emergencyWithdraw(address token, uint256 amount, address to) external onlyOwner {
         if (to == address(0)) revert ZeroAddress();
         // FIX: AUDIT-2026-07-01-M01 — block jackpot custody drain while reserves remain.
-        if (token == address(vaultShares) && address(vaultShares) != address(0) && jackpotReserve > 0) {
+        if (token == address(shareOFT) && jackpotReserve > 0) {
             revert JackpotReserveProtected();
         }
-        // FIX: G-15 — adjust jackpotReserve when withdrawing vault shares
-        if (token == address(vaultShares) && address(vaultShares) != address(0)) {
-            if (amount >= jackpotReserve) {
-                jackpotReserve = 0;
+        if (token == address(shareOFT)) {
+            if (amount >= accountedOFTBalance) {
+                accountedOFTBalance = 0;
             } else {
-                jackpotReserve -= amount;
+                accountedOFTBalance -= amount;
             }
         }
         IERC20(token).safeTransfer(to, amount);

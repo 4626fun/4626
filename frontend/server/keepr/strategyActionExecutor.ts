@@ -81,9 +81,6 @@ export type StrategyQueueAgentRow = {
   agentType: string | null
   privyWalletId: string | null
   cswAddress: string | null
-  encryptedPrivateKeyB64: string | null
-  encryptedPrivateKeyIvB64: string | null
-  encryptedPrivateKeyTagB64: string | null
 }
 
 export type ExecuteKeeprStrategyActionInput = {
@@ -304,16 +301,12 @@ export async function loadStrategyQueueAgentRow(vaultAddress: `0x${string}`): Pr
       v.group_id,
       v.canonical_owner_address,
       a.creator_address,
-      a.xmtp_agent_address,
       a.agent_type,
       a.privy_wallet_id,
-      a.csw_address,
-      a.encrypted_private_key_b64,
-      a.encrypted_private_key_iv_b64,
-      a.encrypted_private_key_tag_b64
+      a.csw_address
     FROM keepr_vaults v
-    LEFT JOIN creator_xmtp_agents a
-      ON LOWER(a.creator_address) = LOWER(v.canonical_owner_address)
+    LEFT JOIN creator_infrastructure a
+      ON LOWER(a.creator_address) = LOWER(v.creator_coin_address)
     WHERE LOWER(v.vault_address) = ${vaultAddress}
     LIMIT 1;
   `
@@ -326,13 +319,10 @@ export async function loadStrategyQueueAgentRow(vaultAddress: `0x${string}`): Pr
     groupId: String(row.group_id),
     canonicalOwnerAddress: String(row.canonical_owner_address).toLowerCase(),
     creatorAddress: row.creator_address ? String(row.creator_address).toLowerCase() : null,
-    xmtpAgentAddress: row.xmtp_agent_address ? String(row.xmtp_agent_address).toLowerCase() : null,
+    xmtpAgentAddress: row.csw_address ? String(row.csw_address).toLowerCase() : null,
     agentType: row.agent_type ? String(row.agent_type).toLowerCase() : null,
     privyWalletId: row.privy_wallet_id ? String(row.privy_wallet_id) : null,
     cswAddress: row.csw_address ? String(row.csw_address).toLowerCase() : null,
-    encryptedPrivateKeyB64: row.encrypted_private_key_b64 ? String(row.encrypted_private_key_b64) : null,
-    encryptedPrivateKeyIvB64: row.encrypted_private_key_iv_b64 ? String(row.encrypted_private_key_iv_b64) : null,
-    encryptedPrivateKeyTagB64: row.encrypted_private_key_tag_b64 ? String(row.encrypted_private_key_tag_b64) : null,
   }
 }
 

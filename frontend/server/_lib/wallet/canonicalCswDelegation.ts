@@ -201,7 +201,6 @@ async function recoverProfileIdFromPrivyHints(db: Db, privyUser: PrivyUserLike):
       FROM profiles
       WHERE (
         LOWER(COALESCE(primary_wallet, '')) = ${address}
-        OR LOWER(COALESCE(primary_smart_wallet, '')) = ${address}
         OR LOWER(COALESCE(csw_address, '')) = ${address}
         OR LOWER(COALESCE(base_sub_account, '')) = ${address}
       )
@@ -270,19 +269,6 @@ async function ensureCanonicalWalletRow(params: {
   const embedded = normalizeAddress(privyEmbeddedEoaAddress)
 
   await db.sql`
-    INSERT INTO wallets (address, chain, wallet_type, provider)
-    VALUES (${canonical}, ${'evm'}, ${'smart_wallet'}, ${'coinbase_wallet'})
-    ON CONFLICT (address) DO UPDATE
-    SET
-      chain = COALESCE(EXCLUDED.chain, wallets.chain),
-      wallet_type = COALESCE(EXCLUDED.wallet_type, wallets.wallet_type),
-      provider = CASE
-        WHEN wallets.provider = 'unknown' THEN EXCLUDED.provider
-        ELSE wallets.provider
-      END;
-  `
-
-  await db.sql`
     UPDATE profile_wallets
     SET is_canonical_smart_wallet = false, updated_at = NOW()
     WHERE profile_id = ${profileId}
@@ -294,6 +280,9 @@ async function ensureCanonicalWalletRow(params: {
     INSERT INTO profile_wallets (
       profile_id,
       address,
+      chain,
+      wallet_type,
+      provider,
       is_canonical_smart_wallet,
       verified_at,
       updated_at,
@@ -305,6 +294,9 @@ async function ensureCanonicalWalletRow(params: {
     VALUES (
       ${profileId},
       ${canonical},
+      ${'evm'},
+      ${'smart_wallet'},
+      ${'coinbase_wallet'},
       true,
       NOW(),
       NOW(),
@@ -315,6 +307,9 @@ async function ensureCanonicalWalletRow(params: {
     )
     ON CONFLICT (profile_id, address) DO UPDATE
     SET
+      chain = EXCLUDED.chain,
+      wallet_type = EXCLUDED.wallet_type,
+      provider = EXCLUDED.provider,
       is_canonical_smart_wallet = true,
       verified_at = COALESCE(profile_wallets.verified_at, NOW()),
       updated_at = NOW(),
@@ -536,7 +531,6 @@ export async function resolveCanonicalCsw(params: {
     SET
       privy_user_id = COALESCE(privy_user_id, ${privyUserId}),
       csw_address = COALESCE(csw_address, ${canonical}),
-      primary_smart_wallet = COALESCE(primary_smart_wallet, ${canonical}),
       updated_at = NOW()
     WHERE id = ${profileId};
   `

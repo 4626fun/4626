@@ -35,28 +35,28 @@ interface ICCAPhaseReader {
  * @notice Synchronous ERC-4626 vault for Creator Coins with full strategy support
  *
  * @dev ARCHITECTURE:
- *      - Fully ERC-4626 compliant vault
- *      - Deposit Creator Coin → mint vault shares
- *      - Deploy idle assets to yield strategies
- *      - Profit unlocking prevents PPS manipulation
+ *      - Fully ERC-4626 compliant vault (hub-only; remote chains use ShareOFT mesh)
+ *      - Deposit Creator Coin → mint vault shares (▢TOKEN)
+ *      - ShareOFT (■TOKEN) minted/burned by vault via wrapper; primary trading surface for lottery/fees
+ *      - Deploy idle assets to yield strategies; profit unlocking prevents PPS manipulation
  *
  * @dev STRATEGY SYSTEM:
- *      - addStrategy() - Add yield strategy with allocation weight
- *      - removeStrategy() - Remove strategy and withdraw funds
- *      - deployToStrategies() - Deploy idle funds
- *      - report() - Harvest yields and update accounting
+ *      - addStrategy() / removeStrategy() — weighted allocation across Charm, Ajna, Uni V4 LP, etc.
+ *      - deployToStrategies() — move idle funds on-chain
+ *      - report() / tend() — harvest yields and update accounting (keeper-driven)
+ *
+ * @dev IMPAIRMENT / RECOVERY:
+ *      - Vault can enter Suspect mode when a strategy impairment is tripped
+ *      - Impairment epochs snapshot holders; CreatorOImpairmentClaims + CreatorORecoveryEscrow settle recovery
  *
  * @dev ACCESS CONTROL:
- *      - Owner: Full control
- *      - Management: Strategy management, fees
- *      - Keeper: Can call report/tend
- *      - EmergencyAdmin: Can shutdown
+ *      - Owner: full control
+ *      - Management: strategy management, fees
+ *      - Keeper: report/tend
+ *      - EmergencyAdmin: shutdown
  *
- * @dev CONSTRUCTOR ARGS (same on all chains):
- *      - _creatorCoin: Creator Coin address
- *      - _owner: deployer
- *      - _name: Vault name (e.g., "Creator OVault - AKITA")
- *      - _symbol: Vault symbol (e.g., "▢AKITA")
+ * @dev CONSTRUCTOR ARGS (same address on all chains via CREATE2):
+ *      - _creatorCoin, _owner, _name (e.g., "Creator OVault - AKITA"), _symbol (e.g., "▢AKITA")
  */
 contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permit {
     using SafeERC20 for IERC20;
@@ -747,7 +747,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         if (coreModule.code.length == 0 || strategiesModule.code.length == 0 || adminModule.code.length == 0) {
             revert InvalidModuleAddress();
         }
-        _validateModuleIdentity(coreModule, MODULE_KIND_CORE);
+        _validateModuleIdentity(coreModule, _expectedCoreModuleKind());
         _validateModuleIdentity(strategiesModule, MODULE_KIND_STRATEGIES);
         _validateModuleIdentity(adminModule, MODULE_KIND_ADMIN);
 
@@ -770,6 +770,15 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         } catch {
             revert InvalidModuleAddress();
         }
+    }
+
+    /// @dev Identity seam: which core-module kind this vault accepts in `setModulesOnce`.
+    ///      CreatorOVault requires the exact-transfer core module; AgentOVault overrides this
+    ///      to require the measured-transfer AgentOVault core module so the two vault flavors
+    ///      can never be wired with the wrong accounting mode.
+    ///      Adding a new ecosystem flavor: see `docs/_internal/ovault-ecosystem-flavors.md`.
+    function _expectedCoreModuleKind() internal pure virtual returns (bytes32) {
+        return MODULE_KIND_CORE;
     }
 
     function _requireModulesSet() internal view {

@@ -739,7 +739,7 @@ async function enrichChatSenderProfiles(
     // This is the canonical place 4626 uses for chat/XMTP participant profile pictures.
     const res = await db.sql`
       SELECT canonical_wallet, avatar_url, display_name
-      FROM chat_directory_profiles
+      FROM v_wallet_directory
       WHERE canonical_wallet = ANY(${senders})
     `
     for (const row of (res.rows ?? []) as Array<{

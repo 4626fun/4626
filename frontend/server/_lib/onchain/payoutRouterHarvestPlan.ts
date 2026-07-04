@@ -14,7 +14,7 @@ import {
   type PayoutRouterBatchAction,
   type PlannedHarvestConversion,
   type SkippedHarvestToken,
-} from '../../../../shared/payout-router/harvestCommon.js'
+} from '../../../shared/payout-router/harvestCommon.js'
 import {
   applyShareOftBuyFeeHaircut,
   deriveMinOutFromQuote,

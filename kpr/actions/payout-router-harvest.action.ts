@@ -21,6 +21,7 @@ import {
   parseHarvestBoolEnv,
   parseHarvestBpsEnv,
   planPayoutRouterHarvestConversions,
+  type PayoutRouterBatchAction,
 } from '../utils/payoutRouterHarvestPlan.js';
 import {
   executePlannedHarvestConversions,
@@ -293,7 +294,7 @@ export async function executePayoutRouterHarvest(): Promise<BatchPayoutRouterHar
         const execution = await executePlannedHarvestConversions({
           conversions,
           perTokenFallback: parseHarvestPerTokenFallbackEnv(),
-          submitBatch: async (actions) => {
+          submitBatch: async (actions: PayoutRouterBatchAction[]) => {
             const batchResult = await writeContract({
               address: payoutRouterAddress,
               abi: PAYOUT_ROUTER_ABI,

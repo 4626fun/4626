@@ -120,6 +120,35 @@ contract MockToken is IERC20 {
         }
     }
 
+    contract MockGaugeWrapper {
+        MockToken public immutable vaultToken;
+        MockToken public immutable oftToken;
+        uint256 public constant NORMALIZATION = 1000;
+
+        constructor(address vault_, address oft_) {
+            vaultToken = MockToken(vault_);
+            oftToken = MockToken(oft_);
+        }
+
+        function vaultShares() external view returns (address) {
+            return address(vaultToken);
+        }
+
+        function wrap(uint256 amount) external returns (uint256) {
+            vaultToken.transferFrom(msg.sender, address(this), amount);
+            uint256 out = amount / NORMALIZATION;
+            oftToken.mint(msg.sender, out);
+            return out;
+        }
+
+        function unwrap(uint256 amount) external returns (uint256) {
+            oftToken.transferFrom(msg.sender, address(this), amount);
+            uint256 out = amount * NORMALIZATION;
+            vaultToken.mint(msg.sender, out);
+            return out;
+        }
+    }
+
     contract MockSwapRouter is ISwapRouter {
         bool public shouldRevert;
         uint256 public amountOut;
@@ -160,6 +189,7 @@ contract MockToken is IERC20 {
         MockVault internal vault;
         MockCreatorOracle internal oracle;
         MockSwapRouter internal router;
+        MockGaugeWrapper internal wrapper;
 
         address internal alice = makeAddr("alice");
         address internal creatorTreasury = makeAddr("creatorTreasury");
@@ -180,10 +210,12 @@ contract MockToken is IERC20 {
             shareOFT = new MockToken("Share OFT", "SHARE");
             vault = new MockVault(address(creatorCoin));
             oracle = new MockCreatorOracle();
+            wrapper = new MockGaugeWrapper(address(vault), address(shareOFT));
 
             gauge = new CreatorGaugeController(address(shareOFT), creatorTreasury, protocolTreasury, address(this));
             gauge.setVault(address(vault));
             gauge.setCreatorCoin(address(creatorCoin));
+            gauge.setWrapper(address(wrapper));
         }
 
         function test_processWETHFees_reverts_whenOracleUnset() public {

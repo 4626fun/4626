@@ -17,6 +17,7 @@ import {
   parseExploreBackfillCheckpoints,
   parseExploreCoinFinancialSnapshot,
   parseTimestamp,
+  resolveEnrichmentFinancials,
   serializeExploreBackfillCheckpoints,
   toFiniteNumber,
   toIntegerOrNull,
@@ -84,6 +85,9 @@ const DEFAULT_MAX_PAGES_PER_RUN = 120
 const DEFAULT_CHAIN_SCAN_BLOCK_SPAN = 90_000
 const DEFAULT_MAX_CHAIN_SCAN_CHUNKS = 8
 const DEFAULT_ENRICH_BATCH_SIZE = 200
+const DEFAULT_ENRICH_MAX_ROUNDS_BACKFILL = 20
+const DEFAULT_ENRICH_MAX_ROUNDS_INCREMENTAL = 5
+const DEFAULT_ENRICH_STALE_BATCH_SIZE = 5000
 const DEFAULT_HOT_REFRESH_PAGES_PER_LIST = 8
 const DEFAULT_STALE_RUNNING_LOCK_MS = 20 * 60 * 1000
 const DEFAULT_COIN_UPSERT_BATCH_SIZE = 200
@@ -1177,6 +1181,143 @@ type EnrichCandidate = {
   feeModel: 'legacy' | 'v4'
 }
 
+async function loadEnrichCandidates(db: Db, limit: number): Promise<EnrichCandidate[]> {
+  const enrichCandidatesResult = await db.sql`
+    SELECT coin_address, fee_model
+    FROM creator_coins
+    WHERE chain_id = ${BASE_CHAIN_ID}
+      AND (market_cap_usd IS NULL OR volume_24h_usd IS NULL OR fees_24h_usd IS NULL)
+    ORDER BY created_at DESC NULLS LAST
+    LIMIT ${limit};
+  `
+  return (enrichCandidatesResult.rows ?? [])
+    .map((row) => {
+      const feeModel: EnrichCandidate['feeModel'] = row.fee_model === 'legacy' ? 'legacy' : 'v4'
+      return {
+        coinAddress: normalizeAddress(row.coin_address) ?? '',
+        feeModel,
+      }
+    })
+    .filter((row) => row.coinAddress.length > 0)
+}
+
+async function applyCoinEnrichment(
+  db: Db,
+  candidate: EnrichCandidate,
+  snap: Awaited<ReturnType<typeof fetchCoinSnapshot>>,
+): Promise<void> {
+  const feeModel = snap.feeModel ?? candidate.feeModel
+  const financials = resolveEnrichmentFinancials({
+    marketCapUsd: snap.marketCapUsd,
+    volume24hUsd: snap.volume24hUsd,
+    feeModel,
+  })
+  await db.sql`
+    UPDATE creator_coins
+    SET
+      creator_address = COALESCE(${snap.creatorAddress}, creator_address),
+      created_at = COALESCE(created_at, ${snap.createdAt}),
+      market_cap_usd = ${financials.marketCapUsd},
+      volume_24h_usd = ${financials.volume24hUsd},
+      fees_24h_usd = ${financials.fees24hUsd},
+      unique_holders = COALESCE(${snap.uniqueHolders}, unique_holders),
+      market_cap_delta_24h = COALESCE(${snap.marketCapDelta24h}, market_cap_delta_24h),
+      fee_model = COALESCE(${feeModel}, fee_model),
+      last_seen_at = NOW()
+    WHERE coin_address = ${candidate.coinAddress};
+  `
+}
+
+async function applyZeroMetricsForUnlistedCoin(db: Db, coinAddress: string, feeModel: EnrichCandidate['feeModel']): Promise<void> {
+  const financials = resolveEnrichmentFinancials({
+    marketCapUsd: null,
+    volume24hUsd: null,
+    feeModel,
+  })
+  await db.sql`
+    UPDATE creator_coins
+    SET
+      market_cap_usd = ${financials.marketCapUsd},
+      volume_24h_usd = ${financials.volume24hUsd},
+      fees_24h_usd = ${financials.fees24hUsd},
+      last_seen_at = NOW()
+    WHERE coin_address = ${coinAddress}
+      AND (market_cap_usd IS NULL OR volume_24h_usd IS NULL OR fees_24h_usd IS NULL);
+  `
+}
+
+async function finalizeStaleUnlistedCoinMetrics(db: Db, batchSize: number): Promise<number> {
+  const result = await db.sql`
+    WITH stale AS (
+      SELECT coin_address
+      FROM creator_coins
+      WHERE chain_id = ${BASE_CHAIN_ID}
+        AND (market_cap_usd IS NULL OR volume_24h_usd IS NULL OR fees_24h_usd IS NULL)
+        AND created_at IS NOT NULL
+        AND created_at < NOW() - INTERVAL '1 day'
+      ORDER BY created_at ASC NULLS LAST
+      LIMIT ${batchSize}
+    )
+    UPDATE creator_coins AS c
+    SET
+      market_cap_usd = 0,
+      volume_24h_usd = 0,
+      fees_24h_usd = 0,
+      last_seen_at = NOW()
+    FROM stale
+    WHERE c.coin_address = stale.coin_address
+    RETURNING c.coin_address;
+  `
+  return result.rows?.length ?? 0
+}
+
+async function enrichCreatorCoinsFromZora(
+  sdk: any,
+  db: Db,
+  options: {
+    enrichBatchSize: number
+    enrichMaxRounds: number
+    enrichStaleBatchSize: number
+    deadLetters: Array<{ reason: string; coinAddress?: string | null }>
+    log: ReturnType<typeof logger.child>
+  },
+): Promise<{ rounds: number; coinsTouched: number; staleZeroed: number }> {
+  let rounds = 0
+  let coinsTouched = 0
+
+  for (let round = 0; round < options.enrichMaxRounds; round += 1) {
+    const enrichCandidates = await loadEnrichCandidates(db, options.enrichBatchSize)
+    if (enrichCandidates.length === 0) break
+    rounds += 1
+
+    for (const candidate of enrichCandidates) {
+      try {
+        const snap = await withRetry('enrich_creator_coin', () => fetchCoinSnapshot(sdk, candidate.coinAddress))
+        await withRetry('apply_coin_enrichment', () => applyCoinEnrichment(db, candidate, snap))
+        coinsTouched += 1
+      } catch {
+        try {
+          await applyZeroMetricsForUnlistedCoin(db, candidate.coinAddress, candidate.feeModel)
+          coinsTouched += 1
+          options.deadLetters.push({ reason: 'coin_enrichment_zeroed_after_failure', coinAddress: candidate.coinAddress })
+        } catch {
+          options.deadLetters.push({ reason: 'coin_enrichment_failed', coinAddress: candidate.coinAddress })
+        }
+      }
+    }
+  }
+
+  const staleZeroed = await finalizeStaleUnlistedCoinMetrics(db, options.enrichStaleBatchSize)
+  if (staleZeroed > 0) {
+    options.log.info('[creator-metrics-sync] zeroed stale unlisted coin metrics', {
+      staleZeroed,
+      enrichStaleBatchSize: options.enrichStaleBatchSize,
+    })
+  }
+
+  return { rounds, coinsTouched, staleZeroed }
+}
+
 async function fetchCoinSnapshot(sdk: any, coinAddress: string): Promise<{
   creatorAddress: string | null
   createdAt: string | null
@@ -1304,6 +1445,10 @@ export async function runCreatorMetricsSync(options: RunOptions = {}): Promise<C
     DEFAULT_MAX_CHAIN_SCAN_CHUNKS,
   )
   const enrichBatchSize = parsePositiveInt(process.env.CREATOR_METRICS_ENRICH_BATCH_SIZE, DEFAULT_ENRICH_BATCH_SIZE)
+  const enrichStaleBatchSize = parsePositiveInt(
+    process.env.CREATOR_METRICS_ENRICH_STALE_BATCH_SIZE,
+    DEFAULT_ENRICH_STALE_BATCH_SIZE,
+  )
   const hotRefreshPagesPerList = parsePositiveInt(
     process.env.CREATOR_METRICS_HOT_REFRESH_PAGES_PER_LIST,
     DEFAULT_HOT_REFRESH_PAGES_PER_LIST,
@@ -1313,6 +1458,8 @@ export async function runCreatorMetricsSync(options: RunOptions = {}): Promise<C
     options.includeHotRefresh ??
     process.env.CREATOR_METRICS_HOT_REFRESH_IN_FULL_SYNC !== '0'
   const mode: SyncMode = forceFull || !current.backfillComplete ? 'backfill' : 'incremental'
+  const enrichMaxRoundsDefault = mode === 'backfill' ? DEFAULT_ENRICH_MAX_ROUNDS_BACKFILL : DEFAULT_ENRICH_MAX_ROUNDS_INCREMENTAL
+  const enrichMaxRounds = parsePositiveInt(process.env.CREATOR_METRICS_ENRICH_MAX_ROUNDS, enrichMaxRoundsDefault)
   const apiKey = requireServerKey() || process.env.VITE_ZORA_PUBLIC_API_KEY || null
 
   await db.sql`
@@ -1481,49 +1628,18 @@ export async function runCreatorMetricsSync(options: RunOptions = {}): Promise<C
     const shouldEnrichCoins =
       sdk && (mode !== 'backfill' || reachedChainTip || enrichDuringBackfillEnabled())
     if (shouldEnrichCoins) {
-      const enrichCandidatesResult = await db.sql`
-        SELECT coin_address, fee_model
-        FROM creator_coins
-        WHERE chain_id = ${BASE_CHAIN_ID}
-          AND (market_cap_usd IS NULL OR volume_24h_usd IS NULL OR fees_24h_usd IS NULL)
-        ORDER BY created_at DESC NULLS LAST
-        LIMIT ${enrichBatchSize};
-      `
-      const enrichCandidates: EnrichCandidate[] = (enrichCandidatesResult.rows ?? [])
-        .map((row) => {
-          const feeModel: EnrichCandidate['feeModel'] = row.fee_model === 'legacy' ? 'legacy' : 'v4'
-          return {
-            coinAddress: normalizeAddress(row.coin_address) ?? '',
-            feeModel,
-          }
-        })
-        .filter((row) => row.coinAddress.length > 0)
-
-      for (const candidate of enrichCandidates) {
-        try {
-          const snap = await withRetry('enrich_creator_coin', () => fetchCoinSnapshot(sdk, candidate.coinAddress))
-          const feeModel = snap.feeModel ?? candidate.feeModel
-          const fees24hUsd = snap.volume24hUsd != null ? snap.volume24hUsd * feeRateFromModel(feeModel) : null
-          await withRetry('apply_coin_enrichment', async () => {
-            await db.sql`
-              UPDATE creator_coins
-              SET
-                creator_address = COALESCE(${snap.creatorAddress}, creator_address),
-                created_at = COALESCE(created_at, ${snap.createdAt}),
-                market_cap_usd = COALESCE(${snap.marketCapUsd}, market_cap_usd),
-                volume_24h_usd = COALESCE(${snap.volume24hUsd}, volume_24h_usd),
-                fees_24h_usd = COALESCE(${fees24hUsd}, fees_24h_usd),
-                unique_holders = COALESCE(${snap.uniqueHolders}, unique_holders),
-                market_cap_delta_24h = COALESCE(${snap.marketCapDelta24h}, market_cap_delta_24h),
-                fee_model = COALESCE(${feeModel}, fee_model),
-                last_seen_at = NOW()
-              WHERE coin_address = ${candidate.coinAddress};
-            `
-          })
-        } catch {
-          deadLetters.push({ reason: 'coin_enrichment_failed', coinAddress: candidate.coinAddress })
-        }
-      }
+      const enrichment = await enrichCreatorCoinsFromZora(sdk, db, {
+        enrichBatchSize,
+        enrichMaxRounds,
+        enrichStaleBatchSize,
+        deadLetters,
+        log,
+      })
+      log.info('[creator-metrics-sync] coin enrichment completed', {
+        ...enrichment,
+        enrichBatchSize,
+        enrichMaxRounds,
+      })
     }
 
     await withRetry('recompute_creator_counts', () => maybeRecomputeCreatorCounts(db))

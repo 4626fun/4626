@@ -156,7 +156,6 @@ async function resolvePersistedSessionAddress(db: any, privyUserId: string): Pro
   try {
     const result = await db.sql`
       SELECT
-        p.primary_smart_wallet,
         p.csw_address,
         p.base_sub_account,
         p.primary_wallet,
@@ -175,7 +174,6 @@ async function resolvePersistedSessionAddress(db: any, privyUserId: string): Pro
     `
     const row = result?.rows?.[0] as
       | {
-          primary_smart_wallet?: unknown
           csw_address?: unknown
           base_sub_account?: unknown
           primary_wallet?: unknown
@@ -186,7 +184,7 @@ async function resolvePersistedSessionAddress(db: any, privyUserId: string): Pro
     if (!row) return null
     const candidates = [
       row.canonical_wallet,
-      row.primary_smart_wallet,
+      row.csw_address,
       row.csw_address,
       row.base_sub_account,
       row.primary_wallet,

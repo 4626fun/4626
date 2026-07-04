@@ -18,7 +18,7 @@ import {
 
 import { ensureWaitlistSchema } from '../../../../../server/_lib/onboarding/waitlistSchema.js'
 import { enqueueSolanaSweepJob } from '../../../../../server/_lib/onchain/solanaSweepJobs.js'
-import { resolveCanonicalSolanaWalletByProfileId } from '../../../../../server/_lib/wallet/canonicalSolanaResolver.js'
+import { resolveCanonicalSolanaWalletByProfileId, resolveOperationalSolanaWalletByProfileId } from '../../../../../server/_lib/wallet/canonicalSolanaResolver.js'
 
 type Body = {
   minLamports?: number | string
@@ -97,7 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const profileResult = await db.sql`
-    SELECT p.id, p.operational_solana_wallet
+    SELECT p.id
     FROM profiles p
     WHERE p.id = ${authorizedPrincipal.profileId}
     LIMIT 1;
@@ -117,19 +117,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  let operationalWallet = typeof profileRow?.operational_solana_wallet === 'string' ? profileRow.operational_solana_wallet.trim() : ''
-  if (!isSolanaAddress(operationalWallet)) {
-    const opRes = await db.sql`
-      SELECT pw.address
-      FROM profile_wallets pw
-      LEFT JOIN wallets w ON LOWER(w.address) = LOWER(pw.address)
-      WHERE pw.profile_id = ${profileId}
-        AND pw.is_operational_solana_wallet = true
-        AND (LOWER(COALESCE(w.chain, '')) = 'solana' OR w.chain IS NULL)
-      LIMIT 1;
-    `
-    operationalWallet = typeof opRes?.rows?.[0]?.address === 'string' ? opRes.rows[0].address.trim() : ''
-  }
+  let operationalWallet = await resolveOperationalSolanaWalletByProfileId(db as any, profileId)
+  if (!isSolanaAddress(operationalWallet)) operationalWallet = ''
   if (!isSolanaAddress(operationalWallet)) {
     return res.status(409).json({
       success: false,

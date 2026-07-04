@@ -2,10 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { applyEnv, createMockReq, createMockRes } from './helpers'
 
-const { ensureKeeprSchemaMock, getDbMock, normalizeKeeprActionStatusForWorkspaceMock } = vi.hoisted(() => ({
+const { ensureKeeprSchemaMock, getDbMock } = vi.hoisted(() => ({
   ensureKeeprSchemaMock: vi.fn(async () => {}),
   getDbMock: vi.fn(),
-  normalizeKeeprActionStatusForWorkspaceMock: vi.fn(async () => undefined),
 }))
 
 vi.mock('@4626/server-core', () => ({
@@ -55,10 +54,6 @@ vi.mock('@4626/server-core', () => ({
 
 vi.mock('../../server/_lib/keepr/keeprSchema.js', () => ({
   ensureKeeprSchema: ensureKeeprSchemaMock,
-}))
-
-vi.mock('../../server/_lib/workspace/normalizer.js', () => ({
-  normalizeKeeprActionStatusForWorkspace: normalizeKeeprActionStatusForWorkspaceMock,
 }))
 
 import handler from '../_handlers/keepr/actions/_updateStatus.ts'

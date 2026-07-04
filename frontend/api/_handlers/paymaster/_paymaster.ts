@@ -45,7 +45,7 @@ import {
   type ImpairmentAuxPlan,
 } from '../../../shared/deploy/impairmentAuxPlan.js'
 
-import { ensureCreatorWalletsSchema } from '../../../server/_lib/wallet/creatorWallets.js'
+
 import { getActiveDeploySessionForSender, getDeploySessionByTokenHash, hashDeployToken, signDeployToken } from '../../../server/_lib/deploy/deploySessions.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../server/_lib/db/supabaseAdmin.js'
 import {
@@ -1246,16 +1246,6 @@ async function isCreatorAllowlisted(params: {
         }
       }
 
-      // Check creator_wallets (linked wallets)
-      const linkedRes = await supabase
-        .from('creator_wallets')
-        .select('wallet_address')
-        .or(buildSupabaseOrFilters(['wallet_address'], addressFilters))
-        .limit(1)
-      if (!linkedRes.error && Array.isArray(linkedRes.data) && linkedRes.data.length > 0) {
-        return { mode: 'enforced', allowed: true }
-      }
-
       // If all checks passed without errors but no match, user is not allowed
       return { mode: 'enforced', allowed: false }
     } catch {
@@ -1268,12 +1258,6 @@ async function isCreatorAllowlisted(params: {
     if (!db) throw new Error('allowlist_check_failed')
     await ensureCreatorAccessSchema()
     if (!db.query || typeof (db as any).sql !== 'function') throw new Error('allowlist_check_failed')
-    // Mirror `/api/creator-allowlist`: deploy requires an explicit allowlist or linked-wallet match.
-    try {
-      await ensureCreatorWalletsSchema(db as any)
-    } catch {
-      // Don't block everything if optional tables are unavailable; fall back to allowlist-only.
-    }
 
     // Check direct address match
     const allowlistedQ = await db.query(
@@ -1300,15 +1284,6 @@ async function isCreatorAllowlisted(params: {
           if (isOwner) return { mode: 'enforced', allowed: true }
         }
       }
-    }
-
-    // Check linked wallets
-    const linkedQ = await db.query(
-      `SELECT wallet_address FROM creator_wallets WHERE LOWER(wallet_address) = ANY($1) LIMIT 1;`,
-      [addressFilters],
-    ).catch(() => ({ rows: [] }))
-    if (Array.isArray(linkedQ.rows) && linkedQ.rows.length > 0) {
-      return { mode: 'enforced', allowed: true }
     }
 
     return { mode: 'enforced', allowed: false }

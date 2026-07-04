@@ -2,7 +2,7 @@ import { classifyLinkedAccounts, type PrivyUserLike } from '../wallet/walletMapp
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
-type EmailCollisionSource = 'accounts' | 'profiles'
+type EmailCollisionSource = 'profiles'
 
 export type IdentityRecoveryRequiredError = Error & {
   code: 'IDENTITY_RECOVERY_REQUIRED'
@@ -82,22 +82,6 @@ function buildWalletCollisionError(params: {
   return error
 }
 
-async function readBoundPrivyUserIdFromAccounts(db: Db, email: string): Promise<string | null> {
-  try {
-    const result = await db.sql`
-      SELECT privy_user_id
-      FROM accounts
-      WHERE LOWER(email) = LOWER(${email})
-        AND privy_user_id IS NOT NULL
-      LIMIT 1;
-    `
-    return normalizeLower(result.rows?.[0]?.privy_user_id) || null
-  } catch (error) {
-    if (isMissingRelationError(error)) return null
-    throw error
-  }
-}
-
 async function readBoundPrivyUserIdFromProfiles(db: Db, email: string): Promise<string | null> {
   try {
     const result = await db.sql`
@@ -123,16 +107,6 @@ export async function assertNoEmailPrivyCollision(params: {
   const email = normalizeEmail(params.email)
   const requestedPrivyUserId = normalizeLower(params.privyUserId)
   if (!email || !requestedPrivyUserId) return
-
-  const boundInAccounts = await readBoundPrivyUserIdFromAccounts(params.db, email)
-  if (boundInAccounts && boundInAccounts !== requestedPrivyUserId) {
-    throw buildEmailCollisionError({
-      email,
-      requestedPrivyUserId,
-      existingPrivyUserId: boundInAccounts,
-      source: 'accounts',
-    })
-  }
 
   const boundInProfiles = await readBoundPrivyUserIdFromProfiles(params.db, email)
   if (boundInProfiles && boundInProfiles !== requestedPrivyUserId) {

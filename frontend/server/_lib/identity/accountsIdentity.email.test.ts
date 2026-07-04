@@ -19,20 +19,31 @@ function createRecordingDb() {
     sql: vi.fn(async (strings: TemplateStringsArray, ...values: any[]): Promise<RecordingQueryResult> => {
       calls.push({ text: normalizeSql(strings), values })
       const text = normalizeSql(strings)
-      if (text.includes("to_regclass('public.profiles') is not null as has_profiles")) {
+      if (text.includes("to_regclass('public.profiles') is not null as has_profiles") && text.includes('has_email_verified')) {
         return {
           rows: [
             {
               has_profiles: true,
-              has_referral_clicks: true,
+              has_account_linked_methods: true,
+              has_account_zora_signals: true,
+              has_email_verified: true,
+              has_canonical_csw_address: true,
+            },
+          ],
+        }
+      }
+      if (text.includes("to_regclass('public.profiles') is not null as has_profiles") && text.includes('has_referral_conversions')) {
+        return {
+          rows: [
+            {
+              has_profiles: true,
               has_referral_conversions: true,
               has_points: true,
-              has_wallets: true,
               has_profile_wallets: true,
               has_app_access_status: true,
               has_verifications: true,
               has_profile_completed_at: true,
-              has_primary_smart_wallet: true,
+              has_csw_address: true,
               has_primary_embedded_eoa: true,
             },
           ],
@@ -53,11 +64,10 @@ function createRecordingDb() {
           ],
         }
       }
-      if (text.includes("to_regclass('public.referral_clicks') is not null as has_referral_clicks")) {
+      if (text.includes("to_regclass('public.referral_conversions') is not null as has_referral_conversions")) {
         return {
           rows: [
             {
-              has_referral_clicks: true,
               has_referral_conversions: true,
               has_profiles_referral_code: true,
               has_profiles_referred_by_signup_id: true,
@@ -65,15 +75,14 @@ function createRecordingDb() {
           ],
         }
       }
-      if (text.includes("to_regclass('public.wallets') is not null as has_wallets")) {
+      if (text.includes("column_name = 'chain'") && text.includes("table_name = 'profile_wallets'")) {
         return {
           rows: [
             {
-              has_wallets: true,
               has_profile_wallets: true,
-              has_primary_smart_wallet: true,
+              has_profile_wallets_chain: true,
+              has_csw_address: true,
               has_primary_embedded_eoa: true,
-              has_canonical_solana_wallet: true,
               has_profile_wallets_canonical_solana: true,
               has_profile_wallets_operational_solana: true,
             },
@@ -128,9 +137,11 @@ describe('accountsIdentity verified email handling', () => {
       } as any,
     })
 
-    const accountUpsert = db.calls.find((call) => call.text.includes('insert into accounts'))
-    expect(accountUpsert?.values[1] ?? null).toBeNull()
-    expect(accountUpsert?.values[2]).toBe(false)
+    const profileUpsert = db.calls.find((call) =>
+      call.text.includes('update profiles') && call.text.includes('email_verified'),
+    )
+    expect(profileUpsert?.values[0] ?? null).toBeNull()
+    expect(profileUpsert?.values[1]).toBe(false)
     expect(db.calls.some((call) => call.text.includes('insert into account_linked_methods'))).toBe(false)
   })
 
@@ -146,9 +157,11 @@ describe('accountsIdentity verified email handling', () => {
       } as any,
     })
 
-    const accountUpsert = db.calls.find((call) => call.text.includes('insert into accounts'))
-    expect(accountUpsert?.values[1]).toBe('verified@example.com')
-    expect(accountUpsert?.values[2]).toBe(true)
+    const profileUpsert = db.calls.find((call) =>
+      call.text.includes('update profiles') && call.text.includes('email_verified'),
+    )
+    expect(profileUpsert?.values[0]).toBe('verified@example.com')
+    expect(profileUpsert?.values[1]).toBe(true)
     expect(db.calls.some((call) => call.text.includes('insert into account_linked_methods'))).toBe(true)
   })
 

@@ -1573,12 +1573,9 @@ async function handleMessage(
 type AgentRow = {
   creatorAddress: string
   xmtpAgentAddress: string
-  agentType: 'eoa' | 'csw'
+  agentType: 'csw'
   privyWalletId: string | null
   cswAddress: string | null
-  encryptedPrivateKeyB64: string
-  encryptedPrivateKeyIvB64: string
-  encryptedPrivateKeyTagB64: string
 }
 
 type RunningAgent = {
@@ -1598,9 +1595,6 @@ function computeRowFingerprint(row: AgentRow): string {
     agentType: row.agentType,
     privyWalletId: row.privyWalletId,
     cswAddress: row.cswAddress,
-    encryptedPrivateKeyB64: row.encryptedPrivateKeyB64,
-    encryptedPrivateKeyIvB64: row.encryptedPrivateKeyIvB64,
-    encryptedPrivateKeyTagB64: row.encryptedPrivateKeyTagB64,
   })
 }
 
@@ -1622,28 +1616,23 @@ async function loadAgentRows(): Promise<AgentRow[]> {
       const res = await db.sql`
         SELECT
           creator_address,
-          xmtp_agent_address,
           agent_type,
           privy_wallet_id,
-          csw_address,
-          encrypted_private_key_b64,
-          encrypted_private_key_iv_b64,
-          encrypted_private_key_tag_b64
-        FROM creator_xmtp_agents
+          csw_address
+        FROM creator_infrastructure
         WHERE listed_publicly = TRUE
+          AND agent_type = 'csw'
+          AND csw_address IS NOT NULL
         ORDER BY created_at ASC
         LIMIT ${MAX_AGENTS};
       `
 
       return (res.rows ?? []).map((r: any) => ({
         creatorAddress: String(r.creator_address).toLowerCase(),
-        xmtpAgentAddress: String(r.xmtp_agent_address).toLowerCase(),
-        agentType: (String(r.agent_type ?? 'eoa').toLowerCase()) as 'eoa' | 'csw',
+        xmtpAgentAddress: String(r.csw_address).toLowerCase(),
+        agentType: 'csw',
         privyWalletId: r.privy_wallet_id ? String(r.privy_wallet_id).trim() : null,
         cswAddress: r.csw_address ? String(r.csw_address).toLowerCase() : null,
-        encryptedPrivateKeyB64: String(r.encrypted_private_key_b64),
-        encryptedPrivateKeyIvB64: String(r.encrypted_private_key_iv_b64),
-        encryptedPrivateKeyTagB64: String(r.encrypted_private_key_tag_b64),
       }))
     },
   })
@@ -1670,14 +1659,9 @@ async function startAgent(row: AgentRow, rowFingerprint = computeRowFingerprint(
       chainId: 8453,
     })
   } else {
-    const privKey = decryptPrivateKey({
-      ciphertextB64: row.encryptedPrivateKeyB64,
-      ivB64: row.encryptedPrivateKeyIvB64,
-      tagB64: row.encryptedPrivateKeyTagB64,
-      aad: `creator:${row.creatorAddress}`,
-    })
-    // For XmtpService, pass the private key directly
-    signer = { type: 'eoa', privateKey: privKey }
+    throw new Error(
+      `legacy_eoa_xmtp_retired: creator ${row.creatorAddress.slice(0, 10)} must use CSW agent (agent_type=csw)`,
+    )
   }
 
   // Create XmtpService with the appropriate config

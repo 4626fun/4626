@@ -21,7 +21,7 @@ function normalizeSql(strings: TemplateStringsArray): string {
 
 function createMockDb(options: {
   profileSeedRow?: {
-    primary_smart_wallet?: string | null
+    csw_address?: string | null
     csw_address?: string | null
     base_sub_account?: string | null
   }
@@ -86,11 +86,10 @@ function createMockDb(options: {
         return { rows: [] }
       }
       if (text.includes('update profiles')) return { rows: [] }
-      if (text.includes('select primary_smart_wallet')) {
+      if (text.includes('select csw_address')) {
         return {
           rows: [
             options.profileSeedRow ?? {
-              primary_smart_wallet: null,
               csw_address: null,
               base_sub_account: null,
             },
@@ -214,8 +213,7 @@ describe('resolveCanonicalCsw', () => {
 
     const db = createMockDb({
       profileSeedRow: {
-        primary_smart_wallet: '0x00000000000000000000000000000000000000cc',
-        csw_address: '0x00000000000000000000000000000000000000dd',
+        csw_address: '0x00000000000000000000000000000000000000cc',
         base_sub_account: '0x00000000000000000000000000000000000000ee',
       },
     })

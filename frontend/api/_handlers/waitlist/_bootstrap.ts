@@ -32,12 +32,14 @@ import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/onboa
 import {
   buildAccountsMePayload,
   ensureAccountsIdentitySchema,
+  refineAccountIdentityFromPrivy,
   syncEmailIdentity,
   upsertAccount,
   verifyPrivyForAccounts,
 } from '../../../server/_lib/identity/accountsIdentity.js'
 import { runWithWaitlistEmailCollisionAdoption, runWithWaitlistWalletCollisionAdoption } from '../../../server/_lib/identity/emailCollisionAdoption.js'
 import { resolveBasenameHandle } from '../../../server/_lib/identity/basenameResolver.js'
+import { dedupeZoraProfileSeeds } from '../../../server/_lib/zora/zoraProfileIdentifier.js'
 import { loadPrivyUserWithVerifiedEmailRetry } from '../../../server/_lib/infra/privyUserLoad.js'
 import { extractPrivyVerifiedEmail } from '../../../server/_lib/infra/trust.js'
 import { classifyLinkedAccounts } from '../../../server/_lib/wallet/walletMapping.js'
@@ -286,6 +288,16 @@ async function readBootstrapProfile(params: {
   return { signupId, referralCode, email, primaryWallet, embeddedWallet, cswAddress, zoraHandle }
 }
 
+async function resolveCreatorCoinReferralCodeFromWallets(
+  wallets: Array<string | null | undefined>,
+): Promise<string | null> {
+  for (const wallet of dedupeZoraProfileSeeds(wallets)) {
+    const code = await withIdentityTimeout(resolveCreatorCoinReferralCode, wallet)
+    if (code) return code
+  }
+  return null
+}
+
 async function resolveCreatorCoinReferralCode(wallet: string | null | undefined): Promise<string | null> {
   const normalizedWallet = typeof wallet === 'string' ? wallet.trim() : ''
   const key = (process.env.ZORA_SERVER_API_KEY || '').trim()
@@ -355,11 +367,11 @@ async function ensureBootstrapReferralCode(params: {
 }): Promise<string | null> {
   // Deduplicate wallets so we never make redundant RPC/API calls
   // when primaryWallet === embeddedWallet or cswAddress === primaryWallet.
-  const creatorCoinCode =
-    (await withIdentityTimeout(resolveCreatorCoinReferralCode, params.primaryWallet)) ??
-    (params.embeddedWallet && params.embeddedWallet !== params.primaryWallet
-      ? await withIdentityTimeout(resolveCreatorCoinReferralCode, params.embeddedWallet)
-      : null)
+  const creatorCoinCode = await resolveCreatorCoinReferralCodeFromWallets([
+    params.cswAddress,
+    params.primaryWallet,
+    params.embeddedWallet,
+  ])
 
   // Resolve Base app handle (basename) from the CSW address, then primary wallet
   const basenameHandle =
@@ -508,10 +520,12 @@ async function lookupVerifiedAccountEmailForPrivyUser(
 ): Promise<string | null> {
   const result = await db.sql`
     SELECT email
-    FROM accounts
+    FROM profiles
     WHERE LOWER(privy_user_id) = LOWER(${privyUserId})
       AND email_verified = TRUE
       AND email IS NOT NULL
+      AND merged_into_profile_id IS NULL
+    ORDER BY updated_at DESC NULLS LAST, id DESC
     LIMIT 1;
   `
   return normalizeEmail(result.rows?.[0]?.email)
@@ -788,6 +802,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }, context.privyUserId),
       })
     }
+
+    await refineAccountIdentityFromPrivy({
+      db: db as any,
+      privyUserId: context.privyUserId,
+      privyUser: resolvedPrivyUser as any,
+    })
 
     const me = await buildAccountsMePayload({
       db: db as any,

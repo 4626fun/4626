@@ -69,7 +69,9 @@ interface IUniswapV4Router {
  * @title SolanaBridgeAdapter
  * @author 0xakita.eth
  * @notice Bridge adapter for 4626 assets between Base and Solana.
- * @dev Used to register bridge tokens and route bridge + lottery actions.
+ * @dev Registers bridge tokens, routes bridge + CCA/lottery actions via Twin contracts.
+ *      ShareOFT buy fees and lottery entries are enforced by ShareOFT SwapOnly logic on Base,
+ *      not by a separate hook callback in this adapter.
  */
 contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -499,12 +501,11 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
      *
      * @return amountOut Amount of share token received
      *
-     * @dev LOTTERY ENTRY FLOW:
-     *      1. Solana user bridges SOL with attached call to this function
-     *      2. This contract swaps input token for share token on Uniswap V4
-     *      3. The share token transfer triggers the 6.9% fee hook
-     *      4. Hook registers a lottery entry for the buyer
-     *      5. Solana user is now in the jackpot draw!
+ * @dev LOTTERY ENTRY FLOW:
+ *      1. Solana user bridges SOL with attached call to this function (via Twin)
+ *      2. Adapter swaps input token → ShareOFT on configured V4 router
+ *      3. ShareOFT transfer from SwapOnly pool → recipient triggers native buy fee + lottery on hub
+ *      4. On Base hub, processSwapLottery runs inline; Solana-side entries may also relay via processLotteryEntryFromSolana()
      */
     function buyAndEnterLottery(
         bytes32 solanaPubkey,

@@ -80,7 +80,14 @@ export type Database = {
             foreignKeyName: "account_linked_methods_privy_user_id_fkey"
             columns: ["privy_user_id"]
             isOneToOne: false
-            referencedRelation: "accounts"
+            referencedRelation: "profiles"
+            referencedColumns: ["privy_user_id"]
+          },
+          {
+            foreignKeyName: "account_linked_methods_privy_user_id_fkey"
+            columns: ["privy_user_id"]
+            isOneToOne: false
+            referencedRelation: "v_wallet_directory"
             referencedColumns: ["privy_user_id"]
           },
         ]
@@ -118,34 +125,17 @@ export type Database = {
             foreignKeyName: "account_zora_signals_privy_user_id_fkey"
             columns: ["privy_user_id"]
             isOneToOne: true
-            referencedRelation: "accounts"
+            referencedRelation: "profiles"
+            referencedColumns: ["privy_user_id"]
+          },
+          {
+            foreignKeyName: "account_zora_signals_privy_user_id_fkey"
+            columns: ["privy_user_id"]
+            isOneToOne: true
+            referencedRelation: "v_wallet_directory"
             referencedColumns: ["privy_user_id"]
           },
         ]
-      }
-      accounts: {
-        Row: {
-          created_at: string
-          email: string | null
-          email_verified: boolean
-          privy_user_id: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          email?: string | null
-          email_verified?: boolean
-          privy_user_id: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          email?: string | null
-          email_verified?: boolean
-          privy_user_id?: string
-          updated_at?: string
-        }
-        Relationships: []
       }
       admin_logs: {
         Row: {
@@ -432,38 +422,68 @@ export type Database = {
         }
         Relationships: []
       }
-      alfaclub_chat_ingest: {
+      ajna_vaults: {
         Row: {
-          ingested_at: string
-          message_date: string | null
-          message_id: string
-          message_text: string
-          raw_payload_text: string | null
-          room_id: string
-          sender_address: string
-          source: string
+          ajna_auth: string
+          ajna_pool: string
+          automation_status: string
+          buffer_ratio_bps: number | null
+          chain_id: number
+          created_at: string
+          creator_token: string
+          creator_vault: string
+          inner_ajna_vault: string
+          last_error: string | null
+          last_run_at: string | null
+          last_success_tx: string | null
+          max_assets_per_move: number | null
+          max_bucket_step: number
+          metadata: Json
+          min_bucket_index: number | null
+          owner_address: string
+          strategy_adapter: string
           updated_at: string
         }
         Insert: {
-          ingested_at?: string
-          message_date?: string | null
-          message_id: string
-          message_text?: string
-          raw_payload_text?: string | null
-          room_id: string
-          sender_address: string
-          source?: string
+          ajna_auth: string
+          ajna_pool: string
+          automation_status?: string
+          buffer_ratio_bps?: number | null
+          chain_id: number
+          created_at?: string
+          creator_token: string
+          creator_vault: string
+          inner_ajna_vault: string
+          last_error?: string | null
+          last_run_at?: string | null
+          last_success_tx?: string | null
+          max_assets_per_move?: number | null
+          max_bucket_step?: number
+          metadata?: Json
+          min_bucket_index?: number | null
+          owner_address: string
+          strategy_adapter: string
           updated_at?: string
         }
         Update: {
-          ingested_at?: string
-          message_date?: string | null
-          message_id?: string
-          message_text?: string
-          raw_payload_text?: string | null
-          room_id?: string
-          sender_address?: string
-          source?: string
+          ajna_auth?: string
+          ajna_pool?: string
+          automation_status?: string
+          buffer_ratio_bps?: number | null
+          chain_id?: number
+          created_at?: string
+          creator_token?: string
+          creator_vault?: string
+          inner_ajna_vault?: string
+          last_error?: string | null
+          last_run_at?: string | null
+          last_success_tx?: string | null
+          max_assets_per_move?: number | null
+          max_bucket_step?: number
+          metadata?: Json
+          min_bucket_index?: number | null
+          owner_address?: string
+          strategy_adapter?: string
           updated_at?: string
         }
         Relationships: []
@@ -474,7 +494,7 @@ export type Database = {
           minted_at: string
           minted_at_block: number
           staking_pool: string | null
-          token_id: string
+          token_id: number
           updated_at: string
         }
         Insert: {
@@ -482,7 +502,7 @@ export type Database = {
           minted_at?: string
           minted_at_block: number
           staking_pool?: string | null
-          token_id: string
+          token_id: number
           updated_at?: string
         }
         Update: {
@@ -490,8 +510,44 @@ export type Database = {
           minted_at?: string
           minted_at_block?: number
           staking_pool?: string | null
-          token_id?: string
+          token_id?: number
           updated_at?: string
+        }
+        Relationships: []
+      }
+      alfaclub_explore_latest: {
+        Row: {
+          action: string | null
+          creator_address: string | null
+          creator_twitter_username: string | null
+          event_time_ms: number | null
+          ingested_at: string
+          raw: Json
+          room_id: number | null
+          room_name: string | null
+          unique_hash: string
+        }
+        Insert: {
+          action?: string | null
+          creator_address?: string | null
+          creator_twitter_username?: string | null
+          event_time_ms?: number | null
+          ingested_at?: string
+          raw: Json
+          room_id?: number | null
+          room_name?: string | null
+          unique_hash: string
+        }
+        Update: {
+          action?: string | null
+          creator_address?: string | null
+          creator_twitter_username?: string | null
+          event_time_ms?: number | null
+          ingested_at?: string
+          raw?: Json
+          room_id?: number | null
+          room_name?: string | null
+          unique_hash?: string
         }
         Relationships: []
       }
@@ -522,7 +578,7 @@ export type Database = {
           score: number
           snapshot_ts: string
           staked_supply: number
-          token_id: string
+          token_id: number
           total_supply: number
         }
         Insert: {
@@ -533,7 +589,7 @@ export type Database = {
           score?: number
           snapshot_ts: string
           staked_supply?: number
-          token_id: string
+          token_id: number
           total_supply?: number
         }
         Update: {
@@ -544,7 +600,7 @@ export type Database = {
           score?: number
           snapshot_ts?: string
           staked_supply?: number
-          token_id?: string
+          token_id?: number
           total_supply?: number
         }
         Relationships: []
@@ -603,6 +659,111 @@ export type Database = {
           scorecard_uri?: string | null
           submission_attempts?: number
           token_id?: string | null
+        }
+        Relationships: []
+      }
+      alfaclub_rooms_snapshot: {
+        Row: {
+          buy_price: number | null
+          created_at: string | null
+          creator_address: string | null
+          creator_ethos_score: number | null
+          creator_points: number | null
+          creator_twitter_username: string | null
+          current_supply: number | null
+          featured: boolean | null
+          fund_size: number | null
+          image_url: string | null
+          ingested_at: string
+          metadata_id: string | null
+          mid_price: number | null
+          pnl: number | null
+          pnl_percentage_30d: number | null
+          pnl_percentage_7d: number | null
+          pnl_percentage_all_time: number | null
+          polymarket_deposit_wallet_address: string | null
+          polymarket_proxy_address: string | null
+          raw: Json
+          room_description: string | null
+          room_id: number
+          room_name: string | null
+          room_type: string | null
+          sell_price: number | null
+          sn: string | null
+          source: string
+          tier: string | null
+          unique_holders: number | null
+          updated_at: string | null
+          volume: number | null
+          wallet_address: string | null
+        }
+        Insert: {
+          buy_price?: number | null
+          created_at?: string | null
+          creator_address?: string | null
+          creator_ethos_score?: number | null
+          creator_points?: number | null
+          creator_twitter_username?: string | null
+          current_supply?: number | null
+          featured?: boolean | null
+          fund_size?: number | null
+          image_url?: string | null
+          ingested_at?: string
+          metadata_id?: string | null
+          mid_price?: number | null
+          pnl?: number | null
+          pnl_percentage_30d?: number | null
+          pnl_percentage_7d?: number | null
+          pnl_percentage_all_time?: number | null
+          polymarket_deposit_wallet_address?: string | null
+          polymarket_proxy_address?: string | null
+          raw: Json
+          room_description?: string | null
+          room_id: number
+          room_name?: string | null
+          room_type?: string | null
+          sell_price?: number | null
+          sn?: string | null
+          source?: string
+          tier?: string | null
+          unique_holders?: number | null
+          updated_at?: string | null
+          volume?: number | null
+          wallet_address?: string | null
+        }
+        Update: {
+          buy_price?: number | null
+          created_at?: string | null
+          creator_address?: string | null
+          creator_ethos_score?: number | null
+          creator_points?: number | null
+          creator_twitter_username?: string | null
+          current_supply?: number | null
+          featured?: boolean | null
+          fund_size?: number | null
+          image_url?: string | null
+          ingested_at?: string
+          metadata_id?: string | null
+          mid_price?: number | null
+          pnl?: number | null
+          pnl_percentage_30d?: number | null
+          pnl_percentage_7d?: number | null
+          pnl_percentage_all_time?: number | null
+          polymarket_deposit_wallet_address?: string | null
+          polymarket_proxy_address?: string | null
+          raw?: Json
+          room_description?: string | null
+          room_id?: number
+          room_name?: string | null
+          room_type?: string | null
+          sell_price?: number | null
+          sn?: string | null
+          source?: string
+          tier?: string | null
+          unique_holders?: number | null
+          updated_at?: string | null
+          volume?: number | null
+          wallet_address?: string | null
         }
         Relationships: []
       }
@@ -972,6 +1133,93 @@ export type Database = {
         }
         Relationships: []
       }
+      backtest_market_bars_1m: {
+        Row: {
+          bar_time: string
+          close: number
+          fetched_at: string
+          high: number
+          interval: string
+          low: number
+          market: string
+          open: number
+          source: string
+          symbol: string
+          volume: number | null
+        }
+        Insert: {
+          bar_time: string
+          close: number
+          fetched_at?: string
+          high: number
+          interval?: string
+          low: number
+          market: string
+          open: number
+          source?: string
+          symbol: string
+          volume?: number | null
+        }
+        Update: {
+          bar_time?: string
+          close?: number
+          fetched_at?: string
+          high?: number
+          interval?: string
+          low?: number
+          market?: string
+          open?: number
+          source?: string
+          symbol?: string
+          volume?: number | null
+        }
+        Relationships: []
+      }
+      canonical_ethos_scores: {
+        Row: {
+          canonical_user_id: number
+          level: string | null
+          score: number | null
+          score_fetched_at: string | null
+          selected_userkey: string | null
+          source_identity_type: string | null
+          updated_at: string
+        }
+        Insert: {
+          canonical_user_id: number
+          level?: string | null
+          score?: number | null
+          score_fetched_at?: string | null
+          selected_userkey?: string | null
+          source_identity_type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          canonical_user_id?: number
+          level?: string | null
+          score?: number | null
+          score_fetched_at?: string | null
+          selected_userkey?: string | null
+          source_identity_type?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "canonical_ethos_scores_canonical_user_id_fkey"
+            columns: ["canonical_user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "canonical_ethos_scores_canonical_user_id_fkey"
+            columns: ["canonical_user_id"]
+            isOneToOne: true
+            referencedRelation: "v_wallet_directory"
+            referencedColumns: ["profile_id"]
+          },
+        ]
+      }
       chat_command_center_events: {
         Row: {
           command_id: string | null
@@ -1005,51 +1253,30 @@ export type Database = {
         }
         Relationships: []
       }
-      chat_directory_profiles: {
+      chat_friend_requests: {
         Row: {
-          avatar_url: string | null
-          canonical_wallet: string
+          addressee_wallet: string
           created_at: string
-          display_name: string | null
-          ethos_level: string | null
-          ethos_profile_id: number | null
-          ethos_score: number | null
-          ethos_score_updated_at: string | null
-          ethos_userkey: string | null
-          last_seen_at: string | null
+          requester_wallet: string
+          responded_at: string | null
+          status: string
           updated_at: string
-          xmtp_address: string | null
-          xmtp_inbox_id: string | null
         }
         Insert: {
-          avatar_url?: string | null
-          canonical_wallet: string
+          addressee_wallet: string
           created_at?: string
-          display_name?: string | null
-          ethos_level?: string | null
-          ethos_profile_id?: number | null
-          ethos_score?: number | null
-          ethos_score_updated_at?: string | null
-          ethos_userkey?: string | null
-          last_seen_at?: string | null
+          requester_wallet: string
+          responded_at?: string | null
+          status?: string
           updated_at?: string
-          xmtp_address?: string | null
-          xmtp_inbox_id?: string | null
         }
         Update: {
-          avatar_url?: string | null
-          canonical_wallet?: string
+          addressee_wallet?: string
           created_at?: string
-          display_name?: string | null
-          ethos_level?: string | null
-          ethos_profile_id?: number | null
-          ethos_score?: number | null
-          ethos_score_updated_at?: string | null
-          ethos_userkey?: string | null
-          last_seen_at?: string | null
+          requester_wallet?: string
+          responded_at?: string | null
+          status?: string
           updated_at?: string
-          xmtp_address?: string | null
-          xmtp_inbox_id?: string | null
         }
         Relationships: []
       }
@@ -1122,6 +1349,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "command_issuer_daily_spend_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_wallet_directory"
+            referencedColumns: ["profile_id"]
+          },
         ]
       }
       command_issuer_execution_context: {
@@ -1137,6 +1371,7 @@ export type Database = {
           profile_id: number
           provisioned_at: string
           provisioned_by: string | null
+          provisioning_source: string | null
           revoked_at: string | null
           revoked_reason: string | null
           smart_wallet_address: string
@@ -1162,6 +1397,7 @@ export type Database = {
           profile_id: number
           provisioned_at?: string
           provisioned_by?: string | null
+          provisioning_source?: string | null
           revoked_at?: string | null
           revoked_reason?: string | null
           smart_wallet_address: string
@@ -1187,6 +1423,7 @@ export type Database = {
           profile_id?: number
           provisioned_at?: string
           provisioned_by?: string | null
+          provisioning_source?: string | null
           revoked_at?: string | null
           revoked_reason?: string | null
           smart_wallet_address?: string
@@ -1208,31 +1445,193 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "command_issuer_execution_context_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "v_wallet_directory"
+            referencedColumns: ["profile_id"]
+          },
         ]
       }
-      creator_agent_wallets: {
+      control_plane_events: {
         Row: {
-          agent_wallet_address: string
-          agent_wallet_id: string
-          coin_address: string
           created_at: string
+          data_json: Json
+          event_type: string
+          id: number
+          message: string
+          operation_id: string
+          stage_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          data_json?: Json
+          event_type: string
+          id?: number
+          message?: string
+          operation_id: string
+          stage_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          data_json?: Json
+          event_type?: string
+          id?: number
+          message?: string
+          operation_id?: string
+          stage_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "control_plane_events_operation_id_fkey"
+            columns: ["operation_id"]
+            isOneToOne: false
+            referencedRelation: "control_plane_operations"
+            referencedColumns: ["operation_id"]
+          },
+          {
+            foreignKeyName: "control_plane_events_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "control_plane_stages"
+            referencedColumns: ["stage_id"]
+          },
+        ]
+      }
+      control_plane_operations: {
+        Row: {
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          finished_at: string | null
+          id: number
+          idempotency_fingerprint: string | null
+          idempotency_key: string | null
+          input_hash: string | null
+          input_json: Json
+          lock_key: string | null
+          lock_scope: string | null
+          operation_id: string
+          operation_kind: string
+          policy_version: string | null
+          requested_by: string | null
+          result_json: Json | null
+          schema_version: string
+          scope_id: string
+          scope_type: string
+          status: string
+          updated_at: string
+          vault_address: string | null
+        }
+        Insert: {
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: number
+          idempotency_fingerprint?: string | null
+          idempotency_key?: string | null
+          input_hash?: string | null
+          input_json?: Json
+          lock_key?: string | null
+          lock_scope?: string | null
+          operation_id: string
+          operation_kind: string
+          policy_version?: string | null
+          requested_by?: string | null
+          result_json?: Json | null
+          schema_version?: string
+          scope_id?: string
+          scope_type?: string
+          status: string
+          updated_at?: string
+          vault_address?: string | null
+        }
+        Update: {
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: number
+          idempotency_fingerprint?: string | null
+          idempotency_key?: string | null
+          input_hash?: string | null
+          input_json?: Json
+          lock_key?: string | null
+          lock_scope?: string | null
+          operation_id?: string
+          operation_kind?: string
+          policy_version?: string | null
+          requested_by?: string | null
+          result_json?: Json | null
+          schema_version?: string
+          scope_id?: string
+          scope_type?: string
+          status?: string
+          updated_at?: string
+          vault_address?: string | null
+        }
+        Relationships: []
+      }
+      control_plane_stages: {
+        Row: {
+          attempt_count: number
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          finished_at: string | null
+          id: number
+          input_json: Json
+          operation_id: string
+          result_json: Json | null
+          stage_id: string
+          stage_kind: string
+          started_at: string | null
+          status: string
           updated_at: string
         }
         Insert: {
-          agent_wallet_address: string
-          agent_wallet_id: string
-          coin_address: string
+          attempt_count?: number
           created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: number
+          input_json?: Json
+          operation_id: string
+          result_json?: Json | null
+          stage_id: string
+          stage_kind: string
+          started_at?: string | null
+          status: string
           updated_at?: string
         }
         Update: {
-          agent_wallet_address?: string
-          agent_wallet_id?: string
-          coin_address?: string
+          attempt_count?: number
           created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: number
+          input_json?: Json
+          operation_id?: string
+          result_json?: Json | null
+          stage_id?: string
+          stage_kind?: string
+          started_at?: string | null
+          status?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "control_plane_stages_operation_id_fkey"
+            columns: ["operation_id"]
+            isOneToOne: false
+            referencedRelation: "control_plane_operations"
+            referencedColumns: ["operation_id"]
+          },
+        ]
       }
       creator_coins: {
         Row: {
@@ -1243,7 +1642,12 @@ export type Database = {
           fee_model: string
           fees_24h_usd: number | null
           last_seen_at: string
+          market_cap_delta_24h: number | null
           market_cap_usd: number | null
+          sparkline_30d_change_pct: number | null
+          sparkline_30d_updated_at: string | null
+          sparkline_30d_values: Json | null
+          unique_holders: number | null
           volume_24h_usd: number | null
         }
         Insert: {
@@ -1254,7 +1658,12 @@ export type Database = {
           fee_model?: string
           fees_24h_usd?: number | null
           last_seen_at?: string
+          market_cap_delta_24h?: number | null
           market_cap_usd?: number | null
+          sparkline_30d_change_pct?: number | null
+          sparkline_30d_updated_at?: string | null
+          sparkline_30d_values?: Json | null
+          unique_holders?: number | null
           volume_24h_usd?: number | null
         }
         Update: {
@@ -1265,8 +1674,124 @@ export type Database = {
           fee_model?: string
           fees_24h_usd?: number | null
           last_seen_at?: string
+          market_cap_delta_24h?: number | null
           market_cap_usd?: number | null
+          sparkline_30d_change_pct?: number | null
+          sparkline_30d_updated_at?: string | null
+          sparkline_30d_values?: Json | null
+          unique_holders?: number | null
           volume_24h_usd?: number | null
+        }
+        Relationships: []
+      }
+      creator_ethos_daily_snapshots: {
+        Row: {
+          creator_address: string
+          ethos_level: string | null
+          ethos_score: number | null
+          ethos_score_source: string | null
+          market_cap_usd: number | null
+          snapshot_date: string
+          volume_24h_usd: number | null
+        }
+        Insert: {
+          creator_address: string
+          ethos_level?: string | null
+          ethos_score?: number | null
+          ethos_score_source?: string | null
+          market_cap_usd?: number | null
+          snapshot_date: string
+          volume_24h_usd?: number | null
+        }
+        Update: {
+          creator_address?: string
+          ethos_level?: string | null
+          ethos_score?: number | null
+          ethos_score_source?: string | null
+          market_cap_usd?: number | null
+          snapshot_date?: string
+          volume_24h_usd?: number | null
+        }
+        Relationships: []
+      }
+      creator_ethos_projection: {
+        Row: {
+          coin_address: string
+          created_at: string | null
+          creator_address: string
+          ethos_level: string | null
+          ethos_score: number | null
+          ethos_score_source: string | null
+          first_seen_date: string | null
+          market_cap_usd: number | null
+          refreshed_at: string
+          score_updated_at: string | null
+          twitter_username: string | null
+          volume_24h_usd: number | null
+          zora_handle: string | null
+        }
+        Insert: {
+          coin_address: string
+          created_at?: string | null
+          creator_address: string
+          ethos_level?: string | null
+          ethos_score?: number | null
+          ethos_score_source?: string | null
+          first_seen_date?: string | null
+          market_cap_usd?: number | null
+          refreshed_at?: string
+          score_updated_at?: string | null
+          twitter_username?: string | null
+          volume_24h_usd?: number | null
+          zora_handle?: string | null
+        }
+        Update: {
+          coin_address?: string
+          created_at?: string | null
+          creator_address?: string
+          ethos_level?: string | null
+          ethos_score?: number | null
+          ethos_score_source?: string | null
+          first_seen_date?: string | null
+          market_cap_usd?: number | null
+          refreshed_at?: string
+          score_updated_at?: string | null
+          twitter_username?: string | null
+          volume_24h_usd?: number | null
+          zora_handle?: string | null
+        }
+        Relationships: []
+      }
+      creator_infrastructure: {
+        Row: {
+          agent_type: string
+          created_at: string
+          creator_address: string
+          csw_address: string | null
+          last_processed_message_at: string | null
+          listed_publicly: boolean
+          privy_wallet_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          agent_type?: string
+          created_at?: string
+          creator_address: string
+          csw_address?: string | null
+          last_processed_message_at?: string | null
+          listed_publicly?: boolean
+          privy_wallet_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agent_type?: string
+          created_at?: string
+          creator_address?: string
+          csw_address?: string | null
+          last_processed_message_at?: string | null
+          listed_publicly?: boolean
+          privy_wallet_id?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1333,15 +1858,25 @@ export type Database = {
       creator_metrics_state: {
         Row: {
           backfill_complete: boolean
+          cached_creators_total: number | null
+          cached_fees_24h_usd: number | null
+          cached_market_cap_usd: number | null
+          cached_totals_at: string | null
+          cached_volume_24h_usd: number | null
           checkpoint_block: number | null
           checkpoint_cursor: string | null
           checkpoint_log_index: number | null
           checkpoint_updated_at: string | null
+          creators_reconciled_at: string | null
           drift_estimate_total: number | null
           drift_pct: number | null
+          explore_backfill_complete: boolean
+          explore_checkpoints_json: string | null
+          explore_last_sync_at: string | null
           id: number
           last_drift_checked_at: string | null
           last_full_sync_at: string | null
+          last_hot_refresh_at: string | null
           last_run_id: string | null
           last_sync_finished_at: string | null
           last_sync_started_at: string | null
@@ -1352,15 +1887,25 @@ export type Database = {
         }
         Insert: {
           backfill_complete?: boolean
+          cached_creators_total?: number | null
+          cached_fees_24h_usd?: number | null
+          cached_market_cap_usd?: number | null
+          cached_totals_at?: string | null
+          cached_volume_24h_usd?: number | null
           checkpoint_block?: number | null
           checkpoint_cursor?: string | null
           checkpoint_log_index?: number | null
           checkpoint_updated_at?: string | null
+          creators_reconciled_at?: string | null
           drift_estimate_total?: number | null
           drift_pct?: number | null
+          explore_backfill_complete?: boolean
+          explore_checkpoints_json?: string | null
+          explore_last_sync_at?: string | null
           id: number
           last_drift_checked_at?: string | null
           last_full_sync_at?: string | null
+          last_hot_refresh_at?: string | null
           last_run_id?: string | null
           last_sync_finished_at?: string | null
           last_sync_started_at?: string | null
@@ -1371,15 +1916,25 @@ export type Database = {
         }
         Update: {
           backfill_complete?: boolean
+          cached_creators_total?: number | null
+          cached_fees_24h_usd?: number | null
+          cached_market_cap_usd?: number | null
+          cached_totals_at?: string | null
+          cached_volume_24h_usd?: number | null
           checkpoint_block?: number | null
           checkpoint_cursor?: string | null
           checkpoint_log_index?: number | null
           checkpoint_updated_at?: string | null
+          creators_reconciled_at?: string | null
           drift_estimate_total?: number | null
           drift_pct?: number | null
+          explore_backfill_complete?: boolean
+          explore_checkpoints_json?: string | null
+          explore_last_sync_at?: string | null
           id?: number
           last_drift_checked_at?: string | null
           last_full_sync_at?: string | null
+          last_hot_refresh_at?: string | null
           last_run_id?: string | null
           last_sync_finished_at?: string | null
           last_sync_started_at?: string | null
@@ -1507,84 +2062,6 @@ export type Database = {
         }
         Relationships: []
       }
-      creator_wallets: {
-        Row: {
-          coin_address: string
-          created_at: string
-          id: number
-          privy_user_id: string | null
-          verified_at: string
-          verified_via: string
-          wallet_address: string
-          wallet_role: string
-        }
-        Insert: {
-          coin_address: string
-          created_at?: string
-          id?: number
-          privy_user_id?: string | null
-          verified_at?: string
-          verified_via?: string
-          wallet_address: string
-          wallet_role: string
-        }
-        Update: {
-          coin_address?: string
-          created_at?: string
-          id?: number
-          privy_user_id?: string | null
-          verified_at?: string
-          verified_via?: string
-          wallet_address?: string
-          wallet_role?: string
-        }
-        Relationships: []
-      }
-      creator_xmtp_agents: {
-        Row: {
-          agent_type: string
-          created_at: string
-          creator_address: string
-          csw_address: string | null
-          encrypted_private_key_b64: string
-          encrypted_private_key_iv_b64: string
-          encrypted_private_key_tag_b64: string
-          last_processed_message_at: string | null
-          listed_publicly: boolean
-          privy_wallet_id: string | null
-          updated_at: string
-          xmtp_agent_address: string
-        }
-        Insert: {
-          agent_type?: string
-          created_at?: string
-          creator_address: string
-          csw_address?: string | null
-          encrypted_private_key_b64: string
-          encrypted_private_key_iv_b64: string
-          encrypted_private_key_tag_b64: string
-          last_processed_message_at?: string | null
-          listed_publicly?: boolean
-          privy_wallet_id?: string | null
-          updated_at?: string
-          xmtp_agent_address: string
-        }
-        Update: {
-          agent_type?: string
-          created_at?: string
-          creator_address?: string
-          csw_address?: string | null
-          encrypted_private_key_b64?: string
-          encrypted_private_key_iv_b64?: string
-          encrypted_private_key_tag_b64?: string
-          last_processed_message_at?: string | null
-          listed_publicly?: boolean
-          privy_wallet_id?: string | null
-          updated_at?: string
-          xmtp_agent_address?: string
-        }
-        Relationships: []
-      }
       creators: {
         Row: {
           coin_count: number
@@ -1605,56 +2082,6 @@ export type Database = {
           last_seen_at?: string
         }
         Relationships: []
-      }
-      csw_owner_link_status: {
-        Row: {
-          canonical_smart_wallet: string | null
-          checked_at: string
-          embedded_eoa: string | null
-          metadata: Json | null
-          owner_linked: boolean
-          privy_user_id: string | null
-          profile_id: number
-          reason: string | null
-          status: string
-          suggested_canonical_smart_wallet: string | null
-          updated_at: string
-        }
-        Insert: {
-          canonical_smart_wallet?: string | null
-          checked_at?: string
-          embedded_eoa?: string | null
-          metadata?: Json | null
-          owner_linked?: boolean
-          privy_user_id?: string | null
-          profile_id: number
-          reason?: string | null
-          status: string
-          suggested_canonical_smart_wallet?: string | null
-          updated_at?: string
-        }
-        Update: {
-          canonical_smart_wallet?: string | null
-          checked_at?: string
-          embedded_eoa?: string | null
-          metadata?: Json | null
-          owner_linked?: boolean
-          privy_user_id?: string | null
-          profile_id?: number
-          reason?: string | null
-          status?: string
-          suggested_canonical_smart_wallet?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "csw_owner_link_status_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: true
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       deploys: {
         Row: {
@@ -1794,6 +2221,60 @@ export type Database = {
         }
         Relationships: []
       }
+      ethos_score_sync_state: {
+        Row: {
+          cursor_after: string | null
+          last_synced_at: string | null
+          sync_key: string
+          updated_at: string
+        }
+        Insert: {
+          cursor_after?: string | null
+          last_synced_at?: string | null
+          sync_key: string
+          updated_at?: string
+        }
+        Update: {
+          cursor_after?: string | null
+          last_synced_at?: string | null
+          sync_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ethos_userkey_scores: {
+        Row: {
+          ethos_last_updated_at: string | null
+          ethos_userkey: string
+          fetched_at: string
+          level: string | null
+          raw: Json | null
+          score: number | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          ethos_last_updated_at?: string | null
+          ethos_userkey: string
+          fetched_at?: string
+          level?: string | null
+          raw?: Json | null
+          score?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          ethos_last_updated_at?: string | null
+          ethos_userkey?: string
+          fetched_at?: string
+          level?: string | null
+          raw?: Json | null
+          score?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       fact_cards: {
         Row: {
           confidence: number | null
@@ -1821,39 +2302,6 @@ export type Database = {
           id?: number
           source_turn_id?: number | null
           updated_at?: string
-        }
-        Relationships: []
-      }
-      farcaster_rollout_events: {
-        Row: {
-          category: string
-          created_at: string
-          endpoint: string
-          id: number
-          metadata: Json | null
-          mode: string | null
-          source: string | null
-          status_code: number | null
-        }
-        Insert: {
-          category: string
-          created_at?: string
-          endpoint: string
-          id?: number
-          metadata?: Json | null
-          mode?: string | null
-          source?: string | null
-          status_code?: number | null
-        }
-        Update: {
-          category?: string
-          created_at?: string
-          endpoint?: string
-          id?: number
-          metadata?: Json | null
-          mode?: string | null
-          source?: string | null
-          status_code?: number | null
         }
         Relationships: []
       }
@@ -2148,62 +2596,86 @@ export type Database = {
         }
         Relationships: []
       }
-      index_usage_snapshots: {
+      keeper_jobs: {
         Row: {
+          attempt_count: number
+          claim_expires_at: string | null
+          claimed_at: string | null
+          claimed_by: string | null
+          created_at: string
+          dedupe_key: string | null
           id: number
-          idx_scan: number
-          idx_tup_fetch: number
-          idx_tup_read: number
-          index_size_bytes: number
-          indexname: string
-          is_primary: boolean
-          is_unique: boolean
-          n_live_tup: number
-          n_tup_del: number
-          n_tup_ins: number
-          n_tup_upd: number
-          schemaname: string
-          snapshot_at: string
-          stats_reset: string | null
-          tablename: string
+          kind: string
+          last_error: string | null
+          max_attempts: number
+          operation_id: string | null
+          payload: Json
+          priority: number
+          result: Json | null
+          run_at: string
+          source: string
+          stage_id: string | null
+          status: string
+          updated_at: string
         }
         Insert: {
+          attempt_count?: number
+          claim_expires_at?: string | null
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          dedupe_key?: string | null
           id?: number
-          idx_scan?: number
-          idx_tup_fetch?: number
-          idx_tup_read?: number
-          index_size_bytes?: number
-          indexname: string
-          is_primary?: boolean
-          is_unique?: boolean
-          n_live_tup?: number
-          n_tup_del?: number
-          n_tup_ins?: number
-          n_tup_upd?: number
-          schemaname: string
-          snapshot_at?: string
-          stats_reset?: string | null
-          tablename: string
+          kind: string
+          last_error?: string | null
+          max_attempts?: number
+          operation_id?: string | null
+          payload?: Json
+          priority?: number
+          result?: Json | null
+          run_at?: string
+          source?: string
+          stage_id?: string | null
+          status?: string
+          updated_at?: string
         }
         Update: {
+          attempt_count?: number
+          claim_expires_at?: string | null
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          dedupe_key?: string | null
           id?: number
-          idx_scan?: number
-          idx_tup_fetch?: number
-          idx_tup_read?: number
-          index_size_bytes?: number
-          indexname?: string
-          is_primary?: boolean
-          is_unique?: boolean
-          n_live_tup?: number
-          n_tup_del?: number
-          n_tup_ins?: number
-          n_tup_upd?: number
-          schemaname?: string
-          snapshot_at?: string
-          stats_reset?: string | null
-          tablename?: string
+          kind?: string
+          last_error?: string | null
+          max_attempts?: number
+          operation_id?: string | null
+          payload?: Json
+          priority?: number
+          result?: Json | null
+          run_at?: string
+          source?: string
+          stage_id?: string | null
+          status?: string
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "keeper_jobs_operation_id_fkey"
+            columns: ["operation_id"]
+            isOneToOne: false
+            referencedRelation: "control_plane_operations"
+            referencedColumns: ["operation_id"]
+          },
+          {
+            foreignKeyName: "keeper_jobs_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "control_plane_stages"
+            referencedColumns: ["stage_id"]
+          },
+        ]
       }
       keepr_actions: {
         Row: {
@@ -2512,16 +2984,52 @@ export type Database = {
         Row: {
           checkin_date: string
           created_at: string
+          tweet_author_id: string | null
+          tweet_author_username: string | null
+          tweet_id: string | null
+          tweet_url: string | null
           wallet_address: string
         }
         Insert: {
           checkin_date: string
           created_at?: string
+          tweet_author_id?: string | null
+          tweet_author_username?: string | null
+          tweet_id?: string | null
+          tweet_url?: string | null
           wallet_address: string
         }
         Update: {
           checkin_date?: string
           created_at?: string
+          tweet_author_id?: string | null
+          tweet_author_username?: string | null
+          tweet_id?: string | null
+          tweet_url?: string | null
+          wallet_address?: string
+        }
+        Relationships: []
+      }
+      lottery_amoe_daily_xmtp_checkins: {
+        Row: {
+          checkin_date: string
+          created_at: string
+          message_id: string | null
+          recipient_address: string | null
+          wallet_address: string
+        }
+        Insert: {
+          checkin_date: string
+          created_at?: string
+          message_id?: string | null
+          recipient_address?: string | null
+          wallet_address: string
+        }
+        Update: {
+          checkin_date?: string
+          created_at?: string
+          message_id?: string | null
+          recipient_address?: string | null
           wallet_address?: string
         }
         Relationships: []
@@ -2604,6 +3112,92 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_events: {
+        Row: {
+          amount: number | null
+          currency: string | null
+          event_type: string
+          id: number
+          order_id: string | null
+          payload_hash: string | null
+          payload_json: Json | null
+          processed_at: string | null
+          provider: string
+          provider_event_id: string
+          received_at: string
+        }
+        Insert: {
+          amount?: number | null
+          currency?: string | null
+          event_type: string
+          id?: number
+          order_id?: string | null
+          payload_hash?: string | null
+          payload_json?: Json | null
+          processed_at?: string | null
+          provider: string
+          provider_event_id: string
+          received_at?: string
+        }
+        Update: {
+          amount?: number | null
+          currency?: string | null
+          event_type?: string
+          id?: number
+          order_id?: string | null
+          payload_hash?: string | null
+          payload_json?: Json | null
+          processed_at?: string | null
+          provider?: string
+          provider_event_id?: string
+          received_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_events_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "payment_orders"
+            referencedColumns: ["order_id"]
+          },
+        ]
+      }
+      payment_orders: {
+        Row: {
+          amount: number
+          created_at: string
+          currency: string
+          id: number
+          metadata_json: Json
+          order_id: string
+          policy_version: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          currency: string
+          id?: number
+          metadata_json?: Json
+          order_id: string
+          policy_version?: string | null
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          id?: number
+          metadata_json?: Json
+          order_id?: string
+          policy_version?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       points: {
         Row: {
           amount: number
@@ -2658,6 +3252,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "privy_user_aliases_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_wallet_directory"
+            referencedColumns: ["profile_id"]
+          },
         ]
       }
       profile_wallets: {
@@ -2666,6 +3267,7 @@ export type Database = {
           canonical_csw_address: string | null
           canonical_source: string
           canonical_zora_csw_address: string | null
+          chain: string
           chain_id: number
           created_at: string
           is_canonical_smart_wallet: boolean
@@ -2678,14 +3280,17 @@ export type Database = {
           privy_embedded_eoa_address: string | null
           privy_is_owner: boolean
           profile_id: number
+          provider: string
           updated_at: string
           verified_at: string | null
+          wallet_type: string
         }
         Insert: {
           address: string
           canonical_csw_address?: string | null
           canonical_source?: string
           canonical_zora_csw_address?: string | null
+          chain?: string
           chain_id?: number
           created_at?: string
           is_canonical_smart_wallet?: boolean
@@ -2698,14 +3303,17 @@ export type Database = {
           privy_embedded_eoa_address?: string | null
           privy_is_owner?: boolean
           profile_id: number
+          provider?: string
           updated_at?: string
           verified_at?: string | null
+          wallet_type?: string
         }
         Update: {
           address?: string
           canonical_csw_address?: string | null
           canonical_source?: string
           canonical_zora_csw_address?: string | null
+          chain?: string
           chain_id?: number
           created_at?: string
           is_canonical_smart_wallet?: boolean
@@ -2718,23 +3326,25 @@ export type Database = {
           privy_embedded_eoa_address?: string | null
           privy_is_owner?: boolean
           profile_id?: number
+          provider?: string
           updated_at?: string
           verified_at?: string | null
+          wallet_type?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "profile_wallets_address_fkey"
-            columns: ["address"]
-            isOneToOne: false
-            referencedRelation: "wallets"
-            referencedColumns: ["address"]
-          },
           {
             foreignKeyName: "profile_wallets_profile_id_fkey"
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_wallets_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_wallet_directory"
+            referencedColumns: ["profile_id"]
           },
         ]
       }
@@ -2749,12 +3359,12 @@ export type Database = {
           base_sub_account: string | null
           bio: string | null
           border_tier: number
-          canonical_solana_wallet: string | null
           contact_preference: string | null
           created_at: string
           csw_address: string | null
           display_name: string | null
           email: string | null
+          email_verified: boolean
           embedded_wallet: string | null
           embedded_wallet_chain: string | null
           embedded_wallet_client_type: string | null
@@ -2768,7 +3378,6 @@ export type Database = {
           lens_handle: string | null
           lens_owner_address: string | null
           merged_into_profile_id: number | null
-          operational_solana_wallet: string | null
           persona: string | null
           preprov_coin_address: string | null
           preprov_coin_symbol: string | null
@@ -2779,7 +3388,6 @@ export type Database = {
           preprov_zora_handle: string | null
           preprovisioned_at: string | null
           primary_embedded_eoa: string | null
-          primary_smart_wallet: string | null
           primary_wallet: string | null
           privy_user_id: string | null
           profile_completed_at: string | null
@@ -2788,7 +3396,6 @@ export type Database = {
           referral_code: string | null
           referred_by_code: string | null
           referred_by_signup_id: number | null
-          solana_wallet: string | null
           updated_at: string
           verifications: Json | null
           website: string | null
@@ -2804,12 +3411,12 @@ export type Database = {
           base_sub_account?: string | null
           bio?: string | null
           border_tier?: number
-          canonical_solana_wallet?: string | null
           contact_preference?: string | null
           created_at?: string
           csw_address?: string | null
           display_name?: string | null
           email?: string | null
+          email_verified?: boolean
           embedded_wallet?: string | null
           embedded_wallet_chain?: string | null
           embedded_wallet_client_type?: string | null
@@ -2823,7 +3430,6 @@ export type Database = {
           lens_handle?: string | null
           lens_owner_address?: string | null
           merged_into_profile_id?: number | null
-          operational_solana_wallet?: string | null
           persona?: string | null
           preprov_coin_address?: string | null
           preprov_coin_symbol?: string | null
@@ -2834,7 +3440,6 @@ export type Database = {
           preprov_zora_handle?: string | null
           preprovisioned_at?: string | null
           primary_embedded_eoa?: string | null
-          primary_smart_wallet?: string | null
           primary_wallet?: string | null
           privy_user_id?: string | null
           profile_completed_at?: string | null
@@ -2843,7 +3448,6 @@ export type Database = {
           referral_code?: string | null
           referred_by_code?: string | null
           referred_by_signup_id?: number | null
-          solana_wallet?: string | null
           updated_at?: string
           verifications?: Json | null
           website?: string | null
@@ -2859,12 +3463,12 @@ export type Database = {
           base_sub_account?: string | null
           bio?: string | null
           border_tier?: number
-          canonical_solana_wallet?: string | null
           contact_preference?: string | null
           created_at?: string
           csw_address?: string | null
           display_name?: string | null
           email?: string | null
+          email_verified?: boolean
           embedded_wallet?: string | null
           embedded_wallet_chain?: string | null
           embedded_wallet_client_type?: string | null
@@ -2878,7 +3482,6 @@ export type Database = {
           lens_handle?: string | null
           lens_owner_address?: string | null
           merged_into_profile_id?: number | null
-          operational_solana_wallet?: string | null
           persona?: string | null
           preprov_coin_address?: string | null
           preprov_coin_symbol?: string | null
@@ -2889,7 +3492,6 @@ export type Database = {
           preprov_zora_handle?: string | null
           preprovisioned_at?: string | null
           primary_embedded_eoa?: string | null
-          primary_smart_wallet?: string | null
           primary_wallet?: string | null
           privy_user_id?: string | null
           profile_completed_at?: string | null
@@ -2898,7 +3500,6 @@ export type Database = {
           referral_code?: string | null
           referred_by_code?: string | null
           referred_by_signup_id?: number | null
-          solana_wallet?: string | null
           updated_at?: string
           verifications?: Json | null
           website?: string | null
@@ -2912,43 +3513,14 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "profiles_merged_into_profile_id_fkey"
+            columns: ["merged_into_profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_wallet_directory"
+            referencedColumns: ["profile_id"]
+          },
         ]
-      }
-      referral_clicks: {
-        Row: {
-          created_at: string
-          id: number
-          ip_hash: string | null
-          is_bot_suspected: boolean
-          landing_url: string | null
-          referral_code: string
-          referrer_signup_id: number
-          session_id: string | null
-          ua_hash: string | null
-        }
-        Insert: {
-          created_at?: string
-          id?: number
-          ip_hash?: string | null
-          is_bot_suspected?: boolean
-          landing_url?: string | null
-          referral_code: string
-          referrer_signup_id: number
-          session_id?: string | null
-          ua_hash?: string | null
-        }
-        Update: {
-          created_at?: string
-          id?: number
-          ip_hash?: string | null
-          is_bot_suspected?: boolean
-          landing_url?: string | null
-          referral_code?: string
-          referrer_signup_id?: number
-          session_id?: string | null
-          ua_hash?: string | null
-        }
-        Relationships: []
       }
       referral_conversions: {
         Row: {
@@ -2998,50 +3570,278 @@ export type Database = {
         }
         Relationships: []
       }
-      sankey_lookerstudio_full_dataset: {
+      schema_bootstrap_ledger: {
         Row: {
-          action_group: string
-          bucket: string
-          from_node: string
-          generated_at: string
-          pct_of_from_count: number
-          pct_of_from_usd: number
-          pct_of_total_count: number
-          pct_of_total_usd: number
-          scope: string
-          to_node: string
-          weight_count: number
-          weight_usd: number
+          applied_at: string
+          filename: string
         }
         Insert: {
-          action_group: string
-          bucket: string
-          from_node: string
-          generated_at: string
-          pct_of_from_count: number
-          pct_of_from_usd: number
-          pct_of_total_count: number
-          pct_of_total_usd: number
-          scope: string
-          to_node: string
-          weight_count: number
-          weight_usd: number
+          applied_at?: string
+          filename: string
         }
         Update: {
-          action_group?: string
-          bucket?: string
-          from_node?: string
-          generated_at?: string
-          pct_of_from_count?: number
-          pct_of_from_usd?: number
-          pct_of_total_count?: number
-          pct_of_total_usd?: number
-          scope?: string
-          to_node?: string
-          weight_count?: number
-          weight_usd?: number
+          applied_at?: string
+          filename?: string
         }
         Relationships: []
+      }
+      solana_creator_relay_config: {
+        Row: {
+          b2_verified_at: string | null
+          created_at: string
+          creator_token: string
+          id: number
+          last_error: string | null
+          readiness_checks_json: Json | null
+          readiness_status: string
+          relay_enabled: boolean
+          relay_enabled_at: string | null
+          share_mesh_mint: string
+          share_oft: string
+          source_session_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          b2_verified_at?: string | null
+          created_at?: string
+          creator_token: string
+          id?: number
+          last_error?: string | null
+          readiness_checks_json?: Json | null
+          readiness_status?: string
+          relay_enabled?: boolean
+          relay_enabled_at?: string | null
+          share_mesh_mint: string
+          share_oft: string
+          source_session_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          b2_verified_at?: string | null
+          created_at?: string
+          creator_token?: string
+          id?: number
+          last_error?: string | null
+          readiness_checks_json?: Json | null
+          readiness_status?: string
+          relay_enabled?: boolean
+          relay_enabled_at?: string | null
+          share_mesh_mint?: string
+          share_oft?: string
+          source_session_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      solana_hook_status: {
+        Row: {
+          created_at: string
+          creator_config: string | null
+          creator_token: string
+          hook_mint: string | null
+          id: number
+          last_error: string | null
+          pending_entries: string | null
+          provision_attempt_count: number
+          response_json: Json | null
+          share_oft: string | null
+          source_session_id: string | null
+          status: string
+          updated_at: string
+          winner_record: string | null
+        }
+        Insert: {
+          created_at?: string
+          creator_config?: string | null
+          creator_token: string
+          hook_mint?: string | null
+          id?: number
+          last_error?: string | null
+          pending_entries?: string | null
+          provision_attempt_count?: number
+          response_json?: Json | null
+          share_oft?: string | null
+          source_session_id?: string | null
+          status?: string
+          updated_at?: string
+          winner_record?: string | null
+        }
+        Update: {
+          created_at?: string
+          creator_config?: string | null
+          creator_token?: string
+          hook_mint?: string | null
+          id?: number
+          last_error?: string | null
+          pending_entries?: string | null
+          provision_attempt_count?: number
+          response_json?: Json | null
+          share_oft?: string | null
+          source_session_id?: string | null
+          status?: string
+          updated_at?: string
+          winner_record?: string | null
+        }
+        Relationships: []
+      }
+      solana_meteora_pool_status: {
+        Row: {
+          created_at: string
+          creator_token: string
+          id: number
+          last_error: string | null
+          last_signature: string | null
+          pool_address: string | null
+          provision_attempt_count: number
+          quote_mint: string
+          response_json: Json | null
+          share_mesh_mint: string
+          share_oft: string | null
+          source_session_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          creator_token: string
+          id?: number
+          last_error?: string | null
+          last_signature?: string | null
+          pool_address?: string | null
+          provision_attempt_count?: number
+          quote_mint?: string
+          response_json?: Json | null
+          share_mesh_mint: string
+          share_oft?: string | null
+          source_session_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          creator_token?: string
+          id?: number
+          last_error?: string | null
+          last_signature?: string | null
+          pool_address?: string | null
+          provision_attempt_count?: number
+          quote_mint?: string
+          response_json?: Json | null
+          share_mesh_mint?: string
+          share_oft?: string | null
+          source_session_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      solana_share_mesh_mappings: {
+        Row: {
+          applied_at: string | null
+          apply_attempt_count: number
+          created_at: string
+          creator_token: string
+          id: number
+          last_error: string | null
+          share_mesh_mint: string
+          share_oft: string
+          source_session_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          applied_at?: string | null
+          apply_attempt_count?: number
+          created_at?: string
+          creator_token: string
+          id?: number
+          last_error?: string | null
+          share_mesh_mint: string
+          share_oft: string
+          source_session_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          applied_at?: string | null
+          apply_attempt_count?: number
+          created_at?: string
+          creator_token?: string
+          id?: number
+          last_error?: string | null
+          share_mesh_mint?: string
+          share_oft?: string
+          source_session_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      solana_sweep_jobs: {
+        Row: {
+          attempt_count: number
+          canonical_wallet: string
+          created_at: string
+          id: number
+          idempotency_key: string
+          last_error: string | null
+          max_attempts: number
+          min_lamports: number
+          next_retry_at: string | null
+          operational_wallet: string
+          profile_id: number
+          status: string
+          tx_sig: string | null
+          updated_at: string
+        }
+        Insert: {
+          attempt_count?: number
+          canonical_wallet: string
+          created_at?: string
+          id?: number
+          idempotency_key: string
+          last_error?: string | null
+          max_attempts?: number
+          min_lamports?: number
+          next_retry_at?: string | null
+          operational_wallet: string
+          profile_id: number
+          status?: string
+          tx_sig?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attempt_count?: number
+          canonical_wallet?: string
+          created_at?: string
+          id?: number
+          idempotency_key?: string
+          last_error?: string | null
+          max_attempts?: number
+          min_lamports?: number
+          next_retry_at?: string | null
+          operational_wallet?: string
+          profile_id?: number
+          status?: string
+          tx_sig?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "solana_sweep_jobs_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solana_sweep_jobs_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_wallet_directory"
+            referencedColumns: ["profile_id"]
+          },
+        ]
       }
       task_loops: {
         Row: {
@@ -3604,102 +4404,165 @@ export type Database = {
         }
         Relationships: []
       }
-      vault_chat_memberships: {
+      user_ethos_identity_keys: {
         Row: {
-          add_action_id: number | null
-          balance_raw: number | null
+          canonical_user_id: number
           created_at: string
-          failure_reason: string | null
-          grace_started_at: string | null
-          last_checked_at: string | null
-          last_eligible_at: string | null
-          metadata: Json
-          profile_id: number | null
-          remove_action_id: number | null
-          status: string
+          ethos_userkey: string
+          identity_type: string
+          priority: number
+          source: string
           updated_at: string
-          vault_address: string
-          wallet_address: string
-          xmtp_inbox_id: string | null
+          verified_at: string | null
         }
         Insert: {
-          add_action_id?: number | null
-          balance_raw?: number | null
+          canonical_user_id: number
           created_at?: string
-          failure_reason?: string | null
-          grace_started_at?: string | null
-          last_checked_at?: string | null
-          last_eligible_at?: string | null
-          metadata?: Json
-          profile_id?: number | null
-          remove_action_id?: number | null
-          status?: string
+          ethos_userkey: string
+          identity_type: string
+          priority: number
+          source?: string
           updated_at?: string
-          vault_address: string
-          wallet_address: string
-          xmtp_inbox_id?: string | null
+          verified_at?: string | null
         }
         Update: {
-          add_action_id?: number | null
-          balance_raw?: number | null
+          canonical_user_id?: number
           created_at?: string
-          failure_reason?: string | null
-          grace_started_at?: string | null
-          last_checked_at?: string | null
-          last_eligible_at?: string | null
-          metadata?: Json
-          profile_id?: number | null
-          remove_action_id?: number | null
+          ethos_userkey?: string
+          identity_type?: string
+          priority?: number
+          source?: string
+          updated_at?: string
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_ethos_identity_keys_canonical_user_id_fkey"
+            columns: ["canonical_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_ethos_identity_keys_canonical_user_id_fkey"
+            columns: ["canonical_user_id"]
+            isOneToOne: false
+            referencedRelation: "v_wallet_directory"
+            referencedColumns: ["profile_id"]
+          },
+        ]
+      }
+      waitlist_leads: {
+        Row: {
+          confirmed_at: string | null
+          created_at: string
+          email: string
+          first_touch: Json
+          id: string
+          ip_country: string | null
+          ip_hash: string | null
+          referrer: string | null
+          role: string
+          session_id: string | null
+          status: string
+          updated_at: string
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
+          visitor_id: string | null
+          x_handle: string | null
+        }
+        Insert: {
+          confirmed_at?: string | null
+          created_at?: string
+          email: string
+          first_touch?: Json
+          id?: string
+          ip_country?: string | null
+          ip_hash?: string | null
+          referrer?: string | null
+          role: string
+          session_id?: string | null
           status?: string
           updated_at?: string
-          vault_address?: string
-          wallet_address?: string
-          xmtp_inbox_id?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+          visitor_id?: string | null
+          x_handle?: string | null
+        }
+        Update: {
+          confirmed_at?: string | null
+          created_at?: string
+          email?: string
+          first_touch?: Json
+          id?: string
+          ip_country?: string | null
+          ip_hash?: string | null
+          referrer?: string | null
+          role?: string
+          session_id?: string | null
+          status?: string
+          updated_at?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+          visitor_id?: string | null
+          x_handle?: string | null
         }
         Relationships: []
       }
-      vault_chat_policies: {
+      wallet_directory: {
         Row: {
+          avatar_url: string | null
+          canonical_wallet: string
           created_at: string
-          created_by: string | null
-          creator_address: string | null
-          enabled: boolean
-          grace_hours: number
-          group_id: string | null
-          metadata: Json
-          min_holding_raw: number
-          share_token_address: string | null
+          display_name: string | null
+          ethos_level: string | null
+          ethos_profile_id: number | null
+          ethos_score: number | null
+          ethos_score_updated_at: string | null
+          ethos_userkey: string | null
+          last_seen_at: string | null
           updated_at: string
-          updated_by: string | null
-          vault_address: string
+          xmtp_address: string | null
+          xmtp_inbox_id: string | null
         }
         Insert: {
+          avatar_url?: string | null
+          canonical_wallet: string
           created_at?: string
-          created_by?: string | null
-          creator_address?: string | null
-          enabled?: boolean
-          grace_hours?: number
-          group_id?: string | null
-          metadata?: Json
-          min_holding_raw?: number
-          share_token_address?: string | null
+          display_name?: string | null
+          ethos_level?: string | null
+          ethos_profile_id?: number | null
+          ethos_score?: number | null
+          ethos_score_updated_at?: string | null
+          ethos_userkey?: string | null
+          last_seen_at?: string | null
           updated_at?: string
-          updated_by?: string | null
-          vault_address: string
+          xmtp_address?: string | null
+          xmtp_inbox_id?: string | null
         }
         Update: {
+          avatar_url?: string | null
+          canonical_wallet?: string
           created_at?: string
-          created_by?: string | null
-          creator_address?: string | null
-          enabled?: boolean
-          grace_hours?: number
-          group_id?: string | null
-          metadata?: Json
-          min_holding_raw?: number
-          share_token_address?: string | null
+          display_name?: string | null
+          ethos_level?: string | null
+          ethos_profile_id?: number | null
+          ethos_score?: number | null
+          ethos_score_updated_at?: string | null
+          ethos_userkey?: string | null
+          last_seen_at?: string | null
           updated_at?: string
-          updated_by?: string | null
-          vault_address?: string
+          xmtp_address?: string | null
+          xmtp_inbox_id?: string | null
         }
         Relationships: []
       }
@@ -3733,411 +4596,51 @@ export type Database = {
         }
         Relationships: []
       }
-      wallets: {
-        Row: {
-          address: string
-          chain: string
-          created_at: string
-          provider: string
-          wallet_type: string
-        }
-        Insert: {
-          address: string
-          chain?: string
-          created_at?: string
-          provider?: string
-          wallet_type: string
-        }
-        Update: {
-          address?: string
-          chain?: string
-          created_at?: string
-          provider?: string
-          wallet_type?: string
-        }
-        Relationships: []
-      }
-      workspace_activity_events: {
-        Row: {
-          actor_address: string | null
-          created_at: string
-          description: string | null
-          event_type: string
-          id: number
-          payload_json: Json
-          related_alert_id: number | null
-          related_approval_id: number | null
-          related_task_id: number | null
-          severity: string
-          source: string
-          title: string
-          vault_address: string
-        }
-        Insert: {
-          actor_address?: string | null
-          created_at?: string
-          description?: string | null
-          event_type: string
-          id?: number
-          payload_json?: Json
-          related_alert_id?: number | null
-          related_approval_id?: number | null
-          related_task_id?: number | null
-          severity?: string
-          source?: string
-          title: string
-          vault_address: string
-        }
-        Update: {
-          actor_address?: string | null
-          created_at?: string
-          description?: string | null
-          event_type?: string
-          id?: number
-          payload_json?: Json
-          related_alert_id?: number | null
-          related_approval_id?: number | null
-          related_task_id?: number | null
-          severity?: string
-          source?: string
-          title?: string
-          vault_address?: string
-        }
-        Relationships: []
-      }
-      workspace_alert_events: {
-        Row: {
-          acknowledged_at: string | null
-          acknowledged_by: string | null
-          created_at: string
-          created_by: string | null
-          dedupe_key: string | null
-          details_json: Json
-          id: number
-          kind: string
-          message: string | null
-          related_task_id: number | null
-          resolved_at: string | null
-          resolved_by: string | null
-          severity: string
-          source: string
-          status: string
-          title: string
-          updated_at: string
-          vault_address: string
-        }
-        Insert: {
-          acknowledged_at?: string | null
-          acknowledged_by?: string | null
-          created_at?: string
-          created_by?: string | null
-          dedupe_key?: string | null
-          details_json?: Json
-          id?: number
-          kind: string
-          message?: string | null
-          related_task_id?: number | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          severity?: string
-          source: string
-          status?: string
-          title: string
-          updated_at?: string
-          vault_address: string
-        }
-        Update: {
-          acknowledged_at?: string | null
-          acknowledged_by?: string | null
-          created_at?: string
-          created_by?: string | null
-          dedupe_key?: string | null
-          details_json?: Json
-          id?: number
-          kind?: string
-          message?: string | null
-          related_task_id?: number | null
-          resolved_at?: string | null
-          resolved_by?: string | null
-          severity?: string
-          source?: string
-          status?: string
-          title?: string
-          updated_at?: string
-          vault_address?: string
-        }
-        Relationships: []
-      }
-      workspace_approvals: {
-        Row: {
-          action_type: string
-          created_at: string
-          deadline_at: string | null
-          decided_at: string | null
-          decided_by: string | null
-          decision_reason: string | null
-          id: number
-          linked_task_id: number | null
-          payload_json: Json
-          requested_by: string | null
-          severity: string
-          signer_address: string | null
-          source: string
-          status: string
-          updated_at: string
-          vault_address: string
-        }
-        Insert: {
-          action_type: string
-          created_at?: string
-          deadline_at?: string | null
-          decided_at?: string | null
-          decided_by?: string | null
-          decision_reason?: string | null
-          id?: number
-          linked_task_id?: number | null
-          payload_json?: Json
-          requested_by?: string | null
-          severity?: string
-          signer_address?: string | null
-          source?: string
-          status?: string
-          updated_at?: string
-          vault_address: string
-        }
-        Update: {
-          action_type?: string
-          created_at?: string
-          deadline_at?: string | null
-          decided_at?: string | null
-          decided_by?: string | null
-          decision_reason?: string | null
-          id?: number
-          linked_task_id?: number | null
-          payload_json?: Json
-          requested_by?: string | null
-          severity?: string
-          signer_address?: string | null
-          source?: string
-          status?: string
-          updated_at?: string
-          vault_address?: string
-        }
-        Relationships: []
-      }
-      workspace_audit_logs: {
-        Row: {
-          action: string
-          actor_address: string | null
-          actor_role: string | null
-          after_json: Json | null
-          before_json: Json | null
-          created_at: string
-          details_json: Json
-          id: number
-          source: string
-          target_id: string | null
-          target_type: string | null
-          vault_address: string
-        }
-        Insert: {
-          action: string
-          actor_address?: string | null
-          actor_role?: string | null
-          after_json?: Json | null
-          before_json?: Json | null
-          created_at?: string
-          details_json?: Json
-          id?: number
-          source: string
-          target_id?: string | null
-          target_type?: string | null
-          vault_address: string
-        }
-        Update: {
-          action?: string
-          actor_address?: string | null
-          actor_role?: string | null
-          after_json?: Json | null
-          before_json?: Json | null
-          created_at?: string
-          details_json?: Json
-          id?: number
-          source?: string
-          target_id?: string | null
-          target_type?: string | null
-          vault_address?: string
-        }
-        Relationships: []
-      }
-      workspace_monitoring_snapshots: {
+      website_events: {
         Row: {
           created_at: string
-          id: number
-          payload_json: Json
-          snapshot_kind: string
-          source: string
-          vault_address: string
+          event_name: string
+          id: string
+          path: string
+          props: Json
+          referrer: string | null
+          session_id: string | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
+          visitor_id: string | null
         }
         Insert: {
           created_at?: string
-          id?: number
-          payload_json: Json
-          snapshot_kind?: string
-          source?: string
-          vault_address: string
+          event_name: string
+          id?: string
+          path: string
+          props?: Json
+          referrer?: string | null
+          session_id?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+          visitor_id?: string | null
         }
         Update: {
           created_at?: string
-          id?: number
-          payload_json?: Json
-          snapshot_kind?: string
-          source?: string
-          vault_address?: string
-        }
-        Relationships: []
-      }
-      workspace_notification_preferences: {
-        Row: {
-          channels_json: Json
-          created_at: string
-          email_enabled: boolean
-          min_severity: string
-          principal_address: string
-          telegram_enabled: boolean
-          updated_at: string
-          vault_address: string
-          xmtp_enabled: boolean
-        }
-        Insert: {
-          channels_json?: Json
-          created_at?: string
-          email_enabled?: boolean
-          min_severity?: string
-          principal_address: string
-          telegram_enabled?: boolean
-          updated_at?: string
-          vault_address: string
-          xmtp_enabled?: boolean
-        }
-        Update: {
-          channels_json?: Json
-          created_at?: string
-          email_enabled?: boolean
-          min_severity?: string
-          principal_address?: string
-          telegram_enabled?: boolean
-          updated_at?: string
-          vault_address?: string
-          xmtp_enabled?: boolean
-        }
-        Relationships: []
-      }
-      workspace_strategy_targets: {
-        Row: {
-          created_at: string
-          max_assets_cap: number | null
-          notes: string | null
-          status: string
-          strategy_address: string
-          target_weight_bps: number
-          updated_at: string
-          updated_by: string | null
-          updated_source: string | null
-          vault_address: string
-        }
-        Insert: {
-          created_at?: string
-          max_assets_cap?: number | null
-          notes?: string | null
-          status?: string
-          strategy_address: string
-          target_weight_bps?: number
-          updated_at?: string
-          updated_by?: string | null
-          updated_source?: string | null
-          vault_address: string
-        }
-        Update: {
-          created_at?: string
-          max_assets_cap?: number | null
-          notes?: string | null
-          status?: string
-          strategy_address?: string
-          target_weight_bps?: number
-          updated_at?: string
-          updated_by?: string | null
-          updated_source?: string | null
-          vault_address?: string
-        }
-        Relationships: []
-      }
-      workspace_task_state: {
-        Row: {
-          action_payload_json: Json
-          action_type: string | null
-          assignee_wallet: string | null
-          created_at: string
-          created_by: string | null
-          description: string | null
-          due_at: string | null
-          id: number
-          related_alert_id: number | null
-          related_approval_id: number | null
-          room_ref: string | null
-          severity: string
-          snoozed_until: string | null
-          source: string
-          status: string
-          thread_ref: string | null
-          title: string
-          updated_at: string
-          updated_by: string | null
-          vault_address: string
-        }
-        Insert: {
-          action_payload_json?: Json
-          action_type?: string | null
-          assignee_wallet?: string | null
-          created_at?: string
-          created_by?: string | null
-          description?: string | null
-          due_at?: string | null
-          id?: number
-          related_alert_id?: number | null
-          related_approval_id?: number | null
-          room_ref?: string | null
-          severity?: string
-          snoozed_until?: string | null
-          source?: string
-          status?: string
-          thread_ref?: string | null
-          title: string
-          updated_at?: string
-          updated_by?: string | null
-          vault_address: string
-        }
-        Update: {
-          action_payload_json?: Json
-          action_type?: string | null
-          assignee_wallet?: string | null
-          created_at?: string
-          created_by?: string | null
-          description?: string | null
-          due_at?: string | null
-          id?: number
-          related_alert_id?: number | null
-          related_approval_id?: number | null
-          room_ref?: string | null
-          severity?: string
-          snoozed_until?: string | null
-          source?: string
-          status?: string
-          thread_ref?: string | null
-          title?: string
-          updated_at?: string
-          updated_by?: string | null
-          vault_address?: string
+          event_name?: string
+          id?: string
+          path?: string
+          props?: Json
+          referrer?: string | null
+          session_id?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+          visitor_id?: string | null
         }
         Relationships: []
       }
@@ -4477,12 +4980,103 @@ export type Database = {
         }
         Relationships: []
       }
+      zora_profiles_refresh_state: {
+        Row: {
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
     }
     Views: {
       points_amoe_eligible_balance: {
         Row: {
           credits: number | null
           signup_id: number | null
+        }
+        Relationships: []
+      }
+      v_looker_zora_profiles_ethos: {
+        Row: {
+          ethos_level: string | null
+          ethos_score: number | null
+          ethos_score_updated_at: string | null
+          ethos_userkey: string | null
+          farcaster_follower_count: number | null
+          farcaster_username: string | null
+          handle: string | null
+          is_in_csw_index: boolean | null
+          last_refreshed_at: string | null
+          payout_recipient: string | null
+          payout_recipient_balance_wei: number | null
+          primary_wallet: string | null
+          primary_wallet_kind: string | null
+          privy_wallet_address: string | null
+          privy_wallet_kind: string | null
+          recommended_install_source: string | null
+          recommended_install_target: string | null
+          score_wallet: string | null
+          signing_eoa: string | null
+          signing_eoa_balance_wei: number | null
+          signing_eoa_source: string | null
+          smart_wallet_address: string | null
+          smart_wallet_kind: string | null
+          twitter_follower_count: number | null
+          twitter_username: string | null
+          unique_holders: number | null
+          volume_24h_usd: number | null
+          zora_creator_coin_address: string | null
+          zora_creator_coin_market_cap: number | null
+          zora_creator_coin_name: string | null
+          zora_creator_coin_symbol: string | null
+          zora_creator_coin_total_volume: number | null
+          zora_display_name: string | null
+        }
+        Relationships: []
+      }
+      v_wallet_directory: {
+        Row: {
+          avatar_url: string | null
+          canonical_wallet: string | null
+          directory_created_at: string | null
+          directory_updated_at: string | null
+          display_name: string | null
+          ethos_level: string | null
+          ethos_profile_id: number | null
+          ethos_score: number | null
+          ethos_score_updated_at: string | null
+          ethos_userkey: string | null
+          last_seen_at: string | null
+          privy_user_id: string | null
+          profile_id: number | null
+          xmtp_address: string | null
+          xmtp_inbox_id: string | null
+        }
+        Relationships: []
+      }
+      v_zora_owner_ethos_sync_health: {
+        Row: {
+          matched_cache_rows: number | null
+          matched_cache_stale_over_24h: number | null
+          newest_cache_score_at: string | null
+          newest_projected_score_at: string | null
+          observed_at: string | null
+          oldest_projected_score_at: string | null
+          rows_missing_score: number | null
+          rows_stale_over_24h: number | null
+          rows_with_score: number | null
+          total_rows: number | null
         }
         Relationships: []
       }
@@ -4550,7 +5144,7 @@ export type Database = {
       }
     }
     Functions: {
-      capture_index_usage_snapshot: { Args: never; Returns: number }
+      capture_temp_io_snapshot: { Args: never; Returns: number }
       cleanup_expired_rows: { Args: never; Returns: Json }
       cleanup_legacy_backups: {
         Args: { p_arena_backup_days?: number }
@@ -4559,40 +5153,44 @@ export type Database = {
       cleanup_log_retention: {
         Args: {
           p_agent_api_log_days?: number
+          p_agent_api_logs_days?: number
+          p_agent_control_audit_days?: number
+          p_alfaclub_metrics_snapshot_days?: number
           p_chat_command_days?: number
+          p_chat_presence_days?: number
+          p_episodic_summaries_days?: number
           p_farcaster_rollout_days?: number
+          p_keepr_logs_days?: number
+          p_memory_snapshots_days?: number
+          p_query_temp_io_days?: number
+          p_telegram_action_audit_days?: number
           p_telegram_funnel_days?: number
+          p_telegram_funnel_days_v2?: number
           p_telegram_link_days?: number
+          p_workspace_activity_days?: number
+          p_workspace_audit_days?: number
+          p_workspace_monitoring_days?: number
         }
         Returns: Json
       }
-      current_privy_user_id: { Args: never; Returns: string }
-      index_drop_candidates: {
+      cleanup_operational_retention: {
         Args: {
-          min_days?: number
-          min_samples?: number
-          min_table_writes?: number
+          p_agent_rate_limits_days?: number
+          p_control_plane_terminal_days?: number
+          p_index_usage_snapshots_days?: number
+          p_keeper_jobs_failed_days?: number
+          p_keeper_jobs_succeeded_days?: number
+          p_prune_unmapped_ethos_userkeys?: boolean
         }
-        Returns: {
-          drop_sql: string
-          idx_scan_delta: number
-          index_size_pretty: string
-          indexname: string
-          rollback_sql: string
-          sample_count: number
-          sample_window: string
-          schemaname: string
-          table_writes_delta: number
-          tablename: string
-        }[]
+        Returns: Json
       }
-      index_drop_migration_draft: {
-        Args: {
-          min_days?: number
-          min_samples?: number
-          min_table_writes?: number
-        }
-        Returns: string
+      count_estimate: { Args: { query_text: string }; Returns: number }
+      current_privy_user_id: { Args: never; Returns: string }
+      get_stale_csw_owner_addresses: {
+        Args: { p_limit?: number; p_stale_hours?: number }
+        Returns: {
+          owner_address: string
+        }[]
       }
       insert_creator_access_request_audit: {
         Args: {
@@ -4602,6 +5200,19 @@ export type Database = {
           p_request_id: string
         }
         Returns: undefined
+      }
+      prune_ethos_daily_snapshots: {
+        Args: { keep_days?: number }
+        Returns: number
+      }
+      snapshot_creator_ethos_daily: { Args: never; Returns: number }
+      upsert_alfaclub_explore_latest: {
+        Args: { payload: Json }
+        Returns: number
+      }
+      upsert_alfaclub_rooms_snapshot: {
+        Args: { payload: Json }
+        Returns: number
       }
     }
     Enums: {

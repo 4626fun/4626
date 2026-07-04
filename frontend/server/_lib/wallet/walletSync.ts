@@ -115,11 +115,13 @@ async function findProfileByProfileColumns(db: Db, params: {
                OR LOWER(embedded_wallet) = ${address}
                OR LOWER(csw_address) = ${address}
                OR LOWER(base_sub_account) = ${address}
-               OR LOWER(primary_smart_wallet) = ${address}
                OR LOWER(primary_embedded_eoa) = ${address}
-               OR solana_wallet = ${address}
-               OR canonical_solana_wallet = ${address}
-               OR operational_solana_wallet = ${address}
+               OR id IN (
+                 SELECT pw.profile_id
+                 FROM profile_wallets pw
+                 WHERE pw.address = ${address}
+                    OR LOWER(pw.address) = ${address}
+               )
           )
             AND (privy_user_id IS NULL OR privy_user_id = ${privyUserId})
           LIMIT 1
@@ -138,11 +140,13 @@ async function findProfileByProfileColumns(db: Db, params: {
              OR LOWER(embedded_wallet) = ${address}
              OR LOWER(csw_address) = ${address}
              OR LOWER(base_sub_account) = ${address}
-             OR LOWER(primary_smart_wallet) = ${address}
              OR LOWER(primary_embedded_eoa) = ${address}
-             OR solana_wallet = ${address}
-             OR canonical_solana_wallet = ${address}
-             OR operational_solana_wallet = ${address}
+             OR id IN (
+               SELECT pw.profile_id
+               FROM profile_wallets pw
+               WHERE pw.address = ${address}
+                  OR LOWER(pw.address) = ${address}
+             )
           LIMIT 1
         )
         SELECT p.id, p.email
@@ -290,15 +294,28 @@ export async function readPersistedIdentity(db: Db, profileId: number): Promise<
   `
   const canonicalFromWallets = normalizeAddress(canonicalWalletResult.rows?.[0]?.address)
 
+  const canonicalSolanaResult = await db.sql`
+    SELECT address
+    FROM profile_wallets
+    WHERE profile_id = ${profileId}
+      AND is_canonical_solana_wallet = true
+      AND LOWER(COALESCE(chain, '')) = 'solana'
+    LIMIT 1;
+  `
+  const operationalSolanaResult = await db.sql`
+    SELECT address
+    FROM profile_wallets
+    WHERE profile_id = ${profileId}
+      AND is_operational_solana_wallet = true
+      AND LOWER(COALESCE(chain, '')) = 'solana'
+    LIMIT 1;
+  `
+
   const result = await db.sql`
     SELECT
       primary_wallet,
-      primary_smart_wallet,
       csw_address,
       base_sub_account,
-      canonical_solana_wallet,
-      operational_solana_wallet,
-      solana_wallet,
       primary_embedded_eoa,
       embedded_wallet,
       preprov_zora_handle
@@ -310,7 +327,6 @@ export async function readPersistedIdentity(db: Db, profileId: number): Promise<
   if (!row) return null
   const canonicalSmartWallet =
     canonicalFromWallets ??
-    normalizeAddress(row.primary_smart_wallet) ??
     normalizeAddress(row.csw_address)
   const embeddedEoa =
     normalizeAddress(row.primary_embedded_eoa) ??
@@ -322,10 +338,8 @@ export async function readPersistedIdentity(db: Db, profileId: number): Promise<
       embeddedEoa ??
       (primaryWallet && (!canonicalSmartWallet || !walletAddressEquals(primaryWallet, canonicalSmartWallet)) ? primaryWallet : null),
     canonicalSmartWallet,
-    canonicalSolanaWallet:
-      normalizeSolanaAddress(row.canonical_solana_wallet) ??
-      normalizeSolanaAddress(row.solana_wallet),
-    operationalSolanaWallet: normalizeSolanaAddress(row.operational_solana_wallet),
+    canonicalSolanaWallet: normalizeSolanaAddress(canonicalSolanaResult.rows?.[0]?.address),
+    operationalSolanaWallet: normalizeSolanaAddress(operationalSolanaResult.rows?.[0]?.address),
     embeddedEoa,
     preprovZoraHandle: typeof row.preprov_zora_handle === 'string' && row.preprov_zora_handle.trim() ? row.preprov_zora_handle.trim() : null,
   }
@@ -381,26 +395,22 @@ function isSmartWalletCandidate(wallet: MappedWallet): boolean {
   return true
 }
 
-function normalizeHandle(value: unknown): string | null {
-  const raw = typeof value === 'string' ? value.trim() : ''
-  if (!raw) return null
-  return raw.startsWith('@') ? raw.slice(1) : raw
-}
+import { pickFirstZoraProfileSeed } from '../zora/zoraProfileIdentifier.js'
 
 function pickZoraSeedIdentifier(params: { classification: ClassifiedLinkedAccounts; persisted: PersistedIdentity | null }): string | null {
   const { classification, persisted } = params
-  const handle = normalizeHandle(persisted?.preprovZoraHandle)
-  if (handle) return handle
+  const externalEoas = classification.allWallets
+    .filter((w) => w.chain === 'evm' && w.walletType === 'external_eoa')
+    .map((w) => w.address)
 
-  // Prefer an EOA seed; Zora can also resolve by CSW address,
-  // but EOAs are the most stable identity anchor.
-  const externalEoa = classification.allWallets.find((w) => w.chain === 'evm' && w.walletType === 'external_eoa')?.address ?? null
-  if (externalEoa) return externalEoa
-
-  const embedded = classification.embeddedEoa?.address ?? null
-  if (embedded) return embedded
-
-  return classification.primaryWalletAddress ?? null
+  return pickFirstZoraProfileSeed({
+    preprovZoraHandle: persisted?.preprovZoraHandle ?? null,
+    canonicalCswAddress:
+      classification.canonicalSmartWallet?.address ?? persisted?.canonicalSmartWallet ?? null,
+    externalEoas,
+    primaryWalletAddress: classification.primaryWalletAddress ?? null,
+    embeddedEoaAddress: classification.embeddedEoa?.address ?? null,
+  })
 }
 
 async function resolveCanonicalSmartWalletFromZora(params: {
@@ -408,9 +418,6 @@ async function resolveCanonicalSmartWalletFromZora(params: {
   persisted: PersistedIdentity | null
 }): Promise<string | null> {
   const { classification, persisted } = params
-  const candidates = classification.allWallets.filter(isSmartWalletCandidate).map((w) => normalizeLower(w.address)).filter(Boolean)
-  if (candidates.length === 0) return null
-
   const seed = pickZoraSeedIdentifier({ classification, persisted })
   if (!seed) return null
 
@@ -422,15 +429,36 @@ async function resolveCanonicalSmartWalletFromZora(params: {
   }
   if (!profile) return null
 
-  const candidateSet = new Set(candidates)
   const zoraCandidates = [
     profile?.publicWallet?.walletAddress,
     ...((profile?.linkedWallets?.edges ?? []).map((edge: any) => edge?.node?.walletAddress ?? null)),
   ]
+  const externalEoaSet = new Set(
+    classification.allWallets
+      .filter((wallet) => wallet.chain === 'evm' && wallet.walletType === 'external_eoa')
+      .map((wallet) => normalizeLower(wallet.address))
+      .filter(Boolean),
+  )
+  const candidates = classification.allWallets.filter(isSmartWalletCandidate).map((w) => normalizeLower(w.address)).filter(Boolean)
+  const candidateSet = new Set(candidates)
+
   for (const candidate of zoraCandidates) {
     const normalized = normalizeAddress(candidate)
     if (!normalized) continue
     if (candidateSet.has(normalizeLower(normalized))) return normalizeLower(normalized)
+  }
+
+  // EOA-only reconnect: Zora may expose the canonical CSW even when Privy only
+  // linked the external owner wallet (common for returning waitlist wallet sign-in).
+  if (candidates.length === 0) {
+    for (const candidate of zoraCandidates) {
+      const normalized = normalizeAddress(candidate)
+      if (!normalized) continue
+      const lower = normalizeLower(normalized)
+      if (!lower || externalEoaSet.has(lower)) continue
+      return lower
+    }
+    return null
   }
 
   // Fallback for canonical drift cases:
@@ -784,8 +812,6 @@ async function insertOrUpdateProfile(params: {
   }
   const canonical = classification.canonicalSmartWallet?.address ?? null
   const activeOwner = classification.activeOwnerWallet?.address ?? null
-  const canonicalSolana = classification.canonicalSolanaWallet?.address ?? null
-  const operationalSolana = classification.operationalSolanaWallet?.address ?? null
   const embedded = classification.embeddedEoa?.address ?? null
   const primary = resolveProfilesPrimaryWalletColumn({
     embedded,
@@ -800,15 +826,11 @@ async function insertOrUpdateProfile(params: {
       SET
         email = COALESCE(profiles.email, ${email}),
         privy_user_id = COALESCE(privy_user_id, ${privyUserId}),
-        primary_smart_wallet = COALESCE(${canonical}, primary_smart_wallet),
         primary_embedded_eoa = ${embedded},
         primary_wallet = COALESCE(${primary}, primary_wallet),
         embedded_wallet = ${embedded},
         embedded_wallet_chain = ${classification.embeddedEoa?.chainType ?? null},
         embedded_wallet_client_type = ${classification.embeddedEoa?.clientType ?? null},
-        canonical_solana_wallet = COALESCE(${canonicalSolana}, canonical_solana_wallet),
-        operational_solana_wallet = COALESCE(${operationalSolana}, operational_solana_wallet),
-        solana_wallet = COALESCE(${canonicalSolana}, solana_wallet),
         csw_address = COALESCE(${canonical}, csw_address),
         updated_at = NOW()
       WHERE id = ${existing.id};
@@ -822,15 +844,11 @@ async function insertOrUpdateProfile(params: {
       UPDATE profiles
       SET
         email = COALESCE(profiles.email, ${email}),
-        primary_smart_wallet = COALESCE(${canonical}, primary_smart_wallet),
         primary_embedded_eoa = ${embedded},
         primary_wallet = COALESCE(${primary}, primary_wallet),
         embedded_wallet = ${embedded},
         embedded_wallet_chain = ${classification.embeddedEoa?.chainType ?? null},
         embedded_wallet_client_type = ${classification.embeddedEoa?.clientType ?? null},
-        canonical_solana_wallet = COALESCE(${canonicalSolana}, canonical_solana_wallet),
-        operational_solana_wallet = COALESCE(${operationalSolana}, operational_solana_wallet),
-        solana_wallet = COALESCE(${canonicalSolana}, solana_wallet),
         csw_address = COALESCE(${canonical}, csw_address),
         updated_at = NOW()
       WHERE privy_user_id = ${privyUserId}
@@ -847,30 +865,22 @@ async function insertOrUpdateProfile(params: {
       INSERT INTO profiles (
         email,
         privy_user_id,
-        primary_smart_wallet,
         primary_embedded_eoa,
         primary_wallet,
         embedded_wallet,
         embedded_wallet_chain,
         embedded_wallet_client_type,
-        canonical_solana_wallet,
-        operational_solana_wallet,
-        solana_wallet,
         csw_address,
         updated_at
       )
       VALUES (
         ${email},
         ${privyUserId},
-        ${canonical},
         ${embedded},
         ${primary},
         ${embedded},
         ${classification.embeddedEoa?.chainType ?? null},
         ${classification.embeddedEoa?.clientType ?? null},
-        ${canonicalSolana},
-        ${operationalSolana},
-        ${canonicalSolana},
         ${canonical},
         NOW()
       )
@@ -878,15 +888,11 @@ async function insertOrUpdateProfile(params: {
       SET
         email = COALESCE(profiles.email, EXCLUDED.email),
         privy_user_id = COALESCE(profiles.privy_user_id, EXCLUDED.privy_user_id),
-        primary_smart_wallet = COALESCE(EXCLUDED.primary_smart_wallet, profiles.primary_smart_wallet),
         primary_embedded_eoa = EXCLUDED.primary_embedded_eoa,
         primary_wallet = COALESCE(EXCLUDED.primary_wallet, profiles.primary_wallet),
         embedded_wallet = EXCLUDED.embedded_wallet,
         embedded_wallet_chain = EXCLUDED.embedded_wallet_chain,
         embedded_wallet_client_type = EXCLUDED.embedded_wallet_client_type,
-        canonical_solana_wallet = COALESCE(EXCLUDED.canonical_solana_wallet, profiles.canonical_solana_wallet),
-        operational_solana_wallet = COALESCE(EXCLUDED.operational_solana_wallet, profiles.operational_solana_wallet),
-        solana_wallet = COALESCE(EXCLUDED.solana_wallet, profiles.solana_wallet),
         csw_address = COALESCE(EXCLUDED.csw_address, profiles.csw_address),
         updated_at = NOW()
       RETURNING id;
@@ -982,19 +988,6 @@ export async function syncUserWallets(db: Db, privyUser: PrivyUserLike): Promise
     const primaryAddress = effectiveClassification.primaryWalletAddress ?? null
 
     for (const wallet of effectiveClassification.allWallets) {
-      await txDb.sql`
-        INSERT INTO wallets (address, chain, wallet_type, provider)
-        VALUES (${wallet.address}, ${wallet.chain}, ${wallet.walletType}, ${wallet.provider})
-        ON CONFLICT (address) DO UPDATE
-        SET
-          chain = COALESCE(EXCLUDED.chain, wallets.chain),
-          wallet_type = COALESCE(EXCLUDED.wallet_type, wallets.wallet_type),
-          provider = CASE
-            WHEN wallets.provider = 'unknown' THEN EXCLUDED.provider
-            ELSE wallets.provider
-          END;
-      `
-
       const metadata = {
         clientType: wallet.clientType,
         syncedFrom: 'privy',
@@ -1004,6 +997,9 @@ export async function syncUserWallets(db: Db, privyUser: PrivyUserLike): Promise
         INSERT INTO profile_wallets (
           profile_id,
           address,
+          chain,
+          wallet_type,
+          provider,
           is_primary,
           is_canonical_smart_wallet,
           is_embedded_eoa,
@@ -1016,6 +1012,9 @@ export async function syncUserWallets(db: Db, privyUser: PrivyUserLike): Promise
         VALUES (
           ${resolvedProfileId},
           ${wallet.address},
+          ${wallet.chain},
+          ${wallet.walletType},
+          ${wallet.provider},
           ${Boolean(primaryAddress && normalizeLower(wallet.address) === normalizeLower(primaryAddress))},
           ${Boolean(canonicalAddress && normalizeLower(wallet.address) === normalizeLower(canonicalAddress))},
           ${Boolean(embeddedAddress && normalizeLower(wallet.address) === normalizeLower(embeddedAddress))},
@@ -1027,6 +1026,12 @@ export async function syncUserWallets(db: Db, privyUser: PrivyUserLike): Promise
         )
         ON CONFLICT (profile_id, address) DO UPDATE
         SET
+          chain = EXCLUDED.chain,
+          wallet_type = EXCLUDED.wallet_type,
+          provider = CASE
+            WHEN profile_wallets.provider = 'unknown' THEN EXCLUDED.provider
+            ELSE profile_wallets.provider
+          END,
           is_primary = EXCLUDED.is_primary,
           is_canonical_smart_wallet = EXCLUDED.is_canonical_smart_wallet,
           is_embedded_eoa = EXCLUDED.is_embedded_eoa,

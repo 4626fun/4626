@@ -58,13 +58,12 @@ async function lookupAdminContextByWallet(address: string): Promise<AdminLookup>
         primary_wallet,
         embedded_wallet,
         csw_address,
-        primary_smart_wallet,
         primary_embedded_eoa
       FROM profiles
       WHERE LOWER(primary_wallet) = LOWER(${address})
          OR LOWER(embedded_wallet) = LOWER(${address})
          OR LOWER(csw_address) = LOWER(${address})
-         OR LOWER(primary_smart_wallet) = LOWER(${address})
+         OR LOWER(csw_address) = LOWER(${address})
          OR LOWER(primary_embedded_eoa) = LOWER(${address})
       LIMIT 1;
     `
@@ -75,7 +74,6 @@ async function lookupAdminContextByWallet(address: string): Promise<AdminLookup>
           primary_wallet?: unknown
           embedded_wallet?: unknown
           csw_address?: unknown
-          primary_smart_wallet?: unknown
           primary_embedded_eoa?: unknown
         }
       | undefined
@@ -86,7 +84,7 @@ async function lookupAdminContextByWallet(address: string): Promise<AdminLookup>
     addAddress(row1?.primary_wallet)
     addAddress(row1?.embedded_wallet)
     addAddress(row1?.csw_address)
-    addAddress(row1?.primary_smart_wallet)
+    addAddress(row1?.csw_address)
     addAddress(row1?.primary_embedded_eoa)
 
     // Canonical wallet mapping table (profile_wallets -> profiles).
@@ -110,7 +108,6 @@ async function lookupAdminContextByWallet(address: string): Promise<AdminLookup>
           p.primary_wallet,
           p.embedded_wallet,
           p.csw_address,
-          p.primary_smart_wallet,
           p.primary_embedded_eoa,
           pw.address
         FROM profiles p
@@ -121,21 +118,10 @@ async function lookupAdminContextByWallet(address: string): Promise<AdminLookup>
         addAddress((row as any)?.primary_wallet)
         addAddress((row as any)?.embedded_wallet)
         addAddress((row as any)?.csw_address)
-        addAddress((row as any)?.primary_smart_wallet)
+        addAddress((row as any)?.csw_address)
         addAddress((row as any)?.primary_embedded_eoa)
         addAddress((row as any)?.address)
       }
-    }
-
-    // Check creator_wallets for compatibility with wallet-email admin mappings.
-    const r2 = await db.sql`
-      SELECT email FROM creator_wallets
-      WHERE LOWER(wallet_address) = LOWER(${address})
-      LIMIT 1;
-    `
-    const email2 = r2?.rows?.[0]?.email
-    if (!email && typeof email2 === 'string' && email2.length > 0) {
-      email = email2
     }
 
     return { email, relatedAddresses: Array.from(related) }

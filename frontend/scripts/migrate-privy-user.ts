@@ -24,7 +24,6 @@ type ProfileRow = {
   primary_wallet: string | null
   embedded_wallet: string | null
   primary_embedded_eoa: string | null
-  primary_smart_wallet: string | null
   csw_address: string | null
   base_sub_account: string | null
 }
@@ -116,7 +115,6 @@ async function getProfileByPrivyUserId(db: Db, privyUserId: string): Promise<Pro
       primary_wallet,
       embedded_wallet,
       primary_embedded_eoa,
-      primary_smart_wallet,
       csw_address,
       base_sub_account
     FROM profiles
@@ -130,7 +128,6 @@ async function getProfileByPrivyUserId(db: Db, privyUserId: string): Promise<Pro
     primary_wallet: normalizeNullableString(row.primary_wallet),
     embedded_wallet: normalizeNullableString(row.embedded_wallet),
     primary_embedded_eoa: normalizeNullableString(row.primary_embedded_eoa),
-    primary_smart_wallet: normalizeNullableString(row.primary_smart_wallet),
     csw_address: normalizeNullableString(row.csw_address),
     base_sub_account: normalizeNullableString(row.base_sub_account),
   }))
@@ -172,19 +169,6 @@ async function enforceCanonicalSmartWallet(db: Db, profileId: number, canonicalA
   if (!canonical) return
 
   await db.sql`
-    INSERT INTO wallets (address, chain, wallet_type, provider)
-    VALUES (${canonical}, ${'evm'}, ${'smart_wallet'}, ${'unknown'})
-    ON CONFLICT (address) DO UPDATE
-    SET
-      chain = COALESCE(EXCLUDED.chain, wallets.chain),
-      wallet_type = COALESCE(EXCLUDED.wallet_type, wallets.wallet_type),
-      provider = CASE
-        WHEN wallets.provider = ${'unknown'} THEN EXCLUDED.provider
-        ELSE wallets.provider
-      END;
-  `
-
-  await db.sql`
     UPDATE profile_wallets
     SET
       is_canonical_smart_wallet = false,
@@ -196,15 +180,24 @@ async function enforceCanonicalSmartWallet(db: Db, profileId: number, canonicalA
     INSERT INTO profile_wallets (
       profile_id,
       address,
+      chain,
+      wallet_type,
+      provider,
       is_primary,
       is_canonical_smart_wallet,
       is_embedded_eoa,
       verified_at,
       updated_at
     )
-    VALUES (${profileId}, ${canonical}, false, true, false, NOW(), NOW())
+    VALUES (${profileId}, ${canonical}, 'evm', 'smart_wallet', 'unknown', false, true, false, NOW(), NOW())
     ON CONFLICT (profile_id, address) DO UPDATE
     SET
+      chain = COALESCE(EXCLUDED.chain, profile_wallets.chain),
+      wallet_type = COALESCE(EXCLUDED.wallet_type, profile_wallets.wallet_type),
+      provider = CASE
+        WHEN profile_wallets.provider = 'unknown' THEN EXCLUDED.provider
+        ELSE profile_wallets.provider
+      END,
       is_canonical_smart_wallet = true,
       verified_at = NOW(),
       updated_at = NOW();
@@ -213,7 +206,6 @@ async function enforceCanonicalSmartWallet(db: Db, profileId: number, canonicalA
   await db.sql`
     UPDATE profiles
     SET
-      primary_smart_wallet = ${canonical},
       csw_address = ${canonical},
       updated_at = NOW()
     WHERE id = ${profileId};
@@ -312,7 +304,7 @@ async function main(): Promise<void> {
   const beforeRoles = await getWalletRoleSummary(db, targetProfile.id)
   const canonicalFromRole = await getCanonicalSmartWalletRole(db, targetProfile.id)
   const canonicalFromProfile =
-    normalizeAddress(targetProfile.primary_smart_wallet ?? '') ??
+    normalizeAddress(targetProfile.csw_address ?? '') ??
     normalizeAddress(targetProfile.csw_address ?? '') ??
     normalizeAddress(targetProfile.base_sub_account ?? '')
   const preservedCanonicalSmartWallet = !allowCanonicalReplacement ? canonicalFromRole ?? canonicalFromProfile : null
@@ -347,7 +339,7 @@ async function main(): Promise<void> {
       primaryWallet: targetProfile.primary_wallet,
       embeddedWallet: targetProfile.embedded_wallet,
       primaryEmbeddedEoa: targetProfile.primary_embedded_eoa,
-      primarySmartWallet: targetProfile.primary_smart_wallet,
+      primarySmartWallet: targetProfile.csw_address,
       cswAddress: targetProfile.csw_address,
       baseSubAccount: targetProfile.base_sub_account,
       walletRoleSummary: beforeRoles,
@@ -377,7 +369,6 @@ async function main(): Promise<void> {
         embedded_wallet_chain = NULL,
         embedded_wallet_client_type = NULL,
         primary_embedded_eoa = NULL,
-        primary_smart_wallet = NULL,
         csw_address = NULL,
         base_sub_account = NULL,
         updated_at = NOW()

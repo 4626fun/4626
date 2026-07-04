@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { getDb } from '../db/postgres.js'
 import { ensureChatSchema } from '../db/schemaBootstrap.js'
 import { shouldSampleEvent } from '../infra/telemetrySampling.js'
-import { getCachedEthosScoreByAddress } from './ethosClient.js'
+import { getCachedEthosProfileByUserkey, getCachedEthosScoreByAddress } from './ethosClient.js'
 import {
   ethosCanonicalReadEnabled,
   getCanonicalEthosScoresByUserkeys,
@@ -30,6 +30,12 @@ function isAddress(value: string): value is `0x${string}` {
 export function normalizeChatAddress(value: unknown): `0x${string}` | null {
   const normalized = typeof value === 'string' ? value.trim().toLowerCase() : ''
   return isAddress(normalized) ? (normalized as `0x${string}`) : null
+}
+
+export function formatShortChatAddress(address: string): string {
+  const normalized = address.trim().toLowerCase()
+  if (normalized.length < 10) return normalized
+  return `${normalized.slice(0, 6)}…${normalized.slice(-4)}`
 }
 
 export async function recordPresenceHeartbeat(params: {
@@ -101,10 +107,26 @@ export async function recordPresenceHeartbeat(params: {
     }
   }
 
+  const ethosUserkey = `address:${params.address}`
+  let profileDisplayName: string | null = null
+  let profileAvatarUrl: string | null = null
+  try {
+    const profile = await getCachedEthosProfileByUserkey(ethosUserkey)
+    profileDisplayName = profile?.displayName ?? profile?.username ?? null
+    profileAvatarUrl = profile?.avatarUrl ?? null
+  } catch {
+    // Non-fatal: score + short-address fallback still populate the directory row.
+  }
+
+  const fallbackDisplayName = formatShortChatAddress(params.address)
+  const directoryDisplayName = profileDisplayName ?? fallbackDisplayName
+
   await db.sql`
-    INSERT INTO chat_directory_profiles (
+    INSERT INTO wallet_directory (
       canonical_wallet,
       ethos_userkey,
+      display_name,
+      avatar_url,
       ethos_score,
       ethos_level,
       ethos_score_updated_at,
@@ -112,7 +134,9 @@ export async function recordPresenceHeartbeat(params: {
       updated_at
     ) VALUES (
       ${params.address},
-      ${`address:${params.address}`},
+      ${ethosUserkey},
+      ${directoryDisplayName},
+      ${profileAvatarUrl},
       ${score?.score ?? null},
       ${score?.level ?? null},
       ${score ? new Date() : null},
@@ -120,10 +144,22 @@ export async function recordPresenceHeartbeat(params: {
       NOW()
     )
     ON CONFLICT (canonical_wallet) DO UPDATE SET
-      ethos_userkey = COALESCE(chat_directory_profiles.ethos_userkey, EXCLUDED.ethos_userkey),
-      ethos_score = COALESCE(EXCLUDED.ethos_score, chat_directory_profiles.ethos_score),
-      ethos_level = COALESCE(EXCLUDED.ethos_level, chat_directory_profiles.ethos_level),
-      ethos_score_updated_at = COALESCE(EXCLUDED.ethos_score_updated_at, chat_directory_profiles.ethos_score_updated_at),
+      ethos_userkey = COALESCE(wallet_directory.ethos_userkey, EXCLUDED.ethos_userkey),
+      display_name = CASE
+        WHEN ${profileDisplayName}::text IS NOT NULL
+          AND (
+            wallet_directory.display_name IS NULL
+            OR wallet_directory.display_name = ${fallbackDisplayName}
+          )
+          THEN ${profileDisplayName}
+        WHEN wallet_directory.display_name IS NULL
+          THEN COALESCE(${profileDisplayName}, ${fallbackDisplayName})
+        ELSE wallet_directory.display_name
+      END,
+      avatar_url = COALESCE(wallet_directory.avatar_url, EXCLUDED.avatar_url),
+      ethos_score = COALESCE(EXCLUDED.ethos_score, wallet_directory.ethos_score),
+      ethos_level = COALESCE(EXCLUDED.ethos_level, wallet_directory.ethos_level),
+      ethos_score_updated_at = COALESCE(EXCLUDED.ethos_score_updated_at, wallet_directory.ethos_score_updated_at),
       last_seen_at = NOW(),
       updated_at = NOW();
   `
@@ -161,7 +197,7 @@ export async function listAvailableChatUsers(params: {
       d.ethos_score,
       d.ethos_level
     FROM latest_presence p
-    LEFT JOIN chat_directory_profiles d ON d.canonical_wallet = p.canonical_wallet
+    LEFT JOIN v_wallet_directory d ON d.canonical_wallet = p.canonical_wallet
     ORDER BY
       CASE WHEN p.available_until > NOW() THEN 0 ELSE 1 END,
       d.ethos_score DESC NULLS LAST,

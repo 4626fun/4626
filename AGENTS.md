@@ -228,9 +228,11 @@ All docs, UI copy, commit messages, and code comments that reference 4626's valu
 - **`tradeFeeCollector`** — destination domain for ShareOFT/hook **trade-fee** routing (native ShareOFT `SwapOnly -> non-SwapOnly` plane and the optional hook fee plane).
 - **`creatorCoinPayoutRecipient`** — CreatorCoin **external earnings** routing (`payoutRecipient`). In router mode this points to per-vault `PayoutRouter`. **Share-holder-biased split:** non-creator-coin inputs (WETH, ZORA, protocol rewards) swap to ShareOFT → `CreatorOVaultWrapper.unwrap` → vault shares queued on `VaultShareBurnStream`; **direct creator-coin payouts** use `vault.deposit(creatorCoin)` unchanged. Deploy must whitelist the router on the wrapper for atomic post-swap unwrap. Non-CC paths use on-chain `swapPathToShareOFT` with keeper/API `minOut` slippage guards — no legacy `swapPathToCreator` / `minCreatorOut` shims. ShareOFT market buys may incur OFT trade fees; unwrap/deposit paths are untaxed. When `PayoutRouter` constructor immutables change, regenerate deploy bytecode manifests and re-seed the on-chain bytecode store before production deploys.
 - **`creatorTreasury`** — destination for the **creator ongoing lane** from `CreatorGaugeController.creatorShareBps`. This lane is disabled by default (`creatorShareBps = 0`). If enabled, `creatorTreasury != 0x0` is enforced by `setFeeSplit(...)` / `setCreatorTreasury(...)`.
-- **`jackpotCustodian`** — the gauge (`CreatorGaugeController.jackpotReserve`, vault-share units). Gauge custodies reserves but does not select winners.
-- **`jackpotPayoutAuthority`** — `CreatorLotteryManager`. Manager selects winners and calls `payJackpot(...)` into the gauge. Custody vs authority must always be split in docs and code.
-- **Voter/protocol branch** — `protocolShareBps` from gauge split. Preferred route: `VoterRewardsDistributor.notifyRewards(...)`. Fallbacks: protocol treasury, then jackpot fallback. Do not call this "protocol share = treasury only".
+- **Gauge buy-fee split (immutable BPS)** — 69% ■ ShareOFT → `jackpotCustodian`; 21.39% ■ ShareOFT → voters (`protocolShareBps`); 9.61% ▢ vault shares burned (`burnShareBps`); creator ongoing lane 0% (`creatorShareBps = 0`).
+- **`jackpotCustodian`** — the gauge (`CreatorGaugeController.jackpotReserve`, ShareOFT ■ units). Gauge custodies lottery reserves but does not select winners.
+- **`jackpotPayoutAuthority`** — `CreatorLotteryManager`. Manager selects winners and calls `payJackpot(...)`; winners receive ShareOFT (■), not vault shares. Custody vs authority must always be split in docs and code.
+- **Voter/protocol branch** — `protocolShareBps` (21.39%) paid as ShareOFT (■). Preferred route: `VoterRewardsDistributor.notifyRewards(...)`. Fallbacks: protocol treasury, then jackpot fallback. Do not call this "protocol share = treasury only".
+- **Burn branch** — `burnShareBps` (9.61%) unwraps to vault shares (▢) burned for PPS accrual.
 
 **Naming policy:**
 

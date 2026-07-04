@@ -8,10 +8,8 @@ import {
   RATE_LIMITS,
   checkDurableRateLimit,
   rateLimitKey,
-  getOrCreateCreatorXmtpAgent,
   enableCswAgent,
 } from '@4626/server-core'
-
 
 import { resolveCanonicalSmartWalletAddress } from '../../../../../server/_lib/wallet/canonicalWalletResolver.js'
 
@@ -94,10 +92,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         listedPublicly,
       })
     } else {
-      // EOA mode: generate a new keypair (existing flow)
-      row = await getOrCreateCreatorXmtpAgent({
-        creatorAddress: creator as `0x${string}`,
-        listedPublicly,
+      return res.status(400).json({
+        success: false,
+        error: 'CSW agent required. Set agentType=csw with cswAddress and privyWalletId. Legacy EOA XMTP agents are retired.',
       })
     }
 

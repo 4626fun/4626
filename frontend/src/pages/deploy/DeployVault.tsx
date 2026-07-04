@@ -87,6 +87,7 @@ import {
   parseCallValue,
   type FinalizePhase2Params,
 } from '@/lib/deploy/finalizeShareBridgeFee'
+import type { ShareBridgeReadClient } from '@/lib/deploy/shareBridgeReadClient'
 import { planCreatorCoinPolicyControllerOwnershipGrant } from '@/lib/deploy/creatorCoinOwnership'
 import {
   mergePipeAFinalizeParams,
@@ -97,6 +98,10 @@ import {
 } from '@/lib/deploy/phase1ModuleDeploy'
 import { assertCreatorOvaultModuleStorageCompatible } from '@/lib/deploy/ovaultModuleIdentity'
 import { ShareBridgeFinalizeWiringPanel } from '@/components/deploy/ShareBridgeFinalizeWiringPanel'
+import {
+  isRemoteRobinhoodShareMeshEnabled,
+  RemoteShareBridgePanel,
+} from '@/components/deploy/RemoteShareBridgePanel'
 import { useAccountMe } from '@/hooks/useAccountMe'
 import { useCreatorAllowlist, useDeploymentTracker } from '@/hooks'
 import { DeploymentSuccess, AlreadyDeployedBanner } from '@/components/deploy/DeploymentSuccess'
@@ -125,7 +130,7 @@ import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { logger } from '@/lib/observability/logger'
 import { buildBaseAppProlinkUrl, encodeSingleCallSendCallsProlink } from '@/lib/base/prolink'
-import { useZoraCoin, useZoraProfile } from '@/lib/zora/hooks'
+import { useZoraCoin, useAccountZoraProfile, useZoraProfile } from '@/lib/zora/hooks'
 import { buildZoraHandoffUrl } from '@/lib/zora/referrals'
 import { resolveCreatorIdentity } from '@/lib/identity/creatorIdentity'
 import { ensureProviderOnBase } from '@/lib/wallet/safeSwitchToBase'
@@ -6777,6 +6782,13 @@ function DeployVaultBatcher({
               finalizeParams={pipeAFinalizeParams}
               wrapperDeployed={pipeAWrapperDeployed}
             />
+            <RemoteShareBridgePanel
+              enabled={isRemoteRobinhoodShareMeshEnabled()}
+              basePublicClient={publicClient as ShareBridgeReadClient | undefined}
+              creatorToken={creatorToken ?? null}
+              baseShareOft={expected?.shareOFT ?? null}
+              hubGaugeReceiver={expected?.gaugeController ?? null}
+            />
             <MeshPreflightPanel
               enabled={ovaultMeshEnabledForSession}
               statusBadge={<PhaseProgressBadge state={timelineProgressState('phase2bOvaultMesh')} />}
@@ -8324,7 +8336,13 @@ function DeployVaultMain() {
 
 
   // Detect "your" creator coin + smart wallet from your Zora profile and prefill inputs once.
-  const myProfileQuery = useZoraProfile(address)
+  const myProfileQuery = useAccountZoraProfile({
+    zoraHandle: accountMe.me?.accountSignals?.zoraHandle,
+    canonicalCswAddress: accountMe.me?.accountSignals?.canonicalCswAddress,
+    externalEoaAddress: address ?? undefined,
+    embeddedEoaAddress: privyCrossAppEmbeddedEoaAddress ?? undefined,
+    fallbackAddress: address ?? undefined,
+  })
   const myProfile = myProfileQuery.data
   
   // Also query Privy smart wallet's Zora profile (for Privy-first flow)

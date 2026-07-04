@@ -6,6 +6,7 @@ import {
   getDb,
 } from '@4626/server-core'
 
+import { getWaitlistMemberCount } from '../../../server/_lib/onboarding/waitlistLeaderboard.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 
 /**
@@ -196,13 +197,7 @@ export default async function handler(req: any, res: any) {
 
     await ensureWaitlistSchema(db as any)
 
-    const countResult = await db.sql`
-      SELECT COUNT(*)::int AS count
-      FROM profiles
-      WHERE email IS NOT NULL;
-    `
-    const signedUpCountRaw = Number(countResult?.rows?.[0]?.count ?? 0)
-    const signedUpCount = Number.isFinite(signedUpCountRaw) ? Math.max(0, Math.floor(signedUpCountRaw)) : 0
+    const signedUpCount = await getWaitlistMemberCount(db as any)
     const capacity = resolveCapacity(signedUpCount)
     const spotsRemaining = Math.max(0, capacity - signedUpCount)
     const avatars = await fetchRecentMemberAvatars(db)

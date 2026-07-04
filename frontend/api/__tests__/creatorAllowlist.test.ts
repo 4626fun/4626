@@ -7,7 +7,6 @@ const {
   isDbConfiguredMock,
   getDbMock,
   ensureCreatorAccessSchemaMock,
-  ensureCreatorWalletsSchemaMock,
   isSupabaseAdminConfiguredMock,
   getSupabaseAdminMock,
   resolveCoinPartiesMock,
@@ -15,7 +14,6 @@ const {
   isDbConfiguredMock: vi.fn(() => false),
   getDbMock: vi.fn(),
   ensureCreatorAccessSchemaMock: vi.fn(async () => {}),
-  ensureCreatorWalletsSchemaMock: vi.fn(async () => {}),
   isSupabaseAdminConfiguredMock: vi.fn(() => false),
   getSupabaseAdminMock: vi.fn(),
   resolveCoinPartiesMock: vi.fn(async () => ({ creator: null, payoutRecipient: null })),
@@ -32,10 +30,6 @@ vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
   getDbInitError: vi.fn(() => null),
   isDbConfigured: isDbConfiguredMock,
-}))
-
-vi.mock('../../server/_lib/wallet/creatorWallets.js', () => ({
-  ensureCreatorWalletsSchema: ensureCreatorWalletsSchemaMock,
 }))
 
 vi.mock('../../server/_lib/onchain/coinParties.js', () => ({
@@ -106,9 +100,6 @@ describe('/api/creator-allowlist', () => {
       sql: vi.fn(async (strings: TemplateStringsArray) => {
         const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
         if (text.includes('from allowlist')) return { rows: [] }
-        if (text.includes('from creator_wallets')) return { rows: [] }
-        if (text.includes('from profiles') && text.includes('lower(primary_wallet)')) return { rows: [] }
-        if (text.includes('join profile_wallets')) return { rows: [{ id: 7 }] }
         return { rows: [] }
       }),
     }
@@ -135,10 +126,6 @@ describe('/api/creator-allowlist', () => {
     getSupabaseAdminMock.mockReturnValue(
       createSupabaseMock(async (state) => {
         if (state.table === 'allowlist') return { data: [], error: null }
-        if (state.table === 'creator_wallets') return { data: [], error: null }
-        if (state.table === 'profiles' && typeof state.filters.or === 'string') return { data: [], error: null }
-        if (state.table === 'profile_wallets') return { data: [{ profile_id: 1 }], error: null }
-        if (state.table === 'profiles' && Array.isArray(state.filters['in:id'])) return { data: [{ id: 1 }], error: null }
         return { data: [], error: null }
       }),
     )
@@ -164,9 +151,6 @@ describe('/api/creator-allowlist', () => {
     getSupabaseAdminMock.mockReturnValue(
       createSupabaseMock(async (state) => {
         if (state.table === 'allowlist') return { data: [], error: { message: 'temporary_error' } }
-        if (state.table === 'creator_wallets') return { data: [], error: null }
-        if (state.table === 'profiles') return { data: [], error: null }
-        if (state.table === 'profile_wallets') return { data: [], error: null }
         return { data: [], error: null }
       }),
     )

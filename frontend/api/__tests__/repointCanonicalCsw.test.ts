@@ -16,7 +16,6 @@ describe('repointCanonicalCswOnProfile', () => {
               {
                 id: 1,
                 csw_address: '0x6c0ea422aa7bb7e1e17c5257f7023c8f05ddf9b3',
-                primary_smart_wallet: '0x6c0ea422aa7bb7e1e17c5257f7023c8f05ddf9b3',
                 primary_embedded_eoa: '0xceca13f2686ed061c57620ecdf67e1b8c0f285e9',
                 embedded_wallet: '0xceca13f2686ed061c57620ecdf67e1b8c0f285e9',
                 base_sub_account: '0x6c0ea422aa7bb7e1e17c5257f7023c8f05ddf9b3',

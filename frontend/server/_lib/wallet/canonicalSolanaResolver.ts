@@ -10,33 +10,44 @@ function isValidSolanaAddress(value: unknown): value is string {
   return /^[1-9A-HJ-NP-Za-km-z]+$/.test(s)
 }
 
+async function readCanonicalSolanaWallet(db: Db, profileId: number): Promise<string | null> {
+  const result = await db.sql`
+    SELECT pw.address
+    FROM profile_wallets pw
+    WHERE pw.profile_id = ${profileId}
+      AND pw.is_canonical_solana_wallet = true
+      AND LOWER(COALESCE(pw.chain, '')) = 'solana'
+    ORDER BY pw.updated_at DESC NULLS LAST, pw.created_at DESC NULLS LAST
+    LIMIT 1;
+  `
+  const address = result?.rows?.[0]?.address
+  return isValidSolanaAddress(address) ? address.trim() : null
+}
+
+async function readOperationalSolanaWallet(db: Db, profileId: number): Promise<string | null> {
+  const result = await db.sql`
+    SELECT pw.address
+    FROM profile_wallets pw
+    WHERE pw.profile_id = ${profileId}
+      AND pw.is_operational_solana_wallet = true
+      AND LOWER(COALESCE(pw.chain, '')) = 'solana'
+    ORDER BY pw.updated_at DESC NULLS LAST, pw.created_at DESC NULLS LAST
+    LIMIT 1;
+  `
+  const address = result?.rows?.[0]?.address
+  return isValidSolanaAddress(address) ? address.trim() : null
+}
+
 export async function resolveCanonicalSolanaWalletByProfileId(db: Db, profileId: number): Promise<string | null> {
   if (!Number.isFinite(profileId) || profileId <= 0) return null
   await ensureCanonicalWalletsSchema(db)
+  return readCanonicalSolanaWallet(db, profileId)
+}
 
-  const canonicalByRole = await db.sql`
-    SELECT pw.address
-    FROM profile_wallets pw
-    LEFT JOIN wallets w ON LOWER(w.address) = LOWER(pw.address)
-    WHERE pw.profile_id = ${profileId}
-      AND pw.is_canonical_solana_wallet = true
-      AND (LOWER(COALESCE(w.chain, '')) = 'solana' OR w.chain IS NULL)
-    LIMIT 1;
-  `
-  const canonicalRoleAddress = canonicalByRole?.rows?.[0]?.address
-  if (isValidSolanaAddress(canonicalRoleAddress)) return canonicalRoleAddress.trim()
-
-  const profileFallback = await db.sql`
-    SELECT canonical_solana_wallet, solana_wallet
-    FROM profiles
-    WHERE id = ${profileId}
-    LIMIT 1;
-  `
-  const canonicalColumn = profileFallback?.rows?.[0]?.canonical_solana_wallet
-  if (isValidSolanaAddress(canonicalColumn)) return canonicalColumn.trim()
-  const compatibilityColumn = profileFallback?.rows?.[0]?.solana_wallet
-  if (isValidSolanaAddress(compatibilityColumn)) return compatibilityColumn.trim()
-  return null
+export async function resolveOperationalSolanaWalletByProfileId(db: Db, profileId: number): Promise<string | null> {
+  if (!Number.isFinite(profileId) || profileId <= 0) return null
+  await ensureCanonicalWalletsSchema(db)
+  return readOperationalSolanaWallet(db, profileId)
 }
 
 export async function resolveCanonicalSolanaWalletByPrincipalAddress(address: string): Promise<string | null> {
@@ -54,12 +65,12 @@ export async function resolveCanonicalSolanaWalletByPrincipalAddress(address: st
        OR LOWER(p.embedded_wallet) = ${principal}
        OR LOWER(p.csw_address) = ${principal}
        OR LOWER(p.base_sub_account) = ${principal}
-       OR LOWER(p.primary_smart_wallet) = ${principal}
        OR LOWER(p.primary_embedded_eoa) = ${principal}
        OR p.id IN (
          SELECT pw.profile_id
          FROM profile_wallets pw
          WHERE LOWER(pw.address) = ${principal}
+            OR pw.address = ${principal}
        )
     ORDER BY
       CASE
@@ -75,13 +86,10 @@ export async function resolveCanonicalSolanaWalletByPrincipalAddress(address: st
         WHEN EXISTS (
           SELECT 1
           FROM profile_wallets pw
-          LEFT JOIN wallets w ON LOWER(w.address) = LOWER(pw.address)
           WHERE pw.profile_id = p.id
             AND pw.is_canonical_solana_wallet = true
-            AND (LOWER(COALESCE(w.chain, '')) = 'solana' OR w.chain IS NULL)
+            AND LOWER(COALESCE(pw.chain, '')) = 'solana'
         ) THEN 0
-        WHEN p.canonical_solana_wallet IS NOT NULL AND LENGTH(TRIM(p.canonical_solana_wallet)) > 0 THEN 0
-        WHEN p.solana_wallet IS NOT NULL AND LENGTH(TRIM(p.solana_wallet)) > 0 THEN 0
         ELSE 1
       END ASC,
       p.updated_at DESC NULLS LAST,
@@ -93,4 +101,3 @@ export async function resolveCanonicalSolanaWalletByPrincipalAddress(address: st
   if (!Number.isFinite(profileId) || profileId <= 0) return null
   return resolveCanonicalSolanaWalletByProfileId(db, profileId)
 }
-

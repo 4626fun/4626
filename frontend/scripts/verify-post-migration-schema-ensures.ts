@@ -18,7 +18,6 @@ import {
   ensureCreatorAccessSchema,
   ensureTelegramTradingSchema,
   ensureChatSchema,
-  ensureWorkspaceSchema,
   ensureImageGenerationSchema,
 } from '../server/_lib/db/schemaBootstrap.js';
 
@@ -105,7 +104,6 @@ async function main() {
     { name: 'ensureCreatorAccessSchema', fn: () => ensureCreatorAccessSchema(db as any) },
     { name: 'ensureTelegramTradingSchema', fn: () => ensureTelegramTradingSchema(db as any) },
     { name: 'ensureChatSchema', fn: () => ensureChatSchema(db as any) },
-    { name: 'ensureWorkspaceSchema', fn: () => ensureWorkspaceSchema(db as any) },
     { name: 'ensureImageGenerationSchema', fn: () => ensureImageGenerationSchema(db as any) },
   ];
 

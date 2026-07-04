@@ -7,7 +7,7 @@ const {
 } = vi.hoisted(() => ({
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
   resolveCanonicalCswMock: vi.fn(),
-  fetchZoraProfileMock: vi.fn(async () => null),
+  fetchZoraProfileMock: vi.fn(async (_seed: string) => null as any),
 }))
 
 vi.mock('../onboarding/waitlistSchema.js', () => ({
@@ -50,13 +50,14 @@ function createDbWithZoraSignals(seed: {
     sql: vi.fn(async (strings: TemplateStringsArray, ...values: any[]) => {
       const query = normalizeSql(strings)
 
-      if (query.includes("to_regclass('public.accounts') is not null as has_accounts")) {
+      if (query.includes("to_regclass('public.profiles') is not null as has_profiles") && query.includes('has_email_verified')) {
         return {
           rows: [
             {
-              has_accounts: true,
+              has_profiles: true,
               has_account_linked_methods: true,
               has_account_zora_signals: true,
+              has_email_verified: true,
               has_canonical_csw_address: true,
             },
           ],
@@ -129,5 +130,48 @@ describe('resolveAndPersistZoraSignals', () => {
     expect(resolveCanonicalCswMock).toHaveBeenCalledTimes(1)
     expect(result.canonicalCswAddress).toBe('0x00000000000000000000000000000000000000bb')
     expect(db.readZoraRow().canonical_csw_address).toBe('0x00000000000000000000000000000000000000bb')
+  })
+
+  it('resolves Zora profile from canonical CSW without querying embedded EOA', async () => {
+    const canonicalCsw = '0x00000000000000000000000000000000000000aa'
+    const embeddedEoa = '0x00000000000000000000000000000000000000bb'
+
+    resolveCanonicalCswMock.mockResolvedValue({
+      profileId: 42,
+      canonicalCswAddress: canonicalCsw,
+      canonicalSource: 'wallet_sync',
+    })
+
+    fetchZoraProfileMock.mockImplementation(async (seed: string) => {
+      if (seed.toLowerCase() === canonicalCsw) return { handle: 'from-csw' }
+      return null
+    })
+
+    const db = createDbWithZoraSignals({
+      privyUserId: 'did:privy:test-user',
+      canonicalCswAddress: canonicalCsw,
+    })
+
+    const result = await resolveAndPersistZoraSignals({
+      db: db as any,
+      privyUserId: 'did:privy:test-user',
+      privyUser: {
+        id: 'did:privy:test-user',
+        linkedAccounts: [
+          {
+            type: 'wallet',
+            address: embeddedEoa,
+            walletClientType: 'privy',
+            chainType: 'ethereum',
+          },
+        ],
+      } as any,
+      forceRefresh: true,
+    })
+
+    expect(fetchZoraProfileMock).toHaveBeenCalledTimes(1)
+    expect(fetchZoraProfileMock).toHaveBeenCalledWith(canonicalCsw)
+    expect(fetchZoraProfileMock).not.toHaveBeenCalledWith(embeddedEoa)
+    expect(result.zoraHandle).toBe('from-csw')
   })
 })

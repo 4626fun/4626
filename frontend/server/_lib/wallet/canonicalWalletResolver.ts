@@ -42,7 +42,6 @@ type ProfileWalletAuthorityRow = {
   id?: unknown
   primary_wallet?: unknown
   primary_embedded_eoa?: unknown
-  primary_smart_wallet?: unknown
   csw_address?: unknown
   base_sub_account?: unknown
   canonical_wallet?: unknown
@@ -54,7 +53,7 @@ function deriveCanonicalSmartWallet(row: ProfileWalletAuthorityRow): string | nu
 
   // Legacy fallback for profiles missing an explicit canonical row.
   // Guardrail: never treat an EOA owner slot as canonical CSW.
-  const fallback = normalizeLower(row.primary_smart_wallet || row.csw_address)
+  const fallback = normalizeLower(row.csw_address)
   if (!fallback || !isAddressLike(fallback)) return null
   const primaryWallet = normalizeLower(row.primary_wallet)
   const embeddedWallet = normalizeLower(row.primary_embedded_eoa)
@@ -84,7 +83,6 @@ async function readProfileWalletAuthorityRow(
       p.id,
       p.primary_wallet,
       p.primary_embedded_eoa,
-      p.primary_smart_wallet,
       p.csw_address,
       p.base_sub_account,
       canonical.address AS canonical_wallet
@@ -166,7 +164,6 @@ export async function resolveAuthorizedWalletProfile(address: string): Promise<P
     WHERE LOWER(p.primary_wallet) = ${input}
        OR LOWER(p.embedded_wallet) = ${input}
        OR LOWER(p.primary_embedded_eoa) = ${input}
-       OR LOWER(p.primary_smart_wallet) = ${input}
        OR LOWER(p.csw_address) = ${input}
        OR LOWER(p.base_sub_account) = ${input}
        OR LOWER(canonical.address) = ${input}
@@ -231,7 +228,6 @@ async function findProfilesForAddress(
     WHERE LOWER(primary_wallet) = ${input}
        OR LOWER(embedded_wallet) = ${input}
        OR LOWER(primary_embedded_eoa) = ${input}
-       OR LOWER(primary_smart_wallet) = ${input}
        OR LOWER(csw_address) = ${input}
        OR LOWER(base_sub_account) = ${input}
        OR id IN (
@@ -365,10 +361,9 @@ export async function resolveCanonicalSmartWalletAddress(address: string): Promi
   await ensureCanonicalWalletsSchema(db as any)
 
   const profileResult = await db.sql`
-    SELECT id, primary_smart_wallet, csw_address
+    SELECT id, csw_address
     FROM profiles
-    WHERE LOWER(primary_smart_wallet) = ${input}
-       OR LOWER(csw_address) = ${input}
+    WHERE LOWER(csw_address) = ${input}
        OR id IN (
          SELECT profile_id
          FROM profile_wallets
@@ -390,5 +385,5 @@ export async function resolveCanonicalSmartWalletAddress(address: string): Promi
   const canonical = normalizeAddress(canonicalResult.rows?.[0]?.address)
   if (canonical) return canonical
 
-  return normalizeAddress(profile.primary_smart_wallet || profile.csw_address)
+  return normalizeAddress(profile.csw_address)
 }

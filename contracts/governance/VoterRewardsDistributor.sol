@@ -11,13 +11,13 @@ pragma solidity ^0.8.20;
  *      (e.g. Hermes V2) but simplified for 4626.
  *
  * How it works:
- * - Each CreatorGaugeController sends its voter slice (currently 9.61%) to this contract.
+ * - Each CreatorGaugeController sends its voter slice (currently 21.39% as ShareOFT) to this contract.
  * - The slice is recorded per (epoch, vault).
  * - Users claim pro-rata by their vote weight for that (epoch, vault).
  *
  * Reward token:
- * - We distribute vault shares (sTOKEN / ERC-4626 shares) for that vault.
- * - This keeps everything composable: users can hold shares or redeem underlying.
+ * - We distribute ShareOFT (■) for that vault's trading surface.
+ * - Voters may hold ■ directly or unwrap/redeem through the vault stack if desired.
  */
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";

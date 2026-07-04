@@ -331,7 +331,7 @@ CREATE TABLE IF NOT EXISTS users (
 - Requests are submitted from `/deploy`.
 - Admin access is controlled by:
   - `CREATOR_ACCESS_ADMIN_ADDRESSES` - comma/space separated wallet addresses
-  - `CREATOR_ACCESS_ADMIN_EMAILS` - comma/space separated emails (looked up from `users` or `creator_wallets` by signed-in wallet)
+  - `CREATOR_ACCESS_ADMIN_EMAILS` - comma/space separated emails (looked up from `profiles` by signed-in wallet)
 
 ## License
 

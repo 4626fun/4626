@@ -615,7 +615,6 @@ describe('xmtp queue executor Ajna canonical automation', () => {
           group_id: 'group-1',
           canonical_owner_address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
           creator_address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-          xmtp_agent_address: CANONICAL_CSW,
           agent_type: 'csw',
           privy_wallet_id: PRIVY_WALLET_ID,
           csw_address: CANONICAL_CSW,
@@ -699,7 +698,7 @@ describe('xmtp queue executor Ajna canonical automation', () => {
     )
   })
 
-  it('keys EOA XMTP queue databases by xmtp agent identity instead of vault address', async () => {
+  it('rejects legacy EOA XMTP agents after CSW-only infrastructure cutover', async () => {
     mocks.sql.mockResolvedValueOnce({
       rows: [
         {
@@ -707,17 +706,12 @@ describe('xmtp queue executor Ajna canonical automation', () => {
           group_id: 'group-1',
           canonical_owner_address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
           creator_address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-          xmtp_agent_address: '0x7777777777777777777777777777777777777777',
           agent_type: 'eoa',
           privy_wallet_id: null,
           csw_address: null,
-          encrypted_private_key_b64: 'ciphertext',
-          encrypted_private_key_iv_b64: 'iv',
-          encrypted_private_key_tag_b64: 'tag',
         },
       ],
     })
-    mocks.AgentCreate.mockRejectedValueOnce(new Error('agent_init_failed'))
 
     const result = await executeKeeprAction({
       id: 16,
@@ -731,12 +725,8 @@ describe('xmtp queue executor Ajna canonical automation', () => {
     })
 
     expect(result.success).toBe(false)
-    expect(result.actionType).toBe('xmtp.group.send_message')
-    expect(mocks.AgentCreate.mock.calls[0]?.[1]).toEqual(
-      expect.objectContaining({
-        dbPath: '/tmp/keepr-xmtp-tests/keepr-production-0x7777777777777777777777777777777777777777.db3',
-      }),
-    )
+    expect(result.error).toBe('legacy_eoa_xmtp_retired')
+    expect(mocks.AgentCreate).not.toHaveBeenCalled()
   })
 
   it('surfaces retryable Charm userop failures for legacy delegate CSW paths', async () => {

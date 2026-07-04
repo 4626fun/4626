@@ -34,10 +34,8 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
       const preflight = await db.sql`
         SELECT
           to_regclass('public.profiles') IS NOT NULL AS has_profiles,
-          to_regclass('public.referral_clicks') IS NOT NULL AS has_referral_clicks,
           to_regclass('public.referral_conversions') IS NOT NULL AS has_referral_conversions,
           to_regclass('public.points') IS NOT NULL AS has_points,
-          to_regclass('public.wallets') IS NOT NULL AS has_wallets,
           to_regclass('public.profile_wallets') IS NOT NULL AS has_profile_wallets,
           EXISTS (
             SELECT 1
@@ -65,8 +63,8 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
             FROM information_schema.columns
             WHERE table_schema = 'public'
               AND table_name = 'profiles'
-              AND column_name = 'primary_smart_wallet'
-          ) AS has_primary_smart_wallet,
+              AND column_name = 'csw_address'
+          ) AS has_csw_address,
           EXISTS (
             SELECT 1
             FROM information_schema.columns
@@ -78,15 +76,13 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
       const status = preflight.rows?.[0] ?? {}
       if (
         Boolean(status.has_profiles) &&
-        Boolean(status.has_referral_clicks) &&
         Boolean(status.has_referral_conversions) &&
         Boolean(status.has_points) &&
-        Boolean(status.has_wallets) &&
         Boolean(status.has_profile_wallets) &&
         Boolean(status.has_app_access_status) &&
         Boolean(status.has_verifications) &&
         Boolean(status.has_profile_completed_at) &&
-        Boolean(status.has_primary_smart_wallet) &&
+        Boolean(status.has_csw_address) &&
         Boolean(status.has_primary_embedded_eoa)
       ) {
         await ensureReferralsSchema(db)
@@ -97,15 +93,13 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
       }
       const missing: string[] = []
       if (!Boolean(status.has_profiles)) missing.push('public.profiles')
-      if (!Boolean(status.has_referral_clicks)) missing.push('public.referral_clicks')
       if (!Boolean(status.has_referral_conversions)) missing.push('public.referral_conversions')
       if (!Boolean(status.has_points)) missing.push('public.points')
-      if (!Boolean(status.has_wallets)) missing.push('public.wallets')
       if (!Boolean(status.has_profile_wallets)) missing.push('public.profile_wallets')
       if (!Boolean(status.has_app_access_status)) missing.push('public.profiles.app_access_status')
       if (!Boolean(status.has_verifications)) missing.push('public.profiles.verifications')
       if (!Boolean(status.has_profile_completed_at)) missing.push('public.profiles.profile_completed_at')
-      if (!Boolean(status.has_primary_smart_wallet)) missing.push('public.profiles.primary_smart_wallet')
+      if (!Boolean(status.has_csw_address)) missing.push('public.profiles.csw_address')
       if (!Boolean(status.has_primary_embedded_eoa)) missing.push('public.profiles.primary_embedded_eoa')
       throw new Error(`waitlist_schema_migration_required:${missing.join(',')}`)
     } catch (error) {

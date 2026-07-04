@@ -161,7 +161,7 @@ function createAuthorityResolutionDb(params: {
   authorityRow: {
     primary_wallet?: string | null
     primary_embedded_eoa?: string | null
-    primary_smart_wallet?: string | null
+    csw_address?: string | null
     csw_address?: string | null
     base_sub_account?: string | null
     canonical_wallet?: string | null
@@ -178,7 +178,6 @@ function createAuthorityResolutionDb(params: {
               id: PROFILE_ID,
               primary_wallet: params.authorityRow.primary_wallet ?? null,
               primary_embedded_eoa: params.authorityRow.primary_embedded_eoa ?? null,
-              primary_smart_wallet: params.authorityRow.primary_smart_wallet ?? null,
               csw_address: params.authorityRow.csw_address ?? null,
               base_sub_account: params.authorityRow.base_sub_account ?? null,
               canonical_wallet: params.authorityRow.canonical_wallet ?? null,

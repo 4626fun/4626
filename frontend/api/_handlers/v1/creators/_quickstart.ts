@@ -365,13 +365,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           agentAddress = agentRow.xmtpAgentAddress
           agentType = 'csw'
         } else {
-          // Fallback: generate EOA agent
-          const agentRow = await getOrCreateCreatorXmtpAgent({
-            creatorAddress: creatorAddress as `0x${string}`,
-            listedPublicly: true,
-          })
-          agentAddress = agentRow.xmtpAgentAddress
-          agentType = 'eoa'
+          pendingActions.push('enable_agent')
         }
       } catch (err) {
         logger.warn('[quickstart] Agent creation failed', err)

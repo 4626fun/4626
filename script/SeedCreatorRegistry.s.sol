@@ -76,6 +76,12 @@ contract SeedCreatorRegistry is Script {
     address constant MONAD_WMON = address(0); // TBD at launch
     address constant MONAD_LZ_ENDPOINT = 0x6F475642a6e85809B1c36Fa62763669b1b48DD5B;
 
+    // --- Robinhood Chain (remote ShareOFT only; Base remains hub) ---
+    uint256 constant ROBINHOOD_CHAIN_ID = 4663;
+    uint32 constant ROBINHOOD_EID = 30416;
+    address constant ROBINHOOD_WETH = 0x4200000000000000000000000000000000000006;
+    address constant ROBINHOOD_LZ_ENDPOINT = 0x6F475642a6e85809B1c36Fa62763669b1b48DD5B;
+
     // ═══════════════════════════════════════════════════════════════════
     //                    BASE DEX INFRASTRUCTURE
     // ═══════════════════════════════════════════════════════════════════
@@ -162,6 +168,8 @@ contract SeedCreatorRegistry is Script {
             console.log(unicode"   [skip] Monad — WMON not set yet");
         }
 
+        _tryRegisterChain(registry, ROBINHOOD_CHAIN_ID, "Robinhood", ROBINHOOD_WETH);
+
         // ────────────────────────────────────────────────────────────────
         //  2. SET LAYERZERO ENDPOINTS
         // ────────────────────────────────────────────────────────────────
@@ -188,6 +196,9 @@ contract SeedCreatorRegistry is Script {
             console.log(unicode"   ✓ Monad");
         }
 
+        registry.setLayerZeroEndpoint(ROBINHOOD_CHAIN_ID, ROBINHOOD_LZ_ENDPOINT);
+        console.log(unicode"   ✓ Robinhood");
+
         // ────────────────────────────────────────────────────────────────
         //  3. SET CHAIN ID ↔ EID MAPPINGS
         // ────────────────────────────────────────────────────────────────
@@ -213,6 +224,9 @@ contract SeedCreatorRegistry is Script {
             registry.setChainIdToEid(MONAD_CHAIN_ID, MONAD_EID);
             console.log(unicode"   ✓ Monad  143 <-> 30390");
         }
+
+        registry.setChainIdToEid(ROBINHOOD_CHAIN_ID, ROBINHOOD_EID);
+        console.log(unicode"   ✓ Robinhood  4663 <-> 30416");
 
         if (solanaRegistryKey > 0) {
             registry.setChainIdToEid(solanaRegistryKey, solanaEid);

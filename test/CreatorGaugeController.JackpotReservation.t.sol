@@ -52,9 +52,10 @@ contract GaugeJackpotHarness is CreatorGaugeController {
         CreatorGaugeController(shareOft, creatorTreasury, protocolTreasury, owner_)
     {}
 
-    function testFundJackpot(uint256 shares) external {
-        vaultShares.safeTransferFrom(msg.sender, address(this), shares);
-        jackpotReserve += shares;
+    function testFundJackpot(uint256 oftAmount) external {
+        shareOFT.safeTransferFrom(msg.sender, address(this), oftAmount);
+        jackpotReserve += oftAmount;
+        accountedOFTBalance += oftAmount;
     }
 }
 
@@ -79,8 +80,8 @@ contract CreatorGaugeControllerJackpotReservationTest is Test {
         gauge.setVault(address(vaultShares));
         gauge.setLotteryManager(lottery);
 
-        vaultShares.mint(address(this), 1_000 ether);
-        vaultShares.approve(address(gauge), type(uint256).max);
+        shareOFT.mint(address(this), 1_000 ether);
+        shareOFT.approve(address(gauge), type(uint256).max);
         gauge.testFundJackpot(500 ether);
     }
 
@@ -93,7 +94,7 @@ contract CreatorGaugeControllerJackpotReservationTest is Test {
         gauge.payJackpot(winner, 100 ether);
 
         assertEq(gauge.jackpotReserve(), 400 ether);
-        assertEq(vaultShares.balanceOf(winner), 100 ether);
+        assertEq(shareOFT.balanceOf(winner), 100 ether);
     }
 
     function test_secondPayout_revertsWhenReserveInsufficient() public {

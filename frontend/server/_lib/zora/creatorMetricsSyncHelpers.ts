@@ -84,6 +84,28 @@ export function computeFees24hUsd(volume24hUsd: number | null, feeModel: FeeMode
   return volume24hUsd * feeRateFromModel(feeModel)
 }
 
+/** Normalize per-coin API financials so unlisted coins exit the enrichment queue. */
+export function resolveEnrichmentFinancials(input: {
+  marketCapUsd: number | null
+  volume24hUsd: number | null
+  feeModel: FeeModel
+}): {
+  marketCapUsd: number
+  volume24hUsd: number
+  fees24hUsd: number
+  /** True when Zora returned no market-cap or volume signal (treat as unlisted). */
+  unlisted: boolean
+} {
+  const unlisted = input.marketCapUsd == null && input.volume24hUsd == null
+  const marketCapUsd = input.marketCapUsd ?? 0
+  const volume24hUsd = input.volume24hUsd ?? 0
+  const fees24hUsd =
+    input.volume24hUsd != null
+      ? input.volume24hUsd * feeRateFromModel(input.feeModel)
+      : 0
+  return { marketCapUsd, volume24hUsd, fees24hUsd, unlisted }
+}
+
 export function parseExploreCoinFinancialSnapshot(coin: unknown): ExploreCoinFinancialSnapshot | null {
   if (!coin || typeof coin !== 'object') return null
   const candidate = coin as CoinCandidate

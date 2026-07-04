@@ -192,7 +192,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const profileRow = await db.sql`
-    SELECT privy_user_id, primary_embedded_eoa, primary_smart_wallet
+    SELECT privy_user_id, primary_embedded_eoa, csw_address
     FROM profiles
     WHERE id = ${principal.profileId}
     LIMIT 1
@@ -202,7 +202,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const ownerEoaRaw = typeof row?.primary_embedded_eoa === 'string' ? row.primary_embedded_eoa.trim() : ''
   const parentCswRaw =
     principal.canonicalSmartWalletAddress ||
-    (typeof row?.primary_smart_wallet === 'string' ? row.primary_smart_wallet.trim() : '')
+    (typeof row?.csw_address === 'string' ? row.csw_address.trim() : '')
   if (!privyUserId || !/^0x[a-fA-F0-9]{40}$/.test(ownerEoaRaw) || !/^0x[a-fA-F0-9]{40}$/.test(parentCswRaw)) {
     return res
       .status(409)

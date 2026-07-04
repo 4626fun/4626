@@ -22,13 +22,10 @@ describe('runtime policy', () => {
       agentType: 'csw' as const,
       privyWalletId: 'wallet-1',
       cswAddress: '0x123',
-      encryptedPrivateKeyB64: 'k',
-      encryptedPrivateKeyIvB64: 'iv',
-      encryptedPrivateKeyTagB64: 'tag',
     }
     const a = fingerprintAgentConfig(base)
     const b = fingerprintAgentConfig({ ...base, privyWalletId: 'wallet-2' })
-    const c = fingerprintAgentConfig({ ...base, encryptedPrivateKeyB64: 'k2' })
+    const c = fingerprintAgentConfig({ ...base, cswAddress: '0x456' })
     expect(a).not.toBe(b)
     expect(a).not.toBe(c)
   })

@@ -11,8 +11,6 @@ import {
   isDbConfigured,
 } from '@4626/server-core'
 
-
-import { ensureCreatorWalletsSchema } from '../../../server/_lib/wallet/creatorWallets.js'
 import { isAddressLike, resolveCoinParties } from '../../../server/_lib/onchain/coinParties.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../server/_lib/db/supabaseAdmin.js'
 
@@ -76,27 +74,6 @@ async function dbIsAllowlisted(
   }
 }
 
-async function dbHasLinkedWallet(
-  db: { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> },
-  address: string | null,
-  coin: string | null,
-): Promise<boolean> {
-  if (!address || !isAddressLike(address) || !coin || !isAddressLike(coin)) return false
-  try {
-    await ensureCreatorWalletsSchema(db)
-    const { rows } = await db.sql`
-      SELECT wallet_address
-      FROM creator_wallets
-      WHERE lower(wallet_address) = ${address.toLowerCase()}
-        AND lower(coin_address) = ${coin.toLowerCase()}
-      LIMIT 1;
-    `
-    return rows.length > 0
-  } catch {
-    return false
-  }
-}
-
 async function supabaseIsAllowlisted(addresses: string[]): Promise<boolean> {
   const addrs = (addresses ?? [])
     .map((a) => (typeof a === 'string' ? a.trim().toLowerCase() : ''))
@@ -111,23 +88,6 @@ async function supabaseIsAllowlisted(addresses: string[]): Promise<boolean> {
       .select('address')
       .or(orFilters)
       .is('revoked_at', null)
-      .limit(1)
-    if (res.error) return false
-    return Array.isArray(res.data) && res.data.length > 0
-  } catch {
-    return false
-  }
-}
-
-async function supabaseHasLinkedWallet(address: string | null, coin: string | null): Promise<boolean> {
-  if (!address || !isAddressLike(address) || !coin || !isAddressLike(coin)) return false
-  const supabase = getSupabaseAdmin()
-  try {
-    const res = await supabase
-      .from('creator_wallets')
-      .select('wallet_address')
-      .ilike('wallet_address', address.toLowerCase())
-      .ilike('coin_address', coin.toLowerCase())
       .limit(1)
     if (res.error) return false
     return Array.isArray(res.data) && res.data.length > 0
@@ -163,11 +123,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (isSupabaseAdminConfigured()) {
     try {
       const mode: AllowlistMode = 'enforced'
-      const [allowlisted, linked] = await Promise.all([
-        supabaseIsAllowlisted(addressesToCheck),
-        supabaseHasLinkedWallet(address, coin),
-      ])
-      const allowed = allowlisted || linked
+      const allowed = await supabaseIsAllowlisted(addressesToCheck)
       return res.status(200).json({
         success: true,
         data: { address, coin, creator, payoutRecipient, mode, allowed } satisfies CreatorAllowlistResponse,
@@ -186,11 +142,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .json({ success: false, error: getDbInitError() || 'Database unavailable' } satisfies ApiEnvelope<never>)
     }
     const mode: AllowlistMode = 'enforced'
-    const [allowlisted, linked] = await Promise.all([
-      dbIsAllowlisted(db, addressesToCheck),
-      dbHasLinkedWallet(db, address, coin),
-    ])
-    const allowed = allowlisted || linked
+    const allowed = await dbIsAllowlisted(db, addressesToCheck)
     return res.status(200).json({
       success: true,
       data: {

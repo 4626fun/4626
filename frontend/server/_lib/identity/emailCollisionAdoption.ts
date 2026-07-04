@@ -57,13 +57,9 @@ async function readCanonicalProfileAddresses(db: Db, profileId: number): Promise
   const profileResult = await db.sql`
     SELECT
       primary_wallet,
-      solana_wallet,
-      canonical_solana_wallet,
-      operational_solana_wallet,
       embedded_wallet,
       base_sub_account,
       csw_address,
-      primary_smart_wallet,
       primary_embedded_eoa
     FROM profiles
     WHERE id = ${profileId}
@@ -73,13 +69,9 @@ async function readCanonicalProfileAddresses(db: Db, profileId: number): Promise
   const profileRow = (profileResult?.rows?.[0] ?? null) as Record<string, unknown> | null
   const profileAddresses = [
     profileRow?.primary_wallet,
-    profileRow?.solana_wallet,
-    profileRow?.canonical_solana_wallet,
-    profileRow?.operational_solana_wallet,
     profileRow?.embedded_wallet,
     profileRow?.base_sub_account,
     profileRow?.csw_address,
-    profileRow?.primary_smart_wallet,
     profileRow?.primary_embedded_eoa,
   ]
     .map((value) => normalizeLower(value))
@@ -219,7 +211,7 @@ async function rebindEmailCollisionProfile(params: {
   })
 
   await db.sql`
-    UPDATE accounts
+    UPDATE profiles
     SET
       privy_user_id = ${privyUserId},
       email_verified = TRUE,
@@ -302,7 +294,7 @@ async function rebindWalletCollisionProfile(params: {
   })
 
   await db.sql`
-    UPDATE accounts
+    UPDATE profiles
     SET
       privy_user_id = ${privyUserId},
       email_verified = TRUE,
@@ -354,13 +346,9 @@ async function adoptOwnedEmailCollision(params: {
       id,
       privy_user_id,
       primary_wallet,
-      solana_wallet,
-      canonical_solana_wallet,
-      operational_solana_wallet,
       embedded_wallet,
       base_sub_account,
       csw_address,
-      primary_smart_wallet,
       primary_embedded_eoa
     FROM profiles
     WHERE LOWER(email) = LOWER(${email})
@@ -373,13 +361,9 @@ async function adoptOwnedEmailCollision(params: {
         id?: unknown
         privy_user_id?: unknown
         primary_wallet?: unknown
-        solana_wallet?: unknown
-        canonical_solana_wallet?: unknown
-        operational_solana_wallet?: unknown
         embedded_wallet?: unknown
         base_sub_account?: unknown
         csw_address?: unknown
-        primary_smart_wallet?: unknown
         primary_embedded_eoa?: unknown
       }
     | null
@@ -394,13 +378,9 @@ async function adoptOwnedEmailCollision(params: {
 
   const profileAddresses = [
     profileRow?.primary_wallet,
-    profileRow?.solana_wallet,
-    profileRow?.canonical_solana_wallet,
-    profileRow?.operational_solana_wallet,
     profileRow?.embedded_wallet,
     profileRow?.base_sub_account,
     profileRow?.csw_address,
-    profileRow?.primary_smart_wallet,
     profileRow?.primary_embedded_eoa,
   ]
     .map((value) => normalizeLower(value))

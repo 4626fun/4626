@@ -42,6 +42,17 @@ function safeInt(v: any): number {
   return Number.isFinite(n) ? Math.floor(n) : 0
 }
 
+/** Verified-email waitlist members (excludes merged-away duplicate profiles). */
+export async function getWaitlistMemberCount(db: Db): Promise<number> {
+  const totalCountResult = await db.sql`
+    SELECT COUNT(*)::int AS c
+    FROM profiles p
+    WHERE p.email IS NOT NULL
+      AND p.merged_into_profile_id IS NULL;
+  `
+  return safeInt(totalCountResult?.rows?.[0]?.c)
+}
+
 function shortAddr(a: string | null): string | null {
   if (!a) return null
   const s = String(a)
@@ -56,8 +67,8 @@ function resolveCanonicalCswAddress(raw: any): string | null {
       ? String(raw.csw_address).trim()
       : null
   const fromSmart =
-    typeof raw?.primary_smart_wallet === 'string' && raw.primary_smart_wallet.trim()
-      ? String(raw.primary_smart_wallet).trim()
+    typeof raw?.csw_address === 'string' && raw.csw_address.trim()
+      ? String(raw.csw_address).trim()
       : null
   const fromRollup =
     typeof raw?.canonical_csw === 'string' && raw.canonical_csw.trim()
@@ -113,14 +124,7 @@ export async function getWaitlistLeaderboardData(params: {
   const { db, page, limit, pointsType, authorizedProfileId } = params
   const offset = (page - 1) * limit
 
-  const totalCountResult = await db.sql`
-    SELECT COUNT(*)::int AS c
-    FROM profiles p
-    WHERE p.email IS NOT NULL
-      AND p.merged_into_profile_id IS NULL;
-  `
-
-  const totalCount = safeInt(totalCountResult?.rows?.[0]?.c)
+  const totalCount = await getWaitlistMemberCount(db)
   const totalPages = Math.max(1, Math.ceil(Math.max(1, totalCount) / limit))
   const hasMore = page < totalPages
 
@@ -159,13 +163,13 @@ export async function getWaitlistLeaderboardData(params: {
         COALESCE(
           NULLIF(TRIM(p.csw_address), ''),
           CASE
-            WHEN NULLIF(TRIM(p.primary_smart_wallet), '') IS NOT NULL
-              AND lower(TRIM(p.primary_smart_wallet)) NOT IN (
+            WHEN NULLIF(TRIM(p.csw_address), '') IS NOT NULL
+              AND lower(TRIM(p.csw_address)) NOT IN (
                 lower(COALESCE(NULLIF(TRIM(p.primary_wallet), ''), '0x0000000000000000000000000000000000000000')),
                 lower(COALESCE(NULLIF(TRIM(p.primary_embedded_eoa), ''), '0x0000000000000000000000000000000000000000')),
                 lower(COALESCE(NULLIF(TRIM(p.embedded_wallet), ''), '0x0000000000000000000000000000000000000000'))
               )
-            THEN NULLIF(TRIM(p.primary_smart_wallet), '')
+            THEN NULLIF(TRIM(p.csw_address), '')
             ELSE NULL
           END,
           NULLIF(TRIM(canonical_pw.address), ''),
@@ -196,13 +200,13 @@ export async function getWaitlistLeaderboardData(params: {
           WHEN COALESCE(
             NULLIF(TRIM(p.csw_address), ''),
             CASE
-              WHEN NULLIF(TRIM(p.primary_smart_wallet), '') IS NOT NULL
-                AND lower(TRIM(p.primary_smart_wallet)) NOT IN (
+              WHEN NULLIF(TRIM(p.csw_address), '') IS NOT NULL
+                AND lower(TRIM(p.csw_address)) NOT IN (
                   lower(COALESCE(NULLIF(TRIM(p.primary_wallet), ''), '0x0000000000000000000000000000000000000000')),
                   lower(COALESCE(NULLIF(TRIM(p.primary_embedded_eoa), ''), '0x0000000000000000000000000000000000000000')),
                   lower(COALESCE(NULLIF(TRIM(p.embedded_wallet), ''), '0x0000000000000000000000000000000000000000'))
                 )
-              THEN NULLIF(TRIM(p.primary_smart_wallet), '')
+              THEN NULLIF(TRIM(p.csw_address), '')
               ELSE NULL
             END,
             NULLIF(TRIM(canonical_pw.address), ''),
@@ -221,10 +225,11 @@ export async function getWaitlistLeaderboardData(params: {
         LIMIT 1
       ) canonical_pw ON true
       LEFT JOIN LATERAL (
-        SELECT w.provider
-        FROM wallets w
-        WHERE NULLIF(TRIM(p.primary_wallet), '') IS NOT NULL
-          AND lower(w.address) = lower(TRIM(p.primary_wallet))
+        SELECT pw.provider
+        FROM profile_wallets pw
+        WHERE pw.profile_id = p.id
+          AND NULLIF(TRIM(p.primary_wallet), '') IS NOT NULL
+          AND lower(pw.address) = lower(TRIM(p.primary_wallet))
         LIMIT 1
       ) primary_wallet_w ON true
       LEFT JOIN LATERAL (
@@ -409,13 +414,13 @@ export async function getWaitlistLeaderboardData(params: {
           COALESCE(
             NULLIF(TRIM(p.csw_address), ''),
             CASE
-              WHEN NULLIF(TRIM(p.primary_smart_wallet), '') IS NOT NULL
-                AND lower(TRIM(p.primary_smart_wallet)) NOT IN (
+              WHEN NULLIF(TRIM(p.csw_address), '') IS NOT NULL
+                AND lower(TRIM(p.csw_address)) NOT IN (
                   lower(COALESCE(NULLIF(TRIM(p.primary_wallet), ''), '0x0000000000000000000000000000000000000000')),
                   lower(COALESCE(NULLIF(TRIM(p.primary_embedded_eoa), ''), '0x0000000000000000000000000000000000000000')),
                   lower(COALESCE(NULLIF(TRIM(p.embedded_wallet), ''), '0x0000000000000000000000000000000000000000'))
                 )
-              THEN NULLIF(TRIM(p.primary_smart_wallet), '')
+              THEN NULLIF(TRIM(p.csw_address), '')
               ELSE NULL
             END,
             NULLIF(TRIM(canonical_pw.address), ''),
@@ -446,13 +451,13 @@ export async function getWaitlistLeaderboardData(params: {
             WHEN COALESCE(
               NULLIF(TRIM(p.csw_address), ''),
               CASE
-                WHEN NULLIF(TRIM(p.primary_smart_wallet), '') IS NOT NULL
-                  AND lower(TRIM(p.primary_smart_wallet)) NOT IN (
+                WHEN NULLIF(TRIM(p.csw_address), '') IS NOT NULL
+                  AND lower(TRIM(p.csw_address)) NOT IN (
                     lower(COALESCE(NULLIF(TRIM(p.primary_wallet), ''), '0x0000000000000000000000000000000000000000')),
                     lower(COALESCE(NULLIF(TRIM(p.primary_embedded_eoa), ''), '0x0000000000000000000000000000000000000000')),
                     lower(COALESCE(NULLIF(TRIM(p.embedded_wallet), ''), '0x0000000000000000000000000000000000000000'))
                   )
-                THEN NULLIF(TRIM(p.primary_smart_wallet), '')
+                THEN NULLIF(TRIM(p.csw_address), '')
                 ELSE NULL
               END,
               NULLIF(TRIM(canonical_pw.address), ''),
@@ -471,10 +476,11 @@ export async function getWaitlistLeaderboardData(params: {
           LIMIT 1
         ) canonical_pw ON true
         LEFT JOIN LATERAL (
-          SELECT w.provider
-          FROM wallets w
-          WHERE NULLIF(TRIM(p.primary_wallet), '') IS NOT NULL
-            AND lower(w.address) = lower(TRIM(p.primary_wallet))
+          SELECT pw.provider
+          FROM profile_wallets pw
+          WHERE pw.profile_id = p.id
+            AND NULLIF(TRIM(p.primary_wallet), '') IS NOT NULL
+            AND lower(pw.address) = lower(TRIM(p.primary_wallet))
           LIMIT 1
         ) primary_wallet_w ON true
         LEFT JOIN LATERAL (

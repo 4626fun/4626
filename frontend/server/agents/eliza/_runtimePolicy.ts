@@ -15,12 +15,9 @@ export function getActionRetryBudget(actionName: string, defaultRetries: number)
 export type AgentConfigFingerprintInput = {
   creatorAddress: string
   xmtpAgentAddress: string
-  agentType: 'eoa' | 'csw'
+  agentType: 'csw'
   privyWalletId: string | null
   cswAddress: string | null
-  encryptedPrivateKeyB64: string
-  encryptedPrivateKeyIvB64: string
-  encryptedPrivateKeyTagB64: string
 }
 
 export function fingerprintAgentConfig(input: AgentConfigFingerprintInput): string {
@@ -30,9 +27,6 @@ export function fingerprintAgentConfig(input: AgentConfigFingerprintInput): stri
     agentType: input.agentType,
     privyWalletId: input.privyWalletId ?? null,
     cswAddress: input.cswAddress?.toLowerCase() ?? null,
-    encryptedPrivateKeyB64: input.encryptedPrivateKeyB64,
-    encryptedPrivateKeyIvB64: input.encryptedPrivateKeyIvB64,
-    encryptedPrivateKeyTagB64: input.encryptedPrivateKeyTagB64,
   })
   return createHash('sha256').update(payload, 'utf8').digest('hex')
 }

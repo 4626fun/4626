@@ -37,7 +37,7 @@ function createPortfolioDb(
 
   const profile: any = {
     id: 1,
-    primary_smart_wallet: '0x00000000000000000000000000000000000000aa',
+    csw_address: '0x00000000000000000000000000000000000000aa',
     primary_embedded_eoa: '0x00000000000000000000000000000000000000bb',
     display_name: 'Alice',
     bio: 'hello',
@@ -77,7 +77,7 @@ function createPortfolioDb(
     sql: async (strings: TemplateStringsArray, ...values: any[]) => {
       const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
 
-      if (text.includes('from profiles') && text.includes('where lower(primary_smart_wallet)')) return { rows: [profile] }
+      if (text.includes('from profiles') && text.includes('where lower(csw_address)')) return { rows: [profile] }
       if (text.includes('from profiles') && text.includes('where id in')) return { rows: [profile] }
       if (text.includes('from profile_wallets pw') && text.includes('left join wallets')) return { rows: walletRows }
       if (text.includes('update profiles') && text.includes('set')) {

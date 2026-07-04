@@ -67,11 +67,9 @@ async function readPersistedWalletMetadata(params: {
   const result = await params.db.sql`
     SELECT
       pw.canonical_source,
-      w.wallet_type,
-      w.provider
+      pw.wallet_type,
+      pw.provider
     FROM profile_wallets pw
-    LEFT JOIN wallets w
-      ON LOWER(w.address) = LOWER(pw.address)
     WHERE pw.profile_id = ${params.profileId}
       AND LOWER(pw.address) = ${params.address}
     LIMIT 1;
@@ -94,16 +92,14 @@ async function readWalletSyncFallbackSubAccount(params: {
   const result = await params.db.sql`
     SELECT pw.address
     FROM profile_wallets pw
-    LEFT JOIN wallets w
-      ON LOWER(w.address) = LOWER(pw.address)
     WHERE pw.profile_id = ${params.profileId}
       AND LOWER(COALESCE(pw.canonical_source, '')) = 'wallet_sync'
-      AND LOWER(COALESCE(w.wallet_type, '')) = 'smart_wallet'
+      AND LOWER(COALESCE(pw.wallet_type, '')) = 'smart_wallet'
       AND (
         ${canonical}::text IS NULL
         OR LOWER(pw.address) <> ${canonical}
       )
-      AND LOWER(COALESCE(w.provider, '')) NOT LIKE '%zora_readonly%'
+      AND LOWER(COALESCE(pw.provider, '')) NOT LIKE '%zora_readonly%'
     ORDER BY pw.updated_at DESC NULLS LAST, pw.created_at DESC NULLS LAST
     LIMIT 1;
   `

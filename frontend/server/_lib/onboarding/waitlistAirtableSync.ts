@@ -256,14 +256,14 @@ function applicantRecordFromProfile(raw: any): AirtableRecord {
       email: String(raw?.email ?? ''),
       wallet_address:
         toStringOrNull(raw?.csw_address) ??
-        toStringOrNull(raw?.primary_smart_wallet) ??
+        toStringOrNull(raw?.csw_address) ??
         toStringOrNull(raw?.primary_wallet),
       referral_code: toStringOrNull(raw?.referral_code),
       status: mapApplicantStatus(raw?.app_access_status),
       email_verified_at: toIso(raw?.created_at),
       wallet_linked_at:
         toStringOrNull(raw?.csw_address) ||
-        toStringOrNull(raw?.primary_smart_wallet) ||
+        toStringOrNull(raw?.csw_address) ||
         toStringOrNull(raw?.primary_wallet)
           ? toIso(raw?.updated_at)
           : null,
@@ -311,7 +311,7 @@ function referralRecordFromConversion(raw: any, profileById: Map<number, any> = 
 function onboardingRecordFromProfile(raw: any): AirtableRecord | null {
   const canonicalWallet =
     toStringOrNull(raw?.csw_address) ??
-    toStringOrNull(raw?.primary_smart_wallet) ??
+    toStringOrNull(raw?.csw_address) ??
     toStringOrNull(raw?.primary_wallet)
   if (!canonicalWallet) return null
   const emailVerified = Boolean(toStringOrNull(raw?.email))
@@ -351,7 +351,7 @@ async function readSupabaseDataset(client: SupabaseLike, limit: number): Promise
         'persona',
         'primary_wallet',
         'csw_address',
-        'primary_smart_wallet',
+        'csw_address',
         'primary_embedded_eoa',
         'embedded_wallet',
         'referral_code',
@@ -506,13 +506,9 @@ export async function readOnboardingRecords(db: Db, limit: number): Promise<Airt
       email,
       primary_wallet,
       csw_address,
-      primary_smart_wallet,
       primary_embedded_eoa,
       embedded_wallet,
       base_sub_account,
-      solana_wallet,
-      canonical_solana_wallet,
-      operational_solana_wallet,
       privy_user_id,
       app_access_status,
       profile_completed_at,

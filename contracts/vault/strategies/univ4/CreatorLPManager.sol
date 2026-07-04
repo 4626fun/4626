@@ -29,22 +29,23 @@ import {V4LiquidityAmounts} from "../../../libraries/V4LiquidityAmounts.sol";
  * @notice Manages LP liquidity for CreatorShareOFT (■AKITA) on Uniswap V4
  *
  * @dev PURPOSE:
- *      This strategy manages liquidity for the WRAPPED SHARE TOKEN (■AKITA)
- *      on Uniswap V4 with 6.9% fee hooks for the lottery system.
+ *      Manages liquidity for the ShareOFT (■AKITA) on Uniswap V4.
+ *      Buy-side trade fees are enforced by ShareOFT SwapOnly classification (default 6.9%), not this strategy.
+ *      Optional sell-side tax is a separate Base V4 hook plane when explicitly configured.
  *
- *      NOT for the original Creator Coin - that uses CreatorCharmStrategy on V3.
+ *      NOT for the original Creator Coin — that uses CreatorCharmStrategy on V3.
  *
  * @dev TOKEN DISTINCTION:
  *      ┌────────────────────────────────────────────────────────────┐
  *      │ AKITA (Creator Coin)  →  CreatorCharmStrategy  →  V3 Pool  │
  *      │ ■AKITA (ShareOFT)     →  CreatorLPManager      →  V4 Pool  │
- *      │                                                  + 6.9% Hook
+ *      │                           (SwapOnly buy fee on ShareOFT)   │
  *      └────────────────────────────────────────────────────────────┘
  *
  * @dev WHY V4 FOR SHARE TOKEN:
- *      - V4 hooks enable the 6.9% fee on trades
- *      - Fees feed into the lottery jackpot via GaugeController
- *      - The ShareOFT (■AKITA) is the primary trading token for the lottery system
+ *      - ShareOFT is the primary trading surface; pool registered as SwapOnly for buy-fee detection
+ *      - Buy fees route to tradeFeeCollector → jackpotCustodian via gauge split
+ *      - V4 hook optional for sell-side tax when owner activates SimpleSellTaxHook config
  *
  * @dev ARCHITECTURE (inspired by Charm Alpha Pro Vault):
  *      CreatorOVault → CreatorLPManager → Uniswap V4 Positions

@@ -43,15 +43,21 @@ export async function ensureCanonicalWalletsSchema(db: Db): Promise<void> {
     try {
       const preflight = await db.sql`
         SELECT
-          to_regclass('public.wallets') IS NOT NULL AS has_wallets,
           to_regclass('public.profile_wallets') IS NOT NULL AS has_profile_wallets,
           EXISTS (
             SELECT 1
             FROM information_schema.columns
             WHERE table_schema = 'public'
+              AND table_name = 'profile_wallets'
+              AND column_name = 'chain'
+          ) AS has_profile_wallets_chain,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
               AND table_name = 'profiles'
-              AND column_name = 'primary_smart_wallet'
-          ) AS has_primary_smart_wallet,
+              AND column_name = 'csw_address'
+          ) AS has_csw_address,
           EXISTS (
             SELECT 1
             FROM information_schema.columns
@@ -59,13 +65,6 @@ export async function ensureCanonicalWalletsSchema(db: Db): Promise<void> {
               AND table_name = 'profiles'
               AND column_name = 'primary_embedded_eoa'
           ) AS has_primary_embedded_eoa,
-          EXISTS (
-            SELECT 1
-            FROM information_schema.columns
-            WHERE table_schema = 'public'
-              AND table_name = 'profiles'
-              AND column_name = 'canonical_solana_wallet'
-          ) AS has_canonical_solana_wallet,
           EXISTS (
             SELECT 1
             FROM information_schema.columns
@@ -83,11 +82,10 @@ export async function ensureCanonicalWalletsSchema(db: Db): Promise<void> {
       `
       const status = preflight.rows?.[0] ?? {}
       if (
-        Boolean(status.has_wallets) &&
         Boolean(status.has_profile_wallets) &&
-        Boolean(status.has_primary_smart_wallet) &&
+        Boolean(status.has_profile_wallets_chain) &&
+        Boolean(status.has_csw_address) &&
         Boolean(status.has_primary_embedded_eoa) &&
-        Boolean(status.has_canonical_solana_wallet) &&
         Boolean(status.has_profile_wallets_canonical_solana) &&
         Boolean(status.has_profile_wallets_operational_solana)
       ) {
@@ -96,11 +94,10 @@ export async function ensureCanonicalWalletsSchema(db: Db): Promise<void> {
         return
       }
       const missing: string[] = []
-      if (!Boolean(status.has_wallets)) missing.push('public.wallets')
       if (!Boolean(status.has_profile_wallets)) missing.push('public.profile_wallets')
-      if (!Boolean(status.has_primary_smart_wallet)) missing.push('public.profiles.primary_smart_wallet')
+      if (!Boolean(status.has_profile_wallets_chain)) missing.push('public.profile_wallets.chain')
+      if (!Boolean(status.has_csw_address)) missing.push('public.profiles.csw_address')
       if (!Boolean(status.has_primary_embedded_eoa)) missing.push('public.profiles.primary_embedded_eoa')
-      if (!Boolean(status.has_canonical_solana_wallet)) missing.push('public.profiles.canonical_solana_wallet')
       if (!Boolean(status.has_profile_wallets_canonical_solana)) {
         missing.push('public.profile_wallets.is_canonical_solana_wallet')
       }

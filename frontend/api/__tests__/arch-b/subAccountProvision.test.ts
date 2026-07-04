@@ -148,7 +148,7 @@ const MOCK_DB = {
       {
         privy_user_id: PRIVY_USER_ID,
         primary_embedded_eoa: OWNER_EOA,
-        primary_smart_wallet: PARENT_CSW,
+        csw_address: PARENT_CSW,
       },
     ],
   })),

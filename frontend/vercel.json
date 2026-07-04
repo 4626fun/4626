@@ -55,6 +55,10 @@
       "schedule": "0 12 * * *"
     },
     {
+      "path": "/api/v1/alfaclub/rooms-snapshot-sync",
+      "schedule": "30 6,12,18 * * *"
+    },
+    {
       "path": "/api/v1/alfaclub/radar",
       "schedule": "5 12 * * *"
     },

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { directBatchAction, type PlannedHarvestConversion } from '../../../../shared/payout-router/harvestCommon.js'
-import { executePlannedHarvestConversions } from '../../../../shared/payout-router/harvestExecute.js'
+import { directBatchAction, type PlannedHarvestConversion } from '../../../shared/payout-router/harvestCommon.js'
+import { executePlannedHarvestConversions } from '../../../shared/payout-router/harvestExecute.js'
 
 function planned(label: string): PlannedHarvestConversion {
   const token = `0x${label.padStart(40, '0')}` as `0x${string}`

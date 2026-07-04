@@ -526,16 +526,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const agentRows = await db.sql`
       SELECT
         creator_address,
-        xmtp_agent_address,
         agent_type,
         privy_wallet_id,
         csw_address,
-        last_processed_message_at,
-        encrypted_private_key_b64,
-        encrypted_private_key_iv_b64,
-        encrypted_private_key_tag_b64
-      FROM creator_xmtp_agents
+        last_processed_message_at
+      FROM creator_infrastructure
       WHERE listed_publicly = TRUE
+        AND agent_type = 'csw'
+        AND csw_address IS NOT NULL
       ORDER BY updated_at DESC
       LIMIT ${MAX_AGENTS};
     `
@@ -571,15 +569,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             chainId: 8453,
           })
         } else {
-          // EOA agent: decrypt private key
-          const privKey = decryptPrivateKey({
-            ciphertextB64: String(row.encrypted_private_key_b64),
-            ivB64: String(row.encrypted_private_key_iv_b64),
-            tagB64: String(row.encrypted_private_key_tag_b64),
-            aad: `creator:${creatorAddress}`,
+          logger.warn('[agent/process] skipping legacy EOA XMTP agent', {
+            creator: creatorAddress.slice(0, 10),
+            agentType,
           })
-          const user = createUser(privKey)
-          signer = createSigner(user)
+          continue
         }
 
         agent = await Agent.create(signer, {
@@ -758,7 +752,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (checkpointToPersist > lastProcessed) {
           const newestIso = new Date(checkpointToPersist).toISOString()
           await db.sql`
-            UPDATE creator_xmtp_agents
+            UPDATE creator_infrastructure
             SET
               last_processed_message_at = GREATEST(
                 COALESCE(last_processed_message_at, TO_TIMESTAMP(0)),

@@ -48,15 +48,13 @@ function createDb(options: { alreadyLinked: boolean }) {
           rows: [
             {
               has_profiles: true,
-              has_referral_clicks: true,
               has_referral_conversions: true,
               has_points: true,
-              has_wallets: true,
               has_profile_wallets: true,
               has_app_access_status: true,
               has_verifications: true,
               has_profile_completed_at: true,
-              has_primary_smart_wallet: true,
+              has_csw_address: true,
               has_primary_embedded_eoa: true,
             },
           ],
@@ -77,11 +75,10 @@ function createDb(options: { alreadyLinked: boolean }) {
           ],
         }
       }
-      if (text.includes("to_regclass('public.referral_clicks') is not null as has_referral_clicks")) {
+      if (text.includes("to_regclass('public.referral_conversions') is not null as has_referral_conversions")) {
         return {
           rows: [
             {
-              has_referral_clicks: true,
               has_referral_conversions: true,
               has_profiles_referral_code: true,
               has_profiles_referred_by_signup_id: true,
@@ -89,15 +86,14 @@ function createDb(options: { alreadyLinked: boolean }) {
           ],
         }
       }
-      if (text.includes("to_regclass('public.wallets') is not null as has_wallets")) {
+      if (text.includes("column_name = 'chain'") && text.includes("table_name = 'profile_wallets'")) {
         return {
           rows: [
             {
-              has_wallets: true,
               has_profile_wallets: true,
-              has_primary_smart_wallet: true,
+              has_profile_wallets_chain: true,
+              has_csw_address: true,
               has_primary_embedded_eoa: true,
-              has_canonical_solana_wallet: true,
               has_profile_wallets_canonical_solana: true,
               has_profile_wallets_operational_solana: true,
             },

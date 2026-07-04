@@ -157,38 +157,26 @@ async function isProfileWalletOwnershipStillValid(params: {
   const { db, profileId, canonicalWallet, operationalWallet } = params
   const row = await db.sql`
     SELECT
-      p.canonical_solana_wallet,
-      p.solana_wallet,
-      p.operational_solana_wallet,
       EXISTS (
         SELECT 1
         FROM profile_wallets pw
-        LEFT JOIN wallets w ON LOWER(w.address) = LOWER(pw.address)
-        WHERE pw.profile_id = p.id
+        WHERE pw.profile_id = ${profileId}
           AND pw.address = ${canonicalWallet}
           AND pw.is_canonical_solana_wallet = true
-          AND (LOWER(COALESCE(w.chain, '')) = 'solana' OR w.chain IS NULL)
+          AND LOWER(COALESCE(pw.chain, '')) = 'solana'
       ) AS canonical_role_ok,
       EXISTS (
         SELECT 1
         FROM profile_wallets pw
-        LEFT JOIN wallets w ON LOWER(w.address) = LOWER(pw.address)
-        WHERE pw.profile_id = p.id
+        WHERE pw.profile_id = ${profileId}
           AND pw.address = ${operationalWallet}
           AND pw.is_operational_solana_wallet = true
-          AND (LOWER(COALESCE(w.chain, '')) = 'solana' OR w.chain IS NULL)
-      ) AS operational_role_ok
-    FROM profiles p
-    WHERE p.id = ${profileId}
-    LIMIT 1;
+          AND LOWER(COALESCE(pw.chain, '')) = 'solana'
+      ) AS operational_role_ok;
   `
   const profile = row?.rows?.[0] as any
   if (!profile) return false
-  const profileCanonical = String(profile?.canonical_solana_wallet ?? profile?.solana_wallet ?? '').trim()
-  const profileOperational = String(profile?.operational_solana_wallet ?? '').trim()
-  const canonicalRoleOk = profile?.canonical_role_ok === true
-  const operationalRoleOk = profile?.operational_role_ok === true
-  return profileCanonical === canonicalWallet && profileOperational === operationalWallet && canonicalRoleOk && operationalRoleOk
+  return profile?.canonical_role_ok === true && profile?.operational_role_ok === true
 }
 
 async function setJobState(params: {

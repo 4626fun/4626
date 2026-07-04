@@ -11,6 +11,7 @@
 import { getDb, isDbConfigured } from '../db/postgres.js'
 import { getOrCreateCreatorAgentWallet } from '../wallet/creatorAgentWallets.js'
 import { logger } from '../infra/logger.js'
+import { fetchZoraProfileForAccount } from '../zora/zoraProfileIdentifier.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -20,22 +21,68 @@ type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ 
 // Helpers (duplicated from quickstart to avoid circular deps)
 // ---------------------------------------------------------------------------
 
-async function resolveZoraProfile(address: string): Promise<{
+async function resolveZoraProfileForSignup(params: {
+  signupId: number
+  walletAddress: string
+  db: Db
+}): Promise<{
   handle: string | null
   coins: Array<{ address: string; name: string; symbol: string }>
+  profileSeed: string | null
 } | null> {
+  const addr = params.walletAddress.toLowerCase()
+
+  let cswAddress: string | null = null
+  let embeddedEoa: string | null = null
+  let preprovZoraHandle: string | null = null
+  try {
+    const row = await params.db.sql`
+      SELECT csw_address, primary_embedded_eoa, preprov_zora_handle
+      FROM profiles
+      WHERE id = ${params.signupId}
+      LIMIT 1;
+    `
+    const profile = row.rows?.[0]
+    cswAddress =
+      typeof profile?.csw_address === 'string' && profile.csw_address.trim()
+        ? profile.csw_address.trim().toLowerCase()
+        : null
+    embeddedEoa =
+      typeof profile?.primary_embedded_eoa === 'string' && profile.primary_embedded_eoa.trim()
+        ? profile.primary_embedded_eoa.trim().toLowerCase()
+        : null
+    preprovZoraHandle =
+      typeof profile?.preprov_zora_handle === 'string' && profile.preprov_zora_handle.trim()
+        ? profile.preprov_zora_handle.trim()
+        : null
+  } catch {
+    // proceed with walletAddress-only seeds
+  }
+
+  const { profile, seed: profileSeed } = await fetchZoraProfileForAccount({
+    preprovZoraHandle,
+    canonicalCswAddress: cswAddress ?? (addr !== embeddedEoa ? addr : null),
+    embeddedEoaAddress: embeddedEoa ?? (addr === embeddedEoa ? addr : null),
+    primaryWalletAddress: addr !== cswAddress && addr !== embeddedEoa ? addr : null,
+  })
+
+  if (!profile || !profileSeed) return null
+
   try {
     const key = (process.env.ZORA_SERVER_API_KEY ?? '').trim()
-    if (!key) return null
+    if (!key) {
+      return {
+        handle: profile?.username ?? profile?.handle ?? null,
+        coins: [],
+        profileSeed,
+      }
+    }
 
     const sdk: any = await import('@zoralabs/coins-sdk')
     sdk.setApiKey(key)
 
-    const profileRes = await sdk.getProfile({ identifier: address })
-    const profile = (profileRes as any)?.data?.profile ?? null
-
     const coinsRes = await sdk.getProfileCoins({
-      identifier: address,
+      identifier: profileSeed,
       count: 10,
       chainIds: [8453],
     })
@@ -53,11 +100,16 @@ async function resolveZoraProfile(address: string): Promise<{
     }
 
     return {
-      handle: profile?.username ?? null,
+      handle: profile?.username ?? profile?.handle ?? null,
       coins,
+      profileSeed,
     }
   } catch {
-    return null
+    return {
+      handle: profile?.username ?? profile?.handle ?? null,
+      coins: [],
+      profileSeed,
+    }
   }
 }
 
@@ -138,14 +190,14 @@ export async function preprovisionWaitlistUser(
 
   logger.info('[preprovision] Starting for signup', { signupId, wallet: addr.slice(0, 10) })
 
-  // 1. Resolve identities in parallel
-  const zoraProfile = await resolveZoraProfile(addr)
+  // 1. Resolve identities (CSW before embedded EOA when both are known)
+  const zoraProfile = await resolveZoraProfileForSignup({ signupId, walletAddress: addr, db })
 
   // 2. Find creator coin
   let coinAddress: string | null = null
   let coinSymbol: string | null = null
   if (zoraProfile?.coins && zoraProfile.coins.length > 0) {
-    const coin = await findCreatorCoin(addr, zoraProfile.coins)
+    const coin = await findCreatorCoin(zoraProfile.profileSeed ?? addr, zoraProfile.coins)
     if (coin) {
       coinAddress = coin.address
       coinSymbol = coin.symbol

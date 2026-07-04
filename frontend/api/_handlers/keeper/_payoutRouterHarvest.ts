@@ -30,6 +30,7 @@ import {
   planPayoutRouterHarvestConversions,
   type HarvestPlanReader,
   type HarvestTokenPlanEntry,
+  type PayoutRouterBatchAction,
 } from '../../../server/_lib/onchain/payoutRouterHarvestPlan.js'
 import { buildDefaultPayoutRouterHarvestTokenPlan } from '../../../server/_lib/onchain/payoutRouterHarvestTokens.js'
 import {
@@ -313,7 +314,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const execution = await executePlannedHarvestConversions({
         conversions,
         perTokenFallback,
-        submitBatch: async (actions) => {
+        submitBatch: async (actions: PayoutRouterBatchAction[]) => {
           try {
             const hash = await walletClient.writeContract({
               address: payoutRouterAddress,

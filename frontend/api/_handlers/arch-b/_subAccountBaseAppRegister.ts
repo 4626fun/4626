@@ -382,18 +382,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           provisioning_source  = EXCLUDED.provisioning_source
       `
 
-      // 2. Ensure both wallets exist in `wallets` (referenced by
-      // profile_wallets.address FK). Use ON CONFLICT DO NOTHING so we
-      // don't overwrite provider/wallet_type for pre-existing rows.
-      await txDb.sql`
-        INSERT INTO wallets (address, chain, wallet_type, provider)
-        VALUES
-          (${parentAddress}, 'evm', 'smart_wallet', 'coinbase'),
-          (${embeddedEoaAddress}, 'evm', 'eoa', 'privy')
-        ON CONFLICT (address) DO NOTHING
-      `
-
-      // 3. Clear is_canonical_smart_wallet from any prior canonical
+      // 2. Clear is_canonical_smart_wallet from any prior canonical
       // row so the partial unique index `profile_wallets_one_canonical`
       // doesn't trip when we set the parent CSW row.
       await txDb.sql`
@@ -405,21 +394,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           AND is_canonical_smart_wallet = true
       `
 
-      // 4. Upsert the parent CSW as canonical.
+      // 3. Upsert the parent CSW as canonical.
       await txDb.sql`
         INSERT INTO profile_wallets (
-          profile_id, address, is_canonical_smart_wallet, is_embedded_eoa,
+          profile_id, address, chain, wallet_type, provider,
+          is_canonical_smart_wallet, is_embedded_eoa,
           verified_at, created_at, updated_at
         ) VALUES (
-          ${principal.profileId}, ${parentAddress}, true, false,
+          ${principal.profileId}, ${parentAddress}, 'evm', 'smart_wallet', 'coinbase',
+          true, false,
           now(), now(), now()
         )
         ON CONFLICT (profile_id, address) DO UPDATE SET
+          chain = EXCLUDED.chain,
+          wallet_type = EXCLUDED.wallet_type,
+          provider = EXCLUDED.provider,
           is_canonical_smart_wallet = true,
           updated_at                = now()
       `
 
-      // 5. Record the embedded EOA on profile_wallets as well, with
+      // 4. Record the embedded EOA on profile_wallets as well, with
       // is_embedded_eoa = true. The partial unique index allows only
       // one such row per profile; if a different EOA was previously
       // recorded, clear it first. (Defense in depth: the
@@ -435,18 +429,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `
       await txDb.sql`
         INSERT INTO profile_wallets (
-          profile_id, address, is_canonical_smart_wallet, is_embedded_eoa,
+          profile_id, address, chain, wallet_type, provider,
+          is_canonical_smart_wallet, is_embedded_eoa,
           verified_at, created_at, updated_at
         ) VALUES (
-          ${principal.profileId}, ${embeddedEoaAddress}, false, true,
+          ${principal.profileId}, ${embeddedEoaAddress}, 'evm', 'eoa', 'privy',
+          false, true,
           now(), now(), now()
         )
         ON CONFLICT (profile_id, address) DO UPDATE SET
+          chain = EXCLUDED.chain,
+          wallet_type = EXCLUDED.wallet_type,
+          provider = EXCLUDED.provider,
           is_embedded_eoa = true,
           updated_at      = now()
       `
 
-      // 6. Mirror profile columns used by accounts/me executionTrack.
+      // 5. Mirror profile columns used by accounts/me executionTrack.
       await txDb.sql`
         UPDATE profiles
         SET

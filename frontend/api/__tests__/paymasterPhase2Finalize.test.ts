@@ -80,13 +80,8 @@ vi.mock('../../server/_lib/onchain/contracts.js', () => ({
 vi.mock('../../server/_lib/db/postgres.js', () => ({
   isDbConfigured: () => isDbConfiguredMock(),
   getDb: getDbMock,
-  ensureCreatorWalletsSchema: vi.fn(),
   ensureCreatorAccessSchema: vi.fn(),
   ensureWaitlistSchema: vi.fn(),
-}))
-
-vi.mock('../../server/_lib/wallet/creatorWallets.js', () => ({
-  ensureCreatorWalletsSchema: vi.fn(async () => {}),
 }))
 
 vi.mock('../../server/_lib/db/supabaseAdmin.js', () => ({
@@ -474,9 +469,6 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
       query: vi.fn(async (sql: string) => {
         const text = String(sql).toLowerCase().replace(/\s+/g, ' ')
         if (text.includes('from allowlist') || text.includes('select csw_address from allowlist')) {
-          return { rows: [] }
-        }
-        if (text.includes('from creator_wallets')) {
           return { rows: [] }
         }
         if (text.includes('from profiles')) {

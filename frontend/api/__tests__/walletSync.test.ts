@@ -228,7 +228,6 @@ describe('wallet mapping + sync', () => {
     expect(result.canonicalSmartWallet?.address).toBe('0x00000000000000000000000000000000000000d2')
     expect(result.embeddedEoa?.address).toBe('0x00000000000000000000000000000000000000d1')
     expect(result.connectedWallets.length).toBe(2)
-    expect(db.calls.some((q) => q.includes('insert into wallets'))).toBe(true)
     expect(db.calls.some((q) => q.includes('insert into profile_wallets'))).toBe(true)
     const profileWriteCalls = db.calls.filter((q) => q.includes('insert into profiles') || q.includes('update profiles set'))
     expect(profileWriteCalls.join('\n')).not.toContain('base_sub_account')
@@ -249,18 +248,14 @@ describe('wallet mapping + sync', () => {
         if (text.includes('with direct as') && text.includes('privy_user_aliases')) {
           return { rows: [{ id: 101, email: 'owner@example.com' }] }
         }
-        if (text.includes('select') && text.includes('primary_smart_wallet') && text.includes('from profiles')) {
+        if (text.includes('select') && text.includes('csw_address') && text.includes('from profiles')) {
           return {
             rows: [
               {
                 primary_wallet: embedded.toLowerCase(),
-                primary_smart_wallet: persistedCanonical.toLowerCase(),
                 csw_address: persistedCanonical.toLowerCase(),
                 primary_embedded_eoa: embedded.toLowerCase(),
                 embedded_wallet: embedded.toLowerCase(),
-                canonical_solana_wallet: null,
-                operational_solana_wallet: null,
-                solana_wallet: null,
                 preprov_zora_handle: null,
               },
             ],
@@ -467,17 +462,13 @@ describe('wallet mapping + sync', () => {
         if (text.includes('from profiles') && text.includes('where privy_user_id')) {
           return { rows: [{ id: 101, email: null }] }
         }
-        if (text.includes('select') && text.includes('from profiles') && text.includes('where id') && text.includes('primary_smart_wallet')) {
+        if (text.includes('select') && text.includes('from profiles') && text.includes('where id') && text.includes('csw_address')) {
           return {
             rows: [
               {
                 primary_wallet: null,
-                primary_smart_wallet: '0x00000000000000000000000000000000000000f2',
-                csw_address: null,
+                csw_address: '0x00000000000000000000000000000000000000f2',
                 base_sub_account: null,
-                canonical_solana_wallet: null,
-                operational_solana_wallet: null,
-                solana_wallet: null,
                 primary_embedded_eoa: null,
                 embedded_wallet: null,
               },
@@ -518,18 +509,14 @@ describe('wallet mapping + sync', () => {
         if (text.includes('from profiles') && text.includes('where privy_user_id')) {
           return { rows: [{ id: 101, email: null }] }
         }
-        if (text.includes('select') && text.includes('from profiles') && text.includes('where id') && text.includes('primary_smart_wallet')) {
+        if (text.includes('select') && text.includes('from profiles') && text.includes('where id') && text.includes('csw_address')) {
           return {
             rows: [
               {
                 primary_wallet: null,
                 // Legacy column has the *wrong* CSW…
-                primary_smart_wallet: '0x00000000000000000000000000000000000000f1',
-                csw_address: null,
+                csw_address: '0x00000000000000000000000000000000000000f1',
                 base_sub_account: null,
-                canonical_solana_wallet: null,
-                operational_solana_wallet: null,
-                solana_wallet: null,
                 primary_embedded_eoa: null,
                 embedded_wallet: null,
               },
@@ -593,17 +580,13 @@ describe('wallet mapping + sync', () => {
         if (text.includes('from profiles') && text.includes('where privy_user_id')) {
           return { rows: [{ id: 101, email: 'user@example.com' }] }
         }
-        if (text.includes('select') && text.includes('from profiles') && text.includes('where id') && text.includes('primary_smart_wallet')) {
+        if (text.includes('select') && text.includes('from profiles') && text.includes('where id') && text.includes('csw_address')) {
           return {
             rows: [
               {
                 primary_wallet: externalEoa,
-                primary_smart_wallet: canonicalCsw,
                 csw_address: canonicalCsw,
                 base_sub_account: null,
-                canonical_solana_wallet: null,
-                operational_solana_wallet: null,
-                solana_wallet: null,
                 primary_embedded_eoa: staleEmbedded,
                 embedded_wallet: staleEmbedded,
               },
@@ -647,17 +630,13 @@ describe('wallet mapping + sync', () => {
         if (text.includes('from profiles') && text.includes('where privy_user_id')) {
           return { rows: [{ id: 101, email: 'user@example.com' }] }
         }
-        if (text.includes('select') && text.includes('from profiles') && text.includes('where id') && text.includes('primary_smart_wallet')) {
+        if (text.includes('select') && text.includes('from profiles') && text.includes('where id') && text.includes('csw_address')) {
           return {
             rows: [
               {
                 primary_wallet: staleEmbedded,
-                primary_smart_wallet: canonicalCsw,
                 csw_address: canonicalCsw,
                 base_sub_account: null,
-                canonical_solana_wallet: null,
-                operational_solana_wallet: null,
-                solana_wallet: null,
                 primary_embedded_eoa: staleEmbedded,
                 embedded_wallet: staleEmbedded,
               },
@@ -703,17 +682,13 @@ describe('wallet mapping + sync', () => {
         if (text.includes('from profile_wallets') && text.includes('is_canonical_smart_wallet')) {
           return { rows: [] }
         }
-        if (text.includes('select') && text.includes('from profiles') && text.includes('where id') && text.includes('primary_smart_wallet')) {
+        if (text.includes('select') && text.includes('from profiles') && text.includes('where id') && text.includes('csw_address')) {
           return {
             rows: [
               {
                 primary_wallet: '0x00000000000000000000000000000000000000f0',
-                primary_smart_wallet: null,
                 csw_address: null,
                 base_sub_account: null,
-                canonical_solana_wallet: null,
-                operational_solana_wallet: null,
-                solana_wallet: null,
                 primary_embedded_eoa: null,
                 embedded_wallet: null,
                 preprov_zora_handle: '@alice',

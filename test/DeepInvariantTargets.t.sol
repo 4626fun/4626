@@ -335,6 +335,10 @@ contract DeepMockVault is ERC20 {
         shares = assets;
         _mint(receiver, shares);
     }
+
+    function mintShares(address to, uint256 amount) external {
+        _mint(to, amount);
+    }
 }
 
 contract DeepMockOracle is ICreatorOracle {
@@ -371,6 +375,35 @@ contract DeepMockRouter is ISwapRouter {
         weth.transferFrom(msg.sender, address(this), params.amountIn);
         out = params.amountIn * 2;
         creatorCoin.transfer(params.recipient, out);
+    }
+}
+
+contract DeepMockWrapper {
+    IERC20 public immutable vaultToken;
+    DeepMockToken public immutable oftToken;
+    uint256 public constant NORMALIZATION = 1000;
+
+    constructor(IERC20 vault_, DeepMockToken oft_) {
+        vaultToken = vault_;
+        oftToken = oft_;
+    }
+
+    function vaultShares() external view returns (address) {
+        return address(vaultToken);
+    }
+
+    function wrap(uint256 amount) external returns (uint256) {
+        vaultToken.transferFrom(msg.sender, address(this), amount);
+        uint256 out = amount / NORMALIZATION;
+        oftToken.mint(msg.sender, out);
+        return out;
+    }
+
+    function unwrap(uint256 amount) external returns (uint256) {
+        oftToken.transferFrom(msg.sender, address(this), amount);
+        uint256 out = amount * NORMALIZATION;
+        DeepMockVault(address(vaultToken)).mintShares(msg.sender, out);
+        return out;
     }
 }
 
@@ -429,13 +462,14 @@ contract GaugeReserveInvariantTest is Test {
         gauge.setVault(address(vault));
         gauge.setCreatorCoin(address(creatorCoin));
         gauge.setOracle(address(oracle));
+        gauge.setWrapper(address(new DeepMockWrapper(vault, shareOFT)));
 
         handler = new GaugeReserveHandler(gauge, weth, creatorCoin);
         targetContract(address(handler));
     }
 
     function invariant_jackpotReserveNeverExceedsShareBalance() external view {
-        assertLe(gauge.jackpotReserve(), IERC20(address(vault)).balanceOf(address(gauge)), "reserve exceeds shares");
+        assertLe(gauge.jackpotReserve(), IERC20(address(shareOFT)).balanceOf(address(gauge)), "reserve exceeds shares");
     }
 }
 

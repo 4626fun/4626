@@ -11,6 +11,10 @@ import {
   normalizeZoraProfileIdentifier,
 } from './client'
 import type { ZoraExploreListType } from './types'
+import {
+  type AccountZoraProfileSeedInput,
+  pickAccountZoraProfileSeed,
+} from './zoraProfileIdentifier'
 
 export function useZoraCoin(address?: Address) {
   const normalizedAddress = address ? normalizeZoraCoinAddress(address) : undefined
@@ -31,6 +35,50 @@ export function useZoraProfile(identifier?: string) {
     enabled: !!normalizedIdentifier,
     staleTime: 1000 * 60 * 5,
   })
+}
+
+type UseAccountZoraProfileOptions = AccountZoraProfileSeedInput & {
+  enabled?: boolean
+  /** Used only when the primary CSW/handle seed returns no profile. */
+  fallbackAddress?: string | null
+}
+
+export function useAccountZoraProfile(options?: UseAccountZoraProfileOptions) {
+  const enabled = options?.enabled !== false
+  const primarySeed = options ? pickAccountZoraProfileSeed(options) : undefined
+
+  const primaryQuery = useZoraProfile(enabled ? primarySeed : undefined)
+
+  const rawFallbackAddress =
+    typeof options?.fallbackAddress === 'string' ? options.fallbackAddress.trim() : ''
+  const normalizedFallbackAddress = rawFallbackAddress
+    ? normalizeZoraProfileIdentifier(rawFallbackAddress)
+    : undefined
+  const fallbackAddress =
+    normalizedFallbackAddress && normalizedFallbackAddress !== primarySeed
+      ? normalizedFallbackAddress
+      : undefined
+
+  const shouldFallback =
+    enabled &&
+    Boolean(fallbackAddress) &&
+    primaryQuery.isFetched &&
+    !primaryQuery.isLoading &&
+    !primaryQuery.data
+
+  const fallbackQuery = useZoraProfile(shouldFallback ? fallbackAddress : undefined)
+
+  const data = primaryQuery.data ?? fallbackQuery.data ?? null
+  const seed = primaryQuery.data ? primarySeed : fallbackQuery.data ? fallbackAddress : primarySeed
+
+  return {
+    data,
+    seed,
+    isLoading: primaryQuery.isLoading || (shouldFallback && fallbackQuery.isLoading),
+    isFetching: primaryQuery.isFetching || fallbackQuery.isFetching,
+    isFetched: primaryQuery.isFetched && (!shouldFallback || fallbackQuery.isFetched),
+    error: primaryQuery.error ?? fallbackQuery.error ?? null,
+  }
 }
 
 export function useZoraExplore(list: ZoraExploreListType, params?: { count?: number; after?: string; enabled?: boolean }) {

@@ -4,40 +4,36 @@ pragma solidity 0.8.30;
 /**
  * @title CreatorLotteryManager
  * @author 0xakita.eth
- * @notice SHARED swap-based lottery service for ALL Creator Coins (hub-only, deployed on Base)
+ * @notice Shared swap-based lottery service for all Creator Coins (hub-only, deployed on Base)
  *
  * @dev ARCHITECTURE (Hub-Centric):
- *      This is a SHARED service deployed ONLY on the hub chain (Base).
- *      It serves ALL Creator Coins by looking up their contracts from the registry.
- *      Remote chain OFTs send lottery entry messages here via LayerZero.
+ *      Shared hub service on Base only. Serves all creators via CreatorRegistry lookups.
+ *      Remote chain buys queue entries on the remote ShareOFT; buyers submit with native LZ fee.
+ *      Hub ShareOFT peer forwards MSG_TYPE_LOTTERY_ENTRY to receiveRemoteLotteryEntry().
  *
  * @dev LOTTERY MECHANICS:
- *      1. User trades ANY share token (■AKITA, ■DRAGON, etc) on ANY chain
- *      2. Hub: local processSwapLottery() is called directly
- *         Remote: OFT sends MSG_TYPE_LOTTERY_ENTRY via LayerZero to this contract
- *      3. Win probability scales with trade size ($1 = base, $10,000 = max)
- *      4. ve4626 lockers get boosted win chances
- *      5. Winners receive % from ALL active creator vaults (diversified prize!)
- *      6. Winner callback sent to source chain OFT for UX notification
+ *      1. User buys ANY share token (■AKITA, ■DRAGON, etc.) on any chain
+ *      2. Hub: ShareOFT calls processSwapLottery() directly on buy
+ *         Remote: buyer calls submitPendingLotteryEntry() after buy queues the entry
+ *      3. Win probability scales with trade size and ve4626 / coverage boosts
+ *      4. Winners paid from jackpotCustodian reserves across active creator vaults
+ *      5. MSG_TYPE_WINNER_CALLBACK sent to source-chain ShareOFT for UX notification
  *
- * @dev MULTI-TOKEN PRIZE PAYOUT:
- *      Winner gets shares from EVERY active creator vault on Base:
- *        - ■AKITA shares (69% of AKITA vault jackpot)
- *        - ■DRAGON shares (69% of DRAGON vault jackpot)
- *        - ■XYZ shares (69% of XYZ vault jackpot)
- *        - ... etc for ALL active creators
- *      Result: Winner gets a diversified portfolio of ALL creator tokens!
+ * @dev MULTI-VAULT PRIZE PAYOUT:
+ *      On win, jackpotPayoutAuthority draws from each active vault's jackpotCustodian reserve.
+ *      Winner receives a diversified basket of vault shares across the creator mesh.
+ *      (69% on gauge is lotteryShareBps of trade fees routed to reserve — not a per-payout slice.)
  *
- * @dev CROSS-CHAIN FLOW (Hub-Centric):
+ * @dev CROSS-CHAIN FLOW:
  *      Trade on Base:
- *        1. OFT calls processSwapLottery() directly
- *        2. VRF + payout happen locally
+ *        1. ShareOFT buy → processSwapLottery() inline
+ *        2. VRF + payout on Base
  *
- *      Trade on Remote (e.g., Arbitrum):
- *        1. Remote OFT sends MSG_TYPE_LOTTERY_ENTRY to this contract
- *        2. This contract processes VRF locally on Base
- *        3. If win: pay from ALL hub vaults
- *        4. Send MSG_TYPE_WINNER_CALLBACK to source chain OFT
+ *      Trade on remote chain:
+ *        1. ShareOFT buy queues pendingLotteryEntry; buyer submits with native LZ fee
+ *        2. Hub ShareOFT forwards entry → receiveRemoteLotteryEntry()
+ *        3. VRF + payout on Base from all active jackpotCustodian reserves
+ *        4. MSG_TYPE_WINNER_CALLBACK to source-chain ShareOFT
  */
 
 import {OApp, Origin, MessagingFee} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";

@@ -7,6 +7,17 @@ import {
 } from './privyLinkedAccounts'
 import { syncAccountsProviderLink } from './providerLink'
 
+function shouldRetryOAuthBackendSync(error: unknown): boolean {
+  const status = typeof (error as { status?: unknown })?.status === 'number'
+    ? (error as { status: number }).status
+    : null
+  if (status === 429) return false
+  if (status != null && status >= 500) return false
+  if (status === 401 || status === 403) return false
+  if ((error as { recoveryRequired?: unknown })?.recoveryRequired === true) return false
+  return true
+}
+
 /**
  * After a full-page OAuth redirect, Privy may show the linked provider before
  * `/api/accounts/link` has run. Sync once when Privy has the link but 4626 does not.
@@ -66,7 +77,9 @@ export function usePrivyOAuthReturnBackendSync(params: {
           })
           if (!cancelled) onSyncedRef.current?.()
         } catch (error) {
-          syncAttemptRef.current[provider] = false
+          if (shouldRetryOAuthBackendSync(error)) {
+            syncAttemptRef.current[provider] = false
+          }
           if (!cancelled) onErrorRef.current?.(error, provider)
         }
       }

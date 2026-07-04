@@ -268,7 +268,7 @@ export async function getCachedEthosScoreByAddress(rawAddress: string): Promise<
 
   const cached = await db.sql`
     SELECT ethos_score, ethos_level, ethos_score_updated_at
-    FROM chat_directory_profiles
+    FROM wallet_directory
     WHERE canonical_wallet = ${address}
     LIMIT 1;
   `
@@ -285,7 +285,7 @@ export async function getCachedEthosScoreByAddress(rawAddress: string): Promise<
 
   const score = await fetchEthosScoreByAddress(address)
   await db.sql`
-    INSERT INTO chat_directory_profiles (
+    INSERT INTO wallet_directory (
       canonical_wallet,
       ethos_userkey,
       ethos_score,
@@ -301,7 +301,7 @@ export async function getCachedEthosScoreByAddress(rawAddress: string): Promise<
       NOW()
     )
     ON CONFLICT (canonical_wallet) DO UPDATE SET
-      ethos_userkey = COALESCE(chat_directory_profiles.ethos_userkey, EXCLUDED.ethos_userkey),
+      ethos_userkey = COALESCE(wallet_directory.ethos_userkey, EXCLUDED.ethos_userkey),
       ethos_score = EXCLUDED.ethos_score,
       ethos_level = EXCLUDED.ethos_level,
       ethos_score_updated_at = NOW(),

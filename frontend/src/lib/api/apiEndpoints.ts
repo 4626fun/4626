@@ -13,16 +13,6 @@ export const API_ENDPOINTS = {
   zora: {
     metrics: '/api/zora/metrics',
   },
-  workspace: {
-    summary: '/api/v1/workspace/summary',
-    strategies: '/api/v1/workspace/strategies',
-    monitoring: '/api/v1/workspace/monitoring',
-    activity: '/api/v1/workspace/activity',
-    rooms: '/api/v1/workspace/rooms',
-    tasks: '/api/v1/workspace/tasks',
-    settings: '/api/v1/workspace/settings',
-    actions: '/api/v1/workspace/actions',
-  },
   explore: {
     vaults: '/api/v1/explore/vaults',
   },

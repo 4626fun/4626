@@ -67,7 +67,6 @@ describe('/api/social/recipient', () => {
           return {
             rows: [{
               id: 42,
-              primary_smart_wallet: null,
               csw_address: null,
               base_sub_account: null,
             }],

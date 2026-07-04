@@ -285,7 +285,7 @@ async function resolveProfileRow(db: any, mode: 'self' | 'public', address: stri
     const publicRow = await db.sql`
       SELECT *
       FROM profiles
-      WHERE LOWER(primary_smart_wallet) = ${address}
+      WHERE LOWER(csw_address) = ${address}
          OR LOWER(csw_address) = ${address}
          OR id IN (
            SELECT profile_id
@@ -310,7 +310,6 @@ async function resolveProfileRow(db: any, mode: 'self' | 'public', address: stri
        OR LOWER(embedded_wallet) = ${address}
        OR LOWER(csw_address) = ${address}
        OR LOWER(base_sub_account) = ${address}
-       OR LOWER(primary_smart_wallet) = ${address}
        OR LOWER(primary_embedded_eoa) = ${address}
     LIMIT 1;
   `
@@ -327,16 +326,15 @@ async function buildResponse(db: any, mode: 'self' | 'public', row: any): Promis
       pw.is_canonical_smart_wallet,
       pw.is_embedded_eoa,
       pw.verified_at,
-      w.wallet_type,
-      w.provider,
-      w.chain
+      pw.chain,
+      pw.wallet_type,
+      pw.provider
     FROM profile_wallets pw
-    LEFT JOIN wallets w ON LOWER(w.address) = LOWER(pw.address)
     WHERE pw.profile_id = ${profileId}
     ORDER BY pw.is_primary DESC, pw.is_canonical_smart_wallet DESC, pw.created_at ASC;
   `
 
-  const canonicalAddress = normalizeLower(row.primary_smart_wallet) || normalizeLower(row.csw_address) || null
+  const canonicalAddress = normalizeLower(row.csw_address) || normalizeLower(row.csw_address) || null
   const allWallets = mapWalletRows(Array.isArray(walletsResult.rows) ? walletsResult.rows : [])
   const wallets = mode === 'public'
     ? (() => {
@@ -407,7 +405,7 @@ async function buildResponse(db: any, mode: 'self' | 'public', row: any): Promis
 
   const profile: PortfolioProfile = {
     profileId,
-    primarySmartWallet: asNullableString(row.primary_smart_wallet) ?? asNullableString(row.csw_address),
+    primarySmartWallet: asNullableString(row.csw_address),
     primaryEmbeddedEoa: mode === 'public' ? null : (asNullableString(row.primary_embedded_eoa) ?? asNullableString(row.embedded_wallet)),
     displayName: getFieldValue(row, effectiveProfileFields, 'displayName'),
     bio: getFieldValue(row, effectiveProfileFields, 'bio'),

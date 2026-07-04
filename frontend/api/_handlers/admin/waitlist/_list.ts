@@ -72,13 +72,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const qRaw = typeof (req.query as any)?.q === 'string' ? String((req.query as any).q) : ''
   const q = qRaw.trim()
 
-  const mapItem = (row: any): WaitlistListItem => ({
+  const mapItem = (row: any): WaitlistListItem => {
+    const profileWallets = Array.isArray(row.profile_wallets) ? row.profile_wallets : []
+    const solanaFromWallets = profileWallets.find(
+      (wallet: any) =>
+        wallet?.is_canonical_solana_wallet === true &&
+        String(wallet?.chain ?? '').toLowerCase() === 'solana' &&
+        typeof wallet?.address === 'string',
+    )?.address
+
+    return {
     id: typeof row.id === 'number' ? row.id : Number(row.id),
     email: typeof row.email === 'string' ? row.email : String(row.email || ''),
     persona: typeof row.persona === 'string' ? row.persona : null,
     primaryWallet: typeof row.primary_wallet === 'string' ? row.primary_wallet : null,
     cswAddress: typeof row.csw_address === 'string' ? row.csw_address : null,
-    solanaWallet: typeof row.solana_wallet === 'string' ? row.solana_wallet : null,
+    solanaWallet:
+      typeof row.solana_wallet === 'string'
+        ? row.solana_wallet
+        : typeof solanaFromWallets === 'string'
+          ? solanaFromWallets
+          : null,
     embeddedWallet: typeof row.embedded_wallet === 'string' ? row.embedded_wallet : null,
     embeddedWalletChain: typeof row.embedded_wallet_chain === 'string' ? row.embedded_wallet_chain : null,
     embeddedWalletClientType: typeof row.embedded_wallet_client_type === 'string' ? row.embedded_wallet_client_type : null,
@@ -91,7 +105,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     preprovisioned: Boolean(row.preprovisioned_at),
     preprovZoraHandle: typeof row.preprov_zora_handle === 'string' ? row.preprov_zora_handle : null,
     preprovCoinSymbol: typeof row.preprov_coin_symbol === 'string' ? row.preprov_coin_symbol : null,
-  })
+  }
+  }
 
   let items: WaitlistListItem[] = []
 
@@ -101,10 +116,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const where = q
       ? `WHERE email ILIKE $1
          OR primary_wallet ILIKE $1
-         OR solana_wallet ILIKE $1
          OR referral_code ILIKE $1
          OR embedded_wallet ILIKE $1
-         OR privy_user_id ILIKE $1`
+         OR privy_user_id ILIKE $1
+         OR EXISTS (
+           SELECT 1
+           FROM profile_wallets pw
+           WHERE pw.profile_id = profiles.id
+             AND pw.address ILIKE $1
+             AND LOWER(COALESCE(pw.chain, '')) = 'solana'
+         )`
       : ''
     const params = q ? [`%${q}%`] : []
 
@@ -115,7 +136,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
          persona,
          primary_wallet,
          csw_address,
-         solana_wallet,
+         (
+           SELECT pw.address
+           FROM profile_wallets pw
+           WHERE pw.profile_id = profiles.id
+             AND pw.is_canonical_solana_wallet = true
+             AND LOWER(COALESCE(pw.chain, '')) = 'solana'
+           ORDER BY pw.updated_at DESC NULLS LAST, pw.created_at DESC NULLS LAST
+           LIMIT 1
+         ) AS solana_wallet,
          embedded_wallet,
          embedded_wallet_chain,
          embedded_wallet_client_type,
@@ -146,7 +175,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           'persona',
           'primary_wallet',
           'csw_address',
-          'solana_wallet',
           'embedded_wallet',
           'embedded_wallet_chain',
           'embedded_wallet_client_type',
@@ -159,6 +187,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           'preprovisioned_at',
           'preprov_zora_handle',
           'preprov_coin_symbol',
+          'profile_wallets(address,is_canonical_solana_wallet,chain)',
         ].join(','),
       )
       .order('created_at', { ascending: false })
@@ -169,7 +198,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         [
           `email.ilike.%${term}%`,
           `primary_wallet.ilike.%${term}%`,
-          `solana_wallet.ilike.%${term}%`,
           `referral_code.ilike.%${term}%`,
           `embedded_wallet.ilike.%${term}%`,
           `privy_user_id.ilike.%${term}%`,

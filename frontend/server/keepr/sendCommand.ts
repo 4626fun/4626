@@ -2,13 +2,6 @@ import type { Address } from 'viem'
 import { encodeFunctionData, parseUnits, isAddress, getAddress } from 'viem'
 
 import { logger } from '../_lib/infra/logger.js'
-import { BASE_CAIP2, walletRpc } from '../_lib/wallet/privyWalletApi.js'
-import {
-  buildInsufficientFundsRefusal,
-  checkWalletBalancePreflight,
-  getBasePreflightPublicClient,
-  isInsufficientFundsError,
-} from '../_lib/wallet/walletBalancePreflight.js'
 import {
   resolveCommandIssuerContextByAddress,
   isExecutionReady,
@@ -40,8 +33,6 @@ const TOKENS: Record<string, { address: Address; decimals: number; name: string 
     name: 'ETH',
   },
 }
-
-const BASE_CHAIN_ID = 8453
 
 const ERC20_TRANSFER_ABI = [
   {
@@ -288,255 +279,29 @@ export async function handleSendCommand(params: {
     return { ok: false, response: `Limit exceeded: ${limitsCheck.reason}` }
   }
 
-  // -------------------------------------------------------------------------
-  // Architecture B (Phase 2): route /keepr send through the issuer's Coinbase
-  // Smart Wallet via UserOperation when `ARCH_B_SEND_VIA_USEROP` is enabled.
-  // This branch resolves the command issuer's execution context, then hands
-  // off to the submitter which enforces caps + preflight on the CSW.
-  // Hard-fail if the issuer is not execution-ready — no silent fallback.
-  // -------------------------------------------------------------------------
-  if (isArchBSendViaUserOpEnabled()) {
-    const archBResult = await handleSendCommandViaArchB({
-      groupId: params.groupId,
-      senderWallet: params.senderWallet,
-      recipient,
-      parsed,
-      tokenInfo,
-      amountNum,
-      vault: params.vault,
-    })
-    return archBResult
-  }
-
-  try {
-    await assertTeeAttestationOrThrow({
-      action: 'keepr.send.transfer',
-      actorAddress: params.senderWallet,
-      metadata: {
-        groupId: params.groupId,
-        vaultAddress: params.vault.vaultAddress,
-        token: parsed.token,
-      },
-    })
-  } catch (err) {
-    logger.warn('[send] TEE attestation gate denied send command', {
-      groupId: params.groupId,
-      senderWallet: params.senderWallet,
-      error: err instanceof Error ? err.message : String(err),
-    })
+  // Keeper send routes through the issuer's parent CSW via UserOperation.
+  // Per-coin Privy keeper EOAs are retired — no legacy EOA fallback.
+  if (!isArchBSendViaUserOpEnabled()) {
     return {
       ok: false,
-      response: 'Transfer denied: secure signer attestation is not verified. Please retry once attestation is healthy.',
+      response:
+        "This trade can't be executed — enable ARCH_B_SEND_VIA_USEROP so /keepr send routes through your parent CSW. Per-coin agent EOAs are retired.",
     }
   }
 
-  // Look up agent wallet (Privy-managed, for onchain tx)
-  // For CSW agents, the "agent wallet" IS the CSW — we use the Privy server
-  // wallet to sign transactions that execute on the CSW.
-  let agentWalletId: string
-  let agentWalletAddress: string
-  try {
-    const { getOrCreateCreatorAgentWallet } = await import('../_lib/wallet/creatorAgentWallets.js')
-    const wallet = await getOrCreateCreatorAgentWallet({ creatorToken: params.vault.creatorCoinAddress })
-    agentWalletId = wallet.walletId
-    agentWalletAddress = wallet.address
-  } catch (err) {
-    logger.error('[send] Failed to get agent wallet', err)
-    return { ok: false, response: 'Agent wallet not available. Contact the vault creator.' }
-  }
-
-  let reservedDailySpend = false
-  try {
-    // Reserve daily limit first so successful transfers are always durably counted.
-    await recordDailySpend(params.vault.vaultAddress, parsed.token, amountNum)
-    reservedDailySpend = true
-  } catch (err) {
-    logger.error('[send] failed reserving durable daily spend', {
-      groupId: params.groupId,
-      vaultAddress: params.vault.vaultAddress,
-      token: parsed.token,
-      amount: amountNum,
-      error: err instanceof Error ? err.message : String(err),
-    })
-    return {
-      ok: false,
-      response: 'Transfer unavailable: durable daily limits are temporarily unavailable. Please retry shortly.',
-    }
-  }
-
-  // Defensive balance preflight: the Privy-managed agent EOA must cover
-  // `value + gas`. For ETH transfers value = parsed amount; for ERC-20
-  // transfers value = 0 (only gas matters). Fail-open on RPC errors.
-  {
-    const preflightValueWei = parsed.token === 'eth' ? parseUnits(parsed.amount, 18) : 0n
-    let preflight: Awaited<ReturnType<typeof checkWalletBalancePreflight>> | null = null
-    try {
-      preflight = await checkWalletBalancePreflight({
-        publicClient: getBasePreflightPublicClient(),
-        wallet: agentWalletAddress as Address,
-        valueWei: preflightValueWei,
-      })
-    } catch (error) {
-      logger.warn('[send] balance preflight threw unexpectedly; proceeding', {
-        groupId: params.groupId,
-        wallet: agentWalletAddress,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
-    if (preflight && preflight.sufficient === false) {
-      logger.warn('[send] agent wallet insufficient for transfer', {
-        groupId: params.groupId,
-        wallet: agentWalletAddress,
-        token: parsed.token,
-        balanceWei: preflight.balanceWei.toString(),
-        requiredWei: preflight.requiredWei.toString(),
-      })
-      if (reservedDailySpend) {
-        try {
-          await recordDailySpend(params.vault.vaultAddress, parsed.token, -amountNum)
-        } catch (rollbackError) {
-          logger.error('[send] failed rolling back daily spend after preflight refusal', {
-            groupId: params.groupId,
-            error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
-          })
-        }
-      }
-      return { ok: false, response: preflight.message }
-    }
-  }
-
-  try {
-    let txHash: string
-
-    if (parsed.token === 'eth') {
-      // Native ETH transfer
-      const valueWei = parseUnits(parsed.amount, 18)
-      const result = await walletRpc<any>({
-        walletId: agentWalletId,
-        method: 'eth_sendTransaction',
-        caip2: BASE_CAIP2,
-        rpcParams: {
-          transaction: {
-            to: recipient,
-            value: `0x${valueWei.toString(16)}`,
-            chain_id: BASE_CHAIN_ID,
-          },
-        },
-        idempotencyKey: `send:${params.groupId}:${Date.now()}`,
-        teeContext: {
-          action: 'keepr.send.transfer',
-          actorAddress: params.senderWallet,
-          metadata: {
-            groupId: params.groupId,
-            vaultAddress: params.vault.vaultAddress,
-            token: parsed.token,
-          },
-        },
-      })
-      txHash = String(result?.data?.hash ?? result?.hash ?? 'pending')
-    } else {
-      // ERC-20 transfer
-      const amountUnits = parseUnits(parsed.amount, tokenInfo.decimals)
-      const data = encodeFunctionData({
-        abi: ERC20_TRANSFER_ABI,
-        functionName: 'transfer',
-        args: [recipient, amountUnits],
-      })
-      const result = await walletRpc<any>({
-        walletId: agentWalletId,
-        method: 'eth_sendTransaction',
-        caip2: BASE_CAIP2,
-        rpcParams: {
-          transaction: {
-            to: tokenInfo.address,
-            data,
-            value: '0x0',
-            chain_id: BASE_CHAIN_ID,
-          },
-        },
-        idempotencyKey: `send:${params.groupId}:${Date.now()}`,
-        teeContext: {
-          action: 'keepr.send.transfer',
-          actorAddress: params.senderWallet,
-          metadata: {
-            groupId: params.groupId,
-            vaultAddress: params.vault.vaultAddress,
-            token: parsed.token,
-          },
-        },
-      })
-      txHash = String(result?.data?.hash ?? result?.hash ?? 'pending')
-    }
-
-    logger.info('[send] Transfer sent', {
-      groupId: params.groupId,
-      token: tokenInfo.name,
-      amount: parsed.amount,
-      recipient,
-      txHash,
-      sender: params.senderWallet,
-    })
-
-    return {
-      ok: true,
-      response: [
-        'Transfer sent',
-        '',
-        `- Amount: ${parsed.amount} ${tokenInfo.name}`,
-        `- To: ${recipient}`,
-        `- From: ${agentWalletAddress} (agent wallet)`,
-        `- Tx: https://basescan.org/tx/${txHash}`,
-        `- Requested by: ${params.senderWallet}`,
-      ].join('\n'),
-      action: {
-        action: 'keepr.send.transfer',
-        token: tokenInfo.name,
-        amount: parsed.amount,
-        recipient,
-        txHash,
-        agentWallet: agentWalletAddress,
-        requestedBy: params.senderWallet,
-        vaultAddress: params.vault.vaultAddress,
-        groupId: params.groupId,
-      },
-    }
-  } catch (err: any) {
-    if (reservedDailySpend) {
-      try {
-        await recordDailySpend(params.vault.vaultAddress, parsed.token, -amountNum)
-      } catch (rollbackError) {
-        logger.error('[send] failed rolling back reserved daily spend', {
-          groupId: params.groupId,
-          vaultAddress: params.vault.vaultAddress,
-          token: parsed.token,
-          amount: amountNum,
-          error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
-        })
-      }
-    }
-    // Map raw insufficient-funds errors that slipped past preflight
-    // (e.g. preflight RPC failure, or gas estimation jumped above our buffer)
-    // to the same friendly refusal so we never leak raw Privy 400s.
-    if (isInsufficientFundsError(err)) {
-      logger.warn('[send] walletRpc returned insufficient-funds after preflight', {
-        groupId: params.groupId,
-        wallet: agentWalletAddress,
-        token: parsed.token,
-        error: err?.message,
-      })
-      return {
-        ok: false,
-        response: buildInsufficientFundsRefusal({ balanceWei: 0n, requiredWei: 0n }),
-      }
-    }
-    const msg = err?.message ?? 'Transaction failed'
-    logger.error('[send] Transfer failed', { error: msg, groupId: params.groupId })
-    return { ok: false, response: `Transfer failed: ${msg.slice(0, 200)}` }
-  }
+  return await handleSendCommandViaArchB({
+    groupId: params.groupId,
+    senderWallet: params.senderWallet,
+    recipient,
+    parsed,
+    tokenInfo,
+    amountNum,
+    vault: params.vault,
+  })
 }
 
 // ---------------------------------------------------------------------------
-// Architecture B (Phase 2) — /keepr send via UserOperation on issuer's CSW.
+// Architecture B — /keepr send via UserOperation on issuer's CSW.
 // ---------------------------------------------------------------------------
 
 async function handleSendCommandViaArchB(params: {

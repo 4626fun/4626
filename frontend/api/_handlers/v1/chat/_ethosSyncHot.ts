@@ -212,13 +212,17 @@ async function maybeRunProjectionFallback(params: {
   }
 
   try {
-    const result = await params.db.sql`
-      SELECT * FROM public.run_zora_owner_ethos_projection(20000);
-    `
+    const fallbackLimit = readInt(process.env.ETHOS_PROJECTION_FALLBACK_LIMIT, 20_000, 100, 250_000)
+    const result = await refreshCreatorEthosProjection({
+      db: params.db,
+      limit: fallbackLimit,
+      mode: 'full',
+    })
     hotProjectionFallbackState.lastTriggeredAt = now
     hotProjectionFallbackState.consecutivePipelineSplitStaleTicks = 0
     console.warn('[ethos-canonical-sync-hot] projection_fallback:triggered', {
-      updatedRows: Number(result.rows?.[0]?.updated_rows ?? 0),
+      updatedRows: result.refreshedRows,
+      appliedLimit: result.appliedLimit,
       cooldownMs,
       requiredConsecutive,
     })

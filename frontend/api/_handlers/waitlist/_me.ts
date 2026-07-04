@@ -154,12 +154,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       embedded_wallet_chain,
       embedded_wallet_client_type,
       csw_address,
-      primary_smart_wallet,
       primary_embedded_eoa,
       base_sub_account,
-      solana_wallet,
-      canonical_solana_wallet,
-      operational_solana_wallet,
       preprov_coin_address,
       preprov_coin_symbol,
       erc8128_agent_id,
@@ -198,7 +194,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const delegationEmbedded = normalizeAddress(delegationWallet.rows?.[0]?.privy_embedded_eoa_address)
 
   const accountMap = new Map<string, ConnectedAccount>()
-  const cswAddressKey = toAccountKey(row.csw_address || row.primary_smart_wallet)
+  const cswAddressKey = toAccountKey(row.csw_address || row.csw_address)
   const rawBaseSubAccountKey = toAccountKey(row.base_sub_account)
   const baseSubAccountKey =
     rawBaseSubAccountKey && rawBaseSubAccountKey !== cswAddressKey ? rawBaseSubAccountKey : ''
@@ -227,14 +223,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     address: normalizeAddress(row.csw_address),
     chain: 'evm',
     walletType: 'smart_wallet',
-    source: 'csw_address_column',
+    source: 'csw_address',
     isCanonicalSmartWallet: true,
   })
   upsertAccount(accountMap, {
-    address: normalizeAddress(row.primary_smart_wallet),
+    address: normalizeAddress(row.csw_address),
     chain: 'evm',
     walletType: 'smart_wallet',
-    source: 'primary_smart_wallet_column',
+    source: 'csw_address_column',
     isCanonicalSmartWallet: true,
   })
   upsertAccount(accountMap, {
@@ -243,20 +239,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     walletType: 'smart_wallet',
     source: 'base_sub_account_column',
     isExecutionSubAccount: true,
-  })
-  upsertAccount(accountMap, {
-    address: normalizeAddress(row.canonical_solana_wallet ?? row.solana_wallet),
-    chain: 'solana',
-    walletType: 'external_eoa',
-    source: 'canonical_solana_wallet_column',
-    isCanonicalSolanaWallet: true,
-  })
-  upsertAccount(accountMap, {
-    address: normalizeAddress(row.operational_solana_wallet),
-    chain: 'solana',
-    walletType: 'embedded_eoa',
-    source: 'operational_solana_wallet_column',
-    isOperationalSolanaWallet: true,
   })
 
   const wallets = await db.sql`
@@ -268,11 +250,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       pw.is_operational_solana_wallet,
       pw.is_embedded_eoa,
       pw.verified_at,
-      w.chain,
-      w.wallet_type,
-      w.provider
+      pw.chain,
+      pw.wallet_type,
+      pw.provider
     FROM profile_wallets pw
-    LEFT JOIN wallets w ON LOWER(w.address) = LOWER(pw.address)
     WHERE pw.profile_id = ${profileId}
     ORDER BY pw.is_primary DESC, pw.is_canonical_smart_wallet DESC, pw.verified_at DESC NULLS LAST, pw.address ASC;
   `
@@ -310,7 +291,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const rawCswAddress =
     delegationCanonical ||
     (typeof row.csw_address === 'string' && row.csw_address.trim()) ||
-    (typeof row.primary_smart_wallet === 'string' && row.primary_smart_wallet.trim()) ||
     null
   const resolvedCswAddress =
     resolveStoredCanonicalCswAddress({
@@ -321,31 +301,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       activeOwnerEoa: typeof row.primary_wallet === 'string' ? row.primary_wallet : null,
     }) ?? rawCswAddress
 
+  const canonicalSolanaWallet =
+    connectedAccounts.find((account) => account.isCanonicalSolanaWallet)?.address ?? null
+  const operationalSolanaWallet =
+    connectedAccounts.find((account) => account.isOperationalSolanaWallet)?.address ?? null
+
   const data: WaitlistMeResponse = {
     profileId,
     email: typeof row.email === 'string' ? row.email : null,
     contactPreference: typeof row.contact_preference === 'string' ? row.contact_preference : null,
     primaryWallet: typeof row.primary_wallet === 'string' ? row.primary_wallet : null,
-    primarySmartWallet: typeof row.primary_smart_wallet === 'string' ? row.primary_smart_wallet : null,
+    primarySmartWallet: typeof row.csw_address === 'string' ? row.csw_address : null,
     primaryEmbeddedEoa: typeof row.primary_embedded_eoa === 'string' ? row.primary_embedded_eoa : null,
     baseSubAccount: typeof row.base_sub_account === 'string' ? row.base_sub_account : null,
     embeddedWallet: typeof row.embedded_wallet === 'string' ? row.embedded_wallet : null,
     embeddedWalletChain: typeof row.embedded_wallet_chain === 'string' ? row.embedded_wallet_chain : null,
     embeddedWalletClientType: typeof row.embedded_wallet_client_type === 'string' ? row.embedded_wallet_client_type : null,
     cswAddress: resolvedCswAddress,
-    canonicalSolanaWallet:
-      typeof row.canonical_solana_wallet === 'string'
-        ? row.canonical_solana_wallet
-        : typeof row.solana_wallet === 'string'
-          ? row.solana_wallet
-          : null,
-    operationalSolanaWallet: typeof row.operational_solana_wallet === 'string' ? row.operational_solana_wallet : null,
-    solanaWallet:
-      typeof row.canonical_solana_wallet === 'string'
-        ? row.canonical_solana_wallet
-        : typeof row.solana_wallet === 'string'
-          ? row.solana_wallet
-          : null,
+    canonicalSolanaWallet,
+    operationalSolanaWallet,
+    solanaWallet: canonicalSolanaWallet,
     preprovCoinAddress: typeof row.preprov_coin_address === 'string' ? row.preprov_coin_address : null,
     preprovCoinSymbol: typeof row.preprov_coin_symbol === 'string' ? row.preprov_coin_symbol : null,
     erc8128AgentId: typeof row.erc8128_agent_id === 'string' ? row.erc8128_agent_id : null,

@@ -116,7 +116,7 @@ describe('confirmOwnerState', () => {
         if (text.includes('select base_sub_account from profiles where id =')) {
           return { rows: [{ base_sub_account: null }] }
         }
-        if (text.includes('select pw.address from profile_wallets pw') && text.includes('left join wallets w')) {
+        if (text.includes('select pw.address from profile_wallets pw') && text.includes("lower(coalesce(pw.canonical_source, '')) = 'wallet_sync'")) {
           return { rows: [] }
         }
         if (text.includes('with direct as') && text.includes('privy_user_aliases')) {

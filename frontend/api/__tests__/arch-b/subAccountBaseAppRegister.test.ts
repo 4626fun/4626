@@ -365,7 +365,7 @@ describe('POST /api/arch-b/sub-account/baseapp/register', () => {
     })
   })
 
-  it('upserts CIEC, wallets, profile_wallets, and profiles via runInTransaction', async () => {
+  it('upserts CIEC, profile_wallets, and profiles via runInTransaction', async () => {
     const db = makeFakeDb({
       selectResponses: [
         profilesSelectResponse(EMBEDDED_EOA),
@@ -383,7 +383,9 @@ describe('POST /api/arch-b/sub-account/baseapp/register', () => {
     const sqlText = db.calls.map((c) => c.sql).join('\n--SEP--\n')
     expect(sqlText).toContain('command_issuer_execution_context')
     expect(sqlText).toContain('provisioning_source')
-    expect(sqlText).toContain('INTO wallets')
+    expect(sqlText).toContain('chain')
+    expect(sqlText).toContain('wallet_type')
+    expect(sqlText).toContain('provider')
     expect(sqlText).toContain('profile_wallets')
     expect(sqlText).toContain('is_canonical_smart_wallet')
     // The handler unsets is_canonical_smart_wallet on prior canonical

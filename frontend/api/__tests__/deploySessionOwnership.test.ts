@@ -303,7 +303,6 @@ function makeCanonicalDb() {
               id: 99,
               primary_wallet: '0x0000000000000000000000000000000000000001',
               primary_embedded_eoa: null,
-              primary_smart_wallet: '0x0000000000000000000000000000000000000002',
               csw_address: '0x0000000000000000000000000000000000000002',
               base_sub_account: null,
               canonical_wallet: '0x0000000000000000000000000000000000000002',
@@ -333,7 +332,6 @@ function makeCanonicalDbWithHistoricalSessionOnly() {
               id: 99,
               primary_wallet: '0x0000000000000000000000000000000000000004',
               primary_embedded_eoa: '0x0000000000000000000000000000000000000004',
-              primary_smart_wallet: '0x0000000000000000000000000000000000000002',
               csw_address: '0x0000000000000000000000000000000000000002',
               base_sub_account: null,
               canonical_wallet: '0x0000000000000000000000000000000000000002',
@@ -792,7 +790,6 @@ describe('deploy session ownership guardrails', () => {
               id: 99,
               primary_wallet: '0x0000000000000000000000000000000000000001',
               primary_embedded_eoa: null,
-              primary_smart_wallet: '0x0000000000000000000000000000000000000002',
               csw_address: '0x0000000000000000000000000000000000000002',
               base_sub_account: null,
               canonical_wallet: '0x0000000000000000000000000000000000000002',
@@ -977,7 +974,6 @@ describe('deploy session ownership guardrails', () => {
     ;(db.query as any).mockImplementation(async (sql: string) => {
       const text = String(sql).toLowerCase()
       if (text.includes('from allowlist')) return { rows: [] }
-      if (text.includes('from creator_wallets')) return { rows: [] }
       if (text.includes('from profiles')) return { rows: [{ id: 7 }] }
       return { rows: [] }
     })

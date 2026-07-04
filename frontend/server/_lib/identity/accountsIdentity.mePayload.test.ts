@@ -13,13 +13,14 @@ describe('buildAccountsMePayload', () => {
           .trim()
           .toLowerCase()
 
-        if (query.includes("to_regclass('public.accounts') is not null as has_accounts")) {
+        if (query.includes("to_regclass('public.profiles') is not null as has_profiles") && query.includes('has_email_verified')) {
           return {
             rows: [
               {
-                has_accounts: true,
+                has_profiles: true,
                 has_account_linked_methods: true,
                 has_account_zora_signals: true,
+                has_email_verified: true,
                 has_canonical_csw_address: true,
               },
             ],
@@ -31,15 +32,13 @@ describe('buildAccountsMePayload', () => {
             rows: [
               {
                 has_profiles: true,
-                has_referral_clicks: true,
                 has_referral_conversions: true,
                 has_points: true,
-                has_wallets: true,
                 has_profile_wallets: true,
                 has_app_access_status: true,
                 has_verifications: true,
                 has_profile_completed_at: true,
-                has_primary_smart_wallet: true,
+                has_csw_address: true,
                 has_primary_embedded_eoa: true,
               },
             ],
@@ -62,11 +61,10 @@ describe('buildAccountsMePayload', () => {
           }
         }
 
-        if (query.includes("to_regclass('public.referral_clicks') is not null as has_referral_clicks")) {
+        if (query.includes("to_regclass('public.referral_conversions') is not null as has_referral_conversions")) {
           return {
             rows: [
               {
-                has_referral_clicks: true,
                 has_referral_conversions: true,
                 has_profiles_referral_code: true,
                 has_profiles_referred_by_signup_id: true,
@@ -75,15 +73,14 @@ describe('buildAccountsMePayload', () => {
           }
         }
 
-        if (query.includes("to_regclass('public.wallets') is not null as has_wallets")) {
+        if (query.includes("column_name = 'chain'") && query.includes("table_name = 'profile_wallets'")) {
           return {
             rows: [
               {
-                has_wallets: true,
                 has_profile_wallets: true,
-                has_primary_smart_wallet: true,
+                has_profile_wallets_chain: true,
+                has_csw_address: true,
                 has_primary_embedded_eoa: true,
-                has_canonical_solana_wallet: true,
                 has_profile_wallets_canonical_solana: true,
                 has_profile_wallets_operational_solana: true,
               },
@@ -91,7 +88,7 @@ describe('buildAccountsMePayload', () => {
           }
         }
 
-        if (query.includes('select email') && query.includes('from accounts')) {
+        if (query.includes('select email') && query.includes('from profiles')) {
           return { rows: [{ email: 'test@example.com' }] }
         }
 
@@ -162,25 +159,22 @@ describe('buildAccountsMePayload', () => {
           return {
             rows: [
               {
-                has_accounts: true,
                 has_profiles: true,
+                has_email_verified: true,
                 has_account_linked_methods: true,
                 has_account_zora_signals: true,
                 has_canonical_csw_address: true,
-                has_referral_clicks: true,
                 has_referral_conversions: true,
                 has_points: true,
-                has_wallets: true,
                 has_profile_wallets: true,
                 has_app_access_status: true,
                 has_verifications: true,
                 has_profile_completed_at: true,
-                has_primary_smart_wallet: true,
+                has_csw_address: true,
                 has_primary_embedded_eoa: true,
                 has_privy_is_owner: true,
                 has_referral_status: true,
                 has_referral_qualified_at: true,
-                has_canonical_solana_wallet: true,
                 has_profile_wallets_canonical_solana: true,
                 has_profile_wallets_operational_solana: true,
                 has_profiles_referral_code: true,
@@ -190,7 +184,7 @@ describe('buildAccountsMePayload', () => {
           }
         }
 
-        if (query.includes('select email') && query.includes('from accounts')) {
+        if (query.includes('select email') && query.includes('from profiles')) {
           return { rows: [{ email: 'legacy@example.com', email_verified: true }] }
         }
 
@@ -224,7 +218,7 @@ describe('buildAccountsMePayload', () => {
         }
 
         // Delegation state lookup: the embedded EOA IS a direct CSW owner (legacy install).
-        if (query.includes('from profile_wallets pw') && query.includes('left join wallets w')) {
+        if (query.includes('from profile_wallets pw') && query.includes('pw.wallet_type')) {
           return {
             rows: [
               {
@@ -286,25 +280,22 @@ describe('buildAccountsMePayload', () => {
           return {
             rows: [
               {
-                has_accounts: true,
                 has_profiles: true,
+                has_email_verified: true,
                 has_account_linked_methods: true,
                 has_account_zora_signals: true,
                 has_canonical_csw_address: true,
-                has_referral_clicks: true,
                 has_referral_conversions: true,
                 has_points: true,
-                has_wallets: true,
                 has_profile_wallets: true,
                 has_app_access_status: true,
                 has_verifications: true,
                 has_profile_completed_at: true,
-                has_primary_smart_wallet: true,
+                has_csw_address: true,
                 has_primary_embedded_eoa: true,
                 has_privy_is_owner: true,
                 has_referral_status: true,
                 has_referral_qualified_at: true,
-                has_canonical_solana_wallet: true,
                 has_profile_wallets_canonical_solana: true,
                 has_profile_wallets_operational_solana: true,
                 has_profiles_referral_code: true,
@@ -314,7 +305,7 @@ describe('buildAccountsMePayload', () => {
           }
         }
 
-        if (query.includes('select email') && query.includes('from accounts')) {
+        if (query.includes('select email') && query.includes('from profiles')) {
           return { rows: [{ email: 'alias@example.com', email_verified: true }] }
         }
 
@@ -392,25 +383,22 @@ describe('buildAccountsMePayload', () => {
           return {
             rows: [
               {
-                has_accounts: true,
                 has_profiles: true,
+                has_email_verified: true,
                 has_account_linked_methods: true,
                 has_account_zora_signals: true,
                 has_canonical_csw_address: true,
-                has_referral_clicks: true,
                 has_referral_conversions: true,
                 has_points: true,
-                has_wallets: true,
                 has_profile_wallets: true,
                 has_app_access_status: true,
                 has_verifications: true,
                 has_profile_completed_at: true,
-                has_primary_smart_wallet: true,
+                has_csw_address: true,
                 has_primary_embedded_eoa: true,
                 has_privy_is_owner: true,
                 has_referral_status: true,
                 has_referral_qualified_at: true,
-                has_canonical_solana_wallet: true,
                 has_profile_wallets_canonical_solana: true,
                 has_profile_wallets_operational_solana: true,
                 has_profiles_referral_code: true,
@@ -420,7 +408,7 @@ describe('buildAccountsMePayload', () => {
           }
         }
 
-        if (query.includes('select email') && query.includes('from accounts')) {
+        if (query.includes('select email') && query.includes('from profiles')) {
           return { rows: [{ email: 'subaccount@example.com', email_verified: true }] }
         }
 
@@ -454,7 +442,7 @@ describe('buildAccountsMePayload', () => {
           }
         }
 
-        if (query.includes('from profile_wallets pw') && query.includes('left join wallets w')) {
+        if (query.includes('from profile_wallets pw') && query.includes('pw.wallet_type')) {
           return {
             rows: [
               {
@@ -516,25 +504,22 @@ describe('buildAccountsMePayload', () => {
           return {
             rows: [
               {
-                has_accounts: true,
                 has_profiles: true,
+                has_email_verified: true,
                 has_account_linked_methods: true,
                 has_account_zora_signals: true,
                 has_canonical_csw_address: true,
-                has_referral_clicks: true,
                 has_referral_conversions: true,
                 has_points: true,
-                has_wallets: true,
                 has_profile_wallets: true,
                 has_app_access_status: true,
                 has_verifications: true,
                 has_profile_completed_at: true,
-                has_primary_smart_wallet: true,
+                has_csw_address: true,
                 has_primary_embedded_eoa: true,
                 has_privy_is_owner: true,
                 has_referral_status: true,
                 has_referral_qualified_at: true,
-                has_canonical_solana_wallet: true,
                 has_profile_wallets_canonical_solana: true,
                 has_profile_wallets_operational_solana: true,
                 has_profiles_referral_code: true,
@@ -544,7 +529,7 @@ describe('buildAccountsMePayload', () => {
           }
         }
 
-        if (query.includes('select email') && query.includes('from accounts')) {
+        if (query.includes('select email') && query.includes('from profiles')) {
           return { rows: [{ email: 'baseapp@example.com', email_verified: true }] }
         }
 
@@ -589,7 +574,7 @@ describe('buildAccountsMePayload', () => {
           }
         }
 
-        if (query.includes('from profile_wallets pw') && query.includes('left join wallets w')) {
+        if (query.includes('from profile_wallets pw') && query.includes('pw.wallet_type')) {
           return { rows: [] }
         }
 
@@ -641,25 +626,22 @@ describe('buildAccountsMePayload', () => {
           return {
             rows: [
               {
-                has_accounts: true,
                 has_profiles: true,
+                has_email_verified: true,
                 has_account_linked_methods: true,
                 has_account_zora_signals: true,
                 has_canonical_csw_address: true,
-                has_referral_clicks: true,
                 has_referral_conversions: true,
                 has_points: true,
-                has_wallets: true,
                 has_profile_wallets: true,
                 has_app_access_status: true,
                 has_verifications: true,
                 has_profile_completed_at: true,
-                has_primary_smart_wallet: true,
+                has_csw_address: true,
                 has_primary_embedded_eoa: true,
                 has_privy_is_owner: true,
                 has_referral_status: true,
                 has_referral_qualified_at: true,
-                has_canonical_solana_wallet: true,
                 has_profile_wallets_canonical_solana: true,
                 has_profile_wallets_operational_solana: true,
                 has_profiles_referral_code: true,
@@ -669,7 +651,7 @@ describe('buildAccountsMePayload', () => {
           }
         }
 
-        if (query.includes('select email') && query.includes('from accounts')) {
+        if (query.includes('select email') && query.includes('from profiles')) {
           return { rows: [{ email: 'baseapp-probe@example.com', email_verified: true }] }
         }
 

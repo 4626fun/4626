@@ -385,7 +385,6 @@ function makeCanonicalDb() {
               primary_wallet: '0x0000000000000000000000000000000000000001',
               embedded_wallet: null,
               primary_embedded_eoa: null,
-              primary_smart_wallet: '0x0000000000000000000000000000000000000002',
               csw_address: '0x0000000000000000000000000000000000000002',
               base_sub_account: null,
               canonical_wallet: '0x0000000000000000000000000000000000000002',

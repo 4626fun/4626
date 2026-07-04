@@ -176,7 +176,6 @@ describe('auth privy wallet sync', () => {
             rows: [
               {
                 canonical_wallet: '0x00000000000000000000000000000000000000aa',
-                primary_smart_wallet: null,
                 csw_address: null,
                 base_sub_account: null,
                 primary_wallet: null,
@@ -223,7 +222,6 @@ describe('auth privy wallet sync', () => {
             rows: [
               {
                 canonical_wallet: '0x00000000000000000000000000000000000000aa',
-                primary_smart_wallet: null,
                 csw_address: null,
                 base_sub_account: null,
                 primary_wallet: null,
@@ -278,7 +276,6 @@ describe('auth privy wallet sync', () => {
             rows: [
               {
                 canonical_wallet: '0x00000000000000000000000000000000000000aa',
-                primary_smart_wallet: null,
                 csw_address: null,
                 base_sub_account: null,
                 primary_wallet: null,

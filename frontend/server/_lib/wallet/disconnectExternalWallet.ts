@@ -51,7 +51,6 @@ export async function disconnectExternalWalletFromProfile(params: {
       primary_embedded_eoa,
       embedded_wallet,
       csw_address,
-      primary_smart_wallet
     FROM profiles
     WHERE id = ${params.profileId}
     LIMIT 1;
@@ -64,7 +63,7 @@ export async function disconnectExternalWalletFromProfile(params: {
     normalizeAddress(profile.embedded_wallet)
   const canonical =
     normalizeAddress(profile.csw_address) ??
-    normalizeAddress(profile.primary_smart_wallet)
+    normalizeAddress(profile.csw_address)
 
   if (embedded && addressEquals(external, embedded)) {
     throw new Error('cannot_disconnect_embedded_signer')

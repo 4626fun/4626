@@ -72,7 +72,6 @@ export async function ensureReferralsSchema(db: Db): Promise<void> {
     try {
       const preflight = await db.sql`
         SELECT
-          to_regclass('public.referral_clicks') IS NOT NULL AS has_referral_clicks,
           to_regclass('public.referral_conversions') IS NOT NULL AS has_referral_conversions,
           EXISTS (
             SELECT 1
@@ -91,7 +90,6 @@ export async function ensureReferralsSchema(db: Db): Promise<void> {
       `
       const status = preflight.rows?.[0] ?? {}
       if (
-        Boolean(status.has_referral_clicks) &&
         Boolean(status.has_referral_conversions) &&
         Boolean(status.has_profiles_referral_code) &&
         Boolean(status.has_profiles_referred_by_signup_id)
@@ -100,7 +98,6 @@ export async function ensureReferralsSchema(db: Db): Promise<void> {
         return
       }
       const missing: string[] = []
-      if (!Boolean(status.has_referral_clicks)) missing.push('public.referral_clicks')
       if (!Boolean(status.has_referral_conversions)) missing.push('public.referral_conversions')
       if (!Boolean(status.has_profiles_referral_code)) missing.push('public.profiles.referral_code')
       if (!Boolean(status.has_profiles_referred_by_signup_id)) missing.push('public.profiles.referred_by_signup_id')

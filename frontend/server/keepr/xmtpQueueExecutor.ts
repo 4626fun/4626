@@ -1,4 +1,4 @@
-import { Agent, createSigner, createUser, getInstallationInfo } from '@xmtp/agent-sdk'
+import { Agent, getInstallationInfo } from '@xmtp/agent-sdk'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import {
@@ -27,7 +27,7 @@ import {
   fileLooksLikePlainSqlite,
   hasLegacyMigrationBackupForFile,
 } from '../_lib/messaging/xmtpDbEncryption.js'
-import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../_lib/messaging/creatorXmtpAgents.js'
+import { ensureCreatorXmtpAgentsSchema } from '../_lib/messaging/creatorXmtpAgents.js'
 import {
   findCoinbaseSmartWalletOwnerIndex,
   sendCoinbaseSmartWalletUserOperation,
@@ -722,16 +722,12 @@ export async function executeKeeprAction(input: ExecuteKeeprActionInput): Promis
         ...(ownerIndex !== undefined ? { ownerIndex } : {}),
       })
     } else {
-      if (!row.encryptedPrivateKeyB64 || !row.encryptedPrivateKeyIvB64 || !row.encryptedPrivateKeyTagB64) {
-        return { success: false, retryable: false, actionType: normalizedActionType, error: 'agent_private_key_missing' }
+      return {
+        success: false,
+        retryable: false,
+        actionType: normalizedActionType,
+        error: 'legacy_eoa_xmtp_retired',
       }
-      const privKey = decryptPrivateKey({
-        ciphertextB64: row.encryptedPrivateKeyB64,
-        ivB64: row.encryptedPrivateKeyIvB64,
-        tagB64: row.encryptedPrivateKeyTagB64,
-        aad: `creator:${row.creatorAddress}`,
-      })
-      signer = createSigner(createUser(privKey))
     }
 
     const dbPath = makeKeeprDbPath(resolveKeeprDbIdentityKey(row))

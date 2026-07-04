@@ -154,7 +154,11 @@ function printComposerBlock(addrs: DeployAddresses): void {
 
   process.stdout.write('--- After finalize: protocol treasury Safe ---\n')
   process.stdout.write(
-    'INPUT REQUIRED before Safe calldata can be generated:\n' +
+    'AKITA launch note: Pipe B compose-deposit is dormant; configureCreatorMesh is deferred and\n' +
+      'NOT required for Base vault launch. See operator pack PF-2 before treating this as blocked.\n\n',
+  )
+  process.stdout.write(
+    'INPUT REQUIRED before Safe calldata can be generated (future activation only):\n' +
       '  configureCreatorMesh reverts on zero assetMeshToken/solanaAssetPeer (OVaultHubComposer ZeroAddress guard),\n' +
       '  and plan-akita-share-mesh-phase-a.ts only emits calldata when ALL FOUR mesh flags are provided.\n' +
       '  Resolve the Base asset-mesh OFT address and its Solana peer bytes32 first\n' +

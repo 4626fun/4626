@@ -11,7 +11,6 @@ import {
   ExternalLink,
   Clock,
   ShieldCheck,
-  MessageSquare,
 } from 'lucide-react'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
@@ -33,9 +32,6 @@ import { TokenAvatar } from '@/components/swap/TokenAvatar'
 import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugCopy'
 import { ShareVaultButton } from '@/components/share/ShareVaultButton'
 import { SHARE_SYMBOL_PREFIX, toShareSymbol } from '@/lib/tokens/tokenSymbols'
-import { CreatorWorkspacePanel } from '@/components/workspace/CreatorWorkspacePanel'
-import { parseVaultWorkspaceQuery, updateVaultWorkspaceQuery } from '@/features/vault/vaultWorkspaceQuery'
-import { requestOpenChat } from '@/lib/chat/openChat'
 
 // ABIs
 const WRAPPER_ABI = [
@@ -72,104 +68,6 @@ const tabs = ['Deposit', 'Withdraw'] as const
 type TabType = typeof tabs[number]
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
 const ZERO_ADDRESS = addr('0000000000000000000000000000000000000000')
-
-type VaultChatStatusResponse = {
-  policy: {
-    vaultAddress: `0x${string}`
-    groupId: string | null
-    minHoldingRaw: string
-    graceHours: number
-    enabled: boolean
-  } | null
-  membership: {
-    status: string
-    balanceRaw: string | null
-  } | null
-  canJoin: boolean
-}
-
-function VaultChatCard({ vaultAddress, shareSymbol }: { vaultAddress: `0x${string}` | null; shareSymbol: string }) {
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ['vaultChatStatus', vaultAddress],
-    queryFn: async () => {
-      if (!vaultAddress) return null
-      const res = await apiFetch(`/api/v1/vault/chat/status?vault=${vaultAddress}`)
-      if (!res.ok) throw new Error('Failed to load vault chat')
-      const json = (await res.json()) as { success: boolean; data?: VaultChatStatusResponse }
-      return json.data ?? null
-    },
-    enabled: Boolean(vaultAddress),
-    staleTime: 30_000,
-  })
-
-  async function handleOpenOrJoin() {
-    if (!vaultAddress || !data?.policy?.enabled) return
-    if (data.policy.groupId && data.membership?.status === 'active') {
-      requestOpenChat({ kind: 'group', conversationId: data.policy.groupId, name: `${shareSymbol} vault chat` })
-      return
-    }
-    try {
-      const res = await apiFetch(`/api/v1/vault/chat/join?vault=${vaultAddress}`, { method: 'POST' })
-      const json = (await res.json().catch(() => null)) as { success?: boolean; error?: string; data?: { policy?: { groupId?: string | null } } } | null
-      if (!res.ok || !json?.success) {
-        toast.error(json?.error === 'not_eligible' ? 'You do not meet this vault chat requirement yet' : json?.error ?? 'Could not join vault chat')
-        void refetch()
-        return
-      }
-      toast.success('Vault chat join queued')
-      const groupId = json.data?.policy?.groupId ?? data.policy.groupId
-      if (groupId) requestOpenChat({ kind: 'group', conversationId: groupId, name: `${shareSymbol} vault chat` })
-      void refetch()
-    } catch (error) {
-      const message = error instanceof Error && error.message ? error.message : 'Could not join vault chat'
-      toast.error(message)
-    }
-  }
-
-  const policy = data?.policy ?? null
-  const enabled = Boolean(policy?.enabled && policy.groupId)
-  const memberStatus = data?.membership?.status ?? null
-  const label = !enabled
-    ? 'Coming soon'
-    : memberStatus === 'active'
-      ? 'Joined'
-      : memberStatus === 'grace'
-        ? 'Grace'
-        : 'Gated'
-
-  return (
-    <div className={`vault-surface-muted vault-hover-lift p-5 space-y-3 ${enabled ? '' : 'opacity-80'}`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="w-4 h-4 text-brand-primary" />
-          <span className="label">Vault Chat</span>
-        </div>
-        <span className={`text-[10px] rounded-full border px-2 py-0.5 ${enabled ? 'border-brand-primary/25 bg-brand-primary/10 text-brand-primary' : 'border-white/12 bg-white/6 text-zinc-500'}`}>
-          {isLoading ? 'Checking' : label}
-        </span>
-      </div>
-      <p className="text-xs text-zinc-600 leading-relaxed">
-        {enabled
-          ? `Holder-gated XMTP group. Minimum: ${policy?.minHoldingRaw ?? '0'} raw ${shareSymbol} shares.`
-          : 'Group chat for vault holders will be available here once messaging is live.'}
-      </p>
-      <button
-        type="button"
-        disabled={!enabled || isLoading}
-        aria-disabled={!enabled || isLoading ? 'true' : undefined}
-        onClick={handleOpenOrJoin}
-        className={`w-full flex items-center justify-center gap-2 rounded-xl border text-xs font-medium py-2.5 transition ${
-          enabled
-            ? 'border-brand-primary/25 bg-brand-primary/10 text-brand-primary hover:bg-brand-primary/18'
-            : 'border-white/10 bg-white/4 text-zinc-600 cursor-not-allowed'
-        }`}
-      >
-        <MessageSquare className="w-3.5 h-3.5" />
-        {enabled ? (memberStatus === 'active' ? 'Open vault chat' : 'Check eligibility and join') : 'Chat not yet available'}
-      </button>
-    </div>
-  )
-}
 
 function formatCompactUsd(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return '$0'
@@ -213,7 +111,6 @@ export function Vault() {
   const [searchParams, setSearchParams] = useSearchParams()
   const addressParamRaw = typeof params.address === 'string' ? params.address.trim() : ''
   const addressParam = addressParamRaw && isAddress(addressParamRaw) ? (getAddress(addressParamRaw) as Address) : null
-  const workspaceQuery = useMemo(() => parseVaultWorkspaceQuery(searchParams), [searchParams])
 
   // Solana claim deep-link: ?claim=solana&solanaPubkey=...&prizeAmount=...
   const solanaClaimMode = searchParams.get('claim') === 'solana'
@@ -402,7 +299,6 @@ export function Vault() {
   const isGraduated = auctionStatus?.[2] || false
   const isUnlocked = isAuctionActive || isGraduated
   const canManageVault = isGraduated
-  const showWorkspacePanel = workspaceQuery.panel === 'workspace'
   const phaseLabel = isAuctionActive ? 'Auction Phase' : isGraduated ? 'Vault Active' : 'Not Launched'
 
   // Prefer Zora indexed preview image (fast), then onchain tokenURI metadata.
@@ -894,27 +790,6 @@ export function Vault() {
           >
             <span className="label">Vault Operations</span>
             <h2 className="headline text-3xl sm:text-5xl mt-4 sm:mt-6">Manage Position</h2>
-            <div className="mt-4 inline-flex">
-              <SegmentedTabs
-                tabs={[
-                  { id: 'manage', label: 'Position' },
-                  { id: 'workspace', label: 'Workspace' },
-                ]}
-                activeTab={showWorkspacePanel ? 'workspace' : 'manage'}
-                onChange={(tabId) =>
-                  setSearchParams(
-                    updateVaultWorkspaceQuery({
-                      current: searchParams,
-                      panel: tabId as 'manage' | 'workspace',
-                      ...(tabId === 'workspace'
-                        ? { tab: workspaceQuery.tab, taskId: workspaceQuery.taskId }
-                        : {}),
-                    }),
-                    { replace: true },
-                  )
-                }
-              />
-            </div>
           </motion.div>
 
           <div className="grid lg:grid-cols-5 gap-8">
@@ -1050,27 +925,6 @@ export function Vault() {
 
             {/* Position Panel */}
             <div className="lg:col-span-2 space-y-8">
-              {showWorkspacePanel && vaultAddress ? (
-                <CreatorWorkspacePanel
-                  vaultAddress={vaultAddress as `0x${string}`}
-                  initialTab={workspaceQuery.tab}
-                  focusedTaskId={workspaceQuery.taskId}
-                  onTabChange={(tab) =>
-                    setSearchParams(
-                      updateVaultWorkspaceQuery({
-                        current: searchParams,
-                        panel: 'workspace',
-                        tab,
-                        taskId: workspaceQuery.taskId,
-                      }),
-                      { replace: true },
-                    )
-                  }
-                />
-              ) : (
-                <VaultChatCard vaultAddress={vaultAddress as `0x${string}` | null} shareSymbol={shareSymbol} />
-              )}
-
               <div>
                 <span className="label mb-4 block">Your Holdings</span>
                 

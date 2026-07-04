@@ -16,7 +16,6 @@ import {
   rateLimitKey,
   logger,
   enableCswAgent,
-  getOrCreateCreatorXmtpAgent,
 } from '@4626/server-core'
 
 
@@ -115,29 +114,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           agentEnabled = true
           logger.info('[approve] CSW agent enabled', { id, wallet: creatorWallet.slice(0, 10) })
         } catch (err) {
-          logger.warn('[approve] CSW agent enable failed, falling back to EOA', err)
-          // Fallback: create EOA agent
-          try {
-            await getOrCreateCreatorXmtpAgent({
-              creatorAddress: creatorWallet as `0x${string}`,
-              listedPublicly: true,
-            })
-            agentEnabled = true
-          } catch (err2) {
-            logger.warn('[approve] EOA agent fallback also failed', err2)
-          }
+          logger.warn('[approve] CSW agent enable failed', err)
         }
       } else {
-        // No pre-provisioned wallet — try EOA agent as fallback
-        try {
-          await getOrCreateCreatorXmtpAgent({
-            creatorAddress: creatorWallet as `0x${string}`,
-            listedPublicly: true,
-          })
-          agentEnabled = true
-        } catch (err) {
-          logger.warn('[approve] EOA agent creation failed', err)
-        }
+        logger.warn('[approve] Skipping agent enable — no pre-provisioned server signer wallet', {
+          id,
+          wallet: creatorWallet.slice(0, 10),
+        })
       }
     } else {
       logger.info('[approve] Skipping auto-enable agent (explicit opt-in required)', {

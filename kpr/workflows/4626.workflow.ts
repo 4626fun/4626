@@ -40,6 +40,10 @@ import {
   executeVaultStrategyReallocator,
   type BatchVaultStrategyReallocateResult,
 } from '../actions/vault-strategy-reallocator.action.js';
+import {
+  executeRemoteShareOftFeeFlush,
+  type RemoteFeeFlushResult,
+} from '../actions/keepr-remote-fee-flush.action.js';
 import { alertCritical } from '../utils/alerts.js';
 
 const WORKFLOW_NAME = '4626';
@@ -58,6 +62,7 @@ export interface UnifiedResult {
   queue: KeeprActionQueueResult | null;
   bridgeIntegrity: BridgeIntegrityMonitorResult | null;
   strategyReallocator: BatchVaultStrategyReallocateResult | null;
+  remoteFeeFlush: RemoteFeeFlushResult | null;
   errors: string[];
   durationMs: number;
 }
@@ -76,6 +81,7 @@ export async function handler(): Promise<void> {
   let queueResult: KeeprActionQueueResult | null = null;
   let bridgeIntegrityResult: BridgeIntegrityMonitorResult | null = null;
   let strategyReallocatorResult: BatchVaultStrategyReallocateResult | null = null;
+  let remoteFeeFlushResult: RemoteFeeFlushResult | null = null;
 
   // ── 1. Vault Keeper (tend + report) ──────────────────────────────────
   try {
@@ -217,6 +223,23 @@ export async function handler(): Promise<void> {
     errors.push(`vault-strategy-reallocator: ${msg}`);
   }
 
+  // ── 9. Remote ShareOFT fee flush (spoke → Base gauge) ─────────────────
+  const remoteFeeFlushEnabled = String(process.env.KPR_REMOTE_SHARE_OFT_FLUSH_ENABLED ?? '0').trim() === '1';
+  if (remoteFeeFlushEnabled) {
+    try {
+      console.log('═══ Remote ShareOFT Fee Flush ═══');
+      remoteFeeFlushResult = await executeRemoteShareOftFeeFlush();
+      console.log(
+        `  targets=${remoteFeeFlushResult.targets.length} flushed=${remoteFeeFlushResult.targets.filter((t) => t.flushed).length} ` +
+          `receiveBridged=${remoteFeeFlushResult.receiveBridgedFeesCalled}`,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`  keepr-remote-fee-flush failed: ${msg}`);
+      errors.push(`keepr-remote-fee-flush: ${msg}`);
+    }
+  }
+
   const durationMs = Date.now() - start;
 
   // ── Summary ──────────────────────────────────────────────────────────
@@ -269,6 +292,14 @@ export async function handler(): Promise<void> {
           vaults: strategyReallocatorResult.totalVaults,
           rebalanced: strategyReallocatorResult.rebalanced,
           skipped: strategyReallocatorResult.skipped,
+        }
+      : null,
+    remoteFeeFlush: remoteFeeFlushResult
+      ? {
+          enabled: remoteFeeFlushResult.enabled,
+          targets: remoteFeeFlushResult.targets.length,
+          flushed: remoteFeeFlushResult.targets.filter((t) => t.flushed).length,
+          receiveBridgedFeesCalled: remoteFeeFlushResult.receiveBridgedFeesCalled,
         }
       : null,
     errors: errors.length,

@@ -20,7 +20,9 @@
     "actions/**/*.ts",
     "utils/**/*.ts",
     "tests/**/*.ts",
-    "types/**/*.d.ts"
+    "types/**/*.d.ts",
+    "../frontend/shared/payout-router/harvestCommon.ts",
+    "../frontend/shared/payout-router/harvestExecute.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

@@ -105,7 +105,7 @@ export default async function handler(req: any, res: any) {
     me = await db.sql`
       SELECT
         id, email, referral_code, profile_completed_at, border_tier,
-        primary_wallet, embedded_wallet, primary_embedded_eoa, csw_address, primary_smart_wallet, base_sub_account
+        primary_wallet, embedded_wallet, primary_embedded_eoa, csw_address, csw_address, base_sub_account
       FROM profiles
       WHERE email = ${email}
       LIMIT 1;
@@ -117,13 +117,12 @@ export default async function handler(req: any, res: any) {
     me = await db.sql`
       SELECT
         p.id, p.email, p.referral_code, p.profile_completed_at, p.border_tier,
-        p.primary_wallet, p.embedded_wallet, p.primary_embedded_eoa, p.csw_address, p.primary_smart_wallet, p.base_sub_account
+        p.primary_wallet, p.embedded_wallet, p.primary_embedded_eoa, p.csw_address, p.csw_address, p.base_sub_account
       FROM profiles p
       WHERE LOWER(p.primary_wallet) = ${wallet}
          OR LOWER(p.embedded_wallet) = ${wallet}
          OR LOWER(p.primary_embedded_eoa) = ${wallet}
          OR LOWER(p.csw_address) = ${wallet}
-         OR LOWER(p.primary_smart_wallet) = ${wallet}
          OR LOWER(p.base_sub_account) = ${wallet}
          OR EXISTS (
            SELECT 1

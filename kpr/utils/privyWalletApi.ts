@@ -118,9 +118,16 @@ export async function walletRpc<T>(params: {
   walletId: string
   method: string
   rpcParams: Record<string, unknown>
+  /** Required for chain-action RPC methods such as eth_sendTransaction. */
+  caip2?: string
   idempotencyKey?: string
 }): Promise<T> {
-  const body = { method: params.method, params: params.rpcParams }
+  const body: Record<string, unknown> = {
+    method: params.method,
+    params: params.rpcParams,
+    chain_type: 'ethereum',
+  }
+  if (params.caip2) body.caip2 = params.caip2
   return await privyFetchJson<T>({
     method: 'POST',
     path: `/v1/wallets/${encodeURIComponent(params.walletId)}/rpc`,

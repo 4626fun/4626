@@ -1,101 +1,75 @@
 #!/usr/bin/env tsx
 /**
- * For each zero-row, zero-activity public table, classify its usage:
+ * Classify zero-row public tables by runtime usage.
  *
- *   - truly-dead       : zero code references outside supabase/migrations.
- *                        The only mention is its own CREATE TABLE. Safe to
- *                        drop after user confirmation.
- *   - schema-only      : referenced only by migration DDL (e.g. a later
- *                        migration ADDs a column but no handler reads it).
- *                        Safe to drop.
- *   - feature-scaffold : referenced in source code (server/client) but
- *                        never exercised (zero rows, zero activity). Do
- *                        NOT drop — active development or feature on ice.
+ * Verdicts:
+ *   - dropped              : already removed from prod (20260714 cleanup pass)
+ *   - protected            : explicit keep (Telegram surface)
+ *   - active-consolidated  : post-20260714 identity tables (always audited, never dropped here)
+ *   - indexer-only         : live in indexer/, not frontend/kpr runtime
+ *   - truly-dead           : zero code refs outside migrations
+ *   - schema-only          : migration DDL only
+ *   - feature-scaffold     : live runtime SQL despite zero rows
  *
- * Output is pure JSON so it pipes cleanly into follow-up actions.
+ * Denormalization backlog (manual review — do not auto-drop):
+ *   Solana roles → profile_wallets.is_canonical_solana_wallet / is_operational_solana_wallet
+ *   wallet_directory       ↔ profiles display cache (chat-wide vs account-scoped)
  */
 
 import { execFileSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const CANDIDATES = [
-  'feedback_index',
-  'grove_chat_manifests',
-  'task_loops',
-  'telegram_chat_vault_scope',
-  'telegram_holder_room_members',
-  'telegram_holder_room_policies',
-  'telegram_inline_signal_feeds',
+/** Tables dropped in supabase/migrations/20260714*.sql — skip re-audit. */
+const DROPPED_TABLES = new Set([
+  'accounts',
+  'creator_wallets',
+  'creator_agent_wallets',
+  'creator_xmtp_agents',
   'csw_owner_link_status',
-  'keepr_join_requests',
-  'keepr_nonces',
-  'keepr_vault_automation',
-  'lottery_amoe_nonces',
-  'lottery_amoe_entries',
+  'referral_clicks',
+  'index_usage_snapshots',
+  'sankey_lookerstudio_full_dataset',
   'workspace_alert_events',
   'workspace_approvals',
   'workspace_audit_logs',
   'workspace_monitoring_snapshots',
   'workspace_notification_preferences',
   'workspace_strategy_targets',
-  'workspace_task_state',
   'workspace_activity_events',
-  'auth_nonces',
-  'auth_agent_nonces',
-  'telegram_miniapp_replay_nonces',
-  'telegram_miniapp_sessions',
-  'wallet_intelligence_cache',
-  'deploys',
-  'referral_conversions',
-  'referral_clicks',
-  'lottery_amoe_daily_twitter_checkins',
-  'keepr_logs',
-  'keepr_workflow_checkpoints',
-
-  // Additional 0-row / low-activity candidates from live DB snapshot (May 2026)
-  'ajna_vaults',
-  'alfaclub_chat_ingest',
-  'amoe_points_burn_ledger',
+  'workspace_task_state',
+  'vault_chat_policies',
+  'vault_chat_memberships',
+  'wallets',
+  'message_threads',
+  'thread_messages',
+  'thread_participants',
+  'thread_summaries',
+  'payment_rail_attempts',
   'base_address_activity_30d',
   'farcaster_rollout_events',
-  'payment_events',
-  'payment_orders',
-  'payment_rail_attempts',
-  'vault_chat_memberships',
-  'vault_chat_policies',
-  'waitlist_leads',
-  'telegram_private_dm_welcome_sent',
-  'telegram_trade_percent_prompts',
+  'alfaclub_chat_ingest',
+  'v_zora_profiles_refresh_freshness',
+])
 
-  // More 0-row tables from full live snapshot for deeper pass
-  'amoe_burn_credits_intents',
-  'auth_handoffs',
-  'chat_friend_requests',
-  'chat_presence_sessions',
-  'command_issuer_daily_spend',
-  'csw_owner_link_status',
-  'ethos_score_sync_state',
-  'farcaster_rollout_events',
-  'feedback_index',
-  'grove_chat_manifests',
-  'image_generation_assets',
-  'image_generation_attempts',
-  'image_generation_jobs',
-  'image_generation_projects',
-  'keepr_join_requests',
-  'keepr_nonces',
-  'lottery_amoe_daily_xmtp_checkins',
-  'lottery_amoe_entries',
-  'lottery_amoe_nonces',
-  'memory_snapshots',
-  'message_threads',
-  'payment_events',
-  'payment_orders',
-  'payment_rail_attempts',
-  'referral_clicks',
-  'referral_conversions',
-  'task_loops',
+/** Post-consolidation identity tables — active, never classify as dead. */
+const ACTIVE_CONSOLIDATED = new Set([
+  'wallet_directory',
+  'v_wallet_directory',
+  'creator_infrastructure',
+  'profile_wallets',
+  'profiles',
+  'allowlist',
+  'privy_user_aliases',
+  'account_linked_methods',
+  'account_zora_signals',
+])
+
+/** Used by indexer/ scripts only (not frontend/kpr). */
+const INDEXER_ONLY = new Set(['zora_coin_holders'])
+
+/** Product decision: keep Telegram tables even when zero-row. */
+const PROTECTED_TABLES = new Set([
   'telegram_chat_vault_scope',
   'telegram_holder_room_members',
   'telegram_holder_room_policies',
@@ -105,39 +79,74 @@ const CANDIDATES = [
   'telegram_miniapp_sessions',
   'telegram_private_dm_welcome_sent',
   'telegram_trade_percent_prompts',
-  'thread_messages',
-  'thread_participants',
-  'thread_summaries',
-  'vault_chat_memberships',
-  'vault_chat_policies',
+  'telegram_action_audit',
+  'telegram_action_tokens',
+  'telegram_active_messages',
+  'telegram_funnel_events',
+  'telegram_link_telemetry_events',
+  'telegram_onboarding_sessions',
+  'telegram_user_links',
+])
+
+const CANDIDATES = [
+  'feedback_index',
+  'grove_chat_manifests',
+  'task_loops',
+  'keepr_join_requests',
+  'keepr_nonces',
+  'keepr_vault_automation',
+  'lottery_amoe_nonces',
+  'lottery_amoe_entries',
+  'auth_nonces',
+  'auth_agent_nonces',
+  'wallet_intelligence_cache',
+  'deploys',
+  'referral_conversions',
+  'lottery_amoe_daily_twitter_checkins',
+  'keepr_logs',
+  'keepr_workflow_checkpoints',
+  'ajna_vaults',
+  'amoe_points_burn_ledger',
+  'payment_events',
+  'payment_orders',
   'waitlist_leads',
-  'workspace_alert_events',
-  'workspace_approvals',
-  'workspace_audit_logs',
-  'workspace_monitoring_snapshots',
-  'workspace_notification_preferences',
-  'workspace_strategy_targets',
-  'workspace_task_state',
-  'workspace_activity_events',
+  'amoe_burn_credits_intents',
+  'auth_handoffs',
+  'chat_friend_requests',
+  'chat_presence_sessions',
+  'command_issuer_daily_spend',
+  'ethos_score_sync_state',
+  'image_generation_assets',
+  'image_generation_attempts',
+  'image_generation_jobs',
+  'image_generation_projects',
+  'lottery_amoe_daily_xmtp_checkins',
+  'memory_snapshots',
+  'solana_creator_relay_config',
+  'solana_hook_status',
+  'solana_meteora_pool_status',
+  'solana_share_mesh_mappings',
+  'solana_sweep_jobs',
+  'entity_labels_cache',
+  'agent_background_tasks',
+  'agent_registration_state',
+  'website_events',
 ]
 
 const REPO = resolve(fileURLToPath(new URL('..', import.meta.url)), '..')
 
-function countMatches(pattern: string, globExclude: string[]): Array<{ file: string; count: number }> {
+function countMatches(pattern: string): Array<{ file: string; count: number }> {
   try {
     const args = [
       '-c',
       '-g',
-      `!supabase/migrations/**`,
+      '!supabase/migrations/**',
       '-g',
-      `!docs/_generated/**`,
+      '!docs/_generated/**',
       '-g',
-      `!frontend/scripts/audit-dead-tables.ts`,
+      '!frontend/scripts/audit-dead-tables.ts',
       '-g',
-      `!frontend/scripts/audit-unused-tables.ts`,
-      '-g',
-      `!frontend/scripts/diagnose-*.ts`,
-      ...globExclude.flatMap((g) => ['-g', g]),
+      '!frontend/db/migrations-legacy/**',
       `\\b${pattern}\\b`,
       REPO,
     ]
@@ -172,6 +181,28 @@ function countMigrationRefs(pattern: string): number {
 }
 
 async function main() {
+  const dropped = [...DROPPED_TABLES].sort()
+  console.log(`\n── DROPPED (${dropped.length}) ──`)
+  for (const table of dropped) console.log(`  ${table}`)
+
+  const protectedTables = [...PROTECTED_TABLES].sort()
+  console.log(`\n── PROTECTED / TELEGRAM (${protectedTables.length}) ──`)
+  for (const table of protectedTables) console.log(`  ${table}`)
+
+  const consolidated = [...ACTIVE_CONSOLIDATED].sort()
+  console.log(`\n── ACTIVE / CONSOLIDATED (${consolidated.length}) ──`)
+  for (const table of consolidated) {
+    const hits = countMatches(table).reduce((sum, r) => sum + r.count, 0)
+    console.log(`  ${table.padEnd(40)} refs=${hits}`)
+  }
+
+  const indexerOnly = [...INDEXER_ONLY].sort()
+  console.log(`\n── INDEXER-ONLY (${indexerOnly.length}) ──`)
+  for (const table of indexerOnly) {
+    const hits = countMatches(table).reduce((sum, r) => sum + r.count, 0)
+    console.log(`  ${table.padEnd(40)} refs=${hits}`)
+  }
+
   const verdicts: Array<{
     table: string
     migrationRefs: number
@@ -181,7 +212,8 @@ async function main() {
   }> = []
 
   for (const table of CANDIDATES) {
-    const codeHits = countMatches(table, [])
+    if (DROPPED_TABLES.has(table) || PROTECTED_TABLES.has(table)) continue
+    const codeHits = countMatches(table)
     const migrationRefs = countMigrationRefs(table)
     const codeRefs = codeHits.reduce((sum, r) => sum + r.count, 0)
     const topFiles = codeHits
@@ -198,7 +230,6 @@ async function main() {
     verdicts.push({ table, migrationRefs, codeRefs, verdict, topFiles })
   }
 
-  // Group by verdict for the report.
   for (const v of ['truly-dead', 'schema-only', 'feature-scaffold'] as const) {
     const group = verdicts.filter((x) => x.verdict === v)
     console.log(`\n── ${v.toUpperCase()} (${group.length}) ──`)
@@ -216,7 +247,15 @@ async function main() {
   console.log(`\n── Summary ──`)
   const c = (v: string) => verdicts.filter((x) => x.verdict === v).length
   console.log(
-    `  truly-dead       : ${c('truly-dead')}\n  schema-only      : ${c('schema-only')}\n  feature-scaffold : ${c('feature-scaffold')}`,
+    [
+      `  dropped (skipped)     : ${DROPPED_TABLES.size}`,
+      `  protected (telegram)  : ${PROTECTED_TABLES.size}`,
+      `  active (consolidated) : ${ACTIVE_CONSOLIDATED.size}`,
+      `  indexer-only          : ${INDEXER_ONLY.size}`,
+      `  truly-dead            : ${c('truly-dead')}`,
+      `  schema-only           : ${c('schema-only')}`,
+      `  feature-scaffold      : ${c('feature-scaffold')}`,
+    ].join('\n'),
   )
 }
 

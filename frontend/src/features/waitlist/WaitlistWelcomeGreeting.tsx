@@ -1,65 +1,96 @@
 import { useMemo } from 'react'
-import { isAddress } from 'viem'
 
 import { useChatIdentity } from '@/components/chat/useChatIdentity'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
 import {
-  isValidWaitlistZoraHandle,
+  buildWaitlistExcludedSignerAddresses,
   isWaitlistAddressLabel,
+  resolvePrivyEmbeddedEoaAddress,
+  resolveWaitlistIdentityLookupAddress,
   resolveWaitlistWelcomeCopy,
+  sanitizeWaitlistZoraHandle,
 } from '@/features/waitlist/waitlistWelcomeIdentity'
+import { resolveWaitlistPrivyDisplayEmail, resolveWaitlistVerifiedEmailHint } from '@/features/waitlist/waitlistStorage'
+import { useSafePrivy } from '@/lib/privy/safeHooks'
 import { cn } from '@/lib/shared/utils'
 
 type WaitlistWelcomeGreetingProps = {
   accountMe: AccountSetupMe | null
-  sessionAddress: string | null
-  linkedEoaAddress?: string | null
+  /** External wallet used for returning wallet sign-in (not session cookie / embedded EOA). */
+  walletReturnAddress?: string | null
   returningViaWallet?: boolean
   className?: string
 }
 
-function normalizeAddress(value: string | null | undefined): `0x${string}` | null {
-  if (!value || !isAddress(value)) return null
-  return value as `0x${string}`
-}
-
 export function WaitlistWelcomeGreeting(props: WaitlistWelcomeGreetingProps) {
-  const cswAddress = props.accountMe?.accountSignals?.canonicalCswAddress ?? null
-  const zoraHandleRaw = props.accountMe?.accountSignals?.zoraHandle ?? null
-  const zoraHandle = isValidWaitlistZoraHandle(zoraHandleRaw) ? zoraHandleRaw : null
-  const zoraCrossAppAddress = props.accountMe?.linkedMethods?.zora_cross_app?.[0] ?? null
-  const resolveAddress =
-    normalizeAddress(zoraCrossAppAddress) ??
-    normalizeAddress(props.linkedEoaAddress) ??
-    (props.returningViaWallet ? normalizeAddress(props.sessionAddress) : null) ??
-    normalizeAddress(props.sessionAddress) ??
-    normalizeAddress(cswAddress)
+  const privy = useSafePrivy()
+  const accountMe = props.accountMe
+  const linkedEoaAddress = accountMe?.linkedMethods?.external_eoa?.[0] ?? null
+  const cswAddress = accountMe?.accountSignals?.canonicalCswAddress ?? null
+  const zoraHandle = sanitizeWaitlistZoraHandle(accountMe?.accountSignals?.zoraHandle)
+  const basename = accountMe?.accountSignals?.basename ?? null
+  const primaryWalletAddress = accountMe?.accountSignals?.primaryWalletAddress ?? null
+  const embeddedEoaAddress = accountMe?.accountSignals?.embeddedEoaAddress ?? null
+  const welcomeEmail =
+    accountMe?.email?.trim().toLowerCase() ??
+    resolveWaitlistPrivyDisplayEmail(privy.user)?.trim().toLowerCase() ??
+    resolveWaitlistVerifiedEmailHint(privy.user)?.trim().toLowerCase() ??
+    null
 
-  const identity = useChatIdentity(resolveAddress)
+  const excludedAddresses = useMemo(
+    () =>
+      buildWaitlistExcludedSignerAddresses({
+        privyEmbeddedEoaAddress: resolvePrivyEmbeddedEoaAddress(privy.user, cswAddress),
+      }),
+    [cswAddress, privy.user],
+  )
+
+  const lookupAddress = resolveWaitlistIdentityLookupAddress({
+    zoraCrossAppAddress: accountMe?.linkedMethods?.zora_cross_app?.[0] ?? null,
+    linkedEoaAddress,
+    walletReturnAddress: props.walletReturnAddress ?? null,
+    cswAddress,
+    primaryWalletAddress,
+    embeddedEoaAddress,
+    returningViaWallet: props.returningViaWallet,
+    excludedAddresses,
+  })
+
+  const identity = useChatIdentity(lookupAddress)
 
   const welcomeCopy = useMemo(
     () =>
       resolveWaitlistWelcomeCopy({
         zoraHandle,
+        basename,
         identityDisplayName: identity.displayName,
         identitySource: identity.source,
-        linkedEoaAddress: props.linkedEoaAddress,
+        linkedEoaAddress,
         cswAddress,
-        sessionAddress: props.sessionAddress,
+        walletReturnAddress: props.walletReturnAddress ?? null,
         returningViaWallet: props.returningViaWallet,
+        email: welcomeEmail,
+        excludedAddresses,
+        primaryWalletAddress,
+        embeddedEoaAddress,
       }),
     [
+      basename,
       cswAddress,
+      embeddedEoaAddress,
+      excludedAddresses,
       identity.displayName,
       identity.source,
-      props.linkedEoaAddress,
+      linkedEoaAddress,
+      primaryWalletAddress,
       props.returningViaWallet,
-      props.sessionAddress,
+      props.walletReturnAddress,
+      welcomeEmail,
       zoraHandle,
     ],
   )
 
-  if (!welcomeCopy && identity.loading) {
+  if (!welcomeCopy && identity.loading && !welcomeEmail) {
     return (
       <div className={cn('text-center', props.className)} aria-busy="true">
         <p className="text-sm font-medium text-zinc-500">Welcome…</p>

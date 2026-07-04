@@ -66,6 +66,7 @@ import {
   type LegacyVaultResolved,
   type TxState,
 } from './adminOpsHelpers'
+import { RemoteFeeFlushCard } from './RemoteFeeFlushCard'
 function TxMeta({ state }: { state?: TxState }) {
   if (!state || state.status === 'idle') return null
   return (
@@ -3237,6 +3238,13 @@ export function AdminOps() {
         kind: 'anchor' as const,
       },
       {
+        id: 'remote-fee-flush',
+        label: 'Remote fee flush',
+        description: 'Hub-initiated spoke fee flush from Base.',
+        to: '#remote-fee-flush',
+        kind: 'anchor' as const,
+      },
+      {
         id: 'share-token-metadata',
         label: 'Share token metadata',
         description: 'Pin ShareOFT metadata to Lens Grove.',
@@ -3286,6 +3294,9 @@ export function AdminOps() {
               </div>
 
               <KeeperTickCard />
+              <div id="remote-fee-flush">
+                <RemoteFeeFlushCard />
+              </div>
             </div>
           </div>
         </div>
