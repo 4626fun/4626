@@ -154,10 +154,22 @@ function printComposerBlock(addrs: DeployAddresses): void {
 
   process.stdout.write('--- After finalize: protocol treasury Safe ---\n')
   process.stdout.write(
+    'INPUT REQUIRED before Safe calldata can be generated:\n' +
+      '  configureCreatorMesh reverts on zero assetMeshToken/solanaAssetPeer (OVaultHubComposer ZeroAddress guard),\n' +
+      '  and plan-akita-share-mesh-phase-a.ts only emits calldata when ALL FOUR mesh flags are provided.\n' +
+      '  Resolve the Base asset-mesh OFT address and its Solana peer bytes32 first\n' +
+      '  (see docs/_internal/operations/akita/akita-launch-operator-pack.md PF-2), then run:\n\n',
+  )
+  process.stdout.write(
     `pnpm -C frontend exec tsx scripts/ops/plan-akita-share-mesh-phase-a.ts \\\n` +
+      `  --asset-mesh <BASE_ASSET_MESH_OFT_ADDRESS> \\\n` +
       `  --share-mesh ${addrs.shareOft} \\\n` +
+      `  --solana-asset-peer <SOLANA_ASSET_PEER_BYTES32> \\\n` +
       `  --solana-share-peer ${BATCHER_DEFAULT_PEER} \\\n` +
       `  --solana-eid 30168\n\n`,
+  )
+  process.stdout.write(
+    'Without --asset-mesh and --solana-asset-peer the plan script prints a checklist only (no calldata).\n\n',
   )
 }
 
@@ -239,9 +251,10 @@ function cmdPostPhase1(): void {
 function cmdPostFinalize(): void {
   const addrs = requireAddresses()
   saveStateFile('post-finalize', addrs)
+  const failures: string[] = []
 
   if (hasFlag('--update-vultr')) {
-    run('pnpm', [
+    const ok = run('pnpm', [
       '-C',
       'frontend',
       'ops:update-vultr-mapping',
@@ -250,10 +263,11 @@ function cmdPostFinalize(): void {
       '--share-oft',
       addrs.shareOft,
     ])
+    if (!ok) failures.push('update-vultr-mapping')
   }
 
   if (hasFlag('--backfill')) {
-    run('pnpm', [
+    const ok = run('pnpm', [
       '-C',
       'frontend',
       'exec',
@@ -265,6 +279,7 @@ function cmdPostFinalize(): void {
       addrs.creator,
       '--execute',
     ])
+    if (!ok) failures.push('backfill-keepr-vault')
   } else {
     process.stdout.write('\nTip: add --backfill to upsert keepr_vaults (settlement may also auto-bootstrap).\n')
   }
@@ -275,7 +290,19 @@ function cmdPostFinalize(): void {
   }
 
   printComposerBlock(addrs)
-  process.stdout.write('\n✓ Post-finalize automatable ops done. Submit wrapper + Safe txs above, then commit defaults if --write-defaults.\n\n')
+
+  if (failures.length > 0) {
+    process.stdout.write(
+      `\n✗ Post-finalize INCOMPLETE — failed substeps: ${failures.join(', ')}.\n` +
+        'Fix and re-run before treating post-finalize as done. PF-4 verification (operator pack) is mandatory either way.\n\n',
+    )
+    process.exit(1)
+  }
+
+  process.stdout.write(
+    '\n✓ Post-finalize automatable ops done. Submit wrapper + Safe txs above, then commit defaults if --write-defaults.\n' +
+      'Still mandatory: PF-4 verification in docs/_internal/operations/akita/akita-launch-operator-pack.md before calling the mesh live.\n\n',
+  )
   process.exit(0)
 }
 
