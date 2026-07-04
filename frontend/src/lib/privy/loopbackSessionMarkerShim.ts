@@ -54,7 +54,12 @@ export function shouldUseLoopbackPrivySessionMarkerShim(): boolean {
 
 export function isLocalDevPrivySessionMarkerMode(): boolean {
   if (typeof window === 'undefined') return false
-  return isLocalDevOrigin(window.location.origin)
+  try {
+    return isLocalDevOrigin(window.location.origin)
+  } catch {
+    // Partial window contexts (tests, exotic embeds) may lack location; best-effort only.
+    return false
+  }
 }
 
 export function assertPrivySessionMarkerCookie(): void {

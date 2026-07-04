@@ -8,21 +8,39 @@ const ENV_KEYS = [
   'VIRTUALS_ACP_AUTO_LLM',
   'VIRTUALS_API_KEY',
   'GROQ_API_KEY',
+  'OPENAI_API_KEY',
+  'ANTHROPIC_API_KEY',
+  'OPENROUTER_API_KEY',
   'ELIZA_LLM_VIRTUALS_ACP_PROVIDER_PRIORITY',
 ]
+
+const savedEnv = new Map<string, string | undefined>()
 
 function clearEnv() {
   for (const key of ENV_KEYS) delete process.env[key]
 }
 
+function snapshotEnv() {
+  savedEnv.clear()
+  for (const key of ENV_KEYS) savedEnv.set(key, process.env[key])
+}
+
+function restoreEnv() {
+  for (const [key, value] of savedEnv) {
+    if (value === undefined) delete process.env[key]
+    else process.env[key] = value
+  }
+}
+
 describe('virtuals acp readiness', () => {
   beforeEach(() => {
     vi.resetModules()
+    snapshotEnv()
     clearEnv()
   })
 
   afterEach(() => {
-    clearEnv()
+    restoreEnv()
     vi.unstubAllGlobals()
   })
 

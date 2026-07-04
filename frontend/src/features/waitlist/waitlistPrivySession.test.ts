@@ -103,7 +103,7 @@ describe('waitlistPrivySession', () => {
     let tokenReads = 0
     vi.mocked(readPrivyAccessTokenWithRetries).mockImplementation(async () => {
       tokenReads += 1
-      return tokenReads === 1 ? null : 'privy-token'
+      return tokenReads === 1 ? '' : 'privy-token'
     })
 
     const address = await runWaitlistReturningWalletSignIn({
@@ -122,7 +122,7 @@ describe('waitlistPrivySession', () => {
     let tokenReads = 0
     vi.mocked(readPrivyAccessTokenWithRetries).mockImplementation(async () => {
       tokenReads += 1
-      return tokenReads <= 1 ? null : 'privy-token'
+      return tokenReads <= 1 ? '' : 'privy-token'
     })
 
     const [first, second] = await Promise.all([

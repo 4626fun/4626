@@ -1,9 +1,3 @@
-import { useMemo } from 'react'
-
-import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
-import { usePrivyWalletsFromContext } from '@/lib/privy/walletHooksContext'
-import { useSafePrivy } from '@/lib/privy/safeHooks'
-
 export type LinkedExternalWalletIdentity = {
   provider: string | null
   connectorId: string | null

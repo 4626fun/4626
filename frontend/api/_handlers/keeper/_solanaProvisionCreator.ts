@@ -651,8 +651,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let b2ReadinessQueued = false
   if (b2PrerequisitesMet && envFlag('SOLANA_B2_READINESS_VERIFICATION_ENABLED', true)) {
     try {
-      const shareMeshMint =
-        shareMeshMapping.status !== 'missing' ? shareMeshMapping.shareMeshMint : null
+      const shareMeshMint = shareMeshMapping.shareMeshMint
       const queue = await enqueueSolanaB2ReadinessVerification({
         creatorToken,
         shareMeshMint,

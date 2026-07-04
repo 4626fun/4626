@@ -113,6 +113,8 @@ describe('shouldClearOrphanWaitlistServerSession', () => {
         privyAuthenticated: false,
         walletSignInPending: false,
         serverSessionAddress: '0xorphan',
+        walletSessionAddress: null,
+        localSessionAddress: null,
       }),
     ).toBe(true)
   })
@@ -125,6 +127,8 @@ describe('shouldClearOrphanWaitlistServerSession', () => {
         privyAuthenticated: false,
         walletSignInPending: true,
         serverSessionAddress: '0xorphan',
+        walletSessionAddress: null,
+        localSessionAddress: null,
       }),
     ).toBe(false)
   })
@@ -138,6 +142,8 @@ describe('shouldClearOrphanWaitlistServerSession', () => {
         walletSignInPending: false,
         signupInProgress: true,
         serverSessionAddress: '0xorphan',
+        walletSessionAddress: null,
+        localSessionAddress: null,
       }),
     ).toBe(false)
   })
@@ -150,6 +156,8 @@ describe('shouldClearOrphanWaitlistServerSession', () => {
         privyAuthenticated: true,
         walletSignInPending: false,
         serverSessionAddress: '0xabc',
+        walletSessionAddress: null,
+        localSessionAddress: null,
       }),
     ).toBe(false)
   })
