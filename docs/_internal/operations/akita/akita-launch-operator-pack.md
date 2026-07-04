@@ -177,18 +177,24 @@ treating the mesh as live; the `✓` only covers the automatable substeps.
 
 1. **Wrapper owner (your CSW):** `setBeneficiaryOperator(0x7dF44cBB93a5191837a988f0Cc441E3811C39CD1, true)`
    on the new wrapper — PF-1 prints the encoded calldata.
-2. **Protocol treasury Safe:** `configureCreatorMesh` on `OVaultHubComposer`.
-   **INPUT REQUIRED first:** `configureCreatorMesh` reverts on a zero
-   `assetMeshToken`/`solanaAssetPeer` (`ZeroAddress` guard in `OVaultHubComposer.sol`),
-   and the plan script only emits Safe calldata when **all four** mesh flags are
-   provided. There is no zero-address placeholder path — resolve the Base asset-mesh
-   OFT address and its Solana peer bytes32 (from the LZ asset-mesh deployment) before
-   this step. Then:
+2. **Protocol treasury Safe:** `configureCreatorMesh` on `OVaultHubComposer` —
+   **DEFERRED, NOT A LAUNCH REQUIREMENT.** Product decision 2026-06-12
+   (`docs/_internal/operations/operations/solana/solana-share-mesh-lottery-policy.md`):
+   the compose-deposit lane (Pipe B) is **dormant** — $AKITA lives on Base only, no
+   Base asset-mesh OFTAdapter or Solana AKITA OFT exists, and none should be deployed
+   for launch. `configureCreatorMesh` reverts on zero `assetMeshToken`/`solanaAssetPeer`,
+   so it CANNOT be called until the AKITA OFT-adapter lockbox ships
+   (activation recipe: `docs/_internal/research/akita-oft-adapter-lockbox.md`).
+   The lane is inert by construction (`CreatorMeshNotConfigured`) and does not gate
+   the vault, the 30% finalize bridge, or Meteora trading. Skip this step at launch.
+   Note: item 1 (`setBeneficiaryOperator`) is likewise only a prerequisite for this
+   future composer activation — cheap to do at launch, but not required for it.
+   If/when the lockbox ships, generate the Safe calldata with:
    ```bash
    pnpm -C frontend exec tsx scripts/ops/plan-akita-share-mesh-phase-a.ts \
-     --asset-mesh 0xBASE_ASSET_MESH_OFT \
+     --asset-mesh 0xBASE_AKITA_OFT_ADAPTER \
      --share-mesh 0xNEW_SHARE_OFT \
-     --solana-asset-peer 0xASSET_MESH_SOLANA_PEER_BYTES32 \
+     --solana-asset-peer 0xAKITA_SOLANA_OFT_PEER_BYTES32 \
      --solana-share-peer 0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f \
      --solana-eid 30168
    ```
@@ -241,4 +247,6 @@ deferral has cleared.
 ## Explicitly NOT required before Base vault live
 
 - B2 devnet hook deploy, `relay_entries` enabled, Meteora pool + LP,
-  legacy `SolanaBridgeAdapter` registration of the new ShareOFT.
+  legacy `SolanaBridgeAdapter` registration of the new ShareOFT,
+  `configureCreatorMesh` on `OVaultHubComposer` (compose-deposit lane is dormant —
+  see PF-2 item 2; requires the future AKITA OFT-adapter lockbox first).
