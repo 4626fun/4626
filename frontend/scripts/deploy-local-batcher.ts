@@ -56,6 +56,13 @@ const PHASE1_MODULE_DEPS_ABI = [
   },
   {
     type: 'function',
+    name: 'agentVaultCoreModule',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
     name: 'vaultStrategiesModule',
     stateMutability: 'view',
     inputs: [],
@@ -308,12 +315,10 @@ function runForgeCreate(contract: string, constructorArgs: readonly string[]): A
   const legacyGasPrice = (process.env.DEPLOY_DRY_RUN_LEGACY_GAS_PRICE ?? '2000000000').trim()
 
   const runCreate = (extraArgs: string[] = []): Address => {
-    const forgeArgs = [
-      ...baseForgePrefixArgs,
-      ...extraArgs,
-      '--constructor-args',
-      ...constructorArgs,
-    ]
+    const forgeArgs = [...baseForgePrefixArgs, ...extraArgs]
+    if (constructorArgs.length > 0) {
+      forgeArgs.push('--constructor-args', ...constructorArgs)
+    }
     const stdout = execFileSync('forge', forgeArgs, {
       cwd: repoRoot,
       encoding: 'utf8',
@@ -355,11 +360,39 @@ function runForgeCreate(contract: string, constructorArgs: readonly string[]): A
   }
 }
 
+async function resolveAgentVaultCoreModuleForLocalPhase1(params: {
+  phase1ModuleAddress: Address
+}): Promise<Address> {
+  const fromEnv = (process.env.DEPLOY_DRY_RUN_AGENT_VAULT_CORE_MODULE ?? '').trim()
+  if (isAddress(fromEnv)) {
+    return getAddress(fromEnv) as Address
+  }
+
+  try {
+    const value = await publicClient.readContract({
+      address: params.phase1ModuleAddress,
+      abi: PHASE1_MODULE_DEPS_ABI,
+      functionName: 'agentVaultCoreModule',
+    })
+    if (isAddress(String(value))) {
+      return getAddress(value as Address) as Address
+    }
+  } catch {
+    // Live Phase1Module bytecode may predate agentVaultCoreModule.
+  }
+
+  return runForgeCreate(
+    'contracts/vault/agent/modules/AgentOVaultCoreModule.sol:AgentOVaultCoreModule',
+    [],
+  )
+}
+
 async function readPhase1ModuleDeps(phase1ModuleAddress: Address): Promise<{
   create2Deployer: Address
   bytecodeStore: Address
   registry: Address
   vaultCoreModule: Address
+  agentVaultCoreModule: Address
   vaultStrategiesModule: Address
   vaultAdminModule: Address
   vaultActivationBatcher: Address
@@ -396,6 +429,7 @@ async function readPhase1ModuleDeps(phase1ModuleAddress: Address): Promise<{
     vaultAdminModule,
     vaultActivationBatcher,
     utilsHelper,
+    agentVaultCoreModule,
   ] = await Promise.all([
     readField('create2Deployer'),
     readField('bytecodeStore'),
@@ -405,6 +439,7 @@ async function readPhase1ModuleDeps(phase1ModuleAddress: Address): Promise<{
     readField('vaultAdminModule'),
     readField('vaultActivationBatcher'),
     readField('utilsHelper'),
+    resolveAgentVaultCoreModuleForLocalPhase1({ phase1ModuleAddress }),
   ])
 
   return {
@@ -412,6 +447,7 @@ async function readPhase1ModuleDeps(phase1ModuleAddress: Address): Promise<{
     bytecodeStore,
     registry,
     vaultCoreModule,
+    agentVaultCoreModule,
     vaultStrategiesModule,
     vaultAdminModule,
     vaultActivationBatcher,
@@ -484,6 +520,7 @@ async function wireLocalPhase1Module(localBatcher: Address): Promise<Address> {
       deps.bytecodeStore,
       deps.registry,
       deps.vaultCoreModule,
+      deps.agentVaultCoreModule,
       deps.vaultStrategiesModule,
       deps.vaultAdminModule,
       deps.vaultActivationBatcher,
