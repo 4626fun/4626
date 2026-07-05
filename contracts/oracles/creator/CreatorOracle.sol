@@ -6,13 +6,13 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
-import {I4626Registry} from "../../interfaces/core/I4626Registry.sol";
+import {I4626Registry} from "@4626/interfaces/core/I4626Registry.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
-import {IUniswapV3Pool} from "../../interfaces/uniswap/IUniswapV3Pool.sol";
-import {TickMathCompat} from "../../libraries/TickMathCompat.sol";
+import {IUniswapV3Pool} from "@4626/interfaces/uniswap/IUniswapV3Pool.sol";
+import {TickMathCompat} from "@4626/libraries/uniswap/TickMathCompat.sol";
 
 /**
  * @title CreatorOracle

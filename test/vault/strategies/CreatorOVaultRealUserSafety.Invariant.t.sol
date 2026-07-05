@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {CreatorOVault} from "../../../contracts/vault/CreatorOVault.sol";
-import {CreatorCharmStrategy} from "../../../contracts/vault/strategies/univ3/CreatorCharmStrategy.sol";
-import {AjnaERC4626Vault} from "../../../contracts/vault/strategies/ajna4626/AjnaERC4626Vault.sol";
-import {ERC4626StrategyAdapter} from "../../../contracts/vault/strategies/ERC4626StrategyAdapter.sol";
+import {CreatorOVault} from "@4626/vault/creator/CreatorOVault.sol";
+import {CreatorCharmStrategy} from "@4626/strategies/univ3/CreatorCharmStrategy.sol";
+import {AjnaERC4626Vault} from "@4626/strategies/ajna/AjnaERC4626Vault.sol";
+import {ERC4626StrategyAdapter} from "@4626/strategies/cca/ERC4626StrategyAdapter.sol";
 
 import {UserPositionInvariantBase} from "./UserPositionInvariantBase.sol";
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IAmoePlonkVerifier} from "./IAmoePlonkVerifier.sol";
+import {IAmoePlonkVerifier} from "@4626/lottery/zk/IAmoePlonkVerifier.sol";
 
 /// @title LotteryAmoeRouter (v2)
 /// @notice On-chain settlement layer for 4626.fun AMOE lottery entries.

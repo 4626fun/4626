@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import {MockAgentTokenV4} from "../mocks/MockAgentTokenV4.sol";
+import {MockAgentTokenV4} from "test/mocks/MockAgentTokenV4.sol";
 
 contract MockAgentTokenV4Test is Test {
     function test_fot_transfer_and_distribute() public {

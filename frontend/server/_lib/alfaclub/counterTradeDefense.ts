@@ -25,7 +25,7 @@ import { sendAlfaClubRoomText } from './chatBridge.js'
 import type { HyperliquidClearinghouseState } from './hyperliquid.js'
 import type { CounterTradeRuntimeConfig, CounterTradeSide } from './counterTradeConfig.js'
 import { isAssetAllowlisted } from '../arena/arenaPairPolicy.js'
-import { computeLegLiqDistancePct, type CounterWalletPositionLeg } from './counterTradeEngine.js'
+import { computeLegLiqDistancePct, computeLegMarkApprox, type CounterWalletPositionLeg } from './counterTradeEngine.js'
 import {
   COUNTER_TRADE_DEFENSE_ALERT_REASON,
   COUNTER_TRADE_DEFENSE_EXECUTED_REASON,
@@ -88,13 +88,112 @@ export function __resetDefenseAlertStateForTests(): void {
   lastAlertAtMsByKey.clear()
 }
 
-/** Free-collateral share of account equity (withdrawable / accountValue). */
 export function computeBufferRatio(state: HyperliquidClearinghouseState | null): number | null {
   const accountValue = state?.accountValueUsd
   const withdrawable = state?.withdrawableUsd
   if (accountValue == null || !Number.isFinite(accountValue) || accountValue <= 0) return null
   if (withdrawable == null || !Number.isFinite(withdrawable)) return null
   return Math.max(0, Math.min(1, withdrawable / accountValue))
+}
+
+const DEFAULT_MAINTENANCE_LEVERAGE = 2
+const DEFAULT_MAINTENANCE_MARGIN_RATE = 0.025
+
+/**
+ * Project liquidation price after adding to an isolated leg.
+ * Uses current collateral including unrealized PnL, then applies the HL formula
+ * to the post-add size and margin delta. Clamps to the correct side of mark.
+ */
+export function projectLiquidationPxAfterAdd(params: {
+  leg: CounterWalletPositionLeg
+  addNotionalUsd: number
+  maintenanceLeverage?: number
+  maintenanceMarginRate?: number
+}): number | null {
+  const { leg, addNotionalUsd } = params
+  if (leg.side !== 'long' && leg.side !== 'short') return null
+  if (!Number.isFinite(addNotionalUsd) || addNotionalUsd <= 0) return null
+  if (leg.positionValue == null || leg.positionValue <= 0) return null
+  if (leg.liquidationPx == null || !Number.isFinite(leg.liquidationPx)) return null
+
+  const markPx = computeLegMarkApprox(leg)
+  if (markPx == null) return null
+
+  const leverage =
+    leg.leverage != null && Number.isFinite(leg.leverage) && leg.leverage >= 1 ? leg.leverage : 1
+  const currentSize = leg.positionValue / markPx
+  const addSize = addNotionalUsd / markPx
+  const newSize = currentSize + addSize
+  if (!Number.isFinite(newSize) || newSize <= 0) return null
+
+  const currentMargin = leg.positionValue / leverage + (leg.unrealizedPnl ?? 0)
+  const addMargin = addNotionalUsd / leverage
+  const newIsolatedMargin = currentMargin + addMargin
+  if (!Number.isFinite(newIsolatedMargin)) return null
+
+  const maintenanceLeverage = params.maintenanceLeverage ?? DEFAULT_MAINTENANCE_LEVERAGE
+  const maintenanceMarginRate = params.maintenanceMarginRate ?? DEFAULT_MAINTENANCE_MARGIN_RATE
+  const l = 1 / maintenanceLeverage
+  const s = leg.side === 'long' ? 1 : -1
+  const newNotional = newSize * markPx
+  const maintenanceRequired = newNotional * maintenanceMarginRate
+  const marginAvailable = newIsolatedMargin - maintenanceRequired
+
+  const denominator = 1 - l * s
+  if (!Number.isFinite(denominator) || Math.abs(denominator) < 1e-12) return null
+
+  let liqPrice = markPx - (s * (marginAvailable / newSize)) / denominator
+  if (!Number.isFinite(liqPrice) || liqPrice <= 0) return null
+
+  if (leg.side === 'long') {
+    liqPrice = Math.min(liqPrice, markPx * 0.999)
+  } else {
+    liqPrice = Math.max(liqPrice, markPx * 1.001)
+  }
+
+  return liqPrice
+}
+
+/** Liq distance % after a proposed add, anchored on HL liquidationPx with conservative shrink. */
+export function projectLegLiqDistancePctAfterAdd(params: {
+  leg: CounterWalletPositionLeg
+  addNotionalUsd: number
+}): number | null {
+  const currentDistance = computeLegLiqDistancePct(params.leg)
+  if (currentDistance == null) return null
+  if (currentDistance <= 0) return 0
+
+  const positionValue = params.leg.positionValue ?? 0
+  if (positionValue <= 0) return null
+
+  const addFraction = params.addNotionalUsd / positionValue
+  if (!Number.isFinite(addFraction) || addFraction < 0) return null
+
+  const projected = currentDistance / (1 + addFraction)
+  return Number.isFinite(projected) ? projected : null
+}
+
+/** Pre-add gate: block dip when projected liq distance is inside defend threshold + margin. */
+export function isDipAddLiqSafeAfterAdd(params: {
+  leg: CounterWalletPositionLeg
+  addNotionalUsd: number
+  runtime: CounterTradeRuntimeConfig
+}): { ok: true; projectedLiqDistancePct: number } | { ok: false; reason: 'unprojectable' | 'too_close' } {
+  const projectedLiqDistancePct = projectLegLiqDistancePctAfterAdd({
+    leg: params.leg,
+    addNotionalUsd: params.addNotionalUsd,
+  })
+  if (projectedLiqDistancePct == null) {
+    return { ok: false, reason: 'unprojectable' }
+  }
+
+  const threshold =
+    params.runtime.defendLiqDistancePct + params.runtime.dipPreAddLiqSafetyMarginPct
+  if (projectedLiqDistancePct <= threshold) {
+    return { ok: false, reason: 'too_close' }
+  }
+
+  return { ok: true, projectedLiqDistancePct }
 }
 
 function computeLegRoiPct(leg: CounterWalletPositionLeg): number | null {

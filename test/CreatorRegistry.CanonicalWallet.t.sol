@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {Registry4626} from "../contracts/core/4626Registry.sol";
+import {Registry4626} from "@4626/core/4626Registry.sol";
 
 contract Registry4626CanonicalWalletTest is Test {
     Registry4626 internal registry;

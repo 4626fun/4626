@@ -9,8 +9,8 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
-import {IStrategy} from "../../interfaces/IStrategy.sol";
-import {IStrategyValuation} from "../../interfaces/IStrategyValuation.sol";
+import {IStrategy} from "@4626/interfaces/strategies/IStrategy.sol";
+import {IStrategyValuation} from "@4626/interfaces/strategies/IStrategyValuation.sol";
 
 interface ICreatorOVaultLike {
     function CREATOR_COIN() external view returns (IERC20);

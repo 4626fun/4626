@@ -3,14 +3,14 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
 import "forge-std/Test.sol";
-import "../contracts/helpers/batchers/StrategyDeploymentBatcher.sol";
+import "@4626/deploy/batchers/StrategyDeploymentBatcher.sol";
 import {
     CreatorCharmStrategyFactory,
     AjnaERC4626StrategyFactory
-} from "../contracts/helpers/batchers/StrategyDeploymentFactories.sol";
-import "../contracts/helpers/batchers/VaultActivationBatcher.sol";
-import "../contracts/vault/strategies/ERC4626StrategyAdapter.sol";
-import "../contracts/vault/strategies/univ3/CreatorCharmStrategy.sol";
+} from "@4626/deploy/batchers/StrategyDeploymentFactories.sol";
+import "@4626/deploy/batchers/VaultActivationBatcher.sol";
+import "@4626/strategies/cca/ERC4626StrategyAdapter.sol";
+import "@4626/strategies/univ3/CreatorCharmStrategy.sol";
 
 /// @notice Minimal interface for Charm vault queries
 interface ICharmVaultInfo {

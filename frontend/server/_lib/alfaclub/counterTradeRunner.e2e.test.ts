@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   enforceSingleActiveCounterTradeActor: vi.fn(),
   resolveRoom1659HyperliquidUserForSnapshot: vi.fn(),
   sendAlfaClubRoomText: vi.fn(),
+  countRebalanceDipAddsForLeg: vi.fn(),
 }))
 
 vi.mock('../arena/arenaConfig.js', () => ({
@@ -47,19 +48,19 @@ vi.mock('./counterTradeConfig.js', async () => {
   }
 })
 
-vi.mock('./counterTradeStore.js', () => ({
-  COUNTER_TRADE_EXIT_EXECUTED_REASON: 'exit_executed',
-  COUNTER_TRADE_DEFENSE_EXECUTED_REASON: 'defense_reduce_executed',
-  COUNTER_TRADE_HARVEST_EXECUTED_REASON: 'harvest_tp_executed',
-  COUNTER_TRADE_DEFENSE_ALERT_REASON: 'defense_alert_posted',
-  COUNTER_TRADE_HARVEST_ALERT_REASON: 'harvest_alert_posted',
-  listActiveCounterTradeOptIns: mocks.listActiveCounterTradeOptIns,
-  readCounterTradeUsageWindow: mocks.readCounterTradeUsageWindow,
-  readOrCreateCounterTradeRoomStrategy: mocks.readOrCreateCounterTradeRoomStrategy,
-  recordCounterTradeAction: mocks.recordCounterTradeAction,
-  registerCounterTradeEventIfNew: mocks.registerCounterTradeEventIfNew,
-  enforceSingleActiveCounterTradeActor: mocks.enforceSingleActiveCounterTradeActor,
-}))
+vi.mock('./counterTradeStore.js', async () => {
+  const actual = await vi.importActual<typeof import('./counterTradeStore.js')>('./counterTradeStore.js')
+  return {
+    ...actual,
+    listActiveCounterTradeOptIns: mocks.listActiveCounterTradeOptIns,
+    readCounterTradeUsageWindow: mocks.readCounterTradeUsageWindow,
+    readOrCreateCounterTradeRoomStrategy: mocks.readOrCreateCounterTradeRoomStrategy,
+    recordCounterTradeAction: mocks.recordCounterTradeAction,
+    registerCounterTradeEventIfNew: mocks.registerCounterTradeEventIfNew,
+    enforceSingleActiveCounterTradeActor: mocks.enforceSingleActiveCounterTradeActor,
+    countRebalanceDipAddsForLeg: mocks.countRebalanceDipAddsForLeg,
+  }
+})
 
 vi.mock('./room1659Market.js', () => ({
   resolveRoom1659HyperliquidUserForSnapshot: mocks.resolveRoom1659HyperliquidUserForSnapshot,
@@ -105,7 +106,8 @@ const BASE_RUNTIME = {
   cooldownMs: 120_000,
   hourlyActionCap: 12,
   dailyNotionalCapUsd: 7_500,
-  maxCounterNotionalPerTradeUsd: 750,
+  maxCounterNotionalCeilingPctOfFund: 25,
+  maxCounterNotionalPctOfFund: 10,
   minOrderNotionalUsd: 10,
   globalMaxLeverage: 12,
   favoredMultiplier: 1.35,
@@ -136,6 +138,11 @@ const BASE_RUNTIME = {
       event: 4,
     },
   },
+  inverseRebalanceScalePct: 100,
+  dipDrawdownFullSizePct: 40,
+  dipDrawdownCurveAlpha: 1.5,
+  maxDipAddsPerLeg: 3,
+  dipPreAddLiqSafetyMarginPct: 2,
 } as const
 
 const FILL = {
@@ -167,7 +174,7 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
         favoredBiasLeverageCap: BASE_RUNTIME.favoredBiasLeverageCap,
         unfavoredBiasLeverageCap: BASE_RUNTIME.unfavoredBiasLeverageCap,
         minUserNotionalUsd: BASE_RUNTIME.minUserNotionalUsd,
-        maxCounterNotionalPerTradeUsd: BASE_RUNTIME.maxCounterNotionalPerTradeUsd,
+        maxCounterNotionalPctOfFund: BASE_RUNTIME.maxCounterNotionalPctOfFund,
         dailyNotionalCapUsd: BASE_RUNTIME.dailyNotionalCapUsd,
         hourlyActionCap: BASE_RUNTIME.hourlyActionCap,
         cooldownMs: BASE_RUNTIME.cooldownMs,
@@ -203,16 +210,15 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
     })
 
     mocks.getClearinghouseState.mockResolvedValue({
+      accountValueUsd: 10_000,
+      withdrawableUsd: 5_000,
       assetPositions: [],
-      marginSummary: { accountValue: '10000' },
-      crossMarginSummary: { accountValue: '10000' },
-      time: 1_720_000_000_000,
-      withdrawable: '5000',
     })
 
     mocks.runArenaTrade.mockResolvedValue({ ok: true, fill: { oid: 1234 } })
     mocks.getSpotUsdcBalance.mockResolvedValue(0)
     mocks.runArenaSpotPerpTransfer.mockResolvedValue({ ok: true, message: 'Transferred.' })
+    mocks.countRebalanceDipAddsForLeg.mockResolvedValue(0)
     mocks.sendAlfaClubRoomText.mockResolvedValue({ lane: 'bot_token_without_reply_id' })
     mocks.recordCounterTradeAction.mockResolvedValue(undefined)
     mocks.resolveBotBankedPnlForClose.mockResolvedValue(null)
@@ -305,6 +311,8 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
       assetPositions: [
         { coin: 'BTC', side: 'short', positionValue: 45, entryPx: 100, liquidationPx: 200 },
       ],
+      accountValueUsd: 10_000,
+      withdrawableUsd: 5_000,
       marginSummary: { accountValue: '10000' },
       time: 1_720_000_000_000,
     })
@@ -332,6 +340,8 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
       assetPositions: [
         { coin: 'BTC', side: 'short', positionValue: 45, entryPx: 100, liquidationPx: 200 },
       ],
+      accountValueUsd: 10_000,
+      withdrawableUsd: 5_000,
       marginSummary: { accountValue: '10000' },
       time: 1_720_000_000_000,
     })
@@ -362,6 +372,8 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
       assetPositions: [
         { coin: 'BTC', side: 'short', positionValue: 45, entryPx: 100, liquidationPx: 200 },
       ],
+      accountValueUsd: 10_000,
+      withdrawableUsd: 5_000,
       marginSummary: { accountValue: '10000' },
       time: 1_720_000_000_000,
     })
@@ -384,6 +396,8 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
       assetPositions: [
         { coin: 'BTC', side: 'short', positionValue: 45, entryPx: 100, liquidationPx: 200 },
       ],
+      accountValueUsd: 10_000,
+      withdrawableUsd: 5_000,
       marginSummary: { accountValue: '10000' },
       time: 1_720_000_000_000,
     })
@@ -421,6 +435,8 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
       assetPositions: [
         { coin: 'BTC', side: 'short', positionValue: 45, entryPx: 100, liquidationPx: 200 },
       ],
+      accountValueUsd: 10_000,
+      withdrawableUsd: 5_000,
       marginSummary: { accountValue: '10000' },
       time: 1_720_000_000_000,
     })
@@ -451,6 +467,8 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
       assetPositions: [
         { coin: 'BTC', side: 'short', positionValue: 45, entryPx: 100, liquidationPx: 200 },
       ],
+      accountValueUsd: 10_000,
+      withdrawableUsd: 5_000,
       marginSummary: { accountValue: '10000' },
       time: 1_720_000_000_000,
     })
@@ -473,6 +491,8 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
     // Snapshot taken before the entry executed — shows no BTC position.
     mocks.getClearinghouseState.mockResolvedValue({
       assetPositions: [],
+      accountValueUsd: 10_000,
+      withdrawableUsd: 5_000,
       marginSummary: { accountValue: '10000' },
       time: 1_720_000_000_000,
     })
@@ -500,6 +520,8 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
       assetPositions: [
         { coin: 'BTC', side: 'short', positionValue: 45, entryPx: 100, liquidationPx: 200 },
       ],
+      accountValueUsd: 10_000,
+      withdrawableUsd: 5_000,
       marginSummary: { accountValue: '10000' },
       time: 1_720_000_000_000,
     })
@@ -544,8 +566,14 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
   it('skips entries below HL minimum order notional without submitting an open', async () => {
     mocks.readCounterTradeRuntimeConfig.mockReturnValue({
       ...BASE_RUNTIME,
-      maxCounterNotionalPerTradeUsd: 40,
+      maxCounterNotionalPctOfFund: 1,
+      maxCounterNotionalCeilingPctOfFund: 1,
       minOrderNotionalUsd: 50,
+    })
+    mocks.getClearinghouseState.mockResolvedValue({
+      accountValueUsd: 4_000,
+      withdrawableUsd: 2_000,
+      assetPositions: [],
     })
 
     const result = await runCounterTradeLoop()

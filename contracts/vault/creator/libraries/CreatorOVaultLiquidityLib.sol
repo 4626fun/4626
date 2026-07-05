@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IStrategy} from "../../interfaces/IStrategy.sol";
-import {IStrategyValuation} from "../../interfaces/IStrategyValuation.sol";
+import {IStrategy} from "@4626/interfaces/strategies/IStrategy.sol";
+import {IStrategyValuation} from "@4626/interfaces/strategies/IStrategyValuation.sol";
 
 interface IVaultLiquidityReader {
     function coinBalance() external view returns (uint256);

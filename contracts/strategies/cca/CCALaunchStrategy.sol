@@ -16,9 +16,9 @@ import {LiquidityAmounts} from "@uniswap/v4-periphery/src/libraries/LiquidityAmo
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
-import {ICreatorOracle} from "../../interfaces/ICreatorOracle.sol";
-import {CCALaunchStrategyConfigModule} from "./CCALaunchStrategyConfigModule.sol";
-import {CCALaunchStrategyEncodingHelper} from "./CCALaunchStrategyEncodingHelper.sol";
+import {ICreatorOracle} from "@4626/interfaces/oracles/ICreatorOracle.sol";
+import {CCALaunchStrategyConfigModule} from "@4626/strategies/cca/CCALaunchStrategyConfigModule.sol";
+import {CCALaunchStrategyEncodingHelper} from "@4626/strategies/cca/CCALaunchStrategyEncodingHelper.sol";
 import {Plan, StrategyPlanner} from "liquidity-launcher/src/libraries/StrategyPlanner.sol";
 import {TokenPricing} from "liquidity-launcher/src/libraries/TokenPricing.sol";
 import {BasePositionParams, FullRangeParams} from "liquidity-launcher/src/types/PositionTypes.sol";

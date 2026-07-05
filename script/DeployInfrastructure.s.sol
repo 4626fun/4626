@@ -4,14 +4,14 @@ pragma solidity ^0.8.20;
 import {Script, console} from "forge-std/Script.sol";
 
 // Core Infrastructure
-import {Registry4626} from "../contracts/core/4626Registry.sol";
-import {CreatorOVaultFactory} from "../contracts/factories/CreatorOVaultFactory.sol";
+import {Registry4626} from "@4626/core/4626Registry.sol";
+import {CreatorOVaultFactory} from "@4626/deploy/factories/CreatorOVaultFactory.sol";
 
 // Shared Services
-import {LotteryManager4626} from "../contracts/lottery/4626LotteryManager.sol";
-import {VRFConsumer4626} from "../contracts/lottery/4626VRFConsumer.sol";
-import {VaultActivationBatcher} from "../contracts/helpers/batchers/VaultActivationBatcher.sol";
-import {SolanaBridgeAdapter} from "../contracts/utilities/bridge/SolanaBridgeAdapter.sol";
+import {LotteryManager4626} from "@4626/lottery/manager/4626LotteryManager.sol";
+import {VRFConsumer4626} from "@4626/lottery/manager/4626VRFConsumer.sol";
+import {VaultActivationBatcher} from "@4626/deploy/batchers/VaultActivationBatcher.sol";
+import {SolanaBridgeAdapter} from "@4626/bridge/SolanaBridgeAdapter.sol";
 
 /**
  * @title DeployInfrastructure

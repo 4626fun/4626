@@ -3,11 +3,11 @@ pragma solidity ^0.8.20;
 
 import {Script, console2} from "forge-std/Script.sol";
 
-import {VaultGaugeVoting} from "../contracts/governance/VaultGaugeVoting.sol";
-import {VoterRewardsDistributor} from "../contracts/governance/VoterRewardsDistributor.sol";
-import {BribesFactory} from "../contracts/factories/BribesFactory.sol";
-import {ve4626} from "../contracts/governance/ve4626.sol";
-import {ve4626BoostManager} from "../contracts/governance/ve4626BoostManager.sol";
+import {VaultGaugeVoting} from "@4626/governance/creator/VaultGaugeVoting.sol";
+import {VoterRewardsDistributor} from "@4626/governance/creator/VoterRewardsDistributor.sol";
+import {BribesFactory} from "@4626/governance/factories/BribesFactory.sol";
+import {ve4626} from "@4626/governance/creator/ve4626.sol";
+import {ve4626BoostManager} from "@4626/governance/creator/ve4626BoostManager.sol";
 
 interface ILotteryManager4626ForRewards {
     function setBoostManager(address manager) external;

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import {ve4626BoostManager} from "../contracts/governance/ve4626BoostManager.sol";
+import {ve4626BoostManager} from "@4626/governance/creator/ve4626BoostManager.sol";
 
 contract MockVe4626BoostMath {
     mapping(address => uint256) public votingPower;

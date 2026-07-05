@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import {CreatorOVault} from "../CreatorOVault.sol";
+import {CreatorOVault} from "@4626/vault/creator/CreatorOVault.sol";
 
 /**
  * @title AgentOVault

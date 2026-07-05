@@ -10,9 +10,9 @@ import {OFTMsgCodec} from "@layerzerolabs/oft-evm/contracts/libs/OFTMsgCodec.sol
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
-import {ICreatorGaugeController} from "../../interfaces/core/ICreatorGaugeController.sol";
-import {ICreatorOVault} from "../../interfaces/core/ICreatorOVault.sol";
-import {I4626Registry} from "../../interfaces/core/I4626Registry.sol";
+import {ICreatorGaugeController} from "@4626/interfaces/core/ICreatorGaugeController.sol";
+import {ICreatorOVault} from "@4626/interfaces/core/ICreatorOVault.sol";
+import {I4626Registry} from "@4626/interfaces/core/I4626Registry.sol";
 
 /// @dev Hub-only: interface for local lottery manager calls on Base
 interface ILotteryManager4626 {

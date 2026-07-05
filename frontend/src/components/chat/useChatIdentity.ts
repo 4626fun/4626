@@ -66,7 +66,7 @@ function resolveZoraDisplayName(profile: Awaited<ReturnType<typeof fetchZoraProf
   return null
 }
 
-function resolveZoraAvatar(profile: Awaited<ReturnType<typeof fetchZoraProfile>> | undefined): string | null {
+export function resolveZoraAvatar(profile: Awaited<ReturnType<typeof fetchZoraProfile>> | undefined): string | null {
   const avatar = profile?.avatar
   const medium = String(avatar?.previewImage?.medium ?? avatar?.medium ?? '').trim()
   if (medium) return medium

@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import "../contracts/utilities/routers/VaultShareBurnStream.sol";
+import "@4626/revenue/creator/VaultShareBurnStream.sol";
 
 /// @dev Documents the payout-router wiring invariant: only the vault may authorize queuers.
 contract VaultShareBurnStreamQueuerBridgeTest is Test {

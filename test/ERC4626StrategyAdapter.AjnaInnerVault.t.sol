@@ -6,10 +6,10 @@ import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {IAjnaPool} from "../contracts/interfaces/IAjnaPool.sol";
-import {ERC4626StrategyAdapter} from "../contracts/vault/strategies/ERC4626StrategyAdapter.sol";
-import {AjnaERC4626Vault} from "../contracts/vault/strategies/ajna4626/AjnaERC4626Vault.sol";
-import {AjnaVaultAuth} from "../contracts/vault/strategies/ajna4626/AjnaVaultAuth.sol";
+import {IAjnaPool} from "@4626/interfaces/external/IAjnaPool.sol";
+import {ERC4626StrategyAdapter} from "@4626/strategies/cca/ERC4626StrategyAdapter.sol";
+import {AjnaERC4626Vault} from "@4626/strategies/ajna/AjnaERC4626Vault.sol";
+import {AjnaVaultAuth} from "@4626/strategies/ajna/AjnaVaultAuth.sol";
 
 contract MockAdapterERC20 is ERC20 {
     constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}

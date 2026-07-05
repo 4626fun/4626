@@ -5,7 +5,7 @@ import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {VaultActivationBatcher} from "../contracts/helpers/batchers/VaultActivationBatcher.sol";
+import {VaultActivationBatcher} from "@4626/deploy/batchers/VaultActivationBatcher.sol";
 import {ISignatureTransfer} from "permit2/src/interfaces/ISignatureTransfer.sol";
 
 contract MockERC20Mintable is ERC20 {

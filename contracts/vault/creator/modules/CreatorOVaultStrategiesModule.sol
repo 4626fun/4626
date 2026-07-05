@@ -4,11 +4,11 @@ pragma solidity ^0.8.20;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import {IStrategy} from "../../interfaces/IStrategy.sol";
-import {IStrategyValuation} from "../../interfaces/IStrategyValuation.sol";
+import {IStrategy} from "@4626/interfaces/strategies/IStrategy.sol";
+import {IStrategyValuation} from "@4626/interfaces/strategies/IStrategyValuation.sol";
 
-import {CreatorOVaultModuleBase} from "./CreatorOVaultModuleBase.sol";
-import {ICreatorOVaultModuleIdentity} from "./ICreatorOVaultModuleIdentity.sol";
+import {CreatorOVaultModuleBase} from "@4626/vault/creator/modules/CreatorOVaultModuleBase.sol";
+import {ICreatorOVaultModuleIdentity} from "@4626/vault/creator/modules/ICreatorOVaultModuleIdentity.sol";
 
 interface ICreatorORecoveryEscrowStrategyModule {
     function notifyRecovery(address asset, uint256 epochId, uint256 amount) external;

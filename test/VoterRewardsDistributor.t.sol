@@ -3,11 +3,11 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import "../contracts/governance/VaultGaugeVoting.sol";
-import "../contracts/governance/VoterRewardsDistributor.sol";
+import "@4626/governance/creator/VaultGaugeVoting.sol";
+import "@4626/governance/creator/VoterRewardsDistributor.sol";
 
 // Import veAKITA contract only (avoid name collision with IveAKITA interface)
-import {ve4626 as Ve4626Contract} from "../contracts/governance/ve4626.sol";
+import {ve4626 as Ve4626Contract} from "@4626/governance/creator/ve4626.sol";
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 

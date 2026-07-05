@@ -4,13 +4,13 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import {CreatorOVault} from "../contracts/vault/CreatorOVault.sol";
-import {AgentOVault} from "../contracts/vault/agent/AgentOVault.sol";
-import {CreatorOVaultAdminModule} from "../contracts/vault/modules/CreatorOVaultAdminModule.sol";
-import {CreatorOVaultCoreModule} from "../contracts/vault/modules/CreatorOVaultCoreModule.sol";
-import {AgentOVaultCoreModule} from "../contracts/vault/agent/modules/AgentOVaultCoreModule.sol";
-import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorOVaultStrategiesModule.sol";
-import {MockAgentTokenV4} from "./mocks/MockAgentTokenV4.sol";
+import {CreatorOVault} from "@4626/vault/creator/CreatorOVault.sol";
+import {AgentOVault} from "@4626/vault/agent/AgentOVault.sol";
+import {CreatorOVaultAdminModule} from "@4626/vault/creator/modules/CreatorOVaultAdminModule.sol";
+import {CreatorOVaultCoreModule} from "@4626/vault/creator/modules/CreatorOVaultCoreModule.sol";
+import {AgentOVaultCoreModule} from "@4626/vault/agent/modules/AgentOVaultCoreModule.sol";
+import {CreatorOVaultStrategiesModule} from "@4626/vault/creator/modules/CreatorOVaultStrategiesModule.sol";
+import {MockAgentTokenV4} from "test/mocks/MockAgentTokenV4.sol";
 
 /// @dev Rebasing-up / reflexive mock: credits the receiver MORE than the sent amount
 ///      (bonus minted on transfer). Used to prove the measured pull fails closed when

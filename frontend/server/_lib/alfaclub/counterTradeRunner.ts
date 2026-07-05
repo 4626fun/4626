@@ -5,6 +5,7 @@ import { resolveArenaIdentityForContext } from '../arena/arenaIdentityMappingSto
 import { runArenaSpotPerpTransfer } from '../arena/arenaClient.js'
 import { sendAlfaClubRoomText } from './chatBridge.js'
 import { executeCounterTradeEntryFlow } from './counterTradeEntryFlow.js'
+import { handlePairedLegRebalanceFlow } from './counterTradeRebalance.js'
 import {
   getClearinghouseState,
   getSpotUsdcBalance,
@@ -13,6 +14,7 @@ import {
 import { resolveRoom1659HyperliquidUserForSnapshot } from './room1659Market.js'
 import { readCounterTradeRuntimeConfig } from './counterTradeConfig.js'
 import { isCounterTradeEnabledByEnv } from './counterTradeEnv.js'
+import { mergeCounterTradeRuntimeWithRoomOverrides } from './counterTradeRoomConfig.js'
 import { applyCounterTradeLlmGate } from './counterTradeLlmAdvisor.js'
 import { handleCounterTradeExitFlow } from './counterTradeExitFlow.js'
 import {
@@ -92,13 +94,12 @@ function resolveStrategySubaccount(params: {
 }
 
 export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
-  const runtime = readCounterTradeRuntimeConfig()
-  const strictInverseParity = runtime.roomId === '1659'
-  if (!runtime.enabled || !isCounterTradeEnabledByEnv()) {
+  const baseRuntime = readCounterTradeRuntimeConfig()
+  if (!baseRuntime.enabled || !isCounterTradeEnabledByEnv()) {
     return {
       ok: false,
       reason: 'disabled',
-      roomId: runtime.roomId,
+      roomId: baseRuntime.roomId,
       scannedIdentities: 0,
       scannedEvents: 0,
       newEvents: 0,
@@ -109,12 +110,12 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
     }
   }
 
-  const roomStrategy = await readOrCreateCounterTradeRoomStrategy(runtime.roomId)
+  const roomStrategy = await readOrCreateCounterTradeRoomStrategy(baseRuntime.roomId)
   if (!roomStrategy?.enabled || roomStrategy.killSwitch) {
     return {
       ok: false,
       reason: roomStrategy?.killSwitch ? 'kill_switch' : 'room_disabled',
-      roomId: runtime.roomId,
+      roomId: baseRuntime.roomId,
       scannedIdentities: 0,
       scannedEvents: 0,
       newEvents: 0,
@@ -124,6 +125,9 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
       failed: 0,
     }
   }
+
+  const runtime = mergeCounterTradeRuntimeWithRoomOverrides(baseRuntime, roomStrategy.configOverrides)
+  const strictInverseParity = runtime.roomId === '1659'
 
   const activeOptIns = await listActiveCounterTradeOptIns({ roomId: runtime.roomId, limit: 300 })
   const strategyActors =
@@ -388,6 +392,7 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
         // it runs before cooldown/hourly/daily gates and the LLM gate; dedupe
         // and the env/DB kill switches above still apply.
         const fillAction = classifyCounterTradeFillAction(fill)
+
         if (isExitFillAction(fillAction)) {
           const exitResult = await handleCounterTradeExitFlow({
             roomId: runtime.roomId,
@@ -408,6 +413,29 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
           executed += exitResult.executedDelta
           skipped += exitResult.skippedDelta
           failed += exitResult.failedDelta
+          continue
+        }
+
+        if (strictInverseParity && (fillAction === 'add' || fillAction === 'reduce')) {
+          const rebalanceResult = await handlePairedLegRebalanceFlow({
+            roomId: runtime.roomId,
+            senderAddress: optIn.senderAddress,
+            eventKey,
+            fill,
+            runtime,
+            userWalletState,
+            botWalletState: strategyCounterWalletState,
+            userWalletForFills,
+            baseArenaConfig,
+            botIdentityConfig: identityConfig,
+            strategyKey,
+            strategySubaccount,
+            chatPostEnabled: runtime.chatPostEnabled,
+            chatPostRoomId: runtime.chatPostRoomId,
+          })
+          executed += rebalanceResult.executedDelta
+          skipped += rebalanceResult.skippedDelta
+          failed += rebalanceResult.failedDelta
           continue
         }
 

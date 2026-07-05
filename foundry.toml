@@ -22,6 +22,7 @@ fs_permissions = [
 # Remappings for LayerZero and other deps
 remappings = [
     "test/=test/",
+    "@4626/=contracts/",
     "tamago/=verification/tamago/",
     "@openzeppelin/=node_modules/@openzeppelin/",
     "@layerzerolabs/=node_modules/@layerzerolabs/",

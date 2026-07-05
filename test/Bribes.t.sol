@@ -3,11 +3,11 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import "../contracts/governance/VaultGaugeVoting.sol";
-import {ve4626 as Ve4626Contract} from "../contracts/governance/ve4626.sol";
+import "@4626/governance/creator/VaultGaugeVoting.sol";
+import {ve4626 as Ve4626Contract} from "@4626/governance/creator/ve4626.sol";
 
-import "../contracts/factories/BribesFactory.sol";
-import {BribeDepot} from "../contracts/governance/bribes/BribeDepot.sol";
+import "@4626/governance/factories/BribesFactory.sol";
+import {BribeDepot} from "@4626/governance/bribes/BribeDepot.sol";
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 

@@ -47,7 +47,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
-import {ICreatorOracle} from "../interfaces/ICreatorOracle.sol";
+import {ICreatorOracle} from "@4626/interfaces/oracles/ICreatorOracle.sol";
 
 // ================================
 // INTERFACES

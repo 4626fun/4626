@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IRandomnessSource} from "./IRandomnessSource.sol";
+import {IRandomnessSource} from "@4626/lottery/randomness/IRandomnessSource.sol";
 
 /// @notice Minimal interface to call into the existing
 ///         `VRFConsumer4626` without importing the full file.

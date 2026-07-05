@@ -2,8 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import {DeploymentBatcher, ICharmFactory} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
-import "./helpers/DeploymentBatcherFixture.sol";
+import {DeploymentBatcher, ICharmFactory} from "@4626/deploy/batchers/DeploymentBatcher.sol";
+import "test/helpers/DeploymentBatcherFixture.sol";
 
 contract MockOwnableTransfer {
     address public owner;

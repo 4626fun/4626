@@ -6,9 +6,9 @@ import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {IAjnaPool} from "../contracts/interfaces/IAjnaPool.sol";
-import {AjnaERC4626Vault} from "../contracts/vault/strategies/ajna4626/AjnaERC4626Vault.sol";
-import {AjnaVaultAuth} from "../contracts/vault/strategies/ajna4626/AjnaVaultAuth.sol";
+import {IAjnaPool} from "@4626/interfaces/external/IAjnaPool.sol";
+import {AjnaERC4626Vault} from "@4626/strategies/ajna/AjnaERC4626Vault.sol";
+import {AjnaVaultAuth} from "@4626/strategies/ajna/AjnaVaultAuth.sol";
 
 /// @title AjnaERC4626Vault — ERC-4626 deviation flag tests (F-19 / 4626-442)
 /// @notice Pins the machine-readable deviation bitmap returned by

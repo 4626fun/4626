@@ -2,8 +2,8 @@
 pragma solidity 0.8.30;
 
 import "forge-std/Test.sol";
-import {DeploymentBatcher, DeploymentBatcherUtilsHelper, DeploymentBatcherPhase1Module, DeploymentBatcherPhase2Module, DeploymentBatcherPhase3Helper, DeploymentBatcherUniV4Helper} from "../../contracts/helpers/batchers/DeploymentBatcher.sol";
-import {I4626Registry} from "../../contracts/interfaces/core/I4626Registry.sol";
+import {DeploymentBatcher, DeploymentBatcherUtilsHelper, DeploymentBatcherPhase1Module, DeploymentBatcherPhase2Module, DeploymentBatcherPhase3Helper, DeploymentBatcherUniV4Helper} from "@4626/deploy/batchers/DeploymentBatcher.sol";
+import {I4626Registry} from "@4626/interfaces/core/I4626Registry.sol";
 
 contract DeploymentBatcherFixture is Test {
     struct Helpers {

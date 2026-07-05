@@ -2,11 +2,11 @@
 pragma solidity 0.8.30;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "../../interfaces/IAjnaPool.sol";
-import "../../vault/strategies/ERC4626StrategyAdapter.sol";
-import "../../vault/strategies/ajna4626/AjnaERC4626Vault.sol";
-import "../../vault/strategies/ajna4626/AjnaVaultAuth.sol";
-import "../../vault/strategies/univ3/CreatorCharmStrategy.sol";
+import "@4626/interfaces/external/IAjnaPool.sol";
+import "@4626/strategies/cca/ERC4626StrategyAdapter.sol";
+import "@4626/strategies/ajna/AjnaERC4626Vault.sol";
+import "@4626/strategies/ajna/AjnaVaultAuth.sol";
+import "@4626/strategies/univ3/CreatorCharmStrategy.sol";
 
 interface ICreatorCharmStrategyFactory {
     function deployAndInitialize(

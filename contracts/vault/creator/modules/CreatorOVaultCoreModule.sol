@@ -8,12 +8,12 @@ import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
-import {IStrategy} from "../../interfaces/IStrategy.sol";
-import {IStrategyValuation} from "../../interfaces/IStrategyValuation.sol";
+import {IStrategy} from "@4626/interfaces/strategies/IStrategy.sol";
+import {IStrategyValuation} from "@4626/interfaces/strategies/IStrategyValuation.sol";
 
-import {CreatorOVaultModuleBase} from "./CreatorOVaultModuleBase.sol";
-import {CreatorOVaultLiquidityLib} from "../libraries/CreatorOVaultLiquidityLib.sol";
-import {ICreatorOVaultModuleIdentity} from "./ICreatorOVaultModuleIdentity.sol";
+import {CreatorOVaultModuleBase} from "@4626/vault/creator/modules/CreatorOVaultModuleBase.sol";
+import {CreatorOVaultLiquidityLib} from "@4626/vault/creator/libraries/CreatorOVaultLiquidityLib.sol";
+import {ICreatorOVaultModuleIdentity} from "@4626/vault/creator/modules/ICreatorOVaultModuleIdentity.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 interface ICreatorOVaultStrategiesModuleInternal {

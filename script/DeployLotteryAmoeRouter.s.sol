@@ -3,8 +3,8 @@ pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
 
-import {AmoePlonkVerifier} from "../contracts/utilities/lottery/zk/AmoePlonkVerifier.sol";
-import {LotteryAmoeRouter} from "../contracts/utilities/lottery/zk/LotteryAmoeRouter.sol";
+import {AmoePlonkVerifier} from "@4626/lottery/zk/AmoePlonkVerifier.sol";
+import {LotteryAmoeRouter} from "@4626/lottery/zk/LotteryAmoeRouter.sol";
 
 /**
  * @title DeployLotteryAmoeRouter

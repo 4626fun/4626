@@ -6,13 +6,13 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {IUniswapV3Factory} from "../../../interfaces/uniswap/IUniswapV3Factory.sol";
-import {IUniswapV3Pool} from "../../../interfaces/uniswap/IUniswapV3Pool.sol";
-import {TickMathCompat} from "../../../libraries/TickMathCompat.sol";
-import {IAjnaPool} from "../../../interfaces/IAjnaPool.sol";
-import "../../../interfaces/IStrategy.sol";
-import {ICreatorOracle} from "../../../interfaces/ICreatorOracle.sol";
-import {IStrategyValuation} from "../../../interfaces/IStrategyValuation.sol";
+import {IUniswapV3Factory} from "@4626/interfaces/uniswap/IUniswapV3Factory.sol";
+import {IUniswapV3Pool} from "@4626/interfaces/uniswap/IUniswapV3Pool.sol";
+import {TickMathCompat} from "@4626/libraries/uniswap/TickMathCompat.sol";
+import {IAjnaPool} from "@4626/interfaces/external/IAjnaPool.sol";
+import "@4626/interfaces/strategies/IStrategy.sol";
+import {ICreatorOracle} from "@4626/interfaces/oracles/ICreatorOracle.sol";
+import {IStrategyValuation} from "@4626/interfaces/strategies/IStrategyValuation.sol";
 
 /**
  * @title CreatorCharmStrategy

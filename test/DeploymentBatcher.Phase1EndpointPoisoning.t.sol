@@ -2,9 +2,9 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import {DeploymentBatcher} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
-import "./helpers/DeploymentBatcherFixture.sol";
-import {OFTBootstrapRegistry} from "../contracts/helpers/infra/OFTBootstrapRegistry.sol";
+import {DeploymentBatcher} from "@4626/deploy/batchers/DeploymentBatcher.sol";
+import "test/helpers/DeploymentBatcherFixture.sol";
+import {OFTBootstrapRegistry} from "@4626/deploy/infra/OFTBootstrapRegistry.sol";
 
 interface IEndpointRegistryLike {
     function getLayerZeroEndpoint(uint256 chainId) external view returns (address);

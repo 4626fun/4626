@@ -9,12 +9,12 @@ import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 
-import {I4626Registry} from "../../interfaces/core/I4626Registry.sol";
-import {ICreatorGaugeController} from "../../interfaces/core/ICreatorGaugeController.sol";
-import {ICreatorOVault} from "../../interfaces/core/ICreatorOVault.sol";
-import {IAjnaPoolFactory} from "../../interfaces/IAjnaPool.sol";
-import {IBaseSolanaBridge} from "../../interfaces/IBaseSolanaBridge.sol";
-import {CreatorLinearVesting} from "../../utilities/vesting/CreatorLinearVesting.sol";
+import {I4626Registry} from "@4626/interfaces/core/I4626Registry.sol";
+import {ICreatorGaugeController} from "@4626/interfaces/core/ICreatorGaugeController.sol";
+import {ICreatorOVault} from "@4626/interfaces/core/ICreatorOVault.sol";
+import {IAjnaPoolFactory} from "@4626/interfaces/external/IAjnaPool.sol";
+import {IBaseSolanaBridge} from "@4626/interfaces/bridge/IBaseSolanaBridge.sol";
+import {CreatorLinearVesting} from "@4626/vesting/CreatorLinearVesting.sol";
 import {IOFT, SendParam, MessagingFee, OFTReceipt} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
 import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 

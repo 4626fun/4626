@@ -12,10 +12,10 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
-import {IStrategy} from "../interfaces/IStrategy.sol";
-import {IStrategyValuation} from "../interfaces/IStrategyValuation.sol";
-import {ICreatorOVaultModuleIdentity} from "./modules/ICreatorOVaultModuleIdentity.sol";
-import {CreatorOVaultLiquidityLib} from "./libraries/CreatorOVaultLiquidityLib.sol";
+import {IStrategy} from "@4626/interfaces/strategies/IStrategy.sol";
+import {IStrategyValuation} from "@4626/interfaces/strategies/IStrategyValuation.sol";
+import {ICreatorOVaultModuleIdentity} from "@4626/vault/creator/modules/ICreatorOVaultModuleIdentity.sol";
+import {CreatorOVaultLiquidityLib} from "@4626/vault/creator/libraries/CreatorOVaultLiquidityLib.sol";
 
 struct CcaLifecycleStatus {
     uint8 phase;

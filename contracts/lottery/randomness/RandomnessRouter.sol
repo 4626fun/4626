@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IRandomnessSource} from "./IRandomnessSource.sol";
+import {IRandomnessSource} from "@4626/lottery/randomness/IRandomnessSource.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// @title RandomnessRouter

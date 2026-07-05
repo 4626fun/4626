@@ -9,7 +9,7 @@ pragma solidity ^0.8.20;
  * Vault address is treated as the gauge id.
  */
 
-import {BribeDepot} from "../governance/bribes/BribeDepot.sol";
+import {BribeDepot} from "@4626/governance/bribes/BribeDepot.sol";
 
 interface IVaultGaugeVotingForBribesFactory {
     function canReceiveVotes(address vault) external view returns (bool);

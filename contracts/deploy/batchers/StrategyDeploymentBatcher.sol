@@ -5,8 +5,8 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 // FIX: F-14 — use Ownable2Step for transferable ownership instead of immutable protocolOwner
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
-import "../../interfaces/uniswap/IUniswapV3Factory.sol";
-import "../../interfaces/uniswap/IUniswapV3Pool.sol";
+import "@4626/interfaces/uniswap/IUniswapV3Factory.sol";
+import "@4626/interfaces/uniswap/IUniswapV3Pool.sol";
 // FIX: 4626-401 / M-37 — only the interfaces are imported here. The concrete factory
 // contracts are deployed in `script/DeployEverything.s.sol` and their addresses are
 // injected via the constructor, which keeps this contract's init-code under the
@@ -14,7 +14,7 @@ import "../../interfaces/uniswap/IUniswapV3Pool.sol";
 import {
     ICreatorCharmStrategyFactory,
     IAjnaERC4626StrategyFactory
-} from "./StrategyDeploymentFactories.sol";
+} from "@4626/deploy/batchers/StrategyDeploymentFactories.sol";
 
 /**
  * @notice Charm Finance Alpha Vault Factory

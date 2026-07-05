@@ -1,3 +1,4 @@
+@4626/=contracts/
 tamago/=contracts/vault/tamago/
 @openzeppelin/=node_modules/@openzeppelin/
 @layerzerolabs/=node_modules/@layerzerolabs/

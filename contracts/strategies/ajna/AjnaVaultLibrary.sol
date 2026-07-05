@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IAjnaPool} from "../../../interfaces/IAjnaPool.sol";
+import {IAjnaPool} from "@4626/interfaces/external/IAjnaPool.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**

@@ -2,11 +2,11 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../contracts/helpers/batchers/StrategyDeploymentBatcher.sol";
+import "@4626/deploy/batchers/StrategyDeploymentBatcher.sol";
 import {
     CreatorCharmStrategyFactory,
     AjnaERC4626StrategyFactory
-} from "../contracts/helpers/batchers/StrategyDeploymentFactories.sol";
+} from "@4626/deploy/batchers/StrategyDeploymentFactories.sol";
 
 /**
  * @title CompileTestBatcher

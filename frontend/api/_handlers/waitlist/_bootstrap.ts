@@ -45,6 +45,8 @@ import { extractPrivyVerifiedEmail } from '../../../server/_lib/infra/trust.js'
 import { classifyLinkedAccounts } from '../../../server/_lib/wallet/walletMapping.js'
 
 type BootstrapBody = { email?: string; referralCode?: string }
+// Vite apiImport caches handler modules by handler mtime only; identity helpers
+// reload when this file changes.
 type BootstrapDb = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
   query?: (sql: string, params?: unknown[]) => Promise<unknown>

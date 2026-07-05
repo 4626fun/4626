@@ -4,10 +4,10 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
-import {ConcentratedStrategy} from "../contracts/vault/strategies/univ4/ConcentratedStrategy.sol";
-import {ICreatorOracle} from "../contracts/interfaces/ICreatorOracle.sol";
-import {V4LiquidityAmounts} from "../contracts/libraries/V4LiquidityAmounts.sol";
-import {IApprovedV4HooksRegistry} from "../contracts/vault/strategies/univ4/ApprovedV4HooksRegistry.sol";
+import {ConcentratedStrategy} from "@4626/strategies/univ4/ConcentratedStrategy.sol";
+import {ICreatorOracle} from "@4626/interfaces/oracles/ICreatorOracle.sol";
+import {V4LiquidityAmounts} from "@4626/libraries/uniswap/V4LiquidityAmounts.sol";
+import {IApprovedV4HooksRegistry} from "@4626/strategies/univ4/ApprovedV4HooksRegistry.sol";
 
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 

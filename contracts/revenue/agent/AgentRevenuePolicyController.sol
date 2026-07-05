@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {IAgentTokenV4} from "../../interfaces/external/IAgentTokenV4.sol";
+import {IAgentTokenV4} from "@4626/interfaces/agent/IAgentTokenV4.sol";
 
 /**
  * @title AgentRevenuePolicyController

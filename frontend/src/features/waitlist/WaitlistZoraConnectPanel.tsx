@@ -1,4 +1,4 @@
-import { ArrowRight, Check } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
@@ -7,13 +7,12 @@ const ZORA_REWARD_POINTS = PROVIDER_POINTS.zora_cross_app
 const ZORA_LOGO_SRC = '/brands/zora-token.svg'
 
 type WaitlistZoraConnectPanelProps = {
-  linked: boolean
   busy: boolean
   onConnect: () => void
   onSkip: () => void
 }
 
-function ZoraLogo(props: { className?: string }) {
+export function ZoraLogo(props: { className?: string }) {
   return (
     <img
       src={ZORA_LOGO_SRC}
@@ -27,24 +26,7 @@ function ZoraLogo(props: { className?: string }) {
 }
 
 export function WaitlistZoraConnectPanel(props: WaitlistZoraConnectPanelProps) {
-  const { linked, busy, onConnect, onSkip } = props
-
-  if (linked) {
-    return (
-      <div className="mt-6 flex items-center justify-between gap-3 py-1 text-left">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <ZoraLogo className="size-7 shrink-0 rounded-full object-cover" />
-          <span className="text-[13px] font-semibold text-emerald-100">Zora connected</span>
-          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-emerald-400/20 text-emerald-300">
-            <Check className="size-3" aria-hidden="true" />
-          </span>
-        </div>
-        <span className="shrink-0 text-[11px] font-medium tabular-nums text-emerald-300/80">
-          +{ZORA_REWARD_POINTS} pts
-        </span>
-      </div>
-    )
-  }
+  const { busy, onConnect, onSkip } = props
 
   return (
     <div className="mt-6 space-y-2.5 text-left">

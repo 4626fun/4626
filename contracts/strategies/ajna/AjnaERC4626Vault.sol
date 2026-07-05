@@ -8,10 +8,10 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-import {IAjnaPool} from "../../../interfaces/IAjnaPool.sol";
-import {AjnaVaultAuth} from "./AjnaVaultAuth.sol";
-import {AjnaVaultBuffer} from "./AjnaVaultBuffer.sol";
-import {AjnaVaultLibrary} from "./AjnaVaultLibrary.sol";
+import {IAjnaPool} from "@4626/interfaces/external/IAjnaPool.sol";
+import {AjnaVaultAuth} from "@4626/strategies/ajna/AjnaVaultAuth.sol";
+import {AjnaVaultBuffer} from "@4626/strategies/ajna/AjnaVaultBuffer.sol";
+import {AjnaVaultLibrary} from "@4626/strategies/ajna/AjnaVaultLibrary.sol";
 
 /**
  * @title AjnaERC4626Vault

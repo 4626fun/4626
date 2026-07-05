@@ -2,6 +2,12 @@ import { getDb } from '../db/postgres.js'
 import { ensureAlfaclubCounterTradeSchema } from '../db/schemaBootstrap.js'
 import { logger } from '../infra/logger.js'
 import type { CounterTradeBias, CounterTradePreset } from './counterTradeConfig.js'
+import {
+  listCounterTradeConfigFieldsForGroup,
+  parseCounterTradeRoomConfigOverrides,
+  type CounterTradeConfigGroup,
+  type CounterTradeRoomConfigOverrides,
+} from './counterTradeRoomConfig.js'
 
 type CounterTradeDb = NonNullable<Awaited<ReturnType<typeof getDb>>>
 
@@ -57,6 +63,17 @@ export const COUNTER_TRADE_DEFENSE_EXECUTED_REASON = 'defense_reduce_executed'
 export const COUNTER_TRADE_HARVEST_EXECUTED_REASON = 'harvest_tp_executed'
 
 /**
+ * Ledger `reason` for strict-inverse hedge mirror reduces (user added to their
+ * leg → bot partially trims the opposite leg). Risk-reducing — excluded from
+ * entry cooldown and usage windows, same as mirrored exits.
+ */
+export const COUNTER_TRADE_MIRROR_REDUCE_EXECUTED_REASON = 'mirror_reduce_executed'
+
+export const COUNTER_TRADE_REBALANCE_HARVEST_EXECUTED_REASON = 'rebalance_harvest_executed'
+
+export const COUNTER_TRADE_REBALANCE_DIP_EXECUTED_REASON = 'rebalance_dip_executed'
+
+/**
  * Ledger `reason` for alert-mode defense warnings (custodied silo — e.g. an
  * AlfaClub room wallet with no approved API-wallet key — so the bot posts an
  * advisory card instead of placing the reduce). Rows use status 'skipped'.
@@ -75,6 +92,9 @@ const NON_ENTRY_EXECUTED_REASONS = [
   COUNTER_TRADE_EXIT_EXECUTED_REASON,
   COUNTER_TRADE_DEFENSE_EXECUTED_REASON,
   COUNTER_TRADE_HARVEST_EXECUTED_REASON,
+  COUNTER_TRADE_MIRROR_REDUCE_EXECUTED_REASON,
+  COUNTER_TRADE_REBALANCE_HARVEST_EXECUTED_REASON,
+  COUNTER_TRADE_REBALANCE_DIP_EXECUTED_REASON,
 ] as const
 
 export type CounterTradeRoomStrategy = {
@@ -82,6 +102,7 @@ export type CounterTradeRoomStrategy = {
   enabled: boolean
   killSwitch: boolean
   globalBias: CounterTradeBias
+  configOverrides: CounterTradeRoomConfigOverrides
   updatedAt: string
 }
 
@@ -115,11 +136,77 @@ export type CounterTradeActionRow = {
   createdAt: string
 }
 
+const LEG_REDUCE_EXECUTED_REASONS = [
+  COUNTER_TRADE_REBALANCE_HARVEST_EXECUTED_REASON,
+  COUNTER_TRADE_DEFENSE_EXECUTED_REASON,
+  COUNTER_TRADE_HARVEST_EXECUTED_REASON,
+  COUNTER_TRADE_EXIT_EXECUTED_REASON,
+  COUNTER_TRADE_MIRROR_REDUCE_EXECUTED_REASON,
+] as const
+
+export function extractCoinFromCounterTradeEventKey(eventKey: string): string | null {
+  const parts = eventKey.split('|')
+  if (parts[0] === 'defense' || parts[0] === 'defense-alert') {
+    const coin = parts[2]?.trim().toUpperCase()
+    return coin || null
+  }
+  if (parts.length >= 3) {
+    const coin = parts[2]?.trim().toUpperCase()
+    return coin || null
+  }
+  return null
+}
+
+export function extractSiloFromCounterTradeEventKey(eventKey: string): 'bot' | 'user' | null {
+  const parts = eventKey.split('|')
+  const last = parts[parts.length - 1]
+  if (last === 'bot' || last === 'user') return last
+  if (parts[0] === 'defense' || parts[0] === 'defense-alert') {
+    return parts[1] === 'bot' || parts[1] === 'user' ? parts[1] : null
+  }
+  return null
+}
+
+/** Count dip adds for a coin+silo since the most recent executed reduce on that leg. */
+export function countDipAddsForLegSinceReduce(
+  actions: CounterTradeActionRow[],
+  coin: string,
+  silo: 'bot' | 'user',
+): number {
+  const coinU = coin.toUpperCase()
+  let count = 0
+  for (const action of actions) {
+    const actionCoin = extractCoinFromCounterTradeEventKey(action.eventKey)
+    if (actionCoin !== coinU) continue
+
+    const actionSilo = extractSiloFromCounterTradeEventKey(action.eventKey)
+
+    if (
+      action.status === 'executed' &&
+      action.reason === COUNTER_TRADE_REBALANCE_DIP_EXECUTED_REASON &&
+      actionSilo === silo
+    ) {
+      count += 1
+      continue
+    }
+
+    if (
+      action.status === 'executed' &&
+      (LEG_REDUCE_EXECUTED_REASONS as readonly string[]).includes(action.reason) &&
+      actionSilo === silo
+    ) {
+      break
+    }
+  }
+  return count
+}
+
 type RoomStrategyRow = {
   room_id: string
   enabled: boolean
   kill_switch: boolean
   global_bias: CounterTradeBias
+  config_overrides: unknown
   updated_at: string
 }
 
@@ -151,6 +238,7 @@ function mapRoomStrategyRow(row: RoomStrategyRow): CounterTradeRoomStrategy {
     enabled: row.enabled,
     killSwitch: row.kill_switch,
     globalBias: row.global_bias,
+    configOverrides: parseCounterTradeRoomConfigOverrides(row.config_overrides),
     updatedAt: row.updated_at,
   }
 }
@@ -194,7 +282,7 @@ export async function readOrCreateCounterTradeRoomStrategy(
       )
       ON CONFLICT (room_id) DO UPDATE
       SET room_id = EXCLUDED.room_id
-      RETURNING room_id, enabled, kill_switch, global_bias, updated_at::text AS updated_at;
+      RETURNING room_id, enabled, kill_switch, global_bias, config_overrides, updated_at::text AS updated_at;
     `
     const row = result.rows?.[0] as RoomStrategyRow | undefined
     return row ? mapRoomStrategyRow(row) : null
@@ -227,7 +315,7 @@ export async function setCounterTradeGlobalBias(params: {
       ON CONFLICT (room_id) DO UPDATE
       SET global_bias = EXCLUDED.global_bias,
           updated_at = NOW()
-      RETURNING room_id, enabled, kill_switch, global_bias, updated_at::text AS updated_at;
+      RETURNING room_id, enabled, kill_switch, global_bias, config_overrides, updated_at::text AS updated_at;
     `
     const row = result.rows?.[0] as RoomStrategyRow | undefined
     return row ? mapRoomStrategyRow(row) : null
@@ -239,6 +327,105 @@ export async function setCounterTradeGlobalBias(params: {
     })
     return null
   }
+}
+
+export async function setCounterTradeRoomConfigOverride(params: {
+  roomId: string
+  field: keyof CounterTradeRoomConfigOverrides
+  value: number
+}): Promise<CounterTradeRoomStrategy | null> {
+  const roomId = normalizeRoomId(params.roomId)
+  if (!roomId) return null
+  const db = await getDb()
+  if (!db) return null
+  await ensureCounterTradeSchema(db)
+
+  const patch = JSON.stringify({ [params.field]: params.value })
+  try {
+    const result = await db.sql`
+      INSERT INTO alfaclub.counter_trade_room_strategy (
+        room_id, enabled, kill_switch, global_bias, updated_at
+      ) VALUES (
+        ${roomId}, TRUE, FALSE, 'neutral', NOW()
+      )
+      ON CONFLICT (room_id) DO UPDATE
+      SET config_overrides = alfaclub.counter_trade_room_strategy.config_overrides || ${patch}::jsonb,
+          updated_at = NOW()
+      RETURNING room_id, enabled, kill_switch, global_bias, config_overrides, updated_at::text AS updated_at;
+    `
+    const row = result.rows?.[0] as RoomStrategyRow | undefined
+    return row ? mapRoomStrategyRow(row) : null
+  } catch (error) {
+    logger.warn('counter_trade.room_strategy_set_config_failed', {
+      roomId,
+      field: params.field,
+      message: error instanceof Error ? error.message : String(error),
+    })
+    return null
+  }
+}
+
+export async function resetCounterTradeRoomConfigOverride(params: {
+  roomId: string
+  field?: keyof CounterTradeRoomConfigOverrides | null
+}): Promise<CounterTradeRoomStrategy | null> {
+  const roomId = normalizeRoomId(params.roomId)
+  if (!roomId) return null
+  const db = await getDb()
+  if (!db) return null
+  await ensureCounterTradeSchema(db)
+
+  try {
+    const result =
+      params.field == null
+        ? await db.sql`
+            INSERT INTO alfaclub.counter_trade_room_strategy (
+              room_id, enabled, kill_switch, global_bias, updated_at
+            ) VALUES (
+              ${roomId}, TRUE, FALSE, 'neutral', NOW()
+            )
+            ON CONFLICT (room_id) DO UPDATE
+            SET config_overrides = '{}'::jsonb,
+                updated_at = NOW()
+            RETURNING room_id, enabled, kill_switch, global_bias, config_overrides, updated_at::text AS updated_at;
+          `
+        : await db.sql`
+            INSERT INTO alfaclub.counter_trade_room_strategy (
+              room_id, enabled, kill_switch, global_bias, updated_at
+            ) VALUES (
+              ${roomId}, TRUE, FALSE, 'neutral', NOW()
+            )
+            ON CONFLICT (room_id) DO UPDATE
+            SET config_overrides = alfaclub.counter_trade_room_strategy.config_overrides - ${params.field},
+                updated_at = NOW()
+            RETURNING room_id, enabled, kill_switch, global_bias, config_overrides, updated_at::text AS updated_at;
+          `
+    const row = result.rows?.[0] as RoomStrategyRow | undefined
+    return row ? mapRoomStrategyRow(row) : null
+  } catch (error) {
+    logger.warn('counter_trade.room_strategy_reset_config_failed', {
+      roomId,
+      field: params.field ?? 'all',
+      message: error instanceof Error ? error.message : String(error),
+    })
+    return null
+  }
+}
+
+export async function resetCounterTradeRoomConfigGroup(params: {
+  roomId: string
+  group: CounterTradeConfigGroup | 'all'
+}): Promise<CounterTradeRoomStrategy | null> {
+  if (params.group === 'all') {
+    return resetCounterTradeRoomConfigOverride({ roomId: params.roomId, field: null })
+  }
+
+  let strategy: CounterTradeRoomStrategy | null = null
+  for (const field of listCounterTradeConfigFieldsForGroup(params.group)) {
+    strategy = await resetCounterTradeRoomConfigOverride({ roomId: params.roomId, field })
+    if (!strategy) return null
+  }
+  return strategy
 }
 
 export async function upsertCounterTradeOptIn(params: {
@@ -666,5 +853,20 @@ export async function listRecentCounterTradeActions(params: {
     })
     return []
   }
+}
+
+export async function countRebalanceDipAddsForLeg(params: {
+  roomId: string
+  senderAddress: string
+  coin: string
+  silo: 'bot' | 'user'
+  limit?: number
+}): Promise<number> {
+  const actions = await listRecentCounterTradeActions({
+    roomId: params.roomId,
+    senderAddress: params.senderAddress,
+    limit: params.limit ?? 500,
+  })
+  return countDipAddsForLegSinceReduce(actions, params.coin, params.silo)
 }
 

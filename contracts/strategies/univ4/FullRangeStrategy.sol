@@ -18,7 +18,7 @@ import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {LiquidityAmounts} from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
 
 import {IAllowanceTransfer} from "permit2/src/interfaces/IAllowanceTransfer.sol";
-import {IApprovedV4HooksRegistry} from "./ApprovedV4HooksRegistry.sol";
+import {IApprovedV4HooksRegistry} from "@4626/strategies/univ4/ApprovedV4HooksRegistry.sol";
 
 /**
  * @title FullRangeStrategy

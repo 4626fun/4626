@@ -2,7 +2,7 @@
 pragma solidity 0.8.30;
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {ICreatorOracle} from "../../interfaces/ICreatorOracle.sol";
+import {ICreatorOracle} from "@4626/interfaces/oracles/ICreatorOracle.sol";
 
 contract CCALaunchStrategyEncodingHelper {
     uint24 public constant MPS = 1e7;

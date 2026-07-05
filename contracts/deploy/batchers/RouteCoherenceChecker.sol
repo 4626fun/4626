@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {I4626Registry} from "../../interfaces/core/I4626Registry.sol";
+import {I4626Registry} from "@4626/interfaces/core/I4626Registry.sol";
 
 /**
  * @title RouteCoherenceChecker

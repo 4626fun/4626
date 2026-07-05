@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {UniversalBytecodeStore} from "../helpers/infra/UniversalBytecodeStore.sol";
+import {UniversalBytecodeStore} from "@4626/deploy/infra/UniversalBytecodeStore.sol";
 
 /**
  * @title UniversalCreate2DeployerFromStore
