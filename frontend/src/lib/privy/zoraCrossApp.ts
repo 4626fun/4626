@@ -1,11 +1,14 @@
 import { sanitizeCrossAppRedirectUrlForAuth, isPrivyRedirectUrlNotAllowedError } from '@/hooks/siweAuthCrossApp'
+import { readPrivyAccessTokenWithRetries } from '@/lib/privy/accessToken'
+import { assertPrivySessionMarkerCookie } from '@/lib/privy/loopbackSessionMarkerShim'
 
 type CrossAppFn = ((params: { appId: string }) => Promise<unknown>) | null | undefined
 const LOCALHOST_PRIVY_CUSTOM_DOMAIN_MESSAGE =
-  'Privy localhost + custom domain (privy.4626.fun) configuration required for OAuth/Zora linking. ' +
-  'In your Privy dashboard, for the Local Dev client: add http://localhost:5173 and http://localhost:5174 (and 127.0.0.1 variants) to Allowed Origins, ' +
-  'and allow the redirect URLs produced by your VITE_APP_ORIGIN / VITE_MARKETING_ORIGIN. ' +
-  'Then restart your dev server. See .env.example for details.'
+  'Privy localhost configuration required for Zora linking. ' +
+  'In your Privy dashboard Local Dev client: allowlist http://localhost:5173 and http://localhost:5174 (plus 127.0.0.1 variants), ' +
+  'add redirect URLs for your VITE_APP_ORIGIN / VITE_MARKETING_ORIGIN, set VITE_PRIVY_CLIENT_ID to that client, and restart Vite. ' +
+  'If oauth/link still returns 401 after a code change, sign out and re-verify email once so the Privy session matches the app client. ' +
+  'See .env.example § Privy Local Dev with custom domain.'
 
 function readErrorStatusCode(error: unknown): number | null {
   const candidate = Number(
@@ -61,6 +64,7 @@ export function isLocalhostPrivyCustomDomainConfigError(error: unknown): boolean
 
 export function isRecoverableCrossAppAuthError(error: unknown): boolean {
   if (isUnauthorizedCrossAppLinkError(error)) return true
+  if (isMissingPrivyAuthTokenError(error)) return true
   const message = String((error as any)?.message ?? '').trim().toLowerCase()
   if (!message) return false
   // Some Privy cross-app lanes return only this generic string.
@@ -108,11 +112,26 @@ async function runWithSanitizedRedirect<T>(
   }
 }
 
+async function ensureCrossAppLinkAuthTokenReady(
+  getAccessToken: (() => Promise<string | null>) | null | undefined,
+): Promise<boolean> {
+  if (typeof getAccessToken !== 'function') return false
+  assertPrivySessionMarkerCookie()
+  const token = await readPrivyAccessTokenWithRetries({
+    read: getAccessToken,
+    attempts: 6,
+    retryDelayMs: 150,
+    timeoutMs: 2_000,
+  })
+  return Boolean(token)
+}
+
 export async function performZoraCrossAppAuth(params: {
   privyAuthed: boolean
   appId: string
   linkCrossAppAccount: CrossAppFn
   loginWithCrossAppAccount: CrossAppFn
+  getAccessToken?: (() => Promise<string | null>) | null
   sanitizeRedirect?: () => (() => void) | null
   isRedirectUrlNotAllowedError?: (error: unknown) => boolean
 }): Promise<void> {
@@ -121,7 +140,14 @@ export async function performZoraCrossAppAuth(params: {
 
   const hasLink = typeof params.linkCrossAppAccount === 'function'
   const hasLogin = typeof params.loginWithCrossAppAccount === 'function'
-  const action = params.privyAuthed ? (hasLink ? 'link' : hasLogin ? 'login' : null) : (hasLogin ? 'login' : hasLink ? 'link' : null)
+  let privyAuthed = params.privyAuthed
+  if (privyAuthed && hasLink && typeof params.getAccessToken === 'function') {
+    const tokenReady = await ensureCrossAppLinkAuthTokenReady(params.getAccessToken)
+    if (!tokenReady && hasLogin) {
+      privyAuthed = false
+    }
+  }
+  const action = privyAuthed ? (hasLink ? 'link' : hasLogin ? 'login' : null) : (hasLogin ? 'login' : hasLink ? 'link' : null)
 
   if (!action) {
     throw new Error('Zora linking is unavailable in this environment.')
@@ -133,6 +159,13 @@ export async function performZoraCrossAppAuth(params: {
       return
     } catch (linkError: unknown) {
       if (isLocalhostPrivyCustomDomainConfigError(linkError)) {
+        throw new Error(LOCALHOST_PRIVY_CUSTOM_DOMAIN_MESSAGE)
+      }
+      if (
+        isMissingPrivyAuthTokenError(linkError) &&
+        typeof window !== 'undefined' &&
+        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      ) {
         throw new Error(LOCALHOST_PRIVY_CUSTOM_DOMAIN_MESSAGE)
       }
       if (

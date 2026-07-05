@@ -379,6 +379,20 @@ export function resolvePrivyClientId(): string | null {
   return clientId
 }
 
+/**
+ * Waitlist Zora cross-app `oauth/link` requires Privy app-client credentials on
+ * loopback. Enable the configured client id for waitlist routes even when
+ * `VITE_PRIVY_CLIENT_ID_ON_LOOPBACK=0` so email OTP can stay app-id-only on
+ * other localhost surfaces until Zora linking is attempted.
+ */
+export function resolveWaitlistLoopbackPrivyClientId(): string | null {
+  if (typeof window === 'undefined') return null
+  if (!isLocalDevOrigin(window.location.origin)) return null
+  if (!isTruthyEnv(import.meta.env.VITE_PRIVY_CLIENT_ID_ENABLED)) return null
+  const clientId = String(import.meta.env.VITE_PRIVY_CLIENT_ID ?? '').trim()
+  return clientId || null
+}
+
 export function resolvePrivyApiUrl(): string | null {
   // On *.4626.fun production origins, automatically use the first-party
   // privy.4626.fun reverse proxy as the Privy API URL. This keeps session

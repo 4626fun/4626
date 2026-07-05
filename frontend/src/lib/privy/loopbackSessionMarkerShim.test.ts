@@ -11,6 +11,7 @@ import {
   applyLoopbackPrivySessionMarkerShim,
   assertPrivySessionMarkerCookie,
   clearPrivySessionMarkerCookie,
+  hasPersistedPrivyLoopbackSession,
   isLocalDevPrivySessionMarkerMode,
 } from './loopbackSessionMarkerShim'
 
@@ -35,6 +36,20 @@ describe('loopbackSessionMarkerShim', () => {
   it('clears stale marker on localhost bootstrap instead of asserting it', () => {
     applyLoopbackPrivySessionMarkerShim()
     expect(document.cookie.includes('privy-session=t')).toBe(false)
+  })
+
+  it('asserts marker on localhost when a persisted Privy session exists', () => {
+    window.localStorage.setItem('privy:token', 'test-access-token')
+    applyLoopbackPrivySessionMarkerShim()
+    expect(document.cookie.includes('privy-session=t')).toBe(true)
+    window.localStorage.removeItem('privy:token')
+  })
+
+  it('detects persisted loopback Privy sessions', () => {
+    expect(hasPersistedPrivyLoopbackSession()).toBe(false)
+    window.localStorage.setItem('privy:refresh_token', 'real-refresh-token')
+    expect(hasPersistedPrivyLoopbackSession()).toBe(true)
+    window.localStorage.removeItem('privy:refresh_token')
   })
 
   it('assert and clear helpers manage the marker cookie', () => {

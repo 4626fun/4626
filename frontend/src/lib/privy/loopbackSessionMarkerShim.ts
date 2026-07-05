@@ -98,14 +98,33 @@ export function clearPrivyServerCookieModeStorage(): void {
   }
 }
 
+/** True when loopback localStorage still holds a non-deprecated Privy session. */
+export function hasPersistedPrivyLoopbackSession(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    const refresh = window.localStorage.getItem(PRIVY_REFRESH_TOKEN_STORAGE_KEY)
+    if (refresh && refresh !== PRIVY_DEPRECATED_REFRESH_TOKEN) return true
+    const token = window.localStorage.getItem('privy:token')
+    return Boolean(String(token ?? '').trim())
+  } catch {
+    return false
+  }
+}
+
 export function applyLoopbackPrivySessionMarkerShim(): void {
   if (typeof window === 'undefined' || typeof document === 'undefined') return
   if (!shouldUseLoopbackPrivySessionMarkerShim()) return
 
   if (isLocalDevPrivySessionMarkerMode()) {
-    // Signed-out localhost loads must not advertise refresh credentials.
-    clearPrivySessionMarkerCookie()
     clearPrivyServerCookieModeStorage()
+    // OAuth redirect returns reload the page while Privy still holds a session in
+    // localStorage. Assert the marker early so oauth/link can attach the auth token.
+    if (hasPersistedPrivyLoopbackSession()) {
+      assertPrivySessionMarkerCookie()
+    } else {
+      // Signed-out localhost loads must not advertise refresh credentials.
+      clearPrivySessionMarkerCookie()
+    }
     return
   }
 

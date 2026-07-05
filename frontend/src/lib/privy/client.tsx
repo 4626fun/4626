@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Component, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { getPrivyApiUrl, getPrivyAppId, getPrivyClientId, isPrivyClientEnabled, isLocalDevOrigin, canUsePrivyEmbeddedWallets } from '@/lib/flags/flags'
+import { resolveWaitlistLoopbackPrivyClientId } from '@/lib/flags/featureFlags'
 import { CONFIGURED_APP_ORIGIN, resolveAuthRedirectOrigin } from '@/lib/env/host'
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth'
 import { base } from 'viem/chains'
@@ -21,10 +22,9 @@ if (typeof window !== 'undefined') {
     ;(window as any).__cv_privy_local_guidance_logged = true
     console.info(
       '[privy] Local dev pins auth.privy.io, strips custom_api_url, and rewrites privy.4626.fun API calls.\n' +
-        'Waitlist localhost omits clientId so sessions stay in localStorage, not server cookies.\n' +
-        'If you hit 401 on /oauth/link outside waitlist:\n' +
-        '  • Allowlist http://localhost:5173 + :5174 in Privy dashboard (Local Dev client).\n' +
-        '  • See .env.example section "Privy Local Dev with custom domain".',
+        'Waitlist passes VITE_PRIVY_CLIENT_ID on loopback when enabled so Zora oauth/link can authenticate.\n' +
+        'If you hit 401 on /oauth/link: confirm localhost:5174 is allowlisted on that Privy client, sign out, re-verify email, retry.\n' +
+        'See .env.example section "Privy Local Dev with custom domain".',
     )
   }
   if (isLocalDevOrigin(window.location.origin) && !window.isSecureContext && ! (window as any).__cv_privy_insecure_origin_logged) {
@@ -59,6 +59,17 @@ const PrivyClientContext = createContext<PrivyClientStatus>('disabled')
 function isLoopbackHostname(hostname: string): boolean {
   const h = String(hostname || '').trim().toLowerCase()
   return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]'
+}
+
+function resolvePrivyProviderClientId(params: {
+  mode: PrivyClientMode
+  clientId: string | null
+  bypassCustomPrivyDomain: boolean
+}): string | null {
+  if (params.bypassCustomPrivyDomain && params.mode === 'waitlist-email-only') {
+    return resolveWaitlistLoopbackPrivyClientId() ?? params.clientId
+  }
+  return params.clientId
 }
 
 function coerceLoopbackAuthRedirectOrigin(input: {
@@ -181,10 +192,11 @@ export function PrivyClientProvider(props: {
   const clientId = enabled ? getPrivyClientId() : null
   const apiUrl = enabled ? getPrivyApiUrl() : null
   const bypassCustomPrivyDomain = isLocalDevPrivyApiBypass()
-  // Localhost: omit clientId and pin apiUrl to auth.privy.io so Privy never enters
-  // server-cookie mode (refresh_token:"deprecated"). Fetch rewrite strips custom_api_url
-  // from app config and no-ops stray deprecated session refresh POSTs.
-  const resolvedClientId = bypassCustomPrivyDomain ? null : clientId
+  // Localhost: pin apiUrl to auth.privy.io so Privy never enters server-cookie mode
+  // against privy.4626.fun (refresh_token:"deprecated"). Fetch rewrite strips
+  // custom_api_url from app config and no-ops stray deprecated session refresh POSTs.
+  // Waitlist still passes app client id on loopback so Zora cross-app oauth/link works.
+  const resolvedClientId = resolvePrivyProviderClientId({ mode, clientId, bypassCustomPrivyDomain })
   const resolvedApiUrl = bypassCustomPrivyDomain ? (apiUrl ?? 'https://auth.privy.io') : apiUrl
   const hasRuntimeConfig = Boolean(enabled && appId)
   const [runtimeStatus, setRuntimeStatus] = useState<PrivyClientStatus>('loading')
@@ -227,11 +239,13 @@ export function PrivyClientProvider(props: {
     // (Rabby/MetaMask) for `window.ethereum`, producing the
     // "injected is not defined" / "Cannot redefine property: ethereum" errors
     // that destabilize the email OTP bootstrap. Email OTP needs no external
-    // wallet. Account-setup surfaces mount a fresh PrivyClientProvider without
-    // this mode and get the full connector set there.
+    // wallet. Zora cross-app linking still needs the crossApp provider lane.
     if (mode === 'waitlist-email-only') {
       return {
         solana: { connectors: solanaConnectors },
+        crossApp: {
+          providerAppIds: [ZORA_PRIVY_APP_ID],
+        },
       }
     }
 

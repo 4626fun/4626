@@ -11,6 +11,7 @@ import {
   isLocalDevOrigin,
   canUsePrivyEmbeddedWallets,
   resolvePrivyClientId,
+  resolveWaitlistLoopbackPrivyClientId,
   resolvePrivyAppId,
   resolvePrivyApiUrl,
   allFlags,
@@ -78,6 +79,28 @@ describe('resolvePrivyClientId', () => {
       location: { origin: 'http://localhost:5174' },
     } as unknown as Window & typeof globalThis)
     expect(resolvePrivyClientId()).toBe('client_live_123')
+  })
+})
+
+describe('resolveWaitlistLoopbackPrivyClientId', () => {
+  it('returns configured client id on loopback even when ON_LOOPBACK is off', () => {
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID_ENABLED', '1')
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID', 'client_waitlist_123')
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID_ON_LOOPBACK', '')
+    vi.stubGlobal('window', {
+      location: { origin: 'http://localhost:5174' },
+    } as unknown as Window & typeof globalThis)
+    expect(resolveWaitlistLoopbackPrivyClientId()).toBe('client_waitlist_123')
+    expect(resolvePrivyClientId()).toBeNull()
+  })
+
+  it('returns null off loopback', () => {
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID_ENABLED', '1')
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID', 'client_waitlist_123')
+    vi.stubGlobal('window', {
+      location: { origin: 'https://4626.fun' },
+    } as unknown as Window & typeof globalThis)
+    expect(resolveWaitlistLoopbackPrivyClientId()).toBeNull()
   })
 })
 

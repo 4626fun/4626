@@ -121,6 +121,45 @@ describe('isUserRejectedCrossAppAuthError', () => {
 })
 
 describe('performZoraCrossAppAuth', () => {
+  it('falls back to login when link fails with missing auth token copy', async () => {
+    const linkCrossAppAccount = vi.fn(async () => {
+      throw new Error('Missing auth token.')
+    })
+    const loginWithCrossAppAccount = vi.fn(async () => {})
+    const sanitizeRedirect = vi.fn(() => vi.fn())
+
+    await performZoraCrossAppAuth({
+      privyAuthed: true,
+      appId: 'zora-app-id',
+      linkCrossAppAccount,
+      loginWithCrossAppAccount,
+      sanitizeRedirect,
+      isRedirectUrlNotAllowedError: () => false,
+    })
+
+    expect(linkCrossAppAccount).toHaveBeenCalledTimes(1)
+    expect(loginWithCrossAppAccount).toHaveBeenCalledWith({ appId: 'zora-app-id' })
+    expect(sanitizeRedirect).toHaveBeenCalledTimes(2)
+  })
+
+  it('prefers login when authenticated but access token is unavailable', async () => {
+    const linkCrossAppAccount = vi.fn(async () => {})
+    const loginWithCrossAppAccount = vi.fn(async () => {})
+    const getAccessToken = vi.fn(async () => null)
+
+    await performZoraCrossAppAuth({
+      privyAuthed: true,
+      appId: 'zora-app-id',
+      linkCrossAppAccount,
+      loginWithCrossAppAccount,
+      getAccessToken,
+      isRedirectUrlNotAllowedError: () => false,
+    })
+
+    expect(linkCrossAppAccount).not.toHaveBeenCalled()
+    expect(loginWithCrossAppAccount).toHaveBeenCalledWith({ appId: 'zora-app-id' })
+  })
+
   it('prefers link when Privy is authenticated and link is available', async () => {
     const linkCrossAppAccount = vi.fn(async () => {})
     const loginWithCrossAppAccount = vi.fn(async () => {})

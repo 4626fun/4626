@@ -652,6 +652,7 @@ export function useAccountSetupController(params: {
                 appId: ZORA_PRIVY_APP_ID,
                 linkCrossAppAccount,
                 loginWithCrossAppAccount,
+                getAccessToken,
               }),
               20_000,
               'Zora cross-app auth',

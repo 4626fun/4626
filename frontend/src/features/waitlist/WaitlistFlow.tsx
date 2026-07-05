@@ -756,6 +756,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
         appId: ZORA_PRIVY_APP_ID,
         linkCrossAppAccount,
         loginWithCrossAppAccount,
+        getAccessToken: getPrivyAccessToken,
       })
       await syncAccountsProviderLink({
         provider: 'zora_cross_app',
