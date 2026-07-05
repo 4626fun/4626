@@ -3,10 +3,10 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import {
-    CreatorVRFConsumerV2_5,
+    VRFConsumer4626,
     IVRFCoordinatorV2Plus,
     RandomWordsRequest
-} from "../../contracts/utilities/lottery/vrf/CreatorVRFConsumerV2_5.sol";
+} from "../../contracts/lottery/4626VRFConsumer.sol";
 import {MessagingFee, Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {MessagingReceipt} from "@layerzerolabs/oapp-evm/contracts/oapp/OAppSender.sol";
 
@@ -49,13 +49,13 @@ contract MockVRFCoordinatorV2Plus is IVRFCoordinatorV2Plus {
     }
 }
 
-contract CreatorVRFConsumerHarness is CreatorVRFConsumerV2_5 {
+contract CreatorVRFConsumerHarness is VRFConsumer4626 {
     uint256 public mockNativeFee = 0.01 ether;
     uint256 public lzSendCount;
     uint32 public lastDstEid;
     uint256 public lastMsgValue;
 
-    constructor(address _registry, address _owner) CreatorVRFConsumerV2_5(_registry, _owner) {}
+    constructor(address _registry, address _owner) VRFConsumer4626(_registry, _owner) {}
 
     function setMockNativeFee(uint256 _fee) external {
         mockNativeFee = _fee;
@@ -114,7 +114,7 @@ contract CreatorVRFConsumerV25RelayFundingTest is Test {
         MockEndpointV2 endpoint = new MockEndpointV2();
         MockRegistry4626ForVRF badRegistry = new MockRegistry4626ForVRF(address(endpoint), 0);
 
-        vm.expectRevert(abi.encodeWithSelector(CreatorVRFConsumerV2_5.MissingLayerZeroEid.selector, block.chainid));
+        vm.expectRevert(abi.encodeWithSelector(VRFConsumer4626.MissingLayerZeroEid.selector, block.chainid));
         new CreatorVRFConsumerHarness(address(badRegistry), address(this));
     }
 
@@ -141,14 +141,14 @@ contract CreatorVRFConsumerV25RelayFundingTest is Test {
         assertTrue(relayable);
         assertGt(expectedFee, 0);
 
-        vm.expectRevert(CreatorVRFConsumerV2_5.UnauthorizedRelayer.selector);
+        vm.expectRevert(VRFConsumer4626.UnauthorizedRelayer.selector);
         vm.prank(attacker);
         consumer.relayPendingResponse{value: expectedFee}(REMOTE_EID, sequence);
 
         consumer.setRelayerAuthorization(relayer, true);
 
         vm.expectRevert(
-            abi.encodeWithSelector(CreatorVRFConsumerV2_5.RelayFeeMismatch.selector, expectedFee - 1, expectedFee)
+            abi.encodeWithSelector(VRFConsumer4626.RelayFeeMismatch.selector, expectedFee - 1, expectedFee)
         );
         vm.prank(relayer);
         consumer.relayPendingResponse{value: expectedFee - 1}(REMOTE_EID, sequence);

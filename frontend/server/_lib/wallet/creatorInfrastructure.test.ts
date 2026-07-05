@@ -15,6 +15,10 @@ vi.mock('./canonicalWalletResolver.js', () => ({
   })),
 }))
 
+vi.mock('../db/postgres.js', () => ({
+  isDbConfigured: vi.fn(() => true),
+}))
+
 import {
   CreatorInfrastructureNotProvisionedError,
   CreatorInfrastructureMismatchError,

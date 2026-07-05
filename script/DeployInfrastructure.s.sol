@@ -9,7 +9,7 @@ import {CreatorOVaultFactory} from "../contracts/factories/CreatorOVaultFactory.
 
 // Shared Services
 import {LotteryManager4626} from "../contracts/lottery/4626LotteryManager.sol";
-import {CreatorVRFConsumerV2_5} from "../contracts/utilities/lottery/vrf/CreatorVRFConsumerV2_5.sol";
+import {VRFConsumer4626} from "../contracts/lottery/4626VRFConsumer.sol";
 import {VaultActivationBatcher} from "../contracts/helpers/batchers/VaultActivationBatcher.sol";
 import {SolanaBridgeAdapter} from "../contracts/utilities/bridge/SolanaBridgeAdapter.sol";
 
@@ -25,7 +25,7 @@ import {SolanaBridgeAdapter} from "../contracts/utilities/bridge/SolanaBridgeAda
  *      │  1. Registry4626         - Central registry for all data    │
  *      │  2. CreatorOVaultFactory    - Legacy registrar for script-deployed stacks │
  *      │  3. LotteryManager4626   - Shared lottery service           │
- *      │  4. CreatorVRFConsumerV2_5  - Chainlink VRF hub                │
+ *      │  4. VRFConsumer4626  - Chainlink VRF hub                │
  *      │  5. VaultActivationBatcher  - Shared activation launcher       │
  *      │  6. SolanaBridgeAdapter     - Shared Solana bridge adapter     │
  *      └─────────────────────────────────────────────────────────────────┘
@@ -89,7 +89,7 @@ contract DeployInfrastructure is Script {
     Registry4626 public registry;
     CreatorOVaultFactory public vaultFactory;
     LotteryManager4626 public lotteryManager;
-    CreatorVRFConsumerV2_5 public vrfConsumer;
+    VRFConsumer4626 public vrfConsumer;
     VaultActivationBatcher public vaultActivationBatcher;
     SolanaBridgeAdapter public solanaBridgeAdapter;
 
@@ -143,9 +143,9 @@ contract DeployInfrastructure is Script {
         lotteryManager = new LotteryManager4626(address(registry), deployer);
         console.log("       Address:", address(lotteryManager));
 
-        // 5. CreatorVRFConsumerV2_5 (VRF hub)
-        console.log("\n[5/6] Deploying CreatorVRFConsumerV2_5...");
-        vrfConsumer = new CreatorVRFConsumerV2_5(address(registry), deployer);
+        // 5. VRFConsumer4626 (VRF hub)
+        console.log("\n[5/6] Deploying VRFConsumer4626...");
+        vrfConsumer = new VRFConsumer4626(address(registry), deployer);
         console.log("       Address:", address(vrfConsumer));
 
         // 6. SolanaBridgeAdapter (shared bridge adapter)
@@ -289,7 +289,7 @@ contract DeployInfrastructure is Script {
         console.log("   CreatorOVaultFactory (legacy registrar):", address(vaultFactory));
         console.log("   VaultActivationBatcher: ", address(vaultActivationBatcher));
         console.log("   LotteryManager4626:  ", address(lotteryManager));
-        console.log("   CreatorVRFConsumerV2_5: ", address(vrfConsumer));
+        console.log("   VRFConsumer4626: ", address(vrfConsumer));
         console.log("   SolanaBridgeAdapter:    ", address(solanaBridgeAdapter));
         console.log(unicode"│                                                                 │");
         console.log(

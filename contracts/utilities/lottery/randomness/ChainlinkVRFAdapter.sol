@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {IRandomnessSource} from "./IRandomnessSource.sol";
 
 /// @notice Minimal interface to call into the existing
-///         `CreatorVRFConsumerV2_5` without importing the full file.
+///         `VRFConsumer4626` without importing the full file.
 interface IChainlinkVRFConsumerLike {
     function requestRandomWords() external returns (uint256 requestId);
     function getRequestStatus(uint256 requestId)
@@ -20,7 +20,7 @@ interface IChainlinkVRFConsumerLike {
 }
 
 /// @title ChainlinkVRFAdapter
-/// @notice Wraps `CreatorVRFConsumerV2_5` behind the `IRandomnessSource`
+/// @notice Wraps `VRFConsumer4626` behind the `IRandomnessSource`
 ///         interface. This is the REQUEST-mode side of the new selector.
 ///
 /// @dev    No state of its own — every call passes through to the existing

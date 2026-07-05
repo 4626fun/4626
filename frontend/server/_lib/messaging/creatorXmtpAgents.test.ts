@@ -4,6 +4,15 @@ vi.mock('../wallet/canonicalWalletResolver.js', () => ({
   resolveCanonicalSmartWalletAddress: vi.fn(async () => null),
 }))
 
+vi.mock('../db/postgres.js', () => ({
+  getDb: vi.fn(async () => ({ sql: vi.fn(async () => ({ rows: [] })) })),
+  isDbConfigured: vi.fn(() => true),
+}))
+
+vi.mock('../db/schemaBootstrap.js', () => ({
+  ensureTelemetryCreativeLogsSchema: vi.fn(async () => {}),
+}))
+
 import { decryptPrivateKey, enableCswAgent } from './creatorXmtpAgents.js'
 import { resolveCanonicalSmartWalletAddress } from '../wallet/canonicalWalletResolver.js'
 

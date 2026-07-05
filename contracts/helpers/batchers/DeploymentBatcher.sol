@@ -742,7 +742,7 @@ contract DeploymentBatcherPhase1Module {
         registry = _registry;
         if (_vaultCoreModule == address(0)) revert ZeroAddress();
         vaultCoreModule = _vaultCoreModule;
-        agentVaultCoreModule = _agentVaultCoreModule == address(0) ? _vaultCoreModule : _agentVaultCoreModule;
+        agentVaultCoreModule = _agentVaultCoreModule;
         if (_vaultStrategiesModule == address(0)) revert ZeroAddress();
         vaultStrategiesModule = _vaultStrategiesModule;
         if (_vaultAdminModule == address(0)) revert ZeroAddress();

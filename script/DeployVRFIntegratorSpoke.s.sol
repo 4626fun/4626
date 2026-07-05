@@ -13,7 +13,7 @@ import {ChainlinkVRFIntegratorV2_5} from "../contracts/utilities/lottery/vrf/Cha
  *      - PRIVATE_KEY: deployer/owner
  *      - LZ_ENDPOINT: LayerZero EndpointV2 address on the spoke chain
  *      - HUB_EID: hub chain eid (Base = 30184)
- *      - HUB_VRF_CONSUMER: hub `CreatorVRFConsumerV2_5` address (as EVM address)
+ *      - HUB_VRF_CONSUMER: hub `VRFConsumer4626` address (as EVM address)
  *
  * @dev Optional env vars:
  *      - AUTHORIZED_CALLER: additional contract/EOA allowed to request randomness (besides owner)

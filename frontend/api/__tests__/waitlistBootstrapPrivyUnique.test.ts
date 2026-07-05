@@ -11,6 +11,7 @@ const {
   upsertAccountMock,
   verifyPrivyForAccountsMock,
   buildAccountsMePayloadMock,
+  refineAccountIdentityFromPrivyMock,
   assertNoEmailPrivyCollisionMock,
   assertNoWalletPrivyCollisionMock,
   readBoundedJsonObjectBodyMock,
@@ -46,10 +47,14 @@ const {
       privyEmbeddedEoaIsOwnerOfCanonicalCsw: null,
       creatorCoin: null,
       zoraHandle: null,
+      basename: null,
+      primaryWalletAddress: null,
+      embeddedEoaAddress: null,
       lastResolvedAt: null,
     },
     score: { points: 0, tier: 0 },
   })),
+  refineAccountIdentityFromPrivyMock: vi.fn(async () => {}),
   assertNoEmailPrivyCollisionMock: vi.fn(async () => {}),
   assertNoWalletPrivyCollisionMock: vi.fn(async () => {}),
   readBoundedJsonObjectBodyMock: vi.fn(async (req: any) => req.body ?? {}),
@@ -70,12 +75,48 @@ vi.mock('../../server/_lib/identity/accountsIdentity.js', () => ({
   upsertAccount: upsertAccountMock,
   verifyPrivyForAccounts: verifyPrivyForAccountsMock,
   buildAccountsMePayload: buildAccountsMePayloadMock,
+  refineAccountIdentityFromPrivy: refineAccountIdentityFromPrivyMock,
 }))
 
 vi.mock('../../server/_lib/identity/identityRecovery.js', () => ({
   assertNoEmailPrivyCollision: assertNoEmailPrivyCollisionMock,
   assertNoWalletPrivyCollision: assertNoWalletPrivyCollisionMock,
   isIdentityRecoveryRequiredError: (error: any) => error?.code === 'IDENTITY_RECOVERY_REQUIRED',
+}))
+
+vi.mock('../../server/_lib/identity/emailCollisionAdoption.js', () => ({
+  runWithWaitlistEmailCollisionAdoption: vi.fn(async (_params: any) => _params.action()),
+  runWithWaitlistWalletCollisionAdoption: vi.fn(async (_params: any) => _params.action()),
+}))
+
+vi.mock('../../server/_lib/infra/trust.js', () => ({
+  extractPrivyVerifiedEmail: vi.fn((privyUser: any) => privyUser?.email?.address ?? null),
+}))
+
+vi.mock('../../server/_lib/wallet/walletMapping.js', () => ({
+  classifyLinkedAccounts: vi.fn(() => ({ allWallets: [], evmWallets: [], solanaWallets: [] })),
+}))
+
+vi.mock('../../server/_lib/onboarding/referrals.js', () => ({
+  dedupeReferralCodeCandidates: vi.fn(() => []),
+  getClientIp: vi.fn(() => '127.0.0.1'),
+  getUserAgent: vi.fn(() => 'test-agent'),
+  hashForAttribution: vi.fn(() => 'hash'),
+  normalizeReferralCode: vi.fn((v: string) => v),
+  referralCodeFromEmail: vi.fn(() => null),
+}))
+
+vi.mock('../../server/_lib/onboarding/waitlistPoints.js', () => ({
+  awardWaitlistPoints: vi.fn(async () => {}),
+  WAITLIST_POINTS: { signup: 100 },
+}))
+
+vi.mock('../../server/_lib/identity/basenameResolver.js', () => ({
+  resolveBasenameHandle: vi.fn(async () => null),
+}))
+
+vi.mock('../../server/_lib/zora/zoraProfileIdentifier.js', () => ({
+  dedupeZoraProfileSeeds: vi.fn(async () => {}),
 }))
 
 vi.mock('../../server/_lib/infra/privyUserLoad.js', () => ({

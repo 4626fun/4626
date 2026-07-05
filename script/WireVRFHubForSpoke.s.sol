@@ -16,7 +16,7 @@ interface ICreatorVRFConsumerHubWiring {
  *
  * @dev Required env vars:
  *      - PRIVATE_KEY: owner key for the hub VRF consumer
- *      - VRF_CONSUMER: hub `CreatorVRFConsumerV2_5` address
+ *      - VRF_CONSUMER: hub `VRFConsumer4626` address
  *      - REMOTE_EID: spoke chain eid
  *      - REMOTE_INTEGRATOR: spoke `ChainlinkVRFIntegratorV2_5` address
  *

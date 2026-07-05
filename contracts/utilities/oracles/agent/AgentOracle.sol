@@ -498,11 +498,23 @@ contract AgentOracle is OApp {
     }
 
     /**
-     * @notice Get Creator token USD price
+     * @notice Get Agent token USD price
      * @return price Price in 1e18 format
      * @return timestamp Last update timestamp
      */
     function getAgentPrice() external view returns (int256 price, uint256 timestamp) {
+        return _getPrice();
+    }
+
+    /// @dev Alias for ICreatorOracle.getCreatorPrice() so LotteryManager4626
+    ///      (which calls getCreatorPrice via ICreatorOracle) can read agent token
+    ///      prices without a separate oracle interface. This keeps the lottery
+    ///      protocol-wide across creator and agent lanes.
+    function getCreatorPrice() external view returns (int256 price, uint256 timestamp) {
+        return _getPrice();
+    }
+
+    function _getPrice() internal view returns (int256 price, uint256 timestamp) {
         if (creatorPriceUSD > 0 && creatorPriceTimestamp > 0) {
             if (block.timestamp - creatorPriceTimestamp < MAX_STALENESS) {
                 return (creatorPriceUSD, creatorPriceTimestamp);

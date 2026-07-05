@@ -8,7 +8,7 @@ import {
     MockRegistry4626ForVRF,
     MockEndpointV2,
     MockVRFCoordinatorV2Plus
-} from "test/vault/CreatorVRFConsumerV2_5.RelayFunding.t.sol";
+} from "test/vault/VRFConsumer4626.RelayFunding.t.sol";
 
 contract ReentrantVRFCoordinator is MockVRFCoordinatorV2Plus {
     uint256 public fulfillAttempts;

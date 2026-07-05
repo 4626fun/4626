@@ -89,9 +89,12 @@ function accountSignals(overrides: Partial<AccountSignals> = {}): AccountSignals
     privyEmbeddedEoaIsOwnerOfCanonicalCsw: null,
     creatorCoin: { address: '0x3333333333333333333333333333333333333333' },
     zoraHandle: 'akita',
+    basename: null,
+    primaryWalletAddress: null,
+    embeddedEoaAddress: null,
     lastResolvedAt: '2026-03-04T00:00:00.000Z',
     ...overrides,
-  }
+  } as AccountSignals
 }
 
 function renderAccountsPage(element: React.ReactElement) {

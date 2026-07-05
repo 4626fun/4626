@@ -108,7 +108,7 @@ async function fetchAuctionStatusSummary(ccaStrategy: `0x${string}`): Promise<Au
 
 export function Vault() {
   const params = useParams()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
   const addressParamRaw = typeof params.address === 'string' ? params.address.trim() : ''
   const addressParam = addressParamRaw && isAddress(addressParamRaw) ? (getAddress(addressParamRaw) as Address) : null
 

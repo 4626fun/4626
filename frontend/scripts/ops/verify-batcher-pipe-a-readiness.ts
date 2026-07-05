@@ -12,7 +12,7 @@ import {
 import { deploymentBatcherNotConfiguredMessage } from '../../src/lib/deploy/deploymentBatcherConfigError.js'
 import { assertCreatorOvaultModuleStorageCompatible } from '../../src/lib/deploy/ovaultModuleIdentity.js'
 import {
-  BASE_MAINNET_CREATOR_REGISTRY,
+  BASE_MAINNET_4626_REGISTRY,
   readBatcherRegistryAuthorized,
 } from '../../server/_lib/deploy/ensureBatcherRegistryAuthorization.js'
 
@@ -282,7 +282,7 @@ async function main() {
     client.readContract({ address: batcher, abi: BATCHER_VIEW_ABI, functionName: 'solanaDestination' }),
     client.readContract({ address: batcher, abi: BATCHER_VIEW_ABI, functionName: 'getOVaultRuntimeConfig' }),
     readSolanaShareOftPeer(client, batcher),
-    readBatcherRegistryAuthorized({ publicClient: client, batcher, registry: BASE_MAINNET_CREATOR_REGISTRY }),
+    readBatcherRegistryAuthorized({ publicClient: client, batcher, registry: BASE_MAINNET_4626_REGISTRY }),
     detectPhase1SaltOverrideSupport(client, batcher),
   ])
 
@@ -349,7 +349,7 @@ async function main() {
       ok: registryAuthorized === true,
       detail:
         registryAuthorized === true
-          ? `authorizedFactories(${batcher})=true on ${BASE_MAINNET_CREATOR_REGISTRY}`
+          ? `authorizedFactories(${batcher})=true on ${BASE_MAINNET_4626_REGISTRY}`
           : `authorizedFactories(${batcher})=false — run CreatorRegistry.setAuthorizedFactory before greenfield Phase 2 finalize`,
     },
     {

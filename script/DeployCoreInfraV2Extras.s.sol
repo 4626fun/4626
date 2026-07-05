@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {Script, console2} from "forge-std/Script.sol";
 
 import {CreatorOVaultFactory} from "../contracts/factories/CreatorOVaultFactory.sol";
-import {CreatorVRFConsumerV2_5} from "../contracts/utilities/lottery/vrf/CreatorVRFConsumerV2_5.sol";
+import {VRFConsumer4626} from "../contracts/lottery/4626VRFConsumer.sol";
 
 interface I4626RegistryAuth {
     function owner() external view returns (address);
@@ -14,7 +14,7 @@ interface I4626RegistryAuth {
 /**
  * @notice Deploys the remaining "core infra" contracts that sit next to the vanity registry/lottery:
  *         - CreatorOVaultFactory (legacy deployment registrar)
- *         - CreatorVRFConsumerV2_5 (VRF hub)
+ *         - VRFConsumer4626 (VRF hub)
  *
  * Wiring:
  * - registry.setAuthorizedFactory(factory, true)
@@ -61,7 +61,7 @@ contract DeployCoreInfraV2Extras is Script {
         vm.startBroadcast(pk);
 
         CreatorOVaultFactory factory;
-        CreatorVRFConsumerV2_5 vrfConsumer;
+        VRFConsumer4626 vrfConsumer;
 
         if (!skipFactory) {
             factory = new CreatorOVaultFactory(registryAddr, owner);
@@ -73,8 +73,8 @@ contract DeployCoreInfraV2Extras is Script {
         }
 
         if (!skipVrfConsumer) {
-            vrfConsumer = new CreatorVRFConsumerV2_5(registryAddr, owner);
-            console2.log("CreatorVRFConsumerV2_5:", address(vrfConsumer));
+            vrfConsumer = new VRFConsumer4626(registryAddr, owner);
+            console2.log("VRFConsumer4626:", address(vrfConsumer));
 
             if (!skipVrfCoordinator) {
                 vrfConsumer.setVRFCoordinator(VRF_COORDINATOR_BASE);

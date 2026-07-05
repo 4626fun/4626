@@ -1,9 +1,9 @@
 import { encodeFunctionData, getAddress, type Address, type Hex } from 'viem'
 
-/** Base mainnet CreatorRegistry — see docs/reference/addresses.md */
-export const BASE_MAINNET_CREATOR_REGISTRY = '0x1eb9A364a3E763dD9249ba3413Dc19E13c1F4461' as const
+/** Base mainnet 4626Registry (renamed from 4626Registry) — see docs/reference/addresses.md */
+export const BASE_MAINNET_4626_REGISTRY = '0x1eb9A364a3E763dD9249ba3413Dc19E13c1F4461' as const
 
-const CREATOR_REGISTRY_ABI = [
+const REGISTRY_4626_ABI = [
   {
     type: 'function',
     name: 'authorizedFactories',
@@ -33,7 +33,7 @@ const CREATOR_REGISTRY_ABI = [
 type ReadContractClient = {
   readContract: (args: {
     address: Address
-    abi: typeof CREATOR_REGISTRY_ABI
+    abi: typeof REGISTRY_4626_ABI
     functionName: 'authorizedFactories' | 'owner'
     args?: readonly unknown[]
   }) => Promise<unknown>
@@ -64,11 +64,11 @@ export async function readBatcherRegistryAuthorized(params: {
   batcher: Address
   registry?: Address
 }): Promise<boolean> {
-  const registry = getAddress(params.registry ?? BASE_MAINNET_CREATOR_REGISTRY)
+  const registry = getAddress(params.registry ?? BASE_MAINNET_4626_REGISTRY)
   const batcher = getAddress(params.batcher)
   const authorized = (await params.publicClient.readContract({
     address: registry,
-    abi: CREATOR_REGISTRY_ABI,
+    abi: REGISTRY_4626_ABI,
     functionName: 'authorizedFactories',
     args: [batcher],
   })) as boolean
@@ -76,9 +76,9 @@ export async function readBatcherRegistryAuthorized(params: {
 }
 
 /**
- * Greenfield Phase 2 finalize registers creator coin + vault on CreatorRegistry.
+ * Greenfield Phase 2 finalize registers creator coin + vault on 4626Registry.
  * The split DeploymentBatcher must be an authorized factory — forge tests set this in
- * setup, but mainnet may lag until SeedCreatorRegistry / ops wiring runs.
+ * setup, but mainnet may lag until Seed4626Registry / ops wiring runs.
  */
 export async function ensureBatcherRegistryAuthorizationOnFork(params: {
   publicClient: ReadContractClient
@@ -90,7 +90,7 @@ export async function ensureBatcherRegistryAuthorizationOnFork(params: {
   registry?: Address
   ownerBalanceHex?: Hex
 }): Promise<{ alreadyAuthorized: boolean; ensured: boolean }> {
-  const registry = getAddress(params.registry ?? BASE_MAINNET_CREATOR_REGISTRY)
+  const registry = getAddress(params.registry ?? BASE_MAINNET_4626_REGISTRY)
   const batcher = getAddress(params.batcher)
   const alreadyAuthorized = await readBatcherRegistryAuthorized({
     publicClient: params.publicClient,
@@ -104,7 +104,7 @@ export async function ensureBatcherRegistryAuthorizationOnFork(params: {
   const owner = getAddress(
     (await params.publicClient.readContract({
       address: registry,
-      abi: CREATOR_REGISTRY_ABI,
+      abi: REGISTRY_4626_ABI,
       functionName: 'owner',
     })) as Address,
   )
@@ -121,7 +121,7 @@ export async function ensureBatcherRegistryAuthorizationOnFork(params: {
 
   try {
     const data = encodeFunctionData({
-      abi: CREATOR_REGISTRY_ABI,
+      abi: REGISTRY_4626_ABI,
       functionName: 'setAuthorizedFactory',
       args: [batcher, true],
     })
@@ -134,7 +134,7 @@ export async function ensureBatcherRegistryAuthorizationOnFork(params: {
     const receipt = await params.waitForTransactionReceipt({ hash })
     if (receipt.status !== 'success') {
       throw new Error(
-        `CreatorRegistry.setAuthorizedFactory(${batcher}, true) reverted on fork (tx ${hash}).`,
+        `4626Registry.setAuthorizedFactory(${batcher}, true) reverted on fork (tx ${hash}).`,
       )
     }
   } finally {
@@ -155,7 +155,7 @@ export async function ensureBatcherRegistryAuthorizationOnFork(params: {
   })
   if (!verified) {
     throw new Error(
-      `CreatorRegistry still reports DeploymentBatcher ${batcher} as unauthorized after fork prep.`,
+      `4626Registry still reports DeploymentBatcher ${batcher} as unauthorized after fork prep.`,
     )
   }
 

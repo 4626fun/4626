@@ -27,8 +27,10 @@ interface RegistryVerificationResult {
   reason?: string;
 }
 
-const DEFAULT_CREATOR_REGISTRY = '0x888506B92181c57A2fD06516FFFb6F375b7A4626' as const;
-const CREATOR_REGISTRY_ABI = [
+/// 4626Registry (renamed from CreatorRegistry) — canonical protocol registry.
+/// Env var CREATOR_REGISTRY is kept for backward compatibility with existing deployments.
+const DEFAULT_4626_REGISTRY = '0x888506B92181c57A2fD06516FFFb6F375b7A4626' as const;
+const REGISTRY_4626_ABI = [
   {
     type: 'function',
     name: 'isCreatorCoinActive',
@@ -73,9 +75,9 @@ function normalizeAddress(value: string | null | undefined): Address | null {
   return getAddress(raw);
 }
 
-function getCreatorRegistryAddress(): `0x${string}` {
+function get4626RegistryAddress(): `0x${string}` {
   const configured = String(process.env.CREATOR_REGISTRY ?? '').trim();
-  const candidate = configured || DEFAULT_CREATOR_REGISTRY;
+  const candidate = configured || DEFAULT_4626_REGISTRY;
   if (!isAddress(candidate)) {
     throw new Error('CREATOR_REGISTRY is not a valid address');
   }
@@ -133,24 +135,24 @@ export async function verifyVaultRegistryBinding(vault: VaultConfig): Promise<Re
     return { verified: false, reason: 'invalid_addresses' };
   }
 
-  const registryAddress = getCreatorRegistryAddress();
+  const registryAddress = get4626RegistryAddress();
 
   const [active, registryVault, registryShare] = await Promise.all([
     readContract<boolean>({
       address: registryAddress,
-      abi: CREATOR_REGISTRY_ABI,
+      abi: REGISTRY_4626_ABI,
       functionName: 'isCreatorCoinActive',
       args: [creatorCoin],
     }),
     readContract<Address>({
       address: registryAddress,
-      abi: CREATOR_REGISTRY_ABI,
+      abi: REGISTRY_4626_ABI,
       functionName: 'getVaultForToken',
       args: [creatorCoin],
     }),
     readContract<Address>({
       address: registryAddress,
-      abi: CREATOR_REGISTRY_ABI,
+      abi: REGISTRY_4626_ABI,
       functionName: 'getShareOFTForToken',
       args: [creatorCoin],
     }),

@@ -8,7 +8,7 @@ import {RandomnessRouter} from "../contracts/utilities/lottery/randomness/Random
 import {ChainlinkVRFAdapter, IChainlinkVRFConsumerLike}
     from "../contracts/utilities/lottery/randomness/ChainlinkVRFAdapter.sol";
 
-/// @notice Local-caller authorization view of `CreatorVRFConsumerV2_5`.
+/// @notice Local-caller authorization view of `VRFConsumer4626`.
 ///         The consumer's `_requestRandomWordsLocal()` reverts unless
 ///         `authorizedLocalCallers[msg.sender]` is true; only `owner()` can
 ///         flip that bit. We use this view to (a) check whether the adapter
@@ -23,14 +23,14 @@ interface IChainlinkVRFConsumerAuth {
 /**
  * @title DeployRandomnessRouter
  * @notice Deploy `ChainlinkVRFAdapter` (wrapping the existing
- *         `CreatorVRFConsumerV2_5`) plus the `RandomnessRouter`, with the
+ *         `VRFConsumer4626`) plus the `RandomnessRouter`, with the
  *         Chainlink adapter as the default source. New creator coins can
  *         later be moved to drand via `router.setSourceFor(coin, drand)`.
  *
  * @dev    Required env vars:
  *         - PRIVATE_KEY:        deployer
  *         - ROUTER_OWNER:       owner of the router (rotates default + per-coin)
- *         - CHAINLINK_CONSUMER: deployed `CreatorVRFConsumerV2_5` address.
+ *         - CHAINLINK_CONSUMER: deployed `VRFConsumer4626` address.
  *
  * @dev    Optional env vars:
  *         - ALLOW_UNAUTHORIZED_ADAPTER: set to "1" to deploy even when the
@@ -79,7 +79,7 @@ contract DeployRandomnessRouter is Script {
         // -------------------------------------------------------------
         // Authorize the adapter as a local caller on the VRF consumer.
         //
-        // CreatorVRFConsumerV2_5.requestRandomWords() ->
+        // VRFConsumer4626.requestRandomWords() ->
         //   _requestRandomWordsLocal() reverts with `Unauthorized()` unless
         //   `authorizedLocalCallers[msg.sender]` is true. The router will
         //   call `adapter.request()` -> `consumer.requestRandomWords()` with
