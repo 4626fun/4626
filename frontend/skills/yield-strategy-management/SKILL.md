@@ -20,7 +20,7 @@ description: Manage CreatorOVault yield strategies (add/remove strategies, set w
 ## System Model (how strategy allocation works)
 
 Core contract:
-- `contracts/vault/CreatorOVault.sol`
+- `contracts/creator/vault/CreatorOVault.sol`
 
 Key ideas:
 - Vault holds idle creator coins (`coinBalance`) and can deploy excess into strategies.
@@ -37,9 +37,9 @@ Key ideas:
 ## Repo Map (where to look / common strategies)
 
 - Vault: `contracts/vault/CreatorOVault.sol`
-- Strategy interface: `contracts/interfaces/IStrategy.sol`
-- Strategy module logic: `contracts/vault/modules/CreatorOVaultStrategiesModule.sol`
-- Ajna strategy adapter: `contracts/vault/strategies/ERC4626StrategyAdapter.sol`
+- Strategy interface: `contracts/shared/interfaces/IStrategy.sol`
+- Strategy module logic: `contracts/creator/vault/modules/CreatorOVaultStrategiesModule.sol`
+- Ajna strategy adapter: `contracts/shared/strategies/cca/ERC4626StrategyAdapter.sol`
 - Strategy deploy tooling:
   - `contracts/helpers/batchers/StrategyDeploymentBatcher.sol`
 - Allocation notes: `docs/primitives/market/vault.md`

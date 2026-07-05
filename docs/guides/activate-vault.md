@@ -22,7 +22,7 @@ Deposit creator coin and start the **fair-launch auction** for `■` tradable sh
 
 ## What activation does
 
-Transfers **50M–100M** creator coin into [CreatorOVault](/contracts/core/creator-ovault), mints vault shares, wraps into `■` ShareOFT, and schedules the [fair-launch auction](/contracts/strategies/cca-launch). This is **open price discovery**, not a private sale. The CCA sells `■` ShareOFT for **USDC/ETH** — not a 99/1 creator-coin/USDC pool seed (that ratio applies to **Charm LP bootstrap** after Phase 3 strategies attach).
+Transfers **50M–100M** creator coin into [CreatorOVault](/contracts/shared/core/creator-ovault), mints vault shares, wraps into `■` ShareOFT, and schedules the [fair-launch auction](/contracts/shared/strategies/cca-launch). This is **open price discovery**, not a private sale. The CCA sells `■` ShareOFT for **USDC/ETH** — not a 99/1 creator-coin/USDC pool seed (that ratio applies to **Charm LP bootstrap** after Phase 3 strategies attach).
 
 On finalize, wrapped `■` supply is allocated **30/30/30/10**: 30% auction · 30% creator vesting (365 days) · 30% Solana bridge · 10% LP reserve on the CCA strategy. See [Share allocation](/reference/glossary#share-allocation-at-finalize).
 
@@ -63,4 +63,4 @@ The app sends these as **separate sponsored UserOps** in order: finalize → Pha
 
 ## Related
 
-[How fees and lottery work](/overview/how-it-works) · [CCA contract](/contracts/strategies/cca-launch)
+[How fees and lottery work](/overview/how-it-works) · [CCA contract](/contracts/shared/strategies/cca-launch)

@@ -60,4 +60,4 @@ Wraps, deposits, and bridge receipts do **not** create lottery entries. Qualifyi
 
 ## Contract reference
 
-[CreatorShareOFT](/contracts/core/creator-share-oft) · [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) · [Addresses](/reference/addresses)
+[CreatorShareOFT](/contracts/shared/core/creator-share-oft) · [CreatorOVaultWrapper](/contracts/shared/core/creator-ovault-wrapper) · [Addresses](/reference/addresses)

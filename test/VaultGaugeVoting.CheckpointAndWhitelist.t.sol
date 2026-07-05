@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {VaultGaugeVoting} from "@4626/governance/creator/VaultGaugeVoting.sol";
+import {VaultGaugeVoting} from "@4626/creator/governance/VaultGaugeVoting.sol";
 
 contract MockVe4626 {
     mapping(address => uint256) internal _votingPower;

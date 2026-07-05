@@ -235,10 +235,10 @@ is_known_deployment_batcher_verify_mismatch() {
       *"ONCHAIN EXECUTION COMPLETE & SUCCESSFUL."*)
         saw_onchain_success=1
         ;;
-      *"Submitting verification for [contracts/deploy/batchers/DeploymentBatcher.sol:DeploymentBatcher]"*)
+      *"Submitting verification for [contracts/shared/deploy/batchers/DeploymentBatcher.sol:DeploymentBatcher]"*)
         saw_deployment_batcher_verify=1
         ;;
-      *"Submitting verification for [contracts/deploy/batchers/DeploymentBatcher.sol:DeploymentBatcherPhase2Module]"*)
+      *"Submitting verification for [contracts/shared/deploy/batchers/DeploymentBatcher.sol:DeploymentBatcherPhase2Module]"*)
         saw_phase2_module_verify=1
         ;;
       *"Compiled contract deployment bytecode does NOT match the transaction deployment bytecode."*)

@@ -11,8 +11,8 @@ Pluggable yield strategies for 4626.
 
 | Strategy | Purpose |
 |----------|---------|
-| **[BaseCreatorStrategy](/contracts/strategies/base-creator-strategy)** | Base implementation for all strategies |
-| **[CCA Launch](/contracts/strategies/cca-launch)** | Uniswap CCA fair launch integration |
+| **[BaseCreatorStrategy](/contracts/shared/strategies/base-creator-strategy)** | Base implementation for all strategies |
+| **[CCA Launch](/contracts/shared/strategies/cca-launch)** | Uniswap CCA fair launch integration |
 
 ## Strategy Architecture
 

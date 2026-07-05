@@ -8,7 +8,7 @@ import {
     MessagingReceipt
 } from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@4626/messaging/creator/CreatorShareOFT.sol";
+import "@4626/creator/messaging/CreatorShareOFT.sol";
 
 contract MockRemoteRegistry {
     address public lotteryManager;

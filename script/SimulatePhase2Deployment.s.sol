@@ -3,16 +3,16 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
 
-import {Create2Deployer} from "@4626/deploy/factories/Create2Deployer.sol";
-import {CreatorOVault} from "@4626/vault/creator/CreatorOVault.sol";
-import {CreatorOVaultWrapper} from "@4626/vault/creator/CreatorOVaultWrapper.sol";
-import {CreatorOVaultAdminModule} from "@4626/vault/creator/modules/CreatorOVaultAdminModule.sol";
-import {CreatorOVaultCoreModule} from "@4626/vault/creator/modules/CreatorOVaultCoreModule.sol";
-import {CreatorOVaultStrategiesModule} from "@4626/vault/creator/modules/CreatorOVaultStrategiesModule.sol";
-import {CreatorShareOFT} from "@4626/messaging/creator/CreatorShareOFT.sol";
-import {CreatorGaugeController} from "@4626/governance/creator/CreatorGaugeController.sol";
-import {CCALaunchStrategy} from "@4626/strategies/cca/CCALaunchStrategy.sol";
-import {CreatorOracle} from "@4626/oracles/creator/CreatorOracle.sol";
+import {Create2Deployer} from "@4626/shared/deploy/factories/Create2Deployer.sol";
+import {CreatorOVault} from "@4626/creator/vault/CreatorOVault.sol";
+import {CreatorOVaultWrapper} from "@4626/creator/vault/CreatorOVaultWrapper.sol";
+import {CreatorOVaultAdminModule} from "@4626/creator/vault/modules/CreatorOVaultAdminModule.sol";
+import {CreatorOVaultCoreModule} from "@4626/creator/vault/modules/CreatorOVaultCoreModule.sol";
+import {CreatorOVaultStrategiesModule} from "@4626/creator/vault/modules/CreatorOVaultStrategiesModule.sol";
+import {CreatorShareOFT} from "@4626/creator/messaging/CreatorShareOFT.sol";
+import {CreatorGaugeController} from "@4626/creator/governance/CreatorGaugeController.sol";
+import {CCALaunchStrategy} from "@4626/shared/strategies/cca/CCALaunchStrategy.sol";
+import {CreatorOracle} from "@4626/creator/oracles/CreatorOracle.sol";
 
 /// @notice Fork simulation of the Phase 2 AA deployment sequence.
 /// @dev Run (no broadcast):

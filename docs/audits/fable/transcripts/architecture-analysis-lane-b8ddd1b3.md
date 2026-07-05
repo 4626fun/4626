@@ -506,12 +506,12 @@ Major subsystems by path:
 
 | File | Role |
 |------|------|
-| `contracts/alfaclub/AlfaCreatorKeyLPFactory.sol` | Creator coin + FriendKey LP factory |
-| `contracts/alfaclub/AlfaCreatorKeyPool.sol` | xy=k pool |
+| `contracts/other/alfaclub/AlfaCreatorKeyLPFactory.sol` | Creator coin + FriendKey LP factory |
+| `contracts/other/alfaclub/AlfaCreatorKeyPool.sol` | xy=k pool |
 
 ### Core registry / oracle
 
-`contracts/core/CreatorRegistry.sol`, `contracts/utilities/oracles/CreatorOracle.sol`, `contracts/services/ovault/CreatorOVaultComposerHub.sol`.
+`contracts/shared/core/CreatorRegistry.sol`, `contracts/utilities/oracles/CreatorOracle.sol`, `contracts/services/ovault/CreatorOVaultComposerHub.sol`.
 
 **Solana program (separate tree):** `programs/creator-share-hook/` (Anchor; mainnet program id in AGENTS.md).
 

@@ -3,8 +3,8 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {I4626Registry} from "@4626/interfaces/core/I4626Registry.sol";
-import "@4626/deploy/batchers/DeploymentBatcher.sol";
+import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
+import "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
 import "test/helpers/DeploymentBatcherFixture.sol";
 import "test/helpers/DeploymentBatcherPhase3Mocks.sol";
 

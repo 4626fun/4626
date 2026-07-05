@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {CreatorShareOFT} from "@4626/messaging/creator/CreatorShareOFT.sol";
+import {CreatorShareOFT} from "@4626/creator/messaging/CreatorShareOFT.sol";
 
 contract MockFlushRegistry {
     function getLayerZeroEndpoint(uint256) external pure returns (address) {

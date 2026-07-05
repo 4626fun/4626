@@ -5,10 +5,10 @@ import {Test} from "forge-std/Test.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {CreatorOVault} from "@4626/vault/creator/CreatorOVault.sol";
-import {CreatorOVaultCoreModule} from "@4626/vault/creator/modules/CreatorOVaultCoreModule.sol";
-import {CreatorOVaultStrategiesModule} from "@4626/vault/creator/modules/CreatorOVaultStrategiesModule.sol";
-import {CreatorOVaultAdminModule} from "@4626/vault/creator/modules/CreatorOVaultAdminModule.sol";
+import {CreatorOVault} from "@4626/creator/vault/CreatorOVault.sol";
+import {CreatorOVaultCoreModule} from "@4626/creator/vault/modules/CreatorOVaultCoreModule.sol";
+import {CreatorOVaultStrategiesModule} from "@4626/creator/vault/modules/CreatorOVaultStrategiesModule.sol";
+import {CreatorOVaultAdminModule} from "@4626/creator/vault/modules/CreatorOVaultAdminModule.sol";
 
 /// @title CreatorOVaultMath — Minimal Halmos symbolic execution smoke on real vault share/asset math + fees
 /// @notice This is the first targeted Halmos layer for 4626's ERC-4626 core (option 3 from the verification roadmap).

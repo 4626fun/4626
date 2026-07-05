@@ -2,12 +2,12 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import "@4626/deploy/batchers/StrategyDeploymentBatcher.sol";
+import "@4626/shared/deploy/batchers/StrategyDeploymentBatcher.sol";
 import {
     CreatorCharmStrategyFactory,
     AjnaERC4626StrategyFactory
-} from "@4626/deploy/batchers/StrategyDeploymentFactories.sol";
-import "@4626/deploy/batchers/VaultActivationBatcher.sol";
+} from "@4626/shared/deploy/batchers/StrategyDeploymentFactories.sol";
+import "@4626/shared/deploy/batchers/VaultActivationBatcher.sol";
 
 /**
  * @title DeployEverything

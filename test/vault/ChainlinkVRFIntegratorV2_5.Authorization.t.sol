@@ -6,7 +6,7 @@ import "forge-std/Test.sol";
 import {MessagingFee} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {MessagingReceipt} from "@layerzerolabs/oapp-evm/contracts/oapp/OAppSender.sol";
 
-import {ChainlinkVRFIntegratorV2_5} from "@4626/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol";
+import {ChainlinkVRFIntegratorV2_5} from "@4626/shared/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol";
 
 contract MockEndpointV2_ForIntegrator {
     address public delegate;

@@ -81,7 +81,7 @@ The batcher wraps the activation deposit into `■` ShareOFT, then allocates sup
 | Solana bridge | 30% | LayerZero bridge of `■` (at finalize) |
 | LP reserve | 10% | Held on CCA strategy for v4 migration after graduation |
 
-Details: [CCA launch strategy](/contracts/strategies/cca-launch) · [Glossary](/reference/glossary#share-allocation-at-finalize)
+Details: [CCA launch strategy](/contracts/shared/strategies/cca-launch) · [Glossary](/reference/glossary#share-allocation-at-finalize)
 
 ## Solana share bridge
 
@@ -95,12 +95,12 @@ Shared infrastructure: [Addresses](/reference/addresses) (v1.14.1). Per creator:
 
 | Contract | Role |
 |----------|------|
-| [CreatorRegistry](/contracts/core/creator-registry) | Creator coin → stack lookup |
-| [CreatorOVault](/contracts/core/creator-ovault) | Vault · holds creator coin |
-| [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) | ▢ → ■ wrap |
-| [CreatorShareOFT](/contracts/core/creator-share-oft) | Tradable ■ share |
+| [CreatorRegistry](/contracts/shared/core/creator-registry) | Creator coin → stack lookup |
+| [CreatorOVault](/contracts/shared/core/creator-ovault) | Vault · holds creator coin |
+| [CreatorOVaultWrapper](/contracts/shared/core/creator-ovault-wrapper) | ▢ → ■ wrap |
+| [CreatorShareOFT](/contracts/shared/core/creator-share-oft) | Tradable ■ share |
 | [CreatorGaugeController](/contracts/governance/gauge-controller) | Fee split · jackpot custody |
-| [CCA launch strategy](/contracts/strategies/cca-launch) | Fair-launch auction |
+| [CCA launch strategy](/contracts/shared/strategies/cca-launch) | Fair-launch auction |
 | [CreatorLotteryManager](/contracts/utilities/lottery-manager) | Lottery on buys |
 | [CreatorOracle](/contracts/utilities/creator-oracle) | TWAP for lottery sizing |
 

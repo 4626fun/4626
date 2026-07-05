@@ -6,7 +6,7 @@ cd "$ROOT_DIR"
 
 CREATE2_FACTORY_ADDR="0x4e59b44847b379578588920cA78FbF26c0B4956C"
 DEFAULT_RPC_URL="${BASE_RPC_URL:-https://mainnet.base.org}"
-CONTRACT_FQN="contracts/deploy/batchers/DeploymentBatcher.sol:DeploymentBatcher"
+CONTRACT_FQN="contracts/shared/deploy/batchers/DeploymentBatcher.sol:DeploymentBatcher"
 ARTIFACT_PATH="$ROOT_DIR/out/DeploymentBatcher.sol/DeploymentBatcher.json"
 
 usage() {

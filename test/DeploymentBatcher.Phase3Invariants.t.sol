@@ -3,7 +3,7 @@ pragma solidity ^0.8.30;
 
 import {Test} from "forge-std/Test.sol";
 
-import {DeploymentBatcher} from "@4626/deploy/batchers/DeploymentBatcher.sol";
+import {DeploymentBatcher} from "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
 import "test/helpers/DeploymentBatcherFixture.sol";
 import {
     MockAjnaAdapterForPhase3,

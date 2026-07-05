@@ -3,12 +3,12 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
 
-import "@4626/deploy/batchers/DeploymentBatcher.sol";
-import "@4626/deploy/infra/UniversalBytecodeStoreV2.sol";
-import "@4626/deploy/factories/UniversalCreate2DeployerFromStore.sol";
-import {CreatorOVaultAdminModule} from "@4626/vault/creator/modules/CreatorOVaultAdminModule.sol";
-import {CreatorOVaultCoreModule} from "@4626/vault/creator/modules/CreatorOVaultCoreModule.sol";
-import {CreatorOVaultStrategiesModule} from "@4626/vault/creator/modules/CreatorOVaultStrategiesModule.sol";
+import "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
+import "@4626/shared/deploy/infra/UniversalBytecodeStoreV2.sol";
+import "@4626/shared/deploy/factories/UniversalCreate2DeployerFromStore.sol";
+import {CreatorOVaultAdminModule} from "@4626/creator/vault/modules/CreatorOVaultAdminModule.sol";
+import {CreatorOVaultCoreModule} from "@4626/creator/vault/modules/CreatorOVaultCoreModule.sol";
+import {CreatorOVaultStrategiesModule} from "@4626/creator/vault/modules/CreatorOVaultStrategiesModule.sol";
 
 /// @notice Deploys the deterministic phased deployment batcher (Phases 1-3) on Base mainnet.
 ///

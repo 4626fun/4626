@@ -50,7 +50,7 @@ Full-scope security review of all Solidity under [`contracts/`](../../../contrac
 - `contracts/vault/modules/CreatorOVaultCoreModule.sol`
 - `contracts/governance/VaultGaugeVoting.sol`
 - `contracts/governance/ve4626.sol`
-- `contracts/governance/bribes/BribeDepot.sol`
+- `contracts/shared/governance/bribes/BribeDepot.sol`
 - `contracts/governance/CreatorGaugeController.sol`
 - `contracts/utilities/lottery/CreatorLotteryManager.sol`
 - `contracts/utilities/messaging/CreatorShareOFT.sol`

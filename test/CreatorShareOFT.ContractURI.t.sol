@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 
 import {LibString} from "solady/utils/LibString.sol";
-import {CreatorShareOFT} from "@4626/messaging/creator/CreatorShareOFT.sol";
+import {CreatorShareOFT} from "@4626/creator/messaging/CreatorShareOFT.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
 contract MockRegistryForShareOFTContractURI {

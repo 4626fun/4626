@@ -290,8 +290,8 @@ import {I4626Registry} from "../../interfaces/core/I4626Registry.sol";
 ```
 to:
 ```solidity
-import {CreatorLinearVesting} from "@4626/vesting/CreatorLinearVesting.sol";
-import {I4626Registry} from "@4626/interfaces/core/I4626Registry.sol";
+import {CreatorLinearVesting} from "@4626/creator/vesting/CreatorLinearVesting.sol";
+import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
 ```
 
 Benefits:

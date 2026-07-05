@@ -40,12 +40,12 @@ export const redirects: ClientRedirect[] = [
 
   // Concepts & primitives → contracts
   { from: '/concepts', to: '/contracts' },
-  { from: '/concepts/vault', to: '/contracts/core/creator-ovault' },
+  { from: '/concepts/vault', to: '/contracts/shared/core/creator-ovault' },
   { from: '/concepts/lottery', to: '/contracts/utilities/lottery-manager' },
-  { from: '/concepts/auction', to: '/contracts/strategies/cca-launch' },
+  { from: '/concepts/auction', to: '/contracts/shared/strategies/cca-launch' },
   { from: '/primitives', to: '/contracts' },
-  { from: '/primitives/market/vault', to: '/contracts/core/creator-ovault' },
-  { from: '/primitives/market/auction', to: '/contracts/strategies/cca-launch' },
+  { from: '/primitives/market/vault', to: '/contracts/shared/core/creator-ovault' },
+  { from: '/primitives/market/auction', to: '/contracts/shared/strategies/cca-launch' },
   { from: '/primitives/game-loop/lottery', to: '/contracts/utilities/lottery-manager' },
   {
     from: '/primitives/game-loop/lottery-amoe-test-matrix',

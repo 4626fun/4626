@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {CreatorCharmStrategy} from "@4626/strategies/univ3/CreatorCharmStrategy.sol";
+import {CreatorCharmStrategy} from "@4626/shared/strategies/univ3/CreatorCharmStrategy.sol";
 
 /**
  * @title Minimal Halmos example for CreatorCharmStrategy valuation math

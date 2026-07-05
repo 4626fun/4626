@@ -37,11 +37,11 @@ Deployed on an **older batcher or release**. May behave differently from a new v
 
 **Creator coin** — The Zora ERC-20 deposited into the vault; the vault **deposit asset**. Distinct contract address from share tokens.
 
-**Vault share (`▢TICKER`)** — ERC-4626 share from [CreatorOVault](/contracts/core/creator-ovault); pro-rata claim on vault TVL.
+**Vault share (`▢TICKER`)** — ERC-4626 share from [CreatorOVault](/contracts/shared/core/creator-ovault); pro-rata claim on vault TVL.
 
-**Tradable share (`■TICKER`)** — LayerZero ShareOFT from [CreatorShareOFT](/contracts/core/creator-share-oft); primary DEX-facing asset.
+**Tradable share (`■TICKER`)** — LayerZero ShareOFT from [CreatorShareOFT](/contracts/shared/core/creator-share-oft); primary DEX-facing asset.
 
-**Wrapper** — [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper); converts ▢ → ■ at 1:1.
+**Wrapper** — [CreatorOVaultWrapper](/contracts/shared/core/creator-ovault-wrapper); converts ▢ → ■ at 1:1.
 
 ## Launch milestones
 
@@ -60,9 +60,9 @@ When the batcher **finalizes** activation, wrapped `■` supply from the deposit
 | Fair-launch auction | 30% | CCA price discovery (launched with 10% LP reserve on strategy) |
 | Creator vesting | 30% | `CreatorLinearVesting` (365-day linear unlock) |
 | Solana bridge | 30% | LayerZero OFT bridge (part of finalize) |
-| LP reserve | 10% | Held on [CCA strategy](/contracts/strategies/cca-launch) for post-auction v4 migration |
+| LP reserve | 10% | Held on [CCA strategy](/contracts/shared/strategies/cca-launch) for post-auction v4 migration |
 
-Onchain constants: `AUCTION_PERCENT`, `VESTING_PERCENT`, `SOLANA_ALLOC_PERCENT`, `LP_RESERVE_PERCENT` on `DeploymentBatcher`. See [CCA launch strategy](/contracts/strategies/cca-launch) for auction graduation, migration, and failed-auction paths.
+Onchain constants: `AUCTION_PERCENT`, `VESTING_PERCENT`, `SOLANA_ALLOC_PERCENT`, `LP_RESERVE_PERCENT` on `DeploymentBatcher`. See [CCA launch strategy](/contracts/shared/strategies/cca-launch) for auction graduation, migration, and failed-auction paths.
 
 ## Fee lanes
 

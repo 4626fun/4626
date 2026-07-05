@@ -15,7 +15,7 @@ Current status of the ve(3,3) governance system.
 - [x] VoterRewardsDistributor for fee claims (`contracts/governance/VoterRewardsDistributor.sol`)
 - [x] Integration with CreatorLotteryManager (`contracts/utilities/lottery/CreatorLotteryManager.sol`)
 - [x] Frontend voting UI (`frontend/src/pages/GaugeVoting.tsx`)
-- [x] Bribe marketplace contract (`contracts/governance/bribes/BribeDepot.sol`)
+- [x] Bribe marketplace contract (`contracts/shared/governance/bribes/BribeDepot.sol`)
 
 ## In Progress
 

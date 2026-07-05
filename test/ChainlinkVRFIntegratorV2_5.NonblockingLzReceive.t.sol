@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 
 import {ChainlinkVRFIntegratorV2_5, IRandomWordsCallbackV2_5} from
-    "@4626/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol";
+    "@4626/shared/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol";
 import {MessagingFee, Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {MessagingReceipt} from "@layerzerolabs/oapp-evm/contracts/oapp/OAppSender.sol";
 

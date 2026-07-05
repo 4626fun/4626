@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {CreatorOVault} from "@4626/vault/creator/CreatorOVault.sol";
+import {CreatorOVault} from "@4626/creator/vault/CreatorOVault.sol";
 import {
     RebalanceTestHarness,
     ScenarioVaultCtx,

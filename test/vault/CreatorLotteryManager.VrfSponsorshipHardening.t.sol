@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {LotteryManager4626} from "@4626/lottery/manager/4626LotteryManager.sol";
+import {LotteryManager4626} from "@4626/shared/lottery/manager/4626LotteryManager.sol";
 import {MessagingFee} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 

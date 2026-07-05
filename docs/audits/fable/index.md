@@ -169,7 +169,7 @@ Infrastructure modules referenced in critical findings. Full registry: [Contract
 | CreatorRegistry | Creator ↔ vault registry | [`0xDD7B106a15540bA2F59464590222bF47D8C9394E`](https://basescan.org/address/0xDD7B106a15540bA2F59464590222bF47D8C9394E) |
 | SolanaBridgeAdapter | Cross-chain bridge | [`0x8e99bb0270bbdf2d64ff6854509CD2410A28fBae`](https://basescan.org/address/0x8e99bb0270bbdf2d64ff6854509CD2410A28fBae) |
 
-Per-vault contracts (e.g. `CreatorORecoveryEscrow`) are deployed at launch; see [CreatorOVault](/contracts/core/creator-ovault) and source on [GitHub](https://github.com/wenakita/4626/tree/main/contracts/vault).
+Per-vault contracts (e.g. `CreatorORecoveryEscrow`) are deployed at launch; see [CreatorOVault](/contracts/shared/core/creator-ovault) and source on [GitHub](https://github.com/wenakita/4626/tree/main/contracts/vault).
 
 ## Methodology
 

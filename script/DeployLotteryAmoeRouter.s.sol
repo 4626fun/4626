@@ -3,8 +3,8 @@ pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
 
-import {AmoePlonkVerifier} from "@4626/lottery/zk/AmoePlonkVerifier.sol";
-import {LotteryAmoeRouter} from "@4626/lottery/zk/LotteryAmoeRouter.sol";
+import {AmoePlonkVerifier} from "@4626/shared/lottery/zk/AmoePlonkVerifier.sol";
+import {LotteryAmoeRouter} from "@4626/shared/lottery/zk/LotteryAmoeRouter.sol";
 
 /**
  * @title DeployLotteryAmoeRouter
@@ -35,7 +35,7 @@ import {LotteryAmoeRouter} from "@4626/lottery/zk/LotteryAmoeRouter.sol";
  * @dev    Pre-deploy checklist:
  *         1. `amoe/circuits/build/plonk_fresh/AmoePlonkVerifier_raw.sol`
  *            (snarkjs source-of-truth) byte-equals the cleaned
- *            `contracts/lottery/zk/AmoePlonkVerifier.sol` modulo
+ *            `contracts/shared/lottery/zk/AmoePlonkVerifier.sol` modulo
  *            our header banner + the renamed contract name.
  *         2. The on-disk zkey verifies a freshly-generated proof off-chain
  *            (`snarkjs plonk verify vk_plonk.json public_plonk.json proof_plonk.json`).

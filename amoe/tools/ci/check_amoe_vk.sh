@@ -2,7 +2,7 @@
 # Fails CI if AmoeGroth16Verifier.sol is the placeholder (zero VK constants).
 # Run after every contracts checkout, before forge build.
 set -euo pipefail
-F="contracts/lottery/zk/AmoeGroth16Verifier.sol"
+F="contracts/shared/lottery/zk/AmoeGroth16Verifier.sol"
 if [ ! -f "$F" ]; then
   echo "[check_amoe_vk] $F missing"; exit 1
 fi

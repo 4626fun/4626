@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test, console2} from "forge-std/Test.sol";
-import {AmoePlonkVerifier} from "@4626/lottery/zk/AmoePlonkVerifier.sol";
+import {AmoePlonkVerifier} from "@4626/shared/lottery/zk/AmoePlonkVerifier.sol";
 
 /// @notice End-to-end PLONK fixture test.
 ///

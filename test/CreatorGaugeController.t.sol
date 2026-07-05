@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "@4626/governance/creator/CreatorGaugeController.sol";
+import "@4626/creator/governance/CreatorGaugeController.sol";
 
 contract MockToken is IERC20 {
     string public name;

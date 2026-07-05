@@ -11,7 +11,7 @@
 // Usage:
 //   amoe-prover emit-verifier \
 //     --vk amoe/circuits/build/verification_key.json \
-//     --out contracts/lottery/zk/AmoeGroth16Verifier.sol \
+//     --out contracts/shared/lottery/zk/AmoeGroth16Verifier.sol \
 //     --name AmoeGroth16Verifier
 
 import ArgumentParser

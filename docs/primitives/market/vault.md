@@ -43,5 +43,5 @@ Why the nested Ajna bundle exists:
 ## References
 
 - [Security](/security)
-- [Contracts: CreatorOVault](/contracts/core/creator-ovault)
+- [Contracts: CreatorOVault](/contracts/shared/core/creator-ovault)
 

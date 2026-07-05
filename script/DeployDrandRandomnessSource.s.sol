@@ -3,8 +3,8 @@ pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
 
-import {DrandRandomnessSource} from "@4626/lottery/randomness/DrandRandomnessSource.sol";
-import {EIP2537Probe} from "@4626/lottery/randomness/EIP2537Probe.sol";
+import {DrandRandomnessSource} from "@4626/shared/lottery/randomness/DrandRandomnessSource.sol";
+import {EIP2537Probe} from "@4626/shared/lottery/randomness/EIP2537Probe.sol";
 
 /**
  * @title DeployDrandRandomnessSource

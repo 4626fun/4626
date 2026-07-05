@@ -3,11 +3,11 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import "@4626/deploy/batchers/VaultAuxiliaryDeployBatcher.sol";
-import "@4626/deploy/infra/UniversalBytecodeStoreV2.sol";
-import "@4626/revenue/creator/CreatorCoinPolicyController.sol";
-import "@4626/revenue/creator/PayoutRouter.sol";
-import "@4626/revenue/creator/VaultShareBurnStream.sol";
+import "@4626/shared/deploy/batchers/VaultAuxiliaryDeployBatcher.sol";
+import "@4626/shared/deploy/infra/UniversalBytecodeStoreV2.sol";
+import "@4626/creator/revenue/CreatorCoinPolicyController.sol";
+import "@4626/creator/revenue/PayoutRouter.sol";
+import "@4626/creator/revenue/VaultShareBurnStream.sol";
 
 contract MockAuxiliaryVault {
     address public immutable owner;

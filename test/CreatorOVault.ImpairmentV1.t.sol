@@ -4,15 +4,15 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import {CreatorOVault} from "@4626/vault/creator/CreatorOVault.sol";
-import {CreatorOVaultAdminModule} from "@4626/vault/creator/modules/CreatorOVaultAdminModule.sol";
-import {CreatorOVaultCoreModule} from "@4626/vault/creator/modules/CreatorOVaultCoreModule.sol";
-import {CreatorOVaultStrategiesModule} from "@4626/vault/creator/modules/CreatorOVaultStrategiesModule.sol";
+import {CreatorOVault} from "@4626/creator/vault/CreatorOVault.sol";
+import {CreatorOVaultAdminModule} from "@4626/creator/vault/modules/CreatorOVaultAdminModule.sol";
+import {CreatorOVaultCoreModule} from "@4626/creator/vault/modules/CreatorOVaultCoreModule.sol";
+import {CreatorOVaultStrategiesModule} from "@4626/creator/vault/modules/CreatorOVaultStrategiesModule.sol";
 import {CreatorOImpairmentClaims} from "@4626/vault/recovery/CreatorOImpairmentClaims.sol";
 import {CreatorORecoveryEscrow} from "@4626/vault/recovery/CreatorORecoveryEscrow.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IStrategy} from "@4626/interfaces/strategies/IStrategy.sol";
-import {IStrategyValuation} from "@4626/interfaces/strategies/IStrategyValuation.sol";
+import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
+import {IStrategyValuation} from "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
 
 contract MockCreatorCoinImp is ERC20 {
     constructor() ERC20("Creator Coin", "CR8R") {}

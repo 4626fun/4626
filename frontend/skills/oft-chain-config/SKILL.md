@@ -18,10 +18,10 @@ description: Configure LayerZero V2 OFT cross-chain settings for 4626 (peers, en
 ## System Model (how OFT + LayerZero works here)
 
 - `CreatorShareOFT` is an Omnichain Fungible Token (OFT) built on LayerZero:
-  - Contract: `contracts/utilities/messaging/CreatorShareOFT.sol`
+  - Contract: `contracts/creator/messaging/CreatorShareOFT.sol`
   - Constructed with a LayerZero endpoint resolved from a registry (`getLayerZeroEndpoint(chainId)`).
 - Deployment bootstrapping:
-  - `contracts/helpers/infra/OFTBootstrapRegistry.sol` provides a minimal `getLayerZeroEndpoint(chainId)` used at OFT construction time.
+  - `contracts/shared/deploy/infra/OFTBootstrapRegistry.sol` provides a minimal `getLayerZeroEndpoint(chainId)` used at OFT construction time.
   - It is permissionless by design because it’s intended to be set atomically during AA deployment immediately before deploying the OFT.
 - Cross-chain security:
   - LayerZero OApps rely on `setPeer(eid, peer)` / `peers(eid)` relationships to authenticate remote senders.
@@ -41,9 +41,9 @@ Never include private keys or full `.env` contents in output.
 
 ## Repo Map (where to look / entrypoints)
 
-- OFT token implementation: `contracts/utilities/messaging/CreatorShareOFT.sol`
-- Bootstrap endpoint registry: `contracts/helpers/infra/OFTBootstrapRegistry.sol`
-- Core registry (chain/EID mappings + endpoint lookup): `contracts/core/CreatorRegistry.sol`
+- OFT token implementation: `contracts/creator/messaging/CreatorShareOFT.sol`
+- Bootstrap endpoint registry: `contracts/shared/deploy/infra/OFTBootstrapRegistry.sol`
+- Core registry (chain/EID mappings + endpoint lookup): `contracts/shared/core/CreatorRegistry.sol`
 - Deployment tooling (CREATE2/bytecode infra): `script/DeployUniversalBytecodeInfra.s.sol`, `script/SimulateUniversalCreate2Factory.s.sol`
 - Deployer orchestration that sets endpoints before deployment: `contracts/helpers/batchers/DeploymentBatcher.sol`
 

@@ -22,12 +22,12 @@ export const CURATED_PUBLISH_GLOBS = [
   'reference/impairment-v1-disclosures.md',
 
   'contracts/index.md',
-  'contracts/core/creator-registry.md',
-  'contracts/core/creator-ovault.md',
-  'contracts/core/creator-share-oft.md',
-  'contracts/core/creator-ovault-wrapper.md',
+  'contracts/shared/core/creator-registry.md',
+  'contracts/shared/core/creator-ovault.md',
+  'contracts/shared/core/creator-share-oft.md',
+  'contracts/shared/core/creator-ovault-wrapper.md',
   'contracts/governance/gauge-controller.md',
-  'contracts/strategies/cca-launch.md',
+  'contracts/shared/strategies/cca-launch.md',
   'contracts/utilities/lottery-manager.md',
   'contracts/utilities/creator-oracle.md',
 

@@ -3,10 +3,10 @@ pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
 
-import {CreatorShareOFT} from "@4626/messaging/creator/CreatorShareOFT.sol";
-import {OFTBootstrapRegistry} from "@4626/deploy/infra/OFTBootstrapRegistry.sol";
-import {UniversalCreate2DeployerFromStore} from "@4626/deploy/factories/UniversalCreate2DeployerFromStore.sol";
-import {UniversalBytecodeStore} from "@4626/deploy/infra/UniversalBytecodeStore.sol";
+import {CreatorShareOFT} from "@4626/creator/messaging/CreatorShareOFT.sol";
+import {OFTBootstrapRegistry} from "@4626/shared/deploy/infra/OFTBootstrapRegistry.sol";
+import {UniversalCreate2DeployerFromStore} from "@4626/shared/deploy/factories/UniversalCreate2DeployerFromStore.sol";
+import {UniversalBytecodeStore} from "@4626/shared/deploy/infra/UniversalBytecodeStore.sol";
 
 interface IRemoteShareOftHubView {
     function isHub() external view returns (bool);

@@ -7,7 +7,7 @@ sidebar_position: 1
 
 **Product role:** **Instant lottery** on hub-chain ShareOFT **buys** (Chainlink VRF) plus attested no-purchase AMOE entries — prizes paid from gauge jackpot reserves.
 
-Shared lottery service deployed once per chain; serves all creator coins by resolving contract addresses from [CreatorRegistry](/contracts/core/creator-registry).
+Shared lottery service deployed once per chain; serves all creator coins by resolving contract addresses from [CreatorRegistry](/contracts/shared/core/creator-registry).
 
 ## Purpose
 
