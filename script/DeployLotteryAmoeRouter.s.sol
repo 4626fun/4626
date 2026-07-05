@@ -35,7 +35,7 @@ import {LotteryAmoeRouter} from "@4626/lottery/zk/LotteryAmoeRouter.sol";
  * @dev    Pre-deploy checklist:
  *         1. `amoe/circuits/build/plonk_fresh/AmoePlonkVerifier_raw.sol`
  *            (snarkjs source-of-truth) byte-equals the cleaned
- *            `contracts/utilities/lottery/zk/AmoePlonkVerifier.sol` modulo
+ *            `contracts/lottery/zk/AmoePlonkVerifier.sol` modulo
  *            our header banner + the renamed contract name.
  *         2. The on-disk zkey verifies a freshly-generated proof off-chain
  *            (`snarkjs plonk verify vk_plonk.json public_plonk.json proof_plonk.json`).

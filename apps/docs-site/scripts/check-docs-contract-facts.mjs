@@ -4,7 +4,7 @@
  * Pins curated public docs to onchain product facts.
  *
  * Sources of truth:
- * - contracts/helpers/batchers/DeploymentBatcher.sol (share split, deposit bounds)
+ * - contracts/deploy/batchers/DeploymentBatcher.sol (share split, deposit bounds)
  * - contracts/vault/CreatorOVault.sol (MINIMUM_FIRST_DEPOSIT)
  * - frontend/src/config/contracts.defaults.ts (live batcher address)
  * - frontend/server/_lib/creatorStrategy/catalog.ts (bundle price)
@@ -19,7 +19,7 @@ import { CURATED_PUBLISH_GLOBS } from '../curatedPublishAllowlist.mjs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 
-const BATCHER_SOL = path.join(REPO_ROOT, 'contracts/helpers/batchers/DeploymentBatcher.sol');
+const BATCHER_SOL = path.join(REPO_ROOT, 'contracts/deploy/batchers/DeploymentBatcher.sol');
 const VAULT_SOL = path.join(REPO_ROOT, 'contracts/vault/CreatorOVault.sol');
 const DEFAULTS_TS = path.join(REPO_ROOT, 'frontend/src/config/contracts.defaults.ts');
 const CATALOG_TS = path.join(REPO_ROOT, 'frontend/server/_lib/creatorStrategy/catalog.ts');

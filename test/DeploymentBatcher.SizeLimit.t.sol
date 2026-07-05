@@ -8,7 +8,7 @@ import "@4626/deploy/batchers/DeploymentBatcher.sol";
 contract DeploymentBatcherSizeLimitTest is Test {
     function test_runtimeCode_staysWithinEip170Limit() public view {
         // Base/mainnet enforces EIP-170: runtime bytecode must be <= 24,576 bytes.
-        bytes memory runtime = vm.getDeployedCode("contracts/helpers/batchers/DeploymentBatcher.sol:DeploymentBatcher");
+        bytes memory runtime = vm.getDeployedCode("contracts/deploy/batchers/DeploymentBatcher.sol:DeploymentBatcher");
         assertLe(runtime.length, 24_576, "DeploymentBatcher runtime exceeds EIP-170 limit");
     }
 }

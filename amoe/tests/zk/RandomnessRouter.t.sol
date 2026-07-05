@@ -2,8 +2,8 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {IRandomnessSource} from "contracts/utilities/lottery/randomness/IRandomnessSource.sol";
-import {RandomnessRouter} from "contracts/utilities/lottery/randomness/RandomnessRouter.sol";
+import {IRandomnessSource} from "@4626/lottery/randomness/IRandomnessSource.sol";
+import {RandomnessRouter} from "@4626/lottery/randomness/RandomnessRouter.sol";
 
 /// @notice Mock REQUEST-mode source that mints sequential request ids.
 contract MockRequestSource is IRandomnessSource {

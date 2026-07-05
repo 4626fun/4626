@@ -56,8 +56,8 @@ export const AMOE_POINTS_TO_USD1E6_FACTOR = 10_000
 // Locked by IAmoePlonkVerifier and verified bit-for-bit in the patch guard
 // (amoe/tools/ci/check_amoe_plonk_patch.sh + the on-chain verifier's own
 // checkField loop). Any change here MUST also be reflected in:
-//   * contracts/utilities/lottery/zk/IAmoePlonkVerifier.sol
-//   * contracts/utilities/lottery/zk/AmoePlonkVerifier.sol (banner)
+//   * contracts/lottery/zk/IAmoePlonkVerifier.sol
+//   * contracts/lottery/zk/AmoePlonkVerifier.sol (banner)
 //   * the circuit (amoe/circuits/amoe_eligibility.circom)
 // otherwise valid proofs will silently fail to verify on-chain.
 export const AMOE_PLONK_PROOF_LEN = 24 as const
@@ -208,7 +208,7 @@ const lotteryAmoeAbi = [
   //   * pubInputs[6] == pointsLedgerRootOf[epoch]
   //   * pubInputs[7] not previously used (global nullifier)
   // and then verifies the proof against AmoePlonkVerifier. See
-  // contracts/utilities/lottery/zk/IAmoePlonkVerifier.sol for the public-
+  // contracts/lottery/zk/IAmoePlonkVerifier.sol for the public-
   // input slot layout. The 24-element proof array is the snarkjs PLONK
   // calldata format (`zkey export solidityverifier`).
   {

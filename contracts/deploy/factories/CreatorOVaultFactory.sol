@@ -9,7 +9,7 @@ import {I4626Registry} from "@4626/interfaces/core/I4626Registry.sol";
  * @author 0xakita.eth
  * @notice Legacy deployment registrar and lookup surface for Creator Vault stacks deployed via script
  *
- * @dev DEPRECATED: This factory is superseded by DeploymentBatcher (contracts/helpers/batchers/).
+ * @dev DEPRECATED: This factory is superseded by DeploymentBatcher (contracts/deploy/batchers/).
  *      DeploymentBatcher handles phased deployment (Phase 1-3) with CREATE2 deterministic
  *      addresses, hub-centric architecture support, and remote chain OFT-only deployment.
  *

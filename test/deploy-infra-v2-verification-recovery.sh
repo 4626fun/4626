@@ -62,7 +62,7 @@ if [[ "$*" == *"DeployBaseMainnetDeployer.s.sol:DeployBaseMainnetDeployer"* ]]; 
 ONCHAIN EXECUTION COMPLETE & SUCCESSFUL.
 ##
 Start verification for (8) contracts
-Submitting verification for [contracts/helpers/batchers/DeploymentBatcher.sol:DeploymentBatcher] 0x2000000000000000000000000000000000000003.
+Submitting verification for [contracts/deploy/batchers/DeploymentBatcher.sol:DeploymentBatcher] 0x2000000000000000000000000000000000000003.
 Submitted contract for verification:
 	Response: `OK`
 Contract verification status:

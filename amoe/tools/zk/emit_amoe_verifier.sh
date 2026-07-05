@@ -7,7 +7,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 BUILD="$ROOT/amoe/circuits/build"
-OUT="$ROOT/contracts/utilities/lottery/zk/AmoeGroth16Verifier.sol"
+OUT="$ROOT/contracts/lottery/zk/AmoeGroth16Verifier.sol"
 
 if [ ! -f "$BUILD/verification_key.json" ]; then
   echo "missing $BUILD/verification_key.json — run circuit build first" >&2

@@ -6,8 +6,8 @@ import {
     LotteryAmoeRouter,
     ILotteryAmoeConsumer,
     IAmoeManager
-} from "contracts/utilities/lottery/zk/LotteryAmoeRouter.sol";
-import {IAmoePlonkVerifier} from "contracts/utilities/lottery/zk/IAmoePlonkVerifier.sol";
+} from "@4626/lottery/zk/LotteryAmoeRouter.sol";
+import {IAmoePlonkVerifier} from "@4626/lottery/zk/IAmoePlonkVerifier.sol";
 
 /// @notice Stub verifier (v2: 8 public inputs) returning whatever flag it's
 ///         configured with. The router's responsibility is the public-input

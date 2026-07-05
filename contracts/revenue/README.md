@@ -1,6 +1,6 @@
 # Revenue domain (layout Phase 2)
 
-Target home for oracles, routers, and vesting currently under `contracts/utilities/`.
+Target home for oracles, routers, and vesting (now reorganized under top-level folders).
 
 | Current path | Target |
 |--------------|--------|

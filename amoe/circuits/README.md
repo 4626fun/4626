@@ -1,7 +1,7 @@
 # AMOE Eligibility Circuit (v2)
 
 Circom 2 circuit that powers `LotteryAmoeRouter.submitAmoeEntryZK` in
-`contracts/utilities/lottery/zk`. See `amoe_eligibility.circom` for the full
+`contracts/lottery/zk`. See `amoe_eligibility.circom` for the full
 spec; the short version:
 
 | #   | Public input          | Meaning                                                    |
@@ -53,12 +53,12 @@ snarkjs zkey export verificationkey build/amoe_final.zkey build/verification_key
 # 4. Emit the Solidity verifier — two options:
 #    (a) snarkjs (default during dev)
 snarkjs zkey export solidityverifier build/amoe_final.zkey \
-  ../../contracts/utilities/lottery/zk/AmoeGroth16Verifier.sol
+  ../../contracts/lottery/zk/AmoeGroth16Verifier.sol
 
 #    (b) zkMetal (production — same VK, GPU-accelerated proving)
 swift run zkmsm-cli emit-solidity \
   --vk build/verification_key.json \
-  --out ../../contracts/utilities/lottery/zk/AmoeGroth16Verifier.sol \
+  --out ../../contracts/lottery/zk/AmoeGroth16Verifier.sol \
   --name AmoeGroth16Verifier
 ```
 

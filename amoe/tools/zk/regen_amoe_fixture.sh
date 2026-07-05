@@ -25,7 +25,7 @@ snarkjs zkey export verificationkey "$BUILD/amoe_final.zkey" "$BUILD/verificatio
 
 snarkjs zkey export solidityverifier "$BUILD/amoe_final.zkey" "$BUILD/AmoeGroth16Verifier.sol" >/dev/null
 sed -i 's/contract Groth16Verifier/contract AmoeGroth16Verifier/' "$BUILD/AmoeGroth16Verifier.sol"
-cp "$BUILD/AmoeGroth16Verifier.sol" "$ROOT/contracts/utilities/lottery/zk/AmoeGroth16Verifier.sol"
+cp "$BUILD/AmoeGroth16Verifier.sol" "$ROOT/contracts/lottery/zk/AmoeGroth16Verifier.sol"
 
 # (fixture-input generator omitted here for brevity — see PR description)
 echo "Verifier regenerated. Re-run fixture step from the PR notes if needed."
