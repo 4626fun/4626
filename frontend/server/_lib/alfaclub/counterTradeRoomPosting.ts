@@ -78,6 +78,93 @@ export async function postCounterTradeMonitorAlert(params: {
   return true
 }
 
+function formatMirrorPctLabel(mirrorPositionChangePct: number | null | undefined): string | null {
+  if (mirrorPositionChangePct == null || !Number.isFinite(mirrorPositionChangePct)) return null
+  return `${(mirrorPositionChangePct * 100).toFixed(1)}%`
+}
+
+function formatCounterTradeMirrorReduceRoomPost(params: {
+  pair: string
+  userFill: HyperliquidUserFillDetailed
+  fillAction: CounterTradeFillAction
+  counterSide: 'long' | 'short'
+  reduceNotionalUsd: number
+  fullClose: boolean
+  remainingPositionValueUsd: number | null
+  mirrorPositionChangePct: number | null
+}): string {
+  const adjustedAt = new Date(params.userFill.time).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  const userSide = params.userFill.side === 'short' ? 'short' : 'long'
+  const counterLabel = params.counterSide === 'long' ? 'Long' : 'Short'
+  const userLabel = userSide === 'long' ? 'Long' : 'Short'
+  const markRaw = params.userFill.px
+  const mark = markRaw != null ? Number(markRaw) : null
+  const mirrorPctLabel = formatMirrorPctLabel(params.mirrorPositionChangePct)
+
+  return [
+    params.fullClose
+      ? `✅ Closed ${counterLabel} · ${adjustedAt}`
+      : `✅ Reduced ${counterLabel} · ${adjustedAt}`,
+    '',
+    `${params.pair}/USDC`,
+    '',
+    `Mark ${mark != null && Number.isFinite(mark) ? `$${mark.toFixed(2)}` : 'n/a'}`,
+    mirrorPctLabel ? `Mirrored ${mirrorPctLabel} of hedge leg` : null,
+    params.fullClose
+      ? `Closed hedge leg ~$${params.reduceNotionalUsd.toFixed(2)}`
+      : `Trimmed ~$${params.reduceNotionalUsd.toFixed(2)}`,
+    ...(params.remainingPositionValueUsd != null && !params.fullClose
+      ? [`Remaining ${counterLabel} ~$${params.remainingPositionValueUsd.toFixed(2)}`]
+      : []),
+    `Signal ${params.fillAction}`,
+    '',
+    `User added ${userLabel} · bot reduced ${counterLabel}`,
+  ]
+    .filter((line): line is string => line != null)
+    .join('\n')
+}
+
+export async function postCounterTradeMirrorReduceRoomUpdate(params: {
+  runtimeRoomId: string
+  postRoomId: string
+  pair: string
+  userFill: HyperliquidUserFillDetailed
+  fillAction: CounterTradeFillAction
+  counterSide: 'long' | 'short'
+  reduceNotionalUsd: number
+  fullClose: boolean
+  remainingPositionValueUsd: number | null
+  mirrorPositionChangePct: number | null
+}): Promise<void> {
+  const message = formatCounterTradeMirrorReduceRoomPost({
+    pair: params.pair,
+    userFill: params.userFill,
+    fillAction: params.fillAction,
+    counterSide: params.counterSide,
+    reduceNotionalUsd: params.reduceNotionalUsd,
+    fullClose: params.fullClose,
+    remainingPositionValueUsd: params.remainingPositionValueUsd,
+    mirrorPositionChangePct: params.mirrorPositionChangePct,
+  })
+  const send = await sendAlfaClubRoomText({
+    roomId: params.postRoomId,
+    text: message,
+  })
+  logger.info('counter_trade.mirror_reduce_room_posted', {
+    roomId: params.runtimeRoomId,
+    postRoomId: params.postRoomId,
+    lane: send.lane,
+    pair: params.pair,
+    fillAction: params.fillAction,
+    counterSide: params.counterSide,
+    reduceNotionalUsd: params.reduceNotionalUsd,
+    fullClose: params.fullClose,
+  })
+}
+
 function formatCounterTradeRoomPost(params: {
   pair: string
   userFill: HyperliquidUserFillDetailed
@@ -86,6 +173,7 @@ function formatCounterTradeRoomPost(params: {
   counterLeverage: number
   counterNotionalUsd: number
   userLeverage: number | null
+  mirrorPositionChangePct: number | null
 }): string {
   const openedAt = new Date(params.userFill.time).toLocaleTimeString([], {
     hour: '2-digit',
@@ -97,18 +185,26 @@ function formatCounterTradeRoomPost(params: {
   const mark = markRaw != null ? Number(markRaw) : null
   const oppositeLabel = params.counterSide === 'long' ? 'Long' : 'Short'
   const userLabel = userSide === 'long' ? 'Long' : 'Short'
+  const mirrorPctLabel = formatMirrorPctLabel(params.mirrorPositionChangePct)
 
   return [
-    `✅ Opened ${oppositeLabel} · ${openedAt}`,
+    params.fillAction === 'reduce'
+      ? `✅ Added ${oppositeLabel} · ${openedAt}`
+      : `✅ Opened ${oppositeLabel} · ${openedAt}`,
     '',
     `${params.pair}/USDC ${params.counterLeverage}x`,
     '',
     `Mark ${mark != null && Number.isFinite(mark) ? `$${mark.toFixed(2)}` : 'n/a'}`,
+    mirrorPctLabel ? `Mirrored ${mirrorPctLabel} of hedge leg` : null,
     `Margin/Size $${counterMarginUsd.toFixed(2)} / $${params.counterNotionalUsd.toFixed(2)}`,
     `Signal ${params.fillAction}`,
     '',
-    `User ${userLabel}${params.userLeverage != null ? ` ${params.userLeverage}x` : ''} · bot opened ${oppositeLabel}`,
-  ].join('\n')
+    params.fillAction === 'reduce'
+      ? `User reduced ${userLabel}${params.userLeverage != null ? ` ${params.userLeverage}x` : ''} · bot added ${oppositeLabel}`
+      : `User ${userLabel}${params.userLeverage != null ? ` ${params.userLeverage}x` : ''} · bot opened ${oppositeLabel}`,
+  ]
+    .filter((line): line is string => line != null)
+    .join('\n')
 }
 
 function formatCounterTradeExitRoomPost(params: {
@@ -209,6 +305,7 @@ export async function postCounterTradeRoomUpdate(params: {
   counterLeverage: number
   counterNotionalUsd: number
   userLeverage: number | null
+  mirrorPositionChangePct?: number | null
 }): Promise<void> {
   const message = formatCounterTradeRoomPost({
     pair: params.pair,
@@ -218,6 +315,7 @@ export async function postCounterTradeRoomUpdate(params: {
     counterLeverage: params.counterLeverage,
     counterNotionalUsd: params.counterNotionalUsd,
     userLeverage: params.userLeverage,
+    mirrorPositionChangePct: params.mirrorPositionChangePct ?? null,
   })
   const send = await sendAlfaClubRoomText({
     roomId: params.postRoomId,

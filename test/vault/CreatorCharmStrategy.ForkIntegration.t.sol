@@ -4,10 +4,10 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {CreatorCharmStrategy} from "../../contracts/vault/strategies/univ3/CreatorCharmStrategy.sol";
-import {IAjnaPool, IAjnaPoolFactory} from "../../contracts/interfaces/IAjnaPool.sol";
-import {IUniswapV3Factory} from "../../contracts/interfaces/uniswap/IUniswapV3Factory.sol";
-import {IUniswapV3Pool} from "../../contracts/interfaces/uniswap/IUniswapV3Pool.sol";
+import {CreatorCharmStrategy} from "@4626/strategies/univ3/CreatorCharmStrategy.sol";
+import {IAjnaPool, IAjnaPoolFactory} from "@4626/interfaces/external/IAjnaPool.sol";
+import {IUniswapV3Factory} from "@4626/interfaces/uniswap/IUniswapV3Factory.sol";
+import {IUniswapV3Pool} from "@4626/interfaces/uniswap/IUniswapV3Pool.sol";
 
 contract ForkCharmOracleMock {
     int256 public priceUsd18;

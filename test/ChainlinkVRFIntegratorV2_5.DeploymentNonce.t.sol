@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../contracts/utilities/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol";
+import "@4626/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol";
 
 /// @title ChainlinkVRFIntegratorV2_5 deployment-nonce fuzz tests
 /// @notice Property tests for L-06 (Linear 4626-354) and its review follow-up.

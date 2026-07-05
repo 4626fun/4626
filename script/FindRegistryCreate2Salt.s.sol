@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import "../contracts/core/4626Registry.sol";
+import "@4626/core/4626Registry.sol";
 
 /// @notice Search for a CREATE2 salt that yields a vanity registry address.
 /// @dev Run with: SALT_START=0 SALT_ITERS=1000000 forge script script/FindRegistryCreate2Salt.s.sol:FindRegistryCreate2Salt -vvvv

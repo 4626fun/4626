@@ -15,7 +15,6 @@ const X_WATERMARK_FADE: CSSProperties = {
 }
 
 type WaitlistTwitterLinkPanelProps = {
-  linked: boolean
   busy: boolean
   onConnect: () => void
   onSkip?: () => void
@@ -24,7 +23,7 @@ type WaitlistTwitterLinkPanelProps = {
 // Mirrors the server `LINK_POINTS` reward written on a `link_twitter` event.
 const X_REWARD_POINTS = PROVIDER_POINTS.twitter
 
-function XLogo({ className, style }: { className?: string; style?: CSSProperties }) {
+export function XLogo({ className, style }: { className?: string; style?: CSSProperties }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className={className} style={style} fill="currentColor">
       <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
@@ -33,21 +32,7 @@ function XLogo({ className, style }: { className?: string; style?: CSSProperties
 }
 
 export function WaitlistTwitterLinkPanel(props: WaitlistTwitterLinkPanelProps) {
-  const { linked, busy, onConnect, onSkip } = props
-
-  if (linked) {
-    return (
-      <div className="mt-6 flex items-center justify-between gap-3 py-1 text-left">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <XLogo className="size-7 shrink-0 text-white" />
-          <span className="text-[13px] font-semibold text-emerald-100">X connected</span>
-        </div>
-        <span className="shrink-0 text-[11px] font-medium tabular-nums text-emerald-300/80">
-          +{X_REWARD_POINTS} pts
-        </span>
-      </div>
-    )
-  }
+  const { busy, onConnect, onSkip } = props
 
   return (
     <div className="mt-6 space-y-2.5 text-left">

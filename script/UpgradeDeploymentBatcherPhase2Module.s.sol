@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Script, console2} from "forge-std/Script.sol";
 
-import {DeploymentBatcher, DeploymentBatcherPhase2Module} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
+import {DeploymentBatcher, DeploymentBatcherPhase2Module} from "@4626/deploy/batchers/DeploymentBatcher.sol";
 
 /**
  * @title UpgradeDeploymentBatcherPhase2Module

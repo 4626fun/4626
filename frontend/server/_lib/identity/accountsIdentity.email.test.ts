@@ -138,15 +138,14 @@ describe('accountsIdentity verified email handling', () => {
     })
 
     const profileUpsert = db.calls.find((call) =>
-      (call.text.includes('update profiles') || call.text.includes('insert into profiles')) &&
-      call.text.includes('email_verified'),
+      call.text.includes('insert into profiles') && call.text.includes('email_verified'),
     )
-    expect(profileUpsert?.values[0] ?? null).toBeNull()
-    expect(profileUpsert?.values[1]).toBe(false)
+    expect(profileUpsert?.values[1] ?? null).toBeNull()
+    expect(profileUpsert?.values[2]).toBe(false)
     expect(db.calls.some((call) => call.text.includes('insert into account_linked_methods'))).toBe(false)
   })
 
-  it('runs profile upsert as separate prepared statements', async () => {
+  it('runs profile upsert as a single prepared statement', async () => {
     const db = createRecordingDb()
 
     await syncEmailIdentity({
@@ -158,15 +157,12 @@ describe('accountsIdentity verified email handling', () => {
       } as any,
     })
 
-    const profileUpdates = db.calls.filter(
-      (call) => call.text.includes('update profiles') && call.text.includes('email_verified'),
+    const profileUpserts = db.calls.filter((call) =>
+      call.text.includes('insert into profiles (privy_user_id, email, email_verified') &&
+      call.text.includes('on conflict (privy_user_id)'),
     )
-    const profileInserts = db.calls.filter((call) =>
-      call.text.includes('insert into profiles (privy_user_id, email, email_verified'),
-    )
-    expect(profileUpdates).toHaveLength(1)
-    expect(profileInserts).toHaveLength(1)
-    expect(profileUpdates[0]?.text.includes('insert into profiles')).toBe(false)
+    expect(profileUpserts).toHaveLength(1)
+    expect(profileUpserts[0]?.text.includes('; insert into profiles')).toBe(false)
   })
 
   it('promotes server-auth email accounts that use snake_case numeric verification timestamps', async () => {
@@ -182,11 +178,10 @@ describe('accountsIdentity verified email handling', () => {
     })
 
     const profileUpsert = db.calls.find((call) =>
-      (call.text.includes('update profiles') || call.text.includes('insert into profiles')) &&
-      call.text.includes('email_verified'),
+      call.text.includes('insert into profiles') && call.text.includes('email_verified'),
     )
-    expect(profileUpsert?.values[0]).toBe('verified@example.com')
-    expect(profileUpsert?.values[1]).toBe(true)
+    expect(profileUpsert?.values[1]).toBe('verified@example.com')
+    expect(profileUpsert?.values[2]).toBe(true)
     expect(db.calls.some((call) => call.text.includes('insert into account_linked_methods'))).toBe(true)
   })
 

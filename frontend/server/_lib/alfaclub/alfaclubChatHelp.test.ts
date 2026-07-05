@@ -20,6 +20,8 @@ describe('alfaclubChatHelp', () => {
     expect(text).toContain('/hermit setup')
     expect(text).toContain('/alfa brief')
     expect(text).toContain('Room 1659')
+    expect(text).toContain('/h join')
+    expect(text).toContain('/h rules')
     expect(text).toContain('Hyperliquid')
     expect(text).not.toContain('Keepr')
   })

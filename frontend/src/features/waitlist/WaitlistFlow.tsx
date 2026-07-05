@@ -30,10 +30,16 @@ import {
 } from '@/features/waitlist/resolveWaitlistJoinedSession'
 import { WaitlistReturningWalletSignIn } from '@/features/waitlist/WaitlistReturningWalletSignIn'
 import { shouldShowWaitlistEmailSignup } from '@/features/waitlist/waitlistSignupVisibility'
-import { WaitlistTwitterLinkPanel } from '@/features/waitlist/WaitlistTwitterLinkPanel'
+import { WaitlistTwitterLinkPanel, XLogo } from '@/features/waitlist/WaitlistTwitterLinkPanel'
 import { WaitlistTwitterEngagementSteps } from '@/features/waitlist/WaitlistTwitterEngagementSteps'
 import { WaitlistWalletConnectPanel } from '@/features/waitlist/WaitlistWalletConnectPanel'
-import { WaitlistZoraConnectPanel } from '@/features/waitlist/WaitlistZoraConnectPanel'
+import { WaitlistZoraConnectPanel, ZoraLogo } from '@/features/waitlist/WaitlistZoraConnectPanel'
+import {
+  WaitlistLinkedAccountsCard,
+  useWaitlistLinkedWalletRow,
+  type WaitlistLinkedAccountRow,
+} from '@/features/waitlist/WaitlistLinkedAccountsCard'
+import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
 import {
   clearWaitlistOnboardingStepFlags,
   readWaitlistWalletSkipped,
@@ -605,7 +611,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   const resendSeconds =
     resendAvailableAt != null && resendAvailableAt > nowMs ? Math.ceil((resendAvailableAt - nowMs) / 1_000) : 0
 
-  const { me: accountMe, refresh: refreshAccountMe } = useAccountMe({
+  const { me: accountMe, loading: accountMeLoading, refresh: refreshAccountMe } = useAccountMe({
     enabled: Boolean(joinedSessionAddress),
   })
   const [twitterBusy, setTwitterBusy] = useState(false)
@@ -622,6 +628,36 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   const zoraLinked =
     (accountMe?.linkedMethods?.zora_cross_app ?? []).length > 0 ||
     Boolean(accountMe?.accountSignals?.linked)
+
+  const walletLinkedRow = useWaitlistLinkedWalletRow(linkedEoaAddress, PROVIDER_POINTS.external_eoa ?? 0)
+
+  // Already-connected identities, shown together as one summary card instead
+  // of three separately-styled "linked" rows.
+  const linkedAccountRows = useMemo<WaitlistLinkedAccountRow[]>(() => {
+    const rows: WaitlistLinkedAccountRow[] = []
+    if (twitterLinked) {
+      rows.push({
+        key: 'twitter',
+        icon: <XLogo className="size-[18px] text-white" />,
+        label: 'X',
+        subtitle: 'Connected',
+        points: PROVIDER_POINTS.twitter ?? 0,
+      })
+    }
+    if (externalEoaLinked) {
+      rows.push(walletLinkedRow)
+    }
+    if (zoraLinked) {
+      rows.push({
+        key: 'zora',
+        icon: <ZoraLogo className="size-full rounded-full object-cover" />,
+        label: 'Zora',
+        subtitle: 'Connected',
+        points: PROVIDER_POINTS.zora_cross_app ?? 0,
+      })
+    }
+    return rows
+  }, [externalEoaLinked, twitterLinked, walletLinkedRow, zoraLinked])
 
   useEffect(() => {
     if (!props.walletSessionAddress) return
@@ -804,7 +840,6 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   )
 
   const showXLinkPanel = !xPhaseDone && !twitterLinked
-  const showXConnectedRow = twitterLinked
   const showXEngagement = twitterLinked && !xPhaseDone
   const showWalletStep = xPhaseDone && !externalEoaLinked && !walletSkipped
   const walletPhaseDone = externalEoaLinked || walletSkipped
@@ -908,6 +943,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
 
                 <WaitlistWelcomeGreeting
                   accountMe={accountMe}
+                  accountMeLoading={accountMeLoading}
                   walletReturnAddress={
                     returningViaWallet
                       ? (props.walletSessionAddress ??
@@ -939,23 +975,16 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                     <span className="h-px flex-1 bg-white/[0.06]" aria-hidden="true" />
                   </div>
 
+                  <WaitlistLinkedAccountsCard rows={linkedAccountRows} />
+
                   {showXLinkPanel ? (
                     <WaitlistTwitterLinkPanel
-                      linked={false}
                       busy={twitterBusy}
                       onConnect={() => {
                         setTwitterError(null)
                         void handleLinkTwitter()
                       }}
                       onSkip={handleSkipXPhase}
-                    />
-                  ) : null}
-
-                  {showXConnectedRow ? (
-                    <WaitlistTwitterLinkPanel
-                      linked
-                      busy={false}
-                      onConnect={() => undefined}
                     />
                   ) : null}
 
@@ -969,7 +998,6 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
 
                   {showWalletStep ? (
                     <WaitlistWalletConnectPanel
-                      linked={false}
                       busy={walletBusy}
                       onConnect={() => {
                         setWalletError(null)
@@ -979,34 +1007,14 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                     />
                   ) : null}
 
-                  {externalEoaLinked ? (
-                    <WaitlistWalletConnectPanel
-                      linked
-                      linkedAddress={linkedEoaAddress}
-                      busy={false}
-                      onConnect={() => undefined}
-                      onSkip={() => undefined}
-                    />
-                  ) : null}
-
                   {showZoraStep ? (
                     <WaitlistZoraConnectPanel
-                      linked={false}
                       busy={zoraBusy}
                       onConnect={() => {
                         setZoraError(null)
                         void handleLinkZora()
                       }}
                       onSkip={handleSkipZora}
-                    />
-                  ) : null}
-
-                  {zoraLinked ? (
-                    <WaitlistZoraConnectPanel
-                      linked
-                      busy={false}
-                      onConnect={() => undefined}
-                      onSkip={() => undefined}
                     />
                   ) : null}
                 </div>

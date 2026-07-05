@@ -3,9 +3,9 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import "../contracts/helpers/batchers/DeploymentBatcher.sol";
-import "../contracts/governance/VaultRolePolicyManager.sol";
-import "./helpers/DeploymentBatcherFixture.sol";
+import "@4626/deploy/batchers/DeploymentBatcher.sol";
+import "@4626/governance/creator/VaultRolePolicyManager.sol";
+import "test/helpers/DeploymentBatcherFixture.sol";
 
 contract MockCreatorTokenDepositBounds {
     string public constant name = "Mock Creator Token";

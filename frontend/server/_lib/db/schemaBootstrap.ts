@@ -532,6 +532,9 @@ export async function ensureAlfaclubArenaIdentityMappingSchema(db: Db): Promise<
 export async function ensureAlfaclubCounterTradeSchema(db: Db): Promise<void> {
   await withEnsureOnce('alfaclubCounterTrade', async () => {
     await ensureMigrationApplied(db, '20260709000000_alfaclub_counter_trade_engine.sql').catch(() => {})
+    await ensureMigrationApplied(db, '20260714180000_alfaclub_counter_trade_room_config_overrides.sql').catch(
+      () => {},
+    )
   })
 }
 

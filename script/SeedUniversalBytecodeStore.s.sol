@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import "../contracts/helpers/infra/UniversalBytecodeStore.sol";
+import "@4626/deploy/infra/UniversalBytecodeStore.sol";
 
 /**
  * @dev Seed UniversalBytecodeStore with all creation codes used by the phased deploy flow

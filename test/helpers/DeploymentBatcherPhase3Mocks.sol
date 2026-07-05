@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "../../contracts/helpers/batchers/DeploymentBatcher.sol";
+import "@4626/deploy/batchers/DeploymentBatcher.sol";
 
 contract MockUniswapV3PoolForPhase3 {
     uint160 public lastSqrtPriceX96;

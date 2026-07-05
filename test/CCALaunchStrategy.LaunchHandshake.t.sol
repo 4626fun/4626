@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {CCALaunchStrategy} from "../contracts/vault/strategies/CCALaunchStrategy.sol";
+import {CCALaunchStrategy} from "@4626/strategies/cca/CCALaunchStrategy.sol";
 
 contract MockLaunchToken is ERC20 {
     constructor() ERC20("Launch Token", "LTKN") {}

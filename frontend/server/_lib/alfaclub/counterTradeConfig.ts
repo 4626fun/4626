@@ -78,7 +78,10 @@ export type CounterTradeRuntimeConfig = {
   cooldownMs: number
   hourlyActionCap: number
   dailyNotionalCapUsd: number
-  maxCounterNotionalPerTradeUsd: number
+  /** Target cap: max response size as % of bot trading fund (account value). */
+  maxCounterNotionalPctOfFund: number
+  /** Hard max % of fund — effective cap is min(target, ceiling). */
+  maxCounterNotionalCeilingPctOfFund: number
   /** Do not submit counter opens below this HL order-notional floor. */
   minOrderNotionalUsd: number
   globalMaxLeverage: number
@@ -97,6 +100,19 @@ export type CounterTradeRuntimeConfig = {
   subaccountsEnabled: boolean
   subaccounts: CounterTradeSubaccountMap
   riskProfile: CounterTradeRiskProfile
+  /**
+   * Room 1659 harvest-and-dip slice: % of the user's position-size change
+   * applied to both the winning-leg harvest and the losing-leg add. 100 = full.
+   */
+  inverseRebalanceScalePct: number
+  /** Drawdown % at which dip-add sizing reaches the target fund allocation (D). */
+  dipDrawdownFullSizePct: number
+  /** Curve exponent for dip-add sizing (alpha). >1 = conservative early. */
+  dipDrawdownCurveAlpha: number
+  /** Max dip adds per coin+silo before a harvest/defense/close resets the count. */
+  maxDipAddsPerLeg: number
+  /** Extra liq-distance buffer beyond defendLiqDistancePct for pre-add dip gate. */
+  dipPreAddLiqSafetyMarginPct: number
 }
 
 function readBool(name: string, fallback: boolean): boolean {
@@ -134,6 +150,17 @@ function readOptionalAddress(name: string): string | null {
   if (/^0x[a-fA-F0-9]{40}$/.test(raw)) return raw.toLowerCase()
   logger.warn('[counter-trade] invalid address env; ignoring', { name })
   return null
+}
+
+function readMirrorScalePct(name: string, fallback: number): number {
+  const raw = String(process.env[name] ?? '').trim()
+  if (!raw) return fallback
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    logger.warn('[counter-trade] invalid mirror scale pct env; using fallback', { name, raw, fallback })
+    return fallback
+  }
+  return Math.min(500, parsed)
 }
 
 function clampBps(raw: number, fallback: number, minBps: number, maxBps: number): number {
@@ -212,9 +239,13 @@ export function readCounterTradeRuntimeConfig(): CounterTradeRuntimeConfig {
     cooldownMs: readPositiveInt('ALFACLUB_COUNTER_TRADE_COOLDOWN_MS', 120_000),
     hourlyActionCap: readPositiveInt('ALFACLUB_COUNTER_TRADE_HOURLY_ACTION_CAP', 12),
     dailyNotionalCapUsd: readPositiveNumber('ALFACLUB_COUNTER_TRADE_DAILY_NOTIONAL_CAP_USD', 7_500),
-    maxCounterNotionalPerTradeUsd: readPositiveNumber(
-      'ALFACLUB_COUNTER_TRADE_MAX_PER_TRADE_USD',
-      750,
+    maxCounterNotionalPctOfFund: readPositiveNumber(
+      'ALFACLUB_COUNTER_TRADE_MAX_PER_TRADE_FUND_PCT',
+      10,
+    ),
+    maxCounterNotionalCeilingPctOfFund: readPositiveNumber(
+      'ALFACLUB_COUNTER_TRADE_MAX_TRADE_CEILING_FUND_PCT',
+      25,
     ),
     minOrderNotionalUsd: readPositiveNumber('ALFACLUB_COUNTER_TRADE_MIN_ORDER_NOTIONAL_USD', 10),
     globalMaxLeverage: readPositiveNumber('ALFACLUB_COUNTER_TRADE_GLOBAL_MAX_LEVERAGE', 12),
@@ -236,6 +267,17 @@ export function readCounterTradeRuntimeConfig(): CounterTradeRuntimeConfig {
     subaccountsEnabled,
     subaccounts,
     riskProfile,
+    inverseRebalanceScalePct: readMirrorScalePct(
+      'ALFACLUB_COUNTER_TRADE_INVERSE_REBALANCE_PCT',
+      100,
+    ),
+    dipDrawdownFullSizePct: readPositiveNumber('ALFACLUB_COUNTER_TRADE_DIP_DRAWDOWN_FULL_PCT', 40),
+    dipDrawdownCurveAlpha: readPositiveNumber('ALFACLUB_COUNTER_TRADE_DIP_DRAWDOWN_ALPHA', 1.5),
+    maxDipAddsPerLeg: readPositiveInt('ALFACLUB_COUNTER_TRADE_MAX_DIP_ADDS_PER_LEG', 3),
+    dipPreAddLiqSafetyMarginPct: readPositiveNumber(
+      'ALFACLUB_COUNTER_TRADE_DIP_PREADD_LIQ_MARGIN_PCT',
+      2,
+    ),
   }
 }
 

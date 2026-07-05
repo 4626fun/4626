@@ -32,7 +32,8 @@ const RUNTIME: CounterTradeRuntimeConfig = {
   cooldownMs: 120_000,
   hourlyActionCap: 12,
   dailyNotionalCapUsd: 7_500,
-  maxCounterNotionalPerTradeUsd: 750,
+  maxCounterNotionalCeilingPctOfFund: 25,
+  maxCounterNotionalPctOfFund: 10,
   minOrderNotionalUsd: 10,
   globalMaxLeverage: 12,
   favoredMultiplier: 1.35,
@@ -63,6 +64,11 @@ const RUNTIME: CounterTradeRuntimeConfig = {
       event: 4,
     },
   },
+  inverseRebalanceScalePct: 100,
+    dipDrawdownFullSizePct: 40,
+    dipDrawdownCurveAlpha: 1.5,
+    maxDipAddsPerLeg: 3,
+    dipPreAddLiqSafetyMarginPct: 2,
 }
 
 type Leg = NonNullable<HyperliquidClearinghouseState['assetPositions']>[number]

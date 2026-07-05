@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {CreatorOracle} from "../contracts/utilities/oracles/CreatorOracle.sol";
+import {CreatorOracle} from "@4626/oracles/creator/CreatorOracle.sol";
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 
 contract MockRegistryForOracleLzReceiveAuth {

@@ -3,8 +3,8 @@ pragma solidity ^0.8.20;
 
 import {Script, console2} from "forge-std/Script.sol";
 
-import {CreatorOVaultFactory} from "../contracts/factories/CreatorOVaultFactory.sol";
-import {VRFConsumer4626} from "../contracts/lottery/4626VRFConsumer.sol";
+import {CreatorOVaultFactory} from "@4626/deploy/factories/CreatorOVaultFactory.sol";
+import {VRFConsumer4626} from "@4626/lottery/manager/4626VRFConsumer.sol";
 
 interface I4626RegistryAuth {
     function owner() external view returns (address);

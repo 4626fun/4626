@@ -26,7 +26,7 @@ function formatHermitCreativeSection(): string[] {
     '• `/signal` — position-aware enter/exit bias from your live entries',
     '• `/market` — broader majors + AlfaClub market scope',
     '• `/arena ...` (status|register|identity ...|join|activate|trade|...) — Virtuals Arena (Degenerate Claw) controls (room/flag gated; per-sender + room-default bindings; create path uses bot ACP session; /arena requires allowlist or HERMIT_OWNER_ADDRESS in AlfaClub rooms)',
-    '• `/strategy ...` (status|optin|pause|resume|bias) — room-level counter-trade lane with personal opt-in presets',
+    '• `/h join` · `/h pause` · `/h resume` · `/h rules` · `/h status` — mirrored trading',
     '• `/gmeow [vibe]` — GIF + one-liner',
     '• `/meme <prompt>` — meme / image concept',
     '• `/hermit copy|announce|quest|tone <text>` — room copy drafts',
@@ -39,7 +39,7 @@ function formatHermitCreativeSection(): string[] {
 function formatHermitCreativeSectionCompact(): string[] {
   return [
     '**Commands**',
-    '• `/position` · `/position chart` · `/position host markers` · `/position sender <addr|me>` · `/position marker latest|trade 1|host 1|<n>` · `/signal` · `/market` · `/arena status|register` · `/strategy status|optin|pause|resume` · `/hermit alert` · `/gmeow` · `/meme` · `/alfa brief`',
+    '• `/h join` · `/h rules` · `/position` · `/signal` · `/gmeow`',
   ]
 }
 
@@ -68,7 +68,8 @@ function formatCooldownSection(): string[] {
 function formatRoomContextSection(roomId: string): string[] {
   if (roomId === ROOM_1659_ID) {
     return [
-      '**Room 1659** — Hermit may inject live market context (Hyperliquid hype/liq, spot PnL, FriendKey curve).',
+      '**Room 1659** — `/h join` walks you through the room playbook · `/h rules` for the full guide.',
+      'Hermit may also inject live market context (Hyperliquid hype/liq, spot PnL, FriendKey curve).',
     ]
   }
   return []

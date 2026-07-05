@@ -2,9 +2,9 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {DeployTier1Upgrade} from "../script/DeployTier1Upgrade.s.sol";
-import {DeployRewardsEcosystem} from "../script/DeployRewardsEcosystem.s.sol";
-import {DeployBaseMainnetDeployer} from "../script/DeployBaseMainnetDeployer.s.sol";
+import {DeployTier1Upgrade} from "script/DeployTier1Upgrade.s.sol";
+import {DeployRewardsEcosystem} from "script/DeployRewardsEcosystem.s.sol";
+import {DeployBaseMainnetDeployer} from "script/DeployBaseMainnetDeployer.s.sol";
 
 contract DeployTier1UpgradeHarness is DeployTier1Upgrade {
     function exposedRegistry() external pure returns (address) {

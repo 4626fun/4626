@@ -224,7 +224,7 @@ function deployVaultAuxiliaryDeployBatcherViaForge(params: {
 }): Address {
   return deployContractViaForgeCreate({
     rpcUrl: params.rpcUrl,
-    contractPath: 'contracts/helpers/batchers/VaultAuxiliaryDeployBatcher.sol:VaultAuxiliaryDeployBatcher',
+    contractPath: 'contracts/deploy/batchers/VaultAuxiliaryDeployBatcher.sol:VaultAuxiliaryDeployBatcher',
     contractLabel: 'VaultAuxiliaryDeployBatcher',
     constructorArgs: [
       params.create2Deployer,

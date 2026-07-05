@@ -7,7 +7,7 @@ import {ERC20Deployer} from "tamago/generated/ERC20Deployer.sol";
 import {ERC20Iface} from "tamago/generated/ERC20Iface.sol";
 import {ERC4626Deployer} from "tamago/generated/ERC4626Deployer.sol";
 import {ERC4626Iface} from "tamago/generated/ERC4626Iface.sol";
-import {CreatorOVault} from "../../CreatorOVault.sol";
+import {CreatorOVault} from "@4626/vault/creator/CreatorOVault.sol";
 
 /// @dev Minimal mintable ERC-20 so we can seed CreatorOVault for view-function parity checks.
 contract MockCreatorCoin is ERC20 {

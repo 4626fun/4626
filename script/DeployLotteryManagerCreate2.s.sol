@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
-import {LotteryManager4626} from "../contracts/lottery/4626LotteryManager.sol";
+import {LotteryManager4626} from "@4626/lottery/manager/4626LotteryManager.sol";
 
 /**
  * @title DeployLotteryManagerCreate2

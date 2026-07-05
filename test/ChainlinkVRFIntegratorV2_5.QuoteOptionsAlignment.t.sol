@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../contracts/utilities/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol";
+import "@4626/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol";
 // `MessagingFee` is defined by LayerZero's OApp. ChainlinkVRFIntegratorV2_5
 // re-exports it transitively but does not declare a `MessagingFee` member,
 // so qualifying it as `ChainlinkVRFIntegratorV2_5.MessagingFee` is a

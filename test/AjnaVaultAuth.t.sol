@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {AjnaVaultAuth} from "../contracts/vault/strategies/ajna4626/AjnaVaultAuth.sol";
+import {AjnaVaultAuth} from "@4626/strategies/ajna/AjnaVaultAuth.sol";
 
 contract AjnaVaultAuthTest is Test {
     AjnaVaultAuth internal auth;

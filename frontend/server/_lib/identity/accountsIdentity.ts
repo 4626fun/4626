@@ -420,21 +420,16 @@ export async function upsertAccount(params: {
     email: normalizedEmail,
     privyUserId,
   })
-  // pg prepared statements reject multiple commands in one query string.
-  await db.sql`
-    UPDATE profiles
-    SET
-      email = COALESCE(${normalizedEmail}, email),
-      email_verified = profiles.email_verified OR ${verified},
-      updated_at = NOW()
-    WHERE privy_user_id = ${privyUserId}
-  `
+  // Single-statement upsert: pg/Supabase prepared statements reject multiple
+  // SQL commands in one query string (UPDATE; INSERT was the bootstrap 500).
   await db.sql`
     INSERT INTO profiles (privy_user_id, email, email_verified, created_at, updated_at)
-    SELECT ${privyUserId}, ${normalizedEmail}, ${verified}, NOW(), NOW()
-    WHERE NOT EXISTS (
-      SELECT 1 FROM profiles WHERE privy_user_id = ${privyUserId}
-    )
+    VALUES (${privyUserId}, ${normalizedEmail}, ${verified}, NOW(), NOW())
+    ON CONFLICT (privy_user_id) DO UPDATE
+    SET
+      email = COALESCE(EXCLUDED.email, profiles.email),
+      email_verified = profiles.email_verified OR EXCLUDED.email_verified,
+      updated_at = NOW()
   `
 }
 

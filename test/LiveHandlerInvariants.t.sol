@@ -5,13 +5,13 @@ import "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import {LotteryManager4626} from "../contracts/lottery/4626LotteryManager.sol";
+import {LotteryManager4626} from "@4626/lottery/manager/4626LotteryManager.sol";
 import {MessagingFee, Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 
-import {DeploymentBatcher} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
-import {Registry4626} from "../contracts/core/4626Registry.sol";
-import "./helpers/DeploymentBatcherFixture.sol";
+import {DeploymentBatcher} from "@4626/deploy/batchers/DeploymentBatcher.sol";
+import {Registry4626} from "@4626/core/4626Registry.sol";
+import "test/helpers/DeploymentBatcherFixture.sol";
 import {
     MockAjnaAdapterForPhase3,
     MockAjnaPoolFactoryForPhase3,
@@ -23,10 +23,10 @@ import {
     MockUniswapV3FactoryForPhase3,
     MockUniswapV3PoolForPhase3,
     MockVaultStrategyManagerForPhase3
-} from "./helpers/DeploymentBatcherPhase3Mocks.sol";
-import {DeploymentBatcherPhase2Module} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
-import {IBaseSolanaBridge} from "../contracts/interfaces/IBaseSolanaBridge.sol";
-import {OFTBootstrapRegistry} from "../contracts/helpers/infra/OFTBootstrapRegistry.sol";
+} from "test/helpers/DeploymentBatcherPhase3Mocks.sol";
+import {DeploymentBatcherPhase2Module} from "@4626/deploy/batchers/DeploymentBatcher.sol";
+import {IBaseSolanaBridge} from "@4626/interfaces/bridge/IBaseSolanaBridge.sol";
+import {OFTBootstrapRegistry} from "@4626/deploy/infra/OFTBootstrapRegistry.sol";
 import {
     MockBytecodeStore,
     MockRegistry4626,

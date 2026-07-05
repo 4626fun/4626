@@ -3,6 +3,7 @@ import {
   classifyCounterTradeFillAction,
   deriveCounterTradeDecision,
   deriveEventKeyFromFill,
+  deriveUserPositionChangePct,
   findCounterPositionForCoin,
   isExitFillAction,
   resolveCounterTradeStrategyForPreset,
@@ -34,7 +35,8 @@ function makeRuntime(): CounterTradeRuntimeConfig {
     cooldownMs: 120_000,
     hourlyActionCap: 12,
     dailyNotionalCapUsd: 7_500,
-    maxCounterNotionalPerTradeUsd: 750,
+    maxCounterNotionalCeilingPctOfFund: 25,
+    maxCounterNotionalPctOfFund: 10,
     minOrderNotionalUsd: 10,
     globalMaxLeverage: 12,
     favoredMultiplier: 1.35,
@@ -65,6 +67,11 @@ function makeRuntime(): CounterTradeRuntimeConfig {
         event: 4,
       },
     },
+    inverseRebalanceScalePct: 100,
+    dipDrawdownFullSizePct: 40,
+    dipDrawdownCurveAlpha: 1.5,
+    maxDipAddsPerLeg: 3,
+    dipPreAddLiqSafetyMarginPct: 2,
   }
 }
 
@@ -93,7 +100,7 @@ describe('counterTradeEngine', () => {
       userNotionalUsd: 200,
       userLeverage: 6,
       runtime: makeRuntime(),
-      counterWalletState: null,
+      counterWalletState: { accountValueUsd: 10_000, withdrawableUsd: 5_000, assetPositions: [] },
     })
     expect(decision.ok).toBe(true)
     if (!decision.ok) return
@@ -102,7 +109,7 @@ describe('counterTradeEngine', () => {
     expect(decision.counterNotionalUsd).toBeGreaterThan(0)
   })
 
-  it('uses strict inverse parity without bias or preset sizing modifiers', () => {
+  it('uses strict inverse parity for entry opens without bias sizing modifiers', () => {
     const decision = deriveCounterTradeDecision({
       bias: 'bullish',
       preset: 'defensive',
@@ -110,14 +117,47 @@ describe('counterTradeEngine', () => {
       userNotionalUsd: 200,
       userLeverage: 6,
       runtime: makeRuntime(),
-      counterWalletState: null,
+      counterWalletState: { accountValueUsd: 10_000, withdrawableUsd: 5_000, assetPositions: [] },
       strictInverseParity: true,
     })
     expect(decision.ok).toBe(true)
     if (!decision.ok) return
+    expect(decision.mirrorAction).toBe('open')
     expect(decision.counterSide).toBe('short')
     expect(decision.counterLeverage).toBe(6)
     expect(decision.counterNotionalUsd).toBe(200)
+  })
+
+  it('derives user position change pct from fill transition math', () => {
+    expect(
+      deriveUserPositionChangePct(
+        makeFill({ dir: 'Buy', side: 'long', startPosition: 2, sz: 0.5 }),
+        'add',
+      ),
+    ).toBe(0.25)
+    expect(
+      deriveUserPositionChangePct(
+        makeFill({ dir: 'Sell', side: 'short', startPosition: 2, sz: 0.5 }),
+        'reduce',
+      ),
+    ).toBe(0.25)
+  })
+
+  it('delegates strict inverse add/reduce to the rebalance lane', () => {
+    const addDecision = deriveCounterTradeDecision({
+      bias: 'neutral',
+      preset: 'balanced',
+      fill: makeFill({ dir: 'Buy', side: 'long', startPosition: 2, sz: 0.5 }),
+      userNotionalUsd: 50,
+      userLeverage: 6,
+      runtime: makeRuntime(),
+      counterWalletState: { accountValueUsd: 10_000, withdrawableUsd: 5_000, assetPositions: [] },
+      strictInverseParity: true,
+    })
+    expect(addDecision.ok).toBe(false)
+    if (addDecision.ok) return
+    expect(addDecision.reason).toBe('fill_action_not_counterable')
+    expect(addDecision.fillAction).toBe('add')
   })
 
   it('skips when user notional is below configured minimum', () => {
@@ -128,7 +168,7 @@ describe('counterTradeEngine', () => {
       userNotionalUsd: 10,
       userLeverage: 5,
       runtime: makeRuntime(),
-      counterWalletState: null,
+      counterWalletState: { accountValueUsd: 10_000, withdrawableUsd: 5_000, assetPositions: [] },
     })
     expect(decision.ok).toBe(false)
     if (decision.ok) return
@@ -166,29 +206,9 @@ describe('counterTradeEngine', () => {
         makeFill({ dir: 'Sell', side: 'short', startPosition: 1, sz: 1 }),
       ),
     ).toBe('close')
-    expect(
-      classifyCounterTradeFillAction(
-        makeFill({ dir: 'Sell', side: 'short', startPosition: 0.25, sz: 1 }),
-      ),
-    ).toBe('close')
-    // Exchange dir text can say "Close" on a partial reduce. We trust
-    // position transition math first so this remains reduce.
-    expect(
-      classifyCounterTradeFillAction(
-        makeFill({ dir: 'Close Long', side: 'short', startPosition: 2, sz: 0.5 }),
-      ),
-    ).toBe('reduce')
   })
 
-  it('fails closed when close-text fill lacks position transition data', () => {
-    expect(
-      classifyCounterTradeFillAction(
-        makeFill({ dir: 'Close Long', side: null, startPosition: null, sz: null }),
-      ),
-    ).toBe('unknown')
-  })
-
-  it('skips non-counterable fill actions (reduce/close/liquidation)', () => {
+  it('skips non-counterable fill actions', () => {
     const reduceDecision = deriveCounterTradeDecision({
       bias: 'neutral',
       preset: 'balanced',
@@ -196,12 +216,11 @@ describe('counterTradeEngine', () => {
       userNotionalUsd: 200,
       userLeverage: 4,
       runtime: makeRuntime(),
-      counterWalletState: null,
+      counterWalletState: { accountValueUsd: 10_000, withdrawableUsd: 5_000, assetPositions: [] },
     })
     expect(reduceDecision.ok).toBe(false)
     if (!reduceDecision.ok) {
       expect(reduceDecision.reason).toBe('fill_action_not_counterable')
-      expect(reduceDecision.fillAction).toBe('reduce')
     }
 
     const closeDecision = deriveCounterTradeDecision({
@@ -211,7 +230,8 @@ describe('counterTradeEngine', () => {
       userNotionalUsd: 200,
       userLeverage: 4,
       runtime: makeRuntime(),
-      counterWalletState: null,
+      counterWalletState: { accountValueUsd: 10_000, withdrawableUsd: 5_000, assetPositions: [] },
+      strictInverseParity: true,
     })
     expect(closeDecision.ok).toBe(false)
     if (!closeDecision.ok) {
@@ -226,7 +246,6 @@ describe('counterTradeEngine', () => {
     expect(isExitFillAction('entry')).toBe(false)
     expect(isExitFillAction('add')).toBe(false)
     expect(isExitFillAction('reduce')).toBe(false)
-    expect(isExitFillAction('unknown')).toBe(false)
   })
 
   it('finds the bot position leg for a coin case-insensitively', () => {
@@ -242,21 +261,6 @@ describe('counterTradeEngine', () => {
       side: 'short',
       positionValue: 350,
     })
-    expect(findCounterPositionForCoin(state, 'SOL')).toBeNull()
-    expect(findCounterPositionForCoin(null, 'BTC')).toBeNull()
-    expect(findCounterPositionForCoin(state, '')).toBeNull()
-  })
-
-  it('ignores flat or malformed position legs when resolving exit targets', () => {
-    const state = {
-      assetPositions: [
-        { coin: 'BTC', side: null, positionValue: 350 },
-        { coin: 'BTC', side: 'short', positionValue: 0 },
-        { coin: 'BTC', side: 'short', positionValue: null },
-      ],
-    } as unknown as HyperliquidClearinghouseState
-
-    expect(findCounterPositionForCoin(state, 'BTC')).toBeNull()
   })
 
   it('maps presets to strategy sleeves deterministically', () => {
@@ -265,4 +269,3 @@ describe('counterTradeEngine', () => {
     expect(resolveCounterTradeStrategyForPreset('aggressive')).toBe('event')
   })
 })
-

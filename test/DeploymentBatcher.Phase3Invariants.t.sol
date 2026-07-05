@@ -3,8 +3,8 @@ pragma solidity ^0.8.30;
 
 import {Test} from "forge-std/Test.sol";
 
-import {DeploymentBatcher} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
-import "./helpers/DeploymentBatcherFixture.sol";
+import {DeploymentBatcher} from "@4626/deploy/batchers/DeploymentBatcher.sol";
+import "test/helpers/DeploymentBatcherFixture.sol";
 import {
     MockAjnaAdapterForPhase3,
     MockAjnaPoolFactoryForPhase3,
@@ -16,7 +16,7 @@ import {
     MockUniswapV3FactoryForPhase3,
     MockUniswapV3PoolForPhase3,
     MockVaultStrategyManagerForPhase3
-} from "./helpers/DeploymentBatcherPhase3Mocks.sol";
+} from "test/helpers/DeploymentBatcherPhase3Mocks.sol";
 
 contract DeploymentBatcherPhase3WeightHandler is Test {
     address internal constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa;

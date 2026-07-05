@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "../contracts/utilities/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol";
+import "@4626/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol";
 
 /// @title ChainlinkVRFIntegratorV2_5 nonce-entropy tests (VRF-04 / 4626-441)
 /// @notice Pins the two new entropy sources added on top of the L-06 fix:

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {OFTBootstrapRegistry} from "../contracts/helpers/infra/OFTBootstrapRegistry.sol";
+import {OFTBootstrapRegistry} from "@4626/deploy/infra/OFTBootstrapRegistry.sol";
 
 contract OFTBootstrapRegistryTest is Test {
     OFTBootstrapRegistry internal registry;

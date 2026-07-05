@@ -1,76 +1,18 @@
-import { useMemo } from 'react'
 import { ArrowRight, Wallet } from 'lucide-react'
 
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
-import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
-import { resolveLinkedExternalWalletProvider } from '@/features/waitlist/resolveLinkedExternalWalletProvider'
-import { useSafePrivy } from '@/lib/privy/safeHooks'
-import { usePrivyWalletsFromContext } from '@/lib/privy/walletHooksContext'
 
 const WALLET_REWARD_POINTS = PROVIDER_POINTS.external_eoa
 
-function shortAddress(address: string): string {
-  const trimmed = address.trim()
-  if (trimmed.length < 10) return trimmed
-  return `${trimmed.slice(0, 6)}…${trimmed.slice(-4)}`
-}
-
 type WaitlistWalletConnectPanelProps = {
-  linked: boolean
-  linkedAddress?: string | null
   busy: boolean
   onConnect: () => void
   onSkip: () => void
 }
 
-function LinkedWalletIcon(props: {
-  linkedAddress?: string | null
-}) {
-  const privy = useSafePrivy()
-  const wallets = usePrivyWalletsFromContext()
-  const identity = useMemo(
-    () =>
-      resolveLinkedExternalWalletProvider({
-        linkedAddress: props.linkedAddress,
-        wallets,
-        privyUser: privy.user,
-      }),
-    [props.linkedAddress, privy.user, wallets],
-  )
-
-  if (!identity.provider && !identity.connectorId) {
-    return <Wallet className="size-7 shrink-0 text-zinc-300" aria-hidden="true" />
-  }
-
-  return (
-    <WalletProviderIcon
-      provider={identity.provider}
-      connectorId={identity.connectorId}
-      walletType="external_eoa"
-      size={28}
-      className="shrink-0 rounded-sm"
-    />
-  )
-}
-
 export function WaitlistWalletConnectPanel(props: WaitlistWalletConnectPanelProps) {
-  const { linked, linkedAddress, busy, onConnect, onSkip } = props
-
-  if (linked) {
-    const label = linkedAddress ? shortAddress(linkedAddress) : 'Wallet connected'
-    return (
-      <div className="mt-6 flex items-center justify-between gap-3 py-1 text-left">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <LinkedWalletIcon linkedAddress={linkedAddress} />
-          <span className="truncate font-mono text-[13px] font-semibold text-emerald-100">{label}</span>
-        </div>
-        <span className="shrink-0 text-[11px] font-medium tabular-nums text-emerald-300/80">
-          +{WALLET_REWARD_POINTS} pts
-        </span>
-      </div>
-    )
-  }
+  const { busy, onConnect, onSkip } = props
 
   return (
     <div className="mt-6 space-y-2.5 text-left">

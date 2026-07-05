@@ -90,10 +90,29 @@ import {
   pauseCounterTradeOptIn,
   readCounterTradeUserOptIn,
   readOrCreateCounterTradeRoomStrategy,
+  resetCounterTradeRoomConfigGroup,
   resumeCounterTradeOptIn,
   setCounterTradeGlobalBias,
+  setCounterTradeRoomConfigOverride,
   upsertCounterTradeOptIn,
 } from '../alfaclub/counterTradeStore.js'
+import {
+  formatCounterTradeConfigStatus,
+  formatCounterTradeConfigUsage,
+  formatCounterTradeGroupResetAnnouncement,
+  formatCounterTradeGroupStatus,
+  formatCounterTradeMemberOnboarding,
+  formatCounterTradeResumeConfirmed,
+  formatCounterTradeResumePreview,
+  formatCounterTradeSettingAnnouncement,
+  mergeCounterTradeRuntimeWithRoomOverrides,
+  parseCounterTradeConfigCommand,
+  parseCounterTradeConfigValue,
+  remapCounterTradeTopLevelCommand,
+  resolveCounterTradeConfigFieldSpec,
+  type CounterTradeConfigGroup,
+  type CounterTradeRoomConfigOverrides,
+} from '../alfaclub/counterTradeRoomConfig.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -202,9 +221,12 @@ type ParsedArenaCommand =
     }
 
 type ParsedStrategyCommand =
-  | { kind: 'help' | 'status' | 'pause' | 'resume' }
+  | { kind: 'help' | 'status' | 'pause' | 'resume' | 'resume-preview' | 'onboarding' }
   | { kind: 'optin'; preset: CounterTradePreset }
   | { kind: 'bias'; bias: CounterTradeBias }
+  | { kind: 'config-show'; group: CounterTradeConfigGroup | 'all' }
+  | { kind: 'config-set'; field: keyof CounterTradeRoomConfigOverrides; rawValue: string; label: string }
+  | { kind: 'config-reset'; group: CounterTradeConfigGroup | 'all' }
 
 function parseArenaCommandArgs(args: string): ParsedArenaCommand | null {
   const trimmed = args.trim()
@@ -405,11 +427,24 @@ function parseArenaCommandArgs(args: string): ParsedArenaCommand | null {
 function parseStrategyCommandArgs(args: string): ParsedStrategyCommand | null {
   const trimmed = args.trim().toLowerCase()
   if (!trimmed || trimmed === 'help') return { kind: 'help' }
-  if (trimmed === 'status') return { kind: 'status' }
-  if (trimmed === 'pause') return { kind: 'pause' }
-  if (trimmed === 'resume') return { kind: 'resume' }
-  if (trimmed.startsWith('optin')) {
-    const preset = (trimmed.split(/\s+/)[1] ?? '').trim()
+  if (trimmed === 'status' || trimmed === 'st' || trimmed === '?') return { kind: 'status' }
+  if (trimmed === 'pause' || trimmed === 'stop' || trimmed === 'x' || trimmed === 'off') return { kind: 'pause' }
+  if (trimmed === 'resume confirm' || trimmed === 'resume yes') return { kind: 'resume' }
+  if (
+    trimmed === 'resume' ||
+    trimmed === 'start' ||
+    trimmed === 'unpause' ||
+    trimmed === 'g' ||
+    trimmed === 'go' ||
+    trimmed === 'on'
+  ) {
+    return { kind: 'resume-preview' }
+  }
+  if (trimmed === 'start confirm' || trimmed === 'start yes') return { kind: 'resume' }
+  if (trimmed === 'j' || trimmed === 'in') return { kind: 'optin', preset: 'balanced' }
+  if (trimmed === 'setup') return { kind: 'onboarding' }
+  if (trimmed.startsWith('optin') || trimmed.startsWith('join') || trimmed.startsWith('in ')) {
+    const preset = (trimmed.split(/\s+/)[1] ?? 'balanced').trim()
     if (preset === 'defensive' || preset === 'balanced' || preset === 'aggressive') {
       return { kind: 'optin', preset }
     }
@@ -419,6 +454,26 @@ function parseStrategyCommandArgs(args: string): ParsedStrategyCommand | null {
     const bias = (trimmed.split(/\s+/)[1] ?? '').trim()
     if (bias === 'bullish' || bias === 'bearish' || bias === 'neutral') return { kind: 'bias', bias }
     return null
+  }
+  const configCmd = parseCounterTradeConfigCommand(trimmed)
+  if (configCmd) {
+    switch (configCmd.kind) {
+      case 'show':
+        return { kind: 'config-show', group: configCmd.group }
+      case 'set':
+        return {
+          kind: 'config-set',
+          field: configCmd.field,
+          rawValue: configCmd.rawValue,
+          label: configCmd.label,
+        }
+      case 'reset':
+        return { kind: 'config-reset', group: configCmd.group }
+      default: {
+        const _exhaustive: never = configCmd
+        return _exhaustive
+      }
+    }
   }
   return null
 }
@@ -481,14 +536,7 @@ function summarizeArenaRunFailure(
 }
 
 function formatStrategyUsage(): string {
-  return [
-    '**Counter-trade strategy controls**',
-    '- `/strategy status`',
-    '- `/strategy optin <defensive|balanced|aggressive>`',
-    '- `/strategy pause`',
-    '- `/strategy resume`',
-    '- `/strategy bias <bullish|bearish|neutral>` (trusted operator)',
-  ].join('\n')
+  return formatCounterTradeConfigUsage()
 }
 
 function sanitizeArenaOutputForReply(text: string | undefined | null, dgclawDir: string | null): string {
@@ -2480,10 +2528,18 @@ async function withOnboardingNudge(
 export async function executeHermitCommand(
   params: HermitExecutionParams,
 ): Promise<HermitExecutionResult> {
-  const { command, args } = splitCommandAndArgs(params.commandText)
+  let { command, args } = splitCommandAndArgs(params.commandText)
+  const remapped = remapCounterTradeTopLevelCommand(command, args)
+  if (remapped) {
+    command = remapped.command
+    args = remapped.args
+  } else if (command === '/status') {
+    command = '/s'
+    args = '?'
+  }
   const userPreferences: HermitUserPreferences | null = params.userPreferences ?? null
 
-  if (command === '/strategy') {
+  if (command === '/strategy' || command === '/s') {
     const parsed = parseStrategyCommandArgs(args)
     if (!parsed) {
       return {
@@ -2556,19 +2612,36 @@ export async function executeHermitCommand(
         statusNotes.push('arenaSetup: disabled (ARENA_ENABLED=0).')
       }
 
+      const effectiveRuntime = mergeCounterTradeRuntimeWithRoomOverrides(
+        runtime,
+        strategy?.configOverrides ?? {},
+      )
+
+      const presetLabel = userState?.preset ?? null
+      const automationLine =
+        userState?.state === 'active'
+          ? `You are **in** — ${presetLabel ?? 'custom'} preset. Pause: \`/h pause\`.`
+          : userState?.state === 'paused'
+            ? 'You are **paused** — `/h resume` to review playbook and confirm.'
+            : 'You are **not in** yet — `/h join` to start.'
+      const biasLabel = strategy?.globalBias ?? 'neutral'
+
       return {
         kind: 'hermit',
         provider: 'local',
         reply: [
-          '**Strategy status**',
-          `state: ${userState?.state ?? 'not_opted_in'}`,
-          `preset: ${userState?.preset ?? 'n/a'}`,
-          `globalBias: ${strategy?.globalBias ?? 'neutral'}`,
-          `enabled: ${String(strategy?.enabled ?? false)}`,
-          `killSwitch: ${String(strategy?.killSwitch ?? false)}`,
-          `lastActionAt: ${userState?.lastActionAt ?? 'none'}`,
-          ...statusNotes,
-          ...(userState?.pauseReason ? [`pauseReason: ${userState.pauseReason}`] : []),
+          '**Your mirrored trading**',
+          automationLine,
+          '',
+          '**Room playbook (shared)**',
+          `Sync when members resize: **${effectiveRuntime.inverseRebalanceScalePct}%**`,
+          `Room direction bias: **${biasLabel}**`,
+          strategy?.killSwitch
+            ? '_Room automation is temporarily halted by operators._'
+            : '_Room automation is live for opted-in members._',
+          '',
+          'Full guide: `/h rules` · Replay walkthrough: `/h setup`',
+          ...statusNotes.filter((note) => note.startsWith('arenaSetup: auto-provision failed')),
         ].join('\n'),
       }
     }
@@ -2636,12 +2709,25 @@ export async function executeHermitCommand(
       return {
         kind: 'hermit',
         provider: 'local',
-        reply: [
-          'Automation enabled for your account.',
-          'Arena setup is linked for your sender and should now appear on Virtuals Arena.',
-          `Preset: ${saved.preset}. Mode: room-level strategy + personal risk controls.`,
-          'You can pause instantly with /strategy pause.',
-        ].join('\n'),
+        reply: formatCounterTradeMemberOnboarding({
+          runtime: mergeCounterTradeRuntimeWithRoomOverrides(runtime, strategy?.configOverrides ?? {}),
+          preset: saved.preset,
+        }),
+      }
+    }
+
+    if (parsed.kind === 'onboarding') {
+      const effectiveRuntime = mergeCounterTradeRuntimeWithRoomOverrides(
+        runtime,
+        strategy?.configOverrides ?? {},
+      )
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: formatCounterTradeMemberOnboarding({
+          runtime: effectiveRuntime,
+          preset: userState?.preset ?? 'balanced',
+        }),
       }
     }
 
@@ -2655,20 +2741,63 @@ export async function executeHermitCommand(
         return {
           kind: 'hermit',
           provider: 'local',
-          reply: 'Automation is not enabled for your account.\nRun /strategy optin <preset> to start.',
+          reply: 'Automation is not enabled for your account.\nRun `/h join` to start.',
         }
       }
       return {
         kind: 'hermit',
         provider: 'local',
         reply: [
-          'Automation paused immediately for your account.',
-          'No new counter-trades will be opened until you resume.',
+          'Automation paused — no new counter-trades until you resume.',
+          'Resume: `/h resume` — review playbook, then `/h resume confirm`',
         ].join('\n'),
       }
     }
 
+    if (parsed.kind === 'resume-preview') {
+      if (!userState || userState.state === 'not_opted_in') {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'Automation is not enabled for your account.\nRun `/h join` to start.',
+        }
+      }
+      if (userState.state === 'active') {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'You are already mirroring. Pause with `/h pause` if you need a break.',
+        }
+      }
+      const effectiveRuntime = mergeCounterTradeRuntimeWithRoomOverrides(
+        runtime,
+        strategy?.configOverrides ?? {},
+      )
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: formatCounterTradeResumePreview({
+          runtime: effectiveRuntime,
+          preset: userState.preset,
+        }),
+      }
+    }
+
     if (parsed.kind === 'resume') {
+      if (!userState || userState.state === 'not_opted_in') {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'Automation is not enabled for your account.\nRun `/h join` to start.',
+        }
+      }
+      if (userState.state === 'active') {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'You are already mirroring. Pause with `/h pause` if you need a break.',
+        }
+      }
       const resumed = await resumeCounterTradeOptIn({
         roomId,
         senderAddress: params.senderAddress,
@@ -2677,13 +2806,121 @@ export async function executeHermitCommand(
         return {
           kind: 'hermit',
           provider: 'local',
-          reply: 'Automation is not enabled for your account.\nRun /strategy optin <preset> to start.',
+          reply: 'Unable to resume automation. Try `/h resume` first, then `/h resume confirm`.',
         }
       }
       return {
         kind: 'hermit',
         provider: 'local',
-        reply: [`Automation resumed for your account.`, `Preset remains: ${resumed.preset}.`].join('\n'),
+        reply: formatCounterTradeResumeConfirmed({ preset: resumed.preset }),
+      }
+    }
+
+    if (parsed.kind === 'config-show') {
+      const effectiveRuntime = mergeCounterTradeRuntimeWithRoomOverrides(
+        runtime,
+        strategy?.configOverrides ?? {},
+      )
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: formatCounterTradeConfigStatus({
+          runtime: effectiveRuntime,
+          overrides: strategy?.configOverrides ?? {},
+          group: parsed.group,
+          audience: 'room',
+        }),
+      }
+    }
+
+    if (parsed.kind === 'config-set') {
+      if (!params.isTrustedOperator) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply:
+            'Only room operators can change the shared playbook. Ask an OWNER/ADMIN or allowlisted operator.',
+        }
+      }
+      const spec = resolveCounterTradeConfigFieldSpec(parsed.field)
+      if (!spec) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: ['Unknown tuning field.', formatCounterTradeConfigUsage()].join('\n\n'),
+        }
+      }
+      const value = parseCounterTradeConfigValue(spec, parsed.rawValue)
+      if (value == null) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: `Invalid ${parsed.label.toLowerCase()}. Expected ${spec.min}–${spec.max}${spec.asFractionOfHundred ? '%' : spec.field === 'minReduceNotionalUsd' ? ' USD' : '%'}.`,
+        }
+      }
+      const updated = await setCounterTradeRoomConfigOverride({
+        roomId,
+        field: spec.field,
+        value,
+      })
+      if (!updated) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'Could not save room tuning override.',
+        }
+      }
+      const effectiveRuntime = mergeCounterTradeRuntimeWithRoomOverrides(runtime, updated.configOverrides)
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: [
+          formatCounterTradeSettingAnnouncement({ field: spec.field, rawValue: parsed.rawValue }),
+          '',
+          formatCounterTradeGroupStatus({
+            group: spec.group,
+            runtime: effectiveRuntime,
+            overrides: updated.configOverrides,
+            audience: 'room',
+          }),
+        ].join('\n'),
+      }
+    }
+
+    if (parsed.kind === 'config-reset') {
+      if (!params.isTrustedOperator) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply:
+            'Only room operators can reset the shared playbook. Ask an OWNER/ADMIN or allowlisted operator.',
+        }
+      }
+      const updated = await resetCounterTradeRoomConfigGroup({
+        roomId,
+        group: parsed.group,
+      })
+      if (!updated) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: 'Could not reset the room playbook.',
+        }
+      }
+      const effectiveRuntime = mergeCounterTradeRuntimeWithRoomOverrides(runtime, updated.configOverrides)
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: [
+          formatCounterTradeGroupResetAnnouncement(parsed.group),
+          '',
+          formatCounterTradeConfigStatus({
+            runtime: effectiveRuntime,
+            overrides: updated.configOverrides,
+            group: parsed.group === 'all' ? 'all' : parsed.group,
+            audience: 'room',
+          }),
+        ].join('\n'),
       }
     }
 
@@ -3460,6 +3697,6 @@ export async function executeHermitCommand(
   }
 
   throw commandError(
-    'Unsupported Hermit command. Use /gmeow, /hermit [copy|announce|quest|tone], /meme, /position, /signal, /market, /strategy, or /arena.',
+    'Unsupported Hermit command. Use /h join|pause|resume|rules|sync|bank|safety|size, /gmeow, /hermit, /meme, /position, /signal, /market, or /arena.',
   )
 }

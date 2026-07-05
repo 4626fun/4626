@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {SeedCreatorRegistry} from "../script/SeedCreatorRegistry.s.sol";
+import {SeedCreatorRegistry} from "script/SeedCreatorRegistry.s.sol";
 
 contract SeedCreatorRegistryHarness is SeedCreatorRegistry {
     function exposedDefaultRegistry() external pure returns (address) {

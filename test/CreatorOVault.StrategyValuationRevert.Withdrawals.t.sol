@@ -4,12 +4,12 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import "../contracts/vault/CreatorOVault.sol";
-import {CreatorOVaultAdminModule} from "../contracts/vault/modules/CreatorOVaultAdminModule.sol";
-import {CreatorOVaultCoreModule} from "../contracts/vault/modules/CreatorOVaultCoreModule.sol";
-import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorOVaultStrategiesModule.sol";
-import "../contracts/interfaces/IStrategy.sol";
-import "../contracts/interfaces/IStrategyValuation.sol";
+import "@4626/vault/creator/CreatorOVault.sol";
+import {CreatorOVaultAdminModule} from "@4626/vault/creator/modules/CreatorOVaultAdminModule.sol";
+import {CreatorOVaultCoreModule} from "@4626/vault/creator/modules/CreatorOVaultCoreModule.sol";
+import {CreatorOVaultStrategiesModule} from "@4626/vault/creator/modules/CreatorOVaultStrategiesModule.sol";
+import "@4626/interfaces/strategies/IStrategy.sol";
+import "@4626/interfaces/strategies/IStrategyValuation.sol";
 
 contract MockCreatorCoinForValuationRevertWithdrawals is ERC20 {
     constructor() ERC20("Creator Coin", "CR8R") {}

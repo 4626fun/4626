@@ -3,10 +3,10 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {I4626Registry} from "../contracts/interfaces/core/I4626Registry.sol";
-import "../contracts/helpers/batchers/DeploymentBatcher.sol";
-import "./helpers/DeploymentBatcherFixture.sol";
-import "./helpers/DeploymentBatcherPhase3Mocks.sol";
+import {I4626Registry} from "@4626/interfaces/core/I4626Registry.sol";
+import "@4626/deploy/batchers/DeploymentBatcher.sol";
+import "test/helpers/DeploymentBatcherFixture.sol";
+import "test/helpers/DeploymentBatcherPhase3Mocks.sol";
 
 contract DeploymentBatcherPhase3DeployTest is Test {
     address internal constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa;

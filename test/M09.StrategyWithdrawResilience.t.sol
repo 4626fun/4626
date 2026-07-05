@@ -5,7 +5,7 @@ import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {IStrategy} from "../contracts/interfaces/IStrategy.sol";
+import {IStrategy} from "@4626/interfaces/strategies/IStrategy.sol";
 
 /// @dev FIX: M-09 — regression tests for `_tryWithdrawFromStrategyMeasured`, the
 ///      best-effort withdrawal helper that replaces the strict revert on the

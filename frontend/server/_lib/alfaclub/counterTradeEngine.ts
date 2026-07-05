@@ -8,16 +8,20 @@ import {
   type CounterTradeSide,
   type CounterTradeStrategyKey,
 } from './counterTradeConfig.js'
+import { resolveMaxCounterNotionalUsd } from './counterTradeSizing.js'
 
 export type CounterTradeDecision =
   | {
       ok: true
       reason: 'execute'
       fillAction: CounterTradeFillAction
+      mirrorAction: CounterTradeMirrorAction
       counterSide: CounterTradeSide
       counterLeverage: number
       counterNotionalUsd: number
       favoredDirection: boolean
+      /** True when a mirror reduce trims the entire opposite leg (dust-safe). */
+      fullClose: boolean
     }
   | {
       ok: false
@@ -39,6 +43,9 @@ export type CounterTradeFillAction =
   | 'close'
   | 'liquidated'
   | 'unknown'
+
+/** How the bot adjusts its opposite leg for a mirrored room fill. */
+export type CounterTradeMirrorAction = 'open' | 'reduce_partial'
 
 type PresetCaps = {
   leverageCapMultiplier: number
@@ -139,12 +146,34 @@ export function classifyCounterTradeFillAction(fill: HyperliquidUserFillDetailed
 
 /**
  * Fill actions that mean the countered user exited risk on a pair. The bot
- * mirrors these by closing its own position on the same pair (full close —
- * the arena CLI has no partial-close, so `reduce` fills are intentionally
- * not mirrored).
+ * mirrors these by closing its own position on the same pair (full close).
  */
 export function isExitFillAction(action: CounterTradeFillAction): boolean {
   return action === 'close' || action === 'liquidated'
+}
+
+/**
+ * User leg size change as a fraction of the pre-fill position (coin units).
+ * Example: start 2 BTC, trim 0.5 → 0.25 (25%). Used by room 1659 rebalance.
+ */
+export function deriveUserPositionChangePct(
+  fill: HyperliquidUserFillDetailed,
+  fillAction: CounterTradeFillAction,
+): number | null {
+  if (fillAction !== 'add' && fillAction !== 'reduce') return null
+  const POSITION_EPSILON = 1e-9
+  const beforeRaw = fill.startPosition == null ? null : Number(fill.startPosition)
+  const size = Math.abs(Number(fill.sz ?? 0))
+  const inferredSide = parseFillSide(fill)
+  if (beforeRaw == null || !Number.isFinite(beforeRaw) || !Number.isFinite(size) || size <= 0 || !inferredSide) {
+    return null
+  }
+  const beforeAbs = Math.abs(beforeRaw)
+  if (beforeAbs <= POSITION_EPSILON) return null
+  const signedDelta = inferredSide === 'long' ? size : -size
+  const deltaAbs = Math.abs(Math.abs(beforeRaw + signedDelta) - beforeAbs)
+  if (deltaAbs <= POSITION_EPSILON) return null
+  return deltaAbs / beforeAbs
 }
 
 export type CounterPositionLeg = {
@@ -176,23 +205,36 @@ export type CounterWalletPositionLeg = NonNullable<
   HyperliquidClearinghouseState['assetPositions']
 >[number]
 
+/** Approximate mark from entry + unrealized PnL (HL snapshot has no mark field). */
+export function computeLegMarkApprox(leg: CounterWalletPositionLeg): number | null {
+  if (leg.side == null || leg.entryPx == null || leg.positionValue == null) return null
+  if (leg.positionValue <= 0) return null
+
+  const units = leg.positionValue / Math.max(1e-9, leg.entryPx)
+  const markApprox =
+    leg.entryPx +
+    (leg.side === 'long'
+      ? (leg.unrealizedPnl ?? 0) / Math.max(1e-9, units)
+      : -(leg.unrealizedPnl ?? 0) / Math.max(1e-9, units))
+
+  if (!Number.isFinite(markApprox) || markApprox <= 0) return null
+  return markApprox
+}
+
 /**
  * Approximate distance (in % of mark price) between a leg's mark and its
  * liquidation price. Mark is approximated from entry + unrealized PnL since
  * the clearinghouse snapshot does not carry mark directly.
  */
 export function computeLegLiqDistancePct(leg: CounterWalletPositionLeg): number | null {
-  if (leg.side == null || leg.liquidationPx == null || leg.entryPx == null || leg.positionValue == null) return null
+  if (leg.side == null || leg.liquidationPx == null || leg.entryPx == null || leg.positionValue == null) {
+    return null
+  }
   if (leg.positionValue <= 0) return null
 
-  // Approximate mark from entry + unrealized pnl.
-  const markApprox =
-    leg.entryPx +
-    (leg.side === 'long'
-      ? (leg.unrealizedPnl ?? 0) / Math.max(1e-9, leg.positionValue / Math.max(1e-9, leg.entryPx))
-      : -(leg.unrealizedPnl ?? 0) / Math.max(1e-9, leg.positionValue / Math.max(1e-9, leg.entryPx)))
+  const markApprox = computeLegMarkApprox(leg)
+  if (markApprox == null) return null
 
-  if (!Number.isFinite(markApprox) || markApprox <= 0) return null
   const distance =
     leg.side === 'long'
       ? ((markApprox - leg.liquidationPx) / markApprox) * 100
@@ -241,7 +283,14 @@ export function deriveCounterTradeDecision(params: {
   strictInverseParity?: boolean
 }): CounterTradeDecision {
   const fillAction = classifyCounterTradeFillAction(params.fill)
-  if (fillAction === 'reduce' || fillAction === 'close' || fillAction === 'liquidated') {
+  const strictInverseParity = params.strictInverseParity === true
+  if (fillAction === 'close' || fillAction === 'liquidated') {
+    return { ok: false, reason: 'fill_action_not_counterable', fillAction }
+  }
+  if (strictInverseParity && (fillAction === 'add' || fillAction === 'reduce')) {
+    return { ok: false, reason: 'fill_action_not_counterable', fillAction }
+  }
+  if (fillAction !== 'entry' && fillAction !== 'add') {
     return { ok: false, reason: 'fill_action_not_counterable', fillAction }
   }
   const userSide = parseFillSide(params.fill)
@@ -261,7 +310,6 @@ export function deriveCounterTradeDecision(params: {
   const presetCaps = PRESET_CAPS[params.preset]
   const favoredDirection = isFavoredDirection({ bias: params.bias, userSide })
   const counterSide = deriveCounterSide(userSide)
-  const strictInverseParity = params.strictInverseParity === true
 
   const leverageMultiplier =
     strictInverseParity
@@ -307,12 +355,14 @@ export function deriveCounterTradeDecision(params: {
   }
 
   const rawCounterNotional = params.userNotionalUsd * notionalRatio
-  const counterNotionalUsd = Math.min(
-    rawCounterNotional,
-    strictInverseParity
-      ? params.runtime.maxCounterNotionalPerTradeUsd
-      : params.runtime.maxCounterNotionalPerTradeUsd * presetCaps.notionalCapMultiplier,
-  )
+  const maxCounterNotionalUsd = resolveMaxCounterNotionalUsd({
+    runtime: params.runtime,
+    accountValueUsd: params.counterWalletState?.accountValueUsd,
+    preset: params.preset,
+    strictInverseParity,
+  })
+  const counterNotionalUsd = Math.min(rawCounterNotional, maxCounterNotionalUsd)
+
   if (!Number.isFinite(counterNotionalUsd) || counterNotionalUsd <= 0) {
     return { ok: false, reason: 'invalid_input', fillAction }
   }
@@ -321,10 +371,12 @@ export function deriveCounterTradeDecision(params: {
     ok: true,
     reason: 'execute',
     fillAction,
+    mirrorAction: 'open',
     counterSide,
     counterLeverage,
     counterNotionalUsd,
     favoredDirection,
+    fullClose: false,
   }
 }
 

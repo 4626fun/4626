@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import "../../contracts/helpers/batchers/DeploymentBatcher.sol";
+import "@4626/deploy/batchers/DeploymentBatcher.sol";
 
 /**
  * @title DeploymentBatcherPhase2ModuleHotSwap fork rehearsal

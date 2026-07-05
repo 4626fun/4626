@@ -5,9 +5,9 @@ import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {CreatorOVaultWrapper} from "../contracts/vault/CreatorOVaultWrapper.sol";
-import {CreatorGaugeController, ICreatorOracle, ISwapRouter} from "../contracts/governance/CreatorGaugeController.sol";
-import {IStrategy} from "../contracts/interfaces/IStrategy.sol";
+import {CreatorOVaultWrapper} from "@4626/vault/creator/CreatorOVaultWrapper.sol";
+import {CreatorGaugeController, ICreatorOracle, ISwapRouter} from "@4626/governance/creator/CreatorGaugeController.sol";
+import {IStrategy} from "@4626/interfaces/strategies/IStrategy.sol";
 
 contract DeepMockToken is ERC20 {
     uint8 private immutable tokenDecimals;
