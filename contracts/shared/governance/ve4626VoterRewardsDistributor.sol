@@ -2,9 +2,9 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title VoterRewardsDistributor
+ * @title ve4626VoterRewardsDistributor
  * @author 0xakita.eth
- * @notice Distributes the "protocol" fee slice to ve4626 voters (ve(3,3) mechanics)
+ * @notice Distributes the "protocol" fee slice to ve4626 voters (ve(3,3) mechanics) — supports creators, agents and future ecosystems
  *
  * @dev Inspired by ve(3,3) systems where voters receive fees/bribes for voting on gauges.
  *      Conceptually similar to bribe/fee-distributor patterns used in b(3,3)/ve(3,3) stacks
@@ -25,7 +25,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-interface IVaultGaugeVotingForRewards {
+interface IVe4626GaugeVotingForRewards {
     function currentEpoch() external view returns (uint256);
     function getVaultWeightAtEpoch(uint256 epoch, address vault) external view returns (uint256);
     function getUserVoteWeightAtEpoch(uint256 epoch, address user, address vault) external view returns (uint256);
@@ -36,7 +36,7 @@ interface I4626RegistryForVoterRewards {
     function getGaugeControllerForToken(address _token) external view returns (address);
 }
 
-contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
+contract ve4626VoterRewardsDistributor is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // ================================
@@ -49,7 +49,7 @@ contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
     // IMMUTABLES
     // ================================
 
-    IVaultGaugeVotingForRewards public immutable gaugeVoting;
+    IVe4626GaugeVotingForRewards public immutable gaugeVoting;
     I4626RegistryForVoterRewards public immutable registry;
 
     // ================================
@@ -112,7 +112,7 @@ contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
 
     constructor(address _gaugeVoting, address _registry, address _owner) Ownable(_owner) {
         if (_gaugeVoting == address(0) || _registry == address(0)) revert ZeroAddress();
-        gaugeVoting = IVaultGaugeVotingForRewards(_gaugeVoting);
+        gaugeVoting = IVe4626GaugeVotingForRewards(_gaugeVoting);
         registry = I4626RegistryForVoterRewards(_registry);
     }
 

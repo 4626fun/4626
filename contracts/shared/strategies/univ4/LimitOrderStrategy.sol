@@ -34,11 +34,12 @@ import {V4LiquidityAmounts} from "@4626/shared/libraries/uniswap/V4LiquidityAmou
  *      - Higher capital efficiency within the specific tick
  *
  * @dev USE CASES:
- *      1. BUY SUPPORT: Place below current price - buys creator coin when price drops
- *      2. SELL RESISTANCE: Place above current price - sells creator coin when price rises
+ *      1. BUY SUPPORT: Place below current price - buys lane token when price drops
+ *      2. SELL RESISTANCE: Place above current price - sells lane token when price rises
+ *      Usable for creator, agent, or future ecosystems by configuring the base token.
  *
  * @dev INTEGRATION:
- *      - Plugs into CreatorLPManager
+ *      - Plugs into lane-specific LPManager (e.g. CreatorLPManager or agent equivalent)
  *      - Multiple limit order positions can be active simultaneously
  */
 
@@ -76,8 +77,8 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
     // STATE
     // =================================
 
-    /// @notice Creator Coin token
-    IERC20 public immutable CREATOR_COIN;
+    /// @notice Base token for the strategy (lane-specific, e.g. creator or agent token)
+    IERC20 public immutable BASE_TOKEN;
 
     /// @notice Paired token (WETH)
     IERC20 public immutable PAIRED_TOKEN;
@@ -94,8 +95,8 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
     /// @notice Uniswap V4 pool id (derived from poolKey)
     PoolId public poolId;
 
-    /// @notice True if CREATOR_COIN is currency0 for poolKey
-    bool public creatorIsCurrency0;
+    /// @notice True if BASE_TOKEN is currency0 for poolKey
+    bool public baseIsCurrency0;
 
     /// @notice Uniswap V4 PositionManager (PosM)
     address public positionManager;
@@ -128,11 +129,11 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
     event OrderCreated(uint256 indexed orderId, int24 tickLower, int24 tickUpper, uint256 liquidity, bool isBuyOrder);
     event OrderFilled(uint256 indexed orderId, uint256 amountIn, uint256 amountOut);
     event OrderCancelled(uint256 indexed orderId, uint256 creatorCoinReturned, uint256 pairedReturned);
-    event Deposited(uint256 creatorCoinAmount, uint256 pairedAmount, uint256 liquidity);
-    event Withdrawn(uint256 liquidity, uint256 creatorCoinAmount, uint256 pairedAmount);
+    event Deposited(uint256 baseTokenAmount, uint256 pairedAmount, uint256 liquidity);
+    event Withdrawn(uint256 liquidity, uint256 baseTokenAmount, uint256 pairedAmount);
     event Rebalanced(uint256 timestamp, uint256 ordersMoved);
     event PoolConfigured(
-        bytes32 poolId, address poolManager, address positionManager, address permit2, bool creatorIsCurrency0
+        bytes32 poolId, address poolManager, address positionManager, address permit2, bool baseIsCurrency0
     );
     event ApprovalsReconfigured(address oldPositionManager, address oldPermit2, address newPositionManager, address newPermit2);
 
@@ -172,14 +173,14 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
     // CONSTRUCTOR
     // =================================
 
-    constructor(address _creatorCoin, address _pairedToken, address _lpManager, address _owner, address _hookRegistry)
+    constructor(address _baseToken, address _pairedToken, address _lpManager, address _owner, address _hookRegistry)
         Ownable(_owner)
     {
-        if (_creatorCoin == address(0)) revert ZeroAddress();
+        if (_baseToken == address(0)) revert ZeroAddress();
         if (_pairedToken == address(0)) revert ZeroAddress();
         if (_hookRegistry == address(0)) revert ZeroAddress();
 
-        CREATOR_COIN = IERC20(_creatorCoin);
+        BASE_TOKEN = IERC20(_baseToken);
         PAIRED_TOKEN = IERC20(_pairedToken);
         lpManager = _lpManager;
         hookRegistry = IApprovedV4HooksRegistry(_hookRegistry);
@@ -203,9 +204,9 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
         // Validate poolKey currencies match our configured tokens
         address c0 = Currency.unwrap(_poolKey.currency0);
         address c1 = Currency.unwrap(_poolKey.currency1);
-        bool _creatorIsCurrency0 = c0 == address(CREATOR_COIN);
-        if (!((_creatorIsCurrency0 && c1 == address(PAIRED_TOKEN))
-                    || (c0 == address(PAIRED_TOKEN) && c1 == address(CREATOR_COIN)))) revert PoolNotFullyConfigured();
+        bool _baseIsCurrency0 = c0 == address(BASE_TOKEN);
+        if (!((_baseIsCurrency0 && c1 == address(PAIRED_TOKEN))
+                    || (c0 == address(PAIRED_TOKEN) && c1 == address(BASE_TOKEN)))) revert PoolNotFullyConfigured();
         if (_poolKey.tickSpacing == 0) revert PoolNotFullyConfigured();
         address hook = address(_poolKey.hooks);
         if (hook == address(0)) revert InvalidHook(hook);
@@ -216,18 +217,18 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
         permit2 = _permit2;
         poolKey = _poolKey;
         poolId = _poolKey.toId();
-        creatorIsCurrency0 = _creatorIsCurrency0;
+        baseIsCurrency0 = _baseIsCurrency0;
         tickSpacing = _poolKey.tickSpacing;
 
         // Approvals for PosM: token -> Permit2, then Permit2 -> PosM
-        CREATOR_COIN.forceApprove(_permit2, type(uint256).max);
+        BASE_TOKEN.forceApprove(_permit2, type(uint256).max);
         PAIRED_TOKEN.forceApprove(_permit2, type(uint256).max);
         IAllowanceTransfer(_permit2)
-            .approve(address(CREATOR_COIN), _positionManager, type(uint160).max, type(uint48).max);
+            .approve(address(BASE_TOKEN), _positionManager, type(uint160).max, type(uint48).max);
         IAllowanceTransfer(_permit2)
             .approve(address(PAIRED_TOKEN), _positionManager, type(uint160).max, type(uint48).max);
 
-        emit PoolConfigured(PoolId.unwrap(poolId), _poolManager, _positionManager, _permit2, _creatorIsCurrency0);
+        emit PoolConfigured(PoolId.unwrap(poolId), _poolManager, _positionManager, _permit2, _baseIsCurrency0);
     }
 
     /**
@@ -243,19 +244,19 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
         address oldPermit2 = permit2;
 
         // Revoke old allowances first so stale pull rights are removed.
-        CREATOR_COIN.forceApprove(oldPermit2, 0);
+        BASE_TOKEN.forceApprove(oldPermit2, 0);
         PAIRED_TOKEN.forceApprove(oldPermit2, 0);
-        IAllowanceTransfer(oldPermit2).approve(address(CREATOR_COIN), oldPositionManager, 0, 0);
+        IAllowanceTransfer(oldPermit2).approve(address(BASE_TOKEN), oldPositionManager, 0, 0);
         IAllowanceTransfer(oldPermit2).approve(address(PAIRED_TOKEN), oldPositionManager, 0, 0);
 
         positionManager = _positionManager;
         permit2 = _permit2;
 
         // Re-grant current approval targets.
-        CREATOR_COIN.forceApprove(_permit2, type(uint256).max);
+        BASE_TOKEN.forceApprove(_permit2, type(uint256).max);
         PAIRED_TOKEN.forceApprove(_permit2, type(uint256).max);
         IAllowanceTransfer(_permit2)
-            .approve(address(CREATOR_COIN), _positionManager, type(uint160).max, type(uint48).max);
+            .approve(address(BASE_TOKEN), _positionManager, type(uint160).max, type(uint48).max);
         IAllowanceTransfer(_permit2)
             .approve(address(PAIRED_TOKEN), _positionManager, type(uint160).max, type(uint48).max);
 
@@ -305,11 +306,11 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
 
         // Pull tokens based on order type
         if (isBuyOrder) {
-            // Buy order: provide paired token (WETH) to buy creator coin
+            // Buy order: provide paired token (WETH) to buy base token
             PAIRED_TOKEN.safeTransferFrom(msg.sender, address(this), amount);
         } else {
-            // Sell order: provide creator coin to sell for paired token
-            CREATOR_COIN.safeTransferFrom(msg.sender, address(this), amount);
+            // Sell order: provide base token to sell for paired token
+            BASE_TOKEN.safeTransferFrom(msg.sender, address(this), amount);
         }
 
         uint128 liq = _liquidityForSingleSidedAmount(amount, tickLower, tickUpper, isBuyOrder);
@@ -344,7 +345,7 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
     function cancelOrder(uint256 orderId)
         external
         onlyLPManager
-        returns (uint256 creatorCoinAmount, uint256 pairedAmount)
+        returns (uint256 baseTokenAmount, uint256 pairedAmount)
     {
         if (orderId >= orders.length) revert OrderNotFound();
 
@@ -353,12 +354,12 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
 
         _requireConfigured();
 
-        uint256 balCreatorBefore = CREATOR_COIN.balanceOf(address(this));
+        uint256 balBaseBefore = BASE_TOKEN.balanceOf(address(this));
         uint256 balPairedBefore = PAIRED_TOKEN.balanceOf(address(this));
 
         _posmBurn(order.tokenId);
 
-        creatorCoinAmount = CREATOR_COIN.balanceOf(address(this)) - balCreatorBefore;
+        baseTokenAmount = BASE_TOKEN.balanceOf(address(this)) - balBaseBefore;
         pairedAmount = PAIRED_TOKEN.balanceOf(address(this)) - balPairedBefore;
 
         totalLiquidity -= order.liquidity;
@@ -367,14 +368,14 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
         order.tokenId = 0;
 
         // Transfer tokens back
-        if (creatorCoinAmount > 0) {
-            CREATOR_COIN.safeTransfer(lpManager, creatorCoinAmount);
+        if (baseTokenAmount > 0) {
+            BASE_TOKEN.safeTransfer(lpManager, baseTokenAmount);
         }
         if (pairedAmount > 0) {
             PAIRED_TOKEN.safeTransfer(lpManager, pairedAmount);
         }
 
-        emit OrderCancelled(orderId, creatorCoinAmount, pairedAmount);
+        emit OrderCancelled(orderId, baseTokenAmount, pairedAmount);
     }
 
     // =================================
@@ -384,7 +385,7 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
     /**
      * @notice Deposit creates a new limit order at default offset
      */
-    function deposit(uint256 creatorCoinAmount, uint256 pairedAmount)
+    function deposit(uint256 baseTokenAmount, uint256 pairedAmount)
         external
         nonReentrant
         onlyLPManager
@@ -392,11 +393,11 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
         returns (uint256 liquidity)
     {
         _requireConfigured();
-        if (creatorCoinAmount == 0 && pairedAmount == 0) revert ZeroAmount();
+        if (baseTokenAmount == 0 && pairedAmount == 0) revert ZeroAmount();
 
         // Pull tokens
-        if (creatorCoinAmount > 0) {
-            CREATOR_COIN.safeTransferFrom(msg.sender, address(this), creatorCoinAmount);
+        if (baseTokenAmount > 0) {
+            BASE_TOKEN.safeTransferFrom(msg.sender, address(this), baseTokenAmount);
         }
         if (pairedAmount > 0) {
             PAIRED_TOKEN.safeTransferFrom(msg.sender, address(this), pairedAmount);
@@ -429,11 +430,11 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
             }
         }
 
-        // Create sell order (above price) with creator coin
-        if (creatorCoinAmount > 0) {
+        // Create sell order (above price) with base token
+        if (baseTokenAmount > 0) {
             int24 sellTick = _roundDownToSpacing(currentTick + defaultTickOffset);
             uint128 sellLiquidity =
-                _liquidityForSingleSidedAmount(creatorCoinAmount, sellTick, sellTick + tickSpacing, false);
+                _liquidityForSingleSidedAmount(baseTokenAmount, sellTick, sellTick + tickSpacing, false);
             if (sellLiquidity > 0) {
                 uint256 tokenId = IPositionManager(positionManager).nextTokenId();
                 _posmMint(sellTick, sellTick + tickSpacing, sellLiquidity);
@@ -456,7 +457,7 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
 
         totalLiquidity += liquidity;
 
-        emit Deposited(creatorCoinAmount, pairedAmount, liquidity);
+        emit Deposited(baseTokenAmount, pairedAmount, liquidity);
     }
 
     /**
@@ -466,14 +467,14 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
         external
         nonReentrant
         onlyLPManager
-        returns (uint256 creatorCoinAmount, uint256 pairedAmount)
+        returns (uint256 baseTokenAmount, uint256 pairedAmount)
     {
         if (liquidity == 0) revert ZeroAmount();
         if (liquidity > totalLiquidity) revert InsufficientLiquidity();
 
         _requireConfigured();
 
-        uint256 balCreatorBefore = CREATOR_COIN.balanceOf(address(this));
+        uint256 balBaseBefore = BASE_TOKEN.balanceOf(address(this));
         uint256 balPairedBefore = PAIRED_TOKEN.balanceOf(address(this));
 
         uint256 remainingLiquidity = liquidity;
@@ -501,18 +502,18 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
 
         totalLiquidity -= liquidity;
 
-        creatorCoinAmount = CREATOR_COIN.balanceOf(address(this)) - balCreatorBefore;
+        baseTokenAmount = BASE_TOKEN.balanceOf(address(this)) - balBaseBefore;
         pairedAmount = PAIRED_TOKEN.balanceOf(address(this)) - balPairedBefore;
 
         // Transfer tokens
-        if (creatorCoinAmount > 0) {
-            CREATOR_COIN.safeTransfer(lpManager, creatorCoinAmount);
+        if (baseTokenAmount > 0) {
+            BASE_TOKEN.safeTransfer(lpManager, baseTokenAmount);
         }
         if (pairedAmount > 0) {
             PAIRED_TOKEN.safeTransfer(lpManager, pairedAmount);
         }
 
-        emit Withdrawn(liquidity, creatorCoinAmount, pairedAmount);
+        emit Withdrawn(liquidity, baseTokenAmount, pairedAmount);
     }
 
     /**
@@ -522,12 +523,12 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
         external
         nonReentrant
         onlyLPManager
-        returns (uint256 creatorCoinAmount, uint256 pairedAmount)
+        returns (uint256 baseTokenAmount, uint256 pairedAmount)
     {
         if (totalLiquidity == 0) return (0, 0);
 
         _requireConfigured();
-        uint256 balCreatorBefore = CREATOR_COIN.balanceOf(address(this));
+        uint256 balBaseBefore = BASE_TOKEN.balanceOf(address(this));
         uint256 balPairedBefore = PAIRED_TOKEN.balanceOf(address(this));
 
         for (uint256 i = 0; i < orders.length; i++) {
@@ -544,18 +545,18 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
         uint256 withdrawn = totalLiquidity;
         totalLiquidity = 0;
 
-        creatorCoinAmount = CREATOR_COIN.balanceOf(address(this)) - balCreatorBefore;
+        baseTokenAmount = BASE_TOKEN.balanceOf(address(this)) - balBaseBefore;
         pairedAmount = PAIRED_TOKEN.balanceOf(address(this)) - balPairedBefore;
 
         // Transfer tokens
-        if (creatorCoinAmount > 0) {
-            CREATOR_COIN.safeTransfer(lpManager, creatorCoinAmount);
+        if (baseTokenAmount > 0) {
+            BASE_TOKEN.safeTransfer(lpManager, baseTokenAmount);
         }
         if (pairedAmount > 0) {
             PAIRED_TOKEN.safeTransfer(lpManager, pairedAmount);
         }
 
-        emit Withdrawn(withdrawn, creatorCoinAmount, pairedAmount);
+        emit Withdrawn(withdrawn, baseTokenAmount, pairedAmount);
     }
 
     /**
@@ -592,7 +593,7 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
     /**
      * @notice Get total value
      */
-    function getTotalValue() external view returns (uint256 creatorCoinValue, uint256 pairedValue) {
+    function getTotalValue() external view returns (uint256 baseTokenValue, uint256 pairedValue) {
         if (address(poolManager) != address(0) && PoolId.unwrap(poolId) != bytes32(0)) {
             (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(poolId);
             uint256 ordersLen = orders.length;
@@ -605,11 +606,11 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
                     TickMath.getSqrtPriceAtTick(orders[i].tickUpper),
                     liq
                 );
-                if (creatorIsCurrency0) {
-                    creatorCoinValue += amount0;
+                if (baseIsCurrency0) {
+                    baseTokenValue += amount0;
                     pairedValue += amount1;
                 } else {
-                    creatorCoinValue += amount1;
+                    baseTokenValue += amount1;
                     pairedValue += amount0;
                 }
             }
@@ -619,13 +620,13 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
                 if (!orders[i].isActive) continue;
 
                 (uint256 creator, uint256 paired) = _estimateOrderValue(orders[i]);
-                creatorCoinValue += creator;
+                baseTokenValue += creator;
                 pairedValue += paired;
             }
         }
 
         // Add local balances
-        creatorCoinValue += CREATOR_COIN.balanceOf(address(this));
+        baseTokenValue += BASE_TOKEN.balanceOf(address(this));
         pairedValue += PAIRED_TOKEN.balanceOf(address(this));
     }
 
@@ -698,8 +699,8 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
         returns (uint128 liquidity)
     {
         // Buy orders supply paired token; sell orders supply creator token.
-        bool supplyCreator = !isBuyOrder;
-        bool supplyIsCurrency0 = supplyCreator ? creatorIsCurrency0 : !creatorIsCurrency0;
+        bool supplyBase = !isBuyOrder;
+        bool supplyIsCurrency0 = supplyBase ? baseIsCurrency0 : !baseIsCurrency0;
 
         uint160 sqrtPriceAX96 = TickMath.getSqrtPriceAtTick(tickLower);
         uint160 sqrtPriceBX96 = TickMath.getSqrtPriceAtTick(tickUpper);
@@ -773,7 +774,7 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
     function _estimateOrderValue(LimitOrder storage order)
         internal
         view
-        returns (uint256 creatorCoinAmount, uint256 pairedAmount)
+        returns (uint256 baseTokenAmount, uint256 pairedAmount)
     {
         // Simplified estimation based on order type
         // In production, query actual position from V4
@@ -781,8 +782,8 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
             // Buy orders hold paired token
             pairedAmount = order.liquidity;
         } else {
-            // Sell orders hold creator coin
-            creatorCoinAmount = order.liquidity;
+            // Sell orders hold base token
+            baseTokenAmount = order.liquidity;
         }
     }
 
@@ -819,11 +820,11 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
     }
 
     function emergencyWithdraw() external onlyOwner {
-        uint256 creatorBal = CREATOR_COIN.balanceOf(address(this));
+        uint256 baseBal = BASE_TOKEN.balanceOf(address(this));
         uint256 pairedBal = PAIRED_TOKEN.balanceOf(address(this));
 
-        if (creatorBal > 0) {
-            CREATOR_COIN.safeTransfer(owner(), creatorBal);
+        if (baseBal > 0) {
+            BASE_TOKEN.safeTransfer(owner(), baseBal);
         }
         if (pairedBal > 0) {
             PAIRED_TOKEN.safeTransfer(owner(), pairedBal);

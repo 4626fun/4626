@@ -115,11 +115,11 @@ contract LotteryManager4626BoostSourceTimelockTest is Test {
     event BoostManagerProposed(address indexed previous, address indexed proposed, uint256 effectiveAt);
     event BoostManagerProposalCancelled(address indexed cancelled);
     event BoostManagerUpdated(address indexed previous, address indexed newManager);
-    event VaultGaugeVotingProposed(address indexed previous, address indexed proposed, uint256 effectiveAt);
-    event VaultGaugeVotingProposalCancelled(address indexed cancelled);
-    event VaultGaugeVotingUpdated(address indexed previous, address indexed newGauge);
+    event ve4626GaugeVotingProposed(address indexed previous, address indexed proposed, uint256 effectiveAt);
+    event ve4626GaugeVotingProposalCancelled(address indexed cancelled);
+    event ve4626GaugeVotingUpdated(address indexed previous, address indexed newGauge);
     event BoostSourceTimelockArmed();
-    event BoostSourcesDisabled(address indexed previousBoostManager, address indexed previousVaultGaugeVoting);
+    event BoostSourcesDisabled(address indexed previousBoostManager, address indexed previousve4626GaugeVoting);
 
     function setUp() public {
         vm.mockCall(LZ_ENDPOINT, abi.encodeWithSignature("setDelegate(address)"), abi.encode());
@@ -139,7 +139,7 @@ contract LotteryManager4626BoostSourceTimelockTest is Test {
         // Bootstrap initial sources via legacy setters before arming.
         vm.startPrank(owner);
         manager.setBoostManager(address(boostA));
-        manager.setVaultGaugeVoting(address(gaugeA));
+        manager.setVe4626GaugeVoting(address(gaugeA));
         vm.stopPrank();
     }
 
@@ -195,10 +195,10 @@ contract LotteryManager4626BoostSourceTimelockTest is Test {
         manager.proposeBoostManager(address(boostB));
     }
 
-    function test_PreArm_ProposeVaultGaugeVoting_Reverts() public {
+    function test_PreArm_Proposeve4626GaugeVoting_Reverts() public {
         vm.prank(owner);
         vm.expectRevert(LotteryManager4626.TimelockNotArmed.selector);
-        manager.proposeVaultGaugeVoting(address(gaugeB));
+        manager.proposeVe4626GaugeVoting(address(gaugeB));
     }
 
     // -------------------------------------------------------------
@@ -245,13 +245,13 @@ contract LotteryManager4626BoostSourceTimelockTest is Test {
         assertEq(_readBoostManager(), address(boostA));
     }
 
-    function test_PostArm_SetVaultGaugeVoting_Reverts() public {
+    function test_PostArm_Setve4626GaugeVoting_Reverts() public {
         vm.prank(owner);
         manager.armBoostSourceTimelock();
 
         vm.prank(owner);
         vm.expectRevert(LotteryManager4626.LegacySetterDisabled.selector);
-        manager.setVaultGaugeVoting(address(gaugeB));
+        manager.setVe4626GaugeVoting(address(gaugeB));
 
         assertEq(_readVaultGauge(), address(gaugeA));
     }
@@ -357,16 +357,16 @@ contract LotteryManager4626BoostSourceTimelockTest is Test {
     // 6. Symmetric path for vaultGaugeVoting
     // -------------------------------------------------------------
 
-    function test_VaultGaugeVoting_HappyPath_ProposeWaitCommit() public {
+    function test_ve4626GaugeVoting_HappyPath_ProposeWaitCommit() public {
         vm.prank(owner);
         manager.armBoostSourceTimelock();
 
         uint256 expectedEffective = block.timestamp + TIMELOCK_DELAY;
 
         vm.expectEmit(true, true, false, true);
-        emit VaultGaugeVotingProposed(address(gaugeA), address(gaugeB), expectedEffective);
+        emit ve4626GaugeVotingProposed(address(gaugeA), address(gaugeB), expectedEffective);
         vm.prank(owner);
-        manager.proposeVaultGaugeVoting(address(gaugeB));
+        manager.proposeVe4626GaugeVoting(address(gaugeB));
 
         assertEq(_readPendingGauge(), address(gaugeB));
         assertEq(_readPendingGaugeEffectiveAt(), expectedEffective);
@@ -374,26 +374,26 @@ contract LotteryManager4626BoostSourceTimelockTest is Test {
         vm.warp(expectedEffective);
 
         vm.expectEmit(true, true, false, true);
-        emit VaultGaugeVotingUpdated(address(gaugeA), address(gaugeB));
+        emit ve4626GaugeVotingUpdated(address(gaugeA), address(gaugeB));
         vm.prank(owner);
-        manager.commitVaultGaugeVoting();
+        manager.commitVe4626GaugeVoting();
 
         assertEq(_readVaultGauge(), address(gaugeB));
         assertEq(_readPendingGauge(), address(0));
         assertEq(_readPendingGaugeEffectiveAt(), 0);
     }
 
-    function test_VaultGaugeVoting_CancelDuringWindow() public {
+    function test_ve4626GaugeVoting_CancelDuringWindow() public {
         vm.prank(owner);
         manager.armBoostSourceTimelock();
 
         vm.prank(owner);
-        manager.proposeVaultGaugeVoting(address(gaugeB));
+        manager.proposeVe4626GaugeVoting(address(gaugeB));
 
         vm.expectEmit(true, false, false, true);
-        emit VaultGaugeVotingProposalCancelled(address(gaugeB));
+        emit ve4626GaugeVotingProposalCancelled(address(gaugeB));
         vm.prank(owner);
-        manager.cancelVaultGaugeVotingProposal();
+        manager.cancelVe4626GaugeVotingProposal();
 
         assertEq(_readPendingGauge(), address(0));
         assertEq(_readVaultGauge(), address(gaugeA));
@@ -437,7 +437,7 @@ contract LotteryManager4626BoostSourceTimelockTest is Test {
         vm.prank(owner);
         manager.proposeBoostManager(address(boostB));
         vm.prank(owner);
-        manager.proposeVaultGaugeVoting(address(gaugeB));
+        manager.proposeVe4626GaugeVoting(address(gaugeB));
 
         vm.expectEmit(true, true, false, true);
         emit BoostSourcesDisabled(address(boostA), address(gaugeA));
@@ -533,12 +533,12 @@ contract LotteryManager4626BoostSourceTimelockTest is Test {
         manager.cancelBoostManagerProposal();
     }
 
-    function test_ProposeVaultGaugeVoting_NonOwner_Reverts() public {
+    function test_Proposeve4626GaugeVoting_NonOwner_Reverts() public {
         vm.prank(owner);
         manager.armBoostSourceTimelock();
 
         vm.prank(nonOwner);
         vm.expectRevert();
-        manager.proposeVaultGaugeVoting(address(gaugeB));
+        manager.proposeVe4626GaugeVoting(address(gaugeB));
     }
 }

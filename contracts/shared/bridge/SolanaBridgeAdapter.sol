@@ -176,8 +176,8 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     // ================================
 
     error TokenNotRegistered();
-    error CreatorCoinNotRegistered(address creatorToken);
-    error VaultNotConfigured(address creatorToken);
+    error LaneTokenNotRegistered(address token); // renamed for generality; supports creator/agent/future
+    error VaultNotConfigured(address token); // for the lane token
     error VaultAssetMismatch(address vault, address expectedAsset, address actualAsset);
     error DexRouterNotConfigured(uint256 chainId);
     error CcaAuctionNotAllowed(address auction);
@@ -365,7 +365,7 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     /**
      * @notice Called by Twin contracts to deposit into vault
      * @dev Solana users can call this via the bridge with attached call
-     * @param creatorToken The Creator Coin (vault asset) to deposit
+     * @param creatorToken The lane token (creator/agent/future ecosystem) to deposit; extensible for additional ecosystems via registry
      * @param amount Amount to deposit
      * @param recipient Who receives the vault shares
      */
@@ -381,7 +381,7 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
 
         // Resolve the canonical vault from the registry.
         if (!I4626Registry(registry).isCreatorCoinRegistered(creatorToken)) {
-            revert CreatorCoinNotRegistered(creatorToken);
+            revert LaneTokenNotRegistered(creatorToken);
         }
         address vault = I4626Registry(registry).getVaultForToken(creatorToken);
         if (vault == address(0)) revert VaultNotConfigured(creatorToken);
@@ -494,7 +494,7 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
      * @notice Buy share token on Uniswap V4 to enter the lottery
      * @dev This triggers a lottery entry for the Solana user!
      *
-     * @param creatorToken The Creator Coin whose ShareOFT should be purchased (resolved via registry)
+     * @param creatorToken The lane token (creator/agent/future ecosystem) whose ShareOFT should be purchased (resolved via registry)
      * @param amountIn Amount of SOL (or other token) to spend
      * @param amountOutMin Minimum share token to receive
      * @param recipient Who receives the share token (usually Twin contract)
@@ -521,7 +521,7 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         if (amountIn == 0) revert InvalidAmount();
 
         if (!I4626Registry(registry).isCreatorCoinRegistered(creatorToken)) {
-            revert CreatorCoinNotRegistered(creatorToken);
+            revert LaneTokenNotRegistered(creatorToken);
         }
         address shareToken = I4626Registry(registry).getShareOFTForToken(creatorToken);
         if (shareToken == address(0)) revert InvalidAddress();
@@ -567,7 +567,7 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         if (msg.value == 0) revert InvalidAmount();
 
         if (!I4626Registry(registry).isCreatorCoinRegistered(creatorToken)) {
-            revert CreatorCoinNotRegistered(creatorToken);
+            revert LaneTokenNotRegistered(creatorToken);
         }
         address shareToken = I4626Registry(registry).getShareOFTForToken(creatorToken);
         if (shareToken == address(0)) revert InvalidAddress();
@@ -641,7 +641,8 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
 
         // Approve gauge and forward fees.
         IERC20(shareOFT).forceApprove(gauge, amount);
-        ICreatorGaugeController(gauge).receiveFees(amount);
+        // Note: receives to the lane's gauge (creator or agent)
+ICreatorGaugeController(gauge).receiveFees(amount);
 
         emit SolanaFeeReceived(msg.sender, shareOFT, gauge, amount);
     }

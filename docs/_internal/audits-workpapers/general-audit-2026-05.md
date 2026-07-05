@@ -56,7 +56,7 @@ Followed the approved plan:
 
 **Medium / Positive with Caveat**
 - SC-04: v1.12 module storage system (`CreatorOVaultModuleStorage.v2`) is explicit and enforced at `setModulesOnce` time — rigorous but manual.
-- SC-05: Payout lanes are correctly separated architecturally (`tradeFeeCollector` domain vs external revenue via `PayoutRouter` + `VaultShareBurnStream`).
+- SC-05: Payout lanes are correctly separated architecturally (`tradeFeeCollector` domain vs external revenue via `CreatorPayoutRouter` + `CreatorVaultShareBurnStream`).
 
 **Positive Verified (x-ray P0)**
 - DeploymentBatcher has a working partial/retry state machine, consistent owner enforcement at phase entrypoints, proper namespaced salt derivation, and a correctly restricted `UniversalCreate2DeployerFromStore`.
@@ -96,7 +96,7 @@ Adoption outside our own audit artifacts is poor.
 - `contracts/helpers/batchers/DeploymentBatcher.sol` — partial remediation completed in this session (error renamed to `InvalidCreatorCoinPayoutRecipient`, comments updated with canonical framing + explanatory block; field retained for ABI compatibility per AGENTS.md). Still some legacy references in generated/out/ and deployed artifacts.
 - Multiple deploy session handlers (`_createCore.ts`, `_continueCore.ts`, `_dryRunCore.ts`, DeployVault.tsx) — heavy use of "creator earnings", "payoutRecipient" in UI labels, comments, and calldata builders.
 - `frontend/src/pages/CreatorEarnings.tsx` and related components — user-facing "Creator Earnings" surfaces.
-- `PayoutRouter.sol` and related comments (still use old framing in places despite correct architectural separation).
+- `CreatorPayoutRouter.sol` and related comments (still use old framing in places despite correct architectural separation).
 - kpr/ actions, keeper handlers, and many explore/creator detail components.
 - Large volume in `docs/` and `apps/docs-site/` (operations runbooks, tokenomics, architecture pages).
 
@@ -113,7 +113,7 @@ Adoption outside our own audit artifacts is poor.
 
 **Remediation in progress (multiple slices this session)**:
 - `DeploymentBatcher.sol`: Error renamed to `InvalidCreatorCoinPayoutRecipient()` + struct comments + prominent explanatory block (field name kept for ABI).
-- `PayoutRouter.sol`: Legacy comment updated to use canonical `creatorCoinPayoutRecipient`.
+- `CreatorPayoutRouter.sol`: Legacy comment updated to use canonical `creatorCoinPayoutRecipient`.
 - `frontend/api/_handlers/deploy/v2/session/_createCore.ts`: Added terminology note block + internal variable improved to `inferredCreatorCoinPayoutRecipient`.
 - `frontend/src/pages/deploy/DeployVault.tsx`: Updated key comments and UI label to use canonical `creatorCoinPayoutRecipient` framing.
 - `frontend/src/pages/CreatorEarnings.tsx`: Updated headline, description, and labels from unqualified "Creator earnings" to "Creator coin external earnings (creatorCoinPayoutRecipient lane)" with link to the new canonical reference.
@@ -137,7 +137,7 @@ Dozens of user-visible strings, operation runbooks, and deploy UI still use "Cre
   - `kpr/actions/payout-integrity-monitor.action.ts` — alertType and message now use `creator_coin_payout_recipient_mismatch` + canonical lane language.
   - `frontend/api/_handlers/keeper/_sweep.ts` — same (two violation codes + messages).
   - `frontend/server/_lib/deploy/deployPhase2Invariants.ts` (the phase-2 completion enforcer) — same + corresponding test expectation.
-- Contract comments tightened: `CreatorCoinPolicyController.sol` (policy NatSpec + enforce function) and residual phrasing in `PayoutRouter.sol`.
+- Contract comments tightened: `CreatorCoinPolicyController.sol` (policy NatSpec + enforce function) and residual phrasing in `CreatorPayoutRouter.sol`.
 - `coinParties.ts`, multiple explore components, and several deploy handlers were already using internal keys only (with good canonical header blocks) or had been pre-cleaned in prior slices.
 - Remaining mentions of `payoutRecipient` in source are now almost entirely (a) on-chain ABI selectors (must be preserved for compatibility) or (b) internal variables that directly shadow the resolver/on-chain shape for fidelity. No new bare prose violations introduced.
 - File count with any legacy term (real source): 54 (down in spirit; the number is now dominated by intentional ABI mirrors rather than policy violations).
@@ -164,7 +164,7 @@ The worst class of drift (the one AGENTS.md explicitly calls out as never to use
   - ~60-70%: Literal on-chain ABI field/function names in structs, ABIs, and calldata builders (DeploymentBatcher phase-2 structs, CreatorCoin `payoutRecipient()` reads, Zora SDK calls, etc.). These are **required** for compatibility and must not be renamed.
   - ~20-25%: Internal variables and response shapes that directly mirror `resolveCoinParties`, on-chain getters, or batcher expectations for fidelity (`payoutRecipient`, `payoutRecipientAddress`, `expectedPayoutRecipient`, `payoutRecipientMode` in a few places). We have added or strengthened canonical header blocks in the key resolvers and handlers.
   - <10%: Comments, log strings, and a small number of UI labels (CoinManage, allowlist response docs, paymaster errors, etc.). These are the active mechanical tail.
-- Files receiving qualification in the most recent passes: CreatorCoinPolicyController.sol, PayoutRouter.sol (residual), deployPhase2Invariants.ts + test, keeper/_sweep.ts, kpr payout-integrity-monitor, paymaster/_paymaster.ts (error), creator-access/_allowlist.ts, CoinManage.tsx (ABI note + render), plus earlier high-leverage work on DeploymentBatcher.sol, DeployVault.tsx, CreatorEarnings.tsx, _createCore.ts, and the zora payout design docs (both copies).
+- Files receiving qualification in the most recent passes: CreatorCoinPolicyController.sol, CreatorPayoutRouter.sol (residual), deployPhase2Invariants.ts + test, keeper/_sweep.ts, kpr payout-integrity-monitor, paymaster/_paymaster.ts (error), creator-access/_allowlist.ts, CoinManage.tsx (ABI note + render), plus earlier high-leverage work on DeploymentBatcher.sol, DeployVault.tsx, CreatorEarnings.tsx, _createCore.ts, and the zora payout design docs (both copies).
 - Key positive: The two most critical enforcement surfaces (deployPhase2Invariants + keeper sweep + kpr monitor) now emit only canonical violation codes and messages.
 - The canonical reference document is actively linked from the cleaned surfaces and from AGENTS.md-scoped design docs.
 

@@ -400,7 +400,7 @@ describe('v1 build phase 1 handlers', () => {
     const res = createMockRes()
     await gaugeResetVotesHandler(req, res)
     expect(res.statusCode).toBe(503)
-    expect(String(res.body?.error ?? '')).toContain('VaultGaugeVoting not configured')
+    expect(String(res.body?.error ?? '')).toContain('ve4626GaugeVoting not configured')
   })
 
   it('builds ve lock calldata', async () => {

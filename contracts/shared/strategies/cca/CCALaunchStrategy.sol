@@ -103,9 +103,8 @@ interface IVaultTelemetry {
  *
  * @dev CCA Factory is chain-specific; configure via `CCA_FACTORY`.
  *
- * @dev Vault share allocation (30/30/30/10 at finalize) is enforced by `DeploymentBatcher`
- *      — this strategy receives explicit `amount` and `lpReserveAmount` from the batcher;
- *      it does not compute global vault splits internally.
+ * @dev Used for creator lane launches primarily. The IStrategy interface and shared deploy make it adaptable for agent, creator, and future ecosystems.
+ *      Vault share allocation is enforced by DeploymentBatcher.
  */
 contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;

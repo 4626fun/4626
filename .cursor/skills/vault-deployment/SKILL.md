@@ -29,7 +29,7 @@ There are multiple layers:
   - `CreatorOracle`
 - Optional post-deploy:
   - Strategies (Charm/Ajna) via batchers
-  - Payout routing (e.g., `PayoutRouter`)
+  - Payout routing (e.g., `CreatorPayoutRouter`)
 
 ## Strategy entitlements (greenfield)
 
@@ -66,7 +66,7 @@ Greenfield vault deploy requires paid **`vault_full_deploy`** ($499 USDC). That 
 - Activation / launch:
   - `contracts/helpers/batchers/VaultActivationBatcher.sol` (activates vault + can trigger launch)
 - Payout routing:
-  - `contracts/utilities/routers/PayoutRouter.sol`
+  - `contracts/utilities/routers/CreatorPayoutRouter.sol`
 - “Required approvals” reminder:
   - `docs/guides/deploy-vault.md`
   - `docs/reference/current-contract-inventory.md`

@@ -491,8 +491,8 @@ Major subsystems by path:
 
 | File | Role |
 |------|------|
-| `contracts/utilities/routers/PayoutRouter.sol` | Creator coin external revenue conversion |
-| `contracts/utilities/routers/VaultShareBurnStream.sol` | Weekly burn drip |
+| `contracts/utilities/routers/CreatorPayoutRouter.sol` | Creator coin external revenue conversion |
+| `contracts/utilities/routers/CreatorVaultShareBurnStream.sol` | Weekly burn drip |
 | `contracts/utilities/routers/CreatorCoinPolicyController.sol` | Policy controller |
 
 ### Solana bridge

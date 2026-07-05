@@ -197,7 +197,7 @@ contract LotteryManager4626AmoeLinearParityTest is Test {
         manager.setLocalVRFConsumer(address(vrf));
         manager.setUseLocalVRF(true);
         manager.setBoostManager(address(boostManager));
-        manager.setVaultGaugeVoting(address(gauge));
+        manager.setVe4626GaugeVoting(address(gauge));
         manager.setAuthorizedAmoeRelayer(relayer);
         vm.stopPrank();
 

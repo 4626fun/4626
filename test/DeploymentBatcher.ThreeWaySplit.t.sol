@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 
 import "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
-import "@4626/creator/governance/VaultRolePolicyManager.sol";
+import "@4626/shared/governance/VaultRolePolicyManager.sol";
 import "test/helpers/DeploymentBatcherFixture.sol";
 
 contract MockCreatorTokenDepositBounds {

@@ -24,6 +24,10 @@ contract VaultAuxiliaryDeployBatcher {
     address public immutable protocolTreasury;
     address public immutable swapRouter;
 
+    // Note: This is primarily for creator lane auxiliary (payout router, burn stream).
+    // Agent lane uses AgentRevenueRouter + tax adapter.
+    // Future ecosystems can extend or use generalized versions via params.
+
     error ZeroAddress();
     error NotOwner();
     error InvalidCodeId();
@@ -95,7 +99,7 @@ contract VaultAuxiliaryDeployBatcher {
         if (IOwnableViewForAuxiliary(params.vault).owner() != params.owner) revert NotOwner();
 
         bytes32 burnStreamSalt =
-            keccak256(abi.encodePacked("4626:VaultShareBurnStream", params.creatorToken, params.owner));
+            keccak256(abi.encodePacked("4626:CreatorVaultShareBurnStream", params.creatorToken, params.owner));
         bytes memory burnStreamArgs = abi.encode(params.vault);
         out.burnStream = create2Deployer.computeAddress(
             burnStreamSalt, _deriveInitCodeHash(codeIds.vaultShareBurnStream, burnStreamArgs)
@@ -105,7 +109,7 @@ contract VaultAuxiliaryDeployBatcher {
         }
 
         bytes32 payoutRouterSalt =
-            keccak256(abi.encodePacked("4626:PayoutRouter", params.creatorToken, params.owner));
+            keccak256(abi.encodePacked("4626:CreatorPayoutRouter", params.creatorToken, params.owner));
         bytes memory payoutRouterArgs = abi.encode(
             params.creatorToken,
             params.vault,

@@ -3,15 +3,15 @@ pragma solidity ^0.8.20;
 
 import {Script, console2} from "forge-std/Script.sol";
 
-import {VaultGaugeVoting} from "@4626/creator/governance/VaultGaugeVoting.sol";
-import {VoterRewardsDistributor} from "@4626/creator/governance/VoterRewardsDistributor.sol";
+import {ve4626GaugeVoting} from "@4626/shared/governance/ve4626GaugeVoting.sol";
+import {ve4626VoterRewardsDistributor} from "@4626/shared/governance/ve4626VoterRewardsDistributor.sol";
 import {BribesFactory} from "@4626/shared/governance/factories/BribesFactory.sol";
 import {ve4626} from "@4626/creator/governance/ve4626.sol";
 import {ve4626BoostManager} from "@4626/creator/governance/ve4626BoostManager.sol";
 
 interface ILotteryManager4626ForRewards {
     function setBoostManager(address manager) external;
-    function setVaultGaugeVoting(address vaultGaugeVoting) external;
+    function setVe4626GaugeVoting(address vaultGaugeVoting) external;
 }
 
 interface I4626RegistryForRewards {
@@ -21,23 +21,23 @@ interface I4626RegistryForRewards {
 }
 
 interface ICreatorGaugeControllerForRewards {
-    function setVaultGaugeVoting(address voting) external;
-    function setVoterRewardsDistributor(address distributor) external;
+    function setVe4626GaugeVoting(address voting) external;
+    function setVe4626VoterRewardsDistributor(address distributor) external;
 }
 
 /**
  * @notice Deploys + wires the ve(3,3) rewards ecosystem:
  * - ve4626 (vote-escrow token)
  * - ve4626BoostManager (personal lottery boost)
- * - VaultGaugeVoting (weekly gauge voting)
- * - VoterRewardsDistributor (routes the 9.61% slice to voters)
+ * - ve4626GaugeVoting (weekly gauge voting)
+ * - ve4626VoterRewardsDistributor (routes the 9.61% slice to voters)
  * - BribesFactory (CREATE2 BribeDepot per vault)
  *
  * Wiring:
  * - ve4626.setBoostManager(boostManager)
  * - lotteryManager.setBoostManager(boostManager)
- * - lotteryManager.setVaultGaugeVoting(vaultGaugeVoting)
- * - each CreatorGaugeController: setVaultGaugeVoting + setVoterRewardsDistributor
+ * - lotteryManager.setVe4626GaugeVoting(vaultGaugeVoting)
+ * - each CreatorGaugeController: setVe4626GaugeVoting + setVe4626VoterRewardsDistributor
  *
  * Run (broadcast):
  *   export BASE_RPC_URL="https://mainnet.base.org"
@@ -96,17 +96,17 @@ contract DeployRewardsEcosystem is Script {
         ve4626BoostManager boostManager = new ve4626BoostManager(address(ve), owner);
         console2.log("veBoostManager:", address(boostManager));
 
-        console2.log("\nDeploy VaultGaugeVoting...");
-        VaultGaugeVoting voting = new VaultGaugeVoting(address(ve), owner);
-        console2.log("VaultGaugeVoting:", address(voting));
+        console2.log("\nDeploy ve4626GaugeVoting...");
+        ve4626GaugeVoting voting = new ve4626GaugeVoting(address(ve), owner);
+        console2.log("ve4626GaugeVoting:", address(voting));
 
         if (setRegistryWhitelist) {
-            console2.log("\nConfigure VaultGaugeVoting registry whitelist...");
+            console2.log("\nConfigure ve4626GaugeVoting registry whitelist...");
             voting.setRegistry(registry);
             voting.setUseRegistryWhitelist(true);
 
             // Seed the manual whitelist from the registry so the gauge is usable immediately.
-            console2.log("\nSeed VaultGaugeVoting manual whitelist from registry vaults...");
+            console2.log("\nSeed ve4626GaugeVoting manual whitelist from registry vaults...");
             I4626RegistryForRewards reg = I4626RegistryForRewards(registry);
             address[] memory tokens = reg.getAllCreatorCoins();
             address[] memory vaultsTmp = new address[](tokens.length);
@@ -141,10 +141,10 @@ contract DeployRewardsEcosystem is Script {
             }
         }
 
-        console2.log("\nDeploy VoterRewardsDistributor...");
-        VoterRewardsDistributor rewards = new VoterRewardsDistributor(address(voting), registry, owner);
+        console2.log("\nDeploy ve4626VoterRewardsDistributor...");
+        ve4626VoterRewardsDistributor rewards = new ve4626VoterRewardsDistributor(address(voting), registry, owner);
         rewards.setProtocolTreasury(protocolTreasury);
-        console2.log("VoterRewardsDistributor:", address(rewards));
+        console2.log("ve4626VoterRewardsDistributor:", address(rewards));
 
         console2.log("\nDeploy BribesFactory...");
         BribesFactory bribesFactory = new BribesFactory(address(voting));
@@ -155,7 +155,7 @@ contract DeployRewardsEcosystem is Script {
 
         console2.log("\nWire LotteryManager4626 -> boostManager + gauge voting...");
         ILotteryManager4626ForRewards(lotteryManager).setBoostManager(address(boostManager));
-        ILotteryManager4626ForRewards(lotteryManager).setVaultGaugeVoting(address(voting));
+        ILotteryManager4626ForRewards(lotteryManager).setVe4626GaugeVoting(address(voting));
 
         if (wireExistingGauges) {
             console2.log("\nWire existing CreatorGaugeControllers (set voting + rewards distributor)...");
@@ -165,8 +165,8 @@ contract DeployRewardsEcosystem is Script {
                 if (gauge == address(0)) continue;
                 // These setters are owner-only on the gauge controller (protocol treasury owner).
                 // This script must be broadcast by the gauge owner to succeed.
-                ICreatorGaugeControllerForRewards(gauge).setVaultGaugeVoting(address(voting));
-                ICreatorGaugeControllerForRewards(gauge).setVoterRewardsDistributor(address(rewards));
+                ICreatorGaugeControllerForRewards(gauge).setVe4626GaugeVoting(address(voting));
+                ICreatorGaugeControllerForRewards(gauge).setVe4626VoterRewardsDistributor(address(rewards));
             }
             console2.log("Wired gauges for token count:", tokens.length);
         }
@@ -176,8 +176,8 @@ contract DeployRewardsEcosystem is Script {
         console2.log("\n=== SUMMARY ===");
         console2.log("ve4626:", address(ve));
         console2.log("veBoostManager:", address(boostManager));
-        console2.log("VaultGaugeVoting:", address(voting));
-        console2.log("VoterRewardsDistributor:", address(rewards));
+        console2.log("ve4626GaugeVoting:", address(voting));
+        console2.log("ve4626VoterRewardsDistributor:", address(rewards));
         console2.log("BribesFactory:", address(bribesFactory));
     }
 }

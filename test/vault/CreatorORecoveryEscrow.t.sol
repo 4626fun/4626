@@ -4,7 +4,7 @@ pragma solidity 0.8.30;
 import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import {CreatorORecoveryEscrow} from "@4626/vault/recovery/CreatorORecoveryEscrow.sol";
+import {CreatorORecoveryEscrow} from "@4626/creator/recovery/CreatorORecoveryEscrow.sol";
 
 contract MockToken is ERC20 {
     constructor() ERC20("Mock", "MOCK") {}

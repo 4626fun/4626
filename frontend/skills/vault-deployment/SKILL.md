@@ -29,7 +29,7 @@ There are multiple layers:
   - `CreatorOracle`
 - Optional post-deploy:
   - Strategies (Charm/Ajna) via batchers
-  - Payout routing (e.g., `PayoutRouter`)
+  - Payout routing (e.g., `CreatorPayoutRouter`)
 
 ## Required Inputs
 
@@ -58,7 +58,7 @@ There are multiple layers:
 - Activation / launch:
   - `contracts/helpers/batchers/VaultActivationBatcher.sol` (activates vault + can trigger launch)
 - Payout routing:
-  - `contracts/utilities/routers/PayoutRouter.sol`
+  - `contracts/creator/revenue/CreatorPayoutRouter.sol`
 - “Required approvals” reminder:
   - `docs/guides/deploy-vault.md`
   - `docs/reference/current-contract-inventory.md`

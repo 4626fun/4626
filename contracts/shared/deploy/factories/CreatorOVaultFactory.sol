@@ -7,7 +7,7 @@ import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
 /**
  * @title CreatorOVaultFactory
  * @author 0xakita.eth
- * @notice Legacy deployment registrar and lookup surface for Creator Vault stacks deployed via script
+ * @notice Lane-specific (creator) registrar for Creator Vault stacks (legacy; superseded by shared deploy batchers). For agent and additional ecosystems use other/ + extend registry or add similar factories.
  *
  * @dev DEPRECATED: This factory is superseded by DeploymentBatcher (contracts/shared/deploy/batchers/).
  *      DeploymentBatcher handles phased deployment (Phase 1-3) with CREATE2 deterministic

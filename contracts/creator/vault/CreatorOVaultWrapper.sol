@@ -54,7 +54,7 @@ interface IQueueAwareVault {
  * @dev SHAREOFT INTEGRATION:
  *      - Registered on ShareOFT via setWrapper(); wrap/unwrap paths are NoFees
  *      - propagateCooldownOnTransfer() enforces per-user deposit cooldown on ShareOFT transfers (M-08)
- *      - PayoutRouter and gauge unwrap paths rely on whitelisted unwrap access
+ *      - CreatorPayoutRouter and gauge unwrap paths rely on whitelisted unwrap access
  */
 contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;

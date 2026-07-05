@@ -49,7 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const gauge = getApiContracts().vaultGaugeVoting
   if (!gauge) {
-    return res.status(503).json({ success: false, error: 'VaultGaugeVoting not configured' })
+    return res.status(503).json({ success: false, error: 've4626GaugeVoting not configured' })
   }
 
   try {

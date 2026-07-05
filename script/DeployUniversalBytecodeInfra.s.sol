@@ -6,7 +6,7 @@ import "forge-std/Script.sol";
 import "@4626/shared/deploy/infra/OFTBootstrapRegistry.sol";
 import "@4626/shared/deploy/infra/UniversalBytecodeStore.sol";
 import "@4626/shared/deploy/factories/UniversalCreate2DeployerFromStore.sol";
-import "@4626/creator/messaging/CreatorShareOFT.sol";
+import "@4626/creator/vault/CreatorShareOFT.sol";
 
 /// @notice Deploys (and seeds) the universal bytecode infra via the universal CREATE2 factory (0x4e59…).
 ///

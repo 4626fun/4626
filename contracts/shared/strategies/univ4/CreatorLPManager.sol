@@ -26,14 +26,15 @@ import {V4LiquidityAmounts} from "@4626/shared/libraries/uniswap/V4LiquidityAmou
 /**
  * @title CreatorLPManager
  * @author 0xakita.eth
- * @notice Manages LP liquidity for CreatorShareOFT (■AKITA) on Uniswap V4
+ * @notice Manages LP for creator lane ShareOFT on V4. Lane-specific manager (creator lane); the IStrategy/ILPStrategy pattern is reusable for agent/other lanes (e.g. future AgentLPManager).
  *
  * @dev PURPOSE:
- *      Manages liquidity for the ShareOFT (■AKITA) on Uniswap V4.
+ *      Manages liquidity for the ShareOFT (creator lane) on Uniswap V4.
  *      Buy-side trade fees are enforced by ShareOFT SwapOnly classification (default 6.9%), not this strategy.
  *      Optional sell-side tax is a separate Base V4 hook plane when explicitly configured.
  *
  *      NOT for the original Creator Coin — that uses CreatorCharmStrategy on V3.
+ *      For agent lane, analogous manager can be created using same interfaces.
  *
  * @dev TOKEN DISTINCTION:
  *      ┌────────────────────────────────────────────────────────────┐
@@ -46,6 +47,7 @@ import {V4LiquidityAmounts} from "@4626/shared/libraries/uniswap/V4LiquidityAmou
  *      - ShareOFT is the primary trading surface; pool registered as SwapOnly for buy-fee detection
  *      - Buy fees route to tradeFeeCollector → jackpotCustodian via gauge split
  *      - V4 hook optional for sell-side tax when owner activates SimpleSellTaxHook config
+ *      - Pattern can be replicated for agent lane ShareOFT or future ecosystems.
  *
  * @dev ARCHITECTURE (inspired by Charm Alpha Pro Vault):
  *      CreatorOVault → CreatorLPManager → Uniswap V4 Positions

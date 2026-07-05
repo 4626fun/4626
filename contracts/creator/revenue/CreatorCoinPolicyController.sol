@@ -15,12 +15,12 @@ interface ICreatorCoinAdmin {
  *
  * @dev This contract is intended to hold CreatorCoin ownership after deployment.
  *      It only permits setting the creatorCoinPayoutRecipient (external earnings lane)
- *      to the configured PayoutRouter and supports an explicit ownership handoff for
+ *      to the configured CreatorPayoutRouter and supports an explicit ownership handoff for
  *      controlled upgrades/migrations.
  *
  *      Per AGENTS.md "Canonical Lane Terminology":
  *      - creatorCoinPayoutRecipient = CreatorCoin external earnings lane (routes to
- *        PayoutRouter → VaultShareBurnStream in router mode, or direct treasury).
+ *        CreatorPayoutRouter → CreatorVaultShareBurnStream in router mode, or direct treasury).
  *      - This is distinct from tradeFeeCollector (ShareOFT/hook trade-fee lane).
  *      See docs/audits/creatorvault-business-logic-core-structure-audit.md.
  */
@@ -46,7 +46,7 @@ contract CreatorCoinPolicyController is Ownable {
     }
 
     /**
-     * @notice Enforce creatorCoinPayoutRecipient (external earnings lane) to the configured PayoutRouter.
+     * @notice Enforce creatorCoinPayoutRecipient (external earnings lane) to the configured CreatorPayoutRouter.
      *
      *         The on-chain CreatorCoin function is still named setPayoutRecipient (ABI compatibility).
      *         All prose, docs, and higher-level comments use the canonical AGENTS.md term.

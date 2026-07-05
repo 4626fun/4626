@@ -28,16 +28,16 @@ Strategies
 vault/strategies/CCALaunchStrategy.sol (+ ConfigModule, EncodingHelper) — continuous clearing auction launch; ERC4626StrategyAdapter.sol — wraps external 4626; SolanaStrategy.sol / SolanaBridgeStrategy.sol — cross-chain NAV.
 
 Lottery / gauge / oracle / rewards
-utilities/lottery/CreatorLotteryManager.sol — jackpot payout authority (VRF winner selection); governance/CreatorGaugeController.sol — jackpot custody + fee-split routing; utilities/oracles/CreatorOracle.sol — Chainlink+TWAP price hub with LZ broadcast; governance/VoterRewardsDistributor.sol — protocol reward routing.
+utilities/lottery/CreatorLotteryManager.sol — jackpot payout authority (VRF winner selection); governance/CreatorGaugeController.sol — jackpot custody + fee-split routing; utilities/oracles/CreatorOracle.sol — Chainlink+TWAP price hub with LZ broadcast; governance/ve4626ve4626VoterRewardsDistributor.sol — protocol reward routing.
 
 ve(3,3) governance
-governance/ve4626.sol — voting escrow (ERC20Votes); ve4626BoostManager.sol — lottery boost multiplier; VaultGaugeVoting.sol — epoch gauge voting; VaultRolePolicyManager.sol — role policy; bribes/BribeDepot.sol + factories/BribesFactory.sol — bribe markets.
+governance/ve4626.sol — voting escrow (ERC20Votes); ve4626BoostManager.sol — lottery boost multiplier; ve4626GaugeVoting.sol — epoch gauge voting; VaultRolePolicyManager.sol — role policy; bribes/BribeDepot.sol + factories/BribesFactory.sol — bribe markets.
 
 Cross-chain
 utilities/messaging/CreatorShareOFT.sol — LayerZero OFT with local tax plane + lottery/winner messaging; OVaultHubComposer.sol (+ services/ovault/CreatorOVaultComposerHub.sol) — LZ compose handler for cross-chain deposit/redeem; utilities/bridge/SolanaBridgeAdapter.sol — Base⇄Solana twin bridge.
 
 Deploy / factories / registry / periphery
-helpers/batchers/DeploymentBatcher.sol (+ strategy/activation/auxiliary batchers, RouteCoherenceChecker) — multi-phase CREATE2 deploy; factories/* — Create2 deployers + CreatorOVaultFactory; helpers/infra/UniversalBytecodeStore*.sol — on-chain init-code store; core/CreatorRegistry.sol — canonical route registry; utilities/routers/PayoutRouter.sol + VaultShareBurnStream.sol + CreatorCoinPolicyController.sol — earnings lanes; helpers/hooks/TaxHookConfigurator.sol; alfaclub/* — creator-key AMM; utilities/vesting/CreatorLinearVesting.sol; libraries/* — Uniswap math.
+helpers/batchers/DeploymentBatcher.sol (+ strategy/activation/auxiliary batchers, RouteCoherenceChecker) — multi-phase CREATE2 deploy; factories/* — Create2 deployers + CreatorOVaultFactory; helpers/infra/UniversalBytecodeStore*.sol — on-chain init-code store; core/CreatorRegistry.sol — canonical route registry; utilities/routers/CreatorPayoutRouter.sol + CreatorVaultShareBurnStream.sol + CreatorCoinPolicyController.sol — earnings lanes; helpers/hooks/TaxHookConfigurator.sol; alfaclub/* — creator-key AMM; utilities/vesting/CreatorLinearVesting.sol; libraries/* — Uniswap math.
 
 Architectural note: The vault uses a delegatecall module pattern (not a proxy — the main contract holds storage; modules are logic-only reached via _delegate/_delegateAndReturn). I verified the storage variable order/types in CreatorOVault match CreatorOVaultModuleStorage.v3 against OZ 5.4 base layout, and that a MODULE_STORAGE_VERSION hash gate blocks module wiring on layout mismatch. No storage-layout divergence was found — this is the single highest-risk area in this design and it is handled correctly.
 
@@ -66,10 +66,10 @@ Lines 842-848
             if (!hasPendingRandomWord[requestId]) {
                 pendingRandomWord[requestId] = randomWords[0];
                 hasPendingRandomWord[requestId] = true;
-Severity: High Title: Emergency vote reset desynchronizes aggregate vs per-user weights → bribe over-claim Contract/File: contracts/governance/VaultGaugeVoting.sol:491-501, 434-436; contracts/shared/governance/bribes/BribeDepot.sol:115-128 Description: emergencyResetAllVotes zeroes _epochVaultVotes / _epochTotalVotes and bumps _epochResetGeneration, but does not clear _epochUserVaultVotes. I verified getUserVoteWeightAtEpoch returns _epochUserVaultVotes[epoch][user][vault] with no generation check, while BribeDepot.claim divides totalBribes * userWeight / totalWeight using these getters. A user who voted pre-reset and did not re-vote retains phantom userWeight; once any new voter re-establishes a small totalWeight, the stale user can claim a disproportionate (up to entire) share of the bribe pool. The generation guard exists only in _clearUserVotes, not in the bribe-facing getter. Impact: Theft of bribe rewards from legitimate voters after an emergency reset; first stale claimer can drain a pool. Recommendation: Make getUserVoteWeightAtEpoch return 0 when _userVoteGeneration[epoch][user] != _epochResetGeneration[epoch], or clear user records on reset, or stamp generation into bribe claims. Code Snippet:
+Severity: High Title: Emergency vote reset desynchronizes aggregate vs per-user weights → bribe over-claim Contract/File: contracts/shared/governance/ve4626GaugeVoting.sol:491-501, 434-436; contracts/shared/governance/bribes/BribeDepot.sol:115-128 Description: emergencyResetAllVotes zeroes _epochVaultVotes / _epochTotalVotes and bumps _epochResetGeneration, but does not clear _epochUserVaultVotes. I verified getUserVoteWeightAtEpoch returns _epochUserVaultVotes[epoch][user][vault] with no generation check, while BribeDepot.claim divides totalBribes * userWeight / totalWeight using these getters. A user who voted pre-reset and did not re-vote retains phantom userWeight; once any new voter re-establishes a small totalWeight, the stale user can claim a disproportionate (up to entire) share of the bribe pool. The generation guard exists only in _clearUserVotes, not in the bribe-facing getter. Impact: Theft of bribe rewards from legitimate voters after an emergency reset; first stale claimer can drain a pool. Recommendation: Make getUserVoteWeightAtEpoch return 0 when _userVoteGeneration[epoch][user] != _epochResetGeneration[epoch], or clear user records on reset, or stamp generation into bribe claims. Code Snippet:
 
 
-VaultGaugeVoting.sol
+ve4626GaugeVoting.sol
 Lines 434-436
     function getUserVoteWeightAtEpoch(uint256 epoch, address user, address vault) external view returns (uint256) {
         return _epochUserVaultVotes[epoch][user][vault];
@@ -98,10 +98,10 @@ Lines 46-53
         seeded = true;
 Severity: High (config-dependent) Title: Remote MSG_TYPE_LOTTERY_ENTRY has no matching handler on the OFT receive path Contract/File: contracts/utilities/messaging/CreatorShareOFT.sol:734-758, 861-886 Description: submitPendingLotteryEntry sends an ABI-encoded 6-field lottery payload via _lzSend(hubEid, ...), which routes to the standard OApp peers[hubEid] (the counterpart OFT). I verified the hub _lzReceive override only branches for winner callbacks (128-byte, hubLotteryPeer sender) and otherwise defers to super._lzReceive, which expects a packed OFT transfer — not a 192-byte ABI payload. CreatorLotteryManager has its own _lzReceive gated by authorizedRemoteOFTs, but a single peers[hubEid] cannot route both token transfers and lottery entries to two different destinations. Impact: If peers are wired OFT→OFT (the normal case), cross-chain lottery entries revert or mis-decode on delivery after the user has paid LZ fees. State is CEI-protected on the send side, so a reverting _lzSend restores the pending entry, but a successful send with failed hub receipt burns fees and drops the entry. Recommendation: Route lottery entries to a dedicated OApp receiver with its own peer wiring (the code comment at lines 890-891 already recommends separating custom messages from the OFT), or add an explicit MSG_TYPE_LOTTERY_ENTRY branch that validates sender and forwards to the hub CreatorLotteryManager.
 
-Severity: High Title: PayoutRouter.emergencyWithdraw can drain all routed revenue Contract/File: contracts/utilities/routers/PayoutRouter.sol:305-317 Description: Owner may withdraw any ERC-20/ETH balance, including creatorCoinPayoutRecipient revenue awaiting conversion/queueing, bypassing the burn-stream policy. Impact: Compromised/misconfigured owner key seizes creator external-earnings before they reach the share-holder-biased burn stream. Recommendation: Timelock + multisig; restrict emergency withdraw to non-core tokens, or re-enforce payout recipient post-withdraw. Code Snippet:
+Severity: High Title: PayoutRouter.emergencyWithdraw can drain all routed revenue Contract/File: contracts/utilities/routers/CreatorPayoutRouter.sol:305-317 Description: Owner may withdraw any ERC-20/ETH balance, including creatorCoinPayoutRecipient revenue awaiting conversion/queueing, bypassing the burn-stream policy. Impact: Compromised/misconfigured owner key seizes creator external-earnings before they reach the share-holder-biased burn stream. Recommendation: Timelock + multisig; restrict emergency withdraw to non-core tokens, or re-enforce payout recipient post-withdraw. Code Snippet:
 
 
-PayoutRouter.sol
+CreatorPayoutRouter.sol
 Lines 305-308
     function emergencyWithdraw(address token, address to, uint256 amount) external onlyOwner nonReentrant {
         if (to == address(0)) revert ZeroAddress();
@@ -131,9 +131,9 @@ Severity: Medium Title: Stuck-token recovery gaps in composer and OFT hub fee pa
 
 Severity: Medium Title: SolanaStrategy.getTotalAssets counts keeper-reported remoteNav, but withdraw returns only Base liquidity Contract/File: contracts/vault/strategies/SolanaStrategy.sol:263-290 Description: NAV = baseLiquid + remoteNav (keeper-reported, delta-bounded) while withdraw transfers only Base-side balance. Impact: Vault share pricing can overstate redeemable assets; a compromised keeper inflates NAV within delta caps. Recommendation: Bound remoteNav by reconciled bridge receipts; add emergency reset; ensure vault withdraw logic accounts for illiquid remote NAV.
 
-Severity: Medium Title: sweepStaleEpochRewards lets owner seize all unclaimed voter rewards after grace Contract/File: contracts/governance/VoterRewardsDistributor.sol:232-255 Description: After staleSweepGraceEpochs (26 ≈ 6 months), owner sweeps the full epochVaultRewards to protocolTreasury regardless of outstanding legitimate claims. Impact: Voters who miss the window lose rewards; centralization risk. Recommendation: Document prominently; consider dust-only sweeps or longer grace; emit outstanding amounts.
+Severity: Medium Title: sweepStaleEpochRewards lets owner seize all unclaimed voter rewards after grace Contract/File: contracts/shared/governance/ve4626ve4626VoterRewardsDistributor.sol:232-255 Description: After staleSweepGraceEpochs (26 ≈ 6 months), owner sweeps the full epochVaultRewards to protocolTreasury regardless of outstanding legitimate claims. Impact: Voters who miss the window lose rewards; centralization risk. Recommendation: Document prominently; consider dust-only sweeps or longer grace; emit outstanding amounts.
 
-Severity: Medium Title: Boost-source setters instant until timelock armed; profit-report resets unlock schedule Contract/File: CreatorLotteryManager.sol:2291-2304; CreatorOVaultCoreModule.sol:729-741 Description: (a) setBoostManager/setVaultGaugeVoting apply instantly until armBoostSourceTimelock() is called — a compromised owner can install a malicious boost source lifting odds toward 15%. (b) Each profitable report() recomputes fullProfitUnlockDate/profitUnlockingRate over old+new locked shares with a fresh window, extending realization for previously-locked profit. Impact: Pre-arming probability manipulation; slower-than-expected PPS accretion. Recommendation: Arm the timelock in the deploy script before production; use additive unlock tranches instead of resetting the timer.
+Severity: Medium Title: Boost-source setters instant until timelock armed; profit-report resets unlock schedule Contract/File: CreatorLotteryManager.sol:2291-2304; CreatorOVaultCoreModule.sol:729-741 Description: (a) setBoostManager/setve4626GaugeVoting apply instantly until armBoostSourceTimelock() is called — a compromised owner can install a malicious boost source lifting odds toward 15%. (b) Each profitable report() recomputes fullProfitUnlockDate/profitUnlockingRate over old+new locked shares with a fresh window, extending realization for previously-locked profit. Impact: Pre-arming probability manipulation; slower-than-expected PPS accretion. Recommendation: Arm the timelock in the deploy script before production; use additive unlock tranches instead of resetting the timer.
 
 Severity: Medium Title: Activation batchers lack registry validation on several entrypoints Contract/File: contracts/helpers/batchers/VaultActivationBatcher.sol:192-229 Description: batchActivate and some Permit2 operator paths accept arbitrary vault/wrapper/ccaStrategy; registry-coherence checks exist only on a subset. Impact: A malicious UI can route user approvals through attacker contracts while the user approves the genuine creator token. Recommendation: Validate every entrypoint against CreatorRegistry.
 
@@ -153,11 +153,11 @@ votingPowerAt uses current lock for historical epochs — ve4626.sol:359-366: se
 burnExpiredLock leaves ghost lock struct — ve4626.sol:287-301: burns ve but keeps _locks[user].amount; confuses amount > 0 consumers.
 extendLock allowed on expired locks without explicit guard — ve4626.sol:185-215.
 setMinVotingPower has no timelock — ve4626BoostManager.sol:164-167, unlike other boost params.
-PayoutRouter.convertAndQueue ignores minOut on direct creator-coin deposits — PayoutRouter.sol:345-349 (documented 1:1).
-PayoutRouter._claimProtocolRewards uses hardcoded magic selectors — PayoutRouter.sol:443-449: brittle to Zora API changes.
+PayoutRouter.convertAndQueue ignores minOut on direct creator-coin deposits — CreatorPayoutRouter.sol:345-349 (documented 1:1).
+PayoutRouter._claimProtocolRewards uses hardcoded magic selectors — CreatorPayoutRouter.sol:443-449: brittle to Zora API changes.
 CCALaunchStrategy.setFeeRecipient repointable post-deploy — CCALaunchStrategyConfigModule.sol:291-294: can redirect away from tradeFeeCollector. Make immutable after launch or assert gauge equality.
 AjnaERC4626StrategyFactory.deploy permissionless — StrategyDeploymentFactories.sol:89-133: spam/grief risk.
-VaultShareBurnStream drip halts at MAX_FAILED_BURN_ACCUMULATOR — VaultShareBurnStream.sol:254-267: prolonged vault-burn failure stalls PPS accretion; needs monitoring/runbook.
+VaultShareBurnStream drip halts at MAX_FAILED_BURN_ACCUMULATOR — CreatorVaultShareBurnStream.sol:254-267: prolonged vault-burn failure stalls PPS accretion; needs monitoring/runbook.
 Solana relay decimal down-scaling truncates small amounts to 0 — SolanaBridgeAdapter.sol:686-692: silent dropped entries; revert on non-zero remainder.
 submitPendingLotteryEntry requires exact msg.value — CreatorShareOFT.sol:745-747: no overpay refund (UX/grief).
 Adapter accumulates excess native fee with no ETH rescue — SolanaBridgeAdapter.sol:865-866.
@@ -175,8 +175,8 @@ SECONDS_PER_YEAR mismatch — 31_556_952 (vault/core) vs 365 days (admin). ~0.07
 UniversalBytecodeStore permissionless but hash-keyed/append-only — poisoning requires a bytecode preimage collision (infeasible); benign front-run only.
 Uniswap math libraries — LiquidityAmounts, V4LiquidityAmounts, TickMathCompat match canonical patterns with Math.mulDiv + toUint128 overflow guards; TickMathCompat intentionally one-directional.
 GAS
-VoterRewardsDistributor.claimMany / emergencyResetAllVotes / processLotteryEntryFromSolana — caller-controlled unbounded loops (self-grief / emergency DoS at scale).
-VaultGaugeVoting.vote O(n²) dedup (bounded at 10, acceptable).
+ve4626ve4626VoterRewardsDistributor.claimMany / emergencyResetAllVotes / processLotteryEntryFromSolana — caller-controlled unbounded loops (self-grief / emergency DoS at scale).
+ve4626GaugeVoting.vote O(n²) dedup (bounded at 10, acceptable).
 CreatorOVaultCoreModule.lockedShares() extra self external-call; inline the math.
 UniversalBytecodeStoreV2.get() linear chunk loop (keep reads off-chain).
 3. Summary
@@ -212,7 +212,7 @@ High-priority issues that must be fixed before deployment:
 
 report() zero-baseline profit mis-accounting (H) — CreatorOVaultCoreModule.sol:704-744.
 VRF owner cherry-pick during pause (H) — CreatorLotteryManager.sol:813-849.
-Emergency-reset bribe over-claim (H) — VaultGaugeVoting.sol:434-436 + BribeDepot.sol.
+Emergency-reset bribe over-claim (H) — ve4626GaugeVoting.sol:434-436 + BribeDepot.sol.
 Permissionless vesting seed() griefing (H) — CreatorLinearVesting.sol:46-53.
 PayoutRouter.emergencyWithdraw drain + gauge emergencyWithdraw jackpot drain (H/M) — add timelock/multisig.
 Cross-chain lottery-entry routing (H, config-dependent) — verify/fix peer wiring or add a dedicated receiver.

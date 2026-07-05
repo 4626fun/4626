@@ -64,38 +64,18 @@ interface IWrapperCooldownHook {
 /**
  * @title AgentShareOFT
  * @author 0xakita.eth
- * @notice LayerZero OFT receipt token for CreatorOVault — hub-centric buy fee, lottery, and omnichain mesh
+ * @notice LayerZero OFT receipt token for the agent lane (AgentOVault) — hub-centric buy fee, lottery, omnichain mesh.
  *
- * @dev ARCHITECTURE:
- *      Per-creator ShareOFT (e.g., ■AKITA). One deployment per chain via CREATE2; `isHub` selects lane behavior.
+ * @dev Uses ◆/◇ symbols.
+ *      Per-agent deployment via CREATE2. `isHub` selects behavior.
  *
- *      HUB MODE (Base):
- *      - SwapOnly → user transfers incur buy fee (default 6.9% via `buyFeeBps`)
- *      - Fees → local `tradeFeeCollector` (AgentGaugeController.receiveFees())
- *      - If receiveFees reverts, fees accumulate in `pendingFees`; retry via flushPendingFeesToGauge()
- *      - Lottery → local LotteryManager4626.processSwapLottery()
- *      - Full vault / wrapper / gauge stack; vault mints/burns via minter role
- *      - Remote lottery entries arrive at this OFT LZ peer and forward to LotteryManager
+ *      HUB (Base): fees to AgentGaugeController, lottery integration, full stack.
+ *      REMOTE: fee flush to hub, lottery entries, winner callbacks.
  *
- *      REMOTE MODE (Arbitrum, Robinhood mesh, etc.):
- *      - Same buy-fee detection; fees accumulate in `pendingFees`
- *      - Permissionless `flushFees()` OR hub `requestRemoteFeeFlush(dstEid)` → spoke auto-flushes
- *      - Lottery: buy queues `pendingLotteryEntries`; buyer submits via submitPendingLotteryEntry() + native LZ fee
- *      - Winner callbacks received from hub LotteryManager peer; emitted as LotteryWinnerNotification
- *      - No local vault, wrapper, or gauge; protocol treasury may wire LZ peers off-Base
+ * @dev Fee plane: buys on SwapOnly → non-SwapOnly.
+ *      Split: 69% ◆ jackpot, 21.39% ◆ voters, 9.61% ◇ burn.
  *
- * @dev FEE MECHANISM (native OFT plane):
- *      - Register DEX pools/routers as SwapOnly; NoFees for vault, wrapper, and gauge
- *      - Buys only: SwapOnly → non-SwapOnly (sells are not taxed on this plane)
- *      - Hub: OFT → tradeFeeCollector → split (69% ■ lottery, 21.39% ■ voters, 9.61% ▢ burn)
- *      - creatorTreasury ongoing lane is 0% by default (`creatorShareBps = 0` on gauge)
- *      - Remote: pendingFees → OFT send to hubGaugeReceiver (permissionless flushFees or hub requestRemoteFeeFlush)
- *      - Optional sell plane: Base Uniswap V4 SimpleSellTaxHook when owner explicitly configures hook tax
- *
- * @dev INTEGRATION NOTES:
- *      - Wrapper cooldown propagation on ShareOFT transfers (setWrapper)
- *      - ILotteryBeneficiary resolver gated by isLotteryResolver allowlist
- *      - Builds on Zora Creator Coins; each vault deploys its own ShareOFT mesh token
+ * @dev Integrates with shared wrapper cooldowns, ILotteryBeneficiary, V4 hook for sell tax (optional).
  */
 contract AgentShareOFT is OFT, ReentrancyGuard {
     using OptionsBuilder for bytes;
@@ -305,6 +285,7 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     );
 
     /// @notice Emitted on remote chain when the hub notifies of a lottery win
+    /// @dev `creatorCoin` here is the lane token (AgentToken for this contract; CreatorCoin for CreatorShareOFT).
     event LotteryWinnerNotification(
         address indexed winner, address indexed creatorCoin, uint256 totalSharesPaid, uint32 indexed sourceHubEid
     );
@@ -370,7 +351,7 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     /**
      * @notice Deploy chain-specific share token
      * @param _name Token name (e.g., "AKITA Shares")
-     * @param _symbol Token symbol (e.g., "■AKITA")
+     * @param _symbol Token symbol (e.g., "◆AKITA")
      * @param _registry Registry4626 address (same on all chains for deterministic addresses)
      * @param _owner Owner address
      *
@@ -408,7 +389,7 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
 
     /**
      * @notice Set the vault that can mint/burn shares (hub-only)
-     * @param _vault CreatorOVault address
+     * @param _vault AgentOVault address
      */
     function setVault(address _vault) external onlyOwner {
         if (_vault == address(0)) revert ZeroAddress();
@@ -439,7 +420,7 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     }
 
     /**
-     * @notice FIX: M-08 — register the CreatorOVaultWrapper so its per-user wrapper
+     * @notice FIX: M-08 — register the AgentOVaultWrapper so its per-user wrapper
      *         cooldown (`lastWrapperDepositBlock`) is propagated on ShareOFT transfers.
      *         Passing address(0) disables the hook. Exempts the wrapper from fees since
      *         wrap/unwrap should not be treated as a fee-bearing trade.
@@ -525,13 +506,13 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
      * @dev Process buy with fees. Follows CEI pattern.
      *
      * @notice FEE FLOW:
-     *         1. Fee is collected in OFT tokens (■AKITA)
+     *         1. Fee is collected in OFT tokens (◆AKITA)
      *         2. Hub: sent to tradeFeeCollector via receiveFees(); on revert → pendingFees + flushPendingFeesToGauge()
      *            Remote: accumulated in pendingFees, bridged via flushFees()
-     *         3. GaugeController on Base routes the burn slice through unwrap → ▢ burn; lottery and voter slices stay as ■:
-     *            - 69% ■ jackpotCustodian reserve (LotteryManager payout authority)
-     *            - 21.39% ■ voter rewards via VoterRewardsDistributor
-     *            - 9.61% ▢ burned → PPS accrual for all vault holders
+     *         3. GaugeController on Base routes the burn slice through unwrap → ◇ burn; lottery and voter slices stay as ◆:
+     *            - 69% ◆ jackpotCustodian reserve (LotteryManager payout authority)
+     *            - 21.39% ◆ voter rewards via ve4626VoterRewardsDistributor
+     *            - 9.61% ◇ burned → PPS accrual for all vault holders
      */
     function _processBuy(address from, address to, uint256 amount) internal nonReentrant returns (bool) {
         // Cache storage reads
@@ -1280,7 +1261,7 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     /**
      * @notice Set the tax config delegate (hub-only, for future custom hooks)
      * @dev NOTE: The existing SimpleSellTaxHook at 0xca975B9dAF772C71161f3648437c3616E5Be0088
-     *      checks msg.sender == token.owner(), so ONLY the ■TOKEN owner can configure it.
+     *      checks msg.sender == token.owner(), so ONLY the ◆TOKEN owner can configure it.
      *      This delegate feature is for future hooks that accept delegated configuration.
      * @param _delegate Address that can call configureTaxHook on behalf of this token
      */
@@ -1312,7 +1293,7 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     // ================================
 
     /**
-     * @notice Convert shares to underlying Creator Coin amount
+     * @notice Convert shares to underlying agent token amount
      * @dev On remote chains (vault == address(0)), returns shares 1:1
      */
     function convertToAssets(uint256 shares) public view returns (uint256) {
@@ -1336,7 +1317,7 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     // getters for `addressType`, `isMinter`, `vault`, `owner`, `pendingFees`,
     // `totalFeesFlushed`, `totalLotteryEntriesSent`, `isHub`, `hubEid`, and
     // `hubGaugeReceiver`. Their dispatcher entries + selectors + literal
-    // strings ("Creator Vault Share Token", "4626.fun Share Token") were
+    // strings ("Agent Vault Share Token", "4626.fun Share Token") were
     // contributing to EIP-170 size pressure and pushing this contract over
     // the 24,576-byte runtime cap (audit M-01, 2026-04-25; see
     // docs/operations/contract-size-gate.md). Removed in the post-PLONK

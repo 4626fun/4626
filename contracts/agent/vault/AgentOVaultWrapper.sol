@@ -18,43 +18,12 @@ interface IQueueAwareVault {
 
 /**
  * @title AgentOVaultWrapper
- * @author 0xakita.eth - Think FriendTech, but for CreatorCoins, in ERC-4626 Omnichain Vaults
- * @notice All-in-one wrapper that handles Agent token → ShareOFT in one transaction
+ * @author 0xakita.eth
+ * @notice All-in-one wrapper for agent lane: Agent token ↔ ShareOFT (◆/◇ symbols).
  *
- * @dev COMBINES WRAPPER + COMPOSER FUNCTIONALITY:
- *
- *      USER-FACING (Simple):
- *      - deposit(akita) → ◆ATIKA  (one tx!)
- *      - withdraw(◆ATIKA) → akita (one tx!)
- *
- *      INTERNAL (Advanced, for integrations):
- *      - wrap(◇ATIKA) → ◆ATIKA
- *      - unwrap(◆ATIKA) → ◇ATIKA
- *
- * @dev WHAT USERS SEE:
- *      "I deposit 1 akita, I get 1 ◆ATIKA"
- *      "I withdraw 1 ◆ATIKA, I get 1 akita"
- *
- *      They never see vault shares (◇ATIKA), wrapping, or the 10^3 offset.
- *
- * @dev NORMALIZATION:
- *      The vault uses a 10^3 offset for inflation attack protection:
- *      - Deposit 1 AKITA → ~1000 ◇ATIKA (vault shares)
- *
- *      This wrapper normalizes the amounts:
- *      - Wrap 1000 ◇ATIKA → 1 ◆ATIKA (÷1000)
- *      - Unwrap 1 ◆ATIKA → 1000 ◇ATIKA (×1000)
- *
- *      Result: 1 AKITA ≈ 1 ◆ATIKA (clean UX!)
- *
- * @dev CROSS-CHAIN COMPATIBLE:
- *      Constructor only takes immutables
- *      Chain-specific shareOFT set via setShareOFT() after deployment
- *
- * @dev SHAREOFT INTEGRATION:
- *      - Registered on ShareOFT via setWrapper(); wrap/unwrap paths are NoFees
- *      - propagateCooldownOnTransfer() enforces per-user deposit cooldown on ShareOFT transfers (M-08)
- *      - PayoutRouter and gauge unwrap paths rely on whitelisted unwrap access
+ * @dev Normalizes the vault's 10^3 offset for clean 1:1 UX.
+ *      Integrated with shared ShareOFT, cooldowns, and revenue paths.
+ *      Chain-specific config post-deploy.
  */
 contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -66,13 +35,13 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
     /**
      * @notice Normalization factor to offset the vault's 10^3 decimals offset
      * @dev The vault uses _decimalsOffset() = 3, meaning:
-     *      - 1 AKITA deposited → ~1000 ◇ATIKA shares
+     *      - 1 agent token deposited → ~1000 ◇ shares
      *
      *      We normalize this in wrap/unwrap:
-     *      - Wrap: ◆ATIKA = ◇ATIKA / 1000
-     *      - Unwrap: ◇ATIKA = ◆ATIKA * 1000
+     *      - Wrap: ◆ = ◇ / 1000
+     *      - Unwrap: ◇ = ◆ * 1000
      *
-     *      Result: 1 AKITA ≈ 1 ◆ATIKA (clean UX!)
+     *      Result: 1 agent token ≈ 1 ◆ share (clean UX!)
      */
     uint256 public constant NORMALIZATION_FACTOR = 1000; // 10^3
 
@@ -80,10 +49,10 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
     // IMMUTABLES
     // ================================
 
-    /// @notice Agent token token (e.g., akita) - the underlying asset
-    IERC20 public immutable creatorCoin;
+    /// @notice Agent token (e.g., the AgentTokenV4) - the underlying asset
+    IERC20 public immutable agentToken;
 
-    /// @notice CreatorOVault (ERC-4626) - converts Agent token to vault shares
+    /// @notice AgentOVault (ERC-4626) - converts Agent token to vault shares
     IERC4626 public immutable vault;
 
     // ================================
@@ -126,8 +95,8 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
     // ================================
 
     // User-facing events
-    event Deposited(address indexed user, uint256 creatorCoinIn, uint256 shareOFTOut);
-    event Withdrawn(address indexed user, uint256 shareOFTIn, uint256 creatorCoinOut);
+    event Deposited(address indexed user, uint256 agentTokenIn, uint256 shareOFTOut);
+    event Withdrawn(address indexed user, uint256 shareOFTIn, uint256 agentTokenOut);
 
     // Internal wrap/unwrap events
     event Wrapped(address indexed user, uint256 vaultSharesIn, uint256 shareOFTOut, uint256 fee);
@@ -176,22 +145,22 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
 
     /**
      * @notice Deploy wrapper (same address possible on all chains)
-     * @param _creatorCoin Agent token address (e.g., akita)
-     * @param _vault CreatorOVault address (ERC-4626)
+     * @param _agentToken Agent token address (e.g. the AgentTokenV4)
+     * @param _vault AgentOVault address (ERC-4626)
      * @param _owner Owner address
      */
-    constructor(address _creatorCoin, address _vault, address _owner) Ownable(_owner) {
-        require(_creatorCoin != address(0), "Zero creatorCoin");
+    constructor(address _agentToken, address _vault, address _owner) Ownable(_owner) {
+        require(_agentToken != address(0), "Zero agentToken");
         require(_vault != address(0), "Zero vault");
 
-        creatorCoin = IERC20(_creatorCoin);
+        agentToken = IERC20(_agentToken);
         vault = IERC4626(_vault);
         feeRecipient = _owner;
         isWhitelisted[_owner] = true;
         isBeneficiaryOperator[_owner] = true;
 
         // Infinite approval for vault deposits
-        IERC20(_creatorCoin).approve(_vault, type(uint256).max);
+        IERC20(_agentToken).approve(_vault, type(uint256).max);
     }
 
     // ================================
@@ -200,7 +169,7 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
 
     /**
      * @notice Set the chain-specific ShareOFT (called after deploy)
-     * @param _shareOFT CreatorShareOFT address (e.g., ◆ATIKA)
+     * @param _shareOFT AgentShareOFT address (e.g., ◆ATIKA)
      */
     function setShareOFT(address _shareOFT) external onlyOwner {
         if (_shareOFT == address(0)) revert ZeroAddress();
@@ -268,7 +237,7 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
     /**
      * @notice Deposit Agent token and receive ShareOFT in ONE transaction
      *
-     * @dev USER SEES: akita → ◆ATIKA
+     * @dev USER SEES: agentToken → ◆ share
      *
      * @dev INTERNAL FLOW:
      *      1. Take Agent token from user
@@ -285,7 +254,7 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
 
         // 1. Take Agent token from user
-        creatorCoin.safeTransferFrom(msg.sender, address(this), amount);
+        agentToken.safeTransferFrom(msg.sender, address(this), amount);
 
         // 2. Deposit to vault → get vault shares
         uint256 vaultShares = vault.deposit(amount, address(this));
@@ -309,7 +278,7 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         if (amount == 0) revert ZeroAmount();
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
 
-        creatorCoin.safeTransferFrom(msg.sender, address(this), amount);
+        agentToken.safeTransferFrom(msg.sender, address(this), amount);
         uint256 vaultShares = vault.deposit(amount, address(this));
         shareOFTOut = _wrapInternal(vaultShares, msg.sender, msg.sender);
 
@@ -334,7 +303,7 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         if (amount == 0) revert ZeroAmount();
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
 
-        creatorCoin.safeTransferFrom(msg.sender, address(this), amount);
+        agentToken.safeTransferFrom(msg.sender, address(this), amount);
         uint256 vaultShares = vault.deposit(amount, address(this));
         shareOFTOut = _wrapInternal(vaultShares, beneficiary, msg.sender);
         if (shareOFTOut < minOut) revert SlippageExceeded();
@@ -348,7 +317,7 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
     /**
      * @notice Withdraw ShareOFT and receive Agent token in ONE transaction
      *
-     * @dev USER SEES: ◆ATIKA → akita
+     * @dev USER SEES: ◆ share → agentToken
      *
      * @dev INTERNAL FLOW:
      *      1. Burn ShareOFT from user
@@ -358,9 +327,9 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
      *
      * @param amount Amount of ShareOFT to withdraw
      * @param minOut Minimum Agent token to receive (slippage protection)
-     * @return creatorCoinOut Amount of Agent token received
+     * @return agentTokenOut Amount of Agent token received
      */
-    function withdraw(uint256 amount, uint256 minOut) external nonReentrant returns (uint256 creatorCoinOut) {
+    function withdraw(uint256 amount, uint256 minOut) external nonReentrant returns (uint256 agentTokenOut) {
         if (amount == 0) revert ZeroAmount();
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
         // FIX: M-01 — enforce per-user cooldown
@@ -371,18 +340,18 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
         _requireSynchronousRedemption(vaultShares);
 
         // 3. Redeem vault shares → Agent token (sent directly to user)
-        creatorCoinOut = vault.redeem(vaultShares, msg.sender, address(this));
+        agentTokenOut = vault.redeem(vaultShares, msg.sender, address(this));
 
         // 4. Check slippage
-        if (creatorCoinOut < minOut) revert SlippageExceeded();
+        if (agentTokenOut < minOut) revert SlippageExceeded();
 
-        emit Withdrawn(msg.sender, amount, creatorCoinOut);
+        emit Withdrawn(msg.sender, amount, agentTokenOut);
     }
 
     /**
      * @notice Withdraw with zero slippage protection (convenience)
      */
-    function withdraw(uint256 amount) external nonReentrant returns (uint256 creatorCoinOut) {
+    function withdraw(uint256 amount) external nonReentrant returns (uint256 agentTokenOut) {
         if (amount == 0) revert ZeroAmount();
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
         // FIX: M-01 — enforce per-user cooldown
@@ -390,9 +359,9 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
 
         uint256 vaultShares = _unwrapInternal(amount, msg.sender, msg.sender);
         _requireSynchronousRedemption(vaultShares);
-        creatorCoinOut = vault.redeem(vaultShares, msg.sender, address(this));
+        agentTokenOut = vault.redeem(vaultShares, msg.sender, address(this));
 
-        emit Withdrawn(msg.sender, amount, creatorCoinOut);
+        emit Withdrawn(msg.sender, amount, agentTokenOut);
     }
 
     /**
@@ -403,7 +372,7 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
     function withdrawFor(uint256 amount, uint256 minOut, address beneficiary)
         external
         nonReentrant
-        returns (uint256 creatorCoinOut)
+        returns (uint256 agentTokenOut)
     {
         if (beneficiary == address(0)) revert ZeroAddress();
         _requireBeneficiaryOperator(beneficiary);
@@ -414,10 +383,10 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
 
         uint256 vaultShares = _unwrapInternal(amount, beneficiary, msg.sender);
         _requireSynchronousRedemption(vaultShares);
-        creatorCoinOut = vault.redeem(vaultShares, msg.sender, address(this));
-        if (creatorCoinOut < minOut) revert SlippageExceeded();
+        agentTokenOut = vault.redeem(vaultShares, msg.sender, address(this));
+        if (agentTokenOut < minOut) revert SlippageExceeded();
 
-        emit Withdrawn(beneficiary, amount, creatorCoinOut);
+        emit Withdrawn(beneficiary, amount, agentTokenOut);
     }
 
     // ================================
@@ -479,7 +448,7 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
      *
      * @dev NORMALIZATION:
      *      1000 ◇ATIKA → 1 ◆ATIKA
-     *      This makes: 1 AKITA ≈ 1 ◆ATIKA (clean UX!)
+     *      This makes: 1 agentToken ≈ 1 ◆ share (clean UX!)
      */
     function _wrapInternal(uint256 vaultSharesIn, address accountingUser, address mintTo)
         internal
@@ -536,7 +505,7 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
      *
      * @dev DENORMALIZATION:
      *      1 ◆ATIKA → 1000 ◇ATIKA
-     *      This makes: 1 ◆ATIKA ≈ 1 AKITA (clean UX!)
+     *      This makes: 1 ◆ share ≈ 1 agentToken (clean UX!)
      */
     function _unwrapInternal(uint256 shareOFTIn, address accountingUser, address burnFrom)
         internal
@@ -591,8 +560,8 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
     /**
      * @notice Preview how much ShareOFT you'll get for depositing Agent token
      */
-    function previewDeposit(uint256 creatorCoinAmount) external view returns (uint256) {
-        uint256 vaultShares = vault.previewDeposit(creatorCoinAmount);
+    function previewDeposit(uint256 agentTokenAmount) external view returns (uint256) {
+        uint256 vaultShares = vault.previewDeposit(agentTokenAmount);
         return _previewWrap(vaultShares, msg.sender);
     }
 
@@ -703,8 +672,8 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
     /**
      * @notice Get all contract addresses
      */
-    function getContracts() external view returns (address _creatorCoin, address _vault, address _shareOFT) {
-        return (address(creatorCoin), address(vault), address(shareOFT));
+    function getContracts() external view returns (address _agentToken, address _vault, address _shareOFT) {
+        return (address(agentToken), address(vault), address(shareOFT));
     }
 
     /**
@@ -759,7 +728,7 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
      * @notice Refresh vault approval if needed
      */
     function refreshApproval() external onlyOwner {
-        creatorCoin.approve(address(vault), type(uint256).max);
+        agentToken.approve(address(vault), type(uint256).max);
     }
 
     function _requiredLockedBacking() internal view returns (uint256) {
@@ -782,7 +751,7 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
 
     /**
      * @notice FIX: M-08 — propagate the wrapper cooldown on ShareOFT transfers.
-     * @dev Called by CreatorShareOFT._update on every non-mint/non-burn ERC20 movement
+     * @dev Called by AgentShareOFT._update on every non-mint/non-burn ERC20 movement
      *      (including LayerZero credit/debit via the OFT transfer hooks). Propagates
      *      `lastWrapperDepositBlock[from]` forward to `to` so a user cannot deposit,
      *      transfer the resulting ShareOFT to a fresh address, and withdraw in the

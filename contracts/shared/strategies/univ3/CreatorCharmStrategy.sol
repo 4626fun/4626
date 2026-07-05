@@ -18,7 +18,7 @@ import {IStrategyValuation} from "@4626/shared/interfaces/strategies/IStrategyVa
  * @title CreatorCharmStrategy
  * @author 0xakita.eth
  * @notice Charm vault strategy adapter for CREATOR/USDC.
- * @dev Used by CreatorOVault as a yield strategy.
+ * @dev Creator lane specific yield strategy (creator oracles/tokens). General IStrategy interface allows adaptation for agent/other ecosystems. Base strategies in shared/strategies/ are lane-agnostic.
  */
 
 interface ICharmVault {
@@ -77,20 +77,20 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
     uint32 public constant MIN_TWAP_DURATION = 60; // 1 minute
     uint32 public constant MAX_TWAP_DURATION = 1 days;
 
-    address public immutable vault; // CreatorOVault address
-    IERC20 public immutable CREATOR; // Creator token
+    address public immutable vault; // lane vault (creator in this impl)
+    IERC20 public immutable CREATOR; // lane token (creator in this impl)
     IERC20 public immutable USDC; // USDC (quote token)
     ISwapRouter public immutable UNISWAP_ROUTER;
 
     ICharmVault public charmVault;
     IUniswapV3Pool public swapPool; // CREATOR/USDC pool for pricing
 
-    /// @notice CreatorOracle used for USDC valuation inside `getTotalAssets()`.
+    /// @notice Lane oracle (creator in this case) used for valuation inside `getTotalAssets()`.
     /// @dev This is intentionally distinct from Uniswap TWAP used for swap sizing/slippage.
     ICreatorOracle public creatorOracle;
 
     /// @notice TWAP window (seconds) used for valuation inside `getTotalAssets()`.
-    /// @dev This impacts ERC-4626 share pricing via `CreatorOVault.totalAssets()`.
+    /// @dev This impacts ERC-4626 share pricing via the lane vault's totalAssets().
     uint32 public twapDuration = DEFAULT_TWAP_DURATION;
 
     /// @notice Uniswap V3 Factory for auto fee tier discovery
@@ -137,10 +137,10 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
     // Additional strategy-specific events:
     event TokensSwapped(address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut);
     event DepositFailed(string reason);
-    event UnusedTokensReturned(uint256 creatorAmount, uint256 usdcAmount);
+    event UnusedTokensReturned(uint256 baseAmount, uint256 usdcAmount);
     event ParametersUpdated(uint256 maxSwapPercent, uint256 swapSlippageBps);
     event TwapDurationUpdated(uint32 oldDuration, uint32 newDuration);
-    event CreatorOracleUpdated(address indexed oldOracle, address indexed newOracle);
+    event LaneOracleUpdated(address indexed oldOracle, address indexed newOracle);
     event AjnaPoolUpdated(address indexed oldPool, address indexed newPool);
     event AjnaBorrowConfigUpdated(
         bool enabled,
@@ -150,8 +150,8 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
         uint256 borrowLimitIndex,
         uint256 repayLimitIndex
     );
-    event AjnaBorrowed(uint256 requestedCreator, uint256 borrowedCreator, uint256 pledgedUsdc);
-    event AjnaRepaid(uint256 repaidCreator, uint256 collateralPulledUsdc);
+    event AjnaBorrowed(uint256 requestedBase, uint256 borrowedBase, uint256 pledgedUsdc);
+    event AjnaRepaid(uint256 repaidBase, uint256 collateralPulledUsdc);
 
     // =================================
     // ERRORS
@@ -167,7 +167,7 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
     error InvalidCollateralRatioBps(uint256 ratioBps);
     error InvalidAjnaLimitIndex(uint256 limitIndex);
     error InvalidAjnaPool(address expectedQuote, address actualQuote, address expectedCollateral, address actualCollateral);
-    error AjnaPositionOpen(uint256 debtCreator, uint256 collateralUsdc);
+    error AjnaPositionOpen(uint256 debtBase, uint256 collateralUsdc);
     error WithdrawLiquidityUnavailable(uint256 requested, uint256 available);
 
     // =================================
@@ -190,19 +190,19 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
 
     constructor(
         address _vault,
-        address _creator,
+        address _baseToken,
         address _usdc,
         address _uniswapRouter,
         address _charmVault,
         address _swapPool,
         address _owner
     ) Ownable(_owner) {
-        if (_vault == address(0) || _creator == address(0) || _usdc == address(0) || _uniswapRouter == address(0)) {
+        if (_vault == address(0) || _baseToken == address(0) || _usdc == address(0) || _uniswapRouter == address(0)) {
             revert ZeroAddress();
         }
 
         vault = _vault;
-        CREATOR = IERC20(_creator);
+        CREATOR = IERC20(_baseToken);
         USDC = IERC20(_usdc);
         UNISWAP_ROUTER = ISwapRouter(_uniswapRouter);
 
@@ -229,7 +229,7 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
     function setCreatorOracle(address _creatorOracle) external onlyOwner {
         address old = address(creatorOracle);
         creatorOracle = ICreatorOracle(_creatorOracle);
-        emit CreatorOracleUpdated(old, _creatorOracle);
+        emit LaneOracleUpdated(old, _creatorOracle);
     }
 
     function setTwapDuration(uint32 _twapDuration) external onlyOwner {

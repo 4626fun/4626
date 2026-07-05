@@ -48,31 +48,30 @@ interface ISwapRouter {
 interface IAgentOracle {
     function getAgentPrice() external view returns (int256 price, uint256 timestamp);
     function getEthPrice() external view returns (int256 price, uint256 timestamp);
-    function getCreatorEthTWAP(uint32 duration) external view returns (uint256 price);
+    function getCreatorEthTWAP(uint32 duration) external view returns (uint256 price); // compatibility alias for shared oracle interface; returns agent token / ETH TWAP
     function isPriceFresh() external view returns (bool);
 }
 
-interface IVaultGaugeVoting {
+interface IVe4626GaugeVoting {
     function getVaultWeight(address vault) external view returns (uint256);
     function getTotalWeight() external view returns (uint256);
     function getVaultWeightBps(address vault) external view returns (uint256);
     function currentEpoch() external view returns (uint256);
 }
 
-interface IVoterRewardsDistributor {
+interface IVe4626VoterRewardsDistributor {
     function notifyRewards(address vault, address token, uint256 amount) external;
 }
 
 /**
  * @title AgentGaugeController
  * @author 0xakita.eth
- * @notice Per-creator `tradeFeeCollector` — receives ShareOFT buy fees, unwraps, and splits value
- * @dev Hub-only (Base). ShareOFT buy fees arrive via receiveFees() or bridged OFT via receiveBridgedFees().
- *      Split (all paths):
- *      - 69% ■ ShareOFT → jackpotCustodian reserve (LotteryManager4626 is jackpotPayoutAuthority)
- *      - 21.39% ■ ShareOFT → VoterRewardsDistributor (ve4626 voter lane)
- *      - 9.61% ▢ vault shares burned (PPS accrual for all holders)
- *      - 0% creatorTreasury ongoing lane (disabled by default; creatorShareBps = 0)
+ * @notice Per-agent `tradeFeeCollector` for the agent lane — receives ShareOFT buy fees, unwraps, and splits value.
+ * @dev Hub-only (Base). Uses agent lane ShareOFT (◆). Split:
+ *      - 69% ◆ → jackpot reserve
+ *      - 21.39% ◆ → ve4626VoterRewardsDistributor
+ *      - 9.61% ◇ burned (PPS)
+ *      - 0% treasury (default)
  */
 contract AgentGaugeController is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -86,7 +85,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     /// @notice WETH on Base
     address public constant WETH = 0x4200000000000000000000000000000000000006;
 
-    /// @notice Uniswap V3 Router on Base (for WETH → CreatorCoin swaps)
+    /// @notice Uniswap V3 Router on Base (for WETH → AgentToken swaps)
     address public constant SWAP_ROUTER = 0x2626664c2603336E57B271c5C0b26F421741e481;
 
     /// @notice Default swap fee tier (0.3%)
@@ -101,16 +100,16 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     // STATE
     // ================================
 
-    /// @notice The ShareOFT token (e.g., ■AKITA) - what we receive as fees
+    /// @notice The ShareOFT token (e.g., ◆AKITA) - what we receive as fees
     IERC20 public immutable shareOFT;
 
-    /// @notice The underlying Creator Coin (e.g., akita)
-    IERC20 public creatorCoin;
+    /// @notice The underlying agent token (e.g., akita)
+    IERC20 public agentToken;
 
     /// @notice The wrapper to unwrap OFT → vault shares
     IAgentOVaultWrapper public wrapper;
 
-    /// @notice The ERC-4626 vault (e.g., ▢AKITA)
+    /// @notice The ERC-4626 vault (e.g., ◇AKITA)
     IAgentOVault public vault;
 
     /// @notice Vault shares token (same as vault address, but as IERC20)
@@ -119,13 +118,13 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     /// @notice Lottery manager for jackpot
     ILotteryManager4626 public lotteryManager;
 
-    /// @notice Creator's treasury wallet
-    address public creatorTreasury;
+    /// @notice Agent's treasury wallet
+    address public agentTreasury;
 
     /// @notice Protocol multisig (4626 treasury)
     address public protocolTreasury;
 
-    /// @notice Swap fee tier for WETH → CreatorCoin
+    /// @notice Swap fee tier for WETH → AgentToken
     uint24 public swapFeeTier = DEFAULT_SWAP_FEE;
 
     /// @notice Slippage tolerance for swaps (in bps, default 100 = 1%)
@@ -144,11 +143,11 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     // Expressed in bps (e.g., 9000 = 90% of input value assumed 1:1 as floor)
     uint256 public fallbackMinOutputBps = 0;
 
-    /// @notice VaultGaugeVoting for ve(3,3) probability direction
-    IVaultGaugeVoting public vaultGaugeVoting;
+    /// @notice ve4626GaugeVoting for ve(3,3) probability direction
+    IVe4626GaugeVoting public vaultGaugeVoting;
 
     /// @notice Voter rewards distributor (receives the 21.39% voter slice as ShareOFT)
-    IVoterRewardsDistributor public voterRewardsDistributor;
+    IVe4626VoterRewardsDistributor public voterRewardsDistributor;
 
     // ================================
     // FEE SPLIT (in basis points) — IMMUTABLE
@@ -162,8 +161,8 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     /// @notice Percentage to lottery reserve (ShareOFT units)
     uint256 public constant lotteryShareBps = 6900; // 69%
 
-    /// @notice Percentage to creator treasury
-    uint256 public constant creatorShareBps = 0; // 0% - creators earn via appreciation + bribes
+    /// @notice Percentage to agent treasury (ongoing lane)
+    uint256 public constant treasuryShareBps = 0; // 0% - agents earn via appreciation + bribes (disabled by default)
 
     /// @notice Voter slice (ShareOFT units via voterRewardsDistributor or treasury fallbacks)
     uint256 public constant protocolShareBps = 2139; // 21.39%
@@ -188,7 +187,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     // JACKPOT RESERVE
     // ================================
 
-    /// @notice ShareOFT (■) held as jackpot reserve for lottery payouts
+    /// @notice ShareOFT (◆) held as jackpot reserve for lottery payouts
     uint256 public jackpotReserve;
 
     // ================================
@@ -201,8 +200,8 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     /// @notice Total distributed to lottery (lifetime)
     uint256 public totalLotteryFunded;
 
-    /// @notice Total distributed to creator (lifetime)
-    uint256 public totalCreatorEarned;
+    /// @notice Total distributed to treasury (lifetime)
+    uint256 public totalTreasuryEarned;
 
     /// @notice Total distributed to protocol (lifetime)
     uint256 public totalProtocolEarned;
@@ -239,24 +238,24 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     event FeesReceived(address indexed from, uint256 oftAmount);
     event WETHFeesReceived(address indexed from, uint256 wethAmount);
     event FeesDistributed(
-        uint256 sharesBurned, uint256 toLottery, uint256 toCreator, uint256 toProtocol, uint256 newPricePerShare
+        uint256 sharesBurned, uint256 toLottery, uint256 toTreasury, uint256 toProtocol, uint256 newPricePerShare
     );
-    event WETHFeesProcessed(uint256 wethAmount, uint256 creatorCoinReceived, uint256 sharesReceived);
+    event WETHFeesProcessed(uint256 wethAmount, uint256 agentTokenReceived, uint256 sharesReceived);
     event SharesBurned(uint256 shares, uint256 newPPS);
     event JackpotPaid(address indexed winner, uint256 shares);
 
     event VaultSet(address indexed vault);
     event WrapperSet(address indexed wrapper);
     event LotteryManagerSet(address indexed manager);
-    event CreatorTreasurySet(address indexed treasury);
+    event AgentTreasurySet(address indexed treasury);
     event ProtocolTreasurySet(address indexed treasury);
-    event CreatorCoinSet(address indexed coin);
+    event AgentTokenSet(address indexed coin);
     event ThresholdUpdated(uint256 newThreshold);
     event SwapConfigUpdated(uint24 feeTier, uint256 slippageBps);
     event OracleSet(address indexed oracle);
     event OracleConfigUpdated(uint32 twapDuration, bool useOracle);
-    event VaultGaugeVotingUpdated(address indexed vaultGaugeVoting);
-    event VoterRewardsDistributorUpdated(address indexed distributor);
+    event Ve4626GaugeVotingUpdated(address indexed ve4626GaugeVoting);
+    event Ve4626VoterRewardsDistributorUpdated(address indexed distributor);
 
     event WethFeeKeeperUpdated(address indexed oldKeeper, address indexed newKeeper);
     event WethProcessingConfigUpdated(uint256 maxPermissionlessWethProcess, bool autoProcessWethFees);
@@ -270,14 +269,14 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     error TooSoon();
     error VaultNotSet();
     error WrapperNotSet();
-    error CreatorCoinNotSet();
+    error AgentTokenNotSet();
     error InsufficientJackpot();
     error OnlyLotteryManager();
     error SwapFailed();
     error InvalidSlippage();
     error MinOutputUnavailable();
     error NotAuthorized();
-    error CreatorTreasuryRequired();
+    error AgentTreasuryRequired();
     error JackpotReserveProtected();
 
     // ================================
@@ -285,13 +284,13 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     // ================================
 
     /**
-     * @notice Create gauge controller for a Creator Coin vault
-     * @param _shareOFT The ShareOFT token address (e.g., ■AKITA)
-     * @param _creatorTreasury Creator's treasury wallet
+     * @notice Create gauge controller for a agent token vault
+     * @param _shareOFT The ShareOFT token address (e.g., ◆AKITA)
+     * @param _agentTreasury Agent's treasury wallet
      * @param _protocolTreasury Protocol multisig (4626 treasury)
-     * @param _owner Owner (usually the creator)
+     * @param _owner Owner (usually the agent owner)
      */
-    constructor(address _shareOFT, address _creatorTreasury, address _protocolTreasury, address _owner)
+    constructor(address _shareOFT, address _agentTreasury, address _protocolTreasury, address _owner)
         Ownable(_owner)
     {
         if (_shareOFT == address(0)) revert ZeroAddress();
@@ -307,12 +306,12 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
 
         // FIX: G-24 — compile/deploy-time assertion that fee split constants sum to MAX_BPS
         require(
-            burnShareBps + lotteryShareBps + creatorShareBps + protocolShareBps == MAX_BPS,
+            burnShareBps + lotteryShareBps + treasuryShareBps + protocolShareBps == MAX_BPS,
             "BPS mismatch"
         );
 
         shareOFT = IERC20(_shareOFT);
-        creatorTreasury = _creatorTreasury;
+        agentTreasury = _agentTreasury;
         protocolTreasury = _protocolTreasury;
     }
 
@@ -321,9 +320,9 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     // ================================
 
     /**
-     * @notice Receive fees from CreatorShareOFT buy transactions
+     * @notice Receive fees from AgentShareOFT buy transactions
      * @dev Called by ShareOFT when buy fees are collected
-     *      Fees arrive as OFT tokens (e.g., ■AKITA)
+     *      Fees arrive as OFT tokens (e.g., ◆AKITA)
      * @param amount Amount of OFT tokens received
      */
     function receiveFees(uint256 amount) external nonReentrant {
@@ -361,7 +360,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
 
     /**
      * @notice Account for OFT tokens that arrived via cross-chain fee flush
-     * @dev When remote CreatorShareOFTs flush fees via OFT send(), the tokens
+     * @dev When remote AgentShareOFTs flush fees via OFT send(), the tokens
      *      are minted directly to this contract by LayerZero's _credit().
      *      This function sweeps the unaccounted balance into pendingFees.
      *
@@ -397,7 +396,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
 
     /**
      * @notice Receive WETH fees from the V4 Tax Hook
-     * @dev Called when swaps happen on the ■AKITA/ETH pool with tax hook
+     * @dev Called when swaps happen on the ◆AKITA/ETH pool with tax hook
      *      The tax hook sends WETH here, which we convert to vault shares
      * @param amount Amount of WETH received
      */
@@ -448,7 +447,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Process pending WETH fees: WETH → CreatorCoin → Vault → Distribute
+     * @notice Process pending WETH fees: WETH → AgentToken → Vault → Distribute
      */
     function processWETHFees() external nonReentrant {
         uint256 amountToProcess = _wethAmountToProcessForCaller(msg.sender);
@@ -473,7 +472,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
         if (wethAmount == 0) return;
         if (pendingWETHFees < wethAmount) revert SwapFailed();
         if (address(vault) == address(0)) revert VaultNotSet();
-        if (address(creatorCoin) == address(0)) revert CreatorCoinNotSet();
+        if (address(agentToken) == address(0)) revert AgentTokenNotSet();
 
         // Optimistically decrement; any revert restores state.
         pendingWETHFees -= wethAmount;
@@ -486,16 +485,16 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
         // This forces the swap to revert if the pool price is pushed beyond the acceptable range.
         uint160 sqrtPriceLimitX96 = _sqrtPriceLimitX96(wethAmount, minAmountOut);
 
-        // Step 2: Swap WETH → CreatorCoin
+        // Step 2: Swap WETH → AgentToken
         IERC20(WETH).forceApprove(SWAP_ROUTER, wethAmount);
 
         uint256 wethBefore = IERC20(WETH).balanceOf(address(this));
 
-        uint256 creatorCoinReceived = ISwapRouter(SWAP_ROUTER)
+        uint256 agentTokenReceived = ISwapRouter(SWAP_ROUTER)
             .exactInputSingle(
                 ISwapRouter.ExactInputSingleParams({
                 tokenIn: WETH,
-                tokenOut: address(creatorCoin),
+                tokenOut: address(agentToken),
                 fee: swapFeeTier,
                 recipient: address(this),
                 // FIX: H-03 — give the swap a real 2-minute deadline window
@@ -513,22 +512,22 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
         uint256 wethAfter = IERC20(WETH).balanceOf(address(this));
         if (wethAfter > wethBefore || wethBefore - wethAfter != wethAmount) revert SwapFailed();
 
-        if (creatorCoinReceived == 0) revert SwapFailed();
+        if (agentTokenReceived == 0) revert SwapFailed();
 
-        // Step 3: Deposit CreatorCoin → Vault (receive vault shares)
-        creatorCoin.forceApprove(address(vault), creatorCoinReceived);
-        uint256 sharesReceived = vault.deposit(creatorCoinReceived, address(this));
+        // Step 3: Deposit AgentToken → Vault (receive vault shares)
+        agentToken.forceApprove(address(vault), agentTokenReceived);
+        uint256 sharesReceived = vault.deposit(agentTokenReceived, address(this));
 
-        emit WETHFeesProcessed(wethAmount, creatorCoinReceived, sharesReceived);
+        emit WETHFeesProcessed(wethAmount, agentTokenReceived, sharesReceived);
 
         // Step 4: Distribute the vault shares
         _distributeVaultShares(sharesReceived);
     }
 
     /**
-     * @notice Calculate minimum output for WETH → CreatorCoin swap using oracle
+     * @notice Calculate minimum output for WETH → AgentToken swap using oracle
      * @param wethAmount Amount of WETH to swap
-     * @return minOut Minimum Creator Coin to receive (0 if oracle disabled/unavailable)
+     * @return minOut Minimum agent token to receive (0 if oracle disabled/unavailable)
      */
     function _calculateMinOutput(uint256 wethAmount) internal view returns (uint256 minOut) {
         // FIX: G-12 — when oracle is disabled, use fallback minimum if configured
@@ -547,11 +546,11 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
         }
 
         // Try to get TWAP price from oracle
-        try oracle.getCreatorEthTWAP(oracleTwapDuration) returns (uint256 creatorPerEth) {
-            if (creatorPerEth == 0) return 0;
+        try oracle.getCreatorEthTWAP(oracleTwapDuration) returns (uint256 agentPerEth) {
+            if (agentPerEth == 0) return 0;
 
-            // Expected output = wethAmount * creatorPerEth / 1e18
-            uint256 expectedOut = Math.mulDiv(wethAmount, creatorPerEth, 1e18);
+            // Expected output = wethAmount * agentPerEth / 1e18
+            uint256 expectedOut = Math.mulDiv(wethAmount, agentPerEth, 1e18);
 
             // Apply slippage tolerance
             minOut = Math.mulDiv(expectedOut, (MAX_BPS - swapSlippageBps), MAX_BPS);
@@ -576,7 +575,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
         if (amountIn == 0 || minAmountOut == 0) return 0;
 
         address tokenIn = WETH;
-        address tokenOut = address(creatorCoin);
+        address tokenOut = address(agentToken);
         bool tokenInIsToken0 = tokenIn < tokenOut;
 
         // Uniswap pool bounds require: MIN_SQRT_RATIO < limit < MAX_SQRT_RATIO
@@ -635,7 +634,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
         accountedOFTBalance -= oftAmount;
         lastDistribution = block.timestamp;
 
-        (uint256 toLottery, uint256 toVoters, uint256 toCreator, uint256 toBurnOft) =
+        (uint256 toLottery, uint256 toVoters, uint256 toTreasury, uint256 toBurnOft) =
             _splitShareOftAmount(oftAmount);
 
         if (toLottery > 0) {
@@ -644,21 +643,21 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
             accountedOFTBalance += toLottery;
         }
 
-        if (toCreator > 0 && creatorTreasury != address(0)) {
-            shareOFT.safeTransfer(creatorTreasury, toCreator);
-            totalCreatorEarned += toCreator;
-        } else if (toCreator > 0) {
-            jackpotReserve += toCreator;
-            totalLotteryFunded += toCreator;
-            toLottery += toCreator;
-            accountedOFTBalance += toCreator;
-            toCreator = 0;
+        if (toTreasury > 0 && agentTreasury != address(0)) {
+            shareOFT.safeTransfer(agentTreasury, toTreasury);
+            totalTreasuryEarned += toTreasury;
+        } else if (toTreasury > 0) {
+            jackpotReserve += toTreasury;
+            totalLotteryFunded += toTreasury;
+            toLottery += toTreasury;
+            accountedOFTBalance += toTreasury;
+            toTreasury = 0;
         }
 
         uint256 vaultSharesBurned = _burnShareOftSlice(toBurnOft);
         _routeVoterShareOft(toVoters);
 
-        emit FeesDistributed(vaultSharesBurned, toLottery, toCreator, toVoters, vault.pricePerShare());
+        emit FeesDistributed(vaultSharesBurned, toLottery, toTreasury, toVoters, vault.pricePerShare());
     }
 
     /**
@@ -673,8 +672,8 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
 
         uint256 toBurn = (vaultSharesReceived * burnShareBps) / MAX_BPS;
         uint256 toLotteryVs = (vaultSharesReceived * lotteryShareBps) / MAX_BPS;
-        uint256 toCreatorVs = (vaultSharesReceived * creatorShareBps) / MAX_BPS;
-        uint256 toVotersVs = vaultSharesReceived - toBurn - toLotteryVs - toCreatorVs;
+        uint256 toTreasuryVs = (vaultSharesReceived * treasuryShareBps) / MAX_BPS;
+        uint256 toVotersVs = vaultSharesReceived - toBurn - toLotteryVs - toTreasuryVs;
 
         uint256 toLotteryOft;
         uint256 toVotersOft;
@@ -688,16 +687,16 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
             }
         }
 
-        if (toCreatorVs > 0 && creatorTreasury != address(0)) {
-            vaultShares.safeTransfer(creatorTreasury, toCreatorVs);
-            totalCreatorEarned += toCreatorVs;
-        } else if (toCreatorVs > 0) {
-            uint256 creatorOft = _wrapVaultSharesToShareOft(toCreatorVs);
-            if (creatorOft > 0) {
-                jackpotReserve += creatorOft;
-                totalLotteryFunded += creatorOft;
-                accountedOFTBalance += creatorOft;
-                toLotteryOft += creatorOft;
+        if (toTreasuryVs > 0 && agentTreasury != address(0)) {
+            vaultShares.safeTransfer(agentTreasury, toTreasuryVs);
+            totalTreasuryEarned += toTreasuryVs;
+        } else if (toTreasuryVs > 0) {
+            uint256 treasuryOft = _wrapVaultSharesToShareOft(toTreasuryVs);
+            if (treasuryOft > 0) {
+                jackpotReserve += treasuryOft;
+                totalLotteryFunded += treasuryOft;
+                accountedOFTBalance += treasuryOft;
+                toLotteryOft += treasuryOft;
             }
         }
 
@@ -713,18 +712,18 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
             emit SharesBurned(toBurn, vault.pricePerShare());
         }
 
-        emit FeesDistributed(toBurn, toLotteryOft, toCreatorVs, toVotersOft, vault.pricePerShare());
+        emit FeesDistributed(toBurn, toLotteryOft, toTreasuryVs, toVotersOft, vault.pricePerShare());
     }
 
     function _splitShareOftAmount(uint256 oftAmount)
         internal
         pure
-        returns (uint256 toLottery, uint256 toVoters, uint256 toCreator, uint256 toBurnOft)
+        returns (uint256 toLottery, uint256 toVoters, uint256 toTreasury, uint256 toBurnOft)
     {
         toLottery = (oftAmount * lotteryShareBps) / MAX_BPS;
         toVoters = (oftAmount * protocolShareBps) / MAX_BPS;
-        toCreator = (oftAmount * creatorShareBps) / MAX_BPS;
-        toBurnOft = oftAmount - toLottery - toVoters - toCreator;
+        toTreasury = (oftAmount * treasuryShareBps) / MAX_BPS;
+        toBurnOft = oftAmount - toLottery - toVoters - toTreasury;
     }
 
     function _wrapVaultSharesToShareOft(uint256 vaultShareAmount) internal returns (uint256 oftOut) {
@@ -789,7 +788,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Pay jackpot to lottery winner in ShareOFT (■)
+     * @notice Pay jackpot to lottery winner in ShareOFT (◆)
      * @dev Only callable by lottery manager; reverts when reserve is insufficient (M-02).
      * @param winner Winner's address
      * @param amount Amount of ShareOFT to pay
@@ -826,7 +825,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
 
     /**
      * @notice Set the vault address
-     * @param _vault CreatorOVault address
+     * @param _vault AgentOVault address
      */
     function setVault(address _vault) external onlyOwner {
         if (_vault == address(0)) revert ZeroAddress();
@@ -837,7 +836,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
 
     /**
      * @notice Set the wrapper address
-     * @param _wrapper CreatorOVaultWrapper address
+     * @param _wrapper AgentOVaultWrapper address
      */
     function setWrapper(address _wrapper) external onlyOwner {
         if (_wrapper == address(0)) revert ZeroAddress();
@@ -856,13 +855,13 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Set creator treasury
-     * @param _treasury Creator's treasury wallet
+     * @notice Set agent treasury
+     * @param _treasury Agent's treasury wallet
      */
-    function setCreatorTreasury(address _treasury) external onlyOwner {
-        if (_treasury == address(0) && creatorShareBps > 0) revert CreatorTreasuryRequired();
-        creatorTreasury = _treasury;
-        emit CreatorTreasurySet(_treasury);
+    function setAgentTreasury(address _treasury) external onlyOwner {
+        if (_treasury == address(0) && treasuryShareBps > 0) revert AgentTreasuryRequired();
+        agentTreasury = _treasury;
+        emit AgentTreasurySet(_treasury);
     }
 
     /**
@@ -876,17 +875,17 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Set the creator coin address
-     * @param _creatorCoin Creator coin address (e.g., akita)
+     * @notice Set the agent token address
+     * @param _agentToken Agent token address (e.g., the AgentTokenV4)
      */
-    function setCreatorCoin(address _creatorCoin) external onlyOwner {
-        if (_creatorCoin == address(0)) revert ZeroAddress();
-        creatorCoin = IERC20(_creatorCoin);
-        emit CreatorCoinSet(_creatorCoin);
+    function setAgentToken(address _agentToken) external onlyOwner {
+        if (_agentToken == address(0)) revert ZeroAddress();
+        agentToken = IERC20(_agentToken);
+        emit AgentTokenSet(_agentToken);
     }
 
     /**
-     * @notice Set swap configuration for WETH → CreatorCoin
+     * @notice Set swap configuration for WETH → AgentToken
      * @param _feeTier Uniswap fee tier (100, 500, 3000, 10000)
      * @param _slippageBps Slippage tolerance in basis points
      */
@@ -949,21 +948,21 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Set VaultGaugeVoting for ve(3,3) probability direction
-     * @param _vaultGaugeVoting Address of the VaultGaugeVoting contract
+     * @notice Set ve4626GaugeVoting for ve(3,3) probability direction
+     * @param _ve4626GaugeVoting Address of the ve4626GaugeVoting contract
      */
-    function setVaultGaugeVoting(address _vaultGaugeVoting) external onlyOwner {
-        vaultGaugeVoting = IVaultGaugeVoting(_vaultGaugeVoting);
-        emit VaultGaugeVotingUpdated(_vaultGaugeVoting);
+    function setVe4626GaugeVoting(address _ve4626GaugeVoting) external onlyOwner {
+        vaultGaugeVoting = IVe4626GaugeVoting(_ve4626GaugeVoting);
+        emit Ve4626GaugeVotingUpdated(_ve4626GaugeVoting);
     }
 
     /**
      * @notice Set the voter rewards distributor to receive the 21.39% ShareOFT voter slice.
      * @dev If unset, we fall back to protocolTreasury (or jackpot if that is unset).
      */
-    function setVoterRewardsDistributor(address _distributor) external onlyOwner {
-        voterRewardsDistributor = IVoterRewardsDistributor(_distributor);
-        emit VoterRewardsDistributorUpdated(_distributor);
+    function setVe4626VoterRewardsDistributor(address _distributor) external onlyOwner {
+        voterRewardsDistributor = IVe4626VoterRewardsDistributor(_distributor);
+        emit Ve4626VoterRewardsDistributorUpdated(_distributor);
     }
 
     /**
@@ -990,23 +989,23 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     /**
      * @notice Get current fee split configuration
      */
-    function getFeeSplit() external pure returns (uint256 burn, uint256 lottery, uint256 creator, uint256 protocol) {
-        return (burnShareBps, lotteryShareBps, creatorShareBps, protocolShareBps);
+    function getFeeSplit() external pure returns (uint256 burn, uint256 lottery, uint256 treasury, uint256 protocol) {
+        return (burnShareBps, lotteryShareBps, treasuryShareBps, protocolShareBps);
     }
 
     /**
      * @notice Preview how pending ShareOFT fees would be distributed
-     * @dev Lottery and voter amounts are ShareOFT (■); burn preview is approximate vault-share units after unwrap.
+     * @dev Lottery and voter amounts are ShareOFT (◆); burn preview is approximate vault-share units after unwrap.
      */
     function previewDistribution()
         external
         view
-        returns (uint256 toBurn, uint256 toLottery, uint256 toCreator, uint256 toProtocol)
+        returns (uint256 toBurn, uint256 toLottery, uint256 toTreasury, uint256 toProtocol)
     {
         toLottery = (pendingFees * lotteryShareBps) / MAX_BPS;
-        toCreator = (pendingFees * creatorShareBps) / MAX_BPS;
+        toTreasury = (pendingFees * treasuryShareBps) / MAX_BPS;
         toProtocol = (pendingFees * protocolShareBps) / MAX_BPS;
-        toBurn = pendingFees - toLottery - toCreator - toProtocol;
+        toBurn = pendingFees - toLottery - toTreasury - toProtocol;
     }
 
     /**
@@ -1020,7 +1019,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
             uint256 _totalWETHFeesReceived,
             uint256 _totalSharesBurned,
             uint256 _totalLotteryFunded,
-            uint256 _totalCreatorEarned,
+            uint256 _totalTreasuryEarned,
             uint256 _totalProtocolEarned,
             uint256 _pendingFees,
             uint256 _pendingWETHFees,
@@ -1033,7 +1032,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
             totalWETHFeesReceived,
             totalSharesBurned,
             totalLotteryFunded,
-            totalCreatorEarned,
+            totalTreasuryEarned,
             totalProtocolEarned,
             pendingFees,
             pendingWETHFees,
@@ -1101,9 +1100,9 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Preview WETH → CreatorCoin swap output with slippage protection
+     * @notice Preview WETH → AgentToken swap output with slippage protection
      * @param wethAmount Amount of WETH to swap
-     * @return expectedOut Expected Creator Coin output (from oracle)
+     * @return expectedOut Expected agent token output (from oracle)
      * @return minOut Minimum output after slippage
      * @return oracleActive Whether oracle slippage is active
      */
@@ -1118,10 +1117,10 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
             return (0, 0, false);
         }
 
-        try oracle.getCreatorEthTWAP(oracleTwapDuration) returns (uint256 creatorPerEth) {
-            if (creatorPerEth == 0) return (0, 0, false);
+        try oracle.getCreatorEthTWAP(oracleTwapDuration) returns (uint256 agentPerEth) {
+            if (agentPerEth == 0) return (0, 0, false);
 
-            expectedOut = Math.mulDiv(wethAmount, creatorPerEth, 1e18);
+            expectedOut = Math.mulDiv(wethAmount, agentPerEth, 1e18);
             minOut = Math.mulDiv(expectedOut, (MAX_BPS - swapSlippageBps), MAX_BPS);
             oracleActive = true;
         } catch {
@@ -1139,7 +1138,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
             address oracleAddress,
             bool isActive,
             bool priceFresh,
-            int256 creatorPriceUSD,
+            int256 agentPriceUSD,
             uint32 twapDuration,
             uint256 slippageBps
         )
@@ -1155,7 +1154,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
             } catch {}
 
             try oracle.getAgentPrice() returns (int256 price, uint256) {
-                creatorPriceUSD = price;
+                agentPriceUSD = price;
             } catch {}
         }
     }

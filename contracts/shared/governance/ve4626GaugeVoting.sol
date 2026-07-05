@@ -2,9 +2,9 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title VaultGaugeVoting
+ * @title ve4626GaugeVoting
  * @author 0xakita.eth
- * @notice ve(3,3) style gauge voting for directing jackpot probability to creator vaults
+ * @notice ve(3,3) style gauge voting for directing jackpot probability to vaults (creators, agents, future ecosystems)
  *
  * @dev VOTING MECHANISM:
  *      ve4626 holders vote to direct jackpot probability to specific creator vaults.
@@ -49,10 +49,10 @@ interface I4626Registry {
 }
 
 /**
- * @title IVaultGaugeVoting
- * @notice Interface for VaultGaugeVoting
+ * @title IVe4626GaugeVoting
+ * @notice Interface for ve4626GaugeVoting
  */
-interface IVaultGaugeVoting {
+interface IVe4626GaugeVoting {
     // User functions
     function vote(address[] calldata vaults, uint256[] calldata weights) external;
     function resetVotes() external;
@@ -75,7 +75,7 @@ interface IVaultGaugeVoting {
     event VaultWhitelisted(address indexed vault, bool status);
 }
 
-contract VaultGaugeVoting is IVaultGaugeVoting, Ownable, ReentrancyGuard {
+contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
     using EnumerableSet for EnumerableSet.AddressSet;
 
     // ================================

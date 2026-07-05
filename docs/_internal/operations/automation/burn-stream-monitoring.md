@@ -3,11 +3,11 @@ title: Burn Stream Operator Runbook (L-03)
 sidebar_position: 30
 ---
 
-# `VaultShareBurnStream` operator runbook (L-03 remediation)
+# `CreatorVaultShareBurnStream` operator runbook (L-03 remediation)
 
 ## Background
 
-`contracts/utilities/routers/VaultShareBurnStream.sol` is **ownerless by
+`contracts/utilities/routers/CreatorVaultShareBurnStream.sol` is **ownerless by
 design** — there is no admin key that can rescue stuck shares or pause
 draining mid-epoch. This is the contract's primary "not trust me bro"
 enforceability promise.
@@ -25,7 +25,7 @@ on-chain `BurnFailed(...)` event protects against this stuck-state**.
 ## Required monitoring
 
 Operations MUST page on the following on-chain events emitted by every
-deployed `VaultShareBurnStream` instance:
+deployed `CreatorVaultShareBurnStream` instance:
 
 - `BurnFailed(uint256 sharesAttempted, bytes reason)` — emitted any time
   `burnSharesForPriceIncrease` reverts inside `drip()`. A single emission
@@ -80,6 +80,6 @@ Page on `count > 1 over 24h` per address.
 
 ## References
 
-- Contract: `contracts/utilities/routers/VaultShareBurnStream.sol`
+- Contract: `contracts/utilities/routers/CreatorVaultShareBurnStream.sol`
 - Audit finding: L-03 (audit 2026-04-25)
 - Related fixes: BS-01..03 (early ringbuffer hardening)

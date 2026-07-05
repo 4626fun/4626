@@ -7,8 +7,8 @@ import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
 /**
  * @title Registry4626
  * @author 0xakita.eth
- * @notice Registry for 4626 deployments and configs.
- * @dev Used by factories, vaults, and OFTs to resolve ecosystem addresses.
+ * @notice Registry for 4626 deployments and configs (supports creator, agent, and future ecosystems).
+ * @dev Used by factories, vaults, and OFTs to resolve per-lane addresses via vaultKind / token registration.
  */
 contract Registry4626 is I4626Registry, Ownable {
     // =================================
@@ -16,14 +16,14 @@ contract Registry4626 is I4626Registry, Ownable {
     // =================================
 
     uint256 public constant MAX_SUPPORTED_CHAINS = 99;
-    uint256 public constant MAX_CREATOR_COINS = 999999;
+    uint256 public constant MAX_CREATOR_COINS = 999999; // per-lane limit; agent and future ecosystems have their own caps if needed
 
     // =================================
     // CREATOR COIN STORAGE
     // =================================
 
-    /// @notice Creator Coin info by token address
-    mapping(address => CreatorCoinInfo) private creatorCoins;
+    /// @notice Lane token info (creator coins, agent tokens, future ecosystems) by token address
+    mapping(address => CreatorCoinInfo) private creatorCoins; // name kept for storage compatibility; supports all lanes via registry methods
 
     /// @notice Reverse lookup: vault → token
     mapping(address => address) public vaultToToken;
@@ -43,10 +43,10 @@ contract Registry4626 is I4626Registry, Ownable {
     /// @notice Reverse lookup: canonicalWallet → token
     mapping(address => address) public canonicalWalletToToken;
 
-    /// @notice All registered Creator Coin addresses
+    /// @notice All registered token addresses (across creator, agent, future lanes)
     address[] private registeredTokens;
 
-    /// @notice Authorized factories that can register Creator Coins
+    /// @notice Authorized factories that can register tokens for lanes
     mapping(address => bool) public authorizedFactories;
     /// @dev FIX: AUDIT-2026-07-01-M17 — optional codehash pin for authorized factories.
     mapping(address => bytes32) public approvedFactoryCodehashes;

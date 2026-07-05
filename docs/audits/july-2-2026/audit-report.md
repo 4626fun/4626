@@ -108,7 +108,7 @@ Severity legend: Critical (permissionless fund loss / integrity break), High (pr
 
 - **File:line:** `frontend/server/_lib/onchain/payoutRouterProductionReadiness.ts:104-172` (H-07 EOA-owner check); `frontend/server/_lib/lottery/lotteryProductionReadiness.ts:66-126` (M-15 timelock, H-06 hub forwarder). Invocations: **tests only**.
 - **Description:** `verifyPayoutRouterProductionReadiness` and `verifyLotteryProductionReadiness` exist but are not called from the deploy session, phase-2 gate, or keeper sweep. Deploy uses `verifyPayoutRouterHarvestReadiness` (harvest path), not the production owner/timelock gates.
-- **Impact:** v1.15.0 canary can go live with a hot-EOA `PayoutRouter` owner (H-07) or an unarmed lottery boost timelock (M-15) despite the audit intent — enforcement is purely operational (runbook checklist).
+- **Impact:** v1.15.0 canary can go live with a hot-EOA `CreatorPayoutRouter` owner (H-07) or an unarmed lottery boost timelock (M-15) despite the audit intent — enforcement is purely operational (runbook checklist).
 - **Recommendation:** Invoke both production-readiness checks in `verifyDeployPhase2Invariants` and/or the keeper sweep router-mode branch before `completed`.
 
 ### M2-04 — `txRouter` non-embedded canonical signers can fall back to `canonicalDirect` when paymaster denies
@@ -197,7 +197,7 @@ Severity legend: Critical (permissionless fund loss / integrity break), High (pr
 |----|-------|-----------|------|
 | L2-01 | `resetPhase1State` does not require `finalized == false` | `contracts/helpers/batchers/DeploymentBatcher.sol:2350-2359` | Trusted treasury can delete a finalized phase-1 mapping → `finalizePhase2` fails `Phase1Missing`; retry hits occupied CREATE2 salts. Add `Phase1AlreadyFinalized` guard. |
 | L2-02 | Initial `wireDeploymentHelpers` skips codehash validation | `DeploymentBatcher.sol:2274-2284` vs `:2290-2316` | Hot-swap setters validate; initial wire does not. Extends M-17. Seed allowlist + validate on wire. |
-| L2-03 | PayoutRouter V3 `convertAndQueue` accepts `minOut == 0` | `contracts/utilities/routers/PayoutRouter.sol:340-371` | External path requires `minOut > 0`; V3 path does not. Keeper mistake → sandwichable conversion. |
+| L2-03 | PayoutRouter V3 `convertAndQueue` accepts `minOut == 0` | `contracts/utilities/routers/CreatorPayoutRouter.sol:340-371` | External path requires `minOut > 0`; V3 path does not. Keeper mistake → sandwichable conversion. |
 | L2-04 | KPR `relay_entries` uses synthetic dedupe id, not Solana tx signature | `kpr/actions/keepr-solana-relay-entries.action.ts:35-49`, `:138-144`; `contracts/utilities/bridge/SolanaBridgeAdapter.sol:648-674` | `sha256(...)` synthetic id used for on-chain dedupe; low collision risk. |
 | L2-05 | Orchestrator `sync_mapping` is high-privilege post-auth mutation | `kpr/actions/keepr-solana-sync-mapping.action.ts:120-163` | Authenticated action writes `/etc/4626/...env` + restarts service; validates format not ownership. Bind to control-plane session. |
 | L2-06 | Solana `record_winner` missing mint cross-constraints | `programs/creator-share-hook/src/record_winner.rs:21-38` | Relies on PDA derivation only; add explicit `mint` equality constraints. |

@@ -17,20 +17,11 @@ import {TickMathCompat} from "@4626/shared/libraries/uniswap/TickMathCompat.sol"
 /**
  * @title AgentOracle
  * @author 0xakita.eth (4626)
- * @notice Omnichain oracle for Agent token price distribution
- * @dev Deployed to same address on all chains via CREATE2
+ * @notice Omnichain oracle for agent lane token price (◆ symbols).
+ * @dev Same address on chains via CREATE2.
  *
- * @dev ARCHITECTURE:
- *      Base (Hub):
- *      - Reads V4 pool TWAP (■AKITA/ETH)
- *      - Gets ETH/USD from Chainlink
- *      - Calculates ■AKITA/USD
- *      - Broadcasts to all chains via LayerZero
- *
- *      Remote Chains:
- *      - Receive and store Base's authoritative price
- *      - Use for lottery, gauge calculations, etc.
- *      - No local liquidity needed!
+ *      Hub: V4 TWAP + Chainlink → price → LZ broadcast.
+ *      Remotes: store price for lottery/gauge.
  *
  * @dev MANIPULATION RESISTANCE:
  *      - Tick capping limits price movement per observation
@@ -70,7 +61,7 @@ contract AgentOracle is OApp {
     /// @notice Maximum allowed price deviation per update (20%)
     uint256 public constant MAX_PRICE_DEVIATION = 0.2e18;
 
-    /// @notice Hard upper bound on the first price that `initializeCreatorPrice`
+    /// @notice Hard upper bound on the first price that `initializeAgentPrice`
     /// may set (1e18 format). Prevents the bootstrap anchor from being placed
     /// at an extreme value even if the owner key is compromised. 1_000_000 USD
     /// per CREATOR token is unrealistically high but is a non-insulting
@@ -85,12 +76,12 @@ contract AgentOracle is OApp {
     // STATE - PRICE DATA
     // ================================
 
-    /// @notice Creator token USD price (broadcast from Base)
-    int256 public creatorPriceUSD; // 1e18 format
-    uint256 public creatorPriceTimestamp;
+    /// @notice Agent token USD price (broadcast from Base)
+    int256 public agentPriceUSD; // 1e18 format
+    uint256 public agentPriceTimestamp;
 
-    /// @notice Creator token symbol (for identification)
-    string public creatorSymbol;
+    /// @notice Agent token symbol (for identification)
+    string public agentSymbol;
 
     /// @notice Chainlink ETH/USD feed address
     address public chainlinkFeed;
@@ -105,13 +96,13 @@ contract AgentOracle is OApp {
     /// @notice Uniswap V4 PoolManager
     IPoolManager public poolManager;
 
-    /// @notice V4 pool key for ■AKITA/ETH
+    /// @notice V4 pool key for ◆AKITA/ETH
     PoolKey public creatorPoolKey;
 
     /// @notice Whether V4 pool is configured
     bool public v4PoolConfigured;
 
-    /// @notice Whether creator token is token0 in the pool
+    /// @notice Whether agent token is token0 in the pool
     bool public creatorIsToken0;
 
     // ================================
@@ -121,14 +112,14 @@ contract AgentOracle is OApp {
     /// @notice Uniswap V3 pool used as primary CREATOR/USD oracle (optional)
     address public v3Pool;
 
-    /// @notice Creator token used in the V3 pool (base token)
-    address public v3CreatorToken;
+    /// @notice Agent token used in the V3 pool (base token)
+    address public v3AgentToken;
 
     /// @notice USD stable token used in the V3 pool (quote token, e.g. USDC)
     address public v3UsdToken;
 
     /// @notice Cached decimals for price scaling
-    uint8 public v3CreatorDecimals;
+    uint8 public v3AgentDecimals;
     uint8 public v3UsdDecimals;
 
     /// @notice Default V3 TWAP duration (seconds)
@@ -218,9 +209,9 @@ contract AgentOracle is OApp {
     // EVENTS
     // ================================
 
-    event CreatorPriceUpdated(string symbol, int256 price, uint256 timestamp, address indexed updater);
-    event CreatorPriceBroadcast(uint32[] dstEids, int256 price, uint256 timestamp);
-    event CreatorPriceReceived(uint32 srcEid, int256 price, uint256 timestamp);
+    event AgentPriceUpdated(string symbol, int256 price, uint256 timestamp, address indexed updater);
+    event AgentPriceBroadcast(uint32[] dstEids, int256 price, uint256 timestamp);
+    event AgentPriceReceived(uint32 srcEid, int256 price, uint256 timestamp);
     event V4PoolConfigured(PoolId indexed poolId, address poolManager, bool creatorIsToken0);
     event V3PoolConfigured(
         address indexed pool, address indexed creatorToken, address indexed usdToken, uint32 twapDuration
@@ -233,7 +224,7 @@ contract AgentOracle is OApp {
     event ChainlinkFeedSet(address indexed feed);
     event SequencerUptimeFeedSet(address indexed feed);
     // FIX: M-3 (4626-439) — emitted (via the deprecated entrypoint's revert path in tests / off-chain
-    // call-simulation) so tooling can pick up migrations to broadcastCreatorPriceWithFees.
+    // call-simulation) so tooling can pick up migrations to broadcastAgentPriceWithFees.
     event BroadcastEqualSplitCallAttempted(address indexed caller, uint256 msgValue, uint32[] dstEids);
 
     // ================================
@@ -253,7 +244,7 @@ contract AgentOracle is OApp {
     error InvalidDuration();
     error PriceUpdateCooldown();
     error PriceDeviationTooHigh();
-    // H-01 / 4626-293: oracle bootstrap must go through initializeCreatorPrice.
+    // H-01 / 4626-293: oracle bootstrap must go through initializeAgentPrice.
     error OracleNotInitialized();
     error OracleAlreadyInitialized();
     error InitialPriceTooHigh();
@@ -270,7 +261,7 @@ contract AgentOracle is OApp {
      * @notice Deploy oracle for a Agent token
      * @param _registry Registry4626 address (same on all chains for deterministic addresses)
      * @param _chainlinkFeed Chainlink ETH/USD feed address
-     * @param _creatorSymbol Creator token symbol (e.g., "■AKITA")
+     * @param _agentSymbol Agent token symbol (e.g., "◆AKITA")
      * @param _owner Owner address
      *
      * @dev DETERMINISTIC DEPLOYMENT:
@@ -278,7 +269,7 @@ contract AgentOracle is OApp {
      *      LayerZero endpoint is looked up from registry at construction.
      *      This allows same constructor args → same CREATE2 address on all chains.
      */
-    constructor(address _registry, address _chainlinkFeed, string memory _creatorSymbol, address _owner)
+    constructor(address _registry, address _chainlinkFeed, string memory _agentSymbol, address _owner)
         OApp(I4626Registry(_registry).getLayerZeroEndpoint(block.chainid), _owner)
         Ownable(_owner)
     {
@@ -288,7 +279,7 @@ contract AgentOracle is OApp {
         if (BASE_EID == 0) revert InvalidBaseEid();
 
         chainlinkFeed = _chainlinkFeed;
-        creatorSymbol = _creatorSymbol;
+        agentSymbol = _agentSymbol; // field name kept for interface compatibility; stores agent symbol
 
         // Initialize tick cap policy with sensible defaults
         tickCapPolicy = TickCapPolicy({
@@ -325,8 +316,8 @@ contract AgentOracle is OApp {
     /**
      * @notice Configure V4 pool for TWAP observations
      * @param _poolManager Uniswap V4 PoolManager
-     * @param _poolKey Pool key for ■AKITA/ETH
-     * @param _creatorIsToken0 Whether creator token is currency0
+     * @param _poolKey Pool key for ◆AKITA/ETH
+     * @param _creatorIsToken0 Whether agent token is currency0
      */
     function setV4Pool(address _poolManager, PoolKey calldata _poolKey, bool _creatorIsToken0) external onlyOwner {
         if (_poolManager == address(0)) revert ZeroAddress();
@@ -368,7 +359,7 @@ contract AgentOracle is OApp {
     /**
      * @notice Configure Uniswap V3 pool for CREATOR/USDC TWAP pricing (optional price source)
      * @param _pool Uniswap V3 pool address (must be the CREATOR/USDC pair)
-     * @param _creatorToken Creator token address
+     * @param _creatorToken Agent token address
      * @param _usdToken USD token address (e.g., USDC)
      * @param _twapDuration TWAP duration in seconds (e.g., 1800)
      */
@@ -391,9 +382,9 @@ contract AgentOracle is OApp {
         if (creatorDec > 18 || usdDec > 18) revert UnsupportedDecimals();
 
         v3Pool = _pool;
-        v3CreatorToken = _creatorToken;
+        v3AgentToken = _creatorToken;
         v3UsdToken = _usdToken;
-        v3CreatorDecimals = creatorDec;
+        v3AgentDecimals = creatorDec;
         v3UsdDecimals = usdDec;
         v3TwapDuration = _twapDuration;
         v3PoolConfigured = true;
@@ -506,58 +497,55 @@ contract AgentOracle is OApp {
         return _getPrice();
     }
 
-    /// @dev Alias for ICreatorOracle.getCreatorPrice() so LotteryManager4626
-    ///      (which calls getCreatorPrice via ICreatorOracle) can read agent token
-    ///      prices without a separate oracle interface. This keeps the lottery
-    ///      protocol-wide across creator and agent lanes.
+    /// @dev Alias for compatibility with shared code (e.g. LotteryManager) that may call getCreatorPrice on oracles for any lane.
     function getCreatorPrice() external view returns (int256 price, uint256 timestamp) {
         return _getPrice();
     }
 
     function _getPrice() internal view returns (int256 price, uint256 timestamp) {
-        if (creatorPriceUSD > 0 && creatorPriceTimestamp > 0) {
-            if (block.timestamp - creatorPriceTimestamp < MAX_STALENESS) {
-                return (creatorPriceUSD, creatorPriceTimestamp);
+        if (agentPriceUSD > 0 && agentPriceTimestamp > 0) {
+            if (block.timestamp - agentPriceTimestamp < MAX_STALENESS) {
+                return (agentPriceUSD, agentPriceTimestamp);
             }
         }
         return (0, 0);
     }
 
     /**
-     * @notice Update creator price (authorized callers only)
+     * @notice Update agent price (authorized callers only)
      * @param _price Price in 1e18 format
      */
-    function updateCreatorPrice(int256 _price) external {
+    function updateAgentPrice(int256 _price) external {
         if (!isPriceUpdater[msg.sender] && msg.sender != owner()) {
             revert Unauthorized();
         }
         if (_price <= 0) revert InvalidPrice();
 
         // H-01 / 4626-293: the first write must go through
-        // initializeCreatorPrice(), which is owner-only and bounded. A 0 price
+        // initializeAgentPrice(), which is owner-only and bounded. A 0 price
         // here means the oracle has never been initialized, and accepting an
         // arbitrary value at this point lets an attacker (or a compromised
         // isPriceUpdater) anchor every subsequent MAX_PRICE_DEVIATION-capped
         // update to a manipulated baseline.
-        if (creatorPriceUSD == 0) revert OracleNotInitialized();
+        if (agentPriceUSD == 0) revert OracleNotInitialized();
 
         // FIX: H-4 — apply deviation bounds to direct setter; previously bypassed all
         // TWAP/deviation guards, allowing a compromised priceUpdater to set arbitrary prices
-        uint256 oldP = uint256(creatorPriceUSD);
+        uint256 oldP = uint256(agentPriceUSD);
         uint256 newP = uint256(_price);
         uint256 deviation = oldP > newP ? ((oldP - newP) * 1e18) / oldP : ((newP - oldP) * 1e18) / oldP;
         if (deviation > MAX_PRICE_DEVIATION) revert PriceDeviationTooHigh();
 
-        creatorPriceUSD = _price;
-        creatorPriceTimestamp = block.timestamp;
+        agentPriceUSD = _price;
+        agentPriceTimestamp = block.timestamp;
 
-        emit CreatorPriceUpdated(creatorSymbol, _price, block.timestamp, msg.sender);
+        emit AgentPriceUpdated(agentSymbol, _price, block.timestamp, msg.sender);
     }
 
     /**
-     * @notice Owner-only bootstrap of the first creator price. Every other
-     *         update path (updateCreatorPrice, updateCreatorPriceFromTWAP,
-     *         updateCreatorPriceFromV3TWAP) enforces a MAX_PRICE_DEVIATION
+     * @notice Owner-only bootstrap of the first agent price. Every other
+     *         update path (updateAgentPrice, updateAgentPriceFromTWAP,
+     *         updateAgentPriceFromV3TWAP) enforces a MAX_PRICE_DEVIATION
      *         cap against the previously stored value, so the first write is
      *         what anchors every subsequent movement. Before this function was
      *         added, any `isPriceUpdater` could silently anchor the oracle to
@@ -568,15 +556,15 @@ contract AgentOracle is OApp {
      * @param _price Initial price in 1e18 format. Must be > 0 and
      *               <= MAX_INITIAL_PRICE_USD.
      */
-    function initializeCreatorPrice(int256 _price) external onlyOwner {
-        if (creatorPriceUSD != 0) revert OracleAlreadyInitialized();
+    function initializeAgentPrice(int256 _price) external onlyOwner {
+        if (agentPriceUSD != 0) revert OracleAlreadyInitialized();
         if (_price <= 0) revert InvalidPrice();
         if (_price > MAX_INITIAL_PRICE_USD) revert InitialPriceTooHigh();
 
-        creatorPriceUSD = _price;
-        creatorPriceTimestamp = block.timestamp;
+        agentPriceUSD = _price;
+        agentPriceTimestamp = block.timestamp;
 
-        emit CreatorPriceUpdated(creatorSymbol, _price, block.timestamp, msg.sender);
+        emit AgentPriceUpdated(agentSymbol, _price, block.timestamp, msg.sender);
     }
 
     // ================================
@@ -856,18 +844,18 @@ contract AgentOracle is OApp {
             price = Math.mulDiv(ratioX128, 1e18, uint256(1) << 128);
         }
 
-        // Invert if creator is token0
+        // Invert if agent is token0
         if (creatorIsToken0 && price > 0) {
             price = (1e18 * 1e18) / price;
         }
     }
 
     /**
-     * @notice Get Creator/ETH TWAP price
+     * @notice Get Agent/ETH TWAP price
      * @param duration TWAP duration in seconds
-     * @return price Creator per ETH in 1e18
+     * @return price Agent per ETH in 1e18
      */
-    function getCreatorEthTWAP(uint32 duration) public view returns (uint256 price) {
+    function getAgentEthTWAP(uint32 duration) public view returns (uint256 price) {
         int24 twapTick = getTWAPTick(duration);
         price = tickToPrice(twapTick);
     }
@@ -904,14 +892,14 @@ contract AgentOracle is OApp {
      * @param duration TWAP duration in seconds
      * @return priceUsd18 USDC per 1 CREATOR, scaled to 1e18
      */
-    function getCreatorUsdTWAP(uint32 duration) public view returns (uint256 priceUsd18) {
+    function getAgentUsdTWAP(uint32 duration) public view returns (uint256 priceUsd18) {
         if (!v3PoolConfigured) revert V3NotConfigured();
 
         int24 twapTick = getV3TWAPTick(duration);
 
         // Quote USDC amount for 1 CREATOR (10^creatorDecimals units)
-        uint256 baseAmount = 10 ** uint256(v3CreatorDecimals);
-        uint256 quoteAmount = _getQuoteAtTick(twapTick, uint128(baseAmount), v3CreatorToken, v3UsdToken);
+        uint256 baseAmount = 10 ** uint256(v3AgentDecimals);
+        uint256 quoteAmount = _getQuoteAtTick(twapTick, uint128(baseAmount), v3AgentToken, v3UsdToken);
 
         // Scale USDC decimals to 1e18
         if (v3UsdDecimals < 18) {
@@ -953,14 +941,14 @@ contract AgentOracle is OApp {
 
     /**
      * @notice Suggested Ajna bucket from the configured CREATOR/USDC V3 TWAP tick
-     * @dev Uniswap ticks are for token1/token0. We need CREATOR per USDC (quote per collateral),
+     * @dev Uniswap ticks are for token1/token0. We need agent-token per USDC (quote per collateral),
      *      so we invert if CREATOR is token0 (i.e., address(creator) < address(usdc)).
      */
     function getAjnaBucketFromV3TWAP(uint32 duration) external view returns (uint256 bucketIndex) {
         if (!v3PoolConfigured) revert V3NotConfigured();
         int24 twapTick = getV3TWAPTick(duration);
 
-        int24 orientedTick = (v3CreatorToken > v3UsdToken) ? twapTick : -twapTick;
+        int24 orientedTick = (v3AgentToken > v3UsdToken) ? twapTick : -twapTick;
         bucketIndex = tickToAjnaBucket(orientedTick);
     }
 
@@ -993,7 +981,7 @@ contract AgentOracle is OApp {
      */
     function _updatePriceFromTWAP() internal {
         // Rate limit
-        if (block.timestamp - creatorPriceTimestamp < priceUpdateCooldown) return;
+        if (block.timestamp - agentPriceTimestamp < priceUpdateCooldown) return;
         if (observationState.cardinality < 2) return;
 
         // Fixed, non-bypassable window for auto-updates.
@@ -1013,9 +1001,9 @@ contract AgentOracle is OApp {
         uint32 timeDelta = currentObs.blockTimestamp - oldObs.blockTimestamp;
         if (timeDelta < MIN_TWAP_DURATION) return;
 
-        // Get Creator/ETH TWAP
+        // Get Agent/ETH TWAP
         uint256 creatorPerEth;
-        try this.getCreatorEthTWAP(duration) returns (uint256 price) {
+        try this.getAgentEthTWAP(duration) returns (uint256 price) {
             creatorPerEth = price;
         } catch {
             return;
@@ -1042,17 +1030,17 @@ contract AgentOracle is OApp {
 
             // Sanity: reject updates that move price more than MAX_PRICE_DEVIATION from the stored value.
             // Auto-update is called inside a swap-path try/catch; return instead of reverting.
-            if (creatorPriceUSD > 0) {
-                uint256 oldP = uint256(creatorPriceUSD);
+            if (agentPriceUSD > 0) {
+                uint256 oldP = uint256(agentPriceUSD);
                 uint256 newP = creatorUSD > 0 ? uint256(creatorUSD) : 0;
                 uint256 deviation = oldP > newP ? ((oldP - newP) * 1e18) / oldP : ((newP - oldP) * 1e18) / oldP;
                 if (deviation > MAX_PRICE_DEVIATION) return;
             }
 
-            creatorPriceUSD = creatorUSD;
-            creatorPriceTimestamp = block.timestamp;
+            agentPriceUSD = creatorUSD;
+            agentPriceTimestamp = block.timestamp;
 
-            emit CreatorPriceUpdated(creatorSymbol, creatorUSD, block.timestamp, address(this));
+            emit AgentPriceUpdated(agentSymbol, creatorUSD, block.timestamp, address(this));
         } catch {
             // Chainlink failed, skip
         }
@@ -1062,10 +1050,10 @@ contract AgentOracle is OApp {
      * @notice Manually update price from TWAP
      * @param twapDuration TWAP duration in seconds
      */
-    function updateCreatorPriceFromTWAP(uint32 twapDuration) external {
+    function updateAgentPriceFromTWAP(uint32 twapDuration) external {
         if (msg.sender != owner() && !isPriceUpdater[msg.sender]) revert Unauthorized();
         if (twapDuration < MIN_TWAP_DURATION) revert InvalidDuration();
-        if (creatorPriceTimestamp > 0 && block.timestamp - creatorPriceTimestamp < priceUpdateCooldown) {
+        if (agentPriceTimestamp > 0 && block.timestamp - agentPriceTimestamp < priceUpdateCooldown) {
             revert PriceUpdateCooldown();
         }
 
@@ -1073,7 +1061,7 @@ contract AgentOracle is OApp {
         if (!v4PoolConfigured) revert V4NotConfigured();
         if (observationState.cardinality < 2) revert NeedMoreObservations();
 
-        uint256 creatorPerEth = getCreatorEthTWAP(twapDuration);
+        uint256 creatorPerEth = getAgentEthTWAP(twapDuration);
         if (creatorPerEth == 0) revert InvalidPrice();
 
         if (chainlinkFeed == address(0)) revert ZeroAddress();
@@ -1091,53 +1079,53 @@ contract AgentOracle is OApp {
         int256 creatorUSD = int256(Math.mulDiv(ethUSD18, 1e18, creatorPerEth));
 
         // H-01 / 4626-293: TWAP-driven writes also must not bootstrap the oracle.
-        if (creatorPriceUSD == 0) revert OracleNotInitialized();
+        if (agentPriceUSD == 0) revert OracleNotInitialized();
 
         // Sanity: reject updates that move price more than MAX_PRICE_DEVIATION from the stored value
         {
-            uint256 oldP = uint256(creatorPriceUSD);
+            uint256 oldP = uint256(agentPriceUSD);
             uint256 newP = creatorUSD > 0 ? uint256(creatorUSD) : 0;
             uint256 deviation = oldP > newP ? ((oldP - newP) * 1e18) / oldP : ((newP - oldP) * 1e18) / oldP;
             if (deviation > MAX_PRICE_DEVIATION) revert PriceDeviationTooHigh();
         }
 
-        creatorPriceUSD = creatorUSD;
-        creatorPriceTimestamp = block.timestamp;
+        agentPriceUSD = creatorUSD;
+        agentPriceTimestamp = block.timestamp;
 
-        emit CreatorPriceUpdated(creatorSymbol, creatorUSD, block.timestamp, msg.sender);
+        emit AgentPriceUpdated(agentSymbol, creatorUSD, block.timestamp, msg.sender);
     }
 
     /**
-     * @notice Optional: update creator USD price from Uniswap V3 TWAP (CREATOR/USDC)
+     * @notice Optional: update agent USD price from Uniswap V3 TWAP (CREATOR/USDC)
      * @dev Useful for Ajna bucket selection or cross-checking. Does not require Chainlink.
      */
-    function updateCreatorPriceFromV3TWAP(uint32 twapDuration) external {
+    function updateAgentPriceFromV3TWAP(uint32 twapDuration) external {
         if (msg.sender != owner() && !isPriceUpdater[msg.sender]) revert Unauthorized();
         if (!v3PoolConfigured) revert V3NotConfigured();
         uint32 dur = twapDuration == 0 ? v3TwapDuration : twapDuration;
         if (dur < MIN_TWAP_DURATION) revert InvalidDuration();
-        if (creatorPriceTimestamp > 0 && block.timestamp - creatorPriceTimestamp < priceUpdateCooldown) {
+        if (agentPriceTimestamp > 0 && block.timestamp - agentPriceTimestamp < priceUpdateCooldown) {
             revert PriceUpdateCooldown();
         }
 
-        uint256 creatorUsd18 = getCreatorUsdTWAP(dur);
+        uint256 creatorUsd18 = getAgentUsdTWAP(dur);
         if (creatorUsd18 == 0) revert InvalidPrice();
 
         // H-01 / 4626-293: TWAP-driven writes also must not bootstrap the oracle.
-        if (creatorPriceUSD == 0) revert OracleNotInitialized();
+        if (agentPriceUSD == 0) revert OracleNotInitialized();
 
         // Sanity: reject updates that move price more than MAX_PRICE_DEVIATION from the stored value
         {
-            uint256 oldP = uint256(creatorPriceUSD);
+            uint256 oldP = uint256(agentPriceUSD);
             uint256 deviation =
                 oldP > creatorUsd18 ? ((oldP - creatorUsd18) * 1e18) / oldP : ((creatorUsd18 - oldP) * 1e18) / oldP;
             if (deviation > MAX_PRICE_DEVIATION) revert PriceDeviationTooHigh();
         }
 
-        creatorPriceUSD = int256(creatorUsd18);
-        creatorPriceTimestamp = block.timestamp;
+        agentPriceUSD = int256(creatorUsd18);
+        agentPriceTimestamp = block.timestamp;
 
-        emit CreatorPriceUpdated(creatorSymbol, int256(creatorUsd18), block.timestamp, msg.sender);
+        emit AgentPriceUpdated(agentSymbol, int256(creatorUsd18), block.timestamp, msg.sender);
     }
 
     // ================================
@@ -1145,7 +1133,7 @@ contract AgentOracle is OApp {
     // ================================
 
     /**
-     * @notice DEPRECATED — see `broadcastCreatorPriceWithFees`.
+     * @notice DEPRECATED — see `broadcastAgentPriceWithFees`.
      * @dev FIX: M-3 (4626-439) — the equal-split variant divided `msg.value / dstEids.length`
      *      and used that as the fee for every destination. LayerZero fees differ per
      *      destination chain, so any chain whose real fee exceeded the split amount
@@ -1153,11 +1141,11 @@ contract AgentOracle is OApp {
      *      ETH stranded on non-refund paths. Rather than carry a footgun with an
      *      attractive short signature, this entrypoint is now a hard revert that emits
      *      a migration-signal event against off-chain call simulation. Callers must
-     *      switch to `broadcastCreatorPriceWithFees(dstEids, options, fees)` and quote
+     *      switch to `broadcastAgentPriceWithFees(dstEids, options, fees)` and quote
      *      per-destination native fees via `quote()` / `endpoint.quote(...)`.
-     * @custom:deprecated Use `broadcastCreatorPriceWithFees` with per-chain fees.
+     * @custom:deprecated Use `broadcastAgentPriceWithFees` with per-chain fees.
      */
-    function broadcastCreatorPrice(uint32[] calldata dstEids, bytes calldata /* options */)
+    function broadcastAgentPrice(uint32[] calldata dstEids, bytes calldata /* options */)
         external
         payable
         returns (MessagingReceipt[] memory /* receipts */)
@@ -1170,7 +1158,7 @@ contract AgentOracle is OApp {
 
     /**
      * @notice Broadcast price to other chains with per-destination LayerZero fees
-     * @dev FIX: M-01 (4626-310) — the equal-split `broadcastCreatorPrice` variant above
+     * @dev FIX: M-01 (4626-310) — the equal-split `broadcastAgentPrice` variant above
      *      divides `msg.value / dstEids.length` and uses that as the fee for every
      *      destination. LayerZero fees differ per destination chain, so any chain whose
      *      real fee exceeds the split amount reverts mid-loop and the broadcast
@@ -1182,12 +1170,12 @@ contract AgentOracle is OApp {
      * @param options    LayerZero options (shared across destinations)
      * @param fees       Native LayerZero fee per destination, in the same order as dstEids
      */
-    function broadcastCreatorPriceWithFees(
+    function broadcastAgentPriceWithFees(
         uint32[] calldata dstEids,
         bytes calldata options,
         uint256[] calldata fees
     ) external payable returns (MessagingReceipt[] memory receipts) {
-        if (creatorPriceUSD <= 0) revert InvalidPrice();
+        if (agentPriceUSD <= 0) revert InvalidPrice();
         if (!isPriceUpdater[msg.sender] && msg.sender != owner()) revert Unauthorized();
         require(dstEids.length > 0, "No destinations");
         require(dstEids.length == fees.length, "Length mismatch");
@@ -1200,7 +1188,7 @@ contract AgentOracle is OApp {
         require(msg.value >= totalFees, "Insufficient fee");
 
         receipts = new MessagingReceipt[](dstEids.length);
-        bytes memory payload = abi.encode(creatorPriceUSD, creatorPriceTimestamp, creatorSymbol);
+        bytes memory payload = abi.encode(agentPriceUSD, agentPriceTimestamp, agentSymbol);
 
         for (uint256 i = 0; i < dstEids.length; i++) {
             receipts[i] = _lzSend(dstEids[i], payload, options, MessagingFee(fees[i], 0), payable(msg.sender));
@@ -1212,7 +1200,7 @@ contract AgentOracle is OApp {
             require(ok, "Refund failed");
         }
 
-        emit CreatorPriceBroadcast(dstEids, creatorPriceUSD, creatorPriceTimestamp);
+        emit AgentPriceBroadcast(dstEids, agentPriceUSD, agentPriceTimestamp);
     }
 
     /// @dev Override LayerZero default behavior to allow multi-destination broadcasts in one transaction.
@@ -1241,19 +1229,19 @@ contract AgentOracle is OApp {
         uint256 safeTimestamp = timestamp > block.timestamp ? block.timestamp : timestamp;
 
         // Defense-in-depth: ignore out-of-order updates so delayed/replayed packets cannot roll back freshness.
-        if (creatorPriceTimestamp != 0 && safeTimestamp < creatorPriceTimestamp) {
+        if (agentPriceTimestamp != 0 && safeTimestamp < agentPriceTimestamp) {
             return;
         }
 
-        creatorPriceUSD = price;
-        creatorPriceTimestamp = safeTimestamp;
+        agentPriceUSD = price;
+        agentPriceTimestamp = safeTimestamp;
 
         // Update symbol if different (for multi-creator support)
         if (bytes(symbol).length > 0) {
-            creatorSymbol = symbol;
+            agentSymbol = symbol;
         }
 
-        emit CreatorPriceReceived(origin.srcEid, price, safeTimestamp);
+        emit AgentPriceReceived(origin.srcEid, price, safeTimestamp);
     }
 
     // ================================
@@ -1287,7 +1275,7 @@ contract AgentOracle is OApp {
      * @notice Check if price is fresh
      */
     function isPriceFresh() external view returns (bool) {
-        return creatorPriceUSD > 0 && block.timestamp - creatorPriceTimestamp < MAX_STALENESS;
+        return agentPriceUSD > 0 && block.timestamp - agentPriceTimestamp < MAX_STALENESS;
     }
 
     /// @dev Chainlink sequencer feeds return 0 when the sequencer is up, 1 when down.

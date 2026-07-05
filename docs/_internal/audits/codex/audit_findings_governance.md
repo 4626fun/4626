@@ -3,8 +3,8 @@
 **Audit Date:** 2025  
 **Contracts Reviewed:**
 1. `CreatorGaugeController.sol` (1043 lines)
-2. `VaultGaugeVoting.sol` (433 lines)
-3. `VoterRewardsDistributor.sol` (280 lines)
+2. `ve4626GaugeVoting.sol` (433 lines)
+3. `ve4626ve4626VoterRewardsDistributor.sol` (280 lines)
 4. `ve4626.sol` (387 lines)
 5. `ve4626BoostManager.sol` (153 lines)
 6. `bribes/BribeDepot.sol` (185 lines)
@@ -19,27 +19,27 @@
 |----|----------|----------|-------|
 | G-01 | ve4626 | CRITICAL | Voting power not reduced on lock expiry — stale ve4626 ERC20 balance enables ghost votes |
 | G-02 | ve4626 | CRITICAL | `_totalVotingSupply` permanently inflated after lock expiry without unlock |
-| G-03 | VaultGaugeVoting | HIGH | Vote weight not invalidated after veToken lock expires mid-epoch |
-| G-04 | VoterRewardsDistributor | HIGH | `notifyRewards` called during current epoch — rewards for epoch N are allocated before epoch N votes are finalized |
+| G-03 | ve4626GaugeVoting | HIGH | Vote weight not invalidated after veToken lock expires mid-epoch |
+| G-04 | ve4626ve4626VoterRewardsDistributor | HIGH | `notifyRewards` called during current epoch — rewards for epoch N are allocated before epoch N votes are finalized |
 | G-05 | BribeDepot | HIGH | `rolloverExpiredEpoch` double-counts rolled amount against live `totalBribes` — overclaims possible |
-| G-06 | VaultGaugeVoting | HIGH | `emergencyResetAllVotes` orphans user-internal vote accounting, causing permanent underflow risk |
+| G-06 | ve4626GaugeVoting | HIGH | `emergencyResetAllVotes` orphans user-internal vote accounting, causing permanent underflow risk |
 | G-07 | ve4626 | HIGH | Voting power decay not reflected in ERC20Votes checkpoints — delegated balances are stale |
-| G-08 | VaultGaugeVoting | MEDIUM | Rounding loss in `normalizedWeight` computation allows weight to silently floor to zero |
-| G-09 | VaultGaugeVoting | MEDIUM | Vote manipulation via same-block `lock → vote` sandwich before any block-delay guard |
-| G-10 | VoterRewardsDistributor | MEDIUM | `recoverVaultRewardToken` can remap token mid-epoch, making old-epoch rewards unclaimable |
+| G-08 | ve4626GaugeVoting | MEDIUM | Rounding loss in `normalizedWeight` computation allows weight to silently floor to zero |
+| G-09 | ve4626GaugeVoting | MEDIUM | Vote manipulation via same-block `lock → vote` sandwich before any block-delay guard |
+| G-10 | ve4626ve4626VoterRewardsDistributor | MEDIUM | `recoverVaultRewardToken` can remap token mid-epoch, making old-epoch rewards unclaimable |
 | G-11 | CreatorGaugeController | MEDIUM | `receiveBridgedFees` accounts balance vs `pendingFees` only — `jackpotReserve` held in vault shares, not OFT, so the accounting comment is misleading and fragile |
 | G-12 | CreatorGaugeController | MEDIUM | Oracle slippage protection silently falls to zero — swap proceeds with `minAmountOut = 0` |
 | G-13 | ve4626BoostManager | MEDIUM | `setBoostParameters` permanently locks after single call — no recovery path |
 | G-14 | BribeDepot | MEDIUM | Bribes can be deposited into the current epoch with zero vault whitelist check — deposits for de-listed/never-listed vaults are locked |
 | G-15 | CreatorGaugeController | MEDIUM | `emergencyWithdraw` drains `jackpotReserve` vault shares without adjusting the accounting variable |
-| G-16 | VaultGaugeVoting | LOW | `timeUntilNextEpoch` returns `0` before genesis — used in lock expiry guard, allows pre-genesis votes |
+| G-16 | ve4626GaugeVoting | LOW | `timeUntilNextEpoch` returns `0` before genesis — used in lock expiry guard, allows pre-genesis votes |
 | G-17 | ve4626 | LOW | `lock` error message says "Must use increaseLock" but revert is `NoExistingLock()` — incorrect guard logic |
-| G-18 | VoterRewardsDistributor | LOW | Unclaimed rewards for epochs with votes are permanently locked after the grace window (no non-zero sweep path) |
+| G-18 | ve4626ve4626VoterRewardsDistributor | LOW | Unclaimed rewards for epochs with votes are permanently locked after the grace window (no non-zero sweep path) |
 | G-19 | CreatorGaugeController | LOW | `distribute()` permissionlessly callable but bypassed by `forceDistribute` — interval can be permanently circumvented by owner |
 | G-20 | ve4626BoostManager | LOW | Flash-loan block-delay protection (`MIN_HOLDING_BLOCKS = 10`) is trivially defeated by waiting ~2 minutes |
 | G-21 | BribeDepot | LOW | `rolloverZeroVoteEpoch` missing `rolloverGraceEpochs` check — anyone can immediately roll zero-vote epochs |
 | G-22 | ve4626 | INFO | `extendLock` never decreases ve4626 balance — old power can only increase, never correct downward on same lock |
-| G-23 | VaultGaugeVoting | INFO | `checkpoint()` only checkpoints `current - 1` — skipped epochs (e.g. no-activity gaps) are never checkpointed |
+| G-23 | ve4626GaugeVoting | INFO | `checkpoint()` only checkpoints `current - 1` — skipped epochs (e.g. no-activity gaps) are never checkpointed |
 | G-24 | CreatorGaugeController | INFO | Fee split constants sum to 10000 bps only when `creatorShareBps = 0`; any future non-zero value breaks the identity |
 
 ---
@@ -123,7 +123,7 @@ Add a `burnExpiredLock(address user)` permissionless function that subtracts the
 
 ### G-03 — HIGH: Vote weight not invalidated after ve4626 lock expires mid-epoch
 
-**Contract:** `VaultGaugeVoting.sol`  
+**Contract:** `ve4626GaugeVoting.sol`  
 **Lines:** 167–219, 228–243
 
 **Code Snippet:**
@@ -147,7 +147,7 @@ Compute voting weight at epoch *end* (snapshot the lock's projected power at `ep
 
 ### G-04 — HIGH: `notifyRewards` credits current epoch — rewards deposited before any votes are cast
 
-**Contract:** `VoterRewardsDistributor.sol`  
+**Contract:** `ve4626ve4626VoterRewardsDistributor.sol`  
 **Lines:** 163–166
 
 **Code Snippet:**
@@ -216,7 +216,7 @@ Either (a) disallow rollover of epochs with non-zero vote weight (mirror `rollov
 
 ### G-06 — HIGH: `emergencyResetAllVotes` orphans user-internal vote accounting, causing permanent underflow risk
 
-**Contract:** `VaultGaugeVoting.sol`  
+**Contract:** `ve4626GaugeVoting.sol`  
 **Lines:** 423–431
 
 **Code Snippet:**
@@ -276,7 +276,7 @@ Either do not inherit `ERC20Votes` (remove the checkpointing entirely and rely s
 
 ### G-08 — MEDIUM: Rounding loss in `normalizedWeight` computation causes vote weight to silently floor to zero
 
-**Contract:** `VaultGaugeVoting.sol`  
+**Contract:** `ve4626GaugeVoting.sol`  
 **Lines:** 211–216
 
 **Code Snippet:**
@@ -307,8 +307,8 @@ Add a "dust" allocation: add any remainder `(userPower - sum(normalizedWeights))
 
 ### G-09 — MEDIUM: Same-block `lock → vote` enables snapshot gaming without lock commitment
 
-**Contract:** `VaultGaugeVoting.sol` + `ve4626.sol`  
-**Lines:** VaultGaugeVoting.sol L171–173
+**Contract:** `ve4626GaugeVoting.sol` + `ve4626.sol`  
+**Lines:** ve4626GaugeVoting.sol L171–173
 
 **Code Snippet:**
 ```solidity
@@ -322,7 +322,7 @@ There is no minimum age requirement on a lock before it can be used for voting. 
 
 1. Borrow tokens (flash loan or standard borrow).
 2. Lock tokens in `ve4626` → receive voting power.
-3. Vote in `VaultGaugeVoting` using that fresh power.
+3. Vote in `ve4626GaugeVoting` using that fresh power.
 4. (Cannot unlock same-block due to `LockNotExpired` guard, so flash-loan in a single transaction is blocked for the lock itself.)
 
 However, since lock duration can be as short as 7 days (MIN_LOCK_DURATION), the attacker only needs to commit tokens for 7 days — which is not capital-free but is capital-efficient for large whales looking to swing a weekly epoch vote. The lock-duration guard (`getRemainingLockTime >= timeUntilNextEpoch`) only ensures the lock doesn't expire before the *current* epoch ends; a 7-day lock passes this for any vote cast early in an epoch.
@@ -334,7 +334,7 @@ Require a minimum lock age before voting (e.g., lock must be at least 1 epoch ol
 
 ### G-10 — MEDIUM: `recoverVaultRewardToken` remaps token mid-epoch — future claims use new token but old balances are in old token
 
-**Contract:** `VoterRewardsDistributor.sol`  
+**Contract:** `ve4626ve4626VoterRewardsDistributor.sol`  
 **Lines:** 128–133
 
 **Code Snippet:**
@@ -498,7 +498,7 @@ function bribe(address token, uint256 amount) external nonReentrant {
 
 **Issue:**  
 `bribe()` accepts any ERC-20 token with no validation. There is no check that:
-1. The vault associated with this `BribeDepot` is still whitelisted in `VaultGaugeVoting`.
+1. The vault associated with this `BribeDepot` is still whitelisted in `ve4626GaugeVoting`.
 2. The bribe token is a recognized/valuable token.
 
 If the vault is de-listed between a bribe deposit and epoch end, no voters will have voted for that vault in that epoch (`getVaultWeightAtEpoch` = 0). Claims will revert with `NoUserVotes`. Rollover is required to recover funds. During the `rolloverGraceEpochs = 4` window, the briber cannot recover their tokens.
@@ -544,7 +544,7 @@ Add explicit accounting updates in `emergencyWithdraw`. If `token == address(vau
 
 ### G-16 — LOW: `timeUntilNextEpoch` returns 0 before genesis — allows voting before protocol launches
 
-**Contract:** `VaultGaugeVoting.sol`  
+**Contract:** `ve4626GaugeVoting.sol`  
 **Lines:** 274–278
 
 **Code Snippet:**
@@ -586,7 +586,7 @@ Rename or add a new error: `error AlreadyLocked()`, and revert with it here. Res
 
 ### G-18 — LOW: No sweep path for unclaimed rewards in epochs with non-zero votes — rewards are permanently locked after grace period
 
-**Contract:** `VoterRewardsDistributor.sol`  
+**Contract:** `ve4626ve4626VoterRewardsDistributor.sol`  
 **Lines:** 180–204
 
 **Code Snippet:**
@@ -601,7 +601,7 @@ function sweepZeroVoteEpoch(address vault, uint256 epoch) external onlyOwner non
 **Issue:**  
 `sweepZeroVoteEpoch` only works when `getVaultWeightAtEpoch(epoch, vault) == 0`. For epochs where voters participated but not all claimants claimed (e.g., they lost their keys, the UI was unavailable, the epoch was skipped), the unclaimed rewards are permanently trapped in the contract. There is no sweep function for non-zero-vote epochs after some timeout.
 
-This contrasts with `BribeDepot.rolloverExpiredEpoch` which handles this case. `VoterRewardsDistributor` has no equivalent.
+This contrasts with `BribeDepot.rolloverExpiredEpoch` which handles this case. `ve4626ve4626VoterRewardsDistributor` has no equivalent.
 
 **Recommended Fix:**  
 Add a `sweepStaleEpochRewards(address vault, uint256 epoch)` function that can be called by the owner after a longer grace period (e.g., 26 epochs / 6 months) regardless of vote weight, to avoid permanent fund lockup.
@@ -714,7 +714,7 @@ The INFO-level concern is documentation: the behavior when `newVotingPower == ol
 
 ### G-23 — INFO: `checkpoint()` only ever checkpoints `currentEpoch() - 1` — skipped epochs are never emitted
 
-**Contract:** `VaultGaugeVoting.sol`  
+**Contract:** `ve4626GaugeVoting.sol`  
 **Lines:** 249–259
 
 **Code Snippet:**
@@ -778,18 +778,18 @@ Add a constructor-time assertion: `require(burnShareBps + lotteryShareBps + crea
 
 ### Malicious Vault/Registry Attacks
 
-**VoterRewardsDistributor** trusts `registry.getTokenForVault()` and `registry.getGaugeControllerForToken()` to authorize callers. If the registry is upgradeable or the admin updates a vault's registered gauge controller to an attacker-controlled address, the attacker can call `notifyRewards()` legitimately (the registry confirms them), deposit worthless tokens, and redirect all future claims to a worthless token (after `vaultRewardToken` is set for that vault).
+**ve4626ve4626VoterRewardsDistributor** trusts `registry.getTokenForVault()` and `registry.getGaugeControllerForToken()` to authorize callers. If the registry is upgradeable or the admin updates a vault's registered gauge controller to an attacker-controlled address, the attacker can call `notifyRewards()` legitimately (the registry confirms them), deposit worthless tokens, and redirect all future claims to a worthless token (after `vaultRewardToken` is set for that vault).
 
 **BribeDepot** accepts any token for bribing. A malicious briber can deposit a reentrant ERC-20 that calls back into `claim()` during the `safeTransferFrom`. However, `nonReentrant` guards on both `bribe()` and `claim()` prevent same-contract reentrancy. Cross-contract reentrancy (through the gauge voting contract's external calls) is not an issue as those calls are all `view`.
 
-### VaultGaugeVoting Whitelist Race
+### ve4626GaugeVoting Whitelist Race
 
 When `setVaultWhitelist(vault, false)` is called:
 1. Active votes for that vault remain in `_epochVaultVotes` and `_epochTotalVotes`.
 2. The vault is removed from `_whitelistedVaults`, so `getVaultGaugeProbabilityBoostPPM` returns 0 for it.
 3. But `_epochVaultVotes[epoch][vault]` is still non-zero.
 4. `getVaultWeightBps` still returns a non-zero share (it doesn't check whitelist).
-5. Voters for the de-listed vault can still claim `VoterRewardsDistributor` rewards (it doesn't check whitelist at claim time).
+5. Voters for the de-listed vault can still claim `ve4626ve4626VoterRewardsDistributor` rewards (it doesn't check whitelist at claim time).
 6. `BribeDepot.claim()` still allows claiming based on the stale vote weight.
 
 This means de-listing a vault mid-epoch does not cleanly terminate its influence on the reward system.

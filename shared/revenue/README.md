@@ -4,7 +4,7 @@ Target home for oracles, routers, and vesting (now reorganized under top-level f
 
 | Current path | Target |
 |--------------|--------|
-| `utilities/routers/PayoutRouter.sol` | `revenue/creator/` |
+| `creator/revenue/CreatorPayoutRouter.sol` | `creator/revenue/` |
 | `utilities/routers/agent/AgentRevenueRouter.sol` | `revenue/agent/` |
 | `revenue/agent/AgentOVaultTaxAdapter.sol` | V3 tax adapter |
 | `utilities/oracles/` | `revenue/oracles/` |

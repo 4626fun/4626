@@ -638,7 +638,7 @@ Your idea makes sense. Between your two options, I recommend:
 
 Why:
 - Keeps the same “value recirculates to holders” story you want.
-- Uses existing audited mechanics: queued shares + weekly linear burn (`VaultShareBurnStream` `queueShares`/`checkpoint`/`drip`).
+- Uses existing audited mechanics: queued shares + weekly linear burn (`CreatorVaultShareBurnStream` `queueShares`/`checkpoint`/`drip`).
 - Smoother, less gameable, better long-term holder alignment than one-shot burn spikes.
 
 ### Suggested product spec

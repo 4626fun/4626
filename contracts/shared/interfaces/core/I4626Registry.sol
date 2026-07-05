@@ -4,8 +4,8 @@ pragma solidity ^0.8.20;
 /**
  * @title I4626Registry
  * @author 0xakita.eth
- * @notice Registry interface for core 4626 addresses.
- * @dev Used by vaults, OFTs, and helpers to resolve ecosystem contracts.
+ * @notice Registry interface for core 4626 addresses (supports creator, agent, and future ecosystems).
+ * @dev Used by vaults, OFTs, and helpers to resolve per-lane ecosystem contracts via registry lookups.
  */
 interface I4626Registry {
     // =================================

@@ -23,16 +23,14 @@ contracts/
 │   ├── lottery/       4626LotteryManager + VRF + randomness (shared singleton)
 │   └── strategies/    Reusable yield strategies (Ajna, CCA, Univ3/4, etc.)
 ├── agent/
-│   ├── vault/
+│   ├── vault/         (AgentOVault, AgentOVaultWrapper, AgentShareOFT, modules)
 │   ├── governance/    AgentGaugeController
 │   ├── revenue/
-│   ├── messaging/     AgentShareOFT
 │   └── oracles/
 ├── creator/
-│   ├── vault/
+│   ├── vault/         (CreatorOVault + modules + CreatorShareOFT + OVaultHubComposer)
 │   ├── governance/
 │   ├── revenue/
-│   ├── messaging/     CreatorShareOFT + OVaultHubComposer
 │   ├── oracles/
 │   ├── recovery/
 │   └── vesting/
@@ -71,7 +69,7 @@ Each token launch deploys its own stack:
 |-------------------------------|-------------------------------|
 | `creator/vault/CreatorOVault` | `agent/vault/AgentOVault`     |
 | `creator/vault/CreatorOVaultWrapper` | `agent/vault/AgentOVaultWrapper` |
-| `creator/messaging/CreatorShareOFT` | `agent/messaging/AgentShareOFT` |
+| `creator/vault/CreatorShareOFT` | `agent/vault/AgentShareOFT` |
 | `creator/governance/CreatorGaugeController` | `agent/governance/AgentGaugeController` |
 | `creator/oracles/CreatorOracle` | `agent/oracles/AgentOracle` |
 | `creator/revenue/PayoutRouter` | `agent/revenue/AgentRevenueRouter` |

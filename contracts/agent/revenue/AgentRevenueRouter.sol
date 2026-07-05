@@ -6,7 +6,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-interface ICreatorOVaultDeposit {
+interface IVaultDeposit {
     function deposit(uint256 assets, address receiver) external returns (uint256 shares);
 }
 
@@ -41,17 +41,15 @@ interface IProtocolRewards {
 /**
  * @title AgentRevenueRouter
  * @author 0xakita.eth
- * @notice Receives agentTokenPayoutRecipient (external earnings lane) revenue and routes value
- *         into the vault via an enforceable burn stream (VaultShareBurnStream).
+ * @notice Receives external earnings revenue for the agent lane and routes it
+ *         into the AgentOVault via an enforceable burn stream.
  *
- * @dev Routing policy:
- * - Agent token payouts: deposit directly into the vault and queue minted shares for burn.
- * - All other payout tokens: swap into ShareOFT (■), unwrap to vault shares (▢), then queue burn.
- *   This biases external-revenue buy pressure toward share holders instead of agent token.
+ * @dev Routing policy (agent lane, using ◆/◇ symbols):
+ * - Direct agent token: deposit + queue burn.
+ * - Other: swap to ShareOFT, unwrap, queue.
+ *   Future ecosystems can subclass or use similar pattern via registry.
  *
- * @dev Notes:
- * - The burn stream MUST be configured on the vault (one-time) so it can burn its own shares.
- * - The payout router MUST be whitelisted on the wrapper so unwrap can run atomically after swaps.
+ * @dev Configured at deploy for the lane. Compatible with shared deploy batchers.
  */
 contract AgentRevenueRouter is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -208,7 +206,7 @@ contract AgentRevenueRouter is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Set the Uniswap V3 swap path for a non-creator-coin payout token into ShareOFT.
+     * @notice Set the Uniswap V3 swap path for a non-agent-token payout token into ShareOFT.
      */
     function setSwapPath(address tokenIn, bytes calldata path) external onlyOwner {
         if (tokenIn == address(0)) revert ZeroAddress();
@@ -240,7 +238,7 @@ contract AgentRevenueRouter is Ownable, ReentrancyGuard {
     /**
      * @notice Convert payout revenue into queued vault-share burns.
      * @param tokenIn Agent token is deposited directly; all other tokens swap to ShareOFT first.
-     * @param minOut Slippage guard for swaps (ShareOFT out). Ignored for direct creator-coin deposits.
+     * @param minOut Slippage guard for swaps (ShareOFT out). Ignored for direct agent-token deposits.
      */
     function convertAndQueue(address tokenIn, uint256 amountIn, uint256 minOut)
         external
@@ -346,7 +344,7 @@ contract AgentRevenueRouter is Ownable, ReentrancyGuard {
 
         if (tokenIn == address(agentToken)) {
             tokenOut = amountIn;
-            sharesQueued = _queueCreatorCoinDeposit(tokenOut);
+            sharesQueued = _queueAgentTokenDeposit(tokenOut);
             emit ConvertedAndQueued(tokenIn, amountIn, tokenOut, sharesQueued);
             return (tokenOut, sharesQueued);
         }
@@ -413,9 +411,9 @@ contract AgentRevenueRouter is Ownable, ReentrancyGuard {
         emit ExternalSwapAndQueued(tokenIn, swapTarget, spender, amountIn, tokenOut, sharesQueued);
     }
 
-    function _queueCreatorCoinDeposit(uint256 creatorAmount) internal returns (uint256 sharesQueued) {
-        if (creatorAmount == 0) revert ZeroAmount();
-        sharesQueued = ICreatorOVaultDeposit(vault).deposit(creatorAmount, burnStream);
+    function _queueAgentTokenDeposit(uint256 agentAmount) internal returns (uint256 sharesQueued) {
+        if (agentAmount == 0) revert ZeroAmount();
+        sharesQueued = IVaultDeposit(vault).deposit(agentAmount, burnStream);
         if (sharesQueued == 0) revert ZeroAmount();
         IVaultShareBurnStream(burnStream).queueShares(sharesQueued);
     }

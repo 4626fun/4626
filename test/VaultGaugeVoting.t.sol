@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "@4626/creator/governance/VaultGaugeVoting.sol";
+import "@4626/shared/governance/ve4626GaugeVoting.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 // Import veAKITA contract directly (not the interface)
@@ -23,11 +23,11 @@ contract MockWSToken is ERC20 {
 }
 
 /**
- * @title VaultGaugeVotingTest
+ * @title ve4626GaugeVotingTest
  * @notice Tests for ve(3,3) vault gauge voting
  */
-contract VaultGaugeVotingTest is Test {
-    VaultGaugeVoting public voting;
+contract ve4626GaugeVotingTest is Test {
+    ve4626GaugeVoting public voting;
     Ve4626Contract public ve;
     MockWSToken public wsToken;
 
@@ -63,8 +63,8 @@ contract VaultGaugeVotingTest is Test {
         // Deploy veAKITA
         ve = new Ve4626Contract("Vote-Escrowed wsAKITA", "veAKITA", address(wsToken), owner);
 
-        // Deploy VaultGaugeVoting
-        voting = new VaultGaugeVoting(address(ve), owner);
+        // Deploy ve4626GaugeVoting
+        voting = new ve4626GaugeVoting(address(ve), owner);
 
         // Whitelist vaults
         voting.setVaultWhitelist(vault1, true);
@@ -142,7 +142,7 @@ contract VaultGaugeVotingTest is Test {
         vaults[0] = vault1;
         weights[0] = 100;
 
-        vm.expectRevert(VaultGaugeVoting.NoVotingPower.selector);
+        vm.expectRevert(ve4626GaugeVoting.NoVotingPower.selector);
         voting.vote(vaults, weights);
 
         vm.stopPrank();
@@ -171,7 +171,7 @@ contract VaultGaugeVotingTest is Test {
 
         // G-03: votingPowerAt(alice, epochEnd) returns 0 because lock expires before epoch end,
         // so NoVotingPower fires before LockExpiresBeforeEpochEnd can be reached.
-        vm.expectRevert(VaultGaugeVoting.NoVotingPower.selector);
+        vm.expectRevert(ve4626GaugeVoting.NoVotingPower.selector);
         voting.vote(vaults, weights);
 
         vm.stopPrank();
@@ -212,7 +212,7 @@ contract VaultGaugeVotingTest is Test {
         vaults[0] = makeAddr("unwhitelisted");
         weights[0] = 100;
 
-        vm.expectRevert(abi.encodeWithSelector(VaultGaugeVoting.VaultNotWhitelisted.selector, vaults[0]));
+        vm.expectRevert(abi.encodeWithSelector(ve4626GaugeVoting.VaultNotWhitelisted.selector, vaults[0]));
         voting.vote(vaults, weights);
 
         vm.stopPrank();
@@ -544,7 +544,7 @@ contract VaultGaugeVotingTest is Test {
         }
 
         vm.startPrank(alice);
-        vm.expectRevert(VaultGaugeVoting.TooManyVaults.selector);
+        vm.expectRevert(ve4626GaugeVoting.TooManyVaults.selector);
         voting.vote(manyVaults, weights);
         vm.stopPrank();
     }
@@ -564,7 +564,7 @@ contract VaultGaugeVotingTest is Test {
         vaults[0] = vault1;
         weights[0] = 0;
 
-        vm.expectRevert(VaultGaugeVoting.ZeroWeight.selector);
+        vm.expectRevert(ve4626GaugeVoting.ZeroWeight.selector);
         voting.vote(vaults, weights);
 
         vm.stopPrank();
@@ -582,7 +582,7 @@ contract VaultGaugeVotingTest is Test {
         vaults[1] = vault2;
         weights[0] = 100;
 
-        vm.expectRevert(VaultGaugeVoting.ArrayLengthMismatch.selector);
+        vm.expectRevert(ve4626GaugeVoting.ArrayLengthMismatch.selector);
         voting.vote(vaults, weights);
 
         vm.stopPrank();

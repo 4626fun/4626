@@ -530,7 +530,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      *            Remote: accumulated in pendingFees, bridged via flushFees()
      *         3. GaugeController on Base routes the burn slice through unwrap → ▢ burn; lottery and voter slices stay as ■:
      *            - 69% ■ jackpotCustodian reserve (LotteryManager payout authority)
-     *            - 21.39% ■ voter rewards via VoterRewardsDistributor
+     *            - 21.39% ■ voter rewards via ve4626VoterRewardsDistributor
      *            - 9.61% ▢ burned → PPS accrual for all vault holders
      */
     function _processBuy(address from, address to, uint256 amount) internal nonReentrant returns (bool) {

@@ -13,11 +13,9 @@ import {CreatorOVaultCoreModule} from "@4626/creator/vault/modules/CreatorOVault
  *         AgentTokenV4 / fee-on-transfer style underlying tokens.
  *
  * @dev ACCOUNTING MODE:
- *      CreatorOVaultCoreModule enforces exact-transfer accounting (reverts with
- *      `TransferAmountMismatch` when a pull moves less than requested). This module
- *      overrides only the `deposit` inflow seam to credit shares from the assets the
- *      vault ACTUALLY received, so a transfer tax cannot inflate `coinBalance`,
- *      `totalAssets()`, `totalAssetsAtLastReport`, or minted shares.
+ *      This module overrides the deposit inflow to credit shares from the assets the
+ *      vault ACTUALLY received (measured after transfer), so a transfer tax cannot inflate
+ *      accounting. It is the measured-FOT counterpart to the exact-transfer core module used by the creator lane.
  *
  *      INFLOW POLICY (deposit):
  *      - Pull `assets`, measure `received = balanceAfter - balanceBefore`.
@@ -38,14 +36,9 @@ import {CreatorOVaultCoreModule} from "@4626/creator/vault/modules/CreatorOVault
  *      inflow for taxed assets.
  *
  *      OUTFLOW POLICY (documented limitation):
- *      `withdraw`/`redeem` inherit the base exact vault-side debit
- *      (`_pushCreatorCoinExact`): the vault's balance must decrease by exactly
- *      `assets` and internal accounting is debited by exactly `assets`. For
- *      receiver-side-tax tokens the RECEIVER may get less than `assets` (the tax is
- *      outside the vault's custody, so vault accounting stays solvent). For
- *      sender-side-tax tokens (vault debited more than `assets`) the transfer fails
- *      closed with `TransferAmountMismatch`. This is the standard ERC-4626
- *      compliance boundary for fee-on-transfer assets.
+ *      `withdraw`/`redeem` inherit the base vault-side debit. For receiver-side-tax
+ *      tokens the RECEIVER may get less than requested (tax outside custody). For
+ *      sender-side-tax the transfer fails closed. Standard ERC-4626 boundary for FOT assets.
  */
 contract AgentOVaultCoreModule is CreatorOVaultCoreModule {
     using SafeERC20 for IERC20;
@@ -83,7 +76,7 @@ contract AgentOVaultCoreModule is CreatorOVaultCoreModule {
 
         // Snapshot pre-transfer assets so share pricing is not diluted by the pull.
         uint256 assetsBefore = totalAssets();
-        uint256 received = _pullCreatorCoinMeasured(msg.sender, assets);
+        uint256 received = _pullAgentTokenMeasured(msg.sender, assets);
 
         if (isFirstDeposit && received < MINIMUM_FIRST_DEPOSIT) {
             revert FirstDepositTooSmall(received, MINIMUM_FIRST_DEPOSIT);
@@ -116,15 +109,14 @@ contract AgentOVaultCoreModule is CreatorOVaultCoreModule {
     }
 
     /**
-     * @notice Pull the underlying token and credit only what actually arrived.
+     * @notice Pull the agent token and credit only what actually arrived.
      * @dev - Reverts on zero measured receipt.
      *      - Rejects `received > amount` so rebasing-up / reflexive tokens cannot
      *        mint uncollateralized credit in the same call.
-     *      - Syncs `coinBalance` to the real post-transfer balance, so no nominal
-     *        amount ever enters `coinBalance` / `totalAssets()`.
+     *      - Syncs `coinBalance` to the real post-transfer balance.
      */
-    function _pullCreatorCoinMeasured(address from, uint256 amount) internal returns (uint256 received) {
-        IERC20 coin = _creatorCoin();
+    function _pullAgentTokenMeasured(address from, uint256 amount) internal returns (uint256 received) {
+        IERC20 coin = _creatorCoin(); // inherited; resolves to agentToken in agent lane context
         uint256 beforeBal = coin.balanceOf(address(this));
         coin.safeTransferFrom(from, address(this), amount);
         uint256 afterBal = coin.balanceOf(address(this));

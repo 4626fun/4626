@@ -1343,8 +1343,9 @@ contract DeploymentBatcherPhase2Module {
 /**
  * @title DeploymentBatcher
  * @author 0xakita.eth
- * @notice Multi-transaction 4626 deployment orchestrator (Phases 1–3).
- * @dev We can no longer deploy the full stack in one transaction on Base due to code-deposit gas limits.
+ * @notice Multi-transaction 4626 deployment orchestrator (Phases 1–3) for creator, agent, and future ecosystems.
+ * @dev Lane-specific logic (e.g. creator vesting, agent tax) is branched via params and registry.
+ *      We can no longer deploy the full stack in one transaction on Base due to code-deposit gas limits.
  *      This contract splits deployment into multiple calls:
  *      - Phase 1: deploy vault + wrapper + shareOFT + minimal wiring (no token pulls / no auction)
  *      - Phase 2a: deploy gauge + CCA + oracle + wiring (no token pulls)
@@ -1412,8 +1413,8 @@ contract DeploymentBatcher is ReentrancyGuard {
     // The struct field below retains the legacy name `payoutRecipient` only for
     // on-chain ABI / calldata compatibility with existing callers. All comments,
     // errors, and new code must use the canonical `creatorCoinPayoutRecipient`
-    // framing for the external earnings lane (the one that feeds PayoutRouter
-    // → VaultShareBurnStream for PPS accretion).
+    // framing for the external earnings lane (the one that feeds CreatorPayoutRouter
+    // → CreatorVaultShareBurnStream for PPS accretion).
     struct Phase2Params {
         address creatorToken;
         address owner;

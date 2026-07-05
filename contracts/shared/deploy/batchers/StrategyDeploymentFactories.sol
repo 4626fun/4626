@@ -8,6 +8,11 @@ import "@4626/shared/strategies/ajna/AjnaERC4626Vault.sol";
 import "@4626/shared/strategies/ajna/AjnaVaultAuth.sol";
 import "@4626/shared/strategies/univ3/CreatorCharmStrategy.sol";
 
+/**
+ * Note: Creator* strategies are for creator lane but implement general IStrategy interfaces.
+ * For agent and future ecosystems, use or add similar in shared/strategies/ or under their lane. Shared strategies should be generalized where possible.
+ */
+
 interface ICreatorCharmStrategyFactory {
     function deployAndInitialize(
         address creatorVault,

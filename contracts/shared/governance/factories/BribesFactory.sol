@@ -11,7 +11,7 @@ pragma solidity ^0.8.20;
 
 import {BribeDepot} from "@4626/shared/governance/bribes/BribeDepot.sol";
 
-interface IVaultGaugeVotingForBribesFactory {
+interface IVe4626GaugeVotingForBribesFactory {
     function canReceiveVotes(address vault) external view returns (bool);
 }
 
@@ -53,7 +53,7 @@ contract BribesFactory {
         address existing = bribeDepotOf[vault];
         if (existing != address(0)) revert DepotAlreadyExists(vault, existing);
 
-        if (!IVaultGaugeVotingForBribesFactory(gaugeVoting).canReceiveVotes(vault)) revert VaultNotWhitelisted(vault);
+        if (!IVe4626GaugeVotingForBribesFactory(gaugeVoting).canReceiveVotes(vault)) revert VaultNotWhitelisted(vault);
 
         // FIX: F-18 — salt is deterministic from vault address. This is intentional: addresses
         // are predictable for off-chain pre-computation. Front-running is not feasible because

@@ -10,7 +10,7 @@ interface ICreatorOVaultDeposit {
     function deposit(uint256 assets, address receiver) external returns (uint256 shares);
 }
 
-interface IVaultShareBurnStream {
+interface ICreatorVaultShareBurnStream {
     function queueShares(uint256 shares) external;
 }
 
@@ -39,10 +39,10 @@ interface IProtocolRewards {
 }
 
 /**
- * @title PayoutRouter
+ * @title CreatorPayoutRouter
  * @author 0xakita.eth
  * @notice Receives creatorCoinPayoutRecipient (external earnings lane) revenue and routes value
- *         into the vault via an enforceable burn stream (VaultShareBurnStream).
+ *         into the vault via an enforceable burn stream (CreatorVaultShareBurnStream).
  *
  * @dev Routing policy:
  * - Creator coin payouts: deposit directly into the vault and queue minted shares for burn.
@@ -53,7 +53,7 @@ interface IProtocolRewards {
  * - The burn stream MUST be configured on the vault (one-time) so it can burn its own shares.
  * - The payout router MUST be whitelisted on the wrapper so unwrap can run atomically after swaps.
  */
-contract PayoutRouter is Ownable, ReentrancyGuard {
+contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     struct ExternalSwapParams {
@@ -417,7 +417,7 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
         if (creatorAmount == 0) revert ZeroAmount();
         sharesQueued = ICreatorOVaultDeposit(vault).deposit(creatorAmount, burnStream);
         if (sharesQueued == 0) revert ZeroAmount();
-        IVaultShareBurnStream(burnStream).queueShares(sharesQueued);
+        ICreatorVaultShareBurnStream(burnStream).queueShares(sharesQueued);
     }
 
     function _unwrapShareOftAndQueue(uint256 shareOftAmount) internal returns (uint256 sharesQueued) {
@@ -426,7 +426,7 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
         if (sharesQueued == 0) revert ZeroAmount();
 
         IERC20(vault).safeTransfer(burnStream, sharesQueued);
-        IVaultShareBurnStream(burnStream).queueShares(sharesQueued);
+        ICreatorVaultShareBurnStream(burnStream).queueShares(sharesQueued);
     }
 
     function _readAddress(bytes memory data, uint256 offset) internal pure returns (address addr) {

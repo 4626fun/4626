@@ -1,5 +1,5 @@
 /**
- * PayoutRouter ABI fragments for KPR payout-integrity workflow.
+ * CreatorPayoutRouter ABI fragments for KPR payout-integrity workflow.
  *
  * Only includes read-only functions needed for monitoring.
  */

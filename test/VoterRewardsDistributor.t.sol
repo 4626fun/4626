@@ -3,8 +3,8 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import "@4626/creator/governance/VaultGaugeVoting.sol";
-import "@4626/creator/governance/VoterRewardsDistributor.sol";
+import "@4626/shared/governance/ve4626GaugeVoting.sol";
+import "@4626/shared/governance/ve4626VoterRewardsDistributor.sol";
 
 // Import veAKITA contract only (avoid name collision with IveAKITA interface)
 import {ve4626 as Ve4626Contract} from "@4626/creator/governance/ve4626.sol";
@@ -48,12 +48,12 @@ contract MockRegistry4626 {
     }
 }
 
-contract VoterRewardsDistributorTest is Test {
+contract ve4626VoterRewardsDistributorTest is Test {
     MockWSToken public wsToken;
     MockRegistry4626 public registry;
     Ve4626Contract public ve;
-    VaultGaugeVoting public voting;
-    VoterRewardsDistributor public distributor;
+    ve4626GaugeVoting public voting;
+    ve4626VoterRewardsDistributor public distributor;
 
     MockERC20 public rewardToken;
 
@@ -80,8 +80,8 @@ contract VoterRewardsDistributorTest is Test {
         rewardToken = new MockERC20("VaultShares", "sTOKEN");
 
         ve = new Ve4626Contract("Vote-Escrowed wsAKITA", "veAKITA", address(wsToken), owner);
-        voting = new VaultGaugeVoting(address(ve), owner);
-        distributor = new VoterRewardsDistributor(address(voting), address(registry), owner);
+        voting = new ve4626GaugeVoting(address(ve), owner);
+        distributor = new ve4626VoterRewardsDistributor(address(voting), address(registry), owner);
 
         registry.setVaultToken(vault1, creatorToken);
         registry.setGaugeForToken(creatorToken, address(this));
@@ -103,7 +103,7 @@ contract VoterRewardsDistributorTest is Test {
 
         vm.startPrank(alice);
         rewardToken.approve(address(distributor), amount);
-        vm.expectRevert(VoterRewardsDistributor.UnauthorizedNotifier.selector);
+        vm.expectRevert(ve4626VoterRewardsDistributor.UnauthorizedNotifier.selector);
         distributor.notifyRewards(vault1, address(rewardToken), amount);
         vm.stopPrank();
     }
@@ -134,7 +134,7 @@ contract VoterRewardsDistributorTest is Test {
         distributor.notifyRewards(vault1, address(badToken), 1 ether);
 
         rewardToken.approve(address(distributor), 100 ether);
-        vm.expectRevert(VoterRewardsDistributor.RewardTokenMismatch.selector);
+        vm.expectRevert(ve4626VoterRewardsDistributor.RewardTokenMismatch.selector);
         distributor.notifyRewards(vault1, address(rewardToken), 100 ether);
 
         distributor.recoverVaultRewardToken(vault1, address(rewardToken));
@@ -237,7 +237,7 @@ contract VoterRewardsDistributorTest is Test {
         uint256[] memory weights = new uint256[](1);
         vaults[0] = vault1;
         weights[0] = 100;
-        vm.expectRevert(VaultGaugeVoting.NoVotingPower.selector);
+        vm.expectRevert(ve4626GaugeVoting.NoVotingPower.selector);
         voting.vote(vaults, weights);
         vm.stopPrank();
 
@@ -429,7 +429,7 @@ contract VoterRewardsDistributorTest is Test {
         distributor.notifyRewards(vault1, address(rewardToken), amount);
 
         vm.prank(alice);
-        vm.expectRevert(VoterRewardsDistributor.EpochNotEnded.selector);
+        vm.expectRevert(ve4626VoterRewardsDistributor.EpochNotEnded.selector);
         distributor.claim(vault1, 0);
     }
 
@@ -446,7 +446,7 @@ contract VoterRewardsDistributorTest is Test {
         vm.warp(voting.genesisEpochStart() + 4 * WEEK + 1);
         assertEq(voting.currentEpoch(), 4);
 
-        vm.expectRevert(VoterRewardsDistributor.SweepNotAllowedYet.selector);
+        vm.expectRevert(ve4626VoterRewardsDistributor.SweepNotAllowedYet.selector);
         distributor.sweepZeroVoteEpoch(vault1, 0);
     }
 
@@ -470,7 +470,7 @@ contract VoterRewardsDistributorTest is Test {
         vm.warp(voting.genesisEpochStart() + 5 * WEEK + 1);
         assertEq(voting.currentEpoch(), 5);
 
-        vm.expectRevert(VoterRewardsDistributor.NotZeroVoteEpoch.selector);
+        vm.expectRevert(ve4626VoterRewardsDistributor.NotZeroVoteEpoch.selector);
         distributor.sweepZeroVoteEpoch(vault1, 0);
     }
 }

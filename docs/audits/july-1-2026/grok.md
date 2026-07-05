@@ -43,9 +43,9 @@
 **ve(3,3) / Governance / Gauges / Bribes:**
 - `ve4626.sol`: Vote-escrow locks (one lock, duration 7d–4y), ERC20Votes + Permit.
 - `ve4626BoostManager.sol`: Coverage-scaled lottery boost (holding period, timelock params).
-- `VaultGaugeVoting.sol`: Directs fixed probability budget (PPM) to vaults (epoch, weights, caps).
+- `ve4626GaugeVoting.sol`: Directs fixed probability budget (PPM) to vaults (epoch, weights, caps).
 - `CreatorGaugeController.sol`: Fee splitter (burn 21.39%, lottery 69%, protocol 9.61%, creator 0% default), jackpot custodian, WETH fee processing + swaps.
-- `VoterRewardsDistributor.sol`, `BribeDepot.sol`, `BribesFactory.sol`, `VaultRolePolicyManager.sol`.
+- `ve4626ve4626VoterRewardsDistributor.sol`, `BribeDepot.sol`, `BribesFactory.sol`, `VaultRolePolicyManager.sol`.
 
 **Deployment / Infra / Factories (highly privileged orchestration):**
 - `DeploymentBatcher.sol` (~2366 LOC) + `DeploymentBatcherPhase1Module` / `Phase2Module` / `Phase3Helper` / `UniV4Helper` / `UtilsHelper`: Phased CREATE2 deployment of vault + wrapper + OFT + gauge + strategies + activation + Solana mesh. Uses bytecode store.
@@ -54,7 +54,7 @@
 - `TaxHookConfigurator.sol`, `CreatorRegistry.sol` (central per-creator mappings + remote peers + Solana mesh).
 
 **Routers / Utilities:**
-- `PayoutRouter.sol` (external revenue → burn stream / vault), `VaultShareBurnStream.sol`, `CreatorCoinPolicyController.sol`.
+- `CreatorPayoutRouter.sol` (external revenue → burn stream / vault), `CreatorVaultShareBurnStream.sol`, `CreatorCoinPolicyController.sol`.
 - `CreatorLinearVesting.sol`.
 - AlfaClub: `AlfaCreatorKeyLPFactory.sol`, `AlfaCreatorKeyPool.sol`.
 - `CreatorOVaultComposerHub.sol`.
@@ -106,7 +106,7 @@ uint256 cap = strategyMaxAssets[strategy]; if (cap != 0 && assets > cap) assets 
 
 **Severity: Medium**  
 **Title: High complexity and cross-contract / cross-chain call surface in shared lottery increases bug risk**  
-**Contract/File:** CreatorLotteryManager.sol (entire, esp. `_lzReceive`, `_processWin`, `_payoutLocalJackpotInner`, VRF paths, `_applyBoost`), CreatorShareOFT.sol (`_lzReceive` + winner callback handling + `_isWinnerCallbackMessage`), Randomness sources, ve4626BoostManager + VaultGaugeVoting  
+**Contract/File:** CreatorLotteryManager.sol (entire, esp. `_lzReceive`, `_processWin`, `_payoutLocalJackpotInner`, VRF paths, `_applyBoost`), CreatorShareOFT.sol (`_lzReceive` + winner callback handling + `_isWinnerCallbackMessage`), Randomness sources, ve4626BoostManager + ve4626GaugeVoting  
 **Description:** Single shared contract handles local + remote (LZ) entries, VRF request/callback (local + cross-chain integrators + zk), win probability (size + ve boost + gauge PPM), jackpot payout iterating vaults (capped at 128 active + 1024 slot scans + cursor), sponsorship budgets, rate limits, and callbacks. `_lzReceive` paths carefully parse/validate but are complex (different payload lengths, guid dedup via `usedReportIds`). Boosts depend on live balances, oracles, and votes.  
 **Impact:** A logic error (payload parsing, cursor advancement, boost math, reentrancy across VRF callback → payout → gauge → vault burn, or chain-specific EID handling) can cause lost entries, incorrect wins, drained jackpots, or DoS of lottery lane. Cross-chain replay or ordering issues possible despite guards. High surface for subtle bugs.  
 **Recommendation:** Extremely strong fuzz/invariant testing on win probability math, payout fairness across cursor iterations, and LZ message flows. Consider formal spec or property-based tests for `_calculateWinChance` + boosts. Separate winner callback receiver if possible. Add more explicit reentrancy locks and pause paths. Monitor all sponsorship and VRF budget drains.  

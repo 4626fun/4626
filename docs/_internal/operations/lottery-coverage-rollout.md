@@ -6,7 +6,7 @@ This rollout ships:
 - coverage-based ve boost in `CreatorLotteryManager`
 - remote payload v2 (`buyerCurrentShareBalance`) in `CreatorShareOFT`
 - one-lock global-share boost in `ve4626BoostManager` (coverage uses creator-share value only)
-- fixed-budget gauge voting in `VaultGaugeVoting` (`69,420` PPM total, `35,000` PPM per-vault cap)
+- fixed-budget gauge voting in `ve4626GaugeVoting` (`69,420` PPM total, `35,000` PPM per-vault cap)
 
 ## Breaking Interface Note
 
@@ -29,7 +29,7 @@ All callers must use the 4-arg selector before cutover.
    - `forge test --match-path test/CreatorLotteryManager.PauseGuards.t.sol`
    - `forge test --match-path test/CreatorLotteryManager.FeeSponsorship.t.sol`
    - `forge test --match-path test/CreatorShareOFT.RemoteLotteryFunding.t.sol`
-   - `forge test --match-path test/VaultGaugeVoting.t.sol`
+   - `forge test --match-path test/ve4626GaugeVoting.t.sol`
    - `forge test --match-path test/ve4626BoostManager.t.sol`
 4. Size gate:
    - `forge build --sizes --skip test --skip script`
@@ -47,7 +47,7 @@ All callers must use the 4-arg selector before cutover.
    - each `CreatorGaugeController.setLotteryManager(...)`
    - `SolanaBridgeAdapter.setLotteryManager(...)`
    - `CreatorLotteryManager.setBoostManager(newBoostManager)`
-   - `CreatorLotteryManager.setVaultGaugeVoting(activeVaultGaugeVoting)`
+   - `CreatorLotteryManager.setve4626GaugeVoting(activeve4626GaugeVoting)`
 5. Verify onchain reads:
    - `lotteryManager.boostManager()`
    - `lotteryManager.vaultGaugeVoting()`

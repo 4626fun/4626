@@ -6,7 +6,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-interface IVaultGaugeVotingForBribeDepot {
+interface IVe4626GaugeVotingForBribeDepot {
     function currentEpoch() external view returns (uint256);
     function getVaultWeightAtEpoch(uint256 epoch, address vault) external view returns (uint256);
     function getUserVoteWeightAtEpoch(uint256 epoch, address user, address vault) external view returns (uint256);
@@ -31,7 +31,7 @@ contract BribeDepot is Ownable, ReentrancyGuard {
     address public immutable vault;
 
     /// @notice Gauge voting contract used for vote weights
-    IVaultGaugeVotingForBribeDepot public immutable gaugeVoting;
+    IVe4626GaugeVotingForBribeDepot public immutable gaugeVoting;
 
     /// @notice epoch => token => total bribe amount
     mapping(uint256 => mapping(address => uint256)) public totalBribes;
@@ -75,7 +75,7 @@ contract BribeDepot is Ownable, ReentrancyGuard {
     constructor(address _vault, address _gaugeVoting) Ownable(msg.sender) {
         if (_vault == address(0) || _gaugeVoting == address(0)) revert ZeroAddress();
         vault = _vault;
-        gaugeVoting = IVaultGaugeVotingForBribeDepot(_gaugeVoting);
+        gaugeVoting = IVe4626GaugeVotingForBribeDepot(_gaugeVoting);
     }
 
     /**

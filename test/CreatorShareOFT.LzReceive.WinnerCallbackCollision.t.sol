@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {CreatorShareOFT} from "@4626/creator/messaging/CreatorShareOFT.sol";
+import {CreatorShareOFT} from "@4626/creator/vault/CreatorShareOFT.sol";
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 
 contract MockRegistryForShareOFTLzReceive {

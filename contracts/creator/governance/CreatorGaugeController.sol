@@ -52,14 +52,14 @@ interface ICreatorOracle {
     function isPriceFresh() external view returns (bool);
 }
 
-interface IVaultGaugeVoting {
+interface IVe4626GaugeVoting {
     function getVaultWeight(address vault) external view returns (uint256);
     function getTotalWeight() external view returns (uint256);
     function getVaultWeightBps(address vault) external view returns (uint256);
     function currentEpoch() external view returns (uint256);
 }
 
-interface IVoterRewardsDistributor {
+interface IVe4626VoterRewardsDistributor {
     function notifyRewards(address vault, address token, uint256 amount) external;
 }
 
@@ -70,7 +70,7 @@ interface IVoterRewardsDistributor {
  * @dev Hub-only (Base). ShareOFT buy fees arrive via receiveFees() or bridged OFT via receiveBridgedFees().
  *      Split (all paths):
  *      - 69% ■ ShareOFT → jackpotCustodian reserve (LotteryManager4626 is jackpotPayoutAuthority)
- *      - 21.39% ■ ShareOFT → VoterRewardsDistributor (ve4626 voter lane)
+ *      - 21.39% ■ ShareOFT → ve4626VoterRewardsDistributor (ve4626 voter lane)
  *      - 9.61% ▢ vault shares burned (PPS accrual for all holders)
  *      - 0% creatorTreasury ongoing lane (disabled by default; creatorShareBps = 0)
  */
@@ -144,11 +144,11 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     // Expressed in bps (e.g., 9000 = 90% of input value assumed 1:1 as floor)
     uint256 public fallbackMinOutputBps = 0;
 
-    /// @notice VaultGaugeVoting for ve(3,3) probability direction
-    IVaultGaugeVoting public vaultGaugeVoting;
+    /// @notice ve4626GaugeVoting for ve(3,3) probability direction
+    IVe4626GaugeVoting public vaultGaugeVoting;
 
     /// @notice Voter rewards distributor (receives the 21.39% voter slice as ShareOFT)
-    IVoterRewardsDistributor public voterRewardsDistributor;
+    IVe4626VoterRewardsDistributor public voterRewardsDistributor;
 
     // ================================
     // FEE SPLIT (in basis points) — IMMUTABLE
@@ -255,8 +255,8 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     event SwapConfigUpdated(uint24 feeTier, uint256 slippageBps);
     event OracleSet(address indexed oracle);
     event OracleConfigUpdated(uint32 twapDuration, bool useOracle);
-    event VaultGaugeVotingUpdated(address indexed vaultGaugeVoting);
-    event VoterRewardsDistributorUpdated(address indexed distributor);
+    event Ve4626GaugeVotingUpdated(address indexed ve4626GaugeVoting);
+    event Ve4626VoterRewardsDistributorUpdated(address indexed distributor);
 
     event WethFeeKeeperUpdated(address indexed oldKeeper, address indexed newKeeper);
     event WethProcessingConfigUpdated(uint256 maxPermissionlessWethProcess, bool autoProcessWethFees);
@@ -949,21 +949,21 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Set VaultGaugeVoting for ve(3,3) probability direction
-     * @param _vaultGaugeVoting Address of the VaultGaugeVoting contract
+     * @notice Set ve4626GaugeVoting for ve(3,3) probability direction
+     * @param _ve4626GaugeVoting Address of the ve4626GaugeVoting contract
      */
-    function setVaultGaugeVoting(address _vaultGaugeVoting) external onlyOwner {
-        vaultGaugeVoting = IVaultGaugeVoting(_vaultGaugeVoting);
-        emit VaultGaugeVotingUpdated(_vaultGaugeVoting);
+    function setVe4626GaugeVoting(address _ve4626GaugeVoting) external onlyOwner {
+        vaultGaugeVoting = IVe4626GaugeVoting(_ve4626GaugeVoting);
+        emit Ve4626GaugeVotingUpdated(_ve4626GaugeVoting);
     }
 
     /**
-     * @notice Set the voter rewards distributor to receive the 21.39% ShareOFT voter slice.
+     * @notice Set the ve4626VoterRewardsDistributor to receive the 21.39% ShareOFT voter slice.
      * @dev If unset, we fall back to protocolTreasury (or jackpot if that is unset).
      */
-    function setVoterRewardsDistributor(address _distributor) external onlyOwner {
-        voterRewardsDistributor = IVoterRewardsDistributor(_distributor);
-        emit VoterRewardsDistributorUpdated(_distributor);
+    function setVe4626VoterRewardsDistributor(address _distributor) external onlyOwner {
+        voterRewardsDistributor = IVe4626VoterRewardsDistributor(_distributor);
+        emit Ve4626VoterRewardsDistributorUpdated(_distributor);
     }
 
     /**

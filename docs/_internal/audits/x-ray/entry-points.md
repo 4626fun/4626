@@ -19,7 +19,7 @@
 ### Fee + Distribution Flow
 
 `CreatorShareOFT._transferWithFees()` → `CreatorGaugeController.receiveFees()` → `CreatorGaugeController.distribute()`  
-`[distribution above]` ├─→ `VaultShareBurnStream` path  
+`[distribution above]` ├─→ `CreatorVaultShareBurnStream` path  
 `[distribution above]` └─→ `CreatorLotteryManager` jackpot path
 
 ### Lottery Flow
