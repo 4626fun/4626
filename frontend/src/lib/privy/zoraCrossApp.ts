@@ -1,6 +1,7 @@
 import { sanitizeCrossAppRedirectUrlForAuth, isPrivyRedirectUrlNotAllowedError } from '@/hooks/siweAuthCrossApp'
 import { readPrivyAccessTokenWithRetries } from '@/lib/privy/accessToken'
 import { assertPrivySessionMarkerCookie } from '@/lib/privy/loopbackSessionMarkerShim'
+import { markWaitlistZoraOAuthPending } from '@/lib/privy/zoraCrossAppAccounts'
 
 type CrossAppFn = ((params: { appId: string }) => Promise<unknown>) | null | undefined
 const LOCALHOST_PRIVY_CUSTOM_DOMAIN_MESSAGE =
@@ -152,6 +153,8 @@ export async function performZoraCrossAppAuth(params: {
   if (!action) {
     throw new Error('Zora linking is unavailable in this environment.')
   }
+
+  markWaitlistZoraOAuthPending()
 
   if (action === 'link') {
     try {

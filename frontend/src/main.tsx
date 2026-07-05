@@ -107,7 +107,8 @@ function shouldSuppressWalletNoise(args: unknown[]): boolean {
     joined.includes('eth_accounts for privy') ||
     joined.includes('unable to migrate wallets') ||
     joined.includes('user must be authenticated before migrating wallets') ||
-    joined.includes('error destroying session')
+    joined.includes('error destroying session') ||
+    joined.includes('walletconnect core is already initialized')
   )
 }
 
@@ -126,6 +127,8 @@ function shouldSuppressKnownDevWarn(args: unknown[]): boolean {
     joined.includes('motion() is deprecated. use motion.create() instead') ||
     joined.includes('lit is in dev mode. not recommended for production') ||
     joined.includes('accessing element.ref was removed in react 19') ||
+    joined.includes('maxlistenersexceededwarning') ||
+    joined.includes('expirer_expired listeners added') ||
     (joined.includes('each child in a list should have a unique "key" prop') &&
       joined.includes('check the render method of `fragment`') &&
       joined.includes('child from me'))

@@ -289,6 +289,10 @@ export async function establishWaitlistSessionAfterPrivyAuth(
       )
     }
 
+    if (isLocalDevPrivySessionMarkerMode()) {
+      assertPrivySessionMarkerCookie()
+    }
+
     const bridgeResult = await bridgePrivySession(privyToken)
     if (!bridgeResult.ok) {
       throw new Error('Could not create your app session. Please try again.')

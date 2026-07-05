@@ -2,11 +2,16 @@ import type { ReactNode } from 'react'
 import { Component, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { getPrivyApiUrl, getPrivyAppId, getPrivyClientId, isPrivyClientEnabled, isLocalDevOrigin, canUsePrivyEmbeddedWallets } from '@/lib/flags/flags'
 import { resolveWaitlistLoopbackPrivyClientId } from '@/lib/flags/featureFlags'
+import { resolveWaitlistPrivyOAuthRedirectUrl } from '@/lib/env/waitlistOAuthRedirect'
 import { CONFIGURED_APP_ORIGIN, resolveAuthRedirectOrigin } from '@/lib/env/host'
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth'
 import { base } from 'viem/chains'
 import { AppLoadingBootstrapGate } from '@/components/layout/AppLoadingOverlay'
-import { createPrivyAppearance, WAITLIST_RETURNING_WALLET_LOGIN_LIST } from './clientAppearance'
+import {
+  createPrivyAppearance,
+  WAITLIST_EMAIL_ONLY_WALLET_LIST,
+  WAITLIST_RETURNING_WALLET_LOGIN_LIST,
+} from './clientAppearance'
 import { applyLoopbackPrivySessionMarkerShim } from './loopbackSessionMarkerShim'
 import { PrivyWalletHooksContextProvider } from './walletHooksContext'
 
@@ -23,7 +28,7 @@ if (typeof window !== 'undefined') {
     console.info(
       '[privy] Local dev pins auth.privy.io, strips custom_api_url, and rewrites privy.4626.fun API calls.\n' +
         'Waitlist passes VITE_PRIVY_CLIENT_ID on loopback when enabled so Zora oauth/link can authenticate.\n' +
-        'If you hit 401 on /oauth/link: confirm localhost:5174 is allowlisted on that Privy client, sign out, re-verify email, retry.\n' +
+        'If you hit 401 on /oauth/link: add Redirect URLs http://localhost:5174/waitlist (and :5173), allowlist that origin on the matching Privy client, sign out, re-verify email, retry.\n' +
         'See .env.example section "Privy Local Dev with custom domain".',
     )
   }
@@ -40,7 +45,7 @@ if (typeof window !== 'undefined') {
 
 type PrivyClientStatus = 'disabled' | 'loading' | 'ready'
 export const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
-type PrivyClientMode = 'default' | 'waitlist-email-only' | 'waitlist-returning-wallet'
+type PrivyClientMode = 'default' | 'waitlist-email-only' | 'waitlist-returning-wallet' | 'waitlist-wallet-joined'
 
 /** Waitlist routes must not inherit dashboard embedded-wallet defaults (privy.4626.fun iframe → server-cookie mode). */
 const WAITLIST_EMBEDDED_WALLETS_OFF = {
@@ -66,7 +71,10 @@ function resolvePrivyProviderClientId(params: {
   clientId: string | null
   bypassCustomPrivyDomain: boolean
 }): string | null {
-  if (params.bypassCustomPrivyDomain && params.mode === 'waitlist-email-only') {
+  if (
+    params.bypassCustomPrivyDomain &&
+    (params.mode === 'waitlist-email-only' || params.mode === 'waitlist-wallet-joined')
+  ) {
     return resolveWaitlistLoopbackPrivyClientId() ?? params.clientId
   }
   return params.clientId
@@ -80,8 +88,9 @@ function coerceLoopbackAuthRedirectOrigin(input: {
     const resolved = new URL(input.resolvedOrigin)
     const current = new URL(input.currentOrigin)
     if (!isLoopbackHostname(current.hostname)) return input.resolvedOrigin
-    if (isLoopbackHostname(resolved.hostname)) return input.resolvedOrigin
-    return current.origin
+    if (!isLoopbackHostname(resolved.hostname)) return current.origin
+    if (resolved.port !== current.port) return current.origin
+    return input.resolvedOrigin
   } catch {
     return input.currentOrigin
   }
@@ -252,10 +261,17 @@ export function PrivyClientProvider(props: {
     // Returning waitlist wallet sign-in: WalletConnect + EIP-6963 only. Skip the
     // Coinbase Wallet SDK here — it races extensions on localhost and triggers
     // failed COOP HEAD probes against /waitlist during init.
-    if (mode === 'waitlist-returning-wallet') {
+    if (mode === 'waitlist-returning-wallet' || mode === 'waitlist-wallet-joined') {
       return {
         walletConnect: { enabled: true },
         solana: { connectors: solanaConnectors },
+        ...(mode === 'waitlist-wallet-joined'
+          ? {
+              crossApp: {
+                providerAppIds: [ZORA_PRIVY_APP_ID],
+              },
+            }
+          : null),
       }
     }
 
@@ -277,12 +293,14 @@ export function PrivyClientProvider(props: {
 
   const appearance = createPrivyAppearance({
     showWalletLoginFirst:
-      mode === 'waitlist-returning-wallet' ? true : showWalletLoginFirst,
+      mode === 'waitlist-returning-wallet' || mode === 'waitlist-wallet-joined' ? true : showWalletLoginFirst,
     ...(walletList
       ? { walletList }
-      : mode === 'waitlist-returning-wallet'
+      : mode === 'waitlist-returning-wallet' || mode === 'waitlist-wallet-joined'
         ? { walletList: WAITLIST_RETURNING_WALLET_LOGIN_LIST }
-        : null),
+        : mode === 'waitlist-email-only'
+          ? { walletList: WAITLIST_EMAIL_ONLY_WALLET_LIST }
+          : null),
     ...(walletChainType ? { walletChainType } : null),
   })
   // Keep generic web login methods aligned with the canonical account model:
@@ -290,12 +308,17 @@ export function PrivyClientProvider(props: {
   const loginMethods =
     mode === 'waitlist-email-only'
       ? (['email', 'twitter'] as const)
+      : mode === 'waitlist-wallet-joined'
+        ? (['wallet', 'twitter'] as const)
       : mode === 'waitlist-returning-wallet'
         ? (['wallet'] as const)
         : (['email', 'wallet'] as const)
 
   const embeddedWalletsSupported = canUsePrivyEmbeddedWallets()
-  const isWaitlistPrivyMode = mode === 'waitlist-email-only' || mode === 'waitlist-returning-wallet'
+  const isWaitlistPrivyMode =
+    mode === 'waitlist-email-only' ||
+    mode === 'waitlist-returning-wallet' ||
+    mode === 'waitlist-wallet-joined'
   // Waitlist routes defer embedded-wallet provisioning to account-setup surfaces.
   // Explicit off + showWalletUIs:false — omitting embeddedWallets inherits dashboard
   // defaults and loads privy.4626.fun/embedded-wallets (server-cookie mode on localhost).
@@ -313,6 +336,9 @@ export function PrivyClientProvider(props: {
   const customOAuthRedirectUrl =
     typeof window !== 'undefined'
       ? (() => {
+          if (mode === 'waitlist-email-only' || mode === 'waitlist-wallet-joined') {
+            return resolveWaitlistPrivyOAuthRedirectUrl(window.location.origin)
+          }
           const resolvedOrigin = coerceLoopbackAuthRedirectOrigin({
             resolvedOrigin: resolveAuthRedirectOrigin({
               configuredOrigin: CONFIGURED_APP_ORIGIN,
@@ -320,12 +346,7 @@ export function PrivyClientProvider(props: {
             }),
             currentOrigin: window.location.origin,
           })
-          if (mode !== 'waitlist-email-only') return resolvedOrigin
-          try {
-            return new URL('/waitlist', resolvedOrigin).toString()
-          } catch {
-            return `${window.location.origin}/waitlist`
-          }
+          return resolvedOrigin
         })()
       : null
 

@@ -1,4 +1,5 @@
 import { useMemo, type ReactNode } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Check, Wallet } from 'lucide-react'
 
 import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
@@ -20,6 +21,9 @@ export type WaitlistLinkedAccountRow = {
   subtitle?: string | null
   monospaceLabel?: boolean
   points: number
+  /** When present, renders a small "Edit" action that unlinks and re-opens the connect step. */
+  onEdit?: () => void
+  editBusy?: boolean
 }
 
 function shortAddress(address: string): string {
@@ -75,12 +79,18 @@ export function useWaitlistLinkedWalletRow(linkedAddress: string | null, points:
   }
 }
 
-function LinkedAccountRow({ icon, label, subtitle, monospaceLabel, points }: Omit<WaitlistLinkedAccountRow, 'key'>) {
+function LinkedAccountRow({
+  icon,
+  label,
+  subtitle,
+  monospaceLabel,
+  points,
+  onEdit,
+  editBusy,
+}: Omit<WaitlistLinkedAccountRow, 'key'>) {
   return (
-    <div className="flex items-center gap-3 px-4 py-3.5">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/[0.06] ring-1 ring-white/[0.08]">
-        {icon}
-      </span>
+    <div className="flex items-center gap-3 py-2.5">
+      <span className="flex size-9 shrink-0 items-center justify-center">{icon}</span>
       <span className="min-w-0 flex-1 text-left">
         <span
           className={cn(
@@ -90,7 +100,19 @@ function LinkedAccountRow({ icon, label, subtitle, monospaceLabel, points }: Omi
         >
           {label}
         </span>
-        {subtitle ? <span className="block truncate text-[11px] text-zinc-500">{subtitle}</span> : null}
+        <span className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+          {subtitle ? <span className="truncate">{subtitle}</span> : null}
+          {onEdit ? (
+            <button
+              type="button"
+              onClick={onEdit}
+              disabled={editBusy}
+              className="shrink-0 text-zinc-600 underline-offset-2 transition hover:text-zinc-300 hover:underline disabled:opacity-50"
+            >
+              {editBusy ? 'Removing…' : 'Edit'}
+            </button>
+          ) : null}
+        </span>
       </span>
       <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-400/[0.12] px-2.5 py-1 text-[11px] font-semibold tabular-nums text-emerald-300">
         <Check className="size-3" aria-hidden="true" />+{points}
@@ -101,23 +123,37 @@ function LinkedAccountRow({ icon, label, subtitle, monospaceLabel, points }: Omi
 
 /**
  * Unified "already connected" summary — replaces the previous per-provider
- * inline rows so linked identities read as one cohesive, minimal card
- * instead of three visually inconsistent list items.
+ * inline rows so linked identities read as one cohesive, minimal list
+ * instead of three visually inconsistent items. Intentionally borderless so
+ * it reads as part of the page rather than a nested card.
  */
 export function WaitlistLinkedAccountsCard({ rows }: { rows: WaitlistLinkedAccountRow[] }) {
+  const reduceMotion = useReducedMotion()
   if (rows.length === 0) return null
   return (
-    <div className="mt-6 divide-y divide-white/[0.05] overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.025]">
-      {rows.map((row) => (
-        <LinkedAccountRow
-          key={row.key}
-          icon={row.icon}
-          label={row.label}
-          subtitle={row.subtitle}
-          monospaceLabel={row.monospaceLabel}
-          points={row.points}
-        />
-      ))}
-    </div>
+    <motion.div layout="position" className="mt-6 flex flex-col gap-1">
+      <AnimatePresence initial={false}>
+        {rows.map((row) => (
+          <motion.div
+            key={row.key}
+            layout
+            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6, scale: 0.98 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <LinkedAccountRow
+              icon={row.icon}
+              label={row.label}
+              subtitle={row.subtitle}
+              monospaceLabel={row.monospaceLabel}
+              points={row.points}
+              onEdit={row.onEdit}
+              editBusy={row.editBusy}
+            />
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </motion.div>
   )
 }

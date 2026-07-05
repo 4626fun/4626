@@ -77,15 +77,15 @@ export function Waitlist() {
     setWalletSessionAddress(null)
   }, [])
 
-  const waitlistWalletPrivyMode = walletSignInPending
+  const waitlistWalletPrivyMode = walletSignInPending || Boolean(walletSessionAddress?.trim())
 
   return (
     <AppQueryProvider>
       <PageMeta title={META.waitlist.title} description={META.waitlist.description} canonicalPath="/waitlist" />
       <PrivyClientProvider
-        key={walletSignInPending ? `wallet-${walletSignInAttempt}` : 'waitlist-email'}
-        showWalletLoginFirst={walletSignInPending}
-        mode={waitlistWalletPrivyMode ? 'waitlist-returning-wallet' : 'waitlist-email-only'}
+        key={waitlistWalletPrivyMode ? 'waitlist-wallet-lane' : 'waitlist-email'}
+        showWalletLoginFirst={waitlistWalletPrivyMode}
+        mode={waitlistWalletPrivyMode ? 'waitlist-wallet-joined' : 'waitlist-email-only'}
         walletChainType={waitlistWalletPrivyMode ? 'ethereum-only' : undefined}
       >
         {walletSignInPending ? (

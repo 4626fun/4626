@@ -17,6 +17,9 @@ export const WAITLIST_RETURNING_WALLET_LOGIN_LIST = [
   'wallet_connect',
 ] as const
 
+/** Email-only waitlist must not mount WalletConnect / extension discovery rows. */
+export const WAITLIST_EMAIL_ONLY_WALLET_LIST = [] as const
+
 export function createPrivyAppearance(options?: PrivyAppearanceOptions) {
   const showWalletLoginFirst = options?.showWalletLoginFirst ?? false
   // `detected_ethereum_wallets` is Privy's EIP-6963 bucket (covers Rabby,
