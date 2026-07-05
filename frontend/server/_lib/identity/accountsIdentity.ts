@@ -420,19 +420,21 @@ export async function upsertAccount(params: {
     email: normalizedEmail,
     privyUserId,
   })
+  // pg prepared statements reject multiple commands in one query string.
   await db.sql`
     UPDATE profiles
     SET
       email = COALESCE(${normalizedEmail}, email),
       email_verified = profiles.email_verified OR ${verified},
       updated_at = NOW()
-    WHERE privy_user_id = ${privyUserId};
-
+    WHERE privy_user_id = ${privyUserId}
+  `
+  await db.sql`
     INSERT INTO profiles (privy_user_id, email, email_verified, created_at, updated_at)
     SELECT ${privyUserId}, ${normalizedEmail}, ${verified}, NOW(), NOW()
     WHERE NOT EXISTS (
       SELECT 1 FROM profiles WHERE privy_user_id = ${privyUserId}
-    );
+    )
   `
 }
 

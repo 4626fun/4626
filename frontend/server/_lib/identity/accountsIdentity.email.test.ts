@@ -145,6 +145,29 @@ describe('accountsIdentity verified email handling', () => {
     expect(db.calls.some((call) => call.text.includes('insert into account_linked_methods'))).toBe(false)
   })
 
+  it('runs profile upsert as separate prepared statements', async () => {
+    const db = createRecordingDb()
+
+    await syncEmailIdentity({
+      db: db as any,
+      privyUserId: 'did:privy:test-user',
+      privyUser: {
+        id: 'did:privy:test-user',
+        email: { address: 'verified@example.com', verified: true },
+      } as any,
+    })
+
+    const profileUpdates = db.calls.filter(
+      (call) => call.text.includes('update profiles') && call.text.includes('email_verified'),
+    )
+    const profileInserts = db.calls.filter((call) =>
+      call.text.includes('insert into profiles (privy_user_id, email, email_verified'),
+    )
+    expect(profileUpdates).toHaveLength(1)
+    expect(profileInserts).toHaveLength(1)
+    expect(profileUpdates[0]?.text.includes('insert into profiles')).toBe(false)
+  })
+
   it('promotes server-auth email accounts that use snake_case numeric verification timestamps', async () => {
     const db = createRecordingDb()
 
