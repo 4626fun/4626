@@ -6,7 +6,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 
 /// @title RandomnessRouter
 /// @notice Per-creator-coin randomness source selector. Sits beside
-///         `CreatorLotteryManager` (NOT inside it — that contract is large,
+///         `LotteryManager4626` (NOT inside it — that contract is large,
 ///         audited, and uses a delegate-call admin module that makes inline
 ///         changes risky during a hackathon).
 ///

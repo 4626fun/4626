@@ -24,7 +24,7 @@ contract MockBytecodeStore {
     }
 }
 
-contract MockCreatorRegistry {
+contract MockRegistry4626 {
     address public endpoint;
 
     constructor(address _endpoint) {
@@ -218,17 +218,18 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
             vaultSymbol: "cvTOKEN",
             shareName: "Creator Shares",
             shareSymbol: "sTOK",
-            version: "v1"
+            version: "v1",
+            vaultKind: DeploymentBatcher.VaultKind.Creator
         });
     }
 
     function _deployFixture(address bootstrapAddress)
         internal
-        returns (DeploymentBatcher deployer, MockCreatorRegistry registry, MockUniversalCreate2Deployer create2)
+        returns (DeploymentBatcher deployer, MockRegistry4626 registry, MockUniversalCreate2Deployer create2)
     {
         vm.chainId(8453);
 
-        registry = new MockCreatorRegistry(CANONICAL_ENDPOINT);
+        registry = new MockRegistry4626(CANONICAL_ENDPOINT);
         MockBytecodeStore store = new MockBytecodeStore();
         create2 = new MockUniversalCreate2Deployer();
         store.setCode(OFT_BOOTSTRAP_CODE_ID, _oftBootstrapCreationCode());
@@ -280,7 +281,7 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
 
     function test_finalizePhase1_deploysShareOFTBoundToCanonicalEndpoint() public {
         OFTBootstrapRegistry bootstrap = new OFTBootstrapRegistry();
-        (DeploymentBatcher deployer, MockCreatorRegistry registry,) = _deployFixture(address(bootstrap));
+        (DeploymentBatcher deployer, MockRegistry4626 registry,) = _deployFixture(address(bootstrap));
 
         deployer.deployPhase1CoreWithSalt(_phase1Params(), _codeIds(), bytes32(0));
 
@@ -301,7 +302,7 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
 
     function test_finalizePhase1_ignoresRegistryEndpointPoisoning() public {
         OFTBootstrapRegistry bootstrap = new OFTBootstrapRegistry();
-        (DeploymentBatcher deployer, MockCreatorRegistry registry,) = _deployFixture(address(bootstrap));
+        (DeploymentBatcher deployer, MockRegistry4626 registry,) = _deployFixture(address(bootstrap));
 
         deployer.deployPhase1CoreWithSalt(_phase1Params(), _codeIds(), bytes32(0));
 

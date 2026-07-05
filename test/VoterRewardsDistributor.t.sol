@@ -27,7 +27,7 @@ contract MockWSToken is ERC20 {
     }
 }
 
-contract MockCreatorRegistry {
+contract MockRegistry4626 {
     mapping(address => address) public vaultToToken;
     mapping(address => address) public tokenToGauge;
 
@@ -50,7 +50,7 @@ contract MockCreatorRegistry {
 
 contract VoterRewardsDistributorTest is Test {
     MockWSToken public wsToken;
-    MockCreatorRegistry public registry;
+    MockRegistry4626 public registry;
     Ve4626Contract public ve;
     VaultGaugeVoting public voting;
     VoterRewardsDistributor public distributor;
@@ -76,7 +76,7 @@ contract VoterRewardsDistributorTest is Test {
         protocolTreasury = makeAddr("protocolTreasury");
 
         wsToken = new MockWSToken();
-        registry = new MockCreatorRegistry();
+        registry = new MockRegistry4626();
         rewardToken = new MockERC20("VaultShares", "sTOKEN");
 
         ve = new Ve4626Contract("Vote-Escrowed wsAKITA", "veAKITA", address(wsToken), owner);

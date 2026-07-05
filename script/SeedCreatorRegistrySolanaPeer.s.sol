@@ -2,12 +2,12 @@
 pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
-import {CreatorRegistry} from "../contracts/core/CreatorRegistry.sol";
-import {ICreatorRegistry} from "../contracts/interfaces/core/ICreatorRegistry.sol";
+import {Registry4626} from "../contracts/core/4626Registry.sol";
+import {I4626Registry} from "../contracts/interfaces/core/I4626Registry.sol";
 
 /**
  * @title SeedCreatorRegistrySolanaPeer
- * @notice Wires Solana bytes32 OFT peer metadata in CreatorRegistry for one creator token.
+ * @notice Wires Solana bytes32 OFT peer metadata in Registry4626 for one creator token.
  *
  * Required env:
  * - PRIVATE_KEY
@@ -48,7 +48,7 @@ contract SeedCreatorRegistrySolanaPeer is Script {
             require(ovaultSolanaAssetMint != bytes32(0), "OVAULT_SOLANA_ASSET_MINT required");
         }
 
-        CreatorRegistry registry = CreatorRegistry(registryAddr);
+        Registry4626 registry = Registry4626(registryAddr);
         require(registry.owner() == deployer, "Deployer is not registry owner");
 
         console.log("Registry:     ", registryAddr);
@@ -69,7 +69,7 @@ contract SeedCreatorRegistrySolanaPeer is Script {
         if (configureOvaultMesh) {
             registry.setOmnichainVaultMesh(
                 creatorToken,
-                ICreatorRegistry.OmnichainVaultMeshConfig({
+                I4626Registry.OmnichainVaultMeshConfig({
                     solanaEid: solanaEid,
                     hubComposer: ovaultHubComposer,
                     assetMeshToken: ovaultAssetMeshToken,
@@ -85,7 +85,7 @@ contract SeedCreatorRegistrySolanaPeer is Script {
         bytes32 configuredPeer = registry.getRemoteOFTPeerBytes32(creatorToken, solanaEid);
         require(configuredPeer == remotePeer, "Solana peer wiring verification failed");
         if (configureOvaultMesh) {
-            ICreatorRegistry.OmnichainVaultMeshConfig memory cfg = registry.getOmnichainVaultMesh(creatorToken);
+            I4626Registry.OmnichainVaultMeshConfig memory cfg = registry.getOmnichainVaultMesh(creatorToken);
             require(cfg.solanaEid == solanaEid, "OVault mesh EID mismatch");
             require(cfg.hubComposer == ovaultHubComposer, "OVault mesh composer mismatch");
             require(cfg.assetMeshToken == ovaultAssetMeshToken, "OVault asset mesh token mismatch");

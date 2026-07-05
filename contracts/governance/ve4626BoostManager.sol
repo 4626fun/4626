@@ -30,7 +30,7 @@ interface Ive4626 {
     function getLock(address user) external view returns (Lock memory);
 }
 
-interface ICreatorRegistryCoverage {
+interface I4626RegistryCoverage {
     function getShareOFTForToken(address token) external view returns (address);
     function getTokenForShareOFT(address shareOFT) external view returns (address);
     function getOracleForToken(address token) external view returns (address);

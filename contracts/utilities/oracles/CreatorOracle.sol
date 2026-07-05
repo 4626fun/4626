@@ -6,7 +6,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
-import {ICreatorRegistry} from "../../interfaces/core/ICreatorRegistry.sol";
+import {I4626Registry} from "../../interfaces/core/I4626Registry.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
@@ -268,7 +268,7 @@ contract CreatorOracle is OApp {
 
     /**
      * @notice Deploy oracle for a Creator Coin
-     * @param _registry CreatorRegistry address (same on all chains for deterministic addresses)
+     * @param _registry Registry4626 address (same on all chains for deterministic addresses)
      * @param _chainlinkFeed Chainlink ETH/USD feed address
      * @param _creatorSymbol Creator token symbol (e.g., "■AKITA")
      * @param _owner Owner address
@@ -279,12 +279,12 @@ contract CreatorOracle is OApp {
      *      This allows same constructor args → same CREATE2 address on all chains.
      */
     constructor(address _registry, address _chainlinkFeed, string memory _creatorSymbol, address _owner)
-        OApp(ICreatorRegistry(_registry).getLayerZeroEndpoint(block.chainid), _owner)
+        OApp(I4626Registry(_registry).getLayerZeroEndpoint(block.chainid), _owner)
         Ownable(_owner)
     {
         if (_registry == address(0)) revert ZeroAddress();
 
-        BASE_EID = ICreatorRegistry(_registry).hubChainEid();
+        BASE_EID = I4626Registry(_registry).hubChainEid();
         if (BASE_EID == 0) revert InvalidBaseEid();
 
         chainlinkFeed = _chainlinkFeed;

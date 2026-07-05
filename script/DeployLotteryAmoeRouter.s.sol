@@ -9,7 +9,7 @@ import {LotteryAmoeRouter} from "../contracts/utilities/lottery/zk/LotteryAmoeRo
 /**
  * @title DeployLotteryAmoeRouter
  * @notice Deploy the AMOE PLONK verifier + router that records ZK-attested
- *         AMOE entries against `CreatorLotteryManager`.
+ *         AMOE entries against `LotteryManager4626`.
  *
  * @dev    What this deploys
  *         - `AmoePlonkVerifier`: emitted by `snarkjs zkey export soliditverifier`
@@ -28,7 +28,7 @@ import {LotteryAmoeRouter} from "../contracts/utilities/lottery/zk/LotteryAmoeRo
  *         - AMOE_PUBLISHER:        backend signer that publishes daily allowlist roots
  *
  * @dev    Optional env vars:
- *         - AMOE_CONSUMER:         CreatorLotteryManager (or a forwarder). If
+ *         - AMOE_CONSUMER:         LotteryManager4626 (or a forwarder). If
  *                                  unset, the router is deployed without a
  *                                  consumer and `setConsumer` must be called.
  *

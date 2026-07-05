@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import {CreatorLotteryManager} from "../contracts/utilities/lottery/CreatorLotteryManager.sol";
+import {LotteryManager4626} from "../contracts/lottery/4626LotteryManager.sol";
 import {MessagingFee, Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 
@@ -103,8 +103,8 @@ contract MockVrfIntegratorForLotteryManager {
     }
 }
 
-contract CreatorLotteryManagerHarness is CreatorLotteryManager {
-    constructor(address registry_, address owner_) CreatorLotteryManager(registry_, owner_) {}
+contract LotteryManager4626Harness is LotteryManager4626 {
+    constructor(address registry_, address owner_) LotteryManager4626(registry_, owner_) {}
 
     function exposedSendWinnerCallback(uint32 dstEid, address winner, address creatorCoin, uint256 totalSharesPaid)
         external
@@ -117,8 +117,8 @@ contract CreatorLotteryManagerHarness is CreatorLotteryManager {
     }
 }
 
-contract CreatorLotteryManagerFeeSponsorshipTest is Test {
-    CreatorLotteryManagerHarness internal lotteryManager;
+contract LotteryManager4626FeeSponsorshipTest is Test {
+    LotteryManager4626Harness internal lotteryManager;
     MockLotteryRegistry internal registry;
     MockCreatorOracle internal oracle;
     MockVrfIntegratorForLotteryManager internal integrator;
@@ -146,7 +146,7 @@ contract CreatorLotteryManagerFeeSponsorshipTest is Test {
         integrator = new MockVrfIntegratorForLotteryManager();
 
         vm.prank(owner);
-        lotteryManager = new CreatorLotteryManagerHarness(address(registry), owner);
+        lotteryManager = new LotteryManager4626Harness(address(registry), owner);
 
         vm.startPrank(owner);
         lotteryManager.setAuthorizedSwapContract(authorizedSwap, true);
@@ -336,7 +336,7 @@ contract CreatorLotteryManagerFeeSponsorshipTest is Test {
                     && logs[i].topics[1] == WINNER_CALLBACK_CONTEXT
             ) {
                 (uint8 reason,,) = abi.decode(logs[i].data, (uint8, uint256, uint256));
-                if (reason == uint8(CreatorLotteryManager.SponsorshipSkipReason.BUDGET_EXCEEDED)) {
+                if (reason == uint8(LotteryManager4626.SponsorshipSkipReason.BUDGET_EXCEEDED)) {
                     sawBudgetSkip = true;
                 }
             }
@@ -400,7 +400,7 @@ contract CreatorLotteryManagerFeeSponsorshipTest is Test {
 
     function test_ProcessSwapLottery_RevertsForUnauthorizedCaller() public {
         vm.prank(unauthorizedSwap);
-        vm.expectRevert(CreatorLotteryManager.Unauthorized.selector);
+        vm.expectRevert(LotteryManager4626.Unauthorized.selector);
         lotteryManager.processSwapLottery(buyer, shareOFT, SWAP_AMOUNT, 0);
     }
 

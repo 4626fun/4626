@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {ICreatorRegistry} from "../interfaces/core/ICreatorRegistry.sol";
+import {I4626Registry} from "../interfaces/core/I4626Registry.sol";
 
 /**
  * @title CreatorOVaultFactory
@@ -17,7 +17,7 @@ import {ICreatorRegistry} from "../interfaces/core/ICreatorRegistry.sol";
  *      deployments, artifacts, scripts, and operator documentation.
  *
  *      This contract does not instantiate vault stacks itself. Authorized deployers register
- *      already-deployed addresses here so they can be enumerated and mirrored into CreatorRegistry.
+ *      already-deployed addresses here so they can be enumerated and mirrored into Registry4626.
  *
  *      This contract is kept for backwards compatibility with existing deployments.
  *      New deployments should use DeploymentBatcher exclusively.
@@ -43,7 +43,7 @@ contract CreatorOVaultFactory is Ownable {
     // STATE
     // =================================
 
-    ICreatorRegistry public registry;
+    I4626Registry public registry;
     uint256 public deploymentCount;
 
     mapping(address => DeploymentInfo) public deployments;
@@ -98,7 +98,7 @@ contract CreatorOVaultFactory is Ownable {
     constructor(address _registry, address _owner) Ownable(_owner) {
         if (_owner == address(0)) revert ZeroAddress();
         if (_registry != address(0)) {
-            registry = ICreatorRegistry(_registry);
+            registry = I4626Registry(_registry);
         }
         // Owner is always authorized
         authorizedDeployers[_owner] = true;
@@ -131,7 +131,7 @@ contract CreatorOVaultFactory is Ownable {
      * @notice Update registry address
      */
     function setRegistry(address _registry) external onlyOwner {
-        registry = ICreatorRegistry(_registry);
+        registry = I4626Registry(_registry);
         emit RegistryUpdated(_registry);
     }
 

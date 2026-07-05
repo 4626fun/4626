@@ -5,7 +5,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ICreatorRegistry} from "../../interfaces/core/ICreatorRegistry.sol";
+import {I4626Registry} from "../../interfaces/core/I4626Registry.sol";
 import {ICreatorOVaultComposer} from "../../interfaces/ovault/ICreatorOVaultComposer.sol";
 import {ILayerZeroComposer} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroComposer.sol";
 import {OFTComposeMsgCodec} from "@layerzerolabs/oft-evm/contracts/libs/OFTComposeMsgCodec.sol";
@@ -34,7 +34,7 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
     uint8 public constant ACTION_DEPOSIT = 1;
     uint8 public constant ACTION_REDEEM = 2;
 
-    ICreatorRegistry public immutable registry;
+    I4626Registry public immutable registry;
     address public immutable endpoint;
 
     struct CreatorMesh {
@@ -122,8 +122,8 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
 
     constructor(address _registry, address _owner) Ownable(_owner) {
         if (_registry == address(0) || _owner == address(0)) revert ZeroAddress();
-        registry = ICreatorRegistry(_registry);
-        address resolvedEndpoint = ICreatorRegistry(_registry).getLayerZeroEndpoint(block.chainid);
+        registry = I4626Registry(_registry);
+        address resolvedEndpoint = I4626Registry(_registry).getLayerZeroEndpoint(block.chainid);
         if (resolvedEndpoint == address(0)) revert ZeroAddress();
         endpoint = resolvedEndpoint;
     }

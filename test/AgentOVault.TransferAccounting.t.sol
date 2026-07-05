@@ -5,41 +5,12 @@ import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import {CreatorOVault} from "../contracts/vault/CreatorOVault.sol";
-import {AgentOVault} from "../contracts/vault/AgentOVault.sol";
+import {AgentOVault} from "../contracts/vault/agent/AgentOVault.sol";
 import {CreatorOVaultAdminModule} from "../contracts/vault/modules/CreatorOVaultAdminModule.sol";
 import {CreatorOVaultCoreModule} from "../contracts/vault/modules/CreatorOVaultCoreModule.sol";
-import {AgentOVaultCoreModule} from "../contracts/vault/modules/AgentOVaultCoreModule.sol";
+import {AgentOVaultCoreModule} from "../contracts/vault/agent/modules/AgentOVaultCoreModule.sol";
 import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorOVaultStrategiesModule.sol";
-
-/// @dev AgentTokenV4-style fee-on-transfer mock: burns `feeBps` of every normal
-///      transfer (not mint/burn), so the receiver gets `amount - fee`.
-contract MockAgentTokenV4 is ERC20 {
-    uint256 public immutable feeBps;
-
-    constructor(uint256 feeBps_) ERC20("Agent Token V4", "AGNT") {
-        require(feeBps_ < 10_000, "fee too high");
-        feeBps = feeBps_;
-    }
-
-    function mint(address to, uint256 amount) external {
-        _mint(to, amount);
-    }
-
-    function _update(address from, address to, uint256 value) internal override {
-        if (from != address(0) && to != address(0) && value > 0) {
-            uint256 fee = (value * feeBps) / 10_000;
-            uint256 sendAmount = value - fee;
-
-            super._update(from, to, sendAmount);
-            if (fee > 0) {
-                super._update(from, address(0), fee); // burn fee
-            }
-            return;
-        }
-
-        super._update(from, to, value);
-    }
-}
+import {MockAgentTokenV4} from "./mocks/MockAgentTokenV4.sol";
 
 /// @dev Rebasing-up / reflexive mock: credits the receiver MORE than the sent amount
 ///      (bonus minted on transfer). Used to prove the measured pull fails closed when
@@ -86,7 +57,7 @@ contract AgentOVaultTransferAccountingTest is Test {
         strategiesModule = address(new CreatorOVaultStrategiesModule());
         adminModule = address(new CreatorOVaultAdminModule());
 
-        agentToken = new MockAgentTokenV4(FEE_BPS);
+        agentToken = new MockAgentTokenV4("Agent Token V4", "AGNT", uint16(FEE_BPS), 0);
         vault = new AgentOVault(address(agentToken), address(this), "Agent OVault", "aoAGNT");
         vault.setModulesOnce(agentCoreModule, strategiesModule, adminModule);
     }

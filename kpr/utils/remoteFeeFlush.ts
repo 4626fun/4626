@@ -109,7 +109,13 @@ export function parseRemoteShareOftFlushTargets(): RemoteShareOftFlushTarget[] {
     if (!item || typeof item !== 'object') continue;
     const entry = item as RawFlushTarget;
     const chainId = Number(entry.chainId);
-    const lzEid = Number(entry.lzEid ?? entry.chainId);
+    const lzEidRaw = entry.lzEid;
+    if (lzEidRaw == null || String(lzEidRaw).trim() === '') {
+      throw new Error(
+        `Remote ShareOFT flush target on chain ${entry.chainId ?? '?'} missing lzEid (LayerZero endpoint id — not chain id)`,
+      );
+    }
+    const lzEid = Number(lzEidRaw);
     const shareOftRaw = String(entry.shareOft ?? '').trim();
     if (!Number.isFinite(chainId) || chainId <= 0) {
       throw new Error('Remote ShareOFT flush target missing valid chainId');

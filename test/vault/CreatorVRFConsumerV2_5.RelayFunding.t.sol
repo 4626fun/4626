@@ -18,7 +18,7 @@ contract MockEndpointV2 {
     }
 }
 
-contract MockCreatorRegistryForVRF {
+contract MockRegistry4626ForVRF {
     address public immutable endpoint;
     uint32 public immutable eid;
 
@@ -96,7 +96,7 @@ contract CreatorVRFConsumerV25RelayFundingTest is Test {
 
     function setUp() external {
         MockEndpointV2 endpoint = new MockEndpointV2();
-        MockCreatorRegistryForVRF registry = new MockCreatorRegistryForVRF(address(endpoint), BASE_EID);
+        MockRegistry4626ForVRF registry = new MockRegistry4626ForVRF(address(endpoint), BASE_EID);
         coordinator = new MockVRFCoordinatorV2Plus();
 
         consumer = new CreatorVRFConsumerHarness(address(registry), address(this));
@@ -112,7 +112,7 @@ contract CreatorVRFConsumerV25RelayFundingTest is Test {
 
     function test_constructor_revertsWhenLzEidMissing() external {
         MockEndpointV2 endpoint = new MockEndpointV2();
-        MockCreatorRegistryForVRF badRegistry = new MockCreatorRegistryForVRF(address(endpoint), 0);
+        MockRegistry4626ForVRF badRegistry = new MockRegistry4626ForVRF(address(endpoint), 0);
 
         vm.expectRevert(abi.encodeWithSelector(CreatorVRFConsumerV2_5.MissingLayerZeroEid.selector, block.chainid));
         new CreatorVRFConsumerHarness(address(badRegistry), address(this));

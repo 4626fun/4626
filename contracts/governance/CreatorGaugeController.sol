@@ -22,7 +22,7 @@ interface ICreatorOVaultWrapper {
     function vaultShares() external view returns (address);
 }
 
-interface ICreatorLotteryManager {
+interface ILotteryManager4626 {
     function addToJackpot(address token, uint256 amount) external;
 }
 
@@ -69,7 +69,7 @@ interface IVoterRewardsDistributor {
  * @notice Per-creator `tradeFeeCollector` — receives ShareOFT buy fees, unwraps, and splits value
  * @dev Hub-only (Base). ShareOFT buy fees arrive via receiveFees() or bridged OFT via receiveBridgedFees().
  *      Split (all paths):
- *      - 69% ■ ShareOFT → jackpotCustodian reserve (CreatorLotteryManager is jackpotPayoutAuthority)
+ *      - 69% ■ ShareOFT → jackpotCustodian reserve (LotteryManager4626 is jackpotPayoutAuthority)
  *      - 21.39% ■ ShareOFT → VoterRewardsDistributor (ve4626 voter lane)
  *      - 9.61% ▢ vault shares burned (PPS accrual for all holders)
  *      - 0% creatorTreasury ongoing lane (disabled by default; creatorShareBps = 0)
@@ -117,7 +117,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     IERC20 public vaultShares;
 
     /// @notice Lottery manager for jackpot
-    ICreatorLotteryManager public lotteryManager;
+    ILotteryManager4626 public lotteryManager;
 
     /// @notice Creator's treasury wallet
     address public creatorTreasury;
@@ -851,7 +851,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
      */
     function setLotteryManager(address _lotteryManager) external onlyOwner {
         if (_lotteryManager == address(0)) revert ZeroAddress();
-        lotteryManager = ICreatorLotteryManager(_lotteryManager);
+        lotteryManager = ILotteryManager4626(_lotteryManager);
         emit LotteryManagerSet(_lotteryManager);
     }
 

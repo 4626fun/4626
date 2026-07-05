@@ -33,8 +33,8 @@ interface IVRFCallbackReceiver {
     function receiveRandomWords(uint256 requestId, uint256[] memory randomWords) external;
 }
 
-// Interface for CreatorRegistry
-interface ICreatorRegistry {
+// Interface for Registry4626
+interface I4626Registry {
     function getLayerZeroEndpoint(uint256 _chainId) external view returns (address);
     function getEidForChainId(uint256 _chainId) external view returns (uint32);
     function getSupportedChains() external view returns (uint256[] memory);
@@ -69,7 +69,7 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
     // ================================
 
     IVRFCoordinatorV2Plus public vrfCoordinator;
-    ICreatorRegistry public immutable registry;
+    I4626Registry public immutable registry;
     ICreatorOracle public priceOracle;
 
     /// @notice Base EID (hub chain where VRF lives)
@@ -247,17 +247,17 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
 
     /**
      * @notice Constructor using registry for LZ endpoint
-     * @param _registry CreatorRegistry address
+     * @param _registry Registry4626 address
      * @param _owner Owner address
      */
     constructor(address _registry, address _owner)
-        OApp(ICreatorRegistry(_registry).getLayerZeroEndpoint(block.chainid), _owner)
+        OApp(I4626Registry(_registry).getLayerZeroEndpoint(block.chainid), _owner)
         Ownable(_owner)
     {
         if (_registry == address(0)) revert ZeroAddress();
         if (_owner == address(0)) revert ZeroAddress();
 
-        registry = ICreatorRegistry(_registry);
+        registry = I4626Registry(_registry);
         uint32 baseEid = registry.getEidForChainId(block.chainid);
         if (baseEid == 0) revert MissingLayerZeroEid(block.chainid);
         BASE_EID = baseEid;

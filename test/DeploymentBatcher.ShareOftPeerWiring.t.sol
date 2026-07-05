@@ -5,8 +5,8 @@ import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {CreatorRegistry} from "../contracts/core/CreatorRegistry.sol";
-import {ICreatorRegistry} from "../contracts/interfaces/core/ICreatorRegistry.sol";
+import {Registry4626} from "../contracts/core/4626Registry.sol";
+import {I4626Registry} from "../contracts/interfaces/core/I4626Registry.sol";
 import {DeploymentBatcher, DeploymentBatcherPhase2Module} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
 import {IBaseSolanaBridge} from "../contracts/interfaces/IBaseSolanaBridge.sol";
 import {IOFT, SendParam, MessagingFee, MessagingReceipt, OFTReceipt, OFTLimit, OFTFeeDetail} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
@@ -254,7 +254,7 @@ contract DeploymentBatcherShareOftPeerWiringTest is Test {
     address internal ownerAddr = makeAddr("owner");
     address internal protocolTreasury = makeAddr("protocolTreasury");
 
-    CreatorRegistry internal registry;
+    Registry4626 internal registry;
     MockCreatorTokenPeerWiring internal creatorToken;
     MockShareOftPeerWiring internal shareOFT;
     MockWrapperPeerWiring internal wrapper;
@@ -267,7 +267,7 @@ contract DeploymentBatcherShareOftPeerWiringTest is Test {
     function setUp() public {
         vm.chainId(8453);
 
-        registry = new CreatorRegistry(address(this));
+        registry = new Registry4626(address(this));
         creatorToken = new MockCreatorTokenPeerWiring();
         batcher = new DeploymentBatcherPeerHarness(
             address(registry),
@@ -387,7 +387,7 @@ contract DeploymentBatcherShareOftPeerWiringTest is Test {
 
         assertEq(shareOFT.peers(SOLANA_EID), BATCHER_DEFAULT_PEER, "default peer not wired");
         assertEq(registry.getRemoteOFTPeerBytes32(address(creatorToken), SOLANA_EID), BATCHER_DEFAULT_PEER);
-        ICreatorRegistry.CreatorCoinInfo memory info = registry.getCreatorCoin(address(creatorToken));
+        I4626Registry.CreatorCoinInfo memory info = registry.getCreatorCoin(address(creatorToken));
         assertEq(info.token, address(creatorToken), "creator not auto-registered");
         assertEq(info.shareOFT, address(shareOFT), "share oft not synced");
     }

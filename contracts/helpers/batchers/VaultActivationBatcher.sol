@@ -42,7 +42,7 @@ interface IOperatorAuthorizableVault {
 }
 
 // FIX: F-07 — registry interface for validating operator-supplied wrapper/vault
-interface ICreatorRegistryLookup {
+interface I4626RegistryLookup {
     function getVaultForToken(address token) external view returns (address);
     function getWrapperForToken(address token) external view returns (address);
 }
@@ -56,12 +56,12 @@ contract VaultActivationBatcher is ReentrancyGuard {
     /// @notice Permit2 contract used for signature-based transfers
     address public immutable permit2;
     // FIX: F-07 — registry for validating operator-supplied wrapper/vault against canonical records
-    ICreatorRegistryLookup public immutable registry;
+    I4626RegistryLookup public immutable registry;
 
     constructor(address _permit2, address _registry) {
         if (_permit2 == address(0) || _registry == address(0)) revert ZeroAddress();
         permit2 = _permit2;
-        registry = ICreatorRegistryLookup(_registry);
+        registry = I4626RegistryLookup(_registry);
     }
 
     // ================================

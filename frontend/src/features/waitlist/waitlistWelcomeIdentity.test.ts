@@ -22,7 +22,7 @@ describe('waitlistWelcomeIdentity', () => {
         identitySource: 'basename',
         walletReturnAddress: '0xabc1230000000000000000000000000000000000',
       }),
-    ).toEqual({ prefix: 'Welcome back', label: '@akita' })
+    ).toEqual({ prefix: 'Welcome back', label: 'akita' })
   })
 
   it('rejects address-like zora handles and falls through to basename', () => {

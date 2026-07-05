@@ -2,11 +2,11 @@
 pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
-import {CreatorRegistry} from "../contracts/core/CreatorRegistry.sol";
+import {Registry4626} from "../contracts/core/4626Registry.sol";
 
 /**
  * @title SeedCreatorRegistryRobinhoodPeer
- * @notice Index Robinhood remote ShareOFT peer on Base CreatorRegistry for one creator token.
+ * @notice Index Robinhood remote ShareOFT peer on Base Registry4626 for one creator token.
  *
  * Required env:
  * - PRIVATE_KEY
@@ -27,7 +27,7 @@ contract SeedCreatorRegistryRobinhoodPeer is Script {
         uint32 robinhoodEid = uint32(vm.envOr("ROBINHOOD_EID", uint256(DEFAULT_ROBINHOOD_EID)));
         address remoteOft = vm.envAddress("ROBINHOOD_REMOTE_OFT");
 
-        CreatorRegistry registry = CreatorRegistry(registryAddr);
+        Registry4626 registry = Registry4626(registryAddr);
         require(registry.owner() == deployer, "Deployer is not registry owner");
 
         console.log("Registry:      ", registryAddr);

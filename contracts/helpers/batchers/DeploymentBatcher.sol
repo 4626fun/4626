@@ -9,7 +9,7 @@ import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 
-import {ICreatorRegistry} from "../../interfaces/core/ICreatorRegistry.sol";
+import {I4626Registry} from "../../interfaces/core/I4626Registry.sol";
 import {ICreatorGaugeController} from "../../interfaces/core/ICreatorGaugeController.sol";
 import {ICreatorOVault} from "../../interfaces/core/ICreatorOVault.sol";
 import {IAjnaPoolFactory} from "../../interfaces/IAjnaPool.sol";
@@ -224,7 +224,7 @@ contract DeploymentBatcherPhase3Helper {
 
     function _resolveCreatorOracle(address creatorToken) internal view returns (address oracle) {
         address reg = IDeploymentBatcherRegistryAccess(batcher).registry();
-        oracle = ICreatorRegistry(reg).getCreatorCoin(creatorToken).oracle;
+        oracle = I4626Registry(reg).getCreatorCoin(creatorToken).oracle;
     }
 
     function _wireCharmAjnaSynergy(address charmStrategy, address ajnaPool, address oracle) internal {
@@ -714,6 +714,7 @@ contract DeploymentBatcherPhase1Module {
     IUniversalBytecodeStore public immutable bytecodeStore;
     address public immutable registry;
     address public immutable vaultCoreModule;
+    address public immutable agentVaultCoreModule;
     address public immutable vaultStrategiesModule;
     address public immutable vaultAdminModule;
     address public immutable vaultActivationBatcher;
@@ -725,6 +726,7 @@ contract DeploymentBatcherPhase1Module {
         address _bytecodeStore,
         address _registry,
         address _vaultCoreModule,
+        address _agentVaultCoreModule,
         address _vaultStrategiesModule,
         address _vaultAdminModule,
         address _vaultActivationBatcher,
@@ -740,6 +742,7 @@ contract DeploymentBatcherPhase1Module {
         registry = _registry;
         if (_vaultCoreModule == address(0)) revert ZeroAddress();
         vaultCoreModule = _vaultCoreModule;
+        agentVaultCoreModule = _agentVaultCoreModule == address(0) ? _vaultCoreModule : _agentVaultCoreModule;
         if (_vaultStrategiesModule == address(0)) revert ZeroAddress();
         vaultStrategiesModule = _vaultStrategiesModule;
         if (_vaultAdminModule == address(0)) revert ZeroAddress();
@@ -780,8 +783,11 @@ contract DeploymentBatcherPhase1Module {
 
         bytes32 baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
         address tempOwner = address(this);
-        bytes32 vaultSalt = utilsHelper.saltFor(baseSalt, "vault");
-        bytes32 wrapperSalt = utilsHelper.saltFor(baseSalt, "wrapper");
+        bool isAgent = params.vaultKind == DeploymentBatcher.VaultKind.Agent;
+        bytes32 vaultSalt = utilsHelper.saltFor(baseSalt, isAgent ? "agentVault" : "vault");
+        bytes32 wrapperSalt = utilsHelper.saltFor(baseSalt, isAgent ? "agentWrapper" : "wrapper");
+        address coreModule = isAgent ? agentVaultCoreModule : vaultCoreModule;
+        if (isAgent && agentVaultCoreModule == address(0)) revert ZeroAddress();
 
         bytes32 oftBootstrapSalt = keccak256("4626:OFTBootstrapRegistry:v1");
         out.oftBootstrapRegistry = create2Deployer.computeAddress(oftBootstrapSalt, codeIds.oftBootstrap);
@@ -791,7 +797,7 @@ contract DeploymentBatcherPhase1Module {
 
         bytes memory vaultArgs = abi.encode(params.creatorToken, tempOwner, params.vaultName, params.vaultSymbol);
         out.vault = create2Deployer.deploy(vaultSalt, codeIds.vault, vaultArgs);
-        ICreatorOVault(out.vault).setModulesOnce(vaultCoreModule, vaultStrategiesModule, vaultAdminModule);
+        ICreatorOVault(out.vault).setModulesOnce(coreModule, vaultStrategiesModule, vaultAdminModule);
 
         bytes memory wrapperArgs = abi.encode(params.creatorToken, out.vault, tempOwner);
         out.wrapper = create2Deployer.deploy(wrapperSalt, codeIds.wrapper, wrapperArgs);
@@ -1160,8 +1166,8 @@ contract DeploymentBatcherPhase2Module {
     ) internal {
         if (solanaEid == 0) revert SolanaShareBridgeNotConfigured();
 
-        ICreatorRegistry reg = ICreatorRegistry(registry);
-        ICreatorRegistry.CreatorCoinInfo memory info = reg.getCreatorCoin(params.creatorToken);
+        I4626Registry reg = I4626Registry(registry);
+        I4626Registry.CreatorCoinInfo memory info = reg.getCreatorCoin(params.creatorToken);
         if (info.token == address(0)) {
             (string memory name, string memory symbol) = _readTokenMetadata(params.creatorToken);
             reg.registerCreatorCoin(params.creatorToken, name, symbol, params.owner, address(0), 0);
@@ -1384,6 +1390,11 @@ contract DeploymentBatcher is ReentrancyGuard {
         bytes32 oftBootstrap;
     }
 
+    enum VaultKind {
+        Creator,
+        Agent
+    }
+
     struct Phase1Params {
         address creatorToken;
         address owner;
@@ -1392,6 +1403,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         string shareName;
         string shareSymbol;
         string version;
+        VaultKind vaultKind;
     }
 
     // === Canonical Value Lane Terminology (AGENTS.md) ===
@@ -1627,7 +1639,7 @@ contract DeploymentBatcher is ReentrancyGuard {
     mapping(address => bytes32) public approvedPhaseModuleCodehashes;
     error Phase1ModuleMissing();
 
-    ICreatorRegistry public immutable registry;
+    I4626Registry public immutable registry;
     IUniversalBytecodeStore public immutable bytecodeStore;
     IUniversalCreate2DeployerFromStore public immutable create2Deployer;
 
@@ -1809,7 +1821,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         // live at the first grouped check. Multi-use params are read from their state
         // vars in the helper deployments below (calldataload values freed above).
         if (_registry == address(0)) revert ZeroAddress();
-        registry = ICreatorRegistry(_registry);
+        registry = I4626Registry(_registry);
 
         if (_bytecodeStore == address(0)) revert ZeroAddress();
         bytecodeStore = IUniversalBytecodeStore(_bytecodeStore);

@@ -46,9 +46,9 @@ contract VanitySharedGlobalCatalogTest is Test {
         );
 
         assertEq(vm.parseJsonString(json, ".deferredTargets[0].contractName"), "VaultActivationBatcher");
-        assertEq(vm.parseJsonString(json, ".deferredTargets[1].contractName"), "CreatorRegistry");
-        assertEq(vm.parseJsonString(json, ".deferredTargets[2].contractName"), "CreatorLotteryManager");
-        assertEq(vm.parseJsonString(json, ".deferredTargets[3].contractName"), "CreatorVRFConsumerV2_5");
+        assertEq(vm.parseJsonString(json, ".deferredTargets[1].contractName"), "Registry4626");
+        assertEq(vm.parseJsonString(json, ".deferredTargets[2].contractName"), "LotteryManager4626");
+        assertEq(vm.parseJsonString(json, ".deferredTargets[3].contractName"), "VRFConsumer4626");
         assertEq(vm.parseJsonString(json, ".deferredTargets[4].contractName"), "SolanaBridgeAdapter");
         assertEq(vm.parseJsonAddress(json, ".deferredTargets[1].currentAddress"), 0x888506B92181c57A2fD06516FFFb6F375b7A4626);
         assertEq(vm.parseJsonAddress(json, ".deferredTargets[2].currentAddress"), address(0));
@@ -70,7 +70,7 @@ contract VanitySharedGlobalCatalogTest is Test {
         assertEq(vm.parseJsonString(json, ".renameCandidates[0].status"), "deferred");
         assertEq(
             vm.parseJsonString(json, ".renameCandidates[0].currentBehavior"),
-            "Authorized legacy deployment registrar for script-deployed stacks; records addresses and mirrors them into CreatorRegistry but does not instantiate vault contracts itself."
+            "Authorized legacy deployment registrar for script-deployed stacks; records addresses and mirrors them into Registry4626 but does not instantiate vault contracts itself."
         );
     }
 

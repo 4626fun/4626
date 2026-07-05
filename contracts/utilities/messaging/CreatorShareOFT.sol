@@ -12,10 +12,10 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {ICreatorGaugeController} from "../../interfaces/core/ICreatorGaugeController.sol";
 import {ICreatorOVault} from "../../interfaces/core/ICreatorOVault.sol";
-import {ICreatorRegistry} from "../../interfaces/core/ICreatorRegistry.sol";
+import {I4626Registry} from "../../interfaces/core/I4626Registry.sol";
 
 /// @dev Hub-only: interface for local lottery manager calls on Base
-interface ICreatorLotteryManager {
+interface ILotteryManager4626 {
     function processSwapLottery(address buyer, address tokenIn, uint256 amountIn) external payable returns (uint256);
     function processSwapLottery(address buyer, address tokenIn, uint256 amountIn, uint256 buyerCurrentShareBalance)
         external
@@ -73,7 +73,7 @@ interface IWrapperCooldownHook {
  *      - SwapOnly → user transfers incur buy fee (default 6.9% via `buyFeeBps`)
  *      - Fees → local `tradeFeeCollector` (CreatorGaugeController.receiveFees())
  *      - If receiveFees reverts, fees accumulate in `pendingFees`; retry via flushPendingFeesToGauge()
- *      - Lottery → local CreatorLotteryManager.processSwapLottery()
+ *      - Lottery → local LotteryManager4626.processSwapLottery()
  *      - Full vault / wrapper / gauge stack; vault mints/burns via minter role
  *      - Remote lottery entries arrive at this OFT LZ peer and forward to LotteryManager
  *
@@ -123,6 +123,12 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     /// @notice Default gas for hub-initiated remote flush command lzReceive
     uint128 public constant DEFAULT_REMOTE_FLUSH_COMMAND_GAS = 350_000;
 
+    /// @notice Minimum gas for hub → remote flush command (must cover flushFees lzReceive)
+    uint128 public constant MIN_REMOTE_FLUSH_COMMAND_GAS = 250_000;
+
+    /// @notice Maximum gas for hub → remote flush command
+    uint128 public constant MAX_REMOTE_FLUSH_COMMAND_GAS = 1_000_000;
+
     // ================================
     // TYPES
     // ================================
@@ -138,8 +144,8 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     // STATE - CORE
     // ================================
 
-    /// @notice CreatorRegistry for ecosystem contracts
-    ICreatorRegistry public registry;
+    /// @notice Registry4626 for ecosystem contracts
+    I4626Registry public registry;
 
     /// @notice Chain EID for this deployment
     uint32 public immutable chainEid;
@@ -365,7 +371,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      * @notice Deploy chain-specific share token
      * @param _name Token name (e.g., "AKITA Shares")
      * @param _symbol Token symbol (e.g., "■AKITA")
-     * @param _registry CreatorRegistry address (same on all chains for deterministic addresses)
+     * @param _registry Registry4626 address (same on all chains for deterministic addresses)
      * @param _owner Owner address
      *
      * @dev DETERMINISTIC DEPLOYMENT:
@@ -376,13 +382,13 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      *      After deployment, call setHubConfig() to set hub vs remote mode.
      */
     constructor(string memory _name, string memory _symbol, address _registry, address _owner)
-        OFT(_name, _symbol, ICreatorRegistry(_registry).getLayerZeroEndpoint(block.chainid), _owner)
+        OFT(_name, _symbol, I4626Registry(_registry).getLayerZeroEndpoint(block.chainid), _owner)
         Ownable(_owner)
     {
         if (_registry == address(0)) revert ZeroAddress();
 
-        registry = ICreatorRegistry(_registry);
-        uint32 resolvedChainEid = ICreatorRegistry(_registry).getEidForChainId(block.chainid);
+        registry = I4626Registry(_registry);
+        uint32 resolvedChainEid = I4626Registry(_registry).getEidForChainId(block.chainid);
         if (resolvedChainEid == 0) revert MissingLayerZeroEid(block.chainid);
         chainEid = resolvedChainEid;
         addressType[address(this)] = OperationType.NoFees;
@@ -413,11 +419,11 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
 
     /**
      * @notice Set the registry for ecosystem lookups
-     * @param _registry CreatorRegistry address
+     * @param _registry Registry4626 address
      */
     function setRegistry(address _registry) external onlyOwner {
         if (_registry == address(0)) revert ZeroAddress();
-        registry = ICreatorRegistry(_registry);
+        registry = I4626Registry(_registry);
         emit RegistrySet(_registry);
     }
 
@@ -778,7 +784,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      * @param recipient The actual recipient of the swap (buyer's wallet)
      * @param amount Amount of tokens bought
      *
-     * @notice Hub mode: calls local CreatorLotteryManager.processSwapLottery()
+     * @notice Hub mode: calls local LotteryManager4626.processSwapLottery()
      *         Remote mode: queues a pending entry that the buyer submits with native gas
      *
      * @notice Uses the actual transfer recipient address to support:
@@ -813,7 +819,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
 
         // External call wrapped in try-catch to prevent lottery issues from blocking transfers
         uint256 buyerCurrentShareBalance = balanceOf(buyer);
-        try ICreatorLotteryManager(mgr).processSwapLottery(
+        try ILotteryManager4626(mgr).processSwapLottery(
             buyer, address(this), amount, buyerCurrentShareBalance
         ) returns (uint256 id) {
             if (id > 0) emit LotteryTriggered(buyer, amount, id);
@@ -991,7 +997,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         if (isHub && _isRemoteLotteryEntryMessage(_message)) {
             address mgr = address(uint160(uint256(hubLotteryPeer)));
             if (mgr == address(0)) revert HubNotConfigured();
-            ICreatorLotteryManager(mgr).receiveRemoteLotteryEntry(_origin.srcEid, _origin.sender, _message);
+            ILotteryManager4626(mgr).receiveRemoteLotteryEntry(_origin.srcEid, _origin.sender, _message);
             return;
         }
 
@@ -1118,7 +1124,9 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         SendParam memory sendParam = this.buildFlushSendParam();
         MessagingFee memory fee = MessagingFee({nativeFee: nativeFee, lzTokenFee: 0});
 
-        CreatorShareOFT(payable(address(this))).flushFees{value: nativeFee}(sendParam, fee);
+        try CreatorShareOFT(payable(address(this))).flushFees{value: nativeFee}(sendParam, fee) {} catch {
+            emit RemoteFeeFlushSkipped(pendingFees, bytes32("flush_reverted"));
+        }
     }
 
     /**
@@ -1200,6 +1208,10 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      * @notice Set gas limit for hub → remote flush command lzReceive
      */
     function setRemoteFlushCommandGasLimit(uint128 _gasLimit) external onlyOwner {
+        require(
+            _gasLimit >= MIN_REMOTE_FLUSH_COMMAND_GAS && _gasLimit <= MAX_REMOTE_FLUSH_COMMAND_GAS,
+            "Invalid flush command gas"
+        );
         remoteFlushCommandGasLimit = _gasLimit;
         emit RemoteFlushCommandGasLimitUpdated(_gasLimit);
     }

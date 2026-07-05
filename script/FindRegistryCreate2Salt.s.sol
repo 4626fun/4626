@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import "../contracts/core/CreatorRegistry.sol";
+import "../contracts/core/4626Registry.sol";
 
 /// @notice Search for a CREATE2 salt that yields a vanity registry address.
 /// @dev Run with: SALT_START=0 SALT_ITERS=1000000 forge script script/FindRegistryCreate2Salt.s.sol:FindRegistryCreate2Salt -vvvv
@@ -25,7 +25,7 @@ contract FindRegistryCreate2Salt is Script {
         uint256 start = vm.envOr("SALT_START", uint256(0));
         uint256 iters = vm.envOr("SALT_ITERS", uint256(1_000_000));
 
-        bytes32 initCodeHash = keccak256(abi.encodePacked(type(CreatorRegistry).creationCode, abi.encode(owner)));
+        bytes32 initCodeHash = keccak256(abi.encodePacked(type(Registry4626).creationCode, abi.encode(owner)));
         console2.log("Owner:", owner);
         console2.log("InitCodeHash:", uint256(initCodeHash));
         console2.log("Start:", start);

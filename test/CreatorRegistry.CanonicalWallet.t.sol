@@ -3,10 +3,10 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {CreatorRegistry} from "../contracts/core/CreatorRegistry.sol";
+import {Registry4626} from "../contracts/core/4626Registry.sol";
 
-contract CreatorRegistryCanonicalWalletTest is Test {
-    CreatorRegistry internal registry;
+contract Registry4626CanonicalWalletTest is Test {
+    Registry4626 internal registry;
 
     address internal owner;
 
@@ -31,7 +31,7 @@ contract CreatorRegistryCanonicalWalletTest is Test {
         victimWallet = makeAddr("victimWallet");
         victimWallet2 = makeAddr("victimWallet2");
 
-        registry = new CreatorRegistry(owner);
+        registry = new Registry4626(owner);
 
         vm.startPrank(owner);
         registry.registerCreatorCoin(tokenVictim, "Victim", "VIC", victimCreator, address(0), 0);
@@ -47,7 +47,7 @@ contract CreatorRegistryCanonicalWalletTest is Test {
         // Attacker attempts to hijack the victim's wallet via reverse lookup.
         vm.prank(attackerCreator);
         vm.expectRevert(
-            abi.encodeWithSelector(CreatorRegistry.CanonicalWalletAlreadyInUse.selector, victimWallet, tokenVictim)
+            abi.encodeWithSelector(Registry4626.CanonicalWalletAlreadyInUse.selector, victimWallet, tokenVictim)
         );
         registry.setCanonicalWallet(tokenAttacker, victimWallet);
 

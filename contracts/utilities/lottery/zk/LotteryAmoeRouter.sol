@@ -18,7 +18,7 @@ import {IAmoePlonkVerifier} from "./IAmoePlonkVerifier.sol";
 ///         security divergence from stock snarkjs output (explicit
 ///         `checkField` on all 8 public inputs).
 ///
-///         When PR 4b is rolled out, `CreatorLotteryManager.authorizedAmoeRelayer`
+///         When PR 4b is rolled out, `LotteryManager4626.authorizedAmoeRelayer`
 ///         is set to this router's address so `processAmoeEntry` is only ever
 ///         called with a cryptographically-bound value.
 ///
@@ -47,7 +47,7 @@ interface ILotteryAmoeConsumer {
 ///         inputs, so the manager no longer trusts an off-chain relayer's
 ///         claim about points accounting.
 ///
-///         Matches `CreatorLotteryManager.processAmoeEntry`'s exact signature
+///         Matches `LotteryManager4626.processAmoeEntry`'s exact signature
 ///         — when the rollout op `setAuthorizedAmoeRelayer(<router>)` runs,
 ///         the manager treats this router as the relayer.
 interface IAmoeManager {
@@ -87,7 +87,7 @@ contract LotteryAmoeRouter {
     ///         Production should prefer `manager` for points-bound fan-out.
     ILotteryAmoeConsumer public consumer;
 
-    /// @notice CreatorLotteryManager-shaped fan-out target. When non-zero, the
+    /// @notice LotteryManager4626-shaped fan-out target. When non-zero, the
     ///         router calls `manager.processAmoeEntry(buyer, coin,
     ///         pointsBurnedAsUSD)` after a successful ZK submission, with the
     ///         value taken directly from `pubInputs[5]`.
@@ -389,7 +389,7 @@ contract LotteryAmoeRouter {
         //    manager-side `authorizedAmoeRelayer` gate now only ever admits
         //    cryptographically-bound values.
         //
-        //    `CreatorLotteryManager.processAmoeEntry` returns 0 on several
+        //    `LotteryManager4626.processAmoeEntry` returns 0 on several
         //    "silent skip" branches (inactive coin, sub-`minSwapAmount` value,
         //    lottery currently inactive). Because step 7 above has already
         //    burned the nonce / wallet / points-burn nullifiers, a 0 return

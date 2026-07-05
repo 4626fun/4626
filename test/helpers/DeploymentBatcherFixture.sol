@@ -3,7 +3,7 @@ pragma solidity 0.8.30;
 
 import "forge-std/Test.sol";
 import {DeploymentBatcher, DeploymentBatcherUtilsHelper, DeploymentBatcherPhase1Module, DeploymentBatcherPhase2Module, DeploymentBatcherPhase3Helper, DeploymentBatcherUniV4Helper} from "../../contracts/helpers/batchers/DeploymentBatcher.sol";
-import {ICreatorRegistry} from "../../contracts/interfaces/core/ICreatorRegistry.sol";
+import {I4626Registry} from "../../contracts/interfaces/core/I4626Registry.sol";
 
 contract DeploymentBatcherFixture is Test {
     struct Helpers {
@@ -64,6 +64,7 @@ contract DeploymentBatcherFixture is Test {
             cfg.bytecodeStore,
             cfg.registry,
             cfg.vaultCoreModule,
+            cfg.vaultCoreModule,
             cfg.vaultStrategiesModule,
             cfg.vaultAdminModule,
             cfg.vaultActivationBatcher,
@@ -106,12 +107,12 @@ contract DeploymentBatcherFixture is Test {
     }
 
     function mockRegistryCreatorCoin(address registry, address creatorToken, address oracle) public {
-        ICreatorRegistry.CreatorCoinInfo memory info;
+        I4626Registry.CreatorCoinInfo memory info;
         info.token = creatorToken;
         info.oracle = oracle;
         vm.mockCall(
             registry,
-            abi.encodeWithSelector(ICreatorRegistry.getCreatorCoin.selector, creatorToken),
+            abi.encodeWithSelector(I4626Registry.getCreatorCoin.selector, creatorToken),
             abi.encode(info)
         );
     }

@@ -1,24 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ExternalLink } from 'lucide-react'
-import {
-  createPublicClient,
-  formatEther,
-  formatUnits,
-  getAddress,
-  http,
-  type Address,
-} from 'viem'
+import { formatEther, formatUnits } from 'viem'
 import { base } from 'viem/chains'
 import { useAccount, useChainId, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 
 import { Button } from '@/components/ui/Button'
 import {
-  applyExecutorDropBuffer,
   parseRemoteFeeFlushTargets,
   resolveHubGaugeController,
   resolveHubShareOft,
   type RemoteFeeFlushTarget,
 } from '@/lib/shareOft/remoteFeeFlushConfig'
+import { quoteSpokeFlushFromHub, readGaugeUnaccountedShareOft } from '@/lib/shareOft/remoteFeeFlushQuotes'
 import { gaugeReceiveBridgedFeesAbi, shareOftFeeFlushAbi } from '@/lib/shareOft/shareOftFeeFlushAbi'
 import { buildTxHref, shortAddress, type TxState } from './adminOpsHelpers'
 
@@ -55,80 +48,20 @@ function TxMeta({ state }: { state?: TxState }) {
   )
 }
 
-async function readSpokeStatus(target: RemoteFeeFlushTarget): Promise<SpokeStatus> {
-  const client = createPublicClient({
-    chain: {
-      ...base,
-      id: target.chainId,
-      name: target.label,
-      rpcUrls: { default: { http: [target.rpcUrl] } },
-    },
-    transport: http(target.rpcUrl, { timeout: 30_000 }),
-  })
-
-  const baseClient = createPublicClient({
-    chain: base,
-    transport: http(String(import.meta.env.VITE_BASE_RPC ?? 'https://mainnet.base.org'), { timeout: 30_000 }),
-  })
-
-  const hubShareOft = resolveHubShareOft()
-
-  try {
-    const [pendingFees, flushThreshold, spokeLzFee] = await Promise.all([
-      client.readContract({
-        address: target.shareOft,
-        abi: shareOftFeeFlushAbi,
-        functionName: 'pendingFees',
-      }),
-      client.readContract({
-        address: target.shareOft,
-        abi: shareOftFeeFlushAbi,
-        functionName: 'flushThreshold',
-      }),
-      client.readContract({
-        address: target.shareOft,
-        abi: shareOftFeeFlushAbi,
-        functionName: 'quoteFlushFees',
-      }),
-    ])
-
-    const executorNativeDrop = applyExecutorDropBuffer(spokeLzFee)
-    const hubQuote = await baseClient.readContract({
-      address: hubShareOft,
-      abi: shareOftFeeFlushAbi,
-      functionName: 'quoteRemoteFeeFlushRequest',
-      args: [target.lzEid, executorNativeDrop],
-    })
-
-    const ready = pendingFees > 0n && pendingFees >= flushThreshold && spokeLzFee > 0n
-
-    return {
-      target,
-      pendingFees,
-      flushThreshold,
-      spokeLzFee,
-      hubLzFee: hubQuote.nativeFee,
-      executorNativeDrop,
-      ready,
-    }
-  } catch (err) {
-    return {
-      target,
-      pendingFees: 0n,
-      flushThreshold: 0n,
-      spokeLzFee: 0n,
-      hubLzFee: 0n,
-      executorNativeDrop: 0n,
-      ready: false,
-      error: err instanceof Error ? err.message : String(err),
-    }
-  }
-}
-
 export function RemoteFeeFlushCard() {
   const hubShareOft = resolveHubShareOft()
   const hubGauge = resolveHubGaugeController()
-  const targets = useMemo(() => parseRemoteFeeFlushTargets(), [])
+  const targetsResult = useMemo(() => {
+    try {
+      return { targets: parseRemoteFeeFlushTargets(), configError: null as string | null }
+    } catch (err) {
+      return {
+        targets: [] as RemoteFeeFlushTarget[],
+        configError: err instanceof Error ? err.message : String(err),
+      }
+    }
+  }, [])
+  const targets = targetsResult.targets
 
   const { isConnected } = useAccount()
   const chainId = useChainId()
@@ -148,47 +81,39 @@ export function RemoteFeeFlushCard() {
   const refresh = useCallback(async () => {
     if (targets.length === 0) {
       setSpokeStatuses([])
+      setGaugeBridgedBalance(null)
       return
     }
     setLoading(true)
     try {
-      const statuses = await Promise.all(targets.map((target) => readSpokeStatus(target)))
+      const statuses: SpokeStatus[] = []
+      for (const target of targets) {
+        try {
+          const quote = await quoteSpokeFlushFromHub(target)
+          statuses.push({ target, ...quote })
+        } catch (err) {
+          statuses.push({
+            target,
+            pendingFees: 0n,
+            flushThreshold: 0n,
+            spokeLzFee: 0n,
+            hubLzFee: 0n,
+            executorNativeDrop: 0n,
+            ready: false,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      }
       setSpokeStatuses(statuses)
 
       if (publicClient) {
-        const [isHub, gaugeShareOft, gaugeBalance, accounted] = await Promise.all([
-          publicClient.readContract({
-            address: hubShareOft,
-            abi: shareOftFeeFlushAbi,
-            functionName: 'isHub',
-          }),
-          publicClient.readContract({
-            address: hubGauge,
-            abi: gaugeReceiveBridgedFeesAbi,
-            functionName: 'shareOFT',
-          }),
-          publicClient.readContract({
-            address: hubGauge,
-            abi: gaugeReceiveBridgedFeesAbi,
-            functionName: 'pendingFees',
-          }).catch(() => 0n),
-          publicClient.readContract({
-            address: hubGauge,
-            abi: gaugeReceiveBridgedFeesAbi,
-            functionName: 'accountedOFTBalance',
-          }),
-        ])
-
-        setHubIsHub(isHub)
-
-        const shareOftBalance = await publicClient.readContract({
-          address: getAddress(gaugeShareOft as Address),
-          abi: [{ type: 'function', name: 'balanceOf', inputs: [{ type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' }] as const,
-          functionName: 'balanceOf',
-          args: [hubGauge],
+        const isHub = await publicClient.readContract({
+          address: hubShareOft,
+          abi: shareOftFeeFlushAbi,
+          functionName: 'isHub',
         })
-        const unaccounted = shareOftBalance > accounted ? shareOftBalance - accounted : 0n
-        setGaugeBridgedBalance(unaccounted > 0n ? unaccounted : gaugeBalance)
+        setHubIsHub(isHub)
+        setGaugeBridgedBalance(await readGaugeUnaccountedShareOft(hubGauge))
       }
     } finally {
       setLoading(false)
@@ -199,48 +124,47 @@ export function RemoteFeeFlushCard() {
     void refresh()
   }, [refresh])
 
-  const requestFlush = async (status: SpokeStatus) => {
+  const ensureBaseWallet = async (): Promise<boolean> => {
+    if (!isConnected) return false
+    if (isBase) return true
+    await switchChainAsync({ chainId: base.id })
+    return true
+  }
+
+  const requestFlush = async (target: RemoteFeeFlushTarget) => {
     if (!walletClient || !publicClient) return
     if (!isConnected) {
       setFlushTxByEid((prev) => ({
         ...prev,
-        [status.target.lzEid]: { status: 'error', error: 'Connect a wallet on Base first.' },
+        [target.lzEid]: { status: 'error', error: 'Connect a wallet on Base first.' },
       }))
       return
     }
-    if (!isBase) {
-      try {
-        await switchChainAsync({ chainId: base.id })
-      } catch (err) {
-        setFlushTxByEid((prev) => ({
-          ...prev,
-          [status.target.lzEid]: {
-            status: 'error',
-            error: err instanceof Error ? err.message : 'Switch to Base to flush remote fees.',
-          },
-        }))
-        return
-      }
-    }
 
-    setFlushTxByEid((prev) => ({ ...prev, [status.target.lzEid]: { status: 'pending' } }))
+    setFlushTxByEid((prev) => ({ ...prev, [target.lzEid]: { status: 'pending' } }))
     try {
+      await ensureBaseWallet()
+      const quote = await quoteSpokeFlushFromHub(target)
+      if (!quote.ready) {
+        throw new Error('Spoke is not flush-ready (below threshold or no pending fees). Refresh and retry.')
+      }
+
       const hash = await walletClient.writeContract({
         chain: base,
         account: walletClient.account,
         address: hubShareOft,
         abi: shareOftFeeFlushAbi,
         functionName: 'requestRemoteFeeFlush',
-        args: [status.target.lzEid, status.executorNativeDrop],
-        value: status.hubLzFee,
+        args: [target.lzEid, quote.executorNativeDrop],
+        value: quote.hubLzFee,
       })
       await publicClient.waitForTransactionReceipt({ hash })
-      setFlushTxByEid((prev) => ({ ...prev, [status.target.lzEid]: { status: 'success', hash } }))
+      setFlushTxByEid((prev) => ({ ...prev, [target.lzEid]: { status: 'success', hash } }))
       await refresh()
     } catch (err) {
       setFlushTxByEid((prev) => ({
         ...prev,
-        [status.target.lzEid]: {
+        [target.lzEid]: {
           status: 'error',
           error: err instanceof Error ? err.message : 'requestRemoteFeeFlush failed',
         },
@@ -254,17 +178,15 @@ export function RemoteFeeFlushCard() {
       setSweepTx({ status: 'error', error: 'Connect a wallet on Base first.' })
       return
     }
-    if (!isBase) {
-      try {
-        await switchChainAsync({ chainId: base.id })
-      } catch (err) {
-        setSweepTx({ status: 'error', error: err instanceof Error ? err.message : 'Switch to Base first.' })
-        return
-      }
-    }
 
     setSweepTx({ status: 'pending' })
     try {
+      await ensureBaseWallet()
+      const unaccounted = await readGaugeUnaccountedShareOft(hubGauge)
+      if (unaccounted === 0n) {
+        throw new Error('No unaccounted bridged ■ on the gauge yet. Wait for LayerZero delivery, then refresh.')
+      }
+
       const hash = await walletClient.writeContract({
         chain: base,
         account: walletClient.account,
@@ -281,6 +203,15 @@ export function RemoteFeeFlushCard() {
         error: err instanceof Error ? err.message : 'receiveBridgedFees failed',
       })
     }
+  }
+
+  if (targetsResult.configError) {
+    return (
+      <div className="rounded-xl border border-red-500/30 bg-black/30 px-4 py-4">
+        <div className="text-sm text-zinc-100">Remote ShareOFT fee flush</div>
+        <div className="mt-2 text-xs text-red-400">{targetsResult.configError}</div>
+      </div>
+    )
   }
 
   if (targets.length === 0) {
@@ -345,7 +276,7 @@ export function RemoteFeeFlushCard() {
                   variant="primary"
                   disabled={!status.ready || loading || txState?.status === 'pending'}
                   onClick={() => {
-                    void requestFlush(status)
+                    void requestFlush(status.target)
                   }}
                 >
                   {txState?.status === 'pending' ? 'Flushing…' : 'Flush from Base'}

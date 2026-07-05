@@ -5,7 +5,7 @@ import "forge-std/Test.sol";
 
 import {
     CreatorVRFConsumerHarness,
-    MockCreatorRegistryForVRF,
+    MockRegistry4626ForVRF,
     MockEndpointV2,
     MockVRFCoordinatorV2Plus
 } from "test/vault/CreatorVRFConsumerV2_5.RelayFunding.t.sol";
@@ -66,7 +66,7 @@ contract CreatorVRFConsumerV25CallbackReentrancyTest is Test {
 
     function setUp() external {
         MockEndpointV2 endpoint = new MockEndpointV2();
-        MockCreatorRegistryForVRF registry = new MockCreatorRegistryForVRF(address(endpoint), BASE_EID);
+        MockRegistry4626ForVRF registry = new MockRegistry4626ForVRF(address(endpoint), BASE_EID);
         coordinator = new ReentrantVRFCoordinator();
 
         consumer = new CreatorVRFConsumerHarness(address(registry), address(this));

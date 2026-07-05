@@ -123,6 +123,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'keeper/cre-oracle-validate-update': () => import('./keeper/_creOracleValidateUpdate.js'),
   'keeper/mark-settled': () => import('./keeper/_markSettled.js'),
   'keeper/payout-router-harvest': () => import('./keeper/_payoutRouterHarvest.js'),
+  'keeper/agent-revenue-harvest': () => import('./keeper/_agentRevenueHarvest.js'),
   'keeper/payout-router-treasury-setup': () => import('./keeper/_payoutRouterTreasurySetup.js'),
   'keeper/alert': () => import('./keeper/_alert.js'),
   'keeper/aiAssess': () => import('./keeper/_aiAssess.js'),

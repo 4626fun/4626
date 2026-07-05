@@ -2,12 +2,12 @@
 pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
-import {CreatorRegistry} from "../contracts/core/CreatorRegistry.sol";
+import {Registry4626} from "../contracts/core/4626Registry.sol";
 
 /**
- * @title DeployCreatorRegistryCreate2
+ * @title DeployRegistry4626Create2
  * @author 0xakita.eth
- * @notice Deploys CreatorRegistry via the Deterministic Deployment Proxy (CREATE2)
+ * @notice Deploys Registry4626 via the Deterministic Deployment Proxy (CREATE2)
  *         to a vanity address starting with 0x777 and ending in 4626.
  *
  * @dev HOW IT WORKS:
@@ -24,18 +24,18 @@ import {CreatorRegistry} from "../contracts/core/CreatorRegistry.sol";
  *         (it's available on all major EVM chains)
  *
  * @dev RUN COMMAND:
- *      forge script script/DeployCreatorRegistryCreate2.s.sol:DeployCreatorRegistryCreate2 \
+ *      forge script script/DeployRegistry4626Create2.s.sol:DeployRegistry4626Create2 \
  *          --rpc-url base \
  *          --broadcast \
  *          --verify \
  *          -vvvv
  *
  * @dev DRY RUN (no broadcast):
- *      forge script script/DeployCreatorRegistryCreate2.s.sol:DeployCreatorRegistryCreate2 \
+ *      forge script script/DeployRegistry4626Create2.s.sol:DeployRegistry4626Create2 \
  *          --rpc-url base \
  *          -vvvv
  */
-contract DeployCreatorRegistryCreate2 is Script {
+contract DeployRegistry4626Create2 is Script {
     // ═══════════════════════════════════════════════════════════════════
     //                    DETERMINISTIC DEPLOYMENT PROXY
     // ═══════════════════════════════════════════════════════════════════
@@ -53,7 +53,7 @@ contract DeployCreatorRegistryCreate2 is Script {
     //    cast create2 --init-code-hash <initCodeHash> --starts-with 777 --ends-with 4626
     //
     //  The init code hash depends on:
-    //   - the CreatorRegistry bytecode, and
+    //   - the Registry4626 bytecode, and
     //   - the constructor args (owner address).
     //  If either changes, the salt must be re-mined to keep the vanity suffix.
     //
@@ -82,7 +82,7 @@ contract DeployCreatorRegistryCreate2 is Script {
         console.log(
             unicode"╔════════════════════════════════════════════════════════════════╗"
         );
-        console.log(unicode"║       CreatorRegistry — CREATE2 Vanity Deployment (4626)       ║");
+        console.log(unicode"║       Registry4626 — CREATE2 Vanity Deployment (4626)       ║");
         console.log(
             unicode"╚════════════════════════════════════════════════════════════════╝"
         );
@@ -101,7 +101,7 @@ contract DeployCreatorRegistryCreate2 is Script {
         console.log("");
 
         // Build the initcode: bytecode + ABI-encoded constructor args
-        bytes memory initcode = abi.encodePacked(type(CreatorRegistry).creationCode, abi.encode(owner));
+        bytes memory initcode = abi.encodePacked(type(Registry4626).creationCode, abi.encode(owner));
 
         // Verify the init code hash matches what we mined against
         bytes32 initCodeHash = keccak256(initcode);
@@ -150,7 +150,7 @@ contract DeployCreatorRegistryCreate2 is Script {
         require(newCodeSize > 0, "No code at expected address after deployment");
 
         // Verify the registry is functional
-        CreatorRegistry registry = CreatorRegistry(predicted);
+        Registry4626 registry = Registry4626(predicted);
         require(registry.owner() == owner, "Owner mismatch");
 
         console.log("");
@@ -162,7 +162,7 @@ contract DeployCreatorRegistryCreate2 is Script {
             unicode"╚════════════════════════════════════════════════════════════════╝"
         );
         console.log("");
-        console.log(unicode"  ✓ CreatorRegistry deployed at:", predicted);
+        console.log(unicode"  ✓ Registry4626 deployed at:", predicted);
         console.log("    Owner:                      ", owner);
         console.log("");
         console.log(

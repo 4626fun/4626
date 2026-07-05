@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {CreatorLotteryManager} from "../contracts/utilities/lottery/CreatorLotteryManager.sol";
+import {LotteryManager4626} from "../contracts/lottery/4626LotteryManager.sol";
 
 // =====================================================================
 // Mocks (namespaced -Amoe to avoid collision with other test files)
@@ -159,8 +159,8 @@ contract MockVaultGaugeAmoe {
 // Test contract
 // =====================================================================
 
-contract CreatorLotteryManagerAmoeLinearParityTest is Test {
-    CreatorLotteryManager internal manager;
+contract LotteryManager4626AmoeLinearParityTest is Test {
+    LotteryManager4626 internal manager;
     MockLotteryRegistryAmoe internal registry;
     MockCreatorOracleAmoe internal oracle;
     MockLocalVrfConsumerAmoe internal vrf;
@@ -190,7 +190,7 @@ contract CreatorLotteryManagerAmoeLinearParityTest is Test {
         gauge = new MockVaultGaugeAmoe();
 
         vm.prank(owner);
-        manager = new CreatorLotteryManager(address(registry), owner);
+        manager = new LotteryManager4626(address(registry), owner);
 
         vm.startPrank(owner);
         manager.setAuthorizedSwapContract(authorizedSwap, true);

@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {CreatorLotteryManager} from "../../contracts/utilities/lottery/CreatorLotteryManager.sol";
+import {LotteryManager4626} from "../../contracts/lottery/4626LotteryManager.sol";
 import {MessagingFee} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 
@@ -121,8 +121,8 @@ contract MockLocalVrfConsumer {
     }
 }
 
-contract CreatorLotteryManagerVrfSponsorshipHardeningTest is Test {
-    CreatorLotteryManager internal lotteryManager;
+contract LotteryManager4626VrfSponsorshipHardeningTest is Test {
+    LotteryManager4626 internal lotteryManager;
     MockLotteryRegistry internal registry;
     MockCreatorOracle internal oracle;
     MockVrfIntegrator internal integrator;
@@ -149,7 +149,7 @@ contract CreatorLotteryManagerVrfSponsorshipHardeningTest is Test {
         localConsumer = new MockLocalVrfConsumer();
 
         vm.prank(owner);
-        lotteryManager = new CreatorLotteryManager(address(registry), owner);
+        lotteryManager = new LotteryManager4626(address(registry), owner);
 
         vm.startPrank(owner);
         lotteryManager.setAuthorizedSwapContract(authorizedSwap, true);
@@ -180,7 +180,7 @@ contract CreatorLotteryManagerVrfSponsorshipHardeningTest is Test {
         vm.stopPrank();
 
         vm.prank(authorizedSwap);
-        vm.expectRevert(CreatorLotteryManager.InvalidAmount.selector);
+        vm.expectRevert(LotteryManager4626.InvalidAmount.selector);
         lotteryManager.processSwapLottery{value: 1}(buyer, shareOFT, SWAP_AMOUNT, 0);
     }
 

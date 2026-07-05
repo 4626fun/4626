@@ -2,11 +2,11 @@
 pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
-import {CreatorLotteryManager} from "../contracts/utilities/lottery/CreatorLotteryManager.sol";
+import {LotteryManager4626} from "../contracts/lottery/4626LotteryManager.sol";
 
 /**
  * @title DeployLotteryManagerCreate2
- * @notice Deploys CreatorLotteryManager via the Deterministic Deployment Proxy (CREATE2)
+ * @notice Deploys LotteryManager4626 via the Deterministic Deployment Proxy (CREATE2)
  *         to a vanity address starting with 0x777 and ending in 4626.
  *
  * Deployer: 0x4e59...B4956C (Deterministic Deployment Proxy)
@@ -36,7 +36,7 @@ contract DeployLotteryManagerCreate2 is Script {
         console.log(
             unicode"╔════════════════════════════════════════════════════════════════╗"
         );
-        console.log(unicode"║   CreatorLotteryManager — CREATE2 Vanity Deployment (4626)     ║");
+        console.log(unicode"║   LotteryManager4626 — CREATE2 Vanity Deployment (4626)     ║");
         console.log(
             unicode"╚════════════════════════════════════════════════════════════════╝"
         );
@@ -50,7 +50,7 @@ contract DeployLotteryManagerCreate2 is Script {
         console.log("");
 
         // Build initcode: creation bytecode + constructor args
-        bytes memory initcode = abi.encodePacked(type(CreatorLotteryManager).creationCode, abi.encode(REGISTRY, OWNER));
+        bytes memory initcode = abi.encodePacked(type(LotteryManager4626).creationCode, abi.encode(REGISTRY, OWNER));
 
         // Verify init code hash
         bytes32 initCodeHash = keccak256(initcode);
@@ -94,7 +94,7 @@ contract DeployLotteryManagerCreate2 is Script {
         require(newCodeSize > 0, "No code at expected address after deployment");
 
         // Verify owner
-        CreatorLotteryManager lottery = CreatorLotteryManager(payable(predicted));
+        LotteryManager4626 lottery = LotteryManager4626(payable(predicted));
         require(lottery.owner() == OWNER, "Owner mismatch");
 
         console.log("");
@@ -106,7 +106,7 @@ contract DeployLotteryManagerCreate2 is Script {
             unicode"╚════════════════════════════════════════════════════════════════╝"
         );
         console.log("");
-        console.log(unicode"  ✓ CreatorLotteryManager deployed at:", predicted);
+        console.log(unicode"  ✓ LotteryManager4626 deployed at:", predicted);
         console.log("    Owner:                         ", OWNER);
         console.log("");
         console.log(

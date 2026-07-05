@@ -9,12 +9,12 @@ import {BribesFactory} from "../contracts/factories/BribesFactory.sol";
 import {ve4626} from "../contracts/governance/ve4626.sol";
 import {ve4626BoostManager} from "../contracts/governance/ve4626BoostManager.sol";
 
-interface ICreatorLotteryManagerForRewards {
+interface ILotteryManager4626ForRewards {
     function setBoostManager(address manager) external;
     function setVaultGaugeVoting(address vaultGaugeVoting) external;
 }
 
-interface ICreatorRegistryForRewards {
+interface I4626RegistryForRewards {
     function getAllCreatorCoins() external view returns (address[] memory);
     function getGaugeControllerForToken(address token) external view returns (address);
     function getVaultForToken(address token) external view returns (address);
@@ -107,7 +107,7 @@ contract DeployRewardsEcosystem is Script {
 
             // Seed the manual whitelist from the registry so the gauge is usable immediately.
             console2.log("\nSeed VaultGaugeVoting manual whitelist from registry vaults...");
-            ICreatorRegistryForRewards reg = ICreatorRegistryForRewards(registry);
+            I4626RegistryForRewards reg = I4626RegistryForRewards(registry);
             address[] memory tokens = reg.getAllCreatorCoins();
             address[] memory vaultsTmp = new address[](tokens.length);
             uint256 count = 0;
@@ -153,15 +153,15 @@ contract DeployRewardsEcosystem is Script {
         console2.log("\nWire ve4626 -> boostManager...");
         ve.setBoostManager(address(boostManager));
 
-        console2.log("\nWire CreatorLotteryManager -> boostManager + gauge voting...");
-        ICreatorLotteryManagerForRewards(lotteryManager).setBoostManager(address(boostManager));
-        ICreatorLotteryManagerForRewards(lotteryManager).setVaultGaugeVoting(address(voting));
+        console2.log("\nWire LotteryManager4626 -> boostManager + gauge voting...");
+        ILotteryManager4626ForRewards(lotteryManager).setBoostManager(address(boostManager));
+        ILotteryManager4626ForRewards(lotteryManager).setVaultGaugeVoting(address(voting));
 
         if (wireExistingGauges) {
             console2.log("\nWire existing CreatorGaugeControllers (set voting + rewards distributor)...");
-            address[] memory tokens = ICreatorRegistryForRewards(registry).getAllCreatorCoins();
+            address[] memory tokens = I4626RegistryForRewards(registry).getAllCreatorCoins();
             for (uint256 i = 0; i < tokens.length; i++) {
-                address gauge = ICreatorRegistryForRewards(registry).getGaugeControllerForToken(tokens[i]);
+                address gauge = I4626RegistryForRewards(registry).getGaugeControllerForToken(tokens[i]);
                 if (gauge == address(0)) continue;
                 // These setters are owner-only on the gauge controller (protocol treasury owner).
                 // This script must be broadcast by the gauge owner to succeed.

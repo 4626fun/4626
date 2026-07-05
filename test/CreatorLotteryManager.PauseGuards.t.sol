@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {CreatorLotteryManager} from "../contracts/utilities/lottery/CreatorLotteryManager.sol";
+import {LotteryManager4626} from "../contracts/lottery/4626LotteryManager.sol";
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
@@ -203,8 +203,8 @@ contract MockVaultGaugeVotingPauseGuards {
     }
 }
 
-contract CreatorLotteryManagerPauseHarness is CreatorLotteryManager {
-    constructor(address registry_, address owner_) CreatorLotteryManager(registry_, owner_) {}
+contract LotteryManager4626PauseHarness is LotteryManager4626 {
+    constructor(address registry_, address owner_) LotteryManager4626(registry_, owner_) {}
 
     function exposedLzReceive(Origin calldata origin, bytes calldata payload) external {
         // Pass an empty `extraData` as calldata (required by the signature).
@@ -212,8 +212,8 @@ contract CreatorLotteryManagerPauseHarness is CreatorLotteryManager {
     }
 }
 
-contract CreatorLotteryManagerPauseGuardsTest is Test {
-    CreatorLotteryManagerPauseHarness internal lotteryManager;
+contract LotteryManager4626PauseGuardsTest is Test {
+    LotteryManager4626PauseHarness internal lotteryManager;
     MockLotteryRegistryPauseGuards internal registry;
     MockCreatorOraclePauseGuards internal oracle;
     MockGaugeControllerPauseGuards internal gauge;
@@ -258,7 +258,7 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
         );
 
         vm.prank(owner);
-        lotteryManager = new CreatorLotteryManagerPauseHarness(address(registry), owner);
+        lotteryManager = new LotteryManager4626PauseHarness(address(registry), owner);
 
         vm.startPrank(owner);
         lotteryManager.setAuthorizedSwapContract(authorizedSwap, true);
@@ -461,7 +461,7 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
         assertEq(maxWinChance, 200_000, "expected max win chance updated to new cap");
 
         vm.prank(owner);
-        vm.expectRevert(CreatorLotteryManager.InvalidAmount.selector);
+        vm.expectRevert(LotteryManager4626.InvalidAmount.selector);
         lotteryManager.setLotteryConfig(1_000_000, 6900, true, 40, 200_001, 10_500);
     }
 

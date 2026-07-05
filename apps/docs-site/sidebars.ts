@@ -15,6 +15,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'getting-started/index',
         'overview/how-it-works',
+        'overview/agent-vault',
         'overview/solana-share-mesh',
       ],
     },

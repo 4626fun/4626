@@ -31,7 +31,7 @@ interface IVaultGaugeVotingForRewards {
     function getUserVoteWeightAtEpoch(uint256 epoch, address user, address vault) external view returns (uint256);
 }
 
-interface ICreatorRegistryForVoterRewards {
+interface I4626RegistryForVoterRewards {
     function getTokenForVault(address _vault) external view returns (address);
     function getGaugeControllerForToken(address _token) external view returns (address);
 }
@@ -50,7 +50,7 @@ contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
     // ================================
 
     IVaultGaugeVotingForRewards public immutable gaugeVoting;
-    ICreatorRegistryForVoterRewards public immutable registry;
+    I4626RegistryForVoterRewards public immutable registry;
 
     // ================================
     // STATE
@@ -113,7 +113,7 @@ contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
     constructor(address _gaugeVoting, address _registry, address _owner) Ownable(_owner) {
         if (_gaugeVoting == address(0) || _registry == address(0)) revert ZeroAddress();
         gaugeVoting = IVaultGaugeVotingForRewards(_gaugeVoting);
-        registry = ICreatorRegistryForVoterRewards(_registry);
+        registry = I4626RegistryForVoterRewards(_registry);
     }
 
     // ================================

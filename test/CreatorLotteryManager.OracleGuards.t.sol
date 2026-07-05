@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {CreatorLotteryManager} from "../contracts/utilities/lottery/CreatorLotteryManager.sol";
+import {LotteryManager4626} from "../contracts/lottery/4626LotteryManager.sol";
 
 contract MockCreatorOracleOracleGuards {
     int256 public price = 1e18;
@@ -85,8 +85,8 @@ contract MockLocalVrfConsumerOracleGuards {
     }
 }
 
-contract CreatorLotteryManagerOracleGuardsTest is Test {
-    CreatorLotteryManager internal lotteryManager;
+contract LotteryManager4626OracleGuardsTest is Test {
+    LotteryManager4626 internal lotteryManager;
     MockLotteryRegistryOracleGuards internal registry;
     MockCreatorOracleOracleGuards internal oracle;
     MockLocalVrfConsumerOracleGuards internal localVrfConsumer;
@@ -109,7 +109,7 @@ contract CreatorLotteryManagerOracleGuardsTest is Test {
         registry = new MockLotteryRegistryOracleGuards(LZ_ENDPOINT, creatorCoin, shareOFT, address(oracle));
 
         vm.prank(owner);
-        lotteryManager = new CreatorLotteryManager(address(registry), owner);
+        lotteryManager = new LotteryManager4626(address(registry), owner);
 
         vm.startPrank(owner);
         lotteryManager.setAuthorizedSwapContract(authorizedSwap, true);

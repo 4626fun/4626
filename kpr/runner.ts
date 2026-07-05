@@ -73,6 +73,9 @@ async function main() {
       case 'payout-router-harvest':
         workflow = await import('./workflows/payout-router-harvest.workflow.js');
         break;
+      case 'agent-revenue-harvest':
+        workflow = await import('./workflows/agent-revenue-harvest.workflow.js');
+        break;
       case 'keepr-action-queue':
         workflow = await import('./workflows/keepr-action-queue.workflow.js');
         break;

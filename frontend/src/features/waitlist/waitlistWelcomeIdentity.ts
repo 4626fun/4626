@@ -126,8 +126,8 @@ export function formatWaitlistNamedIdentityLabel(
     return trimmed.toLowerCase().endsWith('.eth') ? trimmed : `${trimmed}.eth`
   }
 
-  if (source === 'zora' && !trimmed.startsWith('@')) {
-    return `@${trimmed.replace(/^@/, '')}`
+  if (source === 'zora') {
+    return trimmed.replace(/^@+/, '')
   }
 
   return trimmed
@@ -199,7 +199,7 @@ export function resolveWaitlistWelcomeCopy(input: {
   embeddedEoaAddress?: string | null
 }): WaitlistWelcomeCopy | null {
   const zoraRaw = sanitizeWaitlistZoraHandle(input.zoraHandle)
-  const zoraLabel = zoraRaw ? `@${zoraRaw}` : null
+  const zoraLabel = zoraRaw
   const basenameRaw = sanitizeWaitlistBasename(input.basename)
 
   let label: string | null = null

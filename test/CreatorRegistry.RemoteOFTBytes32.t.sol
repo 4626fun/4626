@@ -3,11 +3,11 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {CreatorRegistry} from "../contracts/core/CreatorRegistry.sol";
-import {ICreatorRegistry} from "../contracts/interfaces/core/ICreatorRegistry.sol";
+import {Registry4626} from "../contracts/core/4626Registry.sol";
+import {I4626Registry} from "../contracts/interfaces/core/I4626Registry.sol";
 
-contract CreatorRegistryRemoteOFTBytes32Test is Test {
-    CreatorRegistry internal registry;
+contract Registry4626RemoteOFTBytes32Test is Test {
+    Registry4626 internal registry;
 
     address internal owner;
     address internal token;
@@ -28,7 +28,7 @@ contract CreatorRegistryRemoteOFTBytes32Test is Test {
         creator = makeAddr("creator");
         token = address(0x1001);
 
-        registry = new CreatorRegistry(owner);
+        registry = new Registry4626(owner);
         vm.prank(owner);
         registry.registerCreatorCoin(token, "Creator", "CRT", creator, address(0), 0);
         vm.startPrank(owner);
@@ -90,12 +90,12 @@ contract CreatorRegistryRemoteOFTBytes32Test is Test {
 
     function test_SetRemoteOFTPeerBytes32_RevertsOnZeroPeer() public {
         vm.prank(owner);
-        vm.expectRevert(CreatorRegistry.ZeroBytes32.selector);
+        vm.expectRevert(Registry4626.ZeroBytes32.selector);
         registry.setRemoteOFTPeerBytes32(token, SOLANA_EID, bytes32(0));
     }
 
     function test_SetAndGetOmnichainVaultMesh() public {
-        ICreatorRegistry.OmnichainVaultMeshConfig memory cfg = ICreatorRegistry.OmnichainVaultMeshConfig({
+        I4626Registry.OmnichainVaultMeshConfig memory cfg = I4626Registry.OmnichainVaultMeshConfig({
             solanaEid: SOLANA_EID,
             hubComposer: HUB_COMPOSER,
             assetMeshToken: ASSET_MESH_TOKEN,
@@ -107,7 +107,7 @@ contract CreatorRegistryRemoteOFTBytes32Test is Test {
         vm.prank(owner);
         registry.setOmnichainVaultMesh(token, cfg);
 
-        ICreatorRegistry.OmnichainVaultMeshConfig memory out = registry.getOmnichainVaultMesh(token);
+        I4626Registry.OmnichainVaultMeshConfig memory out = registry.getOmnichainVaultMesh(token);
         assertEq(out.solanaEid, SOLANA_EID);
         assertEq(out.hubComposer, HUB_COMPOSER);
         assertEq(out.assetMeshToken, ASSET_MESH_TOKEN);
@@ -121,7 +121,7 @@ contract CreatorRegistryRemoteOFTBytes32Test is Test {
         vm.prank(owner);
         registry.setOmnichainVaultMesh(
             token,
-            ICreatorRegistry.OmnichainVaultMeshConfig({
+            I4626Registry.OmnichainVaultMeshConfig({
                 solanaEid: SOLANA_EID,
                 hubComposer: HUB_COMPOSER,
                 assetMeshToken: ASSET_MESH_TOKEN,
@@ -138,7 +138,7 @@ contract CreatorRegistryRemoteOFTBytes32Test is Test {
         vm.prank(owner);
         registry.setOmnichainVaultMesh(
             token,
-            ICreatorRegistry.OmnichainVaultMeshConfig({
+            I4626Registry.OmnichainVaultMeshConfig({
                 solanaEid: SOLANA_EID,
                 hubComposer: HUB_COMPOSER,
                 assetMeshToken: ASSET_MESH_TOKEN,

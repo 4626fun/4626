@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
-import {CreatorRegistry} from "../contracts/core/CreatorRegistry.sol";
+import {Registry4626} from "../contracts/core/4626Registry.sol";
 
 interface IOFTPeerConfig {
     function setPeer(uint32 _eid, bytes32 _peer) external;
@@ -77,7 +77,7 @@ contract WireShareOftRobinhoodPeers is Script {
 
         if (registryAddr != address(0)) {
             require(creatorToken != address(0), "CREATOR_TOKEN required when REGISTRY is set");
-            CreatorRegistry(registryAddr).setRemoteOFTPeer(creatorToken, robinhoodEid, robinhoodShareOft);
+            Registry4626(registryAddr).setRemoteOFTPeer(creatorToken, robinhoodEid, robinhoodShareOft);
         }
 
         vm.stopBroadcast();

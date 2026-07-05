@@ -4,10 +4,10 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 
 import {RouteCoherenceChecker} from "../contracts/helpers/batchers/RouteCoherenceChecker.sol";
-import {ICreatorRegistry} from "../contracts/interfaces/core/ICreatorRegistry.sol";
+import {I4626Registry} from "../contracts/interfaces/core/I4626Registry.sol";
 
 contract MockRegistryRouteCoherence {
-    mapping(address => ICreatorRegistry.CreatorCoinInfo) internal infoByToken;
+    mapping(address => I4626Registry.CreatorCoinInfo) internal infoByToken;
 
     function setCreatorCoinInfo(
         address token,
@@ -17,7 +17,7 @@ contract MockRegistryRouteCoherence {
         address gaugeController,
         bool isActive
     ) external {
-        ICreatorRegistry.CreatorCoinInfo storage info = infoByToken[token];
+        I4626Registry.CreatorCoinInfo storage info = infoByToken[token];
         info.token = token;
         info.vault = vault;
         info.shareOFT = shareOFT;
@@ -26,7 +26,7 @@ contract MockRegistryRouteCoherence {
         info.isActive = isActive;
     }
 
-    function getCreatorCoin(address token) external view returns (ICreatorRegistry.CreatorCoinInfo memory) {
+    function getCreatorCoin(address token) external view returns (I4626Registry.CreatorCoinInfo memory) {
         return infoByToken[token];
     }
 }

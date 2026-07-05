@@ -39,47 +39,74 @@ export function resolveHubGaugeController(): Address {
   return readAddressEnv('VITE_HUB_GAUGE_CONTROLLER', AKITA.gaugeController)
 }
 
-function resolveRpcUrl(entry: RawFlushTarget): string | null {
+function resolveRpcUrl(entry: RawFlushTarget, label: string): string {
   if (entry.rpcUrl?.trim()) return entry.rpcUrl.trim()
   const envKey = String(entry.rpcEnvKey ?? '').trim()
-  if (!envKey) return null
+  if (!envKey) {
+    throw new Error(`Remote fee flush target "${label}" requires rpcUrl or rpcEnvKey`)
+  }
   const fromEnv = readEnv(`VITE_${envKey}`) || readEnv(envKey)
-  return fromEnv || null
+  if (!fromEnv) {
+    throw new Error(`Remote fee flush target "${label}" missing RPC env ${envKey}`)
+  }
+  return fromEnv
 }
 
 export function parseRemoteFeeFlushTargets(): RemoteFeeFlushTarget[] {
   const inline = readEnv('VITE_REMOTE_SHARE_OFT_FLUSH_TARGETS')
+  if (!inline) return []
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(inline)
+  } catch {
+    throw new Error('Invalid VITE_REMOTE_SHARE_OFT_FLUSH_TARGETS JSON')
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error('VITE_REMOTE_SHARE_OFT_FLUSH_TARGETS must be a JSON array')
+  }
+
   const out: RemoteFeeFlushTarget[] = []
+  const seenEids = new Set<number>()
 
-  if (inline) {
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(inline)
-    } catch {
-      throw new Error('Invalid VITE_REMOTE_SHARE_OFT_FLUSH_TARGETS JSON')
+  for (const [index, item] of parsed.entries()) {
+    if (!item || typeof item !== 'object') {
+      throw new Error(`Remote fee flush target at index ${index} must be an object`)
     }
-    if (!Array.isArray(parsed)) {
-      throw new Error('VITE_REMOTE_SHARE_OFT_FLUSH_TARGETS must be a JSON array')
+    const entry = item as RawFlushTarget
+    const label = String(entry.label ?? `chain-${entry.chainId ?? index}`)
+    const chainId = Number(entry.chainId)
+    const lzEidRaw = entry.lzEid
+    if (lzEidRaw == null || String(lzEidRaw).trim() === '') {
+      throw new Error(
+        `Remote fee flush target "${label}" missing lzEid (LayerZero endpoint id — not chain id)`,
+      )
+    }
+    const lzEid = Number(lzEidRaw)
+    const shareOftRaw = String(entry.shareOft ?? '').trim()
+
+    if (!Number.isFinite(chainId) || chainId <= 0) {
+      throw new Error(`Remote fee flush target "${label}" missing valid chainId`)
+    }
+    if (!Number.isFinite(lzEid) || lzEid <= 0) {
+      throw new Error(`Remote fee flush target "${label}" missing valid lzEid`)
+    }
+    if (!isAddress(shareOftRaw)) {
+      throw new Error(`Remote fee flush target "${label}" has invalid shareOft`)
     }
 
-    for (const item of parsed) {
-      if (!item || typeof item !== 'object') continue
-      const entry = item as RawFlushTarget
-      const chainId = Number(entry.chainId)
-      const lzEid = Number(entry.lzEid ?? entry.chainId)
-      const shareOftRaw = String(entry.shareOft ?? '').trim()
-      const rpcUrl = resolveRpcUrl(entry)
-      if (!Number.isFinite(chainId) || chainId <= 0) continue
-      if (!Number.isFinite(lzEid) || lzEid <= 0) continue
-      if (!isAddress(shareOftRaw) || !rpcUrl) continue
-      out.push({
-        chainId,
-        lzEid,
-        shareOft: getAddress(shareOftRaw),
-        rpcUrl,
-        label: String(entry.label ?? `chain-${chainId}`),
-      })
+    if (seenEids.has(lzEid)) {
+      throw new Error(`Duplicate lzEid ${lzEid} in VITE_REMOTE_SHARE_OFT_FLUSH_TARGETS`)
     }
+    seenEids.add(lzEid)
+
+    out.push({
+      chainId,
+      lzEid,
+      shareOft: getAddress(shareOftRaw),
+      rpcUrl: resolveRpcUrl(entry, label),
+      label,
+    })
   }
 
   return out

@@ -15,7 +15,7 @@ interface IDeploymentBatcherSolanaConfig {
     function solanaShareOftPeer() external view returns (bytes32);
 }
 
-interface ICreatorLotteryManagerAuth {
+interface ILotteryManager4626Auth {
     function setAuthorizedSwapContract(address swapContract, bool authorized) external;
     function authorizedSwapContracts(address) external view returns (bool);
 }
@@ -89,7 +89,7 @@ contract ConfigureDeploymentBatcherSolana is Script {
         }
 
         if (authorizeOnLottery) {
-            ICreatorLotteryManagerAuth lottery = ICreatorLotteryManagerAuth(lotteryManager);
+            ILotteryManager4626Auth lottery = ILotteryManager4626Auth(lotteryManager);
             if (!lottery.authorizedSwapContracts(adapter)) {
                 lottery.setAuthorizedSwapContract(adapter, true);
                 console2.log("LotteryManager authorization: updated");
@@ -138,7 +138,7 @@ contract ConfigureDeploymentBatcherSolana is Script {
 
         if (authorizeOnLottery) {
             require(
-                ICreatorLotteryManagerAuth(lotteryManager).authorizedSwapContracts(adapter),
+                ILotteryManager4626Auth(lotteryManager).authorizedSwapContracts(adapter),
                 "lottery authorization mismatch"
             );
         }

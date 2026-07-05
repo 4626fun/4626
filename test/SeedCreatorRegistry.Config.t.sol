@@ -54,7 +54,7 @@ contract SeedCreatorRegistryConfigTest is Test {
         harness = new SeedCreatorRegistryHarness();
     }
 
-    function testSeedScriptTargetsLiveCreatorRegistry() external view {
+    function testSeedScriptTargetsLiveRegistry4626() external view {
         assertEq(harness.exposedDefaultRegistry(), LIVE_REGISTRY);
     }
 

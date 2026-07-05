@@ -5,7 +5,7 @@ import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {DeploymentBatcher, DeploymentBatcherPhase2Module, DeploymentBatcherUtilsHelper} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
-import {CreatorRegistry} from "../contracts/core/CreatorRegistry.sol";
+import {Registry4626} from "../contracts/core/4626Registry.sol";
 import {IOFT, SendParam, MessagingFee, MessagingReceipt, OFTReceipt, OFTLimit, OFTFeeDetail} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
 import {IBaseSolanaBridge} from "../contracts/interfaces/IBaseSolanaBridge.sol";
 import {ISignatureTransfer} from "permit2/src/interfaces/ISignatureTransfer.sol";
@@ -272,13 +272,13 @@ contract DeploymentBatcherPermit2Test is Test {
     MockOwnableTransferPermit2 internal oracle;
     MockPermit2Deployment internal permit2;
     DeploymentBatcherHarness internal batcher;
-    CreatorRegistry internal registry;
+    Registry4626 internal registry;
     address internal protocolTreasury = makeAddr("protocolTreasury");
 
     function setUp() public {
         vm.chainId(8453);
 
-        registry = new CreatorRegistry(address(this));
+        registry = new Registry4626(address(this));
         creatorToken = new MockCreatorTokenPermit2();
         shareOFT = new MockShareOFTPermit2();
         wrapper = new MockWrapperPermit2(address(creatorToken), address(shareOFT));

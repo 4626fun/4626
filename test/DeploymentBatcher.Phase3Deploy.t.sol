@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {ICreatorRegistry} from "../contracts/interfaces/core/ICreatorRegistry.sol";
+import {I4626Registry} from "../contracts/interfaces/core/I4626Registry.sol";
 import "../contracts/helpers/batchers/DeploymentBatcher.sol";
 import "./helpers/DeploymentBatcherFixture.sol";
 import "./helpers/DeploymentBatcherPhase3Mocks.sol";
@@ -112,11 +112,11 @@ contract DeploymentBatcherPhase3DeployTest is Test {
     }
 
     function _mockCreatorOracle(address oracle) internal {
-        ICreatorRegistry.CreatorCoinInfo memory info;
+        I4626Registry.CreatorCoinInfo memory info;
         info.oracle = oracle;
         vm.mockCall(
             address(batcher.registry()),
-            abi.encodeWithSelector(ICreatorRegistry.getCreatorCoin.selector, creatorToken),
+            abi.encodeWithSelector(I4626Registry.getCreatorCoin.selector, creatorToken),
             abi.encode(info)
         );
     }

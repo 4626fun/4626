@@ -9,7 +9,7 @@ import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {
     CreatorVRFConsumerHarness,
     MockVRFCoordinatorV2Plus,
-    MockCreatorRegistryForVRF,
+    MockRegistry4626ForVRF,
     MockEndpointV2
 } from "test/vault/CreatorVRFConsumerV2_5.RelayFunding.t.sol";
 
@@ -28,7 +28,7 @@ contract CreatorVRFConsumerV25SequenceScopingTest is Test {
 
     function setUp() external {
         MockEndpointV2 endpoint = new MockEndpointV2();
-        MockCreatorRegistryForVRF registry = new MockCreatorRegistryForVRF(address(endpoint), BASE_EID);
+        MockRegistry4626ForVRF registry = new MockRegistry4626ForVRF(address(endpoint), BASE_EID);
         coordinator = new MockVRFCoordinatorV2Plus();
 
         consumer = new CreatorVRFConsumerHarness(address(registry), address(this));

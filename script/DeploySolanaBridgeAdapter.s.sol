@@ -28,7 +28,7 @@ interface ILotteryManagerAdmin {
  *   the adapter will be authorized on the lottery manager as a swap contract)
  */
 contract DeploySolanaBridgeAdapter is Script {
-    // Base mainnet CreatorRegistry (see deployments/base/contracts/core/CreatorRegistry.json)
+    // Base mainnet Registry4626 (see deployments/base/contracts/core/Registry4626.json)
     address constant DEFAULT_CREATOR_REGISTRY = 0x3f64087dc361Ad52300409E5873b26941D6418B6;
 
     // v1.11.1+ requires explicit lottery manager env when wiring the adapter.
@@ -45,7 +45,7 @@ contract DeploySolanaBridgeAdapter is Script {
         );
 
         console2.log("Broadcaster:", broadcaster);
-        console2.log("CreatorRegistry:", registry);
+        console2.log("Registry4626:", registry);
         console2.log("Adapter owner:", owner);
         console2.log("LotteryManager:", lotteryManager);
 

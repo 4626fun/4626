@@ -2,15 +2,15 @@
 pragma solidity ^0.8.20;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {ICreatorRegistry} from "../interfaces/core/ICreatorRegistry.sol";
+import {I4626Registry} from "../interfaces/core/I4626Registry.sol";
 
 /**
- * @title CreatorRegistry
+ * @title Registry4626
  * @author 0xakita.eth
  * @notice Registry for 4626 deployments and configs.
  * @dev Used by factories, vaults, and OFTs to resolve ecosystem addresses.
  */
-contract CreatorRegistry is ICreatorRegistry, Ownable {
+contract Registry4626 is I4626Registry, Ownable {
     // =================================
     // CONSTANTS
     // =================================
@@ -80,6 +80,9 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
 
     /// @notice Per-creator Solana OVault mesh metadata.
     mapping(address => OmnichainVaultMeshConfig) private omnichainVaultMeshConfigs;
+
+    /// @notice Agent lane integration metadata keyed by underlying token
+    mapping(address => AgentIntegrationMeta) private agentIntegrationMetas;
 
     // =================================
     // CHAIN CONFIGURATION
@@ -1022,6 +1025,26 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
      */
     function getQuoter(uint256 _chainId) external view returns (address) {
         return chainConfigs[_chainId].quoter;
+    }
+
+    // =================================
+    // AGENT INTEGRATION METADATA
+    // =================================
+
+    function setAgentIntegrationMeta(address token, AgentIntegrationMeta calldata meta) external onlyOwner {
+        if (token == address(0)) revert ZeroAddress();
+        agentIntegrationMetas[token] = meta;
+        emit AgentIntegrationMetaSet(token, meta.vaultKind);
+    }
+
+    function getAgentIntegrationMeta(address token) external view returns (AgentIntegrationMeta memory) {
+        return agentIntegrationMetas[token];
+    }
+
+    function getVaultKind(address token) external view returns (VaultKind) {
+        AgentIntegrationMeta memory meta = agentIntegrationMetas[token];
+        if (meta.vaultKind == VaultKind.Agent) return VaultKind.Agent;
+        return VaultKind.Creator;
     }
 
     // =================================

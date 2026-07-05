@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 /// @title IRandomnessSource
 /// @notice Pluggable randomness interface for 4626.fun's lottery stack.
-///         Lets `CreatorLotteryManager` consume Chainlink VRF, drand, or any
+///         Lets `LotteryManager4626` consume Chainlink VRF, drand, or any
 ///         future source through a single shape.
 ///
 /// @dev    Two flavors:

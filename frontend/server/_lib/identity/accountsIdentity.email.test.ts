@@ -138,7 +138,8 @@ describe('accountsIdentity verified email handling', () => {
     })
 
     const profileUpsert = db.calls.find((call) =>
-      call.text.includes('update profiles') && call.text.includes('email_verified'),
+      (call.text.includes('update profiles') || call.text.includes('insert into profiles')) &&
+      call.text.includes('email_verified'),
     )
     expect(profileUpsert?.values[0] ?? null).toBeNull()
     expect(profileUpsert?.values[1]).toBe(false)
@@ -181,7 +182,8 @@ describe('accountsIdentity verified email handling', () => {
     })
 
     const profileUpsert = db.calls.find((call) =>
-      call.text.includes('update profiles') && call.text.includes('email_verified'),
+      (call.text.includes('update profiles') || call.text.includes('insert into profiles')) &&
+      call.text.includes('email_verified'),
     )
     expect(profileUpsert?.values[0]).toBe('verified@example.com')
     expect(profileUpsert?.values[1]).toBe(true)

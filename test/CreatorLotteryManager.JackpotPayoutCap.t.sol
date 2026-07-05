@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 
 /// @notice Targeted fuzz/unit tests for the M-06 remediation in
-/// contracts/utilities/lottery/CreatorLotteryManager.sol.
+/// contracts/lottery/4626LotteryManager.sol.
 ///
 /// The remediation added:
 ///   - MAX_JACKPOT_PAYOUT_ITERATIONS = 128  (cap on *active* creators)
@@ -18,8 +18,8 @@ import "forge-std/Test.sol";
 /// test, identical to the Solidity expression used by the remediated code.
 /// This guarantees the window math itself is correct; full end-to-end
 /// behaviour (registry interaction, per-coin try/catch guards) is covered
-/// by the existing CreatorLotteryManager.*.t.sol integration suite.
-contract CreatorLotteryManagerJackpotPayoutCapTest is Test {
+/// by the existing LotteryManager4626.*.t.sol integration suite.
+contract LotteryManager4626JackpotPayoutCapTest is Test {
     uint256 private constant ACTIVE_CAP = 128;
     uint256 private constant SLOT_CAP = 1024;
 

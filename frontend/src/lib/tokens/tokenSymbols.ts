@@ -4,6 +4,17 @@
 
 export const SHARE_SYMBOL_PREFIX = '■' // U+25A0, Black Square
 export const VAULT_SYMBOL_PREFIX = '▢' // U+25A2, White Square with Rounded Corners
+export const AGENT_SHARE_SYMBOL_PREFIX = '◆' // U+25C6, Black Diamond (filled)
+export const AGENT_VAULT_SYMBOL_PREFIX = '◇' // U+25C7, White Diamond (hollow)
+
+export type VaultKind = 'creator' | 'agent'
+
+const ALL_SYMBOL_PREFIXES = [
+  SHARE_SYMBOL_PREFIX,
+  VAULT_SYMBOL_PREFIX,
+  AGENT_SHARE_SYMBOL_PREFIX,
+  AGENT_VAULT_SYMBOL_PREFIX,
+] as const
 
 function titleCase(word: string): string {
   if (!word) return ''
@@ -17,8 +28,8 @@ function titleCase(word: string): string {
 export function normalizeUnderlyingSymbol(raw: string): string {
   const symbol = (raw ?? '').trim()
   if (!symbol) return ''
-  if (symbol.startsWith(SHARE_SYMBOL_PREFIX) || symbol.startsWith(VAULT_SYMBOL_PREFIX)) {
-    return symbol.slice(1)
+  for (const prefix of ALL_SYMBOL_PREFIXES) {
+    if (symbol.startsWith(prefix)) return symbol.slice(prefix.length)
   }
   return symbol
 }
@@ -59,4 +70,34 @@ export function toVaultName(rawUnderlying: string, creatorName?: string): string
   const base = creatorName?.trim() || normalizeUnderlyingSymbol(rawUnderlying)
   if (!base) return ''
   return `${titleCase(base)} Vault Token`
+}
+
+export function toAgentShareSymbol(rawUnderlying: string): string {
+  const ticker = underlyingSymbolUpper(rawUnderlying)
+  return ticker ? `${AGENT_SHARE_SYMBOL_PREFIX}${ticker}` : ''
+}
+
+export function toAgentVaultSymbol(rawUnderlying: string): string {
+  const ticker = underlyingSymbolUpper(rawUnderlying)
+  return ticker ? `${AGENT_VAULT_SYMBOL_PREFIX}${ticker}` : ''
+}
+
+export function toAgentShareName(rawUnderlying: string, agentName?: string): string {
+  const base = agentName?.trim() || normalizeUnderlyingSymbol(rawUnderlying)
+  if (!base) return ''
+  return `${titleCase(base)} Agent Share Token`
+}
+
+export function toAgentVaultName(rawUnderlying: string, agentName?: string): string {
+  const base = agentName?.trim() || normalizeUnderlyingSymbol(rawUnderlying)
+  if (!base) return ''
+  return `${titleCase(base)} Agent Vault Token`
+}
+
+export function shareSymbolForVaultKind(rawUnderlying: string, vaultKind: VaultKind): string {
+  return vaultKind === 'agent' ? toAgentShareSymbol(rawUnderlying) : toShareSymbol(rawUnderlying)
+}
+
+export function vaultSymbolForVaultKind(rawUnderlying: string, vaultKind: VaultKind): string {
+  return vaultKind === 'agent' ? toAgentVaultSymbol(rawUnderlying) : toVaultSymbol(rawUnderlying)
 }

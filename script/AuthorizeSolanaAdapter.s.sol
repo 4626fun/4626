@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
 
-interface ICreatorLotteryManagerAuth {
+interface ILotteryManager4626Auth {
     function setAuthorizedSwapContract(address swapContract, bool authorized) external;
     function authorizedSwapContracts(address) external view returns (bool);
 }
@@ -19,7 +19,7 @@ interface IDeploymentBatcherSolanaAuth {
 /**
  * @title AuthorizeSolanaAdapter
  * @author 0xakita.eth
- * @notice Authorize SolanaBridgeAdapter as a swap contract on CreatorLotteryManager
+ * @notice Authorize SolanaBridgeAdapter as a swap contract on LotteryManager4626
  *         and configure optional Solana spoke relay wiring.
  *
  * @dev Required env vars:
@@ -27,7 +27,7 @@ interface IDeploymentBatcherSolanaAuth {
  *      - SOLANA_BRIDGE_ADAPTER: SolanaBridgeAdapter address
  *
  * @dev Optional env vars:
- *      - LOTTERY_MANAGER: CreatorLotteryManager address
+ *      - LOTTERY_MANAGER: LotteryManager4626 address
  *      - DEPLOYMENT_BATCHER: derive lottery manager from deployment batcher if LOTTERY_MANAGER is unset
  *      - SET_BATCHER_SOLANA_CONFIG=1 to call batcher.setSolanaConfig(adapter, destination)
  *      - SOLANA_DESTINATION: required when SET_BATCHER_SOLANA_CONFIG=1
@@ -94,7 +94,7 @@ contract AuthorizeSolanaAdapter is Script {
 
         // 1. Authorize SolanaBridgeAdapter as a swap contract on LotteryManager.
         //    This allows the adapter to call processSwapLottery().
-        ICreatorLotteryManagerAuth(lotteryManager).setAuthorizedSwapContract(solanaBridgeAdapter, true);
+        ILotteryManager4626Auth(lotteryManager).setAuthorizedSwapContract(solanaBridgeAdapter, true);
         console.log("Authorized SolanaBridgeAdapter as swap contract on LotteryManager");
 
         // 2. Optional: set Solana adapter + destination on deployment batcher.
@@ -120,7 +120,7 @@ contract AuthorizeSolanaAdapter is Script {
         console.log("--- Verification ---");
         console.log(
             "LotteryManager authorized adapter:",
-            ICreatorLotteryManagerAuth(lotteryManager).authorizedSwapContracts(solanaBridgeAdapter)
+            ILotteryManager4626Auth(lotteryManager).authorizedSwapContracts(solanaBridgeAdapter)
         );
         if (setBatcherSolanaConfig) {
             IDeploymentBatcherSolanaAuth deployer = IDeploymentBatcherSolanaAuth(batcher);

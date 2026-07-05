@@ -2,12 +2,12 @@
 pragma solidity 0.8.30;
 
 /**
- * @title CreatorLotteryManager
+ * @title LotteryManager4626
  * @author 0xakita.eth
  * @notice Shared swap-based lottery service for all Creator Coins (hub-only, deployed on Base)
  *
  * @dev ARCHITECTURE (Hub-Centric):
- *      Shared hub service on Base only. Serves all creators via CreatorRegistry lookups.
+ *      Shared hub service on Base only. Serves all creators via Registry4626 lookups.
  *      Remote chain buys queue entries on the remote ShareOFT; buyers submit with native LZ fee.
  *      Hub ShareOFT peer forwards MSG_TYPE_LOTTERY_ENTRY to receiveRemoteLotteryEntry().
  *
@@ -47,13 +47,13 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
-import {ICreatorOracle} from "../../interfaces/ICreatorOracle.sol";
+import {ICreatorOracle} from "../interfaces/ICreatorOracle.sol";
 
 // ================================
 // INTERFACES
 // ================================
 
-interface ICreatorRegistryLottery {
+interface I4626RegistryLottery {
     // Per-creator lookups
     function getVaultForToken(address _token) external view returns (address);
     function getShareOFTForToken(address _token) external view returns (address);
@@ -103,7 +103,7 @@ interface IVaultGaugeVoting {
     function getVaultGaugeProbabilityBoostPPM(address vault) external view returns (uint256);
 }
 
-contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausable {
+contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable {
     using OptionsBuilder for bytes;
     using SafeERC20 for IERC20;
 
@@ -170,7 +170,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     // ================================
 
     /// @notice Registry for looking up per-creator contracts
-    ICreatorRegistryLottery public immutable registry;
+    I4626RegistryLottery public immutable registry;
 
     /// @notice Authorized swap contracts that can trigger lottery
     mapping(address => bool) public authorizedSwapContracts;
@@ -334,7 +334,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     //
     // The fields below are appended at the END of contract storage so the slot
     // layout remains a strict superset of the audited version. The mirror in
-    // CreatorLotteryManagerAdminModule appends the same fields in the same
+    // LotteryManager4626AdminModule appends the same fields in the same
     // order so delegatecall continues to read/write identical slots.
     //
     // baseCeilingPPM: pre-boost win-chance cap. Default 40_000 PPM = 4%.
@@ -361,7 +361,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     // ================================
     //
     // Appended at the end of contract storage; mirrored in
-    // CreatorLotteryManagerAdminModule in the same order so delegatecall
+    // LotteryManager4626AdminModule in the same order so delegatecall
     // continues to read/write identical slots. See docs/security/amoe-pr3-handoff.md.
     //
     // Threat model: a compromised owner key swapping in a malicious
@@ -508,17 +508,17 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
 
     /**
      * @notice Deploy shared lottery manager
-     * @param _registry CreatorRegistry address
+     * @param _registry Registry4626 address
      * @param owner_ Owner address
      */
     constructor(address _registry, address owner_)
-        OApp(ICreatorRegistryLottery(_registry).getLayerZeroEndpoint(block.chainid), owner_)
+        OApp(I4626RegistryLottery(_registry).getLayerZeroEndpoint(block.chainid), owner_)
         Ownable(owner_)
     {
         if (owner_ == address(0)) revert ZeroAddress();
         if (_registry == address(0)) revert ZeroAddress();
 
-        registry = ICreatorRegistryLottery(_registry);
+        registry = I4626RegistryLottery(_registry);
 
         // Initialize lottery config
         lotteryConfig = LotteryConfig({
@@ -559,7 +559,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         vrfMaxSponsoredPerOriginPerEpoch = DEFAULT_VRF_MAX_SPONSORED_PER_ORIGIN_PER_EPOCH;
         callbackMaxSponsoredPerBuyerPerEpoch = DEFAULT_CALLBACK_MAX_SPONSORED_PER_BUYER_PER_EPOCH;
         callbackMaxSponsoredPerOriginPerEpoch = DEFAULT_CALLBACK_MAX_SPONSORED_PER_ORIGIN_PER_EPOCH;
-        _adminModule = address(new CreatorLotteryManagerAdminModule(_registry, owner_));
+        _adminModule = address(new LotteryManager4626AdminModule(_registry, owner_));
     }
 
     // ================================
@@ -1982,7 +1982,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     receive() external payable {}
 }
 
-contract CreatorLotteryManagerAdminModule is OApp, OAppOptionsType3, ReentrancyGuard, Pausable {
+contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuard, Pausable {
     using OptionsBuilder for bytes;
     using SafeERC20 for IERC20;
 
@@ -1997,7 +1997,7 @@ contract CreatorLotteryManagerAdminModule is OApp, OAppOptionsType3, ReentrancyG
     bytes32 internal constant WINNER_CALLBACK_CONTEXT =
         0x197005c8271d0fbeff8e5770b1fa02e04e4ba94e019fc8ea71c55fd52eb21205;
 
-    ICreatorRegistryLottery public immutable registry;
+    I4626RegistryLottery public immutable registry;
 
     mapping(address => bool) public authorizedSwapContracts;
     ICreatorVRFConsumer public localVRFConsumer;
@@ -2102,7 +2102,7 @@ contract CreatorLotteryManagerAdminModule is OApp, OAppOptionsType3, ReentrancyG
     // STATE — AMOE LINEAR PARITY (PR 1) — MIRROR
     // ================================
     //
-    // These fields MUST mirror the slot order of CreatorLotteryManager so the
+    // These fields MUST mirror the slot order of LotteryManager4626 so the
     // delegatecall storage layout stays consistent. See the same block in the
     // main contract for semantics.
     /// @notice Pre-boost win-chance ceiling (PPM). Default 40_000 = 4%.
@@ -2173,10 +2173,10 @@ contract CreatorLotteryManagerAdminModule is OApp, OAppOptionsType3, ReentrancyG
     error LegacySetterDisabled();
 
     constructor(address _registry, address owner_)
-        OApp(ICreatorRegistryLottery(_registry).getLayerZeroEndpoint(block.chainid), owner_)
+        OApp(I4626RegistryLottery(_registry).getLayerZeroEndpoint(block.chainid), owner_)
         Ownable(owner_)
     {
-        registry = ICreatorRegistryLottery(_registry);
+        registry = I4626RegistryLottery(_registry);
         _self = address(this);
     }
 
@@ -2561,7 +2561,7 @@ contract CreatorLotteryManagerAdminModule is OApp, OAppOptionsType3, ReentrancyG
         _unpause();
         uint256 len = _deferredVrfRequestIds.length;
         for (uint256 i; i < len;) {
-            CreatorLotteryManager(payable(address(this))).applyDeferredVrf(_deferredVrfRequestIds[i]);
+            LotteryManager4626(payable(address(this))).applyDeferredVrf(_deferredVrfRequestIds[i]);
             unchecked {
                 ++i;
             }

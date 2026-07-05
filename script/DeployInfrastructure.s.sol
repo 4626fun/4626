@@ -4,11 +4,11 @@ pragma solidity ^0.8.20;
 import {Script, console} from "forge-std/Script.sol";
 
 // Core Infrastructure
-import {CreatorRegistry} from "../contracts/core/CreatorRegistry.sol";
+import {Registry4626} from "../contracts/core/4626Registry.sol";
 import {CreatorOVaultFactory} from "../contracts/factories/CreatorOVaultFactory.sol";
 
 // Shared Services
-import {CreatorLotteryManager} from "../contracts/utilities/lottery/CreatorLotteryManager.sol";
+import {LotteryManager4626} from "../contracts/lottery/4626LotteryManager.sol";
 import {CreatorVRFConsumerV2_5} from "../contracts/utilities/lottery/vrf/CreatorVRFConsumerV2_5.sol";
 import {VaultActivationBatcher} from "../contracts/helpers/batchers/VaultActivationBatcher.sol";
 import {SolanaBridgeAdapter} from "../contracts/utilities/bridge/SolanaBridgeAdapter.sol";
@@ -22,9 +22,9 @@ import {SolanaBridgeAdapter} from "../contracts/utilities/bridge/SolanaBridgeAda
  *      ┌─────────────────────────────────────────────────────────────────┐
  *      │  PHASE 1: Core Infrastructure (One-time deployment)             │
  *      │  ────────────────────────────────────────────────────────────   │
- *      │  1. CreatorRegistry         - Central registry for all data    │
+ *      │  1. Registry4626         - Central registry for all data    │
  *      │  2. CreatorOVaultFactory    - Legacy registrar for script-deployed stacks │
- *      │  3. CreatorLotteryManager   - Shared lottery service           │
+ *      │  3. LotteryManager4626   - Shared lottery service           │
  *      │  4. CreatorVRFConsumerV2_5  - Chainlink VRF hub                │
  *      │  5. VaultActivationBatcher  - Shared activation launcher       │
  *      │  6. SolanaBridgeAdapter     - Shared Solana bridge adapter     │
@@ -86,9 +86,9 @@ contract DeployInfrastructure is Script {
     //                         DEPLOYED CONTRACTS
     // ═══════════════════════════════════════════════════════════════════
 
-    CreatorRegistry public registry;
+    Registry4626 public registry;
     CreatorOVaultFactory public vaultFactory;
-    CreatorLotteryManager public lotteryManager;
+    LotteryManager4626 public lotteryManager;
     CreatorVRFConsumerV2_5 public vrfConsumer;
     VaultActivationBatcher public vaultActivationBatcher;
     SolanaBridgeAdapter public solanaBridgeAdapter;
@@ -122,9 +122,9 @@ contract DeployInfrastructure is Script {
             unicode"╚════════════════════════════════════════════════════════════════╝"
         );
 
-        // 1. CreatorRegistry
-        console.log("\n[1/6] Deploying CreatorRegistry...");
-        registry = new CreatorRegistry(deployer);
+        // 1. Registry4626
+        console.log("\n[1/6] Deploying Registry4626...");
+        registry = new Registry4626(deployer);
         console.log("       Address:", address(registry));
 
         // 2. CreatorOVaultFactory (legacy deployment registrar)
@@ -138,9 +138,9 @@ contract DeployInfrastructure is Script {
         vaultActivationBatcher = new VaultActivationBatcher(permit2, address(registry));
         console.log("       Address:", address(vaultActivationBatcher));
 
-        // 4. CreatorLotteryManager (shared service)
-        console.log("\n[4/6] Deploying CreatorLotteryManager...");
-        lotteryManager = new CreatorLotteryManager(address(registry), deployer);
+        // 4. LotteryManager4626 (shared service)
+        console.log("\n[4/6] Deploying LotteryManager4626...");
+        lotteryManager = new LotteryManager4626(address(registry), deployer);
         console.log("       Address:", address(lotteryManager));
 
         // 5. CreatorVRFConsumerV2_5 (VRF hub)
@@ -285,10 +285,10 @@ contract DeployInfrastructure is Script {
             unicode"├─────────────────────────────────────────────────────────────────┤"
         );
         console.log(unicode"│                                                                 │");
-        console.log("   CreatorRegistry:        ", address(registry));
+        console.log("   Registry4626:        ", address(registry));
         console.log("   CreatorOVaultFactory (legacy registrar):", address(vaultFactory));
         console.log("   VaultActivationBatcher: ", address(vaultActivationBatcher));
-        console.log("   CreatorLotteryManager:  ", address(lotteryManager));
+        console.log("   LotteryManager4626:  ", address(lotteryManager));
         console.log("   CreatorVRFConsumerV2_5: ", address(vrfConsumer));
         console.log("   SolanaBridgeAdapter:    ", address(solanaBridgeAdapter));
         console.log(unicode"│                                                                 │");

@@ -9,14 +9,14 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 
 import {IBaseSolanaBridge} from "../../interfaces/IBaseSolanaBridge.sol";
 import {ICrossChainERC20Factory} from "../../interfaces/ICrossChainERC20Factory.sol";
-import {ICreatorRegistry} from "../../interfaces/core/ICreatorRegistry.sol";
+import {I4626Registry} from "../../interfaces/core/I4626Registry.sol";
 import {ICreatorGaugeController} from "../../interfaces/core/ICreatorGaugeController.sol";
 
 /**
- * @title ICreatorLotteryManager
+ * @title ILotteryManager4626
  * @notice Minimal interface for the hub-only lottery manager.
  */
-interface ICreatorLotteryManager {
+interface ILotteryManager4626 {
     function processSwapLottery(address buyer, address tokenIn, uint256 amountIn, uint256 buyerCurrentShareBalance)
         external
         payable
@@ -128,7 +128,7 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     /// @notice Authorized entry keeper Solana pubkeys.
     mapping(bytes32 => bool) public authorizedEntryKeepers;
 
-    /// @notice CreatorLotteryManager on Base (hub).
+    /// @notice LotteryManager4626 on Base (hub).
     address public lotteryManager;
 
     // FIX: M-6 — configurable swap fee tier (was hardcoded to 3000)
@@ -380,10 +380,10 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         if (amount == 0) revert InvalidAmount();
 
         // Resolve the canonical vault from the registry.
-        if (!ICreatorRegistry(registry).isCreatorCoinRegistered(creatorToken)) {
+        if (!I4626Registry(registry).isCreatorCoinRegistered(creatorToken)) {
             revert CreatorCoinNotRegistered(creatorToken);
         }
-        address vault = ICreatorRegistry(registry).getVaultForToken(creatorToken);
+        address vault = I4626Registry(registry).getVaultForToken(creatorToken);
         if (vault == address(0)) revert VaultNotConfigured(creatorToken);
 
         // Sanity check: vault.asset() must equal creatorToken.
@@ -520,13 +520,13 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         }
         if (amountIn == 0) revert InvalidAmount();
 
-        if (!ICreatorRegistry(registry).isCreatorCoinRegistered(creatorToken)) {
+        if (!I4626Registry(registry).isCreatorCoinRegistered(creatorToken)) {
             revert CreatorCoinNotRegistered(creatorToken);
         }
-        address shareToken = ICreatorRegistry(registry).getShareOFTForToken(creatorToken);
+        address shareToken = I4626Registry(registry).getShareOFTForToken(creatorToken);
         if (shareToken == address(0)) revert InvalidAddress();
 
-        ICreatorRegistry.ChainConfig memory cfg = ICreatorRegistry(registry).getChainConfig(block.chainid);
+        I4626Registry.ChainConfig memory cfg = I4626Registry(registry).getChainConfig(block.chainid);
         if (cfg.chainId == 0 || cfg.swapRouter == address(0)) revert DexRouterNotConfigured(block.chainid);
         address router = cfg.swapRouter;
 
@@ -566,13 +566,13 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         if (creatorToken == address(0) || recipient == address(0)) revert InvalidAddress();
         if (msg.value == 0) revert InvalidAmount();
 
-        if (!ICreatorRegistry(registry).isCreatorCoinRegistered(creatorToken)) {
+        if (!I4626Registry(registry).isCreatorCoinRegistered(creatorToken)) {
             revert CreatorCoinNotRegistered(creatorToken);
         }
-        address shareToken = ICreatorRegistry(registry).getShareOFTForToken(creatorToken);
+        address shareToken = I4626Registry(registry).getShareOFTForToken(creatorToken);
         if (shareToken == address(0)) revert InvalidAddress();
 
-        ICreatorRegistry.ChainConfig memory cfg = ICreatorRegistry(registry).getChainConfig(block.chainid);
+        I4626Registry.ChainConfig memory cfg = I4626Registry(registry).getChainConfig(block.chainid);
         if (cfg.chainId == 0 || cfg.swapRouter == address(0)) revert DexRouterNotConfigured(block.chainid);
         address router = cfg.swapRouter;
         address weth = cfg.wrappedNativeToken;
@@ -630,10 +630,10 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         if (amount == 0) revert InvalidAmount();
 
         // Resolve the gauge controller for this creator token via registry.
-        address creatorCoin = ICreatorRegistry(registry).getTokenForShareOFT(shareOFT);
+        address creatorCoin = I4626Registry(registry).getTokenForShareOFT(shareOFT);
         if (creatorCoin == address(0)) revert TokenNotRegistered();
 
-        address gauge = ICreatorRegistry(registry).getGaugeControllerForToken(creatorCoin);
+        address gauge = I4626Registry(registry).getGaugeControllerForToken(creatorCoin);
         if (gauge == address(0)) revert GaugeNotFound(shareOFT);
 
         // Pull fees from keeper Twin (msg.sender) into this adapter.
@@ -697,7 +697,7 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
             // FIX: H-1 — wrap in try/catch so a single failing entry doesn't block the
             // entire batch; previously a revert in processSwapLottery (e.g., requiring
             // nonzero msg.value for VRF fee) would brick all entries
-            try ICreatorLotteryManager(lotteryManager).processSwapLottery(buyerTwin, entry.shareOFT, amount18, 0) {
+            try ILotteryManager4626(lotteryManager).processSwapLottery(buyerTwin, entry.shareOFT, amount18, 0) {
                 processedSolanaTxs[entry.solanaTxSig] = true;
                 emit SolanaLotteryEntryRelayed(
                     msg.sender, entry.buyerSolanaPubkey, entry.shareOFT, entry.amountSolanaUnits, amount18, buyerTwin
@@ -971,7 +971,7 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
 
     /**
      * @notice Set the LotteryManager address on Base.
-     * @param _lotteryManager The CreatorLotteryManager contract address
+     * @param _lotteryManager The LotteryManager4626 contract address
      */
     function setLotteryManager(address _lotteryManager) external onlyOwner {
         if (_lotteryManager == address(0)) revert InvalidAddress();

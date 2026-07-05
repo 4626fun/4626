@@ -2,23 +2,23 @@
 pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
-import {CreatorLotteryManager} from "../contracts/utilities/lottery/CreatorLotteryManager.sol";
+import {LotteryManager4626} from "../contracts/lottery/4626LotteryManager.sol";
 import {VaultActivationBatcher} from "../contracts/helpers/batchers/VaultActivationBatcher.sol";
 
 /**
  * @title DeployTier1Upgrade
  * @author 0xakita.eth
  * @notice Deploys Tier 1 upgraded contracts (hub-centric architecture) and configures them
- *         against the EXISTING CreatorRegistry.
+ *         against the EXISTING Registry4626.
  *
  * @dev WHAT THIS DEPLOYS:
- *      1. CreatorLotteryManager  — hub-centric rewrite (receives remote lottery entries,
+ *      1. LotteryManager4626  — hub-centric rewrite (receives remote lottery entries,
  *                                  sends targeted winner callbacks, sourceChainEid tracking)
  *      2. VaultActivationBatcher — adds three-way split support
  *                                  (40% CCA / 40% creator vesting / 20% Solana)
  *
  * @dev WHAT THIS DOES NOT DEPLOY:
- *      - CreatorRegistry — the existing registry is fully compatible with
+ *      - Registry4626 — the existing registry is fully compatible with
  *        the new LotteryManager. Remote OFT peer features are additive and can be deployed
  *        later when multi-chain OFTs are ready.
  *
@@ -50,7 +50,7 @@ contract DeployTier1Upgrade is Script {
     //                    EXISTING DEPLOYED CONTRACTS
     // ═══════════════════════════════════════════════════════════════════
 
-    /// @notice Existing CreatorRegistry on Base (current live registry)
+    /// @notice Existing Registry4626 on Base (current live registry)
     address constant REGISTRY = 0xDD7B106a15540bA2F59464590222bF47D8C9394E;
 
     /// @notice Existing VRF Consumer on Base (unchanged, just needs configuration)
@@ -86,7 +86,7 @@ contract DeployTier1Upgrade is Script {
     //                           OUTPUT
     // ═══════════════════════════════════════════════════════════════════
 
-    CreatorLotteryManager public newLotteryManager;
+    LotteryManager4626 public newLotteryManager;
     VaultActivationBatcher public newBatcher;
 
     function run() external {
@@ -113,12 +113,12 @@ contract DeployTier1Upgrade is Script {
         vm.startBroadcast(deployerPrivateKey);
 
         // ═══════════════════════════════════════════════════════════════
-        //  STEP 1: Deploy new CreatorLotteryManager
+        //  STEP 1: Deploy new LotteryManager4626
         // ═══════════════════════════════════════════════════════════════
 
-        console.log("[1/2] Deploying CreatorLotteryManager (hub-centric)...");
+        console.log("[1/2] Deploying LotteryManager4626 (hub-centric)...");
 
-        newLotteryManager = new CreatorLotteryManager(REGISTRY, deployer);
+        newLotteryManager = new LotteryManager4626(REGISTRY, deployer);
 
         console.log("       Address:", address(newLotteryManager));
         console.log("");
@@ -218,7 +218,7 @@ contract DeployTier1Upgrade is Script {
         console.log(
             unicode"├─────────────────────────────────────────────────────────────────┤"
         );
-        console.log("  CreatorLotteryManager: ", address(newLotteryManager));
+        console.log("  LotteryManager4626: ", address(newLotteryManager));
         console.log("  VaultActivationBatcher:", address(newBatcher));
         console.log(
             unicode"└─────────────────────────────────────────────────────────────────┘"

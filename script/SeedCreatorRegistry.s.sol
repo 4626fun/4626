@@ -2,13 +2,13 @@
 pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
-import {CreatorRegistry} from "../contracts/core/CreatorRegistry.sol";
-import {ICreatorRegistry} from "../contracts/interfaces/core/ICreatorRegistry.sol";
+import {Registry4626} from "../contracts/core/4626Registry.sol";
+import {I4626Registry} from "../contracts/interfaces/core/I4626Registry.sol";
 
 /**
  * @title SeedCreatorRegistry
  * @author 0xakita.eth
- * @notice Seeds the deployed CreatorRegistry with protocol-level configuration:
+ * @notice Seeds the deployed Registry4626 with protocol-level configuration:
  *         chains, LayerZero endpoints, EIDs, DEX infrastructure, and hub chain.
  *
  * @dev This script does NOT register any creator-specific data (tokens, vaults, etc.).
@@ -119,7 +119,7 @@ contract SeedCreatorRegistry is Script {
         }
 
         address registryAddr = vm.envOr("REGISTRY", DEFAULT_REGISTRY);
-        CreatorRegistry registry = CreatorRegistry(registryAddr);
+        Registry4626 registry = Registry4626(registryAddr);
 
         console.log("");
         console.log(
@@ -305,11 +305,11 @@ contract SeedCreatorRegistry is Script {
     /**
      * @dev Attempts to register a chain. Checks if already registered first to avoid reverts.
      */
-    function _tryRegisterChain(CreatorRegistry registry, uint256 chainId, string memory name, address wrappedNative)
+    function _tryRegisterChain(Registry4626 registry, uint256 chainId, string memory name, address wrappedNative)
         internal
     {
         // Check if chain already exists by reading config
-        ICreatorRegistry.ChainConfig memory cfg = registry.getChainConfig(chainId);
+        I4626Registry.ChainConfig memory cfg = registry.getChainConfig(chainId);
         if (cfg.chainId != 0) {
             console.log(unicode"   [skip]", name, unicode"— already registered");
             return;

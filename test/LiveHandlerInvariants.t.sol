@@ -5,12 +5,12 @@ import "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import {CreatorLotteryManager} from "../contracts/utilities/lottery/CreatorLotteryManager.sol";
+import {LotteryManager4626} from "../contracts/lottery/4626LotteryManager.sol";
 import {MessagingFee, Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 
 import {DeploymentBatcher} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
-import {CreatorRegistry} from "../contracts/core/CreatorRegistry.sol";
+import {Registry4626} from "../contracts/core/4626Registry.sol";
 import "./helpers/DeploymentBatcherFixture.sol";
 import {
     MockAjnaAdapterForPhase3,
@@ -29,7 +29,7 @@ import {IBaseSolanaBridge} from "../contracts/interfaces/IBaseSolanaBridge.sol";
 import {OFTBootstrapRegistry} from "../contracts/helpers/infra/OFTBootstrapRegistry.sol";
 import {
     MockBytecodeStore,
-    MockCreatorRegistry,
+    MockRegistry4626,
     MockShareOFT,
     MockUniversalCreate2Deployer,
     MockWrapper
@@ -188,8 +188,8 @@ contract LiveMockGauge {
     }
 }
 
-contract LiveLotteryManagerHarness is CreatorLotteryManager {
-    constructor(address registry_, address owner_) CreatorLotteryManager(registry_, owner_) {}
+contract LiveLotteryManagerHarness is LotteryManager4626 {
+    constructor(address registry_, address owner_) LotteryManager4626(registry_, owner_) {}
 
     function exposedLzReceive(Origin calldata origin, bytes calldata payload) external {
         _lzReceive(origin, bytes32(0), payload, address(0), payload[:0]);
@@ -297,7 +297,7 @@ contract LotteryManagerLiveHandler is Test {
     }
 }
 
-contract CreatorLotteryManagerLiveInvariantTest is Test {
+contract LotteryManager4626LiveInvariantTest is Test {
     LiveLotteryManagerHarness internal manager;
     LiveMockVrfIntegrator internal integrator;
     LiveMockGauge internal gauge;
@@ -586,7 +586,7 @@ contract BatcherPhase12Handler is Test {
         if (finalized + coreOnly + badEndpointBindings + badWrapperWiring + unexpectedReverts >= MAX_CASES) return;
 
         OFTBootstrapRegistry bootstrap = new OFTBootstrapRegistry();
-        (DeploymentBatcher deployer, MockCreatorRegistry registry, MockUniversalCreate2Deployer create2) =
+        (DeploymentBatcher deployer, MockRegistry4626 registry, MockUniversalCreate2Deployer create2) =
             _fixture(address(bootstrap));
         DeploymentBatcher.Phase1Params memory params = _params(seed);
         DeploymentBatcher.CodeIds memory codeIds = _codeIds();
@@ -634,7 +634,8 @@ contract BatcherPhase12Handler is Test {
             vaultSymbol: "cvTOKEN",
             shareName: "Creator Shares",
             shareSymbol: "sTOK",
-            version: string.concat("v", vm.toString(seed))
+            version: string.concat("v", vm.toString(seed)),
+            vaultKind: DeploymentBatcher.VaultKind.Creator
         });
     }
 
@@ -652,10 +653,10 @@ contract BatcherPhase12Handler is Test {
 
     function _fixture(address bootstrapAddress)
         internal
-        returns (DeploymentBatcher deployer, MockCreatorRegistry registry, MockUniversalCreate2Deployer create2)
+        returns (DeploymentBatcher deployer, MockRegistry4626 registry, MockUniversalCreate2Deployer create2)
     {
         vm.chainId(8453);
-        registry = new MockCreatorRegistry(CANONICAL_ENDPOINT);
+        registry = new MockRegistry4626(CANONICAL_ENDPOINT);
         MockBytecodeStore store = new MockBytecodeStore();
         create2 = new MockUniversalCreate2Deployer();
         store.setCode(OFT_BOOTSTRAP_CODE_ID, bytes("mock-oft-bootstrap"));
@@ -818,7 +819,7 @@ contract BatcherPhase2Handler is Test {
         oracle = new MockOwnableTransferPermit2();
         permit2 = new MockPermit2Deployment(address(creatorToken));
 
-        CreatorRegistry registry = new CreatorRegistry(address(this));
+        Registry4626 registry = new Registry4626(address(this));
         address protocolTreasury = makeAddr("protocolTreasury");
         batcher = new DeploymentBatcherHarness(
             address(registry),

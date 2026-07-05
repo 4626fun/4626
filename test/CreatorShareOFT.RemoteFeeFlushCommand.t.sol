@@ -55,4 +55,13 @@ contract CreatorShareOFTFeeFlushCommandTest is Test {
         oft.setRemoteFlushCommandGasLimit(400_000);
         assertEq(oft.remoteFlushCommandGasLimit(), 400_000);
     }
+
+    function test_remoteFlushCommandGasLimit_revertsWhenOutOfBounds() external {
+        vm.startPrank(OWNER);
+        vm.expectRevert(bytes("Invalid flush command gas"));
+        oft.setRemoteFlushCommandGasLimit(100_000);
+        vm.expectRevert(bytes("Invalid flush command gas"));
+        oft.setRemoteFlushCommandGasLimit(2_000_000);
+        vm.stopPrank();
+    }
 }

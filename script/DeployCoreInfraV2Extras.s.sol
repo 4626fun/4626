@@ -6,7 +6,7 @@ import {Script, console2} from "forge-std/Script.sol";
 import {CreatorOVaultFactory} from "../contracts/factories/CreatorOVaultFactory.sol";
 import {CreatorVRFConsumerV2_5} from "../contracts/utilities/lottery/vrf/CreatorVRFConsumerV2_5.sol";
 
-interface ICreatorRegistryAuth {
+interface I4626RegistryAuth {
     function owner() external view returns (address);
     function setAuthorizedFactory(address factory, bool authorized) external;
 }
@@ -55,7 +55,7 @@ contract DeployCoreInfraV2Extras is Script {
 
         require(block.chainid == BASE_CHAIN_ID, "Wrong chain");
 
-        ICreatorRegistryAuth registry = ICreatorRegistryAuth(registryAddr);
+        I4626RegistryAuth registry = I4626RegistryAuth(registryAddr);
         require(registry.owner() == owner, "Registry owner mismatch");
 
         vm.startBroadcast(pk);

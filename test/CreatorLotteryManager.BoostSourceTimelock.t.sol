@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {CreatorLotteryManager} from "../contracts/utilities/lottery/CreatorLotteryManager.sol";
+import {LotteryManager4626} from "../contracts/lottery/4626LotteryManager.sol";
 
 // =====================================================================
 // Mocks (namespaced -BSTL to avoid collision with other test files)
@@ -82,8 +82,8 @@ contract MockVaultGaugeBSTL {
 /// `vaultGaugeVoting`, the one-way `armBoostSourceTimelock` switch, the
 /// emergency `disableBoostSources` circuit breaker, and the gating of legacy
 /// setters once the timelock is armed.
-contract CreatorLotteryManagerBoostSourceTimelockTest is Test {
-    CreatorLotteryManager internal manager;
+contract LotteryManager4626BoostSourceTimelockTest is Test {
+    LotteryManager4626 internal manager;
     MockLotteryRegistryBSTL internal registry;
     MockCreatorOracleBSTL internal oracle;
     MockBoostManagerBSTL internal boostA;
@@ -134,7 +134,7 @@ contract CreatorLotteryManagerBoostSourceTimelockTest is Test {
         gaugeB = new MockVaultGaugeBSTL();
 
         vm.prank(owner);
-        manager = new CreatorLotteryManager(address(registry), owner);
+        manager = new LotteryManager4626(address(registry), owner);
 
         // Bootstrap initial sources via legacy setters before arming.
         vm.startPrank(owner);
@@ -191,13 +191,13 @@ contract CreatorLotteryManagerBoostSourceTimelockTest is Test {
 
     function test_PreArm_ProposeBoostManager_Reverts() public {
         vm.prank(owner);
-        vm.expectRevert(CreatorLotteryManager.TimelockNotArmed.selector);
+        vm.expectRevert(LotteryManager4626.TimelockNotArmed.selector);
         manager.proposeBoostManager(address(boostB));
     }
 
     function test_PreArm_ProposeVaultGaugeVoting_Reverts() public {
         vm.prank(owner);
-        vm.expectRevert(CreatorLotteryManager.TimelockNotArmed.selector);
+        vm.expectRevert(LotteryManager4626.TimelockNotArmed.selector);
         manager.proposeVaultGaugeVoting(address(gaugeB));
     }
 
@@ -219,7 +219,7 @@ contract CreatorLotteryManagerBoostSourceTimelockTest is Test {
         manager.armBoostSourceTimelock();
 
         vm.prank(owner);
-        vm.expectRevert(CreatorLotteryManager.TimelockAlreadyArmed.selector);
+        vm.expectRevert(LotteryManager4626.TimelockAlreadyArmed.selector);
         manager.armBoostSourceTimelock();
     }
 
@@ -238,7 +238,7 @@ contract CreatorLotteryManagerBoostSourceTimelockTest is Test {
         manager.armBoostSourceTimelock();
 
         vm.prank(owner);
-        vm.expectRevert(CreatorLotteryManager.LegacySetterDisabled.selector);
+        vm.expectRevert(LotteryManager4626.LegacySetterDisabled.selector);
         manager.setBoostManager(address(boostB));
 
         // State unchanged.
@@ -250,7 +250,7 @@ contract CreatorLotteryManagerBoostSourceTimelockTest is Test {
         manager.armBoostSourceTimelock();
 
         vm.prank(owner);
-        vm.expectRevert(CreatorLotteryManager.LegacySetterDisabled.selector);
+        vm.expectRevert(LotteryManager4626.LegacySetterDisabled.selector);
         manager.setVaultGaugeVoting(address(gaugeB));
 
         assertEq(_readVaultGauge(), address(gaugeA));
@@ -303,7 +303,7 @@ contract CreatorLotteryManagerBoostSourceTimelockTest is Test {
         vm.warp(block.timestamp + TIMELOCK_DELAY - 1);
 
         vm.prank(owner);
-        vm.expectRevert(CreatorLotteryManager.TimelockNotExpired.selector);
+        vm.expectRevert(LotteryManager4626.TimelockNotExpired.selector);
         manager.commitBoostManager();
 
         // State unchanged.
@@ -316,7 +316,7 @@ contract CreatorLotteryManagerBoostSourceTimelockTest is Test {
         manager.armBoostSourceTimelock();
 
         vm.prank(owner);
-        vm.expectRevert(CreatorLotteryManager.NoPendingProposal.selector);
+        vm.expectRevert(LotteryManager4626.NoPendingProposal.selector);
         manager.commitBoostManager();
     }
 
@@ -349,7 +349,7 @@ contract CreatorLotteryManagerBoostSourceTimelockTest is Test {
         manager.armBoostSourceTimelock();
 
         vm.prank(owner);
-        vm.expectRevert(CreatorLotteryManager.NoPendingProposal.selector);
+        vm.expectRevert(LotteryManager4626.NoPendingProposal.selector);
         manager.cancelBoostManagerProposal();
     }
 

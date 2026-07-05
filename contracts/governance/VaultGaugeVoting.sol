@@ -13,7 +13,7 @@ pragma solidity ^0.8.20;
  * @dev FIXED BUDGET:
  *      Total system-wide gauge budget is locked at 69,420 PPM forever.
  *      Votes allocate this budget proportionally (with 35,000 PPM per-vault cap).
- *      This feeds directly into CreatorLotteryManager._applyBoost as flat additive PPM.
+ *      This feeds directly into LotteryManager4626._applyBoost as flat additive PPM.
  *
  * @dev EPOCH SYSTEM:
  *      Weekly epochs (7 days), starting Thursday 00:00 UTC.
@@ -44,7 +44,7 @@ struct Ive4626Lock {
     uint256 underlyingValue;
 }
 
-interface ICreatorRegistry {
+interface I4626Registry {
     function isRegisteredVault(address vault) external view returns (bool);
 }
 
@@ -105,7 +105,7 @@ contract VaultGaugeVoting is IVaultGaugeVoting, Ownable, ReentrancyGuard {
     Ive4626 public immutable ve4626;
 
     /// @notice Optional registry for auto-whitelisting vaults
-    ICreatorRegistry public registry;
+    I4626Registry public registry;
 
     /// @notice Whether to use registry for whitelist
     bool public useRegistryWhitelist;
@@ -480,7 +480,7 @@ contract VaultGaugeVoting is IVaultGaugeVoting, Ownable, ReentrancyGuard {
     }
 
     function setRegistry(address _registry) external onlyOwner {
-        registry = ICreatorRegistry(_registry);
+        registry = I4626Registry(_registry);
     }
 
     function setUseRegistryWhitelist(bool enabled) external onlyOwner {

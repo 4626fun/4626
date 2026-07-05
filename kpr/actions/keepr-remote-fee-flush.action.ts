@@ -314,7 +314,8 @@ export async function executeRemoteShareOftFeeFlush(): Promise<RemoteFeeFlushRes
     result.targets.push(targetResult);
   }
 
-  if (hubGauge) {
+  const anyFlushed = result.targets.some((target) => target.flushed);
+  if (hubGauge && anyFlushed) {
     const sweep = await maybeReceiveBridgedFeesOnHub(getAddress(hubGauge));
     result.receiveBridgedFeesCalled = sweep.called;
     result.receiveBridgedTxHash = sweep.txHash;

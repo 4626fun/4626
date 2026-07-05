@@ -288,7 +288,8 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
             vaultSymbol: "ovCR8R",
             shareName: "Creator Share",
             shareSymbol: "sCR8R",
-            version: "v1"
+            version: "v1",
+            vaultKind: DeploymentBatcher.VaultKind.Creator
         });
         DeploymentBatcher.CodeIds memory codeIds = DeploymentBatcher.CodeIds({
             vault: bytes32(uint256(1)),

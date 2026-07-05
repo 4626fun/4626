@@ -16,6 +16,8 @@ export interface VaultConfig {
   vrfHubAddress?: `0x${string}`;
   burnStreamAddress?: `0x${string}`;
   payoutRouterAddress?: `0x${string}`;
+  agentRevenueRouterAddress?: `0x${string}`;
+  vaultKind?: 'creator' | 'agent';
   groupId: string;
   extra?: Record<string, unknown>;
 }
@@ -257,6 +259,7 @@ export function filterVaultsForWorkflow(
     | 'ajna-bucket-manager'
     | 'charm-rebalance-manager'
     | 'payout-router-harvest'
+    | 'agent-revenue-harvest'
     | 'vault-strategy-reallocator'
 ): VaultConfig[] {
   switch (workflow) {
@@ -287,6 +290,9 @@ export function filterVaultsForWorkflow(
     case 'payout-router-harvest':
       // Payout processor needs creator coin + router wiring.
       return vaults.filter((v) => v.creatorCoinAddress && v.payoutRouterAddress);
+
+    case 'agent-revenue-harvest':
+      return vaults.filter((v) => v.creatorCoinAddress && v.agentRevenueRouterAddress);
 
     case 'vault-strategy-reallocator':
       // Cross-strategy TVL rebalance only needs an active vault with strategies.

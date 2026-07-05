@@ -2,11 +2,11 @@
 pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
-import {CreatorLotteryManager} from "../contracts/utilities/lottery/CreatorLotteryManager.sol";
+import {LotteryManager4626} from "../contracts/lottery/4626LotteryManager.sol";
 
 /**
  * @title DeployLotteryManagerCreate2V2
- * @notice Deploys the current CreatorLotteryManager at a new vanity CREATE2 address
+ * @notice Deploys the current LotteryManager4626 at a new vanity CREATE2 address
  *         matching "0x777...4626", then wires it as the Base registry lottery manager.
  *
  * Why:
@@ -19,7 +19,7 @@ import {CreatorLotteryManager} from "../contracts/utilities/lottery/CreatorLotte
  * This script is intended to be safe to re-run (idempotent wiring).
  */
 
-interface ICreatorRegistryLotteryManager {
+interface I4626RegistryLotteryManager {
     function owner() external view returns (address);
     function getLotteryManager(uint256 chainId) external view returns (address);
     function setLotteryManager(uint256 chainId, address manager) external;
@@ -84,7 +84,7 @@ contract DeployLotteryManagerCreate2V2 is Script {
         console.log("Chain ID:   ", block.chainid);
 
         // Build initcode: creation bytecode + constructor args
-        bytes memory initcode = abi.encodePacked(type(CreatorLotteryManager).creationCode, abi.encode(REGISTRY, OWNER));
+        bytes memory initcode = abi.encodePacked(type(LotteryManager4626).creationCode, abi.encode(REGISTRY, OWNER));
         bytes32 initCodeHash = keccak256(initcode);
         address predicted = _create2(DETERMINISTIC_DEPLOYER, SALT, initCodeHash);
 
@@ -108,7 +108,7 @@ contract DeployLotteryManagerCreate2V2 is Script {
             bytes memory callData = abi.encodePacked(SALT, initcode);
             (bool ok,) = DETERMINISTIC_DEPLOYER.call(callData);
             require(ok, "CREATE2 deployment failed");
-            console.log("Deployed CreatorLotteryManager:", predicted);
+            console.log("Deployed LotteryManager4626:", predicted);
         } else {
             console.log("Already deployed at:", predicted);
         }
@@ -155,7 +155,7 @@ contract DeployLotteryManagerCreate2V2 is Script {
         }
 
         // Point registry to the new lottery manager (affects existing creators too).
-        ICreatorRegistryLotteryManager registry = ICreatorRegistryLotteryManager(REGISTRY);
+        I4626RegistryLotteryManager registry = I4626RegistryLotteryManager(REGISTRY);
         address registryOwner = registry.owner();
         if (registryOwner == OWNER) {
             if (registry.getLotteryManager(BASE_CHAIN_ID) != predicted) {
