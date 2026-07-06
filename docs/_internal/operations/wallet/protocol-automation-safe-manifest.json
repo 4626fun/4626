@@ -1,0 +1,17 @@
+{
+  "deployedAt": "2026-07-06T20:35:37.924Z",
+  "chainId": 8453,
+  "saltLabel": "4626-protocol-automation-hot-v1",
+  "saltNonce": "0x31e41d22bc08199cef5f38f7ebf98bf3f71ec7318d4342a1d86c8101b2bc9081",
+  "protocolTreasurySafe": "0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3",
+  "protocolAutomationSafe": "0x08f0875E40781578F902998b2b831cc48d838eBE",
+  "owners": [
+    "0xed7eFE34D25a0B219de1b25AC99EB35E48CC1379"
+  ],
+  "threshold": 1,
+  "keeperAutomationEoa": "0xed7efe34d25a0b219de1b25ac99eb35e48cc1379",
+  "env": {
+    "PROTOCOL_AUTOMATION_SAFE": "0x08f0875E40781578F902998b2b831cc48d838eBE",
+    "VITE_PROTOCOL_AUTOMATION": "0x08f0875E40781578F902998b2b831cc48d838eBE"
+  }
+}

@@ -140,8 +140,8 @@ export const BASE_DEFAULTS = {
 
   // Treasury (cold — custody, strategy ownership, feature payments)
   protocolTreasury: addr('7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3'),
-  // Automation (hot — Charm vault manager; set PROTOCOL_AUTOMATION_SAFE after Safe deploy)
-  protocolAutomation: addr('0000000000000000000000000000000000000000'),
+  // Automation (hot — Charm vault manager; Ajna admin)
+  protocolAutomation: addr('08f0875E40781578F902998b2b831cc48d838eBE'),
 
   // Uniswap V4 core + hook
   poolManager: addr('498581fF718922c3f8e6A244956aF099B2652b2b'),

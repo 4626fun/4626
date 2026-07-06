@@ -288,7 +288,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!keeperPk) {
     return res.status(500).json({
       success: false,
-      error: '4626_KEEPER_AUTOMATION_PRIVATE_KEY not configured',
+      error: 'KPR_PRIVATE_KEY / keeper automation signer not configured',
     } satisfies ApiEnvelope<never>)
   }
   const account = privateKeyToAccount(keeperPk as `0x${string}`)

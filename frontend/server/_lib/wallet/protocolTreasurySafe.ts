@@ -4,25 +4,44 @@ import { getAddress, isAddress, type Address, type Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 
 import { getApiContracts } from '../onchain/contracts.js'
+import {
+  KEEPER_AUTOMATION_PRIVATE_KEY_ENV_LEGACY,
+  KEEPER_AUTOMATION_PRIVATE_KEY_ENV_SHELL,
+  KEEPER_AUTOMATION_PUBLIC_KEY_ENV_LEGACY,
+  KEEPER_AUTOMATION_PUBLIC_KEY_ENV_SHELL,
+  KPR_PRIVATE_KEY_ENV,
+  PROTOCOL_AJNA_KEEPER_ENV,
+} from './keeperAutomationPolicy.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
-/** Dedicated Charm automation signer (must be owner of protocol automation Safe). */
-export const KEEPER_AUTOMATION_PRIVATE_KEY_ENV = '4626_KEEPER_AUTOMATION_PRIVATE_KEY'
-export const KEEPER_AUTOMATION_PUBLIC_KEY_ENV = '4626_KEEPER_AUTOMATION_PUBLIC_KEY'
+/** @deprecated Prefer `KEEPER_AUTOMATION_PRIVATE_KEY_ENV_SHELL` in shell `.env` files. */
+export const KEEPER_AUTOMATION_PRIVATE_KEY_ENV = KEEPER_AUTOMATION_PRIVATE_KEY_ENV_LEGACY
+/** @deprecated Prefer `KEEPER_AUTOMATION_PUBLIC_KEY_ENV_SHELL` or `PROTOCOL_AJNA_KEEPER_ENV`. */
+export const KEEPER_AUTOMATION_PUBLIC_KEY_ENV = KEEPER_AUTOMATION_PUBLIC_KEY_ENV_LEGACY
+
+const KEEPER_AUTOMATION_PUBLIC_KEY_ENVS = [
+  PROTOCOL_AJNA_KEEPER_ENV,
+  KEEPER_AUTOMATION_PUBLIC_KEY_ENV_SHELL,
+  KEEPER_AUTOMATION_PUBLIC_KEY_ENV_LEGACY,
+] as const
 
 const PROTOCOL_AUTOMATION_SAFE_SIGNER_PRIVATE_KEY_ENVS = [
-  KEEPER_AUTOMATION_PRIVATE_KEY_ENV,
+  KEEPER_AUTOMATION_PRIVATE_KEY_ENV_SHELL,
+  KEEPER_AUTOMATION_PRIVATE_KEY_ENV_LEGACY,
+  KPR_PRIVATE_KEY_ENV,
   'PROTOCOL_AUTOMATION_SAFE_OWNER_PK',
 ] as const
 
 const PROTOCOL_TREASURY_SAFE_SIGNER_PRIVATE_KEY_ENVS = [
-  ...PROTOCOL_AUTOMATION_SAFE_SIGNER_PRIVATE_KEY_ENVS,
   'PROTOCOL_TREASURY_SAFE_OWNER_PK',
-  'KPR_PRIVATE_KEY',
   'PRIVATE_KEY',
+  KPR_PRIVATE_KEY_ENV,
+  KEEPER_AUTOMATION_PRIVATE_KEY_ENV_SHELL,
+  KEEPER_AUTOMATION_PRIVATE_KEY_ENV_LEGACY,
+  'PROTOCOL_AUTOMATION_SAFE_OWNER_PK',
 ] as const
 
 const GNOSIS_SAFE_ABI = [
@@ -110,18 +129,21 @@ export function resolveKeeperAutomationPrivateKey(
   return resolveProtocolAutomationSafeOwnerPrivateKey(env) ?? resolveProtocolTreasurySafeOwnerPrivateKey(env)
 }
 
-export function resolveKeeperAutomationPublicAddress(
-  env: Record<string, string | undefined> = process.env,
-): Address | null {
-  const configured = (env[KEEPER_AUTOMATION_PUBLIC_KEY_ENV] ?? '').trim()
-  if (configured && isAddress(configured)) return getAddress(configured)
+function readKeeperAutomationPublicAddress(env: Record<string, string | undefined>): Address | null {
+  for (const key of KEEPER_AUTOMATION_PUBLIC_KEY_ENVS) {
+    const configured = readConfiguredAddress(env, key)
+    if (configured) return configured
+  }
 
-  // Keep public-address derivation aligned with keeper signing-key resolution:
-  // PROTOCOL_AJNA_KEEPER should still resolve when only fallback signer keys
-  // (e.g. PROTOCOL_AUTOMATION_SAFE_OWNER_PK / KPR_PRIVATE_KEY) are configured.
   const automationPk = resolveKeeperAutomationPrivateKey(env)
   if (automationPk) return getAddress(privateKeyToAccount(automationPk).address)
   return null
+}
+
+export function resolveKeeperAutomationPublicAddress(
+  env: Record<string, string | undefined> = process.env,
+): Address | null {
+  return readKeeperAutomationPublicAddress(env)
 }
 
 /** On-chain Ajna `keeper` slot — automation EOA for `move*` calls (not the Safe). */
@@ -129,28 +151,31 @@ export function resolveProtocolAjnaKeeperAddress(
   env: Record<string, string | undefined> = process.env,
 ): Address | null {
   return (
-    readConfiguredAddress(env, 'PROTOCOL_AJNA_KEEPER') ??
+    readConfiguredAddress(env, PROTOCOL_AJNA_KEEPER_ENV) ??
     readConfiguredAddress(env, 'VITE_PROTOCOL_AJNA_KEEPER') ??
-    resolveKeeperAutomationPublicAddress(env)
+    readKeeperAutomationPublicAddress(env)
   )
 }
 
 export function assertKeeperAutomationKeyPair(
   env: Record<string, string | undefined> = process.env,
 ): void {
-  const configuredPublic = (env[KEEPER_AUTOMATION_PUBLIC_KEY_ENV] ?? '').trim()
+  const configuredPublic =
+    readConfiguredAddress(env, PROTOCOL_AJNA_KEEPER_ENV) ??
+    readConfiguredAddress(env, KEEPER_AUTOMATION_PUBLIC_KEY_ENV_SHELL) ??
+    readConfiguredAddress(env, KEEPER_AUTOMATION_PUBLIC_KEY_ENV_LEGACY)
   if (!configuredPublic) return
 
-  const automationPk = readHexPrivateKey(env, KEEPER_AUTOMATION_PRIVATE_KEY_ENV)
+  const automationPk =
+    readHexPrivateKey(env, KEEPER_AUTOMATION_PRIVATE_KEY_ENV_SHELL) ??
+    readHexPrivateKey(env, KEEPER_AUTOMATION_PRIVATE_KEY_ENV_LEGACY) ??
+    readHexPrivateKey(env, KPR_PRIVATE_KEY_ENV)
   if (!automationPk) {
     throw new Error('keeper_automation_public_key_without_private_key')
   }
-  if (!isAddress(configuredPublic)) {
-    throw new Error('keeper_automation_public_key_invalid')
-  }
 
   const derived = getAddress(privateKeyToAccount(automationPk).address)
-  if (derived.toLowerCase() !== getAddress(configuredPublic).toLowerCase()) {
+  if (derived.toLowerCase() !== configuredPublic.toLowerCase()) {
     throw new Error(`keeper_automation_key_pair_mismatch:expected=${derived}`)
   }
 }

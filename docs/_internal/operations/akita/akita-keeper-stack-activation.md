@@ -9,7 +9,7 @@ Turn-on checklist for live vault `0x82C06EaAE27B1Ca31fA29F22341A162A670A4471` (c
 | Layer | Host | What it runs |
 |-------|------|----------------|
 | Control plane | **Vercel** (`akita-llc/4626`) | Crons, `/api/keeper/*`, `/api/keepr/actions/*`, Ajna/Charm enqueue + queue processing |
-| Base keeper writes | **Vercel** (`4626_KEEPER_AUTOMATION_*`) | `tend` / `report` via HTTP bridge; Charm `rebalance()` via **protocol automation Safe** on new deploys |
+| Base keeper writes | **Vercel** (`KPR_PRIVATE_KEY` / `PROTOCOL_AUTOMATION_SAFE`) | `tend` / `report` via HTTP bridge; Charm `rebalance()` via **hot automation Safe** `0x08f087…8eBE` |
 | XMTP agent | **Railway** (`4626-keepr-agent`) | Eliza/XMTP primary only — **not** Charm automation |
 | Solana execution | **Vultr** (`orchestrator.4626.fun`) | `/reconcile` relay/settle/winner/rebalance |
 | Local operator | **`kpr/.env`** | Dry-run + manual workflow runs against prod APIs |
@@ -37,11 +37,21 @@ Set in [Vercel → 4626 → Settings → Environment Variables](https://vercel.c
 | `KEEPER_PROCESS_KPR_ACTIONS_ENABLED` | `1` — Vercel cron executes `keepr_actions` queue (Charm/Ajna writes) |
 | `KEEPER_PROCESS_KPR_ACTIONS_LIMIT` | `1` until each strategy action has run cleanly |
 | `KEEPER_STRATEGY_SIGNALS_ENABLED` | `1` (optional Pattern A) — cron-polled Charm/Ajna signal enqueue instead of websocket listener |
-| `KPR_PRIVATE_KEY` | Ops keeper key for sweep/tend/report (fallback if automation vars unset) |
-| `4626_KEEPER_AUTOMATION_PUBLIC_KEY` | Dedicated automation EOA — add as owner on **protocol automation Safe** (not treasury); also the on-chain Ajna **`keeper`** slot on new deploys |
-| `4626_KEEPER_AUTOMATION_PRIVATE_KEY` | Signs automation Safe txs (Charm `rebalance()`, Ajna `setMinBucketIndex()`) and Ajna `moveFromBuffer()` |
-| `PROTOCOL_AUTOMATION_SAFE` | Hot automation Safe — Charm vault **`manager`** and Ajna **`admin`** on **new deploys** |
-| `PROTOCOL_AJNA_KEEPER` | Optional override for deploy/paymaster Ajna keeper checks; defaults to `4626_KEEPER_AUTOMATION_PUBLIC_KEY` |
+| `KPR_PRIVATE_KEY` | Canonical keeper/automation key — **must derive to** `0xed7eFE34D25a0B219de1b25AC99EB35E48CC1379` |
+| `PROTOCOL_AJNA_KEEPER` | `0xed7eFE34D25a0B219de1b25AC99EB35E48CC1379` — Ajna `keeper` on deploy + paymaster checks |
+| `PAYOUT_ROUTER_KEEPER` | `0xed7eFE34D25a0B219de1b25AC99EB35E48CC1379` — payout-router harvest signer pin |
+| `4626_KEEPER_AUTOMATION_PUBLIC_KEY` | **Optional Vercel alias** — if set, must equal `PROTOCOL_AJNA_KEEPER` (do not use a second EOA) |
+| `PROTOCOL_AUTOMATION_SAFE` | `0x08f0875E40781578F902998b2b831cc48d838eBE` — hot automation Safe (Charm manager + Ajna admin) |
+
+Do **not** configure a separate automation private key. Retired: `0xed401e…a0Cd`.
+
+Verify after env changes:
+
+```bash
+pnpm -C frontend exec tsx scripts/ops/verify-keeper-automation-alignment.ts
+```
+
+See `docs/_internal/operations/wallet/keeper-automation-setup.md`.
 
 Redeploy production after changes (`[force-vercel]` commit or manual promote).
 
@@ -91,7 +101,7 @@ pnpm exec tsx runner.ts charm-rebalance-manager --dry-run
 |------|---------|--------|
 | **Protocol treasury** `0x7d429e…f2d3` | Cold Safe | Strategy **ownership**, USDC custody, Solana strategy **`keeper`** slot, governance |
 | **Protocol automation** (`PROTOCOL_AUTOMATION_SAFE`) | Hot Safe | Charm vault **`manager`**; Ajna **`admin`** (`setMinBucketIndex`) |
-| **Automation EOA** (`4626_KEEPER_AUTOMATION_*`) | Hot signer | Safe owner; Ajna auth **`keeper`** (`moveFromBuffer` / buffer moves) |
+| **Automation EOA** (`KPR_PRIVATE_KEY` / `PROTOCOL_AJNA_KEEPER`) | Hot signer | Safe owner (when configured); Ajna auth **`keeper`** (`moveFromBuffer` / buffer moves) |
 
 Deploy a fresh **DeploymentBatcher** with `PROTOCOL_AUTOMATION` set before redeploying vaults. Creators do **not** operate Ajna on new vaults — protocol automation owns rebucket + buffer moves. Grandfathered vaults with CSW or treasury as Ajna admin keep existing exec paths until redeployed.
 

@@ -35,11 +35,18 @@ describe('keeper automation env keys', () => {
     else process.env[key] = value;
   }
 
-  it('prefers 4626_KEEPER_AUTOMATION_PRIVATE_KEY over KPR_PRIVATE_KEY', () => {
+  it('prefers treasury admin key over KPR_PRIVATE_KEY for treasury Safe exec', () => {
+    setEnv('PRIVATE_KEY', OTHER_PK);
+    setEnv('KPR_PRIVATE_KEY', AUTOMATION_PK);
+    setEnv(KEEPER_AUTOMATION_PRIVATE_KEY_ENV, AUTOMATION_PK);
+
+    expect(resolveProtocolTreasurySafeOwnerPrivateKey()).toBe(OTHER_PK);
+  });
+
+  it('prefers legacy automation private key for automation public address resolution', () => {
     setEnv(KEEPER_AUTOMATION_PRIVATE_KEY_ENV, AUTOMATION_PK);
     setEnv('KPR_PRIVATE_KEY', OTHER_PK);
 
-    expect(resolveProtocolTreasurySafeOwnerPrivateKey()).toBe(AUTOMATION_PK);
     expect(resolveKeeperAutomationPublicAddress()).toBe(AUTOMATION_ADDRESS);
   });
 

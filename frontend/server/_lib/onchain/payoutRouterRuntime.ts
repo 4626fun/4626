@@ -1,6 +1,13 @@
 import { getAddress, isAddress, type Address, type Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 
+import {
+  CANONICAL_KEEPER_AUTOMATION_EOA,
+  KPR_PRIVATE_KEY_ENV,
+  PAYOUT_ROUTER_KEEPER_ENV,
+  PROTOCOL_AJNA_KEEPER_ENV,
+} from '../wallet/keeperAutomationPolicy.js'
+
 declare const process: { env: Record<string, string | undefined> }
 
 const DEFAULT_PAYOUT_ROUTER_ZORA_WETH_FEE = 10_000
@@ -51,11 +58,14 @@ function addressFromPrivateKey(rawKey: string | undefined): Address | null {
 }
 
 const PAYOUT_ROUTER_KEEPER_PRIVATE_KEY_ENVS = [
-  'KPR_PRIVATE_KEY',
+  KPR_PRIVATE_KEY_ENV,
+  'KEEPER_AUTOMATION_PRIVATE_KEY',
   '4626_KEEPER_AUTOMATION_PRIVATE_KEY',
   'PROTOCOL_TREASURY_SAFE_OWNER_PK',
   'PRIVATE_KEY',
 ] as const
+
+export { CANONICAL_KEEPER_AUTOMATION_EOA }
 
 export function resolvePayoutRouterKeeperPrivateKey(
   env: Record<string, string | undefined> = process.env,
@@ -124,9 +134,10 @@ export function resolvePayoutRouterZoraToken(fallback?: Address | null): Address
 
 export function resolvePayoutRouterKeeperAddress(): Address | null {
   const explicit =
-    normalizeAddress(process.env.PAYOUT_ROUTER_KEEPER) ??
+    normalizeAddress(process.env[PAYOUT_ROUTER_KEEPER_ENV]) ??
     normalizeAddress(process.env.KPR_KEEPER_ADDRESS) ??
     normalizeAddress(process.env.KPR_ADDRESS) ??
+    normalizeAddress(process.env[PROTOCOL_AJNA_KEEPER_ENV]) ??
     null
   if (explicit) return explicit
 
