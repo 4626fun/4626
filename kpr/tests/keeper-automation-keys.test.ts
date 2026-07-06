@@ -21,8 +21,10 @@ describe('keeper automation env keys', () => {
       KEEPER_AUTOMATION_PRIVATE_KEY_ENV,
       KEEPER_AUTOMATION_PUBLIC_KEY_ENV,
       'PROTOCOL_TREASURY_SAFE_OWNER_PK',
+      'PROTOCOL_AUTOMATION_SAFE_OWNER_PK',
       'KPR_PRIVATE_KEY',
       'PRIVATE_KEY',
+      'PROTOCOL_AJNA_KEEPER',
     ]) {
       if (prior[key] === undefined) delete process.env[key];
       else process.env[key] = prior[key];
@@ -41,6 +43,21 @@ describe('keeper automation env keys', () => {
     setEnv(KEEPER_AUTOMATION_PRIVATE_KEY_ENV, AUTOMATION_PK);
 
     expect(resolveProtocolTreasurySafeOwnerPrivateKey()).toBe(OTHER_PK);
+  });
+
+  it('does not use KPR_PRIVATE_KEY alone for treasury Safe exec', () => {
+    setEnv('KPR_PRIVATE_KEY', AUTOMATION_PK);
+    expect(resolveProtocolTreasurySafeOwnerPrivateKey()).toBeNull();
+  });
+
+  it('does not derive Ajna keeper from PRIVATE_KEY alone', () => {
+    setEnv('PRIVATE_KEY', OTHER_PK);
+    setEnv('KPR_PRIVATE_KEY', undefined);
+    setEnv(KEEPER_AUTOMATION_PRIVATE_KEY_ENV, undefined);
+    setEnv('PROTOCOL_AUTOMATION_SAFE_OWNER_PK', undefined);
+    setEnv(KEEPER_AUTOMATION_PUBLIC_KEY_ENV, undefined);
+    setEnv('PROTOCOL_AJNA_KEEPER', undefined);
+    expect(resolveKeeperAutomationPublicAddress()).toBeNull();
   });
 
   it('prefers legacy automation private key for automation public address resolution', () => {

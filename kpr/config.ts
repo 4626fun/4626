@@ -43,9 +43,11 @@ export const CHARM_FACTORY_ADDRESS = '0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa
 export const PROTOCOL_TREASURY_ADDRESS = '0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3' as const;
 
 /** Protocol automation Safe — Charm vault manager on new deploys (hot automation lane) */
+export const PROTOCOL_AUTOMATION_SAFE_DEFAULT = '0x08f0875E40781578F902998b2b831cc48d838eBE' as const;
+
 export const PROTOCOL_AUTOMATION_ADDRESS =
   (process.env.PROTOCOL_AUTOMATION_SAFE ?? process.env.PROTOCOL_AUTOMATION ?? '').trim() ||
-  undefined;
+  PROTOCOL_AUTOMATION_SAFE_DEFAULT;
 
 // ---------------------------------------------------------------------------
 // Timing constants

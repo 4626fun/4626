@@ -19,12 +19,20 @@ describe('resolveProtocolAjnaKeeperAddress', () => {
     expect(resolved).toBe('0x2222222222222222222222222222222222222222')
   })
 
-  it('derives from fallback keeper private keys when public keys are unset', () => {
+  it('derives from automation private keys when public keys are unset', () => {
     const privateKey = '0x59c6995e998f97a5a0044966f0945388cf7c5d6d5b3b9f8b9b7f59b3f4c9b6d2'
     const expected = privateKeyToAccount(privateKey).address
     const resolved = resolveProtocolAjnaKeeperAddress({
       PROTOCOL_AUTOMATION_SAFE_OWNER_PK: privateKey,
     })
     expect(resolved).toBe(expected)
+  })
+
+  it('does not derive Ajna keeper from PRIVATE_KEY alone', () => {
+    const adminPrivateKey = '0x59c6995e998f97a5a0044966f0945389cf7c5d6d5b3b9f8b9b7f59b3f4c9b6d2'
+    const resolved = resolveProtocolAjnaKeeperAddress({
+      PRIVATE_KEY: adminPrivateKey,
+    })
+    expect(resolved).toBeNull()
   })
 })

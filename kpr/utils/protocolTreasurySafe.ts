@@ -3,7 +3,7 @@ import { OperationType } from '@safe-global/types-kit';
 import { encodeFunctionData, getAddress, isAddress, type Address, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
-import { PROTOCOL_TREASURY_ADDRESS } from '../config.js';
+import { PROTOCOL_AUTOMATION_ADDRESS, PROTOCOL_TREASURY_ADDRESS } from '../config.js';
 import {
   KEEPER_AUTOMATION_PRIVATE_KEY_ENV_LEGACY,
   KEEPER_AUTOMATION_PRIVATE_KEY_ENV_SHELL,
@@ -68,18 +68,16 @@ const PROTOCOL_AUTOMATION_SAFE_SIGNER_PRIVATE_KEY_ENVS = [
   'PROTOCOL_AUTOMATION_SAFE_OWNER_PK',
 ] as const;
 
+/** Cold treasury Safe — admin EOAs only (keeper is not a treasury owner). */
 const PROTOCOL_TREASURY_SAFE_SIGNER_PRIVATE_KEY_ENVS = [
   'PROTOCOL_TREASURY_SAFE_OWNER_PK',
   'PRIVATE_KEY',
-  KPR_PRIVATE_KEY_ENV,
-  KEEPER_AUTOMATION_PRIVATE_KEY_ENV_SHELL,
-  KEEPER_AUTOMATION_PRIVATE_KEY_ENV_LEGACY,
-  'PROTOCOL_AUTOMATION_SAFE_OWNER_PK',
 ] as const;
 
 function readHexPrivateKey(key: string): `0x${string}` | null {
   const raw = (process.env[key] ?? '').trim();
-  if (/^0x[0-9a-fA-F]{64}$/.test(raw)) return raw as `0x${string}`;
+  const normalized = raw.startsWith('0x') || raw.startsWith('0X') ? `0x${raw.slice(2)}` : `0x${raw}`;
+  if (/^0x[0-9a-fA-F]{64}$/.test(normalized)) return normalized as `0x${string}`;
   return null;
 }
 
@@ -98,7 +96,8 @@ export function resolveProtocolTreasuryAddress(): Address {
 export function resolveProtocolAutomationAddress(): Address | null {
   return (
     readConfiguredAddress('PROTOCOL_AUTOMATION_SAFE') ??
-    readConfiguredAddress('4626_PROTOCOL_AUTOMATION_SAFE')
+    readConfiguredAddress('4626_PROTOCOL_AUTOMATION_SAFE') ??
+    getAddress(PROTOCOL_AUTOMATION_ADDRESS)
   );
 }
 
@@ -119,7 +118,7 @@ export function resolveProtocolTreasurySafeOwnerPrivateKey(): `0x${string}` | nu
 }
 
 export function resolveKeeperAutomationPrivateKey(): `0x${string}` | null {
-  return resolveProtocolAutomationSafeOwnerPrivateKey() ?? resolveProtocolTreasurySafeOwnerPrivateKey();
+  return resolveProtocolAutomationSafeOwnerPrivateKey();
 }
 
 function readKeeperAutomationPublicAddress(): Address | null {
@@ -128,7 +127,7 @@ function readKeeperAutomationPublicAddress(): Address | null {
     if (configured) return configured;
   }
 
-  const automationPk = resolveKeeperAutomationPrivateKey();
+  const automationPk = resolveProtocolAutomationSafeOwnerPrivateKey();
   if (automationPk) return getAddress(privateKeyToAccount(automationPk).address);
   return null;
 }

@@ -35,13 +35,10 @@ const PROTOCOL_AUTOMATION_SAFE_SIGNER_PRIVATE_KEY_ENVS = [
   'PROTOCOL_AUTOMATION_SAFE_OWNER_PK',
 ] as const
 
+/** Cold treasury Safe — admin EOAs only (keeper is not a treasury owner). */
 const PROTOCOL_TREASURY_SAFE_SIGNER_PRIVATE_KEY_ENVS = [
   'PROTOCOL_TREASURY_SAFE_OWNER_PK',
   'PRIVATE_KEY',
-  KPR_PRIVATE_KEY_ENV,
-  KEEPER_AUTOMATION_PRIVATE_KEY_ENV_SHELL,
-  KEEPER_AUTOMATION_PRIVATE_KEY_ENV_LEGACY,
-  'PROTOCOL_AUTOMATION_SAFE_OWNER_PK',
 ] as const
 
 const GNOSIS_SAFE_ABI = [
@@ -122,11 +119,11 @@ export function resolveProtocolTreasurySafeOwnerPrivateKey(
   return null
 }
 
-/** Prefer automation signer; fall back to legacy treasury/keeper keys. */
+/** Direct EOA keeper lane (Ajna moveFromBuffer, etc.) — automation keys only. */
 export function resolveKeeperAutomationPrivateKey(
   env: Record<string, string | undefined> = process.env,
 ): `0x${string}` | null {
-  return resolveProtocolAutomationSafeOwnerPrivateKey(env) ?? resolveProtocolTreasurySafeOwnerPrivateKey(env)
+  return resolveProtocolAutomationSafeOwnerPrivateKey(env)
 }
 
 function readKeeperAutomationPublicAddress(env: Record<string, string | undefined>): Address | null {
@@ -135,7 +132,7 @@ function readKeeperAutomationPublicAddress(env: Record<string, string | undefine
     if (configured) return configured
   }
 
-  const automationPk = resolveKeeperAutomationPrivateKey(env)
+  const automationPk = resolveProtocolAutomationSafeOwnerPrivateKey(env)
   if (automationPk) return getAddress(privateKeyToAccount(automationPk).address)
   return null
 }
