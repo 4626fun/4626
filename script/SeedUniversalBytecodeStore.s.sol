@@ -129,14 +129,14 @@ contract SeedUniversalBytecodeStore is Script {
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
             _storeIfMissing(
-                store, vm.getCode("out/CreatorPayoutRouter.sol/PayoutRouter.json"), "PayoutRouter", supportsChunking
+                store, vm.getCode("out/CreatorPayoutRouter.sol/CreatorPayoutRouter.json"), "CreatorPayoutRouter", supportsChunking
             );
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
             _storeIfMissing(
                 store,
-                vm.getCode("out/CreatorVaultShareBurnStream.sol/VaultShareBurnStream.json"),
-                "VaultShareBurnStream",
+                vm.getCode("out/CreatorVaultShareBurnStream.sol/CreatorVaultShareBurnStream.json"),
+                "CreatorVaultShareBurnStream",
                 supportsChunking
             );
         }
