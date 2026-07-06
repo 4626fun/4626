@@ -28,7 +28,7 @@ Strategies
 vault/strategies/CCALaunchStrategy.sol (+ ConfigModule, EncodingHelper) — continuous clearing auction launch; ERC4626StrategyAdapter.sol — wraps external 4626; SolanaStrategy.sol / SolanaBridgeStrategy.sol — cross-chain NAV.
 
 Lottery / gauge / oracle / rewards
-utilities/lottery/CreatorLotteryManager.sol — jackpot payout authority (VRF winner selection); governance/CreatorGaugeController.sol — jackpot custody + fee-split routing; utilities/oracles/CreatorOracle.sol — Chainlink+TWAP price hub with LZ broadcast; governance/ve4626ve4626VoterRewardsDistributor.sol — protocol reward routing.
+utilities/lottery/CreatorLotteryManager.sol — jackpot payout authority (VRF winner selection); governance/CreatorGaugeController.sol — jackpot custody + fee-split routing; utilities/oracles/CreatorOracle.sol — Chainlink+TWAP price hub with LZ broadcast; governance/ve4626VoterRewardsDistributor.sol — protocol reward routing.
 
 ve(3,3) governance
 governance/ve4626.sol — voting escrow (ERC20Votes); ve4626BoostManager.sol — lottery boost multiplier; ve4626GaugeVoting.sol — epoch gauge voting; VaultRolePolicyManager.sol — role policy; bribes/BribeDepot.sol + factories/BribesFactory.sol — bribe markets.
@@ -131,7 +131,7 @@ Severity: Medium Title: Stuck-token recovery gaps in composer and OFT hub fee pa
 
 Severity: Medium Title: SolanaStrategy.getTotalAssets counts keeper-reported remoteNav, but withdraw returns only Base liquidity Contract/File: contracts/vault/strategies/SolanaStrategy.sol:263-290 Description: NAV = baseLiquid + remoteNav (keeper-reported, delta-bounded) while withdraw transfers only Base-side balance. Impact: Vault share pricing can overstate redeemable assets; a compromised keeper inflates NAV within delta caps. Recommendation: Bound remoteNav by reconciled bridge receipts; add emergency reset; ensure vault withdraw logic accounts for illiquid remote NAV.
 
-Severity: Medium Title: sweepStaleEpochRewards lets owner seize all unclaimed voter rewards after grace Contract/File: contracts/shared/governance/ve4626ve4626VoterRewardsDistributor.sol:232-255 Description: After staleSweepGraceEpochs (26 ≈ 6 months), owner sweeps the full epochVaultRewards to protocolTreasury regardless of outstanding legitimate claims. Impact: Voters who miss the window lose rewards; centralization risk. Recommendation: Document prominently; consider dust-only sweeps or longer grace; emit outstanding amounts.
+Severity: Medium Title: sweepStaleEpochRewards lets owner seize all unclaimed voter rewards after grace Contract/File: contracts/shared/governance/ve4626VoterRewardsDistributor.sol:232-255 Description: After staleSweepGraceEpochs (26 ≈ 6 months), owner sweeps the full epochVaultRewards to protocolTreasury regardless of outstanding legitimate claims. Impact: Voters who miss the window lose rewards; centralization risk. Recommendation: Document prominently; consider dust-only sweeps or longer grace; emit outstanding amounts.
 
 Severity: Medium Title: Boost-source setters instant until timelock armed; profit-report resets unlock schedule Contract/File: CreatorLotteryManager.sol:2291-2304; CreatorOVaultCoreModule.sol:729-741 Description: (a) setBoostManager/setve4626GaugeVoting apply instantly until armBoostSourceTimelock() is called — a compromised owner can install a malicious boost source lifting odds toward 15%. (b) Each profitable report() recomputes fullProfitUnlockDate/profitUnlockingRate over old+new locked shares with a fresh window, extending realization for previously-locked profit. Impact: Pre-arming probability manipulation; slower-than-expected PPS accretion. Recommendation: Arm the timelock in the deploy script before production; use additive unlock tranches instead of resetting the timer.
 
@@ -175,7 +175,7 @@ SECONDS_PER_YEAR mismatch — 31_556_952 (vault/core) vs 365 days (admin). ~0.07
 UniversalBytecodeStore permissionless but hash-keyed/append-only — poisoning requires a bytecode preimage collision (infeasible); benign front-run only.
 Uniswap math libraries — LiquidityAmounts, V4LiquidityAmounts, TickMathCompat match canonical patterns with Math.mulDiv + toUint128 overflow guards; TickMathCompat intentionally one-directional.
 GAS
-ve4626ve4626VoterRewardsDistributor.claimMany / emergencyResetAllVotes / processLotteryEntryFromSolana — caller-controlled unbounded loops (self-grief / emergency DoS at scale).
+ve4626VoterRewardsDistributor.claimMany / emergencyResetAllVotes / processLotteryEntryFromSolana — caller-controlled unbounded loops (self-grief / emergency DoS at scale).
 ve4626GaugeVoting.vote O(n²) dedup (bounded at 10, acceptable).
 CreatorOVaultCoreModule.lockedShares() extra self external-call; inline the math.
 UniversalBytecodeStoreV2.get() linear chunk loop (keep reads off-chain).

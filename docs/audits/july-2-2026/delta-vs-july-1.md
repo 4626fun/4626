@@ -26,7 +26,7 @@
 | ID | Grade | Evidence / remaining |
 |----|-------|----------------------|
 | M-12 — Stuck tokens in composer / hub pending fees | **PARTIAL (unchanged)** | `OVaultHubComposer.sol:141-148` `composeRescueEnabled` + `composeReservedBalances` guard rescue. Remaining: full liability ledger before rescue. No regression. |
-| M-14 — `sweepStaleEpochRewards` centralization | **PARTIAL (unchanged)** | `ve4626ve4626VoterRewardsDistributor.sol` emits `StaleEpochSwept` with `graceEpochs`; governance timelock still operational-only. |
+| M-14 — `sweepStaleEpochRewards` centralization | **PARTIAL (unchanged)** | `ve4626VoterRewardsDistributor.sol` emits `StaleEpochSwept` with `graceEpochs`; governance timelock still operational-only. |
 | M-15 — Boost timelock not armed by default | **PARTIAL (unchanged)** | `armBoostSourceTimelock()` (`CreatorLotteryManager.sol:2322`) present; `verifyLotteryProductionReadiness()` exists but **not wired into deploy** (M2-03). Must arm before traffic. |
 | M-17 — Registry factories / hot-swappable modules codehash pins | **PARTIAL (worsened detail)** | Hot-swap setters validate (`DeploymentBatcher.sol:2290-2316`), but **initial `wireDeploymentHelpers` skips codehash validation** (new low L2-02, `:2274-2284`). Seed allowlist + validate on wire. |
 

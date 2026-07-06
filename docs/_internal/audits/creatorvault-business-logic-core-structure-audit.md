@@ -23,7 +23,7 @@ AGENTS.md requires these exact names in docs, UI copy, commit messages, and code
 
 ### 2. creatorCoinPayoutRecipient
 - **Lane**: Creator Coin **external earnings** (protocol rewards, secondary market fees, etc. that accrue to the creator coin itself).
-- **Destination**: `PayoutRouter.convertAndQueue(...)` → swap to creatorCoin → deposit into vault → `CreatorVaultShareBurnStream` (ownerless, gradual burn for holder PPS accretion).
+- **Destination**: `CreatorPayoutRouter.convertAndQueue(...)` → swap to creatorCoin → deposit into vault → `CreatorVaultShareBurnStream` (ownerless, gradual burn for holder PPS accretion).
 - **Trigger**: External revenue events on the creator coin (not vault share trading fees).
 - **Authority / Gating**: Authorized queuers (keeper + deploy-session paths); permissionless drip via `VaultShareBurnStream.checkpoint()`.
 - **On-chain identifiers**:

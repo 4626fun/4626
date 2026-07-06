@@ -39,7 +39,7 @@ Full timeline: [Launch checklist](/guides/launch-checklist) · [After activation
 | **Vault share (`▢`)** | ERC-4626 claim on the vault | `▢JESSE` |
 | **Tradable share (`■`)** | DEX + cross-chain ShareOFT | `■JESSE` |
 
-[CreatorOVaultWrapper](/contracts/shared/core/creator-ovault-wrapper) wraps ▢ → ■ at 1:1. Creator coin address **≠** share token address.
+[CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) wraps ▢ → ■ at 1:1. Creator coin address **≠** share token address.
 
 ## Before you launch
 

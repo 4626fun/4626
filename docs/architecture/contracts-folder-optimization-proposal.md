@@ -97,7 +97,7 @@ contracts/
 ├── governance/                    # Gauge voting, bribes, ve4626 (generalized in shared/)
 │   ├── shared/
 │   │   ├── ve4626GaugeVoting.sol
-│   │   ├── ve4626ve4626VoterRewardsDistributor.sol
+│   │   ├── ve4626VoterRewardsDistributor.sol
 │   │   └── VaultRolePolicyManager.sol
 │   ├── creator/
 │   │   ├── CreatorGaugeController.sol

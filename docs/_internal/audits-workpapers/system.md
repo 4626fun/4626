@@ -15,7 +15,7 @@ The biggest **lottery/VRF risk** is trust-surface concentration around authorize
 | `ve4626GaugeVoting.sol` | both | High | Live deployment params/governance process not shown |
 | `ve4626.sol` | both | High | Whether any external module relies on ERC20Votes checkpoints directly |
 | `ve4626BoostManager.sol` | both | High | Intended denominator semantics for total voting power |
-| `ve4626ve4626VoterRewardsDistributor.sol` | both | High | Ops controls around reward-token repair authority |
+| `ve4626VoterRewardsDistributor.sol` | both | High | Ops controls around reward-token repair authority |
 | `BribeDepot.sol` | both | High | Production token allowlist policy (if any) |
 | `CreatorGaugeController.sol` | both | High | Real-world treasury/operator key management |
 | `CreatorLotteryManager.sol` | both | High | AMOE path parity with source; deployed ABI drift |
@@ -29,7 +29,7 @@ Additional evidence: Foundry suite executed successfully (433 passing tests), wh
 
 # 3. System Architecture
 
-- **Contract map:** `ve4626` (lock power) -> `ve4626GaugeVoting` (epoch vault weights) -> `ve4626ve4626VoterRewardsDistributor` and `BribeDepot` (historical entitlement), while `CreatorGaugeController` routes fee value and `CreatorLotteryManager` computes/settles lottery outcomes via local/cross-chain VRF (`CreatorVRFConsumerV2_5`, `ChainlinkVRFIntegratorV2_5`).
+- **Contract map:** `ve4626` (lock power) -> `ve4626GaugeVoting` (epoch vault weights) -> `ve4626VoterRewardsDistributor` and `BribeDepot` (historical entitlement), while `CreatorGaugeController` routes fee value and `CreatorLotteryManager` computes/settles lottery outcomes via local/cross-chain VRF (`CreatorVRFConsumerV2_5`, `ChainlinkVRFIntegratorV2_5`).
 - **Trust boundaries:** owner/admin keys, registry, authorized swap contracts, authorized local VRF callers, authorized relayers, sponsored caller lists, LayerZero peers, oracle feeds, treasury/distributor endpoints.
 - **Weekly/epoch lifecycle:** users lock and vote in current epoch -> fees are distributed to jackpot/burn/voter rewards -> bribes accumulate per epoch -> claims/rollovers/sweeps use ended-epoch snapshots -> lottery entries happen continuously and consume current config/weights.
 - **Value-flow split:** fee routing and payout value are separate from probability routing; governance can raise/lower win-likelihood for a vault without directly changing payout amount from all vault reserves.
@@ -40,7 +40,7 @@ Additional evidence: Foundry suite executed successfully (433 passing tests), wh
 | B. Personal boost | `ve4626BoostManager.calculateBoost()` | `CreatorLotteryManager._applyBoost()` |
 | C. Lock-duration boost | `ve4626BoostManager.getTotalProbabilityBoost()` | `CreatorLotteryManager._applyBoost()` |
 | D. Vault-directed gauge boost | `ve4626GaugeVoting.getVaultGaugeProbabilityBoostPPM()` | `CreatorLotteryManager._applyBoost()` |
-| E. Voter reward entitlement | `getUserVoteWeightAtEpoch()/getVaultWeightAtEpoch()` | `ve4626ve4626VoterRewardsDistributor._claim()` |
+| E. Voter reward entitlement | `getUserVoteWeightAtEpoch()/getVaultWeightAtEpoch()` | `ve4626VoterRewardsDistributor._claim()` |
 | F. Bribe eligibility | same historical vote weight calls | `BribeDepot.claim()` |
 | G. Jackpot probability | `calculateWinChance()` + `_applyBoost()` + cap | lottery entry settlement |
 | H. Jackpot payout amount | `rewardPercentage` + each gauge reserve | `_payoutLocalJackpot()` / `payJackpot()` |
@@ -265,7 +265,7 @@ Additional evidence: Foundry suite executed successfully (433 passing tests), wh
 
 - **Title:** Last-minute vote sniping remains for rewards/bribes.  
   **Severity:** Medium.  
-  **Affected component:** `ve4626GaugeVoting`, `ve4626ve4626VoterRewardsDistributor`, `BribeDepot`.  
+  **Affected component:** `ve4626GaugeVoting`, `ve4626VoterRewardsDistributor`, `BribeDepot`.  
   **Evidence:** entitlement is epoch snapshot with no anti-sniping lock window.  
   **Why it matters:** governance intent can be front-run near epoch close.  
   **Exploitability / misconfiguration path:** bribe-informed final-block reallocation.  
@@ -307,7 +307,7 @@ Additional evidence: Foundry suite executed successfully (433 passing tests), wh
 
 - **Title:** `claimMany` is user-gas sensitive.  
   **Severity:** Low.  
-  **Affected component:** `ve4626ve4626VoterRewardsDistributor`.  
+  **Affected component:** `ve4626VoterRewardsDistributor`.  
   **Evidence:** unbounded user-provided vault array loop.  
   **Why it matters:** self-DoS/noisy UX.  
   **Exploitability / misconfiguration path:** oversized claim calls fail.  
@@ -372,9 +372,9 @@ Additional evidence: Foundry suite executed successfully (433 passing tests), wh
 - **`ve4626GaugeVoting.sol`:** inspect `vote`, `_clearUserVotes`, `getVaultGaugeProbabilityBoostPPM`, `_isVaultWhitelisted`, `checkpoint`, `emergencyResetAllVotes`; verify state `_epochVaultVotes`, `_epochTotalVotes`, `_whitelistedVaults`; verify events `Voted`, `VotesReset`, `EpochCheckpointed`, `VaultWhitelisted`; verify errors `LockExpiresBeforeEpochEnd`, `VaultNotWhitelisted`.
 - **`ve4626.sol`:** inspect `lock`, `extendLock`, `increaseLock`, `unlock`, `_calculateVotingPower`, `getVotingPower`, `getTotalVotingPower`, `votingPowerAt`, `_notifyBoostManager`; verify `_totalVotingSupply` behavior and lock lifecycle invariants; verify non-transferability overrides and ERC20Votes interactions.
 - **`ve4626BoostManager.sol`:** inspect `calculateBoostWithProtection`, `getTotalProbabilityBoost`, `getCoverageBps`, `updateBalanceTracking`, `setBoostParameters`, `setMinVotingPower`; verify state `lastBalanceUpdateBlock`, `boostParametersLocked`.
-- **`ve4626ve4626VoterRewardsDistributor.sol`:** inspect `notifyRewards`, `_claim`, `claimMany`, `previewClaim`, `sweepZeroVoteEpoch`, `recoverVaultRewardToken`; verify `epochVaultRewards`, `vaultRewardToken`, `hasClaimed`, `sweepGraceEpochs`.
+- **`ve4626VoterRewardsDistributor.sol`:** inspect `notifyRewards`, `_claim`, `claimMany`, `previewClaim`, `sweepZeroVoteEpoch`, `recoverVaultRewardToken`; verify `epochVaultRewards`, `vaultRewardToken`, `hasClaimed`, `sweepGraceEpochs`.
 - **`BribeDepot.sol`:** inspect `bribe`, `claim`, `rolloverZeroVoteEpoch`, `rolloverExpiredEpoch`; verify `totalBribes`, `claimedAmount`, `isClosed`, `rolloverGraceEpochs`; validate behavior on deflationary/rebasing tokens.
-- **`CreatorGaugeController.sol`:** inspect `_distributeInternal`, `_distributeVaultShares`, `payJackpot`, `setFeeSplit`, `setLotteryManager`, `setve4626ve4626VoterRewardsDistributor`, `emergencyWithdraw`; verify split invariants and fallback routing.
+- **`CreatorGaugeController.sol`:** inspect `_distributeInternal`, `_distributeVaultShares`, `payJackpot`, `setFeeSplit`, `setLotteryManager`, `setve4626VoterRewardsDistributor`, `emergencyWithdraw`; verify split invariants and fallback routing.
 - **`CreatorLotteryManager.sol`:** inspect `processSwapLottery`, `_applyBoost`, `_scaleGaugeBoostBySwapSize`, `_processVRFResult`, `processPendingVrfResult`, `_payoutLocalJackpot`, `setAuthorizedSwapContract`, `setUseLocalVRF`, `setVRFIntegrator`, `setVrfSponsorshipPolicy`, `setCallbackSponsorshipPolicy`, `setSponsorshipRateLimits`; verify `vrfRequests`, `pendingRandomWord`, sponsorship budget state; explicitly verify presence/absence of `submitAmoeEntry`, `getAmoeMessageHash`, `minVaultWeightBps`.
 - **`CreatorVRFConsumerV2_5.sol`:** inspect `_lzReceive`, `_consumeRateLimit`, `_relayResponse`, `relayResponse`, `rawFulfillRandomWords`, `setAuthorizedRelayer`, `setAuthorizedLocalCaller`; verify `sequenceToRequestId[srcEid][sequence]`, `pendingResponses`, and replay/ordering invariants.
 - **`ChainlinkVRFIntegratorV2_5.sol`:** inspect `_lzReceive`, request creation paths, `cleanupExpiredRequests`, `setSponsoredCallerAuthorization`, `setRequestTimeout`; verify `s_requests`, `authorizedSponsoredCallers`, late-response handling.

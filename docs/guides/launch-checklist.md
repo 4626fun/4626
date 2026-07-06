@@ -65,7 +65,7 @@ Details: [Solana share bridge](/overview/solana-share-mesh)
 
 ## Contracts
 
-- Per-creator stack: [CreatorRegistry](/contracts/shared/core/creator-registry)
+- Per-creator stack: [CreatorRegistry](/contracts/core/creator-registry)
 - Shared infra: [Addresses](/reference/addresses) (v1.14.1)
 
 ## Related

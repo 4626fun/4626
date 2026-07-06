@@ -73,7 +73,7 @@ Public DEX trading and lottery are **not** guaranteed the moment activation fina
 | 3 | `migrate()` | Uniswap v4 LP position created from auction + LP reserve |
 | 4 | Hook config aligned | Tax hook / `tradeFeeCollector` must match intended gauge routing — separate from `migrate()` |
 
-If the auction **fails**, `finalizeFailedAuction()` / `sweepUnsoldTokens()` clears strategy state so a relaunch can proceed. Details: [CCA launch strategy](/contracts/shared/strategies/cca-launch).
+If the auction **fails**, `finalizeFailedAuction()` / `sweepUnsoldTokens()` clears strategy state so a relaunch can proceed. Details: [CCA launch strategy](/contracts/strategies/cca-launch).
 
 Once live:
 
@@ -106,7 +106,7 @@ New vault flows are app-orchestrated. Follow in-app prompts if finalize is pendi
 
 ### Auction stuck or failed?
 
-Use in-app support. Onchain relaunch semantics: [CCA strategy](/contracts/shared/strategies/cca-launch).
+Use in-app support. Onchain relaunch semantics: [CCA strategy](/contracts/strategies/cca-launch).
 
 ## Related
 
@@ -114,5 +114,5 @@ Use in-app support. Onchain relaunch semantics: [CCA strategy](/contracts/shared
 |-------|------|
 | Full checklist | [Launch checklist](/guides/launch-checklist) |
 | Economics | [How fees and lottery work](/overview/how-it-works) |
-| Share token | [CreatorShareOFT](/contracts/shared/core/creator-share-oft) |
+| Share token | [CreatorShareOFT](/contracts/core/creator-share-oft) |
 | Addresses | [Addresses](/reference/addresses) |

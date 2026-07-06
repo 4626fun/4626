@@ -13,12 +13,12 @@ Onchain reference for 4626 vault infrastructure. For the launch journey, start w
 
 | Contract | Documentation |
 |----------|---------------|
-| CreatorRegistry | [Registry](/contracts/shared/core/creator-registry) — creator coin → vault lookup |
-| CreatorOVault | [Vault](/contracts/shared/core/creator-ovault) — ERC-4626 · creator coin deposit |
-| CreatorOVaultWrapper | [Wrapper](/contracts/shared/core/creator-ovault-wrapper) — ▢ → ■ at 1:1 |
-| CreatorShareOFT | [ShareOFT](/contracts/shared/core/creator-share-oft) — tradable ■ share |
+| CreatorRegistry | [Registry](/contracts/core/creator-registry) — creator coin → vault lookup |
+| CreatorOVault | [Vault](/contracts/core/creator-ovault) — ERC-4626 · creator coin deposit |
+| CreatorOVaultWrapper | [Wrapper](/contracts/core/creator-ovault-wrapper) — ▢ → ■ at 1:1 |
+| CreatorShareOFT | [ShareOFT](/contracts/core/creator-share-oft) — tradable ■ share |
 | CreatorGaugeController | [Gauge](/contracts/governance/gauge-controller) — fees · jackpot custody |
-| CCA launch strategy | [Auction](/contracts/shared/strategies/cca-launch) — fair-launch auction |
+| CCA launch strategy | [Auction](/contracts/strategies/cca-launch) — fair-launch auction |
 | CreatorLotteryManager | [Lottery](/contracts/utilities/lottery-manager) — instant lottery on buys |
 | CreatorOracle | [Oracle](/contracts/utilities/creator-oracle) — TWAP pricing |
 

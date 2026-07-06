@@ -35,7 +35,7 @@ Maps each audit finding to fix status. **Fixed** = merged in this pass; **Partia
 | M-11 | Solana relay marks tx consumed before success | **Fixed** | `SolanaBridgeAdapter.sol` — mark `processedSolanaTxs` only after successful lottery call |
 | M-12 | Stuck tokens in composer / hub pending fees | **Partial** | `OVaultHubComposer.sol` — `composeRescueEnabled`, `composeReservedBalances`, guarded `rescueERC20`. **Remaining:** full liability ledger before rescue |
 | M-13 | Remote Solana NAV vs Base withdraw | **Not applicable** | ShareOFT mesh at finalize; no Phase-3 Solana vault strategy |
-| M-14 | `sweepStaleEpochRewards` centralization | **Partial** | `ve4626ve4626VoterRewardsDistributor.sol` — `StaleEpochSwept` event includes `graceEpochs`; NatSpec documents grace window. **Remaining:** governance timelock (operational) |
+| M-14 | `sweepStaleEpochRewards` centralization | **Partial** | `ve4626VoterRewardsDistributor.sol` — `StaleEpochSwept` event includes `graceEpochs`; NatSpec documents grace window. **Remaining:** governance timelock (operational) |
 | M-15 | Boost timelock not armed by default | **Partial** | Ops gate: `verifyLotteryProductionReadiness()` + post-deploy `armBoostSourceTimelock()` before traffic |
 | M-16 | Activation batcher missing registry validation | **Fixed** | `VaultActivationBatcher.sol` — `_validateRegistryRouting()` in `_executeActivateAndLaunch` (all 6 entrypoints) |
 | M-17 | Registry factories / hot-swappable modules | **Partial** | `DeploymentBatcher.sol` — optional `approvedPhaseModuleCodehashes`; `CreatorRegistry.sol` — optional `approvedFactoryCodehashes`. **Remaining:** seed allowlists at deploy (operational) |

@@ -12,7 +12,7 @@ Current status of the ve(3,3) governance system.
 - [x] ve4626 vote-escrow token (`contracts/governance/ve4626.sol`)
 - [x] ve4626BoostManager for lottery boosts (`contracts/governance/ve4626BoostManager.sol`)
 - [x] ve4626GaugeVoting for probability direction (`contracts/shared/governance/ve4626GaugeVoting.sol`)
-- [x] ve4626ve4626VoterRewardsDistributor for fee claims (`contracts/shared/governance/ve4626ve4626VoterRewardsDistributor.sol`)
+- [x] ve4626VoterRewardsDistributor for fee claims (`contracts/shared/governance/ve4626VoterRewardsDistributor.sol`)
 - [x] Integration with CreatorLotteryManager (`contracts/utilities/lottery/CreatorLotteryManager.sol`)
 - [x] Frontend voting UI (`frontend/src/pages/GaugeVoting.tsx`)
 - [x] Bribe marketplace contract (`contracts/shared/governance/bribes/BribeDepot.sol`)
@@ -48,7 +48,7 @@ Trading fees (6.9%)
    ↓
 GaugeController splits
    ↓
-9.61% → ve4626ve4626VoterRewardsDistributor
+9.61% → ve4626VoterRewardsDistributor
    ↓
 Voters claim pro-rata
 ```

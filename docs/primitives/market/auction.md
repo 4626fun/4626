@@ -26,5 +26,5 @@ This is the **Market** primitive because it is where price discovery, liquidity 
 
 - [Distribution (Launch)](/compressions/distribution)
 - [Tokenomics](/tokenomics)
-- [CCA Launch Strategy Contract](/contracts/shared/strategies/cca-launch)
+- [CCA Launch Strategy Contract](/contracts/strategies/cca-launch)
 

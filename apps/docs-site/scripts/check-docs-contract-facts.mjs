@@ -186,23 +186,23 @@ function main() {
     }
   }
 
-  const ccaLaunchPath = path.join(REPO_ROOT, 'docs/contracts/shared/strategies/cca-launch.md');
+  const ccaLaunchPath = path.join(REPO_ROOT, 'docs/contracts/strategies/cca-launch.md');
   const cca = readFileSync(ccaLaunchPath, 'utf8');
   if (!cca.includes(`${splitLabel} split`)) {
-    failures.push(`docs/contracts/shared/strategies/cca-launch.md: must document ${splitLabel} split`);
+    failures.push(`docs/contracts/strategies/cca-launch.md: must document ${splitLabel} split`);
   }
   if (!cca.includes('Thursday 00:00 UTC')) {
-    failures.push('docs/contracts/shared/strategies/cca-launch.md: must document Thursday 00:00 UTC auction schedule');
+    failures.push('docs/contracts/strategies/cca-launch.md: must document Thursday 00:00 UTC auction schedule');
   }
 
   if (!cca.includes('What finalize does **not** do')) {
-    failures.push('docs/contracts/shared/strategies/cca-launch.md: must document deferred Phase 3 strategies and post-auction migrate');
+    failures.push('docs/contracts/strategies/cca-launch.md: must document deferred Phase 3 strategies and post-auction migrate');
   }
   if (!cca.includes('deployPhase3Strategies')) {
-    failures.push('docs/contracts/shared/strategies/cca-launch.md: must reference Phase 3 deployPhase3Strategies');
+    failures.push('docs/contracts/strategies/cca-launch.md: must reference Phase 3 deployPhase3Strategies');
   }
   if (!cca.includes('launchDeferredAuction')) {
-    failures.push('docs/contracts/shared/strategies/cca-launch.md: must reference Phase 4 launchDeferredAuction');
+    failures.push('docs/contracts/strategies/cca-launch.md: must reference Phase 4 launchDeferredAuction');
   }
 
   const activateVault = readFileSync(path.join(REPO_ROOT, 'docs/guides/activate-vault.md'), 'utf8');
@@ -215,10 +215,10 @@ function main() {
     failures.push('docs/guides/after-activation.md: must separate Phase 3 strategies from post-auction settlement');
   }
 
-  const ovaultPath = path.join(REPO_ROOT, 'docs/contracts/shared/core/creator-ovault.md');
+  const ovaultPath = path.join(REPO_ROOT, 'docs/contracts/core/creator-ovault.md');
   const ovault = readFileSync(ovaultPath, 'utf8');
   if (!ovault.includes('50M')) {
-    failures.push('docs/contracts/shared/core/creator-ovault.md: must document 50M minimum first deposit');
+    failures.push('docs/contracts/core/creator-ovault.md: must document 50M minimum first deposit');
   }
 
   const howItWorks = readFileSync(path.join(REPO_ROOT, 'docs/overview/how-it-works.md'), 'utf8');
