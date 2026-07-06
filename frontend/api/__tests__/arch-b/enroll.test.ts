@@ -30,7 +30,7 @@ const mocks = vi.hoisted(() => ({
   secp256k1SignHash: vi.fn(),
   // privyOwnerWalletIdResolver
   resolveOwnerWalletId: vi.fn(),
-  // subAccountProvisionVerify helpers
+  // basePublicClient helpers
   getBasePublicClient: vi.fn(() => ({})),
   isContractAddressByBytecode: vi.fn(async () => true),
   // PrivyClient
@@ -63,7 +63,7 @@ vi.mock('../../../server/_lib/wallet/privyOwnerWalletIdResolver.js', () => ({
   resolveOwnerWalletId: mocks.resolveOwnerWalletId,
 }))
 
-vi.mock('../../../server/_lib/wallet/subAccountProvisionVerify.js', () => ({
+vi.mock('../../../server/_lib/wallet/basePublicClient.js', () => ({
   getBasePublicClient: mocks.getBasePublicClient,
   isContractAddressByBytecode: mocks.isContractAddressByBytecode,
 }))

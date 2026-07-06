@@ -27,32 +27,6 @@ export function envBigInt(key: string, fallback: bigint): bigint {
 
 export type ExecutionReadiness = 'ready' | 'not_provisioned' | 'revoked' | 'db_unavailable'
 
-export type SpendPermissionPayload = {
-  account: Address
-  spender: Address
-  token: Address
-  allowance: string
-  period: number
-  start: number
-  end: number
-  salt: string
-  extraData: string
-}
-
-export type CommandIssuerSubAccount = {
-  subAccountAddress: Address
-  parentCswAddress: Address
-  spendPermission: {
-    payload: SpendPermissionPayload
-    signature: `0x${string}`
-    hash: `0x${string}`
-    allowanceWei: bigint
-    periodSeconds: number
-    endAt: Date
-    revokedAt: Date | null
-  }
-}
-
 export type CommandIssuerContext = {
   profileId: number
   smartWallet: Address
@@ -65,7 +39,8 @@ export type CommandIssuerContext = {
   dailyCapWei: bigint
   provisionedAt: Date
   revokedAt: Date | null
-  subAccount: CommandIssuerSubAccount | null
+  /** Retained for type compatibility; always null — Arch-B routes through parent CSW only. */
+  subAccount: null
 }
 
 export type CommandIssuerResolution =
@@ -78,72 +53,6 @@ function normalizeAddress(value: unknown): Address | null {
   if (typeof value !== 'string') return null
   const trimmed = value.trim().toLowerCase()
   return /^0x[a-f0-9]{40}$/.test(trimmed) ? (trimmed as Address) : null
-}
-
-function isHex(value: unknown): value is `0x${string}` {
-  return typeof value === 'string' && /^0x[0-9a-fA-F]*$/.test(value)
-}
-
-function parseSpendPermissionPayload(raw: unknown): SpendPermissionPayload | null {
-  if (!raw || typeof raw !== 'object') return null
-  const obj = raw as Record<string, unknown>
-  const account = normalizeAddress(obj.account)
-  const spender = normalizeAddress(obj.spender)
-  const token = normalizeAddress(obj.token)
-  const allowance = typeof obj.allowance === 'string' || typeof obj.allowance === 'number' ? String(obj.allowance) : null
-  const period = typeof obj.period === 'number' || typeof obj.period === 'string' ? Number(obj.period) : NaN
-  const start = typeof obj.start === 'number' || typeof obj.start === 'string' ? Number(obj.start) : NaN
-  const end = typeof obj.end === 'number' || typeof obj.end === 'string' ? Number(obj.end) : NaN
-  const salt = typeof obj.salt === 'string' ? obj.salt : null
-  const extraData = typeof obj.extraData === 'string' ? obj.extraData : null
-
-  if (!account || !spender || !token || !allowance) return null
-  try { if (BigInt(allowance) < 0n) return null } catch { return null }
-  if (!Number.isFinite(period) || period <= 0) return null
-  if (!Number.isFinite(start) || start < 0) return null
-  if (!Number.isFinite(end) || end <= 0) return null
-  if (!salt || !isHex(salt)) return null
-  if (!extraData || !isHex(extraData)) return null
-
-  return { account, spender, token, allowance, period, start, end, salt, extraData }
-}
-
-function parseSubAccount(row: Record<string, unknown>): CommandIssuerSubAccount | null {
-  const subAccountAddress = normalizeAddress(row.sub_account_address)
-  if (!subAccountAddress) return null
-  const parentCswAddress = normalizeAddress(row.parent_csw_address)
-  const signature = typeof row.spend_permission_signature === 'string' ? row.spend_permission_signature : null
-  const hash = typeof row.spend_permission_hash === 'string' ? row.spend_permission_hash : null
-  const allowanceRaw = row.spend_allowance_wei != null ? String(row.spend_allowance_wei) : null
-  const periodRaw = row.spend_period_seconds != null ? Number(row.spend_period_seconds) : NaN
-  const endAtRaw = row.spend_permission_end_at
-  const revokedAtRaw = row.spend_permission_revoked_at
-
-  if (!parentCswAddress || !signature || !isHex(signature) || !hash || !isHex(hash) || !allowanceRaw) {
-    return null
-  }
-  let allowanceWei: bigint
-  try { allowanceWei = BigInt(allowanceRaw) } catch { return null }
-  if (!Number.isFinite(periodRaw) || periodRaw <= 0) return null
-  if (!endAtRaw) return null
-  const endAt = new Date(String(endAtRaw))
-  if (Number.isNaN(endAt.getTime())) return null
-  const payload = parseSpendPermissionPayload(row.spend_permission_payload)
-  if (!payload) return null
-
-  return {
-    subAccountAddress,
-    parentCswAddress,
-    spendPermission: {
-      payload,
-      signature: signature as `0x${string}`,
-      hash: hash as `0x${string}`,
-      allowanceWei,
-      periodSeconds: periodRaw,
-      endAt,
-      revokedAt: revokedAtRaw ? new Date(String(revokedAtRaw)) : null,
-    },
-  }
 }
 
 function rowToContext(row: Record<string, unknown>): CommandIssuerContext {
@@ -159,7 +68,7 @@ function rowToContext(row: Record<string, unknown>): CommandIssuerContext {
     dailyCapWei: BigInt(String(row.daily_cap_wei)),
     provisionedAt: new Date(String(row.provisioned_at)),
     revokedAt: row.revoked_at ? new Date(String(row.revoked_at)) : null,
-    subAccount: parseSubAccount(row),
+    subAccount: null,
   }
 }
 
@@ -232,19 +141,6 @@ export function isExecutionReady(resolution: CommandIssuerResolution): resolutio
   return resolution.status === 'ready'
 }
 
-export type ProvisionSubAccountInput = {
-  subAccountAddress: string
-  parentCswAddress: string
-  spendPermission: {
-    payload: SpendPermissionPayload
-    signature: `0x${string}`
-    hash: `0x${string}`
-    allowanceWei: bigint
-    periodSeconds: number
-    endAt: Date
-  }
-}
-
 export async function provisionCommandIssuerContext(params: {
   profileId: number
   smartWallet: string
@@ -255,7 +151,6 @@ export async function provisionCommandIssuerContext(params: {
   dailyCapWei: bigint
   paymasterPolicy?: string
   provisionedBy?: string | null
-  subAccount?: ProvisionSubAccountInput | null
 }): Promise<{ ok: true; context: CommandIssuerContext } | { ok: false; error: string }> {
   const smartWallet = normalizeAddress(params.smartWallet)
   const ownerEoa = normalizeAddress(params.ownerEoa)
@@ -270,34 +165,16 @@ export async function provisionCommandIssuerContext(params: {
   const paymasterPolicy = (params.paymasterPolicy ?? 'cdp_default').slice(0, 64)
   const provisionedBy = params.provisionedBy ? String(params.provisionedBy).slice(0, 128) : null
 
-  let subAccountAddress: Address | null = null
-  let parentCswAddress: Address | null = null
-  let spendPayloadJson: string | null = null
-
-  if (params.subAccount) {
-    subAccountAddress = normalizeAddress(params.subAccount.subAccountAddress)
-    parentCswAddress = normalizeAddress(params.subAccount.parentCswAddress)
-    if (!subAccountAddress || !parentCswAddress) return { ok: false, error: 'invalid_subaccount_address' }
-    spendPayloadJson = JSON.stringify(params.subAccount.spendPermission.payload)
-  }
-
   try {
     await db.sql`
       INSERT INTO command_issuer_execution_context (
         profile_id, smart_wallet_address, privy_owner_wallet_id, owner_eoa_address,
         owner_index, paymaster_policy, caps_version, per_tx_cap_wei, daily_cap_wei,
-        provisioned_at, provisioned_by, sub_account_address, parent_csw_address,
-        spend_permission_payload, spend_permission_signature, spend_permission_hash,
-        spend_allowance_wei, spend_period_seconds, spend_permission_end_at
+        provisioned_at, provisioned_by
       ) VALUES (
         ${params.profileId}, ${smartWallet}, ${params.privyOwnerWalletId}, ${ownerEoa},
         ${ownerIndex}, ${paymasterPolicy}, 1, ${params.perTxCapWei.toString()}, ${params.dailyCapWei.toString()},
-        NOW(), ${provisionedBy}, ${subAccountAddress}, ${parentCswAddress},
-        ${spendPayloadJson}, ${params.subAccount?.spendPermission.signature ?? null},
-        ${params.subAccount?.spendPermission.hash ?? null},
-        ${params.subAccount?.spendPermission.allowanceWei.toString() ?? null},
-        ${params.subAccount?.spendPermission.periodSeconds ?? null},
-        ${params.subAccount?.spendPermission.endAt.toISOString() ?? null}
+        NOW(), ${provisionedBy}
       )
       ON CONFLICT (profile_id) DO UPDATE SET
         smart_wallet_address = EXCLUDED.smart_wallet_address,
@@ -309,14 +186,15 @@ export async function provisionCommandIssuerContext(params: {
         daily_cap_wei = EXCLUDED.daily_cap_wei,
         provisioned_at = NOW(),
         provisioned_by = EXCLUDED.provisioned_by,
-        sub_account_address = EXCLUDED.sub_account_address,
-        parent_csw_address = EXCLUDED.parent_csw_address,
-        spend_permission_payload = EXCLUDED.spend_permission_payload,
-        spend_permission_signature = EXCLUDED.spend_permission_signature,
-        spend_permission_hash = EXCLUDED.spend_permission_hash,
-        spend_allowance_wei = EXCLUDED.spend_allowance_wei,
-        spend_period_seconds = EXCLUDED.spend_period_seconds,
-        spend_permission_end_at = EXCLUDED.spend_permission_end_at,
+        sub_account_address = NULL,
+        parent_csw_address = NULL,
+        spend_permission_payload = NULL,
+        spend_permission_signature = NULL,
+        spend_permission_hash = NULL,
+        spend_allowance_wei = NULL,
+        spend_period_seconds = NULL,
+        spend_permission_end_at = NULL,
+        spend_permission_revoked_at = NULL,
         revoked_at = NULL,
         revoked_reason = NULL
     `
@@ -343,27 +221,6 @@ export async function revokeCommandIssuerContext(profileId: number, reason?: str
     return true
   } catch (err: any) {
     logger.error('[arch-b/context] revokeCommandIssuerContext failed', { profileId, error: err?.message })
-    return false
-  }
-}
-
-export async function revokeSubAccountSpendPermission(profileId: number): Promise<boolean> {
-  if (!isDbConfigured()) return false
-  const db = await getDb()
-  if (!db) return false
-  try {
-    await db.sql`
-      UPDATE command_issuer_execution_context
-      SET sub_account_address = NULL, parent_csw_address = NULL,
-          spend_permission_payload = NULL, spend_permission_signature = NULL,
-          spend_permission_hash = NULL, spend_allowance_wei = NULL,
-          spend_period_seconds = NULL, spend_permission_end_at = NULL,
-          spend_permission_revoked_at = NOW()
-      WHERE profile_id = ${profileId}
-    `
-    return true
-  } catch (err: any) {
-    logger.error('[arch-b/context] revokeSubAccountSpendPermission failed', { profileId, error: err?.message })
     return false
   }
 }

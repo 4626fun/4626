@@ -7,8 +7,6 @@ import {
   SignersSection,
   YourIdentityHero,
 } from '@/components/account/YourIdentityHero'
-import { ExecutionScopeCard } from '@/features/executionScope/ExecutionScopeCard'
-import { AutoProvisionMount } from '@/features/executionScope/AutoProvisionMount'
 import { AccountSetupWorkspaceView } from '@/features/accountSetup/AccountSetupWorkspaceView'
 import type { AccountSetupInitialData } from '@/features/accountSetup/types'
 import {
@@ -41,15 +39,13 @@ export function AccountsPage(props: {
           <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Accounts</div>
           <h1 className="text-3xl font-semibold tracking-tight">Your identity</h1>
           <p className="text-sm text-zinc-400">
-            Your canonical CSW anchors identity and assets, your app sub-account handles in-app execution, and delegated
-            server signers power deploy and agent automation.
+            Your canonical CSW anchors identity and assets, and delegated server signers power XMTP
+            chat commands, deploy, and agent automation.
           </p>
         </div>
 
         <YourIdentityHero />
         <SignersSection />
-        <ExecutionScopeCard />
-        <AutoProvisionMount />
 
         {!privyAuthed ? (
           <div className="card space-y-3 rounded-2xl border border-white/10 bg-black/40 p-6">

@@ -104,8 +104,7 @@ export type UseArchBDelegationReturn = {
   /**
    * Ensure the Privy embedded EOA has delegated to the Arch B quorum.
    * Skips the Privy modal when `/api/arch-b/status` already reports
-   * `delegated: true`. Does not call `/api/arch-b/enroll` — sub-account
-   * provisioning writes its own execution-context row.
+   * `delegated: true`. Does not call `/api/arch-b/enroll`.
    */
   ensureDelegation: () => Promise<ArchBActionResult>
   /** Backend revoke + Privy wallet revoke. No-op if not provisioned. */

@@ -56,10 +56,6 @@ vi.mock('@/components/account/YourIdentityHero', () => ({
     React.createElement('div', { 'data-advanced-disclosure': true }, props.children),
 }))
 
-vi.mock('@/features/executionScope/ExecutionScopeCard', () => ({
-  ExecutionScopeCard: () => null,
-}))
-
 vi.mock('@/features/accountSetup/AccountSetupWorkspaceView', () => ({
   AccountSetupWorkspaceView: (props: any) =>
     React.createElement(
@@ -70,10 +66,6 @@ vi.mock('@/features/accountSetup/AccountSetupWorkspaceView', () => ({
       React.createElement('div', null, 'Connect owner wallet'),
       React.createElement('div', null, 'Linked identities'),
     ),
-}))
-
-vi.mock('@/features/executionScope/AutoProvisionMount', () => ({
-  AutoProvisionMount: () => null,
 }))
 
 function accountSignals(overrides: Partial<AccountSignals> = {}): AccountSignals {
