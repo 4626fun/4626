@@ -382,7 +382,7 @@ async function resolveAgentVaultCoreModuleForLocalPhase1(params: {
   }
 
   return runForgeCreate(
-    'contracts/vault/agent/modules/AgentOVaultCoreModule.sol:AgentOVaultCoreModule',
+    'contracts/agent/vault/modules/AgentOVaultCoreModule.sol:AgentOVaultCoreModule',
     [],
   )
 }
@@ -514,7 +514,7 @@ async function wireLocalPhase1Module(localBatcher: Address): Promise<Address> {
 
   const deps = await readPhase1ModuleDeps(sourcePhase1Module)
   const localPhase1Module = runForgeCreate(
-    'contracts/deploy/batchers/DeploymentBatcher.sol:DeploymentBatcherPhase1Module',
+    'contracts/shared/deploy/batchers/DeploymentBatcher.sol:DeploymentBatcherPhase1Module',
     [
       deps.create2Deployer,
       deps.bytecodeStore,
@@ -579,7 +579,7 @@ async function wireLocalPhase2Module(localBatcher: Address): Promise<Address> {
   const sourceVaultActivationBatcher = await readAddressGetter(sourceBatcher, 'vaultActivationBatcher')
 
   const localPhase2Module = runForgeCreate(
-    'contracts/deploy/batchers/DeploymentBatcher.sol:DeploymentBatcherPhase2Module',
+    'contracts/shared/deploy/batchers/DeploymentBatcher.sol:DeploymentBatcherPhase2Module',
     [
       sourceCreate2Deployer,
       sourceRegistry,
@@ -869,7 +869,7 @@ async function main() {
   )
   constructorArgs.splice(4, 0, protocolAutomation)
   const deployedBatcher = runForgeCreate(
-    'contracts/deploy/batchers/DeploymentBatcher.sol:DeploymentBatcher',
+    'contracts/shared/deploy/batchers/DeploymentBatcher.sol:DeploymentBatcher',
     constructorArgs,
   )
   await wireLocalPhase1Module(deployedBatcher)

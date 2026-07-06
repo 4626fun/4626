@@ -217,7 +217,7 @@ function deployPhase3HelperViaForge(params: {
 }): Address {
   return deployContractViaForgeCreate({
     rpcUrl: params.rpcUrl,
-    contractPath: 'contracts/deploy/batchers/DeploymentBatcher.sol:DeploymentBatcherPhase3Helper',
+    contractPath: 'contracts/shared/deploy/batchers/DeploymentBatcher.sol:DeploymentBatcherPhase3Helper',
     contractLabel: 'DeploymentBatcherPhase3Helper',
     constructorArgs: [
       params.create2Deployer,

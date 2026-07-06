@@ -217,7 +217,7 @@ test('selectVerificationPlan uses targeted frontend tests for leaf changes', () 
 });
 
 test('selectVerificationPlan uses forge checks for contract-only changes', () => {
-  const plan = selectVerificationPlan(['contracts/vault/CreatorOVault.sol'], {
+  const plan = selectVerificationPlan(['contracts/creator/vault/CreatorOVault.sol'], {
     repoRoot: path.resolve(__dirname, '..', '..', '..'),
     dockerAvailable: false,
   });
@@ -231,7 +231,7 @@ test('selectVerificationPlan uses forge checks for contract-only changes', () =>
 
 test('selectVerificationPlan combines frontend and forge checks for mixed changes', () => {
   const plan = selectVerificationPlan(
-    ['frontend/src/pages/TelegramMenu.tsx', 'contracts/vault/CreatorOVault.sol'],
+    ['frontend/src/pages/TelegramMenu.tsx', 'contracts/creator/vault/CreatorOVault.sol'],
     {
       repoRoot: path.resolve(__dirname, '..', '..', '..'),
       dockerAvailable: false,
