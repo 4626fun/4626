@@ -114,6 +114,7 @@ export function useSafeCrossApp() {
     return {
       loginWithCrossAppAccount: null,
       linkCrossAppAccount: null,
+      unlinkCrossAppAccount: null,
     } as any
   }
 }

@@ -120,4 +120,77 @@ describe('useAccountMe', () => {
     ).length
     expect(accountsMeCallsAfterRerenders).toBe(accountsMeCallsAfterFirstLoad)
   })
+
+  it('starts /api/accounts/me and /api/onboarding/bootstrap in parallel', async () => {
+    usePrivyMock.mockImplementation(() => ({
+      ready: true,
+      authenticated: true,
+      getAccessToken: async () => 'privy-access-token',
+    }))
+
+    let resolveAccountsMe: ((value: unknown) => void) | null = null
+    const accountsMeDeferred = new Promise<unknown>((resolve) => {
+      resolveAccountsMe = resolve
+    })
+
+    apiFetchMock.mockImplementation((path: string) => {
+      if (path === '/api/accounts/me') {
+        return accountsMeDeferred
+      }
+      if (path === '/api/onboarding/bootstrap') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          json: async () => ({
+            success: true,
+            data: {
+              canonicalCswAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+              privyEmbeddedEoaAddress: '0x1111111111111111111111111111111111111111',
+              executionTrack: 'legacy-owner-install',
+              privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
+              baseSubAccount: {
+                address: null,
+                registered: false,
+                isDistinctFromCsw: false,
+              },
+            },
+          }),
+        })
+      }
+      throw new Error(`Unexpected path: ${path}`)
+    })
+
+    const { useAccountMe } = await import('./useAccountMe')
+    const { result } = renderHook(() => useAccountMe())
+
+    await waitFor(() => {
+      const paths = apiFetchMock.mock.calls.map((call) => call[0])
+      expect(paths).toContain('/api/accounts/me')
+      expect(paths).toContain('/api/onboarding/bootstrap')
+    })
+
+    // While /accounts/me is still unresolved, bootstrap should already be in flight.
+    expect(result.current.loading).toBe(true)
+
+    resolveAccountsMe?.({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: async () => ({
+        success: true,
+        data: {
+          accountSignals: {
+            executionTrack: 'legacy-owner-install',
+            privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
+            canonicalCswAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+          },
+        },
+      }),
+    })
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+  })
 })

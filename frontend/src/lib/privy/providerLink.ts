@@ -333,3 +333,21 @@ export async function unlinkAndSyncPrivyProvider(params: {
     value: params.value ?? null,
   })
 }
+
+/**
+ * Syncs a provider unlink to the backend without calling a Privy-side unlink
+ * method first. Use this when the caller already performed (or doesn't need)
+ * the client-side Privy unlink — e.g. cross-app providers like Zora, which
+ * unlink via `unlinkCrossAppAccount({ subject })` rather than the standard
+ * `unlinkX()` pattern in `PRIVY_UNLINK_METHODS`.
+ */
+export async function syncProviderUnlink(params: {
+  provider: string
+  getAccessToken: (() => Promise<string | null>) | null | undefined
+}): Promise<AccountSetupMe> {
+  return postAccountsUnlink({
+    provider: params.provider,
+    getAccessToken: params.getAccessToken,
+    value: null,
+  })
+}

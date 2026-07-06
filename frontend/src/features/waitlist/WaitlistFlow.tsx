@@ -50,12 +50,20 @@ import {
   writeWaitlistZoraSkipped,
 } from '@/features/waitlist/waitlistStorage'
 import { performZoraCrossAppAuth, isRecoverableCrossAppAuthError, isUserRejectedCrossAppAuthError } from '@/lib/privy/zoraCrossApp'
+import { findZoraCrossAppSubject } from '@/lib/privy/zoraCrossAppAccounts'
+import { findLinkedTwitterHandle } from '@/lib/privy/linkedAccounts'
 import { hasZoraReadOnlySignals, resolveZoraReadOnlySignals } from '@/lib/zora/zoraReadOnlyResolve'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { assertPrivySessionMarkerCookie, isLocalDevPrivySessionMarkerMode } from '@/lib/privy/loopbackSessionMarkerShim'
 import { useWaitlistZoraOAuthReturnRecovery } from '@/lib/privy/useWaitlistZoraOAuthReturnRecovery'
 import { WaitlistWelcomeGreeting } from '@/features/waitlist/WaitlistWelcomeGreeting'
-import { linkAndSyncPrivyProvider, syncAccountsProviderLink, unlinkAndSyncPrivyProvider } from '@/lib/privy/providerLink'
+import { sanitizeWaitlistZoraHandle } from '@/features/waitlist/waitlistWelcomeIdentity'
+import {
+  linkAndSyncPrivyProvider,
+  syncAccountsProviderLink,
+  syncProviderUnlink,
+  unlinkAndSyncPrivyProvider,
+} from '@/lib/privy/providerLink'
 import { usePrivyOAuthReturnBackendSync } from '@/lib/privy/usePrivyOAuthReturnBackendSync'
 import { useSafeCrossApp, useSafeLogin, useSafeLoginWithEmail, useSafePrivy, useSafePrivyAccessToken } from '@/lib/privy/safeHooks'
 import { computeAcceptedFromAppAccessStatus } from '@/app/accessShared'
@@ -651,7 +659,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   const [walletError, setWalletError] = useState<string | null>(null)
   const [zoraBusy, setZoraBusy] = useState(false)
   const [zoraError, setZoraError] = useState<string | null>(null)
-  const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossApp()
+  const { loginWithCrossAppAccount, linkCrossAppAccount, unlinkCrossAppAccount } = useSafeCrossApp()
 
   const twitterLinked = (accountMe?.linkedMethods?.twitter ?? []).length > 0
   const externalEoaLinked = (accountMe?.linkedMethods?.external_eoa ?? []).length > 0
@@ -834,18 +842,43 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     }
   }, [externalEoaLinked, getPrivyAccessToken, linkedEoaAddress, privy, refreshAccountMe, walletBusy])
 
+  // Zora is a Privy cross-app account, not a standard OAuth provider, so its
+  // unlink call is `unlinkCrossAppAccount({ subject })` (found from
+  // `privy.user.linkedAccounts`) instead of the `unlinkX()` pattern the other
+  // providers use.
+  const handleEditZora = useCallback(async () => {
+    if (zoraBusy || !zoraLinked) return
+    setZoraBusy(true)
+    setZoraError(null)
+    try {
+      const subject = findZoraCrossAppSubject(privy.user)
+      if (subject && typeof unlinkCrossAppAccount === 'function') {
+        await unlinkCrossAppAccount({ subject })
+      }
+      await syncProviderUnlink({ provider: 'zora_cross_app', getAccessToken: getPrivyAccessToken })
+      setZoraSkipped(false)
+      writeWaitlistZoraSkipped(false)
+      refreshAccountMe()
+    } catch (unlinkError) {
+      setZoraError(unlinkError instanceof Error ? unlinkError.message : 'Could not disconnect Zora.')
+    } finally {
+      setZoraBusy(false)
+    }
+  }, [getPrivyAccessToken, privy.user, refreshAccountMe, unlinkCrossAppAccount, zoraBusy, zoraLinked])
+
+  const twitterHandle = useMemo(() => findLinkedTwitterHandle(privy.user), [privy.user])
+  const zoraHandleForRow = sanitizeWaitlistZoraHandle(accountMe?.accountSignals?.zoraHandle)
+
   // Already-connected identities, shown together as one summary list instead
-  // of three separately-styled "linked" rows. X and wallet support "Edit"
-  // (unlink + re-open the connect step); Zora cross-app auth has no unlink
-  // path in Privy today, so it stays read-only here.
+  // of three separately-styled "linked" rows. All three support "Edit"
+  // (unlink + re-open the connect step).
   const linkedAccountRows = useMemo<WaitlistLinkedAccountRow[]>(() => {
     const rows: WaitlistLinkedAccountRow[] = []
     if (twitterLinked) {
       rows.push({
         key: 'twitter',
         icon: <XLogo className="size-[18px] text-white" />,
-        label: 'X',
-        subtitle: 'Connected',
+        identity: twitterHandle ? `@${twitterHandle}` : 'X account',
         points: PROVIDER_POINTS.twitter ?? 0,
         onEdit: () => void handleEditTwitter(),
         editBusy: twitterBusy,
@@ -861,10 +894,11 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     if (zoraLinked) {
       rows.push({
         key: 'zora',
-        icon: <ZoraLogo className="size-full rounded-full object-cover" />,
-        label: 'Zora',
-        subtitle: 'Connected',
+        icon: <ZoraLogo className="size-[18px] rounded-full object-cover" />,
+        identity: zoraHandleForRow ? `@${zoraHandleForRow}` : 'Zora account',
         points: PROVIDER_POINTS.zora_cross_app ?? 0,
+        onEdit: () => void handleEditZora(),
+        editBusy: zoraBusy,
       })
     }
     return rows
@@ -872,10 +906,14 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     externalEoaLinked,
     handleEditTwitter,
     handleEditWallet,
+    handleEditZora,
     twitterBusy,
+    twitterHandle,
     twitterLinked,
     walletBusy,
     walletLinkedRowBase,
+    zoraBusy,
+    zoraHandleForRow,
     zoraLinked,
   ])
 
@@ -1089,22 +1127,24 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           className="relative w-full space-y-6 sm:space-y-7"
         >
-          {/* Persistent brand mark — shown across every step of the flow (signup, code, approved). */}
-          <div className="flex flex-col items-center gap-2">
-            <img
-              src={siteAssets.logo}
-              alt="4626"
-              width={52}
-              height={52}
-              draggable={false}
-              className="size-12 select-none object-contain sm:size-[52px]"
-            />
-            {showPointsBadge ? (
-              <span className="inline-flex items-center rounded-full bg-white/[0.05] px-2.5 py-1 text-[11px] font-semibold tabular-nums text-zinc-300">
-                {totalPoints.toLocaleString()} points
-              </span>
-            ) : null}
-          </div>
+          {/* Persistent brand mark — shown across every step of the flow (signup, code) so
+              users always see where they are. Hidden once approved: the success state below
+              renders the same mark (glowing) as its own success indicator, so keeping this one
+              too would show the logo twice on one screen. */}
+          {!(joinedSessionAddress && appAccepted) ? (
+            <div className="flex justify-center">
+              <div className="flex size-12 items-center justify-center overflow-hidden sm:size-[52px]">
+                <img
+                  src={siteAssets.logo}
+                  alt="4626"
+                  width={52}
+                  height={52}
+                  draggable={false}
+                  className="size-full scale-[1.316] select-none object-contain"
+                />
+              </div>
+            </div>
+          ) : null}
 
           <AnimatePresence mode="wait" initial={false}>
             {joinedSessionAddress ? (
@@ -1120,16 +1160,20 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
             <div className="text-center">
               <div className="flex flex-col items-center gap-4">
                 {appAccepted ? (
+                  // Success state uses the brand mark itself (not a generic checkmark)
+                  // with a faint green glow that pulses outward and fades to transparent,
+                  // so approval reads as "your 4626 mark, now live" rather than a second,
+                  // competing icon stacked under the persistent header logo.
                   <div className="relative flex items-center justify-center">
                     {!reduceMotion ? (
                       <motion.span
                         aria-hidden="true"
-                        className="absolute inset-0 rounded-full"
-                        initial={{ boxShadow: '0 0 0 0 rgb(var(--brand-primary) / 0.5)' }}
+                        className="absolute inset-0 rounded-2xl"
+                        initial={{ boxShadow: '0 0 0 0 rgba(52,211,153,0.45)' }}
                         animate={{
                           boxShadow: [
-                            '0 0 0 0 rgb(var(--brand-primary) / 0.45)',
-                            '0 0 0 16px rgb(var(--brand-primary) / 0)',
+                            '0 0 0 0 rgba(52,211,153,0.4)',
+                            '0 0 0 16px rgba(52,211,153,0)',
                           ],
                         }}
                         transition={{ duration: 2.1, ease: 'easeOut', repeat: Infinity }}
@@ -1139,54 +1183,55 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                       initial={reduceMotion ? false : { scale: 0.6, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-                      className="relative flex size-14 items-center justify-center rounded-full"
-                      style={{
-                        background:
-                          'linear-gradient(160deg, rgb(var(--brand-hover)), rgb(var(--brand-primary)))',
-                        boxShadow:
-                          'inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -2px 4px rgba(0,0,0,0.25), 0 10px 24px -8px rgb(var(--brand-primary) / 0.7)',
-                      }}
+                      className="relative flex size-14 items-center justify-center overflow-hidden rounded-2xl shadow-[0_0_22px_-4px_rgba(52,211,153,0.6),0_10px_24px_-10px_rgba(0,0,0,0.6)]"
                     >
-                      <Check className="size-7 text-white" aria-hidden="true" />
+                      <img
+                        src={siteAssets.logo}
+                        alt=""
+                        aria-hidden="true"
+                        draggable={false}
+                        className="size-full scale-[1.316] select-none object-contain"
+                      />
                     </motion.span>
                   </div>
                 ) : null}
 
-                <WaitlistWelcomeGreeting
-                  accountMe={accountMe}
-                  accountMeLoading={accountMeLoading}
-                  walletReturnAddress={
-                    returningViaWallet
-                      ? (props.walletSessionAddress ??
-                        accountMe?.linkedMethods?.external_eoa?.[0] ??
-                        null)
-                      : null
-                  }
-                  returningViaWallet={returningViaWallet}
-                />
-
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <h1 className="headline text-2xl leading-tight tracking-[-0.03em] sm:text-3xl">
                     {appAccepted ? "You're approved" : "You're on the list"}
                   </h1>
-                  <p className="text-sm leading-relaxed text-zinc-400">
-                    {appAccepted
-                      ? 'Open the app to continue.'
-                      : "We'll notify you when your spot opens."}
-                  </p>
+                  <div className="space-y-1">
+                    {/* Rendered below the headline (not as its own row above it) so the
+                        identity avatar doesn't stack as a third competing circular shape
+                        directly under the big checkmark. */}
+                    <WaitlistWelcomeGreeting
+                      accountMe={accountMe}
+                      accountMeLoading={accountMeLoading}
+                      walletReturnAddress={
+                        returningViaWallet
+                          ? (props.walletSessionAddress ??
+                            accountMe?.linkedMethods?.external_eoa?.[0] ??
+                            null)
+                          : null
+                      }
+                      returningViaWallet={returningViaWallet}
+                    />
+                    <p className="text-sm leading-relaxed text-zinc-400">
+                      {appAccepted
+                        ? 'Open the app to continue.'
+                        : "We'll notify you when your spot opens."}
+                    </p>
+                  </div>
                 </div>
               </div>
 
                 {/* Earn points — optional identity links, each worth waitlist points. */}
                 <motion.div layout="position" transition={stepTransition} className="mt-7">
-                  <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
-                      Earn points
-                    </span>
-                    <span className="h-px flex-1 bg-white/[0.06]" aria-hidden="true" />
-                  </div>
-
-                  <WaitlistLinkedAccountsCard rows={linkedAccountRows} />
+                  <WaitlistLinkedAccountsCard
+                    rows={linkedAccountRows}
+                    totalPoints={totalPoints}
+                    showTotal={showPointsBadge}
+                  />
 
                   <AnimatePresence mode="wait" initial={false}>
                     {activeStepKey === 'x-link' ? (
@@ -1325,10 +1370,11 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                     <Button
                       variant="primary"
                       size="lg"
-                      className="btn-game-cta group/btn relative w-full !rounded-full !min-h-[56px] !text-base !font-bold !tracking-wide"
+                      className="btn-3d group/btn relative w-full overflow-hidden !rounded-full !min-h-[56px] !text-base !font-bold !tracking-wide"
                       asChild
                     >
                       <a href={`${APP_ORIGIN}/swap?restorePrivy=1`}>
+                        <ButtonSheen />
                         <span className="relative z-10 inline-flex items-center gap-2.5">
                           Enter app
                           <ArrowRight

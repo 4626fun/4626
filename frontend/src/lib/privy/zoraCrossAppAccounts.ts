@@ -1,14 +1,7 @@
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
+import { readPrivyLinkedAccounts } from '@/lib/privy/linkedAccounts'
 
 const WAITLIST_ZORA_OAUTH_PENDING_KEY = 'cv:waitlist:zora-oauth-pending'
-
-function readPrivyLinkedAccounts(user: unknown): unknown[] {
-  const record = user && typeof user === 'object' ? (user as Record<string, unknown>) : null
-  if (!record) return []
-  const camel = Array.isArray(record.linkedAccounts) ? record.linkedAccounts : []
-  const snake = Array.isArray(record.linked_accounts) ? record.linked_accounts : []
-  return [...camel, ...snake]
-}
 
 function normalizeLower(value: unknown): string {
   return String(value ?? '').trim().toLowerCase()
@@ -44,6 +37,27 @@ export function isZoraCrossAppOAuthReturnLocation(location: Pick<Location, 'sear
     raw.includes('authorization_code') ||
     (raw.includes('code=') && raw.includes('state='))
   )
+}
+
+/**
+ * Returns the Privy `subject` for the user's linked Zora cross-app account, or
+ * null if none is linked. Required by `unlinkCrossAppAccount({ subject })` —
+ * unlike the standard OAuth providers, cross-app unlink is keyed by subject,
+ * not by a stored provider value. Mirrors `isPrivyZoraCrossAppLinked`'s
+ * assumption that Zora is the only cross-app provider configured, so the
+ * first `cross_app`-typed linked account is treated as the Zora one even
+ * when a Privy build omits the provider app id on the linked account.
+ */
+export function findZoraCrossAppSubject(user: unknown): string | null {
+  for (const account of readPrivyLinkedAccounts(user)) {
+    const record = account && typeof account === 'object' ? (account as Record<string, unknown>) : null
+    if (!record) continue
+    const type = normalizeLower(record.type)
+    if (type !== 'cross_app' && type !== 'cross-app' && !type.includes('cross_app')) continue
+    const subject = record.subject
+    return typeof subject === 'string' && subject.trim() ? subject.trim() : null
+  }
+  return null
 }
 
 export function isPrivyZoraCrossAppLinked(user: unknown, providerAppId: string = ZORA_PRIVY_APP_ID): boolean {

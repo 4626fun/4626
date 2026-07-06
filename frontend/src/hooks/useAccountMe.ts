@@ -51,34 +51,46 @@ function readRetryAfterMs(res: Response): number {
   return ACCOUNTS_ME_RATE_LIMIT_BACKOFF_MS
 }
 
+/** GET `/api/accounts/me` only — identity, linked methods, and score. Split out from
+ * `fetchAccountMe` so it can run concurrently with the bootstrap fetch below. */
+async function fetchAccountMePayload(token: string): Promise<AccountSetupMe | null> {
+  const res = await apiFetch('/api/accounts/me', {
+    method: 'GET',
+    headers: { 'X-Privy-Token': token },
+  })
+  if (res.status === 429) {
+    accountsMeRateLimitedUntil = Date.now() + readRetryAfterMs(res)
+    return null
+  }
+  if (!res.ok) return null
+  const body = (await res.json().catch(() => null)) as
+    | { success: boolean; data: AccountSetupMe | null }
+    | null
+  return body?.success ? (body.data ?? null) : null
+}
+
 async function fetchAccountMe(getAccessToken: GetAccessTokenFn | null): Promise<AccountSetupMe | null> {
   if (inFlight) return inFlight
   inFlight = (async () => {
     try {
-      const token = typeof getAccessToken === 'function' ? await getAccessToken().catch(() => null) : null
+      const tokenFn = typeof getAccessToken === 'function' ? getAccessToken : null
+      const token = tokenFn ? await tokenFn().catch(() => null) : null
       // No token → user isn't authenticated yet. Skip the request rather
       // than burn a predictable 401 that pollutes logs and browser tabs.
-      if (!token) return null
+      if (!token || !tokenFn) return null
       if (Date.now() < accountsMeRateLimitedUntil) return null
 
-      let payload: AccountSetupMe | null = null
-      const res = await apiFetch('/api/accounts/me', {
-        method: 'GET',
-        headers: { 'X-Privy-Token': token },
-      })
-      if (res.status === 429) {
-        accountsMeRateLimitedUntil = Date.now() + readRetryAfterMs(res)
-        return null
-      }
-      if (res.ok) {
-        const body = (await res.json().catch(() => null)) as
-          | { success: boolean; data: AccountSetupMe | null }
-          | null
-        if (body?.success) payload = body.data ?? null
-      }
+      // `/accounts/me` (identity + points) and `/onboarding/bootstrap`
+      // (execution-track signals — resolved server-side via a separate,
+      // heavier canonical-CSW/on-chain-owner check) are independent reads
+      // keyed off the same token. Fetch them concurrently instead of
+      // one-after-another so the combined round trip costs as long as the
+      // slower of the two, not the sum of both.
+      const [payload, bootstrap] = await Promise.all([
+        fetchAccountMePayload(token),
+        fetchBootstrapExecutionSignals(tokenFn),
+      ])
 
-      if (!getAccessToken) return payload
-      const bootstrap = await fetchBootstrapExecutionSignals(getAccessToken)
       if (!bootstrap) return payload
       return mergeBootstrapSignals(payload, bootstrap)
     } catch {
