@@ -8,7 +8,7 @@ import {AgentOVaultCoreModule} from "@4626/agent/vault/modules/AgentOVaultCoreMo
 import {CreatorOVaultAdminModule} from "@4626/creator/vault/modules/CreatorOVaultAdminModule.sol";
 import {CreatorOVaultStrategiesModule} from "@4626/creator/vault/modules/CreatorOVaultStrategiesModule.sol";
 import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
-import {Registry4626} from "@4626/shared/core/4626Registry.sol";
+import {Registry4626} from "@4626/shared/core/Registry4626.sol";
 
 contract AgentRegistryVaultKindTest is Test {
     Registry4626 internal registry;

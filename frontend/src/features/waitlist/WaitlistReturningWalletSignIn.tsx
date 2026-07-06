@@ -23,32 +23,36 @@ export function WaitlistReturningWalletSignIn(props: WaitlistReturningWalletSign
 
       <button
         type="button"
-        onClick={onSignIn}
-        disabled={busy}
+        onClick={busy ? onCancel ?? undefined : onSignIn}
+        disabled={busy && !onCancel}
         aria-busy={busy}
         className="group relative flex w-full items-center justify-center gap-2.5 rounded-full border border-white/10 bg-white/[0.03] px-5 py-3.5 text-[14px] font-medium text-zinc-200 transition hover:border-white/16 hover:bg-white/[0.06] disabled:opacity-60"
       >
+        {busy && onCancel ? (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 rounded-full bg-red-500/22 opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+          />
+        ) : null}
         {busy ? (
-          <>
-            <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.85)" />
-            <span>Connecting wallet…</span>
-          </>
+          <span className="relative z-10 flex w-full items-center justify-center">
+            <span className="inline-flex items-center gap-2.5 transition-opacity duration-150 group-hover:opacity-0">
+              <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.85)" />
+              <span>Connecting wallet…</span>
+            </span>
+            {onCancel ? (
+              <span className="pointer-events-none absolute inset-0 inline-flex items-center justify-center rounded-full text-[13px] font-semibold text-red-100 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+                Cancel wallet sign-in
+              </span>
+            ) : null}
+          </span>
         ) : (
-          <>
+          <span className="relative z-10 inline-flex items-center gap-2.5">
             <Wallet className="size-4 text-zinc-400 transition group-hover:text-zinc-200" aria-hidden="true" />
             <span>Sign in with linked wallet</span>
-          </>
+          </span>
         )}
       </button>
-      {busy && onCancel ? (
-        <button
-          type="button"
-          onClick={onCancel}
-          className="block w-full text-center text-[11px] font-medium tracking-wide text-zinc-500 transition hover:text-zinc-300"
-        >
-          Cancel wallet sign-in
-        </button>
-      ) : null}
     </div>
   )
 }

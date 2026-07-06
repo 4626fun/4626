@@ -54,6 +54,10 @@ programs/creator-share-hook/target/deploy/*-keypair.json
 *.keypair.json
 *keypair.json
 
+# Pinata agent git clones (gateway token may be in remote URL)
+agent-akita-*/
+agent-hermit-*/
+
 # Environment files (secrets)
 .env
 .env.*

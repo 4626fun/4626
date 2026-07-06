@@ -5,7 +5,7 @@ import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {Registry4626} from "@4626/shared/core/4626Registry.sol";
+import {Registry4626} from "@4626/shared/core/Registry4626.sol";
 import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
 import {DeploymentBatcher, DeploymentBatcherPhase2Module} from "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
 import {IBaseSolanaBridge} from "@4626/shared/interfaces/bridge/IBaseSolanaBridge.sol";

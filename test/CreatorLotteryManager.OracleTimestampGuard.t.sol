@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {LotteryManager4626} from "@4626/shared/lottery/manager/4626LotteryManager.sol";
+import {LotteryManager4626} from "@4626/shared/lottery/manager/LotteryManager4626.sol";
 
 contract MockCreatorOracleFutureTimestamp {
     int256 public price = 1e18;

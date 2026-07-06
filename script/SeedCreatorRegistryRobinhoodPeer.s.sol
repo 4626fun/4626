@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
-import {Registry4626} from "@4626/shared/core/4626Registry.sol";
+import {Registry4626} from "@4626/shared/core/Registry4626.sol";
 
 /**
  * @title SeedCreatorRegistryRobinhoodPeer

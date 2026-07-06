@@ -15,7 +15,7 @@ import {ICreatorOracle} from "@4626/shared/interfaces/oracles/ICreatorOracle.sol
 import {IStrategyValuation} from "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
 
 /**
- * @title CreatorCharmStrategy
+ * @title CharmStrategy4626
  * @author 0xakita.eth
  * @notice Charm vault strategy adapter for CREATOR/USDC.
  * @dev Creator lane specific yield strategy (creator oracles/tokens). General IStrategy interface allows adaptation for agent/other ecosystems. Base strategies in shared/strategies/ are lane-agnostic.
@@ -59,7 +59,7 @@ interface ISwapRouter {
 
 // Interfaces imported from v3-core and interfaces/IStrategy.sol
 
-contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard, Ownable {
+contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
 
     struct AjnaDebtState {

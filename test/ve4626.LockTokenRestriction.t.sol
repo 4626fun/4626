@@ -5,7 +5,7 @@ import "forge-std/Test.sol";
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import {ve4626 as Ve4626} from "@4626/creator/governance/ve4626.sol";
+import {ve4626 as Ve4626} from "@4626/shared/governance/ve4626.sol";
 
 contract MockToken is ERC20 {
     constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}

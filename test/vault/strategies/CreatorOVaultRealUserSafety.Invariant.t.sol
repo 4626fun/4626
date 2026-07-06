@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {CreatorOVault} from "@4626/creator/vault/CreatorOVault.sol";
-import {CreatorCharmStrategy} from "@4626/shared/strategies/univ3/CreatorCharmStrategy.sol";
+import {CharmStrategy4626} from "@4626/shared/strategies/univ3/CharmStrategy4626.sol";
 import {AjnaERC4626Vault} from "@4626/shared/strategies/ajna/AjnaERC4626Vault.sol";
 import {ERC4626StrategyAdapter} from "@4626/shared/strategies/cca/ERC4626StrategyAdapter.sol";
 
@@ -10,7 +10,7 @@ import {UserPositionInvariantBase} from "./UserPositionInvariantBase.sol";
 
 /// @title CreatorOVaultRealUserSafetyInvariant
 /// @notice High-assurance invariant suite for user deposits when using *real* strategies.
-/// @dev This suite is intended to be used with the actual CreatorCharmStrategy + AjnaERC4626Vault
+/// @dev This suite is intended to be used with the actual CharmStrategy4626 + AjnaERC4626Vault
 ///      (including the real backstop borrowing logic inside Charm).
 ///
 /// It reuses the exact same user tracking + protection mode pattern from the base,
@@ -30,7 +30,7 @@ contract RealUserSafetyInvariantHandler is UserPositionInvariantBase {
 
     // In the real version we will have references to the actual deployed strategies
     CreatorOVault internal realVault;
-    CreatorCharmStrategy internal realCharm;
+    CharmStrategy4626 internal realCharm;
     AjnaERC4626Vault internal realAjna;           // or the adapter, depending on setup
     ERC4626StrategyAdapter internal ajnaAdapter;  // if using the adapter pattern
 
@@ -38,7 +38,7 @@ contract RealUserSafetyInvariantHandler is UserPositionInvariantBase {
     constructor() {
         // Example (to be replaced):
         // realVault = CreatorOVault(0x...);
-        // realCharm = CreatorCharmStrategy(0x...);
+        // realCharm = CharmStrategy4626(0x...);
         // ...
         //
         // For now we still deploy the mock vault so the file at least compiles.

@@ -19,9 +19,25 @@ import {
   syncEmailIdentity,
   verifyPrivyForAccounts,
 } from '../../../server/_lib/identity/accountsIdentity.js'
+import { bootstrapCanonicalDelegationState } from '../../../server/_lib/wallet/canonicalCswDelegation.js'
 import { isDeployDryRunDbDisabled } from '../../../server/_lib/dev/localDevEnv.js'
 
 type AccountsMeResponse = Awaited<ReturnType<typeof buildAccountsMePayload>>
+
+function shouldHydrateExecutionSignals(data: AccountsMeResponse): boolean {
+  const signals = data.accountSignals
+  const hasCanonicalAddress =
+    typeof signals.canonicalCswAddress === 'string' && signals.canonicalCswAddress.trim().length > 0
+  const hasExecutionTrack =
+    typeof signals.executionTrack === 'string' &&
+    signals.executionTrack.trim().length > 0 &&
+    signals.executionTrack !== 'none-yet'
+  const hasOwnerFlag =
+    signals.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true ||
+    signals.privyEmbeddedEoaIsOwnerOfCanonicalCsw === false
+  const hasBaseSubAccount = signals.baseSubAccount != null
+  return !(hasCanonicalAddress && hasExecutionTrack && hasOwnerFlag && hasBaseSubAccount)
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -66,11 +82,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       privyUser: context.privyUser,
     })
 
-    const data = await buildAccountsMePayload({
+    const baseData = await buildAccountsMePayload({
       db: db as any,
       privyUserId: context.privyUserId,
       privyUser: context.privyUser,
     })
+    let data: AccountsMeResponse = baseData
+
+    // Fold bootstrap execution signals into /accounts/me only when they're
+    // missing. This keeps /accounts/me as the frontend's single source while
+    // avoiding the heavier bootstrap path for already-hydrated accounts.
+    if (shouldHydrateExecutionSignals(baseData)) {
+      try {
+        const bootstrap = await bootstrapCanonicalDelegationState({ db: db as any, req })
+        const existingSignals = baseData.accountSignals
+        data = {
+          ...baseData,
+          accountSignals: {
+            ...existingSignals,
+            canonicalCswAddress: existingSignals.canonicalCswAddress ?? bootstrap.canonicalCswAddress,
+            baseSubAccount: existingSignals.baseSubAccount ?? bootstrap.baseSubAccount,
+            executionTrack:
+              existingSignals.executionTrack && existingSignals.executionTrack !== 'none-yet'
+                ? existingSignals.executionTrack
+                : bootstrap.executionTrack,
+            privyEmbeddedEoaIsOwnerOfCanonicalCsw:
+              existingSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true
+                ? true
+                : bootstrap.privyIsOwner
+                  ? true
+                  : (existingSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw ?? null),
+            embeddedEoaAddress: existingSignals.embeddedEoaAddress ?? bootstrap.privyEmbeddedEoaAddress,
+          },
+        }
+      } catch {
+        // Keep /accounts/me resilient: if bootstrap hydration fails, return the
+        // base payload rather than failing the whole identity read.
+      }
+    }
 
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<AccountsMeResponse>)
   } catch (error: any) {

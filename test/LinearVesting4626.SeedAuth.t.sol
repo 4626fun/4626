@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {CreatorLinearVesting} from "@4626/creator/vesting/CreatorLinearVesting.sol";
+import {LinearVesting4626} from "@4626/shared/vesting/LinearVesting4626.sol";
 
 contract MockShareTokenForVesting is ERC20 {
     constructor() ERC20("Share", "SHR") {}
@@ -13,9 +13,9 @@ contract MockShareTokenForVesting is ERC20 {
     }
 }
 
-contract CreatorLinearVestingSeedAuthTest is Test {
+contract LinearVesting4626SeedAuthTest is Test {
     MockShareTokenForVesting internal token;
-    CreatorLinearVesting internal vesting;
+    LinearVesting4626 internal vesting;
 
     address internal beneficiary = makeAddr("beneficiary");
     address internal seeder = makeAddr("seeder");
@@ -25,7 +25,7 @@ contract CreatorLinearVestingSeedAuthTest is Test {
 
     function setUp() public {
         token = new MockShareTokenForVesting();
-        vesting = new CreatorLinearVesting(
+        vesting = new LinearVesting4626(
             address(token),
             beneficiary,
             uint64(block.timestamp),
@@ -37,7 +37,7 @@ contract CreatorLinearVestingSeedAuthTest is Test {
 
     function test_seed_revertsForNonSeeder() public {
         vm.prank(attacker);
-        vm.expectRevert(CreatorLinearVesting.NotSeeder.selector);
+        vm.expectRevert(LinearVesting4626.NotSeeder.selector);
         vesting.seed();
     }
 
@@ -53,7 +53,7 @@ contract CreatorLinearVestingSeedAuthTest is Test {
     function test_seed_revertsWhenCalledTwice() public {
         vm.startPrank(seeder);
         vesting.seed();
-        vm.expectRevert(CreatorLinearVesting.AlreadySeeded.selector);
+        vm.expectRevert(LinearVesting4626.AlreadySeeded.selector);
         vesting.seed();
         vm.stopPrank();
     }

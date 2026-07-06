@@ -5,12 +5,12 @@ import "forge-std/Script.sol";
 import "forge-std/Test.sol";
 import "@4626/shared/deploy/batchers/StrategyDeploymentBatcher.sol";
 import {
-    CreatorCharmStrategyFactory,
+    CharmStrategy4626Factory,
     AjnaERC4626StrategyFactory
 } from "@4626/shared/deploy/batchers/StrategyDeploymentFactories.sol";
 import "@4626/shared/deploy/batchers/VaultActivationBatcher.sol";
 import "@4626/shared/strategies/cca/ERC4626StrategyAdapter.sol";
-import "@4626/shared/strategies/univ3/CreatorCharmStrategy.sol";
+import "@4626/shared/strategies/univ3/CharmStrategy4626.sol";
 
 /// @notice Minimal interface for Charm vault queries
 interface ICharmVaultInfo {
@@ -46,11 +46,11 @@ contract TestAADeployment is Script, Test {
         // FIX: 4626-401 / M-37 — factories are deployed separately so the batcher's
         // init-code stays under the EIP-3860 49,152-byte cap.
         console.log("Phase 1: Deploying strategy factories and StrategyDeploymentBatcher...");
-        CreatorCharmStrategyFactory creatorCharmFactory = new CreatorCharmStrategyFactory();
+        CharmStrategy4626Factory creatorCharmFactory = new CharmStrategy4626Factory();
         AjnaERC4626StrategyFactory ajnaFactory = new AjnaERC4626StrategyFactory();
         StrategyDeploymentBatcher batcher =
             new StrategyDeploymentBatcher(address(creatorCharmFactory), address(ajnaFactory));
-        console.log("   CreatorCharmStrategyFactory:", address(creatorCharmFactory));
+        console.log("   CharmStrategy4626Factory:", address(creatorCharmFactory));
         console.log("   AjnaERC4626StrategyFactory:", address(ajnaFactory));
         console.log("   Batcher:", address(batcher));
         console.log("");
@@ -131,7 +131,7 @@ contract TestAADeployment is Script, Test {
             console.log("   Charm governance:", governance);
 
             // Check Creator Charm Strategy configuration
-            address charmStrategyVault = CreatorCharmStrategy(result.creatorCharmStrategy).vault();
+            address charmStrategyVault = CharmStrategy4626(result.creatorCharmStrategy).vault();
             require(charmStrategyVault == CREATOR_VAULT, "Wrong vault");
             console.log("   Creator Charm Strategy configured");
 

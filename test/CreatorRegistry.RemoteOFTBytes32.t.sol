@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {Registry4626} from "@4626/shared/core/4626Registry.sol";
+import {Registry4626} from "@4626/shared/core/Registry4626.sol";
 import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
 
 contract Registry4626RemoteOFTBytes32Test is Test {

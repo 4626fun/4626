@@ -33,12 +33,12 @@ import {V4LiquidityAmounts} from "@4626/shared/libraries/uniswap/V4LiquidityAmou
  *      Buy-side trade fees are enforced by ShareOFT SwapOnly classification (default 6.9%), not this strategy.
  *      Optional sell-side tax is a separate Base V4 hook plane when explicitly configured.
  *
- *      NOT for the original Creator Coin — that uses CreatorCharmStrategy on V3.
+ *      NOT for the original Creator Coin — that uses CharmStrategy4626 on V3.
  *      For agent lane, analogous manager can be created using same interfaces.
  *
  * @dev TOKEN DISTINCTION:
  *      ┌────────────────────────────────────────────────────────────┐
- *      │ AKITA (Creator Coin)  →  CreatorCharmStrategy  →  V3 Pool  │
+ *      │ AKITA (Creator Coin)  →  CharmStrategy4626  →  V3 Pool  │
  *      │ ■AKITA (ShareOFT)     →  CreatorLPManager      →  V4 Pool  │
  *      │                           (SwapOnly buy fee on ShareOFT)   │
  *      └────────────────────────────────────────────────────────────┘

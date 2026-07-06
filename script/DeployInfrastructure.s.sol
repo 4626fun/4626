@@ -4,12 +4,12 @@ pragma solidity ^0.8.20;
 import {Script, console} from "forge-std/Script.sol";
 
 // Core Infrastructure
-import {Registry4626} from "@4626/shared/core/4626Registry.sol";
-import {CreatorOVaultFactory} from "@4626/shared/deploy/factories/CreatorOVaultFactory.sol";
+import {Registry4626} from "@4626/shared/core/Registry4626.sol";
+import {OVaultFactory4626} from "@4626/shared/deploy/factories/OVaultFactory4626.sol";
 
 // Shared Services
-import {LotteryManager4626} from "@4626/shared/lottery/manager/4626LotteryManager.sol";
-import {VRFConsumer4626} from "@4626/shared/lottery/manager/4626VRFConsumer.sol";
+import {LotteryManager4626} from "@4626/shared/lottery/manager/LotteryManager4626.sol";
+import {VRFConsumer4626} from "@4626/shared/lottery/manager/VRFConsumer4626.sol";
 import {VaultActivationBatcher} from "@4626/shared/deploy/batchers/VaultActivationBatcher.sol";
 import {SolanaBridgeAdapter} from "@4626/shared/bridge/SolanaBridgeAdapter.sol";
 
@@ -23,7 +23,7 @@ import {SolanaBridgeAdapter} from "@4626/shared/bridge/SolanaBridgeAdapter.sol";
  *      │  PHASE 1: Core Infrastructure (One-time deployment)             │
  *      │  ────────────────────────────────────────────────────────────   │
  *      │  1. Registry4626         - Central registry for all data    │
- *      │  2. CreatorOVaultFactory    - Legacy registrar for script-deployed stacks │
+ *      │  2. OVaultFactory4626    - Legacy registrar for script-deployed stacks │
  *      │  3. LotteryManager4626   - Shared lottery service           │
  *      │  4. VRFConsumer4626  - Chainlink VRF hub                │
  *      │  5. VaultActivationBatcher  - Shared activation launcher       │
@@ -87,7 +87,7 @@ contract DeployInfrastructure is Script {
     // ═══════════════════════════════════════════════════════════════════
 
     Registry4626 public registry;
-    CreatorOVaultFactory public vaultFactory;
+    OVaultFactory4626 public vaultFactory;
     LotteryManager4626 public lotteryManager;
     VRFConsumer4626 public vrfConsumer;
     VaultActivationBatcher public vaultActivationBatcher;
@@ -127,9 +127,9 @@ contract DeployInfrastructure is Script {
         registry = new Registry4626(deployer);
         console.log("       Address:", address(registry));
 
-        // 2. CreatorOVaultFactory (legacy deployment registrar)
-        console.log("\n[2/6] Deploying CreatorOVaultFactory (legacy registrar)...");
-        vaultFactory = new CreatorOVaultFactory(address(registry), deployer);
+        // 2. OVaultFactory4626 (legacy deployment registrar)
+        console.log("\n[2/6] Deploying OVaultFactory4626 (legacy registrar)...");
+        vaultFactory = new OVaultFactory4626(address(registry), deployer);
         console.log("       Address:", address(vaultFactory));
 
         // 3. VaultActivationBatcher (shared activation launcher)
@@ -286,7 +286,7 @@ contract DeployInfrastructure is Script {
         );
         console.log(unicode"│                                                                 │");
         console.log("   Registry4626:        ", address(registry));
-        console.log("   CreatorOVaultFactory (legacy registrar):", address(vaultFactory));
+        console.log("   OVaultFactory4626 (legacy registrar):", address(vaultFactory));
         console.log("   VaultActivationBatcher: ", address(vaultActivationBatcher));
         console.log("   LotteryManager4626:  ", address(lotteryManager));
         console.log("   VRFConsumer4626: ", address(vrfConsumer));
@@ -342,7 +342,7 @@ contract DeployInfrastructure is Script {
         console.log(
             unicode"├─────────────────────────────────────────────────────────────────┤"
         );
-        console.log(unicode"│  CreatorOVaultFactory is a legacy registrar, not the current    │");
+        console.log(unicode"│  OVaultFactory4626 is a legacy registrar, not the current    │");
         console.log(unicode"│  deployment engine. Do not build new paymaster allowlist        │");
         console.log(unicode"│  assumptions around it. Use the app deploy-session flow and     │");
         console.log(unicode"│  DeploymentBatcher for current deployments.                     │");
@@ -366,7 +366,7 @@ contract DeployInfrastructure is Script {
         console.log(unicode"║  2. Hand off the emitted shared/global artifact into infra-v2   ║");
         console.log(unicode"║  3. Create & fund VRF subscription on Chainlink                ║");
         console.log(unicode"║  4. Launch creator vaults via app deploy-session flow (/deploy) ║");
-        console.log(unicode"║  5. Treat CreatorOVaultFactory as legacy registry-only infra    ║");
+        console.log(unicode"║  5. Treat OVaultFactory4626 as legacy registry-only infra    ║");
         console.log(unicode"║                                                                ║");
         console.log(
             unicode"╚════════════════════════════════════════════════════════════════╝"

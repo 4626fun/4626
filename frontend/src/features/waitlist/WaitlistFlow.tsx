@@ -28,6 +28,7 @@ import {
   resolveWaitlistJoinedSessionAddress,
   shouldClearOrphanWaitlistServerSession,
 } from '@/features/waitlist/resolveWaitlistJoinedSession'
+import { shouldAutoSubmitOtpCode } from '@/features/waitlist/waitlistFlowState'
 import { WaitlistReturningWalletSignIn } from '@/features/waitlist/WaitlistReturningWalletSignIn'
 import { shouldShowWaitlistEmailSignup } from '@/features/waitlist/waitlistSignupVisibility'
 import { WaitlistTwitterLinkPanel, XLogo } from '@/features/waitlist/WaitlistTwitterLinkPanel'
@@ -580,7 +581,10 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
       await finishJoinAfterPrivyAuth()
     } catch (verifyError) {
       setCodeStatus(otpAccepted ? 'default' : 'error')
-      if (!otpAccepted) autoSubmittedCodeRef.current = null
+      // Deliberately leave autoSubmittedCodeRef pointing at this (failed) code — see
+      // shouldAutoSubmitOtpCode's docstring for why clearing it here caused a retry loop.
+      // The user can still retry the same code via the "Verify & join" button, which
+      // calls handleVerifyCode directly and doesn't consult this guard.
       setError(verifyError instanceof Error ? verifyError.message : 'Could not verify the code. Please try again.')
     } finally {
       signupInFlightRef.current = false
@@ -596,7 +600,14 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
       return
     }
     const normalized = code.replace(/\s+/g, '')
-    if (normalized.length === 6 && !codeBusy && autoSubmittedCodeRef.current !== normalized) {
+    if (
+      shouldAutoSubmitOtpCode({
+        step,
+        normalizedCode: normalized,
+        codeBusy,
+        lastAttemptedCode: autoSubmittedCodeRef.current,
+      })
+    ) {
       autoSubmittedCodeRef.current = normalized
       void handleVerifyCode()
     }
@@ -1122,10 +1133,11 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
 
       <div className="relative mx-auto w-full max-w-md px-4 py-10 sm:px-6 sm:py-14">
         <motion.div
+          layout
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className="relative w-full space-y-6 sm:space-y-7"
+          className="relative w-full space-y-5 sm:space-y-6"
         >
           {/* Persistent brand mark — shown across every step of the flow (signup, code) so
               users always see where they are. Hidden once approved: the success state below
@@ -1150,6 +1162,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
             {joinedSessionAddress ? (
               <motion.div
                 key="waitlist-joined"
+                layout
                 variants={phaseVariants}
                 initial="initial"
                 animate="animate"
@@ -1158,33 +1171,25 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                 className="space-y-6 sm:space-y-7"
               >
             <div className="text-center">
-              <div className="flex flex-col items-center gap-4">
+              <div className="flex flex-col items-center gap-3">
                 {appAccepted ? (
-                  // Success state uses the brand mark itself (not a generic checkmark)
-                  // with a faint green glow that pulses outward and fades to transparent,
-                  // so approval reads as "your 4626 mark, now live" rather than a second,
-                  // competing icon stacked under the persistent header logo.
-                  <div className="relative flex items-center justify-center">
-                    {!reduceMotion ? (
-                      <motion.span
-                        aria-hidden="true"
-                        className="absolute inset-0 rounded-2xl"
-                        initial={{ boxShadow: '0 0 0 0 rgba(52,211,153,0.45)' }}
-                        animate={{
-                          boxShadow: [
-                            '0 0 0 0 rgba(52,211,153,0.4)',
-                            '0 0 0 16px rgba(52,211,153,0)',
-                          ],
-                        }}
-                        transition={{ duration: 2.1, ease: 'easeOut', repeat: Infinity }}
-                      />
-                    ) : null}
-                    <motion.span
-                      initial={reduceMotion ? false : { scale: 0.6, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-                      className="relative flex size-14 items-center justify-center overflow-hidden rounded-2xl shadow-[0_0_22px_-4px_rgba(52,211,153,0.6),0_10px_24px_-10px_rgba(0,0,0,0.6)]"
-                    >
+                  // Keep approval state clean/professional: no repeating pulse loop.
+                  // Use a subtle static emerald ring + soft ambient shadow.
+                  <motion.div
+                    initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                    className="relative flex items-center justify-center"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-0 rounded-2xl"
+                      style={{
+                        boxShadow:
+                          '0 0 0 1px rgba(52,211,153,0.2), 0 0 28px -10px rgba(52,211,153,0.5)',
+                      }}
+                    />
+                    <span className="relative flex size-14 items-center justify-center overflow-hidden rounded-2xl border border-emerald-300/20 bg-black/20 shadow-[0_10px_24px_-12px_rgba(0,0,0,0.55)]">
                       <img
                         src={siteAssets.logo}
                         alt=""
@@ -1192,41 +1197,49 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                         draggable={false}
                         className="size-full scale-[1.316] select-none object-contain"
                       />
-                    </motion.span>
-                  </div>
+                    </span>
+                  </motion.div>
                 ) : null}
 
-                <div className="space-y-1.5">
-                  <h1 className="headline text-2xl leading-tight tracking-[-0.03em] sm:text-3xl">
-                    {appAccepted ? "You're approved" : "You're on the list"}
-                  </h1>
-                  <div className="space-y-1">
-                    {/* Rendered below the headline (not as its own row above it) so the
-                        identity avatar doesn't stack as a third competing circular shape
-                        directly under the big checkmark. */}
-                    <WaitlistWelcomeGreeting
-                      accountMe={accountMe}
-                      accountMeLoading={accountMeLoading}
-                      walletReturnAddress={
-                        returningViaWallet
-                          ? (props.walletSessionAddress ??
-                            accountMe?.linkedMethods?.external_eoa?.[0] ??
-                            null)
-                          : null
-                      }
-                      returningViaWallet={returningViaWallet}
-                    />
+                <div className="space-y-1">
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.h1
+                      key={appAccepted ? 'approved' : 'listed'}
+                      initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                      className="headline text-2xl leading-tight tracking-[-0.03em] sm:text-3xl"
+                    >
+                      {appAccepted ? "You're approved" : "You're on the list"}
+                    </motion.h1>
+                  </AnimatePresence>
+                  {/* Rendered below the headline (not as its own row above it) so the
+                      identity avatar doesn't stack as a third competing circular shape
+                      directly under the big checkmark. Points now live only in the
+                      "Your points" summary below — no need to repeat the total here. */}
+                  <WaitlistWelcomeGreeting
+                    accountMe={accountMe}
+                    accountMeLoading={accountMeLoading}
+                    walletReturnAddress={
+                      returningViaWallet
+                        ? (props.walletSessionAddress ??
+                          accountMe?.linkedMethods?.external_eoa?.[0] ??
+                          null)
+                        : null
+                    }
+                    returningViaWallet={returningViaWallet}
+                  />
+                  {appAccepted ? null : (
                     <p className="text-sm leading-relaxed text-zinc-400">
-                      {appAccepted
-                        ? 'Open the app to continue.'
-                        : "We'll notify you when your spot opens."}
+                      We'll notify you when your spot opens.
                     </p>
-                  </div>
+                  )}
                 </div>
               </div>
 
                 {/* Earn points — optional identity links, each worth waitlist points. */}
-                <motion.div layout="position" transition={stepTransition} className="mt-7">
+                <motion.div layout="position" transition={stepTransition} className="mt-5">
                   <WaitlistLinkedAccountsCard
                     rows={linkedAccountRows}
                     totalPoints={totalPoints}
@@ -1399,6 +1412,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
             ) : (
               <motion.div
                 key="waitlist-signup"
+                layout
                 variants={phaseVariants}
                 initial="initial"
                 animate="animate"

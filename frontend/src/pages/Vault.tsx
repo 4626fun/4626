@@ -26,6 +26,7 @@ import { useTokenMetadata } from '@/hooks/useTokenMetadata'
 import { useZoraCoin } from '@/lib/zora/hooks'
 import { apiFetch } from '@/lib/api/apiBase'
 import { resolveVaultByAnyAddress } from '@/lib/onchain/vaultResolve'
+import { readVaultSharePriceSnapshot } from '@/lib/onchain/vaultSharePrice'
 import { OrbBorder } from '@/components/brand/OrbBorder'
 import { TokenOrb } from '@/components/brand/TokenOrb'
 import { TokenAvatar } from '@/components/swap/TokenAvatar'
@@ -342,6 +343,35 @@ export function Vault() {
     const compactAmount = amount >= 1000 ? formatCompactUsd(amount) : `$${amount.toFixed(2).replace(/\.?0+$/, '')}`
     return compactAmount
   }, [auctionSummaryQuery.data?.currencyDecimals, auctionSummaryQuery.data?.currencyRaised, isAuctionActive])
+
+  const sharePriceQuery = useQuery({
+    queryKey: ['vault-share-price', base.id, vaultAddress ?? '', resolved?.info.oracle ?? ''],
+    queryFn: async () => {
+      if (!publicClient || !vaultAddress) return null
+      return await readVaultSharePriceSnapshot(publicClient, {
+        vault: vaultAddress,
+        oracle: resolved?.info.oracle ?? null,
+      })
+    },
+    enabled: Boolean(publicClient && vaultAddress),
+    staleTime: 20_000,
+  })
+
+  const ppsAgentDisplay = useMemo(() => {
+    const raw = sharePriceQuery.data?.ppsAgent
+    if (raw == null) return null
+    const value = Number(formatUnits(raw, 18))
+    if (!Number.isFinite(value) || value <= 0) return null
+    return value.toLocaleString(undefined, { maximumFractionDigits: 6 })
+  }, [sharePriceQuery.data?.ppsAgent])
+
+  const ppsUsdDisplay = useMemo(() => {
+    const raw = sharePriceQuery.data?.ppsUsd
+    if (raw == null) return null
+    const value = Number(formatUnits(raw, 18))
+    if (!Number.isFinite(value) || value <= 0) return null
+    return `$${value.toLocaleString(undefined, { maximumFractionDigits: 6 })}`
+  }, [sharePriceQuery.data?.ppsUsd])
 
   // Amount validation
   const amountError = useMemo((): string | null => {
@@ -721,9 +751,16 @@ export function Vault() {
                   </div>
                 </div>
                 <div className="bg-vault-card/65 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">
-                  <span className="label">Global Jackpot</span>
-                  <div className="value text-2xl sm:text-3xl text-zinc-600" title="Coming soon">
-                    —
+                  <span className="label">Share PPS</span>
+                  <div className="value text-2xl sm:text-3xl">
+                    {ppsAgentDisplay ? (
+                      `${ppsAgentDisplay} ${underlyingSymbol}`
+                    ) : (
+                      <Skeleton className="h-8 w-24 mt-1" />
+                    )}
+                  </div>
+                  <div className="app-meta-value text-zinc-500">
+                    {ppsUsdDisplay ?? 'USD price unavailable'}
                   </div>
                 </div>
                 <div className="bg-vault-card/65 backdrop-blur-xl p-5 sm:p-8 space-y-3 sm:space-y-4">

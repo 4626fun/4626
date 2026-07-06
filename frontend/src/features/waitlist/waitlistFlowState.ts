@@ -114,6 +114,28 @@ export function resolveWaitlistStep(params: {
   return 'done'
 }
 
+/**
+ * Decides whether the 6-digit email OTP should auto-submit. `lastAttemptedCode`
+ * must be set (and never cleared) once a code has been attempted — regardless
+ * of whether that attempt succeeded or failed — so a failed verification
+ * (wrong code, network error, provider rate limit, ...) does not immediately
+ * re-arm this effect and auto-resubmit the exact same unchanged code in a
+ * tight retry loop. The user can still retry explicitly via the submit
+ * button, which calls the verify handler directly and does not consult this
+ * guard; auto-submit only fires again once the code itself changes.
+ */
+export function shouldAutoSubmitOtpCode(params: {
+  step: 'email' | 'code'
+  normalizedCode: string
+  codeBusy: boolean
+  lastAttemptedCode: string | null
+}): boolean {
+  if (params.step !== 'code') return false
+  if (params.codeBusy) return false
+  if (params.normalizedCode.length !== 6) return false
+  return params.lastAttemptedCode !== params.normalizedCode
+}
+
 type CanonicalBootstrapResult = {
   canonicalCswAddress: string | null
 }

@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 
 import "@4626/shared/governance/ve4626GaugeVoting.sol";
-import {ve4626 as Ve4626Contract} from "@4626/creator/governance/ve4626.sol";
+import {ve4626 as Ve4626Contract} from "@4626/shared/governance/ve4626.sol";
 
 import "@4626/shared/governance/factories/BribesFactory.sol";
 import {BribeDepot} from "@4626/shared/governance/bribes/BribeDepot.sol";

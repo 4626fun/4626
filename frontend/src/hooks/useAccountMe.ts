@@ -3,11 +3,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
 import { useSafePrivyAccessToken } from '@/lib/privy/safeHooks'
-import {
-  fetchBootstrapExecutionSignals,
-  invalidateBootstrapExecutionSignalsCache,
-  mergeBootstrapSignals,
-} from '@/lib/account/mergeAccountMeBootstrap'
 
 /**
  * Lightweight cache-aware hook over `GET /api/accounts/me`.
@@ -36,10 +31,18 @@ import {
 type GetAccessTokenFn = () => Promise<string | null>
 
 const ACCOUNTS_ME_RATE_LIMIT_BACKOFF_MS = 8_000
+// Prevent bursty UI triggers from spamming identical `/accounts/me` + bootstrap
+// fetches in quick succession (click storms, rapid provider state churn).
+const ACCOUNTS_ME_REFRESH_DEDUPE_WINDOW_MS = 1_200
+// Window-focus refreshes are useful for stale tabs, but when the data just
+// settled moments ago they only create visible "flicker" with no user value.
+const ACCOUNTS_ME_FOCUS_STALE_MS = 12_000
 
 let inFlight: Promise<AccountSetupMe | null> | null = null
 let cached: AccountSetupMe | null | undefined = undefined
 let accountsMeRateLimitedUntil = 0
+let lastRefreshRequestedAtMs = 0
+let lastSettledAtMs = 0
 
 function readRetryAfterMs(res: Response): number {
   const raw = res.headers.get('retry-after')
@@ -80,19 +83,7 @@ async function fetchAccountMe(getAccessToken: GetAccessTokenFn | null): Promise<
       if (!token || !tokenFn) return null
       if (Date.now() < accountsMeRateLimitedUntil) return null
 
-      // `/accounts/me` (identity + points) and `/onboarding/bootstrap`
-      // (execution-track signals — resolved server-side via a separate,
-      // heavier canonical-CSW/on-chain-owner check) are independent reads
-      // keyed off the same token. Fetch them concurrently instead of
-      // one-after-another so the combined round trip costs as long as the
-      // slower of the two, not the sum of both.
-      const [payload, bootstrap] = await Promise.all([
-        fetchAccountMePayload(token),
-        fetchBootstrapExecutionSignals(tokenFn),
-      ])
-
-      if (!bootstrap) return payload
-      return mergeBootstrapSignals(payload, bootstrap)
+      return await fetchAccountMePayload(token)
     } catch {
       return null
     } finally {
@@ -105,7 +96,6 @@ async function fetchAccountMe(getAccessToken: GetAccessTokenFn | null): Promise<
 function clearAccountMeCache(): void {
   cached = undefined
   inFlight = null
-  invalidateBootstrapExecutionSignalsCache()
 }
 
 /** Call after wallet sign-in remounts Privy so `/api/accounts/me` refetches. */
@@ -162,6 +152,7 @@ export function useAccountMe(options?: { enabled?: boolean }): {
       if (cancelled) return
       if (result !== null) {
         cached = result
+        lastSettledAtMs = Date.now()
       } else {
         // Do not cache failed/null responses — a transient 503 or Privy-not-ready
         // window should not stick the whole app on `me === null` until focus.
@@ -186,6 +177,7 @@ export function useAccountMe(options?: { enabled?: boolean }): {
     if (!enabled) return
     if (typeof window === 'undefined') return
     const onFocus = () => {
+      if (Date.now() - lastSettledAtMs < ACCOUNTS_ME_FOCUS_STALE_MS) return
       clearAccountMeCache()
       setRefreshCounter((c) => c + 1)
     }
@@ -194,6 +186,10 @@ export function useAccountMe(options?: { enabled?: boolean }): {
   }, [enabled])
 
   const refresh = useCallback(() => {
+    const now = Date.now()
+    if (now - lastRefreshRequestedAtMs < ACCOUNTS_ME_REFRESH_DEDUPE_WINDOW_MS) return
+    lastRefreshRequestedAtMs = now
+    if (inFlight) return
     clearAccountMeCache()
     setRefreshCounter((c) => c + 1)
   }, [])

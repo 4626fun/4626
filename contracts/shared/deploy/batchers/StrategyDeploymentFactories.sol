@@ -6,14 +6,14 @@ import "@4626/shared/interfaces/external/IAjnaPool.sol";
 import "@4626/shared/strategies/cca/ERC4626StrategyAdapter.sol";
 import "@4626/shared/strategies/ajna/AjnaERC4626Vault.sol";
 import "@4626/shared/strategies/ajna/AjnaVaultAuth.sol";
-import "@4626/shared/strategies/univ3/CreatorCharmStrategy.sol";
+import "@4626/shared/strategies/univ3/CharmStrategy4626.sol";
 
 /**
  * Note: Creator* strategies are for creator lane but implement general IStrategy interfaces.
  * For agent and future ecosystems, use or add similar in shared/strategies/ or under their lane. Shared strategies should be generalized where possible.
  */
 
-interface ICreatorCharmStrategyFactory {
+interface ICharmStrategy4626Factory {
     function deployAndInitialize(
         address creatorVault,
         address underlyingToken,
@@ -40,7 +40,7 @@ interface IAjnaERC4626StrategyFactory {
     ) external returns (address strategy, address innerVault, address auth);
 }
 
-contract CreatorCharmStrategyFactory is ICreatorCharmStrategyFactory {
+contract CharmStrategy4626Factory is ICharmStrategy4626Factory {
     function deployAndInitialize(
         address creatorVault,
         address underlyingToken,
@@ -51,11 +51,11 @@ contract CreatorCharmStrategyFactory is ICreatorCharmStrategyFactory {
         address owner
     ) external returns (address strategy) {
         strategy = address(
-            new CreatorCharmStrategy(
+            new CharmStrategy4626(
                 creatorVault, underlyingToken, quoteToken, uniswapRouter, charmVault, v3Pool, owner
             )
         );
-        CreatorCharmStrategy(strategy).initializeApprovals();
+        CharmStrategy4626(strategy).initializeApprovals();
     }
 }
 

@@ -9,6 +9,7 @@
 #   ./script/deploy.sh infra-v2          - Deploy current phased infra + seed bytecode store
 #   ./script/deploy.sh release           - Canonical Base v1.13.0 full release rollout
 #   ./script/deploy.sh full-release      - Same as release
+#   ./script/deploy.sh agent-oracle-v2   - Configure + QA AgentOracle V2 lane wiring
 #
 # Environment:
 #   PRIVATE_KEY         - Deployer private key
@@ -57,6 +58,7 @@ print_usage() {
     echo "  ./script/deploy.sh infra-v2               Deploy current phased infra and seed bytecode store"
     echo "  ./script/deploy.sh release                Deploy fresh shared/global + deterministic phased infra"
     echo "  ./script/deploy.sh full-release           Same as release"
+    echo "  ./script/deploy.sh agent-oracle-v2        Configure + QA AgentOracle V2 lane"
     echo ""
     echo -e "${YELLOW}Examples:${NC}"
     echo "  ./script/deploy.sh infrastructure"
@@ -68,6 +70,7 @@ print_usage() {
     echo "  RPC_URL             - Base RPC URL (default: mainnet.base.org)"
     echo "  BASE_RPC_URL        - Base RPC URL for phased deployer"
     echo "  ETHERSCAN_API_KEY   - For contract verification"
+    echo "  AGENT_ORACLE*       - Required by AgentOracle V2 configure/QA scripts"
     echo ""
     echo -e "${YELLOW}Note:${NC}"
     echo "  The infra-v2 command name is historical; it deploys the current CreatorOVault infra."
@@ -120,6 +123,24 @@ deploy_base_full_release() {
     bash "$ROOT_DIR/script/deploy-base-full-release.sh"
 }
 
+configure_and_qa_agent_oracle_v2() {
+    local base_rpc="${BASE_RPC_URL:-$RPC_URL}"
+    echo -e "${GREEN}Configuring AgentOracle V2 lane...${NC}"
+    forge script script/ConfigureAgentOracleV2Lane.s.sol:ConfigureAgentOracleV2Lane \
+        --rpc-url "$base_rpc" \
+        --broadcast \
+        -vvvv
+
+    echo ""
+    echo -e "${GREEN}Running AgentOracle V2 post-deploy QA...${NC}"
+    forge script script/AgentOracleV2PostDeployQa.s.sol:AgentOracleV2PostDeployQa \
+        --rpc-url "$base_rpc" \
+        -vvvv
+
+    echo ""
+    echo -e "${GREEN}✓ AgentOracle V2 configure + QA complete.${NC}"
+}
+
 # Main
 main() {
     print_banner
@@ -139,6 +160,10 @@ main() {
         "release"|"base-release"|"full-release")
             check_prereqs
             deploy_base_full_release
+            ;;
+        "agent-oracle-v2"|"oracle-agent-v2")
+            check_prereqs
+            configure_and_qa_agent_oracle_v2
             ;;
         "help"|"-h"|"--help"|"")
             print_usage

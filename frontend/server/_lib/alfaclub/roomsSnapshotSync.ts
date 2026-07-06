@@ -17,6 +17,7 @@ import {
 import {
   listCreatorRoomIds,
   readRoomsSnapshotSyncCursor,
+  runCreatorIndexer,
   writeRoomsSnapshotSyncCursor,
 } from './creators.js'
 import { ensureAlfaClubVigilanteSchema } from './schema.js'
@@ -28,6 +29,8 @@ const DEFAULT_BATCH_SIZE = 250
 const DEFAULT_CONCURRENCY = 8
 const DEFAULT_HTTP_TIMEOUT_MS = 12_000
 const MAX_FULL_RUN_ROOMS = 2_500
+const DEFAULT_FRONTIER_MISS_STREAK = 5
+const DEFAULT_FRONTIER_PROBE_LIMIT = 64
 
 type JsonRecord = Record<string, unknown>
 
@@ -36,6 +39,9 @@ export type RoomsSnapshotSyncFlags = {
   batchSize: number
   concurrency: number
   httpTimeoutMs: number
+  frontierScanEnabled: boolean
+  frontierMissStreak: number
+  frontierProbeLimit: number
 }
 
 export type RoomsSnapshotSyncResult = {
@@ -53,6 +59,8 @@ export type RoomsSnapshotSyncResult = {
   cursorStart: number
   cursorNext: number
   totalIndexedRooms: number
+  frontierDiscovered: number
+  indexerNewCreators: number | null
   maxRoomId: string | null
   latestIngestedAt: string | null
   errors: string[]
@@ -61,6 +69,8 @@ export type RoomsSnapshotSyncResult = {
 export type RoomsSnapshotSyncOptions = {
   roomIds?: string[]
   full?: boolean
+  /** When true with `full`, scan FriendKey mint logs before fetching room details. */
+  runIndexer?: boolean
 }
 
 function parseBool(raw: string | undefined, fallback = false): boolean {
@@ -95,7 +105,72 @@ export function readRoomsSnapshotSyncFlags(): RoomsSnapshotSyncFlags {
       DEFAULT_HTTP_TIMEOUT_MS,
       30_000,
     ),
+    frontierScanEnabled: parseBool(process.env.ALFACLUB_ROOMS_SNAPSHOT_FRONTIER_SCAN, true),
+    frontierMissStreak: parsePositiveInt(
+      process.env.ALFACLUB_ROOMS_SNAPSHOT_FRONTIER_MISS_STREAK,
+      DEFAULT_FRONTIER_MISS_STREAK,
+      20,
+    ),
+    frontierProbeLimit: parsePositiveInt(
+      process.env.ALFACLUB_ROOMS_SNAPSHOT_FRONTIER_PROBE_LIMIT,
+      DEFAULT_FRONTIER_PROBE_LIMIT,
+      256,
+    ),
   }
+}
+
+/** Merge indexed + frontier ids into one ascending, deduped list. */
+export function mergeRoomIdUniverse(indexedRoomIds: string[], frontierRoomIds: string[]): string[] {
+  return [
+    ...new Set(
+      [...indexedRoomIds, ...frontierRoomIds]
+        .map((roomId) => roomId.trim())
+        .filter((roomId) => /^\d+$/.test(roomId)),
+    ),
+  ].sort((a, b) => Number.parseInt(a, 10) - Number.parseInt(b, 10))
+}
+
+async function probeRoomExists(params: {
+  roomId: string
+  jwt: string
+  httpTimeoutMs: number
+}): Promise<boolean> {
+  const fetched = await fetchRoomDetail(params)
+  return fetched.ok
+}
+
+/** Probe sequential ids above the indexed max until a miss streak ends the scan. */
+export async function discoverFrontierRoomIds(params: {
+  startAfterRoomId: string | null
+  jwt: string
+  httpTimeoutMs: number
+  missStreak: number
+  probeLimit: number
+}): Promise<string[]> {
+  const startAfter = params.startAfterRoomId ? Number.parseInt(params.startAfterRoomId, 10) : 0
+  if (!Number.isFinite(startAfter) || startAfter < 0) return []
+
+  const discovered: string[] = []
+  let misses = 0
+  let probeCount = 0
+
+  for (let roomId = startAfter + 1; probeCount < params.probeLimit; roomId += 1) {
+    probeCount += 1
+    const exists = await probeRoomExists({
+      roomId: String(roomId),
+      jwt: params.jwt,
+      httpTimeoutMs: params.httpTimeoutMs,
+    })
+    if (exists) {
+      discovered.push(String(roomId))
+      misses = 0
+      continue
+    }
+    misses += 1
+    if (misses >= params.missStreak) break
+  }
+
+  return discovered
 }
 
 function asRecord(value: unknown): JsonRecord | null {
@@ -384,13 +459,11 @@ function selectRoomIds(params: {
 }): { roomIds: string[]; cursorNext: number } {
   const { allRoomIds, options, flags, cursorStart } = params
   if (options?.roomIds && options.roomIds.length > 0) {
-    const allowed = new Set(allRoomIds)
     const selected = [
       ...new Set(
         options.roomIds
           .map((roomId) => roomId.trim())
-          .filter((roomId) => /^\d+$/.test(roomId))
-          .filter((roomId) => allowed.size === 0 || allowed.has(roomId)),
+          .filter((roomId) => /^\d+$/.test(roomId)),
       ),
     ]
     return { roomIds: selected, cursorNext: cursorStart }
@@ -451,6 +524,8 @@ export async function syncRoomsSnapshot(
     cursorStart: 0,
     cursorNext: 0,
     totalIndexedRooms: 0,
+    frontierDiscovered: 0,
+    indexerNewCreators: null,
     maxRoomId: null,
     latestIngestedAt: null,
     errors: [],
@@ -471,8 +546,32 @@ export async function syncRoomsSnapshot(
     return { ...result, reason: 'missing_jwt' }
   }
 
-  const allRoomIds = await listCreatorRoomIds()
-  result.totalIndexedRooms = allRoomIds.length
+  if (options?.full && options?.runIndexer !== false) {
+    try {
+      const indexerReport = await runCreatorIndexer()
+      result.indexerNewCreators = indexerReport.newCreators
+    } catch {
+      result.indexerNewCreators = null
+    }
+  }
+
+  const indexedRoomIds = await listCreatorRoomIds()
+  result.totalIndexedRooms = indexedRoomIds.length
+
+  let allRoomIds = indexedRoomIds
+  if (flags.frontierScanEnabled && !options?.roomIds?.length) {
+    const frontierRoomIds = await discoverFrontierRoomIds({
+      startAfterRoomId:
+        indexedRoomIds.length > 0 ? (indexedRoomIds[indexedRoomIds.length - 1] ?? null) : null,
+      jwt,
+      httpTimeoutMs: flags.httpTimeoutMs,
+      missStreak: flags.frontierMissStreak,
+      probeLimit: flags.frontierProbeLimit,
+    })
+    result.frontierDiscovered = frontierRoomIds.length
+    allRoomIds = mergeRoomIdUniverse(indexedRoomIds, frontierRoomIds)
+  }
+
   result.maxRoomId = allRoomIds.length > 0 ? allRoomIds[allRoomIds.length - 1] ?? null : null
 
   const cursorStart = options?.roomIds?.length || options?.full

@@ -25,7 +25,7 @@ forge build --skip test --skip script >/dev/null
 
 contracts=(
   "CreatorRegistry"
-  "CreatorOVaultFactory"
+  "OVaultFactory4626"
   "CreatorLotteryManager"
   "CreatorVRFConsumerV2_5"
   "VaultActivationBatcher"
@@ -45,7 +45,7 @@ contracts=(
   "CreatorPayoutRouter"
   "CreatorVaultShareBurnStream"
   "CreatorCoinPolicyController"
-  "CreatorCharmStrategy"
+  "CharmStrategy4626"
   "AjnaVaultAuth"
   "AjnaERC4626Vault"
   "ERC4626StrategyAdapter"

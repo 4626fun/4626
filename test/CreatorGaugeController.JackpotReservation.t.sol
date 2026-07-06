@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import {CreatorGaugeController} from "@4626/creator/governance/CreatorGaugeController.sol";
+import {CreatorGaugeController} from "@4626/creator/revenue/CreatorGaugeController.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 

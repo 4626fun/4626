@@ -17,7 +17,7 @@ import {TickMathCompat} from "@4626/shared/libraries/uniswap/TickMathCompat.sol"
 /**
  * @title AgentOracle
  * @author 0xakita.eth (4626)
- * @notice Omnichain oracle for agent lane token price (◆ symbols).
+ * @notice Omnichain oracle for agent lane token price (◆ lane symbols).
  * @dev Same address on chains via CREATE2.
  *
  *      Hub: V4 TWAP + Chainlink → price → LZ broadcast.
@@ -96,37 +96,79 @@ contract AgentOracle is OApp {
     /// @notice Uniswap V4 PoolManager
     IPoolManager public poolManager;
 
-    /// @notice V4 pool key for ◆AKITA/ETH
-    PoolKey public creatorPoolKey;
+    /// @notice V4 pool key for ◆AGENT/ETH
+    PoolKey public agentPoolKey;
 
     /// @notice Whether V4 pool is configured
     bool public v4PoolConfigured;
 
     /// @notice Whether agent token is token0 in the pool
-    bool public creatorIsToken0;
+    bool public agentIsToken0;
 
     // ================================
-    // STATE - V3 POOL (CREATOR/USDC TWAP)
+    // STATE - V3 POOL (AGENT/QUOTE TWAP)
     // ================================
 
-    /// @notice Uniswap V3 pool used as primary CREATOR/USD oracle (optional)
+    /// @notice Uniswap V3 pool used as primary AGENT/QUOTE oracle (optional)
     address public v3Pool;
 
     /// @notice Agent token used in the V3 pool (base token)
     address public v3AgentToken;
 
     /// @notice USD stable token used in the V3 pool (quote token, e.g. USDC)
-    address public v3UsdToken;
+    address public v3QuoteToken;
+
+    /// @notice Optional reference quote token guard for V3 pricing lanes.
+    /// @dev If set, `setV3Pool` requires `_quoteToken == referenceQuoteToken`.
+    ///      Intended to pin AgentOracle to the agent lane quote token (e.g. VIRTUAL).
+    address public referenceQuoteToken;
+
+    /// @notice When true, reference quote token can no longer be changed.
+    bool public referenceQuoteTokenLocked;
 
     /// @notice Cached decimals for price scaling
     uint8 public v3AgentDecimals;
-    uint8 public v3UsdDecimals;
+    uint8 public v3QuoteDecimals;
 
     /// @notice Default V3 TWAP duration (seconds)
     uint32 public v3TwapDuration = DEFAULT_TWAP_DURATION;
 
     /// @notice Whether V3 pool is configured
     bool public v3PoolConfigured;
+
+    // ================================
+    // STATE - V2 PAIR (AGENT/QUOTE TWAP)
+    // ================================
+
+    /// @notice Uniswap V2 pair used as primary Agent/quote TWAP source (optional).
+    address public v2Pair;
+
+    /// @notice Agent token in the V2 pair.
+    address public v2AgentToken;
+
+    /// @notice Quote token in the V2 pair (e.g. VIRTUAL, WETH).
+    address public v2QuoteToken;
+
+    /// @notice Cached decimals for V2 quote scaling.
+    uint8 public v2AgentDecimals;
+    uint8 public v2QuoteDecimals;
+
+    /// @notice Optional Chainlink-style feed for V2 quote/USD conversion.
+    /// @dev Used when V2 is the active price lane and quote token is not ETH.
+    ///      If unset, the oracle falls back to `chainlinkFeed`.
+    address public v2QuoteUsdFeed;
+
+    /// @notice Default V2 TWAP duration (seconds)
+    uint32 public v2TwapDuration = DEFAULT_TWAP_DURATION;
+
+    /// @notice Whether V2 pair is configured.
+    bool public v2PairConfigured;
+
+    /// @notice Last recorded cumulative Agent/quote price (UQ112x112*time).
+    uint256 public v2PriceCumulativeLast;
+
+    /// @notice Last recorded V2 observation timestamp.
+    uint32 public v2ObservationTimestamp;
 
     // ================================
     // STATE - TWAP OBSERVATIONS
@@ -212,10 +254,15 @@ contract AgentOracle is OApp {
     event AgentPriceUpdated(string symbol, int256 price, uint256 timestamp, address indexed updater);
     event AgentPriceBroadcast(uint32[] dstEids, int256 price, uint256 timestamp);
     event AgentPriceReceived(uint32 srcEid, int256 price, uint256 timestamp);
-    event V4PoolConfigured(PoolId indexed poolId, address poolManager, bool creatorIsToken0);
+    event V4PoolConfigured(PoolId indexed poolId, address poolManager, bool agentIsToken0);
     event V3PoolConfigured(
         address indexed pool, address indexed creatorToken, address indexed usdToken, uint32 twapDuration
     );
+    event V2PairConfigured(
+        address indexed pair, address indexed agentToken, address indexed quoteToken, uint32 twapDuration
+    );
+    event V2QuoteUsdFeedSet(address indexed feed);
+    event V2ObservationRecorded(uint256 cumulativePrice, uint32 timestamp);
     event ObservationRecorded(uint16 index, int24 tick, int24 truncatedTick, uint32 timestamp);
     event SwapRecorderSet(address indexed recorder, bool authorized);
     event PriceUpdaterSet(address indexed updater, bool authorized);
@@ -223,6 +270,8 @@ contract AgentOracle is OApp {
     event TickWasCapped(int24 rawTick, int24 truncatedTick, int24 movement);
     event ChainlinkFeedSet(address indexed feed);
     event SequencerUptimeFeedSet(address indexed feed);
+    event ReferenceQuoteTokenSet(address indexed token);
+    event ReferenceQuoteTokenLocked(address indexed token);
     // FIX: M-3 (4626-439) — emitted (via the deprecated entrypoint's revert path in tests / off-chain
     // call-simulation) so tooling can pick up migrations to broadcastAgentPriceWithFees.
     event BroadcastEqualSplitCallAttempted(address indexed caller, uint256 msgValue, uint32[] dstEids);
@@ -236,12 +285,17 @@ contract AgentOracle is OApp {
     error Unauthorized();
     error V4NotConfigured();
     error V3NotConfigured();
+    error V2NotConfigured();
     error InvalidV3Pool();
+    error InvalidV2Pair();
     error UnsupportedDecimals();
     error NeedMoreObservations();
     error StalePrice();
     error SequencerDown();
     error InvalidDuration();
+    error InvalidReferenceQuoteToken(address expected, address actual);
+    error ReferenceQuoteTokenIsLocked();
+    error ReferenceQuoteTokenUnset();
     error PriceUpdateCooldown();
     error PriceDeviationTooHigh();
     // H-01 / 4626-293: oracle bootstrap must go through initializeAgentPrice.
@@ -261,7 +315,7 @@ contract AgentOracle is OApp {
      * @notice Deploy oracle for a Agent token
      * @param _registry Registry4626 address (same on all chains for deterministic addresses)
      * @param _chainlinkFeed Chainlink ETH/USD feed address
-     * @param _agentSymbol Agent token symbol (e.g., "◆AKITA")
+     * @param _agentSymbol Agent token symbol (e.g., "◆AGENT")
      * @param _owner Owner address
      *
      * @dev DETERMINISTIC DEPLOYMENT:
@@ -313,13 +367,36 @@ contract AgentOracle is OApp {
         emit SequencerUptimeFeedSet(_feed);
     }
 
+    /// @notice Set the required V3 quote token for this oracle lane.
+    /// @dev Set to zero address to disable strict quote-token enforcement.
+    function setReferenceQuoteToken(address _token) external onlyOwner {
+        if (referenceQuoteTokenLocked) revert ReferenceQuoteTokenIsLocked();
+        referenceQuoteToken = _token;
+        emit ReferenceQuoteTokenSet(_token);
+    }
+
+    /// @notice Configure the quote/USD feed used by the V2 pricing lane.
+    /// @dev Set to zero address to clear and fallback to `chainlinkFeed`.
+    function setV2QuoteUsdFeed(address _feed) external onlyOwner {
+        v2QuoteUsdFeed = _feed;
+        emit V2QuoteUsdFeedSet(_feed);
+    }
+
+    /// @notice Irreversibly lock the current reference quote token.
+    /// @dev Prevents post-init quote-token drift in production deployments.
+    function lockReferenceQuoteToken() external onlyOwner {
+        if (referenceQuoteToken == address(0)) revert ReferenceQuoteTokenUnset();
+        referenceQuoteTokenLocked = true;
+        emit ReferenceQuoteTokenLocked(referenceQuoteToken);
+    }
+
     /**
      * @notice Configure V4 pool for TWAP observations
      * @param _poolManager Uniswap V4 PoolManager
-     * @param _poolKey Pool key for ◆AKITA/ETH
-     * @param _creatorIsToken0 Whether agent token is currency0
+     * @param _poolKey Pool key for ◆AGENT/ETH
+     * @param _agentIsToken0 Whether agent token is currency0
      */
-    function setV4Pool(address _poolManager, PoolKey calldata _poolKey, bool _creatorIsToken0) external onlyOwner {
+    function setV4Pool(address _poolManager, PoolKey calldata _poolKey, bool _agentIsToken0) external onlyOwner {
         if (_poolManager == address(0)) revert ZeroAddress();
 
         // FIX: M-5 — only reset observation ring buffer when pool manager changes;
@@ -328,8 +405,8 @@ contract AgentOracle is OApp {
         bool managerChanged = address(poolManager) != _poolManager;
 
         poolManager = IPoolManager(_poolManager);
-        creatorPoolKey = _poolKey;
-        creatorIsToken0 = _creatorIsToken0;
+        agentPoolKey = _poolKey;
+        agentIsToken0 = _agentIsToken0;
         v4PoolConfigured = true;
 
         // Get initial tick
@@ -353,43 +430,102 @@ contract AgentOracle is OApp {
         lastObservationTimestamp = uint32(block.timestamp);
         tickCapState.lastCapUpdate = uint48(block.timestamp);
 
-        emit V4PoolConfigured(poolId, _poolManager, _creatorIsToken0);
+        emit V4PoolConfigured(poolId, _poolManager, _agentIsToken0);
     }
 
     /**
-     * @notice Configure Uniswap V3 pool for CREATOR/USDC TWAP pricing (optional price source)
-     * @param _pool Uniswap V3 pool address (must be the CREATOR/USDC pair)
-     * @param _creatorToken Agent token address
-     * @param _usdToken USD token address (e.g., USDC)
+     * @notice Configure Uniswap V3 pool for AGENT/QUOTEC TWAP pricing (optional price source)
+     * @param _pool Uniswap V3 pool address (must be the AGENT/QUOTEC pair)
+     * @param _agentToken Agent token address
+     * @param _quoteToken USD token address (e.g., USDC)
      * @param _twapDuration TWAP duration in seconds (e.g., 1800)
      */
-    function setV3Pool(address _pool, address _creatorToken, address _usdToken, uint32 _twapDuration)
+    function setV3Pool(address _pool, address _agentToken, address _quoteToken, uint32 _twapDuration)
         external
         onlyOwner
     {
-        if (_pool == address(0) || _creatorToken == address(0) || _usdToken == address(0)) {
+        if (_pool == address(0) || _agentToken == address(0) || _quoteToken == address(0)) {
             revert ZeroAddress();
+        }
+        address expectedQuoteToken = referenceQuoteToken;
+        if (expectedQuoteToken != address(0) && _quoteToken != expectedQuoteToken) {
+            revert InvalidReferenceQuoteToken(expectedQuoteToken, _quoteToken);
         }
         if (_twapDuration < MIN_TWAP_DURATION) revert InvalidDuration();
 
         address t0 = IUniswapV3Pool(_pool).token0();
         address t1 = IUniswapV3Pool(_pool).token1();
-        bool ok = (t0 == _creatorToken && t1 == _usdToken) || (t0 == _usdToken && t1 == _creatorToken);
+        bool ok = (t0 == _agentToken && t1 == _quoteToken) || (t0 == _quoteToken && t1 == _agentToken);
         if (!ok) revert InvalidV3Pool();
 
-        uint8 creatorDec = IERC20Metadata(_creatorToken).decimals();
-        uint8 usdDec = IERC20Metadata(_usdToken).decimals();
+        uint8 creatorDec = IERC20Metadata(_agentToken).decimals();
+        uint8 usdDec = IERC20Metadata(_quoteToken).decimals();
         if (creatorDec > 18 || usdDec > 18) revert UnsupportedDecimals();
 
         v3Pool = _pool;
-        v3AgentToken = _creatorToken;
-        v3UsdToken = _usdToken;
+        v3AgentToken = _agentToken;
+        v3QuoteToken = _quoteToken;
         v3AgentDecimals = creatorDec;
-        v3UsdDecimals = usdDec;
+        v3QuoteDecimals = usdDec;
         v3TwapDuration = _twapDuration;
         v3PoolConfigured = true;
 
-        emit V3PoolConfigured(_pool, _creatorToken, _usdToken, _twapDuration);
+        emit V3PoolConfigured(_pool, _agentToken, _quoteToken, _twapDuration);
+    }
+
+    /**
+     * @notice Configure Uniswap V2 pair for AGENT/quote TWAP pricing.
+     * @param _pair Uniswap V2 pair address.
+     * @param _agentToken Agent token address.
+     * @param _quoteToken Quote token address (e.g., VIRTUAL/WETH).
+     * @param _twapDuration TWAP duration in seconds.
+     */
+    function setV2Pair(address _pair, address _agentToken, address _quoteToken, uint32 _twapDuration)
+        external
+        onlyOwner
+    {
+        if (_pair == address(0) || _agentToken == address(0) || _quoteToken == address(0)) revert ZeroAddress();
+        address expectedQuoteToken = referenceQuoteToken;
+        if (expectedQuoteToken != address(0) && _quoteToken != expectedQuoteToken) {
+            revert InvalidReferenceQuoteToken(expectedQuoteToken, _quoteToken);
+        }
+        if (_twapDuration < MIN_TWAP_DURATION) revert InvalidDuration();
+
+        address t0 = IUniswapV2Pair(_pair).token0();
+        address t1 = IUniswapV2Pair(_pair).token1();
+        bool ok = (t0 == _agentToken && t1 == _quoteToken) || (t0 == _quoteToken && t1 == _agentToken);
+        if (!ok) revert InvalidV2Pair();
+
+        uint8 agentDec = IERC20Metadata(_agentToken).decimals();
+        uint8 quoteDec = IERC20Metadata(_quoteToken).decimals();
+        if (agentDec > 18 || quoteDec > 18) revert UnsupportedDecimals();
+
+        v2Pair = _pair;
+        v2AgentToken = _agentToken;
+        v2QuoteToken = _quoteToken;
+        v2AgentDecimals = agentDec;
+        v2QuoteDecimals = quoteDec;
+        v2TwapDuration = _twapDuration;
+        v2PairConfigured = true;
+
+        (uint256 cumulativePrice, uint32 ts) = _currentV2CumulativeAgentPerQuote();
+        v2PriceCumulativeLast = cumulativePrice;
+        v2ObservationTimestamp = ts;
+
+        emit V2PairConfigured(_pair, _agentToken, _quoteToken, _twapDuration);
+        emit V2ObservationRecorded(cumulativePrice, ts);
+    }
+
+    /**
+     * @notice Record V2 cumulative observation for TWAP.
+     * @dev Permissionless; records current cumulative and timestamp.
+     */
+    function recordV2Observation() external {
+        if (!v2PairConfigured) revert V2NotConfigured();
+        (uint256 cumulativePrice, uint32 ts) = _currentV2CumulativeAgentPerQuote();
+        v2PriceCumulativeLast = cumulativePrice;
+        v2ObservationTimestamp = ts;
+        emit V2ObservationRecorded(cumulativePrice, ts);
     }
 
     /**
@@ -502,6 +638,26 @@ contract AgentOracle is OApp {
         return _getPrice();
     }
 
+    /// @dev Legacy getter alias kept for ABI compatibility with existing tooling.
+    function creatorPoolKey() external view returns (PoolKey memory) {
+        return agentPoolKey;
+    }
+
+    /// @dev Legacy getter alias kept for ABI compatibility with existing tooling.
+    function creatorIsToken0() external view returns (bool) {
+        return agentIsToken0;
+    }
+
+    /// @dev Legacy getter alias kept for ABI compatibility with existing tooling.
+    function v3UsdToken() external view returns (address) {
+        return v3QuoteToken;
+    }
+
+    /// @dev Legacy getter alias kept for ABI compatibility with existing tooling.
+    function v3UsdDecimals() external view returns (uint8) {
+        return v3QuoteDecimals;
+    }
+
     function _getPrice() internal view returns (int256 price, uint256 timestamp) {
         if (agentPriceUSD > 0 && agentPriceTimestamp > 0) {
             if (block.timestamp - agentPriceTimestamp < MAX_STALENESS) {
@@ -606,7 +762,7 @@ contract AgentOracle is OApp {
     function _recordObservation() internal returns (bool tickWasCapped) {
         if (!v4PoolConfigured) return false;
 
-        PoolId poolId = creatorPoolKey.toId();
+        PoolId poolId = agentPoolKey.toId();
         (, int24 tick,,) = poolManager.getSlot0(poolId);
         uint128 liquidity = poolManager.getLiquidity(poolId);
 
@@ -754,7 +910,7 @@ contract AgentOracle is OApp {
      */
     function getCurrentTick() external view returns (int24 tick) {
         if (!v4PoolConfigured) revert V4NotConfigured();
-        PoolId poolId = creatorPoolKey.toId();
+        PoolId poolId = agentPoolKey.toId();
         (, tick,,) = poolManager.getSlot0(poolId);
     }
 
@@ -845,7 +1001,7 @@ contract AgentOracle is OApp {
         }
 
         // Invert if agent is token0
-        if (creatorIsToken0 && price > 0) {
+        if (agentIsToken0 && price > 0) {
             price = (1e18 * 1e18) / price;
         }
     }
@@ -861,11 +1017,11 @@ contract AgentOracle is OApp {
     }
 
     // ================================
-    // V3 TWAP - PRICE CALCULATION (CREATOR/USDC)
+    // V3 TWAP - PRICE CALCULATION (AGENT/QUOTEC)
     // ================================
 
     /**
-     * @notice Calculate V3 TWAP tick for the configured CREATOR/USDC pool
+     * @notice Calculate V3 TWAP tick for the configured AGENT/QUOTEC pool
      * @dev Uses Uniswap V3 pool observations (TWAP), not spot `slot0`.
      */
     function getV3TWAPTick(uint32 duration) public view returns (int24 twapTick) {
@@ -888,7 +1044,7 @@ contract AgentOracle is OApp {
     }
 
     /**
-     * @notice Get CREATOR/USD TWAP price from the configured Uniswap V3 pool
+     * @notice Get AGENT/QUOTE TWAP price from the configured Uniswap V3 pool
      * @param duration TWAP duration in seconds
      * @return priceUsd18 USDC per 1 CREATOR, scaled to 1e18
      */
@@ -899,16 +1055,16 @@ contract AgentOracle is OApp {
 
         // Quote USDC amount for 1 CREATOR (10^creatorDecimals units)
         uint256 baseAmount = 10 ** uint256(v3AgentDecimals);
-        uint256 quoteAmount = _getQuoteAtTick(twapTick, uint128(baseAmount), v3AgentToken, v3UsdToken);
+        uint256 quoteAmount = _getQuoteAtTick(twapTick, uint128(baseAmount), v3AgentToken, v3QuoteToken);
 
         // Scale USDC decimals to 1e18
-        if (v3UsdDecimals < 18) {
-            priceUsd18 = quoteAmount * (10 ** uint256(18 - v3UsdDecimals));
-        } else if (v3UsdDecimals == 18) {
+        if (v3QuoteDecimals < 18) {
+            priceUsd18 = quoteAmount * (10 ** uint256(18 - v3QuoteDecimals));
+        } else if (v3QuoteDecimals == 18) {
             priceUsd18 = quoteAmount;
         } else {
             // guarded by setV3Pool() but keep safe
-            priceUsd18 = quoteAmount / (10 ** uint256(v3UsdDecimals - 18));
+            priceUsd18 = quoteAmount / (10 ** uint256(v3QuoteDecimals - 18));
         }
     }
 
@@ -923,7 +1079,7 @@ contract AgentOracle is OApp {
      *      - Clamped to Ajna valid range (1..7388). Note: bucket 0 is invalid on Ajna pools.
      *
      *      IMPORTANT: `tick` should represent price = (quote token) per (collateral token).
-     *      For our Ajna strategy (quote=CREATOR, collateral=USDC), you want the CREATOR/USDC tick.
+     *      For our Ajna strategy (quote=CREATOR, collateral=USDC), you want the AGENT/QUOTEC tick.
      */
     function tickToAjnaBucket(int24 tick) public pure returns (uint256 bucketIndex) {
         int256 t = int256(tick);
@@ -940,7 +1096,7 @@ contract AgentOracle is OApp {
     }
 
     /**
-     * @notice Suggested Ajna bucket from the configured CREATOR/USDC V3 TWAP tick
+     * @notice Suggested Ajna bucket from the configured AGENT/QUOTEC V3 TWAP tick
      * @dev Uniswap ticks are for token1/token0. We need agent-token per USDC (quote per collateral),
      *      so we invert if CREATOR is token0 (i.e., address(creator) < address(usdc)).
      */
@@ -948,7 +1104,7 @@ contract AgentOracle is OApp {
         if (!v3PoolConfigured) revert V3NotConfigured();
         int24 twapTick = getV3TWAPTick(duration);
 
-        int24 orientedTick = (v3AgentToken > v3UsdToken) ? twapTick : -twapTick;
+        int24 orientedTick = (v3AgentToken > v3QuoteToken) ? twapTick : -twapTick;
         bucketIndex = tickToAjnaBucket(orientedTick);
     }
 
@@ -977,70 +1133,125 @@ contract AgentOracle is OApp {
     }
 
     /**
+     * @notice Get Agent/quote TWAP from configured Uniswap V2 pair.
+     * @dev Returns Agent-per-quote in 1e18 precision.
+     */
+    function getV2AgentQuoteTWAP(uint32 duration) public view returns (uint256 agentPerQuote18) {
+        if (!v2PairConfigured) revert V2NotConfigured();
+        if (duration == 0) revert InvalidDuration();
+        if (v2ObservationTimestamp == 0) revert NeedMoreObservations();
+
+        (uint256 currentCumulative, uint32 currentTs) = _currentV2CumulativeAgentPerQuote();
+        uint32 timeElapsed = currentTs - v2ObservationTimestamp;
+        if (timeElapsed < duration) revert NeedMoreObservations();
+
+        uint256 avgUQ112x112 = (currentCumulative - v2PriceCumulativeLast) / uint256(timeElapsed);
+        agentPerQuote18 = Math.mulDiv(avgUQ112x112, 1e18, uint256(1) << 112);
+    }
+
+    /**
+     * @dev Compute current cumulative Agent/quote price from V2 pair cumulatives plus current block extrapolation.
+     */
+    function _currentV2CumulativeAgentPerQuote() internal view returns (uint256 cumulativePrice, uint32 blockTimestamp) {
+        IUniswapV2Pair pair = IUniswapV2Pair(v2Pair);
+        blockTimestamp = uint32(block.timestamp % 2 ** 32);
+
+        uint256 price0Cumulative = pair.price0CumulativeLast();
+        uint256 price1Cumulative = pair.price1CumulativeLast();
+        (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast) = pair.getReserves();
+
+        if (blockTimestampLast != blockTimestamp) {
+            uint32 timeElapsed = blockTimestamp - blockTimestampLast;
+            if (reserve0 > 0 && reserve1 > 0) {
+                uint256 price0 = (uint256(reserve1) << 112) / uint256(reserve0); // token1 per token0
+                uint256 price1 = (uint256(reserve0) << 112) / uint256(reserve1); // token0 per token1
+                price0Cumulative += price0 * timeElapsed;
+                price1Cumulative += price1 * timeElapsed;
+            }
+        }
+
+        bool quoteIsToken0 = pair.token0() == v2QuoteToken;
+        // We need Agent per Quote:
+        // - if quote is token0, take price0 (token1/token0 = agent/quote)
+        // - if quote is token1, take price1 (token0/token1 = agent/quote)
+        cumulativePrice = quoteIsToken0 ? price0Cumulative : price1Cumulative;
+    }
+
+    /**
      * @notice Internal: Update price from TWAP
      */
     function _updatePriceFromTWAP() internal {
         // Rate limit
         if (block.timestamp - agentPriceTimestamp < priceUpdateCooldown) return;
-        if (observationState.cardinality < 2) return;
+        // Prefer V2 Agent/quote TWAP when configured; fallback to legacy V4 Agent/ETH TWAP.
+        uint256 agentPerQuote;
+        if (v2PairConfigured) {
+            try this.getV2AgentQuoteTWAP(v2TwapDuration) returns (uint256 price) {
+                agentPerQuote = price;
+            } catch {
+                return;
+            }
+        } else {
+            if (observationState.cardinality < 2) return;
+            uint32 duration = DEFAULT_TWAP_DURATION;
+            uint32 nowTs = uint32(block.timestamp);
+            if (nowTs <= duration) return;
 
-        // Fixed, non-bypassable window for auto-updates.
-        uint32 duration = DEFAULT_TWAP_DURATION;
-        uint32 nowTs = uint32(block.timestamp);
-        if (nowTs <= duration) return;
+            uint16 currentIndex = observationState.index;
+            Observation storage currentObs = observations[currentIndex];
+            if (!currentObs.initialized) return;
 
-        // Require at least MIN_TWAP_DURATION of real observation history before writing a price.
-        uint16 currentIndex = observationState.index;
-        Observation storage currentObs = observations[currentIndex];
-        if (!currentObs.initialized) return;
+            uint16 oldIndex = _findObservationBefore(nowTs - duration);
+            Observation storage oldObs = observations[oldIndex];
+            if (!oldObs.initialized) return;
 
-        uint16 oldIndex = _findObservationBefore(nowTs - duration);
-        Observation storage oldObs = observations[oldIndex];
-        if (!oldObs.initialized) return;
+            uint32 timeDelta = currentObs.blockTimestamp - oldObs.blockTimestamp;
+            if (timeDelta < MIN_TWAP_DURATION) return;
 
-        uint32 timeDelta = currentObs.blockTimestamp - oldObs.blockTimestamp;
-        if (timeDelta < MIN_TWAP_DURATION) return;
-
-        // Get Agent/ETH TWAP
-        uint256 creatorPerEth;
-        try this.getAgentEthTWAP(duration) returns (uint256 price) {
-            creatorPerEth = price;
-        } catch {
-            return;
+            try this.getAgentEthTWAP(duration) returns (uint256 price) {
+                agentPerQuote = price;
+            } catch {
+                return;
+            }
         }
 
-        if (creatorPerEth == 0) return;
+        if (agentPerQuote == 0) return;
 
-        // Get ETH/USD from Chainlink
-        if (chainlinkFeed == address(0)) return;
+        // Get quote/USD from feed.
+        address quoteUsdFeed = v2PairConfigured ? v2QuoteUsdFeed : chainlinkFeed;
+        if (quoteUsdFeed == address(0)) {
+            // Backward compatibility: if explicit V2 feed is not set, fallback to chainlinkFeed.
+            quoteUsdFeed = chainlinkFeed;
+        }
+        if (quoteUsdFeed == address(0)) return;
         if (!_sequencerIsUp()) return;
 
-        try IChainlinkFeed(chainlinkFeed).latestRoundData() returns (
-            uint80 roundId, int256 ethUSD, uint256, uint256 updatedAt, uint80 answeredInRound
+        try IChainlinkFeed(quoteUsdFeed).latestRoundData() returns (
+            uint80 roundId, int256 quoteUsd, uint256, uint256 updatedAt, uint80 answeredInRound
         ) {
-            if (ethUSD <= 0) return;
+            if (quoteUsd <= 0) return;
             if (block.timestamp - updatedAt > MAX_STALENESS) return;
             if (answeredInRound < roundId) return;
 
             // Convert Chainlink 8 decimals to 18
-            uint256 ethUSD18 = uint256(ethUSD) * 1e10;
+            uint256 quoteUsd18 = uint256(quoteUsd) * 1e10;
 
-            // USD per CREATOR = (USD per ETH) / (CREATOR per ETH)
-            int256 creatorUSD = int256(Math.mulDiv(ethUSD18, 1e18, creatorPerEth));
+            // USD per Agent = (USD per quote) / (Agent per quote)
+            int256 agentUsd = int256(Math.mulDiv(quoteUsd18, 1e18, agentPerQuote));
 
             // Sanity: reject updates that move price more than MAX_PRICE_DEVIATION from the stored value.
             // Auto-update is called inside a swap-path try/catch; return instead of reverting.
             if (agentPriceUSD > 0) {
                 uint256 oldP = uint256(agentPriceUSD);
-                uint256 newP = creatorUSD > 0 ? uint256(creatorUSD) : 0;
+                uint256 newP = agentUsd > 0 ? uint256(agentUsd) : 0;
                 uint256 deviation = oldP > newP ? ((oldP - newP) * 1e18) / oldP : ((newP - oldP) * 1e18) / oldP;
                 if (deviation > MAX_PRICE_DEVIATION) return;
             }
 
-            agentPriceUSD = creatorUSD;
+            agentPriceUSD = agentUsd;
             agentPriceTimestamp = block.timestamp;
 
-            emit AgentPriceUpdated(agentSymbol, creatorUSD, block.timestamp, address(this));
+            emit AgentPriceUpdated(agentSymbol, agentUsd, block.timestamp, address(this));
         } catch {
             // Chainlink failed, skip
         }
@@ -1057,26 +1268,37 @@ contract AgentOracle is OApp {
             revert PriceUpdateCooldown();
         }
 
-        // USD/CREATOR = Chainlink(ETH/USD) ÷ V4_TWAP(CREATOR/ETH).
-        if (!v4PoolConfigured) revert V4NotConfigured();
-        if (observationState.cardinality < 2) revert NeedMoreObservations();
+        // USD/Agent = (USD/quote) / (Agent/quote), preferring V2 when configured.
+        uint256 agentPerQuote;
+        if (v2PairConfigured) {
+            uint32 dur = twapDuration == 0 ? v2TwapDuration : twapDuration;
+            agentPerQuote = getV2AgentQuoteTWAP(dur);
+        } else {
+            if (!v4PoolConfigured) revert V4NotConfigured();
+            if (observationState.cardinality < 2) revert NeedMoreObservations();
+            agentPerQuote = getAgentEthTWAP(twapDuration);
+        }
+        if (agentPerQuote == 0) revert InvalidPrice();
 
-        uint256 creatorPerEth = getAgentEthTWAP(twapDuration);
-        if (creatorPerEth == 0) revert InvalidPrice();
-
-        if (chainlinkFeed == address(0)) revert ZeroAddress();
+        address quoteUsdFeed = v2PairConfigured ? v2QuoteUsdFeed : chainlinkFeed;
+        if (quoteUsdFeed == address(0)) {
+            // Backward compatibility: if explicit V2 feed is not set, fallback to chainlinkFeed.
+            quoteUsdFeed = chainlinkFeed;
+        }
+        if (quoteUsdFeed == address(0)) revert ZeroAddress();
         if (!_sequencerIsUp()) revert SequencerDown();
 
-        (uint80 roundId, int256 ethUSD,, uint256 updatedAt, uint80 answeredInRound) = IChainlinkFeed(chainlinkFeed).latestRoundData();
+        (uint80 roundId, int256 quoteUsd,, uint256 updatedAt, uint80 answeredInRound) =
+            IChainlinkFeed(quoteUsdFeed).latestRoundData();
 
-        if (ethUSD <= 0) revert InvalidPrice();
+        if (quoteUsd <= 0) revert InvalidPrice();
         if (block.timestamp - updatedAt > MAX_STALENESS) revert StalePrice();
         // FIX: I-3 (cross-cutting) — check answeredInRound per Chainlink docs
         require(answeredInRound >= roundId, "Stale round");
 
-        uint256 ethUSD18 = uint256(ethUSD) * 1e10;
-        // USD per CREATOR = (USD per ETH) / (CREATOR per ETH)
-        int256 creatorUSD = int256(Math.mulDiv(ethUSD18, 1e18, creatorPerEth));
+        uint256 quoteUsd18 = uint256(quoteUsd) * 1e10;
+        // USD per Agent = (USD per quote) / (Agent per quote)
+        int256 agentUsd = int256(Math.mulDiv(quoteUsd18, 1e18, agentPerQuote));
 
         // H-01 / 4626-293: TWAP-driven writes also must not bootstrap the oracle.
         if (agentPriceUSD == 0) revert OracleNotInitialized();
@@ -1084,19 +1306,19 @@ contract AgentOracle is OApp {
         // Sanity: reject updates that move price more than MAX_PRICE_DEVIATION from the stored value
         {
             uint256 oldP = uint256(agentPriceUSD);
-            uint256 newP = creatorUSD > 0 ? uint256(creatorUSD) : 0;
+            uint256 newP = agentUsd > 0 ? uint256(agentUsd) : 0;
             uint256 deviation = oldP > newP ? ((oldP - newP) * 1e18) / oldP : ((newP - oldP) * 1e18) / oldP;
             if (deviation > MAX_PRICE_DEVIATION) revert PriceDeviationTooHigh();
         }
 
-        agentPriceUSD = creatorUSD;
+        agentPriceUSD = agentUsd;
         agentPriceTimestamp = block.timestamp;
 
-        emit AgentPriceUpdated(agentSymbol, creatorUSD, block.timestamp, msg.sender);
+        emit AgentPriceUpdated(agentSymbol, agentUsd, block.timestamp, msg.sender);
     }
 
     /**
-     * @notice Optional: update agent USD price from Uniswap V3 TWAP (CREATOR/USDC)
+     * @notice Optional: update agent USD price from Uniswap V3 TWAP (AGENT/QUOTEC)
      * @dev Useful for Ajna bucket selection or cross-checking. Does not require Chainlink.
      */
     function updateAgentPriceFromV3TWAP(uint32 twapDuration) external {
@@ -1296,4 +1518,12 @@ interface IChainlinkFeed {
         external
         view
         returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
+}
+
+interface IUniswapV2Pair {
+    function token0() external view returns (address);
+    function token1() external view returns (address);
+    function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
+    function price0CumulativeLast() external view returns (uint256);
+    function price1CumulativeLast() external view returns (uint256);
 }

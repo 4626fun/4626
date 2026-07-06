@@ -152,8 +152,8 @@ contract SeedUniversalBytecodeStore is Script {
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
             _storeIfMissing(
                 store,
-                vm.getCode("out/CreatorCharmStrategy.sol/CreatorCharmStrategy.json"),
-                "CreatorCharmStrategy",
+                vm.getCode("out/CharmStrategy4626.sol/CharmStrategy4626.json"),
+                "CharmStrategy4626",
                 supportsChunking
             );
         }

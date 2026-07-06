@@ -2,20 +2,20 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {CreatorCharmStrategy} from "@4626/shared/strategies/univ3/CreatorCharmStrategy.sol";
+import {CharmStrategy4626} from "@4626/shared/strategies/univ3/CharmStrategy4626.sol";
 
 /**
- * @title Minimal Halmos example for CreatorCharmStrategy valuation math
+ * @title Minimal Halmos example for CharmStrategy4626 valuation math
  * @notice This is an initial symbolic execution target for the most critical pure math
  *         in the Charm strategy (especially the Ajna backstop valuation logic).
  *
  * Run with:
- *   halmos --contract CreatorCharmStrategyValuation_Halmos --function test_*
+ *   halmos --contract CharmStrategy4626Valuation_Halmos --function test_*
  *
  * Or with foundry + halmos:
  *   halmos --forge
  */
-contract CreatorCharmStrategyValuation_Halmos is Test {
+contract CharmStrategy4626Valuation_Halmos is Test {
     uint256 private constant MAX_USDC_AMOUNT_FOR_SCALE = type(uint256).max / 1e30;
     uint256 private constant MAX_COLLATERAL_FOR_BPS = type(uint256).max / 10_000;
 
@@ -72,7 +72,7 @@ contract CreatorCharmStrategyValuation_Halmos is Test {
 
     function _usdcToCreatorValueWithPrice(uint256 usdcAmount, uint256 creatorPriceUsd) internal pure returns (uint256) {
         if (usdcAmount == 0 || creatorPriceUsd == 0) return 0;
-        // Matches the logic in CreatorCharmStrategy
+        // Matches the logic in CharmStrategy4626
         return (usdcAmount * 1e30) / creatorPriceUsd;
     }
 

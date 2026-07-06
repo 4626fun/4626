@@ -22,9 +22,9 @@ import {TickMathCompat} from "@4626/shared/libraries/uniswap/TickMathCompat.sol"
  *
  * @dev ARCHITECTURE:
  *      Base (Hub):
- *      - Reads V4 pool TWAP (■AKITA/ETH)
+ *      - Reads V4 pool TWAP (■CREATOR/ETH)
  *      - Gets ETH/USD from Chainlink
- *      - Calculates ■AKITA/USD
+ *      - Calculates ■CREATOR/USD
  *      - Broadcasts to all chains via LayerZero
  *
  *      Remote Chains:
@@ -105,7 +105,7 @@ contract CreatorOracle is OApp {
     /// @notice Uniswap V4 PoolManager
     IPoolManager public poolManager;
 
-    /// @notice V4 pool key for ■AKITA/ETH
+    /// @notice V4 pool key for ■CREATOR/ETH
     PoolKey public creatorPoolKey;
 
     /// @notice Whether V4 pool is configured
@@ -126,6 +126,14 @@ contract CreatorOracle is OApp {
 
     /// @notice USD stable token used in the V3 pool (quote token, e.g. USDC)
     address public v3UsdToken;
+
+    /// @notice Optional reference quote token guard for V3 pricing lanes.
+    /// @dev If set, `setV3Pool` requires `_usdToken == referenceQuoteToken`.
+    ///      Intended to pin CreatorOracle to the creator lane quote token (e.g. ZORA).
+    address public referenceQuoteToken;
+
+    /// @notice When true, reference quote token can no longer be changed.
+    bool public referenceQuoteTokenLocked;
 
     /// @notice Cached decimals for price scaling
     uint8 public v3CreatorDecimals;
@@ -232,6 +240,8 @@ contract CreatorOracle is OApp {
     event TickWasCapped(int24 rawTick, int24 truncatedTick, int24 movement);
     event ChainlinkFeedSet(address indexed feed);
     event SequencerUptimeFeedSet(address indexed feed);
+    event ReferenceQuoteTokenSet(address indexed token);
+    event ReferenceQuoteTokenLocked(address indexed token);
     // FIX: M-3 (4626-439) — emitted (via the deprecated entrypoint's revert path in tests / off-chain
     // call-simulation) so tooling can pick up migrations to broadcastCreatorPriceWithFees.
     event BroadcastEqualSplitCallAttempted(address indexed caller, uint256 msgValue, uint32[] dstEids);
@@ -251,6 +261,9 @@ contract CreatorOracle is OApp {
     error StalePrice();
     error SequencerDown();
     error InvalidDuration();
+    error InvalidReferenceQuoteToken(address expected, address actual);
+    error ReferenceQuoteTokenIsLocked();
+    error ReferenceQuoteTokenUnset();
     error PriceUpdateCooldown();
     error PriceDeviationTooHigh();
     // H-01 / 4626-293: oracle bootstrap must go through initializeCreatorPrice.
@@ -270,7 +283,7 @@ contract CreatorOracle is OApp {
      * @notice Deploy oracle for a Creator Coin
      * @param _registry Registry4626 address (same on all chains for deterministic addresses)
      * @param _chainlinkFeed Chainlink ETH/USD feed address
-     * @param _creatorSymbol Creator token symbol (e.g., "■AKITA")
+     * @param _creatorSymbol Creator token symbol (e.g., "■CREATOR")
      * @param _owner Owner address
      *
      * @dev DETERMINISTIC DEPLOYMENT:
@@ -322,10 +335,26 @@ contract CreatorOracle is OApp {
         emit SequencerUptimeFeedSet(_feed);
     }
 
+    /// @notice Set the required V3 quote token for this oracle lane.
+    /// @dev Set to zero address to disable strict quote-token enforcement.
+    function setReferenceQuoteToken(address _token) external onlyOwner {
+        if (referenceQuoteTokenLocked) revert ReferenceQuoteTokenIsLocked();
+        referenceQuoteToken = _token;
+        emit ReferenceQuoteTokenSet(_token);
+    }
+
+    /// @notice Irreversibly lock the current reference quote token.
+    /// @dev Prevents post-init quote-token drift in production deployments.
+    function lockReferenceQuoteToken() external onlyOwner {
+        if (referenceQuoteToken == address(0)) revert ReferenceQuoteTokenUnset();
+        referenceQuoteTokenLocked = true;
+        emit ReferenceQuoteTokenLocked(referenceQuoteToken);
+    }
+
     /**
      * @notice Configure V4 pool for TWAP observations
      * @param _poolManager Uniswap V4 PoolManager
-     * @param _poolKey Pool key for ■AKITA/ETH
+     * @param _poolKey Pool key for ■CREATOR/ETH
      * @param _creatorIsToken0 Whether creator token is currency0
      */
     function setV4Pool(address _poolManager, PoolKey calldata _poolKey, bool _creatorIsToken0) external onlyOwner {
@@ -378,6 +407,10 @@ contract CreatorOracle is OApp {
     {
         if (_pool == address(0) || _creatorToken == address(0) || _usdToken == address(0)) {
             revert ZeroAddress();
+        }
+        address expectedQuoteToken = referenceQuoteToken;
+        if (expectedQuoteToken != address(0) && _usdToken != expectedQuoteToken) {
+            revert InvalidReferenceQuoteToken(expectedQuoteToken, _usdToken);
         }
         if (_twapDuration < MIN_TWAP_DURATION) revert InvalidDuration();
 

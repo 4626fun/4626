@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   mapRoomDetailPayload,
+  mergeRoomIdUniverse,
   readRoomsSnapshotSyncFlags,
 } from './roomsSnapshotSync.js'
 
@@ -71,5 +72,10 @@ describe('roomsSnapshotSync', () => {
     expect(flags.enabled).toBe(true)
     expect(flags.batchSize).toBeGreaterThan(0)
     expect(flags.concurrency).toBeGreaterThan(0)
+    expect(flags.frontierScanEnabled).toBe(true)
+  })
+
+  it('merges indexed and frontier ids without duplicates', () => {
+    expect(mergeRoomIdUniverse(['1', '2', '5'], ['5', '6', '7'])).toEqual(['1', '2', '5', '6', '7'])
   })
 })

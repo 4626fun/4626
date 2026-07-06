@@ -43,7 +43,7 @@ import {UserPositionInvariantBase} from "./UserPositionInvariantBase.sol";
 /// the current mock harness. See RebalanceTestHarness and the "real" safety suite for notes.
 ///
 /// Roadmap:
-///   - When real CreatorCharmStrategy + AjnaERC4626Vault (with actual liquidity,
+///   - When real CharmStrategy4626 + AjnaERC4626Vault (with actual liquidity,
 ///     fees, and backstop logic) are integrated, the exact same user tracking +
 ///     protection mode structure should allow 98-99.5%+ bounds to hold reliably.
 ///   - The 99% version below is left as a commented target for that future state.
@@ -57,7 +57,7 @@ import {UserPositionInvariantBase} from "./UserPositionInvariantBase.sol";
 /// ============================================================================
 ///
 /// When you replace the mock strategies with the real contracts
-/// (CreatorCharmStrategy + AjnaERC4626Vault + real backstop), do the following:
+/// (CharmStrategy4626 + AjnaERC4626Vault + real backstop), do the following:
 ///
 /// 1. **Keep the handler structure** (userDepositedAssets, userSharesHeld, users,
 ///    depositForUser, withdrawForUser). This pattern is highly reusable.

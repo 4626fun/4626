@@ -3,8 +3,8 @@ pragma solidity ^0.8.20;
 
 import {Script, console2} from "forge-std/Script.sol";
 
-import {CreatorOVaultFactory} from "@4626/shared/deploy/factories/CreatorOVaultFactory.sol";
-import {VRFConsumer4626} from "@4626/shared/lottery/manager/4626VRFConsumer.sol";
+import {OVaultFactory4626} from "@4626/shared/deploy/factories/OVaultFactory4626.sol";
+import {VRFConsumer4626} from "@4626/shared/lottery/manager/VRFConsumer4626.sol";
 
 interface I4626RegistryAuth {
     function owner() external view returns (address);
@@ -13,7 +13,7 @@ interface I4626RegistryAuth {
 
 /**
  * @notice Deploys the remaining "core infra" contracts that sit next to the vanity registry/lottery:
- *         - CreatorOVaultFactory (legacy deployment registrar)
+ *         - OVaultFactory4626 (legacy deployment registrar)
  *         - VRFConsumer4626 (VRF hub)
  *
  * Wiring:
@@ -60,12 +60,12 @@ contract DeployCoreInfraV2Extras is Script {
 
         vm.startBroadcast(pk);
 
-        CreatorOVaultFactory factory;
+        OVaultFactory4626 factory;
         VRFConsumer4626 vrfConsumer;
 
         if (!skipFactory) {
-            factory = new CreatorOVaultFactory(registryAddr, owner);
-            console2.log("CreatorOVaultFactory (legacy registrar):", address(factory));
+            factory = new OVaultFactory4626(registryAddr, owner);
+            console2.log("OVaultFactory4626 (legacy registrar):", address(factory));
             registry.setAuthorizedFactory(address(factory), true);
             console2.log("registry.setAuthorizedFactory(legacyRegistrar, true)");
         } else {

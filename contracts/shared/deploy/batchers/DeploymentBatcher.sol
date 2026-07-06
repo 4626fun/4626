@@ -14,7 +14,7 @@ import {ICreatorGaugeController} from "@4626/shared/interfaces/core/ICreatorGaug
 import {ICreatorOVault} from "@4626/shared/interfaces/core/ICreatorOVault.sol";
 import {IAjnaPoolFactory} from "@4626/shared/interfaces/external/IAjnaPool.sol";
 import {IBaseSolanaBridge} from "@4626/shared/interfaces/bridge/IBaseSolanaBridge.sol";
-import {CreatorLinearVesting} from "@4626/creator/vesting/CreatorLinearVesting.sol";
+import {LinearVesting4626} from "@4626/shared/vesting/LinearVesting4626.sol";
 import {IOFT, SendParam, MessagingFee, OFTReceipt} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
 import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 
@@ -228,9 +228,9 @@ contract DeploymentBatcherPhase3Helper {
     }
 
     function _wireCharmAjnaSynergy(address charmStrategy, address ajnaPool, address oracle) internal {
-        ICreatorCharmStrategy(charmStrategy).setCreatorOracle(oracle);
-        ICreatorCharmStrategy(charmStrategy).setAjnaPool(ajnaPool);
-        ICreatorCharmStrategy(charmStrategy).setAjnaBorrowConfig(
+        ICharmStrategy4626(charmStrategy).setCreatorOracle(oracle);
+        ICharmStrategy4626(charmStrategy).setAjnaPool(ajnaPool);
+        ICharmStrategy4626(charmStrategy).setAjnaBorrowConfig(
             true, type(uint256).max, type(uint256).max, CHARM_AJNA_MIN_COLLATERAL_RATIO_BPS, 0, 0
         );
     }
@@ -268,7 +268,7 @@ contract DeploymentBatcherPhase3Helper {
         bytes memory charmStratArgs =
             abi.encode(params.vault, params.creatorToken, usdc, uniswapRouter, charmVault, v3Pool, address(this));
         charmStrategy = create2Deployer.deploy(charmStratSalt, codeIds.creatorCharmStrategy, charmStratArgs);
-        ICreatorCharmStrategy(charmStrategy).initializeApprovals();
+        ICharmStrategy4626(charmStrategy).initializeApprovals();
         if (!deferOwnershipTransfer) {
             IOwnableTransfer(charmStrategy).transferOwnership(protocolTreasury);
         }
@@ -628,7 +628,7 @@ interface IDeploymentBatcherRegistryAccess {
     function registry() external view returns (address);
 }
 
-interface ICreatorCharmStrategy {
+interface ICharmStrategy4626 {
     function initializeApprovals() external;
     function setCreatorOracle(address _creatorOracle) external;
     function setAjnaPool(address _ajnaPool) external;
@@ -1126,7 +1126,7 @@ contract DeploymentBatcherPhase2Module {
             result.vestingStartTimestamp = uint64(block.timestamp);
             result.vestingDurationSeconds = uint64(365 days);
             bytes32 vestingSalt = keccak256(abi.encodePacked(baseSalt, "vesting"));
-            CreatorLinearVesting vesting = new CreatorLinearVesting{salt: vestingSalt}(
+            LinearVesting4626 vesting = new LinearVesting4626{salt: vestingSalt}(
                 params.shareOFT,
                 params.owner,
                 result.vestingStartTimestamp,
@@ -1135,7 +1135,7 @@ contract DeploymentBatcherPhase2Module {
             );
             result.vestingAddress = address(vesting);
             IERC20(params.shareOFT).safeTransfer(result.vestingAddress, result.vestingAmount);
-            CreatorLinearVesting(result.vestingAddress).seed();
+            LinearVesting4626(result.vestingAddress).seed();
         }
 
         ICreatorOVault(params.vault).setProtocolRescue(protocolTreasury);

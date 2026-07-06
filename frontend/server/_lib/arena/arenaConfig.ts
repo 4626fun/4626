@@ -13,6 +13,8 @@ export type ArenaConfig = {
   creationEnabled: boolean
   dryRun: boolean
   agentId: string | null
+  /** Numeric degen.virtuals.io profile id for /agents/{id} links when ACP agentId is a UUID. */
+  degenProfileId: string | null
   agentWalletAddress: string | null
   hlApiWalletAddress: string | null
   /**
@@ -101,6 +103,7 @@ export function readArenaConfig(): ArenaConfig {
   const creationEnabled = readBool('ARENA_CREATION_ENABLED', true)
   const dryRun = readBool('ARENA_DRY_RUN', true)
   const agentId = readOptionalString('ARENA_AGENT_ID')
+  const degenProfileId = readOptionalString('ARENA_DEGEN_PROFILE_ID')
   const agentWalletAddress = normalizeAddressOrNull(readOptionalString('ARENA_AGENT_WALLET_ADDRESS'))
   const hlApiWalletAddress = normalizeAddressOrNull(readOptionalString('ARENA_HL_API_WALLET_ADDRESS'))
   const hlSubaccountAddress = normalizeAddressOrNull(readOptionalString('ARENA_HL_SUBACCOUNT_ADDRESS'))
@@ -125,6 +128,7 @@ export function readArenaConfig(): ArenaConfig {
     creationEnabled,
     dryRun,
     agentId,
+    degenProfileId,
     agentWalletAddress,
     hlApiWalletAddress,
     hlAgentPrivateKey: null,

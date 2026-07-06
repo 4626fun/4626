@@ -10,7 +10,7 @@ import {CreatorOVaultAdminModule} from "@4626/creator/vault/modules/CreatorOVaul
 import {CreatorOVaultCoreModule} from "@4626/creator/vault/modules/CreatorOVaultCoreModule.sol";
 import {CreatorOVaultStrategiesModule} from "@4626/creator/vault/modules/CreatorOVaultStrategiesModule.sol";
 import {CreatorShareOFT} from "@4626/creator/vault/CreatorShareOFT.sol";
-import {CreatorGaugeController} from "@4626/creator/governance/CreatorGaugeController.sol";
+import {CreatorGaugeController} from "@4626/creator/revenue/CreatorGaugeController.sol";
 import {CCALaunchStrategy} from "@4626/shared/strategies/cca/CCALaunchStrategy.sol";
 import {CreatorOracle} from "@4626/creator/oracles/CreatorOracle.sol";
 

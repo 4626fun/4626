@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {CreatorCharmStrategy} from "@4626/shared/strategies/univ3/CreatorCharmStrategy.sol";
+import {CharmStrategy4626} from "@4626/shared/strategies/univ3/CharmStrategy4626.sol";
 import {IAjnaPool, IAjnaPoolFactory} from "@4626/shared/interfaces/external/IAjnaPool.sol";
 import {IUniswapV3Factory} from "@4626/shared/interfaces/uniswap/IUniswapV3Factory.sol";
 import {IUniswapV3Pool} from "@4626/shared/interfaces/uniswap/IUniswapV3Pool.sol";
@@ -120,7 +120,7 @@ contract ForkCharmVaultMock {
     function rebalance() external {}
 }
 
-contract CreatorCharmStrategyForkIntegrationTest is Test {
+contract CharmStrategy4626ForkIntegrationTest is Test {
     event StrategyRebalanced(uint256 newTotalAssets);
 
     // Base mainnet addresses
@@ -132,7 +132,7 @@ contract CreatorCharmStrategyForkIntegrationTest is Test {
 
     bool internal forkEnabled;
     ForkCharmVaultMock internal charm;
-    CreatorCharmStrategy internal strategy;
+    CharmStrategy4626 internal strategy;
 
     function setUp() public {
         string memory rpc = vm.envOr("BASE_RPC_URL", string(""));
@@ -147,7 +147,7 @@ contract CreatorCharmStrategyForkIntegrationTest is Test {
         charm = new ForkCharmVaultMock(WETH, USDC);
         charm.setPool(swapPool);
 
-        strategy = new CreatorCharmStrategy(
+        strategy = new CharmStrategy4626(
             address(this), WETH, USDC, UNISWAP_V3_ROUTER, address(charm), swapPool, address(this)
         );
 
@@ -169,7 +169,7 @@ contract CreatorCharmStrategyForkIntegrationTest is Test {
         deal(USDC, address(charm), 5_000e6);
 
         vm.expectRevert(
-            abi.encodeWithSelector(CreatorCharmStrategy.WithdrawLiquidityUnavailable.selector, 1e18, 0)
+            abi.encodeWithSelector(CharmStrategy4626.WithdrawLiquidityUnavailable.selector, 1e18, 0)
         );
         strategy.withdraw(1e18);
     }
@@ -289,8 +289,8 @@ contract CreatorCharmStrategyForkIntegrationTest is Test {
         address swapPool = charm.pool();
         address ownerAddr = makeAddr("owner");
         address vaultAddr = makeAddr("vault");
-        CreatorCharmStrategy strategy2 =
-            new CreatorCharmStrategy(vaultAddr, WETH, USDC, UNISWAP_V3_ROUTER, address(charm), swapPool, ownerAddr);
+        CharmStrategy4626 strategy2 =
+            new CharmStrategy4626(vaultAddr, WETH, USDC, UNISWAP_V3_ROUTER, address(charm), swapPool, ownerAddr);
         vm.prank(ownerAddr);
         strategy2.setUniFactory(UNISWAP_V3_FACTORY);
         vm.prank(ownerAddr);

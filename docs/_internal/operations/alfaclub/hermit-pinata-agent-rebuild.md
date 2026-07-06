@@ -124,4 +124,8 @@ See also: [`hermit-pinata-spanish.md`](hermit-pinata-spanish.md), [`alfaclub-cre
 
 ## 5. Delete old agent (optional)
 
-**Done (2026-06-14):** replaced `x7lmjaxx` with **`x6bk3ima`** (`https://x6bk3ima.agents.pinata.cloud`) during a single-agent-plan destructive rebuild. Update Vercel `HERMIT_PINATA_*` + `GATEWAY_TOKEN` to match `pinata agents get x6bk3ima` if production still points at the old id.
+**Done (2026-06-14):** replaced `x7lmjaxx` with **`x6bk3ima`** during a single-agent-plan destructive rebuild.
+
+**Retired (2026-07-06):** deleted `x6bk3ima` (Agent Hermit) to create fresh **Akitai** agent
+`xpm64dc3`. See [`akita-pinata-agent.md`](akita-pinata-agent.md) for current wiring
+(`AKITAI_PINATA_*` on Vercel). Hermit creative stays on Vercel `/api/hermit/draft`.

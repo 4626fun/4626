@@ -6,8 +6,8 @@ import {Script, console2} from "forge-std/Script.sol";
 import {ve4626GaugeVoting} from "@4626/shared/governance/ve4626GaugeVoting.sol";
 import {ve4626VoterRewardsDistributor} from "@4626/shared/governance/ve4626VoterRewardsDistributor.sol";
 import {BribesFactory} from "@4626/shared/governance/factories/BribesFactory.sol";
-import {ve4626} from "@4626/creator/governance/ve4626.sol";
-import {ve4626BoostManager} from "@4626/creator/governance/ve4626BoostManager.sol";
+import {ve4626} from "@4626/shared/governance/ve4626.sol";
+import {ve4626BoostManager} from "@4626/shared/governance/ve4626BoostManager.sol";
 
 interface ILotteryManager4626ForRewards {
     function setBoostManager(address manager) external;

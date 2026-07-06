@@ -23,12 +23,10 @@ describe('WaitlistReturningWalletSignIn', () => {
     render(<WaitlistReturningWalletSignIn busy onSignIn={onSignIn} onCancel={onCancel} />)
 
     const button = screen.getByRole('button', { name: /Connecting wallet/i })
-    expect(button).toHaveProperty('disabled', true)
+    expect(button).toHaveProperty('disabled', false)
 
     fireEvent.click(button)
     expect(onSignIn).not.toHaveBeenCalled()
-
-    fireEvent.click(screen.getByRole('button', { name: /Cancel wallet sign-in/i }))
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 })

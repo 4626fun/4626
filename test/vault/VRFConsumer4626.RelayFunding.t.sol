@@ -6,7 +6,7 @@ import {
     VRFConsumer4626,
     IVRFCoordinatorV2Plus,
     RandomWordsRequest
-} from "@4626/shared/lottery/manager/4626VRFConsumer.sol";
+} from "@4626/shared/lottery/manager/VRFConsumer4626.sol";
 import {MessagingFee, Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {MessagingReceipt} from "@layerzerolabs/oapp-evm/contracts/oapp/OAppSender.sol";
 

@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Script.sol";
 import "@4626/shared/deploy/batchers/StrategyDeploymentBatcher.sol";
 import {
-    CreatorCharmStrategyFactory,
+    CharmStrategy4626Factory,
     AjnaERC4626StrategyFactory
 } from "@4626/shared/deploy/batchers/StrategyDeploymentFactories.sol";
 import "@4626/shared/deploy/batchers/VaultActivationBatcher.sol";
@@ -35,8 +35,8 @@ contract DeployEverything is Script {
         // FIX: 4626-401 / M-37 — the two strategy factories are deployed here instead of
         // inside `StrategyDeploymentBatcher`'s constructor so the batcher's init-code stays
         // under the EIP-3860 49,152-byte cap enforced by `forge build --sizes`.
-        console.log("\n1a. Deploying CreatorCharmStrategyFactory...");
-        CreatorCharmStrategyFactory creatorCharmFactory = new CreatorCharmStrategyFactory();
+        console.log("\n1a. Deploying CharmStrategy4626Factory...");
+        CharmStrategy4626Factory creatorCharmFactory = new CharmStrategy4626Factory();
         console.log("    Address:", address(creatorCharmFactory));
 
         console.log("\n1b. Deploying AjnaERC4626StrategyFactory...");
@@ -66,7 +66,7 @@ contract DeployEverything is Script {
         console.log("========================================");
         console.log("DEPLOYMENT COMPLETE!");
         console.log("========================================");
-        console.log("CreatorCharmStrategyFactory:", address(creatorCharmFactory));
+        console.log("CharmStrategy4626Factory:", address(creatorCharmFactory));
         console.log("AjnaERC4626StrategyFactory:", address(ajnaFactory));
         console.log("StrategyDeploymentBatcher:  ", address(strategyBatcher));
         console.log("VaultActivationBatcher:     ", address(activationBatcher));

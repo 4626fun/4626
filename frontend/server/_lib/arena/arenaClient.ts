@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { dirname, isAbsolute, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
+import { getClearinghouseState, getSpotUsdcBalance } from '../alfaclub/hyperliquid.js'
 import { logger } from '../infra/logger.js'
 import {
   computeAcpSeedFingerprint,
@@ -11,6 +12,10 @@ import {
   runAcpAuthBootstrap,
   resolveAcpStateEnv,
 } from './acpAuthBootstrap.js'
+import {
+  fetchArenaAgentProfile,
+  resolveArenaDegenProfileId,
+} from './arenaAgentProfile.js'
 import { readArenaConfig, type ArenaConfig } from './arenaConfig.js'
 import { validateArenaPair } from './arenaPairPolicy.js'
 import type { ArenaCreateResult, ArenaOpResult, ArenaRunResult, ArenaTradeRequest } from './arenaTypes.js'
@@ -470,6 +475,216 @@ export async function listArenaAssets(config = readArenaConfig()): Promise<Arena
       total: assets.length,
       assets,
     },
+  }
+}
+
+function extractJsonArrayFromOutput(output: string): unknown[] | null {
+  const trimmed = output.trim()
+  if (!trimmed) return null
+  try {
+    const parsed = JSON.parse(trimmed)
+    return Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+const HYPERLIQUID_INFO_ENDPOINTS = ['https://api.hyperliquid.xyz/info', 'https://api-ui.hyperliquid.xyz/info']
+const HYPERLIQUID_EXPLORER_ENDPOINTS = ['https://rpc.hyperliquid.xyz/explorer']
+const HYPERLIQUID_INFO_TIMEOUT_MS = 10_000
+
+type HyperliquidInfoCall =
+  | { type: 'userDetails'; user: string }
+  | { type: 'userFees'; user: string }
+  | { type: 'userNonFundingLedgerUpdates'; user: string }
+  | { type: 'userFills'; user: string }
+  | { type: 'allMids' }
+  | { type: 'spotMetaAndAssetCtxs' }
+
+function hyperliquidEndpointsForType(type: HyperliquidInfoCall['type']): string[] {
+  if (type === 'userDetails') {
+    return [...HYPERLIQUID_EXPLORER_ENDPOINTS, ...HYPERLIQUID_INFO_ENDPOINTS]
+  }
+  return HYPERLIQUID_INFO_ENDPOINTS
+}
+
+async function postHyperliquidInfo(payload: HyperliquidInfoCall): Promise<{
+  ok: boolean
+  value?: unknown
+  error?: string
+}> {
+  const endpoints = hyperliquidEndpointsForType(payload.type)
+  for (const endpoint of endpoints) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), HYPERLIQUID_INFO_TIMEOUT_MS)
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      })
+      if (!response.ok) {
+        return { ok: false, error: `${payload.type} http ${response.status}` }
+      }
+      const value = (await response.json()) as unknown
+      return { ok: true, value }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (endpoint === endpoints[endpoints.length - 1]) {
+        return { ok: false, error: `${payload.type} fetch failed: ${message}` }
+      }
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+  return { ok: false, error: `${payload.type} fetch failed` }
+}
+
+function pickArenaUserAddress(config: ArenaConfig): string | null {
+  return (
+    normalizeAddress(config.agentWalletAddress) ??
+    normalizeAddress(config.hlMasterAddressOverride) ??
+    normalizeAddress(config.hlApiWalletAddress)
+  )
+}
+
+export async function runArenaPositionIntel(config = readArenaConfig()): Promise<ArenaOpResult> {
+  const openPositions = await runArenaOpenPositions(config)
+  if (!openPositions.ok) return openPositions
+
+  const positions = Array.isArray(openPositions.details?.positions)
+    ? openPositions.details.positions
+    : []
+  const walletAddress = pickArenaUserAddress(config)
+  if (!walletAddress) {
+    return {
+      ok: true,
+      message: 'Fetched open positions (without Hyperliquid account enrichment).',
+      details: {
+        positions,
+        walletAddress: null,
+        partialFailures: ['wallet address unavailable for Hyperliquid user payloads'],
+      },
+      run: openPositions.run,
+    }
+  }
+
+  const [
+    userDetails,
+    userFees,
+    ledgerUpdates,
+    userFills,
+    allMids,
+    spotMetaAndAssetCtxs,
+    clearinghouseState,
+    spotUsdcBalance,
+  ] = await Promise.all([
+    postHyperliquidInfo({ type: 'userDetails', user: walletAddress }),
+    postHyperliquidInfo({ type: 'userFees', user: walletAddress }),
+    postHyperliquidInfo({ type: 'userNonFundingLedgerUpdates', user: walletAddress }),
+    postHyperliquidInfo({ type: 'userFills', user: walletAddress }),
+    postHyperliquidInfo({ type: 'allMids' }),
+    postHyperliquidInfo({ type: 'spotMetaAndAssetCtxs' }),
+    getClearinghouseState(walletAddress),
+    getSpotUsdcBalance(walletAddress),
+  ])
+
+  const partialFailures = [
+    userDetails.error,
+    userFees.error,
+    ledgerUpdates.error,
+    userFills.error,
+    allMids.error,
+    spotMetaAndAssetCtxs.error,
+    clearinghouseState ? null : 'clearinghouseState unavailable',
+    spotUsdcBalance == null ? 'spotClearinghouseState unavailable' : null,
+  ].filter((value): value is string => Boolean(value))
+
+  const profileId = resolveArenaDegenProfileId(config)
+  const agentProfile = profileId ? await fetchArenaAgentProfile(profileId) : null
+  if (profileId && !agentProfile) {
+    partialFailures.push(`agentProfile fetch failed for id ${profileId}`)
+  }
+
+  return {
+    ok: true,
+    message:
+      partialFailures.length > 0
+        ? 'Fetched open positions with partial Hyperliquid enrichment.'
+        : 'Fetched open positions with Hyperliquid enrichment.',
+    details: {
+      positions,
+      walletAddress,
+      agentProfile,
+      userDetails: userDetails.ok ? userDetails.value : null,
+      userFees: userFees.ok ? userFees.value : null,
+      ledgerUpdates: ledgerUpdates.ok ? ledgerUpdates.value : null,
+      userFills: userFills.ok ? userFills.value : null,
+      allMids: allMids.ok ? allMids.value : null,
+      spotMetaAndAssetCtxs: spotMetaAndAssetCtxs.ok ? spotMetaAndAssetCtxs.value : null,
+      clearinghouseState,
+      spotUsdcBalance,
+      partialFailures,
+    },
+    run: openPositions.run,
+  }
+}
+
+export async function runArenaOpenPositions(config = readArenaConfig()): Promise<ArenaOpResult> {
+  const baseValidation = ensureArenaEnabled(config)
+  if (baseValidation) return baseValidation
+  const dgclawValidation = ensureDgclawReady(config)
+  if (dgclawValidation) return dgclawValidation
+
+  const command = buildNodeScriptCommand(config, 'scripts/trade.ts', ['positions'])
+  const run = await runCommand(command, config)
+  if (!run.ok) {
+    auditLog('positions', { ok: false, dryRun: run.dryRun, error: run.error ?? null })
+    return {
+      ok: false,
+      message: 'Arena open-positions query failed.',
+      run,
+    }
+  }
+
+  const stdout = String(run.stdout ?? '').trim()
+  if (!stdout) {
+    auditLog('positions', { ok: true, dryRun: run.dryRun, count: 0, emptyOutput: true })
+    return {
+      ok: true,
+      message: 'No open positions on the Virtuals/Hyperliquid account.',
+      details: { positions: [] },
+      run,
+    }
+  }
+  if (/^No open positions$/i.test(stdout)) {
+    auditLog('positions', { ok: true, dryRun: run.dryRun, count: 0 })
+    return {
+      ok: true,
+      message: 'No open positions on the Virtuals/Hyperliquid account.',
+      details: { positions: [] },
+      run,
+    }
+  }
+
+  const positions = extractJsonArrayFromOutput(stdout)
+  if (positions) {
+    auditLog('positions', { ok: true, dryRun: run.dryRun, count: positions.length })
+    return {
+      ok: true,
+      message: `Fetched ${positions.length} open position${positions.length === 1 ? '' : 's'}.`,
+      details: { positions },
+      run,
+    }
+  }
+
+  auditLog('positions', { ok: true, dryRun: run.dryRun, count: null, parsed: false })
+  return {
+    ok: true,
+    message: 'Fetched open positions.',
+    details: { rawOutput: stdout },
+    run,
   }
 }
 

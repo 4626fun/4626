@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   isWaitlistStepTwoSigningComplete,
+  shouldAutoSubmitOtpCode,
   shouldFocusBaseAppWalletSetup,
   shouldShowBaseAppWalletLinkPanel,
   shouldShowParentCswAddOwnerPanel,
@@ -71,5 +72,76 @@ describe('isWaitlistStepTwoSigningComplete', () => {
         parentEmbeddedOwnerOnChain: true,
       }),
     ).toBe(true)
+  })
+})
+
+describe('shouldAutoSubmitOtpCode', () => {
+  it('auto-submits a fresh 6-digit code that has not been attempted yet', () => {
+    expect(
+      shouldAutoSubmitOtpCode({
+        step: 'code',
+        normalizedCode: '123456',
+        codeBusy: false,
+        lastAttemptedCode: null,
+      }),
+    ).toBe(true)
+  })
+
+  it('does not re-submit the same code after a failed attempt (regression: retry-loop against Privy)', () => {
+    // This is the exact shape that caused a runaway retry loop: verification failed
+    // (e.g. wrong code, network error, provider rate limit), codeBusy flipped back to
+    // false, but the OTP input still holds the same unchanged 6-digit code.
+    expect(
+      shouldAutoSubmitOtpCode({
+        step: 'code',
+        normalizedCode: '123456',
+        codeBusy: false,
+        lastAttemptedCode: '123456',
+      }),
+    ).toBe(false)
+  })
+
+  it('auto-submits again once the user changes the code after a failed attempt', () => {
+    expect(
+      shouldAutoSubmitOtpCode({
+        step: 'code',
+        normalizedCode: '654321',
+        codeBusy: false,
+        lastAttemptedCode: '123456',
+      }),
+    ).toBe(true)
+  })
+
+  it('does not submit while a verification request is already in flight', () => {
+    expect(
+      shouldAutoSubmitOtpCode({
+        step: 'code',
+        normalizedCode: '123456',
+        codeBusy: true,
+        lastAttemptedCode: null,
+      }),
+    ).toBe(false)
+  })
+
+  it('does not submit an incomplete code', () => {
+    expect(
+      shouldAutoSubmitOtpCode({
+        step: 'code',
+        normalizedCode: '12345',
+        codeBusy: false,
+        lastAttemptedCode: null,
+      }),
+    ).toBe(false)
+  })
+
+  it('does not submit outside the code step', () => {
+    expect(
+      shouldAutoSubmitOtpCode({
+        step: 'email',
+        normalizedCode: '123456',
+        codeBusy: false,
+        lastAttemptedCode: null,
+      }),
+    ).toBe(false)
   })
 })

@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 
 /// @notice Targeted fuzz/unit tests for the M-06 remediation in
-/// contracts/shared/lottery/manager/4626LotteryManager.sol.
+/// contracts/shared/lottery/manager/LotteryManager4626.sol.
 ///
 /// The remediation added:
 ///   - MAX_JACKPOT_PAYOUT_ITERATIONS = 128  (cap on *active* creators)

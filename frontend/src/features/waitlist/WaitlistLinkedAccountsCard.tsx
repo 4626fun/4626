@@ -11,11 +11,14 @@ import { cn } from '@/lib/shared/utils'
 
 /** How long the freshly-linked rows stay visible before auto-collapsing into the summary. */
 const AUTO_COLLAPSE_DELAY_MS = 1_600
-const ROW_EXIT_STAGGER_S = 0.08
-const COUNT_UP_DURATION_S = 0.9
+/** Shared per-row delay for the collapse sequence — a row's exit and its "+N" popup fire
+ * together at `index * ROW_COLLAPSE_STAGGER_S`, so each line visibly leaves and lands in the
+ * total one at a time (a domino effect) instead of all rows/popups drifting independently. */
+const ROW_COLLAPSE_STAGGER_S = 0.26
+const ROW_EXIT_DURATION_S = 0.4
+const COUNT_UP_BASE_DURATION_S = 0.6
 /** Timing for the "+N" score-popup that floats up over the total as each row collapses into it. */
-const POPUP_DURATION_S = 1.3
-const POPUP_STAGGER_S = 0.32
+const POPUP_DURATION_S = 1.1
 
 /**
  * One row in the "linked accounts" summary — a provider that has already
@@ -118,7 +121,7 @@ function LinkedAccountRow({ icon, identity, monospaceIdentity, onEdit, editBusy 
 }
 
 /**
- * "Earn points" summary — header (label, running total) plus the linked
+ * "Your points" summary — header (label, running total) plus the linked
  * accounts list. The list starts expanded so newly-earned points are visible,
  * then auto-collapses once: each row animates up and fades into the header
  * while the total counts up to match, turning three rows into one clean
@@ -177,15 +180,19 @@ export function WaitlistLinkedAccountsCard({
       return
     }
     const baseline = totalPoints - rowsPoints
+    // The number keeps counting up until the last row's points have landed, so it
+    // reads as one continuous total accruing in step with each line disappearing.
+    const staggerSpan = Math.max(0, rows.length - 1) * ROW_COLLAPSE_STAGGER_S
     stopCountRef.current = animate(baseline, totalPoints, {
-      duration: COUNT_UP_DURATION_S,
+      duration: staggerSpan + COUNT_UP_BASE_DURATION_S,
       ease: [0.22, 1, 0.36, 1],
       onUpdate: (value) => setDisplayTotal(value),
     })
-    // "+N" score popups float up over the total, staggered so they read as
-    // each row's points landing one after another — like a game combo counter.
+    // "+N" score popups float up over the total in the same one-by-one cadence as
+    // the rows exiting below — each row leaves and its points land at the same
+    // moment, like a game combo counter ticking off one line at a time.
     setPopups(rows.map((row) => ({ id: row.key, points: row.points })))
-    const totalPopupMs = (Math.max(0, rows.length - 1) * POPUP_STAGGER_S + POPUP_DURATION_S) * 1_000
+    const totalPopupMs = (staggerSpan + POPUP_DURATION_S) * 1_000
     popupClearTimerRef.current = window.setTimeout(() => setPopups([]), totalPopupMs)
   }, [clearAutoCollapseTimer, clearPopupTimer, reduceMotion, rows, rowsPoints, totalPoints])
 
@@ -230,7 +237,7 @@ export function WaitlistLinkedAccountsCard({
   const canToggle = rows.length > 0
 
   return (
-    <div>
+    <div className="px-3">
       <button
         type="button"
         onClick={canToggle ? toggleExpanded : undefined}
@@ -243,12 +250,12 @@ export function WaitlistLinkedAccountsCard({
         )}
       >
         <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
-          Earn points
+          Your points
         </span>
         <span className="h-px flex-1 bg-white/[0.06]" aria-hidden="true" />
         {showTotal ? (
-          <span className="relative shrink-0 text-[11px] font-semibold tabular-nums text-zinc-300">
-            {Math.round(displayTotal).toLocaleString()} total
+          <span className="relative shrink-0 text-[12px] font-semibold tabular-nums text-zinc-300">
+            {Math.round(displayTotal).toLocaleString()}
             <AnimatePresence>
               {popups.map((popup, index) => (
                 <motion.span
@@ -258,7 +265,7 @@ export function WaitlistLinkedAccountsCard({
                   exit={{ opacity: 0 }}
                   transition={{
                     duration: POPUP_DURATION_S,
-                    delay: index * POPUP_STAGGER_S,
+                    delay: index * ROW_COLLAPSE_STAGGER_S,
                     times: [0, 0.18, 0.5, 1],
                     ease: 'easeOut',
                   }}
@@ -281,7 +288,7 @@ export function WaitlistLinkedAccountsCard({
         ) : null}
       </button>
 
-      <div id="waitlist-earn-points-rows" className="flex flex-col">
+      <div id="waitlist-earn-points-rows" className="mx-auto flex w-full max-w-[240px] flex-col">
         <AnimatePresence initial={false}>
           {expanded
             ? rows.map((row, index) => (
@@ -296,8 +303,8 @@ export function WaitlistLinkedAccountsCard({
                       : { opacity: 0, y: -28, scale: 0.85, filter: 'blur(2px)' }
                   }
                   transition={{
-                    duration: 0.36,
-                    delay: index * ROW_EXIT_STAGGER_S,
+                    duration: ROW_EXIT_DURATION_S,
+                    delay: index * ROW_COLLAPSE_STAGGER_S,
                     ease: [0.22, 1, 0.36, 1],
                   }}
                 >

@@ -222,14 +222,14 @@ describe('executeHermitCommand', () => {
     expect(result.reply).toContain('Invalid sender filter')
   })
 
-  it('supports /arena status in room 1659 when enabled', async () => {
+  it('supports /h arena status in room 1659 when enabled', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_DGCLAW_DIR: '/tmp',
       ARENA_DRY_RUN: '1',
     })
     const result = await executeHermitCommand({
-      commandText: '/arena status',
+      commandText: '/h arena status',
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       roomId: '1659',
     })
@@ -241,7 +241,154 @@ describe('executeHermitCommand', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('supports /arena backtest and routes to Virtuals backtest runner', async () => {
+  it('supports /h positions and formats overview + options', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+    })
+    const positionsSpy = vi
+      .spyOn(arenaClient, 'runArenaPositionIntel')
+      .mockResolvedValue({
+        ok: true,
+        message: 'Fetched open positions with Hyperliquid enrichment.',
+        details: {
+          positions: [
+            {
+              position: {
+                coin: 'BTC',
+                szi: '0.25',
+                entryPx: '105000',
+                liquidationPx: '95000',
+                unrealizedPnl: '1250.42',
+              },
+            },
+            {
+              position: {
+                coin: 'ETH',
+                szi: '-3.5',
+                entryPx: '5400',
+                liquidationPx: '6200',
+                unrealizedPnl: '-220.1',
+              },
+            },
+          ],
+        },
+      })
+
+    const result = await executeHermitCommand({
+      commandText: '/h positions',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toContain('◆ **Virtuals book**')
+    expect(result.reply).toContain('uPnL +$')
+    expect(result.reply).toContain('├ **BTC')
+    expect(positionsSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('supports numbered /h positions follow-up for risk view', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+    })
+    vi.spyOn(arenaClient, 'runArenaPositionIntel').mockResolvedValue({
+      ok: true,
+      message: 'Fetched open positions with Hyperliquid enrichment.',
+      details: {
+        positions: [
+          {
+            position: {
+              coin: 'BTC',
+              szi: '0.25',
+              entryPx: '105000',
+              liquidationPx: '95000',
+              unrealizedPnl: '1250.42',
+            },
+          },
+        ],
+        allMids: { BTC: '107000' },
+      },
+    })
+
+    const result = await executeHermitCommand({
+      commandText: '/h 2',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.reply).toContain('⚠ **Risk**')
+    expect(result.reply).toContain('Tightest')
+  })
+
+  it('shows partial-data hint and account view for /h pos account', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+    })
+    vi.spyOn(arenaClient, 'runArenaPositionIntel').mockResolvedValue({
+      ok: true,
+      message: 'Fetched open positions with partial Hyperliquid enrichment.',
+      details: {
+        positions: [],
+        userFees: { userCrossRate: '0.000315', userAddRate: '0.000105' },
+        partialFailures: ['userDetails fetch failed: timeout'],
+      },
+    })
+
+    const result = await executeHermitCommand({
+      commandText: '/h pos account',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.reply).toContain('partial data')
+    expect(result.reply).toContain('◈ **Account**')
+    expect(result.reply).toContain('Fees: taker')
+  })
+
+  it('returns unified strategy + arena block for /h status', async () => {
+    restoreEnv = applyEnv({
+      ARENA_ENABLED: '1',
+      ARENA_DGCLAW_DIR: '/tmp',
+      ARENA_DRY_RUN: '1',
+    })
+    vi.spyOn(arenaStore, 'resolveArenaIdentityForContext').mockResolvedValue({
+      source: 'user',
+      roomId: '1659',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      agentId: 'agent-1',
+      agentWalletAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      hlApiWalletAddress: null,
+    })
+    const statusSpy = vi.spyOn(arenaClient, 'runArenaStatus').mockResolvedValue({
+      ok: true,
+      message: 'Arena configured.',
+      details: { enabled: true, tradingEnabled: true, dryRun: true },
+    })
+
+    const result = await executeHermitCommand({
+      commandText: '/h status',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toContain('**Unified `/h` status**')
+    expect(result.reply).toContain('**Strategy (mirrored trading)**')
+    expect(result.reply).toContain('**Arena / Virtuals**')
+    expect(result.reply).toContain('enabled=true tradingEnabled=true dryRun=true')
+    expect(result.reply).toContain('Quick actions: `/h pos` · `/h arena status`')
+    expect(statusSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('supports /h arena backtest and routes to Virtuals backtest runner', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_DGCLAW_DIR: '/tmp',
@@ -264,7 +411,7 @@ describe('executeHermitCommand', () => {
 
     const result = await executeHermitCommand({
       commandText:
-        '/arena backtest BTC leveragePercent 50 rebalanceHealthPercent 75 rebalanceSizePercent 35 capital 4000',
+        '/h arena backtest BTC leveragePercent 50 rebalanceHealthPercent 75 rebalanceSizePercent 35 capital 4000',
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       roomId: '1659',
     })
@@ -283,7 +430,7 @@ describe('executeHermitCommand', () => {
     )
   })
 
-  it('rejects /arena backtest when sender has no mapped identity', async () => {
+  it('rejects /h arena backtest when sender has no mapped identity', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_DGCLAW_DIR: '/tmp',
@@ -305,7 +452,7 @@ describe('executeHermitCommand', () => {
       })
 
     const result = await executeHermitCommand({
-      commandText: '/arena backtest BTC',
+      commandText: '/h arena backtest BTC',
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       roomId: '1659',
     })
@@ -334,7 +481,7 @@ describe('executeHermitCommand', () => {
     )
 
     const result = await executeHermitCommand({
-      commandText: '/arena backtest FOO',
+      commandText: '/h arena backtest FOO',
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       roomId: '1659',
     })
@@ -344,14 +491,14 @@ describe('executeHermitCommand', () => {
     expect(result.reply).toContain('Try BTC/ETH')
   })
 
-  it('supports /arena identity show with resolver fallback', async () => {
+  it('supports /h arena identity show with resolver fallback', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_DGCLAW_DIR: '/tmp',
       ARENA_DRY_RUN: '1',
     })
     const result = await executeHermitCommand({
-      commandText: '/arena identity show',
+      commandText: '/h arena identity show',
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       roomId: '1659',
     })
@@ -361,20 +508,20 @@ describe('executeHermitCommand', () => {
     expect(result.reply).toContain('source:')
   })
 
-  it('rejects /arena commands outside allowed rooms', async () => {
+  it('rejects /h arena commands outside allowed rooms', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_DGCLAW_DIR: '/tmp',
     })
     const result = await executeHermitCommand({
-      commandText: '/arena status',
+      commandText: '/h arena status',
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       roomId: '1043',
     })
     expect(result.reply).toContain('only enabled in approved rooms')
   })
 
-  it('enforces HIP-3 xyz prefix on /arena trade', async () => {
+  it('enforces HIP-3 xyz prefix on /h arena trade', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_TRADING_ENABLED: '1',
@@ -382,14 +529,14 @@ describe('executeHermitCommand', () => {
       ARENA_DGCLAW_DIR: '/tmp',
     })
     const result = await executeHermitCommand({
-      commandText: '/arena trade open foo:bar long 1000 2',
+      commandText: '/h arena trade open foo:bar long 1000 2',
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       roomId: '1659',
     })
     expect(result.reply).toContain('xyz: prefix')
   })
 
-  it('keeps /arena execution in dry-run by default', async () => {
+  it('keeps /h arena execution in dry-run by default', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_TRADING_ENABLED: '1',
@@ -397,7 +544,7 @@ describe('executeHermitCommand', () => {
       ARENA_DGCLAW_DIR: '/tmp',
     })
     const result = await executeHermitCommand({
-      commandText: '/arena trade open xyz:GOLD long 5000 3',
+      commandText: '/h arena trade open xyz:GOLD long 5000 3',
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       roomId: '1659',
     })
@@ -406,7 +553,7 @@ describe('executeHermitCommand', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('supports intuitive /arena long + /arena close aliases', async () => {
+  it('supports intuitive /h arena long + /h arena close aliases', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_TRADING_ENABLED: '1',
@@ -414,7 +561,7 @@ describe('executeHermitCommand', () => {
       ARENA_DGCLAW_DIR: '/tmp',
     })
     const openResult = await executeHermitCommand({
-      commandText: '/arena long xyz:GOLD 5000 3',
+      commandText: '/h arena long xyz:GOLD 5000 3',
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       roomId: '1659',
     })
@@ -422,7 +569,7 @@ describe('executeHermitCommand', () => {
     expect(openResult.reply).toContain('[dry-run]')
 
     const closeResult = await executeHermitCommand({
-      commandText: '/arena close xyz:GOLD',
+      commandText: '/h arena close xyz:GOLD',
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       roomId: '1659',
     })
@@ -430,7 +577,7 @@ describe('executeHermitCommand', () => {
     expect(closeResult.reply).toContain('[dry-run]')
   })
 
-  it('supports /arena transfer to perps in dry-run mode', async () => {
+  it('supports /h arena transfer to perps in dry-run mode', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_TRADING_ENABLED: '1',
@@ -438,7 +585,7 @@ describe('executeHermitCommand', () => {
       ARENA_DGCLAW_DIR: '/tmp',
     })
     const result = await executeHermitCommand({
-      commandText: '/arena transfer 6 perp',
+      commandText: '/h arena transfer 6 perp',
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       roomId: '1659',
     })
@@ -446,7 +593,7 @@ describe('executeHermitCommand', () => {
     expect(result.reply).toContain('[dry-run]')
   })
 
-  it('supports intuitive transfer aliases (/arena move and /arena to-spot)', async () => {
+  it('supports intuitive transfer aliases (/h arena move and /h arena to-spot)', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_TRADING_ENABLED: '1',
@@ -454,7 +601,7 @@ describe('executeHermitCommand', () => {
       ARENA_DGCLAW_DIR: '/tmp',
     })
     const moveResult = await executeHermitCommand({
-      commandText: '/arena move 6 to perp',
+      commandText: '/h arena move 6 to perp',
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       roomId: '1659',
     })
@@ -462,7 +609,7 @@ describe('executeHermitCommand', () => {
     expect(moveResult.reply).toContain('[dry-run]')
 
     const toSpotResult = await executeHermitCommand({
-      commandText: '/arena to-spot 2',
+      commandText: '/h arena to-spot 2',
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       roomId: '1659',
     })
@@ -470,7 +617,7 @@ describe('executeHermitCommand', () => {
     expect(toSpotResult.reply).toContain('[dry-run]')
   })
 
-  it('supports /arena sweep alias in dry-run mode', async () => {
+  it('supports /h arena sweep alias in dry-run mode', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_TRADING_ENABLED: '1',
@@ -478,7 +625,7 @@ describe('executeHermitCommand', () => {
       ARENA_DGCLAW_DIR: '/tmp',
     })
     const result = await executeHermitCommand({
-      commandText: '/arena sweep 4',
+      commandText: '/h arena sweep 4',
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       roomId: '1659',
     })
@@ -486,7 +633,7 @@ describe('executeHermitCommand', () => {
     expect(result.reply).toContain('[dry-run]')
   })
 
-  it('supports /arena register (supplied ids) + runs onboard sequence (dry) with in-memory identity fallback when DB is unavailable', async () => {
+  it('supports /h arena register (supplied ids) + runs onboard sequence (dry) with in-memory identity fallback when DB is unavailable', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_DGCLAW_DIR: '/tmp',
@@ -497,7 +644,7 @@ describe('executeHermitCommand', () => {
     // Use ids that differ from the env defaults so we exercise the bind + sequence path
     // (instead of the new already-bound short-circuit).
     const result = await executeHermitCommand({
-      commandText: '/arena register 11111111-2222-3333-4444-555555555555 0x1111111111111111111111111111111111111111',
+      commandText: '/h arena register 11111111-2222-3333-4444-555555555555 0x1111111111111111111111111111111111111111',
       senderAddress: sender,
       roomId: '1659',
     })
@@ -512,7 +659,7 @@ describe('executeHermitCommand', () => {
     expect(result.reply).toContain('11111111')
   })
 
-  it('supports /arena register (no ids) create path: creates, auto-binds as personal mine + onboards (dry)', async () => {
+  it('supports /h arena register (no ids) create path: creates, auto-binds as personal mine + onboards (dry)', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_DGCLAW_DIR: '/tmp',
@@ -521,7 +668,7 @@ describe('executeHermitCommand', () => {
     })
     const sender = '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9'
     const result = await executeHermitCommand({
-      commandText: '/arena register',
+      commandText: '/h arena register',
       senderAddress: sender,
       roomId: '1659',
     })
@@ -534,7 +681,7 @@ describe('executeHermitCommand', () => {
     expect(result.reply).not.toContain('join=')
   })
 
-  it('create path /arena register (no ids) with successful acp parse auto-binds + onboards (mocked)', async () => {
+  it('create path /h arena register (no ids) with successful acp parse auto-binds + onboards (mocked)', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_DGCLAW_DIR: '/tmp',
@@ -551,7 +698,7 @@ describe('executeHermitCommand', () => {
     } as any)
 
     const result = await executeHermitCommand({
-      commandText: '/arena register',
+      commandText: '/h arena register',
       senderAddress: sender,
       roomId: '1659',
     })
@@ -565,20 +712,20 @@ describe('executeHermitCommand', () => {
     createSpy.mockRestore()
   })
 
-  it('rejects /arena register outside allowed rooms (same gate as other subs)', async () => {
+  it('rejects /h arena register outside allowed rooms (same gate as other subs)', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_DGCLAW_DIR: '/tmp',
     })
     const result = await executeHermitCommand({
-      commandText: '/arena register',
+      commandText: '/h arena register',
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       roomId: '1043',
     })
     expect(result.reply).toContain('only enabled in approved rooms')
   })
 
-  it('supports /arena register default (supplied ids) to change room default + onboard', async () => {
+  it('supports /h arena register default (supplied ids) to change room default + onboard', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_DGCLAW_DIR: '/tmp',
@@ -592,7 +739,7 @@ describe('executeHermitCommand', () => {
     const upsertSpy = vi.spyOn(arenaStore, 'upsertArenaIdentityMapping').mockResolvedValue(true)
 
     const result = await executeHermitCommand({
-      commandText: `/arena register default ${agentId} ${agentWallet}`,
+      commandText: `/h arena register default ${agentId} ${agentWallet}`,
       senderAddress: sender,
       roomId: '1659',
     })
@@ -611,7 +758,7 @@ describe('executeHermitCommand', () => {
     upsertSpy.mockRestore()
   })
 
-  it('includes onboarding diagnostics when /arena register default steps fail', async () => {
+  it('includes onboarding diagnostics when /h arena register default steps fail', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_DGCLAW_DIR: '/tmp',
@@ -672,7 +819,7 @@ describe('executeHermitCommand', () => {
     })
 
     const result = await executeHermitCommand({
-      commandText: `/arena register default ${agentId} ${agentWallet}`,
+      commandText: `/h arena register default ${agentId} ${agentWallet}`,
       senderAddress: sender,
       roomId: '1659',
     })
@@ -692,7 +839,7 @@ describe('executeHermitCommand', () => {
     addApiWalletSpy.mockRestore()
   })
 
-  it('short-circuits /arena register (supplied ids) when ids already match resolved for sender (already-bound case)', async () => {
+  it('short-circuits /h arena register (supplied ids) when ids already match resolved for sender (already-bound case)', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_DGCLAW_DIR: '/tmp',
@@ -703,7 +850,7 @@ describe('executeHermitCommand', () => {
     const sender = '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9'
     // Use explicit env ids (no longer hardcoded in config) so the already-bound short-circuit matches the resolved env fallback
     const result = await executeHermitCommand({
-      commandText: '/arena register 019e82af-2e66-7645-af23-69e9f14351f4 0x30068c6bccf43e9eb5cdb68fb978f32f744d870c',
+      commandText: '/h arena register 019e82af-2e66-7645-af23-69e9f14351f4 0x30068c6bccf43e9eb5cdb68fb978f32f744d870c',
       senderAddress: sender,
       roomId: '1659',
     })
@@ -712,7 +859,7 @@ describe('executeHermitCommand', () => {
     expect(result.reply).not.toContain('join=')
   })
 
-  it('supports full happy-path /arena register (supplied ids) with successful bind + onboard (mocked DB)', async () => {
+  it('supports full happy-path /h arena register (supplied ids) with successful bind + onboard (mocked DB)', async () => {
     restoreEnv = applyEnv({
       ARENA_ENABLED: '1',
       ARENA_DGCLAW_DIR: '/tmp',
@@ -734,7 +881,7 @@ describe('executeHermitCommand', () => {
     const upsertSpy = vi.spyOn(arenaStore, 'upsertArenaIdentityMapping').mockResolvedValue(true)
 
     const result = await executeHermitCommand({
-      commandText: `/arena register ${agentId} ${agentWallet}`,
+      commandText: `/h arena register ${agentId} ${agentWallet}`,
       senderAddress: sender,
       roomId: '1659',
     })
@@ -1564,7 +1711,7 @@ describe('executeHermitCommand', () => {
   })
 
   describe('strategy arena auto-setup', () => {
-    it('throttles repeated /strategy status auto-provision attempts after failure', async () => {
+    it('throttles repeated /s status auto-provision attempts after failure', async () => {
       restoreEnv = applyEnv({
         ARENA_ENABLED: '1',
         ARENA_DGCLAW_DIR: '/tmp',
@@ -1578,29 +1725,30 @@ describe('executeHermitCommand', () => {
       } as any)
 
       const first = await executeHermitCommand({
-        commandText: '/strategy status',
+        commandText: '/s ?',
         senderAddress: sender,
         roomId: '1659',
       })
       const second = await executeHermitCommand({
-        commandText: '/strategy status',
+        commandText: '/s ?',
         senderAddress: sender,
         roomId: '1659',
       })
 
       expect(first.reply).toContain('arenaSetup: auto-provision failed')
-      expect(second.reply).toContain('arenaSetup: retry window active')
+      expect(second.reply).toContain('**Your mirrored trading**')
+      expect(second.reply).not.toContain('arenaSetup: retry window active')
       expect(createSpy).toHaveBeenCalledTimes(1)
     })
 
-    it('auto-provisions arena identity on /strategy status when missing', async () => {
+    it('auto-provisions arena identity on /s status when missing', async () => {
       restoreEnv = applyEnv({
         ARENA_ENABLED: '1',
         ARENA_DGCLAW_DIR: '/tmp',
         ARENA_DRY_RUN: '1',
       })
       const sender = '0x2222222222222222222222222222222222222222'
-      vi.spyOn(arenaClient, 'runArenaCreateAgent').mockResolvedValue({
+      const createSpy = vi.spyOn(arenaClient, 'runArenaCreateAgent').mockResolvedValue({
         ok: true,
         agentId: '019e82af-2e66-7645-af23-69e9f14351f4',
         agentWalletAddress: '0x30068c6bccf43e9eb5cdb68fb978f32f744d870c',
@@ -1620,16 +1768,17 @@ describe('executeHermitCommand', () => {
       } as any)
 
       const result = await executeHermitCommand({
-        commandText: '/strategy status',
+        commandText: '/s ?',
         senderAddress: sender,
         roomId: '1659',
       })
 
-      expect(result.reply).toContain('**Strategy status**')
-      expect(result.reply).toContain('arenaSetup: Auto-provisioned Arena identity')
+      expect(createSpy).toHaveBeenCalledTimes(1)
+      expect(result.reply).toContain('**Your mirrored trading**')
+      expect(result.reply).toContain('**Room playbook (shared)**')
     })
 
-    it('auto-provisions arena identity on /strategy optin when missing', async () => {
+    it('auto-provisions arena identity on /s optin when missing', async () => {
       restoreEnv = applyEnv({
         ARENA_ENABLED: '1',
         ARENA_DGCLAW_DIR: '/tmp',
@@ -1661,14 +1810,14 @@ describe('executeHermitCommand', () => {
       })
 
       const result = await executeHermitCommand({
-        commandText: '/strategy optin balanced',
+        commandText: '/s optin balanced',
         senderAddress: sender,
         roomId: '1659',
       })
 
       expect(createSpy).toHaveBeenCalledTimes(1)
-      expect(result.reply).toContain('Automation enabled for your account.')
-      expect(result.reply).toContain('Arena setup is linked for your sender')
+      expect(result.reply).toContain("**You're in**")
+      expect(result.reply).toContain('/h setup')
     })
   })
 })

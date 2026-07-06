@@ -6,7 +6,7 @@ import "@4626/shared/governance/ve4626GaugeVoting.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 // Import veAKITA contract directly (not the interface)
-import {ve4626 as Ve4626Contract} from "@4626/creator/governance/ve4626.sol";
+import {ve4626 as Ve4626Contract} from "@4626/shared/governance/ve4626.sol";
 
 /**
  * @title MockWSToken

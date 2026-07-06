@@ -5,12 +5,12 @@ import "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import {LotteryManager4626} from "@4626/shared/lottery/manager/4626LotteryManager.sol";
+import {LotteryManager4626} from "@4626/shared/lottery/manager/LotteryManager4626.sol";
 import {MessagingFee, Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 
 import {DeploymentBatcher} from "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
-import {Registry4626} from "@4626/shared/core/4626Registry.sol";
+import {Registry4626} from "@4626/shared/core/Registry4626.sol";
 import "test/helpers/DeploymentBatcherFixture.sol";
 import {
     MockAjnaAdapterForPhase3,

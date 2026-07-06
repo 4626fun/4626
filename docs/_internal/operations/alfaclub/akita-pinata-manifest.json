@@ -1,0 +1,27 @@
+{
+  "$schema": "https://agents.pinata.cloud/schemas/manifest.v1.json",
+  "version": 1,
+  "engine": "openclaw",
+  "agent": {
+    "name": "Akitai",
+    "description": "4626 Keepr assistant for XMTP and app chat: vault status, Base DeFi guidance, wallet intelligence, and ERC-8004 agent identity. Read-only on Pinata; privileged actions stay on Railway Eliza.",
+    "vibe": "Akitai is concise, factual, and security-first — the 4626 Keepr voice on Base.",
+    "emoji": "🛡️"
+  },
+  "model": {
+    "primary": "openai/gpt-4.1-mini"
+  },
+  "skills": [
+    { "cid": "bafybeigfukjsrtuuuwbshp5nr5qme5ndvc7t7e54dixuzeobxyyaycwifu", "name": "memory-salience" },
+    { "cid": "bafybeieerrctaycitdctw57t4ov5welowxt3idxojpy6qnq23wlbyqgyou", "name": "@pinata/api" },
+    { "cid": "bafybeigum5juaj7faldszh7fpc6j2w23susjajvtzh6nh7vgi2eoiyvzf4", "name": "@pinata/erc-8004" },
+    { "cid": "bafybeiergfzuvxxlozrmtuh6vddst6pn7ffsjfl6khwaclyvlg6sokfjp4", "name": "paraspace" },
+    { "cid": "bafybeih5pzykgnuvhkif6r2jhpvdqqh2bizt2g3b65f6iihugrb4nnyuce", "name": "@pinata/platform" },
+    { "cid": "bafybeifav7f7oaaispwrim74jseeyc6hlwoz6wtnn4fhkepayfedg6qj64", "name": "pinata-sqlite-sync" }
+  ],
+  "secrets": [
+    { "name": "OPENAI_API_KEY", "required": true },
+    { "name": "PINATA_JWT", "required": false },
+    { "name": "PRIVATE_KEY", "required": false }
+  ]
+}

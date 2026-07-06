@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {CreatorCharmStrategy, ISwapRouter} from "@4626/shared/strategies/univ3/CreatorCharmStrategy.sol";
+import {CharmStrategy4626, ISwapRouter} from "@4626/shared/strategies/univ3/CharmStrategy4626.sol";
 import {IAjnaPool} from "@4626/shared/interfaces/external/IAjnaPool.sol";
 
 contract MockERC20 is ERC20 {
@@ -367,12 +367,12 @@ contract MockCreatorOracle {
     }
 }
 
-contract CreatorCharmStrategyOracleTest is Test {
+contract CharmStrategy4626OracleTest is Test {
     event StrategyRebalanced(uint256 newTotalAssets);
 
     function _deployStrategy(MockERC20 creator, MockERC20 usdc, MockCharmVault charm, MockV3Pool pool)
         internal
-        returns (CreatorCharmStrategy strategy)
+        returns (CharmStrategy4626 strategy)
     {
         MockRouter router = new MockRouter();
         strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
@@ -384,8 +384,8 @@ contract CreatorCharmStrategyOracleTest is Test {
         MockCharmVault charm,
         MockV3Pool pool,
         MockRouter router
-    ) internal returns (CreatorCharmStrategy strategy) {
-        strategy = new CreatorCharmStrategy(
+    ) internal returns (CharmStrategy4626 strategy) {
+        strategy = new CharmStrategy4626(
             address(this),
             address(creator),
             address(usdc),
@@ -403,7 +403,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         pool.setTwapTick(5000);
 
         MockCharmVault charm = new MockCharmVault(address(usdc), address(creator));
-        CreatorCharmStrategy strategy = _deployStrategy(creator, usdc, charm, pool);
+        CharmStrategy4626 strategy = _deployStrategy(creator, usdc, charm, pool);
 
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true); // 1 USD per CREATOR
@@ -431,7 +431,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         MockERC20 creator = new MockERC20("Creator", "CRT", 18);
         MockV3Pool pool = new MockV3Pool(address(usdc), address(creator));
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
-        CreatorCharmStrategy strategy = _deployStrategy(creator, usdc, charm, pool);
+        CharmStrategy4626 strategy = _deployStrategy(creator, usdc, charm, pool);
 
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true); // 1 USD per CREATOR
@@ -463,13 +463,13 @@ contract CreatorCharmStrategyOracleTest is Test {
         pool.setTwapTick(5000);
 
         MockCharmVault charmCreatorToken0 = new MockCharmVault(address(creator), address(usdc));
-        CreatorCharmStrategy strategyCreatorToken0 = _deployStrategy(creator, usdc, charmCreatorToken0, pool);
+        CharmStrategy4626 strategyCreatorToken0 = _deployStrategy(creator, usdc, charmCreatorToken0, pool);
         charmCreatorToken0.setTotalSupply(100e18);
         charmCreatorToken0.setBalance(address(strategyCreatorToken0), 100e18);
         charmCreatorToken0.setTotalAmounts(200e18, 2_000_000e6);
 
         MockCharmVault charmUsdcToken0 = new MockCharmVault(address(usdc), address(creator));
-        CreatorCharmStrategy strategyUsdcToken0 = _deployStrategy(creator, usdc, charmUsdcToken0, pool);
+        CharmStrategy4626 strategyUsdcToken0 = _deployStrategy(creator, usdc, charmUsdcToken0, pool);
         charmUsdcToken0.setTotalSupply(100e18);
         charmUsdcToken0.setBalance(address(strategyUsdcToken0), 100e18);
         charmUsdcToken0.setTotalAmounts(2_000_000e6, 200e18);
@@ -487,7 +487,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         pool.setObservationCardinality(1);
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
-        CreatorCharmStrategy strategy = _deployStrategy(creator, usdc, charm, pool);
+        CharmStrategy4626 strategy = _deployStrategy(creator, usdc, charm, pool);
 
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true); // 1 USD per CREATOR
@@ -508,7 +508,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         MockV3Pool pool = new MockV3Pool(address(usdc), address(creator));
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
-        CreatorCharmStrategy strategy = _deployStrategy(creator, usdc, charm, pool);
+        CharmStrategy4626 strategy = _deployStrategy(creator, usdc, charm, pool);
 
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, false);
@@ -529,7 +529,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         pool.setTwapTick(5000);
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
-        CreatorCharmStrategy strategy = _deployStrategy(creator, usdc, charm, pool);
+        CharmStrategy4626 strategy = _deployStrategy(creator, usdc, charm, pool);
 
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
@@ -556,7 +556,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         MockV3Pool pool = new MockV3Pool(address(usdc), address(creator));
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
-        CreatorCharmStrategy strategy = _deployStrategy(creator, usdc, charm, pool);
+        CharmStrategy4626 strategy = _deployStrategy(creator, usdc, charm, pool);
 
         charm.setTotalSupply(100e18);
         charm.setBalance(address(strategy), 100e18);
@@ -570,7 +570,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         MockERC20 creator = new MockERC20("Creator", "CRT", 18);
         MockV3Pool pool = new MockV3Pool(address(usdc), address(creator));
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
-        CreatorCharmStrategy strategy = _deployStrategy(creator, usdc, charm, pool);
+        CharmStrategy4626 strategy = _deployStrategy(creator, usdc, charm, pool);
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
@@ -592,7 +592,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         MockERC20 creator = new MockERC20("Creator", "CRT", 18);
         MockV3Pool pool = new MockV3Pool(address(usdc), address(creator));
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
-        CreatorCharmStrategy strategy = _deployStrategy(creator, usdc, charm, pool);
+        CharmStrategy4626 strategy = _deployStrategy(creator, usdc, charm, pool);
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
@@ -611,12 +611,12 @@ contract CreatorCharmStrategyOracleTest is Test {
         MockERC20 creator = new MockERC20("Creator", "CRT", 18);
         MockV3Pool pool = new MockV3Pool(address(usdc), address(creator));
         MockCharmVault charm = new MockCharmVault(address(usdc), address(creator));
-        CreatorCharmStrategy strategy = _deployStrategy(creator, usdc, charm, pool);
+        CharmStrategy4626 strategy = _deployStrategy(creator, usdc, charm, pool);
 
-        vm.expectRevert(abi.encodeWithSelector(CreatorCharmStrategy.InvalidTwapDuration.selector, 59));
+        vm.expectRevert(abi.encodeWithSelector(CharmStrategy4626.InvalidTwapDuration.selector, 59));
         strategy.setTwapDuration(59);
 
-        vm.expectRevert(abi.encodeWithSelector(CreatorCharmStrategy.InvalidTwapDuration.selector, uint32(1 days + 1)));
+        vm.expectRevert(abi.encodeWithSelector(CharmStrategy4626.InvalidTwapDuration.selector, uint32(1 days + 1)));
         strategy.setTwapDuration(uint32(1 days + 1));
 
         strategy.setTwapDuration(3600);
@@ -632,7 +632,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         router.setShouldRevert(true);
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
-        CreatorCharmStrategy strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
+        CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
         strategy.initializeApprovals();
 
         charm.setTotalSupply(100e18);
@@ -644,7 +644,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         usdc.mint(address(charm), 5_000_000e6);
 
         vm.expectRevert(
-            abi.encodeWithSelector(CreatorCharmStrategy.WithdrawLiquidityUnavailable.selector, 100e18, 20e18)
+            abi.encodeWithSelector(CharmStrategy4626.WithdrawLiquidityUnavailable.selector, 100e18, 20e18)
         );
         strategy.withdraw(100e18);
     }
@@ -657,7 +657,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         MockRouter router = new MockRouter();
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
-        CreatorCharmStrategy strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
+        CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
         strategy.initializeApprovals();
 
         charm.setTotalSupply(100e18);
@@ -669,7 +669,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         usdc.mint(address(charm), 5_000_000e6);
 
         vm.expectRevert(
-            abi.encodeWithSelector(CreatorCharmStrategy.WithdrawLiquidityUnavailable.selector, 100e18, 15e18)
+            abi.encodeWithSelector(CharmStrategy4626.WithdrawLiquidityUnavailable.selector, 100e18, 15e18)
         );
         strategy.withdraw(100e18);
         assertFalse(router.called(), "router should not be called when TWAP is unavailable");
@@ -684,7 +684,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         router.setShouldRevert(true);
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
-        CreatorCharmStrategy strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
+        CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
@@ -722,7 +722,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         router.setShouldRevert(true);
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
-        CreatorCharmStrategy strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
+        CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
@@ -755,7 +755,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         router.setShouldRevert(true);
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
-        CreatorCharmStrategy strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
+        CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
@@ -788,7 +788,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         router.setAmountOutToReturn(15e18);
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
-        CreatorCharmStrategy strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
+        CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
         strategy.initializeApprovals();
 
         charm.setTotalSupply(100e18);
@@ -822,7 +822,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         router.setAmountOutToReturn(50e18);
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
-        CreatorCharmStrategy strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
+        CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
@@ -856,7 +856,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         router.setShouldRevert(true);
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
-        CreatorCharmStrategy strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
+        CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
@@ -887,7 +887,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         MockV3Pool pool = new MockV3Pool(address(creator), address(usdc));
         MockRouter router = new MockRouter();
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
-        CreatorCharmStrategy strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
+        CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         charm.setPool(address(pool));
 
@@ -921,7 +921,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         MockV3Pool pool = new MockV3Pool(address(creator), address(usdc));
         MockRouter router = new MockRouter();
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
-        CreatorCharmStrategy strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
+        CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
@@ -961,7 +961,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         MockV3Pool pool = new MockV3Pool(address(creator), address(usdc));
         MockRouter router = new MockRouter();
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
-        CreatorCharmStrategy strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
+        CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         charm.setPool(address(pool));
 
@@ -1015,13 +1015,13 @@ contract CreatorCharmStrategyOracleTest is Test {
         MockERC20 creator = new MockERC20("Creator", "CRT", 18);
         MockV3Pool pool = new MockV3Pool(address(creator), address(usdc));
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
-        CreatorCharmStrategy strategy = _deployStrategy(creator, usdc, charm, pool);
+        CharmStrategy4626 strategy = _deployStrategy(creator, usdc, charm, pool);
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
 
         strategy.setAjnaPool(address(ajna));
         ajna.seedPosition(address(strategy), 5e18, 10e6);
 
-        vm.expectRevert(abi.encodeWithSelector(CreatorCharmStrategy.AjnaPositionOpen.selector, 5e18, 10e6));
+        vm.expectRevert(abi.encodeWithSelector(CharmStrategy4626.AjnaPositionOpen.selector, 5e18, 10e6));
         strategy.setAjnaPool(address(0));
     }
 
@@ -1033,7 +1033,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         MockRouter router = new MockRouter();
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
-        CreatorCharmStrategy strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
+        CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
@@ -1052,7 +1052,7 @@ contract CreatorCharmStrategyOracleTest is Test {
         usdc.mint(address(charm), 5_000_000e6);
 
         vm.expectRevert(
-            abi.encodeWithSelector(CreatorCharmStrategy.WithdrawLiquidityUnavailable.selector, 100e18, 20e18)
+            abi.encodeWithSelector(CharmStrategy4626.WithdrawLiquidityUnavailable.selector, 100e18, 20e18)
         );
         strategy.withdraw(100e18);
     }
@@ -1068,7 +1068,7 @@ contract CreatorCharmStrategyOracleTest is Test {
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
         charm.setPool(address(pool));
-        CreatorCharmStrategy strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
+        CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
         strategy.initializeApprovals();
 
         creator.mint(address(this), 100e18);
@@ -1093,7 +1093,7 @@ contract CreatorCharmStrategyOracleTest is Test {
 
         address vaultAddr = address(0xBEEF);
         address ownerAddr = address(0xABCD);
-        CreatorCharmStrategy strategy = new CreatorCharmStrategy(
+        CharmStrategy4626 strategy = new CharmStrategy4626(
             vaultAddr, address(creator), address(usdc), address(router), address(charm), address(pool), ownerAddr
         );
 
@@ -1111,7 +1111,7 @@ contract CreatorCharmStrategyOracleTest is Test {
 
         address vaultAddr = address(0xBEEF);
         address ownerAddr = address(0xABCD);
-        CreatorCharmStrategy strategy = new CreatorCharmStrategy(
+        CharmStrategy4626 strategy = new CharmStrategy4626(
             vaultAddr, address(creator), address(usdc), address(router), address(charm), address(pool), ownerAddr
         );
 

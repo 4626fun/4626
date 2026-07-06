@@ -14,26 +14,24 @@ Contracts are split by **product lanes** + shared infrastructure:
 ```
 contracts/
 ├── shared/
-│   ├── core/          4626Registry
+│   ├── core/          Registry4626
 │   ├── deploy/        DeploymentBatcher, factories, infra, hooks
 │   ├── bridge/
 │   ├── governance/    Platform-level (bribes, factories, ve4626 roots)
 │   ├── interfaces/
 │   ├── libraries/
 │   ├── lottery/       4626LotteryManager + VRF + randomness (shared singleton)
-│   └── strategies/    Reusable yield strategies (Ajna, CCA, Univ3/4, etc.)
+│   ├── strategies/    Reusable yield strategies (Ajna, CCA, Univ3/4, etc.)
+│   └── vesting/       LinearVesting4626
 ├── agent/
 │   ├── vault/         (AgentOVault, AgentOVaultWrapper, AgentShareOFT, modules)
-│   ├── governance/    AgentGaugeController
-│   ├── revenue/
+│   ├── revenue/       AgentGaugeController + revenue routing/policy
 │   └── oracles/
 ├── creator/
 │   ├── vault/         (CreatorOVault + modules + CreatorShareOFT + OVaultHubComposer)
-│   ├── governance/
 │   ├── revenue/
 │   ├── oracles/
-│   ├── recovery/
-│   └── vesting/
+│   └── recovery/
 └── other/
     └── alfaclub/
 ```
@@ -55,8 +53,8 @@ All lane-specific code lives under `agent/` or `creator/`. Shared singletons and
 
 These serve **all** vault kinds (creator + agent) and live under `shared/`:
 
-- `shared/core/4626Registry.sol` — registry + `vaultKind` metadata
-- `shared/lottery/manager/4626LotteryManager.sol` — jackpot payout authority for any ShareOFT buy
+- `shared/core/Registry4626.sol` — registry + `vaultKind` metadata
+- `shared/lottery/manager/LotteryManager4626.sol` — jackpot payout authority for any ShareOFT buy
 - VRF + randomness infrastructure under `shared/lottery/`
 
 Do not deploy per-lane lottery managers or registries.
@@ -70,7 +68,7 @@ Each token launch deploys its own stack:
 | `creator/vault/CreatorOVault` | `agent/vault/AgentOVault`     |
 | `creator/vault/CreatorOVaultWrapper` | `agent/vault/AgentOVaultWrapper` |
 | `creator/vault/CreatorShareOFT` | `agent/vault/AgentShareOFT` |
-| `creator/governance/CreatorGaugeController` | `agent/governance/AgentGaugeController` |
+| `creator/revenue/CreatorGaugeController` | `agent/revenue/AgentGaugeController` |
 | `creator/oracles/CreatorOracle` | `agent/oracles/AgentOracle` |
 | `creator/revenue/PayoutRouter` | `agent/revenue/AgentRevenueRouter` |
 

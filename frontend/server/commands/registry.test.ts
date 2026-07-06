@@ -27,10 +27,13 @@ describe('command registry', () => {
     expect(getCommandFamily('/bridge')).toBe('alfaclub')
     expect(getCommandFamily('/bridge status')).toBe('alfaclub')
     expect(getCommandFamily('/gmeow gm')).toBe('hermit')
+    expect(getCommandFamily('/h join')).toBe('hermit')
     expect(getCommandFamily('/meme akita')).toBe('hermit')
     expect(getCommandFamily('/hermit help')).toBe('hermit')
     expect(getCommandFamily('/position')).toBe('hermit')
-    expect(getCommandFamily('/arena status')).toBe('hermit')
+    expect(getCommandFamily('/arena status')).toBeNull()
+    expect(getCommandFamily('/strategy status')).toBeNull()
+    expect(getCommandFamily('/strategies status')).toBeNull()
   })
 
   it('matches one or more command families', () => {

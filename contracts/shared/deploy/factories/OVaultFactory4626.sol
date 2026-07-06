@@ -5,7 +5,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
 
 /**
- * @title CreatorOVaultFactory
+ * @title OVaultFactory4626
  * @author 0xakita.eth
  * @notice Lane-specific (creator) registrar for Creator Vault stacks (legacy; superseded by shared deploy batchers). For agent and additional ecosystems use other/ + extend registry or add similar factories.
  *
@@ -38,7 +38,7 @@ import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
  *         - Calls factory.registerDeployment() to store and mirror the addresses
  *      3. Addresses stored here for lookup
  */
-contract CreatorOVaultFactory is Ownable {
+contract OVaultFactory4626 is Ownable {
     // =================================
     // STATE
     // =================================

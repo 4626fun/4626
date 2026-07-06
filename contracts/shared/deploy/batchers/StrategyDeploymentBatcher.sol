@@ -12,7 +12,7 @@ import "@4626/shared/interfaces/uniswap/IUniswapV3Pool.sol";
 // injected via the constructor, which keeps this contract's init-code under the
 // EIP-3860 49,152-byte limit.
 import {
-    ICreatorCharmStrategyFactory,
+    ICharmStrategy4626Factory,
     IAjnaERC4626StrategyFactory
 } from "@4626/shared/deploy/batchers/StrategyDeploymentFactories.sol";
 
@@ -91,7 +91,7 @@ contract StrategyDeploymentBatcher is ReentrancyGuard, Ownable2Step {
     // FIX: F-14 — constructor passes msg.sender to Ownable; use onlyOwner instead of custom modifier
     // FIX: 4626-401 / M-37 — factories are now injected rather than deployed inline so this
     // contract's init-code stays under the EIP-3860 49,152-byte limit. Deploy
-    // `CreatorCharmStrategyFactory` and `AjnaERC4626StrategyFactory` separately (see
+    // `CharmStrategy4626Factory` and `AjnaERC4626StrategyFactory` separately (see
     // `script/DeployEverything.s.sol`) and pass their addresses in.
     constructor(address _creatorCharmStrategyFactory, address _ajnaStrategyFactory) Ownable(msg.sender) {
         if (_creatorCharmStrategyFactory == address(0)) revert ZeroCreatorCharmFactory();
@@ -200,7 +200,7 @@ contract StrategyDeploymentBatcher is ReentrancyGuard, Ownable2Step {
         // ═══════════════════════════════════════════════════════════
         // STEP 4: Deploy Creator Charm Strategy V2 (Vault Integration)
         // ═══════════════════════════════════════════════════════════
-        result.creatorCharmStrategy = ICreatorCharmStrategyFactory(creatorCharmStrategyFactory)
+        result.creatorCharmStrategy = ICharmStrategy4626Factory(creatorCharmStrategyFactory)
             .deployAndInitialize(
                 creatorVault, underlyingToken, quoteToken, UNISWAP_ROUTER, result.charmVault, result.v3Pool, owner
             );

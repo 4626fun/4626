@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
-import {Registry4626} from "@4626/shared/core/4626Registry.sol";
+import {Registry4626} from "@4626/shared/core/Registry4626.sol";
 import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
 
 /**
@@ -257,7 +257,7 @@ contract SeedCreatorRegistry is Script {
 
         if (CREATOR_FACTORY != address(0)) {
             registry.setAuthorizedFactory(CREATOR_FACTORY, true);
-            console.log(unicode"   ✓ CreatorOVaultFactory (legacy registrar) authorized");
+            console.log(unicode"   ✓ OVaultFactory4626 (legacy registrar) authorized");
         }
 
         if (VAULT_BATCHER != address(0)) {
@@ -291,7 +291,7 @@ contract SeedCreatorRegistry is Script {
         console.log(unicode"  ✓ EID mappings set:   5 chains (+ optional Solana registry key)");
         console.log(unicode"  ✓ Hub chain:          Base (8453 / EID 30184)");
         console.log(unicode"  ✓ DEX infra:          PoolManager + SwapRouter on Base");
-        console.log(unicode"  ✓ Auth'd surfaces:    CreatorOVaultFactory legacy registrar, Batcher, ActivationBatcher");
+        console.log(unicode"  ✓ Auth'd surfaces:    OVaultFactory4626 legacy registrar, Batcher, ActivationBatcher");
         console.log("");
         console.log("   No creator-specific data was registered.");
         console.log("   Creator tokens/vaults are registered via the app deploy-session flow (/deploy).");

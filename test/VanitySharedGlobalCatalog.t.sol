@@ -62,7 +62,7 @@ contract VanitySharedGlobalCatalogTest is Test {
         assertEq(vm.parseJsonString(json, ".namingTaxonomy[6].name"), "Helper");
         assertEq(vm.parseJsonString(json, ".namingTaxonomy[7].name"), "Hub");
 
-        assertEq(vm.parseJsonString(json, ".renameCandidates[0].contractName"), "CreatorOVaultFactory");
+        assertEq(vm.parseJsonString(json, ".renameCandidates[0].contractName"), "OVaultFactory4626");
         assertEq(
             vm.parseJsonString(json, ".renameCandidates[0].recommendedName"),
             "LegacyCreatorOVaultDeploymentRegistry"

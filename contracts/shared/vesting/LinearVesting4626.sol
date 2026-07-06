@@ -5,11 +5,11 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
- * @title CreatorLinearVesting
+ * @title LinearVesting4626
  * @notice Minimal linear vesting wallet for the creator’s ShareOFT allocation.
  * @dev Intentionally small/simple (no cliff, no revocation) to minimize deployment gas.
  */
-contract CreatorLinearVesting {
+contract LinearVesting4626 {
     using SafeERC20 for IERC20;
 
     IERC20 public immutable token;

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
@@ -11,6 +11,7 @@ import {
   runArenaCreateAgent,
   runArenaDepositUsdc,
   runArenaJoin,
+  runArenaPositionIntel,
   runArenaStatus,
   runArenaTrade,
 } from './arenaClient.js'
@@ -314,5 +315,53 @@ describe('parseAcpAgentCreateOutput', () => {
     expect(parseAcpAgentCreateOutput('[dry-run] command not executed')).toEqual({})
     expect(parseAcpAgentCreateOutput('some random text with 0x123 but no id')).toEqual({})
     expect(parseAcpAgentCreateOutput('Agent ID: not-a-hex-id-at-all!')).toEqual({})
+  })
+})
+
+describe('runArenaPositionIntel', () => {
+  it('fails soft when wallet context is unavailable', async () => {
+    const result = await runArenaPositionIntel(
+      mockConfig({
+        dryRun: true,
+        agentWalletAddress: null,
+        hlApiWalletAddress: null,
+        hlMasterAddressOverride: null,
+      }),
+    )
+    expect(result.ok).toBe(true)
+    expect(result.message).toContain('without Hyperliquid account enrichment')
+    expect(result.details?.walletAddress).toBeNull()
+    expect(Array.isArray(result.details?.partialFailures)).toBe(true)
+  })
+
+  it('returns enriched payloads when Hyperliquid info endpoints respond', async () => {
+    const originalFetch = globalThis.fetch
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ mocked: true }),
+    }))
+    ;(globalThis as unknown as { fetch: typeof fetch }).fetch = fetchMock as unknown as typeof fetch
+    try {
+      const result = await runArenaPositionIntel(
+        mockConfig({
+          dryRun: true,
+          agentWalletAddress: '0x1111111111111111111111111111111111111111',
+        }),
+      )
+      expect(result.ok).toBe(true)
+      expect(result.details?.walletAddress).toBe('0x1111111111111111111111111111111111111111')
+      expect(result.details?.userDetails).toEqual({ mocked: true })
+      expect(result.details?.userFees).toEqual({ mocked: true })
+      expect(result.details?.ledgerUpdates).toEqual({ mocked: true })
+      expect(result.details?.userFills).toEqual({ mocked: true })
+      expect(result.details?.allMids).toEqual({ mocked: true })
+      expect(result.details?.spotMetaAndAssetCtxs).toEqual({ mocked: true })
+      expect(Array.isArray(result.details?.partialFailures)).toBe(true)
+      const calledUrls = fetchMock.mock.calls.map((call) => String(call[0]))
+      expect(calledUrls.some((url) => url.includes('/explorer'))).toBe(true)
+      expect(calledUrls.some((url) => url.includes('/info'))).toBe(true)
+    } finally {
+      ;(globalThis as unknown as { fetch: typeof fetch }).fetch = originalFetch
+    }
   })
 })

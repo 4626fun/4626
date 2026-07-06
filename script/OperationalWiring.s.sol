@@ -266,7 +266,7 @@ contract OperationalWiring is Script {
 
         console.log("\n[7/8] Registry: Re-confirming registrar/batcher authorizations...");
         registry.setAuthorizedFactory(CREATOR_FACTORY, true);
-        console.log(unicode"   ✓ CreatorOVaultFactory (legacy registrar)");
+        console.log(unicode"   ✓ OVaultFactory4626 (legacy registrar)");
 
         registry.setAuthorizedFactory(VAULT_BATCHER, true);
         console.log(unicode"   ✓ DeploymentBatcher");

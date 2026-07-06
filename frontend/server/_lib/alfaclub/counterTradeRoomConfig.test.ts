@@ -80,18 +80,50 @@ describe('counterTradeRoomConfig', () => {
   })
 
   it('remaps /h subcommands', () => {
+    expect(remapCounterTradeTopLevelCommand('/h', '')).toEqual({ command: '/hermit', args: 'help' })
+    expect(remapCounterTradeTopLevelCommand('/h', 'help')).toEqual({ command: '/hermit', args: 'help' })
+    expect(remapCounterTradeTopLevelCommand('/h', 'arena')).toEqual({ command: '/arena', args: 'status' })
+    expect(remapCounterTradeTopLevelCommand('/h', 'arena status')).toEqual({
+      command: '/arena',
+      args: 'status',
+    })
+    expect(remapCounterTradeTopLevelCommand('/h', 'positions')).toEqual({
+      command: '/arena',
+      args: 'positions',
+    })
+    expect(remapCounterTradeTopLevelCommand('/h', 'pos risk')).toEqual({
+      command: '/arena',
+      args: 'positions risk',
+    })
+    expect(remapCounterTradeTopLevelCommand('/h', 'positions 3')).toEqual({
+      command: '/arena',
+      args: 'positions 3',
+    })
+    expect(remapCounterTradeTopLevelCommand('/h', '2')).toEqual({
+      command: '/arena',
+      args: 'positions 2',
+    })
     expect(remapCounterTradeTopLevelCommand('/h', 'join')).toEqual({ command: '/s', args: 'join' })
+    expect(remapCounterTradeTopLevelCommand('/h', 'start')).toEqual({ command: '/s', args: 'join' })
     expect(remapCounterTradeTopLevelCommand('/h', 'pause')).toEqual({ command: '/s', args: 'pause' })
     expect(remapCounterTradeTopLevelCommand('/h', 'resume')).toEqual({ command: '/s', args: 'resume' })
     expect(remapCounterTradeTopLevelCommand('/h', 'stop')).toEqual({ command: '/s', args: 'pause' })
-    expect(remapCounterTradeTopLevelCommand('/h', 'start')).toEqual({ command: '/s', args: 'resume' })
     expect(remapCounterTradeTopLevelCommand('/h', 'rules')).toEqual({ command: '/s', args: 'p' })
     expect(remapCounterTradeTopLevelCommand('/h', 'sync 80')).toEqual({ command: '/s', args: 'sync 80' })
+    expect(remapCounterTradeTopLevelCommand('/h', 'mirror 80')).toEqual({ command: '/s', args: 'sync 80' })
     expect(remapCounterTradeTopLevelCommand('/h', 'bank trim 25')).toEqual({
       command: '/s',
       args: 'bank trim 25',
     })
+    expect(remapCounterTradeTopLevelCommand('/h', 'profit trim 25')).toEqual({
+      command: '/s',
+      args: 'bank trim 25',
+    })
     expect(remapCounterTradeTopLevelCommand('/h', 'safety 12')).toEqual({
+      command: '/s',
+      args: 'safe 12',
+    })
+    expect(remapCounterTradeTopLevelCommand('/h', 'risk 12')).toEqual({
       command: '/s',
       args: 'safe 12',
     })
@@ -103,16 +135,27 @@ describe('counterTradeRoomConfig', () => {
       command: '/s',
       args: 'reset sync',
     })
+    expect(remapCounterTradeTopLevelCommand('/h', 'defaults sync')).toEqual({
+      command: '/s',
+      args: 'reset sync',
+    })
     expect(remapCounterTradeTopLevelCommand('/h', 'setup')).toEqual({ command: '/s', args: 'setup' })
   })
 
-  it('keeps legacy flat commands as shortcuts', () => {
-    expect(remapCounterTradeTopLevelCommand('/in', '')).toEqual({ command: '/s', args: 'in' })
-    expect(remapCounterTradeTopLevelCommand('/rules', '')).toEqual({ command: '/s', args: 'p' })
+  it('does not remap legacy non-/h shortcuts anymore', () => {
+    expect(remapCounterTradeTopLevelCommand('/in', '')).toBeNull()
+    expect(remapCounterTradeTopLevelCommand('/rules', '')).toBeNull()
+    expect(remapCounterTradeTopLevelCommand('/sync', '80')).toBeNull()
   })
 
   it('parses plain-word section commands', () => {
     expect(parseCounterTradeConfigCommand('sync 80')).toEqual({
+      kind: 'set',
+      field: 'inverseRebalanceScalePct',
+      rawValue: '80',
+      label: 'Sync strength',
+    })
+    expect(parseCounterTradeConfigCommand('mirror 80')).toEqual({
       kind: 'set',
       field: 'inverseRebalanceScalePct',
       rawValue: '80',
@@ -149,6 +192,7 @@ describe('counterTradeRoomConfig', () => {
       label: 'Max dip adds per leg',
     })
     expect(parseCounterTradeConfigCommand('reset sync')).toEqual({ kind: 'reset', group: 'rebalance' })
+    expect(parseCounterTradeConfigCommand('reset mirror')).toEqual({ kind: 'reset', group: 'rebalance' })
   })
 
   it('parses fraction-style harvest trim values', () => {
@@ -210,7 +254,7 @@ describe('counterTradeRoomConfig', () => {
       group: 'all',
       audience: 'room',
     })
-    expect(text).toContain('/h join')
+    expect(text).toContain('/h start')
     expect(text).toContain('Room playbook')
     expect(text).not.toContain('Operator')
   })

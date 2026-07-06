@@ -5,10 +5,10 @@ import "forge-std/Script.sol";
 import "forge-std/Test.sol";
 import "@4626/shared/deploy/batchers/StrategyDeploymentBatcher.sol";
 import {
-    CreatorCharmStrategyFactory,
+    CharmStrategy4626Factory,
     AjnaERC4626StrategyFactory
 } from "@4626/shared/deploy/batchers/StrategyDeploymentFactories.sol";
-import "@4626/shared/strategies/univ3/CreatorCharmStrategy.sol";
+import "@4626/shared/strategies/univ3/CharmStrategy4626.sol";
 
 /**
  * @title TestAAStrategyDeploy
@@ -45,11 +45,11 @@ contract TestAAStrategyDeploy is Script, Test {
         // Deploy batcher
         // FIX: 4626-401 / M-37 — deploy factories separately (keeps batcher init-code under EIP-3860).
         console.log("1. Deploying strategy factories and StrategyDeploymentBatcher...");
-        CreatorCharmStrategyFactory creatorCharmFactoryImpl = new CreatorCharmStrategyFactory();
+        CharmStrategy4626Factory creatorCharmFactoryImpl = new CharmStrategy4626Factory();
         AjnaERC4626StrategyFactory ajnaFactoryImpl = new AjnaERC4626StrategyFactory();
         StrategyDeploymentBatcher batcher =
             new StrategyDeploymentBatcher(address(creatorCharmFactoryImpl), address(ajnaFactoryImpl));
-        console.log("   CreatorCharmStrategyFactory:", address(creatorCharmFactoryImpl));
+        console.log("   CharmStrategy4626Factory:", address(creatorCharmFactoryImpl));
         console.log("   AjnaERC4626StrategyFactory:", address(ajnaFactoryImpl));
         console.log("   Batcher deployed at:", address(batcher));
         console.log("");
@@ -79,9 +79,9 @@ contract TestAAStrategyDeploy is Script, Test {
             console.log("   - Ajna Strategy Adapter:", result.ajnaStrategy);
             console.log("");
 
-            // Verify CreatorCharmStrategy is correct type
-            console.log("3. Verifying CreatorCharmStrategy...");
-            CreatorCharmStrategy charmStrat = CreatorCharmStrategy(result.creatorCharmStrategy);
+            // Verify CharmStrategy4626 is correct type
+            console.log("3. Verifying CharmStrategy4626...");
+            CharmStrategy4626 charmStrat = CharmStrategy4626(result.creatorCharmStrategy);
 
             console.log("   - isActive():", charmStrat.isActive());
             console.log("   - asset():", charmStrat.asset());

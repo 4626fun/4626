@@ -194,6 +194,8 @@ const COUNTER_TRADE_GROUP_SHORT: Record<CounterTradeConfigGroup, { one: string; 
 }
 
 const COUNTER_TRADE_GROUP_TOKEN_ALIASES: Record<string, CounterTradeConfigGroup> = {
+  m: 'rebalance',
+  mirror: 'rebalance',
   s: 'rebalance',
   sy: 'rebalance',
   sync: 'rebalance',
@@ -206,6 +208,8 @@ const COUNTER_TRADE_GROUP_TOKEN_ALIASES: Record<string, CounterTradeConfigGroup>
   profits: 'harvest',
   profit: 'harvest',
   d: 'defend',
+  r: 'defend',
+  risk: 'defend',
   sa: 'defend',
   sf: 'defend',
   f: 'defend',
@@ -231,9 +235,9 @@ export function resolveCounterTradeConfigGroupToken(token: string): CounterTrade
 
 export function primaryCounterTradeGroupCommand(group: CounterTradeConfigGroup): string {
   const words: Record<CounterTradeConfigGroup, string> = {
-    rebalance: 'sync',
-    harvest: 'bank',
-    defend: 'safety',
+    rebalance: 'mirror',
+    harvest: 'profit',
+    defend: 'risk',
     limits: 'size',
   }
   return words[group]
@@ -372,8 +376,8 @@ export type CounterTradeConfigAudience = 'room' | 'operator'
 export function formatCounterTradeRoomPlaybookIntro(): string {
   return [
     '**Room playbook** (shared — same for everyone here)',
-    '`/h join` · `/h pause` · `/h resume` · `/h status` · `/h rules`',
-    'Join shows the 4-step walkthrough: resize sync → bank winners → safety → size cap.',
+    '`/h start` · `/h stop` · `/h resume` · `/h status` · `/h rules`',
+    'Start shows the 4-step walkthrough: resize sync → bank winners → safety → size cap.',
   ].join('\n')
 }
 
@@ -438,25 +442,46 @@ export function formatCounterTradeResumeConfirmed(params: { preset: string }): s
   ].join('\n')
 }
 
-function remapCounterTradeHArgs(tail: string): { command: '/s'; args: string } | null {
+function remapCounterTradeHArgs(tail: string): { command: '/s' | '/arena' | '/hermit'; args: string } | null {
   const trimmed = tail.trim()
-  if (!trimmed) return { command: '/s', args: 'help' }
+  if (!trimmed) return { command: '/hermit', args: 'help' }
   const parts = trimmed.split(/\s+/).filter(Boolean)
   const sub = parts[0].toLowerCase()
   const rest = parts.slice(1).join(' ')
   switch (sub) {
+    case 'help':
+    case '?':
+      return { command: '/hermit', args: 'help' }
+    case '1':
+    case '2':
+    case '3':
+    case '4':
+      return { command: '/arena', args: `positions ${sub}` }
+    case 'arena':
+    case 'a':
+      return { command: '/arena', args: rest || 'status' }
+    case 'positions':
+    case 'pos':
+    case 'position':
+    case 'opens':
+      return { command: '/arena', args: rest ? `positions ${rest}` : 'positions' }
     case 'join':
+    case 'j':
+    case 'copy':
+    case 'start':
       return { command: '/s', args: rest ? `join ${rest}` : 'join' }
     case 'pause':
     case 'stop':
+    case 'x':
       return { command: '/s', args: 'pause' }
     case 'resume':
-    case 'start':
+    case 're':
       if (rest === 'confirm' || rest === 'yes') {
         return { command: '/s', args: 'resume confirm' }
       }
       return { command: '/s', args: 'resume' }
     case 'status':
+    case 'st':
       return { command: '/s', args: '?' }
     case 'setup':
       return { command: '/s', args: 'setup' }
@@ -464,62 +489,47 @@ function remapCounterTradeHArgs(tail: string): { command: '/s'; args: string } |
     case 'guide':
     case 'playbook':
       return { command: '/s', args: 'p' }
+    case 'mirror':
     case 'sync':
+    case 'sy':
       return { command: '/s', args: rest ? `sync ${rest}` : 'sync' }
+    case 'profit':
+    case 'lock':
     case 'bank':
+    case 'ba':
       return { command: '/s', args: rest ? `bank ${rest}` : 'bank' }
+    case 'risk':
+    case 'guard':
     case 'safety':
     case 'safe':
+    case 'sa':
       return { command: '/s', args: rest ? `safe ${rest}` : 'safe' }
     case 'size':
+    case 'sz':
+    case 'cap':
     case 'caps':
       return { command: '/s', args: rest ? `size ${rest}` : 'size' }
+    case 'defaults':
     case 'reset':
+    case 'rs':
       return { command: '/s', args: rest ? `reset ${rest}` : 'reset' }
     default:
       return null
   }
 }
 
-/** Remap `/h …` and legacy flat commands into `/s` strategy args. */
+/** Remap `/h …` into strategy/arena/hermit command args. */
 export function remapCounterTradeTopLevelCommand(
   command: string,
   args: string,
-): { command: '/s'; args: string } | null {
+): { command: '/s' | '/arena' | '/hermit'; args: string } | null {
   const cmd = command.trim().toLowerCase()
   const tail = args.trim()
 
   if (cmd === '/h') {
     return remapCounterTradeHArgs(tail)
   }
-
-  switch (cmd) {
-    case '/in':
-      return { command: '/s', args: 'in' }
-    case '/off':
-      return { command: '/s', args: 'off' }
-    case '/on':
-      return { command: '/s', args: 'on' }
-    case '/rules':
-    case '/playbook':
-    case '/pb':
-    case '/p':
-      return { command: '/s', args: 'p' }
-    case '/sync':
-      return { command: '/s', args: tail ? `sync ${tail}` : 'sync' }
-    case '/bank':
-      return { command: '/s', args: tail ? `bank ${tail}` : 'bank' }
-    case '/safe':
-    case '/safety':
-      return { command: '/s', args: tail ? `safe ${tail}` : 'safe' }
-    case '/size':
-    case '/caps':
-      return { command: '/s', args: tail ? `size ${tail}` : 'size' }
-    case '/reset':
-      return { command: '/s', args: tail ? `reset ${tail}` : 'reset' }
-    default:
-      return null
-  }
+  return null
 }
 
 export function formatCounterTradeSettingAnnouncement(params: {
@@ -643,7 +653,7 @@ export function formatCounterTradeConfigStatus(params: {
     }),
   ]
   if (audience === 'operator') {
-    lines.push('_Ops:_ `/h sync 80` · `/h bank trim 25` · `/h safety 12` · `/h reset`')
+    lines.push('_Ops:_ `/h mirror 80` · `/h profit trim 25` · `/h risk 12` · `/h defaults`')
   }
   return lines.join('\n')
 }
@@ -651,17 +661,17 @@ export function formatCounterTradeConfigStatus(params: {
 export function formatCounterTradeConfigUsage(): string {
   return [
     '**Your commands**',
-    '- `/h join` — opt in + 4-step room walkthrough',
-    '- `/h pause` · `/h resume` — pause, or review playbook + confirm resume',
+    '- `/h start` — opt in + 4-step room walkthrough',
+    '- `/h stop` · `/h resume` — pause, or review playbook + confirm resume',
     '- `/h status` — am I in? paused?',
     '- `/h rules` — full room guide',
     '- `/h setup` — replay the 4-step walkthrough',
     '',
-    '_Sync / bank / safety / size are **room playbook** rules (shared), not personal settings._',
+    '_Mirror / profit / risk / size are **room playbook** rules (shared), not personal settings._',
     '',
     '**Operators only**',
-    '- `/h sync 80` · `/h bank 50` · `/h bank trim 25`',
-    '- `/h safety 12` · `/h size 10` · `/h size max 25` · `/h size depth 40` · `/h size curve 1.5` · `/h size adds 3` · `/h reset`',
+    '- `/h mirror 80` · `/h profit 50` · `/h profit trim 25`',
+    '- `/h risk 12` · `/h size 10` · `/h size max 25` · `/h size depth 40` · `/h size curve 1.5` · `/h size adds 3` · `/h defaults`',
   ].join('\n')
 }
 

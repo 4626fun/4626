@@ -76,11 +76,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const roomIds = parseRoomIds(req.query.rooms)
   const full = parseBool(typeof req.query.full === 'string' ? req.query.full : undefined)
+  const skipIndexer = parseBool(typeof req.query.skipIndexer === 'string' ? req.query.skipIndexer : undefined)
 
   try {
     const result = await syncRoomsSnapshot({
       roomIds: roomIds.length > 0 ? roomIds : undefined,
       full,
+      runIndexer: full ? !skipIndexer : undefined,
     })
     return res.status(result.ok ? 200 : 202).json({
       success: result.ok,

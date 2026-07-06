@@ -6,7 +6,7 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {CreatorOVaultWrapper} from "@4626/creator/vault/CreatorOVaultWrapper.sol";
-import {CreatorGaugeController, ICreatorOracle, ISwapRouter} from "@4626/creator/governance/CreatorGaugeController.sol";
+import {CreatorGaugeController, ICreatorOracle, ISwapRouter} from "@4626/creator/revenue/CreatorGaugeController.sol";
 import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
 
 contract DeepMockToken is ERC20 {

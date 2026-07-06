@@ -58,6 +58,7 @@ import {
   upsertHyperliquidPositionAlert,
 } from '../alfaclub/positionAlertStore.js'
 import { arenaCommandAllowedForRoom, readArenaConfig } from '../arena/arenaConfig.js'
+import { formatArenaPositionIntelReply } from '../arena/arenaPositionIntelFormat.js'
 import {
   listArenaAssets,
   runArenaActivateUnifiedAccount,
@@ -67,6 +68,7 @@ import {
   runArenaCreateAgent,
   runArenaDepositUsdc,
   runArenaJoin,
+  runArenaPositionIntel,
   runArenaSpotPerpTransfer,
   runArenaStatus,
   runArenaTrade,
@@ -186,6 +188,7 @@ function parseHermitDraftMode(args: string): { mode: HermitDraftMode; prompt: st
 
 type ParsedArenaCommand =
   | { kind: 'help' | 'status' | 'assets' | 'join' | 'activate' | 'add-api-wallet' }
+  | { kind: 'positions'; detailToken?: string }
   | { kind: 'backtest'; request: VirtualsBacktestRequest }
   | { kind: 'auth'; mode: 'status' | 'refresh' }
   | { kind: 'identity-show' }
@@ -241,6 +244,9 @@ function parseArenaCommandArgs(args: string): ParsedArenaCommand | null {
     return { kind: 'auth', mode }
   }
   if (sub === 'assets') return { kind: 'assets' }
+  if (sub === 'positions' || sub === 'position' || sub === 'open-positions' || sub === 'opens') {
+    return { kind: 'positions', detailToken: parts[1] }
+  }
   if (sub === 'join') return { kind: 'join' }
   if (sub === 'activate' || sub === 'activate-unified-account') return { kind: 'activate' }
   if (sub === 'add-api-wallet' || sub === 'api-wallet') return { kind: 'add-api-wallet' }
@@ -391,7 +397,7 @@ function parseArenaCommandArgs(args: string): ParsedArenaCommand | null {
   }
 
   if (sub === 'register' || sub === 'create' || sub === 'create-agent') {
-    // /arena register [default] [agentId agentWallet [hlApi]]
+    // h arena register [default] [agentId agentWallet [hlApi]]
     // "default" targets the room-wide default (persisted in DB, overrides envs for the room)
     // Without it, binds to the caller's sender ('mine').
     // If ids supplied, bind + onboard. If omitted, drive acp create (for default: create then set as room default).
@@ -481,44 +487,47 @@ function parseStrategyCommandArgs(args: string): ParsedStrategyCommand | null {
 function formatArenaUsage(): string {
   return [
     '**Arena controls (room-gated)**',
+    'Use `/h arena ...`.',
     '',
     '**Most useful**',
-    '- `/arena status`',
-    '- `/arena backtest BTC leveragePercent 50 rebalanceHealthPercent 75 rebalanceSizePercent 35 capital 4000`',
-    '- `/arena auth` / `/arena auth status`',
-    '- `/arena long <pair> <sizeUsd> <leverage>`',
-    '- `/arena short <pair> <sizeUsd> <leverage>`',
-    '- `/arena close <pair>`',
-    '- `/arena sweep <usdc>`  (spot -> perp)',
-    '- `/arena to-spot <usdc>`  (perp -> spot)',
+    '- `/h arena status`',
+    '- `/h pos` (book snapshot; reply 2–4 for more)',
+    '- `/h arena backtest BTC leveragePercent 50 rebalanceHealthPercent 75 rebalanceSizePercent 35 capital 4000`',
+    '- `/h arena auth` / `/h arena auth status`',
+    '- `/h arena long <pair> <sizeUsd> <leverage>`',
+    '- `/h arena short <pair> <sizeUsd> <leverage>`',
+    '- `/h arena close <pair>`',
+    '- `/h arena sweep <usdc>`  (spot -> perp)',
+    '- `/h arena to-spot <usdc>`  (perp -> spot)',
     '',
     '**Also supported**',
-    '- `/arena transfer <usdc> [perp|spot]`',
-    '- `/arena move <usdc> [to] [perp|spot]`',
-    '- `/arena spot2perp <usdc>` / `/arena perp2spot <usdc>`',
-    '- `/arena trade open <pair> <long|short> <sizeUsd> <leverage>`',
-    '- `/arena trade close <pair>`',
-    '- `/arena assets`',
-    '- `/arena join`',
-    '- `/arena activate`',
-    '- `/arena add-api-wallet`',
-    '- `/arena deposit <usdc>` / `/arena fund <usdc>` / `/arena bridge <usdc>`',
-    '- `/arena register`  (create path: runs acp agent create if enabled under the runtime ACP session; auto-binds + onboards the new agent for your sender or as room default)',
-    '- `/arena register <agentId> <agentWallet> [hlApiWallet]`  (supplied-ids: bind your sender + onboard)',
-    '- `/arena register default <agentId> <agentWallet> [hlApiWallet]`  (supplied-ids: set/change room default + onboard; use this to switch global for the room to one owned via your Alfa address)',
-    '- `/arena register default`  (create via server ACP session then set as room default + onboard)',
-    '- `/arena identity clear mine`  (remove your personal binding and fall back to room default)',
-    '- `/arena identity show`',
-    '- `/arena identity set default <agentId> <agentWallet> [hlApiWallet]`',
-    '- `/arena identity set mine <agentId> <agentWallet> [hlApiWallet]`',
-    '- `/arena identity set user <senderWallet> <agentId> <agentWallet> [hlApiWallet]`',
-    '- `/arena identity clear default|mine|user <senderWallet>`',
+    '- `/h arena transfer <usdc> [perp|spot]`',
+    '- `/h arena move <usdc> [to] [perp|spot]`',
+    '- `/h arena spot2perp <usdc>` / `/h arena perp2spot <usdc>`',
+    '- `/h arena trade open <pair> <long|short> <sizeUsd> <leverage>`',
+    '- `/h arena trade close <pair>`',
+    '- `/h arena assets`',
+    '- `/h arena positions`',
+    '- `/h arena join`',
+    '- `/h arena activate`',
+    '- `/h arena add-api-wallet`',
+    '- `/h arena deposit <usdc>` / `/h arena fund <usdc>` / `/h arena bridge <usdc>`',
+    '- `/h arena register`  (create path: runs acp agent create if enabled under the runtime ACP session; auto-binds + onboards the new agent for your sender or as room default)',
+    '- `/h arena register <agentId> <agentWallet> [hlApiWallet]`  (supplied-ids: bind your sender + onboard)',
+    '- `/h arena register default <agentId> <agentWallet> [hlApiWallet]`  (supplied-ids: set/change room default + onboard; use this to switch global for the room to one owned via your Alfa address)',
+    '- `/h arena register default`  (create via server ACP session then set as room default + onboard)',
+    '- `/h arena identity clear mine`  (remove your personal binding and fall back to room default)',
+    '- `/h arena identity show`',
+    '- `/h arena identity set default <agentId> <agentWallet> [hlApiWallet]`',
+    '- `/h arena identity set mine <agentId> <agentWallet> [hlApiWallet]`',
+    '- `/h arena identity set user <senderWallet> <agentId> <agentWallet> [hlApiWallet]`',
+    '- `/h arena identity clear default|mine|user <senderWallet>`',
     '',
     'HIP-3 pairs must use `xyz:` (example: `xyz:GOLD`).',
-    '`/arena bridge <usdc>` (or `/arena deposit`) runs ACP `perp_deposit` Base->Hyperliquid bridge and auto-funds the job; then use `/arena sweep <usdc>` once funds land.',
-    '`/arena auth` runs runtime ACP bootstrap/re-auth (seeded by ACP_* env on the service). `/arena auth status` is a read-only whoami check.',
-    'Create path (`/arena register` or `default`) runs under the bot\'s pre-configured ACP session (see ACP_OWNER_WALLET in acp-cli headless). Agent is functional for arena immediately (auto-bound + onboarded). For the agent to appear "owned by your Alfa EOA" in Virtuals ACP dashboard (userId match), create via web at app.virtuals.io/acp while connected as your Alfa sender, then supply ids with `/arena register [default] <id> <wallet>`.',
-    'IMPORTANT: In AlfaClub rooms, /arena commands are gated (see execute.ts). Add your sender wallet (e.g. 0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9 for 1659) to HERMIT_ALLOWED_USERS env, or set HERMIT_OWNER_ADDRESS to your wallet, and restart the service before running clears/registers from that wallet. Owner address bypasses the allowlist for /arena.',
+    '`/h arena bridge <usdc>` (or `/h arena deposit`) runs ACP `perp_deposit` Base->Hyperliquid bridge and auto-funds the job; then use `/h arena sweep <usdc>` once funds land.',
+    '`/h arena auth` runs runtime ACP bootstrap/re-auth (seeded by ACP_* env on the service). `/h arena auth status` is a read-only whoami check.',
+    'Create path (`/h arena register` or `default`) runs under the bot\'s pre-configured ACP session (see ACP_OWNER_WALLET in acp-cli headless). Agent is functional for arena immediately (auto-bound + onboarded). For the agent to appear "owned by your Alfa EOA" in Virtuals ACP dashboard (userId match), create via web at app.virtuals.io/acp while connected as your Alfa sender, then supply ids with `/h arena register [default] <id> <wallet>`.',
+    'IMPORTANT: In AlfaClub rooms, `/h arena ...` commands are gated (see execute.ts). Add your sender wallet (e.g. 0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9 for 1659) to HERMIT_ALLOWED_USERS env, or set HERMIT_OWNER_ADDRESS to your wallet, and restart the service before running clears/registers from that wallet. Owner address bypasses the allowlist for arena commands.',
   ].join('\n')
 }
 
@@ -549,6 +558,12 @@ function sanitizeArenaOutputForReply(text: string | undefined | null, dgclawDir:
   return s.slice(0, 400)
 }
 
+function asObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
 async function autoProvisionArenaIdentityForStrategy(params: {
   roomId: string
   senderAddress: string
@@ -566,7 +581,7 @@ async function autoProvisionArenaIdentityForStrategy(params: {
         'Unable to enable automation: auto-setup could not create an Arena identity.',
         createResult.message || 'Create failed or produced no parsable ids.',
         out ? `acp output (sanitized): ${out}` : '',
-        'Run /arena register first, then retry.',
+        'Run /h arena register first, then retry.',
       ]
         .filter(Boolean)
         .join('\n'),
@@ -624,7 +639,7 @@ async function autoProvisionArenaIdentityForStrategy(params: {
           )
           return `- ${step.name}: ${detail || 'unknown failure'}`
         }),
-        'Run /arena register manually, then retry.',
+        'Run /h arena register manually, then retry.',
       ].join('\n'),
     }
   }
@@ -2578,14 +2593,22 @@ export async function executeHermitCommand(
     })
 
     if (parsed.kind === 'status') {
+      const requestedUnifiedHStatus = /^\/h(?:\s+status)?\s*$/i.test(params.commandText.trim())
       const statusNotes: string[] = []
       const baseConfig = readArenaConfig()
+      let arenaIdentitySource = 'n/a'
+      let arenaAgentId: string | null = null
+      let arenaWalletAddress: string | null = null
+      let arenaStatusLine = 'disabled (ARENA_ENABLED=0).'
       if (baseConfig.enabled) {
         const identity = await resolveArenaIdentityForContext({
           roomId,
           senderAddress: params.senderAddress,
           baseConfig,
         })
+        arenaIdentitySource = identity.source
+        arenaAgentId = identity.agentId ?? null
+        arenaWalletAddress = identity.agentWalletAddress ?? null
         const hasMappedIdentity =
           identity.source !== 'env_default' &&
           Boolean(identity.agentId) &&
@@ -2600,13 +2623,24 @@ export async function executeHermitCommand(
             if (autoSetup.ok) {
               statusNotes.push(`arenaSetup: ${autoSetup.summary}`)
             } else {
-              statusNotes.push('arenaSetup: auto-provision failed (run /arena register manually).')
+              statusNotes.push('arenaSetup: auto-provision failed (run /h arena register manually).')
             }
           } else {
             statusNotes.push('arenaSetup: retry window active, skipping auto-provision for now.')
           }
         } else {
           statusNotes.push('arenaSetup: identity already mapped.')
+        }
+        if (requestedUnifiedHStatus) {
+          const arenaStatus = await runArenaStatus({
+            ...baseConfig,
+            agentId: identity.agentId,
+            agentWalletAddress: identity.agentWalletAddress,
+            hlApiWalletAddress: identity.hlApiWalletAddress,
+          })
+          arenaStatusLine = arenaStatus.ok
+            ? `enabled=${String(arenaStatus.details?.enabled)} tradingEnabled=${String(arenaStatus.details?.tradingEnabled)} dryRun=${String(arenaStatus.details?.dryRun)}`
+            : `status unavailable: ${arenaStatus.message}`
         }
       } else {
         statusNotes.push('arenaSetup: disabled (ARENA_ENABLED=0).')
@@ -2623,22 +2657,44 @@ export async function executeHermitCommand(
           ? `You are **in** — ${presetLabel ?? 'custom'} preset. Pause: \`/h pause\`.`
           : userState?.state === 'paused'
             ? 'You are **paused** — `/h resume` to review playbook and confirm.'
-            : 'You are **not in** yet — `/h join` to start.'
+          : 'You are **not in** yet — `/h start` to begin.'
       const biasLabel = strategy?.globalBias ?? 'neutral'
+      const strategyStatusLines = [
+        '**Your mirrored trading**',
+        automationLine,
+        '',
+        '**Room playbook (shared)**',
+        `Sync when members resize: **${effectiveRuntime.inverseRebalanceScalePct}%**`,
+        `Room direction bias: **${biasLabel}**`,
+        strategy?.killSwitch
+          ? '_Room automation is temporarily halted by operators._'
+          : '_Room automation is live for opted-in members._',
+      ]
+
+      if (requestedUnifiedHStatus) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: [
+            '**Unified `/h` status**',
+            '',
+            '**Strategy (mirrored trading)**',
+            ...strategyStatusLines.slice(1),
+            '',
+            '**Arena / Virtuals**',
+            arenaStatusLine,
+            `identitySource=${arenaIdentitySource} agentId=${arenaAgentId ?? 'none'} arenaWallet=${arenaWalletAddress ?? 'none'}`,
+            'Quick actions: `/h pos` · `/h arena status`',
+            ...statusNotes.filter((note) => note.startsWith('arenaSetup: auto-provision failed')),
+          ].join('\n'),
+        }
+      }
 
       return {
         kind: 'hermit',
         provider: 'local',
         reply: [
-          '**Your mirrored trading**',
-          automationLine,
-          '',
-          '**Room playbook (shared)**',
-          `Sync when members resize: **${effectiveRuntime.inverseRebalanceScalePct}%**`,
-          `Room direction bias: **${biasLabel}**`,
-          strategy?.killSwitch
-            ? '_Room automation is temporarily halted by operators._'
-            : '_Room automation is live for opted-in members._',
+          ...strategyStatusLines,
           '',
           'Full guide: `/h rules` · Replay walkthrough: `/h setup`',
           ...statusNotes.filter((note) => note.startsWith('arenaSetup: auto-provision failed')),
@@ -2685,7 +2741,7 @@ export async function executeHermitCommand(
             provider: 'local',
             reply: [
               'Auto-setup ran, but no Arena identity mapping was found for your account.',
-              'Run /arena register first, then retry.',
+              'Run /h arena register first, then retry.',
             ].join('\n'),
           }
         }
@@ -2702,7 +2758,7 @@ export async function executeHermitCommand(
           provider: 'local',
           reply: [
             'Unable to enable automation: no Arena identity mapping found for your account.',
-            'Run /arena register first, then retry.',
+            'Run /h arena register first, then retry.',
           ].join('\n'),
         }
       }
@@ -2741,7 +2797,7 @@ export async function executeHermitCommand(
         return {
           kind: 'hermit',
           provider: 'local',
-          reply: 'Automation is not enabled for your account.\nRun `/h join` to start.',
+          reply: 'Automation is not enabled for your account.\nRun `/h start` to begin.',
         }
       }
       return {
@@ -2759,7 +2815,7 @@ export async function executeHermitCommand(
         return {
           kind: 'hermit',
           provider: 'local',
-          reply: 'Automation is not enabled for your account.\nRun `/h join` to start.',
+          reply: 'Automation is not enabled for your account.\nRun `/h start` to begin.',
         }
       }
       if (userState.state === 'active') {
@@ -2788,7 +2844,7 @@ export async function executeHermitCommand(
         return {
           kind: 'hermit',
           provider: 'local',
-          reply: 'Automation is not enabled for your account.\nRun `/h join` to start.',
+          reply: 'Automation is not enabled for your account.\nRun `/h start` to begin.',
         }
       }
       if (userState.state === 'active') {
@@ -2992,7 +3048,7 @@ export async function executeHermitCommand(
           kind: 'hermit',
           provider: 'local',
           reply:
-            'Arena backtest requires a mapped identity. Run `/arena identity show` or `/arena register` first.',
+            'Arena backtest requires a mapped identity. Run `/h arena identity show` or `/h arena register` first.',
         }
       }
       try {
@@ -3213,7 +3269,7 @@ export async function executeHermitCommand(
               saved ? 'Mapping saved.' : 'Mapping write may have failed (check logs).',
               `steps: ${stepSummaries.join(' ')}`,
               ...failureLines,
-              'Verify with: /arena identity show  |  /arena status',
+              'Verify with: /h arena identity show  |  /h arena status',
               'Note: the agent was created under the active runtime ACP session (owner resolves to ACP_OWNER_WALLET when ACP_* rotation vars are set). For full Virtuals dashboard ownership under your Alfa EOA, create/claim via web UI at app.virtuals.io while connected as that wallet.',
             ].filter(Boolean).join('\n'),
           }
@@ -3222,8 +3278,8 @@ export async function executeHermitCommand(
         // Create failed or no parsable ids
         const out = sanitizeOutputForReply(cr.run?.stdout || cr.run?.stderr)
         const guidance = isDefault
-          ? 'To switch the room default: create on web connected as your Alfa wallet (recommended for dashboard ownership), then /arena register default <id> <wallet>, or run /arena register default (no args) again. (No-args create uses the runtime ACP session currently active on the service.)'
-          : 'Create/claim at app.virtuals.io/acp/new while connected as your room sender wallet (for ownership match), then /arena register <id> <wallet>. (No-args create uses the runtime ACP session currently active on the service.)'
+          ? 'To switch the room default: create on web connected as your Alfa wallet (recommended for dashboard ownership), then /h arena register default <id> <wallet>, or run /h arena register default (no args) again. (No-args create uses the runtime ACP session currently active on the service.)'
+          : 'Create/claim at app.virtuals.io/acp/new while connected as your room sender wallet (for ownership match), then /h arena register <id> <wallet>. (No-args create uses the runtime ACP session currently active on the service.)'
         return {
           kind: 'hermit',
           provider: 'local',
@@ -3314,7 +3370,7 @@ export async function executeHermitCommand(
           `agentId: ${agentId}`,
           `arenaWallet: ${agentWalletAddress}`,
           hlApiWalletAddress ? `hlApiWallet: ${hlApiWalletAddress}` : '',
-          'Verify: /arena identity show  |  /arena status  |  (use /arena deposit for funds; dry-run trade first if live)',
+          'Verify: /h arena identity show  |  /h arena status  |  (use /h arena deposit for funds; dry-run trade first if live)',
         ].filter(Boolean).join('\n'),
       }
     }
@@ -3324,7 +3380,7 @@ export async function executeHermitCommand(
         kind: 'hermit',
         provider: 'local',
         reply: result.ok
-          ? `Arena status: enabled=${String(result.details?.enabled)} tradingEnabled=${String(result.details?.tradingEnabled)} dryRun=${String(result.details?.dryRun)} identitySource=${resolvedIdentity.source} agentId=${resolvedIdentity.agentId ?? 'none'} arenaWallet=${resolvedIdentity.agentWalletAddress ?? 'none'}${resolvedIdentity.source === 'env_default' ? ' (no active DB mapping for room; run /arena register default or set via identity commands to bind a new one)' : ''}`
+          ? `Arena status: enabled=${String(result.details?.enabled)} tradingEnabled=${String(result.details?.tradingEnabled)} dryRun=${String(result.details?.dryRun)} identitySource=${resolvedIdentity.source} agentId=${resolvedIdentity.agentId ?? 'none'} arenaWallet=${resolvedIdentity.agentWalletAddress ?? 'none'}${resolvedIdentity.source === 'env_default' ? ' (no active DB mapping for room; run /h arena register default or set via identity commands to bind a new one)' : ''}`
           : `Arena status unavailable: ${result.message}`,
       }
     }
@@ -3346,6 +3402,34 @@ export async function executeHermitCommand(
         kind: 'hermit',
         provider: 'local',
         reply: `Arena assets (${assets.length}): ${assets.join(', ')}`,
+      }
+    }
+    if (parsed.kind === 'positions') {
+      const result = await runArenaPositionIntel(config)
+      if (!result.ok) {
+        const failureDetail = summarizeArenaRunFailure(result.run)
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: failureDetail ? `${result.message}\nDetails: ${failureDetail}` : result.message,
+        }
+      }
+      const details = asObject(result.details)
+      if (details) {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: formatArenaPositionIntelReply(parsed.detailToken, details),
+        }
+      }
+      const rawOutput = sanitizeArenaOutputForReply(
+        typeof result.details?.rawOutput === 'string' ? result.details.rawOutput : result.message,
+        config.dgclawDir,
+      )
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: rawOutput || 'Virtuals open positions fetched.',
       }
     }
     if (parsed.kind === 'join') {
@@ -3697,6 +3781,6 @@ export async function executeHermitCommand(
   }
 
   throw commandError(
-    'Unsupported Hermit command. Use /h join|pause|resume|rules|sync|bank|safety|size, /gmeow, /hermit, /meme, /position, /signal, /market, or /arena.',
+    'Unsupported Hermit command. Use /h start|stop|resume|rules|mirror|profit|risk|size|status|positions|arena..., /gmeow, /hermit, /meme, /position, /signal, or /market.',
   )
 }
