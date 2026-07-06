@@ -17,10 +17,6 @@ const importRegex =
 const ALLOWED_CROSS_FEATURE = new Map([
   ['accountSetup', new Set(['waitlist', 'archB'])],
   ['waitlist', new Set(['accountSetup'])],
-  // Sub-account reprovision flow legitimately shares logic with archB delegation
-  // (spend permission prepare/commit for Base App sub-accounts). This is
-  // flag-gated and scoped to the secondary execution track.
-  ['executionScope', new Set(['archB'])],
 ])
 
 // Allowed api -> src imports: exact normalized module specifiers.

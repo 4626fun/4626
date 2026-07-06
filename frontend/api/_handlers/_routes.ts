@@ -188,15 +188,8 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'arch-b/enroll': () => import('./arch-b/_enroll.js'),
   'arch-b/revoke': () => import('./arch-b/_revoke.js'),
   'arch-b/status': () => import('./arch-b/_status.js'),
-  'arch-b/sub-account/provision/prepare': () =>
-    import('./arch-b/_subAccountProvisionPrepare.js'),
-  'arch-b/sub-account/provision/commit': () =>
-    import('./arch-b/_subAccountProvisionCommit.js'),
-  'arch-b/sub-account/revoke': () => import('./arch-b/_subAccountRevoke.js'),
 
   'admin/arch-b/provision': () => import('./admin/arch-b/_provision.js'),
-  'admin/arch-b/sub-account/provision': () =>
-    import('./admin/arch-b/_subAccountProvision.js'),
   'admin/recover-stranded-csw/resolve-owner': () =>
     import('./admin/_recoverStrandedCswResolveOwner.js'),
 

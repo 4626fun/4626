@@ -22,13 +22,10 @@ export {
   envBigInt,
   provisionCommandIssuerContext,
   revokeCommandIssuerContext,
-  revokeSubAccountSpendPermission,
   readIssuerDailySpend,
   recordIssuerDailySpend,
   rollbackIssuerDailySpend,
   type CommandIssuerContext,
   type CommandIssuerResolution,
-  type CommandIssuerSubAccount,
-  type SpendPermissionPayload,
   type ExecutionReadiness,
 } from './commandIssuerContext.js'

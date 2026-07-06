@@ -8,8 +8,7 @@ import { requireAdminApiToken } from '@4626/server-core/machine-auth'
  * admin-token boilerplate was duplicated across many handlers, with no
  * central enforcement point. This test pins the contract of the new shared
  * `requireAdminApiToken` helper so that any handler that migrates to it
- * gets the same gate semantics as the canonical implementation in
- * `frontend/api/_handlers/admin/arch-b/_subAccountProvision.ts`:
+ * gets the same gate semantics as the canonical admin handler implementation:
  *
  *   1. ADMIN_API_TOKEN unset → 500 (admin_token_missing) — fail closed
  *   2. Authorization header absent / non-Bearer → 401 (admin_token_invalid)

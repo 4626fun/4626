@@ -61,10 +61,6 @@ import {
   sendPrivyCoinbaseSmartWalletUserOperation,
 } from './privyCoinbaseSmartWallet.js'
 import {
-  buildSpendPermissionCalls,
-  isSpendPermissionApproved,
-} from './spendPermission.js'
-import {
   DEFAULT_GAS_BUFFER_WEI,
   buildInsufficientFundsRefusal,
   checkWalletBalancePreflight,
@@ -114,28 +110,6 @@ export type UserOpRefusal =
       code: 'userop_failed'
       retryable: boolean
       errorMessage: string
-      response: string
-    }
-  | {
-      ok: false
-      code: 'sub_account_feature_disabled'
-      response: string
-    }
-  | {
-      ok: false
-      code: 'sub_account_spend_permission_revoked'
-      response: string
-    }
-  | {
-      ok: false
-      code: 'sub_account_spend_permission_expired'
-      response: string
-    }
-  | {
-      ok: false
-      code: 'sub_account_parent_insufficient_funds'
-      balanceWei: bigint
-      requiredWei: bigint
       response: string
     }
 
@@ -315,55 +289,6 @@ export async function submitUserOpOrRefuse(
     }
   }
 
-  // --- 1b. Sub-account gating --------------------------------------------
-  // When the issuer row has sub-account fields populated, the feature flag
-  // must be on AND the spend permission must be live. We hard-fail on any
-  // failure — no silent fallback to the direct-CSW path, since the row has
-  // been explicitly migrated and the direct-CSW path may no longer work.
-  if (issuer.subAccount) {
-    if (!isArchBSubAccountsEnabled()) {
-      logger.warn('[arch-b/userop] sub-account issuer but feature disabled; refusing', {
-        correlationId,
-        profileId: issuer.profileId,
-        subAccountAddress: issuer.subAccount.subAccountAddress,
-      })
-      return {
-        ok: false,
-        code: 'sub_account_feature_disabled',
-        response:
-          "This trade can't be executed right now — the sub-account execution path is not enabled. Please try again shortly.",
-      }
-    }
-    if (issuer.subAccount.spendPermission.revokedAt != null) {
-      logger.warn('[arch-b/userop] sub-account spend permission revoked; refusing', {
-        correlationId,
-        profileId: issuer.profileId,
-        subAccountAddress: issuer.subAccount.subAccountAddress,
-        revokedAt: issuer.subAccount.spendPermission.revokedAt.toISOString(),
-      })
-      return {
-        ok: false,
-        code: 'sub_account_spend_permission_revoked',
-        response:
-          "This trade can't be executed right now — the spending permission has been revoked. Contact setup to re-authorize.",
-      }
-    }
-    if (issuer.subAccount.spendPermission.endAt.getTime() < Date.now()) {
-      logger.warn('[arch-b/userop] sub-account spend permission expired; refusing', {
-        correlationId,
-        profileId: issuer.profileId,
-        subAccountAddress: issuer.subAccount.subAccountAddress,
-        endAt: issuer.subAccount.spendPermission.endAt.toISOString(),
-      })
-      return {
-        ok: false,
-        code: 'sub_account_spend_permission_expired',
-        response:
-          "This trade can't be executed right now — the spending permission has expired. Contact setup to re-authorize.",
-      }
-    }
-  }
-
   // --- 2. Bundler URL -----------------------------------------------------
   const bundlerUrl = input.bundlerUrl ?? resolveBundlerUrl()
   if (!bundlerUrl) {
@@ -388,17 +313,11 @@ export async function submitUserOpOrRefuse(
     }) as unknown as PublicClient)
 
   // --- 4. Defensive balance preflight ------------------------------------
-  // For legacy rows (no sub-account): check the CSW balance — the CSW pays.
-  // For sub-account rows: the PARENT CSW holds the balance; funding flows
-  // through the spend permission each UserOp. Sub-account itself may hold 0.
   if (input.valueWei > 0n) {
-    const balanceSource: Address = issuer.subAccount
-      ? issuer.subAccount.parentCswAddress
-      : issuer.smartWallet
     try {
       const preflight = await checkWalletBalancePreflight({
         publicClient: getBasePreflightPublicClient(),
-        wallet: balanceSource,
+        wallet: issuer.smartWallet,
         valueWei: input.valueWei,
         gasBufferWei: resolveGasBufferWei(),
       })
@@ -407,20 +326,9 @@ export async function submitUserOpOrRefuse(
           correlationId,
           profileId: issuer.profileId,
           smartWallet: issuer.smartWallet,
-          balanceSource,
-          subAccountPath: Boolean(issuer.subAccount),
           balanceWei: preflight.balanceWei.toString(),
           requiredWei: preflight.requiredWei.toString(),
         })
-        if (issuer.subAccount) {
-          return {
-            ok: false,
-            code: 'sub_account_parent_insufficient_funds',
-            balanceWei: preflight.balanceWei,
-            requiredWei: preflight.requiredWei,
-            response: preflight.message,
-          }
-        }
         return {
           ok: false,
           code: 'insufficient_funds',
@@ -434,7 +342,6 @@ export async function submitUserOpOrRefuse(
         correlationId,
         profileId: issuer.profileId,
         smartWallet: issuer.smartWallet,
-        subAccountPath: Boolean(issuer.subAccount),
         error: error instanceof Error ? error.message : String(error),
       })
     }
@@ -465,47 +372,16 @@ export async function submitUserOpOrRefuse(
     reservedAmount = input.valueWei
   }
 
-  // --- 6. Build effective calls (prepend spend permission for sub-account)
-  let effectiveCalls: CoinbaseSmartWalletCall[] = input.calls
-  let submitWallet: Address = issuer.smartWallet
-  if (issuer.subAccount) {
-    submitWallet = issuer.subAccount.subAccountAddress
-    let isApprovedOnChain = false
-    try {
-      isApprovedOnChain = await isSpendPermissionApproved({
-        publicClient,
-        permission: issuer.subAccount.spendPermission.payload,
-      })
-    } catch (error) {
-      // Fail-open: include approveWithSignature. The manager short-circuits
-      // if the permission is already approved, so an extra call is harmless.
-      logger.warn('[arch-b/userop] isSpendPermissionApproved threw; assuming not approved', {
-        correlationId,
-        profileId: issuer.profileId,
-        subAccountAddress: issuer.subAccount.subAccountAddress,
-        error: error instanceof Error ? error.message : String(error),
-      })
-      isApprovedOnChain = false
-    }
-    const spendCalls = buildSpendPermissionCalls({
-      permission: issuer.subAccount.spendPermission.payload,
-      signature: issuer.subAccount.spendPermission.signature,
-      amountWei: input.valueWei,
-      isApprovedOnChain,
-    })
-    effectiveCalls = [...spendCalls, ...input.calls]
-  }
-
-  // --- 7. Submit UserOperation -------------------------------------------
+  // --- 6. Submit UserOperation -------------------------------------------
   try {
     const result = await sendPrivyCoinbaseSmartWalletUserOperation({
       publicClient,
       bundlerUrl,
       walletId: issuer.privyOwnerWalletId,
-      smartWallet: submitWallet,
+      smartWallet: issuer.smartWallet,
       ownerAddress: issuer.ownerEoa,
       ownerIndex: issuer.ownerIndex,
-      calls: effectiveCalls,
+      calls: input.calls,
       simulate: input.simulate ?? false,
     })
 
@@ -607,19 +483,6 @@ export async function submitUserOpOrRefuse(
 /** True iff `ARCH_B_SEND_VIA_USEROP` is truthy in env. */
 export function isArchBSendViaUserOpEnabled(): boolean {
   const raw = (process.env.ARCH_B_SEND_VIA_USEROP ?? '').trim().toLowerCase()
-  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
-}
-
-/**
- * True iff `ARCH_B_SUB_ACCOUNTS_ENABLED` is truthy in env.
- *
- * When off (default), sub-account issuer rows are refused with
- * `sub_account_feature_disabled` — preserving the invariant that a
- * mis-provisioned row never silently falls back to the legacy direct-CSW path.
- * Legacy rows (subAccount === null) are unaffected by this flag.
- */
-export function isArchBSubAccountsEnabled(): boolean {
-  const raw = (process.env.ARCH_B_SUB_ACCOUNTS_ENABLED ?? '').trim().toLowerCase()
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
 }
 

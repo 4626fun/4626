@@ -52,7 +52,7 @@ import { resolveOwnerWalletId } from '../../../server/_lib/wallet/privyOwnerWall
 import {
   getBasePublicClient,
   isContractAddressByBytecode,
-} from '../../../server/_lib/wallet/subAccountProvisionVerify.js'
+} from '../../../server/_lib/wallet/basePublicClient.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

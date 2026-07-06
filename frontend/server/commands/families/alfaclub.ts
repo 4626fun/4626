@@ -757,14 +757,6 @@ async function executeCreateRoom(params: {
   }
   const issuer = resolution.context
 
-  if (issuer.subAccount) {
-    return {
-      ok: false,
-      response:
-        'Room creation currently requires direct canonical-CSW execution context. This account is configured for sub-account routing; use the AlfaClub app signing flow to create the room.',
-    }
-  }
-
   try {
     await assertTeeAttestationOrThrow({
       action: 'alfaclub.create_room',
@@ -981,7 +973,7 @@ async function executeBuyKey(params: {
       symbol = 'USDC'
     }
 
-    const executionWallet = issuer.subAccount?.subAccountAddress ?? issuer.smartWallet
+    const executionWallet = issuer.smartWallet
     allowance = (await client.readContract({
       address: bondingToken,
       abi: ERC20_ABI,
