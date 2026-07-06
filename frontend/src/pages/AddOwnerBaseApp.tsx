@@ -12,7 +12,7 @@ import {
 } from '@/components/wallet/AddOwnerConnectionStatusPanel'
 import { BaseAppCanonicalWalletLinkPanel } from '@/components/wallet/BaseAppCanonicalWalletLinkPanel'
 import { useEnsureCanonicalBaseAccountWallet } from '@/hooks/useEnsureCanonicalBaseAccountWallet'
-import { useSubAccountSetup } from '@/hooks/useSubAccountSetup'
+import { useBaseAccountWallet } from '@/hooks/useBaseAccountWallet'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { usePrivyWalletsFromContext } from '@/lib/privy/walletHooksContext'
@@ -62,7 +62,7 @@ export function AddOwnerBaseApp() {
   }
   const { signIn, signOut, busy: authBusy, error: authError, hasSession, authAddress } = useSiweAuth()
   const privyContextWallets = usePrivyWalletsFromContext()
-  const { connectBaseAccountWallet } = useSubAccountSetup()
+  const { connectBaseAccountWallet } = useBaseAccountWallet()
   const [privySignOutBusy, setPrivySignOutBusy] = useState(false)
   const [baseDisconnectBusy, setBaseDisconnectBusy] = useState(false)
   const inBaseApp = isBaseAppInAppContext(detectInAppEnvironment())
@@ -87,7 +87,7 @@ export function AddOwnerBaseApp() {
     if (address) {
       await connectBaseAccountWallet({
         canonicalCswAddress,
-        requireEmbeddedEoa: false,
+        description: 'Connect your Base App wallet to enable 4626 signing.',
       }).catch(() => false)
       void loadMe({ showSpinner: true })
     }

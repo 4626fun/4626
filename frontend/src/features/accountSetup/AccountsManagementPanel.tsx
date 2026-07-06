@@ -6,10 +6,11 @@ import { Button } from '@/components/ui/Button'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { InlineAddressCopyButton } from '@/components/account/CopyableAddress'
 import { LinkedIdentitiesSection } from '@/features/accountSetup/LinkedIdentitiesSection'
-import { shouldShowParentCswAddOwnerPanel, shouldShowBaseAppConnectPanel } from '@/features/waitlist/waitlistFlowState'
+import { shouldShowParentCswAddOwnerPanel } from '@/features/waitlist/waitlistFlowState'
 import { useWaitlistSigningStepComplete } from '@/features/waitlist/useWaitlistSigningStepComplete'
-import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
+import { WaitlistBaseAppWalletSetupPanel } from '@/features/waitlist/WaitlistBaseAppWalletSetupPanel'
 import { inferWaitlistEoaOwnerRoutingHint } from '@/lib/wallet/userExecutionTrack'
+import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { shortValue } from './shared'
 import type { useAccountSetupController } from './useAccountSetupController'
 
@@ -18,11 +19,6 @@ type Controller = ReturnType<typeof useAccountSetupController>
 const LazyZoraAddOwnerSigningPanel = lazy(async () => {
   const mod = await import('@/features/accountSetup/ZoraAddOwnerSigningPanel')
   return { default: mod.ZoraAddOwnerSigningPanel }
-})
-
-const LazyWaitlistConnectBaseApp = lazy(async () => {
-  const mod = await import('@/features/waitlist/WaitlistConnectBaseApp')
-  return { default: mod.WaitlistConnectBaseApp }
 })
 
 function StatusRow({
@@ -69,7 +65,6 @@ export function AccountsManagementPanel(props: {
     cswOwnersState,
     error,
     inTelegramMiniApp,
-    loadMe,
     me,
     needsBaseAppSetup,
     onLinkZora,
@@ -97,8 +92,8 @@ export function AccountsManagementPanel(props: {
 
   if (!me) return null
 
+  const inBaseApp = isBaseAppInAppContext()
   const executionTrack = me.accountSignals.executionTrack
-  const subAccountFlowEnabled = waitlistSubAccountFlowFlag()
   const resolvedOnchainEoaOwnerCount = Math.max(
     onchainEoaOwnerCandidates.length,
     inferWaitlistEoaOwnerRoutingHint({
@@ -107,6 +102,7 @@ export function AccountsManagementPanel(props: {
     }),
   )
   const showParentCswAddOwnerPanel = shouldShowParentCswAddOwnerPanel({
+    inBaseApp,
     zoraLinked,
     ownerInstallRequested: ownerInstallPathActive,
     signingStepComplete,
@@ -114,16 +110,6 @@ export function AccountsManagementPanel(props: {
     accountSignals: me.accountSignals,
     parentEmbeddedOwnerOnChain,
     onchainEoaOwnerCount: resolvedOnchainEoaOwnerCount,
-    subAccountFlowEnabled,
-  })
-  const showBaseAppConnectPanel = shouldShowBaseAppConnectPanel({
-    subAccountFlowEnabled,
-    signingStepComplete,
-    embeddedEoaAvailable: Boolean(embeddedEoaAddress),
-    parentEmbeddedOwnerOnChain,
-    zoraLinked,
-    onchainEoaOwnerCount: resolvedOnchainEoaOwnerCount,
-    accountSignals: me.accountSignals,
   })
 
   const zoraHandle = me.accountSignals.zoraHandle?.trim()
@@ -277,25 +263,15 @@ export function AccountsManagementPanel(props: {
             </div>
           </div>
 
-          {showBaseAppConnectPanel ? (
-            <Suspense
-              fallback={
-                <div className="text-xs text-zinc-500">
-                  <LoadingText intent="processing" size="sm" labelOverride="Loading Base App setup..." />
-                </div>
-              }
-            >
-              <LazyWaitlistConnectBaseApp
-                onSkip={() => undefined}
-                onComplete={() => {
-                  void loadMe()
-                  void refreshParentEmbeddedOwner()
-                }}
-                parentAddress={canonicalCswAddress}
-                subAccountAddress={me.accountSignals.baseSubAccount?.address ?? me.baseSubAccount ?? null}
-                embeddedEoaAddress={embeddedEoaAddress ?? null}
-              />
-            </Suspense>
+          {inBaseApp && !signingStepComplete ? (
+            <WaitlistBaseAppWalletSetupPanel
+              controller={controller}
+              embeddedEoaAddress={embeddedEoaAddress}
+              privyAuthenticated={Boolean(me.emailVerified)}
+              parentEmbeddedOwnerOnChain={parentEmbeddedOwnerOnChain}
+              executionTrack={executionTrack}
+              onOwnerInstallSuccess={() => refreshParentEmbeddedOwner()}
+            />
           ) : showParentCswAddOwnerPanel ? (
             <Suspense
               fallback={

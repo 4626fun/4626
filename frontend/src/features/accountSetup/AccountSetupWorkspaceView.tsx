@@ -1,8 +1,6 @@
 import {
   type KeyboardEvent,
   type ReactNode,
-  Suspense,
-  lazy,
   useCallback,
   useEffect,
   useMemo,
@@ -14,21 +12,25 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { toast } from '@/components/ui/Toast'
-import { useSearchParams } from 'react-router-dom'
 
 import { Button } from '@/components/ui/Button'
 import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { AccountsManagementPanel } from '@/features/accountSetup/AccountsManagementPanel'
 import { ArchBEnrollmentCard } from '@/features/archB/ArchBEnrollmentCard'
-import { shouldShowParentCswAddOwnerPanel, shouldShowBaseAppConnectPanel, shouldFocusWaitlistBaseAppConnect, resolveWaitlistAccordionOpenStep } from '@/features/waitlist/waitlistFlowState'
+import {
+  shouldShowParentCswAddOwnerPanel,
+  shouldShowBaseAppWalletLinkPanel,
+  shouldFocusBaseAppWalletSetup,
+  resolveWaitlistAccordionOpenStep,
+} from '@/features/waitlist/waitlistFlowState'
 import { WaitlistBaseAppWalletNudge } from '@/features/waitlist/WaitlistBaseAppWalletNudge'
+import { WaitlistBaseAppWalletSetupPanel } from '@/features/waitlist/WaitlistBaseAppWalletSetupPanel'
 import { inferWaitlistEoaOwnerRoutingHint } from '@/lib/wallet/userExecutionTrack'
-import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
+import { useEnsureCanonicalBaseAccountWallet } from '@/hooks/useEnsureCanonicalBaseAccountWallet'
 import { useWaitlistSigningStepComplete } from '@/features/waitlist/useWaitlistSigningStepComplete'
 import { WaitlistModernParentOwnerInstall } from './WaitlistModernParentOwnerInstall'
 import { usePrivyClientStatus } from '@/lib/privy/client'
-import { readWaitlistSetupIntent } from '@/lib/auth/waitlistEntry'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { shortValue } from './shared'
 import type { useAccountSetupController } from './useAccountSetupController'
@@ -91,27 +93,6 @@ function extractOwnerApprovalDebugDiagnostic(errorMessage: string | null | undef
 
 type AccountSetupWorkspaceController = ReturnType<typeof useAccountSetupController>
 
-const LazyWaitlistConnectBaseApp = lazy(async () => {
-  const mod = await import('@/features/waitlist/WaitlistConnectBaseApp')
-  return { default: mod.WaitlistConnectBaseApp }
-})
-
-function WaitlistConnectBaseAppLazy(
-  props: Parameters<typeof import('@/features/waitlist/WaitlistConnectBaseApp').WaitlistConnectBaseApp>[0],
-) {
-  return (
-    <Suspense
-      fallback={
-        <div className="text-xs text-zinc-500">
-          <LoadingText intent="processing" size="sm" labelOverride="Loading Base App setup..." />
-        </div>
-      }
-    >
-      <LazyWaitlistConnectBaseApp {...props} />
-    </Suspense>
-  )
-}
-
 export function AccountSetupWorkspaceView(props: {
   context: 'accounts' | 'waitlist'
   controller: AccountSetupWorkspaceController
@@ -122,7 +103,6 @@ export function AccountSetupWorkspaceView(props: {
   const { context, controller, summaryActions, waitlistFooter, onSigningStepCompleteChange } = props
   const privyClientStatus = usePrivyClientStatus()
   void privyClientStatus
-  const [searchParams] = useSearchParams()
   const inBaseApp = useMemo(() => isBaseAppInAppContext(), [])
   // openStep: null = auto (first incomplete), 1/2/3 = manually opened
   const [openStep, setOpenStep] = useState<1 | 2 | 3 | null>(null)
@@ -198,6 +178,13 @@ export function AccountSetupWorkspaceView(props: {
     ownerInstallRequested: ownerInstallPathActive,
   })
 
+  const baseWalletLink = useEnsureCanonicalBaseAccountWallet({
+    enabled: Boolean(inBaseApp && canonicalCswAddress),
+    canonicalCswAddress,
+    autoConnect: false,
+  })
+  const baseWalletReady = baseWalletLink.ready
+
   useEffect(() => {
     onSigningStepCompleteChange?.(signingStepComplete)
   }, [onSigningStepCompleteChange, signingStepComplete])
@@ -222,7 +209,6 @@ export function AccountSetupWorkspaceView(props: {
   // form used by the rendered step UI — it shadows the auto-trigger
   // helper `signingStepCompleteForAuto` once `me` is available.
   const executionTrack = me.accountSignals.executionTrack
-  const subAccountFlowEnabled = waitlistSubAccountFlowFlag()
   const resolvedOnchainEoaOwnerCount = Math.max(
     onchainEoaOwnerCandidates.length,
     inferWaitlistEoaOwnerRoutingHint({
@@ -230,7 +216,15 @@ export function AccountSetupWorkspaceView(props: {
       accountSignals: me.accountSignals,
     }),
   )
+  const showBaseAppWalletLinkPanel = shouldShowBaseAppWalletLinkPanel({
+    inBaseApp,
+    signingStepComplete,
+    embeddedEoaAvailable: Boolean(embeddedEoaAddress),
+    baseWalletReady,
+    accountSignals: me.accountSignals,
+  })
   const showParentCswAddOwnerPanel = shouldShowParentCswAddOwnerPanel({
+    inBaseApp,
     zoraLinked,
     ownerInstallRequested: ownerInstallPathActive,
     signingStepComplete,
@@ -238,16 +232,7 @@ export function AccountSetupWorkspaceView(props: {
     accountSignals: me.accountSignals,
     parentEmbeddedOwnerOnChain,
     onchainEoaOwnerCount: resolvedOnchainEoaOwnerCount,
-    subAccountFlowEnabled,
-  })
-  const showBaseAppConnectPanel = shouldShowBaseAppConnectPanel({
-    subAccountFlowEnabled,
-    signingStepComplete,
-    embeddedEoaAvailable: Boolean(embeddedEoaAddress),
-    parentEmbeddedOwnerOnChain,
-    zoraLinked,
-    onchainEoaOwnerCount: resolvedOnchainEoaOwnerCount,
-    accountSignals: me.accountSignals,
+    baseWalletReady: inBaseApp ? baseWalletReady : undefined,
   })
   const stepTwoDoneSubtitle = signingStepComplete
     ? parentEmbeddedOwnerOnChain || executionTrack === 'legacy-owner-install'
@@ -257,8 +242,8 @@ export function AccountSetupWorkspaceView(props: {
       ? ownerInstallPhase === 'awaiting_signature'
         ? 'Waiting for Base App signature…'
         : 'Owner install in progress…'
-      : showBaseAppConnectPanel
-        ? 'Connect Base App to enable sponsored swaps'
+      : showBaseAppWalletLinkPanel
+        ? 'Connect your Base Account wallet in Base App'
         : showParentCswAddOwnerPanel
           ? 'Connect a CSW owner wallet and enable 4626 signing'
           : 'Optional — trade at /swap with an external wallet (EOA mode) if you skip this step'
@@ -270,7 +255,7 @@ export function AccountSetupWorkspaceView(props: {
   // older sub-account connect panel is not the active one. This makes the
   // proven 2026 direction the primary experience inside the waitlist.
   const useModernParentOwnerInstallInWaitlist =
-    showParentCswAddOwnerPanel && (inBaseApp || !showBaseAppConnectPanel)
+    showParentCswAddOwnerPanel && (inBaseApp ? baseWalletReady : true)
   // Zora-controlled CBSWs are passkey-owned (P256 keys held in Coinbase
   // Wallet / Base Account), not EOA-owned. The cross-app login surfaces the
   // CBSW address but cannot expose a transactional signer, so we steer users
@@ -280,27 +265,20 @@ export function AccountSetupWorkspaceView(props: {
     zoraLinked && Boolean(canonicalCswAddress) && !connectedOwnerReady && !hasConnectedSigner
 
   if (context === 'waitlist') {
-    const setupIntent = readWaitlistSetupIntent(searchParams.get('setup'))
-    const focusBaseAppConnect = shouldFocusWaitlistBaseAppConnect({
+    const focusBaseAppWalletSetup = shouldFocusBaseAppWalletSetup({
       inBaseApp,
-      showBaseAppConnectPanel,
       signingStepComplete,
-      setupIntent,
-      subAccountFlowEnabled,
-      parentEmbeddedOwnerOnChain,
-      zoraLinked,
-      onchainEoaOwnerCount: resolvedOnchainEoaOwnerCount,
+      baseWalletReady,
       account: {
         emailVerified: me.emailVerified === true,
         accountSignals: me.accountSignals,
       },
     })
-    // Which top-level step is expanded: null = auto
     const resolvedOpen = resolveWaitlistAccordionOpenStep({
       manualOpenStep: openStep === 1 || openStep === 2 ? openStep : null,
       ownerInstallRequested: ownerInstallResumeState.requested,
       stepOneComplete,
-      focusBaseAppConnect,
+      focusBaseAppWalletSetup,
     })
     const toggleStep = (n: 1 | 2) => {
       setOpenStep(openStep === n ? null : n)
@@ -314,11 +292,11 @@ export function AccountSetupWorkspaceView(props: {
     const badgeActive = 'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-brand-primary/22 bg-brand-primary/[0.14] text-[11px] font-bold text-brand-200'
 
     const stepOneStatus: 'done' | 'active' | 'upcoming' =
-      stepOneComplete ? 'done' : focusBaseAppConnect ? 'upcoming' : resolvedOpen === 1 ? 'active' : 'upcoming'
+      stepOneComplete ? 'done' : focusBaseAppWalletSetup ? 'upcoming' : resolvedOpen === 1 ? 'active' : 'upcoming'
     const stepTwoStatus: 'done' | 'active' | 'upcoming' =
       signingStepComplete
         ? 'done'
-        : ownerInstallPathActive || focusBaseAppConnect || (stepOneComplete && resolvedOpen === 2)
+        : ownerInstallPathActive || focusBaseAppWalletSetup || (stepOneComplete && resolvedOpen === 2)
           ? 'active'
           : 'upcoming'
 
@@ -328,19 +306,19 @@ export function AccountSetupWorkspaceView(props: {
       ? (rawZoraHandle.startsWith('@') || rawZoraHandle.startsWith('$') ? rawZoraHandle : `@${rawZoraHandle}`)
       : null
     const zoraProfileUrl = normalizedZoraHandle ? `${ZORA_PROFILE_BASE}${normalizedZoraHandle}` : null
-    const baseAppConnectProps = {
-      onSkip: () => undefined,
-      onComplete: () => {
-        void loadMe()
-        void refreshParentEmbeddedOwner()
-      },
-      parentAddress: canonicalCswAddress,
-      subAccountAddress: me.accountSignals.baseSubAccount?.address ?? me.baseSubAccount ?? null,
-      embeddedEoaAddress: embeddedEoaAddress ?? null,
-      autoConnectOnMount: focusBaseAppConnect,
-      requireBaseAppConnect: inBaseApp,
-      compact: focusBaseAppConnect && inBaseApp,
-    } as const
+    const baseAppWalletSetupPanel = (
+      <WaitlistBaseAppWalletSetupPanel
+        controller={controller}
+        embeddedEoaAddress={embeddedEoaAddress}
+        privyAuthenticated={Boolean(me.emailVerified)}
+        parentEmbeddedOwnerOnChain={parentEmbeddedOwnerOnChain}
+        executionTrack={executionTrack}
+        onOwnerInstallSuccess={() => {
+          void loadMe()
+          void refreshParentEmbeddedOwner()
+        }}
+      />
+    )
 
     if (allDone) {
       return (
@@ -368,7 +346,7 @@ export function AccountSetupWorkspaceView(props: {
       )
     }
 
-    if (focusBaseAppConnect && showBaseAppConnectPanel && !signingStepComplete) {
+    if (focusBaseAppWalletSetup && inBaseApp && !signingStepComplete) {
       return (
         <div className="mx-auto w-full max-w-[640px] space-y-4">
           {error ? (
@@ -416,7 +394,7 @@ export function AccountSetupWorkspaceView(props: {
             <p className="text-sm text-zinc-500">One approval in Base App unlocks swaps and chat. Zora is optional.</p>
           </div>
 
-          <WaitlistConnectBaseAppLazy {...baseAppConnectProps} />
+          {baseAppWalletSetupPanel}
 
           {!stepOneComplete ? (
             <details className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3 text-sm text-zinc-400">
@@ -467,7 +445,7 @@ export function AccountSetupWorkspaceView(props: {
           </div>
         ) : null}
 
-        {ownerInstallResumeState.requested && !inBaseApp && !showBaseAppConnectPanel ? (
+        {ownerInstallResumeState.requested && !inBaseApp ? (
           <div className="rounded-2xl bg-[linear-gradient(180deg,rgba(37,99,235,0.16),rgba(37,99,235,0.05))] px-5 py-4 text-sm text-brand-50 ring-1 ring-brand-primary/20">
             <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-brand-200">
               <span className="inline-flex rounded-full bg-brand-primary/15 px-2.5 py-1">Desktop signing setup</span>
@@ -486,10 +464,10 @@ export function AccountSetupWorkspaceView(props: {
           </div>
         ) : null}
 
-        {inBaseApp && !signingStepComplete && !focusBaseAppConnect ? (
+        {inBaseApp && !signingStepComplete && !focusBaseAppWalletSetup ? (
           <WaitlistBaseAppWalletNudge
             stepOneComplete={stepOneComplete}
-            showConnectPanel={showBaseAppConnectPanel}
+            showConnectPanel={showBaseAppWalletLinkPanel}
             onGoToStepTwo={goToWaitlistStepTwo}
           />
         ) : null}
@@ -498,18 +476,18 @@ export function AccountSetupWorkspaceView(props: {
         <div className="flex items-start justify-between gap-3">
           <div>
           <h2 className="text-2xl font-semibold tracking-tight text-white">
-            {allDone ? 'Account activated' : focusBaseAppConnect ? 'Connect your wallet' : 'Activate your account'}
+            {allDone ? 'Account activated' : focusBaseAppWalletSetup ? 'Connect your wallet' : 'Activate your account'}
           </h2>
           <p className="mt-1 text-sm text-zinc-500">
             {allDone
               ? 'All steps completed'
-              : focusBaseAppConnect
-                ? 'Link Base App to enable swaps and chat. Zora is optional.'
+              : focusBaseAppWalletSetup
+                ? 'Connect your Base Account wallet, then enable 4626 signing. Zora is optional.'
                 : 'Complete both steps to unlock app access'}
           </p>
           {!allDone ? (
             <div className="mt-2 inline-flex items-center rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[11px] text-zinc-300">
-              {focusBaseAppConnect ? 'Step 2 · Base App' : `Step ${resolvedOpen} of 2`}
+              {focusBaseAppWalletSetup ? 'Step 2 · Base App' : `Step ${resolvedOpen} of 2`}
             </div>
           ) : null}
           </div>
@@ -807,8 +785,8 @@ export function AccountSetupWorkspaceView(props: {
                       <p className="text-xs text-zinc-400 leading-relaxed">
                         Your embedded signer is confirmed as an on-chain owner of your parent smart wallet.
                       </p>
-                    ) : showBaseAppConnectPanel ? (
-                      <WaitlistConnectBaseAppLazy {...baseAppConnectProps} />
+                    ) : inBaseApp && !signingStepComplete ? (
+                      baseAppWalletSetupPanel
                     ) : useModernParentOwnerInstallInWaitlist ? (
                       <WaitlistModernParentOwnerInstall
                         controller={controller}
@@ -1173,16 +1151,14 @@ export function AccountSetupWorkspaceView(props: {
                     </p>
                   </div>
                 ) : null}
-                {showBaseAppConnectPanel ? (
-                  <WaitlistConnectBaseAppLazy
-                    onSkip={() => undefined}
-                    onComplete={() => {
-                      void loadMe()
-                      void refreshParentEmbeddedOwner()
-                    }}
-                    parentAddress={canonicalCswAddress}
-                    subAccountAddress={me.accountSignals.baseSubAccount?.address ?? me.baseSubAccount ?? null}
-                    embeddedEoaAddress={embeddedEoaAddress ?? null}
+                {inBaseApp && !signingStepComplete ? (
+                  <WaitlistBaseAppWalletSetupPanel
+                    controller={controller}
+                    embeddedEoaAddress={embeddedEoaAddress}
+                    privyAuthenticated={Boolean(me.emailVerified)}
+                    parentEmbeddedOwnerOnChain={parentEmbeddedOwnerOnChain}
+                    executionTrack={executionTrack}
+                    onOwnerInstallSuccess={() => refreshParentEmbeddedOwner?.()}
                   />
                 ) : useModernParentOwnerInstallInWaitlist ? (
                   <WaitlistModernParentOwnerInstall
@@ -1195,9 +1171,7 @@ export function AccountSetupWorkspaceView(props: {
                   <p className="mt-4 text-xs text-zinc-500 leading-relaxed">
                     {signingStepComplete
                       ? '4626 signing is enabled on your canonical wallet.'
-                      : subAccountFlowEnabled
-                        ? 'Connect Base App for sponsored swaps, or use the modern Base App owner install path (recommended for parent-CSW signing).'
-                        : 'Modern Base App owner install (validated self-call) is the primary way to enable parent-CSW signing. The older Zora EOA-relay option is the legacy fallback.'}
+                      : 'Enable 4626 signing on your parent Coinbase Smart Wallet via Base App or connect a CSW owner wallet.'}
                   </p>
                 )}
                 <div className="mt-4 flex flex-wrap items-start gap-3">

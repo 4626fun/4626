@@ -7,7 +7,6 @@ import {
   isParentCswEmbeddedOwnerReady,
   isZoraLinkedFromAccountSignals,
   resolveEffectiveExecutionTrack,
-  shouldUseBaseAppSubAccountPath,
 } from './userExecutionTrack'
 
 describe('isParentCswEmbeddedOwnerReady', () => {
@@ -18,33 +17,6 @@ describe('isParentCswEmbeddedOwnerReady', () => {
         accountSignals: { executionTrack: 'none-yet' },
       }),
     ).toBe(true)
-  })
-})
-
-describe('shouldUseBaseAppSubAccountPath', () => {
-  it('returns false for parent-owner accounts', () => {
-    expect(
-      shouldUseBaseAppSubAccountPath({
-        subAccountFlowEnabled: true,
-        parentEmbeddedOwnerOnChain: true,
-        accountSignals: {
-          executionTrack: 'none-yet',
-          baseSubAccount: { registered: true, isDistinctFromCsw: true },
-        },
-      }),
-    ).toBe(false)
-  })
-
-  it('returns false for Zora-linked accounts with an EOA-owner routing hint', () => {
-    expect(
-      shouldUseBaseAppSubAccountPath({
-        subAccountFlowEnabled: true,
-        accountSignals: {
-          linked: true,
-          executionTrack: 'legacy-owner-install',
-        },
-      }),
-    ).toBe(false)
   })
 })
 
@@ -82,66 +54,47 @@ describe('isZoraLinkedFromAccountSignals', () => {
   })
 })
 
-describe('buildWaitlistStepRoutingParams', () => {
-  it('fills zora and EOA-owner hints from account signals', () => {
-    const params = buildWaitlistStepRoutingParams(
-      {
-        emailVerified: true,
-        appAccessStatus: null,
-        accountSignals: {
-          linked: true,
-          executionTrack: 'legacy-owner-install',
-          canonicalCswAddress: '0x1234567890123456789012345678901234567890',
-        },
-      },
-      {
-        subAccountFlowEnabled: true,
-        embeddedEoaAvailable: true,
-      },
-    )
-
-    expect(params.zoraLinked).toBe(true)
-    expect(params.onchainEoaOwnerCount).toBe(1)
-  })
-})
-
 describe('inferWaitlistEoaOwnerRoutingHint', () => {
-  it('uses explicit owner counts when provided', () => {
-    expect(
-      inferWaitlistEoaOwnerRoutingHint({
-        onchainEoaOwnerCount: 2,
-        accountSignals: { executionTrack: 'none-yet' },
-      }),
-    ).toBe(2)
+  it('uses on-chain owner count when provided', () => {
+    expect(inferWaitlistEoaOwnerRoutingHint({ onchainEoaOwnerCount: 2 })).toBe(2)
   })
 })
 
 describe('deriveAccountChromeExecution', () => {
-  const csw = '0xAb6d5c10b03300326cd7fab7267ae192842967b5'
-
-  it('returns parent-csw chrome when parent-owner is on-chain', () => {
+  it('uses parent CSW lane when legacy owner install is active', () => {
     const chrome = deriveAccountChromeExecution({
-      executionTrack: 'none-yet',
+      executionTrack: 'legacy-owner-install',
       parentEmbeddedOwnerOnChain: true,
-      subAccountFlowEnabled: true,
-      canonicalCswAddress: csw,
+      canonicalCswAddress: '0xAb6d5C10b03300326cd7fab7267ae192842967b5',
     })
-
     expect(chrome.mode).toBe('parent-csw')
-    expect(chrome.showSubAccountInTray).toBe(false)
-    expect(chrome.showSubAccountInAccounts).toBe(false)
-    expect(chrome.subAccountAddress).toBeNull()
     expect(chrome.swapSenderLabel).toContain('Coinbase Smart Wallet')
   })
 
-  it('returns none chrome when no owner is confirmed', () => {
+  it('returns none mode when signing is not ready', () => {
     const chrome = deriveAccountChromeExecution({
       executionTrack: 'none-yet',
-      subAccountFlowEnabled: false,
-      canonicalCswAddress: csw,
+      parentEmbeddedOwnerOnChain: false,
     })
-
     expect(chrome.mode).toBe('none')
-    expect(chrome.showSubAccountInTray).toBe(false)
+    expect(chrome.swapSenderLabel).toBeNull()
+  })
+})
+
+describe('buildWaitlistStepRoutingParams', () => {
+  it('passes embedded EOA availability through routing params', () => {
+    const params = buildWaitlistStepRoutingParams(
+      {
+        emailVerified: true,
+        appAccessStatus: 'linked',
+        accountSignals: { executionTrack: 'none-yet' },
+      },
+      {
+        embeddedEoaAvailable: true,
+        parentEmbeddedOwnerOnChain: false,
+      },
+    )
+    expect(params.embeddedEoaAvailable).toBe(true)
+    expect(params.onchainEoaOwnerCount).toBe(0)
   })
 })

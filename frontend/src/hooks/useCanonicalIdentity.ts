@@ -6,7 +6,6 @@ import { useAccountMe } from '@/hooks/useAccountMe'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import { useEmbeddedOwnerOnCsw } from '@/features/waitlist/useEmbeddedOwnerOnCsw'
-import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import {
   deriveAccountChromeExecution,
   type AccountChromeExecution,
@@ -247,26 +246,13 @@ export function useCanonicalIdentity(): CanonicalIdentity {
     const serverFlag = accountMe.me?.accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw
     return serverFlag ?? null
   })()
-  const accountSignals = accountMe.me?.accountSignals
   const accountChrome = deriveAccountChromeExecution({
     executionTrack,
     parentEmbeddedOwnerOnChain,
     privyEmbeddedEoaIsOwnerOfCanonicalCsw: embeddedSignerAuthorizedOnCsw,
-    subAccountFlowEnabled: waitlistSubAccountFlowFlag(),
     canonicalCswAddress: csw,
-    baseSubAccount: accountSignals?.baseSubAccount,
   })
   const effectiveExecutionTrack = accountChrome.effectiveExecutionTrack
-  const executionSubAccountAddress: Address | null = (() => {
-    const candidate = accountChrome.subAccountAddress
-    if (!candidate || !isAddress(candidate)) return null
-    const normalized = candidate as Address
-    const lower = normalized.toLowerCase()
-    if (csw && lower === csw.toLowerCase()) return null
-    if (externalEoa && lower === externalEoa.toLowerCase()) return null
-    if (privyEmbeddedAddress && lower === privyEmbeddedAddress.toLowerCase()) return null
-    return normalized
-  })()
 
   const cswKey = csw ? csw.toLowerCase() : null
   const hasCachedCoin = cswKey ? coinAddressCache.has(cswKey) : false
@@ -322,7 +308,7 @@ export function useCanonicalIdentity(): CanonicalIdentity {
     activeSigner,
     creatorCoinAddress,
     loadingCoin,
-    executionSubAccountAddress,
+    executionSubAccountAddress: null,
     executionTrack,
     effectiveExecutionTrack,
     accountChrome,

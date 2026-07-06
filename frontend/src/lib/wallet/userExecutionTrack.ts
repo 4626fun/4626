@@ -16,11 +16,6 @@ export type UserExecutionAccountSignals = {
   canonicalCswAddress?: string | null
   executionTrack?: UserFrontendExecutionTrack
   privyEmbeddedEoaIsOwnerOfCanonicalCsw?: boolean | null
-  baseSubAccount?: {
-    address?: string | null
-    registered?: boolean
-    isDistinctFromCsw?: boolean
-  }
 }
 
 function hasLegacyOwnerInstallSigning(
@@ -65,33 +60,6 @@ export function inferWaitlistEoaOwnerRoutingHint(params: {
   return 0
 }
 
-export function shouldUseBaseAppSubAccountPath(params: {
-  subAccountFlowEnabled: boolean
-  parentEmbeddedOwnerOnChain?: boolean
-  accountSignals?: UserExecutionAccountSignals
-  zoraLinked?: boolean
-  onchainEoaOwnerCount?: number
-}): boolean {
-  if (!params.subAccountFlowEnabled) return false
-  if (
-    isParentCswEmbeddedOwnerReady({
-      parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain,
-      accountSignals: params.accountSignals,
-    })
-  ) {
-    return false
-  }
-  const zoraLinked =
-    params.zoraLinked ?? isZoraLinkedFromAccountSignals(params.accountSignals)
-  const eoaOwners = inferWaitlistEoaOwnerRoutingHint({
-    parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain,
-    accountSignals: params.accountSignals,
-    onchainEoaOwnerCount: params.onchainEoaOwnerCount,
-  })
-  if (zoraLinked && eoaOwners > 0) return false
-  return true
-}
-
 export function resolveEffectiveExecutionTrack(params: {
   executionTrack?: UserFrontendExecutionTrack | null
   parentEmbeddedOwnerOnChain?: boolean
@@ -108,9 +76,7 @@ export function resolveEffectiveExecutionTrack(params: {
 }
 
 export type WaitlistStepRoutingContext = {
-  subAccountFlowEnabled: boolean
   embeddedEoaAvailable: boolean
-  subAccountStepCompleted?: boolean
   parentEmbeddedOwnerOnChain?: boolean
   zoraLinked?: boolean
   onchainEoaOwnerCount?: number
@@ -121,10 +87,7 @@ export type AccountChromeExecutionMode = 'parent-csw' | 'none'
 export type AccountChromeExecution = {
   mode: AccountChromeExecutionMode
   effectiveExecutionTrack: UserFrontendExecutionTrack
-  showSubAccountInTray: boolean
-  showSubAccountInAccounts: boolean
   swapSenderLabel: string | null
-  subAccountAddress: string | null
   executionLaneTitle: string
   executionLaneDescription: string
 }
@@ -137,13 +100,7 @@ export function deriveAccountChromeExecution(params: {
   executionTrack?: UserFrontendExecutionTrack | null
   parentEmbeddedOwnerOnChain?: boolean
   privyEmbeddedEoaIsOwnerOfCanonicalCsw?: boolean | null
-  subAccountFlowEnabled?: boolean
   canonicalCswAddress?: string | null
-  baseSubAccount?: {
-    address?: string | null
-    registered?: boolean
-    isDistinctFromCsw?: boolean
-  } | null
 }): AccountChromeExecution {
   const effectiveExecutionTrack = resolveEffectiveExecutionTrack({
     executionTrack: params.executionTrack,
@@ -155,10 +112,7 @@ export function deriveAccountChromeExecution(params: {
     return {
       mode: 'parent-csw',
       effectiveExecutionTrack,
-      showSubAccountInTray: false,
-      showSubAccountInAccounts: false,
       swapSenderLabel: 'Sending from your Coinbase Smart Wallet',
-      subAccountAddress: null,
       executionLaneTitle: 'Parent smart wallet signing',
       executionLaneDescription:
         'Sponsored swaps and deploys send from your Coinbase Smart Wallet — your canonical identity.',
@@ -168,10 +122,7 @@ export function deriveAccountChromeExecution(params: {
   return {
     mode: 'none',
     effectiveExecutionTrack,
-    showSubAccountInTray: false,
-    showSubAccountInAccounts: false,
     swapSenderLabel: null,
-    subAccountAddress: null,
     executionLaneTitle: 'Execution lane',
     executionLaneDescription: 'Finish account setup to enable sponsored swaps.',
   }
@@ -181,7 +132,6 @@ export function buildWaitlistStepRoutingParams<
   TAccount extends {
     emailVerified: boolean
     appAccessStatus: string | null
-    baseSubAccount?: string | null
     accountSignals?: UserExecutionAccountSignals
   },
 >(account: TAccount, context: WaitlistStepRoutingContext) {
@@ -195,9 +145,7 @@ export function buildWaitlistStepRoutingParams<
 
   return {
     account,
-    subAccountFlowEnabled: context.subAccountFlowEnabled,
     embeddedEoaAvailable: context.embeddedEoaAvailable,
-    subAccountStepCompleted: context.subAccountStepCompleted,
     parentEmbeddedOwnerOnChain: context.parentEmbeddedOwnerOnChain,
     zoraLinked,
     onchainEoaOwnerCount,
