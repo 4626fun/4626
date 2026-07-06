@@ -1,6 +1,6 @@
 import { getAddress } from 'viem'
 
-import { isBaseAccountWallet } from '@/lib/swap/useSwapSubAccountRuntime'
+import { isBaseAccountWallet } from '@/lib/wallet/baseAccountWallet'
 
 export function normalizeWalletAddress(value: unknown): string | null {
   if (typeof value !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(value)) return null

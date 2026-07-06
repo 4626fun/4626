@@ -1,15 +1,9 @@
-import { shouldUseBaseAppSubAccountPath, type UserExecutionAccountSignals } from '@/lib/wallet/userExecutionTrack'
+import type { UserExecutionAccountSignals } from '@/lib/wallet/userExecutionTrack'
 
 export type WaitlistStep = 'auth' | 'done'
 
 /**
  * Minimal input shape accepted by pure decision helpers (resolveWaitlistStep, etc.).
- *
- * Callers on the bootstrap success path always receive the full AccountSetupMe
- * (via WaitlistAccountsSummary = AccountSetupMe). We explicitly allow extra
- * properties so tests and real richer objects (emailVerified + appAccessStatus +
- * accountSignals + privyUserId + score, etc.) do not trigger TS excess-property
- * errors when passed to these narrow decision functions.
  */
 export type WaitlistStepAccountInput = {
   emailVerified: boolean
@@ -27,73 +21,31 @@ function isLegacyParentOwnerSigningReady(params: {
   return params.parentEmbeddedOwnerOnChain === true
 }
 
-export function shouldFocusWaitlistBaseAppConnect(params: {
+export function shouldFocusBaseAppWalletSetup(params: {
   inBaseApp: boolean
-  showBaseAppConnectPanel: boolean
   signingStepComplete: boolean
-  setupIntent?: string | null
-  subAccountFlowEnabled?: boolean
-  parentEmbeddedOwnerOnChain?: boolean
-  zoraLinked?: boolean
-  onchainEoaOwnerCount?: number
+  baseWalletReady: boolean
   account: {
     emailVerified: boolean
     accountSignals?: WaitlistAccountWithCanonical['accountSignals']
   }
 }): boolean {
+  if (!params.inBaseApp) return false
+  if (!params.account.emailVerified) return false
   if (params.signingStepComplete) return false
-  if (params.inBaseApp && params.showBaseAppConnectPanel) return true
-  return shouldForceBaseAppConnectStep({
-    setupIntent: params.setupIntent,
-    subAccountFlowEnabled: params.subAccountFlowEnabled,
-    parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain,
-    zoraLinked: params.zoraLinked,
-    onchainEoaOwnerCount: params.onchainEoaOwnerCount,
-    account: params.account,
-  })
+  return !params.baseWalletReady
 }
 
 export function resolveWaitlistAccordionOpenStep(params: {
   manualOpenStep: 1 | 2 | null
   ownerInstallRequested: boolean
   stepOneComplete: boolean
-  focusBaseAppConnect: boolean
+  focusBaseAppWalletSetup: boolean
 }): 1 | 2 {
   if (params.manualOpenStep === 1 || params.manualOpenStep === 2) return params.manualOpenStep
-  if (params.focusBaseAppConnect) return 2
+  if (params.focusBaseAppWalletSetup) return 2
   if (params.ownerInstallRequested) return 2
   return params.stepOneComplete ? 2 : 1
-}
-
-export function shouldForceBaseAppConnectStep(params: {
-  setupIntent: string | null | undefined
-  subAccountFlowEnabled?: boolean
-  parentEmbeddedOwnerOnChain?: boolean
-  zoraLinked?: boolean
-  onchainEoaOwnerCount?: number
-  account: {
-    emailVerified: boolean
-    accountSignals?: WaitlistAccountWithCanonical['accountSignals']
-  }
-}): boolean {
-  const setup = String(params.setupIntent ?? '')
-    .trim()
-    .toLowerCase()
-  if (setup !== 'base-app') return false
-  if (params.subAccountFlowEnabled !== true) return false
-  if (!params.account.emailVerified) return false
-  if (
-    !shouldUseBaseAppSubAccountPath({
-      subAccountFlowEnabled: params.subAccountFlowEnabled === true,
-      parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain,
-      accountSignals: params.account.accountSignals,
-      zoraLinked: params.zoraLinked,
-      onchainEoaOwnerCount: params.onchainEoaOwnerCount,
-    })
-  ) {
-    return false
-  }
-  return true
 }
 
 /**
@@ -103,7 +55,6 @@ export function isWaitlistStepTwoSigningComplete(params: {
   ownerInstallRequested: boolean
   accountSignals?: WaitlistAccountWithCanonical['accountSignals']
   parentEmbeddedOwnerOnChain?: boolean
-  subAccountFlowEnabled?: boolean
 }): boolean {
   if (params.parentEmbeddedOwnerOnChain === true) return true
   if (params.accountSignals?.executionTrack === 'legacy-owner-install') return true
@@ -111,6 +62,7 @@ export function isWaitlistStepTwoSigningComplete(params: {
 }
 
 export function shouldShowParentCswAddOwnerPanel(params: {
+  inBaseApp?: boolean
   zoraLinked?: boolean
   ownerInstallRequested: boolean
   signingStepComplete: boolean
@@ -118,7 +70,7 @@ export function shouldShowParentCswAddOwnerPanel(params: {
   accountSignals?: WaitlistAccountWithCanonical['accountSignals']
   parentEmbeddedOwnerOnChain?: boolean
   onchainEoaOwnerCount?: number
-  subAccountFlowEnabled?: boolean
+  baseWalletReady?: boolean
 }): boolean {
   if (params.signingStepComplete) return false
   if (isLegacyParentOwnerSigningReady({ parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain })) {
@@ -129,38 +81,30 @@ export function shouldShowParentCswAddOwnerPanel(params: {
       ? params.accountSignals.canonicalCswAddress.trim()
       : ''
   if (!canonical) return false
-  if ((params.onchainEoaOwnerCount ?? 0) <= 0) return false
   if (params.accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true) return false
+
+  if (params.inBaseApp) {
+    return params.baseWalletReady !== false
+  }
+
+  if ((params.onchainEoaOwnerCount ?? 0) <= 0) return false
   if (!params.zoraLinked && !params.ownerInstallRequested) return false
   return true
 }
 
-export function shouldShowBaseAppConnectPanel(params: {
-  subAccountFlowEnabled: boolean
+/** Base App: link the parent CSW via Privy base_account connector before owner install. */
+export function shouldShowBaseAppWalletLinkPanel(params: {
+  inBaseApp: boolean
   signingStepComplete: boolean
   embeddedEoaAvailable: boolean
-  parentEmbeddedOwnerOnChain?: boolean
-  zoraLinked?: boolean
-  onchainEoaOwnerCount?: number
+  baseWalletReady: boolean
   accountSignals?: WaitlistAccountWithCanonical['accountSignals']
 }): boolean {
-  if (!params.subAccountFlowEnabled) return false
+  if (!params.inBaseApp) return false
   if (params.signingStepComplete) return false
   if (!params.embeddedEoaAvailable) return false
-  if (!params.accountSignals?.canonicalCswAddress?.trim()) return false
-  if (
-    !shouldUseBaseAppSubAccountPath({
-      subAccountFlowEnabled: params.subAccountFlowEnabled,
-      parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain,
-      accountSignals: params.accountSignals,
-      zoraLinked: params.zoraLinked,
-      onchainEoaOwnerCount: params.onchainEoaOwnerCount,
-    })
-  ) {
-    return false
-  }
-
-  return true
+  if (params.baseWalletReady) return false
+  return Boolean(params.accountSignals?.canonicalCswAddress?.trim())
 }
 
 export function resolveWaitlistStep(params: {

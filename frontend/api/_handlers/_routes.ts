@@ -40,7 +40,6 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'x/account-activity/webhook': () => import('./x/_accountActivityWebhook.js'),
 
   'onboarding/bootstrap': () => import('./onboarding/_bootstrap.js'),
-  'onboarding/register-sub-account': () => import('./onboarding/_register-sub-account.js'),
   'onboarding/provision-agent-owner': () => import('./onboarding/_provision-agent-owner.js'),
   'onboarding/preview-agent-owner': () => import('./onboarding/_preview-agent-owner.js'),
   'onboarding/preview-add-owner': () => import('./onboarding/_preview-add-owner.js'),
@@ -193,8 +192,6 @@ export const apiRouteLoaders: ApiRouteLoaders = {
     import('./arch-b/_subAccountProvisionPrepare.js'),
   'arch-b/sub-account/provision/commit': () =>
     import('./arch-b/_subAccountProvisionCommit.js'),
-  'arch-b/sub-account/baseapp/register': () =>
-    import('./arch-b/_subAccountBaseAppRegister.js'),
   'arch-b/sub-account/revoke': () => import('./arch-b/_subAccountRevoke.js'),
 
   'admin/arch-b/provision': () => import('./admin/arch-b/_provision.js'),

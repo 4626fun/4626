@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useBaseAccountSdk } from '@privy-io/react-auth'
 
-import { useSubAccountSetup } from '@/hooks/useSubAccountSetup'
+import { useBaseAccountWallet } from '@/hooks/useBaseAccountWallet'
 import { usePrivyWalletsFromContext } from '@/lib/privy/walletHooksContext'
 import {
   findBaseAccountWalletInList,
@@ -18,7 +18,7 @@ type EnsureCanonicalBaseAccountWalletParams = {
 export function useEnsureCanonicalBaseAccountWallet(params: EnsureCanonicalBaseAccountWalletParams) {
   const wallets = usePrivyWalletsFromContext()
   const { baseAccountSdk } = useBaseAccountSdk()
-  const { connectBaseAccountWallet, disconnectBaseAccountWallet, error: setupError } = useSubAccountSetup()
+  const { connectBaseAccountWallet, disconnectBaseAccountWallet } = useBaseAccountWallet()
   const [linking, setLinking] = useState(false)
   const [linkError, setLinkError] = useState<string | null>(null)
   const [providerAccounts, setProviderAccounts] = useState<string[] | null>(null)
@@ -54,13 +54,10 @@ export function useEnsureCanonicalBaseAccountWallet(params: EnsureCanonicalBaseA
 
       const connected = await connectBaseAccountWallet({
         canonicalCswAddress: params.canonicalCswAddress,
-        requireEmbeddedEoa: false,
+        description: 'Connect your Base App wallet to enable 4626 signing.',
       })
       if (!connected) {
-        setLinkError(
-          setupError?.message ??
-            'Could not link your Base Account wallet. Approve the connect prompt in Base App.',
-        )
+        setLinkError('Could not link your Base Account wallet. Approve the connect prompt in Base App.')
         return false
       }
 
@@ -100,7 +97,6 @@ export function useEnsureCanonicalBaseAccountWallet(params: EnsureCanonicalBaseA
     connectBaseAccountWallet,
     params.canonicalCswAddress,
     refreshProviderAccounts,
-    setupError?.message,
     wallets,
   ])
 

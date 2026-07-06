@@ -113,28 +113,12 @@ describe('resolveExecutionTrack', () => {
     ).toBe('legacy-owner-install')
   })
 
-  it("returns 'none-yet' when parent embedded owner is not confirmed and sub-account flow is disabled", () => {
+  it("returns 'none-yet' when parent embedded owner is not confirmed", () => {
     expect(
       track({
         baseSubAccountAddress: SUB,
         privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
       }),
     ).toBe('none-yet')
-  })
-
-  it("returns 'none-yet' when sub-account flow is enabled but parent owner is not confirmed", () => {
-    const prev = process.env.WAITLIST_SUBACCOUNT_FLOW_ENABLED
-    process.env.WAITLIST_SUBACCOUNT_FLOW_ENABLED = '1'
-    try {
-      expect(
-        track({
-          baseSubAccountAddress: SUB,
-          privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
-        }),
-      ).toBe('none-yet')
-    } finally {
-      if (prev === undefined) delete process.env.WAITLIST_SUBACCOUNT_FLOW_ENABLED
-      else process.env.WAITLIST_SUBACCOUNT_FLOW_ENABLED = prev
-    }
   })
 })
