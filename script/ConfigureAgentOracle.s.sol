@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Script, console2} from "forge-std/Script.sol";
 
-interface IAgentOracleV2Config {
+interface IAgentOracleConfig {
     function owner() external view returns (address);
     function referenceQuoteToken() external view returns (address);
     function referenceQuoteTokenLocked() external view returns (bool);
@@ -21,46 +21,46 @@ interface IAgentOracleV2Config {
 }
 
 /**
- * @title ConfigureAgentOracleV2Lane
- * @notice Idempotent operational script for AgentOracle V2 quote lane wiring.
+ * @title ConfigureAgentOracle
+ * @notice Idempotent operational script for AgentOracle quote-lane wiring.
  *
  * Required env:
  * - PRIVATE_KEY
  * - AGENT_ORACLE
  * - AGENT_TOKEN
- * - AGENT_ORACLE_V2_PAIR
- * - AGENT_ORACLE_V2_QUOTE_TOKEN
- * - AGENT_ORACLE_V2_QUOTE_USD_FEED
+ * - AGENT_ORACLE_PAIR
+ * - AGENT_ORACLE_QUOTE_TOKEN
+ * - AGENT_ORACLE_QUOTE_USD_FEED
  *
  * Optional env:
- * - AGENT_ORACLE_V2_TWAP_DURATION (default 1800)
+ * - AGENT_ORACLE_TWAP_DURATION (default 1800)
  * - AGENT_ORACLE_LOCK_REFERENCE_QUOTE_TOKEN (1/0, default 0)
  */
-contract ConfigureAgentOracleV2Lane is Script {
+contract ConfigureAgentOracle is Script {
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");
         address caller = vm.addr(pk);
 
         address oracleAddr = vm.envAddress("AGENT_ORACLE");
         address agentToken = vm.envAddress("AGENT_TOKEN");
-        address v2Pair = vm.envAddress("AGENT_ORACLE_V2_PAIR");
-        address quoteToken = vm.envAddress("AGENT_ORACLE_V2_QUOTE_TOKEN");
-        address quoteUsdFeed = vm.envAddress("AGENT_ORACLE_V2_QUOTE_USD_FEED");
-        uint32 twapDuration = uint32(vm.envOr("AGENT_ORACLE_V2_TWAP_DURATION", uint256(1800)));
+        address pair = vm.envAddress("AGENT_ORACLE_PAIR");
+        address quoteToken = vm.envAddress("AGENT_ORACLE_QUOTE_TOKEN");
+        address quoteUsdFeed = vm.envAddress("AGENT_ORACLE_QUOTE_USD_FEED");
+        uint32 twapDuration = uint32(vm.envOr("AGENT_ORACLE_TWAP_DURATION", uint256(1800)));
         bool shouldLock = vm.envOr("AGENT_ORACLE_LOCK_REFERENCE_QUOTE_TOKEN", uint256(0)) == 1;
 
         require(oracleAddr != address(0), "AGENT_ORACLE required");
         require(agentToken != address(0), "AGENT_TOKEN required");
-        require(v2Pair != address(0), "AGENT_ORACLE_V2_PAIR required");
-        require(quoteToken != address(0), "AGENT_ORACLE_V2_QUOTE_TOKEN required");
-        require(quoteUsdFeed != address(0), "AGENT_ORACLE_V2_QUOTE_USD_FEED required");
+        require(pair != address(0), "AGENT_ORACLE_PAIR required");
+        require(quoteToken != address(0), "AGENT_ORACLE_QUOTE_TOKEN required");
+        require(quoteUsdFeed != address(0), "AGENT_ORACLE_QUOTE_USD_FEED required");
 
-        IAgentOracleV2Config oracle = IAgentOracleV2Config(oracleAddr);
+        IAgentOracleConfig oracle = IAgentOracleConfig(oracleAddr);
         require(oracle.owner() == caller, "caller must be oracle owner");
 
         console2.log("oracle:", oracleAddr);
         console2.log("owner:", caller);
-        console2.log("v2Pair:", v2Pair);
+        console2.log("pair:", pair);
         console2.log("agentToken:", agentToken);
         console2.log("quoteToken:", quoteToken);
         console2.log("quoteUsdFeed:", quoteUsdFeed);
@@ -68,7 +68,7 @@ contract ConfigureAgentOracleV2Lane is Script {
 
         vm.startBroadcast(pk);
 
-        // Ensure quote-token policy is explicit for the V2 lane.
+        // Ensure quote-token policy is explicit for the quote lane.
         address currentReferenceQuote = oracle.referenceQuoteToken();
         if (currentReferenceQuote != quoteToken) {
             require(!oracle.referenceQuoteTokenLocked(), "reference quote token already locked");
@@ -84,17 +84,17 @@ contract ConfigureAgentOracleV2Lane is Script {
             oracle.setV2QuoteUsdFeed(quoteUsdFeed);
             console2.log("setV2QuoteUsdFeed ->", quoteUsdFeed);
         } else {
-            console2.log("[skip] v2QuoteUsdFeed already set");
+            console2.log("[skip] quoteUsdFeed already set");
         }
 
-        // Configure or refresh V2 pair wiring.
-        bool needsV2Update = !oracle.v2PairConfigured() || oracle.v2Pair() != v2Pair || oracle.v2AgentToken() != agentToken
+        // Configure or refresh pair wiring.
+        bool needsUpdate = !oracle.v2PairConfigured() || oracle.v2Pair() != pair || oracle.v2AgentToken() != agentToken
             || oracle.v2QuoteToken() != quoteToken || oracle.v2TwapDuration() != twapDuration;
-        if (needsV2Update) {
-            oracle.setV2Pair(v2Pair, agentToken, quoteToken, twapDuration);
+        if (needsUpdate) {
+            oracle.setV2Pair(pair, agentToken, quoteToken, twapDuration);
             console2.log("setV2Pair -> updated");
         } else {
-            console2.log("[skip] V2 pair config already matches");
+            console2.log("[skip] pair config already matches");
         }
 
         if (shouldLock) {

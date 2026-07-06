@@ -73,6 +73,17 @@ Legacy note: before 2026-07-06, keeper was temporarily added to the **treasury**
 
 Grandfathered AKITA vault tend/report does **not** require this step — only Safe-mediated strategy automation.
 
+**AKITA Charm (2026-07-06):** Charm vault `0x89Be03…e8D3` manager is hot Safe `0x08f087…` (two-step Charm handoff):
+
+1. Treasury Safe `setManager(hot)` — [`0xac59d7…55f1`](https://basescan.org/tx/0xac59d7660527dac3bd945645d763a47e705c75e02636bcb893e599d5188855f1)
+2. Hot Safe `acceptManager()` — [`0xe239df…2e61`](https://basescan.org/tx/0xe239df8c3000d9c22fdc07ab7ff280fa57952d9805a4388a25234e8843632e61)
+
+```bash
+pnpm -C frontend ops:wire-akita-hot-automation -- --dry-run
+```
+
+AKITA Ajna strategy `0x3d06b5…0CBd` is a legacy direct-pool adapter (no `AjnaVaultAuth`); rebucket still uses CSW or treasury lanes until redeployed.
+
 ## Pick one AKITA execution lane
 
 | Lane | When |

@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Script, console2} from "forge-std/Script.sol";
 
-interface IAgentOracleV2Qa {
+interface IAgentOracleQa {
     function owner() external view returns (address);
     function referenceQuoteToken() external view returns (address);
     function referenceQuoteTokenLocked() external view returns (bool);
@@ -16,37 +16,37 @@ interface IAgentOracleV2Qa {
 }
 
 /**
- * @title AgentOracleV2PostDeployQa
- * @notice Read-only QA for AgentOracle V2 lane wiring.
+ * @title AgentOraclePostDeployQa
+ * @notice Read-only QA for AgentOracle quote-lane wiring.
  *
  * Required env:
  * - AGENT_ORACLE
  *
  * Optional expected values:
  * - AGENT_TOKEN
- * - AGENT_ORACLE_V2_PAIR
- * - AGENT_ORACLE_V2_QUOTE_TOKEN
- * - AGENT_ORACLE_V2_QUOTE_USD_FEED
- * - AGENT_ORACLE_V2_TWAP_DURATION
+ * - AGENT_ORACLE_PAIR
+ * - AGENT_ORACLE_QUOTE_TOKEN
+ * - AGENT_ORACLE_QUOTE_USD_FEED
+ * - AGENT_ORACLE_TWAP_DURATION
  * - AGENT_ORACLE_EXPECT_REFERENCE_QUOTE_LOCKED (1/0)
  *
  * Strict mode:
  * - AGENT_ORACLE_QA_STRICT=1
  *   Reverts when any provided expected value does not match onchain state.
  */
-contract AgentOracleV2PostDeployQa is Script {
+contract AgentOraclePostDeployQa is Script {
     function run() external view {
         address oracleAddr = vm.envAddress("AGENT_ORACLE");
         require(oracleAddr != address(0), "AGENT_ORACLE required");
         require(oracleAddr.code.length > 0, "oracle has no code");
 
-        IAgentOracleV2Qa o = IAgentOracleV2Qa(oracleAddr);
+        IAgentOracleQa o = IAgentOracleQa(oracleAddr);
 
         address expectedAgentToken = vm.envOr("AGENT_TOKEN", address(0));
-        address expectedPair = vm.envOr("AGENT_ORACLE_V2_PAIR", address(0));
-        address expectedQuoteToken = vm.envOr("AGENT_ORACLE_V2_QUOTE_TOKEN", address(0));
-        address expectedQuoteUsdFeed = vm.envOr("AGENT_ORACLE_V2_QUOTE_USD_FEED", address(0));
-        uint32 expectedTwapDuration = uint32(vm.envOr("AGENT_ORACLE_V2_TWAP_DURATION", uint256(0)));
+        address expectedPair = vm.envOr("AGENT_ORACLE_PAIR", address(0));
+        address expectedQuoteToken = vm.envOr("AGENT_ORACLE_QUOTE_TOKEN", address(0));
+        address expectedQuoteUsdFeed = vm.envOr("AGENT_ORACLE_QUOTE_USD_FEED", address(0));
+        uint32 expectedTwapDuration = uint32(vm.envOr("AGENT_ORACLE_TWAP_DURATION", uint256(0)));
         uint256 expectLockedRaw = vm.envOr("AGENT_ORACLE_EXPECT_REFERENCE_QUOTE_LOCKED", uint256(0));
         bool expectLockedProvided = expectLockedRaw == 0 || expectLockedRaw == 1;
         bool expectedLocked = expectLockedRaw == 1;
@@ -66,30 +66,30 @@ contract AgentOracleV2PostDeployQa is Script {
         console2.log("owner:", owner);
         console2.log("referenceQuoteToken:", referenceQuoteToken);
         console2.log("referenceQuoteTokenLocked:", referenceQuoteTokenLocked);
-        console2.log("v2QuoteUsdFeed:", v2QuoteUsdFeed);
-        console2.log("v2PairConfigured:", v2PairConfigured);
-        console2.log("v2Pair:", v2Pair);
-        console2.log("v2AgentToken:", v2AgentToken);
-        console2.log("v2QuoteToken:", v2QuoteToken);
-        console2.log("v2TwapDuration:", uint256(v2TwapDuration));
+        console2.log("quoteUsdFeed:", v2QuoteUsdFeed);
+        console2.log("pairConfigured:", v2PairConfigured);
+        console2.log("pair:", v2Pair);
+        console2.log("agentToken:", v2AgentToken);
+        console2.log("quoteToken:", v2QuoteToken);
+        console2.log("twapDuration:", uint256(v2TwapDuration));
 
         bool allOk = true;
 
         if (expectedPair != address(0) && v2Pair != expectedPair) {
             allOk = false;
-            console2.log("mismatch: v2Pair expected", expectedPair);
+            console2.log("mismatch: pair expected", expectedPair);
         }
         if (expectedAgentToken != address(0) && v2AgentToken != expectedAgentToken) {
             allOk = false;
-            console2.log("mismatch: v2AgentToken expected", expectedAgentToken);
+            console2.log("mismatch: agentToken expected", expectedAgentToken);
         }
         if (expectedQuoteToken != address(0) && v2QuoteToken != expectedQuoteToken) {
             allOk = false;
-            console2.log("mismatch: v2QuoteToken expected", expectedQuoteToken);
+            console2.log("mismatch: quoteToken expected", expectedQuoteToken);
         }
         if (expectedQuoteUsdFeed != address(0) && v2QuoteUsdFeed != expectedQuoteUsdFeed) {
             allOk = false;
-            console2.log("mismatch: v2QuoteUsdFeed expected", expectedQuoteUsdFeed);
+            console2.log("mismatch: quoteUsdFeed expected", expectedQuoteUsdFeed);
         }
         if (expectedQuoteToken != address(0) && referenceQuoteToken != expectedQuoteToken) {
             allOk = false;
@@ -97,7 +97,7 @@ contract AgentOracleV2PostDeployQa is Script {
         }
         if (expectedTwapDuration != 0 && v2TwapDuration != expectedTwapDuration) {
             allOk = false;
-            console2.log("mismatch: v2TwapDuration expected", uint256(expectedTwapDuration));
+            console2.log("mismatch: twapDuration expected", uint256(expectedTwapDuration));
         }
         if (expectLockedProvided && referenceQuoteTokenLocked != expectedLocked) {
             allOk = false;
@@ -105,7 +105,7 @@ contract AgentOracleV2PostDeployQa is Script {
         }
 
         if (strict && !allOk) {
-            revert("strict: AgentOracle V2 QA mismatch");
+            revert("strict: AgentOracle QA mismatch");
         }
     }
 }

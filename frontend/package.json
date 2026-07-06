@@ -106,6 +106,7 @@
     "ops:verify-keeper-automation": "tsx --env-file=.env scripts/ops/verify-keeper-automation-alignment.ts",
     "ops:add-keeper-safe-owner": "tsx --env-file=.env --env-file=../.env scripts/ops/add-keeper-automation-safe-owner.ts",
     "ops:deploy-protocol-automation-safe": "tsx --env-file=.env --env-file=../.env scripts/ops/deploy-protocol-automation-safe.ts",
+    "ops:wire-akita-hot-automation": "tsx --env-file=.env --env-file=../.env scripts/ops/wire-akita-hot-automation-safe.ts",
     "ops:verify-batcher-pipe-a": "tsx scripts/ops/verify-batcher-pipe-a-readiness.ts",
     "ops:verify-v1130-versioning": "tsx scripts/ops/verify-v1130-deploy-versioning.ts",
     "ops:verify-v1140-versioning": "tsx scripts/ops/verify-v1140-deploy-versioning.ts",
