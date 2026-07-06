@@ -2,63 +2,78 @@
 
 Solidity sources for 4626 vault infrastructure on Base (and cross-chain mesh peers).
 
-## Domain map
+## High-level organization
 
-| Domain | Path | Role |
-|--------|------|------|
-| **Registry** | `core/` | Canonical address index (`4626Registry` / `Registry4626`) for all vault kinds |
-| **Vault hub** | `vault/` | ERC-4626 shells, modules, strategies |
-| **Cross-chain** | `utilities/messaging/`, `utilities/bridge/` | ShareOFT, OVault composer, Solana bridge (→ `crosschain/` in layout Phase 3) |
-| **Revenue** | `utilities/routers/`, `utilities/oracles/` | PayoutRouter, AgentRevenueRouter, oracles (→ `revenue/` in layout Phase 3) |
-| **Lottery** | `utilities/lottery/` | Protocol-wide lottery + VRF (→ `lottery/` + `4626LotteryManager`) |
-| **Governance** | `governance/` | Gauge controllers, ve4626, bribes |
-| **Deploy** | `helpers/batchers/`, `factories/`, `helpers/infra/` | DeploymentBatcher, bytecode store, CREATE2 deployer |
-| **Verification** | `verification/tamago/` | Formal verification artifacts (not production bytecode) |
+Contracts are split by **product lanes** + shared infrastructure:
+
+- `shared/` — Infrastructure and singletons used by all lanes (deploy tools, registry, lottery, strategies, bridges, core interfaces, libraries, platform governance).
+- `agent/` — AgentTokenV4 lane (AgentOVault + supporting contracts).
+- `creator/` — Creator coin lane (CreatorOVault + supporting contracts).
+- `other/` — Future ecosystems and special-purpose code (e.g. alfaclub).
+
+```
+contracts/
+├── shared/
+│   ├── core/          4626Registry
+│   ├── deploy/        DeploymentBatcher, factories, infra, hooks
+│   ├── bridge/
+│   ├── governance/    Platform-level (bribes, factories, ve4626 roots)
+│   ├── interfaces/
+│   ├── libraries/
+│   ├── lottery/       4626LotteryManager + VRF + randomness (shared singleton)
+│   └── strategies/    Reusable yield strategies (Ajna, CCA, Univ3/4, etc.)
+├── agent/
+│   ├── vault/         (AgentOVault, AgentOVaultWrapper, AgentShareOFT, modules)
+│   ├── governance/    AgentGaugeController
+│   ├── revenue/
+│   └── oracles/
+├── creator/
+│   ├── vault/         (CreatorOVault + modules + CreatorShareOFT + OVaultHubComposer)
+│   ├── governance/
+│   ├── revenue/
+│   ├── oracles/
+│   ├── recovery/
+│   └── vesting/
+└── other/
+    └── alfaclub/
+```
 
 ## Vault lanes (product flavors)
 
-4626 supports parallel **vault lanes** — not separate product “agents” (XMTP/Keepr identity is unrelated).
+4626 supports two parallel **vault lanes**:
 
-```
-vault/
-├── creator/          CreatorOVault lane (Zora creator coin, exact-transfer)
-├── agent/            AgentOVault lane (AgentTokenV4, measured FOT)
-├── modules/          Shared + lane-specific core modules
-└── strategies/       Charm, Ajna, CCA, UniV4 (asset-agnostic)
-```
+| Lane    | Deposit asset     | Accounting              | Share symbols |
+|---------|-------------------|-------------------------|---------------|
+| **creator** | Zora creator coin | Exact ERC-20 transfer  | `■` / `▢`    |
+| **agent**   | AgentTokenV4      | Measured fee-on-transfer | `◆` / `◇`  |
 
-| Lane | Deposit asset | Accounting | Share symbol |
-|------|---------------|------------|--------------|
-| **Creator** | Zora creator coin | Exact ERC-20 transfer | `■` / `▢` |
-| **Agent** | AgentTokenV4 | Measured fee-on-transfer | `◆` / `◇` |
+**Important:** "Agent" here refers to the Virtuals-style AgentTokenV4 token economy lane. It is unrelated to XMTP agents, Keepr, or ERC-8004 identity.
 
-**AgentOVault ≠ XMTP agent / Keepr / ERC-8004 identity.** Agent here means the Virtuals-style **AgentTokenV4** token economy lane.
+All lane-specific code lives under `agent/` or `creator/`. Shared singletons and deploy infrastructure live under `shared/`.
 
 ## Shared protocol singletons (`4626*`)
 
-These serve **all** vault kinds (creator + agent):
+These serve **all** vault kinds (creator + agent) and live under `shared/`:
 
-- **`Registry4626`** — registry + `vaultKind` metadata
-- **`LotteryManager4626`** — jackpot payout authority for any ShareOFT buy
-- **`VRFConsumer4626`** — shared Chainlink VRF for lottery draws
+- `shared/core/4626Registry.sol` — registry + `vaultKind` metadata
+- `shared/lottery/manager/4626LotteryManager.sol` — jackpot payout authority for any ShareOFT buy
+- VRF + randomness infrastructure under `shared/lottery/`
 
-Do not deploy per-agent lottery managers or registries.
+Do not deploy per-lane lottery managers or registries.
 
 ## Per-asset deploy (CREATE2 per token)
 
 Each token launch deploys its own stack:
 
-| Creator lane | Agent lane |
-|--------------|------------|
-| `CreatorOVault` | `AgentOVault` |
-| `CreatorOVaultWrapper` | `AgentOVaultWrapper` |
-| `CreatorShareOFT` | `AgentShareOFT` |
-| `CreatorGaugeController` | `AgentGaugeController` |
-| `CreatorOracle` | `AgentOracle` |
-| `PayoutRouter` | `AgentRevenueRouter` |
+| Creator lane                  | Agent lane                    |
+|-------------------------------|-------------------------------|
+| `creator/vault/CreatorOVault` | `agent/vault/AgentOVault`     |
+| `creator/vault/CreatorOVaultWrapper` | `agent/vault/AgentOVaultWrapper` |
+| `creator/vault/CreatorShareOFT` | `agent/vault/AgentShareOFT` |
+| `creator/governance/CreatorGaugeController` | `agent/governance/AgentGaugeController` |
+| `creator/oracles/CreatorOracle` | `agent/oracles/AgentOracle` |
+| `creator/revenue/PayoutRouter` | `agent/revenue/AgentRevenueRouter` |
 
-Reused bytecode instances: CCA launch strategy, linear vesting, burn stream, Charm/Ajna strategies.
+Reused bytecode (under `shared/`): CCA launch strategy, linear vesting, burn stream, Charm/Ajna/Concentrated strategies, etc.
 
-## Layout migration (in progress)
-
-Phased folder cleanup is documented in the AgentOVault integration plan. Prefer new agent-lane files under `vault/agent/` and shared singleton renames to `4626*` types.
+Deployment orchestration lives in `shared/deploy/batchers/`.

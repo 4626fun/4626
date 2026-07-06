@@ -62,7 +62,7 @@ The live Base deployment snapshots are stored in `deployments/base/contracts/**/
 
 Current snapshot set:
 
-- `deployments/base/contracts/core/CreatorRegistry.json`
+- `deployments/base/contracts/shared/core/CreatorRegistry.json`
 - `deployments/base/contracts/factories/CreatorOVaultFactory.json`
 - `deployments/base/contracts/services/lottery/CreatorLotteryManager.json`
 - `deployments/base/contracts/services/lottery/vrf/CreatorVRFConsumerV2_5.json`

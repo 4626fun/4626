@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import "@4626/deploy/batchers/DeploymentBatcher.sol";
+import "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
 import "test/helpers/DeploymentBatcherFixture.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";

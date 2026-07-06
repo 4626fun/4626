@@ -10,11 +10,11 @@ Maps each audit finding to fix status. **Fixed** = merged in this pass; **Partia
 |----|-------|--------|-----|
 | H-01 | `report()` treats full NAV as profit when baseline is zero but shares remain | **Fixed** | `CreatorOVaultCoreModule.sol` — reset baseline with zero profit when `previousTotalAssets == 0 && _totalSupply > 0` |
 | H-02 | Owner can cherry-pick deferred VRF outcomes while paused | **Fixed** | Admin-module `unpause()` FIFO-flushes via `applyDeferredVrf()`; `processPendingVrfResult` removed |
-| H-03 | Emergency vote reset → stale bribe over-claim | **Fixed** | `VaultGaugeVoting.sol` — `getUserVoteWeightAtEpoch` returns 0 when vote generation ≠ epoch reset generation |
+| H-03 | Emergency vote reset → stale bribe over-claim | **Fixed** | `ve4626GaugeVoting.sol` — `getUserVoteWeightAtEpoch` returns 0 when vote generation ≠ epoch reset generation |
 | H-04 | `getPastVotes` / clock unit mismatch | **Fixed** | `ve4626.sol` — timestamp `clock()` + per-user lock checkpoints; `getPastVotes` / `votingPowerAt` binary-search historical lock amount/end |
 | H-05 | Permissionless `CreatorLinearVesting.seed()` griefing | **Fixed** | `CreatorLinearVesting.sol` — `seeder` immutable; `DeploymentBatcher.sol` — atomic `seed()` after funding |
 | H-06 | Remote `MSG_TYPE_LOTTERY_ENTRY` not handled on hub ShareOFT | **Fixed** | `CreatorShareOFT.sol` — forward to `receiveRemoteLotteryEntry`; `CreatorLotteryManager.sol` — hub forwarder allowlist |
-| H-07 | `PayoutRouter.emergencyWithdraw` drains routed revenue | **Partial** | `PayoutRouter.sol` — blocks withdraw of `creatorCoin` / `shareOFT`. Ops gate: `verifyPayoutRouterProductionReadiness()` (`frontend/server/_lib/onchain/payoutRouterProductionReadiness.ts`) flags EOA owners. **Remaining:** transfer production owner to multisig/timelock |
+| H-07 | `PayoutRouter.emergencyWithdraw` drains routed revenue | **Partial** | `CreatorPayoutRouter.sol` — blocks withdraw of `creatorCoin` / `shareOFT`. Ops gate: `verifyPayoutRouterProductionReadiness()` (`frontend/server/_lib/onchain/payoutRouterProductionReadiness.ts`) flags EOA owners. **Remaining:** transfer production owner to multisig/timelock |
 
 ---
 
@@ -35,7 +35,7 @@ Maps each audit finding to fix status. **Fixed** = merged in this pass; **Partia
 | M-11 | Solana relay marks tx consumed before success | **Fixed** | `SolanaBridgeAdapter.sol` — mark `processedSolanaTxs` only after successful lottery call |
 | M-12 | Stuck tokens in composer / hub pending fees | **Partial** | `OVaultHubComposer.sol` — `composeRescueEnabled`, `composeReservedBalances`, guarded `rescueERC20`. **Remaining:** full liability ledger before rescue |
 | M-13 | Remote Solana NAV vs Base withdraw | **Not applicable** | ShareOFT mesh at finalize; no Phase-3 Solana vault strategy |
-| M-14 | `sweepStaleEpochRewards` centralization | **Partial** | `VoterRewardsDistributor.sol` — `StaleEpochSwept` event includes `graceEpochs`; NatSpec documents grace window. **Remaining:** governance timelock (operational) |
+| M-14 | `sweepStaleEpochRewards` centralization | **Partial** | `ve4626VoterRewardsDistributor.sol` — `StaleEpochSwept` event includes `graceEpochs`; NatSpec documents grace window. **Remaining:** governance timelock (operational) |
 | M-15 | Boost timelock not armed by default | **Partial** | Ops gate: `verifyLotteryProductionReadiness()` + post-deploy `armBoostSourceTimelock()` before traffic |
 | M-16 | Activation batcher missing registry validation | **Fixed** | `VaultActivationBatcher.sol` — `_validateRegistryRouting()` in `_executeActivateAndLaunch` (all 6 entrypoints) |
 | M-17 | Registry factories / hot-swappable modules | **Partial** | `DeploymentBatcher.sol` — optional `approvedPhaseModuleCodehashes`; `CreatorRegistry.sol` — optional `approvedFactoryCodehashes`. **Remaining:** seed allowlists at deploy (operational) |
@@ -75,7 +75,7 @@ After hub ShareOFT deploy / upgrade:
 ### Before enabling production lottery traffic
 
 5. Call `armBoostSourceTimelock()` on the lottery manager (**M-15**).
-6. Confirm `PayoutRouter` owner is multisig/timelock, not a hot EOA (**H-07**). Run `verifyPayoutRouterProductionReadiness()`.
+6. Confirm `CreatorPayoutRouter` owner is multisig/timelock, not a hot EOA (**H-07**). Run `verifyPayoutRouterProductionReadiness()`.
 7. Run `verifyLotteryProductionReadiness()` (`frontend/server/_lib/lottery/lotteryProductionReadiness.ts`) with required hub ShareOFT addresses — must report zero critical violations.
 
 ### M-17 — module / factory codehash pins (ops)

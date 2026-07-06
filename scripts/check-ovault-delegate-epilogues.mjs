@@ -27,7 +27,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
-const targetFile = path.join(repoRoot, 'contracts/vault/CreatorOVault.sol');
+const targetFile = path.join(repoRoot, 'contracts/creator/vault/CreatorOVault.sol');
 
 const RED = '\x1b[31m';
 const GREEN = '\x1b[32m';

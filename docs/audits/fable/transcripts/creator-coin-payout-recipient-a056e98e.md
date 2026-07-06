@@ -87,7 +87,7 @@ Two things are going on:
 
 1. **Why you see it in the UI:** the Deploy page reads `payoutRecipient` live on-chain (`DeployVault.tsx` ~line 7855), and while the deploy dry-run is running, your RPC is pointed at the local fork. The dry-run's Phase 2 finalize already ran on that fork, so the fork's state shows the post-deploy value. Kill/reset the dry-run and the row goes back to your CSW.
 
-2. **Why it's set to a router at all:** this is by design, not a bug. In router mode, vault deploy rewires the creator coin's `creatorCoinPayoutRecipient` to the `PayoutRouter`, so external earnings flow through `convertAndQueue(...)` → vault deposit → burn-stream drip, accreting to share holders. So after a **real** deploy you'd see the same shape — a PayoutRouter address there instead of your CSW — and that's the expected end state. Your CSW remains the vault owner and canonical identity; it just stops being the raw payout sink because earnings get routed into the vault instead.
+2. **Why it's set to a router at all:** this is by design, not a bug. In router mode, vault deploy rewires the creator coin's `creatorCoinPayoutRecipient` to the `CreatorPayoutRouter`, so external earnings flow through `convertAndQueue(...)` → vault deposit → burn-stream drip, accreting to share holders. So after a **real** deploy you'd see the same shape — a PayoutRouter address there instead of your CSW — and that's the expected end state. Your CSW remains the vault owner and canonical identity; it just stops being the raw payout sink because earnings get routed into the vault instead.
 
 So: today, on mainnet, it's still your Zora CSW. The `0x2f53…` value is fork-only dry-run state.
 
@@ -150,7 +150,7 @@ Now I'm checking the `receiveFeeFromSolana` method on the SolanaBridgeAdapter to
 
 ## Analysis
 
-I traced the whole lane end-to-end: the `PayoutRouter` contract, the keeper harvest that drives it, the swap-path resolution for ZORA, the burn stream, and the Solana fee lane. The flow is correctly built, with two operational caveats at the end you should be aware of.
+I traced the whole lane end-to-end: the `CreatorPayoutRouter` contract, the keeper harvest that drives it, the swap-path resolution for ZORA, the burn stream, and the Solana fee lane. The flow is correctly built, with two operational caveats at the end you should be aware of.
 
 ## Base: the PayoutRouter flow (external earnings lane)
 
@@ -162,7 +162,7 @@ I traced the whole lane end-to-end: the `PayoutRouter` contract, the keeper harv
 
 **Conversion.** The keeper (`payout-router-harvest`, runnable from Railway KPR or the `keeper_jobs` fan-out) processes each vault: claim protocol rewards, then for each of creatorCoin / ZORA / WETH with a balance, call `convertAndQueue`. The contract swaps via a pre-configured Uniswap V3 path that must start at `tokenIn` and end at the creator coin (validated on-chain in `setSwapPath`). For ZORA, path resolution (`payoutRouterSwapPaths.ts`) prefers a **direct ZORA→creator pool** when one exists, then falls back to ZORA→WETH→creator, then ZORA→USDC→creator — matching the documented invariant. There's also an optional allowlisted external-aggregator route (DefiLlama quote → `convertViaExternalAndQueue`), off by default, with overspend and min-out guards.
 
-**Utilization — where the value ends up.** This is the key part for your question: ZORA (and WETH/ETH) received from fees is **not** sent to you or any treasury. After conversion to creator coin, `_queueCreatorOut` deposits it into the vault with the **burn stream as the share receiver**, then queues those shares in `VaultShareBurnStream`. That contract has **no owner and no withdrawal function** — shares can only leave by burning. They burn linearly over weekly epochs (Thursday-aligned), via permissionless `checkpoint()`/`drip()`, each burn calling the vault's `burnSharesForPriceIncrease`. So external earnings become **price-per-share accretion for every vault share holder** — the enforceable "buyback and burn" lane. Your CSW keeps vault ownership and the `emergencyWithdraw` escape hatch (owner is protocol treasury Safe per the setup plan), but the normal path is fully non-custodial value capture.
+**Utilization — where the value ends up.** This is the key part for your question: ZORA (and WETH/ETH) received from fees is **not** sent to you or any treasury. After conversion to creator coin, `_queueCreatorOut` deposits it into the vault with the **burn stream as the share receiver**, then queues those shares in `CreatorVaultShareBurnStream`. That contract has **no owner and no withdrawal function** — shares can only leave by burning. They burn linearly over weekly epochs (Thursday-aligned), via permissionless `checkpoint()`/`drip()`, each burn calling the vault's `burnSharesForPriceIncrease`. So external earnings become **price-per-share accretion for every vault share holder** — the enforceable "buyback and burn" lane. Your CSW keeps vault ownership and the `emergencyWithdraw` escape hatch (owner is protocol treasury Safe per the setup plan), but the normal path is fully non-custodial value capture.
 
 ## Solana
 
@@ -516,7 +516,7 @@ Good instinct to double-check — let me show you the exact on-chain code path s
 
 Yes — this is already happening, and it's enforced on-chain in a single atomic transaction, not by keeper goodwill. Here's the exact code:
 
-```511:519:contracts/utilities/routers/PayoutRouter.sol
+```511:519:contracts/utilities/routers/CreatorPayoutRouter.sol
     function _queueCreatorOut(uint256 creatorOut) internal returns (uint256 sharesQueued) {
         if (creatorOut == 0) revert ZeroAmount();
         sharesQueued = ICreatorOVaultDeposit(vault).deposit(creatorOut, burnStream);
@@ -537,7 +537,7 @@ The ordering you want is structurally guaranteed, because all three steps execut
 If any step fails, the whole transaction reverts — there is no state where tokens get burned without first being swapped and deposited. A few extra guarantees worth knowing:
 
 - **What gets burned is vault shares, never the creator coin itself.** The creator coin stays in the vault as TVL (and gets deployed to Charm/Ajna strategies like any other deposit). Burning the shares while the assets stay in reduces share supply against the same assets, which is what pushes price-per-share up for every remaining holder.
-- The burn stream can't do anything *except* burn — `VaultShareBurnStream` has no owner, no withdrawal, and no transfer path. Shares that land there are irrevocably committed.
+- The burn stream can't do anything *except* burn — `CreatorVaultShareBurnStream` has no owner, no withdrawal, and no transfer path. Shares that land there are irrevocably committed.
 - The actual burning is time-released: queued shares burn linearly over the following weekly epoch via permissionless `checkpoint()` calls (the harvest keeper also calls it each tick), so the PPS accretion is a smooth drip rather than a single spike.
 - `_queueCreatorOut` reverts on a zero deposit or zero minted shares, so dust that would round to zero shares can't get silently lost.
 

@@ -491,8 +491,8 @@ Major subsystems by path:
 
 | File | Role |
 |------|------|
-| `contracts/utilities/routers/PayoutRouter.sol` | Creator coin external revenue conversion |
-| `contracts/utilities/routers/VaultShareBurnStream.sol` | Weekly burn drip |
+| `contracts/utilities/routers/CreatorPayoutRouter.sol` | Creator coin external revenue conversion |
+| `contracts/utilities/routers/CreatorVaultShareBurnStream.sol` | Weekly burn drip |
 | `contracts/utilities/routers/CreatorCoinPolicyController.sol` | Policy controller |
 
 ### Solana bridge
@@ -506,12 +506,12 @@ Major subsystems by path:
 
 | File | Role |
 |------|------|
-| `contracts/alfaclub/AlfaCreatorKeyLPFactory.sol` | Creator coin + FriendKey LP factory |
-| `contracts/alfaclub/AlfaCreatorKeyPool.sol` | xy=k pool |
+| `contracts/other/alfaclub/AlfaCreatorKeyLPFactory.sol` | Creator coin + FriendKey LP factory |
+| `contracts/other/alfaclub/AlfaCreatorKeyPool.sol` | xy=k pool |
 
 ### Core registry / oracle
 
-`contracts/core/CreatorRegistry.sol`, `contracts/utilities/oracles/CreatorOracle.sol`, `contracts/services/ovault/CreatorOVaultComposerHub.sol`.
+`contracts/shared/core/CreatorRegistry.sol`, `contracts/utilities/oracles/CreatorOracle.sol`, `contracts/services/ovault/CreatorOVaultComposerHub.sol`.
 
 **Solana program (separate tree):** `programs/creator-share-hook/` (Anchor; mainnet program id in AGENTS.md).
 

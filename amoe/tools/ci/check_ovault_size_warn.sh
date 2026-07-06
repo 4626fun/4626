@@ -24,7 +24,7 @@
 #                             primary enforcer remains forge build --sizes)
 #
 # PR requirement (enforced by policy, not this script):
-#   Any change touching contracts/vault/CreatorOVault.sol must include
+#   Any change touching contracts/creator/vault/CreatorOVault.sol must include
 #   a short "size budget review" note in the PR description or a linked
 #   issue. Estimate byte impact and confirm remaining headroom.
 #
@@ -41,7 +41,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-CONTRACT="contracts/vault/CreatorOVault.sol:CreatorOVault"
+CONTRACT="contracts/creator/vault/CreatorOVault.sol:CreatorOVault"
 WARN_THRESHOLD=23500
 FAIL_THRESHOLD=24000
 HARD_THRESHOLD=24576

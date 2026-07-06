@@ -44,7 +44,7 @@ Multiple code paths and comments still reference the five required names (`trade
 - `creatorCoinPayoutRecipient`, `jackpotCustodian`, and `jackpotPayoutAuthority` are almost absent from `.sol` source.
 - The old bare term `payoutRecipient` is still present in source for ABI reasons, but remediation started:
   - `contracts/helpers/batchers/DeploymentBatcher.sol`: struct fields retained for compatibility; error renamed to `InvalidCreatorCoinPayoutRecipient()`, comments updated with canonical "creatorCoinPayoutRecipient (external earnings lane)" framing + explanatory block (this session).
-  - `PayoutRouter.sol` comments still use legacy phrasing in places ("Safe CreatorCoin payoutRecipient path").
+  - `CreatorPayoutRouter.sol` comments still use legacy phrasing in places ("Safe CreatorCoin payoutRecipient path").
   - `CreatorCoinPolicyController.sol` comments.
 
 **Impact**: The exact anti-pattern the canonical lane policy was written to eliminate still lives in the most important wiring point (the DeploymentBatcher that actually sets the recipient at deploy time).
@@ -102,9 +102,9 @@ The storage contract itself contains this comment:
 The two Creator Coin earnings planes are correctly implemented as distinct mechanisms:
 
 - **Trade-fee lane** (`tradeFeeCollector` domain): `CreatorGaugeController._distributeVaultShares()` → burn / lottery (jackpotReserve) / `creatorTreasury` / protocol/voter rewards.
-- **External revenue lane** (`creatorCoinPayoutRecipient` domain): `PayoutRouter` (with keeper gating and external swap support) → swap to creatorCoin → vault deposit → `VaultShareBurnStream` (ownerless, only-burn, with failed-burn accumulator cap and recovery).
+- **External revenue lane** (`creatorCoinPayoutRecipient` domain): `CreatorPayoutRouter` (with keeper gating and external swap support) → swap to creatorCoin → vault deposit → `CreatorVaultShareBurnStream` (ownerless, only-burn, with failed-burn accumulator cap and recovery).
 
-`VaultShareBurnStream` has received multiple post-audit hardenings (BS-01, BS-03, H-05) and is properly permissionless for the burn path.
+`CreatorVaultShareBurnStream` has received multiple post-audit hardenings (BS-01, BS-03, H-05) and is properly permissionless for the burn path.
 
 This matches the separation described in the (missing) canonical lane document and AGENTS.md.
 

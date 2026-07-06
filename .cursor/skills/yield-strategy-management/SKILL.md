@@ -38,7 +38,7 @@ Key ideas:
 ## Repo Map (where to look / common strategies)
 
 - Vault: `contracts/vault/CreatorOVault.sol`
-- Strategy interface: `contracts/interfaces/IStrategy.sol`
+- Strategy interface: `contracts/shared/interfaces/IStrategy.sol`
 - Base strategy pattern: `contracts/vault/strategies/BaseCreatorStrategy.sol`
 - Ajna strategy adapter: `contracts/vault/strategies/ERC4626StrategyAdapter.sol`
 - Strategy deploy tooling:

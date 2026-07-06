@@ -55,7 +55,7 @@ Onchain, 4626 consists of:
 - Integrates **Chainlink VRF 2.5** for provably fair randomness on every qualifying trade
 - Winners receive configured payouts from jackpot reserve in **vault shares from active creator vaults** (diversified prize)
 - **Instant lottery** - each trade is an independent roll, winners paid immediately
-- Optional boosts via `ve4626BoostManager` and `VaultGaugeVoting`
+- Optional boosts via `ve4626BoostManager` and `ve4626GaugeVoting`
 
 Important boundary:
 - `CreatorGaugeController` = jackpot custodian (`jackpotReserve`)
@@ -145,6 +145,6 @@ This layer can be deployed and enabled after the core system is live:
 
 - **ve4626**: Vote-escrow token that represents locked power
 - **ve4626BoostManager**: Exposes personal boost signals used by `CreatorLotteryManager`
-- **VaultGaugeVoting**: Weekly voting that allocates a bounded probability budget across whitelisted vaults
-- **VoterRewardsDistributor**: Receives the voter slice (9.61% default) from each `CreatorGaugeController` and lets voters claim pro-rata per epoch/vault
+- **ve4626GaugeVoting**: Weekly voting that allocates a bounded probability budget across whitelisted vaults
+- **ve4626VoterRewardsDistributor**: Receives the voter slice (9.61% default) from each `CreatorGaugeController` and lets voters claim pro-rata per epoch/vault
 - **BribesFactory / BribeDepot**: Optional external bribes per vault (epoch-scoped)

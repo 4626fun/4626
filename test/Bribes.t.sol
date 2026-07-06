@@ -3,11 +3,11 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import "@4626/governance/creator/VaultGaugeVoting.sol";
-import {ve4626 as Ve4626Contract} from "@4626/governance/creator/ve4626.sol";
+import "@4626/shared/governance/ve4626GaugeVoting.sol";
+import {ve4626 as Ve4626Contract} from "@4626/creator/governance/ve4626.sol";
 
-import "@4626/governance/factories/BribesFactory.sol";
-import {BribeDepot} from "@4626/governance/bribes/BribeDepot.sol";
+import "@4626/shared/governance/factories/BribesFactory.sol";
+import {BribeDepot} from "@4626/shared/governance/bribes/BribeDepot.sol";
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
@@ -55,7 +55,7 @@ contract FeeOnTransferERC20 is ERC20 {
 contract BribesTest is Test {
     MockWSToken public wsToken;
     Ve4626Contract public ve;
-    VaultGaugeVoting public voting;
+    ve4626GaugeVoting public voting;
 
     BribesFactory public factory;
     BribeDepot public depot;
@@ -82,7 +82,7 @@ contract BribesTest is Test {
         bribeToken = new MockERC20("BribeToken", "BRIBE");
 
         ve = new Ve4626Contract("Vote-Escrowed wsAKITA", "veAKITA", address(wsToken), owner);
-        voting = new VaultGaugeVoting(address(ve), owner);
+        voting = new ve4626GaugeVoting(address(ve), owner);
         voting.setVaultWhitelist(vault1, true);
 
         factory = new BribesFactory(address(voting));
@@ -191,7 +191,7 @@ contract BribesTest is Test {
         uint256[] memory weights = new uint256[](1);
         vaults[0] = vault1;
         weights[0] = 100;
-        vm.expectRevert(VaultGaugeVoting.NoVotingPower.selector);
+        vm.expectRevert(ve4626GaugeVoting.NoVotingPower.selector);
         voting.vote(vaults, weights);
         vm.stopPrank();
 

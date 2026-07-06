@@ -305,10 +305,10 @@ function extractH1Title(content) {
  * Fix broken links in generated API docs
  * 
  * forge doc generates links like:
- *   /contracts/interfaces/IStrategy.sol/interface.IStrategy.md
+ *   /contracts/shared/interfaces/IStrategy.sol/interface.IStrategy.md
  * 
  * But in Docusaurus, these pages are at:
- *   /api/contracts/contracts/interfaces/IStrategy.sol/interface.IStrategy
+ *   /api/contracts/contracts/shared/interfaces/IStrategy.sol/interface.IStrategy
  * 
  * This function transforms links to work correctly.
  */

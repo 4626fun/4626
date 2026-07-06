@@ -4,7 +4,7 @@
 
 ### Contracts
 
-- Policy manager: `VaultRolePolicyManager`
+- Policy manager: `VaultRolePolicyManager` (now in shared/governance)
 - Enforcer: `DeploymentBatcher`
 
 ### Steps

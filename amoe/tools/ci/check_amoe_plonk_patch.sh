@@ -32,7 +32,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-VERIFIER="$ROOT/contracts/utilities/lottery/zk/AmoePlonkVerifier.sol"
+VERIFIER="$ROOT/contracts/shared/lottery/zk/AmoePlonkVerifier.sol"
 RAW="$ROOT/amoe/circuits/build/plonk_fresh/AmoePlonkVerifier_raw.sol"
 
 ok()   { printf '\033[32m[ok]\033[0m   %s\n' "$*"; }

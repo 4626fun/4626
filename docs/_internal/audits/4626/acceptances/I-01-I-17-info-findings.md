@@ -39,7 +39,7 @@ This acceptance document covers all Informational severity findings from the Pha
 
 ## I-06 — `BribeDepot` sweep for pre-epoch deposits (Linear 4626-387)
 
-- File: `contracts/governance/bribes/BribeDepot.sol`
+- File: `contracts/shared/governance/bribes/BribeDepot.sol`
 - Confidence in source body: "Missing Evidence".
 - Disposition: **Spec-level follow-up required**. `BribeDepot` does not expose a public sweep for deposits keyed to an epoch that was never initialised. The current deposit path requires a valid epoch argument, so a pre-epoch direct ERC-20 transfer into the contract is the only way this could happen — which is operator error, not a user-facing bug.
 - Follow-up: add a `rescueTokens(address token, address to)` admin function guarded by `onlyOwner` for the operator-error case; or document in SECURITY.md that raw-transfer deposits are unsupported. Tracked as a post-audit cleanup item.

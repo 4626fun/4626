@@ -3,11 +3,11 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import "@4626/deploy/batchers/VaultAuxiliaryDeployBatcher.sol";
-import "@4626/deploy/infra/UniversalBytecodeStoreV2.sol";
-import "@4626/revenue/creator/CreatorCoinPolicyController.sol";
-import "@4626/revenue/creator/PayoutRouter.sol";
-import "@4626/revenue/creator/VaultShareBurnStream.sol";
+import "@4626/shared/deploy/batchers/VaultAuxiliaryDeployBatcher.sol";
+import "@4626/shared/deploy/infra/UniversalBytecodeStoreV2.sol";
+import "@4626/creator/revenue/CreatorCoinPolicyController.sol";
+import "@4626/creator/revenue/CreatorPayoutRouter.sol";
+import "@4626/creator/revenue/CreatorVaultShareBurnStream.sol";
 
 contract MockAuxiliaryVault {
     address public immutable owner;
@@ -91,8 +91,8 @@ contract VaultAuxiliaryDeployBatcherTest is Test {
         store = new UniversalBytecodeStoreV2();
         create2 = new MockAuxiliaryCreate2Deployer(address(store), protocolTreasury);
 
-        (burnStreamCodeId,) = store.store(type(VaultShareBurnStream).creationCode);
-        (payoutRouterCodeId,) = store.store(type(PayoutRouter).creationCode);
+        (burnStreamCodeId,) = store.store(type(CreatorVaultShareBurnStream).creationCode);
+        (payoutRouterCodeId,) = store.store(type(CreatorPayoutRouter).creationCode);
         (policyControllerCodeId,) = store.store(type(CreatorCoinPolicyController).creationCode);
 
         auxBatcher = new VaultAuxiliaryDeployBatcher(
@@ -138,7 +138,7 @@ contract VaultAuxiliaryDeployBatcherTest is Test {
         assertGt(out.burnStream.code.length, 0, "burn stream deployed");
         assertGt(out.payoutRouter.code.length, 0, "payout router deployed");
         assertGt(out.creatorCoinPolicyController.code.length, 0, "policy controller deployed");
-        assertEq(PayoutRouter(payable(out.payoutRouter)).owner(), protocolTreasury, "router owned by protocol");
+        assertEq(CreatorPayoutRouter(payable(out.payoutRouter)).owner(), protocolTreasury, "router owned by protocol");
         assertEq(CreatorCoinPolicyController(out.creatorCoinPolicyController).owner(), protocolTreasury, "policy owned by protocol");
     }
 

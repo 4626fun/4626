@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import "@4626/deploy/factories/Create2Deployer.sol";
+import "@4626/shared/deploy/factories/Create2Deployer.sol";
 
 /**
  * @notice Deploy the Create2Deployer (one-time infra).

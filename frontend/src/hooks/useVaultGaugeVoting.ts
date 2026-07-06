@@ -2,7 +2,7 @@ import { useReadContract, useWriteContract, useAccount, useWaitForTransactionRec
 import { parseAbi } from 'viem'
 import { useState, useCallback, useMemo } from 'react'
 
-// VaultGaugeVoting ABI (relevant functions only)
+// ve4626GaugeVoting ABI (relevant functions only)
 const VAULT_GAUGE_VOTING_ABI = parseAbi([
   // User functions
   'function vote(address[] calldata vaults, uint256[] calldata weights) external',

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
-import {Registry4626} from "@4626/core/4626Registry.sol";
+import {Registry4626} from "@4626/shared/core/4626Registry.sol";
 
 interface IOFTPeerConfig {
     function setPeer(uint32 _eid, bytes32 _peer) external;

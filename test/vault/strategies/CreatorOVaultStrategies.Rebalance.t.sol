@@ -3,12 +3,12 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {CreatorOVault} from "@4626/vault/creator/CreatorOVault.sol";
-import {CreatorOVaultCoreModule} from "@4626/vault/creator/modules/CreatorOVaultCoreModule.sol";
-import {CreatorOVaultStrategiesModule} from "@4626/vault/creator/modules/CreatorOVaultStrategiesModule.sol";
-import {CreatorOVaultAdminModule} from "@4626/vault/creator/modules/CreatorOVaultAdminModule.sol";
-import {IStrategy} from "@4626/interfaces/strategies/IStrategy.sol";
-import {IStrategyValuation} from "@4626/interfaces/strategies/IStrategyValuation.sol";
+import {CreatorOVault} from "@4626/creator/vault/CreatorOVault.sol";
+import {CreatorOVaultCoreModule} from "@4626/creator/vault/modules/CreatorOVaultCoreModule.sol";
+import {CreatorOVaultStrategiesModule} from "@4626/creator/vault/modules/CreatorOVaultStrategiesModule.sol";
+import {CreatorOVaultAdminModule} from "@4626/creator/vault/modules/CreatorOVaultAdminModule.sol";
+import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
+import {IStrategyValuation} from "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract MockRebalanceCoin is IERC20 {

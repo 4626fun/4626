@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {ApprovedV4HooksRegistry} from "@4626/strategies/univ4/ApprovedV4HooksRegistry.sol";
+import {ApprovedV4HooksRegistry} from "@4626/shared/strategies/univ4/ApprovedV4HooksRegistry.sol";
 
 contract MockApprovedHook {}
 

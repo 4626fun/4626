@@ -3,12 +3,12 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
 
-import {DeploymentBatcher, DeploymentBatcherPhase1Module} from "@4626/deploy/batchers/DeploymentBatcher.sol";
-import {UniversalCreate2DeployerFromStore} from "@4626/deploy/factories/UniversalCreate2DeployerFromStore.sol";
-import {CreatorOVaultAdminModule} from "@4626/vault/creator/modules/CreatorOVaultAdminModule.sol";
-import {CreatorOVaultCoreModule} from "@4626/vault/creator/modules/CreatorOVaultCoreModule.sol";
-import {CreatorOVaultStrategiesModule} from "@4626/vault/creator/modules/CreatorOVaultStrategiesModule.sol";
-import {ICreatorOVaultModuleIdentity} from "@4626/vault/creator/modules/ICreatorOVaultModuleIdentity.sol";
+import {DeploymentBatcher, DeploymentBatcherPhase1Module} from "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
+import {UniversalCreate2DeployerFromStore} from "@4626/shared/deploy/factories/UniversalCreate2DeployerFromStore.sol";
+import {CreatorOVaultAdminModule} from "@4626/creator/vault/modules/CreatorOVaultAdminModule.sol";
+import {CreatorOVaultCoreModule} from "@4626/creator/vault/modules/CreatorOVaultCoreModule.sol";
+import {CreatorOVaultStrategiesModule} from "@4626/creator/vault/modules/CreatorOVaultStrategiesModule.sol";
+import {ICreatorOVaultModuleIdentity} from "@4626/creator/vault/modules/ICreatorOVaultModuleIdentity.sol";
 
 /// @notice Deploy v3 CreatorOVault modules + a Phase1Module wired to the live split batcher shell.
 /// @dev Does not deploy a new DeploymentBatcher shell.

@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {Script} from "forge-std/Script.sol";
 import {console2} from "forge-std/console2.sol";
 
-import {LBPStrategyWithTaxHook} from "@4626/strategies/launchpad/LBPStrategyWithTaxHook.sol";
+import {LBPStrategyWithTaxHook} from "@4626/shared/strategies/launchpad/LBPStrategyWithTaxHook.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 

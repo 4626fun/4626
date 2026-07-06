@@ -6,8 +6,8 @@ import {
     LotteryAmoeRouter,
     ILotteryAmoeConsumer,
     IAmoeManager
-} from "contracts/utilities/lottery/zk/LotteryAmoeRouter.sol";
-import {IAmoePlonkVerifier} from "contracts/utilities/lottery/zk/IAmoePlonkVerifier.sol";
+} from "@4626/shared/lottery/zk/LotteryAmoeRouter.sol";
+import {IAmoePlonkVerifier} from "@4626/shared/lottery/zk/IAmoePlonkVerifier.sol";
 
 /// @title LotteryAmoeRouter v2 — points-burn binding tests
 /// @notice Exercises the v2-only surface added by PR 4b:

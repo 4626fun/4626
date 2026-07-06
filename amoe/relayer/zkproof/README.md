@@ -85,7 +85,7 @@ Re-emit the Solidity verifier from the AMOE verification key.
 ```
 amoe-prover emit-verifier \
   --vk   amoe/circuits/build/verification_key.json \
-  --out  contracts/utilities/lottery/zk/AmoeGroth16Verifier.sol \
+  --out  contracts/shared/lottery/zk/AmoeGroth16Verifier.sol \
   --name AmoeGroth16Verifier
 ```
 

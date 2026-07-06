@@ -9,7 +9,7 @@
 The previous "In Progress" section listed "Frontend voting UI", "Bribe marketplace", and "Cross-chain voting aggregation" with no code-path citations. In the audited tree, two of those already ship code:
 
 - `frontend/src/pages/GaugeVoting.tsx` (141 LOC) — Frontend voting UI is complete.
-- `contracts/governance/bribes/BribeDepot.sol` — Bribe marketplace contract is deployed.
+- `contracts/shared/governance/bribes/BribeDepot.sol` — Bribe marketplace contract is deployed.
 
 Only "Cross-chain voting aggregation" genuinely has no code.
 

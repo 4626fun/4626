@@ -21,7 +21,7 @@ function usage(): void {
   pnpm -C frontend exec tsx scripts/ops/payout-router-setup-safe.ts [options]
 
 Required:
-  --router <address>         PayoutRouter address
+  --router <address>         CreatorPayoutRouter address
   --creator <address>        Creator coin address (for V3 path resolution)
 
 Options:

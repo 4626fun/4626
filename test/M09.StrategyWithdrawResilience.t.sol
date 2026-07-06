@@ -5,7 +5,7 @@ import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {IStrategy} from "@4626/interfaces/strategies/IStrategy.sol";
+import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
 
 /// @dev FIX: M-09 — regression tests for `_tryWithdrawFromStrategyMeasured`, the
 ///      best-effort withdrawal helper that replaces the strict revert on the
@@ -24,7 +24,7 @@ import {IStrategy} from "@4626/interfaces/strategies/IStrategy.sol";
 ///      exact code under review rather than spinning the full vault wiring. The
 ///      logic, events, selectors, and return-value branches are a byte-for-byte
 ///      port of the production implementation in
-///      `contracts/vault/modules/CreatorOVaultStrategiesModule.sol`.
+///      `contracts/creator/vault/modules/CreatorOVaultStrategiesModule.sol`.
 
 // -----------------------------------------------------------------------------
 // Mocks

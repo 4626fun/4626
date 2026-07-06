@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import "@4626/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol";
+import "@4626/shared/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol";
 
 contract GasHeavyOwnerReceiver {
     uint256 public totalReceived;

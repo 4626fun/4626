@@ -13,10 +13,10 @@
 |--------|----------------|
 | ERC-4626 vault | `CreatorOVault`, modules (`Core`/`Admin`/`Strategies`), `CreatorOVaultWrapper`, impairment/escrow |
 | Strategies | `CCALaunchStrategy`, `ERC4626StrategyAdapter`, Charm/Ajna bundle |
-| Lottery / gauge / oracle | `CreatorLotteryManager`, `CreatorGaugeController`, `CreatorOracle`, `VoterRewardsDistributor` |
-| ve(3,3) | `ve4626`, `ve4626BoostManager`, `VaultGaugeVoting`, `BribeDepot` |
+| Lottery / gauge / oracle | `CreatorLotteryManager`, `CreatorGaugeController`, `CreatorOracle`, `ve4626VoterRewardsDistributor` |
+| ve(3,3) | `ve4626`, `ve4626BoostManager`, `ve4626GaugeVoting`, `BribeDepot` |
 | Cross-chain | `CreatorShareOFT`, `OVaultHubComposer`, `SolanaBridgeAdapter` |
-| Deploy / periphery | `DeploymentBatcher`, `PayoutRouter`, `VaultShareBurnStream`, `CreatorRegistry`, factories, alfaclub |
+| Deploy / periphery | `DeploymentBatcher`, `CreatorPayoutRouter`, `CreatorVaultShareBurnStream`, `CreatorRegistry`, factories, alfaclub |
 
 **Architecture:** Hub-centric (Base); vault uses **delegatecall modules** with `MODULE_STORAGE_VERSION` gate; jackpot **custody** (`CreatorGaugeController`) vs **authority** (`CreatorLotteryManager`) correctly split. Greenfield Solana exposure is ShareOFT mesh at finalize (`solana_ovault_mesh`).
 
@@ -57,7 +57,7 @@
 
 ### H-03 — Emergency reset bribe over-claim
 
-**Contract/File:** `VaultGaugeVoting.sol:434-436`, `BribeDepot.sol:115-128`  
+**Contract/File:** `ve4626GaugeVoting.sol:434-436`, `BribeDepot.sol:115-128`  
 **Description:** `emergencyResetAllVotes` cleared aggregates but not per-user weights; bribe claims used stale weight.  
 **Impact:** Bribe pool theft after emergency reset.  
 **Recommendation:** Generation check in `getUserVoteWeightAtEpoch` (implemented).  
@@ -89,7 +89,7 @@
 
 ### H-07 — `PayoutRouter.emergencyWithdraw`
 
-**Contract/File:** `contracts/utilities/routers/PayoutRouter.sol:305-317`  
+**Contract/File:** `contracts/utilities/routers/CreatorPayoutRouter.sol:305-317`  
 **Description:** Owner could drain creator-coin / ShareOFT revenue.  
 **Impact:** Centralization / rug vector.  
 **Recommendation:** Block core payout tokens (implemented); timelock/multisig still required operationally.  

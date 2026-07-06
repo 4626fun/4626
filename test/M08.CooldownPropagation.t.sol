@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import "@4626/vault/creator/CreatorOVaultWrapper.sol";
+import "@4626/creator/vault/CreatorOVaultWrapper.sol";
 
 /// @dev FIX: M-08 — regression test for the wrapper-cooldown-bypass-via-ShareOFT-transfer finding.
 ///      The vulnerability: a user could deposit through the wrapper, transfer the resulting

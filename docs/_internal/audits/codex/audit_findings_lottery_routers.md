@@ -231,7 +231,7 @@ try IRandomWordsCallbackV2_5(provider).receiveRandomWords(randomWords, uint256(s
 
 ### PR-01 — External swap calldata is opaque — approved target can drain router
 
-**File:** `routers/PayoutRouter.sol`  
+**File:** `routers/CreatorPayoutRouter.sol`  
 **Lines:** 411–448 (`_convertViaExternalAndQueue`)
 
 ```solidity
@@ -505,7 +505,7 @@ function relayPendingResponse(uint32 srcEid, uint64 sequence) external payable n
 
 ### PR-02 — `deadline: block.timestamp` allows sandwiching
 
-**File:** `routers/PayoutRouter.sol`  
+**File:** `routers/CreatorPayoutRouter.sol`  
 **Lines:** 397–404
 
 ```solidity
@@ -528,7 +528,7 @@ creatorOut = ISwapRouterV3(swapRouter).exactInput(
 
 ### PR-03 — External swap overspend check has logic error
 
-**File:** `routers/PayoutRouter.sol`  
+**File:** `routers/CreatorPayoutRouter.sol`  
 **Lines:** 438–441
 
 ```solidity
@@ -558,7 +558,7 @@ which avoids any addition overflow risk.
 
 ### PR-04 — `claimProtocolRewards` claims ETH → `receive()` wraps → no reentrancy guard on `receive()`
 
-**File:** `routers/PayoutRouter.sol`  
+**File:** `routers/CreatorPayoutRouter.sol`  
 **Lines:** 476–485, 186–191
 
 ```solidity
@@ -583,7 +583,7 @@ receive() external payable {
 
 ### BS-01 — `queueShares` is permissionless — DoS via `PendingEpochMismatch`
 
-**File:** `routers/VaultShareBurnStream.sol`  
+**File:** `routers/CreatorVaultShareBurnStream.sol`  
 **Lines:** 108–125, 138–140
 
 ```solidity
@@ -613,7 +613,7 @@ More critically, the legitimate `PayoutRouter.queueShares(sharesQueued)` call ca
 
 ### BS-02 — Epoch boundary: shares arriving at epoch N can silently delay to epoch N+2
 
-**File:** `routers/VaultShareBurnStream.sol`  
+**File:** `routers/CreatorVaultShareBurnStream.sol`  
 **Lines:** 113–121
 
 ```solidity
@@ -635,7 +635,7 @@ This is a normal operational requirement, but the error message says "investigat
 
 ### BS-03 — No validation that vault supports `burnSharesForPriceIncrease`
 
-**File:** `routers/VaultShareBurnStream.sol`  
+**File:** `routers/CreatorVaultShareBurnStream.sol`  
 **Lines:** 217
 
 ```solidity
@@ -812,7 +812,7 @@ function setRateLimitDefaults(uint64 windowSeconds, uint64 maxRequestsPerWindow,
 
 ### PR-05 — `keeper = address(0)` allows anyone to call `onlyOwnerOrKeeper`
 
-**File:** `routers/PayoutRouter.sol`  
+**File:** `routers/CreatorPayoutRouter.sol`  
 **Lines:** 148–151
 
 ```solidity
@@ -832,7 +832,7 @@ More importantly, if the constructor set `keeper = address(0)` initially and the
 
 ### PR-06 — `emergencyWithdraw` can drain WETH held for pending processing
 
-**File:** `routers/PayoutRouter.sol`  
+**File:** `routers/CreatorPayoutRouter.sol`  
 **Lines:** 328–341
 
 **Issue:** `emergencyWithdraw` is callable by the owner at any time and can transfer any token including WETH. WETH held in the router is accumulating from wrapped ETH (from `receive()`) pending the next keeper call. Draining WETH leaves revenue that was already earned unprocessed, violating the "not trust me bro" enforceability goal described in the NatSpec.
@@ -843,7 +843,7 @@ More importantly, if the constructor set `keeper = address(0)` initially and the
 
 ### BS-04 — Stream completion condition may never be true due to rounding
 
-**File:** `routers/VaultShareBurnStream.sol`  
+**File:** `routers/CreatorVaultShareBurnStream.sol`  
 **Lines:** 210–228
 
 ```solidity
@@ -920,7 +920,7 @@ The `entryId` and `tokenValue` are hardcoded to `0` inside `_payoutLocalJackpot`
 
 ### PR-I1 — Hardcoded `PROTOCOL_REWARDS` address
 
-**File:** `routers/PayoutRouter.sol`  
+**File:** `routers/CreatorPayoutRouter.sol`  
 **Lines:** 87
 
 ```solidity

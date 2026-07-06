@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {VaultGaugeVoting} from "@4626/governance/creator/VaultGaugeVoting.sol";
+import {ve4626GaugeVoting} from "@4626/shared/governance/ve4626GaugeVoting.sol";
 
 contract MockVe4626 {
     mapping(address => uint256) internal _votingPower;
@@ -35,7 +35,7 @@ contract MockVe4626 {
         return _remainingLockTime[user];
     }
 
-    // G-09: VaultGaugeVoting now calls getLock to enforce minimum lock age
+    // G-09: ve4626GaugeVoting now calls getLock to enforce minimum lock age
     struct Lock {
         uint256 amount;
         uint256 end;
@@ -53,7 +53,7 @@ contract MockVe4626 {
         return _locks[user];
     }
 
-    // G-03: VaultGaugeVoting now calls votingPowerAt for projected epoch-end power
+    // G-03: ve4626GaugeVoting now calls votingPowerAt for projected epoch-end power
     function votingPowerAt(address user, uint256) external view returns (uint256) {
         return _votingPower[user];
     }
@@ -71,10 +71,10 @@ contract MockRegistry {
     }
 }
 
-contract VaultGaugeVotingCheckpointAndWhitelistTest is Test {
+contract ve4626GaugeVotingCheckpointAndWhitelistTest is Test {
     uint256 internal constant WEEK = 7 days;
 
-    VaultGaugeVoting internal voting;
+    ve4626GaugeVoting internal voting;
     MockVe4626 internal ve;
 
     address internal owner = address(this);
@@ -82,7 +82,7 @@ contract VaultGaugeVotingCheckpointAndWhitelistTest is Test {
 
     function setUp() public {
         ve = new MockVe4626();
-        voting = new VaultGaugeVoting(address(ve), owner);
+        voting = new ve4626GaugeVoting(address(ve), owner);
 
         ve.setVotingPower(voter, 100 ether);
         ve.setRemainingLockTime(voter, type(uint256).max);
@@ -108,7 +108,7 @@ contract VaultGaugeVotingCheckpointAndWhitelistTest is Test {
     function test_checkpoint_revertsDuringEpoch0() public {
         _warpToEpoch(0, 1);
 
-        vm.expectRevert(VaultGaugeVoting.EpochNotEnded.selector);
+        vm.expectRevert(ve4626GaugeVoting.EpochNotEnded.selector);
         voting.checkpoint();
     }
 
@@ -161,7 +161,7 @@ contract VaultGaugeVotingCheckpointAndWhitelistTest is Test {
         weights[0] = 100;
 
         vm.prank(voter);
-        vm.expectRevert(abi.encodeWithSelector(VaultGaugeVoting.VaultNotWhitelisted.selector, registryOnlyVault));
+        vm.expectRevert(abi.encodeWithSelector(ve4626GaugeVoting.VaultNotWhitelisted.selector, registryOnlyVault));
         voting.vote(vaults, weights);
     }
 
@@ -185,7 +185,7 @@ contract VaultGaugeVotingCheckpointAndWhitelistTest is Test {
         weights[0] = 100;
 
         vm.prank(voter);
-        vm.expectRevert(abi.encodeWithSelector(VaultGaugeVoting.VaultNotWhitelisted.selector, unregisteredVault));
+        vm.expectRevert(abi.encodeWithSelector(ve4626GaugeVoting.VaultNotWhitelisted.selector, unregisteredVault));
         voting.vote(vaults, weights);
     }
 }

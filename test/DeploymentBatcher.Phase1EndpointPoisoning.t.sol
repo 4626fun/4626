@@ -2,9 +2,9 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import {DeploymentBatcher} from "@4626/deploy/batchers/DeploymentBatcher.sol";
+import {DeploymentBatcher} from "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
 import "test/helpers/DeploymentBatcherFixture.sol";
-import {OFTBootstrapRegistry} from "@4626/deploy/infra/OFTBootstrapRegistry.sol";
+import {OFTBootstrapRegistry} from "@4626/shared/deploy/infra/OFTBootstrapRegistry.sol";
 
 interface IEndpointRegistryLike {
     function getLayerZeroEndpoint(uint256 chainId) external view returns (address);
@@ -181,7 +181,7 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
     bytes32 internal constant ORACLE_CODE_ID = bytes32(uint256(7));
 
     // Canonical LayerZero v2 EndpointV2 address (CREATE2-deployed identically across EVM chains).
-    // Must match `contracts/helpers/infra/OFTBootstrapRegistry.sol`.
+    // Must match `contracts/shared/deploy/infra/OFTBootstrapRegistry.sol`.
     address internal constant CANONICAL_ENDPOINT = address(0x1a44076050125825900e736c501f859c50fE728c);
     address internal constant ATTACKER_ENDPOINT = address(0x2222222222222222222222222222222222222222);
     address internal constant ATTACKER = address(0xBEEF);

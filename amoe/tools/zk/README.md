@@ -29,7 +29,7 @@ Reported on PR #409 by the `chatgpt-codex-connector` bot. Fix: an explicit
 `checkField` loop over `_pubSignals[0..7]` between `checkProofData()` and
 `calculateChallenges()`. See:
 
-- `contracts/utilities/lottery/zk/AmoePlonkVerifier.sol` (header banner +
+- `contracts/shared/lottery/zk/AmoePlonkVerifier.sol` (header banner +
   patched body)
 - `amoe/tests/zk/AmoePlonkVerifier.t.sol` (`test_nonCanonicalPublicInputRejected`,
   `test_nonCanonicalWalletCommitRejected`)
@@ -46,7 +46,7 @@ amoe/tools/zk/regen_amoe_plonk_verifier.sh
 ```
 
 This runs the full pipeline end-to-end and rewrites
-`contracts/utilities/lottery/zk/AmoePlonkVerifier.sol`. Inspect the diff
+`contracts/shared/lottery/zk/AmoePlonkVerifier.sol`. Inspect the diff
 before committing — the patch script enforces the divergences but a
 circom/snarkjs version bump may produce other changes you want to review.
 

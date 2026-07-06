@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import "@4626/governance/creator/VaultRolePolicyManager.sol";
+import "@4626/shared/governance/VaultRolePolicyManager.sol";
 
 contract VaultRolePolicyManagerTest is Test {
     VaultRolePolicyManager internal manager;

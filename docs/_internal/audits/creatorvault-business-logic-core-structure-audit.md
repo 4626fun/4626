@@ -23,7 +23,7 @@ AGENTS.md requires these exact names in docs, UI copy, commit messages, and code
 
 ### 2. creatorCoinPayoutRecipient
 - **Lane**: Creator Coin **external earnings** (protocol rewards, secondary market fees, etc. that accrue to the creator coin itself).
-- **Destination**: `PayoutRouter.convertAndQueue(...)` → swap to creatorCoin → deposit into vault → `VaultShareBurnStream` (ownerless, gradual burn for holder PPS accretion).
+- **Destination**: `CreatorPayoutRouter.convertAndQueue(...)` → swap to creatorCoin → deposit into vault → `CreatorVaultShareBurnStream` (ownerless, gradual burn for holder PPS accretion).
 - **Trigger**: External revenue events on the creator coin (not vault share trading fees).
 - **Authority / Gating**: Authorized queuers (keeper + deploy-session paths); permissionless drip via `VaultShareBurnStream.checkpoint()`.
 - **On-chain identifiers**:
@@ -57,8 +57,8 @@ For users who create a Coinbase Smart Wallet via Zora's Privy experience and lat
 - The canonical CSW + embedded EOA owner relationship itself is still protected by the on-chain `isOwner` check and the tombstone-aware profile resolvers.
 
 This nuance was surfaced during the 2026-05 general audit (Lens A edge review) and is recorded here as the authoritative reference.
-  - `PayoutRouter`
-  - `VaultShareBurnStream`
+  - `CreatorPayoutRouter`
+  - `CreatorVaultShareBurnStream`
 - **Policy**: Never call this the "trade-fee" lane or conflate with `tradeFeeCollector`. In router mode it feeds holder PPS accretion, not a direct creator treasury spend.
 
 ### 3. creatorTreasury
@@ -90,7 +90,7 @@ The architecture deliberately keeps two distinct planes for creator coin value a
 - **Trade-fee lane** (`tradeFeeCollector` domain) — from vault share trading activity (ShareOFT + hook). Flows through the gauge.
 - **External revenue lane** (`creatorCoinPayoutRecipient` domain) — from the creator coin's own activity (protocol rewards, etc.). Routed via PayoutRouter → burn stream for holder benefit.
 
-`PayoutRouter` and `VaultShareBurnStream` exist specifically to handle the external lane safely and gradually.
+`CreatorPayoutRouter` and `CreatorVaultShareBurnStream` exist specifically to handle the external lane safely and gradually.
 
 ---
 
@@ -106,7 +106,7 @@ The architecture deliberately keeps two distinct planes for creator coin value a
 
 - AGENTS.md — "Canonical Lane Terminology" section (repo-level authority).
 - `docs/audits/general-audit-2026-05.md` and `general-audit-2026-05-sc-hygiene.md` (findings SC-01, SC-02, Lens B).
-- `CreatorGaugeController`, `CreatorShareOFT`, `PayoutRouter`, `VaultShareBurnStream`, `CreatorLotteryManager`, `CCALaunchStrategy`, `DeploymentBatcher` (phase-2 paths).
+- `CreatorGaugeController`, `CreatorShareOFT`, `CreatorPayoutRouter`, `CreatorVaultShareBurnStream`, `CreatorLotteryManager`, `CCALaunchStrategy`, `DeploymentBatcher` (phase-2 paths).
 
 ---
 
@@ -145,6 +145,6 @@ The architecture deliberately keeps two distinct planes for creator coin value a
 **Important policy reminders for this epoch**:
 - Greenfield Phase 2 finalize is payable (LZ native fee for ShareOFT peer wiring + Pipe A auto-bridge).
 - `finalizePhase2` no longer requires `meteoraAlphaVault` / `solanaIxs` bytes (those are handled out-of-band via the Solana provisioner + keeper).
-- `PayoutRouter` is the canonical path for the `creatorCoinPayoutRecipient` lane on new vaults (authorized queuer pattern).
+- `CreatorPayoutRouter` is the canonical path for the `creatorCoinPayoutRecipient` lane on new vaults (authorized queuer pattern).
 
 This section will be updated when the active batcher, module set, or lane routing changes. The source of truth for the current epoch is the combination of this document + `frontend/src/config/contracts.defaults.ts` + the live `DeploymentBatcher` getters.

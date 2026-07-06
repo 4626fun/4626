@@ -2,8 +2,8 @@
 pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
-import {LotteryManager4626} from "@4626/lottery/manager/4626LotteryManager.sol";
-import {VaultActivationBatcher} from "@4626/deploy/batchers/VaultActivationBatcher.sol";
+import {LotteryManager4626} from "@4626/shared/lottery/manager/4626LotteryManager.sol";
+import {VaultActivationBatcher} from "@4626/shared/deploy/batchers/VaultActivationBatcher.sol";
 
 /**
  * @title DeployTier1Upgrade

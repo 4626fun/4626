@@ -2,7 +2,7 @@
 # Regenerate the AMOE PLONK verifier contract from source.
 #
 # This script reproduces the artifact in
-#   contracts/utilities/lottery/zk/AmoePlonkVerifier.sol
+#   contracts/shared/lottery/zk/AmoePlonkVerifier.sol
 # starting from:
 #   * amoe/circuits/amoe_eligibility.circom            (source circuit)
 #   * amoe/circuits/build/pot17_hez_final.ptau         (universal SRS)
@@ -36,7 +36,7 @@
 #   * AmoePlonkVerifier_raw.sol                    (snarkjs source-of-truth)
 #   * proof_plonk.json / public_plonk.json         (smoke-test proof, optional)
 # And the patched contract is written back to:
-#   contracts/utilities/lottery/zk/AmoePlonkVerifier.sol
+#   contracts/shared/lottery/zk/AmoePlonkVerifier.sol
 
 set -euo pipefail
 
@@ -44,7 +44,7 @@ ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 CIRCUITS="$ROOT/amoe/circuits"
 BUILD="$CIRCUITS/build"
 FRESH="$BUILD/plonk_fresh"
-OUT="$ROOT/contracts/utilities/lottery/zk/AmoePlonkVerifier.sol"
+OUT="$ROOT/contracts/shared/lottery/zk/AmoePlonkVerifier.sol"
 
 PTAU="$BUILD/pot17_hez_final.ptau"
 PTAU_SHA="6b662a324867139fb1a20a324d90b6ff61856dfb23f59326909f14b0e2483ae0"

@@ -4,10 +4,10 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {DeploymentBatcher, DeploymentBatcherPhase2Module, DeploymentBatcherUtilsHelper} from "@4626/deploy/batchers/DeploymentBatcher.sol";
-import {Registry4626} from "@4626/core/4626Registry.sol";
+import {DeploymentBatcher, DeploymentBatcherPhase2Module, DeploymentBatcherUtilsHelper} from "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
+import {Registry4626} from "@4626/shared/core/4626Registry.sol";
 import {IOFT, SendParam, MessagingFee, MessagingReceipt, OFTReceipt, OFTLimit, OFTFeeDetail} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
-import {IBaseSolanaBridge} from "@4626/interfaces/bridge/IBaseSolanaBridge.sol";
+import {IBaseSolanaBridge} from "@4626/shared/interfaces/bridge/IBaseSolanaBridge.sol";
 import {ISignatureTransfer} from "permit2/src/interfaces/ISignatureTransfer.sol";
 
 interface IDeploymentBatcherPermit2 {

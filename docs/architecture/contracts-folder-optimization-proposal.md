@@ -18,7 +18,7 @@
 | A1 | **`utilities/` is a catch-all** | High | 20 files / 6 subdirs mixing 6 unrelated domains (bridge, lottery-infra, messaging, oracles, routers, vesting). "utilities" implies helper code; these are core protocol contracts. |
 | A2 | **Agent lane fragmented across 6 dirs** | High | `vault/agent/`, `governance/agent/`, `utilities/messaging/agent/`, `utilities/oracles/agent/`, `utilities/routers/agent/`, `revenue/agent/`. The agent product lane cannot be reviewed as a coherent unit. |
 | A3 | **Lottery split across 2 roots** | Medium | Managers in `lottery/`, infrastructure in `utilities/lottery/`. Same domain, two homes. |
-| A4 | **Revenue split across 2 roots** | Medium | Agent revenue in `revenue/agent/`, creator revenue (PayoutRouter, VaultShareBurnStream) in `utilities/routers/`. |
+| A4 | **Revenue split across 2 roots** | Medium | Agent revenue in `revenue/agent/`, creator revenue (CreatorPayoutRouter, CreatorVaultShareBurnStream) in `creator/revenue/`. |
 | A5 | **`crosschain/` dead dir** | Low | Contains only README.md, zero `.sol` files. |
 | A6 | **`helpers/` mixes 3 concerns** | Medium | Deploy batchers (deploy infra), TaxHookConfigurator (Uniswap V4 hook), UniversalBytecodeStore (runtime infra). Different lifecycles, different owners. |
 | A7 | **Interfaces inconsistently organized** | Medium | 12 flat files at `interfaces/` root mixing external (IWETH9, ILayerZeroEndpointV2, IAjnaPool) with internal (ICreatorOracle, IStrategy). 4 subfolders exist but don't cover all domains. |
@@ -94,12 +94,13 @@ contracts/
 │       ├── FullRangeStrategy.sol
 │       └── LimitOrderStrategy.sol
 │
-├── governance/                    # Gauge voting, bribes, ve4626
+├── governance/                    # Gauge voting, bribes, ve4626 (generalized in shared/)
+│   ├── shared/
+│   │   ├── ve4626GaugeVoting.sol
+│   │   ├── ve4626VoterRewardsDistributor.sol
+│   │   └── VaultRolePolicyManager.sol
 │   ├── creator/
 │   │   ├── CreatorGaugeController.sol
-│   │   ├── VaultGaugeVoting.sol
-│   │   ├── VaultRolePolicyManager.sol
-│   │   ├── VoterRewardsDistributor.sol
 │   │   ├── ve4626.sol
 │   │   └── ve4626BoostManager.sol
 │   ├── agent/
@@ -128,8 +129,8 @@ contracts/
 │
 ├── revenue/                       # Unified revenue domain (was split)
 │   ├── creator/
-│   │   ├── PayoutRouter.sol
-│   │   ├── VaultShareBurnStream.sol
+│   │   ├── CreatorPayoutRouter.sol
+│   │   ├── CreatorVaultShareBurnStream.sol
 │   │   └── CreatorCoinPolicyController.sol
 │   └── agent/
 │       ├── AgentRevenueRouter.sol
@@ -242,7 +243,7 @@ contracts/
    `vrf/`, `zk/` subfolders. Managers and infra are the same domain.
 
 4. **Revenue unified** under `revenue/` with `creator/` + `agent/`
-   subfolders. PayoutRouter moves out of `utilities/routers/`.
+   subfolders. CreatorPayoutRouter moves to `creator/revenue/`.
 
 5. **`helpers/` → `deploy/`** with `batchers/`, `infra/`, `hooks/`,
    `factories/`. "helpers" is vague; "deploy" says what it is. Hooks stay
@@ -290,8 +291,8 @@ import {I4626Registry} from "../../interfaces/core/I4626Registry.sol";
 ```
 to:
 ```solidity
-import {CreatorLinearVesting} from "@4626/vesting/CreatorLinearVesting.sol";
-import {I4626Registry} from "@4626/interfaces/core/I4626Registry.sol";
+import {CreatorLinearVesting} from "@4626/creator/vesting/CreatorLinearVesting.sol";
+import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
 ```
 
 Benefits:

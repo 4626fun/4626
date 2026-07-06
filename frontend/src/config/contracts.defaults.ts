@@ -108,7 +108,7 @@ export const BASE_DEFAULTS = {
   lotteryManager: addr('D62a8a2F4c25587FA80ED5782b50Af6654122b0b'),
   vrfConsumer: addr('933A3BE4a4BF00dD3B71c50Dee4972539a32bE47'),
   // No live global PayoutRouterFactory is part of the current deploy flow.
-  // PayoutRouter is deployed per creator through DeploymentBatcher; keep this
+  // CreatorPayoutRouter is deployed per creator through DeploymentBatcher; keep this
   // zero so stale no-code factory addresses fail closed if a legacy caller uses it.
   payoutRouterFactory: addr('0000000000000000000000000000000000000000'),
 

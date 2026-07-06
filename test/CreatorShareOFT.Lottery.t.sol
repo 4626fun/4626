@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@4626/messaging/creator/CreatorShareOFT.sol";
+import "@4626/creator/vault/CreatorShareOFT.sol";
 
 /**
  * @title CreatorShareOFT Lottery Tests
@@ -756,7 +756,7 @@ contract CreatorShareOFTLotteryTest is Test {
 }
 
 // Import for the mock
-import {ILotteryBeneficiary} from "@4626/messaging/creator/CreatorShareOFT.sol";
+import {ILotteryBeneficiary} from "@4626/creator/vault/CreatorShareOFT.sol";
 
 /**
  * @notice Mock aggregator that just forwards tokens (simulates 1inch, Paraswap, etc.)

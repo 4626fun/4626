@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import "@4626/deploy/infra/UniversalBytecodeStore.sol";
+import "@4626/shared/deploy/infra/UniversalBytecodeStore.sol";
 
 /**
  * @dev Seed UniversalBytecodeStore with all creation codes used by the phased deploy flow
@@ -129,14 +129,14 @@ contract SeedUniversalBytecodeStore is Script {
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
             _storeIfMissing(
-                store, vm.getCode("out/PayoutRouter.sol/PayoutRouter.json"), "PayoutRouter", supportsChunking
+                store, vm.getCode("out/CreatorPayoutRouter.sol/CreatorPayoutRouter.json"), "CreatorPayoutRouter", supportsChunking
             );
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
             _storeIfMissing(
                 store,
-                vm.getCode("out/VaultShareBurnStream.sol/VaultShareBurnStream.json"),
-                "VaultShareBurnStream",
+                vm.getCode("out/CreatorVaultShareBurnStream.sol/CreatorVaultShareBurnStream.json"),
+                "CreatorVaultShareBurnStream",
                 supportsChunking
             );
         }

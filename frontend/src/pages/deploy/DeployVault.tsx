@@ -2406,11 +2406,11 @@ function DeployVaultBatcher({
   }, [runtimeBatcherConfigError])
 
   const payoutRouterCodeId = useMemo(() => {
-    return keccak256(DEPLOY_BYTECODE.PayoutRouter as Hex)
+    return keccak256(DEPLOY_BYTECODE.CreatorPayoutRouter as Hex)
   }, [])
 
   const vaultShareBurnStreamCodeId = useMemo(() => {
-    return keccak256(DEPLOY_BYTECODE.VaultShareBurnStream as Hex)
+    return keccak256(DEPLOY_BYTECODE.CreatorVaultShareBurnStream as Hex)
   }, [])
 
   const creatorCoinPolicyControllerCodeId = useMemo(() => {
@@ -9099,8 +9099,8 @@ function DeployVaultMain() {
       oracle: keccak256(DEPLOY_BYTECODE.CreatorOracle as Hex),
       oftBootstrap: keccak256(DEPLOY_BYTECODE.OFTBootstrapRegistry as Hex),
       // Newly required per-vault contracts (deployed via UniversalCreate2DeployerFromStore)
-      payoutRouter: keccak256(DEPLOY_BYTECODE.PayoutRouter as Hex),
-      vaultShareBurnStream: keccak256(DEPLOY_BYTECODE.VaultShareBurnStream as Hex),
+      payoutRouter: keccak256(DEPLOY_BYTECODE.CreatorPayoutRouter as Hex),
+      vaultShareBurnStream: keccak256(DEPLOY_BYTECODE.CreatorVaultShareBurnStream as Hex),
       creatorCoinPolicyController: keccak256(DEPLOY_BYTECODE.CreatorCoinPolicyController as Hex),
       creatorCharmStrategy: keccak256(DEPLOY_BYTECODE.CreatorCharmStrategy as Hex),
       ajnaVaultAuth: keccak256(DEPLOY_BYTECODE.AjnaVaultAuth as Hex),

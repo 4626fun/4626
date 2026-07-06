@@ -25,7 +25,7 @@ This is the on-chain half. There is no off-chain change.
 | Threat | Mitigation in PR 3 |
 | --- | --- |
 | Compromised owner key swaps `boostManager` to an attacker contract that returns `2.5x` boost + `69_000 PPM` for the attacker, ~0 for everyone else | 24h pending-then-effective window gives monitoring + counsel + multisig time to react via `cancelBoostManagerProposal` or `disableBoostSources`. |
-| Same threat on `vaultGaugeVoting` (gauge-direction PPM up to `35_000 PPM` per source) | Symmetric `proposeVaultGaugeVoting` / `commitVaultGaugeVoting` / `cancelVaultGaugeVotingProposal`. |
+| Same threat on `vaultGaugeVoting` (gauge-direction PPM up to `35_000 PPM` per source) | Symmetric `proposeve4626GaugeVoting` / `commitve4626GaugeVoting` / `cancelve4626GaugeVotingProposal`. |
 | Already-committed malicious source is detected post-fact | `disableBoostSources()` zeroes both sources atomically with **no** timelock. Also clears any pending proposal so a queued malicious address cannot be committed after the breaker is pulled. |
 | Owner forgets to re-arm or wants to change setter style | One-way arm: `armBoostSourceTimelock()` cannot be undone. The only unwind is `disableBoostSources()` to neutralize, then redeploy. |
 
@@ -53,8 +53,8 @@ the main contract; admin module storage layout mirrors main exactly.
 ```solidity
 address internal _pendingBoostManager;                    // slot 58
 uint256 internal _pendingBoostManagerEffectiveAt;         // slot 59
-address internal _pendingVaultGaugeVoting;                // slot 60
-uint256 internal _pendingVaultGaugeVotingEffectiveAt;     // slot 61
+address internal _pendingve4626GaugeVoting;                // slot 60
+uint256 internal _pendingve4626GaugeVotingEffectiveAt;     // slot 61
 bool    internal _timelockArmed;                          // slot 62
 ```
 
@@ -75,21 +75,21 @@ Mirror exposed `public` on the admin module.
 | `BoostManagerProposed(previous, proposed, effectiveAt)` | `proposeBoostManager` records pending. |
 | `BoostManagerProposalCancelled(cancelled)` | `cancelBoostManagerProposal` clears pending. |
 | `BoostManagerUpdated(previous, newManager)` | Live `boostManager` flipped (post-arm via `commit`, pre-arm via legacy setter). |
-| `VaultGaugeVotingProposed(previous, proposed, effectiveAt)` | Symmetric. |
-| `VaultGaugeVotingProposalCancelled(cancelled)` | Symmetric. |
-| `VaultGaugeVotingUpdated(previous, newGauge)` | Symmetric. |
+| `ve4626GaugeVotingProposed(previous, proposed, effectiveAt)` | Symmetric. |
+| `ve4626GaugeVotingProposalCancelled(cancelled)` | Symmetric. |
+| `ve4626GaugeVotingUpdated(previous, newGauge)` | Symmetric. |
 | `BoostSourceTimelockArmed()` | One-way arm. |
-| `BoostSourcesDisabled(prevBoostManager, prevVaultGaugeVoting)` | Emergency circuit breaker. |
+| `BoostSourcesDisabled(prevBoostManager, prevve4626GaugeVoting)` | Emergency circuit breaker. |
 
 ### Errors
 
 | Error | Reverted by |
 | --- | --- |
-| `TimelockNotArmed` | `proposeBoostManager` / `proposeVaultGaugeVoting` if owner has not armed yet. |
+| `TimelockNotArmed` | `proposeBoostManager` / `proposeve4626GaugeVoting` if owner has not armed yet. |
 | `TimelockAlreadyArmed` | Second call to `armBoostSourceTimelock`. |
 | `TimelockNotExpired` | `commitX` before `effectiveAt`. |
 | `NoPendingProposal` | `commitX` / `cancelX` with no pending proposal. |
-| `LegacySetterDisabled` | `setBoostManager` / `setVaultGaugeVoting` once timelock is armed. |
+| `LegacySetterDisabled` | `setBoostManager` / `setve4626GaugeVoting` once timelock is armed. |
 
 ### External functions
 
@@ -101,9 +101,9 @@ function proposeBoostManager(address newManager) external onlyOwner;     // requ
 function commitBoostManager() external onlyOwner;                        // after 24h
 function cancelBoostManagerProposal() external onlyOwner;                // during window
 
-function proposeVaultGaugeVoting(address newGauge) external onlyOwner;   // requires armed
-function commitVaultGaugeVoting() external onlyOwner;                    // after 24h
-function cancelVaultGaugeVotingProposal() external onlyOwner;            // during window
+function proposeve4626GaugeVoting(address newGauge) external onlyOwner;   // requires armed
+function commitve4626GaugeVoting() external onlyOwner;                    // after 24h
+function cancelve4626GaugeVotingProposal() external onlyOwner;            // during window
 ```
 
 A combined view exists on the admin module (not a main-contract stub —
@@ -127,10 +127,10 @@ function getBoostSourceTimelockState()
 
 ### Pre-arm (operations bootstrap)
 
-- `setBoostManager(addr)` and `setVaultGaugeVoting(addr)` work as before.
+- `setBoostManager(addr)` and `setve4626GaugeVoting(addr)` work as before.
   No delay. Used by ops to plug in the real `ve4626BoostManager` and
-  `VaultGaugeVoting` after deploy.
-- `proposeBoostManager` / `proposeVaultGaugeVoting` revert with
+  `ve4626GaugeVoting` after deploy.
+- `proposeBoostManager` / `proposeve4626GaugeVoting` revert with
   `TimelockNotArmed`.
 - `disableBoostSources()` works without timelock — already a useful
   emergency tool even pre-arm.
@@ -140,7 +140,7 @@ function getBoostSourceTimelockState()
 `armBoostSourceTimelock()`:
 - Reverts with `TimelockAlreadyArmed` on second call.
 - Sets `_timelockArmed = true`. After this:
-  - `setBoostManager` / `setVaultGaugeVoting` revert with `LegacySetterDisabled`.
+  - `setBoostManager` / `setve4626GaugeVoting` revert with `LegacySetterDisabled`.
   - The only path to change either source is propose → wait 24h → commit.
 - `disableBoostSources` remains available regardless.
 
@@ -176,7 +176,7 @@ suite).
 
 ## 4. Gating on legacy setters
 
-Inside the admin-module impls, `setBoostManager` and `setVaultGaugeVoting`
+Inside the admin-module impls, `setBoostManager` and `setve4626GaugeVoting`
 both gain a single guard at the top:
 
 ```solidity
@@ -184,7 +184,7 @@ if (_timelockArmed) revert LegacySetterDisabled();
 ```
 
 Both also now emit the symmetric `BoostManagerUpdated` /
-`VaultGaugeVotingUpdated` event so off-chain indexers see one consistent
+`ve4626GaugeVotingUpdated` event so off-chain indexers see one consistent
 event regardless of whether the change went through the legacy or
 timelocked path.
 
@@ -263,7 +263,7 @@ Order of operations after PR 3 deploys (extends the PR 1 / PR 2 list):
    _isActive=true, _baseWinChance=40, _maxWinChance=150_000,
    _usdMultiplierBps=10_000)` (from PR 1 / PR 2)
 3. `setBoostManager(<real ve4626BoostManager>)` — legacy setter, OK pre-arm.
-4. `setVaultGaugeVoting(<real VaultGaugeVoting>)` — legacy setter, OK pre-arm.
+4. `setve4626GaugeVoting(<real ve4626GaugeVoting>)` — legacy setter, OK pre-arm.
 5. `setAuthorizedAmoeRelayer(<scoped-key-address>)` — only after sweepstakes
    counsel sign-off.
 6. **`armBoostSourceTimelock()`** — once 3 and 4 are confirmed correct on
@@ -287,7 +287,7 @@ propose / 24h / commit pattern. The emergency circuit breaker
 - `armBoostSourceTimelock` reverts on second call (one-way).
 - `disableBoostSources` works with or without `_timelockArmed` and
   clears any pending proposals.
-- Legacy `setBoostManager` / `setVaultGaugeVoting` revert with
+- Legacy `setBoostManager` / `setve4626GaugeVoting` revert with
   `LegacySetterDisabled` once `_timelockArmed`.
 - AMOE win-chance pipeline (`_applyBoost`) is **unchanged** in PR 3 —
   AMOE Linear Parity tests from PR 1 still green (verified).

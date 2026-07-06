@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {LotteryManager4626} from "@4626/lottery/manager/4626LotteryManager.sol";
+import {LotteryManager4626} from "@4626/shared/lottery/manager/4626LotteryManager.sol";
 
 // =====================================================================
 // Mocks (namespaced -Amoe to avoid collision with other test files)
@@ -197,7 +197,7 @@ contract LotteryManager4626AmoeLinearParityTest is Test {
         manager.setLocalVRFConsumer(address(vrf));
         manager.setUseLocalVRF(true);
         manager.setBoostManager(address(boostManager));
-        manager.setVaultGaugeVoting(address(gauge));
+        manager.setVe4626GaugeVoting(address(gauge));
         manager.setAuthorizedAmoeRelayer(relayer);
         vm.stopPrank();
 

@@ -1,15 +1,15 @@
 ---
-title: VoterRewardsDistributor
+title: ve4626VoterRewardsDistributor
 sidebar_position: 4
 ---
 
-# VoterRewardsDistributor
+# ve4626VoterRewardsDistributor
 
 Distributes the 9.61% voter rewards slice to ve4626 voters.
 
 ## Purpose
 
-The VoterRewardsDistributor:
+The ve4626VoterRewardsDistributor:
 - Receives voter rewards from GaugeController
 - Tracks rewards per epoch and vault
 - Enables pro-rata claims for voters
@@ -56,7 +56,7 @@ function getTotalRewards(address vault, uint256 epoch) external view returns (ui
 ```
 GaugeController distributes fees
    ↓
-9.61% sent to VoterRewardsDistributor
+9.61% sent to ve4626VoterRewardsDistributor
    ↓
 notifyRewards() tracks per vault/epoch
    ↓

@@ -30,7 +30,7 @@
 #                             primary enforcer remains the forge build gate)
 #
 # PR requirement (enforced by policy, not this script):
-#   Any change touching contracts/utilities/lottery/CreatorLotteryManager.sol
+#   Any change touching contracts/shared/lottery/manager/CreatorLotteryManager.sol
 #   (or its AdminModule) must include a short "size budget review" note
 #   in the PR description or a linked issue. Estimate byte impact of the
 #   change and confirm remaining headroom after the change.
@@ -49,7 +49,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-CONTRACT="contracts/utilities/lottery/CreatorLotteryManager.sol:CreatorLotteryManager"
+CONTRACT="contracts/shared/lottery/manager/CreatorLotteryManager.sol:CreatorLotteryManager"
 WARN_THRESHOLD=24450
 HARD_THRESHOLD=24576
 

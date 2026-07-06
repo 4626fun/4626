@@ -26,7 +26,7 @@ Two contracts exceed the 24,576-byte EIP-170 runtime size limit:
 
 **My partial work (IN THE REPO — may need to be reverted or completed):**
 - `contracts/utilities/lottery/CreatorLotteryManagerAdmin.sol` — admin module with matching storage layout (created but not fully wired)
-- `contracts/interfaces/ICreatorLotteryManagerAdmin.sol` — interface for admin functions
+- `contracts/shared/interfaces/ICreatorLotteryManagerAdmin.sol` — interface for admin functions
 - `contracts/helpers/batchers/DeploymentBatcherLib.sol` — utility library (created but not integrated)
 - Main `CreatorLotteryManager.sol` was modified to use `fallback()` dispatch + `adminModule` state variable
 - Main contract compiles but callers (scripts/tests) don't because they reference removed function signatures
@@ -85,7 +85,7 @@ Two contracts exceed the 24,576-byte EIP-170 runtime size limit:
 ```
 contracts/utilities/lottery/CreatorLotteryManager.sol     — admin functions removed, fallback added
 contracts/utilities/lottery/CreatorLotteryManagerAdmin.sol — NEW admin module
-contracts/interfaces/ICreatorLotteryManagerAdmin.sol       — NEW interface
+contracts/shared/interfaces/ICreatorLotteryManagerAdmin.sol       — NEW interface
 contracts/helpers/batchers/DeploymentBatcherLib.sol        — NEW library (not integrated)
 contracts/utilities/messaging/OVaultHubComposer.sol        — rescueETH() added
 contracts/vault/CreatorOVaultWrapper.sol                   — verify() uses >= 

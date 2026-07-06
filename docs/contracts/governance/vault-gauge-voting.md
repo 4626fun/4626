@@ -1,15 +1,15 @@
 ---
-title: VaultGaugeVoting
+title: ve4626GaugeVoting
 sidebar_position: 2
 ---
 
-# VaultGaugeVoting
+# ve4626GaugeVoting
 
 Weekly voting that allocates a bounded probability budget across whitelisted vaults.
 
 ## Purpose
 
-VaultGaugeVoting enables ve4626 holders to:
+ve4626GaugeVoting enables ve4626 holders to:
 - Vote on probability allocations for vaults
 - Direct a bounded weekly probability budget
 - Boost lottery win chances for preferred vaults

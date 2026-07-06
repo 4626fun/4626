@@ -3,8 +3,8 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@4626/messaging/creator/CreatorShareOFT.sol";
-import {ILotteryBeneficiary} from "@4626/messaging/creator/CreatorShareOFT.sol";
+import "@4626/creator/vault/CreatorShareOFT.sol";
+import {ILotteryBeneficiary} from "@4626/creator/vault/CreatorShareOFT.sol";
 
 /**
  * @title CreatorShareOFT Comprehensive Edge Case Tests

@@ -48,15 +48,15 @@ Full-scope security review of all Solidity under [`contracts/`](../../../contrac
 ## Changed contracts (summary)
 
 - `contracts/vault/modules/CreatorOVaultCoreModule.sol`
-- `contracts/governance/VaultGaugeVoting.sol`
+- `contracts/shared/governance/ve4626GaugeVoting.sol`
 - `contracts/governance/ve4626.sol`
-- `contracts/governance/bribes/BribeDepot.sol`
+- `contracts/shared/governance/bribes/BribeDepot.sol`
 - `contracts/governance/CreatorGaugeController.sol`
 - `contracts/utilities/lottery/CreatorLotteryManager.sol`
 - `contracts/utilities/messaging/CreatorShareOFT.sol`
 - `contracts/utilities/messaging/OVaultHubComposer.sol`
 - `contracts/utilities/vesting/CreatorLinearVesting.sol`
-- `contracts/utilities/routers/PayoutRouter.sol`
+- `contracts/utilities/routers/CreatorPayoutRouter.sol`
 - `contracts/utilities/oracles/CreatorOracle.sol`
 - `contracts/utilities/bridge/SolanaBridgeAdapter.sol`
 - `contracts/vault/strategies/ERC4626StrategyAdapter.sol`

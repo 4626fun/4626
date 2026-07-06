@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {LotteryManager4626} from "@4626/lottery/manager/4626LotteryManager.sol";
+import {LotteryManager4626} from "@4626/shared/lottery/manager/4626LotteryManager.sol";
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
@@ -191,7 +191,7 @@ contract MockBoostManagerPauseGuards {
     }
 }
 
-contract MockVaultGaugeVotingPauseGuards {
+contract Mockve4626GaugeVotingPauseGuards {
     mapping(address => uint256) public boostPPMByVault;
 
     function setGaugeBoostPPM(address vault, uint256 nextBoostPPM) external {
@@ -219,7 +219,7 @@ contract LotteryManager4626PauseGuardsTest is Test {
     MockGaugeControllerPauseGuards internal gauge;
     MockLocalVrfConsumerPauseGuards internal localVrfConsumer;
     MockBoostManagerPauseGuards internal boostManager;
-    MockVaultGaugeVotingPauseGuards internal vaultGaugeVoting;
+    Mockve4626GaugeVotingPauseGuards internal vaultGaugeVoting;
     MockShareTokenPauseGuards internal shareToken;
     MockVe4626PauseGuards internal ve4626;
 
@@ -245,7 +245,7 @@ contract LotteryManager4626PauseGuardsTest is Test {
         gauge = new MockGaugeControllerPauseGuards();
         localVrfConsumer = new MockLocalVrfConsumerPauseGuards();
         boostManager = new MockBoostManagerPauseGuards();
-        vaultGaugeVoting = new MockVaultGaugeVotingPauseGuards();
+        vaultGaugeVoting = new Mockve4626GaugeVotingPauseGuards();
         shareToken = new MockShareTokenPauseGuards();
         shareOFT = address(shareToken);
         ve4626 = new MockVe4626PauseGuards();
@@ -265,7 +265,7 @@ contract LotteryManager4626PauseGuardsTest is Test {
         lotteryManager.setLocalVRFConsumer(address(localVrfConsumer));
         lotteryManager.setUseLocalVRF(true);
         lotteryManager.setBoostManager(address(boostManager));
-        lotteryManager.setVaultGaugeVoting(address(vaultGaugeVoting));
+        lotteryManager.setVe4626GaugeVoting(address(vaultGaugeVoting));
         lotteryManager.setAuthorizedRemoteOFT(SRC_EID, SRC_SENDER, true);
         vm.stopPrank();
     }

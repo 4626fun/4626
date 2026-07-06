@@ -3,12 +3,12 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
 import "forge-std/Test.sol";
-import "@4626/deploy/batchers/StrategyDeploymentBatcher.sol";
+import "@4626/shared/deploy/batchers/StrategyDeploymentBatcher.sol";
 import {
     CreatorCharmStrategyFactory,
     AjnaERC4626StrategyFactory
-} from "@4626/deploy/batchers/StrategyDeploymentFactories.sol";
-import "@4626/strategies/univ3/CreatorCharmStrategy.sol";
+} from "@4626/shared/deploy/batchers/StrategyDeploymentFactories.sol";
+import "@4626/shared/strategies/univ3/CreatorCharmStrategy.sol";
 
 /**
  * @title TestAAStrategyDeploy

@@ -123,7 +123,7 @@ A dedicated KPR workflow runs every 30 minutes to verify the full fee pipeline:
 |-------|------|----------|
 | **creatorCoinPayoutRecipient** | Creator Coin `payoutRecipient()` matches configured lane mode (`payout_router` or `gauge`) | Critical |
 | **tradeFeeCollector** | ShareOFT `gaugeController()` matches expected collector (typically gauge) | Critical |
-| **Router Mode Wiring** | In `payout_router` mode, `PayoutRouter.burnStream()` must match expected burn stream and keeper should be configured | Critical/Warning |
+| **Router Mode Wiring** | In `payout_router` mode, `CreatorPayoutRouter.burnStream()` must match expected burn stream and keeper should be configured | Critical/Warning |
 | **BPS Config** | `burnShareBps + lotteryShareBps + creatorShareBps + protocolShareBps == 10000` | Critical |
 | **Creator Treasury Guard** | If `creatorShareBps > 0`, `creatorTreasury` must be non-zero | Critical |
 | **Vault Wiring** | GaugeController's `vault()` matches registered vault | Critical |

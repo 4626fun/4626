@@ -2,11 +2,11 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {CreatorLPManager} from "@4626/strategies/univ4/CreatorLPManager.sol";
-import {ConcentratedStrategy} from "@4626/strategies/univ4/ConcentratedStrategy.sol";
-import {LimitOrderStrategy} from "@4626/strategies/univ4/LimitOrderStrategy.sol";
-import {FullRangeStrategy} from "@4626/strategies/univ4/FullRangeStrategy.sol";
-import {ApprovedV4HooksRegistry} from "@4626/strategies/univ4/ApprovedV4HooksRegistry.sol";
+import {CreatorLPManager} from "@4626/shared/strategies/univ4/CreatorLPManager.sol";
+import {ConcentratedStrategy} from "@4626/shared/strategies/univ4/ConcentratedStrategy.sol";
+import {LimitOrderStrategy} from "@4626/shared/strategies/univ4/LimitOrderStrategy.sol";
+import {FullRangeStrategy} from "@4626/shared/strategies/univ4/FullRangeStrategy.sol";
+import {ApprovedV4HooksRegistry} from "@4626/shared/strategies/univ4/ApprovedV4HooksRegistry.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";

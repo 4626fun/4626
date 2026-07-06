@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {LimitOrderStrategy, LimitOrder} from "@4626/strategies/univ4/LimitOrderStrategy.sol";
+import {LimitOrderStrategy, LimitOrder} from "@4626/shared/strategies/univ4/LimitOrderStrategy.sol";
 
 contract ERC20MockForLimitOrderBoundary {
     string public name;

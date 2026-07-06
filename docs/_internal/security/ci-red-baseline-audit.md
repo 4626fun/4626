@@ -31,7 +31,7 @@ Resolution notes:
 
 - Added missing Base-chain fixture setup and LayerZero peer setup where tests relied on Base-only guards.
 - Bootstrapped CreatorOracle fixtures against the current owner-only first-price invariant and updated stale broadcast/ring-buffer assumptions.
-- Updated VaultGaugeVoting tests to match the no-votes-no-boost invariant.
+- Updated ve4626GaugeVoting tests to match the no-votes-no-boost invariant.
 - Fixed real wrapper cooldown coverage for advanced `wrap()` / `unwrap()` paths.
 - Fixed hostile strategy withdrawal accounting so negative idle-balance deltas increase the remaining deficit before the queue tries the next strategy.
 - Updated M09 and reentrancy harness expectations to match EVM rollback semantics.
@@ -63,10 +63,10 @@ Tests have `setUp()` that asserts the test EVM is on Base mainnet (`block.chaini
 
 **Fix:** investigate. M08/M09 are non-trivial — they look like real product/test drift that needs a Solidity dev pass. Recommend a dedicated PR.
 
-### D. VaultGaugeVoting probability-boost cap (2)
+### D. ve4626GaugeVoting probability-boost cap (2)
 Both fail with `0 != 35000` and `0 != 13884`. Looks like the boost calculation now returns 0 for the equal-split / no-votes cases (likely a guard-clause regression).
 
-**Fix:** look at recent edits to `VaultGaugeVoting.sol` — probably a 1-line gate that needs to be relaxed or a fixture fix.
+**Fix:** look at recent edits to `ve4626GaugeVoting.sol` — probably a 1-line gate that needs to be relaxed or a fixture fix.
 
 ### E. HostileWithdraw fuzz counterexamples (4)
 - `testFuzz_coinBalance_syncedAfterHostileLeg` — counterexample `args=[6990]` → `InsufficientBalance()`
@@ -130,7 +130,7 @@ Histogram by detector:
 Most of these are likely false positives in this codebase based on prior reviews:
 
 - **uninitialized-state (60)** — almost always immutables / constants Slither can't statically resolve, or storage slots that get bootstrapped via `initialize()` in proxy patterns. Audit each, then add a `// slither-disable-next-line uninitialized-state` with a 1-sentence justification.
-- **reentrancy-balance / reentrancy-eth (32)** — the codebase uses OpenZeppelin `ReentrancyGuard`/`nonReentrant` extensively (e.g., `VaultShareBurnStream`, `CCALaunchStrategy`, `CreatorVRFConsumerV2_5`). Slither can't always see across the modifier. Suppress with rationale when `nonReentrant` is present; investigate otherwise.
+- **reentrancy-balance / reentrancy-eth (32)** — the codebase uses OpenZeppelin `ReentrancyGuard`/`nonReentrant` extensively (e.g., `CreatorVaultShareBurnStream`, `CCALaunchStrategy`, `CreatorVRFConsumerV2_5`). Slither can't always see across the modifier. Suppress with rationale when `nonReentrant` is present; investigate otherwise.
 - **incorrect-return / incorrect-shift / incorrect-exp** — these are usually real bugs when they appear; need per-occurrence triage.
 - **weak-prng (3)** — VRF callbacks; suppress (the entropy comes from Chainlink, not from `block.timestamp`).
 - **controlled-delegatecall (3)** — multicall patterns or EIP-7702-ish flows; verify the target is bounded by access control.

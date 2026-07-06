@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 
 import {DeployAlfaCreatorKeyLPFactory} from "alfaclub/contracts/script/DeployAlfaCreatorKeyLPFactory.s.sol";
-import {AlfaCreatorKeyLPFactory} from "@4626/alfaclub/AlfaCreatorKeyLPFactory.sol";
+import {AlfaCreatorKeyLPFactory} from "@4626/other/alfaclub/AlfaCreatorKeyLPFactory.sol";
 
 /// @notice Smoke test for the `AlfaCreatorKeyLPFactory` deploy script.
 /// @dev    Runs the script in-process (no `--broadcast`) and asserts the
