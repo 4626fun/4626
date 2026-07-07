@@ -40,6 +40,9 @@ export function waitlistChatBlockedMessage(params: {
     return 'Waitlist chat status is temporarily unavailable. Retry in a moment.'
   }
   if (params.joinBlockedReason === 'embedded_owner_not_installed') {
+    if (params.connectTrack === 'privy-owner-install') {
+      return 'Enable 4626 signing on your 4626 smart wallet to join waitlist chat.'
+    }
     return 'Enable 4626 signing on your Zora smart wallet to join waitlist chat.'
   }
   if (

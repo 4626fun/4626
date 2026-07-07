@@ -156,7 +156,7 @@ Healthy runs should generally show:
 ### `chainlinkFeed` is zero
 
 - ETH/USD leg is disabled for V4-chainlink-derived updates.
-- Set a valid feed before relying on `updateCreatorPriceFromTWAP`.
+- Set a valid feed before relying on `updateAssetPriceFromTWAP`.
 
 ### Both `v4PoolConfigured` and `v3PoolConfigured` are false
 

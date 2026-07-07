@@ -99,7 +99,7 @@ describe('keepr solana price monitor dynamic config', () => {
     expect(readContractMock).toHaveBeenCalledWith(
       expect.objectContaining({
         address: '0xcccccccccccccccccccccccccccccccccccccccc',
-        functionName: 'creatorPriceUSD',
+        functionName: 'assetPriceUSD',
       }),
     );
     expect(result.basePriceUsd).toBe('0.000000');
@@ -114,7 +114,7 @@ describe('keepr solana price monitor dynamic config', () => {
     expect(readContractMock).toHaveBeenCalledWith(
       expect.objectContaining({
         address: '0x8C044aeF10d05bcC53912869db89f6e1f37bC6fC',
-        functionName: 'creatorPriceUSD',
+        functionName: 'assetPriceUSD',
       }),
     );
   });

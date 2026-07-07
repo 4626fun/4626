@@ -5,7 +5,7 @@ pragma solidity ^0.8.20;
  * @title ILPStrategy
  * @author 0xakita.eth
  * @notice Interface for LP strategy adapters.
- * @dev Implemented by strategies used by `CreatorLPManager`.
+ * @dev Implemented by strategies used by lane LP managers (e.g. `CreatorLPManager`).
  */
 interface ILPStrategy {
     // =================================
@@ -24,26 +24,26 @@ interface ILPStrategy {
 
     /**
      * @notice Deposit tokens and create/add to LP position
-     * @param creatorCoinAmount Amount of creator coin to deposit
+     * @param assetAmount Amount of asset coin to deposit
      * @param pairedAmount Amount of paired token (WETH) to deposit
      * @return liquidity Amount of liquidity minted/added
      */
-    function deposit(uint256 creatorCoinAmount, uint256 pairedAmount) external returns (uint256 liquidity);
+    function deposit(uint256 assetAmount, uint256 pairedAmount) external returns (uint256 liquidity);
 
     /**
      * @notice Withdraw liquidity from position
      * @param liquidity Amount of liquidity to withdraw
-     * @return creatorCoinAmount Amount of creator coin returned
+     * @return assetAmount Amount of asset coin returned
      * @return pairedAmount Amount of paired token returned
      */
-    function withdraw(uint256 liquidity) external returns (uint256 creatorCoinAmount, uint256 pairedAmount);
+    function withdraw(uint256 liquidity) external returns (uint256 assetAmount, uint256 pairedAmount);
 
     /**
      * @notice Withdraw all liquidity from position
-     * @return creatorCoinAmount Total creator coin withdrawn
+     * @return assetAmount Total asset coin withdrawn
      * @return pairedAmount Total paired token withdrawn
      */
-    function withdrawAll() external returns (uint256 creatorCoinAmount, uint256 pairedAmount);
+    function withdrawAll() external returns (uint256 assetAmount, uint256 pairedAmount);
 
     /**
      * @notice Rebalance the LP position
@@ -59,10 +59,10 @@ interface ILPStrategy {
 
     /**
      * @notice Get total value held in the strategy
-     * @return creatorCoinValue Value in creator coin terms
+     * @return assetValue Value in asset coin terms
      * @return pairedValue Value in paired token terms
      */
-    function getTotalValue() external view returns (uint256 creatorCoinValue, uint256 pairedValue);
+    function getTotalValue() external view returns (uint256 assetValue, uint256 pairedValue);
 
     /**
      * @notice Get current liquidity in position

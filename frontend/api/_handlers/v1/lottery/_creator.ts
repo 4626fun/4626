@@ -102,7 +102,7 @@ const VAULT_ABI = [
 const ORACLE_ABI = [
   {
     type: 'function',
-    name: 'getCreatorPrice',
+    name: 'getAssetPrice',
     stateMutability: 'view',
     inputs: [],
     outputs: [{ type: 'int256' }, { type: 'uint256' }],
@@ -193,7 +193,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           client.readContract({
             address: oracleAddr as any,
             abi: ORACLE_ABI,
-            functionName: 'getCreatorPrice',
+            functionName: 'getAssetPrice',
           }).catch(() => null),
         ])
         const priceUsd1e18 = BigInt((priceResult as any)?.[0] ?? 0n)

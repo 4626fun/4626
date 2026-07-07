@@ -64,7 +64,7 @@ export const ORACLE_STALENESS_THRESHOLD = 1_800; // 30 min
 /** Price delta (bps) that triggers a cross-chain broadcast */
 export const ORACLE_BROADCAST_DELTA_BPS = 200; // 2 %
 
-/** TWAP duration passed to updateCreatorPriceFromTWAP */
+/** TWAP duration passed to updateAssetPriceFromTWAP */
 export const TWAP_DURATION = 1_800; // 30 min
 
 /** TWAP duration for Ajna bucket suggestions */
@@ -176,8 +176,8 @@ export const VAULT_ABI = [
 
 export const ORACLE_ABI = [
   // Read
-  { type: 'function', name: 'creatorPriceUSD', inputs: [], outputs: [{ type: 'int256' }], stateMutability: 'view' },
-  { type: 'function', name: 'creatorPriceTimestamp', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
+  { type: 'function', name: 'assetPriceUSD', inputs: [], outputs: [{ type: 'int256' }], stateMutability: 'view' },
+  { type: 'function', name: 'assetPriceTimestamp', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
   { type: 'function', name: 'isPriceFresh', inputs: [], outputs: [{ type: 'bool' }], stateMutability: 'view' },
   { type: 'function', name: 'v4PoolConfigured', inputs: [], outputs: [{ type: 'bool' }], stateMutability: 'view' },
   { type: 'function', name: 'v3PoolConfigured', inputs: [], outputs: [{ type: 'bool' }], stateMutability: 'view' },
@@ -190,14 +190,14 @@ export const ORACLE_ABI = [
   // Write
   {
     type: 'function',
-    name: 'updateCreatorPriceFromTWAP',
+    name: 'updateAssetPriceFromTWAP',
     inputs: [{ name: 'twapDuration', type: 'uint32' }],
     outputs: [],
     stateMutability: 'nonpayable',
   },
   {
     type: 'function',
-    name: 'broadcastCreatorPrice',
+    name: 'broadcastAssetPrice',
     inputs: [
       { name: 'dstEids', type: 'uint32[]' },
       { name: 'options', type: 'bytes' },

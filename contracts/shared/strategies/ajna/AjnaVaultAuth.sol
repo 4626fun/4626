@@ -8,7 +8,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
  * @title AjnaVaultAuth
  * @notice Policy hub for the inner Ajna ERC-4626 vault.
  * @dev Keeps the role and configuration surface separate from the vault so the
- *      outer CreatorOVault integration can swap operators without redeploying
+ *      outer lane-vault integration can swap operators without redeploying
  *      strategy logic.
  */
 contract AjnaVaultAuth {

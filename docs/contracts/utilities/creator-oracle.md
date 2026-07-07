@@ -21,14 +21,14 @@ The CreatorOracle:
 ### Price Queries
 
 ```solidity
-// Get creator token price in USD
-function getCreatorPrice() external view returns (int256 price, uint256 timestamp);
+// Get creator token (vault asset) price in USD — lane-neutral IOracle4626 selector
+function getAssetPrice() external view returns (int256 price, uint256 timestamp);
 
 // Get ETH price in USD
 function getEthPrice() external view returns (int256 price, uint256 timestamp);
 
-// Get creator token price in ETH (TWAP)
-function getCreatorEthTWAP(uint32 duration) external view returns (uint256 price);
+// Get creator token price in ETH (TWAP) — lane-neutral IOracle4626 selector
+function getAssetEthTWAP(uint32 duration) external view returns (uint256 price);
 
 // Check if price is fresh
 function isPriceFresh() external view returns (bool);

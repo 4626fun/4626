@@ -1,6 +1,6 @@
 {
   "release": "v1.16.0",
-  "generatedAt": "2026-07-07T13:38:58Z",
+  "generatedAt": "2026-07-07T15:20:25Z",
   "chain": "base",
   "chainId": 8453,
   "contracts": {
@@ -15,13 +15,13 @@
       "creationBytecodeBytes": 4665
     },
     "LotteryManager4626": {
-      "creationBytecodeHash": "0x7ce38fcd61437150375b1122cf65c2906218266f7fd79c8b7f2309008fa3dabe",
-      "codeId": "0x7ce38fcd61437150375b1122cf65c2906218266f7fd79c8b7f2309008fa3dabe",
+      "creationBytecodeHash": "0xf3c0f039722006eb6946db56f0376c7554045c3ad9ececd2a10dc310fbe4505e",
+      "codeId": "0xf3c0f039722006eb6946db56f0376c7554045c3ad9ececd2a10dc310fbe4505e",
       "creationBytecodeBytes": 41449
     },
     "VRFConsumer4626": {
-      "creationBytecodeHash": "0xe901d0e832168c98ac220d6263e8b82b03946d8b682e793dfea4c75c7f108dff",
-      "codeId": "0xe901d0e832168c98ac220d6263e8b82b03946d8b682e793dfea4c75c7f108dff",
+      "creationBytecodeHash": "0x94b30faf2b672ea2e32b2f1bde4c46f27dd28c2b374b5110f4207ee09809b2b8",
+      "codeId": "0x94b30faf2b672ea2e32b2f1bde4c46f27dd28c2b374b5110f4207ee09809b2b8",
       "creationBytecodeBytes": 21593
     },
     "VaultActivationBatcher": {
@@ -45,9 +45,9 @@
       "creationBytecodeBytes": 1719
     },
     "CreatorOVaultCoreModule": {
-      "creationBytecodeHash": "0xf770452bcce69d63efa993e5c491f447a8f4b2270a65e6e0c04ef67083e976dd",
-      "codeId": "0xf770452bcce69d63efa993e5c491f447a8f4b2270a65e6e0c04ef67083e976dd",
-      "creationBytecodeBytes": 20579
+      "creationBytecodeHash": "0x4aac7d7836ca1f21a762f7c9c9d67bb03755c7e8c179251f843710022c7bd749",
+      "codeId": "0x4aac7d7836ca1f21a762f7c9c9d67bb03755c7e8c179251f843710022c7bd749",
+      "creationBytecodeBytes": 20360
     },
     "OVaultStrategiesModule": {
       "creationBytecodeHash": "0xa0f5d11529e26e495b9dfca2c3ff4d42d88fffced3569a102dce0bc7f820af4e",
@@ -80,19 +80,19 @@
       "creationBytecodeBytes": 543
     },
     "CreatorGaugeController": {
-      "creationBytecodeHash": "0x80e7b266e28ce28bfd46e00440833085cb48ce7d6909f157921807f1f01892eb",
-      "codeId": "0x80e7b266e28ce28bfd46e00440833085cb48ce7d6909f157921807f1f01892eb",
+      "creationBytecodeHash": "0xdea9a6e465db0d701244a82e0c0f01dc6cb0f614f085d2b370e85a9c0e14617e",
+      "codeId": "0xdea9a6e465db0d701244a82e0c0f01dc6cb0f614f085d2b370e85a9c0e14617e",
       "creationBytecodeBytes": 14068
     },
     "CCALaunchStrategy": {
-      "creationBytecodeHash": "0xaf9ed0918949b3b2366d3248dae769f7bdee939b4ab82eb6443357242779ddd9",
-      "codeId": "0xaf9ed0918949b3b2366d3248dae769f7bdee939b4ab82eb6443357242779ddd9",
+      "creationBytecodeHash": "0x6b349a97e6d4d345cb413fcd93db34349311ee1a003ff704072db8231e7a8b73",
+      "codeId": "0x6b349a97e6d4d345cb413fcd93db34349311ee1a003ff704072db8231e7a8b73",
       "creationBytecodeBytes": 37734
     },
     "CreatorOracle": {
-      "creationBytecodeHash": "0x245245b097192c7807dd1dbd16036e65dbf5c9b328f3d0cb050a377eb3195cae",
-      "codeId": "0x245245b097192c7807dd1dbd16036e65dbf5c9b328f3d0cb050a377eb3195cae",
-      "creationBytecodeBytes": 24737
+      "creationBytecodeHash": "0x8e9917490b0e59245733872756f214bf06c6ba9aaf6a2318afdd8539f35ecea7",
+      "codeId": "0x8e9917490b0e59245733872756f214bf06c6ba9aaf6a2318afdd8539f35ecea7",
+      "creationBytecodeBytes": 24754
     },
     "CreatorPayoutRouter": {
       "creationBytecodeHash": "0x473b1d705465c3cd51e7a5d78fd70d596fd8fad8d910d6d93a084eb3ec198d8d",
@@ -110,8 +110,8 @@
       "creationBytecodeBytes": 1770
     },
     "CharmStrategy4626": {
-      "creationBytecodeHash": "0x06578466ad5cb018ab71c2e8b2d31985f74d7eefa739373bef65236520eb85ee",
-      "codeId": "0x06578466ad5cb018ab71c2e8b2d31985f74d7eefa739373bef65236520eb85ee",
+      "creationBytecodeHash": "0xdc9d3ffb1d4fa970a859f86fab22c224b89e67f6b0b8f2c1635382f0b16420ae",
+      "codeId": "0xdc9d3ffb1d4fa970a859f86fab22c224b89e67f6b0b8f2c1635382f0b16420ae",
       "creationBytecodeBytes": 23768
     },
     "AjnaVaultAuth": {

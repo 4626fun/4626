@@ -5,12 +5,8 @@ import { base } from 'viem/chains'
 
 import { resolveBaseAppInviteUrl } from '../onboarding/baseAppInvite.js'
 import { isOwner } from './coinbaseSmartWalletOwner.js'
-import {
-  resolveExecutionTrack,
-  summarizeBaseSubAccount,
-  type BaseSubAccountSummary,
-  type ExecutionTrack,
-} from './executionTrack.js'
+import { resolveExecutionTrack, summarizeBaseSubAccount, type BaseSubAccountSummary, type ExecutionTrack } from './executionTrack.js'
+import { resolveSyncedCanonicalSource } from './canonicalSource.js'
 import { sanitizePersistedSubAccountAddress } from './sanitizeBaseSubAccount.js'
 import { resolveServerBaseRpcUrls } from '../onchain/baseRpcUrl.js'
 import { ensureWaitlistSchema } from '../onboarding/waitlistSchema.js'
@@ -492,9 +488,11 @@ export async function resolveCanonicalCsw(params: {
 
   const syncedCanonical = normalizeAddress(syncResult?.canonicalSmartWallet?.address ?? null)
   const syncedCanonicalSource = syncedCanonical
-    ? syncResult?.canonicalSmartWallet?.provider === 'coinbase_wallet'
-      ? 'base_account'
-      : 'wallet_sync'
+    ? resolveSyncedCanonicalSource({
+        privyUser,
+        canonicalSmartWallet: syncResult?.canonicalSmartWallet ?? null,
+        persistedCanonicalSource: persisted?.canonicalSource ?? null,
+      })
     : null
 
   // Once a canonical CSW is persisted, it remains the product source of truth

@@ -24,10 +24,10 @@ echo "Generating bytecode manifest → deployments/base/${RELEASE_TAG}-bytecode-
 forge build --skip test --skip script >/dev/null
 
 contracts=(
-  "CreatorRegistry"
+  "Registry4626"
   "OVaultFactory4626"
-  "CreatorLotteryManager"
-  "CreatorVRFConsumerV2_5"
+  "LotteryManager4626"
+  "VRFConsumer4626"
   "VaultActivationBatcher"
   "SolanaBridgeAdapter"
   "UniversalBytecodeStoreV2"

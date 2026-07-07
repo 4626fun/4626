@@ -91,7 +91,7 @@ interface IVaultTelemetry {
  *
  * @dev USE CASES:
  *      1. Initial ■AKITA token launch - fair price discovery
- *      2. Creator token fundraise - no sniping, early participants rewarded
+ *      2. Lane token fundraise - no sniping, early participants rewarded
  *      3. Periodic fee auctions - sell accumulated fees fairly
  *
  * @dev WHY CCA?
@@ -291,7 +291,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         address indexed auction,
         uint256 floorPriceQ96,
         uint256 tickSpacingQ96,
-        uint256 creatorUsdPrice,
+        uint256 assetUsdPrice,
         uint256 ethUsdPrice
     );
 
@@ -329,8 +329,8 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     error NotOperator(address caller, address expected);
     error LaunchOracleNotConfigured();
     error UnsupportedLaunchCurrency(address currency);
-    error LaunchOracleInvalidPrice(int256 creatorUsdPrice, int256 ethUsdPrice);
-    error LaunchOracleStale(uint256 creatorTimestamp, uint256 ethTimestamp, uint64 maxAge, uint256 currentTimestamp);
+    error LaunchOracleInvalidPrice(int256 assetUsdPrice, int256 ethUsdPrice);
+    error LaunchOracleStale(uint256 assetTimestamp, uint256 ethTimestamp, uint64 maxAge, uint256 currentTimestamp);
     error LaunchFloorTooLow(uint256 rawFloorPriceQ96, uint256 tickSpacingQ96);
     error SimpleLaunchDisabled();
     error ZeroAddress();
@@ -490,7 +490,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         // Strict launch policy: always use the strategy-owned schedule so
         // callers cannot accidentally deploy unsafe issuance curves.
         bytes memory auctionSteps = _createUniswapSafeDefaultSteps(defaultDuration);
-        (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 creatorUsdPrice, uint256 ethUsdPrice) =
+        (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 assetUsdPrice, uint256 ethUsdPrice) =
             _deriveLaunchPricing();
 
         // Build auction parameters
@@ -541,7 +541,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         _setPhase(block.number < startBlock ? LifecyclePhase.AuctionScheduled : LifecyclePhase.AuctionLive);
 
         emit AuctionCreated(auction, address(auctionToken), amount, startBlock, endBlock);
-        emit LaunchPricingResolved(auction, floorPriceQ96, tickSpacingQ96, creatorUsdPrice, ethUsdPrice);
+        emit LaunchPricingResolved(auction, floorPriceQ96, tickSpacingQ96, assetUsdPrice, ethUsdPrice);
 
         // FIX: AUDIT-2026-07-01-L06 — trade fee recipient is immutable after first launch.
         (bool locked,) = _configModule.delegatecall(abi.encodeWithSignature("lockFeeRecipient()"));
@@ -786,8 +786,8 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         PoolKey memory poolKey = _buildPoolKey();
 
         // Configure oracle (Chainlink-style price uses V4 TWAP × Chainlink ETH/USD)
-        bool creatorIsToken0 = Currency.unwrap(poolKey.currency0) == address(auctionToken);
-        IOracle4626(oracle).setV4Pool(address(poolManager), poolKey, creatorIsToken0);
+        bool assetIsToken0 = Currency.unwrap(poolKey.currency0) == address(auctionToken);
+        IOracle4626(oracle).setV4Pool(address(poolManager), poolKey, assetIsToken0);
 
         emit V4PoolConfigured(oracle, Currency.unwrap(poolKey.currency0), Currency.unwrap(poolKey.currency1));
     }
@@ -961,7 +961,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     function _deriveLaunchPricing()
         internal
         view
-        returns (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 creatorUsdPrice, uint256 ethUsdPrice)
+        returns (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 assetUsdPrice, uint256 ethUsdPrice)
     {
         return _encodingHelper.deriveLaunchPricing(
             oracle, currency, launchOracleMaxAge, launchDiscountBps, launchTickSpacingBps, block.timestamp
@@ -1177,7 +1177,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     function previewLaunchPricing()
         external
         view
-        returns (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 creatorUsdPrice, uint256 ethUsdPrice)
+        returns (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 assetUsdPrice, uint256 ethUsdPrice)
     {
         return _deriveLaunchPricing();
     }

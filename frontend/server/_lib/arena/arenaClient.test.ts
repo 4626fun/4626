@@ -5,7 +5,9 @@ import { resolve } from 'node:path'
 
 import type { ArenaConfig } from './arenaConfig.js'
 import {
+  formatCloseTradeSummary,
   parseAcpAgentCreateOutput,
+  parseTradeFillFromOutput,
   runArenaActivateUnifiedAccount,
   runArenaAddApiWallet,
   runArenaCreateAgent,
@@ -96,6 +98,57 @@ describe('arenaClient trade guardrails', () => {
   it('builds v2 flag-style close args via tsx', async () => {
     const result = await runArenaTrade({ action: 'close', pair: 'xyz:GOLD' }, mockConfig({ dryRun: true }))
     expect(result.run?.args).toEqual(['tsx', 'scripts/trade.ts', 'close', '--pair', 'xyz:GOLD'])
+  })
+
+  it('parses the exit fill from the dgclaw close order response', () => {
+    const stdout = JSON.stringify({
+      status: 'ok',
+      response: {
+        type: 'order',
+        data: { statuses: [{ filled: { totalSz: '0.00017', avgPx: '63898.0', oid: 489994283102 } }] },
+      },
+    })
+    expect(parseTradeFillFromOutput(stdout)).toEqual({ totalSz: 0.00017, avgPx: 63898 })
+    expect(parseTradeFillFromOutput('Closing BTC position (full)')).toBeNull()
+    expect(parseTradeFillFromOutput('')).toBeNull()
+  })
+
+  it('formats a close summary with entry, exit, and PnL', () => {
+    const summary = formatCloseTradeSummary({
+      pair: 'BTC',
+      partial: false,
+      snapshot: { szi: -0.00017, entryPx: 63898, leverage: 5 },
+      fill: { totalSz: 0.00017, avgPx: 63400 },
+    })
+    expect(summary).toContain('Closed BTC short')
+    expect(summary).toContain('Entry $63,898 → Exit $63,400')
+    expect(summary).toContain('+$0.0847')
+    expect(summary).toContain('% on margin')
+
+    // long side flips the PnL sign
+    const losingLong = formatCloseTradeSummary({
+      pair: 'ETH',
+      partial: true,
+      snapshot: { szi: 0.02, entryPx: 2500, leverage: null },
+      fill: { totalSz: 0.01, avgPx: 2450 },
+    })
+    expect(losingLong).toContain('Partially closed ETH long')
+    expect(losingLong).toContain('-$0.50')
+
+    // no fill parsed -> caller falls back to the plain submitted message
+    expect(
+      formatCloseTradeSummary({ pair: 'BTC', partial: false, snapshot: null, fill: null }),
+    ).toBeNull()
+
+    // fill without a snapshot still reports the exit
+    expect(
+      formatCloseTradeSummary({
+        pair: 'BTC',
+        partial: false,
+        snapshot: null,
+        fill: { totalSz: 0.001, avgPx: 64000 },
+      }),
+    ).toContain('Closed BTC: 0.001 @ $64,000')
   })
 
   it('passes strategy subaccount args through to trade.ts', async () => {

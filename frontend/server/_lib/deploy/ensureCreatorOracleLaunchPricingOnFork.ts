@@ -15,7 +15,7 @@ export const DEFAULT_DRY_RUN_CREATOR_ORACLE_USD_PRICE = 10_000_000_000_000_000n
 const CREATOR_ORACLE_LAUNCH_ABI = [
   {
     type: 'function',
-    name: 'getCreatorPrice',
+    name: 'getAssetPrice',
     stateMutability: 'view',
     inputs: [],
     outputs: [
@@ -42,7 +42,7 @@ const CREATOR_ORACLE_LAUNCH_ABI = [
   },
   {
     type: 'function',
-    name: 'initializeCreatorPrice',
+    name: 'initializeAssetPrice',
     stateMutability: 'nonpayable',
     inputs: [{ name: '_price', type: 'int256' }],
     outputs: [],
@@ -55,7 +55,7 @@ type OracleReadClient = {
   readContract: (args: {
     address: Address
     abi: typeof CREATOR_ORACLE_LAUNCH_ABI
-    functionName: 'getCreatorPrice' | 'getEthPrice' | 'owner'
+    functionName: 'getAssetPrice' | 'getEthPrice' | 'owner'
     args?: readonly unknown[]
   }) => Promise<unknown>
 }
@@ -149,7 +149,7 @@ export async function ensureCreatorOracleLaunchPricingOnFork(params: {
     params.publicClient.readContract({
       address: oracle,
       abi: CREATOR_ORACLE_LAUNCH_ABI,
-      functionName: 'getCreatorPrice',
+      functionName: 'getAssetPrice',
     }),
     params.publicClient.readContract({
       address: oracle,
@@ -193,7 +193,7 @@ export async function ensureCreatorOracleLaunchPricingOnFork(params: {
 
   const data = encodeFunctionData({
     abi: CREATOR_ORACLE_LAUNCH_ABI,
-    functionName: 'initializeCreatorPrice',
+    functionName: 'initializeAssetPrice',
     args: [price1e18],
   })
 
@@ -205,18 +205,18 @@ export async function ensureCreatorOracleLaunchPricingOnFork(params: {
   })
   const receipt = await params.waitForTransactionReceipt({ hash })
   if (String(receipt?.status ?? '').toLowerCase() === 'reverted') {
-    throw new Error(`initializeCreatorPrice reverted for oracle ${oracle}`)
+    throw new Error(`initializeAssetPrice reverted for oracle ${oracle}`)
   }
 
   const refreshedCreator = readSignedPrice(
     await params.publicClient.readContract({
       address: oracle,
       abi: CREATOR_ORACLE_LAUNCH_ABI,
-      functionName: 'getCreatorPrice',
+      functionName: 'getAssetPrice',
     }),
   )
   if (refreshedCreator <= 0n) {
-    throw new Error(`creator oracle price still unset after initializeCreatorPrice (${oracle})`)
+    throw new Error(`creator oracle price still unset after initializeAssetPrice (${oracle})`)
   }
 
   return {

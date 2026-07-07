@@ -44,7 +44,7 @@ import {V4LiquidityAmounts} from "@4626/shared/libraries/uniswap/V4LiquidityAmou
  *      Prevents flash loan attacks by comparing spot price to time-weighted average
  *
  * @dev INTEGRATION:
- *      - Plugs into CreatorLPManager
+ *      - Plugs into lane-specific LPManager (e.g. CreatorLPManager)
  *      - Most capital efficient but highest maintenance
  */
 
@@ -84,8 +84,8 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
     // STATE
     // =================================
 
-    /// @notice Creator Coin token
-    IERC20 public immutable CREATOR_COIN;
+    /// @notice Lane vault asset token (creator coin or agent token)
+    IERC20 public immutable ASSET;
 
     /// @notice Paired token (WETH)
     IERC20 public immutable PAIRED_TOKEN;
@@ -102,8 +102,8 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
     /// @notice Uniswap V4 pool id (derived from poolKey)
     PoolId public poolId;
 
-    /// @notice True if CREATOR_COIN is currency0 for poolKey
-    bool public creatorIsCurrency0;
+    /// @notice True if ASSET is currency0 for poolKey
+    bool public assetIsCurrency0;
 
     /// @notice Uniswap V4 PositionManager (PosM)
     address public positionManager;
@@ -169,12 +169,12 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
     // EVENTS
     // =================================
 
-    event Deposited(uint256 creatorCoinAmount, uint256 pairedAmount, uint256 liquidity);
-    event Withdrawn(uint256 liquidity, uint256 creatorCoinAmount, uint256 pairedAmount);
+    event Deposited(uint256 assetAmount, uint256 pairedAmount, uint256 liquidity);
+    event Withdrawn(uint256 liquidity, uint256 assetAmount, uint256 pairedAmount);
     event Rebalanced(int24 oldTickLower, int24 oldTickUpper, int24 newTickLower, int24 newTickUpper, int24 tick);
     event Snapshot(int24 tick, uint256 totalAmount0, uint256 totalAmount1, uint256 totalSupply);
     event PoolConfigured(
-        bytes32 poolId, address poolManager, address positionManager, address permit2, bool creatorIsCurrency0
+        bytes32 poolId, address poolManager, address positionManager, address permit2, bool assetIsCurrency0
     );
     event ApprovalsReconfigured(address oldPositionManager, address oldPermit2, address newPositionManager, address newPermit2);
     event ParametersUpdated(
@@ -220,14 +220,14 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
     // CONSTRUCTOR
     // =================================
 
-    constructor(address _creatorCoin, address _pairedToken, address _lpManager, address _owner, address _hookRegistry)
+    constructor(address _asset, address _pairedToken, address _lpManager, address _owner, address _hookRegistry)
         Ownable(_owner)
     {
-        if (_creatorCoin == address(0)) revert ZeroAddress();
+        if (_asset == address(0)) revert ZeroAddress();
         if (_pairedToken == address(0)) revert ZeroAddress();
         if (_hookRegistry == address(0)) revert ZeroAddress();
 
-        CREATOR_COIN = IERC20(_creatorCoin);
+        ASSET = IERC20(_asset);
         PAIRED_TOKEN = IERC20(_pairedToken);
         lpManager = _lpManager;
         hookRegistry = IApprovedV4HooksRegistry(_hookRegistry);
@@ -251,9 +251,9 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         // Validate poolKey currencies match our configured tokens
         address c0 = Currency.unwrap(_poolKey.currency0);
         address c1 = Currency.unwrap(_poolKey.currency1);
-        bool _creatorIsCurrency0 = c0 == address(CREATOR_COIN);
-        if (!((_creatorIsCurrency0 && c1 == address(PAIRED_TOKEN))
-                    || (c0 == address(PAIRED_TOKEN) && c1 == address(CREATOR_COIN)))) revert PoolNotFullyConfigured();
+        bool _assetIsCurrency0 = c0 == address(ASSET);
+        if (!((_assetIsCurrency0 && c1 == address(PAIRED_TOKEN))
+                    || (c0 == address(PAIRED_TOKEN) && c1 == address(ASSET)))) revert PoolNotFullyConfigured();
         if (_poolKey.tickSpacing == 0) revert PoolNotFullyConfigured();
         address hook = address(_poolKey.hooks);
         if (hook == address(0)) revert InvalidHook(hook);
@@ -264,18 +264,18 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         permit2 = _permit2;
         poolKey = _poolKey;
         poolId = _poolKey.toId();
-        creatorIsCurrency0 = _creatorIsCurrency0;
+        assetIsCurrency0 = _assetIsCurrency0;
         tickSpacing = _poolKey.tickSpacing;
 
         // Approvals for PosM: token -> Permit2, then Permit2 -> PosM
-        CREATOR_COIN.forceApprove(_permit2, type(uint256).max);
+        ASSET.forceApprove(_permit2, type(uint256).max);
         PAIRED_TOKEN.forceApprove(_permit2, type(uint256).max);
         IAllowanceTransfer(_permit2)
-            .approve(address(CREATOR_COIN), _positionManager, type(uint160).max, type(uint48).max);
+            .approve(address(ASSET), _positionManager, type(uint160).max, type(uint48).max);
         IAllowanceTransfer(_permit2)
             .approve(address(PAIRED_TOKEN), _positionManager, type(uint160).max, type(uint48).max);
 
-        emit PoolConfigured(PoolId.unwrap(poolId), _poolManager, _positionManager, _permit2, _creatorIsCurrency0);
+        emit PoolConfigured(PoolId.unwrap(poolId), _poolManager, _positionManager, _permit2, _assetIsCurrency0);
     }
 
     /**
@@ -291,19 +291,19 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         address oldPermit2 = permit2;
 
         // Revoke old allowances first so stale pull rights are removed.
-        CREATOR_COIN.forceApprove(oldPermit2, 0);
+        ASSET.forceApprove(oldPermit2, 0);
         PAIRED_TOKEN.forceApprove(oldPermit2, 0);
-        IAllowanceTransfer(oldPermit2).approve(address(CREATOR_COIN), oldPositionManager, 0, 0);
+        IAllowanceTransfer(oldPermit2).approve(address(ASSET), oldPositionManager, 0, 0);
         IAllowanceTransfer(oldPermit2).approve(address(PAIRED_TOKEN), oldPositionManager, 0, 0);
 
         positionManager = _positionManager;
         permit2 = _permit2;
 
         // Re-grant current approval targets.
-        CREATOR_COIN.forceApprove(_permit2, type(uint256).max);
+        ASSET.forceApprove(_permit2, type(uint256).max);
         PAIRED_TOKEN.forceApprove(_permit2, type(uint256).max);
         IAllowanceTransfer(_permit2)
-            .approve(address(CREATOR_COIN), _positionManager, type(uint160).max, type(uint48).max);
+            .approve(address(ASSET), _positionManager, type(uint160).max, type(uint48).max);
         IAllowanceTransfer(_permit2)
             .approve(address(PAIRED_TOKEN), _positionManager, type(uint160).max, type(uint48).max);
 
@@ -352,7 +352,7 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
     /**
      * @notice Deposit liquidity into concentrated position
      */
-    function deposit(uint256 creatorCoinAmount, uint256 pairedAmount)
+    function deposit(uint256 assetAmount, uint256 pairedAmount)
         external
         nonReentrant
         onlyLPManager
@@ -360,11 +360,11 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         returns (uint256 liquidity)
     {
         _requireConfigured();
-        if (creatorCoinAmount == 0 && pairedAmount == 0) revert ZeroAmount();
+        if (assetAmount == 0 && pairedAmount == 0) revert ZeroAmount();
 
         // Pull tokens
-        if (creatorCoinAmount > 0) {
-            CREATOR_COIN.safeTransferFrom(msg.sender, address(this), creatorCoinAmount);
+        if (assetAmount > 0) {
+            ASSET.safeTransferFrom(msg.sender, address(this), assetAmount);
         }
         if (pairedAmount > 0) {
             PAIRED_TOKEN.safeTransferFrom(msg.sender, address(this), pairedAmount);
@@ -383,7 +383,7 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         }
 
         (uint256 amountCurrency0, uint256 amountCurrency1) =
-            creatorIsCurrency0 ? (creatorCoinAmount, pairedAmount) : (pairedAmount, creatorCoinAmount);
+            assetIsCurrency0 ? (assetAmount, pairedAmount) : (pairedAmount, assetAmount);
 
         (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(poolId);
         uint128 liq = LiquidityAmounts.getLiquidityForAmounts(
@@ -410,7 +410,7 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         totalLiquidity += uint256(liq);
         liquidity = uint256(liq);
 
-        emit Deposited(creatorCoinAmount, pairedAmount, liquidity);
+        emit Deposited(assetAmount, pairedAmount, liquidity);
     }
 
     /**
@@ -420,7 +420,7 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         external
         nonReentrant
         onlyLPManager
-        returns (uint256 creatorCoinAmount, uint256 pairedAmount)
+        returns (uint256 assetAmount, uint256 pairedAmount)
     {
         _requireConfigured();
         if (liquidity == 0) revert ZeroAmount();
@@ -428,26 +428,26 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         uint128 liqToRemove = uint128(liquidity);
         if (liqToRemove > position.liquidity) liqToRemove = position.liquidity;
 
-        uint256 balCreatorBefore = CREATOR_COIN.balanceOf(address(this));
+        uint256 balAssetBefore = ASSET.balanceOf(address(this));
         uint256 balPairedBefore = PAIRED_TOKEN.balanceOf(address(this));
 
         _posmDecrease(position.tokenId, liqToRemove);
 
-        creatorCoinAmount = CREATOR_COIN.balanceOf(address(this)) - balCreatorBefore;
+        assetAmount = ASSET.balanceOf(address(this)) - balAssetBefore;
         pairedAmount = PAIRED_TOKEN.balanceOf(address(this)) - balPairedBefore;
 
         position.liquidity -= liqToRemove;
         totalLiquidity -= uint256(liqToRemove);
 
         // Transfer tokens
-        if (creatorCoinAmount > 0) {
-            CREATOR_COIN.safeTransfer(lpManager, creatorCoinAmount);
+        if (assetAmount > 0) {
+            ASSET.safeTransfer(lpManager, assetAmount);
         }
         if (pairedAmount > 0) {
             PAIRED_TOKEN.safeTransfer(lpManager, pairedAmount);
         }
 
-        emit Withdrawn(liquidity, creatorCoinAmount, pairedAmount);
+        emit Withdrawn(liquidity, assetAmount, pairedAmount);
     }
 
     /**
@@ -457,11 +457,11 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         external
         nonReentrant
         onlyLPManager
-        returns (uint256 creatorCoinAmount, uint256 pairedAmount)
+        returns (uint256 assetAmount, uint256 pairedAmount)
     {
         _requireConfigured();
         if (totalLiquidity == 0) return (0, 0);
-        uint256 balCreatorBefore = CREATOR_COIN.balanceOf(address(this));
+        uint256 balAssetBefore = ASSET.balanceOf(address(this));
         uint256 balPairedBefore = PAIRED_TOKEN.balanceOf(address(this));
 
         uint256 tokenId = position.tokenId;
@@ -473,7 +473,7 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         );
         _posmBurn(tokenId, amount0Min, amount1Min);
 
-        creatorCoinAmount = CREATOR_COIN.balanceOf(address(this)) - balCreatorBefore;
+        assetAmount = ASSET.balanceOf(address(this)) - balAssetBefore;
         pairedAmount = PAIRED_TOKEN.balanceOf(address(this)) - balPairedBefore;
 
         uint256 liquidity_ = totalLiquidity;
@@ -482,14 +482,14 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         totalLiquidity = 0;
 
         // Transfer tokens
-        if (creatorCoinAmount > 0) {
-            CREATOR_COIN.safeTransfer(lpManager, creatorCoinAmount);
+        if (assetAmount > 0) {
+            ASSET.safeTransfer(lpManager, assetAmount);
         }
         if (pairedAmount > 0) {
             PAIRED_TOKEN.safeTransfer(lpManager, pairedAmount);
         }
 
-        emit Withdrawn(liquidity_, creatorCoinAmount, pairedAmount);
+        emit Withdrawn(liquidity_, assetAmount, pairedAmount);
     }
 
     /**
@@ -515,7 +515,7 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         int24 oldTickUpper = position.tickUpper;
 
         // Emit snapshot before rebalance
-        uint256 balance0 = CREATOR_COIN.balanceOf(address(this));
+        uint256 balance0 = ASSET.balanceOf(address(this));
         uint256 balance1 = PAIRED_TOKEN.balanceOf(address(this));
         emit Snapshot(currentTick, balance0, balance1, totalLiquidity);
 
@@ -532,11 +532,11 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         _posmBurn(oldTokenId, burnAmount0Min, burnAmount1Min);
 
         // Compute new liquidity from current balances (fees + principal now sit idle on this contract)
-        uint256 creatorBal = CREATOR_COIN.balanceOf(address(this));
+        uint256 assetBal = ASSET.balanceOf(address(this));
         uint256 pairedBal = PAIRED_TOKEN.balanceOf(address(this));
 
         (uint256 amountCurrency0, uint256 amountCurrency1) =
-            creatorIsCurrency0 ? (creatorBal, pairedBal) : (pairedBal, creatorBal);
+            assetIsCurrency0 ? (assetBal, pairedBal) : (pairedBal, assetBal);
         (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(poolId);
         uint128 newLiquidity = LiquidityAmounts.getLiquidityForAmounts(
             sqrtPriceX96,
@@ -611,7 +611,7 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
     /**
      * @notice Get total value
      */
-    function getTotalValue() external view returns (uint256 creatorCoinValue, uint256 pairedValue) {
+    function getTotalValue() external view returns (uint256 assetValue, uint256 pairedValue) {
         if (address(poolManager) != address(0) && PoolId.unwrap(poolId) != bytes32(0) && position.liquidity > 0) {
             (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(poolId);
             (uint256 amount0, uint256 amount1) = V4LiquidityAmounts.getAmountsForLiquidity(
@@ -621,16 +621,16 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
                 position.liquidity
             );
 
-            if (creatorIsCurrency0) {
-                creatorCoinValue += amount0;
+            if (assetIsCurrency0) {
+                assetValue += amount0;
                 pairedValue += amount1;
             } else {
-                creatorCoinValue += amount1;
+                assetValue += amount1;
                 pairedValue += amount0;
             }
         }
 
-        creatorCoinValue += CREATOR_COIN.balanceOf(address(this));
+        assetValue += ASSET.balanceOf(address(this));
         pairedValue += PAIRED_TOKEN.balanceOf(address(this));
     }
 
@@ -865,7 +865,7 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
     }
 
     function _calculateLiquidity(
-        uint256 creatorCoinAmount,
+        uint256 assetAmount,
         uint256 pairedAmount,
         int24, /* tickLower */
         int24 /* tickUpper */
@@ -875,19 +875,19 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         returns (uint256)
     {
         // Simplified - production uses V4 LiquidityAmounts math
-        if (creatorCoinAmount == 0 || pairedAmount == 0) {
-            return creatorCoinAmount + pairedAmount;
+        if (assetAmount == 0 || pairedAmount == 0) {
+            return assetAmount + pairedAmount;
         }
-        return _sqrt(creatorCoinAmount * pairedAmount);
+        return _sqrt(assetAmount * pairedAmount);
     }
 
     function _calculateAmountsForLiquidity(uint256 liquidity)
         internal
         view
-        returns (uint256 creatorCoinAmount, uint256 pairedAmount)
+        returns (uint256 assetAmount, uint256 pairedAmount)
     {
         // Simplified - production queries V4 position
-        creatorCoinAmount = liquidity / 2;
+        assetAmount = liquidity / 2;
         pairedAmount = liquidity / 2;
     }
 
@@ -927,11 +927,11 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
     }
 
     function emergencyWithdraw() external onlyOwner {
-        uint256 creatorBal = CREATOR_COIN.balanceOf(address(this));
+        uint256 assetBal = ASSET.balanceOf(address(this));
         uint256 pairedBal = PAIRED_TOKEN.balanceOf(address(this));
 
-        if (creatorBal > 0) {
-            CREATOR_COIN.safeTransfer(owner(), creatorBal);
+        if (assetBal > 0) {
+            ASSET.safeTransfer(owner(), assetBal);
         }
         if (pairedBal > 0) {
             PAIRED_TOKEN.safeTransfer(owner(), pairedBal);

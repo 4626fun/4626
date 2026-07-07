@@ -12,7 +12,7 @@ On local Anvil/Hardhat fork simulation, `launchDeferredAuction(...)` can revert 
 
 - `0x28e7b618` — `LaunchOracleInvalidPrice(int256 creatorUsdPrice, int256 ethUsdPrice)` from `CCALaunchStrategy`
 
-Typical fork cause: Phase 2 deploys a fresh `CreatorOracle` with **no initialized creator USD price** (`creatorUsdPrice = 0`) while Chainlink ETH/USD is valid. Dry-run seeds `initializeCreatorPrice` on the fork oracle (owner-impersonated) before Phase 4 when strict launch is enabled.
+Typical fork cause: Phase 2 deploys a fresh `CreatorOracle` with **no initialized creator USD price** (`assetPriceUSD = 0`) while Chainlink ETH/USD is valid. Dry-run seeds `initializeAssetPrice` on the fork oracle (owner-impersonated) before Phase 4 when strict launch is enabled.
 
 **Pricing source:** dry-run uses the same market-floor lane as Deploy UI (`computeMarketFloorQuote` → CREATOR/ZORA v4 TWAP + conservative ZORA→ETH, converted to creator USD via oracle `getEthPrice()`). Only when that resolution fails does dry-run fall back to a small default ($0.01 in 1e18 units).
 

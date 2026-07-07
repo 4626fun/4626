@@ -5,7 +5,7 @@ pragma solidity ^0.8.20;
  * @title IStrategy
  * @author 0xakita.eth
  * @notice Interface for 4626 single-asset strategies.
- * @dev Implemented by strategies used by `CreatorOVault`.
+ * @dev Implemented by strategies used by lane vaults (CreatorOVault / AgentOVault).
  */
 interface IStrategy {
     // =================================

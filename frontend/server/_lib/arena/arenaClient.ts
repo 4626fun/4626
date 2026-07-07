@@ -850,6 +850,86 @@ export async function runArenaDepositUsdc(amountUsd: number, config = readArenaC
   return runArenaBridgeToHyperliquid(amountUsd, config)
 }
 
+/** Pre-close snapshot of the position being closed, for the close summary. */
+type ClosePositionSnapshot = {
+  szi: number
+  entryPx: number
+  leverage: number | null
+}
+
+function findPositionSnapshotForPair(positions: unknown[], pair: string): ClosePositionSnapshot | null {
+  const target = pair.trim().toUpperCase()
+  for (const row of positions) {
+    const position = (row as { position?: Record<string, unknown> } | null)?.position
+    if (!position) continue
+    if (String(position.coin ?? '').trim().toUpperCase() !== target) continue
+    const szi = Number.parseFloat(String(position.szi ?? ''))
+    const entryPx = Number.parseFloat(String(position.entryPx ?? ''))
+    if (!Number.isFinite(szi) || szi === 0 || !Number.isFinite(entryPx) || entryPx <= 0) return null
+    const leverageValue = Number.parseFloat(
+      String((position.leverage as Record<string, unknown> | undefined)?.value ?? ''),
+    )
+    return {
+      szi,
+      entryPx,
+      leverage: Number.isFinite(leverageValue) && leverageValue > 0 ? leverageValue : null,
+    }
+  }
+  return null
+}
+
+/** Exit fill parsed from the exchange order response dgclaw prints on close. */
+export function parseTradeFillFromOutput(stdout: string): { totalSz: number; avgPx: number } | null {
+  const sz = /"totalSz"\s*:\s*"?([\d.]+)"?/.exec(stdout)
+  const px = /"avgPx"\s*:\s*"?([\d.]+)"?/.exec(stdout)
+  if (!sz || !px) return null
+  const totalSz = Number.parseFloat(sz[1]!)
+  const avgPx = Number.parseFloat(px[1]!)
+  if (!Number.isFinite(totalSz) || totalSz <= 0 || !Number.isFinite(avgPx) || avgPx <= 0) return null
+  return { totalSz, avgPx }
+}
+
+function formatUsdAmount(value: number): string {
+  const abs = Math.abs(value)
+  const digits = abs >= 1000 ? 0 : abs >= 1 ? 2 : 4
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })
+}
+
+/**
+ * Human close summary: side, size, entry → exit, and realized PnL estimate
+ * (price move on the closed size; excludes funding and fees). Returns null
+ * when there is no exit fill to report — callers fall back to the plain
+ * "Close submitted" message.
+ */
+export function formatCloseTradeSummary(params: {
+  pair: string
+  partial: boolean
+  snapshot: ClosePositionSnapshot | null
+  fill: { totalSz: number; avgPx: number } | null
+}): string | null {
+  const { snapshot, fill } = params
+  if (!fill) return null
+  const closedLabel = params.partial ? 'Partially closed' : 'Closed'
+  if (!snapshot) {
+    return `${closedLabel} ${params.pair}: ${fill.totalSz} @ $${formatUsdAmount(fill.avgPx)}.`
+  }
+  const side = snapshot.szi > 0 ? 'long' : 'short'
+  const pnl =
+    (side === 'long' ? fill.avgPx - snapshot.entryPx : snapshot.entryPx - fill.avgPx) * fill.totalSz
+  const entryNotional = snapshot.entryPx * fill.totalSz
+  const pnlPct = entryNotional > 0 ? (pnl / entryNotional) * 100 : 0
+  const roePct = snapshot.leverage != null ? pnlPct * snapshot.leverage : null
+  const sign = pnl >= 0 ? '+' : '-'
+  return [
+    `${closedLabel} ${params.pair} ${side} — ${fill.totalSz} ${params.pair} (~$${formatUsdAmount(entryNotional)}${snapshot.leverage != null ? ` @ ${snapshot.leverage}x` : ''})`,
+    `Entry $${formatUsdAmount(snapshot.entryPx)} → Exit $${formatUsdAmount(fill.avgPx)}`,
+    `PnL: ${sign}$${formatUsdAmount(Math.abs(pnl))} (${sign}${Math.abs(pnlPct).toFixed(2)}%${roePct != null ? ` · ${sign}${Math.abs(roePct).toFixed(2)}% on margin` : ''})`,
+  ].join('\n')
+}
+
 export async function runArenaTrade(request: ArenaTradeRequest, config = readArenaConfig()): Promise<ArenaOpResult> {
   const baseValidation = ensureArenaEnabled(config)
   if (baseValidation) return baseValidation
@@ -867,6 +947,24 @@ export async function runArenaTrade(request: ArenaTradeRequest, config = readAre
     // Optional sizeUsd makes this a partial reduce-only close (repo-patched
     // dgclaw `close --size`); omitted = full close.
     const closeSizeUsd = parsePositiveNumber(request.sizeUsd ?? 0)
+
+    // Best-effort pre-close snapshot so the reply can show entry vs exit and
+    // PnL instead of a bare "Close submitted". Never blocks the close itself.
+    let closeSnapshot: ClosePositionSnapshot | null = null
+    if (!config.dryRun) {
+      try {
+        const before = await runArenaOpenPositions(config)
+        const positions = Array.isArray(before.details?.positions)
+          ? (before.details.positions as unknown[])
+          : null
+        if (positions) {
+          closeSnapshot = findPositionSnapshotForPair(positions, pairCheck.normalizedPair)
+        }
+      } catch {
+        // summary is optional — proceed with the close
+      }
+    }
+
     const closeArgs = ['close', '--pair', pairCheck.normalizedPair]
     if (closeSizeUsd > 0) closeArgs.push('--size', String(closeSizeUsd))
     if (subaccountAddress) closeArgs.push('--subaccount', subaccountAddress)
@@ -881,10 +979,20 @@ export async function runArenaTrade(request: ArenaTradeRequest, config = readAre
       subaccountAddress,
       ...(closeSizeUsd > 0 ? { partialSizeUsd: closeSizeUsd } : {}),
     })
+    const closeSummary =
+      run.ok && !run.dryRun
+        ? formatCloseTradeSummary({
+            pair: pairCheck.normalizedPair,
+            partial: closeSizeUsd > 0,
+            snapshot: closeSnapshot,
+            fill: parseTradeFillFromOutput(String(run.stdout ?? '')),
+          })
+        : null
     return {
       ok: run.ok,
       message: run.ok
-        ? `${closeSizeUsd > 0 ? 'Partial close' : 'Close'} submitted for ${pairCheck.normalizedPair}.`
+        ? closeSummary ??
+          `${closeSizeUsd > 0 ? 'Partial close' : 'Close'} submitted for ${pairCheck.normalizedPair}.`
         : 'Close trade failed.',
       run,
     }

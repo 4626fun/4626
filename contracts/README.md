@@ -33,7 +33,7 @@ contracts/
 │   ├── revenue/       AgentGaugeController + revenue routing/policy
 │   └── oracles/
 ├── creator/
-│   ├── interfaces/    ICreatorOVault, ICreatorGaugeController, ICreatorOracle, ICreatorOVaultComposer
+│   ├── interfaces/    ICreatorOVault, ICreatorGaugeController, ICreatorOVaultComposer
 │   ├── vault/         (CreatorOVault + core module + CreatorShareOFT)
 │   ├── revenue/
 │   ├── strategies/    CreatorLPManager (V4 LP manager for creator-lane ShareOFT)
@@ -42,7 +42,9 @@ contracts/
     └── alfaclub/
 ```
 
-**Interface placement rule:** `shared/interfaces/` holds only lane-neutral and external-protocol interfaces. Interfaces that describe a lane contract (`ICreatorOVault`, `IAgentGaugeController`, …) live in that lane's `interfaces/` folder — shared infra (batcher, hub composer, strategies) imports them from there. Shared strategies still consume `ICreatorOracle` directly; a lane-neutral oracle interface is a possible future cleanup (the agent lane currently declares its own inline `IAgentOracle`).
+**Interface placement rule:** `shared/interfaces/` holds only lane-neutral and external-protocol interfaces. Interfaces that describe a lane contract (`ICreatorOVault`, `IAgentGaugeController`, …) live in that lane's `interfaces/` folder — shared infra (batcher, hub composer, strategies) imports them from there.
+
+**Oracle interface:** both lane oracles (`CreatorOracle`, `AgentOracle`) implement the lane-neutral `shared/interfaces/oracles/IOracle4626.sol` — `getAssetPrice()`, `getAssetEthTWAP()`, `updateAssetPrice*()`, `assetSymbol()`, etc., where "asset" is the vault's underlying token for that lane (creator coin or agent token). Shared consumers (strategies, `LotteryManager4626`, `VRFConsumer4626`, both gauge controllers) type against `IOracle4626` only. The former `ICreatorOracle` interface, the inline gauge/VRF oracle interfaces, and the creator-named alias functions on `AgentOracle` (`getCreatorPrice`, `creatorPoolKey`, `creatorIsToken0`) were removed in the July 2026 selector rename — this changed oracle/gauge/strategy bytecode, folded into the same v1.16.0 re-seed noted below.
 
 **Naming note:** the lane-shared contracts under `shared/` were renamed from their historical `Creator*` names in July 2026: `CreatorOVaultAdminModule` → `OVaultAdminModule`, `CreatorOVaultStrategiesModule` → `OVaultStrategiesModule`, `CreatorOVaultModuleBase`/`Storage` → `OVaultModuleBase`/`Storage`, `ICreatorOVaultModuleIdentity` → `IOVaultModuleIdentity`, `CreatorOVaultLiquidityLib` → `OVaultLiquidityLib`, `CreatorVaultShareBurnStream` → `VaultShareBurnStream`, `CreatorOImpairmentClaims` → `OVaultImpairmentClaims`, `CreatorORecoveryEscrow` → `OVaultRecoveryEscrow`. Because there were no live vaults at the time, the on-chain identity strings were renamed too: module kinds are now `keccak256("CreatorOVaultModule.core")` (creator lane), `keccak256("AgentOVaultModule.core")` (agent lane), and lane-shared `keccak256("OVaultModule.strategies")` / `keccak256("OVaultModule.admin")`; the storage fingerprint is `keccak256("OVaultModuleStorage.v3")`; the burn-stream CREATE2 salt domain is `"4626:VaultShareBurnStream"` (mirrored in `frontend/shared/deploy/create2Salts.ts`). This changes `CreatorOVault`, module, and `VaultAuxiliaryDeployBatcher` bytecode, so the next deploy epoch must re-seed the `UniversalBytecodeStore` and regenerate bytecode manifests before production deploys.
 

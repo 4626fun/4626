@@ -36,7 +36,7 @@ import {IApprovedV4HooksRegistry} from "@4626/shared/strategies/univ4/ApprovedV4
  *      - This covers all possible prices
  *
  * @dev INTEGRATION:
- *      - Plugs into CreatorLPManager
+ *      - Plugs into lane-specific LPManager (e.g. CreatorLPManager)
  *      - Implements ILPStrategy interface
  */
 
@@ -62,8 +62,8 @@ contract FullRangeStrategy is Ownable, ReentrancyGuard {
     // STATE
     // =================================
 
-    /// @notice Creator Coin token
-    IERC20 public immutable CREATOR_COIN;
+    /// @notice Lane vault asset token (creator coin or agent token)
+    IERC20 public immutable ASSET;
 
     /// @notice Paired token (WETH)
     IERC20 public immutable PAIRED_TOKEN;
@@ -80,8 +80,8 @@ contract FullRangeStrategy is Ownable, ReentrancyGuard {
     /// @notice Uniswap V4 pool id (derived from poolKey)
     PoolId public poolId;
 
-    /// @notice True if CREATOR_COIN is currency0 for poolKey
-    bool public creatorIsCurrency0;
+    /// @notice True if ASSET is currency0 for poolKey
+    bool public assetIsCurrency0;
 
     /// @notice Uniswap V4 PositionManager (PosM)
     address public positionManager;
@@ -108,13 +108,13 @@ contract FullRangeStrategy is Ownable, ReentrancyGuard {
     // EVENTS
     // =================================
 
-    event Deposited(uint256 creatorCoinAmount, uint256 pairedAmount, uint256 liquidity);
-    event Withdrawn(uint256 liquidity, uint256 creatorCoinAmount, uint256 pairedAmount);
+    event Deposited(uint256 assetAmount, uint256 pairedAmount, uint256 liquidity);
+    event Withdrawn(uint256 liquidity, uint256 assetAmount, uint256 pairedAmount);
     event Rebalanced(uint256 timestamp);
     /// @notice FIX: H-15 — fees actually collected from the V4 position
-    event FeesCollected(uint256 creatorCoinAmount, uint256 pairedAmount);
+    event FeesCollected(uint256 assetAmount, uint256 pairedAmount);
     event PoolConfigured(
-        bytes32 poolId, address poolManager, address positionManager, address permit2, bool creatorIsCurrency0
+        bytes32 poolId, address poolManager, address positionManager, address permit2, bool assetIsCurrency0
     );
     event ApprovalsReconfigured(address oldPositionManager, address oldPermit2, address newPositionManager, address newPermit2);
     event EmergencyModeEnabled();
@@ -154,20 +154,20 @@ contract FullRangeStrategy is Ownable, ReentrancyGuard {
 
     /**
      * @notice Initialize full range strategy
-     * @param _creatorCoin Creator Coin token
+     * @param _asset Lane vault asset token
      * @param _pairedToken Paired token (WETH)
      * @param _lpManager LP Manager address
      * @param _owner Owner address
      * @param _hookRegistry Registry of approved V4 hooks
      */
-    constructor(address _creatorCoin, address _pairedToken, address _lpManager, address _owner, address _hookRegistry)
+    constructor(address _asset, address _pairedToken, address _lpManager, address _owner, address _hookRegistry)
         Ownable(_owner)
     {
-        if (_creatorCoin == address(0)) revert ZeroAddress();
+        if (_asset == address(0)) revert ZeroAddress();
         if (_pairedToken == address(0)) revert ZeroAddress();
         if (_hookRegistry == address(0)) revert ZeroAddress();
 
-        CREATOR_COIN = IERC20(_creatorCoin);
+        ASSET = IERC20(_asset);
         PAIRED_TOKEN = IERC20(_pairedToken);
         lpManager = _lpManager;
         hookRegistry = IApprovedV4HooksRegistry(_hookRegistry);
@@ -198,9 +198,9 @@ contract FullRangeStrategy is Ownable, ReentrancyGuard {
         // Validate poolKey currencies match our configured tokens
         address c0 = Currency.unwrap(_poolKey.currency0);
         address c1 = Currency.unwrap(_poolKey.currency1);
-        bool _creatorIsCurrency0 = c0 == address(CREATOR_COIN);
-        if (!((_creatorIsCurrency0 && c1 == address(PAIRED_TOKEN))
-                    || (c0 == address(PAIRED_TOKEN) && c1 == address(CREATOR_COIN)))) revert PoolNotFullyConfigured();
+        bool _assetIsCurrency0 = c0 == address(ASSET);
+        if (!((_assetIsCurrency0 && c1 == address(PAIRED_TOKEN))
+                    || (c0 == address(PAIRED_TOKEN) && c1 == address(ASSET)))) revert PoolNotFullyConfigured();
         if (_poolKey.tickSpacing == 0) revert PoolNotFullyConfigured();
         address hook = address(_poolKey.hooks);
         if (hook == address(0)) revert InvalidHook(hook);
@@ -211,17 +211,17 @@ contract FullRangeStrategy is Ownable, ReentrancyGuard {
         permit2 = _permit2;
         poolKey = _poolKey;
         poolId = _poolKey.toId();
-        creatorIsCurrency0 = _creatorIsCurrency0;
+        assetIsCurrency0 = _assetIsCurrency0;
 
         // Approvals for PosM: token -> Permit2, then Permit2 -> PosM
-        CREATOR_COIN.forceApprove(_permit2, type(uint256).max);
+        ASSET.forceApprove(_permit2, type(uint256).max);
         PAIRED_TOKEN.forceApprove(_permit2, type(uint256).max);
         IAllowanceTransfer(_permit2)
-            .approve(address(CREATOR_COIN), _positionManager, type(uint160).max, type(uint48).max);
+            .approve(address(ASSET), _positionManager, type(uint160).max, type(uint48).max);
         IAllowanceTransfer(_permit2)
             .approve(address(PAIRED_TOKEN), _positionManager, type(uint160).max, type(uint48).max);
 
-        emit PoolConfigured(PoolId.unwrap(poolId), _poolManager, _positionManager, _permit2, _creatorIsCurrency0);
+        emit PoolConfigured(PoolId.unwrap(poolId), _poolManager, _positionManager, _permit2, _assetIsCurrency0);
     }
 
     /**
@@ -237,19 +237,19 @@ contract FullRangeStrategy is Ownable, ReentrancyGuard {
         address oldPermit2 = permit2;
 
         // Revoke old allowances first so stale pull rights are removed.
-        CREATOR_COIN.forceApprove(oldPermit2, 0);
+        ASSET.forceApprove(oldPermit2, 0);
         PAIRED_TOKEN.forceApprove(oldPermit2, 0);
-        IAllowanceTransfer(oldPermit2).approve(address(CREATOR_COIN), oldPositionManager, 0, 0);
+        IAllowanceTransfer(oldPermit2).approve(address(ASSET), oldPositionManager, 0, 0);
         IAllowanceTransfer(oldPermit2).approve(address(PAIRED_TOKEN), oldPositionManager, 0, 0);
 
         positionManager = _positionManager;
         permit2 = _permit2;
 
         // Re-grant current approval targets.
-        CREATOR_COIN.forceApprove(_permit2, type(uint256).max);
+        ASSET.forceApprove(_permit2, type(uint256).max);
         PAIRED_TOKEN.forceApprove(_permit2, type(uint256).max);
         IAllowanceTransfer(_permit2)
-            .approve(address(CREATOR_COIN), _positionManager, type(uint160).max, type(uint48).max);
+            .approve(address(ASSET), _positionManager, type(uint160).max, type(uint48).max);
         IAllowanceTransfer(_permit2)
             .approve(address(PAIRED_TOKEN), _positionManager, type(uint160).max, type(uint48).max);
 
@@ -262,11 +262,11 @@ contract FullRangeStrategy is Ownable, ReentrancyGuard {
 
     /**
      * @notice Deposit liquidity
-     * @param creatorCoinAmount Amount of creator coin
+     * @param assetAmount Amount of asset coin
      * @param pairedAmount Amount of paired token
      * @return liquidity Amount of liquidity minted
      */
-    function deposit(uint256 creatorCoinAmount, uint256 pairedAmount)
+    function deposit(uint256 assetAmount, uint256 pairedAmount)
         external
         nonReentrant
         onlyLPManager
@@ -274,11 +274,11 @@ contract FullRangeStrategy is Ownable, ReentrancyGuard {
         returns (uint256 liquidity)
     {
         _requireConfigured();
-        if (creatorCoinAmount == 0 && pairedAmount == 0) revert ZeroAmount();
+        if (assetAmount == 0 && pairedAmount == 0) revert ZeroAmount();
 
         // Pull tokens from LP Manager
-        if (creatorCoinAmount > 0) {
-            CREATOR_COIN.safeTransferFrom(msg.sender, address(this), creatorCoinAmount);
+        if (assetAmount > 0) {
+            ASSET.safeTransferFrom(msg.sender, address(this), assetAmount);
         }
         if (pairedAmount > 0) {
             PAIRED_TOKEN.safeTransferFrom(msg.sender, address(this), pairedAmount);
@@ -291,7 +291,7 @@ contract FullRangeStrategy is Ownable, ReentrancyGuard {
 
         // Convert our token amounts to currency0/currency1 ordering
         (uint256 amountCurrency0, uint256 amountCurrency1) =
-            creatorIsCurrency0 ? (creatorCoinAmount, pairedAmount) : (pairedAmount, creatorCoinAmount);
+            assetIsCurrency0 ? (assetAmount, pairedAmount) : (pairedAmount, assetAmount);
 
         (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(poolId);
         uint128 liquidityToAdd = LiquidityAmounts.getLiquidityForAmounts(
@@ -314,76 +314,76 @@ contract FullRangeStrategy is Ownable, ReentrancyGuard {
         liquidity = uint256(liquidityToAdd);
         totalLiquidity += liquidity;
 
-        emit Deposited(creatorCoinAmount, pairedAmount, liquidity);
+        emit Deposited(assetAmount, pairedAmount, liquidity);
     }
 
     /**
      * @notice Withdraw liquidity
      * @param liquidity Amount of liquidity to withdraw
-     * @return creatorCoinAmount Amount of creator coin returned
+     * @return assetAmount Amount of asset coin returned
      * @return pairedAmount Amount of paired token returned
      */
     function withdraw(uint256 liquidity)
         external
         nonReentrant
         onlyLPManager
-        returns (uint256 creatorCoinAmount, uint256 pairedAmount)
+        returns (uint256 assetAmount, uint256 pairedAmount)
     {
         _requireConfigured();
         if (liquidity == 0) revert ZeroAmount();
         if (liquidity > totalLiquidity) revert InsufficientLiquidity();
 
-        uint256 balCreatorBefore = CREATOR_COIN.balanceOf(address(this));
+        uint256 balAssetBefore = ASSET.balanceOf(address(this));
         uint256 balPairedBefore = PAIRED_TOKEN.balanceOf(address(this));
 
         _posmDecrease(positionTokenId, uint128(liquidity));
 
-        creatorCoinAmount = CREATOR_COIN.balanceOf(address(this)) - balCreatorBefore;
+        assetAmount = ASSET.balanceOf(address(this)) - balAssetBefore;
         pairedAmount = PAIRED_TOKEN.balanceOf(address(this)) - balPairedBefore;
 
         totalLiquidity -= liquidity;
 
         // Transfer tokens to LP Manager
-        if (creatorCoinAmount > 0) {
-            CREATOR_COIN.safeTransfer(lpManager, creatorCoinAmount);
+        if (assetAmount > 0) {
+            ASSET.safeTransfer(lpManager, assetAmount);
         }
         if (pairedAmount > 0) {
             PAIRED_TOKEN.safeTransfer(lpManager, pairedAmount);
         }
 
-        emit Withdrawn(liquidity, creatorCoinAmount, pairedAmount);
+        emit Withdrawn(liquidity, assetAmount, pairedAmount);
     }
 
     /**
      * @notice Withdraw all liquidity
-     * @return creatorCoinAmount Amount of creator coin returned
+     * @return assetAmount Amount of asset coin returned
      * @return pairedAmount Amount of paired token returned
      */
     function withdrawAll()
         external
         nonReentrant
         onlyLPManager
-        returns (uint256 creatorCoinAmount, uint256 pairedAmount)
+        returns (uint256 assetAmount, uint256 pairedAmount)
     {
         _requireConfigured();
         if (totalLiquidity == 0) return (0, 0);
 
         uint256 liquidity = totalLiquidity;
 
-        uint256 balCreatorBefore = CREATOR_COIN.balanceOf(address(this));
+        uint256 balAssetBefore = ASSET.balanceOf(address(this));
         uint256 balPairedBefore = PAIRED_TOKEN.balanceOf(address(this));
 
         _posmDecrease(positionTokenId, uint128(liquidity));
 
-        creatorCoinAmount = CREATOR_COIN.balanceOf(address(this)) - balCreatorBefore;
+        assetAmount = ASSET.balanceOf(address(this)) - balAssetBefore;
         pairedAmount = PAIRED_TOKEN.balanceOf(address(this)) - balPairedBefore;
 
         totalLiquidity = 0;
 
-        if (creatorCoinAmount > 0) CREATOR_COIN.safeTransfer(lpManager, creatorCoinAmount);
+        if (assetAmount > 0) ASSET.safeTransfer(lpManager, assetAmount);
         if (pairedAmount > 0) PAIRED_TOKEN.safeTransfer(lpManager, pairedAmount);
 
-        emit Withdrawn(liquidity, creatorCoinAmount, pairedAmount);
+        emit Withdrawn(liquidity, assetAmount, pairedAmount);
     }
 
     /**
@@ -405,20 +405,20 @@ contract FullRangeStrategy is Ownable, ReentrancyGuard {
 
     /**
      * @notice Get total value in this strategy
-     * @return creatorCoinValue Value in creator coin terms
+     * @return assetValue Value in asset coin terms
      * @return pairedValue Value in paired token terms
      */
-    function getTotalValue() external view returns (uint256 creatorCoinValue, uint256 pairedValue) {
+    function getTotalValue() external view returns (uint256 assetValue, uint256 pairedValue) {
         // Simplified calculation - V4 position integration not yet implemented
         // Returns token balances + estimated position value
 
-        creatorCoinValue = CREATOR_COIN.balanceOf(address(this));
+        assetValue = ASSET.balanceOf(address(this));
         pairedValue = PAIRED_TOKEN.balanceOf(address(this));
 
         // Add position value
         if (totalLiquidity > 0) {
-            (uint256 posCreator, uint256 posPaired) = _calculateAmountsForLiquidity(totalLiquidity);
-            creatorCoinValue += posCreator;
+            (uint256 posAsset, uint256 posPaired) = _calculateAmountsForLiquidity(totalLiquidity);
+            assetValue += posAsset;
             pairedValue += posPaired;
         }
     }
@@ -504,7 +504,7 @@ contract FullRangeStrategy is Ownable, ReentrancyGuard {
      * @param tokenId The V4 position NFT id
      */
     function _collectFees(uint256 tokenId) internal {
-        uint256 balCreatorBefore = CREATOR_COIN.balanceOf(address(this));
+        uint256 balAssetBefore = ASSET.balanceOf(address(this));
         uint256 balPairedBefore = PAIRED_TOKEN.balanceOf(address(this));
 
         bytes memory actions = new bytes(3);
@@ -520,13 +520,13 @@ contract FullRangeStrategy is Ownable, ReentrancyGuard {
 
         IPositionManager(positionManager).modifyLiquidities(abi.encode(actions, params), block.timestamp + 1);
 
-        uint256 creatorCollected = CREATOR_COIN.balanceOf(address(this)) - balCreatorBefore;
+        uint256 assetCollected = ASSET.balanceOf(address(this)) - balAssetBefore;
         uint256 pairedCollected = PAIRED_TOKEN.balanceOf(address(this)) - balPairedBefore;
 
-        if (creatorCollected > 0) CREATOR_COIN.safeTransfer(lpManager, creatorCollected);
+        if (assetCollected > 0) ASSET.safeTransfer(lpManager, assetCollected);
         if (pairedCollected > 0) PAIRED_TOKEN.safeTransfer(lpManager, pairedCollected);
 
-        emit FeesCollected(creatorCollected, pairedCollected);
+        emit FeesCollected(assetCollected, pairedCollected);
     }
 
     function _posmDecrease(uint256 tokenId, uint128 liquidityToRemove) internal {
@@ -547,13 +547,13 @@ contract FullRangeStrategy is Ownable, ReentrancyGuard {
      * @dev Calculate liquidity from token amounts
      * @dev This is a simplified calculation - production would use V4's math
      */
-    function _calculateLiquidity(uint256 creatorCoinAmount, uint256 pairedAmount) internal pure returns (uint256) {
+    function _calculateLiquidity(uint256 assetAmount, uint256 pairedAmount) internal pure returns (uint256) {
         // Simplified: geometric mean of amounts
         // In production, use Uniswap V4's liquidity calculation
-        if (creatorCoinAmount == 0 || pairedAmount == 0) {
-            return creatorCoinAmount + pairedAmount;
+        if (assetAmount == 0 || pairedAmount == 0) {
+            return assetAmount + pairedAmount;
         }
-        return _sqrt(creatorCoinAmount * pairedAmount);
+        return _sqrt(assetAmount * pairedAmount);
     }
 
     /**
@@ -562,11 +562,11 @@ contract FullRangeStrategy is Ownable, ReentrancyGuard {
     function _calculateAmountsForLiquidity(uint256 liquidity)
         internal
         view
-        returns (uint256 creatorCoinAmount, uint256 pairedAmount)
+        returns (uint256 assetAmount, uint256 pairedAmount)
     {
         // Simplified: split evenly
         // In production, this comes from V4 position data
-        creatorCoinAmount = liquidity / 2;
+        assetAmount = liquidity / 2;
         pairedAmount = liquidity / 2;
     }
 
@@ -606,11 +606,11 @@ contract FullRangeStrategy is Ownable, ReentrancyGuard {
      * @notice Emergency withdraw all tokens to owner
      */
     function emergencyWithdraw() external onlyOwner {
-        uint256 creatorBal = CREATOR_COIN.balanceOf(address(this));
+        uint256 assetBal = ASSET.balanceOf(address(this));
         uint256 pairedBal = PAIRED_TOKEN.balanceOf(address(this));
 
-        if (creatorBal > 0) {
-            CREATOR_COIN.safeTransfer(owner(), creatorBal);
+        if (assetBal > 0) {
+            ASSET.safeTransfer(owner(), assetBal);
         }
         if (pairedBal > 0) {
             PAIRED_TOKEN.safeTransfer(owner(), pairedBal);

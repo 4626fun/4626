@@ -18,7 +18,7 @@ import {AjnaVaultLibrary} from "@4626/shared/strategies/ajna/AjnaVaultLibrary.so
  * @notice Inner ERC-4626 vault that manages an idle buffer plus Ajna quote-token
  *         bucket positions.
  * @dev This vault is intended to sit behind `ERC4626StrategyAdapter`, with
- *      `CreatorOVault` remaining the public product vault.
+ *      the outer lane vault (CreatorOVault / AgentOVault) remaining the public product vault.
  */
 contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
     using SafeERC20 for IERC20;

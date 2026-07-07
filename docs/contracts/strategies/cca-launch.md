@@ -119,7 +119,7 @@ function finalizeFailedAuction() external;
 
 ## Launch pricing
 
-- Launch floor is derived onchain from `CreatorOracle` (`getCreatorPrice` and `getEthPrice`), then converted to Q96.
+- Launch floor is derived onchain from the lane oracle via `IOracle4626` (`getAssetPrice` and `getEthPrice`), then converted to Q96.
 - Strategy applies a configurable launch discount (`launchDiscountBps`) and aligns floor to configurable spacing (`launchTickSpacingBps`).
 - Stale/invalid oracle data reverts launch (`LaunchOracleStale`, `LaunchOracleInvalidPrice`), so launch cannot proceed on unsafe pricing.
 - Frontend `computeMarketFloorQuote` is diagnostic/reference only and no longer trusted as an authoritative launch input.

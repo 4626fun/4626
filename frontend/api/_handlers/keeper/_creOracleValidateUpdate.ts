@@ -47,7 +47,7 @@ type CreOracleValidateUpdateResponse = {
 const ORACLE_READ_ABI = [
   {
     type: 'function',
-    name: 'getCreatorPrice',
+    name: 'getAssetPrice',
     stateMutability: 'view',
     inputs: [],
     outputs: [
@@ -60,7 +60,7 @@ const ORACLE_READ_ABI = [
 const ORACLE_WRITE_ABI = [
   {
     type: 'function',
-    name: 'updateCreatorPrice',
+    name: 'updateAssetPrice',
     stateMutability: 'nonpayable',
     inputs: [{ name: '_price', type: 'int256' }],
     outputs: [],
@@ -166,7 +166,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const creatorPriceResult = await publicClient.readContract({
     address: oracleAddress,
     abi: ORACLE_READ_ABI as unknown as Abi,
-    functionName: 'getCreatorPrice',
+    functionName: 'getAssetPrice',
   })
   const currentPrice = BigInt(Array.isArray(creatorPriceResult) ? creatorPriceResult[0] ?? 0 : 0)
   const divergenceBps = computeDivergenceBps(currentPrice, proposedPrice)
@@ -237,7 +237,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const txHash = await walletClient.writeContract({
       address: oracleAddress,
       abi: ORACLE_WRITE_ABI as unknown as Abi,
-      functionName: 'updateCreatorPrice',
+      functionName: 'updateAssetPrice',
       args: [proposedPrice],
       chain: base,
       account,

@@ -12,15 +12,11 @@ import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
 import {IStrategyValuation} from "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
 
-interface ICreatorOVaultLike {
-    function CREATOR_COIN() external view returns (IERC20);
-}
-
 /**
  * @title ERC4626StrategyAdapter
  * @author 0xakita.eth
  * @notice Adapts an ERC-4626 vault to the `IStrategy` interface.
- * @dev Used by CreatorOVault to integrate ERC-4626 yield sources.
+ * @dev Used by lane vaults (CreatorOVault / AgentOVault) to integrate ERC-4626 yield sources.
  */
 contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -41,7 +37,7 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
     // STATE
     // ================================
 
-    /// @notice CreatorOVault that owns this strategy.
+    /// @notice Lane vault that owns this strategy.
     address public immutable vault;
 
     /// @notice Underlying asset token (must match the ERC-4626 `asset()`).
@@ -112,8 +108,8 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
         require(assetAddr != address(0), "Invalid asset");
         ASSET = IERC20(assetAddr);
 
-        // Safety: prevent wiring a strategy with an asset that doesn't match the vault's creator coin.
-        require(address(ICreatorOVaultLike(_vault).CREATOR_COIN()) == assetAddr, "Vault/asset mismatch");
+        // Safety: prevent wiring a strategy with an asset that doesn't match the outer vault's asset.
+        require(IERC4626(_vault).asset() == assetAddr, "Vault/asset mismatch");
 
         _isActive = true;
 
@@ -264,7 +260,7 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
     }
 
     function harvest() external override onlyVault returns (uint256 profit) {
-        // CreatorOVault accounts for gains via totalAssets() deltas in `report()`.
+        // The outer lane vault accounts for gains via totalAssets() deltas in `report()`.
         profit = 0;
         emit StrategyHarvest(profit);
     }

@@ -12,8 +12,8 @@ contract CCALaunchStrategyEncodingHelper {
 
     error LaunchOracleNotConfigured();
     error UnsupportedLaunchCurrency(address currency);
-    error LaunchOracleInvalidPrice(int256 creatorUsdPrice, int256 ethUsdPrice);
-    error LaunchOracleStale(uint256 creatorTimestamp, uint256 ethTimestamp, uint64 maxAge, uint256 currentTimestamp);
+    error LaunchOracleInvalidPrice(int256 assetUsdPrice, int256 ethUsdPrice);
+    error LaunchOracleStale(uint256 assetTimestamp, uint256 ethTimestamp, uint64 maxAge, uint256 currentTimestamp);
     error LaunchFloorTooLow(uint256 rawFloorPriceQ96, uint256 tickSpacingQ96);
 
     function taxHookCalldata(
@@ -143,30 +143,30 @@ contract CCALaunchStrategyEncodingHelper {
         uint16 launchDiscountBps,
         uint16 launchTickSpacingBps,
         uint256 blockTimestamp
-    ) external view returns (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 creatorUsdPrice, uint256 ethUsdPrice)
+    ) external view returns (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 assetUsdPrice, uint256 ethUsdPrice)
     {
         if (oracle == address(0)) revert LaunchOracleNotConfigured();
         if (currency != address(0)) revert UnsupportedLaunchCurrency(currency);
 
-        (int256 creatorUsdSigned, uint256 creatorTimestamp) = IOracle4626(oracle).getAssetPrice();
+        (int256 assetUsdSigned, uint256 assetTimestamp) = IOracle4626(oracle).getAssetPrice();
         (int256 ethUsdSigned, uint256 ethTimestamp) = IOracle4626(oracle).getEthPrice();
 
-        if (creatorUsdSigned <= 0 || ethUsdSigned <= 0) {
-            revert LaunchOracleInvalidPrice(creatorUsdSigned, ethUsdSigned);
+        if (assetUsdSigned <= 0 || ethUsdSigned <= 0) {
+            revert LaunchOracleInvalidPrice(assetUsdSigned, ethUsdSigned);
         }
 
         if (
-            creatorTimestamp == 0 || ethTimestamp == 0 || creatorTimestamp > blockTimestamp || ethTimestamp > blockTimestamp
-                || blockTimestamp - creatorTimestamp > launchOracleMaxAge || blockTimestamp - ethTimestamp > launchOracleMaxAge
+            assetTimestamp == 0 || ethTimestamp == 0 || assetTimestamp > blockTimestamp || ethTimestamp > blockTimestamp
+                || blockTimestamp - assetTimestamp > launchOracleMaxAge || blockTimestamp - ethTimestamp > launchOracleMaxAge
         ) {
-            revert LaunchOracleStale(creatorTimestamp, ethTimestamp, launchOracleMaxAge, blockTimestamp);
+            revert LaunchOracleStale(assetTimestamp, ethTimestamp, launchOracleMaxAge, blockTimestamp);
         }
 
-        creatorUsdPrice = uint256(creatorUsdSigned);
+        assetUsdPrice = uint256(assetUsdSigned);
         ethUsdPrice = uint256(ethUsdSigned);
 
-        uint256 discountedCreatorUsd = Math.mulDiv(creatorUsdPrice, uint256(launchDiscountBps), BPS_DENOMINATOR);
-        uint256 rawFloorPriceQ96 = Math.mulDiv(discountedCreatorUsd, Q96, ethUsdPrice);
+        uint256 discountedAssetUsd = Math.mulDiv(assetUsdPrice, uint256(launchDiscountBps), BPS_DENOMINATOR);
+        uint256 rawFloorPriceQ96 = Math.mulDiv(discountedAssetUsd, Q96, ethUsdPrice);
 
         tickSpacingQ96 = Math.mulDiv(rawFloorPriceQ96, uint256(launchTickSpacingBps), BPS_DENOMINATOR);
         if (tickSpacingQ96 < 2) tickSpacingQ96 = 2;

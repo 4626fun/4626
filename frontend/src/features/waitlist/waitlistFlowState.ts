@@ -7,7 +7,11 @@ import {
 export type WaitlistStep = 'auth' | 'done'
 
 /** Waitlist messaging / signing fork — server population first, not in-app browser alone. */
-export type WaitlistConnectTrack = 'base-app-direct' | 'zora-owner-install' | 'not-ready'
+export type WaitlistConnectTrack =
+  | 'base-app-direct'
+  | 'zora-owner-install'
+  | 'privy-owner-install'
+  | 'not-ready'
 
 /**
  * Minimal input shape accepted by pure decision helpers (resolveWaitlistStep, etc.).
@@ -79,6 +83,7 @@ export function resolveWaitlistConnectTrack(params: {
     Boolean(params.accountSignals?.embeddedEoaAddress?.trim())
 
   if (zoraLinked && canonical && embeddedReady) return 'zora-owner-install'
+  if (canonical && embeddedReady) return 'privy-owner-install'
   return 'not-ready'
 }
 
@@ -101,7 +106,7 @@ export function isWaitlistMessagingSigningReady(params: {
     })
 
   if (connectTrack === 'base-app-direct') return true
-  if (connectTrack === 'zora-owner-install') {
+  if (connectTrack === 'zora-owner-install' || connectTrack === 'privy-owner-install') {
     return isWaitlistStepTwoSigningComplete({
       ownerInstallRequested: params.ownerInstallRequested ?? false,
       accountSignals: params.accountSignals,
@@ -152,6 +157,10 @@ export function shouldShowParentCswAddOwnerPanel(params: {
   if (params.inBaseApp) {
     return params.baseWalletReady !== false
   }
+
+  const privyProvisioned =
+    Boolean(params.accountSignals?.embeddedEoaAddress?.trim()) && !params.zoraLinked
+  if (privyProvisioned) return true
 
   if ((params.onchainEoaOwnerCount ?? 0) <= 0) return false
   if (!params.zoraLinked && !params.ownerInstallRequested) return false

@@ -36,7 +36,7 @@ import {V4LiquidityAmounts} from "@4626/shared/libraries/uniswap/V4LiquidityAmou
  * @dev USE CASES:
  *      1. BUY SUPPORT: Place below current price - buys lane token when price drops
  *      2. SELL RESISTANCE: Place above current price - sells lane token when price rises
- *      Usable for creator, agent, or future ecosystems by configuring the base token.
+ *      Usable for asset, agent, or future ecosystems by configuring the base token.
  *
  * @dev INTEGRATION:
  *      - Plugs into lane-specific LPManager (e.g. CreatorLPManager or agent equivalent)
@@ -77,7 +77,7 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
     // STATE
     // =================================
 
-    /// @notice Base token for the strategy (lane-specific, e.g. creator or agent token)
+    /// @notice Base token for the strategy (lane-specific, e.g. asset or agent token)
     IERC20 public immutable BASE_TOKEN;
 
     /// @notice Paired token (WETH)
@@ -128,7 +128,7 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
 
     event OrderCreated(uint256 indexed orderId, int24 tickLower, int24 tickUpper, uint256 liquidity, bool isBuyOrder);
     event OrderFilled(uint256 indexed orderId, uint256 amountIn, uint256 amountOut);
-    event OrderCancelled(uint256 indexed orderId, uint256 creatorCoinReturned, uint256 pairedReturned);
+    event OrderCancelled(uint256 indexed orderId, uint256 assetReturned, uint256 pairedReturned);
     event Deposited(uint256 baseTokenAmount, uint256 pairedAmount, uint256 liquidity);
     event Withdrawn(uint256 liquidity, uint256 baseTokenAmount, uint256 pairedAmount);
     event Rebalanced(uint256 timestamp, uint256 ordersMoved);
@@ -619,8 +619,8 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
             for (uint256 i = 0; i < ordersLen; i++) {
                 if (!orders[i].isActive) continue;
 
-                (uint256 creator, uint256 paired) = _estimateOrderValue(orders[i]);
-                baseTokenValue += creator;
+                (uint256 asset, uint256 paired) = _estimateOrderValue(orders[i]);
+                baseTokenValue += asset;
                 pairedValue += paired;
             }
         }
@@ -698,7 +698,7 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
         view
         returns (uint128 liquidity)
     {
-        // Buy orders supply paired token; sell orders supply creator token.
+        // Buy orders supply paired token; sell orders supply asset token.
         bool supplyBase = !isBuyOrder;
         bool supplyIsCurrency0 = supplyBase ? baseIsCurrency0 : !baseIsCurrency0;
 

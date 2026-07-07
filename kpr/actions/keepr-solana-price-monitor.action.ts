@@ -196,7 +196,7 @@ export async function executeSolanaPriceMonitor(): Promise<PriceMonitorResult> {
     const basePriceRaw = await readContract<bigint>({
       address: oracleAddress,
       abi: ORACLE_ABI,
-      functionName: 'creatorPriceUSD',
+      functionName: 'assetPriceUSD',
     });
 
     const basePriceUsd = Number(basePriceRaw) / 1e18;

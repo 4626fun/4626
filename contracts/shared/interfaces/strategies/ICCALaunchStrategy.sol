@@ -31,7 +31,7 @@ interface ICCALaunchStrategy {
     function previewLaunchPricing()
         external
         view
-        returns (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 creatorUsdPrice, uint256 ethUsdPrice);
+        returns (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 assetUsdPrice, uint256 ethUsdPrice);
     function migrate() external;
     function finalizeFailedAuction() external;
 }

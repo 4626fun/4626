@@ -35,6 +35,8 @@ import { WaitlistTwitterLinkPanel, XLogo } from '@/features/waitlist/WaitlistTwi
 import { WaitlistTwitterEngagementSteps } from '@/features/waitlist/WaitlistTwitterEngagementSteps'
 import { WaitlistWalletConnectPanel } from '@/features/waitlist/WaitlistWalletConnectPanel'
 import { WaitlistZoraConnectPanel, ZoraLogo } from '@/features/waitlist/WaitlistZoraConnectPanel'
+import { WaitlistMessagingSection } from '@/features/waitlist/WaitlistMessagingSection'
+import { WaitlistWalletSetupSection } from '@/features/waitlist/WaitlistWalletSetupSection'
 import {
   WaitlistLinkedAccountsCard,
   useWaitlistLinkedWalletRow,
@@ -1236,7 +1238,10 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                     </p>
                   )}
                 </div>
-              </div>
+                </div>
+
+                <WaitlistWalletSetupSection enabled={Boolean(joinedSessionAddress)} />
+                <WaitlistMessagingSection enabled={Boolean(joinedSessionAddress)} />
 
                 {/* Earn points — optional identity links, each worth waitlist points. */}
                 <motion.div layout="position" transition={stepTransition} className="mt-5">

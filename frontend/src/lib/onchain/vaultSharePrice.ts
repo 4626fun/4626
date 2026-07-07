@@ -13,7 +13,7 @@ const VAULT_PPS_ABI = [
 const ORACLE_PRICE_ABI = [
   {
     type: 'function',
-    name: 'getCreatorPrice',
+    name: 'getAssetPrice',
     stateMutability: 'view',
     inputs: [],
     outputs: [{ type: 'int256' }, { type: 'uint256' }],
@@ -57,7 +57,7 @@ export async function readVaultSharePriceSnapshot<
     const [oraclePrice, oracleTimestamp] = (await publicClient.readContract({
       address: params.oracle,
       abi: ORACLE_PRICE_ABI,
-      functionName: 'getCreatorPrice',
+      functionName: 'getAssetPrice',
     })) as readonly [bigint, bigint]
 
     if (oraclePrice > 0n) {

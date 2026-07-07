@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  isWaitlistMessagingSigningReady,
   isWaitlistStepTwoSigningComplete,
+  resolveWaitlistConnectTrack,
   shouldAutoSubmitOtpCode,
   shouldFocusBaseAppWalletSetup,
   shouldShowBaseAppWalletLinkPanel,
   shouldShowParentCswAddOwnerPanel,
 } from './waitlistFlowState'
+
+const CSW = '0xAb6d5C10b03300326cd7fab7267ae192842967b5'
+const EOA = '0x1111111111111111111111111111111111111111'
 
 describe('shouldFocusBaseAppWalletSetup', () => {
   it('focuses wallet setup in Base App when wallet is not linked', () => {
@@ -59,6 +64,82 @@ describe('shouldShowParentCswAddOwnerPanel', () => {
           canonicalCswAddress: '0xAb6d5C10b03300326cd7fab7267ae192842967b5',
         },
         baseWalletReady: true,
+      }),
+    ).toBe(true)
+  })
+
+  it('shows owner install for Privy-provisioned CSW without Zora link', () => {
+    expect(
+      shouldShowParentCswAddOwnerPanel({
+        signingStepComplete: false,
+        ownerInstallRequested: false,
+        zoraLinked: false,
+        onchainEoaOwnerCount: 0,
+        accountSignals: {
+          canonicalCswAddress: CSW,
+          embeddedEoaAddress: EOA,
+        },
+      }),
+    ).toBe(true)
+  })
+})
+
+describe('resolveWaitlistConnectTrack', () => {
+  it('returns privy-owner-install for email-only CSW + embedded EOA', () => {
+    expect(
+      resolveWaitlistConnectTrack({
+        accountSignals: {
+          canonicalCswAddress: CSW,
+          embeddedEoaAddress: EOA,
+          executionTrack: 'none-yet',
+        },
+        zoraLinked: false,
+      }),
+    ).toBe('privy-owner-install')
+  })
+
+  it('returns zora-owner-install when Zora is linked', () => {
+    expect(
+      resolveWaitlistConnectTrack({
+        accountSignals: {
+          canonicalCswAddress: CSW,
+          embeddedEoaAddress: EOA,
+          executionTrack: 'none-yet',
+          linked: true,
+        },
+        zoraLinked: true,
+      }),
+    ).toBe('zora-owner-install')
+  })
+
+  it('returns base-app-direct from server execution track', () => {
+    expect(
+      resolveWaitlistConnectTrack({
+        executionTrack: 'base-app-direct',
+        accountSignals: {
+          canonicalCswAddress: CSW,
+          embeddedEoaAddress: EOA,
+        },
+      }),
+    ).toBe('base-app-direct')
+  })
+})
+
+describe('isWaitlistMessagingSigningReady', () => {
+  it('blocks privy-owner-install until embedded owner is on-chain', () => {
+    expect(
+      isWaitlistMessagingSigningReady({
+        connectTrack: 'privy-owner-install',
+        parentEmbeddedOwnerOnChain: false,
+      }),
+    ).toBe(false)
+  })
+
+  it('allows privy-owner-install after embedded owner is on-chain', () => {
+    expect(
+      isWaitlistMessagingSigningReady({
+        connectTrack: 'privy-owner-install',
+        parentEmbeddedOwnerOnChain: true,
       }),
     ).toBe(true)
   })

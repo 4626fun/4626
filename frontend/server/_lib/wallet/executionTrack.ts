@@ -20,6 +20,10 @@
  * track defined in `.cursor/rules/csw-agent-lifecycle.mdc`.
  */
 
+import { isBaseAppPopulationCanonicalSource as isBaseAccountCanonicalSource } from './canonicalSource.js'
+
+export { isBaseAccountCanonicalSource as isBaseAppPopulationCanonicalSource }
+
 const EVM_ADDRESS_RE = /^0x[a-f0-9]{40}$/
 
 export type ExecutionTrack =
@@ -66,12 +70,6 @@ export type ExecutionTrackInput = BaseSubAccountInput & {
   canonicalSource?: string | null | undefined
 }
 
-export function isBaseAppPopulationCanonicalSource(
-  canonicalSource: string | null | undefined,
-): boolean {
-  return String(canonicalSource ?? '').trim() === 'base_account'
-}
-
 function normalizeAddress(value: string | null | undefined): string | null {
   if (typeof value !== 'string') return null
   const lowered = value.trim().toLowerCase()
@@ -101,7 +99,7 @@ export function resolveExecutionTrack(input: ExecutionTrackInput): ExecutionTrac
   if (
     canonical &&
     embedded &&
-    isBaseAppPopulationCanonicalSource(input.canonicalSource)
+    isBaseAccountCanonicalSource(input.canonicalSource)
   ) {
     return 'base-app-direct'
   }
