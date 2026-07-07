@@ -1,5 +1,5 @@
 /**
- * CreatorVaultShareBurnStream ABI fragments for KPR payout-integrity workflow.
+ * VaultShareBurnStream ABI fragments for KPR payout-integrity workflow.
  *
  * Only includes the read-only functions needed for monitoring.
  */

@@ -10,7 +10,7 @@ interface ICreatorOVaultBurn {
 }
 
 /**
- * @title CreatorVaultShareBurnStream
+ * @title VaultShareBurnStream
  * @notice Holds CreatorOVault shares (▢TOKEN) and burns them linearly over an epoch.
  *
  * @dev Enforceability:
@@ -24,7 +24,7 @@ interface ICreatorOVaultBurn {
  * - If `drip()` is not called for a long time, the next call burns the full catch-up amount in one tx
  *   (up to the full epoch), which can create a discrete price-per-share jump. Run a keeper for smoothness.
  */
-contract CreatorVaultShareBurnStream is ReentrancyGuard {
+contract VaultShareBurnStream is ReentrancyGuard {
     // Weekly epochs (7 days)
     uint256 public constant EPOCH_DURATION = 7 days;
 

@@ -4,7 +4,7 @@ pragma solidity 0.8.30;
 import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import {CreatorORecoveryEscrow} from "@4626/creator/recovery/CreatorORecoveryEscrow.sol";
+import {OVaultRecoveryEscrow} from "@4626/shared/recovery/OVaultRecoveryEscrow.sol";
 
 contract MockToken is ERC20 {
     constructor() ERC20("Mock", "MOCK") {}
@@ -14,15 +14,15 @@ contract MockToken is ERC20 {
     }
 }
 
-contract CreatorORecoveryEscrowTest is Test {
-    CreatorORecoveryEscrow internal escrow;
+contract OVaultRecoveryEscrowTest is Test {
+    OVaultRecoveryEscrow internal escrow;
     MockToken internal token;
     address internal owner = address(this);
     address internal vault = address(0xBEEF);
     address internal alice = address(0xA11CE);
 
     function setUp() public {
-        escrow = new CreatorORecoveryEscrow(owner);
+        escrow = new OVaultRecoveryEscrow(owner);
         escrow.setVault(vault);
         token = new MockToken();
     }
@@ -44,7 +44,7 @@ contract CreatorORecoveryEscrowTest is Test {
     }
 
     function test_revert_nonVaultNotify() public {
-        vm.expectRevert(CreatorORecoveryEscrow.Unauthorized.selector);
+        vm.expectRevert(OVaultRecoveryEscrow.Unauthorized.selector);
         escrow.notifyRecovery(address(token), 1, 1);
     }
 
@@ -67,7 +67,7 @@ contract CreatorORecoveryEscrowTest is Test {
         vm.prank(vault);
         vm.expectRevert(
             abi.encodeWithSelector(
-                CreatorORecoveryEscrow.ClaimExceedsRecovered.selector, 1, address(token), 10, 11
+                OVaultRecoveryEscrow.ClaimExceedsRecovered.selector, 1, address(token), 10, 11
             )
         );
         escrow.claimRecovery(address(token), 1, alice, 1);
@@ -83,7 +83,7 @@ contract CreatorORecoveryEscrowTest is Test {
         vm.prank(vault);
         vm.expectRevert(
             abi.encodeWithSelector(
-                CreatorORecoveryEscrow.ClaimExceedsRecovered.selector, 1, address(token), 0, 5
+                OVaultRecoveryEscrow.ClaimExceedsRecovered.selector, 1, address(token), 0, 5
             )
         );
         escrow.claimRecovery(address(token), 1, alice, 5);

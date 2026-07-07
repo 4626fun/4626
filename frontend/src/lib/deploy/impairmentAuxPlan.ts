@@ -60,7 +60,7 @@ function buildContractPlan(creationCode: Hex, saltDomain: string, vault: Address
 }
 
 /**
- * Per-vault impairment aux pair (CreatorOImpairmentClaims + CreatorORecoveryEscrow).
+ * Per-vault impairment aux pair (OVaultImpairmentClaims + OVaultRecoveryEscrow).
  *
  * Both contracts are deployed fresh per vault with `initialOwner` = the deploy owner
  * (creator CSW) so the same Phase 3 batch can call `setVault(...)`, then ownership
@@ -70,13 +70,13 @@ function buildContractPlan(creationCode: Hex, saltDomain: string, vault: Address
 export function buildImpairmentAuxPlan(params: { vault: Address; initialOwner: Address }): ImpairmentAuxPlan {
   return {
     claims: buildContractPlan(
-      DEPLOY_BYTECODE.CreatorOImpairmentClaims as Hex,
+      DEPLOY_BYTECODE.OVaultImpairmentClaims as Hex,
       CLAIMS_SALT_DOMAIN,
       params.vault,
       params.initialOwner,
     ),
     escrow: buildContractPlan(
-      DEPLOY_BYTECODE.CreatorORecoveryEscrow as Hex,
+      DEPLOY_BYTECODE.OVaultRecoveryEscrow as Hex,
       ESCROW_SALT_DOMAIN,
       params.vault,
       params.initialOwner,

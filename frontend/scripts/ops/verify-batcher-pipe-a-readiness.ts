@@ -320,7 +320,7 @@ async function main() {
     {
       id: 'phase1_module_storage_v3',
       ok: moduleStorage.ok,
-      detail: moduleStorage.ok ? 'CreatorOVaultModuleStorage.v3' : moduleStorage.message,
+      detail: moduleStorage.ok ? 'OVaultModuleStorage.v3' : moduleStorage.message,
     },
     {
       id: 'phase2_module',

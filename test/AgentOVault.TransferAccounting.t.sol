@@ -6,10 +6,10 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import {CreatorOVault} from "@4626/creator/vault/CreatorOVault.sol";
 import {AgentOVault} from "@4626/agent/vault/AgentOVault.sol";
-import {CreatorOVaultAdminModule} from "@4626/creator/vault/modules/CreatorOVaultAdminModule.sol";
+import {OVaultAdminModule} from "@4626/shared/vault/modules/OVaultAdminModule.sol";
 import {CreatorOVaultCoreModule} from "@4626/creator/vault/modules/CreatorOVaultCoreModule.sol";
 import {AgentOVaultCoreModule} from "@4626/agent/vault/modules/AgentOVaultCoreModule.sol";
-import {CreatorOVaultStrategiesModule} from "@4626/creator/vault/modules/CreatorOVaultStrategiesModule.sol";
+import {OVaultStrategiesModule} from "@4626/shared/vault/modules/OVaultStrategiesModule.sol";
 import {MockAgentTokenV4} from "test/mocks/MockAgentTokenV4.sol";
 
 /// @dev Rebasing-up / reflexive mock: credits the receiver MORE than the sent amount
@@ -54,8 +54,8 @@ contract AgentOVaultTransferAccountingTest is Test {
     function setUp() public {
         coreModule = address(new CreatorOVaultCoreModule());
         agentCoreModule = address(new AgentOVaultCoreModule());
-        strategiesModule = address(new CreatorOVaultStrategiesModule());
-        adminModule = address(new CreatorOVaultAdminModule());
+        strategiesModule = address(new OVaultStrategiesModule());
+        adminModule = address(new OVaultAdminModule());
 
         agentToken = new MockAgentTokenV4("Agent Token V4", "AGNT", uint16(FEE_BPS), 0);
         vault = new AgentOVault(address(agentToken), address(this), "Agent OVault", "aoAGNT");

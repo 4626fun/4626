@@ -6,8 +6,8 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 
 import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
 
-import {CreatorOVaultModuleBase} from "@4626/creator/vault/modules/CreatorOVaultModuleBase.sol";
-import {ICreatorOVaultModuleIdentity} from "@4626/creator/vault/modules/ICreatorOVaultModuleIdentity.sol";
+import {OVaultModuleBase} from "@4626/shared/vault/modules/OVaultModuleBase.sol";
+import {IOVaultModuleIdentity} from "@4626/shared/vault/modules/IOVaultModuleIdentity.sol";
 
 interface IVaultShareBurnStreamQueuer {
     function setAuthorizedQueuer(address queuer, bool authorized) external;
@@ -15,10 +15,10 @@ interface IVaultShareBurnStreamQueuer {
 
 /// @notice Admin + emergency + rescue + config logic for CreatorOVault.
 /// @dev Must be invoked via delegatecall from CreatorOVault.
-contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModuleIdentity {
+contract OVaultAdminModule is OVaultModuleBase, IOVaultModuleIdentity {
     using SafeERC20 for IERC20;
-    bytes32 internal constant MODULE_KIND = keccak256("CreatorOVaultModule.admin");
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v3");
+    bytes32 internal constant MODULE_KIND = keccak256("OVaultModule.admin");
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("OVaultModuleStorage.v3");
 
     // ---- constants (must match vault) ----
     uint256 internal constant MAX_BPS = 10_000;

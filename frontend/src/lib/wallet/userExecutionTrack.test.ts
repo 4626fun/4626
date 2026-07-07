@@ -71,6 +71,25 @@ describe('deriveAccountChromeExecution', () => {
     expect(chrome.swapSenderLabel).toContain('Coinbase Smart Wallet')
   })
 
+  it('promotes base-app-direct when wagmi CSW matches canonical via Coinbase connector', () => {
+    expect(
+      resolveEffectiveExecutionTrack({
+        executionTrack: 'none-yet',
+        baseAppDirectConnected: true,
+      }),
+    ).toBe('base-app-direct')
+  })
+
+  it('uses base-app-direct chrome when the server track is ready', () => {
+    const chrome = deriveAccountChromeExecution({
+      executionTrack: 'base-app-direct',
+      parentEmbeddedOwnerOnChain: false,
+      canonicalCswAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
+    })
+    expect(chrome.mode).toBe('parent-csw')
+    expect(chrome.swapSenderLabel).toContain('Coinbase Smart Wallet')
+  })
+
   it('returns none mode when signing is not ready', () => {
     const chrome = deriveAccountChromeExecution({
       executionTrack: 'none-yet',

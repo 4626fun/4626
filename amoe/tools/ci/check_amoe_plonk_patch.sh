@@ -72,10 +72,10 @@ grep -q 'DIVERGENCE FROM STOCK SNARKJS OUTPUT' "$VERIFIER" \
 ok "divergence banner present"
 
 # ----------------------------------------------------------------------------- 
-# 4. All 8 checkField(_pubSignals + N*32) calls present.
+# 4. All 9 checkField(_pubSignals + N*32) calls present.
 # ----------------------------------------------------------------------------- 
 
-EXPECTED_OFFSETS=(0 32 64 96 128 160 192 224)
+EXPECTED_OFFSETS=(0 32 64 96 128 160 192 224 256)
 for off in "${EXPECTED_OFFSETS[@]}"; do
   # Match the offset at the end of the calldataload call. Allow flexible
   # spacing because formatters can collapse runs of spaces.
@@ -83,16 +83,16 @@ for off in "${EXPECTED_OFFSETS[@]}"; do
     fail "missing public-input field guard for offset ${off} (slot $((off / 32)))"
   fi
 done
-ok "all 8 public-input checkField calls present"
+ok "all 9 public-input checkField calls present"
 
 # ----------------------------------------------------------------------------- 
-# 5. The 8 calls appear between checkProofData() and calculateChallenges(.
+# 5. The 9 calls appear between checkProofData() and calculateChallenges(.
 # ----------------------------------------------------------------------------- 
 
 L_CHECKPROOFDATA="$(grep -nE '^\s*checkProofData\(\)\s*$' "$VERIFIER" | head -1 | cut -d: -f1 || true)"
 L_CALLCHALLENGES="$(grep -nE '^\s*calculateChallenges\(pMem,\s*_pubSignals\)' "$VERIFIER" | head -1 | cut -d: -f1 || true)"
 L_FIRST_GUARD="$(grep -nE 'checkField\(calldataload\(add\(_pubSignals,\s*0\s*\)\)\)' "$VERIFIER" | head -1 | cut -d: -f1 || true)"
-L_LAST_GUARD="$(grep -nE 'checkField\(calldataload\(add\(_pubSignals,\s*224\s*\)\)\)' "$VERIFIER" | head -1 | cut -d: -f1 || true)"
+L_LAST_GUARD="$(grep -nE 'checkField\(calldataload\(add\(_pubSignals,\s*256\s*\)\)\)' "$VERIFIER" | head -1 | cut -d: -f1 || true)"
 
 [ -n "$L_CHECKPROOFDATA" ]   || fail "could not locate checkProofData() call"
 [ -n "$L_CALLCHALLENGES" ]   || fail "could not locate calculateChallenges(pMem, _pubSignals) call"
@@ -103,7 +103,7 @@ if ! [ "$L_CHECKPROOFDATA" -lt "$L_FIRST_GUARD" ]; then
   fail "checkField(_pubSignals, 0) must come AFTER checkProofData() (line $L_CHECKPROOFDATA), not at line $L_FIRST_GUARD"
 fi
 if ! [ "$L_LAST_GUARD" -lt "$L_CALLCHALLENGES" ]; then
-  fail "checkField(_pubSignals, 224) must come BEFORE calculateChallenges (line $L_CALLCHALLENGES), not at line $L_LAST_GUARD"
+  fail "checkField(_pubSignals, 256) must come BEFORE calculateChallenges (line $L_CALLCHALLENGES), not at line $L_LAST_GUARD"
 fi
 info "checkProofData() at line $L_CHECKPROOFDATA"
 info "checkField loop at lines $L_FIRST_GUARD..$L_LAST_GUARD"

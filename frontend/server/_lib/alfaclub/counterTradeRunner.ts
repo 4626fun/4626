@@ -14,6 +14,7 @@ import {
 import { resolveRoom1659HyperliquidUserForSnapshot } from './room1659Market.js'
 import { readCounterTradeRuntimeConfig } from './counterTradeConfig.js'
 import { isCounterTradeEnabledByEnv } from './counterTradeEnv.js'
+import { INVERSE_AKITA_ROOM_ID } from './inverseAkitaStakerPilot.js'
 import { mergeCounterTradeRuntimeWithRoomOverrides } from './counterTradeRoomConfig.js'
 import { applyCounterTradeLlmGate } from './counterTradeLlmAdvisor.js'
 import { handleCounterTradeExitFlow } from './counterTradeExitFlow.js'
@@ -95,6 +96,20 @@ function resolveStrategySubaccount(params: {
 
 export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
   const baseRuntime = readCounterTradeRuntimeConfig()
+  if (baseRuntime.roomId === INVERSE_AKITA_ROOM_ID) {
+    return {
+      ok: true,
+      reason: 'staker_pilot_mode',
+      roomId: baseRuntime.roomId,
+      scannedIdentities: 0,
+      scannedEvents: 0,
+      newEvents: 0,
+      executed: 0,
+      skipped: 0,
+      blocked: 0,
+      failed: 0,
+    }
+  }
   if (!baseRuntime.enabled || !isCounterTradeEnabledByEnv()) {
     return {
       ok: false,

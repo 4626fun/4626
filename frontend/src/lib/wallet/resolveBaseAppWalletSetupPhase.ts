@@ -2,6 +2,7 @@ import {
   isCanonicalBaseAccountWalletReady,
   normalizeWalletAddress,
 } from '@/lib/wallet/ensureCanonicalBaseAccountWallet'
+import type { UserFrontendExecutionTrack } from '@/lib/wallet/userExecutionTrack'
 
 /**
  * Consolidated Base App wallet setup phases for parent-CSW signing.
@@ -24,7 +25,7 @@ export function resolveBaseAppWalletSetupPhase(params: {
   wallets: unknown[]
   providerAccounts?: string[] | null
   parentEmbeddedOwnerOnChain?: boolean
-  executionTrack?: 'legacy-owner-install' | 'none-yet' | null
+  executionTrack?: UserFrontendExecutionTrack | null
 }): BaseAppWalletSetupPhase {
   if (!params.privyAuthenticated || !normalizeWalletAddress(params.embeddedEoaAddress)) {
     return 'needs-privy-session'
@@ -46,7 +47,8 @@ export function resolveBaseAppWalletSetupPhase(params: {
 
   if (
     params.parentEmbeddedOwnerOnChain === true ||
-    params.executionTrack === 'legacy-owner-install'
+    params.executionTrack === 'legacy-owner-install' ||
+    params.executionTrack === 'base-app-direct'
   ) {
     return 'ready'
   }

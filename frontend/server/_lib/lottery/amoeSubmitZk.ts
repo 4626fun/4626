@@ -40,6 +40,7 @@ import {
   readAmoeSignupSalt,
 } from './amoeIdentifiers.js'
 import { buildAmoeLedgerSnapshotStub } from './amoeLedgerSnapshotStub.js'
+import type { AmoeAllowlistSnapshotPgReader } from './amoeAllowlistSnapshotReader.js'
 import type { AmoeLedgerSnapshotReader } from './amoeLedgerSnapshotReader.js'
 import {
   AMOE_EPOCH_GENESIS_SECONDS,
@@ -171,6 +172,8 @@ export interface AmoeSubmitZkProveOptions {
    * inline from the requesting wallet.
    */
   ledgerSnapshotReader?: AmoeLedgerSnapshotReader
+  /** Published allowlist snapshot reader (production). */
+  allowlistSnapshotReader?: AmoeAllowlistSnapshotPgReader
 }
 
 export interface AmoeSubmitZkOrchestrationResult {
@@ -240,6 +243,8 @@ export function defaultAmoeZkAssetPaths(): { wasmPath: string; zkeyPath: string 
  */
 async function resolveAmoeWitnessTrees(args: {
   reader: AmoeLedgerSnapshotReader | undefined
+  allowlistReader: AmoeAllowlistSnapshotPgReader | undefined
+  wallet: `0x${string}`
   walletBigint: bigint
   epoch: bigint
   signupIdHash: bigint
@@ -249,6 +254,28 @@ async function resolveAmoeWitnessTrees(args: {
   spendRefId: string
   profileId: bigint
 }): Promise<AmoeWitnessTreeContext> {
+  let allowlistSnapshot
+  let allowlistLeafIndex: number
+  if (args.allowlistReader) {
+    const allow = await args.allowlistReader.readSnapshotForWallet({
+      wallet: args.wallet,
+      epoch: args.epoch,
+    })
+    if (allow.epoch !== args.epoch) {
+      throw new AmoeServerError('amoe_allowlist_snapshot_epoch_mismatch')
+    }
+    allowlistSnapshot = allow.allowlistSnapshot
+    allowlistLeafIndex = allow.allowlistLeafIndex
+  } else if (String(process.env.AMOE_ZK_SNAPSHOT_STUB_ALLOW ?? '').trim() === '1') {
+    allowlistSnapshot = buildAmoeAllowlistSnapshotFromSingleWallet(
+      args.walletBigint,
+      args.epoch,
+    )
+    allowlistLeafIndex = 0
+  } else {
+    throw new AmoeServerError('amoe_allowlist_snapshot_unavailable')
+  }
+
   if (args.reader) {
     // Production path: real points-burn ledger snapshot from L2.
     const readResult = await args.reader.readSnapshotForBurn({
@@ -263,17 +290,10 @@ async function resolveAmoeWitnessTrees(args: {
       // refuse rather than build a witness against the wrong root.
       throw new AmoeServerError('amoe_ledger_snapshot_epoch_mismatch')
     }
-    // Allowlist remains the single-leaf inline build until the
-    // allowlist publisher PR ships. This is identical to what the stub
-    // would produce; we just don't gate it on AMOE_ZK_SNAPSHOT_STUB_ALLOW
-    // because the points-burn half is already production-grade.
-    const allowlistSnapshot = buildAmoeAllowlistSnapshotFromSingleWallet(
-      args.walletBigint,
-      args.epoch,
-    )
+    // Allowlist from published snapshot (or stub above).
     return {
       allowlistSnapshot,
-      allowlistLeafIndex: 0,
+      allowlistLeafIndex,
       pointsLedgerSnapshot: readResult.pointsLedgerSnapshot,
       pointsLedgerLeafIndex: readResult.pointsLedgerLeafIndex,
     }
@@ -283,7 +303,7 @@ async function resolveAmoeWitnessTrees(args: {
   // Reference computeAmoeWalletAddrCommit so the import stays live in
   // builds that don't take the reader-injected path.
   void computeAmoeWalletAddrCommit
-  return buildAmoeLedgerSnapshotStub({
+  const stub = buildAmoeLedgerSnapshotStub({
     walletBigint: args.walletBigint,
     epoch: args.epoch,
     signupIdHash: args.signupIdHash,
@@ -291,6 +311,12 @@ async function resolveAmoeWitnessTrees(args: {
     twitterCreditNullifier: args.twitterCreditNullifier,
     pointsBurnedAsUSD: args.pointsBurnedAsUSD,
   })
+  return {
+    allowlistSnapshot,
+    allowlistLeafIndex,
+    pointsLedgerSnapshot: stub.pointsLedgerSnapshot,
+    pointsLedgerLeafIndex: stub.pointsLedgerLeafIndex,
+  }
 }
 
 export async function orchestrateAmoeSubmitZk(
@@ -351,6 +377,8 @@ export async function orchestrateAmoeSubmitZk(
   // ledger reader is in use.
   const trees: AmoeWitnessTreeContext = await resolveAmoeWitnessTrees({
     reader: proveOpts.ledgerSnapshotReader,
+    allowlistReader: proveOpts.allowlistSnapshotReader,
+    wallet: inputs.wallet,
     walletBigint,
     epoch,
     signupIdHash,

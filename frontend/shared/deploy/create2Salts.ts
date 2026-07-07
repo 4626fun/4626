@@ -2,7 +2,7 @@ import type { Address, Hex } from 'viem'
 import { encodePacked, keccak256 } from 'viem'
 
 export const PAYOUT_ROUTER_SALT_TAG = '4626:CreatorPayoutRouter' as const
-export const BURN_STREAM_SALT_TAG = '4626:CreatorVaultShareBurnStream' as const
+export const BURN_STREAM_SALT_TAG = '4626:VaultShareBurnStream' as const
 export const CREATOR_COIN_POLICY_CONTROLLER_SALT_TAG = '4626:CreatorCoinPolicyController' as const
 
 export function derivePayoutRouterSalt(params: { creatorToken: Address; owner: Address }): Hex {

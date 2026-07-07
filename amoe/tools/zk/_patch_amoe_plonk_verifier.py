@@ -5,7 +5,7 @@ The stock snarkjs PLONK verifier:
   - is named `PlonkVerifier` (we want `AmoePlonkVerifier`)
   - uses `pragma solidity >=0.7.0 <0.9.0` (we want `^0.8.20`)
   - has no header banner documenting circuit/SRS provenance
-  - **DOES NOT** run `checkField` on `_pubSignals[0..7]`
+  - **DOES NOT** run `checkField` on `_pubSignals[0..8]`
 
 That last omission is a real security bug for our use case: the on-chain
 router tracks replay nullifiers by raw `uint256` value (usedNonceCommit,
@@ -45,8 +45,7 @@ BANNER = """// SPDX-License-Identifier: GPL-3.0
 // │             run by 0kims/iden3 — no project-specific     │
 // │             ceremony required)                           │
 // │                                                          │
-// │  Public-input layout (uint[8] _pubSignals) matches       │
-// │  IAmoePlonkVerifier and the v2 Groth16 layout exactly:   │
+// │  Public-input layout (uint[9] _pubSignals) — circuit v3:           │
 // │    [0] walletAddrCommit                                  │
 // │    [1] creatorCoinAddr                                   │
 // │    [2] nonceCommit                                       │
@@ -55,6 +54,7 @@ BANNER = """// SPDX-License-Identifier: GPL-3.0
 // │    [5] pointsBurnedAsUSD                                 │
 // │    [6] pointsLedgerRoot                                  │
 // │    [7] pointsBurnNullifier                               │
+// │    [8] walletAddr                                        │
 // │                                                          │
 // │  DIVERGENCE FROM STOCK SNARKJS OUTPUT:                   │
 // │  Stock snarkjs PLONK verifiers `checkField` only the 24  │
@@ -74,7 +74,7 @@ BANNER = """// SPDX-License-Identifier: GPL-3.0
 PUBLIC_INPUT_FIELD_GUARD = """
             // SECURITY: enforce that every public input is canonical (< q).
             // The default snarkjs PLONK verifier only `checkField`-validates
-            // the 24 proof scalars; the 8 public inputs flow straight into
+            // the 24 proof scalars; the 9 public inputs flow straight into
             // calculateChallenges/calculatePI as raw uint256 values. Without
             // this loop a prover could submit non-canonical encodings
             // (x + k*q) that are field-equivalent to a canonical value but
@@ -86,7 +86,7 @@ PUBLIC_INPUT_FIELD_GUARD = """
             // _pubSignals here resolves to the calldata offset of input[0]
             // (the same value the snarkjs-emitted code below passes as
             // `pPublic` / `pPub` into calculateChallenges / calculatePI).
-            // 8 public inputs, each 32 bytes.
+            // 9 public inputs, each 32 bytes.
             checkField(calldataload(add(_pubSignals,   0)))
             checkField(calldataload(add(_pubSignals,  32)))
             checkField(calldataload(add(_pubSignals,  64)))
@@ -95,6 +95,7 @@ PUBLIC_INPUT_FIELD_GUARD = """
             checkField(calldataload(add(_pubSignals, 160)))
             checkField(calldataload(add(_pubSignals, 192)))
             checkField(calldataload(add(_pubSignals, 224)))
+            checkField(calldataload(add(_pubSignals, 256)))
 
 """
 
@@ -110,7 +111,7 @@ RE_CHECK_PROOF_DATA_CALL = re.compile(
 )
 RE_VERIFY_FN = re.compile(
     r"function\s+verifyProof\s*\(\s*uint256\[24\]\s+calldata\s+_proof\s*,\s*"
-    r"uint256\[8\]\s+calldata\s+_pubSignals\s*\)"
+    r"uint256\[9\]\s+calldata\s+_pubSignals\s*\)"
 )
 
 

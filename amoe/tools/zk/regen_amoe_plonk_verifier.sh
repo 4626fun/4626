@@ -13,7 +13,7 @@
 #   2. Pragma bumped to ^0.8.20
 #   3. Header banner with provenance + the "DIVERGENCE FROM STOCK SNARKJS"
 #      block explaining the public-input checkField loop
-#   4. Explicit checkField calls on _pubSignals[0..7] inserted right after
+#   4. Explicit checkField calls on _pubSignals[0..8] inserted right after
 #      checkProofData() — without this, a malicious prover can submit
 #      non-canonical (x + k*q) encodings of public inputs and bypass the
 #      router's raw-bytes replay maps. See PR #409 (codex bot finding).

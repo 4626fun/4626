@@ -10,7 +10,7 @@ interface ICreatorOVaultDeposit {
     function deposit(uint256 assets, address receiver) external returns (uint256 shares);
 }
 
-interface ICreatorVaultShareBurnStream {
+interface IVaultShareBurnStream {
     function queueShares(uint256 shares) external;
 }
 
@@ -42,7 +42,7 @@ interface IProtocolRewards {
  * @title CreatorPayoutRouter
  * @author 0xakita.eth
  * @notice Receives creatorCoinPayoutRecipient (external earnings lane) revenue and routes value
- *         into the vault via an enforceable burn stream (CreatorVaultShareBurnStream).
+ *         into the vault via an enforceable burn stream (VaultShareBurnStream).
  *
  * @dev Routing policy:
  * - Creator coin payouts: deposit directly into the vault and queue minted shares for burn.
@@ -417,7 +417,7 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
         if (creatorAmount == 0) revert ZeroAmount();
         sharesQueued = ICreatorOVaultDeposit(vault).deposit(creatorAmount, burnStream);
         if (sharesQueued == 0) revert ZeroAmount();
-        ICreatorVaultShareBurnStream(burnStream).queueShares(sharesQueued);
+        IVaultShareBurnStream(burnStream).queueShares(sharesQueued);
     }
 
     function _unwrapShareOftAndQueue(uint256 shareOftAmount) internal returns (uint256 sharesQueued) {
@@ -426,7 +426,7 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
         if (sharesQueued == 0) revert ZeroAmount();
 
         IERC20(vault).safeTransfer(burnStream, sharesQueued);
-        ICreatorVaultShareBurnStream(burnStream).queueShares(sharesQueued);
+        IVaultShareBurnStream(burnStream).queueShares(sharesQueued);
     }
 
     function _readAddress(bytes memory data, uint256 offset) internal pure returns (address addr) {

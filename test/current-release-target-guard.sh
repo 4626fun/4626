@@ -116,7 +116,9 @@ if [[ -n "$stale_adapter_hits" ]]; then
 fi
 
 if command -v pnpm >/dev/null 2>&1; then
-  if ! BYTECODE_MANIFEST="$ROOT_DIR/deployments/base/v1.15.0-bytecode-manifest.json" \
+  # v1.16.0 = July 2026 lane-neutral rename epoch (new module identity strings +
+  # burn-stream salt domain). Store re-seed required before this passes.
+  if ! BYTECODE_MANIFEST="$ROOT_DIR/deployments/base/v1.16.0-bytecode-manifest.json" \
     UNIVERSAL_BYTECODE_STORE="$bytecode_store" \
     pnpm -C "$ROOT_DIR/frontend" exec tsx scripts/ops/verify-bytecode-store-seeded.ts >/dev/null; then
     echo "release target guard failed: deploy versioning verifier failed" >&2

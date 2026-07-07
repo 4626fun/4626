@@ -74,31 +74,33 @@
       ]
     },
     {
-      "contractName": "CreatorOVaultStrategiesModule",
+      "contractName": "OVaultStrategiesModule",
       "deploymentKind": "create2_shared_logic_module",
-      "artifactPath": "out/CreatorOVaultStrategiesModule.sol/CreatorOVaultStrategiesModule.json",
+      "artifactPath": "out/OVaultStrategiesModule.sol/OVaultStrategiesModule.json",
       "deploymentJsonPath": "",
       "saltEnv": "INFRA_VAULT_STRATEGIES_MODULE_SALT",
       "saltTagEnv": "INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG",
-      "defaultSaltTagTemplate": "4626:CreatorOVaultStrategiesModule:{epoch}",
+      "defaultSaltTagTemplate": "4626:OVaultStrategiesModule:{epoch}",
       "referenceSaltTag": "4626:CreatorOVaultStrategiesModule:v1.7.1",
       "suffixRequired": true,
       "notes": [
-        "Shared delegatecall logic module deployed with CREATE2."
+        "Shared delegatecall logic module deployed with CREATE2.",
+        "Renamed from CreatorOVaultStrategiesModule (lane-shared); referenceSaltTag records the historical v1.7.1 deploy under the old name."
       ]
     },
     {
-      "contractName": "CreatorOVaultAdminModule",
+      "contractName": "OVaultAdminModule",
       "deploymentKind": "create2_shared_logic_module",
-      "artifactPath": "out/CreatorOVaultAdminModule.sol/CreatorOVaultAdminModule.json",
+      "artifactPath": "out/OVaultAdminModule.sol/OVaultAdminModule.json",
       "deploymentJsonPath": "",
       "saltEnv": "INFRA_VAULT_ADMIN_MODULE_SALT",
       "saltTagEnv": "INFRA_VAULT_ADMIN_MODULE_SALT_TAG",
-      "defaultSaltTagTemplate": "4626:CreatorOVaultAdminModule:{epoch}",
+      "defaultSaltTagTemplate": "4626:OVaultAdminModule:{epoch}",
       "referenceSaltTag": "4626:CreatorOVaultAdminModule:v1.7.1",
       "suffixRequired": true,
       "notes": [
-        "Shared delegatecall logic module deployed with CREATE2."
+        "Shared delegatecall logic module deployed with CREATE2.",
+        "Renamed from CreatorOVaultAdminModule (lane-shared); referenceSaltTag records the historical v1.7.1 deploy under the old name."
       ]
     },
     {
@@ -212,8 +214,8 @@
   ],
   "renameCandidates": [
     {
-      "contractName": "CreatorOVaultFactory",
-      "currentPath": "contracts/factories/CreatorOVaultFactory.sol",
+      "contractName": "OVaultFactory4626",
+      "currentPath": "contracts/shared/deploy/factories/OVaultFactory4626.sol",
       "recommendedName": "LegacyCreatorOVaultDeploymentRegistry",
       "status": "deferred",
       "reason": "Deprecated legacy deployment recorder/lookup surface; current behavior is registry-like rather than factory-like.",

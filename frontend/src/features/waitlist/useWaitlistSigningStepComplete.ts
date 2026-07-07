@@ -1,9 +1,10 @@
 import { useEmbeddedOwnerOnCsw } from './useEmbeddedOwnerOnCsw'
 import { isWaitlistStepTwoSigningComplete } from './waitlistFlowState'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
+import type { UserFrontendExecutionTrack } from '@/lib/wallet/userExecutionTrack'
 
 type WaitlistAccountSignals = {
-  executionTrack?: 'legacy-owner-install' | 'none-yet'
+  executionTrack?: UserFrontendExecutionTrack
 }
 
 export function useWaitlistSigningStepComplete(params: {

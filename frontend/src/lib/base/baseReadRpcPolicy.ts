@@ -13,10 +13,14 @@ export function isLocalForkBaseRpcUrl(url: string): boolean {
 const ALCHEMY_BASE_RPC_PATTERN = /(^|\/\/)base-mainnet\.g\.alchemy\.com/i
 const ANY_ALCHEMY_RPC_PATTERN = /\.g\.alchemy\.com\//i
 const COINBASE_DEVELOPER_BASE_RPC_PATTERN = /^https:\/\/api\.developer\.coinbase\.com\/rpc\/v1\/base\//i
+// Paid keyed endpoints (URL path/query carries the auth token) must never reach a
+// browser bundle via VITE_BASE_RPC; keep them server-side behind /api/rpc.
+const MATRIXED_RPC_PATTERN = /(^|\/\/)([a-z0-9-]+\.)*matrixed\.link(\/|$)/i
 const RESTRICTED_BASE_RPC_PATTERNS = [
   ALCHEMY_BASE_RPC_PATTERN,
   ANY_ALCHEMY_RPC_PATTERN,
   COINBASE_DEVELOPER_BASE_RPC_PATTERN,
+  MATRIXED_RPC_PATTERN,
 ]
 
 export function isBrowserRestrictedBaseRpc(url: string): boolean {

@@ -55,7 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       to: strategy,
       data,
       value: '0',
-      description: 'CreatorCharmStrategy: emit StrategyRebalanced(totalAssets).',
+      description: 'CharmStrategy4626: emit StrategyRebalanced(totalAssets).',
       warnings: [
         'This is build-only: you must submit the transaction via your wallet/provider.',
         'Onchain permission check: only the strategy owner or vault can call rebalance().',

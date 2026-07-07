@@ -1876,7 +1876,7 @@ function DeployVaultBatcher({
     if (lower.includes('0x5cfe78fe') || lower.includes('invalidmoduleaddress')) {
       return (
         'Phase 1 reverted: CreatorOVault rejected the batcher wired modules (InvalidModuleAddress / 0x5cfe78fe). ' +
-        'Deploy bytecode and Phase1Module wiring must share the same moduleStorageVersion fingerprint (v1.14.0 uses CreatorOVaultModuleStorage.v3). ' +
+        'Deploy bytecode and Phase1Module wiring must share the same moduleStorageVersion fingerprint (v1.14.0 uses OVaultModuleStorage.v3). ' +
         'If the live batcher still wires v2 modules, protocol ops must rotate to the v1.14.0 v3 Phase1Module via setPhase1Module before greenfield deploy. ' +
         'Hard-refresh the app so predicted CREATE2 addresses use the Phase1Module create2 deployer (not stale batcher-shell getters), ' +
         'confirm UniversalBytecodeStore CreatorOVault bytecode is seeded for v1.14.0, then bump deploymentVersion in the URL if retrying after a partial Phase 1 (e.g. ?deploymentVersion=v1.14.0-retry-1).'
@@ -2410,7 +2410,7 @@ function DeployVaultBatcher({
   }, [])
 
   const vaultShareBurnStreamCodeId = useMemo(() => {
-    return keccak256(DEPLOY_BYTECODE.CreatorVaultShareBurnStream as Hex)
+    return keccak256(DEPLOY_BYTECODE.VaultShareBurnStream as Hex)
   }, [])
 
   const creatorCoinPolicyControllerCodeId = useMemo(() => {
@@ -2422,7 +2422,7 @@ function DeployVaultBatcher({
       // Phase 3 now deploys Charm alpha vault through Charm's factory (not via bytecode store).
       // Contract ABI still requires this field and only checks for non-zero.
       charmAlphaVaultDeploy: keccak256(toBytes('charm-factory-sentinel-v1')),
-      creatorCharmStrategy: keccak256(DEPLOY_BYTECODE.CreatorCharmStrategy as Hex),
+      creatorCharmStrategy: keccak256(DEPLOY_BYTECODE.CharmStrategy4626 as Hex),
       ajnaVaultAuth: keccak256(DEPLOY_BYTECODE.AjnaVaultAuth as Hex),
       ajnaVault: keccak256(DEPLOY_BYTECODE.AjnaERC4626Vault as Hex),
       erc4626StrategyAdapter: keccak256(DEPLOY_BYTECODE.ERC4626StrategyAdapter as Hex),
@@ -3058,7 +3058,7 @@ function DeployVaultBatcher({
               phase3HelperAddress,
             ],
           )
-          const charmStrategyInitCode = concatHex([DEPLOY_BYTECODE.CreatorCharmStrategy as Hex, charmStrategyArgs])
+          const charmStrategyInitCode = concatHex([DEPLOY_BYTECODE.CharmStrategy4626 as Hex, charmStrategyArgs])
           creatorCharmStrategyAddress = predictCreate2Address({
             create2Deployer: expectedCreate2Deployer,
             salt: charmStrategySalt,
@@ -7049,7 +7049,7 @@ function DeployVaultBatcher({
             <div className="rounded-xl bg-sky-500/[0.04] px-3.5 py-3 space-y-2">
                 <div className="text-[10px] font-medium text-sky-200/90">Emergency safety wiring (this deploy)</div>
                 <div className="text-[11px] text-sky-100/80 leading-relaxed">
-                  Every vault gets its own fresh `CreatorOImpairmentClaims` and `CreatorORecoveryEscrow` pair, deployed and
+                  Every vault gets its own fresh `OVaultImpairmentClaims` and `OVaultRecoveryEscrow` pair, deployed and
                   linked to the vault below during Phase 3. Ownership of both then transfers to the protocol treasury so the
                   protocol can monitor and operate these emergency-safety levers.
                 </div>
@@ -7146,7 +7146,7 @@ function DeployVaultBatcher({
                   {...dryRunRowProps('phase3')}
                 />
                 <AddressRow
-                  label="CreatorCharmStrategy"
+                  label="CharmStrategy4626"
                   iconSrc={PROTOCOL_LOGOS.charm}
                   address={phase3Expected?.creatorCharmStrategy}
                   deployed={phase3ExpectedAddressDeployment?.creatorCharmStrategy ?? null}
@@ -9100,9 +9100,9 @@ function DeployVaultMain() {
       oftBootstrap: keccak256(DEPLOY_BYTECODE.OFTBootstrapRegistry as Hex),
       // Newly required per-vault contracts (deployed via UniversalCreate2DeployerFromStore)
       payoutRouter: keccak256(DEPLOY_BYTECODE.CreatorPayoutRouter as Hex),
-      vaultShareBurnStream: keccak256(DEPLOY_BYTECODE.CreatorVaultShareBurnStream as Hex),
+      vaultShareBurnStream: keccak256(DEPLOY_BYTECODE.VaultShareBurnStream as Hex),
       creatorCoinPolicyController: keccak256(DEPLOY_BYTECODE.CreatorCoinPolicyController as Hex),
-      creatorCharmStrategy: keccak256(DEPLOY_BYTECODE.CreatorCharmStrategy as Hex),
+      creatorCharmStrategy: keccak256(DEPLOY_BYTECODE.CharmStrategy4626 as Hex),
       ajnaVaultAuth: keccak256(DEPLOY_BYTECODE.AjnaVaultAuth as Hex),
       ajnaVault: keccak256(DEPLOY_BYTECODE.AjnaERC4626Vault as Hex),
       erc4626StrategyAdapter: keccak256(DEPLOY_BYTECODE.ERC4626StrategyAdapter as Hex),
@@ -9238,7 +9238,7 @@ function DeployVaultMain() {
           codeId: deployCodeIds.creatorCoinPolicyController,
         },
         // Charm alpha vault is created via Charm's official factory in phase 3 (not from bytecode store).
-        { key: 'creatorCharmStrategy', label: 'CreatorCharmStrategy', codeId: deployCodeIds.creatorCharmStrategy },
+        { key: 'creatorCharmStrategy', label: 'CharmStrategy4626', codeId: deployCodeIds.creatorCharmStrategy },
         { key: 'ajnaVaultAuth', label: 'AjnaVaultAuth', codeId: deployCodeIds.ajnaVaultAuth },
         { key: 'ajnaVault', label: 'AjnaERC4626Vault', codeId: deployCodeIds.ajnaVault },
         {

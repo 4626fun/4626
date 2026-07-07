@@ -11,8 +11,7 @@
 // │             run by 0kims/iden3 — no project-specific     │
 // │             ceremony required)                           │
 // │                                                          │
-// │  Public-input layout (uint[8] _pubSignals) matches       │
-// │  IAmoePlonkVerifier and the v2 Groth16 layout exactly:   │
+// │  Public-input layout (uint[9] _pubSignals) — circuit v3:           │
 // │    [0] walletAddrCommit                                  │
 // │    [1] creatorCoinAddr                                   │
 // │    [2] nonceCommit                                       │
@@ -21,6 +20,7 @@
 // │    [5] pointsBurnedAsUSD                                 │
 // │    [6] pointsLedgerRoot                                  │
 // │    [7] pointsBurnNullifier                               │
+// │    [8] walletAddr                                        │
 // │                                                          │
 // │  DIVERGENCE FROM STOCK SNARKJS OUTPUT:                   │
 // │  Stock snarkjs PLONK verifiers `checkField` only the 24  │
@@ -74,25 +74,25 @@ contract AmoePlonkVerifier {
     
     // Verification Key data
     uint32 constant n         = 32768;
-    uint16 constant nPublic   = 8;
-    uint16 constant nLagrange = 8;
+    uint16 constant nPublic   = 9;
+    uint16 constant nLagrange = 9;
     
-    uint256 constant Qmx  = 21309019613166260886311456675601480895608261919536662997632522065834735941044;
-    uint256 constant Qmy  = 5444603791599110271192586369590134880900696672687678936325469175637794200353;
-    uint256 constant Qlx  = 18993921226340323689893719547622399970523156120829083161463815886633741110555;
-    uint256 constant Qly  = 310286637152588899259863780499459687773170456866692459494967289116198374066;
-    uint256 constant Qrx  = 7860079629867551397401158606255038016972836591108690919379614881370012487208;
-    uint256 constant Qry  = 14168289695398647810369414951672856883322807713532534319826865062262425664820;
-    uint256 constant Qox  = 17280211486518888886132425170138381874423064517988035754675520350457845592124;
-    uint256 constant Qoy  = 15886739862815150413097562111640565281402402213675024488421266538259041070661;
-    uint256 constant Qcx  = 17536447071381201065985234401452199052385051560159292227280798376531951899869;
-    uint256 constant Qcy  = 18385785027978679027237865034025580191737281000136867589251279514534626217811;
-    uint256 constant S1x  = 19037028325391727417912666507149949692497761771104532186990360957516681785511;
-    uint256 constant S1y  = 20299421769833664504627623935027819545139207259002417177038300956584781414024;
-    uint256 constant S2x  = 21256495305375324199527778991464703968027542948575207544522963106196390021119;
-    uint256 constant S2y  = 20254249095512585866520031556554358499117235603356550279418267775280879983959;
-    uint256 constant S3x  = 8336096346147125460704636795969038352862434960268433858266682106136226199633;
-    uint256 constant S3y  = 6462330266542228389515474899447083066288514950666697870228445878071119801308;
+    uint256 constant Qmx  = 18686771899672587930291782134455020539919614029850307152224324372741329692649;
+    uint256 constant Qmy  = 10094081652889565327994200456515451210640304517964317984386561646704294848952;
+    uint256 constant Qlx  = 19212028369100201772732387118287945414062968986307795957646229604187806296074;
+    uint256 constant Qly  = 5386592499785444468056058074646618926726321600814130406326143815325842780522;
+    uint256 constant Qrx  = 170149784364740824059965170512277099524962913861875559066668132759140073692;
+    uint256 constant Qry  = 11096339177761991659070282225839394273159525478591625640298085641753712381768;
+    uint256 constant Qox  = 11041610216570795855363358580540996010957429739583192134677622595326359333125;
+    uint256 constant Qoy  = 20483974303181396314205197418800555345897033529335059717688443002626027981924;
+    uint256 constant Qcx  = 19637807173050422779922009149368919103331617459966009135053609069841428002691;
+    uint256 constant Qcy  = 19653720679098850524533741200369284854011079267484198463675127305263465632618;
+    uint256 constant S1x  = 15339208813489819680931249557964524965643132992589163216347123377042835485944;
+    uint256 constant S1y  = 11393078511310833263401613484172486473415937297848905709150642968605792602;
+    uint256 constant S2x  = 19892577394981657709266176825214827550397371424912062192097192876947791196477;
+    uint256 constant S2y  = 10543645950161798506293273313854462515539114117529992187181018369125722696018;
+    uint256 constant S3x  = 8562685313292740662176868518422876748498998385415642827760626770719235678984;
+    uint256 constant S3y  = 3516351688489225029657770172010503589392560258295482592374442570258574621650;
     uint256 constant k1   = 2;
     uint256 constant k2   = 3;
     uint256 constant X2x1 = 21831381940315734285607113342023901060522397560371972897001948545212302161822;
@@ -162,11 +162,13 @@ contract AmoePlonkVerifier {
     
     uint16 constant pEval_l8 = 1024;
     
+    uint16 constant pEval_l9 = 1056;
     
     
-    uint16 constant lastMem = 1056;
+    
+    uint16 constant lastMem = 1088;
 
-    function verifyProof(uint256[24] calldata _proof, uint256[8] calldata _pubSignals) public view returns (bool) {
+    function verifyProof(uint256[24] calldata _proof, uint256[9] calldata _pubSignals) public view returns (bool) {
         assembly {
             /////////
             // Computes the inverse using the extended euclidean algorithm
@@ -342,14 +344,16 @@ contract AmoePlonkVerifier {
                 
                 mstore(add(mIn, 736), calldataload(add(pPublic, 224)))
                 
-                mstore(add(mIn, 768 ), calldataload(pA))
-                mstore(add(mIn, 800 ), calldataload(add(pA, 32)))
-                mstore(add(mIn, 832 ), calldataload(pB))
-                mstore(add(mIn, 864 ), calldataload(add(pB, 32)))
-                mstore(add(mIn, 896 ), calldataload(pC))
-                mstore(add(mIn, 928 ), calldataload(add(pC, 32)))
+                mstore(add(mIn, 768), calldataload(add(pPublic, 256)))
                 
-                beta := mod(keccak256(mIn, 960), q) 
+                mstore(add(mIn, 800 ), calldataload(pA))
+                mstore(add(mIn, 832 ), calldataload(add(pA, 32)))
+                mstore(add(mIn, 864 ), calldataload(pB))
+                mstore(add(mIn, 896 ), calldataload(add(pB, 32)))
+                mstore(add(mIn, 928 ), calldataload(pC))
+                mstore(add(mIn, 960 ), calldataload(add(pC, 32)))
+                
+                beta := mod(keccak256(mIn, 992), q) 
                 mstore(add(pMem, pBeta), beta)
 
                 // challenges.gamma
@@ -618,9 +622,30 @@ contract AmoePlonkVerifier {
                     )
                 )
                 
+                w := mulmod(w, w1, q)
                 
                 
-                inverseArray(add(pMem, pZhInv), 9 )
+                mstore(
+                    add(pMem, pEval_l9), 
+                    mulmod(
+                        n, 
+                        mod(
+                            add(
+                                sub(
+                                    mload(add(pMem, pXi)), 
+                                    w
+                                ), 
+                                q
+                            ),
+                            q
+                        ), 
+                        q
+                    )
+                )
+                
+                
+                
+                inverseArray(add(pMem, pZhInv), 10 )
                 
                 let zh := mload(add(pMem, pZh))
                 w := 1
@@ -762,6 +787,24 @@ contract AmoePlonkVerifier {
                 )
                 
                 
+                w := mulmod(w, w1, q)
+                
+                
+                
+                mstore(
+                    add(pMem, pEval_l9), 
+                    mulmod(
+                        w,
+                        mulmod(
+                            mload(add(pMem, pEval_l9)),
+                            zh,
+                            q
+                        ),
+                        q
+                    )
+                )
+                
+                
                 
 
 
@@ -883,6 +926,21 @@ contract AmoePlonkVerifier {
                             mulmod(
                                 mload(add(pMem, pEval_l8)),
                                 calldataload(add(pPub, 224)),
+                                q
+                            )
+                        ),
+                        q
+                    ),
+                    q
+                )
+                 
+                pl := mod(
+                    add(
+                        sub(
+                            pl,  
+                            mulmod(
+                                mload(add(pMem, pEval_l9)),
+                                calldataload(add(pPub, 256)),
                                 q
                             )
                         ),
@@ -1191,7 +1249,7 @@ contract AmoePlonkVerifier {
 
             // SECURITY: enforce that every public input is canonical (< q).
             // The default snarkjs PLONK verifier only `checkField`-validates
-            // the 24 proof scalars; the 8 public inputs flow straight into
+            // the 24 proof scalars; the 9 public inputs flow straight into
             // calculateChallenges/calculatePI as raw uint256 values. Without
             // this loop a prover could submit non-canonical encodings
             // (x + k*q) that are field-equivalent to a canonical value but
@@ -1203,7 +1261,7 @@ contract AmoePlonkVerifier {
             // _pubSignals here resolves to the calldata offset of input[0]
             // (the same value the snarkjs-emitted code below passes as
             // `pPublic` / `pPub` into calculateChallenges / calculatePI).
-            // 8 public inputs, each 32 bytes.
+            // 9 public inputs, each 32 bytes.
             checkField(calldataload(add(_pubSignals,   0)))
             checkField(calldataload(add(_pubSignals,  32)))
             checkField(calldataload(add(_pubSignals,  64)))
@@ -1212,6 +1270,7 @@ contract AmoePlonkVerifier {
             checkField(calldataload(add(_pubSignals, 160)))
             checkField(calldataload(add(_pubSignals, 192)))
             checkField(calldataload(add(_pubSignals, 224)))
+            checkField(calldataload(add(_pubSignals, 256)))
 
             calculateChallenges(pMem, _pubSignals)
             calculateLagrange(pMem)

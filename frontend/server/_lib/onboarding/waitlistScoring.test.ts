@@ -52,7 +52,7 @@ describe('sumWaitlistPointsBreakdown', () => {
 })
 
 describe('readAmoeEligibleCreditsForSignupId', () => {
-  it('includes referral_passthrough because it delegates to waitlist breakdown', () => {
-    expect(weightedWaitlistPoints('referral_passthrough', 40)).toBe(40)
+  it('excludes referral_passthrough from AMOE eligibility weights', () => {
+    expect(weightedAmoeEligiblePoints('referral_passthrough', 40)).toBe(0)
   })
 })

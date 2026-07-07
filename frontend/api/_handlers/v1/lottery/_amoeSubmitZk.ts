@@ -7,7 +7,7 @@
 // signature on the canonical EIP-191 message is still required as the
 // off-chain auth + replay artifact (verified via
 // `verifyAmoeWalletSignature`); the on-chain artifact is the proof
-// + 8 public inputs consumed by `LotteryAmoeRouter.submitAmoeEntryZK`.
+// + 9 public inputs consumed by `LotteryAmoeRouter.submitAmoeEntryZK`.
 //
 // Behind a feature flag (`AMOE_ZK_SUBMIT_ENABLED=1`) until PR 5 lands
 // the publisher and we cut over.
@@ -71,6 +71,9 @@ import {
   AmoeSnapshotNotYetConfirmedError,
   type AmoeLedgerSnapshotReader,
 } from '../../../../server/_lib/lottery/amoeLedgerSnapshotReader.js'
+import {
+  AmoeAllowlistSnapshotPgReader,
+} from '../../../../server/_lib/lottery/amoeAllowlistSnapshotReader.js'
 import {
   AMOE_EPOCH_GENESIS_SECONDS,
   AMOE_EPOCH_LENGTH_SECONDS,
@@ -222,6 +225,12 @@ export interface AmoeSubmitZkHandlerHooks {
    * `AmoeLedgerSnapshotPgReader` against the configured Postgres pool.
    */
   ledgerSnapshotReader?: AmoeLedgerSnapshotReader
+  /**
+   * Test seam for the published wallet allowlist snapshot reader.
+   * Production builds `AmoeAllowlistSnapshotPgReader` when burn-then-submit
+   * is required; tests inject a stub to avoid live Postgres.
+   */
+  allowlistSnapshotReader?: AmoeAllowlistSnapshotPgReader
 }
 
 /**
@@ -284,6 +293,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // automation can detect "endpoint exists but disabled".
   if (!isAmoeZkSubmitEnabled()) {
     return res.status(503).json({ success: false, error: 'zk_path_disabled' })
+  }
+
+  // Production path requires phase-A burn before ZK submit (no relay-first debit).
+  if (!isBurnThenSubmitRequired()) {
+    return res.status(503).json({ success: false, error: 'burn_then_submit_required' })
   }
 
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/lottery/amoe/submit-zk', kind: 'read' })
@@ -644,6 +658,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     //
     // Test hooks override `orchestrate`, so they bypass this entirely.
     let ledgerSnapshotReader: AmoeLedgerSnapshotReader | undefined
+    let allowlistSnapshotReader: AmoeAllowlistSnapshotPgReader | undefined
     if (burnThenSubmitReader) {
       ledgerSnapshotReader = burnThenSubmitReader
     } else if (
@@ -653,6 +668,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ) {
       const db = await getDb()
       ledgerSnapshotReader = db ? new AmoeLedgerSnapshotPgReader(db) : undefined
+    }
+
+    if (!__testHooks.orchestrate && isBurnThenSubmitRequired()) {
+      if (__testHooks.allowlistSnapshotReader) {
+        allowlistSnapshotReader = __testHooks.allowlistSnapshotReader
+      } else {
+        const dbForAllowlist = await getDb()
+        allowlistSnapshotReader = dbForAllowlist
+          ? new AmoeAllowlistSnapshotPgReader(dbForAllowlist)
+          : undefined
+      }
     }
 
     let result
@@ -668,7 +694,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           profileId: BigInt(profileId),
           lotteryAmoeRouter,
         },
-        { wasmPath, zkeyPath, ledgerSnapshotReader },
+        { wasmPath, zkeyPath, ledgerSnapshotReader, allowlistSnapshotReader },
       )
     } catch (proveErr) {
       // Best-effort: don't mask the original error if the row update

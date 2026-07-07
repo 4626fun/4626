@@ -417,70 +417,9 @@ describe('AMOE credits handler', () => {
 })
 
 describe('AMOE submit handler', () => {
-  // PR 2 — the submit handler is now server-relay-only and accepts a
-  // variable `pointsBurned` value. We stub the relay viem path to avoid
-  // network I/O and assert the new request/response shape.
   beforeEach(() => {
     vi.clearAllMocks()
     guardMock.mockResolvedValue({ ok: true, ip: '127.0.0.1' })
-    checkRateLimitMock.mockReturnValue({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })
-    getClientIpMock.mockReturnValue('127.0.0.1')
-    rateLimitKeyMock.mockImplementation((...parts: string[]) => parts.join(':'))
-    checkDurableRateLimitMock.mockResolvedValue({ allowed: true, remaining: 5, resetAt: Date.now() + 60_000 })
-    verifyAmoeEntryProofMock.mockResolvedValue({
-      wallet: '0x000000000000000000000000000000000000cafe',
-      creatorCoin: '0x0000000000000000000000000000000000001001',
-      nonce: '0x1111111111111111111111111111111111111111111111111111111111111111',
-      expiresAt: '2026-03-01T00:10:00.000Z',
-    })
-    buildProcessAmoeEntryCallMock.mockResolvedValue({
-      to: '0x77705A2f173dd52F28300447506Dc35086c34626',
-      callData: '0xdeadbeef',
-      pointsBurned: 1000,
-      pointsBurnedAsUSD: '10000000',
-      estimatedWinChancePPM: 40,
-    })
-    // Default the credit snapshot to a high balance so the new pre-flight
-    // gate passes for legacy success-path tests. Tests that exercise the
-    // gate override this with their own balance.
-    getAmoeCreditSnapshotMock.mockResolvedValue({
-      wallet: '0x000000000000000000000000000000000000cafe',
-      credits: 1_000_000,
-      creditsPerEntry: 100,
-      entriesAvailable: 10_000,
-      nextEntryAtCredits: 100,
-    })
-    consumeAmoeCreditsForEntryMock.mockResolvedValue({
-      wallet: '0x000000000000000000000000000000000000cafe',
-      consumed: 1000,
-      creditsRemaining: 0,
-      entriesAvailable: 0,
-      creditsPerEntry: 100,
-    })
-
-    // Stub viem so the relay path returns a deterministic txHash without
-    // touching the network. PR 2 drops client-relay so every successful
-    // submit reaches this code path.
-    process.env.LOTTERY_AMOE_RELAY_PRIVATE_KEY = '0x' + 'aa'.repeat(32)
-    delete process.env.LOTTERY_AMOE_RELAY_SMART_WALLET
-    delete process.env.LOTTERY_AMOE_RELAY_BUNDLER_URL
-    vi.doMock('viem', () => ({
-      createPublicClient: () => ({
-        waitForTransactionReceipt: async () => ({ status: 'success' }),
-      }),
-      createWalletClient: () => ({
-        sendTransaction: async () => '0xfeedface',
-      }),
-      getAddress: (a: string) => a,
-      http: () => () => undefined,
-    }))
-    vi.doMock('viem/chains', () => ({ base: { id: 8453 } }))
-    vi.doMock('viem/accounts', () => ({
-      privateKeyToAccount: (pk: string) => ({
-        address: '0x000000000000000000000000000000000000beef',
-        source: pk,
-      }),
-    }))
   })
 
   it('rejects unsupported methods', async () => {
@@ -491,7 +430,7 @@ describe('AMOE submit handler', () => {
     expect(res.statusCode).toBe(405)
   })
 
-  it('returns server-relayed AMOE submit payload with variable points', async () => {
+  it('returns 410 for retired legacy server-relay path', async () => {
     const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmit')
     const req = createMockReq({
       method: 'POST',
@@ -504,188 +443,11 @@ describe('AMOE submit handler', () => {
     })
     const res = createMockRes()
     await handler(req, res)
-    expect(res.statusCode).toBe(200)
-    expect(res.body?.success).toBe(true)
-    expect(res.body?.data?.txHash).toBe('0xfeedface')
-    expect(res.body?.data?.relayMode).toBe('server')
-    expect(res.body?.data?.pointsBurned).toBe(1000)
-    expect(res.body?.data?.pointsBurnedAsUSD).toBe('10000000')
-    expect(res.body?.data?.estimatedWinChancePPM).toBe(40)
-    expect(verifyAmoeEntryProofMock).toHaveBeenCalledTimes(1)
-    expect(buildProcessAmoeEntryCallMock).toHaveBeenCalledWith(
-      expect.objectContaining({ pointsBurned: 1000 }),
-    )
-    // Variable amount must be passed through to the credit ledger — not the
-    // legacy fixed `AMOE_CREDITS_PER_ENTRY` constant.
-    expect(consumeAmoeCreditsForEntryMock).toHaveBeenCalledWith(
-      expect.objectContaining({ requiredCredits: 1000 }),
-    )
-  })
-
-  it('defaults omitted creatorCoin to the protocol AMOE target and only relays an entry', async () => {
-    verifyAmoeEntryProofMock.mockResolvedValueOnce({
-      wallet: '0x000000000000000000000000000000000000cafe',
-      creatorCoin: PROTOCOL_AMOE_CREATOR_COIN,
-      nonce: '0x2222222222222222222222222222222222222222222222222222222222222222',
-      expiresAt: '2026-03-01T00:10:00.000Z',
-    })
-
-    const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmit')
-    const req = createMockReq({
-      method: 'POST',
-      body: {
-        message: 'amoe-message',
-        signature: '0x1234',
-        pointsBurned: 1000,
-      },
-    })
-    const res = createMockRes()
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(200)
-    expect(verifyAmoeEntryProofMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        creatorCoin: PROTOCOL_AMOE_CREATOR_COIN,
-      }),
-    )
-    expect(buildProcessAmoeEntryCallMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        creatorCoin: PROTOCOL_AMOE_CREATOR_COIN,
-        pointsBurned: 1000,
-      }),
-    )
-    expect(consumeAmoeCreditsForEntryMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        requiredCredits: 1000,
-        refId: `${PROTOCOL_AMOE_CREATOR_COIN}:0x2222222222222222222222222222222222222222222222222222222222222222`,
-      }),
-    )
-    expect(res.body?.data?.txHash).toBe('0xfeedface')
-    expect(res.body?.data).not.toHaveProperty('tokenAmount')
-    expect(res.body?.data).not.toHaveProperty('tokensReceived')
-  })
-
-  it('rejects requests with missing pointsBurned', async () => {
-    const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmit')
-    const req = createMockReq({
-      method: 'POST',
-      body: {
-        creatorCoin: '0x0000000000000000000000000000000000001001',
-        message: 'amoe-message',
-        signature: '0x1234',
-      },
-    })
-    const res = createMockRes()
-    await handler(req, res)
-    expect(res.statusCode).toBe(400)
-    expect(String(res.body?.error ?? '')).toMatch(/pointsBurned/)
+    expect(res.statusCode).toBe(410)
+    expect(res.body?.error).toBe('legacy_amoe_submit_retired')
+    expect(verifyAmoeEntryProofMock).not.toHaveBeenCalled()
     expect(buildProcessAmoeEntryCallMock).not.toHaveBeenCalled()
     expect(consumeAmoeCreditsForEntryMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects pointsBurned below the 100 floor', async () => {
-    const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmit')
-    const req = createMockReq({
-      method: 'POST',
-      body: {
-        creatorCoin: '0x0000000000000000000000000000000000001001',
-        message: 'amoe-message',
-        signature: '0x1234',
-        pointsBurned: 99,
-      },
-    })
-    const res = createMockRes()
-    await handler(req, res)
-    expect(res.statusCode).toBe(400)
-    expect(buildProcessAmoeEntryCallMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects under-collateralized entries before relaying (P1 review fix)', async () => {
-    // Regression for the P1 review finding: client requested 1_000_000
-    // points (= $10K, 4% pre-boost) while only holding 100. Pre-fix the
-    // handler relayed first and only failed the debit afterward, leaking
-    // an on-chain entry. Post-fix the snapshot gate must reject before
-    // any relay-side-effect.
-    getAmoeCreditSnapshotMock.mockResolvedValueOnce({
-      wallet: '0x000000000000000000000000000000000000cafe',
-      credits: 100,
-      creditsPerEntry: 100,
-      entriesAvailable: 1,
-      nextEntryAtCredits: 100,
-    })
-    const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmit')
-    const req = createMockReq({
-      method: 'POST',
-      body: {
-        creatorCoin: '0x0000000000000000000000000000000000001001',
-        message: 'amoe-message',
-        signature: '0x1234',
-        pointsBurned: 1_000_000,
-      },
-    })
-    const res = createMockRes()
-    await handler(req, res)
-    expect(res.statusCode).toBe(402)
-    expect(String(res.body?.error ?? '')).toMatch(/insufficient/i)
-    // The on-chain side-effect must NOT have happened.
-    expect(buildProcessAmoeEntryCallMock).not.toHaveBeenCalled()
-    expect(consumeAmoeCreditsForEntryMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects pointsBurned above the 1M ceiling', async () => {
-    const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmit')
-    const req = createMockReq({
-      method: 'POST',
-      body: {
-        creatorCoin: '0x0000000000000000000000000000000000001001',
-        message: 'amoe-message',
-        signature: '0x1234',
-        pointsBurned: 1_000_001,
-      },
-    })
-    const res = createMockRes()
-    await handler(req, res)
-    expect(res.statusCode).toBe(400)
-    expect(buildProcessAmoeEntryCallMock).not.toHaveBeenCalled()
-  })
-
-  it('returns 429 when submit endpoint rate limit is exceeded', async () => {
-    checkRateLimitMock.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
-    const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmit')
-    const req = createMockReq({
-      method: 'POST',
-      body: {
-        creatorCoin: '0x0000000000000000000000000000000000001001',
-        message: 'amoe-message',
-        signature: '0x1234',
-        pointsBurned: 100,
-      },
-    })
-    const res = createMockRes()
-    await handler(req, res)
-    expect(res.statusCode).toBe(429)
-    expect(res.body?.error).toBe('Too many requests')
-    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
-  })
-
-  it('returns 402 when credits are insufficient', async () => {
-    consumeAmoeCreditsForEntryMock.mockRejectedValue(new Error('insufficient_amoe_credits'))
-
-    const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmit')
-    const req = createMockReq({
-      method: 'POST',
-      body: {
-        creatorCoin: '0x0000000000000000000000000000000000001001',
-        message: 'amoe-message',
-        signature: '0x1234',
-        pointsBurned: 100,
-      },
-    })
-    const res = createMockRes()
-    await handler(req, res)
-    expect(res.statusCode).toBe(402)
-    expect(res.body?.success).toBe(false)
-    expect(String(res.body?.error ?? '')).toMatch(/insufficient/i)
   })
 })
 

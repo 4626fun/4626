@@ -128,7 +128,7 @@ async function main(): Promise<void> {
   checks.push({
     id: 'phase1.module_storage_v3',
     ok: modulePreflight.ok,
-    detail: modulePreflight.ok ? 'CreatorOVaultModuleStorage.v3' : modulePreflight.message,
+    detail: modulePreflight.ok ? 'OVaultModuleStorage.v3' : modulePreflight.message,
   })
 
   const localVaultBytecode = (DEPLOY_BYTECODE.CreatorOVault as Hex).toLowerCase()
@@ -137,7 +137,7 @@ async function main(): Promise<void> {
     ok: localVaultBytecode.includes(V3_FINGERPRINT_HEX),
     detail: localVaultBytecode.includes(V3_FINGERPRINT_HEX)
       ? 'DEPLOY_BYTECODE.CreatorOVault embeds v3 fingerprint'
-      : 'DEPLOY_BYTECODE.CreatorOVault missing CreatorOVaultModuleStorage.v3 fingerprint',
+      : 'DEPLOY_BYTECODE.CreatorOVault missing OVaultModuleStorage.v3 fingerprint',
   })
   checks.push({
     id: 'deploy_bytecode.not_v2_fingerprint',
@@ -256,7 +256,7 @@ async function main(): Promise<void> {
     })
   }
 
-  const expectedV3 = keccak256(encodePacked(['string'], ['CreatorOVaultModuleStorage.v3']))
+  const expectedV3 = keccak256(encodePacked(['string'], ['OVaultModuleStorage.v3']))
   checks.push({
     id: 'constants.v3_fingerprint_hash',
     ok: expectedV3.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_V3.toLowerCase(),

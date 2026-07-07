@@ -14,8 +14,8 @@ import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/Signa
 import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
 import {IStrategyValuation} from "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
-import {ICreatorOVaultModuleIdentity} from "@4626/creator/vault/modules/ICreatorOVaultModuleIdentity.sol";
-import {CreatorOVaultLiquidityLib} from "@4626/creator/vault/libraries/CreatorOVaultLiquidityLib.sol";
+import {IOVaultModuleIdentity} from "@4626/shared/vault/modules/IOVaultModuleIdentity.sol";
+import {OVaultLiquidityLib} from "@4626/shared/vault/libraries/OVaultLiquidityLib.sol";
 
 struct CcaLifecycleStatus {
     uint8 phase;
@@ -47,7 +47,7 @@ interface ICCAPhaseReader {
  *
  * @dev IMPAIRMENT / RECOVERY:
  *      - Vault can enter Suspect mode when a strategy impairment is tripped
- *      - Impairment epochs snapshot holders; CreatorOImpairmentClaims + CreatorORecoveryEscrow settle recovery
+ *      - Impairment epochs snapshot holders; OVaultImpairmentClaims + OVaultRecoveryEscrow settle recovery
  *
  * @dev ACCESS CONTROL:
  *      - Owner: full control
@@ -124,10 +124,10 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
 
     /// @notice Maximum strategies
     uint256 public constant MAX_STRATEGIES = 5;
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v3");
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("OVaultModuleStorage.v3");
     bytes32 internal constant MODULE_KIND_CORE = keccak256("CreatorOVaultModule.core");
-    bytes32 internal constant MODULE_KIND_STRATEGIES = keccak256("CreatorOVaultModule.strategies");
-    bytes32 internal constant MODULE_KIND_ADMIN = keccak256("CreatorOVaultModule.admin");
+    bytes32 internal constant MODULE_KIND_STRATEGIES = keccak256("OVaultModule.strategies");
+    bytes32 internal constant MODULE_KIND_ADMIN = keccak256("OVaultModule.admin");
     uint8 internal constant CCA_PHASE_AUCTION_LIVE = 1;
 
     // =================================
@@ -759,13 +759,13 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     }
 
     function _validateModuleIdentity(address module, bytes32 expectedKind) internal view {
-        try ICreatorOVaultModuleIdentity(module).moduleKind() returns (bytes32 moduleKind) {
+        try IOVaultModuleIdentity(module).moduleKind() returns (bytes32 moduleKind) {
             if (moduleKind != expectedKind) revert InvalidModuleAddress();
         } catch {
             revert InvalidModuleAddress();
         }
 
-        try ICreatorOVaultModuleIdentity(module).moduleStorageVersion() returns (bytes32 moduleStorageVersion) {
+        try IOVaultModuleIdentity(module).moduleStorageVersion() returns (bytes32 moduleStorageVersion) {
             if (moduleStorageVersion != MODULE_STORAGE_VERSION) revert InvalidModuleAddress();
         } catch {
             revert InvalidModuleAddress();
@@ -2201,8 +2201,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         return strategyList.length;
     }
 
-    function liquiditySnapshot() external view returns (CreatorOVaultLiquidityLib.LiquiditySnapshot memory) {
-        return CreatorOVaultLiquidityLib.snapshot(address(this));
+    function liquiditySnapshot() external view returns (OVaultLiquidityLib.LiquiditySnapshot memory) {
+        return OVaultLiquidityLib.snapshot(address(this));
     }
 
     /**

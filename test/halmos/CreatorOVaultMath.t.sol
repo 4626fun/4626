@@ -7,8 +7,8 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {CreatorOVault} from "@4626/creator/vault/CreatorOVault.sol";
 import {CreatorOVaultCoreModule} from "@4626/creator/vault/modules/CreatorOVaultCoreModule.sol";
-import {CreatorOVaultStrategiesModule} from "@4626/creator/vault/modules/CreatorOVaultStrategiesModule.sol";
-import {CreatorOVaultAdminModule} from "@4626/creator/vault/modules/CreatorOVaultAdminModule.sol";
+import {OVaultStrategiesModule} from "@4626/shared/vault/modules/OVaultStrategiesModule.sol";
+import {OVaultAdminModule} from "@4626/shared/vault/modules/OVaultAdminModule.sol";
 
 /// @title CreatorOVaultMath — Minimal Halmos symbolic execution smoke on real vault share/asset math + fees
 /// @notice This is the first targeted Halmos layer for 4626's ERC-4626 core (option 3 from the verification roadmap).
@@ -290,8 +290,8 @@ contract CreatorOVaultMath is Test {
 
         vault.setModulesOnce(
             address(new CreatorOVaultCoreModule()),
-            address(new CreatorOVaultStrategiesModule()),
-            address(new CreatorOVaultAdminModule())
+            address(new OVaultStrategiesModule()),
+            address(new OVaultAdminModule())
         );
 
         // Minimal safe defaults matching harness + production patterns

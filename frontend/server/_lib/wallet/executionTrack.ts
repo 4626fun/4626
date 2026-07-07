@@ -13,7 +13,8 @@
  * Possible tracks:
  *
  *   - `legacy-owner-install` — embedded EOA is a direct owner of the parent CSW.
- *   - `none-yet`             — parent CSW known but no signing track is ready.
+ *   - `base-app-direct`      — parent CSW + embedded EOA exist; Base App CSW signing.
+ *   - `none-yet`             — parent CSW or embedded EOA missing; no signing track ready.
  *
  * Server-side agent / deploy-session delegation is a separate, orthogonal
  * track defined in `.cursor/rules/csw-agent-lifecycle.mdc`.
@@ -23,6 +24,7 @@ const EVM_ADDRESS_RE = /^0x[a-f0-9]{40}$/
 
 export type ExecutionTrack =
   | 'legacy-owner-install'
+  | 'base-app-direct'
   | 'none-yet'
 
 export type BaseSubAccountSummary = {
@@ -55,6 +57,19 @@ export type ExecutionTrackInput = BaseSubAccountInput & {
    * execution; a `true` value signals the legacy owner-install path.
    */
   privyEmbeddedEoaIsOwnerOfCanonicalCsw: boolean | null | undefined
+  /** Privy embedded EOA from `profiles.primary_embedded_eoa`. */
+  embeddedEoaAddress?: string | null | undefined
+  /**
+   * `profile_wallets.canonical_source`. Only `base_account` unlocks the
+   * Base App direct signing track without embedded-owner install.
+   */
+  canonicalSource?: string | null | undefined
+}
+
+export function isBaseAppPopulationCanonicalSource(
+  canonicalSource: string | null | undefined,
+): boolean {
+  return String(canonicalSource ?? '').trim() === 'base_account'
 }
 
 function normalizeAddress(value: string | null | undefined): string | null {
@@ -80,6 +95,15 @@ export function summarizeBaseSubAccount(input: BaseSubAccountInput): BaseSubAcco
 export function resolveExecutionTrack(input: ExecutionTrackInput): ExecutionTrack {
   if (input.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true) {
     return 'legacy-owner-install'
+  }
+  const canonical = normalizeAddress(input.canonicalCswAddress)
+  const embedded = normalizeAddress(input.embeddedEoaAddress)
+  if (
+    canonical &&
+    embedded &&
+    isBaseAppPopulationCanonicalSource(input.canonicalSource)
+  ) {
+    return 'base-app-direct'
   }
   return 'none-yet'
 }

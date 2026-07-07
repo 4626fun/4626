@@ -17,6 +17,8 @@ export type CanonicalSignerGateInput = {
   embeddedWalletAddress: string | null
   embeddedWalletCanSign: boolean
   ownerCheckStatus: CanonicalOwnerCheckStatus
+  /** Wagmi connected address matches canonical CSW via Coinbase/Base connector. */
+  baseAppDirectConnected?: boolean
 }
 
 export type CanonicalSignerGateResult = {
@@ -79,6 +81,22 @@ export function evaluateCanonicalSignerGate(input: CanonicalSignerGateInput): Ca
     return gateFailure(
       'missing-canonical-address',
       'Canonical mode requires a canonical smart wallet address before signing can proceed.',
+    )
+  }
+
+  if (input.baseAppDirectConnected) {
+    return {
+      required: true,
+      ready: true,
+      code: 'ok',
+      reason: null,
+    }
+  }
+
+  if (input.executionTrack === 'base-app-direct') {
+    return gateFailure(
+      'execution-setup-required',
+      'Connect your Coinbase Smart Wallet in Base App to enable sponsored swaps from your parent CSW.',
     )
   }
 

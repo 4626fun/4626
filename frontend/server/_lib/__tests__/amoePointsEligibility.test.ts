@@ -107,7 +107,7 @@ describe('AMOE points eligibility bifurcation', () => {
       expect(lotteryAmoeSource.includes('readAmoeEligibleCreditsForSignup')).toBe(true)
     })
 
-    it('AMOE spend (consumeAmoeCreditsForEntry) gates on the same waitlist-weighted balance as public points', () => {
+    it('AMOE spend (consumeAmoeCreditsForEntry) gates on points_amoe_eligible_balance', () => {
       const fnStart = lotteryAmoeSource.indexOf(
         'export async function consumeAmoeCreditsForEntry',
       )
@@ -118,20 +118,33 @@ describe('AMOE points eligibility bifurcation', () => {
       )
       const fnBody = lotteryAmoeSource.slice(fnStart, fnEnd > -1 ? fnEnd : undefined)
 
-      expect(fnBody.includes('FROM points_amoe_eligible_balance')).toBe(false)
-      expect(fnBody.includes("'referral_passthrough'")).toBe(true)
-      expect(fnBody.includes("'amoe_entry_spend'")).toBe(true)
+      expect(fnBody.includes('FROM points_amoe_eligible_balance')).toBe(true)
+      expect(fnBody.includes("'referral_passthrough'")).toBe(false)
+      expect(fnBody.includes("'has_creator_coin'")).toBe(false)
     })
 
-    it('readAmoeEligibleCreditsForSignup uses waitlist breakdown (one public points total)', () => {
+    it('readAmoeEligibleCreditsForSignup reads points_amoe_eligible_balance', () => {
       const fnStart = lotteryAmoeSource.indexOf(
         'async function readAmoeEligibleCreditsForSignup',
       )
       expect(fnStart).toBeGreaterThan(-1)
       const fnEnd = lotteryAmoeSource.indexOf('\n}', fnStart)
       const fnBody = lotteryAmoeSource.slice(fnStart, fnEnd)
-      expect(fnBody.includes('readWaitlistPointsBreakdown')).toBe(true)
-      expect(fnBody.includes('FROM points_amoe_eligible_balance')).toBe(false)
+      expect(fnBody.includes('FROM points_amoe_eligible_balance')).toBe(true)
+      expect(fnBody.includes('readWaitlistPointsBreakdown')).toBe(false)
+    })
+
+    it('consumeAmoeCreditsForEntry serializes debits with pg_advisory_xact_lock', () => {
+      const fnStart = lotteryAmoeSource.indexOf(
+        'export async function consumeAmoeCreditsForEntry',
+      )
+      const fnEnd = lotteryAmoeSource.indexOf(
+        '\nexport async function ',
+        fnStart + 'export async function consumeAmoeCreditsForEntry'.length,
+      )
+      const fnBody = lotteryAmoeSource.slice(fnStart, fnEnd > -1 ? fnEnd : undefined)
+      expect(fnBody.includes('runInTransaction')).toBe(true)
+      expect(fnBody.includes('pg_advisory_xact_lock')).toBe(true)
     })
 
     it('getAmoeCreditSnapshot uses the AMOE-eligible reader', () => {

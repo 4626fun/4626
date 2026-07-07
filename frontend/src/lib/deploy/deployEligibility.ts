@@ -23,12 +23,14 @@ export type DeployEligibilityCode =
   | 'signing-required'
   | 'simulation-may-fail'
 
+import type { UserFrontendExecutionTrack } from '@/lib/wallet/userExecutionTrack'
+
 export type DeployEligibilityInput = {
   canonicalCswAddress: string | null
   canonicalIdentityType: 'contract' | 'eoa' | 'unknown'
   zoraLinked?: boolean
   baseAppLinked?: boolean
-  executionTrack?: 'legacy-owner-install' | 'none-yet' | null
+  executionTrack?: UserFrontendExecutionTrack | null
   onchainEoaOwnerCount?: number
   privyEmbeddedEoaIsOwnerOfCanonicalCsw?: boolean | null
   /** When set, overrides generic passkey-only Zora block (simulation already failed). */
@@ -65,7 +67,7 @@ export function classifyDeployPopulation(input: DeployEligibilityInput): DeployU
     return 'zora-eoa-owner'
   }
 
-  if (input.baseAppLinked) {
+  if (input.baseAppLinked || input.executionTrack === 'base-app-direct') {
     return 'base-app-passkey'
   }
 

@@ -44,6 +44,7 @@ export type TxMethod =
   | 'eth_sendTransaction'
 export type UserExecutionTrack =
   | 'legacy-owner-install'
+  | 'base-app-direct'
   | 'none-yet'
 
 export type TxRouterContext = {

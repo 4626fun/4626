@@ -5,11 +5,11 @@ import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import {CreatorOVault} from "@4626/creator/vault/CreatorOVault.sol";
-import {CreatorOVaultAdminModule} from "@4626/creator/vault/modules/CreatorOVaultAdminModule.sol";
+import {OVaultAdminModule} from "@4626/shared/vault/modules/OVaultAdminModule.sol";
 import {CreatorOVaultCoreModule} from "@4626/creator/vault/modules/CreatorOVaultCoreModule.sol";
-import {CreatorOVaultStrategiesModule} from "@4626/creator/vault/modules/CreatorOVaultStrategiesModule.sol";
-import {CreatorOImpairmentClaims} from "@4626/creator/recovery/CreatorOImpairmentClaims.sol";
-import {CreatorORecoveryEscrow} from "@4626/creator/recovery/CreatorORecoveryEscrow.sol";
+import {OVaultStrategiesModule} from "@4626/shared/vault/modules/OVaultStrategiesModule.sol";
+import {OVaultImpairmentClaims} from "@4626/shared/recovery/OVaultImpairmentClaims.sol";
+import {OVaultRecoveryEscrow} from "@4626/shared/recovery/OVaultRecoveryEscrow.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
 import {IStrategyValuation} from "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
@@ -83,8 +83,8 @@ contract CreatorOVaultImpairmentV1Test is Test {
 
     MockCreatorCoinImp internal creatorCoin;
     CreatorOVault internal vault;
-    CreatorOImpairmentClaims internal claims;
-    CreatorORecoveryEscrow internal escrow;
+    OVaultImpairmentClaims internal claims;
+    OVaultRecoveryEscrow internal escrow;
 
     address internal alice;
     ImpairmentMockStrategy internal strat;
@@ -95,12 +95,12 @@ contract CreatorOVaultImpairmentV1Test is Test {
         vault = new CreatorOVault(address(creatorCoin), address(this), "Creator OVault", "ovCR8R");
 
         address coreModule = address(new CreatorOVaultCoreModule());
-        address strategiesModule = address(new CreatorOVaultStrategiesModule());
-        address adminModule = address(new CreatorOVaultAdminModule());
+        address strategiesModule = address(new OVaultStrategiesModule());
+        address adminModule = address(new OVaultAdminModule());
         vault.setModulesOnce(coreModule, strategiesModule, adminModule);
 
-        claims = new CreatorOImpairmentClaims(address(this));
-        escrow = new CreatorORecoveryEscrow(address(this));
+        claims = new OVaultImpairmentClaims(address(this));
+        escrow = new OVaultRecoveryEscrow(address(this));
         claims.setVault(address(vault));
         escrow.setVault(address(vault));
         vault.setImpairmentClaims(address(claims));

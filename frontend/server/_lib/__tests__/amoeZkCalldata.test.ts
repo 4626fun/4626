@@ -22,6 +22,10 @@
 //     `amoe/tests/zk/AmoePlonkVerifier.t.sol`. We assert SHAPE, BOUNDS, and
 //     ENCODING here — proof correctness is on-chain's responsibility.
 
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { describe, expect, it } from 'vitest'
 import { decodeFunctionData } from 'viem'
 
@@ -40,62 +44,41 @@ import { AmoeBadRequestError } from '../lottery/lotteryAmoeErrors.js'
 // Fixture — must mirror `amoe/tests/zk/AmoePlonkVerifier.t.sol::_fixture()` exactly.
 // ---------------------------------------------------------------------------
 
-const FIXTURE_PROOF: readonly bigint[] = [
-  0x1a44fca81e6bbdf6a3cde5b7933a8d50323744c332d72c3c4453819f75ff50e5n,
-  0x2becebd5241a74f96de452019edbec80270827d51c2de3bf893a739458fa097bn,
-  0x02afc668d0cef97d04291c1e73dc257102d3eeda38a45e5b41ea833b4d26c016n,
-  0x2c7e0f4ea786b191ffbd2db7bb312c4b21a628f9882f8fcd5ea54ac93dd8efa5n,
-  0x1ec02acfa1db877238b908741c253528b8ba57dd15cd18823499d9c46fb4d09an,
-  0x066a759d52f589a3dcbd03452fd4b3b8b85c863f2b894d4363f74af18312322cn,
-  0x039a44f0dfb802e9506ded3543829ff80dc306f6bd7b404cf8f656f280cd2806n,
-  0x2d72c9f10ec402bbd81185b37ac7b831a2d08f0471e0960dd89927a7ba1877ccn,
-  0x0d0e814571023ff2b983723d38b9da36d9afb9de34a803fcc7f9fb5561459da9n,
-  0x00a85b3c39e759845895053e9cf2881e6f9d928712a8f9725bdfa25f2bc242c8n,
-  0x27f0b0340edd6a95c9cca7fd3dd8efb41af964add75be6e1ac2b95da59caa46en,
-  0x0781f9ad765b5d7d4e2c86a7b16070f10e5c73c3a0c6461e0b9960e7448c3146n,
-  0x052b68286cd53177c8852d66100a4819511a955f341c00d159e910e369c675b7n,
-  0x27dfe0cc923706fe200d2d3672694545624c4d87753f211e9023f21dbb78d2bcn,
-  0x25520a560afd12bfbd4208870708b08e2716b7e59095e45db9041365d18fca37n,
-  0x09c642db3edcf25f8ecd350ee80e3e8fb24c4227cada7a4c4907cacebc621cdan,
-  0x1a779119ced970ec3ea0038f1ea7a7addf6dcd0e482d8142cb05838c08389f25n,
-  0x1252458f38e92b09883396f035948d9385480d2661040b752ed4085b792bbe56n,
-  0x26bcefc70e7f31ccc994eb16be6568d0776fcfa7401474bc1dc2b2cf6d5b478en,
-  0x232988a742744c6589dc0a32dc480d79617b0bdc39a283edd97649b5ac6bd14dn,
-  0x0f8e44679a967e47dfaa6c95c22e0627f77bc8fe1bd28c206cbf5ec46cc37c1cn,
-  0x0b3e1923f8e9c0fa144ec17b33aa3db604d6a24e80560cd47ad397062115f22an,
-  0x0fe474d9a1837d4b7e73352f6f9e03b23514207c4877e0a2388d56558c64ebaen,
-  0x21406ad366d4c1f8a2763b5ab4bee29e6cb9617319575d7345b68085c17f9eb3n,
-]
+// Fixture — mirrors `amoe/tests/zk/AmoePlonkVerifier.t.sol::_fixture()` (circuit v3).
 
-const FIXTURE_PUB: readonly bigint[] = [
-  // [0] walletAddrCommit (Poseidon commit, opaque to relayer)
-  0x14e9fd289780e5f9f4da1fb2a4759160db00379afa607c737578efbb93d24f98n,
-  // [1] creatorCoinAddr — must match calldata `creatorCoin` masked to uint160
-  0x00000000000000000000000000000000c0ffeec0ffeec0ffeec0ffeec0ffeec0n,
-  // [2] nonceCommit
-  0x011f2b850c7c8879a9cc7b87fa6edd0a4b0dd65e4e842f8637494550f572dc01n,
-  // [3] epoch — must match calldata `epoch` (here = 1)
-  0x0000000000000000000000000000000000000000000000000000000000000001n,
-  // [4] allowlistRoot
-  0x1aa68d103c8a332b52d205b2b10cda8a22edb028374e0cb7cc5ef5f288e63e17n,
-  // [5] pointsBurnedAsUSD = 0x0f4240 = 1_000_000 = $1 in USDC 1e6
-  0x00000000000000000000000000000000000000000000000000000000000f4240n,
-  // [6] pointsLedgerRoot
-  0x16bc6d81db1eaf1680362aaf47f0c676a21281346c77be08036397f01e749839n,
-  // [7] pointsBurnNullifier
-  0x0ecf6254b04738d669fff669b4ebd525bddbd6989e06b4a94d4e2f8ea1e167bcn,
-]
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const FIXTURES_DIR = join(__dirname, 'fixtures', 'amoe-plonk')
 
-// Address derived from pub[1] masked to uint160 (lower 20 bytes). pub[1] is
-// 32 bytes — top 16 are zero, bottom 16 are 0xc0ffee... — so the address is
-// 4 zero bytes + the 16 c0ffee bytes = 20 bytes. Must match exactly or the
-// builder rejects with `zk_creator_coin_pub_input_mismatch`.
+function plonkProofScalars(proofJson: Record<string, string[] | string>): bigint[] {
+  const pairKeys = ['A', 'B', 'C', 'Z', 'T1', 'T2', 'T3', 'Wxi', 'Wxiw'] as const
+  const scalarKeys = ['eval_a', 'eval_b', 'eval_c', 'eval_s1', 'eval_s2', 'eval_zw'] as const
+  const out: bigint[] = []
+  for (const key of pairKeys) {
+    const pair = proofJson[key]
+    if (!Array.isArray(pair) || pair.length < 2) throw new Error(`missing proof field ${key}`)
+    out.push(BigInt(pair[0]!), BigInt(pair[1]!))
+  }
+  for (const key of scalarKeys) {
+    const scalar = proofJson[key]
+    if (typeof scalar !== 'string') throw new Error(`missing proof field ${key}`)
+    out.push(BigInt(scalar))
+  }
+  return out
+}
+
+const FIXTURE_PROOF_JSON = JSON.parse(
+  readFileSync(join(FIXTURES_DIR, 'proof.json'), 'utf8'),
+) as Record<string, string[]>
+const FIXTURE_PROOF = plonkProofScalars(FIXTURE_PROOF_JSON)
+
+const FIXTURE_PUB: readonly bigint[] = JSON.parse(
+  readFileSync(join(FIXTURES_DIR, 'public.json'), 'utf8'),
+).map((s: string) => BigInt(s))
+
 const FIXTURE_CREATOR_COIN_ADDR =
   '0x00000000c0ffeec0ffeec0ffeec0ffeec0ffeec0' as const
 
-// All-lowercase to skip viem's checksum check (the on-chain address is
-// equally valid in either case — EIP-55 mixed case is just a typo guard).
-const FIXTURE_WALLET = '0xabcdef0123456789abcdef0123456789abcdef01' as const
+const FIXTURE_WALLET = '0x1234567890abcdef1234567890abcdef12345678' as const
 const FIXTURE_ROUTER = '0x1111111111111111111111111111111111111111' as const
 
 function happyInputs(): AmoeZKBuildInputs {
@@ -121,7 +104,7 @@ const decodeAbi = [
       { name: 'creatorCoin', type: 'address' },
       { name: 'epoch', type: 'uint64' },
       { name: 'proof', type: 'uint256[24]' },
-      { name: 'pubInputs', type: 'uint256[8]' },
+      { name: 'pubInputs', type: 'uint256[9]' },
     ],
     outputs: [{ name: 'entryId', type: 'uint256' }],
   },
@@ -137,8 +120,8 @@ describe('AMOE PLONK — locked constants', () => {
     expect(AMOE_PLONK_PROOF_LEN).toBe(24)
   })
 
-  it('public inputs length is 8 (locked by IAmoePlonkVerifier)', () => {
-    expect(AMOE_PLONK_PUB_INPUTS_LEN).toBe(8)
+  it('public inputs length is 9 (circuit v3 — IAmoePlonkVerifier)', () => {
+    expect(AMOE_PLONK_PUB_INPUTS_LEN).toBe(9)
   })
 
   it('pub-input slot map matches the on-chain spec', () => {
@@ -151,6 +134,7 @@ describe('AMOE PLONK — locked constants', () => {
       pointsBurnedAsUSD: 5,
       pointsLedgerRoot: 6,
       pointsBurnNullifier: 7,
+      walletAddr: 8,
     })
   })
 
@@ -188,11 +172,11 @@ describe('AMOE PLONK — buildAmoeEntryZKCall happy path', () => {
     expect(coin.toLowerCase()).toBe(FIXTURE_CREATOR_COIN_ADDR.toLowerCase())
     expect(epoch).toBe(1n)
     expect(proof.length).toBe(24)
-    expect(pub.length).toBe(8)
+    expect(pub.length).toBe(9)
     // Spot-check first/last proof scalars and every pub input.
     expect(proof[0]).toBe(FIXTURE_PROOF[0])
     expect(proof[23]).toBe(FIXTURE_PROOF[23])
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 9; i++) {
       expect(pub[i]).toBe(FIXTURE_PUB[i])
     }
   })
@@ -249,9 +233,9 @@ describe('AMOE PLONK — input validation', () => {
     ).rejects.toThrow(/zk_proof_wrong_length/)
   })
 
-  it('rejects pubInputs with wrong length (7 instead of 8)', async () => {
+  it('rejects pubInputs with wrong length (8 instead of 9)', async () => {
     await expect(
-      buildAmoeEntryZKCall({ ...happyInputs(), pubInputs: FIXTURE_PUB.slice(0, 7) }),
+      buildAmoeEntryZKCall({ ...happyInputs(), pubInputs: FIXTURE_PUB.slice(0, 8) }),
     ).rejects.toThrow(/zk_pub_inputs_wrong_length/)
   })
 

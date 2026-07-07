@@ -59,9 +59,10 @@ vi.mock('../lottery/lotteryAmoe.js', () => ({
     pointsBurnedAsUSD: 5,
     pointsLedgerRoot: 6,
     pointsBurnNullifier: 7,
+    walletAddr: 8,
   },
   AMOE_PLONK_PROOF_LEN: 24,
-  AMOE_PLONK_PUB_INPUTS_LEN: 8,
+  AMOE_PLONK_PUB_INPUTS_LEN: 9,
 }))
 
 import {
@@ -91,7 +92,7 @@ const CANONICAL_PROOF = Array.from(
   (_, i) => `0x${i.toString(16).padStart(64, '0')}`,
 )
 const CANONICAL_PUB = Array.from(
-  { length: 8 },
+  { length: 9 },
   (_, i) => `0x${(i + 100).toString(16).padStart(64, '0')}`,
 )
 
@@ -285,7 +286,7 @@ describe('retrySubmissionById — outcomes', () => {
     // correct lengths (mirrors blobToBigints contract).
     const callArgs = buildAmoeEntryZKCallMock.mock.calls[0]![0]
     expect(callArgs.proof).toHaveLength(24)
-    expect(callArgs.pubInputs).toHaveLength(8)
+    expect(callArgs.pubInputs).toHaveLength(9)
     expect(typeof callArgs.proof[0]).toBe('bigint')
     expect(typeof callArgs.pubInputs[0]).toBe('bigint')
     expect(callArgs.lotteryAmoeRouter).toBe(ROUTER)

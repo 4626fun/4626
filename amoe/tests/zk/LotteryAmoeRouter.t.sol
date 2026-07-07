@@ -9,7 +9,7 @@ import {
 } from "@4626/shared/lottery/zk/LotteryAmoeRouter.sol";
 import {IAmoePlonkVerifier} from "@4626/shared/lottery/zk/IAmoePlonkVerifier.sol";
 
-/// @notice Stub verifier (v2: 8 public inputs) returning whatever flag it's
+/// @notice Stub verifier (v3: 9 public inputs) returning whatever flag it's
 ///         configured with. The router's responsibility is the public-input
 ///         binding + replay guards; cryptographic correctness of the proof is
 ///         tested in the circuit integration tests (`amoe/circuits/test`).
@@ -18,7 +18,7 @@ contract MockVerifier is IAmoePlonkVerifier {
     function setOk(bool v) external { ok = v; }
     function verifyProof(
         uint256[24] calldata,
-        uint256[8] calldata
+        uint256[9] calldata
     ) external view returns (bool) { return ok; }
 }
 
@@ -68,8 +68,8 @@ contract LotteryAmoeRouterTest is Test {
     address owner = address(0xAA);
     address publisher = address(0xBB);
     address pointsPublisher = address(0xCC);
-    address buyer = address(0xCAFE);
-    address coin = address(0xC0FFEE);
+    address buyer = address(0x1234567890abcdef1234567890abcdef12345678);
+    address coin = address(0x00000000c0ffeec0ffeec0ffeec0ffeec0ffeec0);
 
     uint64 constant EPOCH = 42;
     bytes32 constant ALLOW_ROOT = bytes32(uint256(0x1234));
@@ -121,21 +121,22 @@ contract LotteryAmoeRouterTest is Test {
         uint256 nonceCommit,
         uint256 pointsBurnedAsUSD,
         uint256 nullifier
-    ) internal pure returns (uint256[8] memory inp) {
+    ) internal view returns (uint256[9] memory inp) {
         inp[0] = walletCommit;
-        inp[1] = uint256(uint160(0xC0FFEE));
+        inp[1] = uint256(uint160(coin));
         inp[2] = nonceCommit;
         inp[3] = uint256(EPOCH);
         inp[4] = uint256(ALLOW_ROOT);
         inp[5] = pointsBurnedAsUSD;
         inp[6] = uint256(LEDGER_ROOT);
         inp[7] = nullifier;
+        inp[8] = uint256(uint160(buyer));
     }
 
     function _defaultPubInputs(uint256 walletCommit, uint256 nonceCommit)
         internal
-        pure
-        returns (uint256[8] memory)
+        view
+        returns (uint256[9] memory)
     {
         return _pubInputs(walletCommit, nonceCommit, DEFAULT_POINTS, uint256(DEFAULT_NULLIFIER));
     }
@@ -155,7 +156,7 @@ contract LotteryAmoeRouterTest is Test {
 
     function test_submitAmoeEntryZK_rejectsRootMismatch() public {
         uint256[24] memory proof = _proof();
-        uint256[8] memory inp = _defaultPubInputs(111, 222);
+        uint256[9] memory inp = _defaultPubInputs(111, 222);
         inp[4] = uint256(bytes32(uint256(0xDEAD))); // wrong allowlist root
         vm.expectRevert(LotteryAmoeRouter.RootMismatch.selector);
         router.submitAmoeEntryZK(buyer, coin, EPOCH, proof, inp);
@@ -163,8 +164,16 @@ contract LotteryAmoeRouterTest is Test {
 
     function test_submitAmoeEntryZK_rejectsCoinMismatch() public {
         uint256[24] memory proof = _proof();
-        uint256[8] memory inp = _defaultPubInputs(111, 222);
+        uint256[9] memory inp = _defaultPubInputs(111, 222);
         inp[1] = uint256(uint160(address(0xBADC0DE))); // wrong coin
+        vm.expectRevert(LotteryAmoeRouter.InvalidProof.selector);
+        router.submitAmoeEntryZK(buyer, coin, EPOCH, proof, inp);
+    }
+
+    function test_submitAmoeEntryZK_rejectsBuyerWalletMismatch() public {
+        uint256[24] memory proof = _proof();
+        uint256[9] memory inp = _defaultPubInputs(111, 222);
+        inp[8] = uint256(uint160(address(0xDEADBEEF))); // wrong buyer binding
         vm.expectRevert(LotteryAmoeRouter.InvalidProof.selector);
         router.submitAmoeEntryZK(buyer, coin, EPOCH, proof, inp);
     }
@@ -173,7 +182,7 @@ contract LotteryAmoeRouterTest is Test {
         uint256[24] memory proof = _proof();
         router.submitAmoeEntryZK(buyer, coin, EPOCH, proof, _defaultPubInputs(111, 222));
         // Different walletCommit, different nullifier, but same nonceCommit must still revert.
-        uint256[8] memory inp = _pubInputs(999, 222, DEFAULT_POINTS, uint256(keccak256("n2")));
+        uint256[9] memory inp = _pubInputs(999, 222, DEFAULT_POINTS, uint256(keccak256("n2")));
         vm.expectRevert(LotteryAmoeRouter.NonceReplayed.selector);
         router.submitAmoeEntryZK(buyer, coin, EPOCH, proof, inp);
     }
@@ -182,7 +191,7 @@ contract LotteryAmoeRouterTest is Test {
         uint256[24] memory proof = _proof();
         router.submitAmoeEntryZK(buyer, coin, EPOCH, proof, _defaultPubInputs(111, 222));
         // Same walletCommit (= same twitter credit), fresh nonce + nullifier, same epoch → revert.
-        uint256[8] memory inp = _pubInputs(111, 333, DEFAULT_POINTS, uint256(keccak256("n2")));
+        uint256[9] memory inp = _pubInputs(111, 333, DEFAULT_POINTS, uint256(keccak256("n2")));
         vm.expectRevert(LotteryAmoeRouter.WalletCreditReplayed.selector);
         router.submitAmoeEntryZK(buyer, coin, EPOCH, proof, inp);
     }

@@ -5,8 +5,8 @@ import "forge-std/Test.sol";
 
 import {CreatorOVault} from "@4626/creator/vault/CreatorOVault.sol";
 import {CreatorOVaultCoreModule} from "@4626/creator/vault/modules/CreatorOVaultCoreModule.sol";
-import {CreatorOVaultStrategiesModule} from "@4626/creator/vault/modules/CreatorOVaultStrategiesModule.sol";
-import {CreatorOVaultAdminModule} from "@4626/creator/vault/modules/CreatorOVaultAdminModule.sol";
+import {OVaultStrategiesModule} from "@4626/shared/vault/modules/OVaultStrategiesModule.sol";
+import {OVaultAdminModule} from "@4626/shared/vault/modules/OVaultAdminModule.sol";
 import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
 import {IStrategyValuation} from "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -263,8 +263,8 @@ abstract contract RebalanceTestHarness is Test {
         ctx.vault = new CreatorOVault(address(ctx.coin), address(this), "Scenario Vault", "ovSCN");
         ctx.vault.setModulesOnce(
             address(new CreatorOVaultCoreModule()),
-            address(new CreatorOVaultStrategiesModule()),
-            address(new CreatorOVaultAdminModule())
+            address(new OVaultStrategiesModule()),
+            address(new OVaultAdminModule())
         );
         _initVaultDefaults(ctx.vault, MIN_IDLE);
 
@@ -310,8 +310,8 @@ abstract contract RebalanceTestHarness is Test {
         ctx.vault = new CreatorOVault(address(ctx.coin), address(this), "Scenario Vault", "ovSCN");
         ctx.vault.setModulesOnce(
             address(new CreatorOVaultCoreModule()),
-            address(new CreatorOVaultStrategiesModule()),
-            address(new CreatorOVaultAdminModule())
+            address(new OVaultStrategiesModule()),
+            address(new OVaultAdminModule())
         );
         _initVaultDefaults(ctx.vault, minIdle);
 
@@ -354,8 +354,8 @@ abstract contract RebalanceTestHarness is Test {
         ctx.vault = new CreatorOVault(address(ctx.coin), address(this), "Synergy Vault", "ovSYN");
         ctx.vault.setModulesOnce(
             address(new CreatorOVaultCoreModule()),
-            address(new CreatorOVaultStrategiesModule()),
-            address(new CreatorOVaultAdminModule())
+            address(new OVaultStrategiesModule()),
+            address(new OVaultAdminModule())
         );
         _initVaultDefaults(ctx.vault, MIN_IDLE);
 
@@ -384,8 +384,8 @@ abstract contract RebalanceTestHarness is Test {
         ctx.vault = new CreatorOVault(address(ctx.coin), address(this), "Charm Backstop Vault", "ovCB");
         ctx.vault.setModulesOnce(
             address(new CreatorOVaultCoreModule()),
-            address(new CreatorOVaultStrategiesModule()),
-            address(new CreatorOVaultAdminModule())
+            address(new OVaultStrategiesModule()),
+            address(new OVaultAdminModule())
         );
         _initVaultDefaults(ctx.vault, MIN_IDLE);
 
@@ -769,7 +769,7 @@ abstract contract RebalanceTestHarness is Test {
                     ajnaWeightBps: 4500,
                     thirdWeightBps: 0,
                     caller: KEEPER,
-                    revertSelector: CreatorOVaultStrategiesModule.InvalidWeight.selector,
+                    revertSelector: OVaultStrategiesModule.InvalidWeight.selector,
                     expectFlags: 0
                 });
             }

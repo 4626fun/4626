@@ -84,12 +84,27 @@ export async function resolveWaitlistChatEligibility(
   const embeddedEoaAddress = normalizeWaitlistChatAddress(row?.primary_embedded_eoa)
   const baseSubAccountAddress = normalizeWaitlistChatAddress(row?.base_sub_account)
 
+  let canonicalSource: string | null = null
+  if (canonicalCswAddress) {
+    const sourceResult = await db.sql`
+      SELECT canonical_source
+      FROM profile_wallets
+      WHERE profile_id = ${profileId}
+        AND LOWER(address) = ${canonicalCswAddress}
+      ORDER BY updated_at DESC
+      LIMIT 1;
+    `
+    const rawSource = sourceResult.rows?.[0]?.canonical_source
+    canonicalSource = typeof rawSource === 'string' ? rawSource : null
+  }
+
   if (!canonicalCswAddress || !embeddedEoaAddress) {
     return resolveWaitlistChatEligibilitySnapshot({
       canonicalCswAddress,
       embeddedEoaAddress,
       baseSubAccountAddress,
       embeddedIsOwnerOfParent: false,
+      canonicalSource,
     })
   }
 
@@ -100,6 +115,7 @@ export async function resolveWaitlistChatEligibility(
       embeddedEoaAddress,
       baseSubAccountAddress,
       embeddedIsOwnerOfParent,
+      canonicalSource,
     })
   } catch {
     return resolveWaitlistChatEligibilitySnapshot({
@@ -108,6 +124,7 @@ export async function resolveWaitlistChatEligibility(
       baseSubAccountAddress,
       embeddedIsOwnerOfParent: false,
       ownerCheckFailed: true,
+      canonicalSource,
     })
   }
 }

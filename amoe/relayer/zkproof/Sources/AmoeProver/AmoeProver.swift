@@ -54,8 +54,8 @@ public final class AmoeProver {
     /// (currently `AmoeEligibility(20)`).
     public static let merkleDepth = 20
 
-    /// AMOE has exactly 5 public inputs (see `AmoePublicInputs`).
-    public static let publicInputCount = 5
+    /// AMOE circuit v3 has exactly 9 public inputs (see `AmoePublicInputs`).
+    public static let publicInputCount = 9
 
     private let prover: Groth16Prover
     private let pk: Groth16ProvingKey
@@ -103,7 +103,7 @@ public final class AmoeProver {
 
     /// Prove AMOE eligibility for the given public/private inputs.
     /// Returns the snarkjs-shaped Groth16 proof, ready for `verifyProof` on
-    /// the Solidity verifier, plus the canonical 5-element public input array.
+    /// the Solidity verifier, plus the canonical 9-element public input array.
     public func prove(
         publicInputs: AmoePublicInputs,
         witness: AmoePrivateWitness
@@ -132,14 +132,12 @@ public final class AmoeProver {
         // for `amoe_eligibility.circom` is, in declaration order:
         //
         //   signal[0]                           = "1" (constant — set by zkMetal)
-        //   signal[1 .. 5]                      = public inputs
-        //                                         [walletAddrCommit, creatorCoinAddr,
-        //                                          nonceCommit, epoch, allowlistRoot]
-        //   signal[6]                           = wallet
-        //   signal[7]                           = nonce
-        //   signal[8]                           = twitterCreditNullifier
-        //   signal[9 .. 9 + DEPTH - 1]          = pathElements[i]
-        //   signal[9 + DEPTH .. 9 + 2*DEPTH-1]  = pathIndices[i]
+        //   signal[1 .. 9]                      = public inputs (v3 — 9 signals)
+        //   signal[10]                          = wallet
+        //   signal[11]                          = nonce
+        //   signal[12]                          = twitterCreditNullifier
+        //   signal[13 .. 13 + DEPTH - 1]        = pathElements[i]
+        //   signal[13 + DEPTH .. 13 + 2*DEPTH-1] = pathIndices[i]
         //
         // Anything else (intermediate Poseidon outputs, mux gates, range-check
         // bit decompositions) is solved by zkMetal's `WitnessGraph` from the
@@ -151,17 +149,17 @@ public final class AmoeProver {
             hints[publicBase + i] = v
         }
 
-        let privateBase = publicBase + AmoeProver.publicInputCount  // = 6
+        let privateBase = publicBase + AmoeProver.publicInputCount  // = 10
         hints[privateBase + 0] = witness.wallet
         hints[privateBase + 1] = witness.nonce
         hints[privateBase + 2] = witness.twitterCreditNullifier
 
-        let pathElementsBase = privateBase + 3                       // = 9
+        let pathElementsBase = privateBase + 3                       // = 13
         for (i, sib) in witness.pathElements.enumerated() {
             hints[pathElementsBase + i] = sib
         }
 
-        let pathIndicesBase = pathElementsBase + AmoeProver.merkleDepth  // = 29
+        let pathIndicesBase = pathElementsBase + AmoeProver.merkleDepth  // = 33
         for (i, bit) in witness.pathIndices.enumerated() {
             hints[pathIndicesBase + i] = bit
         }

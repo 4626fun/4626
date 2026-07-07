@@ -65,6 +65,11 @@ import {
   type LookupBurnContext,
   type PublishEpochOutcome,
 } from '../../../../server/_lib/lottery/amoeLedgerPublisher.js'
+import {
+  isAmoeAllowlistPublisherEnabled,
+  publishAllowlistEpoch,
+  type PublishAllowlistOutcome,
+} from '../../../../server/_lib/lottery/amoeAllowlistPublisher.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -212,11 +217,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
   }
 
+  let allowlistOutcome: PublishAllowlistOutcome | null = null
+  if (isAmoeAllowlistPublisherEnabled() && error === null) {
+    try {
+      allowlistOutcome = await publishAllowlistEpoch({
+        db,
+        epoch: targetEpoch,
+        lotteryAmoeRouter,
+        publisherVersion,
+      })
+    } catch (allowErr) {
+      console.warn('[amoe-publish-cron] allowlist publish failed', allowErr)
+    }
+  }
+
   return res.status(200).json({
     ok: error === null,
     tick: error === null ? (outcome?.kind ?? 'unknown') : 'errored',
     epoch: targetEpoch.toString(),
     reclaimedCount,
+    allowlistOutcome: allowlistOutcome?.kind ?? null,
     outcome:
       outcome === null
         ? null

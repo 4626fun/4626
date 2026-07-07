@@ -246,6 +246,7 @@ vi.mock('../../server/_lib/lottery/lotteryAmoe.js', () => ({
     pointsBurnedAsUSD: 5,
     pointsLedgerRoot: 6,
     pointsBurnNullifier: 7,
+    walletAddr: 8,
   },
 }))
 
@@ -311,13 +312,30 @@ function validBody(overrides: Record<string, unknown> = {}) {
 function setEnabledEnv(): () => void {
   const prior = process.env.AMOE_ZK_SUBMIT_ENABLED
   const priorRouter = process.env.LOTTERY_AMOE_ROUTER
+  const priorBurn = process.env.AMOE_BURN_THEN_SUBMIT_REQUIRED
   process.env.AMOE_ZK_SUBMIT_ENABLED = '1'
   process.env.LOTTERY_AMOE_ROUTER = '0x000000000000000000000000000000000000abcd'
+  process.env.AMOE_BURN_THEN_SUBMIT_REQUIRED = '1'
   return () => {
     if (prior === undefined) delete process.env.AMOE_ZK_SUBMIT_ENABLED
     else process.env.AMOE_ZK_SUBMIT_ENABLED = prior
     if (priorRouter === undefined) delete process.env.LOTTERY_AMOE_ROUTER
     else process.env.LOTTERY_AMOE_ROUTER = priorRouter
+    if (priorBurn === undefined) delete process.env.AMOE_BURN_THEN_SUBMIT_REQUIRED
+    else process.env.AMOE_BURN_THEN_SUBMIT_REQUIRED = priorBurn
+  }
+}
+
+function defaultBurnThenSubmitReaderHooks() {
+  return {
+    ledgerSnapshotReader: {
+      readSnapshotForBurn: vi.fn(async () => ({
+        epoch: 7n,
+        pointsLedgerSnapshot: { root: 1n, depth: 20, levels: [[1n]] },
+        pointsLedgerLeafIndex: 0,
+        rootHex: `0x${'01'.repeat(32)}` as `0x${string}`,
+      })),
+    },
   }
 }
 
@@ -398,6 +416,7 @@ beforeEach(() => {
     state: 'prove_failed',
   }))
   findActiveByNonceCommitMock.mockResolvedValue(null)
+  __setAmoeSubmitZkHandlerHooksForTest(defaultBurnThenSubmitReaderHooks())
 })
 
 afterEach(() => {
@@ -454,6 +473,21 @@ describe('feature flag', () => {
       await handler(req, res)
       expect(res.statusCode).toBe(503)
       expect(res.body?.error).toBe('zk_path_disabled')
+    } finally {
+      delete process.env.AMOE_ZK_SUBMIT_ENABLED
+    }
+  })
+
+  it('returns 503 burn_then_submit_required when AMOE_BURN_THEN_SUBMIT_REQUIRED is unset', async () => {
+    process.env.AMOE_ZK_SUBMIT_ENABLED = '1'
+    delete process.env.AMOE_BURN_THEN_SUBMIT_REQUIRED
+    try {
+      const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmitZk')
+      const req = createMockReq({ method: 'POST', body: validBody() })
+      const res = createMockRes()
+      await handler(req, res)
+      expect(res.statusCode).toBe(503)
+      expect(res.body?.error).toBe('burn_then_submit_required')
     } finally {
       delete process.env.AMOE_ZK_SUBMIT_ENABLED
     }
@@ -620,6 +654,7 @@ describe('body validation', () => {
 describe('configuration', () => {
   it('returns 503 when LOTTERY_AMOE_ROUTER is unset', async () => {
     process.env.AMOE_ZK_SUBMIT_ENABLED = '1'
+    process.env.AMOE_BURN_THEN_SUBMIT_REQUIRED = '1'
     delete process.env.LOTTERY_AMOE_ROUTER
     try {
       const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmitZk')
@@ -1009,23 +1044,39 @@ describe('nonce reuse', () => {
 // ---------------------------------------------------------------------------
 
 describe('credit gate', () => {
-  it('returns 402 insufficient_amoe_credits when snapshot.credits < pointsBurned', async () => {
+  it('skips legacy credit pre-flight when burn-then-submit is required', async () => {
     const restore = setEnabledEnv()
     try {
       getAmoeCreditSnapshotMock.mockResolvedValueOnce({
         wallet: CANONICAL_WALLET,
-        credits: 100, // less than pointsBurned=250
+        credits: 100,
         creditsPerEntry: 100,
         entriesAvailable: 1,
         nextEntryAtCredits: 100,
+      })
+      const orchestrate = vi.fn(async () => {
+        throw new AmoeBadRequestError('stop_after_preflight')
+      })
+      __setAmoeSubmitZkHandlerHooksForTest({
+        ...defaultBurnThenSubmitReaderHooks(),
+        orchestrate: orchestrate as any,
       })
       const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmitZk')
       const req = createMockReq({ method: 'POST', body: validBody() })
       const res = createMockRes()
       await handler(req, res)
-      expect(res.statusCode).toBe(402)
-      expect(res.body?.error).toBe('insufficient_amoe_credits')
+      expect(getAmoeCreditSnapshotMock).not.toHaveBeenCalled()
+      expect(res.statusCode).toBe(400)
+      expect(res.body?.error).toBe('stop_after_preflight')
     } finally {
+      getAmoeCreditSnapshotMock.mockReset()
+      getAmoeCreditSnapshotMock.mockResolvedValue({
+        wallet: CANONICAL_WALLET,
+        credits: 1000,
+        creditsPerEntry: 100,
+        entriesAvailable: 10,
+        nextEntryAtCredits: 100,
+      })
       restore()
     }
   })
@@ -1048,7 +1099,7 @@ describe('happy path', () => {
         },
         proof: {
           proof: Array.from({ length: 24 }, () => 1n),
-          pubInputs: Array.from({ length: 8 }, () => 1n),
+          pubInputs: Array.from({ length: 9 }, () => 1n),
         },
         epoch: 7n,
         pointsBurnedAsUSD: 250_000_000n,
@@ -1059,6 +1110,7 @@ describe('happy path', () => {
       const relay = vi.fn(async () => FIXTURE_TX as `0x${string}`)
 
       __setAmoeSubmitZkHandlerHooksForTest({
+        ...defaultBurnThenSubmitReaderHooks(),
         orchestrate: orchestrate as any,
         relay: relay as any,
       })
@@ -1075,8 +1127,8 @@ describe('happy path', () => {
       expect(res.body?.data?.txHash).toBe(FIXTURE_TX)
       expect(res.body?.data?.pointsBurned).toBe(250)
       expect(res.body?.data?.pointsBurnedAsUSD).toBe('250000000')
-      expect(res.body?.data?.creditsConsumed).toBe(250)
-      expect(res.body?.data?.creditsRemaining).toBe(750)
+      expect(res.body?.data?.creditsConsumed).toBe(0)
+      expect(res.body?.data?.creditsRemaining).toBe(1000)
 
       // Orchestrate was called with the lowercased creator coin and the
       // canonical wallet from the resolver.
@@ -1094,21 +1146,8 @@ describe('happy path', () => {
         callData: '0xdeadbeef',
       })
 
-      // Credit debit was issued AFTER relay (we can't check ordering with
-      // bare mocks, but we can at least check both were called).
-      expect(consumeAmoeCreditsForEntryMock).toHaveBeenCalledTimes(1)
-      const debitArg = consumeAmoeCreditsForEntryMock.mock.calls[0]?.[0]
-      // PR 5b correctness fix — refId is now the original client-supplied
-      // `spendRefId`, NOT `zk:${submissionId}`. This is required so that
-      // `points.source_id == amoe_zk_submissions.spend_ref_id` and the
-      // publisher's `defaultLookupBurnContext` join succeeds. Mismatch
-      // would cause the projector to skip the burn and the publisher to
-      // emit a partial root (Codex review on PR 5b).
-      expect(debitArg).toMatchObject({
-        wallet: CANONICAL_WALLET,
-        requiredCredits: 250,
-        refId: 'idem-2026-04-29-aaaa',
-      })
+      // Phase A already debited — submit-zk must not consume again.
+      expect(consumeAmoeCreditsForEntryMock).not.toHaveBeenCalled()
     } finally {
       restore()
     }
@@ -1138,6 +1177,7 @@ describe('AmoeProofGenerationError mapping', () => {
         throw new FakeProofErr('plonk_witness_input_invalid')
       })
       __setAmoeSubmitZkHandlerHooksForTest({
+        ...defaultBurnThenSubmitReaderHooks(),
         orchestrate: orchestrate as any,
         relay: vi.fn() as any,
       })
@@ -1400,7 +1440,7 @@ describe('PR 6b — burn-then-submit happy path', () => {
         },
         proof: {
           proof: Array.from({ length: 24 }, () => 1n),
-          pubInputs: Array.from({ length: 8 }, () => 1n),
+          pubInputs: Array.from({ length: 9 }, () => 1n),
         },
         epoch: 7n,
         pointsBurnedAsUSD: 250_000_000n,
@@ -1421,9 +1461,10 @@ describe('PR 6b — burn-then-submit happy path', () => {
       })
 
       __setAmoeSubmitZkHandlerHooksForTest({
+        ...defaultBurnThenSubmitReaderHooks(),
+        ledgerSnapshotReader: { readSnapshotForBurn } as any,
         orchestrate: orchestrate as any,
         relay: relay as any,
-        ledgerSnapshotReader: { readSnapshotForBurn } as any,
       })
 
       const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmitZk')

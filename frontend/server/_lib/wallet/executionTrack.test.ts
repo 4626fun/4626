@@ -113,7 +113,44 @@ describe('resolveExecutionTrack', () => {
     ).toBe('legacy-owner-install')
   })
 
-  it("returns 'none-yet' when parent embedded owner is not confirmed", () => {
+  it("returns 'base-app-direct' when parent CSW and embedded EOA exist without owner install for base_account source", () => {
+    const EMBEDDED = '0x00000000000000000000000000000000000000cc'
+    expect(
+      track({
+        privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+        embeddedEoaAddress: EMBEDDED,
+        canonicalSource: 'base_account',
+      }),
+    ).toBe('base-app-direct')
+    expect(
+      track({
+        baseSubAccountAddress: SUB,
+        privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+        embeddedEoaAddress: EMBEDDED,
+        canonicalSource: 'base_account',
+      }),
+    ).toBe('base-app-direct')
+  })
+
+  it("returns 'none-yet' for Zora/wallet_sync CSW without embedded-owner install", () => {
+    const EMBEDDED = '0x00000000000000000000000000000000000000cc'
+    expect(
+      track({
+        privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+        embeddedEoaAddress: EMBEDDED,
+        canonicalSource: 'wallet_sync',
+      }),
+    ).toBe('none-yet')
+    expect(
+      track({
+        privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+        embeddedEoaAddress: EMBEDDED,
+        canonicalSource: null,
+      }),
+    ).toBe('none-yet')
+  })
+
+  it("returns 'none-yet' when parent embedded owner is not confirmed and embedded EOA is missing", () => {
     expect(
       track({
         baseSubAccountAddress: SUB,

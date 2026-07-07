@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import {CreatorVaultShareBurnStream as VaultShareBurnStream} from "@4626/creator/revenue/CreatorVaultShareBurnStream.sol";
+import {VaultShareBurnStream as VaultShareBurnStream} from "@4626/shared/revenue/VaultShareBurnStream.sol";
 
 contract MockVaultSharesForBurnStream is ERC20 {
     // Simple, static asset base so PPS rises when shares burn.

@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 
-import { getDb } from '../db/postgres.js'
+import { getDb, runInTransaction } from '../db/postgres.js'
 import { ensureWaitlistSchema } from '../onboarding/waitlistSchema.js'
 import { ensureMigrationApplied, ensureAmoeSchema as ensureAmoeSchemaBootstrap } from '../db/schemaBootstrap.js'
 import { readWaitlistPointsBreakdown } from '../onboarding/waitlistScoring.js'
@@ -61,7 +61,7 @@ export const AMOE_POINTS_TO_USD1E6_FACTOR = 10_000
 //   * the circuit (amoe/circuits/amoe_eligibility.circom)
 // otherwise valid proofs will silently fail to verify on-chain.
 export const AMOE_PLONK_PROOF_LEN = 24 as const
-export const AMOE_PLONK_PUB_INPUTS_LEN = 8 as const
+export const AMOE_PLONK_PUB_INPUTS_LEN = 9 as const
 export const AMOE_PLONK_PUB_INPUT_SLOT = {
   walletAddrCommit: 0,
   creatorCoinAddr: 1,
@@ -71,6 +71,7 @@ export const AMOE_PLONK_PUB_INPUT_SLOT = {
   pointsBurnedAsUSD: 5,
   pointsLedgerRoot: 6,
   pointsBurnNullifier: 7,
+  walletAddr: 8,
 } as const
 
 // BN254 scalar field modulus. Public-input values must be in [0, Q).
@@ -220,7 +221,7 @@ const lotteryAmoeAbi = [
       { name: 'creatorCoin', type: 'address' },
       { name: 'epoch', type: 'uint64' },
       { name: 'proof', type: 'uint256[24]' },
-      { name: 'pubInputs', type: 'uint256[8]' },
+      { name: 'pubInputs', type: 'uint256[9]' },
     ],
     outputs: [{ name: 'entryId', type: 'uint256' }],
   },
@@ -385,13 +386,19 @@ async function readUnifiedPointsForSignup(db: Db, signupId: number): Promise<num
   return Math.max(0, value)
 }
 
-/** Public points total — same weighted sum as waitlist score and leaderboard. */
+/** AMOE spendable balance from `points_amoe_eligible_balance` (strict free-action allowlist). */
 async function readAmoeEligibleCreditsForSignup(
   db: Db,
   signupId: number,
 ): Promise<number> {
-  const breakdown = await readWaitlistPointsBreakdown(db as any, signupId)
-  return breakdown.total
+  const result = await db.sql`
+    SELECT COALESCE(credits, 0)::bigint AS credits
+    FROM points_amoe_eligible_balance
+    WHERE signup_id = ${signupId};
+  `
+  const valueRaw = Number(result.rows?.[0]?.credits ?? 0)
+  const value = Number.isFinite(valueRaw) ? Math.floor(valueRaw) : 0
+  return Math.max(0, value)
 }
 
 function normalizeWallet(wallet: `0x${string}`): `0x${string}` {
@@ -739,7 +746,8 @@ export async function consumeAmoeCreditsForEntry(params: {
     normalizeRefId(params.refId) ??
     `amoe-spend:${wallet}:${Date.now().toString(36)}:${randomBytes(6).toString('hex')}`
 
-  // Spend is gated on the same weighted public points total as waitlist/leaderboard.
+  // Spend is gated on `points_amoe_eligible_balance` (strict AMOE free-action
+  // allowlist; `amoe_entry_spend` debits reduce the balance).
   //
   // We `RETURNING created_at` from the INSERT so the new-insert path can
   // surface the actual persisted burn time (Fix #2 from PR #457 review).
@@ -751,28 +759,17 @@ export async function consumeAmoeCreditsForEntry(params: {
   // PR 6c hotfix where a separate post-debit INSERT could fail and
   // leave an unmarked burn that the refund cron would permanently
   // skip. See docs/security/amoe-burn-then-submit-design.md §5.1.1.
-  const spendAttempt = await db.sql`
+  // Serialize debits per signup_id so concurrent burns cannot both pass the
+  // balance pre-check (M1 advisory lock).
+  const txOutcome = await runInTransaction(async (txDb) => {
+    await txDb.sql`SELECT pg_advisory_xact_lock(${signupId}::bigint)`
+
+    const spendAttempt = await txDb.sql`
     WITH current AS (
       SELECT COALESCE(
         (
-          SELECT ROUND(
-            SUM(
-              CASE
-                WHEN source IN ('amoe_entry_spend', 'amoe_twitter_daily', 'amoe_xmtp_daily', 'amoe_entry_refund') THEN 0
-                WHEN source IN ('waitlist_signup', 'referral_passthrough', 'csw_link', 'amoe_checkin') THEN amount * 1.00
-                WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
-                WHEN source LIKE 'social_%' THEN amount * 0.50
-                WHEN source LIKE 'bonus_%' OR source = 'task' THEN amount * 0.30
-                WHEN source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN amount * 0.40
-                WHEN source IN (
-                  'link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram',
-                  'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin'
-                ) THEN amount * 0.60
-                ELSE 0
-              END
-            )
-          )::bigint
-          FROM points
+          SELECT credits
+          FROM points_amoe_eligible_balance
           WHERE signup_id = ${signupId}
         ),
         0
@@ -799,28 +796,10 @@ export async function consumeAmoeCreditsForEntry(params: {
       (SELECT created_at FROM ins) AS inserted_at,
       EXISTS(SELECT 1 FROM intent_ins) AS intent_inserted;
   `
-  const inserted = spendAttempt.rows?.[0]?.inserted === true
-  let burnedAtRaw: unknown = inserted ? spendAttempt.rows?.[0]?.inserted_at : null
-  if (!inserted) {
-    // Idempotent retry path: source `created_at` from the existing
-    // persisted row so the returned `burnedAt`/`burnEpoch` match the
-    // ORIGINAL debit, not the retry's wall clock (Fix #2).
-    //
-    // We also opportunistically backfill the phase-A intent marker on
-    // retry. Two cases this covers:
-    //   (a) Retries against debits written before the intent table
-    //       existed (legacy `c46f4fa` rows committed during the brief
-    //       window between PR 6c shipping and this hotfix landing).
-    //   (b) A pathological case where the original debit's CTE
-    //       committed but a follow-on operation rolled back at the
-    //       application layer — the marker insert is idempotent
-    //       (PRIMARY KEY (signup_id, spend_ref_id) + ON CONFLICT).
-    //
-    // Failure to backfill on retry is non-fatal — the retry still
-    // returns the same `burnedAt` / `burnEpoch` as the original burn,
-    // and a subsequent retry will try again. The handler does NOT
-    // depend on intent-row presence.
-    const existingSpend = await db.sql`
+    const inserted = spendAttempt.rows?.[0]?.inserted === true
+    let burnedAtRaw: unknown = inserted ? spendAttempt.rows?.[0]?.inserted_at : null
+    if (!inserted) {
+      const existingSpend = await txDb.sql`
       WITH existing AS (
         SELECT id, created_at
         FROM points
@@ -839,11 +818,17 @@ export async function consumeAmoeCreditsForEntry(params: {
       )
       SELECT id, created_at FROM existing;
     `
-    const existingRow = existingSpend.rows?.[0]
-    const alreadySpent = Boolean(existingRow?.id)
-    if (!alreadySpent) throw new AmoeInsufficientCreditsError()
-    burnedAtRaw = existingRow?.created_at ?? null
+      const existingRow = existingSpend.rows?.[0]
+      const alreadySpent = Boolean(existingRow?.id)
+      if (!alreadySpent) throw new AmoeInsufficientCreditsError()
+      burnedAtRaw = existingRow?.created_at ?? null
+    }
+    return { inserted, burnedAtRaw }
+  })
+  if (txOutcome === null) {
+    throw new AmoeServerError('amoe_db_unavailable')
   }
+  const { burnedAtRaw } = txOutcome
 
   const creditsRemaining = await readAmoeEligibleCreditsForSignup(db, signupId)
 
@@ -1468,9 +1453,13 @@ export async function buildAmoeEntryZKCall(
   if (epochBig !== pubInputScalars[AMOE_PLONK_PUB_INPUT_SLOT.epoch]) {
     throw new AmoeBadRequestError('zk_epoch_pub_input_mismatch')
   }
+  const walletAsField = BigInt(inputs.wallet)
+  if (walletAsField !== pubInputScalars[AMOE_PLONK_PUB_INPUT_SLOT.walletAddr]) {
+    throw new AmoeBadRequestError('zk_wallet_pub_input_mismatch')
+  }
 
   // Build the typed fixed-length tuples viem expects for `uint256[24]` /
-  // `uint256[8]`. We use intermediate variables so TS keeps the
+  // `uint256[9]`. We use intermediate variables so TS keeps the
   // tuple-arity narrowing.
   const proofTuple = proofScalars as unknown as readonly [
     bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint,
@@ -1478,7 +1467,7 @@ export async function buildAmoeEntryZKCall(
     bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint,
   ]
   const pubTuple = pubInputScalars as unknown as readonly [
-    bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint,
+    bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint,
   ]
 
   // Mirror the on-chain `PointsValueOutOfRange` guard

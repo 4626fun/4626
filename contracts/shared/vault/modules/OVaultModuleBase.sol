@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
-import {CreatorOVaultModuleStorage} from "@4626/creator/vault/modules/CreatorOVaultModuleStorage.sol";
+import {OVaultModuleStorage} from "@4626/shared/vault/modules/OVaultModuleStorage.sol";
 
 interface ICreatorOVaultModuleCalls {
     function __moduleUpdate(address from, address to, uint256 value) external;
@@ -13,7 +13,7 @@ interface ICreatorOVaultModuleCalls {
 }
 
 /// @notice Shared helpers for CreatorOVault delegatecall modules.
-abstract contract CreatorOVaultModuleBase is CreatorOVaultModuleStorage {
+abstract contract OVaultModuleBase is OVaultModuleStorage {
     error OnlyDelegateCall();
 
     address private immutable _self;

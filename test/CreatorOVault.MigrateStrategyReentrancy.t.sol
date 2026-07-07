@@ -5,8 +5,8 @@ import {Test} from "forge-std/Test.sol";
 
 import {CreatorOVault} from "@4626/creator/vault/CreatorOVault.sol";
 import {CreatorOVaultCoreModule} from "@4626/creator/vault/modules/CreatorOVaultCoreModule.sol";
-import {CreatorOVaultStrategiesModule} from "@4626/creator/vault/modules/CreatorOVaultStrategiesModule.sol";
-import {CreatorOVaultAdminModule} from "@4626/creator/vault/modules/CreatorOVaultAdminModule.sol";
+import {OVaultStrategiesModule} from "@4626/shared/vault/modules/OVaultStrategiesModule.sol";
+import {OVaultAdminModule} from "@4626/shared/vault/modules/OVaultAdminModule.sol";
 import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
 import {IStrategyValuation} from "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -110,8 +110,8 @@ contract MigrateStrategyReentrancyTest is Test {
         vault = new CreatorOVault(address(coin), address(this), "Creator OVault", "ovCR8R");
         vault.setModulesOnce(
             address(new CreatorOVaultCoreModule()),
-            address(new CreatorOVaultStrategiesModule()),
-            address(new CreatorOVaultAdminModule())
+            address(new OVaultStrategiesModule()),
+            address(new OVaultAdminModule())
         );
         vault.setFlashLoanProtection(0, type(uint256).max, 1);
 

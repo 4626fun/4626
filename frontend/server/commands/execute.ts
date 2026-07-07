@@ -19,7 +19,13 @@ import { pickHermitReactionEmoji } from '../_lib/hermit/reactionEmoji.js'
 import {
   isHermitOperatorOnlyCommand,
   isTrustedHermitOperator,
+  formatInverseAkitaPilotDeniedMessage,
 } from '../_lib/hermit/operatorPolicy.js'
+import {
+  canPilotInverseAkita,
+  isInverseAkitaPilotRoom,
+  resolveInverseAkitaStakerPilotAccess,
+} from '../_lib/alfaclub/inverseAkitaStakerPilot.js'
 import {
   executeKeeprCommandFamily,
   formatAssistantOnlyBlocked,
@@ -477,11 +483,25 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
           role: hermitRole,
           isRoomOwner,
         })
+        const alfaClubRoomId = parseAlfaClubRoomIdFromChatId(params.chatId)
+        const inverseAkitaPilotAccess =
+          alfaClubRoomId && isInverseAkitaPilotRoom(alfaClubRoomId)
+            ? await resolveInverseAkitaStakerPilotAccess({
+                senderAddress: params.senderWallet,
+                roomId: alfaClubRoomId,
+                isTrustedOperator,
+              })
+            : null
+        const canPilotInverseAkitaInRoom = canPilotInverseAkita({
+          roomId: alfaClubRoomId,
+          isTrustedOperator,
+          pilotAccess: inverseAkitaPilotAccess,
+        })
         const operatorOnlyCommand = isHermitOperatorOnlyCommand(raw)
         if (
           alfaClubChat &&
           operatorOnlyCommand &&
-          !isTrustedOperator
+          !canPilotInverseAkitaInRoom
         ) {
           const restrictedCommand = hermitCommand === '/arena'
             ? '/arena'
@@ -490,11 +510,11 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
               : '/signal'
           return {
             ok: false,
-            response:
-              `Hermit \`${restrictedCommand}\` is restricted to trusted operators (OWNER/ADMIN, allowlisted user, or HERMIT_OWNER_ADDRESS) in this room. To allow your wallet (e.g. 0x64c3... for 1659), set HERMIT_OWNER_ADDRESS or HERMIT_ALLOWED_USERS on the Railway alfaclub-bridge/hermit service and redeploy.`,
+            response: isInverseAkitaPilotRoom(alfaClubRoomId)
+              ? formatInverseAkitaPilotDeniedMessage(restrictedCommand)
+              : `Hermit \`${restrictedCommand}\` is restricted to trusted operators (OWNER/ADMIN, allowlisted user, or HERMIT_OWNER_ADDRESS) in this room. To allow your wallet (e.g. 0x64c3... for 1659), set HERMIT_OWNER_ADDRESS or HERMIT_ALLOWED_USERS on the Railway alfaclub-bridge/hermit service and redeploy.`,
           }
         }
-        const alfaClubRoomId = parseAlfaClubRoomIdFromChatId(params.chatId)
         const cooldownCommand = resolveHermitCooldownCommand(raw)
         if (alfaClubChat && alfaClubRoomId && cooldownCommand) {
           const cooldown = await checkHermitCommandCooldown({
@@ -517,7 +537,7 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
         const result = await executeHermitCommand({
           commandText: raw,
           senderAddress: params.senderWallet as `0x${string}`,
-          isTrustedOperator,
+          isTrustedOperator: canPilotInverseAkitaInRoom,
           sourceIdentity: isAlfaClubChatId(params.chatId) ? 'alfaclub-bridge-runner' : null,
           ...(hermitRoomContext.roomId ? { roomId: hermitRoomContext.roomId } : {}),
           ...(hermitRoomContext.userPreferences

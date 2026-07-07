@@ -85,7 +85,7 @@ vi.mock('../../src/deploy/bytecode.generated.js', () => ({
     PayoutRouter: ('0x' + '00'.repeat(32)) as `0x${string}`,
     VaultShareBurnStream: ('0x' + '00'.repeat(32)) as `0x${string}`,
     CreatorCoinPolicyController: ('0x' + '00'.repeat(32)) as `0x${string}`,
-    CreatorCharmStrategy: ('0x' + '00'.repeat(32)) as `0x${string}`,
+    CharmStrategy4626: ('0x' + '00'.repeat(32)) as `0x${string}`,
     AjnaVaultAuth: ('0x' + '00'.repeat(32)) as `0x${string}`,
     AjnaERC4626Vault: ('0x' + '00'.repeat(32)) as `0x${string}`,
     ERC4626StrategyAdapter: ('0x' + '00'.repeat(32)) as `0x${string}`,

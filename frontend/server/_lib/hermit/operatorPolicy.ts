@@ -29,3 +29,10 @@ export function isTrustedHermitOperator(params: {
   return params.senderIsAllowlisted || params.role === 'OWNER' || params.role === 'ADMIN' || params.isRoomOwner
 }
 
+export function formatInverseAkitaPilotDeniedMessage(restrictedCommand: string): string {
+  return [
+    `Hermit \`${restrictedCommand}\` requires InverseAKITA pilot access in room 1659.`,
+    'Stake at least 1 FriendKey in room 1659, or ask an operator to add your wallet to HERMIT_ALLOWED_USERS / HERMIT_OWNER_ADDRESS on the Hermit service.',
+  ].join(' ')
+}
+

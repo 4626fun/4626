@@ -59,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       to: strategy,
       data,
       value: '0',
-      description: 'CreatorCharmStrategy (owner): withdraw all shares from Charm vault into strategy (no swaps).',
+      description: 'CharmStrategy4626 (owner): withdraw all shares from Charm vault into strategy (no swaps).',
       warnings: [
         'Owner-only onchain action. This API only builds calldata; it does not execute.',
         'This pulls underlying tokens into the strategy contract; you may still need to move them to the vault.',

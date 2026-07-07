@@ -250,7 +250,7 @@ function _extractScalars(chunk: string): bigint[] {
 }
 
 // ----------------------------------------------------------------------------
-// snarkjs wrapper: witness input → (proof[24], pubInputs[8])
+// snarkjs wrapper: witness input → (proof[24], pubInputs[9])
 // ----------------------------------------------------------------------------
 
 /**
@@ -277,6 +277,7 @@ export interface AmoeEligibilityWitness {
   pointsBurnedAsUSD: string | bigint
   pointsLedgerRoot: string | bigint
   pointsBurnNullifier: string | bigint
+  walletAddr: string | bigint
 
   // ---- Private inputs (allowlist eligibility) ----
   wallet: string | bigint
@@ -304,7 +305,7 @@ export interface AmoeProveResult {
   /** 24-element PLONK proof, scalars in `[0, Q)`. Suitable as input to
    *  `buildAmoeEntryZKCall`. */
   proof: bigint[]
-  /** 8-element public-input array, in the slot order pinned by
+  /** 9-element public-input array, in the slot order pinned by
    *  `AMOE_PLONK_PUB_INPUT_SLOT`. */
   pubInputs: bigint[]
 }
@@ -353,7 +354,7 @@ export interface SnarkjsLike {
 
 /**
  * Generate a PLONK proof for the AMOE eligibility circuit and return it in
- * the (proof[24], pubInputs[8]) shape the on-chain `submitAmoeEntryZK`
+ * the (proof[24], pubInputs[9]) shape the on-chain `submitAmoeEntryZK`
  * verifier consumes.
  *
  * This function is a *thin* wrapper. It does not:
@@ -472,6 +473,7 @@ function _normalizeWitness(
     'pointsBurnedAsUSD',
     'pointsLedgerRoot',
     'pointsBurnNullifier',
+    'walletAddr',
     'wallet',
     'nonce',
     'twitterCreditNullifier',

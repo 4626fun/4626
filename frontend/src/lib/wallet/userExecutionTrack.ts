@@ -7,6 +7,7 @@
 
 export type UserFrontendExecutionTrack =
   | 'legacy-owner-install'
+  | 'base-app-direct'
   | 'none-yet'
 
 export type UserExecutionAccountSignals = {
@@ -64,6 +65,7 @@ export function resolveEffectiveExecutionTrack(params: {
   executionTrack?: UserFrontendExecutionTrack | null
   parentEmbeddedOwnerOnChain?: boolean
   privyEmbeddedEoaIsOwnerOfCanonicalCsw?: boolean | null
+  baseAppDirectConnected?: boolean
 }): UserFrontendExecutionTrack {
   if (
     params.parentEmbeddedOwnerOnChain === true ||
@@ -71,6 +73,9 @@ export function resolveEffectiveExecutionTrack(params: {
     params.executionTrack === 'legacy-owner-install'
   ) {
     return 'legacy-owner-install'
+  }
+  if (params.baseAppDirectConnected || params.executionTrack === 'base-app-direct') {
+    return 'base-app-direct'
   }
   return 'none-yet'
 }
@@ -101,14 +106,19 @@ export function deriveAccountChromeExecution(params: {
   parentEmbeddedOwnerOnChain?: boolean
   privyEmbeddedEoaIsOwnerOfCanonicalCsw?: boolean | null
   canonicalCswAddress?: string | null
+  baseAppDirectConnected?: boolean
 }): AccountChromeExecution {
   const effectiveExecutionTrack = resolveEffectiveExecutionTrack({
     executionTrack: params.executionTrack,
     parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain,
     privyEmbeddedEoaIsOwnerOfCanonicalCsw: params.privyEmbeddedEoaIsOwnerOfCanonicalCsw,
+    baseAppDirectConnected: params.baseAppDirectConnected,
   })
 
-  if (effectiveExecutionTrack === 'legacy-owner-install') {
+  if (
+    effectiveExecutionTrack === 'legacy-owner-install' ||
+    effectiveExecutionTrack === 'base-app-direct'
+  ) {
     return {
       mode: 'parent-csw',
       effectiveExecutionTrack,

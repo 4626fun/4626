@@ -364,6 +364,7 @@ export async function ensureAmoeSchema(db: Db): Promise<void> {
   await withEnsureOnce('amoe', async () => {
     // Core AMOE tables already had migrations; this adds the remaining lottery ones.
     await ensureMigrationApplied(db, '20260527000000_amoe_lottery_tables.sql').catch(() => {})
+    await ensureMigrationApplied(db, '20260707060000_amoe_wallet_allowlist_snapshots.sql').catch(() => {})
     // Note: amoe_zk_submissions and related publisher tables are covered via earlier calls
     // in the individual ensure functions.
   })

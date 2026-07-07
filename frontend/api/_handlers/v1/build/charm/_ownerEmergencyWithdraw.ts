@@ -63,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       to: strategy,
       data,
       value: '0',
-      description: 'CreatorCharmStrategy (owner): emergency withdraw ERC20 from strategy.',
+      description: 'CharmStrategy4626 (owner): emergency withdraw ERC20 from strategy.',
       warnings: [
         'Owner-only onchain action. This API only builds calldata; it does not execute.',
         'Use with care: moving assets out of the strategy can break accounting/withdrawals.',

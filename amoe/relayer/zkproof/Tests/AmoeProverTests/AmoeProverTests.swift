@@ -12,17 +12,18 @@ import zkMetal
 
 final class AmoeProverTests: XCTestCase {
     /// Locks the public input order to the circom `public []` declaration in
-    /// `amoe/circuits/amoe_eligibility.circom`:
-    ///   [walletAddrCommit, creatorCoinAddr, nonceCommit, epoch, allowlistRoot]
-    /// If you change this test, also update the circuit and re-run
-    /// `amoe/tools/zk/regen_amoe_fixture.sh` so the verifier IC indices stay aligned.
+    /// `amoe/circuits/amoe_eligibility.circom` (v3 — 9 signals).
     func testPublicInputOrderMatchesCircuit() throws {
         let pub = AmoePublicInputs(
             walletAddrCommit: Fr(integerLiteral: 11),
             creatorCoinAddr:  Fr(integerLiteral: 22),
             nonceCommit:      Fr(integerLiteral: 33),
             epoch:            Fr(integerLiteral: 44),
-            allowlistRoot:    Fr(integerLiteral: 55)
+            allowlistRoot:    Fr(integerLiteral: 55),
+            pointsBurnedAsUSD: Fr(integerLiteral: 66),
+            pointsLedgerRoot: Fr(integerLiteral: 77),
+            pointsBurnNullifier: Fr(integerLiteral: 88),
+            walletAddr:       Fr(integerLiteral: 99)
         )
         let arr = pub.asArray
         XCTAssertEqual(arr.count, AmoeProver.publicInputCount)
@@ -31,6 +32,10 @@ final class AmoeProverTests: XCTestCase {
         XCTAssertEqual(arr[2], Fr(integerLiteral: 33))   // nonceCommit
         XCTAssertEqual(arr[3], Fr(integerLiteral: 44))   // epoch
         XCTAssertEqual(arr[4], Fr(integerLiteral: 55))   // allowlistRoot
+        XCTAssertEqual(arr[5], Fr(integerLiteral: 66))   // pointsBurnedAsUSD
+        XCTAssertEqual(arr[6], Fr(integerLiteral: 77))   // pointsLedgerRoot
+        XCTAssertEqual(arr[7], Fr(integerLiteral: 88))   // pointsBurnNullifier
+        XCTAssertEqual(arr[8], Fr(integerLiteral: 99))   // walletAddr
     }
 
     /// Locks the private witness shape: 3 scalars + 2 arrays of length DEPTH.

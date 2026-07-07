@@ -7,19 +7,19 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
 import {IStrategyValuation} from "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
 
-import {CreatorOVaultModuleBase} from "@4626/creator/vault/modules/CreatorOVaultModuleBase.sol";
-import {ICreatorOVaultModuleIdentity} from "@4626/creator/vault/modules/ICreatorOVaultModuleIdentity.sol";
+import {OVaultModuleBase} from "@4626/shared/vault/modules/OVaultModuleBase.sol";
+import {IOVaultModuleIdentity} from "@4626/shared/vault/modules/IOVaultModuleIdentity.sol";
 
-interface ICreatorORecoveryEscrowStrategyModule {
+interface IOVaultRecoveryEscrowStrategyModule {
     function notifyRecovery(address asset, uint256 epochId, uint256 amount) external;
 }
 
 /// @notice Strategy management + strategy interaction logic for CreatorOVault.
 /// @dev Must be invoked via delegatecall from CreatorOVault.
-contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaultModuleIdentity {
+contract OVaultStrategiesModule is OVaultModuleBase, IOVaultModuleIdentity {
     using SafeERC20 for IERC20;
-    bytes32 internal constant MODULE_KIND = keccak256("CreatorOVaultModule.strategies");
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v3");
+    bytes32 internal constant MODULE_KIND = keccak256("OVaultModule.strategies");
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("OVaultModuleStorage.v3");
 
     // ---- constants (must match vault) ----
     uint256 internal constant MAX_BPS = 10_000;
@@ -204,7 +204,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
                 uint256 epochId = _findLatestEpochForStrategy(strategy);
                 if (epochId != 0) {
                     coin.safeTransfer(impairmentRecoveryEscrow, recovered);
-                    ICreatorORecoveryEscrowStrategyModule(impairmentRecoveryEscrow).notifyRecovery(
+                    IOVaultRecoveryEscrowStrategyModule(impairmentRecoveryEscrow).notifyRecovery(
                         address(coin), epochId, recovered
                     );
                     coinBalance = coin.balanceOf(address(this));
@@ -720,7 +720,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
             uint256 epochId = _findLatestEpochForStrategy(strategy);
             if (epochId != 0) {
                 _creatorCoin().safeTransfer(impairmentRecoveryEscrow, _amount);
-                ICreatorORecoveryEscrowStrategyModule(impairmentRecoveryEscrow).notifyRecovery(
+                IOVaultRecoveryEscrowStrategyModule(impairmentRecoveryEscrow).notifyRecovery(
                     address(_creatorCoin()), epochId, _amount
                 );
                 coinBalance = _creatorCoin().balanceOf(address(this));

@@ -25,9 +25,9 @@ function formatHermitCreativeSection(): string[] {
     '• `/position` — Hyperliquid positions + alert setup',
     '• `/signal` — position-aware enter/exit bias from your live entries',
     '• `/market` — broader majors + AlfaClub market scope',
-    '• `/h arena ...` (status|register|identity ...|join|activate|trade|...) — Virtuals Arena (Degenerate Claw) controls (room/flag gated; per-sender + room-default bindings; create path uses bot ACP session; /h arena requires allowlist or HERMIT_OWNER_ADDRESS in AlfaClub rooms)',
-    '• `/h start` · `/h stop` · `/h resume` · `/h rules` · `/h status` — mirrored trading + unified status',
-    '• `/h pos` — Virtuals book snapshot (reply 2–4 for risk / activity / account)',
+    '• `/h arena ...` (status|register|identity ...|join|activate|trade|...) — Virtuals Arena (Degenerate Claw) controls (room/flag gated; room 1659 routes to InverseAKITA room-default wallet; stakers with ≥1 staked key have operator-equivalent pilot access)',
+    '• `/h arena long|short|close` · `/h pos` · `/h rules` · `/h status` — InverseAKITA pilot (room 1659; stake ≥1 key)',
+    '• `/h start` · `/h stop` · `/h resume` — mirrored trading (non-1659 rooms only)',
     '• `/gmeow [vibe]` — GIF + one-liner',
     '• `/meme <prompt>` — meme / image concept',
     '• `/hermit copy|announce|quest|tone <text>` — room copy drafts',
@@ -40,7 +40,7 @@ function formatHermitCreativeSection(): string[] {
 function formatHermitCreativeSectionCompact(): string[] {
   return [
     '**Commands**',
-    '• `/h start` · `/h rules` · `/h pos` · `/position` · `/signal` · `/gmeow`',
+    '• `/h arena long|short|close` · `/h rules` · `/h pos` · `/position` · `/signal` · `/gmeow`',
   ]
 }
 
@@ -69,7 +69,7 @@ function formatCooldownSection(): string[] {
 function formatRoomContextSection(roomId: string): string[] {
   if (roomId === ROOM_1659_ID) {
     return [
-      '**Room 1659** — `/h start` walks you through the room playbook · `/h rules` for the full guide.',
+      '**Room 1659 — InverseAKITA pilot** — stake ≥1 FriendKey to trade on InverseAKITA\'s wallet (`/h arena long|short|close`). Autonomous strategy runs in parallel.',
       'Hermit may also inject live market context (Hyperliquid hype/liq, spot PnL, FriendKey curve).',
     ]
   }

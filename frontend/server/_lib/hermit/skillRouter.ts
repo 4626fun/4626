@@ -81,6 +81,7 @@ import {
 import {
   clearArenaIdentityMapping,
   resolveArenaIdentityForContext,
+  resolveRoomDefaultArenaIdentity,
   upsertArenaIdentityMapping,
 } from '../arena/arenaIdentityMappingStore.js'
 import {
@@ -115,6 +116,12 @@ import {
   type CounterTradeConfigGroup,
   type CounterTradeRoomConfigOverrides,
 } from '../alfaclub/counterTradeRoomConfig.js'
+import {
+  formatInverseAkitaPilotStatus,
+  formatInverseAkitaStakerPilotGateReply,
+  isInverseAkitaPilotRoom,
+  resolveInverseAkitaStakerPilotAccess,
+} from '../alfaclub/inverseAkitaStakerPilot.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -544,8 +551,36 @@ function summarizeArenaRunFailure(
   return firstLine.length > 280 ? `${firstLine.slice(0, 277)}...` : firstLine
 }
 
-function formatStrategyUsage(): string {
+function formatStrategyUsage(roomId?: string | null): string {
+  if (isInverseAkitaPilotRoom(roomId)) {
+    return [
+      '**InverseAKITA pilot (room 1659)**',
+      '- `/h arena long|short|close` — trade on InverseAKITA wallet',
+      '- `/h pos` · `/h arena status` — book + executor health',
+      '- `/h rules` — full pilot guide · `/signal` — position-aware bias',
+      '',
+      '**Playbook tune (stakers + operators)**',
+      '- `/h mirror` · `/h profit` · `/h risk` · `/h size` · `/h defaults`',
+      '- `/h strategy bias bullish|bearish|neutral`',
+      '',
+      '_Mirrored counter-trading (`/h start`) is retired in this room. Stake ≥1 key to pilot._',
+    ].join('\n')
+  }
   return formatCounterTradeConfigUsage()
+}
+
+async function resolveArenaIdentityForHermitCommand(params: {
+  roomId: string | null | undefined
+  senderAddress: string
+  baseConfig: ReturnType<typeof readArenaConfig>
+}) {
+  if (isInverseAkitaPilotRoom(params.roomId)) {
+    return resolveRoomDefaultArenaIdentity({
+      roomId: params.roomId,
+      baseConfig: params.baseConfig,
+    })
+  }
+  return resolveArenaIdentityForContext(params)
 }
 
 function sanitizeArenaOutputForReply(text: string | undefined | null, dgclawDir: string | null): string {
@@ -2562,7 +2597,7 @@ export async function executeHermitCommand(
         provider: 'local',
         reply: [
           'Invalid strategy command.',
-          formatStrategyUsage(),
+          formatStrategyUsage(roomId),
           'Preset must be one of: defensive, balanced, aggressive.',
         ].join('\n\n'),
       }
@@ -2582,7 +2617,22 @@ export async function executeHermitCommand(
       return {
         kind: 'hermit',
         provider: 'local',
-        reply: formatStrategyUsage(),
+        reply: formatStrategyUsage(roomId),
+      }
+    }
+
+    if (
+      isInverseAkitaPilotRoom(roomId) &&
+      (parsed.kind === 'optin' ||
+        parsed.kind === 'pause' ||
+        parsed.kind === 'resume-preview' ||
+        parsed.kind === 'resume' ||
+        parsed.kind === 'onboarding')
+    ) {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: formatInverseAkitaStakerPilotGateReply(),
       }
     }
 
@@ -2594,6 +2644,58 @@ export async function executeHermitCommand(
 
     if (parsed.kind === 'status') {
       const requestedUnifiedHStatus = /^\/h(?:\s+status)?\s*$/i.test(params.commandText.trim())
+      if (isInverseAkitaPilotRoom(roomId)) {
+        const baseConfig = readArenaConfig()
+        const identity = await resolveRoomDefaultArenaIdentity({ roomId, baseConfig })
+        const stakeAccess = await resolveInverseAkitaStakerPilotAccess({
+          senderAddress: params.senderAddress,
+          roomId,
+          isTrustedOperator: false,
+        })
+        const pilotAccess = {
+          eligible: Boolean(params.isTrustedOperator) || stakeAccess.eligible,
+          stakedKeys: stakeAccess.stakedKeys,
+          reason: params.isTrustedOperator ? ('operator' as const) : stakeAccess.reason,
+        }
+        let arenaStatusLine = 'disabled (ARENA_ENABLED=0).'
+        if (baseConfig.enabled) {
+          const arenaStatus = await runArenaStatus({
+            ...baseConfig,
+            agentId: identity.agentId,
+            agentWalletAddress: identity.agentWalletAddress,
+            hlApiWalletAddress: identity.hlApiWalletAddress,
+          })
+          arenaStatusLine = arenaStatus.ok
+            ? `enabled=${String(arenaStatus.details?.enabled)} tradingEnabled=${String(arenaStatus.details?.tradingEnabled)} dryRun=${String(arenaStatus.details?.dryRun)}`
+            : `status unavailable: ${arenaStatus.message}`
+        }
+        const pilotStatus = formatInverseAkitaPilotStatus({
+          pilotAccess,
+          arenaAgentId: identity.agentId,
+          arenaWalletAddress: identity.agentWalletAddress,
+        })
+        if (requestedUnifiedHStatus) {
+          return {
+            kind: 'hermit',
+            provider: 'local',
+            reply: [
+              '**Unified `/h` status**',
+              '',
+              pilotStatus,
+              '',
+              '**Arena / Virtuals**',
+              arenaStatusLine,
+              `identitySource=${identity.source} agentId=${identity.agentId ?? 'none'} arenaWallet=${identity.agentWalletAddress ?? 'none'}`,
+            ].join('\n'),
+          }
+        }
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: pilotStatus,
+        }
+      }
+
       const statusNotes: string[] = []
       const baseConfig = readArenaConfig()
       let arenaIdentitySource = 'n/a'
@@ -2601,7 +2703,7 @@ export async function executeHermitCommand(
       let arenaWalletAddress: string | null = null
       let arenaStatusLine = 'disabled (ARENA_ENABLED=0).'
       if (baseConfig.enabled) {
-        const identity = await resolveArenaIdentityForContext({
+        const identity = await resolveArenaIdentityForHermitCommand({
           roomId,
           senderAddress: params.senderAddress,
           baseConfig,
@@ -2704,7 +2806,7 @@ export async function executeHermitCommand(
 
     if (parsed.kind === 'optin') {
       const baseConfig = readArenaConfig()
-      let identity = await resolveArenaIdentityForContext({
+      let identity = await resolveArenaIdentityForHermitCommand({
         roomId,
         senderAddress: params.senderAddress,
         baseConfig,
@@ -2726,7 +2828,7 @@ export async function executeHermitCommand(
             reply: autoSetup.message,
           }
         }
-        identity = await resolveArenaIdentityForContext({
+        identity = await resolveArenaIdentityForHermitCommand({
           roomId,
           senderAddress: params.senderAddress,
           baseConfig,
@@ -3021,7 +3123,7 @@ export async function executeHermitCommand(
     }
 
     const baseConfig = readArenaConfig()
-    const resolvedIdentity = await resolveArenaIdentityForContext({
+    const resolvedIdentity = await resolveArenaIdentityForHermitCommand({
       roomId: params.roomId ?? null,
       senderAddress: params.senderAddress,
       baseConfig,

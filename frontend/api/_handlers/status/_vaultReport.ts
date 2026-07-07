@@ -560,7 +560,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const isNestedAjna = Boolean(nestedAjnaInnerVault && addrOk(effectiveAjnaPool))
 
         const flavor = addrOk(charmVault)
-          ? 'Charm LP (CreatorCharmStrategy)'
+          ? 'Charm LP (CharmStrategy4626)'
           : isNestedAjna
             ? 'Ajna lending (adapter-backed inner vault)'
             : hasSolanaRoute

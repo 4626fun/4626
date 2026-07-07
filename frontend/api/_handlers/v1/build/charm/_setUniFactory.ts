@@ -56,7 +56,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       to: strategy,
       data,
       value: '0',
-      description: 'CreatorCharmStrategy (owner): set Uniswap V3 factory (auto fee discovery).',
+      description: 'CharmStrategy4626 (owner): set Uniswap V3 factory (auto fee discovery).',
       warnings: ['Owner-only onchain action. This API only builds calldata; it does not execute.'],
     }
 

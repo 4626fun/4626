@@ -33,6 +33,10 @@ import {
 } from '@/wallet/canonicalWalletPolicy'
 import { resolveClientAgentXmtpAddress } from '@/lib/xmtp/agentXmtpAddress'
 import { CANONICAL_SCW_CHAIN_ID, decideXmtpSignerType, resolveXmtpChainId } from '@/lib/xmtp/signerUtils'
+import {
+  isBaseAppDirectXmtpPath,
+  resolveBaseAppDirectXmtpIdentity,
+} from '@/lib/xmtp/baseAppDirectXmtp'
 import { isPrivyEmbeddedSignerAuthError } from '@/lib/auth/privyEmbeddedSignerAuthErrors'
 import {
   buildNotRegisteredDmMessage,
@@ -83,7 +87,7 @@ import {
 } from '@/lib/xmtp/xmtpConnectPolicy'
 import { buildWrongOriginConnectError, evaluateXmtpConnectPrecheck } from '@/lib/xmtp/xmtpConnectGuard'
 import {
-  isWaitlistMessagingWagmiConnector,
+  isXmtpMessagingWagmiConnector,
   waitForMessagingWallet,
 } from '@/lib/xmtp/waitForMessagingWallet'
 import { finishRestoredXmtpClient } from '@/lib/xmtp/xmtpConnectOrchestrator'
@@ -1505,6 +1509,17 @@ export function XmtpChatProvider({
       })
     }
 
+    const accountCswAddress = normalizeEvmAddress(accountContext.cswAddress)
+    const baseAppDirectIdentity = resolveBaseAppDirectXmtpIdentity({
+      connectedAddress: connected,
+      canonicalCswAddress: accountCswAddress,
+      connector,
+    })
+    if (baseAppDirectIdentity) {
+      resolvedIdentityByWalletRef.current.set(cacheKey, baseAppDirectIdentity)
+      return baseAppDirectIdentity
+    }
+
     const accountContextSmartAddress =
       normalizeEvmAddress(
         accountContext.activeAccountType === 'SMART_WALLET'
@@ -1564,7 +1579,14 @@ export function XmtpChatProvider({
 
       if (waitlistXmtpMemberAddress) {
         preferred = waitlistXmtpMemberAddress
-        isCanonicalSmartWallet = waitlistXmtpMemberAddress !== connected
+        isCanonicalSmartWallet =
+          waitlistXmtpMemberAddress !== connected
+            ? true
+            : isBaseAppDirectXmtpPath({
+                connectedAddress: connected,
+                canonicalCswAddress: waitlistXmtpMemberAddress,
+                connector,
+              }) || preferredSelection.isSmartWalletIdentity
         policyApplies = false
       } else {
         policyApplies = shouldApplyCanonicalEnforcement({
@@ -1615,6 +1637,16 @@ export function XmtpChatProvider({
       }
     }
 
+    const baseAppDirectAfterWaitlist = resolveBaseAppDirectXmtpIdentity({
+      connectedAddress: connected,
+      canonicalCswAddress: waitlistCanonicalAddress ?? accountCswAddress,
+      connector,
+    })
+    if (baseAppDirectAfterWaitlist) {
+      resolvedIdentityByWalletRef.current.set(cacheKey, baseAppDirectAfterWaitlist)
+      return baseAppDirectAfterWaitlist
+    }
+
     if (policyApplies) {
       if (preferred !== CANONICAL_CSW_ADDRESS) {
         console.warn('[xmtp] canonical policy overriding identity resolution to target CSW', {
@@ -1628,7 +1660,13 @@ export function XmtpChatProvider({
 
     const preserveSmartModeIdentity = modeOverride === 'SMART_WALLET' && isCanonicalSmartWallet
 
-    if (preferred !== connected && publicClient) {
+    const skipOwnerInstallGate = isBaseAppDirectXmtpPath({
+      connectedAddress: connected,
+      canonicalCswAddress: preferred,
+      connector,
+    })
+
+    if (preferred !== connected && !skipOwnerInstallGate && publicClient) {
       try {
         const isOwner = (await publicClient.readContract({
           address: preferred as `0x${string}`,
@@ -1675,7 +1713,7 @@ export function XmtpChatProvider({
     const resolved = { identityAddress: preferred, isCanonicalSmartWallet }
     resolvedIdentityByWalletRef.current.set(cacheKey, resolved)
     return resolved
-  }, [accountContext.activeAccount, accountContext.activeAccountType, accountContext.cswAddress, publicClient])
+  }, [accountContext.activeAccount, accountContext.activeAccountType, accountContext.cswAddress, connector, publicClient])
 
   const connect = useCallback(async (intent: ConnectIntent = 'auto') => {
     const canonicalAppOrigin = APP_ORIGIN.replace(/\/+$/, '')
@@ -1689,7 +1727,7 @@ export function XmtpChatProvider({
     if (!connectWalletAddress || !connectWalletClient) {
       const settled = await waitForMessagingWallet(wagmiConfig, {
         timeoutMs: intent === 'user' ? 8_000 : 500,
-        connectorPredicate: isWaitlistMessagingWagmiConnector,
+        connectorPredicate: isXmtpMessagingWagmiConnector,
       })
       if (settled) {
         connectWalletAddress = settled.address

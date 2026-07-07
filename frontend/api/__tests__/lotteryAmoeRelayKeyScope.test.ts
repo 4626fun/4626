@@ -123,6 +123,30 @@ const VALID_PROCESS_CALL = {
   estimatedWinChancePPM: 4,
 }
 
+async function postLegacySubmit(
+  body: Record<string, unknown> = {},
+): Promise<ReturnType<typeof createMockRes>> {
+  const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmit')
+  const req = createMockReq({
+    method: 'POST',
+    body: {
+      creatorCoin: VALID_PROOF.creatorCoin,
+      message: 'amoe-message',
+      signature: '0x1234',
+      pointsBurned: 100,
+      ...body,
+    },
+  })
+  const res = createMockRes()
+  await handler(req, res)
+  return res
+}
+
+function expectLegacySubmitRetired(res: ReturnType<typeof createMockRes>): void {
+  expect(res.statusCode).toBe(410)
+  expect(res.body?.error).toBe('legacy_amoe_submit_retired')
+}
+
 /**
  * Stub viem so the relay path returns a deterministic txHash without
  * touching the network. PR 2 dropped client-relay so the only way to reach
@@ -210,27 +234,8 @@ describe('AMOE submit relay key scope (A4)', () => {
       KPR_ERC4337_OWNER_PRIVATE_KEY: '0x' + '44'.repeat(32),
     })
 
-    const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmit')
-    const req = createMockReq({
-      method: 'POST',
-      body: {
-        creatorCoin: VALID_PROOF.creatorCoin,
-        message: 'amoe-message',
-        signature: '0x1234',
-        pointsBurned: 100,
-      },
-    })
-    const res = createMockRes()
-    await handler(req, res)
-
-    // The relay path must surface `amoe_relay_unavailable`. classifyAmoeError
-    // routes this through legacy-substring as a 500 (no `invalid` /
-    // `mismatch` / `expired` / `insufficient`).
-    expect(res.statusCode).toBe(500)
-    expect(String(res.body?.error ?? '')).toBe('amoe_relay_unavailable')
-
-    // Critically, credits must NOT have been debited — the order is
-    // relay-then-debit so a relay failure leaves the user's balance intact.
+    const res = await postLegacySubmit()
+    expectLegacySubmitRetired(res)
     expect(consumeAmoeCreditsForEntryMock).not.toHaveBeenCalled()
   })
 
@@ -258,29 +263,8 @@ describe('AMOE submit relay key scope (A4)', () => {
       PRIVATE_KEY: undefined,
     })
 
-    const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmit')
-    const req = createMockReq({
-      method: 'POST',
-      body: {
-        creatorCoin: VALID_PROOF.creatorCoin,
-        message: 'amoe-message',
-        signature: '0x1234',
-        pointsBurned: 100,
-      },
-    })
-    const res = createMockRes()
-    await handler(req, res)
-
-    // Either the dynamic viem mock takes effect (200 + txHash) or the
-    // dynamic-import shape diverges in test env and we get 500. Both are
-    // acceptable for THIS test — what we're guarding against is the
-    // pre-A4 behaviour of accepting `KPR_PRIVATE_KEY` / `PRIVATE_KEY`.
-    // The previous test already locked that down; this one just confirms
-    // the AMOE-scoped key is the only one that unblocks relay.
-    expect([200, 500]).toContain(res.statusCode)
-    if (res.statusCode === 200) {
-      expect(res.body?.data?.txHash).toBe('0xfeedface')
-    }
+    const res = await postLegacySubmit()
+    expectLegacySubmitRetired(res)
 
     vi.doUnmock('viem')
     vi.doUnmock('viem/chains')
@@ -336,23 +320,8 @@ describe('AMOE submit wallet authority recheck (A3)', () => {
       activeOwnerWalletAddress: '0x0000000000000000000000000000000000000aa1',
     })
 
-    const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmit')
-    const req = createMockReq({
-      method: 'POST',
-      body: {
-        creatorCoin: VALID_PROOF.creatorCoin,
-        message: 'amoe-message',
-        signature: '0x1234',
-        pointsBurned: 100,
-      },
-    })
-    const res = createMockRes()
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(403)
-    expect(String(res.body?.error ?? '')).toBe('wallet_authority_mismatch')
-    // The auth check runs BEFORE attestation / credit-spend — both side
-    // effects must be untouched on a 403.
+    const res = await postLegacySubmit()
+    expectLegacySubmitRetired(res)
     expect(createAmoeAttestationMock).not.toHaveBeenCalled()
     expect(consumeAmoeCreditsForEntryMock).not.toHaveBeenCalled()
   })
@@ -364,21 +333,8 @@ describe('AMOE submit wallet authority recheck (A3)', () => {
     guardMock.mockResolvedValue({ ok: true, ip: '127.0.0.1' })
     resolveAuthorizedWalletProfileMock.mockResolvedValue(null)
 
-    const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmit')
-    const req = createMockReq({
-      method: 'POST',
-      body: {
-        creatorCoin: VALID_PROOF.creatorCoin,
-        message: 'amoe-message',
-        signature: '0x1234',
-        pointsBurned: 100,
-      },
-    })
-    const res = createMockRes()
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(200)
-    expect(res.body?.success).toBe(true)
+    const res = await postLegacySubmit()
+    expectLegacySubmitRetired(res)
   })
 })
 
@@ -476,21 +432,8 @@ describe('AMOE typed error classification (A2)', () => {
     )
     consumeAmoeCreditsForEntryMock.mockRejectedValue(new AmoeInsufficientCreditsError())
 
-    const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmit')
-    const req = createMockReq({
-      method: 'POST',
-      body: {
-        creatorCoin: VALID_PROOF.creatorCoin,
-        message: 'amoe-message',
-        signature: '0x1234',
-        pointsBurned: 100,
-      },
-    })
-    const res = createMockRes()
-    await handler(req, res)
-
-    expect(res.statusCode).toBe(402)
-    expect(String(res.body?.error ?? '')).toMatch(/insufficient/i)
+    const res = await postLegacySubmit()
+    expectLegacySubmitRetired(res)
   })
 })
 
@@ -543,40 +486,11 @@ describe('AMOE submit credit-spend idempotency contract (A1)', () => {
     })
   })
 
-  it('passes a deterministic refId derived from (creatorCoin, nonce) so retries collide on the unique index', async () => {
-    const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmit')
-
-    // First submit.
-    const req1 = createMockReq({
-      method: 'POST',
-      body: {
-        creatorCoin: VALID_PROOF.creatorCoin,
-        message: 'amoe-message',
-        signature: '0x1234',
-        pointsBurned: 100,
-      },
-    })
-    await handler(req1, createMockRes())
-
-    // Retry with the same proof (e.g. client double-clicked Submit).
-    const req2 = createMockReq({
-      method: 'POST',
-      body: {
-        creatorCoin: VALID_PROOF.creatorCoin,
-        message: 'amoe-message',
-        signature: '0x1234',
-        pointsBurned: 100,
-      },
-    })
-    await handler(req2, createMockRes())
-
-    expect(consumeAmoeCreditsForEntryMock).toHaveBeenCalledTimes(2)
-    const firstCall = consumeAmoeCreditsForEntryMock.mock.calls[0][0]
-    const secondCall = consumeAmoeCreditsForEntryMock.mock.calls[1][0]
-
-    // Both calls must use the SAME refId — that's the idempotency key the
-    // unique constraint uses to deduplicate the spend.
-    expect(firstCall.refId).toBe(`${VALID_PROOF.creatorCoin}:${VALID_PROOF.nonce}`)
-    expect(secondCall.refId).toBe(firstCall.refId)
+  it('legacy submit is retired (use burn-credits + submit-zk)', async () => {
+    const res1 = await postLegacySubmit()
+    const res2 = await postLegacySubmit()
+    expectLegacySubmitRetired(res1)
+    expectLegacySubmitRetired(res2)
+    expect(consumeAmoeCreditsForEntryMock).not.toHaveBeenCalled()
   })
 })

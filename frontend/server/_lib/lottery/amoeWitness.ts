@@ -793,6 +793,7 @@ export function assembleAmoeWitness(
     pointsBurnedAsUSD: raw.pointsBurnedAsUSD,
     pointsLedgerRoot: trees.pointsLedgerSnapshot.root,
     pointsBurnNullifier,
+    walletAddr: raw.wallet,
     // ---- Private (allowlist) ----------------------------------------
     // Canonicalized values flow into the witness so the circuit's
     // `nonceCommit === Poseidon3(nonce, wallet, creatorCoinAddr)`

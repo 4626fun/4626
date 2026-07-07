@@ -70,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       to: strategy,
       data,
       value: '0',
-      description: 'CreatorCharmStrategy (owner): update maxSwapPercent / slippage bps / swap pool fee.',
+      description: 'CharmStrategy4626 (owner): update maxSwapPercent / slippage bps / swap pool fee.',
       warnings: [
         'Owner-only onchain action. This API only builds calldata; it does not execute.',
         'Be careful: overly tight slippage can cause deposits/withdraws to fail; overly loose slippage can increase MEV risk.',

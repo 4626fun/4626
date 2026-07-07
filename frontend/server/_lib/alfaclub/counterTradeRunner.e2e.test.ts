@@ -99,9 +99,9 @@ const BASE_RUNTIME = {
   userSiloDefenseEnabled: false,
   userSiloHlAgentPrivateKey: null,
   userSiloMasterAddress: null,
-  roomId: '1659',
+  roomId: '1043',
   chatPostEnabled: true,
-  chatPostRoomId: '1659',
+  chatPostRoomId: '1043',
   minUserNotionalUsd: 25,
   cooldownMs: 120_000,
   hourlyActionCap: 12,
@@ -235,7 +235,7 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
 
     expect(mocks.runArenaTrade).toHaveBeenCalledTimes(1)
     expect(mocks.getUserFillsByTimeDetailed).toHaveBeenCalledWith(
-      '0xebf94fa19db7d2e7905decd01dae4ea9eb4c1ff2',
+      '0xhlwallet',
       expect.any(Number),
     )
     expect(mocks.recordCounterTradeAction).toHaveBeenCalled()
@@ -272,14 +272,39 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
     expect(mocks.runArenaTrade).toHaveBeenCalledTimes(1)
   })
 
-  it('uses only one active strategy actor for room 1659', async () => {
+  it('skips counter-trade loop in room 1659 (staker pilot mode)', async () => {
+    mocks.readCounterTradeRuntimeConfig.mockReturnValue({
+      ...BASE_RUNTIME,
+      roomId: '1659',
+      chatPostRoomId: '1659',
+    })
+
+    const result = await runCounterTradeLoop()
+
+    expect(result).toMatchObject({
+      ok: true,
+      reason: 'staker_pilot_mode',
+      roomId: '1659',
+      scannedIdentities: 0,
+      executed: 0,
+    })
+    expect(mocks.listActiveCounterTradeOptIns).not.toHaveBeenCalled()
+    expect(mocks.runArenaTrade).not.toHaveBeenCalled()
+  })
+
+  it('uses only one active strategy actor for room 1043 when multiple opt-ins exist', async () => {
+    mocks.readCounterTradeRuntimeConfig.mockReturnValue({
+      ...BASE_RUNTIME,
+      roomId: '1043',
+      chatPostRoomId: '1043',
+    })
     mocks.listActiveCounterTradeOptIns.mockResolvedValue([
       { senderAddress: '0xsender-a', preset: 'balanced', lastActionAt: null },
       { senderAddress: '0xsender-b', preset: 'balanced', lastActionAt: null },
       { senderAddress: '0xsender-c', preset: 'balanced', lastActionAt: null },
     ])
     mocks.resolveArenaIdentityForContext.mockResolvedValue({
-      roomId: BASE_RUNTIME.roomId,
+      roomId: '1043',
       senderAddress: '0xsender-a',
       agentWalletAddress: '0xagentwallet',
       hlApiWalletAddress: '0xhlwallet',
@@ -289,18 +314,9 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
 
     const result = await runCounterTradeLoop()
 
-    expect(result.scannedIdentities).toBe(1)
-    expect(result.executed).toBe(1)
-    expect(mocks.resolveArenaIdentityForContext).toHaveBeenCalledTimes(1)
-    expect(mocks.resolveArenaIdentityForContext).toHaveBeenCalledWith(
-      expect.objectContaining({ senderAddress: '0xsender-a' }),
-    )
-    expect(mocks.enforceSingleActiveCounterTradeActor).toHaveBeenCalledWith(
-      expect.objectContaining({
-        roomId: '1659',
-        survivorSenderAddress: '0xsender-a',
-      }),
-    )
+    expect(result.scannedIdentities).toBe(3)
+    expect(result.executed).toBe(3)
+    expect(mocks.enforceSingleActiveCounterTradeActor).not.toHaveBeenCalled()
   })
 
   it('mirrors a user close by closing the bot position on that pair', async () => {
@@ -740,7 +756,7 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
   })
 
   it('user-silo defense reduces a user leg near liquidation via the API-wallet config', async () => {
-    const userWallet = '0xebf94fa19db7d2e7905decd01dae4ea9eb4c1ff2'
+    const userWallet = '0xhlwallet'
     const agentKey = `0x${'11'.repeat(32)}`
     mocks.readCounterTradeRuntimeConfig.mockReturnValue({
       ...BASE_RUNTIME,
@@ -753,7 +769,8 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
     mocks.getClearinghouseState.mockImplementation(async (address: string) =>
       address === '0xagentwallet'
         ? { accountValueUsd: 10_000, withdrawableUsd: 5_000, assetPositions: [] }
-        : {
+        : address === userWallet
+          ? {
             accountValueUsd: 4_000,
             withdrawableUsd: 800,
             assetPositions: [
@@ -767,7 +784,8 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
                 leverage: 5,
               },
             ],
-          },
+          }
+          : { accountValueUsd: 0, withdrawableUsd: 0, assetPositions: [] },
     )
 
     const result = await runCounterTradeLoop()
@@ -791,7 +809,7 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
   })
 
   it('falls back to alert-only user-silo defense when no API-wallet key is configured', async () => {
-    const userWallet = '0xebf94fa19db7d2e7905decd01dae4ea9eb4c1ff2'
+    const userWallet = '0xhlwallet'
     mocks.readCounterTradeRuntimeConfig.mockReturnValue({
       ...BASE_RUNTIME,
       userSiloDefenseEnabled: true,
@@ -803,7 +821,8 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
     mocks.getClearinghouseState.mockImplementation(async (address: string) =>
       address === '0xagentwallet'
         ? { accountValueUsd: 10_000, withdrawableUsd: 5_000, assetPositions: [] }
-        : {
+        : address === userWallet
+          ? {
             accountValueUsd: 4_000,
             withdrawableUsd: 800,
             assetPositions: [
@@ -817,7 +836,8 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
                 leverage: 5,
               },
             ],
-          },
+          }
+          : { accountValueUsd: 0, withdrawableUsd: 0, assetPositions: [] },
     )
 
     const result = await runCounterTradeLoop()
@@ -858,7 +878,7 @@ describe('runCounterTradeLoop end-to-end integration behavior', () => {
     )
     expect(mocks.sendAlfaClubRoomText).toHaveBeenCalledWith(
       expect.objectContaining({
-        roomId: '1659',
+        roomId: '1043',
         text: expect.stringContaining('✅ Bridge funds settled'),
       }),
     )

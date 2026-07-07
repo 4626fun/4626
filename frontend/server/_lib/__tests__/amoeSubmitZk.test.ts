@@ -355,7 +355,7 @@ function makeEchoSnarkjs(): SnarkjsLike {
   return {
     plonk: {
       fullProve: vi.fn(async (witness: Record<string, unknown>) => {
-        // Echo the eight public signals from the witness, in declared order.
+        // Echo the nine public signals from the witness, in declared order.
         const publicSignals = [
           String(witness.walletAddrCommit),
           String(witness.creatorCoinAddr),
@@ -365,6 +365,7 @@ function makeEchoSnarkjs(): SnarkjsLike {
           String(witness.pointsBurnedAsUSD),
           String(witness.pointsLedgerRoot),
           String(witness.pointsBurnNullifier),
+          String(witness.walletAddr),
         ]
         // Build a 24-element fake proof. Each scalar is a small in-field value.
         const fakeProof: Record<string, unknown> = {}
@@ -405,6 +406,7 @@ function makeDriftingSnarkjs(): SnarkjsLike {
           '999999',
           String(witness.pointsLedgerRoot),
           String(witness.pointsBurnNullifier),
+          String(witness.walletAddr),
         ]
         const fakeProof: Record<string, unknown> = {}
         for (let i = 0; i < AMOE_PLONK_PROOF_LEN; i += 1) fakeProof[`s${i}`] = String(i + 1)
@@ -418,6 +420,26 @@ function makeDriftingSnarkjs(): SnarkjsLike {
         return `[${proofScalars.join(',')}][${pubScalars.join(',')}]`
       }),
     },
+  }
+}
+
+function makeAllowlistReaderStub(wallet: `0x${string}`, epoch: bigint) {
+  return {
+    readSnapshotForWallet: vi.fn(async () => {
+      const { buildAmoeAllowlistSnapshotFromSingleWallet } = await import(
+        '../lottery/amoeWitness.js'
+      )
+      const allowlistSnapshot = buildAmoeAllowlistSnapshotFromSingleWallet(
+        BigInt(wallet),
+        epoch,
+      )
+      return {
+        epoch,
+        allowlistSnapshot,
+        allowlistLeafIndex: 0,
+        rootHex: (`0x${allowlistSnapshot.root.toString(16).padStart(64, '0')}`) as `0x${string}`,
+      }
+    }),
   }
 }
 
@@ -448,7 +470,7 @@ describe('orchestrateAmoeSubmitZk — end-to-end', () => {
     }
   })
 
-  it('throws AmoeServerError(amoe_ledger_snapshot_stub_not_allowed) when stub flag unset', async () => {
+  it('throws AmoeServerError(amoe_allowlist_snapshot_unavailable) when stub flag unset', async () => {
     const restore = setEnv({
       AMOE_SIGNUP_SALT: FIXTURE_SALT_HEX,
       AMOE_ZK_SNAPSHOT_STUB_ALLOW: undefined,
@@ -467,7 +489,7 @@ describe('orchestrateAmoeSubmitZk — end-to-end', () => {
         err = e
       }
       expect(err).toBeInstanceOf(AmoeServerError)
-      expect((err as Error).message).toBe('amoe_ledger_snapshot_stub_not_allowed')
+      expect((err as Error).message).toBe('amoe_allowlist_snapshot_unavailable')
     } finally {
       restore()
     }
@@ -721,6 +743,10 @@ describe('orchestrateAmoeSubmitZk — end-to-end', () => {
         snarkjs: makeEchoSnarkjs(),
         nowSec: AMOE_EPOCH_GENESIS_UNIX_SEC + AMOE_EPOCH_SECONDS * 7n + 1n,
         ledgerSnapshotReader: reader as unknown as Parameters<typeof orchestrateAmoeSubmitZk>[1]['ledgerSnapshotReader'],
+        allowlistSnapshotReader: makeAllowlistReaderStub(
+          inputs.wallet,
+          epoch,
+        ) as unknown as Parameters<typeof orchestrateAmoeSubmitZk>[1]['allowlistSnapshotReader'],
       })
       expect(result.epoch).toBe(epoch)
       expect(reader.readSnapshotForBurn).toHaveBeenCalledTimes(1)
@@ -756,14 +782,21 @@ describe('orchestrateAmoeSubmitZk — end-to-end', () => {
             `0x${string}`,
         })),
       }
+      const nowSec = AMOE_EPOCH_GENESIS_UNIX_SEC + AMOE_EPOCH_SECONDS * 7n + 1n
+      const epoch = (nowSec - AMOE_EPOCH_GENESIS_UNIX_SEC) / AMOE_EPOCH_SECONDS
+      const inputs = makeInputs()
       let err: unknown = null
       try {
-        await orchestrateAmoeSubmitZk(makeInputs(), {
+        await orchestrateAmoeSubmitZk(inputs, {
           wasmPath: 'mock',
           zkeyPath: 'mock',
           snarkjs: makeEchoSnarkjs(),
-          nowSec: AMOE_EPOCH_GENESIS_UNIX_SEC + AMOE_EPOCH_SECONDS * 7n + 1n,
+          nowSec,
           ledgerSnapshotReader: reader as unknown as Parameters<typeof orchestrateAmoeSubmitZk>[1]['ledgerSnapshotReader'],
+          allowlistSnapshotReader: makeAllowlistReaderStub(
+            inputs.wallet,
+            epoch,
+          ) as unknown as Parameters<typeof orchestrateAmoeSubmitZk>[1]['allowlistSnapshotReader'],
         })
       } catch (e) {
         err = e

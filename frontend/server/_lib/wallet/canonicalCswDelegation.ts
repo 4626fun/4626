@@ -758,6 +758,8 @@ export async function bootstrapCanonicalDelegationState(params: {
     canonicalCswAddress: canonical.canonicalCswAddress,
     baseSubAccountAddress: sanitizedSubAccountAddress,
     privyEmbeddedEoaIsOwnerOfCanonicalCsw: privyIsOwner,
+    embeddedEoaAddress: privyEmbeddedEoaAddress,
+    canonicalSource: canonical.canonicalSource,
   })
 
   return {

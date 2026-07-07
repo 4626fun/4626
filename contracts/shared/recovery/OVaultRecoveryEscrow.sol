@@ -6,7 +6,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /// @notice Epoch-scoped recovery escrow. Vault notifies recoveries and executes claims.
-contract CreatorORecoveryEscrow is Ownable {
+contract OVaultRecoveryEscrow is Ownable {
     using SafeERC20 for IERC20;
 
     address public vault;

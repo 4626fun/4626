@@ -1065,6 +1065,8 @@ export async function buildAccountsMePayload(params: {
     canonicalCswAddress: canonicalCswAddressForTrack,
     baseSubAccountAddress: sanitizedBaseSubAccountForTrack,
     privyEmbeddedEoaIsOwnerOfCanonicalCsw: privyEmbeddedEoaIsOwnerOfCanonicalCsw === true,
+    embeddedEoaAddress: profileEmbeddedEoa,
+    canonicalSource: delegationState?.canonicalSource ?? null,
   })
 
   const basenameFromLinks = linkedMethods.basename?.[0] ?? null

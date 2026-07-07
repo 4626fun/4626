@@ -482,7 +482,7 @@ describe('buildAccountsMePayload', () => {
       privyUser: null,
     })
 
-    expect(payload.accountSignals.executionTrack).toBe('none-yet')
+    expect(payload.accountSignals.executionTrack).toBe('base-app-direct')
     expect(payload.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw).toBe(false)
     expect(payload.accountSignals.baseSubAccount).toEqual({
       address: SUB_ACCOUNT,
@@ -606,7 +606,7 @@ describe('buildAccountsMePayload', () => {
       privyUser: null,
     })
 
-    expect(payload.accountSignals.executionTrack).toBe('none-yet')
+    expect(payload.accountSignals.executionTrack).toBe('base-app-direct')
     expect(payload.accountSignals.baseSubAccount).toEqual({
       address: SUB_ACCOUNT,
       isDistinctFromCsw: true,
@@ -614,7 +614,7 @@ describe('buildAccountsMePayload', () => {
     })
   })
 
-  it('classifies the Base App probe CSW as none-yet before sub-account or owner install', async () => {
+  it('classifies the Base App probe CSW as base-app-direct before owner install', async () => {
     const CANONICAL_CSW = CANONICAL_CSW_ADDRESS
     const EMBEDDED_EOA = '0x00000000000000000000000000000000000000cc'
 
@@ -714,8 +714,112 @@ describe('buildAccountsMePayload', () => {
     })
 
     expect(payload.accountSignals.canonicalCswAddress).toBe(CANONICAL_CSW)
-    expect(payload.accountSignals.executionTrack).toBe('none-yet')
+    expect(payload.accountSignals.executionTrack).toBe('base-app-direct')
     expect(payload.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw).toBe(false)
     expect(payload.accountSignals.baseSubAccount.registered).toBe(false)
+  })
+
+  it('keeps Zora wallet_sync accounts on none-yet until embedded-owner install', async () => {
+    const CANONICAL_CSW = '0x00000000000000000000000000000000000000aa'
+    const EMBEDDED_EOA = '0x00000000000000000000000000000000000000bb'
+
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const query = strings.join(' ').replace(/\s+/g, ' ').trim().toLowerCase()
+
+        if (query.includes('to_regclass')) {
+          return {
+            rows: [
+              {
+                has_profiles: true,
+                has_email_verified: true,
+                has_account_linked_methods: true,
+                has_account_zora_signals: true,
+                has_canonical_csw_address: true,
+                has_referral_conversions: true,
+                has_points: true,
+                has_profile_wallets: true,
+                has_app_access_status: true,
+                has_verifications: true,
+                has_profile_completed_at: true,
+                has_csw_address: true,
+                has_primary_embedded_eoa: true,
+                has_privy_is_owner: true,
+                has_referral_status: true,
+                has_referral_qualified_at: true,
+                has_profile_wallets_canonical_solana: true,
+                has_profile_wallets_operational_solana: true,
+                has_profiles_referral_code: true,
+                has_profiles_referred_by_signup_id: true,
+              },
+            ],
+          }
+        }
+
+        if (query.includes('select email') && query.includes('from profiles')) {
+          return { rows: [{ email: 'zora@example.com', email_verified: true }] }
+        }
+
+        if (query.includes('from account_linked_methods')) return { rows: [] }
+
+        if (query.includes('from account_zora_signals')) {
+          return {
+            rows: [
+              {
+                zora_linked: true,
+                canonical_csw_address: CANONICAL_CSW,
+                creator_coin_address: '0x00000000000000000000000000000000000000ee',
+                zora_handle: 'zorauser',
+                last_resolved_at: new Date().toISOString(),
+              },
+            ],
+          }
+        }
+
+        if (query.includes('privy_user_aliases') && query.includes('merged_into_profile_id')) {
+          return { rows: [{ id: 91 }] }
+        }
+
+        if (query.includes('from points p') && query.includes('where p.signup_id in')) {
+          return { rows: [{ points: 0 }] }
+        }
+
+        if (query.includes('app_access_status') && query.includes('base_sub_account') && query.includes('from profiles') && query.includes('where id')) {
+          return {
+            rows: [{ id: 91, app_access_status: 'approved', base_sub_account: null }],
+          }
+        }
+
+        if (query.includes('from profile_wallets pw') && query.includes('privy_is_owner')) {
+          return {
+            rows: [
+              {
+                profile_id: 91,
+                chain_id: 8453,
+                canonical_csw_address: CANONICAL_CSW,
+                canonical_source: 'wallet_sync',
+                privy_embedded_eoa_address: EMBEDDED_EOA,
+                privy_is_owner: false,
+                last_checked_at: new Date().toISOString(),
+                address: CANONICAL_CSW,
+                is_canonical_smart_wallet: true,
+              },
+            ],
+          }
+        }
+
+        return { rows: [] }
+      }),
+    }
+
+    const payload = await buildAccountsMePayload({
+      db: db as any,
+      privyUserId: 'did:privy:zora-user',
+      privyUser: null,
+    })
+
+    expect(payload.accountSignals.executionTrack).toBe('none-yet')
+    expect(payload.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw).toBe(false)
+    expect(payload.accountSignals.linked).toBe(true)
   })
 })

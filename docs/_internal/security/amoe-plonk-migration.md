@@ -188,3 +188,41 @@ Then rename `PlonkVerifier` → `AmoePlonkVerifier`, bump pragma to
   it after the user pointed out that the structure (cold account asking
   strangers to download binaries) is identical to a phishing operation.
   PLONK is the more honest fix.
+
+## Circuit v3 — buyer/wallet binding (2026-07)
+
+**Breaking change:** `amoe_eligibility.circom` v3 adds `walletAddr` as the 9th public
+input. `LotteryAmoeRouter.submitAmoeEntryZK` now requires
+`buyer == pubInputs[8]` after proof verification, closing proof-theft /
+frontrun gaps where an attacker could relay a valid proof with a different
+`buyer` calldata argument.
+
+| Artifact | v2 (8 pub inputs) | v3 (9 pub inputs) |
+|---|---|---|
+| `IAmoePlonkVerifier.verifyProof` | `uint256[8] pubInputs` | `uint256[9] pubInputs` |
+| `AmoePlonkVerifier.sol` | regen via `amoe/tools/zk/regen_amoe_plonk_verifier.sh` | same script (patch guard updated) |
+| Off-chain witness | 8 public signals | + `walletAddr` (must equal private `wallet`) |
+| Deploy checklist | `router.setVerifier(newVerifier)` | + router upgrade if ABI arity changed |
+
+**Regen commands (from repo root):**
+
+```bash
+# Recompile circuit + regen zkey/verifier (needs circom + snarkjs)
+bash amoe/tools/zk/regen_amoe_plonk_verifier.sh
+
+# Refresh TS test fixtures (uses frontend snarkjs)
+SNARKJS_CLI=frontend/node_modules/snarkjs/build/cli.cjs \
+  node amoe/tools/zk/regen_amoe_plonk_fixture.mjs
+
+# Patch guard (CI)
+bash amoe/tools/ci/check_amoe_plonk_patch.sh
+```
+
+**On-chain wiring (required before enabling ZK master flag):**
+
+1. `router.setManager(LotteryManager4626)`
+2. `manager.setAuthorizedAmoeRelayer(router)` — router is the only caller of `processAmoeEntry`
+3. Kill-switch: `manager.setAuthorizedAmoeRelayer(address(0))`
+
+See `script/DeployLotteryAmoeRouter.s.sol` and
+`docs/_internal/operations/lottery/amoe-root-publish-runbook.md`.

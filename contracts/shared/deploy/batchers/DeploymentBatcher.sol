@@ -1414,7 +1414,7 @@ contract DeploymentBatcher is ReentrancyGuard {
     // on-chain ABI / calldata compatibility with existing callers. All comments,
     // errors, and new code must use the canonical `creatorCoinPayoutRecipient`
     // framing for the external earnings lane (the one that feeds CreatorPayoutRouter
-    // → CreatorVaultShareBurnStream for PPS accretion).
+    // → VaultShareBurnStream for PPS accretion).
     struct Phase2Params {
         address creatorToken;
         address owner;

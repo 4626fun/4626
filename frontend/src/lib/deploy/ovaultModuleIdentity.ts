@@ -16,7 +16,7 @@ export const CREATOR_OVAULT_MODULE_STORAGE_V2 = keccak256(
 
 /** Impairment-side-pocket module stack (not yet paired with v1.13.0 deploy bytecode). */
 export const CREATOR_OVAULT_MODULE_STORAGE_V3 = keccak256(
-  encodePacked(['string'], ['CreatorOVaultModuleStorage.v3']),
+  encodePacked(['string'], ['OVaultModuleStorage.v3']),
 ) as Hex
 
 /** Pre-v1.12.1 modules still on-chain for grandfathered vaults only. */
@@ -113,11 +113,11 @@ export async function assertCreatorOvaultModuleStorageCompatible(params: {
       moduleReports.toLowerCase() === CREATOR_OVAULT_MODULE_STORAGE_V2.toLowerCase()
     const hint =
       expectsV3 && moduleIsV2
-        ? ' Deploy bytecode expects CreatorOVaultModuleStorage.v3 (v1.14.0) but the live batcher Phase1Module still wires v2 modules. ' +
+        ? ' Deploy bytecode expects OVaultModuleStorage.v3 (v1.14.0) but the live batcher Phase1Module still wires v2 modules. ' +
           'Protocol ops must call setPhase1Module with the v1.14.0 v3 Phase1Module before greenfield deploy. ' +
           'Hard-refresh the app so CREATE2 prediction reads Phase1Module immutables (not batcher-shell getters).'
         : expectsV3 && moduleIsLegacyCurrent
-          ? ' Deploy bytecode expects CreatorOVaultModuleStorage.v3 but the live batcher still wires .current modules. ' +
+          ? ' Deploy bytecode expects OVaultModuleStorage.v3 but the live batcher still wires .current modules. ' +
             'Deploy fresh v3 modules and rotate the batcher, or re-seed deploy bytecode to match live wiring.'
           : ' Re-seed deploy bytecode or rotate batcher/module wiring so vault and modules share one moduleStorageVersion fingerprint.'
     return {

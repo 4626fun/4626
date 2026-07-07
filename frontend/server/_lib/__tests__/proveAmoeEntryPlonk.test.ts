@@ -75,7 +75,7 @@ const FIXTURE_PUBLIC = JSON.parse(
 const FIXTURE_CREATOR_COIN = '0x00000000c0ffeec0ffeec0ffeec0ffeec0ffeec0' as const
 
 const FIXTURE_ROUTER = '0x000000000000000000000000000000000000ABCD' as const
-const FIXTURE_WALLET = '0x1111111111111111111111111111111111111111' as const
+const FIXTURE_WALLET = '0x1234567890abcdef1234567890abcdef12345678' as const
 
 // ---------------------------------------------------------------------------
 // parsePlonkSolidityCallData
@@ -244,6 +244,7 @@ function makeValidWitness(): AmoeEligibilityWitness {
     pointsBurnedAsUSD: '1000000',
     pointsLedgerRoot: FILL,
     pointsBurnNullifier: FILL,
+    walletAddr: FILL,
     wallet: FILL,
     nonce: FILL,
     twitterCreditNullifier: FILL,
@@ -279,7 +280,7 @@ function makeFixtureSnarkjs(overrides?: {
 }
 
 describe('proveAmoeEntryPlonk', () => {
-  it('happy path: returns proof[24] + pubInputs[8] in the locked slot order', async () => {
+  it('happy path: returns proof[24] + pubInputs[9] in the locked slot order', async () => {
     const result = await proveAmoeEntryPlonk(makeValidWitness(), {
       wasmPath: '/dev/null/amoe_eligibility.wasm',
       zkeyPath: '/dev/null/amoe_plonk_final.zkey',

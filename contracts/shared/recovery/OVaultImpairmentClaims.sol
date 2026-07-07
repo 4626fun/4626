@@ -5,7 +5,7 @@ import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /// @notice Non-transferable v1 impairment claims keyed by epoch id.
-contract CreatorOImpairmentClaims is ERC1155, Ownable {
+contract OVaultImpairmentClaims is ERC1155, Ownable {
     address public vault;
     mapping(uint256 => uint256) public totalSupply;
 

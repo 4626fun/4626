@@ -73,7 +73,7 @@ export function weightedWaitlistPoints(source: unknown, amount: unknown): number
   return 0
 }
 
-/** Legacy per-row AMOE allowlist weights (view still exists in DB). Runtime balance/spend uses `readWaitlistPointsBreakdown`. */
+/** Per-row AMOE allowlist weights (mirrors `points_amoe_eligible_balance` CASE). */
 export function weightedAmoeEligiblePoints(source: unknown, amount: unknown): number {
   const normalizedSource = String(source ?? '').trim()
   const normalizedAmount = safeInt(amount)
@@ -248,15 +248,22 @@ export async function readWaitlistPointsBreakdown(
 }
 
 /**
- * Public points balance for lottery spend and `/api/v1/lottery/amoe/credits`.
- * Same weighted total as waitlist tiers, leaderboard, and tray (`points.total`).
+ * AMOE spendable balance for lottery spend and `/api/v1/lottery/amoe/credits`.
+ * Reads `points_amoe_eligible_balance` (strict free-action allowlist; burns reduce balance).
  */
 export async function readAmoeEligibleCreditsForSignupId(
   db: ScoringDb,
   signupId: number,
 ): Promise<number> {
-  const breakdown = await readWaitlistPointsBreakdown(db, signupId)
-  return breakdown.total
+  const validId = assertValidSignupId(signupId)
+  const result = await db.sql`
+    SELECT COALESCE(credits, 0)::bigint AS credits
+    FROM points_amoe_eligible_balance
+    WHERE signup_id = ${validId};
+  `
+  const valueRaw = Number(result.rows?.[0]?.credits ?? 0)
+  const value = Number.isFinite(valueRaw) ? Math.floor(valueRaw) : 0
+  return Math.max(0, value)
 }
 
 export function labelForPointsSource(source: string): string {

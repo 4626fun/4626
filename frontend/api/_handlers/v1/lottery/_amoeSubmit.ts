@@ -78,6 +78,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
   }
 
+  // Legacy server-relay path retired — use burn-credits + submit-zk (ZK proof).
+  return res.status(410).json({ success: false, error: 'legacy_amoe_submit_retired' })
+
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/lottery/amoe/submit', kind: 'read' })
   if (!g.ok) return
 

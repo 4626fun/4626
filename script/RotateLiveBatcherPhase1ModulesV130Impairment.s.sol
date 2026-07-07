@@ -5,10 +5,10 @@ import "forge-std/Script.sol";
 
 import {DeploymentBatcher, DeploymentBatcherPhase1Module} from "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
 import {UniversalCreate2DeployerFromStore} from "@4626/shared/deploy/factories/UniversalCreate2DeployerFromStore.sol";
-import {CreatorOVaultAdminModule} from "@4626/creator/vault/modules/CreatorOVaultAdminModule.sol";
+import {OVaultAdminModule} from "@4626/shared/vault/modules/OVaultAdminModule.sol";
 import {CreatorOVaultCoreModule} from "@4626/creator/vault/modules/CreatorOVaultCoreModule.sol";
-import {CreatorOVaultStrategiesModule} from "@4626/creator/vault/modules/CreatorOVaultStrategiesModule.sol";
-import {ICreatorOVaultModuleIdentity} from "@4626/creator/vault/modules/ICreatorOVaultModuleIdentity.sol";
+import {OVaultStrategiesModule} from "@4626/shared/vault/modules/OVaultStrategiesModule.sol";
+import {IOVaultModuleIdentity} from "@4626/shared/vault/modules/IOVaultModuleIdentity.sol";
 
 /// @notice Deploy v3 CreatorOVault modules + a Phase1Module wired to the live split batcher shell.
 /// @dev Does not deploy a new DeploymentBatcher shell.
@@ -24,11 +24,11 @@ contract RotateLiveBatcherPhase1ModulesV130Impairment is Script {
 
     string constant DEFAULT_DEPLOYMENT_EPOCH_TAG = "v1.13.0-impairment-v1";
     string constant VAULT_CORE_MODULE_SALT_TAG_PREFIX = "base-release:CreatorOVaultCoreModule:";
-    string constant VAULT_STRATEGIES_MODULE_SALT_TAG_PREFIX = "base-release:CreatorOVaultStrategiesModule:";
-    string constant VAULT_ADMIN_MODULE_SALT_TAG_PREFIX = "base-release:CreatorOVaultAdminModule:";
+    string constant VAULT_STRATEGIES_MODULE_SALT_TAG_PREFIX = "base-release:OVaultStrategiesModule:";
+    string constant VAULT_ADMIN_MODULE_SALT_TAG_PREFIX = "base-release:OVaultAdminModule:";
     string constant LIVE_PHASE1_MODULE_SALT_TAG_PREFIX = "base-release:DeploymentBatcherPhase1Module:";
 
-    bytes32 constant MODULE_STORAGE_V3 = keccak256("CreatorOVaultModuleStorage.v3");
+    bytes32 constant MODULE_STORAGE_V3 = keccak256("OVaultModuleStorage.v3");
 
     function _create2(address deployer, bytes32 salt, bytes32 initCodeHash) internal pure returns (address) {
         return address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), deployer, salt, initCodeHash)))));
@@ -82,8 +82,8 @@ contract RotateLiveBatcherPhase1ModulesV130Impairment is Script {
         bytes32 phase1Salt = _phase1Salt();
 
         bytes memory coreInit = type(CreatorOVaultCoreModule).creationCode;
-        bytes memory strategiesInit = type(CreatorOVaultStrategiesModule).creationCode;
-        bytes memory adminInit = type(CreatorOVaultAdminModule).creationCode;
+        bytes memory strategiesInit = type(OVaultStrategiesModule).creationCode;
+        bytes memory adminInit = type(OVaultAdminModule).creationCode;
 
         address coreModuleAddr = _create2(CREATE2_FACTORY_ADDR, coreSalt, keccak256(coreInit));
         address strategiesModuleAddr = _create2(CREATE2_FACTORY_ADDR, strategiesSalt, keccak256(strategiesInit));
@@ -108,20 +108,20 @@ contract RotateLiveBatcherPhase1ModulesV130Impairment is Script {
         console2.log("Broadcaster:", broadcaster);
         console2.log("Live DeploymentBatcher:", batcher);
         console2.log("CreatorOVaultCoreModule (predicted):", coreModuleAddr);
-        console2.log("CreatorOVaultStrategiesModule (predicted):", strategiesModuleAddr);
-        console2.log("CreatorOVaultAdminModule (predicted):", adminModuleAddr);
+        console2.log("OVaultStrategiesModule (predicted):", strategiesModuleAddr);
+        console2.log("OVaultAdminModule (predicted):", adminModuleAddr);
         console2.log("DeploymentBatcherPhase1Module (predicted):", phase1ModuleAddr);
 
         vm.startBroadcast(pk);
         _deployCreate2IfMissing(coreSalt, coreInit, "CreatorOVaultCoreModule");
-        _deployCreate2IfMissing(strategiesSalt, strategiesInit, "CreatorOVaultStrategiesModule");
-        _deployCreate2IfMissing(adminSalt, adminInit, "CreatorOVaultAdminModule");
+        _deployCreate2IfMissing(strategiesSalt, strategiesInit, "OVaultStrategiesModule");
+        _deployCreate2IfMissing(adminSalt, adminInit, "OVaultAdminModule");
         _deployCreate2IfMissing(phase1Salt, phase1Init, "DeploymentBatcherPhase1Module");
         vm.stopBroadcast();
 
         _assertModuleStorageV3(coreModuleAddr, "CreatorOVaultCoreModule");
-        _assertModuleStorageV3(strategiesModuleAddr, "CreatorOVaultStrategiesModule");
-        _assertModuleStorageV3(adminModuleAddr, "CreatorOVaultAdminModule");
+        _assertModuleStorageV3(strategiesModuleAddr, "OVaultStrategiesModule");
+        _assertModuleStorageV3(adminModuleAddr, "OVaultAdminModule");
 
         require(
             DeploymentBatcherPhase1Module(phase1ModuleAddr).batcher() == batcher,
@@ -136,7 +136,7 @@ contract RotateLiveBatcherPhase1ModulesV130Impairment is Script {
     }
 
     function _assertModuleStorageV3(address moduleAddr, string memory label) internal view {
-        bytes32 reported = ICreatorOVaultModuleIdentity(moduleAddr).moduleStorageVersion();
+        bytes32 reported = IOVaultModuleIdentity(moduleAddr).moduleStorageVersion();
         require(reported == MODULE_STORAGE_V3, string.concat(label, " not v3 fingerprint"));
     }
 }

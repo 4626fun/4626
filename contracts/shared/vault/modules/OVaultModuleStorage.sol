@@ -8,7 +8,7 @@ pragma solidity ^0.8.20;
 /// FIX: I-02 — Layout integrity is verified at deploy time via `setModulesOnce()` which checks
 /// `moduleStorageVersion()`. Upgrades MUST bump MODULE_STORAGE_VERSION if layout changes.
 /// Storage-hardening roadmap: `docs/research/ovault-storage-namespacing-rfc.md`.
-abstract contract CreatorOVaultModuleStorage {
+abstract contract OVaultModuleStorage {
     enum VaultMode {
         Normal,
         Suspect

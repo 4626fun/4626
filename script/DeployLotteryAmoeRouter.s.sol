@@ -27,6 +27,13 @@ import {LotteryAmoeRouter} from "@4626/shared/lottery/zk/LotteryAmoeRouter.sol";
  *         - AMOE_OWNER:            router owner (rotates verifier, sets consumer)
  *         - AMOE_PUBLISHER:        backend signer that publishes daily allowlist roots
  *
+ * @dev    Post-deploy wiring (REQUIRED — not optional):
+ *         - `router.setManager(LotteryManager4626)` from owner
+ *         - `manager.setAuthorizedAmoeRelayer(router)` so only the router
+ *           may call `processAmoeEntry` (kill-switch: relayer address(0))
+ *         - `router.setPointsLedgerPublisher(<ledger publisher EOA>)`
+ *         - `router.setConsumer(<LotteryManager4626>)` if not wired in-script
+ *
  * @dev    Optional env vars:
  *         - AMOE_CONSUMER:         LotteryManager4626 (or a forwarder). If
  *                                  unset, the router is deployed without a

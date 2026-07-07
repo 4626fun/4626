@@ -11,24 +11,24 @@ import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProo
 import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
 import {IStrategyValuation} from "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
 
-import {CreatorOVaultModuleBase} from "@4626/creator/vault/modules/CreatorOVaultModuleBase.sol";
-import {CreatorOVaultLiquidityLib} from "@4626/creator/vault/libraries/CreatorOVaultLiquidityLib.sol";
-import {ICreatorOVaultModuleIdentity} from "@4626/creator/vault/modules/ICreatorOVaultModuleIdentity.sol";
+import {OVaultModuleBase} from "@4626/shared/vault/modules/OVaultModuleBase.sol";
+import {OVaultLiquidityLib} from "@4626/shared/vault/libraries/OVaultLiquidityLib.sol";
+import {IOVaultModuleIdentity} from "@4626/shared/vault/modules/IOVaultModuleIdentity.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-interface ICreatorOVaultStrategiesModuleInternal {
+interface IOVaultStrategiesModuleInternal {
     function __withdrawFromStrategies(uint256 amountNeeded) external returns (uint256 totalWithdrawn);
     function __autoAllocateToStrategy() external;
     function __ejectDisabledStrategy(address strategy) external;
 }
 
-interface ICreatorOImpairmentClaims {
+interface IOVaultImpairmentClaims {
     function mintFromVault(address account, uint256 epochId, uint256 amount) external;
     function balanceOf(address account, uint256 id) external view returns (uint256);
     function totalSupply(uint256 id) external view returns (uint256);
 }
 
-interface ICreatorORecoveryEscrow {
+interface IOVaultRecoveryEscrow {
     function notifyRecovery(address asset, uint256 epochId, uint256 amount) external;
     function claimRecovery(address asset, uint256 epochId, address receiver, uint256 amount) external;
 }
@@ -47,10 +47,10 @@ interface ICCAPhaseReader {
 
 /// @notice Core ERC-4626 + queue + profit unlocking + reporting logic for CreatorOVault.
 /// @dev Must be invoked via delegatecall from CreatorOVault.
-contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModuleIdentity {
+contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     using SafeERC20 for IERC20;
     bytes32 internal constant MODULE_KIND = keccak256("CreatorOVaultModule.core");
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v3");
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("OVaultModuleStorage.v3");
 
     // ---- constants (must match vault) ----
     uint16 internal constant MAX_FEE = 2_000;
@@ -589,8 +589,8 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         uint256 userShares = _balances[owner_];
         if (userShares == 0) return 0;
         uint256 assetsFromShares = IERC4626(address(this)).previewRedeem(userShares);
-        CreatorOVaultLiquidityLib.LiquiditySnapshot memory snap = CreatorOVaultLiquidityLib.snapshot(address(this));
-        uint256 liquidityCap = CreatorOVaultLiquidityLib.maxInstantWithdrawAssets(snap);
+        OVaultLiquidityLib.LiquiditySnapshot memory snap = OVaultLiquidityLib.snapshot(address(this));
+        uint256 liquidityCap = OVaultLiquidityLib.maxInstantWithdrawAssets(snap);
         if (assetsFromShares > liquidityCap) assetsFromShares = liquidityCap;
         if (largeWithdrawalThreshold == 0) return assetsFromShares;
         uint256 maxSyncAssets = largeWithdrawalThreshold - 1;
@@ -603,8 +603,8 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         uint256 userShares = _balances[owner_];
         if (userShares == 0) return 0;
 
-        CreatorOVaultLiquidityLib.LiquiditySnapshot memory snap = CreatorOVaultLiquidityLib.snapshot(address(this));
-        uint256 liquidityCap = CreatorOVaultLiquidityLib.maxInstantWithdrawAssets(snap);
+        OVaultLiquidityLib.LiquiditySnapshot memory snap = OVaultLiquidityLib.snapshot(address(this));
+        uint256 liquidityCap = OVaultLiquidityLib.maxInstantWithdrawAssets(snap);
         uint256 maxAssetWithdraw = liquidityCap;
         if (largeWithdrawalThreshold > 0) {
             uint256 syncCap = largeWithdrawalThreshold - 1;
@@ -673,7 +673,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         // Delegatecall is intentional: strategies module shares the same vault storage layout.
         // `_strategiesModule` is set by owner-gated module wiring and verified before use.
         (bool ok, bytes memory ret) =
-            module.delegatecall(abi.encodeWithSelector(ICreatorOVaultStrategiesModuleInternal.__withdrawFromStrategies.selector, amountNeeded));
+            module.delegatecall(abi.encodeWithSelector(IOVaultStrategiesModuleInternal.__withdrawFromStrategies.selector, amountNeeded));
         if (!ok) _revertBytes(ret);
     }
 
@@ -683,7 +683,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
 
         // Delegatecall is intentional and access-controlled via module-address configuration.
         (bool ok, bytes memory ret) =
-            module.delegatecall(abi.encodeWithSelector(ICreatorOVaultStrategiesModuleInternal.__autoAllocateToStrategy.selector));
+            module.delegatecall(abi.encodeWithSelector(IOVaultStrategiesModuleInternal.__autoAllocateToStrategy.selector));
         if (!ok) _revertBytes(ret);
     }
 
@@ -878,7 +878,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         if (module == address(0)) revert ModulesNotSet();
 
         (bool ok, bytes memory ret) = module.delegatecall(
-            abi.encodeWithSelector(ICreatorOVaultStrategiesModuleInternal.__ejectDisabledStrategy.selector, strategy)
+            abi.encodeWithSelector(IOVaultStrategiesModuleInternal.__ejectDisabledStrategy.selector, strategy)
         );
         if (!ok) _revertBytes(ret);
     }
@@ -1084,13 +1084,13 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         // claimImpairmentRecovery divides by totalClaimSupply assuming claims
         // never exceed it; an over-stated root (leaves summing past the cap)
         // would otherwise dilute honest holders / over-pay early claimers.
-        uint256 mintedSupply = ICreatorOImpairmentClaims(impairmentClaims).totalSupply(epochId);
+        uint256 mintedSupply = IOVaultImpairmentClaims(impairmentClaims).totalSupply(epochId);
         if (mintedSupply + amount > epoch.totalClaimSupply) {
             revert ClaimSupplyExceeded(epochId, epoch.totalClaimSupply, mintedSupply + amount);
         }
 
         impairmentClaimMinted[epochId][account] = true;
-        ICreatorOImpairmentClaims(impairmentClaims).mintFromVault(account, epochId, amount);
+        IOVaultImpairmentClaims(impairmentClaims).mintFromVault(account, epochId, amount);
     }
 
     function notifyImpairmentRecovery(uint256 epochId, uint256 amount) external onlyDelegateCall {
@@ -1113,7 +1113,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         } else {
             IERC20(epoch.recoveryAsset).safeTransfer(impairmentRecoveryEscrow, amount);
         }
-        ICreatorORecoveryEscrow(impairmentRecoveryEscrow).notifyRecovery(epoch.recoveryAsset, epochId, amount);
+        IOVaultRecoveryEscrow(impairmentRecoveryEscrow).notifyRecovery(epoch.recoveryAsset, epochId, amount);
         epoch.totalRecovered += amount;
         emit ImpairmentRecoveryNotified(epochId, epoch.recoveryAsset, amount);
     }
@@ -1122,14 +1122,14 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         if (receiver == address(0)) revert ZeroAddress();
         ImpairmentEpoch storage epoch = impairmentEpochs[epochId];
         if (epoch.totalClaimSupply == 0) revert InvalidImpairmentEpoch(epochId);
-        uint256 claimUnits = ICreatorOImpairmentClaims(impairmentClaims).balanceOf(msg.sender, epochId);
+        uint256 claimUnits = IOVaultImpairmentClaims(impairmentClaims).balanceOf(msg.sender, epochId);
         uint256 gross = (epoch.totalRecovered * claimUnits) / epoch.totalClaimSupply;
         uint256 already = impairmentAmountClaimed[epochId][msg.sender];
         if (gross <= already) revert NothingToClaim(epochId, msg.sender);
         amountOut = gross - already;
         impairmentAmountClaimed[epochId][msg.sender] = gross;
         epoch.totalClaimed += amountOut;
-        ICreatorORecoveryEscrow(impairmentRecoveryEscrow).claimRecovery(epoch.recoveryAsset, epochId, receiver, amountOut);
+        IOVaultRecoveryEscrow(impairmentRecoveryEscrow).claimRecovery(epoch.recoveryAsset, epochId, receiver, amountOut);
         if (epoch.status == ImpairmentEpochStatus.Finalized && epoch.totalClaimed >= epoch.totalRecovered) {
             epoch.status = ImpairmentEpochStatus.Resolved;
             epoch.resolvedAt = uint64(block.timestamp);

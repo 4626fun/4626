@@ -112,6 +112,55 @@ function envFallback(baseConfig: ArenaConfig, senderAddress: string, roomId: str
   }
 }
 
+/** Room-default InverseAKITA / arena executor binding (`sender_address = '*'`). */
+export async function resolveRoomDefaultArenaIdentity(params: {
+  roomId: string | null | undefined
+  baseConfig: ArenaConfig
+}): Promise<ResolvedArenaIdentity> {
+  const roomId = normalizeRoomId(params.roomId)
+  if (!roomId) {
+    return envFallback(params.baseConfig, DEFAULT_ROOM_SENDER_KEY, null)
+  }
+
+  const memoryResolved = resolveInMemoryIdentity(roomId, DEFAULT_ROOM_SENDER_KEY)
+  const db = await getDb()
+  if (!db) return memoryResolved ?? envFallback(params.baseConfig, DEFAULT_ROOM_SENDER_KEY, roomId)
+
+  try {
+    await ensureAlfaclubArenaIdentityMappingSchema(db)
+    const result = await db.sql`
+      SELECT room_id,
+             sender_address,
+             enabled,
+             arena_agent_id,
+             arena_wallet_address,
+             hl_api_wallet_address,
+             updated_at::text AS updated_at
+      FROM alfaclub.arena_identity_mapping
+      WHERE room_id = ${roomId}
+        AND enabled = TRUE
+        AND sender_address = ${DEFAULT_ROOM_SENDER_KEY}
+      LIMIT 1;
+    `
+    const row = ((result.rows ?? [])[0] ?? null) as ArenaIdentityRow | null
+    if (!row) return memoryResolved ?? envFallback(params.baseConfig, DEFAULT_ROOM_SENDER_KEY, roomId)
+    upsertInMemoryIdentity({
+      roomId: row.room_id,
+      senderAddress: row.sender_address,
+      arenaAgentId: row.arena_agent_id,
+      arenaWalletAddress: row.arena_wallet_address,
+      hlApiWalletAddress: row.hl_api_wallet_address,
+    })
+    return mapRowToIdentity(row)
+  } catch (error) {
+    logger.warn('[arena.identity] room-default resolve failed; using env defaults', {
+      roomId,
+      message: error instanceof Error ? error.message : String(error),
+    })
+    return memoryResolved ?? envFallback(params.baseConfig, DEFAULT_ROOM_SENDER_KEY, roomId)
+  }
+}
+
 export async function resolveArenaIdentityForContext(params: {
   roomId: string | null | undefined
   senderAddress: string

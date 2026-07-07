@@ -20,7 +20,7 @@ interface ICreatorCoinAdmin {
  *
  *      Per AGENTS.md "Canonical Lane Terminology":
  *      - creatorCoinPayoutRecipient = CreatorCoin external earnings lane (routes to
- *        CreatorPayoutRouter → CreatorVaultShareBurnStream in router mode, or direct treasury).
+ *        CreatorPayoutRouter → VaultShareBurnStream in router mode, or direct treasury).
  *      - This is distinct from tradeFeeCollector (ShareOFT/hook trade-fee lane).
  *      See docs/audits/creatorvault-business-logic-core-structure-audit.md.
  */

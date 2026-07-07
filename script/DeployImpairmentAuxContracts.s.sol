@@ -3,8 +3,8 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
 
-import {CreatorOImpairmentClaims} from "@4626/creator/recovery/CreatorOImpairmentClaims.sol";
-import {CreatorORecoveryEscrow} from "@4626/creator/recovery/CreatorORecoveryEscrow.sol";
+import {OVaultImpairmentClaims} from "@4626/shared/recovery/OVaultImpairmentClaims.sol";
+import {OVaultRecoveryEscrow} from "@4626/shared/recovery/OVaultRecoveryEscrow.sol";
 
 /// @notice Deploy shared impairment-v1 auxiliary contracts.
 /// @dev These are configured per-vault after deployment via `setVault(...)`.
@@ -18,8 +18,8 @@ contract DeployImpairmentAuxContracts is Script {
         console2.log("Owner:", owner);
 
         vm.startBroadcast(pk);
-        CreatorOImpairmentClaims claims = new CreatorOImpairmentClaims(owner);
-        CreatorORecoveryEscrow escrow = new CreatorORecoveryEscrow(owner);
+        OVaultImpairmentClaims claims = new OVaultImpairmentClaims(owner);
+        OVaultRecoveryEscrow escrow = new OVaultRecoveryEscrow(owner);
         vm.stopBroadcast();
 
         console2.log("HANDOFF:IMPAIRMENT_CLAIMS=", address(claims));

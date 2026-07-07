@@ -6,9 +6,9 @@ import "forge-std/Script.sol";
 import {Create2Deployer} from "@4626/shared/deploy/factories/Create2Deployer.sol";
 import {CreatorOVault} from "@4626/creator/vault/CreatorOVault.sol";
 import {CreatorOVaultWrapper} from "@4626/creator/vault/CreatorOVaultWrapper.sol";
-import {CreatorOVaultAdminModule} from "@4626/creator/vault/modules/CreatorOVaultAdminModule.sol";
+import {OVaultAdminModule} from "@4626/shared/vault/modules/OVaultAdminModule.sol";
 import {CreatorOVaultCoreModule} from "@4626/creator/vault/modules/CreatorOVaultCoreModule.sol";
-import {CreatorOVaultStrategiesModule} from "@4626/creator/vault/modules/CreatorOVaultStrategiesModule.sol";
+import {OVaultStrategiesModule} from "@4626/shared/vault/modules/OVaultStrategiesModule.sol";
 import {CreatorShareOFT} from "@4626/creator/vault/CreatorShareOFT.sol";
 import {CreatorGaugeController} from "@4626/creator/revenue/CreatorGaugeController.sol";
 import {CCALaunchStrategy} from "@4626/shared/strategies/cca/CCALaunchStrategy.sol";
@@ -116,8 +116,8 @@ contract SimulatePhase2Deployment is Script {
         // CreatorOVault now uses delegatecall modules for EIP-170 runtime size compliance.
         // Deploy modules (one-time per chain in production) and set once on the vault.
         CreatorOVaultCoreModule coreModule = new CreatorOVaultCoreModule();
-        CreatorOVaultStrategiesModule strategiesModule = new CreatorOVaultStrategiesModule();
-        CreatorOVaultAdminModule adminModule = new CreatorOVaultAdminModule();
+        OVaultStrategiesModule strategiesModule = new OVaultStrategiesModule();
+        OVaultAdminModule adminModule = new OVaultAdminModule();
         CreatorOVault(payable(predictedVault)).setModulesOnce(
             address(coreModule), address(strategiesModule), address(adminModule)
         );

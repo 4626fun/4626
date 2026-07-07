@@ -20,7 +20,7 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 | Contract | Address |
 |----------|---------|
 | CreatorRegistry | `0x1eb9A364a3E763dD9249ba3413Dc19E13c1F4461` |
-| CreatorOVaultFactory | `0x26b74b1d3AadD17e714068d259051409C9f942d1` |
+| OVaultFactory4626 | `0x26b74b1d3AadD17e714068d259051409C9f942d1` |
 | VaultActivationBatcher | `0xB06d99c81994F5829ba462c4afA78eCff75bC281` |
 | CreatorLotteryManager | `0xD62a8a2F4c25587FA80ED5782b50Af6654122b0b` |
 | CreatorVRFConsumerV2_5 | `0x933A3BE4a4BF00dD3B71c50Dee4972539a32bE47` |

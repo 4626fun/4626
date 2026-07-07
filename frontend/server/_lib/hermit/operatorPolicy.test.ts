@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isHermitOperatorOnlyCommand, isTrustedHermitOperator } from './operatorPolicy.js'
+import { isHermitOperatorOnlyCommand, isTrustedHermitOperator, formatInverseAkitaPilotDeniedMessage } from './operatorPolicy.js'
 
 describe('operatorPolicy', () => {
   it('recognizes operator-only hermit commands', () => {
@@ -32,6 +32,11 @@ describe('operatorPolicy', () => {
         isRoomOwner: false,
       }),
     ).toBe(true)
+  })
+
+  it('formats 1659 pilot denial copy', () => {
+    expect(formatInverseAkitaPilotDeniedMessage('/arena')).toContain('Stake at least 1 FriendKey')
+    expect(formatInverseAkitaPilotDeniedMessage('/arena')).toContain('room 1659')
   })
 })
 

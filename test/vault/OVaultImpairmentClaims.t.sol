@@ -3,17 +3,17 @@ pragma solidity 0.8.30;
 
 import "forge-std/Test.sol";
 
-import {CreatorOImpairmentClaims} from "@4626/creator/recovery/CreatorOImpairmentClaims.sol";
+import {OVaultImpairmentClaims} from "@4626/shared/recovery/OVaultImpairmentClaims.sol";
 
-contract CreatorOImpairmentClaimsTest is Test {
-    CreatorOImpairmentClaims internal claims;
+contract OVaultImpairmentClaimsTest is Test {
+    OVaultImpairmentClaims internal claims;
     address internal owner = address(this);
     address internal vault = address(0xBEEF);
     address internal alice = address(0xA11CE);
     address internal bob = address(0xB0B);
 
     function setUp() public {
-        claims = new CreatorOImpairmentClaims(owner);
+        claims = new OVaultImpairmentClaims(owner);
         claims.setVault(vault);
     }
 
@@ -25,7 +25,7 @@ contract CreatorOImpairmentClaimsTest is Test {
     }
 
     function test_revert_nonVaultMint() public {
-        vm.expectRevert(CreatorOImpairmentClaims.Unauthorized.selector);
+        vm.expectRevert(OVaultImpairmentClaims.Unauthorized.selector);
         claims.mintFromVault(alice, 1, 10);
     }
 
@@ -34,7 +34,7 @@ contract CreatorOImpairmentClaimsTest is Test {
         claims.mintFromVault(alice, 1, 10);
 
         vm.startPrank(alice);
-        vm.expectRevert(CreatorOImpairmentClaims.ClaimTransferDisabled.selector);
+        vm.expectRevert(OVaultImpairmentClaims.ClaimTransferDisabled.selector);
         claims.safeTransferFrom(alice, bob, 1, 1, "");
         vm.stopPrank();
     }

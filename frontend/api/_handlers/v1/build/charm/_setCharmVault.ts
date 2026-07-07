@@ -59,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       to: strategy,
       data,
       value: '0',
-      description: 'CreatorCharmStrategy (owner): set Charm vault address.',
+      description: 'CharmStrategy4626 (owner): set Charm vault address.',
       warnings: ['Owner-only onchain action. This API only builds calldata; it does not execute.'],
     }
 

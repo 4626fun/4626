@@ -99,7 +99,7 @@ contract VaultAuxiliaryDeployBatcher {
         if (IOwnableViewForAuxiliary(params.vault).owner() != params.owner) revert NotOwner();
 
         bytes32 burnStreamSalt =
-            keccak256(abi.encodePacked("4626:CreatorVaultShareBurnStream", params.creatorToken, params.owner));
+            keccak256(abi.encodePacked("4626:VaultShareBurnStream", params.creatorToken, params.owner));
         bytes memory burnStreamArgs = abi.encode(params.vault);
         out.burnStream = create2Deployer.computeAddress(
             burnStreamSalt, _deriveInitCodeHash(codeIds.vaultShareBurnStream, burnStreamArgs)

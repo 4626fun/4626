@@ -21,8 +21,8 @@ contract VanitySharedGlobalCatalogTest is Test {
         assertEq(vm.parseJsonString(json, ".phase1VanityTargets[0].contractName"), "UniversalBytecodeStoreV2");
         assertEq(vm.parseJsonString(json, ".phase1VanityTargets[1].contractName"), "UniversalCreate2DeployerFromStore");
         assertEq(vm.parseJsonString(json, ".phase1VanityTargets[2].contractName"), "CreatorOVaultCoreModule");
-        assertEq(vm.parseJsonString(json, ".phase1VanityTargets[3].contractName"), "CreatorOVaultStrategiesModule");
-        assertEq(vm.parseJsonString(json, ".phase1VanityTargets[4].contractName"), "CreatorOVaultAdminModule");
+        assertEq(vm.parseJsonString(json, ".phase1VanityTargets[3].contractName"), "OVaultStrategiesModule");
+        assertEq(vm.parseJsonString(json, ".phase1VanityTargets[4].contractName"), "OVaultAdminModule");
         assertEq(vm.parseJsonString(json, ".phase1VanityTargets[5].contractName"), "DeploymentBatcher");
         assertTrue(vm.parseJsonBool(json, ".phase1VanityTargets[5].suffixRequired"), "batcher should remain suffix-enforced");
         assertEq(

@@ -309,16 +309,17 @@ contract LotteryAmoeRouter {
     // -------------------------------------------------------------------------
 
     /// @notice Submit an AMOE entry backed by a PLONK proof.
-    /// @dev    `pubInputs` MUST be in the same order as the v2 circuit's
+    /// @dev    `pubInputs` MUST be in the same order as the v3 circuit's
     ///         `public [...]` declaration:
     ///           [0] walletAddrCommit
     ///           [1] creatorCoinAddr (uint160 cast)
     ///           [2] nonceCommit
     ///           [3] epoch
     ///           [4] allowlistRoot
-    ///           [5] pointsBurnedAsUSD       (v2)
-    ///           [6] pointsLedgerRoot        (v2)
-    ///           [7] pointsBurnNullifier     (v2)
+    ///           [5] pointsBurnedAsUSD
+    ///           [6] pointsLedgerRoot
+    ///           [7] pointsBurnNullifier
+    ///           [8] walletAddr (uint160 cast) — v3 buyer binding
     ///         `proof` is the flat 24-element PLONK proof emitted by
     ///         `snarkjs zkey export soliditycalldata`.
     function submitAmoeEntryZK(
@@ -326,14 +327,15 @@ contract LotteryAmoeRouter {
         address creatorCoin,
         uint64 epoch,
         uint256[24] calldata proof,
-        uint256[8] calldata pubInputs
+        uint256[9] calldata pubInputs
     ) external returns (uint256 entryId) {
         if (address(verifier) == address(0)) revert VerifierNotSet();
 
-        // 1. Bind public inputs to the calldata-asserted (creatorCoin, epoch)
+        // 1. Bind public inputs to the calldata-asserted (creatorCoin, epoch, buyer)
         //    so the proof can't be re-used against a different on-chain entry.
         if (uint256(uint160(creatorCoin)) != pubInputs[1]) revert InvalidProof();
         if (uint256(epoch) != pubInputs[3]) revert InvalidProof();
+        if (uint160(buyer) != uint160(pubInputs[8])) revert InvalidProof();
 
         // 2. Allowlist root pinning. The root must match the value the
         //    publisher posted for this epoch.

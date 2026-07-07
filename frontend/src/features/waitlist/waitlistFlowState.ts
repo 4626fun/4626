@@ -1,6 +1,13 @@
-import type { UserExecutionAccountSignals } from '@/lib/wallet/userExecutionTrack'
+import {
+  isZoraLinkedFromAccountSignals,
+  type UserExecutionAccountSignals,
+  type UserFrontendExecutionTrack,
+} from '@/lib/wallet/userExecutionTrack'
 
 export type WaitlistStep = 'auth' | 'done'
+
+/** Waitlist messaging / signing fork — server population first, not in-app browser alone. */
+export type WaitlistConnectTrack = 'base-app-direct' | 'zora-owner-install' | 'not-ready'
 
 /**
  * Minimal input shape accepted by pure decision helpers (resolveWaitlistStep, etc.).
@@ -48,8 +55,65 @@ export function resolveWaitlistAccordionOpenStep(params: {
   return params.stepOneComplete ? 2 : 1
 }
 
+export function resolveWaitlistConnectTrack(params: {
+  executionTrack?: UserFrontendExecutionTrack | null
+  accountSignals?: UserExecutionAccountSignals
+  zoraLinked?: boolean
+  canonicalCswAddress?: string | null
+  embeddedEoaAvailable?: boolean
+}): WaitlistConnectTrack {
+  const executionTrack = params.executionTrack ?? params.accountSignals?.executionTrack ?? null
+  if (executionTrack === 'base-app-direct') return 'base-app-direct'
+  if (executionTrack === 'legacy-owner-install') return 'zora-owner-install'
+
+  const zoraLinked =
+    params.zoraLinked ?? isZoraLinkedFromAccountSignals(params.accountSignals)
+  const canonical =
+    typeof params.canonicalCswAddress === 'string'
+      ? params.canonicalCswAddress.trim()
+      : typeof params.accountSignals?.canonicalCswAddress === 'string'
+        ? params.accountSignals.canonicalCswAddress.trim()
+        : ''
+  const embeddedReady =
+    params.embeddedEoaAvailable === true ||
+    Boolean(params.accountSignals?.embeddedEoaAddress?.trim())
+
+  if (zoraLinked && canonical && embeddedReady) return 'zora-owner-install'
+  return 'not-ready'
+}
+
 /**
- * Waitlist step 2 completion — parent CSW embedded owner on-chain.
+ * Whether the waitlist messaging connect/join surface may open for this account.
+ * Base App population skips embedded-owner install; Zora requires it first.
+ */
+export function isWaitlistMessagingSigningReady(params: {
+  connectTrack?: WaitlistConnectTrack
+  executionTrack?: UserFrontendExecutionTrack | null
+  accountSignals?: WaitlistAccountWithCanonical['accountSignals']
+  parentEmbeddedOwnerOnChain?: boolean
+  ownerInstallRequested?: boolean
+}): boolean {
+  const connectTrack =
+    params.connectTrack ??
+    resolveWaitlistConnectTrack({
+      executionTrack: params.executionTrack ?? params.accountSignals?.executionTrack,
+      accountSignals: params.accountSignals,
+    })
+
+  if (connectTrack === 'base-app-direct') return true
+  if (connectTrack === 'zora-owner-install') {
+    return isWaitlistStepTwoSigningComplete({
+      ownerInstallRequested: params.ownerInstallRequested ?? false,
+      accountSignals: params.accountSignals,
+      parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain,
+    })
+  }
+  return false
+}
+
+/**
+ * Waitlist step 2 completion — parent CSW embedded owner on-chain (Zora track).
+ * Base App direct population is messaging-ready without this step.
  */
 export function isWaitlistStepTwoSigningComplete(params: {
   ownerInstallRequested: boolean
@@ -58,6 +122,7 @@ export function isWaitlistStepTwoSigningComplete(params: {
 }): boolean {
   if (params.parentEmbeddedOwnerOnChain === true) return true
   if (params.accountSignals?.executionTrack === 'legacy-owner-install') return true
+  if (params.accountSignals?.executionTrack === 'base-app-direct') return true
   return false
 }
 
@@ -73,6 +138,7 @@ export function shouldShowParentCswAddOwnerPanel(params: {
   baseWalletReady?: boolean
 }): boolean {
   if (params.signingStepComplete) return false
+  if (params.executionTrack === 'base-app-direct') return false
   if (isLegacyParentOwnerSigningReady({ parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain })) {
     return false
   }

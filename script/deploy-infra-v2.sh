@@ -137,8 +137,8 @@ configure_infra_salts() {
   : "${INFRA_STORE_SALT_TAG:=base-release:UniversalBytecodeStore:${DEPLOYMENT_EPOCH_TAG}}"
   : "${INFRA_DEPLOYER_FROM_STORE_SALT_TAG:=base-release:UniversalCreate2DeployerFromStore:${DEPLOYMENT_EPOCH_TAG}}"
   : "${INFRA_VAULT_CORE_MODULE_SALT_TAG:=base-release:CreatorOVaultCoreModule:${DEPLOYMENT_EPOCH_TAG}}"
-  : "${INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG:=base-release:CreatorOVaultStrategiesModule:${DEPLOYMENT_EPOCH_TAG}}"
-  : "${INFRA_VAULT_ADMIN_MODULE_SALT_TAG:=base-release:CreatorOVaultAdminModule:${DEPLOYMENT_EPOCH_TAG}}"
+  : "${INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG:=base-release:OVaultStrategiesModule:${DEPLOYMENT_EPOCH_TAG}}"
+  : "${INFRA_VAULT_ADMIN_MODULE_SALT_TAG:=base-release:OVaultAdminModule:${DEPLOYMENT_EPOCH_TAG}}"
   : "${INFRA_DEPLOYMENT_BATCHER_SALT_TAG:=base-release:DeploymentBatcher:${DEPLOYMENT_EPOCH_TAG}}"
   export INFRA_STORE_SALT_TAG
   export INFRA_DEPLOYER_FROM_STORE_SALT_TAG
@@ -277,9 +277,9 @@ print_infra_configuration() {
   echo "  INFRA_VAULT_CORE_MODULE_SALT=${INFRA_VAULT_CORE_MODULE_SALT:-[auto by tag/default]}"
   echo "  INFRA_VAULT_CORE_MODULE_SALT_TAG=${INFRA_VAULT_CORE_MODULE_SALT_TAG:-base-release:CreatorOVaultCoreModule:${DEFAULT_RELEASE_TAG} (default)}"
   echo "  INFRA_VAULT_STRATEGIES_MODULE_SALT=${INFRA_VAULT_STRATEGIES_MODULE_SALT:-[auto by tag/default]}"
-  echo "  INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG=${INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG:-base-release:CreatorOVaultStrategiesModule:${DEFAULT_RELEASE_TAG} (default)}"
+  echo "  INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG=${INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG:-base-release:OVaultStrategiesModule:${DEFAULT_RELEASE_TAG} (default)}"
   echo "  INFRA_VAULT_ADMIN_MODULE_SALT=${INFRA_VAULT_ADMIN_MODULE_SALT:-[auto by tag/default]}"
-  echo "  INFRA_VAULT_ADMIN_MODULE_SALT_TAG=${INFRA_VAULT_ADMIN_MODULE_SALT_TAG:-base-release:CreatorOVaultAdminModule:${DEFAULT_RELEASE_TAG} (default)}"
+  echo "  INFRA_VAULT_ADMIN_MODULE_SALT_TAG=${INFRA_VAULT_ADMIN_MODULE_SALT_TAG:-base-release:OVaultAdminModule:${DEFAULT_RELEASE_TAG} (default)}"
   echo "  INFRA_DEPLOYMENT_BATCHER_SALT=${INFRA_DEPLOYMENT_BATCHER_SALT:-[auto by tag/default]}"
   echo "  INFRA_DEPLOYMENT_BATCHER_SALT_TAG=${INFRA_DEPLOYMENT_BATCHER_SALT_TAG:-base-release:DeploymentBatcher:${DEFAULT_RELEASE_TAG} (default)}"
 }

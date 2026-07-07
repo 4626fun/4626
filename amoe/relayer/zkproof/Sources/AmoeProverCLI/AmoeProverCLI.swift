@@ -128,12 +128,16 @@ struct BuildRoot: ParsableCommand {
 // existing fixture (e.g. `amoe/circuits/build/input.json`) Just Works.
 
 private struct InputJSON: Decodable {
-    // Public signals
+    // Public signals (v3)
     let walletAddrCommit: String
     let creatorCoinAddr: String
     let nonceCommit: String
     let epoch: String
     let allowlistRoot: String
+    let pointsBurnedAsUSD: String
+    let pointsLedgerRoot: String
+    let pointsBurnNullifier: String
+    let walletAddr: String
 
     // Private signals
     let wallet: String
@@ -148,7 +152,11 @@ private struct InputJSON: Decodable {
             creatorCoinAddr:  try fr(creatorCoinAddr,  "creatorCoinAddr"),
             nonceCommit:      try fr(nonceCommit,      "nonceCommit"),
             epoch:            try fr(epoch,            "epoch"),
-            allowlistRoot:    try fr(allowlistRoot,    "allowlistRoot")
+            allowlistRoot:    try fr(allowlistRoot,    "allowlistRoot"),
+            pointsBurnedAsUSD: try fr(pointsBurnedAsUSD, "pointsBurnedAsUSD"),
+            pointsLedgerRoot: try fr(pointsLedgerRoot, "pointsLedgerRoot"),
+            pointsBurnNullifier: try fr(pointsBurnNullifier, "pointsBurnNullifier"),
+            walletAddr:       try fr(walletAddr,       "walletAddr")
         )
     }
 

@@ -133,7 +133,7 @@ export async function resolveDeployExpectedAddresses(
     owner: params.owner,
   })
   const burnStreamArgs = encodeAbiParameters(parseAbiParameters('address'), [vaultAddress])
-  const burnStreamInitCode = concatHex([DEPLOY_BYTECODE.CreatorVaultShareBurnStream as Hex, burnStreamArgs])
+  const burnStreamInitCode = concatHex([DEPLOY_BYTECODE.VaultShareBurnStream as Hex, burnStreamArgs])
   const payoutRouterSalt = derivePayoutRouterSalt({
     creatorToken: params.creatorToken,
     owner: params.owner,

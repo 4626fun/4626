@@ -148,6 +148,45 @@ describe('evaluateCanonicalSignerGate', () => {
     expect(result.code).toBe('ok')
   })
 
+  it('returns base-app-direct when server track is set but Base App CSW is not connected yet', () => {
+    const result = evaluateCanonicalSignerGate({
+      executionMode: 'canonical',
+      executionTrack: 'base-app-direct',
+      canonicalAddress: USER_CANONICAL_CSW,
+      clientStatus: 'ready',
+      authStatus: 'authenticated',
+      embeddedWalletDetected: true,
+      embeddedWalletAddress: '0x1111111111111111111111111111111111111111',
+      embeddedWalletCanSign: true,
+      ownerCheckStatus: 'not-owner',
+      baseAppDirectConnected: false,
+    })
+
+    expect(result.required).toBe(true)
+    expect(result.ready).toBe(false)
+    expect(result.code).toBe('execution-setup-required')
+    expect(result.reason).toContain('Base App')
+  })
+
+  it('is ready for Base App direct CSW signing without embedded-owner install', () => {
+    const result = evaluateCanonicalSignerGate({
+      executionMode: 'canonical',
+      executionTrack: 'base-app-direct',
+      canonicalAddress: USER_CANONICAL_CSW,
+      clientStatus: 'ready',
+      authStatus: 'authenticated',
+      embeddedWalletDetected: false,
+      embeddedWalletAddress: null,
+      embeddedWalletCanSign: false,
+      ownerCheckStatus: 'not-owner',
+      baseAppDirectConnected: true,
+    })
+
+    expect(result.required).toBe(true)
+    expect(result.ready).toBe(true)
+    expect(result.code).toBe('ok')
+  })
+
   it('fails for none-yet track when owner is not confirmed', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',

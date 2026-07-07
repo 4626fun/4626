@@ -2,6 +2,7 @@ import { getAccount, getWalletClient } from '@wagmi/core'
 import type { Config, Connector } from 'wagmi'
 import type { WalletClient } from 'viem'
 import { base } from 'wagmi/chains'
+import { isCoinbaseWalletConnector } from '@/lib/xmtp/signerUtils'
 
 export const WAITLIST_EMBEDDED_CONNECTOR_ID = 'privy-embedded-waitlist'
 
@@ -15,6 +16,12 @@ export function isWaitlistMessagingWagmiConnector(connectorId: string | null | u
   const id = String(connectorId ?? '').trim().toLowerCase()
   if (!id) return false
   return id === WAITLIST_EMBEDDED_CONNECTOR_ID || id.includes('privy')
+}
+
+export function isXmtpMessagingWagmiConnector(connector: unknown): boolean {
+  if (isCoinbaseWalletConnector(connector)) return true
+  const connectorId = (connector as Connector | null | undefined)?.id
+  return isWaitlistMessagingWagmiConnector(connectorId)
 }
 
 export type ResolvedMessagingWallet = {

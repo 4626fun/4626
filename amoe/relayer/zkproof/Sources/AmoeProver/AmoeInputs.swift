@@ -1,22 +1,21 @@
 // SPDX-License-Identifier: MIT
 //
-// AmoeInputs — strongly-typed view of the 5 public inputs and the private
-// witness fields required by `amoe/circuits/amoe_eligibility.circom`.
+// AmoeInputs — strongly-typed view of the 9 public inputs and the private
+// witness fields required by `amoe/circuits/amoe_eligibility.circom` (v3).
 //
 // IMPORTANT: field names and ordering here MUST track the circuit literally.
 // See `amoe/circuits/amoe_eligibility.circom`:
 //
-//   component main {
-//     public [walletAddrCommit, creatorCoinAddr, nonceCommit, epoch, allowlistRoot]
-//   } = AmoeEligibility(20);
-//
-// Public inputs (this is the order the verifier and `public.json` expect —
-// snarkjs / Groth16Verifier.IC indices 1..5):
+// Public inputs (circuit v3 — 9 signals):
 //   0  walletAddrCommit   Poseidon(wallet, twitterCreditNullifier)
 //   1  creatorCoinAddr    address of the creator coin (uint160 packed in Fr)
 //   2  nonceCommit        Poseidon(nonce, wallet, creatorCoin)
 //   3  epoch              current AMOE epoch id (uint64 packed in Fr)
 //   4  allowlistRoot      Poseidon Merkle root of the daily wallet allowlist
+//   5  pointsBurnedAsUSD  uint64 — value bound into the proof
+//   6  pointsLedgerRoot   Merkle root of the points-burn ledger
+//   7  pointsBurnNullifier Poseidon(signupIdHash, spendRefIdHash, pointsBurnedAsUSD, epoch)
+//   8  walletAddr         proven wallet (uint160) — v3 buyer binding
 //
 // Private inputs (witness only, in circom declaration order):
 //   wallet                 EOA / smart-wallet address (uint160)
@@ -24,6 +23,7 @@
 //   twitterCreditNullifier Poseidon(twitterUserId, epoch, secretSalt)
 //   pathElements[20]       Poseidon Merkle sibling hashes
 //   pathIndices[20]        0/1 left/right bits per level
+//   signupIdHash, spendRefIdHash, pointsLedgerPathElements/Indices[20]
 //
 // We deliberately keep this struct dependency-light (only Foundation + the few
 // zkMetal field types we need to encode). The CLI layer is responsible for
@@ -38,25 +38,47 @@ public struct AmoePublicInputs: Sendable, Equatable {
     public let nonceCommit: Fr
     public let epoch: Fr
     public let allowlistRoot: Fr
+    public let pointsBurnedAsUSD: Fr
+    public let pointsLedgerRoot: Fr
+    public let pointsBurnNullifier: Fr
+    public let walletAddr: Fr
 
     public init(
         walletAddrCommit: Fr,
         creatorCoinAddr: Fr,
         nonceCommit: Fr,
         epoch: Fr,
-        allowlistRoot: Fr
+        allowlistRoot: Fr,
+        pointsBurnedAsUSD: Fr,
+        pointsLedgerRoot: Fr,
+        pointsBurnNullifier: Fr,
+        walletAddr: Fr
     ) {
         self.walletAddrCommit = walletAddrCommit
         self.creatorCoinAddr = creatorCoinAddr
         self.nonceCommit = nonceCommit
         self.epoch = epoch
         self.allowlistRoot = allowlistRoot
+        self.pointsBurnedAsUSD = pointsBurnedAsUSD
+        self.pointsLedgerRoot = pointsLedgerRoot
+        self.pointsBurnNullifier = pointsBurnNullifier
+        self.walletAddr = walletAddr
     }
 
-    /// Order matters — must match `Groth16Verifier.IC` indices 1..5 and the
-    /// `public []` declaration in `amoe_eligibility.circom`.
+    /// Order matters — must match the circuit `public []` declaration and
+    /// `AmoePlonkVerifier` public-input indices 0..8.
     public var asArray: [Fr] {
-        [walletAddrCommit, creatorCoinAddr, nonceCommit, epoch, allowlistRoot]
+        [
+            walletAddrCommit,
+            creatorCoinAddr,
+            nonceCommit,
+            epoch,
+            allowlistRoot,
+            pointsBurnedAsUSD,
+            pointsLedgerRoot,
+            pointsBurnNullifier,
+            walletAddr,
+        ]
     }
 }
 

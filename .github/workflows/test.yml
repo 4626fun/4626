@@ -77,6 +77,16 @@ jobs:
         id: manager_size_warn
         continue-on-error: true
 
+      - name: Guard agent/creator lane contract parity
+        # The four copy-renamed agent-lane forks (ShareOFT, OVaultWrapper,
+        # GaugeController, RevenueRouter/PayoutRouter) must stay logic-identical
+        # to their creator-lane counterparts modulo the approved identifier
+        # rename map. Prevents a bug fix landing in one lane but not the other.
+        # See contracts/README.md § Lane parity policy.
+        run: |
+          node scripts/check-lane-contract-parity.mjs --self-test
+          node scripts/check-lane-contract-parity.mjs
+
       - name: Guard CreatorOVault delegate-epilogue invariant
         # Static guard: any external/public function with nonReentrant
         # must call _delegateAndReturn(), never _delegate(). Prevents

@@ -5,8 +5,8 @@ import "forge-std/Test.sol";
 import {MockAgentTokenV4} from "test/mocks/MockAgentTokenV4.sol";
 import {AgentOVault} from "@4626/agent/vault/AgentOVault.sol";
 import {AgentOVaultCoreModule} from "@4626/agent/vault/modules/AgentOVaultCoreModule.sol";
-import {CreatorOVaultAdminModule} from "@4626/creator/vault/modules/CreatorOVaultAdminModule.sol";
-import {CreatorOVaultStrategiesModule} from "@4626/creator/vault/modules/CreatorOVaultStrategiesModule.sol";
+import {OVaultAdminModule} from "@4626/shared/vault/modules/OVaultAdminModule.sol";
+import {OVaultStrategiesModule} from "@4626/shared/vault/modules/OVaultStrategiesModule.sol";
 import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
 import {Registry4626} from "@4626/shared/core/Registry4626.sol";
 

@@ -67,16 +67,16 @@ contract SeedUniversalBytecodeStore is Script {
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
             _storeIfMissing(
                 store,
-                vm.getCode("out/CreatorOVaultStrategiesModule.sol/CreatorOVaultStrategiesModule.json"),
-                "CreatorOVaultStrategiesModule",
+                vm.getCode("out/OVaultStrategiesModule.sol/OVaultStrategiesModule.json"),
+                "OVaultStrategiesModule",
                 supportsChunking
             );
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
             _storeIfMissing(
                 store,
-                vm.getCode("out/CreatorOVaultAdminModule.sol/CreatorOVaultAdminModule.json"),
-                "CreatorOVaultAdminModule",
+                vm.getCode("out/OVaultAdminModule.sol/OVaultAdminModule.json"),
+                "OVaultAdminModule",
                 supportsChunking
             );
         }
@@ -135,8 +135,8 @@ contract SeedUniversalBytecodeStore is Script {
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
             _storeIfMissing(
                 store,
-                vm.getCode("out/CreatorVaultShareBurnStream.sol/CreatorVaultShareBurnStream.json"),
-                "CreatorVaultShareBurnStream",
+                vm.getCode("out/VaultShareBurnStream.sol/VaultShareBurnStream.json"),
+                "VaultShareBurnStream",
                 supportsChunking
             );
         }

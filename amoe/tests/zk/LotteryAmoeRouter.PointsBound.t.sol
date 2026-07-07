@@ -28,7 +28,7 @@ contract MockVerifier is IAmoePlonkVerifier {
     function setOk(bool v) external { ok = v; }
     function verifyProof(
         uint256[24] calldata,
-        uint256[8] calldata
+        uint256[9] calldata
     ) external view returns (bool) { return ok; }
 }
 
@@ -64,8 +64,8 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
     address owner = address(0xAA);
     address publisher = address(0xBB);
     address pointsPublisher = address(0xCC);
-    address buyer = address(0xCAFE);
-    address coin = address(0xC0FFEE);
+    address buyer = address(0x1234567890abcdef1234567890abcdef12345678);
+    address coin = address(0x00000000c0ffeec0ffeec0ffeec0ffeec0ffeec0);
 
     uint64 constant EPOCH = 42;
     bytes32 constant ALLOW_ROOT = bytes32(uint256(0x1234));
@@ -111,22 +111,23 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
         uint256 nonceCommit,
         uint256 pointsBurnedAsUSD,
         uint256 nullifier
-    ) internal pure returns (uint256[8] memory inp) {
+    ) internal view returns (uint256[9] memory inp) {
         inp[0] = walletCommit;
-        inp[1] = uint256(uint160(0xC0FFEE));
+        inp[1] = uint256(uint160(coin));
         inp[2] = nonceCommit;
         inp[3] = uint256(EPOCH);
         inp[4] = uint256(ALLOW_ROOT);
         inp[5] = pointsBurnedAsUSD;
         inp[6] = uint256(LEDGER_ROOT);
         inp[7] = nullifier;
+        inp[8] = uint256(uint160(buyer));
     }
 
-    function _defaults(uint256 wc, uint256 nc) internal pure returns (uint256[8] memory) {
+    function _defaults(uint256 wc, uint256 nc) internal view returns (uint256[9] memory) {
         return _pubInputs(wc, nc, DEFAULT_POINTS, uint256(DEFAULT_NULLIFIER));
     }
 
-    function _submit(uint256[8] memory inp) internal returns (uint256) {
+    function _submit(uint256[9] memory inp) internal returns (uint256) {
         uint256[24] memory proof = _proof();
         return router.submitAmoeEntryZK(buyer, coin, EPOCH, proof, inp);
     }
@@ -162,7 +163,7 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
     // =====================================================================
 
     function test_submitAmoeEntryZK_rejectsLedgerRootMismatch() public {
-        uint256[8] memory inp = _defaults(111, 222);
+        uint256[9] memory inp = _defaults(111, 222);
         inp[6] = uint256(bytes32(uint256(0xDEAD))); // wrong ledger root
         vm.expectRevert(LotteryAmoeRouter.PointsLedgerRootMismatch.selector);
         _submit(inp);
@@ -174,7 +175,7 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
         vm.prank(publisher);
         router.setAllowlistRoot(freshEpoch, ALLOW_ROOT);
 
-        uint256[8] memory inp = _defaults(111, 222);
+        uint256[9] memory inp = _defaults(111, 222);
         inp[3] = uint256(freshEpoch);
         // No setPointsLedgerRoot for freshEpoch -> on-chain root is zero.
         uint256[24] memory proof = _proof();
@@ -187,14 +188,14 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
     // =====================================================================
 
     function test_submitAmoeEntryZK_rejectsZeroPoints() public {
-        uint256[8] memory inp = _pubInputs(111, 222, 0, uint256(DEFAULT_NULLIFIER));
+        uint256[9] memory inp = _pubInputs(111, 222, 0, uint256(DEFAULT_NULLIFIER));
         vm.expectRevert(LotteryAmoeRouter.PointsValueOutOfRange.selector);
         _submit(inp);
     }
 
     function test_submitAmoeEntryZK_rejectsPointsAboveMax() public {
         uint256 tooMuch = router.MAX_POINTS_AS_USD() + 1;
-        uint256[8] memory inp = _pubInputs(111, 222, tooMuch, uint256(DEFAULT_NULLIFIER));
+        uint256[9] memory inp = _pubInputs(111, 222, tooMuch, uint256(DEFAULT_NULLIFIER));
         vm.expectRevert(LotteryAmoeRouter.PointsValueOutOfRange.selector);
         _submit(inp);
     }
@@ -202,7 +203,7 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
     function test_submitAmoeEntryZK_acceptsPointsAtMax() public {
         // Exactly MAX_POINTS_AS_USD must succeed (boundary inclusive).
         uint256 atMax = router.MAX_POINTS_AS_USD();
-        uint256[8] memory inp = _pubInputs(111, 222, atMax, uint256(DEFAULT_NULLIFIER));
+        uint256[9] memory inp = _pubInputs(111, 222, atMax, uint256(DEFAULT_NULLIFIER));
         uint256 id = _submit(inp);
         assertEq(id, 1);
         assertEq(managerMock.lastPoints(), atMax);
@@ -218,7 +219,7 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
 
         // Second submit with a different wallet + nonce but same nullifier
         // (and same epoch) must revert.
-        uint256[8] memory inp = _pubInputs(999, 333, DEFAULT_POINTS, uint256(DEFAULT_NULLIFIER));
+        uint256[9] memory inp = _pubInputs(999, 333, DEFAULT_POINTS, uint256(DEFAULT_NULLIFIER));
         vm.expectRevert(LotteryAmoeRouter.PointsBurnReplayed.selector);
         _submit(inp);
     }
@@ -235,7 +236,7 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
         vm.prank(pointsPublisher);
         router.setPointsLedgerRoot(nextEpoch, LEDGER_ROOT);
 
-        uint256[8] memory inp = _pubInputs(999, 333, DEFAULT_POINTS, uint256(DEFAULT_NULLIFIER));
+        uint256[9] memory inp = _pubInputs(999, 333, DEFAULT_POINTS, uint256(DEFAULT_NULLIFIER));
         inp[3] = uint256(nextEpoch);
         uint256[24] memory proof = _proof();
         vm.expectRevert(LotteryAmoeRouter.PointsBurnReplayed.selector);
@@ -249,7 +250,7 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
 
     function test_submitAmoeEntryZK_failedProof_doesNotConsumeNullifier() public {
         verifier.setOk(false);
-        uint256[8] memory inp = _defaults(111, 222);
+        uint256[9] memory inp = _defaults(111, 222);
         vm.expectRevert(LotteryAmoeRouter.InvalidProof.selector);
         _submit(inp);
 
@@ -270,7 +271,7 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
 
     function test_submitAmoeEntryZK_managerReceivesProvenPointsValue() public {
         uint256 provenPoints = 500_000_000; // $500
-        uint256[8] memory inp =
+        uint256[9] memory inp =
             _pubInputs(111, 222, provenPoints, uint256(DEFAULT_NULLIFIER));
         _submit(inp);
 
@@ -286,7 +287,7 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
         vm.prank(owner);
         router.setManager(address(0));
 
-        uint256[8] memory inp = _defaults(111, 222);
+        uint256[9] memory inp = _defaults(111, 222);
         uint256 id = _submit(inp);
         assertEq(id, 1);
         assertEq(managerMock.callCount(), 0);
@@ -297,7 +298,7 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
         // entry must roll back so the replay guards don't leak.
         managerMock.setShouldRevert(true);
 
-        uint256[8] memory inp = _defaults(111, 222);
+        uint256[9] memory inp = _defaults(111, 222);
         vm.expectRevert(); // bubbled-up MockManager string
         _submit(inp);
 
@@ -314,7 +315,7 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
         uint256 provenPoints = 250_000_000;
         managerMock.setReturnEntryId(424242);
 
-        uint256[8] memory inp =
+        uint256[9] memory inp =
             _pubInputs(111, 222, provenPoints, uint256(DEFAULT_NULLIFIER));
         uint256[24] memory proof = _proof();
 
@@ -393,7 +394,7 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
         // sub-minSwap, lottery inactive) by having the mock return 0.
         managerMock.setReturnEntryId(0);
 
-        uint256[8] memory inp = _defaults(111, 222);
+        uint256[9] memory inp = _defaults(111, 222);
         vm.expectRevert(LotteryAmoeRouter.ManagerDeclinedEntry.selector);
         _submit(inp);
 
@@ -409,7 +410,7 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
         // Sanity twin to the above: a non-zero manager return must NOT
         // revert, even with very small entry ids.
         managerMock.setReturnEntryId(1);
-        uint256[8] memory inp = _defaults(111, 222);
+        uint256[9] memory inp = _defaults(111, 222);
         uint256 id = _submit(inp);
         assertEq(id, 1);
         assertEq(managerMock.callCount(), 1);
@@ -419,7 +420,7 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
     function test_submitAmoeEntryZK_managerReturnsZero_resubmitAfterFix() public {
         // First attempt: manager declines (returns 0) -> revert, nullifier preserved.
         managerMock.setReturnEntryId(0);
-        uint256[8] memory inp = _defaults(111, 222);
+        uint256[9] memory inp = _defaults(111, 222);
         vm.expectRevert(LotteryAmoeRouter.ManagerDeclinedEntry.selector);
         _submit(inp);
 

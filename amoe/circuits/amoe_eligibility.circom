@@ -1,28 +1,27 @@
 // SPDX-License-Identifier: MIT
 pragma circom 2.1.6;
 
-// AMOE Eligibility Circuit v2 (4626.fun)
+// AMOE Eligibility Circuit v3 (4626.fun)
 // =============================================================================
 // Proves, without revealing private inputs, that a wallet is permitted to
 // submit a no-purchase lottery entry for a given creator coin in a given epoch
 // AND that the entry is backed by a specific, non-replayable points-burn row
 // in the off-chain ledger snapshotted into `pointsLedgerRoot`.
 //
-// v2 closes the trust gap that allowed `authorizedAmoeRelayer` to assert an
-// arbitrary `pointsBurnedAsUSD` for any allowlisted wallet. v1 only proved
-// eligibility (allowlist + nonce); v2 also proves the value the lottery
-// manager will use to compute win-chance.
+// v3 adds `walletAddr` as a public input so on-chain `submitAmoeEntryZK` can
+// require `buyer == walletAddr`, closing proof-theft / frontrun gaps.
 //
-// Public inputs (in this exact order — must match Groth16Verifier.IC indices):
+// Public inputs (in this exact order — must match verifier IC indices):
 //   0  walletAddrCommit       Poseidon(wallet, twitterCreditNullifier)
 //   1  creatorCoinAddr        address of the creator coin (uint160)
 //   2  nonceCommit            Poseidon(nonce, wallet, creatorCoin)
 //   3  epoch                  current AMOE epoch id (uint64)
 //   4  allowlistRoot          Merkle root of the daily wallet allowlist
-//   5  pointsBurnedAsUSD      uint64 — value bound into the proof (NEW in v2)
-//   6  pointsLedgerRoot       Merkle root of the points-burn ledger (NEW in v2)
+//   5  pointsBurnedAsUSD      uint64 — value bound into the proof
+//   6  pointsLedgerRoot       Merkle root of the points-burn ledger
 //   7  pointsBurnNullifier    Poseidon(signupIdHash, spendRefIdHash,
-//                                      pointsBurnedAsUSD, epoch) (NEW in v2)
+//                                      pointsBurnedAsUSD, epoch)
+//   8  walletAddr             proven wallet address (uint160) — v3
 //
 // Private inputs (witness only):
 //   wallet                    EOA / smart-wallet address (uint160)
@@ -119,6 +118,7 @@ template AmoeEligibility(DEPTH) {
     signal input pointsBurnedAsUSD;        // v2
     signal input pointsLedgerRoot;         // v2
     signal input pointsBurnNullifier;      // v2
+    signal input walletAddr;               // v3 — binds on-chain buyer to proven wallet
 
     // ---- Private inputs (allowlist eligibility) ----
     signal input wallet;
@@ -138,6 +138,11 @@ template AmoeEligibility(DEPTH) {
     wcHash.inputs[0] <== wallet;
     wcHash.inputs[1] <== twitterCreditNullifier;
     walletAddrCommit === wcHash.out;
+
+    // -- 1b. v3: expose proven wallet publicly and bind to private witness.
+    walletAddr === wallet;
+    component walletAddrBits = Num2Bits(160);
+    walletAddrBits.in <== walletAddr;
 
     // -- 2. Bind the server-issued nonce to (wallet, creatorCoin). This is the
     //       same coupling that lotteryAmoe.ts enforces today via the EIP-712
@@ -227,6 +232,7 @@ component main {
         allowlistRoot,
         pointsBurnedAsUSD,
         pointsLedgerRoot,
-        pointsBurnNullifier
+        pointsBurnNullifier,
+        walletAddr
     ]
 } = AmoeEligibility(20);

@@ -18,13 +18,13 @@ import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
 ///      emitting `StrategyWithdrawFailed` and returning a safe measured delta
 ///      so the outer queue loop can skip to the next strategy.
 ///
-///      Because `CreatorOVaultStrategiesModule` is a delegatecall module that
+///      Because `OVaultStrategiesModule` is a delegatecall module that
 ///      reads `asset()` off the hosting vault via `IERC4626(address(this)).asset()`,
 ///      we test the resilience helper through a minimal harness that inlines the
 ///      exact code under review rather than spinning the full vault wiring. The
 ///      logic, events, selectors, and return-value branches are a byte-for-byte
 ///      port of the production implementation in
-///      `contracts/creator/vault/modules/CreatorOVaultStrategiesModule.sol`.
+///      `contracts/shared/vault/modules/OVaultStrategiesModule.sol`.
 
 // -----------------------------------------------------------------------------
 // Mocks
@@ -161,7 +161,7 @@ contract MismatchStrategy is IStrategy {
 // -----------------------------------------------------------------------------
 
 /// @dev Source-level mirror of `_tryWithdrawFromStrategyMeasured` from
-///      CreatorOVaultStrategiesModule.sol. Kept here because the production
+///      OVaultStrategiesModule.sol. Kept here because the production
 ///      function is `internal` on a delegatecall module and `_creatorCoin()`
 ///      expects the hosting contract to implement `IERC4626.asset()`.
 ///      Any change to the production function should be mirrored here AND

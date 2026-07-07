@@ -7,6 +7,7 @@ import {
   isBaseAppWalletSetupReady,
   resolveBaseAppWalletSetupPhase,
 } from '@/lib/wallet/resolveBaseAppWalletSetupPhase'
+import type { UserFrontendExecutionTrack } from '@/lib/wallet/userExecutionTrack'
 
 type Controller = ReturnType<typeof useAccountSetupController>
 
@@ -15,7 +16,7 @@ type Props = {
   embeddedEoaAddress: string | null | undefined
   privyAuthenticated: boolean
   parentEmbeddedOwnerOnChain: boolean
-  executionTrack?: 'legacy-owner-install' | 'none-yet'
+  executionTrack?: UserFrontendExecutionTrack
   onOwnerInstallSuccess?: () => void | Promise<void>
 }
 

@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import {CreatorVaultShareBurnStream as VaultShareBurnStream} from "@4626/creator/revenue/CreatorVaultShareBurnStream.sol";
+import {VaultShareBurnStream as VaultShareBurnStream} from "@4626/shared/revenue/VaultShareBurnStream.sol";
 
 // ============================================================================
 // VaultShareBurnStream — hostile burn-recipient fuzz suite
@@ -51,7 +51,7 @@ import {CreatorVaultShareBurnStream as VaultShareBurnStream} from "@4626/creator
 ///      IMPORTANT — counting reverted attempts:
 ///      `burnCalls` and `lastBurnAmount` increment only on the **success** path,
 ///      because any storage write made in a subcall that ultimately reverts is
-///      rolled back by the EVM — even when the parent frame (`CreatorVaultShareBurnStream`)
+///      rolled back by the EVM — even when the parent frame (`VaultShareBurnStream`)
 ///      catches the revert via `try/catch`. Writes before a `revert` inside this
 ///      mock therefore never land. To count *attempts* (success + failure),
 ///      observe the stream's `BurnFailed` event via `vm.recordLogs()` /

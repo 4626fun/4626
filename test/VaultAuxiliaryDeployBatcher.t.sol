@@ -7,7 +7,7 @@ import "@4626/shared/deploy/batchers/VaultAuxiliaryDeployBatcher.sol";
 import "@4626/shared/deploy/infra/UniversalBytecodeStoreV2.sol";
 import "@4626/creator/revenue/CreatorCoinPolicyController.sol";
 import "@4626/creator/revenue/CreatorPayoutRouter.sol";
-import "@4626/creator/revenue/CreatorVaultShareBurnStream.sol";
+import "@4626/shared/revenue/VaultShareBurnStream.sol";
 
 contract MockAuxiliaryVault {
     address public immutable owner;
@@ -91,7 +91,7 @@ contract VaultAuxiliaryDeployBatcherTest is Test {
         store = new UniversalBytecodeStoreV2();
         create2 = new MockAuxiliaryCreate2Deployer(address(store), protocolTreasury);
 
-        (burnStreamCodeId,) = store.store(type(CreatorVaultShareBurnStream).creationCode);
+        (burnStreamCodeId,) = store.store(type(VaultShareBurnStream).creationCode);
         (payoutRouterCodeId,) = store.store(type(CreatorPayoutRouter).creationCode);
         (policyControllerCodeId,) = store.store(type(CreatorCoinPolicyController).creationCode);
 

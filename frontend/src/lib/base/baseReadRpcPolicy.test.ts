@@ -11,6 +11,11 @@ describe('baseReadRpcPolicy', () => {
     expect(isBrowserRestrictedBaseRpc('https://base-mainnet.g.alchemy.com/v2/test-key')).toBe(true)
   })
 
+  it('flags keyed matrixed.link RPC URLs as browser-restricted and proxies them', () => {
+    expect(isBrowserRestrictedBaseRpc('https://eu.endpoints.matrixed.link/base/test-key')).toBe(true)
+    expect(getBrowserBaseReadRpcUrl('https://eu.endpoints.matrixed.link/base/test-key')).toBe(BASE_RPC_PROXY_PATH)
+  })
+
   it('keeps browser-safe public Base RPC URLs direct', () => {
     expect(getBrowserBaseReadRpcUrl('https://mainnet.base.org')).toBe('https://mainnet.base.org')
   })

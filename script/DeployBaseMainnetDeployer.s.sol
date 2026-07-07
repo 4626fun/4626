@@ -6,9 +6,9 @@ import "forge-std/Script.sol";
 import "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
 import "@4626/shared/deploy/infra/UniversalBytecodeStoreV2.sol";
 import "@4626/shared/deploy/factories/UniversalCreate2DeployerFromStore.sol";
-import {CreatorOVaultAdminModule} from "@4626/creator/vault/modules/CreatorOVaultAdminModule.sol";
+import {OVaultAdminModule} from "@4626/shared/vault/modules/OVaultAdminModule.sol";
 import {CreatorOVaultCoreModule} from "@4626/creator/vault/modules/CreatorOVaultCoreModule.sol";
-import {CreatorOVaultStrategiesModule} from "@4626/creator/vault/modules/CreatorOVaultStrategiesModule.sol";
+import {OVaultStrategiesModule} from "@4626/shared/vault/modules/OVaultStrategiesModule.sol";
 
 /// @notice Deploys the deterministic phased deployment batcher (Phases 1-3) on Base mainnet.
 ///
@@ -69,8 +69,8 @@ contract DeployBaseMainnetDeployer is Script {
 
     // CreatorOVault module salts (shared logic contracts; no constructor args).
     string constant VAULT_CORE_MODULE_SALT_TAG_PREFIX = "base-release:CreatorOVaultCoreModule:";
-    string constant VAULT_STRATEGIES_MODULE_SALT_TAG_PREFIX = "base-release:CreatorOVaultStrategiesModule:";
-    string constant VAULT_ADMIN_MODULE_SALT_TAG_PREFIX = "base-release:CreatorOVaultAdminModule:";
+    string constant VAULT_STRATEGIES_MODULE_SALT_TAG_PREFIX = "base-release:OVaultStrategiesModule:";
+    string constant VAULT_ADMIN_MODULE_SALT_TAG_PREFIX = "base-release:OVaultAdminModule:";
 
     // DeploymentBatcher salt (constructor args are chain-specific ⇒ address is chain-specific).
     string constant DEPLOYMENT_BATCHER_SALT_TAG_PREFIX = "base-release:DeploymentBatcher:";
@@ -483,8 +483,8 @@ contract DeployBaseMainnetDeployer is Script {
 
         // Predict deterministic addresses for shared CreatorOVault modules.
         bytes memory coreModuleInit = type(CreatorOVaultCoreModule).creationCode;
-        bytes memory strategiesModuleInit = type(CreatorOVaultStrategiesModule).creationCode;
-        bytes memory adminModuleInit = type(CreatorOVaultAdminModule).creationCode;
+        bytes memory strategiesModuleInit = type(OVaultStrategiesModule).creationCode;
+        bytes memory adminModuleInit = type(OVaultAdminModule).creationCode;
 
         address coreModuleAddr = _create2(CREATE2_FACTORY_ADDR, salts.vaultCoreModule, keccak256(coreModuleInit));
         address strategiesModuleAddr =
@@ -495,8 +495,8 @@ contract DeployBaseMainnetDeployer is Script {
         predicted.vaultAdminModule = adminModuleAddr;
 
         console2.log("CreatorOVaultCoreModule (predicted):", coreModuleAddr);
-        console2.log("CreatorOVaultStrategiesModule (predicted):", strategiesModuleAddr);
-        console2.log("CreatorOVaultAdminModule (predicted):", adminModuleAddr);
+        console2.log("OVaultStrategiesModule (predicted):", strategiesModuleAddr);
+        console2.log("OVaultAdminModule (predicted):", adminModuleAddr);
 
         predicted = _resolvePredictedBundle(
             cfg, salts, storeAddr, create2DeployerAddr, coreModuleAddr, strategiesModuleAddr, adminModuleAddr

@@ -20,7 +20,7 @@ interface IVaultLiquidityReader {
 }
 
 /// @notice Read-only liquidity transparency for CreatorOVault (P0 / P2 integrator surface).
-library CreatorOVaultLiquidityLib {
+library OVaultLiquidityLib {
     uint256 internal constant MAX_BPS = 10_000;
 
     struct StrategyLiquidity {

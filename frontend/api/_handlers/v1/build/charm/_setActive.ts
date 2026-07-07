@@ -58,7 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       to: strategy,
       data,
       value: '0',
-      description: 'CreatorCharmStrategy (owner): set active flag.',
+      description: 'CharmStrategy4626 (owner): set active flag.',
       warnings: ['Owner-only onchain action. This API only builds calldata; it does not execute.'],
     }
 

@@ -43,27 +43,44 @@ describe('resolveWaitlistChatEligibilitySnapshot', () => {
     expect(result.chatReady).toBe(true)
   })
 
-  it('blocks sub-account-only users until the embedded EOA is installed as a CSW owner', () => {
+  it('allows base-app-direct users on the parent CSW inbox without embedded-owner install', () => {
     const result = resolveWaitlistChatEligibilitySnapshot({
       canonicalCswAddress: CSW,
       embeddedEoaAddress: EOA,
       baseSubAccountAddress: SUB,
       embeddedIsOwnerOfParent: false,
+      canonicalSource: 'base_account',
     })
-    expect(result.executionTrack).toBe('none-yet')
-    expect(result.xmtpMemberAddress).toBeNull()
-    expect(result.chatReady).toBe(false)
-    expect(result.joinBlockedReason).toBe('embedded_owner_not_installed')
+    expect(result.executionTrack).toBe('base-app-direct')
+    expect(result.xmtpMemberAddress).toBe(CSW)
+    expect(result.chatReady).toBe(true)
+    expect(result.joinBlockedReason).toBeNull()
   })
 
-  it('blocks users without embedded-owner install when no sub-account is present', () => {
+  it('allows base-app-direct users without a sub-account', () => {
     const result = resolveWaitlistChatEligibilitySnapshot({
       canonicalCswAddress: CSW,
       embeddedEoaAddress: EOA,
       baseSubAccountAddress: null,
       embeddedIsOwnerOfParent: false,
+      canonicalSource: 'base_account',
+    })
+    expect(result.executionTrack).toBe('base-app-direct')
+    expect(result.xmtpMemberAddress).toBe(CSW)
+    expect(result.chatReady).toBe(true)
+    expect(result.joinBlockedReason).toBeNull()
+  })
+
+  it('blocks Zora/wallet_sync users until embedded-owner install completes', () => {
+    const result = resolveWaitlistChatEligibilitySnapshot({
+      canonicalCswAddress: CSW,
+      embeddedEoaAddress: EOA,
+      baseSubAccountAddress: null,
+      embeddedIsOwnerOfParent: false,
+      canonicalSource: 'wallet_sync',
     })
     expect(result.executionTrack).toBe('none-yet')
+    expect(result.xmtpMemberAddress).toBeNull()
     expect(result.chatReady).toBe(false)
     expect(result.joinBlockedReason).toBe('embedded_owner_not_installed')
   })

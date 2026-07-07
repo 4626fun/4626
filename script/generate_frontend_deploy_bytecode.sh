@@ -88,14 +88,14 @@ printf "  CreatorGaugeController: '0x' + '%s',\n" "$(bytecode CreatorGaugeContro
 printf "  CCALaunchStrategy: '0x' + '%s',\n" "$(bytecode CCALaunchStrategy)" >>"$OUT_FILE"
 printf "  CreatorOracle: '0x' + '%s',\n" "$(bytecode CreatorOracle)" >>"$OUT_FILE"
 printf "  CreatorPayoutRouter: '0x' + '%s',\n" "$(bytecode CreatorPayoutRouter)" >>"$OUT_FILE"
-printf "  CreatorVaultShareBurnStream: '0x' + '%s',\n" "$(bytecode CreatorVaultShareBurnStream)" >>"$OUT_FILE"
+printf "  VaultShareBurnStream: '0x' + '%s',\n" "$(bytecode VaultShareBurnStream)" >>"$OUT_FILE"
 printf "  CreatorCoinPolicyController: '0x' + '%s',\n" "$(bytecode CreatorCoinPolicyController)" >>"$OUT_FILE"
 printf "  CharmStrategy4626: '0x' + '%s',\n" "$(bytecode CharmStrategy4626)" >>"$OUT_FILE"
 printf "  AjnaVaultAuth: '0x' + '%s',\n" "$(bytecode AjnaVaultAuth)" >>"$OUT_FILE"
 printf "  AjnaERC4626Vault: '0x' + '%s',\n" "$(bytecode AjnaERC4626Vault)" >>"$OUT_FILE"
 printf "  ERC4626StrategyAdapter: '0x' + '%s',\n" "$(bytecode ERC4626StrategyAdapter)" >>"$OUT_FILE"
-printf "  CreatorOImpairmentClaims: '0x' + '%s',\n" "$(bytecode CreatorOImpairmentClaims)" >>"$OUT_FILE"
-printf "  CreatorORecoveryEscrow: '0x' + '%s',\n" "$(bytecode CreatorORecoveryEscrow)" >>"$OUT_FILE"
+printf "  OVaultImpairmentClaims: '0x' + '%s',\n" "$(bytecode OVaultImpairmentClaims)" >>"$OUT_FILE"
+printf "  OVaultRecoveryEscrow: '0x' + '%s',\n" "$(bytecode OVaultRecoveryEscrow)" >>"$OUT_FILE"
 
 cat >>"$OUT_FILE" <<'EOF'
 } as const;

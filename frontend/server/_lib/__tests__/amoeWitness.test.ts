@@ -73,6 +73,7 @@ interface CircuitInputV2 {
   pointsBurnedAsUSD: string
   pointsLedgerRoot: string
   pointsBurnNullifier: string
+  walletAddr: string
   wallet: string
   nonce: string
   twitterCreditNullifier: string
@@ -93,6 +94,7 @@ const FALLBACK_FIXTURE: CircuitInputV2 = {
   pointsBurnedAsUSD: '1000000',
   pointsLedgerRoot: '4258986812028554858946529553847958246124952924136142975253146101054090175239',
   pointsBurnNullifier: '3400027258985903365737705727950731065442821420678606743016111351159525614787',
+  walletAddr: '103929005307927756724354605802047639613112342136',
   wallet: '103929005307927756724354605802047639613112342136',
   nonce: '1',
   twitterCreditNullifier: '2',
@@ -218,6 +220,8 @@ describe('amoeWitness — assembleAmoeWitness end-to-end vs. fixture', () => {
     expect(w.pointsBurnedAsUSD).toBe(B(fx.pointsBurnedAsUSD))
     expect(w.pointsLedgerRoot).toBe(B(fx.pointsLedgerRoot))
     expect(w.pointsBurnNullifier).toBe(B(fx.pointsBurnNullifier))
+    expect(w.walletAddr).toBe(B(fx.walletAddr))
+    expect(w.walletAddr).toBe(w.wallet)
   })
 
   it('produces private signals that match the fixture', () => {
