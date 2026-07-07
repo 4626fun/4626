@@ -80,6 +80,18 @@ describe('inverseAkitaChatReaction', () => {
       userSide: 'short',
       pair: 'SOL',
     })
+    expect(parseInverseAkitaChatTradeIntent('hey @flip_research should i short btc?')).toEqual({
+      userSide: 'short',
+      pair: 'BTC',
+    })
+    expect(parseInverseAkitaChatTradeIntent('should i long eth')).toEqual({
+      userSide: 'long',
+      pair: 'ETH',
+    })
+    expect(parseInverseAkitaChatTradeIntent('@flip_research short btc')).toEqual({
+      userSide: 'short',
+      pair: 'BTC',
+    })
     expect(parseInverseAkitaChatTradeIntent('/h arena long BTC 50 5')).toBeNull()
     expect(parseInverseAkitaChatTradeIntent('thinking about long btc')).toBeNull()
   })

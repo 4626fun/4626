@@ -215,12 +215,12 @@ contract OracleReferenceQuoteTokenGuardsTest is Test {
 
         oracle.setReferenceQuoteToken(zoraToken);
         oracle.setV3Pool(pool, creatorToken, zoraToken, 1800);
-        oracle.initializeCreatorPrice(int256(1e18));
+        oracle.initializeAssetPrice(int256(1e18));
         oracle.setPriceUpdateCooldown(0);
 
         // Pinned non-stable quote without a quote/USD feed must not store a ZORA-denominated price as USD.
         vm.expectRevert(abi.encodeWithSelector(CreatorOracle.MissingQuoteUsdFeed.selector, zoraToken));
-        oracle.updateCreatorPriceFromV3TWAP(1800);
+        oracle.updateAssetPriceFromV3TWAP(1800);
     }
 
     function test_creatorOracle_v3Update_convertsQuoteToUsd_viaQuoteUsdFeed() external {
@@ -235,15 +235,15 @@ contract OracleReferenceQuoteTokenGuardsTest is Test {
         oracle.setReferenceQuoteToken(zoraToken);
         oracle.setV3Pool(pool, creatorToken, zoraToken, 1800);
         oracle.setQuoteUsdFeed(address(quoteFeed));
-        oracle.initializeCreatorPrice(int256(0.5e18));
+        oracle.initializeAssetPrice(int256(0.5e18));
         oracle.setPriceUpdateCooldown(0);
 
         // Tick 0 => 1 ZORA per CREATOR; ZORA/USD = 0.50 => USD/CREATOR = 0.50.
         quoteFeed.setLatestAnswer(0.5e8, block.timestamp);
-        oracle.updateCreatorPriceFromV3TWAP(1800);
+        oracle.updateAssetPriceFromV3TWAP(1800);
 
         // Without the conversion the write would be 1e18 (100% deviation from 0.5e18) and revert.
-        assertEq(oracle.creatorPriceUSD(), int256(0.5e18));
+        assertEq(oracle.assetPriceUSD(), int256(0.5e18));
     }
 
     function test_agentOracle_v3Update_failsClosedWithoutQuoteUsdFeed_whenReferencePinned() external {
@@ -256,11 +256,11 @@ contract OracleReferenceQuoteTokenGuardsTest is Test {
 
         oracle.setReferenceQuoteToken(virtualToken);
         oracle.setV3Pool(pool, agentToken, virtualToken, 1800);
-        oracle.initializeAgentPrice(int256(1e18));
+        oracle.initializeAssetPrice(int256(1e18));
         oracle.setPriceUpdateCooldown(0);
 
         vm.expectRevert(abi.encodeWithSelector(AgentOracle.MissingQuoteUsdFeed.selector, virtualToken));
-        oracle.updateAgentPriceFromV3TWAP(1800);
+        oracle.updateAssetPriceFromV3TWAP(1800);
     }
 
     function test_agentOracle_v3Update_convertsQuoteToUsd_viaQuoteUsdFeed() external {
@@ -275,14 +275,14 @@ contract OracleReferenceQuoteTokenGuardsTest is Test {
         oracle.setReferenceQuoteToken(virtualToken);
         oracle.setV3Pool(pool, agentToken, virtualToken, 1800);
         oracle.setQuoteUsdFeed(address(quoteFeed));
-        oracle.initializeAgentPrice(int256(2e18));
+        oracle.initializeAssetPrice(int256(2e18));
         oracle.setPriceUpdateCooldown(0);
 
         // Tick 0 => 1 VIRTUAL per AGENT; VIRTUAL/USD = 2.00 => USD/AGENT = 2.00.
         quoteFeed.setLatestAnswer(2e8, block.timestamp);
-        oracle.updateAgentPriceFromV3TWAP(1800);
+        oracle.updateAssetPriceFromV3TWAP(1800);
 
-        assertEq(oracle.agentPriceUSD(), int256(2e18));
+        assertEq(oracle.assetPriceUSD(), int256(2e18));
     }
 
     function _deployCreatorOracle() internal returns (CreatorOracle oracle) {

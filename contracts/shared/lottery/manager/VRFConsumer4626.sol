@@ -27,6 +27,7 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {OApp, MessagingFee, Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {MessagingReceipt} from "@layerzerolabs/oapp-evm/contracts/oapp/OAppSender.sol";
 import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
+import {IOracle4626} from "@4626/shared/interfaces/oracles/IOracle4626.sol";
 
 // Interface for local callbacks
 interface IVRFCallbackReceiver {
@@ -38,13 +39,6 @@ interface I4626Registry {
     function getLayerZeroEndpoint(uint256 _chainId) external view returns (address);
     function getEidForChainId(uint256 _chainId) external view returns (uint32);
     function getSupportedChains() external view returns (uint256[] memory);
-}
-
-// Interface for CreatorOracle
-interface ICreatorOracle {
-    function getCreatorPrice() external view returns (int256 price, uint256 timestamp);
-    function getCreatorEthTWAP(uint32 duration) external view returns (uint256 price);
-    function getEthPrice() external view returns (int256 price, uint256 timestamp);
 }
 
 // Chainlink VRF V2.5 interface
@@ -70,7 +64,7 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
 
     IVRFCoordinatorV2Plus public vrfCoordinator;
     I4626Registry public immutable registry;
-    ICreatorOracle public priceOracle;
+    IOracle4626 public priceOracle;
 
     /// @notice Base EID (hub chain where VRF lives)
     uint32 public immutable BASE_EID;
@@ -137,7 +131,7 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
 
     /// @notice Price data from each chain
     struct ChainPriceData {
-        int256 creatorPriceUSD;
+        int256 assetPriceUSD;
         uint256 timestamp;
         uint256 lastUpdated;
     }
@@ -196,8 +190,8 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
     event PendingResponseRelayed(
         uint64 indexed sequence, uint256 indexed requestId, address indexed relayer, uint256 feePaid
     );
-    event ChainPriceReceived(uint32 indexed chainEid, int256 creatorPriceUSD, uint256 timestamp);
-    event LocalPriceUpdated(int256 creatorPriceUSD, uint256 timestamp);
+    event ChainPriceReceived(uint32 indexed chainEid, int256 assetPriceUSD, uint256 timestamp);
+    event LocalPriceUpdated(int256 assetPriceUSD, uint256 timestamp);
     event AggregatedPriceCalculated(int256 avgPrice, uint256 numChains, uint256 timestamp);
     event PriceOracleSet(address oracle);
     event RemotePriceReportingEnabled(bool enabled);
@@ -324,7 +318,7 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
     }
 
     function setPriceOracle(address _oracle) external onlyOwner {
-        priceOracle = ICreatorOracle(_oracle);
+        priceOracle = IOracle4626(_oracle);
         emit PriceOracleSet(_oracle);
     }
 
@@ -638,7 +632,7 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
         }
 
         chainPrices[chainEid] =
-            ChainPriceData({creatorPriceUSD: price, timestamp: timestamp, lastUpdated: block.timestamp});
+            ChainPriceData({assetPriceUSD: price, timestamp: timestamp, lastUpdated: block.timestamp});
 
         emit ChainPriceReceived(chainEid, price, timestamp);
     }
@@ -646,7 +640,7 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
     function updateLocalPrice() public {
         if (address(priceOracle) == address(0)) return;
 
-        try priceOracle.getCreatorPrice() returns (int256 creatorUsd, uint256 timestamp) {
+        try priceOracle.getAssetPrice() returns (int256 creatorUsd, uint256 timestamp) {
             if (creatorUsd > 0) {
                 localCreatorPriceUSD = creatorUsd;
                 localPriceTimestamp = timestamp;
@@ -654,7 +648,7 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
             }
         } catch {
             // Fallback: calculate from TWAP
-            try priceOracle.getCreatorEthTWAP(twapPeriod) returns (uint256 creatorPerEth) {
+            try priceOracle.getAssetEthTWAP(twapPeriod) returns (uint256 creatorPerEth) {
                 if (creatorPerEth == 0) return;
 
                 try priceOracle.getEthPrice() returns (int256 ethUsd, uint256) {
@@ -691,10 +685,10 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
             // FIX: VRFC-03 — use lastUpdated (local receipt time) for staleness instead of
             // remote-reported timestamp, which can be spoofed to appear fresh
             if (
-                priceData.creatorPriceUSD > 0 && priceData.lastUpdated > 0
+                priceData.assetPriceUSD > 0 && priceData.lastUpdated > 0
                     && block.timestamp - priceData.lastUpdated < PRICE_STALENESS
             ) {
-                totalPrice += priceData.creatorPriceUSD;
+                totalPrice += priceData.assetPriceUSD;
                 validChains++;
             }
         }
@@ -886,7 +880,7 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
         for (uint256 i = 0; i < priceLen; i++) {
             uint32 chainEid = priceReportingChains[i];
             chainEids[i] = chainEid;
-            prices[i] = chainPrices[chainEid].creatorPriceUSD;
+            prices[i] = chainPrices[chainEid].assetPriceUSD;
             timestamps[i] = chainPrices[chainEid].lastUpdated;
         }
     }

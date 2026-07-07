@@ -2,7 +2,7 @@
 pragma solidity 0.8.30;
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {ICreatorOracle} from "@4626/creator/interfaces/ICreatorOracle.sol";
+import {IOracle4626} from "@4626/shared/interfaces/oracles/IOracle4626.sol";
 
 contract CCALaunchStrategyEncodingHelper {
     uint24 public constant MPS = 1e7;
@@ -148,8 +148,8 @@ contract CCALaunchStrategyEncodingHelper {
         if (oracle == address(0)) revert LaunchOracleNotConfigured();
         if (currency != address(0)) revert UnsupportedLaunchCurrency(currency);
 
-        (int256 creatorUsdSigned, uint256 creatorTimestamp) = ICreatorOracle(oracle).getCreatorPrice();
-        (int256 ethUsdSigned, uint256 ethTimestamp) = ICreatorOracle(oracle).getEthPrice();
+        (int256 creatorUsdSigned, uint256 creatorTimestamp) = IOracle4626(oracle).getAssetPrice();
+        (int256 ethUsdSigned, uint256 ethTimestamp) = IOracle4626(oracle).getEthPrice();
 
         if (creatorUsdSigned <= 0 || ethUsdSigned <= 0) {
             revert LaunchOracleInvalidPrice(creatorUsdSigned, ethUsdSigned);

@@ -37,10 +37,6 @@ interface I4626RegistryCoverage {
     function isCreatorCoinActive(address token) external view returns (bool);
 }
 
-interface ICreatorOracleCoverage {
-    function getCreatorPrice() external view returns (int256 price, uint256 timestamp);
-}
-
 contract ve4626BoostManager is Ownable, ReentrancyGuard {
     uint256 public constant BOOST_PRECISION = 10_000;
     uint256 public constant MAX_VE_BOOST = 25_000;

@@ -16,6 +16,34 @@ declare const process: { env: Record<string, string | undefined> }
 const CHAT_TRADE_INTENT_RE =
   /^(?:go(?:ing)?\s+)?(long|short)\s+(?:on\s+)?([a-z0-9]{2,20})\s*[!.?]*$/i
 
+const QUALIFIED_TRADE_INTENT_RE =
+  /\b(?:should\s+i|shall\s+i|can\s+i|would\s+you\s+say\s+i\s+should|do\s+you\s+think\s+i\s+should)\s+(?:go\s+)?(long|short)\s+(?:on\s+)?([a-z0-9]{2,20})\b/i
+
+const MENTION_LED_TRADE_INTENT_RE =
+  /\b(long|short)\s+(?:on\s+)?([a-z0-9]{2,20})\b/i
+
+function normalizeChatTradeIntentText(text: string): string {
+  return text
+    .replace(/@[\w.-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function isNonActionTradeChatter(text: string): boolean {
+  return (
+    /\bthinking\s+(?:about|of)\s+(?:going\s+)?(?:long|short)\b/i.test(text) ||
+    /\b(?:talking|chatting|debating)\s+about\s+(?:going\s+)?(?:long|short)\b/i.test(text)
+  )
+}
+
+function parseTradeIntentMatch(match: RegExpExecArray): ParsedInverseAkitaChatTradeIntent | null {
+  const userSide = match[1]?.toLowerCase()
+  const pair = match[2]?.toUpperCase()
+  if (userSide !== 'long' && userSide !== 'short') return null
+  if (!pair) return null
+  return { userSide, pair }
+}
+
 /** Reaction on the user's trigger message — alternates 🔄 / 🙃 per message id. */
 export const INVERSE_AKITA_CHAT_REACTION_EMOJIS = ['🔄', '🙃'] as const
 
@@ -211,13 +239,23 @@ export type InverseAkitaChatHistoryMessage = {
 export function parseInverseAkitaChatTradeIntent(text: string): ParsedInverseAkitaChatTradeIntent | null {
   const trimmed = String(text ?? '').trim()
   if (!trimmed || trimmed.startsWith('/')) return null
-  const match = CHAT_TRADE_INTENT_RE.exec(trimmed)
-  if (!match) return null
-  const userSide = match[1]?.toLowerCase()
-  const pair = match[2]?.toUpperCase()
-  if (userSide !== 'long' && userSide !== 'short') return null
-  if (!pair) return null
-  return { userSide, pair }
+  if (isNonActionTradeChatter(trimmed)) return null
+
+  const normalized = normalizeChatTradeIntentText(trimmed)
+  if (!normalized) return null
+
+  const strict = CHAT_TRADE_INTENT_RE.exec(normalized)
+  if (strict) return parseTradeIntentMatch(strict)
+
+  const qualified = QUALIFIED_TRADE_INTENT_RE.exec(normalized)
+  if (qualified) return parseTradeIntentMatch(qualified)
+
+  if (/@[\w.-]+/.test(trimmed)) {
+    const mentionLed = MENTION_LED_TRADE_INTENT_RE.exec(normalized)
+    if (mentionLed) return parseTradeIntentMatch(mentionLed)
+  }
+
+  return null
 }
 
 export type InverseAkitaChatTradeIntentMessage = {

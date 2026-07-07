@@ -29,7 +29,7 @@ contract ForkCharmOracleMock {
         return fresh;
     }
 
-    function getCreatorPrice() external view returns (int256 price, uint256 ts) {
+    function getAssetPrice() external view returns (int256 price, uint256 ts) {
         return (priceUsd18, block.timestamp);
     }
 

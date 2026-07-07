@@ -6,7 +6,7 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {CreatorOVaultWrapper} from "@4626/creator/vault/CreatorOVaultWrapper.sol";
-import {CreatorGaugeController, ICreatorOracle, ISwapRouter} from "@4626/creator/revenue/CreatorGaugeController.sol";
+import {CreatorGaugeController, ISwapRouter} from "@4626/creator/revenue/CreatorGaugeController.sol";
 import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
 
 contract DeepMockToken is ERC20 {
@@ -341,11 +341,11 @@ contract DeepMockVault is ERC20 {
     }
 }
 
-contract DeepMockOracle is ICreatorOracle {
+contract DeepMockOracle {
     uint256 public creatorPerEth = 2e18;
     bool public fresh = true;
 
-    function getCreatorPrice() external view returns (int256, uint256) {
+    function getAssetPrice() external view returns (int256, uint256) {
         return (1e8, block.timestamp);
     }
 
@@ -353,7 +353,7 @@ contract DeepMockOracle is ICreatorOracle {
         return (3000e8, block.timestamp);
     }
 
-    function getCreatorEthTWAP(uint32) external view returns (uint256) {
+    function getAssetEthTWAP(uint32) external view returns (uint256) {
         return creatorPerEth;
     }
 

@@ -88,7 +88,7 @@ contract CreatorOracleSequencerFeedTest is Test {
 
         oracle.setChainlinkFeed(address(ethFeed));
         oracle.setSequencerUptimeFeed(address(sequencerFeed));
-        oracle.initializeCreatorPrice(int256(1e18));
+        oracle.initializeAssetPrice(int256(1e18));
     }
 
     function test_getEthPrice_returnsZeroWhenSequencerDown() public {

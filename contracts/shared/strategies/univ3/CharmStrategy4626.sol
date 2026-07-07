@@ -11,7 +11,7 @@ import {IUniswapV3Pool} from "@4626/shared/interfaces/uniswap/IUniswapV3Pool.sol
 import {TickMathCompat} from "@4626/shared/libraries/uniswap/TickMathCompat.sol";
 import {IAjnaPool} from "@4626/shared/interfaces/external/IAjnaPool.sol";
 import "@4626/shared/interfaces/strategies/IStrategy.sol";
-import {ICreatorOracle} from "@4626/creator/interfaces/ICreatorOracle.sol";
+import {IOracle4626} from "@4626/shared/interfaces/oracles/IOracle4626.sol";
 import {IStrategyValuation} from "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
 
 /**
@@ -87,7 +87,7 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
 
     /// @notice Lane oracle (creator in this case) used for valuation inside `getTotalAssets()`.
     /// @dev This is intentionally distinct from Uniswap TWAP used for swap sizing/slippage.
-    ICreatorOracle public creatorOracle;
+    IOracle4626 public creatorOracle;
 
     /// @notice TWAP window (seconds) used for valuation inside `getTotalAssets()`.
     /// @dev This impacts ERC-4626 share pricing via the lane vault's totalAssets().
@@ -228,7 +228,7 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
 
     function setCreatorOracle(address _creatorOracle) external onlyOwner {
         address old = address(creatorOracle);
-        creatorOracle = ICreatorOracle(_creatorOracle);
+        creatorOracle = IOracle4626(_creatorOracle);
         emit LaneOracleUpdated(old, _creatorOracle);
     }
 
@@ -538,7 +538,7 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
     }
 
     function _getFreshCreatorPrice() internal view returns (uint256 priceUsd, bool fresh) {
-        ICreatorOracle oracle = creatorOracle;
+        IOracle4626 oracle = creatorOracle;
         if (address(oracle) == address(0)) return (0, false);
 
         try oracle.isPriceFresh() returns (bool ok) {
@@ -548,7 +548,7 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
         }
         if (!fresh) return (0, false);
 
-        try oracle.getCreatorPrice() returns (int256 priceUsdSigned, uint256) {
+        try oracle.getAssetPrice() returns (int256 priceUsdSigned, uint256) {
             if (priceUsdSigned <= 0) return (0, false);
             return (uint256(priceUsdSigned), true);
         } catch {
@@ -1160,7 +1160,7 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
     }
 
     function _oracleSuggestedAjnaBucket() internal view returns (uint256 bucketIndex) {
-        ICreatorOracle oracle = creatorOracle;
+        IOracle4626 oracle = creatorOracle;
         if (address(oracle) == address(0)) return 0;
 
         try oracle.getAjnaBucketFromV3TWAP(twapDuration) returns (uint256 suggested) {

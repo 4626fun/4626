@@ -156,15 +156,15 @@ contract AgentOracleV2PrimaryPathTest is Test {
         pair.setState(100e18, 200e18, t0, 0, 0);
 
         oracle.setV2Pair(address(pair), agentToken, quoteToken, 1800);
-        oracle.initializeAgentPrice(int256(5e18));
+        oracle.initializeAssetPrice(int256(5e18));
 
         vm.warp(block.timestamp + 1800);
         // Intentionally set ETH feed to a different value to ensure the V2 quote feed is used.
         ethFeed.setLatestAnswer(99e8, block.timestamp);
         quoteFeed.setLatestAnswer(10e8, block.timestamp); // quote/USD = 10
 
-        oracle.updateAgentPriceFromTWAP(1800);
-        (int256 price,) = oracle.getAgentPrice();
+        oracle.updateAssetPriceFromTWAP(1800);
+        (int256 price,) = oracle.getAssetPrice();
 
         // USD/Agent = (USD/Quote) / (Agent/Quote) = 10 / 2 = 5
         assertEq(price, int256(5e18));
@@ -182,11 +182,11 @@ contract AgentOracleV2PrimaryPathTest is Test {
         uint32 t0 = uint32(block.timestamp);
         pair.setState(100e18, 200e18, t0, 0, 0);
         oracle.setV2Pair(address(pair), agentToken, virtualToken, 1800);
-        oracle.initializeAgentPrice(int256(5e18));
+        oracle.initializeAssetPrice(int256(5e18));
 
         vm.warp(block.timestamp + 1800);
         vm.expectRevert(abi.encodeWithSelector(AgentOracle.MissingQuoteUsdFeed.selector, virtualToken));
-        oracle.updateAgentPriceFromTWAP(1800);
+        oracle.updateAssetPriceFromTWAP(1800);
     }
 
     function test_updateAgentPriceFromTWAP_fallsBackToEthFeed_whenQuoteIsBaseWeth() external {
@@ -204,12 +204,12 @@ contract AgentOracleV2PrimaryPathTest is Test {
         uint32 t0 = uint32(block.timestamp);
         pair.setState(100e18, 200e18, t0, 0, 0);
         oracle.setV2Pair(address(pair), agentToken, weth, 1800);
-        oracle.initializeAgentPrice(int256(5e18));
+        oracle.initializeAssetPrice(int256(5e18));
 
         vm.warp(block.timestamp + 1800);
         ethFeed.setLatestAnswer(10e8, block.timestamp);
-        oracle.updateAgentPriceFromTWAP(1800);
-        (int256 price,) = oracle.getAgentPrice();
+        oracle.updateAssetPriceFromTWAP(1800);
+        (int256 price,) = oracle.getAssetPrice();
         assertEq(price, int256(5e18));
     }
 
@@ -229,13 +229,13 @@ contract AgentOracleV2PrimaryPathTest is Test {
         uint32 t0 = uint32(block.timestamp);
         pair.setState(100e18, 200e18, t0, 0, 0);
         oracle.setV2Pair(address(pair), agentToken, quoteToken, 1800);
-        oracle.initializeAgentPrice(int256(5e18));
+        oracle.initializeAssetPrice(int256(5e18));
 
         vm.warp(block.timestamp + 1800);
         quoteFeed18.setLatestAnswer(10e18, block.timestamp); // quote/USD with 18-dec feed
 
-        oracle.updateAgentPriceFromTWAP(1800);
-        (int256 price,) = oracle.getAgentPrice();
+        oracle.updateAssetPriceFromTWAP(1800);
+        (int256 price,) = oracle.getAssetPrice();
         assertEq(price, int256(5e18));
     }
 
@@ -254,13 +254,13 @@ contract AgentOracleV2PrimaryPathTest is Test {
         uint32 t0 = uint32(block.timestamp);
         pair.setState(100e6, 200e18, t0, 0, 0);
         oracle.setV2Pair(address(pair), agentToken, quoteToken6, 1800);
-        oracle.initializeAgentPrice(int256(5e18));
+        oracle.initializeAssetPrice(int256(5e18));
 
         vm.warp(block.timestamp + 1800);
         quoteFeed.setLatestAnswer(10e8, block.timestamp); // quote/USD = 10
 
-        oracle.updateAgentPriceFromTWAP(1800);
-        (int256 price,) = oracle.getAgentPrice();
+        oracle.updateAssetPriceFromTWAP(1800);
+        (int256 price,) = oracle.getAssetPrice();
 
         // USD/Agent = 10 / 2 = 5 — without decimal normalization this would be off by 1e12.
         assertEq(price, int256(5e18));
@@ -279,15 +279,15 @@ contract AgentOracleV2PrimaryPathTest is Test {
         uint32 t0 = uint32(block.timestamp);
         pair.setState(100e18, 200e18, t0, 0, 0);
         oracle.setV2Pair(address(pair), agentToken, quoteToken, 1800);
-        // Deliberately NOT calling initializeAgentPrice.
+        // Deliberately NOT calling initializeAssetPrice.
 
         vm.warp(block.timestamp + 1800);
         quoteFeed.setLatestAnswer(10e8, block.timestamp);
 
         // Manual TWAP path must refuse to bootstrap.
         vm.expectRevert(AgentOracle.OracleNotInitialized.selector);
-        oracle.updateAgentPriceFromTWAP(1800);
-        assertEq(oracle.agentPriceUSD(), int256(0));
+        oracle.updateAssetPriceFromTWAP(1800);
+        assertEq(oracle.assetPriceUSD(), int256(0));
     }
 
     function test_updateAgentPriceFromTWAP_revertsInvalidPrice_whenQuoteFeedMissingDecimals() external {
@@ -304,13 +304,13 @@ contract AgentOracleV2PrimaryPathTest is Test {
         uint32 t0 = uint32(block.timestamp);
         pair.setState(100e18, 200e18, t0, 0, 0);
         oracle.setV2Pair(address(pair), agentToken, quoteToken, 1800);
-        oracle.initializeAgentPrice(int256(5e18));
+        oracle.initializeAssetPrice(int256(5e18));
 
         vm.warp(block.timestamp + 1800);
         badQuoteFeed.setLatestAnswer(10e8, block.timestamp);
 
         vm.expectRevert(AgentOracle.InvalidPrice.selector);
-        oracle.updateAgentPriceFromTWAP(1800);
+        oracle.updateAssetPriceFromTWAP(1800);
     }
 
     function _deployOracle() internal returns (AgentOracle oracle) {

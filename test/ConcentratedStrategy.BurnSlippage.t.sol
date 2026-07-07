@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {ConcentratedStrategy} from "@4626/shared/strategies/univ4/ConcentratedStrategy.sol";
-import {ICreatorOracle} from "@4626/creator/interfaces/ICreatorOracle.sol";
+import {IOracle4626} from "@4626/shared/interfaces/oracles/IOracle4626.sol";
 import {V4LiquidityAmounts} from "@4626/shared/libraries/uniswap/V4LiquidityAmounts.sol";
 import {IApprovedV4HooksRegistry} from "@4626/shared/strategies/univ4/ApprovedV4HooksRegistry.sol";
 
@@ -34,7 +34,7 @@ contract HookRegistryStub is IApprovedV4HooksRegistry {
 // Oracle mock — returns a test-controlled TWAP tick. Unused methods revert so
 // accidental call paths are caught loudly.
 // -----------------------------------------------------------------------------
-contract OracleStub is ICreatorOracle {
+contract OracleStub is IOracle4626 {
     int24 public twapTick;
 
     function setTwapTick(int24 t) external { twapTick = t; }
@@ -45,22 +45,22 @@ contract OracleStub is ICreatorOracle {
     function setV4Pool(address, PoolKey calldata, bool) external {}
     function setV3Pool(address, address, address, uint32) external {}
     function getEthPrice() external pure returns (int256, uint256) { revert("ns"); }
-    function getCreatorPrice() external pure returns (int256, uint256) { revert("ns"); }
-    function getCreatorEthTWAP(uint32) external pure returns (uint256) { revert("ns"); }
+    function getAssetPrice() external pure returns (int256, uint256) { revert("ns"); }
+    function getAssetEthTWAP(uint32) external pure returns (uint256) { revert("ns"); }
     function tickToPrice(int24) external pure returns (uint256) { revert("ns"); }
     function getCurrentTick() external pure returns (int24) { revert("ns"); }
     function isPriceFresh() external pure returns (bool) { return true; }
     function tickToAjnaBucket(int24) external pure returns (uint256) { revert("ns"); }
     function getAjnaBucketFromV3TWAP(uint32) external pure returns (uint256) { revert("ns"); }
-    function updateCreatorPrice(int256) external {}
-    function updateCreatorPriceFromTWAP(uint32) external {}
-    function updateCreatorPriceFromV3TWAP(uint32) external {}
+    function updateAssetPrice(int256) external {}
+    function updateAssetPriceFromTWAP(uint32) external {}
+    function updateAssetPriceFromV3TWAP(uint32) external {}
     function recordSwapObservation() external {}
     function getObservationState() external pure returns (uint16, uint16, uint16, uint32) { return (0,0,0,0); }
     function getTickCapState() external pure returns (int24, uint64, bool) { return (0, 0, false); }
-    function creatorSymbol() external pure returns (string memory) { return "MOCK"; }
-    function creatorPriceUSD() external pure returns (int256) { return 0; }
-    function creatorPriceTimestamp() external pure returns (uint256) { return 0; }
+    function assetSymbol() external pure returns (string memory) { return "MOCK"; }
+    function assetPriceUSD() external pure returns (int256) { return 0; }
+    function assetPriceTimestamp() external pure returns (uint256) { return 0; }
     function v4PoolConfigured() external pure returns (bool) { return false; }
     function maxTicksPerObservation() external pure returns (int24) { return 0; }
 }
@@ -89,7 +89,7 @@ contract ConcentratedStrategyHarness is ConcentratedStrategy {
 
     // Expose setters for test-only configuration that is otherwise owner-gated
     // but which we need to exercise without running a full configurePool flow.
-    function test_setTwapOracle(address oracle) external { twapOracle = ICreatorOracle(oracle); }
+    function test_setTwapOracle(address oracle) external { twapOracle = IOracle4626(oracle); }
     function test_setMaxTwapDeviation(int24 d) external { maxTwapDeviation = d; }
     function test_setTwapDuration(uint32 dur) external { twapDuration = dur; }
 }

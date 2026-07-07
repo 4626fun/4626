@@ -6,6 +6,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {IOracle4626} from "@4626/shared/interfaces/oracles/IOracle4626.sol";
 
 interface IAgentOVault {
     function burnSharesForPriceIncrease(uint256 shares) external;
@@ -43,13 +44,6 @@ interface ISwapRouter {
         uint160 sqrtPriceLimitX96;
     }
     function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
-}
-
-interface IAgentOracle {
-    function getAgentPrice() external view returns (int256 price, uint256 timestamp);
-    function getEthPrice() external view returns (int256 price, uint256 timestamp);
-    function getCreatorEthTWAP(uint32 duration) external view returns (uint256 price); // compatibility alias for shared oracle interface; returns agent token / ETH TWAP
-    function isPriceFresh() external view returns (bool);
 }
 
 interface IVe4626GaugeVoting {
@@ -131,7 +125,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     uint256 public swapSlippageBps = 100;
 
     /// @notice Oracle for price-based slippage protection
-    IAgentOracle public oracle;
+    IOracle4626 public oracle;
 
     /// @notice TWAP duration for oracle price (default 30 min)
     uint32 public oracleTwapDuration = 1800;
@@ -546,7 +540,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
         }
 
         // Try to get TWAP price from oracle
-        try oracle.getCreatorEthTWAP(oracleTwapDuration) returns (uint256 agentPerEth) {
+        try oracle.getAssetEthTWAP(oracleTwapDuration) returns (uint256 agentPerEth) {
             if (agentPerEth == 0) return 0;
 
             // Expected output = wethAmount * agentPerEth / 1e18
@@ -925,7 +919,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
      * @param _oracle AgentOracle address
      */
     function setOracle(address _oracle) external onlyOwner {
-        oracle = IAgentOracle(_oracle);
+        oracle = IOracle4626(_oracle);
         emit OracleSet(_oracle);
     }
 
@@ -1117,7 +1111,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
             return (0, 0, false);
         }
 
-        try oracle.getCreatorEthTWAP(oracleTwapDuration) returns (uint256 agentPerEth) {
+        try oracle.getAssetEthTWAP(oracleTwapDuration) returns (uint256 agentPerEth) {
             if (agentPerEth == 0) return (0, 0, false);
 
             expectedOut = Math.mulDiv(wethAmount, agentPerEth, 1e18);
@@ -1138,7 +1132,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
             address oracleAddress,
             bool isActive,
             bool priceFresh,
-            int256 agentPriceUSD,
+            int256 assetPriceUSD,
             uint32 twapDuration,
             uint256 slippageBps
         )
@@ -1153,8 +1147,8 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
                 priceFresh = fresh;
             } catch {}
 
-            try oracle.getAgentPrice() returns (int256 price, uint256) {
-                agentPriceUSD = price;
+            try oracle.getAssetPrice() returns (int256 price, uint256) {
+                assetPriceUSD = price;
             } catch {}
         }
     }

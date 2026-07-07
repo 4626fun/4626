@@ -19,7 +19,7 @@ contract MockCreatorOracle {
         updatedAt = block.timestamp;
     }
 
-    function getCreatorPrice() external view returns (int256, uint256) {
+    function getAssetPrice() external view returns (int256, uint256) {
         return (price, updatedAt);
     }
 }

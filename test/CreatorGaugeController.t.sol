@@ -85,7 +85,7 @@ contract MockToken is IERC20 {
         }
     }
 
-    contract MockCreatorOracle is ICreatorOracle {
+    contract MockCreatorOracle {
         bool public shouldRevert;
         uint256 public creatorPerEth;
         bool public priceFresh = true;
@@ -102,7 +102,7 @@ contract MockToken is IERC20 {
             priceFresh = _fresh;
         }
 
-        function getCreatorPrice() external view returns (int256, uint256) {
+        function getAssetPrice() external view returns (int256, uint256) {
             return (1e8, block.timestamp);
         }
 
@@ -110,7 +110,7 @@ contract MockToken is IERC20 {
             return (3000e8, block.timestamp);
         }
 
-        function getCreatorEthTWAP(uint32) external view returns (uint256) {
+        function getAssetEthTWAP(uint32) external view returns (uint256) {
             if (shouldRevert) revert("oracle unavailable");
             return creatorPerEth;
         }

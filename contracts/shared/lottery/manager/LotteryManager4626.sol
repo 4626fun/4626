@@ -47,7 +47,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
-import {ICreatorOracle} from "@4626/creator/interfaces/ICreatorOracle.sol";
+import {IOracle4626} from "@4626/shared/interfaces/oracles/IOracle4626.sol";
 
 // ================================
 // INTERFACES
@@ -907,11 +907,11 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         if (tokenIn != creatorCoin && tokenIn != shareOFT) return (0, 0, 0);
         if (amount == 0) return (0, 0, 0);
 
-        ICreatorOracle oracle = ICreatorOracle(oracleAddr);
+        IOracle4626 oracle = IOracle4626(oracleAddr);
         int256 priceUSD;
         uint256 timestamp;
         // Oracle reads should never be able to revert swap processing.
-        try oracle.getCreatorPrice() returns (int256 p, uint256 t) {
+        try oracle.getAssetPrice() returns (int256 p, uint256 t) {
             priceUSD = p;
             timestamp = t;
         } catch {

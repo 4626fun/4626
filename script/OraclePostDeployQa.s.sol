@@ -9,7 +9,7 @@ interface IRegistryOracleLookup {
 }
 
 interface ICreatorOracleQa {
-    function creatorSymbol() external view returns (string memory);
+    function assetSymbol() external view returns (string memory);
     function chainlinkFeed() external view returns (address);
     function v4PoolConfigured() external view returns (bool);
     function v3PoolConfigured() external view returns (bool);
@@ -19,13 +19,13 @@ interface ICreatorOracleQa {
     function v3TwapDuration() external view returns (uint32);
     function priceUpdateCooldown() external view returns (uint32);
     function maxTicksPerObservation() external view returns (int24);
-    function creatorPriceUSD() external view returns (int256);
-    function creatorPriceTimestamp() external view returns (uint256);
+    function assetPriceUSD() external view returns (int256);
+    function assetPriceTimestamp() external view returns (uint256);
     function isPriceFresh() external view returns (bool);
     function getEthPrice() external view returns (int256 price, uint256 timestamp);
-    function getCreatorPrice() external view returns (int256 price, uint256 timestamp);
-    function getCreatorEthTWAP(uint32 duration) external view returns (uint256 price);
-    function getCreatorUsdTWAP(uint32 duration) external view returns (uint256 priceUsd18);
+    function getAssetPrice() external view returns (int256 price, uint256 timestamp);
+    function getAssetEthTWAP(uint32 duration) external view returns (uint256 price);
+    function getAssetUsdTWAP(uint32 duration) external view returns (uint256 priceUsd18);
     function getAjnaBucketFromV3TWAP(uint32 duration) external view returns (uint256 bucketIndex);
 }
 
@@ -88,13 +88,13 @@ contract OraclePostDeployQa is Script {
         console2.log("oracleCodeSize:", oracle.code.length);
         console2.log("");
 
-        string memory symbol = o.creatorSymbol();
+        string memory symbol = o.assetSymbol();
         address chainlinkFeed = o.chainlinkFeed();
         bool v4Configured = o.v4PoolConfigured();
         bool v3Configured = o.v3PoolConfigured();
 
         console2.log("--- Config ---");
-        console2.log("creatorSymbol:", symbol);
+        console2.log("assetSymbol:", symbol);
         console2.log("chainlinkFeed:", chainlinkFeed);
         console2.log("v4PoolConfigured:", v4Configured);
         console2.log("v3PoolConfigured:", v3Configured);
@@ -137,12 +137,12 @@ contract OraclePostDeployQa is Script {
 
         console2.log("--- Stored Prices ---");
         (int256 ethUsd18, uint256 ethTs) = o.getEthPrice();
-        (int256 creatorUsd18, uint256 creatorTs) = o.getCreatorPrice();
+        (int256 creatorUsd18, uint256 creatorTs) = o.getAssetPrice();
         bool fresh = o.isPriceFresh();
         console2.log("ethUsd1e18:", ethUsd18);
         console2.log("ethPriceTimestamp:", ethTs);
         console2.log("creatorUsd1e18:", creatorUsd18);
-        console2.log("creatorPriceTimestamp:", creatorTs);
+        console2.log("assetPriceTimestamp:", creatorTs);
         console2.log("isPriceFresh:", fresh);
         console2.log("");
 
@@ -184,7 +184,7 @@ contract OraclePostDeployQa is Script {
     }
 
     function _tryCreatorEthTwap(ICreatorOracleQa oracle, uint32 duration) internal view returns (uint256 out) {
-        try oracle.getCreatorEthTWAP(duration) returns (uint256 p) {
+        try oracle.getAssetEthTWAP(duration) returns (uint256 p) {
             return p;
         } catch {
             return 0;
@@ -192,7 +192,7 @@ contract OraclePostDeployQa is Script {
     }
 
     function _tryCreatorUsdTwap(ICreatorOracleQa oracle, uint32 duration) internal view returns (uint256 out) {
-        try oracle.getCreatorUsdTWAP(duration) returns (uint256 p) {
+        try oracle.getAssetUsdTWAP(duration) returns (uint256 p) {
             return p;
         } catch {
             return 0;

@@ -28,7 +28,7 @@ contract MockLaunchOracle {
         ethTimestamp = _ethTimestamp;
     }
 
-    function getCreatorPrice() external view returns (int256 price, uint256 timestamp) {
+    function getAssetPrice() external view returns (int256 price, uint256 timestamp) {
         return (creatorPrice, creatorTimestamp);
     }
 

@@ -137,24 +137,24 @@ contract CreatorOracleTwapSafetyTest is Test {
         oracle.setV4Pool(address(poolManager), key, false);
         oracle.setSwapRecorder(address(this), true);
 
-        // Build enough TWAP history for 30 minutes so updateCreatorPriceFromTWAP(1800) succeeds.
+        // Build enough TWAP history for 30 minutes so updateAssetPriceFromTWAP(1800) succeeds.
         vm.warp(block.timestamp + 1);
         oracle.recordSwapObservation();
         vm.warp(block.timestamp + 1800);
         oracle.recordSwapObservation();
 
         uint32 duration = 1800;
-        uint256 creatorPerEth = oracle.getCreatorEthTWAP(duration);
+        uint256 creatorPerEth = oracle.getAssetEthTWAP(duration);
 
         // Expected: USD/CREATOR = (USD/ETH) / (CREATOR/ETH)
         uint256 ethUsd18 = 2000e18;
         uint256 expectedUsdPerCreator18 = Math.mulDiv(ethUsd18, 1e18, creatorPerEth);
 
-        oracle.initializeCreatorPrice(int256(expectedUsdPerCreator18));
+        oracle.initializeAssetPrice(int256(expectedUsdPerCreator18));
         oracle.setPriceUpdateCooldown(0);
-        oracle.updateCreatorPriceFromTWAP(duration);
+        oracle.updateAssetPriceFromTWAP(duration);
 
-        assertEq(oracle.creatorPriceUSD(), int256(expectedUsdPerCreator18));
+        assertEq(oracle.assetPriceUSD(), int256(expectedUsdPerCreator18));
     }
 
     function test_recordObservation_FirstWriteAdvancesIndexAndInitializesNextSlot() public {
@@ -240,7 +240,7 @@ contract CreatorOracleTwapSafetyTest is Test {
 
         // H-01: auto-updates must not bootstrap; anchor the first price via the owner path.
         // tick = 0 => CREATOR/ETH = 1 => USD/CREATOR = 2000.
-        oracle.initializeCreatorPrice(int256(2000e18));
+        oracle.initializeAssetPrice(int256(2000e18));
         // NOTE: literal instead of a block.timestamp snapshot — via-IR may rematerialize
         // block.timestamp reads across vm.warp calls.
         uint256 initTs = 1_700_000_000;
@@ -253,14 +253,14 @@ contract CreatorOracleTwapSafetyTest is Test {
         vm.warp(block.timestamp + 60);
         oracle.recordSwapObservation();
 
-        assertEq(oracle.creatorPriceTimestamp(), initTs, "auto-update should not write price with <30m history");
+        assertEq(oracle.assetPriceTimestamp(), initTs, "auto-update should not write price with <30m history");
 
         // 3) Once we have >= 30 minutes of history, auto-update should be able to write a price.
         vm.warp(block.timestamp + 1800);
         oracle.recordSwapObservation();
 
-        assertGt(oracle.creatorPriceUSD(), int256(0), "auto-update should write after >=30m history");
-        assertEq(oracle.creatorPriceTimestamp(), block.timestamp);
+        assertGt(oracle.assetPriceUSD(), int256(0), "auto-update should write after >=30m history");
+        assertEq(oracle.assetPriceTimestamp(), block.timestamp);
     }
 
     function test_recordSwapObservation_BaseAutoUpdate_DoesNotBootstrapUninitializedOracle() public {
@@ -284,7 +284,7 @@ contract CreatorOracleTwapSafetyTest is Test {
         oracle.setV4Pool(address(poolManager), key, false);
         oracle.setSwapRecorder(address(this), true);
 
-        // Deliberately no initializeCreatorPrice. Even with >=30m of history and a
+        // Deliberately no initializeAssetPrice. Even with >=30m of history and a
         // fresh Chainlink answer, the auto path must not anchor the first price.
         vm.warp(block.timestamp + 1);
         oracle.recordSwapObservation();
@@ -292,7 +292,7 @@ contract CreatorOracleTwapSafetyTest is Test {
         feed.setLatestAnswer(2000e8, block.timestamp);
         oracle.recordSwapObservation();
 
-        assertEq(oracle.creatorPriceUSD(), int256(0), "auto-update must not bootstrap the oracle (H-01)");
+        assertEq(oracle.assetPriceUSD(), int256(0), "auto-update must not bootstrap the oracle (H-01)");
     }
 
     function test_recordSwapObservation_BaseAutoUpdate_DoesNotBypassMaxDeviation() public {
@@ -320,7 +320,7 @@ contract CreatorOracleTwapSafetyTest is Test {
         oracle.setAutoTunePaused(true);
 
         // H-01: anchor the first price via the owner path (tick = 0 => USD/CREATOR = 2000).
-        oracle.initializeCreatorPrice(int256(2000e18));
+        oracle.initializeAssetPrice(int256(2000e18));
 
         // 1) Establish a baseline price via auto-update at tick = 0 (CREATOR/ETH ~= 1).
         vm.warp(t0 + 1);
@@ -328,7 +328,7 @@ contract CreatorOracleTwapSafetyTest is Test {
         vm.warp(t0 + 1801);
         oracle.recordSwapObservation();
 
-        int256 oldPrice = oracle.creatorPriceUSD();
+        int256 oldPrice = oracle.assetPriceUSD();
         assertGt(oldPrice, int256(0), "baseline price should be set");
 
         // 2) Make Chainlink stale so intermediate auto-updates do not write, while we manipulate observations.
@@ -343,7 +343,7 @@ contract CreatorOracleTwapSafetyTest is Test {
             int24 tick = int24(-int256(i * 100)); // -100 ticks per observation (within default cap=100)
             poolManager.setSlot0Tick(poolId, tick);
             oracle.recordSwapObservation();
-            assertEq(oracle.creatorPriceUSD(), oldPrice, "stale Chainlink should prevent writes");
+            assertEq(oracle.assetPriceUSD(), oldPrice, "stale Chainlink should prevent writes");
         }
 
         // 4) End the fixed 30m window at a much lower tick (hold at -2300), refresh Chainlink, and trigger
@@ -356,7 +356,7 @@ contract CreatorOracleTwapSafetyTest is Test {
 
         // Desired behavior: auto-update should NOT overwrite the stored price with a >MAX deviation jump.
         // (This assertion should fail on the vulnerable implementation.)
-        assertEq(oracle.creatorPriceUSD(), oldPrice);
+        assertEq(oracle.assetPriceUSD(), oldPrice);
     }
 
     function test_tickToPrice_DoesNotOverflowAtValidTickBounds() public {

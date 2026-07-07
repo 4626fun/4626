@@ -319,7 +319,9 @@
       "postcss": "8.5.10",
       "underscore": "1.13.8",
       "ip-address": "10.1.1",
-      "@xmtp/node-bindings": "1.9.1"
+      "@xmtp/node-bindings": "1.9.1",
+      "viem": "2.45.1",
+      "ox": "0.11.3"
     },
     "patchedDependencies": {
       "elliptic@6.6.1": "patches/elliptic@6.6.1.patch",

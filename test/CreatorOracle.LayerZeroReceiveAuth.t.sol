@@ -62,7 +62,7 @@ contract CreatorOracleLayerZeroReceiveAuthTest is Test {
         vm.prank(LZ_ENDPOINT);
         oracle.lzReceive(origin, bytes32(0), payload, address(0), "");
 
-        assertEq(oracle.creatorPriceUSD(), 2e18);
+        assertEq(oracle.assetPriceUSD(), 2e18);
     }
 
     function test_LzReceive_HubEidNonPeerSenderReverts() public {
@@ -94,8 +94,8 @@ contract CreatorOracleLayerZeroReceiveAuthTest is Test {
         vm.prank(LZ_ENDPOINT);
         oracle.lzReceive(origin, bytes32(0), payload1, address(0), "");
 
-        assertEq(oracle.creatorPriceUSD(), 2e18);
-        assertEq(oracle.creatorPriceTimestamp(), t1);
+        assertEq(oracle.assetPriceUSD(), 2e18);
+        assertEq(oracle.assetPriceTimestamp(), t1);
 
         // Attempt to roll back with an older timestamp; should be ignored.
         uint256 t0 = t1 - 1;
@@ -103,8 +103,8 @@ contract CreatorOracleLayerZeroReceiveAuthTest is Test {
         vm.prank(LZ_ENDPOINT);
         oracle.lzReceive(origin, bytes32(0), payload0, address(0), "");
 
-        assertEq(oracle.creatorPriceUSD(), 2e18, "older update should not overwrite price");
-        assertEq(oracle.creatorPriceTimestamp(), t1, "older update should not overwrite timestamp");
+        assertEq(oracle.assetPriceUSD(), 2e18, "older update should not overwrite price");
+        assertEq(oracle.assetPriceTimestamp(), t1, "older update should not overwrite timestamp");
     }
 
     function test_LzReceive_ClampsFutureTimestampToNow() public {
@@ -117,10 +117,10 @@ contract CreatorOracleLayerZeroReceiveAuthTest is Test {
         vm.prank(LZ_ENDPOINT);
         oracle.lzReceive(origin, bytes32(0), payload, address(0), "");
 
-        assertEq(oracle.creatorPriceTimestamp(), nowTs, "timestamp should be clamped to now");
+        assertEq(oracle.assetPriceTimestamp(), nowTs, "timestamp should be clamped to now");
 
         // Ensure the freshness path stays non-reverting (future timestamps can underflow).
-        (int256 price, uint256 ts) = oracle.getCreatorPrice();
+        (int256 price, uint256 ts) = oracle.getAssetPrice();
         assertEq(price, 3e18);
         assertEq(ts, nowTs);
     }

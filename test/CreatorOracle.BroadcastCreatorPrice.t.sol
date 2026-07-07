@@ -77,7 +77,7 @@ contract CreatorOracleBroadcastCreatorPriceTest is Test {
         oracle.setPeer(222, bytes32(uint256(uint160(address(0x2222)))));
         oracle.setPeer(333, bytes32(uint256(uint160(address(0x3333)))));
 
-        oracle.initializeCreatorPrice(int256(2e18));
+        oracle.initializeAssetPrice(int256(2e18));
     }
 
     function test_BroadcastCreatorPrice_MultiSend_UsesDivisibleSplit() public {
@@ -87,7 +87,7 @@ contract CreatorOracleBroadcastCreatorPriceTest is Test {
         dstEids[2] = 333;
 
         vm.expectRevert(CreatorOracle.BroadcastEqualSplitDeprecated.selector);
-        oracle.broadcastCreatorPrice{value: 9}(dstEids, "");
+        oracle.broadcastAssetPrice{value: 9}(dstEids, "");
     }
 
     function test_BroadcastCreatorPrice_RefundsRemainderWhenFeeNotDivisible() public {
@@ -97,7 +97,7 @@ contract CreatorOracleBroadcastCreatorPriceTest is Test {
         dstEids[2] = 333;
 
         vm.expectRevert(CreatorOracle.BroadcastEqualSplitDeprecated.selector);
-        oracle.broadcastCreatorPrice{value: 10}(dstEids, "");
+        oracle.broadcastAssetPrice{value: 10}(dstEids, "");
     }
 
     receive() external payable {}
@@ -105,7 +105,7 @@ contract CreatorOracleBroadcastCreatorPriceTest is Test {
     function test_BroadcastCreatorPrice_RevertsWhenNoDestinations() public {
         uint32[] memory dstEids = new uint32[](0);
         vm.expectRevert(CreatorOracle.BroadcastEqualSplitDeprecated.selector);
-        oracle.broadcastCreatorPrice{value: 0}(dstEids, "");
+        oracle.broadcastAssetPrice{value: 0}(dstEids, "");
     }
 }
 

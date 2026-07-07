@@ -63,7 +63,7 @@ contract LiveMockLotteryOracle {
         updatedAt = block.timestamp;
     }
 
-    function getCreatorPrice() external view returns (int256, uint256) {
+    function getAssetPrice() external view returns (int256, uint256) {
         if (shouldRevert) revert("oracle-revert");
         return (price, updatedAt);
     }

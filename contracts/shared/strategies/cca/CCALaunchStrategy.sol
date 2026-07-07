@@ -16,7 +16,7 @@ import {LiquidityAmounts} from "@uniswap/v4-periphery/src/libraries/LiquidityAmo
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
-import {ICreatorOracle} from "@4626/creator/interfaces/ICreatorOracle.sol";
+import {IOracle4626} from "@4626/shared/interfaces/oracles/IOracle4626.sol";
 import {CCALaunchStrategyConfigModule} from "@4626/shared/strategies/cca/CCALaunchStrategyConfigModule.sol";
 import {CCALaunchStrategyEncodingHelper} from "@4626/shared/strategies/cca/CCALaunchStrategyEncodingHelper.sol";
 import {Plan, StrategyPlanner} from "liquidity-launcher/src/libraries/StrategyPlanner.sol";
@@ -787,7 +787,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
 
         // Configure oracle (Chainlink-style price uses V4 TWAP × Chainlink ETH/USD)
         bool creatorIsToken0 = Currency.unwrap(poolKey.currency0) == address(auctionToken);
-        ICreatorOracle(oracle).setV4Pool(address(poolManager), poolKey, creatorIsToken0);
+        IOracle4626(oracle).setV4Pool(address(poolManager), poolKey, creatorIsToken0);
 
         emit V4PoolConfigured(oracle, Currency.unwrap(poolKey.currency0), Currency.unwrap(poolKey.currency1));
     }

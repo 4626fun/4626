@@ -11,7 +11,7 @@ import {CreatorOracle} from "@4626/creator/oracles/CreatorOracle.sol";
  *         `BroadcastEqualSplitDeprecated` and emits the `BroadcastEqualSplitCallAttempted`
  *         migration-signal event, so off-chain tooling that simulates calls (trace /
  *         call-simulation / estimateGas with the `debug_` APIs) surfaces the migration
- *         path to `broadcastCreatorPriceWithFees`.
+ *         path to `broadcastAssetPriceWithFees`.
  */
 contract MockRegistryForBroadcastFees {
     address public immutable endpoint;
@@ -48,9 +48,9 @@ contract CreatorOracleBroadcastFeesTest is Test {
         MockRegistryForBroadcastFees registry = new MockRegistryForBroadcastFees(LZ_ENDPOINT, HUB_EID);
         oracle = new CreatorOracle(address(registry), address(0), "TEST", address(this));
 
-        // Seed a valid creator price so the legacy entrypoint gets past `creatorPriceUSD <= 0`
+        // Seed a valid creator price so the legacy entrypoint gets past `assetPriceUSD <= 0`
         // and we can prove the deprecation revert fires even when everything else is happy.
-        oracle.initializeCreatorPrice(int256(1e18));
+        oracle.initializeAssetPrice(int256(1e18));
 
         // Authorize self as a price updater so we cover the auth-passed path too.
         oracle.setPriceUpdater(address(this), true);
@@ -70,7 +70,7 @@ contract CreatorOracleBroadcastFeesTest is Test {
 
         // Assert the call reverts with the dedicated error.
         vm.expectRevert(CreatorOracle.BroadcastEqualSplitDeprecated.selector);
-        oracle.broadcastCreatorPrice{value: 0.3 ether}(dstEids, options);
+        oracle.broadcastAssetPrice{value: 0.3 ether}(dstEids, options);
     }
 
     function test_broadcastCreatorPrice_legacyEntrypoint_revertsEvenWithZeroValue() public {
@@ -84,7 +84,7 @@ contract CreatorOracleBroadcastFeesTest is Test {
         emit BroadcastEqualSplitCallAttempted(address(this), 0, dstEids);
 
         vm.expectRevert(CreatorOracle.BroadcastEqualSplitDeprecated.selector);
-        oracle.broadcastCreatorPrice(dstEids, options);
+        oracle.broadcastAssetPrice(dstEids, options);
     }
 
     function test_broadcastCreatorPrice_legacyEntrypoint_revertsBeforeAuthCheck() public {
@@ -102,7 +102,7 @@ contract CreatorOracleBroadcastFeesTest is Test {
 
         vm.prank(stranger);
         vm.expectRevert(CreatorOracle.BroadcastEqualSplitDeprecated.selector);
-        oracle.broadcastCreatorPrice{value: 0.5 ether}(dstEids, options);
+        oracle.broadcastAssetPrice{value: 0.5 ether}(dstEids, options);
     }
 
     function test_broadcastCreatorPriceWithFees_isUnaffected() public {
@@ -120,7 +120,7 @@ contract CreatorOracleBroadcastFeesTest is Test {
         // but critically NOT the deprecation error. Any non-deprecation revert proves
         // the WithFees selector is still the live implementation.
         bool hit = false;
-        try oracle.broadcastCreatorPriceWithFees{value: 0.05 ether}(dstEids, options, fees) {
+        try oracle.broadcastAssetPriceWithFees{value: 0.05 ether}(dstEids, options, fees) {
             hit = true;
         } catch (bytes memory err) {
             // If it reverted with our deprecation selector, the wrong function was called.
