@@ -40,10 +40,7 @@ export function deriveWaitlistXmtpPhase(input: {
   if (input.serviceUnavailable) return 'service_unavailable'
   if (input.localStateResetRequired) return 'local_reset_required'
   if (input.hasGroupConversation) return 'chat_ready'
-  if (
-    input.joinStatus === 'executed' &&
-    (input.xmtpStatus === 'connected' || input.syncTimedOut)
-  ) {
+  if (input.joinStatus === 'executed') {
     return 'group_syncing'
   }
   if (

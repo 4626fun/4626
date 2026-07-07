@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 
 /** True after client mount — avoids wagmi Hydrate setState during SSR/first paint. */
 export function useDeferUntilMounted(): boolean {
@@ -41,4 +41,33 @@ export function useDeferUntilAfterCommit(): boolean {
     deferAfterCommitStore.getSnapshot,
     deferAfterCommitStore.getServerSnapshot,
   )
+}
+
+function createDeferOneMacrotaskStore() {
+  let ready = false
+  const listeners = new Set<() => void>()
+
+  return {
+    subscribe(listener: () => void) {
+      listeners.add(listener)
+      if (!ready) {
+        setTimeout(() => {
+          if (ready) return
+          ready = true
+          for (const listener of listeners) listener()
+        }, 0)
+      }
+      return () => {
+        listeners.delete(listener)
+      }
+    },
+    getSnapshot: () => ready,
+    getServerSnapshot: () => false,
+  }
+}
+
+/** True one macrotask after mount — per-instance deferral for nested provider gates. */
+export function useDeferOneMacrotask(): boolean {
+  const store = useMemo(() => createDeferOneMacrotaskStore(), [])
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot)
 }

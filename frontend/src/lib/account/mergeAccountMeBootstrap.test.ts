@@ -16,6 +16,7 @@ function makePayload(overrides: Partial<AccountSetupMe> = {}): AccountSetupMe {
     accountSignals: {
       linked: false,
       canonicalCswAddress: null,
+      canonicalSource: null,
       baseSubAccount: baseSubAccountNone,
       executionTrack: 'none-yet',
       privyEmbeddedEoaIsOwnerOfCanonicalCsw: null,
@@ -57,6 +58,7 @@ describe('mergeBootstrapSignals (R7: concurrent fetch merge consistency)', () =>
       accountSignals: {
         linked: true,
         canonicalCswAddress: '0xCSW',
+        canonicalSource: null,
         baseSubAccount: { address: '0xPAYLOAD_SUB', registered: true, isDistinctFromCsw: true },
         executionTrack: 'legacy-owner-install',
         privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,

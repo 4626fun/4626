@@ -97,6 +97,10 @@ export type AccountsMePayload = {
      * not been primed yet or the account has no canonical CSW.
      */
     privyEmbeddedEoaIsOwnerOfCanonicalCsw: boolean | null
+    /** How the canonical CSW was resolved (`base_account`, `wallet_sync`, etc.). */
+    canonicalSource: string | null
+    /** Set when bootstrap hydration fails; null when signals are fresh. */
+    walletHydrationError?: string | null
   }
   score: AccountScore
 }
@@ -1095,6 +1099,7 @@ export async function buildAccountsMePayload(params: {
       baseSubAccount: baseSubAccountSummary,
       executionTrack,
       privyEmbeddedEoaIsOwnerOfCanonicalCsw,
+      walletHydrationError: null,
     },
     score,
   }

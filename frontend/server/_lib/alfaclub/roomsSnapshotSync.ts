@@ -545,6 +545,7 @@ export async function syncRoomsSnapshot(
   if (!jwt) {
     return { ...result, reason: 'missing_jwt' }
   }
+  const authJwt: string = jwt
 
   if (options?.full && options?.runIndexer !== false) {
     try {
@@ -563,7 +564,7 @@ export async function syncRoomsSnapshot(
     const frontierRoomIds = await discoverFrontierRoomIds({
       startAfterRoomId:
         indexedRoomIds.length > 0 ? (indexedRoomIds[indexedRoomIds.length - 1] ?? null) : null,
-      jwt,
+      jwt: authJwt,
       httpTimeoutMs: flags.httpTimeoutMs,
       missStreak: flags.frontierMissStreak,
       probeLimit: flags.frontierProbeLimit,
@@ -604,7 +605,7 @@ export async function syncRoomsSnapshot(
 
       const fetched = await fetchRoomDetail({
         roomId: current,
-        jwt,
+        jwt: authJwt,
         httpTimeoutMs: flags.httpTimeoutMs,
       })
       if (!fetched.ok) {

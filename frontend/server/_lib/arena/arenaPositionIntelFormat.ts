@@ -564,7 +564,7 @@ function formatActivityView(details: ArenaPositionIntelDetails): string {
       })
     : rawFills
   ).slice(0, 5)
-  const fillPnlTotal = displayedRawFills.reduce(
+  const fillPnlTotal = displayedRawFills.reduce<number>(
     (sum, entry) => sum + (asFiniteNumber(asObject(entry)?.closedPnl ?? asObject(entry)?.pnl) ?? 0),
     0,
   )

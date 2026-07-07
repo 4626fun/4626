@@ -1769,24 +1769,37 @@ export function XmtpChatProvider({
         }
         return
       }
+      let precheckError: string | null = null
       if (mountedRef.current) {
         if (precheck.reason === 'cooldown') {
-          setStatus('error')
-          setError(`XMTP reconnect is cooling down. Retry in ${precheck.retryInSeconds ?? 1}s.`)
+          precheckError = `XMTP reconnect is cooling down. Retry in ${precheck.retryInSeconds ?? 1}s.`
         } else if (precheck.reason === 'wrong_origin') {
-          setStatus('error')
-          setError(buildWrongOriginConnectError(currentOrigin, canonicalAppOrigin))
+          precheckError = buildWrongOriginConnectError(currentOrigin, canonicalAppOrigin)
         } else if (precheck.reason === 'no_wallet') {
-          setStatus('error')
-          setError(
-            'Messaging signer is not ready yet. Use Connect messaging on the waitlist panel, or restore Privy email sign-in and retry.',
-          )
+          precheckError =
+            'Messaging signer is not ready yet. Use Connect messaging on the waitlist panel, or restore Privy email sign-in and retry.'
         }
+        if (precheckError) {
+          setStatus('error')
+          setError(precheckError)
+        }
+      }
+      if (intent === 'user' && precheck.reason !== 'already_connected' && precheckError) {
+        throw new Error(precheckError)
       }
       return
     }
 
     if (!connectWalletAddress || !connectWalletClient) {
+      const missingWalletError =
+        'Messaging signer is not ready yet. Use Connect messaging on the waitlist panel, or restore Privy email sign-in and retry.'
+      if (intent === 'user') {
+        if (mountedRef.current) {
+          setStatus('error')
+          setError(missingWalletError)
+        }
+        throw new Error(missingWalletError)
+      }
       return
     }
 

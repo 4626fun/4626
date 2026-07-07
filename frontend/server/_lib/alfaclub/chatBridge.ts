@@ -789,6 +789,7 @@ type AlfaClubLiveInboundMessage = {
   date: number
   sender: string
   text: string
+  isBot?: boolean
   attachments: AlfaClubMessageAttachment[]
   replyAttachments: AlfaClubMessageAttachment[]
   rawPayloadText: string | null

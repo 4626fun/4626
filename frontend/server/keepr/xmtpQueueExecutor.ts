@@ -229,7 +229,12 @@ function getEffectiveDbEncryptionKeyForPath(filePath: string): `0x${string}` | u
   return encKey
 }
 
-function resolveKeeprDbIdentityKey(row: QueueAgentRow): string {
+type KeeprDbIdentityRow = Pick<
+  QueueAgentRow,
+  'vaultAddress' | 'canonicalOwnerAddress' | 'creatorAddress' | 'xmtpAgentAddress' | 'agentType' | 'cswAddress'
+>
+
+function resolveKeeprDbIdentityKey(row: KeeprDbIdentityRow): string {
   const candidates =
     row.agentType === 'csw'
       ? [row.cswAddress, row.xmtpAgentAddress, row.creatorAddress, row.canonicalOwnerAddress, row.vaultAddress]

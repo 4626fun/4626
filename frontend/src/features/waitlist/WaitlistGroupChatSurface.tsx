@@ -294,7 +294,7 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
                 >
                   Refresh
                 </Button>
-                {identityMismatch || syncTimedOut ? (
+                {identityMismatch || syncTimedOut || !messagingConnected ? (
                   <Button type="button" variant="secondary" size="sm" onClick={() => void reconnectMessaging()}>
                     Reconnect messaging
                   </Button>

@@ -157,6 +157,7 @@ export function mergeBootstrapSignals(
       accountSignals: {
         linked: baseSignals?.linked ?? false,
         canonicalCswAddress: baseSignals?.canonicalCswAddress ?? bootstrap.canonicalCswAddress ?? null,
+        canonicalSource: baseSignals?.canonicalSource ?? null,
         creatorCoin: baseSignals?.creatorCoin ?? null,
         zoraHandle: baseSignals?.zoraHandle ?? null,
         basename: baseSignals?.basename ?? null,

@@ -2591,6 +2591,8 @@ export async function executeHermitCommand(
   const userPreferences: HermitUserPreferences | null = params.userPreferences ?? null
 
   if (command === '/strategy' || command === '/s') {
+    const runtime = readCounterTradeRuntimeConfig()
+    const roomId = params.roomId ?? runtime.roomId
     const parsed = parseStrategyCommandArgs(args)
     if (!parsed) {
       return {
@@ -2603,9 +2605,6 @@ export async function executeHermitCommand(
         ].join('\n\n'),
       }
     }
-
-    const runtime = readCounterTradeRuntimeConfig()
-    const roomId = params.roomId ?? runtime.roomId
     if (!arenaCommandAllowedForRoom(roomId)) {
       return {
         kind: 'hermit',

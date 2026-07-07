@@ -1,4 +1,4 @@
-import { createConfig, fallback, http, type Config } from 'wagmi'
+import { createConfig, fallback, http } from 'wagmi'
 import { base } from 'viem/chains'
 import { coinbaseWallet } from 'wagmi/connectors'
 
@@ -32,7 +32,7 @@ const BASE_READ_RPC_URLS = [
  * synthetic injected connector at connect time (see prepareWaitlistMessagingWallet).
  * Base App direct is the only track that mounts Coinbase Wallet SDK connectors.
  */
-export function createWaitlistMessagingWagmiConfig(connectTrack: WaitlistConnectTrack): Config {
+export function createWaitlistMessagingWagmiConfig(connectTrack: WaitlistConnectTrack) {
   const connectors =
     connectTrack === 'base-app-direct'
       ? [

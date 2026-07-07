@@ -24,6 +24,7 @@ export type AccountCreatorCoin = {
 export type AccountSignals = {
   linked: boolean
   canonicalCswAddress: string | null
+  canonicalSource: string | null
   baseSubAccount: {
     address: string | null
     registered: boolean
@@ -37,6 +38,7 @@ export type AccountSignals = {
   primaryWalletAddress: string | null
   embeddedEoaAddress: string | null
   lastResolvedAt: string | null
+  walletHydrationError?: string | null
 }
 
 export type AccountSetupMe = {

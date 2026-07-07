@@ -18,9 +18,15 @@ export function isWaitlistMessagingWagmiConnector(connectorId: string | null | u
   return id === WAITLIST_EMBEDDED_CONNECTOR_ID || id.includes('privy')
 }
 
-export function isXmtpMessagingWagmiConnector(connector: unknown): boolean {
-  if (isCoinbaseWalletConnector(connector)) return true
-  const connectorId = (connector as Connector | null | undefined)?.id
+export function isXmtpMessagingWagmiConnector(connectorOrId: unknown): boolean {
+  if (typeof connectorOrId === 'string') {
+    const id = connectorOrId.trim().toLowerCase()
+    if (!id) return false
+    if (id.includes('coinbase')) return true
+    return isWaitlistMessagingWagmiConnector(id)
+  }
+  if (isCoinbaseWalletConnector(connectorOrId)) return true
+  const connectorId = (connectorOrId as Connector | null | undefined)?.id
   return isWaitlistMessagingWagmiConnector(connectorId)
 }
 
