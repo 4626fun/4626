@@ -44,7 +44,7 @@ import {V4LiquidityAmounts} from "@4626/shared/libraries/uniswap/V4LiquidityAmou
  *      Prevents flash loan attacks by comparing spot price to time-weighted average
  *
  * @dev INTEGRATION:
- *      - Plugs into lane-specific LPManager (e.g. CreatorLPManager)
+ *      - Plugs into OVaultLPManager (shared univ4 orchestrator)
  *      - Most capital efficient but highest maintenance
  */
 

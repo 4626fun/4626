@@ -23,6 +23,8 @@ export async function probeGreenfieldPhase1Deploy(params: {
   shareOftInitCode: Hex
   shareSymbol: string
   wrapperBytecode: Hex
+  vaultSaltLabel?: 'vault' | 'agentVault'
+  wrapperSaltLabel?: 'wrapper' | 'agentWrapper'
 }): Promise<boolean> {
   const baseSalt = deriveDeployBaseSalt({
     creatorToken: params.creatorToken,
@@ -30,8 +32,8 @@ export async function probeGreenfieldPhase1Deploy(params: {
     chainId: params.chainId,
     version: params.deploymentVersion,
   })
-  const vaultSalt = saltForDeployLabel(baseSalt, 'vault')
-  const wrapperSalt = saltForDeployLabel(baseSalt, 'wrapper')
+  const vaultSalt = saltForDeployLabel(baseSalt, params.vaultSaltLabel ?? 'vault')
+  const wrapperSalt = saltForDeployLabel(baseSalt, params.wrapperSaltLabel ?? 'wrapper')
   const shareSalt = deriveShareOftSaltFromVersion({
     owner: params.owner,
     shareSymbol: params.shareSymbol,

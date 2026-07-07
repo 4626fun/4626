@@ -11,6 +11,15 @@ import {
 
 import { DEPLOY_BYTECODE } from '@/deploy/bytecode.generated'
 import type { CreatorVaultBatcherInfra } from '@/lib/deploy/creatorVaultBatcherInfra'
+import {
+  resolveDeployLaneGaugeBytecode,
+  resolveDeployLaneOracleBytecode,
+  resolveDeployLanePayoutRouterBytecode,
+  resolveDeployLaneWrapperBytecode,
+  resolveDeployLaneWrapperSaltLabel,
+  usesCreatorCoinPolicyController,
+} from '@/lib/deploy/deployLaneBytecode'
+import type { VaultKind } from '@/lib/onchain/agentTokenIntegration'
 import type { DeployVanityPlan } from '@/lib/deploy/resolveDeployVanityPlan'
 import {
   deriveCreatorCoinPolicyControllerSalt,
@@ -72,11 +81,20 @@ export type ResolveDeployExpectedAddressesParams = {
   vaultShareBurnStreamCodeId: Hex
   payoutRouterCodeId: Hex
   creatorCoinPolicyControllerCodeId: Hex
+  vaultKind?: VaultKind
 }
 
 export async function resolveDeployExpectedAddresses(
   params: ResolveDeployExpectedAddressesParams,
 ): Promise<ResolveDeployExpectedAddressesResult> {
+  const vaultKind = params.vaultKind ?? 'creator'
+  const wrapperSaltLabel = resolveDeployLaneWrapperSaltLabel(vaultKind)
+  const wrapperBytecode = resolveDeployLaneWrapperBytecode(vaultKind)
+  const gaugeBytecode = resolveDeployLaneGaugeBytecode(vaultKind)
+  const oracleBytecode = resolveDeployLaneOracleBytecode(vaultKind)
+  const payoutRouterBytecode = resolveDeployLanePayoutRouterBytecode(vaultKind)
+  const includePolicyController = usesCreatorCoinPolicyController(vaultKind)
+
   const create2Deployer = params.batcherInfra.create2Deployer
   const protocolTreasury = params.batcherInfra.protocolTreasury
   const registryAddress = params.batcherInfra.registry
@@ -98,7 +116,7 @@ export async function resolveDeployExpectedAddresses(
     chainId: params.chainId,
     version: deploymentVersionUsed,
   })
-  const wrapperSalt = saltForDeployLabel(baseSalt, 'wrapper')
+  const wrapperSalt = saltForDeployLabel(baseSalt, wrapperSaltLabel)
   const gaugeSalt = saltForDeployLabel(baseSalt, 'gauge')
   const ccaSalt = saltForDeployLabel(baseSalt, 'cca')
   const oracleSalt = saltForDeployLabel(baseSalt, 'oracle')
@@ -120,7 +138,7 @@ export async function resolveDeployExpectedAddresses(
     vaultAddress,
     tempOwner,
   ])
-  const wrapperInitCode = concatHex([DEPLOY_BYTECODE.CreatorOVaultWrapper as Hex, wrapperArgs])
+  const wrapperInitCode = concatHex([wrapperBytecode, wrapperArgs])
   const wrapperAddress = predictCreate2AddressFromInitCode({
     create2Deployer,
     salt: wrapperSalt,
@@ -164,26 +182,28 @@ export async function resolveDeployExpectedAddresses(
           ZERO_ADDRESS,
         ],
       )
-      const init = concatHex([DEPLOY_BYTECODE.CreatorPayoutRouter as Hex, args])
+      const init = concatHex([payoutRouterBytecode, args])
       return predictCreate2AddressFromInitCode({
         create2Deployer,
         salt: payoutRouterSalt,
         initCode: init,
       })
     })()
-    let creatorCoinPolicyControllerAddress = (() => {
-      const args = encodeAbiParameters(parseAbiParameters('address,address,address'), [
-        params.creatorToken,
-        payoutRouterAddress,
-        protocolTreasury,
-      ])
-      const init = concatHex([DEPLOY_BYTECODE.CreatorCoinPolicyController as Hex, args])
-      return predictCreate2AddressFromInitCode({
-        create2Deployer,
-        salt: creatorCoinPolicyControllerSalt,
-        initCode: init,
-      })
-    })()
+    let creatorCoinPolicyControllerAddress = includePolicyController
+      ? (() => {
+          const args = encodeAbiParameters(parseAbiParameters('address,address,address'), [
+            params.creatorToken,
+            payoutRouterAddress,
+            protocolTreasury,
+          ])
+          const init = concatHex([DEPLOY_BYTECODE.CreatorCoinPolicyController as Hex, args])
+          return predictCreate2AddressFromInitCode({
+            create2Deployer,
+            salt: creatorCoinPolicyControllerSalt,
+            initCode: init,
+          })
+        })()
+      : ZERO_ADDRESS
 
     try {
       const BYTECODE_STORE_GET_ABI = [
@@ -216,12 +236,14 @@ export async function resolveDeployExpectedAddresses(
             functionName: 'get',
             args: [params.payoutRouterCodeId],
           }),
-          params.publicClient.readContract({
-            address: bytecodeStore,
-            abi: BYTECODE_STORE_GET_ABI,
-            functionName: 'get',
-            args: [params.creatorCoinPolicyControllerCodeId],
-          }),
+          includePolicyController
+            ? params.publicClient.readContract({
+                address: bytecodeStore,
+                abi: BYTECODE_STORE_GET_ABI,
+                functionName: 'get',
+                args: [params.creatorCoinPolicyControllerCodeId],
+              })
+            : Promise.resolve('0x' as Hex),
         ])) as [Hex, Hex, Hex]
 
         const burnInitHash = keccak256(concatHex([burnCreation as Hex, burnStreamArgs]))
@@ -252,19 +274,23 @@ export async function resolveDeployExpectedAddresses(
           bytecodeHash: routerInitHash,
         })
 
-        const policyControllerArgsFixed = encodeAbiParameters(parseAbiParameters('address,address,address'), [
-          params.creatorToken,
-          payoutRouterAddress,
-          protocolTreasury,
-        ])
-        const policyControllerInitHash = keccak256(
-          concatHex([policyControllerCreation as Hex, policyControllerArgsFixed]),
-        )
-        creatorCoinPolicyControllerAddress = getCreate2Address({
-          from: create2Deployer,
-          salt: creatorCoinPolicyControllerSalt,
-          bytecodeHash: policyControllerInitHash,
-        })
+        if (includePolicyController) {
+          const policyControllerArgsFixed = encodeAbiParameters(parseAbiParameters('address,address,address'), [
+            params.creatorToken,
+            payoutRouterAddress,
+            protocolTreasury,
+          ])
+          const policyControllerInitHash = keccak256(
+            concatHex([policyControllerCreation as Hex, policyControllerArgsFixed]),
+          )
+          creatorCoinPolicyControllerAddress = getCreate2Address({
+            from: create2Deployer,
+            salt: creatorCoinPolicyControllerSalt,
+            bytecodeHash: policyControllerInitHash,
+          })
+        } else {
+          creatorCoinPolicyControllerAddress = ZERO_ADDRESS
+        }
       }
     } catch {
       // Best-effort: fall back to local bytecode predictions
@@ -283,7 +309,7 @@ export async function resolveDeployExpectedAddresses(
     protocolTreasury,
     tempOwner,
   ])
-  const gaugeInitCode = concatHex([DEPLOY_BYTECODE.CreatorGaugeController as Hex, gaugeArgs])
+  const gaugeInitCode = concatHex([gaugeBytecode, gaugeArgs])
   const gaugeAddress = predictCreate2AddressFromInitCode({
     create2Deployer,
     salt: gaugeSalt,
@@ -310,7 +336,7 @@ export async function resolveDeployExpectedAddresses(
     shareSymbolLower,
     tempOwner,
   ])
-  const oracleInitCode = concatHex([DEPLOY_BYTECODE.CreatorOracle as Hex, oracleArgs])
+  const oracleInitCode = concatHex([oracleBytecode, oracleArgs])
   const oracleAddress = predictCreate2AddressFromInitCode({
     create2Deployer,
     salt: oracleSalt,

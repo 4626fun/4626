@@ -485,13 +485,13 @@ describe('buildAccountsMePayload', () => {
     expect(payload.accountSignals.executionTrack).toBe('base-app-direct')
     expect(payload.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw).toBe(false)
     expect(payload.accountSignals.baseSubAccount).toEqual({
-      address: SUB_ACCOUNT,
-      isDistinctFromCsw: true,
-      registered: true,
+      address: null,
+      isDistinctFromCsw: false,
+      registered: false,
     })
   })
 
-  it("trusts counterfactual baseapp_waitlist CIEC rows for executionTrack even without bytecode", async () => {
+  it('does not surface legacy persisted sub-accounts on /accounts/me', async () => {
     const CANONICAL_CSW = '0x00000000000000000000000000000000000000aa'
     const EMBEDDED_EOA = '0x00000000000000000000000000000000000000bb'
     const SUB_ACCOUNT = '0x00000000000000000000000000000000000000dd'
@@ -608,9 +608,9 @@ describe('buildAccountsMePayload', () => {
 
     expect(payload.accountSignals.executionTrack).toBe('base-app-direct')
     expect(payload.accountSignals.baseSubAccount).toEqual({
-      address: SUB_ACCOUNT,
-      isDistinctFromCsw: true,
-      registered: true,
+      address: null,
+      isDistinctFromCsw: false,
+      registered: false,
     })
   })
 

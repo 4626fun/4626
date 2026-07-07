@@ -13,6 +13,7 @@ import {
 } from './useWaitlistChatJoin'
 import { useWaitlistXmtpStatus } from './useWaitlistXmtpStatus'
 import { WaitlistGroupChatSurface } from './WaitlistGroupChatSurface'
+import { WaitlistMessagingWalletProviders } from './WaitlistMessagingWalletProviders'
 import type { WaitlistConnectTrack } from './waitlistFlowState'
 
 type WaitlistGroupChatPanelProps = {
@@ -50,26 +51,35 @@ function WaitlistGroupChatPanelInner(props: WaitlistGroupChatPanelProps) {
   const identityHintAddress = chatConfig?.xmtpMemberAddress ?? null
 
   return (
-    <AccountContextProvider>
-      <XmtpChatProvider identityHintAddress={identityHintAddress} manualConnectOnly>
-        {statusQuery.isLoading && !chatConfig ? (
-          <WaitlistChatSection layout={layout}>
-            <LoadingInline labelOverride="Loading waitlist chat…" />
-          </WaitlistChatSection>
-        ) : (
-          <WaitlistGroupChatPanelBody
-            messagingReady={messagingReady}
-            connectTrack={connectTrack}
-            statusQuery={statusQuery}
-            layout={layout}
-            onSignOut={onSignOut}
-            signOutBusy={signOutBusy}
-            onRepairSession={onRepairSession}
-            repairBusy={repairBusy}
-          />
-        )}
-      </XmtpChatProvider>
-    </AccountContextProvider>
+    <WaitlistMessagingWalletProviders
+      connectTrack={connectTrack}
+      fallback={
+        <WaitlistChatSection layout={layout}>
+          <LoadingInline labelOverride="Loading waitlist chat…" />
+        </WaitlistChatSection>
+      }
+    >
+      <AccountContextProvider>
+        <XmtpChatProvider identityHintAddress={identityHintAddress} manualConnectOnly>
+          {statusQuery.isLoading && !chatConfig ? (
+            <WaitlistChatSection layout={layout}>
+              <LoadingInline labelOverride="Loading waitlist chat…" />
+            </WaitlistChatSection>
+          ) : (
+            <WaitlistGroupChatPanelBody
+              messagingReady={messagingReady}
+              connectTrack={connectTrack}
+              statusQuery={statusQuery}
+              layout={layout}
+              onSignOut={onSignOut}
+              signOutBusy={signOutBusy}
+              onRepairSession={onRepairSession}
+              repairBusy={repairBusy}
+            />
+          )}
+        </XmtpChatProvider>
+      </AccountContextProvider>
+    </WaitlistMessagingWalletProviders>
   )
 }
 

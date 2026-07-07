@@ -24,7 +24,7 @@ contracts/
 │   ├── lottery/       4626LotteryManager + VRF + randomness (shared singleton)
 │   ├── recovery/      Impairment claims + recovery escrow (vault-agnostic, both lanes)
 │   ├── revenue/       VaultShareBurnStream (both lanes point burnStream here)
-│   ├── strategies/    Reusable yield strategies (Ajna, CCA, Univ3/4, etc.)
+│   ├── strategies/    Reusable yield strategies (Ajna, CCA, Univ3/4, OVaultLPManager, etc.)
 │   ├── vault/         OVaultHubComposer + lane-shared vault modules/
 │   └── vesting/       LinearVesting4626
 ├── agent/
@@ -36,7 +36,6 @@ contracts/
 │   ├── interfaces/    ICreatorOVault, ICreatorGaugeController (+ lane vault composer consumers import `shared/interfaces/vault/IOVaultComposer.sol`)
 │   ├── vault/         (CreatorOVault + core module + CreatorShareOFT)
 │   ├── revenue/
-│   ├── strategies/    CreatorLPManager (V4 LP manager for creator-lane ShareOFT)
 │   └── oracles/
 └── other/
     └── alfaclub/

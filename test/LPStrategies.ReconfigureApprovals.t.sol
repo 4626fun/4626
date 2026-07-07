@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {CreatorLPManager} from "@4626/creator/strategies/CreatorLPManager.sol";
+import {OVaultLPManager} from "@4626/shared/strategies/univ4/OVaultLPManager.sol";
 import {ConcentratedStrategy} from "@4626/shared/strategies/univ4/ConcentratedStrategy.sol";
 import {LimitOrderStrategy} from "@4626/shared/strategies/univ4/LimitOrderStrategy.sol";
 import {FullRangeStrategy} from "@4626/shared/strategies/univ4/FullRangeStrategy.sol";
@@ -314,20 +314,20 @@ contract LPStrategiesReconfigureApprovalsTest is Test {
         strat.reconfigureApprovals(positionManagerAlt, address(0));
     }
 
-    function test_CreatorLPManager_ConfigurePool_IsOneTimeOnly() external {
-        CreatorLPManager strat =
-            new CreatorLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+    function test_OVaultLPManager_ConfigurePool_IsOneTimeOnly() external {
+        OVaultLPManager strat =
+            new OVaultLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
 
         strat.configurePool(poolManager, positionManager, address(permit2), _poolKey());
         _assertConfigured(address(strat), address(permit2), permit2, positionManager);
 
-        vm.expectRevert(CreatorLPManager.PoolAlreadyConfigured.selector);
+        vm.expectRevert(OVaultLPManager.PoolAlreadyConfigured.selector);
         strat.configurePool(poolManager, positionManagerAlt, address(permit2Alt), _poolKey());
     }
 
-    function test_CreatorLPManager_ReconfigureApprovals_RotatesTargetsAndRevokesOld() external {
-        CreatorLPManager strat =
-            new CreatorLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+    function test_OVaultLPManager_ReconfigureApprovals_RotatesTargetsAndRevokesOld() external {
+        OVaultLPManager strat =
+            new OVaultLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
 
         strat.configurePool(poolManager, positionManager, address(permit2), _poolKey());
         _assertConfigured(address(strat), address(permit2), permit2, positionManager);
@@ -340,9 +340,9 @@ contract LPStrategiesReconfigureApprovalsTest is Test {
         assertEq(strat.permit2(), address(permit2Alt));
     }
 
-    function test_CreatorLPManager_ReconfigureApprovals_RevertsForNonOwner() external {
-        CreatorLPManager strat =
-            new CreatorLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+    function test_OVaultLPManager_ReconfigureApprovals_RevertsForNonOwner() external {
+        OVaultLPManager strat =
+            new OVaultLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
 
         strat.configurePool(poolManager, positionManager, address(permit2), _poolKey());
 
@@ -351,31 +351,31 @@ contract LPStrategiesReconfigureApprovalsTest is Test {
         strat.reconfigureApprovals(positionManagerAlt, address(permit2Alt));
     }
 
-    function test_CreatorLPManager_ReconfigureApprovals_RevertsWhenPoolNotConfigured() external {
-        CreatorLPManager strat =
-            new CreatorLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+    function test_OVaultLPManager_ReconfigureApprovals_RevertsWhenPoolNotConfigured() external {
+        OVaultLPManager strat =
+            new OVaultLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
 
-        vm.expectRevert(CreatorLPManager.PoolNotConfigured.selector);
+        vm.expectRevert(OVaultLPManager.PoolNotConfigured.selector);
         strat.reconfigureApprovals(positionManagerAlt, address(permit2Alt));
     }
 
-    function test_CreatorLPManager_ReconfigureApprovals_RevertsOnZeroPositionManager() external {
-        CreatorLPManager strat =
-            new CreatorLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+    function test_OVaultLPManager_ReconfigureApprovals_RevertsOnZeroPositionManager() external {
+        OVaultLPManager strat =
+            new OVaultLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
 
         strat.configurePool(poolManager, positionManager, address(permit2), _poolKey());
 
-        vm.expectRevert(CreatorLPManager.ZeroAddress.selector);
+        vm.expectRevert(OVaultLPManager.ZeroAddress.selector);
         strat.reconfigureApprovals(address(0), address(permit2Alt));
     }
 
-    function test_CreatorLPManager_ReconfigureApprovals_RevertsOnZeroPermit2() external {
-        CreatorLPManager strat =
-            new CreatorLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+    function test_OVaultLPManager_ReconfigureApprovals_RevertsOnZeroPermit2() external {
+        OVaultLPManager strat =
+            new OVaultLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
 
         strat.configurePool(poolManager, positionManager, address(permit2), _poolKey());
 
-        vm.expectRevert(CreatorLPManager.ZeroAddress.selector);
+        vm.expectRevert(OVaultLPManager.ZeroAddress.selector);
         strat.reconfigureApprovals(positionManagerAlt, address(0));
     }
 
@@ -405,11 +405,11 @@ contract LPStrategiesReconfigureApprovalsTest is Test {
         strat.configurePool(poolManager, positionManager, address(permit2), _poolKeyWithHook(address(unapprovedHook)));
     }
 
-    function test_CreatorLPManager_RevertsWhenHookNotApproved() external {
-        CreatorLPManager strat =
-            new CreatorLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+    function test_OVaultLPManager_RevertsWhenHookNotApproved() external {
+        OVaultLPManager strat =
+            new OVaultLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
 
-        vm.expectRevert(abi.encodeWithSelector(CreatorLPManager.HookNotApproved.selector, address(unapprovedHook)));
+        vm.expectRevert(abi.encodeWithSelector(OVaultLPManager.HookNotApproved.selector, address(unapprovedHook)));
         strat.configurePool(poolManager, positionManager, address(permit2), _poolKeyWithHook(address(unapprovedHook)));
     }
 }

@@ -25,6 +25,7 @@ import {
   resolveAlignedPhase1DeployDeps,
   resolveBytecodeStoreForBatcher,
   resolveCreate2DeployerForBatcher,
+  resolveAgentVaultCoreModule,
   resolveWiredCreatorOvaultModules,
 } from '../../../../../src/lib/deploy/phase1ModuleDeploy.js'
 import { assertShareBridgeOftWiringForFinalize } from '../../../../../src/lib/deploy/shareBridgeOftWiring.js'
@@ -76,7 +77,12 @@ import {
 } from '../../../../../src/config/contracts.defaults.js'
 import { deploymentBatcherNotConfiguredMessage } from '../../../../../server/_lib/onchain/deploymentBatcherConfigError.js'
 import { assertDeploySessionPhaseBoundaries } from '../../../../../server/_lib/deploy/deploySessionPhaseBoundaries.js'
-import { DEPLOY_BYTECODE } from '../../../../../src/deploy/bytecode.generated.js'
+import {
+  fromOnchainVaultKind,
+  resolveDeployLaneCoreModuleKind,
+  resolveDeployLanePhase1CodeIds,
+} from '../../../../../src/lib/deploy/deployLaneBytecode.js'
+import type { VaultKind } from '../../../../../src/lib/onchain/agentTokenIntegration.js'
 
 export type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -193,21 +199,11 @@ const PHASE1_WITH_SALT_SELECTORS = new Set<string>([
 const BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR = 'e7fdf838'
 const UNIVERSAL_CREATE2_FACTORY = '0x4e59b44847b379578588920ca78fbf26c0b4956c'
 const EXPECTED_VAULT_MODULE_STORAGE_VERSION = keccak256(encodePacked(['string'], ['OVaultModuleStorage.v3']))
-const EXPECTED_VAULT_CORE_MODULE_KIND = keccak256(encodePacked(['string'], ['CreatorOVaultModule.core']))
 const EXPECTED_VAULT_STRATEGIES_MODULE_KIND = keccak256(encodePacked(['string'], ['OVaultModule.strategies']))
 const EXPECTED_VAULT_ADMIN_MODULE_KIND = keccak256(encodePacked(['string'], ['OVaultModule.admin']))
 const DEFAULT_FREE_VAULT_VANITY_PREFIX = '4626'
 const DEFAULT_FREE_SHARE_VANITY_SUFFIX = '4626'
 const DEFAULT_DEPLOY_VANITY_CUSTOM_MAX_HEX = 5
-const PHASE1_EXPECTED_CODE_IDS = {
-  vault: keccak256(DEPLOY_BYTECODE.CreatorOVault as Hex),
-  wrapper: keccak256(DEPLOY_BYTECODE.CreatorOVaultWrapper as Hex),
-  shareOFT: keccak256(DEPLOY_BYTECODE.CreatorShareOFT as Hex),
-  gauge: keccak256(DEPLOY_BYTECODE.CreatorGaugeController as Hex),
-  cca: keccak256(DEPLOY_BYTECODE.CCALaunchStrategy as Hex),
-  oracle: keccak256(DEPLOY_BYTECODE.CreatorOracle as Hex),
-  oftBootstrap: keccak256(DEPLOY_BYTECODE.OFTBootstrapRegistry as Hex),
-} as const
 
 const PHASE1_PARAMS_COMPONENTS = [
   { name: 'creatorToken', type: 'address' },
@@ -217,6 +213,7 @@ const PHASE1_PARAMS_COMPONENTS = [
   { name: 'shareName', type: 'string' },
   { name: 'shareSymbol', type: 'string' },
   { name: 'version', type: 'string' },
+  { name: 'vaultKind', type: 'uint8' },
 ] as const
 
 const PHASE1_CODE_IDS_COMPONENTS = [
@@ -978,18 +975,75 @@ type Phase1CodeIdsTuple = {
   oftBootstrap?: Hex
 } | null
 
-function normalizePhase1CodeIdsTuple(codeIds: Phase1CodeIdsTuple): { codeIds: Phase1CodeIdsTuple; changed: boolean } {
+function extractVaultKindFromPhase1Params(params: unknown): VaultKind {
+  if (!params || typeof params !== 'object') return 'creator'
+  const record = params as Record<string | number, unknown>
+  const raw = record.vaultKind ?? record[7]
+  return fromOnchainVaultKind(raw)
+}
+
+function decodePhase1ParamsFromCallData(data: Hex): unknown | null {
+  const raw = typeof data === 'string' ? data.trim() : ''
+  if (!raw.startsWith('0x') || raw.length < 10) return null
+  const selector = raw.slice(0, 10).toLowerCase()
+  try {
+    if (selector === PHASE1_SELECTOR_DEPLOY) {
+      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_ABI, data: raw as Hex })
+      return decoded.args?.[0] ?? null
+    }
+    if (selector === PHASE1_SELECTOR_CORE) {
+      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_ABI, data: raw as Hex })
+      return decoded.args?.[0] ?? null
+    }
+    if (selector === PHASE1_SELECTOR_FINALIZE) {
+      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_ABI, data: raw as Hex })
+      return decoded.args?.[0] ?? null
+    }
+    if (selector === PHASE1_SELECTOR_DEPLOY_WITH_SALT) {
+      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI, data: raw as Hex })
+      return decoded.args?.[0] ?? null
+    }
+    if (selector === PHASE1_SELECTOR_CORE_WITH_SALT) {
+      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI, data: raw as Hex })
+      return decoded.args?.[0] ?? null
+    }
+    if (selector === PHASE1_SELECTOR_FINALIZE_WITH_SALT) {
+      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI, data: raw as Hex })
+      return decoded.args?.[0] ?? null
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+function extractPhase1VaultKindFromCalls(calls: Call[]): VaultKind {
+  if (!Array.isArray(calls) || calls.length === 0) return 'creator'
+  for (const call of calls) {
+    const data = typeof call?.data === 'string' ? (call.data.trim() as Hex) : null
+    if (!data) continue
+    const params = decodePhase1ParamsFromCallData(data)
+    if (params) return extractVaultKindFromPhase1Params(params)
+  }
+  return 'creator'
+}
+
+function normalizePhase1CodeIdsTuple(
+  codeIds: Phase1CodeIdsTuple,
+  vaultKind: VaultKind,
+): { codeIds: Phase1CodeIdsTuple; changed: boolean } {
   if (!codeIds || typeof codeIds !== 'object') return { codeIds, changed: false }
   let changed = false
   const normalized: Record<string, unknown> = { ...codeIds }
-  const entries: Array<[keyof typeof PHASE1_EXPECTED_CODE_IDS, Hex]> = [
-    ['vault', PHASE1_EXPECTED_CODE_IDS.vault],
-    ['wrapper', PHASE1_EXPECTED_CODE_IDS.wrapper],
-    ['shareOFT', PHASE1_EXPECTED_CODE_IDS.shareOFT],
-    ['gauge', PHASE1_EXPECTED_CODE_IDS.gauge],
-    ['cca', PHASE1_EXPECTED_CODE_IDS.cca],
-    ['oracle', PHASE1_EXPECTED_CODE_IDS.oracle],
-    ['oftBootstrap', PHASE1_EXPECTED_CODE_IDS.oftBootstrap],
+  const expected = resolveDeployLanePhase1CodeIds(vaultKind)
+  const entries: Array<[keyof typeof expected, Hex]> = [
+    ['vault', expected.vault],
+    ['wrapper', expected.wrapper],
+    ['shareOFT', expected.shareOFT],
+    ['gauge', expected.gauge],
+    ['cca', expected.cca],
+    ['oracle', expected.oracle],
+    ['oftBootstrap', expected.oftBootstrap],
   ]
   for (const [label, expected] of entries) {
     const current = normalized[label]
@@ -1009,7 +1063,8 @@ function rewritePhase1CallCodeIdsToCurrent(call: Call): Call {
     if (selector === PHASE1_SELECTOR_DEPLOY) {
       const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_ABI, data: data as Hex })
       const params = decoded.args?.[0]
-      const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple)
+      const vaultKind = extractVaultKindFromPhase1Params(params)
+      const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple, vaultKind)
       if (!params || !codeIds || !changed) return call
       return {
         ...call,
@@ -1023,7 +1078,8 @@ function rewritePhase1CallCodeIdsToCurrent(call: Call): Call {
     if (selector === PHASE1_SELECTOR_CORE) {
       const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_ABI, data: data as Hex })
       const params = decoded.args?.[0]
-      const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple)
+      const vaultKind = extractVaultKindFromPhase1Params(params)
+      const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple, vaultKind)
       if (!params || !codeIds || !changed) return call
       return {
         ...call,
@@ -1037,7 +1093,8 @@ function rewritePhase1CallCodeIdsToCurrent(call: Call): Call {
     if (selector === PHASE1_SELECTOR_FINALIZE) {
       const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_ABI, data: data as Hex })
       const params = decoded.args?.[0]
-      const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple)
+      const vaultKind = extractVaultKindFromPhase1Params(params)
+      const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple, vaultKind)
       if (!params || !codeIds || !changed) return call
       return {
         ...call,
@@ -1051,7 +1108,8 @@ function rewritePhase1CallCodeIdsToCurrent(call: Call): Call {
     if (selector === PHASE1_SELECTOR_DEPLOY_WITH_SALT) {
       const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI, data: data as Hex })
       const params = decoded.args?.[0]
-      const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple)
+      const vaultKind = extractVaultKindFromPhase1Params(params)
+      const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple, vaultKind)
       const shareOftSaltOverride = decoded.args?.[2] as Hex | undefined
       if (!params || !codeIds || typeof shareOftSaltOverride !== 'string' || !changed) return call
       return {
@@ -1066,7 +1124,8 @@ function rewritePhase1CallCodeIdsToCurrent(call: Call): Call {
     if (selector === PHASE1_SELECTOR_CORE_WITH_SALT) {
       const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI, data: data as Hex })
       const params = decoded.args?.[0]
-      const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple)
+      const vaultKind = extractVaultKindFromPhase1Params(params)
+      const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple, vaultKind)
       const shareOftSaltOverride = decoded.args?.[2] as Hex | undefined
       if (!params || !codeIds || typeof shareOftSaltOverride !== 'string' || !changed) return call
       return {
@@ -1081,7 +1140,8 @@ function rewritePhase1CallCodeIdsToCurrent(call: Call): Call {
     if (selector === PHASE1_SELECTOR_FINALIZE_WITH_SALT) {
       const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI, data: data as Hex })
       const params = decoded.args?.[0]
-      const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple)
+      const vaultKind = extractVaultKindFromPhase1Params(params)
+      const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple, vaultKind)
       const shareOftSaltOverride = decoded.args?.[2] as Hex | undefined
       if (!params || !codeIds || typeof shareOftSaltOverride !== 'string' || !changed) return call
       return {
@@ -1273,9 +1333,11 @@ async function assertPhase1BatcherReadiness(phase1Calls: Call[]): Promise<void> 
     // case, skip this specific check and continue with bytecode presence checks.
   }
 
-  // If batcher module getters exist, ensure they point to CreatorOVault-compatible
+  // If batcher module getters exist, ensure they point to lane-compatible OVault
   // modules before we attempt phase1. This catches immutable module-mismatch
   // batchers up front (otherwise deployPhase1* reverts with InvalidModuleAddress()).
+  const vaultKind = extractPhase1VaultKindFromCalls(phase1Calls)
+  const expectedCoreKind = resolveDeployLaneCoreModuleKind(vaultKind)
   try {
     const wiredModules = await resolveWiredCreatorOvaultModules({
       publicClient: readClient,
@@ -1284,10 +1346,24 @@ async function assertPhase1BatcherReadiness(phase1Calls: Call[]): Promise<void> 
     if (!wiredModules) {
       throw new Error('could not resolve phase1 module wiring')
     }
-    const { core: coreModule, strategies: strategiesModule, admin: adminModule } = wiredModules
+    const { strategies: strategiesModule, admin: adminModule } = wiredModules
+    const coreModule =
+      vaultKind === 'agent'
+        ? await resolveAgentVaultCoreModule({
+            publicClient: readClient,
+            batcherAddress,
+          })
+        : wiredModules.core
+    if (!coreModule) {
+      throw new Error(
+        vaultKind === 'agent'
+          ? 'agentVaultCoreModule is not configured on batcher'
+          : 'vaultCoreModule is not configured on batcher',
+      )
+    }
 
     const moduleChecks: Array<{ label: 'core' | 'strategies' | 'admin'; address: Address; expectedKind: Hex }> = [
-      { label: 'core', address: getAddress(coreModule), expectedKind: EXPECTED_VAULT_CORE_MODULE_KIND },
+      { label: 'core', address: getAddress(coreModule), expectedKind: expectedCoreKind },
       { label: 'strategies', address: getAddress(strategiesModule), expectedKind: EXPECTED_VAULT_STRATEGIES_MODULE_KIND },
       { label: 'admin', address: getAddress(adminModule), expectedKind: EXPECTED_VAULT_ADMIN_MODULE_KIND },
     ]
@@ -1314,7 +1390,7 @@ async function assertPhase1BatcherReadiness(phase1Calls: Call[]): Promise<void> 
         throw new DeploySessionRequestError(
           409,
           `phase1 precheck failed: batcher ${batcherAddress} ${moduleCheck.label} module ${moduleCheck.address} ` +
-            `does not implement CreatorOVault module identity (InvalidModuleAddress). Rotate to a module-compatible batcher.`,
+            `does not implement ${vaultKind === 'agent' ? 'AgentOVault' : 'CreatorOVault'} module identity (InvalidModuleAddress). Rotate to a module-compatible batcher.`,
         )
       }
 
@@ -1331,7 +1407,7 @@ async function assertPhase1BatcherReadiness(phase1Calls: Call[]): Promise<void> 
         throw new DeploySessionRequestError(
           409,
           `phase1 precheck failed: batcher ${batcherAddress} ${moduleCheck.label} module ${moduleCheck.address} ` +
-            `is incompatible with current CreatorOVault module identity/version (InvalidModuleAddress).${v2Hint}`,
+            `is incompatible with current ${vaultKind === 'agent' ? 'AgentOVault' : 'CreatorOVault'} module identity/version (InvalidModuleAddress).${v2Hint}`,
         )
       }
     }

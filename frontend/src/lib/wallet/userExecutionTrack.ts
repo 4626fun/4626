@@ -19,6 +19,8 @@ export type UserExecutionAccountSignals = {
   embeddedEoaAddress?: string | null
   executionTrack?: UserFrontendExecutionTrack
   privyEmbeddedEoaIsOwnerOfCanonicalCsw?: boolean | null
+  /** Set when /accounts/me bootstrap hydration fails while wallet signals are incomplete. */
+  walletHydrationError?: string | null
 }
 
 function hasLegacyOwnerInstallSigning(

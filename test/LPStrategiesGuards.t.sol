@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {CreatorLPManager} from "@4626/creator/strategies/CreatorLPManager.sol";
+import {OVaultLPManager} from "@4626/shared/strategies/univ4/OVaultLPManager.sol";
 import {ConcentratedStrategy} from "@4626/shared/strategies/univ4/ConcentratedStrategy.sol";
 import {LimitOrderStrategy} from "@4626/shared/strategies/univ4/LimitOrderStrategy.sol";
 import {FullRangeStrategy} from "@4626/shared/strategies/univ4/FullRangeStrategy.sol";
@@ -91,24 +91,24 @@ contract LPStrategiesGuardsTest is Test {
         });
     }
 
-    function testCreatorLPManagerRevertsWhenNotConfigured() public {
-        CreatorLPManager strat =
-            new CreatorLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
-        vm.expectRevert(CreatorLPManager.PoolNotConfigured.selector);
+    function testOVaultLPManagerRevertsWhenNotConfigured() public {
+        OVaultLPManager strat =
+            new OVaultLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+        vm.expectRevert(OVaultLPManager.PoolNotConfigured.selector);
         strat.rebalance();
     }
 
-    function testCreatorLPManagerRevertsWhenPositionManagerMissing() public {
-        CreatorLPManager strat =
-            new CreatorLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
-        vm.expectRevert(CreatorLPManager.ZeroAddress.selector);
+    function testOVaultLPManagerRevertsWhenPositionManagerMissing() public {
+        OVaultLPManager strat =
+            new OVaultLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+        vm.expectRevert(OVaultLPManager.ZeroAddress.selector);
         strat.configurePool(poolManager, address(0), address(permit2), _poolKey());
     }
 
-    function testCreatorLPManagerRevertsWhenPermit2Missing() public {
-        CreatorLPManager strat =
-            new CreatorLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
-        vm.expectRevert(CreatorLPManager.ZeroAddress.selector);
+    function testOVaultLPManagerRevertsWhenPermit2Missing() public {
+        OVaultLPManager strat =
+            new OVaultLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+        vm.expectRevert(OVaultLPManager.ZeroAddress.selector);
         strat.configurePool(poolManager, positionManager, address(0), _poolKey());
     }
 

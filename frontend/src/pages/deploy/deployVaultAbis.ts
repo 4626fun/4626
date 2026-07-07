@@ -671,6 +671,7 @@ export const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'shareName', type: 'string' },
           { name: 'shareSymbol', type: 'string' },
           { name: 'version', type: 'string' },
+          { name: 'vaultKind', type: 'uint8' },
         ],
       },
       {
@@ -716,6 +717,7 @@ export const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'shareName', type: 'string' },
           { name: 'shareSymbol', type: 'string' },
           { name: 'version', type: 'string' },
+          { name: 'vaultKind', type: 'uint8' },
         ],
       },
       {
@@ -762,6 +764,7 @@ export const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'shareName', type: 'string' },
           { name: 'shareSymbol', type: 'string' },
           { name: 'version', type: 'string' },
+          { name: 'vaultKind', type: 'uint8' },
         ],
       },
       {
@@ -807,6 +810,7 @@ export const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'shareName', type: 'string' },
           { name: 'shareSymbol', type: 'string' },
           { name: 'version', type: 'string' },
+          { name: 'vaultKind', type: 'uint8' },
         ],
       },
       {
@@ -853,6 +857,7 @@ export const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'shareName', type: 'string' },
           { name: 'shareSymbol', type: 'string' },
           { name: 'version', type: 'string' },
+          { name: 'vaultKind', type: 'uint8' },
         ],
       },
       {
@@ -898,6 +903,7 @@ export const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'shareName', type: 'string' },
           { name: 'shareSymbol', type: 'string' },
           { name: 'version', type: 'string' },
+          { name: 'vaultKind', type: 'uint8' },
         ],
       },
       {

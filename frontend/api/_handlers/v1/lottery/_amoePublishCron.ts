@@ -174,13 +174,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const targetEpoch = await pickNextEpochToPublish(db, {
     latestClosedEpoch,
   })
+
+  let allowlistOutcome: PublishAllowlistOutcome | null = null
+
   if (targetEpoch === null) {
-    // Every epoch in the horizon is already published or no-op'd.
+    if (isAmoeAllowlistPublisherEnabled()) {
+      try {
+        allowlistOutcome = await publishAllowlistEpoch({
+          db,
+          epoch: latestClosedEpoch,
+          lotteryAmoeRouter,
+          publisherVersion,
+        })
+      } catch (allowErr) {
+        console.warn('[amoe-publish-cron] allowlist publish failed', allowErr)
+      }
+    }
+    // Ledger horizon is caught up; allowlist may still have unpublished roots.
     return res.status(200).json({
       ok: true,
       tick: 'nothing_to_publish',
       latestClosedEpoch: latestClosedEpoch.toString(),
       reclaimedCount,
+      allowlistOutcome: allowlistOutcome?.kind ?? null,
     })
   }
 
@@ -217,7 +233,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
   }
 
-  let allowlistOutcome: PublishAllowlistOutcome | null = null
   if (isAmoeAllowlistPublisherEnabled() && error === null) {
     try {
       allowlistOutcome = await publishAllowlistEpoch({

@@ -284,3 +284,31 @@ export async function resolveWiredCreatorOvaultModules(params: {
   if (!core || !strategies || !admin) return null
   return { core, strategies, admin }
 }
+
+const AGENT_VAULT_CORE_MODULE_ABI = [
+  {
+    type: 'function',
+    name: 'agentVaultCoreModule',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
+export async function resolveAgentVaultCoreModule(params: {
+  publicClient: ReadClient
+  batcherAddress: Address
+}): Promise<Address | null> {
+  try {
+    const value = await params.publicClient.readContract({
+      address: params.batcherAddress,
+      abi: AGENT_VAULT_CORE_MODULE_ABI,
+      functionName: 'agentVaultCoreModule',
+    })
+    if (!isAddress(String(value))) return null
+    const resolved = getAddress(value as Address)
+    return resolved === '0x0000000000000000000000000000000000000000' ? null : resolved
+  } catch {
+    return null
+  }
+}

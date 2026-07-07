@@ -8,6 +8,13 @@ import {
   buildAmoeAllowlistSnapshot,
   type AmoeAllowlistBuilderDb,
 } from './amoeAllowlistSnapshotBuilder.js'
+import {
+  readAmoeLedgerPublisherBundlerUrl,
+  readAmoeLedgerPublisherOwnerAddress,
+  readAmoeLedgerPublisherPrivyWalletId,
+  readAmoeLedgerPublisherSmartWallet,
+  readBaseRpcUrlForPublisher,
+} from './amoeLedgerPublisher.js'
 import { AmoeServerError } from './lotteryAmoeErrors.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -68,10 +75,7 @@ export async function defaultBroadcastSetAllowlistRoot(args: {
   epoch: bigint
   rootHex: `0x${string}`
 }): Promise<{ txHash: `0x${string}` }> {
-  const pk = readAmoeAllowlistPublisherPrivateKey()
-  if (!pk) throw new Error('no_allowlist_publisher_key_configured')
-
-  const [{ createWalletClient, encodeFunctionData, http }, { base }, { privateKeyToAccount }] =
+  const [{ createPublicClient, createWalletClient, encodeFunctionData, http }, { base }, { privateKeyToAccount }] =
     await Promise.all([
       import('viem'),
       import('viem/chains'),
@@ -84,9 +88,45 @@ export async function defaultBroadcastSetAllowlistRoot(args: {
     args: [args.epoch, args.rootHex],
   })
 
-  const rpc =
-    String(process.env.AMOE_ALLOWLIST_PUBLISHER_BASE_RPC ?? process.env.BASE_RPC_URL ?? '').trim() ||
-    'https://mainnet.base.org'
+  const rpc = readBaseRpcUrlForPublisher()
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http(rpc, { timeout: 30_000 }),
+  })
+
+  // Production router.allowlistPublisher is the canonical CSW — mirror the
+  // ledger publisher's Privy 4337 path before falling back to a direct EOA.
+  const smartWallet = readAmoeLedgerPublisherSmartWallet()
+  const bundlerUrl = readAmoeLedgerPublisherBundlerUrl()
+  const privyWalletId = readAmoeLedgerPublisherPrivyWalletId()
+  const expectedOwnerAddress = readAmoeLedgerPublisherOwnerAddress()
+  if (smartWallet && bundlerUrl && privyWalletId && expectedOwnerAddress) {
+    const {
+      resolvePrivyCoinbaseSmartWalletOwnerContext,
+      sendPrivyCoinbaseSmartWalletUserOperation,
+    } = await import('../wallet/privyCoinbaseSmartWallet.js')
+    const ownerContext = await resolvePrivyCoinbaseSmartWalletOwnerContext({
+      publicClient,
+      walletId: privyWalletId,
+      smartWallet,
+      expectedOwnerAddress,
+      maxScan: 512,
+    })
+    const userOpResult = await sendPrivyCoinbaseSmartWalletUserOperation({
+      publicClient,
+      bundlerUrl,
+      walletId: privyWalletId,
+      smartWallet,
+      ownerAddress: ownerContext.ownerAddress,
+      ownerIndex: ownerContext.ownerIndex,
+      calls: [{ to: args.lotteryAmoeRouter, value: 0n, data: callData }],
+      simulate: false,
+    })
+    return { txHash: userOpResult.txHash }
+  }
+
+  const pk = readAmoeAllowlistPublisherPrivateKey()
+  if (!pk) throw new Error('no_allowlist_publisher_key_configured')
 
   const wallet = createWalletClient({
     account: privateKeyToAccount(pk),

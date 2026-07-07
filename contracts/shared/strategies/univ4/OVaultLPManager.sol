@@ -24,53 +24,28 @@ import {IOracle4626} from "@4626/shared/interfaces/oracles/IOracle4626.sol";
 import {V4LiquidityAmounts} from "@4626/shared/libraries/uniswap/V4LiquidityAmounts.sol";
 
 /**
- * @title CreatorLPManager
+ * @title OVaultLPManager
  * @author 0xakita.eth
- * @notice Manages LP for creator lane ShareOFT on V4. Lane-specific manager (creator lane); the IStrategy/ILPStrategy pattern is reusable for agent/other lanes (e.g. future AgentLPManager).
+ * @notice Lane-neutral Uniswap V4 LP orchestrator for ShareOFT mesh tokens (creator or agent lane).
  *
  * @dev PURPOSE:
- *      Manages liquidity for the ShareOFT (creator lane) on Uniswap V4.
- *      Buy-side trade fees are enforced by ShareOFT SwapOnly classification (default 6.9%), not this strategy.
- *      Optional sell-side tax is a separate Base V4 hook plane when explicitly configured.
+ *      Manages three-position V4 liquidity (full range + concentrated base + limit order) for a vault
+ *      asset token paired with WETH. Works for creator-lane ShareOFT or agent-lane ShareOFT — deploy
+ *      once per vault via CREATE2 with lane-specific codeIds/salts, same bytecode for both lanes.
  *
- *      NOT for the original Creator Coin — that uses CharmStrategy4626 on V3.
- *      For agent lane, analogous manager can be created using same interfaces.
+ *      NOT for the underlying creator coin on V3 — that lane uses CharmStrategy4626.
+ *      Buy-side trade fees on ShareOFT come from SwapOnly classification, not this manager.
  *
- * @dev TOKEN DISTINCTION:
- *      ┌────────────────────────────────────────────────────────────┐
- *      │ AKITA (Creator Coin)  →  CharmStrategy4626  →  V3 Pool  │
- *      │ ■AKITA (ShareOFT)     →  CreatorLPManager      →  V4 Pool  │
- *      │                           (SwapOnly buy fee on ShareOFT)   │
- *      └────────────────────────────────────────────────────────────┘
- *
- * @dev WHY V4 FOR SHARE TOKEN:
- *      - ShareOFT is the primary trading surface; pool registered as SwapOnly for buy-fee detection
- *      - Buy fees route to tradeFeeCollector → jackpotCustodian via gauge split
- *      - V4 hook optional for sell-side tax when owner activates SimpleSellTaxHook config
- *      - Pattern can be replicated for agent lane ShareOFT or future ecosystems.
- *
- * @dev ARCHITECTURE (inspired by Charm Alpha Pro Vault):
- *      CreatorOVault → CreatorLPManager → Uniswap V4 Positions
+ * @dev ARCHITECTURE:
+ *      OVault (creator or agent) → OVaultLPManager → Uniswap V4 Positions
  *
  * @dev THREE-POSITION STRATEGY:
  *      1. Full Range: Passive liquidity across entire price range
  *      2. Base Order: Concentrated around current price (both sides)
  *      3. Limit Order: Single-sided bid or ask (excess token)
- *
- * @dev REBALANCE FLOW:
- *      1. Withdraw all liquidity from all positions
- *      2. Place full range order (weighted %)
- *      3. Place base order with remaining liquidity
- *      4. Place limit order with excess token (bid or ask)
- *
- * @dev REBALANCE GUARDS (from Charm):
- *      - Time: Must wait `period` seconds between rebalances
- *      - Price: Must move at least `minTickMove` ticks
- *      - TWAP: Spot price must be within `maxTwapDeviation` of TWAP
- *      - Boundary: Price can't be too close to MIN/MAX tick
  */
 
-contract CreatorLPManager is Ownable, ReentrancyGuard {
+contract OVaultLPManager is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using StateLibrary for IPoolManager;
 
@@ -86,8 +61,8 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
     // STATE - TOKENS & POOL
     // =================================
 
-    /// @notice Creator Coin token (token0 or token1 depending on sort)
-    IERC20 public immutable CREATOR_COIN;
+    /// @notice Lane vault asset token (token0 or token1 depending on sort)
+    IERC20 public immutable ASSET;
 
     /// @notice Paired token (WETH)
     IERC20 public immutable PAIRED_TOKEN;
@@ -101,8 +76,8 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
     /// @notice Uniswap V4 pool id (derived from poolKey)
     PoolId public poolId;
 
-    /// @notice True if CREATOR_COIN is currency0 for poolKey
-    bool public creatorIsCurrency0;
+    /// @notice True if ASSET is currency0 for poolKey
+    bool public assetIsCurrency0;
 
     /// @notice Uniswap V4 PositionManager (PosM)
     address public positionManager;
@@ -205,7 +180,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
     event FeesCollected(uint256 fees0, uint256 fees1);
     event ParametersUpdated(uint24 fullRangeWeight, int24 baseThreshold, int24 limitThreshold);
     event PoolConfigured(
-        bytes32 poolId, address poolManager, address positionManager, address permit2, bool creatorIsCurrency0
+        bytes32 poolId, address poolManager, address positionManager, address permit2, bool assetIsCurrency0
     );
     event ApprovalsReconfigured(address oldPositionManager, address oldPermit2, address newPositionManager, address newPermit2);
 
@@ -251,14 +226,14 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
     // CONSTRUCTOR
     // =================================
 
-    constructor(address _creatorCoin, address _pairedToken, address _vault, address _owner, address _hookRegistry)
+    constructor(address _asset, address _pairedToken, address _vault, address _owner, address _hookRegistry)
         Ownable(_owner)
     {
-        if (_creatorCoin == address(0)) revert ZeroAddress();
+        if (_asset == address(0)) revert ZeroAddress();
         if (_pairedToken == address(0)) revert ZeroAddress();
         if (_hookRegistry == address(0)) revert ZeroAddress();
 
-        CREATOR_COIN = IERC20(_creatorCoin);
+        ASSET = IERC20(_asset);
         PAIRED_TOKEN = IERC20(_pairedToken);
         vault = _vault;
         hookRegistry = IApprovedV4HooksRegistry(_hookRegistry);
@@ -284,9 +259,9 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
         // Validate poolKey currencies match our configured tokens
         address c0 = Currency.unwrap(_poolKey.currency0);
         address c1 = Currency.unwrap(_poolKey.currency1);
-        bool _creatorIsCurrency0 = c0 == address(CREATOR_COIN);
-        if (!((_creatorIsCurrency0 && c1 == address(PAIRED_TOKEN))
-                    || (c0 == address(PAIRED_TOKEN) && c1 == address(CREATOR_COIN)))) revert InvalidPoolKey();
+        bool _assetIsCurrency0 = c0 == address(ASSET);
+        if (!((_assetIsCurrency0 && c1 == address(PAIRED_TOKEN))
+                    || (c0 == address(PAIRED_TOKEN) && c1 == address(ASSET)))) revert InvalidPoolKey();
         if (_poolKey.tickSpacing == 0) revert InvalidPoolKey();
         address hook = address(_poolKey.hooks);
         if (hook == address(0)) revert InvalidHook(hook);
@@ -297,7 +272,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
         permit2 = _permit2;
         poolKey = _poolKey;
         poolId = _poolKey.toId();
-        creatorIsCurrency0 = _creatorIsCurrency0;
+        assetIsCurrency0 = _assetIsCurrency0;
         tickSpacing = _poolKey.tickSpacing;
 
         // Initialize full range bounds
@@ -305,14 +280,14 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
         fullRangePosition.tickUpper = (MAX_TICK / tickSpacing) * tickSpacing;
 
         // Approvals for PosM: token -> Permit2, then Permit2 -> PosM
-        CREATOR_COIN.forceApprove(_permit2, type(uint256).max);
+        ASSET.forceApprove(_permit2, type(uint256).max);
         PAIRED_TOKEN.forceApprove(_permit2, type(uint256).max);
         IAllowanceTransfer(_permit2)
-            .approve(address(CREATOR_COIN), _positionManager, type(uint160).max, type(uint48).max);
+            .approve(address(ASSET), _positionManager, type(uint160).max, type(uint48).max);
         IAllowanceTransfer(_permit2)
             .approve(address(PAIRED_TOKEN), _positionManager, type(uint160).max, type(uint48).max);
 
-        emit PoolConfigured(PoolId.unwrap(poolId), _poolManager, _positionManager, _permit2, _creatorIsCurrency0);
+        emit PoolConfigured(PoolId.unwrap(poolId), _poolManager, _positionManager, _permit2, _assetIsCurrency0);
     }
 
     /**
@@ -328,19 +303,19 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
         address oldPermit2 = permit2;
 
         // Revoke old allowances first so stale pull rights are removed.
-        CREATOR_COIN.forceApprove(oldPermit2, 0);
+        ASSET.forceApprove(oldPermit2, 0);
         PAIRED_TOKEN.forceApprove(oldPermit2, 0);
-        IAllowanceTransfer(oldPermit2).approve(address(CREATOR_COIN), oldPositionManager, 0, 0);
+        IAllowanceTransfer(oldPermit2).approve(address(ASSET), oldPositionManager, 0, 0);
         IAllowanceTransfer(oldPermit2).approve(address(PAIRED_TOKEN), oldPositionManager, 0, 0);
 
         positionManager = _positionManager;
         permit2 = _permit2;
 
         // Re-grant current approval targets.
-        CREATOR_COIN.forceApprove(_permit2, type(uint256).max);
+        ASSET.forceApprove(_permit2, type(uint256).max);
         PAIRED_TOKEN.forceApprove(_permit2, type(uint256).max);
         IAllowanceTransfer(_permit2)
-            .approve(address(CREATOR_COIN), _positionManager, type(uint160).max, type(uint48).max);
+            .approve(address(ASSET), _positionManager, type(uint160).max, type(uint48).max);
         IAllowanceTransfer(_permit2)
             .approve(address(PAIRED_TOKEN), _positionManager, type(uint160).max, type(uint48).max);
 
@@ -399,7 +374,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
         if (amount0 == 0 && amount1 == 0) revert ZeroAmount();
 
         if (amount0 > 0) {
-            CREATOR_COIN.safeTransferFrom(msg.sender, address(this), amount0);
+            ASSET.safeTransferFrom(msg.sender, address(this), amount0);
         }
         if (amount1 > 0) {
             PAIRED_TOKEN.safeTransferFrom(msg.sender, address(this), amount1);
@@ -435,7 +410,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
         amount1 = full1 + base1 + limit1 + idle1;
 
         // Transfer to vault
-        if (amount0 > 0) CREATOR_COIN.safeTransfer(vault, amount0);
+        if (amount0 > 0) ASSET.safeTransfer(vault, amount0);
         if (amount1 > 0) PAIRED_TOKEN.safeTransfer(vault, amount1);
 
         emit Withdraw(msg.sender, amount0, amount1, shares);
@@ -459,7 +434,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
         checkCanRebalance();
 
         // FIX: S-H02 — snapshot value before rebalance for slippage check
-        uint256 valueBefore0 = CREATOR_COIN.balanceOf(address(this));
+        uint256 valueBefore0 = ASSET.balanceOf(address(this));
         uint256 valueBefore1 = PAIRED_TOKEN.balanceOf(address(this));
 
         // Withdraw all current liquidity
@@ -516,7 +491,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
                 limitPosition.tickUpper = _bidUpper;
                 _mintLiquidity(limitPosition, bidLiquidity);
             } else {
-                // More token0 (Creator) - place ask order above price
+                // More token0 (Asset) - place ask order above price
                 limitPosition.tickLower = _askLower;
                 limitPosition.tickUpper = _askUpper;
                 _mintLiquidity(limitPosition, askLiquidity);
@@ -527,7 +502,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
         lastTick = tick;
 
         // FIX: S-H02 — post-rebalance slippage check (token0 only as primary value measure)
-        uint256 valueAfter0 = CREATOR_COIN.balanceOf(address(this));
+        uint256 valueAfter0 = ASSET.balanceOf(address(this));
         if (valueBefore0 > 0) {
             uint256 maxLoss = (valueBefore0 * maxRebalanceSlippageBps) / 10_000;
             if (valueAfter0 + maxLoss < valueBefore0) {
@@ -599,7 +574,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
      * @notice Idle balance of token0
      */
     function getBalance0() public view returns (uint256) {
-        return CREATOR_COIN.balanceOf(address(this)) - accruedFees0;
+        return ASSET.balanceOf(address(this)) - accruedFees0;
     }
 
     /**
@@ -685,7 +660,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
 
         _requireConfigured();
 
-        uint256 balCreatorBefore = CREATOR_COIN.balanceOf(address(this));
+        uint256 balAssetBefore = ASSET.balanceOf(address(this));
         uint256 balPairedBefore = PAIRED_TOKEN.balanceOf(address(this));
 
         bytes memory actions = new bytes(3);
@@ -700,7 +675,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
 
         IPositionManager(positionManager).modifyLiquidities(abi.encode(actions, params), block.timestamp + 1);
 
-        amount0 = CREATOR_COIN.balanceOf(address(this)) - balCreatorBefore;
+        amount0 = ASSET.balanceOf(address(this)) - balAssetBefore;
         amount1 = PAIRED_TOKEN.balanceOf(address(this)) - balPairedBefore;
 
         pos.liquidity = 0;
@@ -718,7 +693,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
 
         _requireConfigured();
 
-        uint256 balCreatorBefore = CREATOR_COIN.balanceOf(address(this));
+        uint256 balAssetBefore = ASSET.balanceOf(address(this));
         uint256 balPairedBefore = PAIRED_TOKEN.balanceOf(address(this));
 
         bytes memory actions = new bytes(3);
@@ -733,7 +708,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
 
         IPositionManager(positionManager).modifyLiquidities(abi.encode(actions, params), block.timestamp + 1);
 
-        amount0 = CREATOR_COIN.balanceOf(address(this)) - balCreatorBefore;
+        amount0 = ASSET.balanceOf(address(this)) - balAssetBefore;
         amount1 = PAIRED_TOKEN.balanceOf(address(this)) - balPairedBefore;
 
         pos.liquidity -= liquidityToBurn;
@@ -751,7 +726,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
             pos.liquidity
         );
 
-        if (creatorIsCurrency0) {
+        if (assetIsCurrency0) {
             return (amountCurrency0, amountCurrency1);
         }
         return (amountCurrency1, amountCurrency0);
@@ -769,7 +744,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
         uint160 sqrtPriceBX96 = TickMath.getSqrtPriceAtTick(tickUpper);
 
         (uint256 amountCurrency0, uint256 amountCurrency1) =
-            creatorIsCurrency0 ? (amount0, amount1) : (amount1, amount0);
+            assetIsCurrency0 ? (amount0, amount1) : (amount1, amount0);
         return LiquidityAmounts.getLiquidityForAmounts(
             sqrtPriceX96, sqrtPriceAX96, sqrtPriceBX96, amountCurrency0, amountCurrency1
         );
@@ -824,7 +799,7 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
         accruedFees0 = 0;
         accruedFees1 = 0;
 
-        if (fees0 > 0) CREATOR_COIN.safeTransfer(feeRecipient, fees0);
+        if (fees0 > 0) ASSET.safeTransfer(feeRecipient, fees0);
         if (fees1 > 0) PAIRED_TOKEN.safeTransfer(feeRecipient, fees1);
 
         emit FeesCollected(fees0, fees1);
@@ -838,10 +813,10 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
         _burnAndCollect(basePosition);
         _burnAndCollect(limitPosition);
 
-        uint256 bal0 = CREATOR_COIN.balanceOf(address(this));
+        uint256 bal0 = ASSET.balanceOf(address(this));
         uint256 bal1 = PAIRED_TOKEN.balanceOf(address(this));
 
-        if (bal0 > 0) CREATOR_COIN.safeTransfer(vault, bal0);
+        if (bal0 > 0) ASSET.safeTransfer(vault, bal0);
         if (bal1 > 0) PAIRED_TOKEN.safeTransfer(vault, bal1);
     }
 }

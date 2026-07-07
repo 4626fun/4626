@@ -101,6 +101,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           accountSignals: {
             ...existingSignals,
             canonicalCswAddress: existingSignals.canonicalCswAddress ?? bootstrap.canonicalCswAddress,
+            canonicalSource: existingSignals.canonicalSource ?? bootstrap.canonicalSource ?? null,
             baseSubAccount: existingSignals.baseSubAccount ?? bootstrap.baseSubAccount,
             executionTrack:
               existingSignals.executionTrack && existingSignals.executionTrack !== 'none-yet'
@@ -113,11 +114,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   ? true
                   : (existingSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw ?? null),
             embeddedEoaAddress: existingSignals.embeddedEoaAddress ?? bootstrap.privyEmbeddedEoaAddress,
+            walletHydrationError: null,
           },
         }
-      } catch {
-        // Keep /accounts/me resilient: if bootstrap hydration fails, return the
-        // base payload rather than failing the whole identity read.
+      } catch (error) {
+        const message =
+          error instanceof Error && error.message.trim()
+            ? error.message
+            : 'Wallet profile sync is still catching up. Retry in a moment.'
+        data = {
+          ...baseData,
+          accountSignals: {
+            ...baseData.accountSignals,
+            walletHydrationError: message,
+          },
+        }
       }
     }
 

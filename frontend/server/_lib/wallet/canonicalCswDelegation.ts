@@ -45,6 +45,7 @@ export type BootstrapDelegationState = {
   profileId: number
   privyUserId: string
   canonicalCswAddress: string
+  canonicalSource: string | null
   privyEmbeddedEoaAddress: string
   privyIsOwner: boolean
   baseSubAccount: BaseSubAccountSummary
@@ -765,6 +766,7 @@ export async function bootstrapCanonicalDelegationState(params: {
     profileId: canonical.profileId,
     privyUserId: context.privyUserId,
     canonicalCswAddress: canonical.canonicalCswAddress,
+    canonicalSource: canonical.canonicalSource,
     privyEmbeddedEoaAddress,
     privyIsOwner,
     baseSubAccount,

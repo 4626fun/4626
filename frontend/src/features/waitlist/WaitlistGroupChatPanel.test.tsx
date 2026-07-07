@@ -49,6 +49,10 @@ vi.mock('@/lib/auth/privyEmbeddedSignerAuthErrors', () => ({
   isPrivyEmbeddedSignerAuthError: () => false,
 }))
 
+vi.mock('./WaitlistMessagingWalletProviders', () => ({
+  WaitlistMessagingWalletProviders: ({ children }: { children: React.ReactNode }) => children,
+}))
+
 vi.mock('./usePrepareWaitlistMessagingWallet', () => ({
   usePrepareWaitlistMessagingWallet: () => ({
     prepare: vi.fn(async () => ({ ok: true })),

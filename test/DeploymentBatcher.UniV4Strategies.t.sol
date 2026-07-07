@@ -161,11 +161,11 @@ contract DeploymentBatcherUniV4StrategiesTest is Test {
             fullRangeStrategy: FULL_RANGE_CODE_ID,
             concentratedStrategy: CONCENTRATED_CODE_ID,
             limitOrderStrategy: LIMIT_ORDER_CODE_ID,
-            creatorLPManager: LP_MANAGER_CODE_ID
+            lpManager: LP_MANAGER_CODE_ID
         });
     }
 
-    function _uniV4Params(bool creatorIsCurrency0) internal view returns (DeploymentBatcher.UniV4DeployParams memory params) {
+    function _uniV4Params(bool assetIsCurrency0) internal view returns (DeploymentBatcher.UniV4DeployParams memory params) {
         address[] memory hooks = new address[](2);
         hooks[0] = hookA;
         hooks[1] = hookB;
@@ -179,7 +179,7 @@ contract DeploymentBatcherUniV4StrategiesTest is Test {
             positionManager: positionManager,
             fee: 6_900,
             tickSpacing: 60,
-            creatorIsCurrency0: creatorIsCurrency0,
+            assetIsCurrency0: assetIsCurrency0,
             poolHook: hookC,
             registryOwner: registryOwner,
             hooksToApprove: hooks
@@ -193,7 +193,7 @@ contract DeploymentBatcherUniV4StrategiesTest is Test {
         assertEq(out.fullRangeStrategy, address(fullRange), "full range mismatch");
         assertEq(out.concentratedStrategy, address(concentrated), "concentrated mismatch");
         assertEq(out.limitOrderStrategy, address(limitOrder), "limit order mismatch");
-        assertEq(out.creatorLPManager, address(lpManager), "lp manager mismatch");
+        assertEq(out.lpManager, address(lpManager), "lp manager mismatch");
 
         assertTrue(hookRegistry.approved(hookA), "hook A should be approved");
         assertTrue(hookRegistry.approved(hookB), "hook B should be approved");

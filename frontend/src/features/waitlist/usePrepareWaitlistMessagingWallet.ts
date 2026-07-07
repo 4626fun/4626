@@ -1,8 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import { useActiveWallet, usePrivy, useWallets } from '@privy-io/react-auth'
-import { useAccount, useConnect, useDisconnect, useWalletClient } from 'wagmi'
-
-import { wagmiConfig } from '@/config/wagmi'
+import { useAccount, useConfig, useConnect, useDisconnect, useWalletClient } from 'wagmi'
 
 import {
   extractPrivyWalletsFromUser,
@@ -47,6 +45,7 @@ export function usePrepareWaitlistMessagingWallet(params: {
   canonicalCswAddress?: string | null
 }) {
   const privy = usePrivy()
+  const wagmiConfig = useConfig()
   const { embeddedEoaAddress, ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
   const { wallets } = useWallets()
   const { setActiveWallet } = useActiveWallet()
@@ -105,6 +104,7 @@ export function usePrepareWaitlistMessagingWallet(params: {
     params.connectTrack,
     params.enabled,
     setActiveWallet,
+    wagmiConfig,
   ])
 
   return {

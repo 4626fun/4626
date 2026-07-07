@@ -3,7 +3,6 @@ import { Suspense, lazy, useMemo } from 'react'
 import { LoadingInline } from '@/components/ui/LoadingState'
 import { useAccountMe } from '@/hooks/useAccountMe'
 import { isZoraLinkedFromAccountSignals } from '@/lib/wallet/userExecutionTrack'
-import { WalletProviders } from '@/web3/Web3Providers'
 
 import { WaitlistOwnerInstallPanel } from './WaitlistOwnerInstallPanel'
 import { WaitlistWalletProvision } from './WaitlistWalletProvision'
@@ -26,12 +25,7 @@ type WaitlistPostJoinShellProps = {
 
 export function WaitlistPostJoinShell(props: WaitlistPostJoinShellProps) {
   if (!props.enabled) return null
-
-  return (
-    <WalletProviders reconnectOnMount={false}>
-      <WaitlistPostJoinShellInner />
-    </WalletProviders>
-  )
+  return <WaitlistPostJoinShellInner />
 }
 
 function WaitlistPostJoinShellInner() {

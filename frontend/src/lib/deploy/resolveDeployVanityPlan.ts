@@ -8,8 +8,16 @@ import {
   type Hex,
 } from 'viem'
 
-import { DEPLOY_BYTECODE } from '@/deploy/bytecode.generated'
 import type { CreatorVaultBatcherInfra } from '@/lib/deploy/creatorVaultBatcherInfra'
+import { DEPLOY_BYTECODE } from '@/deploy/bytecode.generated'
+import {
+  resolveDeployLaneShareOftBytecode,
+  resolveDeployLaneVaultBytecode,
+  resolveDeployLaneVaultSaltLabel,
+  resolveDeployLaneWrapperBytecode,
+  resolveDeployLaneWrapperSaltLabel,
+} from '@/lib/deploy/deployLaneBytecode'
+import type { VaultKind } from '@/lib/onchain/agentTokenIntegration'
 import { probeGreenfieldPhase1Deploy } from '@/lib/deploy/deployVaultGreenfieldProbe'
 import { fetchServerCombinedVanityVersion } from '@/lib/deploy/fetchServerCombinedVanityVersion'
 import { fetchServerShareOftVanitySalt } from '@/lib/deploy/fetchServerShareOftVanitySalt'
@@ -100,6 +108,7 @@ export type ResolveDeployVanityPlanParams = {
   shareVanityIsCustom: boolean
   cacheState: DeployVanityCacheState
   shortAddress: (value: string) => string
+  vaultKind?: VaultKind
 }
 
 function deriveOftBootstrapSalt(): Hex {
@@ -109,11 +118,17 @@ function deriveOftBootstrapSalt(): Hex {
 export async function resolveDeployVanityPlan(
   params: ResolveDeployVanityPlanParams,
 ): Promise<DeployVanityPlan> {
+  const vaultKind = params.vaultKind ?? 'creator'
   const create2Deployer = params.batcherInfra.create2Deployer
   const tempOwner = params.batcherAddress
   const { supportsPhase1WithSalt } = params.batcherInfra.capabilities
   const shareSymbolLower = params.shareSymbol.toLowerCase()
   const shareSymbolUpper = params.shareSymbol.toUpperCase()
+  const vaultBytecode = resolveDeployLaneVaultBytecode(vaultKind)
+  const wrapperBytecode = resolveDeployLaneWrapperBytecode(vaultKind)
+  const shareOftBytecode = resolveDeployLaneShareOftBytecode(vaultKind)
+  const vaultSaltLabel = resolveDeployLaneVaultSaltLabel(vaultKind)
+  const wrapperSaltLabel = resolveDeployLaneWrapperSaltLabel(vaultKind)
 
   const oftBootstrapRegistry = predictCreate2AddressFromInitCode({
     create2Deployer,
@@ -126,14 +141,14 @@ export async function resolveDeployVanityPlan(
     oftBootstrapRegistry,
     tempOwner,
   ])
-  const shareOftInitCode = concatHex([DEPLOY_BYTECODE.CreatorShareOFT as Hex, shareOftArgs])
+  const shareOftInitCode = concatHex([shareOftBytecode, shareOftArgs])
   const vaultArgs = encodeAbiParameters(parseAbiParameters('address,address,string,string'), [
     params.creatorToken,
     tempOwner,
     params.vaultName,
     params.vaultSymbol,
   ])
-  const vaultInitCode = concatHex([DEPLOY_BYTECODE.CreatorOVault as Hex, vaultArgs])
+  const vaultInitCode = concatHex([vaultBytecode, vaultArgs])
 
   const isGreenfieldVanityDeploy = await probeGreenfieldPhase1Deploy({
     publicClient: params.publicClient,
@@ -146,7 +161,9 @@ export async function resolveDeployVanityPlan(
     vaultInitCode,
     shareOftInitCode,
     shareSymbol: params.shareSymbol,
-    wrapperBytecode: DEPLOY_BYTECODE.CreatorOVaultWrapper as Hex,
+    wrapperBytecode,
+    vaultSaltLabel,
+    wrapperSaltLabel,
   })
   const vanityAddressDeployedCheck = isGreenfieldVanityDeploy
     ? undefined
@@ -178,7 +195,7 @@ export async function resolveDeployVanityPlan(
       version: candidateVersion,
     })
     if (versionSearchVaultPrefix) {
-      const candidateVaultSalt = saltForDeployLabel(candidateBaseSalt, 'vault')
+      const candidateVaultSalt = saltForDeployLabel(candidateBaseSalt, vaultSaltLabel)
       const candidateVaultAddress = predictCreate2AddressFromInitCode({
         create2Deployer,
         salt: candidateVaultSalt,
@@ -469,7 +486,7 @@ export async function resolveDeployVanityPlan(
       chainId: params.chainId,
       version: candidateVersion,
     })
-    const candidateVaultSalt = saltForDeployLabel(candidateBaseSalt, 'vault')
+    const candidateVaultSalt = saltForDeployLabel(candidateBaseSalt, vaultSaltLabel)
     return predictCreate2AddressFromInitCode({
       create2Deployer,
       salt: candidateVaultSalt,
@@ -619,7 +636,9 @@ export async function resolveDeployVanityPlan(
               vaultInitCode,
               shareOftInitCode,
               shareSymbol: params.shareSymbol,
-              wrapperBytecode: DEPLOY_BYTECODE.CreatorOVaultWrapper as Hex,
+              wrapperBytecode,
+              vaultSaltLabel,
+              wrapperSaltLabel,
             })
       const saltDeployedCheck = skipSaltDeployedCheck ? undefined : vanityAddressDeployedCheck
       let found = await findCreate2SaltForSuffix({

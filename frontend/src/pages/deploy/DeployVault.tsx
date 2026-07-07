@@ -32,6 +32,15 @@ import {
 import { resolveDeployExpectedAddresses } from '@/lib/deploy/resolveDeployExpectedAddresses'
 import { resolveDeployVanityPlan } from '@/lib/deploy/resolveDeployVanityPlan'
 import {
+  parseVaultKindQueryParam,
+  resolveDeployLaneBytecodeLabels,
+  resolveDeployLanePayoutRouterCodeId,
+  resolveDeployLanePhase1CodeIds,
+  toOnchainVaultKind,
+  usesCreatorCoinPolicyController,
+} from '@/lib/deploy/deployLaneBytecode'
+import type { VaultKind } from '@/lib/onchain/agentTokenIntegration'
+import {
   debugSignatureReady,
   ensureSignatureHex,
   isTransientRpcFailure,
@@ -55,6 +64,7 @@ import {
   parseAbiParameters,
   toHex,
   toBytes,
+  type PublicClient,
 } from 'viem'
 import { getWalletClient } from '@wagmi/core'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -143,12 +153,16 @@ import {
 } from '@/lib/deploy/impairmentAuxPlan'
 import {
   normalizeUnderlyingSymbol,
+  shareSymbolForVaultKind,
   toShareName,
-  toShareSymbol,
   toVaultName,
-  toVaultSymbol,
+  vaultSymbolForVaultKind,
   underlyingSymbolUpper as deriveUnderlyingUpper,
 } from '@/lib/tokens/tokenSymbols'
+import {
+  isAgentTokenV4Integration,
+  resolveAgentTokenIntegration,
+} from '@/lib/onchain/resolveAgentTokenIntegration'
 import { computeMarketFloorQuote } from '@/lib/cca/marketFloor'
 import { q96ToCurrencyPerTokenBaseUnits } from '@/lib/cca/q96'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
@@ -1261,6 +1275,7 @@ function DeployVaultBatcher({
   solanaDecimalsOverride,
   connectorId,
   wagmiWalletClient,
+  vaultKind = 'creator',
 }: {
   creatorToken: Address
   owner: Address
@@ -1296,6 +1311,7 @@ function DeployVaultBatcher({
   // For direct Coinbase Wallet connection (supports eth_sign)
   connectorId: string | undefined
   wagmiWalletClient: any
+  vaultKind?: VaultKind
 }) {
   const { address: connectedAddress } = useAccount()
   const publicClient = usePublicClient({ chainId: base.id })
@@ -2306,17 +2322,9 @@ function DeployVaultBatcher({
     query: { enabled: Boolean(creatorToken && owner) },
   })
 
-  const codeIds = useMemo(() => {
-    return {
-      vault: keccak256(DEPLOY_BYTECODE.CreatorOVault as Hex),
-      wrapper: keccak256(DEPLOY_BYTECODE.CreatorOVaultWrapper as Hex),
-      shareOFT: keccak256(DEPLOY_BYTECODE.CreatorShareOFT as Hex),
-      gauge: keccak256(DEPLOY_BYTECODE.CreatorGaugeController as Hex),
-      cca: keccak256(DEPLOY_BYTECODE.CCALaunchStrategy as Hex),
-      oracle: keccak256(DEPLOY_BYTECODE.CreatorOracle as Hex),
-      oftBootstrap: keccak256(DEPLOY_BYTECODE.OFTBootstrapRegistry as Hex),
-    } as const
-  }, [])
+  const codeIds = useMemo(() => resolveDeployLanePhase1CodeIds(vaultKind), [vaultKind])
+  const onchainVaultKind = useMemo(() => toOnchainVaultKind(vaultKind), [vaultKind])
+  const includePolicyController = usesCreatorCoinPolicyController(vaultKind)
 
   const shareOftVanitySuffix = useMemo(() => {
     const raw = (import.meta.env.VITE_SHARE_OFT_VANITY_SUFFIX as string | undefined) ?? DEFAULT_SHARE_OFT_VANITY_SUFFIX
@@ -2405,9 +2413,7 @@ function DeployVaultBatcher({
     }
   }, [runtimeBatcherConfigError])
 
-  const payoutRouterCodeId = useMemo(() => {
-    return keccak256(DEPLOY_BYTECODE.CreatorPayoutRouter as Hex)
-  }, [])
+  const payoutRouterCodeId = useMemo(() => resolveDeployLanePayoutRouterCodeId(vaultKind), [vaultKind])
 
   const vaultShareBurnStreamCodeId = useMemo(() => {
     return keccak256(DEPLOY_BYTECODE.VaultShareBurnStream as Hex)
@@ -2470,6 +2476,7 @@ function DeployVaultBatcher({
       shareOftVanityMaxTries,
       vaultVanityPrefix,
       vaultVanityMaxTries,
+      vaultKind,
     ],
     enabled:
       !!publicClient &&
@@ -2509,6 +2516,7 @@ function DeployVaultBatcher({
           shareOftVanitySkipLogKey: shareOftVanitySkipLogKeyRef.current,
         },
         shortAddress,
+        vaultKind,
       })
       vaultVanityVersionCacheRef.current = plan.cacheState.vaultVanityVersion
       shareOftVanityCacheRef.current = plan.cacheState.shareOftVanity
@@ -2527,6 +2535,7 @@ function DeployVaultBatcher({
       vanityPlanQuery.data?.deploymentVersionUsed,
       vanityPlanQuery.data?.shareOftSaltOverrideUsed,
       vanityPlanQuery.data?.vaultAddress,
+      vaultKind,
     ],
     enabled: !!publicClient && !!batcherAddress && !!creatorToken && !!owner && vanityPlanQuery.isSuccess,
     staleTime: 30_000,
@@ -2545,6 +2554,7 @@ function DeployVaultBatcher({
         vaultShareBurnStreamCodeId,
         payoutRouterCodeId,
         creatorCoinPolicyControllerCodeId,
+        vaultKind,
       }),
   })
 
@@ -3532,7 +3542,7 @@ function DeployVaultBatcher({
         !expectedGauge ||
         !expectedBurnStream ||
         !expectedPayoutRouter ||
-        !expectedCreatorCoinPolicyController ||
+        (includePolicyController && !expectedCreatorCoinPolicyController) ||
         !expectedCreate2Deployer ||
         !expectedProtocolTreasury
       )
@@ -3584,13 +3594,16 @@ function DeployVaultBatcher({
         return !!bc && bc !== '0x'
       })()
 
-      const creatorCoinPolicyControllerAlreadyDeployed = await (async () => {
-        const bc = await publicClient.getBytecode({ address: expectedCreatorCoinPolicyController })
-        return !!bc && bc !== '0x'
-      })()
+      const creatorCoinPolicyControllerAlreadyDeployed = includePolicyController
+        ? await (async () => {
+            const bc = await publicClient.getBytecode({ address: expectedCreatorCoinPolicyController! })
+            return !!bc && bc !== '0x'
+          })()
+        : true
 
-      const phase2AuxiliaryDeployNeeded =
-        !burnStreamAlreadyDeployed || !payoutRouterAlreadyDeployed || !creatorCoinPolicyControllerAlreadyDeployed
+      const phase2AuxiliaryDeployNeeded = includePolicyController
+        ? !burnStreamAlreadyDeployed || !payoutRouterAlreadyDeployed || !creatorCoinPolicyControllerAlreadyDeployed
+        : !burnStreamAlreadyDeployed || !payoutRouterAlreadyDeployed
       if (phase2AuxiliaryDeployNeeded && !vaultAuxiliaryDeployBatcher) {
         throw new Error('Vault auxiliary deploy batcher is not configured. Set VITE_VAULT_AUXILIARY_DEPLOY_BATCHER after deploying the helper.')
       }
@@ -4348,13 +4361,22 @@ function DeployVaultBatcher({
         functionName: 'setPayoutRecipient',
         args: [expectedPayoutRouter],
       })
-      const creatorCoinPolicyControllerOwnershipPlan =
-        await planCreatorCoinPolicyControllerOwnershipGrant({
-          publicClient,
-          creatorToken,
-          deploySender: owner,
-          policyController: expectedCreatorCoinPolicyController,
-        })
+      const creatorCoinPolicyControllerOwnershipPlan = includePolicyController
+        ? await planCreatorCoinPolicyControllerOwnershipGrant({
+            publicClient,
+            creatorToken,
+            deploySender: owner,
+            policyController: expectedCreatorCoinPolicyController as Address,
+          })
+        : {
+            needsGrant: false,
+            grantMethod: null,
+            grantCallData: null,
+            coinOwners: null,
+            policyControllerIsOwner: false,
+            deploySenderIsCoinOwner: false,
+            legacyCoinOwner: null,
+          }
       const canSetPayoutRecipientFromOwner = await (async () => {
         if (!payoutMismatch) return false
         try {
@@ -4537,6 +4559,7 @@ function DeployVaultBatcher({
           shareName,
           shareSymbol,
           version: deployVersion,
+          vaultKind: onchainVaultKind,
         } as const
         const asBatcherCall = (data: Hex) =>
           ({
@@ -4606,6 +4629,7 @@ function DeployVaultBatcher({
                 shareName,
                 shareSymbol,
                 version: deployVersion,
+                vaultKind: onchainVaultKind,
               } as const
               await publicClient.call({
                 account: owner,
@@ -5148,7 +5172,7 @@ function DeployVaultBatcher({
             data: payoutRecipientCallData,
           })
         }
-        if (creatorCoinPolicyControllerOwnershipPlan.needsGrant) {
+        if (includePolicyController && creatorCoinPolicyControllerOwnershipPlan.needsGrant) {
           if (!creatorCoinPolicyControllerOwnershipPlan.grantCallData) {
             const ownersDisplay =
               creatorCoinPolicyControllerOwnershipPlan.coinOwners?.length
@@ -5157,7 +5181,7 @@ function DeployVaultBatcher({
                   ? shortAddress(creatorCoinPolicyControllerOwnershipPlan.legacyCoinOwner)
                   : 'unknown'
             throw new Error(
-              `Cannot grant CreatorCoin admin to policy controller ${shortAddress(expectedCreatorCoinPolicyController)} ` +
+              `Cannot grant CreatorCoin admin to policy controller ${shortAddress(expectedCreatorCoinPolicyController!)} ` +
                 `from deploy sender ${shortAddress(owner)} (current coin owners: ${ownersDisplay}).`,
             )
           }
@@ -7007,16 +7031,18 @@ function DeployVaultBatcher({
                   forkOnly={isForkOnlyAddress(expected?.payoutRouter, expectedAddressDeployment?.payoutRouter ?? null)}
                   {...dryRunRowProps('phase2Finalize')}
                 />
-                <AddressRow
-                  label="Creator coin policy controller"
-                  address={expected?.creatorCoinPolicyController}
-                  deployed={expectedAddressDeployment?.creatorCoinPolicyController ?? null}
-                  forkOnly={isForkOnlyAddress(
-                    expected?.creatorCoinPolicyController,
-                    expectedAddressDeployment?.creatorCoinPolicyController ?? null,
-                  )}
-                  {...dryRunRowProps('phase2Finalize')}
-                />
+                {includePolicyController ? (
+                  <AddressRow
+                    label="Creator coin policy controller"
+                    address={expected?.creatorCoinPolicyController}
+                    deployed={expectedAddressDeployment?.creatorCoinPolicyController ?? null}
+                    forkOnly={isForkOnlyAddress(
+                      expected?.creatorCoinPolicyController,
+                      expectedAddressDeployment?.creatorCoinPolicyController ?? null,
+                    )}
+                    {...dryRunRowProps('phase2Finalize')}
+                  />
+                ) : null}
                 <AddressRow label="Creator coin payout recipient (external earnings)" address={currentPayoutRecipient} />
             </AddressTable>
             </div>
@@ -8441,6 +8467,26 @@ function DeployVaultMain() {
 
   const tokenIsValid = isAddress(creatorToken)
 
+  const vaultKindQueryParam = parseVaultKindQueryParam(searchParams.get('vaultKind'))
+
+  const agentIntegrationQuery = useQuery({
+    queryKey: ['agentTokenIntegration', tokenIsValid ? creatorToken : null],
+    enabled: !!publicClient && tokenIsValid,
+    staleTime: 60_000,
+    retry: 0,
+    queryFn: async () => resolveAgentTokenIntegration(publicClient as PublicClient, creatorToken as Address),
+  })
+
+  const vaultKind: VaultKind = useMemo(() => {
+    if (vaultKindQueryParam) return vaultKindQueryParam
+    if (isAgentTokenV4Integration(agentIntegrationQuery.data ?? null)) return 'agent'
+    return 'creator'
+  }, [agentIntegrationQuery.data, vaultKindQueryParam])
+
+  const isAgentVaultDeploy = vaultKind === 'agent'
+  const isAgentTokenReady = isAgentVaultDeploy && isAgentTokenV4Integration(agentIntegrationQuery.data ?? null)
+  const laneBytecodeLabels = useMemo(() => resolveDeployLaneBytecodeLabels(vaultKind), [vaultKind])
+
   // NOTE: selectedOwnerWallet (smart wallet vs connected wallet) is computed further down once we know
   // payoutRecipient/creatorAddress.
 
@@ -8501,8 +8547,8 @@ function DeployVaultMain() {
 
   const derivedVaultSymbol = useMemo(() => {
     if (!underlyingSymbolUpper) return ''
-    return toVaultSymbol(underlyingSymbolUpper)
-  }, [underlyingSymbolUpper])
+    return vaultSymbolForVaultKind(underlyingSymbolUpper, vaultKind)
+  }, [underlyingSymbolUpper, vaultKind])
 
   const derivedVaultName = useMemo(() => {
     if (!underlyingSymbolUpper) return ''
@@ -8511,8 +8557,8 @@ function DeployVaultMain() {
 
   const derivedShareSymbol = useMemo(() => {
     if (!underlyingSymbolUpper) return ''
-    return toShareSymbol(underlyingSymbolUpper)
-  }, [underlyingSymbolUpper])
+    return shareSymbolForVaultKind(underlyingSymbolUpper, vaultKind)
+  }, [underlyingSymbolUpper, vaultKind])
 
   const derivedShareName = useMemo(() => {
     if (!underlyingSymbolUpper) return ''
@@ -9090,16 +9136,10 @@ function DeployVaultMain() {
   const creatorVaultBatcherConfigured = Boolean(creatorVaultBatcherAddress)
 
   const deployCodeIds = useMemo(() => {
+    const phase1 = resolveDeployLanePhase1CodeIds(vaultKind)
     return {
-      vault: keccak256(DEPLOY_BYTECODE.CreatorOVault as Hex),
-      wrapper: keccak256(DEPLOY_BYTECODE.CreatorOVaultWrapper as Hex),
-      shareOFT: keccak256(DEPLOY_BYTECODE.CreatorShareOFT as Hex),
-      gauge: keccak256(DEPLOY_BYTECODE.CreatorGaugeController as Hex),
-      cca: keccak256(DEPLOY_BYTECODE.CCALaunchStrategy as Hex),
-      oracle: keccak256(DEPLOY_BYTECODE.CreatorOracle as Hex),
-      oftBootstrap: keccak256(DEPLOY_BYTECODE.OFTBootstrapRegistry as Hex),
-      // Newly required per-vault contracts (deployed via UniversalCreate2DeployerFromStore)
-      payoutRouter: keccak256(DEPLOY_BYTECODE.CreatorPayoutRouter as Hex),
+      ...phase1,
+      payoutRouter: resolveDeployLanePayoutRouterCodeId(vaultKind),
       vaultShareBurnStream: keccak256(DEPLOY_BYTECODE.VaultShareBurnStream as Hex),
       creatorCoinPolicyController: keccak256(DEPLOY_BYTECODE.CreatorCoinPolicyController as Hex),
       charmStrategy4626: keccak256(DEPLOY_BYTECODE.CharmStrategy4626 as Hex),
@@ -9108,7 +9148,7 @@ function DeployVaultMain() {
       erc4626StrategyAdapter: keccak256(DEPLOY_BYTECODE.ERC4626StrategyAdapter as Hex),
       solanaStrategy: ZERO_BYTES32 as Hex,
     } as const
-  }, [])
+  }, [vaultKind])
 
   const bytecodeInfraQuery = useQuery({
     queryKey: [
@@ -9125,6 +9165,7 @@ function DeployVaultMain() {
       deployCodeIds.payoutRouter,
       deployCodeIds.vaultShareBurnStream,
       deployCodeIds.creatorCoinPolicyController,
+      vaultKind,
       deployCodeIds.charmStrategy4626,
       deployCodeIds.ajnaVaultAuth,
       deployCodeIds.ajnaVault,
@@ -9224,19 +9265,23 @@ function DeployVaultMain() {
 
       const codeEntries = [
         { key: 'oftBootstrap', label: 'OFTBootstrapRegistry', codeId: deployCodeIds.oftBootstrap },
-        { key: 'shareOFT', label: 'CreatorShareOFT', codeId: deployCodeIds.shareOFT },
-        { key: 'vault', label: 'CreatorOVault', codeId: deployCodeIds.vault },
-        { key: 'wrapper', label: 'CreatorOVaultWrapper', codeId: deployCodeIds.wrapper },
-        { key: 'gauge', label: 'CreatorGaugeController', codeId: deployCodeIds.gauge },
+        { key: 'shareOFT', label: laneBytecodeLabels.shareOFT, codeId: deployCodeIds.shareOFT },
+        { key: 'vault', label: laneBytecodeLabels.vault, codeId: deployCodeIds.vault },
+        { key: 'wrapper', label: laneBytecodeLabels.wrapper, codeId: deployCodeIds.wrapper },
+        { key: 'gauge', label: laneBytecodeLabels.gauge, codeId: deployCodeIds.gauge },
         { key: 'cca', label: 'CCALaunchStrategy', codeId: deployCodeIds.cca },
-        { key: 'oracle', label: 'CreatorOracle', codeId: deployCodeIds.oracle },
+        { key: 'oracle', label: laneBytecodeLabels.oracle, codeId: deployCodeIds.oracle },
         { key: 'vaultShareBurnStream', label: 'VaultShareBurnStream', codeId: deployCodeIds.vaultShareBurnStream },
-        { key: 'payoutRouter', label: 'PayoutRouter', codeId: deployCodeIds.payoutRouter },
-        {
-          key: 'creatorCoinPolicyController',
-          label: 'CreatorCoinPolicyController',
-          codeId: deployCodeIds.creatorCoinPolicyController,
-        },
+        { key: 'payoutRouter', label: laneBytecodeLabels.payoutRouter, codeId: deployCodeIds.payoutRouter },
+        ...(usesCreatorCoinPolicyController(vaultKind)
+          ? [
+              {
+                key: 'creatorCoinPolicyController',
+                label: 'CreatorCoinPolicyController',
+                codeId: deployCodeIds.creatorCoinPolicyController,
+              },
+            ]
+          : []),
         // Charm alpha vault is created via Charm's official factory in phase 3 (not from bytecode store).
         { key: 'charmStrategy4626', label: 'CharmStrategy4626', codeId: deployCodeIds.charmStrategy4626 },
         { key: 'ajnaVaultAuth', label: 'AjnaVaultAuth', codeId: deployCodeIds.ajnaVaultAuth },
@@ -9535,10 +9580,7 @@ function DeployVaultMain() {
 
   const canDeploy =
     tokenIsValid &&
-    !!zoraCoin &&
-    isCreatorCoin &&
     canonicalIdentityType === 'contract' &&
-    coinAgeOk &&
     isAuthorizedDeployerOrOperator &&
     creatorAllowlistQuery.isSuccess &&
     passesCreatorAllowlist &&
@@ -9553,9 +9595,13 @@ function DeployVaultMain() {
     !solanaMintOverrideInvalid &&
     !solanaDecimalsOverrideInvalid &&
     !identityBlockingReason &&
-    deployFeatureActivated &&
     deployEligibility.canProceedWithDeploySession &&
-    smartWalletCapabilityReady
+    smartWalletCapabilityReady &&
+    (isAgentTokenReady ||
+      (!!zoraCoin &&
+        isCreatorCoin &&
+        coinAgeOk &&
+        deployFeatureActivated))
 
   const vrfConsumerAddress = (CONTRACTS.vrfConsumer ?? null) as Address | null
   const vrfConsumerConfigured = isAddress(String(vrfConsumerAddress ?? ''))
@@ -9681,14 +9727,20 @@ function DeployVaultMain() {
 
   const deployBlocker =
     !tokenIsValid
-      ? 'Enter a creator coin address to continue.'
-      : tokenIsValid && !zoraCoin
+      ? isAgentVaultDeploy
+        ? 'Enter an AgentTokenV4 address to continue.'
+        : 'Enter a creator coin address to continue.'
+      : tokenIsValid && isAgentVaultDeploy && agentIntegrationQuery.isLoading
+        ? 'Checking agent token integration…'
+      : tokenIsValid && isAgentVaultDeploy && !isAgentTokenReady
+        ? 'Token is not a supported AgentTokenV4 integration.'
+      : tokenIsValid && !isAgentVaultDeploy && !zoraCoin
         ? 'Token is not a Zora Creator Coin.'
-        : tokenIsValid && zoraCoin && !isCreatorCoin
-          ? 'Only Creator Coins can deploy a vault.'
+        : tokenIsValid && !isAgentVaultDeploy && zoraCoin && !isCreatorCoin
+          ? 'Only Creator Coins can deploy a vault. Use ?vaultKind=agent for AgentTokenV4 deploys.'
           : tokenIsValid && zoraCoin && canonicalIdentityType === 'eoa'
             ? 'Deploy requires your canonical Coinbase Smart Wallet as sender. Connect with the canonical smart wallet identity.'
-          : tokenIsValid && zoraCoin && isCreatorCoin && !coinAgeOk
+          : tokenIsValid && !isAgentVaultDeploy && zoraCoin && isCreatorCoin && !coinAgeOk
             ? `Creator Coin must be at least ${minCoinAgeDays} days old to deploy.`
           : creatorAllowlistQuery.isLoading
             ? 'Checking vault allowlist…'
@@ -9702,7 +9754,7 @@ function DeployVaultMain() {
                     ? 'Checking USDC deployment feature activation…'
                     : creatorStrategyDeployGateQuery.isError
                       ? 'Could not verify deployment feature activation. Use the activation panel below and confirm vault_full_deploy is active.'
-                      : !deployFeatureActivated
+                      : !isAgentVaultDeploy && !deployFeatureActivated
                         ? 'Vault deploy requires paid feature activation (USDC-denominated). Activate vault_full_deploy below.'
                   : !isAuthorizedDeployerOrOperator
                     ? 'Connect the creator or CreatorCoin payout recipient wallet.'
@@ -10213,6 +10265,7 @@ function DeployVaultMain() {
                     solanaDecimalsOverride={solanaDecimalsOverride}
                     connectorId={connector?.id}
                     wagmiWalletClient={walletClient}
+                    vaultKind={vaultKind}
                   />
                 </>
               ) : (

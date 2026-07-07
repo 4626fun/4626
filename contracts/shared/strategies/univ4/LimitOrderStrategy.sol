@@ -39,7 +39,7 @@ import {V4LiquidityAmounts} from "@4626/shared/libraries/uniswap/V4LiquidityAmou
  *      Usable for asset, agent, or future ecosystems by configuring the base token.
  *
  * @dev INTEGRATION:
- *      - Plugs into lane-specific LPManager (e.g. CreatorLPManager or agent equivalent)
+ *      - Plugs into OVaultLPManager (shared univ4 orchestrator)
  *      - Multiple limit order positions can be active simultaneously
  */
 

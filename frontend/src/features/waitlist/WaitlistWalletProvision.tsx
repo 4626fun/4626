@@ -55,6 +55,9 @@ function WaitlistWalletProvisionInner(props: WaitlistWalletProvisionProps) {
       </div>
       {busy ? <LoadingInline labelOverride="Provisioning wallet…" /> : null}
       {error ? <p className="text-xs text-rose-300/90">{error}</p> : null}
+      {me?.accountSignals?.walletHydrationError ? (
+        <p className="text-xs text-amber-200/90">{me.accountSignals.walletHydrationError}</p>
+      ) : null}
       {!busy ? (
         <Button type="button" variant="secondary" size="sm" onClick={() => void runProvision()}>
           Retry wallet setup

@@ -34,6 +34,7 @@ export function usePrivyCswWebOwnerInstall(params: {
   const [alreadyOwner, setAlreadyOwner] = useState(false)
   const [txRequest, setTxRequest] = useState<PreparedOwnerTxRequest | null>(null)
   const autoCheckedRef = useRef(false)
+  const autoPrepareStartedRef = useRef(false)
 
   const authHeaders = useCallback(
     () =>
@@ -92,6 +93,8 @@ export function usePrivyCswWebOwnerInstall(params: {
       }
       return
     }
+    if (autoPrepareStartedRef.current) return
+    autoPrepareStartedRef.current = true
     void loadPrepare()
   }, [embeddedOwnerOnChain, loadPrepare, markReady, params.enabled])
 

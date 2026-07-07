@@ -81,7 +81,7 @@ export const CONTRACTS = {
   // External - Uniswap V4
   poolManager: envAddress('VITE_V4_POOL_MANAGER', BASE_DEFAULTS.poolManager)!,
   taxHook: envAddress('VITE_V4_TAX_HOOK', BASE_DEFAULTS.taxHook)!,
-  // V4 periphery (optional; required for on-chain V4 LP strategies like CreatorLPManager)
+  // V4 periphery (optional; required for on-chain V4 LP strategies like OVaultLPManager)
   v4PositionManager: envAddress('VITE_V4_POSITION_MANAGER'),
   chainlinkEthUsd: envAddress('VITE_CHAINLINK_ETH_USD', BASE_DEFAULTS.chainlinkEthUsd)!,
   weth: envAddress('VITE_WETH', BASE_DEFAULTS.weth)!, // Base WETH

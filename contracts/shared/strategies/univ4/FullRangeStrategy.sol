@@ -36,7 +36,7 @@ import {IApprovedV4HooksRegistry} from "@4626/shared/strategies/univ4/ApprovedV4
  *      - This covers all possible prices
  *
  * @dev INTEGRATION:
- *      - Plugs into lane-specific LPManager (e.g. CreatorLPManager)
+ *      - Plugs into OVaultLPManager (shared univ4 orchestrator)
  *      - Implements ILPStrategy interface
  */
 

@@ -356,45 +356,8 @@ export async function prepareWaitlistMessagingWallet(
     }
   }
 
-  // Prefer the regular Privy connector (after we called setActiveWallet(embedded) above).
-  // This avoids creating a synthetic `injected` connector (with custom target.provider)
-  // which tends to wake up wallet extension content scripts (evmAsk.js, injected.js,
-  // requestProvider.js etc). Those scripts then throw "injected is not defined",
-  // "Cannot set property ethereum ... which has only a getter", and trigger the
-  // provider.on errors we saw (both in our code and inside the extensions' own
-  // inject logic).
-  //
-  // The privy connector is a first-class one that already knows how to talk to
-  // Privy wallets (including the embedded EOA). After setActiveWallet the active
-  // one should be our embedded; waitFor will verify the address matches.
-  const privyConnector = input.connectors.find((connector) => {
-    const id = connector.id.toLowerCase()
-    const name = connector.name.toLowerCase()
-    return id.includes('privy') || name.includes('privy')
-  })
-
-  if (privyConnector) {
-    try {
-      await input.connectAsync({ connector: privyConnector })
-    } catch (error) {
-      if (!isConnectorAlreadyConnectedError(error)) {
-        // fall through to synthetic
-      }
-    }
-
-    const settled = await waitForMessagingWallet(input.wagmiConfig, {
-      expectedAddress: embeddedAddress,
-      connectorPredicate: isWaitlistMessagingWagmiConnector,
-    })
-    if (settled) return { ok: true }
-  }
-
-  // Only if the normal Privy path didn't land on the exact embedded EOA we want
-  // (can happen if Privy has several wallets in the session and the connector
-  // picks a different one), fall back to the synthetic injected that directly
-  // wires the embedded provider we resolved. The wrapper on it prevents the
-  // "provider.on is not a function" and wallet_* leaks, and stubs the event
-  // methods.
+  // The privy connector is not mounted on email/Zora waitlist tracks — use the
+  // synthetic embedded provider directly to avoid waking extension injectors.
   const embeddedConnect = await connectEmbeddedWaitlistProvider(input, provider, embeddedAddress)
   if (embeddedConnect.ok) return embeddedConnect
 

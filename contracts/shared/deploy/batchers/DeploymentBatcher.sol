@@ -354,7 +354,7 @@ contract DeploymentBatcherUniV4Helper {
         if (
             codeIds.approvedV4HooksRegistry == bytes32(0) || codeIds.fullRangeStrategy == bytes32(0)
                 || codeIds.concentratedStrategy == bytes32(0) || codeIds.limitOrderStrategy == bytes32(0)
-                || codeIds.creatorLPManager == bytes32(0)
+                || codeIds.lpManager == bytes32(0)
         ) {
             revert InvalidCodeId();
         }
@@ -370,10 +370,10 @@ contract DeploymentBatcherUniV4Helper {
         }
         IApprovedV4HooksRegistryAdmin(out.hookRegistry).setHookApproval(params.poolHook, true);
 
-        bytes32 managerSalt = _saltFor(baseSalt, "univ4CreatorLPManager");
-        out.creatorLPManager = create2Deployer.deploy(
+        bytes32 managerSalt = _saltFor(baseSalt, "univ4OVaultLPManager");
+        out.lpManager = create2Deployer.deploy(
             managerSalt,
-            codeIds.creatorLPManager,
+            codeIds.lpManager,
             abi.encode(
                 params.creatorToken,
                 params.pairedToken,
@@ -390,7 +390,7 @@ contract DeploymentBatcherUniV4Helper {
             abi.encode(
                 params.creatorToken,
                 params.pairedToken,
-                out.creatorLPManager,
+                out.lpManager,
                 address(this),
                 out.hookRegistry
             )
@@ -403,7 +403,7 @@ contract DeploymentBatcherUniV4Helper {
             abi.encode(
                 params.creatorToken,
                 params.pairedToken,
-                out.creatorLPManager,
+                out.lpManager,
                 address(this),
                 out.hookRegistry
             )
@@ -416,15 +416,15 @@ contract DeploymentBatcherUniV4Helper {
             abi.encode(
                 params.creatorToken,
                 params.pairedToken,
-                out.creatorLPManager,
+                out.lpManager,
                 address(this),
                 out.hookRegistry
             )
         );
 
         PoolKey memory poolKey = PoolKey({
-            currency0: params.creatorIsCurrency0 ? Currency.wrap(params.creatorToken) : Currency.wrap(params.pairedToken),
-            currency1: params.creatorIsCurrency0 ? Currency.wrap(params.pairedToken) : Currency.wrap(params.creatorToken),
+            currency0: params.assetIsCurrency0 ? Currency.wrap(params.creatorToken) : Currency.wrap(params.pairedToken),
+            currency1: params.assetIsCurrency0 ? Currency.wrap(params.pairedToken) : Currency.wrap(params.creatorToken),
             fee: params.fee,
             tickSpacing: params.tickSpacing,
             hooks: IHooks(params.poolHook)
@@ -439,14 +439,14 @@ contract DeploymentBatcherUniV4Helper {
         IUniV4ConfigurableStrategy(out.limitOrderStrategy).configurePool(
             poolManager, params.positionManager, permit2, poolKey
         );
-        IUniV4ConfigurableStrategy(out.creatorLPManager).configurePool(
+        IUniV4ConfigurableStrategy(out.lpManager).configurePool(
             poolManager, params.positionManager, permit2, poolKey
         );
 
         IUniV4ConfigurableStrategy(out.fullRangeStrategy).transferOwnership(params.owner);
         IUniV4ConfigurableStrategy(out.concentratedStrategy).transferOwnership(params.owner);
         IUniV4ConfigurableStrategy(out.limitOrderStrategy).transferOwnership(params.owner);
-        IUniV4ConfigurableStrategy(out.creatorLPManager).transferOwnership(params.owner);
+        IUniV4ConfigurableStrategy(out.lpManager).transferOwnership(params.owner);
         IApprovedV4HooksRegistryAdmin(out.hookRegistry).transferOwnership(params.registryOwner);
     }
 
@@ -1578,7 +1578,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         bytes32 fullRangeStrategy;
         bytes32 concentratedStrategy;
         bytes32 limitOrderStrategy;
-        bytes32 creatorLPManager;
+        bytes32 lpManager;
     }
 
     struct UniV4DeployParams {
@@ -1590,7 +1590,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         address positionManager;
         uint24 fee;
         int24 tickSpacing;
-        bool creatorIsCurrency0;
+        bool assetIsCurrency0;
         address poolHook;
         address registryOwner;
         address[] hooksToApprove;
@@ -1601,7 +1601,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         address fullRangeStrategy;
         address concentratedStrategy;
         address limitOrderStrategy;
-        address creatorLPManager;
+        address lpManager;
     }
 
     struct OVaultRuntimeConfig {
@@ -1786,7 +1786,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         address fullRangeStrategy,
         address concentratedStrategy,
         address limitOrderStrategy,
-        address creatorLPManager,
+        address lpManager,
         address poolHook,
         address registryOwner
     );
@@ -2252,7 +2252,7 @@ contract DeploymentBatcher is ReentrancyGuard {
 
     /**
      * @notice Deploy + configure UniV4 strategy set with approved-hook enforcement.
-     * @dev Deploys a hook registry + FullRange + Concentrated + LimitOrder + CreatorLPManager,
+     * @dev Deploys a hook registry + FullRange + Concentrated + LimitOrder + OVaultLPManager,
      *      configures all pools using the same hook, then transfers ownerships.
      */
     function deployUniV4Strategies(UniV4DeployParams calldata params, UniV4CodeIds calldata codeIds)
@@ -2272,7 +2272,7 @@ contract DeploymentBatcher is ReentrancyGuard {
             out.fullRangeStrategy,
             out.concentratedStrategy,
             out.limitOrderStrategy,
-            out.creatorLPManager,
+            out.lpManager,
             params.poolHook,
             params.registryOwner
         );

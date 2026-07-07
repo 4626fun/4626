@@ -5,7 +5,7 @@ pragma solidity ^0.8.20;
  * @title ILPStrategy
  * @author 0xakita.eth
  * @notice Interface for LP strategy adapters.
- * @dev Implemented by strategies used by lane LP managers (e.g. `CreatorLPManager`).
+ * @dev Implemented by strategies used by `OVaultLPManager`.
  */
 interface ILPStrategy {
     // =================================
