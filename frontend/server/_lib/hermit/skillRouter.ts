@@ -544,13 +544,19 @@ function summarizeArenaRunFailure(
   run: { error?: string; stderr?: string; stdout?: string } | undefined,
 ): string | null {
   if (!run) return null
-  const candidate = [run.error, run.stderr, run.stdout]
-    .map((part) => String(part ?? '').trim())
-    .find((part) => part.length > 0)
-  if (!candidate) return null
-  const firstLine = candidate.split('\n').map((line) => line.trim()).find((line) => line.length > 0)
-  if (!firstLine) return null
-  return firstLine.length > 280 ? `${firstLine.slice(0, 277)}...` : firstLine
+  const lines: string[] = []
+  for (const part of [run.error, run.stderr, run.stdout]) {
+    for (const line of String(part ?? '').split('\n')) {
+      const trimmed = line.trim()
+      if (trimmed && !lines.includes(trimmed)) lines.push(trimmed)
+    }
+  }
+  if (lines.length === 0) return null
+  // Node exec's "Command failed: <cmd>" line carries no signal — prefer the
+  // underlying tool output (e.g. the ACP signer error) when present.
+  const informative = lines.filter((line) => !/^command failed:/i.test(line))
+  const summary = (informative.length > 0 ? informative : lines).slice(0, 2).join(' — ')
+  return summary.length > 280 ? `${summary.slice(0, 277)}...` : summary
 }
 
 function formatStrategyUsage(roomId?: string | null): string {

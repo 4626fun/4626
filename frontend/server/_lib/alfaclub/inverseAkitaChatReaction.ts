@@ -29,11 +29,186 @@ function normalizeChatTradeIntentText(text: string): string {
     .trim()
 }
 
-function isNonActionTradeChatter(text: string): boolean {
-  return (
-    /\bthinking\s+(?:about|of)\s+(?:going\s+)?(?:long|short)\b/i.test(text) ||
-    /\b(?:talking|chatting|debating)\s+about\s+(?:going\s+)?(?:long|short)\b/i.test(text)
-  )
+/**
+ * Known Hyperliquid perp aliases so the loose sentiment parser only fires on
+ * real assets (or explicit $TICKER), not random words. Deliberately excludes
+ * ambiguous everyday words like "ton".
+ */
+const PAIR_ALIASES: Record<string, string> = {
+  btc: 'BTC', bitcoin: 'BTC', xbt: 'BTC',
+  eth: 'ETH', ethereum: 'ETH', ether: 'ETH',
+  sol: 'SOL', solana: 'SOL',
+  doge: 'DOGE', dogecoin: 'DOGE',
+  xrp: 'XRP', ripple: 'XRP',
+  ada: 'ADA', cardano: 'ADA',
+  avax: 'AVAX', avalanche: 'AVAX',
+  link: 'LINK', chainlink: 'LINK',
+  sui: 'SUI',
+  apt: 'APT', aptos: 'APT',
+  arb: 'ARB', arbitrum: 'ARB',
+  op: 'OP', optimism: 'OP',
+  pol: 'POL', matic: 'POL', polygon: 'POL',
+  ltc: 'LTC', litecoin: 'LTC',
+  bnb: 'BNB',
+  near: 'NEAR',
+  dot: 'DOT', polkadot: 'DOT',
+  atom: 'ATOM', cosmos: 'ATOM',
+  uni: 'UNI', uniswap: 'UNI',
+  aave: 'AAVE',
+  hype: 'HYPE', hyperliquid: 'HYPE',
+  pepe: 'PEPE',
+  wif: 'WIF',
+  bonk: 'BONK',
+  shib: 'SHIB',
+  trx: 'TRX', tron: 'TRX',
+  ena: 'ENA',
+  ondo: 'ONDO',
+  sei: 'SEI',
+  tia: 'TIA', celestia: 'TIA',
+  inj: 'INJ', injective: 'INJ',
+  jup: 'JUP', jupiter: 'JUP',
+  ldo: 'LDO', lido: 'LDO',
+  mkr: 'MKR', maker: 'MKR',
+  crv: 'CRV', curve: 'CRV',
+  fartcoin: 'FARTCOIN',
+  kas: 'KAS', kaspa: 'KAS',
+  xlm: 'XLM', stellar: 'XLM',
+  bch: 'BCH',
+  fil: 'FIL', filecoin: 'FIL',
+  wld: 'WLD', worldcoin: 'WLD',
+  ordi: 'ORDI',
+  popcat: 'POPCAT',
+  pnut: 'PNUT',
+  moodeng: 'MOODENG',
+  pengu: 'PENGU',
+  trump: 'TRUMP',
+  eigen: 'EIGEN',
+  zro: 'ZRO', layerzero: 'ZRO',
+  strk: 'STRK', starknet: 'STRK',
+  render: 'RENDER', rndr: 'RENDER',
+  virtual: 'VIRTUAL', virtuals: 'VIRTUAL',
+  ai16z: 'AI16Z',
+  aixbt: 'AIXBT',
+  zora: 'ZORA',
+}
+
+/** Extract the first recognizable perp asset from casual chat ($TICKER wins). */
+export function extractChatMarketAsset(text: string): string | null {
+  const dollarMatch = /\$([a-z0-9]{2,12})\b/i.exec(text)
+  if (dollarMatch) {
+    const raw = dollarMatch[1]!.toLowerCase()
+    return PAIR_ALIASES[raw] ?? raw.toUpperCase()
+  }
+  for (const word of text.toLowerCase().split(/[^a-z0-9]+/)) {
+    const mapped = PAIR_ALIASES[word]
+    if (mapped) return mapped
+  }
+  return null
+}
+
+/**
+ * Loose market-sentiment lexicon. Any opinion-sounding phrase counts; the
+ * decisive direction (long vs short) is the user's lean we then invert.
+ */
+const BULLISH_SENTIMENT_RES: RegExp[] = [
+  /\blong(?:ing|ed)?\b/i,
+  /\bbull(?:ish|s)?\b/i,
+  /\bpump(?:s|ing|ed)?\b/i,
+  /\bmoon(?:ing|shot|s)?\b/i,
+  /\bsend(?:ing)?\s+it\b/i,
+  /\brip(?:s|ping)\b/i,
+  /\brally(?:ing)?\b/i,
+  /\bbreak(?:s|ing)?\s?out\b/i,
+  /\bath\b/i,
+  /\bup\s?only\b/i,
+  /\bgoing\s+(?:up|higher)\b/i,
+  /\bbuy(?:ing)?\b/i,
+  /\bbid(?:ding)?\b/i,
+  /\baccumulat(?:e|ing|ed)\b/i,
+  /\bap(?:e|ing|ed)\s+(?:in|into)?\b/i,
+  /\bload(?:ing)?\s+(?:up|the\s+boat)\b/i,
+  /\bundervalued\b/i,
+  /\bcheap\b/i,
+  /\bprint(?:s|ing)\b/i,
+  /\bgod\s+candle\b/i,
+  /\bsupercycle\b/i,
+  /\bnumber\s+go\s+up\b/i,
+  /\bso\s+back\b/i,
+  /\blook(?:s|ing)?\s+(?:good|strong|great|juicy|ready|bullish)\b/i,
+  /\bto\s+\$?\d*[1-9]\d*(?:\.\d+)?k?\b/i,
+  /\bgonna\s+(?:run|rip|fly|pump|moon|send)\b/i,
+]
+
+const BEARISH_SENTIMENT_RES: RegExp[] = [
+  /\bshort(?:ing|ed)?\b/i,
+  /\bbear(?:ish|s)?\b/i,
+  /\bdump(?:s|ing|ed)?\b/i,
+  /\bcrash(?:ing|es)?\b/i,
+  /\bnuke(?:s|d|ing)?\b/i,
+  /\btank(?:s|ing|ed)?\b/i,
+  /\bbleed(?:s|ing)?\b/i,
+  /\brug(?:ged|pull|s)?\b/i,
+  /\brekt\b/i,
+  /\bcooked\b/i,
+  /\bdead\b/i,
+  /\bit'?s\s+over\b/i,
+  /\bovervalued\b/i,
+  /\bweak\b/i,
+  /\bheavy\b/i,
+  /\bugly\b/i,
+  /\bdrop(?:s|ping|ped)?\b/i,
+  /\bdown\s?bad\b/i,
+  /\bgoing\s+(?:down|lower)\b/i,
+  /\bsell(?:ing)?\b/i,
+  /\bfad(?:e|ing)\b/i,
+  /\btop\s+(?:is\s+)?in\b/i,
+  /\btopped\b/i,
+  /\bto\s+(?:zero|\$?0)\b/i,
+  /\bcapitulat(?:e|ion|ing)\b/i,
+  /\bcorrection\b/i,
+  /\bpull\s?back\b/i,
+  /\bngmi\b/i,
+  /\bexit\s+liquidity\b/i,
+  /\brip\b(?!(?:s|ping))/i,
+  /\blook(?:s|ing)?\s+(?:bad|weak|terrible|cooked|grim|bearish|heavy|rough)\b/i,
+]
+
+const NEGATION_WORDS = new Set([
+  'not', 'no', 'never', 'isnt', "isn't", 'aint', "ain't",
+  'dont', "don't", 'doesnt', "doesn't", 'wont', "won't",
+  'wouldnt', "wouldn't", 'cant', "can't", 'nothing',
+])
+
+function isNegatedAt(text: string, matchIndex: number): boolean {
+  const before = text.slice(Math.max(0, matchIndex - 32), matchIndex)
+  const words = before.toLowerCase().split(/[^a-z']+/).filter(Boolean)
+  return words.slice(-3).some((word) => NEGATION_WORDS.has(word))
+}
+
+function scoreSentiment(text: string, patterns: RegExp[]): { score: number; flipped: number } {
+  let score = 0
+  let flipped = 0
+  for (const re of patterns) {
+    const match = re.exec(text)
+    if (!match) continue
+    if (isNegatedAt(text, match.index)) flipped += 1
+    else score += 1
+  }
+  return { score, flipped }
+}
+
+/**
+ * Detect the user's directional lean from arbitrary market chatter.
+ * Negated terms ("not bullish") count toward the opposite side.
+ */
+export function detectChatMarketSentiment(text: string): CounterTradeSide | null {
+  const bull = scoreSentiment(text, BULLISH_SENTIMENT_RES)
+  const bear = scoreSentiment(text, BEARISH_SENTIMENT_RES)
+  const longScore = bull.score + bear.flipped
+  const shortScore = bear.score + bull.flipped
+  if (longScore > shortScore) return 'long'
+  if (shortScore > longScore) return 'short'
+  return null
 }
 
 function parseTradeIntentMatch(match: RegExpExecArray): ParsedInverseAkitaChatTradeIntent | null {
@@ -239,7 +414,6 @@ export type InverseAkitaChatHistoryMessage = {
 export function parseInverseAkitaChatTradeIntent(text: string): ParsedInverseAkitaChatTradeIntent | null {
   const trimmed = String(text ?? '').trim()
   if (!trimmed || trimmed.startsWith('/')) return null
-  if (isNonActionTradeChatter(trimmed)) return null
 
   const normalized = normalizeChatTradeIntentText(trimmed)
   if (!normalized) return null
@@ -253,6 +427,15 @@ export function parseInverseAkitaChatTradeIntent(text: string): ParsedInverseAki
   if (/@[\w.-]+/.test(trimmed)) {
     const mentionLed = MENTION_LED_TRADE_INTENT_RE.exec(normalized)
     if (mentionLed) return parseTradeIntentMatch(mentionLed)
+  }
+
+  // Loose fallback: any opinion-sounding market chatter ("btc looking cooked",
+  // "eth to 10k", "sol gonna pump") — requires a recognizable asset so random
+  // sentences don't trade.
+  const sentimentSide = detectChatMarketSentiment(normalized)
+  if (sentimentSide) {
+    const pair = extractChatMarketAsset(normalized)
+    if (pair) return { userSide: sentimentSide, pair }
   }
 
   return null
@@ -324,6 +507,26 @@ export function collectInverseAkitaChatTradeIntents(params: {
   return out
 }
 
+/** First informative line of a failed arena run, for chat-visible fail replies. */
+export function summarizeInverseTradeFailureDetail(
+  run: { error?: string; stderr?: string; stdout?: string } | undefined | null,
+): string | null {
+  if (!run) return null
+  const lines: string[] = []
+  for (const part of [run.error, run.stderr, run.stdout]) {
+    for (const line of String(part ?? '').split('\n')) {
+      const trimmed = line.trim()
+      if (trimmed && !lines.includes(trimmed)) lines.push(trimmed)
+    }
+  }
+  if (lines.length === 0) return null
+  // Node's exec error message ("Command failed: npx tsx ...") carries no
+  // signal — prefer the underlying tool output when present.
+  const informative = lines.filter((line) => !/^command failed:/i.test(line))
+  const detail = (informative[0] ?? lines[0])!
+  return detail.length > 160 ? `${detail.slice(0, 157)}...` : detail
+}
+
 export function formatInverseAkitaChatReactionReply(params: {
   seed: string
   userSide: CounterTradeSide
@@ -333,6 +536,7 @@ export function formatInverseAkitaChatReactionReply(params: {
   leverage: number
   dryRun: boolean
   tradeOk: boolean
+  failDetail?: string | null
 }): string {
   const ctx: InverseReplyContext = {
     pair: params.pair,
@@ -350,9 +554,38 @@ export function formatInverseAkitaChatReactionReply(params: {
     if (params.dryRun) text = `${text} [dry-run]`
   } else {
     text = pickInverseReplyTemplate(params.seed, 'fail', INVERSE_TRADE_FAIL)(ctx)
+    if (params.failDetail) text = `${text} (${params.failDetail})`
   }
 
   return text
+}
+
+export function formatInverseAkitaChatReactionSkipReply(skipReason: string): string | null {
+  switch (skipReason) {
+    case 'arena_trading_disabled':
+      return 'wanted to invert your take but arena trading is off on the server. operator skill issue.'
+    case 'missing_executor_wallet':
+      return 'wanted to invert your take but InverseAKITA has no executor wallet mapped yet.'
+    case 'arena_room_blocked':
+      return 'wanted to invert your take but this room is not on the arena allowlist.'
+    default:
+      if (skipReason.startsWith('pair_') || skipReason.includes('allowlist')) {
+        return `wanted to invert your take but that pair is blocked here (${skipReason}).`
+      }
+      return null
+  }
+}
+
+function withInverseSkipReply(
+  result: Omit<InverseAkitaChatReactionResult, 'replyText' | 'reactionEmoji'>,
+  messageId: string,
+): InverseAkitaChatReactionResult {
+  const skipReply = result.skipped ? formatInverseAkitaChatReactionSkipReply(result.skipReason ?? '') : null
+  return {
+    ...result,
+    replyText: skipReply ?? '',
+    reactionEmoji: skipReply ? resolveInverseAkitaChatReactionEmoji(messageId) : '',
+  }
 }
 
 export function isInverseAkitaChatReactionSenderCoolingDown(
@@ -421,15 +654,16 @@ export async function executeInverseAkitaChatReaction(params: {
     }
   }
   if (!arenaCommandAllowedForRoom(roomId)) {
-    return {
-      ok: false,
-      skipped: true,
-      skipReason: 'arena_room_blocked',
-      replyText: '',
-      reactionEmoji: '',
-      counterSide: deriveCounterSide(params.intent.userSide),
-      pair: params.intent.pair,
-    }
+    return withInverseSkipReply(
+      {
+        ok: false,
+        skipped: true,
+        skipReason: 'arena_room_blocked',
+        counterSide: deriveCounterSide(params.intent.userSide),
+        pair: params.intent.pair,
+      },
+      params.intent.id,
+    )
   }
   if (isInverseAkitaChatReactionSenderCoolingDown(params.intent.sender)) {
     return {
@@ -445,28 +679,30 @@ export async function executeInverseAkitaChatReaction(params: {
 
   const baseConfig = readArenaConfig()
   if (!baseConfig.enabled || !baseConfig.tradingEnabled) {
-    return {
-      ok: false,
-      skipped: true,
-      skipReason: 'arena_trading_disabled',
-      replyText: '',
-      reactionEmoji: '',
-      counterSide: deriveCounterSide(params.intent.userSide),
-      pair: params.intent.pair,
-    }
+    return withInverseSkipReply(
+      {
+        ok: false,
+        skipped: true,
+        skipReason: 'arena_trading_disabled',
+        counterSide: deriveCounterSide(params.intent.userSide),
+        pair: params.intent.pair,
+      },
+      params.intent.id,
+    )
   }
 
   const pairCheck = validateArenaPair(params.intent.pair, baseConfig)
   if (!pairCheck.ok) {
-    return {
-      ok: false,
-      skipped: true,
-      skipReason: pairCheck.reason,
-      replyText: '',
-      reactionEmoji: '',
-      counterSide: deriveCounterSide(params.intent.userSide),
-      pair: params.intent.pair,
-    }
+    return withInverseSkipReply(
+      {
+        ok: false,
+        skipped: true,
+        skipReason: pairCheck.reason,
+        counterSide: deriveCounterSide(params.intent.userSide),
+        pair: params.intent.pair,
+      },
+      params.intent.id,
+    )
   }
 
   const identity = await resolveRoomDefaultArenaIdentity({ roomId, baseConfig })
@@ -481,15 +717,16 @@ export async function executeInverseAkitaChatReaction(params: {
   }
 
   if (!executionConfig.agentWalletAddress) {
-    return {
-      ok: false,
-      skipped: true,
-      skipReason: 'missing_executor_wallet',
-      replyText: '',
-      reactionEmoji: '',
-      counterSide,
-      pair: pairCheck.normalizedPair,
-    }
+    return withInverseSkipReply(
+      {
+        ok: false,
+        skipped: true,
+        skipReason: 'missing_executor_wallet',
+        counterSide,
+        pair: pairCheck.normalizedPair,
+      },
+      params.intent.id,
+    )
   }
 
   const trade = await runArenaTrade(
@@ -515,6 +752,7 @@ export async function executeInverseAkitaChatReaction(params: {
     leverage,
     dryRun: baseConfig.dryRun,
     tradeOk: trade.ok,
+    failDetail: trade.ok ? null : summarizeInverseTradeFailureDetail(trade.run),
   })
 
   logger.info('inverse_akita.chat_reaction', {

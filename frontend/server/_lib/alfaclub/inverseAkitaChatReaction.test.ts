@@ -28,11 +28,13 @@ import {
   computeInverseAkitaChatReactionLeverage,
   executeInverseAkitaChatReaction,
   formatInverseAkitaChatReactionReply,
+  formatInverseAkitaChatReactionSkipReply,
   INVERSE_AKITA_CHAT_REACTION_EMOJIS,
   resolveInverseAkitaChatReactionEmoji,
   isInverseAkitaChatReactionSenderCoolingDown,
   parseInverseAkitaChatTradeIntent,
   resolveInverseAkitaChatReactionLeverage,
+  summarizeInverseTradeFailureDetail,
 } from './inverseAkitaChatReaction.js'
 
 const mockRunArenaTrade = vi.mocked(runArenaTrade)
@@ -67,7 +69,13 @@ describe('inverseAkitaChatReaction', () => {
     vi.unstubAllEnvs()
   })
 
-  it('parses casual long/short chat intents', () => {
+  it('formats skip replies for operator-visible config failures', () => {
+    expect(formatInverseAkitaChatReactionSkipReply('arena_trading_disabled')).toMatch(/arena trading is off/i)
+    expect(formatInverseAkitaChatReactionSkipReply('missing_executor_wallet')).toMatch(/executor wallet/i)
+    expect(formatInverseAkitaChatReactionSkipReply('sender_cooldown')).toBeNull()
+  })
+
+  it('parses mention-led and question-style trade intents', () => {
     expect(parseInverseAkitaChatTradeIntent('long btc')).toEqual({
       userSide: 'long',
       pair: 'BTC',
@@ -93,7 +101,59 @@ describe('inverseAkitaChatReaction', () => {
       pair: 'BTC',
     })
     expect(parseInverseAkitaChatTradeIntent('/h arena long BTC 50 5')).toBeNull()
-    expect(parseInverseAkitaChatTradeIntent('thinking about long btc')).toBeNull()
+  })
+
+  it('parses loose market-opinion sentiment for known assets', () => {
+    expect(parseInverseAkitaChatTradeIntent('btc looking bullish today')).toEqual({
+      userSide: 'long',
+      pair: 'BTC',
+    })
+    expect(parseInverseAkitaChatTradeIntent('eth is gonna dump hard')).toEqual({
+      userSide: 'short',
+      pair: 'ETH',
+    })
+    expect(parseInverseAkitaChatTradeIntent('sol gonna pump tonight')).toEqual({
+      userSide: 'long',
+      pair: 'SOL',
+    })
+    expect(parseInverseAkitaChatTradeIntent('bearish on doge ngl')).toEqual({
+      userSide: 'short',
+      pair: 'DOGE',
+    })
+    expect(parseInverseAkitaChatTradeIntent('btc to 100k')).toEqual({
+      userSide: 'long',
+      pair: 'BTC',
+    })
+    expect(parseInverseAkitaChatTradeIntent('eth is dead bro')).toEqual({
+      userSide: 'short',
+      pair: 'ETH',
+    })
+    expect(parseInverseAkitaChatTradeIntent('should i buy some bitcoin here')).toEqual({
+      userSide: 'long',
+      pair: 'BTC',
+    })
+    expect(parseInverseAkitaChatTradeIntent('$wif looks cooked')).toEqual({
+      userSide: 'short',
+      pair: 'WIF',
+    })
+    expect(parseInverseAkitaChatTradeIntent('thinking about long btc')).toEqual({
+      userSide: 'long',
+      pair: 'BTC',
+    })
+  })
+
+  it('flips negated sentiment and skips ambiguous or asset-free chatter', () => {
+    expect(parseInverseAkitaChatTradeIntent('btc is not looking good')).toEqual({
+      userSide: 'short',
+      pair: 'BTC',
+    })
+    // no recognizable asset — never trade on vibes alone
+    expect(parseInverseAkitaChatTradeIntent('everything is pumping lol')).toBeNull()
+    // mixed signals — skip
+    expect(parseInverseAkitaChatTradeIntent('btc could pump or dump who knows')).toBeNull()
+    // plain chatter with an asset but no opinion
+    expect(parseInverseAkitaChatTradeIntent('anyone watching btc rn')).toBeNull()
+    expect(parseInverseAkitaChatTradeIntent('gm')).toBeNull()
   })
 
   it('collects intents for room 1659 and skips operators', () => {
@@ -158,6 +218,29 @@ describe('inverseAkitaChatReaction', () => {
       tradeOk: false,
     })
     expect(reply).toMatch(/long|ETH|failed|no/i)
+  })
+
+  it('appends the real failure detail instead of a bare Command failed line', () => {
+    expect(
+      summarizeInverseTradeFailureDetail({
+        error: 'Command failed: npx tsx scripts/trade.ts open --pair BTC --side short',
+        stdout: 'Failed to sign with ACP CLI. Make sure acp-cli is configured:\n  acp configure',
+      }),
+    ).toBe('Failed to sign with ACP CLI. Make sure acp-cli is configured:')
+    expect(summarizeInverseTradeFailureDetail(null)).toBeNull()
+
+    const reply = formatInverseAkitaChatReactionReply({
+      seed: 'm3',
+      userSide: 'long',
+      pair: 'BTC',
+      counterSide: 'short',
+      sizeUsd: 11,
+      leverage: 27,
+      dryRun: false,
+      tradeOk: false,
+      failDetail: 'Failed to sign with ACP CLI.',
+    })
+    expect(reply).toContain('(Failed to sign with ACP CLI.)')
   })
 
   it('executes the opposite side on InverseAKITA wallet', async () => {

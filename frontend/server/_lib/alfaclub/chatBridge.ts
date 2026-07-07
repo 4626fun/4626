@@ -1176,6 +1176,14 @@ function mapBotHistoryMessageToBridgeMessage(
   } as AlfaClubRoomHistoryMessage
 }
 
+function normalizeFetchedHistoryMessages(
+  messages: AlfaClubRoomHistoryMessage[],
+): AlfaClubRoomHistoryMessage[] {
+  return messages
+    .map((message) => mapBotHistoryMessageToBridgeMessage(message as BotTokenRoomHistoryMessage))
+    .filter((message): message is AlfaClubRoomHistoryMessage => Boolean(message))
+}
+
 async function fetchRoomHistoryViaReadBotToken(params: {
   /** URL the HTTP request is actually sent to (proxy or direct API base). */
   apiBaseUrl: string
@@ -2915,19 +2923,21 @@ function ensureLiveCommandSocket(params: {
       // Fail-open: ingest should never block chat command processing.
     })
     const pollRoomIds = params.flags.wsIngestAllRoomsEnabled
-      ? new Set(resolveAlfaClubBridgePollRoomIds(params.flags))
-      : new Set([params.roomId])
-    const roomMessages = inboundMessages
-      .filter((message) => pollRoomIds.has(message.roomId))
-      .map((message): AlfaClubRoomHistoryMessage => ({
-        id: message.id,
-        date: message.date,
-        sender: message.sender,
-        text: message.text,
-      }))
-    if (params.roomId === INVERSE_AKITA_ROOM_ID) {
+      ? resolveAlfaClubBridgePollRoomIds(params.flags)
+      : [params.roomId]
+    for (const targetRoomId of pollRoomIds) {
+      if (targetRoomId !== INVERSE_AKITA_ROOM_ID) continue
+      const roomMessages = inboundMessages
+        .filter((message) => message.roomId === targetRoomId)
+        .map((message): AlfaClubRoomHistoryMessage => ({
+          id: message.id,
+          date: message.date,
+          sender: message.sender,
+          text: message.text,
+          isBot: message.isBot,
+        }))
       const inverseIntents = collectInverseAkitaChatTradeIntents({
-        roomId: params.roomId,
+        roomId: targetRoomId,
         messages: roomMessages as InverseAkitaChatHistoryMessage[],
         selfAddress: CANONICAL_CSW_ADDRESS,
       })
@@ -2935,16 +2945,25 @@ function ensureLiveCommandSocket(params: {
         void executeInverseAkitaChatReactionBatch({
           intents: inverseIntents,
           flags: params.flags,
-          roomId: params.roomId,
+          roomId: targetRoomId,
           jwt: params.jwt,
         }).catch((error) => {
           logger.warn('[alfaclub-chat] live_inverse_chat_reaction_failed', {
-            roomId: params.roomId,
+            roomId: targetRoomId,
             message: error instanceof Error ? error.message : String(error),
           })
         })
       }
     }
+    const pollRoomIdSet = new Set(pollRoomIds)
+    const roomMessages = inboundMessages
+      .filter((message) => pollRoomIdSet.has(message.roomId))
+      .map((message): AlfaClubRoomHistoryMessage => ({
+        id: message.id,
+        date: message.date,
+        sender: message.sender,
+        text: message.text,
+      }))
     if (!bridgeState.liveFallbackActive) return
     const commands = collectAlfaClubCommandMessages({
       messages: roomMessages,
@@ -3069,6 +3088,14 @@ async function executeInverseAkitaChatReactionBatch(params: {
         roomId: params.roomId,
         intent,
       })
+      if (result.skipped) {
+        logger.info('[alfaclub-chat] inverse_chat_reaction_skipped', {
+          roomId: params.roomId,
+          messageId: intent.id,
+          sender: intent.sender,
+          skipReason: result.skipReason ?? 'unknown',
+        })
+      }
       if (result.skipped && result.skipReason === 'sender_cooldown') {
         continue
       }
@@ -3645,6 +3672,7 @@ async function runBridgeTick(
   if (!fetchedMessages) {
     throw new Error('room_history_failed:unknown')
   }
+  fetchedMessages = normalizeFetchedHistoryMessages(fetchedMessages)
   clearHistoryTimeouts(roomId)
 
   // Persist polled history rows to a DB-backed dedupe ledger so one-shot
@@ -3786,13 +3814,30 @@ async function runBridgeTick(
               jwt,
             })
           : { processed: 0, replied: 0, errors: [] as Array<{ messageId: string; error: string }> }
+      const recentInverseIntents =
+        roomId === INVERSE_AKITA_ROOM_ID
+          ? collectInverseAkitaChatTradeIntents({
+              roomId,
+              messages: recentMessages as InverseAkitaChatHistoryMessage[],
+              selfAddress: CANONICAL_CSW_ADDRESS,
+            })
+          : []
+      const recentInverseBatch =
+        recentInverseIntents.length > 0
+          ? await executeInverseAkitaChatReactionBatch({
+              intents: recentInverseIntents,
+              flags,
+              roomId,
+              jwt,
+            })
+          : { processed: 0, reacted: 0 }
       return {
         seeded: true,
         roomId,
         fetched: fetchedMessages.length,
         unseen: unseenMessages.length,
-        processed: recentBatch.processed,
-        replied: recentBatch.replied,
+        processed: recentBatch.processed + recentInverseBatch.processed,
+        replied: recentBatch.replied + recentInverseBatch.reacted,
         errors: recentBatch.errors,
       }
     }
