@@ -195,6 +195,19 @@ function formatBookHeader(details: ArenaPositionIntelDetails, wallet: string): s
   return viewHeader('◆ **Virtuals book**', wallet)
 }
 
+function formatSubviewHeader(
+  details: ArenaPositionIntelDetails,
+  icon: string,
+  label: string,
+  wallet: string,
+): string {
+  const profile = readAgentProfile(details)
+  if (profile) {
+    return `${icon} [**${profile.name}**](${profile.url}) · ${label} · \`${wallet}\``
+  }
+  return viewHeader(`${icon} **${label}**`, wallet)
+}
+
 function formatLegPriceTail(leg: ArenaPositionLeg): string {
   if (leg.entryPx != null && leg.markPx != null) {
     return ` · ${formatPrice(leg.entryPx, 0)}→${formatPrice(leg.markPx, 0)}`
@@ -459,53 +472,33 @@ function formatRiskView(details: ArenaPositionIntelDetails): string {
   const account = readAccountSummary(details)
   const wallet = walletLabel(details.walletAddress ?? null)
   if (legs.length === 0) {
-    return [viewHeader('⚠ **Risk**', wallet), sectionRule(32), formatTreeBlock(null, ['No open positions'])].join('\n')
+    return [
+      formatSubviewHeader(details, '⚠', 'Risk', wallet),
+      sectionRule(32),
+      formatTreeBlock(null, ['No open positions']),
+    ].join('\n')
   }
 
   const ranked = legs
-    .map((leg) => ({
-      leg,
-      liqDist: liqDistancePct(leg),
-    }))
+    .map((leg) => ({ leg, liqDist: liqDistancePct(leg) }))
     .sort((a, b) => (a.liqDist ?? 999) - (b.liqDist ?? 999))
-
   const tightest = ranked[0]
   const marginPct = marginUsePct(account.marginUsedUsd, account.accountValueUsd)
   const totalPnl = legs.reduce((sum, leg) => sum + (leg.unrealizedPnl ?? 0), 0)
 
-  const summaryLines: string[] = []
-  if (tightest?.liqDist != null) {
-    summaryLines.push(
-      `Tightest: ${tightest.leg.symbol} ${sideBadge(tightest.leg.side)} · ◆ ${formatPct(tightest.liqDist)} to liq`,
-    )
-  } else {
-    summaryLines.push('Tightest: liquidation distance n/a')
-  }
-  if (marginPct != null) {
-    summaryLines.push(
-      `Margin: ${blockBar(marginPct / 100)} ${formatPct(marginPct, 0)} · free ${formatUsdCompact(account.withdrawableUsd)}`,
-    )
-  }
-  summaryLines.push(`Book uPnL: ${formatUsd(totalPnl)} · ${bookHealthLabel(legs)}`)
-
-  const legBlocks = ranked.slice(0, 6).map(({ leg, liqDist }) =>
-    formatTreeBlock(`${sideBadge(leg.side)} **${leg.symbol}**`, [
-      liqDist == null
-        ? 'cushion n/a'
-        : `cushion ${liqCushionBar(liqDist)}   ◆ ${formatPct(liqDist)}`,
-      `uPnL: ${formatUsd(leg.unrealizedPnl)}`,
-    ]),
-  )
+  const summaryParts = [
+    tightest?.liqDist != null
+      ? `Tightest: ${tightest.leg.symbol} · ◆ ${formatPct(tightest.liqDist)} to liq`
+      : 'Tightest: n/a',
+    marginPct != null ? `${blockBar(marginPct / 100)} ${formatPct(marginPct, 0)} margin` : null,
+    `uPnL ${formatUsd(totalPnl)}`,
+  ].filter((line): line is string => Boolean(line))
 
   return [
-    viewHeader('⚠ **Risk**', wallet),
+    formatSubviewHeader(details, '⚠', 'Risk', wallet),
     sectionRule(32),
-    formatTreeBlock(null, summaryLines),
-    '',
-    ...legBlocks,
-  ]
-    .filter(Boolean)
-    .join('\n')
+    formatTreeList([summaryParts.join('  '), ...formatCompactLegLines(ranked.map(({ leg }) => leg))]).join('\n'),
+  ].join('\n')
 }
 
 function summarizeLedgerRow(entry: unknown): string | null {
@@ -572,7 +565,7 @@ function formatActivityView(details: ArenaPositionIntelDetails): string {
   const cashLines = ledgerLines.length > 0 ? ledgerLines : ['none']
 
   return [
-    viewHeader('↺ **Activity**', wallet),
+    formatSubviewHeader(details, '↺', 'Activity', wallet),
     sectionRule(32),
     formatTreeBlock('**Trades**', tradeLines),
     '',
@@ -609,6 +602,7 @@ function formatFeeBps(rate: number | null): string {
 
 function formatAccountView(details: ArenaPositionIntelDetails): string {
   const account = readAccountSummary(details)
+  const wallet = walletLabel(details.walletAddress ?? null)
   const fees = asObject(details.userFees)
   const crossRate = asFiniteNumber(fees?.userCrossRate)
   const addRate = asFiniteNumber(fees?.userAddRate)
@@ -617,7 +611,7 @@ function formatAccountView(details: ArenaPositionIntelDetails): string {
   const marginPct = marginUsePct(account.marginUsedUsd, account.accountValueUsd)
 
   const accountLines: string[] = [
-    `Wallet: \`${walletLabel(details.walletAddress ?? null)}\``,
+    `Wallet: \`${wallet}\``,
     `Perps: ${formatUsdCompact(account.accountValueUsd)} · withdraw ${formatUsdCompact(account.withdrawableUsd)}`,
     `Spot: ${formatUsdCompact(account.spotUsdcUsd)}`,
   ]
@@ -633,7 +627,7 @@ function formatAccountView(details: ArenaPositionIntelDetails): string {
   if (explorer) accountLines.push(`Explorer: ${explorer}`)
 
   return [
-    viewHeader('◈ **Account**', walletLabel(details.walletAddress ?? null)),
+    formatSubviewHeader(details, '◈', 'Account', wallet),
     sectionRule(32),
     formatTreeBlock(null, accountLines),
   ]

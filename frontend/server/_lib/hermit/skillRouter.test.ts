@@ -321,8 +321,7 @@ describe('executeHermitCommand', () => {
       roomId: '1659',
     })
 
-    expect(result.reply).toContain('⚠ **Risk**')
-    expect(result.reply).toContain('Tightest')
+    expect(result.reply).toContain('Tightest: BTC')
   })
 
   it('shows partial-data hint and account view for /h pos account', async () => {

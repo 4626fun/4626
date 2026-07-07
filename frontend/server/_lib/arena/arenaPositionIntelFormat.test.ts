@@ -146,10 +146,17 @@ describe('arenaPositionIntelFormat', () => {
   })
 
   it('formats risk view with contextual footer', () => {
-    const reply = formatArenaPositionIntelReply('risk', sampleDetails)
-    expect(reply).toContain('⚠ **Risk**')
-    expect(reply).toContain('├ Tightest: BTC')
-    expect(reply).toContain('Book uPnL:')
+    const reply = formatArenaPositionIntelReply('risk', {
+      ...sampleDetails,
+      agentProfile: {
+        id: '1213',
+        name: 'InverseAKITA',
+        url: 'https://degen.virtuals.io/agents/1213',
+      },
+    })
+    expect(reply).toContain('⚠ [**InverseAKITA**](https://degen.virtuals.io/agents/1213) · Risk')
+    expect(reply).toContain('Tightest: BTC')
+    expect(reply).toContain('**BTC 5x** LONG')
     expect(reply).toContain('└ `1` book · `3` activity · `4` account')
   })
 
