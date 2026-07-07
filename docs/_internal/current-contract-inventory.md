@@ -31,11 +31,11 @@ Scope: current live Base infra addresses plus the canonical `v1.15.0` greenfield
 | `creatorOVaultCoreModule` | `0xD4553478780571A1A5F6cCCC0735F897F15a85Cf` |
 | `creatorOVaultStrategiesModule` | `0x4036e3D2d029451cEB68d521a5D0233F56518681` |
 | `creatorOVaultAdminModule` | `0xDd136c20F8f6688089e55a6CA8709718c5183307` |
-| `deploymentBatcher` | `0x17163e67dED6B45bd2A7E6a509A32fB7b0cB6D33` |
-| `deploymentBatcherPhase1Module` | `0x829D0096fF18F096469Ae9D440f58Ae0D106ff06` |
-| `deploymentBatcherPhase2Module` | `0x362495324370f68b30a57743254b154eD6115524` |
-| `deploymentBatcherPhase3Helper` | `0xa5Ba1121214b9187749dfeb1382393c1941e0Da8` |
-| `deploymentBatcherUniV4Helper` | `0xa2D06A329eD7b413646509845412f8C73CbbeDBF` |
+| `deploymentBatcher` | `0xA9024e1B89C5Be34502A275576Cc137473d65839` |
+| `deploymentBatcherPhase1Module` | `0xc7d44c4136f10a780B93cCA901F8Fcf2cc130bD1` |
+| `deploymentBatcherPhase2Module` | `0xD641076Ff1b1121c3cF85F5d69B386bCE91a6bb2` |
+| `deploymentBatcherPhase3Helper` | `0x219eA6e7c28b20c668CbaCD99246C1c17a5D97F6` |
+| `deploymentBatcherShareMeshHelper` | `0x64aA8ba6aD4641034Ca5A1bF31609a5fa9e5dc80` |
 | `deploymentBatcherUtilsHelper` | `0x5B59219683b748a321f84eFDfe5A29d3bB945B27` |
 | `permit2` | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
 | `usdc` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
@@ -72,14 +72,14 @@ Current snapshot set:
 - `deployments/base/contracts/factories/UniversalCreate2DeployerFromStore.json`
 - `deployments/base/contracts/helpers/batchers/DeploymentBatcher.json`
 - `deployments/base/contracts/helpers/batchers/DeploymentBatcherPhase3Helper.json`
-- `deployments/base/contracts/helpers/batchers/DeploymentBatcherUniV4Helper.json`
+- `deployments/base/contracts/helpers/batchers/DeploymentBatcherShareMeshHelper.json` (post-`v1.16.1`; legacy `DeploymentBatcherUniV4Helper.json` retained for prior batchers)
 
 Live batcher child addresses that are read directly from `DeploymentBatcher` are also recorded in the release packet:
 
 - `DeploymentBatcherPhase1Module=0x0fac3F8040879eF1ca6cc4572cc27f0908a8f266`
 - `DeploymentBatcherPhase2Module=0xde192645Fb02dD05f586930e55D709E89c320435`
 - `DeploymentBatcherPhase3Helper=0xE0971a924E33251556fE73a4025166701b772dBe`
-- `DeploymentBatcherUniV4Helper=0xD2c68F175FB4DB4069A2ebBc3f02B31C635438eb`
+- `DeploymentBatcherShareMeshHelper=0xD2c68F175FB4DB4069A2ebBc3f02B31C635438eb` (legacy child name on live batcher; `v1.16.1` bytecode uses ShareMesh helper)
 - `DeploymentBatcherUtilsHelper=0xE41231e399511baaDa8844C9D1c83C096e3f2E60`
 
 Legacy pre-rotation Phase1Module (deprecated): `0xf3b20557ef8173510693A13EF71F884DB835E8c0`

@@ -25,17 +25,21 @@ export const PRE_V1111_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('271Ab2C53D79d52dd
 export const PRE_V1112_PIPE_A_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8')
 export const PRE_V1140_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('a99058f424FB3ACC639F59355C65C40149030651')
 export const PRE_V1141_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('660B251F2feB28f61A8e23e65C66F9b917Ee61c1')
-/** v1.15.0 epoch: July audit fixes + ShareOFT mesh at finalize (45% Charm / 45% Ajna / 10% idle Phase 3). */
-export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('17163e67dED6B45bd2A7E6a509A32fB7b0cB6D33')
-/** v1.15.0 greenfield Phase1Module paired with batcher shell above. */
-export const SPLIT_PHASE1_PHASE1_MODULE = addr('829D0096fF18F096469Ae9D440f58Ae0D106ff06')
+/** v1.15.0 epoch shell (superseded by v1.16.1-share-mesh cutover). */
+export const PRE_V1160_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('17163e67dED6B45bd2A7E6a509A32fB7b0cB6D33')
+/** v1.16.1-share-mesh epoch: CCALaunchArm + post-CCA share-mesh LP manager shell. */
+export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('A9024e1B89C5Be34502A275576Cc137473d65839')
+/** v1.16.1-share-mesh greenfield Phase1Module paired with batcher shell above. */
+export const SPLIT_PHASE1_PHASE1_MODULE = addr('c7d44c4136f10a780B93cCA901F8Fcf2cc130bD1')
 /** Retired v1.13.0 v2 Phase1Module (grandfathered greenfield only). */
 export const SPLIT_PHASE1_PHASE1_MODULE_V2_LEGACY = addr('19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87')
 /** Earlier impairment pilot Phase1Module (superseded by v1.14.0 store cutover). */
 export const SPLIT_PHASE1_PHASE1_MODULE_V3_IMPAIRMENT = addr('ffbFf3E529e5A4dBFD9ea2e9C01B773D1B7fA1a0')
-export const SPLIT_PHASE1_PHASE2_MODULE = addr('362495324370f68b30a57743254b154eD6115524')
-export const SPLIT_PHASE1_PHASE3_HELPER = addr('a5Ba1121214b9187749dfeb1382393c1941e0Da8')
-export const SPLIT_PHASE1_UNIV4_HELPER = addr('a2D06A329eD7b413646509845412f8C73CbbeDBF')
+export const SPLIT_PHASE1_PHASE2_MODULE = addr('D641076Ff1b1121c3cF85F5d69B386bCE91a6bb2')
+export const SPLIT_PHASE1_PHASE3_HELPER = addr('219eA6e7c28b20c668CbaCD99246C1c17a5D97F6')
+export const SPLIT_PHASE1_SHARE_MESH_HELPER = addr('64aA8ba6aD4641034Ca5A1bF31609a5fa9e5dc80')
+/** @deprecated Use SPLIT_PHASE1_SHARE_MESH_HELPER */
+export const SPLIT_PHASE1_UNIV4_HELPER = SPLIT_PHASE1_SHARE_MESH_HELPER
 export const SPLIT_PHASE1_UTILS_HELPER = addr('5B59219683b748a321f84eFDfe5A29d3bB945B27')
 export const CREATOR_OVAULT_FACTORY = addr('26b74b1d3AadD17e714068d259051409C9f942d1')
 export const CREATOR_OVAULT_CORE_MODULE = addr('396cF02c219cfA5288C3e472Fbc9634fe4D44B68')
@@ -51,6 +55,7 @@ const DEPRECATED_CREATOR_VAULT_BATCHERS = new Set<string>([
   PRE_V1112_PIPE_A_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_V1140_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_V1141_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+  PRE_V1160_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
 ])
 
 export function isDeprecatedCreatorVaultBatcherAddress(value: string | null | undefined): boolean {
@@ -124,7 +129,7 @@ export const BASE_DEFAULTS = {
   // `creatorVaultBatcher`; strict no-EOA deploy preflight checks the
   // batcher's onchain getters.
   universalBytecodeStore: addr('7D1029a832E2BEd2C961bC912b623b763862Ad3C'),
-  /** Paired with `universalBytecodeStore` on live split batcher `0x17163e…`. */
+  /** Paired with `universalBytecodeStore` on live split batcher `0xA9024e…`. */
   universalCreate2DeployerFromStore: addr('dC75A18C521f6Ae1ACa112A98E46c8231F431BC0'),
   vaultAuxiliaryDeployBatcher: addr('a3986F2F812a80a4Ee4A33646bE5248D9e22eb88'),
 
@@ -200,7 +205,7 @@ export const AKITA_DEFAULTS = {
   wrapper: addr('58Cd1E9248F89138208A601e95A531d3c0fa0c4f'),
   shareOFT: addr('4df30fFfDA1D4A81bcf4DC778292Be8Ff9752a57'),
   gaugeController: addr('B471B53cD0A30289Bc3a2dc3c6dd913288F8baA1'),
-  ccaStrategy: addr('00c7897e0554b34A477D9D144AcC613Cdc97046F'),
+  ccaLaunchArm: addr('00c7897e0554b34A477D9D144AcC613Cdc97046F'),
   oracle: addr('8C044aeF10d05bcC53912869db89f6e1f37bC6fC'),
 } as const
 
@@ -212,6 +217,6 @@ export const ERC4626_DEFAULTS = {
   wrapper: addr('58Cd1E9248F89138208A601e95A531d3c0fa0c4f'),
   shareOFT: addr('4df30fFfDA1D4A81bcf4DC778292Be8Ff9752a57'),
   gaugeController: addr('B471B53cD0A30289Bc3a2dc3c6dd913288F8baA1'),
-  ccaStrategy: addr('00c7897e0554b34A477D9D144AcC613Cdc97046F'),
+  ccaLaunchArm: addr('00c7897e0554b34A477D9D144AcC613Cdc97046F'),
   oracle: addr('8C044aeF10d05bcC53912869db89f6e1f37bC6fC'),
 } as const

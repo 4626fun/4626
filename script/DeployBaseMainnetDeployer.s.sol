@@ -77,7 +77,7 @@ contract DeployBaseMainnetDeployer is Script {
     string constant PHASE2_MODULE_SALT_TAG_PREFIX = "base-release:DeploymentBatcherPhase2Module:";
     string constant PHASE1_MODULE_SALT_TAG_PREFIX = "base-release:DeploymentBatcherPhase1Module:";
     string constant PHASE3_HELPER_SALT_TAG_PREFIX = "base-release:DeploymentBatcherPhase3Helper:";
-    string constant UNIV4_HELPER_SALT_TAG_PREFIX = "base-release:DeploymentBatcherUniV4Helper:";
+    string constant SHARE_MESH_HELPER_SALT_TAG_PREFIX = "base-release:DeploymentBatcherShareMeshHelper:";
     string constant UTILS_HELPER_SALT_TAG_PREFIX = "base-release:DeploymentBatcherUtilsHelper:";
 
     // Live Base mainnet fallback defaults — overridden by shared/global handoff during fresh epochs.
@@ -108,6 +108,7 @@ contract DeployBaseMainnetDeployer is Script {
         address uniswapV3Factory;
         address uniswapRouter;
         address ajnaFactory;
+        address agentVaultCoreModule;
         address create2FromStoreOwner;
         address solanaBridgeAdapter;
         bytes32 solanaDestination;
@@ -125,7 +126,7 @@ contract DeployBaseMainnetDeployer is Script {
         bytes32 phase2Module;
         bytes32 phase1Module;
         bytes32 phase3Helper;
-        bytes32 uniV4Helper;
+        bytes32 shareMeshHelper;
         bytes32 utilsHelper;
         bytes32 deploymentBatcher;
     }
@@ -139,7 +140,7 @@ contract DeployBaseMainnetDeployer is Script {
         address phase2Module;
         address phase1Module;
         address phase3Helper;
-        address uniV4Helper;
+        address shareMeshHelper;
         address utilsHelper;
         address deploymentBatcher;
     }
@@ -189,7 +190,7 @@ contract DeployBaseMainnetDeployer is Script {
 
     function _helpersWired(DeploymentBatcher deployer) internal view returns (bool) {
         return address(deployer.phase1Module()) != address(0) && address(deployer.phase2Module()) != address(0)
-            && address(deployer.phase3Helper()) != address(0) && address(deployer.uniV4Helper()) != address(0)
+            && address(deployer.phase3Helper()) != address(0) && address(deployer.shareMeshHelper()) != address(0)
             && address(deployer.utilsHelper()) != address(0);
     }
 
@@ -229,9 +230,11 @@ contract DeployBaseMainnetDeployer is Script {
         address coreModuleAddr,
         address strategiesModuleAddr,
         address adminModuleAddr,
+        address agentVaultCoreModuleAddr,
         address utilsHelperAddr,
         address batcherAddr
     ) internal pure returns (bytes memory) {
+        address agentCore = agentVaultCoreModuleAddr == address(0) ? coreModuleAddr : agentVaultCoreModuleAddr;
         return abi.encodePacked(
             type(DeploymentBatcherPhase1Module).creationCode,
             abi.encode(
@@ -239,6 +242,7 @@ contract DeployBaseMainnetDeployer is Script {
                 storeAddr,
                 cfg.registry,
                 coreModuleAddr,
+                agentCore,
                 strategiesModuleAddr,
                 adminModuleAddr,
                 cfg.vaultActivationBatcher,
@@ -268,13 +272,13 @@ contract DeployBaseMainnetDeployer is Script {
         );
     }
 
-    function _buildUniV4HelperInit(Config memory cfg, address create2DeployerAddr, address batcherAddr)
+    function _buildShareMeshHelperInit(Config memory cfg, address create2DeployerAddr, address batcherAddr)
         internal
         pure
         returns (bytes memory)
     {
         return abi.encodePacked(
-            type(DeploymentBatcherUniV4Helper).creationCode,
+            type(DeploymentBatcherShareMeshHelper).creationCode,
             abi.encode(create2DeployerAddr, cfg.poolManager, cfg.permit2, batcherAddr)
         );
     }
@@ -292,7 +296,7 @@ contract DeployBaseMainnetDeployer is Script {
         address adminModuleAddr,
         address phase2ModuleAddr,
         address phase3HelperAddr,
-        address uniV4HelperAddr,
+        address shareMeshHelperAddr,
         address utilsHelperAddr
     ) internal pure returns (bytes memory) {
         return abi.encodePacked(
@@ -318,7 +322,7 @@ contract DeployBaseMainnetDeployer is Script {
                 adminModuleAddr,
                 phase2ModuleAddr,
                 phase3HelperAddr,
-                uniV4HelperAddr,
+                shareMeshHelperAddr,
                 utilsHelperAddr
             )
         );
@@ -357,10 +361,10 @@ contract DeployBaseMainnetDeployer is Script {
             salts.phase3Helper,
             keccak256(_buildPhase3HelperInit(cfg, create2DeployerAddr, batcherAddr))
         );
-        predicted.uniV4Helper = _create2(
+        predicted.shareMeshHelper = _create2(
             CREATE2_FACTORY_ADDR,
-            salts.uniV4Helper,
-            keccak256(_buildUniV4HelperInit(cfg, create2DeployerAddr, batcherAddr))
+            salts.shareMeshHelper,
+            keccak256(_buildShareMeshHelperInit(cfg, create2DeployerAddr, batcherAddr))
         );
         predicted.phase1Module = _create2(
             CREATE2_FACTORY_ADDR,
@@ -373,6 +377,7 @@ contract DeployBaseMainnetDeployer is Script {
                     coreModuleAddr,
                     strategiesModuleAddr,
                     adminModuleAddr,
+                    cfg.agentVaultCoreModule,
                     predicted.utilsHelper,
                     batcherAddr
                 )
@@ -404,6 +409,7 @@ contract DeployBaseMainnetDeployer is Script {
         cfg.uniswapV3Factory = vm.envOr("UNISWAP_V3_FACTORY", DEFAULT_UNISWAP_V3_FACTORY);
         cfg.uniswapRouter = vm.envOr("UNISWAP_ROUTER", DEFAULT_UNISWAP_ROUTER);
         cfg.ajnaFactory = vm.envOr("AJNA_FACTORY", DEFAULT_AJNA_FACTORY);
+        cfg.agentVaultCoreModule = vm.envOr("AGENT_VAULT_CORE_MODULE", address(0));
         cfg.create2FromStoreOwner = vm.envOr("CREATE2_FROM_STORE_OWNER", broadcaster);
         cfg.solanaBridgeAdapter = vm.envOr("SOLANA_BRIDGE_ADAPTER", address(0));
         cfg.solanaDestination = vm.envOr("SOLANA_DESTINATION", bytes32(0));
@@ -442,8 +448,8 @@ contract DeployBaseMainnetDeployer is Script {
         salts.phase3Helper = _saltFromEnvOrEpoch(
             "INFRA_PHASE3_HELPER_SALT", "INFRA_PHASE3_HELPER_SALT_TAG", PHASE3_HELPER_SALT_TAG_PREFIX
         );
-        salts.uniV4Helper = _saltFromEnvOrEpoch(
-            "INFRA_UNIV4_HELPER_SALT", "INFRA_UNIV4_HELPER_SALT_TAG", UNIV4_HELPER_SALT_TAG_PREFIX
+        salts.shareMeshHelper = _saltFromEnvOrEpoch(
+            "INFRA_SHARE_MESH_HELPER_SALT", "INFRA_SHARE_MESH_HELPER_SALT_TAG", SHARE_MESH_HELPER_SALT_TAG_PREFIX
         );
         salts.utilsHelper = _saltFromEnvOrEpoch(
             "INFRA_UTILS_HELPER_SALT", "INFRA_UTILS_HELPER_SALT_TAG", UTILS_HELPER_SALT_TAG_PREFIX
@@ -506,7 +512,7 @@ contract DeployBaseMainnetDeployer is Script {
         console2.log("DeploymentBatcherPhase2Module (predicted):", predicted.phase2Module);
         console2.log("DeploymentBatcherPhase1Module (predicted):", predicted.phase1Module);
         console2.log("DeploymentBatcherPhase3Helper (predicted):", predicted.phase3Helper);
-        console2.log("DeploymentBatcherUniV4Helper (predicted):", predicted.uniV4Helper);
+        console2.log("DeploymentBatcherShareMeshHelper (predicted):", predicted.shareMeshHelper);
         console2.log("DeploymentBatcher (predicted):", deployerAddr);
 
         if (cfg.create2FromStoreOwner != broadcaster) {
@@ -550,7 +556,7 @@ contract DeployBaseMainnetDeployer is Script {
             salts.phase3Helper, _buildPhase3HelperInit(cfg, create2DeployerAddr, deployerAddr)
         );
         _deployCreate2IfMissing(
-            salts.uniV4Helper, _buildUniV4HelperInit(cfg, create2DeployerAddr, deployerAddr)
+            salts.shareMeshHelper, _buildShareMeshHelperInit(cfg, create2DeployerAddr, deployerAddr)
         );
         _deployCreate2IfMissing(
             salts.phase1Module,
@@ -561,6 +567,7 @@ contract DeployBaseMainnetDeployer is Script {
                 coreModuleAddr,
                 strategiesModuleAddr,
                 adminModuleAddr,
+                cfg.agentVaultCoreModule,
                 predicted.utilsHelper,
                 deployerAddr
             )
@@ -594,7 +601,7 @@ contract DeployBaseMainnetDeployer is Script {
             console2.log(string.concat("  wireDeploymentHelpers("));
             console2.log(string.concat("    ", vm.toString(predicted.phase2Module), ","));
             console2.log(string.concat("    ", vm.toString(predicted.phase3Helper), ","));
-            console2.log(string.concat("    ", vm.toString(predicted.uniV4Helper), ","));
+            console2.log(string.concat("    ", vm.toString(predicted.shareMeshHelper), ","));
             console2.log(string.concat("    ", vm.toString(predicted.utilsHelper)));
             console2.log("  )");
             console2.log(string.concat("  setPhase1Module(", vm.toString(predicted.phase1Module), ")"));
@@ -606,7 +613,7 @@ contract DeployBaseMainnetDeployer is Script {
         address[3] memory requiredDeployers = [
             deployerAddr,
             address(deployer.phase3Helper()),
-            address(deployer.uniV4Helper())
+            address(deployer.shareMeshHelper())
         ];
         for (uint256 i = 0; i < requiredDeployers.length; ++i) {
             address deployerCaller = requiredDeployers[i];
@@ -623,7 +630,7 @@ contract DeployBaseMainnetDeployer is Script {
         require(create2Deployer.owner() == cfg.create2FromStoreOwner, "Create2 owner mismatch");
         require(create2Deployer.authorizedDeployers(address(deployer)), "Batcher not authorized in create2");
         require(create2Deployer.authorizedDeployers(address(deployer.phase3Helper())), "Phase3 helper not authorized");
-        require(create2Deployer.authorizedDeployers(address(deployer.uniV4Helper())), "UniV4 helper not authorized");
+        require(create2Deployer.authorizedDeployers(address(deployer.shareMeshHelper())), "Share mesh helper not authorized");
         require(address(deployer.registry()) == cfg.registry, "Deployer registry mismatch");
         require(address(deployer.usdc()) == cfg.usdc, "Deployer USDC mismatch");
         require(address(deployer.uniswapV3Factory()) == cfg.uniswapV3Factory, "Deployer V3 factory mismatch");

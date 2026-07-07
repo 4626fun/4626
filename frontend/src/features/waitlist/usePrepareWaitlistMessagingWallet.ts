@@ -49,6 +49,13 @@ export function usePrepareWaitlistMessagingWallet(params: {
   const { embeddedEoaAddress, ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
   const { wallets } = useWallets()
   const { setActiveWallet } = useActiveWallet()
+  const getToken = useCallback(
+    () =>
+      (typeof privy.getAccessToken === 'function' ? privy.getAccessToken() : Promise.resolve(null)).catch(
+        () => null,
+      ),
+    [privy],
+  )
   const { address, connector } = useAccount()
   const { data: walletClient } = useWalletClient()
   const { connectAsync, connectors } = useConnect()
@@ -82,6 +89,7 @@ export function usePrepareWaitlistMessagingWallet(params: {
       embeddedEoaAddress,
       ensureEmbeddedWallet,
       setActiveWallet: setActiveWallet as PrepareWaitlistMessagingWalletInput['setActiveWallet'],
+      getToken,
       connectAsync: connectAsync as PrepareWaitlistMessagingWalletInput['connectAsync'],
       connectors,
       disconnectAsync,
@@ -98,6 +106,7 @@ export function usePrepareWaitlistMessagingWallet(params: {
     disconnectAsync,
     embeddedEoaAddress,
     ensureEmbeddedWallet,
+    getToken,
     mergedWallets,
     messagingWalletReady,
     params.canonicalCswAddress,

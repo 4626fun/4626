@@ -99,7 +99,7 @@ contract SeedCreatorRegistry is Script {
     // v1.15.0 greenfield cutover (tmp/base-v1.15.0-handoff.env)
     address constant CREATOR_FACTORY = 0x26b74b1d3AadD17e714068d259051409C9f942d1;
     address constant LOTTERY_MANAGER = 0xD62a8a2F4c25587FA80ED5782b50Af6654122b0b;
-    address constant VAULT_BATCHER = 0x17163e67dED6B45bd2A7E6a509A32fB7b0cB6D33;
+    address constant VAULT_BATCHER = 0xA9024e1B89C5Be34502A275576Cc137473d65839;
     address constant VAULT_ACT_BATCHER = 0xB06d99c81994F5829ba462c4afA78eCff75bC281;
 
     // ═══════════════════════════════════════════════════════════════════
