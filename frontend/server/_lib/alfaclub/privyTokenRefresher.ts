@@ -16,9 +16,9 @@
  * that accepts a (possibly near-expiry but not-yet-expired) access token
  * and a refresh token, and mints a fresh triplet: new access token, new
  * identity token, and — when it rotates — a new refresh token. We run
- * this on a ~30 minute interval (access tokens live 1h, so we have a
- * 30 min safety margin) and write the new identity token into the DB-
- * backed `alfaclub_runtime_secret.chat_jwt` slot. The chatBridge reads
+ * this on a ~55 minute interval (Privy identity/access tokens live 1h) and write
+ * the new identity token into the DB-backed `alfaclub_runtime_secret.chat_jwt`
+ * slot with a ~5 minute safety margin before expiry. The chatBridge reads
  * that slot on every tick (see `resolveBridgeJwtWithSource`) so the new
  * token is picked up on the next 6s poll without a bridge restart.
  *
@@ -96,13 +96,22 @@ const ALFACLUB_PRIVY_ORIGIN =
 
 const PRIVY_SESSIONS_ENDPOINT = 'https://auth.privy.io/api/v1/sessions'
 
-// Refresh at half the access-token lifetime (1h) minus a safety margin.
-// With a 30-minute cadence + a 20-minute "near-expiry" guard we always
-// refresh at least 30 minutes before the current access token expires,
-// giving ~20 minutes of clock slack for transient RPC failures before
-// the bridge sees any tick errors.
-const DEFAULT_REFRESH_INTERVAL_MS = 30 * 60 * 1000
-const NEAR_EXPIRY_WINDOW_MS = 20 * 60 * 1000
+// Privy identity/access tokens expire after 1 hour. Refresh on a ~55 minute
+// cadence so each scheduled tick lands inside the near-expiry window (~5 min
+// before the cliff) instead of on the cliff itself (the old 30-minute cadence
+// skipped at T+30 and only retried at T+60).
+const DEFAULT_REFRESH_INTERVAL_MS = 55 * 60 * 1000
+const NEAR_EXPIRY_WINDOW_MS = 10 * 60 * 1000
+const MIN_REFRESH_INTERVAL_MS = 5 * 60 * 1000
+const MAX_REFRESH_INTERVAL_MS = 59 * 60 * 1000
+
+export function readAlfaClubPrivyRefreshIntervalMs(): number {
+  const raw = String(process.env.ALFACLUB_CHAT_PRIVY_REFRESH_INTERVAL_MS ?? '').trim()
+  if (!/^\d+$/.test(raw)) return DEFAULT_REFRESH_INTERVAL_MS
+  const parsed = Number.parseInt(raw, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_REFRESH_INTERVAL_MS
+  return Math.min(Math.max(parsed, MIN_REFRESH_INTERVAL_MS), MAX_REFRESH_INTERVAL_MS)
+}
 
 export interface PrivyRefreshBundle {
   accessToken: string
@@ -421,8 +430,9 @@ const MIN_IMMEDIATE_REFRESH_KICK_INTERVAL_MS = 5_000
 
 export async function runAlfaClubPrivyRefreshOnce(
   deps: AlfaClubRefresherDependencies = {},
-  opts: { force?: boolean } = {},
+  opts: { force?: boolean; writer?: string } = {},
 ): Promise<AlfaClubRefresherOutcome> {
+  const writer = (opts.writer ?? 'privy-token-refresher').trim() || 'privy-token-refresher'
   const resolved = resolveDeps(deps)
   const {
     readAccessToken,
@@ -454,7 +464,7 @@ export async function runAlfaClubPrivyRefreshOnce(
         status: 'missing_tokens',
         rawError: `missing:${missing.join(',')}`,
       }),
-      'privy-token-refresher',
+      writer,
     ).catch(() => false)
     return { status: 'missing_tokens', missing }
   }
@@ -503,7 +513,7 @@ export async function runAlfaClubPrivyRefreshOnce(
       accessToken: accessToken as string,
       refreshToken: refreshToken as string,
     })
-    await writeBundle(bundle, 'privy-token-refresher', {
+    await writeBundle(bundle, writer, {
       accessToken: accessToken as string,
       refreshToken: refreshToken as string,
     })
@@ -520,7 +530,7 @@ export async function runAlfaClubPrivyRefreshOnce(
         at: new Date(now()).toISOString(),
         identityTokenExpIso: newExp ? new Date(newExp).toISOString() : null,
         accessTokenExpIso: newAccessExp ? new Date(newAccessExp).toISOString() : null,
-        writer: 'privy-token-refresher',
+        writer,
         rotatedRefresh: bundle.refreshToken !== refreshToken,
       }),
     ).catch(() => false)
@@ -542,7 +552,7 @@ export async function runAlfaClubPrivyRefreshOnce(
             accessToken: envAccessToken as string,
             refreshToken: envRefreshToken as string,
           })
-          await writeBundle(fallbackBundle, 'privy-token-refresher', {
+          await writeBundle(fallbackBundle, writer, {
             accessToken: envAccessToken as string,
             refreshToken: envRefreshToken as string,
           })
@@ -557,7 +567,7 @@ export async function runAlfaClubPrivyRefreshOnce(
               accessTokenExpIso: fallbackAccessExp
                 ? new Date(fallbackAccessExp).toISOString()
                 : null,
-              writer: 'privy-token-refresher',
+              writer,
               rotatedRefresh: fallbackBundle.refreshToken !== envRefreshToken,
             }),
           ).catch(() => false)
@@ -582,7 +592,7 @@ export async function runAlfaClubPrivyRefreshOnce(
         status: 'error',
         rawError: message,
       }),
-      'privy-token-refresher',
+      writer,
     ).catch(() => false)
     return { status: 'error', error: message }
   }
@@ -599,7 +609,10 @@ export function requestImmediatePrivyRefresh(
 
   lastImmediateRefreshKickAt = now
   logger.info('[alfaclub-refresher] immediate refresh requested', { reason })
-  immediateRefreshInFlight = runAlfaClubPrivyRefreshOnce({}, { force: true }).finally(() => {
+  immediateRefreshInFlight = runAlfaClubPrivyRefreshOnce(
+    {},
+    { force: true, writer: 'hermit-privy-refresher' },
+  ).finally(() => {
     immediateRefreshInFlight = null
   })
   return immediateRefreshInFlight
@@ -664,13 +677,13 @@ export function startAlfaClubPrivyTokenRefresher(opts?: {
     }
   }
 
-  const intervalMs = opts?.intervalMs ?? DEFAULT_REFRESH_INTERVAL_MS
+  const intervalMs = opts?.intervalMs ?? readAlfaClubPrivyRefreshIntervalMs()
   const deps = opts?.deps ?? {}
   let firstTick = true
   let stopped = false
 
   const runNow = async (): Promise<AlfaClubRefresherOutcome> =>
-    runAlfaClubPrivyRefreshOnce(deps)
+    runAlfaClubPrivyRefreshOnce(deps, { writer: 'hermit-privy-refresher' })
 
   const tick = async (): Promise<void> => {
     if (stopped) return
@@ -686,7 +699,7 @@ export function startAlfaClubPrivyTokenRefresher(opts?: {
       // window, making the refresher behavior path-independent of when
       // the process happened to boot relative to a prior token lifetime.
       firstTick = false
-      await runAlfaClubPrivyRefreshOnce(deps, { force: true })
+      await runAlfaClubPrivyRefreshOnce(deps, { force: true, writer: 'hermit-privy-refresher' })
       return
     }
     await runNow()

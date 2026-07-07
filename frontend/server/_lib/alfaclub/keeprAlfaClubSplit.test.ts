@@ -2,14 +2,23 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import {
   isAlfaClubRailwayBridgeOverrideEnabled,
+  isAlfaClubRailwayHermitPrimaryConfigured,
   isKeeprRailwayAlfaClubSplit,
   isRailwayRuntimeEnv,
+  shouldSuppressVercelBridgeCron,
+  shouldSuppressVercelTokenRefreshCron,
 } from './keeprAlfaClubSplit.js'
 
 const RAILWAY_KEYS = [
   'RAILWAY_SERVICE_ID',
   'RAILWAY_PROJECT_ID',
   'RAILWAY_ENVIRONMENT_ID',
+] as const
+
+const POLICY_KEYS = [
+  'ALFACLUB_RAILWAY_HERMIT_PRIMARY',
+  'ALFACLUB_VERCEL_BRIDGE_CRON_DISABLED',
+  'ALFACLUB_VERCEL_TOKEN_REFRESH_CRON_DISABLED',
 ] as const
 
 const saved: Record<string, string | undefined> = {}
@@ -33,7 +42,7 @@ function clearRailwayEnv() {
 
 describe('keeprAlfaClubSplit', () => {
   afterEach(() => {
-    restoreEnv([...RAILWAY_KEYS, 'ALFACLUB_CHAT_BRIDGE_ALLOW_RAILWAY'])
+    restoreEnv([...RAILWAY_KEYS, 'ALFACLUB_CHAT_BRIDGE_ALLOW_RAILWAY', ...POLICY_KEYS])
   })
 
   it('detects Railway runtime from RAILWAY_* vars', () => {
@@ -63,5 +72,25 @@ describe('keeprAlfaClubSplit', () => {
     delete process.env.ALFACLUB_CHAT_BRIDGE_ALLOW_RAILWAY
 
     expect(isKeeprRailwayAlfaClubSplit()).toBe(false)
+  })
+
+  it('suppresses Vercel bridge cron when Hermit Railway is primary', () => {
+    saveEnv(POLICY_KEYS)
+    delete process.env.ALFACLUB_RAILWAY_HERMIT_PRIMARY
+    delete process.env.ALFACLUB_VERCEL_BRIDGE_CRON_DISABLED
+    expect(shouldSuppressVercelBridgeCron()).toBe(false)
+
+    process.env.ALFACLUB_RAILWAY_HERMIT_PRIMARY = '1'
+    expect(isAlfaClubRailwayHermitPrimaryConfigured()).toBe(true)
+    expect(shouldSuppressVercelBridgeCron()).toBe(true)
+  })
+
+  it('suppresses Vercel token refresh cron only when explicitly disabled', () => {
+    saveEnv(POLICY_KEYS)
+    delete process.env.ALFACLUB_VERCEL_TOKEN_REFRESH_CRON_DISABLED
+    expect(shouldSuppressVercelTokenRefreshCron()).toBe(false)
+
+    process.env.ALFACLUB_VERCEL_TOKEN_REFRESH_CRON_DISABLED = '1'
+    expect(shouldSuppressVercelTokenRefreshCron()).toBe(true)
   })
 })

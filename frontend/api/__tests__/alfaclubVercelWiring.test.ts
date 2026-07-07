@@ -32,17 +32,16 @@ describe('alfaclub vigilante — vercel wiring', () => {
     expect(entry?.schedule).toBe('10 12 * * *')
   })
 
-  it('frontend/vercel.json registers a minute cron for /api/v1/alfaclub/chat-bridge-run', async () => {
+  it('frontend/vercel.json does not register the retired minute bridge cron', async () => {
     const body = await readFile(new URL('../../vercel.json', import.meta.url), 'utf8')
     const parsed = JSON.parse(body) as {
       crons?: Array<{ path?: string; schedule?: string }>
     }
     const entry = (parsed.crons ?? []).find((c) => c.path === '/api/v1/alfaclub/chat-bridge-run')
-    expect(entry).toBeDefined()
-    expect(entry?.schedule).toBe('* * * * *')
+    expect(entry).toBeUndefined()
   })
 
-  it('frontend/vercel.json registers a sub-hour cron for /api/v1/alfaclub/chat-token-refresh', async () => {
+  it('frontend/vercel.json registers a sub-hour backup cron for /api/v1/alfaclub/chat-token-refresh', async () => {
     const body = await readFile(new URL('../../vercel.json', import.meta.url), 'utf8')
     const parsed = JSON.parse(body) as {
       crons?: Array<{ path?: string; schedule?: string }>

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   _resetImmediatePrivyRefreshForTests,
+  readAlfaClubPrivyRefreshIntervalMs,
   refreshPrivySession,
   requestImmediatePrivyRefresh,
   runAlfaClubPrivyRefreshOnce,
@@ -661,6 +662,33 @@ describe('refreshPrivySession Privy response parsing', () => {
     await expect(
       refreshPrivySession({ accessToken: 'at-old', refreshToken: 'rt-old' }),
     ).rejects.toThrow(/privy_refresh_failed:400/)
+  })
+})
+
+describe('readAlfaClubPrivyRefreshIntervalMs', () => {
+  const ENV_KEY = 'ALFACLUB_CHAT_PRIVY_REFRESH_INTERVAL_MS'
+  let priorEnv: string | undefined
+
+  beforeEach(() => {
+    priorEnv = process.env[ENV_KEY]
+    delete process.env[ENV_KEY]
+  })
+
+  afterEach(() => {
+    if (priorEnv === undefined) delete process.env[ENV_KEY]
+    else process.env[ENV_KEY] = priorEnv
+  })
+
+  it('defaults to 55 minutes to stay inside Privy 1-hour TTL', () => {
+    expect(readAlfaClubPrivyRefreshIntervalMs()).toBe(55 * 60 * 1000)
+  })
+
+  it('clamps custom intervals to the safe 5-59 minute window', () => {
+    process.env[ENV_KEY] = String(59 * 60 * 1000)
+    expect(readAlfaClubPrivyRefreshIntervalMs()).toBe(59 * 60 * 1000)
+
+    process.env[ENV_KEY] = String(2 * 60 * 1000)
+    expect(readAlfaClubPrivyRefreshIntervalMs()).toBe(5 * 60 * 1000)
   })
 })
 

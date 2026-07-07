@@ -23,9 +23,10 @@
  *     via the deterministic executor's `hermit` family branch. The Hermit
  *     agent itself runs out-of-process; only its API endpoint + bearer
  *     are wired here through `HERMIT_AGENT_*` env.
- *   - Privy session-token rotation — that is the canonical Vercel cron at
- *     `/api/v1/alfaclub/chat-token-refresh`. The bridge reads the rotated
- *     `chat_jwt` row but does not write it.
+ *   - Privy session-token rotation — Hermit Railway runs the in-process
+ *     refresher when `ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED=1`; Vercel cron
+ *     at `/api/v1/alfaclub/chat-token-refresh` is an hourly backup. The bridge
+ *     reads the rotated `chat_jwt` row but does not write it.
  */
 
 import { matchesAnyCommandFamily } from '../../commands/registry.js'
@@ -50,7 +51,7 @@ import {
 import { readAlfaClubChatToken } from './chatTokenStore.js'
 import { requestImmediatePrivyRefresh } from './privyTokenRefresher.js'
 import { parseTelegramChatRef } from './telegramChatRef.js'
-import { isKeeprRailwayAlfaClubSplit } from './keeprAlfaClubSplit.js'
+import { isKeeprRailwayAlfaClubSplit, shouldSuppressVercelBridgeCron } from './keeprAlfaClubSplit.js'
 import {
   ALFACLUB_API_COMMON_BROWSER_HEADERS,
   buildAlfaClubApiHeaders,
@@ -257,6 +258,7 @@ export type AlfaClubChatBridgeSkipReason =
   | 'kill_switch'
   | 'disabled'
   | 'railway_blocked'
+  | 'railway_primary'
   | 'env_missing'
   | 'already_running'
 
@@ -3746,6 +3748,14 @@ async function runBridgeTick(
 
 export async function runAlfaClubChatBridgeTickOnce(): Promise<RunAlfaClubChatBridgeTickOnceResult> {
   const flags = readAlfaClubChatBridgeFlagsForCronTick()
+  if (shouldSuppressVercelBridgeCron()) {
+    return {
+      ok: false,
+      reason: 'railway_primary',
+      intervalMs: flags.pollIntervalMs,
+      roomId: flags.roomId,
+    }
+  }
   if (flags.killSwitch) {
     return {
       ok: false,

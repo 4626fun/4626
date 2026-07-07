@@ -39,10 +39,6 @@
       "schedule": "*/15 * * * *"
     },
     {
-      "path": "/api/v1/alfaclub/chat-bridge-run",
-      "schedule": "* * * * *"
-    },
-    {
       "path": "/api/v1/alfaclub/position-alerts",
       "schedule": "*/5 * * * *"
     },

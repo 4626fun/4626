@@ -1,12 +1,11 @@
 /**
  * POST /api/v1/alfaclub/chat-token-refresh
  *
- * Cron-secret-gated entry point that runs exactly one Privy session-refresh
- * pass for the AlfaClub chat bridge in Vercel's serverless runtime. This
- * mirrors the long-lived `startAlfaClubPrivyTokenRefresher` loop that runs
- * inside the Railway agent — Vercel cron invokes this every ~30 minutes so
- * the user can retire the Railway-only refresher without losing automatic
- * identity-token rotation.
+ * Cron-secret-gated backup entry point that runs exactly one Privy session-refresh
+ * pass for the AlfaClub chat bridge in Vercel's serverless runtime. Hermit Railway
+ * is the primary writer when `ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED=1`; this cron
+ * fires hourly as a safety net unless
+ * `ALFACLUB_VERCEL_TOKEN_REFRESH_CRON_DISABLED=1`.
  *
  * The handler delegates to `runAlfaClubPrivyRefreshOnce` (one-shot) and
  * never returns raw token material; only refresh status, fingerprintable
@@ -22,6 +21,7 @@ import {
   rateLimitKey,
 } from '@4626/server-core'
 import { runAlfaClubPrivyRefreshOnce } from '../../../../server/_lib/alfaclub/privyTokenRefresher.js'
+import { shouldSuppressVercelTokenRefreshCron } from '../../../../server/_lib/alfaclub/keeprAlfaClubSplit.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -85,13 +85,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' })
   }
 
+  if (shouldSuppressVercelTokenRefreshCron()) {
+    return res.status(202).json({
+      success: false,
+      reason: 'vercel_token_refresh_disabled',
+      data: {
+        hint: 'Hermit Railway owns Privy rotation; unset ALFACLUB_VERCEL_TOKEN_REFRESH_CRON_DISABLED to re-enable this backup cron',
+      },
+    })
+  }
+
   try {
-    // Always force a refresh on the cron path. Vercel only invokes us every
-    // ~30 minutes, well below the access-token TTL, so there is no risk of
+    // Always force a refresh on the cron path. Vercel invokes this every
+    // ~10 minutes as a backup while Hermit owns the primary ~55 minute loop.
     // burning rate budget — and skipping based on the identity-token's
     // remaining lifetime would mean a missed cron tick (cold start, transient
     // 5xx, etc.) could push the next refresh past the 1-hour cliff.
-    const outcome = await runAlfaClubPrivyRefreshOnce({}, { force: true })
+    const outcome = await runAlfaClubPrivyRefreshOnce(
+      {},
+      { force: true, writer: 'vercel-cron-privy-refresher' },
+    )
 
     if (outcome.status === 'refreshed') {
       return res.status(200).json({

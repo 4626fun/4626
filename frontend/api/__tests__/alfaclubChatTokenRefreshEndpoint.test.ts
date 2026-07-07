@@ -90,7 +90,27 @@ describe('POST /api/v1/alfaclub/chat-token-refresh', () => {
     })
     const res = createMockRes()
     await refreshHandler(req, res)
-    expect(runAlfaClubPrivyRefreshOnceMock).toHaveBeenCalledWith({}, { force: true })
+    expect(runAlfaClubPrivyRefreshOnceMock).toHaveBeenCalledWith(
+      {},
+      { force: true, writer: 'vercel-cron-privy-refresher' },
+    )
+  })
+
+  it('returns 202 when Vercel token refresh cron is explicitly disabled', async () => {
+    restoreEnv?.()
+    restoreEnv = applyEnv({
+      CRON_SECRET: 'test-cron-secret',
+      ALFACLUB_VERCEL_TOKEN_REFRESH_CRON_DISABLED: '1',
+    })
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-cron-secret': 'test-cron-secret' },
+    })
+    const res = createMockRes()
+    await refreshHandler(req, res)
+    expect(res.statusCode).toBe(202)
+    expect(res.body?.reason).toBe('vercel_token_refresh_disabled')
+    expect(runAlfaClubPrivyRefreshOnceMock).not.toHaveBeenCalled()
   })
 
   it('returns 200 with refreshed metadata on success and never leaks token material', async () => {

@@ -14,6 +14,7 @@ import {
   rateLimitKey,
 } from '@4626/server-core'
 import { runAlfaClubChatBridgeTickOnce } from '../../../../server/_lib/alfaclub/chatBridge.js'
+import { shouldSuppressVercelBridgeCron } from '../../../../server/_lib/alfaclub/keeprAlfaClubSplit.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -63,6 +64,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!limiter.allowed) {
     res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' })
+  }
+
+  if (shouldSuppressVercelBridgeCron()) {
+    return res.status(202).json({
+      success: false,
+      reason: 'railway_primary',
+      data: {
+        hint: 'Hermit Railway owns the live bridge; unset ALFACLUB_RAILWAY_HERMIT_PRIMARY to re-enable this cron path',
+      },
+    })
   }
 
   try {

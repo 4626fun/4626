@@ -22,7 +22,7 @@ import {
   type AlfaClubChatBridgeTickResult,
   startAlfaClubChatBridge,
 } from '../../_lib/alfaclub/chatBridge.js'
-import { startAlfaClubPrivyTokenRefresher } from '../../_lib/alfaclub/privyTokenRefresher.js'
+import { startAlfaClubPrivyTokenRefresher, readAlfaClubPrivyRefreshIntervalMs } from '../../_lib/alfaclub/privyTokenRefresher.js'
 import {
   type CounterTradeTickerState,
   startCounterTradeTicker,
@@ -34,6 +34,7 @@ import {
 } from '../../_lib/arena/acpAuthBootstrap.js'
 import { logger } from '../../_lib/infra/logger.js'
 import { isDbConfigured } from '../../_lib/db/postgres.js'
+import { parseAlfaClubBoolEnv } from '../../_lib/alfaclub/keeprAlfaClubSplit.js'
 import { readAlfaClubChatToken, readAlfaClubPrivyAccessToken } from '../../_lib/alfaclub/chatTokenStore.js'
 
 declare const process: {
@@ -91,7 +92,7 @@ try {
   console.error('[hermit][early] ALFACLUB_CHAT_BRIDGE_ENABLED  :', (process.env.ALFACLUB_CHAT_BRIDGE_ENABLED ?? '').trim() || 'not set')
   console.error('[hermit][early] ALFACLUB_CHAT_BRIDGE_ALLOW_RAILWAY:', (process.env.ALFACLUB_CHAT_BRIDGE_ALLOW_RAILWAY ?? '').trim() || 'not set')
   console.error('[hermit][early] Any room targeting            :', hasAnyRoomTargeting ? 'yes' : 'no (bridge may skip most work)')
-  console.error('[hermit][early] Privy Token Refresher         :', (process.env.ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED ?? '').trim() ? 'ENABLED (this Hermit owns rotation)' : 'disabled (Vercel cron expected to be writer)')
+  console.error('[hermit][early] Privy Token Refresher         :', parseAlfaClubBoolEnv(process.env.ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED) ? 'ENABLED (this Hermit owns rotation)' : 'disabled (Vercel hourly backup expected)')
   console.error('[hermit][early] ----------------------------------------------------------------')
 
   if (criticalIssues.length > 0) {
@@ -416,7 +417,7 @@ async function startRuntime(): Promise<void> {
     } else {
       stopRefresher = refresher.stop
       logger.info('[hermit] AlfaClub Privy token refresher started', {
-        intervalMinutes: 30,
+        intervalMinutes: Math.round(readAlfaClubPrivyRefreshIntervalMs() / 60_000),
         role: 'primary writer for alfaclub_runtime_secret (this Hermit instance owns token rotation)',
       })
 
