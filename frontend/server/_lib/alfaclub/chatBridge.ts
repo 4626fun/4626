@@ -144,6 +144,10 @@ type AlfaClubOutboundFrame = {
     text: string
     attachments: AlfaClubMessageAttachment[]
     reply_id?: string
+    /** Required alongside reply_id — the WS server rejects reply_id without reply_date. */
+    reply_date?: number
+    /** Posts the message into the root message's thread instead of main chat. */
+    thread_root_id?: string
   }
 }
 
@@ -562,14 +566,32 @@ export function buildAlfaClubOutboundFrame(params: {
   text: string
   attachments?: unknown
   replyToMessageId?: string
+  /**
+   * Unix ms date of the message being replied to. The AlfaClub WS server
+   * rejects frames carrying `reply_id` without `reply_date` ("Both replyId
+   * and replyDate must be provided together or not at all."), so `reply_id`
+   * is only emitted when the date is known.
+   */
+  replyToMessageDate?: number
+  /**
+   * Root message id to post into that message's thread. Thread replies must
+   * also include `reply_id` + `reply_date` ("Thread replies must include
+   * reply_id and reply_date."), so this is only emitted when both are set.
+   */
+  threadRootId?: string
 }): AlfaClubOutboundFrame {
+  const replyDate = Number(params.replyToMessageDate)
+  const hasReply = Boolean(params.replyToMessageId) && Number.isFinite(replyDate) && replyDate > 0
   return {
     type: 'message',
     value: {
       room: params.roomId,
       text: params.text,
       attachments: normalizeAlfaClubAttachments(params.attachments),
-      ...(params.replyToMessageId ? { reply_id: params.replyToMessageId } : {}),
+      ...(hasReply
+        ? { reply_id: params.replyToMessageId, reply_date: Math.floor(replyDate) }
+        : {}),
+      ...(hasReply && params.threadRootId ? { thread_root_id: params.threadRootId } : {}),
     },
   }
 }
@@ -1591,6 +1613,8 @@ async function sendRoomMessageViaWebSocket(params: {
   text: string
   attachments?: unknown
   replyToMessageId?: string
+  replyToMessageDate?: number
+  threadRootId?: string
   timeoutMs: number
 }): Promise<'ws_proxy_http' | 'websocket'> {
   if (params.wsProxyHttpSendUrl) {
@@ -1613,6 +1637,8 @@ async function sendRoomMessageViaWebSocket(params: {
             text: params.text,
             attachments: params.attachments,
             replyToMessageId: params.replyToMessageId,
+            replyToMessageDate: params.replyToMessageDate,
+            threadRootId: params.threadRootId,
           }),
         }),
         signal: controller.signal,
@@ -1646,6 +1672,8 @@ async function sendRoomMessageViaWebSocket(params: {
       text: params.text,
       attachments: params.attachments,
       replyToMessageId: params.replyToMessageId,
+      replyToMessageDate: params.replyToMessageDate,
+      threadRootId: params.threadRootId,
     }),
   )
 
@@ -1873,6 +1901,13 @@ async function sendCommandReplyToRoom(params: {
   text: string
   attachments: AlfaClubMessageAttachment[]
   replyToMessageId: string
+  /**
+   * Unix ms date of the trigger message. When present, the reply goes over
+   * the WS lane first so it renders as a real quote-reply — the bot-token
+   * HTTP lane silently ignores `reply_id` (public docs: "Other fields are
+   * ignored"), and the WS server requires reply_id + reply_date together.
+   */
+  replyToMessageDate?: number | null
   commandMessageId: string
 }): Promise<string> {
   const idempotencyKey = buildBotMessageIdempotencyKey({
@@ -1880,8 +1915,12 @@ async function sendCommandReplyToRoom(params: {
     messageId: params.commandMessageId,
   })
   const hasAttachments = params.attachments.length > 0
+  const replyToMessageDate =
+    typeof params.replyToMessageDate === 'number' && Number.isFinite(params.replyToMessageDate)
+      ? params.replyToMessageDate
+      : undefined
 
-  if (hasAttachments) {
+  if (hasAttachments || replyToMessageDate !== undefined) {
     try {
       const lane = await sendRoomMessageViaWebSocket({
         websocketUrl: params.flags.websocketUrl,
@@ -1892,14 +1931,16 @@ async function sendCommandReplyToRoom(params: {
         text: params.text,
         attachments: params.attachments,
         replyToMessageId: params.replyToMessageId,
+        replyToMessageDate,
         timeoutMs: params.flags.sendTimeoutMs,
       })
       return lane === 'ws_proxy_http' ? 'ws_proxy_http_with_reply_id' : 'websocket_with_reply_id'
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
-      logger.warn('[alfaclub-chat] ws_reply_with_attachments_failed', {
+      logger.warn('[alfaclub-chat] ws_reply_with_reply_context_failed', {
         roomId: params.roomId,
         messageId: params.commandMessageId,
+        hasAttachments,
         error: detail.slice(0, 180),
       })
     }
@@ -1945,6 +1986,7 @@ async function sendCommandReplyToRoom(params: {
     text: params.text,
     attachments: params.attachments,
     replyToMessageId: params.replyToMessageId,
+    replyToMessageDate,
     timeoutMs: params.flags.sendTimeoutMs,
   })
   return lane === 'ws_proxy_http' ? 'ws_proxy_http_fallback' : 'websocket_fallback'
@@ -3033,7 +3075,33 @@ async function sendAlfaClubCommandTextReply(params: {
   jwt: string
   text: string
   replyToMessageId: string
+  replyToMessageDate?: number
 }): Promise<void> {
+  if (
+    typeof params.replyToMessageDate === 'number' &&
+    Number.isFinite(params.replyToMessageDate)
+  ) {
+    try {
+      await sendRoomMessageViaWebSocket({
+        websocketUrl: params.flags.websocketUrl,
+        wsProxyHttpSendUrl: (params.flags as any).wsProxyHttpSendUrl,
+        wsProxySecret: (params.flags as any).wsProxySecret,
+        jwt: params.jwt,
+        roomId: params.roomId,
+        text: params.text,
+        replyToMessageId: params.replyToMessageId,
+        replyToMessageDate: params.replyToMessageDate,
+        timeoutMs: params.flags.sendTimeoutMs,
+      })
+      return
+    } catch (error) {
+      logger.warn('[alfaclub-chat] ws_followup_reply_failed', {
+        roomId: params.roomId,
+        messageId: params.replyToMessageId,
+        error: error instanceof Error ? error.message.slice(0, 180) : String(error).slice(0, 180),
+      })
+    }
+  }
   if (params.flags.botToken) {
     const idempotencyKey = buildBotMessageIdempotencyKey({
       roomId: params.roomId,
@@ -3107,6 +3175,7 @@ async function executeInverseAkitaChatReactionBatch(params: {
           text: result.replyText,
           attachments: [],
           replyToMessageId: intent.id,
+          replyToMessageDate: intent.date,
           commandMessageId: intent.id,
         })
         await reactToAlfaClubTriggerMessage({
@@ -3116,6 +3185,35 @@ async function executeInverseAkitaChatReactionBatch(params: {
           messageId: intent.id,
           emoji: result.reactionEmoji,
         })
+        if (result.threadReceiptText?.trim()) {
+          try {
+            await sendRoomMessageViaWebSocket({
+              websocketUrl: params.flags.websocketUrl,
+              wsProxyHttpSendUrl: (params.flags as any).wsProxyHttpSendUrl,
+              wsProxySecret: (params.flags as any).wsProxySecret,
+              jwt: params.jwt,
+              roomId: params.roomId,
+              text: result.threadReceiptText,
+              replyToMessageId: intent.id,
+              replyToMessageDate: intent.date,
+              threadRootId: intent.id,
+              timeoutMs: params.flags.sendTimeoutMs,
+            })
+            logger.info('[alfaclub-chat] inverse_thread_receipt_sent', {
+              roomId: params.roomId,
+              messageId: intent.id,
+            })
+          } catch (receiptError) {
+            logger.warn('[alfaclub-chat] inverse_thread_receipt_failed', {
+              roomId: params.roomId,
+              messageId: intent.id,
+              error:
+                receiptError instanceof Error
+                  ? receiptError.message.slice(0, 180)
+                  : String(receiptError).slice(0, 180),
+            })
+          }
+        }
         if (result.ok) reacted += 1
       }
       await recordCommandReply({
@@ -3216,6 +3314,7 @@ async function executeCommandBatch(params: {
         text: responseText,
         attachments,
         replyToMessageId: command.id,
+        replyToMessageDate: command.date,
         commandMessageId: command.id,
       })
       logger.info('[alfaclub-chat] command_reply_sent', {
@@ -3249,6 +3348,7 @@ async function executeCommandBatch(params: {
             jwt: params.jwt,
             text: followUpText,
             replyToMessageId: command.id,
+            replyToMessageDate: command.date,
           })
           logger.info('[alfaclub-chat] command_followup_sent', {
             roomId: params.roomId,

@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../arena/arenaClient.js', () => ({
-  runArenaTrade: vi.fn(),
-}))
+vi.mock('../arena/arenaClient.js', async () => {
+  const actual = await vi.importActual<typeof import('../arena/arenaClient.js')>(
+    '../arena/arenaClient.js',
+  )
+  return {
+    parseTradeFillFromOutput: actual.parseTradeFillFromOutput,
+    runArenaTrade: vi.fn(),
+  }
+})
 
 vi.mock('../arena/arenaIdentityMappingStore.js', () => ({
   resolveRoomDefaultArenaIdentity: vi.fn(),
@@ -29,6 +35,7 @@ import {
   executeInverseAkitaChatReaction,
   formatInverseAkitaChatReactionReply,
   formatInverseAkitaChatReactionSkipReply,
+  formatInverseAkitaThreadReceipt,
   INVERSE_AKITA_CHAT_REACTION_EMOJIS,
   resolveInverseAkitaChatReactionEmoji,
   isInverseAkitaChatReactionSenderCoolingDown,
@@ -241,6 +248,97 @@ describe('inverseAkitaChatReaction', () => {
       failDetail: 'Failed to sign with ACP CLI.',
     })
     expect(reply).toContain('(Failed to sign with ACP CLI.)')
+  })
+
+  it('formats a thread receipt with fill detail, dry-run tag, and fail detail', () => {
+    expect(
+      formatInverseAkitaThreadReceipt({
+        pair: 'BTC',
+        counterSide: 'short',
+        sizeUsd: 11,
+        leverage: 27,
+        tradeOk: true,
+        dryRun: false,
+        fill: { totalSz: 0.0001, avgPx: 109_432 },
+      }),
+    ).toBe('🧾 receipt: SHORT BTC · $11 notional · 27x · filled 0.0001 @ $109432')
+
+    expect(
+      formatInverseAkitaThreadReceipt({
+        pair: 'ETH',
+        counterSide: 'long',
+        sizeUsd: 11,
+        leverage: 17,
+        tradeOk: true,
+        dryRun: false,
+        fill: null,
+      }),
+    ).toBe('🧾 receipt: LONG ETH · $11 notional · 17x · submitted')
+
+    expect(
+      formatInverseAkitaThreadReceipt({
+        pair: 'BTC',
+        counterSide: 'short',
+        sizeUsd: 11,
+        leverage: 27,
+        tradeOk: false,
+        dryRun: true,
+        fill: null,
+      }),
+    ).toBe('🧾 receipt: SHORT BTC · $11 notional · 27x · [dry-run]')
+
+    expect(
+      formatInverseAkitaThreadReceipt({
+        pair: 'BTC',
+        counterSide: 'short',
+        sizeUsd: 11,
+        leverage: 27,
+        tradeOk: false,
+        dryRun: false,
+        fill: null,
+        failDetail: 'Failed to sign with ACP CLI.',
+      }),
+    ).toBe('🧾 receipt: SHORT BTC attempt failed — Failed to sign with ACP CLI.')
+
+    expect(
+      formatInverseAkitaThreadReceipt({
+        pair: 'BTC',
+        counterSide: 'short',
+        sizeUsd: 11,
+        leverage: 27,
+        tradeOk: false,
+        dryRun: false,
+        fill: null,
+        failDetail: null,
+      }),
+    ).toBeNull()
+  })
+
+  it('returns a thread receipt with the parsed fill from the trade run output', async () => {
+    vi.stubEnv('ARENA_DRY_RUN', '0')
+    mockRunArenaTrade.mockResolvedValue({
+      ok: true,
+      message: 'ok',
+      run: {
+        ok: true,
+        stdout: '{"filled":{"totalSz":"0.0001","avgPx":"109432.0"}}',
+      },
+    } as never)
+    const result = await executeInverseAkitaChatReaction({
+      roomId: '1659',
+      intent: {
+        id: 'm-receipt',
+        date: Date.now(),
+        sender: '0x1234567890123456789012345678901234567890',
+        text: 'long btc',
+        userSide: 'long',
+        pair: 'BTC',
+      },
+    })
+    expect(result.ok).toBe(true)
+    expect(result.threadReceiptText).toBe(
+      '🧾 receipt: SHORT BTC · $50 notional · 27x · filled 0.0001 @ $109432',
+    )
   })
 
   it('executes the opposite side on InverseAKITA wallet', async () => {

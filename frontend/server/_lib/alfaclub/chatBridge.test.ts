@@ -62,6 +62,7 @@ import {
   _resetAlfaClubChatBridgeStateForTests,
   _runAlfaClubChatBridgeTickForTests,
   _sendRoomMessageViaWebSocketForTests,
+  buildAlfaClubOutboundFrame,
   canBridgeReplyInRoom,
   isHistoryMessageCommandCandidate,
   readAlfaClubChatBridgeFlags,
@@ -975,5 +976,64 @@ describe('AlfaClub chat bridge cron helpers', () => {
         isBot: true,
       }),
     ).toBe(false)
+  })
+})
+
+describe('buildAlfaClubOutboundFrame reply/thread contract', () => {
+  const root = { id: 'msg-root-1', date: 1_783_440_580_981 }
+
+  it('emits reply_id and reply_date together when the trigger date is known', () => {
+    const frame = buildAlfaClubOutboundFrame({
+      roomId: '1659',
+      text: 'quote reply',
+      replyToMessageId: root.id,
+      replyToMessageDate: root.date,
+    })
+    expect(frame.value.reply_id).toBe(root.id)
+    expect(frame.value.reply_date).toBe(root.date)
+    expect(frame.value.thread_root_id).toBeUndefined()
+  })
+
+  it('drops reply_id when the reply date is missing (server rejects lone reply_id)', () => {
+    const frame = buildAlfaClubOutboundFrame({
+      roomId: '1659',
+      text: 'plain send',
+      replyToMessageId: root.id,
+    })
+    expect(frame.value.reply_id).toBeUndefined()
+    expect(frame.value.reply_date).toBeUndefined()
+  })
+
+  it('emits thread_root_id only alongside a complete reply_id + reply_date pair', () => {
+    const threaded = buildAlfaClubOutboundFrame({
+      roomId: '1659',
+      text: 'thread receipt',
+      replyToMessageId: root.id,
+      replyToMessageDate: root.date,
+      threadRootId: root.id,
+    })
+    expect(threaded.value.thread_root_id).toBe(root.id)
+    expect(threaded.value.reply_id).toBe(root.id)
+    expect(threaded.value.reply_date).toBe(root.date)
+
+    const incomplete = buildAlfaClubOutboundFrame({
+      roomId: '1659',
+      text: 'thread receipt without date',
+      replyToMessageId: root.id,
+      threadRootId: root.id,
+    })
+    expect(incomplete.value.thread_root_id).toBeUndefined()
+    expect(incomplete.value.reply_id).toBeUndefined()
+  })
+
+  it('ignores invalid reply dates', () => {
+    const frame = buildAlfaClubOutboundFrame({
+      roomId: '1659',
+      text: 'bad date',
+      replyToMessageId: root.id,
+      replyToMessageDate: Number.NaN,
+    })
+    expect(frame.value.reply_id).toBeUndefined()
+    expect(frame.value.reply_date).toBeUndefined()
   })
 })

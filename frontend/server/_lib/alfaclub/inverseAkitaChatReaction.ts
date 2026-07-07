@@ -1,5 +1,5 @@
 import { arenaCommandAllowedForRoom, readArenaConfig } from '../arena/arenaConfig.js'
-import { runArenaTrade } from '../arena/arenaClient.js'
+import { parseTradeFillFromOutput, runArenaTrade } from '../arena/arenaClient.js'
 import { validateArenaPair } from '../arena/arenaPairPolicy.js'
 import { resolveRoomDefaultArenaIdentity } from '../arena/arenaIdentityMappingStore.js'
 import { logger } from '../infra/logger.js'
@@ -560,6 +560,34 @@ export function formatInverseAkitaChatReactionReply(params: {
   return text
 }
 
+/**
+ * Compact trade receipt posted into the trigger message's thread.
+ * Returns null when there's nothing worth threading (skips, dry-runs
+ * with no execution detail beyond the main reply).
+ */
+export function formatInverseAkitaThreadReceipt(params: {
+  pair: string
+  counterSide: CounterTradeSide
+  sizeUsd: number
+  leverage: number
+  tradeOk: boolean
+  dryRun: boolean
+  fill: { totalSz: number; avgPx: number } | null
+  failDetail?: string | null
+}): string | null {
+  const side = params.counterSide === 'long' ? 'LONG' : 'SHORT'
+  if (!params.tradeOk && !params.dryRun) {
+    if (!params.failDetail) return null
+    return `🧾 receipt: ${side} ${params.pair} attempt failed — ${params.failDetail}`
+  }
+  const head = `🧾 receipt: ${side} ${params.pair} · $${params.sizeUsd} notional · ${params.leverage}x`
+  if (params.dryRun) return `${head} · [dry-run]`
+  if (params.fill) {
+    return `${head} · filled ${params.fill.totalSz} @ $${params.fill.avgPx}`
+  }
+  return `${head} · submitted`
+}
+
 export function formatInverseAkitaChatReactionSkipReply(skipReason: string): string | null {
   switch (skipReason) {
     case 'arena_trading_disabled':
@@ -622,6 +650,8 @@ export type InverseAkitaChatReactionResult = {
   skipReason?: string
   replyText: string
   reactionEmoji: string
+  /** Optional trade receipt posted into the trigger message's thread. */
+  threadReceiptText?: string | null
   counterSide: CounterTradeSide
   pair: string
 }
@@ -743,6 +773,7 @@ export async function executeInverseAkitaChatReaction(params: {
   markInverseAkitaChatReactionSenderCooldown(params.intent.sender)
 
   const reactionEmoji = resolveInverseAkitaChatReactionEmoji(params.intent.id)
+  const failDetail = trade.ok ? null : summarizeInverseTradeFailureDetail(trade.run)
   const replyText = formatInverseAkitaChatReactionReply({
     seed: params.intent.id,
     userSide: params.intent.userSide,
@@ -752,7 +783,17 @@ export async function executeInverseAkitaChatReaction(params: {
     leverage,
     dryRun: baseConfig.dryRun,
     tradeOk: trade.ok,
-    failDetail: trade.ok ? null : summarizeInverseTradeFailureDetail(trade.run),
+    failDetail,
+  })
+  const threadReceiptText = formatInverseAkitaThreadReceipt({
+    pair: pairCheck.normalizedPair,
+    counterSide,
+    sizeUsd,
+    leverage,
+    tradeOk: trade.ok,
+    dryRun: baseConfig.dryRun,
+    fill: parseTradeFillFromOutput(String(trade.run?.stdout ?? '')),
+    failDetail,
   })
 
   logger.info('inverse_akita.chat_reaction', {
@@ -773,6 +814,7 @@ export async function executeInverseAkitaChatReaction(params: {
     ok: trade.ok,
     replyText,
     reactionEmoji,
+    threadReceiptText,
     counterSide,
     pair: pairCheck.normalizedPair,
   }
