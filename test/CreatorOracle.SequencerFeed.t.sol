@@ -39,6 +39,10 @@ contract MockSequencerFeed is IChainlinkFeed {
 }
 
 contract MockEthFeed is IChainlinkFeed {
+    function decimals() external pure returns (uint8) {
+        return 8;
+    }
+
     function latestRoundData()
         external
         view

@@ -31,6 +31,34 @@ contract MockV3PoolForOracleQuoteTokenGuard {
         token0 = _token0;
         token1 = _token1;
     }
+
+    /// @dev Constant tick 0 (price 1:1 in raw units) for TWAP reads.
+    function observe(uint32[] calldata secondsAgos)
+        external
+        pure
+        returns (int56[] memory tickCumulatives, uint160[] memory secondsPerLiquidityCumulativeX128s)
+    {
+        tickCumulatives = new int56[](secondsAgos.length);
+        secondsPerLiquidityCumulativeX128s = new uint160[](secondsAgos.length);
+    }
+}
+
+contract MockQuoteUsdFeedForOracleQuoteTokenGuard {
+    int256 public answer;
+    uint256 public updatedAt;
+
+    function decimals() external pure returns (uint8) {
+        return 8;
+    }
+
+    function setLatestAnswer(int256 _answer, uint256 _updatedAt) external {
+        answer = _answer;
+        updatedAt = _updatedAt;
+    }
+
+    function latestRoundData() external view returns (uint80, int256, uint256, uint256, uint80) {
+        return (1, answer, 0, updatedAt, 1);
+    }
 }
 
 contract MockErc20MetadataForOracleQuoteTokenGuard {
@@ -175,6 +203,86 @@ contract OracleReferenceQuoteTokenGuardsTest is Test {
         AgentOracle oracle = _deployAgentOracle();
         vm.expectRevert(AgentOracle.ReferenceQuoteTokenUnset.selector);
         oracle.lockReferenceQuoteToken();
+    }
+
+    function test_creatorOracle_v3Update_failsClosedWithoutQuoteUsdFeed_whenReferencePinned() external {
+        vm.warp(1_700_000_000);
+        CreatorOracle oracle = _deployCreatorOracle();
+
+        address creatorToken = address(new MockErc20MetadataForOracleQuoteTokenGuard(18));
+        address zoraToken = address(new MockErc20MetadataForOracleQuoteTokenGuard(18));
+        address pool = address(new MockV3PoolForOracleQuoteTokenGuard(creatorToken, zoraToken));
+
+        oracle.setReferenceQuoteToken(zoraToken);
+        oracle.setV3Pool(pool, creatorToken, zoraToken, 1800);
+        oracle.initializeCreatorPrice(int256(1e18));
+        oracle.setPriceUpdateCooldown(0);
+
+        // Pinned non-stable quote without a quote/USD feed must not store a ZORA-denominated price as USD.
+        vm.expectRevert(abi.encodeWithSelector(CreatorOracle.MissingQuoteUsdFeed.selector, zoraToken));
+        oracle.updateCreatorPriceFromV3TWAP(1800);
+    }
+
+    function test_creatorOracle_v3Update_convertsQuoteToUsd_viaQuoteUsdFeed() external {
+        vm.warp(1_700_000_000);
+        CreatorOracle oracle = _deployCreatorOracle();
+
+        address creatorToken = address(new MockErc20MetadataForOracleQuoteTokenGuard(18));
+        address zoraToken = address(new MockErc20MetadataForOracleQuoteTokenGuard(18));
+        address pool = address(new MockV3PoolForOracleQuoteTokenGuard(creatorToken, zoraToken));
+        MockQuoteUsdFeedForOracleQuoteTokenGuard quoteFeed = new MockQuoteUsdFeedForOracleQuoteTokenGuard();
+
+        oracle.setReferenceQuoteToken(zoraToken);
+        oracle.setV3Pool(pool, creatorToken, zoraToken, 1800);
+        oracle.setQuoteUsdFeed(address(quoteFeed));
+        oracle.initializeCreatorPrice(int256(0.5e18));
+        oracle.setPriceUpdateCooldown(0);
+
+        // Tick 0 => 1 ZORA per CREATOR; ZORA/USD = 0.50 => USD/CREATOR = 0.50.
+        quoteFeed.setLatestAnswer(0.5e8, block.timestamp);
+        oracle.updateCreatorPriceFromV3TWAP(1800);
+
+        // Without the conversion the write would be 1e18 (100% deviation from 0.5e18) and revert.
+        assertEq(oracle.creatorPriceUSD(), int256(0.5e18));
+    }
+
+    function test_agentOracle_v3Update_failsClosedWithoutQuoteUsdFeed_whenReferencePinned() external {
+        vm.warp(1_700_000_000);
+        AgentOracle oracle = _deployAgentOracle();
+
+        address agentToken = address(new MockErc20MetadataForOracleQuoteTokenGuard(18));
+        address virtualToken = address(new MockErc20MetadataForOracleQuoteTokenGuard(18));
+        address pool = address(new MockV3PoolForOracleQuoteTokenGuard(agentToken, virtualToken));
+
+        oracle.setReferenceQuoteToken(virtualToken);
+        oracle.setV3Pool(pool, agentToken, virtualToken, 1800);
+        oracle.initializeAgentPrice(int256(1e18));
+        oracle.setPriceUpdateCooldown(0);
+
+        vm.expectRevert(abi.encodeWithSelector(AgentOracle.MissingQuoteUsdFeed.selector, virtualToken));
+        oracle.updateAgentPriceFromV3TWAP(1800);
+    }
+
+    function test_agentOracle_v3Update_convertsQuoteToUsd_viaQuoteUsdFeed() external {
+        vm.warp(1_700_000_000);
+        AgentOracle oracle = _deployAgentOracle();
+
+        address agentToken = address(new MockErc20MetadataForOracleQuoteTokenGuard(18));
+        address virtualToken = address(new MockErc20MetadataForOracleQuoteTokenGuard(18));
+        address pool = address(new MockV3PoolForOracleQuoteTokenGuard(agentToken, virtualToken));
+        MockQuoteUsdFeedForOracleQuoteTokenGuard quoteFeed = new MockQuoteUsdFeedForOracleQuoteTokenGuard();
+
+        oracle.setReferenceQuoteToken(virtualToken);
+        oracle.setV3Pool(pool, agentToken, virtualToken, 1800);
+        oracle.setQuoteUsdFeed(address(quoteFeed));
+        oracle.initializeAgentPrice(int256(2e18));
+        oracle.setPriceUpdateCooldown(0);
+
+        // Tick 0 => 1 VIRTUAL per AGENT; VIRTUAL/USD = 2.00 => USD/AGENT = 2.00.
+        quoteFeed.setLatestAnswer(2e8, block.timestamp);
+        oracle.updateAgentPriceFromV3TWAP(1800);
+
+        assertEq(oracle.agentPriceUSD(), int256(2e18));
     }
 
     function _deployCreatorOracle() internal returns (CreatorOracle oracle) {

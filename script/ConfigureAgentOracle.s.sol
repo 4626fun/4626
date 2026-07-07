@@ -7,7 +7,7 @@ interface IAgentOracleConfig {
     function owner() external view returns (address);
     function referenceQuoteToken() external view returns (address);
     function referenceQuoteTokenLocked() external view returns (bool);
-    function v2QuoteUsdFeed() external view returns (address);
+    function quoteUsdFeed() external view returns (address);
     function v2PairConfigured() external view returns (bool);
     function v2Pair() external view returns (address);
     function v2AgentToken() external view returns (address);
@@ -16,7 +16,7 @@ interface IAgentOracleConfig {
 
     function setReferenceQuoteToken(address token) external;
     function lockReferenceQuoteToken() external;
-    function setV2QuoteUsdFeed(address feed) external;
+    function setQuoteUsdFeed(address feed) external;
     function setV2Pair(address pair, address agentToken, address quoteToken, uint32 twapDuration) external;
 }
 
@@ -79,10 +79,10 @@ contract ConfigureAgentOracle is Script {
         }
 
         // Ensure quote/USD feed is explicit and not relying on fallback behavior.
-        address currentQuoteUsdFeed = oracle.v2QuoteUsdFeed();
+        address currentQuoteUsdFeed = oracle.quoteUsdFeed();
         if (currentQuoteUsdFeed != quoteUsdFeed) {
-            oracle.setV2QuoteUsdFeed(quoteUsdFeed);
-            console2.log("setV2QuoteUsdFeed ->", quoteUsdFeed);
+            oracle.setQuoteUsdFeed(quoteUsdFeed);
+            console2.log("setQuoteUsdFeed ->", quoteUsdFeed);
         } else {
             console2.log("[skip] quoteUsdFeed already set");
         }

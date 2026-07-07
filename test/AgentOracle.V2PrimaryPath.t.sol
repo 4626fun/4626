@@ -27,6 +27,31 @@ contract MockChainlinkFeedForAgentOracleV2 {
     uint256 public updatedAt;
     uint80 public roundId = 1;
     uint80 public answeredInRound = 1;
+    uint8 public immutable decimals;
+
+    constructor(uint8 _decimals) {
+        decimals = _decimals;
+    }
+
+    function setLatestAnswer(int256 _answer, uint256 _updatedAt) external {
+        answer = _answer;
+        updatedAt = _updatedAt;
+    }
+
+    function latestRoundData()
+        external
+        view
+        returns (uint80, int256, uint256, uint256, uint80)
+    {
+        return (roundId, answer, 0, updatedAt, answeredInRound);
+    }
+}
+
+contract MockChainlinkFeedNoDecimalsForAgentOracleV2 {
+    int256 public answer;
+    uint256 public updatedAt;
+    uint80 public roundId = 1;
+    uint80 public answeredInRound = 1;
 
     function setLatestAnswer(int256 _answer, uint256 _updatedAt) external {
         answer = _answer;
@@ -116,10 +141,10 @@ contract AgentOracleV2PrimaryPathTest is Test {
     function test_updateAgentPriceFromTWAP_prefersV2Path_whenConfigured() external {
         AgentOracle oracle = _deployOracle();
 
-        MockChainlinkFeedForAgentOracleV2 ethFeed = new MockChainlinkFeedForAgentOracleV2();
-        MockChainlinkFeedForAgentOracleV2 quoteFeed = new MockChainlinkFeedForAgentOracleV2();
+        MockChainlinkFeedForAgentOracleV2 ethFeed = new MockChainlinkFeedForAgentOracleV2(8);
+        MockChainlinkFeedForAgentOracleV2 quoteFeed = new MockChainlinkFeedForAgentOracleV2(8);
         oracle.setChainlinkFeed(address(ethFeed));
-        oracle.setV2QuoteUsdFeed(address(quoteFeed));
+        oracle.setQuoteUsdFeed(address(quoteFeed));
 
         address agentToken = address(new MockERC20Decimals(18));
         address quoteToken = address(new MockERC20Decimals(18));
@@ -143,6 +168,149 @@ contract AgentOracleV2PrimaryPathTest is Test {
 
         // USD/Agent = (USD/Quote) / (Agent/Quote) = 10 / 2 = 5
         assertEq(price, int256(5e18));
+    }
+
+    function test_updateAgentPriceFromTWAP_revertsWithoutV2QuoteFeed_forNonWethQuote() external {
+        AgentOracle oracle = _deployOracle();
+        MockChainlinkFeedForAgentOracleV2 ethFeed = new MockChainlinkFeedForAgentOracleV2(8);
+        oracle.setChainlinkFeed(address(ethFeed));
+
+        address agentToken = address(new MockERC20Decimals(18));
+        address virtualToken = address(new MockERC20Decimals(18));
+        MockUniswapV2PairForAgentOracle pair = new MockUniswapV2PairForAgentOracle(virtualToken, agentToken);
+
+        uint32 t0 = uint32(block.timestamp);
+        pair.setState(100e18, 200e18, t0, 0, 0);
+        oracle.setV2Pair(address(pair), agentToken, virtualToken, 1800);
+        oracle.initializeAgentPrice(int256(5e18));
+
+        vm.warp(block.timestamp + 1800);
+        vm.expectRevert(abi.encodeWithSelector(AgentOracle.MissingQuoteUsdFeed.selector, virtualToken));
+        oracle.updateAgentPriceFromTWAP(1800);
+    }
+
+    function test_updateAgentPriceFromTWAP_fallsBackToEthFeed_whenQuoteIsBaseWeth() external {
+        AgentOracle oracle = _deployOracle();
+        MockChainlinkFeedForAgentOracleV2 ethFeed = new MockChainlinkFeedForAgentOracleV2(8);
+        oracle.setChainlinkFeed(address(ethFeed));
+
+        address agentToken = address(new MockERC20Decimals(18));
+        address weth = oracle.BASE_WETH();
+        address wethDecimalsImpl = address(new MockERC20Decimals(18));
+        vm.etch(weth, wethDecimalsImpl.code);
+        MockUniswapV2PairForAgentOracle pair = new MockUniswapV2PairForAgentOracle(weth, agentToken);
+
+        // Agent/quote = reserveAgent/reserveWeth = 2
+        uint32 t0 = uint32(block.timestamp);
+        pair.setState(100e18, 200e18, t0, 0, 0);
+        oracle.setV2Pair(address(pair), agentToken, weth, 1800);
+        oracle.initializeAgentPrice(int256(5e18));
+
+        vm.warp(block.timestamp + 1800);
+        ethFeed.setLatestAnswer(10e8, block.timestamp);
+        oracle.updateAgentPriceFromTWAP(1800);
+        (int256 price,) = oracle.getAgentPrice();
+        assertEq(price, int256(5e18));
+    }
+
+    function test_updateAgentPriceFromTWAP_handlesNon8DecimalQuoteFeeds() external {
+        AgentOracle oracle = _deployOracle();
+
+        MockChainlinkFeedForAgentOracleV2 ethFeed = new MockChainlinkFeedForAgentOracleV2(8);
+        MockChainlinkFeedForAgentOracleV2 quoteFeed18 = new MockChainlinkFeedForAgentOracleV2(18);
+        oracle.setChainlinkFeed(address(ethFeed));
+        oracle.setQuoteUsdFeed(address(quoteFeed18));
+
+        address agentToken = address(new MockERC20Decimals(18));
+        address quoteToken = address(new MockERC20Decimals(18));
+        MockUniswapV2PairForAgentOracle pair = new MockUniswapV2PairForAgentOracle(quoteToken, agentToken);
+
+        // Agent/Quote = 2
+        uint32 t0 = uint32(block.timestamp);
+        pair.setState(100e18, 200e18, t0, 0, 0);
+        oracle.setV2Pair(address(pair), agentToken, quoteToken, 1800);
+        oracle.initializeAgentPrice(int256(5e18));
+
+        vm.warp(block.timestamp + 1800);
+        quoteFeed18.setLatestAnswer(10e18, block.timestamp); // quote/USD with 18-dec feed
+
+        oracle.updateAgentPriceFromTWAP(1800);
+        (int256 price,) = oracle.getAgentPrice();
+        assertEq(price, int256(5e18));
+    }
+
+    function test_updateAgentPriceFromTWAP_normalizesMixedDecimalV2Pairs() external {
+        AgentOracle oracle = _deployOracle();
+
+        MockChainlinkFeedForAgentOracleV2 quoteFeed = new MockChainlinkFeedForAgentOracleV2(8);
+        oracle.setQuoteUsdFeed(address(quoteFeed));
+
+        address agentToken = address(new MockERC20Decimals(18));
+        address quoteToken6 = address(new MockERC20Decimals(6));
+        MockUniswapV2PairForAgentOracle pair = new MockUniswapV2PairForAgentOracle(quoteToken6, agentToken);
+
+        // Human-unit ratio: 200 agent / 100 quote = 2 agent per quote.
+        // Raw reserves: quote has 6 decimals, agent has 18.
+        uint32 t0 = uint32(block.timestamp);
+        pair.setState(100e6, 200e18, t0, 0, 0);
+        oracle.setV2Pair(address(pair), agentToken, quoteToken6, 1800);
+        oracle.initializeAgentPrice(int256(5e18));
+
+        vm.warp(block.timestamp + 1800);
+        quoteFeed.setLatestAnswer(10e8, block.timestamp); // quote/USD = 10
+
+        oracle.updateAgentPriceFromTWAP(1800);
+        (int256 price,) = oracle.getAgentPrice();
+
+        // USD/Agent = 10 / 2 = 5 — without decimal normalization this would be off by 1e12.
+        assertEq(price, int256(5e18));
+    }
+
+    function test_autoTwapPath_doesNotBootstrapUninitializedOracle() external {
+        AgentOracle oracle = _deployOracle();
+
+        MockChainlinkFeedForAgentOracleV2 quoteFeed = new MockChainlinkFeedForAgentOracleV2(8);
+        oracle.setQuoteUsdFeed(address(quoteFeed));
+
+        address agentToken = address(new MockERC20Decimals(18));
+        address quoteToken = address(new MockERC20Decimals(18));
+        MockUniswapV2PairForAgentOracle pair = new MockUniswapV2PairForAgentOracle(quoteToken, agentToken);
+
+        uint32 t0 = uint32(block.timestamp);
+        pair.setState(100e18, 200e18, t0, 0, 0);
+        oracle.setV2Pair(address(pair), agentToken, quoteToken, 1800);
+        // Deliberately NOT calling initializeAgentPrice.
+
+        vm.warp(block.timestamp + 1800);
+        quoteFeed.setLatestAnswer(10e8, block.timestamp);
+
+        // Manual TWAP path must refuse to bootstrap.
+        vm.expectRevert(AgentOracle.OracleNotInitialized.selector);
+        oracle.updateAgentPriceFromTWAP(1800);
+        assertEq(oracle.agentPriceUSD(), int256(0));
+    }
+
+    function test_updateAgentPriceFromTWAP_revertsInvalidPrice_whenQuoteFeedMissingDecimals() external {
+        AgentOracle oracle = _deployOracle();
+        MockChainlinkFeedForAgentOracleV2 ethFeed = new MockChainlinkFeedForAgentOracleV2(8);
+        MockChainlinkFeedNoDecimalsForAgentOracleV2 badQuoteFeed = new MockChainlinkFeedNoDecimalsForAgentOracleV2();
+        oracle.setChainlinkFeed(address(ethFeed));
+        oracle.setQuoteUsdFeed(address(badQuoteFeed));
+
+        address agentToken = address(new MockERC20Decimals(18));
+        address quoteToken = address(new MockERC20Decimals(18));
+        MockUniswapV2PairForAgentOracle pair = new MockUniswapV2PairForAgentOracle(quoteToken, agentToken);
+
+        uint32 t0 = uint32(block.timestamp);
+        pair.setState(100e18, 200e18, t0, 0, 0);
+        oracle.setV2Pair(address(pair), agentToken, quoteToken, 1800);
+        oracle.initializeAgentPrice(int256(5e18));
+
+        vm.warp(block.timestamp + 1800);
+        badQuoteFeed.setLatestAnswer(10e8, block.timestamp);
+
+        vm.expectRevert(AgentOracle.InvalidPrice.selector);
+        oracle.updateAgentPriceFromTWAP(1800);
     }
 
     function _deployOracle() internal returns (AgentOracle oracle) {

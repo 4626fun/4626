@@ -45,6 +45,8 @@ contract AgentOracle is OApp {
 
     /// @notice Base chain ID (source of truth)
     uint256 public constant BASE_CHAIN_ID = 8453;
+    /// @notice Base mainnet canonical WETH address.
+    address public constant BASE_WETH = 0x4200000000000000000000000000000000000006;
 
     /// @notice Base chain LayerZero EID (source of truth for inbound price updates)
     uint32 public immutable BASE_EID;
@@ -153,10 +155,12 @@ contract AgentOracle is OApp {
     uint8 public v2AgentDecimals;
     uint8 public v2QuoteDecimals;
 
-    /// @notice Optional Chainlink-style feed for V2 quote/USD conversion.
-    /// @dev Used when V2 is the active price lane and quote token is not ETH.
-    ///      If unset, the oracle falls back to `chainlinkFeed`.
-    address public v2QuoteUsdFeed;
+    /// @notice Optional Chainlink-style feed converting the lane quote token to USD.
+    /// @dev Shared by the V2 and V3 pricing lanes (both are pinned to the same
+    ///      `referenceQuoteToken` when it is set). When unset, Base WETH quotes fall
+    ///      back to `chainlinkFeed`; other quote tokens fail closed instead of being
+    ///      silently priced as ETH or USD.
+    address public quoteUsdFeed;
 
     /// @notice Default V2 TWAP duration (seconds)
     uint32 public v2TwapDuration = DEFAULT_TWAP_DURATION;
@@ -261,7 +265,7 @@ contract AgentOracle is OApp {
     event V2PairConfigured(
         address indexed pair, address indexed agentToken, address indexed quoteToken, uint32 twapDuration
     );
-    event V2QuoteUsdFeedSet(address indexed feed);
+    event QuoteUsdFeedSet(address indexed feed);
     event V2ObservationRecorded(uint256 cumulativePrice, uint32 timestamp);
     event ObservationRecorded(uint16 index, int24 tick, int24 truncatedTick, uint32 timestamp);
     event SwapRecorderSet(address indexed recorder, bool authorized);
@@ -296,6 +300,7 @@ contract AgentOracle is OApp {
     error InvalidReferenceQuoteToken(address expected, address actual);
     error ReferenceQuoteTokenIsLocked();
     error ReferenceQuoteTokenUnset();
+    error MissingQuoteUsdFeed(address quoteToken);
     error PriceUpdateCooldown();
     error PriceDeviationTooHigh();
     // H-01 / 4626-293: oracle bootstrap must go through initializeAgentPrice.
@@ -375,11 +380,12 @@ contract AgentOracle is OApp {
         emit ReferenceQuoteTokenSet(_token);
     }
 
-    /// @notice Configure the quote/USD feed used by the V2 pricing lane.
-    /// @dev Set to zero address to clear and fallback to `chainlinkFeed`.
-    function setV2QuoteUsdFeed(address _feed) external onlyOwner {
-        v2QuoteUsdFeed = _feed;
-        emit V2QuoteUsdFeedSet(_feed);
+    /// @notice Configure the quote-token/USD feed used by the V2 and V3 pricing lanes.
+    /// @dev Set to zero address to clear. When cleared, only Base WETH quotes fall
+    ///      back to `chainlinkFeed`; other quote lanes fail closed.
+    function setQuoteUsdFeed(address _feed) external onlyOwner {
+        quoteUsdFeed = _feed;
+        emit QuoteUsdFeedSet(_feed);
     }
 
     /// @notice Irreversibly lock the current reference quote token.
@@ -612,15 +618,9 @@ contract AgentOracle is OApp {
         if (!_sequencerIsUp()) return (0, 0);
         if (chainlinkFeed == address(0)) return (0, 0);
 
-        (uint80 roundId, int256 answer,, uint256 updatedAt, uint80 answeredInRound) = IChainlinkFeed(chainlinkFeed).latestRoundData();
-
-        if (answer <= 0) return (0, 0);
-        if (block.timestamp - updatedAt > MAX_STALENESS) return (0, 0);
-        // FIX: I-3 (cross-cutting) — check answeredInRound per Chainlink docs
-        if (answeredInRound < roundId) return (0, 0);
-
-        // Chainlink 8 decimals → 18 decimals
-        price = answer * 1e10;
+        (uint256 price18, uint256 updatedAt, bool ok) = _readFeedPrice18(chainlinkFeed);
+        if (!ok) return (0, 0);
+        price = int256(price18);
         timestamp = updatedAt;
     }
 
@@ -1146,7 +1146,15 @@ contract AgentOracle is OApp {
         if (timeElapsed < duration) revert NeedMoreObservations();
 
         uint256 avgUQ112x112 = (currentCumulative - v2PriceCumulativeLast) / uint256(timeElapsed);
+        // Raw V2 cumulative price is a raw-token-unit ratio (agent wei per quote wei).
+        // Normalize to human units using the cached pair decimals so quote tokens
+        // with fewer/more decimals than the agent token are not mispriced.
         agentPerQuote18 = Math.mulDiv(avgUQ112x112, 1e18, uint256(1) << 112);
+        if (v2QuoteDecimals > v2AgentDecimals) {
+            agentPerQuote18 = Math.mulDiv(agentPerQuote18, 10 ** uint256(v2QuoteDecimals - v2AgentDecimals), 1);
+        } else if (v2AgentDecimals > v2QuoteDecimals) {
+            agentPerQuote18 = agentPerQuote18 / (10 ** uint256(v2AgentDecimals - v2QuoteDecimals));
+        }
     }
 
     /**
@@ -1217,31 +1225,24 @@ contract AgentOracle is OApp {
 
         if (agentPerQuote == 0) return;
 
+        // H-01 / 4626-293: auto TWAP writes must not bootstrap the oracle either;
+        // the first price must come from owner-only initializeAgentPrice().
+        if (agentPriceUSD == 0) return;
+
         // Get quote/USD from feed.
-        address quoteUsdFeed = v2PairConfigured ? v2QuoteUsdFeed : chainlinkFeed;
-        if (quoteUsdFeed == address(0)) {
-            // Backward compatibility: if explicit V2 feed is not set, fallback to chainlinkFeed.
-            quoteUsdFeed = chainlinkFeed;
-        }
-        if (quoteUsdFeed == address(0)) return;
+        address resolvedFeed = _resolveQuoteUsdFeed();
+        if (resolvedFeed == address(0)) return;
         if (!_sequencerIsUp()) return;
 
-        try IChainlinkFeed(quoteUsdFeed).latestRoundData() returns (
-            uint80 roundId, int256 quoteUsd, uint256, uint256 updatedAt, uint80 answeredInRound
-        ) {
-            if (quoteUsd <= 0) return;
-            if (block.timestamp - updatedAt > MAX_STALENESS) return;
-            if (answeredInRound < roundId) return;
-
-            // Convert Chainlink 8 decimals to 18
-            uint256 quoteUsd18 = uint256(quoteUsd) * 1e10;
+        try this._readFeedPrice18External(resolvedFeed) returns (uint256 quoteUsd18, uint256, bool ok) {
+            if (!ok || quoteUsd18 == 0) return;
 
             // USD per Agent = (USD per quote) / (Agent per quote)
             int256 agentUsd = int256(Math.mulDiv(quoteUsd18, 1e18, agentPerQuote));
 
             // Sanity: reject updates that move price more than MAX_PRICE_DEVIATION from the stored value.
             // Auto-update is called inside a swap-path try/catch; return instead of reverting.
-            if (agentPriceUSD > 0) {
+            {
                 uint256 oldP = uint256(agentPriceUSD);
                 uint256 newP = agentUsd > 0 ? uint256(agentUsd) : 0;
                 uint256 deviation = oldP > newP ? ((oldP - newP) * 1e18) / oldP : ((newP - oldP) * 1e18) / oldP;
@@ -1280,23 +1281,20 @@ contract AgentOracle is OApp {
         }
         if (agentPerQuote == 0) revert InvalidPrice();
 
-        address quoteUsdFeed = v2PairConfigured ? v2QuoteUsdFeed : chainlinkFeed;
-        if (quoteUsdFeed == address(0)) {
-            // Backward compatibility: if explicit V2 feed is not set, fallback to chainlinkFeed.
-            quoteUsdFeed = chainlinkFeed;
+        address resolvedFeed = _resolveQuoteUsdFeed();
+        if (resolvedFeed == address(0)) {
+            if (v2PairConfigured) revert MissingQuoteUsdFeed(v2QuoteToken);
+            revert ZeroAddress();
         }
-        if (quoteUsdFeed == address(0)) revert ZeroAddress();
         if (!_sequencerIsUp()) revert SequencerDown();
 
-        (uint80 roundId, int256 quoteUsd,, uint256 updatedAt, uint80 answeredInRound) =
-            IChainlinkFeed(quoteUsdFeed).latestRoundData();
-
-        if (quoteUsd <= 0) revert InvalidPrice();
-        if (block.timestamp - updatedAt > MAX_STALENESS) revert StalePrice();
-        // FIX: I-3 (cross-cutting) — check answeredInRound per Chainlink docs
-        require(answeredInRound >= roundId, "Stale round");
-
-        uint256 quoteUsd18 = uint256(quoteUsd) * 1e10;
+        (uint256 quoteUsd18, uint256 updatedAt, bool ok) = _readFeedPrice18(resolvedFeed);
+        if (!ok || quoteUsd18 == 0) {
+            if (updatedAt != 0 && block.timestamp > updatedAt && block.timestamp - updatedAt > MAX_STALENESS) {
+                revert StalePrice();
+            }
+            revert InvalidPrice();
+        }
         // USD per Agent = (USD per quote) / (Agent per quote)
         int256 agentUsd = int256(Math.mulDiv(quoteUsd18, 1e18, agentPerQuote));
 
@@ -1318,8 +1316,12 @@ contract AgentOracle is OApp {
     }
 
     /**
-     * @notice Optional: update agent USD price from Uniswap V3 TWAP (AGENT/QUOTEC)
-     * @dev Useful for Ajna bucket selection or cross-checking. Does not require Chainlink.
+     * @notice Optional: update agent USD price from Uniswap V3 TWAP (AGENT/QUOTE)
+     * @dev The V3 TWAP is quote-token-denominated. When the quote token is not a
+     *      USD stable, the price is converted through `quoteUsdFeed` (or the ETH/USD
+     *      feed for Base WETH quotes). With a pinned non-stable `referenceQuoteToken`
+     *      and no feed configured this fails closed rather than storing a
+     *      quote-denominated value as USD.
      */
     function updateAgentPriceFromV3TWAP(uint32 twapDuration) external {
         if (msg.sender != owner() && !isPriceUpdater[msg.sender]) revert Unauthorized();
@@ -1330,7 +1332,10 @@ contract AgentOracle is OApp {
             revert PriceUpdateCooldown();
         }
 
-        uint256 creatorUsd18 = getAgentUsdTWAP(dur);
+        uint256 quotePerAgent18 = getAgentUsdTWAP(dur);
+        if (quotePerAgent18 == 0) revert InvalidPrice();
+
+        uint256 creatorUsd18 = _convertQuoteToUsd18(quotePerAgent18, v3QuoteToken);
         if (creatorUsd18 == 0) revert InvalidPrice();
 
         // H-01 / 4626-293: TWAP-driven writes also must not bootstrap the oracle.
@@ -1505,8 +1510,86 @@ contract AgentOracle is OApp {
         address feed = sequencerUptimeFeed;
         if (feed == address(0)) return true;
         (, int256 answer,, uint256 updatedAt,) = IChainlinkFeed(feed).latestRoundData();
+        if (updatedAt > block.timestamp) return false;
         if (block.timestamp - updatedAt > MAX_STALENESS) return false;
         return answer == 0;
+    }
+
+    /// @notice External wrapper used in try/catch to keep auto-path fail-open.
+    function _readFeedPrice18External(address feed) external view returns (uint256 price18, uint256 updatedAt, bool ok) {
+        require(msg.sender == address(this), "Only self");
+        return _readFeedPrice18(feed);
+    }
+
+    /// @dev Convert a quote-token-denominated 1e18 amount to USD 1e18.
+    ///      Resolution order: explicit `quoteUsdFeed` → ETH/USD `chainlinkFeed` when the
+    ///      quote token is Base WETH → legacy 1:1 USD-stable assumption only when no
+    ///      `referenceQuoteToken` is pinned. A pinned quote token without a feed fails
+    ///      closed with `MissingQuoteUsdFeed`.
+    function _convertQuoteToUsd18(uint256 amountQuote18, address quoteToken) internal view returns (uint256 usd18) {
+        address feed = quoteUsdFeed;
+        if (feed == address(0) && quoteToken == BASE_WETH) {
+            feed = chainlinkFeed;
+        }
+        if (feed == address(0)) {
+            if (referenceQuoteToken != address(0)) revert MissingQuoteUsdFeed(quoteToken);
+            return amountQuote18; // legacy USD-stable quote (e.g. USDC)
+        }
+        if (!_sequencerIsUp()) revert SequencerDown();
+        (uint256 quoteUsd18, uint256 updatedAt, bool ok) = _readFeedPrice18(feed);
+        if (!ok || quoteUsd18 == 0) {
+            if (updatedAt != 0 && block.timestamp > updatedAt && block.timestamp - updatedAt > MAX_STALENESS) {
+                revert StalePrice();
+            }
+            revert InvalidPrice();
+        }
+        usd18 = Math.mulDiv(amountQuote18, quoteUsd18, 1e18);
+    }
+
+    function _resolveQuoteUsdFeed() internal view returns (address feed) {
+        if (!v2PairConfigured) return chainlinkFeed;
+        if (quoteUsdFeed != address(0)) return quoteUsdFeed;
+        // Only fallback to ETH/USD when the quote token is Base WETH.
+        if (v2QuoteToken == BASE_WETH) return chainlinkFeed;
+        return address(0);
+    }
+
+    function _readFeedPrice18(address feed) internal view returns (uint256 price18, uint256 updatedAt, bool ok) {
+        if (feed == address(0)) return (0, 0, false);
+        uint80 roundId;
+        int256 answer;
+        uint80 answeredInRound;
+        uint256 roundUpdatedAt;
+        try IChainlinkFeed(feed).latestRoundData() returns (
+            uint80 _roundId, int256 _answer, uint256, uint256 _updatedAt, uint80 _answeredInRound
+        ) {
+            roundId = _roundId;
+            answer = _answer;
+            roundUpdatedAt = _updatedAt;
+            answeredInRound = _answeredInRound;
+        } catch {
+            return (0, 0, false);
+        }
+        if (answer <= 0) return (0, roundUpdatedAt, false);
+        if (roundUpdatedAt > block.timestamp) return (0, roundUpdatedAt, false);
+        if (block.timestamp - roundUpdatedAt > MAX_STALENESS) return (0, roundUpdatedAt, false);
+        if (answeredInRound < roundId) return (0, roundUpdatedAt, false);
+
+        uint8 feedDecimals;
+        try IChainlinkFeed(feed).decimals() returns (uint8 d) {
+            feedDecimals = d;
+        } catch {
+            return (0, roundUpdatedAt, false);
+        }
+        if (feedDecimals > 18) return (0, roundUpdatedAt, false);
+
+        uint256 unsignedAnswer = uint256(answer);
+        if (feedDecimals < 18) {
+            price18 = Math.mulDiv(unsignedAnswer, 10 ** uint256(18 - feedDecimals), 1);
+        } else {
+            price18 = unsignedAnswer;
+        }
+        return (price18, roundUpdatedAt, true);
     }
 }
 
@@ -1514,6 +1597,7 @@ contract AgentOracle is OApp {
  * @notice Chainlink feed interface
  */
 interface IChainlinkFeed {
+    function decimals() external view returns (uint8);
     function latestRoundData()
         external
         view

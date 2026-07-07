@@ -7,7 +7,7 @@ interface IAgentOracleQa {
     function owner() external view returns (address);
     function referenceQuoteToken() external view returns (address);
     function referenceQuoteTokenLocked() external view returns (bool);
-    function v2QuoteUsdFeed() external view returns (address);
+    function quoteUsdFeed() external view returns (address);
     function v2PairConfigured() external view returns (bool);
     function v2Pair() external view returns (address);
     function v2AgentToken() external view returns (address);
@@ -55,7 +55,7 @@ contract AgentOraclePostDeployQa is Script {
         address owner = o.owner();
         address referenceQuoteToken = o.referenceQuoteToken();
         bool referenceQuoteTokenLocked = o.referenceQuoteTokenLocked();
-        address v2QuoteUsdFeed = o.v2QuoteUsdFeed();
+        address quoteUsdFeed = o.quoteUsdFeed();
         bool v2PairConfigured = o.v2PairConfigured();
         address v2Pair = o.v2Pair();
         address v2AgentToken = o.v2AgentToken();
@@ -66,7 +66,7 @@ contract AgentOraclePostDeployQa is Script {
         console2.log("owner:", owner);
         console2.log("referenceQuoteToken:", referenceQuoteToken);
         console2.log("referenceQuoteTokenLocked:", referenceQuoteTokenLocked);
-        console2.log("quoteUsdFeed:", v2QuoteUsdFeed);
+        console2.log("quoteUsdFeed:", quoteUsdFeed);
         console2.log("pairConfigured:", v2PairConfigured);
         console2.log("pair:", v2Pair);
         console2.log("agentToken:", v2AgentToken);
@@ -87,7 +87,7 @@ contract AgentOraclePostDeployQa is Script {
             allOk = false;
             console2.log("mismatch: quoteToken expected", expectedQuoteToken);
         }
-        if (expectedQuoteUsdFeed != address(0) && v2QuoteUsdFeed != expectedQuoteUsdFeed) {
+        if (expectedQuoteUsdFeed != address(0) && quoteUsdFeed != expectedQuoteUsdFeed) {
             allOk = false;
             console2.log("mismatch: quoteUsdFeed expected", expectedQuoteUsdFeed);
         }
