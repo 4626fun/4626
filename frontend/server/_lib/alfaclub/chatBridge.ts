@@ -3082,6 +3082,13 @@ async function executeInverseAkitaChatReactionBatch(params: {
           replyToMessageId: intent.id,
           commandMessageId: intent.id,
         })
+        await reactToAlfaClubTriggerMessage({
+          flags: params.flags,
+          jwt: params.jwt,
+          roomId: params.roomId,
+          messageId: intent.id,
+          emoji: result.reactionEmoji,
+        })
         if (result.ok) reacted += 1
       }
       await recordCommandReply({

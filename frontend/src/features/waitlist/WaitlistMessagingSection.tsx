@@ -32,7 +32,7 @@ export function WaitlistMessagingSection(props: WaitlistMessagingSectionProps) {
 }
 
 function WaitlistMessagingSectionInner() {
-  const { data: accountMe, isLoading } = useAccountMe()
+  const { me: accountMe, loading } = useAccountMe()
   const accountSignals = accountMe?.accountSignals
   const canonicalCswAddress = accountSignals?.canonicalCswAddress ?? null
   const zoraLinked = isZoraLinkedFromAccountSignals(accountSignals)
@@ -65,7 +65,7 @@ function WaitlistMessagingSectionInner() {
     [accountSignals, connectTrack, parentEmbeddedOwnerOnChain],
   )
 
-  if (isLoading && !accountMe) {
+  if (loading && !accountMe) {
     return (
       <div className="mt-5 rounded-2xl border border-white/10 bg-black/25 px-4 py-5">
         <LoadingInline labelOverride="Loading messaging options…" />

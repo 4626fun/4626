@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { XmtpStatus } from '@/lib/xmtp/provider'
 
-import { isPrivyEmbeddedSignerAuthError } from '@/lib/xmtp/xmtpHelpers'
+import { isPrivyEmbeddedSignerAuthError } from '@/lib/auth/privyEmbeddedSignerAuthErrors'
 import type { SessionRepairOutcome } from '@/lib/auth/sessionRepair'
 
 import type { WaitlistChatStatus } from './waitlistChatCopy'

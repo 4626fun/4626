@@ -28,6 +28,8 @@ import {
   computeInverseAkitaChatReactionLeverage,
   executeInverseAkitaChatReaction,
   formatInverseAkitaChatReactionReply,
+  INVERSE_AKITA_CHAT_REACTION_EMOJIS,
+  resolveInverseAkitaChatReactionEmoji,
   isInverseAkitaChatReactionSenderCoolingDown,
   parseInverseAkitaChatTradeIntent,
   resolveInverseAkitaChatReactionLeverage,
@@ -110,18 +112,40 @@ describe('inverseAkitaChatReaction', () => {
     expect(mockGetPerpMarkets).toHaveBeenCalledTimes(1)
   })
 
-  it('formats the inverse reply copy', () => {
-    expect(
-      formatInverseAkitaChatReactionReply({
-        userSide: 'long',
-        pair: 'BTC',
-        counterSide: 'short',
-        sizeUsd: 50,
-        leverage: 27,
-        dryRun: false,
-        tradeOk: true,
-      }),
-    ).toContain('you said long BTC. i shorted BTC instead lol')
+  it('alternates inverse trigger reaction emojis', () => {
+    expect(INVERSE_AKITA_CHAT_REACTION_EMOJIS).toEqual(['🔄', '🙃'])
+    expect(resolveInverseAkitaChatReactionEmoji('msg-a')).toBe('🙃')
+    expect(resolveInverseAkitaChatReactionEmoji('msg-b')).toBe('🔄')
+  })
+
+  it('formats sarcastic inverse reply copy', () => {
+    const reply = formatInverseAkitaChatReactionReply({
+      seed: 'm1',
+      userSide: 'long',
+      pair: 'BTC',
+      counterSide: 'short',
+      sizeUsd: 50,
+      leverage: 27,
+      dryRun: false,
+      tradeOk: true,
+    })
+    expect(reply).toMatch(/short/i)
+    expect(reply).toContain('BTC')
+    expect(reply).toContain('50 @ 27x')
+  })
+
+  it('formats sarcastic fail copy when trade rejects', () => {
+    const reply = formatInverseAkitaChatReactionReply({
+      seed: 'm2',
+      userSide: 'short',
+      pair: 'ETH',
+      counterSide: 'long',
+      sizeUsd: 50,
+      leverage: 17,
+      dryRun: false,
+      tradeOk: false,
+    })
+    expect(reply).toMatch(/long|ETH|failed|no/i)
   })
 
   it('executes the opposite side on InverseAKITA wallet', async () => {
@@ -139,11 +163,13 @@ describe('inverseAkitaChatReaction', () => {
 
     expect(result.ok).toBe(true)
     expect(result.counterSide).toBe('short')
+    expect(result.reactionEmoji).toMatch(/^(🔄|🙃)$/)
     expect(mockRunArenaTrade).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'open', pair: 'BTC', side: 'short', leverage: 27 }),
       expect.objectContaining({ agentWalletAddress: '0xagentwallet' }),
     )
-    expect(result.replyText).toContain('shorted BTC instead lol (50 @ 27x)')
+    expect(result.replyText).toMatch(/short/i)
+    expect(result.replyText).toContain('50 @ 27x')
   })
 
   it('rate-limits repeat reactions from the same sender', async () => {

@@ -15,6 +15,7 @@ export type UserExecutionAccountSignals = {
   zoraHandle?: string | null
   creatorCoin?: { address?: string | null } | null
   canonicalCswAddress?: string | null
+  embeddedEoaAddress?: string | null
   executionTrack?: UserFrontendExecutionTrack
   privyEmbeddedEoaIsOwnerOfCanonicalCsw?: boolean | null
 }

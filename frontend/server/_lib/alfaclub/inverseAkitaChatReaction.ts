@@ -16,6 +16,82 @@ declare const process: { env: Record<string, string | undefined> }
 const CHAT_TRADE_INTENT_RE =
   /^(?:go(?:ing)?\s+)?(long|short)\s+(?:on\s+)?([a-z0-9]{2,20})\s*[!.?]*$/i
 
+/** Reaction on the user's trigger message — alternates 🔄 / 🙃 per message id. */
+export const INVERSE_AKITA_CHAT_REACTION_EMOJIS = ['🔄', '🙃'] as const
+
+function pickDeterministicIndex(seed: string, count: number): number {
+  let hash = 0
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0
+  }
+  return count > 0 ? hash % count : 0
+}
+
+export function resolveInverseAkitaChatReactionEmoji(seed: string): (typeof INVERSE_AKITA_CHAT_REACTION_EMOJIS)[number] {
+  const normalized = String(seed ?? '').trim() || 'inverse'
+  return INVERSE_AKITA_CHAT_REACTION_EMOJIS[
+    pickDeterministicIndex(normalized, INVERSE_AKITA_CHAT_REACTION_EMOJIS.length)
+  ]
+}
+
+type InverseReplyContext = {
+  pair: string
+  userSide: CounterTradeSide
+  counterSide: CounterTradeSide
+  sizeUsd: number
+  leverage: number
+}
+
+const LONG_USER_SHORT_BOT_SUCCESS: Array<(ctx: InverseReplyContext) => string> = [
+  (c) =>
+    `wow, long ${c.pair}? brave. i shorted it anyway. you're welcome ($${c.sizeUsd} @ ${c.leverage}x)`,
+  (c) =>
+    `cute thesis. i heard "please short ${c.pair}" and obeyed ($${c.sizeUsd} @ ${c.leverage}x)`,
+  (c) =>
+    `you typed long ${c.pair}. my wallet typed short ${c.pair}. we are not the same ($${c.sizeUsd} @ ${c.leverage}x)`,
+  (c) =>
+    `thanks for the free counter-signal. short ${c.pair} is live ($${c.sizeUsd} @ ${c.leverage}x)`,
+  (c) =>
+    `long ${c.pair} in this chat? immediately shorted. call it alpha ($${c.sizeUsd} @ ${c.leverage}x)`,
+  (c) =>
+    `bold public call. i faded you and shorted ${c.pair}. no notes ($${c.sizeUsd} @ ${c.leverage}x)`,
+  (c) =>
+    `i don't follow your bias, i invert it. short ${c.pair} deployed ($${c.sizeUsd} @ ${c.leverage}x)`,
+]
+
+const SHORT_USER_LONG_BOT_SUCCESS: Array<(ctx: InverseReplyContext) => string> = [
+  (c) =>
+    `short ${c.pair}? cute. i went long out of pure spite ($${c.sizeUsd} @ ${c.leverage}x)`,
+  (c) =>
+    `bearish fanfic noted. i longed ${c.pair} instead ($${c.sizeUsd} @ ${c.leverage}x)`,
+  (c) =>
+    `you said short ${c.pair}. i said long ${c.pair}. trust issues? ($${c.sizeUsd} @ ${c.leverage}x)`,
+  (c) =>
+    `thanks for the exit liquidity narrative. i'm long ${c.pair} now ($${c.sizeUsd} @ ${c.leverage}x)`,
+  (c) =>
+    `short ${c.pair} is wild energy. i countered long. cope ($${c.sizeUsd} @ ${c.leverage}x)`,
+  (c) =>
+    `your short take was adorable. i longed ${c.pair} professionally ($${c.sizeUsd} @ ${c.leverage}x)`,
+  (c) =>
+    `i don't mirror, i menace. long ${c.pair} is on ($${c.sizeUsd} @ ${c.leverage}x)`,
+]
+
+const INVERSE_TRADE_FAIL: Array<(ctx: InverseReplyContext) => string> = [
+  (c) =>
+    `tried to ${c.counterSide} ${c.pair} purely to annoy you. hyperliquid said no. tragic.`,
+  (c) =>
+    `attempted the opposite ${c.counterSide} on ${c.pair}. exchange rejected it. skill issue (shared).`,
+  (c) =>
+    `wanted to invert your ${c.userSide} ${c.pair} take. trade failed. the universe saved you this once.`,
+  (c) =>
+    `i went to ${c.counterSide} ${c.pair} out of principle. execution said absolutely not.`,
+]
+
+function pickInverseReplyTemplate<T>(seed: string, bucket: string, templates: T[]): T {
+  const key = `${seed}:${bucket}`
+  return templates[pickDeterministicIndex(key, templates.length)]
+}
+
 const DEFAULT_CHAT_REACTION_SIZE_USD = 50
 const DEFAULT_CHAT_REACTION_LEVERAGE_PCT = 69
 const DEFAULT_FALLBACK_MAX_LEVERAGE = 10
@@ -211,6 +287,7 @@ export function collectInverseAkitaChatTradeIntents(params: {
 }
 
 export function formatInverseAkitaChatReactionReply(params: {
+  seed: string
   userSide: CounterTradeSide
   pair: string
   counterSide: CounterTradeSide
@@ -219,12 +296,25 @@ export function formatInverseAkitaChatReactionReply(params: {
   dryRun: boolean
   tradeOk: boolean
 }): string {
-  const action = params.counterSide === 'short' ? 'shorted' : 'longed'
-  const failAction = params.counterSide
-  if (params.tradeOk || params.dryRun) {
-    return `you said ${params.userSide} ${params.pair}. i ${action} ${params.pair} instead lol (${params.sizeUsd} @ ${params.leverage}x)`
+  const ctx: InverseReplyContext = {
+    pair: params.pair,
+    userSide: params.userSide,
+    counterSide: params.counterSide,
+    sizeUsd: params.sizeUsd,
+    leverage: params.leverage,
   }
-  return `you said ${params.userSide} ${params.pair}. i tried to ${failAction} ${params.pair} instead — trade failed`
+
+  let text: string
+  if (params.tradeOk || params.dryRun) {
+    const templates =
+      params.userSide === 'long' ? LONG_USER_SHORT_BOT_SUCCESS : SHORT_USER_LONG_BOT_SUCCESS
+    text = pickInverseReplyTemplate(params.seed, 'success', templates)(ctx)
+    if (params.dryRun) text = `${text} [dry-run]`
+  } else {
+    text = pickInverseReplyTemplate(params.seed, 'fail', INVERSE_TRADE_FAIL)(ctx)
+  }
+
+  return text
 }
 
 export function isInverseAkitaChatReactionSenderCoolingDown(
@@ -260,6 +350,7 @@ export type InverseAkitaChatReactionResult = {
   skipped?: boolean
   skipReason?: string
   replyText: string
+  reactionEmoji: string
   counterSide: CounterTradeSide
   pair: string
 }
@@ -275,6 +366,7 @@ export async function executeInverseAkitaChatReaction(params: {
       skipped: true,
       skipReason: 'wrong_room',
       replyText: '',
+      reactionEmoji: '',
       counterSide: 'short',
       pair: params.intent.pair,
     }
@@ -285,6 +377,7 @@ export async function executeInverseAkitaChatReaction(params: {
       skipped: true,
       skipReason: 'disabled',
       replyText: '',
+      reactionEmoji: '',
       counterSide: deriveCounterSide(params.intent.userSide),
       pair: params.intent.pair,
     }
@@ -295,6 +388,7 @@ export async function executeInverseAkitaChatReaction(params: {
       skipped: true,
       skipReason: 'arena_room_blocked',
       replyText: '',
+      reactionEmoji: '',
       counterSide: deriveCounterSide(params.intent.userSide),
       pair: params.intent.pair,
     }
@@ -305,6 +399,7 @@ export async function executeInverseAkitaChatReaction(params: {
       skipped: true,
       skipReason: 'sender_cooldown',
       replyText: '',
+      reactionEmoji: '',
       counterSide: deriveCounterSide(params.intent.userSide),
       pair: params.intent.pair,
     }
@@ -317,6 +412,7 @@ export async function executeInverseAkitaChatReaction(params: {
       skipped: true,
       skipReason: 'arena_trading_disabled',
       replyText: '',
+      reactionEmoji: '',
       counterSide: deriveCounterSide(params.intent.userSide),
       pair: params.intent.pair,
     }
@@ -329,6 +425,7 @@ export async function executeInverseAkitaChatReaction(params: {
       skipped: true,
       skipReason: pairCheck.reason,
       replyText: '',
+      reactionEmoji: '',
       counterSide: deriveCounterSide(params.intent.userSide),
       pair: params.intent.pair,
     }
@@ -351,6 +448,7 @@ export async function executeInverseAkitaChatReaction(params: {
       skipped: true,
       skipReason: 'missing_executor_wallet',
       replyText: '',
+      reactionEmoji: '',
       counterSide,
       pair: pairCheck.normalizedPair,
     }
@@ -369,7 +467,9 @@ export async function executeInverseAkitaChatReaction(params: {
 
   markInverseAkitaChatReactionSenderCooldown(params.intent.sender)
 
+  const reactionEmoji = resolveInverseAkitaChatReactionEmoji(params.intent.id)
   const replyText = formatInverseAkitaChatReactionReply({
+    seed: params.intent.id,
     userSide: params.intent.userSide,
     pair: pairCheck.normalizedPair,
     counterSide,
@@ -390,11 +490,13 @@ export async function executeInverseAkitaChatReaction(params: {
     leverage,
     tradeOk: trade.ok,
     dryRun: baseConfig.dryRun,
+    reactionEmoji,
   })
 
   return {
     ok: trade.ok,
     replyText,
+    reactionEmoji,
     counterSide,
     pair: pairCheck.normalizedPair,
   }

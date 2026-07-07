@@ -45,7 +45,7 @@ vi.mock('./useWaitlistChatJoin', () => ({
   waitlistChatBlockedMessage: () => 'Enable 4626 signing to join waitlist chat.',
 }))
 
-vi.mock('@/lib/xmtp/xmtpHelpers', () => ({
+vi.mock('@/lib/auth/privyEmbeddedSignerAuthErrors', () => ({
   isPrivyEmbeddedSignerAuthError: () => false,
 }))
 

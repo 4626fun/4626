@@ -9,7 +9,7 @@ import { usePrepareWaitlistMessagingWallet } from './usePrepareWaitlistMessaging
 import { useWaitlistGroupSync } from './useWaitlistGroupSync'
 import { useWaitlistMessagingConnect } from './useWaitlistMessagingConnect'
 import { formatWaitlistChatError } from './waitlistChatErrors'
-import { isPrivyEmbeddedSignerAuthError } from '@/lib/xmtp/xmtpHelpers'
+import { isPrivyEmbeddedSignerAuthError } from '@/lib/auth/privyEmbeddedSignerAuthErrors'
 import type { WaitlistChatStatus } from './waitlistChatCopy'
 import { findWaitlistGroupConversation } from './waitlistXmtpGroupIds'
 import {
