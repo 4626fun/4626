@@ -18,6 +18,7 @@ import {
   INVERSE_AKITA_ROOM_ID,
   isInverseAkitaPilotRoom,
 } from './inverseAkitaStakerPilot.js'
+import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -364,7 +365,64 @@ const PERP_MARKET_CACHE_MS = 5 * 60_000
 const DEFAULT_SENDER_COOLDOWN_MS = 90_000
 
 const senderCooldownUntilMs = new Map<string, number>()
+const inverseBotOutboundTextUntilMs = new Map<string, number>()
+const INVERSE_BOT_OUTBOUND_TEXT_TTL_MS = 15 * 60_000
+
+/** Bot-authored AlfaClub lines that must never re-trigger inverse parsing. */
+const INVERSE_AKITA_BOT_AUTHORED_TEXT_RES: RegExp[] = [
+  /^InverseAKITA pilot\b/i,
+  /^🧾 receipt:/,
+  /wanted to invert your take/i,
+  /trimmed anyway/i,
+  /i was already there/i,
+  /your call is my exit signal/i,
+  /tried to (?:long|short)\b/i,
+  /hyperliquid said no/i,
+  /execution said absolutely not/i,
+  /\[dry-run\]/i,
+  /kek (?:top|bottom) signal/i,
+  /sized up the (?:long|short)/i,
+  /stacked the (?:long|short)/i,
+  /increased .* (?:long|short)/i,
+  /took \$?\d+ off the/i,
+  /bearish cope is my buy signal/i,
+  /bullish fanfic noted/i,
+  /you sound bearish\. i sound longer/i,
+  /you said up only\. i said more short/i,
+]
+
 let cachedPerpMarkets: { fetchedAtMs: number; markets: HyperliquidPerpMarket[] } | null = null
+
+function normalizeInverseBotOutboundTextKey(text: string): string {
+  return text.trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+function pruneInverseBotOutboundTextRegistry(nowMs: number): void {
+  for (const [key, untilMs] of inverseBotOutboundTextUntilMs) {
+    if (untilMs <= nowMs) inverseBotOutboundTextUntilMs.delete(key)
+  }
+}
+
+/** Remember InverseAKITA outbound chat lines so the bridge does not trade on its own copy. */
+export function registerInverseAkitaBotOutboundText(text: string, nowMs = Date.now()): void {
+  const key = normalizeInverseBotOutboundTextKey(text)
+  if (!key) return
+  pruneInverseBotOutboundTextRegistry(nowMs)
+  inverseBotOutboundTextUntilMs.set(key, nowMs + INVERSE_BOT_OUTBOUND_TEXT_TTL_MS)
+}
+
+export function isRegisteredInverseAkitaBotOutboundText(text: string, nowMs = Date.now()): boolean {
+  const key = normalizeInverseBotOutboundTextKey(text)
+  if (!key) return false
+  pruneInverseBotOutboundTextRegistry(nowMs)
+  return (inverseBotOutboundTextUntilMs.get(key) ?? 0) > nowMs
+}
+
+export function isInverseAkitaBotAuthoredChatText(text: string): boolean {
+  const normalized = text.trim()
+  if (!normalized) return false
+  return INVERSE_AKITA_BOT_AUTHORED_TEXT_RES.some((pattern) => pattern.test(normalized))
+}
 
 function readEnvFlag(name: string, fallback: boolean): boolean {
   const raw = String(process.env[name] ?? '').trim().toLowerCase()
@@ -466,9 +524,14 @@ export type InverseAkitaChatHistoryMessage = {
   sender?: string | null
   text?: string | null
   isBot?: boolean | null
+  replyId?: string | number | null
+  reply_id?: string | null
 }
 
-export function parseInverseAkitaChatTradeIntent(text: string): ParsedInverseAkitaChatTradeIntent | null {
+export function parseInverseAkitaChatTradeIntent(
+  text: string,
+  options?: { allowLooseSentiment?: boolean },
+): ParsedInverseAkitaChatTradeIntent | null {
   const trimmed = String(text ?? '').trim()
   if (!trimmed || trimmed.startsWith('/')) return null
 
@@ -486,9 +549,10 @@ export function parseInverseAkitaChatTradeIntent(text: string): ParsedInverseAki
     if (mentionLed) return parseTradeIntentMatch(mentionLed)
   }
 
-  // Loose fallback: any opinion-sounding market chatter ("btc looking cooked",
-  // "eth to 10k", "sol gonna pump") — requires a recognizable asset so random
-  // sentences don't trade.
+  // Loose fallback: top-level opinion chatter only. Quote-replies are usually
+  // InverseAKITA's own trim/add copy ("long SOL gang? i was already there…").
+  if (options?.allowLooseSentiment === false) return null
+
   const sentimentSide = detectChatMarketSentiment(normalized)
   if (sentimentSide) {
     const pair = extractChatMarketAsset(normalized)
@@ -515,6 +579,25 @@ function isInvalidInverseChatReactionSender(senderLower: string): boolean {
   return !isHexAddress(senderLower)
 }
 
+function isBridgeSelfChatSender(senderLower: string, selfAddressLower: string): boolean {
+  if (selfAddressLower && senderLower === selfAddressLower) return true
+  return senderLower === CANONICAL_CSW_ADDRESS.toLowerCase()
+}
+
+function shouldSkipInverseChatReactionHistoryMessage(params: {
+  senderLower: string
+  text: string
+  isBot?: boolean | null
+  selfAddressLower: string
+}): boolean {
+  if (params.isBot === true) return true
+  if (isInvalidInverseChatReactionSender(params.senderLower)) return true
+  if (isBridgeSelfChatSender(params.senderLower, params.selfAddressLower)) return true
+  if (isInverseAkitaBotAuthoredChatText(params.text)) return true
+  if (isRegisteredInverseAkitaBotOutboundText(params.text)) return true
+  return false
+}
+
 function isCommandLikeChatText(text: string): boolean {
   const trimmed = text.trim()
   if (!trimmed) return true
@@ -537,15 +620,25 @@ export function collectInverseAkitaChatTradeIntents(params: {
   const out: InverseAkitaChatTradeIntentMessage[] = []
 
   for (const message of params.messages) {
-    if (message.isBot === true) continue
     const id = String(message.id ?? '').trim()
     const sender = String(message.sender ?? '').trim().toLowerCase()
     const text = String(message.text ?? '').trim()
     if (!id || !text || isCommandLikeChatText(text)) continue
-    if (self && sender === self) continue
-    if (isInvalidInverseChatReactionSender(sender)) continue
+    if (
+      shouldSkipInverseChatReactionHistoryMessage({
+        senderLower: sender,
+        text,
+        isBot: message.isBot,
+        selfAddressLower: self,
+      })
+    ) {
+      continue
+    }
 
-    const parsed = parseInverseAkitaChatTradeIntent(text)
+    const replyId = String(message.replyId ?? message.reply_id ?? '').trim()
+    const parsed = parseInverseAkitaChatTradeIntent(text, {
+      allowLooseSentiment: replyId.length === 0,
+    })
     if (!parsed) continue
 
     const date = Number(message.date)
@@ -734,6 +827,11 @@ export function __resetInverseAkitaChatReactionCooldownForTests(): void {
 
 export function __resetInverseAkitaChatReactionMarketCacheForTests(): void {
   cachedPerpMarkets = null
+}
+
+/** For unit tests only. */
+export function __resetInverseAkitaBotOutboundTextRegistryForTests(): void {
+  inverseBotOutboundTextUntilMs.clear()
 }
 
 export type InverseAkitaChatReactionResult = {

@@ -35,6 +35,7 @@ import { resolveRoomDefaultArenaIdentity } from '../arena/arenaIdentityMappingSt
 import { resolveInverseAkitaStakerPilotAccess } from './inverseAkitaStakerPilot.js'
 import { getPerpMarkets } from './hyperliquid.js'
 import {
+  __resetInverseAkitaBotOutboundTextRegistryForTests,
   __resetInverseAkitaChatReactionCooldownForTests,
   __resetInverseAkitaChatReactionMarketCacheForTests,
   collectInverseAkitaChatTradeIntents,
@@ -44,6 +45,9 @@ import {
   formatInverseAkitaChatReactionSkipReply,
   formatInverseAkitaThreadReceipt,
   INVERSE_AKITA_CHAT_REACTION_EMOJIS,
+  isInverseAkitaBotAuthoredChatText,
+  isRegisteredInverseAkitaBotOutboundText,
+  registerInverseAkitaBotOutboundText,
   resolveInverseAkitaChatReactionEmoji,
   isInverseAkitaChatReactionSenderCoolingDown,
   parseInverseAkitaChatTradeIntent,
@@ -63,6 +67,7 @@ describe('inverseAkitaChatReaction', () => {
     vi.clearAllMocks()
     __resetInverseAkitaChatReactionCooldownForTests()
     __resetInverseAkitaChatReactionMarketCacheForTests()
+    __resetInverseAkitaBotOutboundTextRegistryForTests()
     vi.stubEnv('ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ENABLED', '1')
     vi.stubEnv('ARENA_ENABLED', '1')
     vi.stubEnv('ARENA_TRADING_ENABLED', '1')
@@ -195,6 +200,49 @@ describe('inverseAkitaChatReaction', () => {
     expect(intents).toHaveLength(2)
     expect(intents[0]?.pair).toBe('BTC')
     expect(intents[1]?.pair).toBe('ETH')
+  })
+
+  it('ignores InverseAKITA outbound copy and quote-reply sentiment loops', () => {
+    const botTrimReply =
+      'long SOL gang? i was already there. trimmed anyway ($50)'
+    expect(isInverseAkitaBotAuthoredChatText(botTrimReply)).toBe(true)
+    expect(
+      parseInverseAkitaChatTradeIntent(botTrimReply, { allowLooseSentiment: false }),
+    ).toBeNull()
+
+    registerInverseAkitaBotOutboundText(botTrimReply)
+    expect(isRegisteredInverseAkitaBotOutboundText(botTrimReply)).toBe(true)
+
+    const intents = collectInverseAkitaChatTradeIntents({
+      roomId: '1659',
+      messages: [
+        {
+          id: 'bot-1',
+          sender: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
+          text: botTrimReply,
+          reply_id: 'user-1',
+        },
+        {
+          id: 'user-1',
+          sender: '0x1111111111111111111111111111111111111111',
+          text: 'long sol',
+        },
+        {
+          id: 'pilot',
+          sender: '0x2222222222222222222222222222222222222222',
+          text: 'InverseAKITA pilot — stake ≥1 FriendKey in this room to trade on InverseAKITA\'s wallet.',
+        },
+      ],
+    })
+    expect(intents).toEqual([
+      expect.objectContaining({ id: 'user-1', pair: 'SOL', userSide: 'long' }),
+    ])
+  })
+
+  it('still parses explicit trade intents inside quote-replies', () => {
+    expect(
+      parseInverseAkitaChatTradeIntent('long sol', { allowLooseSentiment: false }),
+    ).toEqual({ userSide: 'long', pair: 'SOL' })
   })
 
   it('uses 69% of Hyperliquid max leverage by default', () => {

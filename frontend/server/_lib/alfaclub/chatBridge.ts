@@ -51,6 +51,7 @@ import {
 import {
   collectInverseAkitaChatTradeIntents,
   executeInverseAkitaChatReaction,
+  registerInverseAkitaBotOutboundText,
   type InverseAkitaChatHistoryMessage,
   type InverseAkitaChatTradeIntentMessage,
 } from './inverseAkitaChatReaction.js'
@@ -790,6 +791,7 @@ type AlfaClubLiveInboundMessage = {
   sender: string
   text: string
   isBot?: boolean
+  replyId?: string
   attachments: AlfaClubMessageAttachment[]
   replyAttachments: AlfaClubMessageAttachment[]
   rawPayloadText: string | null
@@ -930,6 +932,15 @@ function extractWsMessagesFromPayload(payload: unknown): AlfaClubLiveInboundMess
       isJsonRecord(node.value) ? node.value.createdAt : null,
       isJsonRecord(node.value) ? node.value.sentAt : null,
     ])
+    const replyId =
+      pickFirstString([
+        node.reply_id,
+        node.replyId,
+        isJsonRecord(node.value) ? node.value.reply_id : null,
+        isJsonRecord(node.value) ? node.value.replyId : null,
+      ]) ?? undefined
+    const isBotRaw = node.isBot ?? (isJsonRecord(node.value) ? node.value.isBot : null)
+    const isBot = typeof isBotRaw === 'boolean' ? isBotRaw : undefined
     let rawPayloadText: string | null = null
     try {
       rawPayloadText = JSON.stringify(node)
@@ -943,6 +954,8 @@ function extractWsMessagesFromPayload(payload: unknown): AlfaClubLiveInboundMess
       date,
       sender,
       text: text ?? '',
+      isBot,
+      replyId,
       attachments,
       replyAttachments,
       rawPayloadText,
@@ -2978,6 +2991,7 @@ function ensureLiveCommandSocket(params: {
           sender: message.sender,
           text: message.text,
           isBot: message.isBot,
+          reply_id: message.replyId,
         }))
       const inverseIntents = collectInverseAkitaChatTradeIntents({
         roomId: targetRoomId,
@@ -3169,6 +3183,7 @@ async function executeInverseAkitaChatReactionBatch(params: {
         continue
       }
       if (result.replyText.trim()) {
+        registerInverseAkitaBotOutboundText(result.replyText)
         await sendCommandReplyToRoom({
           flags: params.flags,
           jwt: params.jwt,
@@ -3187,6 +3202,7 @@ async function executeInverseAkitaChatReactionBatch(params: {
           emoji: result.reactionEmoji,
         })
         if (result.threadReceiptText?.trim()) {
+          registerInverseAkitaBotOutboundText(result.threadReceiptText)
           try {
             await sendRoomMessageViaWebSocket({
               websocketUrl: params.flags.websocketUrl,
