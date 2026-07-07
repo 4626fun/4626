@@ -74,6 +74,7 @@ const PAIRS = [
     agent: 'contracts/agent/vault/AgentShareOFT.sol',
     creator: 'contracts/creator/vault/CreatorShareOFT.sol',
     renames: [
+      ['@4626/agent/interfaces/', '@4626/creator/interfaces/'],
       ['Agent', 'Creator'],
       ['◆', '■'],
       ['◇', '▢'],

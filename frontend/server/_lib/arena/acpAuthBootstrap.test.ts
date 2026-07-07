@@ -32,6 +32,7 @@ function mockConfig(overrides: Partial<ArenaConfig> = {}): ArenaConfig {
     hlSubaccountAddress: null,
     commandTimeoutMs: 60_000,
     maxUsdcDeposit: 50_000,
+    minTradeSizeUsd: 11,
     maxTradeSizeUsd: 100_000,
     allowedRoomIds: ['1659'],
     dgclawDir: '/tmp',

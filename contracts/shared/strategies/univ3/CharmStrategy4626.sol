@@ -11,7 +11,7 @@ import {IUniswapV3Pool} from "@4626/shared/interfaces/uniswap/IUniswapV3Pool.sol
 import {TickMathCompat} from "@4626/shared/libraries/uniswap/TickMathCompat.sol";
 import {IAjnaPool} from "@4626/shared/interfaces/external/IAjnaPool.sol";
 import "@4626/shared/interfaces/strategies/IStrategy.sol";
-import {ICreatorOracle} from "@4626/shared/interfaces/oracles/ICreatorOracle.sol";
+import {ICreatorOracle} from "@4626/creator/interfaces/ICreatorOracle.sol";
 import {IStrategyValuation} from "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
 
 /**

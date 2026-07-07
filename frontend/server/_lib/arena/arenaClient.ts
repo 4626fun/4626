@@ -896,6 +896,11 @@ export async function runArenaTrade(request: ArenaTradeRequest, config = readAre
   if (!side) return fail('Open trade requires side (long or short).')
   if (sizeUsd <= 0) return fail('Open trade requires a positive sizeUsd.')
   if (leverage <= 0) return fail('Open trade requires a positive leverage.')
+  if (sizeUsd < config.minTradeSizeUsd) {
+    return fail(
+      `Trade size ${sizeUsd} is below ARENA_MIN_TRADE_SIZE_USD (${config.minTradeSizeUsd}).`,
+    )
+  }
   if (sizeUsd > config.maxTradeSizeUsd) {
     return fail(`Trade size ${sizeUsd} exceeds ARENA_MAX_TRADE_SIZE_USD (${config.maxTradeSizeUsd}).`)
   }

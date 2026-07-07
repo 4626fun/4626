@@ -14,8 +14,8 @@ import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/Signa
 import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
 import {IStrategyValuation} from "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
-import {IOVaultModuleIdentity} from "@4626/shared/vault/modules/IOVaultModuleIdentity.sol";
-import {OVaultLiquidityLib} from "@4626/shared/vault/libraries/OVaultLiquidityLib.sol";
+import {IOVaultModuleIdentity} from "@4626/shared/interfaces/vault/IOVaultModuleIdentity.sol";
+import {OVaultLiquidityLib} from "@4626/shared/libraries/vault/OVaultLiquidityLib.sol";
 
 struct CcaLifecycleStatus {
     uint8 phase;

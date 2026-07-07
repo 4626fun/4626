@@ -30,6 +30,7 @@ function mockConfig(overrides: Partial<ArenaConfig> = {}): ArenaConfig {
     hlSubaccountAddress: null,
     commandTimeoutMs: 60_000,
     maxUsdcDeposit: 50_000,
+    minTradeSizeUsd: 11,
     maxTradeSizeUsd: 100_000,
     allowedRoomIds: ['1659'],
     dgclawDir: '/tmp',
@@ -50,6 +51,16 @@ describe('arenaClient trade guardrails', () => {
     )
     expect(result.ok).toBe(false)
     expect(result.message).toContain('ARENA_TRADING_ENABLED')
+  })
+
+  it('rejects open trades below ARENA_MIN_TRADE_SIZE_USD', async () => {
+    const result = await runArenaTrade(
+      { action: 'open', pair: 'BTC', side: 'long', sizeUsd: 10, leverage: 5 },
+      mockConfig({ dryRun: true }),
+    )
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('ARENA_MIN_TRADE_SIZE_USD')
+    expect(result.message).toContain('11')
   })
 
   it('returns dry-run success when enabled', async () => {

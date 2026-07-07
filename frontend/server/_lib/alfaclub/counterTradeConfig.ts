@@ -247,7 +247,7 @@ export function readCounterTradeRuntimeConfig(): CounterTradeRuntimeConfig {
       'ALFACLUB_COUNTER_TRADE_MAX_TRADE_CEILING_FUND_PCT',
       25,
     ),
-    minOrderNotionalUsd: readPositiveNumber('ALFACLUB_COUNTER_TRADE_MIN_ORDER_NOTIONAL_USD', 10),
+    minOrderNotionalUsd: readPositiveNumber('ALFACLUB_COUNTER_TRADE_MIN_ORDER_NOTIONAL_USD', 11),
     globalMaxLeverage: readPositiveNumber('ALFACLUB_COUNTER_TRADE_GLOBAL_MAX_LEVERAGE', 12),
     favoredMultiplier: readPositiveNumber('ALFACLUB_COUNTER_TRADE_FAVORED_MULTIPLIER', 1.35),
     neutralMultiplier: readPositiveNumber('ALFACLUB_COUNTER_TRADE_NEUTRAL_MULTIPLIER', 1),

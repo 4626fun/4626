@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
 
-import {IRandomnessSource} from "@4626/shared/lottery/randomness/IRandomnessSource.sol";
+import {IRandomnessSource} from "@4626/shared/interfaces/lottery/IRandomnessSource.sol";
 import {RandomnessRouter} from "@4626/shared/lottery/randomness/RandomnessRouter.sol";
 import {ChainlinkVRFAdapter, IChainlinkVRFConsumerLike}
     from "@4626/shared/lottery/randomness/ChainlinkVRFAdapter.sol";

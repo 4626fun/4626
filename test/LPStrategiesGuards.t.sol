@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {CreatorLPManager} from "@4626/shared/strategies/univ4/CreatorLPManager.sol";
+import {CreatorLPManager} from "@4626/creator/strategies/CreatorLPManager.sol";
 import {ConcentratedStrategy} from "@4626/shared/strategies/univ4/ConcentratedStrategy.sol";
 import {LimitOrderStrategy} from "@4626/shared/strategies/univ4/LimitOrderStrategy.sol";
 import {FullRangeStrategy} from "@4626/shared/strategies/univ4/FullRangeStrategy.sol";

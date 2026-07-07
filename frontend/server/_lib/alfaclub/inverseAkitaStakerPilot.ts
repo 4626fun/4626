@@ -2,9 +2,12 @@ import type { Address } from 'viem'
 
 import { getAlfaClubPublicClient } from '../wallet/alfaclub.js'
 import { readUserStakedKeys, resolveStakingPoolAddress } from './alfaclubStakeReads.js'
+import type { CounterTradeBias, CounterTradeRuntimeConfig } from './counterTradeConfig.js'
+import { formatSizeCapForMembers } from './counterTradeSizing.js'
 
 export const INVERSE_AKITA_ROOM_ID = '1659'
 export const MIN_INVERSE_AKITA_STAKER_PILOT_KEYS = 1
+export const INVERSE_AKITA_PILOT_RULES_MAX_CHARS = 2_000
 
 export type InverseAkitaStakerPilotReason =
   | 'operator'
@@ -73,13 +76,8 @@ export function canPilotInverseAkita(params: {
 
 export function formatInverseAkitaStakerPilotGateReply(): string {
   return [
-    '**InverseAKITA pilot access**',
-    `Stake at least **${MIN_INVERSE_AKITA_STAKER_PILOT_KEYS}** FriendKey in room **${INVERSE_AKITA_ROOM_ID}** to pilot InverseAKITA.`,
-    '',
-    'Mirrored counter-trading is retired here. InverseAKITA trades autonomously; stakers open, adjust, and close on **InverseAKITA\'s wallet**.',
-    '',
-    'Once staked: `/h arena long|short|close` · `/h pos` · `/h rules` · `/signal`',
-    'Playbook tune (stakers): `/h mirror` · `/h profit` · `/h risk` · `/h size` · `/h strategy bias`',
+    '**InverseAKITA pilot** — stake **≥1** FriendKey in this room to trade on InverseAKITA\'s wallet.',
+    'Full guide: `/h rules` · Trade: `/h arena long|short|close` · Check: `/h status`',
   ].join('\n')
 }
 
@@ -114,4 +112,59 @@ export function formatInverseAkitaPilotStatus(params: {
     '',
     `Executor: agent **${params.arenaAgentId ?? 'n/a'}** · wallet **${params.arenaWalletAddress ?? 'n/a'}**`,
   ].join('\n')
+}
+
+function formatInverseAkitaPilotEligibilityLine(pilotAccess: InverseAkitaStakerPilotAccess): string {
+  if (pilotAccess.reason === 'operator') {
+    return '**You:** operator — pilot access on.'
+  }
+  if (pilotAccess.eligible && pilotAccess.reason === 'staker') {
+    const keys = pilotAccess.stakedKeys ?? MIN_INVERSE_AKITA_STAKER_PILOT_KEYS
+    return `**You:** pilot access on (**${keys}** staked key${keys === 1 ? '' : 's'}).`
+  }
+  if (pilotAccess.reason === 'insufficient_stake') {
+    const keys = pilotAccess.stakedKeys ?? 0
+    return `**You:** locked — stake **≥${MIN_INVERSE_AKITA_STAKER_PILOT_KEYS}** key (you have **${keys}**).`
+  }
+  return '**You:** stake check failed — try `/h status`.'
+}
+
+function formatInverseAkitaPilotPlaybookSummary(params: {
+  runtime: CounterTradeRuntimeConfig
+  globalBias: CounterTradeBias
+}): string {
+  const harvestTrimPct = Number.isFinite(params.runtime.harvestFraction)
+    ? (params.runtime.harvestFraction * 100).toFixed(0)
+    : '?'
+  const defendCutPct = Number.isFinite(params.runtime.defendReduceFraction)
+    ? (params.runtime.defendReduceFraction * 100).toFixed(0)
+    : '?'
+
+  return `Playbook: **${params.globalBias}** bias · bank at **+${params.runtime.harvestTriggerRoiPct}%** (trim **${harvestTrimPct}%**) · safety **${defendCutPct}%** within **${params.runtime.defendLiqDistancePct}%** of liq · cap ${formatSizeCapForMembers(params.runtime)}`
+}
+
+/** `/h rules` for room 1659 — short intro, access, commands, playbook snapshot. */
+export function formatInverseAkitaPilotRules(params: {
+  pilotAccess: InverseAkitaStakerPilotAccess
+  runtime: CounterTradeRuntimeConfig
+  globalBias?: CounterTradeBias
+}): string {
+  const globalBias = params.globalBias ?? 'neutral'
+  const lines = [
+    '**InverseAKITA**',
+    'Autonomous Hyperliquid bot for this room. It trades on its own wallet; stakers with **≥1** FriendKey staked here can open/close on that same wallet.',
+    'Say **long btc** or **short eth** in chat (no slash) and InverseAKITA does the **opposite** on its wallet lol.',
+    '',
+    formatInverseAkitaPilotEligibilityLine(params.pilotAccess),
+    '',
+    '**Trade** `/h arena long|short|close <pair> <usd> <lev>`',
+    '**Check** `/h pos` · `/h status` · `/signal`',
+    '**Tune** `/h mirror` · `/h profit` · `/h risk` · `/h size` · `/h strategy bias`',
+    '',
+    formatInverseAkitaPilotPlaybookSummary({ runtime: params.runtime, globalBias }),
+  ]
+
+  const text = lines.join('\n')
+  if (text.length <= INVERSE_AKITA_PILOT_RULES_MAX_CHARS) return text
+  return `${text.slice(0, INVERSE_AKITA_PILOT_RULES_MAX_CHARS - 1).trimEnd()}…`
 }

@@ -117,10 +117,12 @@ import {
   type CounterTradeRoomConfigOverrides,
 } from '../alfaclub/counterTradeRoomConfig.js'
 import {
+  formatInverseAkitaPilotRules,
   formatInverseAkitaPilotStatus,
   formatInverseAkitaStakerPilotGateReply,
   isInverseAkitaPilotRoom,
   resolveInverseAkitaStakerPilotAccess,
+  type InverseAkitaStakerPilotAccess,
 } from '../alfaclub/inverseAkitaStakerPilot.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -501,8 +503,8 @@ function formatArenaUsage(): string {
     '- `/h pos` (book snapshot; reply 2–4 for more)',
     '- `/h arena backtest BTC leveragePercent 50 rebalanceHealthPercent 75 rebalanceSizePercent 35 capital 4000`',
     '- `/h arena auth` / `/h arena auth status`',
-    '- `/h arena long <pair> <sizeUsd> <leverage>`',
-    '- `/h arena short <pair> <sizeUsd> <leverage>`',
+    '- `/h arena long <pair> <sizeUsd> <leverage>`  (min $11 notional)',
+    '- `/h arena short <pair> <sizeUsd> <leverage>`  (min $11 notional)',
     '- `/h arena close <pair>`',
     '- `/h arena sweep <usdc>`  (spot -> perp)',
     '- `/h arena to-spot <usdc>`  (perp -> spot)',
@@ -554,16 +556,9 @@ function summarizeArenaRunFailure(
 function formatStrategyUsage(roomId?: string | null): string {
   if (isInverseAkitaPilotRoom(roomId)) {
     return [
-      '**InverseAKITA pilot (room 1659)**',
-      '- `/h arena long|short|close` — trade on InverseAKITA wallet',
-      '- `/h pos` · `/h arena status` — book + executor health',
-      '- `/h rules` — full pilot guide · `/signal` — position-aware bias',
-      '',
-      '**Playbook tune (stakers + operators)**',
-      '- `/h mirror` · `/h profit` · `/h risk` · `/h size` · `/h defaults`',
-      '- `/h strategy bias bullish|bearish|neutral`',
-      '',
-      '_Mirrored counter-trading (`/h start`) is retired in this room. Stake ≥1 key to pilot._',
+      '**InverseAKITA** — `/h rules` for the full guide',
+      'Trade `/h arena long|short|close` · Check `/h pos` · `/h status` · `/signal`',
+      'Tune `/h mirror` · `/h profit` · `/h risk` · `/h size` · `/h strategy bias`',
     ].join('\n')
   }
   return formatCounterTradeConfigUsage()
@@ -2979,6 +2974,27 @@ export async function executeHermitCommand(
         runtime,
         strategy?.configOverrides ?? {},
       )
+      if (isInverseAkitaPilotRoom(roomId) && parsed.group === 'all') {
+        const stakeAccess = await resolveInverseAkitaStakerPilotAccess({
+          senderAddress: params.senderAddress,
+          roomId,
+          isTrustedOperator: false,
+        })
+        const pilotAccess: InverseAkitaStakerPilotAccess = {
+          eligible: Boolean(params.isTrustedOperator) || stakeAccess.eligible,
+          stakedKeys: stakeAccess.stakedKeys,
+          reason: params.isTrustedOperator ? 'operator' : stakeAccess.reason,
+        }
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: formatInverseAkitaPilotRules({
+            pilotAccess,
+            runtime: effectiveRuntime,
+            globalBias: strategy?.globalBias ?? 'neutral',
+          }),
+        }
+      }
       return {
         kind: 'hermit',
         provider: 'local',

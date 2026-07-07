@@ -18,25 +18,31 @@ contracts/
 │   ├── deploy/        DeploymentBatcher, factories, infra, hooks
 │   ├── bridge/
 │   ├── governance/    Platform-level (bribes, factories, ve4626 roots)
-│   ├── interfaces/
-│   ├── libraries/
+│   ├── interfaces/    Lane-neutral + external interfaces only (bridge, core,
+│   │                  deploy, external, lottery, strategies, uniswap, vault)
+│   ├── libraries/     uniswap/ + vault/ (OVaultLiquidityLib)
 │   ├── lottery/       4626LotteryManager + VRF + randomness (shared singleton)
 │   ├── recovery/      Impairment claims + recovery escrow (vault-agnostic, both lanes)
 │   ├── revenue/       VaultShareBurnStream (both lanes point burnStream here)
 │   ├── strategies/    Reusable yield strategies (Ajna, CCA, Univ3/4, etc.)
-│   ├── vault/         OVaultHubComposer + lane-shared vault modules/ + libraries/
+│   ├── vault/         OVaultHubComposer + lane-shared vault modules/
 │   └── vesting/       LinearVesting4626
 ├── agent/
+│   ├── interfaces/    IAgentOVault, IAgentGaugeController, IAgentTokenV4, IAgentTaxAccountingAdapter
 │   ├── vault/         (AgentOVault, AgentOVaultWrapper, AgentShareOFT, core module)
 │   ├── revenue/       AgentGaugeController + revenue routing/policy
 │   └── oracles/
 ├── creator/
+│   ├── interfaces/    ICreatorOVault, ICreatorGaugeController, ICreatorOracle, ICreatorOVaultComposer
 │   ├── vault/         (CreatorOVault + core module + CreatorShareOFT)
 │   ├── revenue/
+│   ├── strategies/    CreatorLPManager (V4 LP manager for creator-lane ShareOFT)
 │   └── oracles/
 └── other/
     └── alfaclub/
 ```
+
+**Interface placement rule:** `shared/interfaces/` holds only lane-neutral and external-protocol interfaces. Interfaces that describe a lane contract (`ICreatorOVault`, `IAgentGaugeController`, …) live in that lane's `interfaces/` folder — shared infra (batcher, hub composer, strategies) imports them from there. Shared strategies still consume `ICreatorOracle` directly; a lane-neutral oracle interface is a possible future cleanup (the agent lane currently declares its own inline `IAgentOracle`).
 
 **Naming note:** the lane-shared contracts under `shared/` were renamed from their historical `Creator*` names in July 2026: `CreatorOVaultAdminModule` → `OVaultAdminModule`, `CreatorOVaultStrategiesModule` → `OVaultStrategiesModule`, `CreatorOVaultModuleBase`/`Storage` → `OVaultModuleBase`/`Storage`, `ICreatorOVaultModuleIdentity` → `IOVaultModuleIdentity`, `CreatorOVaultLiquidityLib` → `OVaultLiquidityLib`, `CreatorVaultShareBurnStream` → `VaultShareBurnStream`, `CreatorOImpairmentClaims` → `OVaultImpairmentClaims`, `CreatorORecoveryEscrow` → `OVaultRecoveryEscrow`. Because there were no live vaults at the time, the on-chain identity strings were renamed too: module kinds are now `keccak256("CreatorOVaultModule.core")` (creator lane), `keccak256("AgentOVaultModule.core")` (agent lane), and lane-shared `keccak256("OVaultModule.strategies")` / `keccak256("OVaultModule.admin")`; the storage fingerprint is `keccak256("OVaultModuleStorage.v3")`; the burn-stream CREATE2 salt domain is `"4626:VaultShareBurnStream"` (mirrored in `frontend/shared/deploy/create2Salts.ts`). This changes `CreatorOVault`, module, and `VaultAuxiliaryDeployBatcher` bytecode, so the next deploy epoch must re-seed the `UniversalBytecodeStore` and regenerate bytecode manifests before production deploys.
 

@@ -10,8 +10,8 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 
 import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
-import {ICreatorGaugeController} from "@4626/shared/interfaces/core/ICreatorGaugeController.sol";
-import {ICreatorOVault} from "@4626/shared/interfaces/core/ICreatorOVault.sol";
+import {ICreatorGaugeController} from "@4626/creator/interfaces/ICreatorGaugeController.sol";
+import {ICreatorOVault} from "@4626/creator/interfaces/ICreatorOVault.sol";
 import {IAjnaPoolFactory} from "@4626/shared/interfaces/external/IAjnaPool.sol";
 import {IBaseSolanaBridge} from "@4626/shared/interfaces/bridge/IBaseSolanaBridge.sol";
 import {LinearVesting4626} from "@4626/shared/vesting/LinearVesting4626.sol";

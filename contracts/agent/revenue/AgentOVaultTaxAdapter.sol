@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {IAgentTaxAccountingAdapter} from "@4626/shared/interfaces/agent/IAgentTaxAccountingAdapter.sol";
+import {IAgentTaxAccountingAdapter} from "@4626/agent/interfaces/IAgentTaxAccountingAdapter.sol";
 
 /**
  * @title AgentOVaultTaxAdapter

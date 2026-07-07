@@ -20,7 +20,7 @@ import {LiquidityAmounts} from "@uniswap/v4-periphery/src/libraries/LiquidityAmo
 import {IAllowanceTransfer} from "permit2/src/interfaces/IAllowanceTransfer.sol";
 import {IApprovedV4HooksRegistry} from "@4626/shared/strategies/univ4/ApprovedV4HooksRegistry.sol";
 
-import {ICreatorOracle} from "@4626/shared/interfaces/oracles/ICreatorOracle.sol";
+import {ICreatorOracle} from "@4626/creator/interfaces/ICreatorOracle.sol";
 import {V4LiquidityAmounts} from "@4626/shared/libraries/uniswap/V4LiquidityAmounts.sol";
 
 /**

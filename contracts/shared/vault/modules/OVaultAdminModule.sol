@@ -7,7 +7,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
 
 import {OVaultModuleBase} from "@4626/shared/vault/modules/OVaultModuleBase.sol";
-import {IOVaultModuleIdentity} from "@4626/shared/vault/modules/IOVaultModuleIdentity.sol";
+import {IOVaultModuleIdentity} from "@4626/shared/interfaces/vault/IOVaultModuleIdentity.sol";
 
 interface IVaultShareBurnStreamQueuer {
     function setAuthorizedQueuer(address queuer, bool authorized) external;

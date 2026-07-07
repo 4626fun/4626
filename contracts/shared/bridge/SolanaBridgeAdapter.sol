@@ -10,7 +10,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {IBaseSolanaBridge} from "@4626/shared/interfaces/bridge/IBaseSolanaBridge.sol";
 import {ICrossChainERC20Factory} from "@4626/shared/interfaces/bridge/ICrossChainERC20Factory.sol";
 import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
-import {ICreatorGaugeController} from "@4626/shared/interfaces/core/ICreatorGaugeController.sol";
+import {ICreatorGaugeController} from "@4626/creator/interfaces/ICreatorGaugeController.sol";
 
 /**
  * @title ILotteryManager4626

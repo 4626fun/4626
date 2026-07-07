@@ -8,7 +8,7 @@ import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
 import {IStrategyValuation} from "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
 
 import {OVaultModuleBase} from "@4626/shared/vault/modules/OVaultModuleBase.sol";
-import {IOVaultModuleIdentity} from "@4626/shared/vault/modules/IOVaultModuleIdentity.sol";
+import {IOVaultModuleIdentity} from "@4626/shared/interfaces/vault/IOVaultModuleIdentity.sol";
 
 interface IOVaultRecoveryEscrowStrategyModule {
     function notifyRecovery(address asset, uint256 epochId, uint256 amount) external;

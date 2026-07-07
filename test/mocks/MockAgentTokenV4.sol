@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {IAgentTokenV4} from "@4626/shared/interfaces/agent/IAgentTokenV4.sol";
+import {IAgentTokenV4} from "@4626/agent/interfaces/IAgentTokenV4.sol";
 
 /**
  * @title MockAgentTokenV4

@@ -12,8 +12,8 @@ import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
 import {IStrategyValuation} from "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
 
 import {OVaultModuleBase} from "@4626/shared/vault/modules/OVaultModuleBase.sol";
-import {OVaultLiquidityLib} from "@4626/shared/vault/libraries/OVaultLiquidityLib.sol";
-import {IOVaultModuleIdentity} from "@4626/shared/vault/modules/IOVaultModuleIdentity.sol";
+import {OVaultLiquidityLib} from "@4626/shared/libraries/vault/OVaultLiquidityLib.sol";
+import {IOVaultModuleIdentity} from "@4626/shared/interfaces/vault/IOVaultModuleIdentity.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 interface IOVaultStrategiesModuleInternal {

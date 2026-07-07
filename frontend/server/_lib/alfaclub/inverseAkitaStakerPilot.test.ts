@@ -15,11 +15,70 @@ vi.mock('./alfaclubStakeReads.js', () => ({
 
 import {
   INVERSE_AKITA_ROOM_ID,
+  INVERSE_AKITA_PILOT_RULES_MAX_CHARS,
   canPilotInverseAkita,
+  formatInverseAkitaPilotRules,
   formatInverseAkitaStakerPilotGateReply,
   isInverseAkitaPilotRoom,
   resolveInverseAkitaStakerPilotAccess,
 } from './inverseAkitaStakerPilot.js'
+import type { CounterTradeRuntimeConfig } from './counterTradeConfig.js'
+
+function makeRulesRuntime(): CounterTradeRuntimeConfig {
+  return {
+    enabled: true,
+    exitEnabled: true,
+    defenseEnabled: true,
+    defendLiqDistancePct: 12,
+    defendReduceFraction: 0.25,
+    harvestTriggerRoiPct: 50,
+    harvestFraction: 0.25,
+    minReduceNotionalUsd: 15,
+    minBufferRatio: 0.2,
+    maxDefenseActionsPerTick: 2,
+    spotSweepEnabled: true,
+    spotSweepMinUsd: 1,
+    userSiloDefenseEnabled: false,
+    userSiloHlAgentPrivateKey: null,
+    userSiloMasterAddress: null,
+    roomId: '1659',
+    chatPostEnabled: true,
+    chatPostRoomId: '1659',
+    minUserNotionalUsd: 25,
+    cooldownMs: 120_000,
+    hourlyActionCap: 12,
+    dailyNotionalCapUsd: 7_500,
+    maxCounterNotionalCeilingPctOfFund: 25,
+    maxCounterNotionalPctOfFund: 10,
+    minOrderNotionalUsd: 10,
+    globalMaxLeverage: 12,
+    favoredMultiplier: 1.35,
+    neutralMultiplier: 1,
+    unfavoredMultiplier: 0.75,
+    favoredNotionalRatio: 0.6,
+    neutralNotionalRatio: 0.45,
+    unfavoredNotionalRatio: 0.3,
+    neutralBiasLeverageCap: 8,
+    favoredBiasLeverageCap: 10,
+    unfavoredBiasLeverageCap: 6,
+    liquidationMinDistancePct: 8,
+    eventLookbackMs: 45 * 60_000,
+    runLimitPerIdentity: 20,
+    subaccountsEnabled: false,
+    subaccounts: { trend: null, meanRevert: null, event: null },
+    riskProfile: {
+      riskPerTradeBps: 100,
+      dailyLossCapBps: 300,
+      maxDrawdownPauseBps: 1000,
+      stopDistancePctByStrategy: { trend: 2.5, meanRevert: 1.5, event: 4 },
+    },
+    inverseRebalanceScalePct: 100,
+    dipDrawdownFullSizePct: 40,
+    dipDrawdownCurveAlpha: 1.5,
+    maxDipAddsPerLeg: 3,
+    dipPreAddLiqSafetyMarginPct: 2,
+  }
+}
 
 describe('inverseAkitaStakerPilot', () => {
   beforeEach(() => {
@@ -97,7 +156,30 @@ describe('inverseAkitaStakerPilot', () => {
   })
 
   it('mentions retired mirror flow in gate copy', () => {
-    expect(formatInverseAkitaStakerPilotGateReply()).toContain('Mirrored counter-trading is retired')
-    expect(formatInverseAkitaStakerPilotGateReply()).toContain('/h arena long')
+    expect(formatInverseAkitaStakerPilotGateReply()).toContain('stake **≥1** FriendKey')
+    expect(formatInverseAkitaStakerPilotGateReply()).toContain('/h rules')
+  })
+
+  it('formats concise /h rules with access, commands, and playbook', () => {
+    const runtime = makeRulesRuntime()
+    const stakerText = formatInverseAkitaPilotRules({
+      pilotAccess: { eligible: true, stakedKeys: 3, reason: 'staker' },
+      runtime,
+      globalBias: 'bullish',
+    })
+    expect(stakerText).toContain('**InverseAKITA**')
+    expect(stakerText).toContain('pilot access on')
+    expect(stakerText).toContain('**3**')
+    expect(stakerText).toContain('/h arena long|short|close')
+    expect(stakerText).toContain('does the **opposite**')
+    expect(stakerText).toContain('Playbook: **bullish** bias')
+    expect(stakerText).not.toContain('Autonomous lane')
+    expect(stakerText.length).toBeLessThanOrEqual(INVERSE_AKITA_PILOT_RULES_MAX_CHARS)
+
+    const lockedText = formatInverseAkitaPilotRules({
+      pilotAccess: { eligible: false, stakedKeys: 0, reason: 'insufficient_stake' },
+      runtime,
+    })
+    expect(lockedText).toContain('locked')
   })
 })

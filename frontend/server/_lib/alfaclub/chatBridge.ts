@@ -48,6 +48,13 @@ import {
   filterUnrepliedCommandMessageIds,
   recordCommandReply,
 } from './commandReplyLedger.js'
+import {
+  collectInverseAkitaChatTradeIntents,
+  executeInverseAkitaChatReaction,
+  type InverseAkitaChatHistoryMessage,
+  type InverseAkitaChatTradeIntentMessage,
+} from './inverseAkitaChatReaction.js'
+import { INVERSE_AKITA_ROOM_ID } from './inverseAkitaStakerPilot.js'
 import { readAlfaClubChatToken } from './chatTokenStore.js'
 import { requestImmediatePrivyRefresh } from './privyTokenRefresher.js'
 import { parseTelegramChatRef } from './telegramChatRef.js'
@@ -2907,7 +2914,6 @@ function ensureLiveCommandSocket(params: {
     }).catch(() => {
       // Fail-open: ingest should never block chat command processing.
     })
-    if (!bridgeState.liveFallbackActive) return
     const pollRoomIds = params.flags.wsIngestAllRoomsEnabled
       ? new Set(resolveAlfaClubBridgePollRoomIds(params.flags))
       : new Set([params.roomId])
@@ -2919,6 +2925,27 @@ function ensureLiveCommandSocket(params: {
         sender: message.sender,
         text: message.text,
       }))
+    if (params.roomId === INVERSE_AKITA_ROOM_ID) {
+      const inverseIntents = collectInverseAkitaChatTradeIntents({
+        roomId: params.roomId,
+        messages: roomMessages as InverseAkitaChatHistoryMessage[],
+        selfAddress: CANONICAL_CSW_ADDRESS,
+      })
+      if (inverseIntents.length > 0) {
+        void executeInverseAkitaChatReactionBatch({
+          intents: inverseIntents,
+          flags: params.flags,
+          roomId: params.roomId,
+          jwt: params.jwt,
+        }).catch((error) => {
+          logger.warn('[alfaclub-chat] live_inverse_chat_reaction_failed', {
+            roomId: params.roomId,
+            message: error instanceof Error ? error.message : String(error),
+          })
+        })
+      }
+    }
+    if (!bridgeState.liveFallbackActive) return
     const commands = collectAlfaClubCommandMessages({
       messages: roomMessages,
       seenMessageIds: bridgeState.seenMessageIds,
@@ -3016,6 +3043,68 @@ async function sendAlfaClubCommandTextReply(params: {
     replyToMessageId: params.replyToMessageId,
     timeoutMs: params.flags.sendTimeoutMs,
   })
+}
+
+async function executeInverseAkitaChatReactionBatch(params: {
+  intents: InverseAkitaChatTradeIntentMessage[]
+  flags: AlfaClubChatBridgeFlags
+  roomId: string
+  jwt: string
+}): Promise<{ processed: number; reacted: number }> {
+  if (params.roomId !== INVERSE_AKITA_ROOM_ID) return { processed: 0, reacted: 0 }
+  if (!canBridgeReplyInRoom(params.flags, params.roomId)) return { processed: 0, reacted: 0 }
+  if (params.intents.length === 0) return { processed: 0, reacted: 0 }
+
+  const unrepliedIds = await filterUnrepliedCommandMessageIds({
+    roomId: params.roomId,
+    messageIds: params.intents.map((intent) => intent.id),
+  })
+  const intents = params.intents.filter((intent) => unrepliedIds.has(intent.id))
+  if (intents.length === 0) return { processed: 0, reacted: 0 }
+
+  let reacted = 0
+  for (const intent of intents) {
+    try {
+      const result = await executeInverseAkitaChatReaction({
+        roomId: params.roomId,
+        intent,
+      })
+      if (result.skipped && result.skipReason === 'sender_cooldown') {
+        continue
+      }
+      if (result.replyText.trim()) {
+        await sendCommandReplyToRoom({
+          flags: params.flags,
+          jwt: params.jwt,
+          roomId: params.roomId,
+          text: result.replyText,
+          attachments: [],
+          replyToMessageId: intent.id,
+          commandMessageId: intent.id,
+        })
+        if (result.ok) reacted += 1
+      }
+      await recordCommandReply({
+        roomId: params.roomId,
+        messageId: intent.id,
+        commandHead: result.ok ? 'inverse-chat' : 'inverse-chat-skip',
+      })
+    } catch (error) {
+      logger.warn('[alfaclub-chat] inverse_chat_reaction_failed', {
+        roomId: params.roomId,
+        messageId: intent.id,
+        sender: intent.sender,
+        message: error instanceof Error ? error.message : String(error),
+      })
+      await recordCommandReply({
+        roomId: params.roomId,
+        messageId: intent.id,
+        commandHead: 'inverse-chat-error',
+      })
+    }
+  }
+
+  return { processed: intents.length, reacted }
 }
 
 async function executeCommandBatch(params: {
@@ -3735,13 +3824,32 @@ async function runBridgeTick(
     jwt,
   })
 
+  const inverseChatIntents = collectInverseAkitaChatTradeIntents({
+    roomId,
+    messages: unseenMessages as InverseAkitaChatHistoryMessage[],
+    selfAddress: CANONICAL_CSW_ADDRESS,
+  })
+  if (inverseChatIntents.length > 0) {
+    logger.info('[alfaclub-chat] inverse_chat_intents_detected', {
+      roomId,
+      count: inverseChatIntents.length,
+      ids: inverseChatIntents.map((entry) => entry.id).slice(0, 8),
+    })
+  }
+  const inverseBatch = await executeInverseAkitaChatReactionBatch({
+    intents: inverseChatIntents,
+    flags,
+    roomId,
+    jwt,
+  })
+
   return {
     seeded: false,
     roomId,
     fetched: fetchedMessages.length,
     unseen: unseenMessages.length,
-    processed: batch.processed,
-    replied: batch.replied,
+    processed: batch.processed + inverseBatch.processed,
+    replied: batch.replied + inverseBatch.reacted,
     errors: batch.errors,
   }
 }

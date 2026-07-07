@@ -8,7 +8,7 @@ import {UniversalCreate2DeployerFromStore} from "@4626/shared/deploy/factories/U
 import {OVaultAdminModule} from "@4626/shared/vault/modules/OVaultAdminModule.sol";
 import {CreatorOVaultCoreModule} from "@4626/creator/vault/modules/CreatorOVaultCoreModule.sol";
 import {OVaultStrategiesModule} from "@4626/shared/vault/modules/OVaultStrategiesModule.sol";
-import {IOVaultModuleIdentity} from "@4626/shared/vault/modules/IOVaultModuleIdentity.sol";
+import {IOVaultModuleIdentity} from "@4626/shared/interfaces/vault/IOVaultModuleIdentity.sol";
 
 /// @notice Deploy v1.12.1 CreatorOVault `.v2` modules + a Phase1Module wired to the **live** split batcher shell.
 /// Does not deploy a new DeploymentBatcher shell — only rotates module wiring via `setPhase1Module` (Safe).

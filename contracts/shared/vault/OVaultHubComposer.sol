@@ -6,7 +6,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
-import {ICreatorOVaultComposer} from "@4626/shared/interfaces/vault/ICreatorOVaultComposer.sol";
+import {ICreatorOVaultComposer} from "@4626/creator/interfaces/ICreatorOVaultComposer.sol";
 import {ILayerZeroComposer} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroComposer.sol";
 import {OFTComposeMsgCodec} from "@layerzerolabs/oft-evm/contracts/libs/OFTComposeMsgCodec.sol";
 

@@ -6,6 +6,7 @@ const DEFAULT_ALLOWED_ROOM_IDS = ['1659']
 const DEFAULT_COMMAND_TIMEOUT_MS = 60_000
 const DEFAULT_MAX_USDC_DEPOSIT = 50_000
 const DEFAULT_MAX_TRADE_SIZE_USD = 100_000
+export const DEFAULT_MIN_TRADE_SIZE_USD = 11
 
 export type ArenaConfig = {
   enabled: boolean
@@ -32,6 +33,7 @@ export type ArenaConfig = {
   hlSubaccountAddress: string | null
   commandTimeoutMs: number
   maxUsdcDeposit: number
+  minTradeSizeUsd: number
   maxTradeSizeUsd: number
   allowedRoomIds: string[]
   dgclawDir: string | null
@@ -109,6 +111,7 @@ export function readArenaConfig(): ArenaConfig {
   const hlSubaccountAddress = normalizeAddressOrNull(readOptionalString('ARENA_HL_SUBACCOUNT_ADDRESS'))
   const commandTimeoutMs = readPositiveInt('ARENA_COMMAND_TIMEOUT_MS', DEFAULT_COMMAND_TIMEOUT_MS)
   const maxUsdcDeposit = readPositiveNumber('ARENA_MAX_USDC_DEPOSIT', DEFAULT_MAX_USDC_DEPOSIT)
+  const minTradeSizeUsd = readPositiveNumber('ARENA_MIN_TRADE_SIZE_USD', DEFAULT_MIN_TRADE_SIZE_USD)
   const maxTradeSizeUsd = readPositiveNumber('ARENA_MAX_TRADE_SIZE_USD', DEFAULT_MAX_TRADE_SIZE_USD)
   const allowedRoomIds = readCsv('ARENA_ALLOWED_ROOM_IDS')
   const dgclawDir = String(process.env.ARENA_DGCLAW_DIR ?? '').trim() || null
@@ -136,6 +139,7 @@ export function readArenaConfig(): ArenaConfig {
     hlSubaccountAddress,
     commandTimeoutMs,
     maxUsdcDeposit,
+    minTradeSizeUsd,
     maxTradeSizeUsd,
     allowedRoomIds: allowedRoomIds.length > 0 ? allowedRoomIds : [...DEFAULT_ALLOWED_ROOM_IDS],
     dgclawDir,
