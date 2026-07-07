@@ -65,7 +65,7 @@ function creatorAssetsToUsd1e6(params: {
 const LOTTERY_ABI = [
   {
     type: 'function',
-    name: 'getCreatorLotteryStats',
+    name: 'getTokenLotteryStats',
     stateMutability: 'view',
     inputs: [{ name: 'creatorCoin', type: 'address' }],
     outputs: [{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }],
@@ -157,7 +157,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const stats = await client.readContract({
       address: lotteryManager as any,
       abi: LOTTERY_ABI,
-      functionName: 'getCreatorLotteryStats',
+      functionName: 'getTokenLotteryStats',
       args: [creatorCoin as any],
     })
 

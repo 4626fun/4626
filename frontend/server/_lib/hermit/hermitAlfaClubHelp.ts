@@ -27,6 +27,7 @@ function formatHermitCreativeSection(): string[] {
     '• `/market` — broader majors + AlfaClub market scope',
     '• `/h arena ...` (status|register|identity ...|join|activate|trade|...) — Virtuals Arena (Degenerate Claw) controls (room/flag gated; room 1659 routes to InverseAKITA room-default wallet; stakers with ≥1 staked key have operator-equivalent pilot access)',
     '• `/h arena long|short|close` · `/h pos` · `/h rules` · `/h status` — InverseAKITA pilot (room 1659; stake ≥1 key)',
+    '• `/h pnl` — InverseAKITA realized-PnL scorecard (win rate, fees, volume from Hyperliquid fills)',
     '• `/h start` · `/h stop` · `/h resume` — mirrored trading (non-1659 rooms only)',
     '• `/gmeow [vibe]` — GIF + one-liner',
     '• `/meme <prompt>` — meme / image concept',

@@ -13,17 +13,17 @@ interface I4626Registry {
     // =================================
 
     /**
-     * @notice Information about a registered Creator Coin
+     * @notice Information about a registered lane token (creator coin or agent token)
      */
-    struct CreatorCoinInfo {
-        address token; // Creator Coin token address
+    struct TokenInfo {
+        address token; // Lane token address (creator coin or agent token)
         string name; // Token name
         string symbol; // Token symbol
-        address vault; // CreatorOVault address
-        address shareOFT; // CreatorShareOFT address
-        address wrapper; // CreatorOVaultWrapper address
-        address oracle; // CreatorOracle address (per-creator price oracle)
-        address gaugeController; // CreatorGaugeController address (per-creator fee distribution)
+        address vault; // Lane vault address (CreatorOVault / AgentOVault)
+        address shareOFT; // Lane ShareOFT address
+        address wrapper; // Lane vault wrapper address
+        address oracle; // Lane oracle address (per-token IOracle4626 price oracle)
+        address gaugeController; // Lane gauge controller address (per-token fee distribution)
         address creator; // Creator's address (admin/EOA signer)
         address canonicalWallet; // Canonical smart wallet (ERC-4337 / Coinbase Smart Wallet)
         // Used as: ERC-8004 agent identity, asset holder,
@@ -84,7 +84,7 @@ interface I4626Registry {
     // EVENTS
     // =================================
 
-    event CreatorCoinRegistered(
+    event TokenRegistered(
         address indexed token,
         string name,
         string symbol,
@@ -94,15 +94,15 @@ interface I4626Registry {
         address wrapper
     );
 
-    event CreatorCoinUpdated(address indexed token);
-    event CreatorCoinStatusChanged(address indexed token, bool isActive);
+    event TokenUpdated(address indexed token);
+    event TokenStatusChanged(address indexed token, bool isActive);
     event CanonicalWalletSet(address indexed token, address indexed wallet);
-    event RemoteOFTPeerSet(address indexed creatorCoin, uint32 indexed chainEid, address remoteOFT);
-    event RemoteOFTPeerRemoved(address indexed creatorCoin, uint32 indexed chainEid);
-    event RemoteOFTPeerBytes32Set(address indexed creatorCoin, uint32 indexed chainEid, bytes32 remoteOFT);
-    event RemoteOFTPeerBytes32Removed(address indexed creatorCoin, uint32 indexed chainEid);
+    event RemoteOFTPeerSet(address indexed token, uint32 indexed chainEid, address remoteOFT);
+    event RemoteOFTPeerRemoved(address indexed token, uint32 indexed chainEid);
+    event RemoteOFTPeerBytes32Set(address indexed token, uint32 indexed chainEid, bytes32 remoteOFT);
+    event RemoteOFTPeerBytes32Removed(address indexed token, uint32 indexed chainEid);
     event OmnichainVaultMeshConfigured(
-        address indexed creatorCoin,
+        address indexed token,
         uint32 indexed solanaEid,
         address hubComposer,
         address assetMeshToken,
@@ -125,15 +125,15 @@ interface I4626Registry {
     // =================================
 
     /**
-     * @notice Register a new Creator Coin
-     * @param _token Creator Coin token address
+     * @notice Register a new lane token
+     * @param _token Lane token address
      * @param _name Token name
      * @param _symbol Token symbol
      * @param _creator Creator's address
      * @param _pool Primary liquidity pool
      * @param _poolFee Pool fee tier
      */
-    function registerCreatorCoin(
+    function registerToken(
         address _token,
         string calldata _name,
         string calldata _symbol,
@@ -143,34 +143,34 @@ interface I4626Registry {
     ) external;
 
     /**
-     * @notice Set vault address for a Creator Coin
+     * @notice Set vault address for a token
      */
     function setVault(address _token, address _vault) external;
 
     /**
-     * @notice Set ShareOFT address for a Creator Coin
+     * @notice Set ShareOFT address for a token
      */
-    function setCreatorShareOFT(address _token, address _shareOFT) external;
+    function setShareOFTForToken(address _token, address _shareOFT) external;
 
     /**
-     * @notice Set wrapper address for a Creator Coin
+     * @notice Set wrapper address for a token
      */
-    function setCreatorWrapper(address _token, address _wrapper) external;
+    function setWrapperForToken(address _token, address _wrapper) external;
 
     /**
-     * @notice Set oracle address for a Creator Coin
+     * @notice Set oracle address for a token
      */
-    function setCreatorOracle(address _token, address _oracle) external;
+    function setOracleForToken(address _token, address _oracle) external;
 
     /**
-     * @notice Set gauge controller address for a Creator Coin
+     * @notice Set gauge controller address for a token
      */
-    function setCreatorGaugeController(address _token, address _gaugeController) external;
+    function setGaugeControllerForToken(address _token, address _gaugeController) external;
 
     /**
-     * @notice Set active status for a Creator Coin
+     * @notice Set active status for a token
      */
-    function setCreatorCoinStatus(address _token, bool _isActive) external;
+    function setTokenStatus(address _token, bool _isActive) external;
 
     /**
      * @notice Set the canonical smart wallet for a creator
@@ -180,7 +180,7 @@ interface I4626Registry {
      *      - ERC-4337 account (UserOp sender, gas sponsorship)
      *      - Vault owner and asset holder
      *      - Lottery prize recipient
-     * @param _token Creator Coin address
+     * @param _token Lane token address
      * @param _wallet Canonical smart wallet address
      */
     function setCanonicalWallet(address _token, address _wallet) external;
@@ -195,37 +195,37 @@ interface I4626Registry {
     // =================================
 
     /**
-     * @notice Get full Creator Coin info
+     * @notice Get full token info
      */
-    function getCreatorCoin(address _token) external view returns (CreatorCoinInfo memory);
+    function getTokenInfo(address _token) external view returns (TokenInfo memory);
 
     /**
-     * @notice Get vault for a Creator Coin
+     * @notice Get vault for a token
      */
     function getVaultForToken(address _token) external view returns (address);
 
     /**
-     * @notice Get ShareOFT for a Creator Coin
+     * @notice Get ShareOFT for a token
      */
     function getShareOFTForToken(address _token) external view returns (address);
 
     /**
-     * @notice Get wrapper for a Creator Coin
+     * @notice Get wrapper for a token
      */
     function getWrapperForToken(address _token) external view returns (address);
 
     /**
-     * @notice Get oracle for a Creator Coin
+     * @notice Get oracle for a token
      */
     function getOracleForToken(address _token) external view returns (address);
 
     /**
-     * @notice Get gauge controller for a Creator Coin
+     * @notice Get gauge controller for a token
      */
     function getGaugeControllerForToken(address _token) external view returns (address);
 
     /**
-     * @notice Reverse-lookup: get the Creator Coin address for a given ShareOFT
+     * @notice Reverse-lookup: get the token address for a given ShareOFT
      */
     function getTokenForShareOFT(address _shareOFT) external view returns (address);
 
@@ -236,7 +236,7 @@ interface I4626Registry {
     function getCanonicalWallet(address _token) external view returns (address);
 
     /**
-     * @notice Reverse-lookup: get the Creator Coin address for a canonical wallet
+     * @notice Reverse-lookup: get the token address for a canonical wallet
      */
     function getTokenForCanonicalWallet(address _wallet) external view returns (address);
 
@@ -320,20 +320,20 @@ interface I4626Registry {
     function getTokenForRemoteOFTBytes32(bytes32 _remoteOFT) external view returns (address);
 
     /**
-     * @notice Get all registered Creator Coins
+     * @notice Get all registered tokens
      */
-    function getAllCreatorCoins() external view returns (address[] memory);
+    function getAllTokens() external view returns (address[] memory);
 
     /**
-     * @notice Check if a Creator Coin is registered
+     * @notice Check if a token is registered
      */
-    function isCreatorCoinRegistered(address _token) external view returns (bool);
+    function isTokenRegistered(address _token) external view returns (bool);
 
     /**
-     * @notice Check if a Creator Coin is registered AND active
+     * @notice Check if a token is registered AND active
      * @dev Returns false if not registered or if deactivated
      */
-    function isCreatorCoinActive(address _token) external view returns (bool);
+    function isTokenActive(address _token) external view returns (bool);
 
     // =================================
     // CHAIN CONFIGURATION

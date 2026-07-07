@@ -73,6 +73,7 @@ describe('shouldShowParentCswAddOwnerPanel', () => {
       shouldShowParentCswAddOwnerPanel({
         signingStepComplete: false,
         ownerInstallRequested: false,
+        connectTrack: 'privy-owner-install',
         zoraLinked: false,
         onchainEoaOwnerCount: 0,
         accountSignals: {
@@ -81,6 +82,39 @@ describe('shouldShowParentCswAddOwnerPanel', () => {
         },
       }),
     ).toBe(true)
+  })
+
+  it('shows owner install for Zora track when Zora is linked', () => {
+    expect(
+      shouldShowParentCswAddOwnerPanel({
+        signingStepComplete: false,
+        ownerInstallRequested: false,
+        connectTrack: 'zora-owner-install',
+        zoraLinked: true,
+        onchainEoaOwnerCount: 0,
+        accountSignals: {
+          canonicalCswAddress: CSW,
+          embeddedEoaAddress: EOA,
+        },
+      }),
+    ).toBe(true)
+  })
+
+  it('hides owner install when Privy embedded EOA is already CSW owner', () => {
+    expect(
+      shouldShowParentCswAddOwnerPanel({
+        signingStepComplete: false,
+        ownerInstallRequested: false,
+        connectTrack: 'privy-owner-install',
+        zoraLinked: false,
+        onchainEoaOwnerCount: 0,
+        accountSignals: {
+          canonicalCswAddress: CSW,
+          embeddedEoaAddress: EOA,
+          privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
+        },
+      }),
+    ).toBe(false)
   })
 })
 
@@ -91,6 +125,20 @@ describe('resolveWaitlistConnectTrack', () => {
         accountSignals: {
           canonicalCswAddress: CSW,
           embeddedEoaAddress: EOA,
+          executionTrack: 'none-yet',
+        },
+        zoraLinked: false,
+      }),
+    ).toBe('privy-owner-install')
+  })
+
+  it('returns privy-owner-install when canonical_source is privy_csw', () => {
+    expect(
+      resolveWaitlistConnectTrack({
+        accountSignals: {
+          canonicalCswAddress: CSW,
+          embeddedEoaAddress: EOA,
+          canonicalSource: 'privy_csw',
           executionTrack: 'none-yet',
         },
         zoraLinked: false,

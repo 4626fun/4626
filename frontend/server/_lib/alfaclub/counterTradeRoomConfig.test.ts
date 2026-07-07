@@ -103,6 +103,18 @@ describe('counterTradeRoomConfig', () => {
       command: '/arena',
       args: 'positions 2',
     })
+    expect(remapCounterTradeTopLevelCommand('/h', '5')).toEqual({
+      command: '/arena',
+      args: 'positions 5',
+    })
+    expect(remapCounterTradeTopLevelCommand('/h', 'pnl')).toEqual({
+      command: '/arena',
+      args: 'positions pnl',
+    })
+    expect(remapCounterTradeTopLevelCommand('/h', 'scorecard')).toEqual({
+      command: '/arena',
+      args: 'positions pnl',
+    })
     expect(remapCounterTradeTopLevelCommand('/h', 'join')).toEqual({ command: '/s', args: 'join' })
     expect(remapCounterTradeTopLevelCommand('/h', 'start')).toEqual({ command: '/s', args: 'join' })
     expect(remapCounterTradeTopLevelCommand('/h', 'pause')).toEqual({ command: '/s', args: 'pause' })

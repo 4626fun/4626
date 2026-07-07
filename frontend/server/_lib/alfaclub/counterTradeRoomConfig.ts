@@ -456,7 +456,12 @@ function remapCounterTradeHArgs(tail: string): { command: '/s' | '/arena' | '/he
     case '2':
     case '3':
     case '4':
+    case '5':
       return { command: '/arena', args: `positions ${sub}` }
+    case 'pnl':
+    case 'score':
+    case 'scorecard':
+      return { command: '/arena', args: 'positions pnl' }
     case 'arena':
     case 'a':
       return { command: '/arena', args: rest || 'status' }

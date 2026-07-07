@@ -34,8 +34,8 @@ contract Registry4626CanonicalWalletTest is Test {
         registry = new Registry4626(owner);
 
         vm.startPrank(owner);
-        registry.registerCreatorCoin(tokenVictim, "Victim", "VIC", victimCreator, address(0), 0);
-        registry.registerCreatorCoin(tokenAttacker, "Attacker", "ATK", attackerCreator, address(0), 0);
+        registry.registerToken(tokenVictim, "Victim", "VIC", victimCreator, address(0), 0);
+        registry.registerToken(tokenAttacker, "Attacker", "ATK", attackerCreator, address(0), 0);
         vm.stopPrank();
     }
 

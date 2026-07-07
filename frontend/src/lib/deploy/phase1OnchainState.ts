@@ -20,6 +20,7 @@ export const BATCHER_PHASE1_SPLIT_STATE_ABI = [
       { name: 'codeIdsHash', type: 'bytes32' },
       { name: 'coreDone', type: 'bool' },
       { name: 'finalized', type: 'bool' },
+      { name: 'vaultKind', type: 'uint8' },
     ],
   },
 ] as const
@@ -30,6 +31,7 @@ export type Phase1SplitState = {
   shareOFT: Address | null
   coreDone: boolean
   finalized: boolean
+  vaultKind: 0 | 1
 }
 
 type Phase1ReadClient = {
@@ -56,12 +58,16 @@ function readTupleField(raw: unknown, key: string, index: number): unknown {
 }
 
 export function parsePhase1SplitState(raw: unknown): Phase1SplitState {
+  const vaultKindRaw = readTupleField(raw, 'vaultKind', 9)
+  const vaultKindNumber =
+    typeof vaultKindRaw === 'bigint' ? Number(vaultKindRaw) : Number(vaultKindRaw ?? 0)
   return {
     vault: normalizeDeployedAddress(readTupleField(raw, 'vault', 1)),
     wrapper: normalizeDeployedAddress(readTupleField(raw, 'wrapper', 2)),
     shareOFT: normalizeDeployedAddress(readTupleField(raw, 'shareOFT', 3)),
     coreDone: Boolean(readTupleField(raw, 'coreDone', 7)),
     finalized: Boolean(readTupleField(raw, 'finalized', 8)),
+    vaultKind: vaultKindNumber === 1 ? 1 : 0,
   }
 }
 

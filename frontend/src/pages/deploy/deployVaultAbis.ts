@@ -48,6 +48,7 @@ export const CREATOR_VAULT_BATCHER_PHASE1_STATE_ABI = [
           { name: 'codeIdsHash', type: 'bytes32' },
           { name: 'coreDone', type: 'bool' },
           { name: 'finalized', type: 'bool' },
+          { name: 'vaultKind', type: 'uint8' },
         ],
       },
     ],
@@ -1268,7 +1269,7 @@ export const CREATOR_VAULT_BATCHER_ABI = [
         type: 'tuple',
         components: [
           { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
-          { name: 'creatorCharmStrategy', type: 'bytes32' },
+          { name: 'charmStrategy4626', type: 'bytes32' },
           { name: 'ajnaVaultAuth', type: 'bytes32' },
           { name: 'ajnaVault', type: 'bytes32' },
           { name: 'erc4626StrategyAdapter', type: 'bytes32' },
@@ -1353,6 +1354,7 @@ export const BATCHER_PHASE1_SPLIT_STATE_VIEW_ABI = [
       { name: 'codeIdsHash', type: 'bytes32' },
       { name: 'coreDone', type: 'bool' },
       { name: 'finalized', type: 'bool' },
+      { name: 'vaultKind', type: 'uint8' },
     ],
   },
 ] as const

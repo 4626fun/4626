@@ -514,7 +514,7 @@ async function main(): Promise<void> {
 
   process.stdout.write('\n--- After Phase 1 (new ShareOFT address known) — operator ---\n')
   process.stdout.write('  • LZ Base init-config + wire on the NEW CreatorShareOFT (symbol ■AKITA)\n')
-  process.stdout.write('  • Safe: configureCreatorMesh on OVaultHubComposer\n')
+  process.stdout.write('  • Safe: configureTokenMesh on OVaultHubComposer\n')
   process.stdout.write('  • Vultr: update SOLANA_SHARE_OFT_MAPPING to new ShareOFT + share mesh mint; restart orchestrator\n')
   process.stdout.write('  • Update AKITA_DEFAULTS + keeper backfill + Vercel env\n')
   process.stdout.write('  • Docs: docs/operations/akita-full-stack-prelaunch.md\n')

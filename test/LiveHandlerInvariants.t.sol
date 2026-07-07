@@ -118,7 +118,7 @@ contract LiveMockLotteryRegistry {
         return token == creatorCoin ? gauge : address(0);
     }
 
-    function isCreatorCoinActive(address token) external view returns (bool) {
+    function isTokenActive(address token) external view returns (bool) {
         return active && token == creatorCoin;
     }
 
@@ -130,7 +130,7 @@ contract LiveMockLotteryRegistry {
         return endpoint;
     }
 
-    function getAllCreatorCoins() external view returns (address[] memory coins) {
+    function getAllTokens() external view returns (address[] memory coins) {
         coins = new address[](1);
         coins[0] = creatorCoin;
     }
@@ -455,7 +455,7 @@ contract BatcherPhaseHandler is Test {
         bytes32 solanaCode = bytes32(uint256(6));
         codeIds = DeploymentBatcher.StrategyCodeIds({
             charmAlphaVaultDeploy: charm == 0 ? bytes32(0) : charmAlpha,
-            creatorCharmStrategy: charm == 0 ? bytes32(0) : charmCode,
+            charmStrategy4626: charm == 0 ? bytes32(0) : charmCode,
             ajnaVaultAuth: ajna == 0 ? bytes32(0) : ajnaAuthCode,
             ajnaVault: ajna == 0 ? bytes32(0) : ajnaVaultCode,
             erc4626StrategyAdapter: ajna == 0 ? bytes32(0) : ajnaAdapterCode,
@@ -487,6 +487,7 @@ contract BatcherPhaseHandler is Test {
             uniswapRouter: makeAddr("uniswapRouter"),
             ajnaFactory: address(ajnaFactory),
             vaultCoreModule: makeAddr("vaultCoreModule"),
+            agentVaultCoreModule: address(0),
             vaultStrategiesModule: makeAddr("vaultStrategiesModule"),
             vaultAdminModule: makeAddr("vaultAdminModule")
         });
@@ -684,6 +685,7 @@ contract BatcherPhase12Handler is Test {
             uniswapRouter: address(0x1009),
             ajnaFactory: address(0x1010),
             vaultCoreModule: address(0x2001),
+            agentVaultCoreModule: address(0),
             vaultStrategiesModule: address(0x2002),
             vaultAdminModule: address(0x2003)
         });
@@ -699,7 +701,7 @@ contract BatcherPhase12Handler is Test {
         bytes32 baseSalt = keccak256(
             abi.encodePacked(params.creatorToken, params.owner, block.chainid, "4626:deploy:", params.version)
         );
-        (address bootstrapAddr,,,, bytes32 shareOftSalt,,,,) = deployer.phase1SplitStates(baseSalt);
+        (address bootstrapAddr,,,, bytes32 shareOftSalt,,,,,) = deployer.phase1SplitStates(baseSalt);
         bytes memory shareOftArgs = abi.encode(params.shareName, "STOK", bootstrapAddr, address(deployer));
         bytes32 shareOftInitCodeHash = keccak256(bytes.concat(bytes("mock-share-oft"), shareOftArgs));
         MockShareOFT squattedShareOFT = new MockShareOFT(params.shareName, "STOK", bootstrapAddr, address(deployer));

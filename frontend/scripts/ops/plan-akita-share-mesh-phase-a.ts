@@ -25,10 +25,10 @@ declare const process: {
 const HUB_COMPOSER = (process.env.OVAULT_HUB_COMPOSER ??
   '0x7dF44cBB93a5191837a988f0Cc441E3811C39CD1') as Address
 
-const configureCreatorMeshAbi = [
+const configureTokenMeshAbi = [
   {
     type: 'function',
-    name: 'configureCreatorMesh',
+    name: 'configureTokenMesh',
     stateMutability: 'nonpayable',
     inputs: [
       { name: 'creatorToken', type: 'address' },
@@ -136,11 +136,11 @@ Options:
   }
 
   process.stdout.write('--- Known blockers (2026-05-25 audit) ---\n\n')
-  process.stdout.write('1. creatorMesh(AKITA) unset on OVaultHubComposer\n')
+  process.stdout.write('1. tokenMesh(AKITA) unset on OVaultHubComposer\n')
   process.stdout.write(
     '2. Batcher solanaShareOftPeer() unset — greenfield finalize bridge reverts until LZ share-mesh peer bytes32 is wired\n',
   )
-  process.stdout.write('3. Grandfathered AKITA wrapper lacks isBeneficiaryOperator — configureCreatorMesh reverts until wrapper upgrade/wiring\n')
+  process.stdout.write('3. Grandfathered AKITA wrapper lacks isBeneficiaryOperator — configureTokenMesh reverts until wrapper upgrade/wiring\n')
   process.stdout.write('4. Solana LZ asset mesh + share mesh OFTs/peers not deployed — no OVAULT_ASSET_MESH_TOKEN / OVAULT_SHARE_MESH_TOKEN in env\n')
   process.stdout.write('5. ShareOFT not registered on canonical SolanaBridgeAdapter\n')
   process.stdout.write('6. relay_entries paused — KEEPER_SOLANA_RECONCILE_ACTIONS must stay settle_fees,winner_relay only\n\n')
@@ -148,7 +148,7 @@ Options:
   process.stdout.write('--- Operator sequence ---\n\n')
   process.stdout.write('A. Deploy/peers: Solana asset mesh + share mesh OFTs (LayerZero), record Base addresses + Solana peers\n')
   process.stdout.write('B. Wrapper: upgrade AKITA wrapper OR set composer as beneficiary operator (ComposerNotBeneficiaryOperator guard)\n')
-  process.stdout.write('C. Composer owner: configureCreatorMesh(...)\n')
+  process.stdout.write('C. Composer owner: configureTokenMesh(...)\n')
   process.stdout.write('D. Batcher owner: setSolanaShareOftPeer(shareMeshPeerBytes32) — done via execute-batcher-share-oft-peer-safe.ts\n')
   process.stdout.write('E. Bridge ShareOFT Base → Solana share mesh (seed LP later in Phase B)\n\n')
 
@@ -179,14 +179,14 @@ Options:
   process.stdout.write('\nforge script script/SeedCreatorRegistrySolanaPeer.s.sol:SeedCreatorRegistrySolanaPeer \\\n')
   process.stdout.write('  --rpc-url base --broadcast -vvvv\n\n')
   process.stdout.write(
-    'Then configureCreatorMesh on composer + setSolanaShareOftPeer(shareMeshPeerBytes32) on batcher.\n\n',
+    'Then configureTokenMesh on composer + setSolanaShareOftPeer(shareMeshPeerBytes32) on batcher.\n\n',
   )
     return
   }
 
   const configureData = encodeFunctionData({
-    abi: configureCreatorMeshAbi,
-    functionName: 'configureCreatorMesh',
+    abi: configureTokenMeshAbi,
+    functionName: 'configureTokenMesh',
     args: [
       creator,
       vault,
@@ -205,10 +205,10 @@ Options:
   })
 
   process.stdout.write('--- Calldata preview (submit via protocol treasury Safe) ---\n\n')
-  process.stdout.write(`configureCreatorMesh → ${HUB_COMPOSER}\n${configureData}\n\n`)
+  process.stdout.write(`configureTokenMesh → ${HUB_COMPOSER}\n${configureData}\n\n`)
   process.stdout.write(`setOVaultRuntimeConfig → ${batcher}\n${runtimeData}\n\n`)
   process.stdout.write(
-    'Warning: configureCreatorMesh reverts with ComposerNotBeneficiaryOperator until AKITA wrapper wires the composer as beneficiary operator.\n',
+    'Warning: configureTokenMesh reverts with ComposerNotBeneficiaryOperator until AKITA wrapper wires the composer as beneficiary operator.\n',
   )
 }
 

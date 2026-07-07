@@ -180,7 +180,7 @@ contract CharmStrategy4626ForkIntegrationTest is Test {
         ForkCharmOracleMock oracle = new ForkCharmOracleMock();
         oracle.setPrice(3000e18, true); // conservative WETH oracle price for collateral checks
         oracle.setAjnaBucketFromV3Twap(7_300, false);
-        strategy.setCreatorOracle(address(oracle));
+        strategy.setAssetOracle(address(oracle));
 
         address ajnaPoolAddr = _getOrDeployAjnaPool();
         strategy.setAjnaPool(ajnaPoolAddr);
@@ -219,7 +219,7 @@ contract CharmStrategy4626ForkIntegrationTest is Test {
         ForkCharmOracleMock oracle = new ForkCharmOracleMock();
         oracle.setPrice(3000e18, true); // conservative WETH oracle price for collateral checks
         oracle.setAjnaBucketFromV3Twap(7_300, false);
-        strategy.setCreatorOracle(address(oracle));
+        strategy.setAssetOracle(address(oracle));
 
         address ajnaPoolAddr = _getOrDeployAjnaPool();
         strategy.setAjnaPool(ajnaPoolAddr);

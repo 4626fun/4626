@@ -628,13 +628,13 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     // =================================
 
     function _syncCoinBalance() internal returns (uint256 actual) {
-        IERC20 coin = _creatorCoin();
+        IERC20 coin = _vaultAsset();
         actual = coin.balanceOf(address(this));
         coinBalance = actual;
     }
 
     function _pullCreatorCoinExact(address from, uint256 amount) internal {
-        IERC20 coin = _creatorCoin();
+        IERC20 coin = _vaultAsset();
         uint256 beforeBal = coin.balanceOf(address(this));
         coin.safeTransferFrom(from, address(this), amount);
         uint256 afterBal = coin.balanceOf(address(this));
@@ -645,7 +645,7 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     }
 
     function _pushCreatorCoinExact(address to, uint256 amount) internal {
-        IERC20 coin = _creatorCoin();
+        IERC20 coin = _vaultAsset();
         uint256 beforeBal = coin.balanceOf(address(this));
         coin.safeTransfer(to, amount);
         uint256 afterBal = coin.balanceOf(address(this));
@@ -1105,7 +1105,7 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         // refactor could route funds to a zero-asset escrow entry).
         if (epoch.recoveryAsset == address(0)) revert ImpairmentRootRequired(epochId);
         if (impairmentRecoveryEscrow == address(0)) revert RecoveryEscrowNotConfigured();
-        if (epoch.recoveryAsset == address(_creatorCoin())) {
+        if (epoch.recoveryAsset == address(_vaultAsset())) {
             // FIX H-1: a raw safeTransfer of the creator coin desyncs the
             // cached coinBalance used by totalAssets(), leaving the recovered
             // amount double-counted (escrow + vault book) until the next sync.

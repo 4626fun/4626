@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-interface ICreatorOVaultBurn {
+interface IOVaultBurn {
     function burnSharesForPriceIncrease(uint256 shares) external;
     function pricePerShare() external view returns (uint256);
 }
@@ -252,7 +252,7 @@ contract VaultShareBurnStream is ReentrancyGuard {
         burnedActive = burnableTotal;
 
         // FIX: BS-03 — wrap burn call in try/catch to prevent permanent stream lockup
-        try ICreatorOVaultBurn(vault).burnSharesForPriceIncrease(burnedNow) {
+        try IOVaultBurn(vault).burnSharesForPriceIncrease(burnedNow) {
             // success
         } catch {
             // FIX: H-05 — enforce a hard cap on accumulated failed burns so that
@@ -268,7 +268,7 @@ contract VaultShareBurnStream is ReentrancyGuard {
 
         uint256 remaining = activeShares - burnedActive;
         uint256 pps;
-        try ICreatorOVaultBurn(vault).pricePerShare() returns (uint256 _pps) {
+        try IOVaultBurn(vault).pricePerShare() returns (uint256 _pps) {
             pps = _pps;
         } catch {}
         emit StreamDripped(activeEpochStart, burnedNow, burnedActive, remaining, pps);
@@ -278,7 +278,7 @@ contract VaultShareBurnStream is ReentrancyGuard {
             // Burn any remainder due to rounding
             uint256 roundingRemainder = activeShares - burnedActive;
             if (roundingRemainder > 0) {
-                try ICreatorOVaultBurn(vault).burnSharesForPriceIncrease(roundingRemainder) {} catch {
+                try IOVaultBurn(vault).burnSharesForPriceIncrease(roundingRemainder) {} catch {
                     // FIX: H-05 — same cap enforcement on the rounding-remainder path
                     uint256 newAccum2 = failedBurnAccumulator + roundingRemainder;
                     if (newAccum2 > MAX_FAILED_BURN_ACCUMULATOR) {
@@ -320,7 +320,7 @@ contract VaultShareBurnStream is ReentrancyGuard {
         failedBurnAccumulator = accum - recovered;
 
         // Interaction
-        ICreatorOVaultBurn(vault).burnSharesForPriceIncrease(recovered);
+        IOVaultBurn(vault).burnSharesForPriceIncrease(recovered);
 
         emit FailedBurnsRecovered(recovered, failedBurnAccumulator);
     }

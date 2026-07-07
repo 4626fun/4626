@@ -122,6 +122,10 @@ contract MockCreatorOVaultLike {
     constructor(IERC20 asset_) {
         CREATOR_COIN = asset_;
     }
+
+    function asset() external view returns (address) {
+        return address(CREATOR_COIN);
+    }
 }
 
 contract ERC4626StrategyAdapterAjnaInnerVaultTest is Test {

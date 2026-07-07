@@ -27,7 +27,7 @@ abstract contract OVaultModuleBase is OVaultModuleStorage {
         _;
     }
 
-    function _creatorCoin() internal view returns (IERC20) {
+    function _vaultAsset() internal view returns (IERC20) {
         // CreatorOVault inherits ERC4626; the underlying is available via `asset()`.
         return IERC20(IERC4626(address(this)).asset());
     }

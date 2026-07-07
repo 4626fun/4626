@@ -3,16 +3,16 @@ title: CreatorRegistry
 sidebar_position: 1
 ---
 
-# CreatorRegistry
+# Registry4626 (formerly CreatorRegistry)
 
-**Product role:** Onchain **index** from a creator coin address to that vault’s contract stack (vault, wrapper, ShareOFT, gauge). Integrators and the application resolve which contracts belong to a given coin via the registry.
+**Product role:** Onchain **index** from a lane token address (creator coin or agent token) to that vault’s contract stack (vault, wrapper, ShareOFT, gauge). Integrators and the application resolve which contracts belong to a given token via the registry.
 
 Central registry for platform contract lookups and shared chain config.
 
 ## Purpose
 
-The CreatorRegistry:
-- Maps Creator Coins → (Vault, Wrapper, OFT, GaugeController, Lottery)
+The Registry4626:
+- Maps lane tokens → (Vault, Wrapper, OFT, GaugeController, Lottery)
 - Stores chain configurations (LayerZero endpoints, DEX infrastructure)
 - Provides lookup functions for all platform contracts
 - Manages per-creator and shared infrastructure references
@@ -22,14 +22,15 @@ The CreatorRegistry:
 ### Registration
 
 ```solidity
-// Register a new creator coin and its contracts
-function registerCreatorCoin(
-    address creatorCoin,
-    address vault,
-    address wrapper,
-    address shareOFT,
-    address gaugeController
-) external onlyOwner;
+// Register a new lane token (creator coin or agent token)
+function registerToken(
+    address token,
+    string calldata name,
+    string calldata symbol,
+    address creator,
+    address pool,
+    uint24 poolFee
+) external;
 ```
 
 ### Lookup
@@ -41,11 +42,11 @@ function getVaultForToken(address creatorCoin) external view returns (address);
 // Get ShareOFT for a creator coin
 function getShareOFTForToken(address creatorCoin) external view returns (address);
 
-// Check if a creator coin is registered
-function isCreatorCoinRegistered(address creatorCoin) external view returns (bool);
+// Check if a token is registered
+function isTokenRegistered(address token) external view returns (bool);
 
-// Get all registered creator coins
-function getAllCreatorCoins() external view returns (address[] memory);
+// Get all registered tokens
+function getAllTokens() external view returns (address[] memory);
 ```
 
 ### Chain Configuration
@@ -64,11 +65,13 @@ function isHubChain() external view returns (bool);
 ## Events
 
 ```solidity
-event CreatorCoinRegistered(
-    address indexed creatorCoin,
+event TokenRegistered(
+    address indexed token,
+    string name,
+    string symbol,
+    address indexed creator,
     address vault,
-    address wrapper,
     address shareOFT,
-    address gaugeController
+    address wrapper
 );
 ```

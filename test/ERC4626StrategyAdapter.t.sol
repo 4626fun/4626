@@ -59,6 +59,10 @@ contract MockCreatorOVault {
     constructor(IERC20 _creatorCoin) {
         CREATOR_COIN = _creatorCoin;
     }
+
+    function asset() external view returns (address) {
+        return address(CREATOR_COIN);
+    }
 }
 
 contract ERC4626StrategyAdapterTest is Test {

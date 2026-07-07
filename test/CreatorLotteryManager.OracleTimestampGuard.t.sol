@@ -54,7 +54,7 @@ contract MockLotteryRegistryTimestampGuard {
         return address(0);
     }
 
-    function isCreatorCoinActive(address token) external view returns (bool) {
+    function isTokenActive(address token) external view returns (bool) {
         return token == creatorCoin;
     }
 
@@ -62,7 +62,7 @@ contract MockLotteryRegistryTimestampGuard {
         return endpoint;
     }
 
-    function getAllCreatorCoins() external view returns (address[] memory coins) {
+    function getAllTokens() external view returns (address[] memory coins) {
         coins = new address[](1);
         coins[0] = creatorCoin;
     }

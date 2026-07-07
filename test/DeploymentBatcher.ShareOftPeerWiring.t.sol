@@ -368,7 +368,7 @@ contract DeploymentBatcherShareOftPeerWiringTest is Test {
     }
 
     function test_ensureShareOftPeerWiring_wiresShareOftPeerFromRegistry() external {
-        registry.registerCreatorCoin(
+        registry.registerToken(
             address(creatorToken), "Creator Coin", "CR8R", ownerAddr, address(0), 0
         );
         registry.setRemoteOFTPeerBytes32(address(creatorToken), SOLANA_EID, REGISTRY_PEER);
@@ -387,7 +387,7 @@ contract DeploymentBatcherShareOftPeerWiringTest is Test {
 
         assertEq(shareOFT.peers(SOLANA_EID), BATCHER_DEFAULT_PEER, "default peer not wired");
         assertEq(registry.getRemoteOFTPeerBytes32(address(creatorToken), SOLANA_EID), BATCHER_DEFAULT_PEER);
-        I4626Registry.CreatorCoinInfo memory info = registry.getCreatorCoin(address(creatorToken));
+        I4626Registry.TokenInfo memory info = registry.getTokenInfo(address(creatorToken));
         assertEq(info.token, address(creatorToken), "creator not auto-registered");
         assertEq(info.shareOFT, address(shareOFT), "share oft not synced");
     }
@@ -398,7 +398,7 @@ contract DeploymentBatcherShareOftPeerWiringTest is Test {
     }
 
     function test_ensureShareOftPeerWiring_skipsSetPeerWhenAlreadyMatched() external {
-        registry.registerCreatorCoin(
+        registry.registerToken(
             address(creatorToken), "Creator Coin", "CR8R", ownerAddr, address(0), 0
         );
         registry.setRemoteOFTPeerBytes32(address(creatorToken), SOLANA_EID, REGISTRY_PEER);

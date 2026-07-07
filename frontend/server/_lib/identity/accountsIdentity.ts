@@ -1085,6 +1085,7 @@ export async function buildAccountsMePayload(params: {
     accountSignals: {
       linked: zoraRow.zoraLinked,
       canonicalCswAddress: canonicalCswAddressForTrack ?? zoraRow.canonicalCswAddress,
+      canonicalSource: delegationState?.canonicalSource ?? null,
       creatorCoin: zoraRow.creatorCoinAddress ? { address: zoraRow.creatorCoinAddress } : null,
       zoraHandle: splitZoraProfileHandle(zoraRow.zoraHandle).zoraHandle,
       basename,

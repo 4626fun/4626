@@ -2422,7 +2422,7 @@ function DeployVaultBatcher({
       // Phase 3 now deploys Charm alpha vault through Charm's factory (not via bytecode store).
       // Contract ABI still requires this field and only checks for non-zero.
       charmAlphaVaultDeploy: keccak256(toBytes('charm-factory-sentinel-v1')),
-      creatorCharmStrategy: keccak256(DEPLOY_BYTECODE.CharmStrategy4626 as Hex),
+      charmStrategy4626: keccak256(DEPLOY_BYTECODE.CharmStrategy4626 as Hex),
       ajnaVaultAuth: keccak256(DEPLOY_BYTECODE.AjnaVaultAuth as Hex),
       ajnaVault: keccak256(DEPLOY_BYTECODE.AjnaERC4626Vault as Hex),
       erc4626StrategyAdapter: keccak256(DEPLOY_BYTECODE.ERC4626StrategyAdapter as Hex),
@@ -3071,7 +3071,7 @@ function DeployVaultBatcher({
         v3Pool: v3PoolAddress,
         protocolAutomation: protocolAutomationAddress,
         charmVault: charmVaultAddress,
-        creatorCharmStrategy: creatorCharmStrategyAddress,
+        charmStrategy4626: creatorCharmStrategyAddress,
         ajnaPool: ajnaPoolAddress,
         ajnaVaultAuth: ajnaVaultAuthAddress,
         ajnaVault: ajnaVaultAddress,
@@ -3088,7 +3088,7 @@ function DeployVaultBatcher({
       'phase3ExpectedAddressDeployment',
       phase3Expected?.v3Pool,
       phase3Expected?.charmVault,
-      phase3Expected?.creatorCharmStrategy,
+      phase3Expected?.charmStrategy4626,
       phase3Expected?.ajnaPool,
       phase3Expected?.ajnaVaultAuth,
       phase3Expected?.ajnaVault,
@@ -3105,7 +3105,7 @@ function DeployVaultBatcher({
         | {
             v3Pool: boolean | null
             charmVault: boolean | null
-            creatorCharmStrategy: boolean | null
+            charmStrategy4626: boolean | null
             ajnaPool: boolean | null
             ajnaVaultAuth: boolean | null
             ajnaVault: boolean | null
@@ -3123,7 +3123,7 @@ function DeployVaultBatcher({
       const out: {
         v3Pool: boolean | null
         charmVault: boolean | null
-        creatorCharmStrategy: boolean | null
+        charmStrategy4626: boolean | null
         ajnaPool: boolean | null
         ajnaVaultAuth: boolean | null
         ajnaVault: boolean | null
@@ -3131,7 +3131,7 @@ function DeployVaultBatcher({
       } = {
         v3Pool: null,
         charmVault: null,
-        creatorCharmStrategy: null,
+        charmStrategy4626: null,
         ajnaPool: null,
         ajnaVaultAuth: null,
         ajnaVault: null,
@@ -3156,7 +3156,7 @@ function DeployVaultBatcher({
     if (!phase3Expected) return false
     const hasPools = Boolean(phase3Expected.v3Pool || phase3Expected.ajnaPool || phase3Expected.charmVault)
     const missingHelperDependent =
-      !phase3Expected.creatorCharmStrategy &&
+      !phase3Expected.charmStrategy4626 &&
       !phase3Expected.ajnaVaultAuth &&
       !phase3Expected.ajnaVault &&
       !phase3Expected.erc4626StrategyAdapter
@@ -3227,7 +3227,7 @@ function DeployVaultBatcher({
       expected?.creatorCoinPolicyController,
       phase3Expected?.v3Pool,
       phase3Expected?.charmVault,
-      phase3Expected?.creatorCharmStrategy,
+      phase3Expected?.charmStrategy4626,
       phase3Expected?.ajnaPool,
       phase3Expected?.ajnaVaultAuth,
       phase3Expected?.ajnaVault,
@@ -7148,11 +7148,11 @@ function DeployVaultBatcher({
                 <AddressRow
                   label="CharmStrategy4626"
                   iconSrc={PROTOCOL_LOGOS.charm}
-                  address={phase3Expected?.creatorCharmStrategy}
-                  deployed={phase3ExpectedAddressDeployment?.creatorCharmStrategy ?? null}
+                  address={phase3Expected?.charmStrategy4626}
+                  deployed={phase3ExpectedAddressDeployment?.charmStrategy4626 ?? null}
                   forkOnly={isForkOnlyAddress(
-                    phase3Expected?.creatorCharmStrategy,
-                    phase3ExpectedAddressDeployment?.creatorCharmStrategy ?? null,
+                    phase3Expected?.charmStrategy4626,
+                    phase3ExpectedAddressDeployment?.charmStrategy4626 ?? null,
                   )}
                   {...dryRunRowProps('phase3')}
                 />
@@ -9102,7 +9102,7 @@ function DeployVaultMain() {
       payoutRouter: keccak256(DEPLOY_BYTECODE.CreatorPayoutRouter as Hex),
       vaultShareBurnStream: keccak256(DEPLOY_BYTECODE.VaultShareBurnStream as Hex),
       creatorCoinPolicyController: keccak256(DEPLOY_BYTECODE.CreatorCoinPolicyController as Hex),
-      creatorCharmStrategy: keccak256(DEPLOY_BYTECODE.CharmStrategy4626 as Hex),
+      charmStrategy4626: keccak256(DEPLOY_BYTECODE.CharmStrategy4626 as Hex),
       ajnaVaultAuth: keccak256(DEPLOY_BYTECODE.AjnaVaultAuth as Hex),
       ajnaVault: keccak256(DEPLOY_BYTECODE.AjnaERC4626Vault as Hex),
       erc4626StrategyAdapter: keccak256(DEPLOY_BYTECODE.ERC4626StrategyAdapter as Hex),
@@ -9125,7 +9125,7 @@ function DeployVaultMain() {
       deployCodeIds.payoutRouter,
       deployCodeIds.vaultShareBurnStream,
       deployCodeIds.creatorCoinPolicyController,
-      deployCodeIds.creatorCharmStrategy,
+      deployCodeIds.charmStrategy4626,
       deployCodeIds.ajnaVaultAuth,
       deployCodeIds.ajnaVault,
       deployCodeIds.erc4626StrategyAdapter,
@@ -9238,7 +9238,7 @@ function DeployVaultMain() {
           codeId: deployCodeIds.creatorCoinPolicyController,
         },
         // Charm alpha vault is created via Charm's official factory in phase 3 (not from bytecode store).
-        { key: 'creatorCharmStrategy', label: 'CharmStrategy4626', codeId: deployCodeIds.creatorCharmStrategy },
+        { key: 'charmStrategy4626', label: 'CharmStrategy4626', codeId: deployCodeIds.charmStrategy4626 },
         { key: 'ajnaVaultAuth', label: 'AjnaVaultAuth', codeId: deployCodeIds.ajnaVaultAuth },
         { key: 'ajnaVault', label: 'AjnaERC4626Vault', codeId: deployCodeIds.ajnaVault },
         {

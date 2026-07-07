@@ -19,7 +19,7 @@ const CREATOR_REGISTRY_RESOLVE_ABI = [
 const CREATOR_REGISTRY_COIN_ABI = [
   {
     type: 'function',
-    name: 'getCreatorCoin',
+    name: 'getTokenInfo',
     stateMutability: 'view',
     inputs: [{ name: '_token', type: 'address' }],
     outputs: [
@@ -77,7 +77,7 @@ const CREATOR_VAULT_PHASE2_CORE_DEPLOYED_EVENT = parseAbiItem(
   'event Phase2CoreDeployed(address indexed creatorToken, address indexed owner, address gaugeController, address ccaStrategy, address oracle)',
 )
 
-export type CreatorCoinInfo = {
+export type TokenInfo = {
   token: Address
   name: string
   symbol: string
@@ -93,7 +93,7 @@ export type CreatorCoinInfo = {
 
 export type VaultResolved = {
   token: Address
-  info: CreatorCoinInfo
+  info: TokenInfo
   ccaStrategy: Address | null
 }
 
@@ -155,14 +155,14 @@ export async function resolveCreatorTradeTokenAddress<
 export async function fetchCreatorCoinInfo<
   TTransport extends Transport = Transport,
   TChain extends Chain | undefined = Chain | undefined,
->(publicClient: PublicClient<TTransport, TChain>, token: Address): Promise<CreatorCoinInfo | null> {
+>(publicClient: PublicClient<TTransport, TChain>, token: Address): Promise<TokenInfo | null> {
   const registry = CONTRACTS.registry as Address
   let infoRaw: unknown = null
   try {
     infoRaw = await publicClient.readContract({
       address: registry,
       abi: CREATOR_REGISTRY_COIN_ABI,
-      functionName: 'getCreatorCoin',
+      functionName: 'getTokenInfo',
       args: [token],
     })
   } catch {
@@ -172,7 +172,7 @@ export async function fetchCreatorCoinInfo<
   const info = infoRaw as any
   const tokenFromRegistry = asAddress(info?.token)
   if (!eqAddress(tokenFromRegistry, token)) return null
-  const out: CreatorCoinInfo = {
+  const out: TokenInfo = {
     token,
     name: typeof info?.name === 'string' ? info.name : '',
     symbol: typeof info?.symbol === 'string' ? info.symbol : '',

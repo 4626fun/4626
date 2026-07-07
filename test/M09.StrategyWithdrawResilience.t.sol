@@ -162,7 +162,7 @@ contract MismatchStrategy is IStrategy {
 
 /// @dev Source-level mirror of `_tryWithdrawFromStrategyMeasured` from
 ///      OVaultStrategiesModule.sol. Kept here because the production
-///      function is `internal` on a delegatecall module and `_creatorCoin()`
+///      function is `internal` on a delegatecall module and `_vaultAsset()`
 ///      expects the hosting contract to implement `IERC4626.asset()`.
 ///      Any change to the production function should be mirrored here AND
 ///      covered by a test that fails on divergence.

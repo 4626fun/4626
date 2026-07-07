@@ -15,7 +15,7 @@ interface ILotteryManager4626ForRewards {
 }
 
 interface I4626RegistryForRewards {
-    function getAllCreatorCoins() external view returns (address[] memory);
+    function getAllTokens() external view returns (address[] memory);
     function getGaugeControllerForToken(address token) external view returns (address);
     function getVaultForToken(address token) external view returns (address);
 }
@@ -108,7 +108,7 @@ contract DeployRewardsEcosystem is Script {
             // Seed the manual whitelist from the registry so the gauge is usable immediately.
             console2.log("\nSeed ve4626GaugeVoting manual whitelist from registry vaults...");
             I4626RegistryForRewards reg = I4626RegistryForRewards(registry);
-            address[] memory tokens = reg.getAllCreatorCoins();
+            address[] memory tokens = reg.getAllTokens();
             address[] memory vaultsTmp = new address[](tokens.length);
             uint256 count = 0;
 
@@ -159,7 +159,7 @@ contract DeployRewardsEcosystem is Script {
 
         if (wireExistingGauges) {
             console2.log("\nWire existing CreatorGaugeControllers (set voting + rewards distributor)...");
-            address[] memory tokens = I4626RegistryForRewards(registry).getAllCreatorCoins();
+            address[] memory tokens = I4626RegistryForRewards(registry).getAllTokens();
             for (uint256 i = 0; i < tokens.length; i++) {
                 address gauge = I4626RegistryForRewards(registry).getGaugeControllerForToken(tokens[i]);
                 if (gauge == address(0)) continue;

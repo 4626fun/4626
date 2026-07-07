@@ -28,35 +28,48 @@ contract MockRegistryForOVaultComposer {
         endpoint = _endpoint;
     }
 
-    function setBindings(address creatorToken, address wrapper, address shareOft) external {
-        wrapperForToken[creatorToken] = wrapper;
-        shareOftForToken[creatorToken] = shareOft;
+    function setBindings(address token, address wrapper, address shareOft) external {
+        wrapperForToken[token] = wrapper;
+        shareOftForToken[token] = shareOft;
     }
 
-    function setVaultForToken(address creatorToken, address vault) external {
-        vaultForToken[creatorToken] = vault;
+    function setVaultForToken(address token, address vault) external {
+        vaultForToken[token] = vault;
     }
 
     function getLayerZeroEndpoint(uint256) external view returns (address) {
         return endpoint;
     }
 
-    function getWrapperForToken(address creatorToken) external view returns (address) {
-        return wrapperForToken[creatorToken];
+    function getWrapperForToken(address token) external view returns (address) {
+        return wrapperForToken[token];
     }
 
-    function getShareOFTForToken(address creatorToken) external view returns (address) {
-        return shareOftForToken[creatorToken];
+    function getShareOFTForToken(address token) external view returns (address) {
+        return shareOftForToken[token];
     }
 
-    function getVaultForToken(address creatorToken) external view returns (address) {
-        return vaultForToken[creatorToken];
+    function getVaultForToken(address token) external view returns (address) {
+        return vaultForToken[token];
+    }
+}
+
+contract MockVaultForComposer {
+    address private immutable _asset;
+
+    constructor(address asset_) {
+        _asset = asset_;
+    }
+
+    function asset() external view returns (address) {
+        return _asset;
     }
 }
 
 contract MockWrapperForComposer {
     MockToken public immutable creatorCoin;
     MockToken public immutable shareOFT;
+    address public vault;
 
     uint16 public depositSpendBps = 10_000;
     uint16 public depositMintBps = 10_000;
@@ -71,6 +84,10 @@ contract MockWrapperForComposer {
     constructor(address _creatorCoin, address _shareOft) {
         creatorCoin = MockToken(_creatorCoin);
         shareOFT = MockToken(_shareOft);
+    }
+
+    function setVault(address _vault) external {
+        vault = _vault;
     }
 
     function isBeneficiaryOperator(address) external pure returns (bool) {
@@ -128,29 +145,31 @@ contract OVaultHubComposerTest is Test {
     address internal receiver = address(0xCAFE);
     address internal composeFrom = address(0xF00D);
 
-    MockToken internal creatorToken;
+    MockToken internal token;
     MockToken internal shareOft;
     MockRegistryForOVaultComposer internal registry;
     MockWrapperForComposer internal wrapper;
     OVaultHubComposer internal composer;
 
-    address internal vault = address(0xDA0);
+    address internal vault;
 
     function setUp() public {
-        creatorToken = new MockToken("Creator", "CRT");
+        token = new MockToken("Creator", "CRT");
         shareOft = new MockToken("Share", "SHARE");
         registry = new MockRegistryForOVaultComposer(endpoint);
-        wrapper = new MockWrapperForComposer(address(creatorToken), address(shareOft));
-        registry.setBindings(address(creatorToken), address(wrapper), address(shareOft));
-        registry.setVaultForToken(address(creatorToken), vault);
+        wrapper = new MockWrapperForComposer(address(token), address(shareOft));
+        vault = address(new MockVaultForComposer(address(token)));
+        wrapper.setVault(vault);
+        registry.setBindings(address(token), address(wrapper), address(shareOft));
+        registry.setVaultForToken(address(token), vault);
 
         composer = new OVaultHubComposer(address(registry), owner);
         composer.setAllowedComposeSender(sourceOft, true);
         composer.setAllowedComposeSender(address(shareOft), true);
 
         // C-2: configure mesh so _enforceMeshInvariants does not revert
-        composer.configureCreatorMesh(
-            address(creatorToken),
+        composer.configureTokenMesh(
+            address(token),
             vault,
             sourceOft,           // assetMeshToken
             address(shareOft),   // shareMeshToken
@@ -167,7 +186,7 @@ contract OVaultHubComposerTest is Test {
             amountLD: 1e18,
             composeFrom_: composeFrom,
             action: composer.ACTION_DEPOSIT(),
-            creatorToken_: address(creatorToken),
+            creatorToken_: address(token),
             wrapper_: address(wrapper),
             receiver_: receiver,
             sourceOft_: sourceOft,
@@ -180,7 +199,7 @@ contract OVaultHubComposerTest is Test {
 
     function test_DepositCompose_HappyPath_ExactInvariants() public {
         uint256 amountIn = 25e18;
-        creatorToken.mint(address(composer), amountIn);
+        token.mint(address(composer), amountIn);
 
         bytes memory message = _buildComposeMessage({
             nonce: 11,
@@ -188,20 +207,20 @@ contract OVaultHubComposerTest is Test {
             amountLD: amountIn,
             composeFrom_: composeFrom,
             action: composer.ACTION_DEPOSIT(),
-            creatorToken_: address(creatorToken),
+            creatorToken_: address(token),
             wrapper_: address(wrapper),
             receiver_: receiver,
             sourceOft_: sourceOft,
             minOut: 1
         });
 
-        uint256 composerCreatorBefore = creatorToken.balanceOf(address(composer));
+        uint256 composerCreatorBefore = token.balanceOf(address(composer));
         uint256 composerShareBefore = shareOft.balanceOf(address(composer));
 
         vm.prank(endpoint);
         composer.lzCompose(sourceOft, bytes32("g1"), message, address(0xE1), "");
 
-        assertEq(creatorToken.balanceOf(address(composer)), composerCreatorBefore - amountIn, "creator spend mismatch");
+        assertEq(token.balanceOf(address(composer)), composerCreatorBefore - amountIn, "creator spend mismatch");
         assertEq(shareOft.balanceOf(address(composer)), composerShareBefore, "share residual mismatch");
         assertEq(shareOft.balanceOf(receiver), amountIn, "receiver share out mismatch");
         assertEq(wrapper.lastDepositBeneficiary(), receiver, "deposit beneficiary mismatch");
@@ -217,28 +236,28 @@ contract OVaultHubComposerTest is Test {
             amountLD: sharesIn,
             composeFrom_: composeFrom,
             action: composer.ACTION_REDEEM(),
-            creatorToken_: address(creatorToken),
+            creatorToken_: address(token),
             wrapper_: address(wrapper),
             receiver_: receiver,
             sourceOft_: address(shareOft),
             minOut: 1
         });
 
-        uint256 composerCreatorBefore = creatorToken.balanceOf(address(composer));
+        uint256 composerCreatorBefore = token.balanceOf(address(composer));
         uint256 composerShareBefore = shareOft.balanceOf(address(composer));
 
         vm.prank(endpoint);
         composer.lzCompose(address(shareOft), bytes32("g2"), message, address(0xE2), "");
 
         assertEq(shareOft.balanceOf(address(composer)), composerShareBefore - sharesIn, "share spend mismatch");
-        assertEq(creatorToken.balanceOf(address(composer)), composerCreatorBefore, "creator residual mismatch");
-        assertEq(creatorToken.balanceOf(receiver), sharesIn, "receiver creator out mismatch");
+        assertEq(token.balanceOf(address(composer)), composerCreatorBefore, "creator residual mismatch");
+        assertEq(token.balanceOf(receiver), sharesIn, "receiver creator out mismatch");
         assertEq(wrapper.lastWithdrawBeneficiary(), receiver, "withdraw beneficiary mismatch");
     }
 
     function test_DepositCompose_RevertOnInputSpendInvariant() public {
         uint256 amountIn = 10e18;
-        creatorToken.mint(address(composer), amountIn);
+        token.mint(address(composer), amountIn);
         wrapper.setDepositConfig(5_000, 10_000, 10_000); // spends only 50%
 
         bytes memory message = _buildComposeMessage({
@@ -247,7 +266,7 @@ contract OVaultHubComposerTest is Test {
             amountLD: amountIn,
             composeFrom_: composeFrom,
             action: composer.ACTION_DEPOSIT(),
-            creatorToken_: address(creatorToken),
+            creatorToken_: address(token),
             wrapper_: address(wrapper),
             receiver_: receiver,
             sourceOft_: sourceOft,
@@ -257,7 +276,7 @@ contract OVaultHubComposerTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(
                 bytes4(keccak256("InputSpendInvariantFailed(address,uint256,uint256,uint256)")),
-                address(creatorToken),
+                address(token),
                 amountIn,
                 amountIn / 2,
                 amountIn
@@ -278,7 +297,7 @@ contract OVaultHubComposerTest is Test {
             amountLD: sharesIn,
             composeFrom_: composeFrom,
             action: composer.ACTION_REDEEM(),
-            creatorToken_: address(creatorToken),
+            creatorToken_: address(token),
             wrapper_: address(wrapper),
             receiver_: receiver,
             sourceOft_: address(shareOft),
@@ -288,7 +307,7 @@ contract OVaultHubComposerTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(
                 bytes4(keccak256("OutputMintInvariantFailed(address,uint256,uint256,uint256)")),
-                address(creatorToken),
+                address(token),
                 0,
                 sharesIn / 2,
                 sharesIn

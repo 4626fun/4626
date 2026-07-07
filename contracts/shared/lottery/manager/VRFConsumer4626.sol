@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 /**
  * @title VRFConsumer4626
  * @author 0xakita.eth
- * @notice Multi-chain VRF Consumer for Creator Coin lottery system
+ * @notice Multi-chain VRF Consumer for the 4626 lottery system (all lanes)
  * @dev Accepts requests from multiple chains AND direct local requests from Base.
  *      Sends randomness back to the originating chain or calls local callbacks.
  *      This acts as a VRF hub on Base using Chainlink VRF 2.5.
@@ -138,7 +138,7 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
 
     /// @notice Maximum number of distinct remote chains permitted to
     /// push price updates. Bounds the cost of
-    /// `getAggregatedCreatorPrice()` which iterates
+    /// `getAggregatedAssetPrice()` which iterates
     /// `priceReportingChains` in O(N).
     /// @dev FIX: L-09 (4626-357) — previously unbounded; a malicious
     /// set of LayerZero sources could register arbitrarily many EIDs
@@ -154,7 +154,7 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
     bool public remotePriceReportingEnabled = false;
 
     /// @notice Local price from Base's oracle
-    int256 public localCreatorPriceUSD;
+    int256 public localAssetPriceUSD;
     uint256 public localPriceTimestamp;
 
     /// @notice TWAP period (default 5 minutes)
@@ -548,7 +548,7 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
         targetGasLimit = chainGasLimits[request.sourceChainEid];
         if (targetGasLimit == 0) targetGasLimit = defaultGasLimit;
 
-        (int256 aggregatedPrice,) = getAggregatedCreatorPrice();
+        (int256 aggregatedPrice,) = getAggregatedAssetPrice();
         bytes memory payload = abi.encode(request.sequence, request.randomWord, aggregatedPrice, block.timestamp);
         bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(targetGasLimit, 0);
 
@@ -563,7 +563,7 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
         if (targetGasLimit == 0) targetGasLimit = defaultGasLimit;
 
         // Get aggregated price
-        (int256 aggregatedPrice, uint256 numChains) = getAggregatedCreatorPrice();
+        (int256 aggregatedPrice, uint256 numChains) = getAggregatedAssetPrice();
 
         // Extended payload with price
         bytes memory payload = abi.encode(_request.sequence, _request.randomWord, aggregatedPrice, block.timestamp);
@@ -640,39 +640,39 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
     function updateLocalPrice() public {
         if (address(priceOracle) == address(0)) return;
 
-        try priceOracle.getAssetPrice() returns (int256 creatorUsd, uint256 timestamp) {
-            if (creatorUsd > 0) {
-                localCreatorPriceUSD = creatorUsd;
+        try priceOracle.getAssetPrice() returns (int256 assetUsd, uint256 timestamp) {
+            if (assetUsd > 0) {
+                localAssetPriceUSD = assetUsd;
                 localPriceTimestamp = timestamp;
-                emit LocalPriceUpdated(localCreatorPriceUSD, localPriceTimestamp);
+                emit LocalPriceUpdated(localAssetPriceUSD, localPriceTimestamp);
             }
         } catch {
             // Fallback: calculate from TWAP
-            try priceOracle.getAssetEthTWAP(twapPeriod) returns (uint256 creatorPerEth) {
-                if (creatorPerEth == 0) return;
+            try priceOracle.getAssetEthTWAP(twapPeriod) returns (uint256 assetPerEth) {
+                if (assetPerEth == 0) return;
 
                 try priceOracle.getEthPrice() returns (int256 ethUsd, uint256) {
                     if (ethUsd <= 0) return;
 
                     // USD per CREATOR = (USD per ETH) / (CREATOR per ETH)
-                    localCreatorPriceUSD = int256(Math.mulDiv(uint256(ethUsd), 1e18, creatorPerEth));
+                    localAssetPriceUSD = int256(Math.mulDiv(uint256(ethUsd), 1e18, assetPerEth));
                     localPriceTimestamp = block.timestamp;
-                    emit LocalPriceUpdated(localCreatorPriceUSD, localPriceTimestamp);
+                    emit LocalPriceUpdated(localAssetPriceUSD, localPriceTimestamp);
                 } catch {}
             } catch {}
         }
     }
 
-    function getAggregatedCreatorPrice() public view returns (int256 avgPrice, uint256 numChains) {
+    function getAggregatedAssetPrice() public view returns (int256 avgPrice, uint256 numChains) {
         int256 totalPrice;
         uint256 validChains;
 
         // Include local price
         if (
-            localCreatorPriceUSD > 0 && localPriceTimestamp > 0 && localPriceTimestamp <= block.timestamp
+            localAssetPriceUSD > 0 && localPriceTimestamp > 0 && localPriceTimestamp <= block.timestamp
                 && block.timestamp - localPriceTimestamp < PRICE_STALENESS
         ) {
-            totalPrice += localCreatorPriceUSD;
+            totalPrice += localAssetPriceUSD;
             validChains++;
         }
 

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-interface ICreatorOVaultComposer {
-    function configureCreatorMesh(
-        address creatorToken,
+interface IOVaultComposer {
+    function configureTokenMesh(
+        address token,
         address vault,
         address assetMeshToken,
         address shareMeshToken,
@@ -12,9 +12,9 @@ interface ICreatorOVaultComposer {
         bytes32 solanaSharePeer
     ) external;
 
-    function pauseCreatorMesh(address creatorToken, bool paused) external;
+    function pauseTokenMesh(address token, bool paused) external;
 
-    function creatorMesh(address creatorToken)
+    function tokenMesh(address token)
         external
         view
         returns (

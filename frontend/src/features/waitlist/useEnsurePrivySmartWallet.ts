@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 import { getAddress, isAddress } from 'viem'
+import { base } from 'viem/chains'
 
 import { invalidateAccountMeCache } from '@/hooks/useAccountMe'
-import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
+import { extractPrivyWalletsFromUser, useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
+import { collectPrivySmartWalletAddressesFromWallets } from '@/lib/privy/privyEmbeddedEoa'
 import { useSafePrivy } from '@/lib/privy/safeHooks'
+
+import { syncWaitlistCanonicalWallet } from './syncWaitlistCanonicalWallet'
 
 const SMART_WALLET_WAIT_MS = 12_000
 const POLL_MS = 400
@@ -21,11 +25,12 @@ export type EnsurePrivySmartWalletResult =
 
 export function useEnsurePrivySmartWallet(params: { enabled: boolean }) {
   const privy = useSafePrivy()
-  const { client } = useSmartWallets()
+  const { client, getClientForChain } = useSmartWallets()
   const { embeddedEoaAddress, ensureEmbeddedWallet, isCreatingEmbeddedWallet } =
     useEnsurePrivyEmbeddedWallet()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [syncError, setSyncError] = useState<string | null>(null)
   const [smartWalletAddress, setSmartWalletAddress] = useState<string | null>(null)
   const provisionedRef = useRef(false)
 
@@ -41,6 +46,58 @@ export function useEnsurePrivySmartWallet(params: { enabled: boolean }) {
     if (fromClient) setSmartWalletAddress(fromClient)
   }, [client?.account?.address, params.enabled])
 
+  const resolveSmartWalletClient = useCallback(async (): Promise<string | null> => {
+    const existing = readSmartWalletAddress()
+    if (existing) return existing
+
+    const wallets = extractPrivyWalletsFromUser(privy.user)
+    const fromUser = collectPrivySmartWalletAddressesFromWallets(wallets)[0]
+    const normalizedFromUser = normalizeAddress(fromUser)
+    if (normalizedFromUser) {
+      setSmartWalletAddress(normalizedFromUser)
+      return normalizedFromUser
+    }
+
+    if (typeof getClientForChain === 'function') {
+      try {
+        const chainClient = await getClientForChain({ id: base.id })
+        const fromChain = normalizeAddress(chainClient?.account?.address)
+        if (fromChain) {
+          setSmartWalletAddress(fromChain)
+          return fromChain
+        }
+      } catch {
+        /* poll fallback below */
+      }
+    }
+
+    const deadline = Date.now() + SMART_WALLET_WAIT_MS
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => window.setTimeout(resolve, POLL_MS))
+
+      if (typeof getClientForChain === 'function') {
+        try {
+          const chainClient = await getClientForChain({ id: base.id })
+          const fromChain = normalizeAddress(chainClient?.account?.address)
+          if (fromChain) {
+            setSmartWalletAddress(fromChain)
+            return fromChain
+          }
+        } catch {
+          /* keep polling */
+        }
+      }
+
+      const fromClient = normalizeAddress(client?.account?.address) ?? readSmartWalletAddress()
+      if (fromClient) {
+        setSmartWalletAddress(fromClient)
+        return fromClient
+      }
+    }
+
+    return null
+  }, [client?.account?.address, getClientForChain, privy.user, readSmartWalletAddress])
+
   const ensurePrivyWallets = useCallback(async (): Promise<EnsurePrivySmartWalletResult> => {
     if (!params.enabled) {
       return { ok: false, error: 'Wallet provisioning is not enabled.' }
@@ -51,6 +108,7 @@ export function useEnsurePrivySmartWallet(params: { enabled: boolean }) {
 
     setBusy(true)
     setError(null)
+    setSyncError(null)
     try {
       const embedded = await ensureEmbeddedWallet()
       const embeddedAddress = normalizeAddress(embedded.address)
@@ -58,13 +116,7 @@ export function useEnsurePrivySmartWallet(params: { enabled: boolean }) {
         return { ok: false, error: 'Could not provision your embedded signer.' }
       }
 
-      let resolvedSmart = readSmartWalletAddress()
-      const deadline = Date.now() + SMART_WALLET_WAIT_MS
-      while (!resolvedSmart && Date.now() < deadline) {
-        await new Promise((resolve) => window.setTimeout(resolve, POLL_MS))
-        resolvedSmart = normalizeAddress(client?.account?.address) ?? readSmartWalletAddress()
-      }
-
+      const resolvedSmart = await resolveSmartWalletClient()
       if (!resolvedSmart) {
         return {
           ok: false,
@@ -78,6 +130,14 @@ export function useEnsurePrivySmartWallet(params: { enabled: boolean }) {
         provisionedRef.current = true
         invalidateAccountMeCache()
       }
+
+      const sync = await syncWaitlistCanonicalWallet()
+      if (!sync.ok) {
+        setSyncError(sync.error)
+        return { ok: false, error: sync.error }
+      }
+
+      invalidateAccountMeCache()
 
       return {
         ok: true,
@@ -93,16 +153,16 @@ export function useEnsurePrivySmartWallet(params: { enabled: boolean }) {
       setBusy(false)
     }
   }, [
-    client?.account?.address,
     ensureEmbeddedWallet,
     params.enabled,
     privy.authenticated,
     readSmartWalletAddress,
+    resolveSmartWalletClient,
   ])
 
   return {
     busy: busy || isCreatingEmbeddedWallet,
-    error,
+    error: error ?? syncError,
     embeddedEoaAddress,
     smartWalletAddress: readSmartWalletAddress(),
     ensurePrivyWallets,

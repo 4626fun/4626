@@ -36,9 +36,11 @@ describe('parsePhase1SplitState', () => {
       shareOFT: '0x2222222222222222222222222222222222222222',
       coreDone: true,
       finalized: false,
+      vaultKind: 1,
     })
     expect(parsed.coreDone).toBe(true)
     expect(parsed.wrapper).toBe(predictedWrapper)
+    expect(parsed.vaultKind).toBe(1)
   })
 })
 

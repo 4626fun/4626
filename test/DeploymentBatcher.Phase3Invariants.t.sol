@@ -112,7 +112,7 @@ contract DeploymentBatcherPhase3WeightHandler is Test {
 
         codeIds = DeploymentBatcher.StrategyCodeIds({
             charmAlphaVaultDeploy: charmWeight == 0 ? bytes32(0) : CHARM_ALPHA_CODE_ID,
-            creatorCharmStrategy: charmWeight == 0 ? bytes32(0) : CREATOR_CHARM_STRATEGY_CODE_ID,
+            charmStrategy4626: charmWeight == 0 ? bytes32(0) : CREATOR_CHARM_STRATEGY_CODE_ID,
             ajnaVaultAuth: ajnaWeight == 0 ? bytes32(0) : AJNA_AUTH_CODE_ID,
             ajnaVault: ajnaWeight == 0 ? bytes32(0) : AJNA_VAULT_CODE_ID,
             erc4626StrategyAdapter: ajnaWeight == 0 ? bytes32(0) : AJNA_ADAPTER_CODE_ID,
@@ -149,6 +149,7 @@ contract DeploymentBatcherPhase3WeightHandler is Test {
             uniswapRouter: makeAddr("uniswapRouter"),
             ajnaFactory: address(ajnaFactory),
             vaultCoreModule: makeAddr("vaultCoreModule"),
+            agentVaultCoreModule: address(0),
             vaultStrategiesModule: makeAddr("vaultStrategiesModule"),
             vaultAdminModule: makeAddr("vaultAdminModule")
         });

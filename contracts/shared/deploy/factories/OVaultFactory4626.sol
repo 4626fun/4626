@@ -208,7 +208,7 @@ contract OVaultFactory4626 is Ownable {
         string memory symbol = success ? abi.decode(data, (string)) : "UNK";
 
         // Register with basic info (pool will be set later when launched)
-        registry.registerCreatorCoin(
+        registry.registerToken(
             _creatorCoin,
             name,
             symbol,
@@ -219,10 +219,10 @@ contract OVaultFactory4626 is Ownable {
 
         // Set vault infrastructure addresses
         registry.setVault(_creatorCoin, _vault);
-        registry.setCreatorWrapper(_creatorCoin, _wrapper);
-        registry.setCreatorShareOFT(_creatorCoin, _shareOFT);
-        registry.setCreatorOracle(_creatorCoin, _oracle);
-        registry.setCreatorGaugeController(_creatorCoin, _gaugeController);
+        registry.setWrapperForToken(_creatorCoin, _wrapper);
+        registry.setShareOFTForToken(_creatorCoin, _shareOFT);
+        registry.setOracleForToken(_creatorCoin, _oracle);
+        registry.setGaugeControllerForToken(_creatorCoin, _gaugeController);
     }
 
     // =================================

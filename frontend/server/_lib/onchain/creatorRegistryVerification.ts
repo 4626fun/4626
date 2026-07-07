@@ -7,7 +7,7 @@ const DEFAULT_BASE_RPC_URL = 'https://mainnet.base.org'
 const CREATOR_REGISTRY_ABI = [
   {
     type: 'function',
-    name: 'isCreatorCoinActive',
+    name: 'isTokenActive',
     stateMutability: 'view',
     inputs: [{ name: '_token', type: 'address' }],
     outputs: [{ type: 'bool' }],
@@ -111,7 +111,7 @@ export async function validateCreatorRegistryBinding(
         client.readContract({
           address: registry,
           abi: CREATOR_REGISTRY_ABI,
-          functionName: 'isCreatorCoinActive',
+          functionName: 'isTokenActive',
           args: [creatorCoin],
         }) as Promise<boolean>,
         client.readContract({

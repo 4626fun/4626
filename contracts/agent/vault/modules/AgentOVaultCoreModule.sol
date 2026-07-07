@@ -116,7 +116,7 @@ contract AgentOVaultCoreModule is CreatorOVaultCoreModule {
      *      - Syncs `coinBalance` to the real post-transfer balance.
      */
     function _pullAgentTokenMeasured(address from, uint256 amount) internal returns (uint256 received) {
-        IERC20 coin = _creatorCoin(); // inherited; resolves to agentToken in agent lane context
+        IERC20 coin = _vaultAsset(); // inherited; resolves to agentToken in agent lane context
         uint256 beforeBal = coin.balanceOf(address(this));
         coin.safeTransferFrom(from, address(this), amount);
         uint256 afterBal = coin.balanceOf(address(this));

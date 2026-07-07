@@ -63,7 +63,7 @@ contract TestAADeployment is Script, Test {
         console.log("   1. Creates V3 pool (if needed)");
         console.log("   2. Deploys Charm Alpha Vault");
         console.log("   3. Deploys Charm Alpha Strategy");
-        console.log("   4. Deploys Creator Charm Strategy");
+        console.log("   4. Deploys Charm Strategy 4626");
         console.log("   5. Deploys Ajna Strategy Adapter");
         console.log("");
 
@@ -87,7 +87,7 @@ contract TestAADeployment is Script, Test {
             console.log("   - V3 Pool:", result.v3Pool);
             console.log("   - Charm Vault:", result.charmVault);
             console.log("   - Charm Strategy:", result.charmStrategy);
-            console.log("   - Creator Charm Strategy:", result.creatorCharmStrategy);
+            console.log("   - Charm Strategy 4626:", result.charmStrategy4626);
             console.log("   - Ajna Strategy Adapter:", result.ajnaStrategy);
             console.log("");
 
@@ -130,10 +130,10 @@ contract TestAADeployment is Script, Test {
             address governance = ICharmVaultInfo(result.charmVault).governance();
             console.log("   Charm governance:", governance);
 
-            // Check Creator Charm Strategy configuration
-            address charmStrategyVault = CharmStrategy4626(result.creatorCharmStrategy).vault();
+            // Check Charm Strategy 4626 configuration
+            address charmStrategyVault = CharmStrategy4626(result.charmStrategy4626).vault();
             require(charmStrategyVault == CREATOR_VAULT, "Wrong vault");
-            console.log("   Creator Charm Strategy configured");
+            console.log("   Charm Strategy 4626 configured");
 
             // Check nested Ajna adapter strategy (if deployed)
             if (result.ajnaStrategy != address(0)) {

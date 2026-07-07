@@ -24,7 +24,7 @@ interface I4626RegistryLotteryManager {
     function getLotteryManager(uint256 chainId) external view returns (address);
     function setLotteryManager(uint256 chainId, address manager) external;
 
-    function getAllCreatorCoins() external view returns (address[] memory);
+    function getAllTokens() external view returns (address[] memory);
     function getShareOFTForToken(address token) external view returns (address);
 }
 
@@ -169,7 +169,7 @@ contract DeployLotteryManagerCreate2V2 is Script {
         // Authorize existing ShareOFTs to trigger buy-side lottery entries.
         // ShareOFT calls `processSwapLottery()` directly from `_triggerLotteryLocal(...)`,
         // so the token contract must be an authorized swap entrypoint.
-        address[] memory tokens = registry.getAllCreatorCoins();
+        address[] memory tokens = registry.getAllTokens();
         for (uint256 i; i < tokens.length; i++) {
             address shareOFT = registry.getShareOFTForToken(tokens[i]);
             if (shareOFT == address(0)) continue;

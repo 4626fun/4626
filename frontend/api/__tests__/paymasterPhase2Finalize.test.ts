@@ -738,7 +738,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
             type: 'tuple',
             components: [
               { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
-              { name: 'creatorCharmStrategy', type: 'bytes32' },
+              { name: 'charmStrategy4626', type: 'bytes32' },
               { name: 'ajnaVaultAuth', type: 'bytes32' },
               { name: 'ajnaVault', type: 'bytes32' },
               { name: 'erc4626StrategyAdapter', type: 'bytes32' },
@@ -798,7 +798,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
         },
         {
           charmAlphaVaultDeploy: CHARM_FACTORY_SENTINEL_CODE_ID,
-          creatorCharmStrategy: MOCK_CODE_ID,
+          charmStrategy4626: MOCK_CODE_ID,
           ajnaVaultAuth: MOCK_CODE_ID,
           ajnaVault: MOCK_CODE_ID,
           erc4626StrategyAdapter: MOCK_CODE_ID,
@@ -993,7 +993,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
             type: 'tuple',
             components: [
               { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
-              { name: 'creatorCharmStrategy', type: 'bytes32' },
+              { name: 'charmStrategy4626', type: 'bytes32' },
               { name: 'ajnaVaultAuth', type: 'bytes32' },
               { name: 'ajnaVault', type: 'bytes32' },
               { name: 'erc4626StrategyAdapter', type: 'bytes32' },
@@ -1076,7 +1076,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
         },
         {
           charmAlphaVaultDeploy: CHARM_FACTORY_SENTINEL_CODE_ID,
-          creatorCharmStrategy: MOCK_CODE_ID,
+          charmStrategy4626: MOCK_CODE_ID,
           ajnaVaultAuth: MOCK_CODE_ID,
           ajnaVault: MOCK_CODE_ID,
           erc4626StrategyAdapter: MOCK_CODE_ID,
@@ -1171,7 +1171,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
             type: 'tuple',
             components: [
               { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
-              { name: 'creatorCharmStrategy', type: 'bytes32' },
+              { name: 'charmStrategy4626', type: 'bytes32' },
               { name: 'ajnaStrategy', type: 'bytes32' },
               { name: 'solanaStrategy', type: 'bytes32' },
             ],
@@ -1221,7 +1221,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
         },
         {
           charmAlphaVaultDeploy: ZERO_BYTES32,
-          creatorCharmStrategy: ZERO_BYTES32,
+          charmStrategy4626: ZERO_BYTES32,
           ajnaStrategy: ZERO_BYTES32,
           solanaStrategy: ZERO_BYTES32,
         },

@@ -10,6 +10,7 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 
 import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
+import {IAgentGaugeController} from "@4626/agent/interfaces/IAgentGaugeController.sol";
 import {ICreatorGaugeController} from "@4626/creator/interfaces/ICreatorGaugeController.sol";
 import {ICreatorOVault} from "@4626/creator/interfaces/ICreatorOVault.sol";
 import {IAjnaPoolFactory} from "@4626/shared/interfaces/external/IAjnaPool.sol";
@@ -120,7 +121,7 @@ contract DeploymentBatcherPhase3Helper {
         uint256 totalProductiveWeight = params.charmWeightBps + params.ajnaWeightBps;
         if (totalProductiveWeight == 0 || totalProductiveWeight > 10_000) revert InvalidWeight();
         if (params.charmWeightBps != 0) {
-            if (codeIds.charmAlphaVaultDeploy == bytes32(0) || codeIds.creatorCharmStrategy == bytes32(0)) {
+            if (codeIds.charmAlphaVaultDeploy == bytes32(0) || codeIds.charmStrategy4626 == bytes32(0)) {
                 revert InvalidCodeId();
             }
         }
@@ -224,11 +225,11 @@ contract DeploymentBatcherPhase3Helper {
 
     function _resolveCreatorOracle(address creatorToken) internal view returns (address oracle) {
         address reg = IDeploymentBatcherRegistryAccess(batcher).registry();
-        oracle = I4626Registry(reg).getCreatorCoin(creatorToken).oracle;
+        oracle = I4626Registry(reg).getTokenInfo(creatorToken).oracle;
     }
 
     function _wireCharmAjnaSynergy(address charmStrategy, address ajnaPool, address oracle) internal {
-        ICharmStrategy4626(charmStrategy).setCreatorOracle(oracle);
+        ICharmStrategy4626(charmStrategy).setAssetOracle(oracle);
         ICharmStrategy4626(charmStrategy).setAjnaPool(ajnaPool);
         ICharmStrategy4626(charmStrategy).setAjnaBorrowConfig(
             true, type(uint256).max, type(uint256).max, CHARM_AJNA_MIN_COLLATERAL_RATIO_BPS, 0, 0
@@ -267,7 +268,7 @@ contract DeploymentBatcherPhase3Helper {
         bytes32 charmStratSalt = _saltFor(baseSalt, "charmStrategyV3");
         bytes memory charmStratArgs =
             abi.encode(params.vault, params.creatorToken, usdc, uniswapRouter, charmVault, v3Pool, address(this));
-        charmStrategy = create2Deployer.deploy(charmStratSalt, codeIds.creatorCharmStrategy, charmStratArgs);
+        charmStrategy = create2Deployer.deploy(charmStratSalt, codeIds.charmStrategy4626, charmStratArgs);
         ICharmStrategy4626(charmStrategy).initializeApprovals();
         if (!deferOwnershipTransfer) {
             IOwnableTransfer(charmStrategy).transferOwnership(protocolTreasury);
@@ -505,10 +506,11 @@ contract DeploymentBatcherUtilsHelper {
         string calldata vaultSymbol,
         string calldata shareName,
         string calldata shareSymbol,
-        string calldata version
+        string calldata version,
+        DeploymentBatcher.VaultKind vaultKind
     ) external pure returns (bytes32) {
         return keccak256(
-            abi.encode(creatorToken, owner, vaultName, vaultSymbol, shareName, shareSymbol, version)
+            abi.encode(creatorToken, owner, vaultName, vaultSymbol, shareName, shareSymbol, version, vaultKind)
         );
     }
 
@@ -630,7 +632,7 @@ interface IDeploymentBatcherRegistryAccess {
 
 interface ICharmStrategy4626 {
     function initializeApprovals() external;
-    function setCreatorOracle(address _creatorOracle) external;
+    function setAssetOracle(address _assetOracle) external;
     function setAjnaPool(address _ajnaPool) external;
     function setAjnaBorrowConfig(
         bool _enabled,
@@ -811,6 +813,7 @@ contract DeploymentBatcherPhase1Module {
         state.shareOftSalt = shareOftSalt;
         state.paramsHash = paramsHash;
         state.codeIdsHash = codeIdsHash;
+        state.vaultKind = params.vaultKind;
         state.coreDone = true;
         state.finalized = false;
     }
@@ -901,7 +904,8 @@ contract DeploymentBatcherPhase1Module {
             params.vaultSymbol,
             params.shareName,
             params.shareSymbol,
-            params.version
+            params.version,
+            params.vaultKind
         );
         codeIdsHash =
             utilsHelper.phase1CodeIdsHash(codeIds.vault, codeIds.wrapper, codeIds.shareOFT, codeIds.oftBootstrap);
@@ -1009,7 +1013,9 @@ contract DeploymentBatcherPhase2Module {
         string calldata shareSymbolLower
     ) external returns (DeploymentBatcher.Phase2Result memory out) {
         if (address(this) != batcher) revert NotBatcherContext();
-        return _deployPhase2CoreBody(params, codeIds, baseSalt, shareSymbolLower);
+        return _deployPhase2CoreBody(
+            params, codeIds, baseSalt, shareSymbolLower, DeploymentBatcher.VaultKind.Creator
+        );
     }
 
     function deployPhase2CoreOrchestrator(
@@ -1045,14 +1051,27 @@ contract DeploymentBatcherPhase2Module {
             revert InvalidCreatorTreasury(params.creatorTreasury);
         }
         if (params.payoutRecipient != address(0)) revert InvalidCreatorCoinPayoutRecipient();
-        return _deployPhase2CoreBody(params, codeIds, baseSalt, shareSymbolLower);
+        return _deployPhase2CoreBody(params, codeIds, baseSalt, shareSymbolLower, p1state.vaultKind);
+    }
+
+    function _wireGaugeAssetToken(
+        address gaugeController,
+        address assetToken,
+        DeploymentBatcher.VaultKind vaultKind
+    ) internal {
+        if (vaultKind == DeploymentBatcher.VaultKind.Agent) {
+            IAgentGaugeController(gaugeController).setAgentToken(assetToken);
+        } else {
+            ICreatorGaugeController(gaugeController).setCreatorCoin(assetToken);
+        }
     }
 
     function _deployPhase2CoreBody(
         DeploymentBatcher.Phase2CoreParams calldata params,
         DeploymentBatcher.CodeIds calldata codeIds,
         bytes32 baseSalt,
-        string calldata shareSymbolLower
+        string calldata shareSymbolLower,
+        DeploymentBatcher.VaultKind vaultKind
     ) internal returns (DeploymentBatcher.Phase2Result memory out) {
         address treasury = protocolTreasury;
         address tempOwner = address(this);
@@ -1074,7 +1093,7 @@ contract DeploymentBatcherPhase2Module {
 
         ICreatorGaugeController(out.gaugeController).setVault(params.vault);
         ICreatorGaugeController(out.gaugeController).setWrapper(params.wrapper);
-        ICreatorGaugeController(out.gaugeController).setCreatorCoin(params.creatorToken);
+        _wireGaugeAssetToken(out.gaugeController, params.creatorToken, vaultKind);
         if (lotteryManager != address(0)) {
             ICreatorGaugeController(out.gaugeController).setLotteryManager(lotteryManager);
         }
@@ -1167,26 +1186,26 @@ contract DeploymentBatcherPhase2Module {
         if (solanaEid == 0) revert SolanaShareBridgeNotConfigured();
 
         I4626Registry reg = I4626Registry(registry);
-        I4626Registry.CreatorCoinInfo memory info = reg.getCreatorCoin(params.creatorToken);
+        I4626Registry.TokenInfo memory info = reg.getTokenInfo(params.creatorToken);
         if (info.token == address(0)) {
             (string memory name, string memory symbol) = _readTokenMetadata(params.creatorToken);
-            reg.registerCreatorCoin(params.creatorToken, name, symbol, params.owner, address(0), 0);
-            info = reg.getCreatorCoin(params.creatorToken);
+            reg.registerToken(params.creatorToken, name, symbol, params.owner, address(0), 0);
+            info = reg.getTokenInfo(params.creatorToken);
         }
         if (info.vault == address(0)) {
             reg.setVault(params.creatorToken, params.vault);
         }
         if (info.wrapper == address(0)) {
-            reg.setCreatorWrapper(params.creatorToken, params.wrapper);
+            reg.setWrapperForToken(params.creatorToken, params.wrapper);
         }
         if (info.shareOFT == address(0)) {
-            reg.setCreatorShareOFT(params.creatorToken, params.shareOFT);
+            reg.setShareOFTForToken(params.creatorToken, params.shareOFT);
         }
         if (info.gaugeController == address(0)) {
-            reg.setCreatorGaugeController(params.creatorToken, params.gaugeController);
+            reg.setGaugeControllerForToken(params.creatorToken, params.gaugeController);
         }
         if (info.oracle == address(0)) {
-            reg.setCreatorOracle(params.creatorToken, params.oracle);
+            reg.setOracleForToken(params.creatorToken, params.oracle);
         }
 
         bytes32 peer = reg.getRemoteOFTPeerBytes32(params.creatorToken, solanaEid);
@@ -1479,6 +1498,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         bytes32 codeIdsHash;
         bool coreDone;
         bool finalized;
+        VaultKind vaultKind;
     }
 
     struct Phase2Result {
@@ -1507,7 +1527,7 @@ contract DeploymentBatcher is ReentrancyGuard {
 
     struct StrategyCodeIds {
         bytes32 charmAlphaVaultDeploy;
-        bytes32 creatorCharmStrategy;
+        bytes32 charmStrategy4626;
         bytes32 ajnaVaultAuth;
         bytes32 ajnaVault;
         bytes32 erc4626StrategyAdapter;

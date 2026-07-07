@@ -75,13 +75,13 @@ contract TestAAStrategyDeploy is Script, Test {
             console.log("   - V3 Pool:              ", result.v3Pool);
             console.log("   - Charm Vault:          ", result.charmVault);
             console.log("   - Charm Strategy:       ", result.charmStrategy);
-            console.log("   - Creator Charm V2:     ", result.creatorCharmStrategy);
+            console.log("   - Creator Charm V2:     ", result.charmStrategy4626);
             console.log("   - Ajna Strategy Adapter:", result.ajnaStrategy);
             console.log("");
 
             // Verify CharmStrategy4626 is correct type
             console.log("3. Verifying CharmStrategy4626...");
-            CharmStrategy4626 charmStrat = CharmStrategy4626(result.creatorCharmStrategy);
+            CharmStrategy4626 charmStrat = CharmStrategy4626(result.charmStrategy4626);
 
             console.log("   - isActive():", charmStrat.isActive());
             console.log("   - asset():", charmStrat.asset());

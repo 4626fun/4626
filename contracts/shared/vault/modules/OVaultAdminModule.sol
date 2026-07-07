@@ -89,7 +89,7 @@ contract OVaultAdminModule is OVaultModuleBase, IOVaultModuleIdentity {
     error InvalidRescueOwner(address newOwner);
     error MaxTotalSupplyBelowCurrent(uint256 provided, uint256 current);
     error TooManyBlocks(uint256 provided, uint256 max);
-    error CannotRescueCreatorCoin();
+    error CannotRescueVaultAsset();
     error ETHTransferFailed();
     error RiskConfigDelayOutOfBounds(uint64 provided, uint64 min, uint64 max);
     error PendingRiskConfigExists(uint8 kind);
@@ -117,7 +117,7 @@ contract OVaultAdminModule is OVaultModuleBase, IOVaultModuleIdentity {
 
     // slither-disable-next-line uninitialized-state
     function emergencyWithdrawFromStrategies() external onlyDelegateCall {
-        IERC20 coin = _creatorCoin();
+        IERC20 coin = _vaultAsset();
         uint256 length = strategyList.length;
         for (uint256 i = 0; i < length; i++) {
             address strategy = strategyList[i];
@@ -145,7 +145,7 @@ contract OVaultAdminModule is OVaultModuleBase, IOVaultModuleIdentity {
         if (!isShutdown) revert VaultNotShutdown();
         if (to == address(0)) revert ZeroAddress();
 
-        IERC20 coin = _creatorCoin();
+        IERC20 coin = _vaultAsset();
         if (amount > 0) {
             coin.safeTransfer(to, amount);
         }
@@ -509,7 +509,7 @@ contract OVaultAdminModule is OVaultModuleBase, IOVaultModuleIdentity {
     // =================================
 
     function syncBalances() external onlyDelegateCall {
-        IERC20 coin = _creatorCoin();
+        IERC20 coin = _vaultAsset();
         uint256 actual = coin.balanceOf(address(this));
         coinBalance = actual;
         emit BalancesSynced(actual);
@@ -523,7 +523,7 @@ contract OVaultAdminModule is OVaultModuleBase, IOVaultModuleIdentity {
     }
 
     function rescueToken(address token, uint256 amount, address to) external onlyDelegateCall {
-        if (token == address(_creatorCoin())) revert CannotRescueCreatorCoin();
+        if (token == address(_vaultAsset())) revert CannotRescueVaultAsset();
         if (to == address(0)) revert ZeroAddress();
         IERC20(token).safeTransfer(to, amount);
     }

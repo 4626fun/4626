@@ -2665,7 +2665,7 @@ function LegacyWithdrawals() {
         const tokens = (await publicClient.readContract({
           address: registryAddress as Address,
           abi: CREATOR_REGISTRY_ABI,
-          functionName: 'getAllCreatorCoins',
+          functionName: 'getAllTokens',
         })) as Address[]
 
         const vaultMap = new Map<string, { vault: Address; wrapper: Address; shareOft: Address }>()
@@ -2673,7 +2673,7 @@ function LegacyWithdrawals() {
           const calls = tokens.map((token) => ({
             address: registryAddress as Address,
             abi: CREATOR_REGISTRY_ABI,
-            functionName: 'getCreatorCoin',
+            functionName: 'getTokenInfo',
             args: [token],
           }))
 

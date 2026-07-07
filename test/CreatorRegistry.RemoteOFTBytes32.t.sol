@@ -30,11 +30,11 @@ contract Registry4626RemoteOFTBytes32Test is Test {
 
         registry = new Registry4626(owner);
         vm.prank(owner);
-        registry.registerCreatorCoin(token, "Creator", "CRT", creator, address(0), 0);
+        registry.registerToken(token, "Creator", "CRT", creator, address(0), 0);
         vm.startPrank(owner);
         registry.setVault(token, VAULT);
-        registry.setCreatorWrapper(token, WRAPPER);
-        registry.setCreatorShareOFT(token, SHARE_OFT);
+        registry.setWrapperForToken(token, WRAPPER);
+        registry.setShareOFTForToken(token, SHARE_OFT);
         vm.stopPrank();
     }
 

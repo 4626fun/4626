@@ -66,7 +66,7 @@ contract StrategyDeploymentBatcher is ReentrancyGuard, Ownable2Step {
     /// @notice Pinned Charm governance allowlist on Base. Strategy deploys fail closed outside this set.
     address public constant CHARM_FACTORY_GOVERNANCE = 0x424cdd9021AF88A86C76b245e24583f9a71e32a1;
     address public constant CHARM_FACTORY_GOVERNANCE_LEGACY = 0x94D85f9E8707fd8955D36173Ee48138E972609c6;
-    address public immutable creatorCharmStrategyFactory;
+    address public immutable charmStrategyFactory;
     address public immutable ajnaStrategyFactory;
     bytes4 private constant ADD_STRATEGY_SELECTOR = bytes4(keccak256("addStrategy(address,uint256)"));
     // Charm managerFee uses 1e6 precision (100% = 1_000_000).
@@ -82,7 +82,7 @@ contract StrategyDeploymentBatcher is ReentrancyGuard, Ownable2Step {
     error ZeroUnderlying();
     error ZeroQuote();
     error ZeroVault();
-    error ZeroCreatorCharmFactory();
+    error ZeroCharmFactory();
     error ZeroAjnaFactory();
     error CharmFactoryGovernanceMismatch(address expected, address actual);
     error CharmFactoryProtocolFeeMismatch(uint256 expected, uint256 actual);
@@ -93,17 +93,17 @@ contract StrategyDeploymentBatcher is ReentrancyGuard, Ownable2Step {
     // contract's init-code stays under the EIP-3860 49,152-byte limit. Deploy
     // `CharmStrategy4626Factory` and `AjnaERC4626StrategyFactory` separately (see
     // `script/DeployEverything.s.sol`) and pass their addresses in.
-    constructor(address _creatorCharmStrategyFactory, address _ajnaStrategyFactory) Ownable(msg.sender) {
-        if (_creatorCharmStrategyFactory == address(0)) revert ZeroCreatorCharmFactory();
+    constructor(address _charmStrategyFactory, address _ajnaStrategyFactory) Ownable(msg.sender) {
+        if (_charmStrategyFactory == address(0)) revert ZeroCharmFactory();
         if (_ajnaStrategyFactory == address(0)) revert ZeroAjnaFactory();
-        creatorCharmStrategyFactory = _creatorCharmStrategyFactory;
+        charmStrategyFactory = _charmStrategyFactory;
         ajnaStrategyFactory = _ajnaStrategyFactory;
     }
 
     struct DeploymentResult {
         address charmVault;
-        address charmStrategy;
-        address creatorCharmStrategy;
+        address charmStrategy; // Charm passive rebalancer strategy (unused placeholder)
+        address charmStrategy4626; // vault-integrated CharmStrategy4626
         address ajnaVaultAuth;
         address ajnaVault;
         address ajnaStrategy;
@@ -113,14 +113,14 @@ contract StrategyDeploymentBatcher is ReentrancyGuard, Ownable2Step {
     event StrategiesDeployed(address indexed creator, address indexed underlyingToken, DeploymentResult result);
 
     /**
-     * @notice Deploy all strategies for a creator vault (FULLY AUTOMATED)
-     * @param underlyingToken The creator token (e.g., CREATOR)
+     * @notice Deploy all strategies for a lane vault (FULLY AUTOMATED)
+     * @param underlyingToken The lane vault asset token
      * @param quoteToken The quote token for LP (e.g., USDC - 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913)
-     * @param creatorVault The vault that will use these strategies
+     * @param vault The vault that will use these strategies
      * @param _ajnaFactory The Ajna ERC20Pool factory address (if using Ajna)
      * @param v3FeeTier The Uniswap V3 fee tier (e.g., 3000 for 0.3%)
      * @param initialSqrtPriceX96 Initial price for V3 pool (e.g., for 99/1 CREATOR/USDC)
-     * @param owner The creator coin owner who will own all strategies (typically the creator)
+     * @param owner The vault owner who will own all strategies
      * @param vaultName Standard name for the Charm vault (e.g., "4626: akita/USDC")
      * @param vaultSymbol Standard symbol for the Charm vault (e.g., "CV-akita-USDC")
      * @return result All deployed contract addresses
@@ -134,7 +134,7 @@ contract StrategyDeploymentBatcher is ReentrancyGuard, Ownable2Step {
     function batchDeployStrategies(
         address underlyingToken,
         address quoteToken,
-        address creatorVault,
+        address vault,
         address _ajnaFactory,
         uint24 v3FeeTier,
         uint160 initialSqrtPriceX96,
@@ -148,7 +148,7 @@ contract StrategyDeploymentBatcher is ReentrancyGuard, Ownable2Step {
         if (bytes(vaultSymbol).length == 0) revert InvalidVaultSymbol();
         if (underlyingToken == address(0)) revert ZeroUnderlying();
         if (quoteToken == address(0)) revert ZeroQuote();
-        if (creatorVault == address(0)) revert ZeroVault();
+        if (vault == address(0)) revert ZeroVault();
 
         // ═══════════════════════════════════════════════════════════
         // STEP 1: Create or Get V3 Pool
@@ -198,11 +198,11 @@ contract StrategyDeploymentBatcher is ReentrancyGuard, Ownable2Step {
         result.charmStrategy = address(0);
 
         // ═══════════════════════════════════════════════════════════
-        // STEP 4: Deploy Creator Charm Strategy V2 (Vault Integration)
+        // STEP 4: Deploy Charm Strategy V2 (Vault Integration)
         // ═══════════════════════════════════════════════════════════
-        result.creatorCharmStrategy = ICharmStrategy4626Factory(creatorCharmStrategyFactory)
+        result.charmStrategy4626 = ICharmStrategy4626Factory(charmStrategyFactory)
             .deployAndInitialize(
-                creatorVault, underlyingToken, quoteToken, UNISWAP_ROUTER, result.charmVault, result.v3Pool, owner
+                vault, underlyingToken, quoteToken, UNISWAP_ROUTER, result.charmVault, result.v3Pool, owner
             );
 
         // ═══════════════════════════════════════════════════════════
@@ -214,7 +214,7 @@ contract StrategyDeploymentBatcher is ReentrancyGuard, Ownable2Step {
             (result.ajnaStrategy, result.ajnaVault, result.ajnaVaultAuth) = IAjnaERC4626StrategyFactory(
                 ajnaStrategyFactory
             ).deploy(
-                creatorVault,
+                vault,
                 underlyingToken,
                 _ajnaFactory,
                 quoteToken,
@@ -245,7 +245,7 @@ contract StrategyDeploymentBatcher is ReentrancyGuard, Ownable2Step {
         calls = new bytes[](numCalls);
 
         // Charm strategy
-        calls[0] = abi.encodeWithSelector(ADD_STRATEGY_SELECTOR, result.creatorCharmStrategy, charmWeightBps);
+        calls[0] = abi.encodeWithSelector(ADD_STRATEGY_SELECTOR, result.charmStrategy4626, charmWeightBps);
 
         // Ajna strategy (if exists)
         if (result.ajnaStrategy != address(0)) {

@@ -105,7 +105,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
         vm.prank(protocolTreasury);
         batcher.resetPhase1State(makeAddr("phase1CreatorTokenNonFinalized"), makeAddr("phase1OwnerNonFinalized"), "v1");
 
-        (address oftBootstrapRegistry, address clearedVault,,,,,,,) = batcher.phase1SplitStates(baseSalt);
+        (address oftBootstrapRegistry, address clearedVault,,,,,,,,) = batcher.phase1SplitStates(baseSalt);
         assertEq(oftBootstrapRegistry, address(0), "phase1 oft bootstrap not cleared");
         assertEq(clearedVault, address(0), "phase1 vault not cleared");
     }
@@ -124,7 +124,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
         vm.prank(protocolTreasury);
         batcher.resetPhase1State(makeAddr("phase1CreatorToken"), makeAddr("phase1Owner"), "v1");
 
-        (address oftBootstrapRegistry, address clearedVault,,,,,,,) = batcher.phase1SplitStates(baseSalt);
+        (address oftBootstrapRegistry, address clearedVault,,,,,,,,) = batcher.phase1SplitStates(baseSalt);
         assertEq(oftBootstrapRegistry, address(0), "phase1 oft bootstrap not cleared");
         assertEq(clearedVault, address(0), "phase1 vault not cleared");
     }
@@ -137,7 +137,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
         bytes32 baseSalt = _seedPhase1StateWithFinalized(false); // coreDone=true, finalized=false
 
         // confirm partial/stuck
-        (address preOft, address preVault,,,,,,,) = batcher.phase1SplitStates(baseSalt);
+        (address preOft, address preVault,,,,,,,,) = batcher.phase1SplitStates(baseSalt);
         assertNotEq(preVault, address(0), "expected partial state with vault");
 
         // reset (as treasury) to recover from stuck partial
@@ -145,7 +145,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
         batcher.resetPhase1State(makeAddr("phase1CreatorTokenNonFinalized"), makeAddr("phase1OwnerNonFinalized"), "v1");
 
         // state cleared -> retry path open (new phase1 deploy could re-use the (token,owner,version) context)
-        (address postOft, address postVault,,,,,,,) = batcher.phase1SplitStates(baseSalt);
+        (address postOft, address postVault,,,,,,,,) = batcher.phase1SplitStates(baseSalt);
         assertEq(postOft, address(0), "post-reset oft bootstrap should be cleared for retry");
         assertEq(postVault, address(0), "post-reset vault should be cleared for retry");
     }
@@ -269,7 +269,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
 
         DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({
             charmAlphaVaultDeploy: bytes32(uint256(1)),
-            creatorCharmStrategy: bytes32(uint256(2)),
+            charmStrategy4626: bytes32(uint256(2)),
             ajnaVaultAuth: bytes32(uint256(3)),
             ajnaVault: bytes32(uint256(4)),
             erc4626StrategyAdapter: bytes32(uint256(5)),
@@ -428,6 +428,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
         cfg.uniswapRouter = makeAddr("uniswapRouter");
         cfg.ajnaFactory = makeAddr("ajnaFactory");
         cfg.vaultCoreModule = makeAddr("vaultCoreModule");
+        cfg.agentVaultCoreModule = address(0);
         cfg.vaultStrategiesModule = makeAddr("vaultStrategiesModule");
         cfg.vaultAdminModule = makeAddr("vaultAdminModule");
     }

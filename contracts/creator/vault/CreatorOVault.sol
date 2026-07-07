@@ -616,7 +616,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     error NoStrategies();
     error MaxTotalSupplyBelowCurrent(uint256 provided, uint256 current);
     error TooManyBlocks(uint256 provided, uint256 max);
-    error CannotRescueCreatorCoin();
+    error CannotRescueVaultAsset();
     /// @notice Creator coin transfer did not move the expected amount (fee-on-transfer / rebasing / deflationary not supported).
     error TransferAmountMismatch(uint256 expected, uint256 actual);
     error ETHTransferFailed();

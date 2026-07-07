@@ -22,7 +22,7 @@ const client = createPublicClient({ chain: base, transport: http(rpc) })
 const composerAbi = [
   {
     type: 'function',
-    name: 'creatorMesh',
+    name: 'tokenMesh',
     stateMutability: 'view',
     inputs: [{ name: 'creatorToken', type: 'address' }],
     outputs: [
@@ -138,7 +138,7 @@ async function main() {
     client.readContract({
       address: HUB_COMPOSER,
       abi: composerAbi,
-      functionName: 'creatorMesh',
+      functionName: 'tokenMesh',
       args: [AKITA_DEFAULTS.token],
     }),
     client.readContract({
@@ -156,13 +156,13 @@ async function main() {
 
   console.log('=== OVaultHubComposer ===')
   console.log('deployed:', composerCode && composerCode !== '0x' ? 'yes' : 'no')
-  console.log('creatorMesh.vault:', mesh[0])
-  console.log('creatorMesh.assetMeshToken:', mesh[1])
-  console.log('creatorMesh.shareMeshToken:', mesh[2])
-  console.log('creatorMesh.solanaEid:', mesh[3])
-  console.log('creatorMesh.solanaAssetPeer:', mesh[4])
-  console.log('creatorMesh.solanaSharePeer:', mesh[5])
-  console.log('creatorMesh.paused:', mesh[6])
+  console.log('tokenMesh.vault:', mesh[0])
+  console.log('tokenMesh.assetMeshToken:', mesh[1])
+  console.log('tokenMesh.shareMeshToken:', mesh[2])
+  console.log('tokenMesh.solanaEid:', mesh[3])
+  console.log('tokenMesh.solanaAssetPeer:', mesh[4])
+  console.log('tokenMesh.solanaSharePeer:', mesh[5])
+  console.log('tokenMesh.paused:', mesh[6])
   console.log(
     'mesh configured:',
     !isZero(mesh[0]) && !isZero(mesh[2]) && mesh[3] > 0 ? 'yes' : 'NO',

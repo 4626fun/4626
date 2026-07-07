@@ -257,6 +257,7 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
             uniswapRouter: address(0x1009),
             ajnaFactory: address(0x1010),
             vaultCoreModule: address(0x2001),
+            agentVaultCoreModule: address(0),
             vaultStrategiesModule: address(0x2002),
             vaultAdminModule: address(0x2003)
         });
@@ -332,7 +333,8 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
             bytes32 paramsHash,
             bytes32 codeIdsHash,
             bool coreDone,
-            bool finalized
+            bool finalized,
+            DeploymentBatcher.VaultKind vaultKind
         ) = deployer.phase1SplitStates(baseSalt);
         vaultAddr;
         shareAddr;
@@ -340,6 +342,7 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
         codeIdsHash;
         coreDone;
         finalized;
+        vaultKind;
 
         bytes memory shareOftArgs = abi.encode(params.shareName, "STOK", oftBootstrapRegistry, address(deployer));
         bytes32 shareOftInitCodeHash = keccak256(bytes.concat(_shareOftCreationCode(), shareOftArgs));
@@ -379,6 +382,7 @@ contract DeploymentBatcherOVaultRuntimeConfigTest is Test {
             uniswapRouter: address(0x1012),
             ajnaFactory: address(0x1013),
             vaultCoreModule: address(0x1014),
+            agentVaultCoreModule: address(0),
             vaultStrategiesModule: address(0x1015),
             vaultAdminModule: address(0x1016)
         });

@@ -34,7 +34,7 @@ interface I4626RegistryCoverage {
     function getShareOFTForToken(address token) external view returns (address);
     function getTokenForShareOFT(address shareOFT) external view returns (address);
     function getOracleForToken(address token) external view returns (address);
-    function isCreatorCoinActive(address token) external view returns (bool);
+    function isTokenActive(address token) external view returns (bool);
 }
 
 contract ve4626BoostManager is Ownable, ReentrancyGuard {

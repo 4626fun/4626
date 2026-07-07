@@ -43,7 +43,7 @@ contract RouteCoherenceChecker {
     ) external view returns (RouteCoherenceStatus memory status) {
         if (creatorToken == address(0)) revert ZeroAddress();
 
-        I4626Registry.CreatorCoinInfo memory info = registry.getCreatorCoin(creatorToken);
+        I4626Registry.TokenInfo memory info = registry.getTokenInfo(creatorToken);
         status.active = info.isActive;
         status.registryVault = info.vault;
         status.registryShareOFT = info.shareOFT;

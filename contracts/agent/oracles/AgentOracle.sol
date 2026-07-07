@@ -14,6 +14,8 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {IUniswapV3Pool} from "@4626/shared/interfaces/uniswap/IUniswapV3Pool.sol";
 import {TickMathCompat} from "@4626/shared/libraries/uniswap/TickMathCompat.sol";
 
+import {IOracle4626} from "@4626/shared/interfaces/oracles/IOracle4626.sol";
+
 /**
  * @title AgentOracle
  * @author 0xakita.eth (4626)
@@ -35,7 +37,7 @@ import {TickMathCompat} from "@4626/shared/libraries/uniswap/TickMathCompat.sol"
  *      - Vault: Price impact calculations
  *      - Cross-chain: Consistent pricing everywhere
  */
-contract AgentOracle is OApp {
+contract AgentOracle is OApp, IOracle4626 {
     using PoolIdLibrary for PoolKey;
     using StateLibrary for IPoolManager;
 

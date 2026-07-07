@@ -50,6 +50,7 @@ const {
         codeIdsHash: `0x${'0'.repeat(64)}`,
         coreDone: false,
         finalized: false,
+        vaultKind: 0,
       }
     }
     if (fn === 'pendingAuctions') {

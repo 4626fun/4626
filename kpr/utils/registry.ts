@@ -33,7 +33,7 @@ const DEFAULT_4626_REGISTRY = '0x888506B92181c57A2fD06516FFFb6F375b7A4626' as co
 const REGISTRY_4626_ABI = [
   {
     type: 'function',
-    name: 'isCreatorCoinActive',
+    name: 'isTokenActive',
     stateMutability: 'view',
     inputs: [{ name: '_token', type: 'address' }],
     outputs: [{ type: 'bool' }],
@@ -141,7 +141,7 @@ export async function verifyVaultRegistryBinding(vault: VaultConfig): Promise<Re
     readContract<boolean>({
       address: registryAddress,
       abi: REGISTRY_4626_ABI,
-      functionName: 'isCreatorCoinActive',
+      functionName: 'isTokenActive',
       args: [creatorCoin],
     }),
     readContract<Address>({

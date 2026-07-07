@@ -79,7 +79,7 @@ const BATCHER_ABI = [
         type: 'tuple',
         components: [
           { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
-          { name: 'creatorCharmStrategy', type: 'bytes32' },
+          { name: 'charmStrategy4626', type: 'bytes32' },
           { name: 'ajnaVaultAuth', type: 'bytes32' },
           { name: 'ajnaVault', type: 'bytes32' },
           { name: 'erc4626StrategyAdapter', type: 'bytes32' },
@@ -189,7 +189,7 @@ function deployPhase3Data(): `0x${string}` {
       },
       {
         charmAlphaVaultDeploy: `0x${'11'.repeat(32)}`,
-        creatorCharmStrategy: `0x${'22'.repeat(32)}`,
+        charmStrategy4626: `0x${'22'.repeat(32)}`,
         ajnaVaultAuth: `0x${'33'.repeat(32)}`,
         ajnaVault: `0x${'44'.repeat(32)}`,
         erc4626StrategyAdapter: `0x${'55'.repeat(32)}`,

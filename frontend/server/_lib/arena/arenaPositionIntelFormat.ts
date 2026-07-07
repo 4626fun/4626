@@ -29,7 +29,7 @@ export type ArenaPositionIntelDetails = {
   partialFailures?: unknown
 }
 
-export type ArenaPositionsView = 'positions' | 'risk' | 'activity' | 'account'
+export type ArenaPositionsView = 'positions' | 'risk' | 'activity' | 'account' | 'pnl'
 
 function asFiniteNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
@@ -148,21 +148,31 @@ function formatProgressMenu(currentView: ArenaPositionsView): string {
       { key: '2', label: 'risk' },
       { key: '3', label: 'activity' },
       { key: '4', label: 'account' },
+      { key: '5', label: 'pnl' },
     ],
     risk: [
       { key: '1', label: 'book' },
       { key: '3', label: 'activity' },
       { key: '4', label: 'account' },
+      { key: '5', label: 'pnl' },
     ],
     activity: [
       { key: '1', label: 'book' },
       { key: '2', label: 'risk' },
       { key: '4', label: 'account' },
+      { key: '5', label: 'pnl' },
     ],
     account: [
       { key: '1', label: 'book' },
       { key: '2', label: 'risk' },
       { key: '3', label: 'activity' },
+      { key: '5', label: 'pnl' },
+    ],
+    pnl: [
+      { key: '1', label: 'book' },
+      { key: '2', label: 'risk' },
+      { key: '3', label: 'activity' },
+      { key: '4', label: 'account' },
     ],
   }
   const options = optionsByView[currentView]
@@ -440,6 +450,13 @@ export function parseArenaPositionsView(token: string | undefined): ArenaPositio
     case 'balance':
     case 'wallet':
       return 'account'
+    case '5':
+    case 'pnl':
+    case 'score':
+    case 'scorecard':
+    case 'stats':
+    case 'record':
+      return 'pnl'
     default:
       return 'positions'
   }
@@ -635,6 +652,162 @@ function formatAccountView(details: ArenaPositionIntelDetails): string {
     .join('\n')
 }
 
+export type ArenaRealizedScorecard = {
+  /** Distinct closing orders (fills grouped by tx hash with a closing dir). */
+  closeEvents: number
+  wins: number
+  losses: number
+  /** Sum of closedPnl across all fills (before fees). */
+  realizedPnlUsd: number
+  /** Sum of fees across all fills. */
+  feesUsd: number
+  avgWinUsd: number | null
+  avgLossUsd: number | null
+  /** Sum of |px * sz| across all fills. */
+  volumeUsd: number
+  fillCount: number
+  firstFillAtMs: number | null
+  lastFillAtMs: number | null
+}
+
+function isClosingFillDir(dir: string): boolean {
+  const normalized = dir.toLowerCase()
+  return (
+    normalized.includes('close') ||
+    normalized.includes('liquidat') ||
+    normalized.includes('>')
+  )
+}
+
+/**
+ * Aggregate a Hyperliquid `userFills` payload into a realized-PnL scorecard.
+ * A "trade" is a closing order: fills sharing one tx hash where the fill
+ * direction closes or flips a position (partial fills of one close order
+ * count once). Exported for tests.
+ */
+export function computeArenaRealizedScorecard(userFills: unknown): ArenaRealizedScorecard | null {
+  const rawFills = asArray(userFills)
+  if (rawFills.length === 0) return null
+
+  let realizedPnlUsd = 0
+  let feesUsd = 0
+  let volumeUsd = 0
+  let fillCount = 0
+  let firstFillAtMs: number | null = null
+  let lastFillAtMs: number | null = null
+  const closePnlByHash = new Map<string, number>()
+
+  for (const entry of rawFills) {
+    const row = asObject(entry)
+    if (!row) continue
+    fillCount += 1
+    const closedPnl = asFiniteNumber(row.closedPnl ?? row.pnl) ?? 0
+    const fee = asFiniteNumber(row.fee) ?? 0
+    const px = asFiniteNumber(row.px ?? row.price)
+    const sz = asFiniteNumber(row.sz ?? row.size)
+    realizedPnlUsd += closedPnl
+    feesUsd += fee
+    if (px != null && sz != null) volumeUsd += Math.abs(px * sz)
+
+    const time = asFiniteNumber(row.time ?? row.timestamp)
+    if (time != null && time > 0) {
+      if (firstFillAtMs == null || time < firstFillAtMs) firstFillAtMs = time
+      if (lastFillAtMs == null || time > lastFillAtMs) lastFillAtMs = time
+    }
+
+    const dir = String(row.dir ?? row.side ?? '')
+    if (isClosingFillDir(dir)) {
+      const hash = String(row.hash ?? row.tid ?? `${dir}:${String(time ?? fillCount)}`)
+      closePnlByHash.set(hash, (closePnlByHash.get(hash) ?? 0) + closedPnl)
+    }
+  }
+
+  let wins = 0
+  let losses = 0
+  let winTotal = 0
+  let lossTotal = 0
+  for (const pnl of closePnlByHash.values()) {
+    if (pnl > 0) {
+      wins += 1
+      winTotal += pnl
+    } else {
+      losses += 1
+      lossTotal += pnl
+    }
+  }
+
+  return {
+    closeEvents: closePnlByHash.size,
+    wins,
+    losses,
+    realizedPnlUsd,
+    feesUsd,
+    avgWinUsd: wins > 0 ? winTotal / wins : null,
+    avgLossUsd: losses > 0 ? lossTotal / losses : null,
+    volumeUsd,
+    fillCount,
+    firstFillAtMs,
+    lastFillAtMs,
+  }
+}
+
+function formatSinceDate(ms: number | null): string | null {
+  if (ms == null || ms <= 0) return null
+  return new Date(ms).toISOString().slice(0, 10)
+}
+
+function formatSignedUsdFixed(value: number | null): string {
+  if (value == null) return 'n/a'
+  const sign = value > 0 ? '+' : value < 0 ? '-' : ''
+  return `${sign}$${Math.abs(value).toFixed(2)}`
+}
+
+function formatUnsignedUsdCompact(value: number | null): string {
+  return formatUsdCompact(value).replace(/^\+/, '')
+}
+
+function formatPnlView(details: ArenaPositionIntelDetails): string {
+  const wallet = walletLabel(details.walletAddress ?? null)
+  const scorecard = computeArenaRealizedScorecard(details.userFills)
+  const account = readAccountSummary(details)
+  const legs = normalizeArenaPositionLegs(details)
+  const header = formatSubviewHeader(details, '◎', 'PnL', wallet)
+
+  if (!scorecard) {
+    return [header, sectionRule(32), formatTreeBlock(null, ['No fills recorded yet'])].join('\n')
+  }
+
+  const netRealized = scorecard.realizedPnlUsd - scorecard.feesUsd
+  const winRatePct =
+    scorecard.closeEvents > 0 ? (scorecard.wins / scorecard.closeEvents) * 100 : null
+
+  const lines: string[] = [
+    `Realized: ${formatSignedUsdFixed(netRealized)} net (gross ${formatSignedUsdFixed(scorecard.realizedPnlUsd)} · fees $${scorecard.feesUsd.toFixed(2)})`,
+    winRatePct == null
+      ? `Closes: none yet · ${scorecard.fillCount} fills`
+      : `Win rate: ${winRatePct.toFixed(0)}% (${scorecard.wins}W / ${scorecard.losses}L over ${scorecard.closeEvents} closes)`,
+  ]
+  if (scorecard.avgWinUsd != null || scorecard.avgLossUsd != null) {
+    lines.push(
+      `Avg: win ${formatSignedUsdFixed(scorecard.avgWinUsd)} · loss ${formatSignedUsdFixed(scorecard.avgLossUsd)}`,
+    )
+  }
+  const since = formatSinceDate(scorecard.firstFillAtMs)
+  lines.push(
+    `Volume: ${formatUnsignedUsdCompact(scorecard.volumeUsd)} across ${scorecard.fillCount} fills${since ? ` since ${since}` : ''}`,
+  )
+  const openPnl = legs.reduce((sum, leg) => sum + (leg.unrealizedPnl ?? 0), 0)
+  lines.push(
+    `Account: ${formatUnsignedUsdCompact(account.accountValueUsd)}${legs.length > 0 ? ` · uPnL ${formatSignedUsdFixed(openPnl)} (${legs.length} open)` : ' · flat'}`,
+  )
+  const fullWallet = String(details.walletAddress ?? '').trim().toLowerCase()
+  if (/^0x[a-f0-9]{40}$/.test(fullWallet)) {
+    lines.push(`Explorer: https://hypurrscan.io/address/${fullWallet}`)
+  }
+
+  return [header, sectionRule(32), formatTreeBlock(null, lines)].join('\n')
+}
+
 export function formatArenaPositionIntelReply(
   detailToken: string | undefined,
   details: ArenaPositionIntelDetails,
@@ -653,7 +826,9 @@ export function formatArenaPositionIntelReply(
         ? formatActivityView(details)
         : view === 'account'
           ? formatAccountView(details)
-          : formatPositionsView(details)
+          : view === 'pnl'
+            ? formatPnlView(details)
+            : formatPositionsView(details)
 
   const footer = formatProgressMenu(view)
   if (warning) return `${warning}\n${body}\n${footer}`

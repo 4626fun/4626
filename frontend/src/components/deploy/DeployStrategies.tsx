@@ -36,7 +36,7 @@ const STRATEGY_BATCHER_ABI = [
         components: [
           { name: 'charmVault', type: 'address' },
           { name: 'charmStrategy', type: 'address' },
-          { name: 'creatorCharmStrategy', type: 'address' },
+          { name: 'charmStrategy4626', type: 'address' },
           { name: 'ajnaStrategy', type: 'address' },
           { name: 'v3Pool', type: 'address' },
         ],
@@ -94,7 +94,7 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
   const [predicted, setPredicted] = useState<{
     nonce: bigint
     charmVault: Address
-    creatorCharmStrategy: Address
+    charmStrategy4626: Address
     ajnaStrategy: Address
   } | null>(null)
 
@@ -112,9 +112,9 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
     // viem returns nonce as a JS number; convert so we can do safe +1n/+2n math and satisfy viem typings.
     const nonce = BigInt(await publicClient.getTransactionCount({ address: baseBatcher }))
     const charmVault = getContractAddress({ from: baseBatcher, nonce })
-    const creatorCharmStrategy = getContractAddress({ from: baseBatcher, nonce: nonce + 1n })
+    const charmStrategy4626 = getContractAddress({ from: baseBatcher, nonce: nonce + 1n })
     const ajnaStrategy = getContractAddress({ from: baseBatcher, nonce: nonce + 2n })
-    return { nonce, charmVault, creatorCharmStrategy, ajnaStrategy }
+    return { nonce, charmVault, charmStrategy4626, ajnaStrategy }
   }
 
   async function deployAndConfigure() {
@@ -175,7 +175,7 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
           data: encodeFunctionData({
             abi: VAULT_MGMT_ABI,
             functionName: 'addStrategy',
-            args: [next.creatorCharmStrategy, BigInt(charmW)],
+            args: [next.charmStrategy4626, BigInt(charmW)],
           }),
           value: 0n,
         })
@@ -353,7 +353,7 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
             </div>
             <div>
               <div className="text-zinc-500 mb-1">Charm strategy</div>
-              <div className="text-zinc-300 break-all">{predicted.creatorCharmStrategy}</div>
+              <div className="text-zinc-300 break-all">{predicted.charmStrategy4626}</div>
             </div>
             <div>
               <div className="text-zinc-500 mb-1">Ajna strategy</div>

@@ -19,15 +19,15 @@ contract MockOwnableTransfer {
 
 contract MockCharmStrategy is MockOwnableTransfer {
     bool public approvalsInitialized;
-    address public creatorOracle;
+    address public assetOracle;
     address public ajnaPool;
 
     function initializeApprovals() external {
         approvalsInitialized = true;
     }
 
-    function setCreatorOracle(address _creatorOracle) external {
-        creatorOracle = _creatorOracle;
+    function setAssetOracle(address _assetOracle) external {
+        assetOracle = _assetOracle;
     }
 
     function setAjnaPool(address _ajnaPool) external {
@@ -253,12 +253,13 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
             uniswapRouter: makeAddr("uniswapRouter"),
             ajnaFactory: address(new MockAjnaPoolFactory(makeAddr("ajnaPool"))),
             vaultCoreModule: makeAddr("vaultCoreModule"),
+            agentVaultCoreModule: address(0),
             vaultStrategiesModule: makeAddr("vaultStrategiesModule"),
             vaultAdminModule: makeAddr("vaultAdminModule")
         });
         (batcher,) = deployerLib.deployBatcher(cfg);
         vault.setManagement(address(batcher));
-        deployerLib.mockRegistryCreatorCoin(cfg.registry, makeAddr("creatorToken"), makeAddr("creatorOracle"));
+        deployerLib.mockRegistryCreatorCoin(cfg.registry, makeAddr("creatorToken"), makeAddr("assetOracle"));
 
         vm.mockCall(
             batcher.CHARM_FACTORY(),
@@ -302,7 +303,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         });
         DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({
             charmAlphaVaultDeploy: CHARM_ALPHA_VAULT_DEPLOY_CODE_ID,
-            creatorCharmStrategy: CREATOR_CHARM_STRATEGY_CODE_ID,
+            charmStrategy4626: CREATOR_CHARM_STRATEGY_CODE_ID,
             ajnaVaultAuth: AJNA_AUTH_CODE_ID,
             ajnaVault: AJNA_VAULT_CODE_ID,
             erc4626StrategyAdapter: AJNA_ADAPTER_CODE_ID,
@@ -352,7 +353,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         });
         DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({
             charmAlphaVaultDeploy: CHARM_ALPHA_VAULT_DEPLOY_CODE_ID,
-            creatorCharmStrategy: CREATOR_CHARM_STRATEGY_CODE_ID,
+            charmStrategy4626: CREATOR_CHARM_STRATEGY_CODE_ID,
             ajnaVaultAuth: AJNA_AUTH_CODE_ID,
             ajnaVault: AJNA_VAULT_CODE_ID,
             erc4626StrategyAdapter: AJNA_ADAPTER_CODE_ID,
@@ -410,7 +411,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         });
         DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({
             charmAlphaVaultDeploy: CHARM_ALPHA_VAULT_DEPLOY_CODE_ID,
-            creatorCharmStrategy: CREATOR_CHARM_STRATEGY_CODE_ID,
+            charmStrategy4626: CREATOR_CHARM_STRATEGY_CODE_ID,
             ajnaVaultAuth: AJNA_AUTH_CODE_ID,
             ajnaVault: AJNA_VAULT_CODE_ID,
             erc4626StrategyAdapter: AJNA_ADAPTER_CODE_ID,
@@ -460,7 +461,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         });
         DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({
             charmAlphaVaultDeploy: CHARM_ALPHA_VAULT_DEPLOY_CODE_ID,
-            creatorCharmStrategy: CREATOR_CHARM_STRATEGY_CODE_ID,
+            charmStrategy4626: CREATOR_CHARM_STRATEGY_CODE_ID,
             ajnaVaultAuth: AJNA_AUTH_CODE_ID,
             ajnaVault: AJNA_VAULT_CODE_ID,
             erc4626StrategyAdapter: AJNA_ADAPTER_CODE_ID,
@@ -499,7 +500,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         });
         DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({
             charmAlphaVaultDeploy: CHARM_ALPHA_VAULT_DEPLOY_CODE_ID,
-            creatorCharmStrategy: CREATOR_CHARM_STRATEGY_CODE_ID,
+            charmStrategy4626: CREATOR_CHARM_STRATEGY_CODE_ID,
             ajnaVaultAuth: AJNA_AUTH_CODE_ID,
             ajnaVault: AJNA_VAULT_CODE_ID,
             erc4626StrategyAdapter: AJNA_ADAPTER_CODE_ID,
@@ -540,7 +541,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         });
         DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({
             charmAlphaVaultDeploy: CHARM_ALPHA_VAULT_DEPLOY_CODE_ID,
-            creatorCharmStrategy: CREATOR_CHARM_STRATEGY_CODE_ID,
+            charmStrategy4626: CREATOR_CHARM_STRATEGY_CODE_ID,
             ajnaVaultAuth: AJNA_AUTH_CODE_ID,
             ajnaVault: AJNA_VAULT_CODE_ID,
             erc4626StrategyAdapter: AJNA_ADAPTER_CODE_ID,

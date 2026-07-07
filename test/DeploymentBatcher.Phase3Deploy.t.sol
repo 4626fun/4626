@@ -42,7 +42,7 @@ contract DeploymentBatcherPhase3DeployTest is Test {
     address internal solanaKeeper;
     address internal solanaBridge;
     address internal ajnaKeeper;
-    address internal creatorOracle;
+    address internal assetOracle;
 
     function setUp() public {
         vm.chainId(8453);
@@ -53,7 +53,7 @@ contract DeploymentBatcherPhase3DeployTest is Test {
         solanaKeeper = makeAddr("solanaKeeper");
         solanaBridge = makeAddr("solanaBridge");
         ajnaKeeper = makeAddr("ajnaKeeper");
-        creatorOracle = makeAddr("creatorOracle");
+        assetOracle = makeAddr("assetOracle");
 
         create2Deployer = new MockCreate2DeployerForPhase3();
         uniswapFactory = new MockUniswapV3FactoryForPhase3();
@@ -91,6 +91,7 @@ contract DeploymentBatcherPhase3DeployTest is Test {
             uniswapRouter: makeAddr("uniswapRouter"),
             ajnaFactory: address(ajnaFactory),
             vaultCoreModule: makeAddr("vaultCoreModule"),
+            agentVaultCoreModule: address(0),
             vaultStrategiesModule: makeAddr("vaultStrategiesModule"),
             vaultAdminModule: makeAddr("vaultAdminModule")
         });
@@ -108,15 +109,15 @@ contract DeploymentBatcherPhase3DeployTest is Test {
             abi.encodeWithSelector(CREATE_VAULT_SELECTOR),
             abi.encode(address(new MockCharmVaultForPhase3(protocolAutomation)))
         );
-        _mockCreatorOracle(creatorOracle);
+        _mockCreatorOracle(assetOracle);
     }
 
     function _mockCreatorOracle(address oracle) internal {
-        I4626Registry.CreatorCoinInfo memory info;
+        I4626Registry.TokenInfo memory info;
         info.oracle = oracle;
         vm.mockCall(
             address(batcher.registry()),
-            abi.encodeWithSelector(I4626Registry.getCreatorCoin.selector, creatorToken),
+            abi.encodeWithSelector(I4626Registry.getTokenInfo.selector, creatorToken),
             abi.encode(info)
         );
     }
@@ -151,7 +152,7 @@ contract DeploymentBatcherPhase3DeployTest is Test {
     function _strategyCodeIds() internal pure returns (DeploymentBatcher.StrategyCodeIds memory codeIds) {
         codeIds = DeploymentBatcher.StrategyCodeIds({
             charmAlphaVaultDeploy: CHARM_ALPHA_CODE_ID,
-            creatorCharmStrategy: CREATOR_CHARM_STRATEGY_CODE_ID,
+            charmStrategy4626: CREATOR_CHARM_STRATEGY_CODE_ID,
             ajnaVaultAuth: AJNA_AUTH_CODE_ID,
             ajnaVault: AJNA_VAULT_CODE_ID,
             erc4626StrategyAdapter: AJNA_ADAPTER_CODE_ID,
@@ -179,7 +180,7 @@ contract DeploymentBatcherPhase3DeployTest is Test {
         assertEq(charmStrategy.lastOwner(), protocolTreasury, "charm strategy ownership not transferred");
         assertTrue(charmStrategy.ajnaBorrowEnabled(), "charm ajna borrow backstop should be enabled");
         assertEq(charmStrategy.ajnaPool(), makeAddr("ajnaPool"), "charm ajna pool mismatch");
-        assertEq(charmStrategy.creatorOracle(), creatorOracle, "charm creator oracle mismatch");
+        assertEq(charmStrategy.assetOracle(), assetOracle, "charm creator oracle mismatch");
         assertEq(charmStrategy.ajnaMinCollateralRatioBps(), 12_500, "charm min collateral ratio mismatch");
         assertEq(ajnaStrategy.lastOwner(), protocolTreasury, "ajna adapter ownership not transferred");
         assertEq(ajnaStrategy.idleBufferBps(), 0, "adapter idle buffer should be disabled");
@@ -329,7 +330,7 @@ contract DeploymentBatcherPhase3DeployTest is Test {
 
         DeploymentBatcher.StrategyCodeIds memory codeIds = DeploymentBatcher.StrategyCodeIds({
             charmAlphaVaultDeploy: bytes32(0),
-            creatorCharmStrategy: bytes32(0),
+            charmStrategy4626: bytes32(0),
             ajnaVaultAuth: bytes32(0),
             ajnaVault: bytes32(0),
             erc4626StrategyAdapter: bytes32(0),

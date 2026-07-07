@@ -699,7 +699,7 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
         type: 'tuple',
         components: [
           { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
-          { name: 'creatorCharmStrategy', type: 'bytes32' },
+          { name: 'charmStrategy4626', type: 'bytes32' },
           { name: 'ajnaVaultAuth', type: 'bytes32' },
           { name: 'ajnaVault', type: 'bytes32' },
           { name: 'erc4626StrategyAdapter', type: 'bytes32' },
@@ -2377,7 +2377,7 @@ async function validateInnerCalls(params: {
 
           const expectedPhase3CodeIds = {
             charmAlphaVaultDeploy: CHARM_ALPHA_VAULT_DEPLOY_SENTINEL_CODE_ID,
-            creatorCharmStrategy: CREATOR_CHARM_STRATEGY_CODE_ID,
+            charmStrategy4626: CREATOR_CHARM_STRATEGY_CODE_ID,
             ajnaVaultAuth: AJNA_VAULT_AUTH_CODE_ID,
             ajnaVault: AJNA_ERC4626_VAULT_CODE_ID,
             erc4626StrategyAdapter: ERC4626_STRATEGY_ADAPTER_CODE_ID,
@@ -2402,8 +2402,8 @@ async function validateInnerCalls(params: {
               charmWeightBpsBig !== 0n,
             ) &&
             codeIdMatches(
-              codeIds.creatorCharmStrategy,
-              expectedPhase3CodeIds.creatorCharmStrategy,
+              codeIds.charmStrategy4626,
+              expectedPhase3CodeIds.charmStrategy4626,
               charmWeightBpsBig !== 0n,
             ) &&
             codeIdMatches(

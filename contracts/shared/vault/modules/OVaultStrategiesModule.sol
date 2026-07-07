@@ -107,7 +107,7 @@ contract OVaultStrategiesModule is OVaultModuleBase, IOVaultModuleIdentity {
 
         if (!IStrategy(strategy).isActive()) revert StrategyNotActive();
         address strategyAsset = IStrategy(strategy).asset();
-        address expected = address(_creatorCoin());
+        address expected = address(_vaultAsset());
         if (strategyAsset != expected) revert StrategyAssetMismatch(expected, strategyAsset);
 
         activeStrategies[strategy] = true;
@@ -187,7 +187,7 @@ contract OVaultStrategiesModule is OVaultModuleBase, IOVaultModuleIdentity {
 
         uint256 currentDebt = strategyDebt[strategy];
         if (currentDebt > 0) {
-            IERC20 coin = _creatorCoin();
+            IERC20 coin = _vaultAsset();
             uint256 beforeBal = coin.balanceOf(address(this));
             try IStrategy(strategy).withdraw(currentDebt) returns (uint256) {} catch {
                 try IStrategy(strategy).emergencyWithdraw() returns (uint256) {} catch {}
@@ -250,7 +250,7 @@ contract OVaultStrategiesModule is OVaultModuleBase, IOVaultModuleIdentity {
     // =================================
 
     function _syncCoinBalance() internal returns (uint256 actual) {
-        IERC20 coin = _creatorCoin();
+        IERC20 coin = _vaultAsset();
         actual = coin.balanceOf(address(this));
         coinBalance = actual;
     }
@@ -259,7 +259,7 @@ contract OVaultStrategiesModule is OVaultModuleBase, IOVaultModuleIdentity {
     ///      not strategy-reported values, so fee-on-transfer and partial-spend
     ///      strategy internals do not brick keeper deploys.
     function _depositIntoStrategyMeasured(address strategy, uint256 amount) internal returns (uint256 deposited) {
-        IERC20 coin = _creatorCoin();
+        IERC20 coin = _vaultAsset();
         uint256 beforeBal = coin.balanceOf(address(this));
         coin.forceApprove(strategy, amount);
         IStrategy(strategy).deposit(amount);
@@ -274,7 +274,7 @@ contract OVaultStrategiesModule is OVaultModuleBase, IOVaultModuleIdentity {
     }
 
     function _withdrawFromStrategyMeasured(address strategy, uint256 amount) internal returns (uint256 withdrawn) {
-        IERC20 coin = _creatorCoin();
+        IERC20 coin = _vaultAsset();
         uint256 beforeBal = coin.balanceOf(address(this));
         withdrawn = IStrategy(strategy).withdraw(amount);
         uint256 afterBal = coin.balanceOf(address(this));
@@ -301,7 +301,7 @@ contract OVaultStrategiesModule is OVaultModuleBase, IOVaultModuleIdentity {
     ///      withdraw, defeating the entire M-09 best-effort fix. Both the revert
     ///      path and the success-with-lying-report path now guard this.
     function _tryWithdrawFromStrategyMeasured(address strategy, uint256 amount) internal returns (uint256 withdrawn) {
-        IERC20 coin = _creatorCoin();
+        IERC20 coin = _vaultAsset();
         uint256 beforeBal = coin.balanceOf(address(this));
 
         uint256 reported;
@@ -399,9 +399,9 @@ contract OVaultStrategiesModule is OVaultModuleBase, IOVaultModuleIdentity {
             // FIX: M-09 — user-facing withdrawal path is best-effort per strategy.
             // A reverting/illiquid strategy is skipped (via `_tryWithdrawFromStrategyMeasured`)
             // instead of bubbling up and freezing the entire withdrawal queue.
-            uint256 balanceBefore = _creatorCoin().balanceOf(address(this));
+            uint256 balanceBefore = _vaultAsset().balanceOf(address(this));
             uint256 withdrawn = _tryWithdrawFromStrategyMeasured(strategy, toWithdraw);
-            uint256 balanceAfter = _creatorCoin().balanceOf(address(this));
+            uint256 balanceAfter = _vaultAsset().balanceOf(address(this));
 
             if (withdrawn == 0) {
                 // If a hostile strategy drained idle funds while reporting failure, the
@@ -703,7 +703,7 @@ contract OVaultStrategiesModule is OVaultModuleBase, IOVaultModuleIdentity {
         uint256 _amount = amount > currentDebt ? currentDebt : amount;
 
         // Buyer sends Creator Coin to vault
-        IERC20 coin = _creatorCoin();
+        IERC20 coin = _vaultAsset();
         uint256 beforeBal = coin.balanceOf(address(this));
         coin.safeTransferFrom(msg.sender, address(this), _amount);
         uint256 afterBal = coin.balanceOf(address(this));
@@ -719,11 +719,11 @@ contract OVaultStrategiesModule is OVaultModuleBase, IOVaultModuleIdentity {
         if (strategyImpaired[strategy] && impairmentRecoveryEscrow != address(0)) {
             uint256 epochId = _findLatestEpochForStrategy(strategy);
             if (epochId != 0) {
-                _creatorCoin().safeTransfer(impairmentRecoveryEscrow, _amount);
+                _vaultAsset().safeTransfer(impairmentRecoveryEscrow, _amount);
                 IOVaultRecoveryEscrowStrategyModule(impairmentRecoveryEscrow).notifyRecovery(
-                    address(_creatorCoin()), epochId, _amount
+                    address(_vaultAsset()), epochId, _amount
                 );
-                coinBalance = _creatorCoin().balanceOf(address(this));
+                coinBalance = _vaultAsset().balanceOf(address(this));
             }
         }
 

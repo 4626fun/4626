@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 /**
- * Verify live UniversalBytecodeStoreV2 has creation bytecode for the active release deploy codeIds.
+ * Verifies manifest codeIds, DEPLOY_BYTECODE alignment, and on-chain store seeding for:
+ * - SHARED_MANIFEST_KEYS — lane-neutral phase 2/3 bytecode (both deploy paths)
+ * - CREATOR_LANE_KEYS / AGENT_LANE_KEYS — per-vault lane-specific bytecode
  *
  * Usage:
  *   pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts
- *   BYTECODE_MANIFEST=../../deployments/base/v1.14.1-bytecode-manifest.json pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts
+ *   BYTECODE_MANIFEST=../../deployments/base/v1.16.0-bytecode-manifest.json pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts
  */
-const DEFAULT_RELEASE = 'v1.14.1'
+const DEFAULT_RELEASE = 'v1.16.0'
 
 
 import { readFileSync } from 'node:fs'
@@ -50,33 +52,41 @@ const STORE_ABI = [
   },
 ] as const
 
-const REQUIRED_MANIFEST_KEYS = [
-  'CreatorOVault',
-  'CreatorOVaultWrapper',
-  'CreatorShareOFT',
+/** Lane-neutral deploy bytecode (one codeId each; shared by creator and agent paths). */
+const SHARED_MANIFEST_KEYS = [
   'OFTBootstrapRegistry',
-  'CreatorGaugeController',
   'CCALaunchStrategy',
-  'CreatorOracle',
   'CharmStrategy4626',
   'AjnaVaultAuth',
   'AjnaERC4626Vault',
   'ERC4626StrategyAdapter',
 ] as const
 
-const FRONTEND_DEPLOY_KEYS = [
+/** Per-vault creator lane (distinct codeIds from agent counterparts). */
+const CREATOR_LANE_KEYS = [
   'CreatorOVault',
   'CreatorOVaultWrapper',
   'CreatorShareOFT',
-  'OFTBootstrapRegistry',
   'CreatorGaugeController',
-  'CCALaunchStrategy',
   'CreatorOracle',
-  'CharmStrategy4626',
-  'AjnaVaultAuth',
-  'AjnaERC4626Vault',
-  'ERC4626StrategyAdapter',
 ] as const
+
+/** Per-vault agent lane (distinct codeIds from creator counterparts). */
+const AGENT_LANE_KEYS = [
+  'AgentOVault',
+  'AgentOVaultWrapper',
+  'AgentShareOFT',
+  'AgentGaugeController',
+  'AgentOracle',
+] as const
+
+const REQUIRED_MANIFEST_KEYS = [
+  ...SHARED_MANIFEST_KEYS,
+  ...CREATOR_LANE_KEYS,
+  ...AGENT_LANE_KEYS,
+] as const
+
+const FRONTEND_DEPLOY_KEYS = REQUIRED_MANIFEST_KEYS
 
 type Manifest = {
   release: string

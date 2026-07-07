@@ -71,6 +71,34 @@ describe('resolveWaitlistChatEligibilitySnapshot', () => {
     expect(result.joinBlockedReason).toBeNull()
   })
 
+  it('blocks privy_csw users until embedded-owner install completes', () => {
+    const result = resolveWaitlistChatEligibilitySnapshot({
+      canonicalCswAddress: CSW,
+      embeddedEoaAddress: EOA,
+      baseSubAccountAddress: null,
+      embeddedIsOwnerOfParent: false,
+      canonicalSource: 'privy_csw',
+    })
+    expect(result.executionTrack).toBe('none-yet')
+    expect(result.xmtpMemberAddress).toBeNull()
+    expect(result.chatReady).toBe(false)
+    expect(result.joinBlockedReason).toBe('embedded_owner_not_installed')
+  })
+
+  it('unlocks privy_csw users after embedded owner install', () => {
+    const result = resolveWaitlistChatEligibilitySnapshot({
+      canonicalCswAddress: CSW,
+      embeddedEoaAddress: EOA,
+      baseSubAccountAddress: null,
+      embeddedIsOwnerOfParent: true,
+      canonicalSource: 'privy_csw',
+    })
+    expect(result.executionTrack).toBe('legacy-owner-install')
+    expect(result.xmtpMemberAddress).toBe(CSW)
+    expect(result.chatReady).toBe(true)
+    expect(result.joinBlockedReason).toBeNull()
+  })
+
   it('blocks Zora/wallet_sync users until embedded-owner install completes', () => {
     const result = resolveWaitlistChatEligibilitySnapshot({
       canonicalCswAddress: CSW,

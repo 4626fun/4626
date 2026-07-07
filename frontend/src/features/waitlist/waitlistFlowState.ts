@@ -83,7 +83,10 @@ export function resolveWaitlistConnectTrack(params: {
     Boolean(params.accountSignals?.embeddedEoaAddress?.trim())
 
   if (zoraLinked && canonical && embeddedReady) return 'zora-owner-install'
-  if (canonical && embeddedReady) return 'privy-owner-install'
+  if (params.accountSignals?.canonicalSource === 'privy_csw' && canonical && embeddedReady) {
+    return 'privy-owner-install'
+  }
+  if (canonical && embeddedReady && !zoraLinked) return 'privy-owner-install'
   return 'not-ready'
 }
 
@@ -134,6 +137,7 @@ export function isWaitlistStepTwoSigningComplete(params: {
 export function shouldShowParentCswAddOwnerPanel(params: {
   inBaseApp?: boolean
   zoraLinked?: boolean
+  connectTrack?: WaitlistConnectTrack
   ownerInstallRequested: boolean
   signingStepComplete: boolean
   executionTrack?: WaitlistAccountWithCanonical['accountSignals']['executionTrack']
@@ -144,6 +148,7 @@ export function shouldShowParentCswAddOwnerPanel(params: {
 }): boolean {
   if (params.signingStepComplete) return false
   if (params.executionTrack === 'base-app-direct') return false
+  if (params.connectTrack === 'base-app-direct') return false
   if (isLegacyParentOwnerSigningReady({ parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain })) {
     return false
   }
@@ -158,9 +163,13 @@ export function shouldShowParentCswAddOwnerPanel(params: {
     return params.baseWalletReady !== false
   }
 
-  const privyProvisioned =
-    Boolean(params.accountSignals?.embeddedEoaAddress?.trim()) && !params.zoraLinked
-  if (privyProvisioned) return true
+  if (params.connectTrack === 'privy-owner-install') return true
+
+  if (params.connectTrack === 'zora-owner-install') {
+    if ((params.onchainEoaOwnerCount ?? 0) <= 0 && !params.zoraLinked) return false
+    if (!params.zoraLinked && !params.ownerInstallRequested) return false
+    return true
+  }
 
   if ((params.onchainEoaOwnerCount ?? 0) <= 0) return false
   if (!params.zoraLinked && !params.ownerInstallRequested) return false

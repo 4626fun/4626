@@ -213,14 +213,14 @@ export function getLegacyVestingStartBlock(): bigint {
 export const CREATOR_REGISTRY_ABI = [
   {
     type: 'function',
-    name: 'getAllCreatorCoins',
+    name: 'getAllTokens',
     stateMutability: 'view',
     inputs: [],
     outputs: [{ type: 'address[]' }],
   },
   {
     type: 'function',
-    name: 'getCreatorCoin',
+    name: 'getTokenInfo',
     stateMutability: 'view',
     inputs: [{ name: '_token', type: 'address' }],
     outputs: [
@@ -586,7 +586,7 @@ export async function resolveShareOftFromVault(
   const tokens = (await publicClient.readContract({
     address: registryAddress as Address,
     abi: CREATOR_REGISTRY_ABI,
-    functionName: 'getAllCreatorCoins',
+    functionName: 'getAllTokens',
   })) as Address[]
 
   if (!tokens || tokens.length === 0) return null
@@ -595,7 +595,7 @@ export async function resolveShareOftFromVault(
   const calls = tokens.map((token) => ({
     address: registryAddress as Address,
     abi: CREATOR_REGISTRY_ABI,
-    functionName: 'getCreatorCoin',
+    functionName: 'getTokenInfo',
     args: [token],
   }))
 

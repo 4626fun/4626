@@ -7,9 +7,9 @@ import {RouteCoherenceChecker} from "@4626/shared/deploy/batchers/RouteCoherence
 import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
 
 contract MockRegistryRouteCoherence {
-    mapping(address => I4626Registry.CreatorCoinInfo) internal infoByToken;
+    mapping(address => I4626Registry.TokenInfo) internal infoByToken;
 
-    function setCreatorCoinInfo(
+    function setTokenInfo(
         address token,
         address vault,
         address shareOFT,
@@ -17,7 +17,7 @@ contract MockRegistryRouteCoherence {
         address gaugeController,
         bool isActive
     ) external {
-        I4626Registry.CreatorCoinInfo storage info = infoByToken[token];
+        I4626Registry.TokenInfo storage info = infoByToken[token];
         info.token = token;
         info.vault = vault;
         info.shareOFT = shareOFT;
@@ -26,7 +26,7 @@ contract MockRegistryRouteCoherence {
         info.isActive = isActive;
     }
 
-    function getCreatorCoin(address token) external view returns (I4626Registry.CreatorCoinInfo memory) {
+    function getTokenInfo(address token) external view returns (I4626Registry.TokenInfo memory) {
         return infoByToken[token];
     }
 }
@@ -44,7 +44,7 @@ contract RouteCoherenceIntegrationTest is Test {
     function setUp() public {
         vm.chainId(8453);
         registry = new MockRegistryRouteCoherence();
-        registry.setCreatorCoinInfo(
+        registry.setTokenInfo(
             creatorToken, expectedVault, expectedShareOFT, expectedOracle, expectedGauge, true
         );
 
@@ -59,7 +59,7 @@ contract RouteCoherenceIntegrationTest is Test {
         assertEq(status.mismatchBitmap, 0, "baseline mismatch bitmap");
 
         // Drift one endpoint.
-        registry.setCreatorCoinInfo(
+        registry.setTokenInfo(
             creatorToken, expectedVault, expectedShareOFT, makeAddr("driftOracle"), expectedGauge, true
         );
         status = checker.checkRouteCoherence(
@@ -69,7 +69,7 @@ contract RouteCoherenceIntegrationTest is Test {
         assertEq(status.mismatchBitmap, 4, "oracle mismatch bit expected");
 
         // Repair drift.
-        registry.setCreatorCoinInfo(
+        registry.setTokenInfo(
             creatorToken, expectedVault, expectedShareOFT, expectedOracle, expectedGauge, true
         );
         status = checker.checkRouteCoherence(
@@ -82,7 +82,7 @@ contract RouteCoherenceIntegrationTest is Test {
     function test_settledFlow_requiresCoherencePass() external {
         _requireCoherentBeforeSettle();
 
-        registry.setCreatorCoinInfo(
+        registry.setTokenInfo(
             creatorToken, expectedVault, expectedShareOFT, makeAddr("driftOracle"), expectedGauge, true
         );
         RouteCoherenceChecker.RouteCoherenceStatus memory status = checker.checkRouteCoherence(

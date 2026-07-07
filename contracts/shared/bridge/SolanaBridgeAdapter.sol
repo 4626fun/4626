@@ -10,7 +10,9 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {IBaseSolanaBridge} from "@4626/shared/interfaces/bridge/IBaseSolanaBridge.sol";
 import {ICrossChainERC20Factory} from "@4626/shared/interfaces/bridge/ICrossChainERC20Factory.sol";
 import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
-import {ICreatorGaugeController} from "@4626/creator/interfaces/ICreatorGaugeController.sol";
+interface IGaugeControllerFees {
+    function receiveFees(uint256 amount) external;
+}
 
 /**
  * @title ILotteryManager4626
@@ -365,39 +367,39 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     /**
      * @notice Called by Twin contracts to deposit into vault
      * @dev Solana users can call this via the bridge with attached call
-     * @param creatorToken The lane token (creator/agent/future ecosystem) to deposit; extensible for additional ecosystems via registry
+     * @param laneToken The lane token (creator/agent/future ecosystem) to deposit; extensible for additional ecosystems via registry
      * @param amount Amount to deposit
      * @param recipient Who receives the vault shares
      */
-    function depositFromSolana(bytes32 solanaPubkey, address creatorToken, uint256 amount, address recipient)
+    function depositFromSolana(bytes32 solanaPubkey, address laneToken, uint256 amount, address recipient)
         external
         nonReentrant
         onlyTwin(solanaPubkey)
         returns (uint256 shares)
     {
-        if (creatorToken == address(0)) revert InvalidAddress();
+        if (laneToken == address(0)) revert InvalidAddress();
         if (recipient == address(0)) revert InvalidAddress();
         if (amount == 0) revert InvalidAmount();
 
         // Resolve the canonical vault from the registry.
-        if (!I4626Registry(registry).isCreatorCoinRegistered(creatorToken)) {
-            revert LaneTokenNotRegistered(creatorToken);
+        if (!I4626Registry(registry).isTokenRegistered(laneToken)) {
+            revert LaneTokenNotRegistered(laneToken);
         }
-        address vault = I4626Registry(registry).getVaultForToken(creatorToken);
-        if (vault == address(0)) revert VaultNotConfigured(creatorToken);
+        address vault = I4626Registry(registry).getVaultForToken(laneToken);
+        if (vault == address(0)) revert VaultNotConfigured(laneToken);
 
-        // Sanity check: vault.asset() must equal creatorToken.
+        // Sanity check: vault.asset() must equal laneToken.
         address asset = IERC4626Deposit(vault).asset();
-        if (asset != creatorToken) revert VaultAssetMismatch(vault, creatorToken, asset);
+        if (asset != laneToken) revert VaultAssetMismatch(vault, laneToken, asset);
 
-        // Pull tokens from Twin (user must have bridged creatorToken to their Twin first).
-        IERC20(creatorToken).safeTransferFrom(msg.sender, address(this), amount);
+        // Pull tokens from Twin (user must have bridged laneToken to their Twin first).
+        IERC20(laneToken).safeTransferFrom(msg.sender, address(this), amount);
 
         // Approve vault and deposit.
-        IERC20(creatorToken).forceApprove(vault, amount);
+        IERC20(laneToken).forceApprove(vault, amount);
         shares = IERC4626Deposit(vault).deposit(amount, recipient);
 
-        emit BridgeFromSolana(solanaPubkey, recipient, creatorToken, amount);
+        emit BridgeFromSolana(solanaPubkey, recipient, laneToken, amount);
     }
 
     // ================================
@@ -494,7 +496,7 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
      * @notice Buy share token on Uniswap V4 to enter the lottery
      * @dev This triggers a lottery entry for the Solana user!
      *
-     * @param creatorToken The lane token (creator/agent/future ecosystem) whose ShareOFT should be purchased (resolved via registry)
+     * @param laneToken The lane token (creator/agent/future ecosystem) whose ShareOFT should be purchased (resolved via registry)
      * @param amountIn Amount of SOL (or other token) to spend
      * @param amountOutMin Minimum share token to receive
      * @param recipient Who receives the share token (usually Twin contract)
@@ -509,21 +511,21 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
      */
     function buyAndEnterLottery(
         bytes32 solanaPubkey,
-        address creatorToken,
+        address laneToken,
         address tokenIn,
         uint256 amountIn,
         uint256 amountOutMin,
         address recipient
     ) external nonReentrant onlyTwin(solanaPubkey) returns (uint256 amountOut) {
-        if (creatorToken == address(0) || tokenIn == address(0) || recipient == address(0)) {
+        if (laneToken == address(0) || tokenIn == address(0) || recipient == address(0)) {
             revert InvalidAddress();
         }
         if (amountIn == 0) revert InvalidAmount();
 
-        if (!I4626Registry(registry).isCreatorCoinRegistered(creatorToken)) {
-            revert LaneTokenNotRegistered(creatorToken);
+        if (!I4626Registry(registry).isTokenRegistered(laneToken)) {
+            revert LaneTokenNotRegistered(laneToken);
         }
-        address shareToken = I4626Registry(registry).getShareOFTForToken(creatorToken);
+        address shareToken = I4626Registry(registry).getShareOFTForToken(laneToken);
         if (shareToken == address(0)) revert InvalidAddress();
 
         I4626Registry.ChainConfig memory cfg = I4626Registry(registry).getChainConfig(block.chainid);
@@ -559,17 +561,17 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
      */
     function buyAndEnterLotteryWithETH(
         bytes32 solanaPubkey,
-        address creatorToken,
+        address laneToken,
         uint256 amountOutMin,
         address recipient
     ) external payable nonReentrant onlyTwin(solanaPubkey) returns (uint256 amountOut) {
-        if (creatorToken == address(0) || recipient == address(0)) revert InvalidAddress();
+        if (laneToken == address(0) || recipient == address(0)) revert InvalidAddress();
         if (msg.value == 0) revert InvalidAmount();
 
-        if (!I4626Registry(registry).isCreatorCoinRegistered(creatorToken)) {
-            revert LaneTokenNotRegistered(creatorToken);
+        if (!I4626Registry(registry).isTokenRegistered(laneToken)) {
+            revert LaneTokenNotRegistered(laneToken);
         }
-        address shareToken = I4626Registry(registry).getShareOFTForToken(creatorToken);
+        address shareToken = I4626Registry(registry).getShareOFTForToken(laneToken);
         if (shareToken == address(0)) revert InvalidAddress();
 
         I4626Registry.ChainConfig memory cfg = I4626Registry(registry).getChainConfig(block.chainid);
@@ -629,11 +631,11 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         if (!authorizedFeeKeepers[keeperPubkey]) revert UnauthorizedFeeKeeper(keeperPubkey);
         if (amount == 0) revert InvalidAmount();
 
-        // Resolve the gauge controller for this creator token via registry.
-        address creatorCoin = I4626Registry(registry).getTokenForShareOFT(shareOFT);
-        if (creatorCoin == address(0)) revert TokenNotRegistered();
+        // Resolve the gauge controller for this lane token via registry.
+        address laneToken = I4626Registry(registry).getTokenForShareOFT(shareOFT);
+        if (laneToken == address(0)) revert TokenNotRegistered();
 
-        address gauge = I4626Registry(registry).getGaugeControllerForToken(creatorCoin);
+        address gauge = I4626Registry(registry).getGaugeControllerForToken(laneToken);
         if (gauge == address(0)) revert GaugeNotFound(shareOFT);
 
         // Pull fees from keeper Twin (msg.sender) into this adapter.
@@ -642,7 +644,7 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         // Approve gauge and forward fees.
         IERC20(shareOFT).forceApprove(gauge, amount);
         // Note: receives to the lane's gauge (creator or agent)
-ICreatorGaugeController(gauge).receiveFees(amount);
+IGaugeControllerFees(gauge).receiveFees(amount);
 
         emit SolanaFeeReceived(msg.sender, shareOFT, gauge, amount);
     }
@@ -747,12 +749,12 @@ ICreatorGaugeController(gauge).receiveFees(amount);
         return abi.encodeWithSelector(bytes4(0x095ea7b3), spender, amount);
     }
 
-    function encodeDepositFromSolanaCall(bytes32 solanaPubkey, address creatorToken, uint256 amount, address recipient)
+    function encodeDepositFromSolanaCall(bytes32 solanaPubkey, address laneToken, uint256 amount, address recipient)
         external
         pure
         returns (bytes memory)
     {
-        return abi.encodeWithSelector(this.depositFromSolana.selector, solanaPubkey, creatorToken, amount, recipient);
+        return abi.encodeWithSelector(this.depositFromSolana.selector, solanaPubkey, laneToken, amount, recipient);
     }
 
     /**
@@ -761,25 +763,25 @@ ICreatorGaugeController(gauge).receiveFees(amount);
      */
     function encodeLotteryEntryCall(
         bytes32 solanaPubkey,
-        address creatorToken,
+        address laneToken,
         address tokenIn,
         uint256 amountIn,
         uint256 amountOutMin,
         address recipient
     ) external pure returns (bytes memory) {
         return abi.encodeWithSelector(
-            this.buyAndEnterLottery.selector, solanaPubkey, creatorToken, tokenIn, amountIn, amountOutMin, recipient
+            this.buyAndEnterLottery.selector, solanaPubkey, laneToken, tokenIn, amountIn, amountOutMin, recipient
         );
     }
 
     function encodeLotteryEntryWithETHCall(
         bytes32 solanaPubkey,
-        address creatorToken,
+        address laneToken,
         uint256 amountOutMin,
         address recipient
     ) external pure returns (bytes memory) {
         return abi.encodeWithSelector(
-            this.buyAndEnterLotteryWithETH.selector, solanaPubkey, creatorToken, amountOutMin, recipient
+            this.buyAndEnterLotteryWithETH.selector, solanaPubkey, laneToken, amountOutMin, recipient
         );
     }
 

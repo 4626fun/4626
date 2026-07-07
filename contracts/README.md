@@ -33,7 +33,7 @@ contracts/
 │   ├── revenue/       AgentGaugeController + revenue routing/policy
 │   └── oracles/
 ├── creator/
-│   ├── interfaces/    ICreatorOVault, ICreatorGaugeController, ICreatorOVaultComposer
+│   ├── interfaces/    ICreatorOVault, ICreatorGaugeController (+ lane vault composer consumers import `shared/interfaces/vault/IOVaultComposer.sol`)
 │   ├── vault/         (CreatorOVault + core module + CreatorShareOFT)
 │   ├── revenue/
 │   ├── strategies/    CreatorLPManager (V4 LP manager for creator-lane ShareOFT)
@@ -45,6 +45,22 @@ contracts/
 **Interface placement rule:** `shared/interfaces/` holds only lane-neutral and external-protocol interfaces. Interfaces that describe a lane contract (`ICreatorOVault`, `IAgentGaugeController`, …) live in that lane's `interfaces/` folder — shared infra (batcher, hub composer, strategies) imports them from there.
 
 **Oracle interface:** both lane oracles (`CreatorOracle`, `AgentOracle`) implement the lane-neutral `shared/interfaces/oracles/IOracle4626.sol` — `getAssetPrice()`, `getAssetEthTWAP()`, `updateAssetPrice*()`, `assetSymbol()`, etc., where "asset" is the vault's underlying token for that lane (creator coin or agent token). Shared consumers (strategies, `LotteryManager4626`, `VRFConsumer4626`, both gauge controllers) type against `IOracle4626` only. The former `ICreatorOracle` interface, the inline gauge/VRF oracle interfaces, and the creator-named alias functions on `AgentOracle` (`getCreatorPrice`, `creatorPoolKey`, `creatorIsToken0`) were removed in the July 2026 selector rename — this changed oracle/gauge/strategy bytecode, folded into the same v1.16.0 re-seed noted below.
+
+**Shared ABI neutralization (July 2026):** lane-shared contracts no longer expose creator-prefixed selectors where the implementation is lane-neutral. Highlights:
+
+| Area | Old | New |
+|------|-----|-----|
+| `Registry4626` / `I4626Registry` | `CreatorCoinInfo`, `registerCreatorCoin`, `setCreatorOracle`, `getCreatorCoin`, … | `TokenInfo`, `registerToken`, `setOracleForToken`, `getTokenInfo`, … |
+| `CharmStrategy4626` | `CREATOR`, `creatorOracle`, `setCreatorOracle` | `ASSET`, `assetOracle`, `setAssetOracle` |
+| Univ4 LP strategies + `ILPStrategy` | `CREATOR_COIN`, `creatorIsCurrency0`, `creatorCoinAmount` | `ASSET`, `assetIsCurrency0`, `assetCoinAmount` |
+| `LotteryManager4626` | `getCreatorLotteryStats`, `creatorStats` | `getTokenLotteryStats`, `tokenStats` |
+| `VRFConsumer4626` | `localCreatorPriceUSD`, `getAggregatedCreatorPrice` | `localAssetPriceUSD`, `getAggregatedAssetPrice` |
+| `OVaultHubComposer` | `configureCreatorMesh`, `creatorMesh`, `CreatorMesh*` errors/events | `configureTokenMesh`, `tokenMesh`, `TokenMesh*` |
+| `DeploymentBatcher.StrategyCodeIds` | `creatorCharmStrategy` | `charmStrategy4626` |
+| Vault modules | `_creatorCoin()`, `CannotRescueCreatorCoin` | `_vaultAsset()`, `CannotRescueVaultAsset` |
+| Hub composer interface | `ICreatorOVaultComposer` (creator lane) | `shared/interfaces/vault/IOVaultComposer.sol` |
+
+Lane-specific contracts (`CreatorOVaultWrapper.creatorCoin`, `CreatorShareOFT`, deploy batcher `creatorToken` params, etc.) keep creator naming where the asset is explicitly the creator coin. `ERC4626StrategyAdapter` now validates vault/asset alignment via `IERC4626(vault).asset()` instead of a creator-only getter.
 
 **Naming note:** the lane-shared contracts under `shared/` were renamed from their historical `Creator*` names in July 2026: `CreatorOVaultAdminModule` → `OVaultAdminModule`, `CreatorOVaultStrategiesModule` → `OVaultStrategiesModule`, `CreatorOVaultModuleBase`/`Storage` → `OVaultModuleBase`/`Storage`, `ICreatorOVaultModuleIdentity` → `IOVaultModuleIdentity`, `CreatorOVaultLiquidityLib` → `OVaultLiquidityLib`, `CreatorVaultShareBurnStream` → `VaultShareBurnStream`, `CreatorOImpairmentClaims` → `OVaultImpairmentClaims`, `CreatorORecoveryEscrow` → `OVaultRecoveryEscrow`. Because there were no live vaults at the time, the on-chain identity strings were renamed too: module kinds are now `keccak256("CreatorOVaultModule.core")` (creator lane), `keccak256("AgentOVaultModule.core")` (agent lane), and lane-shared `keccak256("OVaultModule.strategies")` / `keccak256("OVaultModule.admin")`; the storage fingerprint is `keccak256("OVaultModuleStorage.v3")`; the burn-stream CREATE2 salt domain is `"4626:VaultShareBurnStream"` (mirrored in `frontend/shared/deploy/create2Salts.ts`). This changes `CreatorOVault`, module, and `VaultAuxiliaryDeployBatcher` bytecode, so the next deploy epoch must re-seed the `UniversalBytecodeStore` and regenerate bytecode manifests before production deploys.
 
@@ -109,4 +125,8 @@ Each token launch deploys its own stack:
 
 Reused bytecode (under `shared/`): CCA launch strategy, linear vesting, burn stream, Charm/Ajna/Concentrated strategies, etc.
 
-Deployment orchestration lives in `shared/deploy/batchers/`.
+Deployment orchestration lives in `shared/deploy/batchers/`. `DeploymentBatcher` phase 1 branches on `VaultKind` (salts, core module, bytecode ids) and persists `vaultKind` in `phase1SplitStates` (included in `phase1ParamsHash`). Phase 2 reads that stored kind and wires gauge asset tokens via `setCreatorCoin` (creator) or `setAgentToken` (agent). Legacy on-chain split state written before `vaultKind` was added decodes as `Creator` (enum default `0`).
+
+Bytecode epoch ops: `deployments/base/v1.16.0-bytecode-manifest.json` + `docs/_internal/deployment-releases-legacy/v1.16.0-bytecode-epoch.md` (store re-seed via `./script/seed-v1160-bytecode-store.sh`).
+
+V4 tax hook pool configuration is applied through `CCALaunchStrategy.setOracleConfig` during phase 2 — there is no separate `TaxHookConfigurator` helper contract in-tree.

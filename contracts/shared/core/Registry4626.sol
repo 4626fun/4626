@@ -16,14 +16,14 @@ contract Registry4626 is I4626Registry, Ownable {
     // =================================
 
     uint256 public constant MAX_SUPPORTED_CHAINS = 99;
-    uint256 public constant MAX_CREATOR_COINS = 999999; // per-lane limit; agent and future ecosystems have their own caps if needed
+    uint256 public constant MAX_REGISTERED_TOKENS = 999999; // per-lane limit; agent and future ecosystems have their own caps if needed
 
     // =================================
     // CREATOR COIN STORAGE
     // =================================
 
     /// @notice Lane token info (creator coins, agent tokens, future ecosystems) by token address
-    mapping(address => CreatorCoinInfo) private creatorCoins; // name kept for storage compatibility; supports all lanes via registry methods
+    mapping(address => TokenInfo) private tokenInfos; 
 
     /// @notice Reverse lookup: vault → token
     mapping(address => address) public vaultToToken;
@@ -57,28 +57,28 @@ contract Registry4626 is I4626Registry, Ownable {
     // REMOTE OFT PEER TRACKING (Hub-Centric)
     // =================================
 
-    /// @notice Remote OFT addresses per creator coin per chain EID
-    /// @dev creatorCoin → chainEid → remoteOFTAddress
+    /// @notice Remote OFT addresses per token per chain EID
+    /// @dev token → chainEid → remoteOFTAddress
     mapping(address => mapping(uint32 => address)) public remoteOFTPeers;
 
-    /// @notice All chain EIDs that have a remote OFT for a given creator coin
+    /// @notice All chain EIDs that have a remote OFT for a given token
     mapping(address => uint32[]) private remoteOFTChains;
 
-    /// @notice Reverse lookup: remote OFT address → creator coin (for cross-chain lookups)
+    /// @notice Reverse lookup: remote OFT address → token (for cross-chain lookups)
     /// @dev Used when a remote OFT sends a lottery entry and we need to identify the creator
     mapping(address => address) public remoteOFTToToken;
 
     /// @notice Remote OFT peers for non-EVM chains keyed by bytes32 identity (e.g., Solana pubkey)
-    /// @dev creatorCoin → chainEid → remoteOFTBytes32
+    /// @dev token → chainEid → remoteOFTBytes32
     mapping(address => mapping(uint32 => bytes32)) public remoteOFTPeersBytes32;
 
-    /// @notice Chain EIDs that have bytes32 peers for a given creator coin
+    /// @notice Chain EIDs that have bytes32 peers for a given token
     mapping(address => uint32[]) private remoteOFTChainsBytes32;
 
-    /// @notice Reverse lookup: remote bytes32 peer → creator coin
+    /// @notice Reverse lookup: remote bytes32 peer → token
     mapping(bytes32 => address) public remoteOFTBytes32ToToken;
 
-    /// @notice Per-creator Solana OVault mesh metadata.
+    /// @notice Per-token Solana OVault mesh metadata.
     mapping(address => OmnichainVaultMeshConfig) private omnichainVaultMeshConfigs;
 
     /// @notice Agent lane integration metadata keyed by underlying token
@@ -147,10 +147,10 @@ contract Registry4626 is I4626Registry, Ownable {
 
     error ChainAlreadyRegistered(uint256 chainId);
     error ChainNotRegistered(uint256 chainId);
-    error CreatorCoinAlreadyRegistered(address token);
-    error CreatorCoinNotRegistered(address token);
+    error TokenAlreadyRegistered(address token);
+    error TokenNotRegistered(address token);
     error TooManyChains();
-    error TooManyCreatorCoins();
+    error TooManyTokens();
     error CanonicalWalletAlreadyInUse(address wallet, address token);
     error ZeroAddress();
     error ZeroBytes32();
@@ -192,7 +192,7 @@ contract Registry4626 is I4626Registry, Ownable {
     // =================================
 
     /**
-     * @notice Authorize a factory to register Creator Coins
+     * @notice Authorize a factory to register tokens
      */
     function setAuthorizedFactory(address _factory, bool _authorized) external onlyOwner {
         if (_factory == address(0)) revert ZeroAddress();
@@ -218,9 +218,9 @@ contract Registry4626 is I4626Registry, Ownable {
     // =================================
 
     /**
-     * @notice Register a new Creator Coin
+     * @notice Register a new lane token
      */
-    function registerCreatorCoin(
+    function registerToken(
         address _token,
         string calldata _name,
         string calldata _symbol,
@@ -229,10 +229,10 @@ contract Registry4626 is I4626Registry, Ownable {
         uint24 _poolFee
     ) external override onlyAuthorizedOrOwner {
         if (_token == address(0)) revert ZeroAddress();
-        if (creatorCoins[_token].token != address(0)) revert CreatorCoinAlreadyRegistered(_token);
-        if (registeredTokens.length >= MAX_CREATOR_COINS) revert TooManyCreatorCoins();
+        if (tokenInfos[_token].token != address(0)) revert TokenAlreadyRegistered(_token);
+        if (registeredTokens.length >= MAX_REGISTERED_TOKENS) revert TooManyTokens();
 
-        creatorCoins[_token] = CreatorCoinInfo({
+        tokenInfos[_token] = TokenInfo({
             token: _token,
             name: _name,
             symbol: _symbol,
@@ -252,112 +252,112 @@ contract Registry4626 is I4626Registry, Ownable {
 
         registeredTokens.push(_token);
 
-        emit CreatorCoinRegistered(_token, _name, _symbol, _creator, address(0), address(0), address(0));
+        emit TokenRegistered(_token, _name, _symbol, _creator, address(0), address(0), address(0));
     }
 
     /**
-     * @notice Set vault address for a Creator Coin
+     * @notice Set vault address for a token
      */
     function setVault(address _token, address _vault) external override onlyAuthorizedOrOwner {
-        if (creatorCoins[_token].token == address(0)) revert CreatorCoinNotRegistered(_token);
+        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
         if (_vault == address(0)) revert ZeroAddress();
 
         // Clear old reverse mapping if exists
-        if (creatorCoins[_token].vault != address(0)) {
-            delete vaultToToken[creatorCoins[_token].vault];
+        if (tokenInfos[_token].vault != address(0)) {
+            delete vaultToToken[tokenInfos[_token].vault];
         }
 
-        creatorCoins[_token].vault = _vault;
+        tokenInfos[_token].vault = _vault;
         vaultToToken[_vault] = _token;
 
-        emit CreatorCoinUpdated(_token);
+        emit TokenUpdated(_token);
     }
 
     /**
-     * @notice Set ShareOFT address for a Creator Coin
+     * @notice Set ShareOFT address for a token
      */
-    function setCreatorShareOFT(address _token, address _shareOFT) external override onlyAuthorizedOrOwner {
-        if (creatorCoins[_token].token == address(0)) revert CreatorCoinNotRegistered(_token);
+    function setShareOFTForToken(address _token, address _shareOFT) external override onlyAuthorizedOrOwner {
+        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
         if (_shareOFT == address(0)) revert ZeroAddress();
 
         // Clear old reverse mapping if exists
-        if (creatorCoins[_token].shareOFT != address(0)) {
-            delete shareOFTToToken[creatorCoins[_token].shareOFT];
+        if (tokenInfos[_token].shareOFT != address(0)) {
+            delete shareOFTToToken[tokenInfos[_token].shareOFT];
         }
 
-        creatorCoins[_token].shareOFT = _shareOFT;
+        tokenInfos[_token].shareOFT = _shareOFT;
         shareOFTToToken[_shareOFT] = _token;
 
-        emit CreatorCoinUpdated(_token);
+        emit TokenUpdated(_token);
     }
 
     /**
-     * @notice Set wrapper address for a Creator Coin
+     * @notice Set wrapper address for a token
      */
-    function setCreatorWrapper(address _token, address _wrapper) external override onlyAuthorizedOrOwner {
-        if (creatorCoins[_token].token == address(0)) revert CreatorCoinNotRegistered(_token);
+    function setWrapperForToken(address _token, address _wrapper) external override onlyAuthorizedOrOwner {
+        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
         if (_wrapper == address(0)) revert ZeroAddress();
 
         // Clear old reverse mapping if exists
-        if (creatorCoins[_token].wrapper != address(0)) {
-            delete wrapperToToken[creatorCoins[_token].wrapper];
+        if (tokenInfos[_token].wrapper != address(0)) {
+            delete wrapperToToken[tokenInfos[_token].wrapper];
         }
 
-        creatorCoins[_token].wrapper = _wrapper;
+        tokenInfos[_token].wrapper = _wrapper;
         wrapperToToken[_wrapper] = _token;
 
-        emit CreatorCoinUpdated(_token);
+        emit TokenUpdated(_token);
     }
 
     /**
-     * @notice Set oracle address for a Creator Coin
+     * @notice Set oracle address for a token
      */
-    function setCreatorOracle(address _token, address _oracle) external override onlyAuthorizedOrOwner {
-        if (creatorCoins[_token].token == address(0)) revert CreatorCoinNotRegistered(_token);
+    function setOracleForToken(address _token, address _oracle) external override onlyAuthorizedOrOwner {
+        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
         if (_oracle == address(0)) revert ZeroAddress();
 
         // Clear old reverse mapping if exists
-        if (creatorCoins[_token].oracle != address(0)) {
-            delete oracleToToken[creatorCoins[_token].oracle];
+        if (tokenInfos[_token].oracle != address(0)) {
+            delete oracleToToken[tokenInfos[_token].oracle];
         }
 
-        creatorCoins[_token].oracle = _oracle;
+        tokenInfos[_token].oracle = _oracle;
         oracleToToken[_oracle] = _token;
 
-        emit CreatorCoinUpdated(_token);
+        emit TokenUpdated(_token);
     }
 
     /**
-     * @notice Set gauge controller address for a Creator Coin
+     * @notice Set gauge controller address for a token
      */
-    function setCreatorGaugeController(address _token, address _gaugeController)
+    function setGaugeControllerForToken(address _token, address _gaugeController)
         external
         override
         onlyAuthorizedOrOwner
     {
-        if (creatorCoins[_token].token == address(0)) revert CreatorCoinNotRegistered(_token);
+        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
         if (_gaugeController == address(0)) revert ZeroAddress();
 
         // Clear old reverse mapping if exists
-        if (creatorCoins[_token].gaugeController != address(0)) {
-            delete gaugeControllerToToken[creatorCoins[_token].gaugeController];
+        if (tokenInfos[_token].gaugeController != address(0)) {
+            delete gaugeControllerToToken[tokenInfos[_token].gaugeController];
         }
 
-        creatorCoins[_token].gaugeController = _gaugeController;
+        tokenInfos[_token].gaugeController = _gaugeController;
         gaugeControllerToToken[_gaugeController] = _token;
 
-        emit CreatorCoinUpdated(_token);
+        emit TokenUpdated(_token);
     }
 
     /**
-     * @notice Set active status for a Creator Coin
+     * @notice Set active status for a token
      */
-    function setCreatorCoinStatus(address _token, bool _isActive) external override onlyOwner {
-        if (creatorCoins[_token].token == address(0)) revert CreatorCoinNotRegistered(_token);
+    function setTokenStatus(address _token, bool _isActive) external override onlyOwner {
+        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
 
-        creatorCoins[_token].isActive = _isActive;
+        tokenInfos[_token].isActive = _isActive;
 
-        emit CreatorCoinStatusChanged(_token, _isActive);
+        emit TokenStatusChanged(_token, _isActive);
     }
 
     /**
@@ -370,11 +370,11 @@ contract Registry4626 is I4626Registry, Ownable {
      *      Only the registry owner or the creator themselves can set this.
      */
     function setCanonicalWallet(address _token, address _wallet) external override {
-        if (creatorCoins[_token].token == address(0)) revert CreatorCoinNotRegistered(_token);
+        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
         if (_wallet == address(0)) revert ZeroAddress();
 
         // Only owner or the creator can set the canonical wallet
-        address creator = creatorCoins[_token].creator;
+        address creator = tokenInfos[_token].creator;
         if (msg.sender != owner() && msg.sender != creator) revert NotAuthorized();
 
         // Enforce a 1:1 canonical wallet reverse mapping.
@@ -385,7 +385,7 @@ contract Registry4626 is I4626Registry, Ownable {
         }
 
         // Clear old reverse mapping if exists
-        address oldWallet = creatorCoins[_token].canonicalWallet;
+        address oldWallet = tokenInfos[_token].canonicalWallet;
         if (oldWallet != address(0) && oldWallet != _wallet) {
             // Defensive: only delete if the reverse mapping still points to this token.
             // (If state is already inconsistent from older deployments, don't clobber another token.)
@@ -394,7 +394,7 @@ contract Registry4626 is I4626Registry, Ownable {
             }
         }
 
-        creatorCoins[_token].canonicalWallet = _wallet;
+        tokenInfos[_token].canonicalWallet = _wallet;
         canonicalWalletToToken[_wallet] = _token;
 
         emit CanonicalWalletSet(_token, _wallet);
@@ -409,7 +409,7 @@ contract Registry4626 is I4626Registry, Ownable {
         override
         onlyAuthorizedOrOwner
     {
-        if (creatorCoins[_token].token == address(0)) revert CreatorCoinNotRegistered(_token);
+        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
 
         if (_cfg.enabled) {
             if (
@@ -435,15 +435,15 @@ contract Registry4626 is I4626Registry, Ownable {
     }
 
     /**
-     * @notice Update Creator Coin pool info
+     * @notice Update token pool info
      */
-    function setCreatorPool(address _token, address _pool, uint24 _poolFee) external onlyOwner {
-        if (creatorCoins[_token].token == address(0)) revert CreatorCoinNotRegistered(_token);
+    function setPoolForToken(address _token, address _pool, uint24 _poolFee) external onlyOwner {
+        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
 
-        creatorCoins[_token].pool = _pool;
-        creatorCoins[_token].poolFee = _poolFee;
+        tokenInfos[_token].pool = _pool;
+        tokenInfos[_token].poolFee = _poolFee;
 
-        emit CreatorCoinUpdated(_token);
+        emit TokenUpdated(_token);
     }
 
     // =================================
@@ -463,7 +463,7 @@ contract Registry4626 is I4626Registry, Ownable {
         override
         onlyAuthorizedOrOwner
     {
-        if (creatorCoins[_token].token == address(0)) revert CreatorCoinNotRegistered(_token);
+        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
         if (_remoteOFT == address(0)) revert ZeroAddress();
 
         // Clear old reverse mapping if exists
@@ -489,7 +489,7 @@ contract Registry4626 is I4626Registry, Ownable {
      * @notice Remove a remote OFT peer for a creator coin
      */
     function removeRemoteOFTPeer(address _token, uint32 _chainEid) external override onlyOwner {
-        if (creatorCoins[_token].token == address(0)) revert CreatorCoinNotRegistered(_token);
+        if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
 
         address remoteOFT = remoteOFTPeers[_token][_chainEid];
         if (remoteOFT == address(0)) return;
@@ -565,7 +565,7 @@ contract Registry4626 is I4626Registry, Ownable {
         override
         onlyAuthorizedOrOwner
     {
-        require(creatorCoins[_token].token != address(0), "Token not registered");
+        require(tokenInfos[_token].token != address(0), "Token not registered");
         require(_chainEid != 0, "Invalid chain EID");
         if (_remoteOFT == bytes32(0)) revert ZeroBytes32();
 
@@ -648,39 +648,39 @@ contract Registry4626 is I4626Registry, Ownable {
     // CREATOR COIN GETTERS
     // =================================
 
-    function getCreatorCoin(address _token) external view override returns (CreatorCoinInfo memory) {
-        return creatorCoins[_token];
+    function getTokenInfo(address _token) external view override returns (TokenInfo memory) {
+        return tokenInfos[_token];
     }
 
     function getVaultForToken(address _token) external view override returns (address) {
-        return creatorCoins[_token].vault;
+        return tokenInfos[_token].vault;
     }
 
     function getShareOFTForToken(address _token) external view override returns (address) {
-        return creatorCoins[_token].shareOFT;
+        return tokenInfos[_token].shareOFT;
     }
 
     function getWrapperForToken(address _token) external view override returns (address) {
-        return creatorCoins[_token].wrapper;
+        return tokenInfos[_token].wrapper;
     }
 
     function getOracleForToken(address _token) external view override returns (address) {
-        return creatorCoins[_token].oracle;
+        return tokenInfos[_token].oracle;
     }
 
     function getGaugeControllerForToken(address _token) external view override returns (address) {
-        return creatorCoins[_token].gaugeController;
+        return tokenInfos[_token].gaugeController;
     }
 
     /// @dev FIX: F-25 — WARNING: this function returns an unbounded array. It will revert
     /// when `registeredTokens` grows large enough to exceed the block gas limit for on-chain
-    /// callers. Use `getCreatorCoinsPaginated` for bounded access.
-    function getAllCreatorCoins() external view override returns (address[] memory) {
+    /// callers. Use `getTokensPaginated` for bounded access.
+    function getAllTokens() external view override returns (address[] memory) {
         return registeredTokens;
     }
 
     // FIX: F-25 — paginated access for large registries; prevents block gas limit DoS
-    function getCreatorCoinsPaginated(uint256 offset, uint256 limit) external view returns (address[] memory result) {
+    function getTokensPaginated(uint256 offset, uint256 limit) external view returns (address[] memory result) {
         uint256 total = registeredTokens.length;
         if (offset >= total) return new address[](0);
         uint256 end = offset + limit;
@@ -691,15 +691,15 @@ contract Registry4626 is I4626Registry, Ownable {
         }
     }
 
-    function isCreatorCoinRegistered(address _token) external view override returns (bool) {
-        return creatorCoins[_token].token != address(0);
+    function isTokenRegistered(address _token) external view override returns (bool) {
+        return tokenInfos[_token].token != address(0);
     }
 
-    function isCreatorCoinActive(address _token) external view override returns (bool) {
-        return creatorCoins[_token].token != address(0) && creatorCoins[_token].isActive;
+    function isTokenActive(address _token) external view override returns (bool) {
+        return tokenInfos[_token].token != address(0) && tokenInfos[_token].isActive;
     }
 
-    function getCreatorCoinCount() external view returns (uint256) {
+    function getTokenCount() external view returns (uint256) {
         return registeredTokens.length;
     }
 
@@ -712,7 +712,7 @@ contract Registry4626 is I4626Registry, Ownable {
 
     /**
      * @notice Compatibility helper for gauge voting registry-gates
-     * @dev A vault is considered "registered" once it's mapped to a Creator Coin.
+     * @dev A vault is considered "registered" once it's mapped to a registered token.
      */
     function isRegisteredVault(address _vault) external view returns (bool) {
         return vaultToToken[_vault] != address(0);
@@ -727,15 +727,15 @@ contract Registry4626 is I4626Registry, Ownable {
 
     /**
      * @notice Get the canonical smart wallet for a creator
-     * @param _token Creator Coin address
+     * @param _token Lane token address
      * @return The creator's canonical ERC-4337 smart wallet (address(0) if not set)
      */
     function getCanonicalWallet(address _token) external view override returns (address) {
-        return creatorCoins[_token].canonicalWallet;
+        return tokenInfos[_token].canonicalWallet;
     }
 
     /**
-     * @notice Get the Creator Coin for a canonical wallet (reverse lookup)
+     * @notice Get the token for a canonical wallet (reverse lookup)
      * @param _wallet Canonical smart wallet address
      * @return The creator coin address (address(0) if not found)
      */
@@ -748,7 +748,7 @@ contract Registry4626 is I4626Registry, Ownable {
     }
 
     function isSolanaDepositEligible(address _token) external view override returns (bool) {
-        CreatorCoinInfo storage info = creatorCoins[_token];
+        TokenInfo storage info = tokenInfos[_token];
         if (info.token == address(0) || !info.isActive) return false;
 
         OmnichainVaultMeshConfig storage cfg = omnichainVaultMeshConfigs[_token];

@@ -522,7 +522,7 @@ const CREATOR_VAULT_BATCHER_DEPLOY_PHASE3_STRATEGIES_ABI = [
         type: 'tuple',
         components: [
           { name: 'charmAlphaVaultDeploy', type: 'bytes32' },
-          { name: 'creatorCharmStrategy', type: 'bytes32' },
+          { name: 'charmStrategy4626', type: 'bytes32' },
           { name: 'ajnaVaultAuth', type: 'bytes32' },
           { name: 'ajnaVault', type: 'bytes32' },
           { name: 'erc4626StrategyAdapter', type: 'bytes32' },

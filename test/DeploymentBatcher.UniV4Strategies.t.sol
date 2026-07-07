@@ -148,6 +148,7 @@ contract DeploymentBatcherUniV4StrategiesTest is Test {
             uniswapRouter: makeAddr("uniswapRouter"),
             ajnaFactory: makeAddr("ajnaFactory"),
             vaultCoreModule: makeAddr("vaultCoreModule"),
+            agentVaultCoreModule: address(0),
             vaultStrategiesModule: makeAddr("vaultStrategiesModule"),
             vaultAdminModule: makeAddr("vaultAdminModule")
         });

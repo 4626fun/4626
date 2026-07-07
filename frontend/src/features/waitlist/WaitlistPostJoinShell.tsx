@@ -1,37 +1,41 @@
-import { useMemo } from 'react'
+import { Suspense, lazy, useMemo } from 'react'
 
 import { LoadingInline } from '@/components/ui/LoadingState'
-import { WaitlistModernParentOwnerInstall } from '@/features/accountSetup/WaitlistModernParentOwnerInstall'
-import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { useAccountMe } from '@/hooks/useAccountMe'
 import { isZoraLinkedFromAccountSignals } from '@/lib/wallet/userExecutionTrack'
 import { WalletProviders } from '@/web3/Web3Providers'
 
-import { useWaitlistSigningStepComplete } from './useWaitlistSigningStepComplete'
+import { WaitlistOwnerInstallPanel } from './WaitlistOwnerInstallPanel'
 import { WaitlistWalletProvision } from './WaitlistWalletProvision'
+import { useWaitlistSigningStepComplete } from './useWaitlistSigningStepComplete'
 import {
+  isWaitlistMessagingSigningReady,
   resolveWaitlistConnectTrack,
   shouldShowParentCswAddOwnerPanel,
   type WaitlistConnectTrack,
 } from './waitlistFlowState'
 
-type WaitlistWalletSetupSectionProps = {
+const LazyWaitlistGroupChatPanel = lazy(async () => {
+  const mod = await import('./WaitlistGroupChatPanel')
+  return { default: mod.WaitlistGroupChatPanel }
+})
+
+type WaitlistPostJoinShellProps = {
   enabled: boolean
 }
 
-export function WaitlistWalletSetupSection(props: WaitlistWalletSetupSectionProps) {
+export function WaitlistPostJoinShell(props: WaitlistPostJoinShellProps) {
   if (!props.enabled) return null
 
   return (
     <WalletProviders reconnectOnMount={false}>
-      <WaitlistWalletSetupSectionInner />
+      <WaitlistPostJoinShellInner />
     </WalletProviders>
   )
 }
 
-function WaitlistWalletSetupSectionInner() {
+function WaitlistPostJoinShellInner() {
   const { me: accountMe, loading, refresh } = useAccountMe()
-  const controller = useAccountSetupController({ zoraReturnPath: '/waitlist' })
   const accountSignals = accountMe?.accountSignals
   const canonicalCswAddress = accountSignals?.canonicalCswAddress ?? null
   const zoraLinked = isZoraLinkedFromAccountSignals(accountSignals)
@@ -65,6 +69,7 @@ function WaitlistWalletSetupSectionInner() {
     !canonicalCswAddress?.trim()
 
   const showOwnerInstall = shouldShowParentCswAddOwnerPanel({
+    connectTrack,
     zoraLinked,
     ownerInstallRequested: false,
     signingStepComplete,
@@ -72,6 +77,21 @@ function WaitlistWalletSetupSectionInner() {
     accountSignals,
     parentEmbeddedOwnerOnChain,
   })
+
+  const messagingReady = useMemo(
+    () =>
+      isWaitlistMessagingSigningReady({
+        connectTrack,
+        accountSignals,
+        parentEmbeddedOwnerOnChain,
+      }),
+    [accountSignals, connectTrack, parentEmbeddedOwnerOnChain],
+  )
+
+  const handleOwnerInstallSuccess = async () => {
+    await refreshParentEmbeddedOwner()
+    refresh()
+  }
 
   if (loading && !accountMe) {
     return (
@@ -81,25 +101,41 @@ function WaitlistWalletSetupSectionInner() {
     )
   }
 
-  if (!needsProvision && !showOwnerInstall) return null
+  const showWalletSection = needsProvision || showOwnerInstall
 
   return (
     <div className="mt-5 space-y-4">
-      <WaitlistWalletProvision enabled needsProvision={needsProvision} />
+      {showWalletSection ? (
+        <div className="space-y-4">
+          <WaitlistWalletProvision enabled needsProvision={needsProvision} />
 
-      {showOwnerInstall ? (
-        <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-4">
-          <p className="mb-3 text-sm font-medium text-zinc-200">Enable 4626 signing</p>
-          <WaitlistModernParentOwnerInstall
-            controller={controller}
-            embeddedEoaAddress={embeddedEoaAddress ?? accountSignals?.embeddedEoaAddress ?? null}
-            onOwnerInstallSuccess={async () => {
-              await refreshParentEmbeddedOwner()
-              refresh()
-            }}
-          />
+          {showOwnerInstall ? (
+            <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-4">
+              <p className="mb-3 text-sm font-medium text-zinc-200">Enable 4626 signing</p>
+              <WaitlistOwnerInstallPanel
+                connectTrack={connectTrack}
+                canonicalCswAddress={canonicalCswAddress}
+                embeddedEoaAddress={embeddedEoaAddress ?? accountSignals?.embeddedEoaAddress ?? null}
+                onSuccess={handleOwnerInstallSuccess}
+              />
+            </div>
+          ) : null}
         </div>
       ) : null}
+
+      <Suspense
+        fallback={
+          <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-5">
+            <LoadingInline labelOverride="Loading waitlist chat…" />
+          </div>
+        }
+      >
+        <LazyWaitlistGroupChatPanel
+          setupComplete
+          messagingReady={messagingReady}
+          connectTrack={connectTrack}
+        />
+      </Suspense>
     </div>
   )
 }

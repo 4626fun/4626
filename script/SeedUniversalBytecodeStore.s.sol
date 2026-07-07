@@ -2,23 +2,27 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import "@4626/shared/deploy/infra/UniversalBytecodeStore.sol";
 
 /**
- * @dev Seed UniversalBytecodeStore with all creation codes used by the phased deploy flow
- * (`DeploymentBatcher`, Phases 1–3).
+ * @dev Seed UniversalBytecodeStoreV2 with v1.16.0 creation codes (creator + agent lanes).
  *
  * Run:
- *  forge script script/SeedUniversalBytecodeStore.s.sol:SeedUniversalBytecodeStore --rpc-url $BASE_RPC_URL --broadcast
+ *   forge script script/SeedUniversalBytecodeStore.s.sol:SeedUniversalBytecodeStore \
+ *     --rpc-url $BASE_RPC_URL --broadcast
  *
- * Env overrides:
- *  PRIVATE_KEY (required)
- *  UNIVERSAL_BYTECODE_STORE (optional; defaults to Base mainnet store)
+ * Env:
+ *   PRIVATE_KEY (required)
+ *   UNIVERSAL_BYTECODE_STORE (optional; defaults to live Base v2 store)
+ *   SEED_OFFSET / SEED_LIMIT (optional batch window over the ordered list below)
  */
+interface IUniversalBytecodeStoreSeed {
+    function store(bytes calldata creationCode) external returns (bytes32 codeId, address pointer);
+    function pointers(bytes32 codeId) external view returns (address);
+}
+
 contract SeedUniversalBytecodeStore is Script {
-    // Base mainnet: current live chunked store; override via env for fresh release epochs.
-    address constant DEFAULT_BYTECODE_STORE = 0x8B51E6784A0C6681F5de25bAC4f9B2fDCEDE72b4;
-    uint256 constant MAX_SSTORE2_BYTES = 24_575; // EIP-170 runtime limit (24,576) minus STOP prefix.
+    // Live Base mainnet UniversalBytecodeStoreV2 (see test/current-release-target-guard.sh).
+    address constant DEFAULT_BYTECODE_STORE = 0x7D1029a832E2BEd2C961bC912b623b763862Ad3C;
 
     function _shouldProcess(uint256 index, uint256 offset, uint256 limit) internal pure returns (bool) {
         if (limit == 0) return true;
@@ -34,185 +38,126 @@ contract SeedUniversalBytecodeStore is Script {
 
         console2.log("Broadcaster:", broadcaster);
         console2.log("Broadcaster balance (ETH):", broadcaster.balance);
-
-        console2.log("UniversalBytecodeStore:", storeAddr);
+        console2.log("UniversalBytecodeStoreV2:", storeAddr);
         console2.log("Seed offset:", seedOffset);
         console2.log("Seed limit:", seedLimit);
-        UniversalBytecodeStore store = UniversalBytecodeStore(storeAddr);
 
-        bool supportsChunking = _supportsChunking(storeAddr);
-        console2.log("Store supports chunking:", supportsChunking);
-
-        // Foundry will happily simulate these calls even if the broadcaster can't pay gas,
-        // which is confusing because you'll see "stored" logs but nothing is actually mined.
-        // Fail fast for the common case: 0 balance.
         if (broadcaster.balance == 0) {
             console2.log("ERROR: broadcaster has 0 ETH on this chain. Fund it and rerun.");
             return;
         }
 
+        IUniversalBytecodeStoreSeed store = IUniversalBytecodeStoreSeed(storeAddr);
         vm.startBroadcast(pk);
+
         uint256 i = 0;
-        // Shared CreatorOVault delegatecall modules.
-        // These are deployed as standalone CREATE2 contracts (not via the store),
-        // but we keep their creation code in the bytecode store for completeness/debugging.
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(
-                store,
-                vm.getCode("out/CreatorOVaultCoreModule.sol/CreatorOVaultCoreModule.json"),
-                "CreatorOVaultCoreModule",
-                supportsChunking
-            );
+            _storeIfMissing(store, vm.getCode("out/CreatorOVaultCoreModule.sol/CreatorOVaultCoreModule.json"), "CreatorOVaultCoreModule");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(
-                store,
-                vm.getCode("out/OVaultStrategiesModule.sol/OVaultStrategiesModule.json"),
-                "OVaultStrategiesModule",
-                supportsChunking
-            );
+            _storeIfMissing(store, vm.getCode("out/AgentOVaultCoreModule.sol/AgentOVaultCoreModule.json"), "AgentOVaultCoreModule");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(
-                store,
-                vm.getCode("out/OVaultAdminModule.sol/OVaultAdminModule.json"),
-                "OVaultAdminModule",
-                supportsChunking
-            );
+            _storeIfMissing(store, vm.getCode("out/OVaultStrategiesModule.sol/OVaultStrategiesModule.json"), "OVaultStrategiesModule");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(
-                store,
-                vm.getCode("out/OFTBootstrapRegistry.sol/OFTBootstrapRegistry.json"),
-                "OFTBootstrapRegistry",
-                supportsChunking
-            );
+            _storeIfMissing(store, vm.getCode("out/OVaultAdminModule.sol/OVaultAdminModule.json"), "OVaultAdminModule");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(
-                store, vm.getCode("out/CreatorShareOFT.sol/CreatorShareOFT.json"), "CreatorShareOFT", supportsChunking
-            );
+            _storeIfMissing(store, vm.getCode("out/OFTBootstrapRegistry.sol/OFTBootstrapRegistry.json"), "OFTBootstrapRegistry");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(
-                store, vm.getCode("out/CreatorOVault.sol/CreatorOVault.json"), "CreatorOVault", supportsChunking
-            );
+            _storeIfMissing(store, vm.getCode("out/CreatorShareOFT.sol/CreatorShareOFT.json"), "CreatorShareOFT");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(
-                store,
-                vm.getCode("out/CreatorOVaultWrapper.sol/CreatorOVaultWrapper.json"),
-                "CreatorOVaultWrapper",
-                supportsChunking
-            );
+            _storeIfMissing(store, vm.getCode("out/AgentShareOFT.sol/AgentShareOFT.json"), "AgentShareOFT");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(
-                store,
-                vm.getCode("out/CreatorGaugeController.sol/CreatorGaugeController.json"),
-                "CreatorGaugeController",
-                supportsChunking
-            );
+            _storeIfMissing(store, vm.getCode("out/CreatorOVault.sol/CreatorOVault.json"), "CreatorOVault");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(
-                store,
-                vm.getCode("out/CCALaunchStrategy.sol/CCALaunchStrategy.json"),
-                "CCALaunchStrategy",
-                supportsChunking
-            );
+            _storeIfMissing(store, vm.getCode("out/AgentOVault.sol/AgentOVault.json"), "AgentOVault");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(
-                store, vm.getCode("out/CreatorOracle.sol/CreatorOracle.json"), "CreatorOracle", supportsChunking
-            );
+            _storeIfMissing(store, vm.getCode("out/CreatorOVaultWrapper.sol/CreatorOVaultWrapper.json"), "CreatorOVaultWrapper");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(
-                store, vm.getCode("out/CreatorPayoutRouter.sol/CreatorPayoutRouter.json"), "CreatorPayoutRouter", supportsChunking
-            );
+            _storeIfMissing(store, vm.getCode("out/AgentOVaultWrapper.sol/AgentOVaultWrapper.json"), "AgentOVaultWrapper");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(
-                store,
-                vm.getCode("out/VaultShareBurnStream.sol/VaultShareBurnStream.json"),
-                "VaultShareBurnStream",
-                supportsChunking
-            );
+            _storeIfMissing(store, vm.getCode("out/CreatorGaugeController.sol/CreatorGaugeController.json"), "CreatorGaugeController");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(
-                store,
-                vm.getCode("out/CreatorCoinPolicyController.sol/CreatorCoinPolicyController.json"),
-                "CreatorCoinPolicyController",
-                supportsChunking
-            );
-        }
-        // CharmAlphaVaultDeploy removed - now using Charm's official factory
-        if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(
-                store,
-                vm.getCode("out/CharmStrategy4626.sol/CharmStrategy4626.json"),
-                "CharmStrategy4626",
-                supportsChunking
-            );
+            _storeIfMissing(store, vm.getCode("out/AgentGaugeController.sol/AgentGaugeController.json"), "AgentGaugeController");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(
-                store, vm.getCode("out/AjnaVaultAuth.sol/AjnaVaultAuth.json"), "AjnaVaultAuth", supportsChunking
-            );
+            _storeIfMissing(store, vm.getCode("out/CCALaunchStrategy.sol/CCALaunchStrategy.json"), "CCALaunchStrategy");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(
-                store,
-                vm.getCode("out/AjnaERC4626Vault.sol/AjnaERC4626Vault.json"),
-                "AjnaERC4626Vault",
-                supportsChunking
-            );
+            _storeIfMissing(store, vm.getCode("out/CreatorOracle.sol/CreatorOracle.json"), "CreatorOracle");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(
-                store,
-                vm.getCode("out/ERC4626StrategyAdapter.sol/ERC4626StrategyAdapter.json"),
-                "ERC4626StrategyAdapter",
-                supportsChunking
-            );
+            _storeIfMissing(store, vm.getCode("out/AgentOracle.sol/AgentOracle.json"), "AgentOracle");
         }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(store, vm.getCode("out/CreatorPayoutRouter.sol/CreatorPayoutRouter.json"), "CreatorPayoutRouter");
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(store, vm.getCode("out/AgentRevenueRouter.sol/AgentRevenueRouter.json"), "AgentRevenueRouter");
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(store, vm.getCode("out/VaultShareBurnStream.sol/VaultShareBurnStream.json"), "VaultShareBurnStream");
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(store, vm.getCode("out/CreatorCoinPolicyController.sol/CreatorCoinPolicyController.json"), "CreatorCoinPolicyController");
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(store, vm.getCode("out/CharmStrategy4626.sol/CharmStrategy4626.json"), "CharmStrategy4626");
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(store, vm.getCode("out/AjnaVaultAuth.sol/AjnaVaultAuth.json"), "AjnaVaultAuth");
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(store, vm.getCode("out/AjnaERC4626Vault.sol/AjnaERC4626Vault.json"), "AjnaERC4626Vault");
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(store, vm.getCode("out/ERC4626StrategyAdapter.sol/ERC4626StrategyAdapter.json"), "ERC4626StrategyAdapter");
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(store, vm.getCode("out/DeploymentBatcher.sol/DeploymentBatcherPhase1Module.json"), "DeploymentBatcherPhase1Module");
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(store, vm.getCode("out/DeploymentBatcher.sol/DeploymentBatcherPhase2Module.json"), "DeploymentBatcherPhase2Module");
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(store, vm.getCode("out/DeploymentBatcher.sol/DeploymentBatcherPhase3Helper.json"), "DeploymentBatcherPhase3Helper");
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(store, vm.getCode("out/DeploymentBatcher.sol/DeploymentBatcherUniV4Helper.json"), "DeploymentBatcherUniV4Helper");
+        }
+        if (_shouldProcess(i++, seedOffset, seedLimit)) {
+            _storeIfMissing(store, vm.getCode("out/DeploymentBatcher.sol/DeploymentBatcherUtilsHelper.json"), "DeploymentBatcherUtilsHelper");
+        }
+
         vm.stopBroadcast();
+        console2.log("Processed entries:", i);
     }
 
-    function _storeIfMissing(
-        UniversalBytecodeStore store,
-        bytes memory creationCode,
-        string memory label,
-        bool supportsChunking
-    ) internal {
+    function _storeIfMissing(IUniversalBytecodeStoreSeed store, bytes memory creationCode, string memory label) internal {
         bytes32 codeId = keccak256(creationCode);
         address pointer = store.pointers(codeId);
-        if (pointer == address(0)) {
-            if (!supportsChunking && creationCode.length > MAX_SSTORE2_BYTES) {
-                console2.log("ERROR:", label, "creation bytecode too large for v1 store:", creationCode.length);
-                console2.log("       Deploy UniversalBytecodeStoreV2 and rerun with:");
-                console2.log("       UNIVERSAL_BYTECODE_STORE=<v2_store_address>");
-                return;
-            }
-
-            try store.store(creationCode) returns (bytes32 storedId, address storedPointer) {
-                console2.log(label, "stored codeId:", uint256(storedId));
-                console2.log(label, "pointer:", storedPointer);
-            } catch (bytes memory err) {
-                console2.log("ERROR:", label, "store() reverted");
-                console2.logBytes(err);
-            }
-        } else {
+        if (pointer != address(0)) {
             console2.log(label, "already stored codeId:", uint256(codeId));
             console2.log(label, "pointer:", pointer);
+            return;
         }
-    }
 
-    function _supportsChunking(address storeAddr) internal view returns (bool ok) {
-        // `UniversalBytecodeStoreV2` exposes `chunkCount(bytes32)` for debugging.
-        // v1 stores will not recognize the selector, causing the call to fail.
-        (ok,) = storeAddr.staticcall(abi.encodeWithSignature("chunkCount(bytes32)", bytes32(0)));
+        try store.store(creationCode) returns (bytes32 storedId, address storedPointer) {
+            console2.log(label, "stored codeId:", uint256(storedId));
+            console2.log(label, "pointer:", storedPointer);
+        } catch (bytes memory err) {
+            console2.log("ERROR:", label, "store() reverted");
+            console2.logBytes(err);
+        }
     }
 }

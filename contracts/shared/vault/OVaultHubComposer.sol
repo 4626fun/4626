@@ -6,17 +6,21 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
-import {ICreatorOVaultComposer} from "@4626/creator/interfaces/ICreatorOVaultComposer.sol";
+import {IOVaultComposer} from "@4626/shared/interfaces/vault/IOVaultComposer.sol";
 import {ILayerZeroComposer} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroComposer.sol";
 import {OFTComposeMsgCodec} from "@layerzerolabs/oft-evm/contracts/libs/OFTComposeMsgCodec.sol";
 
-interface ICreatorOVaultWrapperComposer {
-    function creatorCoin() external view returns (address);
+interface IOVaultWrapperComposer {
+    function vault() external view returns (address);
     function shareOFT() external view returns (address);
     function depositFor(uint256 amount, uint256 minOut, address beneficiary) external returns (uint256 shareOFTOut);
-    function withdrawFor(uint256 amount, uint256 minOut, address beneficiary) external returns (uint256 creatorCoinOut);
-    // FIX: C-1 — expose operator check so configureCreatorMesh can verify
+    function withdrawFor(uint256 amount, uint256 minOut, address beneficiary) external returns (uint256 assetOut);
+    // FIX: C-1 — expose operator check so configureTokenMesh can verify
     function isBeneficiaryOperator(address operator) external view returns (bool);
+}
+
+interface IERC4626AssetLike {
+    function asset() external view returns (address);
 }
 
 /**
@@ -27,7 +31,7 @@ interface ICreatorOVaultWrapperComposer {
  *      balance-delta invariants so a compose packet can never spend or mint more than
  *      the packet-provided OFT amount.
  */
-contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownable, ReentrancyGuard {
+contract OVaultHubComposer is ILayerZeroComposer, IOVaultComposer, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using SafeERC20 for IERC20;
 
@@ -37,7 +41,7 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
     I4626Registry public immutable registry;
     address public immutable endpoint;
 
-    struct CreatorMesh {
+    struct TokenMesh {
         address vault;
         address assetMeshToken;
         address shareMeshToken;
@@ -47,12 +51,12 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
         bool paused;
     }
 
-    mapping(address => CreatorMesh) internal creatorMeshes;
+    mapping(address => TokenMesh) internal tokenMeshes;
     mapping(address => bool) public allowedComposeSenders;
 
     event ComposeSenderAllowed(address indexed sender, bool allowed);
-    event CreatorMeshConfigured(
-        address indexed creatorToken,
+    event TokenMeshConfigured(
+        address indexed token,
         address indexed vault,
         address assetMeshToken,
         address shareMeshToken,
@@ -60,12 +64,12 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
         bytes32 solanaAssetPeer,
         bytes32 solanaSharePeer
     );
-    event CreatorMeshPaused(address indexed creatorToken, bool paused);
+    event TokenMeshPaused(address indexed token, bool paused);
     event DepositComposed(
         bytes32 indexed guid,
         address indexed sourceOft,
         address indexed receiver,
-        address creatorToken,
+        address token,
         address wrapper,
         uint256 assetsIn,
         uint256 sharesOut,
@@ -76,7 +80,7 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
         bytes32 indexed guid,
         address indexed sourceOft,
         address indexed receiver,
-        address creatorToken,
+        address token,
         address wrapper,
         uint256 sharesIn,
         uint256 assetsOut,
@@ -92,18 +96,18 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
     error SourceOftMismatch(address expected, address actual);
     error CanonicalShareOftMismatch(address expected, address actual);
     error WrapperMismatch(address expected, address actual);
-    error WrapperCreatorTokenMismatch(address expected, address actual);
+    error WrapperTokenMismatch(address expected, address actual);
     error WrapperShareOftMismatch(address expected, address actual);
-    error CreatorMeshPausedError(address creatorToken);
-    error CreatorMeshVaultMismatch(address expected, address actual);
-    error CreatorMeshAssetTokenMismatch(address expected, address actual);
-    error CreatorMeshShareTokenMismatch(address expected, address actual);
-    error CreatorMeshSrcEidMismatch(uint32 expected, uint32 actual);
-    error CreatorMeshPeerMismatch(bytes32 expected, bytes32 actual);
+    error TokenMeshPausedError(address token);
+    error TokenMeshVaultMismatch(address expected, address actual);
+    error TokenMeshAssetTokenMismatch(address expected, address actual);
+    error TokenMeshShareTokenMismatch(address expected, address actual);
+    error TokenMeshSrcEidMismatch(uint32 expected, uint32 actual);
+    error TokenMeshPeerMismatch(bytes32 expected, bytes32 actual);
     // FIX: C-1 — require composer is registered as beneficiary operator on wrapper
     error ComposerNotBeneficiaryOperator(address composer, address wrapper);
     // FIX: C-2 — require mesh configuration before allowing compose
-    error CreatorMeshNotConfigured(address creatorToken);
+    error TokenMeshNotConfigured(address token);
     // FIX: L-7 — prevent receiver == address(this) locking shares in composer
     error ReceiverIsComposer();
     error InsufficientComposerBalance(address token, uint256 available, uint256 requiredAmount);
@@ -163,8 +167,8 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
         emit ComposeSenderAllowed(sender, allowed);
     }
 
-    function configureCreatorMesh(
-        address creatorToken,
+    function configureTokenMesh(
+        address token,
         address vault,
         address assetMeshToken,
         address shareMeshToken,
@@ -173,18 +177,18 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
         bytes32 solanaSharePeer
     ) external override onlyOwner {
         if (
-            creatorToken == address(0) || vault == address(0) || assetMeshToken == address(0) || shareMeshToken == address(0)
+            token == address(0) || vault == address(0) || assetMeshToken == address(0) || shareMeshToken == address(0)
         ) {
             revert ZeroAddress();
         }
         if (solanaAssetPeer == bytes32(0) || solanaSharePeer == bytes32(0)) revert ZeroAddress();
         // FIX: C-1 — verify composer is registered as beneficiary operator on the wrapper
         // before allowing mesh configuration; prevents permanent compose DoS
-        address wrapper = registry.getWrapperForToken(creatorToken);
-        if (wrapper != address(0) && !ICreatorOVaultWrapperComposer(wrapper).isBeneficiaryOperator(address(this))) {
+        address wrapper = registry.getWrapperForToken(token);
+        if (wrapper != address(0) && !IOVaultWrapperComposer(wrapper).isBeneficiaryOperator(address(this))) {
             revert ComposerNotBeneficiaryOperator(address(this), wrapper);
         }
-        creatorMeshes[creatorToken] = CreatorMesh({
+        tokenMeshes[token] = TokenMesh({
             vault: vault,
             assetMeshToken: assetMeshToken,
             shareMeshToken: shareMeshToken,
@@ -193,18 +197,18 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
             solanaSharePeer: solanaSharePeer,
             paused: false
         });
-        emit CreatorMeshConfigured(
-            creatorToken, vault, assetMeshToken, shareMeshToken, solanaEid, solanaAssetPeer, solanaSharePeer
+        emit TokenMeshConfigured(
+            token, vault, assetMeshToken, shareMeshToken, solanaEid, solanaAssetPeer, solanaSharePeer
         );
     }
 
-    function pauseCreatorMesh(address creatorToken, bool paused) external override onlyOwner {
-        if (creatorToken == address(0)) revert ZeroAddress();
-        creatorMeshes[creatorToken].paused = paused;
-        emit CreatorMeshPaused(creatorToken, paused);
+    function pauseTokenMesh(address token, bool paused) external override onlyOwner {
+        if (token == address(0)) revert ZeroAddress();
+        tokenMeshes[token].paused = paused;
+        emit TokenMeshPaused(token, paused);
     }
 
-    function creatorMesh(address creatorToken)
+    function tokenMesh(address token)
         external
         view
         override
@@ -218,7 +222,7 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
             bool paused
         )
     {
-        CreatorMesh memory mesh = creatorMeshes[creatorToken];
+        TokenMesh memory mesh = tokenMeshes[token];
         return (
             mesh.vault,
             mesh.assetMeshToken,
@@ -246,10 +250,10 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
         if (amountIn == 0) revert ZeroAmount();
 
         bytes memory composeMsg = OFTComposeMsgCodec.composeMsg(_message);
-        (uint8 action, address creatorToken, address wrapper, address receiver, address sourceOft, uint256 minOut) =
+        (uint8 action, address token, address wrapper, address receiver, address sourceOft, uint256 minOut) =
             abi.decode(composeMsg, (uint8, address, address, address, address, uint256));
 
-        if (creatorToken == address(0) || wrapper == address(0) || receiver == address(0) || sourceOft == address(0)) {
+        if (token == address(0) || wrapper == address(0) || receiver == address(0) || sourceOft == address(0)) {
             revert ZeroAddress();
         }
         // FIX: L-7 — prevent shares/assets from being locked in the composer
@@ -258,31 +262,31 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
         if (minOut == 0) revert ZeroAmount();
         if (sourceOft != _from) revert SourceOftMismatch(sourceOft, _from);
 
-        address shareOft = _validateCreatorBindings(creatorToken, wrapper);
+        address shareOft = _validateTokenBindings(token, wrapper);
         bytes32 composeFromBytes32 = OFTComposeMsgCodec.composeFrom(_message);
         address composeFrom = OFTComposeMsgCodec.bytes32ToAddress(composeFromBytes32);
         uint32 srcEid = OFTComposeMsgCodec.srcEid(_message);
         _enforceMeshInvariants({
             action: action,
-            creatorToken: creatorToken,
+            token: token,
             sourceOft: _from,
             srcEid: srcEid,
             composeFrom: composeFromBytes32
         });
 
         if (action == ACTION_DEPOSIT) {
-            uint256 sharesOut = _composeDeposit(creatorToken, shareOft, wrapper, receiver, amountIn, minOut);
+            uint256 sharesOut = _composeDeposit(token, shareOft, wrapper, receiver, amountIn, minOut);
             emit DepositComposed(
-                _guid, _from, receiver, creatorToken, wrapper, amountIn, sharesOut, srcEid, composeFrom
+                _guid, _from, receiver, token, wrapper, amountIn, sharesOut, srcEid, composeFrom
             );
             return;
         }
 
         if (action == ACTION_REDEEM) {
             if (_from != shareOft) revert CanonicalShareOftMismatch(shareOft, _from);
-            uint256 assetsOut = _composeRedeem(creatorToken, shareOft, wrapper, receiver, amountIn, minOut);
+            uint256 assetsOut = _composeRedeem(token, shareOft, wrapper, receiver, amountIn, minOut);
             emit RedeemComposed(
-                _guid, _from, receiver, creatorToken, wrapper, amountIn, assetsOut, srcEid, composeFrom
+                _guid, _from, receiver, token, wrapper, amountIn, assetsOut, srcEid, composeFrom
             );
             return;
         }
@@ -291,29 +295,29 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
     }
 
     function _composeDeposit(
-        address creatorToken,
+        address token,
         address shareOft,
         address wrapper,
         address receiver,
         uint256 amountIn,
         uint256 minSharesOut
     ) internal returns (uint256 sharesOut) {
-        IERC20 creator = IERC20(creatorToken);
+        IERC20 asset = IERC20(token);
         IERC20 share = IERC20(shareOft);
 
-        uint256 creatorBefore = creator.balanceOf(address(this));
-        if (creatorBefore < amountIn) {
-            revert InsufficientComposerBalance(creatorToken, creatorBefore, amountIn);
+        uint256 assetBefore = asset.balanceOf(address(this));
+        if (assetBefore < amountIn) {
+            revert InsufficientComposerBalance(token, assetBefore, amountIn);
         }
         uint256 shareBefore = share.balanceOf(address(this));
 
-        creator.forceApprove(wrapper, amountIn);
-        sharesOut = ICreatorOVaultWrapperComposer(wrapper).depositFor(amountIn, minSharesOut, receiver);
-        creator.forceApprove(wrapper, 0);
+        asset.forceApprove(wrapper, amountIn);
+        sharesOut = IOVaultWrapperComposer(wrapper).depositFor(amountIn, minSharesOut, receiver);
+        asset.forceApprove(wrapper, 0);
 
-        uint256 creatorAfter = creator.balanceOf(address(this));
-        if (creatorAfter + amountIn != creatorBefore) {
-            revert InputSpendInvariantFailed(creatorToken, creatorBefore, creatorAfter, amountIn);
+        uint256 assetAfter = asset.balanceOf(address(this));
+        if (assetAfter + amountIn != assetBefore) {
+            revert InputSpendInvariantFailed(token, assetBefore, assetAfter, amountIn);
         }
 
         uint256 shareAfterMint = share.balanceOf(address(this));
@@ -329,24 +333,24 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
     }
 
     function _composeRedeem(
-        address creatorToken,
+        address token,
         address shareOft,
         address wrapper,
         address receiver,
         uint256 amountIn,
         uint256 minAssetsOut
     ) internal returns (uint256 assetsOut) {
-        IERC20 creator = IERC20(creatorToken);
+        IERC20 asset = IERC20(token);
         IERC20 share = IERC20(shareOft);
 
         uint256 shareBefore = share.balanceOf(address(this));
         if (shareBefore < amountIn) {
             revert InsufficientComposerBalance(shareOft, shareBefore, amountIn);
         }
-        uint256 creatorBefore = creator.balanceOf(address(this));
+        uint256 assetBefore = asset.balanceOf(address(this));
 
         share.forceApprove(wrapper, amountIn);
-        assetsOut = ICreatorOVaultWrapperComposer(wrapper).withdrawFor(amountIn, minAssetsOut, receiver);
+        assetsOut = IOVaultWrapperComposer(wrapper).withdrawFor(amountIn, minAssetsOut, receiver);
         share.forceApprove(wrapper, 0);
 
         uint256 shareAfterBurn = share.balanceOf(address(this));
@@ -354,62 +358,64 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
             revert InputSpendInvariantFailed(shareOft, shareBefore, shareAfterBurn, amountIn);
         }
 
-        uint256 creatorAfterMint = creator.balanceOf(address(this));
-        if (creatorBefore + assetsOut != creatorAfterMint) {
-            revert OutputMintInvariantFailed(creatorToken, creatorBefore, creatorAfterMint, assetsOut);
+        uint256 assetAfterMint = asset.balanceOf(address(this));
+        if (assetBefore + assetsOut != assetAfterMint) {
+            revert OutputMintInvariantFailed(token, assetBefore, assetAfterMint, assetsOut);
         }
 
-        creator.safeTransfer(receiver, assetsOut);
-        uint256 creatorAfterTransfer = creator.balanceOf(address(this));
-        if (creatorAfterTransfer != creatorBefore) {
-            revert ResidualBalanceInvariantFailed(creatorToken, creatorBefore, creatorAfterTransfer);
+        asset.safeTransfer(receiver, assetsOut);
+        uint256 assetAfterTransfer = asset.balanceOf(address(this));
+        if (assetAfterTransfer != assetBefore) {
+            revert ResidualBalanceInvariantFailed(token, assetBefore, assetAfterTransfer);
         }
     }
 
-    function _validateCreatorBindings(address creatorToken, address wrapper) internal view returns (address shareOft) {
-        address expectedWrapper = registry.getWrapperForToken(creatorToken);
+    function _validateTokenBindings(address token, address wrapper) internal view returns (address shareOft) {
+        address expectedWrapper = registry.getWrapperForToken(token);
         if (expectedWrapper != wrapper) revert WrapperMismatch(expectedWrapper, wrapper);
 
-        address wrapperCreator = ICreatorOVaultWrapperComposer(wrapper).creatorCoin();
-        if (wrapperCreator != creatorToken) revert WrapperCreatorTokenMismatch(creatorToken, wrapperCreator);
+        // Lane-neutral: resolve the wrapper's deposit token via its vault's ERC-4626 asset()
+        // (works for both CreatorOVaultWrapper.creatorCoin and AgentOVaultWrapper.agentToken).
+        address wrapperAsset = IERC4626AssetLike(IOVaultWrapperComposer(wrapper).vault()).asset();
+        if (wrapperAsset != token) revert WrapperTokenMismatch(token, wrapperAsset);
 
-        shareOft = registry.getShareOFTForToken(creatorToken);
-        address wrapperShare = ICreatorOVaultWrapperComposer(wrapper).shareOFT();
+        shareOft = registry.getShareOFTForToken(token);
+        address wrapperShare = IOVaultWrapperComposer(wrapper).shareOFT();
         if (wrapperShare != shareOft) revert WrapperShareOftMismatch(shareOft, wrapperShare);
     }
 
     function _enforceMeshInvariants(
         uint8 action,
-        address creatorToken,
+        address token,
         address sourceOft,
         uint32 srcEid,
         bytes32 composeFrom
     ) internal view {
-        CreatorMesh memory mesh = creatorMeshes[creatorToken];
+        TokenMesh memory mesh = tokenMeshes[token];
         // FIX: C-2 — require explicit mesh config; legacy bypass allowed unconfigured tokens
         // to skip ALL security invariants (source EID, vault, peer validation)
-        if (mesh.vault == address(0)) revert CreatorMeshNotConfigured(creatorToken);
+        if (mesh.vault == address(0)) revert TokenMeshNotConfigured(token);
 
-        if (mesh.paused) revert CreatorMeshPausedError(creatorToken);
+        if (mesh.paused) revert TokenMeshPausedError(token);
         // FIX: I-5 — always enforce source EID check; a misconfigured solanaEid=0 previously
         // allowed messages from any source chain to be accepted
-        if (srcEid != mesh.solanaEid) revert CreatorMeshSrcEidMismatch(mesh.solanaEid, srcEid);
+        if (srcEid != mesh.solanaEid) revert TokenMeshSrcEidMismatch(mesh.solanaEid, srcEid);
 
-        address expectedVault = registry.getVaultForToken(creatorToken);
-        if (expectedVault != mesh.vault) revert CreatorMeshVaultMismatch(mesh.vault, expectedVault);
+        address expectedVault = registry.getVaultForToken(token);
+        if (expectedVault != mesh.vault) revert TokenMeshVaultMismatch(mesh.vault, expectedVault);
 
         if (action == ACTION_DEPOSIT) {
-            if (sourceOft != mesh.assetMeshToken) revert CreatorMeshAssetTokenMismatch(mesh.assetMeshToken, sourceOft);
+            if (sourceOft != mesh.assetMeshToken) revert TokenMeshAssetTokenMismatch(mesh.assetMeshToken, sourceOft);
             if (composeFrom != mesh.solanaAssetPeer) {
-                revert CreatorMeshPeerMismatch(mesh.solanaAssetPeer, composeFrom);
+                revert TokenMeshPeerMismatch(mesh.solanaAssetPeer, composeFrom);
             }
             return;
         }
 
         if (action == ACTION_REDEEM) {
-            if (sourceOft != mesh.shareMeshToken) revert CreatorMeshShareTokenMismatch(mesh.shareMeshToken, sourceOft);
+            if (sourceOft != mesh.shareMeshToken) revert TokenMeshShareTokenMismatch(mesh.shareMeshToken, sourceOft);
             if (composeFrom != mesh.solanaSharePeer) {
-                revert CreatorMeshPeerMismatch(mesh.solanaSharePeer, composeFrom);
+                revert TokenMeshPeerMismatch(mesh.solanaSharePeer, composeFrom);
             }
             return;
         }

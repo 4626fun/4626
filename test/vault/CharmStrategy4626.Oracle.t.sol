@@ -407,7 +407,7 @@ contract CharmStrategy4626OracleTest is Test {
 
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true); // 1 USD per CREATOR
-        strategy.setCreatorOracle(address(oracle));
+        strategy.setAssetOracle(address(oracle));
 
         charm.setTotalSupply(100e18);
         charm.setBalance(address(strategy), 100e18);
@@ -435,7 +435,7 @@ contract CharmStrategy4626OracleTest is Test {
 
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true); // 1 USD per CREATOR
-        strategy.setCreatorOracle(address(oracle));
+        strategy.setAssetOracle(address(oracle));
 
         charm.setTotalSupply(100e18);
         charm.setBalance(address(strategy), 100e18);
@@ -491,7 +491,7 @@ contract CharmStrategy4626OracleTest is Test {
 
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true); // 1 USD per CREATOR
-        strategy.setCreatorOracle(address(oracle));
+        strategy.setAssetOracle(address(oracle));
 
         charm.setTotalSupply(100e18);
         charm.setBalance(address(strategy), 100e18);
@@ -512,7 +512,7 @@ contract CharmStrategy4626OracleTest is Test {
 
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, false);
-        strategy.setCreatorOracle(address(oracle));
+        strategy.setAssetOracle(address(oracle));
 
         charm.setTotalSupply(100e18);
         charm.setBalance(address(strategy), 100e18);
@@ -533,7 +533,7 @@ contract CharmStrategy4626OracleTest is Test {
 
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
-        strategy.setCreatorOracle(address(oracle));
+        strategy.setAssetOracle(address(oracle));
 
         charm.setTotalSupply(100e18);
         charm.setBalance(address(strategy), 100e18);
@@ -575,7 +575,7 @@ contract CharmStrategy4626OracleTest is Test {
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
 
-        strategy.setCreatorOracle(address(oracle));
+        strategy.setAssetOracle(address(oracle));
         strategy.setAjnaPool(address(ajna));
         strategy.initializeApprovals();
 
@@ -597,7 +597,7 @@ contract CharmStrategy4626OracleTest is Test {
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
 
-        strategy.setCreatorOracle(address(oracle));
+        strategy.setAssetOracle(address(oracle));
         strategy.setAjnaPool(address(ajna));
         strategy.setAjnaBorrowConfig(true, type(uint256).max, type(uint256).max, 12_500, 0, 0);
 
@@ -688,7 +688,7 @@ contract CharmStrategy4626OracleTest is Test {
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
-        strategy.setCreatorOracle(address(oracle));
+        strategy.setAssetOracle(address(oracle));
         strategy.setAjnaPool(address(ajna));
         strategy.setAjnaBorrowConfig(true, type(uint256).max, type(uint256).max, 12_500, 0, 0);
         strategy.initializeApprovals();
@@ -727,7 +727,7 @@ contract CharmStrategy4626OracleTest is Test {
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
         oracle.setAjnaBucketFromV3Twap(6_000, false);
-        strategy.setCreatorOracle(address(oracle));
+        strategy.setAssetOracle(address(oracle));
         strategy.setAjnaPool(address(ajna));
         strategy.setAjnaBorrowConfig(true, type(uint256).max, type(uint256).max, 12_500, 0, 0);
         strategy.initializeApprovals();
@@ -760,7 +760,7 @@ contract CharmStrategy4626OracleTest is Test {
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
         oracle.setAjnaBucketFromV3Twap(0, true);
-        strategy.setCreatorOracle(address(oracle));
+        strategy.setAssetOracle(address(oracle));
         strategy.setAjnaPool(address(ajna));
         strategy.setAjnaBorrowConfig(true, type(uint256).max, type(uint256).max, 12_500, 0, 0);
         strategy.initializeApprovals();
@@ -826,7 +826,7 @@ contract CharmStrategy4626OracleTest is Test {
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
-        strategy.setCreatorOracle(address(oracle));
+        strategy.setAssetOracle(address(oracle));
         strategy.setAjnaPool(address(ajna));
         // Cap Ajna borrow so swap fallback must cover the residual.
         strategy.setAjnaBorrowConfig(true, type(uint256).max, 30e18, 12_500, 0, 0);
@@ -860,7 +860,7 @@ contract CharmStrategy4626OracleTest is Test {
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
-        strategy.setCreatorOracle(address(oracle));
+        strategy.setAssetOracle(address(oracle));
         strategy.setAjnaPool(address(ajna));
         strategy.setAjnaBorrowConfig(true, type(uint256).max, type(uint256).max, 12_500, 0, 0);
         strategy.initializeApprovals();
@@ -928,7 +928,7 @@ contract CharmStrategy4626OracleTest is Test {
         oracle.setAjnaBucketFromV3Twap(6_100, false);
         charm.setPool(address(pool));
 
-        strategy.setCreatorOracle(address(oracle));
+        strategy.setAssetOracle(address(oracle));
         strategy.setAjnaPool(address(ajna));
         strategy.setAjnaBorrowConfig(true, type(uint256).max, type(uint256).max, 12_500, 0, 0);
         strategy.initializeApprovals();
@@ -1037,7 +1037,7 @@ contract CharmStrategy4626OracleTest is Test {
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         MockCreatorOracle oracle = new MockCreatorOracle();
         oracle.setPrice(1e18, block.timestamp, true);
-        strategy.setCreatorOracle(address(oracle));
+        strategy.setAssetOracle(address(oracle));
         strategy.setAjnaPool(address(ajna));
         strategy.setAjnaBorrowConfig(true, type(uint256).max, type(uint256).max, 12_500, 0, 0);
         strategy.initializeApprovals();

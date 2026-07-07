@@ -66,7 +66,7 @@ contract MockOwnableTransferForPhase3 {
 
 contract MockCharmStrategyForPhase3 is MockOwnableTransferForPhase3 {
     bool public approvalsInitialized;
-    address public creatorOracle;
+    address public assetOracle;
     address public ajnaPool;
     bool public ajnaBorrowEnabled;
     uint256 public ajnaMaxDebt;
@@ -77,8 +77,8 @@ contract MockCharmStrategyForPhase3 is MockOwnableTransferForPhase3 {
         approvalsInitialized = true;
     }
 
-    function setCreatorOracle(address _creatorOracle) external {
-        creatorOracle = _creatorOracle;
+    function setAssetOracle(address _assetOracle) external {
+        assetOracle = _assetOracle;
     }
 
     function setAjnaPool(address _ajnaPool) external {

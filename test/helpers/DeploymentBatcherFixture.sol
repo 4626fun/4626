@@ -31,6 +31,7 @@ contract DeploymentBatcherFixture is Test {
         address uniswapRouter;
         address ajnaFactory;
         address vaultCoreModule;
+        address agentVaultCoreModule;
         address vaultStrategiesModule;
         address vaultAdminModule;
     }
@@ -64,7 +65,7 @@ contract DeploymentBatcherFixture is Test {
             cfg.bytecodeStore,
             cfg.registry,
             cfg.vaultCoreModule,
-            cfg.vaultCoreModule,
+            cfg.agentVaultCoreModule == address(0) ? cfg.vaultCoreModule : cfg.agentVaultCoreModule,
             cfg.vaultStrategiesModule,
             cfg.vaultAdminModule,
             cfg.vaultActivationBatcher,
@@ -107,12 +108,12 @@ contract DeploymentBatcherFixture is Test {
     }
 
     function mockRegistryCreatorCoin(address registry, address creatorToken, address oracle) public {
-        I4626Registry.CreatorCoinInfo memory info;
+        I4626Registry.TokenInfo memory info;
         info.token = creatorToken;
         info.oracle = oracle;
         vm.mockCall(
             registry,
-            abi.encodeWithSelector(I4626Registry.getCreatorCoin.selector, creatorToken),
+            abi.encodeWithSelector(I4626Registry.getTokenInfo.selector, creatorToken),
             abi.encode(info)
         );
     }
