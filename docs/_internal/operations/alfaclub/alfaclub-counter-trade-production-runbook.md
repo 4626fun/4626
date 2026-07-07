@@ -178,8 +178,8 @@ action cap, or daily notional cap. Each action posts a `🛡️ Defense` /
 
 Env knobs (Railway InverseAKITA executor):
 
-- **`ARENA_ASSET_ALLOWLIST`** — optional comma-separated HL perp symbols. When set
-  (e.g. `HYPE` for room 1659 HYPE-only), the counter-trade loop skips non-listed
+- **`ARENA_ASSET_ALLOWLIST`** — optional comma-separated HL perp symbols (and `xyz:` HIP-3 pairs). When **unset**, all markets the executor wallet can trade are allowed. When set
+  (e.g. `HYPE` for a narrow room), the counter-trade loop skips non-listed
   fills (`pair_not_allowlisted`), defense/harvest ignore other legs, and
   `runArenaTrade` rejects other pairs at execution time. Set on **Railway** —
   Vercel env alone does not affect the ticker executor.

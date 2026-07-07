@@ -878,6 +878,16 @@ function findPositionSnapshotForPair(positions: unknown[], pair: string): CloseP
   return null
 }
 
+/** Open perp side for a pair, if any (long when szi > 0, short when szi < 0). */
+export function resolveOpenArenaPositionSide(
+  positions: unknown[],
+  pair: string,
+): 'long' | 'short' | null {
+  const snapshot = findPositionSnapshotForPair(positions, pair)
+  if (!snapshot) return null
+  return snapshot.szi > 0 ? 'long' : 'short'
+}
+
 /** Exit fill parsed from the exchange order response dgclaw prints on close. */
 export function parseTradeFillFromOutput(stdout: string): { totalSz: number; avgPx: number } | null {
   const sz = /"totalSz"\s*:\s*"?([\d.]+)"?/.exec(stdout)

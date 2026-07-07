@@ -6,6 +6,8 @@ vi.mock('../arena/arenaClient.js', async () => {
   )
   return {
     parseTradeFillFromOutput: actual.parseTradeFillFromOutput,
+    resolveOpenArenaPositionSide: actual.resolveOpenArenaPositionSide,
+    runArenaOpenPositions: vi.fn(),
     runArenaTrade: vi.fn(),
   }
 })
@@ -14,18 +16,23 @@ vi.mock('../arena/arenaIdentityMappingStore.js', () => ({
   resolveRoomDefaultArenaIdentity: vi.fn(),
 }))
 
-vi.mock('../hermit/policy.js', () => ({
-  isHermitOwner: vi.fn(() => false),
-  isHermitUserAllowed: vi.fn(() => false),
-}))
+vi.mock('./inverseAkitaStakerPilot.js', async () => {
+  const actual = await vi.importActual<typeof import('./inverseAkitaStakerPilot.js')>(
+    './inverseAkitaStakerPilot.js',
+  )
+  return {
+    ...actual,
+    resolveInverseAkitaStakerPilotAccess: vi.fn(),
+  }
+})
 
 vi.mock('./hyperliquid.js', () => ({
   getPerpMarkets: vi.fn(),
 }))
 
-import { runArenaTrade } from '../arena/arenaClient.js'
+import { runArenaOpenPositions, runArenaTrade } from '../arena/arenaClient.js'
 import { resolveRoomDefaultArenaIdentity } from '../arena/arenaIdentityMappingStore.js'
-import { isHermitUserAllowed } from '../hermit/policy.js'
+import { resolveInverseAkitaStakerPilotAccess } from './inverseAkitaStakerPilot.js'
 import { getPerpMarkets } from './hyperliquid.js'
 import {
   __resetInverseAkitaChatReactionCooldownForTests,
@@ -41,12 +48,14 @@ import {
   isInverseAkitaChatReactionSenderCoolingDown,
   parseInverseAkitaChatTradeIntent,
   resolveInverseAkitaChatReactionLeverage,
+  resolveInverseChatPositionAction,
   summarizeInverseTradeFailureDetail,
 } from './inverseAkitaChatReaction.js'
 
 const mockRunArenaTrade = vi.mocked(runArenaTrade)
+const mockRunArenaOpenPositions = vi.mocked(runArenaOpenPositions)
 const mockResolveRoomDefaultArenaIdentity = vi.mocked(resolveRoomDefaultArenaIdentity)
-const mockIsHermitUserAllowed = vi.mocked(isHermitUserAllowed)
+const mockResolveInverseAkitaStakerPilotAccess = vi.mocked(resolveInverseAkitaStakerPilotAccess)
 const mockGetPerpMarkets = vi.mocked(getPerpMarkets)
 
 describe('inverseAkitaChatReaction', () => {
@@ -69,6 +78,16 @@ describe('inverseAkitaChatReaction', () => {
       agentWalletAddress: '0xagentwallet',
       hlApiWalletAddress: '0xhlwallet',
     })
+    mockResolveInverseAkitaStakerPilotAccess.mockResolvedValue({
+      eligible: true,
+      stakedKeys: 1,
+      reason: 'staker',
+    })
+    mockRunArenaOpenPositions.mockResolvedValue({
+      ok: true,
+      message: 'no positions',
+      details: { positions: [] },
+    })
     mockRunArenaTrade.mockResolvedValue({ ok: true, message: 'ok' })
   })
 
@@ -79,6 +98,7 @@ describe('inverseAkitaChatReaction', () => {
   it('formats skip replies for operator-visible config failures', () => {
     expect(formatInverseAkitaChatReactionSkipReply('arena_trading_disabled')).toMatch(/arena trading is off/i)
     expect(formatInverseAkitaChatReactionSkipReply('missing_executor_wallet')).toMatch(/executor wallet/i)
+    expect(formatInverseAkitaChatReactionSkipReply('insufficient_stake')).toMatch(/stake/i)
     expect(formatInverseAkitaChatReactionSkipReply('sender_cooldown')).toBeNull()
   })
 
@@ -163,21 +183,18 @@ describe('inverseAkitaChatReaction', () => {
     expect(parseInverseAkitaChatTradeIntent('gm')).toBeNull()
   })
 
-  it('collects intents for room 1659 and skips operators', () => {
-    mockIsHermitUserAllowed.mockImplementation(
-      (address) => address.toLowerCase() === '0x1111111111111111111111111111111111111111',
-    )
+  it('collects intents for room 1659 from any hex sender including operators', () => {
     const intents = collectInverseAkitaChatTradeIntents({
       roomId: '1659',
       messages: [
         { id: '1', sender: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd', text: 'long btc' },
-        { id: '2', sender: '0x1111111111111111111111111111111111111111', text: 'long btc' },
+        { id: '2', sender: '0x1111111111111111111111111111111111111111', text: 'should i long eth' },
         { id: '3', sender: '0x2222222222222222222222222222222222222222', text: 'gm' },
       ],
     })
-    expect(intents).toHaveLength(1)
+    expect(intents).toHaveLength(2)
     expect(intents[0]?.pair).toBe('BTC')
-    expect(intents[0]?.userSide).toBe('long')
+    expect(intents[1]?.pair).toBe('ETH')
   })
 
   it('uses 69% of Hyperliquid max leverage by default', () => {
@@ -211,6 +228,48 @@ describe('inverseAkitaChatReaction', () => {
     expect(reply).toMatch(/short/i)
     expect(reply).toContain('BTC')
     expect(reply).toContain('50 @ 27x')
+  })
+
+  it('formats add-to-position copy when stacking an existing leg', () => {
+    const reply = formatInverseAkitaChatReactionReply({
+      seed: 'm-add',
+      userSide: 'short',
+      pair: 'ETH',
+      counterSide: 'long',
+      sizeUsd: 50,
+      leverage: 17,
+      dryRun: false,
+      tradeOk: true,
+      positionAction: 'add',
+    })
+    expect(reply).toMatch(/bottom signal|sized up|stacked|increased/i)
+    expect(reply).toContain('ETH')
+    expect(reply).toContain('50')
+  })
+
+  it('formats trim copy when the open leg conflicts with the inverse side', () => {
+    const reply = formatInverseAkitaChatReactionReply({
+      seed: 'm-trim',
+      userSide: 'long',
+      pair: 'ETH',
+      counterSide: 'short',
+      existingSide: 'long',
+      sizeUsd: 50,
+      leverage: 17,
+      dryRun: false,
+      tradeOk: true,
+      positionAction: 'trim',
+    })
+    expect(reply).toMatch(/trimmed|exit signal|top signal/i)
+    expect(reply).toContain('ETH')
+    expect(reply).toContain('50')
+  })
+
+  it('resolves position action from open book vs counter side', () => {
+    expect(resolveInverseChatPositionAction({ openSide: null, counterSide: 'short' })).toBe('open')
+    expect(resolveInverseChatPositionAction({ openSide: 'long', counterSide: 'long' })).toBe('add')
+    expect(resolveInverseChatPositionAction({ openSide: 'long', counterSide: 'short' })).toBe('trim')
+    expect(resolveInverseChatPositionAction({ openSide: 'short', counterSide: 'long' })).toBe('trim')
   })
 
   it('formats sarcastic fail copy when trade rejects', () => {
@@ -363,6 +422,114 @@ describe('inverseAkitaChatReaction', () => {
     )
     expect(result.replyText).toMatch(/short/i)
     expect(result.replyText).toContain('50 @ 27x')
+    expect(mockResolveInverseAkitaStakerPilotAccess).toHaveBeenCalledWith({
+      senderAddress: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
+      roomId: '1659',
+      isTrustedOperator: false,
+    })
+  })
+
+  it('replies with the staker gate when the sender has no staked keys in room 1659', async () => {
+    mockResolveInverseAkitaStakerPilotAccess.mockResolvedValueOnce({
+      eligible: false,
+      stakedKeys: 0,
+      reason: 'insufficient_stake',
+    })
+
+    const result = await executeInverseAkitaChatReaction({
+      roomId: '1659',
+      intent: {
+        id: 'm-gate',
+        date: Date.now(),
+        sender: '0x9999999999999999999999999999999999999999',
+        text: 'should i long eth',
+        userSide: 'long',
+        pair: 'ETH',
+      },
+    })
+
+    expect(result.skipped).toBe(true)
+    expect(result.skipReason).toBe('insufficient_stake')
+    expect(result.replyText).toMatch(/stake/i)
+    expect(mockRunArenaTrade).not.toHaveBeenCalled()
+  })
+
+  it('uses add-to-position copy when the inverse leg is already open', async () => {
+    mockRunArenaOpenPositions.mockResolvedValueOnce({
+      ok: true,
+      message: 'positions',
+      details: {
+        positions: [
+          {
+            position: {
+              coin: 'ETH',
+              szi: '1.5',
+              entryPx: '3200',
+              leverage: { value: '17' },
+            },
+          },
+        ],
+      },
+    })
+
+    const result = await executeInverseAkitaChatReaction({
+      roomId: '1659',
+      intent: {
+        id: 'm-stack',
+        date: Date.now(),
+        sender: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
+        text: 'eth going down hard',
+        userSide: 'short',
+        pair: 'ETH',
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.replyText).toMatch(/bottom signal|sized up|stacked|increased/i)
+    expect(result.threadReceiptText).toMatch(/added to LONG ETH/)
+    expect(mockRunArenaTrade).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'open', pair: 'ETH', side: 'long' }),
+      expect.anything(),
+    )
+  })
+
+  it('partial-closes the conflicting leg when user aligns with the open book', async () => {
+    mockRunArenaOpenPositions.mockResolvedValueOnce({
+      ok: true,
+      message: 'positions',
+      details: {
+        positions: [
+          {
+            position: {
+              coin: 'ETH',
+              szi: '2',
+              entryPx: '3200',
+              leverage: { value: '17' },
+            },
+          },
+        ],
+      },
+    })
+
+    const result = await executeInverseAkitaChatReaction({
+      roomId: '1659',
+      intent: {
+        id: 'm-trim-exec',
+        date: Date.now(),
+        sender: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
+        text: 'long eth',
+        userSide: 'long',
+        pair: 'ETH',
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.replyText).toMatch(/trimmed|exit signal|top signal|took \$50 off/i)
+    expect(result.threadReceiptText).toMatch(/trimmed LONG ETH/)
+    expect(mockRunArenaTrade).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'close', pair: 'ETH', sizeUsd: 50 }),
+      expect.anything(),
+    )
   })
 
   it('rate-limits repeat reactions from the same sender', async () => {

@@ -1,10 +1,18 @@
 import { arenaCommandAllowedForRoom, readArenaConfig } from '../arena/arenaConfig.js'
-import { parseTradeFillFromOutput, runArenaTrade } from '../arena/arenaClient.js'
+import {
+  parseTradeFillFromOutput,
+  resolveOpenArenaPositionSide,
+  runArenaOpenPositions,
+  runArenaTrade,
+} from '../arena/arenaClient.js'
 import { validateArenaPair } from '../arena/arenaPairPolicy.js'
 import { resolveRoomDefaultArenaIdentity } from '../arena/arenaIdentityMappingStore.js'
 import { logger } from '../infra/logger.js'
-import { isHermitOwner, isHermitUserAllowed } from '../hermit/policy.js'
 import { deriveCounterSide, type CounterTradeSide } from './counterTradeConfig.js'
+import {
+  formatInverseAkitaStakerPilotGateReply,
+  resolveInverseAkitaStakerPilotAccess,
+} from './inverseAkitaStakerPilot.js'
 import { getPerpMarkets, type HyperliquidPerpMarket } from './hyperliquid.js'
 import {
   INVERSE_AKITA_ROOM_ID,
@@ -241,8 +249,21 @@ type InverseReplyContext = {
   pair: string
   userSide: CounterTradeSide
   counterSide: CounterTradeSide
+  existingSide?: CounterTradeSide
   sizeUsd: number
   leverage: number
+}
+
+export type InverseChatPositionAction = 'open' | 'add' | 'trim'
+
+/** How to adjust the book before/instead of a naive counter-side open. */
+export function resolveInverseChatPositionAction(params: {
+  openSide: CounterTradeSide | null
+  counterSide: CounterTradeSide
+}): InverseChatPositionAction {
+  if (!params.openSide) return 'open'
+  if (params.openSide === params.counterSide) return 'add'
+  return 'trim'
 }
 
 const LONG_USER_SHORT_BOT_SUCCESS: Array<(ctx: InverseReplyContext) => string> = [
@@ -277,6 +298,42 @@ const SHORT_USER_LONG_BOT_SUCCESS: Array<(ctx: InverseReplyContext) => string> =
     `your short take was adorable. i longed ${c.pair} professionally ($${c.sizeUsd} @ ${c.leverage}x)`,
   (c) =>
     `i don't mirror, i menace. long ${c.pair} is on ($${c.sizeUsd} @ ${c.leverage}x)`,
+]
+
+/** User bearish + bot already long ETH — stack the long. */
+const SHORT_USER_LONG_BOT_ADD: Array<(ctx: InverseReplyContext) => string> = [
+  (c) => `kek bottom signal. added $${c.sizeUsd} to ${c.pair} long (${c.leverage}x)`,
+  (c) => `${c.pair} going down? yum. sized up the long (+$${c.sizeUsd} @ ${c.leverage}x)`,
+  (c) => `bearish cope is my buy signal. increased ${c.pair} long ($${c.sizeUsd} @ ${c.leverage}x)`,
+  (c) => `thanks for the dip narrative. stacked ${c.pair} long (+$${c.sizeUsd} @ ${c.leverage}x)`,
+  (c) => `you sound bearish. i sound longer. added $${c.sizeUsd} to ${c.pair} (${c.leverage}x)`,
+]
+
+/** User bullish + bot already short — stack the short. */
+const LONG_USER_SHORT_BOT_ADD: Array<(ctx: InverseReplyContext) => string> = [
+  (c) => `kek top signal. added $${c.sizeUsd} to ${c.pair} short (${c.leverage}x)`,
+  (c) => `${c.pair} moon thesis? cute. stacked the short (+$${c.sizeUsd} @ ${c.leverage}x)`,
+  (c) => `bullish fanfic noted. increased ${c.pair} short ($${c.sizeUsd} @ ${c.leverage}x)`,
+  (c) => `you said up only. i said more short. added $${c.sizeUsd} (${c.leverage}x)`,
+  (c) => `top caller vibes. sized up ${c.pair} short (+$${c.sizeUsd} @ ${c.leverage}x)`,
+]
+
+/** User long + bot already long — trim toward fading them. */
+const LONG_USER_LONG_BOT_TRIM: Array<(ctx: InverseReplyContext) => string> = [
+  (c) =>
+    `you said long ${c.pair}? already long. trimmed $${c.sizeUsd} — your call is my exit signal`,
+  (c) => `kek top signal on your long take. trimmed ${c.pair} long ($${c.sizeUsd})`,
+  (c) => `bullish cope detected. took $${c.sizeUsd} off the ${c.pair} long. you're welcome`,
+  (c) => `long ${c.pair} gang? i was already there. trimmed anyway ($${c.sizeUsd})`,
+]
+
+/** User short + bot already short — trim the short leg. */
+const SHORT_USER_SHORT_BOT_TRIM: Array<(ctx: InverseReplyContext) => string> = [
+  (c) =>
+    `you said short ${c.pair}? already short. trimmed $${c.sizeUsd} — your bearishness paid rent`,
+  (c) => `kek bottom signal on your short take. trimmed ${c.pair} short ($${c.sizeUsd})`,
+  (c) => `bearish fanfic noted. cut $${c.sizeUsd} from the ${c.pair} short. cope`,
+  (c) => `short ${c.pair} energy? same. trimmed $${c.sizeUsd} off the book anyway`,
 ]
 
 const INVERSE_TRADE_FAIL: Array<(ctx: InverseReplyContext) => string> = [
@@ -454,10 +511,8 @@ function isHexAddress(value: string): boolean {
   return /^0x[a-f0-9]{40}$/i.test(value.trim())
 }
 
-function shouldSkipInverseChatReactionSender(senderLower: string): boolean {
-  if (!isHexAddress(senderLower)) return true
-  if (isHermitUserAllowed(senderLower) || isHermitOwner(senderLower)) return true
-  return false
+function isInvalidInverseChatReactionSender(senderLower: string): boolean {
+  return !isHexAddress(senderLower)
 }
 
 function isCommandLikeChatText(text: string): boolean {
@@ -488,7 +543,7 @@ export function collectInverseAkitaChatTradeIntents(params: {
     const text = String(message.text ?? '').trim()
     if (!id || !text || isCommandLikeChatText(text)) continue
     if (self && sender === self) continue
-    if (shouldSkipInverseChatReactionSender(sender)) continue
+    if (isInvalidInverseChatReactionSender(sender)) continue
 
     const parsed = parseInverseAkitaChatTradeIntent(text)
     if (!parsed) continue
@@ -536,21 +591,37 @@ export function formatInverseAkitaChatReactionReply(params: {
   leverage: number
   dryRun: boolean
   tradeOk: boolean
+  positionAction?: InverseChatPositionAction
+  existingSide?: CounterTradeSide | null
   failDetail?: string | null
 }): string {
+  const positionAction = params.positionAction ?? 'open'
   const ctx: InverseReplyContext = {
     pair: params.pair,
     userSide: params.userSide,
     counterSide: params.counterSide,
+    existingSide: params.existingSide ?? undefined,
     sizeUsd: params.sizeUsd,
     leverage: params.leverage,
   }
 
   let text: string
   if (params.tradeOk || params.dryRun) {
-    const templates =
-      params.userSide === 'long' ? LONG_USER_SHORT_BOT_SUCCESS : SHORT_USER_LONG_BOT_SUCCESS
-    text = pickInverseReplyTemplate(params.seed, 'success', templates)(ctx)
+    let bucket: string
+    let templates: Array<(ctx: InverseReplyContext) => string>
+    if (positionAction === 'trim') {
+      bucket = 'success-trim'
+      templates = params.userSide === 'long' ? LONG_USER_LONG_BOT_TRIM : SHORT_USER_SHORT_BOT_TRIM
+    } else if (positionAction === 'add') {
+      bucket = 'success-add'
+      templates =
+        params.userSide === 'long' ? LONG_USER_SHORT_BOT_ADD : SHORT_USER_LONG_BOT_ADD
+    } else {
+      bucket = 'success'
+      templates =
+        params.userSide === 'long' ? LONG_USER_SHORT_BOT_SUCCESS : SHORT_USER_LONG_BOT_SUCCESS
+    }
+    text = pickInverseReplyTemplate(params.seed, bucket, templates)(ctx)
     if (params.dryRun) text = `${text} [dry-run]`
   } else {
     text = pickInverseReplyTemplate(params.seed, 'fail', INVERSE_TRADE_FAIL)(ctx)
@@ -572,15 +643,32 @@ export function formatInverseAkitaThreadReceipt(params: {
   leverage: number
   tradeOk: boolean
   dryRun: boolean
+  positionAction?: InverseChatPositionAction
+  existingSide?: CounterTradeSide | null
   fill: { totalSz: number; avgPx: number } | null
   failDetail?: string | null
 }): string | null {
+  const positionAction = params.positionAction ?? 'open'
   const side = params.counterSide === 'long' ? 'LONG' : 'SHORT'
   if (!params.tradeOk && !params.dryRun) {
     if (!params.failDetail) return null
-    return `🧾 receipt: ${side} ${params.pair} attempt failed — ${params.failDetail}`
+    const failSide =
+      positionAction === 'trim' && params.existingSide
+        ? params.existingSide === 'long'
+          ? 'LONG'
+          : 'SHORT'
+        : side
+    return `🧾 receipt: ${failSide} ${params.pair} attempt failed — ${params.failDetail}`
   }
-  const head = `🧾 receipt: ${side} ${params.pair} · $${params.sizeUsd} notional · ${params.leverage}x`
+  let head: string
+  if (positionAction === 'trim' && params.existingSide) {
+    const trimmedSide = params.existingSide === 'long' ? 'LONG' : 'SHORT'
+    head = `🧾 receipt: trimmed ${trimmedSide} ${params.pair} · -$${params.sizeUsd}`
+  } else if (positionAction === 'add') {
+    head = `🧾 receipt: added to ${side} ${params.pair} · +$${params.sizeUsd} · ${params.leverage}x`
+  } else {
+    head = `🧾 receipt: ${side} ${params.pair} · $${params.sizeUsd} notional · ${params.leverage}x`
+  }
   if (params.dryRun) return `${head} · [dry-run]`
   if (params.fill) {
     return `${head} · filled ${params.fill.totalSz} @ $${params.fill.avgPx}`
@@ -594,6 +682,10 @@ export function formatInverseAkitaChatReactionSkipReply(skipReason: string): str
       return 'wanted to invert your take but arena trading is off on the server. operator skill issue.'
     case 'missing_executor_wallet':
       return 'wanted to invert your take but InverseAKITA has no executor wallet mapped yet.'
+    case 'insufficient_stake':
+      return formatInverseAkitaStakerPilotGateReply()
+    case 'stake_read_failed':
+      return 'wanted to invert your take but the room 1659 stake check failed. retry in a moment.'
     case 'arena_room_blocked':
       return 'wanted to invert your take but this room is not on the arena allowlist.'
     default:
@@ -707,6 +799,28 @@ export async function executeInverseAkitaChatReaction(params: {
     }
   }
 
+  const pilotAccess = await resolveInverseAkitaStakerPilotAccess({
+    senderAddress: params.intent.sender,
+    roomId,
+    isTrustedOperator: false,
+  })
+  if (!pilotAccess.eligible) {
+    const skipReason =
+      pilotAccess.reason === 'insufficient_stake' || pilotAccess.reason === 'stake_read_failed'
+        ? pilotAccess.reason
+        : 'staker_gate'
+    return withInverseSkipReply(
+      {
+        ok: false,
+        skipped: true,
+        skipReason,
+        counterSide: deriveCounterSide(params.intent.userSide),
+        pair: params.intent.pair,
+      },
+      params.intent.id,
+    )
+  }
+
   const baseConfig = readArenaConfig()
   if (!baseConfig.enabled || !baseConfig.tradingEnabled) {
     return withInverseSkipReply(
@@ -759,16 +873,39 @@ export async function executeInverseAkitaChatReaction(params: {
     )
   }
 
-  const trade = await runArenaTrade(
-    {
-      action: 'open',
-      pair: pairCheck.normalizedPair,
-      side: counterSide,
-      sizeUsd,
-      leverage,
-    },
-    executionConfig,
-  )
+  let positionAction: InverseChatPositionAction = 'open'
+  let existingSide: CounterTradeSide | null = null
+  try {
+    const positionsResult = await runArenaOpenPositions(executionConfig)
+    const positions = Array.isArray(positionsResult.details?.positions)
+      ? (positionsResult.details.positions as unknown[])
+      : []
+    existingSide = resolveOpenArenaPositionSide(positions, pairCheck.normalizedPair)
+    positionAction = resolveInverseChatPositionAction({ openSide: existingSide, counterSide })
+  } catch {
+    // Position lookup is best-effort — fresh-open copy if it fails.
+  }
+
+  const trade =
+    positionAction === 'trim'
+      ? await runArenaTrade(
+          {
+            action: 'close',
+            pair: pairCheck.normalizedPair,
+            sizeUsd,
+          },
+          executionConfig,
+        )
+      : await runArenaTrade(
+          {
+            action: 'open',
+            pair: pairCheck.normalizedPair,
+            side: counterSide,
+            sizeUsd,
+            leverage,
+          },
+          executionConfig,
+        )
 
   markInverseAkitaChatReactionSenderCooldown(params.intent.sender)
 
@@ -783,6 +920,8 @@ export async function executeInverseAkitaChatReaction(params: {
     leverage,
     dryRun: baseConfig.dryRun,
     tradeOk: trade.ok,
+    positionAction,
+    existingSide,
     failDetail,
   })
   const threadReceiptText = formatInverseAkitaThreadReceipt({
@@ -792,6 +931,8 @@ export async function executeInverseAkitaChatReaction(params: {
     leverage,
     tradeOk: trade.ok,
     dryRun: baseConfig.dryRun,
+    positionAction,
+    existingSide,
     fill: parseTradeFillFromOutput(String(trade.run?.stdout ?? '')),
     failDetail,
   })
@@ -805,6 +946,8 @@ export async function executeInverseAkitaChatReaction(params: {
     pair: pairCheck.normalizedPair,
     sizeUsd,
     leverage,
+    positionAction,
+    existingSide,
     tradeOk: trade.ok,
     dryRun: baseConfig.dryRun,
     reactionEmoji,

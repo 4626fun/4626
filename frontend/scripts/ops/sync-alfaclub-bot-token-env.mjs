@@ -73,7 +73,6 @@ function main() {
     ['ALFACLUB_COUNTER_TRADE_USER_DEFENSE_ENABLED', '1'],
     ['ALFACLUB_COUNTER_TRADE_USER_DEFENSE_MASTER', '0xebf94fa19db7d2e7905decd01dae4ea9eb4c1ff2'],
     ['ALFACLUB_COUNTER_TRADE_ROOM_ID', '1659'],
-    ['ARENA_ASSET_ALLOWLIST', 'HYPE'],
   ]
   for (const [key, value] of defenseDefaults) {
     if (!(map.get(key) ?? '').trim()) {
