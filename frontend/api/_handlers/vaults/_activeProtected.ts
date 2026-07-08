@@ -19,7 +19,7 @@ import {
 import { listKeeprVaultAutomationByVaultAddresses } from '../../../server/_lib/keepr/keeprAutomation.js'
 
 import { ensureKeeprSchema } from '../../../server/_lib/keepr/keeprSchema.js'
-import { validateKeeperVaultListing } from '../../../server/_lib/onchain/creatorRegistryVerification.js'
+import { validateKeeperVaultListing } from '../../../server/_lib/onchain/registry4626Verification.js'
 
 export interface VaultAutomationConfig {
   automationEnabled: boolean

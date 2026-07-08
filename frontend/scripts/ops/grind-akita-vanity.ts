@@ -35,7 +35,7 @@ import {
   toVaultName,
   toVaultSymbol,
 } from '../../src/lib/tokens/tokenSymbols.js'
-import { parseCreatorVaultBatcherCapabilities } from '../../src/lib/deploy/creatorVaultBatcherInfra.js'
+import { parseCreatorVaultBatcherCapabilities } from '../../src/lib/deploy/deploymentBatcherInfra.js'
 import { DEPLOY_BYTECODE } from '../../src/deploy/bytecode.generated.js'
 import {
   deriveDeployBaseSalt,

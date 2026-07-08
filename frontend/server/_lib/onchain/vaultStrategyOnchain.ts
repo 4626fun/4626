@@ -6,7 +6,7 @@ import { getApiContracts } from './contracts.js'
 
 const DEFAULT_BASE_RPC_URL = 'https://mainnet.base.org'
 
-const CREATOR_REGISTRY_ABI = [
+const REGISTRY_4626_ABI = [
   {
     type: 'function',
     name: 'getTokenForVault',
@@ -215,7 +215,7 @@ export async function readCreatorTokenForVault(params: {
       await readContractSafe<Address>({
         client: params.client,
         address: registry,
-        abi: CREATOR_REGISTRY_ABI,
+        abi: REGISTRY_4626_ABI,
         functionName: 'getTokenForVault',
         args: [params.vault],
       }),
@@ -244,7 +244,7 @@ export async function readShareOftForCreatorToken(params: {
     await readContractSafe<Address>({
       client: params.client,
       address: registry,
-      abi: CREATOR_REGISTRY_ABI,
+      abi: REGISTRY_4626_ABI,
       functionName: 'getShareOFTForToken',
       args: [params.creatorToken],
     }),

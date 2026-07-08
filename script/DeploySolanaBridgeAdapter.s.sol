@@ -19,17 +19,17 @@ interface ILotteryManagerAdmin {
  *
  * Env:
  * - PRIVATE_KEY (required)
- * - CREATOR_REGISTRY (optional; defaults to Base mainnet registry from deployments/)
+ * - REGISTRY_4626 or REGISTRY (optional; defaults to Base mainnet registry from deployments/)
  * - SOLANA_BRIDGE_ADAPTER_OWNER (optional; defaults to broadcaster)
  *
  * Optional post-deploy config:
  * - CCA_AUCTION (optional; if set, will be allowlisted via setCcaAuctionAllowed)
- * - LOTTERY_MANAGER / CREATOR_LOTTERY_MANAGER (optional; if set, will be set on the adapter and
+ * - LOTTERY_MANAGER (optional; if set, will be set on the adapter and
  *   the adapter will be authorized on the lottery manager as a swap contract)
  */
 contract DeploySolanaBridgeAdapter is Script {
     // Base mainnet Registry4626 (see deployments/base/contracts/core/Registry4626.json)
-    address constant DEFAULT_CREATOR_REGISTRY = 0x3f64087dc361Ad52300409E5873b26941D6418B6;
+    address constant DEFAULT_REGISTRY = 0x3f64087dc361Ad52300409E5873b26941D6418B6;
 
     // v1.11.1+ requires explicit lottery manager env when wiring the adapter.
     address constant DEFAULT_LOTTERY_MANAGER = address(0);
@@ -38,11 +38,9 @@ contract DeploySolanaBridgeAdapter is Script {
         uint256 pk = vm.envUint("PRIVATE_KEY");
         address broadcaster = vm.addr(pk);
 
-        address registry = vm.envOr("CREATOR_REGISTRY", vm.envOr("REGISTRY", DEFAULT_CREATOR_REGISTRY));
+        address registry = vm.envOr("REGISTRY_4626", vm.envOr("REGISTRY", DEFAULT_REGISTRY));
         address owner = vm.envOr("SOLANA_BRIDGE_ADAPTER_OWNER", vm.envOr("OWNER", broadcaster));
-        address lotteryManager = vm.envOr(
-            "CREATOR_LOTTERY_MANAGER", vm.envOr("LOTTERY_MANAGER", DEFAULT_LOTTERY_MANAGER)
-        );
+        address lotteryManager = vm.envOr("LOTTERY_MANAGER", DEFAULT_LOTTERY_MANAGER);
 
         console2.log("Broadcaster:", broadcaster);
         console2.log("Registry4626:", registry);
@@ -75,8 +73,7 @@ contract DeploySolanaBridgeAdapter is Script {
 
         vm.stopBroadcast();
 
-        console2.log(string.concat("HANDOFF:CREATOR_REGISTRY=", vm.toString(registry)));
-        console2.log(string.concat("HANDOFF:CREATOR_LOTTERY_MANAGER=", vm.toString(lotteryManager)));
+        console2.log(string.concat("HANDOFF:REGISTRY=", vm.toString(registry)));
         console2.log(string.concat("HANDOFF:LOTTERY_MANAGER=", vm.toString(lotteryManager)));
         console2.log(string.concat("HANDOFF:SOLANA_BRIDGE_ADAPTER=", vm.toString(address(adapter))));
     }

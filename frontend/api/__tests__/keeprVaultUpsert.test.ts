@@ -7,13 +7,13 @@ const {
   getSessionAddressMock,
   computeConfigHashMock,
   upsertKeeprVaultMock,
-  validateCreatorRegistryBindingMock,
+  validateRegistry4626BindingMock,
   createPublicClientMock,
 } = vi.hoisted(() => ({
   getSessionAddressMock: vi.fn(),
   computeConfigHashMock: vi.fn(),
   upsertKeeprVaultMock: vi.fn(),
-  validateCreatorRegistryBindingMock: vi.fn(),
+  validateRegistry4626BindingMock: vi.fn(),
   createPublicClientMock: vi.fn(),
 }))
 
@@ -26,8 +26,8 @@ vi.mock('../../server/_lib/keepr/keeprRegistry.js', () => ({
   upsertKeeprVault: upsertKeeprVaultMock,
 }))
 
-vi.mock('../../server/_lib/onchain/creatorRegistryVerification.js', () => ({
-  validateCreatorRegistryBinding: validateCreatorRegistryBindingMock,
+vi.mock('../../server/_lib/onchain/registry4626Verification.js', () => ({
+  validateRegistry4626Binding: validateRegistry4626BindingMock,
 }))
 
 vi.mock('viem', async (importOriginal) => {
@@ -74,7 +74,7 @@ describe('keepr/vault/upsert', () => {
     vi.clearAllMocks()
     getSessionAddressMock.mockReturnValue(OWNER)
     computeConfigHashMock.mockReturnValue('cfg-hash-1')
-    validateCreatorRegistryBindingMock.mockResolvedValue({ ok: true })
+    validateRegistry4626BindingMock.mockResolvedValue({ ok: true })
     createPublicClientMock.mockReturnValue({
       readContract: vi.fn().mockResolvedValue(OWNER),
     })
@@ -163,7 +163,7 @@ describe('keepr/vault/upsert', () => {
   })
 
   it('rejects config when onchain registry binding does not match', async () => {
-    validateCreatorRegistryBindingMock.mockResolvedValueOnce({ ok: false, reason: 'vault_mismatch' })
+    validateRegistry4626BindingMock.mockResolvedValueOnce({ ok: false, reason: 'vault_mismatch' })
 
     const req = createMockReq({
       method: 'POST',
@@ -182,7 +182,7 @@ describe('keepr/vault/upsert', () => {
   })
 
   it('fails closed when onchain registry verification is unavailable', async () => {
-    validateCreatorRegistryBindingMock.mockRejectedValueOnce(new Error('rpc unavailable'))
+    validateRegistry4626BindingMock.mockRejectedValueOnce(new Error('rpc unavailable'))
 
     const req = createMockReq({
       method: 'POST',

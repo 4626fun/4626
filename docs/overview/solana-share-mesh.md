@@ -53,7 +53,7 @@ There is no separate “deploy to Solana” step in the application.
 
 | Chain | Status (new vaults) |
 |-------|---------------------|
-| **Base** | **Live when trading is live** — qualifying ShareOFT DEX **buys** may enter [CreatorLotteryManager](/contracts/utilities/lottery-manager) |
+| **Base** | **Live when trading is live** — qualifying ShareOFT DEX **buys** may enter [LotteryManager4626](/contracts/utilities/lottery-manager) |
 | **Solana** | **Planned** — policy targets pool **buys** of the bridged share; Base lottery stays authoritative until relay is live |
 
 Wraps, deposits, and bridge receipts do **not** create lottery entries. Qualifying **buys** do.

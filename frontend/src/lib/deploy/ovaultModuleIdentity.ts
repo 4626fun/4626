@@ -3,9 +3,9 @@ import { encodePacked, getAddress, isAddress, keccak256, type Address, type Hex 
 // NOTE: this module is in the api→src allowlist (server-shared). Imports must be
 // Node-ESM-safe: relative with explicit .js extension, never `@/` aliases.
 import {
-  CREATOR_OVAULT_ADMIN_MODULE,
-  CREATOR_OVAULT_CORE_MODULE,
-  CREATOR_OVAULT_STRATEGIES_MODULE,
+  OVAULT_ADMIN_MODULE,
+  OVAULT_CORE_MODULE,
+  OVAULT_STRATEGIES_MODULE,
 } from '../../config/contracts.defaults.js'
 import { resolveWiredCreatorOvaultModules } from './phase1ModuleDeploy.js'
 
@@ -73,7 +73,7 @@ export async function assertCreatorOvaultModuleStorageCompatible(params: {
     })
     moduleAddress = wired?.core
   }
-  moduleAddress = getAddress(moduleAddress ?? CREATOR_OVAULT_CORE_MODULE)
+  moduleAddress = getAddress(moduleAddress ?? OVAULT_CORE_MODULE)
   const vaultExpects = params.vaultExpects ?? DEPLOY_CREATOR_OVAULT_MODULE_STORAGE_VERSION
 
   if (!isAddress(moduleAddress)) {
@@ -135,7 +135,7 @@ export async function assertCreatorOvaultModuleStorageCompatible(params: {
 }
 
 export const DEFAULT_BATCHER_OVAULT_MODULES = {
-  core: CREATOR_OVAULT_CORE_MODULE,
-  strategies: CREATOR_OVAULT_STRATEGIES_MODULE,
-  admin: CREATOR_OVAULT_ADMIN_MODULE,
+  core: OVAULT_CORE_MODULE,
+  strategies: OVAULT_STRATEGIES_MODULE,
+  admin: OVAULT_ADMIN_MODULE,
 } as const

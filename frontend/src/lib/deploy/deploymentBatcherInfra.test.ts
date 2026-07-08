@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseCreatorVaultBatcherCapabilities } from './creatorVaultBatcherInfra'
+import { parseCreatorVaultBatcherCapabilities } from './deploymentBatcherInfra'
 
-describe('creatorVaultBatcherInfra', () => {
+describe('deploymentBatcherInfra', () => {
   it('detects salt-enabled selectors on greenfield batcher bytecode', () => {
     const capabilities = parseCreatorVaultBatcherCapabilities({
       batcherAddress: '0xa99058f424FB3ACC639F59355C65C40149030651',

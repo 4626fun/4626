@@ -24,9 +24,9 @@ async function repoFileExists(...segments: string[]): Promise<boolean> {
 describe('Solana registry key naming', () => {
   test('registry seeding scripts use SOLANA_REGISTRY_KEY without compatibility aliases', async () => {
     const [seedRegistry, operationalWiring, seedSolanaPeer] = await Promise.all([
-      readRepoFile('script', 'SeedCreatorRegistry.s.sol'),
+      readRepoFile('script', 'SeedRegistry4626.s.sol'),
       readRepoFile('script', 'OperationalWiring.s.sol'),
-      readRepoFile('script', 'SeedCreatorRegistrySolanaPeer.s.sol'),
+      readRepoFile('script', 'SeedRegistry4626SolanaPeer.s.sol'),
     ])
 
     for (const source of [seedRegistry, operationalWiring, seedSolanaPeer]) {
@@ -38,9 +38,9 @@ describe('Solana registry key naming', () => {
 
   test('registry-facing Solana wording is explicit about registry-key semantics', async () => {
     const [seedRegistry, operationalWiring, seedSolanaPeer] = await Promise.all([
-      readRepoFile('script', 'SeedCreatorRegistry.s.sol'),
+      readRepoFile('script', 'SeedRegistry4626.s.sol'),
       readRepoFile('script', 'OperationalWiring.s.sol'),
-      readRepoFile('script', 'SeedCreatorRegistrySolanaPeer.s.sol'),
+      readRepoFile('script', 'SeedRegistry4626SolanaPeer.s.sol'),
     ])
 
     expect(seedRegistry).toContain('registry key <-> EID')

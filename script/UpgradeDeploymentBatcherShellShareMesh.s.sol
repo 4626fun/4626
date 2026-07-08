@@ -576,7 +576,7 @@ contract UpgradeDeploymentBatcherShellShareMesh is Script {
         vm.stopBroadcast();
 
         console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER=", vm.toString(predicted.deploymentBatcher)));
-        console2.log(string.concat("HANDOFF:CREATOR_VAULT_BATCHER=", vm.toString(predicted.deploymentBatcher)));
+        console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER=", vm.toString(predicted.deploymentBatcher)));
         console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER_PHASE2_MODULE=", vm.toString(predicted.phase2Module)));
         console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER_PHASE1_MODULE=", vm.toString(predicted.phase1Module)));
         console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER_PHASE3_HELPER=", vm.toString(predicted.phase3Helper)));

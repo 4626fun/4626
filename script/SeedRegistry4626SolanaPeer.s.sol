@@ -6,7 +6,7 @@ import {Registry4626} from "@4626/shared/core/Registry4626.sol";
 import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 
 /**
- * @title SeedCreatorRegistrySolanaPeer
+ * @title SeedRegistry4626SolanaPeer
  * @notice Wires Solana bytes32 OFT peer metadata in Registry4626 for one creator token.
  *
  * Required env:
@@ -24,7 +24,7 @@ import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
  * - OVAULT_SOLANA_ASSET_MINT
  * - OVAULT_MESH_ENABLED (default 1)
  */
-contract SeedCreatorRegistrySolanaPeer is Script {
+contract SeedRegistry4626SolanaPeer is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);

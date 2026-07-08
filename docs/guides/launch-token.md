@@ -42,7 +42,7 @@ Sponsored smart-wallet execution may apply where configured.
 |-----------|------|
 | CreatorOVault | ERC-4626 vault |
 | Share tokens | `▢` vault shares + `■` ShareOFT |
-| CreatorRegistry | Maps creator coin → stack |
+| Registry4626 | Maps creator coin → stack |
 | CreatorGaugeController | Fees & jackpot routing |
 | CreatorOracle | TWAP pricing |
 | CCA strategy | Fair-launch auction |

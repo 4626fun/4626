@@ -221,7 +221,7 @@
       "reason": "Deprecated legacy deployment recorder/lookup surface; current behavior is registry-like rather than factory-like.",
       "currentBehavior": "Authorized legacy deployment registrar for script-deployed stacks; records addresses and mirrors them into Registry4626 but does not instantiate vault contracts itself.",
       "deferredFollowUp": "Only rename alongside a dedicated ABI, artifact, env, and operator-doc migration after the vanity epoch cutover is complete.",
-      "blastRadius": "Touches artifacts, deployment JSON, scripts, docs, skills, and registry authorization references keyed to CreatorOVaultFactory or CREATOR_FACTORY."
+      "blastRadius": "Touches artifacts, deployment JSON, scripts, docs, skills, and registry authorization references keyed to CreatorOVaultFactory or OVAULT_FACTORY."
     }
   ]
 }

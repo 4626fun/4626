@@ -111,7 +111,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
     isAdminAddressMock.mockReturnValue(true)
     checkRateLimitMock.mockReturnValue({ allowed: true, resetAt: Date.now() + 60_000 })
     getApiContractsMock.mockReturnValue({
-      creatorVaultBatcher: '0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753',
+      deploymentBatcher: '0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753',
     })
     resolveMeteoraConfigMock.mockResolvedValue(null)
     resolveMeteoraConfigHintsMock.mockResolvedValue(null)

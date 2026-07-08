@@ -35,7 +35,7 @@ Gather for this creator:
 |-------|---------|
 | `CREATOR_TOKEN` | Base creator coin address |
 | Ticker / name | `AKITA`, `jesse` → symbol `■AKITA`, name `Akita Share Token` (`frontend/src/lib/tokens/tokenSymbols.ts`) |
-| `REGISTRY` | Live `CreatorRegistry` address |
+| `REGISTRY` | Live `Registry4626` address |
 | Target EID | Solana mainnet **`30168`** |
 
 ---
@@ -89,7 +89,7 @@ pnpm hardhat lz:oft:solana:debug --eid 30168 --dst-eids 30184 --action peers
 
 ## Step 3 — Registry peer (creator #N)
 
-Before this creator's vault **`finalizePhase2`**, set the Solana bytes32 peer on **`CreatorRegistry`** (not only batcher default):
+Before this creator's vault **`finalizePhase2`**, set the Solana bytes32 peer on **`Registry4626`** (not only batcher default):
 
 ```bash
 export REGISTRY=0x…
@@ -97,7 +97,7 @@ export CREATOR_TOKEN=0x…
 export SOLANA_EID=30168
 export SOLANA_REMOTE_OFT_PEER_BYTES32=0x…   # from Step 1
 
-forge script script/SeedCreatorRegistrySolanaPeer.s.sol:SeedCreatorRegistrySolanaPeer \
+forge script script/SeedRegistry4626SolanaPeer.s.sol:SeedRegistry4626SolanaPeer \
   --rpc-url "$BASE_RPC_URL" --broadcast
 ```
 
@@ -113,7 +113,7 @@ cast call "$REGISTRY" \
 
 **Creator #1 only:** batcher `setSolanaShareOftPeer` can seed the first peer if registry was empty at finalize; still prefer explicit registry seed for auditability.
 
-**Grandfathered AKITA:** `setRemoteOFTPeerBytes32` reverts with `Token not registered` until the creator coin exists in `CreatorRegistry`. For AKITA, rely on batcher default peer at first finalize (registry registers during finalize) or call `registerCreatorCoin` first if seeding early.
+**Grandfathered AKITA:** `setRemoteOFTPeerBytes32` reverts with `Token not registered` until the creator coin exists in `Registry4626`. For AKITA, rely on batcher default peer at first finalize (registry registers during finalize) or call `registerCreatorCoin` first if seeding early.
 
 ---
 
@@ -138,7 +138,7 @@ POST /api/keeper/solana/provision-creator  # machine auth
 
 Standard vault deploy through phase 2. On **`finalizePhase2`** / `finalizePhase2WithPermit2`:
 
-- Batcher registers vault stack on `CreatorRegistry` if missing
+- Batcher registers vault stack on `Registry4626` if missing
 - Uses registry peer (or batcher default only when registry peer unset)
 - Calls `CreatorShareOFT.setPeer(30168, peer)` when mismatched
 - Bridges **30%** ShareOFT to Solana via OVault composer path

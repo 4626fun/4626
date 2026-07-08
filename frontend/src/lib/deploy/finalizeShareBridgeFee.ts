@@ -223,7 +223,7 @@ const SHARE_OFT_QUOTE_ABI = [
   },
 ] as const
 
-const CREATOR_REGISTRY_REMOTE_PEER_ABI = [
+const REGISTRY_4626_REMOTE_PEER_ABI = [
   {
     type: 'function',
     name: 'getRemoteOFTPeerBytes32',
@@ -738,7 +738,7 @@ export async function quoteFinalizeShareBridgeNativeFee(params: {
   const [registryPeerRaw, batcherDefaultPeerRaw] = await Promise.all([
     params.publicClient.readContract({
       address: registryAddress,
-      abi: CREATOR_REGISTRY_REMOTE_PEER_ABI,
+      abi: REGISTRY_4626_REMOTE_PEER_ABI,
       functionName: 'getRemoteOFTPeerBytes32',
       args: [decoded.params.creatorToken, runtime.solanaEid],
     }),

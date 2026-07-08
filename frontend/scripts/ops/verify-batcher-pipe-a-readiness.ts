@@ -7,7 +7,7 @@ import {
   SPLIT_PHASE1_DEPLOYMENT_BATCHER,
   SPLIT_PHASE1_PHASE1_MODULE,
   SPLIT_PHASE1_PHASE1_MODULE_V2_LEGACY,
-  isDeprecatedCreatorVaultBatcherAddress,
+  isDeprecatedDeploymentBatcherAddress,
 } from '../../src/config/contracts.defaults.js'
 import { deploymentBatcherNotConfiguredMessage } from '../../src/lib/deploy/deploymentBatcherConfigError.js'
 import { assertCreatorOvaultModuleStorageCompatible } from '../../src/lib/deploy/ovaultModuleIdentity.js'
@@ -261,13 +261,13 @@ async function main() {
   const batcher = normalizeAddress(
     getArg(
       '--batcher',
-      process.env.CREATOR_VAULT_BATCHER ||
+      process.env.DEPLOYMENT_BATCHER ||
         process.env.DEPLOYMENT_BATCHER ||
         SPLIT_PHASE1_DEPLOYMENT_BATCHER,
     ),
   )
-  if (!batcher) throw new Error('Missing --batcher (or CREATOR_VAULT_BATCHER / DEPLOYMENT_BATCHER env)')
-  if (isDeprecatedCreatorVaultBatcherAddress(batcher)) {
+  if (!batcher) throw new Error('Missing --batcher (or DEPLOYMENT_BATCHER / DEPLOYMENT_BATCHER env)')
+  if (isDeprecatedDeploymentBatcherAddress(batcher)) {
     throw new Error(deploymentBatcherNotConfiguredMessage(batcher))
   }
 
@@ -345,7 +345,7 @@ async function main() {
       detail: String(destination),
     },
     {
-      id: 'creator_registry_batcher_authorized',
+      id: 'registry_4626_batcher_authorized',
       ok: registryAuthorized === true,
       detail:
         registryAuthorized === true

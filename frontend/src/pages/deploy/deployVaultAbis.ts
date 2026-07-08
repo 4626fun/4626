@@ -29,7 +29,7 @@ export const CCA_LAUNCH_ARM_AUCTION_STATUS_ABI = [
   },
 ] as const
 
-export const CREATOR_VAULT_BATCHER_PHASE1_STATE_ABI = [
+export const DEPLOYMENT_BATCHER_PHASE1_STATE_ABI = [
   {
     type: 'function',
     name: 'phase1SplitStates',
@@ -55,7 +55,7 @@ export const CREATOR_VAULT_BATCHER_PHASE1_STATE_ABI = [
   },
 ] as const
 
-export const CREATOR_VAULT_BATCHER_PENDING_AUCTION_ABI = [
+export const DEPLOYMENT_BATCHER_PENDING_AUCTION_ABI = [
   {
     type: 'function',
     name: 'pendingAuctions',
@@ -605,7 +605,7 @@ export const VAULT_SHARE_BURN_STREAM_ABI = [
 
 // Legacy permit/permit2 ABIs were used for the one-tx deploy paths (now removed).
 
-export const CREATOR_VAULT_BATCHER_ABI = [
+export const DEPLOYMENT_BATCHER_ABI = [
   {
     type: 'function',
     name: 'bytecodeStore',

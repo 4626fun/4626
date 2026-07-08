@@ -414,8 +414,8 @@ if [[ "$USE_LOCAL_BATCHER" == "1" ]]; then
     VITE_BASE_RPC="$LOCAL_RPC_URL" \
     pnpm exec tsx "scripts/deploy-local-batcher.ts"
   )"
-  export VITE_CREATOR_VAULT_BATCHER="$LOCAL_BATCHER_ADDRESS"
-  export CREATOR_VAULT_BATCHER="$LOCAL_BATCHER_ADDRESS"
+  export VITE_DEPLOYMENT_BATCHER="$LOCAL_BATCHER_ADDRESS"
+  export DEPLOYMENT_BATCHER="$LOCAL_BATCHER_ADDRESS"
   echo "Using local DeploymentBatcher at ${LOCAL_BATCHER_ADDRESS}"
 fi
 

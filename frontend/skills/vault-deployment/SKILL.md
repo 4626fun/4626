@@ -78,11 +78,11 @@ cast chain-id --rpc-url $RPC_URL
 # check the *legacy* registry/factory (from env/config) rather than the latest defaults.
 
 # 1) Registry is the source of truth for what the app should use.
-cast call --rpc-url $RPC_URL $CREATOR_REGISTRY "getVaultForToken(address)(address)" $CREATOR_COIN
+cast call --rpc-url $RPC_URL $REGISTRY_4626 "getVaultForToken(address)(address)" $CREATOR_COIN
 
 # 2) Legacy CreatorOVaultFactory registrar is useful to see “which stack was registered by which legacy infra deploy”.
-cast call --rpc-url $RPC_URL $CREATOR_FACTORY "isDeployed(address)(bool)" $CREATOR_COIN
-cast call --rpc-url $RPC_URL $CREATOR_FACTORY "getDeployment(address)((address,address,address,address,address,address,address,address,uint256,bool))" $CREATOR_COIN
+cast call --rpc-url $RPC_URL $OVAULT_FACTORY "isDeployed(address)(bool)" $CREATOR_COIN
+cast call --rpc-url $RPC_URL $OVAULT_FACTORY "getDeployment(address)((address,address,address,address,address,address,address,address,uint256,bool))" $CREATOR_COIN
 ```
 
 If you’re using the multi-phase deployer, prefer checking deterministic addresses first (computeAddress/create2) rather than “guessing”.
@@ -114,7 +114,7 @@ The legacy CLI AA script was removed. Use the app deploy-session path.
 
 Reality check (AA UI):
 
-- The **frontend AA path** is the canonical “1-click deploy” in practice. It uses the onchain batcher/deployer addresses from config (e.g. `creatorVaultBatcher`, `vaultActivationBatcher`) and submits UserOperations via Coinbase.
+- The **frontend AA path** is the canonical “1-click deploy” in practice. It uses the onchain batcher/deployer addresses from config (e.g. `deploymentBatcher`, `vaultActivationBatcher`) and submits UserOperations via Coinbase.
 
 ### D) Multi-phase: deploy via deployment batcher (Phase 1–3)
 

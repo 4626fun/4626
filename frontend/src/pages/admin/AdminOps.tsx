@@ -34,7 +34,7 @@ import { LoadingText } from '@/components/ui/LoadingState'
 import {
   CANONICAL_SMART_WALLET,
   COINBASE_SMART_WALLET_OWNER_LINK_ABI,
-  CREATOR_REGISTRY_ABI,
+  REGISTRY_4626_ABI,
   ERC8004_AGENT_URI_DEFAULT,
   ERC8004_AGENT_URI_PLACEHOLDER,
   ERC8004_IDENTITY_REGISTRY,
@@ -2664,7 +2664,7 @@ function LegacyWithdrawals() {
       try {
         const tokens = (await publicClient.readContract({
           address: registryAddress as Address,
-          abi: CREATOR_REGISTRY_ABI,
+          abi: REGISTRY_4626_ABI,
           functionName: 'getAllTokens',
         })) as Address[]
 
@@ -2672,7 +2672,7 @@ function LegacyWithdrawals() {
         if (Array.isArray(tokens) && tokens.length > 0) {
           const calls = tokens.map((token) => ({
             address: registryAddress as Address,
-            abi: CREATOR_REGISTRY_ABI,
+            abi: REGISTRY_4626_ABI,
             functionName: 'getTokenInfo',
             args: [token],
           }))

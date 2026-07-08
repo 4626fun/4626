@@ -208,7 +208,7 @@ header "Protocol/Contract Readiness Gates (Owner: Contracts)"
 echo "Pass criteria: release target guard and focused contract tests succeed."
 run_cmd "current release target guard" bash test/current-release-target-guard.sh
 run_cmd "registry default scripts test" forge test --match-contract RegistryDefaultScriptsTest
-run_cmd "seed creator registry config test" forge test --match-contract SeedCreatorRegistryConfigTest
+run_cmd "seed creator registry config test" forge test --match-contract SeedRegistry4626ConfigTest
 
 if ask_yes_no "Run full forge test suite now (recommended for max confidence)?"; then
   run_cmd "full forge test suite" forge test

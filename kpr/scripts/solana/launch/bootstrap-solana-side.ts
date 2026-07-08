@@ -18,7 +18,7 @@
  *
  * Optional env:
  *   DEPLOY_API_ORIGIN                  - App origin (default: https://4626.fun)
- *   CREATOR_VAULT_BATCHER              - Deployment batcher (default: mainnet batcher)
+ *   DEPLOYMENT_BATCHER              - Deployment batcher (default: mainnet batcher)
  *   EXPECTED_SOLANA_AMOUNT             - Base units for smoke ix build (default: 1000000000)
  *   SKIP_ROUTE_REGISTER                - "1" to skip step 1
  *   SKIP_METEORA_UPSERT                - "1" to skip step 2
@@ -225,7 +225,7 @@ async function main(): Promise<void> {
     'CREATOR_TOKEN',
     'SOLANA_DEFAULT_BRIDGE_TOKEN',
   ]);
-  const batcherAddress = requireAddressEnv('CREATOR_VAULT_BATCHER', DEFAULT_BATCHER);
+  const batcherAddress = requireAddressEnv('DEPLOYMENT_BATCHER', DEFAULT_BATCHER);
   const origin = normalizeOrigin(String(process.env.DEPLOY_API_ORIGIN ?? DEFAULT_ORIGIN));
   const expectedSolanaAmount = requirePositiveIntegerString(
     String(process.env.EXPECTED_SOLANA_AMOUNT ?? DEFAULT_EXPECTED_SOLANA_AMOUNT).trim(),

@@ -49,7 +49,7 @@ Activation alone is **not** trading live. DEX secondary trading starts after the
 ## When trading is live on Base
 
 - `■` ShareOFT tradable on Base DEXs
-- Qualifying **buys** may enter [CreatorLotteryManager](/contracts/utilities/lottery-manager)
+- Qualifying **buys** may enter [LotteryManager4626](/contracts/utilities/lottery-manager)
 - Trade fees route via [CreatorGaugeController](/contracts/governance/gauge-controller)
 
 ## Solana share bridge
@@ -65,7 +65,7 @@ Details: [Solana share bridge](/overview/solana-share-mesh)
 
 ## Contracts
 
-- Per-creator stack: [CreatorRegistry](/contracts/core/creator-registry)
+- Per-creator stack: [Registry4626](/contracts/core/creator-registry)
 - Shared infra: [Addresses](/reference/addresses) (v1.14.1)
 
 ## Related

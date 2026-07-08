@@ -187,7 +187,7 @@ export function resolveShareMeshCompletionConfig(): ShareMeshCompletionConfig {
   const enabled = process.env.KEEPER_SHARE_MESH_ENABLED !== 'false'
   return {
     enabled,
-    deploymentBatcher: normalizeAddress(process.env.DEPLOYMENT_BATCHER ?? process.env.CREATOR_VAULT_BATCHER),
+    deploymentBatcher: normalizeAddress(process.env.DEPLOYMENT_BATCHER ?? process.env.DEPLOYMENT_BATCHER),
     hookRegistryCodeId: normalizeBytes32(process.env.KEEPER_SHARE_MESH_HOOK_REGISTRY_CODE_ID),
     lpManagerCodeId: normalizeBytes32(process.env.KEEPER_SHARE_MESH_LP_MANAGER_CODE_ID),
     positionManager: normalizeAddress(process.env.V4_POSITION_MANAGER ?? process.env.KEEPER_V4_POSITION_MANAGER),

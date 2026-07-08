@@ -210,7 +210,7 @@ export function getLegacyVestingStartBlock(): bigint {
 // ABIs + events
 // ---------------------------------------------------------------------------
 
-export const CREATOR_REGISTRY_ABI = [
+export const REGISTRY_4626_ABI = [
   {
     type: 'function',
     name: 'getAllTokens',
@@ -523,7 +523,7 @@ export async function fetchLegacyVesting(
   shareOft: Address,
   beneficiary: Address,
 ): Promise<Address | null> {
-  const batcher = CONTRACTS.creatorVaultBatcher
+  const batcher = CONTRACTS.deploymentBatcher
   if (!batcher || !isAddress(batcher)) return null
   try {
     const logs = await publicClient.getLogs({
@@ -545,7 +545,7 @@ export async function fetchLegacyPhase1Map(
   publicClient: any,
   owner?: Address,
 ): Promise<Map<string, { vault: Address; wrapper: Address; shareOft: Address }>> {
-  const batcher = CONTRACTS.creatorVaultBatcher
+  const batcher = CONTRACTS.deploymentBatcher
   if (!batcher || !isAddress(batcher)) return new Map()
   try {
     const filterArgs = owner && isAddress(owner) ? { owner } : undefined
@@ -585,7 +585,7 @@ export async function resolveShareOftFromVault(
 
   const tokens = (await publicClient.readContract({
     address: registryAddress as Address,
-    abi: CREATOR_REGISTRY_ABI,
+    abi: REGISTRY_4626_ABI,
     functionName: 'getAllTokens',
   })) as Address[]
 
@@ -594,7 +594,7 @@ export async function resolveShareOftFromVault(
   const target = vaultAddress.toLowerCase()
   const calls = tokens.map((token) => ({
     address: registryAddress as Address,
-    abi: CREATOR_REGISTRY_ABI,
+    abi: REGISTRY_4626_ABI,
     functionName: 'getTokenInfo',
     args: [token],
   }))

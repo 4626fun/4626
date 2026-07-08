@@ -14,7 +14,7 @@ const legacyVault = getAddress('0x5555555555555555555555555555555555555555')
 const legacyWrapper = getAddress('0x6666666666666666666666666666666666666666')
 const legacyShareOFT = getAddress('0x7777777777777777777777777777777777777777')
 
-const creatorVaultBatcher = getAddress('0xB87CBb646dD14F520078F11196f79BF815F18c84')
+const deploymentBatcher = getAddress('0xB87CBb646dD14F520078F11196f79BF815F18c84')
 const vaultActivationBatcher = getAddress('0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB')
 const permit2 = getAddress('0x000000000022D473030F116dDEE9F6B43aC78BA3')
 const create2Deployer = getAddress('0x74183076C7D33346880A5bf0e263B761FB4d38BA')
@@ -124,7 +124,7 @@ describe('paymaster legacy withdraw provenance', () => {
 
     readRequestPrincipalMock.mockReturnValue(sessionAddress)
     getApiContractsMock.mockReturnValue({
-      creatorVaultBatcher,
+      deploymentBatcher,
       vaultActivationBatcher,
       permit2,
       universalCreate2DeployerFromStore: create2Deployer,
@@ -278,9 +278,9 @@ describe('paymaster legacy withdraw provenance', () => {
       if (opts.address === legacyWrapper && opts.functionName === 'vault') return Promise.resolve(legacyVault)
       if (opts.address === legacyWrapper && opts.functionName === 'shareOFT') return Promise.resolve(legacyShareOFT)
       if (opts.address === legacyWrapper && opts.functionName === 'creatorCoin') return Promise.resolve(wrongCreatorToken)
-      if (opts.address === legacyWrapper && opts.functionName === 'owner') return Promise.resolve(creatorVaultBatcher)
+      if (opts.address === legacyWrapper && opts.functionName === 'owner') return Promise.resolve(deploymentBatcher)
       if (opts.address === legacyShareOFT && opts.functionName === 'vault') return Promise.resolve(legacyVault)
-      if (opts.address === legacyShareOFT && opts.functionName === 'owner') return Promise.resolve(creatorVaultBatcher)
+      if (opts.address === legacyShareOFT && opts.functionName === 'owner') return Promise.resolve(deploymentBatcher)
       return Promise.resolve(null)
     })
     mockGetLogs.mockResolvedValue([
@@ -322,7 +322,7 @@ describe('paymaster legacy withdraw provenance', () => {
       if (opts.address === legacyWrapper && opts.functionName === 'vault') return Promise.resolve(legacyVault)
       if (opts.address === legacyWrapper && opts.functionName === 'shareOFT') return Promise.resolve(legacyShareOFT)
       if (opts.address === legacyWrapper && opts.functionName === 'creatorCoin') return Promise.resolve(creatorToken)
-      if (opts.address === legacyWrapper && opts.functionName === 'owner') return Promise.resolve(creatorVaultBatcher)
+      if (opts.address === legacyWrapper && opts.functionName === 'owner') return Promise.resolve(deploymentBatcher)
       if (opts.address === legacyShareOFT && opts.functionName === 'vault') return Promise.resolve(legacyVault)
       if (opts.address === legacyShareOFT && opts.functionName === 'owner') return Promise.resolve(unexpectedOwner)
       return Promise.resolve(null)

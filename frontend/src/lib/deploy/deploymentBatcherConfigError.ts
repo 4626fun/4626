@@ -10,8 +10,8 @@ export function deploymentBatcherNotConfiguredMessage(receivedBatcher?: string |
       ? ` Received ${receivedBatcher}.`
       : ''
   return (
-    'deployment batcher is not configured: missing/invalid VITE_CREATOR_VAULT_BATCHER / CONTRACTS.creatorVaultBatcher ' +
-    '(server: CREATOR_VAULT_BATCHER / CREATOR_VAULT_BATCHER_AUTO_HANDOFF). ' +
+    'deployment batcher is not configured: missing/invalid VITE_DEPLOYMENT_BATCHER / CONTRACTS.deploymentBatcher ' +
+    '(server: DEPLOYMENT_BATCHER / DEPLOYMENT_BATCHER_AUTO_HANDOFF). ' +
     `Deprecated aliases are blocked (${LEGACY_DEPLOYMENT_BATCHER}, ${MODULE_MISMATCH_DEPLOYMENT_BATCHER}); ` +
     `use canonical ${SPLIT_PHASE1_DEPLOYMENT_BATCHER}.${received}`
   )

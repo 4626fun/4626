@@ -129,9 +129,9 @@ contract RotateLiveBatcherPhase1ModulesV121 is Script {
         );
 
         console2.log("SAFE_WIRING: setPhase1Module(", phase1ModuleAddr, ") on batcher", batcher);
-        console2.log("HANDOFF:CREATOR_OVAULT_CORE_MODULE=", coreModuleAddr);
-        console2.log("HANDOFF:CREATOR_OVAULT_STRATEGIES_MODULE=", strategiesModuleAddr);
-        console2.log("HANDOFF:CREATOR_OVAULT_ADMIN_MODULE=", adminModuleAddr);
+        console2.log("HANDOFF:OVAULT_CORE_MODULE=", coreModuleAddr);
+        console2.log("HANDOFF:OVAULT_STRATEGIES_MODULE=", strategiesModuleAddr);
+        console2.log("HANDOFF:OVAULT_ADMIN_MODULE=", adminModuleAddr);
         console2.log("HANDOFF:SPLIT_PHASE1_PHASE1_MODULE=", phase1ModuleAddr);
     }
 

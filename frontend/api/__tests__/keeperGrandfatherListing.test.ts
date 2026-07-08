@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   shouldAttemptGrandfatheredKeeperFallback,
   validateKeeperVaultListing,
-} from '../../server/_lib/onchain/creatorRegistryVerification.js'
+} from '../../server/_lib/onchain/registry4626Verification.js'
 import { AKITA_DEFAULTS } from '../../src/config/contracts.defaults.js'
 
 const { mockCreatorCoin } = vi.hoisted(() => ({

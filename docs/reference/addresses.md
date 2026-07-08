@@ -5,9 +5,13 @@ sidebar_position: 1
 
 # Contract Addresses
 
-Canonical deployed contract addresses for 4626 on Base mainnet (**v1.16.1-share-mesh**).
+Canonical deployed contract addresses for 4626 on Base mainnet (**v1.18.0-greenfield**).
 
-> **Planned release:** full greenfield **v1.17.0** — see [`docs/_internal/deployment-releases-legacy/v1.17.0-greenfield.md`](../_internal/deployment-releases-legacy/v1.17.0-greenfield.md). Orchestrator: `./script/run-v1170-greenfield-cutover.sh`. Do not flip this page to v1.17.0 addresses until post-broadcast handoff.
+> **Post-broadcast:** on-chain cutover complete 2026-07-08. Release packet: [`v1.18.0-greenfield.md`](../_internal/deployment-releases-legacy/v1.18.0-greenfield.md). Handoff: `tmp/base-v1.18.0-handoff.env`.
+
+> **Pending operator steps:** treasury Safe must `wireDeploymentHelpers` + `setPhase1Module` on batcher `0x02D7ab…`; fresh AMOE router on new `LotteryManager4626` `0xbE87AD…`; Vercel env + redeploy.
+
+> **Abandoned:** v1.17.0 partial broadcast (orphan infra only). Handoff: `tmp/base-v1.17.0-handoff.env`.
 
 For launch procedures, see [Getting started](/getting-started). This page lists **shared infrastructure** (batcher, factories, registry). Per-creator vault, wrapper, and ShareOFT addresses are emitted at deploy and available in the application and onchain events.
 
@@ -21,46 +25,36 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 
 | Contract | Address |
 |----------|---------|
-| Registry4626 | `0x1eb9A364a3E763dD9249ba3413Dc19E13c1F4461` |
-| OVaultFactory4626 | `0x26b74b1d3AadD17e714068d259051409C9f942d1` |
-| VaultActivationBatcher | `0xB06d99c81994F5829ba462c4afA78eCff75bC281` |
-| LotteryManager4626 | `0xD62a8a2F4c25587FA80ED5782b50Af6654122b0b` |
-| VRFConsumer4626 | `0x933A3BE4a4BF00dD3B71c50Dee4972539a32bE47` |
-| SolanaBridgeAdapter | `0x363662F9728A9fd12c7CA398e5A6d1d9E7De07F1` |
-| UniversalBytecodeStoreV2 | `0x7D1029a832E2BEd2C961bC912b623b763862Ad3C` |
-| UniversalCreate2DeployerFromStore | `0xdC75A18C521f6Ae1ACa112A98E46c8231F431BC0` |
-| CreatorOVaultCoreModule | `0x396cF02c219cfA5288C3e472Fbc9634fe4D44B68` |
-| CreatorOVaultStrategiesModule | `0x21BCC0461fC5890ca2a3C06707EAaea30736e8f7` |
-| CreatorOVaultAdminModule | `0xba261a7B732f0a743Ea7187567ff93Ea3C9af93f` |
-| DeploymentBatcher | `0xA9024e1B89C5Be34502A275576Cc137473d65839` |
-| DeploymentBatcherPhase1Module | `0xc7d44c4136f10a780B93cCA901F8Fcf2cc130bD1` |
-| DeploymentBatcherPhase2Module | `0xD641076Ff1b1121c3cF85F5d69B386bCE91a6bb2` |
-| DeploymentBatcherPhase3Helper | `0x38Abe158e1A71774Cfa014287b574d52051133Fc` |
-| DeploymentBatcherShareMeshHelper | `0x64aA8ba6aD4641034Ca5A1bF31609a5fa9e5dc80` |
-| DeploymentBatcherUtilsHelper | `0x5B59219683b748a321f84eFDfe5A29d3bB945B27` |
+| Registry4626 | `0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0` |
+| OVaultFactory4626 | `0x70d0D2411D362BA50821389383Fa6B829d736232` |
+| VaultActivationBatcher | `0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3` |
+| LotteryManager4626 | `0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1` |
+| VRFConsumer4626 | `0x0b41AD9Eb06EE14C360E1e3D16Af63F5a172Ec36` |
+| SolanaBridgeAdapter | `0x9A61814082A26192DD9Cb201b44058506685Be60` |
+| UniversalBytecodeStoreV2 | `0xfa3e3b466635DAff910057f18749B93d56F9DE50` |
+| UniversalCreate2DeployerFromStore | `0x54660E61857a652753d805aD2c7b4f759C138bD5` |
+| CreatorOVaultCoreModule | `0xE5C1de158Cb66ffCE15b26BE6F40f598c642EF43` |
+| CreatorOVaultStrategiesModule | `0x8757065daf34D8B536FC35BdfE3001D43FAbAA7e` |
+| CreatorOVaultAdminModule | `0x506400ce30228378Ee4682cfcBD55625154Bc063` |
+| DeploymentBatcher | `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
+| DeploymentBatcherPhase1Module | `0x808fC8e83629019e29df79E592237B4603F9D1b5` |
+| DeploymentBatcherPhase2Module | `0x9845D8d412DA4686FE8b1886F314Ef8b288b8D71` |
+| DeploymentBatcherPhase3Helper | `0xB8c10FE668d59E2DEb5771298133c2a3DBFc9bB3` |
+| DeploymentBatcherShareMeshHelper | `0x9C965724f6B3387433D82bf67632Bf06470a8988` |
+| DeploymentBatcherUtilsHelper | `0xCBf24949Fc99e7C9b5e16e15a423543930fd4A52` |
 
 Notes:
-- **v1.16.1-share-mesh** adds `CCALaunchArm` + post-CCA share-mesh LP manager completion on a fresh batcher shell. Phase 3 remains **45% Charm + 45% Ajna + 10% idle**; Solana is **ShareOFT mesh at Phase 2 finalize** (~30% via Pipe A).
+- **v1.18.0-greenfield** fresh shared/global + phased deploy infra under epoch tag `v1.18.0`. Phase 3 remains **45% Charm + 45% Ajna + 10% idle**; Solana is **ShareOFT mesh at Phase 2 finalize** (~30% via Pipe A).
 - `DeploymentBatcher` deploys as a slim shell; helpers and `DeploymentBatcherPhase1Module` wire post-deploy via protocol treasury Safe (`wireDeploymentHelpers` + `setPhase1Module`).
-- **New vault launches** use **Phase1Module immutables** (`phase1Module()` → `0xc7d44…`), not batcher-shell module getters.
-- Pre-v1.16.1 batchers (`0x17163e…`, `0x660B25…`, `0xa99058…`, and older) are deprecated for **new vault launches**.
-
-### Planned: v1.17.0 greenfield
-
-| Item | Status |
-|------|--------|
-| Release packet | [`v1.17.0-greenfield.md`](../_internal/deployment-releases-legacy/v1.17.0-greenfield.md) |
-| Orchestrator | `./script/run-v1170-greenfield-cutover.sh` |
-| Bytecode manifest | `deployments/base/v1.17.0-bytecode-manifest.json` (generated pre/post broadcast) |
-| Live addresses | **TBD** — fill from `HANDOFF:*` logs after `./script/deploy-base-full-release.sh` |
-
-After cutover: move the **Current infrastructure** table below into **Deprecated (v1.16.1-share-mesh)** and replace with v1.17.0 HANDOFF addresses.
+- **New vault launches** use **Phase1Module immutables** (`phase1Module()` → `0x808fC8…`), not batcher-shell module getters until Safe wiring completes.
+- Pre-v1.18.0 batchers (including `0xA9024e…` v1.16.1) are deprecated for **new vault launches**.
 
 ### Deprecated infrastructure
 
 | Epoch / label | Representative addresses | Notes |
 |---------------|-------------------------|-------|
-| v1.16.1-share-mesh | Registry `0x1eb9A3…`, batcher `0xA9024e…`, store `0x7D1029…` | **Still live** until v1.17.0 cutover; then move full table here |
+| v1.16.1-share-mesh | Registry `0x1eb9A3…`, batcher `0xA9024e…`, store `0x7D1029…` | Superseded by v1.18.0; existing vaults may still reference |
+| v1.17.0 orphan | Registry `0x5646B5…`, batcher `0xa4090F…` | Partial broadcast — never wired for production |
 | v1.16.0 shell | Batcher `0x17163e67dED6B45bd2A7E6a509A32fB7b0cB6D33` | Lacks `shareMeshHelper()` |
 | v1.14.1 shell | Batcher `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1` | Pre–share-mesh |
 | v1.14.0 shell | Batcher `0xa99058f424FB3ACC639F59355C65C40149030651` | Pre–v1.14.1 refresh |
@@ -80,8 +74,10 @@ Do **not** set `PROTOCOL_AUTOMATION_SAFE` to the treasury address. Phase 3 deplo
 
 | Contract / role | Address | Notes |
 |-----------------|---------|-------|
-| `LotteryAmoeRouter` (v3, PLONK + 9 public inputs) | `0x066e11d795656A2A980585a414BC0fD6BB12e057` | **Production router.** Fan-out target = `LotteryManager4626` `0xD62a…` on Registry4626 `0x1eb9…`. |
-| `LotteryManager4626` (v1.16.1) | `0xD62a8a2F4c25587FA80ED5782b50Af6654122b0b` | Canonical manager for AKITA + new stack. |
+| `LotteryAmoeRouter` (v3, PLONK + 9 public inputs) | `0x18D1806cfe044de1eb4652ab30Bf6937f8dfc0A7` | **Live v1.18.0 router** wired to manager `0xbE87AD…`. |
+| `LotteryAmoeRouter` (v3, legacy v1.16.1) | `0x066e11d795656A2A980585a414BC0fD6BB12e057` | Deprecated — do not point Vercel here after v1.18.0 cutover. |
+| `LotteryManager4626` (v1.18.0) | `0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1` | Canonical manager on Registry4626 `0xDb8570…`. |
+| `LotteryManager4626` (v1.16.1) | `0xD62a8a2F4c25587FA80ED5782b50Af6654122b0b` | Deprecated manager on prior registry stack. |
 | Legacy `LotteryAmoeRouter` | `0xc57aedc38eba3edfa116f92b3fc427af7eb06b0a` | **Deprecated.** Was wired to v1.11 manager `0x04CADE…`; do not point Vercel here. |
 | Legacy manager (v1.11) | `0x04CADE6FDf564A5005FF80930d8e8784cb1A7Cf8` | Pre–v1.16.1. Kill-switch relayer after cutover. |
 | Allowlist + ledger publisher | `0xAb6d5C10b03300326cd7fab7267ae192842967b5` | Canonical CSW — must match on-chain `allowlistPublisher` / `pointsLedgerPublisher`. |
@@ -89,34 +85,36 @@ Do **not** set `PROTOCOL_AUTOMATION_SAFE` to the treasury address. Phase 3 deplo
 
 **Cutover checklist (production):**
 
-1. `./script/wire-amoe-router-v1161.sh` — `router.setManager(0xD62a…)`, `manager.setAuthorizedAmoeRelayer(0x066e11…)`, publishers → canonical CSW.
-2. Set `LOTTERY_AMOE_ROUTER=0x066e11d795656A2A980585a414BC0fD6BB12e057` on Vercel (`production`, `preview`, `development`) and redeploy.
-3. Republish allowlist + points-ledger Merkle roots on the v3 router (`/api/v1/lottery/amoe/publish-cron` or manual ops). Roots are **one-shot per epoch** on each router address.
-4. Confirm signed AMOE messages embed `Lottery Manager: 0xD62a…` (nonce API reads live `LOTTERY_MANAGER` env).
+1. Deploy fresh `LotteryAmoeRouter` via `script/DeployLotteryAmoeRouter.s.sol` (PLONK v3).
+2. `./script/wire-amoe-router-v1161.sh` — `router.setManager(0xbE87AD…)`, `manager.setAuthorizedAmoeRelayer(<new router>)`, publishers → canonical CSW.
+3. Set `LOTTERY_AMOE_ROUTER=<new router>` on Vercel (`production`, `preview`, `development`) and redeploy.
+4. Republish allowlist + points-ledger Merkle roots on the new router (`/api/v1/lottery/amoe/publish-cron` or manual ops). Roots are **one-shot per epoch** on each router address.
+5. Confirm signed AMOE messages embed `Lottery Manager: 0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1` (nonce API reads live `LOTTERY_MANAGER` env).
 
-## Environment cutover (v1.16.1-share-mesh)
+## Environment cutover (v1.18.0-greenfield)
 
 After an infra epoch deploy, update **local `.env`**, **Vercel** (`production`, `preview`, `development`), and any operator host env to these keys. Canonical values:
 
-| Server env | Client (Vite) env | v1.16.1-share-mesh value |
+| Server env | Client (Vite) env | v1.18.0-greenfield value |
 |------------|-------------------|---------------------------|
-| `CREATOR_REGISTRY` | `VITE_REGISTRY` | `0x1eb9A364a3E763dD9249ba3413Dc19E13c1F4461` |
-| `CREATOR_FACTORY` | `VITE_FACTORY` | `0x26b74b1d3AadD17e714068d259051409C9f942d1` |
-| `VAULT_ACTIVATION_BATCHER` | `VITE_VAULT_ACTIVATION_BATCHER` | `0xB06d99c81994F5829ba462c4afA78eCff75bC281` |
-| `LOTTERY_MANAGER` | `VITE_LOTTERY_MANAGER` | `0xD62a8a2F4c25587FA80ED5782b50Af6654122b0b` |
-| `UNIVERSAL_BYTECODE_STORE` | `VITE_UNIVERSAL_BYTECODE_STORE` | `0x7D1029a832E2BEd2C961bC912b623b763862Ad3C` |
-| `UNIVERSAL_CREATE2_FROM_STORE`, `UNIVERSAL_CREATE2_DEPLOYER` | `VITE_UNIVERSAL_CREATE2_DEPLOYER` | `0xdC75A18C521f6Ae1ACa112A98E46c8231F431BC0` |
-| `DEPLOYMENT_BATCHER`, `CREATOR_VAULT_BATCHER` | `VITE_CREATOR_VAULT_BATCHER` | `0xA9024e1B89C5Be34502A275576Cc137473d65839` |
-| `CREATOR_VAULT_BATCHER_AUTO_HANDOFF` | `VITE_CREATOR_VAULT_BATCHER_AUTO_HANDOFF` | `0xA9024e1B89C5Be34502A275576Cc137473d65839` |
-| `SOLANA_BRIDGE_ADAPTER` | `VITE_SOLANA_BRIDGE_ADAPTER` | `0x363662F9728A9fd12c7CA398e5A6d1d9E7De07F1` |
-| `LOTTERY_AMOE_ROUTER` | — | `0x066e11d795656A2A980585a414BC0fD6BB12e057` |
-| — | `VITE_DEPLOYMENT_VERSION` | `v1.16.1` |
+| `REGISTRY_4626` | `VITE_REGISTRY` | `0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0` |
+| `OVAULT_FACTORY` | `VITE_FACTORY` | `0x70d0D2411D362BA50821389383Fa6B829d736232` |
+| `VAULT_ACTIVATION_BATCHER` | `VITE_VAULT_ACTIVATION_BATCHER` | `0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3` |
+| `LOTTERY_MANAGER` | `VITE_LOTTERY_MANAGER` | `0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1` |
+| `VRF_CONSUMER` | `VITE_VRF_CONSUMER` | `0x0b41AD9Eb06EE14C360E1e3D16Af63F5a172Ec36` |
+| `UNIVERSAL_BYTECODE_STORE` | `VITE_UNIVERSAL_BYTECODE_STORE` | `0xfa3e3b466635DAff910057f18749B93d56F9DE50` |
+| `UNIVERSAL_CREATE2_FROM_STORE`, `UNIVERSAL_CREATE2_DEPLOYER` | `VITE_UNIVERSAL_CREATE2_DEPLOYER` | `0x54660E61857a652753d805aD2c7b4f759C138bD5` |
+| `DEPLOYMENT_BATCHER` | `VITE_DEPLOYMENT_BATCHER` | `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
+| `DEPLOYMENT_BATCHER_AUTO_HANDOFF` | `VITE_DEPLOYMENT_BATCHER_AUTO_HANDOFF` | `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
+| `SOLANA_BRIDGE_ADAPTER` | `VITE_SOLANA_BRIDGE_ADAPTER` | `0x9A61814082A26192DD9Cb201b44058506685Be60` |
+| `LOTTERY_AMOE_ROUTER` | — | `0x18D1806cfe044de1eb4652ab30Bf6937f8dfc0A7` |
+| — | `VITE_DEPLOYMENT_VERSION` | `v1.18.0` |
+
+Sync local env from handoff: `./script/sync-greenfield-env-from-handoff.sh tmp/base-v1.18.0-handoff.env`
 
 `VITE_DEPLOYMENT_VERSION` pins the CREATE2 namespace for **new vault launches**.
 
-**Deploy script env overrides:** when running `./script/deploy-infra-v2.sh` or `./script/upgrade-batcher-shell-share-mesh.sh`, pin `REGISTRY=0x1eb9A3…`, `VAULT_ACTIVATION_BATCHER=0xB06d99…`, `PROTOCOL_TREASURY=0x7d429e…`, and `PROTOCOL_AUTOMATION_SAFE=0x08f0875…` if not already in `.env`. If the live Phase3 helper still points automation at treasury, run `./script/upgrade-phase3-automation.sh` after the shell cutover.
-
-Redeploy the Vercel app after env changes; run `pnpm -C frontend ops:verify-akita-prelaunch --production` and `verify-bytecode-store-seeded.ts` against `deployments/base/v1.16.1-bytecode-manifest.json` before traffic cutover.
+Redeploy the Vercel app after env changes; run `bash test/current-release-target-guard.sh` and `verify-bytecode-store-seeded.ts` against `deployments/base/v1.18.0-bytecode-manifest.json` before traffic cutover.
 
 ### Per-Creator Deployments
 

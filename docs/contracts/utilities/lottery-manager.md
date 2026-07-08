@@ -1,17 +1,17 @@
 ---
-title: LotteryManager
+title: LotteryManager4626
 sidebar_position: 1
 ---
 
-# CreatorLotteryManager
+# LotteryManager4626
 
 **Product role:** **Instant lottery** on hub-chain ShareOFT **buys** (Chainlink VRF) plus attested no-purchase AMOE entries — prizes paid from gauge jackpot reserves.
 
-Shared lottery service deployed once per chain; serves all creator coins by resolving contract addresses from [CreatorRegistry](/contracts/core/creator-registry).
+Shared lottery service deployed once per chain; serves all creator coins by resolving contract addresses from [Registry4626](/contracts/core/creator-registry).
 
 ## Purpose
 
-The CreatorLotteryManager:
+The LotteryManager4626:
 - Processes lottery entries from qualifying ShareOFT DEX **buys**
 - Processes AMOE entries from server attestations (no purchase required)
 - Integrates Chainlink VRF 2.5 for verifiable randomness
@@ -86,7 +86,7 @@ function setAmoeConfig(bool enabled, uint32 maxEntriesPerBuyerPerEpoch, uint256 
 ### Cross-Chain Fee Sponsorship Guardrails
 
 When cross-chain VRF and winner callbacks are enabled, the manager can sponsor LayerZero native fees.
-To prevent unbounded fee burn, `CreatorLotteryManager` uses a hybrid model:
+To prevent unbounded fee burn, `LotteryManager4626` uses a hybrid model:
 
 Defaults (new deployments):
 - Sponsorship is disabled by default (`vrfSponsorshipPolicy.enabled == false`, `callbackSponsorshipPolicy.enabled == false`).

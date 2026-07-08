@@ -31,7 +31,7 @@ vi.mock('../../server/_lib/keepr/keeprSchema.js', () => ({
   ensureKeeprSchema: ensureKeeprSchemaMock,
 }))
 
-vi.mock('../../server/_lib/onchain/creatorRegistryVerification.js', () => ({
+vi.mock('../../server/_lib/onchain/registry4626Verification.js', () => ({
   validateKeeperVaultListing: validateKeeperVaultListingMock,
 }))
 

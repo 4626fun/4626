@@ -1,9 +1,9 @@
 ---
-title: CreatorRegistry
+title: Registry4626
 sidebar_position: 1
 ---
 
-# Registry4626 (formerly CreatorRegistry)
+# Registry4626
 
 **Product role:** Onchain **index** from a lane token address (creator coin or agent token) to that vault’s contract stack (vault, wrapper, ShareOFT, gauge). Integrators and the application resolve which contracts belong to a given token via the registry.
 

@@ -155,7 +155,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     resolvePersistedWalletIdentityMock.mockResolvedValue(null)
     resolvePersistedWalletIdentityForProfileIdMock.mockResolvedValue(null)
     getApiContractsMock.mockReturnValue({
-      creatorVaultBatcher: '0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753',
+      deploymentBatcher: '0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753',
       vaultActivationBatcher: '0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB',
       permit2: '0x000000000022D473030F116dDEE9F6B43aC78BA3',
       universalCreate2DeployerFromStore: '0x0243F14771054c890E5Ef5D467D0137a20B2d94B',
@@ -2174,7 +2174,7 @@ describe('paymaster payout-router external approvals', () => {
   const ccaLaunchArm = getAddress('0x9999999999999999999999999999999999999999')
   const oracle = getAddress('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
 
-  const creatorVaultBatcher = getAddress('0xB87CBb646dD14F520078F11196f79BF815F18c84')
+  const deploymentBatcher = getAddress('0xB87CBb646dD14F520078F11196f79BF815F18c84')
   const vaultActivationBatcher = getAddress('0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB')
   const permit2 = getAddress('0x000000000022D473030F116dDEE9F6B43aC78BA3')
   const create2Deployer = getAddress('0x74183076C7D33346880A5bf0e263B761FB4d38BA')
@@ -2289,7 +2289,7 @@ describe('paymaster payout-router external approvals', () => {
         },
       ],
     })
-    return { target: creatorVaultBatcher as `0x${string}`, value: 0n, data: finalizeData }
+    return { target: deploymentBatcher as `0x${string}`, value: 0n, data: finalizeData }
   }
 
   function buildRouterAdminCall(params: {
@@ -2358,7 +2358,7 @@ describe('paymaster payout-router external approvals', () => {
 
     readRequestPrincipalMock.mockReturnValue(sessionAddress)
     getApiContractsMock.mockReturnValue({
-      creatorVaultBatcher,
+      deploymentBatcher,
       vaultActivationBatcher,
       permit2,
       universalCreate2DeployerFromStore: create2Deployer,
@@ -2387,9 +2387,9 @@ describe('paymaster payout-router external approvals', () => {
       if (address === wrapper && functionName === 'creatorCoin') return Promise.resolve(creatorToken)
       if (address === wrapper && functionName === 'vault') return Promise.resolve(vault)
       if (address === wrapper && functionName === 'shareOFT') return Promise.resolve(shareOFT)
-      if (address === wrapper && functionName === 'owner') return Promise.resolve(creatorVaultBatcher)
+      if (address === wrapper && functionName === 'owner') return Promise.resolve(deploymentBatcher)
       if (address === shareOFT && functionName === 'vault') return Promise.resolve(vault)
-      if (address === shareOFT && functionName === 'owner') return Promise.resolve(creatorVaultBatcher)
+      if (address === shareOFT && functionName === 'owner') return Promise.resolve(deploymentBatcher)
       return Promise.resolve(null)
     })
 

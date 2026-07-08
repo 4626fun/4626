@@ -4,7 +4,7 @@ import { assertShareBridgeOftWiringForFinalize } from '../../../src/lib/deploy/s
 
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
 
-const CREATOR_VAULT_BATCHER_OVAULT_RUNTIME_VIEW_ABI = [
+const DEPLOYMENT_BATCHER_OVAULT_RUNTIME_VIEW_ABI = [
   {
     type: 'function',
     name: 'getOVaultRuntimeConfig',
@@ -93,7 +93,7 @@ async function assertOvaultRuntimeReady(params: {
   const runtime = await params.publicClient
     .readContract({
       address: params.batcherAddress,
-      abi: CREATOR_VAULT_BATCHER_OVAULT_RUNTIME_VIEW_ABI,
+      abi: DEPLOYMENT_BATCHER_OVAULT_RUNTIME_VIEW_ABI,
       functionName: 'getOVaultRuntimeConfig',
     })
     .catch(() => null)

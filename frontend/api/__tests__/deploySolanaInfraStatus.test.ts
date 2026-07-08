@@ -45,7 +45,7 @@ describe('deploy solana infra status handler', () => {
     getSessionAddressMock.mockReturnValue('0x1111111111111111111111111111111111111111')
     isAdminAddressMock.mockReturnValue(true)
     getApiContractsMock.mockReturnValue({
-      creatorVaultBatcher: '0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753',
+      deploymentBatcher: '0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753',
     })
   })
 

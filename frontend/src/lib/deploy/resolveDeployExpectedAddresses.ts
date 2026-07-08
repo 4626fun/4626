@@ -10,7 +10,7 @@ import {
 } from 'viem'
 
 import { DEPLOY_BYTECODE } from '@/deploy/bytecode.generated'
-import type { CreatorVaultBatcherInfra } from '@/lib/deploy/creatorVaultBatcherInfra'
+import type { CreatorVaultBatcherInfra } from '@/lib/deploy/deploymentBatcherInfra'
 import {
   resolveDeployLaneGaugeBytecode,
   resolveDeployLaneOracleBytecode,

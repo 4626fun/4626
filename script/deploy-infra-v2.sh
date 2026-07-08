@@ -35,6 +35,10 @@ load_env_file() {
     if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
       continue
     fi
+    # Explicit shell exports (e.g. DEPLOYMENT_EPOCH_TAG=v1.17.0) must win over .env defaults.
+    if [[ -n "${!key:-}" ]]; then
+      continue
+    fi
     value="${value#"${value%%[![:space:]]*}"}"
     value="${value%"${value##*[![:space:]]}"}"
     if [[ "$value" == \"*\" && "$value" == *\" ]]; then
@@ -116,11 +120,10 @@ load_shared_global_artifact() {
 
   echo "Loading shared/global handoff artifact: ${BASE_SHARED_GLOBAL_OUTPUT_PATH}"
 
-  export_json_field REGISTRY "${BASE_SHARED_GLOBAL_OUTPUT_PATH}" ".creatorRegistry"
-  export_json_field CREATOR_REGISTRY "${BASE_SHARED_GLOBAL_OUTPUT_PATH}" ".creatorRegistry"
-  export_json_field CREATOR_FACTORY "${BASE_SHARED_GLOBAL_OUTPUT_PATH}" ".creatorVaultFactory"
-  export_json_field LOTTERY_MANAGER "${BASE_SHARED_GLOBAL_OUTPUT_PATH}" ".creatorLotteryManager"
-  export_json_field CREATOR_LOTTERY_MANAGER "${BASE_SHARED_GLOBAL_OUTPUT_PATH}" ".creatorLotteryManager"
+  export_json_field REGISTRY "${BASE_SHARED_GLOBAL_OUTPUT_PATH}" ".registry"
+  export_json_field OVAULT_FACTORY "${BASE_SHARED_GLOBAL_OUTPUT_PATH}" ".ovaultFactory"
+  export_json_field LOTTERY_MANAGER "${BASE_SHARED_GLOBAL_OUTPUT_PATH}" ".lotteryManager"
+  export_json_field VRF_CONSUMER "${BASE_SHARED_GLOBAL_OUTPUT_PATH}" ".vrfConsumer"
   export_json_field VAULT_ACTIVATION_BATCHER "${BASE_SHARED_GLOBAL_OUTPUT_PATH}" ".vaultActivationBatcher"
   export_json_field SOLANA_BRIDGE_ADAPTER "${BASE_SHARED_GLOBAL_OUTPUT_PATH}" ".solanaBridgeAdapter"
 }
@@ -130,8 +133,10 @@ configure_infra_salts() {
     export DEPLOYMENT_EPOCH_TAG="${DEFAULT_RELEASE_TAG}"
   fi
 
-  : "${REGISTRY:=${CREATOR_REGISTRY:-}}"
-  : "${LOTTERY_MANAGER:=${CREATOR_LOTTERY_MANAGER:-}}"
+  if [ -z "${REGISTRY:-}" ] || [ -z "${LOTTERY_MANAGER:-}" ]; then
+    echo "Error: REGISTRY and LOTTERY_MANAGER must be set (shared/global artifact or handoff env)" >&2
+    exit 1
+  fi
   export REGISTRY LOTTERY_MANAGER
 
   : "${INFRA_STORE_SALT_TAG:=base-release:UniversalBytecodeStore:${DEPLOYMENT_EPOCH_TAG}}"
@@ -185,6 +190,14 @@ recover_v2_handoff_from_deployer_log_fallback() {
   local store_addr=""
   local create2_deployer_addr=""
   local deployment_batcher_addr=""
+  local phase1_module_addr=""
+  local phase2_module_addr=""
+  local phase3_helper_addr=""
+  local share_mesh_helper_addr=""
+  local utils_helper_addr=""
+  local core_module_addr=""
+  local strategies_module_addr=""
+  local admin_module_addr=""
 
   while IFS= read -r line || [ -n "$line" ]; do
     line="${line#"${line%%[![:space:]]*}"}"
@@ -203,6 +216,30 @@ recover_v2_handoff_from_deployer_log_fallback() {
           deployment_batcher_addr="${line#DeploymentBatcher (predicted): }"
         fi
         ;;
+      "DeploymentBatcherPhase1Module (predicted): "*)
+        phase1_module_addr="${line#DeploymentBatcherPhase1Module (predicted): }"
+        ;;
+      "DeploymentBatcherPhase2Module (predicted): "*)
+        phase2_module_addr="${line#DeploymentBatcherPhase2Module (predicted): }"
+        ;;
+      "DeploymentBatcherPhase3Helper (predicted): "*)
+        phase3_helper_addr="${line#DeploymentBatcherPhase3Helper (predicted): }"
+        ;;
+      "DeploymentBatcherShareMeshHelper (predicted): "*)
+        share_mesh_helper_addr="${line#DeploymentBatcherShareMeshHelper (predicted): }"
+        ;;
+      "DeploymentBatcherUtilsHelper (predicted): "*)
+        utils_helper_addr="${line#DeploymentBatcherUtilsHelper (predicted): }"
+        ;;
+      "CreatorOVaultCoreModule (predicted): "*)
+        core_module_addr="${line#CreatorOVaultCoreModule (predicted): }"
+        ;;
+      "OVaultStrategiesModule (predicted): "*)
+        strategies_module_addr="${line#OVaultStrategiesModule (predicted): }"
+        ;;
+      "OVaultAdminModule (predicted): "*)
+        admin_module_addr="${line#OVaultAdminModule (predicted): }"
+        ;;
     esac
   done < "$log_path"
 
@@ -215,16 +252,41 @@ recover_v2_handoff_from_deployer_log_fallback() {
     printf 'UNIVERSAL_CREATE2_DEPLOYER=%s\n' "$create2_deployer_addr"
     printf 'UNIVERSAL_CREATE2_FROM_STORE=%s\n' "$create2_deployer_addr"
     printf 'DEPLOYMENT_BATCHER=%s\n' "$deployment_batcher_addr"
-    printf 'CREATOR_VAULT_BATCHER=%s\n' "$deployment_batcher_addr"
-    printf 'CREATOR_VAULT_BATCHER_AUTO_HANDOFF=%s\n' "$deployment_batcher_addr"
+    printf 'DEPLOYMENT_BATCHER_AUTO_HANDOFF=%s\n' "$deployment_batcher_addr"
+    printf 'WIRE_BATCHER_HELPERS_BATCHER=%s\n' "$deployment_batcher_addr"
+    if [ -n "$phase1_module_addr" ]; then
+      printf 'DEPLOYMENT_BATCHER_PHASE1_MODULE=%s\n' "$phase1_module_addr"
+    fi
+    if [ -n "$phase2_module_addr" ]; then
+      printf 'DEPLOYMENT_BATCHER_PHASE2_MODULE=%s\n' "$phase2_module_addr"
+    fi
+    if [ -n "$phase3_helper_addr" ]; then
+      printf 'DEPLOYMENT_BATCHER_PHASE3_HELPER=%s\n' "$phase3_helper_addr"
+    fi
+    if [ -n "$share_mesh_helper_addr" ]; then
+      printf 'DEPLOYMENT_BATCHER_SHARE_MESH_HELPER=%s\n' "$share_mesh_helper_addr"
+    fi
+    if [ -n "$utils_helper_addr" ]; then
+      printf 'DEPLOYMENT_BATCHER_UTILS_HELPER=%s\n' "$utils_helper_addr"
+    fi
+    if [ -n "$core_module_addr" ]; then
+      printf 'OVAULT_CORE_MODULE=%s\n' "$core_module_addr"
+    fi
+    if [ -n "$strategies_module_addr" ]; then
+      printf 'OVAULT_STRATEGIES_MODULE=%s\n' "$strategies_module_addr"
+    fi
+    if [ -n "$admin_module_addr" ]; then
+      printf 'OVAULT_ADMIN_MODULE=%s\n' "$admin_module_addr"
+    fi
   } >> "$BASE_RELEASE_HANDOFF_ENV_PATH"
 
-  echo "Recovered current phased-infra handoff values from deployer log fallback."
+  echo "Recovered phased-infra handoff values from deployer log fallback."
 }
 
 is_known_deployment_batcher_verify_mismatch() {
   local log_path="$1"
   local saw_onchain_success=0
+omgg
   local saw_deployment_batcher_verify=0
   local saw_phase2_module_verify=0
   local saw_mismatch=0
@@ -271,21 +333,28 @@ print_infra_configuration() {
   echo "  SOLANA_BRIDGE_ADAPTER=${SOLANA_BRIDGE_ADAPTER:-[optional]}"
   echo "  UNIVERSAL_BYTECODE_STORE=${UNIVERSAL_BYTECODE_STORE:-[set by deployer handoff or existing env]}"
   echo "  INFRA_STORE_SALT=${INFRA_STORE_SALT:-[auto by tag/default]}"
-  echo "  INFRA_STORE_SALT_TAG=${INFRA_STORE_SALT_TAG:-base-release:UniversalBytecodeStore:${DEFAULT_RELEASE_TAG} (default)}"
+  echo "  INFRA_STORE_SALT_TAG=${INFRA_STORE_SALT_TAG:-[not set]}"
   echo "  INFRA_DEPLOYER_FROM_STORE_SALT=${INFRA_DEPLOYER_FROM_STORE_SALT:-[auto by tag/default]}"
-  echo "  INFRA_DEPLOYER_FROM_STORE_SALT_TAG=${INFRA_DEPLOYER_FROM_STORE_SALT_TAG:-base-release:UniversalCreate2DeployerFromStore:${DEFAULT_RELEASE_TAG} (default)}"
+  echo "  INFRA_DEPLOYER_FROM_STORE_SALT_TAG=${INFRA_DEPLOYER_FROM_STORE_SALT_TAG:-[not set]}"
   echo "  INFRA_VAULT_CORE_MODULE_SALT=${INFRA_VAULT_CORE_MODULE_SALT:-[auto by tag/default]}"
-  echo "  INFRA_VAULT_CORE_MODULE_SALT_TAG=${INFRA_VAULT_CORE_MODULE_SALT_TAG:-base-release:CreatorOVaultCoreModule:${DEFAULT_RELEASE_TAG} (default)}"
+  echo "  INFRA_VAULT_CORE_MODULE_SALT_TAG=${INFRA_VAULT_CORE_MODULE_SALT_TAG:-[not set]}"
   echo "  INFRA_VAULT_STRATEGIES_MODULE_SALT=${INFRA_VAULT_STRATEGIES_MODULE_SALT:-[auto by tag/default]}"
-  echo "  INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG=${INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG:-base-release:OVaultStrategiesModule:${DEFAULT_RELEASE_TAG} (default)}"
+  echo "  INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG=${INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG:-[not set]}"
   echo "  INFRA_VAULT_ADMIN_MODULE_SALT=${INFRA_VAULT_ADMIN_MODULE_SALT:-[auto by tag/default]}"
-  echo "  INFRA_VAULT_ADMIN_MODULE_SALT_TAG=${INFRA_VAULT_ADMIN_MODULE_SALT_TAG:-base-release:OVaultAdminModule:${DEFAULT_RELEASE_TAG} (default)}"
+  echo "  INFRA_VAULT_ADMIN_MODULE_SALT_TAG=${INFRA_VAULT_ADMIN_MODULE_SALT_TAG:-[not set]}"
   echo "  INFRA_DEPLOYMENT_BATCHER_SALT=${INFRA_DEPLOYMENT_BATCHER_SALT:-[auto by tag/default]}"
-  echo "  INFRA_DEPLOYMENT_BATCHER_SALT_TAG=${INFRA_DEPLOYMENT_BATCHER_SALT_TAG:-base-release:DeploymentBatcher:${DEFAULT_RELEASE_TAG} (default)}"
+  echo "  INFRA_DEPLOYMENT_BATCHER_SALT_TAG=${INFRA_DEPLOYMENT_BATCHER_SALT_TAG:-[not set]}"
 }
 
 main() {
   load_env_file ".env"
+  if [ "${BASE_FULL_RELEASE_MODE:-0}" = "1" ]; then
+    unset UNIVERSAL_BYTECODE_STORE UNIVERSAL_CREATE2_DEPLOYER UNIVERSAL_CREATE2_FROM_STORE \
+      DEPLOYMENT_BATCHER DEPLOYMENT_BATCHER_AUTO_HANDOFF \
+      REGISTRY REGISTRY_4626 OVAULT_FACTORY LOTTERY_MANAGER VRF_CONSUMER \
+      VAULT_ACTIVATION_BATCHER SOLANA_BRIDGE_ADAPTER \
+      2>/dev/null || true
+  fi
   load_handoff_env_file
 
   if ! command -v forge >/dev/null 2>&1; then
@@ -351,7 +420,14 @@ main() {
     echo "Skipping treasury-only Solana batcher config (set RUN_TREASURY_SOLANA_CONFIG=1 with protocolTreasury signer to enable)."
   fi
 
-  echo "Seeding current bytecode store (idempotent)..."
+  handoff_store="$(grep -E '^UNIVERSAL_BYTECODE_STORE=' "$BASE_RELEASE_HANDOFF_ENV_PATH" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+  if [ -z "$handoff_store" ]; then
+    echo "Error: HANDOFF missing UNIVERSAL_BYTECODE_STORE before bytecode store seed" >&2
+    exit 1
+  fi
+  export UNIVERSAL_BYTECODE_STORE="$handoff_store"
+
+  echo "Seeding bytecode store at ${UNIVERSAL_BYTECODE_STORE} (from HANDOFF)..."
   forge script script/SeedUniversalBytecodeStore.s.sol:SeedUniversalBytecodeStore \
     --rpc-url "$BASE_RPC_URL" \
     --broadcast

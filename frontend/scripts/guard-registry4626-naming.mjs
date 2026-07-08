@@ -32,6 +32,13 @@ const SCAN_PATHS = [
   join(REPO_ROOT, 'frontend', 'api'),
   join(REPO_ROOT, 'frontend', 'scripts'),
   join(REPO_ROOT, 'docs', 'reference'),
+  join(REPO_ROOT, 'docs', 'contracts'),
+  join(REPO_ROOT, 'docs', 'guides'),
+  join(REPO_ROOT, 'docs', 'overview'),
+  join(REPO_ROOT, 'docs', 'architecture'),
+  join(REPO_ROOT, 'docs', 'agent-learned-facts.md'),
+  join(REPO_ROOT, 'docs', '_internal', 'operations', 'deployment'),
+  join(REPO_ROOT, '.cursor', 'skills'),
   join(REPO_ROOT, 'README.md'),
   join(REPO_ROOT, 'AGENTS.md'),
   join(REPO_ROOT, 'deployments'),
@@ -69,6 +76,7 @@ const ALLOWLIST_RELATIVE = new Set([
   'frontend/scripts/guard-registry4626-naming.mjs',
   'frontend/scripts/guard-registry4626-naming.test.mjs',
   'docs/architecture/contracts-folder-optimization-proposal.md',
+  'script/sync-greenfield-env-from-handoff.sh',
 ])
 
 function walk(dir, out) {
@@ -137,7 +145,7 @@ function findViolations(content) {
       hits.push({ lineNo, reason: 'use getRegistry4626* helper naming', line })
     }
     if (/\bSeed4626Registry\b/.test(line)) {
-      hits.push({ lineNo, reason: 'use SeedRegistry4626 / SeedCreatorRegistry script naming', line })
+      hits.push({ lineNo, reason: 'use SeedRegistry4626 / SeedRegistry4626 script naming', line })
     }
     if (/\bI4626Registry(?:\.sol|[A-Za-z0-9_]*)?\b/.test(line)) {
       hits.push({ lineNo, reason: 'use IRegistry4626 (4626 suffix), not I4626Registry prefix', line })
@@ -165,6 +173,45 @@ function findViolations(content) {
     }
     if (/\b4626VRFConsumer\b/.test(line)) {
       hits.push({ lineNo, reason: 'use VRFConsumer4626.json / VRFConsumer4626.sol', line })
+    }
+    if (/\bCREATOR_REGISTRY\b/.test(line)) {
+      hits.push({ lineNo, reason: 'use REGISTRY_4626 (or REGISTRY deploy handoff), not CREATOR_REGISTRY', line })
+    }
+    if (/\bCREATOR_FACTORY\b/.test(line)) {
+      hits.push({ lineNo, reason: 'use OVAULT_FACTORY for OVaultFactory4626 registrar', line })
+    }
+    if (/\bCREATOR_LOTTERY_MANAGER\b/.test(line)) {
+      hits.push({ lineNo, reason: 'use LOTTERY_MANAGER for LotteryManager4626', line })
+    }
+    if (/\bCREATOR_VRF_CONSUMER\b/.test(line)) {
+      hits.push({ lineNo, reason: 'use VRF_CONSUMER for VRFConsumer4626', line })
+    }
+    if (/\bCREATOR_VAULT_BATCHER\b/.test(line)) {
+      hits.push({ lineNo, reason: 'use DEPLOYMENT_BATCHER for DeploymentBatcher shell', line })
+    }
+    if (/creatorRegistryVerification/.test(line)) {
+      hits.push({ lineNo, reason: 'use registry4626Verification module naming', line })
+    }
+    if (/\bvalidateCreatorRegistryBinding\b/.test(line)) {
+      hits.push({ lineNo, reason: 'use validateRegistry4626Binding', line })
+    }
+    if (/\bSeedCreatorRegistry\b/.test(line)) {
+      hits.push({ lineNo, reason: 'use SeedRegistry4626 script naming', line })
+    }
+    if (/creator_registry_batcher/.test(line)) {
+      hits.push({ lineNo, reason: 'use registry_4626_batcher_* check/log naming', line })
+    }
+    if (/creatorVaultBatcher/.test(line)) {
+      hits.push({ lineNo, reason: 'use deploymentBatcher config/API naming', line })
+    }
+    if (/creatorVaultBatcherConfigError/.test(line)) {
+      hits.push({ lineNo, reason: 'use deploymentBatcherConfigError', line })
+    }
+    if (/\bVITE_CREATOR_VAULT_BATCHER\b/.test(line)) {
+      hits.push({ lineNo, reason: 'use VITE_DEPLOYMENT_BATCHER', line })
+    }
+    if (/\bnormalizeCreatorVaultBatcherAddress\b/.test(line)) {
+      hits.push({ lineNo, reason: 'use normalizeDeploymentBatcherAddress', line })
     }
     if (/\bCreatorLotteryManager\.json\b/.test(line)) {
       hits.push({ lineNo, reason: 'deployment artifact must be LotteryManager4626.json', line })

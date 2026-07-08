@@ -113,7 +113,7 @@ export type CanonicalIdentity = {
 const coinAddressCache = new Map<string, Address | null>()
 const coinAddressPending = new Map<string, Promise<Address | null>>()
 
-const CREATOR_REGISTRY_ABI = [
+const REGISTRY_4626_ABI = [
   {
     type: 'function',
     name: 'getVaultForToken',
@@ -163,7 +163,7 @@ async function fetchCreatorCoinForCsw(csw: Address): Promise<Address | null> {
       const client = getBaseReadClient()
       const token = (await client.readContract({
         address: BASE_DEFAULTS.registry,
-        abi: CREATOR_REGISTRY_ABI,
+        abi: REGISTRY_4626_ABI,
         functionName: 'getTokenForVault',
         args: [csw],
       })) as Address

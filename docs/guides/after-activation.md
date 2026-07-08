@@ -79,7 +79,7 @@ Once live:
 
 - `■` shares tradable on Base DEXs
 - Fees on qualifying **buys** → [CreatorGaugeController](/contracts/governance/gauge-controller)
-- Lottery entries on qualifying **buys** → [CreatorLotteryManager](/contracts/utilities/lottery-manager)
+- Lottery entries on qualifying **buys** → [LotteryManager4626](/contracts/utilities/lottery-manager)
 - Zora creator revenue can accrue vault PPS via payout router
 
 [How fees and lottery work](/overview/how-it-works)

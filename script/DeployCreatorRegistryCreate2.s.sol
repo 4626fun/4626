@@ -172,7 +172,7 @@ contract DeployRegistry4626Create2 is Script {
         console.log(
             unicode"├─────────────────────────────────────────────────────────────────┤"
         );
-        console.log("  CREATOR_REGISTRY=", predicted);
+        console.log("  REGISTRY_4626=", predicted);
         console.log(
             unicode"└─────────────────────────────────────────────────────────────────┘"
         );
@@ -184,7 +184,7 @@ contract DeployRegistry4626Create2 is Script {
         console.log(
             unicode"├─────────────────────────────────────────────────────────────────┤"
         );
-        console.log(unicode"│  1. Update env/config with CREATOR_REGISTRY                      │");
+        console.log(unicode"│  1. Update env/config with REGISTRY_4626                          │");
         console.log(unicode"│  2. Seed the new registry (chains, LZ endpoints/EIDs, DEX infra) │");
         console.log(unicode"│  3. Redeploy/wire dependent contracts to the new registry        │");
         console.log(

@@ -29,7 +29,7 @@ outside the approved whitelist.
 
 | Address | Kind | Deployed by release | Orphaned by release | Reason | Owner at orphan time | Replacement plan | Cleanup actions taken | Cleanup date | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| `0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357` | manager | v1.8.3 | v1.10.1 | v1.8.3 canonical `CreatorLotteryManager`; pre-PR #395 and missing all three AMOE selectors. | EOA `0xB05C...0FdD` (Safe signer) | `<v1.10.1 manager TBD post-broadcast>` | pending - see post-broadcast follow-up PR | pending - see post-broadcast follow-up PR | `docs/operations/deployment/releases/v1.10.1-mainnet.md`; `docs/operations/deployment/amoe-deploy-evidence-2026-05-01.md` |
+| `0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357` | manager | v1.8.3 | v1.10.1 | v1.8.3 canonical `LotteryManager4626`; pre-PR #395 and missing all three AMOE selectors. | EOA `0xB05C...0FdD` (Safe signer) | `<v1.10.1 manager TBD post-broadcast>` | pending - see post-broadcast follow-up PR | pending - see post-broadcast follow-up PR | `docs/operations/deployment/releases/v1.10.1-mainnet.md`; `docs/operations/deployment/amoe-deploy-evidence-2026-05-01.md` |
 | `0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3` | manager | v1.7.1 / v1.8.1 | v1.10.1 | Replacement-router target manager; pre-PR #395 and missing all three AMOE selectors. | verify on chain | `<v1.10.1 manager TBD post-broadcast>` | pending - see post-broadcast follow-up PR | pending - see post-broadcast follow-up PR | `docs/operations/deployment/releases/v1.10.1-mainnet.md`; `docs/operations/deployment/amoe-deploy-evidence-2026-05-01.md` |
 | `0xC618Dde25F0085F3b2BC3a48ba806F8Fc9a93759` | router | v1.9.0 replacement attempt | v1.10.1 | Replacement `LotteryAmoeRouter`; wired correctly, but its target manager has no AMOE handler. | Safe `0x7d42...f2d3` | `<v1.10.1 router TBD post-broadcast>` | pending - see post-broadcast follow-up PR | pending - see post-broadcast follow-up PR | `docs/operations/deployment/releases/v1.10.1-mainnet.md`; `docs/operations/deployment/amoe-deploy-evidence-2026-05-01.md` |
 | `0xA39A71a388816d657300EFffF1857F938AEF65D1` | verifier | v1.9.0 replacement attempt | v1.10.1 | Replacement `AmoePlonkVerifier`; companion to the orphaned router. | no owner - verifier | `<v1.10.1 verifier TBD post-broadcast>` | pending - see post-broadcast follow-up PR | pending - see post-broadcast follow-up PR | `docs/operations/deployment/releases/v1.10.1-mainnet.md`; `docs/operations/deployment/amoe-deploy-evidence-2026-05-01.md` |
@@ -44,7 +44,7 @@ guards that use the addresses as known-bad fixtures.
 
 Current whitelisted paths:
 
-- `deployments/base/contracts/services/lottery/CreatorLotteryManager.json`
+- `deployments/base/contracts/services/lottery/LotteryManager4626.json`
 - `deployments/base/v1.8.1-vanity-manifest.json`
 - `docs/operations/contract-size-gate.md`
 - `docs/operations/deployment/amoe-deploy-evidence-2026-05-01.md`

@@ -28,7 +28,7 @@ import {
 import {
   readCreatorVaultBatcherInfra,
   type CreatorVaultBatcherInfra,
-} from '@/lib/deploy/creatorVaultBatcherInfra'
+} from '@/lib/deploy/deploymentBatcherInfra'
 import { resolveDeployExpectedAddresses } from '@/lib/deploy/resolveDeployExpectedAddresses'
 import { resolveDeployVanityPlan } from '@/lib/deploy/resolveDeployVanityPlan'
 import {
@@ -86,9 +86,9 @@ import {
   BASE_DEFAULTS,
   SPLIT_PHASE1_DEPLOYMENT_BATCHER,
   SPLIT_PHASE1_PHASE3_HELPER,
-  isDeprecatedCreatorVaultBatcherAddress,
+  isDeprecatedDeploymentBatcherAddress,
   isShareOftSaltOverrideDisabledBatcher,
-  normalizeCreatorVaultBatcherAddress,
+  normalizeDeploymentBatcherAddress,
 } from '@/config/contracts.defaults'
 import { deploymentBatcherNotConfiguredMessage } from '@/lib/deploy/deploymentBatcherConfigError'
 import { evaluateDeployEligibility } from '@/lib/deploy/deployEligibility'
@@ -214,9 +214,9 @@ import {
   CREATOR_SHARE_OFT_ADMIN_ABI,
   CREATOR_VAULT_ADMIN_ABI,
   CREATOR_OVAULT_WRAPPER_ADMIN_ABI,
-  CREATOR_VAULT_BATCHER_ABI,
-  CREATOR_VAULT_BATCHER_PENDING_AUCTION_ABI,
-  CREATOR_VAULT_BATCHER_PHASE1_STATE_ABI,
+  DEPLOYMENT_BATCHER_ABI,
+  DEPLOYMENT_BATCHER_PENDING_AUCTION_ABI,
+  DEPLOYMENT_BATCHER_PHASE1_STATE_ABI,
   IMPAIRMENT_AUX_OWNED_ABI,
   PAYOUT_ROUTER_ADMIN_ABI,
   PHASE3_HELPER_VIEW_ABI,
@@ -353,8 +353,8 @@ function resolveDeploymentVersionFromRuntime(): string {
 function normalizeDeploymentBatcherAddress(value: unknown): Address | null {
   const normalized = normalizeAddressLike(typeof value === 'string' ? value : null)
   if (!normalized) return null
-  if (isDeprecatedCreatorVaultBatcherAddress(normalized)) return null
-  const mapped = normalizeCreatorVaultBatcherAddress(normalized)
+  if (isDeprecatedDeploymentBatcherAddress(normalized)) return null
+  const mapped = normalizeDeploymentBatcherAddress(normalized)
   return mapped ? (mapped as Address) : null
 }
 
@@ -439,7 +439,7 @@ async function waitForPhase1CoreState(params: {
     try {
       const state = (await params.publicClient.readContract({
         address: params.batcher,
-        abi: CREATOR_VAULT_BATCHER_PHASE1_STATE_ABI as unknown as readonly unknown[],
+        abi: DEPLOYMENT_BATCHER_PHASE1_STATE_ABI as unknown as readonly unknown[],
         functionName: 'phase1SplitStates',
         args: [params.baseSalt],
       })) as any
@@ -464,8 +464,8 @@ async function waitForPhase1CoreState(params: {
 
 type AdminAuthResponse = { address: string; isAdmin: boolean } | null
 type DeployRuntimeConfigResponse = {
-  creatorVaultBatcher: Address | null
-  creatorVaultBatcherConfigError: string | null
+  deploymentBatcher: Address | null
+  deploymentBatcherConfigError: string | null
   deploymentVersion: string
   allowApiContractOverrides: boolean
   deployMode: string
@@ -1579,7 +1579,7 @@ function DeployVaultBatcher({
   const deploySessionBatcherAddress = useMemo(() => {
     const normalizedOverride = normalizeDeploymentBatcherAddress(batcherOverride)
     if (normalizedOverride) return normalizedOverride
-    const configured = CONTRACTS.creatorVaultBatcher ?? null
+    const configured = CONTRACTS.deploymentBatcher ?? null
     return normalizeDeploymentBatcherAddress(configured)
   }, [batcherOverride])
   const deploySessionStorageKey = useMemo(() => {
@@ -1922,7 +1922,7 @@ function DeployVaultBatcher({
       return (
         'Paymaster rejected the deploy call shape (`missing_primary_call`).' +
         mismatchDetail +
-        ' This is usually a frontend/backend batcher mismatch. On Vercel, keep `ALLOW_API_CONTRACT_OVERRIDES` unset/0, remove stale `CREATOR_VAULT_BATCHER`, and redeploy latest commit.'
+        ' This is usually a frontend/backend batcher mismatch. On Vercel, keep `ALLOW_API_CONTRACT_OVERRIDES` unset/0, remove stale `DEPLOYMENT_BATCHER`, and redeploy latest commit.'
       )
     }
     if (lower.includes('signature check failed') || lower.includes('invalid userop signature')) {
@@ -2279,7 +2279,7 @@ function DeployVaultBatcher({
   const batcherAddress = useMemo(() => {
     const normalizedOverride = normalizeDeploymentBatcherAddress(batcherOverride)
     if (normalizedOverride) return normalizedOverride
-    const configured = CONTRACTS.creatorVaultBatcher ?? null
+    const configured = CONTRACTS.deploymentBatcher ?? null
     return normalizeDeploymentBatcherAddress(configured)
   }, [batcherOverride])
 
@@ -2360,8 +2360,8 @@ function DeployVaultBatcher({
         )
         return
       }
-      setRuntimeBatcherConfigError(runtimeConfig.creatorVaultBatcherConfigError ?? null)
-      const runtimeBatcher = normalizeDeploymentBatcherAddress(runtimeConfig?.creatorVaultBatcher ?? null)
+      setRuntimeBatcherConfigError(runtimeConfig.deploymentBatcherConfigError ?? null)
+      const runtimeBatcher = normalizeDeploymentBatcherAddress(runtimeConfig?.deploymentBatcher ?? null)
       if (runtimeBatcher && (!batcherAddress || !sameAddress(runtimeBatcher, batcherAddress))) {
         setBatcherOverride(runtimeBatcher)
       }
@@ -2437,7 +2437,7 @@ function DeployVaultBatcher({
   }, [])
 
   const batcherInfraQuery = useQuery({
-    queryKey: ['creatorVaultBatcher', 'infra', batcherAddress],
+    queryKey: ['deploymentBatcher', 'infra', batcherAddress],
     enabled: !!publicClient && !!batcherAddress,
     staleTime: 300_000,
     retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
@@ -2461,7 +2461,7 @@ function DeployVaultBatcher({
 
   const vanityPlanQuery = useQuery({
     queryKey: [
-      'creatorVaultBatcher',
+      'deploymentBatcher',
       'vanityPlan',
       batcherAddress,
       creatorToken,
@@ -2527,7 +2527,7 @@ function DeployVaultBatcher({
 
   const expectedAddressesQuery = useQuery({
     queryKey: [
-      'creatorVaultBatcher',
+      'deploymentBatcher',
       'expectedAddresses',
       batcherAddress,
       creatorToken,
@@ -2560,7 +2560,7 @@ function DeployVaultBatcher({
 
   const batcherInfraQueryLoading = batcherInfraQuery.isLoading || batcherInfraQuery.isFetching
   const batcherSharedInfraQuery = useQuery({
-    queryKey: ['creatorVaultBatcher', 'sharedInfra', batcherAddress],
+    queryKey: ['deploymentBatcher', 'sharedInfra', batcherAddress],
     enabled: !!publicClient && !!batcherAddress,
     staleTime: 120_000,
     retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
@@ -2742,7 +2742,7 @@ function DeployVaultBatcher({
   }, [creatorToken, expectedDeploymentVersion, owner])
 
   const phase1OnchainQuery = useQuery({
-    queryKey: ['creatorVaultBatcher', 'phase1Onchain', batcherAddress, phase1BaseSalt],
+    queryKey: ['deploymentBatcher', 'phase1Onchain', batcherAddress, phase1BaseSalt],
     enabled: Boolean(publicClient && batcherAddress && phase1BaseSalt),
     staleTime: 15_000,
     retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
@@ -2806,7 +2806,7 @@ function DeployVaultBatcher({
 
   const phase3ExpectedQuery = useQuery({
     queryKey: [
-      'creatorVaultBatcher',
+      'deploymentBatcher',
       'phase3Expected',
       batcherAddress,
       expectedCreate2Deployer,
@@ -3094,7 +3094,7 @@ function DeployVaultBatcher({
 
   const phase3ExpectedAddressDeploymentQuery = useQuery({
     queryKey: [
-      'creatorVaultBatcher',
+      'deploymentBatcher',
       'phase3ExpectedAddressDeployment',
       phase3Expected?.v3Pool,
       phase3Expected?.charmVault,
@@ -3174,7 +3174,7 @@ function DeployVaultBatcher({
   }, [phase3Expected])
 
   const phase4AuctionAddressQuery = useQuery({
-    queryKey: ['creatorVaultBatcher', 'phase4AuctionAddress', expected?.ccaLaunchArm, phase],
+    queryKey: ['deploymentBatcher', 'phase4AuctionAddress', expected?.ccaLaunchArm, phase],
     enabled: !!publicClient && !!expected?.ccaLaunchArm,
     staleTime: 5_000,
     retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
@@ -3193,7 +3193,7 @@ function DeployVaultBatcher({
 
   const phase4AuctionAddress = phase4AuctionAddressQuery.data ?? null
   const phase4AuctionDeploymentQuery = useQuery({
-    queryKey: ['creatorVaultBatcher', 'phase4AuctionDeployment', phase4AuctionAddress, phase],
+    queryKey: ['deploymentBatcher', 'phase4AuctionDeployment', phase4AuctionAddress, phase],
     enabled: !!publicClient && !!phase4AuctionAddress,
     staleTime: 5_000,
     retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
@@ -3272,7 +3272,7 @@ function DeployVaultBatcher({
   ])
 
   const mainnetAddressCodeQuery = useQuery({
-    queryKey: ['creatorVaultBatcher', 'deploymentPlanAddressUniverseMainnetCode', deploymentPlanAddressUniverse.join(',')],
+    queryKey: ['deploymentBatcher', 'deploymentPlanAddressUniverseMainnetCode', deploymentPlanAddressUniverse.join(',')],
     enabled: deploymentPlanAddressUniverse.length > 0,
     staleTime: 20_000,
     retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
@@ -3320,7 +3320,7 @@ function DeployVaultBatcher({
 
   const phase1ExistsQuery = useQuery({
     queryKey: [
-      'creatorVaultBatcher',
+      'deploymentBatcher',
       'phase1Exists',
       deploymentVersion,
       expected?.vault,
@@ -3340,7 +3340,7 @@ function DeployVaultBatcher({
 
   const expectedAddressDeploymentQuery = useQuery({
     queryKey: [
-      'creatorVaultBatcher',
+      'deploymentBatcher',
       'expectedAddressDeployment',
       expected?.vault,
       expected?.wrapper,
@@ -3465,9 +3465,9 @@ function DeployVaultBatcher({
       const runtimeConfig = await fetchDeployRuntimeConfig().catch(() => null)
       await ensurePaymasterSession()
       if (!batcherAddress) {
-        throw new Error(runtimeConfig?.creatorVaultBatcherConfigError || deploymentBatcherNotConfiguredMessage())
+        throw new Error(runtimeConfig?.deploymentBatcherConfigError || deploymentBatcherNotConfiguredMessage())
       }
-      const runtimeBatcher = normalizeDeploymentBatcherAddress(runtimeConfig?.creatorVaultBatcher ?? null)
+      const runtimeBatcher = normalizeDeploymentBatcherAddress(runtimeConfig?.deploymentBatcher ?? null)
       if (runtimeBatcher && !sameAddress(runtimeBatcher, batcherAddress)) {
         const recovered = tryAutoRecoverStaleDeployConfig({
           reason: 'batcher',
@@ -4007,7 +4007,7 @@ function DeployVaultBatcher({
               target: batcherAddress,
               value: 0n,
               data: encodeFunctionData({
-                abi: CREATOR_VAULT_BATCHER_ABI,
+                abi: DEPLOYMENT_BATCHER_ABI,
                 functionName: 'whitelistPayoutRouterOnWrapper',
                 args: [expected.wrapper, expectedPayoutRouter],
               }),
@@ -4052,7 +4052,7 @@ function DeployVaultBatcher({
               target: batcherAddress,
               value: 0n,
               data: encodeFunctionData({
-                abi: CREATOR_VAULT_BATCHER_ABI,
+                abi: DEPLOYMENT_BATCHER_ABI,
                 functionName: 'setPayoutRouterShareOftNoFees',
                 args: [expected.shareOFT, expectedPayoutRouter],
               }),
@@ -4433,7 +4433,7 @@ function DeployVaultBatcher({
         throw new Error(
           `Legacy deployment batcher active on this deployment (${batcherAddress}). ` +
             'This version cannot initialize CreatorOVault modules and will stall at Phase 1 finalize. ' +
-            'Update `VITE_CREATOR_VAULT_BATCHER` (and server `CREATOR_VAULT_BATCHER`) to the current batcher.',
+            'Update `VITE_DEPLOYMENT_BATCHER` (and server `DEPLOYMENT_BATCHER`) to the current batcher.',
         )
       }
       if (isTwoStepBatcher && supportsVaultModuleGetters) {
@@ -4480,7 +4480,7 @@ function DeployVaultBatcher({
       if (!supportsSplitPhase1 && !supportsLegacyPhase1) {
         throw new Error(
           `Configured batcher at ${batcherAddress} exposes neither split Phase-1 nor legacy deployPhase1 entrypoints. ` +
-            'Update VITE_CREATOR_VAULT_BATCHER / CREATOR_VAULT_BATCHER.',
+            'Update VITE_DEPLOYMENT_BATCHER / DEPLOYMENT_BATCHER.',
         )
       }
       const batcherAddressLower = String(batcherAddress ?? '').toLowerCase()
@@ -4584,12 +4584,12 @@ function DeployVaultBatcher({
           }
           const phase1CallData = expectedShareOftSaltOverride && supportsLegacyPhase1WithSalt
             ? encodeFunctionData({
-                abi: CREATOR_VAULT_BATCHER_ABI,
+                abi: DEPLOYMENT_BATCHER_ABI,
                 functionName: 'deployPhase1WithSalt',
                 args: [phase1Params, codeIds, expectedShareOftSaltOverride],
               })
             : encodeFunctionData({
-                abi: CREATOR_VAULT_BATCHER_ABI,
+                abi: DEPLOYMENT_BATCHER_ABI,
                 functionName: 'deployPhase1',
                 args: [phase1Params, codeIds],
               })
@@ -4635,7 +4635,7 @@ function DeployVaultBatcher({
                 account: owner,
                 to: batcherAddress,
                 data: encodeFunctionData({
-                  abi: CREATOR_VAULT_BATCHER_ABI,
+                  abi: DEPLOYMENT_BATCHER_ABI,
                   functionName: 'deployPhase1CoreWithSalt',
                   args: [phase1SaltProbeParams, codeIds, shareOftSaltOverride],
                 }),
@@ -4674,23 +4674,23 @@ function DeployVaultBatcher({
           } else if (!coreDone) {
             const coreCallData = useSplitWithSaltSelectors
               ? encodeFunctionData({
-                  abi: CREATOR_VAULT_BATCHER_ABI,
+                  abi: DEPLOYMENT_BATCHER_ABI,
                   functionName: 'deployPhase1CoreWithSalt',
                   args: [phase1Params, codeIds, shareOftSaltOverride],
                 })
               : encodeFunctionData({
-                  abi: CREATOR_VAULT_BATCHER_ABI,
+                  abi: DEPLOYMENT_BATCHER_ABI,
                   functionName: 'deployPhase1Core',
                   args: [phase1Params, codeIds],
                 })
             const finalizeCallData = useSplitWithSaltSelectors
               ? encodeFunctionData({
-                  abi: CREATOR_VAULT_BATCHER_ABI,
+                  abi: DEPLOYMENT_BATCHER_ABI,
                   functionName: 'finalizePhase1WithSalt',
                   args: [phase1Params, codeIds, shareOftSaltOverride],
                 })
               : encodeFunctionData({
-                  abi: CREATOR_VAULT_BATCHER_ABI,
+                  abi: DEPLOYMENT_BATCHER_ABI,
                   functionName: 'finalizePhase1',
                   args: [phase1Params, codeIds],
                 })
@@ -4698,12 +4698,12 @@ function DeployVaultBatcher({
           } else {
             const finalizeCallData = useSplitWithSaltSelectors
               ? encodeFunctionData({
-                  abi: CREATOR_VAULT_BATCHER_ABI,
+                  abi: DEPLOYMENT_BATCHER_ABI,
                   functionName: 'finalizePhase1WithSalt',
                   args: [phase1Params, codeIds, shareOftSaltOverride],
                 })
               : encodeFunctionData({
-                  abi: CREATOR_VAULT_BATCHER_ABI,
+                  abi: DEPLOYMENT_BATCHER_ABI,
                   functionName: 'finalizePhase1',
                   args: [phase1Params, codeIds],
                 })
@@ -4971,7 +4971,7 @@ function DeployVaultBatcher({
         }
 
         const finalizePhase2Calldata = encodeFunctionData({
-          abi: CREATOR_VAULT_BATCHER_ABI,
+          abi: DEPLOYMENT_BATCHER_ABI,
           functionName: 'finalizePhase2',
           args: [phase2FinalizeParams],
         })
@@ -5025,7 +5025,7 @@ function DeployVaultBatcher({
               target: batcherAddress,
               value: finalizeBridgeNativeFee,
               data: encodeFunctionData({
-                abi: CREATOR_VAULT_BATCHER_ABI,
+                abi: DEPLOYMENT_BATCHER_ABI,
                 functionName: 'finalizePhase2WithPermit2',
                 args: [phase2FinalizeParams, permit, signature],
               }),
@@ -5109,7 +5109,7 @@ function DeployVaultBatcher({
           target: batcherAddress,
           value: 0n,
           data: encodeFunctionData({
-            abi: CREATOR_VAULT_BATCHER_ABI,
+            abi: DEPLOYMENT_BATCHER_ABI,
             functionName: 'deployPhase2Core',
             args: [phase2CoreParams, codeIds],
           }),
@@ -5197,7 +5197,7 @@ function DeployVaultBatcher({
             target: batcherAddress,
             value: 0n,
             data: encodeFunctionData({
-              abi: CREATOR_VAULT_BATCHER_ABI,
+              abi: DEPLOYMENT_BATCHER_ABI,
               functionName: 'deployPhase3Strategies',
               args: [phase3Params, strategyCodeIds],
             }),
@@ -5210,7 +5210,7 @@ function DeployVaultBatcher({
             target: batcherAddress,
             value: 0n,
             data: encodeFunctionData({
-              abi: CREATOR_VAULT_BATCHER_ABI,
+              abi: DEPLOYMENT_BATCHER_ABI,
               functionName: 'launchDeferredAuction',
               args: [
                 {
@@ -6036,7 +6036,7 @@ function DeployVaultBatcher({
         }
 
         // IMPORTANT: Keep a batcher call in the same sponsored UserOp.
-        // The paymaster requires a "primary" call to `creatorVaultBatcher` / `vaultActivationBatcher`,
+        // The paymaster requires a "primary" call to `deploymentBatcher` / `vaultActivationBatcher`,
         // so we bundle finalize + post into one executeBatch to avoid `missing_primary_call`.
 
         if (useServerContinue) {
@@ -6145,7 +6145,7 @@ function DeployVaultBatcher({
           try {
             const pending = (await publicClient.readContract({
               address: batcherAddress,
-              abi: CREATOR_VAULT_BATCHER_PENDING_AUCTION_ABI,
+              abi: DEPLOYMENT_BATCHER_PENDING_AUCTION_ABI,
               functionName: 'pendingAuctions',
               args: [phase4BaseSalt],
             })) as any
@@ -9129,11 +9129,11 @@ function DeployVaultMain() {
     return meta ? `${ethShort} ETH / ${derivedShareSymbol} (${meta})` : `${ethShort} ETH / ${derivedShareSymbol}`
   }, [derivedShareSymbol, marketFloorQuery.data])
 
-  const creatorVaultBatcherAddress = (() => {
-    const v = String((CONTRACTS as any).creatorVaultBatcher ?? '')
+  const deploymentBatcherAddress = (() => {
+    const v = String((CONTRACTS as any).deploymentBatcher ?? '')
     return isAddress(v) ? (v as Address) : null
   })()
-  const creatorVaultBatcherConfigured = Boolean(creatorVaultBatcherAddress)
+  const deploymentBatcherConfigured = Boolean(deploymentBatcherAddress)
 
   const deployCodeIds = useMemo(() => {
     const phase1 = resolveDeployLanePhase1CodeIds(vaultKind)
@@ -9152,9 +9152,9 @@ function DeployVaultMain() {
 
   const bytecodeInfraQuery = useQuery({
     queryKey: [
-      'creatorVaultBatcher',
+      'deploymentBatcher',
       'bytecodeInfra',
-      creatorVaultBatcherAddress,
+      deploymentBatcherAddress,
       deployCodeIds.vault,
       deployCodeIds.wrapper,
       deployCodeIds.shareOFT,
@@ -9171,15 +9171,15 @@ function DeployVaultMain() {
       deployCodeIds.ajnaVault,
       deployCodeIds.erc4626StrategyAdapter,
     ],
-    enabled: Boolean(publicClient && creatorVaultBatcherAddress),
+    enabled: Boolean(publicClient && deploymentBatcherAddress),
     staleTime: 15_000,
     refetchOnWindowFocus: true,
     retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
     queryFn: async () => {
-      const batcher = creatorVaultBatcherAddress as Address
+      const batcher = deploymentBatcherAddress as Address
       const cachedInfra = queryClient.getQueryData<CreatorVaultBatcherInfra>([
-        'creatorVaultBatcher',
+        'deploymentBatcher',
         'infra',
         batcher,
       ])
@@ -9197,7 +9197,7 @@ function DeployVaultMain() {
       if (!batcherCode || batcherCode === '0x') {
         const chainId = publicClient?.chain?.id
         throw new Error(
-          `Deployment batcher has no code at ${batcher} on chain ${chainId ?? 'unknown'}. Switch to Base (8453) or update VITE_CREATOR_VAULT_BATCHER / CREATOR_VAULT_BATCHER.`,
+          `Deployment batcher has no code at ${batcher} on chain ${chainId ?? 'unknown'}. Switch to Base (8453) or update VITE_DEPLOYMENT_BATCHER / DEPLOYMENT_BATCHER.`,
         )
       }
 
@@ -9345,14 +9345,14 @@ function DeployVaultMain() {
   })
 
   const bytecodeInfraOk = Boolean(
-    creatorVaultBatcherConfigured &&
+    deploymentBatcherConfigured &&
       bytecodeInfraQuery.isSuccess &&
       bytecodeInfraQuery.data &&
       bytecodeInfraQuery.data.missing.length === 0,
   )
 
   const bytecodeInfraBlocker = useMemo(() => {
-    if (!creatorVaultBatcherConfigured) return null
+    if (!deploymentBatcherConfigured) return null
     if (bytecodeInfraQuery.isFetching) return 'Checking deployment bytecode store…'
     if (bytecodeInfraQuery.isError) return (bytecodeInfraQuery.error as any)?.message || 'Deployment bytecode check failed.'
     if (!bytecodeInfraQuery.data) return 'Deployment bytecode check failed.'
@@ -9364,7 +9364,7 @@ function DeployVaultMain() {
     }
     return null
   }, [
-    creatorVaultBatcherConfigured,
+    deploymentBatcherConfigured,
     bytecodeInfraQuery.data,
     bytecodeInfraQuery.error,
     bytecodeInfraQuery.isError,
@@ -9590,7 +9590,7 @@ function DeployVaultMain() {
     !!derivedVaultSymbol &&
     !!connectedWalletAddress &&
     fundingGateOk &&
-    creatorVaultBatcherConfigured &&
+    deploymentBatcherConfigured &&
     bytecodeInfraOk &&
     !solanaMintOverrideInvalid &&
     !solanaDecimalsOverrideInvalid &&
@@ -9622,13 +9622,13 @@ function DeployVaultMain() {
   const firstLaunchChecklist = [
     {
       label: 'Deployment batcher configured',
-      ok: creatorVaultBatcherConfigured,
-      hint: creatorVaultBatcherConfigured && creatorVaultBatcherAddress ? shortAddress(creatorVaultBatcherAddress) : 'missing',
+      ok: deploymentBatcherConfigured,
+      hint: deploymentBatcherConfigured && deploymentBatcherAddress ? shortAddress(deploymentBatcherAddress) : 'missing',
     },
     {
       label: 'Deployment bytecode ready',
       ok: bytecodeInfraOk,
-      hint: !creatorVaultBatcherConfigured
+      hint: !deploymentBatcherConfigured
         ? 'missing'
         : bytecodeInfraQuery.isFetching
           ? 'checking'
@@ -9748,7 +9748,7 @@ function DeployVaultMain() {
               ? 'Vault allowlist check failed.'
               : allowlistEnforced && !isAllowlistedCreator
                 ? 'Vault allowlist required.'
-                : !creatorVaultBatcherConfigured
+                : !deploymentBatcherConfigured
                   ? 'Deployment not configured (missing deployment batcher).'
                   : creatorStrategyDeployGateQuery.isLoading || creatorStrategyDeployGateQuery.isFetching
                     ? 'Checking USDC deployment feature activation…'
@@ -10165,7 +10165,7 @@ function DeployVaultMain() {
                 <RequestCreatorAccess coin={creatorToken} />
               ) : tokenIsValid && zoraCoin && allowlistEnforced && !isAllowlistedCreator ? (
                 <RequestCreatorAccess coin={creatorToken} />
-              ) : tokenIsValid && zoraCoin && !creatorVaultBatcherConfigured ? (
+              ) : tokenIsValid && zoraCoin && !deploymentBatcherConfigured ? (
                 <BlockedStateCard
                   tone="error"
                   title="Deployment is not configured"

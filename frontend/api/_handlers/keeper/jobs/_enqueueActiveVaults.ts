@@ -11,7 +11,7 @@ import {
 import { ensureKeeprSchema } from '../../../../server/_lib/keepr/keeprSchema.js'
 import { isAuthorizedCron } from '../../../../server/_lib/lottery/cronAuth.js'
 import { enqueueKeeperJob, type KeeperJob } from '../../../../server/_lib/keeperJobs/keeperJobs.js'
-import { validateKeeperVaultListing } from '../../../../server/_lib/onchain/creatorRegistryVerification.js'
+import { validateKeeperVaultListing } from '../../../../server/_lib/onchain/registry4626Verification.js'
 import { parseMinDeviationBps } from '../../../../server/_lib/keeper/strategyReallocEnv.js'
 
 type ActiveVaultEnqueueResponse = {

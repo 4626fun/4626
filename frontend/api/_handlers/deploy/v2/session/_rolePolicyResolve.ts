@@ -249,7 +249,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   })
 
   const contracts = getApiContracts()
-  const batcherAddress = contracts.creatorVaultBatcher ?? null
+  const batcherAddress = contracts.deploymentBatcher ?? null
   const client = createPublicClient({
     chain: base,
     transport: http(resolveDeploySessionRpcUrl(), { timeout: 12_000 }),

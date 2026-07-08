@@ -7,7 +7,7 @@ import {
   AKITA_DEFAULTS,
   BASE_DEFAULTS,
   ERC4626_DEFAULTS,
-  normalizeCreatorVaultBatcherAddress,
+  normalizeDeploymentBatcherAddress,
 } from './contracts.defaults'
 
 // Prefer env overrides for local/dev flexibility. In production, default to repo-controlled BASE_DEFAULTS
@@ -25,17 +25,17 @@ function envAddress(name: string, fallback?: `0x${string}` | undefined): `0x${st
   return trimmed as `0x${string}`
 }
 
-function resolveCreatorVaultBatcherAddress(): `0x${string}` | undefined {
+function resolveDeploymentBatcherAddress(): `0x${string}` | undefined {
   const configured = envAddress(
-    'VITE_CREATOR_VAULT_BATCHER',
-    envAddress('VITE_CREATOR_VAULT_BATCHER_AUTO_HANDOFF') ??
-      BASE_DEFAULTS.creatorVaultBatcher,
+    'VITE_DEPLOYMENT_BATCHER',
+    envAddress('VITE_DEPLOYMENT_BATCHER_AUTO_HANDOFF') ??
+      BASE_DEFAULTS.deploymentBatcher,
   )
-  const normalized = normalizeCreatorVaultBatcherAddress(configured)
+  const normalized = normalizeDeploymentBatcherAddress(configured)
   if (normalized) return normalized
   // If env is set to a deprecated/invalid alias, keep runtime on the canonical default
   // instead of exposing `undefined` and breaking frontend/server batcher parity.
-  return normalizeCreatorVaultBatcherAddress(BASE_DEFAULTS.creatorVaultBatcher) ?? undefined
+  return normalizeDeploymentBatcherAddress(BASE_DEFAULTS.deploymentBatcher) ?? undefined
 }
 
 export const CONTRACTS = {
@@ -64,8 +64,8 @@ export const CONTRACTS = {
   vaultActivationBatcher: envAddress('VITE_VAULT_ACTIVATION_BATCHER', BASE_DEFAULTS.vaultActivationBatcher),
   // Phased deploy orchestrator (Phases 1–3): deterministic deploy+launch across multiple txs on Base.
   // Optional env alias kept for staged cutovers / emergency overrides.
-  // Primary default remains BASE_DEFAULTS.creatorVaultBatcher.
-  creatorVaultBatcher: resolveCreatorVaultBatcherAddress(),
+  // Primary default remains BASE_DEFAULTS.deploymentBatcher.
+  deploymentBatcher: resolveDeploymentBatcherAddress(),
 
   // Protocol treasury / multisig (receives protocol fee slice from GaugeController)
   protocolTreasury: envAddress('VITE_PROTOCOL_TREASURY', BASE_DEFAULTS.protocolTreasury)!,

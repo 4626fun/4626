@@ -97,7 +97,7 @@ contract OperationalWiring is Script {
     address constant TAX_HOOK = 0xca975B9dAF772C71161f3648437c3616E5Be0088;
 
     // Legacy registrar / batchers
-    address constant CREATOR_FACTORY = 0x90D25129072059ed5AfF321434f36d40B4556Cfc;
+    address constant OVAULT_FACTORY = 0x90D25129072059ed5AfF321434f36d40B4556Cfc;
     address constant VAULT_BATCHER = 0x32403a647e73E04aE42b02bdd1Ade9C88698FD0c;
     address constant VAULT_ACT_BATCHER = 0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB;
 
@@ -265,7 +265,7 @@ contract OperationalWiring is Script {
         // ────────────────────────────────────────────────────────────────
 
         console.log("\n[7/8] Registry: Re-confirming registrar/batcher authorizations...");
-        registry.setAuthorizedFactory(CREATOR_FACTORY, true);
+        registry.setAuthorizedFactory(OVAULT_FACTORY, true);
         console.log(unicode"   ✓ OVaultFactory4626 (legacy registrar)");
 
         registry.setAuthorizedFactory(VAULT_BATCHER, true);

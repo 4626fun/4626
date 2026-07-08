@@ -15,7 +15,7 @@ import {
 
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
 
-const CREATOR_REGISTRY_REMOTE_PEER_ABI = [
+const REGISTRY_4626_REMOTE_PEER_ABI = [
   {
     type: 'function',
     name: 'getRemoteOFTPeerBytes32',
@@ -99,7 +99,7 @@ export async function readShareBridgeOftWiringStatus(params: {
     const [registryPeerRaw, batcherDefaultPeerRaw] = await Promise.all([
       params.publicClient.readContract({
         address: registryAddress,
-        abi: CREATOR_REGISTRY_REMOTE_PEER_ABI,
+        abi: REGISTRY_4626_REMOTE_PEER_ABI,
         functionName: 'getRemoteOFTPeerBytes32',
         args: [decoded.params.creatorToken, quote.dstEid],
       }),

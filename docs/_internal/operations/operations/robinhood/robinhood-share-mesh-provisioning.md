@@ -5,7 +5,7 @@ Robinhood Chain (chainId `4663`, EID `30416`) is a **remote ShareOFT-only** expa
 ## Prerequisites
 
 - Base hub ShareOFT already deployed and wired for the creator (`isHub=true` on Base).
-- `CreatorRegistry` on Base seeded with Robinhood chain config (`script/SeedCreatorRegistry.s.sol`).
+- `Registry4626` on Base seeded with Robinhood chain config (`script/SeedRegistry4626.s.sol`).
 - Robinhood RPC: `ROBINHOOD_RPC_URL` (default `https://rpc.mainnet.chain.robinhood.com`).
 - LayerZero EndpointV2 on Robinhood: `0x6F475642a6e85809B1c36Fa62763669b1b48DD5B`.
 
@@ -32,13 +32,13 @@ curl -sS 'https://metadata.layerzero-api.com/v1/metadata/dvns?version=v2&stage=m
 ## Step 1 — Seed registry (Base)
 
 ```bash
-forge script script/SeedCreatorRegistry.s.sol:SeedCreatorRegistry \
+forge script script/SeedRegistry4626.s.sol:SeedRegistry4626 \
   --rpc-url base \
   --broadcast \
   -vvvv
 ```
 
-Confirms `4663 <-> 30416` and Robinhood endpoint on Base `CreatorRegistry`.
+Confirms `4663 <-> 30416` and Robinhood endpoint on Base `Registry4626`.
 
 ## Step 2 — Seed bytecode infra (Robinhood)
 
@@ -132,7 +132,7 @@ forge script script/WireShareOftRobinhoodPeers.s.sol:WireShareOftRobinhoodPeers 
 Or registry-only:
 
 ```bash
-forge script script/SeedCreatorRegistryRobinhoodPeer.s.sol:SeedCreatorRegistryRobinhoodPeer \
+forge script script/SeedRegistry4626RobinhoodPeer.s.sol:SeedRegistry4626RobinhoodPeer \
   --rpc-url base \
   --broadcast \
   -vvvv

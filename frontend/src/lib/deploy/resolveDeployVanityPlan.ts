@@ -8,7 +8,7 @@ import {
   type Hex,
 } from 'viem'
 
-import type { CreatorVaultBatcherInfra } from '@/lib/deploy/creatorVaultBatcherInfra'
+import type { CreatorVaultBatcherInfra } from '@/lib/deploy/deploymentBatcherInfra'
 import { DEPLOY_BYTECODE } from '@/deploy/bytecode.generated'
 import {
   resolveDeployLaneShareOftBytecode,

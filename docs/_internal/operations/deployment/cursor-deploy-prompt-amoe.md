@@ -15,7 +15,7 @@ Hard gates before resuming AMOE rollout:
 
 - v1.10.1 broadcast complete.
 - v1.10.1 addresses recorded in the release packet.
-- AMOE selector-surface guard green on the new `CreatorLotteryManager`.
+- AMOE selector-surface guard green on the new `LotteryManager4626`.
 - `authorizedAmoeRelayer()` remains unset until the explicit §3.0.5 handoff.
 - AMOE feature flags remain off until their rollout phase says otherwise.
 

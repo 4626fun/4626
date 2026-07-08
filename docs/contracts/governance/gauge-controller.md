@@ -7,7 +7,7 @@ sidebar_position: 1
 
 **Product role:** Receives ShareOFT **trade fees** and splits them across vault-share burn, jackpot reserve, optional creator treasury, and protocol/voter branches — the onchain fee router for share holders.
 
-Fee splitter and jackpot custodian for creator vaults. Payout authority for jackpots resides in [CreatorLotteryManager](/contracts/utilities/lottery-manager), not the gauge itself.
+Fee splitter and jackpot custodian for creator vaults. Payout authority for jackpots resides in [LotteryManager4626](/contracts/utilities/lottery-manager), not the gauge itself.
 
 ## Purpose
 

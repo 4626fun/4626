@@ -10,7 +10,7 @@ import {
   SPLIT_PHASE1_PHASE3_HELPER,
   SPLIT_PHASE1_UNIV4_HELPER,
   SPLIT_PHASE1_UTILS_HELPER,
-  isDeprecatedCreatorVaultBatcherAddress,
+  isDeprecatedDeploymentBatcherAddress,
 } from '../../src/config/contracts.defaults.js'
 import { deploymentBatcherNotConfiguredMessage } from '../../src/lib/deploy/deploymentBatcherConfigError.js'
 
@@ -338,14 +338,14 @@ async function main() {
   const batcher = normalizeAddress(
     getArg(
       '--batcher',
-      process.env.CREATOR_VAULT_BATCHER_AUTO_HANDOFF ||
-        process.env.CREATOR_VAULT_BATCHER ||
+      process.env.DEPLOYMENT_BATCHER_AUTO_HANDOFF ||
+        process.env.DEPLOYMENT_BATCHER ||
         process.env.DEPLOYMENT_BATCHER ||
         '',
     ),
   )
-  if (!batcher) throw new Error('Missing --batcher (or CREATOR_VAULT_BATCHER*_env)')
-  if (isDeprecatedCreatorVaultBatcherAddress(batcher)) {
+  if (!batcher) throw new Error('Missing --batcher (or DEPLOYMENT_BATCHER*_env)')
+  if (isDeprecatedDeploymentBatcherAddress(batcher)) {
     throw new Error(`Deprecated batcher alias is blocked. ${deploymentBatcherNotConfiguredMessage(batcher)}`)
   }
 

@@ -15,7 +15,7 @@ import {
 import { base } from 'viem/chains'
 import {
   SPLIT_PHASE1_DEPLOYMENT_BATCHER,
-  isDeprecatedCreatorVaultBatcherAddress,
+  isDeprecatedDeploymentBatcherAddress,
 } from '../src/config/contracts.defaults.js'
 import { deploymentBatcherNotConfiguredMessage } from '../src/lib/deploy/deploymentBatcherConfigError.js'
 import { readPhase1ModuleAddress } from '../src/lib/deploy/phase1ModuleDeploy.js'
@@ -209,7 +209,7 @@ const CREATE2_AUTH_ABI = [
   },
 ] as const
 
-const CREATOR_REGISTRY_AUTH_ABI = [
+const REGISTRY_4626_AUTH_ABI = [
   {
     type: 'function',
     name: 'owner',
@@ -249,7 +249,7 @@ const deployerPrivateKey = (process.env.DEPLOY_DRY_RUN_DEPLOYER_PRIVATE_KEY ?? D
 if (!isAddress(sourceBatcherRaw)) {
   throw new Error(`Invalid DEPLOY_DRY_RUN_SOURCE_BATCHER: ${sourceBatcherRaw || '(empty)'}`)
 }
-if (isDeprecatedCreatorVaultBatcherAddress(sourceBatcherRaw)) {
+if (isDeprecatedDeploymentBatcherAddress(sourceBatcherRaw)) {
   throw new Error(
     `DEPLOY_DRY_RUN_SOURCE_BATCHER is a deprecated alias. ${deploymentBatcherNotConfiguredMessage(sourceBatcherRaw)}`,
   )
@@ -785,7 +785,7 @@ async function ensureRegistryAuthorizedFactory(localBatcher: Address): Promise<v
 
   const alreadyAuthorized = (await publicClient.readContract({
     address: registry,
-    abi: CREATOR_REGISTRY_AUTH_ABI,
+    abi: REGISTRY_4626_AUTH_ABI,
     functionName: 'authorizedFactories',
     args: [localBatcher],
   })) as boolean
@@ -794,14 +794,14 @@ async function ensureRegistryAuthorizedFactory(localBatcher: Address): Promise<v
   const registryOwner = getAddress(
     (await publicClient.readContract({
       address: registry,
-      abi: CREATOR_REGISTRY_AUTH_ABI,
+      abi: REGISTRY_4626_AUTH_ABI,
       functionName: 'owner',
     })) as Address,
   )
   await anvilRpc('anvil_setBalance', [registryOwner, '0x56bc75e2d63100000'])
   await anvilRpc<boolean>('anvil_impersonateAccount', [registryOwner])
   const data = encodeFunctionData({
-    abi: CREATOR_REGISTRY_AUTH_ABI,
+    abi: REGISTRY_4626_AUTH_ABI,
     functionName: 'setAuthorizedFactory',
     args: [localBatcher, true],
   })

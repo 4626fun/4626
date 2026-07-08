@@ -4,9 +4,9 @@ This directory tracks committed deployment artifacts and ABI snapshots used by t
 
 ## Current Canonical Release
 
-- **Live infra (production traffic):** **v1.16.1-share-mesh** — `docs/reference/addresses.md` + `test/current-release-target-guard.sh`
-- **Bytecode manifest (live store verification):** `deployments/base/v1.16.1-bytecode-manifest.json` — ops runbook: `docs/_internal/deployment-releases-legacy/v1.16.1-bytecode-epoch.md`
-- **Planned greenfield:** **v1.17.0** — `docs/_internal/deployment-releases-legacy/v1.17.0-greenfield.md` + `./script/run-v1170-greenfield-cutover.sh` (pre-broadcast)
+- **Live infra (production traffic):** **v1.18.0-greenfield** — `docs/reference/addresses.md` + `test/current-release-target-guard.sh`
+- **Bytecode manifest (live store verification):** `deployments/base/v1.18.0-bytecode-manifest.json`
+- **Orphan (do not cut over):** v1.17.0 partial broadcast — `tmp/base-v1.17.0-handoff.env`
 
 Prior bytecode manifests: `v1.16.0`, `v1.15.1`, `v1.14.1`, … under `deployments/base/`.
 
@@ -16,8 +16,8 @@ Prior bytecode manifests: `v1.16.0`, `v1.15.1`, `v1.14.1`, … under `deployment
 deployments/
 └── base/
     ├── v1.7.1-bytecode-manifest.json
-    ├── v1.16.1-bytecode-manifest.json   ← live verification target
-    ├── v1.17.0-bytecode-manifest.json   ← generated at v1.17 cutover
+    ├── v1.16.1-bytecode-manifest.json   ← prior live verification target
+    ├── v1.18.0-bytecode-manifest.json   ← live verification target
     ├── archive/
     │   └── 2026-01-addresses.json
     └── contracts/
@@ -54,4 +54,4 @@ deployments/
 2. Update ABI snapshots under `base/contracts/` whenever deployed interfaces change.
 3. Never overwrite archive snapshots; append a new timestamped file instead.
 4. Keep this README aligned to the actual tree (no placeholder networks or pending-chain tables).
-5. After v1.17.0 greenfield cutover, move v1.16.1 addresses to **Deprecated** in `docs/reference/addresses.md` and update `test/current-release-target-guard.sh`.
+5. After v1.18.0 greenfield cutover, keep v1.16.1 addresses in **Deprecated** in `docs/reference/addresses.md`; `test/current-release-target-guard.sh` validates v1.18.0.

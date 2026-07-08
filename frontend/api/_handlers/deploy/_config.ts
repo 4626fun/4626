@@ -26,8 +26,8 @@ import { hexAddressOrNull, hexAddresses } from '../../../server/_lib/onchain/hex
 declare const process: { env: Record<string, string | undefined> }
 
 type DeployConfigResponse = {
-  creatorVaultBatcher: `0x${string}` | null
-  creatorVaultBatcherConfigError: string | null
+  deploymentBatcher: `0x${string}` | null
+  deploymentBatcherConfigError: string | null
   deploymentVersion: string
   allowApiContractOverrides: boolean
   deployMode: string
@@ -80,16 +80,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .trim()
     .toLowerCase() || 'default'
   const deploymentVersion = String(process.env.VITE_DEPLOYMENT_VERSION ?? '').trim()
-  const creatorVaultBatcherRawCandidate =
-    String(process.env.CREATOR_VAULT_BATCHER ?? '').trim() ||
-    String(process.env.CREATOR_VAULT_BATCHER_AUTO_HANDOFF ?? '').trim() ||
+  const deploymentBatcherRawCandidate =
+    String(process.env.DEPLOYMENT_BATCHER ?? '').trim() ||
+    String(process.env.DEPLOYMENT_BATCHER_AUTO_HANDOFF ?? '').trim() ||
     null
 
   const data: DeployConfigResponse = {
-    creatorVaultBatcher: hexAddressOrNull(contracts.creatorVaultBatcher ?? null),
-    creatorVaultBatcherConfigError:
-      contracts.creatorVaultBatcher == null
-        ? deploymentBatcherNotConfiguredMessage(creatorVaultBatcherRawCandidate)
+    deploymentBatcher: hexAddressOrNull(contracts.deploymentBatcher ?? null),
+    deploymentBatcherConfigError:
+      contracts.deploymentBatcher == null
+        ? deploymentBatcherNotConfiguredMessage(deploymentBatcherRawCandidate)
         : null,
     deploymentVersion,
     allowApiContractOverrides: envBool('ALLOW_API_CONTRACT_OVERRIDES'),

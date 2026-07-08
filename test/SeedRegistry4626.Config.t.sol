@@ -2,15 +2,15 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {SeedCreatorRegistry} from "script/SeedCreatorRegistry.s.sol";
+import {SeedRegistry4626} from "script/SeedRegistry4626.s.sol";
 
-contract SeedCreatorRegistryHarness is SeedCreatorRegistry {
+contract SeedRegistry4626Harness is SeedRegistry4626 {
     function exposedDefaultRegistry() external pure returns (address) {
         return DEFAULT_REGISTRY;
     }
 
-    function exposedCreatorFactory() external pure returns (address) {
-        return CREATOR_FACTORY;
+    function exposedOvaultFactory() external pure returns (address) {
+        return OVAULT_FACTORY;
     }
 
     function exposedVaultBatcher() external pure returns (address) {
@@ -42,16 +42,16 @@ contract SeedCreatorRegistryHarness is SeedCreatorRegistry {
     }
 }
 
-contract SeedCreatorRegistryConfigTest is Test {
+contract SeedRegistry4626ConfigTest is Test {
     // v1.15.0 greenfield cutover addresses (tmp/base-v1.15.0-handoff.env)
     address internal constant LIVE_REGISTRY = 0x1eb9A364a3E763dD9249ba3413Dc19E13c1F4461;
-    address internal constant LIVE_CREATOR_FACTORY = 0x26b74b1d3AadD17e714068d259051409C9f942d1;
-    address internal constant LIVE_VAULT_BATCHER = 0x17163e67dED6B45bd2A7E6a509A32fB7b0cB6D33;
+    address internal constant LIVE_OVAULT_FACTORY = 0x26b74b1d3AadD17e714068d259051409C9f942d1;
+    address internal constant LIVE_VAULT_BATCHER = 0xA9024e1B89C5Be34502A275576Cc137473d65839;
     address internal constant LIVE_VAULT_ACT_BATCHER = 0xB06d99c81994F5829ba462c4afA78eCff75bC281;
-    SeedCreatorRegistryHarness internal harness;
+    SeedRegistry4626Harness internal harness;
 
     function setUp() external {
-        harness = new SeedCreatorRegistryHarness();
+        harness = new SeedRegistry4626Harness();
     }
 
     function testSeedScriptTargetsLiveRegistry4626() external view {
@@ -59,7 +59,7 @@ contract SeedCreatorRegistryConfigTest is Test {
     }
 
     function testSeedScriptAuthorizesLiveFactoryAndBatchers() external view {
-        assertEq(harness.exposedCreatorFactory(), LIVE_CREATOR_FACTORY);
+        assertEq(harness.exposedOvaultFactory(), LIVE_OVAULT_FACTORY);
         assertEq(harness.exposedVaultBatcher(), LIVE_VAULT_BATCHER);
         assertEq(harness.exposedVaultActivationBatcher(), LIVE_VAULT_ACT_BATCHER);
     }

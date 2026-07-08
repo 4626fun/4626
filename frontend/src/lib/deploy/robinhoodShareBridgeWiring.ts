@@ -80,7 +80,7 @@ export function predictOftBootstrapRegistryAddress(create2Deployer: Address): Ad
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
 const QUOTE_AMOUNT_LD = 1_000_000_000_000_000_000n
 
-const CREATOR_REGISTRY_ABI = [
+const REGISTRY_4626_ABI = [
   {
     type: 'function',
     name: 'getEidForChainId',
@@ -263,19 +263,19 @@ export async function readRobinhoodShareMeshWiringStatus(params: {
   const [registryEid, registryEndpoint, registryPeer] = await Promise.all([
     params.baseClient.readContract({
       address: params.registryAddress,
-      abi: CREATOR_REGISTRY_ABI,
+      abi: REGISTRY_4626_ABI,
       functionName: 'getEidForChainId',
       args: [BigInt(ROBINHOOD_CHAIN_ID)],
     }) as Promise<number>,
     params.baseClient.readContract({
       address: params.registryAddress,
-      abi: CREATOR_REGISTRY_ABI,
+      abi: REGISTRY_4626_ABI,
       functionName: 'getLayerZeroEndpoint',
       args: [BigInt(ROBINHOOD_CHAIN_ID)],
     }) as Promise<Address>,
     params.baseClient.readContract({
       address: params.registryAddress,
-      abi: CREATOR_REGISTRY_ABI,
+      abi: REGISTRY_4626_ABI,
       functionName: 'getRemoteOFTPeer',
       args: [params.creatorToken, ROBINHOOD_EID],
     }) as Promise<Address>,

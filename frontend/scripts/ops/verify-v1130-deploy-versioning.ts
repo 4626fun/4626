@@ -22,9 +22,9 @@ import { base } from 'viem/chains'
 
 import {
   BASE_DEFAULTS,
-  CREATOR_OVAULT_ADMIN_MODULE,
-  CREATOR_OVAULT_CORE_MODULE,
-  CREATOR_OVAULT_STRATEGIES_MODULE,
+  OVAULT_ADMIN_MODULE,
+  OVAULT_CORE_MODULE,
+  OVAULT_STRATEGIES_MODULE,
   SPLIT_PHASE1_DEPLOYMENT_BATCHER,
   SPLIT_PHASE1_PHASE1_MODULE,
   SPLIT_PHASE1_PHASE1_MODULE_V3_IMPAIRMENT,
@@ -193,9 +193,9 @@ async function main(): Promise<void> {
   }
 
   const wiredModules = {
-    core: CREATOR_OVAULT_CORE_MODULE,
-    strategies: CREATOR_OVAULT_STRATEGIES_MODULE,
-    admin: CREATOR_OVAULT_ADMIN_MODULE,
+    core: OVAULT_CORE_MODULE,
+    strategies: OVAULT_STRATEGIES_MODULE,
+    admin: OVAULT_ADMIN_MODULE,
   }
   if (aligned.ok) {
     const [core, strategies, admin] = await Promise.all([

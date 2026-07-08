@@ -1,7 +1,7 @@
 import { encodeFunctionData, getAddress, type Address, type Hex } from 'viem'
 
-/** Base mainnet Registry4626 — see docs/reference/addresses.md */
-export const BASE_MAINNET_REGISTRY_4626 = '0x1eb9A364a3E763dD9249ba3413Dc19E13c1F4461' as const
+/** Base mainnet Registry4626 — see docs/reference/addresses.md (v1.18.0-greenfield) */
+export const BASE_MAINNET_REGISTRY_4626 = '0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0' as const
 
 const REGISTRY_4626_ABI = [
   {
@@ -78,7 +78,7 @@ export async function readBatcherRegistryAuthorized(params: {
 /**
  * Greenfield Phase 2 finalize registers creator coin + vault on Registry4626.
  * The split DeploymentBatcher must be an authorized factory — forge tests set this in
- * setup, but mainnet may lag until SeedCreatorRegistry / ops wiring runs.
+ * setup, but mainnet may lag until SeedRegistry4626 / ops wiring runs.
  */
 export async function ensureBatcherRegistryAuthorizationOnFork(params: {
   publicClient: ReadContractClient

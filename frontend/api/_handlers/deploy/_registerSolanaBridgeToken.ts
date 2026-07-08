@@ -110,7 +110,7 @@ const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
 const BASE_SOLANA_BRIDGE = '0x3eff766c76a1be2ce1acf2b69c78bcae257d5188' as Address
 const REGISTER_SOLANA_BRIDGE_TOKEN_MAX_BODY_BYTES = 64 * 1024
 
-const CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI = [
+const DEPLOYMENT_BATCHER_SOLANA_VIEW_ABI = [
   {
     type: 'function',
     name: 'solanaBridgeAdapter',
@@ -1111,7 +1111,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const contracts = getApiContracts()
   const batcherRaw = typeof body?.batcherAddress === 'string' && isAddress(body.batcherAddress)
     ? body.batcherAddress
-    : contracts.creatorVaultBatcher
+    : contracts.deploymentBatcher
 
   if (!batcherRaw || !isAddress(batcherRaw)) {
     return res.status(503).json({
@@ -1132,14 +1132,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       publicClient
         .readContract({
           address: batcher,
-          abi: CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI,
+          abi: DEPLOYMENT_BATCHER_SOLANA_VIEW_ABI,
           functionName: 'solanaBridgeAdapter',
         })
         .catch(() => ZERO_ADDRESS as Address),
       publicClient
         .readContract({
           address: batcher,
-          abi: CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI,
+          abi: DEPLOYMENT_BATCHER_SOLANA_VIEW_ABI,
           functionName: 'solanaDestination',
         })
         .catch(() => ZERO_BYTES32 as Hex),

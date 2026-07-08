@@ -39,6 +39,10 @@ load_env_file() {
     if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
       continue
     fi
+    # Explicit shell exports (e.g. DEPLOYMENT_EPOCH_TAG=v1.17.0) must win over .env defaults.
+    if [[ -n "${!key:-}" ]]; then
+      continue
+    fi
     value="${value#"${value%%[![:space:]]*}"}"
     value="${value%"${value##*[![:space:]]}"}"
     if [[ "$value" == \"*\" && "$value" == *\" ]]; then
@@ -78,7 +82,41 @@ append_handoff_from_log() {
   fi
 }
 
+log_shows_successful_onchain_broadcast() {
+  local log_path="$1"
+  grep -q "ONCHAIN EXECUTION COMPLETE & SUCCESSFUL" "$log_path"
+}
+
+log_shows_handoff_registry() {
+  local log_path="$1"
+  grep -q "HANDOFF:REGISTRY=" "$log_path"
+}
+
+continue_after_partial_verify_failure() {
+  local log_path="$1"
+  local phase_label="$2"
+  local exit_status="$3"
+
+  if [ "$exit_status" -eq 0 ]; then
+    return 0
+  fi
+
+  if log_shows_successful_onchain_broadcast "$log_path" && log_shows_handoff_registry "$log_path"; then
+    echo "Warning: ${phase_label} exited ${exit_status} after successful on-chain broadcast; continuing with captured HANDOFF."
+    return 0
+  fi
+
+  return 1
+}
+
 load_env_file ".env"
+
+# Full release deploys fresh CREATE2 infra — do not pin prior-epoch addresses from .env.
+unset UNIVERSAL_BYTECODE_STORE UNIVERSAL_CREATE2_DEPLOYER UNIVERSAL_CREATE2_FROM_STORE \
+  DEPLOYMENT_BATCHER DEPLOYMENT_BATCHER_AUTO_HANDOFF \
+  REGISTRY REGISTRY_4626 OVAULT_FACTORY LOTTERY_MANAGER VRF_CONSUMER \
+  VAULT_ACTIVATION_BATCHER SOLANA_BRIDGE_ADAPTER \
+  2>/dev/null || true
 
 if ! command -v forge >/dev/null 2>&1; then
   echo "Error: Foundry (forge) not installed. Install from https://getfoundry.sh" >&2
@@ -129,12 +167,18 @@ echo ""
 
 infra_log="${LOG_DIR}/deploy-infrastructure.log"
 echo "1/2 Deploying fresh shared/global contracts..."
+set +e
 BASE_SHARED_GLOBAL_OUTPUT_PATH="$BASE_SHARED_GLOBAL_OUTPUT_PATH" \
 forge script script/DeployInfrastructure.s.sol:DeployInfrastructure \
   --rpc-url "$BASE_RPC_URL" \
   --broadcast \
   --verify \
   -vvvv | tee "$infra_log"
+infra_status=${PIPESTATUS[0]}
+set -e
+if ! continue_after_partial_verify_failure "$infra_log" "DeployInfrastructure" "$infra_status"; then
+  exit "$infra_status"
+fi
 append_handoff_from_log "$infra_log"
 load_env_file "$HANDOFF_ENV_PATH"
 

@@ -5,7 +5,7 @@ import {Script, console} from "forge-std/Script.sol";
 import {Registry4626} from "@4626/shared/core/Registry4626.sol";
 
 /**
- * @title SeedCreatorRegistryRobinhoodPeer
+ * @title SeedRegistry4626RobinhoodPeer
  * @notice Index Robinhood remote ShareOFT peer on Base Registry4626 for one creator token.
  *
  * Required env:
@@ -15,7 +15,7 @@ import {Registry4626} from "@4626/shared/core/Registry4626.sol";
  * - ROBINHOOD_EID (default 30416)
  * - ROBINHOOD_REMOTE_OFT (EVM address on Robinhood Chain)
  */
-contract SeedCreatorRegistryRobinhoodPeer is Script {
+contract SeedRegistry4626RobinhoodPeer is Script {
     uint32 internal constant DEFAULT_ROBINHOOD_EID = 30416;
 
     function run() external {

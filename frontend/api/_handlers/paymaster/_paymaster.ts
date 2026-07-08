@@ -225,7 +225,7 @@ const VAULT_AUXILIARY_DEPLOY_BATCHER_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_PHASE_ABI = [
+const DEPLOYMENT_BATCHER_PHASE_ABI = [
   {
     type: 'function',
     name: 'deployPhase1',
@@ -1022,7 +1022,7 @@ const ALL_LEGACY_VAULT_SELECTORS = new Set<string>(
   Array.from(LEGACY_VAULT_SELECTORS).concat(Array.from(LEGACY_VAULT_EMERGENCY_SELECTORS)),
 )
 
-const CREATOR_VAULT_BATCHER_PHASE1_EVENT = [
+const DEPLOYMENT_BATCHER_PHASE1_EVENT = [
   {
     type: 'event',
     name: 'Phase1Deployed',
@@ -2095,8 +2095,8 @@ async function validateInnerCalls(params: {
   const expectedProtocolTreasury =
     contracts.protocolTreasury && isAddress(contracts.protocolTreasury) ? getAddress(contracts.protocolTreasury) : null
   const expectedProtocolAjnaKeeper = resolveProtocolAjnaKeeperAddress()
-  if (!contracts.creatorVaultBatcher) throw new Error(deploymentBatcherNotConfiguredMessage())
-  const creatorVaultBatcher = getAddress(contracts.creatorVaultBatcher)
+  if (!contracts.deploymentBatcher) throw new Error(deploymentBatcherNotConfiguredMessage())
+  const deploymentBatcher = getAddress(contracts.deploymentBatcher)
   const vaultAuxiliaryDeployBatcher =
     contracts.vaultAuxiliaryDeployBatcher && isAddress(contracts.vaultAuxiliaryDeployBatcher)
       ? getAddress(contracts.vaultAuxiliaryDeployBatcher)
@@ -2147,7 +2147,7 @@ async function validateInnerCalls(params: {
       continue
     }
     const isFinalizeShareBridge =
-      c.target === creatorVaultBatcher &&
+      c.target === deploymentBatcher &&
       (selector === SELECTOR_BATCHER_FINALIZE_PHASE2 ||
         selector === SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2)
     if (isFinalizeShareBridge) continue
@@ -2203,7 +2203,7 @@ async function validateInnerCalls(params: {
 
   for (const c of innerCalls) {
     const selector = getSelector(c.data)
-    if (c.target === creatorVaultBatcher) {
+    if (c.target === deploymentBatcher) {
       if (!ALLOWED_BATCHER_SELECTORS.has(selector)) throw new Error('batcher_selector_not_allowed')
       let creatorToken: Address | null = null
       let owner: Address | null = null
@@ -2227,7 +2227,7 @@ async function validateInnerCalls(params: {
       ) {
         let decodedBatcher: any
         try {
-          decodedBatcher = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE_ABI as any, data: c.data })
+          decodedBatcher = decodeFunctionData({ abi: DEPLOYMENT_BATCHER_PHASE_ABI as any, data: c.data })
         } catch {
           throw new Error('batcher_decode_failed')
         }
@@ -2630,7 +2630,7 @@ async function validateInnerCalls(params: {
       const approveOnlyToken = (() => {
         if (innerCalls.length === 0) return null
         const firstTarget = innerCalls[0].target
-        const allowedSpenders = new Set<Address>([creatorVaultBatcher, vaultActivationBatcher, permit2])
+        const allowedSpenders = new Set<Address>([deploymentBatcher, vaultActivationBatcher, permit2])
         const ok = innerCalls.every((c) => {
           if (c.target !== firstTarget) return false
           if (getSelector(c.data) !== SELECTOR_ERC20_APPROVE) return false
@@ -2816,7 +2816,7 @@ async function validateInnerCalls(params: {
               if (!wrapperCreatorCoin || getAddress(wrapperCreatorCoin) !== creatorToken) {
                 throw new Error('legacy_wrapper_creator_token_mismatch')
               }
-              if (wrapperOwner && getAddress(wrapperOwner) !== creatorVaultBatcher) {
+              if (wrapperOwner && getAddress(wrapperOwner) !== deploymentBatcher) {
                 throw new Error('legacy_wrapper_owner_mismatch')
               }
               if (!wrapperShare || !isAddress(wrapperShare)) {
@@ -2835,15 +2835,15 @@ async function validateInnerCalls(params: {
               if (!shareVault || getAddress(shareVault) !== legacyVaultAddress) {
                 throw new Error('legacy_shareoft_vault_mismatch')
               }
-              if (shareOwner && getAddress(shareOwner) !== creatorVaultBatcher) {
+              if (shareOwner && getAddress(shareOwner) !== deploymentBatcher) {
                 throw new Error('legacy_shareoft_owner_mismatch')
               }
             }
           }
           const phase1Logs = await client
             .getLogs({
-              address: creatorVaultBatcher,
-              event: CREATOR_VAULT_BATCHER_PHASE1_EVENT[0],
+              address: deploymentBatcher,
+              event: DEPLOYMENT_BATCHER_PHASE1_EVENT[0],
               args: { creatorToken, owner: params.sender },
               fromBlock: 0n,
               toBlock: 'latest',
@@ -2879,7 +2879,7 @@ async function validateInnerCalls(params: {
             .map((c) => `${c.target}:${getSelector(c.data)}`)
             .join(',')
           throw new Error(
-            `missing_primary_call(expectedBatcher=${creatorVaultBatcher},expectedActivation=${vaultActivationBatcher},seen=${sample})`,
+            `missing_primary_call(expectedBatcher=${deploymentBatcher},expectedActivation=${vaultActivationBatcher},seen=${sample})`,
           )
         }
       }
@@ -2975,10 +2975,10 @@ async function validateInnerCalls(params: {
         throw new Error('wrapper_creator_token_mismatch')
       }
       if (!shareVault || getAddress(shareVault) !== expectedVault) throw new Error('shareoft_vault_mismatch')
-      if (wrapperOwner && getAddress(wrapperOwner) !== creatorVaultBatcher) throw new Error('wrapper_owner_mismatch')
-      if (shareOwner && getAddress(shareOwner) !== creatorVaultBatcher) throw new Error('shareoft_owner_mismatch')
+      if (wrapperOwner && getAddress(wrapperOwner) !== deploymentBatcher) throw new Error('wrapper_owner_mismatch')
+      if (shareOwner && getAddress(shareOwner) !== deploymentBatcher) throw new Error('shareoft_owner_mismatch')
       for (const c of innerCalls) {
-        if (c.target !== creatorVaultBatcher) continue
+        if (c.target !== deploymentBatcher) continue
         const selector = getSelector(c.data)
         if (
           selector !== SELECTOR_BATCHER_FINALIZE_PHASE2 &&
@@ -2988,7 +2988,7 @@ async function validateInnerCalls(params: {
         }
         await assertFinalizeShareBridgeCallValue({
           publicClient: client,
-          batcherAddress: creatorVaultBatcher,
+          batcherAddress: deploymentBatcher,
           callData: c.data,
           value: c.value,
         })
@@ -3016,7 +3016,7 @@ async function validateInnerCalls(params: {
           { type: 'string', name: 'name' },
           { type: 'string', name: 'symbol' },
         ],
-        [getAddress(expectedCreatorToken as Address), getAddress(creatorVaultBatcher), vaultName, vaultSymbol],
+        [getAddress(expectedCreatorToken as Address), getAddress(deploymentBatcher), vaultName, vaultSymbol],
       )
       const initCodeHash = keccak256(concatHex([creationCode, constructorArgs]))
       const baseSalt = keccak256(
@@ -3045,8 +3045,8 @@ async function validateInnerCalls(params: {
     if (!vaultValidated) {
       const phase1Logs = await client
         .getLogs({
-          address: creatorVaultBatcher,
-          event: CREATOR_VAULT_BATCHER_PHASE1_EVENT[0],
+          address: deploymentBatcher,
+          event: DEPLOYMENT_BATCHER_PHASE1_EVENT[0],
           args: { creatorToken: expectedCreatorToken as Address, owner: params.sender },
           fromBlock: 0n,
           toBlock: 'latest',
@@ -3209,7 +3209,7 @@ async function validateInnerCalls(params: {
       throw new Error('legacy_target_not_allowed')
     }
 
-    if (c.target === creatorVaultBatcher) {
+    if (c.target === deploymentBatcher) {
       if (!ALLOWED_BATCHER_SELECTORS.has(selector)) throw new Error('batcher_selector_not_allowed')
       continue
     }
@@ -3492,7 +3492,7 @@ async function validateInnerCalls(params: {
     if (selector === SELECTOR_ERC20_APPROVE) {
       const spender = decodeAddressArgFromCalldata(c.data, 0)
       if (!spender) throw new Error('approve_decode_failed')
-      const allowedSpenders = new Set<Address>([creatorVaultBatcher, vaultActivationBatcher, permit2])
+      const allowedSpenders = new Set<Address>([deploymentBatcher, vaultActivationBatcher, permit2])
       if (!allowedSpenders.has(spender)) throw new Error('approve_spender_not_allowed')
       continue
     }

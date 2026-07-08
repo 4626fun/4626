@@ -15,7 +15,7 @@ sidebar_position: 3
 
 Onchain, 4626 consists of:
 
-- **Shared infrastructure** (deployed once per chain, referenced via `CreatorRegistry`)
+- **Shared infrastructure** (deployed once per chain, referenced via `Registry4626`)
 - **Per-creator vault stack** (deployed per creator coin)
 - **Optional incentives layer** (ve(3,3) voting, voter rewards, bribes)
 

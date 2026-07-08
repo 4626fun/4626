@@ -194,6 +194,24 @@ contract DeployBaseMainnetDeployer is Script {
             && address(deployer.utilsHelper()) != address(0);
     }
 
+    function _emitPhasedInfraHandoff(PredictedAddresses memory predicted) internal view {
+        console2.log(string.concat("HANDOFF:UNIVERSAL_BYTECODE_STORE=", vm.toString(predicted.store)));
+        console2.log(string.concat("HANDOFF:UNIVERSAL_CREATE2_DEPLOYER=", vm.toString(predicted.deployerFromStore)));
+        console2.log(string.concat("HANDOFF:UNIVERSAL_CREATE2_FROM_STORE=", vm.toString(predicted.deployerFromStore)));
+        console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER=", vm.toString(predicted.deploymentBatcher)));
+        console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER_AUTO_HANDOFF=", vm.toString(predicted.deploymentBatcher)));
+        console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER_PHASE1_MODULE=", vm.toString(predicted.phase1Module)));
+        console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER_PHASE2_MODULE=", vm.toString(predicted.phase2Module)));
+        console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER_PHASE3_HELPER=", vm.toString(predicted.phase3Helper)));
+        console2.log(
+            string.concat("HANDOFF:DEPLOYMENT_BATCHER_SHARE_MESH_HELPER=", vm.toString(predicted.shareMeshHelper))
+        );
+        console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER_UTILS_HELPER=", vm.toString(predicted.utilsHelper)));
+        console2.log(string.concat("HANDOFF:OVAULT_CORE_MODULE=", vm.toString(predicted.vaultCoreModule)));
+        console2.log(string.concat("HANDOFF:OVAULT_STRATEGIES_MODULE=", vm.toString(predicted.vaultStrategiesModule)));
+        console2.log(string.concat("HANDOFF:OVAULT_ADMIN_MODULE=", vm.toString(predicted.vaultAdminModule)));
+    }
+
     function _deployCreate2IfMissing(bytes32 salt, bytes memory initCode) internal {
         address predicted = _create2(CREATE2_FACTORY_ADDR, salt, keccak256(initCode));
         if (predicted.code.length == 0) {
@@ -606,6 +624,7 @@ contract DeployBaseMainnetDeployer is Script {
             console2.log("  )");
             console2.log(string.concat("  setPhase1Module(", vm.toString(predicted.phase1Module), ")"));
             console2.log(string.concat("HANDOFF:WIRE_BATCHER_HELPERS_BATCHER=", vm.toString(deployerAddr)));
+            _emitPhasedInfraHandoff(predicted);
             return;
         }
 
@@ -640,12 +659,7 @@ contract DeployBaseMainnetDeployer is Script {
         require(deployer.vaultStrategiesModule() == strategiesModuleAddr, "Deployer strategies module mismatch");
         require(deployer.vaultAdminModule() == adminModuleAddr, "Deployer admin module mismatch");
         console2.log("DeploymentBatcher:", address(deployer));
-        console2.log(string.concat("HANDOFF:UNIVERSAL_BYTECODE_STORE=", vm.toString(storeAddr)));
-        console2.log(string.concat("HANDOFF:UNIVERSAL_CREATE2_DEPLOYER=", vm.toString(create2DeployerAddr)));
-        console2.log(string.concat("HANDOFF:UNIVERSAL_CREATE2_FROM_STORE=", vm.toString(create2DeployerAddr)));
-        console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER=", vm.toString(address(deployer))));
-        console2.log(string.concat("HANDOFF:CREATOR_VAULT_BATCHER=", vm.toString(address(deployer))));
-        console2.log(string.concat("HANDOFF:CREATOR_VAULT_BATCHER_AUTO_HANDOFF=", vm.toString(address(deployer))));
+        _emitPhasedInfraHandoff(predicted);
 
         // Optional: configure the 20% Solana allocation path on the batcher.
         if (configureSolana) {

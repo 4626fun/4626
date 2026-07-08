@@ -27,26 +27,28 @@ export const PRE_V1140_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('a99058f424FB3ACC6
 export const PRE_V1141_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('660B251F2feB28f61A8e23e65C66F9b917Ee61c1')
 /** v1.15.0 epoch shell (superseded by v1.16.1-share-mesh cutover). */
 export const PRE_V1160_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('17163e67dED6B45bd2A7E6a509A32fB7b0cB6D33')
-/** v1.16.1-share-mesh epoch: CCALaunchArm + post-CCA share-mesh LP manager shell. */
-export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('A9024e1B89C5Be34502A275576Cc137473d65839')
-/** v1.16.1-share-mesh greenfield Phase1Module paired with batcher shell above. */
-export const SPLIT_PHASE1_PHASE1_MODULE = addr('c7d44c4136f10a780B93cCA901F8Fcf2cc130bD1')
+/** v1.16.1-share-mesh epoch (superseded by v1.18.0 greenfield). */
+export const PRE_V1161_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('A9024e1B89C5Be34502A275576Cc137473d65839')
+/** v1.18.0 greenfield epoch: fresh shared/global + phased deploy infra. */
+export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('02D7abC547F8B1e7E2D7a919D8D1005918361750')
+/** v1.18.0 greenfield Phase1Module paired with batcher shell above. */
+export const SPLIT_PHASE1_PHASE1_MODULE = addr('808fC8e83629019e29df79E592237B4603F9D1b5')
 /** Retired v1.13.0 v2 Phase1Module (grandfathered greenfield only). */
 export const SPLIT_PHASE1_PHASE1_MODULE_V2_LEGACY = addr('19Bd8d3b69Ee8b4D127adb0DE35372e2825FFC87')
 /** Earlier impairment pilot Phase1Module (superseded by v1.14.0 store cutover). */
 export const SPLIT_PHASE1_PHASE1_MODULE_V3_IMPAIRMENT = addr('ffbFf3E529e5A4dBFD9ea2e9C01B773D1B7fA1a0')
-export const SPLIT_PHASE1_PHASE2_MODULE = addr('D641076Ff1b1121c3cF85F5d69B386bCE91a6bb2')
-export const SPLIT_PHASE1_PHASE3_HELPER = addr('219eA6e7c28b20c668CbaCD99246C1c17a5D97F6')
-export const SPLIT_PHASE1_SHARE_MESH_HELPER = addr('64aA8ba6aD4641034Ca5A1bF31609a5fa9e5dc80')
+export const SPLIT_PHASE1_PHASE2_MODULE = addr('9845D8d412DA4686FE8b1886F314Ef8b288b8D71')
+export const SPLIT_PHASE1_PHASE3_HELPER = addr('B8c10FE668d59E2DEb5771298133c2a3DBFc9bB3')
+export const SPLIT_PHASE1_SHARE_MESH_HELPER = addr('9C965724f6B3387433D82bf67632Bf06470a8988')
 /** @deprecated Use SPLIT_PHASE1_SHARE_MESH_HELPER */
 export const SPLIT_PHASE1_UNIV4_HELPER = SPLIT_PHASE1_SHARE_MESH_HELPER
-export const SPLIT_PHASE1_UTILS_HELPER = addr('5B59219683b748a321f84eFDfe5A29d3bB945B27')
-export const CREATOR_OVAULT_FACTORY = addr('26b74b1d3AadD17e714068d259051409C9f942d1')
-export const CREATOR_OVAULT_CORE_MODULE = addr('396cF02c219cfA5288C3e472Fbc9634fe4D44B68')
-export const CREATOR_OVAULT_STRATEGIES_MODULE = addr('21BCC0461fC5890ca2a3C06707EAaea30736e8f7')
-export const CREATOR_OVAULT_ADMIN_MODULE = addr('ba261a7B732f0a743Ea7187567ff93Ea3C9af93f')
+export const SPLIT_PHASE1_UTILS_HELPER = addr('CBf24949Fc99e7C9b5e16e15a423543930fd4A52')
+export const OVAULT_FACTORY4626 = addr('70d0D2411D362BA50821389383Fa6B829d736232')
+export const OVAULT_CORE_MODULE = addr('E5C1de158Cb66ffCE15b26BE6F40f598c642EF43')
+export const OVAULT_STRATEGIES_MODULE = addr('8757065daf34D8B536FC35BdfE3001D43FAbAA7e')
+export const OVAULT_ADMIN_MODULE = addr('506400ce30228378Ee4682cfcBD55625154Bc063')
 
-const DEPRECATED_CREATOR_VAULT_BATCHERS = new Set<string>([
+const DEPRECATED_DEPLOYMENT_BATCHERS = new Set<string>([
   LEGACY_DEPLOYMENT_BATCHER.toLowerCase(),
   MODULE_MISMATCH_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_CURRENT_MODULE_DEPLOYMENT_BATCHER.toLowerCase(),
@@ -56,14 +58,15 @@ const DEPRECATED_CREATOR_VAULT_BATCHERS = new Set<string>([
   PRE_V1140_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_V1141_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_V1160_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+  PRE_V1161_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
 ])
 
-export function isDeprecatedCreatorVaultBatcherAddress(value: string | null | undefined): boolean {
+export function isDeprecatedDeploymentBatcherAddress(value: string | null | undefined): boolean {
   if (value == null) return false
   const trimmed = value.trim()
   if (!trimmed) return false
   if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) return false
-  return DEPRECATED_CREATOR_VAULT_BATCHERS.has(trimmed.toLowerCase())
+  return DEPRECATED_DEPLOYMENT_BATCHERS.has(trimmed.toLowerCase())
 }
 
 /** Historical split Phase-1 batcher that also rejects non-zero share vanity salt overrides. */
@@ -94,31 +97,30 @@ export function isShareOftSaltOverrideDisabledBatcher(value: string | null | und
   return SHARE_OFT_SALT_OVERRIDE_DISABLED_BATCHERS.has(trimmed.toLowerCase())
 }
 
-export function normalizeCreatorVaultBatcherAddress(
+export function normalizeDeploymentBatcherAddress(
   value: string | null | undefined,
 ): ContractAddress | null | undefined {
   if (value == null) return value
   const trimmed = value.trim()
   if (!trimmed) return undefined
   if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) return undefined
-  if (isDeprecatedCreatorVaultBatcherAddress(trimmed)) return undefined
+  if (isDeprecatedDeploymentBatcherAddress(trimmed)) return undefined
   const normalized = trimmed as ContractAddress
   return normalized
 }
 
 export const BASE_DEFAULTS = {
-  // Shared infrastructure
-  // v1.15.0 protocol cutover addresses.
-  registry: addr('1eb9A364a3E763dD9249ba3413Dc19E13c1F4461'),
-  lotteryManager: addr('D62a8a2F4c25587FA80ED5782b50Af6654122b0b'),
-  vrfConsumer: addr('933A3BE4a4BF00dD3B71c50Dee4972539a32bE47'),
+  // Shared infrastructure — v1.18.0 greenfield cutover addresses.
+  registry: addr('Db8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0'),
+  lotteryManager: addr('bE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1'),
+  vrfConsumer: addr('0b41AD9Eb06EE14C360E1e3D16Af63F5a172Ec36'),
   // No live global PayoutRouterFactory is part of the current deploy flow.
   // CreatorPayoutRouter is deployed per creator through DeploymentBatcher; keep this
   // zero so stale no-code factory addresses fail closed if a legacy caller uses it.
   payoutRouterFactory: addr('0000000000000000000000000000000000000000'),
 
-  // Base↔Solana bridge integration for current v1.15.0 target stack.
-  solanaBridgeAdapter: addr('363662F9728A9fd12c7CA398e5A6d1d9E7De07F1'),
+  // Base↔Solana bridge integration for v1.18.0 target stack.
+  solanaBridgeAdapter: addr('9A61814082A26192DD9Cb201b44058506685Be60'),
 
   // CREATE2 infra (canonical, chain-agnostic)
   create2Factory: addr('4e59b44847b379578588920cA78FbF26c0B4956C'),
@@ -126,22 +128,22 @@ export const BASE_DEFAULTS = {
 
   // Module-fixed split Phase-1 bytecode store + deployer-from-store for the
   // active Base DeploymentBatcher. Keep these paired with
-  // `creatorVaultBatcher`; strict no-EOA deploy preflight checks the
+  // `deploymentBatcher`; strict no-EOA deploy preflight checks the
   // batcher's onchain getters.
-  universalBytecodeStore: addr('7D1029a832E2BEd2C961bC912b623b763862Ad3C'),
-  /** Paired with `universalBytecodeStore` on live split batcher `0xA9024e…`. */
-  universalCreate2DeployerFromStore: addr('dC75A18C521f6Ae1ACa112A98E46c8231F431BC0'),
+  universalBytecodeStore: addr('fa3e3b466635DAff910057f18749B93d56F9DE50'),
+  /** Paired with `universalBytecodeStore` on live split batcher `0x02D7ab…`. */
+  universalCreate2DeployerFromStore: addr('54660E61857a652753d805aD2c7b4f759C138bD5'),
   vaultAuxiliaryDeployBatcher: addr('a3986F2F812a80a4Ee4A33646bE5248D9e22eb88'),
 
   // AA helpers
-  vaultActivationBatcher: addr('B06d99c81994F5829ba462c4afA78eCff75bC281'),
+  vaultActivationBatcher: addr('4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3'),
   // Module-fixed split Phase-1 deployment batcher for strict no-EOA deploy
   // sessions. It exposes both core/finalize split selectors, Base↔Solana
   // bridge routing, compatible CreatorOVault modules, and enabled OVault
   // runtime composer config for day-one mesh preflight.
-  creatorVaultBatcher: SPLIT_PHASE1_DEPLOYMENT_BATCHER,
+  deploymentBatcher: SPLIT_PHASE1_DEPLOYMENT_BATCHER,
   // Optional alias used by env-based rollout/cutover logic.
-  creatorVaultBatcherAutoHandoff: SPLIT_PHASE1_DEPLOYMENT_BATCHER,
+  deploymentBatcherAutoHandoff: SPLIT_PHASE1_DEPLOYMENT_BATCHER,
 
   // Treasury (cold — custody, strategy ownership, feature payments)
   protocolTreasury: addr('7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3'),

@@ -51,7 +51,7 @@ A creator coin alone does not provide:
 
 - **Trade fees** — ShareOFT transfer fees on qualifying DEX routes.
 - **Creator revenue** — Zora `payoutRecipient` earnings (router mode) accrue holder value via vault PPS.
-- **Jackpot** — Gauge **custodies** reserves; [CreatorLotteryManager](/contracts/utilities/lottery-manager) **pays** winners on qualifying **buys**.
+- **Jackpot** — Gauge **custodies** reserves; [LotteryManager4626](/contracts/utilities/lottery-manager) **pays** winners on qualifying **buys**.
 
 Lane names: [Glossary](/reference/glossary).
 
@@ -95,13 +95,13 @@ Shared infrastructure: [Addresses](/reference/addresses) (v1.14.1). Per creator:
 
 | Contract | Role |
 |----------|------|
-| [CreatorRegistry](/contracts/core/creator-registry) | Creator coin → stack lookup |
+| [Registry4626](/contracts/core/creator-registry) | Creator coin → stack lookup |
 | [CreatorOVault](/contracts/core/creator-ovault) | Vault · holds creator coin |
 | [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) | ▢ → ■ wrap |
 | [CreatorShareOFT](/contracts/core/creator-share-oft) | Tradable ■ share |
 | [CreatorGaugeController](/contracts/governance/gauge-controller) | Fee split · jackpot custody |
 | [CCA launch strategy](/contracts/strategies/cca-launch) | Fair-launch auction |
-| [CreatorLotteryManager](/contracts/utilities/lottery-manager) | Lottery on buys |
+| [LotteryManager4626](/contracts/utilities/lottery-manager) | Lottery on buys |
 | [CreatorOracle](/contracts/utilities/creator-oracle) | TWAP for lottery sizing |
 
 Impairment: [disclosures](/reference/impairment-v1-disclosures).

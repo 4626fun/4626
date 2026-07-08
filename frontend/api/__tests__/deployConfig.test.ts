@@ -46,7 +46,7 @@ describe('deploy config handler', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getApiContractsMock.mockReturnValue({
-      creatorVaultBatcher: '0x2222222222222222222222222222222222222222',
+      deploymentBatcher: '0x2222222222222222222222222222222222222222',
       zora: '0x3333333333333333333333333333333333333333',
     })
     readRequestPrincipalAddressMock.mockReturnValue('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
@@ -113,8 +113,8 @@ describe('deploy config handler', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(true)
     expect(res.body?.data).toMatchObject({
-      creatorVaultBatcher: '0x2222222222222222222222222222222222222222',
-      creatorVaultBatcherConfigError: null,
+      deploymentBatcher: '0x2222222222222222222222222222222222222222',
+      deploymentBatcherConfigError: null,
       deploymentVersion: 'v1.7.1-dryrun',
       allowApiContractOverrides: true,
       deployMode: 'no_eoa_strict',
@@ -130,10 +130,10 @@ describe('deploy config handler', () => {
 
   it('returns explicit batcher config error when batcher is unresolved', async () => {
     getApiContractsMock.mockReturnValueOnce({
-      creatorVaultBatcher: null,
+      deploymentBatcher: null,
       zora: '0x3333333333333333333333333333333333333333',
     })
-    process.env.CREATOR_VAULT_BATCHER = LEGACY_DEPLOYMENT_BATCHER
+    process.env.DEPLOYMENT_BATCHER = LEGACY_DEPLOYMENT_BATCHER
 
     const req = createMockReq({ method: 'GET' })
     const res = createMockRes()
@@ -141,8 +141,8 @@ describe('deploy config handler', () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(true)
-    expect(res.body?.data?.creatorVaultBatcher).toBeNull()
-    expect(String(res.body?.data?.creatorVaultBatcherConfigError ?? '')).toContain('Deprecated aliases are blocked')
-    expect(String(res.body?.data?.creatorVaultBatcherConfigError ?? '')).toContain(LEGACY_DEPLOYMENT_BATCHER)
+    expect(res.body?.data?.deploymentBatcher).toBeNull()
+    expect(String(res.body?.data?.deploymentBatcherConfigError ?? '')).toContain('Deprecated aliases are blocked')
+    expect(String(res.body?.data?.deploymentBatcherConfigError ?? '')).toContain(LEGACY_DEPLOYMENT_BATCHER)
   })
 })

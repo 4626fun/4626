@@ -36,7 +36,7 @@ authorize protocol deployment surfaces instead.
      `setAuthorizedDeployer(vaultAuxiliaryDeployBatcher, true)`.
 
 3. Update runtime config.
-   - Keep `CREATOR_VAULT_BATCHER` / `VITE_CREATOR_VAULT_BATCHER` pointed at the
+   - Keep `DEPLOYMENT_BATCHER` / `VITE_DEPLOYMENT_BATCHER` pointed at the
      active `DeploymentBatcher`.
    - Set `VAULT_AUXILIARY_DEPLOY_BATCHER` /
      `VITE_VAULT_AUXILIARY_DEPLOY_BATCHER` to the helper.
@@ -80,6 +80,6 @@ Blocked:
 
 If the auxiliary helper fails preflight, clear
 `VAULT_AUXILIARY_DEPLOY_BATCHER` / `VITE_VAULT_AUXILIARY_DEPLOY_BATCHER` and
-leave the active `CREATOR_VAULT_BATCHER` unchanged. If the helper should be
+leave the active `DEPLOYMENT_BATCHER` unchanged. If the helper should be
 retired, the create2 deployer owner should call
 `setAuthorizedDeployer(vaultAuxiliaryDeployBatcher, false)`.

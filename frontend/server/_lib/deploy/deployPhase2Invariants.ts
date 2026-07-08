@@ -4,7 +4,7 @@ import { verifyPayoutRouterHarvestReadiness } from '../onchain/payoutRouterHarve
 
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
 
-const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI = [
+const DEPLOYMENT_BATCHER_FINALIZE_PHASE2_ABI = [
   {
     type: 'function',
     name: 'finalizePhase2',
@@ -44,7 +44,7 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
+const DEPLOYMENT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
   {
     type: 'function',
     name: 'finalizePhase2',
@@ -180,7 +180,7 @@ function extractFinalizePhase2Info(calls: Array<{ to: Address; value: bigint; da
   const finalizeCall = calls[0]
   if (!finalizeCall || typeof finalizeCall.data !== 'string') return null
 
-  for (const abi of [CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI, CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
+  for (const abi of [DEPLOYMENT_BATCHER_FINALIZE_PHASE2_ABI, DEPLOYMENT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
     try {
       const decoded = decodeFunctionData({ abi, data: finalizeCall.data })
       const params = (decoded.args?.[0] ?? null) as {

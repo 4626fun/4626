@@ -28,7 +28,7 @@ interface RegistryVerificationResult {
 }
 
 /// Registry4626 — canonical protocol registry (4626 suffix naming).
-/// Env: prefer REGISTRY_4626; CREATOR_REGISTRY is a legacy alias.
+/// Env: REGISTRY_4626 (preferred) or REGISTRY for deploy handoff scripts.
 const DEFAULT_REGISTRY_4626 = '0x1eb9A364a3E763dD9249ba3413Dc19E13c1F4461' as const;
 const REGISTRY_4626_ABI = [
   {
@@ -76,10 +76,10 @@ function normalizeAddress(value: string | null | undefined): Address | null {
 }
 
 function getRegistry4626Address(): `0x${string}` {
-  const configured = String(process.env.REGISTRY_4626 ?? process.env.CREATOR_REGISTRY ?? '').trim();
+  const configured = String(process.env.REGISTRY_4626 ?? process.env.REGISTRY ?? '').trim();
   const candidate = configured || DEFAULT_REGISTRY_4626;
   if (!isAddress(candidate)) {
-    throw new Error('REGISTRY_4626 (or legacy CREATOR_REGISTRY) is not a valid address');
+    throw new Error('REGISTRY_4626 (or REGISTRY) is not a valid address');
   }
   return getAddress(candidate) as `0x${string}`;
 }

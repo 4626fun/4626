@@ -8,7 +8,7 @@ import { base } from 'viem/chains'
 import { BASE_DEFAULTS } from '../../src/config/contracts.defaults.js'
 import { DEPLOY_BYTECODE } from '../../src/deploy/bytecode.generated.js'
 
-const BATCHER = BASE_DEFAULTS.creatorVaultBatcher as Address
+const BATCHER = BASE_DEFAULTS.deploymentBatcher as Address
 const ZERO = '0x0000000000000000000000000000000000000000' as Address
 
 const BATCHER_ABI = [

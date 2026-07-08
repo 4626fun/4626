@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { validateCreatorRegistryBinding } from '../../server/_lib/onchain/creatorRegistryVerification.js'
+import { validateRegistry4626Binding } from '../../server/_lib/onchain/registry4626Verification.js'
 import { AKITA_DEFAULTS } from '../../src/config/contracts.defaults.js'
 
-describe('validateCreatorRegistryBinding', () => {
-  it('reports AKITA as inactive in CreatorRegistry (grandfather handled by validateKeeperVaultListing)', async () => {
-    const strict = await validateCreatorRegistryBinding({
+describe('validateRegistry4626Binding', () => {
+  it('reports AKITA as inactive in Registry4626 (grandfather handled by validateKeeperVaultListing)', async () => {
+    const strict = await validateRegistry4626Binding({
       creatorCoinAddress: AKITA_DEFAULTS.token,
       vaultAddress: AKITA_DEFAULTS.vault,
       shareTokenAddress: AKITA_DEFAULTS.shareOFT,

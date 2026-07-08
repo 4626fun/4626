@@ -73,7 +73,7 @@ import {
 } from '../../../../../server/_lib/deploy/featurePolicy/policy.js'
 import { hasContractBytecode } from '../../../../../shared/wallet/bytecode.js'
 import {
-  isDeprecatedCreatorVaultBatcherAddress,
+  isDeprecatedDeploymentBatcherAddress,
 } from '../../../../../src/config/contracts.defaults.js'
 import { deploymentBatcherNotConfiguredMessage } from '../../../../../server/_lib/onchain/deploymentBatcherConfigError.js'
 import { assertDeploySessionPhaseBoundaries } from '../../../../../server/_lib/deploy/deploySessionPhaseBoundaries.js'
@@ -226,7 +226,7 @@ const PHASE1_CODE_IDS_COMPONENTS = [
   { name: 'oftBootstrap', type: 'bytes32' },
 ] as const
 
-const CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI = [
+const DEPLOYMENT_BATCHER_PHASE1_WITH_SALT_ABI = [
   {
     type: 'function',
     name: 'deployPhase1WithSalt',
@@ -240,7 +240,7 @@ const CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI = [
+const DEPLOYMENT_BATCHER_PHASE1_CORE_WITH_SALT_ABI = [
   {
     type: 'function',
     name: 'deployPhase1CoreWithSalt',
@@ -254,7 +254,7 @@ const CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI = [
+const DEPLOYMENT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI = [
   {
     type: 'function',
     name: 'finalizePhase1WithSalt',
@@ -268,7 +268,7 @@ const CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_PHASE1_ABI = [
+const DEPLOYMENT_BATCHER_PHASE1_ABI = [
   {
     type: 'function',
     name: 'deployPhase1',
@@ -281,7 +281,7 @@ const CREATOR_VAULT_BATCHER_PHASE1_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_PHASE1_CORE_ABI = [
+const DEPLOYMENT_BATCHER_PHASE1_CORE_ABI = [
   {
     type: 'function',
     name: 'deployPhase1Core',
@@ -294,7 +294,7 @@ const CREATOR_VAULT_BATCHER_PHASE1_CORE_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_ABI = [
+const DEPLOYMENT_BATCHER_PHASE1_FINALIZE_ABI = [
   {
     type: 'function',
     name: 'finalizePhase1',
@@ -320,7 +320,7 @@ const ERC20_APPROVE_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI = [
+const DEPLOYMENT_BATCHER_FINALIZE_PHASE2_ABI = [
   {
     type: 'function',
     name: 'finalizePhase2',
@@ -360,7 +360,7 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
+const DEPLOYMENT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
   {
     type: 'function',
     name: 'finalizePhase2',
@@ -390,7 +390,7 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_OVAULT_RUNTIME_VIEW_ABI = [
+const DEPLOYMENT_BATCHER_OVAULT_RUNTIME_VIEW_ABI = [
   {
     type: 'function',
     name: 'getOVaultRuntimeConfig',
@@ -409,7 +409,7 @@ const CREATOR_VAULT_BATCHER_OVAULT_RUNTIME_VIEW_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI = [
+const DEPLOYMENT_BATCHER_DEPLOY_PHASE2_CORE_ABI = [
   {
     type: 'function',
     name: 'deployPhase2Core',
@@ -460,7 +460,7 @@ const CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI = [
+const DEPLOYMENT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI = [
   {
     type: 'function',
     name: 'deployPhase2CoreWithRolePolicy',
@@ -512,7 +512,7 @@ const CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_PENDING_AUCTION_ABI = [
+const DEPLOYMENT_BATCHER_PENDING_AUCTION_ABI = [
   {
     type: 'function',
     name: 'pendingAuctions',
@@ -675,7 +675,7 @@ function hasPhase1SaltOverrideCalls(calls: Call[]): boolean {
     try {
       if (selector === PHASE1_SELECTOR_DEPLOY_WITH_SALT) {
         const decoded = decodeFunctionData({
-          abi: CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI,
+          abi: DEPLOYMENT_BATCHER_PHASE1_WITH_SALT_ABI,
           data: data as Hex,
         })
         const shareOftSaltOverride = decoded.args?.[2]
@@ -690,7 +690,7 @@ function hasPhase1SaltOverrideCalls(calls: Call[]): boolean {
       }
       if (selector === PHASE1_SELECTOR_CORE_WITH_SALT) {
         const decoded = decodeFunctionData({
-          abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI,
+          abi: DEPLOYMENT_BATCHER_PHASE1_CORE_WITH_SALT_ABI,
           data: data as Hex,
         })
         const shareOftSaltOverride = decoded.args?.[2]
@@ -705,7 +705,7 @@ function hasPhase1SaltOverrideCalls(calls: Call[]): boolean {
       }
       if (selector === PHASE1_SELECTOR_FINALIZE_WITH_SALT) {
         const decoded = decodeFunctionData({
-          abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI,
+          abi: DEPLOYMENT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI,
           data: data as Hex,
         })
         const shareOftSaltOverride = decoded.args?.[2]
@@ -733,7 +733,7 @@ function rewritePhase1SaltCallToZeroOverride(call: Call): Call {
   try {
     if (selector === PHASE1_SELECTOR_DEPLOY_WITH_SALT) {
       const decoded = decodeFunctionData({
-        abi: CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI,
+        abi: DEPLOYMENT_BATCHER_PHASE1_WITH_SALT_ABI,
         data: data as Hex,
       })
       const params = decoded.args?.[0]
@@ -742,7 +742,7 @@ function rewritePhase1SaltCallToZeroOverride(call: Call): Call {
       return {
         ...call,
         data: encodeFunctionData({
-          abi: CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI,
+          abi: DEPLOYMENT_BATCHER_PHASE1_WITH_SALT_ABI,
           functionName: 'deployPhase1WithSalt',
           args: [params as any, codeIds as any, zeroOverride],
         }) as Hex,
@@ -750,7 +750,7 @@ function rewritePhase1SaltCallToZeroOverride(call: Call): Call {
     }
     if (selector === PHASE1_SELECTOR_CORE_WITH_SALT) {
       const decoded = decodeFunctionData({
-        abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI,
+        abi: DEPLOYMENT_BATCHER_PHASE1_CORE_WITH_SALT_ABI,
         data: data as Hex,
       })
       const params = decoded.args?.[0]
@@ -759,7 +759,7 @@ function rewritePhase1SaltCallToZeroOverride(call: Call): Call {
       return {
         ...call,
         data: encodeFunctionData({
-          abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI,
+          abi: DEPLOYMENT_BATCHER_PHASE1_CORE_WITH_SALT_ABI,
           functionName: 'deployPhase1CoreWithSalt',
           args: [params as any, codeIds as any, zeroOverride],
         }) as Hex,
@@ -767,7 +767,7 @@ function rewritePhase1SaltCallToZeroOverride(call: Call): Call {
     }
     if (selector === PHASE1_SELECTOR_FINALIZE_WITH_SALT) {
       const decoded = decodeFunctionData({
-        abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI,
+        abi: DEPLOYMENT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI,
         data: data as Hex,
       })
       const params = decoded.args?.[0]
@@ -776,7 +776,7 @@ function rewritePhase1SaltCallToZeroOverride(call: Call): Call {
       return {
         ...call,
         data: encodeFunctionData({
-          abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI,
+          abi: DEPLOYMENT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI,
           functionName: 'finalizePhase1WithSalt',
           args: [params as any, codeIds as any, zeroOverride],
         }) as Hex,
@@ -795,7 +795,7 @@ function rewritePhase1CallToWithSaltZeroOverride(call: Call): Call {
   try {
     if (selector === PHASE1_SELECTOR_DEPLOY) {
       const decoded = decodeFunctionData({
-        abi: CREATOR_VAULT_BATCHER_PHASE1_ABI,
+        abi: DEPLOYMENT_BATCHER_PHASE1_ABI,
         data: data as Hex,
       })
       const params = decoded.args?.[0]
@@ -804,7 +804,7 @@ function rewritePhase1CallToWithSaltZeroOverride(call: Call): Call {
       return {
         ...call,
         data: encodeFunctionData({
-          abi: CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI,
+          abi: DEPLOYMENT_BATCHER_PHASE1_WITH_SALT_ABI,
           functionName: 'deployPhase1WithSalt',
           args: [params as any, codeIds as any, ZERO_BYTES32],
         }) as Hex,
@@ -812,7 +812,7 @@ function rewritePhase1CallToWithSaltZeroOverride(call: Call): Call {
     }
     if (selector === PHASE1_SELECTOR_CORE) {
       const decoded = decodeFunctionData({
-        abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_ABI,
+        abi: DEPLOYMENT_BATCHER_PHASE1_CORE_ABI,
         data: data as Hex,
       })
       const params = decoded.args?.[0]
@@ -821,7 +821,7 @@ function rewritePhase1CallToWithSaltZeroOverride(call: Call): Call {
       return {
         ...call,
         data: encodeFunctionData({
-          abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI,
+          abi: DEPLOYMENT_BATCHER_PHASE1_CORE_WITH_SALT_ABI,
           functionName: 'deployPhase1CoreWithSalt',
           args: [params as any, codeIds as any, ZERO_BYTES32],
         }) as Hex,
@@ -829,7 +829,7 @@ function rewritePhase1CallToWithSaltZeroOverride(call: Call): Call {
     }
     if (selector === PHASE1_SELECTOR_FINALIZE) {
       const decoded = decodeFunctionData({
-        abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_ABI,
+        abi: DEPLOYMENT_BATCHER_PHASE1_FINALIZE_ABI,
         data: data as Hex,
       })
       const params = decoded.args?.[0]
@@ -838,7 +838,7 @@ function rewritePhase1CallToWithSaltZeroOverride(call: Call): Call {
       return {
         ...call,
         data: encodeFunctionData({
-          abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI,
+          abi: DEPLOYMENT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI,
           functionName: 'finalizePhase1WithSalt',
           args: [params as any, codeIds as any, ZERO_BYTES32],
         }) as Hex,
@@ -988,27 +988,27 @@ function decodePhase1ParamsFromCallData(data: Hex): unknown | null {
   const selector = raw.slice(0, 10).toLowerCase()
   try {
     if (selector === PHASE1_SELECTOR_DEPLOY) {
-      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_ABI, data: raw as Hex })
+      const decoded = decodeFunctionData({ abi: DEPLOYMENT_BATCHER_PHASE1_ABI, data: raw as Hex })
       return decoded.args?.[0] ?? null
     }
     if (selector === PHASE1_SELECTOR_CORE) {
-      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_ABI, data: raw as Hex })
+      const decoded = decodeFunctionData({ abi: DEPLOYMENT_BATCHER_PHASE1_CORE_ABI, data: raw as Hex })
       return decoded.args?.[0] ?? null
     }
     if (selector === PHASE1_SELECTOR_FINALIZE) {
-      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_ABI, data: raw as Hex })
+      const decoded = decodeFunctionData({ abi: DEPLOYMENT_BATCHER_PHASE1_FINALIZE_ABI, data: raw as Hex })
       return decoded.args?.[0] ?? null
     }
     if (selector === PHASE1_SELECTOR_DEPLOY_WITH_SALT) {
-      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI, data: raw as Hex })
+      const decoded = decodeFunctionData({ abi: DEPLOYMENT_BATCHER_PHASE1_WITH_SALT_ABI, data: raw as Hex })
       return decoded.args?.[0] ?? null
     }
     if (selector === PHASE1_SELECTOR_CORE_WITH_SALT) {
-      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI, data: raw as Hex })
+      const decoded = decodeFunctionData({ abi: DEPLOYMENT_BATCHER_PHASE1_CORE_WITH_SALT_ABI, data: raw as Hex })
       return decoded.args?.[0] ?? null
     }
     if (selector === PHASE1_SELECTOR_FINALIZE_WITH_SALT) {
-      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI, data: raw as Hex })
+      const decoded = decodeFunctionData({ abi: DEPLOYMENT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI, data: raw as Hex })
       return decoded.args?.[0] ?? null
     }
   } catch {
@@ -1061,7 +1061,7 @@ function rewritePhase1CallCodeIdsToCurrent(call: Call): Call {
   const selector = data.slice(0, 10).toLowerCase()
   try {
     if (selector === PHASE1_SELECTOR_DEPLOY) {
-      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_ABI, data: data as Hex })
+      const decoded = decodeFunctionData({ abi: DEPLOYMENT_BATCHER_PHASE1_ABI, data: data as Hex })
       const params = decoded.args?.[0]
       const vaultKind = extractVaultKindFromPhase1Params(params)
       const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple, vaultKind)
@@ -1069,14 +1069,14 @@ function rewritePhase1CallCodeIdsToCurrent(call: Call): Call {
       return {
         ...call,
         data: encodeFunctionData({
-          abi: CREATOR_VAULT_BATCHER_PHASE1_ABI,
+          abi: DEPLOYMENT_BATCHER_PHASE1_ABI,
           functionName: 'deployPhase1',
           args: [params as any, codeIds as any],
         }) as Hex,
       }
     }
     if (selector === PHASE1_SELECTOR_CORE) {
-      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_ABI, data: data as Hex })
+      const decoded = decodeFunctionData({ abi: DEPLOYMENT_BATCHER_PHASE1_CORE_ABI, data: data as Hex })
       const params = decoded.args?.[0]
       const vaultKind = extractVaultKindFromPhase1Params(params)
       const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple, vaultKind)
@@ -1084,14 +1084,14 @@ function rewritePhase1CallCodeIdsToCurrent(call: Call): Call {
       return {
         ...call,
         data: encodeFunctionData({
-          abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_ABI,
+          abi: DEPLOYMENT_BATCHER_PHASE1_CORE_ABI,
           functionName: 'deployPhase1Core',
           args: [params as any, codeIds as any],
         }) as Hex,
       }
     }
     if (selector === PHASE1_SELECTOR_FINALIZE) {
-      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_ABI, data: data as Hex })
+      const decoded = decodeFunctionData({ abi: DEPLOYMENT_BATCHER_PHASE1_FINALIZE_ABI, data: data as Hex })
       const params = decoded.args?.[0]
       const vaultKind = extractVaultKindFromPhase1Params(params)
       const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple, vaultKind)
@@ -1099,14 +1099,14 @@ function rewritePhase1CallCodeIdsToCurrent(call: Call): Call {
       return {
         ...call,
         data: encodeFunctionData({
-          abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_ABI,
+          abi: DEPLOYMENT_BATCHER_PHASE1_FINALIZE_ABI,
           functionName: 'finalizePhase1',
           args: [params as any, codeIds as any],
         }) as Hex,
       }
     }
     if (selector === PHASE1_SELECTOR_DEPLOY_WITH_SALT) {
-      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI, data: data as Hex })
+      const decoded = decodeFunctionData({ abi: DEPLOYMENT_BATCHER_PHASE1_WITH_SALT_ABI, data: data as Hex })
       const params = decoded.args?.[0]
       const vaultKind = extractVaultKindFromPhase1Params(params)
       const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple, vaultKind)
@@ -1115,14 +1115,14 @@ function rewritePhase1CallCodeIdsToCurrent(call: Call): Call {
       return {
         ...call,
         data: encodeFunctionData({
-          abi: CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI,
+          abi: DEPLOYMENT_BATCHER_PHASE1_WITH_SALT_ABI,
           functionName: 'deployPhase1WithSalt',
           args: [params as any, codeIds as any, shareOftSaltOverride],
         }) as Hex,
       }
     }
     if (selector === PHASE1_SELECTOR_CORE_WITH_SALT) {
-      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI, data: data as Hex })
+      const decoded = decodeFunctionData({ abi: DEPLOYMENT_BATCHER_PHASE1_CORE_WITH_SALT_ABI, data: data as Hex })
       const params = decoded.args?.[0]
       const vaultKind = extractVaultKindFromPhase1Params(params)
       const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple, vaultKind)
@@ -1131,14 +1131,14 @@ function rewritePhase1CallCodeIdsToCurrent(call: Call): Call {
       return {
         ...call,
         data: encodeFunctionData({
-          abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI,
+          abi: DEPLOYMENT_BATCHER_PHASE1_CORE_WITH_SALT_ABI,
           functionName: 'deployPhase1CoreWithSalt',
           args: [params as any, codeIds as any, shareOftSaltOverride],
         }) as Hex,
       }
     }
     if (selector === PHASE1_SELECTOR_FINALIZE_WITH_SALT) {
-      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI, data: data as Hex })
+      const decoded = decodeFunctionData({ abi: DEPLOYMENT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI, data: data as Hex })
       const params = decoded.args?.[0]
       const vaultKind = extractVaultKindFromPhase1Params(params)
       const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple, vaultKind)
@@ -1147,7 +1147,7 @@ function rewritePhase1CallCodeIdsToCurrent(call: Call): Call {
       return {
         ...call,
         data: encodeFunctionData({
-          abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI,
+          abi: DEPLOYMENT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI,
           functionName: 'finalizePhase1WithSalt',
           args: [params as any, codeIds as any, shareOftSaltOverride],
         }) as Hex,
@@ -1176,27 +1176,27 @@ function decodePhase1CodeIdsFromCallData(data: Hex): Phase1CodeIdsTuple {
   const selector = raw.slice(0, 10).toLowerCase()
   try {
     if (selector === PHASE1_SELECTOR_DEPLOY) {
-      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_ABI, data: raw as Hex })
+      const decoded = decodeFunctionData({ abi: DEPLOYMENT_BATCHER_PHASE1_ABI, data: raw as Hex })
       return (decoded.args?.[1] ?? null) as Phase1CodeIdsTuple
     }
     if (selector === PHASE1_SELECTOR_CORE) {
-      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_ABI, data: raw as Hex })
+      const decoded = decodeFunctionData({ abi: DEPLOYMENT_BATCHER_PHASE1_CORE_ABI, data: raw as Hex })
       return (decoded.args?.[1] ?? null) as Phase1CodeIdsTuple
     }
     if (selector === PHASE1_SELECTOR_FINALIZE) {
-      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_ABI, data: raw as Hex })
+      const decoded = decodeFunctionData({ abi: DEPLOYMENT_BATCHER_PHASE1_FINALIZE_ABI, data: raw as Hex })
       return (decoded.args?.[1] ?? null) as Phase1CodeIdsTuple
     }
     if (selector === PHASE1_SELECTOR_DEPLOY_WITH_SALT) {
-      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI, data: raw as Hex })
+      const decoded = decodeFunctionData({ abi: DEPLOYMENT_BATCHER_PHASE1_WITH_SALT_ABI, data: raw as Hex })
       return (decoded.args?.[1] ?? null) as Phase1CodeIdsTuple
     }
     if (selector === PHASE1_SELECTOR_CORE_WITH_SALT) {
-      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI, data: raw as Hex })
+      const decoded = decodeFunctionData({ abi: DEPLOYMENT_BATCHER_PHASE1_CORE_WITH_SALT_ABI, data: raw as Hex })
       return (decoded.args?.[1] ?? null) as Phase1CodeIdsTuple
     }
     if (selector === PHASE1_SELECTOR_FINALIZE_WITH_SALT) {
-      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI, data: raw as Hex })
+      const decoded = decodeFunctionData({ abi: DEPLOYMENT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI, data: raw as Hex })
       return (decoded.args?.[1] ?? null) as Phase1CodeIdsTuple
     }
   } catch {
@@ -1225,7 +1225,7 @@ async function assertPhase1BatcherReadiness(phase1Calls: Call[]): Promise<void> 
   if (!phase1BatcherCall || !isAddress(phase1BatcherCall.to)) return
 
   const batcherAddress = getAddress(phase1BatcherCall.to as Address)
-  if (isDeprecatedCreatorVaultBatcherAddress(batcherAddress)) {
+  if (isDeprecatedDeploymentBatcherAddress(batcherAddress)) {
     throw new DeploySessionRequestError(409, deploymentBatcherNotConfiguredMessage(batcherAddress))
   }
   const rpc = resolveDeploySessionRpcUrl()
@@ -1513,8 +1513,8 @@ function extractPhase2CoreInvariantInfo(data: Hex): {
   rolePolicyId: bigint | null
 } | null {
   for (const abi of [
-    CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
-    CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI,
+    DEPLOYMENT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
+    DEPLOYMENT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI,
   ] as const) {
     try {
       const decoded = decodeFunctionData({
@@ -1543,8 +1543,8 @@ function extractPhase2CoreInvariantInfo(data: Hex): {
 
 function isDeployPhase2CoreCall(call: Call): boolean {
   for (const abi of [
-    CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
-    CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI,
+    DEPLOYMENT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
+    DEPLOYMENT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI,
   ] as const) {
     try {
       const decoded = decodeFunctionData({
@@ -1595,8 +1595,8 @@ function extractPhase1VersionFromCalls(calls: Call[]): string | null {
         const decoded = decodeFunctionData({
           abi:
             selector === PHASE1_SELECTOR_DEPLOY
-              ? CREATOR_VAULT_BATCHER_PHASE1_ABI
-              : CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI,
+              ? DEPLOYMENT_BATCHER_PHASE1_ABI
+              : DEPLOYMENT_BATCHER_PHASE1_WITH_SALT_ABI,
           data: data as Hex,
         })
         const params = decoded.args?.[0] as { version?: string } | undefined
@@ -1607,8 +1607,8 @@ function extractPhase1VersionFromCalls(calls: Call[]): string | null {
         const decoded = decodeFunctionData({
           abi:
             selector === PHASE1_SELECTOR_CORE
-              ? CREATOR_VAULT_BATCHER_PHASE1_CORE_ABI
-              : CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI,
+              ? DEPLOYMENT_BATCHER_PHASE1_CORE_ABI
+              : DEPLOYMENT_BATCHER_PHASE1_CORE_WITH_SALT_ABI,
           data: data as Hex,
         })
         const params = decoded.args?.[0] as { version?: string } | undefined
@@ -1619,8 +1619,8 @@ function extractPhase1VersionFromCalls(calls: Call[]): string | null {
         const decoded = decodeFunctionData({
           abi:
             selector === PHASE1_SELECTOR_FINALIZE
-              ? CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_ABI
-              : CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI,
+              ? DEPLOYMENT_BATCHER_PHASE1_FINALIZE_ABI
+              : DEPLOYMENT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI,
           data: data as Hex,
         })
         const params = decoded.args?.[0] as { version?: string } | undefined
@@ -1653,8 +1653,8 @@ function normalizePhase2CallVersions(params: {
 
   const phase2CoreCalls = params.phase2CoreCalls.map((call) => {
     for (const abi of [
-      CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
-      CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI,
+      DEPLOYMENT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
+      DEPLOYMENT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI,
     ] as const) {
       try {
         const decoded = decodeFunctionData({
@@ -1675,7 +1675,7 @@ function normalizePhase2CallVersions(params: {
           return {
             ...call,
             data: encodeFunctionData({
-              abi: CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI,
+              abi: DEPLOYMENT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI,
               functionName: 'deployPhase2CoreWithRolePolicy',
               args: [{ ...phase2Params, version: targetVersion } as any, codeIds as any, rolePolicyId ?? 0n],
             }) as Hex,
@@ -1684,7 +1684,7 @@ function normalizePhase2CallVersions(params: {
         return {
           ...call,
           data: encodeFunctionData({
-            abi: CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
+            abi: DEPLOYMENT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
             functionName: 'deployPhase2Core',
             args: [{ ...phase2Params, version: targetVersion } as any, codeIds as any],
           }) as Hex,
@@ -1699,7 +1699,7 @@ function normalizePhase2CallVersions(params: {
   const phase2FinalizeCalls = params.phase2FinalizeCalls.map((call) => {
     try {
       const decoded = decodeFunctionData({
-        abi: CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI,
+        abi: DEPLOYMENT_BATCHER_FINALIZE_PHASE2_ABI,
         data: call.data,
       })
       if (decoded.functionName !== 'finalizePhase2') return call
@@ -1711,7 +1711,7 @@ function normalizePhase2CallVersions(params: {
       return {
         ...call,
         data: encodeFunctionData({
-          abi: CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI,
+          abi: DEPLOYMENT_BATCHER_FINALIZE_PHASE2_ABI,
           functionName: 'finalizePhase2',
           args: [{ ...phase2Params, version: targetVersion } as any],
         }) as Hex,
@@ -1807,8 +1807,8 @@ export function normalizePhase2RolePolicyCalls(params: {
   let rewrote = false
   const normalized = params.phase2CoreCalls.map((call) => {
     for (const abi of [
-      CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
-      CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI,
+      DEPLOYMENT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
+      DEPLOYMENT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI,
     ] as const) {
       try {
         const decoded = decodeFunctionData({
@@ -1831,7 +1831,7 @@ export function normalizePhase2RolePolicyCalls(params: {
         return {
           ...call,
           data: encodeFunctionData({
-            abi: CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI,
+            abi: DEPLOYMENT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI,
             functionName: 'deployPhase2CoreWithRolePolicy',
             args: [phase2Params as any, codeIds as any, activeRolePolicyId],
           }),
@@ -1879,7 +1879,7 @@ function extractFinalizePhase2InvariantInfo(data: Hex): {
   shareToken: Address
   gaugeController: Address
 } | null {
-  for (const abi of [CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI, CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
+  for (const abi of [DEPLOYMENT_BATCHER_FINALIZE_PHASE2_ABI, DEPLOYMENT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
     try {
       const decoded = decodeFunctionData({ abi, data })
       const params = (decoded.args?.[0] ?? null) as {
@@ -1961,7 +1961,7 @@ async function assertOvaultRuntimeReadyForBatcher(batcherAddress: Address): Prom
   const runtime = await publicClient
     .readContract({
       address: batcherAddress,
-      abi: CREATOR_VAULT_BATCHER_OVAULT_RUNTIME_VIEW_ABI,
+      abi: DEPLOYMENT_BATCHER_OVAULT_RUNTIME_VIEW_ABI,
       functionName: 'getOVaultRuntimeConfig',
     })
     .catch(() => null)
@@ -1978,7 +1978,7 @@ function extractFinalizePhase2ApprovalInfo(data: Hex): {
   depositAmount: bigint
   vault: Address | null
 } | null {
-  for (const abi of [CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI, CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
+  for (const abi of [DEPLOYMENT_BATCHER_FINALIZE_PHASE2_ABI, DEPLOYMENT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
     try {
       const decoded = decodeFunctionData({ abi, data })
       const params = (decoded.args?.[0] ?? null) as {
@@ -3074,7 +3074,7 @@ export async function validateDeploySessionRequest(params: {
       try {
         const pending = (await readClient.readContract({
           address: batcherAddress,
-          abi: CREATOR_VAULT_BATCHER_PENDING_AUCTION_ABI,
+          abi: DEPLOYMENT_BATCHER_PENDING_AUCTION_ABI,
           functionName: 'pendingAuctions',
           args: [baseSalt],
         })) as unknown

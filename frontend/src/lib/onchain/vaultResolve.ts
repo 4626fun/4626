@@ -6,7 +6,7 @@ import { CONTRACTS } from '@/config/contracts'
 const addrHex = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
 const ZERO_ADDRESS = addrHex('0000000000000000000000000000000000000000')
 
-const CREATOR_REGISTRY_RESOLVE_ABI = [
+const REGISTRY_4626_RESOLVE_ABI = [
   { type: 'function', name: 'vaultToToken', stateMutability: 'view', inputs: [{ name: '', type: 'address' }], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'wrapperToToken', stateMutability: 'view', inputs: [{ name: '', type: 'address' }], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'shareOFTToToken', stateMutability: 'view', inputs: [{ name: '', type: 'address' }], outputs: [{ type: 'address' }] },
@@ -16,7 +16,7 @@ const CREATOR_REGISTRY_RESOLVE_ABI = [
   { type: 'function', name: 'getTokenForRemoteOFT', stateMutability: 'view', inputs: [{ name: '_remoteOFT', type: 'address' }], outputs: [{ type: 'address' }] },
 ] as const
 
-const CREATOR_REGISTRY_COIN_ABI = [
+const REGISTRY_4626_COIN_ABI = [
   {
     type: 'function',
     name: 'getTokenInfo',
@@ -128,13 +128,13 @@ export async function resolveCreatorTokenFromAnyAddress<
 
   const results = await publicClient.multicall({
     contracts: [
-      { address: registry, abi: CREATOR_REGISTRY_RESOLVE_ABI, functionName: 'vaultToToken', args: [addr] },
-      { address: registry, abi: CREATOR_REGISTRY_RESOLVE_ABI, functionName: 'wrapperToToken', args: [addr] },
-      { address: registry, abi: CREATOR_REGISTRY_RESOLVE_ABI, functionName: 'shareOFTToToken', args: [addr] },
-      { address: registry, abi: CREATOR_REGISTRY_RESOLVE_ABI, functionName: 'oracleToToken', args: [addr] },
-      { address: registry, abi: CREATOR_REGISTRY_RESOLVE_ABI, functionName: 'gaugeControllerToToken', args: [addr] },
-      { address: registry, abi: CREATOR_REGISTRY_RESOLVE_ABI, functionName: 'canonicalWalletToToken', args: [addr] },
-      { address: registry, abi: CREATOR_REGISTRY_RESOLVE_ABI, functionName: 'getTokenForRemoteOFT', args: [addr] },
+      { address: registry, abi: REGISTRY_4626_RESOLVE_ABI, functionName: 'vaultToToken', args: [addr] },
+      { address: registry, abi: REGISTRY_4626_RESOLVE_ABI, functionName: 'wrapperToToken', args: [addr] },
+      { address: registry, abi: REGISTRY_4626_RESOLVE_ABI, functionName: 'shareOFTToToken', args: [addr] },
+      { address: registry, abi: REGISTRY_4626_RESOLVE_ABI, functionName: 'oracleToToken', args: [addr] },
+      { address: registry, abi: REGISTRY_4626_RESOLVE_ABI, functionName: 'gaugeControllerToToken', args: [addr] },
+      { address: registry, abi: REGISTRY_4626_RESOLVE_ABI, functionName: 'canonicalWalletToToken', args: [addr] },
+      { address: registry, abi: REGISTRY_4626_RESOLVE_ABI, functionName: 'getTokenForRemoteOFT', args: [addr] },
     ],
     allowFailure: true,
   })
@@ -169,7 +169,7 @@ export async function fetchCreatorCoinInfo<
   try {
     infoRaw = await publicClient.readContract({
       address: registry,
-      abi: CREATOR_REGISTRY_COIN_ABI,
+      abi: REGISTRY_4626_COIN_ABI,
       functionName: 'getTokenInfo',
       args: [token],
     })
@@ -300,7 +300,7 @@ async function resolveVaultFromBatcherEvents<
   publicClient: PublicClient<TTransport, TChain>,
   addr: Address,
 ): Promise<VaultResolved | null> {
-  const batcher = asAddress(CONTRACTS.creatorVaultBatcher)
+  const batcher = asAddress(CONTRACTS.deploymentBatcher)
   if (!batcher) return null
 
   const tokenHints = await readTokenHintsFromAddress(publicClient, addr)

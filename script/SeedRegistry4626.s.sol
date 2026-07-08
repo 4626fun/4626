@@ -6,7 +6,7 @@ import {Registry4626} from "@4626/shared/core/Registry4626.sol";
 import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 
 /**
- * @title SeedCreatorRegistry
+ * @title SeedRegistry4626
  * @author 0xakita.eth
  * @notice Seeds the deployed Registry4626 with protocol-level configuration:
  *         chains, LayerZero endpoints, EIDs, DEX infrastructure, and hub chain.
@@ -15,20 +15,20 @@ import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
  *      It only sets up the "global" config that every per-creator deployment relies on.
  *
  * @dev RUN COMMAND:
- *      forge script script/SeedCreatorRegistry.s.sol:SeedCreatorRegistry \
+ *      forge script script/SeedRegistry4626.s.sol:SeedRegistry4626 \
  *          --rpc-url base \
  *          --broadcast \
  *          -vvvv
  *
  * @dev DRY RUN (no broadcast):
- *      forge script script/SeedCreatorRegistry.s.sol:SeedCreatorRegistry \
+ *      forge script script/SeedRegistry4626.s.sol:SeedRegistry4626 \
  *          --rpc-url base \
  *          -vvvv
  *
  * @dev OPTIONAL SOLANA EID MAPPING:
  *      Set SOLANA_REGISTRY_KEY and SOLANA_EID to also seed the Solana registry key <-> EID mapping.
  */
-contract SeedCreatorRegistry is Script {
+contract SeedRegistry4626 is Script {
     // ═══════════════════════════════════════════════════════════════════
     //                    DEPLOYED REGISTRY
     // ═══════════════════════════════════════════════════════════════════
@@ -97,10 +97,10 @@ contract SeedCreatorRegistry is Script {
 
     address constant CHAINLINK_ETH_USD = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
     // v1.15.0 greenfield cutover (tmp/base-v1.15.0-handoff.env)
-    address constant CREATOR_FACTORY = 0x26b74b1d3AadD17e714068d259051409C9f942d1;
+    address constant OVAULT_FACTORY = 0x26b74b1d3AadD17e714068d259051409C9f942d1;
     address constant LOTTERY_MANAGER = 0xD62a8a2F4c25587FA80ED5782b50Af6654122b0b;
-    address constant VAULT_BATCHER = 0xA9024e1B89C5Be34502A275576Cc137473d65839;
-    address constant VAULT_ACT_BATCHER = 0xB06d99c81994F5829ba462c4afA78eCff75bC281;
+    address constant VAULT_BATCHER = 0x02D7abC547F8B1e7E2D7a919D8D1005918361750;
+    address constant VAULT_ACT_BATCHER = 0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3;
 
     // ═══════════════════════════════════════════════════════════════════
     //                              MAIN
@@ -125,7 +125,7 @@ contract SeedCreatorRegistry is Script {
         console.log(
             unicode"╔════════════════════════════════════════════════════════════════╗"
         );
-        console.log(unicode"║       SeedCreatorRegistry — Protocol Config (no creators)      ║");
+        console.log(unicode"║       SeedRegistry4626 — Protocol Config (no creators)      ║");
         console.log(
             unicode"╚════════════════════════════════════════════════════════════════╝"
         );
@@ -255,8 +255,8 @@ contract SeedCreatorRegistry is Script {
 
         console.log("\n[5/5] Authorizing legacy registrar and batchers...");
 
-        if (CREATOR_FACTORY != address(0)) {
-            registry.setAuthorizedFactory(CREATOR_FACTORY, true);
+        if (OVAULT_FACTORY != address(0)) {
+            registry.setAuthorizedFactory(OVAULT_FACTORY, true);
             console.log(unicode"   ✓ OVaultFactory4626 (legacy registrar) authorized");
         }
 

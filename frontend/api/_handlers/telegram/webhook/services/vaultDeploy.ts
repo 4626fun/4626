@@ -730,7 +730,7 @@ export async function buildAkitaVaultDeployStartRequest(params: {
   const creatorToken = getAddress(AKITA_TEMPLATE.creatorToken)
 
   const contracts = getApiContracts()
-  const batcherRaw = asTrimmed(contracts.creatorVaultBatcher ?? '')
+  const batcherRaw = asTrimmed(contracts.deploymentBatcher ?? '')
   if (!batcherRaw) {
     throw new Error(deploymentBatcherNotConfiguredMessage())
   }

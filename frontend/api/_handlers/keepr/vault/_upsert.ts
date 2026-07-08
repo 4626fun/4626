@@ -17,7 +17,7 @@ import {
 
 
 import { computeConfigHash, type KeeprConfigV1, upsertKeeprVault } from '../../../../server/_lib/keepr/keeprRegistry.js'
-import { validateCreatorRegistryBinding } from '../../../../server/_lib/onchain/creatorRegistryVerification.js'
+import { validateRegistry4626Binding } from '../../../../server/_lib/onchain/registry4626Verification.js'
 
 const VAULT_OWNER_ABI = [
   { type: 'function', name: 'owner', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
@@ -121,7 +121,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const registryValidation = await validateCreatorRegistryBinding({
+    const registryValidation = await validateRegistry4626Binding({
       creatorCoinAddress,
       vaultAddress,
       shareTokenAddress,

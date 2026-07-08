@@ -372,7 +372,7 @@ function formatDryRunError(error: unknown): string {
     if (raw.toLowerCase().includes(NOT_AUTHORIZED_SELECTOR)) {
       return (
         'NotAuthorized(): Registry4626 rejected Phase 2 finalize because the DeploymentBatcher is not an authorized factory. ' +
-        'On mainnet, run Registry4626.setAuthorizedFactory(batcher, true) from the registry owner (see script/SeedCreatorRegistry.s.sol). ' +
+        'On mainnet, run Registry4626.setAuthorizedFactory(batcher, true) from the registry owner (see script/SeedRegistry4626.s.sol). ' +
         'Local dry-runs should auto-impersonate the registry owner on the fork before finalize.'
       )
     }
@@ -2222,7 +2222,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ownerBalanceHex: FORK_BALANCE_HEX,
         })
         if (registryPrep.ensured) {
-          console.warn('[deploy/v2/session/dry-run] creator_registry_batcher_authorized_on_fork', {
+          console.warn('[deploy/v2/session/dry-run] registry_4626_batcher_authorized_on_fork', {
             batcher: phase1Batcher.toLowerCase(),
           })
         }

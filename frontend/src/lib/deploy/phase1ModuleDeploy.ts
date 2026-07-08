@@ -193,7 +193,7 @@ export async function resolveAlignedPhase1DeployDeps(params: {
       ok: false,
       message:
         `Configured batcher at ${params.batcherAddress} does not expose expected phased deploy interface ` +
-        '(bytecodeStore/create2Deployer). Update VITE_CREATOR_VAULT_BATCHER / CREATOR_VAULT_BATCHER.',
+        '(bytecodeStore/create2Deployer). Update VITE_DEPLOYMENT_BATCHER / DEPLOYMENT_BATCHER.',
     }
   }
 

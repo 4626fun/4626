@@ -4,7 +4,7 @@ import { getApiContracts } from './contracts.js'
 
 const DEFAULT_BASE_RPC_URL = 'https://mainnet.base.org'
 
-const CREATOR_REGISTRY_ABI = [
+const REGISTRY_4626_ABI = [
   {
     type: 'function',
     name: 'isTokenActive',
@@ -28,7 +28,7 @@ const CREATOR_REGISTRY_ABI = [
   },
 ] as const
 
-export type CreatorRegistryValidationReason =
+export type Registry4626ValidationReason =
   | 'invalid_input'
   | 'creator_coin_inactive'
   | 'vault_mismatch'
@@ -36,9 +36,9 @@ export type CreatorRegistryValidationReason =
   | 'grandfathered_vault_asset_mismatch'
   | 'grandfathered_vault_not_deployed'
 
-export type CreatorRegistryValidationResult =
+export type Registry4626ValidationResult =
   | { ok: true; mode?: 'registry' | 'grandfathered_onchain' }
-  | { ok: false; reason: CreatorRegistryValidationReason }
+  | { ok: false; reason: Registry4626ValidationReason }
 
 const CREATOR_OVAULT_ASSET_ABI = [
   {
@@ -50,7 +50,7 @@ const CREATOR_OVAULT_ASSET_ABI = [
   },
 ] as const
 
-export type CreatorRegistryBindingInput = {
+export type Registry4626BindingInput = {
   creatorCoinAddress: string
   vaultAddress: string
   shareTokenAddress?: string | null
@@ -81,13 +81,13 @@ function getBaseRpcUrls(): string[] {
 
 function getRegistryAddress(): Address {
   const registry = normalizeAddress(getApiContracts().registry)
-  if (!registry) throw new Error('creator_registry_not_configured')
+  if (!registry) throw new Error('registry_4626_not_configured')
   return registry
 }
 
-export async function validateCreatorRegistryBinding(
-  input: CreatorRegistryBindingInput,
-): Promise<CreatorRegistryValidationResult> {
+export async function validateRegistry4626Binding(
+  input: Registry4626BindingInput,
+): Promise<Registry4626ValidationResult> {
   const creatorCoin = normalizeAddress(input.creatorCoinAddress)
   const expectedVault = normalizeAddress(input.vaultAddress)
   const expectedShareToken = input.shareTokenAddress == null ? null : normalizeAddress(input.shareTokenAddress)
@@ -110,19 +110,19 @@ export async function validateCreatorRegistryBinding(
       const [active, vaultFromRegistry, shareFromRegistry] = await Promise.all([
         client.readContract({
           address: registry,
-          abi: CREATOR_REGISTRY_ABI,
+          abi: REGISTRY_4626_ABI,
           functionName: 'isTokenActive',
           args: [creatorCoin],
         }) as Promise<boolean>,
         client.readContract({
           address: registry,
-          abi: CREATOR_REGISTRY_ABI,
+          abi: REGISTRY_4626_ABI,
           functionName: 'getVaultForToken',
           args: [creatorCoin],
         }) as Promise<Address>,
         client.readContract({
           address: registry,
-          abi: CREATOR_REGISTRY_ABI,
+          abi: REGISTRY_4626_ABI,
           functionName: 'getShareOFTForToken',
           args: [creatorCoin],
         }) as Promise<Address>,
@@ -141,7 +141,7 @@ export async function validateCreatorRegistryBinding(
   }
 
   if (lastError instanceof Error) throw lastError
-  throw new Error('creator_registry_unreachable')
+  throw new Error('registry_4626_unreachable')
 }
 
 function isGrandfatheredKeeperListingEnabled(): boolean {
@@ -150,8 +150,8 @@ function isGrandfatheredKeeperListingEnabled(): boolean {
 }
 
 async function validateGrandfatheredVaultBinding(
-  input: CreatorRegistryBindingInput,
-): Promise<CreatorRegistryValidationResult> {
+  input: Registry4626BindingInput,
+): Promise<Registry4626ValidationResult> {
   const creatorCoin = normalizeAddress(input.creatorCoinAddress)
   const expectedVault = normalizeAddress(input.vaultAddress)
   const expectedShareToken = input.shareTokenAddress == null ? null : normalizeAddress(input.shareTokenAddress)
@@ -206,7 +206,7 @@ async function validateGrandfatheredVaultBinding(
 
 /** Strict registry reasons that may still pass via on-chain vault.asset() binding. */
 export function shouldAttemptGrandfatheredKeeperFallback(
-  reason: CreatorRegistryValidationReason,
+  reason: Registry4626ValidationReason,
 ): boolean {
   return (
     reason === 'creator_coin_inactive'
@@ -220,9 +220,9 @@ export function shouldAttemptGrandfatheredKeeperFallback(
  * grandfathered fallback for pre-registry vaults (for example AKITA).
  */
 export async function validateKeeperVaultListing(
-  input: CreatorRegistryBindingInput,
-): Promise<CreatorRegistryValidationResult> {
-  const strict = await validateCreatorRegistryBinding(input)
+  input: Registry4626BindingInput,
+): Promise<Registry4626ValidationResult> {
+  const strict = await validateRegistry4626Binding(input)
   if (strict.ok) return strict
   if (!isGrandfatheredKeeperListingEnabled()) return strict
 

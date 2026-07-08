@@ -176,7 +176,7 @@ Options:
   process.stdout.write('OVAULT_ASSET_MESH_TOKEN=0x<base-asset-mesh-oft>\n')
   process.stdout.write('OVAULT_SHARE_MESH_TOKEN=0x<base-share-mesh-oft>\n')
   process.stdout.write('OVAULT_SOLANA_ASSET_MINT=0x<asset-mesh-solana-mint-bytes32>\n')
-  process.stdout.write('\nforge script script/SeedCreatorRegistrySolanaPeer.s.sol:SeedCreatorRegistrySolanaPeer \\\n')
+  process.stdout.write('\nforge script script/SeedRegistry4626SolanaPeer.s.sol:SeedRegistry4626SolanaPeer \\\n')
   process.stdout.write('  --rpc-url base --broadcast -vvvv\n\n')
   process.stdout.write(
     'Then configureTokenMesh on composer + setSolanaShareOftPeer(shareMeshPeerBytes32) on batcher.\n\n',

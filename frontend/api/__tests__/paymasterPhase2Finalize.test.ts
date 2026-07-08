@@ -22,7 +22,7 @@ const gaugeController = getAddress('0x8888888888888888888888888888888888888888')
 const ccaLaunchArm = getAddress('0x9999999999999999999999999999999999999999')
 const oracle = getAddress('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
 
-const creatorVaultBatcher = getAddress('0xB87CBb646dD14F520078F11196f79BF815F18c84')
+const deploymentBatcher = getAddress('0xB87CBb646dD14F520078F11196f79BF815F18c84')
 const vaultActivationBatcher = getAddress('0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB')
 const permit2 = getAddress('0x000000000022D473030F116dDEE9F6B43aC78BA3')
 const create2Deployer = getAddress('0x74183076C7D33346880A5bf0e263B761FB4d38BA')
@@ -173,9 +173,9 @@ function configureMockReadContract(overrides: ReadContractOverrides = {}): void 
     wrapperVault: vault,
     wrapperShareOFT: shareOFT,
     wrapperCreatorCoin: creatorToken,
-    wrapperOwner: creatorVaultBatcher as Address | null,
+    wrapperOwner: deploymentBatcher as Address | null,
     shareVault: vault,
-    shareOwner: creatorVaultBatcher as Address | null,
+    shareOwner: deploymentBatcher as Address | null,
     ...overrides,
   }
 
@@ -290,7 +290,7 @@ function buildFinalizePhase2CallData(params?: {
   return encodeFunctionData({
     abi: COINBASE_SMART_WALLET_EXECUTE_ABI,
     functionName: 'execute',
-    args: [creatorVaultBatcher, 0n, finalizeData],
+    args: [deploymentBatcher, 0n, finalizeData],
   })
 }
 
@@ -317,7 +317,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
 
     readRequestPrincipalMock.mockReturnValue(sessionAddress)
     getApiContractsMock.mockReturnValue({
-      creatorVaultBatcher,
+      deploymentBatcher,
       vaultActivationBatcher,
       permit2,
       universalCreate2DeployerFromStore: create2Deployer,
@@ -430,7 +430,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
     const callData = encodeFunctionData({
       abi: COINBASE_SMART_WALLET_ABI,
       functionName: 'execute',
-      args: [creatorVaultBatcher, 0n, finalizeData],
+      args: [deploymentBatcher, 0n, finalizeData],
     })
 
     const userOp = {
@@ -649,7 +649,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
     const callData = encodeFunctionData({
       abi: COINBASE_SMART_WALLET_ABI,
       functionName: 'execute',
-      args: [creatorVaultBatcher, 0n, finalizeData],
+      args: [deploymentBatcher, 0n, finalizeData],
     })
 
     const userOp = {
@@ -812,7 +812,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
     const callData = encodeFunctionData({
       abi: COINBASE_SMART_WALLET_ABI,
       functionName: 'execute',
-      args: [creatorVaultBatcher, 0n, phase3Data],
+      args: [deploymentBatcher, 0n, phase3Data],
     })
 
     const userOp = {
@@ -904,7 +904,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
     const callData = encodeFunctionData({
       abi: COINBASE_SMART_WALLET_ABI,
       functionName: 'execute',
-      args: [creatorVaultBatcher, 0n, launchData],
+      args: [deploymentBatcher, 0n, launchData],
     })
 
     const userOp = {
@@ -1101,7 +1101,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
       functionName: 'executeBatch',
       args: [
         [
-          { target: creatorVaultBatcher, value: 0n, data: phase3Data },
+          { target: deploymentBatcher, value: 0n, data: phase3Data },
           { target: vault, value: 0n, data: setMinimumIdleData },
           { target: vault, value: 0n, data: deployToStrategiesData },
         ],
@@ -1233,7 +1233,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
     const callData = encodeFunctionData({
       abi: COINBASE_SMART_WALLET_ABI,
       functionName: 'execute',
-      args: [creatorVaultBatcher, 0n, phase3Data],
+      args: [deploymentBatcher, 0n, phase3Data],
     })
 
     const userOp = {

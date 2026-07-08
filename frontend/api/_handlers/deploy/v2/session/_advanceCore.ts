@@ -360,7 +360,7 @@ const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
   { type: 'function', name: 'removeOwnerAtIndex', stateMutability: 'nonpayable', inputs: [{ name: 'index', type: 'uint256' }, { name: 'owner', type: 'bytes' }], outputs: [] },
 ] as const
 
-const CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI = [
+const DEPLOYMENT_BATCHER_SOLANA_VIEW_ABI = [
   {
     type: 'function',
     name: 'solanaBridgeAdapter',
@@ -413,7 +413,7 @@ const OWNABLE_OWNER_VIEW_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI = [
+const DEPLOYMENT_BATCHER_FINALIZE_PHASE2_ABI = [
   {
     type: 'function',
     name: 'finalizePhase2',
@@ -453,7 +453,7 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
+const DEPLOYMENT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
   {
     type: 'function',
     name: 'finalizePhase2',
@@ -483,7 +483,7 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_DEPLOY_PHASE3_STRATEGIES_ABI = [
+const DEPLOYMENT_BATCHER_DEPLOY_PHASE3_STRATEGIES_ABI = [
   {
     type: 'function',
     name: 'deployPhase3Strategies',
@@ -534,7 +534,7 @@ const CREATOR_VAULT_BATCHER_DEPLOY_PHASE3_STRATEGIES_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_LAUNCH_DEFERRED_AUCTION_ABI = [
+const DEPLOYMENT_BATCHER_LAUNCH_DEFERRED_AUCTION_ABI = [
   {
     type: 'function',
     name: 'launchDeferredAuction',
@@ -558,7 +558,7 @@ const CREATOR_VAULT_BATCHER_LAUNCH_DEFERRED_AUCTION_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_PHASE3_VIEW_ABI = [
+const DEPLOYMENT_BATCHER_PHASE3_VIEW_ABI = [
   {
     type: 'function',
     name: 'uniswapV3Factory',
@@ -755,7 +755,7 @@ const ERC20_BALANCE_OF_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_AUCTION_LAUNCHED_EVENT_ABI = [
+const DEPLOYMENT_BATCHER_AUCTION_LAUNCHED_EVENT_ABI = [
   {
     type: 'event',
     name: 'AuctionLaunchedDeferred',
@@ -901,7 +901,7 @@ function extractFinalizePhase2Info(data: Hex): {
   ccaLaunchArm: Address | null
   oracle: Address | null
 } | null {
-  for (const abi of [CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI, CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
+  for (const abi of [DEPLOYMENT_BATCHER_FINALIZE_PHASE2_ABI, DEPLOYMENT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
     try {
       const decoded = decodeFunctionData({ abi, data })
       const params = (decoded.args?.[0] ?? null) as {
@@ -1067,7 +1067,7 @@ function extractPhase3DeployInfo(calls: Array<{ to: Address; value: bigint; data
   for (const call of calls) {
     try {
       const decoded = decodeFunctionData({
-        abi: CREATOR_VAULT_BATCHER_DEPLOY_PHASE3_STRATEGIES_ABI,
+        abi: DEPLOYMENT_BATCHER_DEPLOY_PHASE3_STRATEGIES_ABI,
         data: call.data,
       })
       if (decoded.functionName !== 'deployPhase3Strategies') continue
@@ -1151,7 +1151,7 @@ function extractPhase4LaunchInfo(calls: Array<{ to: Address; value: bigint; data
   for (const call of calls) {
     try {
       const decoded = decodeFunctionData({
-        abi: CREATOR_VAULT_BATCHER_LAUNCH_DEFERRED_AUCTION_ABI,
+        abi: DEPLOYMENT_BATCHER_LAUNCH_DEFERRED_AUCTION_ABI,
         data: call.data,
       })
       if (decoded.functionName !== 'launchDeferredAuction') continue
@@ -1300,14 +1300,14 @@ async function verifyPhase3PostState(params: {
     params.publicClient
       .readContract({
         address: info.batcher,
-        abi: CREATOR_VAULT_BATCHER_PHASE3_VIEW_ABI,
+        abi: DEPLOYMENT_BATCHER_PHASE3_VIEW_ABI,
         functionName: 'uniswapV3Factory',
       })
       .catch(() => null),
     params.publicClient
       .readContract({
         address: info.batcher,
-        abi: CREATOR_VAULT_BATCHER_PHASE3_VIEW_ABI,
+        abi: DEPLOYMENT_BATCHER_PHASE3_VIEW_ABI,
         functionName: 'usdc',
       })
       .catch(() => null),
@@ -1563,7 +1563,7 @@ async function verifyPhase4PostState(params: {
       if (!logAddress || logAddress.toLowerCase() !== launch.batcher.toLowerCase()) continue
       try {
         const decoded = decodeEventLog({
-          abi: CREATOR_VAULT_BATCHER_AUCTION_LAUNCHED_EVENT_ABI,
+          abi: DEPLOYMENT_BATCHER_AUCTION_LAUNCHED_EVENT_ABI,
           data: (log as any).data,
           topics: (log as any).topics,
         })
@@ -1753,21 +1753,21 @@ async function ensureSolanaRouteReadyForPhase3(params: {
     params.publicClient
       .readContract({
         address: batcherAddress,
-        abi: CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI,
+        abi: DEPLOYMENT_BATCHER_SOLANA_VIEW_ABI,
         functionName: 'solanaBridgeAdapter',
       })
       .catch(() => ZERO_ADDRESS as Address),
     params.publicClient
       .readContract({
         address: batcherAddress,
-        abi: CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI,
+        abi: DEPLOYMENT_BATCHER_SOLANA_VIEW_ABI,
         functionName: 'solanaDestination',
       })
       .catch(() => ZERO_BYTES32 as Hex),
     params.publicClient
       .readContract({
         address: batcherAddress,
-        abi: CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI,
+        abi: DEPLOYMENT_BATCHER_SOLANA_VIEW_ABI,
         functionName: 'getOVaultRuntimeConfig',
       })
       .catch(() => null),

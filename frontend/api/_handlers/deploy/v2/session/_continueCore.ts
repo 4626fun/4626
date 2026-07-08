@@ -209,7 +209,7 @@ const OWNABLE_OWNER_VIEW_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI = [
+const DEPLOYMENT_BATCHER_FINALIZE_PHASE2_ABI = [
   {
     type: 'function',
     name: 'finalizePhase2',
@@ -249,7 +249,7 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
+const DEPLOYMENT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
   {
     type: 'function',
     name: 'finalizePhase2',
@@ -279,7 +279,7 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
   },
 ] as const
 
-const CREATOR_VAULT_BATCHER_OVAULT_RUNTIME_VIEW_ABI = [
+const DEPLOYMENT_BATCHER_OVAULT_RUNTIME_VIEW_ABI = [
   {
     type: 'function',
     name: 'getOVaultRuntimeConfig',
@@ -322,7 +322,7 @@ function extractFinalizePhase2Info(data: Hex): {
   ccaLaunchArm: Address | null
   oracle: Address | null
 } | null {
-  for (const abi of [CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI, CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
+  for (const abi of [DEPLOYMENT_BATCHER_FINALIZE_PHASE2_ABI, DEPLOYMENT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
     try {
       const decoded = decodeFunctionData({ abi, data })
       const params = (decoded.args?.[0] ?? null) as {
@@ -421,7 +421,7 @@ async function assertOvaultRuntimeReady(params: {
   const runtime = await params.publicClient
     .readContract({
       address: params.batcherAddress,
-      abi: CREATOR_VAULT_BATCHER_OVAULT_RUNTIME_VIEW_ABI,
+      abi: DEPLOYMENT_BATCHER_OVAULT_RUNTIME_VIEW_ABI,
       functionName: 'getOVaultRuntimeConfig',
     })
     .catch(() => null)

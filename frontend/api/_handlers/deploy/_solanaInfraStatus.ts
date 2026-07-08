@@ -37,7 +37,7 @@ const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
 const BASE_SOLANA_BRIDGE = '0x3eff766c76a1be2ce1acf2b69c78bcae257d5188' as Address
 
-const CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI = [
+const DEPLOYMENT_BATCHER_SOLANA_VIEW_ABI = [
   {
     type: 'function',
     name: 'solanaBridgeAdapter',
@@ -104,7 +104,7 @@ type DynamicProvisioningMode = 'disabled' | 'local-cli' | 'remote-provisioner' |
 
 type SolanaInfraStatusResponse = {
   admin: Address
-  creatorVaultBatcher: Address | null
+  deploymentBatcher: Address | null
   solanaEnabledOnBatcher: boolean
   batcherAdapter: Address | null
   batcherDestination: Hex | null
@@ -279,7 +279,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const contracts = getApiContracts()
-  const batcherRaw = contracts.creatorVaultBatcher
+  const batcherRaw = contracts.deploymentBatcher
   const batcherAddress = batcherRaw && isAddress(batcherRaw) ? getAddress(batcherRaw) : null
   const rpcUrl = (process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim()
   const publicClient = createPublicClient({
@@ -323,21 +323,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       publicClient
         .readContract({
           address: batcherAddress,
-          abi: CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI,
+          abi: DEPLOYMENT_BATCHER_SOLANA_VIEW_ABI,
           functionName: 'solanaBridgeAdapter',
         })
         .catch(() => ZERO_ADDRESS as Address),
       publicClient
         .readContract({
           address: batcherAddress,
-          abi: CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI,
+          abi: DEPLOYMENT_BATCHER_SOLANA_VIEW_ABI,
           functionName: 'solanaDestination',
         })
         .catch(() => ZERO_BYTES32 as Hex),
       publicClient
         .readContract({
           address: batcherAddress,
-          abi: CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI,
+          abi: DEPLOYMENT_BATCHER_SOLANA_VIEW_ABI,
           functionName: 'getOVaultRuntimeConfig',
         })
         .catch(() => null),
@@ -603,7 +603,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const data: SolanaInfraStatusResponse = {
     admin: admin && isAddress(admin) ? getAddress(admin as Address) : ZERO_ADDRESS,
-    creatorVaultBatcher: batcherAddress,
+    deploymentBatcher: batcherAddress,
     solanaEnabledOnBatcher,
     batcherAdapter,
     batcherDestination,

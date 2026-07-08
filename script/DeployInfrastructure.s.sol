@@ -322,11 +322,10 @@ contract DeployInfrastructure is Script {
         );
         console.log(unicode"│                                                                 │");
         console.log("   # Add to your .env file:");
-        console.log("   CREATOR_FACTORY=", address(vaultFactory), "   # legacy registrar");
-        console.log("   CREATOR_REGISTRY=", address(registry));
+        console.log("   REGISTRY_4626=", address(registry));
+        console.log("   OVAULT_FACTORY=", address(vaultFactory), "   # legacy registrar");
         console.log("   LOTTERY_MANAGER=", address(lotteryManager));
-        console.log("   CREATOR_LOTTERY_MANAGER=", address(lotteryManager));
-        console.log("   CREATOR_VRF_CONSUMER=", address(vrfConsumer));
+        console.log("   VRF_CONSUMER=", address(vrfConsumer));
         console.log("   VAULT_ACTIVATION_BATCHER=", address(vaultActivationBatcher));
         console.log("   SOLANA_BRIDGE_ADAPTER=", address(solanaBridgeAdapter));
         console.log(unicode"│                                                                 │");
@@ -375,12 +374,10 @@ contract DeployInfrastructure is Script {
         console.log("");
         console.log("Handoff env for downstream rollout:");
         console.log(string.concat("HANDOFF:REGISTRY=", vm.toString(address(registry))));
-        console.log(string.concat("HANDOFF:CREATOR_REGISTRY=", vm.toString(address(registry))));
-        console.log(string.concat("HANDOFF:CREATOR_FACTORY=", vm.toString(address(vaultFactory))));
+        console.log(string.concat("HANDOFF:REGISTRY_4626=", vm.toString(address(registry))));
+        console.log(string.concat("HANDOFF:OVAULT_FACTORY=", vm.toString(address(vaultFactory))));
         console.log(string.concat("HANDOFF:LOTTERY_MANAGER=", vm.toString(address(lotteryManager))));
-        console.log(string.concat("HANDOFF:CREATOR_LOTTERY_MANAGER=", vm.toString(address(lotteryManager))));
         console.log(string.concat("HANDOFF:VRF_CONSUMER=", vm.toString(address(vrfConsumer))));
-        console.log(string.concat("HANDOFF:CREATOR_VRF_CONSUMER=", vm.toString(address(vrfConsumer))));
         console.log(
             string.concat("HANDOFF:VAULT_ACTIVATION_BATCHER=", vm.toString(address(vaultActivationBatcher)))
         );
@@ -391,10 +388,10 @@ contract DeployInfrastructure is Script {
         string memory artifactKey = "baseSharedGlobal";
         vm.serializeString(artifactKey, "releaseTag", releaseTag);
         vm.serializeUint(artifactKey, "chainId", block.chainid);
-        vm.serializeAddress(artifactKey, "creatorRegistry", address(registry));
-        vm.serializeAddress(artifactKey, "creatorVaultFactory", address(vaultFactory));
-        vm.serializeAddress(artifactKey, "creatorLotteryManager", address(lotteryManager));
-        vm.serializeAddress(artifactKey, "creatorVrfConsumerV2_5", address(vrfConsumer));
+        vm.serializeAddress(artifactKey, "registry", address(registry));
+        vm.serializeAddress(artifactKey, "ovaultFactory", address(vaultFactory));
+        vm.serializeAddress(artifactKey, "lotteryManager", address(lotteryManager));
+        vm.serializeAddress(artifactKey, "vrfConsumer", address(vrfConsumer));
         vm.serializeAddress(artifactKey, "vaultActivationBatcher", address(vaultActivationBatcher));
         string memory json =
             vm.serializeAddress(artifactKey, "solanaBridgeAdapter", address(solanaBridgeAdapter));

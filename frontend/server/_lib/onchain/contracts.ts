@@ -12,7 +12,7 @@ declare const process: { env: Record<string, string | undefined> }
 // NOTE: Vercel Node functions run as ESM; include `.js` extension for cross-folder imports.
 import {
   BASE_DEFAULTS,
-  normalizeCreatorVaultBatcherAddress,
+  normalizeDeploymentBatcherAddress,
   type ContractAddress,
 } from '../../../src/config/contracts.defaults.js'
 
@@ -26,7 +26,7 @@ export type ApiContracts = {
   universalCreate2DeployerFromStore?: ContractAddress
   vaultAuxiliaryDeployBatcher?: ContractAddress
   vaultActivationBatcher: ContractAddress
-  creatorVaultBatcher?: ContractAddress
+  deploymentBatcher?: ContractAddress
   protocolTreasury: ContractAddress
   protocolAutomation?: ContractAddress
   vaultGaugeVoting?: ContractAddress
@@ -72,16 +72,16 @@ function pickAddressProdSafe(envKey: string, fallback?: string): ContractAddress
   return pickAddress(envKey, fallback)
 }
 
-function resolveCreatorVaultBatcherAddress(): ContractAddress | undefined {
+function resolveDeploymentBatcherAddress(): ContractAddress | undefined {
   const configured = pickAddressProdSafe(
-    'CREATOR_VAULT_BATCHER',
-    pickAddressProdSafe('CREATOR_VAULT_BATCHER_AUTO_HANDOFF') ?? BASE_DEFAULTS.creatorVaultBatcher,
+    'DEPLOYMENT_BATCHER',
+    pickAddressProdSafe('DEPLOYMENT_BATCHER_AUTO_HANDOFF') ?? BASE_DEFAULTS.deploymentBatcher,
   )
-  const normalized = normalizeCreatorVaultBatcherAddress(configured)
+  const normalized = normalizeDeploymentBatcherAddress(configured)
   if (normalized) return normalized as ContractAddress
   // If env is present but deprecated/invalid, hard-failing to `undefined` breaks
   // server/runtime parity and paymaster validation. Fall back to canonical default.
-  return normalizeCreatorVaultBatcherAddress(BASE_DEFAULTS.creatorVaultBatcher) as ContractAddress | undefined
+  return normalizeDeploymentBatcherAddress(BASE_DEFAULTS.deploymentBatcher) as ContractAddress | undefined
 }
 
 /**
@@ -91,7 +91,7 @@ function resolveCreatorVaultBatcherAddress(): ContractAddress | undefined {
  */
 export function getApiContracts(): ApiContracts {
   return {
-    registry: pickAddress('REGISTRY_4626', pickAddress('CREATOR_REGISTRY', BASE_DEFAULTS.registry)!),
+    registry: pickAddress('REGISTRY_4626', pickAddress('REGISTRY', BASE_DEFAULTS.registry)!),
     lotteryManager: pickAddress('LOTTERY_MANAGER', BASE_DEFAULTS.lotteryManager)!,
     payoutRouterFactory: pickAddress('PAYOUT_ROUTER_FACTORY', BASE_DEFAULTS.payoutRouterFactory)!,
     create2Factory: pickAddress('CREATE2_FACTORY', BASE_DEFAULTS.create2Factory)!,
@@ -106,7 +106,7 @@ export function getApiContracts(): ApiContracts {
       BASE_DEFAULTS.vaultAuxiliaryDeployBatcher,
     ),
     vaultActivationBatcher: pickAddressProdSafe('VAULT_ACTIVATION_BATCHER', BASE_DEFAULTS.vaultActivationBatcher)!,
-    creatorVaultBatcher: resolveCreatorVaultBatcherAddress(),
+    deploymentBatcher: resolveDeploymentBatcherAddress(),
     protocolTreasury: pickAddress('PROTOCOL_TREASURY', BASE_DEFAULTS.protocolTreasury)!,
     protocolAutomation: pickAddressProdSafe('PROTOCOL_AUTOMATION_SAFE', BASE_DEFAULTS.protocolAutomation),
     vaultGaugeVoting: pickAddressProdSafe('VAULT_GAUGE_VOTING'),

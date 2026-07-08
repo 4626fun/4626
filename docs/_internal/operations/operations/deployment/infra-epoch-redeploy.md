@@ -7,7 +7,7 @@ sidebar_position: 3
 
 Run this when contract/runtime behavior changed enough that patching in place is risky, and you want a clean infra epoch:
 
-- new `CreatorRegistry`
+- new `Registry4626`
 - new deterministic infra addresses (store, deployer-from-store, module contracts, `DeploymentBatcher`)
 - reseeded bytecode store entries for current creation bytecode
 - app/API cutover to new addresses
@@ -108,16 +108,16 @@ Record the release hash snapshot after regenerating deploy bytecode:
 Update environment/config to the new epoch addresses. For **v1.14.1**, canonical values are in [Contract addresses](/reference/addresses#environment-cutover-v1141).
 
 - server env:
-  - `CREATOR_REGISTRY`
-  - `CREATOR_FACTORY`
+  - `REGISTRY_4626`
+  - `OVAULT_FACTORY`
   - `VAULT_ACTIVATION_BATCHER`
   - `UNIVERSAL_BYTECODE_STORE` (chunked `UniversalBytecodeStoreV2`)
   - `UNIVERSAL_CREATE2_FROM_STORE`
   - `UNIVERSAL_CREATE2_DEPLOYER` (legacy alias; same value as `UNIVERSAL_CREATE2_FROM_STORE`)
-  - `CREATOR_VAULT_BATCHER`
-  - `CREATOR_VAULT_BATCHER_AUTO_HANDOFF`
   - `DEPLOYMENT_BATCHER`
-  - `CREATOR_LOTTERY_MANAGER`
+  - `DEPLOYMENT_BATCHER_AUTO_HANDOFF`
+  - `DEPLOYMENT_BATCHER`
+  - `LOTTERY_MANAGER`
   - `LOTTERY_MANAGER`
   - `SOLANA_BRIDGE_ADAPTER`
 - frontend env:
@@ -126,8 +126,8 @@ Update environment/config to the new epoch addresses. For **v1.14.1**, canonical
   - `VITE_VAULT_ACTIVATION_BATCHER`
   - `VITE_UNIVERSAL_BYTECODE_STORE`
   - `VITE_UNIVERSAL_CREATE2_DEPLOYER`
-  - `VITE_CREATOR_VAULT_BATCHER`
-  - `VITE_CREATOR_VAULT_BATCHER_AUTO_HANDOFF`
+  - `VITE_DEPLOYMENT_BATCHER`
+  - `VITE_DEPLOYMENT_BATCHER_AUTO_HANDOFF`
   - `VITE_LOTTERY_MANAGER`
   - `VITE_SOLANA_BRIDGE_ADAPTER`
 - bump deploy namespace:
