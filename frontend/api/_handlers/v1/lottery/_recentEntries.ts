@@ -12,9 +12,9 @@ import {
 
 import { getDb } from '../../../../server/_lib/db/postgres.js'
 import {
-  resolveRecentWinners,
-  resolveRecentWinnersBlockRange,
-} from '../../../../server/_lib/lottery/recentWinnersQuery.js'
+  resolveRecentEntries,
+  resolveRecentEntriesBlockRange,
+} from '../../../../server/_lib/lottery/recentEntriesQuery.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -65,11 +65,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
   }
 
-  const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/lottery/recentWinners', kind: 'logs' })
+  const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/lottery/recentEntries', kind: 'logs' })
   if (!g.ok) return
 
   const limiter = checkRateLimit(
-    rateLimitKey('v1-lottery-recent-winners', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
+    rateLimitKey('v1-lottery-recent-entries', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
     RATE_LIMITS.lotteryRead,
   )
   if (!limiter.allowed) {
@@ -93,9 +93,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { fromBlock, toBlock } = await resolveRecentWinnersBlockRange(fromBlockQ, toBlockQ)
+    const { fromBlock, toBlock } = await resolveRecentEntriesBlockRange(fromBlockQ, toBlockQ)
     const db = await getDb()
-    const { events, dataSource } = await resolveRecentWinners(db, {
+    const { events, dataSource } = await resolveRecentEntries(db, {
       lotteryManager: String(lotteryManager).toLowerCase(),
       creatorCoin: creatorCoin ? creatorCoin.toLowerCase() : null,
       fromBlock,
@@ -119,6 +119,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     })
   } catch (e: any) {
-    return res.status(500).json({ success: false, error: e?.message || 'Failed to read winner logs' })
+    return res.status(500).json({ success: false, error: e?.message || 'Failed to read entry logs' })
   }
 }

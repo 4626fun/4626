@@ -13,6 +13,7 @@ const v1RouteLoaders: ApiRouteLoaders = {
   'lottery/global': () => import('./v1/lottery/_global.js'),
   'lottery/creator': () => import('./v1/lottery/_creator.js'),
   'lottery/recentWinners': () => import('./v1/lottery/_recentWinners.js'),
+  'lottery/recentEntries': () => import('./v1/lottery/_recentEntries.js'),
   'lottery/amoe/nonce': () => import('./v1/lottery/_amoeNonce.js'),
   'lottery/amoe/credits': () => import('./v1/lottery/_amoeCredits.js'),
   'lottery/amoe/submit': () => import('./v1/lottery/_amoeSubmit.js'),

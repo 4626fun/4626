@@ -165,4 +165,4 @@ python3 scripts/probe-shovel-rpc.py --json
 
 - `indexer/README.md` — Zora CSW indexer (same Postgres pattern)
 - `docs/reference/addresses.md` — canonical contract addresses
-- `frontend/api/_handlers/v1/lottery/_recentWinners.ts` — today scans logs live; migrate to `protocol_lottery_winners` when backfill is caught up
+- `frontend/api/_handlers/v1/lottery/_recentWinners.ts` — today scans logs live; reads `protocol_lottery_winners` / `protocol_lottery_multi_jackpot` when Shovel index covers the window (RPC fallback for pre-greenfield lookback)

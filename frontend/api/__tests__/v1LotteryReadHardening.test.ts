@@ -43,6 +43,7 @@ describe('v1 lottery read hardening', () => {
     await expect(getV1ApiHandler('lottery/global')).resolves.toBeTypeOf('function')
     await expect(getV1ApiHandler('lottery/creator')).resolves.toBeTypeOf('function')
     await expect(getV1ApiHandler('lottery/recentWinners')).resolves.toBeTypeOf('function')
+    await expect(getV1ApiHandler('lottery/recentEntries')).resolves.toBeTypeOf('function')
     await expect(getV1ApiHandler(`lottery/creator/${CREATOR_COIN}`)).resolves.toBeTypeOf('function')
   })
 
@@ -73,6 +74,15 @@ describe('v1 lottery read hardening', () => {
     expect(winnersRes.statusCode).toBe(429)
     expect(winnersRes.body?.error).toBe('Too many requests')
     expect(Number(winnersRes.getHeader('retry-after'))).toBeGreaterThan(0)
+
+    mocks.checkRateLimit.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+    const entriesMod = await import('../_handlers/v1/lottery/_recentEntries.ts')
+    const entriesReq = createMockReq({ method: 'GET', query: {} })
+    const entriesRes = createMockRes()
+    await entriesMod.default(entriesReq, entriesRes)
+    expect(entriesRes.statusCode).toBe(429)
+    expect(entriesRes.body?.error).toBe('Too many requests')
+    expect(Number(entriesRes.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('converts jackpot creator assets to USD at 1e6 display scale', async () => {

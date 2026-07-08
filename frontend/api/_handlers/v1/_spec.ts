@@ -76,6 +76,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       '/v1/lottery/global': { get: { summary: 'Global lottery stats', responses: { '200': { description: 'OK' } } } },
       '/v1/lottery/creator/{creatorCoin}': { get: { summary: 'Creator lottery stats', parameters: [{ name: 'creatorCoin', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'OK' } } } },
       '/v1/lottery/recentWinners': { get: { summary: 'Recent lottery winners (logs)', responses: { '200': { description: 'OK' } } } },
+      '/v1/lottery/recentEntries': {
+        get: {
+          summary: 'Recent lottery swap entries (logs)',
+          description: 'Each event includes entrySource: amoe | swap | unknown.',
+          responses: { '200': { description: 'OK' } },
+        },
+      },
       '/v1/lottery/amoe/nonce': { get: { summary: 'Issue AMOE nonce + signable challenge', responses: { '200': { description: 'OK' } } } },
       '/v1/lottery/amoe/credits': { get: { summary: 'Read AMOE credit balance for a wallet', responses: { '200': { description: 'OK' } } } },
       '/v1/lottery/amoe/submit': { post: { summary: 'Verify AMOE challenge signature and return attested onchain payload', responses: { '200': { description: 'OK' } } } },
