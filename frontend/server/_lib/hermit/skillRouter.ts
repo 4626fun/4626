@@ -45,17 +45,23 @@ import { buildAlfaClubBriefContext } from '../alfaclub/dailyBrief.js'
 import {
   buildHyperliquidEntrySignalReport,
   buildHyperliquidPositionReport,
+  formatCompactArenaHlSummary,
   formatPositionAlertStatusBlock,
+  formatRoom1659WalletLanesSection,
 } from '../alfaclub/positionReport.js'
 import { buildRoomTimelineData, type RoomTimelineChatEvent } from '../alfaclub/roomTimeline.js'
 import {
-  disableHyperliquidPositionAlert,
+  disableHermitPositionAlert,
+  enableDefaultHermitPositionAlert,
+  readHermitPositionAlert,
+  resolveMonitoredHlWalletsForAlert,
+  resolveRoom1659MonitoredHlWallets,
+  upsertHermitPositionAlert,
+} from '../alfaclub/hermitAlertWallets.js'
+import {
   describeHyperliquidAlertDefaults,
-  enableDefaultHyperliquidPositionAlert,
   parseHermitAlertCommandArgs,
-  readHyperliquidPositionAlert,
   resolveTelegramChatIdForWallet,
-  upsertHyperliquidPositionAlert,
 } from '../alfaclub/positionAlertStore.js'
 import { arenaCommandAllowedForRoom, readArenaConfig } from '../arena/arenaConfig.js'
 import { formatArenaPositionIntelReply } from '../arena/arenaPositionIntelFormat.js'
@@ -1846,7 +1852,7 @@ async function handleHermitAlertSubcommand(
     }
 
     if (parsed.action === 'off') {
-      await disableHyperliquidPositionAlert(sender)
+      await disableHermitPositionAlert(sender, params.roomId)
       return {
         kind: 'hermit',
         provider: 'local',
@@ -1894,20 +1900,36 @@ async function handleHermitAlertSubcommand(
     }
 
     if (parsed.action === 'status') {
-      const alert = await readHyperliquidPositionAlert(sender)
+      const alert = await readHermitPositionAlert(sender, params.roomId)
       const telegramLinked = await resolveTelegramChatIdForWallet(sender)
-      const lines = ['🔔 **Hyperliquid alert settings**', '', ...formatPositionAlertStatusBlock(alert)]
-      if (telegramLinked) {
-        lines.push(`• Linked Telegram: **yes**`)
-      } else {
-        lines.push('• Linked Telegram: **no** — link your wallet in the 4626 Telegram Mini App first')
+      const monitoredWallets =
+        params.roomId === '1659' && alert
+          ? await resolveMonitoredHlWalletsForAlert(alert)
+          : params.roomId === '1659'
+            ? await resolveRoom1659MonitoredHlWallets()
+            : undefined
+      const lines = [
+        '🔔 **Hyperliquid alert settings**',
+        '',
+        ...formatPositionAlertStatusBlock(alert, {
+          roomId: params.roomId ?? null,
+          telegramLinked: Boolean(telegramLinked),
+          monitoredWallets,
+          operatorWallet: sender,
+        }),
+      ]
+      if (params.roomId === '1659') {
+        lines.push(
+          '',
+          'Room 1659 alerts monitor **room HL portfolio + Virtual Arena wallet**; Telegram DMs go to your linked account.',
+        )
       }
       return { kind: 'hermit', provider: 'local', reply: lines.join('\n') }
     }
 
     if (parsed.action === 'default') {
       const telegramLinked = await resolveTelegramChatIdForWallet(sender)
-      const saved = await enableDefaultHyperliquidPositionAlert(sender, {
+      const saved = await enableDefaultHermitPositionAlert(sender, params.roomId, {
         telegramEnabled: telegramLinked ? true : false,
       })
       if (!saved) {
@@ -1917,17 +1939,24 @@ async function handleHermitAlertSubcommand(
           reply: 'Could not save alert settings right now. Try again in a moment.',
         }
       }
+      const monitoredWallets = await resolveMonitoredHlWalletsForAlert(saved)
       const lines = [
         '✅ **Hyperliquid alerts on** (defaults)',
         '',
         ...describeHyperliquidAlertDefaults(),
       ]
+      if (params.roomId === '1659') {
+        lines.push(
+          '',
+          `Monitoring **room HL portfolio + Virtual Arena wallet** (${monitoredWallets.map((w) => w.label).join(' · ')}).`,
+        )
+      }
       if (telegramLinked) {
-        lines.push('', 'Telegram DMs **enabled** for this wallet.')
+        lines.push('', 'Telegram DMs **enabled** for your linked account.')
       } else {
         lines.push(
           '',
-          'Telegram not linked yet — link via 4626 Telegram Mini App, then run `/hermit alert` again.',
+          'Telegram not linked yet — link via **4626 Telegram Mini App**, then run `/hermit alert` again.',
         )
       }
       lines.push('', 'Live snapshot: `/position` · disable: `/hermit alert off`')
@@ -1950,8 +1979,9 @@ async function handleHermitAlertSubcommand(
               'No linked Telegram for this wallet. Link via 4626 Telegram, then retry `/hermit alert telegram on`.',
           }
         }
-        await upsertHyperliquidPositionAlert({
+        await upsertHermitPositionAlert({
           senderAddress: sender,
+          roomId: params.roomId,
           enabled: true,
           telegramEnabled: true,
         })
@@ -1961,8 +1991,9 @@ async function handleHermitAlertSubcommand(
           reply: `Telegram DMs **on** for Hyperliquid alerts. Set thresholds with \`/hermit alert liq 10\` and/or \`/hermit alert target 5000\`.`,
         }
       }
-      await upsertHyperliquidPositionAlert({
+      await upsertHermitPositionAlert({
         senderAddress: sender,
+        roomId: params.roomId,
         telegramEnabled: false,
       })
       return {
@@ -1976,8 +2007,9 @@ async function handleHermitAlertSubcommand(
     const autoTelegram = Boolean(telegramLinked)
 
     if (parsed.action === 'liq') {
-      const saved = await upsertHyperliquidPositionAlert({
+      const saved = await upsertHermitPositionAlert({
         senderAddress: sender,
+        roomId: params.roomId,
         enabled: true,
         liquidationWarnPct: parsed.pct,
         ...(autoTelegram ? { telegramEnabled: true } : {}),
@@ -1993,18 +2025,24 @@ async function handleHermitAlertSubcommand(
         kind: 'hermit',
         provider: 'local',
         reply: [
-          `Hyperliquid liquidation alert **on** — Telegram when **any open leg** is within **${parsed.pct}%** of liquidation.`,
+          `Hyperliquid liquidation alert **on** — Telegram when mark→liq distance ≤ **${parsed.pct}%** on any open leg.`,
+          params.roomId === '1659'
+            ? 'Monitoring room HL portfolio + Virtual Arena wallet.'
+            : null,
           autoTelegram
             ? 'Telegram DMs enabled (wallet linked).'
             : 'Link Telegram to 4626 to receive DMs, or run `/hermit alert telegram on` after linking.',
           'Check live levels with `/position`.',
-        ].join('\n'),
+        ]
+          .filter(Boolean)
+          .join('\n'),
       }
     }
 
     if (parsed.action === 'target') {
-      const saved = await upsertHyperliquidPositionAlert({
+      const saved = await upsertHermitPositionAlert({
         senderAddress: sender,
+        roomId: params.roomId,
         enabled: true,
         targetPnlUsd: parsed.usd,
         ...(autoTelegram ? { telegramEnabled: true } : {}),
@@ -2021,17 +2059,23 @@ async function handleHermitAlertSubcommand(
         provider: 'local',
         reply: [
           `Hyperliquid target alert **on** — combined unrealized PnL **+$${parsed.usd.toLocaleString('en-US')}**.`,
+          params.roomId === '1659'
+            ? 'Progress sums room HL portfolio + Virtual Arena wallet.'
+            : null,
           'Default fire at 90% of target; override with `/hermit alert progress 80`.',
           autoTelegram
             ? 'Telegram DMs enabled (wallet linked).'
             : 'Link Telegram to 4626 to receive DMs.',
-        ].join('\n'),
+        ]
+          .filter(Boolean)
+          .join('\n'),
       }
     }
 
     if (parsed.action === 'progress') {
-      const saved = await upsertHyperliquidPositionAlert({
+      const saved = await upsertHermitPositionAlert({
         senderAddress: sender,
+        roomId: params.roomId,
         enabled: true,
         targetProgressPct: parsed.pct,
       })
@@ -2069,18 +2113,40 @@ async function handleHermitAlertSubcommand(
 }
 
 async function buildPositionCommandReply(params: HermitExecutionParams): Promise<string> {
-  // Room 1659 tracks a dedicated room-level Hyperliquid portfolio rather than
-  // the sender's personal wallet. Keep alert config per-sender, but pull HL
-  // positions for the room portfolio so /position matches the room context.
   const hlWallet =
     params.roomId === '1659'
       ? resolveRoom1659HyperliquidUserForSnapshot(params.senderAddress)
       : params.senderAddress
   const hlState = await getClearinghouseState(hlWallet)
-  const alert = await readHyperliquidPositionAlert(params.senderAddress)
+  const alert = await readHermitPositionAlert(params.senderAddress, params.roomId)
+  const telegramLinked = Boolean(await resolveTelegramChatIdForWallet(params.senderAddress))
   const room1659Market =
     params.roomId === '1659' ? await resolveRoom1659MarketContext(params.senderAddress) : null
   const marketBrief = await buildMarketScopeSummary()
+
+  let walletLanesSection: string[] | null = null
+  let arenaWalletSummary: string[] | null = null
+  let monitoredWallets: Awaited<ReturnType<typeof resolveMonitoredHlWalletsForAlert>> | undefined
+
+  if (params.roomId === '1659') {
+    monitoredWallets = alert
+      ? await resolveMonitoredHlWalletsForAlert(alert)
+      : await resolveRoom1659MonitoredHlWallets()
+    const arenaWallet = monitoredWallets.find((wallet) => wallet.label === 'Virtual Arena execution')
+    walletLanesSection = formatRoom1659WalletLanesSection({
+      roomHlAddress: hlWallet,
+      arenaAddress: arenaWallet?.address ?? null,
+      operatorWallet: params.senderAddress,
+    })
+    if (arenaWallet && arenaWallet.address !== hlWallet) {
+      const arenaHlState = await getClearinghouseState(arenaWallet.address)
+      arenaWalletSummary = formatCompactArenaHlSummary({
+        arenaAddress: arenaWallet.address,
+        hlState: arenaHlState,
+      })
+    }
+  }
+
   return buildHyperliquidPositionReport({
     walletAddress: hlWallet,
     hlState,
@@ -2088,6 +2154,14 @@ async function buildPositionCommandReply(params: HermitExecutionParams): Promise
     roomId: params.roomId ?? null,
     room1659Market,
     marketBrief,
+    alertStatusOptions: {
+      roomId: params.roomId ?? null,
+      telegramLinked,
+      monitoredWallets,
+      operatorWallet: params.senderAddress,
+    },
+    walletLanesSection,
+    arenaWalletSummary,
   })
 }
 

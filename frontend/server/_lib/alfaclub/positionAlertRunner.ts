@@ -8,6 +8,11 @@ import {
   type PositionAlertConfig,
 } from './positionAlertStore.js'
 import {
+  isSupportedAlertScope,
+  resolveMonitoredHlWalletsForAlert,
+  ROOM_1659_ALERT_SCOPE,
+} from './hermitAlertWallets.js'
+import {
   formatHyperliquidLiqAlertMessage,
   formatHyperliquidTargetAlertMessage,
   sumHyperliquidUnrealizedPnl,
@@ -84,42 +89,21 @@ async function sendTelegramDm(params: { chatId: string; text: string; botToken: 
   }
 }
 
-async function evaluateAlert(params: {
-  alert: PositionAlertConfig
-  botToken: string | null
-  cooldownMs: number
-  nowMs: number
-}): Promise<{ liqSent: boolean; targetSent: boolean; skippedCooldown: number; skippedNoTelegram: number; errors: number }> {
-  let liqSent = false
-  let targetSent = false
-  let skippedCooldown = 0
-  let skippedNoTelegram = 0
-  let errors = 0
+type AtRiskLeg = {
+  walletLabel: string
+  coin: string
+  side: string
+  liqDistPct: number
+}
 
-  if (params.alert.roomId !== HL_POSITION_ALERT_SCOPE) {
-    return { liqSent, targetSent, skippedCooldown, skippedNoTelegram, errors }
-  }
-
-  if (!params.alert.telegramEnabled) {
-    return { liqSent, targetSent, skippedCooldown, skippedNoTelegram: 1, errors }
-  }
-  if (!params.botToken) {
-    return { liqSent, targetSent, skippedCooldown, skippedNoTelegram: 1, errors: 1 }
-  }
-
-  const chatId = await resolveTelegramChatIdForWallet(params.alert.senderAddress)
-  if (!chatId) {
-    return { liqSent, targetSent, skippedCooldown, skippedNoTelegram: 1, errors }
-  }
-
-  const hl = await getClearinghouseState(params.alert.senderAddress)
-  const legs = hl?.assetPositions ?? []
-
-  if (
-    params.alert.liquidationWarnPct != null &&
-    !withinCooldown(params.alert.lastLiqAlertAt, params.cooldownMs, params.nowMs)
-  ) {
-    const atRisk: Array<{ coin: string; side: string; liqDistPct: number }> = []
+async function collectAtRiskLegs(params: {
+  monitoredWallets: Awaited<ReturnType<typeof resolveMonitoredHlWalletsForAlert>>
+  liquidationWarnPct: number
+}): Promise<AtRiskLeg[]> {
+  const atRisk: AtRiskLeg[] = []
+  for (const wallet of params.monitoredWallets) {
+    const hl = await getClearinghouseState(wallet.address)
+    const legs = hl?.assetPositions ?? []
     for (const pos of legs) {
       if (
         !pos.side ||
@@ -142,16 +126,84 @@ async function evaluateAlert(params: {
         liquidationPrice: pos.liquidationPx,
         side: pos.side,
       })
-      if (liqDist != null && liqDist <= params.alert.liquidationWarnPct) {
-        atRisk.push({ coin: pos.coin ?? 'HL', side: pos.side, liqDistPct: liqDist })
+      if (liqDist != null && liqDist <= params.liquidationWarnPct) {
+        atRisk.push({
+          walletLabel: wallet.label,
+          coin: pos.coin ?? 'HL',
+          side: pos.side,
+          liqDistPct: liqDist,
+        })
       }
     }
+  }
+  return atRisk
+}
+
+async function sumMonitoredUnrealizedPnl(
+  monitoredWallets: Awaited<ReturnType<typeof resolveMonitoredHlWalletsForAlert>>,
+): Promise<number | null> {
+  let total = 0
+  let any = false
+  for (const wallet of monitoredWallets) {
+    const hl = await getClearinghouseState(wallet.address)
+    const pnl = sumHyperliquidUnrealizedPnl(hl)
+    if (pnl != null) {
+      total += pnl
+      any = true
+    }
+  }
+  return any ? total : null
+}
+
+async function evaluateAlert(params: {
+  alert: PositionAlertConfig
+  botToken: string | null
+  cooldownMs: number
+  nowMs: number
+}): Promise<{ liqSent: boolean; targetSent: boolean; skippedCooldown: number; skippedNoTelegram: number; errors: number }> {
+  let liqSent = false
+  let targetSent = false
+  let skippedCooldown = 0
+  let skippedNoTelegram = 0
+  let errors = 0
+
+  if (!isSupportedAlertScope(params.alert.roomId)) {
+    return { liqSent, targetSent, skippedCooldown, skippedNoTelegram, errors }
+  }
+
+  if (!params.alert.telegramEnabled) {
+    return { liqSent, targetSent, skippedCooldown, skippedNoTelegram: 1, errors }
+  }
+  if (!params.botToken) {
+    return { liqSent, targetSent, skippedCooldown, skippedNoTelegram: 1, errors: 1 }
+  }
+
+  const chatId = await resolveTelegramChatIdForWallet(params.alert.senderAddress)
+  if (!chatId) {
+    return { liqSent, targetSent, skippedCooldown, skippedNoTelegram: 1, errors }
+  }
+
+  const monitoredWallets = await resolveMonitoredHlWalletsForAlert(params.alert)
+
+  if (
+    params.alert.liquidationWarnPct != null &&
+    !withinCooldown(params.alert.lastLiqAlertAt, params.cooldownMs, params.nowMs)
+  ) {
+    const atRisk = await collectAtRiskLegs({
+      monitoredWallets,
+      liquidationWarnPct: params.alert.liquidationWarnPct,
+    })
 
     if (atRisk.length > 0) {
       const text = formatHyperliquidLiqAlertMessage({
         walletAddress: params.alert.senderAddress,
         warnPct: params.alert.liquidationWarnPct,
-        legs: atRisk,
+        legs: atRisk.map((leg) => ({
+          coin: leg.coin,
+          side: leg.side,
+          liqDistPct: leg.liqDistPct,
+          walletLabel: leg.walletLabel,
+        })),
       })
       const ok = await sendTelegramDm({ chatId, text, botToken: params.botToken })
       if (ok) {
@@ -173,7 +225,7 @@ async function evaluateAlert(params: {
     params.alert.targetPnlUsd != null &&
     !withinCooldown(params.alert.lastTargetAlertAt, params.cooldownMs, params.nowMs)
   ) {
-    const totalPnl = sumHyperliquidUnrealizedPnl(hl)
+    const totalPnl = await sumMonitoredUnrealizedPnl(monitoredWallets)
     if (totalPnl != null) {
       const progress = computeTargetProgressPct(totalPnl, params.alert.targetPnlUsd)
       if (progress != null && progress >= params.alert.targetProgressPct) {
@@ -182,6 +234,7 @@ async function evaluateAlert(params: {
           targetPnlUsd: params.alert.targetPnlUsd,
           progressPct: progress,
           currentPnlUsd: totalPnl,
+          monitoredWalletLabels: monitoredWallets.map((wallet) => wallet.label),
         })
         const ok = await sendTelegramDm({ chatId, text, botToken: params.botToken })
         if (ok) {
@@ -220,8 +273,8 @@ export async function runPositionAlerts(): Promise<PositionAlertRunResult> {
 
   const bridgeFlags = readAlfaClubChatBridgeFlags()
   const botToken = bridgeFlags.botToken
-  const alerts = (await listEnabledPositionAlerts()).filter(
-    (row) => row.roomId === HL_POSITION_ALERT_SCOPE,
+  const alerts = (await listEnabledPositionAlerts()).filter((row) =>
+    row.roomId === HL_POSITION_ALERT_SCOPE || row.roomId === ROOM_1659_ALERT_SCOPE,
   )
   const nowMs = Date.now()
 
@@ -248,6 +301,7 @@ export async function runPositionAlerts(): Promise<PositionAlertRunResult> {
       errors += 1
       logger.warn('position_alert.evaluate_failed', {
         sender: alert.senderAddress,
+        roomId: alert.roomId,
         message: error instanceof Error ? error.message : String(error),
       })
     }

@@ -332,8 +332,12 @@ export function readHyperliquidAlertDefaults(): HyperliquidAlertDefaults {
   return { liquidationWarnPct: liq, targetPnlUsd, targetProgressPct }
 }
 
+export function formatLiquidationThresholdLine(warnPct: number): string {
+  return `• Liquidation: alert when mark→liq distance ≤ **${warnPct}%** on any open leg _(distance from estimated mark price to liquidation price — not position size or margin)_`
+}
+
 export function describeHyperliquidAlertDefaults(defaults = readHyperliquidAlertDefaults()): string[] {
-  const lines = [`• Liquidation: within **${defaults.liquidationWarnPct}%** on any HL leg`]
+  const lines = [formatLiquidationThresholdLine(defaults.liquidationWarnPct)]
   if (defaults.targetPnlUsd != null) {
     lines.push(
       `• Target PnL: **+$${defaults.targetPnlUsd.toLocaleString('en-US')}** combined (fire at **${defaults.targetProgressPct}%**)`,
@@ -379,7 +383,7 @@ export function parseHermitAlertCommandArgs(args: string): ParsedAlertCommand {
       return {
         action: 'invalid',
         reason:
-          'Usage: `/hermit alert liq <percent>` — e.g. `10` warns within 10% of liquidation on any HL leg.',
+          'Usage: `/hermit alert liq <percent>` — e.g. `10` alerts when mark→liq distance ≤ 10% on any open HL leg.',
       }
     }
     return { action: 'liq', pct }

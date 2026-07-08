@@ -1,5 +1,8 @@
 import type { HyperliquidClearinghouseState } from './hyperliquid.js'
 import type { PositionAlertConfig } from './positionAlertStore.js'
+import { formatLiquidationThresholdLine } from './positionAlertStore.js'
+import type { MonitoredHlWallet } from './hermitAlertWallets.js'
+import { formatWalletShort } from './hermitAlertWallets.js'
 import {
   computeLiquidationProximityPct,
   computeTargetProgressPct,
@@ -60,25 +63,58 @@ export function sumHyperliquidUnrealizedPnl(
   return any ? sum : null
 }
 
-export function formatPositionAlertStatusBlock(alert: PositionAlertConfig | null): string[] {
+export type PositionAlertStatusOptions = {
+  telegramLinked?: boolean | null
+  monitoredWallets?: MonitoredHlWallet[]
+  roomId?: string | null
+  operatorWallet?: string | null
+}
+
+export function formatPositionAlertStatusBlock(
+  alert: PositionAlertConfig | null,
+  options?: PositionAlertStatusOptions,
+): string[] {
   if (!alert || !alert.enabled) {
-    return [
+    const lines = [
       '**Hyperliquid alerts** — off',
       '• **`/hermit alert`** — turn on defaults (liq + target, Telegram if linked)',
       '• `/hermit alert off` · `/hermit alert status`',
     ]
+    if (options?.roomId === '1659') {
+      lines.push(
+        '• Room 1659 monitors **room HL portfolio + Virtual Arena wallet** — link Telegram in the 4626 Mini App, then `/hermit alert` · `/hermit alert test`',
+      )
+    }
+    return lines
   }
 
   const lines = ['**Hyperliquid alerts** — on']
   if (alert.liquidationWarnPct != null) {
-    lines.push(`• Liquidation: within **${alert.liquidationWarnPct}%** on any open HL leg`)
+    lines.push(formatLiquidationThresholdLine(alert.liquidationWarnPct))
   }
   if (alert.targetPnlUsd != null) {
     lines.push(
       `• Target PnL: **+$${alert.targetPnlUsd.toLocaleString('en-US')}** combined unrealized (fire at **${alert.targetProgressPct}%**)`,
     )
   }
+  if (options?.monitoredWallets && options.monitoredWallets.length > 0) {
+    lines.push(
+      `• Monitored wallets: ${options.monitoredWallets
+        .map((wallet) => `**${wallet.label}** (${formatWalletShort(wallet.address)})`)
+        .join(' · ')}`,
+    )
+  }
   lines.push(`• Telegram DM: **${alert.telegramEnabled ? 'on' : 'off'}**`)
+  if (options?.telegramLinked === true) {
+    lines.push('• Linked Telegram: **yes**')
+  } else if (options?.telegramLinked === false) {
+    lines.push(
+      '• Linked Telegram: **no** — link in the **4626 Telegram Mini App**, then `/hermit alert` · `/hermit alert test`',
+    )
+  }
+  if (options?.operatorWallet && options.roomId === '1659') {
+    lines.push(`• Operator wallet (subscription): **${formatWalletShort(options.operatorWallet)}**`)
+  }
   lines.push('• `/hermit alert off` · `/hermit alert status`')
   return lines
 }
@@ -444,18 +480,38 @@ export function buildHyperliquidPositionReport(params: {
   roomId?: string | null
   room1659Market?: Room1659MarketSummary | null
   marketBrief?: MarketScopeSummary | null
+  alertStatusOptions?: PositionAlertStatusOptions
+  walletLanesSection?: string[] | null
+  arenaWalletSummary?: string[] | null
 }): string {
-  const { walletAddress, hlState, alert, roomId, room1659Market, marketBrief } = params
+  const {
+    walletAddress,
+    hlState,
+    alert,
+    roomId,
+    room1659Market,
+    marketBrief,
+    alertStatusOptions,
+    walletLanesSection,
+    arenaWalletSummary,
+  } = params
   const conviction = computeConvictionProfile({
     state: hlState,
     room1659Market,
   })
-  const lines: string[] = [
+  const lines: string[] = []
+  if (walletLanesSection && walletLanesSection.length > 0) {
+    lines.push(...walletLanesSection, '')
+  }
+  lines.push(
     '📊 **Hyperliquid snapshot**',
     `_Wallet ${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}_`,
     '',
     ...formatHlPositionsSection(hlState, walletAddress),
-  ]
+  )
+  if (arenaWalletSummary && arenaWalletSummary.length > 0) {
+    lines.push('', ...arenaWalletSummary)
+  }
 
   const totalPnl = sumHyperliquidUnrealizedPnl(hlState)
   if (totalPnl != null && alert?.targetPnlUsd != null) {
@@ -467,7 +523,7 @@ export function buildHyperliquidPositionReport(params: {
   }
 
   lines.push('')
-  lines.push(...formatPositionAlertStatusBlock(alert ?? null))
+  lines.push(...formatPositionAlertStatusBlock(alert ?? null, alertStatusOptions))
   lines.push('', ...formatMarketReadSection(hlState, conviction))
 
   if (roomId === '1659' && room1659Market && room1659Market.ok === false) {
@@ -616,16 +672,17 @@ export function buildHyperliquidEntrySignalReport(params: {
 export function formatHyperliquidLiqAlertMessage(params: {
   walletAddress: string
   warnPct: number
-  legs: Array<{ coin: string; side: string; liqDistPct: number }>
+  legs: Array<{ coin: string; side: string; liqDistPct: number; walletLabel?: string }>
 }): string {
   const wallet = `${params.walletAddress.slice(0, 6)}…${params.walletAddress.slice(-4)}`
-  const legLines = params.legs.map(
-    (leg) => `• ${leg.side.toUpperCase()} **${leg.coin}** — **${formatPct(leg.liqDistPct)}** to liq`,
-  )
+  const legLines = params.legs.map((leg) => {
+    const prefix = leg.walletLabel ? `[${leg.walletLabel}] ` : ''
+    return `• ${prefix}${leg.side.toUpperCase()} **${leg.coin}** — **${formatPct(leg.liqDistPct)}** to liq`
+  })
   return [
     '⚠️ **Hyperliquid liquidation alert**',
     wallet,
-    `Threshold: within **${params.warnPct}%** of liquidation`,
+    `Threshold: mark→liq distance ≤ **${params.warnPct}%** _(percent of mark price, not position size)_`,
     '',
     ...legLines,
     '',
@@ -638,13 +695,87 @@ export function formatHyperliquidTargetAlertMessage(params: {
   targetPnlUsd: number
   progressPct: number
   currentPnlUsd: number
+  monitoredWalletLabels?: string[]
 }): string {
   const wallet = `${params.walletAddress.slice(0, 6)}…${params.walletAddress.slice(-4)}`
   const pnlLabel = `${params.currentPnlUsd >= 0 ? '+' : ''}$${Number(params.currentPnlUsd).toFixed(0)}`
+  const scopeLine =
+    params.monitoredWalletLabels && params.monitoredWalletLabels.length > 0
+      ? `Monitored: ${params.monitoredWalletLabels.join(' + ')}`
+      : null
   return [
     '🎯 **Hyperliquid target PnL alert**',
     wallet,
+    ...(scopeLine ? [scopeLine] : []),
     `Combined unrealized PnL **${pnlLabel}** — **${formatPct(params.progressPct)}** of +$${params.targetPnlUsd.toLocaleString('en-US')} target.`,
     'Consider taking profit or tightening risk — not financial advice.',
   ].join('\n')
+}
+
+export function formatRoom1659WalletLanesSection(params: {
+  roomHlAddress: string
+  arenaAddress: string | null
+  operatorWallet: string
+}): string[] {
+  const lines = ['📍 **Wallet lanes** (room 1659)']
+  lines.push(
+    `• Room HL portfolio (room book): **${formatWalletShort(params.roomHlAddress)}** — snapshot below`,
+  )
+  if (params.arenaAddress) {
+    lines.push(
+      `• Virtual Arena execution: **${formatWalletShort(params.arenaAddress)}** — \`/h pos\` for live legs`,
+    )
+  } else {
+    lines.push('• Virtual Arena execution: _not bound_ — `/arena status` or `/arena register`')
+  }
+  lines.push(
+    `• Alerts + Telegram: your linked 4626 account (operator **${formatWalletShort(params.operatorWallet)}**)`,
+  )
+  return lines
+}
+
+export function formatCompactArenaHlSummary(params: {
+  arenaAddress: string
+  hlState: HyperliquidClearinghouseState | null
+}): string[] {
+  const legs = params.hlState?.assetPositions ?? []
+  const walletLabel = formatWalletShort(params.arenaAddress)
+  if (legs.length === 0) {
+    return [`**Virtual Arena HL** (${walletLabel})`, '- No open perp positions on Hyperliquid for this wallet.']
+  }
+
+  let nearestLiqDist: number | null = null
+  for (const leg of legs) {
+    if (
+      !leg.side ||
+      leg.entryPx == null ||
+      leg.liquidationPx == null ||
+      leg.positionValue == null ||
+      leg.unrealizedPnl == null
+    ) {
+      continue
+    }
+    const mark = estimateMarkPrice({
+      entryPx: leg.entryPx,
+      positionValueUsd: leg.positionValue,
+      unrealizedPnlUsd: leg.unrealizedPnl,
+      side: leg.side,
+    })
+    if (mark == null) continue
+    const liqDist = computeLiquidationProximityPct({
+      markPrice: mark,
+      liquidationPrice: leg.liquidationPx,
+      side: leg.side,
+    })
+    if (liqDist == null) continue
+    nearestLiqDist =
+      nearestLiqDist == null ? liqDist : Math.min(nearestLiqDist, liqDist)
+  }
+
+  const lines = [
+    `**Virtual Arena HL** (${walletLabel})`,
+    `- **${legs.length}** open leg${legs.length === 1 ? '' : 's'} · nearest liq-dist **${formatPct(nearestLiqDist)}**`,
+    '- Drill in: `/h pos` · `/arena status`',
+  ]
+  return lines
 }
