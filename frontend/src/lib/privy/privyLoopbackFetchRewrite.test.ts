@@ -94,6 +94,48 @@ describe('installPrivyLoopbackFetchRewrite', () => {
     expect(listener).toHaveBeenCalledTimes(1)
   })
 
+  it('resets stale Privy loopback session storage when oauth/link 401s on local dev', async () => {
+    window.localStorage.setItem('privy:token', 'a-stale-access-token')
+    window.fetch = (() => Promise.resolve(new Response(null, { status: 401 }))) as typeof fetch
+
+    installPrivyLoopbackFetchRewrite()
+
+    const listener = vi.fn()
+    window.addEventListener(PRIVY_LOOPBACK_SESSION_EXPIRED_EVENT, listener)
+
+    const response = await window.fetch('https://auth.privy.io/api/v1/oauth/link', {
+      method: 'POST',
+      body: JSON.stringify({ provider: 'twitter' }),
+    })
+
+    window.removeEventListener(PRIVY_LOOPBACK_SESSION_EXPIRED_EVENT, listener)
+
+    expect(response.status).toBe(401)
+    expect(window.localStorage.getItem('privy:token')).toBeNull()
+    expect(listener).toHaveBeenCalledTimes(1)
+  })
+
+  it('resets stale Privy loopback session storage when oauth/unlink 401s on local dev', async () => {
+    window.localStorage.setItem('privy:token', 'a-stale-access-token')
+    window.fetch = (() => Promise.resolve(new Response(null, { status: 401 }))) as typeof fetch
+
+    installPrivyLoopbackFetchRewrite()
+
+    const listener = vi.fn()
+    window.addEventListener(PRIVY_LOOPBACK_SESSION_EXPIRED_EVENT, listener)
+
+    const response = await window.fetch('https://privy.4626.fun/api/v1/oauth/unlink', {
+      method: 'POST',
+      body: JSON.stringify({ provider: 'twitter' }),
+    })
+
+    window.removeEventListener(PRIVY_LOOPBACK_SESSION_EXPIRED_EVENT, listener)
+
+    expect(response.status).toBe(401)
+    expect(window.localStorage.getItem('privy:token')).toBeNull()
+    expect(listener).toHaveBeenCalledTimes(1)
+  })
+
   it('leaves other 401s from Privy alone', async () => {
     window.localStorage.setItem('privy:token', 'a-live-access-token')
     window.fetch = (() => Promise.resolve(new Response(null, { status: 401 }))) as typeof fetch

@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
 
 import { formatWaitlistChatError } from './waitlistChatErrors'
@@ -21,11 +22,21 @@ describe('formatWaitlistChatError', () => {
   })
 
   it('maps missing auth token (embedded signer session) to re-login guidance', () => {
+    // jsdom's default test origin is http://localhost/, so this also covers
+    // the localhost-specific suffix (see the dedicated suffix test below).
     expect(
       formatWaitlistChatError('UnknownRpcError: An unknown RPC error occurred. Details: Missing auth token.'),
-    ).toBe('Sign-in for chat expired.')
-    expect(formatWaitlistChatError('ei3: Missing auth token.')).toBe(
+    ).toContain('Sign-in for chat expired.')
+    expect(formatWaitlistChatError('ei3: Missing auth token.')).toContain(
       'Sign-in for chat expired.',
     )
+  })
+
+  it('appends localhost-specific guidance for the expired-session message on a loopback host', () => {
+    // jsdom test origin defaults to http://localhost/.
+    const message = formatWaitlistChatError('Missing auth token.')
+    expect(message).toContain('Sign-in for chat expired.')
+    expect(message).toContain('known localhost limitation')
+    expect(message).toContain('deployed preview URL')
   })
 })

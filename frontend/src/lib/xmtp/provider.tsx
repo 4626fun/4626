@@ -64,6 +64,7 @@ import {
   syncConversationsForGroupDiscovery,
   groupMembershipListOptions,
 } from '@/lib/xmtp/xmtpHelpers'
+import { acquireXmtpOpfsMutex } from '@/lib/xmtp/xmtpOpfsMutex'
 import { isSessionRepairableChatError } from '@/lib/auth/sessionRepair'
 import {
   markXmtpRateLimited,
@@ -1843,6 +1844,13 @@ export function XmtpChatProvider({
     const connectEpoch = connectEpochRef.current
     let tabLockAcquired = false
     let xmtpIdentityAddress = String(connectWalletAddress).toLowerCase()
+    // See acquireXmtpOpfsMutex() — guards the OPFS-touching span below against
+    // a Fast-Refresh-orphaned prior instance's still-running connect().
+    const releaseXmtpOpfsMutex = await acquireXmtpOpfsMutex(() =>
+      console.warn(
+        '[xmtp] OPFS mutex wait timed out; proceeding without waiting for a possibly-stale prior connect() to release its OPFS handle.',
+      ),
+    )
     try {
       setError(null)
       setInstallationLimitInboxId(null)
@@ -2467,6 +2475,14 @@ export function XmtpChatProvider({
             const repaired = await Promise.resolve(repairFn()).catch(() => false)
             if (repaired && mountedRef.current) {
               // Session re-bridged: retry connect exactly once via the latest ref.
+              // This outer invocation is still mid-catch (its own `finally` hasn't
+              // run), so its in-flight flag, cooldown, and OPFS mutex are all still
+              // held/set — release them first, otherwise evaluateXmtpConnectPrecheck
+              // denies the recursive call as 'connect_in_flight'/'cooldown' and this
+              // "retry exactly once" silently no-ops every time.
+              connectInFlightRef.current = false
+              connectCooldownUntilRef.current = 0
+              releaseXmtpOpfsMutex()
               await Promise.resolve(connectRef.current?.('user')).catch(() => undefined)
               return
             }
@@ -2491,6 +2507,7 @@ export function XmtpChatProvider({
       }
     } finally {
       connectInFlightRef.current = false
+      releaseXmtpOpfsMutex()
       if (!clientRef.current && tabLockAcquired) {
         stopTabLockHeartbeat()
         releaseTabLock()

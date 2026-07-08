@@ -21,6 +21,8 @@ const PRIVY_PASSWORDLESS_INIT_HOSTS = ['auth.privy.io', 'privy.4626.fun']
 const PRIVY_APP_CONFIG_PATH = /^\/api\/v1\/apps\/[^/]+$/
 const PRIVY_SESSIONS_PATH = '/api/v1/sessions'
 const PRIVY_SIWE_LINK_PATH = '/api/v1/siwe/link'
+const PRIVY_OAUTH_LINK_PATH = '/api/v1/oauth/link'
+const PRIVY_OAUTH_UNLINK_PATH = '/api/v1/oauth/unlink'
 const PRIVY_PRIVY_IO_HOSTS = ['auth.privy.io', 'privy.4626.fun']
 const PRIVY_DEPRECATED_REFRESH_TOKEN = 'deprecated'
 
@@ -69,6 +71,25 @@ export function isPrivySiweLinkRequest(url: string, method: string): boolean {
       PRIVY_PRIVY_IO_HOSTS.includes(parsed.hostname.toLowerCase()) &&
       parsed.pathname === PRIVY_SIWE_LINK_PATH
     )
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Privy's OAuth link/unlink calls (used by `handleLinkWallet`/`handleEditWallet`/
+ * `handleEditTwitter` in the waitlist account-linking UI) hit the same
+ * localhost stale-access-token limitation as `isPrivySiweLinkRequest` above —
+ * a live token is required, and on loopback that token can go stale mid-session
+ * with no way to silently refresh it, so these 401 repeatedly until the stale
+ * session is reset.
+ */
+export function isPrivyOauthLinkOrUnlinkRequest(url: string, method: string): boolean {
+  if (normalizeFetchMethod(method) !== 'POST') return false
+  try {
+    const parsed = new URL(url)
+    if (!PRIVY_PRIVY_IO_HOSTS.includes(parsed.hostname.toLowerCase())) return false
+    return parsed.pathname === PRIVY_OAUTH_LINK_PATH || parsed.pathname === PRIVY_OAUTH_UNLINK_PATH
   } catch {
     return false
   }

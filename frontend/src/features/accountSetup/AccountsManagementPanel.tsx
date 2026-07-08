@@ -403,7 +403,11 @@ export function AccountsManagementPanel(props: {
         {summaryActions ? <div className="flex flex-wrap items-center gap-2 pt-1">{summaryActions}</div> : null}
         <p className="text-xs text-zinc-600">
           Need the full onboarding flow? Continue at{' '}
-          <Link to="/waitlist" className="text-zinc-400 underline underline-offset-2 hover:text-zinc-200">
+          <Link
+            to="/waitlist"
+            viewTransition
+            className="text-zinc-400 underline underline-offset-2 hover:text-zinc-200"
+          >
             /waitlist
           </Link>
           .

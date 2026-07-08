@@ -7,7 +7,7 @@ import type { SessionRepairOutcome } from '@/lib/auth/sessionRepair'
 
 import type { WaitlistChatStatus } from './waitlistChatCopy'
 import { shouldRetryWaitlistJoin } from './waitlistChatCopy'
-import { formatWaitlistChatError } from './waitlistChatErrors'
+import { formatWaitlistChatError, signInExpiredMessage } from './waitlistChatErrors'
 import type { PrepareWaitlistMessagingWalletResult } from './prepareWaitlistMessagingWallet'
 
 type UseWaitlistMessagingConnectParams = {
@@ -160,7 +160,7 @@ export function useWaitlistMessagingConnect(params: UseWaitlistMessagingConnectP
         if (friendly) {
           setPrepareError(friendly)
         } else if (isPrivyEmbeddedSignerAuthError(raw)) {
-          setPrepareError('Sign-in for chat expired.')
+          setPrepareError(signInExpiredMessage())
         } else {
           setPrepareError(raw)
         }

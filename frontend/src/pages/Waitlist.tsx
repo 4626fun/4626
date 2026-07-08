@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 
 import { AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { META, PageMeta } from '@/components/seo/PageMeta'
@@ -41,7 +41,24 @@ function WaitlistFlowGate(props: WaitlistFlowGateProps) {
   )
 }
 
+// Route-scoped (not in index.html) so this hint only competes for priority
+// on the one page that actually renders the badge — avoids an unused-preload
+// penalty on every other route in the SPA shell.
+function useWaitlistPreloadTrustBadge() {
+  useEffect(() => {
+    const link = document.createElement('link')
+    link.rel = 'preload'
+    link.as = 'image'
+    link.href = '/brands/privy-symbol-white.svg'
+    document.head.appendChild(link)
+    return () => {
+      link.remove()
+    }
+  }, [])
+}
+
 export function Waitlist() {
+  useWaitlistPreloadTrustBadge()
   const [walletSignInPending, setWalletSignInPending] = useState(false)
   const [walletSignInAttempt, setWalletSignInAttempt] = useState(0)
   const [walletSessionAddress, setWalletSessionAddress] = useState<string | null>(null)

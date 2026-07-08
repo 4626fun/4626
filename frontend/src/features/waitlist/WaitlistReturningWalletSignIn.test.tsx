@@ -17,15 +17,15 @@ describe('WaitlistReturningWalletSignIn', () => {
     expect(onSignIn).toHaveBeenCalledTimes(1)
   })
 
-  it('shows loading state and disables the button while busy', () => {
+  it('shows loading state and triggers cancel while busy', () => {
     const onSignIn = vi.fn()
     const onCancel = vi.fn()
     render(<WaitlistReturningWalletSignIn busy onSignIn={onSignIn} onCancel={onCancel} />)
 
-    const button = screen.getByRole('button', { name: /Connecting wallet/i })
-    expect(button).toHaveProperty('disabled', false)
+    expect(screen.getByText(/Connecting wallet/i)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Sign in with linked wallet/i })).toBeNull()
 
-    fireEvent.click(button)
+    fireEvent.click(screen.getByRole('button', { name: /Cancel/i }))
     expect(onSignIn).not.toHaveBeenCalled()
     expect(onCancel).toHaveBeenCalledTimes(1)
   })

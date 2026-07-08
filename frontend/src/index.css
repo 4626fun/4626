@@ -872,6 +872,40 @@ body:has(#privy-dialog) #waitlist-page {
   pointer-events: none !important;
 }
 
+/* Native browser View Transitions (React Router `<Link viewTransition>` /
+   `navigate(to, { viewTransition: true })`) — a soft cross-fade + scale
+   instead of the browser's default hard cut, so in-app route swaps that opt
+   into this feel like a continuation rather than a page reload. Inert unless
+   a navigation explicitly enables it; the reduced-motion block above already
+   neutralizes these via the universal `animation-duration` override. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.42s;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+::view-transition-old(root) {
+  animation-name: waitlist-vt-fade-out;
+}
+
+::view-transition-new(root) {
+  animation-name: waitlist-vt-fade-in;
+}
+
+@keyframes waitlist-vt-fade-out {
+  to {
+    opacity: 0;
+    transform: scale(0.99);
+  }
+}
+
+@keyframes waitlist-vt-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(1.01);
+  }
+}
+
 /* Accessibility: Respect reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
   *,

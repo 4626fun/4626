@@ -13,7 +13,7 @@ import { refreshPrivyEmbeddedSignerSession } from '@/lib/privy/refreshEmbeddedSi
 
 import { bridgePrivySession } from './waitlistHandoff'
 import { readAuthSessionAddress } from './waitlistPrivySession'
-import { findLiveEmbeddedPrivyWallet } from './prepareWaitlistMessagingWallet'
+import { findLiveEmbeddedPrivyWallet, isWaitlistMessagingLoopbackHost } from './prepareWaitlistMessagingWallet'
 
 function isRecoveryRequiredBridgeError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
@@ -84,6 +84,15 @@ export function useWaitlistMessagingSessionRepair(): () => Promise<SessionRepair
         getToken,
         logLabel: 'waitlist-messaging-repair',
       })
+      // On localhost, Privy's iframe session-refresh cookie is blocked as
+      // third-party, so this probe succeeding (a cheap eth_accounts call)
+      // is not proof the deeper wallets/authenticate handshake XMTP's real
+      // signing call needs is actually live. Reporting 'repaired' here led
+      // to a confusing repair-then-fail cycle: the caller would retry
+      // connect(), hit the same stale-iframe 401, and only then show the
+      // expired-session message. Surface that immediately instead so the
+      // user isn't sent through a second doomed attempt.
+      if (isWaitlistMessagingLoopbackHost()) return 'recovery-required'
       return 'repaired'
     } catch (error) {
       console.warn('[waitlist-messaging-repair] embedded signer refresh failed:', error)

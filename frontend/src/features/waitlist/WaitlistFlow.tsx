@@ -9,7 +9,14 @@ import {
   type ReactNode,
 } from 'react'
 import { Link } from 'react-router-dom'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import {
+  AnimatePresence,
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useSpring,
+  useTransform,
+} from 'framer-motion'
 import { ArrowLeft, ArrowRight, AlertCircle, Check } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { InputOTP, type InputOTPStatus } from '@/components/ui/InputOTP'
@@ -18,7 +25,7 @@ import { cn } from '@/lib/shared/utils'
 import { siteAssets } from '@/config/site'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
-import { APP_ORIGIN } from '@/lib/env/host'
+import { APP_ORIGIN, getMarketingBaseUrl } from '@/lib/env/host'
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import {
   establishWaitlistSessionAfterPrivyAuth,
@@ -57,6 +64,7 @@ import { findLinkedTwitterHandle } from '@/lib/privy/linkedAccounts'
 import { hasZoraReadOnlySignals, resolveZoraReadOnlySignals } from '@/lib/zora/zoraReadOnlyResolve'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { assertPrivySessionMarkerCookie, isLocalDevPrivySessionMarkerMode } from '@/lib/privy/loopbackSessionMarkerShim'
+import { appendLocalhostPrivyAuthNoteIfNeeded } from '@/lib/privy/localhostPrivyAuthNotice'
 import { useWaitlistZoraOAuthReturnRecovery } from '@/lib/privy/useWaitlistZoraOAuthReturnRecovery'
 import { WaitlistWelcomeGreeting } from '@/features/waitlist/WaitlistWelcomeGreeting'
 import { sanitizeWaitlistZoraHandle } from '@/features/waitlist/waitlistWelcomeIdentity'
@@ -93,16 +101,18 @@ type WaitlistFlowProps = {
   onClearWalletSession?: () => void
 }
 
+// A single soft ambient glow (border ring + one diffuse halo) reads calmer
+// and more premium than stacking several concentric glow radii.
 const WAITLIST_PANEL_STYLE = {
   background: 'linear-gradient(165deg, rgb(var(--vault-card)), rgb(var(--vault-card-raised)))',
   boxShadow:
-    '0 18px 45px -24px rgba(0, 0, 0, 0.65), 0 0 0 1px rgb(var(--brand-primary) / 0.1), 0 0 28px 4px rgb(var(--brand-primary) / 0.16), 0 0 52px 14px rgb(var(--brand-primary) / 0.1), 0 0 84px 28px rgb(var(--brand-primary) / 0.05)',
+    '0 18px 45px -24px rgba(0, 0, 0, 0.65), 0 0 0 1px rgb(var(--brand-primary) / 0.14), 0 0 44px 2px rgb(var(--brand-primary) / 0.14)',
 } as const
 
 const WAITLIST_PANEL_SUCCESS_STYLE: CSSProperties = {
   background: WAITLIST_PANEL_STYLE.background,
   boxShadow:
-    '0 18px 45px -24px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(52, 211, 153, 0.22), 0 0 28px 4px rgba(52, 211, 153, 0.2), 0 0 52px 14px rgba(52, 211, 153, 0.1), 0 0 84px 28px rgba(52, 211, 153, 0.05)',
+    '0 18px 45px -24px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(52, 211, 153, 0.26), 0 0 44px 2px rgba(52, 211, 153, 0.18)',
 }
 
 type BeamCardAccent = 'default' | 'success'
@@ -324,20 +334,190 @@ function WaitlistLinkingProgress({
 }
 
 const SOCIAL_PROOF_AVATAR_SLOTS = 12
+/** Per-avatar entrance stagger/duration — kept as named constants (rather than
+ * inline magic numbers in the JSX below) so `AVATAR_CONSUME_START_DELAY_MS`
+ * can be derived from exactly when the last avatar finishes landing. */
+const AVATAR_ENTRANCE_STAGGER_S = 0.045
+const AVATAR_ENTRANCE_DURATION_S = 0.32
+const AVATAR_ENTRANCE_TOTAL_MS = Math.round(
+  (AVATAR_ENTRANCE_DURATION_S + (SOCIAL_PROOF_AVATAR_SLOTS - 1) * AVATAR_ENTRANCE_STAGGER_S) * 1000,
+)
+/** The stack must finish rendering — every avatar fully landed — before any of
+ * them start feeding into the count. This beat needs to be long enough to
+ * read as a deliberate pause (not just a continuation of the landing
+ * motion) before the stack starts feeding into the count. */
+const AVATAR_CONSUME_START_DELAY_MS = AVATAR_ENTRANCE_TOTAL_MS + 320
+/** Per-avatar delay between one flying into the count and the next starting.
+ * Deliberately kept greater than `AVATAR_CONSUME_EXIT_S` (below) — when more
+ * than ~1-2 avatars are simultaneously mid-exit, Framer Motion's
+ * `AnimatePresence` (with `mode="popLayout"`) stops removing them from the
+ * DOM incrementally and instead defers all the removals to a single batch
+ * at the very end, which reads as "nothing happens, then everything vanishes
+ * at once" instead of a steady one-by-one consumption — confirmed by
+ * instrumenting the previous (too-overlapping) 70ms/350ms pairing.
+ */
+const AVATAR_CONSUME_STAGGER_MS = 140
+/** Exit duration for a single avatar flying into the count. Kept below
+ * `AVATAR_CONSUME_STAGGER_MS` — see comment above. */
+const AVATAR_CONSUME_EXIT_S = 0.11
+/** Span from the first avatar starting its flight into the count to the last
+ * one fully disappearing — used only to time the dock choreography below;
+ * the count itself is derived directly from consume progress (see
+ * `joinedCount` in `WaitlistFlow`), not from this duration. */
+const AVATAR_CONSUME_TOTAL_MS = Math.round(
+  (SOCIAL_PROOF_AVATAR_SLOTS - 1) * AVATAR_CONSUME_STAGGER_MS + AVATAR_CONSUME_EXIT_S * 1000,
+)
 
 // Overlapping avatar stack. Uses real member PFPs (linked, with hover names)
 // when present, and fills remaining slots with brand gradient placeholders so
 // the social-proof row still looks populated when only a subset has avatars.
-function JoinedAvatars({ avatars }: { avatars: WaitlistAvatar[] }) {
+// Each dot fades/slides in left-to-right on mount. When `consumeIntoCount` is
+// set (the pre-join view only — see `renderSocialProof`), the stack then
+// eats itself from the right (the end closest to the count text) inward:
+// each avatar slides right and shrinks away as if flying into the number,
+// and — because the row is `justify-center` and every remaining avatar plus
+// the count text carries `layout` — the rest of the stack and the count
+// smoothly re-centre after every avatar that disappears, rather than
+// snapping. Skipped for `prefers-reduced-motion` (all avatars removed
+// immediately) and for the always-visible post-join row, whose avatars stay
+// put since they're real, clickable member links.
+//
+// `consumedCount` is a controlled prop (owned by `WaitlistFlow`, not this
+// component) specifically so the count text next to this stack can be
+// derived from the exact same number — see `joinedCount` in `WaitlistFlow`.
+// That's what guarantees the two are causally tied together (the count only
+// ever moves because an avatar was consumed) instead of merely running on
+// two separately-timed clocks that happen to overlap.
+function JoinedAvatars({
+  avatars,
+  consumeIntoCount = false,
+  consumedCount = 0,
+}: {
+  avatars: WaitlistAvatar[]
+  consumeIntoCount?: boolean
+  consumedCount?: number
+}) {
+  const reduceMotion = useReducedMotion()
   const slots: (WaitlistAvatar | null)[] = Array.from({ length: SOCIAL_PROOF_AVATAR_SLOTS }, (_, index) =>
     avatars[index] ?? null,
   )
+
+  const visibleSlots = consumeIntoCount
+    ? slots.slice(0, Math.max(0, SOCIAL_PROOF_AVATAR_SLOTS - consumedCount))
+    : slots
+
   return (
     <div className="flex -space-x-2.5">
-      {slots.map((avatar, index) => (
-        <AvatarDot key={`${avatar?.src ?? 'placeholder'}-${index}`} avatar={avatar} index={index} />
-      ))}
+      {/* `popLayout`: takes an exiting avatar out of flow immediately (it keeps
+          animating out visually via `exit`, just no longer occupies space), so
+          the surviving avatars + count text start re-centering in the same
+          instant it starts flying away, instead of waiting for it to finish
+          and then snapping to their new spots. */}
+      <AnimatePresence mode="popLayout">
+        {visibleSlots.map((avatar, index) => (
+          <motion.span
+            key={`${avatar?.src ?? 'placeholder'}-${index}`}
+            layout="position"
+            initial={reduceMotion ? false : { opacity: 0, x: -10 }}
+            animate={{
+              opacity: 1,
+              x: 0,
+              transition: {
+                duration: AVATAR_ENTRANCE_DURATION_S,
+                delay: reduceMotion ? 0 : index * AVATAR_ENTRANCE_STAGGER_S,
+                ease: [0.22, 1, 0.36, 1],
+              },
+            }}
+            // Two-phase "pulled in and swallowed" exit: stays fully visible while
+            // accelerating right for the first half (an ease-IN — the opposite
+            // curve from the entrance — so it reads as being pulled toward the
+            // number rather than drifting away), then rapidly closes the rest of
+            // the distance, shrinks further, and only disappears right at the
+            // end — instead of fading evenly the whole way, which read as
+            // "sliding away" rather than "flying into" the count.
+            exit={{
+              opacity: [1, 1, 0],
+              x: [0, 14, 46],
+              scale: [1, 0.82, 0.2],
+              transition: {
+                duration: reduceMotion ? 0 : AVATAR_CONSUME_EXIT_S,
+                times: [0, 0.55, 1],
+                ease: [0.55, 0.055, 0.675, 0.19],
+              },
+            }}
+            transition={{ layout: { duration: 0.28, ease: [0.22, 1, 0.36, 1] } }}
+          >
+            <AvatarDot avatar={avatar} index={index} />
+          </motion.span>
+        ))}
+      </AnimatePresence>
     </div>
+  )
+}
+
+// Shared Framer Motion `layoutId` for the "N already joined" pill's one-time
+// flight from the avatar row down into the "Already joined?" divider. Both
+// ends just need to mount a `motion` element with this id — Framer computes
+// the position/size interpolation between them automatically.
+const ALREADY_JOINED_DOCK_LAYOUT_ID = 'waitlist-already-joined-dock'
+
+type AlreadyJoinedDockPhase = 'shown' | 'docking' | 'docked'
+
+// Lives inside the "Already joined?" divider (see `WaitlistReturningWalletSignIn`'s
+// `labelSlot`) and plays the landing half of the dock animation: an invisible
+// spacer (keeps the divider's width stable) until the pill above is ready to
+// land, then the landed pill itself, then a crossfade into the real
+// "Already joined?" control — which, on hover, reveals it doubles as a link
+// to the public leaderboard.
+function WaitlistAlreadyJoinedSlot({
+  dockPhase,
+  joinedLabel,
+}: {
+  dockPhase: AlreadyJoinedDockPhase
+  joinedLabel: number
+}) {
+  if (dockPhase === 'docked') {
+    return (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
+        <Link
+          to="/leaderboard"
+          className="group/aj relative inline-flex min-w-[92px] items-center justify-center text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-500 transition hover:text-zinc-300"
+        >
+          <span className="inline-flex items-center transition-opacity duration-150 group-hover/aj:opacity-0">
+            Already joined?
+          </span>
+          <span className="pointer-events-none absolute inset-0 inline-flex items-center justify-center gap-1 whitespace-nowrap normal-case tracking-normal opacity-0 transition-opacity duration-150 group-hover/aj:opacity-100">
+            See who&apos;s joined
+            <ArrowRight className="size-3 transition group-hover/aj:translate-x-0.5" aria-hidden="true" />
+          </span>
+        </Link>
+      </motion.div>
+    )
+  }
+
+  return (
+    <AnimatePresence mode="wait">
+      {dockPhase === 'docking' ? (
+        <motion.span
+          key="landed-pill"
+          layoutId={ALREADY_JOINED_DOCK_LAYOUT_ID}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          // Matches the source badge's `text-[11px]` exactly (see `renderSocialProof`)
+          // — a font-size mismatch between the two `layoutId`-linked elements makes
+          // Framer's shared-layout FLIP visibly squish/stretch the text as it
+          // interpolates box size, which read as a glitch during the hand-off.
+          className="text-[11px] font-medium text-zinc-400"
+        >
+          <AnimatedCount value={joinedLabel} className="font-semibold text-zinc-200" /> already joined
+        </motion.span>
+      ) : (
+        // Invisible placeholder — keeps the divider's width/height stable so
+        // nothing jumps around before the pill above is ready to land here.
+        <span key="spacer" aria-hidden="true" className="text-[10px] font-medium uppercase tracking-[0.14em] text-transparent">
+          Already joined?
+        </span>
+      )}
+    </AnimatePresence>
   )
 }
 
@@ -348,6 +528,96 @@ function ButtonSheen() {
       aria-hidden="true"
       className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 ease-out group-hover/btn:translate-x-full motion-reduce:hidden"
     />
+  )
+}
+
+// Subtle cursor-follow tilt for the primary CTA — a light "magnetic" feel
+// without being gimmicky. No-op (renders children directly) under reduced
+// motion or on touch devices, where there's no persistent cursor to track.
+function MagneticButton({ children }: { children: ReactNode }) {
+  const reduceMotion = useReducedMotion()
+  const pointerX = useMotionValue(0.5)
+  const pointerY = useMotionValue(0.5)
+  const springConfig = { stiffness: 300, damping: 22, mass: 0.6 }
+  const rotateX = useSpring(useTransform(pointerY, [0, 1], [5, -5]), springConfig)
+  const rotateY = useSpring(useTransform(pointerX, [0, 1], [-5, 5]), springConfig)
+
+  if (reduceMotion) return <>{children}</>
+
+  return (
+    <motion.div
+      style={{ rotateX, rotateY, transformPerspective: 500 }}
+      onPointerMove={(event) => {
+        if (event.pointerType !== 'mouse') return
+        const rect = event.currentTarget.getBoundingClientRect()
+        pointerX.set((event.clientX - rect.left) / rect.width)
+        pointerY.set((event.clientY - rect.top) / rect.height)
+      }}
+      onPointerLeave={() => {
+        pointerX.set(0.5)
+        pointerY.set(0.5)
+      }}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+// A checkmark that draws itself on (stroke animates in) rather than just
+// fading/scaling — reads as a more deliberate "confirmed" moment.
+function DrawnCheck({ className }: { className?: string }) {
+  const reduceMotion = useReducedMotion()
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <motion.path
+        d="M5 13l4 4L19 7"
+        stroke="currentColor"
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        initial={reduceMotion ? false : { pathLength: 0 }}
+        animate={{ pathLength: 1 }}
+        transition={{ duration: 0.35, ease: [0.65, 0, 0.35, 1] }}
+      />
+    </svg>
+  )
+}
+
+// Renders a number as individually-animated digits so each place value rolls
+// vertically like an odometer when it changes, instead of the whole string
+// just popping to its new value. Falls back to a plain static string under
+// reduced motion.
+function AnimatedCount({ value, className }: { value: number; className?: string }) {
+  const reduceMotion = useReducedMotion()
+  const formatted = value.toLocaleString()
+
+  if (reduceMotion) {
+    return <span className={className}>{formatted}</span>
+  }
+
+  return (
+    <span className={cn('inline-flex', className)}>
+      {formatted.split('').map((char, index) =>
+        /\d/.test(char) ? (
+          <span key={index} className="relative inline-block h-[1em] w-[0.62em] overflow-hidden align-top">
+            <AnimatePresence initial={false}>
+              <motion.span
+                key={char}
+                initial={{ y: '100%', opacity: 0 }}
+                animate={{ y: '0%', opacity: 1 }}
+                exit={{ y: '-100%', opacity: 0 }}
+                transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+                className="absolute inset-0 flex items-center justify-center tabular-nums"
+              >
+                {char}
+              </motion.span>
+            </AnimatePresence>
+          </span>
+        ) : (
+          <span key={index}>{char}</span>
+        ),
+      )}
+    </span>
   )
 }
 
@@ -379,28 +649,6 @@ function SkippedStepReminder({
   )
 }
 
-// Eased count-up for the social-proof number. Reduced motion / disabled paths
-// return the target directly (no animation, no synchronous setState in effect).
-function useCountUp(target: number | null, enabled: boolean): number {
-  const reduceMotion = useReducedMotion()
-  const animate = enabled && !reduceMotion && target != null
-  const [display, setDisplay] = useState(0)
-  useEffect(() => {
-    if (!animate || target == null) return
-    let raf = 0
-    const start = performance.now()
-    const duration = 900
-    const tick = (now: number) => {
-      const progress = Math.min(1, (now - start) / duration)
-      const eased = 1 - Math.pow(1 - progress, 3)
-      setDisplay(Math.round(target * eased))
-      if (progress < 1) raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [animate, target])
-  return animate ? display : (target ?? 0)
-}
 
 export function WaitlistFlow(props: WaitlistFlowProps) {
   const sectionId = props.sectionId ?? 'waitlist-page'
@@ -968,7 +1216,8 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
       writeWaitlistXPhaseDone(false)
       refreshAccountMe()
     } catch (unlinkError) {
-      setTwitterError(unlinkError instanceof Error ? unlinkError.message : 'Could not disconnect X.')
+      const message = unlinkError instanceof Error ? unlinkError.message : 'Could not disconnect X.'
+      setTwitterError(appendLocalhostPrivyAuthNoteIfNeeded(message))
     } finally {
       setTwitterBusy(false)
     }
@@ -989,7 +1238,8 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
         refreshAccountMe()
       }
     } catch (linkError) {
-      setWalletError(linkError instanceof Error ? linkError.message : 'Could not connect wallet.')
+      const message = linkError instanceof Error ? linkError.message : 'Could not connect wallet.'
+      setWalletError(appendLocalhostPrivyAuthNoteIfNeeded(message))
     } finally {
       setWalletBusy(false)
     }
@@ -1016,7 +1266,8 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
       writeWaitlistWalletSkipped(false)
       refreshAccountMe()
     } catch (unlinkError) {
-      setWalletError(unlinkError instanceof Error ? unlinkError.message : 'Could not disconnect wallet.')
+      const message = unlinkError instanceof Error ? unlinkError.message : 'Could not disconnect wallet.'
+      setWalletError(appendLocalhostPrivyAuthNoteIfNeeded(message))
     } finally {
       setWalletBusy(false)
     }
@@ -1224,35 +1475,135 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     walletSignInPending,
     walletSessionAddress: props.walletSessionAddress ?? null,
   })
-  const joinedCount = useCountUp(listCount, !joinedSessionAddress)
+  const reduceMotionForDock = useReducedMotion()
 
-  const socialProof = (
-    <div className="flex flex-col items-center gap-3">
-      <div className="flex items-center justify-center gap-1">
-        <JoinedAvatars avatars={memberAvatars} />
-        {listCount != null && listCount > 0 ? (
-          <p className="text-[11px] text-zinc-400">
-            <span className="font-semibold tabular-nums text-zinc-200">
-              {joinedCount.toLocaleString()}
-            </span>{' '}
-            already joined
-          </p>
+  // Owns the avatar-consume progress (0..SOCIAL_PROOF_AVATAR_SLOTS) and passes
+  // it down to `JoinedAvatars` as a controlled prop — see that component's
+  // comment for why. Lazy initializer (not an effect) covers the reduced-
+  // motion "all consumed" case so it's correct on the very first render
+  // without a synchronous `setState` inside an effect body.
+  const [avatarConsumedCount, setAvatarConsumedCount] = useState(() =>
+    reduceMotionForDock ? SOCIAL_PROOF_AVATAR_SLOTS : 0,
+  )
+  // No "already started" ref guard — see the matching comment on the dock
+  // choreography effect below; StrictMode's dev-only double-invoke is
+  // handled by plain dependencies + cleanup, not a ref latch.
+  useEffect(() => {
+    if (joinedSessionAddress || reduceMotionForDock) return
+    const timers: number[] = []
+    for (let i = 0; i < SOCIAL_PROOF_AVATAR_SLOTS; i += 1) {
+      timers.push(
+        window.setTimeout(
+          () => setAvatarConsumedCount((count) => count + 1),
+          AVATAR_CONSUME_START_DELAY_MS + i * AVATAR_CONSUME_STAGGER_MS,
+        ),
+      )
+    }
+    return () => timers.forEach((timer) => window.clearTimeout(timer))
+  }, [joinedSessionAddress, reduceMotionForDock])
+
+  // Derived directly from `avatarConsumedCount` — not a separately-timed
+  // animation — so the number can only ever move because an avatar was just
+  // consumed, landing on `listCount` exactly when the last one disappears.
+  // Once joined, `avatarConsumedCount` may be left at whatever it reached
+  // before the join happened (this state outlives the pre-join view's
+  // unmount, since it lives up here), so the post-join, non-dockable render
+  // always shows the plain final `listCount` instead of a stale ratio.
+  const joinedCount =
+    listCount == null
+      ? 0
+      : joinedSessionAddress
+        ? listCount
+        : Math.round((listCount * avatarConsumedCount) / SOCIAL_PROOF_AVATAR_SLOTS)
+
+  // One-time choreography, pre-join only: avatars render, then feed into the
+  // count as it climbs (see above), then after a beat the "N already joined"
+  // pill flies down and docks into the "Already joined?" divider below it
+  // (see `ALREADY_JOINED_DOCK_LAYOUT_ID` and `WaitlistAlreadyJoinedSlot`),
+  // which then becomes the interactive "hover to see the leaderboard"
+  // control. Skipped once already joined (that view keeps the plain,
+  // permanently-visible count + "See leaderboard" link).
+  const [alreadyJoinedDockPhase, setAlreadyJoinedDockPhase] = useState<AlreadyJoinedDockPhase>('shown')
+  // No "already started" ref guard — see the matching comment in
+  // `JoinedAvatars`. React 18 StrictMode's dev-only mount→cleanup→remount
+  // would set a ref latch on the first (discarded) run, clear its timers,
+  // then see the latch already set on the second (surviving) run and skip
+  // scheduling entirely, so the dock animation would silently never start.
+  // Plain dependencies + proper cleanup self-correct for that double-invoke.
+  useEffect(() => {
+    if (joinedSessionAddress) return
+    if (listCount == null || listCount <= 0) return
+    if (reduceMotionForDock) {
+      setAlreadyJoinedDockPhase('docked')
+      return
+    }
+    // Timed to start once the avatar stack has finished feeding itself into
+    // the count (see `AVATAR_CONSUME_START_DELAY_MS` + `AVATAR_CONSUME_TOTAL_MS`
+    // above), plus a short beat to let the final number sit on its own before
+    // it docks down into "Already joined?". `DOCKING_TRANSITION_MS` mirrors
+    // the docking pill's own `transition.duration` in `WaitlistAlreadyJoinedSlot`.
+    const countSettledAtMs = AVATAR_CONSUME_START_DELAY_MS + AVATAR_CONSUME_TOTAL_MS
+    const dockStartDelayMs = countSettledAtMs + 350
+    const DOCKING_TRANSITION_MS = 550
+    const dockTimer = window.setTimeout(() => setAlreadyJoinedDockPhase('docking'), dockStartDelayMs)
+    const dockedTimer = window.setTimeout(
+      () => setAlreadyJoinedDockPhase('docked'),
+      dockStartDelayMs + DOCKING_TRANSITION_MS,
+    )
+    return () => {
+      window.clearTimeout(dockTimer)
+      window.clearTimeout(dockedTimer)
+    }
+  }, [joinedSessionAddress, listCount, reduceMotionForDock])
+
+  const renderSocialProof = (dockable: boolean) => {
+    const hideCountBadge = dockable && alreadyJoinedDockPhase !== 'shown'
+    return (
+      <div className="flex flex-col items-center gap-3">
+        <div className="flex items-center justify-center gap-1">
+          <JoinedAvatars
+            avatars={memberAvatars}
+            consumeIntoCount={dockable}
+            consumedCount={dockable ? avatarConsumedCount : 0}
+          />
+          <AnimatePresence>
+            {!hideCountBadge && listCount != null && listCount > 0 ? (
+              <motion.p
+                key="count-badge"
+                layout
+                layoutId={dockable ? ALREADY_JOINED_DOCK_LAYOUT_ID : undefined}
+                // When this hands off to the docked pill (`WaitlistAlreadyJoinedSlot`)
+                // via the shared `layoutId`, Framer already crossfades/morphs it
+                // into that target — a separate manual `exit` here would fight
+                // that hand-off (two competing animations on the same element).
+                // Only the always-static, non-dockable render (post-join) needs
+                // its own fade-out, and even there it only fires if `listCount`
+                // itself disappears.
+                exit={dockable ? undefined : { opacity: 0, y: 6, scale: 0.94 }}
+                transition={{ duration: dockable ? 0.5 : 0.4, ease: [0.22, 1, 0.36, 1] }}
+                className="text-[11px] text-zinc-400"
+              >
+                <AnimatedCount value={joinedCount} className="font-semibold text-zinc-200" />{' '}
+                already joined
+              </motion.p>
+            ) : null}
+          </AnimatePresence>
+        </div>
+        {joinedSessionAddress && !appAccepted ? (
+          <Link
+            to="/leaderboard"
+            className="group inline-flex items-center gap-1 text-[11px] font-medium text-zinc-500 transition hover:text-white"
+          >
+            See leaderboard
+            <ArrowRight
+              className="size-3 transition group-hover:translate-x-0.5"
+              aria-hidden="true"
+            />
+          </Link>
         ) : null}
       </div>
-      {joinedSessionAddress && !appAccepted ? (
-        <Link
-          to="/leaderboard"
-          className="group inline-flex items-center gap-1 text-[11px] font-medium text-zinc-500 transition hover:text-white"
-        >
-          See leaderboard
-          <ArrowRight
-            className="size-3 transition group-hover:translate-x-0.5"
-            aria-hidden="true"
-          />
-        </Link>
-      ) : null}
-    </div>
-  )
+    )
+  }
 
   const showXLinkPanel = !xPhaseDone && !twitterLinked
   const showXEngagement = twitterLinked && !xPhaseDone
@@ -1338,7 +1689,11 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     },
   ]
 
-  const stepTransition = { duration: 0.32, ease: [0.22, 1, 0.36, 1] as const }
+  // Spring physics (rather than a fixed-duration ease curve) so step swaps
+  // feel like they have real weight/momentum instead of a mechanical slide.
+  const stepTransition = reduceMotion
+    ? { duration: 0.2 }
+    : { type: 'spring' as const, stiffness: 420, damping: 38, mass: 0.9 }
   // Directional (not just fade) — the entering step slides in from the side it
   // conceptually arrives from, and the exiting step slides out the other way,
   // so sequential steps read as spatial forward/backward progression.
@@ -1388,13 +1743,20 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           className="relative w-full space-y-5 sm:space-y-6"
         >
-          {/* Persistent brand mark — shown across every step of the flow (signup, code) so
-              users always see where they are. Hidden once approved: the success state below
-              renders the same mark (glowing) as its own success indicator, so keeping this one
-              too would show the logo twice on one screen. */}
+          {/* Persistent brand mark — shown across every step of the flow (signup, code) as
+              a clickable escape hatch back to 4626.fun. Hidden once approved: the success
+              state below renders the same mark (glowing) as its own success indicator, so
+              keeping this one too would show the logo twice on one screen. */}
           {!(joinedSessionAddress && appAccepted) ? (
             <div className="flex justify-center">
-              <div className="flex size-12 items-center justify-center overflow-hidden sm:size-[52px]">
+              <motion.a
+                href={getMarketingBaseUrl()}
+                aria-label="Back to 4626.fun"
+                title="Back to 4626.fun"
+                whileHover={reduceMotion ? undefined : { opacity: 0.8 }}
+                whileTap={reduceMotion ? undefined : { scale: 0.94 }}
+                className="flex size-12 items-center justify-center overflow-hidden rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--brand-primary)/0.5)] sm:size-[52px]"
+              >
                 <img
                   src={siteAssets.logo}
                   alt="4626"
@@ -1403,7 +1765,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                   draggable={false}
                   className="size-full scale-[1.316] select-none object-contain"
                 />
-              </div>
+              </motion.a>
             </div>
           ) : null}
 
@@ -1702,23 +2064,23 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
               >
             <>
               <div className="space-y-3 text-center">
-                <span className="mx-auto inline-flex items-center gap-1.5 rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-400">
+                <span className="mx-auto inline-flex items-center gap-1.5 text-[11px] font-medium tracking-[0.08em] text-zinc-500">
                   <span
-                    className="size-1.5 rounded-full bg-[rgb(var(--brand-primary))]"
+                    className="size-1 rounded-full bg-[rgb(var(--brand-primary))]"
                     aria-hidden="true"
                   />
-                  Early access
+                  early access
                 </span>
                 <h1 className="headline text-3xl leading-[1.02] tracking-[-0.03em] sm:text-4xl">
                   Join the waitlist
                 </h1>
-                <p className="mx-auto max-w-xs text-sm leading-relaxed text-zinc-400">
-                  {walletSignInPending
-                    ? 'Sign in with your linked wallet to continue.'
-                    : showEmailSignupForm
-                      ? 'Claim your spot and start earning points.'
+                {!showEmailSignupForm || walletSignInPending ? (
+                  <p className="mx-auto max-w-xs text-sm leading-relaxed text-zinc-400">
+                    {walletSignInPending
+                      ? 'Sign in with your linked wallet to continue.'
                       : 'Restoring your waitlist session…'}
-                </p>
+                  </p>
+                ) : null}
               </div>
 
               {showEmailSignupForm ? (
@@ -1737,12 +2099,33 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                         transition={stepTransition}
                       >
                         <div className="space-y-2">
-                          <label
-                            htmlFor="waitlist-email"
-                            className="block text-xs font-medium tracking-wide text-zinc-400"
-                          >
-                            Email address
-                          </label>
+                          <div className="flex items-center justify-between gap-2">
+                            <label
+                              htmlFor="waitlist-email"
+                              className="block text-xs font-medium tracking-wide text-zinc-400"
+                            >
+                              Email address
+                            </label>
+                            <a
+                              href="https://privy.io"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] tracking-wide text-zinc-600 transition hover:text-zinc-400"
+                            >
+                              Secured by
+                              <img
+                                src="/brands/privy-symbol-white.svg"
+                                alt=""
+                                aria-hidden="true"
+                                width={9}
+                                height={12}
+                                className="h-3 w-auto opacity-70"
+                                loading="lazy"
+                                decoding="async"
+                              />
+                              Privy
+                            </a>
+                          </div>
                           <div className="relative">
                             <input
                               ref={emailInputRef}
@@ -1771,32 +2154,34 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                                   className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-emerald-400"
                                   aria-hidden="true"
                                 >
-                                  <Check className="size-4" />
+                                  <DrawnCheck className="size-4" />
                                 </motion.span>
                               ) : null}
                             </AnimatePresence>
                           </div>
                         </div>
-                        <Button
-                          type="submit"
-                          variant="primary"
-                          size="lg"
-                          className="btn-3d group/btn relative w-full overflow-hidden !rounded-full !min-h-[52px] text-[15px] font-semibold"
-                          disabled={emailBusy || !privy.ready || !isValidEmail(email)}
-                        >
-                          <ButtonSheen />
-                          {emailBusy ? (
-                            <span className="relative z-10 inline-flex items-center gap-2">
-                              <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.9)" />
-                              Sending code…
-                            </span>
-                          ) : (
-                            <span className="relative z-10 inline-flex items-center gap-2">
-                              Join with email
-                              <ArrowRight className="size-4" aria-hidden="true" />
-                            </span>
-                          )}
-                        </Button>
+                        <MagneticButton>
+                          <Button
+                            type="submit"
+                            variant="primary"
+                            size="lg"
+                            className="btn-3d group/btn relative w-full overflow-hidden !rounded-full !min-h-[52px] text-[15px] font-semibold"
+                            disabled={emailBusy || !privy.ready || !isValidEmail(email)}
+                          >
+                            <ButtonSheen />
+                            {emailBusy ? (
+                              <span className="relative z-10 inline-flex items-center gap-2">
+                                <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.9)" />
+                                Sending code…
+                              </span>
+                            ) : (
+                              <span className="relative z-10 inline-flex items-center gap-2">
+                                Join with email
+                                <ArrowRight className="size-4" aria-hidden="true" />
+                              </span>
+                            )}
+                          </Button>
+                        </MagneticButton>
                         <p className="text-center text-[11px] leading-relaxed text-zinc-500">
                           {!privy.ready ? 'Preparing secure session…' : 'We’ll send a 6-digit code to your email.'}
                         </p>
@@ -1851,7 +2236,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                           <ButtonSheen />
                           {codeStatus === 'success' ? (
                             <span className="relative z-10 inline-flex items-center gap-2">
-                              <Check className="size-4" aria-hidden="true" />
+                              <DrawnCheck className="size-4" />
                               Verified
                             </span>
                           ) : codeBusy ? (
@@ -1887,13 +2272,19 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                 </BeamCard>
               ) : null}
 
-              <div className="text-center">{socialProof}</div>
+              <div className="text-center">{renderSocialProof(true)}</div>
 
               {(showEmailSignupForm && step === 'email') || walletSignInPending ? (
                 <WaitlistReturningWalletSignIn
                   busy={walletSignInPending}
                   onSignIn={handleSignInWithLinkedWallet}
                   onCancel={onCancelWalletSignIn}
+                  labelSlot={
+                    <WaitlistAlreadyJoinedSlot
+                      dockPhase={alreadyJoinedDockPhase}
+                      joinedLabel={joinedCount}
+                    />
+                  }
                 />
               ) : null}
             </>
@@ -1911,29 +2302,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
             </div>
           ) : null}
 
-          {joinedSessionAddress ? socialProof : null}
-
-          <p className="flex items-center justify-center gap-1.5 text-center text-[10px] tracking-wide text-zinc-600">
-            <span className="text-zinc-500">Powered by</span>
-            <a
-              href="https://privy.io"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-zinc-400 transition hover:text-zinc-200"
-            >
-              <img
-                src="/brands/privy-symbol-white.svg"
-                alt=""
-                aria-hidden="true"
-                width={9}
-                height={12}
-                className="h-3 w-auto opacity-70"
-                loading="lazy"
-                decoding="async"
-              />
-              Privy
-            </a>
-          </p>
+          {joinedSessionAddress ? renderSocialProof(false) : null}
         </motion.div>
       </div>
     </section>

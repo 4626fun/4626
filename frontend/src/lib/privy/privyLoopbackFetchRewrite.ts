@@ -2,6 +2,7 @@ import { isLocalDevOrigin } from '@/lib/flags/flags'
 import {
   isPrivyAppConfigRequest,
   isPrivyDeprecatedSessionRefreshRequest,
+  isPrivyOauthLinkOrUnlinkRequest,
   isPrivySiweLinkRequest,
   normalizeFetchMethod,
   rewritePrivyLegacyRequestInput,
@@ -54,10 +55,15 @@ export function installPrivyLoopbackFetchRewrite(): void {
     }
 
     const response = await originalFetch(rewritten.input, rewritten.init)
-    if (response.status === 401 && isPrivySiweLinkRequest(rewritten.url, method)) {
+    if (
+      response.status === 401 &&
+      (isPrivySiweLinkRequest(rewritten.url, method) || isPrivyOauthLinkOrUnlinkRequest(rewritten.url, method))
+    ) {
       // Stale access token from the loopback no-op above (or a token that expired
       // mid-session): reset now so the *next* attempt starts from a clean, honestly
-      // unauthenticated state instead of repeating the same 401.
+      // unauthenticated state instead of repeating the same 401. Covers both the
+      // SIWE wallet-link path and account-linking oauth/link + oauth/unlink calls
+      // (handleLinkWallet/handleEditWallet/handleEditTwitter).
       resetPrivyLoopbackSessionAfterAuthFailure()
     }
     if (isPrivyAppConfigRequest(rewritten.url, method)) {

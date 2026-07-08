@@ -1,3 +1,12 @@
+import { isWaitlistMessagingLoopbackHost } from './prepareWaitlistMessagingWallet'
+import { LOCALHOST_PRIVY_AUTH_NOTE } from '@/lib/privy/localhostPrivyAuthNotice'
+
+export function signInExpiredMessage(): string {
+  return isWaitlistMessagingLoopbackHost()
+    ? `Sign-in for chat expired.${LOCALHOST_PRIVY_AUTH_NOTE}`
+    : 'Sign-in for chat expired.'
+}
+
 export function formatWaitlistChatError(raw: string | null | undefined): string | null {
   if (!raw) return null
   const message = raw.trim()
@@ -34,7 +43,7 @@ export function formatWaitlistChatError(raw: string | null | undefined): string 
     message.toLowerCase().includes('cannot be silently restored on localhost') ||
     (message.toLowerCase().includes('oauth/link') && (message.includes('401') || message.toLowerCase().includes('unauthorized')))
   ) {
-    return 'Sign-in for chat expired.'
+    return signInExpiredMessage()
   }
 
   return message

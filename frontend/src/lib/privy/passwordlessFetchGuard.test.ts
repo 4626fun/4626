@@ -6,6 +6,7 @@ import {
   getPrivyPasswordlessInitUrl,
   isPrivyAppConfigRequest,
   isPrivyDeprecatedSessionRefreshRequest,
+  isPrivyOauthLinkOrUnlinkRequest,
   isPrivyPasswordlessFailure,
   isPrivyPasswordlessInitRequest,
   normalizeFetchMethod,
@@ -104,6 +105,19 @@ describe('passwordlessFetchGuard', () => {
     expect(isPrivyDeprecatedSessionRefreshRequest(url, 'POST', deprecatedBody)).toBe(true)
     expect(isPrivyDeprecatedSessionRefreshRequest(url, 'POST', realBody)).toBe(false)
     expect(isPrivyDeprecatedSessionRefreshRequest(url, 'GET', deprecatedBody)).toBe(false)
+  })
+
+  it('matches Privy oauth link/unlink POSTs on both the canonical and custom domain', () => {
+    expect(isPrivyOauthLinkOrUnlinkRequest('https://auth.privy.io/api/v1/oauth/link', 'POST')).toBe(true)
+    expect(isPrivyOauthLinkOrUnlinkRequest('https://auth.privy.io/api/v1/oauth/unlink', 'POST')).toBe(true)
+    expect(isPrivyOauthLinkOrUnlinkRequest('https://privy.4626.fun/api/v1/oauth/link', 'POST')).toBe(true)
+    expect(isPrivyOauthLinkOrUnlinkRequest('https://privy.4626.fun/api/v1/oauth/unlink', 'POST')).toBe(true)
+  })
+
+  it('does not match oauth link/unlink on GET or on unrelated paths/hosts', () => {
+    expect(isPrivyOauthLinkOrUnlinkRequest('https://auth.privy.io/api/v1/oauth/link', 'GET')).toBe(false)
+    expect(isPrivyOauthLinkOrUnlinkRequest('https://auth.privy.io/api/v1/oauth/callback', 'POST')).toBe(false)
+    expect(isPrivyOauthLinkOrUnlinkRequest('https://evil.example/api/v1/oauth/link', 'POST')).toBe(false)
   })
 
   it('recognizes the rate-limit and browser-network failures Privy surfaces for OTP init', () => {
