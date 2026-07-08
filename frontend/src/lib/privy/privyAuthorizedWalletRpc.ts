@@ -1,7 +1,7 @@
 import { getAccessToken } from '@privy-io/react-auth'
 import type { Hex } from 'viem'
 
-import { getPrivyApiUrl, getPrivyAppId } from '@/lib/flags/flags'
+import { getPrivyApiUrl, getPrivyAppId, getPrivyClientId } from '@/lib/flags/flags'
 import { refreshPrivyEmbeddedSignerSession } from '@/lib/privy/refreshEmbeddedSignerSession'
 
 const RAW_DIGEST_RE = /^0x[0-9a-fA-F]{64}$/
@@ -21,6 +21,10 @@ function walletRpcPath(walletId: string): string {
   return `/api/v1/wallets/${walletId}/rpc`
 }
 
+function isPrivyProxyHost(host: string): boolean {
+  return host === 'privy.4626.fun' || host === 'privy.app.4626.fun'
+}
+
 function resolvePrivyWalletRpcBaseUrl(): string {
   const resolved = (getPrivyApiUrl() ?? 'https://auth.privy.io').replace(/\/$/, '')
   // Wallet RPC auth-signature verification can fail behind first-party proxy hosts
@@ -29,13 +33,29 @@ function resolvePrivyWalletRpcBaseUrl(): string {
   // to the canonical Privy origin whenever we're on the 4626 proxy host family.
   try {
     const parsed = new URL(resolved)
-    const host = parsed.hostname.toLowerCase()
-    if (host === 'privy.4626.fun' || host === 'privy.app.4626.fun') {
+    if (isPrivyProxyHost(parsed.hostname.toLowerCase())) {
       return 'https://auth.privy.io'
     }
     return parsed.origin
   } catch {
     return 'https://auth.privy.io'
+  }
+}
+
+/**
+ * Custom-auth-domain base (e.g. https://privy.4626.fun) when configured.
+ * In server-cookie mode the Privy session lives in an HttpOnly cookie scoped
+ * to this host, so bearer-only requests to auth.privy.io can 401 with
+ * "Missing auth token" while the same request authenticates via cookie here.
+ */
+function resolvePrivyProxyBaseUrl(): string | null {
+  const resolved = (getPrivyApiUrl() ?? '').replace(/\/$/, '')
+  if (!resolved) return null
+  try {
+    const parsed = new URL(resolved)
+    return isPrivyProxyHost(parsed.hostname.toLowerCase()) ? parsed.origin : null
+  } catch {
+    return null
   }
 }
 
@@ -101,18 +121,45 @@ async function postAuthorizedWalletRpc(params: {
     headers: { 'privy-app-id': appId },
   })
 
-  const response = await fetch(rpcAuthorizationUrl, {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    'privy-app-id': appId,
+    Authorization: `Bearer ${accessToken}`,
+    'privy-authorization-signature': authorizationSignature,
+  }
+  // Apps configured with an app client issue access tokens bound to that
+  // client context. Privy verifies the bearer against the client id, so
+  // omitting this header makes valid tokens fail as "Missing auth token."
+  const clientId = getPrivyClientId()
+  if (clientId) {
+    headers['privy-client-id'] = clientId
+  }
+
+  const requestInit: RequestInit = {
     method: 'POST',
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      'privy-app-id': appId,
-      Authorization: `Bearer ${accessToken}`,
-      'privy-authorization-signature': authorizationSignature,
-    },
+    headers,
     body: JSON.stringify(params.body),
-  })
+  }
+
+  let response = await fetch(rpcAuthorizationUrl, requestInit)
+
+  // Bearer verification can fail at auth.privy.io when the session was issued
+  // through the first-party proxy (server-cookie mode). The proxy host holds
+  // the HttpOnly session cookies, so retry there. The authorization signature
+  // stays canonicalized against the auth.privy.io URL form, which is what
+  // upstream verification expects even for proxied requests.
+  if (response.status === 401) {
+    const proxyBase = resolvePrivyProxyBaseUrl()
+    if (proxyBase && !rpcAuthorizationUrl.startsWith(proxyBase)) {
+      const proxyUrl = `${proxyBase}${walletRpcPath(params.walletId)}`
+      console.warn(
+        `[privy-authorized-rpc] ${params.context} got 401 at canonical origin, retrying via first-party proxy`,
+      )
+      response = await fetch(proxyUrl, requestInit)
+    }
+  }
 
   const responseText = await response.text()
   if (!response.ok) {

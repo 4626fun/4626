@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+const flagState = {
+  clientId: null as string | null,
+}
+
 vi.mock('@/lib/flags/flags', () => ({
   getPrivyAppId: () => 'cltestappid000000000000000',
   getPrivyApiUrl: () => 'https://privy.4626.fun',
-  getPrivyClientId: () => null,
+  getPrivyClientId: () => flagState.clientId,
   isPrivyHostModeAllowed: () => true,
 }))
 
@@ -195,5 +199,104 @@ describe('privyAuthorizedWalletPersonalSign', () => {
 
     expect(fetchMock).not.toHaveBeenCalled()
     expect(generateAuthorizationSignature).not.toHaveBeenCalled()
+  })
+
+  it('retries via the first-party proxy host when the canonical origin returns 401', async () => {
+    const messageHex = `0x${Buffer.from('XMTP inbox signature').toString('hex')}`
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith('https://auth.privy.io/')) {
+        return {
+          ok: false,
+          status: 401,
+          text: async () => JSON.stringify({ error: 'Missing auth token.' }),
+        }
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ data: { signature: SIG } }),
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    const generateAuthorizationSignature = vi.fn(async () => ({ signature: 'auth-sig-base64' }))
+
+    const out = await privyAuthorizedWalletPersonalSign({
+      walletId: WALLET_ID,
+      messageHex,
+      generateAuthorizationSignature,
+      getToken: async () => 'access-token',
+    })
+
+    expect(out).toBe(SIG)
+    // Signature stays canonicalized against the auth.privy.io URL form.
+    expect(generateAuthorizationSignature).toHaveBeenCalledTimes(1)
+    expect(generateAuthorizationSignature).toHaveBeenCalledWith(
+      expect.objectContaining({ url: `https://auth.privy.io/api/v1/wallets/${WALLET_ID}/rpc` }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      `https://auth.privy.io/api/v1/wallets/${WALLET_ID}/rpc`,
+      expect.objectContaining({ method: 'POST', credentials: 'include' }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      `https://privy.4626.fun/api/v1/wallets/${WALLET_ID}/rpc`,
+      expect.objectContaining({ method: 'POST', credentials: 'include' }),
+    )
+    warnSpy.mockRestore()
+  })
+
+  it('surfaces the proxy failure when both origins return 401', async () => {
+    const messageHex = `0x${Buffer.from('XMTP inbox signature').toString('hex')}`
+    const fetchMock = vi.fn(async () => ({
+      ok: false,
+      status: 401,
+      text: async () => JSON.stringify({ error: 'Missing auth token.' }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    await expect(
+      privyAuthorizedWalletPersonalSign({
+        walletId: WALLET_ID,
+        messageHex,
+        generateAuthorizationSignature: vi.fn(async () => ({ signature: 'auth-sig-base64' })),
+        getToken: async () => 'access-token',
+      }),
+    ).rejects.toThrow('personal_sign failed (401)')
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    warnSpy.mockRestore()
+  })
+
+  it('sends privy-client-id when an app client is configured', async () => {
+    flagState.clientId = 'client-test-id'
+    try {
+      const fetchMock = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ data: { signature: SIG } }),
+      }))
+      vi.stubGlobal('fetch', fetchMock)
+
+      const messageHex = `0x${Buffer.from('XMTP inbox signature').toString('hex')}`
+      await privyAuthorizedWalletPersonalSign({
+        walletId: WALLET_ID,
+        messageHex,
+        generateAuthorizationSignature: vi.fn(async () => ({ signature: 'auth-sig-base64' })),
+        getToken: async () => 'access-token',
+      })
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({ 'privy-client-id': 'client-test-id' }),
+        }),
+      )
+    } finally {
+      flagState.clientId = null
+    }
   })
 })

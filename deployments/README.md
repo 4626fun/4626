@@ -4,9 +4,11 @@ This directory tracks committed deployment artifacts and ABI snapshots used by t
 
 ## Current Canonical Release
 
-- Base mainnet bytecode epoch: **`v1.16.0`** — `deployments/base/v1.16.0-bytecode-manifest.json` (lane-neutral rename + agent lane entries). Ops runbook: `docs/_internal/deployment-releases-legacy/v1.16.0-bytecode-epoch.md`.
-- Live infra addresses: `test/current-release-target-guard.sh` + `docs/reference/addresses.md` (still documents v1.15.x infra shell until greenfield redeploy).
-- Prior bytecode manifest: `deployments/base/v1.15.1-bytecode-manifest.json`
+- **Live infra (production traffic):** **v1.16.1-share-mesh** — `docs/reference/addresses.md` + `test/current-release-target-guard.sh`
+- **Bytecode manifest (live store verification):** `deployments/base/v1.16.1-bytecode-manifest.json` — ops runbook: `docs/_internal/deployment-releases-legacy/v1.16.1-bytecode-epoch.md`
+- **Planned greenfield:** **v1.17.0** — `docs/_internal/deployment-releases-legacy/v1.17.0-greenfield.md` + `./script/run-v1170-greenfield-cutover.sh` (pre-broadcast)
+
+Prior bytecode manifests: `v1.16.0`, `v1.15.1`, `v1.14.1`, … under `deployments/base/`.
 
 ## Directory Map
 
@@ -14,8 +16,8 @@ This directory tracks committed deployment artifacts and ABI snapshots used by t
 deployments/
 └── base/
     ├── v1.7.1-bytecode-manifest.json
-    ├── v1.8.2-bytecode-manifest.json
-    ├── v1.8.3-bytecode-manifest.json
+    ├── v1.16.1-bytecode-manifest.json   ← live verification target
+    ├── v1.17.0-bytecode-manifest.json   ← generated at v1.17 cutover
     ├── archive/
     │   └── 2026-01-addresses.json
     └── contracts/
@@ -52,3 +54,4 @@ deployments/
 2. Update ABI snapshots under `base/contracts/` whenever deployed interfaces change.
 3. Never overwrite archive snapshots; append a new timestamped file instead.
 4. Keep this README aligned to the actual tree (no placeholder networks or pending-chain tables).
+5. After v1.17.0 greenfield cutover, move v1.16.1 addresses to **Deprecated** in `docs/reference/addresses.md` and update `test/current-release-target-guard.sh`.

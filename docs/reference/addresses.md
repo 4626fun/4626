@@ -7,6 +7,8 @@ sidebar_position: 1
 
 Canonical deployed contract addresses for 4626 on Base mainnet (**v1.16.1-share-mesh**).
 
+> **Planned release:** full greenfield **v1.17.0** — see [`docs/_internal/deployment-releases-legacy/v1.17.0-greenfield.md`](../_internal/deployment-releases-legacy/v1.17.0-greenfield.md). Orchestrator: `./script/run-v1170-greenfield-cutover.sh`. Do not flip this page to v1.17.0 addresses until post-broadcast handoff.
+
 For launch procedures, see [Getting started](/getting-started). This page lists **shared infrastructure** (batcher, factories, registry). Per-creator vault, wrapper, and ShareOFT addresses are emitted at deploy and available in the application and onchain events.
 
 > **Terms:** **New vault launch** = fresh deploy on the current release (internal: *greenfield*). **Solana bridge at finalize** = ~30% of `■` bridged during activation (internal: *Pipe A*). See [Glossary](/reference/glossary#quick-definitions).
@@ -42,6 +44,28 @@ Notes:
 - `DeploymentBatcher` deploys as a slim shell; helpers and `DeploymentBatcherPhase1Module` wire post-deploy via protocol treasury Safe (`wireDeploymentHelpers` + `setPhase1Module`).
 - **New vault launches** use **Phase1Module immutables** (`phase1Module()` → `0xc7d44…`), not batcher-shell module getters.
 - Pre-v1.16.1 batchers (`0x17163e…`, `0x660B25…`, `0xa99058…`, and older) are deprecated for **new vault launches**.
+
+### Planned: v1.17.0 greenfield
+
+| Item | Status |
+|------|--------|
+| Release packet | [`v1.17.0-greenfield.md`](../_internal/deployment-releases-legacy/v1.17.0-greenfield.md) |
+| Orchestrator | `./script/run-v1170-greenfield-cutover.sh` |
+| Bytecode manifest | `deployments/base/v1.17.0-bytecode-manifest.json` (generated pre/post broadcast) |
+| Live addresses | **TBD** — fill from `HANDOFF:*` logs after `./script/deploy-base-full-release.sh` |
+
+After cutover: move the **Current infrastructure** table below into **Deprecated (v1.16.1-share-mesh)** and replace with v1.17.0 HANDOFF addresses.
+
+### Deprecated infrastructure
+
+| Epoch / label | Representative addresses | Notes |
+|---------------|-------------------------|-------|
+| v1.16.1-share-mesh | Registry `0x1eb9A3…`, batcher `0xA9024e…`, store `0x7D1029…` | **Still live** until v1.17.0 cutover; then move full table here |
+| v1.16.0 shell | Batcher `0x17163e67dED6B45bd2A7E6a509A32fB7b0cB6D33` | Lacks `shareMeshHelper()` |
+| v1.14.1 shell | Batcher `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1` | Pre–share-mesh |
+| v1.14.0 shell | Batcher `0xa99058f424FB3ACC639F59355C65C40149030651` | Pre–v1.14.1 refresh |
+| Legacy AMOE router | `0xc57aedc38eba3edfa116f92b3fc427af7eb06b0a` | v1.11 manager fan-out |
+| Legacy lottery manager | `0x04CADE6FDf564A5005FF80930d8e8784cb1A7Cf8` | Pre–v1.16.1 registry stack |
 
 ### Protocol Safes
 
