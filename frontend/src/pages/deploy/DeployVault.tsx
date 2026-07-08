@@ -86,7 +86,6 @@ import {
   BASE_DEFAULTS,
   SPLIT_PHASE1_DEPLOYMENT_BATCHER,
   SPLIT_PHASE1_PHASE3_HELPER,
-  isDeprecatedDeploymentBatcherAddress,
   isShareOftSaltOverrideDisabledBatcher,
   normalizeDeploymentBatcherAddress,
 } from '@/config/contracts.defaults'
@@ -348,14 +347,6 @@ function resolveDeploymentVersionFromRuntime(): string {
   const params = new URLSearchParams(window.location.search)
   const queryVersion = normalizeDeploymentVersion(params.get('deploymentVersion'))
   return queryVersion ?? envVersion ?? DEFAULT_DEPLOYMENT_VERSION
-}
-
-function normalizeDeploymentBatcherAddress(value: unknown): Address | null {
-  const normalized = normalizeAddressLike(typeof value === 'string' ? value : null)
-  if (!normalized) return null
-  if (isDeprecatedDeploymentBatcherAddress(normalized)) return null
-  const mapped = normalizeDeploymentBatcherAddress(normalized)
-  return mapped ? (mapped as Address) : null
 }
 
 function defaultPhase3HelperForBatcher(batcher: Address | null | undefined): Address | null {

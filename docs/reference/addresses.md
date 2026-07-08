@@ -9,7 +9,7 @@ Canonical deployed contract addresses for 4626 on Base mainnet (**v1.18.0-greenf
 
 > **Post-broadcast:** on-chain cutover complete 2026-07-08. Release packet: [`v1.18.0-greenfield.md`](../_internal/deployment-releases-legacy/v1.18.0-greenfield.md). Handoff: `tmp/base-v1.18.0-handoff.env`.
 
-> **Pending operator steps:** treasury Safe must `wireDeploymentHelpers` + `setPhase1Module` on batcher `0x02D7ab…`; fresh AMOE router on new `LotteryManager4626` `0xbE87AD…`; Vercel env + redeploy.
+> **Cutover complete (2026-07-08):** treasury Safe wiring, AMOE router `0x18D180…` on manager `0xbE87AD…`, bytecode store seeded, Vercel production/development env synced, legacy v1.16.1 manager AMOE relayer kill-switched. Preview env vars remain dashboard-only (Vercel CLI skips preview targets).
 
 > **Abandoned:** v1.17.0 partial broadcast (orphan infra only). Handoff: `tmp/base-v1.17.0-handoff.env`.
 
