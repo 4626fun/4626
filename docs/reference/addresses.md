@@ -33,7 +33,7 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 | DeploymentBatcher | `0xA9024e1B89C5Be34502A275576Cc137473d65839` |
 | DeploymentBatcherPhase1Module | `0xc7d44c4136f10a780B93cCA901F8Fcf2cc130bD1` |
 | DeploymentBatcherPhase2Module | `0xD641076Ff1b1121c3cF85F5d69B386bCE91a6bb2` |
-| DeploymentBatcherPhase3Helper | `0x219eA6e7c28b20c668CbaCD99246C1c17a5D97F6` *(pre-fix; run `./script/upgrade-phase3-automation.sh` to wire hot automation Safe)* |
+| DeploymentBatcherPhase3Helper | `0x38Abe158e1A71774Cfa014287b574d52051133Fc` |
 | DeploymentBatcherShareMeshHelper | `0x64aA8ba6aD4641034Ca5A1bF31609a5fa9e5dc80` |
 | DeploymentBatcherUtilsHelper | `0x5B59219683b748a321f84eFDfe5A29d3bB945B27` |
 
@@ -52,6 +52,24 @@ Notes:
 
 Do **not** set `PROTOCOL_AUTOMATION_SAFE` to the treasury address. Phase 3 deploys wire Charm `manager` and Ajna `admin` to the automation Safe; treasury keeps adapter ownership only.
 
+### AMOE (ZK lottery entry)
+
+| Contract / role | Address | Notes |
+|-----------------|---------|-------|
+| `LotteryAmoeRouter` (v3, PLONK + 9 public inputs) | `0x066e11d795656A2A980585a414BC0fD6BB12e057` | **Production router.** Fan-out target = `LotteryManager4626` `0xD62a…` on Registry4626 `0x1eb9…`. |
+| `LotteryManager4626` (v1.16.1) | `0xD62a8a2F4c25587FA80ED5782b50Af6654122b0b` | Canonical manager for AKITA + new stack. |
+| Legacy `LotteryAmoeRouter` | `0xc57aedc38eba3edfa116f92b3fc427af7eb06b0a` | **Deprecated.** Was wired to v1.11 manager `0x04CADE…`; do not point Vercel here. |
+| Legacy manager (v1.11) | `0x04CADE6FDf564A5005FF80930d8e8784cb1A7Cf8` | Pre–v1.16.1. Kill-switch relayer after cutover. |
+| Allowlist + ledger publisher | `0xAb6d5C10b03300326cd7fab7267ae192842967b5` | Canonical CSW — must match on-chain `allowlistPublisher` / `pointsLedgerPublisher`. |
+| Protocol AMOE creator coin (AKITA) | `0x5b674196812451b7cec024fe9d22d2c0b172fa75` | Default target for protocol-entry AMOE flows. |
+
+**Cutover checklist (production):**
+
+1. `./script/wire-amoe-router-v1161.sh` — `router.setManager(0xD62a…)`, `manager.setAuthorizedAmoeRelayer(0x066e11…)`, publishers → canonical CSW.
+2. Set `LOTTERY_AMOE_ROUTER=0x066e11d795656A2A980585a414BC0fD6BB12e057` on Vercel (`production`, `preview`, `development`) and redeploy.
+3. Republish allowlist + points-ledger Merkle roots on the v3 router (`/api/v1/lottery/amoe/publish-cron` or manual ops). Roots are **one-shot per epoch** on each router address.
+4. Confirm signed AMOE messages embed `Lottery Manager: 0xD62a…` (nonce API reads live `LOTTERY_MANAGER` env).
+
 ## Environment cutover (v1.16.1-share-mesh)
 
 After an infra epoch deploy, update **local `.env`**, **Vercel** (`production`, `preview`, `development`), and any operator host env to these keys. Canonical values:
@@ -67,6 +85,7 @@ After an infra epoch deploy, update **local `.env`**, **Vercel** (`production`, 
 | `DEPLOYMENT_BATCHER`, `CREATOR_VAULT_BATCHER` | `VITE_CREATOR_VAULT_BATCHER` | `0xA9024e1B89C5Be34502A275576Cc137473d65839` |
 | `CREATOR_VAULT_BATCHER_AUTO_HANDOFF` | `VITE_CREATOR_VAULT_BATCHER_AUTO_HANDOFF` | `0xA9024e1B89C5Be34502A275576Cc137473d65839` |
 | `SOLANA_BRIDGE_ADAPTER` | `VITE_SOLANA_BRIDGE_ADAPTER` | `0x363662F9728A9fd12c7CA398e5A6d1d9E7De07F1` |
+| `LOTTERY_AMOE_ROUTER` | — | `0x066e11d795656A2A980585a414BC0fD6BB12e057` |
 | — | `VITE_DEPLOYMENT_VERSION` | `v1.16.1` |
 
 `VITE_DEPLOYMENT_VERSION` pins the CREATE2 namespace for **new vault launches**.

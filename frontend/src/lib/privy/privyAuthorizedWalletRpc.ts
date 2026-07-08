@@ -68,6 +68,67 @@ function parseWalletRpcSignature(payload: unknown, context: string): Hex {
   throw new Error(`Invalid signature returned from ${context}`)
 }
 
+async function postAuthorizedWalletRpc(params: {
+  walletId: string
+  body: Record<string, unknown>
+  generateAuthorizationSignature: PrivyAuthorizationSignatureGenerator
+  getToken?: () => Promise<string | null>
+  refreshSession?: () => Promise<unknown>
+  context: string
+}): Promise<Hex> {
+  if (typeof params.refreshSession === 'function') {
+    await params.refreshSession().catch(() => null)
+  }
+
+  const appId = getPrivyAppId()
+  if (!appId) {
+    throw new Error('Privy app id is not configured.')
+  }
+
+  const getToken = params.getToken ?? getAccessToken
+  const accessToken = await getToken()
+  if (!accessToken) {
+    throw new Error('Privy access token missing — sign in again with email OTP.')
+  }
+
+  const rpcAuthorizationUrl = resolvePrivyWalletRpcAuthorizationUrl(params.walletId)
+
+  const { signature: authorizationSignature } = await params.generateAuthorizationSignature({
+    version: 1,
+    method: 'POST',
+    url: rpcAuthorizationUrl,
+    body: params.body,
+    headers: { 'privy-app-id': appId },
+  })
+
+  const response = await fetch(rpcAuthorizationUrl, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'privy-app-id': appId,
+      Authorization: `Bearer ${accessToken}`,
+      'privy-authorization-signature': authorizationSignature,
+    },
+    body: JSON.stringify(params.body),
+  })
+
+  const responseText = await response.text()
+  if (!response.ok) {
+    throw new Error(`Privy wallet ${params.context} failed (${response.status}): ${responseText.slice(0, 400)}`)
+  }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(responseText)
+  } catch {
+    throw new Error(`Privy wallet ${params.context} returned a non-JSON response.`)
+  }
+
+  return parseWalletRpcSignature(parsed, params.context)
+}
+
 /**
  * Privy unified-stack wallets with an `owner_id` require a user authorization
  * signature on Wallet API RPC calls. Mirrors `@privy-io/js-sdk-core` wallet RPC.
@@ -87,64 +148,60 @@ export async function privyAuthorizedWalletSecp256k1Sign(params: {
     throw new Error('Privy secp256k1_sign requires a 32-byte digest hash (0x + 64 hex chars).')
   }
 
-  if (typeof params.refreshSession === 'function') {
-    await params.refreshSession().catch(() => null)
-  }
-
-  const appId = getPrivyAppId()
-  if (!appId) {
-    throw new Error('Privy app id is not configured.')
-  }
-
-  const getToken = params.getToken ?? getAccessToken
-  const accessToken = await getToken()
-  if (!accessToken) {
-    throw new Error('Privy access token missing — sign in again with email OTP.')
-  }
-
-  const rpcAuthorizationUrl = resolvePrivyWalletRpcAuthorizationUrl(walletId)
-  const body = {
-    chain_type: 'ethereum',
-    method: 'secp256k1_sign',
-    params: { hash: params.hash },
-  }
-
-  const { signature: authorizationSignature } = await params.generateAuthorizationSignature({
-    version: 1,
-    method: 'POST',
-    url: rpcAuthorizationUrl,
-    body,
-    headers: { 'privy-app-id': appId },
-  })
-
-  const response = await fetch(rpcAuthorizationUrl, {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      'privy-app-id': appId,
-      Authorization: `Bearer ${accessToken}`,
-      'privy-authorization-signature': authorizationSignature,
+  return postAuthorizedWalletRpc({
+    walletId,
+    body: {
+      chain_type: 'ethereum',
+      method: 'secp256k1_sign',
+      params: { hash: params.hash },
     },
-    body: JSON.stringify(body),
+    generateAuthorizationSignature: params.generateAuthorizationSignature,
+    getToken: params.getToken,
+    refreshSession: params.refreshSession,
+    context: 'secp256k1_sign',
   })
+}
 
-  const responseText = await response.text()
-  if (!response.ok) {
-    throw new Error(
-      `Privy wallet secp256k1_sign failed (${response.status}): ${responseText.slice(0, 400)}`,
-    )
+/**
+ * EIP-191 personal_sign via the Privy Wallet API with a user authorization
+ * signature. Needed for unified-stack (owner_id) embedded wallets where the
+ * SDK's own personal_sign path 401s with "No valid authorization signatures"
+ * (e.g. XMTP inbox registration on /waitlist). Accepts the hex-encoded
+ * message exactly as EIP-1193 `personal_sign` transports it.
+ */
+export async function privyAuthorizedWalletPersonalSign(params: {
+  walletId: string
+  /** 0x-prefixed hex-encoded message bytes (EIP-1193 personal_sign param form). */
+  messageHex: string
+  generateAuthorizationSignature: PrivyAuthorizationSignatureGenerator
+  getToken?: () => Promise<string | null>
+  refreshSession?: () => Promise<unknown>
+}): Promise<Hex> {
+  const walletId = String(params.walletId ?? '').trim()
+  if (!walletId) {
+    throw new Error('Privy wallet id is required for authorized personal_sign.')
+  }
+  const messageHex = String(params.messageHex ?? '').trim()
+  if (!/^0x[0-9a-fA-F]*$/.test(messageHex)) {
+    throw new Error('Privy personal_sign requires a 0x-prefixed hex-encoded message.')
   }
 
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(responseText)
-  } catch {
-    throw new Error('Privy wallet secp256k1_sign returned a non-JSON response.')
-  }
-
-  return parseWalletRpcSignature(parsed, 'privyAuthorizedWalletSecp256k1Sign')
+  return postAuthorizedWalletRpc({
+    walletId,
+    body: {
+      chain_type: 'ethereum',
+      method: 'personal_sign',
+      params: {
+        // Privy Wallet API hex encoding expects the digits without the 0x prefix.
+        message: messageHex.slice(2),
+        encoding: 'hex',
+      },
+    },
+    generateAuthorizationSignature: params.generateAuthorizationSignature,
+    getToken: params.getToken,
+    refreshSession: params.refreshSession,
+    context: 'personal_sign',
+  })
 }
 
 export function resolvePrivyUnifiedWalletId(params: {

@@ -9,6 +9,7 @@ vi.mock('@/lib/flags/flags', () => ({
 
 import {
   isPrivyUnifiedStackWallet,
+  privyAuthorizedWalletPersonalSign,
   privyAuthorizedWalletSecp256k1Sign,
   resolvePrivyUnifiedWalletId,
 } from '@/lib/privy/privyAuthorizedWalletRpc'
@@ -123,6 +124,74 @@ describe('privyAuthorizedWalletSecp256k1Sign', () => {
         getToken: async () => 'access-token',
       }),
     ).rejects.toThrow('requires a 32-byte digest hash')
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(generateAuthorizationSignature).not.toHaveBeenCalled()
+  })
+})
+
+describe('privyAuthorizedWalletPersonalSign', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('sends hex message (without 0x) and privy-authorization-signature via canonical origin', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ data: { signature: SIG } }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const generateAuthorizationSignature = vi.fn(async () => ({ signature: 'auth-sig-base64' }))
+    const messageHex = `0x${Buffer.from('XMTP inbox signature').toString('hex')}`
+
+    const out = await privyAuthorizedWalletPersonalSign({
+      walletId: WALLET_ID,
+      messageHex,
+      generateAuthorizationSignature,
+      getToken: async () => 'access-token',
+    })
+
+    expect(out).toBe(SIG)
+    expect(generateAuthorizationSignature).toHaveBeenCalledWith(
+      expect.objectContaining({
+        version: 1,
+        method: 'POST',
+        url: `https://auth.privy.io/api/v1/wallets/${WALLET_ID}/rpc`,
+        body: {
+          chain_type: 'ethereum',
+          method: 'personal_sign',
+          params: { message: messageHex.slice(2), encoding: 'hex' },
+        },
+      }),
+    )
+    expect(fetchMock).toHaveBeenCalledWith(
+      `https://auth.privy.io/api/v1/wallets/${WALLET_ID}/rpc`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer access-token',
+          'privy-authorization-signature': 'auth-sig-base64',
+        }),
+      }),
+    )
+  })
+
+  it('rejects non-hex messages before calling Privy', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const generateAuthorizationSignature = vi.fn(async () => ({ signature: 'auth-sig-base64' }))
+
+    await expect(
+      privyAuthorizedWalletPersonalSign({
+        walletId: WALLET_ID,
+        messageHex: 'plain text message',
+        generateAuthorizationSignature,
+        getToken: async () => 'access-token',
+      }),
+    ).rejects.toThrow('0x-prefixed hex-encoded message')
 
     expect(fetchMock).not.toHaveBeenCalled()
     expect(generateAuthorizationSignature).not.toHaveBeenCalled()

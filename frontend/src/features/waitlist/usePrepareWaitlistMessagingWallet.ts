@@ -1,11 +1,12 @@
 import { useCallback, useMemo } from 'react'
-import { useActiveWallet, usePrivy, useWallets } from '@privy-io/react-auth'
+import { useActiveWallet, useAuthorizationSignature, usePrivy, useWallets } from '@privy-io/react-auth'
 import { useAccount, useConfig, useConnect, useDisconnect, useWalletClient } from 'wagmi'
 
 import {
   extractPrivyWalletsFromUser,
   useEnsurePrivyEmbeddedWallet,
 } from '@/lib/privy/embeddedWallet'
+import type { PrivyAuthorizationSignatureGenerator } from '@/lib/privy/privyAuthorizedWalletRpc'
 
 import {
   isWaitlistMessagingWagmiConnector,
@@ -46,6 +47,7 @@ export function usePrepareWaitlistMessagingWallet(params: {
 }) {
   const privy = usePrivy()
   const wagmiConfig = useConfig()
+  const { generateAuthorizationSignature } = useAuthorizationSignature()
   const { embeddedEoaAddress, ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
   const { wallets } = useWallets()
   const { setActiveWallet } = useActiveWallet()
@@ -98,6 +100,9 @@ export function usePrepareWaitlistMessagingWallet(params: {
       wagmiConfig,
       connectTrack: params.connectTrack,
       canonicalCswAddress: params.canonicalCswAddress ?? null,
+      generateAuthorizationSignature:
+        generateAuthorizationSignature as PrivyAuthorizationSignatureGenerator,
+      privyUser: privy.user,
     })
   }, [
     connectAsync,
@@ -106,12 +111,14 @@ export function usePrepareWaitlistMessagingWallet(params: {
     disconnectAsync,
     embeddedEoaAddress,
     ensureEmbeddedWallet,
+    generateAuthorizationSignature,
     getToken,
     mergedWallets,
     messagingWalletReady,
     params.canonicalCswAddress,
     params.connectTrack,
     params.enabled,
+    privy.user,
     setActiveWallet,
     wagmiConfig,
   ])

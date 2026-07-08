@@ -10,6 +10,12 @@ import {
 import { isConnectorAlreadyConnectedError } from '@/lib/swap/connectGate'
 
 import { refreshPrivyEmbeddedSignerSession } from '@/lib/privy/refreshEmbeddedSignerSession'
+import {
+  isPrivyUnifiedStackWallet,
+  privyAuthorizedWalletPersonalSign,
+  resolvePrivyUnifiedWalletId,
+  type PrivyAuthorizationSignatureGenerator,
+} from '@/lib/privy/privyAuthorizedWalletRpc'
 
 import type { WaitlistConnectTrack } from './waitlistFlowState'
 
@@ -29,6 +35,13 @@ export type PrepareWaitlistMessagingWalletInput = {
   wagmiConfig: Config
   connectTrack?: WaitlistConnectTrack
   canonicalCswAddress?: string | null
+  /**
+   * Privy user authorization-signature generator (from `useAuthorizationSignature`).
+   * Required for unified-stack (owner_id) embedded wallets: their personal_sign
+   * goes through the Wallet API and 401s without `privy-authorization-signature`.
+   */
+  generateAuthorizationSignature?: PrivyAuthorizationSignatureGenerator
+  privyUser?: unknown
 }
 
 export type PrepareWaitlistMessagingWalletResult =
@@ -113,8 +126,9 @@ async function resolveEmbeddedProvider(wallet: Record<string, unknown>): Promise
  * throw "provider.on is not a function". For this manualConnectOnly messaging
  * path we don't need real event subscriptions.
  */
-function wrapWaitlistMessagingProvider(
-  real: { request: (args: unknown) => Promise<unknown> }
+export function wrapWaitlistMessagingProvider(
+  real: { request: (args: unknown) => Promise<unknown> },
+  authorizedPersonalSign?: (messageHex: string) => Promise<string>,
 ) {
   // Build so that event methods can return the provider (for any code that
   // chains .on().on() etc.). This prevents "provider.on is not a function"
@@ -138,6 +152,30 @@ function wrapWaitlistMessagingProvider(
         // reject with a clear message. Existing catch blocks in probes will fall back.
         throw new Error(`wallet method ${method} not supported for waitlist messaging connector`)
       }
+      if (method === 'personal_sign' && typeof authorizedPersonalSign === 'function') {
+        // Unified-stack (owner_id) embedded wallets: the SDK's own personal_sign
+        // hits the Wallet API without a user authorization signature and 401s
+        // ("No valid authorization signatures were provided"). Sign through the
+        // authorized Wallet API lane instead; fall back to the raw provider so
+        // legacy embedded wallets keep working.
+        const params = Array.isArray(args?.params) ? args.params : []
+        const hexParams = params.filter(
+          (value: unknown): value is string => typeof value === 'string' && /^0x[0-9a-fA-F]*$/.test(value),
+        )
+        // EIP-1193 sends [message, address]; some providers reverse it. Skip
+        // the 20-byte address param so we never sign the address by mistake.
+        const messageHex = hexParams.find((value: string) => !/^0x[0-9a-fA-F]{40}$/.test(value)) ?? null
+        if (messageHex) {
+          try {
+            return await authorizedPersonalSign(messageHex)
+          } catch (error) {
+            console.warn(
+              '[waitlist-messaging] authorized personal_sign failed, falling back to embedded provider:',
+              error,
+            )
+          }
+        }
+      }
       return real.request(args)
     },
     // No-op EIP-1193-ish event methods. We don't need real subscriptions
@@ -156,8 +194,9 @@ async function connectEmbeddedWaitlistProvider(
   input: Pick<PrepareWaitlistMessagingWalletInput, 'connectAsync' | 'wagmiConfig'>,
   provider: { request: (args: unknown) => Promise<unknown> },
   embeddedAddress: string | null,
+  authorizedPersonalSign?: (messageHex: string) => Promise<string>,
 ): Promise<PrepareWaitlistMessagingWalletResult> {
-  const safeProvider = wrapWaitlistMessagingProvider(provider)
+  const safeProvider = wrapWaitlistMessagingProvider(provider, authorizedPersonalSign)
   try {
     await input.connectAsync({
       connector: injected({
@@ -374,9 +413,34 @@ export async function prepareWaitlistMessagingWallet(
     }
   }
 
+  const unifiedWalletId =
+    typeof input.generateAuthorizationSignature === 'function' &&
+    isPrivyUnifiedStackWallet(embeddedWallet, input.privyUser)
+      ? resolvePrivyUnifiedWalletId({
+          wallet: embeddedWallet,
+          user: input.privyUser,
+          address: embeddedAddress,
+        })
+      : null
+  const authorizedPersonalSign =
+    unifiedWalletId && typeof input.generateAuthorizationSignature === 'function'
+      ? (messageHex: string) =>
+          privyAuthorizedWalletPersonalSign({
+            walletId: unifiedWalletId,
+            messageHex,
+            generateAuthorizationSignature: input.generateAuthorizationSignature!,
+            getToken: input.getToken,
+          })
+      : undefined
+
   // The privy connector is not mounted on email/Zora waitlist tracks — use the
   // synthetic embedded provider directly to avoid waking extension injectors.
-  const embeddedConnect = await connectEmbeddedWaitlistProvider(input, provider, embeddedAddress)
+  const embeddedConnect = await connectEmbeddedWaitlistProvider(
+    input,
+    provider,
+    embeddedAddress,
+    authorizedPersonalSign,
+  )
   if (embeddedConnect.ok) return embeddedConnect
 
   return embeddedConnect

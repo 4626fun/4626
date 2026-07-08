@@ -4,6 +4,7 @@ import {
   findLiveEmbeddedPrivyWallet,
   isWaitlistMessagingWagmiConnector,
   prepareWaitlistMessagingWallet,
+  wrapWaitlistMessagingProvider,
 } from './prepareWaitlistMessagingWallet'
 
 const EMBEDDED = '0x2222222222222222222222222222222222222222'
@@ -112,6 +113,58 @@ describe('prepareWaitlistMessagingWallet', () => {
     })
     expect(result).toEqual({ ok: true })
     expect(connectAsync).toHaveBeenCalledTimes(1)
+  })
+
+  it('routes personal_sign through the authorized Wallet API lane for unified-stack wallets', async () => {
+    const realRequest = vi.fn()
+    const authorizedPersonalSign = vi.fn(async () => `0x${'ab'.repeat(65)}`)
+    const provider = wrapWaitlistMessagingProvider({ request: realRequest }, authorizedPersonalSign)
+
+    const messageHex = `0x${Buffer.from('XMTP : Authenticate to inbox').toString('hex')}`
+    const signature = await provider.request({
+      method: 'personal_sign',
+      params: [messageHex, EMBEDDED],
+    })
+
+    expect(signature).toBe(`0x${'ab'.repeat(65)}`)
+    expect(authorizedPersonalSign).toHaveBeenCalledWith(messageHex)
+    expect(realRequest).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the raw embedded provider when the authorized lane fails', async () => {
+    const realRequest = vi.fn(async () => `0x${'cd'.repeat(65)}`)
+    const authorizedPersonalSign = vi.fn(async () => {
+      throw new Error('No valid authorization signatures were provided.')
+    })
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const provider = wrapWaitlistMessagingProvider({ request: realRequest }, authorizedPersonalSign)
+
+    const messageHex = `0x${Buffer.from('XMTP : Authenticate to inbox').toString('hex')}`
+    const signature = await provider.request({
+      method: 'personal_sign',
+      params: [messageHex, EMBEDDED],
+    })
+
+    expect(signature).toBe(`0x${'cd'.repeat(65)}`)
+    expect(authorizedPersonalSign).toHaveBeenCalledTimes(1)
+    expect(realRequest).toHaveBeenCalledWith({
+      method: 'personal_sign',
+      params: [messageHex, EMBEDDED],
+    })
+  })
+
+  it('keeps personal_sign on the raw provider for legacy wallets without an authorized lane', async () => {
+    const realRequest = vi.fn(async () => `0x${'ef'.repeat(65)}`)
+    const provider = wrapWaitlistMessagingProvider({ request: realRequest })
+
+    const messageHex = `0x${Buffer.from('hello').toString('hex')}`
+    const signature = await provider.request({
+      method: 'personal_sign',
+      params: [messageHex, EMBEDDED],
+    })
+
+    expect(signature).toBe(`0x${'ef'.repeat(65)}`)
+    expect(realRequest).toHaveBeenCalledTimes(1)
   })
 
   it('connects the canonical CSW via Coinbase connector for base-app-direct', async () => {
