@@ -169,6 +169,38 @@ type PrivyWalletLoginFn = (input: {
   walletList?: readonly string[]
 }) => void
 
+const WALLET_LOGIN_AUTH_POLL_ATTEMPTS = 120
+const WALLET_LOGIN_AUTH_POLL_DELAY_MS = 500
+const WALLET_LOGIN_TOKEN_ATTEMPTS = 8
+const WALLET_LOGIN_TOKEN_RETRY_DELAY_MS = 250
+const WALLET_LOGIN_TOKEN_TIMEOUT_MS = 4_000
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => globalThis.setTimeout(resolve, ms))
+}
+
+/**
+ * Wait for Privy to report authenticated without calling getAccessToken.
+ * Hammering getAccessToken while signed out triggers session refresh attempts
+ * against privy.4626.fun and spams POST /api/v1/sessions 400s.
+ */
+async function waitForPrivyAuthenticated(params: {
+  isAuthenticated: () => boolean
+  attempts?: number
+  retryDelayMs?: number
+}): Promise<boolean> {
+  const attempts = Math.max(1, Number(params.attempts ?? WALLET_LOGIN_AUTH_POLL_ATTEMPTS))
+  const retryDelayMs = Math.max(0, Number(params.retryDelayMs ?? WALLET_LOGIN_AUTH_POLL_DELAY_MS))
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (params.isAuthenticated()) return true
+    if (attempt < attempts - 1 && retryDelayMs > 0) {
+      await sleep(retryDelayMs)
+    }
+  }
+  return false
+}
+
 async function readExistingPrivyAccessToken(privy: SafePrivyClient): Promise<string> {
   return readPrivyAccessTokenWithRetries({
     read: privy.getAccessToken?.bind(privy) ?? null,
@@ -183,8 +215,11 @@ async function readExistingPrivyAccessToken(privy: SafePrivyClient): Promise<str
  * so the wallet picker always opens instead of short-circuiting on an OTP token.
  */
 async function prepareExplicitWalletPrivyLogin(privy: SafePrivyClient): Promise<void> {
+  // Signed-out users must not call getAccessToken here — stale refresh cookies
+  // would otherwise spam POST /api/v1/sessions on every wallet sign-in attempt.
+  if (!privy.authenticated) return
+
   const existingToken = await readExistingPrivyAccessToken(privy)
-  if (!existingToken && !privy.authenticated) return
 
   await runWaitlistPrivyLogout({
     logout: privy.logout ?? null,
@@ -195,6 +230,11 @@ async function prepareExplicitWalletPrivyLogin(privy: SafePrivyClient): Promise<
 }
 
 let returningWalletSignInFlight: Promise<string> | null = null
+
+/** Test-only reset for module-level wallet sign-in dedupe state. */
+export function resetWaitlistReturningWalletSignInForTests(): void {
+  returningWalletSignInFlight = null
+}
 
 export async function runWaitlistReturningWalletSignIn(params: {
   privy: SafePrivyClient
@@ -209,20 +249,36 @@ export async function runWaitlistReturningWalletSignIn(params: {
 
     await prepareExplicitWalletPrivyLogin(privy)
 
-    login({
-      loginMethods: ['wallet'],
-      walletList: WAITLIST_RETURNING_WALLET_LOGIN_LIST,
+    try {
+      login({
+        loginMethods: ['wallet'],
+        walletList: WAITLIST_RETURNING_WALLET_LOGIN_LIST,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message.trim() : String(error ?? '').trim()
+      throw new Error(
+        message || 'Could not open the wallet sign-in modal. Refresh the page and try again.',
+      )
+    }
+
+    const authenticated = await waitForPrivyAuthenticated({
+      isAuthenticated: () => privy.authenticated === true,
     })
+    if (!authenticated) {
+      throw new Error('Sign-in cancelled.')
+    }
 
     const walletLoginToken = await readPrivyAccessTokenWithRetries({
       read: privy.getAccessToken?.bind(privy) ?? null,
-      attempts: 60,
-      retryDelayMs: 500,
-      timeoutMs: null,
+      attempts: WALLET_LOGIN_TOKEN_ATTEMPTS,
+      retryDelayMs: WALLET_LOGIN_TOKEN_RETRY_DELAY_MS,
+      timeoutMs: WALLET_LOGIN_TOKEN_TIMEOUT_MS,
     })
 
     if (!walletLoginToken) {
-      throw new Error('Sign-in cancelled.')
+      throw new Error(
+        'Wallet sign-in completed but Privy access token is missing. Refresh the page and try again.',
+      )
     }
 
     if (!isLocalDevPrivySessionMarkerMode()) {

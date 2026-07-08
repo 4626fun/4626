@@ -21,6 +21,12 @@ import type { WaitlistConnectTrack } from './waitlistFlowState'
 
 export { isWaitlistMessagingWagmiConnector, WAITLIST_EMBEDDED_CONNECTOR_ID }
 
+export function isWaitlistMessagingLoopbackHost(): boolean {
+  if (typeof window === 'undefined') return false
+  const host = window.location.hostname.toLowerCase()
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]'
+}
+
 export type PrepareWaitlistMessagingWalletInput = {
   wallets: unknown[]
   embeddedEoaAddress: string | null
@@ -369,14 +375,11 @@ export async function prepareWaitlistMessagingWallet(
 
   const provider = await resolveEmbeddedProvider(embeddedWallet)
   if (!provider) {
-    if (typeof window !== 'undefined') {
-      const h = window.location.hostname.toLowerCase()
-      if (h === 'localhost' || h === '127.0.0.1') {
-        return {
-          ok: false,
-          error:
-            'Embedded signer session not ready on localhost (privy.4626.fun custom domain). Sign out completely, hard refresh, and sign in with email OTP again. If linking Zora/OAuth, also allowlist localhost:5173/5174 in your Privy Local Dev client Allowed Origins.',
-        }
+    if (isWaitlistMessagingLoopbackHost()) {
+      return {
+        ok: false,
+        error:
+          'Embedded signer session not ready on localhost (privy.4626.fun custom domain). Sign out completely, hard refresh, and sign in with email OTP again. If linking Zora/OAuth, also allowlist localhost:5173/5174 in your Privy Local Dev client Allowed Origins.',
       }
     }
     return {
@@ -414,6 +417,7 @@ export async function prepareWaitlistMessagingWallet(
   }
 
   const unifiedWalletId =
+    !isWaitlistMessagingLoopbackHost() &&
     typeof input.generateAuthorizationSignature === 'function' &&
     isPrivyUnifiedStackWallet(embeddedWallet, input.privyUser)
       ? resolvePrivyUnifiedWalletId({

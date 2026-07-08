@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   findLiveEmbeddedPrivyWallet,
+  isWaitlistMessagingLoopbackHost,
   isWaitlistMessagingWagmiConnector,
   prepareWaitlistMessagingWallet,
   wrapWaitlistMessagingProvider,
 } from './prepareWaitlistMessagingWallet'
+import { privyAuthorizedWalletPersonalSign } from '@/lib/privy/privyAuthorizedWalletRpc'
 
 const EMBEDDED = '0x2222222222222222222222222222222222222222'
 
@@ -29,6 +31,14 @@ vi.mock('@/lib/xmtp/waitForMessagingWallet', async (importOriginal) => {
 vi.mock('@/lib/privy/refreshEmbeddedSignerSession', () => ({
   refreshPrivyEmbeddedSignerSession: vi.fn(async () => true),
 }))
+
+vi.mock('@/lib/privy/privyAuthorizedWalletRpc', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/privy/privyAuthorizedWalletRpc')>()
+  return {
+    ...actual,
+    privyAuthorizedWalletPersonalSign: vi.fn(async () => `0x${'11'.repeat(65)}`),
+  }
+})
 
 const wagmiConfig = {} as import('wagmi').Config
 
@@ -183,5 +193,46 @@ describe('prepareWaitlistMessagingWallet', () => {
     })
     expect(result).toEqual({ ok: true })
     expect(connectAsync).toHaveBeenCalledTimes(1)
+  })
+
+  it('detects loopback hosts for authorized-sign gating', () => {
+    vi.stubGlobal('window', {
+      location: { hostname: '127.0.0.1' },
+    } as Window & typeof globalThis)
+    expect(isWaitlistMessagingLoopbackHost()).toBe(true)
+    vi.unstubAllGlobals()
+  })
+
+  it('returns localhost embedded-signer error before attempting authorized signing', async () => {
+    vi.stubGlobal('window', {
+      location: { hostname: 'localhost' },
+    } as Window & typeof globalThis)
+
+    const result = await prepareWaitlistMessagingWallet({
+      wallets: [
+        {
+          id: 'wallet-unified',
+          address: EMBEDDED,
+          walletClientType: 'privy',
+          recovery_method: 'privy-v2',
+        },
+      ],
+      embeddedEoaAddress: EMBEDDED,
+      ensureEmbeddedWallet: vi.fn(async () => ({ address: EMBEDDED })),
+      connectAsync: vi.fn(),
+      connectors: [],
+      messagingWalletReady: false,
+      wagmiConfig,
+      generateAuthorizationSignature: vi.fn(async () => ({ signature: 'auth-sig' })),
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      error:
+        'Embedded signer session not ready on localhost (privy.4626.fun custom domain). Sign out completely, hard refresh, and sign in with email OTP again. If linking Zora/OAuth, also allowlist localhost:5173/5174 in your Privy Local Dev client Allowed Origins.',
+    })
+    expect(vi.mocked(privyAuthorizedWalletPersonalSign)).not.toHaveBeenCalled()
+
+    vi.unstubAllGlobals()
   })
 })

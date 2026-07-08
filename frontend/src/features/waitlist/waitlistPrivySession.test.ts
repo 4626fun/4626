@@ -27,6 +27,7 @@ import {
   establishWaitlistSessionAfterPrivyAuth,
   isWaitlistWalletSignInCancellation,
   mapWaitlistWalletSignInError,
+  resetWaitlistReturningWalletSignInForTests,
   runWaitlistReturningWalletSignIn,
 } from './waitlistPrivySession'
 
@@ -40,6 +41,7 @@ const mockPrivy = {
 describe('waitlistPrivySession', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    resetWaitlistReturningWalletSignInForTests()
     vi.mocked(readPrivyAccessTokenWithRetries).mockResolvedValue('privy-token')
     vi.mocked(bridgePrivySession).mockResolvedValue({
       ok: true,
@@ -78,7 +80,9 @@ describe('waitlistPrivySession', () => {
   })
 
   it('runWaitlistReturningWalletSignIn clears an existing Privy token before wallet modal', async () => {
-    const login = vi.fn()
+    const login = vi.fn(() => {
+      // Wallet modal completed.
+    })
     let tokenReads = 0
     vi.mocked(readPrivyAccessTokenWithRetries).mockImplementation(async () => {
       tokenReads += 1
@@ -99,15 +103,18 @@ describe('waitlistPrivySession', () => {
   })
 
   it('runWaitlistReturningWalletSignIn opens wallet login when unauthenticated', async () => {
-    const login = vi.fn()
-    let tokenReads = 0
-    vi.mocked(readPrivyAccessTokenWithRetries).mockImplementation(async () => {
-      tokenReads += 1
-      return tokenReads === 1 ? '' : 'privy-token'
+    let authenticated = false
+    const login = vi.fn(() => {
+      authenticated = true
     })
 
     const address = await runWaitlistReturningWalletSignIn({
-      privy: { ...mockPrivy, authenticated: false },
+      privy: {
+        ...mockPrivy,
+        get authenticated() {
+          return authenticated
+        },
+      },
       login,
     })
     expect(address).toBe('0xabc1234567890123456789012345678901234567')
@@ -118,20 +125,25 @@ describe('waitlistPrivySession', () => {
   })
 
   it('runWaitlistReturningWalletSignIn deduplicates concurrent calls', async () => {
-    const login = vi.fn()
-    let tokenReads = 0
-    vi.mocked(readPrivyAccessTokenWithRetries).mockImplementation(async () => {
-      tokenReads += 1
-      return tokenReads <= 1 ? '' : 'privy-token'
+    let authenticated = false
+    const login = vi.fn(() => {
+      authenticated = true
     })
+
+    const privy = {
+      ...mockPrivy,
+      get authenticated() {
+        return authenticated
+      },
+    }
 
     const [first, second] = await Promise.all([
       runWaitlistReturningWalletSignIn({
-        privy: { ...mockPrivy, authenticated: false },
+        privy,
         login,
       }),
       runWaitlistReturningWalletSignIn({
-        privy: { ...mockPrivy, authenticated: false },
+        privy,
         login,
       }),
     ])
@@ -139,6 +151,40 @@ describe('waitlistPrivySession', () => {
     expect(first).toBe('0xabc1234567890123456789012345678901234567')
     expect(second).toBe(first)
     expect(login).toHaveBeenCalledTimes(1)
+  })
+
+  it('runWaitlistReturningWalletSignIn does not call getAccessToken while signed out before login', async () => {
+    vi.useFakeTimers()
+    const login = vi.fn()
+    vi.mocked(readPrivyAccessTokenWithRetries).mockClear()
+
+    const promise = runWaitlistReturningWalletSignIn({
+      privy: { ...mockPrivy, authenticated: false },
+      login,
+    })
+
+    const rejection = expect(promise).rejects.toThrow('Sign-in cancelled.')
+    await vi.runAllTimersAsync()
+    await rejection
+
+    expect(readPrivyAccessTokenWithRetries).not.toHaveBeenCalled()
+    expect(login).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
+
+  it('runWaitlistReturningWalletSignIn surfaces login() failures immediately', async () => {
+    const login = vi.fn(() => {
+      throw new Error('Privy modal unavailable')
+    })
+
+    await expect(
+      runWaitlistReturningWalletSignIn({
+        privy: { ...mockPrivy, authenticated: false },
+        login,
+      }),
+    ).rejects.toThrow('Privy modal unavailable')
+
+    expect(readPrivyAccessTokenWithRetries).not.toHaveBeenCalled()
   })
 
   it('isWaitlistWalletSignInCancellation detects user cancellation', () => {

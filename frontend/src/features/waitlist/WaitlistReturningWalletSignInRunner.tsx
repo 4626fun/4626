@@ -97,8 +97,12 @@ export function WaitlistReturningWalletSignInRunner(props: WaitlistReturningWall
       const startedAt = Date.now()
       const poll = () => {
         if (!isActiveAttempt()) return
-        if (isPrivyRuntimeReady() || Date.now() - startedAt >= WALLET_READY_FORCE_MS) {
+        if (isPrivyRuntimeReady()) {
           runSignIn()
+          return
+        }
+        if (Date.now() - startedAt >= WALLET_READY_FORCE_MS) {
+          failAttempt('Wallet sign-in is still starting. Refresh the page and try again.')
           return
         }
         readyPollId = window.setTimeout(poll, WALLET_READY_POLL_MS)
