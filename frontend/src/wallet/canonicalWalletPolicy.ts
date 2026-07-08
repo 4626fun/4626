@@ -9,7 +9,7 @@ export type PolicyAddress = `0x${string}`
  *   Railway Keepr sender for agent #2205 (`4626.base.eth` target). Zora protocol
  *   CSW with Privy server signer at owner slot 2 (`0x858c…`).
  * - `CANONICAL_CSW_ADDRESS` — the 4626 operator account CSW (`profiles.csw_address`
- *   for the admin account): personal custody, AMOE, sponsored swaps, owner-install.
+ *   for the admin account): personal custody, sponsored swaps, AKITA vault owner, owner-install.
  *
  * Do not conflate protocol agent identity with the operator account wallet.
  * Runtime env: `PROTOCOL_CSW_*` + `CANONICAL_CSW_*` (`canonicalCswEnv.ts`).

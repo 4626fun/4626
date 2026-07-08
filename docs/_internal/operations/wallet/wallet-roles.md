@@ -8,7 +8,7 @@ Policy source: `frontend/src/wallet/canonicalWalletPolicy.ts`, `frontend/server/
 
 | Address | Type | Role |
 |---------|------|------|
-| `0x793ca28123cba3ca3c20b9c6c67f37510c89c145` | **CSW** | XMTP agent 4626 inbox, Railway Keepr `sender`, AMOE publisher/relay, ERC-8004 **agentWallet** in registration JSON |
+| `0x793ca28123cba3ca3c20b9c6c67f37510c89c145` | **CSW** | XMTP agent 4626 inbox, Railway Keepr `sender`, AMOE publisher/relay, ERC-8004 agent #2205 **NFT owner**, **agentWallet** in registration JSON |
 | `0x858c01556ec5a8531fa4118d595430ac7fd0baf0` | Privy server wallet | Protocol CSW owner **slot 2** — signs Railway / AMOE / protocol UserOps (`PROTOCOL_CSW_OWNER_INDEX=2`) |
 
 Env: `PROTOCOL_CSW_ADDRESS`, `PROTOCOL_CSW_OWNER_INDEX`, optional `PROTOCOL_CSW_PRIVY_WALLET_ID` (falls back to `CANONICAL_CSW_PRIVY_WALLET_ID`), `VITE_PROTOCOL_CSW_ADDRESS`.
@@ -17,7 +17,7 @@ Env: `PROTOCOL_CSW_ADDRESS`, `PROTOCOL_CSW_OWNER_INDEX`, optional `PROTOCOL_CSW_
 
 | Address | Type | Role |
 |---------|------|------|
-| `0xAb6d5C10b03300326cd7fab7267ae192842967b5` | **CSW** | Personal custody, sponsored swap `msg.sender`, AKITA vault **owner**, ERC-8004 agent #2205 **NFT owner** (until transferred) |
+| `0xAb6d5C10b03300326cd7fab7267ae192842967b5` | **CSW** | Personal custody, sponsored swap `msg.sender`, AKITA vault **owner** |
 | `0xceca13f2686ed061c57620ecdf67e1b8c0f285e9` | Privy embedded EOA | User-initiated frontend signing (`canonical4337`) |
 | `0x858c01556ec5a8531fa4118d595430ac7fd0baf0` | Privy server wallet | Operator CSW owner **slot 15** (`CANONICAL_CSW_OWNER_INDEX=15`) |
 | `0xB05Cf01231cF2fF99499682E64D3780d57c80FdD` | Admin EOA | Zora-creation wallet; CSW owner slot ~1; `PRIVATE_KEY` treasury/ops |

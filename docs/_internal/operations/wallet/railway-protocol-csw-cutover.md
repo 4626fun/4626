@@ -71,3 +71,9 @@ Local doctor check:
 pnpm -C frontend exec tsx --env-file=.env scripts/agent/eliza-doctor.ts
 # Expect: Protocol CSW signer config address=0x793c…
 ```
+
+Full cutover smoke (on-chain + static mirror + Railway):
+
+```bash
+pnpm -C frontend exec tsx --env-file=.env scripts/ops/verify-protocol-csw-cutover.ts
+```
