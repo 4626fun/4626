@@ -9,9 +9,8 @@ import { base } from 'viem/chains'
 import { buildAgentRegistrationDataUri } from '../../server/_lib/agent/agentRegistration.js'
 import { IDENTITY_REGISTRY_ABI } from '../../server/_lib/agent/erc8004.js'
 import {
-  readCanonicalCswAddressEnv,
-  readCanonicalCswOwnerIndexEnv,
-  readCanonicalCswPrivyWalletIdEnv,
+  readProtocolCswOwnerIndexEnv,
+  readProtocolCswPrivyWalletIdEnv,
   resolveServerAgentCswAddress,
 } from '../../server/_lib/wallet/canonicalCswEnv.js'
 import {
@@ -61,20 +60,6 @@ function readBundlerUrl(): string | null {
   return null
 }
 
-function readExpectedOwnerAddress(): Address | null {
-  const candidates = [
-    process.env.CANONICAL_CSW_OWNER_ADDRESS,
-    process.env.KPR_ERC4337_OWNER,
-  ]
-  for (const candidate of candidates) {
-    const value = String(candidate ?? '').trim()
-    if (/^0x[a-fA-F0-9]{40}$/.test(value)) {
-      return getAddress(value) as Address
-    }
-  }
-  return null
-}
-
 async function writeDataUriFile(dataUri: string) {
   const outDir = path.join(frontendRoot, '.tmp')
   await fs.mkdir(outDir, { recursive: true })
@@ -83,21 +68,18 @@ async function writeDataUriFile(dataUri: string) {
   return outPath
 }
 
-async function submitViaCanonicalCsw(dataUri: string): Promise<void> {
-  // Agent #2205 NFT owner is still the operator CSW until an explicit on-chain transfer.
-  // Registration JSON already points XMTP/agentWallet at PROTOCOL_CSW_ADDRESS.
-  const smartWalletRaw = readCanonicalCswAddressEnv() || resolveServerAgentCswAddress()
-  const walletId = readCanonicalCswPrivyWalletIdEnv()
+async function submitViaProtocolCsw(dataUri: string): Promise<void> {
+  const smartWalletRaw = resolveServerAgentCswAddress()
+  const walletId = readProtocolCswPrivyWalletIdEnv()
   const bundlerUrl = readBundlerUrl()
-  const expectedOwnerAddress = readExpectedOwnerAddress()
-  const ownerIndexRaw = readCanonicalCswOwnerIndexEnv()
+  const ownerIndexRaw = readProtocolCswOwnerIndexEnv()
   const configuredOwnerIndex = ownerIndexRaw ? Number(ownerIndexRaw) : Number.NaN
 
   if (!smartWalletRaw || !/^0x[a-fA-F0-9]{40}$/.test(smartWalletRaw)) {
-    throw new Error('CANONICAL_CSW_ADDRESS missing or invalid for --submit-csw.')
+    throw new Error('PROTOCOL_CSW_ADDRESS missing or invalid for --submit-csw.')
   }
   if (!walletId) {
-    throw new Error('CANONICAL_CSW_PRIVY_WALLET_ID missing for --submit-csw.')
+    throw new Error('PROTOCOL_CSW_PRIVY_WALLET_ID or CANONICAL_CSW_PRIVY_WALLET_ID missing for --submit-csw.')
   }
   if (!bundlerUrl) {
     throw new Error('Bundler URL missing (set CDP_PAYMASTER_URL or BUNDLER_URL).')
@@ -116,13 +98,13 @@ async function submitViaCanonicalCsw(dataUri: string): Promise<void> {
     publicClient,
     walletId,
     smartWallet,
-    expectedOwnerAddress,
+    expectedOwnerAddress: null,
     configuredOwnerIndex: Number.isFinite(configuredOwnerIndex) ? configuredOwnerIndex : null,
     allowConfiguredOwnerIndexFallback: true,
     maxScan: 512,
   })
 
-  console.log('[erc8004-write-uri] submitting setAgentURI via canonical CSW UserOp')
+  console.log('[erc8004-write-uri] submitting setAgentURI via protocol CSW UserOp')
   console.log(`smartWallet=${smartWallet}`)
   console.log(`owner=${ownerContext.ownerAddress}`)
   console.log(`ownerIndex=${ownerContext.ownerIndex}`)
@@ -147,7 +129,7 @@ async function submitViaEoa(dataUri: string): Promise<void> {
     throw new Error('PRIVATE_KEY missing for --submit-eoa.')
   }
 
-  console.warn('[erc8004-write-uri] WARNING: agent #2205 owner is the canonical CSW, not an EOA.')
+  console.warn('[erc8004-write-uri] WARNING: agent #2205 owner is protocol CSW, not an EOA.')
   console.warn('[erc8004-write-uri] Prefer --submit-csw unless you know the EOA can execute setAgentURI.')
 
   const args = [
@@ -193,7 +175,7 @@ async function main() {
   }
 
   if (submitCsw) {
-    await submitViaCanonicalCsw(dataUri)
+    await submitViaProtocolCsw(dataUri)
     return
   }
 
