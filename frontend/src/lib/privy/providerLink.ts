@@ -24,14 +24,29 @@ class AccountsLinkError extends Error {
   readonly status: number
   readonly recoveryRequired: boolean
   readonly code: string | null
+  readonly retryAfterMs: number | null
 
-  constructor(message: string, options?: { status?: number; recoveryRequired?: boolean; code?: string | null }) {
+  constructor(
+    message: string,
+    options?: { status?: number; recoveryRequired?: boolean; code?: string | null; retryAfterMs?: number | null },
+  ) {
     super(message)
     this.name = 'AccountsLinkError'
     this.status = options?.status ?? 500
     this.recoveryRequired = options?.recoveryRequired ?? false
     this.code = options?.code ?? null
+    this.retryAfterMs = options?.retryAfterMs ?? null
   }
+}
+
+function readRetryAfterMs(response: Response): number | null {
+  const raw = response.headers.get('retry-after')
+  if (!raw) return null
+  const seconds = Number(raw)
+  if (Number.isFinite(seconds) && seconds > 0) return Math.ceil(seconds * 1_000)
+  const at = Date.parse(raw)
+  if (Number.isFinite(at)) return Math.max(1_000, at - Date.now())
+  return null
 }
 
 const PRIVY_LINK_METHODS: Record<PrivyOAuthProvider, string[]> = {
@@ -132,6 +147,7 @@ function parseAccountsLinkFailure(
     status: response.status,
     recoveryRequired,
     code,
+    retryAfterMs: response.status === 429 ? readRetryAfterMs(response) : null,
   })
 }
 

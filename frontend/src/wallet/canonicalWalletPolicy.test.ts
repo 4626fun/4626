@@ -4,16 +4,26 @@ import {
   CANONICAL_CSW_EXECUTION_OWNER_ADDRESSES,
   CANONICAL_CSW_ALLOWED_OWNER_EOAS,
   CANONICAL_CSW_ADDRESS,
+  PROTOCOL_CSW_ADDRESS,
+  PROTOCOL_CSW_EXECUTION_OWNER_ADDRESSES,
+  isAllowedProtocolCswExecutionSigner,
   isAllowedCanonicalCswExecutionSigner,
   isAllowedCanonicalSigner,
   isAllowedOwnerEoa,
   isEoaAddressByCode,
   isCanonicalCsw,
+  isProtocolCsw,
   resolvePolicyCanonicalAddress,
   shouldApplyCanonicalEnforcement,
 } from './canonicalWalletPolicy'
 
 describe('canonicalWalletPolicy', () => {
+  it('detects target protocol smart wallet address', () => {
+    expect(isProtocolCsw(PROTOCOL_CSW_ADDRESS)).toBe(true)
+    expect(isProtocolCsw(CANONICAL_CSW_ADDRESS)).toBe(false)
+    expect(isProtocolCsw('0x1111111111111111111111111111111111111111')).toBe(false)
+  })
+
   it('detects target canonical smart wallet address', () => {
     expect(isCanonicalCsw(CANONICAL_CSW_ADDRESS)).toBe(true)
     expect(isCanonicalCsw('0x1111111111111111111111111111111111111111')).toBe(false)
@@ -24,6 +34,10 @@ describe('canonicalWalletPolicy', () => {
     expect(isAllowedCanonicalSigner(CANONICAL_CSW_ALLOWED_OWNER_EOAS[1])).toBe(true)
     expect(isAllowedCanonicalSigner(CANONICAL_CSW_ADDRESS)).toBe(true)
     expect(isAllowedOwnerEoa('0x1111111111111111111111111111111111111111')).toBe(false)
+  })
+
+  it('allows the Privy server wallet to execute on the protocol CSW', () => {
+    expect(isAllowedProtocolCswExecutionSigner(PROTOCOL_CSW_EXECUTION_OWNER_ADDRESSES[0])).toBe(true)
   })
 
   it('allows the Privy embedded EOA to execute on the canonical CSW', () => {

@@ -98,17 +98,18 @@ import { createCorrelationLogger, logger } from '../../_lib/infra/logger.js'
 import { emitTelemetryEvent } from '../../_lib/infra/telemetry.js'
 import { claimDailyXmtpCheckin } from '../../_lib/lottery/lotteryAmoe.js'
 import {
-  readCanonicalCswAddressEnv,
-  readCanonicalCswOwnerIndexEnv,
-  readCanonicalCswPrivyWalletIdEnv,
+  readProtocolCswAddressEnv,
+  readProtocolCswOwnerIndexEnv,
+  readProtocolCswPrivyWalletIdEnv,
+  readProtocolCswChainIdEnv,
   readCanonicalCswSkipEnforcementEnv,
-  readCanonicalCswChainIdEnv,
-  hasCanonicalCswRuntimeConfig,
+  hasProtocolCswRuntimeConfig,
   listRetiredCanonicalCswEnvKeys,
+  resolveServerAgentCswAddress,
 } from '../../_lib/wallet/canonicalCswEnv.js'
 import {
-  CANONICAL_CSW_ADDRESS,
-  isCanonicalCsw,
+  PROTOCOL_CSW_ADDRESS,
+  isProtocolCsw,
   normalizePolicyAddress,
 } from '../../../src/wallet/canonicalWalletPolicy.js'
 import path from 'node:path'
@@ -146,8 +147,7 @@ declare const process: {
 
 const XMTP_ENV = ((process.env.XMTP_ENV ?? 'production').trim()) as 'production' | 'dev' | 'local'
 
-// Emergency escape hatch: when true, a configured `CANONICAL_CSW_ADDRESS` env value
-// is honored even when it does not match the policy constant `CANONICAL_CSW_ADDRESS`.
+// Emergency escape hatch for operator-account CSW env drift (not used for protocol XMTP identity).
 const CANONICAL_CSW_SKIP_ENFORCEMENT = readCanonicalCswSkipEnforcementEnv()
 
 const POLL_INTERVAL_MS = 60_000
@@ -729,9 +729,9 @@ let earlyRailwayDiagnostics: Record<string, unknown> | null = null
 try {
   const hasDb = isDbConfigured()
   const hasEncKey = !!(process.env.XMTP_AGENT_KEY_ENCRYPTION_KEY ?? '').trim()
-  const hasCsw = !!readCanonicalCswAddressEnv()
-  const hasCswPrivy = !!readCanonicalCswPrivyWalletIdEnv()
-  const hasSingleAgentCsw = hasCsw && hasCswPrivy
+  const hasCsw = !!readProtocolCswAddressEnv() || true
+  const hasCswPrivy = !!readProtocolCswPrivyWalletIdEnv()
+  const hasSingleAgentCsw = hasCswPrivy
   const dbDir = process.env.XMTP_DB_DIRECTORY || '/data/xmtp'
   const hasVolume = RUNNING_ON_RAILWAY ? hasDedicatedMount(dbDir) : true
   const mountedAncestor = RUNNING_ON_RAILWAY ? findMountedAncestorPath(dbDir) : null
@@ -865,11 +865,11 @@ function validateStartupEnv(): EnvValidationResult {
   const hasDb = isDbConfigured()
   const hasEncKey = !!(process.env.XMTP_AGENT_KEY_ENCRYPTION_KEY ?? '').trim()
   const hasPrivateKey = !!(process.env.XMTP_AGENT_PRIVATE_KEY ?? '').trim()
-  const configuredCswRaw = readCanonicalCswAddressEnv()
-  const configuredCsw = normalizePolicyAddress(configuredCswRaw)
-  const hasCswAddress = !!configuredCswRaw
-  const hasCswPrivyWallet = !!readCanonicalCswPrivyWalletIdEnv()
-  const hasCswConfig = hasCswAddress && hasCswPrivyWallet
+  const configuredProtocolRaw = readProtocolCswAddressEnv()
+  const configuredProtocol = normalizePolicyAddress(configuredProtocolRaw || PROTOCOL_CSW_ADDRESS)
+  const hasCswAddress = !!configuredProtocol
+  const hasCswPrivyWallet = !!readProtocolCswPrivyWalletIdEnv()
+  const hasCswConfig = hasProtocolCswRuntimeConfig()
   const multiAgentConfigured = hasDb && hasEncKey
 
   if (!AGENT_CONSUME_XMTP && AGENT_RUNTIME_ROLE === 'primary') {
@@ -971,24 +971,18 @@ function validateStartupEnv(): EnvValidationResult {
   }
 
   if (hasCswAddress && !hasCswPrivyWallet) {
-    errors.push('CANONICAL_CSW_PRIVY_WALLET_ID is required when CANONICAL_CSW_ADDRESS is set.')
+    errors.push('PROTOCOL_CSW_PRIVY_WALLET_ID or CANONICAL_CSW_PRIVY_WALLET_ID is required for protocol CSW mode.')
   }
   if (!hasCswAddress && hasCswPrivyWallet) {
-    errors.push('CANONICAL_CSW_ADDRESS is required when CANONICAL_CSW_PRIVY_WALLET_ID is set.')
+    errors.push('PROTOCOL_CSW_ADDRESS must be set or policy default used when a Privy server wallet is configured.')
   }
-  if (hasCswAddress && !configuredCsw) {
-    errors.push('CANONICAL_CSW_ADDRESS must be a valid EVM address.')
+  if (configuredProtocolRaw && !configuredProtocol) {
+    errors.push('PROTOCOL_CSW_ADDRESS must be a valid EVM address.')
   }
-  if (configuredCsw && !isCanonicalCsw(configuredCsw)) {
-    if (CANONICAL_CSW_SKIP_ENFORCEMENT) {
-      warnings.push(
-        `CANONICAL_CSW_SKIP_ENFORCEMENT=true: XMTP identity will run as ${configuredCsw} instead of policy ${CANONICAL_CSW_ADDRESS}. Business identity (Zora referrer, ERC-8004, admin) still treats the policy address as authoritative — DIVERGENT identities in effect.`,
-      )
-    } else {
-      warnings.push(
-        `CANONICAL_CSW_ADDRESS (${configuredCsw}) does not match policy ${CANONICAL_CSW_ADDRESS}; startup will enforce policy identity.`,
-      )
-    }
+  if (configuredProtocol && !isProtocolCsw(configuredProtocol)) {
+    warnings.push(
+      `PROTOCOL_CSW_ADDRESS (${configuredProtocol}) does not match policy ${PROTOCOL_CSW_ADDRESS}; startup will enforce policy identity.`,
+    )
   }
 
   const retiredCanonicalCswEnv = listRetiredCanonicalCswEnvKeys()
@@ -1250,7 +1244,7 @@ function summarizeInboundMessageForLog(params: {
 }
 
 const EVM_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
-const AMOE_XMTP_TASK_AGENT_ADDRESS = CANONICAL_CSW_ADDRESS.toLowerCase()
+const AMOE_XMTP_TASK_AGENT_ADDRESS = PROTOCOL_CSW_ADDRESS.toLowerCase()
 
 function isExpectedAmoeXmtpAwardingError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? '')
@@ -2113,22 +2107,15 @@ async function uploadRegistrationToGrove(): Promise<void> {
       return
     }
 
-    const configuredCsw = normalizePolicyAddress(readCanonicalCswAddressEnv())
-    if (configuredCsw && !isCanonicalCsw(configuredCsw)) {
-      if (CANONICAL_CSW_SKIP_ENFORCEMENT) {
-        regLogger.warn(
-          '[eliza] Skipping Grove registration upload: CANONICAL_CSW_SKIP_ENFORCEMENT=true would publish ERC-8004 metadata with a divergent XMTP identity. Resolve canonical ownership, then unset the bypass flag to re-enable.',
-          { configured: configuredCsw, canonical: CANONICAL_CSW_ADDRESS, correlationId },
-        )
-        return
-      }
-      regLogger.warn('[eliza] configured canonical CSW differs from policy constant; using policy agent key', {
-        configured: configuredCsw,
-        expected: CANONICAL_CSW_ADDRESS,
+    const configuredProtocol = normalizePolicyAddress(readProtocolCswAddressEnv())
+    if (configuredProtocol && !isProtocolCsw(configuredProtocol)) {
+      regLogger.warn('[eliza] configured protocol CSW differs from policy constant; using policy agent key', {
+        configured: configuredProtocol,
+        expected: PROTOCOL_CSW_ADDRESS,
         correlationId,
       })
     }
-    const agentKey = `single-csw:${CANONICAL_CSW_ADDRESS}`
+    const agentKey = `single-csw:${PROTOCOL_CSW_ADDRESS}`
     const publish = await withRetry({
       operation: 'grove_registration_upload',
       maxRetries: EXTERNAL_MAX_RETRIES,
@@ -2242,7 +2229,7 @@ async function main() {
   const hasDb = isDbConfigured()
   const hasEncKey = !!(process.env.XMTP_AGENT_KEY_ENCRYPTION_KEY ?? '').trim()
   const hasPrivateKey = !!(process.env.XMTP_AGENT_PRIVATE_KEY ?? '').trim()
-  const hasCswConfig = hasCanonicalCswRuntimeConfig()
+  const hasCswConfig = hasProtocolCswRuntimeConfig()
   const multiAgentMode = hasDb && hasEncKey
   const shouldRunXmtp = AGENT_CONSUME_XMTP
   const runtimeLockRequired = shouldRunXmtp && AGENT_RUNTIME_LOCK_REQUIRED
@@ -2389,28 +2376,10 @@ async function main() {
     // Single-agent CSW mode: Privy server wallet signs on behalf of your CSW.
     // Same delegation pattern used for ERC-4337 UserOps & vault deployments.
     // -----------------------------------------------------------------------
-    const configuredCsw = normalizePolicyAddress(readCanonicalCswAddressEnv())
-    const divergentConfigured = configuredCsw && !isCanonicalCsw(configuredCsw)
-    if (divergentConfigured && !CANONICAL_CSW_SKIP_ENFORCEMENT) {
-      logger.warn('[eliza] overriding configured CSW with canonical target', {
-        configured: configuredCsw,
-        expected: CANONICAL_CSW_ADDRESS,
-      })
-    } else if (divergentConfigured && CANONICAL_CSW_SKIP_ENFORCEMENT) {
-      logger.warn('[eliza] CANONICAL_CSW_SKIP_ENFORCEMENT=true — running XMTP identity on configured CSW, NOT canonical', {
-        xmtpCsw: configuredCsw,
-        canonicalCsw: CANONICAL_CSW_ADDRESS,
-        note: 'Temporary bypass. Unset the flag once the canonical CSW owner set is restored.',
-      })
-    }
-    const cswAddress = (
-      divergentConfigured && CANONICAL_CSW_SKIP_ENFORCEMENT
-        ? (configuredCsw as `0x${string}`)
-        : (CANONICAL_CSW_ADDRESS as `0x${string}`)
-    )
-    const privyWalletId = readCanonicalCswPrivyWalletIdEnv()
-    const chainId = readCanonicalCswChainIdEnv()
-    const ownerIndexRaw = readCanonicalCswOwnerIndexEnv()
+    const cswAddress = resolveServerAgentCswAddress()
+    const privyWalletId = readProtocolCswPrivyWalletIdEnv()
+    const chainId = readProtocolCswChainIdEnv()
+    const ownerIndexRaw = readProtocolCswOwnerIndexEnv()
     const ownerIndexParsed = ownerIndexRaw ? Number(ownerIndexRaw) : Number.NaN
     const ownerIndex =
       Number.isFinite(ownerIndexParsed) && ownerIndexParsed >= 0 ? Math.floor(ownerIndexParsed) : undefined

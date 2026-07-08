@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { MessageSquare } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
@@ -196,8 +196,11 @@ function WaitlistGroupChatPanelBody({
   // into an unbounded refetch loop (each refetch re-renders, re-firing the
   // effect) that trips the server's 429 rate limit.
   const refetchStatus = statusQuery.refetch
+  const hadMessagingReadyRef = useRef(false)
   useEffect(() => {
-    if (accountMessagingReady) {
+    const becameReady = accountMessagingReady && !hadMessagingReadyRef.current
+    hadMessagingReadyRef.current = accountMessagingReady
+    if (becameReady) {
       void refetchStatus().catch(() => undefined)
     }
   }, [accountMessagingReady, refetchStatus])

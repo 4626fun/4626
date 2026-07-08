@@ -263,9 +263,15 @@ export async function runShareMeshCompletion(params: {
       return result
     }
 
+    const vaultAddress = params.input.vaultAddress
+    if (!vaultAddress) {
+      result.deployStatus = 'missing_config'
+      return result
+    }
+
     const vaultOwner =
       params.input.vaultOwnerAddress
-      ?? (await readVaultOwner(params.publicClient, params.input.vaultAddress))
+      ?? (await readVaultOwner(params.publicClient, vaultAddress))
 
     if (!vaultOwner || vaultOwner !== params.keeperAddress.toLowerCase()) {
       result.deployStatus = 'awaiting_vault_owner'

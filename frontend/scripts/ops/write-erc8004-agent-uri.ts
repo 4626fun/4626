@@ -12,6 +12,7 @@ import {
   readCanonicalCswAddressEnv,
   readCanonicalCswOwnerIndexEnv,
   readCanonicalCswPrivyWalletIdEnv,
+  resolveServerAgentCswAddress,
 } from '../../server/_lib/wallet/canonicalCswEnv.js'
 import {
   resolvePrivyCoinbaseSmartWalletOwnerContext,
@@ -83,7 +84,9 @@ async function writeDataUriFile(dataUri: string) {
 }
 
 async function submitViaCanonicalCsw(dataUri: string): Promise<void> {
-  const smartWalletRaw = readCanonicalCswAddressEnv()
+  // Agent #2205 NFT owner is still the operator CSW until an explicit on-chain transfer.
+  // Registration JSON already points XMTP/agentWallet at PROTOCOL_CSW_ADDRESS.
+  const smartWalletRaw = readCanonicalCswAddressEnv() || resolveServerAgentCswAddress()
   const walletId = readCanonicalCswPrivyWalletIdEnv()
   const bundlerUrl = readBundlerUrl()
   const expectedOwnerAddress = readExpectedOwnerAddress()

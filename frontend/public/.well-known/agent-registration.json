@@ -46,16 +46,16 @@
     },
     {
       "name": "XMTP",
-      "endpoint": "https://xmtp.chat/dm/0xab6d5c10b03300326cd7fab7267ae192842967b5",
+      "endpoint": "https://xmtp.chat/dm/0x793ca28123cba3ca3c20b9c6c67f37510c89c145",
+      "address": "0x793ca28123cba3ca3c20b9c6c67f37510c89c145",
       "version": "production",
-      "address": "0xab6d5c10b03300326cd7fab7267ae192842967b5",
-      "description": "XMTP messaging endpoint — DM or group chat with the agent. Identity is a Coinbase Smart Wallet on Base (chain 8453)."
+      "description": "XMTP messaging endpoint — DM or group chat with the agent. Identity is a Coinbase Smart Wallet on chain 8453."
     },
     {
       "name": "agentWallet",
-      "endpoint": "eip155:8453:0xab6d5c10b03300326cd7fab7267ae192842967b5",
-      "account": "eip155:8453:0xab6d5c10b03300326cd7fab7267ae192842967b5",
-      "explorer": "https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5"
+      "endpoint": "eip155:8453:0x793ca28123cba3ca3c20b9c6c67f37510c89c145",
+      "account": "eip155:8453:0x793ca28123cba3ca3c20b9c6c67f37510c89c145",
+      "explorer": "https://basescan.org/address/0x793ca28123cba3ca3c20b9c6c67f37510c89c145"
     },
     {
       "name": "api",
@@ -106,6 +106,6 @@
     "crypto-economic",
     "tee-attestation"
   ],
-  "updatedAt": 1783484820,
+  "updatedAt": 1783493956,
   "reputationRegistry": "eip155:8453:0x8004baa17c55a88189ae136b182e5fda19de9b63"
 }

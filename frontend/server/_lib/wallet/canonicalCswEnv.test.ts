@@ -2,10 +2,15 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import {
   hasCanonicalCswRuntimeConfig,
+  hasProtocolCswRuntimeConfig,
   listRetiredCanonicalCswEnvKeys,
   readCanonicalCswAddressEnv,
   readCanonicalCswPrivyWalletIdEnv,
   readCanonicalCswSkipEnforcementEnv,
+  readProtocolCswAddressEnv,
+  readProtocolCswOwnerIndexEnv,
+  readProtocolCswPrivyWalletIdEnv,
+  resolveServerAgentCswAddress,
   resolveServerAgentInboxAddress,
   RETIRED_CANONICAL_CSW_ENV_KEYS,
 } from './canonicalCswEnv.js'
@@ -14,6 +19,9 @@ const ENV_KEYS = [
   'CANONICAL_CSW_ADDRESS',
   'CANONICAL_CSW_PRIVY_WALLET_ID',
   'CANONICAL_CSW_SKIP_ENFORCEMENT',
+  'PROTOCOL_CSW_ADDRESS',
+  'PROTOCOL_CSW_OWNER_INDEX',
+  'PROTOCOL_CSW_PRIVY_WALLET_ID',
 ] as const
 
 const originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]])) as Record<
@@ -35,9 +43,15 @@ describe('canonicalCswEnv', () => {
     expect(readCanonicalCswAddressEnv()).toBe('0x1111111111111111111111111111111111111111')
   })
 
-  it('returns empty when CANONICAL_CSW_ADDRESS is unset', () => {
-    delete process.env.CANONICAL_CSW_ADDRESS
-    expect(readCanonicalCswAddressEnv()).toBe('')
+  it('reads PROTOCOL_CSW_ADDRESS when set', () => {
+    process.env.PROTOCOL_CSW_ADDRESS = '0x793ca28123cba3ca3c20b9c6c67f37510c89c145'
+    expect(readProtocolCswAddressEnv()).toBe('0x793ca28123cba3ca3c20b9c6c67f37510c89c145')
+  })
+
+  it('falls back protocol privy wallet id to canonical env', () => {
+    delete process.env.PROTOCOL_CSW_PRIVY_WALLET_ID
+    process.env.CANONICAL_CSW_PRIVY_WALLET_ID = 'wallet-abc'
+    expect(readProtocolCswPrivyWalletIdEnv()).toBe('wallet-abc')
   })
 
   it('detects full runtime config from canonical env names', () => {
@@ -47,19 +61,30 @@ describe('canonicalCswEnv', () => {
     expect(readCanonicalCswPrivyWalletIdEnv()).toBe('wallet-abc')
   })
 
+  it('detects protocol runtime config from privy wallet env', () => {
+    process.env.CANONICAL_CSW_PRIVY_WALLET_ID = 'wallet-abc'
+    expect(hasProtocolCswRuntimeConfig()).toBe(true)
+  })
+
   it('reads skip enforcement flag', () => {
     process.env.CANONICAL_CSW_SKIP_ENFORCEMENT = 'true'
     expect(readCanonicalCswSkipEnforcementEnv()).toBe(true)
   })
 
-  it('resolveServerAgentInboxAddress prefers CANONICAL_CSW_ADDRESS env', () => {
-    process.env.CANONICAL_CSW_ADDRESS = '0x1111111111111111111111111111111111111111'
-    expect(resolveServerAgentInboxAddress()).toBe('0x1111111111111111111111111111111111111111')
+  it('resolveServerAgentCswAddress prefers PROTOCOL_CSW_ADDRESS env', () => {
+    process.env.PROTOCOL_CSW_ADDRESS = '0x793ca28123cba3ca3c20b9c6c67f37510c89c145'
+    expect(resolveServerAgentCswAddress()).toBe('0x793ca28123cba3ca3c20b9c6c67f37510c89c145')
+    expect(resolveServerAgentInboxAddress()).toBe('0x793ca28123cba3ca3c20b9c6c67f37510c89c145')
   })
 
-  it('resolveServerAgentInboxAddress falls back to policy constant', () => {
+  it('resolveServerAgentCswAddress falls back to policy constant', () => {
     for (const key of ENV_KEYS) delete process.env[key]
-    expect(resolveServerAgentInboxAddress()).toBe('0xab6d5c10b03300326cd7fab7267ae192842967b5')
+    expect(resolveServerAgentCswAddress()).toBe('0x793ca28123cba3ca3c20b9c6c67f37510c89c145')
+  })
+
+  it('reads protocol owner index env', () => {
+    process.env.PROTOCOL_CSW_OWNER_INDEX = '2'
+    expect(readProtocolCswOwnerIndexEnv()).toBe('2')
   })
 
   it('lists retired env keys when still set in the environment', () => {

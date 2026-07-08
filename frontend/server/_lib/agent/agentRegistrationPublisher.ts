@@ -10,7 +10,7 @@ import {
   type GroveUploadResult,
 } from '../lens/lensGrove.js'
 import { getAgentRegistrationState, upsertAgentRegistrationState } from './agentRegistrationState.js'
-import { readCanonicalCswAddressEnv } from '../wallet/canonicalCswEnv.js'
+import { resolveServerAgentInboxAddress } from '../wallet/canonicalCswEnv.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -82,7 +82,7 @@ function safeGatewayUrl(upload: GroveUploadResult): string {
 }
 
 export function resolveAgentRegistrationKey(payload: RegistrationFile, fallback = 'single-agent'): string {
-  const explicit = readCanonicalCswAddressEnv().toLowerCase()
+  const explicit = resolveServerAgentInboxAddress().toLowerCase()
   if (isAddressLike(explicit)) return `single-csw:${explicit}`
 
   const services = Array.isArray(payload.services) ? payload.services : []

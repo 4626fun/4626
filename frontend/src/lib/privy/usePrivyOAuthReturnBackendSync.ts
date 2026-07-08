@@ -7,13 +7,17 @@ import {
 } from './privyLinkedAccounts'
 import { syncAccountsProviderLink } from './providerLink'
 
+const OAUTH_SYNC_RATE_LIMIT_BACKOFF_MS = 20_000
+const OAUTH_SYNC_AUTH_BACKOFF_MS = 30_000
+const oauthSyncBackoffUntilMs: Partial<Record<OAuthReturnSyncProvider, number>> = {}
+
 function shouldRetryOAuthBackendSync(error: unknown): boolean {
   const status = typeof (error as { status?: unknown })?.status === 'number'
     ? (error as { status: number }).status
     : null
-  if (status === 429) return false
+  if (status === 429) return true
   if (status != null && status >= 500) return false
-  if (status === 401 || status === 403) return false
+  if (status === 401 || status === 403) return true
   if ((error as { recoveryRequired?: unknown })?.recoveryRequired === true) return false
   return true
 }
@@ -54,9 +58,11 @@ export function usePrivyOAuthReturnBackendSync(params: {
     const pending: OAuthReturnSyncProvider[] = []
 
     for (const provider of providers) {
+      if (Date.now() < (oauthSyncBackoffUntilMs[provider] ?? 0)) continue
       const backendLinked = (params.linkedMethods?.[provider] ?? []).length > 0
       if (backendLinked) {
         syncAttemptRef.current[provider] = false
+        oauthSyncBackoffUntilMs[provider] = 0
         continue
       }
       if (!isPrivyProviderLinked(params.privyUser, provider)) continue
@@ -77,6 +83,19 @@ export function usePrivyOAuthReturnBackendSync(params: {
           })
           if (!cancelled) onSyncedRef.current?.()
         } catch (error) {
+          const status = typeof (error as { status?: unknown })?.status === 'number'
+            ? (error as { status: number }).status
+            : null
+          if (status === 429) {
+            const retryAfterMs = Number((error as { retryAfterMs?: unknown })?.retryAfterMs)
+            const backoffMs =
+              Number.isFinite(retryAfterMs) && retryAfterMs > 0
+                ? retryAfterMs
+                : OAUTH_SYNC_RATE_LIMIT_BACKOFF_MS
+            oauthSyncBackoffUntilMs[provider] = Date.now() + backoffMs
+          } else if (status === 401 || status === 403) {
+            oauthSyncBackoffUntilMs[provider] = Date.now() + OAUTH_SYNC_AUTH_BACKOFF_MS
+          }
           if (shouldRetryOAuthBackendSync(error)) {
             syncAttemptRef.current[provider] = false
           }

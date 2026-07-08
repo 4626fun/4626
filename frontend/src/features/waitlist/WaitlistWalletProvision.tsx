@@ -7,6 +7,10 @@ import { SmartWalletsRouteProvider } from '@/lib/privy/SmartWalletsRouteProvider
 
 import { useEnsurePrivySmartWallet } from './useEnsurePrivySmartWallet'
 
+const AUTO_PROVISION_COOLDOWN_MS = 45_000
+let autoProvisionInFlight = false
+let autoProvisionLastAttemptAtMs = 0
+
 type WaitlistWalletProvisionProps = {
   enabled: boolean
   needsProvision: boolean
@@ -17,12 +21,31 @@ function WaitlistWalletProvisionInner(props: WaitlistWalletProvisionProps) {
   const { busy, error, ensurePrivyWallets } = useEnsurePrivySmartWallet({ enabled: props.enabled })
   const autoStartedRef = useRef(false)
 
-  const runProvision = useCallback(async () => {
-    const result = await ensurePrivyWallets()
-    if (result.ok) {
-      refresh()
+  const runProvision = useCallback(async (options?: { auto?: boolean }) => {
+    const auto = options?.auto === true
+    if (auto) {
+      const now = Date.now()
+      if (autoProvisionInFlight) {
+        return { ok: false, error: 'Wallet setup is already in progress. Please wait a moment.' } as const
+      }
+      if (now - autoProvisionLastAttemptAtMs < AUTO_PROVISION_COOLDOWN_MS) {
+        return { ok: false, error: 'Wallet setup is cooling down after a recent attempt.' } as const
+      }
+      autoProvisionInFlight = true
+      autoProvisionLastAttemptAtMs = now
     }
-    return result
+
+    try {
+      const result = await ensurePrivyWallets()
+      if (result.ok) {
+        refresh()
+      }
+      return result
+    } finally {
+      if (auto) {
+        autoProvisionInFlight = false
+      }
+    }
   }, [ensurePrivyWallets, refresh])
 
   useEffect(() => {
@@ -30,7 +53,7 @@ function WaitlistWalletProvisionInner(props: WaitlistWalletProvisionProps) {
     if (autoStartedRef.current) return
     if (me?.accountSignals?.canonicalCswAddress?.trim()) return
     autoStartedRef.current = true
-    void runProvision()
+    void runProvision({ auto: true })
   }, [me?.accountSignals?.canonicalCswAddress, props.enabled, props.needsProvision, runProvision])
 
   if (!props.enabled || !props.needsProvision) return null

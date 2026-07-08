@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 
 import { LoadingInline } from '@/components/ui/LoadingState'
 import { useAccountMe } from '@/hooks/useAccountMe'
+import { detectInAppEnvironment, isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { isZoraLinkedFromAccountSignals } from '@/lib/wallet/userExecutionTrack'
 
 import { WaitlistChatDock } from './WaitlistChatDock'
@@ -26,9 +27,11 @@ export function WaitlistPostJoinShell(props: WaitlistPostJoinShellProps) {
 
 function WaitlistPostJoinShellInner() {
   const { me: accountMe, loading, refresh } = useAccountMe()
+  const inBaseApp = isBaseAppInAppContext(detectInAppEnvironment())
   const accountSignals = accountMe?.accountSignals
   const canonicalCswAddress = accountSignals?.canonicalCswAddress ?? null
   const zoraLinked = isZoraLinkedFromAccountSignals(accountSignals)
+  const accountStateReady = Boolean(accountMe) && !loading
 
   const {
     embeddedEoaAddress,
@@ -53,12 +56,18 @@ function WaitlistPostJoinShellInner() {
     [accountSignals, canonicalCswAddress, embeddedEoaAddress, zoraLinked],
   )
 
+  // Only infer "needs provision" once `/api/accounts/me` has settled for this
+  // session. During transient auth/rate-limit windows, accountMe can be null
+  // even when the user already has a canonical smart wallet.
   const needsProvision =
+    accountStateReady &&
+    !inBaseApp &&
     connectTrack !== 'base-app-direct' &&
     !zoraLinked &&
     !canonicalCswAddress?.trim()
 
   const showOwnerInstall = shouldShowParentCswAddOwnerPanel({
+    inBaseApp,
     connectTrack,
     zoraLinked,
     ownerInstallRequested: false,
@@ -91,7 +100,7 @@ function WaitlistPostJoinShellInner() {
     )
   }
 
-  const showWalletSection = needsProvision || showOwnerInstall
+  const showWalletSection = accountStateReady && (needsProvision || showOwnerInstall)
 
   return (
     <div className="mt-5 space-y-4">

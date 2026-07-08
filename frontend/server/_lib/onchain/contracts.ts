@@ -91,7 +91,7 @@ function resolveDeploymentBatcherAddress(): ContractAddress | undefined {
  */
 export function getApiContracts(): ApiContracts {
   return {
-    registry: pickAddress('REGISTRY_4626', pickAddress('REGISTRY', BASE_DEFAULTS.registry)!),
+    registry: pickAddress('REGISTRY_4626', pickAddress('REGISTRY', BASE_DEFAULTS.registry)!)!,
     lotteryManager: pickAddress('LOTTERY_MANAGER', BASE_DEFAULTS.lotteryManager)!,
     payoutRouterFactory: pickAddress('PAYOUT_ROUTER_FACTORY', BASE_DEFAULTS.payoutRouterFactory)!,
     create2Factory: pickAddress('CREATE2_FACTORY', BASE_DEFAULTS.create2Factory)!,

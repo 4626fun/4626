@@ -54,6 +54,8 @@
 
 import { hostname as osHostname } from 'node:os'
 
+import { getAddress } from 'viem'
+
 import { getDb } from '../db/postgres.js'
 import {
   buildAmoeLedgerSnapshot,
@@ -67,6 +69,11 @@ import {
   type ProjectAmoeBurnsToLedgerResult,
 } from './amoeLedgerProjector.js'
 import { AmoeServerError } from './lotteryAmoeErrors.js'
+import {
+  readProtocolCswOwnerIndexEnv,
+  readProtocolCswPrivyWalletIdEnv,
+  resolveServerAgentCswAddress,
+} from '../wallet/canonicalCswEnv.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -727,8 +734,10 @@ export function readAmoeLedgerPublisherPrivateKey(): `0x${string}` | null {
 }
 
 export function readAmoeLedgerPublisherPrivyWalletId(): string | null {
-  const raw = String(process.env.AMOE_LEDGER_PUBLISHER_PRIVY_WALLET_ID ?? '').trim()
-  return raw.length > 0 ? raw : null
+  const explicit = String(process.env.AMOE_LEDGER_PUBLISHER_PRIVY_WALLET_ID ?? '').trim()
+  if (explicit.length > 0) return explicit
+  const protocol = readProtocolCswPrivyWalletIdEnv()
+  return protocol.length > 0 ? protocol : null
 }
 
 export function readAmoeLedgerPublisherOwnerAddress(): `0x${string}` | null {
@@ -737,12 +746,16 @@ export function readAmoeLedgerPublisherOwnerAddress(): `0x${string}` | null {
   return raw as `0x${string}`
 }
 
-export function readAmoeLedgerPublisherSmartWallet(): `0x${string}` | null {
-  const raw = String(
-    process.env.AMOE_LEDGER_PUBLISHER_SMART_WALLET ?? '',
-  ).trim()
-  if (!/^0x[a-fA-F0-9]{40}$/.test(raw)) return null
-  return raw as `0x${string}`
+export function readAmoeLedgerPublisherSmartWallet(): `0x${string}` {
+  const raw = String(process.env.AMOE_LEDGER_PUBLISHER_SMART_WALLET ?? '').trim()
+  if (/^0x[a-fA-F0-9]{40}$/.test(raw)) return getAddress(raw).toLowerCase() as `0x${string}`
+  return resolveServerAgentCswAddress()
+}
+
+function readAmoeLedgerPublisherOwnerIndexHint(): number | null {
+  const raw = readProtocolCswOwnerIndexEnv()
+  const parsed = raw ? Number(raw) : Number.NaN
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : null
 }
 
 export function readAmoeLedgerPublisherBundlerUrl(): string | null {
@@ -843,6 +856,8 @@ export async function defaultBroadcastSetPointsLedgerRoot(args: {
       walletId: privyWalletId,
       smartWallet,
       expectedOwnerAddress,
+      configuredOwnerIndex: readAmoeLedgerPublisherOwnerIndexHint(),
+      allowConfiguredOwnerIndexFallback: true,
       maxScan: 512,
     })
     const userOpResult = await sendPrivyCoinbaseSmartWalletUserOperation({

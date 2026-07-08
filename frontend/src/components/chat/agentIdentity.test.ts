@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { CANONICAL_CSW_ADDRESS, CANONICAL_CSW_ALLOWED_OWNER_EOAS } from '@/wallet/canonicalWalletPolicy'
+import { CANONICAL_CSW_ADDRESS, CANONICAL_CSW_ALLOWED_OWNER_EOAS, PROTOCOL_CSW_ADDRESS } from '@/wallet/canonicalWalletPolicy'
 
 /**
  * Stubs the three env vars `agentIdentity.ts` reads at module load so each
@@ -9,6 +9,7 @@ import { CANONICAL_CSW_ADDRESS, CANONICAL_CSW_ALLOWED_OWNER_EOAS } from '@/walle
  * this first, then re-stub that one key.
  */
 function stubDefaultAgentIdentityEnv() {
+  vi.stubEnv('VITE_PROTOCOL_CSW_ADDRESS', '')
   vi.stubEnv('VITE_CANONICAL_CSW_ADDRESS', '')
   vi.stubEnv('VITE_AGENT_DISPLAY_NAME', '')
   vi.stubEnv('VITE_AGENT_AVATAR_URL', '')
@@ -20,23 +21,29 @@ describe('getAgentIdentity', () => {
     vi.unstubAllEnvs()
   })
 
-  it('returns the agent identity for the canonical CSW inbox address', async () => {
+  it('returns the agent identity for the protocol CSW inbox address', async () => {
     stubDefaultAgentIdentityEnv()
     const { getAgentIdentity } = await import('./agentIdentity')
 
-    const result = getAgentIdentity(CANONICAL_CSW_ADDRESS)
+    const result = getAgentIdentity(PROTOCOL_CSW_ADDRESS)
 
     expect(result).not.toBeNull()
     expect(result?.name).toBe('akita')
     expect(result?.avatar).toBe('/base/base-square-blue.svg')
   })
 
-  it('matches the canonical CSW regardless of casing', async () => {
+  it('returns null for the operator canonical CSW inbox address', async () => {
     stubDefaultAgentIdentityEnv()
     const { getAgentIdentity } = await import('./agentIdentity')
 
-    // Uppercase / checksummed canonical CSW must still resolve.
-    const uppercased = CANONICAL_CSW_ADDRESS.toUpperCase()
+    expect(getAgentIdentity(CANONICAL_CSW_ADDRESS)).toBeNull()
+  })
+
+  it('matches the protocol CSW regardless of casing', async () => {
+    stubDefaultAgentIdentityEnv()
+    const { getAgentIdentity } = await import('./agentIdentity')
+
+    const uppercased = PROTOCOL_CSW_ADDRESS.toUpperCase()
     const result = getAgentIdentity(uppercased)
 
     expect(result).not.toBeNull()
@@ -70,14 +77,14 @@ describe('getAgentIdentity', () => {
     expect(getAgentIdentity('')).toBeNull()
   })
 
-  it('honors VITE_CANONICAL_CSW_ADDRESS override at module load time', async () => {
-    vi.stubEnv('VITE_CANONICAL_CSW_ADDRESS', '0x1111111111111111111111111111111111111111')
+  it('honors VITE_PROTOCOL_CSW_ADDRESS override at module load time', async () => {
+    vi.stubEnv('VITE_PROTOCOL_CSW_ADDRESS', '0x1111111111111111111111111111111111111111')
+    vi.stubEnv('VITE_CANONICAL_CSW_ADDRESS', '')
     vi.stubEnv('VITE_AGENT_DISPLAY_NAME', '')
     vi.stubEnv('VITE_AGENT_AVATAR_URL', '')
     const { getAgentIdentity } = await import('./agentIdentity')
 
-    // Override address is the agent inbox; canonical CSW no longer matches.
-    expect(getAgentIdentity(CANONICAL_CSW_ADDRESS)).toBeNull()
+    expect(getAgentIdentity(PROTOCOL_CSW_ADDRESS)).toBeNull()
     expect(getAgentIdentity('0x1111111111111111111111111111111111111111')).not.toBeNull()
   })
 })

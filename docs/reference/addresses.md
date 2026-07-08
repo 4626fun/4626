@@ -80,13 +80,13 @@ Do **not** set `PROTOCOL_AUTOMATION_SAFE` to the treasury address. Phase 3 deplo
 | `LotteryManager4626` (v1.16.1) | `0xD62a8a2F4c25587FA80ED5782b50Af6654122b0b` | Deprecated manager on prior registry stack. |
 | Legacy `LotteryAmoeRouter` | `0xc57aedc38eba3edfa116f92b3fc427af7eb06b0a` | **Deprecated.** Was wired to v1.11 manager `0x04CADE…`; do not point Vercel here. |
 | Legacy manager (v1.11) | `0x04CADE6FDf564A5005FF80930d8e8784cb1A7Cf8` | Pre–v1.16.1. Kill-switch relayer after cutover. |
-| Allowlist + ledger publisher | `0xAb6d5C10b03300326cd7fab7267ae192842967b5` | Canonical CSW — must match on-chain `allowlistPublisher` / `pointsLedgerPublisher`. |
+| Allowlist + ledger publisher | `0x793ca28123cba3ca3c20b9c6c67f37510c89c145` | Protocol CSW (`PROTOCOL_CSW_ADDRESS`) — must match on-chain `allowlistPublisher` / `pointsLedgerPublisher`. Operator personal CSW `0xAb6d5…` is no longer the AMOE publisher. |
 | Protocol AMOE creator coin (AKITA) | `0x5b674196812451b7cec024fe9d22d2c0b172fa75` | Default target for protocol-entry AMOE flows. |
 
 **Cutover checklist (production):**
 
 1. Deploy fresh `LotteryAmoeRouter` via `script/DeployLotteryAmoeRouter.s.sol` (PLONK v3).
-2. `./script/wire-amoe-router-v1161.sh` — `router.setManager(0xbE87AD…)`, `manager.setAuthorizedAmoeRelayer(<new router>)`, publishers → canonical CSW.
+2. `./script/wire-amoe-router-v1161.sh` — `router.setManager(0xbE87AD…)`, `manager.setAuthorizedAmoeRelayer(<new router>)`, publishers → protocol CSW (`0x793c…`).
 3. Set `LOTTERY_AMOE_ROUTER=<new router>` on Vercel (`production`, `preview`, `development`) and redeploy.
 4. Republish allowlist + points-ledger Merkle roots on the new router (`/api/v1/lottery/amoe/publish-cron` or manual ops). Roots are **one-shot per epoch** on each router address.
 5. Confirm signed AMOE messages embed `Lottery Manager: 0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1` (nonce API reads live `LOTTERY_MANAGER` env).

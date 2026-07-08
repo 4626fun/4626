@@ -31,6 +31,7 @@ import { useSafePrivyAccessToken } from '@/lib/privy/safeHooks'
 type GetAccessTokenFn = () => Promise<string | null>
 
 const ACCOUNTS_ME_RATE_LIMIT_BACKOFF_MS = 8_000
+const ACCOUNTS_ME_UNAUTHORIZED_BACKOFF_MS = 12_000
 // Prevent bursty UI triggers from spamming identical `/accounts/me` + bootstrap
 // fetches in quick succession (click storms, rapid provider state churn).
 const ACCOUNTS_ME_REFRESH_DEDUPE_WINDOW_MS = 1_200
@@ -41,6 +42,7 @@ const ACCOUNTS_ME_FOCUS_STALE_MS = 12_000
 let inFlight: Promise<AccountSetupMe | null> | null = null
 let cached: AccountSetupMe | null | undefined = undefined
 let accountsMeRateLimitedUntil = 0
+let accountsMeUnauthorizedUntil = 0
 let lastRefreshRequestedAtMs = 0
 let lastSettledAtMs = 0
 
@@ -65,6 +67,10 @@ async function fetchAccountMePayload(token: string): Promise<AccountSetupMe | nu
     accountsMeRateLimitedUntil = Date.now() + readRetryAfterMs(res)
     return null
   }
+  if (res.status === 401 || res.status === 403) {
+    accountsMeUnauthorizedUntil = Date.now() + ACCOUNTS_ME_UNAUTHORIZED_BACKOFF_MS
+    return null
+  }
   if (!res.ok) return null
   const body = (await res.json().catch(() => null)) as
     | { success: boolean; data: AccountSetupMe | null }
@@ -82,6 +88,7 @@ async function fetchAccountMe(getAccessToken: GetAccessTokenFn | null): Promise<
       // than burn a predictable 401 that pollutes logs and browser tabs.
       if (!token || !tokenFn) return null
       if (Date.now() < accountsMeRateLimitedUntil) return null
+      if (Date.now() < accountsMeUnauthorizedUntil) return null
 
       return await fetchAccountMePayload(token)
     } catch {
@@ -139,10 +146,11 @@ export function useAccountMe(options?: { enabled?: boolean }): {
         cancelled = true
       }
     }
-    if (Date.now() < accountsMeRateLimitedUntil && refreshCounter === 0) {
+    if ((Date.now() < accountsMeRateLimitedUntil || Date.now() < accountsMeUnauthorizedUntil) && refreshCounter === 0) {
+      const nextAllowedAt = Math.max(accountsMeRateLimitedUntil, accountsMeUnauthorizedUntil)
       retryTimeout = window.setTimeout(() => {
         if (!cancelled) setRefreshCounter((count) => count + 1)
-      }, Math.max(500, accountsMeRateLimitedUntil - Date.now()))
+      }, Math.max(500, nextAllowedAt - Date.now()))
       return () => {
         cancelled = true
         if (retryTimeout !== undefined) window.clearTimeout(retryTimeout)
@@ -162,6 +170,7 @@ export function useAccountMe(options?: { enabled?: boolean }): {
       setSettledCounter(refreshCounter)
       if (result === null && refreshCounter < 3) {
         if (Date.now() < accountsMeRateLimitedUntil) return
+        if (Date.now() < accountsMeUnauthorizedUntil) return
         retryTimeout = window.setTimeout(() => {
           if (!cancelled) setRefreshCounter((count) => count + 1)
         }, 1_500)
@@ -187,6 +196,7 @@ export function useAccountMe(options?: { enabled?: boolean }): {
 
   const refresh = useCallback(() => {
     const now = Date.now()
+    if (now < accountsMeRateLimitedUntil || now < accountsMeUnauthorizedUntil) return
     if (now - lastRefreshRequestedAtMs < ACCOUNTS_ME_REFRESH_DEDUPE_WINDOW_MS) return
     lastRefreshRequestedAtMs = now
     if (inFlight) return

@@ -3,25 +3,30 @@ import { getAddress, isAddress } from 'viem'
 export type PolicyAddress = `0x${string}`
 
 /**
- * Canonical parent CSW policy (`CANONICAL_CSW_ADDRESS`).
+ * Platform wallet policy — two distinct CSW pins:
  *
- * One canonical Coinbase Smart Wallet per 4626 account — stored as
- * `profiles.csw_address` and mirrored here as the policy constant for the
- * 4626 canonical account. Not a separate "agent wallet" vs "user wallet":
- * the same address is custody, XMTP inbox, AKITA vault owner, Railway Keepr
- * sender, and parent-CSW `canonical4337` / owner-install when that account
- * is in scope.
+ * - `PROTOCOL_CSW_ADDRESS` — 4626 agent / XMTP inbox / ERC-8004 identity /
+ *   Railway Keepr sender for agent #2205 (`4626.base.eth` target). Zora protocol
+ *   CSW with Privy server signer at owner slot 2 (`0x858c…`).
+ * - `CANONICAL_CSW_ADDRESS` — the 4626 operator account CSW (`profiles.csw_address`
+ *   for the admin account): personal custody, AMOE, sponsored swaps, owner-install.
  *
- * Migrated 2026-04-23 from legacy `XMTP_AGENT_CSW_*` split
- * (`0x4beabd…04ef` → `0xAb6d5…967b5`). Runtime env: `CANONICAL_CSW_*`
- * (`canonicalCswEnv.ts`). Other verified accounts have their own
- * `profiles.csw_address` (same role, different on-chain address).
- *
- * Signing lanes on this wallet: Privy embedded EOA (slot 18) for frontend;
- * Privy server wallet (slot 15) for Railway automation; admin/passkey EOAs below.
+ * Do not conflate protocol agent identity with the operator account wallet.
+ * Runtime env: `PROTOCOL_CSW_*` + `CANONICAL_CSW_*` (`canonicalCswEnv.ts`).
  */
 
-// Canonical CSW migrated on 2026-04-23 from 0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef
+/** 4626 protocol agent CSW (Zora CSW; `4626.base.eth` target). */
+export const PROTOCOL_CSW_ADDRESS =
+  '0x793ca28123cba3ca3c20b9c6c67f37510c89c145' as const satisfies PolicyAddress
+
+/** Privy server wallet (`0x858c…`) — owner slot 2 on `PROTOCOL_CSW_ADDRESS`. */
+export const PROTOCOL_CSW_EXECUTION_OWNER_ADDRESSES = [
+  '0x858c01556ec5a8531fa4118d595430ac7fd0baf0',
+] as const satisfies readonly PolicyAddress[]
+
+const PROTOCOL_CSW_EXECUTION_OWNER_SET = new Set<string>(PROTOCOL_CSW_EXECUTION_OWNER_ADDRESSES)
+
+// Operator account CSW (personal canonical account; migrated 2026-04-23 from 0x4beabd…)
 export const CANONICAL_CSW_ADDRESS =
   '0xab6d5c10b03300326cd7fab7267ae192842967b5' as const satisfies PolicyAddress
 
@@ -59,8 +64,19 @@ export function normalizePolicyAddress(value: string | null | undefined): Policy
   return getAddress(value).toLowerCase() as PolicyAddress
 }
 
+export function isProtocolCsw(value: string | null | undefined): boolean {
+  return normalizePolicyAddress(value) === PROTOCOL_CSW_ADDRESS
+}
+
 export function isCanonicalCsw(value: string | null | undefined): boolean {
   return normalizePolicyAddress(value) === CANONICAL_CSW_ADDRESS
+}
+
+/** Whether `value` may sign execution on `PROTOCOL_CSW_ADDRESS`. */
+export function isAllowedProtocolCswExecutionSigner(value: string | null | undefined): boolean {
+  const normalized = normalizePolicyAddress(value)
+  if (!normalized) return false
+  return PROTOCOL_CSW_EXECUTION_OWNER_SET.has(normalized)
 }
 
 export function isAllowedOwnerEoa(value: string | null | undefined): boolean {

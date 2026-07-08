@@ -45,12 +45,10 @@ import {
   type CoinbaseSmartWalletCall,
 } from '../wallet/privyCoinbaseSmartWallet.js'
 import { resolveBundlerUrl } from '../wallet/userOperationSubmitter.js'
+import { resolveServerAgentCswAddress } from '../wallet/canonicalCswEnv.js'
 import {
-  CANONICAL_CSW_ADDRESS,
-} from '../../../src/wallet/canonicalWalletPolicy.js'
-import {
-  readCanonicalCswOwnerIndexEnv,
-  readCanonicalCswPrivyWalletIdEnv,
+  readProtocolCswOwnerIndexEnv,
+  readProtocolCswPrivyWalletIdEnv,
 } from '../wallet/canonicalCswEnv.js'
 import {
   abandonQueuedFeedback,
@@ -144,7 +142,7 @@ function resolvePrivyEnv(): {
   bundlerUrl: string | null
 } {
   return {
-    walletId: readCanonicalCswPrivyWalletIdEnv() || null,
+    walletId: readProtocolCswPrivyWalletIdEnv() || null,
     appId: (process.env.PRIVY_APP_ID ?? '').trim() || null,
     appSecret: (process.env.PRIVY_APP_SECRET ?? '').trim() || null,
     authKey: (process.env.PRIVY_WALLET_AUTHORIZATION_KEY ?? '').trim() || null,
@@ -153,7 +151,7 @@ function resolvePrivyEnv(): {
 }
 
 function configuredOwnerIndex(): number | null {
-  const raw = readCanonicalCswOwnerIndexEnv()
+  const raw = readProtocolCswOwnerIndexEnv()
   if (!/^\d+$/.test(raw)) return null
   const n = Number.parseInt(raw, 10)
   if (!Number.isFinite(n) || n < 0) return null
@@ -322,7 +320,7 @@ export async function relayAlfaClubFeedbackOnce(
         return resolvePrivyCoinbaseSmartWalletOwnerContext({
           publicClient,
           walletId: env.walletId as string,
-          smartWallet: CANONICAL_CSW_ADDRESS as Address,
+          smartWallet: resolveServerAgentCswAddress() as Address,
           configuredOwnerIndex: configuredOwnerIndex(),
           allowConfiguredOwnerIndexFallback: true,
         })
@@ -364,7 +362,7 @@ export async function relayAlfaClubFeedbackOnce(
 
     const result = await submitCall({
       walletId: env.walletId,
-      smartWallet: CANONICAL_CSW_ADDRESS as Address,
+      smartWallet: resolveServerAgentCswAddress() as Address,
       ownerAddress,
       ownerIndex,
       calls: [

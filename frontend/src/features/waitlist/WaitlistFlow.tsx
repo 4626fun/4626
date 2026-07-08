@@ -223,7 +223,7 @@ function JoinedAvatars({ avatars }: { avatars: WaitlistAvatar[] }) {
   return (
     <div className="flex -space-x-2">
       {slots.map((avatar, index) => (
-        <AvatarDot key={avatar?.src ?? `placeholder-${index}`} avatar={avatar} index={index} />
+        <AvatarDot key={`${avatar?.src ?? 'placeholder'}-${index}`} avatar={avatar} index={index} />
       ))}
     </div>
   )
@@ -322,6 +322,10 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   const [error, setError] = useState<string | null>(null)
   const [listCount, setListCount] = useState<number | null>(null)
   const [memberAvatars, setMemberAvatars] = useState<WaitlistAvatar[]>([])
+  const lastNonEmptyWaitlistStatsRef = useRef<{ signedUpCount: number | null; avatars: WaitlistAvatar[] }>({
+    signedUpCount: null,
+    avatars: [],
+  })
   const [resendAvailableAt, setResendAvailableAt] = useState<number | null>(null)
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [xPhaseDone, setXPhaseDone] = useState(() => readWaitlistXPhaseDone())
@@ -481,16 +485,45 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
         signedUpCount?: number
         avatars?: WaitlistAvatar[]
       }> | null
-      if (json?.success && typeof json.data?.signedUpCount === 'number' && json.data.signedUpCount > 0) {
-        setListCount(json.data.signedUpCount)
-      }
-      if (json?.success && Array.isArray(json.data?.avatars)) {
-        setMemberAvatars(
-          json.data.avatars.filter(
+      if (!json?.success) return
+
+      const signedUpCount =
+        typeof json.data?.signedUpCount === 'number' && Number.isFinite(json.data.signedUpCount)
+          ? Math.max(0, Math.floor(json.data.signedUpCount))
+          : null
+      const avatars = Array.isArray(json.data?.avatars)
+        ? json.data.avatars.filter(
             (avatar): avatar is WaitlistAvatar =>
               Boolean(avatar) && typeof avatar.src === 'string' && avatar.src.length > 0,
-          ),
-        )
+          )
+        : []
+      const looksLikeFailOpenEmpty = signedUpCount === 0 && avatars.length === 0
+
+      if (looksLikeFailOpenEmpty) {
+        const previous = lastNonEmptyWaitlistStatsRef.current
+        if ((previous.signedUpCount ?? 0) > 0 || previous.avatars.length > 0) {
+          // Public stats intentionally fail-open with `0/[]` on transient backend
+          // issues. Keep the last non-empty snapshot so social proof doesn't flicker
+          // back to placeholders between successful polls.
+          if ((previous.signedUpCount ?? 0) > 0) {
+            setListCount((current) => current ?? previous.signedUpCount)
+          }
+          if (previous.avatars.length > 0) {
+            setMemberAvatars((current) => (current.length > 0 ? current : previous.avatars))
+          }
+          return
+        }
+      }
+
+      if (signedUpCount != null) {
+        setListCount(signedUpCount)
+        if (signedUpCount > 0) {
+          lastNonEmptyWaitlistStatsRef.current.signedUpCount = signedUpCount
+        }
+      }
+      if (avatars.length > 0) {
+        setMemberAvatars(avatars)
+        lastNonEmptyWaitlistStatsRef.current.avatars = avatars
       }
     } catch {
       // fail open — placeholders still render

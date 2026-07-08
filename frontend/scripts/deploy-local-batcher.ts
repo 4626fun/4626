@@ -291,6 +291,50 @@ async function readAddressGetter(batcher: Address, name: string): Promise<Addres
   return getAddress(value) as Address
 }
 
+const CONSTRUCTOR_GETTER_FALLBACKS: Record<string, readonly string[]> = {
+  // Older batcher shells expose this helper as `shareMeshHelper()` instead of `uniV4Helper()`.
+  uniV4Helper: ['shareMeshHelper'],
+}
+
+const CONSTRUCTOR_GETTER_ENV_FALLBACKS: Record<string, readonly string[]> = {
+  uniV4Helper: ['DEPLOYMENT_BATCHER_SHARE_MESH_HELPER', 'VITE_DEPLOYMENT_BATCHER_SHARE_MESH_HELPER'],
+}
+
+async function resolveConstructorGetter(batcher: Address, getterName: string): Promise<Address> {
+  const attemptedGetters: string[] = []
+  const getterCandidates = [getterName, ...(CONSTRUCTOR_GETTER_FALLBACKS[getterName] ?? [])]
+
+  for (const candidate of getterCandidates) {
+    attemptedGetters.push(candidate)
+    try {
+      return await readAddressGetter(batcher, candidate)
+    } catch {
+      // Try the next alias.
+    }
+  }
+
+  const envFallbackKeys = CONSTRUCTOR_GETTER_ENV_FALLBACKS[getterName] ?? []
+  for (const envKey of envFallbackKeys) {
+    const raw = String(process.env[envKey] ?? '').trim()
+    if (!raw) continue
+    if (!isAddress(raw)) {
+      throw new Error(
+        `${envKey} is set but invalid: ${raw}. Provide a valid address to satisfy ${getterName}() fallback.`,
+      )
+    }
+    return getAddress(raw) as Address
+  }
+
+  const attempted = attemptedGetters.map((name) => `${name}()`).join(', ')
+  const envHint =
+    envFallbackKeys.length > 0
+      ? ` or set one of: ${envFallbackKeys.join(', ')}`
+      : ''
+  throw new Error(
+    `Source batcher ${batcher} is missing required constructor getter(s): ${attempted}${envHint}.`,
+  )
+}
+
 async function anvilRpc<T>(method: string, params: unknown[]): Promise<T> {
   const res = await fetch(rpcUrl, {
     method: 'POST',
@@ -865,7 +909,7 @@ async function main() {
   })()
 
   const constructorArgs = await Promise.all(
-    constructorGetterNames.map((name) => readAddressGetter(sourceBatcher, name)),
+    constructorGetterNames.map((name) => resolveConstructorGetter(sourceBatcher, name)),
   )
   constructorArgs.splice(4, 0, protocolAutomation)
   const deployedBatcher = runForgeCreate(

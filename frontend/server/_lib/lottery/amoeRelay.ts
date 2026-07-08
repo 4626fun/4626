@@ -1,5 +1,11 @@
 import type { Address, Hex } from 'viem'
 
+import {
+  readProtocolCswOwnerIndexEnv,
+  readProtocolCswPrivyWalletIdEnv,
+  resolveServerAgentCswAddress,
+} from '../wallet/canonicalCswEnv.js'
+
 declare const process: { env: Record<string, string | undefined> }
 
 function isAddressLike(value: string): value is `0x${string}` {
@@ -26,7 +32,7 @@ function readAmoeRelayOwnerPrivateKey(): `0x${string}` | null {
   return null
 }
 
-function readAmoeRelaySmartWallet(): `0x${string}` | null {
+function readAmoeRelaySmartWallet(): `0x${string}` {
   const candidates = [
     process.env.LOTTERY_AMOE_RELAY_SMART_WALLET,
     process.env.KPR_ERC4337_SMART_WALLET,
@@ -35,7 +41,13 @@ function readAmoeRelaySmartWallet(): `0x${string}` | null {
     const value = String(candidate ?? '').trim()
     if (isAddressLike(value)) return value.toLowerCase() as `0x${string}`
   }
-  return null
+  return resolveServerAgentCswAddress()
+}
+
+function readAmoeRelayOwnerIndexHint(): number | null {
+  const raw = readProtocolCswOwnerIndexEnv()
+  const parsed = raw ? Number(raw) : Number.NaN
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : null
 }
 
 function readAmoeRelayBundlerUrl(): string | null {
@@ -59,6 +71,7 @@ function readAmoeRelayPrivyWalletId(): string | null {
   const candidates = [
     process.env.LOTTERY_AMOE_RELAY_PRIVY_WALLET_ID,
     process.env.KPR_ERC4337_PRIVY_WALLET_ID,
+    readProtocolCswPrivyWalletIdEnv(),
   ]
   for (const candidate of candidates) {
     const value = String(candidate ?? '').trim()
@@ -135,6 +148,8 @@ async function relayAmoeTransaction(params: AmoeRelayRequest): Promise<`0x${stri
         walletId: privyWalletId,
         smartWallet,
         expectedOwnerAddress,
+        configuredOwnerIndex: readAmoeRelayOwnerIndexHint(),
+        allowConfiguredOwnerIndexFallback: true,
         maxScan: 512,
       })
       const viaPrivyUserOp = await sendPrivyCoinbaseSmartWalletUserOperation({

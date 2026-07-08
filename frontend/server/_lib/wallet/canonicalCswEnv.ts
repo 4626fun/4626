@@ -1,12 +1,17 @@
 /**
- * Canonical CSW runtime env (`CANONICAL_CSW_*`).
+ * Canonical + protocol CSW runtime env.
  *
- * One smart wallet address for profiles, XMTP, vault owner, and swap execution.
- * Legacy `XMTP_AGENT_CSW_*` / `XMTP_AGENT_PRIVY_WALLET_ID` aliases were removed —
- * set `CANONICAL_CSW_*` on Railway/Vercel/local env.
+ * - `PROTOCOL_CSW_*` — 4626 agent / XMTP / ERC-8004 / Railway Keepr sender.
+ * - `CANONICAL_CSW_*` — operator account CSW (personal custody, AMOE, swaps).
+ *
+ * Legacy `XMTP_AGENT_CSW_*` aliases were removed — set `PROTOCOL_CSW_*` and
+ * `CANONICAL_CSW_*` on Railway/Vercel/local env.
  */
 
-import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
+import {
+  CANONICAL_CSW_ADDRESS,
+  PROTOCOL_CSW_ADDRESS,
+} from '../../../src/wallet/canonicalWalletPolicy.js'
 
 /** Hard-cutover env aliases — code no longer reads these; ops must migrate to CANONICAL_CSW_*. */
 export const RETIRED_CANONICAL_CSW_ENV_KEYS = [
@@ -38,9 +43,34 @@ function readEnvFlag(...keys: readonly string[]): boolean {
   return /^(1|true|yes)$/i.test(readEnvFirst(...keys))
 }
 
-/** On-chain canonical parent CSW address (XMTP inbox, vault owner, swap sender). */
+function isAddressLike(value: string): value is `0x${string}` {
+  return /^0x[a-fA-F0-9]{40}$/.test(value)
+}
+
+/** Operator account CSW (`profiles.csw_address` for the admin account). */
 export function readCanonicalCswAddressEnv(): string {
   return readEnvFirst('CANONICAL_CSW_ADDRESS')
+}
+
+/** 4626 protocol agent CSW (XMTP inbox, ERC-8004 agent wallet, Railway sender). */
+export function readProtocolCswAddressEnv(): string {
+  return readEnvFirst('PROTOCOL_CSW_ADDRESS')
+}
+
+/** Chain id where the protocol CSW is deployed (default Base mainnet). */
+export function readProtocolCswChainIdEnv(): number {
+  const raw = readEnvFirst('PROTOCOL_CSW_CHAIN_ID', 'CANONICAL_CSW_CHAIN_ID')
+  return Number(raw || '8453') || 8453
+}
+
+/** Optional MultiOwnable owner-index hint for the server Privy signer on the protocol CSW. */
+export function readProtocolCswOwnerIndexEnv(): string {
+  return readEnvFirst('PROTOCOL_CSW_OWNER_INDEX')
+}
+
+/** Privy server wallet id that signs UserOps / XMTP for the protocol CSW. */
+export function readProtocolCswPrivyWalletIdEnv(): string {
+  return readEnvFirst('PROTOCOL_CSW_PRIVY_WALLET_ID', 'CANONICAL_CSW_PRIVY_WALLET_ID')
 }
 
 /** Chain id where the canonical CSW is deployed (default Base mainnet). */
@@ -49,12 +79,12 @@ export function readCanonicalCswChainIdEnv(): number {
   return Number(raw || '8453') || 8453
 }
 
-/** Optional MultiOwnable owner-index hint for the server Privy signer. */
+/** Optional MultiOwnable owner-index hint for the server Privy signer on the operator CSW. */
 export function readCanonicalCswOwnerIndexEnv(): string {
   return readEnvFirst('CANONICAL_CSW_OWNER_INDEX')
 }
 
-/** Privy server wallet id that signs UserOps / XMTP for the canonical CSW. */
+/** Privy server wallet id that signs UserOps for the operator canonical CSW. */
 export function readCanonicalCswPrivyWalletIdEnv(): string {
   return readEnvFirst('CANONICAL_CSW_PRIVY_WALLET_ID')
 }
@@ -71,8 +101,18 @@ export function hasCanonicalCswRuntimeConfig(): boolean {
   return Boolean(readCanonicalCswAddressEnv() && readCanonicalCswPrivyWalletIdEnv())
 }
 
-function isAddressLike(value: string): value is `0x${string}` {
-  return /^0x[a-fA-F0-9]{40}$/.test(value)
+export function hasProtocolCswRuntimeConfig(): boolean {
+  return Boolean(readProtocolCswPrivyWalletIdEnv())
+}
+
+/**
+ * Protocol agent CSW for Railway XMTP / ERC-8004 UserOps.
+ * Prefers `PROTOCOL_CSW_ADDRESS` env, then policy constant.
+ */
+export function resolveServerAgentCswAddress(): `0x${string}` {
+  const protocol = readProtocolCswAddressEnv()
+  if (isAddressLike(protocol)) return protocol.toLowerCase() as `0x${string}`
+  return PROTOCOL_CSW_ADDRESS.toLowerCase() as `0x${string}`
 }
 
 /**
@@ -80,7 +120,5 @@ function isAddressLike(value: string): value is `0x${string}` {
  * Mirrors client `resolveClientAgentXmtpAddress()` precedence.
  */
 export function resolveServerAgentInboxAddress(): `0x${string}` {
-  const configured = readCanonicalCswAddressEnv()
-  if (isAddressLike(configured)) return configured.toLowerCase() as `0x${string}`
-  return CANONICAL_CSW_ADDRESS.toLowerCase() as `0x${string}`
+  return resolveServerAgentCswAddress()
 }
