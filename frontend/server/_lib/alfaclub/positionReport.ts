@@ -65,9 +65,11 @@ export function sumHyperliquidUnrealizedPnl(
 
 export type PositionAlertStatusOptions = {
   telegramLinked?: boolean | null
+  xmtpConfigured?: boolean | null
   monitoredWallets?: MonitoredHlWallet[]
   roomId?: string | null
   operatorWallet?: string | null
+  protocolAgentDmLink?: string | null
 }
 
 export function formatPositionAlertStatusBlock(
@@ -78,11 +80,11 @@ export function formatPositionAlertStatusBlock(
     const lines = [
       '**Hyperliquid alerts** — off',
       '• **`/hermit alert`** — turn on defaults (liq + target, Telegram if linked)',
-      '• `/hermit alert off` · `/hermit alert status`',
+      '• `/hermit alert off` · `/hermit alert status` · `/hermit alert xmtp on`',
     ]
     if (options?.roomId === '1659') {
       lines.push(
-        '• Room 1659 monitors **room HL portfolio + Virtual Arena wallet** — link Telegram in the 4626 Mini App, then `/hermit alert` · `/hermit alert test`',
+        '• Room 1659 monitors **room HL portfolio + Virtual Arena wallet** — link Telegram in the 4626 Mini App, or DM the 4626 agent on XMTP, then `/hermit alert` · `/hermit alert test`',
       )
     }
     return lines
@@ -105,12 +107,21 @@ export function formatPositionAlertStatusBlock(
     )
   }
   lines.push(`• Telegram DM: **${alert.telegramEnabled ? 'on' : 'off'}**`)
+  lines.push(`• XMTP DM (4626 agent): **${alert.xmtpEnabled ? 'on' : 'off'}**`)
   if (options?.telegramLinked === true) {
     lines.push('• Linked Telegram: **yes**')
   } else if (options?.telegramLinked === false) {
     lines.push(
-      '• Linked Telegram: **no** — link in the **4626 Telegram Mini App**, then `/hermit alert` · `/hermit alert test`',
+      '• Linked Telegram: **no** — link in the **4626 Telegram Mini App**, then `/hermit alert telegram on`',
     )
+  }
+  if (alert.xmtpEnabled && options?.protocolAgentDmLink) {
+    lines.push(`• 4626 agent XMTP: ${options.protocolAgentDmLink}`)
+  } else if (!alert.xmtpEnabled && options?.protocolAgentDmLink) {
+    lines.push(`• XMTP opt-in: DM once at ${options.protocolAgentDmLink}, then \`/hermit alert xmtp on\``)
+  }
+  if (options?.xmtpConfigured === false) {
+    lines.push('• XMTP delivery: **not configured** on this runtime (`PROTOCOL_CSW_*` missing)')
   }
   if (options?.operatorWallet && options.roomId === '1659') {
     lines.push(`• Operator wallet (subscription): **${formatWalletShort(options.operatorWallet)}**`)

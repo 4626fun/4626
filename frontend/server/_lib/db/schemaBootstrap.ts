@@ -512,6 +512,7 @@ export async function ensureAlfaclubDailyBriefSchema(db: Db): Promise<void> {
 export async function ensureAlfaclubPositionAlertSchema(db: Db): Promise<void> {
   await withEnsureOnce('alfaclubPositionAlert', async () => {
     await ensureMigrationApplied(db, '20260707000000_alfaclub_position_alerts.sql').catch(() => {})
+    await ensureMigrationApplied(db, '20260708120000_position_alert_xmtp_enabled.sql').catch(() => {})
   })
 }
 

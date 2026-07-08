@@ -15,6 +15,7 @@ export type PositionAlertConfig = {
   senderAddress: string
   enabled: boolean
   telegramEnabled: boolean
+  xmtpEnabled: boolean
   liquidationWarnPct: number | null
   targetPnlUsd: number | null
   targetProgressPct: number
@@ -28,6 +29,7 @@ type AlertRow = {
   sender_address: string
   enabled: boolean
   telegram_enabled: boolean
+  xmtp_enabled?: boolean
   liquidation_warn_pct: string | null
   target_pnl_usd: string | null
   target_progress_pct: string
@@ -66,6 +68,7 @@ function rowToConfig(row: AlertRow): PositionAlertConfig {
     senderAddress: row.sender_address,
     enabled: row.enabled,
     telegramEnabled: row.telegram_enabled,
+    xmtpEnabled: row.xmtp_enabled ?? false,
     liquidationWarnPct: row.liquidation_warn_pct != null ? Number(row.liquidation_warn_pct) : null,
     targetPnlUsd: row.target_pnl_usd != null ? Number(row.target_pnl_usd) : null,
     targetProgressPct: Number(row.target_progress_pct) || 90,
@@ -124,7 +127,7 @@ export async function readPositionAlert(params: {
   if (!tableExists) return null
 
   const result = await db.sql`
-    SELECT room_id, sender_address, enabled, telegram_enabled,
+    SELECT room_id, sender_address, enabled, telegram_enabled, xmtp_enabled,
            liquidation_warn_pct, target_pnl_usd, target_progress_pct,
            last_liq_alert_at, last_target_alert_at, updated_at
     FROM alfaclub.position_alert
@@ -140,6 +143,7 @@ export async function upsertPositionAlert(params: {
   senderAddress: string
   enabled?: boolean
   telegramEnabled?: boolean
+  xmtpEnabled?: boolean
   liquidationWarnPct?: number | null
   targetPnlUsd?: number | null
   targetProgressPct?: number | null
@@ -158,6 +162,7 @@ export async function upsertPositionAlert(params: {
 
   const enabled = params.enabled ?? existing?.enabled ?? true
   const telegramEnabled = params.telegramEnabled ?? existing?.telegramEnabled ?? false
+  const xmtpEnabled = params.xmtpEnabled ?? existing?.xmtpEnabled ?? false
   const liquidationWarnPct =
     params.liquidationWarnPct !== undefined
       ? params.liquidationWarnPct
@@ -170,20 +175,21 @@ export async function upsertPositionAlert(params: {
   try {
     const result = await db.sql`
       INSERT INTO alfaclub.position_alert (
-        room_id, sender_address, enabled, telegram_enabled,
+        room_id, sender_address, enabled, telegram_enabled, xmtp_enabled,
         liquidation_warn_pct, target_pnl_usd, target_progress_pct, updated_at
       ) VALUES (
-        ${roomId}, ${senderAddress}, ${enabled}, ${telegramEnabled},
+        ${roomId}, ${senderAddress}, ${enabled}, ${telegramEnabled}, ${xmtpEnabled},
         ${liquidationWarnPct}, ${targetPnlUsd}, ${targetProgressPct}, NOW()
       )
       ON CONFLICT (room_id, sender_address) DO UPDATE SET
         enabled = EXCLUDED.enabled,
         telegram_enabled = EXCLUDED.telegram_enabled,
+        xmtp_enabled = EXCLUDED.xmtp_enabled,
         liquidation_warn_pct = EXCLUDED.liquidation_warn_pct,
         target_pnl_usd = EXCLUDED.target_pnl_usd,
         target_progress_pct = EXCLUDED.target_progress_pct,
         updated_at = NOW()
-      RETURNING room_id, sender_address, enabled, telegram_enabled,
+      RETURNING room_id, sender_address, enabled, telegram_enabled, xmtp_enabled,
                 liquidation_warn_pct, target_pnl_usd, target_progress_pct,
                 last_liq_alert_at, last_target_alert_at, updated_at;
     `
@@ -244,11 +250,15 @@ export async function listEnabledPositionAlerts(limit = 200): Promise<PositionAl
 
     const capped = Math.min(Math.max(1, limit), 500)
     const result = await db.sql`
-      SELECT room_id, sender_address, enabled, telegram_enabled,
+      SELECT room_id, sender_address, enabled, telegram_enabled, xmtp_enabled,
              liquidation_warn_pct, target_pnl_usd, target_progress_pct,
              last_liq_alert_at, last_target_alert_at, updated_at
       FROM alfaclub.position_alert
       WHERE enabled = TRUE
+        AND (
+          telegram_enabled = TRUE
+          OR xmtp_enabled = TRUE
+        )
         AND (
           liquidation_warn_pct IS NOT NULL
           OR target_pnl_usd IS NOT NULL
@@ -306,7 +316,9 @@ export type ParsedAlertCommand =
   | { action: 'default' }
   | { action: 'off' }
   | { action: 'test' }
+  | { action: 'xmtp_test' }
   | { action: 'telegram'; enabled: boolean }
+  | { action: 'xmtp'; enabled: boolean }
   | { action: 'liq'; pct: number }
   | { action: 'target'; usd: number }
   | { action: 'progress'; pct: number }
@@ -377,6 +389,13 @@ export function parseHermitAlertCommandArgs(args: string): ParsedAlertCommand {
     return { action: 'telegram', enabled: true }
   }
 
+  if (head === 'xmtp') {
+    const mode = (parts[1] ?? 'on').toLowerCase()
+    if (mode === 'test') return { action: 'xmtp_test' }
+    if (mode === 'off' || mode === 'disable') return { action: 'xmtp', enabled: false }
+    return { action: 'xmtp', enabled: true }
+  }
+
   if (head === 'liq' || head === 'liquidation') {
     const pct = parseOptionalPct(parts[1])
     if (pct == null) {
@@ -414,7 +433,7 @@ export function parseHermitAlertCommandArgs(args: string): ParsedAlertCommand {
   return {
     action: 'invalid',
     reason:
-      'Usage: `/hermit alert` (defaults) · `status` · `off` · optional `liq 10` · `target 5000`',
+      'Usage: `/hermit alert` (defaults) · `status` · `off` · `telegram on|off` · `xmtp on|off` · `xmtp test` · optional `liq 10` · `target 5000`',
   }
 }
 

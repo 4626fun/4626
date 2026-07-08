@@ -72,6 +72,7 @@ export async function resolveRoom1659MonitoredHlWallets(): Promise<MonitoredHlWa
     senderAddress: '0x0000000000000000000000000000000000000000',
     enabled: false,
     telegramEnabled: false,
+    xmtpEnabled: false,
     liquidationWarnPct: null,
     targetPnlUsd: null,
     targetProgressPct: 90,

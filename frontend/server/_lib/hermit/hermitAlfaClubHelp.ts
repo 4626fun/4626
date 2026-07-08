@@ -32,8 +32,9 @@ function formatHermitCreativeSection(): string[] {
     '• `/gmeow [vibe]` — GIF + one-liner',
     '• `/meme <prompt>` — meme / image concept',
     '• `/hermit copy|announce|quest|tone <text>` — room copy drafts',
-    '• `/hermit alert` — Hyperliquid Telegram alerts (room 1659: room HL + Virtual Arena wallets)',
-    '• `/hermit alert test` — send immediate Telegram test DM (link 4626 in Telegram Mini App first)',
+    '• `/hermit alert` — Hyperliquid alerts via Telegram and/or 4626 agent XMTP',
+    '• `/hermit alert test` · `/hermit alert xmtp test` — verify delivery',
+    '• `/hermit alert xmtp on|off` — opt into XMTP DMs from the protocol 4626 agent',
     '• `/hermit setup` · `/hermit help`',
   ]
 }

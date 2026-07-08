@@ -11,6 +11,7 @@ function makeAlert(overrides: Partial<PositionAlertConfig> = {}): PositionAlertC
     senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     enabled: true,
     telegramEnabled: true,
+    xmtpEnabled: false,
     liquidationWarnPct: 10,
     targetPnlUsd: 5000,
     targetProgressPct: 90,

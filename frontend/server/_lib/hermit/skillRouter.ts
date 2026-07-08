@@ -63,6 +63,11 @@ import {
   parseHermitAlertCommandArgs,
   resolveTelegramChatIdForWallet,
 } from '../alfaclub/positionAlertStore.js'
+import {
+  formatProtocolAgentXmtpDmLink,
+  isProtocolXmtpAlertDeliveryConfigured,
+  sendProtocolAgentXmtpDm,
+} from '../wallet/protocolXmtpAlertSender.js'
 import { arenaCommandAllowedForRoom, readArenaConfig } from '../arena/arenaConfig.js'
 import { formatArenaPositionIntelReply } from '../arena/arenaPositionIntelFormat.js'
 import {
@@ -1862,40 +1867,95 @@ async function handleHermitAlertSubcommand(
 
     if (parsed.action === 'test') {
       const botToken = readPositionAlertBotToken()
-      if (!botToken) {
+      const alert = await readHermitPositionAlert(sender, params.roomId)
+      const testTelegram = alert?.telegramEnabled !== false
+      const testXmtp = alert?.xmtpEnabled === true
+      const results: string[] = []
+
+      if (testTelegram) {
+        if (!botToken) {
+          results.push(
+            'Telegram: failed — bot token is not configured on this runtime (`ALFACLUB_API_KEY`).',
+          )
+        } else {
+          const chatId = await resolveTelegramChatIdForWallet(sender)
+          if (!chatId) {
+            results.push(
+              'Telegram: failed — no linked Telegram for this wallet. Link in the 4626 Telegram Mini App first.',
+            )
+          } else {
+            const sent = await sendTelegramAlertTestDm({
+              chatId,
+              senderAddress: sender,
+              botToken,
+            })
+            results.push(sent ? `Telegram: sent ✅ (chat ${chatId}).` : 'Telegram: send failed.')
+          }
+        }
+      }
+
+      if (testXmtp) {
+        if (!isProtocolXmtpAlertDeliveryConfigured()) {
+          results.push('XMTP: failed — `PROTOCOL_CSW_*` is not configured on this runtime.')
+        } else {
+          const sent = await sendProtocolAgentXmtpDm({
+            recipientAddress: sender,
+            text: [
+              '🧪 **Hermit alert test (XMTP)**',
+              `Wallet ${sender.slice(0, 6)}…${sender.slice(-4)}`,
+              '4626 agent XMTP delivery is configured for this wallet.',
+              'You will receive Hyperliquid alert DMs here when thresholds trigger.',
+            ].join('\n'),
+          })
+          results.push(sent ? 'XMTP: sent ✅ from the 4626 agent.' : 'XMTP: send failed — DM the agent once, then retry.')
+        }
+      }
+
+      if (!testTelegram && !testXmtp) {
         return {
           kind: 'hermit',
           provider: 'local',
           reply:
-            'Telegram alert test failed: bot token is not configured on this runtime. Set `ALFACLUB_API_KEY` (and/or Telegram relay token) and retry.',
+            'No alert channels enabled. Run `/hermit alert` or `/hermit alert telegram on` / `/hermit alert xmtp on`, then retry `/hermit alert test`.',
         }
       }
-      const chatId = await resolveTelegramChatIdForWallet(sender)
-      if (!chatId) {
+
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: ['**Hermit alert test**', '', ...results].join('\n'),
+      }
+    }
+
+    if (parsed.action === 'xmtp_test') {
+      if (!isProtocolXmtpAlertDeliveryConfigured()) {
         return {
           kind: 'hermit',
           provider: 'local',
           reply:
-            'Telegram alert test failed: no linked Telegram for this wallet. Link in the 4626 Telegram Mini App, then retry `/hermit alert test`.',
+            'XMTP alert test failed: `PROTOCOL_CSW_*` is not configured on this runtime. Set protocol CSW env on Hermit/Vercel and retry.',
         }
       }
-      const sent = await sendTelegramAlertTestDm({
-        chatId,
-        senderAddress: sender,
-        botToken,
+      const sent = await sendProtocolAgentXmtpDm({
+        recipientAddress: sender,
+        text: [
+          '🧪 **Hermit alert test (XMTP)**',
+          `Wallet ${sender.slice(0, 6)}…${sender.slice(-4)}`,
+          '4626 agent XMTP delivery is configured for this wallet.',
+          'You will receive Hyperliquid alert DMs here when thresholds trigger.',
+        ].join('\n'),
       })
       if (sent) {
         return {
           kind: 'hermit',
           provider: 'local',
-          reply: `Telegram alert test sent ✅ (chat ${chatId}).`,
+          reply: `XMTP alert test sent ✅ from the 4626 agent. Link: ${formatProtocolAgentXmtpDmLink()}`,
         }
       }
       return {
         kind: 'hermit',
         provider: 'local',
-        reply:
-          'Telegram alert test failed during send. Check bot permissions/chat access, then retry `/hermit alert test`.',
+        reply: `XMTP alert test failed during send. DM the 4626 agent once (${formatProtocolAgentXmtpDmLink()}), then retry \`/hermit alert xmtp test\`.`,
       }
     }
 
@@ -1914,6 +1974,8 @@ async function handleHermitAlertSubcommand(
         ...formatPositionAlertStatusBlock(alert, {
           roomId: params.roomId ?? null,
           telegramLinked: Boolean(telegramLinked),
+          xmtpConfigured: isProtocolXmtpAlertDeliveryConfigured(),
+          protocolAgentDmLink: formatProtocolAgentXmtpDmLink(),
           monitoredWallets,
           operatorWallet: sender,
         }),
@@ -1921,7 +1983,7 @@ async function handleHermitAlertSubcommand(
       if (params.roomId === '1659') {
         lines.push(
           '',
-          'Room 1659 alerts monitor **room HL portfolio + Virtual Arena wallet**; Telegram DMs go to your linked account.',
+          'Room 1659 alerts monitor **room HL portfolio + Virtual Arena wallet**; delivery via linked Telegram and/or XMTP (`/hermit alert xmtp on`).',
         )
       }
       return { kind: 'hermit', provider: 'local', reply: lines.join('\n') }
@@ -1960,7 +2022,7 @@ async function handleHermitAlertSubcommand(
         )
       }
       lines.push('', 'Live snapshot: `/position` · disable: `/hermit alert off`')
-      lines.push('Verify delivery now: `/hermit alert test`')
+      lines.push('Verify delivery: `/hermit alert test` · XMTP: `/hermit alert xmtp on` then `/hermit alert xmtp test`')
       return {
         kind: 'hermit',
         provider: 'local',
@@ -2000,6 +2062,44 @@ async function handleHermitAlertSubcommand(
         kind: 'hermit',
         provider: 'local',
         reply: 'Telegram DMs off. `/position` still works in chat anytime.',
+      }
+    }
+
+    if (parsed.action === 'xmtp') {
+      if (parsed.enabled) {
+        if (!isProtocolXmtpAlertDeliveryConfigured()) {
+          return {
+            kind: 'hermit',
+            provider: 'local',
+            reply:
+              'XMTP alerts are not configured on this runtime. Set `PROTOCOL_CSW_*` on Hermit/Vercel, then retry `/hermit alert xmtp on`.',
+          }
+        }
+        await upsertHermitPositionAlert({
+          senderAddress: sender,
+          roomId: params.roomId,
+          enabled: true,
+          xmtpEnabled: true,
+        })
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: [
+            'XMTP DMs **on** from the **4626 agent** for Hyperliquid alerts.',
+            `DM link: ${formatProtocolAgentXmtpDmLink()}`,
+            'Verify delivery: `/hermit alert xmtp test`.',
+          ].join('\n'),
+        }
+      }
+      await upsertHermitPositionAlert({
+        senderAddress: sender,
+        roomId: params.roomId,
+        xmtpEnabled: false,
+      })
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: 'XMTP DMs off. Telegram alerts (if enabled) still work.',
       }
     }
 

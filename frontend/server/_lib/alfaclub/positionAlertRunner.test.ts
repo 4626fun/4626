@@ -66,6 +66,7 @@ vi.mock('./positionAlertStore.js', async (importOriginal) => {
         senderAddress: TEST_SENDER,
         enabled: true,
         telegramEnabled: true,
+        xmtpEnabled: false,
         liquidationWarnPct: 10,
         targetPnlUsd: null,
         targetProgressPct: 90,
@@ -81,6 +82,11 @@ vi.mock('./positionAlertStore.js', async (importOriginal) => {
 
 vi.mock('./chatBridge.js', () => ({
   readAlfaClubChatBridgeFlags: vi.fn(() => ({ botToken: 'test-bot-token' })),
+}))
+
+vi.mock('../wallet/protocolXmtpAlertSender.js', () => ({
+  isProtocolXmtpAlertDeliveryConfigured: vi.fn(() => true),
+  sendProtocolAgentXmtpDm: vi.fn(async () => true),
 }))
 
 describe('runPositionAlerts', () => {
@@ -108,6 +114,41 @@ describe('runPositionAlerts', () => {
     expect(body.text).toContain('mark→liq distance')
   })
 
+  it('sends XMTP liquidation alerts when xmtp is enabled', async () => {
+    const { listEnabledPositionAlerts } = await import('./positionAlertStore.js')
+    const { sendProtocolAgentXmtpDm } = await import('../wallet/protocolXmtpAlertSender.js')
+    vi.mocked(listEnabledPositionAlerts).mockResolvedValueOnce([
+      {
+        roomId: ROOM_1659_ALERT_SCOPE,
+        senderAddress: TEST_SENDER,
+        enabled: true,
+        telegramEnabled: false,
+        xmtpEnabled: true,
+        liquidationWarnPct: 10,
+        targetPnlUsd: null,
+        targetProgressPct: 90,
+        lastLiqAlertAt: null,
+        lastTargetAlertAt: null,
+        updatedAt: new Date().toISOString(),
+      },
+    ])
+
+    const fetchMock = vi.fn(async () => ({ ok: true, text: async () => '' }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await runPositionAlerts()
+
+    expect(result.xmtpLiqSent).toBe(1)
+    expect(result.liqSent).toBe(0)
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(vi.mocked(sendProtocolAgentXmtpDm)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipientAddress: TEST_SENDER,
+        text: expect.stringContaining('Virtual Arena execution'),
+      }),
+    )
+  })
+
   it('ignores unsupported alert scopes', async () => {
     const { listEnabledPositionAlerts } = await import('./positionAlertStore.js')
     vi.mocked(listEnabledPositionAlerts).mockResolvedValueOnce([
@@ -116,6 +157,7 @@ describe('runPositionAlerts', () => {
         senderAddress: TEST_SENDER,
         enabled: true,
         telegramEnabled: true,
+        xmtpEnabled: false,
         liquidationWarnPct: 10,
         targetPnlUsd: null,
         targetProgressPct: 90,
@@ -141,6 +183,7 @@ describe('runPositionAlerts', () => {
         senderAddress: TEST_SENDER,
         enabled: true,
         telegramEnabled: true,
+        xmtpEnabled: false,
         liquidationWarnPct: 10,
         targetPnlUsd: null,
         targetProgressPct: 90,

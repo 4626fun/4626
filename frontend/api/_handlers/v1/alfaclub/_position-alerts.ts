@@ -2,7 +2,7 @@
  * GET/POST /api/v1/alfaclub/position-alerts
  *
  * Cron-secret-gated evaluator for Hermit position alert subscriptions.
- * Sends Telegram DMs when wallets approach liquidation or target unrealized PnL.
+ * Sends Telegram and/or XMTP DMs when wallets approach liquidation or target unrealized PnL.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'

@@ -23,6 +23,10 @@ import {
   estimateMarkPrice,
 } from './positionProximity.js'
 import { readAlfaClubChatBridgeFlags } from './chatBridge.js'
+import {
+  isProtocolXmtpAlertDeliveryConfigured,
+  sendProtocolAgentXmtpDm,
+} from '../wallet/protocolXmtpAlertSender.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -35,8 +39,12 @@ export type PositionAlertRunResult = {
   scanned: number
   liqSent: number
   targetSent: number
+  xmtpLiqSent: number
+  xmtpTargetSent: number
   skippedCooldown: number
   skippedNoTelegram: number
+  skippedNoXmtp: number
+  skippedNoChannel: number
   errors: number
 }
 
@@ -155,32 +163,140 @@ async function sumMonitoredUnrealizedPnl(
   return any ? total : null
 }
 
+type AlertDeliveryResult = {
+  telegramSent: boolean
+  xmtpSent: boolean
+  skippedNoTelegram: number
+  skippedNoXmtp: number
+  skippedNoChannel: number
+  errors: number
+}
+
+async function deliverAlertText(params: {
+  alert: PositionAlertConfig
+  text: string
+  botToken: string | null
+}): Promise<AlertDeliveryResult> {
+  let telegramSent = false
+  let xmtpSent = false
+  let skippedNoTelegram = 0
+  let skippedNoXmtp = 0
+  let skippedNoChannel = 0
+  let errors = 0
+
+  if (!params.alert.telegramEnabled && !params.alert.xmtpEnabled) {
+    return {
+      telegramSent,
+      xmtpSent,
+      skippedNoTelegram: 0,
+      skippedNoXmtp: 0,
+      skippedNoChannel: 1,
+      errors,
+    }
+  }
+
+  if (params.alert.telegramEnabled) {
+    if (!params.botToken) {
+      errors += 1
+    } else {
+      const chatId = await resolveTelegramChatIdForWallet(params.alert.senderAddress)
+      if (!chatId) {
+        skippedNoTelegram += 1
+      } else {
+        const ok = await sendTelegramDm({ chatId, text: params.text, botToken: params.botToken })
+        if (ok) telegramSent = true
+        else errors += 1
+      }
+    }
+  }
+
+  if (params.alert.xmtpEnabled) {
+    if (!isProtocolXmtpAlertDeliveryConfigured()) {
+      skippedNoXmtp += 1
+      errors += 1
+    } else {
+      const ok = await sendProtocolAgentXmtpDm({
+        recipientAddress: params.alert.senderAddress,
+        text: params.text,
+      })
+      if (ok) xmtpSent = true
+      else errors += 1
+    }
+  }
+
+  if (
+    params.alert.telegramEnabled &&
+    params.alert.xmtpEnabled &&
+    !telegramSent &&
+    !xmtpSent &&
+    skippedNoTelegram > 0 &&
+    skippedNoXmtp > 0
+  ) {
+    skippedNoChannel += 1
+  }
+
+  return {
+    telegramSent,
+    xmtpSent,
+    skippedNoTelegram,
+    skippedNoXmtp,
+    skippedNoChannel,
+    errors,
+  }
+}
+
 async function evaluateAlert(params: {
   alert: PositionAlertConfig
   botToken: string | null
   cooldownMs: number
   nowMs: number
-}): Promise<{ liqSent: boolean; targetSent: boolean; skippedCooldown: number; skippedNoTelegram: number; errors: number }> {
+}): Promise<{
+  liqSent: boolean
+  targetSent: boolean
+  xmtpLiqSent: boolean
+  xmtpTargetSent: boolean
+  skippedCooldown: number
+  skippedNoTelegram: number
+  skippedNoXmtp: number
+  skippedNoChannel: number
+  errors: number
+}> {
   let liqSent = false
   let targetSent = false
+  let xmtpLiqSent = false
+  let xmtpTargetSent = false
   let skippedCooldown = 0
   let skippedNoTelegram = 0
+  let skippedNoXmtp = 0
+  let skippedNoChannel = 0
   let errors = 0
 
   if (!isSupportedAlertScope(params.alert.roomId)) {
-    return { liqSent, targetSent, skippedCooldown, skippedNoTelegram, errors }
+    return {
+      liqSent,
+      targetSent,
+      xmtpLiqSent,
+      xmtpTargetSent,
+      skippedCooldown,
+      skippedNoTelegram,
+      skippedNoXmtp,
+      skippedNoChannel,
+      errors,
+    }
   }
 
-  if (!params.alert.telegramEnabled) {
-    return { liqSent, targetSent, skippedCooldown, skippedNoTelegram: 1, errors }
-  }
-  if (!params.botToken) {
-    return { liqSent, targetSent, skippedCooldown, skippedNoTelegram: 1, errors: 1 }
-  }
-
-  const chatId = await resolveTelegramChatIdForWallet(params.alert.senderAddress)
-  if (!chatId) {
-    return { liqSent, targetSent, skippedCooldown, skippedNoTelegram: 1, errors }
+  if (!params.alert.telegramEnabled && !params.alert.xmtpEnabled) {
+    return {
+      liqSent,
+      targetSent,
+      xmtpLiqSent,
+      xmtpTargetSent,
+      skippedCooldown,
+      skippedNoTelegram: 0,
+      skippedNoXmtp: 0,
+      skippedNoChannel: 1,
+      errors,
+    }
   }
 
   const monitoredWallets = await resolveMonitoredHlWalletsForAlert(params.alert)
@@ -205,17 +321,24 @@ async function evaluateAlert(params: {
           walletLabel: leg.walletLabel,
         })),
       })
-      const ok = await sendTelegramDm({ chatId, text, botToken: params.botToken })
-      if (ok) {
+      const delivery = await deliverAlertText({
+        alert: params.alert,
+        text,
+        botToken: params.botToken,
+      })
+      if (delivery.telegramSent || delivery.xmtpSent) {
         await markPositionAlertFired({
           roomId: params.alert.roomId,
           senderAddress: params.alert.senderAddress,
           kind: 'liq',
         })
-        liqSent = true
-      } else {
-        errors += 1
+        if (delivery.telegramSent) liqSent = true
+        if (delivery.xmtpSent) xmtpLiqSent = true
       }
+      skippedNoTelegram += delivery.skippedNoTelegram
+      skippedNoXmtp += delivery.skippedNoXmtp
+      skippedNoChannel += delivery.skippedNoChannel
+      errors += delivery.errors
     }
   } else if (params.alert.liquidationWarnPct != null && withinCooldown(params.alert.lastLiqAlertAt, params.cooldownMs, params.nowMs)) {
     skippedCooldown += 1
@@ -236,24 +359,41 @@ async function evaluateAlert(params: {
           currentPnlUsd: totalPnl,
           monitoredWalletLabels: monitoredWallets.map((wallet) => wallet.label),
         })
-        const ok = await sendTelegramDm({ chatId, text, botToken: params.botToken })
-        if (ok) {
+        const delivery = await deliverAlertText({
+          alert: params.alert,
+          text,
+          botToken: params.botToken,
+        })
+        if (delivery.telegramSent || delivery.xmtpSent) {
           await markPositionAlertFired({
             roomId: params.alert.roomId,
             senderAddress: params.alert.senderAddress,
             kind: 'target',
           })
-          targetSent = true
-        } else {
-          errors += 1
+          if (delivery.telegramSent) targetSent = true
+          if (delivery.xmtpSent) xmtpTargetSent = true
         }
+        skippedNoTelegram += delivery.skippedNoTelegram
+        skippedNoXmtp += delivery.skippedNoXmtp
+        skippedNoChannel += delivery.skippedNoChannel
+        errors += delivery.errors
       }
     }
   } else if (params.alert.targetPnlUsd != null && withinCooldown(params.alert.lastTargetAlertAt, params.cooldownMs, params.nowMs)) {
     skippedCooldown += 1
   }
 
-  return { liqSent, targetSent, skippedCooldown, skippedNoTelegram, errors }
+  return {
+    liqSent,
+    targetSent,
+    xmtpLiqSent,
+    xmtpTargetSent,
+    skippedCooldown,
+    skippedNoTelegram,
+    skippedNoXmtp,
+    skippedNoChannel,
+    errors,
+  }
 }
 
 export async function runPositionAlerts(): Promise<PositionAlertRunResult> {
@@ -265,8 +405,12 @@ export async function runPositionAlerts(): Promise<PositionAlertRunResult> {
       scanned: 0,
       liqSent: 0,
       targetSent: 0,
+      xmtpLiqSent: 0,
+      xmtpTargetSent: 0,
       skippedCooldown: 0,
       skippedNoTelegram: 0,
+      skippedNoXmtp: 0,
+      skippedNoChannel: 0,
       errors: 0,
     }
   }
@@ -280,8 +424,12 @@ export async function runPositionAlerts(): Promise<PositionAlertRunResult> {
 
   let liqSent = 0
   let targetSent = 0
+  let xmtpLiqSent = 0
+  let xmtpTargetSent = 0
   let skippedCooldown = 0
   let skippedNoTelegram = 0
+  let skippedNoXmtp = 0
+  let skippedNoChannel = 0
   let errors = 0
 
   for (const alert of alerts) {
@@ -294,8 +442,12 @@ export async function runPositionAlerts(): Promise<PositionAlertRunResult> {
       })
       if (result.liqSent) liqSent += 1
       if (result.targetSent) targetSent += 1
+      if (result.xmtpLiqSent) xmtpLiqSent += 1
+      if (result.xmtpTargetSent) xmtpTargetSent += 1
       skippedCooldown += result.skippedCooldown
       skippedNoTelegram += result.skippedNoTelegram
+      skippedNoXmtp += result.skippedNoXmtp
+      skippedNoChannel += result.skippedNoChannel
       errors += result.errors
     } catch (error) {
       errors += 1
@@ -312,8 +464,12 @@ export async function runPositionAlerts(): Promise<PositionAlertRunResult> {
     scanned: alerts.length,
     liqSent,
     targetSent,
+    xmtpLiqSent,
+    xmtpTargetSent,
     skippedCooldown,
     skippedNoTelegram,
+    skippedNoXmtp,
+    skippedNoChannel,
     errors,
   }
 }
