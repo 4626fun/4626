@@ -243,8 +243,16 @@ type LinkingProgressStep = {
 // Zora). Without it, one optional panel silently replaces the last with no
 // sense of how many steps remain — this gives an at-a-glance read on
 // progress. Purely decorative dots backed by a single accessible progress
-// summary for screen readers.
-function WaitlistLinkingProgress({ steps }: { steps: LinkingProgressStep[] }) {
+// summary for screen readers. `compact` drops the text labels and tightens
+// sizing so it can sit inline as part of the "Your points" card header
+// instead of taking its own full row.
+function WaitlistLinkingProgress({
+  steps,
+  compact = false,
+}: {
+  steps: LinkingProgressStep[]
+  compact?: boolean
+}) {
   const currentIndex = steps.findIndex((step) => step.status === 'current')
   const activeIndex = currentIndex >= 0 ? currentIndex : steps.length
   const currentLabel = currentIndex >= 0 ? steps[currentIndex]?.label : 'Done'
@@ -257,14 +265,15 @@ function WaitlistLinkingProgress({ steps }: { steps: LinkingProgressStep[] }) {
       aria-valuemax={steps.length}
       aria-valuenow={stepNumber}
       aria-valuetext={`Step ${stepNumber} of ${steps.length}: ${currentLabel}`}
-      className="mb-4 flex items-center justify-center"
+      className={cn('flex items-center justify-center', compact ? 'gap-0' : 'mb-4')}
     >
       {steps.map((step, index) => (
         <div key={step.key} className="flex items-center" aria-hidden="true">
-          <div className="flex flex-col items-center gap-1.5">
+          <div className={cn('flex flex-col items-center', compact ? 'gap-0' : 'gap-1.5')}>
             <span
               className={cn(
-                'flex size-5 items-center justify-center rounded-full border transition-colors duration-300',
+                'flex items-center justify-center rounded-full border transition-colors duration-300',
+                compact ? 'size-3.5' : 'size-5',
                 step.status === 'done' && 'border-transparent bg-[rgb(var(--brand-primary))] text-white',
                 step.status === 'current' &&
                   'border-[rgb(var(--brand-primary))] bg-[rgb(var(--brand-primary)/0.16)]',
@@ -273,11 +282,12 @@ function WaitlistLinkingProgress({ steps }: { steps: LinkingProgressStep[] }) {
               )}
             >
               {step.status === 'done' ? (
-                <Check className="size-3" aria-hidden="true" />
+                <Check className={compact ? 'size-2' : 'size-3'} aria-hidden="true" />
               ) : (
                 <span
                   className={cn(
-                    'size-1.5 rounded-full',
+                    'rounded-full',
+                    compact ? 'size-1' : 'size-1.5',
                     step.status === 'current' && 'animate-pulse bg-[rgb(var(--brand-primary))]',
                     step.status === 'skipped' && 'bg-zinc-600',
                     step.status === 'upcoming' && 'bg-zinc-700',
@@ -285,19 +295,22 @@ function WaitlistLinkingProgress({ steps }: { steps: LinkingProgressStep[] }) {
                 />
               )}
             </span>
-            <span
-              className={cn(
-                'text-[9px] font-medium uppercase tracking-[0.1em] transition-colors duration-300',
-                step.status === 'current' ? 'text-zinc-300' : 'text-zinc-600',
-              )}
-            >
-              {step.label}
-            </span>
+            {compact ? null : (
+              <span
+                className={cn(
+                  'text-[9px] font-medium uppercase tracking-[0.1em] transition-colors duration-300',
+                  step.status === 'current' ? 'text-zinc-300' : 'text-zinc-600',
+                )}
+              >
+                {step.label}
+              </span>
+            )}
           </div>
           {index < steps.length - 1 ? (
             <span
               className={cn(
-                'mb-4 h-px w-5 transition-colors duration-300',
+                'h-px transition-colors duration-300',
+                compact ? 'w-3' : 'mb-4 w-5',
                 step.status === 'done' || step.status === 'skipped'
                   ? 'bg-[rgb(var(--brand-primary)/0.4)]'
                   : 'bg-white/10',
@@ -1033,6 +1046,15 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     }
   }, [getPrivyAccessToken, privy.user, refreshAccountMe, unlinkCrossAppAccount, zoraBusy, zoraLinked])
 
+  // First-time link errors (provider not yet linked, so there's no row to attach
+  // the message to) vs. edit/unlink errors (provider is linked — its row above
+  // owns the message instead, see `linkedAccountRows`).
+  const unlinkedProviderError =
+    (!twitterLinked && twitterError) ||
+    (!externalEoaLinked && walletError) ||
+    (!zoraLinked && zoraError) ||
+    null
+
   const twitterHandle = useMemo(() => findLinkedTwitterHandle(privy.user), [privy.user])
   const zoraHandleForRow = sanitizeWaitlistZoraHandle(accountMe?.accountSignals?.zoraHandle)
 
@@ -1049,6 +1071,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
         points: PROVIDER_POINTS.twitter ?? 0,
         onEdit: () => void handleEditTwitter(),
         editBusy: twitterBusy,
+        error: twitterError,
       })
     }
     if (externalEoaLinked) {
@@ -1056,6 +1079,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
         ...walletLinkedRowBase,
         onEdit: () => void handleEditWallet(),
         editBusy: walletBusy,
+        error: walletError,
       })
     }
     if (zoraLinked) {
@@ -1066,6 +1090,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
         points: PROVIDER_POINTS.zora_cross_app ?? 0,
         onEdit: () => void handleEditZora(),
         editBusy: zoraBusy,
+        error: zoraError,
       })
     }
     return rows
@@ -1075,11 +1100,14 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     handleEditWallet,
     handleEditZora,
     twitterBusy,
+    twitterError,
     twitterHandle,
     twitterLinked,
     walletBusy,
+    walletError,
     walletLinkedRowBase,
     zoraBusy,
+    zoraError,
     zoraHandleForRow,
     zoraLinked,
   ])
@@ -1461,30 +1489,36 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
 
                 <WaitlistPostJoinShell enabled={Boolean(joinedSessionAddress)} />
 
-                {/* Earn points — optional identity links, each worth waitlist points. */}
+                {/* Earn points — optional identity links, each worth waitlist points.
+                    Lives in the same BeamCard treatment as the email/code step above,
+                    so the whole flow reads as one consistent "card per stage" language
+                    instead of a loose stack of differently-styled pieces. */}
                 <motion.div layout="position" transition={stepTransition} className="mt-5">
-                  <WaitlistLinkedAccountsCard
-                    rows={linkedAccountRows}
-                    totalPoints={totalPoints}
-                    showTotal={showPointsBadge}
-                  />
+                  <BeamCard className="p-5 sm:p-6">
+                    <WaitlistLinkedAccountsCard
+                      rows={linkedAccountRows}
+                      totalPoints={totalPoints}
+                      showTotal={showPointsBadge}
+                      progress={
+                        <AnimatePresence initial={false}>
+                          {linkingWizardInProgress ? (
+                            <motion.div
+                              key="linking-progress"
+                              variants={reminderVariants}
+                              initial="initial"
+                              animate="animate"
+                              exit="exit"
+                              transition={stepTransition}
+                              className="pt-2"
+                            >
+                              <WaitlistLinkingProgress steps={linkingSteps} compact />
+                            </motion.div>
+                          ) : null}
+                        </AnimatePresence>
+                      }
+                    />
 
-                  <AnimatePresence initial={false}>
-                    {linkingWizardInProgress ? (
-                      <motion.div
-                        key="linking-progress"
-                        variants={reminderVariants}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                        transition={stepTransition}
-                      >
-                        <WaitlistLinkingProgress steps={linkingSteps} />
-                      </motion.div>
-                    ) : null}
-                  </AnimatePresence>
-
-                  <AnimatePresence mode="wait" initial={false} custom={linkingDirection}>
+                    <AnimatePresence mode="wait" initial={false} custom={linkingDirection}>
                     {activeStepKey === 'x-link' ? (
                       <motion.div
                         key="x-link"
@@ -1612,11 +1646,15 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                       </motion.div>
                     ) : null}
                   </AnimatePresence>
+                  </BeamCard>
                 </motion.div>
 
-                {twitterError || walletError || zoraError ? (
+                {/* Once a provider is linked its row (above) owns the error message —
+                    only show this generic caption for first-time link failures, before
+                    the row (and its edit action) exist to attach the message to. */}
+                {unlinkedProviderError ? (
                   <p className="mt-4 text-center text-[11px] leading-relaxed text-rose-300/90">
-                    {twitterError ?? walletError ?? zoraError}
+                    {unlinkedProviderError}
                   </p>
                 ) : null}
 

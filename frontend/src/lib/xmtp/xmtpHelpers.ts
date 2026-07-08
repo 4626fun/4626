@@ -237,6 +237,39 @@ export function isOpfsAccessHandleError(message: string): boolean {
   )
 }
 
+/** Default backoff schedule for retrying an OPFS operation past a transient access-handle lock. */
+export const DEFAULT_OPFS_ACCESS_HANDLE_RETRY_DELAYS_MS = [0, 200, 500, 1_000] as const
+
+/**
+ * Retry `operation` when it fails with a transient OPFS access-handle lock
+ * (`isOpfsAccessHandleError`) — e.g. a just-closed XMTP client's worker
+ * hasn't released its `createSyncAccessHandle` lock yet. Any other error is
+ * rethrown immediately without retrying, since retrying would only delay a
+ * genuine failure (OPFS unsupported, corrupted state, etc.).
+ */
+export async function retryOnOpfsAccessHandleError<T>(
+  operation: () => Promise<T>,
+  delaysMs: readonly number[] = DEFAULT_OPFS_ACCESS_HANDLE_RETRY_DELAYS_MS,
+): Promise<T> {
+  const delays = delaysMs.length > 0 ? delaysMs : [0]
+  let lastError: unknown = null
+  for (let attempt = 0; attempt < delays.length; attempt += 1) {
+    const delayMs = delays[attempt] ?? 0
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+    try {
+      return await operation()
+    } catch (err) {
+      lastError = err
+      const msg = err instanceof Error ? err.message : String(err)
+      if (!isOpfsAccessHandleError(msg)) throw err
+      if (attempt === delays.length - 1) throw err
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError ?? 'OPFS operation failed'))
+}
+
 /** Local OPFS install no longer validates against the XMTP network inbox. */
 export function isLocalXmtpStateInvalidError(message: string): boolean {
   const m = String(message || '')

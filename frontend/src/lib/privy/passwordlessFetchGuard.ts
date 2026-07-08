@@ -20,6 +20,7 @@ const PRIVY_PASSWORDLESS_INIT_PATH = '/api/v1/passwordless/init'
 const PRIVY_PASSWORDLESS_INIT_HOSTS = ['auth.privy.io', 'privy.4626.fun']
 const PRIVY_APP_CONFIG_PATH = /^\/api\/v1\/apps\/[^/]+$/
 const PRIVY_SESSIONS_PATH = '/api/v1/sessions'
+const PRIVY_SIWE_LINK_PATH = '/api/v1/siwe/link'
 const PRIVY_PRIVY_IO_HOSTS = ['auth.privy.io', 'privy.4626.fun']
 const PRIVY_DEPRECATED_REFRESH_TOKEN = 'deprecated'
 
@@ -49,6 +50,25 @@ export function isPrivyDeprecatedSessionRefreshRequest(
     if (!bodyText) return false
     const json = JSON.parse(bodyText) as { refresh_token?: unknown }
     return json?.refresh_token === PRIVY_DEPRECATED_REFRESH_TOKEN
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Privy's own SDK submits the signed SIWE message to link an additional wallet here.
+ * It requires a live access token; on local dev's `custom_api_url` loopback (see
+ * privyLoopbackFetchRewrite.ts) that token can go stale mid-session with no way to
+ * silently refresh it, so this 401s repeatedly until the stale session is reset.
+ */
+export function isPrivySiweLinkRequest(url: string, method: string): boolean {
+  if (normalizeFetchMethod(method) !== 'POST') return false
+  try {
+    const parsed = new URL(url)
+    return (
+      PRIVY_PRIVY_IO_HOSTS.includes(parsed.hostname.toLowerCase()) &&
+      parsed.pathname === PRIVY_SIWE_LINK_PATH
+    )
   } catch {
     return false
   }

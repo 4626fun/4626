@@ -4,8 +4,10 @@ import {
   aggregateReactionsByMessageId,
   filterDisplayChatMessages,
   isLocalXmtpStateInvalidError,
+  isOpfsAccessHandleError,
   isTransientXmtpStreamNetworkError,
   isXmtpRateLimitError,
+  retryOnOpfsAccessHandleError,
   shouldFallbackToOriginalXmtpRecipient,
 } from './xmtpHelpers'
 import { resetXmtpSyncCoordinatorForTests } from './xmtpSyncCoordinator'
@@ -154,6 +156,67 @@ describe('isXmtpRateLimitError', () => {
         "api client at endpoint \"/xmtp.mls.api.v1.MlsApi/QueryWelcomeMessages\" has error status: 'Some resource has been exhausted'",
       ),
     ).toBe(true)
+  })
+})
+
+describe('isOpfsAccessHandleError', () => {
+  it('matches the "another active XMTP clients or Opfs instances" failure', () => {
+    expect(
+      isOpfsAccessHandleError(
+        'Failed to initialize OPFS, ensure that there are no other active XMTP clients or Opfs instances',
+      ),
+    ).toBe(true)
+  })
+
+  it('matches createSyncAccessHandle NoModificationAllowedError', () => {
+    expect(
+      isOpfsAccessHandleError(
+        "NoModificationAllowedError: Failed to execute 'createSyncAccessHandle' on 'FileSystemFileHandle': Access Handles cannot be created if there is another open Access Handle or Writable stream associated with the same file.",
+      ),
+    ).toBe(true)
+  })
+
+  it('does not match unrelated errors', () => {
+    expect(isOpfsAccessHandleError('Network error')).toBe(false)
+    expect(isOpfsAccessHandleError('')).toBe(false)
+  })
+})
+
+describe('retryOnOpfsAccessHandleError', () => {
+  it('returns the result immediately when the operation succeeds on the first try', async () => {
+    const operation = vi.fn(async () => 'ok')
+    await expect(retryOnOpfsAccessHandleError(operation, [0, 0])).resolves.toBe('ok')
+    expect(operation).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries on a transient OPFS access-handle lock and succeeds once it clears', async () => {
+    const operation = vi
+      .fn<() => Promise<string>>()
+      .mockRejectedValueOnce(
+        new Error('Failed to initialize OPFS, ensure that there are no other active XMTP clients or Opfs instances'),
+      )
+      .mockResolvedValueOnce('recovered')
+
+    await expect(retryOnOpfsAccessHandleError(operation, [0, 0])).resolves.toBe('recovered')
+    expect(operation).toHaveBeenCalledTimes(2)
+  })
+
+  it('rethrows immediately for a non-OPFS-lock error without retrying', async () => {
+    const operation = vi.fn(async () => {
+      throw new Error('Some unrelated failure')
+    })
+
+    await expect(retryOnOpfsAccessHandleError(operation, [0, 0, 0])).rejects.toThrow('Some unrelated failure')
+    expect(operation).toHaveBeenCalledTimes(1)
+  })
+
+  it('rethrows the OPFS-lock error once the retry budget is exhausted', async () => {
+    const operation = vi.fn(async () => {
+      throw new Error('NoModificationAllowedError: createSyncAccessHandle')
+    })
+
+    await expect(retryOnOpfsAccessHandleError(operation, [0, 0])).rejects.toThrow('createSyncAccessHandle')
+    expect(operation).toHaveBeenCalledTimes(2)
   })
 })
 

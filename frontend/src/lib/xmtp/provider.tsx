@@ -48,6 +48,7 @@ import {
   isInstallationLimitError,
   isLocalXmtpStateInvalidError,
   isOpfsAccessHandleError,
+  retryOnOpfsAccessHandleError,
   isScwSignatureValidationError,
   isTransientXmtpStreamNetworkError,
   isXmtpRateLimitError,
@@ -212,7 +213,13 @@ type XmtpContextValue = {
   resetInstallations: () => Promise<void>
   /** Clears only this browser's local XMTP database and reconnects with a fresh installation. */
   resetLocalState: () => Promise<void>
-  disconnect: () => void
+  /**
+   * Awaits full teardown (client close + OPFS access-handle release) before
+   * resolving, so callers that immediately reconnect (e.g. waitlist chat's
+   * repair-and-retry) don't race a still-open OPFS handle from the prior
+   * client. Assignable anywhere `() => void` was previously expected.
+   */
+  disconnect: () => Promise<void>
   conversations: ChatConversation[]
   loadMessages: (conversationId: string) => Promise<ChatMessage[]>
   sendMessage: (
@@ -368,7 +375,7 @@ const XmtpContext = createContext<XmtpContextValue>({
   connect: async () => {},
   resetInstallations: async () => {},
   resetLocalState: async () => {},
-  disconnect: noop,
+  disconnect: async () => {},
   conversations: [],
   loadMessages: async () => [],
   sendMessage: async () => ({
@@ -873,24 +880,34 @@ async function requestPersistentStorage(): Promise<void> {
  */
 async function hasOpfsDatabase(): Promise<boolean> {
   try {
-    const opfs = await Opfs.create()
-    try {
-      const files = await opfs.listFiles()
-      const prefix = `xmtp-${XMTP_ENV}-`
-      const found = files.some(
-        (f) => f.startsWith(prefix) && f.endsWith('.db3'),
-      )
-      xmtpDebug(
-        `[xmtp] OPFS files: ${files.length} total, DB present: ${found}`,
-        files.filter((f) => f.endsWith('.db3')),
-      )
-      return found
-    } finally {
-      opfs.close()
-    }
+    // A just-closed XMTP client's worker can still hold its OPFS sync access
+    // handle for a moment after `client.close()` returns (see `cleanup()`),
+    // which makes `Opfs.create()` throw the same "another active XMTP
+    // clients or Opfs instances" / NoModificationAllowedError as a genuine
+    // multi-tab lock. Retry that specific, known-transient case a few times
+    // before concluding there's no local DB — otherwise a reconnect racing
+    // its own prior client's teardown would wrongly skip Client.build restore.
+    return await retryOnOpfsAccessHandleError(async () => {
+      const opfs = await Opfs.create()
+      try {
+        const files = await opfs.listFiles()
+        const prefix = `xmtp-${XMTP_ENV}-`
+        const found = files.some(
+          (f) => f.startsWith(prefix) && f.endsWith('.db3'),
+        )
+        xmtpDebug(
+          `[xmtp] OPFS files: ${files.length} total, DB present: ${found}`,
+          files.filter((f) => f.endsWith('.db3')),
+        )
+        return found
+      } finally {
+        opfs.close()
+      }
+    })
   } catch (err) {
-    // OPFS not supported or transiently unavailable. Treat as "no readable DB"
-    // so we can still fall back to Client.create instead of hard-failing init.
+    // OPFS not supported, or the access-handle lock never cleared after
+    // retrying. Treat as "no readable DB" so we can still fall back to
+    // Client.create instead of hard-failing init.
     console.warn('[xmtp] OPFS check failed (treating as no local DB):', err)
     return false
   }
@@ -1180,6 +1197,7 @@ export function XmtpChatProvider({
   // ------- cleanup -------
   const cleanup = useCallback(async () => {
     endActiveStreams()
+    const hadClient = Boolean(clientRef.current)
     closeClientSafe(clientRef.current)
     clientRef.current = null
     perConvoCbRef.current.clear()
@@ -1187,6 +1205,15 @@ export function XmtpChatProvider({
     identityAddressRef.current = null
     stopTabLockHeartbeat()
     releaseTabLock()
+    // client.close() posts to the XMTP worker but does not itself await the
+    // worker actually releasing its OPFS sync access handle. Without this
+    // wait, an immediate reconnect (e.g. waitlist chat's repair-and-retry)
+    // can race the still-open handle and fail with NoModificationAllowedError
+    // ("Access Handles cannot be created if there is another open Access
+    // Handle"). Only pay this cost when there was an actual client to close.
+    if (hadClient) {
+      await waitMs(XMTP_PEER_RELEASE_WAIT_MS)
+    }
   }, [endActiveStreams, releaseTabLock, stopTabLockHeartbeat])
 
   // Cleanup on unmount
@@ -3007,8 +3034,13 @@ export function XmtpChatProvider({
   }, [address, walletClient, identityAddress, connect, connector, publicClient, resolveXmtpIdentityAddress, shutdownForOpfsReset, stopTabLockHeartbeat, xmtpModeOverride])
 
   // ------- disconnect -------
-  const disconnect = useCallback(() => {
-    void cleanup()
+  // Resolves only after `cleanup()` (client close + OPFS release wait)
+  // completes, so a caller that immediately reconnects (e.g. waitlist
+  // chat's repair-and-retry) can `await disconnect()` and be sure the
+  // previous client's OPFS access handle is actually free. UI-visible
+  // state resets happen synchronously up front so the UI doesn't wait on
+  // the OPFS release to reflect "disconnected".
+  const disconnect = useCallback(async () => {
     resolvedIdentityByWalletRef.current.clear()
     setStatus('idle')
     setError(null)
@@ -3018,6 +3050,7 @@ export function XmtpChatProvider({
     conversationsRef.current = []
     identityAddressRef.current = null
     setInboxId(null)
+    await cleanup()
   }, [cleanup])
 
   // ------- decode message helper -------

@@ -10,7 +10,7 @@ import {
   clearPrivySessionMarkerCookie,
   isLocalDevPrivySessionMarkerMode,
 } from '@/lib/privy/loopbackSessionMarkerShim'
-import { useSafeLogin, useSafePrivy } from '@/lib/privy/safeHooks'
+import { createLivePrivyClientView, useSafeLogin, useSafePrivy } from '@/lib/privy/safeHooks'
 
 const WALLET_SIGN_IN_TIMEOUT_MS = 90_000
 const WALLET_READY_POLL_MS = 100
@@ -78,8 +78,13 @@ export function WaitlistReturningWalletSignInRunner(props: WaitlistReturningWall
 
       void (async () => {
         try {
+          // Must stay live-backed (not a one-time snapshot): login() below
+          // resolves asynchronously and runWaitlistReturningWalletSignIn polls
+          // `.authenticated` waiting for it to flip true after the wallet modal
+          // completes. usePrivy() gives a fresh object per render, so a plain
+          // `privyRef.current` captured here would freeze at its pre-login value.
           const address = await runWaitlistReturningWalletSignIn({
-            privy: privyRef.current,
+            privy: createLivePrivyClientView(privyRef),
             login: (input) => loginRef.current(input),
           })
           succeedAttempt(address)

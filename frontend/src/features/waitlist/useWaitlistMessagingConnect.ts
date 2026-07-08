@@ -15,7 +15,7 @@ type UseWaitlistMessagingConnectParams = {
   privyAuthenticated: boolean
   prepare: () => Promise<PrepareWaitlistMessagingWalletResult>
   connect: (intent: 'user') => Promise<void>
-  disconnect: () => void
+  disconnect: () => Promise<void>
   joinStatus: WaitlistChatStatus
   retryJoin: () => void
   walletReady: boolean
@@ -109,7 +109,11 @@ export function useWaitlistMessagingConnect(params: UseWaitlistMessagingConnectP
           }
 
           if (options?.reconnect || attempt > 0) {
-            disconnect()
+            // Await full teardown (client close + OPFS access-handle
+            // release) before reconnecting, so the retry doesn't race the
+            // prior client's still-open OPFS handle and fail with
+            // NoModificationAllowedError.
+            await disconnect()
           }
 
           const prepared = await prepare()

@@ -38,6 +38,32 @@ const DISABLED_PRIVY_CLIENT: SafePrivyClient = {
   logout: null,
 }
 
+/**
+ * `usePrivy()` (and `useSafePrivy()` above) returns a brand-new plain object
+ * on every render — Privy's SDK builds it via `{...useContext(ctx), ...}`, not
+ * a live/mutable reference. A `privy` value captured once (e.g. at the start of
+ * an async flow) will never reflect a later `authenticated`/`ready` transition;
+ * code that needs to *poll* for a state change (rather than read it once) must
+ * go through a ref. This wraps a `{ current: SafePrivyClient }` ref in an
+ * object whose fields are live getters/delegating calls, so repeated reads
+ * always see the latest snapshot without the caller needing to re-derive it.
+ */
+export function createLivePrivyClientView(privyRef: { current: SafePrivyClient }): SafePrivyClient {
+  return {
+    get ready() {
+      return privyRef.current.ready
+    },
+    get authenticated() {
+      return privyRef.current.authenticated
+    },
+    get user() {
+      return privyRef.current.user
+    },
+    getAccessToken: () => privyRef.current.getAccessToken?.() ?? Promise.resolve(null),
+    logout: () => privyRef.current.logout?.() ?? Promise.resolve(),
+  }
+}
+
 export function useSafePrivy(options?: {
   enabled?: boolean
   onUnavailable?: (error: unknown) => void

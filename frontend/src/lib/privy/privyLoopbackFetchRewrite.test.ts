@@ -7,6 +7,7 @@ vi.mock('@/lib/flags/flags', () => ({
 }))
 
 import { isLocalDevOrigin } from '@/lib/flags/flags'
+import { PRIVY_LOOPBACK_SESSION_EXPIRED_EVENT } from './loopbackSessionMarkerShim'
 import { installPrivyLoopbackFetchRewrite } from './privyLoopbackFetchRewrite'
 
 describe('installPrivyLoopbackFetchRewrite', () => {
@@ -70,6 +71,39 @@ describe('installPrivyLoopbackFetchRewrite', () => {
 
     expect(payload.id).toBe('app')
     expect(payload.custom_api_url).toBeUndefined()
+  })
+
+  it('resets stale Privy loopback session storage when siwe/link 401s on local dev', async () => {
+    window.localStorage.setItem('privy:token', 'a-stale-access-token')
+    window.fetch = (() => Promise.resolve(new Response(null, { status: 401 }))) as typeof fetch
+
+    installPrivyLoopbackFetchRewrite()
+
+    const listener = vi.fn()
+    window.addEventListener(PRIVY_LOOPBACK_SESSION_EXPIRED_EVENT, listener)
+
+    const response = await window.fetch('https://auth.privy.io/api/v1/siwe/link', {
+      method: 'POST',
+      body: JSON.stringify({ message: 'x', signature: '0x0' }),
+    })
+
+    window.removeEventListener(PRIVY_LOOPBACK_SESSION_EXPIRED_EVENT, listener)
+
+    expect(response.status).toBe(401)
+    expect(window.localStorage.getItem('privy:token')).toBeNull()
+    expect(listener).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves other 401s from Privy alone', async () => {
+    window.localStorage.setItem('privy:token', 'a-live-access-token')
+    window.fetch = (() => Promise.resolve(new Response(null, { status: 401 }))) as typeof fetch
+
+    installPrivyLoopbackFetchRewrite()
+
+    await window.fetch('https://auth.privy.io/api/v1/siwe/init', { method: 'POST' })
+
+    expect(window.localStorage.getItem('privy:token')).toBe('a-live-access-token')
+    window.localStorage.removeItem('privy:token')
   })
 
   it('no-ops deprecated server-cookie session refresh on local dev', async () => {

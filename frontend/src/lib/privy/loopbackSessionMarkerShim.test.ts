@@ -13,6 +13,8 @@ import {
   clearPrivySessionMarkerCookie,
   hasPersistedPrivyLoopbackSession,
   isLocalDevPrivySessionMarkerMode,
+  PRIVY_LOOPBACK_SESSION_EXPIRED_EVENT,
+  resetPrivyLoopbackSessionAfterAuthFailure,
 } from './loopbackSessionMarkerShim'
 
 describe('loopbackSessionMarkerShim', () => {
@@ -69,5 +71,46 @@ describe('loopbackSessionMarkerShim', () => {
     applyLoopbackPrivySessionMarkerShim()
     expect(window.localStorage.getItem('privy:refresh_token')).toBeNull()
     expect(window.localStorage.getItem('privy:token')).toBeNull()
+  })
+
+  describe('resetPrivyLoopbackSessionAfterAuthFailure', () => {
+    it('unconditionally clears Privy storage even when refresh token is not "deprecated"', () => {
+      window.localStorage.setItem('privy:refresh_token', 'a-real-looking-refresh-token')
+      window.localStorage.setItem('privy:token', 'a-stale-access-token')
+      resetPrivyLoopbackSessionAfterAuthFailure()
+      expect(window.localStorage.getItem('privy:refresh_token')).toBeNull()
+      expect(window.localStorage.getItem('privy:token')).toBeNull()
+    })
+
+    it('clears the marker cookie', () => {
+      assertPrivySessionMarkerCookie()
+      expect(document.cookie.includes('privy-session=t')).toBe(true)
+      resetPrivyLoopbackSessionAfterAuthFailure()
+      expect(document.cookie.includes('privy-session=t')).toBe(false)
+    })
+
+    it('dispatches the session-expired event', () => {
+      const listener = vi.fn()
+      window.addEventListener(PRIVY_LOOPBACK_SESSION_EXPIRED_EVENT, listener)
+      resetPrivyLoopbackSessionAfterAuthFailure()
+      window.removeEventListener(PRIVY_LOOPBACK_SESSION_EXPIRED_EVENT, listener)
+      expect(listener).toHaveBeenCalledTimes(1)
+    })
+
+    it('does nothing outside local dev marker mode', () => {
+      vi.mocked(isLocalDevOrigin).mockReturnValue(false)
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: {
+          origin: 'https://4626.fun',
+          hostname: '4626.fun',
+          protocol: 'https:',
+        },
+      })
+      window.localStorage.setItem('privy:token', 'should-survive')
+      resetPrivyLoopbackSessionAfterAuthFailure()
+      expect(window.localStorage.getItem('privy:token')).toBe('should-survive')
+      window.localStorage.removeItem('privy:token')
+    })
   })
 })

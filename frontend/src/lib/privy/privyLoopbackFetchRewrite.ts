@@ -2,10 +2,12 @@ import { isLocalDevOrigin } from '@/lib/flags/flags'
 import {
   isPrivyAppConfigRequest,
   isPrivyDeprecatedSessionRefreshRequest,
+  isPrivySiweLinkRequest,
   normalizeFetchMethod,
   rewritePrivyLegacyRequestInput,
   sanitizePrivyAppConfigResponse,
 } from '@/lib/privy/passwordlessFetchGuard'
+import { resetPrivyLoopbackSessionAfterAuthFailure } from '@/lib/privy/loopbackSessionMarkerShim'
 
 const LOOPBACK_FETCH_PATCHED_KEY = '__cvPrivyLoopbackFetchPatched'
 
@@ -52,6 +54,12 @@ export function installPrivyLoopbackFetchRewrite(): void {
     }
 
     const response = await originalFetch(rewritten.input, rewritten.init)
+    if (response.status === 401 && isPrivySiweLinkRequest(rewritten.url, method)) {
+      // Stale access token from the loopback no-op above (or a token that expired
+      // mid-session): reset now so the *next* attempt starts from a clean, honestly
+      // unauthenticated state instead of repeating the same 401.
+      resetPrivyLoopbackSessionAfterAuthFailure()
+    }
     if (isPrivyAppConfigRequest(rewritten.url, method)) {
       return sanitizePrivyAppConfigResponse(response)
     }

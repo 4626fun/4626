@@ -35,6 +35,8 @@ export type WaitlistLinkedAccountRow = {
   /** When present, renders a small edit action that unlinks and re-opens the connect step. */
   onEdit?: () => void
   editBusy?: boolean
+  /** Shown inline under this row when its most recent edit/unlink attempt failed. */
+  error?: string | null
 }
 
 function shortAddress(address: string): string {
@@ -89,32 +91,44 @@ export function useWaitlistLinkedWalletRow(linkedAddress: string | null, points:
   }
 }
 
-function LinkedAccountRow({ icon, identity, monospaceIdentity, onEdit, editBusy }: Omit<WaitlistLinkedAccountRow, 'key' | 'points'>) {
+function LinkedAccountRow({
+  icon,
+  identity,
+  monospaceIdentity,
+  onEdit,
+  editBusy,
+  error,
+}: Omit<WaitlistLinkedAccountRow, 'key' | 'points'>) {
   return (
-    <div className="flex items-center gap-3 py-2">
-      <span className="flex size-8 shrink-0 items-center justify-center">{icon}</span>
-      <span
-        className={cn(
-          'min-w-0 flex-1 truncate text-[13px] font-medium text-zinc-200',
-          monospaceIdentity && 'font-mono',
-        )}
-      >
-        {identity}
-      </span>
-      {onEdit ? (
-        <button
-          type="button"
-          onClick={onEdit}
-          disabled={editBusy}
-          aria-label="Edit"
-          className="shrink-0 rounded-full p-1.5 text-zinc-600 transition hover:bg-white/[0.06] hover:text-zinc-300 disabled:opacity-50"
-        >
-          {editBusy ? (
-            <span className="block size-3.5 animate-spin rounded-full border-[1.5px] border-zinc-500 border-t-transparent" />
-          ) : (
-            <Pencil className="size-3.5" aria-hidden="true" />
+    <div className="py-2">
+      <div className="flex items-center gap-3">
+        <span className="flex size-8 shrink-0 items-center justify-center">{icon}</span>
+        <span
+          className={cn(
+            'min-w-0 flex-1 truncate text-[13px] font-medium text-zinc-200',
+            monospaceIdentity && 'font-mono',
           )}
-        </button>
+        >
+          {identity}
+        </span>
+        {onEdit ? (
+          <button
+            type="button"
+            onClick={onEdit}
+            disabled={editBusy}
+            aria-label="Edit"
+            className="shrink-0 rounded-full p-1.5 text-zinc-600 transition hover:bg-white/[0.06] hover:text-zinc-300 disabled:opacity-50"
+          >
+            {editBusy ? (
+              <span className="block size-3.5 animate-spin rounded-full border-[1.5px] border-zinc-500 border-t-transparent" />
+            ) : (
+              <Pencil className="size-3.5" aria-hidden="true" />
+            )}
+          </button>
+        ) : null}
+      </div>
+      {error ? (
+        <p className="pl-11 pt-1 text-[11px] leading-relaxed text-rose-300/90">{error}</p>
       ) : null}
     </div>
   )
@@ -132,10 +146,15 @@ export function WaitlistLinkedAccountsCard({
   rows,
   totalPoints,
   showTotal,
+  progress,
 }: {
   rows: WaitlistLinkedAccountRow[]
   totalPoints: number
   showTotal: boolean
+  /** Optional step-progress indicator, rendered between the header and the
+   * row list. Lets the caller show "where you are" in a linking wizard
+   * without this card needing to know anything about that wizard's steps. */
+  progress?: ReactNode
 }) {
   const reduceMotion = useReducedMotion()
   const [expanded, setExpanded] = useState(true)
@@ -211,6 +230,22 @@ export function WaitlistLinkedAccountsCard({
     if (!expanded) setDisplayTotal(totalPoints)
   }, [expanded, totalPoints])
 
+  // A failed edit/unlink is only useful if the user can see which row it
+  // belongs to — force back open if the summary already auto-collapsed
+  // (or is mid-collapse) by the time the error arrives, so it's never
+  // silently hidden behind the summary line.
+  const hasRowError = rows.some((row) => Boolean(row.error))
+  useEffect(() => {
+    if (!hasRowError || expanded) return
+    isCollapsedRef.current = false
+    clearAutoCollapseTimer()
+    stopCountRef.current?.stop()
+    clearPopupTimer()
+    setPopups([])
+    setDisplayTotal(totalPoints)
+    setExpanded(true)
+  }, [hasRowError, expanded, clearAutoCollapseTimer, clearPopupTimer, totalPoints])
+
   useEffect(
     () => () => {
       stopCountRef.current?.stop()
@@ -237,7 +272,7 @@ export function WaitlistLinkedAccountsCard({
   const canToggle = rows.length > 0
 
   return (
-    <div className="px-3">
+    <div>
       <button
         type="button"
         onClick={canToggle ? toggleExpanded : undefined}
@@ -288,6 +323,8 @@ export function WaitlistLinkedAccountsCard({
         ) : null}
       </button>
 
+      {progress}
+
       <div id="waitlist-earn-points-rows" className="mx-auto flex w-full max-w-[240px] flex-col">
         <AnimatePresence initial={false}>
           {expanded
@@ -314,6 +351,7 @@ export function WaitlistLinkedAccountsCard({
                     monospaceIdentity={row.monospaceIdentity}
                     onEdit={row.onEdit}
                     editBusy={row.editBusy}
+                    error={row.error}
                   />
                 </motion.div>
               ))

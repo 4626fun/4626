@@ -30,6 +30,9 @@ const PRIVY_SERVER_COOKIE_STORAGE_KEYS = [
   'privy:id_token',
 ] as const
 
+/** Dispatched on `window` after `resetPrivyLoopbackSessionAfterAuthFailure` runs. */
+export const PRIVY_LOOPBACK_SESSION_EXPIRED_EVENT = 'cv-privy-loopback-session-expired'
+
 let productionIntervalStarted = false
 
 function isSecureOrigin(): boolean {
@@ -84,15 +87,44 @@ function writeMarkerCookie(): void {
   assertPrivySessionMarkerCookie()
 }
 
+function removePrivyServerCookieModeStorageKeys(): void {
+  for (const key of PRIVY_SERVER_COOKIE_STORAGE_KEYS) {
+    window.localStorage.removeItem(key)
+  }
+}
+
 /** Drop stale server-cookie-mode Privy storage left from prior localhost sessions. */
 export function clearPrivyServerCookieModeStorage(): void {
   if (typeof window === 'undefined') return
   try {
     const refresh = window.localStorage.getItem(PRIVY_REFRESH_TOKEN_STORAGE_KEY)
     if (refresh !== PRIVY_DEPRECATED_REFRESH_TOKEN) return
-    for (const key of PRIVY_SERVER_COOKIE_STORAGE_KEYS) {
-      window.localStorage.removeItem(key)
-    }
+    removePrivyServerCookieModeStorageKeys()
+  } catch {
+    // best-effort
+  }
+}
+
+/**
+ * Local dev's `custom_api_url` loopback workaround (see privyLoopbackFetchRewrite.ts)
+ * cannot perform a real server-cookie refresh, so a Privy access token that expires
+ * mid-session leaves stale storage behind that fails the same way on every retry
+ * (e.g. `POST /api/v1/siwe/link` 401 when linking a wallet). Once that 401 is observed,
+ * wipe the stale storage/marker unconditionally so the SDK discovers it has no valid
+ * session on its next read instead of reusing the dead token, and notify listeners
+ * that a fresh sign-in is required.
+ */
+export function resetPrivyLoopbackSessionAfterAuthFailure(): void {
+  if (typeof window === 'undefined') return
+  if (!isLocalDevPrivySessionMarkerMode()) return
+  try {
+    removePrivyServerCookieModeStorageKeys()
+  } catch {
+    // best-effort
+  }
+  clearPrivySessionMarkerCookie()
+  try {
+    window.dispatchEvent(new CustomEvent(PRIVY_LOOPBACK_SESSION_EXPIRED_EVENT))
   } catch {
     // best-effort
   }
