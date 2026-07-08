@@ -65,6 +65,7 @@ interface IGnosisSafe {
 contract UpgradeDeploymentBatcherShellShareMesh is Script {
     address constant CREATE2_FACTORY_ADDR = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
     address constant DEFAULT_OLD_BATCHER = 0x17163e67dED6B45bd2A7E6a509A32fB7b0cB6D33;
+    address constant DEFAULT_PROTOCOL_AUTOMATION_SAFE = 0x08f0875E40781578F902998b2b831cc48d838eBE;
     string constant DEFAULT_EPOCH_TAG = "v1.16.1-share-mesh";
 
     string constant DEPLOYMENT_BATCHER_SALT_TAG_PREFIX = "base-release:DeploymentBatcher:";
@@ -354,7 +355,13 @@ contract UpgradeDeploymentBatcherShellShareMesh is Script {
         Config memory cfg;
         cfg.registry = address(oldBatcher.registry());
         cfg.protocolTreasury = oldBatcher.protocolTreasury();
-        cfg.protocolAutomation = oldPhase3.protocolAutomation();
+        cfg.protocolAutomation = vm.envOr("PROTOCOL_AUTOMATION_SAFE", DEFAULT_PROTOCOL_AUTOMATION_SAFE);
+        address legacyAutomation = oldPhase3.protocolAutomation();
+        if (legacyAutomation != cfg.protocolAutomation) {
+            console2.log("Using protocol automation Safe override (legacy phase3 had wrong address):");
+            console2.log("  legacy:", legacyAutomation);
+            console2.log("  override:", cfg.protocolAutomation);
+        }
         cfg.poolManager = oldBatcher.poolManager();
         cfg.taxHook = oldBatcher.taxHook();
         cfg.chainlinkEthUsd = oldBatcher.chainlinkEthUsd();

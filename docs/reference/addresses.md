@@ -33,7 +33,7 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 | DeploymentBatcher | `0xA9024e1B89C5Be34502A275576Cc137473d65839` |
 | DeploymentBatcherPhase1Module | `0xc7d44c4136f10a780B93cCA901F8Fcf2cc130bD1` |
 | DeploymentBatcherPhase2Module | `0xD641076Ff1b1121c3cF85F5d69B386bCE91a6bb2` |
-| DeploymentBatcherPhase3Helper | `0x219eA6e7c28b20c668CbaCD99246C1c17a5D97F6` |
+| DeploymentBatcherPhase3Helper | `0x219eA6e7c28b20c668CbaCD99246C1c17a5D97F6` *(pre-fix; run `./script/upgrade-phase3-automation.sh` to wire hot automation Safe)* |
 | DeploymentBatcherShareMeshHelper | `0x64aA8ba6aD4641034Ca5A1bF31609a5fa9e5dc80` |
 | DeploymentBatcherUtilsHelper | `0x5B59219683b748a321f84eFDfe5A29d3bB945B27` |
 
@@ -42,6 +42,15 @@ Notes:
 - `DeploymentBatcher` deploys as a slim shell; helpers and `DeploymentBatcherPhase1Module` wire post-deploy via protocol treasury Safe (`wireDeploymentHelpers` + `setPhase1Module`).
 - **New vault launches** use **Phase1Module immutables** (`phase1Module()` → `0xc7d44…`), not batcher-shell module getters.
 - Pre-v1.16.1 batchers (`0x17163e…`, `0x660B25…`, `0xa99058…`, and older) are deprecated for **new vault launches**.
+
+### Protocol Safes
+
+| Role | Address |
+|------|---------|
+| Protocol treasury Safe (cold custody, strategy ownership) | `0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3` |
+| Protocol automation Safe (hot lane — Charm manager, Ajna admin) | `0x08f0875E40781578F902998b2b831cc48d838eBE` |
+
+Do **not** set `PROTOCOL_AUTOMATION_SAFE` to the treasury address. Phase 3 deploys wire Charm `manager` and Ajna `admin` to the automation Safe; treasury keeps adapter ownership only.
 
 ## Environment cutover (v1.16.1-share-mesh)
 
@@ -52,7 +61,7 @@ After an infra epoch deploy, update **local `.env`**, **Vercel** (`production`, 
 | `CREATOR_REGISTRY` | `VITE_REGISTRY` | `0x1eb9A364a3E763dD9249ba3413Dc19E13c1F4461` |
 | `CREATOR_FACTORY` | `VITE_FACTORY` | `0x26b74b1d3AadD17e714068d259051409C9f942d1` |
 | `VAULT_ACTIVATION_BATCHER` | `VITE_VAULT_ACTIVATION_BATCHER` | `0xB06d99c81994F5829ba462c4afA78eCff75bC281` |
-| `LOTTERY_MANAGER` | `VITE_LOTTERY_MANAGER` | `0x29F901864D65Eb848BC548ebCEacD6dAD39EFd26` |
+| `LOTTERY_MANAGER` | `VITE_LOTTERY_MANAGER` | `0xD62a8a2F4c25587FA80ED5782b50Af6654122b0b` |
 | `UNIVERSAL_BYTECODE_STORE` | `VITE_UNIVERSAL_BYTECODE_STORE` | `0x7D1029a832E2BEd2C961bC912b623b763862Ad3C` |
 | `UNIVERSAL_CREATE2_FROM_STORE`, `UNIVERSAL_CREATE2_DEPLOYER` | `VITE_UNIVERSAL_CREATE2_DEPLOYER` | `0xdC75A18C521f6Ae1ACa112A98E46c8231F431BC0` |
 | `DEPLOYMENT_BATCHER`, `CREATOR_VAULT_BATCHER` | `VITE_CREATOR_VAULT_BATCHER` | `0xA9024e1B89C5Be34502A275576Cc137473d65839` |
@@ -62,7 +71,7 @@ After an infra epoch deploy, update **local `.env`**, **Vercel** (`production`, 
 
 `VITE_DEPLOYMENT_VERSION` pins the CREATE2 namespace for **new vault launches**.
 
-**Deploy script env overrides:** when running `./script/deploy-infra-v2.sh`, pin `REGISTRY=0x1eb9A3…`, `VAULT_ACTIVATION_BATCHER=0xB06d99…`, and `PROTOCOL_AUTOMATION_SAFE=0x7d429e…` if not already in `.env`.
+**Deploy script env overrides:** when running `./script/deploy-infra-v2.sh` or `./script/upgrade-batcher-shell-share-mesh.sh`, pin `REGISTRY=0x1eb9A3…`, `VAULT_ACTIVATION_BATCHER=0xB06d99…`, `PROTOCOL_TREASURY=0x7d429e…`, and `PROTOCOL_AUTOMATION_SAFE=0x08f0875…` if not already in `.env`. If the live Phase3 helper still points automation at treasury, run `./script/upgrade-phase3-automation.sh` after the shell cutover.
 
 Redeploy the Vercel app after env changes; run `pnpm -C frontend ops:verify-akita-prelaunch --production` and `verify-bytecode-store-seeded.ts` against `deployments/base/v1.16.1-bytecode-manifest.json` before traffic cutover.
 

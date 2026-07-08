@@ -15,7 +15,7 @@ describe('resolveAmoePointsProfile', () => {
     const db = {
       sql: vi.fn(async (strings: TemplateStringsArray) => {
         const text = strings.join(' ').toLowerCase()
-        if (text.includes('a.email_verified = true')) {
+        if (text.includes('p.email_verified = true')) {
           return { rows: [{ profile_id: 42 }] }
         }
         return { rows: [] }

@@ -90,9 +90,8 @@ export async function resolvePrivyUserIdForTwitterActor(
   if (!userId && !username) return null
 
   const result = await db.sql`
-    SELECT DISTINCT accounts.privy_user_id AS privy_user_id
+    SELECT DISTINCT account_linked_methods.privy_user_id AS privy_user_id
     FROM account_linked_methods
-    INNER JOIN accounts ON accounts.privy_user_id = account_linked_methods.privy_user_id
     WHERE account_linked_methods.type = 'twitter'
       AND (
         (${userId}::text IS NOT NULL AND account_linked_methods.value = ${userId})

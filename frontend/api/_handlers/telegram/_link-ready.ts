@@ -132,13 +132,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const result = await db.sql`
       SELECT
-        a.email,
-        a.email_verified,
+        p.email,
+        p.email_verified,
         azs.canonical_csw_address
-      FROM accounts a
+      FROM profiles p
       LEFT JOIN account_zora_signals azs
-        ON azs.privy_user_id = a.privy_user_id
-      WHERE a.privy_user_id = ${context.privyUserId}
+        ON azs.privy_user_id = p.privy_user_id
+      WHERE p.privy_user_id = ${context.privyUserId}
       LIMIT 1;
     `
 

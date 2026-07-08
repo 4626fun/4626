@@ -51,14 +51,13 @@ async function findVerifiedPrivyProfileId(db: Db, wallet: `0x${string}`): Promis
     SELECT pw.profile_id
     FROM profile_wallets pw
     JOIN profiles p ON p.id = pw.profile_id
-    JOIN accounts a ON a.privy_user_id = p.privy_user_id
     WHERE LOWER(pw.address) = ${wallet}
       AND p.privy_user_id IS NOT NULL
       AND p.merged_into_profile_id IS NULL
-      AND a.email_verified = TRUE
+      AND p.email_verified = TRUE
       AND NOT (
-        LOWER(COALESCE(a.email, '')) LIKE '%@wallet.4626.fun'
-        OR LOWER(COALESCE(a.email, '')) LIKE '%@noemail.4626.fun'
+        LOWER(COALESCE(p.email, '')) LIKE '%@wallet.4626.fun'
+        OR LOWER(COALESCE(p.email, '')) LIKE '%@noemail.4626.fun'
       )
     ORDER BY
       pw.is_canonical_smart_wallet DESC NULLS LAST,

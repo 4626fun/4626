@@ -35,7 +35,11 @@ async function fetchWaitlistXmtpStatus(): Promise<WaitlistXmtpStatus> {
   } | null
   if (!response.ok || !json?.success || !json.data) {
     const reason = json?.error ?? `waitlist_xmtp_status_${response.status}`
-    throw new Error(reason)
+    const error = new Error(reason)
+    if (response.status === 429) {
+      error.name = 'RateLimitedError'
+    }
+    throw error
   }
   return json.data
 }
@@ -47,6 +51,8 @@ export function useWaitlistXmtpStatus(enabled: boolean) {
     enabled,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
+    // Retrying a 429 immediately just extends the rate-limit window.
+    retry: (failureCount, error) => error.name !== 'RateLimitedError' && failureCount < 2,
     refetchInterval: (query) => {
       const joinStatus = query.state.data?.joinAction?.status ?? null
       if (joinStatus === 'pending' || joinStatus === 'retry' || joinStatus === 'executing') {

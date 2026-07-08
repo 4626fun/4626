@@ -191,11 +191,16 @@ function WaitlistGroupChatPanelBody({
     joinBlockedReason: chatConfig?.joinBlockedReason,
   })
 
+  // Depend on the stable `refetch` fn, not the whole query result object —
+  // the result is a new object every render, so depending on it turns this
+  // into an unbounded refetch loop (each refetch re-renders, re-firing the
+  // effect) that trips the server's 429 rate limit.
+  const refetchStatus = statusQuery.refetch
   useEffect(() => {
     if (accountMessagingReady) {
-      void statusQuery.refetch().catch(() => undefined)
+      void refetchStatus().catch(() => undefined)
     }
-  }, [accountMessagingReady, statusQuery])
+  }, [accountMessagingReady, refetchStatus])
 
   return (
     <WaitlistChatSection layout={layout}>
