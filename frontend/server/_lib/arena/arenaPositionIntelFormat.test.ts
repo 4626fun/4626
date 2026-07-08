@@ -118,10 +118,12 @@ describe('arenaPositionIntelFormat', () => {
       },
     })
     expect(reply).toContain('[**InverseAKITA**](https://degen.virtuals.io/agents/1213)')
+    expect(reply).toContain(' · `0x1111')
     expect(reply).not.toContain('Virtuals book')
     expect(reply).toContain('├ Margin $8.20k')
     expect(reply).toContain('Account $12.5k')
     expect(reply).toContain('uPnL +$1,030')
+    expect(reply).toContain('Positions')
     expect(reply).not.toContain('├ uPnL:')
     expect(reply).toContain('├ **BTC 5x** LONG')
     expect(reply).toContain('+$1,250')
@@ -130,8 +132,43 @@ describe('arenaPositionIntelFormat', () => {
     expect(reply).toContain('$5,400→$5,460')
     expect(reply).toContain('(+1.9%)')
     expect(reply).toContain('└ **ETH 10x** SHORT')
-    expect(reply).toContain('└ `2` risk · `3` activity · `4` account')
+    expect(reply).toContain('Actions')
+    expect(reply).toContain('├ [2] risk')
+    expect(reply).toContain('└ [5] pnl')
     expect(reply).not.toContain('/h pos risk')
+  })
+
+  it('reads normalized clearinghouse enrichment from getClearinghouseState()', () => {
+    const reply = formatArenaPositionIntelReply(undefined, {
+      walletAddress: '0x1111111111111111111111111111111111111111',
+      positions: sampleDetails.positions,
+      clearinghouseState: {
+        accountValueUsd: 12450.5,
+        totalNtlPosUsd: 8200,
+        withdrawableUsd: 4250.5,
+        assetPositions: [
+          {
+            coin: 'BTC',
+            side: 'long',
+            entryPx: 105000,
+            liquidationPx: 95000,
+            unrealizedPnl: 1250.42,
+            positionValue: 26500,
+            leverage: 5,
+          },
+        ],
+      },
+      allMids: sampleDetails.allMids,
+      agentProfile: {
+        id: '1213',
+        name: 'InverseAKITA',
+        url: 'https://degen.virtuals.io/agents/1213',
+      },
+    })
+    expect(reply).toContain('Margin $8.20k')
+    expect(reply).toContain('Account $12.5k')
+    expect(reply).not.toContain('Margin n/a')
+    expect(reply).not.toContain('Account n/a')
   })
 
   it('falls back to Virtuals book when agent profile is missing', () => {
@@ -158,7 +195,7 @@ describe('arenaPositionIntelFormat', () => {
     expect(reply).toContain('⚠ [**InverseAKITA**](https://degen.virtuals.io/agents/1213) · Risk')
     expect(reply).toContain('Tightest: BTC')
     expect(reply).toContain('**BTC 5x** LONG')
-    expect(reply).toContain('└ `1` book · `3` activity · `4` account')
+    expect(reply).toContain('├ [4] account')
   })
 
   it('formats activity and account views from API payloads', () => {
@@ -294,7 +331,8 @@ describe('arenaPositionIntelFormat', () => {
       'Explorer: https://hypurrscan.io/address/0x1111111111111111111111111111111111111111',
     )
     // Footer routes back to the other views.
-    expect(reply).toContain('└ `1` book · `2` risk · `3` activity · `4` account')
+    expect(reply).toContain('Actions')
+    expect(reply).toContain('└ [4] account')
   })
 
   it('formats pnl view without fills as an empty scorecard', () => {

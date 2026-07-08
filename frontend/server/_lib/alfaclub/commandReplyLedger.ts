@@ -1,5 +1,11 @@
 import { getDb } from '../db/postgres.js'
 
+const inMemoryClaimedReplyKeys = new Set<string>()
+
+function commandReplyClaimKey(roomId: string, messageId: string): string {
+  return `${roomId.trim()}:${messageId.trim()}`
+}
+
 export async function filterUnrepliedCommandMessageIds(params: {
   roomId: string
   messageIds: string[]
@@ -30,21 +36,31 @@ export async function filterUnrepliedCommandMessageIds(params: {
   }
 }
 
-export async function recordCommandReply(params: {
+/**
+ * Atomically claim a command message before executing/sending a reply.
+ * Returns false when another bridge tick already claimed the same message.
+ */
+export async function tryClaimCommandReply(params: {
   roomId: string
   messageId: string
   commandHead?: string
-}): Promise<void> {
+}): Promise<boolean> {
   const roomId = params.roomId.trim()
   const messageId = params.messageId.trim()
-  if (!roomId || !messageId) return
+  if (!roomId || !messageId) return false
+
+  const claimKey = commandReplyClaimKey(roomId, messageId)
+  if (inMemoryClaimedReplyKeys.has(claimKey)) return false
 
   const db = await getDb()
-  if (!db) return
+  if (!db) {
+    inMemoryClaimedReplyKeys.add(claimKey)
+    return true
+  }
 
   const commandHead = (params.commandHead ?? '').trim().slice(0, 64)
   try {
-    await db.sql`
+    const result = await db.sql`
       INSERT INTO alfaclub.command_reply_ledger (
         room_id,
         message_id,
@@ -56,9 +72,28 @@ export async function recordCommandReply(params: {
         ${commandHead},
         NOW()
       )
-      ON CONFLICT (room_id, message_id) DO NOTHING;
+      ON CONFLICT (room_id, message_id) DO NOTHING
+      RETURNING message_id;
     `
+    const claimed = ((result.rows ?? []) as Array<{ message_id: string | null }>).length > 0
+    if (claimed) inMemoryClaimedReplyKeys.add(claimKey)
+    return claimed
   } catch {
-    // Best-effort — a missed write may allow one duplicate, not a hard failure.
+    if (inMemoryClaimedReplyKeys.has(claimKey)) return false
+    inMemoryClaimedReplyKeys.add(claimKey)
+    return true
   }
+}
+
+export async function recordCommandReply(params: {
+  roomId: string
+  messageId: string
+  commandHead?: string
+}): Promise<void> {
+  await tryClaimCommandReply(params)
+}
+
+/** For unit tests only. */
+export function __resetCommandReplyClaimCacheForTests(): void {
+  inMemoryClaimedReplyKeys.clear()
 }

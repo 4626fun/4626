@@ -175,10 +175,8 @@ function formatProgressMenu(currentView: ArenaPositionsView): string {
       { key: '4', label: 'account' },
     ],
   }
-  const options = optionsByView[currentView]
-    .map(({ key, label }) => `\`${key}\` ${label}`)
-    .join(' · ')
-  return `${sectionRule(32)}\n└ ${options}`
+  const actionLines = optionsByView[currentView].map(({ key, label }) => `[${key}] ${label}`)
+  return [sectionRule(32), 'Actions', ...formatTreeList(actionLines)].join('\n')
 }
 
 function viewHeader(title: string, wallet: string): string {
@@ -203,6 +201,14 @@ function formatBookHeader(details: ArenaPositionIntelDetails, wallet: string): s
     return viewHeader(`◆ [**${profile.name}**](${profile.url})`, wallet)
   }
   return viewHeader('◆ **Virtuals book**', wallet)
+}
+
+function formatBookHeaderMultiline(details: ArenaPositionIntelDetails, wallet: string): string {
+  const profile = readAgentProfile(details)
+  if (profile) {
+    return [`◆ [**${profile.name}**](${profile.url})`, ` · \`${wallet}\``].join('\n')
+  }
+  return [`◆ **Virtuals book**`, ` · \`${wallet}\``].join('\n')
 }
 
 function formatSubviewHeader(
@@ -379,20 +385,37 @@ export function normalizeArenaPositionLegs(details: ArenaPositionIntelDetails): 
     const row = asObject(raw)
     if (!row) continue
     const position = asObject(row.position) ?? row
-    const sizeRaw = asFiniteNumber(position.szi)
-    const side = parseSideFromSize(sizeRaw)
-    if (!side || sizeRaw == null) continue
-    const symbol = String(position.coin ?? 'UNKNOWN').trim().toUpperCase()
+    const sizeRaw =
+      asFiniteNumber(position.szi) ??
+      asFiniteNumber(position.size) ??
+      asFiniteNumber(position.positionSize)
+    let side = parseSideFromSize(sizeRaw)
+    if (!side) {
+      const sideRaw = String(position.side ?? row.side ?? '').trim().toLowerCase()
+      if (sideRaw === 'long') side = 'LONG'
+      else if (sideRaw === 'short') side = 'SHORT'
+    }
+    if (!side) continue
+    const symbol = String(position.coin ?? row.coin ?? 'UNKNOWN').trim().toUpperCase()
+    const markPx = readMarkPrice(symbol, allMids)
+    const positionValueUsd = asFiniteNumber(position.positionValue ?? row.positionValue)
+    const inferredSize =
+      sizeRaw != null
+        ? Math.abs(sizeRaw)
+        : markPx != null && positionValueUsd != null && markPx > 0
+          ? Math.abs(positionValueUsd / markPx)
+          : 0
+    const directLeverage = asFiniteNumber(position.leverage ?? row.leverage)
     const leg = mergeLeg(bySymbol.get(symbol), {
       symbol,
       side,
-      size: Math.abs(sizeRaw),
-      entryPx: asFiniteNumber(position.entryPx),
-      liquidationPx: asFiniteNumber(position.liquidationPx),
-      unrealizedPnl: asFiniteNumber(position.unrealizedPnl),
-      positionValueUsd: asFiniteNumber(position.positionValue),
-      leverage: readPositionLeverage(position),
-      markPx: readMarkPrice(symbol, allMids),
+      size: inferredSize,
+      entryPx: asFiniteNumber(position.entryPx ?? row.entryPx),
+      liquidationPx: asFiniteNumber(position.liquidationPx ?? row.liquidationPx),
+      unrealizedPnl: asFiniteNumber(position.unrealizedPnl ?? row.unrealizedPnl),
+      positionValueUsd,
+      leverage: directLeverage ?? readPositionLeverage(position),
+      markPx,
     })
     bySymbol.set(symbol, leg)
   }
@@ -412,10 +435,21 @@ function readAccountSummary(details: ArenaPositionIntelDetails): {
 } {
   const clearinghouse = asObject(details.clearinghouseState)
   const marginSummary = asObject(clearinghouse?.marginSummary)
+  const rawAccountValue = asFiniteNumber(marginSummary?.accountValue)
+  const rawMarginUsed = asFiniteNumber(
+    marginSummary?.totalMarginUsed ?? marginSummary?.totalNtlPos,
+  )
+  const rawWithdrawable = asFiniteNumber(clearinghouse?.withdrawable)
+  const normalizedAccountValue = asFiniteNumber(clearinghouse?.accountValueUsd)
+  const normalizedMarginUsed = asFiniteNumber(
+    clearinghouse?.totalNtlPosUsd ?? clearinghouse?.totalRawUsdUsd,
+  )
+  const normalizedWithdrawable = asFiniteNumber(clearinghouse?.withdrawableUsd)
+
   return {
-    accountValueUsd: asFiniteNumber(marginSummary?.accountValue),
-    marginUsedUsd: asFiniteNumber(marginSummary?.totalMarginUsed ?? marginSummary?.totalNtlPos),
-    withdrawableUsd: asFiniteNumber(clearinghouse?.withdrawable),
+    accountValueUsd: rawAccountValue ?? normalizedAccountValue,
+    marginUsedUsd: rawMarginUsed ?? normalizedMarginUsed,
+    withdrawableUsd: rawWithdrawable ?? normalizedWithdrawable,
     spotUsdcUsd: asFiniteNumber(details.spotUsdcBalance),
   }
 }
@@ -469,18 +503,24 @@ function formatPositionsView(details: ArenaPositionIntelDetails): string {
   if (legs.length === 0) {
     const free = account.withdrawableUsd ?? account.spotUsdcUsd
     return [
-      formatBookHeader(details, wallet),
+      formatBookHeaderMultiline(details, wallet),
       sectionRule(32),
       formatTreeBlock(null, [free == null ? 'Flat · no open perps' : `Flat · free ${formatUsdCompact(free)}`]),
     ].join('\n')
   }
 
   const totalPnl = legs.reduce((sum, leg) => sum + (leg.unrealizedPnl ?? 0), 0)
+  const marginPct = marginUsePct(account.marginUsedUsd, account.accountValueUsd)
+  const marginBar = marginPct == null ? blockBar(0) : blockBar(marginPct / 100)
+  const summaryLine = `Margin ${formatUsdPlain(account.marginUsedUsd)}  ${marginBar}  Account ${formatUsdPlain(account.accountValueUsd)}  uPnL ${formatUsd(totalPnl)}`
 
   return [
-    formatBookHeader(details, wallet),
+    formatBookHeaderMultiline(details, wallet),
     sectionRule(32),
-    formatCompactBookBlock({ account, totalPnl, legs }),
+    `├ ${summaryLine}`,
+    sectionRule(32),
+    'Positions',
+    ...formatTreeList(formatCompactLegLines(legs)),
   ].join('\n')
 }
 

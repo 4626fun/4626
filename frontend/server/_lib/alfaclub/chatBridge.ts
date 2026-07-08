@@ -46,7 +46,7 @@ import {
 import { upsertAlfaClubIngestMessages, type AlfaClubIngestMessage } from './chatIngestStore.js'
 import {
   filterUnrepliedCommandMessageIds,
-  recordCommandReply,
+  tryClaimCommandReply,
 } from './commandReplyLedger.js'
 import {
   collectInverseAkitaChatTradeIntents,
@@ -1981,6 +1981,7 @@ async function sendCommandReplyToRoom(params: {
         messageId: params.commandMessageId,
         sendResult,
       })
+      return 'bot_token_text_only_attachments_dropped'
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
       logger.warn('[alfaclub-chat] bot_reply_with_reply_id_failed', {
@@ -3166,6 +3167,19 @@ async function executeInverseAkitaChatReactionBatch(params: {
 
   let reacted = 0
   for (const intent of intents) {
+    const claimed = await tryClaimCommandReply({
+      roomId: params.roomId,
+      messageId: intent.id,
+      commandHead: 'inverse-chat',
+    })
+    if (!claimed) {
+      logger.info('[alfaclub-chat] inverse_chat_reaction_skipped_already_claimed', {
+        roomId: params.roomId,
+        messageId: intent.id,
+        sender: intent.sender,
+      })
+      continue
+    }
     try {
       const result = await executeInverseAkitaChatReaction({
         roomId: params.roomId,
@@ -3233,22 +3247,12 @@ async function executeInverseAkitaChatReactionBatch(params: {
         }
         if (result.ok) reacted += 1
       }
-      await recordCommandReply({
-        roomId: params.roomId,
-        messageId: intent.id,
-        commandHead: result.ok ? 'inverse-chat' : 'inverse-chat-skip',
-      })
     } catch (error) {
       logger.warn('[alfaclub-chat] inverse_chat_reaction_failed', {
         roomId: params.roomId,
         messageId: intent.id,
         sender: intent.sender,
         message: error instanceof Error ? error.message : String(error),
-      })
-      await recordCommandReply({
-        roomId: params.roomId,
-        messageId: intent.id,
-        commandHead: 'inverse-chat-error',
       })
     }
   }
@@ -3280,6 +3284,20 @@ async function executeCommandBatch(params: {
 
   for (const command of commands) {
     const commandHead = command.text.trim().split(/\s+/, 1)[0] ?? command.text.trim()
+    const claimed = await tryClaimCommandReply({
+      roomId: params.roomId,
+      messageId: command.id,
+      commandHead,
+    })
+    if (!claimed) {
+      logger.info('[alfaclub-chat] command_reply_skipped_already_claimed', {
+        roomId: params.roomId,
+        messageId: command.id,
+        sender: command.sender,
+        command: commandHead,
+      })
+      continue
+    }
     logger.info('[alfaclub-chat] command_execute_start', {
       roomId: params.roomId,
       messageId: command.id,
@@ -3340,11 +3358,6 @@ async function executeCommandBatch(params: {
         sender: command.sender,
         lane,
         hasAttachments: attachments.length > 0,
-      })
-      await recordCommandReply({
-        roomId: params.roomId,
-        messageId: command.id,
-        commandHead,
       })
       if (reactionEmoji) {
         await reactToAlfaClubTriggerMessage({
