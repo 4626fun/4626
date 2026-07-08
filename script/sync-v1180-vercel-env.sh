@@ -17,6 +17,14 @@ if [[ -f "$HANDOFF" ]]; then
   set +a
 fi
 
+# CRON_SECRET for publish-cron lives in frontend/.env (not root .env).
+if [[ -f "${ROOT_DIR}/frontend/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "${ROOT_DIR}/frontend/.env"
+  set +a
+fi
+
 REGISTRY="${REGISTRY_4626:-${REGISTRY:-0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0}}"
 OVAULT_FACTORY="${OVAULT_FACTORY:-0x70d0D2411D362BA50821389383Fa6B829d736232}"
 VAULT_ACTIVATION_BATCHER="${VAULT_ACTIVATION_BATCHER:-0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3}"
@@ -61,6 +69,13 @@ declare -A CLIENT_ENV=(
   [VITE_DEPLOYMENT_VERSION]="$EPOCH"
 )
 
+declare -A PRIVY_ENV=(
+  [PRIVY_WALLET_AUTHORIZATION_KEY]="${PRIVY_WALLET_AUTHORIZATION_KEY:-}"
+  [PRIVY_WALLET_OWNER_ID]="${PRIVY_WALLET_OWNER_ID:-}"
+  [AMOE_LEDGER_PUBLISHER_PRIVY_WALLET_ID]="${CANONICAL_CSW_PRIVY_WALLET_ID:-${AMOE_LEDGER_PUBLISHER_PRIVY_WALLET_ID:-}}"
+  [AMOE_LEDGER_PUBLISHER_OWNER_ADDRESS]="${AMOE_LEDGER_PUBLISHER_OWNER_ADDRESS:-0x858c01556EC5a8531fA4118d595430AC7fD0baF0}"
+)
+
 upsert_env() {
   local target="$1"
   local key="$2"
@@ -77,10 +92,23 @@ for target in production preview development; do
   for key in "${!CLIENT_ENV[@]}"; do
     upsert_env "$target" "$key" "${CLIENT_ENV[$key]}"
   done
+  for key in "${!PRIVY_ENV[@]}"; do
+    value="${PRIVY_ENV[$key]}"
+    if [[ -z "$value" ]]; then
+      echo "  skip $target $key (empty locally)" >&2
+      continue
+    fi
+    upsert_env "$target" "$key" "$value"
+  done
 done
 
-echo "==> Production redeploy"
-vercel deploy --prod --yes
+echo "==> Production redeploy (last Ready deployment)"
+LATEST_READY="$(vercel ls --prod 2>/dev/null | rg "Ready" | rg -o 'https://4626-[a-z0-9-]+-akita-llc\.vercel\.app' | head -1 || true)"
+if [[ -n "$LATEST_READY" ]]; then
+  vercel redeploy "$LATEST_READY" --target production
+else
+  vercel deploy --prod --yes
+fi
 
 echo "==> Trigger AMOE publish-cron (best-effort)"
 if [[ -n "${CRON_SECRET:-}" ]]; then
