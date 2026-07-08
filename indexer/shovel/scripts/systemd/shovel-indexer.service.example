@@ -1,0 +1,24 @@
+# Example systemd unit for a small VM (not Railway).
+# Install:
+#   sudo cp shovel-indexer.service.example /etc/systemd/system/shovel-indexer.service
+#   sudo systemctl edit shovel-indexer.service  # set WorkingDirectory + User
+#   sudo systemctl enable --now shovel-indexer.service
+
+[Unit]
+Description=4626 Shovel protocol indexer (Tier A)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=deploy
+WorkingDirectory=/opt/4626/indexer/shovel
+EnvironmentFile=/opt/4626/frontend/.env
+ExecStart=/opt/4626/indexer/shovel/scripts/railway-entrypoint.sh
+Restart=on-failure
+RestartSec=15
+StandardOutput=append:/var/log/shovel-indexer.log
+StandardError=append:/var/log/shovel-indexer.log
+
+[Install]
+WantedBy=multi-user.target

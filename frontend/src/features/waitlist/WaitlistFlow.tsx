@@ -156,7 +156,6 @@ function AvatarDisc({ src, index, onError }: { src: string | null; index: number
           alt=""
           loading="lazy"
           decoding="async"
-          referrerPolicy="no-referrer"
           className="size-full object-cover"
           onError={onError}
         />
@@ -214,14 +213,114 @@ function AvatarDot({ avatar, index }: { avatar: WaitlistAvatar | null; index: nu
   )
 }
 
-// Overlapping avatar stack. Uses real member PFPs (linked, with hover names)
-// when present, otherwise four brand gradient placeholders (preserves the look
-// when stats have no avatars).
-function JoinedAvatars({ avatars }: { avatars: WaitlistAvatar[] }) {
-  const slots: (WaitlistAvatar | null)[] =
-    avatars.length > 0 ? avatars.slice(0, 4) : [null, null, null, null]
+// Tracks whether a step index just advanced (+1) or retreated (-1) so the
+// wizard transition can slide in the matching spatial direction instead of a
+// generic fade. Uses React's documented "adjust state during rendering"
+// pattern (https://react.dev/learn/you-might-not-need-an-effect) rather than
+// an effect, so the direction is available for the very render that changes
+// it — no one-render lag, and no cascading-render lint violation.
+function useStepDirection(stepIndex: number | null): number {
+  const [previous, setPrevious] = useState(stepIndex)
+  const [direction, setDirection] = useState(0)
+  if (stepIndex !== previous) {
+    if (previous != null && stepIndex != null) {
+      setDirection(stepIndex > previous ? 1 : -1)
+    }
+    setPrevious(stepIndex)
+  }
+  return direction
+}
+
+type LinkingStepStatus = 'upcoming' | 'current' | 'done' | 'skipped'
+
+type LinkingProgressStep = {
+  key: string
+  label: string
+  status: LinkingStepStatus
+}
+
+// Small step tracker for the post-join "earn points" wizard (X → Wallet →
+// Zora). Without it, one optional panel silently replaces the last with no
+// sense of how many steps remain — this gives an at-a-glance read on
+// progress. Purely decorative dots backed by a single accessible progress
+// summary for screen readers.
+function WaitlistLinkingProgress({ steps }: { steps: LinkingProgressStep[] }) {
+  const currentIndex = steps.findIndex((step) => step.status === 'current')
+  const activeIndex = currentIndex >= 0 ? currentIndex : steps.length
+  const currentLabel = currentIndex >= 0 ? steps[currentIndex]?.label : 'Done'
+  const stepNumber = Math.min(activeIndex + 1, steps.length)
+
   return (
-    <div className="flex -space-x-2">
+    <div
+      role="progressbar"
+      aria-valuemin={1}
+      aria-valuemax={steps.length}
+      aria-valuenow={stepNumber}
+      aria-valuetext={`Step ${stepNumber} of ${steps.length}: ${currentLabel}`}
+      className="mb-4 flex items-center justify-center"
+    >
+      {steps.map((step, index) => (
+        <div key={step.key} className="flex items-center" aria-hidden="true">
+          <div className="flex flex-col items-center gap-1.5">
+            <span
+              className={cn(
+                'flex size-5 items-center justify-center rounded-full border transition-colors duration-300',
+                step.status === 'done' && 'border-transparent bg-[rgb(var(--brand-primary))] text-white',
+                step.status === 'current' &&
+                  'border-[rgb(var(--brand-primary))] bg-[rgb(var(--brand-primary)/0.16)]',
+                step.status === 'skipped' && 'border-dashed border-zinc-600',
+                step.status === 'upcoming' && 'border-zinc-700',
+              )}
+            >
+              {step.status === 'done' ? (
+                <Check className="size-3" aria-hidden="true" />
+              ) : (
+                <span
+                  className={cn(
+                    'size-1.5 rounded-full',
+                    step.status === 'current' && 'animate-pulse bg-[rgb(var(--brand-primary))]',
+                    step.status === 'skipped' && 'bg-zinc-600',
+                    step.status === 'upcoming' && 'bg-zinc-700',
+                  )}
+                />
+              )}
+            </span>
+            <span
+              className={cn(
+                'text-[9px] font-medium uppercase tracking-[0.1em] transition-colors duration-300',
+                step.status === 'current' ? 'text-zinc-300' : 'text-zinc-600',
+              )}
+            >
+              {step.label}
+            </span>
+          </div>
+          {index < steps.length - 1 ? (
+            <span
+              className={cn(
+                'mb-4 h-px w-5 transition-colors duration-300',
+                step.status === 'done' || step.status === 'skipped'
+                  ? 'bg-[rgb(var(--brand-primary)/0.4)]'
+                  : 'bg-white/10',
+              )}
+            />
+          ) : null}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+const SOCIAL_PROOF_AVATAR_SLOTS = 12
+
+// Overlapping avatar stack. Uses real member PFPs (linked, with hover names)
+// when present, and fills remaining slots with brand gradient placeholders so
+// the social-proof row still looks populated when only a subset has avatars.
+function JoinedAvatars({ avatars }: { avatars: WaitlistAvatar[] }) {
+  const slots: (WaitlistAvatar | null)[] = Array.from({ length: SOCIAL_PROOF_AVATAR_SLOTS }, (_, index) =>
+    avatars[index] ?? null,
+  )
+  return (
+    <div className="flex -space-x-2.5">
       {slots.map((avatar, index) => (
         <AvatarDot key={`${avatar?.src ?? 'placeholder'}-${index}`} avatar={avatar} index={index} />
       ))}
@@ -1101,7 +1200,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
 
   const socialProof = (
     <div className="flex flex-col items-center gap-3">
-      <div className="flex items-center justify-center gap-2.5">
+      <div className="flex items-center justify-center gap-1">
         <JoinedAvatars avatars={memberAvatars} />
         {listCount != null && listCount > 0 ? (
           <p className="text-[11px] text-zinc-400">
@@ -1151,11 +1250,76 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   const xSkippedWithoutLink = xPhaseDone && !twitterLinked
   const showWalletSkippedReminder = walletSkipped && !externalEoaLinked
   const showZoraSkippedReminder = zoraSkipped && !zoraLinked
+
+  // The step tracker is only useful while the wizard is actively guiding the
+  // user (a panel is showing) or reminding them about something skipped. Once
+  // every step is linked, the "Your points" list above already shows the same
+  // three accounts with real identities — the abstract X/Wallet/Zora dots
+  // would just be a redundant, all-checked row cluttering the finished state.
+  const linkingWizardInProgress =
+    activeStepKey !== null || xSkippedWithoutLink || showWalletSkippedReminder || showZoraSkippedReminder
+
+  // Signup (email -> code) and the post-join linking wizard (X -> wallet ->
+  // Zora) each get their own forward/backward slide direction, so "Edit"
+  // (back to email) or reopening a skipped step ("Link now") visibly reverses
+  // instead of using the same generic forward animation both ways.
+  const signupStepIndex = step === 'email' ? 0 : 1
+  const signupDirection = useStepDirection(signupStepIndex)
+  const linkingStepIndex =
+    activeStepKey === 'x-link' || activeStepKey === 'x-engagement'
+      ? 0
+      : activeStepKey === 'wallet'
+        ? 1
+        : activeStepKey === 'zora'
+          ? 2
+          : 3
+  const linkingDirection = useStepDirection(linkingStepIndex)
+  const linkingSteps: LinkingProgressStep[] = [
+    {
+      key: 'x',
+      label: 'X',
+      status: twitterLinked
+        ? 'done'
+        : activeStepKey === 'x-link' || activeStepKey === 'x-engagement'
+          ? 'current'
+          : xSkippedWithoutLink
+            ? 'skipped'
+            : 'upcoming',
+    },
+    {
+      key: 'wallet',
+      label: 'Wallet',
+      status: externalEoaLinked
+        ? 'done'
+        : activeStepKey === 'wallet'
+          ? 'current'
+          : showWalletSkippedReminder
+            ? 'skipped'
+            : 'upcoming',
+    },
+    {
+      key: 'zora',
+      label: 'Zora',
+      status: zoraLinked
+        ? 'done'
+        : activeStepKey === 'zora'
+          ? 'current'
+          : showZoraSkippedReminder
+            ? 'skipped'
+            : 'upcoming',
+    },
+  ]
+
   const stepTransition = { duration: 0.32, ease: [0.22, 1, 0.36, 1] as const }
+  // Directional (not just fade) — the entering step slides in from the side it
+  // conceptually arrives from, and the exiting step slides out the other way,
+  // so sequential steps read as spatial forward/backward progression.
   const stepVariants = {
-    initial: reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.99 },
-    animate: { opacity: 1, y: 0, scale: 1 },
-    exit: reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.99 },
+    initial: (dir: number) =>
+      reduceMotion ? { opacity: 0 } : { opacity: 0, x: dir < 0 ? -18 : 18, scale: 0.99 },
+    animate: { opacity: 1, x: 0, scale: 1 },
+    exit: (dir: number) =>
+      reduceMotion ? { opacity: 0 } : { opacity: 0, x: dir < 0 ? 18 : -18, scale: 0.99 },
   }
   const reminderVariants = {
     initial: reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0, y: -4 },
@@ -1305,10 +1469,26 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                     showTotal={showPointsBadge}
                   />
 
-                  <AnimatePresence mode="wait" initial={false}>
+                  <AnimatePresence initial={false}>
+                    {linkingWizardInProgress ? (
+                      <motion.div
+                        key="linking-progress"
+                        variants={reminderVariants}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                        transition={stepTransition}
+                      >
+                        <WaitlistLinkingProgress steps={linkingSteps} />
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
+
+                  <AnimatePresence mode="wait" initial={false} custom={linkingDirection}>
                     {activeStepKey === 'x-link' ? (
                       <motion.div
                         key="x-link"
+                        custom={linkingDirection}
                         variants={stepVariants}
                         initial="initial"
                         animate="animate"
@@ -1327,6 +1507,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                     ) : activeStepKey === 'x-engagement' ? (
                       <motion.div
                         key="x-engagement"
+                        custom={linkingDirection}
                         variants={stepVariants}
                         initial="initial"
                         animate="animate"
@@ -1342,6 +1523,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                     ) : activeStepKey === 'wallet' ? (
                       <motion.div
                         key="wallet"
+                        custom={linkingDirection}
                         variants={stepVariants}
                         initial="initial"
                         animate="animate"
@@ -1360,6 +1542,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                     ) : activeStepKey === 'zora' ? (
                       <motion.div
                         key="zora"
+                        custom={linkingDirection}
                         variants={stepVariants}
                         initial="initial"
                         animate="animate"
@@ -1502,10 +1685,11 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
 
               {showEmailSignupForm ? (
                 <BeamCard className="p-5 sm:p-6" accent={codeStatus === 'success' ? 'success' : 'default'}>
-                  <AnimatePresence mode="wait" initial={false}>
+                  <AnimatePresence mode="wait" initial={false} custom={signupDirection}>
                     {step === 'email' ? (
                       <motion.form
                         key="email"
+                        custom={signupDirection}
                         className="space-y-4"
                         onSubmit={handleEmailFormSubmit}
                         variants={stepVariants}
@@ -1582,6 +1766,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                     ) : (
                       <motion.form
                         key="code"
+                        custom={signupDirection}
                         className="space-y-3"
                         onSubmit={handleCodeFormSubmit}
                         variants={stepVariants}

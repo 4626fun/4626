@@ -1,0 +1,8 @@
+.env
+.env.*
+.direct_pg_url
+.run/
+shovel
+shovel-main
+config.generated.json
+config.*.json

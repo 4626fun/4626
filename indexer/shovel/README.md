@@ -108,10 +108,53 @@ order by 2 desc;
 select * from v_protocol_index_freshness;
 ```
 
+## Railway (always-on)
+
+Create a new Railway service pointing at this repo:
+
+| Setting | Value |
+|---------|-------|
+| Config file | `railway.shovel.toml` |
+| Dockerfile | `indexer/shovel/Dockerfile` |
+| Healthcheck | `/health` |
+
+Required variables on the service:
+
+- `SHOVEL_PG_URL` (or `DIRECT_URL` / `DATABASE_URL`) — Supabase **session** `:5432` URL
+- `BASE_LOGS_RPC_URL` + `BASE_READ_RPC_URL` / `BASE_RPC_URL` — probe picks the first that passes header-batch + getLogs checks
+- `SHOVEL_BASE_START_BLOCK=48345250`
+
+Deploy from repo root:
+
+```bash
+railway link   # new project: 4626-shovel-indexer
+railway up --service <shovel-service> -c railway.shovel.toml
+```
+
+The container runs `scripts/railway-entrypoint.sh`: RPC probe → `render-config.mjs` → `shovel-main` (foreground) + `/health` sidecar.
+
+## VM (systemd)
+
+See `scripts/systemd/shovel-indexer.service.example` — same entrypoint as Railway, `EnvironmentFile` pointing at your `frontend/.env`.
+
+## RPC probe
+
+`scripts/probe-shovel-rpc.py` tests each candidate for:
+
+1. `eth_blockNumber`
+2. small `eth_getLogs` on the v1.18 `DeploymentBatcher`
+3. batched `eth_getBlockByNumber` headers (default **200** blocks — matches Shovel batch size)
+
+Alchemy often passes (1)+(2) but fails (3) at 500-block batches; sync-env and Railway entrypoint skip it and use `BASE_READ_RPC_URL` / matrixed when needed.
+
+```bash
+python3 scripts/probe-shovel-rpc.py --json
+```
+
 ## Ops notes
 
 - Uses **`shovel-main`** binary (`indexsupply.net/bin/main/…`) — v1.6 Docker/`1.6` binary hit `converge-retry` loops here; main works.
-- Alchemy `BASE_LOGS_RPC_URL` is probed first; when capped (429), sync falls back to `BASE_READ_RPC_URL` / `BASE_RPC_URL` (currently matrixed.link).
+- `sync-env-from-frontend.sh` probes **header batches**, not just tiny getLogs; default `SHOVEL_BATCH_SIZE=200`.
 - Start block pinned to **48345250** (v1.18.0 `DeploymentBatcher` deploy window).
 - Shovel internal state lives in schema `shovel.*` (do not drop).
 - Re-render config after address cutovers: `node render-config.mjs --write && docker compose up -d`.

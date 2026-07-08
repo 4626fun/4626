@@ -71,10 +71,9 @@ function resolvePrivyProviderClientId(params: {
   clientId: string | null
   bypassCustomPrivyDomain: boolean
 }): string | null {
-  if (
-    params.bypassCustomPrivyDomain &&
-    (params.mode === 'waitlist-email-only' || params.mode === 'waitlist-wallet-joined')
-  ) {
+  // Loopback client-id override is required for waitlist Zora cross-app oauth/link
+  // but can break wallet SIWE linking on the joined-wallet lane with 401s.
+  if (params.bypassCustomPrivyDomain && params.mode === 'waitlist-email-only') {
     return resolveWaitlistLoopbackPrivyClientId() ?? params.clientId
   }
   return params.clientId

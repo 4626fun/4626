@@ -250,6 +250,11 @@ export async function runWaitlistReturningWalletSignIn(params: {
     await prepareExplicitWalletPrivyLogin(privy)
 
     try {
+      if (isLocalDevPrivySessionMarkerMode()) {
+        // Wallet SIWE link can 401 on loopback if Privy does not see the first-party
+        // marker right before the login/link handshake starts.
+        assertPrivySessionMarkerCookie()
+      }
       login({
         loginMethods: ['wallet'],
         walletList: WAITLIST_RETURNING_WALLET_LOGIN_LIST,

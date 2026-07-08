@@ -1,0 +1,39 @@
+# --------------------------------------------------------------------------
+# Railway deployment config — Tier A Shovel protocol indexer
+# --------------------------------------------------------------------------
+# New project/service (suggested): 4626-shovel-indexer
+#
+# UI settings:
+#   - Dockerfile Path: indexer/shovel/Dockerfile
+#   - Railway Config File: railway.shovel.toml
+#   - Healthcheck Path: /health
+#   - Healthcheck Timeout: 120
+#
+# Required variables (copy from Supabase + frontend/.env):
+#   SHOVEL_PG_URL          — direct Postgres :5432 session URL (preferred)
+#   or DIRECT_URL / DATABASE_URL
+#   BASE_LOGS_RPC_URL      — Alchemy (optional; probe falls back automatically)
+#   BASE_READ_RPC_URL      — matrixed / read fallback
+#   BASE_RPC_URL           — last-resort fallback
+#   SHOVEL_BASE_START_BLOCK=48345250
+#
+# Optional:
+#   SHOVEL_PROBE_HEADER_BATCH=200
+#   SHOVEL_BATCH_SIZE=200
+#   SHOVEL_CONCURRENCY=1
+#   DEPLOYMENT_BATCHER, LOTTERY_MANAGER
+# --------------------------------------------------------------------------
+
+[build]
+dockerfilePath = "indexer/shovel/Dockerfile"
+watchPatterns = [
+  "/indexer/shovel/**",
+  "/railway.shovel.toml",
+]
+
+[deploy]
+numReplicas = 1
+healthcheckPath = "/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
