@@ -35,17 +35,31 @@ pick_logs_rpc() {
 }
 
 LOGS_RPC="$(pick_logs_rpc)"
-PG_URL="${DIRECT_URL:-${DATABASE_URL:-}}"
+PG_URL="${SHOVEL_PG_URL:-${DIRECT_URL:-${DATABASE_URL:-}}}"
+
+# Optional direct db.* host when IPv4 reachable (pooler session URL is the fallback).
+if [[ -z "${SHOVEL_PG_URL:-}" && -n "${SUPABASE_USE_DIRECT_PG:-}" && -n "${SUPABASE_URL:-}" && -n "${SUPABASE_DB_PASSWORD:-}" ]]; then
+  REF="$(python3 - <<'PY'
+import os, re
+m = re.search(r"https://([^.]+)\\.supabase\\.co", os.environ.get("SUPABASE_URL", ""))
+print(m.group(1) if m else "")
+PY
+)"
+  if [[ -n "$REF" ]]; then
+    PG_URL="postgresql://postgres:${SUPABASE_DB_PASSWORD}@db.${REF}.supabase.co:5432/postgres"
+    echo "Using Supabase direct Postgres (db.${REF}.supabase.co) for Shovel" >&2
+  fi
+fi
 
 if [[ -z "$PG_URL" ]]; then
-  echo "Set DIRECT_URL or DATABASE_URL in frontend/.env" >&2
+  echo "Set DIRECT_URL, DATABASE_URL, or SUPABASE_URL+SUPABASE_DB_PASSWORD in frontend/.env" >&2
   exit 1
 fi
 if [[ "$PG_URL" != *sslmode=* ]]; then
   PG_URL="${PG_URL}$( [[ "$PG_URL" == *'?'* ]] && echo '&' || echo '?' )sslmode=require"
 fi
 if [[ -z "$LOGS_RPC" ]]; then
-  echo "Set BASE_LOGS_RPC_URL or BASE_RPC_URL in frontend/.env" >&2
+  echo "No working eth_getLogs RPC found in frontend/.env" >&2
   exit 1
 fi
 

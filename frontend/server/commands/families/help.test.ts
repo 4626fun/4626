@@ -61,6 +61,37 @@ vi.mock('../../_lib/alfaclub/hyperliquid.js', async (importOriginal) => {
   }
 })
 
+vi.mock('../../_lib/alfaclub/positionAlertStore.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../_lib/alfaclub/positionAlertStore.js')>()
+  return {
+    ...actual,
+    readPositionAlert: vi.fn(async () => ({
+      roomId: '1659',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      enabled: true,
+      telegramEnabled: false,
+      liquidationWarnPct: 10,
+      targetPnlUsd: 5000,
+      targetProgressPct: 90,
+      lastLiqAlertAt: null,
+      lastTargetAlertAt: null,
+      updatedAt: new Date().toISOString(),
+    })),
+    resolveTelegramChatIdForWallet: vi.fn(async () => null),
+  }
+})
+
+vi.mock('../../_lib/arena/arenaIdentityMappingStore.js', () => ({
+  resolveRoomDefaultArenaIdentity: vi.fn(async () => ({
+    source: 'env_default',
+    roomId: '1659',
+    senderAddress: '*',
+    agentId: 'test-agent',
+    agentWalletAddress: '0x30068c6bccf43e9eb5cdb68fb978f32f744d870c',
+    hlApiWalletAddress: null,
+  })),
+}))
+
 const TEST_WALLET = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 
 describe('executeHelpCommandFamily', () => {
@@ -81,13 +112,19 @@ describe('executeHelpCommandFamily', () => {
     expect(result?.response).not.toContain('Keepr')
   })
 
-  it('treats /halp as /help in Hermit rooms', async () => {
+  it('treats /halp as comprehensive Hermit brief in room 1659', async () => {
     vi.stubEnv('ALFACLUB_HERMIT_COMMAND_ROOMS', '1043,1659')
     const result = await executeHelpCommandFamily('/halp', {
       chatId: 'alfaclub:1659',
       senderWallet: TEST_WALLET,
     })
     expect(result?.response).toContain('Hyperliquid intelligence brief')
+    expect(result?.response).toContain('Wallet lanes')
+    expect(result?.response).toContain('Virtual Arena execution')
+    expect(result?.response).toContain('mark→liq distance')
+    expect(result?.response).toContain('Telegram Mini App')
+    const combined = `${result?.response ?? ''}${result?.action?.alfaclubFollowUpText ?? ''}`
+    expect(combined.length).toBeLessThanOrEqual(4000)
   })
 
   it('returns Hyperliquid position help for /help in alfaclub:1043', async () => {

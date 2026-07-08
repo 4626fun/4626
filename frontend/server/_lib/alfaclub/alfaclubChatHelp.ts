@@ -1,6 +1,12 @@
 import { isHermitCommandRoom } from './chatBridge.js'
 import { readOperationalAlfaClubRoomIds } from './creatorRoomLinks.js'
 import { formatHermitCommandRoomHelp } from '../hermit/hermitAlfaClubHelp.js'
+import {
+  readHermitPositionAlert,
+  resolveMonitoredHlWalletsForAlert,
+  resolveRoom1659MonitoredHlWallets,
+} from './hermitAlertWallets.js'
+import { resolveRoom1659HyperliquidUserForSnapshot } from './room1659Market.js'
 
 const EVM_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
 const ALFACLUB_MESSAGE_MAX_CHARS = 2_000
@@ -57,13 +63,15 @@ function formatHermitConciseCtaSection(params: {
   lines.push('• Refresh risk + PnL snapshot: **`/position`**')
 
   if (params.roomId === '1659') {
-    lines.push('• Check room execution lane: **`/arena status`** (or `/arena register` to create/bind an arena agent for this sender/room). /arena gated to allowlisted or HERMIT_OWNER_ADDRESS in AlfaClub rooms.')
+    lines.push('• Check room execution lane: **`/arena status`** (or `/arena register` to create/bind an arena agent). /arena gated to allowlisted or HERMIT_OWNER_ADDRESS in AlfaClub rooms.')
+    lines.push('• Enable Telegram DMs: link in **4626 Telegram Mini App** → **`/hermit alert`** → **`/hermit alert test`**')
+    lines.push('', '_Alerts monitor room HL + Virtual Arena wallets; DMs go to your linked Telegram._')
   } else {
     lines.push('• Expand market context: **`/market`**')
+    const walletLabel = `${params.senderWallet.slice(0, 6)}…${params.senderWallet.slice(-4)}`
+    lines.push('', `_${walletLabel} alerts are wallet-scoped (not room-key scoped)._`)
   }
 
-  const walletLabel = `${params.senderWallet.slice(0, 6)}…${params.senderWallet.slice(-4)}`
-  lines.push('', `_${walletLabel} alerts are wallet-scoped (not room-key scoped)._`)
   return lines
 }
 
@@ -73,30 +81,28 @@ async function buildHermitComprehensiveHelpPayload(params: {
 }): Promise<AlfaClubHelpPayload> {
   const [
     { getClearinghouseState },
-    { buildHyperliquidPositionReport },
-    { readHyperliquidPositionAlert },
+    { buildHyperliquidPositionReport, formatCompactArenaHlSummary, formatRoom1659WalletLanesSection },
+    { resolveTelegramChatIdForWallet },
   ] = await Promise.all([
     import('./hyperliquid.js'),
     import('./positionReport.js'),
     import('./positionAlertStore.js'),
   ])
 
-  // Room 1659 tracks a dedicated room-level Hyperliquid portfolio, not the
-  // sender's personal wallet. Resolve the HL identity through the room
-  // resolver so the snapshot/position report match the room context shown in
-  // the "Market pulse" section below. Alert config stays per-sender.
   let hlWallet = params.senderWallet
   if (params.roomId === '1659') {
-    const { resolveRoom1659HyperliquidUserForSnapshot } = await import('./room1659Market.js')
     hlWallet = resolveRoom1659HyperliquidUserForSnapshot(params.senderWallet)
   }
 
-  const [stateResult, alertResult] = await Promise.allSettled([
+  const [stateResult, alertResult, telegramLinkedResult] = await Promise.allSettled([
     getClearinghouseState(hlWallet),
-    readHyperliquidPositionAlert(params.senderWallet),
+    readHermitPositionAlert(params.senderWallet, params.roomId),
+    resolveTelegramChatIdForWallet(params.senderWallet),
   ])
   const state = stateResult.status === 'fulfilled' ? stateResult.value : null
   const alert = alertResult.status === 'fulfilled' ? alertResult.value : null
+  const telegramLinked =
+    telegramLinkedResult.status === 'fulfilled' ? Boolean(telegramLinkedResult.value) : false
 
   let room1659Market:
     | Awaited<ReturnType<(typeof import('./room1659Market.js'))['resolveRoom1659MarketContext']>>
@@ -110,6 +116,29 @@ async function buildHermitComprehensiveHelpPayload(params: {
     }
   }
 
+  let walletLanesSection: string[] | null = null
+  let arenaWalletSummary: string[] | null = null
+  let monitoredWallets: Awaited<ReturnType<typeof resolveMonitoredHlWalletsForAlert>> | undefined
+
+  if (params.roomId === '1659') {
+    monitoredWallets = alert
+      ? await resolveMonitoredHlWalletsForAlert(alert)
+      : await resolveRoom1659MonitoredHlWallets()
+    const arenaWallet = monitoredWallets.find((wallet) => wallet.label === 'Virtual Arena execution')
+    walletLanesSection = formatRoom1659WalletLanesSection({
+      roomHlAddress: hlWallet,
+      arenaAddress: arenaWallet?.address ?? null,
+      operatorWallet: params.senderWallet,
+    })
+    if (arenaWallet && arenaWallet.address !== hlWallet) {
+      const arenaHlState = await getClearinghouseState(arenaWallet.address)
+      arenaWalletSummary = formatCompactArenaHlSummary({
+        arenaAddress: arenaWallet.address,
+        hlState: arenaHlState,
+      })
+    }
+  }
+
   const sections: string[] = [
     '🧠 **Agent Hermit — Hyperliquid intelligence brief**',
     buildHyperliquidPositionReport({
@@ -118,6 +147,14 @@ async function buildHermitComprehensiveHelpPayload(params: {
       alert,
       roomId: params.roomId,
       room1659Market: room1659Market ?? undefined,
+      alertStatusOptions: {
+        roomId: params.roomId,
+        telegramLinked,
+        monitoredWallets,
+        operatorWallet: params.senderWallet,
+      },
+      walletLanesSection,
+      arenaWalletSummary,
     }),
   ]
 

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import type { HyperliquidClearinghouseState } from './hyperliquid.js'
 import type { PositionAlertConfig } from './positionAlertStore.js'
-import { buildHyperliquidEntrySignalReport, buildHyperliquidPositionReport } from './positionReport.js'
+import { buildHyperliquidEntrySignalReport, buildHyperliquidPositionReport, formatRoom1659WalletLanesSection } from './positionReport.js'
+import { formatLiquidationThresholdLine } from './positionAlertStore.js'
 
 function makeAlert(overrides: Partial<PositionAlertConfig> = {}): PositionAlertConfig {
   return {
@@ -77,6 +78,41 @@ describe('buildHyperliquidPositionReport', () => {
     expect(report).toContain('Hype score: **31/100**')
     expect(report).toContain('Room 1659 HL leg')
     expect(report).toContain('Arena lane check: `/arena status`')
+  })
+
+  it('includes wallet lanes, monitored wallets, and mark→liq alert copy for room 1659', () => {
+    const report = buildHyperliquidPositionReport({
+      walletAddress: '0xebf94fa19db7d2e7905decd01dae4ea9eb4c1ff2',
+      hlState: { accountValueUsd: 1000, totalNtlPosUsd: 0, totalRawUsdUsd: null, assetPositions: [] },
+      alert: makeAlert({ roomId: '1659' }),
+      roomId: '1659',
+      walletLanesSection: formatRoom1659WalletLanesSection({
+        roomHlAddress: '0xebf94fa19db7d2e7905decd01dae4ea9eb4c1ff2',
+        arenaAddress: '0x30068c6bccf43e9eb5cdb68fb978f32f744d870c',
+        operatorWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      }),
+      alertStatusOptions: {
+        roomId: '1659',
+        telegramLinked: false,
+        monitoredWallets: [
+          { label: 'Room HL portfolio', address: '0xebf94fa19db7d2e7905decd01dae4ea9eb4c1ff2' },
+          { label: 'Virtual Arena execution', address: '0x30068c6bccf43e9eb5cdb68fb978f32f744d870c' },
+        ],
+        operatorWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      },
+    })
+
+    expect(report).toContain('📍 **Wallet lanes** (room 1659)')
+    expect(report).toContain('Room HL portfolio')
+    expect(report).toContain('Virtual Arena execution')
+    expect(report).toContain('mark→liq distance ≤ **10%**')
+    expect(report).toContain('Monitored wallets:')
+    expect(report).toContain('Linked Telegram: **no**')
+  })
+
+  it('uses clarified liquidation threshold copy', () => {
+    expect(formatLiquidationThresholdLine(10)).toContain('mark→liq distance')
+    expect(formatLiquidationThresholdLine(10)).toContain('not position size or margin')
   })
 
   it('switches CTA tone for aggressive conviction regimes', () => {

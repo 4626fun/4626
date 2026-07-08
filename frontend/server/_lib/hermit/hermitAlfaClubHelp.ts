@@ -32,8 +32,8 @@ function formatHermitCreativeSection(): string[] {
     '• `/gmeow [vibe]` — GIF + one-liner',
     '• `/meme <prompt>` — meme / image concept',
     '• `/hermit copy|announce|quest|tone <text>` — room copy drafts',
-    '• `/hermit alert` — Hyperliquid Telegram alerts (defaults)',
-    '• `/hermit alert test` — send immediate Telegram test DM',
+    '• `/hermit alert` — Hyperliquid Telegram alerts (room 1659: room HL + Virtual Arena wallets)',
+    '• `/hermit alert test` — send immediate Telegram test DM (link 4626 in Telegram Mini App first)',
     '• `/hermit setup` · `/hermit help`',
   ]
 }
@@ -108,7 +108,10 @@ export function formatHermitCommandRoomHelp(
       '',
       '• `/hermit prefs` · `/hermit tone` · `/position` · `/help` refreshes this snapshot',
       ...(id === ROOM_1659_ID
-        ? ['', '_Alerts track your Hyperliquid wallet, not AlfaClub room keys._']
+        ? [
+            '',
+            '_Room 1659 alerts monitor the room HL portfolio + Virtual Arena wallet; Telegram DMs go to your linked account._',
+          ]
         : []),
     ].join('\n')
     return trimHelpToBudget(body)

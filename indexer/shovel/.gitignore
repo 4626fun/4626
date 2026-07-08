@@ -1,4 +1,19 @@
-.run/
-shovel
+# Generated / local secrets
 .env
+.direct_pg_url
 config.generated.json
+.run/
+
+# Shovel binaries (downloaded by scripts/start.sh)
+shovel
+shovel-main
+
+# Debug / smoke configs from local setup
+config.demo*.json
+config.fixed.json
+config.localpg.json
+config.smoke.json
+config.test*.json
+config.tip.json
+config.valid*.json
+config.no-time.json

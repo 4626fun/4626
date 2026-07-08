@@ -83,8 +83,6 @@ const baseSource = {
   name: 'base',
   chain_id: 8453,
   urls: [rpcUrl],
-  batch_size: Number(process.env.SHOVEL_BATCH_SIZE ?? '2000'),
-  concurrency: Number(process.env.SHOVEL_CONCURRENCY ?? '4'),
 }
 
 const sourceRef = [{ name: 'base', start: Number(startBlock) }]
@@ -92,7 +90,11 @@ const sourceRef = [{ name: 'base', start: Number(startBlock) }]
 /** @type {Record<string, unknown>} */
 const config = {
   pg_url: pgUrl,
-  eth_sources: [baseSource],
+  eth_sources: [{
+    ...baseSource,
+    batch_size: Number(process.env.SHOVEL_BATCH_SIZE ?? '500'),
+    concurrency: Number(process.env.SHOVEL_CONCURRENCY ?? '1'),
+  }],
   integrations: [
     {
       name: 'protocol_phase1_deployed',

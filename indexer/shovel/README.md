@@ -42,14 +42,12 @@ cd indexer/shovel
 set -a && source .env && set +a
 node render-config.mjs --write   # writes config.generated.json
 
-# Option A: Docker (recommended)
-docker compose up -d
-docker compose logs -f
+# Option A: host-native (recommended — Docker v1.6 image has a converge bug; main binary works)
+./scripts/start.sh
+tail -f .run/shovel.log
 
-# Option B: local binary
-curl -LO https://indexsupply.net/bin/1.6/linux/amd64/shovel
-chmod +x shovel
-./shovel -config config.generated.json
+# Option B: Docker (not recommended until indexsupply/shovel main is published)
+# docker compose up -d
 ```
 
 After first run (tables created by Shovel):
@@ -112,6 +110,9 @@ select * from v_protocol_index_freshness;
 
 ## Ops notes
 
+- Uses **`shovel-main`** binary (`indexsupply.net/bin/main/…`) — v1.6 Docker/`1.6` binary hit `converge-retry` loops here; main works.
+- Alchemy `BASE_LOGS_RPC_URL` is probed first; when capped (429), sync falls back to `BASE_READ_RPC_URL` / `BASE_RPC_URL` (currently matrixed.link).
+- Start block pinned to **48345250** (v1.18.0 `DeploymentBatcher` deploy window).
 - Shovel internal state lives in schema `shovel.*` (do not drop).
 - Re-render config after address cutovers: `node render-config.mjs --write && docker compose up -d`.
 - For v1.16.1 historical vaults on the **old** batcher (`0xA9024e…`), add a second source block range or a separate config file — this scaffold targets v1.18.0-greenfield only.

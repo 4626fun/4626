@@ -42,6 +42,14 @@ describe('parseHermitAlertCommandArgs', () => {
     expect(parseHermitAlertCommandArgs('off')).toEqual({ action: 'off' })
   })
 
+  it('documents mark→liq distance in invalid liq usage', () => {
+    const parsed = parseHermitAlertCommandArgs('liq')
+    expect(parsed.action).toBe('invalid')
+    if (parsed.action === 'invalid') {
+      expect(parsed.reason).toContain('mark→liq distance')
+    }
+  })
+
   it('bare alert enables defaults', () => {
     expect(parseHermitAlertCommandArgs('')).toEqual({ action: 'default' })
     expect(parseHermitAlertCommandArgs('on')).toEqual({ action: 'default' })
