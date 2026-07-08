@@ -35,7 +35,9 @@ export type PredictRemoteShareOftAddressParams = {
   shareName: string
   shareSymbol: string
   oftBootstrapRegistry: Address
-  /** Creator CSW — used for shareOftSalt derivation only. */
+  /** Lane token — salt-scoped (AUDIT-2026-07-08-C01). */
+  creatorToken: Address
+  /** Creator CSW — used for shareOftSalt derivation. */
   owner: Address
   deploymentVersion: string
   shareOftSaltOverride?: Hex | null
@@ -56,6 +58,7 @@ export function predictRemoteShareOftAddress(params: PredictRemoteShareOftAddres
   ])
   const shareOftInitCode = concatHex([DEPLOY_BYTECODE.CreatorShareOFT as Hex, shareOftArgs])
   const derivedSalt = deriveShareOftSaltFromVersion({
+    creatorToken: params.creatorToken,
     owner: params.owner,
     shareSymbol: shareSymbolLower,
     version: params.deploymentVersion,

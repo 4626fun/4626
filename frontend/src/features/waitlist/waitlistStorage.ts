@@ -199,3 +199,32 @@ export function clearWaitlistOnboardingStepFlags(): void {
   writeWaitlistWalletSkipped(false)
   writeWaitlistZoraSkipped(false)
 }
+
+// ----------------------------- Joined-avatars reveal -----------------------------
+// Tracks whether the post-join member-avatar row has already played its
+// one-time "emerge" reveal this session, so revisiting/remounting the joined
+// view (route changes, re-renders) shows the avatars at rest instead of
+// replaying the animation every time.
+export const WAITLIST_JOINED_AVATARS_REVEALED_STORAGE_KEY = 'cv:waitlist:joined-avatars-revealed'
+
+export function readWaitlistJoinedAvatarsRevealed(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.sessionStorage.getItem(WAITLIST_JOINED_AVATARS_REVEALED_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function writeWaitlistJoinedAvatarsRevealed(revealed: boolean): void {
+  if (typeof window === 'undefined') return
+  try {
+    if (revealed) {
+      window.sessionStorage.setItem(WAITLIST_JOINED_AVATARS_REVEALED_STORAGE_KEY, '1')
+    } else {
+      window.sessionStorage.removeItem(WAITLIST_JOINED_AVATARS_REVEALED_STORAGE_KEY)
+    }
+  } catch {
+    // ignore
+  }
+}

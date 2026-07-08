@@ -1,0 +1,10 @@
+{
+  "moduleStorageVersionTag": "OVaultModuleStorage.v4",
+  "creatorOVaultLayoutHash": "9ff6793eac529cf22d4eb6686153154624472ff718cfaf3f44c327ad132fcd68",
+  "contracts": [
+    "contracts/creator/vault/CreatorOVault.sol:CreatorOVault",
+    "contracts/creator/vault/modules/CreatorOVaultCoreModule.sol:CreatorOVaultCoreModule",
+    "contracts/shared/vault/modules/OVaultStrategiesModule.sol:OVaultStrategiesModule",
+    "contracts/shared/vault/modules/OVaultAdminModule.sol:OVaultAdminModule"
+  ]
+}

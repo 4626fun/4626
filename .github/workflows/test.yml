@@ -95,6 +95,12 @@ jobs:
         # See docs/operations/ovault-module-immutability-and-recovery.md
         run: node scripts/check-ovault-delegate-epilogues.mjs
 
+      - name: Guard CreatorOVault module storage layout parity + versioning
+        # Ensures CreatorOVault and its delegatecall modules have identical
+        # storage slot ordering and that layout changes do not ship under an
+        # unchanged MODULE_STORAGE_VERSION tag.
+        run: node scripts/check-ovault-module-storage-layout.mjs
+
       - name: CreatorOVault size warn/fail gate
         # Defence-in-depth on top of the EIP-170 hard gate above.
         # WARN at 23,500 B (informational). FAIL at 24,000 B (blocking).

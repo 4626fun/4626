@@ -37,7 +37,27 @@ export function saltForDeployLabel(baseSalt: Hex, label: string): Hex {
   return keccak256(encodePacked(['bytes32', 'string'], [baseSalt, label]))
 }
 
+/**
+ * ShareOFT CREATE2 salt (matches DeploymentBatcherUtilsHelper.deriveShareOftSalt).
+ * AUDIT-2026-07-08-C01: includes creatorToken so multi-vault same-owner/symbol deploys do not collide.
+ */
 export function deriveShareOftSaltFromVersion(params: {
+  creatorToken: Address
+  owner: Address
+  shareSymbol: string
+  version: string
+}): Hex {
+  const base = keccak256(
+    encodePacked(
+      ['address', 'address', 'string'],
+      [params.creatorToken, params.owner, params.shareSymbol.toLowerCase()],
+    ),
+  )
+  return keccak256(encodePacked(['bytes32', 'string'], [base, `CreatorShareOFT:${params.version}`]))
+}
+
+/** Pre-C01 salt (owner + symbol + version only). For historical address reconstruction. */
+export function deriveShareOftSaltFromVersionLegacy(params: {
   owner: Address
   shareSymbol: string
   version: string
@@ -109,6 +129,7 @@ export function findDeploymentVersionForVanityTargetsSync(
 
     if (shareSuffix) {
       const shareSalt = deriveShareOftSaltFromVersion({
+        creatorToken: params.creatorToken,
         owner: params.owner,
         shareSymbol: params.shareSymbol,
         version: candidateVersion,
@@ -164,6 +185,7 @@ export async function findDeploymentVersionForVanityTargets(
       }
       if (shareSuffix) {
         const candidateShareSalt = deriveShareOftSaltFromVersion({
+          creatorToken: params.creatorToken,
           owner: params.owner,
           shareSymbol: params.shareSymbol,
           version: candidateVersion,
@@ -260,6 +282,7 @@ async function findDeploymentVersionForVanityTargetsAsyncTypescript(
     let shareAddress: Address | null = null
     if (shareSuffix) {
       const shareSalt = deriveShareOftSaltFromVersion({
+        creatorToken: params.creatorToken,
         owner: params.owner,
         shareSymbol: params.shareSymbol,
         version: candidateVersion,

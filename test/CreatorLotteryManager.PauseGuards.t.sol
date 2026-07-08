@@ -343,7 +343,12 @@ contract LotteryManager4626PauseGuardsTest is Test {
         vm.prank(owner);
         lotteryManager.unpause();
 
-        assertEq(gauge.payCount(), 1, "unpause should auto-settle deferred VRF FIFO");
+        assertEq(gauge.payCount(), 0, "unpause should not auto-settle deferred VRF FIFO");
+
+        vm.prank(owner);
+        lotteryManager.applyDeferredVrf(requestId);
+
+        assertEq(gauge.payCount(), 1, "apply should settle deferred request");
         assertEq(gauge.lastWinner(), buyer, "winner should match buyer");
 
         (address userAfter,,,,,,) = lotteryManager.vrfRequests(requestId);
@@ -354,7 +359,7 @@ contract LotteryManager4626PauseGuardsTest is Test {
         assertEq(gauge.payCount(), 1, "second apply should no-op when pending word cleared");
     }
 
-    function test_VrfCallback_DefersMultipleWhilePaused_AndUnpauseSettlesFifo() public {
+    function test_VrfCallback_DefersMultipleWhilePaused_AndFlushSettlesInPages() public {
         address buyer2 = makeAddr("buyer2");
         shareToken.mint(buyer2, 100 ether);
         ve4626.setLock(buyer2, shareOFT, 100 ether, 100 ether);
@@ -385,13 +390,65 @@ contract LotteryManager4626PauseGuardsTest is Test {
         vm.prank(owner);
         lotteryManager.unpause();
 
-        assertEq(gauge.payCount(), 2, "unpause should settle every deferred VRF result");
+        assertEq(gauge.payCount(), 0, "unpause should not settle deferred requests");
+
+        vm.prank(owner);
+        lotteryManager.applyDeferredVrf(requestId1);
+        assertEq(gauge.payCount(), 1, "first apply should settle first request");
+
+        vm.prank(owner);
+        lotteryManager.applyDeferredVrf(requestId2);
+        assertEq(gauge.payCount(), 2, "second apply should settle second request");
         assertEq(gauge.lastWinner(), buyer2, "second deferred request should settle last in FIFO order");
 
         (address userAfter1,,,,,,) = lotteryManager.vrfRequests(requestId1);
         (address userAfter2,,,,,,) = lotteryManager.vrfRequests(requestId2);
         assertEq(userAfter1, address(0));
         assertEq(userAfter2, address(0));
+    }
+
+    function test_DeferredVrf_RemainsValidAcrossLongPause() public {
+        uint256 rawVrfId = localVrfConsumer.nextRequestId();
+        vm.prank(authorizedSwap);
+        uint256 requestId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 100 ether);
+        assertGt(requestId, 0, "expected VRF request");
+
+        vm.prank(owner);
+        lotteryManager.pause();
+
+        uint256[] memory randomWords = new uint256[](1);
+        randomWords[0] = 0;
+        vm.prank(address(localVrfConsumer));
+        lotteryManager.receiveRandomWords(rawVrfId, randomWords);
+
+        // Longer than the default 30 minute grace, but entirely paused time.
+        vm.warp(block.timestamp + 31 minutes);
+
+        vm.prank(owner);
+        lotteryManager.unpause();
+
+        vm.prank(owner);
+        lotteryManager.applyDeferredVrf(requestId);
+
+        assertEq(gauge.payCount(), 1, "paused time must not age deferred VRF beyond grace");
+    }
+
+    function test_VrfCallback_DiscardsTrulyStaleResultWhenActive() public {
+        uint256 rawVrfId = localVrfConsumer.nextRequestId();
+        vm.prank(authorizedSwap);
+        uint256 requestId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 100 ether);
+        assertGt(requestId, 0, "expected VRF request");
+
+        vm.warp(block.timestamp + 31 minutes);
+
+        uint256[] memory randomWords = new uint256[](1);
+        randomWords[0] = 0;
+        vm.prank(address(localVrfConsumer));
+        lotteryManager.receiveRandomWords(rawVrfId, randomWords);
+
+        assertEq(gauge.payCount(), 0, "stale active-time VRF result must be discarded");
+        (address userAfter,,,,,,) = lotteryManager.vrfRequests(requestId);
+        assertEq(userAfter, address(0), "stale request should be cleared");
     }
 
     function test_VrfCallback_UsesStoredAdditiveProbabilityBoost() public {
@@ -455,14 +512,14 @@ contract LotteryManager4626PauseGuardsTest is Test {
 
     function test_SetLotteryConfig_Allows200kCapAndRejectsAbove() public {
         vm.prank(owner);
-        lotteryManager.setLotteryConfig(1_000_000, 6900, true, 40, 200_000, 10_500);
+        lotteryManager.setLotteryConfig(1_000_000, 6900, true, 40, 150_000, 10_000);
 
         (,,,, uint256 maxWinChance,) = lotteryManager.lotteryConfig();
-        assertEq(maxWinChance, 200_000, "expected max win chance updated to new cap");
+        assertEq(maxWinChance, 150_000, "expected max win chance updated to policy cap");
 
         vm.prank(owner);
         vm.expectRevert(LotteryManager4626.InvalidAmount.selector);
-        lotteryManager.setLotteryConfig(1_000_000, 6900, true, 40, 200_001, 10_500);
+        lotteryManager.setLotteryConfig(1_000_000, 6900, true, 40, 150_001, 10_000);
     }
 
 }

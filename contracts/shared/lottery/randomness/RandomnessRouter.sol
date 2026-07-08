@@ -46,6 +46,7 @@ contract RandomnessRouter is ReentrancyGuard {
 
     /// @notice Per-creator override.
     mapping(address => IRandomnessSource) public sourceOf;
+    mapping(address => bool) public authorizedRequester;
 
     // -------------------------------------------------------------------------
     // Events / Errors
@@ -54,6 +55,7 @@ contract RandomnessRouter is ReentrancyGuard {
     event OwnerUpdated(address indexed previous, address indexed current);
     event DefaultSourceUpdated(address indexed previous, address indexed current);
     event SourceOverrideSet(address indexed creatorCoin, address indexed source);
+    event RequesterAuthorizationUpdated(address indexed requester, bool authorized);
     event RandomnessAcquired(
         address indexed creatorCoin,
         address indexed source,
@@ -66,6 +68,7 @@ contract RandomnessRouter is ReentrancyGuard {
     error NoSource();
     error UnsupportedMode();
     error NotReady();
+    error UnauthorizedRequester();
 
     // -------------------------------------------------------------------------
     // Construction
@@ -75,8 +78,10 @@ contract RandomnessRouter is ReentrancyGuard {
         if (_owner == address(0)) revert ZeroAddress();
         owner = _owner;
         defaultSource = _defaultSource;
+        authorizedRequester[_owner] = true;
         emit OwnerUpdated(address(0), _owner);
         emit DefaultSourceUpdated(address(0), address(_defaultSource));
+        emit RequesterAuthorizationUpdated(_owner, true);
     }
 
     // -------------------------------------------------------------------------
@@ -108,6 +113,12 @@ contract RandomnessRouter is ReentrancyGuard {
     function clearSourceFor(address creatorCoin) external onlyOwner {
         delete sourceOf[creatorCoin];
         emit SourceOverrideSet(creatorCoin, address(0));
+    }
+
+    function setRequesterAuthorization(address requester, bool authorized) external onlyOwner {
+        if (requester == address(0)) revert ZeroAddress();
+        authorizedRequester[requester] = authorized;
+        emit RequesterAuthorizationUpdated(requester, authorized);
     }
 
     // -------------------------------------------------------------------------
@@ -143,6 +154,7 @@ contract RandomnessRouter is ReentrancyGuard {
         nonReentrant
         returns (address sourceAddr, IRandomnessSource.SourceMode m, uint256 key)
     {
+        if (!authorizedRequester[msg.sender]) revert UnauthorizedRequester();
         IRandomnessSource src = resolve(creatorCoin);
         m = src.mode();
         if (m != IRandomnessSource.SourceMode.REQUEST) revert UnsupportedMode();

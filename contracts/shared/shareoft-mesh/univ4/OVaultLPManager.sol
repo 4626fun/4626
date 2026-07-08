@@ -5,6 +5,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
@@ -110,6 +111,7 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
     error HookNotApproved(address hook);
     error RebalanceSlippageExceeded(uint256 valueBefore, uint256 valueAfter);
     error PositionsNotEmpty();
+    error OracleAssetPriceUnavailable();
 
     modifier onlyVault() {
         if (msg.sender != vault && msg.sender != owner()) revert NotVault();
@@ -259,9 +261,13 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
             ASSET.safeTransferFrom(msg.sender, address(this), amount0);
         }
         if (pairedIsNative) {
-            if (amount1 > 0 && msg.value != amount1) revert InvalidParameters();
+            // Native pairs require exact ETH value parity for each deposit.
+            if (msg.value != amount1) revert InvalidParameters();
         } else if (amount1 > 0) {
             IERC20(pairedToken).safeTransferFrom(msg.sender, address(this), amount1);
+        } else if (msg.value != 0) {
+            // ERC20-paired pools must never accept stray native value.
+            revert InvalidParameters();
         }
 
         totalLiquidity = _estimateLiquidity(amount0, amount1 == 0 ? msg.value : amount1);
@@ -322,7 +328,7 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
     }
 
     function getTwap() public view returns (int24) {
-        if (maxTwapDeviation == 0) return _getCurrentTick();
+        // Always resolve TWAP from oracle to avoid spot-tick bypasses.
         if (address(twapOracle) == address(0)) revert TwapOracleNotSet();
         return twapOracle.getTWAPTick(twapDuration);
     }
@@ -400,7 +406,7 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
     }
 
     function _executeRebalance(bool isSeed) internal {
-        uint256 valueBefore0 = ASSET.balanceOf(address(this));
+        uint256 valueBefore = _portfolioValueInAsset();
 
         _burnAndCollect(fullRangePosition);
         _burnAndCollect(basePosition);
@@ -457,11 +463,11 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         lastTimestamp = block.timestamp;
         lastTick = tick;
 
-        uint256 valueAfter0 = ASSET.balanceOf(address(this));
-        if (valueBefore0 > 0) {
-            uint256 maxLoss = (valueBefore0 * maxRebalanceSlippageBps) / 10_000;
-            if (valueAfter0 + maxLoss < valueBefore0) {
-                revert RebalanceSlippageExceeded(valueBefore0, valueAfter0);
+        uint256 valueAfter = _portfolioValueInAsset();
+        if (valueBefore > 0) {
+            uint256 maxLoss = (valueBefore * maxRebalanceSlippageBps) / 10_000;
+            if (valueAfter + maxLoss < valueBefore) {
+                revert RebalanceSlippageExceeded(valueBefore, valueAfter);
             }
         }
 
@@ -528,7 +534,7 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         params[1] = abi.encode(poolKey.currency0);
         params[2] = abi.encode(poolKey.currency1);
 
-        uint256 nativeValue = pairedIsNative ? address(this).balance : 0;
+        uint256 nativeValue = pairedIsNative ? getBalance1() : 0;
         IPositionManager(positionManager).modifyLiquidities{value: nativeValue}(
             abi.encode(actions, params), block.timestamp + 1
         );
@@ -540,6 +546,7 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
     function _burnAndCollect(PositionInfo storage pos) internal returns (uint256 amount0, uint256 amount1) {
         if (pos.liquidity == 0) return (0, 0);
         _requireConfigured();
+        (uint256 principal0, uint256 principal1) = _getPositionAmounts(pos);
 
         uint256 balAssetBefore = ASSET.balanceOf(address(this));
         uint256 balPairedBefore = _pairedBalance();
@@ -554,13 +561,21 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         params[1] = abi.encode(poolKey.currency0);
         params[2] = abi.encode(poolKey.currency1);
 
-        uint256 nativeValue = pairedIsNative ? address(this).balance : 0;
-        IPositionManager(positionManager).modifyLiquidities{value: nativeValue}(
+        IPositionManager(positionManager).modifyLiquidities{value: 0}(
             abi.encode(actions, params), block.timestamp + 1
         );
 
         amount0 = ASSET.balanceOf(address(this)) - balAssetBefore;
         amount1 = _pairedBalance() - balPairedBefore;
+
+        // Credit realized swap fees (collected - principal currently backing liquidity).
+        // Clamp at zero for edge rounding cases where collected == principal or slightly lower.
+        if (amount0 > principal0) {
+            accruedFees0 += amount0 - principal0;
+        }
+        if (amount1 > principal1) {
+            accruedFees1 += amount1 - principal1;
+        }
 
         pos.liquidity = 0;
         pos.tokenId = 0;
@@ -590,8 +605,7 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         params[1] = abi.encode(poolKey.currency0);
         params[2] = abi.encode(poolKey.currency1);
 
-        uint256 nativeValue = pairedIsNative ? address(this).balance : 0;
-        IPositionManager(positionManager).modifyLiquidities{value: nativeValue}(
+        IPositionManager(positionManager).modifyLiquidities{value: 0}(
             abi.encode(actions, params), block.timestamp + 1
         );
 
@@ -644,6 +658,18 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
     function _estimateLiquidity(uint256 amount0, uint256 amount1) internal pure returns (uint256) {
         if (amount0 == 0 || amount1 == 0) return amount0 + amount1;
         return _sqrt(amount0 * amount1);
+    }
+
+    function _portfolioValueInAsset() internal view returns (uint256) {
+        (uint256 totalAsset, uint256 totalPaired) = getTotalAmounts();
+        if (totalPaired == 0) return totalAsset;
+        if (address(twapOracle) == address(0)) revert TwapOracleNotSet();
+
+        // assetPerEth is 1e18-scaled asset units for 1 ETH.
+        uint256 assetPerEth = twapOracle.getAssetEthTWAP(twapDuration);
+        if (assetPerEth == 0) revert OracleAssetPriceUnavailable();
+        uint256 pairedInAsset = Math.mulDiv(totalPaired, assetPerEth, 1e18);
+        return totalAsset + pairedInAsset;
     }
 
     function _sqrt(uint256 x) internal pure returns (uint256) {

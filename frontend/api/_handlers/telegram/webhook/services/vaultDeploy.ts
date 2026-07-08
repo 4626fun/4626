@@ -353,8 +353,18 @@ function saltFor(baseSalt: Hex, label: string): Hex {
   return keccak256(encodePacked(['bytes32', 'string'], [baseSalt, label]))
 }
 
-function deriveShareOftSalt(params: { owner: Address; shareSymbolLower: string; version: string }): Hex {
-  const baseSalt = keccak256(encodePacked(['address', 'string'], [params.owner, params.shareSymbolLower]))
+function deriveShareOftSalt(params: {
+  creatorToken: Address
+  owner: Address
+  shareSymbolLower: string
+  version: string
+}): Hex {
+  const baseSalt = keccak256(
+    encodePacked(
+      ['address', 'address', 'string'],
+      [params.creatorToken, params.owner, params.shareSymbolLower],
+    ),
+  )
   return keccak256(encodePacked(['bytes32', 'string', 'string'], [baseSalt, 'CreatorShareOFT:', params.version]))
 }
 
@@ -483,6 +493,7 @@ async function predictDeployAddresses(params: {
   const shareSymbolUpper = upperAscii(shareSymbol)
   const shareSymbolLower = lowerAscii(shareSymbol)
   const shareOftSalt = deriveShareOftSalt({
+    creatorToken: params.creatorToken,
     owner: params.owner,
     shareSymbolLower,
     version: params.version,

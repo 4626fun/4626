@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { motion } from 'framer-motion'
 import { Wallet } from 'lucide-react'
 
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
@@ -20,13 +21,19 @@ export function WaitlistReturningWalletSignIn(props: WaitlistReturningWalletSign
   return (
     <div className="space-y-2.5 text-center">
       <div className="flex items-center gap-3">
-        <div className="h-px flex-1 bg-white/8" aria-hidden="true" />
-        {labelSlot ?? (
-          <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-500">
-            Already joined?
-          </span>
-        )}
-        <div className="h-px flex-1 bg-white/8" aria-hidden="true" />
+        {/* `layout` on the hairlines + label lets Framer smoothly resize this
+            row (instead of an instant snap) whenever `labelSlot`'s content
+            swaps to a different width — e.g. the waitlist flow's "N already
+            joined" pill docking into the shorter "Already joined?" text. */}
+        <motion.div layout className="h-px flex-1 bg-white/8" aria-hidden="true" />
+        <motion.div layout className="shrink-0">
+          {labelSlot ?? (
+            <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-500">
+              Already joined?
+            </span>
+          )}
+        </motion.div>
+        <motion.div layout className="h-px flex-1 bg-white/8" aria-hidden="true" />
       </div>
 
       {/* Collapsed to a quiet text link by default — the full bordered pill

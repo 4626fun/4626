@@ -50,6 +50,16 @@ export function useWaitlistMessagingSessionRepair(): () => Promise<SessionRepair
   )
 
   return useCallback(async (): Promise<SessionRepairOutcome> => {
+    // Logs the outcome this function actually RETURNS, not just the
+    // intermediate `attemptSessionRepair` primitive's own transition — those
+    // can diverge (e.g. the primitive reports 'repaired' but this function
+    // then downgrades it to 'recovery-required'/'transient' below), and the
+    // divergent case is exactly what's confusing to debug from console output.
+    const logFinal = (outcome: SessionRepairOutcome, reason: string): SessionRepairOutcome => {
+      console.info('[auth-repair]', { surface: 'waitlist-chat', transition: 'final', outcome, reason })
+      return outcome
+    }
+
     const outcome = await attemptSessionRepair({
       getToken,
       bridge: async (token) => {
@@ -68,7 +78,7 @@ export function useWaitlistMessagingSessionRepair(): () => Promise<SessionRepair
     })
 
     if (outcome === 'recovery-required' || outcome === 'true-stale' || outcome === 'no-privy') {
-      return outcome
+      return logFinal(outcome, 'bridge-repair-outcome')
     }
 
     try {
@@ -76,7 +86,7 @@ export function useWaitlistMessagingSessionRepair(): () => Promise<SessionRepair
       const mergedWallets = [...(wallets as unknown[]), ...extractPrivyWalletsFromUser(privy.user)]
       const embeddedWallet = findLiveEmbeddedPrivyWallet(mergedWallets, ensured.address)
       if (!embeddedWallet) {
-        return outcome === 'repaired' ? 'transient' : outcome
+        return logFinal(outcome === 'repaired' ? 'transient' : outcome, 'no-live-embedded-wallet')
       }
       await refreshPrivyEmbeddedSignerSession({
         wallet: embeddedWallet,
@@ -92,11 +102,11 @@ export function useWaitlistMessagingSessionRepair(): () => Promise<SessionRepair
       // connect(), hit the same stale-iframe 401, and only then show the
       // expired-session message. Surface that immediately instead so the
       // user isn't sent through a second doomed attempt.
-      if (isWaitlistMessagingLoopbackHost()) return 'recovery-required'
-      return 'repaired'
+      if (isWaitlistMessagingLoopbackHost()) return logFinal('recovery-required', 'loopback-signing-not-verifiable')
+      return logFinal('repaired', 'embedded-signer-refreshed')
     } catch (error) {
       console.warn('[waitlist-messaging-repair] embedded signer refresh failed:', error)
-      return outcome === 'repaired' ? 'transient' : outcome
+      return logFinal(outcome === 'repaired' ? 'transient' : outcome, 'embedded-signer-refresh-threw')
     }
   }, [ensureEmbeddedWallet, getToken, privy.user, setActiveWallet, wallets])
 }

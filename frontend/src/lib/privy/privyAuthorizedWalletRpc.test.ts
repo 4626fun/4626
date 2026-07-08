@@ -11,6 +11,20 @@ vi.mock('@/lib/flags/flags', () => ({
   isPrivyHostModeAllowed: () => true,
 }))
 
+vi.mock('@/lib/flags/featureFlags', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/flags/featureFlags')>()
+  return {
+    ...actual,
+    resolveEffectivePrivyClientId: () =>
+      flagState.clientId ?? actual.resolveEffectivePrivyClientId(),
+  }
+})
+
+const assertPrivySessionMarkerCookie = vi.fn()
+vi.mock('@/lib/privy/loopbackSessionMarkerShim', () => ({
+  assertPrivySessionMarkerCookie: (...args: unknown[]) => assertPrivySessionMarkerCookie(...args),
+}))
+
 import {
   isPrivyUnifiedStackWallet,
   privyAuthorizedWalletPersonalSign,
@@ -116,6 +130,24 @@ describe('privyAuthorizedWalletSecp256k1Sign', () => {
     )
   })
 
+  it('asserts the loopback session marker cookie before reading the access token', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ data: { signature: SIG } }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await privyAuthorizedWalletSecp256k1Sign({
+      walletId: WALLET_ID,
+      hash: DIGEST,
+      generateAuthorizationSignature: vi.fn(async () => ({ signature: 'auth-sig-base64' })),
+      getToken: async () => 'access-token',
+    })
+
+    expect(assertPrivySessionMarkerCookie).toHaveBeenCalled()
+  })
+
   it('rejects malformed non-32-byte hash before calling Privy', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
@@ -137,6 +169,8 @@ describe('privyAuthorizedWalletSecp256k1Sign', () => {
 
 describe('privyAuthorizedWalletPersonalSign', () => {
   afterEach(() => {
+    flagState.clientId = null
+    vi.unstubAllEnvs()
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
   })
@@ -179,6 +213,42 @@ describe('privyAuthorizedWalletPersonalSign', () => {
         headers: expect.objectContaining({
           Authorization: 'Bearer access-token',
           'privy-authorization-signature': 'auth-sig-base64',
+        }),
+      }),
+    )
+  })
+
+  it('sends waitlist loopback privy-client-id when generic loopback client id is disabled', async () => {
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID_ENABLED', '1')
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID', 'client_waitlist_123')
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID_ON_LOOPBACK', '')
+
+    vi.stubGlobal('window', {
+      location: { origin: 'http://localhost:5174' },
+    } as Window & typeof globalThis)
+
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ data: { signature: SIG } }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const generateAuthorizationSignature = vi.fn(async () => ({ signature: 'auth-sig-base64' }))
+    const messageHex = `0x${Buffer.from('XMTP inbox signature').toString('hex')}`
+
+    await privyAuthorizedWalletPersonalSign({
+      walletId: WALLET_ID,
+      messageHex,
+      generateAuthorizationSignature,
+      getToken: async () => 'access-token',
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `https://auth.privy.io/api/v1/wallets/${WALLET_ID}/rpc`,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'privy-client-id': 'client_waitlist_123',
         }),
       }),
     )

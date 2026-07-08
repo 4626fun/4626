@@ -10,8 +10,14 @@ import { useWaitlistGroupSync } from './useWaitlistGroupSync'
 import { useWaitlistMessagingConnect } from './useWaitlistMessagingConnect'
 import { formatWaitlistChatError } from './waitlistChatErrors'
 import { isPrivyEmbeddedSignerAuthError } from '@/lib/auth/privyEmbeddedSignerAuthErrors'
+import type { SessionRepairOutcome } from '@/lib/auth/sessionRepair'
 import type { WaitlistChatStatus } from './waitlistChatCopy'
 import { findWaitlistGroupConversation } from './waitlistXmtpGroupIds'
+import { isWaitlistMessagingLoopbackHost } from './prepareWaitlistMessagingWallet'
+import {
+  buildLoopbackAppChatHref,
+  shouldShowLoopbackAppChatShortcut,
+} from './waitlistLoopbackDevChat'
 import {
   deriveWaitlistXmtpPhase,
   WAITLIST_CHAT_SHELL_MIN_HEIGHT_PX,
@@ -32,9 +38,12 @@ export type WaitlistGroupChatSurfaceProps = {
   xmtpMemberAddress: string | null
   retryJoin: () => void
   chatReady: boolean
-  /** Optional handler to repair auth/session drift without a forced sign-out. */
-  onRequestReauth?: () => Promise<boolean> | boolean
+  /** Session repair returning full outcome (not a legacy boolean). */
+  onRequestReauth?: () => Promise<SessionRepairOutcome>
+  /** Hard sign-out for fresh email OTP (preferred on localhost recovery-required). */
+  onSignOut?: () => void | Promise<void>
   reauthBusy?: boolean
+  signOutBusy?: boolean
 }
 
 export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
@@ -52,7 +61,9 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
     retryJoin,
     chatReady,
     onRequestReauth,
+    onSignOut,
     reauthBusy = false,
+    signOutBusy = false,
   } = props
 
   const {
@@ -103,6 +114,7 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
 
   const rawMessaging = useWaitlistMessagingConnect({
     xmtpStatus: status,
+    xmtpError: error,
     privyAuthenticated,
     prepare,
     connect,
@@ -119,6 +131,7 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
     needsConnectMessaging,
     connectAndJoin,
     reconnectMessaging,
+    needsFreshSignIn,
   } = rawMessaging
 
   const displayXmtpError = formatWaitlistChatError(error) ?? error
@@ -129,6 +142,9 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
     isPrivyEmbeddedSignerAuthError(error || '') ||
     /sign-in for chat expired|sign out and sign in/i.test(prepareError || '') ||
     /sign-in for chat expired|sign out and sign in/i.test(displayXmtpError || '')
+
+  const preferFreshSignIn =
+    needsFreshSignIn || (isReauthError && isWaitlistMessagingLoopbackHost())
 
   const displayJoinActionError = useMemo(() => {
     if (joinStatus === 'executed') return null
@@ -160,6 +176,11 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
     xmtpError: displayXmtpError,
   })
 
+  const showLoopbackAppChatShortcut =
+    shouldShowLoopbackAppChatShortcut() &&
+    (phase === 'connect_error' || isReauthError || preferFreshSignIn)
+  const loopbackAppChatHref = showLoopbackAppChatShortcut ? buildLoopbackAppChatHref() : null
+
   const autoConnectAttemptedRef = useRef(false)
   useEffect(() => {
     if (
@@ -168,6 +189,7 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
       isConnecting ||
       prepareBusy ||
       !chatReady ||
+      !walletReady ||
       autoConnectAttemptedRef.current
     ) {
       return
@@ -177,7 +199,7 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
       void connectAndJoin({ skipJoinRetry: true })
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [chatReady, connectAndJoin, isConnecting, joinStatus, messagingConnected, prepareBusy])
+  }, [chatReady, connectAndJoin, isConnecting, joinStatus, messagingConnected, prepareBusy, walletReady])
 
   const statusMessage = waitlistXmtpPhaseMessage(phase, {
     joinStatus,
@@ -262,8 +284,19 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
               </Button>
             ) : null}
 
-            {/* For signer expiry, prefer session repair over retrying a doomed connect. */}
-            {isReauthError && onRequestReauth ? (
+            {/* On localhost, iframe signing cannot be silently repaired — prefer fresh OTP. */}
+            {isReauthError && preferFreshSignIn && onSignOut ? (
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                loading={signOutBusy}
+                disabled={signOutBusy}
+                onClick={() => void onSignOut()}
+              >
+                Sign in again
+              </Button>
+            ) : isReauthError && onRequestReauth && !preferFreshSignIn ? (
               <Button
                 type="button"
                 variant="primary"
@@ -281,13 +314,14 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
               </Button>
             ) : null}
 
-            {(phase === 'connect_prompt' || phase === 'connect_error') && (!isReauthError || !onRequestReauth) ? (
+            {(phase === 'connect_prompt' || phase === 'connect_error') &&
+            (!isReauthError || (!onRequestReauth && !onSignOut) || (!preferFreshSignIn && !onSignOut)) ? (
               <Button
                 type="button"
                 variant={isReauthError ? 'secondary' : 'primary'}
                 size="sm"
                 loading={prepareBusy || isConnecting}
-                disabled={prepareBusy || isConnecting || (isReauthError && !onRequestReauth)}
+                disabled={prepareBusy || isConnecting || (isReauthError && (preferFreshSignIn ? !onSignOut : !onRequestReauth))}
                 onClick={() => void (joinStatus === 'executed' ? reconnectMessaging() : connectAndJoin())}
               >
                 {isConnecting
@@ -337,15 +371,33 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
                 Free an XMTP install slot
               </Button>
             ) : null}
+
+            {loopbackAppChatHref ? (
+              <Button type="button" variant="secondary" size="sm" asChild>
+                <a href={loopbackAppChatHref}>Open app chat</a>
+              </Button>
+            ) : null}
           </div>
 
-          {isReauthError && !onRequestReauth ? (
+          {showLoopbackAppChatShortcut ? (
+            <p className="text-[10px] text-zinc-500">
+              Localhost waitlist signing is limited. Open app chat uses the /swap shell where messaging
+              connect already works with the same email session.
+            </p>
+          ) : null}
+
+          {isReauthError && preferFreshSignIn ? (
+            <p className="text-[10px] text-zinc-500">
+              On localhost, Privy embedded-wallet signing usually needs a fresh email OTP sign-in. Use Sign in
+              again, then retry Connect messaging.
+            </p>
+          ) : isReauthError && !onRequestReauth && !onSignOut ? (
             <p className="text-[10px] text-zinc-500">
               Session repair is unavailable here. Hard refresh the page, or sign out and sign in again with email OTP.
             </p>
           ) : isReauthError ? (
             <p className="text-[10px] text-zinc-500">
-              On localhost, Privy may require a fresh email OTP sign-in if refresh does not restore the embedded signer.
+              Try Refresh session first. If messaging still fails, sign out and sign in again with email OTP.
             </p>
           ) : null}
         </div>

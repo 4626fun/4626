@@ -65,6 +65,12 @@ contract CreatorOracle is OApp, IOracle4626 {
     /// @notice Staleness threshold for prices
     uint256 public constant MAX_STALENESS = 7200; // 2 hours
 
+    /// @notice Post-recovery grace period before a "sequencer up" status is trusted.
+    /// @dev Mitigates L-1 (audit `docs/audits/aristotle/oracle`) — mirrors Chainlink's
+    ///      reference sequencer-uptime pattern of not trusting prices for a window
+    ///      right after the sequencer comes back online.
+    uint256 public constant SEQUENCER_GRACE_PERIOD = 3600; // 1 hour
+
     /// @notice Default TWAP duration
     uint32 public constant DEFAULT_TWAP_DURATION = 1800; // 30 minutes
 
@@ -285,6 +291,8 @@ contract CreatorOracle is OApp, IOracle4626 {
     error InitialPriceTooHigh();
     error InvalidBaseEid();
     error InvalidOriginEid(uint32 srcEid);
+    error HubOnly();
+    error StaleObservationWindow();
     // FIX: M-3 (4626-439) — signalled when the legacy equal-split broadcast entrypoint is called.
     error BroadcastEqualSplitDeprecated();
 
@@ -564,6 +572,7 @@ contract CreatorOracle is OApp, IOracle4626 {
      * @param _price Price in 1e18 format
      */
     function updateAssetPrice(int256 _price) external {
+        if (block.chainid != BASE_CHAIN_ID) revert HubOnly();
         if (!isPriceUpdater[msg.sender] && msg.sender != owner()) {
             revert Unauthorized();
         }
@@ -605,6 +614,7 @@ contract CreatorOracle is OApp, IOracle4626 {
      *               <= MAX_INITIAL_PRICE_USD.
      */
     function initializeAssetPrice(int256 _price) external onlyOwner {
+        if (block.chainid != BASE_CHAIN_ID) revert HubOnly();
         if (assetPriceUSD != 0) revert OracleAlreadyInitialized();
         if (_price <= 0) revert InvalidPrice();
         if (_price > MAX_INITIAL_PRICE_USD) revert InitialPriceTooHigh();
@@ -778,13 +788,13 @@ contract CreatorOracle is OApp, IOracle4626 {
 
         int24 newCap;
         if (currentFreq > targetFreq) {
-            // Too many caps → loosen
-            newCap = currentCap + change;
-            if (newCap > tickCapPolicy.maxCap) newCap = tickCapPolicy.maxCap;
-        } else {
-            // Too few caps → tighten
+            // Too many cap hits imply increased turbulence/risk; tighten.
             newCap = currentCap - change;
             if (newCap < tickCapPolicy.minCap) newCap = tickCapPolicy.minCap;
+        } else {
+            // Too few cap hits imply room to relax cap strictness.
+            newCap = currentCap + change;
+            if (newCap > tickCapPolicy.maxCap) newCap = tickCapPolicy.maxCap;
         }
 
         if (newCap != currentCap) {
@@ -1036,6 +1046,7 @@ contract CreatorOracle is OApp, IOracle4626 {
         uint32 duration = DEFAULT_TWAP_DURATION;
         uint32 nowTs = uint32(block.timestamp);
         if (nowTs <= duration) return;
+        if (!_hasRecentObservationWindow(duration)) return;
 
         // Require at least MIN_TWAP_DURATION of real observation history before writing a price.
         uint16 currentIndex = observationState.index;
@@ -1096,6 +1107,7 @@ contract CreatorOracle is OApp, IOracle4626 {
      * @param twapDuration TWAP duration in seconds
      */
     function updateAssetPriceFromTWAP(uint32 twapDuration) external {
+        if (block.chainid != BASE_CHAIN_ID) revert HubOnly();
         if (msg.sender != owner() && !isPriceUpdater[msg.sender]) revert Unauthorized();
         if (twapDuration < MIN_TWAP_DURATION) revert InvalidDuration();
         if (assetPriceTimestamp > 0 && block.timestamp - assetPriceTimestamp < priceUpdateCooldown) {
@@ -1105,6 +1117,7 @@ contract CreatorOracle is OApp, IOracle4626 {
         // USD/CREATOR = Chainlink(ETH/USD) ÷ V4_TWAP(CREATOR/ETH).
         if (!v4PoolConfigured) revert V4NotConfigured();
         if (observationState.cardinality < 2) revert NeedMoreObservations();
+        if (!_hasRecentObservationWindow(twapDuration)) revert StaleObservationWindow();
 
         uint256 creatorPerEth = getAssetEthTWAP(twapDuration);
         if (creatorPerEth == 0) revert InvalidPrice();
@@ -1149,6 +1162,7 @@ contract CreatorOracle is OApp, IOracle4626 {
      *      than storing a quote-denominated value as USD.
      */
     function updateAssetPriceFromV3TWAP(uint32 twapDuration) external {
+        if (block.chainid != BASE_CHAIN_ID) revert HubOnly();
         if (msg.sender != owner() && !isPriceUpdater[msg.sender]) revert Unauthorized();
         if (!v3PoolConfigured) revert V3NotConfigured();
         uint32 dur = twapDuration == 0 ? v3TwapDuration : twapDuration;
@@ -1331,13 +1345,26 @@ contract CreatorOracle is OApp, IOracle4626 {
     }
 
     /// @dev Chainlink sequencer feeds return 0 when the sequencer is up, 1 when down.
+    /// @dev FIX: M-1 (audit `docs/audits/aristotle/oracle`) — the L2 sequencer uptime
+    ///      feed only emits a new round when the sequencer's status *transitions*
+    ///      (up<->down), so `updatedAt`/`startedAt` are legitimately far in the past
+    ///      during long stretches of healthy uptime. Applying `MAX_STALENESS` to this
+    ///      feed (as before) fails closed a couple of hours after any status change,
+    ///      bricking every price-update path. The freshness/heartbeat check remains on
+    ///      the *price* feeds only (`_readFeedPrice18`), never on this status feed.
+    /// @dev FIX: L-1 — require `SEQUENCER_GRACE_PERIOD` to elapse since the last status
+    ///      transition (`startedAt`) before trusting an "up" answer, per Chainlink's
+    ///      reference sequencer-uptime pattern. This also naturally rejects a future
+    ///      `startedAt` (spoofed/misreporting feed), which would otherwise underflow.
     function _sequencerIsUp() internal view returns (bool) {
         address feed = sequencerUptimeFeed;
         if (feed == address(0)) return true;
-        (, int256 answer,, uint256 updatedAt,) = IChainlinkFeed(feed).latestRoundData();
+        (, int256 answer, uint256 startedAt, uint256 updatedAt,) = IChainlinkFeed(feed).latestRoundData();
         if (updatedAt > block.timestamp) return false;
-        if (block.timestamp - updatedAt > MAX_STALENESS) return false;
-        return answer == 0;
+        if (answer != 0) return false; // sequencer reported down
+        if (startedAt > block.timestamp) return false;
+        if (block.timestamp - startedAt <= SEQUENCER_GRACE_PERIOD) return false;
+        return true;
     }
 
     /// @notice External wrapper used in try/catch to keep auto-path fail-open.
@@ -1410,6 +1437,28 @@ contract CreatorOracle is OApp, IOracle4626 {
             price18 = unsignedAnswer;
         }
         return (price18, roundUpdatedAt, true);
+    }
+
+    function _hasRecentObservationWindow(uint32 duration) internal view returns (bool) {
+        if (observationState.cardinality < 2) return false;
+
+        uint16 currentIndex = observationState.index;
+        Observation storage currentObs = observations[currentIndex];
+        if (!currentObs.initialized) return false;
+
+        uint32 currentTs = currentObs.blockTimestamp;
+        if (currentTs > block.timestamp) return false;
+
+        // The latest observation must be reasonably fresh relative to the requested window.
+        if (block.timestamp - currentTs > duration) return false;
+
+        uint32 targetTime = currentTs > duration ? currentTs - duration : 0;
+        uint16 oldIndex = _findObservationBefore(targetTime);
+        Observation storage oldObs = observations[oldIndex];
+        if (!oldObs.initialized) return false;
+
+        uint32 realizedWindow = currentTs - oldObs.blockTimestamp;
+        return realizedWindow >= MIN_TWAP_DURATION;
     }
 }
 

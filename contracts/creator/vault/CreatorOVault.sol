@@ -16,6 +16,7 @@ import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
 import {IStrategyValuation} from "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
 import {IOVaultModuleIdentity} from "@4626/shared/interfaces/vault/IOVaultModuleIdentity.sol";
 import {OVaultLiquidityLib} from "@4626/shared/libraries/vault/OVaultLiquidityLib.sol";
+import {OVaultModuleConstants} from "@4626/shared/vault/modules/OVaultModuleConstants.sol";
 
 struct CcaLifecycleStatus {
     uint8 phase;
@@ -104,6 +105,11 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     uint64 public constant MIN_RISK_CONFIG_DELAY = 1 days;
     uint64 public constant MAX_RISK_CONFIG_DELAY = 30 days;
 
+    /// @notice Bounds for `maxImpairmentTripDuration`, the liveness cap on Suspect mode
+    ///         (FIX: M-2, docs/audits/CreatorOVault_aristotle).
+    uint64 public constant MIN_IMPAIRMENT_TRIP_DURATION = 3 days;
+    uint64 public constant MAX_IMPAIRMENT_TRIP_DURATION = 30 days;
+
     uint8 internal constant RISK_KIND_NONE = 0;
     uint8 internal constant RISK_KIND_PERFORMANCE_FEE = 1;
     uint8 internal constant RISK_KIND_MANAGEMENT_FEE = 2;
@@ -120,11 +126,11 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     uint256 internal constant MAX_BPS_EXTENDED = 1_000_000_000_000;
 
     /// @notice Seconds per year
-    uint256 internal constant SECONDS_PER_YEAR = 31_556_952;
+    uint256 internal constant SECONDS_PER_YEAR = OVaultModuleConstants.SECONDS_PER_YEAR;
 
     /// @notice Maximum strategies
     uint256 public constant MAX_STRATEGIES = 5;
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("OVaultModuleStorage.v3");
+    bytes32 internal constant MODULE_STORAGE_VERSION = OVaultModuleConstants.MODULE_STORAGE_VERSION;
     bytes32 internal constant MODULE_KIND_CORE = keccak256("CreatorOVaultModule.core");
     bytes32 internal constant MODULE_KIND_STRATEGIES = keccak256("OVaultModule.strategies");
     bytes32 internal constant MODULE_KIND_ADMIN = keccak256("OVaultModule.admin");
@@ -424,6 +430,13 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     address public impairmentRecoveryEscrow;
     // slither-disable-next-line uninitialized-state
     address public ccaLaunchArm;
+    /// @notice FIX: M-2 (docs/audits/CreatorOVault_aristotle) — liveness bound on Suspect
+    ///         mode. If a Tripped impairment epoch is not resolved (cleared or finalized)
+    ///         within this many seconds of `tripImpairment`, anyone may call
+    ///         `clearStaleImpairmentTrip` to force it back to Normal, so a stuck or
+    ///         unresponsive impairment authority cannot freeze deposits/withdrawals
+    ///         forever. See MIN/MAX_IMPAIRMENT_TRIP_DURATION for configurable bounds.
+    uint64 public maxImpairmentTripDuration;
 
     // =================================
     // EVENTS
@@ -433,6 +446,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     event ManagementFeeAccrued(uint256 feeAssets, uint256 feeShares, uint256 elapsedSeconds);
     event StrategyValuationAutoDisabled(address indexed strategy, uint8 consecutiveMisses);
     event ImpairmentChallengeWindowUpdated(uint64 newWindow);
+    event MaxImpairmentTripDurationUpdated(uint64 newDuration);
+    event ImpairmentTripClearedByTimeout(uint256 indexed epochId, address indexed strategy, address indexed caller);
     event ImpairmentTripped(
         uint256 indexed epochId,
         address indexed strategy,
@@ -604,6 +619,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     error NothingToClaim(uint256 epochId, address account);
     error RecoveryEscrowNotConfigured();
     error ClaimSupplyExceeded(uint256 epochId, uint256 totalClaimSupply, uint256 requested);
+    error InvalidImpairmentTripDuration(uint64 provided, uint64 min, uint64 max);
+    error ImpairmentTripNotStale(uint256 epochId, uint256 staleAt);
 
     // Protocol rescue errors
     error RescueNotConfigured();
@@ -619,6 +636,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     error CannotRescueVaultAsset();
     /// @notice Creator coin transfer did not move the expected amount (fee-on-transfer / rebasing / deflationary not supported).
     error TransferAmountMismatch(uint256 expected, uint256 actual);
+    error DebtPurchaseDisabled();
     error ETHTransferFailed();
 
     // Module dispatch errors
@@ -649,6 +667,11 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         ) {
             revert Unauthorized();
         }
+        _;
+    }
+
+    modifier onlyImpairmentAuthorized() {
+        if (msg.sender != owner() && msg.sender != impairmentGuardian) revert Unauthorized();
         _;
     }
 
@@ -713,6 +736,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         managementFeeRecipient = _owner;
         performanceFee = 0; // 0% default
         managementFee = 0;
+        riskConfigDelay = MIN_RISK_CONFIG_DELAY;
         profitMaxUnlockTime = 7 days;
         rescueDelay = uint64(7 days);
 
@@ -722,6 +746,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         lastProfitUnlockUpdate = uint96(block.timestamp);
         vaultMode = VaultMode.Normal;
         impairmentChallengeWindow = uint64(1 days);
+        maxImpairmentTripDuration = uint64(14 days);
     }
 
     // =================================
@@ -1162,6 +1187,13 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         _delegate(_coreModule);
     }
 
+    /// @notice FIX: M-2 (docs/audits/CreatorOVault_aristotle). Bounded by
+    ///         MIN/MAX_IMPAIRMENT_TRIP_DURATION so it can neither be defeated (too
+    ///         short) nor used to reintroduce an unbounded freeze (too long / disabled).
+    function setMaxImpairmentTripDuration(uint64 duration) external onlyManagement {
+        _delegate(_coreModule);
+    }
+
     function setImpairmentGuardian(address guardian) external onlyOwner {
         _delegate(_adminModule);
     }
@@ -1177,14 +1209,28 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     function tripImpairment(address strategy, uint256 reasonCode)
         external
         nonReentrant
-        onlyEmergencyAuthorized
+        onlyImpairmentAuthorized
         returns (uint256 epochId)
     {
         bytes memory ret = _delegateAndReturn(_coreModule);
         epochId = abi.decode(ret, (uint256));
     }
 
-    function clearImpairmentTrip(uint256 epochId) external nonReentrant onlyEmergencyAuthorized {
+    function clearImpairmentTrip(uint256 epochId) external nonReentrant onlyImpairmentAuthorized {
+        _delegateAndReturn(_coreModule);
+    }
+
+    /// @notice Permissionless liveness valve — FIX: M-2 (docs/audits/CreatorOVault_aristotle).
+    ///         Anyone may force a Tripped epoch back to Normal once it has sat unresolved
+    ///         for longer than `maxImpairmentTripDuration`, so a stuck, negligent, or
+    ///         compromised impairment authority (owner/impairmentGuardian) cannot freeze
+    ///         deposits/withdrawals indefinitely. Deliberately intentionally NOT gated by
+    ///         `onlyImpairmentAuthorized` — restricting who can call this would defeat its
+    ///         purpose as a backstop against that very authority being unavailable.
+    ///         Applies uniformly regardless of whether a root has already been proposed;
+    ///         governance should size `maxImpairmentTripDuration` comfortably longer than
+    ///         its expected propose + `impairmentChallengeWindow` + finalize turnaround.
+    function clearStaleImpairmentTrip(uint256 epochId) external nonReentrant {
         _delegateAndReturn(_coreModule);
     }
 

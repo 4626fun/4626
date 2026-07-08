@@ -58,7 +58,7 @@ interface ISimpleSellTaxHook {
 
 // FIX: M-08 — wrapper-side cooldown propagation hook
 interface IWrapperCooldownHook {
-    function propagateCooldownOnTransfer(address from, address to) external;
+    function propagateCooldownOnTransfer(address from, address to, uint256 amount) external;
 }
 
 /**
@@ -206,6 +206,7 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     struct PendingLotteryEntry {
         address buyer;
         uint256 amount;
+        uint256 buyerShareBalanceAtQueue;
     }
 
     /// @notice LayerZero peer for the hub LotteryManager (bytes32-encoded address)
@@ -228,6 +229,15 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
 
     /// @notice Total lottery entries sent to hub (lifetime, remote only)
     uint256 public totalLotteryEntriesSent;
+
+    // ================================
+    // STATE - LOTTERY COVERAGE SNAPSHOT (AUDIT-2026-07-08-H02)
+    // ================================
+
+    /// @dev First balance mutation in a block records pre-mutation balance for coverage.
+    ///      Flash-borrowed ShareOFT credited in the same block does not inflate lottery coverage.
+    mapping(address => uint256) private _lotteryCoverageSnapshotBlock;
+    mapping(address => uint256) private _lotteryCoverageBalanceAtBlockStart;
 
     // ================================
     // EVENTS
@@ -555,18 +565,41 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
      *      operators can page on persistent hook regressions.
      */
     function _update(address from, address to, uint256 value) internal virtual override {
+        // Snapshot pre-mutation balances once per block before credits/debits apply.
+        _snapshotLotteryCoverageBalance(from);
+        _snapshotLotteryCoverageBalance(to);
         super._update(from, to, value);
 
         address _wrapper = wrapper;
         if (_wrapper == address(0)) return;
         if (from == address(0) || to == address(0)) return;
         if (from == to) return;
+        if (value == 0) return;
+        OperationType fromType = addressType[from];
+        OperationType toType = addressType[to];
+        if (fromType == OperationType.SwapOnly || toType == OperationType.SwapOnly) return;
+        if (fromType == OperationType.NoFees || toType == OperationType.NoFees) return;
 
-        try IWrapperCooldownHook(_wrapper).propagateCooldownOnTransfer(from, to) {
+        try IWrapperCooldownHook(_wrapper).propagateCooldownOnTransfer(from, to, value) {
             // ok
         } catch (bytes memory revertData) {
             emit WrapperCooldownHookFailed(_wrapper, from, to, revertData);
         }
+    }
+
+    function _snapshotLotteryCoverageBalance(address account) internal {
+        if (account == address(0)) return;
+        if (_lotteryCoverageSnapshotBlock[account] == block.number) return;
+        _lotteryCoverageBalanceAtBlockStart[account] = balanceOf(account);
+        _lotteryCoverageSnapshotBlock[account] = block.number;
+    }
+
+    /// @notice Share balance eligible for lottery coverage boost (excludes same-block receipts).
+    function balanceEligibleForLotteryCoverage(address account) public view returns (uint256) {
+        if (_lotteryCoverageSnapshotBlock[account] == block.number) {
+            return _lotteryCoverageBalanceAtBlockStart[account];
+        }
+        return balanceOf(account);
     }
 
     // ================================
@@ -654,8 +687,10 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
         require(_sendParam.to == bytes32(uint256(uint160(hubGaugeReceiver))), "Invalid receiver");
         require(_sendParam.amountLD == amount, "Amount mismatch");
 
-        // Execute the OFT send (burns on this chain, mints on Base to hubGaugeReceiver)
-        _send(_sendParam, _fee, payable(msg.sender));
+        // Execute OFT send with the contract as the debited sender.
+        // Calling `this.send` makes msg.sender == address(this) in OFTCore._send,
+        // so `_debit` burns from this contract's accumulated pending fees.
+        this.send{value: msg.value}(_sendParam, _fee, payable(msg.sender));
 
         emit FeesFlushed(amount, hubGaugeReceiver, hubEid);
     }
@@ -798,8 +833,10 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
         address mgr = registry.getLotteryManager(block.chainid);
         if (mgr == address(0)) return;
 
-        // External call wrapped in try-catch to prevent lottery issues from blocking transfers
-        uint256 buyerCurrentShareBalance = balanceOf(buyer);
+        // External call wrapped in try-catch to prevent lottery issues from blocking transfers.
+        // Pass block-start eligible balance (not post-buy live balance) so coverage cannot
+        // include this purchase or same-block flash-borrowed ShareOFT.
+        uint256 buyerCurrentShareBalance = balanceEligibleForLotteryCoverage(buyer);
         try ILotteryManager4626(mgr).processSwapLottery(
             buyer, address(this), amount, buyerCurrentShareBalance
         ) returns (uint256 id) {
@@ -818,7 +855,14 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
         uint256 entryId = nextPendingLotteryEntryId;
         nextPendingLotteryEntryId = entryId + 1;
 
-        pendingLotteryEntries[entryId] = PendingLotteryEntry({buyer: buyer, amount: amount});
+        // AUDIT-2026-07-08-R-H03: use block-start eligible balance (same as hub path),
+        // not post-buy live balance, so remote coverage cannot include this purchase
+        // or same-block flash-borrowed ShareOFT.
+        pendingLotteryEntries[entryId] = PendingLotteryEntry({
+            buyer: buyer,
+            amount: amount,
+            buyerShareBalanceAtQueue: balanceEligibleForLotteryCoverage(buyer)
+        });
         pendingLotteryEntryCount[buyer] += 1;
 
         emit PendingLotteryEntryQueued(entryId, buyer, amount, hubEid);
@@ -837,7 +881,7 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
         if (hubLotteryPeer == bytes32(0) || hubEid == 0 || peers[hubEid] == bytes32(0)) revert HubNotConfigured();
 
         (bytes memory payload, bytes memory options, MessagingFee memory fee) =
-            _prepareLotteryEntryMessage(entry.buyer, entry.amount);
+            _prepareLotteryEntryMessage(entry.buyer, entry.amount, entry.buyerShareBalanceAtQueue);
 
         if (msg.value < fee.nativeFee) {
             revert InvalidLotteryEntryFee(msg.value, fee.nativeFee);
@@ -865,7 +909,7 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
             return MessagingFee(0, 0);
         }
 
-        (,, fee) = _prepareLotteryEntryMessage(address(0), amount);
+        (,, fee) = _prepareLotteryEntryMessage(address(0), amount, 0);
     }
 
     /**
@@ -878,15 +922,14 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
         if (entry.buyer == address(0)) return MessagingFee(0, 0);
         if (hubLotteryPeer == bytes32(0) || hubEid == 0 || peers[hubEid] == bytes32(0)) return MessagingFee(0, 0);
 
-        (,, fee) = _prepareLotteryEntryMessage(entry.buyer, entry.amount);
+        (,, fee) = _prepareLotteryEntryMessage(entry.buyer, entry.amount, entry.buyerShareBalanceAtQueue);
     }
 
-    function _prepareLotteryEntryMessage(address buyer, uint256 amount)
+    function _prepareLotteryEntryMessage(address buyer, uint256 amount, uint256 buyerCurrentShareBalance)
         internal
         view
         returns (bytes memory payload, bytes memory options, MessagingFee memory fee)
     {
-        uint256 buyerCurrentShareBalance = buyer == address(0) ? 0 : balanceOf(buyer);
         payload = abi.encode(
             MSG_TYPE_LOTTERY_ENTRY,
             buyer,
@@ -976,6 +1019,9 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
         // FIX: AUDIT-2026-07-01-H06 — remote lottery entries arrive at the hub ShareOFT peer;
         // forward to the hub LotteryManager with the original LZ origin preserved.
         if (isHub && _isRemoteLotteryEntryMessage(_message)) {
+            if (peers[_origin.srcEid] == bytes32(0) || _origin.sender != peers[_origin.srcEid]) {
+                revert InvalidCallback();
+            }
             address mgr = address(uint160(uint256(hubLotteryPeer)));
             if (mgr == address(0)) revert HubNotConfigured();
             ILotteryManager4626(mgr).receiveRemoteLotteryEntry(_origin.srcEid, _origin.sender, _message);
@@ -1051,11 +1097,24 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     function _isRemoteLotteryEntryMessage(bytes calldata message) internal pure returns (bool) {
         if (message.length != 160 && message.length != 192) return false;
         uint256 word0;
+        uint256 word1;
+        uint256 word2;
+        uint256 word3;
+        uint256 word4;
         assembly {
             word0 := calldataload(message.offset)
+            word1 := calldataload(add(message.offset, 0x20))
+            word2 := calldataload(add(message.offset, 0x40))
+            word3 := calldataload(add(message.offset, 0x60))
+            word4 := calldataload(add(message.offset, 0x80))
         }
         if (word0 >> 16 != 0) return false;
-        return uint16(word0) == MSG_TYPE_LOTTERY_ENTRY;
+        if (uint16(word0) != MSG_TYPE_LOTTERY_ENTRY) return false;
+        if (word1 >> 160 != 0) return false; // buyer
+        if (word2 >> 160 != 0) return false; // tokenIn
+        if (word3 == 0) return false; // amount
+        if (word4 >> 32 != 0) return false; // sourceChainId uint32
+        return true;
     }
 
     function _isRemoteFeeFlushCommand(Origin calldata _origin, bytes calldata _message)

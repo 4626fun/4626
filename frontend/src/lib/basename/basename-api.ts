@@ -300,6 +300,23 @@ function createMainnetReadClient() {
   })
 }
 
+const ENS_AVATAR_LOOKUP_TIMEOUT_MS = 3_000
+
+type MainnetReadClient = ReturnType<typeof createMainnetReadClient>
+
+/** Avoid hanging chat identity on slow IPFS gateway HEAD probes during ENS avatar resolution. */
+async function getEnsAvatarWithTimeout(client: MainnetReadClient, name: string): Promise<string | null> {
+  try {
+    const avatarPromise = client.getEnsAvatar({ name, gatewayUrls: [...ENS_GATEWAY_URLS] })
+    const timeoutPromise = new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), ENS_AVATAR_LOOKUP_TIMEOUT_MS)
+    })
+    return await Promise.race([avatarPromise, timeoutPromise])
+  } catch {
+    return null
+  }
+}
+
 /**
  * Get Basename for an address
  */
@@ -463,7 +480,7 @@ export async function getBasenameProfile(
       // Fetch ENS text records in parallel
       const [avatar, displayName, description, twitter, github, discord, email, url] =
         await Promise.all([
-          client.getEnsAvatar({ name: normalizedName, gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
+          getEnsAvatarWithTimeout(client, normalizedName),
           client.getEnsText({ name: normalizedName, key: 'name', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
           client.getEnsText({ name: normalizedName, key: 'description', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
           client.getEnsText({ name: normalizedName, key: 'com.twitter', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
@@ -529,7 +546,7 @@ export async function getBasenameProfileByName(
 
       const [avatar, displayName, description, twitter, github, discord, email, url] =
         await Promise.all([
-          client.getEnsAvatar({ name: normalizedName, gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
+          getEnsAvatarWithTimeout(client, normalizedName),
           client.getEnsText({ name: normalizedName, key: 'name', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
           client.getEnsText({ name: normalizedName, key: 'description', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),
           client.getEnsText({ name: normalizedName, key: 'com.twitter', gatewayUrls: [...ENS_GATEWAY_URLS] }).catch(() => null),

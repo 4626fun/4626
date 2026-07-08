@@ -766,12 +766,13 @@ contract AgentOVaultWrapper is Ownable, ReentrancyGuard {
      *      contract already record `lastWrapperDepositBlock[msg.sender] = block.number`
      *      on the original depositor, and burns have no recipient.
      */
-    function propagateCooldownOnTransfer(address from, address to) external {
+    function propagateCooldownOnTransfer(address from, address to, uint256 amount) external {
         if (msg.sender != address(shareOFT)) revert CooldownHookUnauthorizedCaller(msg.sender);
         // Mints and burns are no-ops here. Deposits record the cooldown on the
         // original depositor; burns have no recipient to propagate to.
         if (from == address(0) || to == address(0)) return;
         if (from == to) return;
+        if (amount == 0) return;
 
         uint256 fromBlock = lastWrapperDepositBlock[from];
         if (fromBlock == 0) return;

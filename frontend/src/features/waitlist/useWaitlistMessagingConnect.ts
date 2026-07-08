@@ -12,6 +12,8 @@ import type { PrepareWaitlistMessagingWalletResult } from './prepareWaitlistMess
 
 type UseWaitlistMessagingConnectParams = {
   xmtpStatus: XmtpStatus
+  /** Latest error surfaced by the xmtp context (`useXmtp().error`), if any. */
+  xmtpError?: string | null
   privyAuthenticated: boolean
   prepare: () => Promise<PrepareWaitlistMessagingWalletResult>
   connect: (intent: 'user') => Promise<void>
@@ -25,20 +27,65 @@ type UseWaitlistMessagingConnectParams = {
 const SESSION_FINALIZING_RETRY_MESSAGE =
   'Your sign-in is still finalizing. Tap Connect Messaging again in a moment.'
 
+export type ConnectRepairDecision =
+  | { action: 'retry' }
+  | { action: 'wait'; message: string }
+  | { action: 'fresh-sign-in'; message: string }
+  | { action: 'privy-not-loaded'; message: string }
+
 /**
- * Normalize a repair result into a SessionRepairOutcome. A legacy boolean
- * `true` maps to `repaired`; `false` maps to `transient` so a momentary token
- * miss never burns the single repair attempt or hard-errors the connect path.
+ * Normalize a repair result into a SessionRepairOutcome. Legacy boolean `true`
+ * maps to `repaired`. Legacy boolean `false` is treated as `transient` only for
+ * callers that still return booleans — prefer returning SessionRepairOutcome.
  */
-function normalizeRepairOutcome(value: SessionRepairOutcome | boolean): SessionRepairOutcome {
+export function normalizeRepairOutcome(value: SessionRepairOutcome | boolean): SessionRepairOutcome {
   if (value === true) return 'repaired'
   if (value === false) return 'transient'
   return value
 }
 
+/** Maps session-repair outcomes to the next connect step. */
+export function resolveConnectAfterRepair(outcome: SessionRepairOutcome): ConnectRepairDecision {
+  if (outcome === 'repaired') return { action: 'retry' }
+  if (outcome === 'transient') {
+    return { action: 'wait', message: SESSION_FINALIZING_RETRY_MESSAGE }
+  }
+  if (outcome === 'recovery-required' || outcome === 'true-stale') {
+    return { action: 'fresh-sign-in', message: signInExpiredMessage() }
+  }
+  return {
+    action: 'privy-not-loaded',
+    message:
+      'Your 4626 session is active, but Privy sign-in is not loaded in this browser. Sign in with email again, then retry.',
+  }
+}
+
+export type ConnectFailureDisplay = { message: string; needsFreshSignIn: boolean }
+
+/**
+ * Formats a raw connect failure (either a thrown error's message, or the
+ * xmtp context's `error` string after a connect that resolved without
+ * throwing but did not reach `'connected'`) into the message + fresh-sign-in
+ * flag the UI should show. Shared by both failure paths in `connectAndJoin`
+ * so the two stay in sync.
+ */
+export function resolveConnectFailureDisplay(raw: string): ConnectFailureDisplay {
+  const friendly = formatWaitlistChatError(raw)
+  if (friendly) {
+    const needsFreshSignIn =
+      friendly === signInExpiredMessage() || /sign-in for chat expired|sign out and sign in/i.test(friendly)
+    return { message: friendly, needsFreshSignIn }
+  }
+  if (isPrivyEmbeddedSignerAuthError(raw)) {
+    return { message: signInExpiredMessage(), needsFreshSignIn: true }
+  }
+  return { message: raw, needsFreshSignIn: false }
+}
+
 export function useWaitlistMessagingConnect(params: UseWaitlistMessagingConnectParams) {
   const {
     xmtpStatus,
+    xmtpError = null,
     privyAuthenticated,
     prepare,
     connect,
@@ -52,7 +99,20 @@ export function useWaitlistMessagingConnect(params: UseWaitlistMessagingConnectP
   const [prepareError, setPrepareError] = useState<string | null>(null)
   const [prepareBusy, setPrepareBusy] = useState(false)
   const [messagingEverConnected, setMessagingEverConnected] = useState(false)
+  const [needsFreshSignIn, setNeedsFreshSignIn] = useState(false)
   const connectInFlightRef = useRef(false)
+
+  // `provider.tsx`'s shared `connect()` never rejects on a handled/terminal
+  // failure — it just sets xmtp `status`/`error` internally and resolves.
+  // `connectAndJoin` below is a long-lived callback (its deps deliberately
+  // exclude xmtpStatus/xmtpError so in-flight work isn't torn down mid-connect
+  // by a status flicker), so its closure alone would only ever see a stale
+  // snapshot. Mirror the latest values into refs on every render instead, so
+  // the post-`await connect('user')` check reads the true, current outcome.
+  const latestStatusRef = useRef(xmtpStatus)
+  latestStatusRef.current = xmtpStatus
+  const latestErrorRef = useRef(xmtpError)
+  latestErrorRef.current = xmtpError
 
   const isConnecting = xmtpStatus === 'signing' || xmtpStatus === 'connecting'
   const messagingConnected = xmtpStatus === 'connected'
@@ -73,6 +133,7 @@ export function useWaitlistMessagingConnect(params: UseWaitlistMessagingConnectP
       if (connectInFlightRef.current) return
 
       setPrepareError(null)
+      setNeedsFreshSignIn(false)
 
       connectInFlightRef.current = true
       setPrepareBusy(true)
@@ -87,20 +148,32 @@ export function useWaitlistMessagingConnect(params: UseWaitlistMessagingConnectP
           return normalizeRepairOutcome(result)
         }
 
+        const applyRepairDecision = (decision: ConnectRepairDecision): boolean => {
+          if (decision.action === 'retry') {
+            repairConsumed = true
+            return true
+          }
+          if (decision.action === 'wait') {
+            setPrepareError(decision.message)
+            return false
+          }
+          if (decision.action === 'fresh-sign-in') {
+            setNeedsFreshSignIn(true)
+            setPrepareError(decision.message)
+            return false
+          }
+          setPrepareError(decision.message)
+          return false
+        }
+
         for (let attempt = 0; attempt < 2; attempt += 1) {
           if (!privyAuthenticated) {
             if (!repairConsumed && repairSession) {
               const outcome = await runRepairOutcome()
-              if (outcome === 'repaired') {
-                repairConsumed = true
+              if (applyRepairDecision(resolveConnectAfterRepair(outcome))) {
                 continue
               }
-              if (outcome === 'transient') {
-                // Session likely still finalizing — do not burn the attempt.
-                setPrepareError(SESSION_FINALIZING_RETRY_MESSAGE)
-                return
-              }
-              // 'true-stale' | 'recovery-required' | 'no-privy' fall through.
+              return
             }
             setPrepareError(
               'Your 4626 session is active, but Privy sign-in is not loaded in this browser. Sign in with email again, then retry.',
@@ -129,6 +202,22 @@ export function useWaitlistMessagingConnect(params: UseWaitlistMessagingConnectP
 
           try {
             await connect('user')
+
+            if (latestStatusRef.current !== 'connected') {
+              // `connect()` resolved without throwing, but never actually
+              // reached 'connected' — a handled failure (e.g. the embedded
+              // signer's auth token was rejected). `provider.tsx` already ran
+              // its own single bounded repair-and-retry internally before
+              // landing here, so don't invoke repairSession a second time
+              // from this layer; just surface the error it already computed.
+              await disconnect().catch(() => undefined)
+              const raw = latestErrorRef.current ?? 'Failed to connect to XMTP for waitlist chat.'
+              const { message, needsFreshSignIn: freshSignIn } = resolveConnectFailureDisplay(raw)
+              setPrepareError(message)
+              if (freshSignIn) setNeedsFreshSignIn(true)
+              return
+            }
+
             setMessagingEverConnected(true)
 
             if (!options?.skipJoinRetry && shouldRequestJoin) {
@@ -136,34 +225,28 @@ export function useWaitlistMessagingConnect(params: UseWaitlistMessagingConnectP
             }
             return
           } catch (connectError) {
+            await disconnect().catch(() => undefined)
+
             const raw =
               connectError instanceof Error ? connectError.message : String(connectError)
             const authExpired = isPrivyEmbeddedSignerAuthError(raw)
             if (authExpired && !repairConsumed && repairSession) {
               const outcome = await runRepairOutcome()
-              if (outcome === 'repaired') {
-                repairConsumed = true
+              if (applyRepairDecision(resolveConnectAfterRepair(outcome))) {
                 continue
               }
-              if (outcome === 'transient') {
-                setPrepareError(SESSION_FINALIZING_RETRY_MESSAGE)
-                return
-              }
-              // 'true-stale' | 'recovery-required' | 'no-privy' fall through.
+              return
             }
             throw connectError
           }
         }
       } catch (err) {
+        await disconnect().catch(() => undefined)
+
         const raw = err instanceof Error ? err.message : String(err)
-        const friendly = formatWaitlistChatError(raw)
-        if (friendly) {
-          setPrepareError(friendly)
-        } else if (isPrivyEmbeddedSignerAuthError(raw)) {
-          setPrepareError(signInExpiredMessage())
-        } else {
-          setPrepareError(raw)
-        }
+        const { message, needsFreshSignIn: freshSignIn } = resolveConnectFailureDisplay(raw)
+        setPrepareError(message)
+        if (freshSignIn) setNeedsFreshSignIn(true)
       } finally {
         connectInFlightRef.current = false
         setPrepareBusy(false)
@@ -187,5 +270,6 @@ export function useWaitlistMessagingConnect(params: UseWaitlistMessagingConnectP
     needsConnectMessaging,
     connectAndJoin,
     reconnectMessaging,
+    needsFreshSignIn,
   }
 }

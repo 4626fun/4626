@@ -28,6 +28,8 @@ contract OVaultRecoveryEscrowTest is Test {
     }
 
     function test_notifyRecovery_onlyVault() public {
+        // Vault must push tokens before notify (push-then-notify custody model).
+        token.mint(address(escrow), 5);
         vm.prank(vault);
         escrow.notifyRecovery(address(token), 1, 5);
         assertEq(escrow.recoveredByEpochAsset(1, address(token)), 5);
@@ -87,6 +89,22 @@ contract OVaultRecoveryEscrowTest is Test {
             )
         );
         escrow.claimRecovery(address(token), 1, alice, 5);
+    }
+
+    /// AUDIT-2026-07-08-R-H02: second asset can notify while first is still unclaimed.
+    function test_notifyRecovery_perAssetFree_independentTokens() public {
+        MockToken tokenB = new MockToken();
+        token.mint(address(escrow), 10);
+        tokenB.mint(address(escrow), 7);
+
+        vm.prank(vault);
+        escrow.notifyRecovery(address(token), 1, 10);
+        vm.prank(vault);
+        escrow.notifyRecovery(address(tokenB), 2, 7);
+
+        assertEq(escrow.totalUnclaimedRecoveryByAsset(address(token)), 10);
+        assertEq(escrow.totalUnclaimedRecoveryByAsset(address(tokenB)), 7);
+        assertEq(escrow.totalUnclaimedRecovery(), 17);
     }
 }
 

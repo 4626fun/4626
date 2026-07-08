@@ -170,6 +170,7 @@ export function isShareSuffixSatisfiedByDeploymentVersion(params: {
   const suffix = normalizeHexSuffix(params.shareSuffix)
   if (!suffix) return false
   const shareSalt = deriveShareOftSaltFromVersion({
+    creatorToken: params.creatorToken,
     owner: params.owner,
     shareSymbol: params.shareSymbol,
     version: params.deploymentVersion,

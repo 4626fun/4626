@@ -177,6 +177,12 @@ export function wrapWaitlistMessagingProvider(
           try {
             return await authorizedPersonalSign(messageHex)
           } catch (error) {
+            // On localhost the iframe embedded signer 401s — do not fall back to it.
+            if (isWaitlistMessagingLoopbackHost()) {
+              throw error instanceof Error
+                ? error
+                : new Error(String(error ?? 'Authorized personal_sign failed on localhost.'))
+            }
             console.warn(
               '[waitlist-messaging] authorized personal_sign failed, falling back to embedded provider:',
               error,
@@ -212,6 +218,11 @@ export function wrapWaitlistMessagingProvider(
             try {
               return await authorizedSignTypedData(typedData, addressParam ?? null)
             } catch (error) {
+              if (isWaitlistMessagingLoopbackHost()) {
+                throw error instanceof Error
+                  ? error
+                  : new Error(String(error ?? 'Authorized eth_signTypedData_v4 failed on localhost.'))
+              }
               console.warn(
                 '[waitlist-messaging] authorized eth_signTypedData_v4 failed, falling back to embedded provider:',
                 error,
@@ -460,7 +471,6 @@ export async function prepareWaitlistMessagingWallet(
   }
 
   const unifiedWalletId =
-    !isWaitlistMessagingLoopbackHost() &&
     typeof input.generateAuthorizationSignature === 'function' &&
     isPrivyUnifiedStackWallet(embeddedWallet, input.privyUser)
       ? resolvePrivyUnifiedWalletId({

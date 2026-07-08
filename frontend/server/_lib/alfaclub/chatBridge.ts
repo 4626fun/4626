@@ -49,6 +49,12 @@ import {
   tryClaimCommandReply,
 } from './commandReplyLedger.js'
 import {
+  getChatBridgeMessageOrigins,
+  recordChatBridgeMessageOrigin,
+  type ChatBridgeMessageOrigin,
+} from './chatBridgeMessageOrigin.js'
+import { relayNewRoom1659MessagesToXmtpBridge } from './room1659XmtpBridge.js'
+import {
   collectInverseAkitaChatTradeIntents,
   executeInverseAkitaChatReaction,
   registerInverseAkitaBotOutboundText,
@@ -2848,10 +2854,35 @@ async function ingestLiveMessages(
       roomIds,
     })
   }
+  // Cross-channel loop prevention: a message tagged 'xmtp' was just mirrored in
+  // by the XMTP bridge inbound handler, and one tagged 'telegram' was just
+  // mirrored in by telegramToAlfaclubRelay.ts — each must not echo back to the
+  // channel it came from, but native/Hermit and cross-channel messages still
+  // propagate normally (hub-and-spoke sync).
+  const bridgedRoomIds = Array.from(new Set(inserted.map((message) => message.roomId)))
+  const originsByRoom = new Map<string, Map<string, ChatBridgeMessageOrigin>>()
+  for (const roomId of bridgedRoomIds) {
+    const messageIds = inserted.filter((m) => m.roomId === roomId).map((m) => m.messageId)
+    originsByRoom.set(roomId, await getChatBridgeMessageOrigins({ roomId, messageIds }))
+  }
+
+  const xmtpRelay = await relayNewRoom1659MessagesToXmtpBridge(
+    inserted
+      .filter((message) => originsByRoom.get(message.roomId)?.get(message.messageId) !== 'xmtp')
+      .map((message) => ({ roomId: message.roomId, messageId: message.messageId, text: message.text })),
+  )
+  if (xmtpRelay.enqueued > 0) {
+    logger.info('[alfaclub-chat] xmtp_bridge_relay_enqueued', {
+      enqueued: xmtpRelay.enqueued,
+      skipped: xmtpRelay.skipped,
+    })
+  }
+
   if (!flags.telegramRelayEnabled) return
   if (!flags.telegramRelayBotToken || !flags.telegramRelayChatId) return
 
   for (const message of inserted) {
+    if (originsByRoom.get(message.roomId)?.get(message.messageId) === 'telegram') continue
     const relay = await sendTelegramRelayMessage({
       botToken: flags.telegramRelayBotToken,
       chatId: flags.telegramRelayChatId,
@@ -4305,7 +4336,7 @@ export type AlfaClubRoomSendResult = {
   messageId: string | null
 }
 
-export async function sendAlfaClubRoomText(params: {
+async function sendAlfaClubRoomTextInner(params: {
   text: string
   roomId?: string | null
   replyToMessageId?: string
@@ -4443,6 +4474,39 @@ export async function sendAlfaClubRoomText(params: {
     messageId: null,
   }
 }
+
+export async function sendAlfaClubRoomText(params: {
+  text: string
+  roomId?: string | null
+  replyToMessageId?: string
+  /** Stable id for bot-token idempotency keys (cron retries). */
+  clientMessageId?: string
+  flags?: AlfaClubChatBridgeFlags
+  jwt?: string | null
+  attachments?: unknown
+  /**
+   * Tag the resulting room message as having been posted by a relay, so the
+   * outbound Telegram/XMTP fan-out in `ingestLiveMessages` can skip echoing
+   * it straight back to the channel it came from. Omit for native/Hermit
+   * command replies (which should still propagate to both relays).
+   */
+  origin?: ChatBridgeMessageOrigin
+}): Promise<AlfaClubRoomSendResult> {
+  const result = await sendAlfaClubRoomTextInner(params)
+  if (params.origin && result.messageId) {
+    const roomId = (params.roomId ?? params.flags?.roomId ?? readAlfaClubChatBridgeFlags().roomId ?? '').trim()
+    if (roomId) {
+      await recordChatBridgeMessageOrigin({
+        roomId,
+        messageId: result.messageId,
+        origin: params.origin,
+      }).catch(() => {})
+    }
+  }
+  return result
+}
+
+export const _ingestLiveMessagesForTests = ingestLiveMessages
 
 export function _resetAlfaClubChatBridgeStateForTests(): void {
   if (activeHandle !== null) clearInterval(activeHandle)

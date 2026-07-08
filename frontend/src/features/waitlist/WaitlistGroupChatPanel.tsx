@@ -3,6 +3,7 @@ import { MessageSquare } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
 import { LoadingInline } from '@/components/ui/LoadingState'
+import type { SessionRepairOutcome } from '@/lib/auth/sessionRepair'
 import { XmtpChatProvider, useXmtp } from '@/lib/xmtp/provider'
 import { WaitlistMessagingAccountContextProvider } from './WaitlistMessagingAccountContextProvider'
 
@@ -23,10 +24,10 @@ type WaitlistGroupChatPanelProps = {
   connectTrack: WaitlistConnectTrack
   layout?: 'inline' | 'sidebar' | 'mobile' | 'dock'
   /** Forwarded to surface for the embedded signer expiry recovery path. */
-  onSignOut?: () => void
+  onSignOut?: () => void | Promise<void>
   signOutBusy?: boolean
   /** Preferred recovery path: repair session drift without hard sign-out. */
-  onRepairSession?: () => Promise<boolean> | boolean
+  onRepairSession?: () => Promise<SessionRepairOutcome>
   repairBusy?: boolean
 }
 
@@ -53,11 +54,10 @@ function WaitlistGroupChatPanelInner(props: WaitlistGroupChatPanelProps) {
   const repairSession = useWaitlistMessagingSessionRepair()
   const [localRepairBusy, setLocalRepairBusy] = useState(false)
 
-  const handleRepairSession = useCallback(async () => {
+  const handleRepairSession = useCallback(async (): Promise<SessionRepairOutcome> => {
     setLocalRepairBusy(true)
     try {
-      const outcome = await repairSession()
-      return outcome === 'repaired'
+      return await repairSession()
     } finally {
       setLocalRepairBusy(false)
     }
@@ -97,6 +97,18 @@ function WaitlistGroupChatPanelInner(props: WaitlistGroupChatPanelProps) {
   )
 }
 
+function WaitlistXmtpDisconnectOnUnmount() {
+  const { disconnect } = useXmtp()
+
+  useEffect(() => {
+    return () => {
+      void disconnect().catch(() => undefined)
+    }
+  }, [disconnect])
+
+  return null
+}
+
 function WaitlistGroupChatMessagingTree(props: {
   messagingReady: boolean
   connectTrack: WaitlistConnectTrack
@@ -104,9 +116,9 @@ function WaitlistGroupChatMessagingTree(props: {
   statusQuery: ReturnType<typeof useWaitlistXmtpStatus>
   chatConfig: ReturnType<typeof useWaitlistXmtpStatus>['data']
   identityHintAddress: string | null
-  onSignOut?: () => void
+  onSignOut?: () => void | Promise<void>
   signOutBusy?: boolean
-  onRepairSession?: () => Promise<boolean> | boolean
+  onRepairSession?: () => Promise<SessionRepairOutcome>
   repairBusy?: boolean
   attemptXmtpSessionRepair: () => Promise<boolean>
 }) {
@@ -131,6 +143,7 @@ function WaitlistGroupChatMessagingTree(props: {
         manualConnectOnly
         attemptSessionRepair={attemptXmtpSessionRepair}
       >
+        <WaitlistXmtpDisconnectOnUnmount />
         {statusQuery.isLoading && !chatConfig ? (
           <WaitlistChatSection layout={layout}>
             <LoadingInline labelOverride="Loading waitlist chat…" />
@@ -166,9 +179,9 @@ function WaitlistGroupChatPanelBody({
   connectTrack: WaitlistConnectTrack
   statusQuery: ReturnType<typeof useWaitlistXmtpStatus>
   layout: 'inline' | 'sidebar' | 'mobile' | 'dock'
-  onSignOut?: () => void
+  onSignOut?: () => void | Promise<void>
   signOutBusy?: boolean
-  onRepairSession?: () => Promise<boolean> | boolean
+  onRepairSession?: () => Promise<SessionRepairOutcome>
   repairBusy?: boolean
 }) {
   const { status: xmtpStatus } = useXmtp()
@@ -245,9 +258,9 @@ function WaitlistGroupChatPanelContent(props: {
   join: { status: WaitlistChatStatus; retryJoin: () => void }
   groupName: string
   chatReady: boolean
-  onSignOut?: () => void
+  onSignOut?: () => void | Promise<void>
   signOutBusy?: boolean
-  onRepairSession?: () => Promise<boolean> | boolean
+  onRepairSession?: () => Promise<SessionRepairOutcome>
   repairBusy?: boolean
 }) {
   const {
@@ -259,6 +272,7 @@ function WaitlistGroupChatPanelContent(props: {
     join,
     groupName,
     chatReady,
+    onSignOut,
     signOutBusy,
     onRepairSession,
     repairBusy,
@@ -329,7 +343,9 @@ function WaitlistGroupChatPanelContent(props: {
         retryJoin={join.retryJoin}
         chatReady={surfaceChatReady}
         onRequestReauth={onRepairSession}
+        onSignOut={onSignOut}
         reauthBusy={repairBusy ?? signOutBusy}
+        signOutBusy={signOutBusy}
       />
     </div>
   )

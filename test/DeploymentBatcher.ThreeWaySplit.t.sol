@@ -62,11 +62,11 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
     VaultRolePolicyManager internal rolePolicyManager;
     address internal protocolTreasury;
     address internal protocolAutomation;
-    // Must match `forge inspect DeploymentBatcher storage-layout`. Shifted 6→7 /
-    // 4→5 by the v1.15.0 additions (approvedPhaseModuleCodehashes,
-    // vaultRolePolicyManager/Id, vaultAdminModule).
-    uint256 private constant PHASE1_SPLIT_STATES_SLOT = 7;
-    uint256 private constant PENDING_AUCTIONS_SLOT = 5;
+    // Must match `forge inspect DeploymentBatcher storage-layout`.
+    // 2026-07-08 P1: approvedCodeIds@2; bools+vaultRolePolicyManager pack@3;
+    // vaultRolePolicyId@4; vaultAdminModule@5; pendingAuctions@6; hasActive@7; phase1@8.
+    uint256 private constant PHASE1_SPLIT_STATES_SLOT = 8;
+    uint256 private constant PENDING_AUCTIONS_SLOT = 6;
 
     function setUp() public {
         vm.chainId(8453);

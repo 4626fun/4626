@@ -74,11 +74,14 @@ contract ShareMeshSeedPoolManager {
     bytes32 internal constant POOLS_SLOT = bytes32(uint256(6));
     mapping(bytes32 => bytes32) internal slots;
     uint160 public lastSqrtPriceX96;
+    error AlreadyInitialized();
 
     function initialize(PoolKey calldata key, uint160 sqrtPriceX96) external returns (int24 tick) {
-        lastSqrtPriceX96 = sqrtPriceX96;
         PoolId poolId = key.toId();
         bytes32 stateSlot = keccak256(abi.encodePacked(PoolId.unwrap(poolId), POOLS_SLOT));
+        // Mirror V4: pool can only be initialized once.
+        if (slots[stateSlot] != bytes32(0)) revert AlreadyInitialized();
+        lastSqrtPriceX96 = sqrtPriceX96;
         slots[stateSlot] = bytes32(uint256(sqrtPriceX96));
         tick = 0;
     }
@@ -202,5 +205,28 @@ contract CCALaunchArmShareMeshSeedTest is Test {
         vm.prank(makeAddr("rando"));
         vm.expectRevert();
         launchArm.setLpManager(address(lpManager));
+    }
+
+    /// AUDIT-2026-07-08-H04: hostile initialize of primary pool key must not brick migrate.
+    function test_migrate_recoversFromHostilePrimaryPoolInit() public {
+        ShareMeshSeedAuction auction = _launchWithReserve();
+        _fundAndSweep(auction);
+
+        PoolKey memory primary = launchArm.getPoolKey();
+        // Grief primary key at a wrong sqrt price (permissionless V4 initialize).
+        poolManager.initialize(primary, uint160(1));
+
+        uint24 feeBefore = launchArm.poolFeeTier();
+        launchArm.migrate();
+
+        assertTrue(launchArm.getLifecycleStatus().migrated);
+        // Must have rotated off the griefed primary key.
+        assertTrue(
+            launchArm.poolFeeTier() != feeBefore || launchArm.poolTickSpacing() != primary.tickSpacing,
+            "expected fee or tick rotation after primary grief"
+        );
+        PoolKey memory live = launchArm.getPoolKey();
+        (uint160 actual,,,) = StateLibrary.getSlot0(IPoolManager(address(poolManager)), live.toId());
+        assertGt(actual, 1, "live pool must be at clearing price, not grief price");
     }
 }

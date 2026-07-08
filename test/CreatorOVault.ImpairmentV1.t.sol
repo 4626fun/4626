@@ -339,5 +339,124 @@ contract CreatorOVaultImpairmentV1Test is Test {
         // no longer double-counted in the vault book.
         assertLt(vault.convertToAssets(1e18), ppsBefore);
     }
+
+    // =================================
+    // FIX: M-2 (docs/audits/CreatorOVault_aristotle) — Suspect-mode liveness bound
+    // =================================
+
+    function test_maxImpairmentTripDuration_defaultsTo14Days() public view {
+        assertEq(vault.maxImpairmentTripDuration(), 14 days);
+    }
+
+    function test_setMaxImpairmentTripDuration_revertsOutOfBounds() public {
+        // Cache the bound constants BEFORE arming `vm.expectRevert` — it fires on the very
+        // next external call/staticcall, including argument-evaluation calls.
+        uint64 min = vault.MIN_IMPAIRMENT_TRIP_DURATION();
+        uint64 max = vault.MAX_IMPAIRMENT_TRIP_DURATION();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(CreatorOVault.InvalidImpairmentTripDuration.selector, min - 1, min, max)
+        );
+        vault.setMaxImpairmentTripDuration(min - 1);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(CreatorOVault.InvalidImpairmentTripDuration.selector, max + 1, min, max)
+        );
+        vault.setMaxImpairmentTripDuration(max + 1);
+    }
+
+    function test_setMaxImpairmentTripDuration_appliesWithinBounds() public {
+        vault.setMaxImpairmentTripDuration(7 days);
+        assertEq(vault.maxImpairmentTripDuration(), 7 days);
+    }
+
+    /// A stranger cannot clear a Tripped epoch early — the permissionless path only
+    /// fires once `maxImpairmentTripDuration` has actually elapsed since the trip.
+    function test_clearStaleImpairmentTrip_revertsBeforeDeadline() public {
+        uint256 epochId = vault.tripImpairment(address(strat), 1);
+        uint64 staleAt = uint64(block.timestamp) + vault.maxImpairmentTripDuration();
+
+        address stranger = _pickEmptyCodeAddress("impairment-stranger");
+        vm.prank(stranger);
+        vm.expectRevert(
+            abi.encodeWithSelector(CreatorOVault.ImpairmentTripNotStale.selector, epochId, staleAt)
+        );
+        vault.clearStaleImpairmentTrip(epochId);
+    }
+
+    /// Once `maxImpairmentTripDuration` has elapsed with the impairment authority never
+    /// having acted, ANY address can force the epoch back to Normal — the liveness valve
+    /// M-2 asked for. The vault becomes depositable/withdrawable again and the strategy
+    /// can be re-tripped (it is no longer "impaired") if it's still actually broken.
+    function test_clearStaleImpairmentTrip_succeedsAfterDeadline_andUnfreezesVault() public {
+        uint256 epochId = vault.tripImpairment(address(strat), 1);
+        assertEq(uint8(vault.vaultMode()), 1); // Suspect
+
+        vm.warp(block.timestamp + vault.maxImpairmentTripDuration());
+
+        address stranger = _pickEmptyCodeAddress("impairment-stranger");
+        vm.expectEmit(true, true, true, true);
+        emit CreatorOVault.ImpairmentTripClearedByTimeout(epochId, address(strat), stranger);
+        vm.prank(stranger);
+        vault.clearStaleImpairmentTrip(epochId);
+
+        assertEq(uint8(vault.vaultMode()), 0); // Normal
+        assertFalse(vault.strategyImpaired(address(strat)));
+
+        (CreatorOVault.ImpairmentEpochStatus status,,,,,,,,,,,,,) = vault.impairmentEpochs(epochId);
+        assertEq(uint8(status), 3); // Resolved
+
+        // Vault is usable again for ordinary deposit flows.
+        creatorCoin.mint(alice, 1e18);
+        vm.prank(alice);
+        vault.deposit(1e18, alice);
+
+        // Strategy is no longer marked impaired, so it can be re-tripped if still broken.
+        uint256 newEpochId = vault.tripImpairment(address(strat), 1);
+        assertEq(newEpochId, epochId + 1);
+    }
+
+    /// The timeout clear is a hard bound on Suspect-mode duration regardless of internal
+    /// sub-state — even if a root has already been proposed and is sitting in (or past)
+    /// its own challenge window, a stranger can still force-clear once the *overall* trip
+    /// has outlived `maxImpairmentTripDuration`. Governance controls both durations and is
+    /// expected to size `maxImpairmentTripDuration` comfortably longer than its expected
+    /// propose+challenge+finalize turnaround.
+    function test_clearStaleImpairmentTrip_worksEvenWithProposedRoot() public {
+        uint256 epochId = vault.tripImpairment(address(strat), 1);
+        uint256 aliceShares = vault.balanceOf(alice);
+        bytes32 leaf = keccak256(abi.encode(epochId, alice, aliceShares));
+        vault.proposeImpairmentRoot(epochId, leaf, aliceShares, address(creatorCoin));
+        assertGt(vault.impairmentRootUnlockTime(epochId), 0);
+
+        vm.warp(block.timestamp + vault.maxImpairmentTripDuration());
+
+        address stranger = _pickEmptyCodeAddress("impairment-stranger-2");
+        vm.prank(stranger);
+        vault.clearStaleImpairmentTrip(epochId);
+
+        assertEq(uint8(vault.vaultMode()), 0);
+        assertEq(vault.impairmentRootUnlockTime(epochId), 0);
+        assertFalse(vault.impairmentRootChallenged(epochId));
+    }
+
+    /// The permissionless timeout path must not interfere with the ordinary authorized
+    /// clear path while the trip is still fresh (no regression vs. pre-M-2 behavior).
+    function test_clearImpairmentTrip_authorized_stillWorksBeforeDeadline() public {
+        uint256 epochId = vault.tripImpairment(address(strat), 1);
+        vault.clearImpairmentTrip(epochId);
+        assertEq(uint8(vault.vaultMode()), 0);
+        assertFalse(vault.strategyImpaired(address(strat)));
+    }
+
+    /// Once an epoch is already Resolved (by either clear path) or Finalized, the
+    /// permissionless timeout path must not be replayable against it.
+    function test_clearStaleImpairmentTrip_revertsOnAlreadyResolvedEpoch() public {
+        uint256 epochId = vault.tripImpairment(address(strat), 1);
+        vault.clearImpairmentTrip(epochId);
+
+        vm.expectRevert(abi.encodeWithSelector(CreatorOVault.InvalidImpairmentEpoch.selector, epochId));
+        vault.clearStaleImpairmentTrip(epochId);
+    }
 }
 

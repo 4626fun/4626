@@ -33,6 +33,9 @@ contract LinearVesting4626 {
     error NotSeeder();
     error AlreadySeeded();
     error NotSeeded();
+    // FIX: I-4 (audit `docs/audits/aristotle/oracle`) — `seed()` on an empty balance
+    // previously reverted with the misleading `ZeroDuration` error.
+    error NothingToSeed();
 
     /// @notice Only this address may call `seed()` (typically the deployment batcher).
     address public immutable seeder;
@@ -54,14 +57,21 @@ contract LinearVesting4626 {
     }
 
     // FIX: CLV-01 — record total allocation from current balance (call once after funding)
+    // FIX: L-5 (audit `docs/audits/aristotle/oracle`) — include `released` in the recorded
+    // allocation. If `release()`/`release(to)` is ever called before `seed()` (vesting
+    // against the live balance per `vestedAmount`'s pre-seed branch), using only the
+    // live balance here would permanently drop the already-released portion from the
+    // schedule denominator, under-allocating every subsequent vesting calculation.
+    // FIX: I-4 — revert with `NothingToSeed` instead of the misleading `ZeroDuration`.
     function seed() external {
         if (msg.sender != seeder) revert NotSeeder();
         if (seeded) revert AlreadySeeded();
         uint256 bal = token.balanceOf(address(this));
-        if (bal == 0) revert ZeroDuration();
-        totalAllocation = bal;
+        uint256 total = bal + released;
+        if (total == 0) revert NothingToSeed();
+        totalAllocation = total;
         seeded = true;
-        emit Seeded(bal);
+        emit Seeded(total);
     }
 
     function vestedAmount(uint64 timestamp) public view returns (uint256) {

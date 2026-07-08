@@ -30,6 +30,7 @@ contract AlfaCreatorKeyPool is ERC20, IERC1155Receiver, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint256 public constant BPS = 10_000;
+    uint256 public constant MINIMUM_LIQUIDITY = 1_000;
     /// @dev Hard ceiling on configurable fee. Must stay below `BPS` so the
     ///      buy-side gross-up `BPS / (BPS - feeBps)` cannot divide by zero or
     ///      blow up. 10% is well above any room-type fee we expect to ship
@@ -124,7 +125,13 @@ contract AlfaCreatorKeyPool is ERC20, IERC1155Receiver, ReentrancyGuard {
         uint256 liveKeys = IERC1155(friendKey).balanceOf(address(this), keyTokenId);
         if (liveCreatorCoin < creatorCoinAmount || liveKeys < keyAmount) revert InsufficientReserves();
 
-        lpShares = _sqrt(creatorCoinAmount * keyAmount);
+        uint256 initialShares = _sqrt(creatorCoinAmount * keyAmount);
+        if (initialShares <= MINIMUM_LIQUIDITY) revert InsufficientLiquidityMinted();
+
+        // Permanently lock a small share balance so totalSupply/reserves can
+        // never both reach zero via a full LP burn.
+        _mint(address(0xdead), MINIMUM_LIQUIDITY);
+        lpShares = initialShares - MINIMUM_LIQUIDITY;
         if (lpShares == 0) revert InsufficientLiquidityMinted();
 
         _mint(recipient, lpShares);

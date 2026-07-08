@@ -92,6 +92,10 @@ contract LotteryAmoeRouter {
     ///         pointsBurnedAsUSD)` after a successful ZK submission, with the
     ///         value taken directly from `pubInputs[5]`.
     IAmoeManager public manager;
+    address public pendingVerifier;
+    uint256 public pendingVerifierAt;
+    address public pendingManager;
+    uint256 public pendingManagerAt;
 
     /// @notice Daily allowlist roots, keyed by epoch.
     mapping(uint64 => bytes32) public allowlistRootOf;
@@ -128,6 +132,8 @@ contract LotteryAmoeRouter {
     event VerifierUpdated(address indexed previous, address indexed current);
     event ConsumerUpdated(address indexed previous, address indexed current);
     event ManagerUpdated(address indexed previous, address indexed current);
+    event VerifierUpdateQueued(address indexed pendingVerifier, uint256 executeAfter);
+    event ManagerUpdateQueued(address indexed pendingManager, uint256 executeAfter);
     event AllowlistRootSet(uint64 indexed epoch, bytes32 root);
     event PointsLedgerRootSet(uint64 indexed epoch, bytes32 root);
 
@@ -178,6 +184,8 @@ contract LotteryAmoeRouter {
     error ManagerDeclinedEntry();
     error DeadlineExpired();
     error DeadlineTooSoon();
+    error UpdateTimelockActive(uint256 executeAfter);
+    error NoPendingUpdate();
 
     // -------------------------------------------------------------------------
     // Constants
@@ -198,6 +206,7 @@ contract LotteryAmoeRouter {
     ///         block boundary. Sixty seconds is well above worst-case
     ///         observed L1 / L2 timestamp slack.
     uint256 public constant MIN_DEADLINE_BUFFER = 60;
+    uint256 public constant CONFIG_UPDATE_TIMELOCK = 1 days;
 
     /// @notice Defense-in-depth ceiling on `pointsBurnedAsUSD`. AMOE max is
     ///         1_000_000 points × 10_000 = 10^10 1e6 units = $10,000. A
@@ -251,8 +260,14 @@ contract LotteryAmoeRouter {
     }
 
     function setVerifier(address _verifier) external onlyOwner {
-        emit VerifierUpdated(address(verifier), _verifier);
-        verifier = IAmoePlonkVerifier(_verifier);
+        if (address(verifier) == address(0)) {
+            emit VerifierUpdated(address(verifier), _verifier);
+            verifier = IAmoePlonkVerifier(_verifier);
+            return;
+        }
+        pendingVerifier = _verifier;
+        pendingVerifierAt = block.timestamp + CONFIG_UPDATE_TIMELOCK;
+        emit VerifierUpdateQueued(_verifier, pendingVerifierAt);
     }
 
     function setConsumer(address _consumer) external onlyOwner {
@@ -267,8 +282,36 @@ contract LotteryAmoeRouter {
     ///         `authorizedAmoeRelayer` for the call to succeed. That is a
     ///         one-way ops handoff (see `docs/security/amoe-pr4-handoff.md`).
     function setManager(address _manager) external onlyOwner {
-        emit ManagerUpdated(address(manager), _manager);
-        manager = IAmoeManager(_manager);
+        if (address(manager) == address(0)) {
+            emit ManagerUpdated(address(manager), _manager);
+            manager = IAmoeManager(_manager);
+            return;
+        }
+        pendingManager = _manager;
+        pendingManagerAt = block.timestamp + CONFIG_UPDATE_TIMELOCK;
+        emit ManagerUpdateQueued(_manager, pendingManagerAt);
+    }
+
+    function executeVerifierUpdate() external onlyOwner {
+        uint256 executeAfter = pendingVerifierAt;
+        if (executeAfter == 0) revert NoPendingUpdate();
+        if (block.timestamp < executeAfter) revert UpdateTimelockActive(executeAfter);
+        address nextVerifier = pendingVerifier;
+        emit VerifierUpdated(address(verifier), nextVerifier);
+        verifier = IAmoePlonkVerifier(nextVerifier);
+        pendingVerifier = address(0);
+        pendingVerifierAt = 0;
+    }
+
+    function executeManagerUpdate() external onlyOwner {
+        uint256 executeAfter = pendingManagerAt;
+        if (executeAfter == 0) revert NoPendingUpdate();
+        if (block.timestamp < executeAfter) revert UpdateTimelockActive(executeAfter);
+        address nextManager = pendingManager;
+        emit ManagerUpdated(address(manager), nextManager);
+        manager = IAmoeManager(nextManager);
+        pendingManager = address(0);
+        pendingManagerAt = 0;
     }
 
     /// @notice Publish the allowlist Merkle root for an epoch. One-shot per

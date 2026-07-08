@@ -193,6 +193,7 @@ export async function relayTelegramMessageToAlfaClub(params: {
       roomId,
       replyToMessageId: dedupeKey,
       flags,
+      origin: 'telegram',
     })
     logger.info('[telegram-to-alfaclub] relayed', {
       roomId,

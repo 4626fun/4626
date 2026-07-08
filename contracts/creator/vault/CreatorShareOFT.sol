@@ -226,6 +226,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     struct PendingLotteryEntry {
         address buyer;
         uint256 amount;
+        uint256 buyerShareBalanceAtQueue;
     }
 
     /// @notice LayerZero peer for the hub LotteryManager (bytes32-encoded address)
@@ -248,6 +249,15 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
 
     /// @notice Total lottery entries sent to hub (lifetime, remote only)
     uint256 public totalLotteryEntriesSent;
+
+    // ================================
+    // STATE - LOTTERY COVERAGE SNAPSHOT (AUDIT-2026-07-08-H02)
+    // ================================
+
+    /// @dev First balance mutation in a block records pre-mutation balance for coverage.
+    ///      Flash-borrowed ShareOFT credited in the same block does not inflate lottery coverage.
+    mapping(address => uint256) private _lotteryCoverageSnapshotBlock;
+    mapping(address => uint256) private _lotteryCoverageBalanceAtBlockStart;
 
     // ================================
     // EVENTS
@@ -469,8 +479,15 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      */
     function burn(address _from, uint256 _amount) external onlyVaultOrMinter {
         // FIX: H-3 — require allowance when a minter burns from an arbitrary address;
-        // vault and owner are trusted and exempt, but minters must have approval
-        if (msg.sender != vault && msg.sender != owner()) {
+        // the vault is trusted and exempt (it burns as part of normal
+        // deposit/withdraw/unwrap accounting), but minters must have approval.
+        //
+        // FIX: L-1 (docs/audits/CreatorOVault_aristotle) — `owner()` used to share the
+        // vault's exemption, letting the owner key burn ANY holder's shares with no
+        // allowance and no on-chain trace of consent. `owner()` now goes through the
+        // same `_spendAllowance` path as any other minter; a holder's balance can only
+        // be burned by the vault itself or by an address the holder has approved.
+        if (msg.sender != vault) {
             _spendAllowance(_from, msg.sender, _amount);
         }
         _burn(_from, _amount);
@@ -574,6 +591,9 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      *      operators can page on persistent hook regressions.
      */
     function _update(address from, address to, uint256 value) internal virtual override {
+        // Snapshot pre-mutation balances once per block before credits/debits apply.
+        _snapshotLotteryCoverageBalance(from);
+        _snapshotLotteryCoverageBalance(to);
         super._update(from, to, value);
 
         address _wrapper = wrapper;
@@ -586,6 +606,21 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         } catch (bytes memory revertData) {
             emit WrapperCooldownHookFailed(_wrapper, from, to, revertData);
         }
+    }
+
+    function _snapshotLotteryCoverageBalance(address account) internal {
+        if (account == address(0)) return;
+        if (_lotteryCoverageSnapshotBlock[account] == block.number) return;
+        _lotteryCoverageBalanceAtBlockStart[account] = balanceOf(account);
+        _lotteryCoverageSnapshotBlock[account] = block.number;
+    }
+
+    /// @notice Share balance eligible for lottery coverage boost (excludes same-block receipts).
+    function balanceEligibleForLotteryCoverage(address account) public view returns (uint256) {
+        if (_lotteryCoverageSnapshotBlock[account] == block.number) {
+            return _lotteryCoverageBalanceAtBlockStart[account];
+        }
+        return balanceOf(account);
     }
 
     // ================================
@@ -673,8 +708,11 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         require(_sendParam.to == bytes32(uint256(uint160(hubGaugeReceiver))), "Invalid receiver");
         require(_sendParam.amountLD == amount, "Amount mismatch");
 
-        // Execute the OFT send (burns on this chain, mints on Base to hubGaugeReceiver)
-        _send(_sendParam, _fee, payable(msg.sender));
+        // Execute OFT send with the contract as the debited sender.
+        // Calling `this.send` makes msg.sender == address(this) in OFTCore._send,
+        // so `_debit` burns from the accumulated `pendingFees` balance rather than
+        // from the external caller's wallet.
+        this.send{value: msg.value}(_sendParam, _fee, payable(msg.sender));
 
         emit FeesFlushed(amount, hubGaugeReceiver, hubEid);
     }
@@ -817,8 +855,10 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         address mgr = registry.getLotteryManager(block.chainid);
         if (mgr == address(0)) return;
 
-        // External call wrapped in try-catch to prevent lottery issues from blocking transfers
-        uint256 buyerCurrentShareBalance = balanceOf(buyer);
+        // External call wrapped in try-catch to prevent lottery issues from blocking transfers.
+        // Pass block-start eligible balance (not post-buy live balance) so coverage cannot
+        // include this purchase or same-block flash-borrowed ShareOFT.
+        uint256 buyerCurrentShareBalance = balanceEligibleForLotteryCoverage(buyer);
         try ILotteryManager4626(mgr).processSwapLottery(
             buyer, address(this), amount, buyerCurrentShareBalance
         ) returns (uint256 id) {
@@ -837,7 +877,14 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         uint256 entryId = nextPendingLotteryEntryId;
         nextPendingLotteryEntryId = entryId + 1;
 
-        pendingLotteryEntries[entryId] = PendingLotteryEntry({buyer: buyer, amount: amount});
+        // AUDIT-2026-07-08-R-H03: use block-start eligible balance (same as hub path),
+        // not post-buy live balance, so remote coverage cannot include this purchase
+        // or same-block flash-borrowed ShareOFT.
+        pendingLotteryEntries[entryId] = PendingLotteryEntry({
+            buyer: buyer,
+            amount: amount,
+            buyerShareBalanceAtQueue: balanceEligibleForLotteryCoverage(buyer)
+        });
         pendingLotteryEntryCount[buyer] += 1;
 
         emit PendingLotteryEntryQueued(entryId, buyer, amount, hubEid);
@@ -856,7 +903,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         if (hubLotteryPeer == bytes32(0) || hubEid == 0 || peers[hubEid] == bytes32(0)) revert HubNotConfigured();
 
         (bytes memory payload, bytes memory options, MessagingFee memory fee) =
-            _prepareLotteryEntryMessage(entry.buyer, entry.amount);
+            _prepareLotteryEntryMessage(entry.buyer, entry.amount, entry.buyerShareBalanceAtQueue);
 
         if (msg.value < fee.nativeFee) {
             revert InvalidLotteryEntryFee(msg.value, fee.nativeFee);
@@ -884,7 +931,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
             return MessagingFee(0, 0);
         }
 
-        (,, fee) = _prepareLotteryEntryMessage(address(0), amount);
+        (,, fee) = _prepareLotteryEntryMessage(address(0), amount, 0);
     }
 
     /**
@@ -897,15 +944,14 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         if (entry.buyer == address(0)) return MessagingFee(0, 0);
         if (hubLotteryPeer == bytes32(0) || hubEid == 0 || peers[hubEid] == bytes32(0)) return MessagingFee(0, 0);
 
-        (,, fee) = _prepareLotteryEntryMessage(entry.buyer, entry.amount);
+        (,, fee) = _prepareLotteryEntryMessage(entry.buyer, entry.amount, entry.buyerShareBalanceAtQueue);
     }
 
-    function _prepareLotteryEntryMessage(address buyer, uint256 amount)
+    function _prepareLotteryEntryMessage(address buyer, uint256 amount, uint256 buyerCurrentShareBalance)
         internal
         view
         returns (bytes memory payload, bytes memory options, MessagingFee memory fee)
     {
-        uint256 buyerCurrentShareBalance = buyer == address(0) ? 0 : balanceOf(buyer);
         payload = abi.encode(
             MSG_TYPE_LOTTERY_ENTRY,
             buyer,
@@ -1028,11 +1074,15 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     }
 
     function _isWinnerCallbackMessage(Origin calldata _origin, bytes calldata _message) internal view returns (bool) {
-        // Authentication: must be the configured hub LotteryManager peer.
-        // NOTE: Long-term, consider routing winner callbacks through a dedicated OApp receiver (separate from the OFT)
-        // so custom messages and token-transfer payloads never share the same entrypoint.
-        bytes32 expectedSender = hubLotteryPeer;
-        if (expectedSender == bytes32(0) || _origin.sender != expectedSender) return false;
+        // Authentication: accept callback messages from either:
+        // - the configured hub lottery manager peer (legacy wiring), or
+        // - the configured OFT hub peer for this EID (forwarded callback wiring).
+        // This keeps winner callbacks routable when the lane uses a single OFT peer.
+        bytes32 managerPeer = hubLotteryPeer;
+        bytes32 oftPeer = peers[hubEid];
+        bool fromAllowedPeer = (managerPeer != bytes32(0) && _origin.sender == managerPeer)
+            || (oftPeer != bytes32(0) && _origin.sender == oftPeer);
+        if (!fromAllowedPeer) return false;
 
         // FIX: M-7 — tighten callback detection: standard OFT SEND is ~40 bytes,
         // but SEND_AND_CALL with specific compose lengths could be exactly 128 bytes.

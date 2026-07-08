@@ -381,6 +381,16 @@ export function resolveWaitlistLoopbackPrivyClientId(): string | null {
   return clientId || null
 }
 
+/**
+ * Client id for Privy Wallet API bearer verification. Waitlist loopback OTP
+ * sessions are issued against the waitlist app client even when
+ * VITE_PRIVY_CLIENT_ID_ON_LOOPBACK=0 — mirror that here so authorized signing
+ * does not 401 with "Missing auth token."
+ */
+export function resolveEffectivePrivyClientId(): string | null {
+  return resolveWaitlistLoopbackPrivyClientId() ?? resolvePrivyClientId()
+}
+
 export function resolvePrivyApiUrl(): string | null {
   // On *.4626.fun production origins, automatically use the first-party
   // privy.4626.fun reverse proxy as the Privy API URL. This keeps session

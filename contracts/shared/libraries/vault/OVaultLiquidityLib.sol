@@ -48,17 +48,11 @@ library OVaultLiquidityLib {
         StrategyLiquidity[] strategies;
     }
 
-    /// @dev FIX: AUDIT-2026-07-01-M05 — conservative instant-withdraw ceiling from idle
-    ///      reserves plus strategy debt on active, valuation-ready strategies.
+    /// @dev Conservative instant-withdraw ceiling from idle reserves only.
+    ///      Strategy debt represents deployed capital and must not be counted as
+    ///      instantly withdrawable liquidity.
     function maxInstantWithdrawAssets(LiquiditySnapshot memory snap) internal pure returns (uint256) {
-        uint256 total = snap.instantIdleAssets;
-        for (uint256 i = 0; i < snap.strategies.length; i++) {
-            StrategyLiquidity memory strategy = snap.strategies[i];
-            if (strategy.active && strategy.valuationReady) {
-                total += strategy.strategyDebt;
-            }
-        }
-        return total > snap.totalAssets ? snap.totalAssets : total;
+        return snap.instantIdleAssets > snap.totalAssets ? snap.totalAssets : snap.instantIdleAssets;
     }
 
     function snapshot(address vault) internal view returns (LiquiditySnapshot memory snap) {

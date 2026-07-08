@@ -35,6 +35,7 @@ export async function probeGreenfieldPhase1Deploy(params: {
   const vaultSalt = saltForDeployLabel(baseSalt, params.vaultSaltLabel ?? 'vault')
   const wrapperSalt = saltForDeployLabel(baseSalt, params.wrapperSaltLabel ?? 'wrapper')
   const shareSalt = deriveShareOftSaltFromVersion({
+    creatorToken: params.creatorToken,
     owner: params.owner,
     shareSymbol: params.shareSymbol,
     version: params.deploymentVersion,

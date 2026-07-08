@@ -1,91 +1,39 @@
-import { useMemo } from 'react'
-
 import { LoadingInline } from '@/components/ui/LoadingState'
-import { useAccountMe } from '@/hooks/useAccountMe'
-import { detectInAppEnvironment, isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
-import { isZoraLinkedFromAccountSignals } from '@/lib/wallet/userExecutionTrack'
 
 import { WaitlistChatDock } from './WaitlistChatDock'
 import { WaitlistOwnerInstallPanel } from './WaitlistOwnerInstallPanel'
 import { WaitlistWalletProvision } from './WaitlistWalletProvision'
-import { useWaitlistSigningStepComplete } from './useWaitlistSigningStepComplete'
-import {
-  isWaitlistMessagingSigningReady,
-  resolveWaitlistConnectTrack,
-  shouldShowParentCswAddOwnerPanel,
-  type WaitlistConnectTrack,
-} from './waitlistFlowState'
+import { useWaitlistPostJoinAttention } from './useWaitlistPostJoinAttention'
 
 type WaitlistPostJoinShellProps = {
   enabled: boolean
+  onSignOut?: () => void | Promise<void>
+  signOutBusy?: boolean
 }
 
 export function WaitlistPostJoinShell(props: WaitlistPostJoinShellProps) {
   if (!props.enabled) return null
-  return <WaitlistPostJoinShellInner />
+  return <WaitlistPostJoinShellInner onSignOut={props.onSignOut} signOutBusy={props.signOutBusy} />
 }
 
-function WaitlistPostJoinShellInner() {
-  const { me: accountMe, loading, refresh } = useAccountMe()
-  const inBaseApp = isBaseAppInAppContext(detectInAppEnvironment())
-  const accountSignals = accountMe?.accountSignals
-  const canonicalCswAddress = accountSignals?.canonicalCswAddress ?? null
-  const zoraLinked = isZoraLinkedFromAccountSignals(accountSignals)
-  const accountStateReady = Boolean(accountMe) && !loading
-
+function WaitlistPostJoinShellInner(props: {
+  onSignOut?: () => void | Promise<void>
+  signOutBusy?: boolean
+}) {
   const {
-    embeddedEoaAddress,
-    signingStepComplete,
-    parentEmbeddedOwnerOnChain,
-    refreshParentEmbeddedOwner,
-  } = useWaitlistSigningStepComplete({
-    accountSignals,
-    canonicalCswAddress,
-    ownerInstallRequested: false,
-  })
-
-  const connectTrack = useMemo<WaitlistConnectTrack>(
-    () =>
-      resolveWaitlistConnectTrack({
-        executionTrack: accountSignals?.executionTrack,
-        accountSignals,
-        zoraLinked,
-        canonicalCswAddress,
-        embeddedEoaAvailable: Boolean(accountSignals?.embeddedEoaAddress?.trim() || embeddedEoaAddress),
-      }),
-    [accountSignals, canonicalCswAddress, embeddedEoaAddress, zoraLinked],
-  )
-
-  // Only infer "needs provision" once `/api/accounts/me` has settled for this
-  // session. During transient auth/rate-limit windows, accountMe can be null
-  // even when the user already has a canonical smart wallet.
-  const needsProvision =
-    accountStateReady &&
-    !inBaseApp &&
-    connectTrack !== 'base-app-direct' &&
-    !zoraLinked &&
-    !canonicalCswAddress?.trim()
-
-  const showOwnerInstall = shouldShowParentCswAddOwnerPanel({
-    inBaseApp,
+    accountMe,
+    loading,
+    refresh,
     connectTrack,
-    zoraLinked,
-    ownerInstallRequested: false,
-    signingStepComplete,
-    executionTrack: accountSignals?.executionTrack,
-    accountSignals,
-    parentEmbeddedOwnerOnChain,
-  })
-
-  const messagingReady = useMemo(
-    () =>
-      isWaitlistMessagingSigningReady({
-        connectTrack,
-        accountSignals,
-        parentEmbeddedOwnerOnChain,
-      }),
-    [accountSignals, connectTrack, parentEmbeddedOwnerOnChain],
-  )
+    canonicalCswAddress,
+    embeddedEoaAddress,
+    needsProvision,
+    showOwnerInstall,
+    messagingReady,
+    refreshParentEmbeddedOwner,
+    setupRequired,
+  } = useWaitlistPostJoinAttention()
+  const accountSignals = accountMe?.accountSignals
 
   const handleOwnerInstallSuccess = async () => {
     await refreshParentEmbeddedOwner()
@@ -100,11 +48,9 @@ function WaitlistPostJoinShellInner() {
     )
   }
 
-  const showWalletSection = accountStateReady && (needsProvision || showOwnerInstall)
-
   return (
     <div className="mt-5 space-y-4">
-      {showWalletSection ? (
+      {setupRequired ? (
         <div className="space-y-4">
           <WaitlistWalletProvision enabled needsProvision={needsProvision} />
 
@@ -126,6 +72,8 @@ function WaitlistPostJoinShellInner() {
         setupComplete
         messagingReady={messagingReady}
         connectTrack={connectTrack}
+        onSignOut={props.onSignOut}
+        signOutBusy={props.signOutBusy}
       />
     </div>
   )

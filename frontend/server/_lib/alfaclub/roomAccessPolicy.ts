@@ -4,6 +4,7 @@ import { getDb } from '../db/postgres.js'
 import { getKeeprBaseRpcUrls } from '../keepr/keeprGating.js'
 import { getAlfaClubPublicClient } from '../wallet/alfaclub.js'
 import { ensureAlfaClubVigilanteSchema } from './schema.js'
+import { syncRoom1659XmtpBridgeMembership } from './room1659XmtpBridge.js'
 
 const ALFA_CREATOR_KEY_POOL_ABI = parseAbi([
   'function quoteBuyKeys(uint256 keyAmount) view returns (uint256 creatorCoinAmountIn)',
@@ -402,6 +403,15 @@ export async function joinAlfaClubRoomAccess(params: {
     failureReason: eligibility.canEnter ? null : eligibility.reason,
   })
 
+  if (eligibility.canEnter) {
+    // No-ops for rooms other than the room-1659 XMTP bridge (or when disabled).
+    await syncRoom1659XmtpBridgeMembership({
+      roomId: policy.roomId,
+      walletAddress: params.walletAddress,
+      action: 'add',
+    }).catch(() => {})
+  }
+
   return { policy, membership, eligible: eligibility.canEnter, reason: eligibility.reason }
 }
 
@@ -461,7 +471,14 @@ export async function recheckAlfaClubRoomAccessMemberships(params: {
         quoteThresholdRaw: eligibility.evidence.quoteThresholdRaw,
         failureReason: null,
       })
-      if (!wasActive) autoEntered += 1
+      if (!wasActive) {
+        autoEntered += 1
+        await syncRoom1659XmtpBridgeMembership({
+          roomId: policy.roomId,
+          walletAddress: membership.walletAddress,
+          action: 'add',
+        }).catch(() => {})
+      }
       continue
     }
 
@@ -500,6 +517,11 @@ export async function recheckAlfaClubRoomAccessMemberships(params: {
       failureReason: eligibility.reason,
     })
     removed += 1
+    await syncRoom1659XmtpBridgeMembership({
+      roomId: policy.roomId,
+      walletAddress: membership.walletAddress,
+      action: 'remove',
+    }).catch(() => {})
   }
 
   return { checked, autoEntered, removed, stale }

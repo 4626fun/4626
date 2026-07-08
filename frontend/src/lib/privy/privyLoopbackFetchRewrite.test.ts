@@ -94,6 +94,27 @@ describe('installPrivyLoopbackFetchRewrite', () => {
     expect(listener).toHaveBeenCalledTimes(1)
   })
 
+  it('resets stale Privy loopback session storage when siwe/unlink 401s on local dev', async () => {
+    window.localStorage.setItem('privy:token', 'a-stale-access-token')
+    window.fetch = (() => Promise.resolve(new Response(null, { status: 401 }))) as typeof fetch
+
+    installPrivyLoopbackFetchRewrite()
+
+    const listener = vi.fn()
+    window.addEventListener(PRIVY_LOOPBACK_SESSION_EXPIRED_EVENT, listener)
+
+    const response = await window.fetch('https://auth.privy.io/api/v1/siwe/unlink', {
+      method: 'POST',
+      body: JSON.stringify({ address: '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD' }),
+    })
+
+    window.removeEventListener(PRIVY_LOOPBACK_SESSION_EXPIRED_EVENT, listener)
+
+    expect(response.status).toBe(401)
+    expect(window.localStorage.getItem('privy:token')).toBeNull()
+    expect(listener).toHaveBeenCalledTimes(1)
+  })
+
   it('resets stale Privy loopback session storage when oauth/link 401s on local dev', async () => {
     window.localStorage.setItem('privy:token', 'a-stale-access-token')
     window.fetch = (() => Promise.resolve(new Response(null, { status: 401 }))) as typeof fetch

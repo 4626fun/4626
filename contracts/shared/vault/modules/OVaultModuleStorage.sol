@@ -205,6 +205,13 @@ abstract contract OVaultModuleStorage {
     // ---------------------------------------------------------------------
     /// @notice Optional CCA launch strategy used to enforce auction-time deposit pauses.
     address internal ccaLaunchArm;
+
+    // ---------------------------------------------------------------------
+    // Impairment liveness bound (appended; preserves prior storage ordering)
+    // FIX: M-2 (docs/audits/CreatorOVault_aristotle)
+    // ---------------------------------------------------------------------
+    /// @notice Liveness cap on Suspect mode; see CreatorOVault.sol for full doc.
+    uint64 internal maxImpairmentTripDuration;
 }
 
 // slither-disable-end uninitialized-state

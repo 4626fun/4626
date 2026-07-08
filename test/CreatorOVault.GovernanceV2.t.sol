@@ -111,6 +111,10 @@ contract CreatorOVaultGovernanceV2Test is Test {
         assertEq(vault.maxTotalSupply(), type(uint256).max);
     }
 
+    function test_riskConfigDelay_defaultsToMinimumTimelock() public view {
+        assertEq(vault.riskConfigDelay(), 1 days);
+    }
+
     function test_liquiditySnapshot_reportsIdleInstantBps() public view {
         OVaultLiquidityLib.LiquiditySnapshot memory snap = vault.liquiditySnapshot();
         assertEq(snap.totalAssets, vault.totalAssets());
@@ -137,6 +141,7 @@ contract CreatorOVaultGovernanceV2Test is Test {
 
     function test_managementFee_accruesOnReport() public {
         address recipient = makeAddr("mgmtRecipient");
+        vault.setRiskConfigDelay(0);
         vault.setManagementFeeRecipient(recipient);
         vault.scheduleSetManagementFee(200);
 

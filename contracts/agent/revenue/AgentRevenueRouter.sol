@@ -141,6 +141,7 @@ contract AgentRevenueRouter is Ownable, ReentrancyGuard {
     error ProtocolRewardsClaimFailed();
     error ProtocolRewardsHasNoCode(address candidate);
     error ProtectedPayoutAsset(address token);
+    error InvalidExternalSwapAddress(address addr);
 
     modifier onlyOwnerOrKeeper() {
         if (msg.sender != owner() && msg.sender != keeper) revert NotAuthorized();
@@ -223,14 +224,25 @@ contract AgentRevenueRouter is Ownable, ReentrancyGuard {
         emit SwapPathSet(tokenIn, path);
     }
 
+    function _requireSafeExternalSwapAddress(address addr) internal view {
+        if (
+            addr == address(this) || addr == vault || addr == wrapper || addr == burnStream
+                || addr == address(agentToken) || addr == address(shareOFT)
+        ) {
+            revert InvalidExternalSwapAddress(addr);
+        }
+    }
+
     function setExternalSwapTargetApproval(address target, bool approved) external onlyOwner {
         if (target == address(0)) revert ZeroAddress();
+        if (approved) _requireSafeExternalSwapAddress(target);
         approvedExternalSwapTargets[target] = approved;
         emit ExternalSwapTargetApprovalSet(target, approved);
     }
 
     function setExternalSwapSpenderApproval(address spender, bool approved) external onlyOwner {
         if (spender == address(0)) revert ZeroAddress();
+        if (approved) _requireSafeExternalSwapAddress(spender);
         approvedExternalSwapSpenders[spender] = approved;
         emit ExternalSwapSpenderApprovalSet(spender, approved);
     }
@@ -304,7 +316,9 @@ contract AgentRevenueRouter is Ownable, ReentrancyGuard {
     function emergencyWithdraw(address token, uint256 amount, address to) external onlyOwner nonReentrant {
         if (to == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
-        if (token == address(agentToken) || token == address(shareOFT)) revert ProtectedPayoutAsset(token);
+        if (token == address(agentToken) || token == address(shareOFT) || token == weth) {
+            revert ProtectedPayoutAsset(token);
+        }
 
         if (token == address(0)) {
             (bool ok,) = to.call{value: amount}("");

@@ -16,6 +16,9 @@ pnpm -C kpr test vault-strategy-reallocator
 pnpm -C kpr test vault-strategy-reallocator-pass-loop
 pnpm -C kpr test strategyAllocation.fuzz
 
+echo "== CreatorOVault module storage-layout guard =="
+node scripts/check-ovault-module-storage-layout.mjs
+
 echo "== Foundry cross-strategy rebalance gate =="
 forge test --match-path "test/vault/strategies/CreatorOVaultStrategies.Rebalance*"
 

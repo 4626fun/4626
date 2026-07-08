@@ -207,6 +207,7 @@ export async function resolveDeployVanityPlan(
     }
     if (versionSearchShareSuffix) {
       const candidateShareSalt = deriveShareOftSaltFromVersion({
+        creatorToken: params.creatorToken,
         owner: params.owner,
         shareSymbol: params.shareSymbol,
         version: candidateVersion,

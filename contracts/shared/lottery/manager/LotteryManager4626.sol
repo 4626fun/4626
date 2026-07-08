@@ -75,6 +75,11 @@ interface IGaugeControllerLottery {
     function payJackpot(address winner, uint256 shares) external;
 }
 
+/// @dev ShareOFT exposes block-start balance so same-tx flash loans cannot inflate coverage.
+interface IShareOFTLotteryCoverage {
+    function balanceEligibleForLotteryCoverage(address account) external view returns (uint256);
+}
+
 interface IVRFConsumer4626 {
     function requestRandomWords() external returns (uint256 requestId);
 }
@@ -274,7 +279,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     /// @dev While paused, callbacks store randomness and do not settle wins/losses.
     mapping(uint256 => uint256) public pendingRandomWord;
     mapping(uint256 => bool) public hasPendingRandomWord;
-    /// @dev FIFO queue of requestIds deferred during pause; flushed atomically on unpause.
+    /// @dev FIFO queue of requestIds deferred during pause.
     uint256[] internal _deferredVrfRequestIds;
 
     /// @notice Hub ShareOFT contracts authorized to forward remote lottery entries.
@@ -530,7 +535,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
             // Constructor default. Production rollout sets this to 10_000
             // via `setLotteryConfig` for paid/AMOE PPM parity at equal
             // notional. See storage-field comment for full rationale.
-            usdMultiplierBps: 10500
+            usdMultiplierBps: 10000
         });
 
         // PR 1 — AMOE Linear Parity: pre-boost ceiling. 40_000 PPM = 4% at $10K swap.
@@ -620,10 +625,12 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
             return 0;
         }
 
-        // Convert raw held share balance to USD (1e6) for coverage math.
+        // AUDIT-2026-07-08-H02: coverage must not count flash-borrowed or just-purchased ShareOFT.
+        // Authorized ShareOFT passes block-start eligible balance; we still cap by live pre-buy max.
         uint256 shareBalanceUSD = 0;
-        if (buyerCurrentShareBalance > 0) {
-            (shareBalanceUSD,,) = _calculateTokenUSD(token, tokenIn, buyerCurrentShareBalance);
+        uint256 coverageBal = _coverageShareBalance(tokenIn, buyer, amountIn, buyerCurrentShareBalance);
+        if (coverageBal > 0) {
+            (shareBalanceUSD,,) = _calculateTokenUSD(token, tokenIn, coverageBal);
         }
 
         (entryId, ) = _boostAndDispatchVRF(buyer, token, tokenIn, shareBalanceUSD, swapValueUSD, msg.value);
@@ -719,28 +726,22 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
             return 0;
         }
 
-        // Option B2 — full boost parity with paid swaps. ve4626 personal
-        // multiplier and lock-duration additive boosts are gated by
-        // `getCoverageBps(shareBalanceUSD, swapAmountUSD)`, so
-        // passing 0 here would silently disable both branches for AMOE
-        // entrants who actually hold the lane token. The paid path
-        // reads `balanceOf(buyer)` from the OFT before calling
-        // `processSwapLottery` (CreatorShareOFT line 704); mirror that
-        // read so AMOE odds match paid odds at equal `pointsBurnedAsUSD`
-        // and equal share balance. Vault gauge boost is independent and
-        // applies regardless.
+        // AUDIT-2026-07-08-H03: coverage is ShareOFT holdings (not the lane coin).
+        // Prefer ShareOFT block-start eligible balance when the OFT exposes it
+        // so same-tx flash-borrowed shares do not inflate AMOE odds.
         uint256 shareBalanceUSD = 0;
-        uint256 buyerShareBalance = IERC20(token).balanceOf(buyer);
-        if (buyerShareBalance > 0) {
-            // Same call shape as `processSwapLottery` (line 554). If the
-            // per-token oracle reverts here it would also revert on the
-            // paid path — failure mode is symmetric, no new behavior.
-            (shareBalanceUSD,,) = _calculateTokenUSD(token, token, buyerShareBalance);
+        address shareOFT = registry.getShareOFTForToken(token);
+        uint256 buyerShareBalance = 0;
+        if (shareOFT != address(0)) {
+            buyerShareBalance = _eligibleShareBalance(shareOFT, buyer);
+            if (buyerShareBalance > 0) {
+                (shareBalanceUSD,,) = _calculateTokenUSD(token, shareOFT, buyerShareBalance);
+            }
         }
 
         uint256 boostedWinChance;
         (entryId, boostedWinChance) = _boostAndDispatchVRF(
-            buyer, token, token, shareBalanceUSD, pointsBurnedAsUSD, 0
+            buyer, token, shareOFT == address(0) ? token : shareOFT, shareBalanceUSD, pointsBurnedAsUSD, 0
         );
 
         if (entryId > 0) {
@@ -809,15 +810,17 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
      * @notice Apply one deferred VRF result (used by admin `unpause()` FIFO flush).
      */
     function applyDeferredVrf(uint256 requestId) external {
-        if (msg.sender != owner() && msg.sender != address(this)) revert Unauthorized();
+        if (msg.sender != owner()) revert Unauthorized();
         if (!hasPendingRandomWord[requestId]) return;
 
         uint256 word = pendingRandomWord[requestId];
         delete pendingRandomWord[requestId];
         delete hasPendingRandomWord[requestId];
-
         uint256[] memory randomWords = new uint256[](1);
         randomWords[0] = word;
+        // Deferred results are settled after an admin pause window. Refresh the
+        // staleness reference so a long pause does not discard already-arrived VRF.
+        vrfRequests[requestId].requestTimestamp = block.timestamp;
         _processVRFResult(requestId, randomWords);
     }
 
@@ -848,8 +851,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         if (request.user == address(0)) return;
 
         // FIX: CLM-02 — reject stale VRF results that arrive after grace period
-        if (vrfResultGracePeriod > 0 && request.requestTimestamp > 0
-            && block.timestamp > request.requestTimestamp + vrfResultGracePeriod) {
+        if (vrfResultGracePeriod > 0 && block.timestamp > request.requestTimestamp + vrfResultGracePeriod) {
             delete vrfRequests[requestId];
             emit StaleVRFResultDiscarded(requestId, request.requestTimestamp, vrfResultGracePeriod);
             return;
@@ -860,7 +862,6 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
             if (!hasPendingRandomWord[requestId]) {
                 pendingRandomWord[requestId] = randomWords[0];
                 hasPendingRandomWord[requestId] = true;
-                _deferredVrfRequestIds.push(requestId);
                 emit VrfResultDeferred(requestId, randomWords[0]);
             }
             return;
@@ -1147,10 +1148,17 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         if (swapValueUSD < lotteryConfig.minSwapAmount) return;
         if (!lotteryConfig.isActive) return;
 
-        // Convert raw held share balance to USD (1e6) for coverage math.
+        // AUDIT-2026-07-08-R-H03: cap remote-reported coverage when tokenIn is present
+        // on this chain (hub ShareOFT / CREATE2-parity address). Pure remote addresses
+        // with no hub code trust the payload (remote OFT must queue eligible balance).
+        uint256 coverageBal = buyerCurrentShareBalance;
+        if (tokenIn.code.length > 0) {
+            coverageBal = _coverageShareBalance(tokenIn, buyer, amount, buyerCurrentShareBalance);
+        }
+
         uint256 shareBalanceUSD = 0;
-        if (buyerCurrentShareBalance > 0) {
-            (shareBalanceUSD,,) = _calculateTokenUSD(token, tokenIn, buyerCurrentShareBalance);
+        if (coverageBal > 0) {
+            (shareBalanceUSD,,) = _calculateTokenUSD(token, tokenIn, coverageBal);
         }
 
         // Get vault for this lane token (for ve(3,3) vault weighting)
@@ -1512,6 +1520,30 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         if (!success) revert ETHRefundFailed();
     }
 
+    /// @dev Cap coverage balance to tokens that cannot be explained by this purchase alone.
+    ///      Prefer caller-reported eligible balance (block-start snapshot from ShareOFT) when stricter.
+    function _coverageShareBalance(
+        address shareOFT,
+        address buyer,
+        uint256 amountIn,
+        uint256 reportedEligible
+    ) internal view returns (uint256 coverageBal) {
+        uint256 live = IERC20(shareOFT).balanceOf(buyer);
+        uint256 maxPreBuy = live > amountIn ? live - amountIn : 0;
+        coverageBal = reportedEligible;
+        if (coverageBal > maxPreBuy) coverageBal = maxPreBuy;
+        if (coverageBal > live) coverageBal = live;
+    }
+
+    /// @dev Read ShareOFT block-start eligible balance when available; else live balance.
+    function _eligibleShareBalance(address shareOFT, address buyer) internal view returns (uint256) {
+        try IShareOFTLotteryCoverage(shareOFT).balanceEligibleForLotteryCoverage(buyer) returns (uint256 eligible) {
+            return eligible;
+        } catch {
+            return IERC20(shareOFT).balanceOf(buyer);
+        }
+    }
+
     function _rateLimitOriginKey(uint32 eid, bytes32 sender) internal pure returns (bytes32) {
         return keccak256(abi.encode(eid, sender));
     }
@@ -1748,8 +1780,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         _delegateAdmin();
     }
 
-    function setTargetEid(uint32 _eid) external {
-        _eid;
+    function setTargetEid(uint32) external {
         _delegateAdmin();
     }
 
@@ -2193,7 +2224,6 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
 
     function setLocalVRFConsumer(address _consumer) external onlyDelegateCall onlyOwner {
         localVRFConsumer = IVRFConsumer4626(_consumer);
-        emit VRFConsumerUpdated(_consumer);
     }
 
     function setVRFIntegrator(address _integrator) external onlyDelegateCall onlyOwner {
@@ -2210,7 +2240,6 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
 
     function setTargetEid(uint32 _eid) external onlyDelegateCall onlyOwner {
         targetEid = _eid;
-        emit TargetEidUpdated(_eid);
     }
 
     function setUseLocalVRF(bool _useLocal) external onlyDelegateCall onlyOwner {
@@ -2477,7 +2506,7 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     ) external onlyDelegateCall onlyOwner {
         if (_minSwap < MIN_SWAP_USD || _minSwap > MAX_SWAP_USD) revert InvalidAmount();
         if (_rewardPercentage > BASIS_POINTS) revert InvalidAmount();
-        if (_maxWinChance > 200_000) revert InvalidAmount();
+        if (_maxWinChance > 150_000) revert InvalidAmount();
         if (_baseWinChance > _maxWinChance) revert InvalidAmount();
         if (_usdMultiplierBps < 10_000 || _usdMultiplierBps > 15_000) revert InvalidAmount();
         // PR 1 — AMOE Linear Parity invariant: never let maxWinChance drop
@@ -2550,7 +2579,6 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
 
     function setCallbackGasLimit(uint128 _gasLimit) external onlyDelegateCall onlyOwner {
         callbackGasLimit = _gasLimit;
-        emit CallbackGasLimitUpdated(_gasLimit);
     }
 
     function pause() external onlyDelegateCall onlyOwner {
@@ -2559,14 +2587,6 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
 
     function unpause() external onlyDelegateCall onlyOwner nonReentrant {
         _unpause();
-        uint256 len = _deferredVrfRequestIds.length;
-        for (uint256 i; i < len;) {
-            LotteryManager4626(payable(address(this))).applyDeferredVrf(_deferredVrfRequestIds[i]);
-            unchecked {
-                ++i;
-            }
-        }
-        delete _deferredVrfRequestIds;
     }
 
     function setAuthorizedHubShareOftForwarder(address shareOft, bool authorized) external onlyDelegateCall onlyOwner {

@@ -75,6 +75,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     // ================================
 
     uint256 public constant MAX_BPS = 10000;
+    uint256 public constant LOTTERY_MANAGER_UPDATE_TIMELOCK = 1 days;
 
     /// @notice WETH on Base
     address public constant WETH = 0x4200000000000000000000000000000000000006;
@@ -111,6 +112,8 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
 
     /// @notice Lottery manager for jackpot
     ILotteryManager4626 public lotteryManager;
+    ILotteryManager4626 public pendingLotteryManager;
+    uint256 public pendingLotteryManagerAt;
 
     /// @notice Agent's treasury wallet
     address public agentTreasury;
@@ -241,6 +244,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     event VaultSet(address indexed vault);
     event WrapperSet(address indexed wrapper);
     event LotteryManagerSet(address indexed manager);
+    event LotteryManagerUpdateQueued(address indexed pendingManager, uint256 executeAfter);
     event AgentTreasurySet(address indexed treasury);
     event ProtocolTreasurySet(address indexed treasury);
     event AgentTokenSet(address indexed coin);
@@ -271,7 +275,13 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     error MinOutputUnavailable();
     error NotAuthorized();
     error AgentTreasuryRequired();
+    error InvalidVaultAssetBinding();
+    error InvalidWrapperVaultBinding();
     error JackpotReserveProtected();
+    error PendingOftFeesProtected();
+    error PendingWethFeesProtected();
+    error NoPendingLotteryManager();
+    error LotteryManagerUpdateTimelockActive(uint256 executeAfter);
 
     // ================================
     // CONSTRUCTOR
@@ -524,11 +534,10 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
      * @return minOut Minimum agent token to receive (0 if oracle disabled/unavailable)
      */
     function _calculateMinOutput(uint256 wethAmount) internal view returns (uint256 minOut) {
-        // FIX: G-12 — when oracle is disabled, use fallback minimum if configured
+        // NOTE: WETH and agentToken are different units. A fallback derived from
+        // raw input amount (`wethAmount`) can underflow protection by many orders
+        // of magnitude. Keep fail-closed when oracle pricing is unavailable.
         if (!useOracleSlippage || address(oracle) == address(0)) {
-            if (fallbackMinOutputBps > 0) {
-                return (wethAmount * fallbackMinOutputBps) / MAX_BPS;
-            }
             return 0;
         }
 
@@ -746,9 +755,31 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
         if (toVoters == 0) return;
 
         if (address(voterRewardsDistributor) != address(0)) {
+            uint256 balanceBefore = shareOFT.balanceOf(address(this));
             shareOFT.forceApprove(address(voterRewardsDistributor), toVoters);
             try voterRewardsDistributor.notifyRewards(address(vault), address(shareOFT), toVoters) {
-                totalProtocolEarned += toVoters;
+                uint256 balanceAfter = shareOFT.balanceOf(address(this));
+                uint256 spent = balanceBefore > balanceAfter ? balanceBefore - balanceAfter : 0;
+                if (spent > toVoters) spent = toVoters;
+
+                if (spent > 0) {
+                    totalProtocolEarned += spent;
+                }
+
+                uint256 remainder = toVoters - spent;
+                if (remainder > 0) {
+                    if (protocolTreasury != address(0)) {
+                        shareOFT.safeTransfer(protocolTreasury, remainder);
+                        totalProtocolEarned += remainder;
+                    } else {
+                        jackpotReserve += remainder;
+                        totalLotteryFunded += remainder;
+                        accountedOFTBalance += remainder;
+                    }
+                }
+                // Clear allowance on success too, so a partial-spend distributor
+                // cannot retain stale spend permissions between distributions.
+                shareOFT.forceApprove(address(voterRewardsDistributor), 0);
             } catch {
                 shareOFT.forceApprove(address(voterRewardsDistributor), 0);
                 if (protocolTreasury != address(0)) {
@@ -825,6 +856,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
         if (_vault == address(0)) revert ZeroAddress();
         vault = IAgentOVault(_vault);
         vaultShares = IERC20(_vault); // Vault is also the share token
+        _validateCoreWiring();
         emit VaultSet(_vault);
     }
 
@@ -835,6 +867,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     function setWrapper(address _wrapper) external onlyOwner {
         if (_wrapper == address(0)) revert ZeroAddress();
         wrapper = IAgentOVaultWrapper(_wrapper);
+        _validateCoreWiring();
         emit WrapperSet(_wrapper);
     }
 
@@ -844,8 +877,26 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
      */
     function setLotteryManager(address _lotteryManager) external onlyOwner {
         if (_lotteryManager == address(0)) revert ZeroAddress();
-        lotteryManager = ILotteryManager4626(_lotteryManager);
-        emit LotteryManagerSet(_lotteryManager);
+        if (address(lotteryManager) == address(0)) {
+            lotteryManager = ILotteryManager4626(_lotteryManager);
+            emit LotteryManagerSet(_lotteryManager);
+            return;
+        }
+        pendingLotteryManager = ILotteryManager4626(_lotteryManager);
+        pendingLotteryManagerAt = block.timestamp + LOTTERY_MANAGER_UPDATE_TIMELOCK;
+        emit LotteryManagerUpdateQueued(_lotteryManager, pendingLotteryManagerAt);
+    }
+
+    function executeLotteryManagerUpdate() external onlyOwner {
+        uint256 executeAfter = pendingLotteryManagerAt;
+        if (executeAfter == 0) revert NoPendingLotteryManager();
+        if (block.timestamp < executeAfter) revert LotteryManagerUpdateTimelockActive(executeAfter);
+
+        ILotteryManager4626 next = pendingLotteryManager;
+        pendingLotteryManager = ILotteryManager4626(address(0));
+        pendingLotteryManagerAt = 0;
+        lotteryManager = next;
+        emit LotteryManagerSet(address(next));
     }
 
     /**
@@ -875,6 +926,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     function setAgentToken(address _agentToken) external onlyOwner {
         if (_agentToken == address(0)) revert ZeroAddress();
         agentToken = IERC20(_agentToken);
+        _validateCoreWiring();
         emit AgentTokenSet(_agentToken);
     }
 
@@ -1166,16 +1218,29 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     function emergencyWithdraw(address token, uint256 amount, address to) external onlyOwner {
         if (to == address(0)) revert ZeroAddress();
         // FIX: AUDIT-2026-07-01-M01 — block jackpot custody drain while reserves remain.
-        if (token == address(shareOFT) && jackpotReserve > 0) {
+        if (token == address(shareOFT) && (jackpotReserve > 0 || pendingFees > 0)) {
             revert JackpotReserveProtected();
         }
         if (token == address(shareOFT)) {
+            if (pendingFees > 0) revert PendingOftFeesProtected();
             if (amount >= accountedOFTBalance) {
                 accountedOFTBalance = 0;
             } else {
                 accountedOFTBalance -= amount;
             }
         }
+        if (token == WETH && pendingWETHFees > 0) {
+            revert PendingWethFeesProtected();
+        }
         IERC20(token).safeTransfer(to, amount);
+    }
+
+    function _validateCoreWiring() internal view {
+        if (address(vault) != address(0) && address(agentToken) != address(0)) {
+            if (vault.asset() != address(agentToken)) revert InvalidVaultAssetBinding();
+        }
+        if (address(wrapper) != address(0) && address(vault) != address(0)) {
+            if (wrapper.vaultShares() != address(vault)) revert InvalidWrapperVaultBinding();
+        }
     }
 }

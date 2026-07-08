@@ -74,6 +74,7 @@ describe('predictRemoteShareOftAddress', () => {
     )
     const initCode = concatHex([DEPLOY_BYTECODE.CreatorShareOFT as `0x${string}`, shareArgs])
     const salt = deriveShareOftSaltFromVersion({
+      creatorToken: CREATOR,
       owner: CSW_OWNER,
       shareSymbol: '■akita',
       version: 'v1.15.0',
@@ -84,6 +85,7 @@ describe('predictRemoteShareOftAddress', () => {
       shareName: 'AKITA Shares',
       shareSymbol: '■AKITA',
       oftBootstrapRegistry: bootstrap,
+      creatorToken: CREATOR,
       owner: CSW_OWNER,
       deploymentVersion: 'v1.15.0',
     })

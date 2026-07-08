@@ -15,6 +15,8 @@ type WaitlistChatDockProps = {
   setupComplete: boolean
   messagingReady: boolean
   connectTrack: WaitlistConnectTrack
+  onSignOut?: () => void | Promise<void>
+  signOutBusy?: boolean
 }
 
 /**
@@ -67,6 +69,8 @@ export function WaitlistChatDock(props: WaitlistChatDockProps) {
                 messagingReady={props.messagingReady}
                 connectTrack={props.connectTrack}
                 layout="dock"
+                onSignOut={props.onSignOut}
+                signOutBusy={props.signOutBusy}
               />
             </Suspense>
           </div>

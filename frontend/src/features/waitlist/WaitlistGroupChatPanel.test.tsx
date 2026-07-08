@@ -38,7 +38,7 @@ vi.mock('@/lib/xmtp/provider', () => ({
     identityAddress: null,
     refreshConversations: vi.fn(async () => []),
     ensureConversationById: vi.fn(async () => null),
-    disconnect: vi.fn(),
+    disconnect: vi.fn(async () => undefined),
   }),
 }))
 

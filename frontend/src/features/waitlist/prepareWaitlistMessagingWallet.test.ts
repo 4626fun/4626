@@ -168,7 +168,11 @@ describe('prepareWaitlistMessagingWallet', () => {
     expect(realRequest).not.toHaveBeenCalled()
   })
 
-  it('falls back to the raw embedded provider when the authorized lane fails', async () => {
+  it('falls back to the raw embedded provider when the authorized lane fails off loopback', async () => {
+    vi.stubGlobal('window', {
+      location: { hostname: '4626.fun' },
+    } as Window & typeof globalThis)
+
     const realRequest = vi.fn(async () => `0x${'cd'.repeat(65)}`)
     const authorizedPersonalSign = vi.fn(async () => {
       throw new Error('No valid authorization signatures were provided.')
@@ -188,9 +192,38 @@ describe('prepareWaitlistMessagingWallet', () => {
       method: 'personal_sign',
       params: [messageHex, EMBEDDED],
     })
+
+    vi.unstubAllGlobals()
   })
 
-  it('falls back to the raw provider when authorized eth_signTypedData_v4 fails', async () => {
+  it('does not fall back to the iframe provider when authorized personal_sign fails on loopback', async () => {
+    vi.stubGlobal('window', {
+      location: { hostname: 'localhost' },
+    } as Window & typeof globalThis)
+
+    const realRequest = vi.fn(async () => `0x${'cd'.repeat(65)}`)
+    const authorizedPersonalSign = vi.fn(async () => {
+      throw new Error('Missing auth token.')
+    })
+    const provider = wrapWaitlistMessagingProvider({ request: realRequest }, authorizedPersonalSign)
+
+    const messageHex = `0x${Buffer.from('XMTP : Authenticate to inbox').toString('hex')}`
+    await expect(
+      provider.request({
+        method: 'personal_sign',
+        params: [messageHex, EMBEDDED],
+      }),
+    ).rejects.toThrow('Missing auth token.')
+
+    expect(realRequest).not.toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+
+  it('falls back to the raw provider when authorized eth_signTypedData_v4 fails off loopback', async () => {
+    vi.stubGlobal('window', {
+      location: { hostname: '4626.fun' },
+    } as Window & typeof globalThis)
+
     const realRequest = vi.fn(async () => `0x${'34'.repeat(65)}`)
     const authorizedSignTypedData = vi.fn(async () => {
       throw new Error('No valid authorization signatures were provided.')
@@ -217,6 +250,8 @@ describe('prepareWaitlistMessagingWallet', () => {
       method: 'eth_signTypedData_v4',
       params: [EMBEDDED, typedData],
     })
+
+    vi.unstubAllGlobals()
   })
 
   it('keeps personal_sign on the raw provider for legacy wallets without an authorized lane', async () => {
@@ -259,7 +294,7 @@ describe('prepareWaitlistMessagingWallet', () => {
     vi.unstubAllGlobals()
   })
 
-  it('returns localhost embedded-signer error before attempting authorized signing', async () => {
+  it('returns localhost embedded-signer error when the embedded provider is unavailable', async () => {
     vi.stubGlobal('window', {
       location: { hostname: 'localhost' },
     } as Window & typeof globalThis)
@@ -289,6 +324,41 @@ describe('prepareWaitlistMessagingWallet', () => {
     })
     expect(vi.mocked(privyAuthorizedWalletPersonalSign)).not.toHaveBeenCalled()
     expect(vi.mocked(privyAuthorizedWalletSignTypedData)).not.toHaveBeenCalled()
+
+    vi.unstubAllGlobals()
+  })
+
+  it('uses authorized Wallet API signing on localhost when unified-stack wallet has a provider', async () => {
+    vi.stubGlobal('window', {
+      location: { hostname: 'localhost' },
+    } as Window & typeof globalThis)
+
+    const connectAsync = vi.fn(async () => ({ accounts: [EMBEDDED] }))
+    const generateAuthorizationSignature = vi.fn(async () => ({ signature: 'auth-sig' }))
+    const result = await prepareWaitlistMessagingWallet({
+      wallets: [
+        {
+          id: 'wallet-unified',
+          address: EMBEDDED,
+          walletClientType: 'privy',
+          recovery_method: 'privy-v2',
+          provider: { request: vi.fn() },
+        },
+      ],
+      embeddedEoaAddress: EMBEDDED,
+      ensureEmbeddedWallet: vi.fn(async () => ({ address: EMBEDDED })),
+      connectAsync,
+      connectors: [],
+      messagingWalletReady: false,
+      wagmiConfig,
+      generateAuthorizationSignature,
+      privyUser: {
+        linked_accounts: [{ type: 'wallet', address: EMBEDDED, id: 'wallet-unified' }],
+      },
+    })
+
+    expect(result).toEqual({ ok: true })
+    expect(connectAsync).toHaveBeenCalledTimes(1)
 
     vi.unstubAllGlobals()
   })

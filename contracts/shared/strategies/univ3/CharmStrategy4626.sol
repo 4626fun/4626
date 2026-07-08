@@ -169,6 +169,9 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
     error InvalidAjnaPool(address expectedQuote, address actualQuote, address expectedCollateral, address actualCollateral);
     error AjnaPositionOpen(uint256 debtBase, uint256 collateralUsdc);
     error WithdrawLiquidityUnavailable(uint256 requested, uint256 available);
+    error InvalidEmergencyWithdrawRecipient(address recipient);
+    error EmergencyWithdrawRestrictedToken(address token);
+    error RebalanceValuationUnavailable();
 
     // =================================
     // MODIFIERS
@@ -948,18 +951,22 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
 
         if (address(charmVault) != address(0)) {
             uint256 ourShares = charmVault.balanceOf(address(this));
-            // FIX: S-M01 — use Charm vault's own getTotalAmounts for accurate share conversion
-            // instead of (ourShares * amount) / totalValue which conflates strategy-level
-            // and Charm-level accounting
-            (uint256 charm0, uint256 charm1) = charmVault.getTotalAmounts();
-            uint256 charmTotal = charm0 + charm1;
-            uint256 sharesToWithdraw = charmTotal > 0
-                ? (ourShares * amount) / charmTotal
-                : ourShares;
+            // Size redemption in a single asset-denominated unit to avoid mixing
+            // ASSET (1e18) and USDC (1e6) directly.
+            (uint256 charmAssetExposure, uint256 charmUsdcExposure,) = _getCharmExposure();
+            uint256 charmValueInAsset = charmAssetExposure + _usdcToAssetValue(charmUsdcExposure);
+            uint256 sharesToWithdraw =
+                charmValueInAsset > 0 ? Math.ceilDiv(ourShares * amount, charmValueInAsset) : ourShares;
             if (sharesToWithdraw > ourShares) sharesToWithdraw = ourShares;
 
             if (sharesToWithdraw > 0) {
-                charmVault.withdraw(sharesToWithdraw, 0, 0, address(this));
+                uint256 totalShares = charmVault.totalSupply();
+                (uint256 total0, uint256 total1) = charmVault.getTotalAmounts();
+                uint256 expected0 = totalShares > 0 ? Math.mulDiv(total0, sharesToWithdraw, totalShares) : 0;
+                uint256 expected1 = totalShares > 0 ? Math.mulDiv(total1, sharesToWithdraw, totalShares) : 0;
+                uint256 min0 = Math.mulDiv(expected0, 10_000 - depositSlippageBps, 10_000);
+                uint256 min1 = Math.mulDiv(expected1, 10_000 - depositSlippageBps, 10_000);
+                charmVault.withdraw(sharesToWithdraw, min0, min1, address(this));
             }
         }
 
@@ -1207,6 +1214,7 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
 
         // FIX: S-H04 — trigger actual Charm vault rebalance with slippage post-check
         uint256 totalBefore = getTotalAssets();
+        if (totalBefore == 0) revert RebalanceValuationUnavailable();
         if (address(charmVault) != address(0)) {
             charmVault.rebalance();
         }
@@ -1287,6 +1295,12 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
     // =================================
 
     function ownerEmergencyWithdraw(address token, address to, uint256 amount) external onlyOwner {
+        // Restrict emergency outs to canonical control addresses only.
+        if (to != vault && to != owner()) revert InvalidEmergencyWithdrawRecipient(to);
+        // Prevent draining core strategy assets while strategy is active.
+        if (active && (token == address(ASSET) || token == address(USDC) || token == address(charmVault))) {
+            revert EmergencyWithdrawRestrictedToken(token);
+        }
         IERC20(token).safeTransfer(to, amount);
     }
 

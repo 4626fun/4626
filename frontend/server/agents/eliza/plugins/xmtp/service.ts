@@ -19,8 +19,14 @@ import {
   type XmtpAgentReply,
 } from '../../../../_lib/messaging/xmtpInteractive.js'
 import { formatAiPromptGuidance, resolveInboundMenuText } from '../../../../_lib/messaging/chatCommandFallback.js'
+import {
+  isRoom1659XmtpBridgeEnabled,
+  relayXmtpBridgeTextToAlfaClubRoom,
+  resolveRoom1659XmtpBridgeGroupId,
+} from '../../../../_lib/alfaclub/room1659XmtpBridge.js'
 
 const ETHEREUM_IDENTIFIER_KIND = 0
+const ROOM_BRIDGE_GROUP_ID_CACHE_TTL_MS = 30_000
 
 function getEthereumAddressFromInboxState(state: any): string | null {
   const identifiers = Array.isArray(state?.identifiers) ? state.identifiers : []
@@ -317,6 +323,7 @@ export class XmtpService {
   private config: XmtpConfig
   private signerForArchive: any = null
   private conversationArchiveKeyCache = new Map<string, string>()
+  private roomBridgeGroupIdCache: { groupId: string | null; fetchedAtMs: number } | null = null
   private readonly seenInboundMessages = new Map<string, number>()
   private readonly inboundDedupeTtlMs = INBOUND_DEDUPE_TTL_MS
   private readonly inboundDedupeMaxKeys = INBOUND_DEDUPE_MAX_KEYS
@@ -657,6 +664,31 @@ export class XmtpService {
     await this.handleInboundContent(ctx as unknown as MessageContext<string>, command, 'intent')
   }
 
+  /**
+   * Resolve (with a short cache) the AlfaClub room-1659 <-> XMTP bridge
+   * group's conversation id, so inbound messages on that specific group can
+   * be mirrored into the room instead of going through normal AI/keeper
+   * reply handling. Returns null when the bridge is disabled or not yet
+   * bootstrapped (see room1659XmtpBridge.ts).
+   */
+  private async resolveRoomBridgeGroupId(): Promise<string | null> {
+    if (!isRoom1659XmtpBridgeEnabled()) return null
+    const now = Date.now()
+    if (
+      this.roomBridgeGroupIdCache &&
+      now - this.roomBridgeGroupIdCache.fetchedAtMs < ROOM_BRIDGE_GROUP_ID_CACHE_TTL_MS
+    ) {
+      return this.roomBridgeGroupIdCache.groupId
+    }
+    try {
+      const { groupId } = await resolveRoom1659XmtpBridgeGroupId()
+      this.roomBridgeGroupIdCache = { groupId, fetchedAtMs: now }
+      return groupId
+    } catch {
+      return this.roomBridgeGroupIdCache?.groupId ?? null
+    }
+  }
+
   private async handleIncoming(ctx: MessageContext<string>): Promise<void> {
     const normalizedContent = normalizeInboundText((ctx.message as any).content)
     const content = normalizedContent.text
@@ -674,6 +706,15 @@ export class XmtpService {
     try {
       if (!this.agent) return
       if (filter.fromSelf(ctx.message, ctx.client)) return
+
+      // AlfaClub room-1659 <-> XMTP bridge group: pure mirroring, no AI/menu
+      // takeover. Skips dedupe/archival bookkeeping below intentionally —
+      // this is a lightweight relay path, not a Keeper conversation.
+      const bridgeGroupId = await this.resolveRoomBridgeGroupId()
+      if (bridgeGroupId && ctx.conversation.id === bridgeGroupId) {
+        await relayXmtpBridgeTextToAlfaClubRoom(content).catch(() => {})
+        return
+      }
 
       const menuRoute = resolveInboundMenuText(content)
       if (menuRoute.kind === 'invalid') {

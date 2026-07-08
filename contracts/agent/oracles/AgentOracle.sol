@@ -55,6 +55,8 @@ contract AgentOracle is OApp, IOracle4626 {
 
     /// @notice Staleness threshold for prices
     uint256 public constant MAX_STALENESS = 7200; // 2 hours
+    /// @notice Post-recovery grace period before a "sequencer up" status is trusted.
+    uint256 public constant SEQUENCER_GRACE_PERIOD = 3600; // 1 hour
 
     /// @notice Default TWAP duration
     uint32 public constant DEFAULT_TWAP_DURATION = 1800; // 30 minutes
@@ -281,6 +283,7 @@ contract AgentOracle is OApp, IOracle4626 {
     // FIX: M-3 (4626-439) — emitted (via the deprecated entrypoint's revert path in tests / off-chain
     // call-simulation) so tooling can pick up migrations to broadcastAssetPriceWithFees.
     event BroadcastEqualSplitCallAttempted(address indexed caller, uint256 msgValue, uint32[] dstEids);
+    event RemotePriceUpdateSkipped(uint32 indexed srcEid, int256 candidatePrice, uint256 candidateTimestamp, string reason);
 
     // ================================
     // ERRORS
@@ -311,6 +314,9 @@ contract AgentOracle is OApp, IOracle4626 {
     error InitialPriceTooHigh();
     error InvalidBaseEid();
     error InvalidOriginEid(uint32 srcEid);
+    error HubOnly();
+    error RemoteOnly();
+    error StaleObservationWindow();
     // FIX: M-3 (4626-439) — signalled when the legacy equal-split broadcast entrypoint is called.
     error BroadcastEqualSplitDeprecated();
 
@@ -407,10 +413,11 @@ contract AgentOracle is OApp, IOracle4626 {
     function setV4Pool(address _poolManager, PoolKey calldata _poolKey, bool _assetIsToken0) external onlyOwner {
         if (_poolManager == address(0)) revert ZeroAddress();
 
-        // FIX: M-5 — only reset observation ring buffer when pool manager changes;
-        // previously every call to setV4Pool reset cardinality to 1, invalidating
-        // TWAP history and causing a price blackout during warmup
-        bool managerChanged = address(poolManager) != _poolManager;
+        PoolId newPoolId = _poolKey.toId();
+        bool v4IdentityChanged =
+            !v4PoolConfigured || address(poolManager) != _poolManager
+            || PoolId.unwrap(assetPoolKey.toId()) != PoolId.unwrap(newPoolId)
+            || assetIsToken0 != _assetIsToken0;
 
         poolManager = IPoolManager(_poolManager);
         assetPoolKey = _poolKey;
@@ -418,11 +425,10 @@ contract AgentOracle is OApp, IOracle4626 {
         v4PoolConfigured = true;
 
         // Get initial tick
-        PoolId poolId = _poolKey.toId();
-        (, int24 tick,,) = poolManager.getSlot0(poolId);
+        (, int24 tick,,) = poolManager.getSlot0(newPoolId);
 
-        if (managerChanged || observationState.cardinality == 0) {
-            // Initialize first observation only on manager change or first setup
+        if (v4IdentityChanged || observationState.cardinality == 0) {
+            // Reset observations when pool identity changes to avoid cross-pool TWAP contamination.
             observations[0] = Observation({
                 blockTimestamp: uint32(block.timestamp),
                 tickCumulative: 0,
@@ -438,7 +444,7 @@ contract AgentOracle is OApp, IOracle4626 {
         lastObservationTimestamp = uint32(block.timestamp);
         tickCapState.lastCapUpdate = uint48(block.timestamp);
 
-        emit V4PoolConfigured(poolId, _poolManager, _assetIsToken0);
+        emit V4PoolConfigured(newPoolId, _poolManager, _assetIsToken0);
     }
 
     /**
@@ -530,6 +536,7 @@ contract AgentOracle is OApp, IOracle4626 {
      */
     function recordV2Observation() external {
         if (!v2PairConfigured) revert V2NotConfigured();
+        if (msg.sender != owner() && !isSwapRecorder[msg.sender]) revert Unauthorized();
         (uint256 cumulativePrice, uint32 ts) = _currentV2CumulativeAssetPerQuote();
         v2PriceCumulativeLast = cumulativePrice;
         v2ObservationTimestamp = ts;
@@ -659,10 +666,15 @@ contract AgentOracle is OApp, IOracle4626 {
      * @param _price Price in 1e18 format
      */
     function updateAssetPrice(int256 _price) external {
+        if (block.chainid != BASE_CHAIN_ID) revert HubOnly();
         if (!isPriceUpdater[msg.sender] && msg.sender != owner()) {
             revert Unauthorized();
         }
         if (_price <= 0) revert InvalidPrice();
+        if (!_sequencerIsUp()) revert SequencerDown();
+        if (assetPriceTimestamp > 0 && block.timestamp - assetPriceTimestamp < priceUpdateCooldown) {
+            revert PriceUpdateCooldown();
+        }
 
         // H-01 / 4626-293: the first write must go through
         // initializeAssetPrice(), which is owner-only and bounded. A 0 price
@@ -700,6 +712,7 @@ contract AgentOracle is OApp, IOracle4626 {
      *               <= MAX_INITIAL_PRICE_USD.
      */
     function initializeAssetPrice(int256 _price) external onlyOwner {
+        if (block.chainid != BASE_CHAIN_ID) revert HubOnly();
         if (assetPriceUSD != 0) revert OracleAlreadyInitialized();
         if (_price <= 0) revert InvalidPrice();
         if (_price > MAX_INITIAL_PRICE_USD) revert InitialPriceTooHigh();
@@ -708,6 +721,27 @@ contract AgentOracle is OApp, IOracle4626 {
         assetPriceTimestamp = block.timestamp;
 
         emit AssetPriceUpdated(assetSymbol, _price, block.timestamp, msg.sender);
+    }
+
+    /**
+     * @notice Owner emergency path to recover a stale remote oracle state.
+     * @dev Remote-only: hub price source should continue using normal update/broadcast lanes.
+     *      This is intentionally owner-gated for operations use during sustained packet
+     *      delay/loss or repeated deviation rejections on remotes.
+     */
+    function forceSyncRemotePrice(int256 _price, uint256 _timestamp, string calldata _symbol) external onlyOwner {
+        if (block.chainid == BASE_CHAIN_ID) revert RemoteOnly();
+        if (_price <= 0 || _price > MAX_INITIAL_PRICE_USD) revert InvalidPrice();
+        if (_timestamp > block.timestamp) revert InvalidPrice();
+        if (assetPriceTimestamp != 0 && _timestamp < assetPriceTimestamp) revert InvalidPrice();
+
+        assetPriceUSD = _price;
+        assetPriceTimestamp = _timestamp;
+        if (bytes(_symbol).length > 0) {
+            assetSymbol = _symbol;
+        }
+
+        emit AssetPriceUpdated(assetSymbol, _price, _timestamp, msg.sender);
     }
 
     // ================================
@@ -873,13 +907,13 @@ contract AgentOracle is OApp, IOracle4626 {
 
         int24 newCap;
         if (currentFreq > targetFreq) {
-            // Too many caps → loosen
-            newCap = currentCap + change;
-            if (newCap > tickCapPolicy.maxCap) newCap = tickCapPolicy.maxCap;
-        } else {
-            // Too few caps → tighten
+            // Too many cap hits imply increased turbulence/risk; tighten.
             newCap = currentCap - change;
             if (newCap < tickCapPolicy.minCap) newCap = tickCapPolicy.minCap;
+        } else {
+            // Too few cap hits imply room to relax cap strictness.
+            newCap = currentCap + change;
+            if (newCap > tickCapPolicy.maxCap) newCap = tickCapPolicy.maxCap;
         }
 
         if (newCap != currentCap) {
@@ -1191,6 +1225,7 @@ contract AgentOracle is OApp, IOracle4626 {
             uint32 duration = DEFAULT_TWAP_DURATION;
             uint32 nowTs = uint32(block.timestamp);
             if (nowTs <= duration) return;
+            if (!_hasRecentObservationWindow(duration)) return;
 
             uint16 currentIndex = observationState.index;
             Observation storage currentObs = observations[currentIndex];
@@ -1250,6 +1285,7 @@ contract AgentOracle is OApp, IOracle4626 {
      * @param twapDuration TWAP duration in seconds
      */
     function updateAssetPriceFromTWAP(uint32 twapDuration) external {
+        if (block.chainid != BASE_CHAIN_ID) revert HubOnly();
         if (msg.sender != owner() && !isPriceUpdater[msg.sender]) revert Unauthorized();
         if (twapDuration < MIN_TWAP_DURATION) revert InvalidDuration();
         if (assetPriceTimestamp > 0 && block.timestamp - assetPriceTimestamp < priceUpdateCooldown) {
@@ -1264,6 +1300,7 @@ contract AgentOracle is OApp, IOracle4626 {
         } else {
             if (!v4PoolConfigured) revert V4NotConfigured();
             if (observationState.cardinality < 2) revert NeedMoreObservations();
+            if (!_hasRecentObservationWindow(twapDuration)) revert StaleObservationWindow();
             agentPerQuote = getAssetEthTWAP(twapDuration);
         }
         if (agentPerQuote == 0) revert InvalidPrice();
@@ -1311,6 +1348,7 @@ contract AgentOracle is OApp, IOracle4626 {
      *      quote-denominated value as USD.
      */
     function updateAssetPriceFromV3TWAP(uint32 twapDuration) external {
+        if (block.chainid != BASE_CHAIN_ID) revert HubOnly();
         if (msg.sender != owner() && !isPriceUpdater[msg.sender]) revert Unauthorized();
         if (!v3PoolConfigured) revert V3NotConfigured();
         uint32 dur = twapDuration == 0 ? v3TwapDuration : twapDuration;
@@ -1437,14 +1475,44 @@ contract AgentOracle is OApp, IOracle4626 {
 
         (int256 price, uint256 timestamp, string memory symbol) = abi.decode(payload, (int256, uint256, string));
 
-        if (price <= 0) revert InvalidPrice();
+        if (price <= 0) {
+            emit RemotePriceUpdateSkipped(origin.srcEid, price, block.timestamp, "invalid_non_positive");
+            return;
+        }
 
         // Clamp to prevent freshness spoofing and future-timestamp underflow in staleness checks.
         uint256 safeTimestamp = timestamp > block.timestamp ? block.timestamp : timestamp;
 
         // Defense-in-depth: ignore out-of-order updates so delayed/replayed packets cannot roll back freshness.
         if (assetPriceTimestamp != 0 && safeTimestamp < assetPriceTimestamp) {
+            emit RemotePriceUpdateSkipped(origin.srcEid, price, safeTimestamp, "out_of_order");
             return;
+        }
+        if (price > MAX_INITIAL_PRICE_USD) {
+            emit RemotePriceUpdateSkipped(origin.srcEid, price, safeTimestamp, "invalid_out_of_bounds");
+            return;
+        }
+        if (assetPriceUSD > 0) {
+            uint256 oldP = uint256(assetPriceUSD);
+            uint256 newP = uint256(price);
+            uint256 deviation = oldP > newP ? ((oldP - newP) * 1e18) / oldP : ((newP - oldP) * 1e18) / oldP;
+            if (deviation > MAX_PRICE_DEVIATION) {
+                // If we are still fresh, keep strict deviation guard.
+                // If already stale, accept authenticated hub price to recover liveness.
+                if (block.timestamp - assetPriceTimestamp <= MAX_STALENESS) {
+                    // Step-wise convergence: clamp toward hub value by one max-deviation
+                    // step so remotes keep progressing even after packet loss/censorship.
+                    uint256 maxStep = Math.mulDiv(oldP, MAX_PRICE_DEVIATION, 1e18);
+                    if (maxStep == 0) maxStep = 1;
+                    if (newP > oldP) {
+                        newP = oldP + maxStep;
+                    } else {
+                        newP = oldP > maxStep ? oldP - maxStep : 1;
+                    }
+                    price = int256(newP);
+                    emit RemotePriceUpdateSkipped(origin.srcEid, price, safeTimestamp, "deviation_clamped");
+                }
+            }
         }
 
         assetPriceUSD = price;
@@ -1496,10 +1564,13 @@ contract AgentOracle is OApp, IOracle4626 {
     function _sequencerIsUp() internal view returns (bool) {
         address feed = sequencerUptimeFeed;
         if (feed == address(0)) return true;
-        (, int256 answer,, uint256 updatedAt,) = IChainlinkFeed(feed).latestRoundData();
+        (, int256 answer, uint256 startedAt, uint256 updatedAt,) = IChainlinkFeed(feed).latestRoundData();
         if (updatedAt > block.timestamp) return false;
-        if (block.timestamp - updatedAt > MAX_STALENESS) return false;
-        return answer == 0;
+        if (answer != 0) return false;
+        if (startedAt == 0) return false;
+        if (startedAt > block.timestamp) return false;
+        if (block.timestamp - startedAt <= SEQUENCER_GRACE_PERIOD) return false;
+        return true;
     }
 
     /// @notice External wrapper used in try/catch to keep auto-path fail-open.
@@ -1577,6 +1648,26 @@ contract AgentOracle is OApp, IOracle4626 {
             price18 = unsignedAnswer;
         }
         return (price18, roundUpdatedAt, true);
+    }
+
+    function _hasRecentObservationWindow(uint32 duration) internal view returns (bool) {
+        if (observationState.cardinality < 2) return false;
+
+        uint16 currentIndex = observationState.index;
+        Observation storage currentObs = observations[currentIndex];
+        if (!currentObs.initialized) return false;
+
+        uint32 currentTs = currentObs.blockTimestamp;
+        if (currentTs > block.timestamp) return false;
+        if (block.timestamp - currentTs > duration) return false;
+
+        uint32 targetTime = currentTs > duration ? currentTs - duration : 0;
+        uint16 oldIndex = _findObservationBefore(targetTime);
+        Observation storage oldObs = observations[oldIndex];
+        if (!oldObs.initialized) return false;
+
+        uint32 realizedWindow = currentTs - oldObs.blockTimestamp;
+        return realizedWindow >= MIN_TWAP_DURATION;
     }
 }
 

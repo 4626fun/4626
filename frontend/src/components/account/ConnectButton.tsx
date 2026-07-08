@@ -200,7 +200,7 @@ function formatTokenAmount(value: number | null | undefined): string {
   return value.toLocaleString(undefined, { maximumFractionDigits: 6 })
 }
 
-type TrayPointsOverview = {
+export type TrayPointsOverview = {
   points: {
     total: number
     invite: number
@@ -1028,14 +1028,19 @@ export function ConnectButton({
   )
 }
 
-function RelayTrayPrimaryTabs(props: {
+export function RelayTrayPrimaryTabs(props: {
   section: 'account' | 'portfolio' | 'points'
   onChange: (section: 'account' | 'portfolio' | 'points') => void
+  /** Defaults to all three tabs. Callers that don't offer a Portfolio surface
+   * (e.g. the waitlist tray, which has no wagmi/portfolio data) can pass a
+   * narrower list instead of duplicating this tab-bar component. */
+  sections?: readonly ('account' | 'portfolio' | 'points')[]
 }) {
+  const sections = props.sections ?? (['account', 'portfolio', 'points'] as const)
   return (
     <div className="px-4 pt-1 pb-2">
       <div className="inline-flex items-center gap-1 rounded-lg border border-white/8 bg-black/20 p-1">
-        {(['account', 'portfolio', 'points'] as const).map((value) => (
+        {sections.map((value) => (
           <button
             key={value}
             type="button"
@@ -1307,7 +1312,7 @@ async function fetchTrayLeaderboard(limit: number): Promise<TrayLeaderboardRespo
   return json.data
 }
 
-function RelayTrayPointsModule(props: {
+export function RelayTrayPointsModule(props: {
   pointsTotal: number
   position: TrayPointsOverview | null
   pointsLoading: boolean
@@ -1596,7 +1601,7 @@ function formatPointsActivityWhen(timestampMs: number): string {
   return new Date(timestampMs).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-function useIsPhoneViewport(): boolean {
+export function useIsPhoneViewport(): boolean {
   const [isPhone, setIsPhone] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
     return window.matchMedia('(max-width: 767px)').matches

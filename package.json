@@ -12,6 +12,7 @@
     "security:local": "bash scripts/security-audit-local.sh",
     "guard:vault-strategy-reallocator": "node scripts/check-vault-strategy-reallocator-wiring.mjs",
     "guard:ovault-delegate-epilogues": "node scripts/check-ovault-delegate-epilogues.mjs",
+    "guard:ovault-module-storage-layout": "node scripts/check-ovault-module-storage-layout.mjs",
     "guard:lane-contract-parity": "node scripts/check-lane-contract-parity.mjs",
     "test:guard:lane-contract-parity": "node scripts/check-lane-contract-parity.mjs --self-test",
     "docs:guard-source-link-pin": "node scripts/check-docs-source-link-pin.mjs",

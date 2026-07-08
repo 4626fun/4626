@@ -411,6 +411,7 @@ function predictAddresses(params: {
   const shareSalt =
     params.shareOftSalt ??
     deriveShareOftSaltFromVersion({
+      creatorToken: params.creatorToken,
       owner: params.owner,
       shareSymbol: params.shareSymbol,
       version: params.version,

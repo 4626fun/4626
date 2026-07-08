@@ -97,6 +97,38 @@ Update rule:
 - When changing Telegram destination, update these env vars together and redeploy.
 - Keep this table in sync with production after each destination change.
 
+### Room 1659 &harr; XMTP bridge (optional, off by default)
+
+Bidirectional bridge between AlfaClub room `1659` and a dedicated XMTP group, mirroring the
+Telegram relay pattern. Sending identity is the existing protocol 4626 agent CSW
+(`PROTOCOL_CSW_*`) — no new wallet. See `frontend/server/_lib/alfaclub/room1659XmtpBridge.ts`.
+
+- **Env:**
+  - `ROOM_1659_XMTP_BRIDGE_ENABLED` (bool, default off) — master switch for both directions.
+  - Reuses `PROTOCOL_CSW_ADDRESS` / `PROTOCOL_CSW_PRIVY_WALLET_ID` / `PROTOCOL_CSW_OWNER_INDEX` /
+    `PROTOCOL_CSW_CHAIN_ID` (already set for XMTP DM alerts) — the bridge is disabled whenever
+    `hasProtocolCswRuntimeConfig()` is false, regardless of the flag above.
+  - The XMTP group id is **not** an env var. It's resolved from a synthetic `keepr_vaults` row
+    (`vault_address = 0x0000…001659`, mirroring the waitlist chat's synthetic vault address) and
+    self-bootstraps a real group on the first outbound send or membership sync action, the same
+    way the waitlist XMTP group does.
+- **Runtime split:**
+  - Outbound (room &rarr; XMTP) is enqueued from the AlfaClub bridge tick (`chatBridge.ts`
+    `ingestLiveMessages`, wherever it runs — Vercel cron or Railway per the existing
+    Keepr/Vercel split) as a `xmtp.group.send_message` Keepr action.
+  - Inbound (XMTP &rarr; room) and all Keepr action execution happen on the **Keepr Railway
+    primary**'s already-live `XmtpService` connection — per the Railway-only-XMTP-primary
+    invariant, no second live XMTP listener is introduced.
+- **Membership:** synced 1:1 with `alfaclub.room_access_memberships` transitions for room `1659`
+  (active &rarr; `xmtp.group.add_member`, removed &rarr; `xmtp.group.remove_member`), via hooks in
+  `roomAccessPolicy.ts`. No separate join flow.
+- **Loop prevention:** `alfaclub.chat_bridge_message_origin` tags each room message posted by a
+  relay with its origin channel (`telegram` | `xmtp`) so outbound fan-out skips re-relaying a
+  message back to the exact channel it came from, while still letting it propagate to the other
+  channel (hub-and-spoke, not two independent one-way mirrors).
+- **Rollout:** ship with the flag off, verify group bootstrap + a manual add_member + manual send
+  in a private test group, then enable for room 1659 production traffic.
+
 ### Fast health checks
 
 - **Bridge alive:** startup logs show `AlfaClub chat bridge started` and `AlfaClub chat seeded`.

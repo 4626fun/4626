@@ -324,6 +324,52 @@ type EstablishWaitlistSessionInput = {
   tokenAttempts?: number
   tokenRetryDelayMs?: number
   tokenTimeoutMs?: number | null
+  /**
+   * Best-effort hook to ensure the caller has a Privy embedded EOA before we
+   * bridge the session. Waitlist Privy modes disable auto-create-on-login
+   * (`WAITLIST_EMBEDDED_WALLETS_OFF` in lib/privy/client.tsx), so a brand-new
+   * email join otherwise has zero linked wallets at this point and
+   * /api/auth/privy fails closed with 400 "No Privy wallet is ready yet."
+   * Only the email-join tail supplies this; the wallet-sign-in path already
+   * has a wallet and omits it.
+   */
+  ensureEmbeddedWallet?: () => Promise<unknown>
+}
+
+/**
+ * `ensureEmbeddedWallet()` reads a ref snapshot of `privy.authenticated` that is
+ * refreshed by a `useEffect` on every render of the caller. Immediately after
+ * `loginWithCode` resolves, that snapshot can still be one render behind (we've
+ * observed it read `authenticated: false` for a single render right after a
+ * `passwordless/authenticate` retry), which makes `ensureEmbeddedWallet()` throw
+ * synchronously and get swallowed as a no-op — leaving the join with zero linked
+ * wallets and a 400 from `/api/auth/privy`. Retry a few times with a short delay
+ * so React gets a chance to flush the pending re-render before we give up.
+ */
+async function ensureEmbeddedWalletBestEffort(
+  ensureEmbeddedWallet: () => Promise<unknown>,
+  logStep: (step: string, detail?: Record<string, unknown>) => void,
+): Promise<void> {
+  const attempts = 4
+  const retryDelayMs = 200
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const result = await ensureEmbeddedWallet()
+      const resultRecord = result && typeof result === 'object' ? (result as Record<string, unknown>) : null
+      logStep('ensure-embedded-wallet:success', {
+        attempt,
+        created: resultRecord?.created ?? null,
+      })
+      return
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error ?? '')
+      logStep('ensure-embedded-wallet:attempt-failed', { attempt, message })
+      if (attempt < attempts) {
+        await sleep(retryDelayMs)
+      }
+    }
+  }
+  logStep('ensure-embedded-wallet:gave-up', { attempts })
 }
 
 export async function establishWaitlistSessionAfterPrivyAuth(
@@ -357,6 +403,12 @@ export async function establishWaitlistSessionAfterPrivyAuth(
 
     if (isLocalDevPrivySessionMarkerMode()) {
       assertPrivySessionMarkerCookie()
+    }
+
+    if (input.ensureEmbeddedWallet) {
+      logStep('ensure-embedded-wallet:start')
+      await ensureEmbeddedWalletBestEffort(input.ensureEmbeddedWallet, logStep)
+      logStep('ensure-embedded-wallet:done')
     }
 
     logStep('bridge:start')

@@ -7,6 +7,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
 
 import {OVaultModuleBase} from "@4626/shared/vault/modules/OVaultModuleBase.sol";
+import {OVaultModuleConstants} from "@4626/shared/vault/modules/OVaultModuleConstants.sol";
 import {IOVaultModuleIdentity} from "@4626/shared/interfaces/vault/IOVaultModuleIdentity.sol";
 
 interface IVaultShareBurnStreamQueuer {
@@ -18,13 +19,13 @@ interface IVaultShareBurnStreamQueuer {
 contract OVaultAdminModule is OVaultModuleBase, IOVaultModuleIdentity {
     using SafeERC20 for IERC20;
     bytes32 internal constant MODULE_KIND = keccak256("OVaultModule.admin");
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("OVaultModuleStorage.v3");
+    bytes32 internal constant MODULE_STORAGE_VERSION = OVaultModuleConstants.MODULE_STORAGE_VERSION;
 
     // ---- constants (must match vault) ----
     uint256 internal constant MAX_BPS = 10_000;
     uint16 internal constant MAX_FEE = 2_000;
     uint16 internal constant MAX_MANAGEMENT_FEE = 500;
-    uint256 internal constant SECONDS_PER_YEAR = 365 days;
+    uint256 internal constant SECONDS_PER_YEAR = OVaultModuleConstants.SECONDS_PER_YEAR;
     uint64 internal constant MIN_RISK_CONFIG_DELAY = 1 days;
     uint64 internal constant MAX_RISK_CONFIG_DELAY = 30 days;
 
@@ -97,6 +98,7 @@ contract OVaultAdminModule is OVaultModuleBase, IOVaultModuleIdentity {
     error RiskConfigTooEarly(uint64 unlockTime);
     error InvalidRiskConfigKind(uint8 kind);
     error InvalidImpairmentConfig(address provided);
+    error BurnStreamIntegrationCheckFailed(address burnStreamAddr);
 
     // =================================
     // EMERGENCY CONTROLS
@@ -197,6 +199,16 @@ contract OVaultAdminModule is OVaultModuleBase, IOVaultModuleIdentity {
      */
     function setBurnStream(address _burnStream) external onlyDelegateCall {
         if (_burnStream == address(0)) revert ZeroAddress();
+
+        // Integration canary: owner-less burn streams authorize queuers only when
+        // `msg.sender == vault`. Ensure this vault can actually call that path now,
+        // so deployment wiring fails fast instead of breaking payout routing later.
+        try IVaultShareBurnStreamQueuer(_burnStream).setAuthorizedQueuer(address(this), true) {
+            IVaultShareBurnStreamQueuer(_burnStream).setAuthorizedQueuer(address(this), false);
+        } catch {
+            revert BurnStreamIntegrationCheckFailed(_burnStream);
+        }
+
         address old = burnStream;
         burnStream = _burnStream;
         emit UpdateBurnStream(old, _burnStream);

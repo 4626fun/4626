@@ -123,6 +123,8 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     /// @notice Allowed CCA auction contracts for Solana-originated bids/claims/exits.
     /// @dev Must be configured by the adapter owner.
     mapping(address => bool) public allowedCcaAuctions;
+    /// @notice Canonical Twin owner for each CCA bid placed through this adapter.
+    mapping(address => mapping(uint256 => address)) public ccaBidOwner;
 
     /// @notice Authorized fee keeper Solana pubkeys (keeper role, not Keepr brand).
     mapping(bytes32 => bool) public authorizedFeeKeepers;
@@ -187,6 +189,8 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     error InvalidAddress();
     error InvalidIxPayload();
     error UnauthorizedTwin(address caller, address expectedTwin);
+    error NotBidOwner(address auction, uint256 bidId, address expected, address actual);
+    error UnknownBidOwner(address auction, uint256 bidId);
     error BridgeFailed();
     error UnauthorizedFeeKeeper(bytes32 keeperPubkey);
     error UnauthorizedEntryKeeper(bytes32 keeperPubkey);
@@ -446,6 +450,9 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
             prevTickPrice,
             "" // No hook data
         );
+        // Bind this bidId to the caller Twin so claim/exit cannot be executed by
+        // a different Twin through the shared adapter.
+        ccaBidOwner[ccaAuction][bidId] = twinContract;
 
         emit CCABidFromSolana(twinContract, ccaAuction, bidId, amount, msg.value);
     }
@@ -463,6 +470,9 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     {
         if (ccaAuction == address(0)) revert InvalidAddress();
         if (!allowedCcaAuctions[ccaAuction]) revert CcaAuctionNotAllowed(ccaAuction);
+        address expectedOwner = ccaBidOwner[ccaAuction][bidId];
+        if (expectedOwner == address(0)) revert UnknownBidOwner(ccaAuction, bidId);
+        if (expectedOwner != msg.sender) revert NotBidOwner(ccaAuction, bidId, expectedOwner, msg.sender);
 
         // Claim tokens - they go to the bid owner (Twin contract)
         ICCAuction(ccaAuction).claimTokens(bidId);
@@ -482,6 +492,9 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     {
         if (ccaAuction == address(0)) revert InvalidAddress();
         if (!allowedCcaAuctions[ccaAuction]) revert CcaAuctionNotAllowed(ccaAuction);
+        address expectedOwner = ccaBidOwner[ccaAuction][bidId];
+        if (expectedOwner == address(0)) revert UnknownBidOwner(ccaAuction, bidId);
+        if (expectedOwner != msg.sender) revert NotBidOwner(ccaAuction, bidId, expectedOwner, msg.sender);
 
         ICCAuction(ccaAuction).exitBid(bidId);
 
@@ -687,7 +700,13 @@ IGaugeControllerFees(gauge).receiveFees(amount);
             uint256 amount18;
 
             if (baseDecimals >= solDecimals) {
-                amount18 = entry.amountSolanaUnits * (10 ** (baseDecimals - solDecimals));
+                uint8 scaleDecimals = baseDecimals - solDecimals;
+                // Skip malformed decimal configs that would overflow exponentiation.
+                if (scaleDecimals > 77) continue;
+                uint256 scale = 10 ** uint256(scaleDecimals);
+                // Skip entries that overflow during scale-up to Base units.
+                if (entry.amountSolanaUnits > type(uint256).max / scale) continue;
+                amount18 = entry.amountSolanaUnits * scale;
             } else {
                 amount18 = entry.amountSolanaUnits / (10 ** (solDecimals - baseDecimals));
             }

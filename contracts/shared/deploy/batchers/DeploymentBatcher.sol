@@ -24,6 +24,11 @@ interface IUniversalCreate2DeployerFromStore {
     function computeAddress(bytes32 salt, bytes32 initCodeHash) external view returns (address);
 }
 
+/// @dev AUDIT-2026-07-08-NEW-H — phase modules consult the batcher shell for codeId allowlist.
+interface IDeploymentBatcherCodeAllowlist {
+    function requireApprovedCodeId(bytes32 codeId) external view;
+}
+
 interface IApprovedV4HooksRegistryAdmin {
     function setHookApproval(address hook, bool approved) external;
     function transferOwnership(address newOwner) external;
@@ -162,6 +167,8 @@ contract DeploymentBatcherPhase3Helper {
             if (codeIds.charmAlphaVaultDeploy == bytes32(0) || codeIds.charmStrategy4626 == bytes32(0)) {
                 revert InvalidCodeId();
             }
+            IDeploymentBatcherCodeAllowlist(batcher).requireApprovedCodeId(codeIds.charmAlphaVaultDeploy);
+            IDeploymentBatcherCodeAllowlist(batcher).requireApprovedCodeId(codeIds.charmStrategy4626);
         }
         if (params.ajnaWeightBps != 0) {
             if (
@@ -170,6 +177,9 @@ contract DeploymentBatcherPhase3Helper {
             ) {
                 revert InvalidCodeId();
             }
+            IDeploymentBatcherCodeAllowlist(batcher).requireApprovedCodeId(codeIds.ajnaVaultAuth);
+            IDeploymentBatcherCodeAllowlist(batcher).requireApprovedCodeId(codeIds.ajnaVault);
+            IDeploymentBatcherCodeAllowlist(batcher).requireApprovedCodeId(codeIds.erc4626StrategyAdapter);
         }
 
         address v3Pool = IUniswapV3Factory(uniswapV3Factory).getPool(params.creatorToken, usdc, V3_FEE_TIER);
@@ -391,6 +401,8 @@ contract DeploymentBatcherShareMeshHelper {
         if (codeIds.approvedV4HooksRegistry == bytes32(0) || codeIds.lpManager == bytes32(0)) {
             revert InvalidCodeId();
         }
+        IDeploymentBatcherCodeAllowlist(batcher).requireApprovedCodeId(codeIds.approvedV4HooksRegistry);
+        IDeploymentBatcherCodeAllowlist(batcher).requireApprovedCodeId(codeIds.lpManager);
 
         ICCALaunchArmMesh cca = ICCALaunchArmMesh(params.ccaLaunchArm);
         (,, bool isGraduated,,, bool currencySwept,, bool migrated,,,,,,,,,) = cca.getLifecycleStatus();
@@ -470,7 +482,23 @@ contract DeploymentBatcherUtilsHelper {
         return keccak256(abi.encodePacked(baseSalt, label));
     }
 
-    function deriveShareOftSalt(address owner, string calldata shareSymbolLower, string calldata version)
+    /// @notice ShareOFT CREATE2 salt scoped per creator token.
+    /// @dev AUDIT-2026-07-08-C01: previous salt was `owner + symbol + version` only, so two
+    ///      tokens under the same owner/symbol/version collided and phase-1 could adopt
+    ///      and re-wire a foreign ShareOFT. Include `creatorToken` so each vault gets a
+    ///      unique salt while remote deploys of the same token still share address parity.
+    function deriveShareOftSalt(
+        address creatorToken,
+        address owner,
+        string calldata shareSymbolLower,
+        string calldata version
+    ) external pure returns (bytes32) {
+        bytes32 base = keccak256(abi.encodePacked(creatorToken, owner, shareSymbolLower));
+        return keccak256(abi.encodePacked(base, "CreatorShareOFT:", version));
+    }
+
+    /// @dev Legacy salt (pre C-01). Kept only for read/debug of historical deploys.
+    function deriveShareOftSaltLegacy(address owner, string calldata shareSymbolLower, string calldata version)
         external
         pure
         returns (bytes32)
@@ -527,6 +555,7 @@ interface ICreatorShareOFT {
     function setHubConfig(bool _isHub, uint32 _hubEid, address _hubGaugeReceiver) external;
     function setAddressType(address addr, uint8 opType) external;
     function transferOwnership(address newOwner) external;
+    function vault() external view returns (address);
 }
 
 interface ICCALaunchArm {
@@ -690,6 +719,7 @@ contract DeploymentBatcherPhase1Module {
     error Phase1StateMismatch();
     error Phase1CoreMissing();
     error Phase1ShareOFTMissing();
+    error Phase1ShareOFTAlreadyBound(address shareOFT, address existingVault, address expectedVault);
     error Phase1Missing();
 
     IUniversalCreate2DeployerFromStore public immutable create2Deployer;
@@ -841,10 +871,17 @@ contract DeploymentBatcherPhase1Module {
         ) {
             out.shareOFT = deployedShareOFT;
         } catch {
+            // AUDIT-2026-07-08-C01: only adopt a pre-existing ShareOFT when it is still
+            // unbound (vault == 0) or already pointed at this vault. Never re-wire a
+            // ShareOFT that belongs to another vault (salt collision / squat reuse).
             address expectedAddr = create2Deployer.computeAddress(state.shareOftSalt, shareOftInitCodeHash);
             if (expectedAddr.code.length == 0) revert Phase1ShareOFTMissing();
             bytes32 verifyHash = keccak256(bytes.concat(bytecodeStore.get(codeIds.shareOFT), shareOftArgs));
             if (verifyHash != shareOftInitCodeHash) revert Phase1StateMismatch();
+            address existingVault = ICreatorShareOFT(expectedAddr).vault();
+            if (existingVault != address(0) && existingVault != out.vault) {
+                revert Phase1ShareOFTAlreadyBound(expectedAddr, existingVault, out.vault);
+            }
             out.shareOFT = expectedAddr;
         }
 
@@ -875,7 +912,9 @@ contract DeploymentBatcherPhase1Module {
         string memory shareSymbolLower = utilsHelper.toLower(params.shareSymbol);
         baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
         shareOftSalt = shareOftSaltOverride == bytes32(0)
-            ? utilsHelper.deriveShareOftSalt(params.owner, shareSymbolLower, params.version)
+            ? utilsHelper.deriveShareOftSalt(
+                params.creatorToken, params.owner, shareSymbolLower, params.version
+            )
             : shareOftSaltOverride;
         paramsHash = utilsHelper.phase1ParamsHash(
             params.creatorToken,
@@ -891,13 +930,18 @@ contract DeploymentBatcherPhase1Module {
             utilsHelper.phase1CodeIdsHash(codeIds.vault, codeIds.wrapper, codeIds.shareOFT, codeIds.oftBootstrap);
     }
 
-    function _requirePhase1CodeIds(DeploymentBatcher.CodeIds calldata codeIds) internal pure {
+    function _requirePhase1CodeIds(DeploymentBatcher.CodeIds calldata codeIds) internal view {
         if (
             codeIds.vault == bytes32(0) || codeIds.wrapper == bytes32(0) || codeIds.shareOFT == bytes32(0)
                 || codeIds.oftBootstrap == bytes32(0)
         ) {
             revert InvalidCodeId();
         }
+        // AUDIT-2026-07-08-NEW-H: reject unallowlisted bytecode ids when batcher enforces.
+        IDeploymentBatcherCodeAllowlist(batcher).requireApprovedCodeId(codeIds.vault);
+        IDeploymentBatcherCodeAllowlist(batcher).requireApprovedCodeId(codeIds.wrapper);
+        IDeploymentBatcherCodeAllowlist(batcher).requireApprovedCodeId(codeIds.shareOFT);
+        IDeploymentBatcherCodeAllowlist(batcher).requireApprovedCodeId(codeIds.oftBootstrap);
     }
 
     function _deriveInitCodeHash(bytes32 codeId, bytes memory constructorArgs) internal view returns (bytes32) {
@@ -1020,6 +1064,9 @@ contract DeploymentBatcherPhase2Module {
         if (codeIds.gauge == bytes32(0) || codeIds.cca == bytes32(0) || codeIds.oracle == bytes32(0)) {
             revert InvalidCodeId();
         }
+        IDeploymentBatcherCodeAllowlist(batcher).requireApprovedCodeId(codeIds.gauge);
+        IDeploymentBatcherCodeAllowlist(batcher).requireApprovedCodeId(codeIds.cca);
+        IDeploymentBatcherCodeAllowlist(batcher).requireApprovedCodeId(codeIds.oracle);
         if (params.vault.code.length == 0 || params.wrapper.code.length == 0 || params.shareOFT.code.length == 0) {
             revert Phase1Missing();
         }
@@ -1629,10 +1676,26 @@ contract DeploymentBatcher is ReentrancyGuard {
     error InvalidPhase2Module();
     error InvalidPhase1Module();
     error ModuleCodehashMismatch(address module, bytes32 expected, bytes32 actual);
+    /// @dev AUDIT-2026-07-08-H08: module must be pre-approved with a non-zero codehash.
+    error PhaseModuleCodehashNotApproved(address module);
+    /// @dev AUDIT-2026-07-08-NEW-H: deploy codeId not on the treasury allowlist.
+    error CodeIdNotApproved(bytes32 codeId);
+    error CodeIdAllowlistFrozen();
 
-    /// @dev FIX: AUDIT-2026-07-01-M17 — optional codehash allowlist for hot-swapped modules.
+    /// @dev AUDIT-2026-07-08-H08 — mandatory codehash allowlist for phase1/2 module hot-swap.
     mapping(address => bytes32) public approvedPhaseModuleCodehashes;
+    /// @dev AUDIT-2026-07-08-NEW-H — bytecode codeIds permitted for CREATE2 deploys via this batcher.
+    mapping(bytes32 => bool) public approvedCodeIds;
+    /// @notice When true (default), every phase deploy codeId must be approved.
+    bool public codeIdAllowlistEnabled = true;
+    /// @notice When true, allowlist enabled flag and further disable attempts are frozen on.
+    bool public codeIdAllowlistFrozen;
     error Phase1ModuleMissing();
+
+    event PhaseModuleCodehashApproved(address indexed module, bytes32 codehash);
+    event CodeIdApprovalUpdated(bytes32 indexed codeId, bool approved);
+    event CodeIdAllowlistEnabledUpdated(bool enabled);
+    event CodeIdAllowlistFrozenEvent();
 
     IRegistry4626 public immutable registry;
     IUniversalBytecodeStore public immutable bytecodeStore;
@@ -2025,7 +2088,7 @@ contract DeploymentBatcher is ReentrancyGuard {
 
     /// @notice Whitelist the payout router on the wrapper while the batcher still owns it.
     /// @dev Must run after payout router CREATE2 deploy and before finalizePhase2 ownership transfer.
-    function whitelistPayoutRouterOnWrapper(address wrapper, address payoutRouter) external {
+    function whitelistPayoutRouterOnWrapper(address wrapper, address payoutRouter) external onlyProtocolTreasury {
         if (wrapper == address(0) || payoutRouter == address(0)) revert ZeroAddress();
         address wrapperOwner = IOwnableView(wrapper).owner();
         if (wrapperOwner != address(this)) revert WrapperOwnerMismatch(wrapper, wrapperOwner);
@@ -2034,7 +2097,10 @@ contract DeploymentBatcher is ReentrancyGuard {
 
     /// @notice Mark the payout router ShareOFT fee-exempt while the batcher still owns ShareOFT.
     /// @dev OperationType.NoFees = 2. Must run before finalizePhase2 transfers ShareOFT to treasury.
-    function setPayoutRouterShareOftNoFees(address shareOFT, address payoutRouter) external {
+    function setPayoutRouterShareOftNoFees(address shareOFT, address payoutRouter)
+        external
+        onlyProtocolTreasury
+    {
         if (shareOFT == address(0) || payoutRouter == address(0)) revert ZeroAddress();
         address shareOwner = IOwnableView(shareOFT).owner();
         if (shareOwner != address(this)) revert ShareOftOwnerMismatch(shareOFT, shareOwner);
@@ -2279,6 +2345,13 @@ contract DeploymentBatcher is ReentrancyGuard {
         address _shareMeshHelper,
         address _utilsHelper
     ) external onlyProtocolTreasury {
+        if (_phase2Module == address(0) || _phase3Helper == address(0) || _shareMeshHelper == address(0)
+            || _utilsHelper == address(0)) {
+            revert ZeroAddress();
+        }
+        // AUDIT-2026-07-08-H08: phase2 is delegatecall authority — require approved codehash.
+        _validatePhaseModuleCodehash(_phase2Module);
+        if (DeploymentBatcherPhase2Module(_phase2Module).batcher() != address(this)) revert InvalidPhase2Module();
         phase2Module = DeploymentBatcherPhase2Module(_phase2Module);
         phase3Helper = DeploymentBatcherPhase3Helper(_phase3Helper);
         shareMeshHelper = DeploymentBatcherShareMeshHelper(_shareMeshHelper);
@@ -2305,12 +2378,52 @@ contract DeploymentBatcher is ReentrancyGuard {
 
     function approvePhaseModuleCodehash(address module, bytes32 codehash) external onlyProtocolTreasury {
         if (module == address(0)) revert ZeroAddress();
+        if (codehash == bytes32(0)) revert PhaseModuleCodehashNotApproved(module);
         approvedPhaseModuleCodehashes[module] = codehash;
+        emit PhaseModuleCodehashApproved(module, codehash);
+    }
+
+    /// @notice Approve or revoke a bytecode-store codeId for phase CREATE2 deploys.
+    function setApprovedCodeId(bytes32 codeId, bool approved) external onlyProtocolTreasury {
+        if (codeId == bytes32(0)) revert InvalidCodeId();
+        approvedCodeIds[codeId] = approved;
+        emit CodeIdApprovalUpdated(codeId, approved);
+    }
+
+    function setApprovedCodeIds(bytes32[] calldata codeIds, bool approved) external onlyProtocolTreasury {
+        uint256 len = codeIds.length;
+        for (uint256 i = 0; i < len; i++) {
+            bytes32 codeId = codeIds[i];
+            if (codeId == bytes32(0)) revert InvalidCodeId();
+            approvedCodeIds[codeId] = approved;
+            emit CodeIdApprovalUpdated(codeId, approved);
+        }
+    }
+
+    /// @notice Enable/disable codeId allowlist enforcement (must be true in production).
+    function setCodeIdAllowlistEnabled(bool enabled) external onlyProtocolTreasury {
+        if (codeIdAllowlistFrozen) revert CodeIdAllowlistFrozen();
+        codeIdAllowlistEnabled = enabled;
+        emit CodeIdAllowlistEnabledUpdated(enabled);
+    }
+
+    /// @notice Permanently keep the allowlist enforced (cannot disable afterward).
+    function freezeCodeIdAllowlist() external onlyProtocolTreasury {
+        codeIdAllowlistEnabled = true;
+        codeIdAllowlistFrozen = true;
+        emit CodeIdAllowlistFrozenEvent();
+    }
+
+    /// @notice View helper for phase modules: reverts when allowlist is on and codeId is not approved.
+    function requireApprovedCodeId(bytes32 codeId) external view {
+        if (!codeIdAllowlistEnabled) return;
+        if (!approvedCodeIds[codeId]) revert CodeIdNotApproved(codeId);
     }
 
     function _validatePhaseModuleCodehash(address module) internal view {
         bytes32 expected = approvedPhaseModuleCodehashes[module];
-        if (expected == bytes32(0)) return;
+        // AUDIT-2026-07-08-H08: zero approval is no longer a pass-through.
+        if (expected == bytes32(0)) revert PhaseModuleCodehashNotApproved(module);
         bytes32 actual;
         assembly {
             actual := extcodehash(module)

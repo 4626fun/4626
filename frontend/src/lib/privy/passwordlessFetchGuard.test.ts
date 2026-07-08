@@ -9,6 +9,7 @@ import {
   isPrivyOauthLinkOrUnlinkRequest,
   isPrivyPasswordlessFailure,
   isPrivyPasswordlessInitRequest,
+  isPrivySiweLinkOrUnlinkRequest,
   normalizeFetchMethod,
   rewritePrivyLegacyRequestInput,
   rewritePrivyLegacyRequestUrl,
@@ -105,6 +106,19 @@ describe('passwordlessFetchGuard', () => {
     expect(isPrivyDeprecatedSessionRefreshRequest(url, 'POST', deprecatedBody)).toBe(true)
     expect(isPrivyDeprecatedSessionRefreshRequest(url, 'POST', realBody)).toBe(false)
     expect(isPrivyDeprecatedSessionRefreshRequest(url, 'GET', deprecatedBody)).toBe(false)
+  })
+
+  it('matches Privy siwe link/unlink POSTs on both the canonical and custom domain', () => {
+    expect(isPrivySiweLinkOrUnlinkRequest('https://auth.privy.io/api/v1/siwe/link', 'POST')).toBe(true)
+    expect(isPrivySiweLinkOrUnlinkRequest('https://auth.privy.io/api/v1/siwe/unlink', 'POST')).toBe(true)
+    expect(isPrivySiweLinkOrUnlinkRequest('https://privy.4626.fun/api/v1/siwe/link', 'POST')).toBe(true)
+    expect(isPrivySiweLinkOrUnlinkRequest('https://privy.4626.fun/api/v1/siwe/unlink', 'POST')).toBe(true)
+  })
+
+  it('does not match siwe link/unlink on GET or on unrelated paths/hosts', () => {
+    expect(isPrivySiweLinkOrUnlinkRequest('https://auth.privy.io/api/v1/siwe/link', 'GET')).toBe(false)
+    expect(isPrivySiweLinkOrUnlinkRequest('https://auth.privy.io/api/v1/siwe/init', 'POST')).toBe(false)
+    expect(isPrivySiweLinkOrUnlinkRequest('https://evil.example/api/v1/siwe/link', 'POST')).toBe(false)
   })
 
   it('matches Privy oauth link/unlink POSTs on both the canonical and custom domain', () => {

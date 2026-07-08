@@ -201,7 +201,7 @@ contract CreatorOVaultTransferAccountingTest is CreatorOVaultModulesTestBase {
         assertEq(creatorCoin.balanceOf(address(this)), amount);
     }
 
-    function test_buyDebt_reverts_when_feeOnTransfer_token_receivedLessThanRequested() public {
+    function test_buyDebt_reverts_when_debtPurchase_is_disabled() public {
         MockCreatorCoinFeeOnTransfer creatorCoin = new MockCreatorCoinFeeOnTransfer();
         CreatorOVaultDebtHarness vault = new CreatorOVaultDebtHarness(address(creatorCoin), address(this));
         _setVaultModules(vault);
@@ -216,9 +216,8 @@ contract CreatorOVaultTransferAccountingTest is CreatorOVaultModulesTestBase {
         vm.prank(alice);
         creatorCoin.approve(address(vault), type(uint256).max);
 
-        uint256 expectedReceived = debt - (debt / 10);
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(CreatorOVault.TransferAmountMismatch.selector, debt, expectedReceived));
+        vm.expectRevert(CreatorOVault.DebtPurchaseDisabled.selector);
         vault.buyDebt(strategy, debt);
 
         assertEq(creatorCoin.balanceOf(address(vault)), 0);

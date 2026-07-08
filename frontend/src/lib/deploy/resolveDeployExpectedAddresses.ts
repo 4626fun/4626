@@ -122,6 +122,7 @@ export async function resolveDeployExpectedAddresses(
   const oracleSalt = saltForDeployLabel(baseSalt, 'oracle')
 
   const derivedShareOftSalt = deriveShareOftSaltFromVersion({
+    creatorToken: params.creatorToken,
     owner: params.owner,
     shareSymbol: shareSymbolLower,
     version: deploymentVersionUsed,

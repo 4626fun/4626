@@ -103,8 +103,25 @@ contract DeploymentBatcherFixture is Test {
             address(helpers.utils)
         );
         require(address(batcher) == predicted, "DeploymentBatcherFixture: prediction mismatch");
+        // AUDIT-2026-07-08-H08/NEW-H: approve phase module codehashes; tests use free codeIds.
+        _wireSecurityDefaults(batcher, helpers, cfg.protocolTreasury);
         vm.prank(cfg.protocolTreasury);
         batcher.setPhase1Module(address(helpers.phase1));
+    }
+
+    function _extcodehash(address account) internal view returns (bytes32 h) {
+        assembly {
+            h := extcodehash(account)
+        }
+    }
+
+    /// @dev Approve phase1/2 codehashes (mandatory H-08) and disable codeId allowlist for unit tests.
+    function _wireSecurityDefaults(DeploymentBatcher batcher, Helpers memory helpers, address treasury) internal {
+        vm.startPrank(treasury);
+        batcher.approvePhaseModuleCodehash(address(helpers.phase1), _extcodehash(address(helpers.phase1)));
+        batcher.approvePhaseModuleCodehash(address(helpers.phase2), _extcodehash(address(helpers.phase2)));
+        batcher.setCodeIdAllowlistEnabled(false);
+        vm.stopPrank();
     }
 
     function mockRegistryCreatorCoin(address registry, address creatorToken, address oracle) public {
@@ -147,6 +164,7 @@ contract DeploymentBatcherFixture is Test {
             address(0)
         );
         require(address(batcher) == predicted, "DeploymentBatcherFixture: prediction mismatch");
+        _wireSecurityDefaults(batcher, helpers, cfg.protocolTreasury);
         vm.prank(cfg.protocolTreasury);
         batcher.wireDeploymentHelpers(
             address(helpers.phase2), address(helpers.phase3), address(helpers.shareMesh), address(helpers.utils)

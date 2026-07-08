@@ -107,7 +107,12 @@ async function main(): Promise<void> {
     salt: wrapperSalt,
     initCode: wrapperInit,
   })
-  const shareSalt = deriveShareOftSaltFromVersion({ owner: OWNER, shareSymbol: 'AKITA', version })
+  const shareSalt = deriveShareOftSaltFromVersion({
+    creatorToken: CREATOR,
+    owner: OWNER,
+    shareSymbol: 'AKITA',
+    version,
+  })
   const share = predictCreate2AddressFromInitCode({ create2Deployer: create2, salt: shareSalt, initCode: shareInit })
 
   for (const [label, addr] of [

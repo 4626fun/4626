@@ -71,6 +71,66 @@ describe('waitlistPrivySession', () => {
     expect(vi.mocked(apiFetch).mock.calls.some(([path]) => path === '/api/auth/me')).toBe(false)
   })
 
+  it('establishWaitlistSessionAfterPrivyAuth calls ensureEmbeddedWallet before bridging the session', async () => {
+    const callOrder: string[] = []
+    vi.mocked(bridgePrivySession).mockImplementation(async () => {
+      callOrder.push('bridge')
+      return { ok: true, address: '0xabc1234567890123456789012345678901234567' }
+    })
+    const ensureEmbeddedWallet = vi.fn(async () => {
+      callOrder.push('ensureEmbeddedWallet')
+      return { address: '0xabc1234567890123456789012345678901234567', created: true }
+    })
+
+    const address = await establishWaitlistSessionAfterPrivyAuth({ privy: mockPrivy, ensureEmbeddedWallet })
+
+    expect(address).toBe('0xabc1234567890123456789012345678901234567')
+    expect(ensureEmbeddedWallet).toHaveBeenCalledTimes(1)
+    expect(callOrder).toEqual(['ensureEmbeddedWallet', 'bridge'])
+  })
+
+  it('establishWaitlistSessionAfterPrivyAuth retries ensureEmbeddedWallet on a transient failure and still succeeds', async () => {
+    vi.useFakeTimers()
+    const ensureEmbeddedWallet = vi
+      .fn()
+      // Mirrors the real failure mode: `ensureEmbeddedWallet()` throws when its
+      // internal `authenticated` ref snapshot is one render behind, then succeeds
+      // once React catches up.
+      .mockRejectedValueOnce(new Error('Sign in with Privy before provisioning your embedded wallet.'))
+      .mockResolvedValueOnce({ address: '0xabc1234567890123456789012345678901234567', created: true })
+
+    const promise = establishWaitlistSessionAfterPrivyAuth({ privy: mockPrivy, ensureEmbeddedWallet })
+    await vi.runAllTimersAsync()
+    const address = await promise
+
+    expect(address).toBe('0xabc1234567890123456789012345678901234567')
+    expect(ensureEmbeddedWallet).toHaveBeenCalledTimes(2)
+    expect(bridgePrivySession).toHaveBeenCalledWith('privy-token')
+    vi.useRealTimers()
+  })
+
+  it('establishWaitlistSessionAfterPrivyAuth still bridges the session after ensureEmbeddedWallet exhausts all retries', async () => {
+    vi.useFakeTimers()
+    const ensureEmbeddedWallet = vi.fn(async () => {
+      throw new Error('Privy embedded wallet provisioning did not complete. Retry in a moment.')
+    })
+
+    const promise = establishWaitlistSessionAfterPrivyAuth({ privy: mockPrivy, ensureEmbeddedWallet })
+    await vi.runAllTimersAsync()
+    const address = await promise
+
+    expect(address).toBe('0xabc1234567890123456789012345678901234567')
+    expect(ensureEmbeddedWallet).toHaveBeenCalledTimes(4)
+    expect(bridgePrivySession).toHaveBeenCalledWith('privy-token')
+    vi.useRealTimers()
+  })
+
+  it('establishWaitlistSessionAfterPrivyAuth does not require ensureEmbeddedWallet (wallet sign-in path)', async () => {
+    const address = await establishWaitlistSessionAfterPrivyAuth({ privy: mockPrivy })
+    expect(address).toBe('0xabc1234567890123456789012345678901234567')
+    expect(bridgePrivySession).toHaveBeenCalledWith('privy-token')
+  })
+
   it('mapWaitlistWalletSignInError maps wallet-bound recovery', () => {
     const error = new Error('Recovery required') as Error & { code?: string }
     error.code = 'RECOVERY_REQUIRED_WALLET_BOUND'

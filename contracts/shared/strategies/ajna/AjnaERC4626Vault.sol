@@ -322,7 +322,7 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
 
     function moveFromBuffer(uint256 toIndex, uint256 assets)
         external
-        onlySwapperOrKeeper
+        onlyAdapterAuthorized
         notPaused
         nonReentrant
         returns (uint256 movedAssets, uint256 mintedBucketLp)
@@ -369,7 +369,7 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
 
     function move(uint256 fromIndex, uint256 toIndex, uint256 bucketLpAmount)
         external
-        onlySwapperOrKeeper
+        onlyAdapterAuthorized
         notPaused
         nonReentrant
         returns (uint256 fromBucketLp, uint256 toBucketLp)

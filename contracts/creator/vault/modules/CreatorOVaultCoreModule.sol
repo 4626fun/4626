@@ -12,6 +12,7 @@ import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
 import {IStrategyValuation} from "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
 
 import {OVaultModuleBase} from "@4626/shared/vault/modules/OVaultModuleBase.sol";
+import {OVaultModuleConstants} from "@4626/shared/vault/modules/OVaultModuleConstants.sol";
 import {OVaultLiquidityLib} from "@4626/shared/libraries/vault/OVaultLiquidityLib.sol";
 import {IOVaultModuleIdentity} from "@4626/shared/interfaces/vault/IOVaultModuleIdentity.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
@@ -50,17 +51,20 @@ interface ICCAPhaseReader {
 contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     using SafeERC20 for IERC20;
     bytes32 internal constant MODULE_KIND = keccak256("CreatorOVaultModule.core");
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("OVaultModuleStorage.v3");
+    bytes32 internal constant MODULE_STORAGE_VERSION = OVaultModuleConstants.MODULE_STORAGE_VERSION;
 
     // ---- constants (must match vault) ----
     uint16 internal constant MAX_FEE = 2_000;
     uint256 internal constant MAX_BPS = 10_000;
-    uint256 internal constant SECONDS_PER_YEAR = 31_556_952;
+    uint256 internal constant SECONDS_PER_YEAR = OVaultModuleConstants.SECONDS_PER_YEAR;
     uint256 internal constant MAX_BPS_EXTENDED = 1_000_000_000_000;
     uint256 internal constant MAX_PRICE_CHANGE_BPS = 1000;
     uint256 internal constant MINIMUM_FIRST_DEPOSIT = 50_000_000e18;
     uint8 internal constant MAX_VALUATION_MISS_THRESHOLD = 30;
     uint256 internal constant IMPAIR_REASON_MAX = 7;
+    // FIX: M-2 (docs/audits/CreatorOVault_aristotle) — bounds for maxImpairmentTripDuration.
+    uint64 internal constant MIN_IMPAIRMENT_TRIP_DURATION = 3 days;
+    uint64 internal constant MAX_IMPAIRMENT_TRIP_DURATION = 30 days;
     uint8 internal constant CCA_PHASE_AUCTION_LIVE = 1;
     uint256 internal constant OP_DEPOSIT = 1 << 0;
     uint256 internal constant OP_WITHDRAW = 1 << 1;
@@ -83,6 +87,8 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     event WithdrawalClaimed(address indexed user, uint256 assets);
     event WithdrawalCancelled(address indexed user, uint256 shares);
     event ImpairmentChallengeWindowUpdated(uint64 newWindow);
+    event MaxImpairmentTripDurationUpdated(uint64 newDuration);
+    event ImpairmentTripClearedByTimeout(uint256 indexed epochId, address indexed strategy, address indexed caller);
     event ImpairmentTripped(
         uint256 indexed epochId,
         address indexed strategy,
@@ -147,6 +153,8 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     error RecoveryEscrowNotConfigured();
     error ClaimSupplyExceeded(uint256 epochId, uint256 totalClaimSupply, uint256 requested);
     error CcaAuctionDepositBlocked();
+    error InvalidImpairmentTripDuration(uint64 provided, uint64 min, uint64 max);
+    error ImpairmentTripNotStale(uint256 epochId, uint256 staleAt);
 
     // =================================
     // PROFIT UNLOCKING
@@ -485,7 +493,8 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         uint256 requiredBlock = lastDepositBlock[msg.sender] + withdrawDelayBlocks;
         if (block.number < requiredBlock) revert WithdrawTooSoon(block.number, requiredBlock);
 
-        uint256 assets = IERC4626(address(this)).previewRedeem(shares);
+        // Use uncapped conversion so queue classification is not distorted by queued reservation caps.
+        uint256 assets = IERC4626(address(this)).convertToAssets(shares);
         if (assets < largeWithdrawalThreshold) revert InvalidAmount();
 
         _sharesUpdate(msg.sender, address(this), shares);
@@ -522,7 +531,8 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         address receiver = queued.receiver;
         delete queuedWithdrawals[msg.sender];
 
-        assets = IERC4626(address(this)).previewRedeem(shares);
+        // Use uncapped conversion for queued settlement; capped previewRedeem is for sync withdrawals.
+        assets = IERC4626(address(this)).convertToAssets(shares);
 
         totalQueuedWithdrawalShares -= shares;
         _sharesUpdate(address(this), address(0), shares);
@@ -946,6 +956,15 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         emit ImpairmentChallengeWindowUpdated(window);
     }
 
+    /// @notice FIX: M-2 (docs/audits/CreatorOVault_aristotle).
+    function setMaxImpairmentTripDuration(uint64 duration) external onlyDelegateCall {
+        if (duration < MIN_IMPAIRMENT_TRIP_DURATION || duration > MAX_IMPAIRMENT_TRIP_DURATION) {
+            revert InvalidImpairmentTripDuration(duration, MIN_IMPAIRMENT_TRIP_DURATION, MAX_IMPAIRMENT_TRIP_DURATION);
+        }
+        maxImpairmentTripDuration = duration;
+        emit MaxImpairmentTripDurationUpdated(duration);
+    }
+
     function tripImpairment(address strategy, uint256 reasonCode) external onlyDelegateCall returns (uint256 epochId) {
         if (strategy == address(0)) revert ZeroAddress();
         if (reasonCode == 0 || reasonCode > IMPAIR_REASON_MAX) revert InvalidImpairmentReason(reasonCode);
@@ -975,6 +994,32 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         ImpairmentEpoch storage epoch = impairmentEpochs[epochId];
         if (epoch.status != ImpairmentEpochStatus.Tripped) revert InvalidImpairmentTransition(epochId);
 
+        address strategy = epoch.strategy;
+        _resetImpairmentTripToNormal(epochId, epoch);
+        emit ImpairmentTripCleared(epochId, strategy);
+        emit ImpairmentResolved(epochId);
+    }
+
+    /// @notice Permissionless liveness valve — FIX: M-2 (docs/audits/CreatorOVault_aristotle).
+    ///         See CreatorOVault.sol's `clearStaleImpairmentTrip` wrapper for full rationale.
+    function clearStaleImpairmentTrip(uint256 epochId) external onlyDelegateCall {
+        if (epochId == 0 || epochId != activeImpairmentEpoch) revert InvalidImpairmentEpoch(epochId);
+        ImpairmentEpoch storage epoch = impairmentEpochs[epochId];
+        if (epoch.status != ImpairmentEpochStatus.Tripped) revert InvalidImpairmentTransition(epochId);
+
+        uint256 staleAt = uint256(epoch.trippedAt) + uint256(maxImpairmentTripDuration);
+        if (block.timestamp < staleAt) revert ImpairmentTripNotStale(epochId, staleAt);
+
+        address strategy = epoch.strategy;
+        _resetImpairmentTripToNormal(epochId, epoch);
+        emit ImpairmentTripClearedByTimeout(epochId, strategy, msg.sender);
+        emit ImpairmentResolved(epochId);
+    }
+
+    /// @dev Shared reset for both the authorized (`clearImpairmentTrip`) and permissionless
+    ///      timeout (`clearStaleImpairmentTrip`) false-alarm/expiry paths. Caller has already
+    ///      validated `epoch.status == Tripped` and that `epochId == activeImpairmentEpoch`.
+    function _resetImpairmentTripToNormal(uint256 epochId, ImpairmentEpoch storage epoch) internal {
         epoch.status = ImpairmentEpochStatus.Resolved;
         epoch.resolvedAt = uint64(block.timestamp);
         // FIX C-3: a false-alarm trip must lose its claim surface. Any root
@@ -991,8 +1036,6 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         strategyImpaired[epoch.strategy] = false;
         activeImpairmentEpoch = 0;
         vaultMode = VaultMode.Normal;
-        emit ImpairmentTripCleared(epochId, epoch.strategy);
-        emit ImpairmentResolved(epochId);
     }
 
     function proposeImpairmentRoot(

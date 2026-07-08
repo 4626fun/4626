@@ -76,6 +76,7 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     // ================================
 
     uint256 public constant MAX_BPS = 10000;
+    uint256 public constant EMERGENCY_WITHDRAW_DELAY = 1 days;
 
     /// @notice WETH on Base
     address public constant WETH = 0x4200000000000000000000000000000000000006;
@@ -226,6 +227,11 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     /// @dev Default: false (intake should not trigger public mempool swaps).
     bool public autoProcessWethFees;
 
+    address public pendingEmergencyWithdrawToken;
+    uint256 public pendingEmergencyWithdrawAmount;
+    address public pendingEmergencyWithdrawTo;
+    uint256 public pendingEmergencyWithdrawAt;
+
     // ================================
     // EVENTS
     // ================================
@@ -254,12 +260,15 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
 
     event WethFeeKeeperUpdated(address indexed oldKeeper, address indexed newKeeper);
     event WethProcessingConfigUpdated(uint256 maxPermissionlessWethProcess, bool autoProcessWethFees);
+    event EmergencyWithdrawQueued(address indexed token, uint256 amount, address indexed to, uint256 executeAfter);
+    event EmergencyWithdrawCancelled(address indexed token, uint256 amount, address indexed to);
 
     // ================================
     // ERRORS
     // ================================
 
     error ZeroAddress();
+    error ZeroAmount();
     error NothingToDistribute();
     error TooSoon();
     error VaultNotSet();
@@ -273,6 +282,13 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     error NotAuthorized();
     error CreatorTreasuryRequired();
     error JackpotReserveProtected();
+    error PendingOftFeesProtected();
+    // FIX: L-4 (audit `docs/audits/aristotle/oracle`) — block draining WETH fees
+    // still pending processing.
+    error PendingWethFeesProtected();
+    error NoPendingEmergencyWithdraw();
+    error EmergencyWithdrawTooEarly(uint256 executeAfter);
+    error InvalidAmount();
 
     // ================================
     // CONSTRUCTOR
@@ -323,14 +339,18 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     function receiveFees(uint256 amount) external nonReentrant {
         if (amount == 0) return;
 
-        // Pull OFT tokens from sender
+        // Pull OFT tokens from sender and account only what arrived.
+        uint256 balBefore = shareOFT.balanceOf(address(this));
         shareOFT.safeTransferFrom(msg.sender, address(this), amount);
-        pendingFees += amount;
-        // FIX: G-11 — track OFT balance
-        accountedOFTBalance += amount;
-        totalFeesReceived += amount;
+        uint256 received = shareOFT.balanceOf(address(this)) - balBefore;
+        if (received == 0) return;
 
-        emit FeesReceived(msg.sender, amount);
+        pendingFees += received;
+        // FIX: G-11 — track OFT balance
+        accountedOFTBalance += received;
+        totalFeesReceived += received;
+
+        emit FeesReceived(msg.sender, received);
 
         // Auto-distribute if above threshold and enough time has passed
         if (pendingFees >= distributionThreshold && block.timestamp >= lastDistribution + distributionInterval) {
@@ -344,13 +364,17 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     function deposit(uint256 amount) external nonReentrant {
         if (amount == 0) return;
 
+        uint256 balBefore = shareOFT.balanceOf(address(this));
         shareOFT.safeTransferFrom(msg.sender, address(this), amount);
-        pendingFees += amount;
-        // FIX: G-11 — track OFT balance
-        accountedOFTBalance += amount;
-        totalFeesReceived += amount;
+        uint256 received = shareOFT.balanceOf(address(this)) - balBefore;
+        if (received == 0) return;
 
-        emit FeesReceived(msg.sender, amount);
+        pendingFees += received;
+        // FIX: G-11 — track OFT balance
+        accountedOFTBalance += received;
+        totalFeesReceived += received;
+
+        emit FeesReceived(msg.sender, received);
     }
 
     /**
@@ -398,12 +422,16 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     function receiveWETHFees(uint256 amount) external nonReentrant {
         if (amount == 0) return;
 
-        // Pull WETH from sender (the tax hook)
+        // Pull WETH from sender (the tax hook) and account only what arrived.
+        uint256 balBefore = IERC20(WETH).balanceOf(address(this));
         IERC20(WETH).safeTransferFrom(msg.sender, address(this), amount);
-        pendingWETHFees += amount;
-        totalWETHFeesReceived += amount;
+        uint256 received = IERC20(WETH).balanceOf(address(this)) - balBefore;
+        if (received == 0) return;
 
-        emit WETHFeesReceived(msg.sender, amount);
+        pendingWETHFees += received;
+        totalWETHFeesReceived += received;
+
+        emit WETHFeesReceived(msg.sender, received);
 
         // Default: do not auto-swap on fee intake (public mempool MEV risk).
         // If enabled, only process up to the permissionless cap to avoid large public swaps.
@@ -747,9 +775,30 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
         if (toVoters == 0) return;
 
         if (address(voterRewardsDistributor) != address(0)) {
+            uint256 balanceBefore = shareOFT.balanceOf(address(this));
             shareOFT.forceApprove(address(voterRewardsDistributor), toVoters);
             try voterRewardsDistributor.notifyRewards(address(vault), address(shareOFT), toVoters) {
-                totalProtocolEarned += toVoters;
+                uint256 balanceAfter = shareOFT.balanceOf(address(this));
+                uint256 spent = balanceBefore > balanceAfter ? balanceBefore - balanceAfter : 0;
+                if (spent > toVoters) spent = toVoters;
+
+                if (spent > 0) {
+                    totalProtocolEarned += spent;
+                }
+
+                uint256 remainder = toVoters - spent;
+                if (remainder > 0) {
+                    if (protocolTreasury != address(0)) {
+                        shareOFT.safeTransfer(protocolTreasury, remainder);
+                        totalProtocolEarned += remainder;
+                    } else {
+                        jackpotReserve += remainder;
+                        totalLotteryFunded += remainder;
+                        accountedOFTBalance += remainder;
+                    }
+                }
+                // Always clear allowance after notifyRewards to avoid stale approvals.
+                shareOFT.forceApprove(address(voterRewardsDistributor), 0);
             } catch {
                 shareOFT.forceApprove(address(voterRewardsDistributor), 0);
                 if (protocolTreasury != address(0)) {
@@ -1166,16 +1215,61 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
      */
     function emergencyWithdraw(address token, uint256 amount, address to) external onlyOwner {
         if (to == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
+
+        pendingEmergencyWithdrawToken = token;
+        pendingEmergencyWithdrawAmount = amount;
+        pendingEmergencyWithdrawTo = to;
+        pendingEmergencyWithdrawAt = block.timestamp + EMERGENCY_WITHDRAW_DELAY;
+        emit EmergencyWithdrawQueued(token, amount, to, pendingEmergencyWithdrawAt);
+    }
+
+    function cancelEmergencyWithdraw() external onlyOwner {
+        address token = pendingEmergencyWithdrawToken;
+        uint256 amount = pendingEmergencyWithdrawAmount;
+        address to = pendingEmergencyWithdrawTo;
+        if (to == address(0) || amount == 0) revert NoPendingEmergencyWithdraw();
+
+        pendingEmergencyWithdrawToken = address(0);
+        pendingEmergencyWithdrawAmount = 0;
+        pendingEmergencyWithdrawTo = address(0);
+        pendingEmergencyWithdrawAt = 0;
+        emit EmergencyWithdrawCancelled(token, amount, to);
+    }
+
+    function executeEmergencyWithdraw() external onlyOwner {
+        address token = pendingEmergencyWithdrawToken;
+        uint256 amount = pendingEmergencyWithdrawAmount;
+        address to = pendingEmergencyWithdrawTo;
+        uint256 executeAfter = pendingEmergencyWithdrawAt;
+        if (to == address(0) || amount == 0 || executeAfter == 0) revert NoPendingEmergencyWithdraw();
+        if (block.timestamp < executeAfter) revert EmergencyWithdrawTooEarly(executeAfter);
+
+        pendingEmergencyWithdrawToken = address(0);
+        pendingEmergencyWithdrawAmount = 0;
+        pendingEmergencyWithdrawTo = address(0);
+        pendingEmergencyWithdrawAt = 0;
+
+        if (to == address(0)) revert ZeroAddress();
         // FIX: AUDIT-2026-07-01-M01 — block jackpot custody drain while reserves remain.
-        if (token == address(shareOFT) && jackpotReserve > 0) {
+        if (token == address(shareOFT) && (jackpotReserve > 0 || pendingFees > 0)) {
             revert JackpotReserveProtected();
         }
         if (token == address(shareOFT)) {
+            if (pendingFees > 0) revert PendingOftFeesProtected();
             if (amount >= accountedOFTBalance) {
                 accountedOFTBalance = 0;
             } else {
                 accountedOFTBalance -= amount;
             }
+        }
+        // FIX: L-4 (audit `docs/audits/aristotle/oracle`) — `emergencyWithdraw` only
+        // protected `shareOFT`; WETH fees held in `pendingWETHFees` (awaiting
+        // `_processWETHFees`) are an in-flight balance too and were previously fully
+        // drainable by the owner. Mirror the shareOFT/jackpotReserve pattern instead
+        // of leaving this centralization gap undocumented.
+        if (token == WETH && pendingWETHFees > 0) {
+            revert PendingWethFeesProtected();
         }
         IERC20(token).safeTransfer(to, amount);
     }

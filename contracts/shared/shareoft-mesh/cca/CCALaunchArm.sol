@@ -145,6 +145,7 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
         bool currencySwept;
         bool unsoldSwept;
         bool migrated;
+        bool lpManagerSeeded;
         bool failedFinalized;
     }
 
@@ -283,6 +284,8 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
     event LifecyclePhaseChanged(address indexed auction, LifecyclePhase phase);
     event FailedAuctionFinalized(address indexed auction, uint256 unsoldTokens);
     event Migrated(address indexed auction, uint160 sqrtPriceX96, uint256 tokenAmount, uint256 currencyAmount);
+    /// @notice Emitted when migrate uses a non-primary fee/tick after primary pool grief (H-04).
+    event MigrationPoolKeyRotated(uint24 fee, int24 tickSpacing, uint160 sqrtPriceX96);
 
     event AuctionGraduated(address indexed auction, uint256 currencyRaised, uint256 finalPrice);
     event FundsSwept(address indexed auction, uint256 amount);
@@ -327,6 +330,7 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
     error MigrationConfigMissing();
     error LpManagerNotSet();
     error LpManagerAlreadySet();
+    error LpManagerAlreadySeeded();
     error CurrencyBalanceTooLow(uint256 needed, uint256 available);
     error LpReserveTooLow(uint256 requiredReserve, uint256 availableBalance);
     error SweepNotAllowed(uint64 sweepBlock, uint256 currentBlock);
@@ -344,6 +348,8 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
     error EthTransferFailed();
     // FIX: H-02 — migrate deadline / slippage protection
     error MigrationSqrtPriceMismatch(uint160 expected, uint160 actual);
+    /// @dev AUDIT-2026-07-08-H04: all candidate fee/tick keys were griefed at wrong prices.
+    error MigrationPoolUnavailable(uint160 expectedSqrtPriceX96);
 
     // ================================
     // CONSTRUCTOR
@@ -537,6 +543,7 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
             currencySwept: false,
             unsoldSwept: false,
             migrated: false,
+            lpManagerSeeded: false,
             failedFinalized: false
         });
         _snapshotBackingTelemetry();
@@ -711,17 +718,11 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
         uint256 priceX192 = auction.clearingPrice().convertToPriceX192(currencyIsCurrency0);
         uint160 sqrtPriceX96 = priceX192.convertToSqrtPriceX96();
 
-        PoolKey memory key = _buildPoolKey();
         _setPhase(LifecyclePhase.PoolInitializing);
-        poolManager.initialize(key, sqrtPriceX96);
-
-        {
-            PoolId pid = PoolIdLibrary.toId(key);
-            (uint160 actualSqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, pid);
-            if (actualSqrtPriceX96 != sqrtPriceX96) {
-                revert MigrationSqrtPriceMismatch(sqrtPriceX96, actualSqrtPriceX96);
-            }
-        }
+        // AUDIT-2026-07-08-H04: V4 pools are permissionlessly initializable. If the primary
+        // (fee, tickSpacing) key was griefed at a wrong sqrtPrice, rotate across a small
+        // candidate set and persist the winning fee/tick so LP seed + oracle use the same key.
+        _resolveAndInitializeMigrationPool(sqrtPriceX96);
 
         currentLaunch.migrated = true;
         _persistLifecycleSnapshot();
@@ -745,15 +746,18 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
     /**
      * @notice Transfer retained ShareOFT reserve + swept currency to the wired LP manager.
      */
-    function seedLpManager() external nonReentrant {
+    function seedLpManager() external nonReentrant onlyApprovedOrOwner {
         if (!currentLaunch.migrated) revert MigrationConfigMissing();
         if (lpManager == address(0) || lpManager.code.length == 0) revert LpManagerNotSet();
+        if (currentLaunch.lpManagerSeeded) revert LpManagerAlreadySeeded();
 
         uint256 reserveAmount = currentLaunch.lpReserveAmount;
         uint256 currencyAmount = _currencyBalance(address(this));
+        currentLaunch.lpManagerSeeded = true;
+        _persistLifecycleSnapshot();
 
         if (reserveAmount > 0) {
-            auctionToken.transfer(lpManager, reserveAmount);
+            auctionToken.safeTransfer(lpManager, reserveAmount);
         }
         if (currencyAmount > 0) {
             if (currency == address(0)) {
@@ -1003,15 +1007,57 @@ contract CCALaunchArm is Ownable, ReentrancyGuard {
     }
 
     function _buildPoolKey() internal view returns (PoolKey memory key) {
+        return _buildPoolKeyWith(poolFeeTier, poolTickSpacing);
+    }
+
+    function _buildPoolKeyWith(uint24 fee, int24 tickSpacing) internal view returns (PoolKey memory key) {
         // ETH (address(0)) naturally sorts first as token0 in V4.
         bool currencyIsToken0 = currency < address(auctionToken);
         key = PoolKey({
             currency0: Currency.wrap(currencyIsToken0 ? currency : address(auctionToken)),
             currency1: Currency.wrap(currencyIsToken0 ? address(auctionToken) : currency),
-            fee: poolFeeTier,
-            tickSpacing: poolTickSpacing,
+            fee: fee,
+            tickSpacing: tickSpacing,
             hooks: IHooks(taxHook)
         });
+    }
+
+    /// @dev Try primary pool key then alternate fee/tick combos if a third party initialized
+    ///      the primary key at the wrong price (permissionless V4 initialize grief).
+    function _resolveAndInitializeMigrationPool(uint160 sqrtPriceX96) internal {
+        // Candidate fees: configured first, then common V4 tiers.
+        uint24 primaryFee = poolFeeTier;
+        int24 primaryTick = poolTickSpacing;
+        uint24[4] memory fees = [primaryFee, uint24(500), uint24(10_000), uint24(100)];
+        int24[3] memory ticks = [primaryTick, int24(10), int24(200)];
+
+        for (uint256 i = 0; i < fees.length; i++) {
+            uint24 fee = fees[i];
+            // Skip duplicate fees after the first slot.
+            if (i > 0 && fee == primaryFee) continue;
+            if (fee > LPFeeLibrary.MAX_LP_FEE) continue;
+
+            for (uint256 j = 0; j < ticks.length; j++) {
+                int24 tickSp = ticks[j];
+                if (j > 0 && tickSp == primaryTick) continue;
+                if (tickSp > TickMath.MAX_TICK_SPACING || tickSp < TickMath.MIN_TICK_SPACING) continue;
+
+                PoolKey memory key = _buildPoolKeyWith(fee, tickSp);
+                try poolManager.initialize(key, sqrtPriceX96) {} catch {}
+
+                PoolId pid = PoolIdLibrary.toId(key);
+                (uint160 actualSqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, pid);
+                if (actualSqrtPriceX96 == sqrtPriceX96) {
+                    if (fee != poolFeeTier || tickSp != poolTickSpacing) {
+                        poolFeeTier = fee;
+                        poolTickSpacing = tickSp;
+                        emit MigrationPoolKeyRotated(fee, tickSp, sqrtPriceX96);
+                    }
+                    return;
+                }
+            }
+        }
+        revert MigrationPoolUnavailable(sqrtPriceX96);
     }
 
     // ================================

@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  buildPrivyUnlinkMethodArgs,
   isRecoverableOAuthLinkError,
   linkAndSyncPrivyProvider,
   linkPrivyProvider,
   syncAccountsProviderLink,
+  unlinkPrivyProvider,
 } from '@/lib/privy/providerLink'
 
 vi.mock('@/lib/api/apiBase', () => ({
@@ -25,6 +27,11 @@ vi.mock('@/lib/telegram/telegramWebApp', () => ({
 
 vi.mock('@/lib/privy/accessToken', () => ({
   readPrivyAccessTokenWithRetries: vi.fn(async () => 'privy-token'),
+}))
+
+const assertPrivySessionMarkerCookie = vi.fn()
+vi.mock('@/lib/privy/loopbackSessionMarkerShim', () => ({
+  assertPrivySessionMarkerCookie: (...args: unknown[]) => assertPrivySessionMarkerCookie(...args),
 }))
 
 import { apiFetch } from '@/lib/api/apiBase'
@@ -68,6 +75,14 @@ describe('providerLink', () => {
       expect(login).toHaveBeenCalledWith({ loginMethods: ['twitter'] })
       expect(result).toBe(true)
     })
+
+    it('asserts the loopback session marker cookie before calling the Privy SDK', async () => {
+      const privy = { authenticated: true, linkTwitter: vi.fn(async () => ({ id: 'user' })) }
+
+      await linkPrivyProvider({ privy, provider: 'twitter' })
+
+      expect(assertPrivySessionMarkerCookie).toHaveBeenCalled()
+    })
   })
 
   describe('linkAndSyncPrivyProvider', () => {
@@ -89,6 +104,63 @@ describe('providerLink', () => {
 
       expect(data).toBeNull()
       expect(apiFetch).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('buildPrivyUnlinkMethodArgs', () => {
+    it('passes wallet addresses as plain strings for external_eoa', () => {
+      expect(buildPrivyUnlinkMethodArgs('external_eoa', '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD')).toEqual([
+        '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD',
+      ])
+    })
+
+    it('passes twitter subjects as plain strings', () => {
+      expect(buildPrivyUnlinkMethodArgs('twitter', 'twitter-subject-123')).toEqual(['twitter-subject-123'])
+    })
+
+    it('returns empty args when the identifier is missing', () => {
+      expect(buildPrivyUnlinkMethodArgs('external_eoa', null)).toEqual([])
+    })
+  })
+
+  describe('unlinkPrivyProvider', () => {
+    it('calls unlinkWallet with the address string, not a value wrapper', async () => {
+      const unlinkWallet = vi.fn(async () => ({ id: 'user' }))
+      const privy = { unlinkWallet }
+
+      await unlinkPrivyProvider({
+        privy,
+        provider: 'external_eoa',
+        value: '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD',
+      })
+
+      expect(unlinkWallet).toHaveBeenCalledWith('0xB05Cf01231cF2fF99499682E64D3780d57c80FdD')
+    })
+
+    it('calls unlinkTwitter with the subject string', async () => {
+      const unlinkTwitter = vi.fn(async () => ({ id: 'user' }))
+      const privy = { unlinkTwitter }
+
+      await unlinkPrivyProvider({
+        privy,
+        provider: 'twitter',
+        value: 'twitter-subject-123',
+      })
+
+      expect(unlinkTwitter).toHaveBeenCalledWith('twitter-subject-123')
+    })
+
+    it('asserts the loopback session marker cookie before calling the Privy SDK', async () => {
+      const unlinkWallet = vi.fn(async () => ({ id: 'user' }))
+      const privy = { unlinkWallet }
+
+      await unlinkPrivyProvider({
+        privy,
+        provider: 'external_eoa',
+        value: '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD',
+      })
+
+      expect(assertPrivySessionMarkerCookie).toHaveBeenCalled()
     })
   })
 

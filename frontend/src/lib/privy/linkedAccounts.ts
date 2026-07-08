@@ -14,14 +14,28 @@ export function readPrivyLinkedAccounts(user: unknown): unknown[] {
  * index into for display — this reads the `username` field directly off the
  * matching linked account instead.
  */
+function isLinkedTwitterAccount(record: Record<string, unknown>): boolean {
+  const type = String(record.type ?? '').trim().toLowerCase()
+  return type.includes('twitter') || type === 'x'
+}
+
 export function findLinkedTwitterHandle(user: unknown): string | null {
   for (const account of readPrivyLinkedAccounts(user)) {
     const record = account && typeof account === 'object' ? (account as Record<string, unknown>) : null
-    if (!record) continue
-    const type = String(record.type ?? '').trim().toLowerCase()
-    if (!type.includes('twitter') && type !== 'x') continue
+    if (!record || !isLinkedTwitterAccount(record)) continue
     const username = typeof record.username === 'string' ? record.username.trim() : ''
     if (username) return username.replace(/^@+/, '')
+  }
+  return null
+}
+
+/** Privy `unlinkTwitter` / `unlinkOAuth` require the linked account `subject`, not the handle. */
+export function findLinkedTwitterSubject(user: unknown): string | null {
+  for (const account of readPrivyLinkedAccounts(user)) {
+    const record = account && typeof account === 'object' ? (account as Record<string, unknown>) : null
+    if (!record || !isLinkedTwitterAccount(record)) continue
+    const subject = typeof record.subject === 'string' ? record.subject.trim() : ''
+    if (subject) return subject
   }
   return null
 }

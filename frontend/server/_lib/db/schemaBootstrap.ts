@@ -540,6 +540,13 @@ export async function ensureAlfaclubCounterTradeSchema(db: Db): Promise<void> {
   })
 }
 
+/** AlfaClub room <-> XMTP group bridge: message-origin loop-prevention ledger. */
+export async function ensureAlfaclubRoomXmtpBridgeSchema(db: Db): Promise<void> {
+  await withEnsureOnce('alfaclubRoomXmtpBridge', async () => {
+    await ensureMigrationApplied(db, '20260708130000_alfaclub_room_xmtp_bridge.sql').catch(() => {})
+  })
+}
+
 // NOTE (2026-07-13): ensureEthosChartSupportSchema was removed. The entire Ethos chart
 // matview layer (20260620000000_unified_ethos_chart_support.sql) was retired by
 // 20260713110000_retire_ethos_chart_matview_layer.sql — the matviews had no readers.

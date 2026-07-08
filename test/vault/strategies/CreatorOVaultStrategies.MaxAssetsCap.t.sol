@@ -108,6 +108,10 @@ contract MaxAssetsCapTest is Test {
         strat = new LyingValuationStrategy(address(coin));
         vault.addStrategy(address(strat), 10_000, true);
         vault.setFlashLoanProtection(0, type(uint256).max, 1);
+        // Risk-config changes (incl. setStrategyMaxAssets) now default to a non-zero
+        // timelock (see M-3 fix); disable it here so this suite's direct
+        // before/after cap assertions keep testing the *applied* cap synchronously.
+        vault.setRiskConfigDelay(0);
 
         uint256 depositAmount = vault.MINIMUM_FIRST_DEPOSIT() * 2;
         coin.mint(alice, depositAmount + 500_000e18);

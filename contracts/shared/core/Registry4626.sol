@@ -893,8 +893,11 @@ contract Registry4626 is IRegistry4626, Ownable {
     /**
      * @notice Set full LZ config for a chain
      */
+    // FIX: I-3 (audit `docs/audits/aristotle/oracle`) — `_chainId` was narrowed to
+    // `uint16` while `lzConfigs`, `chainIdToEid`, etc. are keyed by `uint256`
+    // everywhere else, making chains with id > 65535 unconfigurable via this function.
     function setLzConfig(
-        uint16 _chainId,
+        uint256 _chainId,
         address _endpoint,
         uint32 _eid,
         address _sendLib,

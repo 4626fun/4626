@@ -44,6 +44,7 @@ contract CreatorOVaultReportTest is Test {
         adminModule = address(new OVaultAdminModule());
         vault.setModulesOnce(coreModule, strategiesModule, adminModule);
 
+        vault.setRiskConfigDelay(0);
         vault.setPerformanceFee(0);
         vault.setProfitMaxUnlockTime(7 days);
         vault.setFlashLoanProtection(0, 1e18, 2);
@@ -221,6 +222,32 @@ contract CreatorOVaultReportTest is Test {
         assertEq(vault.totalLockedShares(), lockedBefore);
     }
 
+    function test_claimQueuedWithdrawal_fullQueuePaysFullEntitlement() public {
+        vm.prank(bob);
+        vault.deposit(INITIAL_DEPOSIT, bob);
+
+        uint256 aliceShares = vault.balanceOf(alice);
+        uint256 bobShares = vault.balanceOf(bob);
+        assertGt(aliceShares, 0);
+        assertGt(bobShares, 0);
+
+        vm.roll(block.number + 3);
+        vm.prank(alice);
+        vault.queueWithdrawal(aliceShares, alice);
+        vm.prank(bob);
+        vault.queueWithdrawal(bobShares, bob);
+
+        vm.roll(block.number + vault.largeWithdrawalDelayBlocks() + 1);
+        vm.prank(alice);
+        uint256 aliceClaimed = vault.claimQueuedWithdrawal();
+        vm.prank(bob);
+        uint256 bobClaimed = vault.claimQueuedWithdrawal();
+
+        assertEq(aliceClaimed, INITIAL_DEPOSIT);
+        assertEq(bobClaimed, INITIAL_DEPOSIT);
+        assertEq(aliceClaimed + bobClaimed, INITIAL_DEPOSIT * 2);
+    }
+
     function test_maxWithdraw_and_maxRedeem_reflectSyncThreshold() public {
         uint256 threshold = vault.largeWithdrawalThreshold();
         assertGt(threshold, 1);
@@ -340,6 +367,7 @@ contract CreatorOVaultReportTest is Test {
     function _newVaultForBaselineTests() internal returns (CreatorOVault freshVault) {
         freshVault = new CreatorOVault(address(creatorCoin), address(this), "Fresh OVault", "ovFRESH");
         freshVault.setModulesOnce(coreModule, strategiesModule, adminModule);
+        freshVault.setRiskConfigDelay(0);
         freshVault.setPerformanceFee(1000);
         freshVault.setPerformanceFeeRecipient(feeRecipient);
         freshVault.setProfitMaxUnlockTime(7 days);

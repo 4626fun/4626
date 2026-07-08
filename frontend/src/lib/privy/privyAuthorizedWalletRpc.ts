@@ -1,8 +1,10 @@
 import { getAccessToken } from '@privy-io/react-auth'
 import type { Hex } from 'viem'
 
-import { getPrivyApiUrl, getPrivyAppId, getPrivyClientId } from '@/lib/flags/flags'
+import { getPrivyApiUrl, getPrivyAppId } from '@/lib/flags/flags'
+import { resolveEffectivePrivyClientId } from '@/lib/flags/featureFlags'
 import { refreshPrivyEmbeddedSignerSession } from '@/lib/privy/refreshEmbeddedSignerSession'
+import { assertPrivySessionMarkerCookie } from '@/lib/privy/loopbackSessionMarkerShim'
 
 const RAW_DIGEST_RE = /^0x[0-9a-fA-F]{64}$/
 
@@ -105,6 +107,14 @@ async function postAuthorizedWalletRpc(params: {
     throw new Error('Privy app id is not configured.')
   }
 
+  // On localhost/loopback, getAccessToken() requires a readable first-party
+  // `privy-session` marker cookie before it returns a token — assert it right
+  // before this read (same pattern as refreshPrivyEmbeddedSignerSession).
+  // Without this, an otherwise-live session can spuriously read back `null`
+  // here (e.g. XMTP inbox personal_sign) even though `privy.authenticated`
+  // and other reads elsewhere succeeded moments earlier.
+  assertPrivySessionMarkerCookie()
+
   const getToken = params.getToken ?? getAccessToken
   const accessToken = await getToken()
   if (!accessToken) {
@@ -131,7 +141,7 @@ async function postAuthorizedWalletRpc(params: {
   // Apps configured with an app client issue access tokens bound to that
   // client context. Privy verifies the bearer against the client id, so
   // omitting this header makes valid tokens fail as "Missing auth token."
-  const clientId = getPrivyClientId()
+  const clientId = resolveEffectivePrivyClientId()
   if (clientId) {
     headers['privy-client-id'] = clientId
   }

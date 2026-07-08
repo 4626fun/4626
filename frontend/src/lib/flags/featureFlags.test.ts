@@ -12,6 +12,7 @@ import {
   canUsePrivyEmbeddedWallets,
   resolvePrivyClientId,
   resolveWaitlistLoopbackPrivyClientId,
+  resolveEffectivePrivyClientId,
   resolvePrivyAppId,
   resolvePrivyApiUrl,
   allFlags,
@@ -101,6 +102,19 @@ describe('resolveWaitlistLoopbackPrivyClientId', () => {
       location: { origin: 'https://4626.fun' },
     } as unknown as Window & typeof globalThis)
     expect(resolveWaitlistLoopbackPrivyClientId()).toBeNull()
+  })
+})
+
+describe('resolveEffectivePrivyClientId', () => {
+  it('prefers waitlist loopback client id over generic resolvePrivyClientId', () => {
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID_ENABLED', '1')
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID', 'client_waitlist_123')
+    vi.stubEnv('VITE_PRIVY_CLIENT_ID_ON_LOOPBACK', '')
+    vi.stubGlobal('window', {
+      location: { origin: 'http://localhost:5174' },
+    } as unknown as Window & typeof globalThis)
+    expect(resolveEffectivePrivyClientId()).toBe('client_waitlist_123')
+    expect(resolvePrivyClientId()).toBeNull()
   })
 })
 

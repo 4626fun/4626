@@ -6,6 +6,7 @@ import {
   sanitizeCrossAppRedirectUrlForAuth,
 } from '@/hooks/siweAuthCrossApp'
 import { readPrivyTelegramLaunchParams } from '@/lib/telegram/telegramWebApp'
+import { assertPrivySessionMarkerCookie } from '@/lib/privy/loopbackSessionMarkerShim'
 
 import { readPrivyAccessTokenWithRetries } from './accessToken'
 
@@ -251,6 +252,12 @@ export async function linkPrivyProvider(params: {
 }): Promise<boolean> {
   const { privy, provider, login } = params
   assertPrivyAuthenticated(privy)
+  // On localhost/loopback, Privy's getAccessToken() requires a readable
+  // first-party `privy-session` marker cookie before it will hand back the
+  // token these link calls sign requests with — see loopbackSessionMarkerShim.ts.
+  // Assert it right before the SDK call (same pattern as
+  // refreshPrivyEmbeddedSignerSession) so link doesn't 401 on a missing cookie.
+  assertPrivySessionMarkerCookie()
   let navigationPending = false
 
   await runWithSanitizedRedirect(async () => {
@@ -306,17 +313,61 @@ export async function linkPrivyProvider(params: {
   return navigationPending
 }
 
+function normalizePrivyUnlinkIdentifier(value: string | null | undefined): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+/**
+ * Privy unlink helpers take provider-native identifiers — wallet address and
+ * OAuth subject as plain strings, or `{ provider, subject }` for `unlinkOAuth`.
+ * Passing `{ value }` objects (a legacy guess) makes Privy call `.startsWith`
+ * on a non-string and throws at runtime.
+ */
+export function buildPrivyUnlinkMethodArgs(
+  provider: PrivyOAuthProvider,
+  value?: string | null,
+): unknown[] {
+  const identifier = normalizePrivyUnlinkIdentifier(value)
+  if (!identifier) return []
+
+  switch (provider) {
+    case 'external_eoa':
+      return [identifier]
+    case 'twitter':
+    case 'google':
+    case 'apple':
+    case 'tiktok':
+    case 'telegram':
+    case 'email':
+      return [identifier]
+    default: {
+      const exhaustive: never = provider
+      return exhaustive
+    }
+  }
+}
+
 export async function unlinkPrivyProvider(params: {
   privy: unknown
   provider: PrivyOAuthProvider
   value?: string | null
 }): Promise<void> {
+  // Same loopback marker-cookie requirement as linkPrivyProvider above —
+  // unlinkTwitter/unlinkWallet/etc. hit oauth/unlink or siwe/unlink, which
+  // 401 on localhost without a freshly-asserted marker cookie.
+  assertPrivySessionMarkerCookie()
   const methodNames = PRIVY_UNLINK_METHODS[params.provider]
-  const called = await callPrivyMethod(
-    params.privy,
-    methodNames,
-    params.value ? [{ value: params.value }] : [],
-  )
+  const args = buildPrivyUnlinkMethodArgs(params.provider, params.value)
+  if (args.length === 0) {
+    throw new Error(`Could not resolve ${params.provider.replace(/_/g, ' ')} identifier to unlink.`)
+  }
+
+  let called = await callPrivyMethod(params.privy, methodNames, args)
+  if (!called && params.provider === 'twitter') {
+    called = await callPrivyMethod(params.privy, ['unlinkOAuth'], [
+      { provider: 'twitter', subject: normalizePrivyUnlinkIdentifier(params.value) },
+    ])
+  }
   if (!called) {
     throw new Error(`${params.provider.replace(/_/g, ' ')} unlink is unavailable in this client.`)
   }

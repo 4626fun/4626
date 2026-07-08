@@ -56,6 +56,8 @@ interface IProtocolRewards {
 contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
+    uint256 public constant EMERGENCY_WITHDRAW_DELAY = 1 days;
+
     struct ExternalSwapParams {
         address tokenIn;
         uint256 amountIn;
@@ -63,6 +65,13 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
         address spender;
         address swapTarget;
         bytes swapCallData;
+    }
+
+    struct KeeperSpendCap {
+        uint256 cap;
+        uint64 window;
+        uint64 windowStart;
+        uint256 spentInWindow;
     }
 
     struct BatchAction {
@@ -98,6 +107,15 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
     address public keeper;
     uint256 public swapDeadlineBuffer = 15 minutes;
 
+    /// @notice Per-token keeper spend caps for external swap calls.
+    /// @dev Caps apply only to `keeper` (owner is exempt).
+    mapping(address => KeeperSpendCap) public keeperExternalSpendCaps;
+
+    address public pendingEmergencyWithdrawToken;
+    uint256 public pendingEmergencyWithdrawAmount;
+    address public pendingEmergencyWithdrawTo;
+    uint256 public pendingEmergencyWithdrawAt;
+
     /// @notice tokenIn => Uniswap V3 encoded path ending in `shareOFT`.
     mapping(address => bytes) public swapPathToShareOFT;
 
@@ -123,6 +141,12 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
     );
     event BatchProcessed(uint256 actionCount, uint256 totalTokenOut, uint256 totalSharesQueued);
     event ProtocolRewardsClaimed(address indexed claimer, uint256 amount);
+    event KeeperExternalSpendCapUpdated(address indexed tokenIn, uint256 cap, uint64 windowSeconds);
+    event KeeperExternalSpendTracked(
+        address indexed tokenIn, uint256 amountIn, uint256 spentInWindow, uint256 cap, uint256 windowResetsAt
+    );
+    event EmergencyWithdrawQueued(address indexed token, uint256 amount, address indexed to, uint256 executeAfter);
+    event EmergencyWithdrawCancelled(address indexed token, uint256 amount, address indexed to);
     event EmergencyWithdraw(address indexed token, address indexed to, uint256 amount);
 
     // ================================
@@ -143,6 +167,15 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
     error ProtocolRewardsClaimFailed();
     error ProtocolRewardsHasNoCode(address candidate);
     error ProtectedPayoutAsset(address token);
+    // FIX: L-3 (audit `docs/audits/aristotle/oracle`) — reject allowlisting a
+    // self-referential/custody address as an external swap target or spender.
+    error InvalidExternalSwapAddress(address addr);
+    error InvalidKeeperSpendWindow(uint64 windowSeconds);
+    error KeeperExternalSpendCapExceeded(
+        address tokenIn, uint256 amountIn, uint256 spentInWindow, uint256 cap, uint256 windowResetsAt
+    );
+    error NoPendingEmergencyWithdraw();
+    error EmergencyWithdrawTooEarly(uint256 executeAfter);
 
     modifier onlyOwnerOrKeeper() {
         if (msg.sender != owner() && msg.sender != keeper) revert NotAuthorized();
@@ -225,16 +258,47 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
         emit SwapPathSet(tokenIn, path);
     }
 
+    /// @dev FIX: L-3 — a compromised keeper can route arbitrary calldata to any approved
+    ///      target (`_convertViaExternalAndQueue` uses caller-controlled `swapCallData`).
+    ///      Block owner-error/compromise from ever allowlisting this contract's own
+    ///      custody surfaces (self, vault, wrapper, burn stream, or the managed tokens)
+    ///      as a target, since a call routed to any of those could move funds outside
+    ///      the swap-then-queue accounting this contract relies on. Canonical DEX
+    ///      routers only.
+    function _requireSafeExternalSwapAddress(address addr) internal view {
+        if (
+            addr == address(this) || addr == vault || addr == wrapper || addr == burnStream
+                || addr == address(creatorCoin) || addr == address(shareOFT)
+        ) {
+            revert InvalidExternalSwapAddress(addr);
+        }
+    }
+
     function setExternalSwapTargetApproval(address target, bool approved) external onlyOwner {
         if (target == address(0)) revert ZeroAddress();
+        if (approved) _requireSafeExternalSwapAddress(target);
         approvedExternalSwapTargets[target] = approved;
         emit ExternalSwapTargetApprovalSet(target, approved);
     }
 
     function setExternalSwapSpenderApproval(address spender, bool approved) external onlyOwner {
         if (spender == address(0)) revert ZeroAddress();
+        if (approved) _requireSafeExternalSwapAddress(spender);
         approvedExternalSwapSpenders[spender] = approved;
         emit ExternalSwapSpenderApprovalSet(spender, approved);
+    }
+
+    function setKeeperExternalSpendCap(address tokenIn, uint256 cap, uint64 windowSeconds) external onlyOwner {
+        if (tokenIn == address(0)) revert ZeroAddress();
+        if (cap > 0 && windowSeconds == 0) revert InvalidKeeperSpendWindow(windowSeconds);
+
+        KeeperSpendCap storage spendCap = keeperExternalSpendCaps[tokenIn];
+        spendCap.cap = cap;
+        spendCap.window = windowSeconds;
+        spendCap.windowStart = uint64(block.timestamp);
+        spendCap.spentInWindow = 0;
+
+        emit KeeperExternalSpendCapUpdated(tokenIn, cap, windowSeconds);
     }
 
     /**
@@ -306,7 +370,52 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
     function emergencyWithdraw(address token, uint256 amount, address to) external onlyOwner nonReentrant {
         if (to == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
-        if (token == address(creatorCoin) || token == address(shareOFT)) revert ProtectedPayoutAsset(token);
+
+        pendingEmergencyWithdrawToken = token;
+        pendingEmergencyWithdrawAmount = amount;
+        pendingEmergencyWithdrawTo = to;
+        pendingEmergencyWithdrawAt = block.timestamp + EMERGENCY_WITHDRAW_DELAY;
+
+        emit EmergencyWithdrawQueued(token, amount, to, pendingEmergencyWithdrawAt);
+    }
+
+    function cancelEmergencyWithdraw() external onlyOwner {
+        address token = pendingEmergencyWithdrawToken;
+        uint256 amount = pendingEmergencyWithdrawAmount;
+        address to = pendingEmergencyWithdrawTo;
+        if (to == address(0) || amount == 0) revert NoPendingEmergencyWithdraw();
+
+        pendingEmergencyWithdrawToken = address(0);
+        pendingEmergencyWithdrawAmount = 0;
+        pendingEmergencyWithdrawTo = address(0);
+        pendingEmergencyWithdrawAt = 0;
+
+        emit EmergencyWithdrawCancelled(token, amount, to);
+    }
+
+    function executeEmergencyWithdraw() external onlyOwner nonReentrant {
+        address token = pendingEmergencyWithdrawToken;
+        uint256 amount = pendingEmergencyWithdrawAmount;
+        address to = pendingEmergencyWithdrawTo;
+        uint256 executeAfter = pendingEmergencyWithdrawAt;
+        if (to == address(0) || amount == 0 || executeAfter == 0) revert NoPendingEmergencyWithdraw();
+        if (block.timestamp < executeAfter) revert EmergencyWithdrawTooEarly(executeAfter);
+
+        pendingEmergencyWithdrawToken = address(0);
+        pendingEmergencyWithdrawAmount = 0;
+        pendingEmergencyWithdrawTo = address(0);
+        pendingEmergencyWithdrawAt = 0;
+
+        if (to == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
+        // FIX: L-4 (audit `docs/audits/aristotle/oracle`) — WETH is an in-flight payout
+        // asset too (native ETH sent to `receive()` is deposited to WETH pending
+        // `convertAndQueue`/`convertViaExternalAndQueue`); protect it the same way as
+        // the creator coin and ShareOFT so owner-drain centralization can't skim funds
+        // mid-flight. Use `convertAndQueue`/`convertViaExternalAndQueue` for WETH instead.
+        if (token == address(creatorCoin) || token == address(shareOFT) || token == weth) {
+            revert ProtectedPayoutAsset(token);
+        }
 
         if (token == address(0)) {
             (bool ok,) = to.call{value: amount}("");
@@ -387,6 +496,7 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
         if (amountIn == 0 || minOut == 0) revert ZeroAmount();
         if (!approvedExternalSwapTargets[swapTarget]) revert ExternalSwapTargetNotApproved(swapTarget);
         if (!approvedExternalSwapSpenders[spender]) revert ExternalSwapSpenderNotApproved(spender);
+        _consumeKeeperExternalSpend(tokenIn, amountIn);
 
         IERC20 inToken = IERC20(tokenIn);
         uint256 tokenInBefore = inToken.balanceOf(address(this));
@@ -411,6 +521,32 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
 
         sharesQueued = _unwrapShareOftAndQueue(tokenOut);
         emit ExternalSwapAndQueued(tokenIn, swapTarget, spender, amountIn, tokenOut, sharesQueued);
+    }
+
+    function _consumeKeeperExternalSpend(address tokenIn, uint256 amountIn) internal {
+        if (msg.sender != keeper || keeper == address(0)) return;
+
+        KeeperSpendCap storage spendCap = keeperExternalSpendCaps[tokenIn];
+        uint256 cap = spendCap.cap;
+        uint64 window = spendCap.window;
+        if (cap == 0 || window == 0) {
+            revert KeeperExternalSpendCapExceeded(tokenIn, amountIn, 0, cap, 0);
+        }
+
+        uint256 windowStart = spendCap.windowStart;
+        uint256 windowEnd = windowStart + window;
+        if (windowStart == 0 || block.timestamp >= windowEnd) {
+            spendCap.windowStart = uint64(block.timestamp);
+            spendCap.spentInWindow = 0;
+            windowEnd = block.timestamp + window;
+        }
+
+        uint256 newSpent = spendCap.spentInWindow + amountIn;
+        if (newSpent > cap) {
+            revert KeeperExternalSpendCapExceeded(tokenIn, amountIn, spendCap.spentInWindow, cap, windowEnd);
+        }
+        spendCap.spentInWindow = newSpent;
+        emit KeeperExternalSpendTracked(tokenIn, amountIn, newSpent, cap, windowEnd);
     }
 
     function _queueCreatorCoinDeposit(uint256 creatorAmount) internal returns (uint256 sharesQueued) {

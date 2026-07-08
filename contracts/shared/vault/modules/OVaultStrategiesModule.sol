@@ -8,6 +8,7 @@ import {IStrategy} from "@4626/shared/interfaces/strategies/IStrategy.sol";
 import {IStrategyValuation} from "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
 
 import {OVaultModuleBase} from "@4626/shared/vault/modules/OVaultModuleBase.sol";
+import {OVaultModuleConstants} from "@4626/shared/vault/modules/OVaultModuleConstants.sol";
 import {IOVaultModuleIdentity} from "@4626/shared/interfaces/vault/IOVaultModuleIdentity.sol";
 
 interface IOVaultRecoveryEscrowStrategyModule {
@@ -19,7 +20,7 @@ interface IOVaultRecoveryEscrowStrategyModule {
 contract OVaultStrategiesModule is OVaultModuleBase, IOVaultModuleIdentity {
     using SafeERC20 for IERC20;
     bytes32 internal constant MODULE_KIND = keccak256("OVaultModule.strategies");
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("OVaultModuleStorage.v3");
+    bytes32 internal constant MODULE_STORAGE_VERSION = OVaultModuleConstants.MODULE_STORAGE_VERSION;
 
     // ---- constants (must match vault) ----
     uint256 internal constant MAX_BPS = 10_000;
@@ -44,6 +45,8 @@ contract OVaultStrategiesModule is OVaultModuleBase, IOVaultModuleIdentity {
     event AutoAllocated(address indexed strategy, uint256 amount);
     event StrategiesRebalanced(uint256 totalWithdrawn, uint256 totalRedeployed);
     event ImpairedStrategyReinstated(address indexed strategy, uint256 indexed epochId);
+    /// @dev Must match CreatorOVault / CreatorOVaultCoreModule so claim books stay consistent.
+    event ImpairmentRecoveryNotified(uint256 indexed epochId, address indexed asset, uint256 amount);
 
     // ---- errors (must match vault selectors) ----
     error ZeroAddress();
@@ -55,6 +58,7 @@ contract OVaultStrategiesModule is OVaultModuleBase, IOVaultModuleIdentity {
     error StrategyAssetMismatch(address expected, address actual);
     error NoStrategies();
     error NothingToBuy();
+    error DebtPurchaseDisabled();
     error VaultNotNormal();
     error TransferAmountMismatch(uint256 expected, uint256 actual);
     error StrategyWithdrawShortfall(uint256 expected, uint256 actual);
@@ -199,15 +203,26 @@ contract OVaultStrategiesModule is OVaultModuleBase, IOVaultModuleIdentity {
             strategyDebt[strategy] = 0;
             emit DebtUpdated(strategy, currentDebt, 0);
 
+            // AUDIT-2026-07-08-R-H01: credit vault claim book (totalRecovered) when ejecting
+            // into escrow. Escrow-only notify left funds unclaimable after the P0 push-notify fix.
             if (strategyImpaired[strategy] && impairmentRecoveryEscrow != address(0) && afterBal > beforeBal) {
                 uint256 recovered = afterBal - beforeBal;
                 uint256 epochId = _findLatestEpochForStrategy(strategy);
-                if (epochId != 0) {
-                    coin.safeTransfer(impairmentRecoveryEscrow, recovered);
-                    IOVaultRecoveryEscrowStrategyModule(impairmentRecoveryEscrow).notifyRecovery(
-                        address(coin), epochId, recovered
-                    );
-                    coinBalance = coin.balanceOf(address(this));
+                if (epochId != 0 && recovered > 0) {
+                    ImpairmentEpoch storage epoch = impairmentEpochs[epochId];
+                    // Only finalize/resolved epochs have a claim surface; recovery asset must
+                    // match the vault asset this eject recovered (M-NEW-02).
+                    bool claimSurfaceLive = epoch.status == ImpairmentEpochStatus.Finalized
+                        || epoch.status == ImpairmentEpochStatus.Resolved;
+                    if (claimSurfaceLive && epoch.recoveryAsset == address(coin)) {
+                        coin.safeTransfer(impairmentRecoveryEscrow, recovered);
+                        IOVaultRecoveryEscrowStrategyModule(impairmentRecoveryEscrow).notifyRecovery(
+                            address(coin), epochId, recovered
+                        );
+                        epoch.totalRecovered += recovered;
+                        emit ImpairmentRecoveryNotified(epochId, address(coin), recovered);
+                        coinBalance = coin.balanceOf(address(this));
+                    }
                 }
             }
         }
@@ -694,41 +709,9 @@ contract OVaultStrategiesModule is OVaultModuleBase, IOVaultModuleIdentity {
     }
 
     function buyDebt(address strategy, uint256 amount) external onlyDelegateCall {
-        if (!activeStrategies[strategy] && !strategyImpaired[strategy]) revert StrategyNotActive();
-
-        uint256 currentDebt = strategyDebt[strategy];
-        if (currentDebt == 0) revert NothingToBuy();
-        if (amount == 0) revert NothingToBuy();
-
-        uint256 _amount = amount > currentDebt ? currentDebt : amount;
-
-        // Buyer sends Creator Coin to vault
-        IERC20 coin = _vaultAsset();
-        uint256 beforeBal = coin.balanceOf(address(this));
-        coin.safeTransferFrom(msg.sender, address(this), _amount);
-        uint256 afterBal = coin.balanceOf(address(this));
-
-        uint256 received = afterBal - beforeBal;
-        if (received != _amount) revert TransferAmountMismatch(_amount, received);
-        coinBalance = afterBal;
-
-        uint256 newDebt = currentDebt - _amount;
-        strategyDebt[strategy] = newDebt;
-        totalDebt -= _amount;
-
-        if (strategyImpaired[strategy] && impairmentRecoveryEscrow != address(0)) {
-            uint256 epochId = _findLatestEpochForStrategy(strategy);
-            if (epochId != 0) {
-                _vaultAsset().safeTransfer(impairmentRecoveryEscrow, _amount);
-                IOVaultRecoveryEscrowStrategyModule(impairmentRecoveryEscrow).notifyRecovery(
-                    address(_vaultAsset()), epochId, _amount
-                );
-                coinBalance = _vaultAsset().balanceOf(address(this));
-            }
-        }
-
-        emit DebtUpdated(strategy, currentDebt, newDebt);
-        emit DebtPurchased(strategy, _amount, msg.sender);
+        strategy;
+        amount;
+        revert DebtPurchaseDisabled();
     }
 
     function assessUnrealisedLosses(address strategy, uint256 assetsNeeded)

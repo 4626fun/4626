@@ -40,6 +40,12 @@ contract VaultShareBurnStream is ReentrancyGuard {
     uint256 public activeEpochStart;
     uint256 public burnedActive;
 
+    // FIX: I-1 — separate tally of shares actually burned (vault call succeeded) within
+    // the active epoch, distinct from `burnedActive` which advances on schedule regardless
+    // of burn success/failure. Used only so `StreamDripped`/`StreamCompleted` report real
+    // burned amounts instead of double-reporting shares diverted to `failedBurnAccumulator`.
+    uint256 public actuallyBurnedActive;
+
     // FIX: BS-01 — access control for queueShares
     mapping(address => bool) public authorizedQueuers;
 
@@ -86,6 +92,16 @@ contract VaultShareBurnStream is ReentrancyGuard {
     }
 
     // FIX: BS-01 — vault itself can authorize queuers (since this contract has no owner)
+    //
+    // FIX: L-2 (audit `docs/audits/aristotle/oracle`) — deployment/integration invariant:
+    // this contract is intentionally owner-less, so `setAuthorizedQueuer` and
+    // `recoverFailedBurns` are bootstrapped *only* through `msg.sender == vault`. The
+    // deployed vault MUST expose owner/governance-gated functions that call these on
+    // its behalf, or: (a) no queuer can ever be authorized, permanently reverting
+    // `CreatorPayoutRouter._queueCreatorCoinDeposit` / `_unwrapShareOftAndQueue` at
+    // `queueShares`, and (b) `failedBurnAccumulator` can never be recovered (compounds
+    // M-2). Deployment scripts/tests MUST verify the vault can successfully call both
+    // functions before this stream is wired into the payout path.
     function setAuthorizedQueuer(address queuer, bool authorized) external {
         require(msg.sender == vault, "Only vault");
         authorizedQueuers[queuer] = authorized;
@@ -118,6 +134,7 @@ contract VaultShareBurnStream is ReentrancyGuard {
         activeShares = pendingShares;
         activeEpochStart = pendingEpochStart;
         burnedActive = 0;
+        actuallyBurnedActive = 0;
 
         pendingShares = 0;
         pendingEpochStart = 0;
@@ -137,8 +154,13 @@ contract VaultShareBurnStream is ReentrancyGuard {
     }
 
     function _queueSharesAfterRollover(uint256 shares) internal {
+        // FIX: M-2 — `failedBurnAccumulator` shares physically remain in this contract's
+        // balance (the vault burn reverted), so they must be excluded from "accounted"
+        // just like `pendingShares`/`remainingActive`. Otherwise the permissionless
+        // sync path re-queues them into a fresh stream while `recoverFailedBurns` also
+        // still tracks them, double-counting the same shares.
         uint256 remainingActive = _remainingActive();
-        uint256 accounted = pendingShares + remainingActive;
+        uint256 accounted = pendingShares + remainingActive + failedBurnAccumulator;
         uint256 bal = vaultShares.balanceOf(address(this));
         if (bal < accounted + shares) revert NoNewShares();
 
@@ -183,8 +205,10 @@ contract VaultShareBurnStream is ReentrancyGuard {
     function syncUnaccounted() external nonReentrant {
         _rolloverIfNeeded();
 
+        // FIX: M-2 — exclude `failedBurnAccumulator` from "accounted" (see
+        // `_queueSharesAfterRollover`) so failed-burn shares are not re-queued.
         uint256 remainingActive = _remainingActive();
-        uint256 accounted = pendingShares + remainingActive;
+        uint256 accounted = pendingShares + remainingActive + failedBurnAccumulator;
         uint256 bal = vaultShares.balanceOf(address(this));
         if (bal <= accounted) revert NoNewShares();
         _queueSharesAfterRollover(bal - accounted);
@@ -228,8 +252,10 @@ contract VaultShareBurnStream is ReentrancyGuard {
         _rolloverIfNeeded();
 
         // Sync any unaccounted shares into the pending bucket (non-reverting).
+        // FIX: M-2 — exclude `failedBurnAccumulator` from "accounted" (see
+        // `_queueSharesAfterRollover`) so failed-burn shares are not re-queued.
         uint256 remainingActive = _remainingActive();
-        uint256 accounted = pendingShares + remainingActive;
+        uint256 accounted = pendingShares + remainingActive + failedBurnAccumulator;
         uint256 bal = vaultShares.balanceOf(address(this));
         if (bal > accounted) {
             _queueSharesAfterRollover(bal - accounted);
@@ -252,8 +278,10 @@ contract VaultShareBurnStream is ReentrancyGuard {
         burnedActive = burnableTotal;
 
         // FIX: BS-03 — wrap burn call in try/catch to prevent permanent stream lockup
+        // FIX: I-1 — track successful burns separately so events don't over-report
+        // amounts that were actually diverted to `failedBurnAccumulator`.
         try IOVaultBurn(vault).burnSharesForPriceIncrease(burnedNow) {
-            // success
+            actuallyBurnedActive += burnedNow;
         } catch {
             // FIX: H-05 — enforce a hard cap on accumulated failed burns so that
             // a persistently-failing vault does not silently build up unbounded
@@ -264,6 +292,7 @@ contract VaultShareBurnStream is ReentrancyGuard {
             }
             failedBurnAccumulator = newAccum;
             emit BurnFailed(activeEpochStart, burnedNow, failedBurnAccumulator);
+            burnedNow = 0; // FIX: I-1 — caller/return value reflects actual burns, not attempted
         }
 
         uint256 remaining = activeShares - burnedActive;
@@ -271,14 +300,16 @@ contract VaultShareBurnStream is ReentrancyGuard {
         try IOVaultBurn(vault).pricePerShare() returns (uint256 _pps) {
             pps = _pps;
         } catch {}
-        emit StreamDripped(activeEpochStart, burnedNow, burnedActive, remaining, pps);
+        emit StreamDripped(activeEpochStart, burnedNow, actuallyBurnedActive, remaining, pps);
 
         // FIX: BS-04 — force-complete at epoch end regardless of rounding
         if (elapsed >= EPOCH_DURATION) {
             // Burn any remainder due to rounding
             uint256 roundingRemainder = activeShares - burnedActive;
             if (roundingRemainder > 0) {
-                try IOVaultBurn(vault).burnSharesForPriceIncrease(roundingRemainder) {} catch {
+                try IOVaultBurn(vault).burnSharesForPriceIncrease(roundingRemainder) {
+                    actuallyBurnedActive += roundingRemainder;
+                } catch {
                     // FIX: H-05 — same cap enforcement on the rounding-remainder path
                     uint256 newAccum2 = failedBurnAccumulator + roundingRemainder;
                     if (newAccum2 > MAX_FAILED_BURN_ACCUMULATOR) {
@@ -289,10 +320,12 @@ contract VaultShareBurnStream is ReentrancyGuard {
                 }
                 burnedActive = activeShares;
             }
-            emit StreamCompleted(activeEpochStart, activeShares, pps);
+            // FIX: I-1 — report the actually-burned total, not the scheduled/advanced total.
+            emit StreamCompleted(activeEpochStart, actuallyBurnedActive, pps);
             activeShares = 0;
             activeEpochStart = 0;
             burnedActive = 0;
+            actuallyBurnedActive = 0;
         }
     }
 
@@ -308,6 +341,11 @@ contract VaultShareBurnStream is ReentrancyGuard {
      *      burn the queued-but-never-burned shares. Gated by the vault address
      *      because this contract has no owner (see BS-01 authorization model).
      *      Callable with `amount == 0` to retry the full accumulator.
+     * @dev FIX: L-2 — authorized by `msg.sender == vault`, but the burn executes as
+     *      `this` (the stream contract), a different actor than the caller. The vault's
+     *      `burnSharesForPriceIncrease` MUST burn from `msg.sender`'s (i.e. the stream's)
+     *      own balance, not the caller's — verify this integration invariant at
+     *      deployment time, since it cannot be checked from this file alone.
      */
     function recoverFailedBurns(uint256 amount) external nonReentrant returns (uint256 recovered) {
         if (msg.sender != vault) revert OnlyVault();
