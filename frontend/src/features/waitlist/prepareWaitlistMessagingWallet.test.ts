@@ -7,7 +7,10 @@ import {
   prepareWaitlistMessagingWallet,
   wrapWaitlistMessagingProvider,
 } from './prepareWaitlistMessagingWallet'
-import { privyAuthorizedWalletPersonalSign } from '@/lib/privy/privyAuthorizedWalletRpc'
+import {
+  privyAuthorizedWalletPersonalSign,
+  privyAuthorizedWalletSignTypedData,
+} from '@/lib/privy/privyAuthorizedWalletRpc'
 
 const EMBEDDED = '0x2222222222222222222222222222222222222222'
 
@@ -37,6 +40,7 @@ vi.mock('@/lib/privy/privyAuthorizedWalletRpc', async (importOriginal) => {
   return {
     ...actual,
     privyAuthorizedWalletPersonalSign: vi.fn(async () => `0x${'11'.repeat(65)}`),
+    privyAuthorizedWalletSignTypedData: vi.fn(async () => `0x${'22'.repeat(65)}`),
   }
 })
 
@@ -141,6 +145,29 @@ describe('prepareWaitlistMessagingWallet', () => {
     expect(realRequest).not.toHaveBeenCalled()
   })
 
+  it('routes eth_signTypedData_v4 through the authorized Wallet API lane for unified-stack wallets', async () => {
+    const realRequest = vi.fn()
+    const authorizedSignTypedData = vi.fn(async () => `0x${'ab'.repeat(65)}`)
+    const provider = wrapWaitlistMessagingProvider({ request: realRequest }, undefined, authorizedSignTypedData)
+
+    const typedData = {
+      domain: { name: 'Coinbase Smart Wallet', version: '1', chainId: 8453 },
+      types: {
+        CoinbaseSmartWalletMessage: [{ name: 'hash', type: 'bytes32' }],
+      },
+      primaryType: 'CoinbaseSmartWalletMessage',
+      message: { hash: `0x${'cd'.repeat(32)}` },
+    }
+    const signature = await provider.request({
+      method: 'eth_signTypedData_v4',
+      params: [EMBEDDED, typedData],
+    })
+
+    expect(signature).toBe(`0x${'ab'.repeat(65)}`)
+    expect(authorizedSignTypedData).toHaveBeenCalledWith(typedData, EMBEDDED)
+    expect(realRequest).not.toHaveBeenCalled()
+  })
+
   it('falls back to the raw embedded provider when the authorized lane fails', async () => {
     const realRequest = vi.fn(async () => `0x${'cd'.repeat(65)}`)
     const authorizedPersonalSign = vi.fn(async () => {
@@ -160,6 +187,35 @@ describe('prepareWaitlistMessagingWallet', () => {
     expect(realRequest).toHaveBeenCalledWith({
       method: 'personal_sign',
       params: [messageHex, EMBEDDED],
+    })
+  })
+
+  it('falls back to the raw provider when authorized eth_signTypedData_v4 fails', async () => {
+    const realRequest = vi.fn(async () => `0x${'34'.repeat(65)}`)
+    const authorizedSignTypedData = vi.fn(async () => {
+      throw new Error('No valid authorization signatures were provided.')
+    })
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const provider = wrapWaitlistMessagingProvider({ request: realRequest }, undefined, authorizedSignTypedData)
+
+    const typedData = {
+      domain: { name: 'Coinbase Smart Wallet', version: '1', chainId: 8453 },
+      types: {
+        CoinbaseSmartWalletMessage: [{ name: 'hash', type: 'bytes32' }],
+      },
+      primaryType: 'CoinbaseSmartWalletMessage',
+      message: { hash: `0x${'cd'.repeat(32)}` },
+    }
+    const signature = await provider.request({
+      method: 'eth_signTypedData_v4',
+      params: [EMBEDDED, typedData],
+    })
+
+    expect(signature).toBe(`0x${'34'.repeat(65)}`)
+    expect(authorizedSignTypedData).toHaveBeenCalledTimes(1)
+    expect(realRequest).toHaveBeenCalledWith({
+      method: 'eth_signTypedData_v4',
+      params: [EMBEDDED, typedData],
     })
   })
 
@@ -232,6 +288,7 @@ describe('prepareWaitlistMessagingWallet', () => {
         'Embedded signer session not ready on localhost (privy.4626.fun custom domain). Sign out completely, hard refresh, and sign in with email OTP again. If linking Zora/OAuth, also allowlist localhost:5173/5174 in your Privy Local Dev client Allowed Origins.',
     })
     expect(vi.mocked(privyAuthorizedWalletPersonalSign)).not.toHaveBeenCalled()
+    expect(vi.mocked(privyAuthorizedWalletSignTypedData)).not.toHaveBeenCalled()
 
     vi.unstubAllGlobals()
   })

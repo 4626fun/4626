@@ -13,6 +13,7 @@ import { refreshPrivyEmbeddedSignerSession } from '@/lib/privy/refreshEmbeddedSi
 import {
   isPrivyUnifiedStackWallet,
   privyAuthorizedWalletPersonalSign,
+  privyAuthorizedWalletSignTypedData,
   resolvePrivyUnifiedWalletId,
   type PrivyAuthorizationSignatureGenerator,
 } from '@/lib/privy/privyAuthorizedWalletRpc'
@@ -135,6 +136,7 @@ async function resolveEmbeddedProvider(wallet: Record<string, unknown>): Promise
 export function wrapWaitlistMessagingProvider(
   real: { request: (args: unknown) => Promise<unknown> },
   authorizedPersonalSign?: (messageHex: string) => Promise<string>,
+  authorizedSignTypedData?: (typedData: unknown, address?: string | null) => Promise<string>,
 ) {
   // Build so that event methods can return the provider (for any code that
   // chains .on().on() etc.). This prevents "provider.on is not a function"
@@ -182,6 +184,42 @@ export function wrapWaitlistMessagingProvider(
           }
         }
       }
+      if (method === 'eth_signTypedData_v4' && typeof authorizedSignTypedData === 'function') {
+        const params = Array.isArray(args?.params) ? args.params : []
+        const addressParam = params.find(
+          (value: unknown): value is string =>
+            typeof value === 'string' && /^0x[0-9a-fA-F]{40}$/.test(value),
+        )
+        const typedDataParam =
+          params.find(
+            (value: unknown) =>
+              value && typeof value === 'object' && !Array.isArray(value) && 'domain' in (value as object),
+          ) ??
+          params.find((value: unknown) => typeof value === 'string' && value.trim().startsWith('{')) ??
+          null
+        if (typedDataParam) {
+          const typedData =
+            typeof typedDataParam === 'string'
+              ? (() => {
+                  try {
+                    return JSON.parse(typedDataParam)
+                  } catch {
+                    return null
+                  }
+                })()
+              : typedDataParam
+          if (typedData) {
+            try {
+              return await authorizedSignTypedData(typedData, addressParam ?? null)
+            } catch (error) {
+              console.warn(
+                '[waitlist-messaging] authorized eth_signTypedData_v4 failed, falling back to embedded provider:',
+                error,
+              )
+            }
+          }
+        }
+      }
       return real.request(args)
     },
     // No-op EIP-1193-ish event methods. We don't need real subscriptions
@@ -201,8 +239,13 @@ async function connectEmbeddedWaitlistProvider(
   provider: { request: (args: unknown) => Promise<unknown> },
   embeddedAddress: string | null,
   authorizedPersonalSign?: (messageHex: string) => Promise<string>,
+  authorizedSignTypedData?: (typedData: unknown, address?: string | null) => Promise<string>,
 ): Promise<PrepareWaitlistMessagingWalletResult> {
-  const safeProvider = wrapWaitlistMessagingProvider(provider, authorizedPersonalSign)
+  const safeProvider = wrapWaitlistMessagingProvider(
+    provider,
+    authorizedPersonalSign,
+    authorizedSignTypedData,
+  )
   try {
     await input.connectAsync({
       connector: injected({
@@ -436,6 +479,17 @@ export async function prepareWaitlistMessagingWallet(
             getToken: input.getToken,
           })
       : undefined
+  const authorizedSignTypedData =
+    unifiedWalletId && typeof input.generateAuthorizationSignature === 'function'
+      ? (typedData: unknown, address?: string | null) =>
+          privyAuthorizedWalletSignTypedData({
+            walletId: unifiedWalletId,
+            typedData,
+            address,
+            generateAuthorizationSignature: input.generateAuthorizationSignature!,
+            getToken: input.getToken,
+          })
+      : undefined
 
   // The privy connector is not mounted on email/Zora waitlist tracks — use the
   // synthetic embedded provider directly to avoid waking extension injectors.
@@ -444,6 +498,7 @@ export async function prepareWaitlistMessagingWallet(
     provider,
     embeddedAddress,
     authorizedPersonalSign,
+    authorizedSignTypedData,
   )
   if (embeddedConnect.ok) return embeddedConnect
 

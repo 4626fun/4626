@@ -1,0 +1,4 @@
+.run/
+shovel
+.env
+config.generated.json

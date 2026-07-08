@@ -1,0 +1,9 @@
+services:
+  shovel:
+    image: indexsupply/shovel:1.6
+    restart: unless-stopped
+    volumes:
+      - ./config.generated.json:/config.json:ro
+    command: ['shovel', '-config', '/config.json']
+    # Shovel reads pg_url + RPC URLs from the generated JSON (render-config embeds them).
+    # Regenerate config after env changes: node render-config.mjs --write && docker compose up -d

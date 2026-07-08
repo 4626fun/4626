@@ -1,0 +1,96 @@
+{
+  "pg_url": "postgresql://postgres.qajpnuvqlcfseghnldkl:MTbEX9uemji9L6qZ@aws-1-us-east-2.pooler.supabase.com:5432/postgres",
+  "eth_sources": [
+    {
+      "name": "base",
+      "chain_id": 8453,
+      "urls": [
+        "https://eu.endpoints.matrixed.link/rpc/base?auth=p886of4gitu82"
+      ],
+      "batch_size": 100,
+      "concurrency": 1
+    }
+  ],
+  "integrations": [
+    {
+      "name": "protocol_lottery_winners",
+      "enabled": true,
+      "sources": [
+        {
+          "name": "base",
+          "start": "48348800"
+        }
+      ],
+      "table": {
+        "name": "protocol_lottery_winners",
+        "columns": [
+          {
+            "name": "block_num",
+            "type": "numeric"
+          },
+          {
+            "name": "block_time",
+            "type": "numeric"
+          },
+          {
+            "name": "tx_hash",
+            "type": "bytea"
+          },
+          {
+            "name": "log_addr",
+            "type": "bytea"
+          },
+          {
+            "name": "token",
+            "type": "bytea"
+          },
+          {
+            "name": "winner",
+            "type": "bytea"
+          }
+        ]
+      },
+      "block": [
+        {
+          "name": "block_num",
+          "column": "block_num"
+        },
+        {
+          "name": "block_time",
+          "column": "block_time"
+        },
+        {
+          "name": "tx_hash",
+          "column": "tx_hash"
+        },
+        {
+          "name": "log_addr",
+          "column": "log_addr",
+          "filter_op": "contains",
+          "filter_arg": [
+            "be87ad917be7f6a9ae1f9c9dd0a7ec7550f3f8c1"
+          ]
+        }
+      ],
+      "event": {
+        "name": "LotteryWinner",
+        "type": "event",
+        "anonymous": false,
+        "inputs": [
+          {
+            "indexed": true,
+            "name": "token",
+            "type": "address",
+            "column": "token"
+          },
+          {
+            "indexed": true,
+            "name": "user",
+            "type": "address",
+            "column": "winner"
+          }
+        ]
+      }
+    }
+  ]
+}

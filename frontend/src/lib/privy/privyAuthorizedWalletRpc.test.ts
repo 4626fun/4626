@@ -15,6 +15,7 @@ import {
   isPrivyUnifiedStackWallet,
   privyAuthorizedWalletPersonalSign,
   privyAuthorizedWalletSecp256k1Sign,
+  privyAuthorizedWalletSignTypedData,
   resolvePrivyUnifiedWalletId,
 } from '@/lib/privy/privyAuthorizedWalletRpc'
 
@@ -298,5 +299,83 @@ describe('privyAuthorizedWalletPersonalSign', () => {
     } finally {
       flagState.clientId = null
     }
+  })
+})
+
+describe('privyAuthorizedWalletSignTypedData', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('sends eth_signTypedData_v4 with typed_data payload via canonical origin', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ data: { signature: SIG } }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const typedData = {
+      domain: {
+        name: 'Coinbase Smart Wallet',
+        version: '1',
+        chainId: 8453,
+        verifyingContract: ADDRESS,
+      },
+      types: {
+        CoinbaseSmartWalletMessage: [{ name: 'hash', type: 'bytes32' }],
+      },
+      primaryType: 'CoinbaseSmartWalletMessage',
+      message: { hash: DIGEST },
+    }
+
+    const out = await privyAuthorizedWalletSignTypedData({
+      walletId: WALLET_ID,
+      typedData,
+      address: ADDRESS,
+      generateAuthorizationSignature: vi.fn(async () => ({ signature: 'auth-sig-base64' })),
+      getToken: async () => 'access-token',
+    })
+
+    expect(out).toBe(SIG)
+    expect(fetchMock).toHaveBeenCalledWith(
+      `https://auth.privy.io/api/v1/wallets/${WALLET_ID}/rpc`,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer access-token',
+          'privy-authorization-signature': 'auth-sig-base64',
+        }),
+        body: JSON.stringify({
+          chain_type: 'ethereum',
+          method: 'eth_signTypedData_v4',
+          params: {
+            typed_data: {
+              domain: typedData.domain,
+              message: typedData.message,
+              types: typedData.types,
+              primary_type: typedData.primaryType,
+            },
+          },
+          address: ADDRESS,
+        }),
+      }),
+    )
+  })
+
+  it('rejects malformed typed data before calling Privy', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      privyAuthorizedWalletSignTypedData({
+        walletId: WALLET_ID,
+        typedData: { domain: {}, message: {} },
+        generateAuthorizationSignature: vi.fn(async () => ({ signature: 'auth-sig-base64' })),
+        getToken: async () => 'access-token',
+      }),
+    ).rejects.toThrow('requires typed data with domain, message, types, and primaryType')
+
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

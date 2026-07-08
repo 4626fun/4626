@@ -36,8 +36,6 @@ DEPLOYMENT_BATCHER="${DEPLOYMENT_BATCHER:-0x02D7abC547F8B1e7E2D7a919D8D100591836
 SOLANA_BRIDGE_ADAPTER="${SOLANA_BRIDGE_ADAPTER:-0x9A61814082A26192DD9Cb201b44058506685Be60}"
 EPOCH="${DEPLOYMENT_EPOCH_TAG:-v1.18.0}"
 
-cd "$ROOT_DIR/frontend"
-
 declare -A SERVER_ENV=(
   [REGISTRY_4626]="$REGISTRY"
   [REGISTRY]="$REGISTRY"
@@ -80,12 +78,18 @@ upsert_env() {
   local target="$1"
   local key="$2"
   local value="$3"
-  printf '%s' "$value" | vercel env add "$key" "$target" --force >/dev/null
+  if [[ "$target" == "preview" ]]; then
+    echo "  skip preview $key (Vercel CLI requires interactive git-branch; set in dashboard)" >&2
+    return 0
+  fi
+  vercel env add "$key" "$target" --force --yes --value "$value" >/dev/null
   echo "  $target $key"
 }
 
-echo "==> Syncing Vercel env for project 4626 (production, preview, development)"
-for target in production preview development; do
+cd "$ROOT_DIR/frontend"
+
+echo "==> Syncing Vercel env for project 4626 (production + development; preview skipped)"
+for target in production development; do
   for key in "${!SERVER_ENV[@]}"; do
     upsert_env "$target" "$key" "${SERVER_ENV[$key]}"
   done
@@ -102,13 +106,9 @@ for target in production preview development; do
   done
 done
 
-echo "==> Production redeploy (last Ready deployment)"
-LATEST_READY="$(vercel ls --prod 2>/dev/null | rg "Ready" | rg -o 'https://4626-[a-z0-9-]+-akita-llc\.vercel\.app' | head -1 || true)"
-if [[ -n "$LATEST_READY" ]]; then
-  vercel redeploy "$LATEST_READY" --target production
-else
-  vercel deploy --prod --yes
-fi
+cd "$ROOT_DIR"
+echo "==> Production deploy (archive=tgz from repo root)"
+vercel deploy --archive=tgz --prod --yes --no-wait
 
 echo "==> Trigger AMOE publish-cron (best-effort)"
 if [[ -n "${CRON_SECRET:-}" ]]; then

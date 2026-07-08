@@ -25,10 +25,13 @@ LOTTERY_MANAGER="${LOTTERY_MANAGER:-0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1}"
 AMOE_PUBLISHER="${AMOE_PUBLISHER:-0xAb6d5C10b03300326CD7fAb7267Ae192842967b5}"
 AMOE_OWNER="${AMOE_OWNER:-0xB05Cf01231cF2fF99499682E64D3780d57c80FdD}"
 
-echo "==> [1/6] Safe wiring (wireDeploymentHelpers + setPhase1Module + solana/ovault config)"
+echo "==> [1/7] Safe wiring (wireDeploymentHelpers + setPhase1Module + solana/ovault config)"
 pnpm -C frontend exec tsx scripts/ops/execute-v1180-greenfield-wiring.ts
 
-echo "==> [2/6] Registry4626.setAuthorizedFactory(batcher, true)"
+echo "==> [2/7] Authorize batcher on CREATE2 deployer + OVault factory (admin EOA)"
+./script/authorize-v1180-batcher-deployers.sh
+
+echo "==> [3/7] Registry4626.setAuthorizedFactory(batcher, true)"
 AUTHORIZED="$(cast call "$REGISTRY" "authorizedFactories(address)(bool)" "$BATCHER" --rpc-url "$BASE_RPC_URL")"
 if [[ "$AUTHORIZED" == "true" ]]; then
   echo "    already authorized"
@@ -37,7 +40,7 @@ else
     --rpc-url "$BASE_RPC_URL" --private-key "$PRIVATE_KEY" --json | jq -r '.transactionHash // .hash // .'
 fi
 
-echo "==> [3/6] Deploy fresh LotteryAmoeRouter (PLONK v3)"
+echo "==> [4/7] Deploy fresh LotteryAmoeRouter (PLONK v3) — skip if AMOE_ROUTER already wired"
 export AMOE_OWNER AMOE_PUBLISHER AMOE_CONSUMER="$LOTTERY_MANAGER"
 forge script script/DeployLotteryAmoeRouter.s.sol:DeployLotteryAmoeRouter \
   --rpc-url "$BASE_RPC_URL" \
@@ -51,14 +54,14 @@ if [[ -z "$AMOE_ROUTER" ]]; then
 fi
 echo "    AMOE_ROUTER=$AMOE_ROUTER"
 
-echo "==> [4/6] Wire AMOE router to manager $LOTTERY_MANAGER"
+echo "==> [5/7] Wire AMOE router to manager $LOTTERY_MANAGER"
 export AMOE_ROUTER AMOE_MANAGER="$LOTTERY_MANAGER"
 ./script/wire-amoe-router-v1161.sh
 
-echo "==> [5/6] Pipe A readiness check"
+echo "==> [6/7] Pipe A readiness check"
 pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts --shell-only
 
-echo "==> [6/6] Vercel env + production redeploy"
+echo "==> [7/7] Vercel env + production redeploy"
 "$ROOT_DIR/script/sync-v1180-vercel-env.sh" "$AMOE_ROUTER"
 
 echo ""

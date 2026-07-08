@@ -251,6 +251,85 @@ export async function privyAuthorizedWalletPersonalSign(params: {
   })
 }
 
+function normalizeTypedDataPayload(typedData: unknown): Record<string, unknown> {
+  const record =
+    typedData && typeof typedData === 'object' ? (typedData as Record<string, unknown>) : null
+  if (!record) {
+    throw new Error('Privy eth_signTypedData_v4 requires an object payload.')
+  }
+
+  const domain =
+    record.domain && typeof record.domain === 'object'
+      ? (record.domain as Record<string, unknown>)
+      : null
+  const message =
+    record.message && typeof record.message === 'object'
+      ? (record.message as Record<string, unknown>)
+      : null
+  const types =
+    record.types && typeof record.types === 'object'
+      ? (record.types as Record<string, unknown>)
+      : null
+  const primaryTypeRaw =
+    typeof record.primary_type === 'string'
+      ? record.primary_type
+      : typeof record.primaryType === 'string'
+      ? record.primaryType
+      : null
+  const primaryType = String(primaryTypeRaw ?? '').trim()
+
+  if (!domain || !message || !types || !primaryType) {
+    throw new Error(
+      'Privy eth_signTypedData_v4 requires typed data with domain, message, types, and primaryType.',
+    )
+  }
+
+  return {
+    domain,
+    message,
+    types,
+    primary_type: primaryType,
+  }
+}
+
+/**
+ * EIP-712 eth_signTypedData_v4 via Privy Wallet API with user authorization
+ * signature. Unified-stack embedded wallets require this for wallet RPC calls.
+ */
+export async function privyAuthorizedWalletSignTypedData(params: {
+  walletId: string
+  typedData: unknown
+  address?: string | null
+  generateAuthorizationSignature: PrivyAuthorizationSignatureGenerator
+  getToken?: () => Promise<string | null>
+  refreshSession?: () => Promise<unknown>
+}): Promise<Hex> {
+  const walletId = String(params.walletId ?? '').trim()
+  if (!walletId) {
+    throw new Error('Privy wallet id is required for authorized eth_signTypedData_v4.')
+  }
+  const normalizedAddress = String(params.address ?? '').trim()
+  const body: Record<string, unknown> = {
+    chain_type: 'ethereum',
+    method: 'eth_signTypedData_v4',
+    params: {
+      typed_data: normalizeTypedDataPayload(params.typedData),
+    },
+  }
+  if (/^0x[0-9a-fA-F]{40}$/.test(normalizedAddress)) {
+    body.address = normalizedAddress
+  }
+
+  return postAuthorizedWalletRpc({
+    walletId,
+    body,
+    generateAuthorizationSignature: params.generateAuthorizationSignature,
+    getToken: params.getToken,
+    refreshSession: params.refreshSession,
+    context: 'eth_signTypedData_v4',
+  })
+}
+
 export function resolvePrivyUnifiedWalletId(params: {
   wallet?: unknown
   user?: unknown
