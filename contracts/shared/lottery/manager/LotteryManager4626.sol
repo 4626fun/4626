@@ -53,7 +53,7 @@ import {IOracle4626} from "@4626/shared/interfaces/oracles/IOracle4626.sol";
 // INTERFACES
 // ================================
 
-interface I4626RegistryLottery {
+interface IRegistry4626Lottery {
     // Per-token lookups
     function getVaultForToken(address _token) external view returns (address);
     function getShareOFTForToken(address _token) external view returns (address);
@@ -170,7 +170,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     // ================================
 
     /// @notice Registry for looking up per-token contracts
-    I4626RegistryLottery public immutable registry;
+    IRegistry4626Lottery public immutable registry;
 
     /// @notice Authorized swap contracts that can trigger lottery
     mapping(address => bool) public authorizedSwapContracts;
@@ -512,13 +512,13 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
      * @param owner_ Owner address
      */
     constructor(address _registry, address owner_)
-        OApp(I4626RegistryLottery(_registry).getLayerZeroEndpoint(block.chainid), owner_)
+        OApp(IRegistry4626Lottery(_registry).getLayerZeroEndpoint(block.chainid), owner_)
         Ownable(owner_)
     {
         if (owner_ == address(0)) revert ZeroAddress();
         if (_registry == address(0)) revert ZeroAddress();
 
-        registry = I4626RegistryLottery(_registry);
+        registry = IRegistry4626Lottery(_registry);
 
         // Initialize lottery config
         lotteryConfig = LotteryConfig({
@@ -1997,7 +1997,7 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     bytes32 internal constant WINNER_CALLBACK_CONTEXT =
         0x197005c8271d0fbeff8e5770b1fa02e04e4ba94e019fc8ea71c55fd52eb21205;
 
-    I4626RegistryLottery public immutable registry;
+    IRegistry4626Lottery public immutable registry;
 
     mapping(address => bool) public authorizedSwapContracts;
     IVRFConsumer4626 public localVRFConsumer;
@@ -2173,10 +2173,10 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     error LegacySetterDisabled();
 
     constructor(address _registry, address owner_)
-        OApp(I4626RegistryLottery(_registry).getLayerZeroEndpoint(block.chainid), owner_)
+        OApp(IRegistry4626Lottery(_registry).getLayerZeroEndpoint(block.chainid), owner_)
         Ownable(owner_)
     {
-        registry = I4626RegistryLottery(_registry);
+        registry = IRegistry4626Lottery(_registry);
         _self = address(this);
     }
 

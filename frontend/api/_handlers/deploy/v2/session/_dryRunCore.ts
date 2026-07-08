@@ -107,7 +107,7 @@ const NOT_AUTHORIZED_SELECTOR = '0xea8e4eb5'
 const NOT_BATCHER_SELECTOR = '0xd1c41351'
 const UNAUTHORIZED_SELECTOR = '0x82b42900'
 const ERC20_INSUFFICIENT_BALANCE_SELECTOR = '0xe450d38c'
-/** CCALaunchStrategy.LaunchOracleInvalidPrice(int256,int256) — not a raise hint. */
+/** CCALaunchArm.LaunchOracleInvalidPrice(int256,int256) — not a raise hint. */
 const LAUNCH_ORACLE_INVALID_PRICE_SELECTOR = '0x28e7b618'
 const PHASE2_MISSING_SELECTOR = '0xf79c143b'
 const AUCTION_ALREADY_PENDING_SELECTOR = AUCTION_ALREADY_PENDING_FOR_TOKEN_SELECTOR
@@ -189,7 +189,7 @@ const DRY_RUN_FINALIZE_PHASE2_ABI = [
           { name: 'wrapper', type: 'address' },
           { name: 'shareOFT', type: 'address' },
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
           { name: 'version', type: 'string' },
           { name: 'depositAmount', type: 'uint256' },
@@ -238,7 +238,7 @@ const DRY_RUN_LAUNCH_DEFERRED_AUCTION_ABI = [
 ] as const
 
 const PHASE2_CORE_DEPLOYED_EVENT = parseAbiItem(
-  'event Phase2CoreDeployed(address indexed creatorToken, address indexed owner, address gaugeController, address ccaStrategy, address oracle)',
+  'event Phase2CoreDeployed(address indexed creatorToken, address indexed owner, address gaugeController, address ccaLaunchArm, address oracle)',
 )
 
 const DRY_RUN_PHASE1_PARAMS_COMPONENTS = [
@@ -371,8 +371,8 @@ function formatDryRunError(error: unknown): string {
     }
     if (raw.toLowerCase().includes(NOT_AUTHORIZED_SELECTOR)) {
       return (
-        'NotAuthorized(): CreatorRegistry rejected Phase 2 finalize because the DeploymentBatcher is not an authorized factory. ' +
-        'On mainnet, run CreatorRegistry.setAuthorizedFactory(batcher, true) from the registry owner (see script/SeedCreatorRegistry.s.sol). ' +
+        'NotAuthorized(): Registry4626 rejected Phase 2 finalize because the DeploymentBatcher is not an authorized factory. ' +
+        'On mainnet, run Registry4626.setAuthorizedFactory(batcher, true) from the registry owner (see script/SeedCreatorRegistry.s.sol). ' +
         'Local dry-runs should auto-impersonate the registry owner on the fork before finalize.'
       )
     }
@@ -1224,7 +1224,7 @@ async function normalizePhase2AddressesToPhase1State(params: {
 
 function extractFinalizePhase2CoreAddresses(calls: Call[]): {
   gaugeController: Address
-  ccaStrategy: Address
+  ccaLaunchArm: Address
   oracle: Address
 } | null {
   for (const call of calls) {
@@ -1236,10 +1236,10 @@ function extractFinalizePhase2CoreAddresses(calls: Call[]): {
       if (decoded.functionName !== 'finalizePhase2') continue
       const params = decoded.args[0]
       const gaugeController = getTupleAddress(params, 'gaugeController', 5)
-      const ccaStrategy = getTupleAddress(params, 'ccaStrategy', 6)
+      const ccaLaunchArm = getTupleAddress(params, 'ccaLaunchArm', 6)
       const oracle = getTupleAddress(params, 'oracle', 7)
-      if (gaugeController && ccaStrategy && oracle) {
-        return { gaugeController, ccaStrategy, oracle }
+      if (gaugeController && ccaLaunchArm && oracle) {
+        return { gaugeController, ccaLaunchArm, oracle }
       }
     } catch {
       // Ignore non-finalize calls.
@@ -1305,7 +1305,7 @@ async function alignPhase4LaunchToPendingAuctionState(params: {
                 inputs: [{ name: 'baseSalt', type: 'bytes32' }],
                 outputs: [
                   { name: 'shareOFT', type: 'address' },
-                  { name: 'ccaStrategy', type: 'address' },
+                  { name: 'ccaLaunchArm', type: 'address' },
                   { name: 'amount', type: 'uint256' },
                   { name: 'lpReserveAmount', type: 'uint256' },
                 ],
@@ -1441,7 +1441,7 @@ async function alignPhase2FinalizeToCoreDeploymentEvent(params: {
   if (!latestLog?.args) return { phase2FinalizeCalls: params.phase2FinalizeCalls, rewrote: false }
 
   const deployedGauge = getTupleAddress(latestLog.args, 'gaugeController', 2)
-  const deployedCca = getTupleAddress(latestLog.args, 'ccaStrategy', 3)
+  const deployedCca = getTupleAddress(latestLog.args, 'ccaLaunchArm', 3)
   const deployedOracle = getTupleAddress(latestLog.args, 'oracle', 4)
   if (!deployedGauge || !deployedCca || !deployedOracle) {
     return { phase2FinalizeCalls: params.phase2FinalizeCalls, rewrote: false }
@@ -1456,7 +1456,7 @@ async function alignPhase2FinalizeToCoreDeploymentEvent(params: {
       if (!finalizeParams) return call
 
       const currentGauge = getTupleAddress(finalizeParams, 'gaugeController', 5)
-      const currentCca = getTupleAddress(finalizeParams, 'ccaStrategy', 6)
+      const currentCca = getTupleAddress(finalizeParams, 'ccaLaunchArm', 6)
       const currentOracle = getTupleAddress(finalizeParams, 'oracle', 7)
       if (
         currentGauge?.toLowerCase() === deployedGauge.toLowerCase() &&
@@ -1476,7 +1476,7 @@ async function alignPhase2FinalizeToCoreDeploymentEvent(params: {
             {
               ...finalizeParams,
               gaugeController: deployedGauge,
-              ccaStrategy: deployedCca,
+              ccaLaunchArm: deployedCca,
               oracle: deployedOracle,
             } as any,
           ],
@@ -1523,16 +1523,16 @@ async function alignPhase2FinalizeToLiveCoreCode(params: {
       const creatorToken = getTupleAddress(finalizeParams, 'creatorToken', 0)
       const owner = getTupleAddress(finalizeParams, 'owner', 1)
       const gaugeController = getTupleAddress(finalizeParams, 'gaugeController', 5)
-      const ccaStrategy = getTupleAddress(finalizeParams, 'ccaStrategy', 6)
+      const ccaLaunchArm = getTupleAddress(finalizeParams, 'ccaLaunchArm', 6)
       const oracle = getTupleAddress(finalizeParams, 'oracle', 7)
-      if (!creatorToken || !owner || !gaugeController || !ccaStrategy || !oracle) {
+      if (!creatorToken || !owner || !gaugeController || !ccaLaunchArm || !oracle) {
         phase2FinalizeCalls.push(call)
         continue
       }
 
       const [gaugeCode, ccaCode, oracleCode] = await Promise.all([
         params.getBytecode({ address: gaugeController }),
-        params.getBytecode({ address: ccaStrategy }),
+        params.getBytecode({ address: ccaLaunchArm }),
         params.getBytecode({ address: oracle }),
       ])
       const hasCode = (c: Hex | string | null | undefined) => Boolean(c && c !== '0x')
@@ -1564,7 +1564,7 @@ async function alignPhase2FinalizeToLiveCoreCode(params: {
               .catch(() => [])
       const latestLog = logsAny[logsAny.length - 1]
       const deployedGauge = latestLog?.args ? getTupleAddress(latestLog.args, 'gaugeController', 2) : null
-      const deployedCca = latestLog?.args ? getTupleAddress(latestLog.args, 'ccaStrategy', 3) : null
+      const deployedCca = latestLog?.args ? getTupleAddress(latestLog.args, 'ccaLaunchArm', 3) : null
       const deployedOracle = latestLog?.args ? getTupleAddress(latestLog.args, 'oracle', 4) : null
       if (!deployedGauge || !deployedCca || !deployedOracle) {
         phase2FinalizeCalls.push(call)
@@ -1581,7 +1581,7 @@ async function alignPhase2FinalizeToLiveCoreCode(params: {
             {
               ...finalizeParams,
               gaugeController: deployedGauge,
-              ccaStrategy: deployedCca,
+              ccaLaunchArm: deployedCca,
               oracle: deployedOracle,
             } as any,
           ],
@@ -1661,7 +1661,7 @@ async function alignPhase2FinalizeFromSimulation(params: {
         const log = logs[i]
         if (!log?.args) continue
         const deployedGauge = getTupleAddress(log.args, 'gaugeController', 2)
-        const deployedCca = getTupleAddress(log.args, 'ccaStrategy', 3)
+        const deployedCca = getTupleAddress(log.args, 'ccaLaunchArm', 3)
         const deployedOracle = getTupleAddress(log.args, 'oracle', 4)
         if (!deployedGauge || !deployedCca || !deployedOracle) continue
 
@@ -1674,7 +1674,7 @@ async function alignPhase2FinalizeFromSimulation(params: {
               {
                 ...finalizeParams,
                 gaugeController: deployedGauge,
-                ccaStrategy: deployedCca,
+                ccaLaunchArm: deployedCca,
                 oracle: deployedOracle,
               } as any,
             ],
@@ -1769,7 +1769,7 @@ async function recoverPhase2FinalizeCallFromLogs(params: {
     const log = logs[i]
     if (!log?.args) continue
     const deployedGauge = getTupleAddress(log.args, 'gaugeController', 2)
-    const deployedCca = getTupleAddress(log.args, 'ccaStrategy', 3)
+    const deployedCca = getTupleAddress(log.args, 'ccaLaunchArm', 3)
     const deployedOracle = getTupleAddress(log.args, 'oracle', 4)
     if (!deployedGauge || !deployedCca || !deployedOracle) continue
 
@@ -1782,7 +1782,7 @@ async function recoverPhase2FinalizeCallFromLogs(params: {
           {
             ...finalizeParams,
             gaugeController: deployedGauge,
-            ccaStrategy: deployedCca,
+            ccaLaunchArm: deployedCca,
             oracle: deployedOracle,
           } as any,
         ],
@@ -1834,7 +1834,7 @@ async function preparePhase2CoreCalls(params: {
 
   const entries = [
     ['gauge', addresses.gaugeController],
-    ['cca', addresses.ccaStrategy],
+    ['cca', addresses.ccaLaunchArm],
     ['oracle', addresses.oracle],
   ] as const
   const deployed = await Promise.all(

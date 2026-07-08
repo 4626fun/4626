@@ -129,7 +129,7 @@ const BATCHER_PHASE2_CORE_ABI = [
         type: 'tuple',
         components: [
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
           { name: 'auction', type: 'address' },
         ],
@@ -154,7 +154,7 @@ const BATCHER_FINALIZE_PHASE2_ABI = [
           { name: 'wrapper', type: 'address' },
           { name: 'shareOFT', type: 'address' },
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
           { name: 'version', type: 'string' },
           { name: 'depositAmount', type: 'uint256' },
@@ -180,7 +180,7 @@ const BATCHER_FINALIZE_PHASE2_ABI = [
         type: 'tuple',
         components: [
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
           { name: 'auction', type: 'address' },
         ],
@@ -273,7 +273,7 @@ export type VaultDeployContracts = {
   wrapper: Address | null
   shareOFT: Address | null
   gaugeController: Address | null
-  ccaStrategy: Address | null
+  ccaLaunchArm: Address | null
   oracle: Address | null
 }
 
@@ -416,7 +416,7 @@ type PredictedDeployAddresses = {
   shareOFT: Address
   oftBootstrapRegistry: Address
   gaugeController: Address
-  ccaStrategy: Address
+  ccaLaunchArm: Address
   oracle: Address
 }
 
@@ -610,7 +610,7 @@ async function predictDeployAddresses(params: {
     [shareOFT, getAddress('0x0000000000000000000000000000000000000000'), vault, vault, tempOwner],
   ) as Hex
   const ccaInitCodeHash = keccak256(concatHex(ccaCode, ccaArgs))
-  const ccaStrategy = await computeCreate2Address({
+  const ccaLaunchArm = await computeCreate2Address({
     publicClient,
     create2Deployer,
     salt: ccaSalt,
@@ -640,7 +640,7 @@ async function predictDeployAddresses(params: {
     shareOFT,
     oftBootstrapRegistry,
     gaugeController,
-    ccaStrategy,
+    ccaLaunchArm,
     oracle,
   }
 }
@@ -655,7 +655,7 @@ function extractPredictedContractsFromFinalizeCall(params: {
     wrapper: null,
     shareOFT: null,
     gaugeController: null,
-    ccaStrategy: null,
+    ccaLaunchArm: null,
     oracle: null,
   }
   try {
@@ -678,7 +678,7 @@ function extractPredictedContractsFromFinalizeCall(params: {
       wrapper: normalizeMaybeAddress(callParams.wrapper),
       shareOFT: normalizeMaybeAddress(callParams.shareOFT),
       gaugeController: normalizeMaybeAddress(callParams.gaugeController),
-      ccaStrategy: normalizeMaybeAddress(callParams.ccaStrategy),
+      ccaLaunchArm: normalizeMaybeAddress(callParams.ccaLaunchArm),
       oracle: normalizeMaybeAddress(callParams.oracle),
     }
   } catch {
@@ -799,7 +799,7 @@ export async function buildAkitaVaultDeployStartRequest(params: {
     wrapper: predicted.wrapper,
     shareOFT: predicted.shareOFT,
     gaugeController: predicted.gaugeController,
-    ccaStrategy: predicted.ccaStrategy,
+    ccaLaunchArm: predicted.ccaLaunchArm,
     oracle: predicted.oracle,
     depositAmount: DEFAULT_MIN_FIRST_DEPOSIT_WEI,
     version: params.version,

@@ -12,16 +12,13 @@ import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {LPFeeLibrary} from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
-import {LiquidityAmounts} from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {IOracle4626} from "@4626/shared/interfaces/oracles/IOracle4626.sol";
-import {CCALaunchStrategyConfigModule} from "@4626/shared/strategies/cca/CCALaunchStrategyConfigModule.sol";
-import {CCALaunchStrategyEncodingHelper} from "@4626/shared/strategies/cca/CCALaunchStrategyEncodingHelper.sol";
-import {Plan, StrategyPlanner} from "liquidity-launcher/src/libraries/StrategyPlanner.sol";
+import {CCALaunchArmConfigModule} from "@4626/shared/shareoft-mesh/cca/CCALaunchArmConfigModule.sol";
+import {CCALaunchArmEncodingHelper} from "@4626/shared/shareoft-mesh/cca/CCALaunchArmEncodingHelper.sol";
 import {TokenPricing} from "liquidity-launcher/src/libraries/TokenPricing.sol";
-import {BasePositionParams, FullRangeParams} from "liquidity-launcher/src/types/PositionTypes.sol";
 
 /**
  * @title ITaxHook
@@ -85,7 +82,7 @@ interface IVaultTelemetry {
 }
 
 /**
- * @title CCALaunchStrategy
+ * @title CCALaunchArm
  * @author 0xakita.eth
  * @notice Fair launch strategy using Uniswap's Continuous Clearing Auction
  *
@@ -103,12 +100,11 @@ interface IVaultTelemetry {
  *
  * @dev CCA Factory is chain-specific; configure via `CCA_FACTORY`.
  *
- * @dev Used for creator lane launches primarily. The IStrategy interface and shared deploy make it adaptable for agent, creator, and future ecosystems.
+ * @dev Used for creator lane launches primarily. Shared deploy make it adaptable for agent, creator, and future ecosystems.
  *      Vault share allocation is enforced by DeploymentBatcher.
  */
-contract CCALaunchStrategy is Ownable, ReentrancyGuard {
+contract CCALaunchArm is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
-    using StrategyPlanner for *;
     using TokenPricing for uint256;
 
     // ================================
@@ -210,6 +206,8 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     IPositionManager public positionManager;
     /// @notice Recipient of the migrated v4 LP position
     address public positionRecipient;
+    /// @notice Share-mesh LP manager wired post-auction for three-position liquidity.
+    address public lpManager;
     /// @notice Operator allowed to sweep residual balances after sweepBlock
     address public operator;
 
@@ -270,8 +268,10 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     uint64 public defaultSweepDelayBlocks = 14_400; // ~8 hours on Base @2s blocks
     /// @notice If false, `launchAuctionSimple` is disabled.
     bool public simpleLaunchEnabled;
+    /// @dev FIX: AUDIT-2026-07-01-L06 — fee recipient is locked after the first launch.
+    bool public feeRecipientLocked;
     address private immutable _configModule;
-    CCALaunchStrategyEncodingHelper private immutable _encodingHelper;
+    CCALaunchArmEncodingHelper private immutable _encodingHelper;
 
     // ================================
     // EVENTS
@@ -311,6 +311,8 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     );
     event BackingVaultUpdated(address indexed backingVault);
     event SimpleLaunchToggled(bool enabled);
+    event LpManagerUpdated(address indexed lpManager);
+    event LpManagerSeeded(address indexed lpManager, uint256 shareAmount, uint256 currencyAmount);
 
     // ================================
     // ERRORS
@@ -323,6 +325,8 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     error AuctionNotFailed();
     error MigrationNotReady(uint64 migrationBlock, uint256 currentBlock);
     error MigrationConfigMissing();
+    error LpManagerNotSet();
+    error LpManagerAlreadySet();
     error CurrencyBalanceTooLow(uint256 needed, uint256 available);
     error LpReserveTooLow(uint256 requiredReserve, uint256 availableBalance);
     error SweepNotAllowed(uint64 sweepBlock, uint256 currentBlock);
@@ -375,9 +379,9 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         operator = _owner;
         simpleLaunchEnabled = false;
         _configModule = address(
-            new CCALaunchStrategyConfigModule(_auctionToken, _currency, _fundsRecipient, _tokensRecipient, _owner)
+            new CCALaunchArmConfigModule(_auctionToken, _currency, _fundsRecipient, _tokensRecipient, _owner)
         );
-        _encodingHelper = new CCALaunchStrategyEncodingHelper();
+        _encodingHelper = new CCALaunchArmEncodingHelper();
     }
 
     // ================================
@@ -671,11 +675,13 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Migrate graduated CCA liquidity into a Uniswap v4 LP position.
+     * @notice Migrate graduated CCA into a live ShareOFT/native-ETH V4 pool.
+     * @dev Initializes the pool at the auction clearing price, configures the oracle, and
+     *      retains ShareOFT lp reserve + swept currency on this strategy for `seedLpManager()`.
      */
     function migrate() external nonReentrant {
         if (currentAuction == address(0)) revert NoActiveAuction();
-        if (address(positionManager) == address(0) || address(poolManager) == address(0) || taxHook == address(0)) {
+        if (address(poolManager) == address(0) || taxHook == address(0)) {
             revert MigrationConfigMissing();
         }
         if (currentLaunch.migrated) revert InvalidConfig();
@@ -684,7 +690,6 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
             revert MigrationNotReady(currentLaunch.migrationBlock, block.number);
         }
 
-        // FIX: S-C01 — cache auction pointer before external calls (CEI ordering)
         address auctionAddr = currentAuction;
         IContinuousClearingAuction auction = IContinuousClearingAuction(auctionAddr);
         auction.checkpoint();
@@ -702,32 +707,14 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         uint256 reserveRaw = currentLaunch.lpReserveAmount;
         if (reserveRaw == 0 || reserveRaw > type(uint128).max) revert InvalidConfig();
 
-        uint128 reserveSupply = uint128(reserveRaw);
-        uint128 currencyAmount = uint128(currencyAmountRaw);
         bool currencyIsCurrency0 = currency < address(auctionToken);
-
         uint256 priceX192 = auction.clearingPrice().convertToPriceX192(currencyIsCurrency0);
         uint160 sqrtPriceX96 = priceX192.convertToSqrtPriceX96();
-
-        (uint128 fullRangeTokenAmount, uint128 fullRangeCurrencyAmount) =
-            priceX192.calculateAmounts(currencyAmount, currencyIsCurrency0, reserveSupply);
-
-        uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(
-            sqrtPriceX96,
-            TickMath.getSqrtPriceAtTick(TickMath.minUsableTick(poolTickSpacing)),
-            TickMath.getSqrtPriceAtTick(TickMath.maxUsableTick(poolTickSpacing)),
-            currencyIsCurrency0 ? fullRangeCurrencyAmount : fullRangeTokenAmount,
-            currencyIsCurrency0 ? fullRangeTokenAmount : fullRangeCurrencyAmount
-        );
 
         PoolKey memory key = _buildPoolKey();
         _setPhase(LifecyclePhase.PoolInitializing);
         poolManager.initialize(key, sqrtPriceX96);
 
-        // FIX: H-02 — verify pool slot0 matches the price we computed from the
-        // auction clearing price. If a prior tx initialized the pool at a
-        // different sqrtPrice (front-run / stale pool), this guards the LP
-        // mint against adding liquidity at a manipulated price.
         {
             PoolId pid = PoolIdLibrary.toId(key);
             (uint160 actualSqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, pid);
@@ -736,45 +723,55 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
             }
         }
 
-        Plan memory plan = StrategyPlanner.init();
-        BasePositionParams memory baseParams = BasePositionParams({
-            currency: currency,
-            poolToken: address(auctionToken),
-            poolLPFee: poolFeeTier,
-            poolTickSpacing: poolTickSpacing,
-            initialSqrtPriceX96: sqrtPriceX96,
-            liquidity: liquidity,
-            positionRecipient: positionRecipient,
-            hooks: IHooks(taxHook)
-        });
-
-        plan = plan.planFullRangePosition(
-            baseParams, FullRangeParams({tokenAmount: fullRangeTokenAmount, currencyAmount: fullRangeCurrencyAmount})
-        );
-        plan = plan.planTakePair(baseParams);
-        bytes memory encodedPlan = plan.encode();
-
-        // FIX: S-C01 — update state before external positionManager calls (CEI ordering)
         currentLaunch.migrated = true;
         _persistLifecycleSnapshot();
-
-        Currency.wrap(address(auctionToken)).transfer(address(positionManager), fullRangeTokenAmount);
-        // FIX: H-02 — give the position-manager call a real deadline window
-        // (5 minutes) instead of the raw block.timestamp used previously,
-        // which left no slack and effectively disabled deadline protection
-        // for L2 re-orgs or sequencer delays.
-        uint256 migrationDeadline = block.timestamp + 5 minutes;
-        if (currency == address(0)) {
-            positionManager.modifyLiquidities{value: fullRangeCurrencyAmount}(encodedPlan, migrationDeadline);
-        } else {
-            IERC20(currency).safeTransfer(address(positionManager), fullRangeCurrencyAmount);
-            positionManager.modifyLiquidities(encodedPlan, migrationDeadline);
-        }
 
         _configureOracleV4Pool();
         _setPhase(LifecyclePhase.PoolLive);
 
-        emit Migrated(auctionAddr, sqrtPriceX96, fullRangeTokenAmount, fullRangeCurrencyAmount);
+        emit Migrated(auctionAddr, sqrtPriceX96, reserveRaw, currencyAmountRaw);
+    }
+
+    /**
+     * @notice Wire the post-auction ShareOFT mesh LP manager.
+     */
+    function setLpManager(address _lpManager) external onlyApprovedOrOwner {
+        if (_lpManager == address(0)) revert ZeroAddress();
+        if (lpManager != address(0)) revert LpManagerAlreadySet();
+        lpManager = _lpManager;
+        emit LpManagerUpdated(_lpManager);
+    }
+
+    /**
+     * @notice Transfer retained ShareOFT reserve + swept currency to the wired LP manager.
+     */
+    function seedLpManager() external nonReentrant {
+        if (!currentLaunch.migrated) revert MigrationConfigMissing();
+        if (lpManager == address(0) || lpManager.code.length == 0) revert LpManagerNotSet();
+
+        uint256 reserveAmount = currentLaunch.lpReserveAmount;
+        uint256 currencyAmount = _currencyBalance(address(this));
+
+        if (reserveAmount > 0) {
+            auctionToken.transfer(lpManager, reserveAmount);
+        }
+        if (currencyAmount > 0) {
+            if (currency == address(0)) {
+                (bool ok,) = lpManager.call{value: currencyAmount}("");
+                if (!ok) revert InvalidConfig();
+            } else {
+                IERC20(currency).safeTransfer(lpManager, currencyAmount);
+            }
+        }
+
+        emit LpManagerSeeded(lpManager, reserveAmount, currencyAmount);
+    }
+
+    /**
+     * @notice Return the ShareOFT/native-ETH mesh pool key used by this strategy.
+     */
+    function getPoolKey() external view returns (PoolKey memory) {
+        return _buildPoolKey();
     }
 
     /**

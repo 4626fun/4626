@@ -205,7 +205,7 @@ import {
   BATCHER_PHASE1_SPLIT_STATE_VIEW_ABI,
   BATCHER_PHASE3_CONFIG_ABI,
   BATCHER_SHARED_INFRA_ABI,
-  CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI,
+  CCA_LAUNCH_ARM_AUCTION_STATUS_ABI,
   CHARM_FACTORY_ABI,
   COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
   COIN_PAYOUT_RECIPIENT_ABI,
@@ -275,7 +275,7 @@ const DEFAULT_SOLANA_MAX_NAV_DELTA_BPS = 500
 const DEFAULT_SOLANA_MIN_BASE_LIQUIDITY_BPS = 1_000
 const DEFAULT_SOLANA_OVAULT_MESH_ENABLED = true
 const DEFAULT_CHARM_EXPECTED_PROTOCOL_FEE_PIPS = 10_000 // 1% in Charm 1e6 precision
-const DEFAULT_CCA_DURATION_BLOCKS = 302_400n // ~7 days on Base at ~2s blocks (must match CCALaunchStrategy defaultDuration)
+const DEFAULT_CCA_DURATION_BLOCKS = 302_400n // ~7 days on Base at ~2s blocks (must match CCALaunchArm defaultDuration)
 const DEFAULT_SHARE_OFT_VANITY_SUFFIX = '4626'
 const DEFAULT_SHARE_OFT_VANITY_MAX_TRIES = 1_000_000
 const DEFAULT_VAULT_VANITY_PREFIX = '4626'
@@ -546,7 +546,7 @@ type ServerDeployResponse = {
     wrapper: Address
     shareOFT: Address
     gaugeController: Address
-    ccaStrategy: Address
+    ccaLaunchArm: Address
     oracle: Address
     burnStream?: Address
     payoutRouter?: Address
@@ -729,7 +729,7 @@ type DeployPlanExport = {
     wrapper: Address
     shareOFT: Address
     gaugeController: Address
-    ccaStrategy: Address
+    ccaLaunchArm: Address
     oracle: Address
     burnStream: Address
     payoutRouter: Address
@@ -2766,7 +2766,7 @@ function DeployVaultBatcher({
       wrapper: expected.wrapper,
       shareOFT: expected.shareOFT,
       gaugeController: expected.gaugeController,
-      ccaStrategy: expected.ccaStrategy,
+      ccaLaunchArm: expected.ccaLaunchArm,
       oracle: expected.oracle,
       version: expectedDeploymentVersion,
       depositAmount: minFirstDeposit,
@@ -3174,15 +3174,15 @@ function DeployVaultBatcher({
   }, [phase3Expected])
 
   const phase4AuctionAddressQuery = useQuery({
-    queryKey: ['creatorVaultBatcher', 'phase4AuctionAddress', expected?.ccaStrategy, phase],
-    enabled: !!publicClient && !!expected?.ccaStrategy,
+    queryKey: ['creatorVaultBatcher', 'phase4AuctionAddress', expected?.ccaLaunchArm, phase],
+    enabled: !!publicClient && !!expected?.ccaLaunchArm,
     staleTime: 5_000,
     retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
     retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 5_000),
     queryFn: async () => {
       const status = (await publicClient!.readContract({
-        address: expected!.ccaStrategy,
-        abi: CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI,
+        address: expected!.ccaLaunchArm,
+        abi: CCA_LAUNCH_ARM_AUCTION_STATUS_ABI,
         functionName: 'getAuctionStatus',
       })) as readonly [Address, boolean, boolean, bigint, bigint]
       const auction = normalizeAddressLike(status?.[0] ?? null)
@@ -3230,7 +3230,7 @@ function DeployVaultBatcher({
       expected?.wrapper,
       expected?.shareOFT,
       expected?.gaugeController,
-      expected?.ccaStrategy,
+      expected?.ccaLaunchArm,
       expected?.oracle,
       expected?.burnStream,
       expected?.payoutRouter,
@@ -3346,7 +3346,7 @@ function DeployVaultBatcher({
       expected?.wrapper,
       expected?.shareOFT,
       expected?.gaugeController,
-      expected?.ccaStrategy,
+      expected?.ccaLaunchArm,
       expected?.oracle,
       expected?.burnStream,
       expected?.payoutRouter,
@@ -3365,7 +3365,7 @@ function DeployVaultBatcher({
             wrapper: boolean
             shareOFT: boolean
             gaugeController: boolean
-            ccaStrategy: boolean
+            ccaLaunchArm: boolean
             oracle: boolean
             burnStream: boolean
             payoutRouter: boolean
@@ -3383,7 +3383,7 @@ function DeployVaultBatcher({
         wrapper: expected!.wrapper,
         shareOFT: expected!.shareOFT,
         gaugeController: expected!.gaugeController,
-        ccaStrategy: expected!.ccaStrategy,
+        ccaLaunchArm: expected!.ccaLaunchArm,
         oracle: expected!.oracle,
         burnStream: expected!.burnStream,
         payoutRouter: expected!.payoutRouter,
@@ -3399,7 +3399,7 @@ function DeployVaultBatcher({
         wrapper: boolean
         shareOFT: boolean
         gaugeController: boolean
-        ccaStrategy: boolean
+        ccaLaunchArm: boolean
         oracle: boolean
         burnStream: boolean
         payoutRouter: boolean
@@ -4731,7 +4731,7 @@ function DeployVaultBatcher({
           wrapper: expected.wrapper,
           shareOFT: expected.shareOFT,
           gaugeController: expected.gaugeController,
-          ccaStrategy: expected.ccaStrategy,
+          ccaLaunchArm: expected.ccaLaunchArm,
           oracle: expected.oracle,
           version: deployVersion,
           depositAmount,
@@ -5077,7 +5077,7 @@ function DeployVaultBatcher({
 
         const phase2CoreState = await (async () => {
           try {
-            const addrs = [expected.gaugeController, expected.ccaStrategy, expected.oracle] as const
+            const addrs = [expected.gaugeController, expected.ccaLaunchArm, expected.oracle] as const
             const codes = await Promise.all(addrs.map((a) => publicClient.getBytecode({ address: a })))
             const deployed = codes.map((c) => !!c && c !== '0x')
             return {
@@ -5133,7 +5133,7 @@ function DeployVaultBatcher({
         } else {
           logger.info('[DeployVault] phase2.core already deployed; skipping deployPhase2Core call', {
             expectedGauge: expected.gaugeController,
-            expectedCca: expected.ccaStrategy,
+            expectedCca: expected.ccaLaunchArm,
             expectedOracle: expected.oracle,
           })
           if (!phase2UsesPermit2) {
@@ -5333,7 +5333,7 @@ function DeployVaultBatcher({
             wrapper: expected.wrapper,
             shareOFT: expected.shareOFT,
             gaugeController: expected.gaugeController,
-            ccaStrategy: expected.ccaStrategy,
+            ccaLaunchArm: expected.ccaLaunchArm,
             oracle: expected.oracle,
             burnStream: expected.burnStream,
             payoutRouter: expected.payoutRouter,
@@ -6118,13 +6118,13 @@ function DeployVaultBatcher({
           await sendPhaseCalls([phase2CoreCall], 'phase2', { noSplit: true, segment: 'core' })
           await waitForContractsDeployed({
             publicClient: publicClient as any,
-            addresses: [expected.gaugeController, expected.ccaStrategy, expected.oracle],
+            addresses: [expected.gaugeController, expected.ccaLaunchArm, expected.oracle],
             label: 'Phase 2 core',
           })
         } else {
           logger.info('[DeployVault] phase2.core skipped (already deployed)', {
             expectedGauge: expected.gaugeController,
-            expectedCca: expected.ccaStrategy,
+            expectedCca: expected.ccaLaunchArm,
             expectedOracle: expected.oracle,
           })
         }
@@ -6163,8 +6163,8 @@ function DeployVaultBatcher({
           }
           try {
             await publicClient.readContract({
-              address: expected.ccaStrategy,
-              abi: CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI,
+              address: expected.ccaLaunchArm,
+              abi: CCA_LAUNCH_ARM_AUCTION_STATUS_ABI,
               functionName: 'previewLaunchPricing',
             })
           } catch (pricingErr) {
@@ -7005,9 +7005,9 @@ function DeployVaultBatcher({
                 />
                 <AddressRow
                   label="CCA strategy"
-                  address={expected?.ccaStrategy}
-                  deployed={expectedAddressDeployment?.ccaStrategy ?? null}
-                  forkOnly={isForkOnlyAddress(expected?.ccaStrategy, expectedAddressDeployment?.ccaStrategy ?? null)}
+                  address={expected?.ccaLaunchArm}
+                  deployed={expectedAddressDeployment?.ccaLaunchArm ?? null}
+                  forkOnly={isForkOnlyAddress(expected?.ccaLaunchArm, expectedAddressDeployment?.ccaLaunchArm ?? null)}
                   {...dryRunRowProps('phase2Core')}
                 />
                 <AddressRow
@@ -8599,8 +8599,8 @@ function DeployVaultMain() {
   const deploymentTracker = useDeploymentTracker(deploySender, deploymentVersion)
   const [justCompletedDeployment, setJustCompletedDeployment] = useState<DeploymentRecord | null>(null)
   const trackerDeployment = deploymentTracker.existingDeployment
-  const justCompletedCcaStrategy = justCompletedDeployment?.contracts.ccaStrategy
-  const trackerCcaStrategy = trackerDeployment?.contracts.ccaStrategy
+  const justCompletedCcaStrategy = justCompletedDeployment?.contracts.ccaLaunchArm
+  const trackerCcaStrategy = trackerDeployment?.contracts.ccaLaunchArm
   const hasRequiredContracts = useCallback((record: DeploymentRecord | null | undefined): boolean => {
     if (!record) return false
     return (
@@ -8608,16 +8608,16 @@ function DeployVaultMain() {
       isAddress(record.contracts.wrapper) &&
       isAddress(record.contracts.shareOFT) &&
       isAddress(record.contracts.gaugeController ?? '') &&
-      isAddress(record.contracts.ccaStrategy ?? '') &&
+      isAddress(record.contracts.ccaLaunchArm ?? '') &&
       isAddress(record.contracts.oracle ?? '')
     )
   }, [])
   const isAuctionReadyForStrategy = useCallback(
-    async (ccaStrategy: Address | null | undefined): Promise<boolean> => {
-      if (!ccaStrategy || !publicClient) return false
+    async (ccaLaunchArm: Address | null | undefined): Promise<boolean> => {
+      if (!ccaLaunchArm || !publicClient) return false
       const status = (await publicClient.readContract({
-        address: ccaStrategy,
-        abi: CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI,
+        address: ccaLaunchArm,
+        abi: CCA_LAUNCH_ARM_AUCTION_STATUS_ABI,
         functionName: 'getAuctionStatus',
       })) as readonly [Address, boolean, boolean, bigint, bigint]
       const auction = String(status?.[0] ?? '').toLowerCase()
@@ -8660,7 +8660,7 @@ function DeployVaultMain() {
         wrapper: addresses.wrapper,
         shareOFT: addresses.shareOFT,
         gaugeController: addresses.gaugeController,
-        ccaStrategy: addresses.ccaStrategy,
+        ccaLaunchArm: addresses.ccaLaunchArm,
         burnStream: addresses.burnStream,
         payoutRouter: addresses.payoutRouter,
         oracle: addresses.oracle,
@@ -9269,7 +9269,7 @@ function DeployVaultMain() {
         { key: 'vault', label: laneBytecodeLabels.vault, codeId: deployCodeIds.vault },
         { key: 'wrapper', label: laneBytecodeLabels.wrapper, codeId: deployCodeIds.wrapper },
         { key: 'gauge', label: laneBytecodeLabels.gauge, codeId: deployCodeIds.gauge },
-        { key: 'cca', label: 'CCALaunchStrategy', codeId: deployCodeIds.cca },
+        { key: 'cca', label: 'CCALaunchArm', codeId: deployCodeIds.cca },
         { key: 'oracle', label: laneBytecodeLabels.oracle, codeId: deployCodeIds.oracle },
         { key: 'vaultShareBurnStream', label: 'VaultShareBurnStream', codeId: deployCodeIds.vaultShareBurnStream },
         { key: 'payoutRouter', label: laneBytecodeLabels.payoutRouter, codeId: deployCodeIds.payoutRouter },

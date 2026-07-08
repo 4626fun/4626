@@ -28,7 +28,7 @@ type VaultCardConfig = {
   chainId: number
   creatorCoinAddress: `0x${string}`
   groupId: string
-  ccaStrategyAddress?: `0x${string}`
+  ccaLaunchArmAddress?: `0x${string}`
   shareOFTAddress?: `0x${string}`
   graduatedAt?: string | null
   settledAt?: string | null
@@ -63,8 +63,8 @@ type AuctionActivity = {
   activity: AuctionActivityItem[]
 }
 
-async function fetchAuctionStatus(ccaStrategy: `0x${string}`): Promise<AuctionStatus> {
-  const res = await apiFetch(`/api/v1/auction/status?ccaStrategy=${ccaStrategy}`)
+async function fetchAuctionStatus(ccaLaunchArm: `0x${string}`): Promise<AuctionStatus> {
+  const res = await apiFetch(`/api/v1/auction/status?ccaLaunchArm=${ccaLaunchArm}`)
   if (!res.ok) throw new Error('Auction status unavailable')
   const json = (await res.json()) as {
     success?: boolean
@@ -93,8 +93,8 @@ async function fetchAuctionStatus(ccaStrategy: `0x${string}`): Promise<AuctionSt
   }
 }
 
-async function fetchAuctionActivity(ccaStrategy: `0x${string}`): Promise<AuctionActivity> {
-  const res = await apiFetch(`/api/v1/auction/activity?ccaStrategy=${ccaStrategy}&limit=2`)
+async function fetchAuctionActivity(ccaLaunchArm: `0x${string}`): Promise<AuctionActivity> {
+  const res = await apiFetch(`/api/v1/auction/activity?ccaLaunchArm=${ccaLaunchArm}&limit=2`)
   if (!res.ok) throw new Error('Auction activity unavailable')
   const json = (await res.json()) as {
     success?: boolean
@@ -134,11 +134,11 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
     functionName: 'decimals',
   })
 
-  const ccaStrategy = vault.ccaStrategyAddress ?? (vault.shareOFTAddress ? SHARE_TO_CCA[vault.shareOFTAddress.toLowerCase()] : undefined)
+  const ccaLaunchArm = vault.ccaLaunchArmAddress ?? (vault.shareOFTAddress ? SHARE_TO_CCA[vault.shareOFTAddress.toLowerCase()] : undefined)
   const auctionQuery = useQuery({
-    queryKey: ['auction-status', vault.chainId, ccaStrategy],
-    queryFn: () => fetchAuctionStatus(ccaStrategy!),
-    enabled: Boolean(ccaStrategy),
+    queryKey: ['auction-status', vault.chainId, ccaLaunchArm],
+    queryFn: () => fetchAuctionStatus(ccaLaunchArm!),
+    enabled: Boolean(ccaLaunchArm),
     staleTime: 20_000,
   })
   const hasOnchainAuction = useMemo(() => {
@@ -153,11 +153,11 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
     hasOnchainAuction &&
     !auctionFinished &&
     (auctionQuery.data?.lifecycleFailedFinalized === true || auctionQuery.data?.lifecyclePhase === 6)
-  const auctionStatusUnavailable = Boolean(ccaStrategy) && auctionQuery.isError === true
+  const auctionStatusUnavailable = Boolean(ccaLaunchArm) && auctionQuery.isError === true
   const activityQuery = useQuery({
-    queryKey: ['auction-activity', vault.chainId, ccaStrategy],
-    queryFn: () => fetchAuctionActivity(ccaStrategy!),
-    enabled: Boolean(ccaStrategy && auctionLive),
+    queryKey: ['auction-activity', vault.chainId, ccaLaunchArm],
+    queryFn: () => fetchAuctionActivity(ccaLaunchArm!),
+    enabled: Boolean(ccaLaunchArm && auctionLive),
     staleTime: 20_000,
   })
 
@@ -187,7 +187,7 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
   const shareOFT = vault.shareOFTAddress
   const tokenImageUrl = shareOFT ? shareTokenLogo(shareOFT, vault.chainId, 64) : null
 
-  const auctionUrl = ccaStrategy ? `${UNISWAP_AUCTION_BASE}/${ccaStrategy}` : null
+  const auctionUrl = ccaLaunchArm ? `${UNISWAP_AUCTION_BASE}/${ccaLaunchArm}` : null
   const recentActivity = activityQuery.data?.activity ?? []
   const committedDisplay = useMemo(() => {
     if (!auctionLive || auctionQuery.data?.currencyRaised == null) return null
@@ -298,9 +298,9 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
           </div>
         ) : null}
 
-        {auctionFailed && ccaStrategy ? (
+        {auctionFailed && ccaLaunchArm ? (
           <Link
-            to={`/complete-auction/${ccaStrategy}`}
+            to={`/complete-auction/${ccaLaunchArm}`}
             className="inline-flex w-full items-center justify-center rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 py-2 text-xs text-rose-200 transition hover:bg-rose-500/20"
           >
             Recover Auction + Strategy Funds

@@ -105,7 +105,7 @@ This KPR layer solves that by making execution deterministic, auditable, and ide
 | Product | Strength | Where used |
 |---|---|---|
 | **KPR** | Verified offchain computation with deterministic trigger/capability orchestration | `kpr/kpr-workflows/**` |
-| **VRF 2.5** | Cryptographically verifiable randomness for fair lottery outcomes | `contracts/utilities/lottery/vrf/CreatorVRFConsumerV2_5.sol`, `contracts/utilities/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol` |
+| **VRF 2.5** | Cryptographically verifiable randomness for fair lottery outcomes | `contracts/utilities/lottery/vrf/VRFConsumer4626.sol`, `contracts/utilities/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol` |
 
 ## Roadmap
 
@@ -374,7 +374,7 @@ Each vault is registered via `POST /api/keepr/vault/upsert`. Include contract ad
 ```json
 {
   "contracts": {
-    "ccaStrategy": "0x...",
+    "ccaLaunchArm": "0x...",
     "gaugeController": "0x...",
     "burnStream": "0x..."
   }
@@ -382,7 +382,7 @@ Each vault is registered via `POST /api/keepr/vault/upsert`. Include contract ad
 ```
 
 - **Vault Keeper** processes every registered vault (only needs `vault_address`)
-- **Auction Settlement** only processes vaults with `contracts.ccaStrategy` that are not yet settled
+- **Auction Settlement** only processes vaults with `contracts.ccaLaunchArm` that are not yet settled
 - **Payout Integrity** only processes vaults with `contracts.gaugeController`
 - **Keepr Queue** processes all pending actions regardless of vault
 

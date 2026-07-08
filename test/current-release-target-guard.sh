@@ -61,7 +61,7 @@ deprecated_solana_adapters='0x2414b595c4f18532A5836B6e2E6d536832c572e8|0x3a9dC0b
 
 require_rg 'Canonical deployed contract addresses for 4626 on Base mainnet (**v1.16.1-share-mesh**).' "$ADDRESSES_DOC" 'addresses doc v1.16.1 title'
 require_rg '### Current infrastructure' "$ADDRESSES_DOC" 'addresses doc current infrastructure heading'
-require_rg "CreatorRegistry | \`$registry\`" "$ADDRESSES_DOC" 'CreatorRegistry address'
+require_rg "Registry4626 | \`$registry\`" "$ADDRESSES_DOC" 'Registry4626 address'
 require_rg "OVaultFactory4626 | \`$factory\`" "$ADDRESSES_DOC" 'OVaultFactory4626 address'
 require_rg "VaultActivationBatcher | \`$activation_batcher\`" "$ADDRESSES_DOC" 'VaultActivationBatcher address'
 require_rg "SolanaBridgeAdapter | \`$solana_adapter\`" "$ADDRESSES_DOC" 'SolanaBridgeAdapter address'

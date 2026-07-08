@@ -36,13 +36,13 @@ contract UpgradeDeploymentBatcherPhase3Helper is Script {
         DeploymentBatcherPhase3Helper previous =
             DeploymentBatcherPhase3Helper(previousHelper);
         address phase2Module = address(batcher.phase2Module());
-        address uniV4Helper = address(batcher.uniV4Helper());
+        address shareMeshHelper = address(batcher.shareMeshHelper());
         address utilsHelper = address(batcher.utilsHelper());
 
         console2.log("Deployment batcher:", batcherAddr);
         console2.log("Previous phase3 helper:", previousHelper);
         console2.log("Keeping phase2 module:", phase2Module);
-        console2.log("Keeping uniV4 helper:", uniV4Helper);
+        console2.log("Keeping share mesh helper:", shareMeshHelper);
         console2.log("Keeping utils helper:", utilsHelper);
 
         vm.startBroadcast(pk);
@@ -59,7 +59,7 @@ contract UpgradeDeploymentBatcherPhase3Helper is Script {
         console2.log("New phase3 helper:", address(helper));
 
         if (wireHelpers) {
-            batcher.wireDeploymentHelpers(phase2Module, address(helper), uniV4Helper, utilsHelper);
+            batcher.wireDeploymentHelpers(phase2Module, address(helper), shareMeshHelper, utilsHelper);
             console2.log("wireDeploymentHelpers: phase3 helper updated");
         }
         vm.stopBroadcast();

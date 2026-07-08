@@ -50,7 +50,7 @@ export type KeeprConfigV1 = {
   }
   /** Optional contract addresses for keeper automation workflows */
   contracts?: {
-    ccaStrategy?: `0x${string}`
+    ccaLaunchArm?: `0x${string}`
     ajnaAdapter?: `0x${string}`
     ajnaInnerVault?: `0x${string}`
     ajnaAuth?: `0x${string}`

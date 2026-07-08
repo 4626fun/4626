@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {CCALaunchStrategy} from "@4626/shared/strategies/cca/CCALaunchStrategy.sol";
+import {CCALaunchArm} from "@4626/shared/shareoft-mesh/cca/CCALaunchArm.sol";
 
 contract MockLaunchToken is ERC20 {
     constructor() ERC20("Launch Token", "LTKN") {}
@@ -110,7 +110,7 @@ contract MockCcaFactory {
     }
 }
 
-contract CCALaunchStrategyLaunchHandshakeTest is Test {
+contract CCALaunchArmLaunchHandshakeTest is Test {
     uint24 internal constant MPS = 10_000_000;
     uint8 internal constant PHASE_AUCTION_LIVE = 1;
     uint8 internal constant PHASE_AUCTION_SCHEDULED = 7;
@@ -130,22 +130,22 @@ contract CCALaunchStrategyLaunchHandshakeTest is Test {
     }
 
     MockLaunchToken internal token;
-    CCALaunchStrategy internal strategy;
+    CCALaunchArm internal launchArm;
     MockCcaFactory internal factory;
     MockLaunchOracle internal oracle;
 
     function setUp() external {
         token = new MockLaunchToken();
-        strategy = new CCALaunchStrategy(address(token), address(0), address(this), address(this), address(this));
+        launchArm = new CCALaunchArm(address(token), address(0), address(this), address(this), address(this));
         factory = new MockCcaFactory();
         oracle = new MockLaunchOracle();
 
-        strategy.setCcaFactory(address(factory));
+        launchArm.setCcaFactory(address(factory));
         oracle.setPrices(int256(2e18), block.timestamp, int256(2000e18), block.timestamp);
-        strategy.setOracleConfig(address(oracle), address(0x1111), address(0x2222), address(this));
+        launchArm.setOracleConfig(address(oracle), address(0x1111), address(0x2222), address(this));
 
         token.mint(address(this), 1_000_000e18);
-        token.approve(address(strategy), type(uint256).max);
+        token.approve(address(launchArm), type(uint256).max);
     }
 
     function testLaunchAuctionUsesSafeScheduleAndFundsAuction() external {
@@ -161,10 +161,10 @@ contract CCALaunchStrategyLaunchHandshakeTest is Test {
         uint128 requiredRaise = 1e18;
         bytes memory callerProvidedSteps = hex"1234";
 
-        address auction = strategy.launchAuction(amount, floorPrice, requiredRaise, callerProvidedSteps);
+        address auction = launchArm.launchAuction(amount, floorPrice, requiredRaise, callerProvidedSteps);
 
         assertEq(auction, address(factory.lastAuction()), "auction address mismatch");
-        assertEq(token.balanceOf(address(strategy)), 0, "strategy should not retain auction tokens");
+        assertEq(token.balanceOf(address(launchArm)), 0, "strategy should not retain auction tokens");
         assertEq(token.balanceOf(auction), amount, "auction must be funded with full auction amount");
 
         MockAuction launchedAuction = MockAuction(auction);
@@ -172,7 +172,7 @@ contract CCALaunchStrategyLaunchHandshakeTest is Test {
         assertEq(launchedAuction.onTokensReceivedCalls(), 1, "onTokensReceived should be called exactly once");
 
         EncodedAuctionParams memory params = abi.decode(factory.lastConfigData(), (EncodedAuctionParams));
-        bytes memory expectedSafeSteps = _createUniswapSafeDefaultSteps(strategy.defaultDuration());
+        bytes memory expectedSafeSteps = _createUniswapSafeDefaultSteps(launchArm.defaultDuration());
         uint256 expectedStartTimestamp = _nextThursdayStartTimestamp(launchTimestamp);
         uint256 expectedDeltaBlocks = _deriveExpectedStartDeltaBlocks(launchTimestamp, expectedStartTimestamp);
 
@@ -188,10 +188,10 @@ contract CCALaunchStrategyLaunchHandshakeTest is Test {
             params.startBlock, uint64(launchBlock + expectedDeltaBlocks), "launch should align to next Thursday epoch"
         );
         assertEq(
-            params.endBlock, params.startBlock + strategy.defaultDuration(), "end block should preserve 7-day duration"
+            params.endBlock, params.startBlock + launchArm.defaultDuration(), "end block should preserve 7-day duration"
         );
 
-        CCALaunchStrategy.LifecycleStatus memory lifecycle = strategy.getLifecycleStatus();
+        CCALaunchArm.LifecycleStatus memory lifecycle = launchArm.getLifecycleStatus();
         assertEq(lifecycle.phase, PHASE_AUCTION_SCHEDULED, "launch should remain scheduled before Thursday start");
         assertFalse(lifecycle.auctionWindowOpen, "auction window must stay closed before start");
 
@@ -208,7 +208,7 @@ contract CCALaunchStrategyLaunchHandshakeTest is Test {
         assertTrue(params.floorPrice != floorPrice, "caller floor input must be ignored");
 
         vm.roll(params.startBlock);
-        lifecycle = strategy.getLifecycleStatus();
+        lifecycle = launchArm.getLifecycleStatus();
         assertEq(lifecycle.phase, PHASE_AUCTION_LIVE, "auction should become live at the scheduled start block");
         assertTrue(lifecycle.auctionWindowOpen, "auction window should open at the scheduled start block");
     }
@@ -217,17 +217,17 @@ contract CCALaunchStrategyLaunchHandshakeTest is Test {
         factory.setNextGraduated(false);
 
         uint256 amount = 50_000e18;
-        strategy.launchAuction(amount, 1e15, 1 ether, hex"");
+        launchArm.launchAuction(amount, 1e15, 1 ether, hex"");
 
-        address launchedAuction = strategy.currentAuction();
+        address launchedAuction = launchArm.currentAuction();
         assertTrue(launchedAuction != address(0), "expected active auction");
 
-        CCALaunchStrategy.LifecycleStatus memory lifecycle = strategy.getLifecycleStatus();
+        CCALaunchArm.LifecycleStatus memory lifecycle = launchArm.getLifecycleStatus();
         vm.roll(lifecycle.endBlock + 1);
-        strategy.finalizeFailedAuction();
+        launchArm.finalizeFailedAuction();
 
-        assertEq(strategy.currentAuction(), address(0), "failed auction should be cleared");
-        address[] memory history = strategy.getPastAuctions();
+        assertEq(launchArm.currentAuction(), address(0), "failed auction should be cleared");
+        address[] memory history = launchArm.getPastAuctions();
         assertEq(history.length, 1, "failed auction should be archived");
         assertEq(history[0], launchedAuction, "archived auction mismatch");
     }
@@ -236,9 +236,9 @@ contract CCALaunchStrategyLaunchHandshakeTest is Test {
         oracle.setPrices(0, block.timestamp, int256(2000e18), block.timestamp);
 
         vm.expectRevert(
-            abi.encodeWithSelector(CCALaunchStrategy.LaunchOracleInvalidPrice.selector, int256(0), int256(2000e18))
+            abi.encodeWithSelector(CCALaunchArm.LaunchOracleInvalidPrice.selector, int256(0), int256(2000e18))
         );
-        strategy.launchAuction(10_000e18, 1e15, 1 ether, hex"");
+        launchArm.launchAuction(10_000e18, 1e15, 1 ether, hex"");
     }
 
     function testLaunchAuctionRevertsWhenOraclePriceStale() external {
@@ -248,25 +248,25 @@ contract CCALaunchStrategyLaunchHandshakeTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                CCALaunchStrategy.LaunchOracleStale.selector, staleTs, staleTs, uint64(7200), block.timestamp
+                CCALaunchArm.LaunchOracleStale.selector, staleTs, staleTs, uint64(7200), block.timestamp
             )
         );
-        strategy.launchAuction(10_000e18, 1e15, 1 ether, hex"");
+        launchArm.launchAuction(10_000e18, 1e15, 1 ether, hex"");
     }
 
     function testPreviewLaunchPricingSucceedsAtMaxAgeBoundary() external {
-        uint64 maxAge = strategy.launchOracleMaxAge();
+        uint64 maxAge = launchArm.launchOracleMaxAge();
         vm.warp(50_000);
         uint256 boundaryTs = block.timestamp - maxAge;
         oracle.setPrices(int256(2e18), boundaryTs, int256(2000e18), boundaryTs);
 
         (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 creatorUsdPrice, uint256 ethUsdPrice) =
-            strategy.previewLaunchPricing();
+            launchArm.previewLaunchPricing();
 
         uint256 rawFloorPriceQ96 =
-            _deriveExpectedFloorPriceQ96(uint256(2e18), uint256(2000e18), strategy.launchDiscountBps());
+            _deriveExpectedFloorPriceQ96(uint256(2e18), uint256(2000e18), launchArm.launchDiscountBps());
         uint256 expectedTickSpacingQ96 =
-            _deriveExpectedTickSpacingQ96(rawFloorPriceQ96, strategy.launchTickSpacingBps());
+            _deriveExpectedTickSpacingQ96(rawFloorPriceQ96, launchArm.launchTickSpacingBps());
         uint256 expectedFloorPriceQ96 = (rawFloorPriceQ96 / expectedTickSpacingQ96) * expectedTickSpacingQ96;
 
         assertEq(floorPriceQ96, expectedFloorPriceQ96, "floor should be derived at max-age boundary");
@@ -276,34 +276,34 @@ contract CCALaunchStrategyLaunchHandshakeTest is Test {
     }
 
     function testPreviewLaunchPricingRevertsWhenOracleNotConfigured() external {
-        CCALaunchStrategy noOracleStrategy =
-            new CCALaunchStrategy(address(token), address(0), address(this), address(this), address(this));
-        vm.expectRevert(CCALaunchStrategy.LaunchOracleNotConfigured.selector);
+        CCALaunchArm noOracleStrategy =
+            new CCALaunchArm(address(token), address(0), address(this), address(this), address(this));
+        vm.expectRevert(CCALaunchArm.LaunchOracleNotConfigured.selector);
         noOracleStrategy.previewLaunchPricing();
     }
 
     function testPreviewLaunchPricingRevertsForUnsupportedCurrency() external {
-        CCALaunchStrategy erc20CurrencyStrategy =
-            new CCALaunchStrategy(address(token), address(0xBEEF), address(this), address(this), address(this));
+        CCALaunchArm erc20CurrencyStrategy =
+            new CCALaunchArm(address(token), address(0xBEEF), address(this), address(this), address(this));
         erc20CurrencyStrategy.setOracleConfig(address(oracle), address(0x1111), address(0x2222), address(this));
 
-        vm.expectRevert(abi.encodeWithSelector(CCALaunchStrategy.UnsupportedLaunchCurrency.selector, address(0xBEEF)));
+        vm.expectRevert(abi.encodeWithSelector(CCALaunchArm.UnsupportedLaunchCurrency.selector, address(0xBEEF)));
         erc20CurrencyStrategy.previewLaunchPricing();
     }
 
     function testPreviewLaunchPricingRevertsWhenDerivedFloorRoundsToZero() external {
         oracle.setPrices(int256(1), block.timestamp, int256(2000e18), block.timestamp);
 
-        vm.expectRevert(abi.encodeWithSelector(CCALaunchStrategy.LaunchFloorTooLow.selector, uint256(0), uint256(2)));
-        strategy.previewLaunchPricing();
+        vm.expectRevert(abi.encodeWithSelector(CCALaunchArm.LaunchFloorTooLow.selector, uint256(0), uint256(2)));
+        launchArm.previewLaunchPricing();
     }
 
     function testPreviewLaunchPricingRespectsUpdatedDiscountAndTickSpacing() external {
-        strategy.setLaunchDiscountBps(10_000);
-        strategy.setLaunchTickSpacingBps(250);
+        launchArm.setLaunchDiscountBps(10_000);
+        launchArm.setLaunchTickSpacingBps(250);
 
         (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 creatorUsdPrice, uint256 ethUsdPrice) =
-            strategy.previewLaunchPricing();
+            launchArm.previewLaunchPricing();
 
         uint256 rawFloorPriceQ96 = _deriveExpectedFloorPriceQ96(uint256(2e18), uint256(2000e18), 10_000);
         uint256 expectedTickSpacingQ96 = _deriveExpectedTickSpacingQ96(rawFloorPriceQ96, 250);
@@ -316,21 +316,21 @@ contract CCALaunchStrategyLaunchHandshakeTest is Test {
     }
 
     function testPreviewLaunchPricingClampsTickSpacingToMinimum() external {
-        strategy.setLaunchDiscountBps(10_000);
-        strategy.setLaunchTickSpacingBps(1);
+        launchArm.setLaunchDiscountBps(10_000);
+        launchArm.setLaunchTickSpacingBps(1);
 
         uint256 tinyCreatorUsdPrice = 1;
-        uint256 ethUsdPriceForRawThree = strategy.Q96() / 3;
+        uint256 ethUsdPriceForRawThree = launchArm.Q96() / 3;
         oracle.setPrices(int256(tinyCreatorUsdPrice), block.timestamp, int256(ethUsdPriceForRawThree), block.timestamp);
 
-        (uint256 floorPriceQ96, uint256 tickSpacingQ96,,) = strategy.previewLaunchPricing();
+        (uint256 floorPriceQ96, uint256 tickSpacingQ96,,) = launchArm.previewLaunchPricing();
 
         assertEq(tickSpacingQ96, 2, "tick spacing should clamp to minimum 2");
         assertEq(floorPriceQ96, 2, "aligned floor should stay non-zero after min spacing clamp");
     }
 
     function testFuzzPreviewLaunchPricingAcceptsFreshOracleAges(uint64 creatorAge, uint64 ethAge) external {
-        uint64 maxAge = strategy.launchOracleMaxAge();
+        uint64 maxAge = launchArm.launchOracleMaxAge();
         creatorAge = uint64(bound(creatorAge, 0, maxAge));
         ethAge = uint64(bound(ethAge, 0, maxAge));
 
@@ -338,12 +338,12 @@ contract CCALaunchStrategyLaunchHandshakeTest is Test {
         oracle.setPrices(int256(2e18), block.timestamp - creatorAge, int256(2000e18), block.timestamp - ethAge);
 
         (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 creatorUsdPrice, uint256 ethUsdPrice) =
-            strategy.previewLaunchPricing();
+            launchArm.previewLaunchPricing();
 
         uint256 rawFloorPriceQ96 =
-            _deriveExpectedFloorPriceQ96(uint256(2e18), uint256(2000e18), strategy.launchDiscountBps());
+            _deriveExpectedFloorPriceQ96(uint256(2e18), uint256(2000e18), launchArm.launchDiscountBps());
         uint256 expectedTickSpacingQ96 =
-            _deriveExpectedTickSpacingQ96(rawFloorPriceQ96, strategy.launchTickSpacingBps());
+            _deriveExpectedTickSpacingQ96(rawFloorPriceQ96, launchArm.launchTickSpacingBps());
         uint256 expectedFloorPriceQ96 = (rawFloorPriceQ96 / expectedTickSpacingQ96) * expectedTickSpacingQ96;
 
         assertEq(floorPriceQ96, expectedFloorPriceQ96, "fresh quotes should derive floor");
@@ -353,7 +353,7 @@ contract CCALaunchStrategyLaunchHandshakeTest is Test {
     }
 
     function testFuzzPreviewLaunchPricingRejectsStaleOracleAge(uint64 ageOverMax, bool staleCreatorPrice) external {
-        uint64 maxAge = strategy.launchOracleMaxAge();
+        uint64 maxAge = launchArm.launchOracleMaxAge();
         ageOverMax = uint64(bound(ageOverMax, 1, 30 days));
 
         vm.warp(10_000_000);
@@ -369,10 +369,10 @@ contract CCALaunchStrategyLaunchHandshakeTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                CCALaunchStrategy.LaunchOracleStale.selector, creatorTimestamp, ethTimestamp, maxAge, block.timestamp
+                CCALaunchArm.LaunchOracleStale.selector, creatorTimestamp, ethTimestamp, maxAge, block.timestamp
             )
         );
-        strategy.previewLaunchPricing();
+        launchArm.previewLaunchPricing();
     }
 
     function testFuzzPreviewLaunchPricingRespectsDiscountAndTickSpacingConfig(
@@ -386,12 +386,12 @@ contract CCALaunchStrategyLaunchHandshakeTest is Test {
         uint256 creatorUsdPrice = bound(uint256(creatorUsdPriceRaw), 1e16, 1e24);
         uint256 ethUsdPrice = bound(uint256(ethUsdPriceRaw), 1e16, 1e24);
 
-        strategy.setLaunchDiscountBps(discountBps);
-        strategy.setLaunchTickSpacingBps(tickSpacingBps);
+        launchArm.setLaunchDiscountBps(discountBps);
+        launchArm.setLaunchTickSpacingBps(tickSpacingBps);
         oracle.setPrices(int256(creatorUsdPrice), block.timestamp, int256(ethUsdPrice), block.timestamp);
 
         (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 creatorUsdOut, uint256 ethUsdOut) =
-            strategy.previewLaunchPricing();
+            launchArm.previewLaunchPricing();
 
         uint256 rawFloorPriceQ96 = _deriveExpectedFloorPriceQ96(creatorUsdPrice, ethUsdPrice, discountBps);
         uint256 expectedTickSpacingQ96 = _deriveExpectedTickSpacingQ96(rawFloorPriceQ96, tickSpacingBps);
@@ -410,9 +410,9 @@ contract CCALaunchStrategyLaunchHandshakeTest is Test {
         oracle.setPrices(creatorUsdPrice, block.timestamp, ethUsdPrice, block.timestamp);
 
         vm.expectRevert(
-            abi.encodeWithSelector(CCALaunchStrategy.LaunchOracleInvalidPrice.selector, creatorUsdPrice, ethUsdPrice)
+            abi.encodeWithSelector(CCALaunchArm.LaunchOracleInvalidPrice.selector, creatorUsdPrice, ethUsdPrice)
         );
-        strategy.previewLaunchPricing();
+        launchArm.previewLaunchPricing();
     }
 
     function _parseStep(bytes memory packedSteps, uint256 stepIndex)
@@ -483,8 +483,8 @@ contract CCALaunchStrategyLaunchHandshakeTest is Test {
         returns (uint256 deltaBlocks)
     {
         if (startTimestamp > launchTimestamp) {
-            deltaBlocks = (startTimestamp - launchTimestamp + strategy.launchBlockTimeSeconds() - 1)
-                / strategy.launchBlockTimeSeconds();
+            deltaBlocks = (startTimestamp - launchTimestamp + launchArm.launchBlockTimeSeconds() - 1)
+                / launchArm.launchBlockTimeSeconds();
         }
         if (deltaBlocks == 0) return 1;
         return deltaBlocks;

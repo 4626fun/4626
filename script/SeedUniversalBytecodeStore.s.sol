@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Script.sol";
 
 /**
- * @dev Seed UniversalBytecodeStoreV2 with v1.16.0 creation codes (creator + agent lanes).
+ * @dev Seed UniversalBytecodeStoreV2 with v1.16.1 creation codes (CCALaunchArm + share-mesh lane).
  *
  * Run:
  *   forge script script/SeedUniversalBytecodeStore.s.sol:SeedUniversalBytecodeStore \
@@ -91,7 +91,7 @@ contract SeedUniversalBytecodeStore is Script {
             _storeIfMissing(store, vm.getCode("out/AgentGaugeController.sol/AgentGaugeController.json"), "AgentGaugeController");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(store, vm.getCode("out/CCALaunchStrategy.sol/CCALaunchStrategy.json"), "CCALaunchStrategy");
+            _storeIfMissing(store, vm.getCode("out/CCALaunchArm.sol/CCALaunchArm.json"), "CCALaunchArm");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
             _storeIfMissing(store, vm.getCode("out/CreatorOracle.sol/CreatorOracle.json"), "CreatorOracle");
@@ -133,7 +133,9 @@ contract SeedUniversalBytecodeStore is Script {
             _storeIfMissing(store, vm.getCode("out/DeploymentBatcher.sol/DeploymentBatcherPhase3Helper.json"), "DeploymentBatcherPhase3Helper");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
-            _storeIfMissing(store, vm.getCode("out/DeploymentBatcher.sol/DeploymentBatcherUniV4Helper.json"), "DeploymentBatcherUniV4Helper");
+            _storeIfMissing(store, vm.getCode("out/DeploymentBatcher.sol/DeploymentBatcherShareMeshHelper.json"), "DeploymentBatcherShareMeshHelper");
+            _storeIfMissing(store, vm.getCode("out/ApprovedV4HooksRegistry.sol/ApprovedV4HooksRegistry.json"), "ApprovedV4HooksRegistry");
+            _storeIfMissing(store, vm.getCode("out/OVaultLPManager.sol/OVaultLPManager.json"), "OVaultLPManager");
         }
         if (_shouldProcess(i++, seedOffset, seedLimit)) {
             _storeIfMissing(store, vm.getCode("out/DeploymentBatcher.sol/DeploymentBatcherUtilsHelper.json"), "DeploymentBatcherUtilsHelper");

@@ -24,6 +24,9 @@ bash frontend/scripts/check-no-todo-markers.sh
 
 echo "== frontend lint / typecheck / test =="
 pnpm -C frontend guard:canonical-csw
+pnpm -C frontend guard:registry4626-naming
+pnpm -C frontend guard:contracts-folder-paths
+pnpm guard:lane-contract-parity
 pnpm -C frontend lint
 pnpm -C frontend typecheck
 pnpm -C frontend test --run

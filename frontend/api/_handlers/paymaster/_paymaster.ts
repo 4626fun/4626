@@ -535,7 +535,7 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
           { name: 'wrapper', type: 'address' },
           { name: 'shareOFT', type: 'address' },
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
           { name: 'version', type: 'string' },
           { name: 'depositAmount', type: 'uint256' },
@@ -572,7 +572,7 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
           { name: 'wrapper', type: 'address' },
           { name: 'shareOFT', type: 'address' },
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
           { name: 'version', type: 'string' },
           { name: 'depositAmount', type: 'uint256' },
@@ -923,7 +923,7 @@ const CREATOR_OVAULT_WRAPPER_CODE_ID = keccak256(DEPLOY_BYTECODE.CreatorOVaultWr
 const CREATOR_SHARE_OFT_CODE_ID = keccak256(DEPLOY_BYTECODE.CreatorShareOFT as Hex)
 const OFT_BOOTSTRAP_REGISTRY_CODE_ID = keccak256(DEPLOY_BYTECODE.OFTBootstrapRegistry as Hex)
 const CREATOR_GAUGE_CONTROLLER_CODE_ID = keccak256(DEPLOY_BYTECODE.CreatorGaugeController as Hex)
-const CCA_LAUNCH_STRATEGY_CODE_ID = keccak256(DEPLOY_BYTECODE.CCALaunchStrategy as Hex)
+const CCA_LAUNCH_ARM_CODE_ID = keccak256(DEPLOY_BYTECODE.CCALaunchArm as Hex)
 const CREATOR_ORACLE_CODE_ID = keccak256(DEPLOY_BYTECODE.CreatorOracle as Hex)
 const CREATOR_CHARM_STRATEGY_CODE_ID = keccak256(DEPLOY_BYTECODE.CharmStrategy4626 as Hex)
 const AJNA_VAULT_AUTH_CODE_ID = keccak256(DEPLOY_BYTECODE.AjnaVaultAuth as Hex)
@@ -2266,7 +2266,7 @@ async function validateInnerCalls(params: {
             wrapper: CREATOR_OVAULT_WRAPPER_CODE_ID,
             shareOFT: CREATOR_SHARE_OFT_CODE_ID,
             gauge: CREATOR_GAUGE_CONTROLLER_CODE_ID,
-            cca: CCA_LAUNCH_STRATEGY_CODE_ID,
+            cca: CCA_LAUNCH_ARM_CODE_ID,
             oracle: CREATOR_ORACLE_CODE_ID,
             oftBootstrap: OFT_BOOTSTRAP_REGISTRY_CODE_ID,
           } as const

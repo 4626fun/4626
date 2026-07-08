@@ -53,7 +53,7 @@ function contractsFromConfig(raw: unknown): Record<string, unknown> {
 
 function hasCcaStrategy(configJson: unknown): boolean {
   const contracts = contractsFromConfig(configJson)
-  return Boolean(normalizeAddress(contracts.ccaStrategy))
+  return Boolean(normalizeAddress(contracts.ccaLaunchArm))
 }
 
 async function loadVaultRow(vaultAddress: `0x${string}`): Promise<VaultRow | null> {
@@ -118,10 +118,10 @@ export async function runMaintenanceCycle(input: {
 
   const includeSweep = mode === 'standard' && !row.settled_at && hasCcaStrategy(row.config_json)
   if (includeSweep) {
-    const ccaStrategyAddress = normalizeAddress(contractsFromConfig(row.config_json).ccaStrategy)
-    if (ccaStrategyAddress) {
+    const ccaLaunchArmAddress = normalizeAddress(contractsFromConfig(row.config_json).ccaLaunchArm)
+    if (ccaLaunchArmAddress) {
       try {
-        const result = await executeVaultSweep({ ccaStrategyAddress })
+        const result = await executeVaultSweep({ ccaLaunchArmAddress })
         steps.push({ action: 'sweep', status: 'succeeded', result })
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)

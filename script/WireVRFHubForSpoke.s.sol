@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
 
-interface ICreatorVRFConsumerHubWiring {
+interface IVRFConsumer4626HubWiring {
     function setPeer(uint32 eid, bytes32 peer) external;
     function setSupportedChain(uint32 chainEid, bool supported, uint32 gasLimit) external;
     function setChainRateLimit(uint32 chainEid, uint64 maxRequestsPerWindow) external;
@@ -51,7 +51,7 @@ contract WireVRFHubForSpoke is Script {
 
         vm.startBroadcast(privateKey);
 
-        ICreatorVRFConsumerHubWiring hub = ICreatorVRFConsumerHubWiring(vrfConsumer);
+        IVRFConsumer4626HubWiring hub = IVRFConsumer4626HubWiring(vrfConsumer);
 
         // Authenticate remote sender (spoke integrator).
         hub.setPeer(remoteEid, bytes32(uint256(uint160(remoteIntegrator))));

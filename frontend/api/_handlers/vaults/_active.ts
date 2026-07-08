@@ -20,7 +20,7 @@ export interface VaultConfig {
   vaultAddress: `0x${string}`
   chainId: number
   creatorCoinAddress: `0x${string}`
-  ccaStrategyAddress?: `0x${string}`
+  ccaLaunchArmAddress?: `0x${string}`
   shareOFTAddress?: `0x${string}`
   oracleAddress?: `0x${string}`
   vrfHubAddress?: `0x${string}`
@@ -144,7 +144,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           : {
               automationEnabled: false,
             },
-        ...(contracts.ccaStrategy ? { ccaStrategyAddress: contracts.ccaStrategy } : {}),
+        ...(contracts.ccaLaunchArm ? { ccaLaunchArmAddress: contracts.ccaLaunchArm } : {}),
         ...(contracts.shareOFT ? { shareOFTAddress: contracts.shareOFT } : {}),
         ...(contracts.oracle ? { oracleAddress: contracts.oracle } : {}),
         ...(contracts.vrfHub ? { vrfHubAddress: contracts.vrfHub } : {}),

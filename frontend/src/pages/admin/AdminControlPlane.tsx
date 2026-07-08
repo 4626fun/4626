@@ -360,7 +360,7 @@ export function AdminControlPlane() {
   const [settleIdempotencyKey, setSettleIdempotencyKey] = useState('')
   const [actionVaultAddress, setActionVaultAddress] = useState('')
   const [actionType, setActionType] = useState('vault.sweep')
-  const [actionPayloadText, setActionPayloadText] = useState('{"ccaStrategyAddress":""}')
+  const [actionPayloadText, setActionPayloadText] = useState('{"ccaLaunchArmAddress":""}')
   const [actionIdempotencyKey, setActionIdempotencyKey] = useState('')
   const [actionPayloadError, setActionPayloadError] = useState<string | null>(null)
 

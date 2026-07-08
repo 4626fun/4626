@@ -6,7 +6,7 @@ describe('parseOperatorAction', () => {
     const action = parseOperatorAction({
       type: 'vault.sweep',
       vaultAddress: '0x1111111111111111111111111111111111111111',
-      ccaStrategyAddress: '0x2222222222222222222222222222222222222222',
+      ccaLaunchArmAddress: '0x2222222222222222222222222222222222222222',
     })
     expect(action.type).toBe('vault.sweep')
   })

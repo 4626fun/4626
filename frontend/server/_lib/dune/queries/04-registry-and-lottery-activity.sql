@@ -1,4 +1,4 @@
--- Protocol touchpoints: CreatorRegistry + CreatorLotteryManager (Base)
+-- Protocol touchpoints: Registry4626 + LotteryManager4626 (Base)
 -- Registry (v1.14.1): 0xDD7B106a15540bA2F59464590222bF47D8C9394E
 -- Lottery (v1.14.1): 0x29F901864D65Eb848BC548ebCEAcD6dAD39EFd26
 --

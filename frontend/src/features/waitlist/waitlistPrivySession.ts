@@ -270,18 +270,23 @@ export async function establishWaitlistSessionAfterPrivyAuth(
 ): Promise<string> {
   const { privy, missingTokenMessage } = input
   let bridged = false
+  const logStep = (step: string, detail?: Record<string, unknown>) => {
+    console.info('[waitlist-join]', { step, ...detail })
+  }
 
   try {
     if (!isLocalDevPrivySessionMarkerMode()) {
       assertPrivySessionMarkerCookie()
     }
 
+    logStep('read-token:start')
     const privyToken = await readPrivyAccessTokenWithRetries({
       read: privy.getAccessToken?.bind(privy) ?? null,
       attempts: input.tokenAttempts,
       retryDelayMs: input.tokenRetryDelayMs,
       timeoutMs: input.tokenTimeoutMs,
     })
+    logStep('read-token:done', { hasToken: Boolean(privyToken) })
     if (!privyToken) {
       throw new Error(
         missingTokenMessage ??
@@ -293,14 +298,18 @@ export async function establishWaitlistSessionAfterPrivyAuth(
       assertPrivySessionMarkerCookie()
     }
 
+    logStep('bridge:start')
     const bridgeResult = await bridgePrivySession(privyToken)
+    logStep('bridge:done', { ok: bridgeResult.ok })
     if (!bridgeResult.ok) {
       throw new Error('Could not create your app session. Please try again.')
     }
     bridged = true
     const bridgedSessionAddress = bridgeResult.address
 
+    logStep('bootstrap:start')
     let bootstrap = await bootstrapWaitlist(privyToken)
+    logStep('bootstrap:done', { requiresPrivyAuth: bootstrap.requiresPrivyAuth })
     if (bootstrap.requiresPrivyAuth) {
       const retryToken = await readPrivyAccessTokenWithRetries({
         read: privy.getAccessToken?.bind(privy) ?? null,
@@ -309,6 +318,7 @@ export async function establishWaitlistSessionAfterPrivyAuth(
       })
       if (retryToken) {
         bootstrap = await bootstrapWaitlist(retryToken)
+        logStep('bootstrap:retry-done', { requiresPrivyAuth: bootstrap.requiresPrivyAuth })
       }
     }
     if (bootstrap.requiresPrivyAuth) {
@@ -316,11 +326,15 @@ export async function establishWaitlistSessionAfterPrivyAuth(
     }
 
     const confirmedSessionAddress = await confirmAuthSessionAddressAfterBridge(bridgedSessionAddress)
+    logStep('confirm:done', { hasAddress: Boolean(confirmedSessionAddress) })
     if (!confirmedSessionAddress) {
       throw new Error('Sign-in finished but session is still syncing. Please try once more.')
     }
     return confirmedSessionAddress
   } catch (joinError) {
+    logStep('error', {
+      message: joinError instanceof Error ? joinError.message : String(joinError),
+    })
     if (bridged) {
       await runWaitlistPrivyLogout({
         logout: privy.logout ?? null,

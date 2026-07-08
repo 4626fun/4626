@@ -20,15 +20,15 @@ description: Operate the 4626 lottery randomness system (Chainlink VRF 2.5 hub o
 
 ## System Model (how randomness flows here)
 
-- Hub (Base): `contracts/utilities/lottery/vrf/CreatorVRFConsumerV2_5.sol`
+- Hub (Base): `contracts/shared/lottery/manager/VRFConsumer4626.sol`
   - Receives remote requests via LayerZero (`_lzReceive`)
   - Requests randomness from Chainlink VRF Coordinator 2.5
   - Queues fulfilled remote responses and waits for relayer-funded send
   - Can also serve local requests (`requestRandomWordsLocal`) and call back local receivers
-- Spoke (remote chains): `contracts/utilities/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol`
+- Spoke (remote chains): `contracts/shared/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol`
   - Forwards "request randomness" to the hub
   - Receives randomness from hub and calls back the local requester
-- Lottery manager (per chain): `contracts/utilities/lottery/CreatorLotteryManager.sol`
+- Lottery manager (per chain): `contracts/shared/lottery/manager/LotteryManager4626.sol`
   - Triggered by swap activity (continuous, not scheduled draws)
   - Requests local VRF (if enabled) or cross-chain VRF via the integrator
   - Processes win/loss immediately when randomness arrives
@@ -38,8 +38,8 @@ description: Operate the 4626 lottery randomness system (Chainlink VRF 2.5 hub o
 - Chain/network: Base (hub) or which remote chain you are operating on
 - RPC URL for that chain
 - Contract addresses:
-  - VRF hub (Base): `CreatorVRFConsumerV2_5`
-  - Lottery manager on the chain: `CreatorLotteryManager`
+  - VRF hub (Base): `VRFConsumer4626`
+  - Lottery manager on the chain: `LotteryManager4626`
   - VRF integrator on the chain (for cross-chain mode): `ChainlinkVRFIntegratorV2_5`
 - VRF configuration (Base):
   - `subscriptionId` and `keyHash`
@@ -52,10 +52,10 @@ Never include private keys or full `.env` contents in output.
 ## Repo Map (what to read / where truth lives)
 
 - Deployment script (Base infra): `script/DeployInfrastructure.s.sol` (sets VRF coordinator on the hub)
-- Hub contract: `contracts/utilities/lottery/vrf/CreatorVRFConsumerV2_5.sol`
-- Spoke contract: `contracts/utilities/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol`
-- Lottery manager: `contracts/utilities/lottery/CreatorLotteryManager.sol`
-- Example deployed hub metadata/ABI: `deployments/base/contracts/services/lottery/vrf/CreatorVRFConsumerV2_5.json`
+- Hub contract: `contracts/shared/lottery/manager/VRFConsumer4626.sol`
+- Spoke contract: `contracts/shared/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol`
+- Lottery manager: `contracts/shared/lottery/manager/LotteryManager4626.sol`
+- Example deployed hub metadata/ABI: `deployments/base/contracts/services/lottery/vrf/VRFConsumer4626.json`
 - Historical run artifacts: `broadcast/**` (local JSON logs may also be generated ad hoc)
 - Notes: `docs/primitives/game-loop/lottery.md`
 
@@ -98,7 +98,7 @@ Steps:
 
 ### B) Enable cross-chain VRF on a chain (lottery manager)
 
-Cross-chain mode means the chain’s `CreatorLotteryManager` requests randomness via a local `ChainlinkVRFIntegratorV2_5`, which forwards to the Base hub.
+Cross-chain mode means the chain’s `LotteryManager4626` requests randomness via a local `ChainlinkVRFIntegratorV2_5`, which forwards to the Base hub.
 
 Checklist:
 
@@ -116,7 +116,7 @@ Checklist:
 
 ### C) Enable local VRF mode on Base (lottery manager)
 
-Local mode means the lottery manager calls `CreatorVRFConsumerV2_5.requestRandomWords()` directly, and receives the callback via `receiveRandomWords(requestId, randomWords)`.
+Local mode means the lottery manager calls `VRFConsumer4626.requestRandomWords()` directly, and receives the callback via `receiveRandomWords(requestId, randomWords)`.
 
 Checklist:
 
@@ -141,7 +141,7 @@ Checklist:
   - The hub requires `authorizedLocalCallers[msg.sender] = true` for `requestRandomWordsLocal()`.
   - Ensure the lottery manager (or your test caller) is authorized.
 - Lottery entries return 0 / no entry created:
-  - `CreatorLotteryManager` can return 0 if VRF is misconfigured (no integrator, not trusted, no `targetEid`, or local consumer unset).
+  - `LotteryManager4626` can return 0 if VRF is misconfigured (no integrator, not trusted, no `targetEid`, or local consumer unset).
   - Also check creator coin registration/active status and per-creator oracle freshness.
 
 ## Output Format (when using this skill)

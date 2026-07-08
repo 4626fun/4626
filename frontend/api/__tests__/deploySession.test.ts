@@ -554,14 +554,14 @@ describe('deploy session optimistic concurrency', () => {
       violations: [
         {
           code: 'strategy_fee_recipient_mismatch',
-          message: 'CCALaunchStrategy feeRecipient does not match expected tradeFeeCollector',
+          message: 'CCALaunchArm feeRecipient does not match expected tradeFeeCollector',
         },
       ],
       expectations: {
         creatorToken: '0x1000000000000000000000000000000000000001',
         shareToken: '0x2000000000000000000000000000000000000002',
         gaugeController: '0x3000000000000000000000000000000000000003',
-        ccaStrategy: '0x4000000000000000000000000000000000000004',
+        ccaLaunchArm: '0x4000000000000000000000000000000000000004',
         expectedTradeFeeCollector: '0x3000000000000000000000000000000000000003',
         expectedPayoutRecipient: '0x3000000000000000000000000000000000000003',
         payoutRecipientMode: 'gauge' as const,
@@ -618,7 +618,7 @@ describe('deploy session optimistic concurrency', () => {
         creatorToken: '0x1000000000000000000000000000000000000001',
         shareToken: '0x2000000000000000000000000000000000000002',
         gaugeController: '0x3000000000000000000000000000000000000003',
-        ccaStrategy: '0x4000000000000000000000000000000000000004',
+        ccaLaunchArm: '0x4000000000000000000000000000000000000004',
         expectedTradeFeeCollector: '0x3000000000000000000000000000000000000003',
         expectedPayoutRecipient: '0x5000000000000000000000000000000000000005',
         payoutRecipientMode: 'payout_router' as const,
@@ -1125,7 +1125,7 @@ describe('deploy session optimistic concurrency', () => {
     const batcher = '0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753'
     const vault = '0x3000000000000000000000000000000000000003'
     const shareOft = '0x7000000000000000000000000000000000000007'
-    const ccaStrategy = '0x5000000000000000000000000000000000000005'
+    const ccaLaunchArm = '0x5000000000000000000000000000000000000005'
     const charmStrategy = '0x8100000000000000000000000000000000000008'
     const ajnaStrategy = '0x9100000000000000000000000000000000000009'
     const ajnaInnerVault = '0x9200000000000000000000000000000000000009'
@@ -1201,7 +1201,7 @@ describe('deploy session optimistic concurrency', () => {
               owner: '0x2000000000000000000000000000000000000002',
               vault,
               gaugeController: '0x4000000000000000000000000000000000000004',
-              ccaStrategy,
+              ccaLaunchArm,
               oracle: '0x6000000000000000000000000000000000000006',
               depositAmount: '5000000000000000000000000',
             },
@@ -1296,7 +1296,7 @@ describe('deploy session optimistic concurrency', () => {
         const withCode = new Set([
           vault.toLowerCase(),
           shareOft.toLowerCase(),
-          ccaStrategy.toLowerCase(),
+          ccaLaunchArm.toLowerCase(),
           charmStrategy.toLowerCase(),
           ajnaStrategy.toLowerCase(),
           ajnaInnerVault.toLowerCase(),
@@ -1404,7 +1404,7 @@ describe('deploy session optimistic concurrency', () => {
           owner: '0x00000000000000000000000000000000000000aa',
           vault: '0x00000000000000000000000000000000000000ab',
           gaugeController: '0x00000000000000000000000000000000000000ac',
-          ccaStrategy: '0x00000000000000000000000000000000000000ad',
+          ccaLaunchArm: '0x00000000000000000000000000000000000000ad',
           oracle: '0x00000000000000000000000000000000000000ae',
           depositAmount: '5000000000000000000000000',
         },
@@ -1451,7 +1451,7 @@ describe('deploy session optimistic concurrency', () => {
           owner: '0x00000000000000000000000000000000000000aa',
           vault: '0x00000000000000000000000000000000000000ab',
           gaugeController: '0x00000000000000000000000000000000000000ac',
-          ccaStrategy: '0x00000000000000000000000000000000000000ad',
+          ccaLaunchArm: '0x00000000000000000000000000000000000000ad',
           oracle: '0x00000000000000000000000000000000000000ae',
           depositAmount: '5000000000000000000000000',
         },
@@ -2068,7 +2068,7 @@ describe('deploy session optimistic concurrency', () => {
               owner: '0x2000000000000000000000000000000000000002',
               vault: '0x3000000000000000000000000000000000000003',
               gaugeController: '0x4000000000000000000000000000000000000004',
-              ccaStrategy: '0x5000000000000000000000000000000000000005',
+              ccaLaunchArm: '0x5000000000000000000000000000000000000005',
               oracle: '0x6000000000000000000000000000000000000006',
               depositAmount: '5000000000000000000000000',
             },
@@ -2180,7 +2180,7 @@ describe('deploy session optimistic concurrency', () => {
               owner: '0x2000000000000000000000000000000000000002',
               vault,
               gaugeController: '0x4000000000000000000000000000000000000004',
-              ccaStrategy: '0x5000000000000000000000000000000000000005',
+              ccaLaunchArm: '0x5000000000000000000000000000000000000005',
               oracle: '0x6000000000000000000000000000000000000006',
               depositAmount: '5000000000000000000000000',
             },
@@ -2311,7 +2311,7 @@ describe('deploy session optimistic concurrency', () => {
               owner: '0x2000000000000000000000000000000000000002',
               vault: '0x3000000000000000000000000000000000000003',
               gaugeController: '0x4000000000000000000000000000000000000004',
-              ccaStrategy: '0x5000000000000000000000000000000000000005',
+              ccaLaunchArm: '0x5000000000000000000000000000000000000005',
               oracle: '0x6000000000000000000000000000000000000006',
               depositAmount: '5000000000000000000000000',
             },
@@ -2426,7 +2426,7 @@ describe('deploy session optimistic concurrency', () => {
               owner: '0x2000000000000000000000000000000000000002',
               vault,
               gaugeController: '0x4000000000000000000000000000000000000004',
-              ccaStrategy: '0x5000000000000000000000000000000000000005',
+              ccaLaunchArm: '0x5000000000000000000000000000000000000005',
               oracle: '0x6000000000000000000000000000000000000006',
               depositAmount: '5000000000000000000000000',
             },
@@ -2579,7 +2579,7 @@ describe('deploy session optimistic concurrency', () => {
               owner: '0x2000000000000000000000000000000000000002',
               vault,
               gaugeController: '0x4000000000000000000000000000000000000004',
-              ccaStrategy: '0x5000000000000000000000000000000000000005',
+              ccaLaunchArm: '0x5000000000000000000000000000000000000005',
               oracle: '0x6000000000000000000000000000000000000006',
               depositAmount: '5000000000000000000000000',
             },
@@ -2724,7 +2724,7 @@ describe('deploy session optimistic concurrency', () => {
               owner: '0x2000000000000000000000000000000000000002',
               vault,
               gaugeController: '0x4000000000000000000000000000000000000004',
-              ccaStrategy: '0x5000000000000000000000000000000000000005',
+              ccaLaunchArm: '0x5000000000000000000000000000000000000005',
               oracle: '0x6000000000000000000000000000000000000006',
               depositAmount: '5000000000000000000000000',
             },
@@ -2928,7 +2928,7 @@ describe('deploy session optimistic concurrency', () => {
               owner: '0x2000000000000000000000000000000000000002',
               vault,
               gaugeController: '0x4000000000000000000000000000000000000004',
-              ccaStrategy: '0x5000000000000000000000000000000000000005',
+              ccaLaunchArm: '0x5000000000000000000000000000000000000005',
               oracle: '0x6000000000000000000000000000000000000006',
               depositAmount: '5000000000000000000000000',
             },
@@ -3039,7 +3039,7 @@ describe('deploy session optimistic concurrency', () => {
     }
     const viem = await import('viem')
     const shareOft = '0x7000000000000000000000000000000000000007'
-    const ccaStrategy = '0x5000000000000000000000000000000000000005'
+    const ccaLaunchArm = '0x5000000000000000000000000000000000000005'
     const auction = '0xe00000000000000000000000000000000000000e'
     const ccaFactory = '0xf00000000000000000000000000000000000000f'
     ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
@@ -3068,7 +3068,7 @@ describe('deploy session optimistic concurrency', () => {
               owner: '0x2000000000000000000000000000000000000002',
               vault: '0x3000000000000000000000000000000000000003',
               gaugeController: '0x4000000000000000000000000000000000000004',
-              ccaStrategy,
+              ccaLaunchArm,
               oracle: '0x6000000000000000000000000000000000000006',
               depositAmount: '5000000000000000000000000',
             },
@@ -3104,7 +3104,7 @@ describe('deploy session optimistic concurrency', () => {
       getBytecode: vi.fn(async ({ address }: any) => {
         const withCode = new Set([
           shareOft.toLowerCase(),
-          ccaStrategy.toLowerCase(),
+          ccaLaunchArm.toLowerCase(),
           auction.toLowerCase(),
           ccaFactory.toLowerCase(),
         ])
@@ -3139,7 +3139,7 @@ describe('deploy session optimistic concurrency', () => {
     }
     const viem = await import('viem')
     const shareOft = '0x7000000000000000000000000000000000000007'
-    const ccaStrategy = '0x5000000000000000000000000000000000000005'
+    const ccaLaunchArm = '0x5000000000000000000000000000000000000005'
     const auction = '0xe00000000000000000000000000000000000000e'
     const ccaFactory = '0xf00000000000000000000000000000000000000f'
     ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
@@ -3168,7 +3168,7 @@ describe('deploy session optimistic concurrency', () => {
               owner: '0x2000000000000000000000000000000000000002',
               vault: '0x3000000000000000000000000000000000000003',
               gaugeController: '0x4000000000000000000000000000000000000004',
-              ccaStrategy,
+              ccaLaunchArm,
               oracle: '0x6000000000000000000000000000000000000006',
               depositAmount: '5000000000000000000000000',
             },
@@ -3204,7 +3204,7 @@ describe('deploy session optimistic concurrency', () => {
       getBytecode: vi.fn(async ({ address }: any) => {
         const withCode = new Set([
           shareOft.toLowerCase(),
-          ccaStrategy.toLowerCase(),
+          ccaLaunchArm.toLowerCase(),
           auction.toLowerCase(),
           ccaFactory.toLowerCase(),
         ])
@@ -3240,7 +3240,7 @@ describe('deploy session optimistic concurrency', () => {
     }
     const viem = await import('viem')
     const shareOft = '0x7000000000000000000000000000000000000007'
-    const ccaStrategy = '0x5000000000000000000000000000000000000005'
+    const ccaLaunchArm = '0x5000000000000000000000000000000000000005'
     const auction = '0xe00000000000000000000000000000000000000e'
     const ccaFactory = '0xf00000000000000000000000000000000000000f'
     ;(viem.decodeFunctionData as any).mockImplementation(({ data }: { data: string }) => {
@@ -3275,7 +3275,7 @@ describe('deploy session optimistic concurrency', () => {
         creatorToken: '0x1000000000000000000000000000000000000001',
         owner: '0x2000000000000000000000000000000000000002',
         shareOFT: shareOft,
-        ccaStrategy,
+        ccaLaunchArm,
         amount: 1000n,
         auction,
       },
@@ -3301,7 +3301,7 @@ describe('deploy session optimistic concurrency', () => {
       getBytecode: vi.fn(async ({ address }: any) => {
         const withCode = new Set([
           shareOft.toLowerCase(),
-          ccaStrategy.toLowerCase(),
+          ccaLaunchArm.toLowerCase(),
           auction.toLowerCase(),
           ccaFactory.toLowerCase(),
         ])
@@ -3532,7 +3532,7 @@ describe('deploy session optimistic concurrency', () => {
               owner: '0x2000000000000000000000000000000000000002',
               vault,
               gaugeController: '0x4000000000000000000000000000000000000004',
-              ccaStrategy: '0x5000000000000000000000000000000000000005',
+              ccaLaunchArm: '0x5000000000000000000000000000000000000005',
               oracle: '0x6000000000000000000000000000000000000006',
               depositAmount: '5000000000000000000000000',
             },
@@ -3588,7 +3588,7 @@ describe('deploy session optimistic concurrency', () => {
               owner: '0x2000000000000000000000000000000000000002',
               vault,
               gaugeController: '0x4000000000000000000000000000000000000004',
-              ccaStrategy: '0x5000000000000000000000000000000000000005',
+              ccaLaunchArm: '0x5000000000000000000000000000000000000005',
               oracle: '0x6000000000000000000000000000000000000006',
               depositAmount: '5000000000000000000000000',
             },

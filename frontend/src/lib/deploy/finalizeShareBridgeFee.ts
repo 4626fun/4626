@@ -43,7 +43,7 @@ const FINALIZE_PHASE2_ABI = [
           { name: 'wrapper', type: 'address' },
           { name: 'shareOFT', type: 'address' },
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
           { name: 'version', type: 'string' },
           { name: 'depositAmount', type: 'uint256' },
@@ -259,7 +259,7 @@ export type FinalizePhase2Params = {
   wrapper: Address
   shareOFT: Address
   gaugeController: Address
-  ccaStrategy: Address
+  ccaLaunchArm: Address
   oracle: Address
   version: string
   depositAmount: bigint
@@ -540,10 +540,10 @@ export function decodeFinalizePhase2Call(data: Hex): {
       const wrapper = normalizeAddress(params?.wrapper)
       const vault = normalizeAddress(params?.vault)
       const gaugeController = normalizeAddress(params?.gaugeController)
-      const ccaStrategy = normalizeAddress(params?.ccaStrategy)
+      const ccaLaunchArm = normalizeAddress(params?.ccaLaunchArm)
       const oracle = normalizeAddress(params?.oracle)
       const depositAmount = BigInt((params?.depositAmount ?? 0n) as bigint | string | number)
-      if (!creatorToken || !owner || !wrapper || !vault || !shareOFT || !gaugeController || !ccaStrategy || !oracle) {
+      if (!creatorToken || !owner || !wrapper || !vault || !shareOFT || !gaugeController || !ccaLaunchArm || !oracle) {
         return null
       }
       return {
@@ -555,7 +555,7 @@ export function decodeFinalizePhase2Call(data: Hex): {
           wrapper,
           shareOFT,
           gaugeController,
-          ccaStrategy,
+          ccaLaunchArm,
           oracle,
           version: typeof params?.version === 'string' ? params.version : '',
           depositAmount,
@@ -580,10 +580,10 @@ export function decodeFinalizePhase2Call(data: Hex): {
       const wrapper = normalizeAddress(params?.wrapper)
       const vault = normalizeAddress(params?.vault)
       const gaugeController = normalizeAddress(params?.gaugeController)
-      const ccaStrategy = normalizeAddress(params?.ccaStrategy)
+      const ccaLaunchArm = normalizeAddress(params?.ccaLaunchArm)
       const oracle = normalizeAddress(params?.oracle)
       const depositAmount = BigInt((params?.depositAmount ?? 0n) as bigint | string | number)
-      if (!creatorToken || !owner || !wrapper || !vault || !shareOFT || !gaugeController || !ccaStrategy || !oracle) {
+      if (!creatorToken || !owner || !wrapper || !vault || !shareOFT || !gaugeController || !ccaLaunchArm || !oracle) {
         return null
       }
       return {
@@ -595,7 +595,7 @@ export function decodeFinalizePhase2Call(data: Hex): {
           wrapper,
           shareOFT,
           gaugeController,
-          ccaStrategy,
+          ccaLaunchArm,
           oracle,
           version: typeof params?.version === 'string' ? params.version : '',
           depositAmount,
@@ -761,7 +761,7 @@ export async function quoteFinalizeShareBridgeNativeFee(params: {
     return {
       code: 'oft_peer_not_configured',
       message:
-        `CreatorRegistry and deployment batcher have no LayerZero remote ShareOFT peer for ${decoded.params.creatorToken} ` +
+        `Registry4626 and deployment batcher have no LayerZero remote ShareOFT peer for ${decoded.params.creatorToken} ` +
         `on Solana EID ${runtime.solanaEid}. Seed registry peer wiring or set batcher solanaShareOftPeer before finalizePhase2.`,
     }
   }

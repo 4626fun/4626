@@ -310,7 +310,7 @@ describe('telegram webhook handler', () => {
         chainId: 8453,
         groupId: 'xmtp-group-1',
         isSettled: false,
-        ccaStrategyAddress: '0x3333333333333333333333333333333333333333',
+        ccaLaunchArmAddress: '0x3333333333333333333333333333333333333333',
       },
     ])
     listTelegramSignalsMock.mockResolvedValue([])
@@ -1047,7 +1047,7 @@ describe('telegram webhook handler', () => {
             rows: [{
               vault_address: '0x1111111111111111111111111111111111111111',
               share_token_address: '0x3333333333333333333333333333333333333333',
-              config_json: { contracts: { ccaStrategy: '0x4444444444444444444444444444444444444444' } },
+              config_json: { contracts: { ccaLaunchArm: '0x4444444444444444444444444444444444444444' } },
               chain_id: 8453,
               group_id: 'xmtp-group-1',
               settled_at: null,
@@ -2027,7 +2027,7 @@ describe('telegram webhook handler', () => {
         chainId: 8453,
         groupId: 'g1',
         isSettled: false,
-        ccaStrategyAddress: '0x3333333333333333333333333333333333333333',
+        ccaLaunchArmAddress: '0x3333333333333333333333333333333333333333',
       },
       {
         vaultAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
@@ -2036,7 +2036,7 @@ describe('telegram webhook handler', () => {
         chainId: 8453,
         groupId: 'g2',
         isSettled: false,
-        ccaStrategyAddress: null,
+        ccaLaunchArmAddress: null,
       },
       {
         vaultAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
@@ -2045,7 +2045,7 @@ describe('telegram webhook handler', () => {
         chainId: 8453,
         groupId: 'g3',
         isSettled: false,
-        ccaStrategyAddress: '0x5555555555555555555555555555555555555555',
+        ccaLaunchArmAddress: '0x5555555555555555555555555555555555555555',
       },
     ])
 
@@ -4941,7 +4941,7 @@ describe('telegram webhook handler', () => {
         amountEth: 0.1,
         amountInput: '300',
         usdEstimate: 300,
-        ccaStrategyAddress: '0x3333333333333333333333333333333333333333',
+        ccaLaunchArmAddress: '0x3333333333333333333333333333333333333333',
         bid: {
           auctionAddress: '0x4444444444444444444444444444444444444444',
           maxPriceQ96: '1000000000000',
@@ -5039,7 +5039,7 @@ describe('telegram webhook handler', () => {
       intentPayload: {
         amountEth: 0.1,
         usdEstimate: 600,
-        ccaStrategyAddress: '0x3333333333333333333333333333333333333333',
+        ccaLaunchArmAddress: '0x3333333333333333333333333333333333333333',
         bid: {
           auctionAddress: '0x4444444444444444444444444444444444444444',
           maxPriceQ96: '1000000000000',
@@ -5420,7 +5420,7 @@ describe('telegram webhook handler', () => {
         chainId: 8453,
         groupId: 'xmtp-group-1',
         isSettled: false,
-        ccaStrategyAddress: '0x3333333333333333333333333333333333333333',
+        ccaLaunchArmAddress: '0x3333333333333333333333333333333333333333',
       },
       {
         vaultAddress: '0x2222222222222222222222222222222222222222',
@@ -5429,7 +5429,7 @@ describe('telegram webhook handler', () => {
         chainId: 8453,
         groupId: 'xmtp-group-2',
         isSettled: false,
-        ccaStrategyAddress: '0x5555555555555555555555555555555555555555',
+        ccaLaunchArmAddress: '0x5555555555555555555555555555555555555555',
       },
     ])
     fetchZoraProfileMock.mockResolvedValueOnce(null)
@@ -5987,7 +5987,7 @@ describe('telegram webhook handler', () => {
           wrapper: '0x2222222222222222222222222222222222222222',
           shareOFT: '0x3333333333333333333333333333333333333333',
           gaugeController: '0x4444444444444444444444444444444444444444',
-          ccaStrategy: '0x5555555555555555555555555555555555555555',
+          ccaLaunchArm: '0x5555555555555555555555555555555555555555',
           oracle: '0x6666666666666666666666666666666666666666',
         },
       },

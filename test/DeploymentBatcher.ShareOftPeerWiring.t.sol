@@ -6,7 +6,7 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {Registry4626} from "@4626/shared/core/Registry4626.sol";
-import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
+import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 import {DeploymentBatcher, DeploymentBatcherPhase2Module} from "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
 import {IBaseSolanaBridge} from "@4626/shared/interfaces/bridge/IBaseSolanaBridge.sol";
 import {IOFT, SendParam, MessagingFee, MessagingReceipt, OFTReceipt, OFTLimit, OFTFeeDetail} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
@@ -327,7 +327,7 @@ contract DeploymentBatcherShareOftPeerWiringTest is Test {
             wrapper: address(wrapper),
             shareOFT: address(shareOFT),
             gaugeController: address(gauge),
-            ccaStrategy: address(cca),
+            ccaLaunchArm: address(cca),
             oracle: address(oracle),
             version: "v-peer",
             depositAmount: 50_000_000e18,
@@ -387,7 +387,7 @@ contract DeploymentBatcherShareOftPeerWiringTest is Test {
 
         assertEq(shareOFT.peers(SOLANA_EID), BATCHER_DEFAULT_PEER, "default peer not wired");
         assertEq(registry.getRemoteOFTPeerBytes32(address(creatorToken), SOLANA_EID), BATCHER_DEFAULT_PEER);
-        I4626Registry.TokenInfo memory info = registry.getTokenInfo(address(creatorToken));
+        IRegistry4626.TokenInfo memory info = registry.getTokenInfo(address(creatorToken));
         assertEq(info.token, address(creatorToken), "creator not auto-registered");
         assertEq(info.shareOFT, address(shareOFT), "share oft not synced");
     }

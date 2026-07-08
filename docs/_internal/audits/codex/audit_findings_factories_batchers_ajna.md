@@ -51,7 +51,7 @@
 **Lines:** 1082–1099 (`finalizePhase2`, `finalizePhase2WithPermit2`), 1135–1205 (`_deployPhase2Core`)
 
 **Description:**  
-`finalizePhase2` accepts `Phase2FinalizeParams` which contains caller-supplied `vault`, `wrapper`, `shareOFT`, `gaugeController`, `ccaStrategy`, and `oracle` addresses. The only binding checks are:
+`finalizePhase2` accepts `Phase2FinalizeParams` which contains caller-supplied `vault`, `wrapper`, `shareOFT`, `gaugeController`, `ccaLaunchArm`, and `oracle` addresses. The only binding checks are:
 1. Each address must have `code.length > 0`.
 2. The caller must be `params.owner`.
 
@@ -81,7 +81,7 @@ if (state.vault != params.vault || state.wrapper != params.wrapper || state.shar
     revert Phase1StateMismatch();
 }
 ```
-Similarly validate `gaugeController`, `ccaStrategy`, `oracle` against a Phase2 state record.
+Similarly validate `gaugeController`, `ccaLaunchArm`, `oracle` against a Phase2 state record.
 
 ---
 
@@ -95,7 +95,7 @@ The `baseSalt` is derived from `(creatorToken, owner, block.chainid, version)`. 
 
 The check at line 1250 prevents a double-finalize for the **same salt**, but a creator can legitimately call `finalizePhase2` with a different `version` string, creating a **second** `pendingAuctions` entry. This:
 1. Leaves batcher holding the first batch of 40% shareOFTs indefinitely (locked, no cleanup).
-2. Creates orphaned `lpReserveAmount` tokens transferred to `params.ccaStrategy` with no recovery path.
+2. Creates orphaned `lpReserveAmount` tokens transferred to `params.ccaLaunchArm` with no recovery path.
 3. If the same `creatorToken`+`owner` is used with `version=""` and `version="v2"`, two completely separate vault stacks are wired in the registry — inconsistent state.
 
 ```solidity
@@ -262,9 +262,9 @@ The flow allows any address that passes `isAuthorizedOperator(msg.sender, OP_ACT
 
 1. **`depositAmount`**: Can set to any value `<= permit.permitted.amount`. The permit may be signed for the maximum amount, allowing the operator to choose how much to pull.
 2. **`auctionPercent`**: Operator chooses what fraction goes to the auction.
-3. **`vault`**, **`wrapper`**, **`ccaStrategy`**: These are operator-supplied and only checked against `IOwnable(vault).owner() == identity`. If `identity` owns multiple vaults or a malicious vault is deployed with `identity` as owner, the operator can route tokens through unintended contracts.
+3. **`vault`**, **`wrapper`**, **`ccaLaunchArm`**: These are operator-supplied and only checked against `IOwnable(vault).owner() == identity`. If `identity` owns multiple vaults or a malicious vault is deployed with `identity` as owner, the operator can route tokens through unintended contracts.
 
-The `ccaStrategy` parameter is entirely operator-chosen with no registry validation. An operator could pass a malicious `ccaStrategy` that does not launch a real auction.
+The `ccaLaunchArm` parameter is entirely operator-chosen with no registry validation. An operator could pass a malicious `ccaLaunchArm` that does not launch a real auction.
 
 ```solidity
 // Lines 291–293: operator authorization
@@ -275,11 +275,11 @@ if (msg.sender != identity) {
 }
 // Line 302: pulls from identity based on operator-supplied amount
 ISignatureTransfer(permit2).permitTransferFrom(permit, details, identity, signature);
-// Lines 308–319: operator chooses ccaStrategy, wrapper, auctionPercent
+// Lines 308–319: operator chooses ccaLaunchArm, wrapper, auctionPercent
 ```
 
 **Recommended Fix:**  
-- Validate `ccaStrategy` and `wrapper` against the CreatorRegistry for `identity`'s registered token.
+- Validate `ccaLaunchArm` and `wrapper` against the CreatorRegistry for `identity`'s registered token.
 - Do not allow operator to choose `auctionPercent` freely — derive it from on-chain protocol constants.
 
 ---
@@ -558,7 +558,7 @@ The legacy factory allows authorized deployers to register arbitrary addresses a
 ```solidity
 function registerDeployment(
     address _creatorCoin, address _vault, address _wrapper, address _shareOFT,
-    address _gaugeController, address _ccaStrategy, address _oracle, address _creator
+    address _gaugeController, address _ccaLaunchArm, address _oracle, address _creator
 ) external onlyAuthorizedDeployer {
     if (_creatorCoin == address(0)) revert ZeroAddress();
     // No code.length checks on vault, wrapper, shareOFT, etc.

@@ -142,7 +142,7 @@ export async function executeOperatorAction(input: {
       return { actionType: action.type, executed: true, result }
     }
     case 'vault.sweep': {
-      const result = await executeVaultSweep({ ccaStrategyAddress: action.ccaStrategyAddress })
+      const result = await executeVaultSweep({ ccaLaunchArmAddress: action.ccaLaunchArmAddress })
       return { actionType: action.type, executed: true, result }
     }
     case 'strategy.ajna.rebucket': {

@@ -37,7 +37,11 @@ type AccountContextValue = ResolvedAccountContext & {
   }
 }
 
+export type { AccountContextValue }
+
 const AccountContext = createContext<AccountContextValue | null>(null)
+
+export { AccountContext }
 
 function toChainIdHex(chainId: number | null): `0x${string}` | null {
   if (typeof chainId !== 'number' || !Number.isFinite(chainId) || chainId <= 0) return null

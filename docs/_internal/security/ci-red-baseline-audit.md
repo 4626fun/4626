@@ -130,7 +130,7 @@ Histogram by detector:
 Most of these are likely false positives in this codebase based on prior reviews:
 
 - **uninitialized-state (60)** — almost always immutables / constants Slither can't statically resolve, or storage slots that get bootstrapped via `initialize()` in proxy patterns. Audit each, then add a `// slither-disable-next-line uninitialized-state` with a 1-sentence justification.
-- **reentrancy-balance / reentrancy-eth (32)** — the codebase uses OpenZeppelin `ReentrancyGuard`/`nonReentrant` extensively (e.g., `CreatorVaultShareBurnStream`, `CCALaunchStrategy`, `CreatorVRFConsumerV2_5`). Slither can't always see across the modifier. Suppress with rationale when `nonReentrant` is present; investigate otherwise.
+- **reentrancy-balance / reentrancy-eth (32)** — the codebase uses OpenZeppelin `ReentrancyGuard`/`nonReentrant` extensively (e.g., `CreatorVaultShareBurnStream`, `CCALaunchArm`, `CreatorVRFConsumerV2_5`). Slither can't always see across the modifier. Suppress with rationale when `nonReentrant` is present; investigate otherwise.
 - **incorrect-return / incorrect-shift / incorrect-exp** — these are usually real bugs when they appear; need per-occurrence triage.
 - **weak-prng (3)** — VRF callbacks; suppress (the entropy comes from Chainlink, not from `block.timestamp`).
 - **controlled-delegatecall (3)** — multicall patterns or EIP-7702-ish flows; verify the target is bounded by access control.

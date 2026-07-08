@@ -28,7 +28,7 @@ import { resolveCreatorTradeTokenAddress } from '@/lib/onchain/vaultResolve'
 import { Spinner } from '@/components/ui/Spinner'
 
 // CCA Strategy ABI
-const CCA_STRATEGY_ABI = [
+const CCA_LAUNCH_ARM_ABI = [
   {
     name: 'getAuctionStatus',
     type: 'function',
@@ -157,31 +157,31 @@ export function CompleteAuction() {
   const [error, setError] = useState<string | null>(null)
 
   // Default to AKITA CCA strategy if not provided
-  const strategyAddress = (strategy || AKITA.ccaStrategy) as `0x${string}`
+  const strategyAddress = (strategy || AKITA.ccaLaunchArm) as `0x${string}`
 
   // Read auction status
   const { data: auctionStatus } = useReadContract({
     address: strategyAddress,
-    abi: CCA_STRATEGY_ABI,
+    abi: CCA_LAUNCH_ARM_ABI,
     functionName: 'getAuctionStatus',
   })
   const { data: lifecycleStatus } = useReadContract({
     address: strategyAddress,
-    abi: CCA_STRATEGY_ABI,
+    abi: CCA_LAUNCH_ARM_ABI,
     functionName: 'getLifecycleStatus',
   })
 
   // Read token address
   const { data: tokenAddress } = useReadContract({
     address: strategyAddress,
-    abi: CCA_STRATEGY_ABI,
+    abi: CCA_LAUNCH_ARM_ABI,
     functionName: 'auctionToken',
   })
 
   // Read funds recipient (vault)
   const { data: fundsRecipient } = useReadContract({
     address: strategyAddress,
-    abi: CCA_STRATEGY_ABI,
+    abi: CCA_LAUNCH_ARM_ABI,
     functionName: 'fundsRecipient',
   })
   const vaultAddress = (fundsRecipient && typeof fundsRecipient === 'string' ? fundsRecipient : null) as
@@ -219,14 +219,14 @@ export function CompleteAuction() {
   // Read fee recipient (GaugeController)
   const { data: feeRecipient } = useReadContract({
     address: strategyAddress,
-    abi: CCA_STRATEGY_ABI,
+    abi: CCA_LAUNCH_ARM_ABI,
     functionName: 'feeRecipient',
   })
 
   // Read tax rate
   const { data: taxRate } = useReadContract({
     address: strategyAddress,
-    abi: CCA_STRATEGY_ABI,
+    abi: CCA_LAUNCH_ARM_ABI,
     functionName: 'taxRateBps',
   })
 
@@ -325,7 +325,7 @@ export function CompleteAuction() {
     setError(null)
     sweepCurrency({
       address: strategyAddress,
-      abi: CCA_STRATEGY_ABI,
+      abi: CCA_LAUNCH_ARM_ABI,
       functionName: 'sweepCurrency',
     })
   }
@@ -334,7 +334,7 @@ export function CompleteAuction() {
     setError(null)
     migrateAuction({
       address: strategyAddress,
-      abi: CCA_STRATEGY_ABI,
+      abi: CCA_LAUNCH_ARM_ABI,
       functionName: 'migrate',
     })
   }
@@ -366,7 +366,7 @@ export function CompleteAuction() {
     setError(null)
     sweepUnsoldTokens({
       address: strategyAddress,
-      abi: CCA_STRATEGY_ABI,
+      abi: CCA_LAUNCH_ARM_ABI,
       functionName: 'sweepUnsoldTokens',
     })
   }

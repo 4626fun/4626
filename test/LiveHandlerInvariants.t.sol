@@ -759,7 +759,7 @@ contract BatcherPhase2Handler is Test {
             wrapper: address(wrapper),
             shareOFT: address(shareOFT),
             gaugeController: address(gauge),
-            ccaStrategy: address(cca),
+            ccaLaunchArm: address(cca),
             oracle: address(oracle),
             version: string.concat("v-test-", vm.toString(seed)),
             depositAmount: depositAmount,

@@ -129,9 +129,9 @@ const CCA_SWEEP_ABI = [
 ] as const
 
 export async function executeVaultSweep(params: {
-  ccaStrategyAddress: string
+  ccaLaunchArmAddress: string
 }): Promise<{ txHash: string; status: string }> {
-  const strategy = normalizeVaultAddress(params.ccaStrategyAddress)
+  const strategy = normalizeVaultAddress(params.ccaLaunchArmAddress)
   const { account, publicClient, walletClient } = getKeeperClients()
   const txHash = await walletClient.writeContract({
     address: strategy,

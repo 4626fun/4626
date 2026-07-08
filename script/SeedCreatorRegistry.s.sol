@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
 import {Registry4626} from "@4626/shared/core/Registry4626.sol";
-import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
+import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 
 /**
  * @title SeedCreatorRegistry
@@ -309,7 +309,7 @@ contract SeedCreatorRegistry is Script {
         internal
     {
         // Check if chain already exists by reading config
-        I4626Registry.ChainConfig memory cfg = registry.getChainConfig(chainId);
+        IRegistry4626.ChainConfig memory cfg = registry.getChainConfig(chainId);
         if (cfg.chainId != 0) {
             console.log(unicode"   [skip]", name, unicode"— already registered");
             return;

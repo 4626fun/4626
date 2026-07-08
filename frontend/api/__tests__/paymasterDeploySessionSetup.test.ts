@@ -106,7 +106,7 @@ vi.mock('../../src/deploy/bytecode.generated.js', () => ({
     CreatorShareOFT: ('0x' + '00'.repeat(32)) as `0x${string}`,
     OFTBootstrapRegistry: ('0x' + '00'.repeat(32)) as `0x${string}`,
     CreatorGaugeController: ('0x' + '00'.repeat(32)) as `0x${string}`,
-    CCALaunchStrategy: ('0x' + '00'.repeat(32)) as `0x${string}`,
+    CCALaunchArm: ('0x' + '00'.repeat(32)) as `0x${string}`,
     CreatorOracle: ('0x' + '00'.repeat(32)) as `0x${string}`,
     PayoutRouter: ('0x' + '00'.repeat(32)) as `0x${string}`,
     VaultShareBurnStream: ('0x' + '00'.repeat(32)) as `0x${string}`,
@@ -2171,7 +2171,7 @@ describe('paymaster payout-router external approvals', () => {
   const wrapper = getAddress('0x6666666666666666666666666666666666666666')
   const shareOFT = getAddress('0x7777777777777777777777777777777777777777')
   const gaugeController = getAddress('0x8888888888888888888888888888888888888888')
-  const ccaStrategy = getAddress('0x9999999999999999999999999999999999999999')
+  const ccaLaunchArm = getAddress('0x9999999999999999999999999999999999999999')
   const oracle = getAddress('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
 
   const creatorVaultBatcher = getAddress('0xB87CBb646dD14F520078F11196f79BF815F18c84')
@@ -2198,7 +2198,7 @@ describe('paymaster payout-router external approvals', () => {
             { name: 'wrapper', type: 'address' },
             { name: 'shareOFT', type: 'address' },
             { name: 'gaugeController', type: 'address' },
-            { name: 'ccaStrategy', type: 'address' },
+            { name: 'ccaLaunchArm', type: 'address' },
             { name: 'oracle', type: 'address' },
             { name: 'version', type: 'string' },
             { name: 'depositAmount', type: 'uint256' },
@@ -2277,7 +2277,7 @@ describe('paymaster payout-router external approvals', () => {
           wrapper,
           shareOFT,
           gaugeController,
-          ccaStrategy,
+          ccaLaunchArm,
           oracle,
           version: 'v1',
           depositAmount: 5_000_000n * 10n ** 18n,

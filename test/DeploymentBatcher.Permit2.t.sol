@@ -348,7 +348,7 @@ contract DeploymentBatcherPermit2Test is Test {
             wrapper: address(wrapper),
             shareOFT: address(shareOFT),
             gaugeController: address(gauge),
-            ccaStrategy: address(cca),
+            ccaLaunchArm: address(cca),
             oracle: address(oracle),
             version: "v-test",
             depositAmount: depositAmount,

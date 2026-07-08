@@ -20,7 +20,7 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI = [
           { name: 'wrapper', type: 'address' },
           { name: 'shareToken', type: 'address' },
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
           { name: 'version', type: 'string' },
           { name: 'depositAmount', type: 'uint256' },
@@ -60,7 +60,7 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
           { name: 'wrapper', type: 'address' },
           { name: 'shareToken', type: 'address' },
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
           { name: 'version', type: 'string' },
           { name: 'depositAmount', type: 'uint256' },
@@ -132,7 +132,7 @@ type FinalizePhase2Info = {
   creatorToken: Address
   shareToken: Address
   gaugeController: Address
-  ccaStrategy: Address
+  ccaLaunchArm: Address
 }
 
 type MinimalPublicClient = {
@@ -159,7 +159,7 @@ export type VerifyPhase2InvariantsResult = {
     creatorToken: Address
     shareToken: Address
     gaugeController: Address
-    ccaStrategy: Address
+    ccaLaunchArm: Address
     expectedTradeFeeCollector: Address
     expectedPayoutRecipient: Address | null
     payoutRecipientMode: 'gauge' | 'payout_router'
@@ -187,14 +187,14 @@ function extractFinalizePhase2Info(calls: Array<{ to: Address; value: bigint; da
         creatorToken?: string
         shareToken?: string
         gaugeController?: string
-        ccaStrategy?: string
+        ccaLaunchArm?: string
       } | null
       const creatorToken = normalizeAddress(params?.creatorToken)
       const shareToken = normalizeAddress(params?.shareToken)
       const gaugeController = normalizeAddress(params?.gaugeController)
-      const ccaStrategy = normalizeAddress(params?.ccaStrategy)
-      if (!creatorToken || !shareToken || !gaugeController || !ccaStrategy) continue
-      return { creatorToken, shareToken, gaugeController, ccaStrategy }
+      const ccaLaunchArm = normalizeAddress(params?.ccaLaunchArm)
+      if (!creatorToken || !shareToken || !gaugeController || !ccaLaunchArm) continue
+      return { creatorToken, shareToken, gaugeController, ccaLaunchArm }
     } catch {
       continue
     }
@@ -253,7 +253,7 @@ export async function verifyDeployPhase2Invariants(
 
   const strategyFeeRecipient = normalizeAddress(
     await params.publicClient.readContract({
-      address: info.ccaStrategy,
+      address: info.ccaLaunchArm,
       abi: CCA_STRATEGY_FEE_RECIPIENT_VIEW_ABI,
       functionName: 'feeRecipient',
     }),
@@ -262,7 +262,7 @@ export async function verifyDeployPhase2Invariants(
   if (!strategyFeeRecipient || strategyFeeRecipient.toLowerCase() !== expectedTradeFeeCollector.toLowerCase()) {
     recordViolation(
       'strategy_fee_recipient_mismatch',
-      'CCALaunchStrategy feeRecipient does not match expected tradeFeeCollector',
+      'CCALaunchArm feeRecipient does not match expected tradeFeeCollector',
       expectedTradeFeeCollector,
       strategyFeeRecipient,
     )
@@ -367,7 +367,7 @@ export async function verifyDeployPhase2Invariants(
       creatorToken: info.creatorToken,
       shareToken: info.shareToken,
       gaugeController: info.gaugeController,
-      ccaStrategy: info.ccaStrategy,
+      ccaLaunchArm: info.ccaLaunchArm,
       expectedTradeFeeCollector,
       expectedPayoutRecipient,
       payoutRecipientMode: mode,

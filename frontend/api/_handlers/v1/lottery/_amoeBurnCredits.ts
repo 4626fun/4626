@@ -81,6 +81,7 @@ import {
   AMOE_EPOCH_GENESIS_UNIX_SEC,
   AMOE_EPOCH_SECONDS,
 } from '../../../../server/_lib/lottery/amoeSubmitZk.js'
+import { seedBurnProjectionContext } from '../../../../server/_lib/lottery/amoeBurnProjectionSeed.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -351,6 +352,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       requiredCredits: pointsBurned,
       refId: spendRefId,
     })
+
+    if (typeof debitResult.signupId === 'number' && debitResult.signupId > 0) {
+      await seedBurnProjectionContext({
+        signupId: debitResult.signupId,
+        wallet,
+        creatorCoin,
+        burnEpoch: debitResult.burnEpoch,
+        spendRefId,
+        pointsBurned,
+        twitterHandle,
+      })
+    }
 
     // ----------------------------------------------------------------
     // 5b. Phase-A intent marker. Written ATOMICALLY inside

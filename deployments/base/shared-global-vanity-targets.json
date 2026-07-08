@@ -131,9 +131,9 @@
       "reason": "Constructor-created helper; tracked for deterministic drift but not independently suffix-ground."
     },
     {
-      "contractName": "DeploymentBatcherUniV4Helper",
+      "contractName": "DeploymentBatcherShareMeshHelper",
       "deploymentKind": "constructor_child_create",
-      "artifactPath": "out/DeploymentBatcher.sol/DeploymentBatcherUniV4Helper.json",
+      "artifactPath": "out/DeploymentBatcher.sol/DeploymentBatcherShareMeshHelper.json",
       "deploymentJsonPath": "",
       "parentContractName": "DeploymentBatcher",
       "parentCreateNonce": 2,
@@ -152,21 +152,21 @@
     {
       "contractName": "Registry4626",
       "deploymentKind": "stateful_global_registry",
-      "deploymentJsonPath": "deployments/base/contracts/core/4626Registry.json",
+      "deploymentJsonPath": "deployments/base/contracts/core/Registry4626.json",
       "currentAddress": "0x888506B92181c57A2fD06516FFFb6F375b7A4626",
       "reasonDeferred": "Holds live creator/token/vault/OFT mappings, reverse indexes, and chain configuration."
     },
     {
       "contractName": "LotteryManager4626",
       "deploymentKind": "stateful_global_service",
-      "deploymentJsonPath": "deployments/base/contracts/lottery/4626LotteryManager.json",
+      "deploymentJsonPath": "deployments/base/contracts/services/lottery/LotteryManager4626.json",
       "currentAddress": "0x0000000000000000000000000000000000000000",
       "reasonDeferred": "v1.10.1 pre-broadcast sentinel; previous manager is orphaned and the replacement manager is TBD post-broadcast."
     },
     {
       "contractName": "VRFConsumer4626",
       "deploymentKind": "stateful_global_service",
-      "deploymentJsonPath": "deployments/base/contracts/lottery/4626VRFConsumer.json",
+      "deploymentJsonPath": "deployments/base/contracts/services/lottery/vrf/VRFConsumer4626.json",
       "currentAddress": "0x9F85d8EEe5d2b8dC1E99b598B9c2B084934d0304",
       "reasonDeferred": "Stateful lottery/VRF integration with live coordinator and request lifecycle concerns."
     },

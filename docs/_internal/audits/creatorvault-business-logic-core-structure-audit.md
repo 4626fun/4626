@@ -12,12 +12,12 @@ AGENTS.md requires these exact names in docs, UI copy, commit messages, and code
 
 ### 1. tradeFeeCollector
 - **Lane**: ShareOFT / hook **trade-fee** plane (and optional hook fee plane).
-- **Destination domain**: `CreatorGaugeController` (via `tradeFeeCollector()` on CreatorShareOFT and `feeRecipient` on CCALaunchStrategy).
+- **Destination domain**: `CreatorGaugeController` (via `tradeFeeCollector()` on CreatorShareOFT and `feeRecipient` on CCALaunchArm).
 - **Trigger**: Native ShareOFT transfers (SwapOnly → non-SwapOnly) + configured hook fees.
 - **Custody / Routing**: Gauge receives fees → distributes to burn, jackpotReserve, creatorTreasury (if enabled), protocol/voter rewards.
 - **On-chain identifiers**:
   - `CreatorShareOFT.tradeFeeCollector()`
-  - `CCALaunchStrategy.feeRecipient`
+  - `CCALaunchArm.feeRecipient`
   - `CreatorGaugeController` (primary recipient in most deployments)
 - **Notes**: This is the primary ongoing fee lane for vault shares. Distinct from creator coin external revenue.
 
@@ -106,7 +106,7 @@ The architecture deliberately keeps two distinct planes for creator coin value a
 
 - AGENTS.md — "Canonical Lane Terminology" section (repo-level authority).
 - `docs/audits/general-audit-2026-05.md` and `general-audit-2026-05-sc-hygiene.md` (findings SC-01, SC-02, Lens B).
-- `CreatorGaugeController`, `CreatorShareOFT`, `CreatorPayoutRouter`, `CreatorVaultShareBurnStream`, `CreatorLotteryManager`, `CCALaunchStrategy`, `DeploymentBatcher` (phase-2 paths).
+- `CreatorGaugeController`, `CreatorShareOFT`, `CreatorPayoutRouter`, `CreatorVaultShareBurnStream`, `CreatorLotteryManager`, `CCALaunchArm`, `DeploymentBatcher` (phase-2 paths).
 
 ---
 
@@ -132,7 +132,7 @@ The architecture deliberately keeps two distinct planes for creator coin value a
 - ShareOFT: `0x4df30fFfDA1D4A81bcf4DC778292Be8Ff9752a57`
 
 **Lane wiring notes for current greenfield deploys**:
-- `tradeFeeCollector` for a new vault's ShareOFT and CCALaunchStrategy is set to the per-creator `GaugeController` deployed in Phase 2.
+- `tradeFeeCollector` for a new vault's ShareOFT and CCALaunchArm is set to the per-creator `GaugeController` deployed in Phase 2.
 - `creatorCoinPayoutRecipient` (the raw `payoutRecipient` field in Phase2CoreParams) is forced to `address(0)` in the batcher for greenfield deploys. The actual creatorCoin payout recipient is set post-deploy by the owner via `CreatorCoin.setPayoutRecipient(...)` (typically to the PayoutRouter for the external earnings lane).
 - `creatorTreasury` is left at zero unless the creator explicitly enables `creatorShareBps > 0` via `setFeeSplit` / `setCreatorTreasury`.
 - `jackpotCustodian` = the GaugeController's `jackpotReserve`.

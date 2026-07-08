@@ -3,7 +3,7 @@ pragma solidity 0.8.30;
 
 import "forge-std/Test.sol";
 
-import {OVaultImpairmentClaims} from "@4626/shared/recovery/OVaultImpairmentClaims.sol";
+import {OVaultImpairmentClaims} from "@4626/shared/vault/recovery/OVaultImpairmentClaims.sol";
 
 contract OVaultImpairmentClaimsTest is Test {
     OVaultImpairmentClaims internal claims;

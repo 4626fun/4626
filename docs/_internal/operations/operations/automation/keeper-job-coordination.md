@@ -162,11 +162,11 @@ The enqueued job is:
 ```json
 {
   "kind": "internal_api",
-  "dedupeKey": "sweep-canary:<ccaStrategyAddress>",
+  "dedupeKey": "sweep-canary:<ccaLaunchArmAddress>",
   "payload": {
     "path": "/api/keeper/sweep",
     "body": {
-      "ccaStrategyAddress": "0x...",
+      "ccaLaunchArmAddress": "0x...",
       "enforceInvariants": true,
       "invariants": {}
     }
@@ -215,7 +215,7 @@ KEEPER_ACTIVE_VAULT_PAYOUT_RECIPIENT_MODE=gauge
 
 Supported workflows are:
 
-- `sweep` — enqueues `/api/keeper/sweep` for unsettled vaults with `contracts.ccaStrategy`.
+- `sweep` — enqueues `/api/keeper/sweep` for unsettled vaults with `contracts.ccaLaunchArm`.
 - `tend` — enqueues `/api/keeper/tend` for each discovered vault.
 - `report` — enqueues `/api/keeper/report` for each discovered vault.
 - `payout` — enqueues `/api/keeper/payout-router-harvest` for vaults with `contracts.payoutRouter`.

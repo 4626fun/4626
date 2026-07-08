@@ -129,7 +129,7 @@ export const AKITA = {
   wrapper: envAddress('VITE_AKITA_WRAPPER', AKITA_DEFAULTS.wrapper)!,
   shareOFT: envAddress('VITE_AKITA_SHARE_OFT', AKITA_DEFAULTS.shareOFT)!,
   gaugeController: envAddress('VITE_AKITA_GAUGE_CONTROLLER', AKITA_DEFAULTS.gaugeController)!,
-  ccaStrategy: envAddress('VITE_AKITA_CCA_STRATEGY', AKITA_DEFAULTS.ccaStrategy)!,
+  ccaLaunchArm: envAddress('VITE_AKITA_CCA_STRATEGY', AKITA_DEFAULTS.ccaLaunchArm)!,
   oracle: envAddress('VITE_AKITA_ORACLE', AKITA_DEFAULTS.oracle)!,
   // Strategies for vault allocation
   strategies: {
@@ -146,7 +146,7 @@ export const ERC4626 = {
   wrapper: envAddress('VITE_ERC4626_WRAPPER', ERC4626_DEFAULTS.wrapper)!,
   shareOFT: envAddress('VITE_ERC4626_SHARE_OFT', ERC4626_DEFAULTS.shareOFT)!,
   gaugeController: envAddress('VITE_ERC4626_GAUGE_CONTROLLER', ERC4626_DEFAULTS.gaugeController)!,
-  ccaStrategy: envAddress('VITE_ERC4626_CCA_STRATEGY', ERC4626_DEFAULTS.ccaStrategy)!,
+  ccaLaunchArm: envAddress('VITE_ERC4626_CCA_STRATEGY', ERC4626_DEFAULTS.ccaLaunchArm)!,
   oracle: envAddress('VITE_ERC4626_ORACLE', ERC4626_DEFAULTS.oracle)!,
 } as const
 

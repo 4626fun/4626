@@ -11,7 +11,7 @@ export interface VaultConfig {
   chainId: number;
   creatorCoinAddress: `0x${string}`;
   shareTokenAddress?: `0x${string}`;
-  ccaStrategyAddress?: `0x${string}`;
+  ccaLaunchArmAddress?: `0x${string}`;
   oracleAddress?: `0x${string}`;
   vrfHubAddress?: `0x${string}`;
   burnStreamAddress?: `0x${string}`;
@@ -27,9 +27,9 @@ interface RegistryVerificationResult {
   reason?: string;
 }
 
-/// 4626Registry (renamed from CreatorRegistry) — canonical protocol registry.
-/// Env var CREATOR_REGISTRY is kept for backward compatibility with existing deployments.
-const DEFAULT_4626_REGISTRY = '0x888506B92181c57A2fD06516FFFb6F375b7A4626' as const;
+/// Registry4626 — canonical protocol registry (4626 suffix naming).
+/// Env: prefer REGISTRY_4626; CREATOR_REGISTRY is a legacy alias.
+const DEFAULT_REGISTRY_4626 = '0x1eb9A364a3E763dD9249ba3413Dc19E13c1F4461' as const;
 const REGISTRY_4626_ABI = [
   {
     type: 'function',
@@ -75,11 +75,11 @@ function normalizeAddress(value: string | null | undefined): Address | null {
   return getAddress(raw);
 }
 
-function get4626RegistryAddress(): `0x${string}` {
-  const configured = String(process.env.CREATOR_REGISTRY ?? '').trim();
-  const candidate = configured || DEFAULT_4626_REGISTRY;
+function getRegistry4626Address(): `0x${string}` {
+  const configured = String(process.env.REGISTRY_4626 ?? process.env.CREATOR_REGISTRY ?? '').trim();
+  const candidate = configured || DEFAULT_REGISTRY_4626;
   if (!isAddress(candidate)) {
-    throw new Error('CREATOR_REGISTRY is not a valid address');
+    throw new Error('REGISTRY_4626 (or legacy CREATOR_REGISTRY) is not a valid address');
   }
   return getAddress(candidate) as `0x${string}`;
 }
@@ -135,7 +135,7 @@ export async function verifyVaultRegistryBinding(vault: VaultConfig): Promise<Re
     return { verified: false, reason: 'invalid_addresses' };
   }
 
-  const registryAddress = get4626RegistryAddress();
+  const registryAddress = getRegistry4626Address();
 
   const [active, registryVault, registryShare] = await Promise.all([
     readContract<boolean>({
@@ -271,7 +271,7 @@ export function filterVaultsForWorkflow(
 
     case 'cca-finalization':
       // CCA finalization needs CCA strategy address
-      return vaults.filter((v) => v.vaultAddress && v.ccaStrategyAddress);
+      return vaults.filter((v) => v.vaultAddress && v.ccaLaunchArmAddress);
 
     case 'oracle-broadcaster':
       // Oracle broadcaster needs oracle address

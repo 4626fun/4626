@@ -30,6 +30,8 @@ export function formatWaitlistChatError(raw: string | null | undefined): string 
     message.toLowerCase().includes('unknownrpcerror') && message.toLowerCase().includes('buffer is not defined') ||
     message.toLowerCase().includes('embedded signer') ||
     message.toLowerCase().includes('privy localhost') ||
+    message.toLowerCase().includes('privy session expired') ||
+    message.toLowerCase().includes('cannot be silently restored on localhost') ||
     (message.toLowerCase().includes('oauth/link') && (message.includes('401') || message.toLowerCase().includes('unauthorized')))
   ) {
     return 'Sign-in for chat expired.'

@@ -143,3 +143,60 @@ Viewers can now slice every widget with one click.
 - In the target Notion page: type `/embed` → paste URL →
   **Embed link**. The embed renders in Notion and refreshes whenever
   the underlying Looker Studio cache refreshes.
+
+## Ethos sync health dashboard (ops)
+
+Separate from the outreach dashboard above. Monitors Zora owner Ethos
+projection coverage via `v_zora_owner_ethos_sync_health` (single-row view).
+
+### Data source setup
+
+1. **Create → Data source** (same community connector + Supabase credentials).
+2. Source table: **`v_zora_owner_ethos_sync_health`** (not `zora_csw_owner_class`).
+3. **Data source → Edit → Refresh fields** after any DB migration touching this view.
+4. Set **Data freshness** to **15 min** or **1 hour** for ops monitoring.
+
+### Canonical fields (use these exact names)
+
+| Field | Widget use |
+|-------|------------|
+| `total_rows` | Scorecard "Total owners" |
+| `rows_with_score` | Scorecard "With score" |
+| `rows_missing_score` | Scorecard "Missing score" |
+| `rows_missing_no_identity_key` | Scorecard or bar segment |
+| `rows_missing_no_matched_cache` | Scorecard or bar segment |
+| `rows_missing_projection_gap` | Scorecard or bar segment |
+| `rows_stale_over_24h` | Scorecard "Stale >24h" |
+| `matched_cache_rows` | Scorecard "Matched cache rows" |
+| `matched_cache_stale_over_24h` | Scorecard "Stale cache >24h" |
+| `newest_projected_score_at` | Optional timestamp card |
+| `newest_cache_score_at` | Optional timestamp card |
+
+The three `rows_missing_*` buckets partition `rows_missing_score` (they sum to it).
+
+### Suggested layout
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  [total_rows] [rows_with_score] [rows_missing_score]        │
+├─────────────────────────────────────────────────────────────┤
+│  Stacked bar: rows_missing_no_identity_key                  │
+│               + rows_missing_no_matched_cache               │
+│               + rows_missing_projection_gap                 │
+├─────────────────────────────────────────────────────────────┤
+│  [rows_stale_over_24h]  [matched_cache_rows]                │
+│  [matched_cache_stale_over_24h]                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Fixing broken widgets after a view change
+
+If Supabase logs show `column "…" does not exist`:
+
+1. Open the Ethos health data source in Looker Studio.
+2. **Resource → Manage added data sources → Edit → Refresh fields**.
+3. Re-bind each chart metric to the canonical field names in the table above.
+4. Remove any calculated fields that reference retired column names.
+5. Click the report **Refresh** icon to verify.
+
+Schema authority: `supabase/migrations/20260714200000_restore_ethos_sync_health_canonical_buckets.sql`.

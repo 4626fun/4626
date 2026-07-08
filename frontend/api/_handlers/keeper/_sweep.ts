@@ -5,7 +5,8 @@
  * executes canonical completion phases:
  *   1) sweepCurrency()
  *   2) migrate() when migrationBlock is ready
- *   3) optional hook setTaxConfig() when keeper hook mode is enabled
+ *   3) deployShareMeshLpManager() + seedLpManager() + seedRebalance() when share-mesh bundle is configured
+ *   4) optional hook setTaxConfig() when keeper hook mode is enabled
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
@@ -25,6 +26,12 @@ import { createVaultControlPlane } from '../../../server/_lib/controlPlane/vault
 import { SWEEP_COMPLETION_AUTHORITY } from '../../../server/_lib/controlPlane/executors/executeSettleVault.js'
 import { verifyPayoutRouterHarvestReadiness } from '../../../server/_lib/onchain/payoutRouterHarvestReadiness.js'
 import { resolvePayoutRouterSwapPathTokens } from '../../../server/_lib/onchain/payoutRouterHarvestTokens.js'
+import {
+  evaluateShareMeshInvariants,
+  resolveShareMeshCompletionConfig,
+  runShareMeshCompletion,
+  type ShareMeshCompletionResult,
+} from '../../../server/_lib/onchain/shareMeshCompletion.js'
 import { createPublicClient, createWalletClient, http, type Abi, zeroAddress } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
@@ -150,6 +157,9 @@ type CompletionInvariantInput = {
   burnStreamAddress: `0x${string}` | null
   payoutRouterAddress: `0x${string}` | null
   payoutRecipientMode: PayoutRecipientMode
+  oracleAddress: `0x${string}` | null
+  vaultAddress: `0x${string}` | null
+  vaultOwnerAddress: `0x${string}` | null
 }
 
 type InvariantViolation = {
@@ -220,7 +230,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const body = (await readBoundedJsonObjectBody(req, { maxBytes: 16_384 })) as {
-    ccaStrategyAddress?: string
+    ccaLaunchArmAddress?: string
     markSettled?: {
       vaultAddress?: string
     }
@@ -231,12 +241,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       burnStreamAddress?: string
       payoutRouterAddress?: string
       payoutRecipientMode?: PayoutRecipientMode
+      oracleAddress?: string
+      vaultAddress?: string
+      vaultOwnerAddress?: string
     }
   } | null
-  const { ccaStrategyAddress, invariants } = body ?? {}
+  const { ccaLaunchArmAddress, invariants } = body ?? {}
   const markSettled = parseMarkSettledInput(body?.markSettled)
-  if (!ccaStrategyAddress || !ccaStrategyAddress.startsWith('0x') || ccaStrategyAddress.length !== 42) {
-    return res.status(400).json({ success: false, error: 'Invalid ccaStrategyAddress' } satisfies ApiEnvelope<never>)
+  if (!ccaLaunchArmAddress || !ccaLaunchArmAddress.startsWith('0x') || ccaLaunchArmAddress.length !== 42) {
+    return res.status(400).json({ success: false, error: 'Invalid ccaLaunchArmAddress' } satisfies ApiEnvelope<never>)
   }
 
   const invariantInput: CompletionInvariantInput = {
@@ -247,7 +260,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     payoutRouterAddress: normalizeAddress(invariants?.payoutRouterAddress),
     payoutRecipientMode:
       invariants?.payoutRecipientMode === 'payout_router' ? 'payout_router' : 'gauge',
+    oracleAddress: normalizeAddress(invariants?.oracleAddress),
+    vaultAddress: normalizeAddress(invariants?.vaultAddress),
+    vaultOwnerAddress: normalizeAddress(invariants?.vaultOwnerAddress),
   }
+
+  const shareMeshConfig = resolveShareMeshCompletionConfig()
 
   const keeperPk = process.env.KPR_PRIVATE_KEY
   if (!keeperPk) {
@@ -262,7 +280,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const hookFlagFromEnv = process.env.KEEPER_ENABLE_HOOK_CONFIG === 'true'
     const hookStrategyAllowlist = parseAddressAllowlist(process.env.KEEPER_HOOK_CONFIG_STRATEGY_ALLOWLIST)
-    const normalizedStrategyAddress = normalizeAddress(ccaStrategyAddress)
+    const normalizedStrategyAddress = normalizeAddress(ccaLaunchArmAddress)
     const strategyAllowedForHookConfig =
       !!normalizedStrategyAddress &&
       hookStrategyAllowlist.size > 0 &&
@@ -274,7 +292,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const enforceCompletionInvariants = process.env.KEEPER_ENFORCE_COMPLETION_INVARIANTS !== 'false'
     if (!enforceCompletionInvariants) {
       console.error('[keeper/sweep] ALERT: KEEPER_ENFORCE_COMPLETION_INVARIANTS=false — completion invariants disabled via env override', {
-        ccaStrategyAddress: normalizedStrategyAddress,
+        ccaLaunchArmAddress: normalizedStrategyAddress,
       })
     }
 
@@ -289,18 +307,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let unsoldStatus: 'skipped' | 'success' | 'reverted' | 'failed' = 'skipped'
     let completionStage: CompletionStage = 'in_progress'
     let hookConfigError: string | null = null
+    let shareMeshResult: ShareMeshCompletionResult | null = null
     let invariantChecksRun = 0
     const invariantViolations: InvariantViolation[] = []
 
     const readLifecycle = async (): Promise<LifecycleSnapshot> =>
       parseLifecycleStatus(await publicClient.readContract({
-        address: ccaStrategyAddress as `0x${string}`,
+        address: ccaLaunchArmAddress as `0x${string}`,
         abi: CCA_STRATEGY_ABI as unknown as Abi,
         functionName: 'getLifecycleStatus',
       }))
     const readFeeRecipient = async (): Promise<`0x${string}`> =>
       (await publicClient.readContract({
-        address: ccaStrategyAddress as `0x${string}`,
+        address: ccaLaunchArmAddress as `0x${string}`,
         abi: CCA_STRATEGY_ABI as unknown as Abi,
         functionName: 'feeRecipient',
       })) as `0x${string}`
@@ -332,7 +351,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (expectedGauge) {
         const strategyFeeRecipient = (await publicClient.readContract({
-          address: ccaStrategyAddress as `0x${string}`,
+          address: ccaLaunchArmAddress as `0x${string}`,
           abi: CCA_STRATEGY_ABI as unknown as Abi,
           functionName: 'feeRecipient',
         }) as `0x${string}`).toLowerCase()
@@ -436,41 +455,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             functionName: 'burnStream',
           }) as `0x${string}`).toLowerCase()
           invariantChecksRun++
-        if (routerBurnStream !== invariantInput.burnStreamAddress) {
-          recordInvariantViolation(
-            'router_burn_stream_mismatch',
-            'PayoutRouter burnStream does not match expected burn stream',
-            invariantInput.burnStreamAddress,
-            routerBurnStream,
-          )
-        }
+          if (routerBurnStream !== invariantInput.burnStreamAddress) {
+            recordInvariantViolation(
+              'router_burn_stream_mismatch',
+              'PayoutRouter burnStream does not match expected burn stream',
+              invariantInput.burnStreamAddress,
+              routerBurnStream,
+            )
+          }
 
-        if (invariantInput.shareTokenAddress) {
-          const swapPathTokens = await resolvePayoutRouterSwapPathTokens({
-            publicClient,
-            shareOft: invariantInput.shareTokenAddress,
-          })
-          const readiness = await verifyPayoutRouterHarvestReadiness({
-            publicClient,
-            payoutRouter: invariantInput.payoutRouterAddress,
-            burnStream: invariantInput.burnStreamAddress,
-            swapPathTokens,
-          })
-          invariantChecksRun += readiness.checksRun
-          for (const issue of readiness.violations) {
-            if (issue.severity !== 'critical') continue
-            recordInvariantViolation(issue.code, issue.message)
+          if (invariantInput.shareTokenAddress) {
+            const swapPathTokens = await resolvePayoutRouterSwapPathTokens({
+              publicClient,
+              shareOft: invariantInput.shareTokenAddress,
+            })
+            const readiness = await verifyPayoutRouterHarvestReadiness({
+              publicClient,
+              payoutRouter: invariantInput.payoutRouterAddress,
+              burnStream: invariantInput.burnStreamAddress,
+              swapPathTokens,
+            })
+            invariantChecksRun += readiness.checksRun
+            for (const issue of readiness.violations) {
+              if (issue.severity !== 'critical') continue
+              recordInvariantViolation(issue.code, issue.message)
+            }
           }
         }
       }
-    }
+
+      if (shareMeshConfig.enabled && invariantInput.oracleAddress) {
+        invariantChecksRun += await evaluateShareMeshInvariants({
+          publicClient,
+          input: {
+            ccaLaunchArmAddress: ccaLaunchArmAddress as `0x${string}`,
+            shareTokenAddress: invariantInput.shareTokenAddress,
+            oracleAddress: invariantInput.oracleAddress,
+          },
+          recordViolation: recordInvariantViolation,
+        })
+      }
     }
 
     let lifecycle = await readLifecycle()
 
     if (!lifecycle.currencySwept) {
       sweepTxHash = await walletClient.writeContract({
-        address: ccaStrategyAddress as `0x${string}`,
+        address: ccaLaunchArmAddress as `0x${string}`,
         abi: CCA_STRATEGY_ABI as unknown as Abi,
         functionName: 'sweepCurrency',
         chain: base,
@@ -498,7 +529,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         completionStage = 'awaiting_migration_block'
       } else {
         migrateTxHash = await walletClient.writeContract({
-          address: ccaStrategyAddress as `0x${string}`,
+          address: ccaLaunchArmAddress as `0x${string}`,
           abi: CCA_STRATEGY_ABI as unknown as Abi,
           functionName: 'migrate',
           chain: base,
@@ -523,11 +554,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    if (
+      lifecycle.migrated
+      && shareMeshConfig.enabled
+      && invariantInput.oracleAddress
+      && invariantInput.vaultAddress
+      && invariantInput.creatorCoinAddress
+      && invariantInput.shareTokenAddress
+    ) {
+      shareMeshResult = await runShareMeshCompletion({
+        publicClient,
+        walletClient,
+        keeperAddress: account.address,
+        config: shareMeshConfig,
+        input: {
+          ccaLaunchArmAddress: ccaLaunchArmAddress as `0x${string}`,
+          creatorCoinAddress: invariantInput.creatorCoinAddress,
+          shareTokenAddress: invariantInput.shareTokenAddress,
+          vaultAddress: invariantInput.vaultAddress,
+          oracleAddress: invariantInput.oracleAddress,
+          vaultOwnerAddress: invariantInput.vaultOwnerAddress,
+        },
+      })
+    }
+
     if (lifecycle.migrated) {
       if (shouldAttemptHookConfig) {
         try {
           const [target, calldata] = await publicClient.readContract({
-            address: ccaStrategyAddress as `0x${string}`,
+            address: ccaLaunchArmAddress as `0x${string}`,
             abi: CCA_STRATEGY_ABI as unknown as Abi,
             functionName: 'getTaxHookCalldata',
           }) as readonly [`0x${string}`, `0x${string}`]
@@ -590,7 +645,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     try {
       unsoldTxHash = await walletClient.writeContract({
-        address: ccaStrategyAddress as `0x${string}`,
+        address: ccaLaunchArmAddress as `0x${string}`,
         abi: CCA_STRATEGY_ABI as unknown as Abi,
         functionName: 'sweepUnsoldTokens',
         chain: base,
@@ -661,6 +716,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       invariantsEnforced: enforceCompletionInvariants,
       invariantChecksRun,
       invariantViolations,
+      shareMesh: shareMeshResult,
       settlementWrite,
     }
 

@@ -2,12 +2,12 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title ICCALaunchStrategy
+ * @title ICCALaunchArm
  * @author 0xakita.eth
- * @notice Interface for configuring CCALaunchStrategy.
+ * @notice Interface for configuring CCALaunchArm.
  * @dev Used by deployment and admin tooling.
  */
-interface ICCALaunchStrategy {
+interface ICCALaunchArm {
     function setApprovedLauncher(address launcher, bool approved) external;
     function setRecipients(address _fundsRecipient, address _tokensRecipient) external;
     function setBackingVault(address _backingVault) external;

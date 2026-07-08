@@ -1,7 +1,6 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useActiveWallet, usePrivy, useWallets } from '@privy-io/react-auth'
 
-import { useSiweAuth } from '@/hooks/useSiweAuth'
 import {
   attemptSessionRepair,
   type SessionRepairOutcome,
@@ -12,6 +11,8 @@ import {
 } from '@/lib/privy/embeddedWallet'
 import { refreshPrivyEmbeddedSignerSession } from '@/lib/privy/refreshEmbeddedSignerSession'
 
+import { bridgePrivySession } from './waitlistHandoff'
+import { readAuthSessionAddress } from './waitlistPrivySession'
 import { findLiveEmbeddedPrivyWallet } from './prepareWaitlistMessagingWallet'
 
 function isRecoveryRequiredBridgeError(error: unknown): boolean {
@@ -31,7 +32,17 @@ export function useWaitlistMessagingSessionRepair(): () => Promise<SessionRepair
   const { wallets } = useWallets()
   const { setActiveWallet } = useActiveWallet()
   const { ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
-  const { signInWithPrivyToken, hasSession } = useSiweAuth()
+  const liveCookieRef = useRef(false)
+
+  useEffect(() => {
+    let cancelled = false
+    void readAuthSessionAddress().then((address) => {
+      if (!cancelled) liveCookieRef.current = Boolean(address)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const getToken = useCallback(
     () => (typeof privy.getAccessToken === 'function' ? privy.getAccessToken() : Promise.resolve(null)).catch(() => null),
@@ -41,8 +52,15 @@ export function useWaitlistMessagingSessionRepair(): () => Promise<SessionRepair
   return useCallback(async (): Promise<SessionRepairOutcome> => {
     const outcome = await attemptSessionRepair({
       getToken,
-      bridge: async (token) => Boolean(await signInWithPrivyToken(token, { background: true })),
-      hasLiveCookie: () => hasSession,
+      bridge: async (token) => {
+        const result = await bridgePrivySession(token)
+        if (result.ok) {
+          liveCookieRef.current = true
+          return true
+        }
+        return false
+      },
+      hasLiveCookie: () => liveCookieRef.current,
       isRecoveryRequiredError: isRecoveryRequiredBridgeError,
       onTransition: (event) => {
         console.info('[auth-repair]', { surface: 'waitlist-chat', ...event })
@@ -62,7 +80,7 @@ export function useWaitlistMessagingSessionRepair(): () => Promise<SessionRepair
       }
       await refreshPrivyEmbeddedSignerSession({
         wallet: embeddedWallet,
-        setActiveWallet,
+        setActiveWallet: (wallet) => setActiveWallet(wallet as Parameters<typeof setActiveWallet>[0]),
         getToken,
         logLabel: 'waitlist-messaging-repair',
       })
@@ -71,5 +89,5 @@ export function useWaitlistMessagingSessionRepair(): () => Promise<SessionRepair
       console.warn('[waitlist-messaging-repair] embedded signer refresh failed:', error)
       return outcome === 'repaired' ? 'transient' : outcome
     }
-  }, [ensureEmbeddedWallet, getToken, hasSession, privy.user, setActiveWallet, signInWithPrivyToken, wallets])
+  }, [ensureEmbeddedWallet, getToken, privy.user, setActiveWallet, wallets])
 }

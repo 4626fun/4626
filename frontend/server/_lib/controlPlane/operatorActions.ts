@@ -1,7 +1,7 @@
 export type VaultSweepAction = {
   type: 'vault.sweep'
   vaultAddress: string
-  ccaStrategyAddress: string
+  ccaLaunchArmAddress: string
 }
 
 export type VaultTendAction = {
@@ -73,7 +73,7 @@ export function parseOperatorAction(payload: unknown): OperatorAction {
       return {
         type,
         vaultAddress: readAddress(payload.vaultAddress),
-        ccaStrategyAddress: readAddress(payload.ccaStrategyAddress),
+        ccaLaunchArmAddress: readAddress(payload.ccaLaunchArmAddress),
       }
     case 'vault.tend':
       return {

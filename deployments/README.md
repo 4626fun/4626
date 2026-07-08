@@ -20,7 +20,7 @@ deployments/
     │   └── 2026-01-addresses.json
     └── contracts/
         ├── core/
-        │   └── CreatorRegistry.json
+        │   └── Registry4626.json
         ├── factories/
         │   ├── CreatorOVaultFactory.json
         │   └── UniversalCreate2DeployerFromStore.json
@@ -35,9 +35,9 @@ deployments/
             ├── bridge/
             │   └── SolanaBridgeAdapter.json
             └── lottery/
-                ├── CreatorLotteryManager.json
+                ├── LotteryManager4626.json
                 └── vrf/
-                    └── CreatorVRFConsumerV2_5.json
+                    └── VRFConsumer4626.json
 ```
 
 ## File Conventions

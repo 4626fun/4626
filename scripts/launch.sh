@@ -233,7 +233,7 @@ validate_status_progression "$STATUS_JSON"
 header "Image + Auction Readiness (Owner: Backend/Frontend)"
 echo "Pass criteria: Share image endpoint returns non-empty bytes and auction status includes image fields."
 read_or_fail "Enter SHARE_OFT address" SHARE_OFT
-read_or_fail "Enter CCA strategy address" CCA_STRATEGY
+read_or_fail "Enter CCA launch arm address" CCA_LAUNCH_ARM
 
 IMAGE_BYTES="$(curl -sS -L "${APP_ORIGIN}/api/v1/token/${SHARE_OFT}/image?chain=8453&format=png" | wc -c | tr -d ' ')"
 if [[ "$IMAGE_BYTES" -eq 0 ]]; then
@@ -242,7 +242,7 @@ if [[ "$IMAGE_BYTES" -eq 0 ]]; then
 fi
 green "PASS: ShareOFT image endpoint returned ${IMAGE_BYTES} bytes"
 
-AUCTION_JSON="$(curl -sS "${APP_ORIGIN}/api/v1/auction/status?ccaStrategy=${CCA_STRATEGY}")"
+AUCTION_JSON="$(curl -sS "${APP_ORIGIN}/api/v1/auction/status?ccaLaunchArm=${CCA_LAUNCH_ARM}")"
 echo "Auction status response:"
 printf '%s\n' "$AUCTION_JSON"
 

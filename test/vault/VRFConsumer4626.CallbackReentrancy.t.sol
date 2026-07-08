@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 
 import {
-    CreatorVRFConsumerHarness,
+    VRFConsumer4626Harness,
     MockRegistry4626ForVRF,
     MockEndpointV2,
     MockVRFCoordinatorV2Plus
@@ -15,12 +15,12 @@ contract ReentrantVRFCoordinator is MockVRFCoordinatorV2Plus {
     bool public lastFulfillSucceeded;
     bytes public lastFulfillReturnData;
 
-    function fulfill(CreatorVRFConsumerHarness consumer, uint256 requestId, uint256[] memory randomWords) external {
+    function fulfill(VRFConsumer4626Harness consumer, uint256 requestId, uint256[] memory randomWords) external {
         fulfillAttempts++;
         consumer.rawFulfillRandomWords(requestId, randomWords);
     }
 
-    function tryFulfill(CreatorVRFConsumerHarness consumer, uint256 requestId, uint256[] memory randomWords)
+    function tryFulfill(VRFConsumer4626Harness consumer, uint256 requestId, uint256[] memory randomWords)
         external
         returns (bool ok, bytes memory returnData)
     {
@@ -33,13 +33,13 @@ contract ReentrantVRFCoordinator is MockVRFCoordinatorV2Plus {
 }
 
 contract ReentrantLocalVrfRequester {
-    CreatorVRFConsumerHarness public immutable consumer;
+    VRFConsumer4626Harness public immutable consumer;
     ReentrantVRFCoordinator public immutable coordinator;
     uint256 public callbackCount;
     bool public reentryCallSucceeded;
     bytes public reentryReturnData;
 
-    constructor(CreatorVRFConsumerHarness consumer_, ReentrantVRFCoordinator coordinator_) {
+    constructor(VRFConsumer4626Harness consumer_, ReentrantVRFCoordinator coordinator_) {
         consumer = consumer_;
         coordinator = coordinator_;
     }
@@ -57,10 +57,10 @@ contract ReentrantLocalVrfRequester {
     }
 }
 
-contract CreatorVRFConsumerV25CallbackReentrancyTest is Test {
+contract VRFConsumer4626CallbackReentrancyTest is Test {
     uint32 internal constant BASE_EID = 30184;
 
-    CreatorVRFConsumerHarness internal consumer;
+    VRFConsumer4626Harness internal consumer;
     ReentrantVRFCoordinator internal coordinator;
     ReentrantLocalVrfRequester internal requester;
 
@@ -69,7 +69,7 @@ contract CreatorVRFConsumerV25CallbackReentrancyTest is Test {
         MockRegistry4626ForVRF registry = new MockRegistry4626ForVRF(address(endpoint), BASE_EID);
         coordinator = new ReentrantVRFCoordinator();
 
-        consumer = new CreatorVRFConsumerHarness(address(registry), address(this));
+        consumer = new VRFConsumer4626Harness(address(registry), address(this));
         consumer.setVRFCoordinator(address(coordinator));
         consumer.setVRFConfig(1, bytes32(uint256(0xAA)), 40000, 3);
 

@@ -9,6 +9,7 @@ via_ir = true
 optimizer = true
 optimizer_runs = 200
 bytecode_hash = "none"
+ignore = ["contracts/_archive/**"]
 
 # Needed for scripts that read frontend-generated deploy bytecode (e.g. SeedUniversalBytecodeStore).
 # Keep this narrow (read-only) for safety.
@@ -55,7 +56,7 @@ optimizer_runs = 200
 # exceeds 24,576 bytes runtime bytecode. The gate is enforced in
 # .github/workflows/test.yml at the "Run Forge build (sizes; EIP-170 blocking)"
 # step. See docs/operations/contract-size-gate.md.
-# CCALaunchStrategy is the current hot-spot contract — Sprint 2 adds
+# ShareCcaLaunchArm is the current hot-spot contract — Sprint 2 adds
 # ~<200 bytes (H-02 slot0 check + deadlines) and does not itself push it
 # over the cap, but the gate is enforced going forward.
 

@@ -11,7 +11,7 @@ import {CreatorOVaultCoreModule} from "@4626/creator/vault/modules/CreatorOVault
 import {OVaultStrategiesModule} from "@4626/shared/vault/modules/OVaultStrategiesModule.sol";
 import {CreatorShareOFT} from "@4626/creator/vault/CreatorShareOFT.sol";
 import {CreatorGaugeController} from "@4626/creator/revenue/CreatorGaugeController.sol";
-import {CCALaunchStrategy} from "@4626/shared/strategies/cca/CCALaunchStrategy.sol";
+import {CCALaunchArm} from "@4626/shared/shareoft-mesh/cca/CCALaunchArm.sol";
 import {CreatorOracle} from "@4626/creator/oracles/CreatorOracle.sol";
 
 /// @notice Fork simulation of the Phase 2 AA deployment sequence.
@@ -61,7 +61,7 @@ contract SimulatePhase2Deployment is Script {
         bytes32 saltWrapper = _derive(baseSalt, "CreatorOVaultWrapper");
         bytes32 saltShare = _derive(baseSalt, "CreatorShareOFT");
         bytes32 saltGauge = _derive(baseSalt, "CreatorGaugeController");
-        bytes32 saltCCA = _derive(baseSalt, "CCALaunchStrategy");
+        bytes32 saltCCA = _derive(baseSalt, "CCALaunchArm");
         bytes32 saltOracle = _derive(baseSalt, "CreatorOracle");
 
         // Build init code
@@ -75,7 +75,7 @@ contract SimulatePhase2Deployment is Script {
             type(CreatorGaugeController).creationCode, abi.encode(address(0), creatorTreasury, PROTOCOL_TREASURY, owner)
         ); // shareOFT set later once computed
         bytes memory initCCA = abi.encodePacked(
-            type(CCALaunchStrategy).creationCode, abi.encode(address(0), address(0), address(0), address(0), owner)
+            type(CCALaunchArm).creationCode, abi.encode(address(0), address(0), address(0), address(0), owner)
         ); // filled later
         bytes memory initOracle = abi.encodePacked(
             type(CreatorOracle).creationCode, abi.encode(REGISTRY, CHAINLINK_ETH_USD, creatorSymbol, owner)
@@ -100,7 +100,7 @@ contract SimulatePhase2Deployment is Script {
         address predictedGauge = d.computeAddress(saltGauge, keccak256(initGauge));
 
         initCCA = abi.encodePacked(
-            type(CCALaunchStrategy).creationCode,
+            type(CCALaunchArm).creationCode,
             abi.encode(predictedShare, address(0), predictedVault, predictedVault, owner)
         );
         address predictedCCA = d.computeAddress(saltCCA, keccak256(initCCA));
@@ -152,8 +152,8 @@ contract SimulatePhase2Deployment is Script {
         CreatorGaugeController(payable(predictedGauge)).setCreatorCoin(creatorToken);
         CreatorGaugeController(payable(predictedGauge)).setOracle(predictedOracle);
 
-        CCALaunchStrategy(payable(predictedCCA)).setApprovedLauncher(VAULT_ACTIVATION_BATCHER, true);
-        CCALaunchStrategy(payable(predictedCCA))
+        CCALaunchArm(payable(predictedCCA)).setApprovedLauncher(VAULT_ACTIVATION_BATCHER, true);
+        CCALaunchArm(payable(predictedCCA))
             .setOracleConfig(predictedOracle, POOL_MANAGER, TAX_HOOK, creatorTreasury);
 
         vm.stopBroadcast();
@@ -165,7 +165,7 @@ contract SimulatePhase2Deployment is Script {
         require(CreatorOVault(payable(predictedVault)).gaugeController() == predictedGauge, "vault->gauge");
         require(CreatorOVault(payable(predictedVault)).whitelist(predictedWrapper), "wrapper not whitelisted");
         require(
-            CCALaunchStrategy(payable(predictedCCA)).approvedLaunchers(VAULT_ACTIVATION_BATCHER),
+            CCALaunchArm(payable(predictedCCA)).approvedLaunchers(VAULT_ACTIVATION_BATCHER),
             "launcher not approved"
         );
     }

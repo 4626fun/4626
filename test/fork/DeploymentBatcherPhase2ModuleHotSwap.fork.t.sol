@@ -76,7 +76,7 @@ contract DeploymentBatcherPhase2ModuleHotSwapForkTest is Test {
         params.wrapper = makeAddr("forkWrapper");
         params.shareOFT = makeAddr("forkShareOFT");
         params.gaugeController = makeAddr("forkGauge");
-        params.ccaStrategy = makeAddr("forkCca");
+        params.ccaLaunchArm = makeAddr("forkCca");
         params.oracle = makeAddr("forkOracle");
         params.version = "fork-hot-swap-rehearsal";
         params.depositAmount = depositAmount;

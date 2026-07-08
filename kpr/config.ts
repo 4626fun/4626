@@ -324,6 +324,72 @@ export const CCA_STRATEGY_ABI = [
   { type: 'function', name: 'sweepUnsoldTokens', inputs: [], outputs: [], stateMutability: 'nonpayable' },
   { type: 'function', name: 'finalizeFailedAuction', inputs: [], outputs: [], stateMutability: 'nonpayable' },
   { type: 'function', name: 'migrate', inputs: [], outputs: [], stateMutability: 'nonpayable' },
+  { type: 'function', name: 'lpManager', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' },
+  { type: 'function', name: 'seedLpManager', inputs: [], outputs: [], stateMutability: 'nonpayable' },
+] as const;
+
+export const LP_MANAGER_MESH_ABI = [
+  { type: 'function', name: 'seedRebalance', inputs: [], outputs: [], stateMutability: 'nonpayable' },
+  { type: 'function', name: 'twapOracle', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' },
+  { type: 'function', name: 'poolId', inputs: [], outputs: [{ type: 'bytes32' }], stateMutability: 'view' },
+  {
+    type: 'function',
+    name: 'fullRangePosition',
+    inputs: [],
+    outputs: [
+      { name: 'tickLower', type: 'int24' },
+      { name: 'tickUpper', type: 'int24' },
+      { name: 'liquidity', type: 'uint128' },
+      { name: 'tokenId', type: 'uint256' },
+    ],
+    stateMutability: 'view',
+  },
+] as const;
+
+export const DEPLOYMENT_BATCHER_SHARE_MESH_ABI = [
+  {
+    type: 'function',
+    name: 'deployShareMeshLpManager',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'positionManager', type: 'address' },
+          { name: 'poolHook', type: 'address' },
+          { name: 'registryOwner', type: 'address' },
+          { name: 'keeperManager', type: 'address' },
+          { name: 'hooksToApprove', type: 'address[]' },
+        ],
+      },
+      {
+        name: 'codeIds',
+        type: 'tuple',
+        components: [
+          { name: 'approvedV4HooksRegistry', type: 'bytes32' },
+          { name: 'lpManager', type: 'bytes32' },
+        ],
+      },
+    ],
+    outputs: [
+      {
+        name: 'out',
+        type: 'tuple',
+        components: [
+          { name: 'hookRegistry', type: 'address' },
+          { name: 'lpManager', type: 'address' },
+        ],
+      },
+    ],
+    stateMutability: 'nonpayable',
+  },
 ] as const;
 
 // ---------------------------------------------------------------------------

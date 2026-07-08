@@ -13,7 +13,7 @@ import { ShareVaultButton } from '@/components/share/ShareVaultButton'
 
 const shortAddress = (addr: string) => `${addr.slice(0, 6)}…${addr.slice(-4)}`
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
-const CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI = [
+const CCA_LAUNCH_ARM_AUCTION_STATUS_ABI = [
   {
     name: 'getAuctionStatus',
     type: 'function',
@@ -299,14 +299,14 @@ export function DeploymentSuccess({
   const publicClient = usePublicClient({ chainId: 8453 })
   const [ajnaAutomationStatus, setAjnaAutomationStatus] = useState<AjnaAutomationStatus | null>(null)
   const auctionStatusQuery = useQuery({
-    queryKey: ['deploymentSuccess', 'auctionStatus', deployment?.contracts.ccaStrategy],
-    enabled: !!deployment?.contracts.ccaStrategy && !!publicClient,
+    queryKey: ['deploymentSuccess', 'auctionStatus', deployment?.contracts.ccaLaunchArm],
+    enabled: !!deployment?.contracts.ccaLaunchArm && !!publicClient,
     staleTime: 20_000,
     queryFn: async () => {
-      if (!deployment?.contracts.ccaStrategy || !publicClient) return null
+      if (!deployment?.contracts.ccaLaunchArm || !publicClient) return null
       const status = (await publicClient.readContract({
-        address: deployment.contracts.ccaStrategy,
-        abi: CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI,
+        address: deployment.contracts.ccaLaunchArm,
+        abi: CCA_LAUNCH_ARM_AUCTION_STATUS_ABI,
         functionName: 'getAuctionStatus',
       })) as readonly [Address, boolean, boolean, bigint, bigint]
       const auction = String(status?.[0] ?? '').toLowerCase()
@@ -379,7 +379,7 @@ export function DeploymentSuccess({
       },
     })
     
-    if (deployment?.contracts.ccaStrategy) {
+    if (deployment?.contracts.ccaLaunchArm) {
       if (auctionStatusQuery.data?.hasAuction) {
         steps.push({
           icon: <Sparkles className="w-5 h-5" />,
@@ -387,7 +387,7 @@ export function DeploymentSuccess({
           description: 'Your Creator-Controlled Auction is now live. Share it with your community!',
           action: {
             label: 'View Auction',
-            to: `/auction/bid/${deployment.contracts.ccaStrategy}`,
+            to: `/auction/bid/${deployment.contracts.ccaLaunchArm}`,
           },
         })
       } else {
@@ -397,7 +397,7 @@ export function DeploymentSuccess({
           description: 'Auction launch is not confirmed on-chain yet. Finish deployment before sharing auction links.',
           action: {
             label: 'View CCA Strategy',
-            href: `https://basescan.org/address/${deployment.contracts.ccaStrategy}`,
+            href: `https://basescan.org/address/${deployment.contracts.ccaLaunchArm}`,
           },
         })
       }
@@ -533,7 +533,7 @@ export function DeploymentSuccess({
             <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-600 mb-2">Infrastructure (Phase 2)</div>
             <div className="space-y-2 rounded-lg border border-white/5 bg-black/20 p-3">
               <AddressRow label="Gauge Controller" address={deployment.contracts.gaugeController} />
-              <AddressRow label="CCA Strategy" address={deployment.contracts.ccaStrategy} />
+              <AddressRow label="CCA Strategy" address={deployment.contracts.ccaLaunchArm} />
               <AddressRow label="Burn Stream" address={deployment.contracts.burnStream} />
               <AddressRow label="Payout Router" address={deployment.contracts.payoutRouter} />
               {deployment.contracts.oracle && (

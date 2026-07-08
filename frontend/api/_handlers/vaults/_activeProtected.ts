@@ -34,7 +34,7 @@ export interface VaultConfig {
   chainId: number
   creatorCoinAddress: `0x${string}`
   shareTokenAddress?: `0x${string}`
-  ccaStrategyAddress?: `0x${string}`
+  ccaLaunchArmAddress?: `0x${string}`
   oracleAddress?: `0x${string}`
   vrfHubAddress?: `0x${string}`
   gaugeControllerAddress?: `0x${string}`
@@ -195,7 +195,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const contracts = ((configJson as any).contracts ?? {}) as Record<string, unknown>
       const vaultAddress = String(row.vault_address).toLowerCase() as `0x${string}`
       const automation = automationByVault.get(vaultAddress)
-      const ccaStrategyAddress = toHexAddressOrNull(contracts.ccaStrategy)
+      const ccaLaunchArmAddress = toHexAddressOrNull(contracts.ccaLaunchArm)
       const oracleAddress = toHexAddressOrNull(contracts.oracle)
       const vrfHubAddress = toHexAddressOrNull(contracts.vrfHub)
       const gaugeControllerAddress = toHexAddressOrNull(contracts.gaugeController)
@@ -222,7 +222,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           : {
               automationEnabled: false,
             },
-        ...(ccaStrategyAddress ? { ccaStrategyAddress } : {}),
+        ...(ccaLaunchArmAddress ? { ccaLaunchArmAddress } : {}),
         ...(oracleAddress ? { oracleAddress } : {}),
         ...(vrfHubAddress ? { vrfHubAddress } : {}),
         ...(gaugeControllerAddress ? { gaugeControllerAddress } : {}),

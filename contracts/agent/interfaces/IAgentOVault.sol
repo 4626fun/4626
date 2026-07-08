@@ -11,7 +11,7 @@ interface IAgentOVault {
     function deposit(uint256 assets, address receiver) external returns (uint256 shares);
     function setModulesOnce(address coreModule, address strategiesModule, address adminModule) external;
     function setGaugeController(address _controller) external;
-    function setCCALaunchStrategy(address _ccaLaunchStrategy) external;
+    function setCcaLaunchArm(address _ccaLaunchArm) external;
     function setWhitelist(address _account, bool _status) external;
     function setProtocolRescue(address rescue) external;
     function transferOwnership(address newOwner) external;

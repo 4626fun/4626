@@ -30,9 +30,9 @@ This acceptance document covers all Informational severity findings from the Pha
 - Disposition: **Accepted with explicit documentation required**. Returning `true` is consistent with the explicit design choice in the Solana-spoke hub/spoke model: Solana allocation is intentionally counted as zero for on-chain valuation (the Solana side is treated as an off-chain valuation channel reconciled by keeper).
 - Follow-up: add a NatSpec `@dev` block above `isValuationReady()` stating "Solana allocation is treated as zero on-chain; this always returns true so that vault rebalances do not block." Not in-scope for this sprint.
 
-## I-05 — `CCALaunchStrategy.launchAuction()` parameters silently ignored (Linear 4626-386)
+## I-05 — `CCALaunchArm.launchAuction()` parameters silently ignored (Linear 4626-386)
 
-- File: `contracts/vault/strategies/CCALaunchStrategy.sol` lines 557–566 and 573–581 (`launchAuctionWithReserve`)
+- File: `contracts/vault/strategies/CCALaunchArm.sol` lines 557–566 and 573–581 (`launchAuctionWithReserve`)
 - Current code: `floorPrice;` and `auctionSteps;` are used as explicit "no-op statements" so the Solidity compiler does not emit an unused-parameter warning, but they are not forwarded to `_launchAuctionInternal`.
 - Disposition: **Accepted**. The ABI preserves two historical parameters for off-chain tooling compatibility. Removing them is a breaking change; adding `require(floorPrice == 0 && auctionSteps.length == 0)` is a behavioural tightening that would brick existing keeper calls that pass non-zero defaults.
 - Follow-up: schedule a batch ABI cleanup for the next strategy upgrade window; include parameter removal, tooling updates, and a version bump in `IStrategy`.

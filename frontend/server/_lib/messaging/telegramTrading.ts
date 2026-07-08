@@ -1261,7 +1261,7 @@ export async function listTelegramScopedVaults(params: {
       chainId: Number(row.chain_id),
       groupId: String(row.group_id),
       isSettled: Boolean(row.settled_at),
-      ccaStrategyAddress: asTrimmed(contracts.ccaStrategy).toLowerCase() || null,
+      ccaLaunchArmAddress: asTrimmed(contracts.ccaLaunchArm).toLowerCase() || null,
     }
   })
 }
@@ -1926,10 +1926,10 @@ export async function listTelegramAuctions(params: {
     limit: Math.max(1, Math.min(25, Math.floor(Number(params.limit ?? 8)))),
   })
   return vaults
-    .filter((vault) => vault.ccaStrategyAddress)
+    .filter((vault) => vault.ccaLaunchArmAddress)
     .map((vault) => ({
       vaultAddress: vault.vaultAddress,
-      ccaStrategyAddress: String(vault.ccaStrategyAddress),
+      ccaLaunchArmAddress: String(vault.ccaLaunchArmAddress),
       creatorCoinAddress: vault.creatorCoinAddress,
       chainId: vault.chainId,
       isSettled: vault.isSettled,

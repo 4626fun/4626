@@ -10,7 +10,7 @@ and what that means operationally.
 
 On local Anvil/Hardhat fork simulation, `launchDeferredAuction(...)` can revert with selector:
 
-- `0x28e7b618` — `LaunchOracleInvalidPrice(int256 creatorUsdPrice, int256 ethUsdPrice)` from `CCALaunchStrategy`
+- `0x28e7b618` — `LaunchOracleInvalidPrice(int256 creatorUsdPrice, int256 ethUsdPrice)` from `CCALaunchArm`
 
 Typical fork cause: Phase 2 deploys a fresh `CreatorOracle` with **no initialized creator USD price** (`assetPriceUSD = 0`) while Chainlink ETH/USD is valid. Dry-run seeds `initializeAssetPrice` on the fork oracle (owner-impersonated) before Phase 4 when strict launch is enabled.
 

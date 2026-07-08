@@ -1,8 +1,8 @@
 {
-  "contractName": "CreatorLotteryManager",
+  "contractName": "LotteryManager4626",
   "network": "Base",
   "chainId": 8453,
-  "address": "0x5c0115589d7F4930A0dc93417aE409f44186f4E7",
+  "address": "0xD62a8a2F4c25587FA80ED5782b50Af6654122b0b",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
   "deployedAt": "2026-05-05T04:51:21Z",
   "deploymentTx": "0x6ce43336c629d379ad891b405ef6c91032afcd804118918808b5a76df7600cdb",
@@ -776,7 +776,7 @@
         {
           "name": "",
           "type": "address",
-          "internalType": "contract ICreatorVRFConsumer"
+          "internalType": "contract IVRFConsumer4626"
         }
       ],
       "stateMutability": "view"
@@ -1882,7 +1882,7 @@
         {
           "name": "vrfType",
           "type": "uint8",
-          "internalType": "enum CreatorLotteryManager.VRFType"
+          "internalType": "enum LotteryManager4626.VRFType"
         },
         {
           "name": "sourceChainEid",
@@ -2699,7 +2699,7 @@
           "name": "reason",
           "type": "uint8",
           "indexed": false,
-          "internalType": "enum CreatorLotteryManager.SponsorshipSkipReason"
+          "internalType": "enum LotteryManager4626.SponsorshipSkipReason"
         },
         {
           "name": "feeNative",

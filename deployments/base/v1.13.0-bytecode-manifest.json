@@ -14,12 +14,12 @@
       "codeId": "0xfe43099d57b11bce8faa637836b2f61365b0e55313a1461e81e52f0888b73ce1",
       "creationBytecodeBytes": 4665
     },
-    "CreatorLotteryManager": {
+    "LotteryManager4626": {
       "creationBytecodeHash": "0x0e2062f63a2a3527283ef59ce5e31858466c75df994fbbbdfb56787230a5b760",
       "codeId": "0x0e2062f63a2a3527283ef59ce5e31858466c75df994fbbbdfb56787230a5b760",
       "creationBytecodeBytes": 40885
     },
-    "CreatorVRFConsumerV2_5": {
+    "VRFConsumer4626": {
       "creationBytecodeHash": "0xe901d0e832168c98ac220d6263e8b82b03946d8b682e793dfea4c75c7f108dff",
       "codeId": "0xe901d0e832168c98ac220d6263e8b82b03946d8b682e793dfea4c75c7f108dff",
       "creationBytecodeBytes": 21593

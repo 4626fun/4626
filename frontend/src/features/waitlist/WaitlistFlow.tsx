@@ -369,6 +369,26 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   )
 
   useEffect(() => {
+    console.info('[waitlist-join] gate', {
+      sessionProbeComplete,
+      privyReady: privy.ready === true,
+      privyAuthenticated: privy.authenticated === true,
+      walletSignInPending,
+      hasLocalSession: Boolean(localSessionAddress?.trim()),
+      hasServerSession: Boolean(serverSessionAddress?.trim()),
+      joined: Boolean(joinedSessionAddress),
+    })
+  }, [
+    joinedSessionAddress,
+    localSessionAddress,
+    privy.authenticated,
+    privy.ready,
+    serverSessionAddress,
+    sessionProbeComplete,
+    walletSignInPending,
+  ])
+
+  useEffect(() => {
     if (!props.walletSignInError) return
     setError(props.walletSignInError)
     onClearWalletSignInError()
@@ -387,6 +407,9 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     })()
     return () => {
       cancelled = true
+      // StrictMode-safe: allow the re-invoked effect to restart the probe;
+      // otherwise a cancelled first run leaves sessionProbeComplete false forever.
+      sessionProbeStartedRef.current = false
     }
   }, [privy.ready])
 

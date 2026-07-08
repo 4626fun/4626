@@ -1,6 +1,6 @@
 import { getAddress, isAddress, type Address, type Hex } from 'viem'
 
-/** Verified via `forge inspect CreatorLotteryManager storageLayout` (BoostSourceTimelock tests). */
+/** Verified via `forge inspect LotteryManager4626 storageLayout` (BoostSourceTimelock tests). */
 export const LOTTERY_TIMELOCK_ARMED_STORAGE_SLOT = 64n
 
 const HUB_FORWARDER_ABI = [
@@ -78,7 +78,7 @@ export async function verifyLotteryProductionReadiness(
       violations.push({
         code: 'lottery_boost_timelock_not_armed',
         message:
-          'CreatorLotteryManager boost-source timelock is not armed; call armBoostSourceTimelock() before production traffic (M-15)',
+          'LotteryManager4626 boost-source timelock is not armed; call armBoostSourceTimelock() before production traffic (M-15)',
         severity: 'critical',
         expected: true,
         actual: false,

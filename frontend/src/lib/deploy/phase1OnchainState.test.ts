@@ -15,7 +15,7 @@ function baseParams(overrides: Partial<FinalizePhase2Params> = {}): FinalizePhas
     wrapper: predictedWrapper,
     shareOFT: getAddress('0x2222222222222222222222222222222222222222'),
     gaugeController: getAddress('0x3333333333333333333333333333333333333333'),
-    ccaStrategy: getAddress('0x4444444444444444444444444444444444444444'),
+    ccaLaunchArm: getAddress('0x4444444444444444444444444444444444444444'),
     oracle: getAddress('0x5555555555555555555555555555555555555555'),
     version: 'v1.2.3x-akita-redeploy',
     depositAmount: 50_000_000n * 10n ** 18n,

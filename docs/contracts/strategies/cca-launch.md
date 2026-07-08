@@ -1,20 +1,20 @@
 ---
-title: CCA Launch Strategy
+title: Share CCA Launch Arm
 sidebar_position: 2
 ---
 
-# CCA Launch Strategy
+# Share CCA Launch Arm
 
-**Product role:** Runs the **fair-launch auction** that sells vault shares for USDC at a clearing price before secondary trading — the vault’s public price-discovery step.
+**Product role:** **Vault arm** (not a leg / not `addStrategy`) that runs the **fair-launch auction** selling ■ ShareOFT for native ETH at a clearing price before secondary mesh liquidity.
 
 Uniswap Continuous Clearing Auction (CCA) integration for fair-launch price discovery on Uniswap V4.
 
 ## Purpose
 
-The CCA Launch Strategy:
+The Share CCA launch arm (`CCALaunchArm`; legacy onchain names `CCALaunchStrategy` / `ccaLaunchStrategy`):
 - Runs CCA price discovery with explicit lifecycle tracking.
 - Supports deterministic failed-auction finalization and relaunch safety.
-- Migrates graduated auctions into a Uniswap v4 LP position.
+- On graduation: `migrate()` initializes the ShareOFT/native-ETH V4 pool and wires the oracle — **no LP mint** at migrate (mesh arm handles liquidity later).
 - Derives launch floor price onchain from oracle data (manipulation-resistant).
 - Exposes non-blocking backing telemetry (vault economics stay live).
 
@@ -29,15 +29,15 @@ Batcher enforces 30/30/30/10 split (of wrapped ■ supply)
   - 30% fair-launch CCA auction (pending launch)
   - 30% creator linear vesting (365 days)
   - 30% LayerZero bridge to Solana (part of finalize; same ■ ticker)
-  - 10% LP reserve held on CCA strategy for post-auction migration
+  - 10% LP reserve held on launch arm for post-auction mesh seeding
    ↓
 Fair-launch auction runs (30% auction leg + 10% LP reserve metadata)
    ↓
-If graduated: sweepCurrency() → migrate() (Uniswap v4 LP migration)
+If graduated: sweepCurrency() → migrate() (pool init + oracle) → mesh arm (deploy LP manager → seedLpManager → seedRebalance)
    ↓
 Hook config / alignment (separate step) before declaring launch complete
    ↓
-If failed: finalizeFailedAuction() / sweepUnsoldTokens() clears strategy state for relaunch
+If failed: finalizeFailedAuction() / sweepUnsoldTokens() clears launch arm state for relaunch
 ```
 
 **Deposit bounds:** first activation deposit must be **50M–100M** creator coin (18 decimals). The split applies to **wrapped share tokens** minted from that deposit, not raw creator coin units 1:1.
@@ -49,13 +49,13 @@ Phase 2 `finalizePhase2` (batcher) only wraps the deposit and enforces the **30/
 | Deferred step | When it runs | Onchain surface |
 |---------------|--------------|-----------------|
 | **Charm / Ajna strategy TVL** | Deploy-session **Phase 3** (next UserOp after finalize) | `deployPhase3Strategies` + vault `deployToStrategies()` at **45% / 45% / 10% idle** |
-| **CCA graduation / `migrate()`** | **After the auction runs and succeeds** | Keeper settlement: `sweepCurrency()` → `migrate()` on this strategy |
+| **CCA graduation / `migrate()`** | **After the auction runs and succeeds** | Keeper settlement: `sweepCurrency()` → `migrate()` on the launch arm |
 
 Phase 4 `launchDeferredAuction` **schedules** the auction (30% leg + 10% LP reserve metadata) — it does not graduate or migrate. Public DEX trading starts only after graduation + migration succeed.
 
 ## Auction timing
 
-The CCA strategy schedules auctions on the **next Thursday 00:00 UTC** weekly epoch (`CCALaunchStrategy._deriveScheduledStartBlock`). After Phase 2 finalize, the app typically calls **`launchDeferredAuction`** (Phase 4) with the 30% auction leg plus 10% LP reserve metadata.
+The launch arm schedules auctions on the **next Thursday 00:00 UTC** weekly epoch (`CCALaunchArm._deriveScheduledStartBlock`). After Phase 2 finalize, the app typically calls **`launchDeferredAuction`** (Phase 4) with the 30% auction leg plus 10% LP reserve metadata.
 
 | Phase | Meaning |
 |-------|---------|

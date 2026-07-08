@@ -84,13 +84,13 @@ flowchart LR
   end
 
   subgraph Protocol["Protocol Plane (Base + Omnichain)"]
-    Registry["CreatorRegistry"]
+    Registry["Registry4626"]
     Deployer["DeploymentBatcher"]
     Vault["CreatorOVault (ERC-4626)"]
     Wrapper["CreatorOVaultWrapper"]
     Share["CreatorShareOFT (LayerZero V2 OFT)"]
     Gauge["CreatorGaugeController"]
-    Lottery["CreatorLotteryManager"]
+    Lottery["LotteryManager4626"]
     Oracle["CreatorOracle"]
     Strategies["Strategy Layer"]
   end
@@ -247,12 +247,12 @@ flowchart LR
 
 | Component                | Role                                                                        |
 | ------------------------ | --------------------------------------------------------------------------- |
-| `CreatorRegistry`        | Canonical registry of creator coin -> vault stack mappings and chain config |
+| `Registry4626`        | Canonical registry of creator coin -> vault stack mappings and chain config |
 | `CreatorOVault`          | ERC-4626 vault for creator coin deposits and strategy accounting            |
 | `CreatorOVaultWrapper`   | Wraps vault shares into transportable OFT-compatible share form             |
 | `CreatorShareOFT`        | LayerZero V2 OFT share token with DEX-aware fee hooks                       |
 | `CreatorGaugeController` | Receives and routes trading-fee proceeds to downstream sinks                |
-| `CreatorLotteryManager`  | Executes lottery odds/payout flow with VRF randomness                       |
+| `LotteryManager4626`  | Executes lottery odds/payout flow with VRF randomness                       |
 | `CreatorOracle`          | Price and accounting inputs for vault/share mechanics                       |
 | `CreatorCCAStrategy`     | CCA launch path and post-auction liquidity transition                       |
 

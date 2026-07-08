@@ -95,7 +95,7 @@ Repeat for:
 - `CreatorOVaultWrapper`
 - `CreatorShareOFT`
 - `CreatorGaugeController`
-- `CCALaunchStrategy`
+- `CCALaunchArm`
 - `CreatorOracle`
 - `OFTBootstrapRegistry`
 

@@ -28,17 +28,11 @@ import {OApp, MessagingFee, Origin} from "@layerzerolabs/oapp-evm/contracts/oapp
 import {MessagingReceipt} from "@layerzerolabs/oapp-evm/contracts/oapp/OAppSender.sol";
 import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 import {IOracle4626} from "@4626/shared/interfaces/oracles/IOracle4626.sol";
+import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 
 // Interface for local callbacks
 interface IVRFCallbackReceiver {
     function receiveRandomWords(uint256 requestId, uint256[] memory randomWords) external;
-}
-
-// Interface for Registry4626
-interface I4626Registry {
-    function getLayerZeroEndpoint(uint256 _chainId) external view returns (address);
-    function getEidForChainId(uint256 _chainId) external view returns (uint32);
-    function getSupportedChains() external view returns (uint256[] memory);
 }
 
 // Chainlink VRF V2.5 interface
@@ -63,7 +57,7 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
     // ================================
 
     IVRFCoordinatorV2Plus public vrfCoordinator;
-    I4626Registry public immutable registry;
+    IRegistry4626 public immutable registry;
     IOracle4626 public priceOracle;
 
     /// @notice Base EID (hub chain where VRF lives)
@@ -245,13 +239,13 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
      * @param _owner Owner address
      */
     constructor(address _registry, address _owner)
-        OApp(I4626Registry(_registry).getLayerZeroEndpoint(block.chainid), _owner)
+        OApp(IRegistry4626(_registry).getLayerZeroEndpoint(block.chainid), _owner)
         Ownable(_owner)
     {
         if (_registry == address(0)) revert ZeroAddress();
         if (_owner == address(0)) revert ZeroAddress();
 
-        registry = I4626Registry(_registry);
+        registry = IRegistry4626(_registry);
         uint32 baseEid = registry.getEidForChainId(block.chainid);
         if (baseEid == 0) revert MissingLayerZeroEid(block.chainid);
         BASE_EID = baseEid;

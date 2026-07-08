@@ -1,0 +1,9 @@
+{
+  "spendRefId": "smoke-mrbafxps-b984fb6d",
+  "nonce": "0x9d85b55e60acd5292d36d983d296ee01fface7390c801e70e9849f1bb5e8ab25",
+  "message": "4626 Lottery AMOE Entry\n\nWallet: 0xab6d5c10b03300326cd7fab7267ae192842967b5\nCreator Coin: 0x5b674196812451b7cec024fe9d22d2c0b172fa75\nNonce: 0xd1eb88a87991ff5c3b69e772d41c0f2de512732e0b381fa0458be32e69815b2e\nIssued At: 2026-07-08T00:08:05.888Z\nExpires At: 2026-07-08T00:18:05.888Z\nChain ID: 8453\nLottery Manager: 0xd62a8a2f4c25587fa80ed5782b50af6654122b0b",
+  "signature": "0x2cd46ab384819542347de724fb5deb2db589097565d759409e87318999246e994868538ee7a269a1b1a907c02801c6aa459f4aab41303cbbd3f65636bd7db4ee1b",
+  "burnEpoch": "68",
+  "burnedAt": "2026-07-07T23:36:39.836Z",
+  "signupId": 1
+}

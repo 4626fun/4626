@@ -362,7 +362,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
         params.wrapper = makeAddr("depositBoundsWrapper");
         params.shareOFT = makeAddr("depositBoundsShareOFT");
         params.gaugeController = makeAddr("depositBoundsGauge");
-        params.ccaStrategy = makeAddr("depositBoundsCca");
+        params.ccaLaunchArm = makeAddr("depositBoundsCca");
         params.oracle = makeAddr("depositBoundsOracle");
         params.version = "deposit-bounds-test";
         params.depositAmount = depositAmount;

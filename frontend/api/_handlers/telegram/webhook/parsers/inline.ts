@@ -27,7 +27,7 @@ export type InlineScopedVaultRow = {
   chainId: number
   groupId: string
   isSettled: boolean
-  ccaStrategyAddress: string | null
+  ccaLaunchArmAddress: string | null
 }
 
 type InlineResultTemplate = {

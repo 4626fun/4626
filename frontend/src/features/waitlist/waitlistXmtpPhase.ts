@@ -30,6 +30,7 @@ export function deriveWaitlistXmtpPhase(input: {
   hasGroupConversation: boolean
   syncTimedOut: boolean
   needsConnectMessaging: boolean
+  messagingConnected: boolean
   prepareError: string | null
   xmtpError: string | null
 }): WaitlistXmtpPhase {
@@ -41,6 +42,15 @@ export function deriveWaitlistXmtpPhase(input: {
   if (input.localStateResetRequired) return 'local_reset_required'
   if (input.hasGroupConversation) return 'chat_ready'
   if (input.joinStatus === 'executed') {
+    if (!input.messagingConnected) {
+      if (input.xmtpStatus === 'signing' || input.xmtpStatus === 'connecting') {
+        return 'connecting'
+      }
+      if (input.needsConnectMessaging && (input.prepareError || input.xmtpError)) {
+        return 'connect_error'
+      }
+      return 'connect_prompt'
+    }
     return 'group_syncing'
   }
   if (
@@ -86,6 +96,9 @@ export function waitlistXmtpPhaseMessage(
     case 'local_reset_required':
       return 'This browser’s XMTP cache no longer validates. Reset local messaging state to reconnect.'
     case 'connect_prompt':
+      if (context.joinStatus === 'executed') {
+        return 'You are in the waitlist group. Connect messaging to open the chat in this browser.'
+      }
       return context.walletReady
         ? 'One tap connects messaging and adds you to the waitlist group.'
         : 'Connect messaging to create your inbox, then we add you to the waitlist group.'

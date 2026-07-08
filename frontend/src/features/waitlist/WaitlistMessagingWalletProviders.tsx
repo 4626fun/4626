@@ -1,7 +1,7 @@
 import { useMemo, type ReactNode } from 'react'
 import { WagmiProvider } from 'wagmi'
 
-import { useDeferOneMacrotask, useDeferUntilAfterCommit } from '@/hooks/useDeferUntilMounted'
+import { useDeferOneMacrotask } from '@/hooks/useDeferUntilMounted'
 import { createWaitlistMessagingWagmiConfig } from '@/config/waitlistMessagingWagmi'
 
 import type { WaitlistConnectTrack } from './waitlistFlowState'
@@ -24,17 +24,14 @@ function WaitlistMessagingWagmiReadyGate(props: { children: ReactNode; fallback?
 }
 
 /**
- * Mount wagmi only for waitlist XMTP messaging — never for email OTP / owner install.
- * Defers hook consumers until after commit to avoid wagmi Hydrate setState-in-render.
+ * Route-scoped wagmi for waitlist XMTP messaging — never for email OTP / owner install.
+ * WagmiProvider mounts immediately; hook consumers defer until after Hydrate settles.
  */
 export function WaitlistMessagingWalletProviders(props: WaitlistMessagingWalletProvidersProps) {
-  const ready = useDeferUntilAfterCommit()
   const config = useMemo(
     () => createWaitlistMessagingWagmiConfig(props.connectTrack),
     [props.connectTrack],
   )
-
-  if (!ready) return props.fallback ?? null
 
   return (
     <WagmiProvider config={config as never} reconnectOnMount={false}>

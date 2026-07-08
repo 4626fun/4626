@@ -49,12 +49,12 @@ export type TelegramScopedVault = {
   chainId: number
   groupId: string
   isSettled: boolean
-  ccaStrategyAddress: string | null
+  ccaLaunchArmAddress: string | null
 }
 
 export type TelegramAuctionRow = {
   vaultAddress: string
-  ccaStrategyAddress: string
+  ccaLaunchArmAddress: string
   creatorCoinAddress: string
   chainId: number
   isSettled: boolean

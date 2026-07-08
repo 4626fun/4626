@@ -19,6 +19,11 @@ Onchain, 4626 consists of:
 - **Per-creator vault stack** (deployed per creator coin)
 - **Optional incentives layer** (ve(3,3) voting, voter rewards, bribes)
 
+Each creator vault has two extension families:
+
+- **Legs (strategies)** — deploy and manage the **creator coin** in yield sleeves (Charm, Ajna; wired via `addStrategy`)
+- **Arms** — **extend ShareOFT (■)** — launch, mesh liquidity, bridge routing, and trade-fee plumbing; never `addStrategy`
+
 ## Core Contracts
 
 ### 1. CreatorOVault (ERC-4626 Vault)
@@ -48,7 +53,7 @@ Onchain, 4626 consists of:
 - Splits fees by configurable bps (default: **69% lottery**, **21.39% burn**, **9.61% voter/protocol branch**, **0% creator**)
 - Unwraps fees into vault shares and routes them by configured splits
 
-### 5. CreatorLotteryManager
+### 5. LotteryManager4626
 
 - **Shared service** (one per chain): triggered by approved swap contracts
 - Calculates instant win probability (percentage-based: $1 traded = 0.0004% chance)
@@ -59,12 +64,13 @@ Onchain, 4626 consists of:
 
 Important boundary:
 - `CreatorGaugeController` = jackpot custodian (`jackpotReserve`)
-- `CreatorLotteryManager` = jackpot payout authority (authorized caller), not custodian
+- `LotteryManager4626` = jackpot payout authority (authorized caller), not custodian
 
-### 6. CreatorCCAStrategy (Uniswap CCA Integration)
+### 6. Share CCA launch arm (Uniswap CCA)
 
-- Allocates vault assets to **Uniswap Continuous Clearing Auction** for fair launch price discovery
-- After graduation/sweep, `migrate()` handles v4 pool initialization + LP position migration
+- **Vault arm** (not a leg / not `addStrategy`): fair-launch primary market for ■ ShareOFT via Uniswap **Continuous Clearing Auction**
+- Onchain: `CCALaunchArm` (vault pointer: `ccaLaunchArm`)
+- Post-graduation: `sweepCurrency()` → `migrate()` (V4 pool init + oracle only; **no LP mint**) → mesh arm (`OVaultLPManager`) via `seedLpManager` / `seedRebalance`
 - Full launch completion still requires explicit hook config/alignment checks (separate operational step)
 
 ### 7. CreatorOracle (Price Oracle)
@@ -110,7 +116,7 @@ tradeFeeCollector (typically CreatorGaugeController)
      - 9.61% → Voter/protocol branch
 CreatorGaugeController (jackpot custodian)
    ↓ Calculate percentage-based win chance ($1 = 0.0004%)
-CreatorLotteryManager (jackpot payout authority)
+LotteryManager4626 (jackpot payout authority)
    ↓ Instant Chainlink VRF roll
    ↓ Winner (if lucky) receives 69% of prize pool in vault shares
 ```
@@ -123,7 +129,7 @@ CreatorLotteryManager (jackpot payout authority)
 User clicks "Deploy" → wallet/bundler executes a phased sequence
 
 Phase 1 — Deterministic deploy (deployment batcher):
-- Deploy per-creator contracts (vault, wrapper, share OFT, gauge controller, oracle, CCA strategy)
+- Deploy per-creator contracts (vault, wrapper, share OFT, gauge controller, oracle, share CCA launch arm)
 - Register them in CreatorRegistry
 
 Phase 2 — Configuration (deployment batcher):
@@ -144,7 +150,7 @@ Notes:
 This layer can be deployed and enabled after the core system is live:
 
 - **ve4626**: Vote-escrow token that represents locked power
-- **ve4626BoostManager**: Exposes personal boost signals used by `CreatorLotteryManager`
+- **ve4626BoostManager**: Exposes personal boost signals used by `LotteryManager4626`
 - **ve4626GaugeVoting**: Weekly voting that allocates a bounded probability budget across whitelisted vaults
 - **ve4626VoterRewardsDistributor**: Receives the voter slice (9.61% default) from each `CreatorGaugeController` and lets voters claim pro-rata per epoch/vault
 - **BribesFactory / BribeDepot**: Optional external bribes per vault (epoch-scoped)

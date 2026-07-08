@@ -59,7 +59,7 @@ type VaultState = {
 }
 
 type AuctionState = {
-  ccaStrategyAddress: `0x${string}`
+  ccaLaunchArmAddress: `0x${string}`
   currentAuction: `0x${string}`
   hasActiveAuction: boolean
   isGraduated: boolean
@@ -87,7 +87,7 @@ type BatchCcaFinalizationResult = {
   skipped: number
   errors: number
   results: Array<{
-    ccaStrategyAddress: `0x${string}`
+    ccaLaunchArmAddress: `0x${string}`
     swept: boolean
     unsoldSwept: boolean
     skippedReason?: string
@@ -275,7 +275,7 @@ function formatVaultState(s: VaultState): string {
 }
 
 function formatAuctionState(s: AuctionState): string {
-  const addr = `${s.ccaStrategyAddress.slice(0, 8)}...${s.ccaStrategyAddress.slice(-6)}`
+  const addr = `${s.ccaLaunchArmAddress.slice(0, 8)}...${s.ccaLaunchArmAddress.slice(-6)}`
   const status = s.isGraduated ? 'GRADUATED' : s.hasActiveAuction ? 'active' : 'no auction'
   return `**${addr}** — ${status}`
 }
@@ -380,16 +380,16 @@ async function handleObserveStatus(callback: HandlerCallback | undefined, includ
     try {
       const registry = await importRegistry()
       const vaults = await registry.fetchActiveVaults()
-      const withCCA = vaults.filter((v: any) => v.ccaStrategyAddress)
+      const withCCA = vaults.filter((v: any) => v.ccaLaunchArmAddress)
       if (withCCA.length > 0) {
         const as = await importCcaFinalization()
         parts.push(`**Auctions (${withCCA.length}):**`)
         for (const v of withCCA.slice(0, 10)) {
           try {
-            const state: AuctionState = await as.readAuctionStateForAddress(v.ccaStrategyAddress as `0x${string}`)
+            const state: AuctionState = await as.readAuctionStateForAddress(v.ccaLaunchArmAddress as `0x${string}`)
             parts.push(`  ${formatAuctionState(state)}`)
           } catch (err: any) {
-            parts.push(`  ${v.ccaStrategyAddress.slice(0, 10)}... — error: ${err.message}`)
+            parts.push(`  ${v.ccaLaunchArmAddress.slice(0, 10)}... — error: ${err.message}`)
           }
         }
       } else {
@@ -421,7 +421,7 @@ async function handleObserveAuction(callback: HandlerCallback | undefined): Prom
   try {
     const registry = await importRegistry()
     const vaults = await registry.fetchActiveVaults()
-    const withCCA = vaults.filter((v: any) => v.ccaStrategyAddress)
+    const withCCA = vaults.filter((v: any) => v.ccaLaunchArmAddress)
 
     if (withCCA.length === 0) {
       await callback?.({ text: 'No CCA strategies registered.' } as Content)
@@ -433,10 +433,10 @@ async function handleObserveAuction(callback: HandlerCallback | undefined): Prom
 
     for (const v of withCCA.slice(0, 15)) {
       try {
-        const state: AuctionState = await as.readAuctionStateForAddress(v.ccaStrategyAddress as `0x${string}`)
+        const state: AuctionState = await as.readAuctionStateForAddress(v.ccaLaunchArmAddress as `0x${string}`)
         lines.push(formatAuctionState(state))
       } catch (err: any) {
-        lines.push(`${v.ccaStrategyAddress.slice(0, 10)}... — error: ${err.message}`)
+        lines.push(`${v.ccaLaunchArmAddress.slice(0, 10)}... — error: ${err.message}`)
       }
     }
 

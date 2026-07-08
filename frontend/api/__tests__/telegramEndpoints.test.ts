@@ -348,7 +348,7 @@ describe('telegram endpoint handlers', () => {
         chainId: 8453,
         groupId: 'telegram:-100123',
         isSettled: false,
-        ccaStrategyAddress: null,
+        ccaLaunchArmAddress: null,
       },
     ])
     listTelegramAuctionsMock.mockResolvedValue([])

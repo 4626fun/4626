@@ -39,7 +39,7 @@ Key ideas:
 - Vault: `contracts/vault/CreatorOVault.sol`
 - Strategy interface: `contracts/shared/interfaces/IStrategy.sol`
 - Strategy module logic: `contracts/creator/vault/modules/CreatorOVaultStrategiesModule.sol`
-- Ajna strategy adapter: `contracts/shared/strategies/cca/ERC4626StrategyAdapter.sol`
+- Ajna strategy adapter: `contracts/shared/strategies/ERC4626StrategyAdapter.sol`
 - Strategy deploy tooling:
   - `contracts/helpers/batchers/StrategyDeploymentBatcher.sol`
 - Allocation notes: `docs/primitives/market/vault.md`

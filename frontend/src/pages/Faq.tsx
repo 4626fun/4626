@@ -282,7 +282,7 @@ const FAQ_SECTIONS: FaqSection[] = [
           <>
             <p>
               Open a vault page and use the embedded auction panel, or go to the full-page route:
-              <span className="mono"> /auction/bid/&lt;ccaStrategy&gt;</span>.
+              <span className="mono"> /auction/bid/&lt;ccaLaunchArm&gt;</span>.
             </p>
             <p className="text-zinc-600">
               The “simple” flow helps pick a max price; “advanced” lets you set it explicitly. Always sanity-check your max price before signing.

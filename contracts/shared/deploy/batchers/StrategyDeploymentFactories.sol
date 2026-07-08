@@ -3,7 +3,7 @@ pragma solidity 0.8.30;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@4626/shared/interfaces/external/IAjnaPool.sol";
-import "@4626/shared/strategies/cca/ERC4626StrategyAdapter.sol";
+import "@4626/shared/strategies/ERC4626StrategyAdapter.sol";
 import "@4626/shared/strategies/ajna/AjnaERC4626Vault.sol";
 import "@4626/shared/strategies/ajna/AjnaVaultAuth.sol";
 import "@4626/shared/strategies/univ3/CharmStrategy4626.sol";

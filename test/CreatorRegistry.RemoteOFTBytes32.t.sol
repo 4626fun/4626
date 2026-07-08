@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 
 import {Registry4626} from "@4626/shared/core/Registry4626.sol";
-import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
+import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 
 contract Registry4626RemoteOFTBytes32Test is Test {
     Registry4626 internal registry;
@@ -95,7 +95,7 @@ contract Registry4626RemoteOFTBytes32Test is Test {
     }
 
     function test_SetAndGetOmnichainVaultMesh() public {
-        I4626Registry.OmnichainVaultMeshConfig memory cfg = I4626Registry.OmnichainVaultMeshConfig({
+        IRegistry4626.OmnichainVaultMeshConfig memory cfg = IRegistry4626.OmnichainVaultMeshConfig({
             solanaEid: SOLANA_EID,
             hubComposer: HUB_COMPOSER,
             assetMeshToken: ASSET_MESH_TOKEN,
@@ -107,7 +107,7 @@ contract Registry4626RemoteOFTBytes32Test is Test {
         vm.prank(owner);
         registry.setOmnichainVaultMesh(token, cfg);
 
-        I4626Registry.OmnichainVaultMeshConfig memory out = registry.getOmnichainVaultMesh(token);
+        IRegistry4626.OmnichainVaultMeshConfig memory out = registry.getOmnichainVaultMesh(token);
         assertEq(out.solanaEid, SOLANA_EID);
         assertEq(out.hubComposer, HUB_COMPOSER);
         assertEq(out.assetMeshToken, ASSET_MESH_TOKEN);
@@ -121,7 +121,7 @@ contract Registry4626RemoteOFTBytes32Test is Test {
         vm.prank(owner);
         registry.setOmnichainVaultMesh(
             token,
-            I4626Registry.OmnichainVaultMeshConfig({
+            IRegistry4626.OmnichainVaultMeshConfig({
                 solanaEid: SOLANA_EID,
                 hubComposer: HUB_COMPOSER,
                 assetMeshToken: ASSET_MESH_TOKEN,
@@ -138,7 +138,7 @@ contract Registry4626RemoteOFTBytes32Test is Test {
         vm.prank(owner);
         registry.setOmnichainVaultMesh(
             token,
-            I4626Registry.OmnichainVaultMeshConfig({
+            IRegistry4626.OmnichainVaultMeshConfig({
                 solanaEid: SOLANA_EID,
                 hubComposer: HUB_COMPOSER,
                 assetMeshToken: ASSET_MESH_TOKEN,

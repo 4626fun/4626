@@ -2,10 +2,10 @@
  * CCA Finalization Action — onchain read/write logic (NON-CANONICAL for
  * settlement state).
  *
- * Monitors CCALaunchStrategy for graduated auctions and, per lifecycle flags,
+ * Monitors CCALaunchArm for graduated auctions and, per lifecycle flags,
  * attempts these three onchain writes in order:
  *   1. sweepCurrency()       — settles auction currency (initializes V4 pool input)
- *   2. migrate()             — creates the V4 pool + mints the seeded LP position
+ *   2. migrate()             — initializes the ShareOFT/native-ETH V4 pool + oracle.setV4Pool (no LP mint)
  *   3. sweepUnsoldTokens()   — best-effort cleanup of unsold auction tokens
  *
  * Failure path: calls finalizeFailedAuction() when the auction ended without
@@ -64,7 +64,7 @@ const WORKFLOW_NAME = 'cca-finalization';
 // ---------------------------------------------------------------------------
 
 export interface AuctionState {
-  ccaStrategyAddress: `0x${string}`;
+  ccaLaunchArmAddress: `0x${string}`;
   currentAuction: `0x${string}`;
   hasActiveAuction: boolean;
   isGraduated: boolean;
@@ -77,7 +77,7 @@ export interface AuctionState {
 }
 
 export interface CcaFinalizationResult {
-  ccaStrategyAddress: `0x${string}`;
+  ccaLaunchArmAddress: `0x${string}`;
   swept: boolean;
   unsoldSwept: boolean;
   migrated: boolean;
@@ -107,9 +107,9 @@ const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as `0x${string
 /**
  * Read auction state for a specific CCA strategy address.
  */
-export async function readAuctionStateForAddress(ccaStrategyAddress: `0x${string}`): Promise<AuctionState> {
+export async function readAuctionStateForAddress(ccaLaunchArmAddress: `0x${string}`): Promise<AuctionState> {
   const lifecycle = await readContract<any>({
-    address: ccaStrategyAddress,
+    address: ccaLaunchArmAddress,
     abi: CCA_STRATEGY_ABI,
     functionName: 'getLifecycleStatus',
   }).catch(() => null);
@@ -119,7 +119,7 @@ export async function readAuctionStateForAddress(ccaStrategyAddress: `0x${string
   const isGraduated = Boolean(lifecycle?.isGraduated ?? false);
 
   return {
-    ccaStrategyAddress,
+    ccaLaunchArmAddress,
     currentAuction,
     hasActiveAuction,
     isGraduated,
@@ -156,11 +156,11 @@ export async function isAlreadySwept(auctionAddress: `0x${string}`): Promise<boo
 /**
  * Execute finalization logic for a single CCA strategy.
  */
-export async function executeCcaFinalizationForStrategy(ccaStrategyAddress: `0x${string}`): Promise<CcaFinalizationResult> {
-  const state = await readAuctionStateForAddress(ccaStrategyAddress);
-  const shortAddr = `${ccaStrategyAddress.slice(0, 6)}...${ccaStrategyAddress.slice(-4)}`;
+export async function executeCcaFinalizationForStrategy(ccaLaunchArmAddress: `0x${string}`): Promise<CcaFinalizationResult> {
+  const state = await readAuctionStateForAddress(ccaLaunchArmAddress);
+  const shortAddr = `${ccaLaunchArmAddress.slice(0, 6)}...${ccaLaunchArmAddress.slice(-4)}`;
   const result: CcaFinalizationResult = {
-    ccaStrategyAddress,
+    ccaLaunchArmAddress,
     swept: false,
     unsoldSwept: false,
     migrated: false,
@@ -190,7 +190,7 @@ export async function executeCcaFinalizationForStrategy(ccaStrategyAddress: `0x$
 
     // We rely on strategy guardrails for exact end-block checks.
     const failedFinalizeResult = await writeContract({
-      address: ccaStrategyAddress,
+      address: ccaLaunchArmAddress,
       abi: CCA_STRATEGY_ABI,
       functionName: 'finalizeFailedAuction',
     });
@@ -200,7 +200,7 @@ export async function executeCcaFinalizationForStrategy(ccaStrategyAddress: `0x$
     if (failedFinalizeResult.success) {
       console.log(`[${shortAddr}] finalizeFailedAuction() succeeded — tx: ${failedFinalizeResult.txHash}`);
       await alertWarning(WORKFLOW_NAME, `Failed auction finalized for ${shortAddr}`, {
-        ccaStrategyAddress,
+        ccaLaunchArmAddress,
         auctionAddress: state.currentAuction,
         txHash: failedFinalizeResult.txHash,
       });
@@ -217,7 +217,7 @@ export async function executeCcaFinalizationForStrategy(ccaStrategyAddress: `0x$
   if (!state.currencySwept) {
     console.log(`[${shortAddr}] Auction graduated; calling sweepCurrency()`);
     const sweepResult = await writeContract({
-      address: ccaStrategyAddress,
+      address: ccaLaunchArmAddress,
       abi: CCA_STRATEGY_ABI,
       functionName: 'sweepCurrency',
     });
@@ -227,14 +227,14 @@ export async function executeCcaFinalizationForStrategy(ccaStrategyAddress: `0x$
     if (sweepResult.success) {
       console.log(`[${shortAddr}] sweepCurrency() succeeded — tx: ${sweepResult.txHash}`);
       await alertInfo(WORKFLOW_NAME, `Auction currency swept for ${shortAddr}`, {
-        ccaStrategyAddress,
+        ccaLaunchArmAddress,
         auctionAddress: state.currentAuction,
         txHash: sweepResult.txHash,
       });
     } else {
       console.error(`[${shortAddr}] sweepCurrency() failed — ${sweepResult.error}`);
       await alertCritical(WORKFLOW_NAME, `sweepCurrency() failed for ${shortAddr}`, {
-        ccaStrategyAddress,
+        ccaLaunchArmAddress,
         error: sweepResult.error,
       });
       return result;
@@ -244,7 +244,7 @@ export async function executeCcaFinalizationForStrategy(ccaStrategyAddress: `0x$
   // --- Step 2: migrate() ---
   if (!state.migrated) {
     const migrateResult = await writeContract({
-      address: ccaStrategyAddress,
+      address: ccaLaunchArmAddress,
       abi: CCA_STRATEGY_ABI,
       functionName: 'migrate',
     });
@@ -262,7 +262,7 @@ export async function executeCcaFinalizationForStrategy(ccaStrategyAddress: `0x$
   if (!state.unsoldSwept) {
     console.log(`[${shortAddr}] Sweeping unsold tokens (best-effort)`);
     const unsoldResult = await writeContract({
-      address: ccaStrategyAddress,
+      address: ccaLaunchArmAddress,
       abi: CCA_STRATEGY_ABI,
       functionName: 'sweepUnsoldTokens',
     });
@@ -341,17 +341,17 @@ export async function executeCcaFinalization(): Promise<BatchCcaFinalizationResu
 
   // Process strategies sequentially
   for (const vault of vaults) {
-    if (!vault.ccaStrategyAddress) continue;
+    if (!vault.ccaLaunchArmAddress) continue;
 
     try {
       const registryCheck = await verifyVaultRegistryBinding(vault);
       if (!registryCheck.verified) {
         const reason = registryCheck.reason ?? 'registry_verification_failed';
         console.warn(
-          `[${vault.ccaStrategyAddress}] Skipping due to registry verification: ${reason}`
+          `[${vault.ccaLaunchArmAddress}] Skipping due to registry verification: ${reason}`
         );
         batchResult.results.push({
-          ccaStrategyAddress: vault.ccaStrategyAddress,
+          ccaLaunchArmAddress: vault.ccaLaunchArmAddress,
           swept: false,
           unsoldSwept: false,
           migrated: false,
@@ -363,7 +363,7 @@ export async function executeCcaFinalization(): Promise<BatchCcaFinalizationResu
         continue;
       }
 
-      const result = await executeCcaFinalizationForStrategy(vault.ccaStrategyAddress);
+      const result = await executeCcaFinalizationForStrategy(vault.ccaLaunchArmAddress);
       batchResult.results.push(result);
       batchResult.processed++;
 
@@ -371,10 +371,10 @@ export async function executeCcaFinalization(): Promise<BatchCcaFinalizationResu
       if (result.skippedReason) batchResult.skipped++;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`[${vault.ccaStrategyAddress}] Error: ${message}`);
+      console.error(`[${vault.ccaLaunchArmAddress}] Error: ${message}`);
       batchResult.errors++;
       batchResult.results.push({
-        ccaStrategyAddress: vault.ccaStrategyAddress,
+        ccaLaunchArmAddress: vault.ccaLaunchArmAddress,
         swept: false,
         unsoldSwept: false,
         migrated: false,
@@ -403,9 +403,9 @@ export async function executeCcaFinalization(): Promise<BatchCcaFinalizationResu
 
 /** @deprecated Use readAuctionStateForAddress instead */
 export async function readAuctionState(): Promise<AuctionState> {
-  const ccaStrategyAddress = process.env.CCA_STRATEGY_ADDRESS as `0x${string}`;
-  if (!ccaStrategyAddress) {
+  const ccaLaunchArmAddress = process.env.CCA_STRATEGY_ADDRESS as `0x${string}`;
+  if (!ccaLaunchArmAddress) {
     throw new Error('CCA_STRATEGY_ADDRESS not set');
   }
-  return readAuctionStateForAddress(ccaStrategyAddress);
+  return readAuctionStateForAddress(ccaLaunchArmAddress);
 }

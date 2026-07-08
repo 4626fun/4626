@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
 import {Registry4626} from "@4626/shared/core/Registry4626.sol";
-import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
+import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 
 /**
  * @title SeedCreatorRegistrySolanaPeer
@@ -69,7 +69,7 @@ contract SeedCreatorRegistrySolanaPeer is Script {
         if (configureOvaultMesh) {
             registry.setOmnichainVaultMesh(
                 creatorToken,
-                I4626Registry.OmnichainVaultMeshConfig({
+                IRegistry4626.OmnichainVaultMeshConfig({
                     solanaEid: solanaEid,
                     hubComposer: ovaultHubComposer,
                     assetMeshToken: ovaultAssetMeshToken,
@@ -85,7 +85,7 @@ contract SeedCreatorRegistrySolanaPeer is Script {
         bytes32 configuredPeer = registry.getRemoteOFTPeerBytes32(creatorToken, solanaEid);
         require(configuredPeer == remotePeer, "Solana peer wiring verification failed");
         if (configureOvaultMesh) {
-            I4626Registry.OmnichainVaultMeshConfig memory cfg = registry.getOmnichainVaultMesh(creatorToken);
+            IRegistry4626.OmnichainVaultMeshConfig memory cfg = registry.getOmnichainVaultMesh(creatorToken);
             require(cfg.solanaEid == solanaEid, "OVault mesh EID mismatch");
             require(cfg.hubComposer == ovaultHubComposer, "OVault mesh composer mismatch");
             require(cfg.assetMeshToken == ovaultAssetMeshToken, "OVault asset mesh token mismatch");

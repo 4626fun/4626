@@ -8,7 +8,7 @@
  *   pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts
  *   BYTECODE_MANIFEST=../../deployments/base/v1.16.0-bytecode-manifest.json pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts
  */
-const DEFAULT_RELEASE = 'v1.16.0'
+const DEFAULT_RELEASE = 'v1.16.1'
 
 
 import { readFileSync } from 'node:fs'
@@ -55,7 +55,7 @@ const STORE_ABI = [
 /** Lane-neutral deploy bytecode (one codeId each; shared by creator and agent paths). */
 const SHARED_MANIFEST_KEYS = [
   'OFTBootstrapRegistry',
-  'CCALaunchStrategy',
+  'CCALaunchArm',
   'CharmStrategy4626',
   'AjnaVaultAuth',
   'AjnaERC4626Vault',
@@ -80,10 +80,14 @@ const AGENT_LANE_KEYS = [
   'AgentOracle',
 ] as const
 
+/** Post-CCA share-mesh CREATE2 bytecode (keeper completion lane). */
+const SHARE_MESH_MANIFEST_KEYS = ['ApprovedV4HooksRegistry', 'OVaultLPManager'] as const
+
 const REQUIRED_MANIFEST_KEYS = [
   ...SHARED_MANIFEST_KEYS,
   ...CREATOR_LANE_KEYS,
   ...AGENT_LANE_KEYS,
+  ...SHARE_MESH_MANIFEST_KEYS,
 ] as const
 
 const FRONTEND_DEPLOY_KEYS = REQUIRED_MANIFEST_KEYS

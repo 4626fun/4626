@@ -172,8 +172,8 @@ function sweepPayload(row: ActiveVaultRow): Record<string, unknown> | null {
   if (row.settled_at) return null
   const contracts = contractsFromConfig(row.config_json)
   const vaultCfg = vaultFromConfig(row.config_json)
-  const ccaStrategyAddress = normalizeAddress(contracts.ccaStrategy)
-  if (!ccaStrategyAddress) return null
+  const ccaLaunchArmAddress = normalizeAddress(contracts.ccaLaunchArm)
+  if (!ccaLaunchArmAddress) return null
   const vaultAddress = normalizeAddress(row.vault_address)
   const creatorCoinAddress = normalizeAddress(row.creator_coin_address)
   const shareTokenAddress = normalizeAddress(vaultCfg.shareTokenAddress) ?? normalizeAddress(row.share_token_address)
@@ -198,7 +198,7 @@ function sweepPayload(row: ActiveVaultRow): Record<string, unknown> | null {
   return {
     path: '/api/keeper/sweep',
     body: {
-      ccaStrategyAddress,
+      ccaLaunchArmAddress,
       markSettled: { vaultAddress },
       invariants,
     },
@@ -293,7 +293,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (workflows.includes('sweep')) {
       const payload = sweepPayload(row)
-      const strategy = normalizeAddress((payload?.body as Record<string, unknown> | undefined)?.ccaStrategyAddress)
+      const strategy = normalizeAddress((payload?.body as Record<string, unknown> | undefined)?.ccaLaunchArmAddress)
       if (payload && strategy) {
         jobs.push(await enqueueKeeperJob({
           kind: 'internal_api',

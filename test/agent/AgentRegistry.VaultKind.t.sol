@@ -7,7 +7,7 @@ import {AgentOVault} from "@4626/agent/vault/AgentOVault.sol";
 import {AgentOVaultCoreModule} from "@4626/agent/vault/modules/AgentOVaultCoreModule.sol";
 import {OVaultAdminModule} from "@4626/shared/vault/modules/OVaultAdminModule.sol";
 import {OVaultStrategiesModule} from "@4626/shared/vault/modules/OVaultStrategiesModule.sol";
-import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
+import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 import {Registry4626} from "@4626/shared/core/Registry4626.sol";
 
 contract AgentRegistryVaultKindTest is Test {
@@ -20,8 +20,8 @@ contract AgentRegistryVaultKindTest is Test {
     }
 
     function test_setAgentIntegrationMeta() public {
-        I4626Registry.AgentIntegrationMeta memory meta = I4626Registry.AgentIntegrationMeta({
-            vaultKind: I4626Registry.VaultKind.Agent,
+        IRegistry4626.AgentIntegrationMeta memory meta = IRegistry4626.AgentIntegrationMeta({
+            vaultKind: IRegistry4626.VaultKind.Agent,
             nativeAgentVault: address(0xBEEF),
             taxRecipient: address(0),
             taxAccountingAdapter: address(0),
@@ -30,8 +30,8 @@ contract AgentRegistryVaultKindTest is Test {
             implementationFingerprint: bytes32(uint256(1))
         });
         registry.setAgentIntegrationMeta(address(token), meta);
-        I4626Registry.AgentIntegrationMeta memory stored = registry.getAgentIntegrationMeta(address(token));
-        assertEq(uint256(stored.vaultKind), uint256(I4626Registry.VaultKind.Agent));
-        assertEq(uint256(registry.getVaultKind(address(token))), uint256(I4626Registry.VaultKind.Agent));
+        IRegistry4626.AgentIntegrationMeta memory stored = registry.getAgentIntegrationMeta(address(token));
+        assertEq(uint256(stored.vaultKind), uint256(IRegistry4626.VaultKind.Agent));
+        assertEq(uint256(registry.getVaultKind(address(token))), uint256(IRegistry4626.VaultKind.Agent));
     }
 }

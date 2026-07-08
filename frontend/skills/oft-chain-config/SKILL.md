@@ -11,7 +11,7 @@ description: Configure LayerZero V2 OFT cross-chain settings for 4626 (peers, en
   - Operational send/receive debugging (fee quotes, peer mismatch, blocked messages)
 - Collect inputs first:
   - Chain IDs + LayerZero EIDs for source/target
-  - Contract addresses on each chain (CreatorRegistry, ShareOFT / OApp contracts)
+  - Contract addresses on each chain (Registry4626, ShareOFT / OApp contracts)
   - Who is allowed to change config (owner/multisig)
 - Do read-only checks first (`cast call`) before any state changes.
 
@@ -32,7 +32,7 @@ description: Configure LayerZero V2 OFT cross-chain settings for 4626 (peers, en
 - Source chain: chainId + LayerZero EID
 - Target chain: chainId + LayerZero EID
 - Contract addresses on each chain:
-  - `CreatorRegistry` (or `OFTBootstrapRegistry` if using the bootstrap flow)
+  - `Registry4626` (or `OFTBootstrapRegistry` if using the bootstrap flow)
   - `CreatorShareOFT` (and any other OApp you’re wiring)
 - Admin identity:
   - EOA/multisig that is `owner()` of the contracts being configured
@@ -43,7 +43,7 @@ Never include private keys or full `.env` contents in output.
 
 - OFT token implementation: `contracts/creator/vault/CreatorShareOFT.sol`
 - Bootstrap endpoint registry: `contracts/shared/deploy/infra/OFTBootstrapRegistry.sol`
-- Core registry (chain/EID mappings + endpoint lookup): `contracts/shared/core/CreatorRegistry.sol`
+- Core registry (chain/EID mappings + endpoint lookup): `contracts/shared/core/Registry4626.sol`
 - Deployment tooling (CREATE2/bytecode infra): `script/DeployUniversalBytecodeInfra.s.sol`, `script/SimulateUniversalCreate2Factory.s.sol`
 - Deployer orchestration that sets endpoints before deployment: `contracts/helpers/batchers/DeploymentBatcher.sol`
 

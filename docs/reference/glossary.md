@@ -76,7 +76,7 @@ Use qualified names — bare `payoutRecipient` is ambiguous.
 
 **Jackpot custodian** — Gauge reserve (`jackpotReserve`); holds funds, does not pick winners.
 
-**Jackpot payout authority** — [CreatorLotteryManager](/contracts/utilities/lottery-manager); selects winners and pays jackpots.
+**Jackpot payout authority** — [LotteryManager4626](/contracts/utilities/lottery-manager); selects winners and pays jackpots.
 
 **Voter / protocol branch** — `protocolShareBps` from gauge split.
 

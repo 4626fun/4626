@@ -108,7 +108,7 @@ describe('keeper sweep handler', () => {
         method: 'POST',
         headers: { authorization: 'Bearer test-key' },
         body: {
-          ccaStrategyAddress: STRATEGY,
+          ccaLaunchArmAddress: STRATEGY,
           attemptHookConfig: false,
           invariants: {
             creatorCoinAddress: CREATOR_COIN,
@@ -195,7 +195,7 @@ describe('keeper sweep handler', () => {
         method: 'POST',
         headers: { authorization: 'Bearer test-key' },
         body: {
-          ccaStrategyAddress: STRATEGY,
+          ccaLaunchArmAddress: STRATEGY,
           attemptHookConfig: false,
           // Attempted per-request bypass — must be ignored.
           enforceInvariants: false,
@@ -256,7 +256,7 @@ describe('keeper sweep handler', () => {
         method: 'POST',
         headers: { authorization: 'Bearer test-key' },
         body: {
-          ccaStrategyAddress: STRATEGY,
+          ccaLaunchArmAddress: STRATEGY,
           attemptHookConfig: false,
           invariants: {
             creatorCoinAddress: CREATOR_COIN,

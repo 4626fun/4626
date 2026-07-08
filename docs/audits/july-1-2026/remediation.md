@@ -52,7 +52,7 @@ Maps each audit finding to fix status. **Fixed** = merged in this pass; **Partia
 | L-03 | Lottery `_lzReceive` missing `nonReentrant` | **Deferred** | Omitted to preserve EIP-170 headroom (24,568 B); low compose reentrancy risk |
 | L-04 | Exact fee only on lottery submit | **Fixed** | `CreatorShareOFT.sol` — refund overpay on `submitPendingLotteryEntry` |
 | L-05 | `impairmentGuardian` unused | **Fixed** | `CreatorOVault.sol` — `impairmentGuardian` added to `onlyEmergencyAuthorized` |
-| L-06 | `CCALaunchStrategy.setFeeRecipient` repointable | **Fixed** | `CCALaunchStrategyConfigModule.sol` — `lockFeeRecipient()` after first launch |
+| L-06 | `CCALaunchArm.setFeeRecipient` repointable | **Fixed** | `CCALaunchArmConfigModule.sol` — `lockFeeRecipient()` after first launch |
 | L-07 | `extendLock` on expired locks | **Fixed** | `ve4626.sol` — NatSpec documents intentional revive behavior |
 
 ---

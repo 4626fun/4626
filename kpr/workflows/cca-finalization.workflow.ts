@@ -5,7 +5,7 @@
  * Pattern:  cron → onchain read → conditional onchain write
  *
  * Actions:
- *   1. Read currentAuction from CCALaunchStrategy
+ *   1. Read currentAuction from CCALaunchArm
  *   2. If auction exists, call isGraduated() on the auction contract
  *   3. If graduated → call sweepCurrency() (settles + configures oracle V4 pool)
  *   4. Then call sweepUnsoldTokens()

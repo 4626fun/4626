@@ -104,7 +104,7 @@ describe('v1 auction activity handler', () => {
     const handler = mod.default
     const req = createMockReq({
       method: 'GET',
-      query: { ccaStrategy: CCA_STRATEGY, limit: '3' },
+      query: { ccaLaunchArm: CCA_STRATEGY, limit: '3' },
     })
     const res = createMockRes()
     await handler(req, res)
@@ -119,7 +119,7 @@ describe('v1 auction activity handler', () => {
 
     const req = createMockReq({
       method: 'GET',
-      query: { ccaStrategy: CCA_STRATEGY, limit: '3' },
+      query: { ccaLaunchArm: CCA_STRATEGY, limit: '3' },
     })
     const res = createMockRes()
 
@@ -128,7 +128,7 @@ describe('v1 auction activity handler', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(true)
     expect(res.body?.data).toMatchObject({
-      ccaStrategy: CCA_STRATEGY.toLowerCase(),
+      ccaLaunchArm: CCA_STRATEGY.toLowerCase(),
       auction: AUCTION.toLowerCase(),
       isActive: true,
       isGraduated: false,
@@ -170,7 +170,7 @@ describe('v1 auction activity handler', () => {
 
     const req = createMockReq({
       method: 'GET',
-      query: { ccaStrategy: CCA_STRATEGY },
+      query: { ccaLaunchArm: CCA_STRATEGY },
     })
     const res = createMockRes()
 

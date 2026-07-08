@@ -15,13 +15,39 @@ const baseInput = {
   hasGroupConversation: false,
   syncTimedOut: false,
   needsConnectMessaging: true,
+  messagingConnected: false,
   prepareError: 'Messaging signer is not ready yet. Click Connect messaging again.',
   xmtpError: 'Messaging signer is not ready yet. Click Connect messaging again.',
 }
 
 describe('deriveWaitlistXmtpPhase', () => {
-  it('prefers group_syncing over connect_error when join already executed', () => {
-    expect(deriveWaitlistXmtpPhase(baseInput)).toBe('group_syncing')
+  it('routes executed-but-disconnected joins to connect_error, not group_syncing', () => {
+    expect(deriveWaitlistXmtpPhase(baseInput)).toBe('connect_error')
+  })
+
+  it('shows connect_prompt when join executed but messaging is not connected and there is no error', () => {
+    expect(
+      deriveWaitlistXmtpPhase({
+        ...baseInput,
+        xmtpStatus: 'idle',
+        needsConnectMessaging: true,
+        prepareError: null,
+        xmtpError: null,
+      }),
+    ).toBe('connect_prompt')
+  })
+
+  it('shows group_syncing only after local XMTP is connected', () => {
+    expect(
+      deriveWaitlistXmtpPhase({
+        ...baseInput,
+        xmtpStatus: 'connected',
+        messagingConnected: true,
+        needsConnectMessaging: false,
+        prepareError: null,
+        xmtpError: null,
+      }),
+    ).toBe('group_syncing')
   })
 
   it('returns chat_ready when the waitlist group conversation is present', () => {
@@ -30,6 +56,7 @@ describe('deriveWaitlistXmtpPhase', () => {
         ...baseInput,
         hasGroupConversation: true,
         xmtpStatus: 'connected',
+        messagingConnected: true,
       }),
     ).toBe('chat_ready')
   })

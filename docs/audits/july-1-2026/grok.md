@@ -19,7 +19,7 @@
 - `CreatorOImpairmentClaims.sol` (ERC1155 claims for side-pocket), `CreatorORecoveryEscrow.sol`, `CreatorOVaultLiquidityLib.sol`, `CreatorOVaultFactory.sol`.
 
 **Yield Strategies (plugged into vault via weights; implement `IStrategy`/`IStrategyValuation`):**
-- `CCALaunchStrategy.sol` (+ `CCALaunchStrategyConfigModule`, `CCALaunchStrategyEncodingHelper`): Continuous Clearing Auction launch strategy (phase-aware).
+- `CCALaunchArm.sol` (+ `CCALaunchArmConfigModule`, `CCALaunchArmEncodingHelper`): Continuous Clearing Auction launch strategy (phase-aware).
 - Ajna: `AjnaERC4626Vault.sol` (inner 4626 + capped buckets), `AjnaVaultAuth.sol`, `AjnaVaultBuffer.sol`, `AjnaVaultLibrary.sol`.
 - `ERC4626StrategyAdapter.sol`.
 - Univ3: `CreatorCharmStrategy.sol`.

@@ -12,7 +12,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {ICreatorGaugeController} from "@4626/creator/interfaces/ICreatorGaugeController.sol";
 import {ICreatorOVault} from "@4626/creator/interfaces/ICreatorOVault.sol";
-import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
+import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 
 /// @dev Hub-only: interface for local lottery manager calls on Base
 interface ILotteryManager4626 {
@@ -145,7 +145,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     // ================================
 
     /// @notice Registry4626 for ecosystem contracts
-    I4626Registry public registry;
+    IRegistry4626 public registry;
 
     /// @notice Chain EID for this deployment
     uint32 public immutable chainEid;
@@ -382,13 +382,13 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      *      After deployment, call setHubConfig() to set hub vs remote mode.
      */
     constructor(string memory _name, string memory _symbol, address _registry, address _owner)
-        OFT(_name, _symbol, I4626Registry(_registry).getLayerZeroEndpoint(block.chainid), _owner)
+        OFT(_name, _symbol, IRegistry4626(_registry).getLayerZeroEndpoint(block.chainid), _owner)
         Ownable(_owner)
     {
         if (_registry == address(0)) revert ZeroAddress();
 
-        registry = I4626Registry(_registry);
-        uint32 resolvedChainEid = I4626Registry(_registry).getEidForChainId(block.chainid);
+        registry = IRegistry4626(_registry);
+        uint32 resolvedChainEid = IRegistry4626(_registry).getEidForChainId(block.chainid);
         if (resolvedChainEid == 0) revert MissingLayerZeroEid(block.chainid);
         chainEid = resolvedChainEid;
         addressType[address(this)] = OperationType.NoFees;
@@ -423,7 +423,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      */
     function setRegistry(address _registry) external onlyOwner {
         if (_registry == address(0)) revert ZeroAddress();
-        registry = I4626Registry(_registry);
+        registry = IRegistry4626(_registry);
         emit RegistrySet(_registry);
     }
 

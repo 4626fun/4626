@@ -3,8 +3,8 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
 
-import {OVaultImpairmentClaims} from "@4626/shared/recovery/OVaultImpairmentClaims.sol";
-import {OVaultRecoveryEscrow} from "@4626/shared/recovery/OVaultRecoveryEscrow.sol";
+import {OVaultImpairmentClaims} from "@4626/shared/vault/recovery/OVaultImpairmentClaims.sol";
+import {OVaultRecoveryEscrow} from "@4626/shared/vault/recovery/OVaultRecoveryEscrow.sol";
 
 /// @notice Deploy shared impairment-v1 auxiliary contracts.
 /// @dev These are configured per-vault after deployment via `setVault(...)`.

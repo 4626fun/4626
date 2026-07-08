@@ -451,8 +451,8 @@ export function applyKnownVaultDefaults(vault: Address, artifacts: VaultOnChainA
   if (!next.oracle) {
     next.oracle = AKITA_DEFAULTS.oracle
   }
-  if (!next.ccaStrategy) {
-    next.ccaStrategy = AKITA_DEFAULTS.ccaStrategy
+  if (!next.ccaLaunchArm) {
+    next.ccaLaunchArm = AKITA_DEFAULTS.ccaLaunchArm
   }
   return next
 }

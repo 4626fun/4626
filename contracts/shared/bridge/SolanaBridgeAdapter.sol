@@ -9,7 +9,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 
 import {IBaseSolanaBridge} from "@4626/shared/interfaces/bridge/IBaseSolanaBridge.sol";
 import {ICrossChainERC20Factory} from "@4626/shared/interfaces/bridge/ICrossChainERC20Factory.sol";
-import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
+import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 interface IGaugeControllerFees {
     function receiveFees(uint256 amount) external;
 }
@@ -382,10 +382,10 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         if (amount == 0) revert InvalidAmount();
 
         // Resolve the canonical vault from the registry.
-        if (!I4626Registry(registry).isTokenRegistered(laneToken)) {
+        if (!IRegistry4626(registry).isTokenRegistered(laneToken)) {
             revert LaneTokenNotRegistered(laneToken);
         }
-        address vault = I4626Registry(registry).getVaultForToken(laneToken);
+        address vault = IRegistry4626(registry).getVaultForToken(laneToken);
         if (vault == address(0)) revert VaultNotConfigured(laneToken);
 
         // Sanity check: vault.asset() must equal laneToken.
@@ -522,13 +522,13 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         }
         if (amountIn == 0) revert InvalidAmount();
 
-        if (!I4626Registry(registry).isTokenRegistered(laneToken)) {
+        if (!IRegistry4626(registry).isTokenRegistered(laneToken)) {
             revert LaneTokenNotRegistered(laneToken);
         }
-        address shareToken = I4626Registry(registry).getShareOFTForToken(laneToken);
+        address shareToken = IRegistry4626(registry).getShareOFTForToken(laneToken);
         if (shareToken == address(0)) revert InvalidAddress();
 
-        I4626Registry.ChainConfig memory cfg = I4626Registry(registry).getChainConfig(block.chainid);
+        IRegistry4626.ChainConfig memory cfg = IRegistry4626(registry).getChainConfig(block.chainid);
         if (cfg.chainId == 0 || cfg.swapRouter == address(0)) revert DexRouterNotConfigured(block.chainid);
         address router = cfg.swapRouter;
 
@@ -568,13 +568,13 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         if (laneToken == address(0) || recipient == address(0)) revert InvalidAddress();
         if (msg.value == 0) revert InvalidAmount();
 
-        if (!I4626Registry(registry).isTokenRegistered(laneToken)) {
+        if (!IRegistry4626(registry).isTokenRegistered(laneToken)) {
             revert LaneTokenNotRegistered(laneToken);
         }
-        address shareToken = I4626Registry(registry).getShareOFTForToken(laneToken);
+        address shareToken = IRegistry4626(registry).getShareOFTForToken(laneToken);
         if (shareToken == address(0)) revert InvalidAddress();
 
-        I4626Registry.ChainConfig memory cfg = I4626Registry(registry).getChainConfig(block.chainid);
+        IRegistry4626.ChainConfig memory cfg = IRegistry4626(registry).getChainConfig(block.chainid);
         if (cfg.chainId == 0 || cfg.swapRouter == address(0)) revert DexRouterNotConfigured(block.chainid);
         address router = cfg.swapRouter;
         address weth = cfg.wrappedNativeToken;
@@ -632,10 +632,10 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         if (amount == 0) revert InvalidAmount();
 
         // Resolve the gauge controller for this lane token via registry.
-        address laneToken = I4626Registry(registry).getTokenForShareOFT(shareOFT);
+        address laneToken = IRegistry4626(registry).getTokenForShareOFT(shareOFT);
         if (laneToken == address(0)) revert TokenNotRegistered();
 
-        address gauge = I4626Registry(registry).getGaugeControllerForToken(laneToken);
+        address gauge = IRegistry4626(registry).getGaugeControllerForToken(laneToken);
         if (gauge == address(0)) revert GaugeNotFound(shareOFT);
 
         // Pull fees from keeper Twin (msg.sender) into this adapter.

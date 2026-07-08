@@ -429,7 +429,7 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI = [
           { name: 'wrapper', type: 'address' },
           { name: 'shareToken', type: 'address' },
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
           { name: 'version', type: 'string' },
           { name: 'depositAmount', type: 'uint256' },
@@ -469,7 +469,7 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
           { name: 'wrapper', type: 'address' },
           { name: 'shareToken', type: 'address' },
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
           { name: 'version', type: 'string' },
           { name: 'depositAmount', type: 'uint256' },
@@ -711,7 +711,7 @@ const SOLANA_STRATEGY_VIEW_ABI = [
   },
 ] as const
 
-const CCA_STRATEGY_VIEW_ABI = [
+const CCA_LAUNCH_ARM_VIEW_ABI = [
   {
     type: 'function',
     name: 'currentAuction',
@@ -763,7 +763,7 @@ const CREATOR_VAULT_BATCHER_AUCTION_LAUNCHED_EVENT_ABI = [
       { indexed: true, name: 'creatorToken', type: 'address' },
       { indexed: true, name: 'owner', type: 'address' },
       { indexed: true, name: 'shareOFT', type: 'address' },
-      { indexed: false, name: 'ccaStrategy', type: 'address' },
+      { indexed: false, name: 'ccaLaunchArm', type: 'address' },
       { indexed: false, name: 'amount', type: 'uint256' },
       { indexed: false, name: 'auction', type: 'address' },
     ],
@@ -898,7 +898,7 @@ function extractFinalizePhase2Info(data: Hex): {
   owner: Address | null
   vault: Address | null
   gaugeController: Address | null
-  ccaStrategy: Address | null
+  ccaLaunchArm: Address | null
   oracle: Address | null
 } | null {
   for (const abi of [CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI, CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
@@ -910,7 +910,7 @@ function extractFinalizePhase2Info(data: Hex): {
         owner?: string
         vault?: string
         gaugeController?: string
-        ccaStrategy?: string
+        ccaLaunchArm?: string
         oracle?: string
       } | null
       const creatorTokenCandidate = params?.creatorToken && isAddress(params.creatorToken)
@@ -927,7 +927,7 @@ function extractFinalizePhase2Info(data: Hex): {
         owner: normalizeAddress(params?.owner),
         vault: normalizeAddress(params?.vault),
         gaugeController: normalizeAddress(params?.gaugeController),
-        ccaStrategy: normalizeAddress(params?.ccaStrategy),
+        ccaLaunchArm: normalizeAddress(params?.ccaLaunchArm),
         oracle: normalizeAddress(params?.oracle),
       }
     } catch {
@@ -1038,7 +1038,7 @@ async function readPhase2ReplayState(params: {
 
   const [gaugeDeployed, ccaDeployed, oracleDeployed, vaultOwner] = await Promise.all([
     hasRuntimeCode(params.publicClient, finalizeInfo.gaugeController),
-    hasRuntimeCode(params.publicClient, finalizeInfo.ccaStrategy),
+    hasRuntimeCode(params.publicClient, finalizeInfo.ccaLaunchArm),
     hasRuntimeCode(params.publicClient, finalizeInfo.oracle),
     readOwnableOwner(params.publicClient, finalizeInfo.vault),
   ])
@@ -1547,7 +1547,7 @@ async function verifyPhase4PostState(params: {
     .find((info): info is NonNullable<typeof info> => Boolean(info))
 
   const readLaunchEventFromReceipt = async (): Promise<{
-    ccaStrategy: Address | null
+    ccaLaunchArm: Address | null
     auction: Address | null
     creatorToken: Address | null
     owner: Address | null
@@ -1574,7 +1574,7 @@ async function verifyPhase4PostState(params: {
           creatorToken: normalizeAddress(args?.creatorToken),
           owner: normalizeAddress(args?.owner),
           shareOFT: normalizeAddress(args?.shareOFT),
-          ccaStrategy: normalizeAddress(args?.ccaStrategy),
+          ccaLaunchArm: normalizeAddress(args?.ccaLaunchArm),
           auction: normalizeAddress(args?.auction),
         }
       } catch {
@@ -1595,10 +1595,10 @@ async function verifyPhase4PostState(params: {
     throw new Error('phase4 verification failed: launch event share OFT mismatch')
   }
 
-  const finalizeCca = normalizeAddress(finalizeInfo?.ccaStrategy)
-  const eventCca = normalizeAddress(launchEvent?.ccaStrategy)
-  const ccaStrategy = finalizeCca ?? eventCca
-  if (!ccaStrategy) {
+  const finalizeCca = normalizeAddress(finalizeInfo?.ccaLaunchArm)
+  const eventCca = normalizeAddress(launchEvent?.ccaLaunchArm)
+  const ccaLaunchArm = finalizeCca ?? eventCca
+  if (!ccaLaunchArm) {
     throw new Error('phase4 verification failed: could not resolve CCA strategy')
   }
   if (finalizeInfo?.creatorToken && launch.creatorToken.toLowerCase() !== finalizeInfo.creatorToken.toLowerCase()) {
@@ -1610,22 +1610,22 @@ async function verifyPhase4PostState(params: {
   if (!(await hasRuntimeCode(params.publicClient, launch.shareOFT))) {
     throw new Error(`phase4 verification failed: share OFT code missing at ${launch.shareOFT}`)
   }
-  if (!(await hasRuntimeCode(params.publicClient, ccaStrategy))) {
-    throw new Error(`phase4 verification failed: CCA strategy code missing at ${ccaStrategy}`)
+  if (!(await hasRuntimeCode(params.publicClient, ccaLaunchArm))) {
+    throw new Error(`phase4 verification failed: CCA strategy code missing at ${ccaLaunchArm}`)
   }
 
   const [currentAuctionRaw, ccaFactoryRaw] = await Promise.all([
     params.publicClient
       .readContract({
-        address: ccaStrategy,
-        abi: CCA_STRATEGY_VIEW_ABI,
+        address: ccaLaunchArm,
+        abi: CCA_LAUNCH_ARM_VIEW_ABI,
         functionName: 'currentAuction',
       })
       .catch(() => null),
     params.publicClient
       .readContract({
-        address: ccaStrategy,
-        abi: CCA_STRATEGY_VIEW_ABI,
+        address: ccaLaunchArm,
+        abi: CCA_LAUNCH_ARM_VIEW_ABI,
         functionName: 'ccaFactory',
       })
       .catch(() => null),

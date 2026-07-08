@@ -42,7 +42,7 @@ export type DeployExpectedAddresses = {
   wrapper: Address
   shareOFT: Address
   gaugeController: Address
-  ccaStrategy: Address
+  ccaLaunchArm: Address
   oracle: Address
   burnStream: Address
   payoutRouter: Address
@@ -323,7 +323,7 @@ export async function resolveDeployExpectedAddresses(
     vaultAddress,
     tempOwner,
   ])
-  const ccaInitCode = concatHex([DEPLOY_BYTECODE.CCALaunchStrategy as Hex, ccaArgs])
+  const ccaInitCode = concatHex([DEPLOY_BYTECODE.CCALaunchArm as Hex, ccaArgs])
   const ccaAddress = predictCreate2AddressFromInitCode({
     create2Deployer,
     salt: ccaSalt,
@@ -355,7 +355,7 @@ export async function resolveDeployExpectedAddresses(
       wrapper: wrapperAddress,
       shareOFT: shareOftAddress,
       gaugeController: gaugeAddress,
-      ccaStrategy: ccaAddress,
+      ccaLaunchArm: ccaAddress,
       oracle: oracleAddress,
       burnStream: phase2AuxAddresses.burnStreamAddress,
       payoutRouter: phase2AuxAddresses.payoutRouterAddress,

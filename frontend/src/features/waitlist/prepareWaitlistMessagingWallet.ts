@@ -9,6 +9,8 @@ import {
 } from '@/lib/xmtp/waitForMessagingWallet'
 import { isConnectorAlreadyConnectedError } from '@/lib/swap/connectGate'
 
+import { refreshPrivyEmbeddedSignerSession } from '@/lib/privy/refreshEmbeddedSignerSession'
+
 import type { WaitlistConnectTrack } from './waitlistFlowState'
 
 export { isWaitlistMessagingWagmiConnector, WAITLIST_EMBEDDED_CONNECTOR_ID }
@@ -18,6 +20,7 @@ export type PrepareWaitlistMessagingWalletInput = {
   embeddedEoaAddress: string | null
   ensureEmbeddedWallet: () => Promise<{ address: string }>
   setActiveWallet?: (wallet: unknown) => Promise<unknown> | unknown
+  getToken?: () => Promise<string | null>
   connectAsync: (variables: { connector: unknown }) => Promise<unknown>
   connectors: ReadonlyArray<{ id: string; name: string }>
   disconnectAsync?: () => Promise<unknown>
@@ -340,6 +343,21 @@ export async function prepareWaitlistMessagingWallet(
     return {
       ok: false,
       error: 'Embedded signer is not ready to sign yet. Refresh the page and retry Connect messaging.',
+    }
+  }
+
+  try {
+    await refreshPrivyEmbeddedSignerSession({
+      wallet: embeddedWallet,
+      setActiveWallet: input.setActiveWallet,
+      getToken: input.getToken,
+      logLabel: 'waitlist-messaging-prepare',
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      ok: false,
+      error: message || 'Sign-in for chat expired. Refresh session or sign in again with email OTP.',
     }
   }
 

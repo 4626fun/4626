@@ -626,7 +626,7 @@ function parseTelegramVaultDeployIntent(rawText: string):
 
 type CcaAuctionQuote = {
   auctionAddress: `0x${string}`
-  ccaStrategyAddress: `0x${string}`
+  ccaLaunchArmAddress: `0x${string}`
   clearingPriceQ96: bigint
   maxPriceQ96: bigint
   tokenDecimals: number
@@ -643,7 +643,7 @@ type PrivyWalletOwnerContext = {
   ownerAddress: `0x${string}`
 }
 
-const CCA_LAUNCH_STRATEGY_ABI = [
+const CCA_LAUNCH_ARM_ABI = [
   {
     name: 'getAuctionStatus',
     type: 'function',
@@ -953,7 +953,7 @@ async function resolvePrivyWalletOwnerContextByPrivyUserId(params: {
 }
 
 async function readCcaAuctionQuote(params: {
-  ccaStrategyAddress: `0x${string}`
+  ccaLaunchArmAddress: `0x${string}`
   usdIntent: number
 }): Promise<CcaAuctionQuote> {
   const client = createPublicClient({
@@ -961,8 +961,8 @@ async function readCcaAuctionQuote(params: {
     transport: http(getBaseRpcUrl(), { timeout: 20_000 }),
   }) as any
   const status = (await client.readContract({
-    address: getAddress(params.ccaStrategyAddress as Address),
-    abi: CCA_LAUNCH_STRATEGY_ABI,
+    address: getAddress(params.ccaLaunchArmAddress as Address),
+    abi: CCA_LAUNCH_ARM_ABI,
     functionName: 'getAuctionStatus',
   })) as [Address, boolean, boolean, bigint, bigint]
   const auctionAddress = status?.[0] ? getAddress(status[0]) : (ZERO_ADDRESS as Address)
@@ -980,8 +980,8 @@ async function readCcaAuctionQuote(params: {
   let tokenSymbol = 'TOKEN'
   try {
     const auctionTokenAddress = (await client.readContract({
-      address: getAddress(params.ccaStrategyAddress as Address),
-      abi: CCA_LAUNCH_STRATEGY_ABI,
+      address: getAddress(params.ccaLaunchArmAddress as Address),
+      abi: CCA_LAUNCH_ARM_ABI,
       functionName: 'auctionToken',
     })) as Address
     if (isAddressLike(auctionTokenAddress) && auctionTokenAddress.toLowerCase() !== ZERO_ADDRESS) {
@@ -1024,7 +1024,7 @@ async function readCcaAuctionQuote(params: {
   const maxPriceWeiPerToken = q96ToCurrencyPerTokenBaseUnits(maxPriceQ96, tokenDecimals)
   return {
     auctionAddress: auctionAddress.toLowerCase() as `0x${string}`,
-    ccaStrategyAddress: getAddress(params.ccaStrategyAddress as Address).toLowerCase() as `0x${string}`,
+    ccaLaunchArmAddress: getAddress(params.ccaLaunchArmAddress as Address).toLowerCase() as `0x${string}`,
     clearingPriceQ96,
     maxPriceQ96,
     tokenDecimals,
@@ -2363,7 +2363,7 @@ type ResolvedTelegramPickerUserProfile = {
   volume24hUsd: number | null
   vaultAddress: `0x${string}` | null
   shareTokenAddress: `0x${string}` | null
-  ccaStrategyAddress: `0x${string}` | null
+  ccaLaunchArmAddress: `0x${string}` | null
 }
 
 function toFiniteNumber(value: unknown): number | null {
@@ -2393,8 +2393,8 @@ function mapKeeprVaultRowToScopedVault(vault: Awaited<ReturnType<typeof getKeepr
     chainId: vault.chainId,
     groupId: vault.groupId,
     isSettled: false,
-    ccaStrategyAddress: isAddressLike(vault.config?.contracts?.ccaStrategy)
-      ? (String(vault.config.contracts.ccaStrategy).toLowerCase() as `0x${string}`)
+    ccaLaunchArmAddress: isAddressLike(vault.config?.contracts?.ccaLaunchArm)
+      ? (String(vault.config.contracts.ccaLaunchArm).toLowerCase() as `0x${string}`)
       : null,
   }
 }
@@ -2486,7 +2486,7 @@ async function resolveTelegramPickerUserProfile(params: {
     volume24hUsd: toFiniteNumber(metricsRow?.volume_24h_usd),
     vaultAddress: isAddressLike(vaultRow?.vault_address) ? (String(vaultRow.vault_address).toLowerCase() as `0x${string}`) : null,
     shareTokenAddress: isAddressLike(vaultRow?.share_token_address) ? (String(vaultRow.share_token_address).toLowerCase() as `0x${string}`) : null,
-    ccaStrategyAddress: isAddressLike(contracts.ccaStrategy) ? (String(contracts.ccaStrategy).toLowerCase() as `0x${string}`) : null,
+    ccaLaunchArmAddress: isAddressLike(contracts.ccaLaunchArm) ? (String(contracts.ccaLaunchArm).toLowerCase() as `0x${string}`) : null,
   }
 }
 
@@ -2822,7 +2822,7 @@ function formatAuctionsText(auctions: Awaited<ReturnType<typeof listTelegramAuct
   const lines: string[] = []
   for (const row of auctions.slice(0, 8)) {
     const status = row.isSettled ? 'settled' : 'available'
-    lines.push(`- ${truncateAddress(row.vaultAddress)} -> ${truncateAddress(row.ccaStrategyAddress)} (${status})`)
+    lines.push(`- ${truncateAddress(row.vaultAddress)} -> ${truncateAddress(row.ccaLaunchArmAddress)} (${status})`)
   }
   const summaryLines = [
     `${auctions.length} scoped auction${auctions.length === 1 ? '' : 's'} found.`,
@@ -4365,7 +4365,7 @@ async function executeTelegramNativeCommand(params: {
     let bidQuote: CcaAuctionQuote | null = null
 
     if (tradeIntent.actionType === 'bid') {
-      if (!isAddressLike(target.ccaStrategyAddress)) {
+      if (!isAddressLike(target.ccaLaunchArmAddress)) {
         return {
           text: [
             'Bid blocked',
@@ -4377,7 +4377,7 @@ async function executeTelegramNativeCommand(params: {
       }
       try {
         bidQuote = await readCcaAuctionQuote({
-          ccaStrategyAddress: target.ccaStrategyAddress as `0x${string}`,
+          ccaLaunchArmAddress: target.ccaLaunchArmAddress as `0x${string}`,
           usdIntent: tradeIntent.amount,
         })
       } catch (error: any) {
@@ -4411,7 +4411,7 @@ async function executeTelegramNativeCommand(params: {
       chainId: target.chainId,
       vaultAddress: target.vaultAddress,
       creatorCoinAddress: target.creatorCoinAddress,
-      ccaStrategyAddress: target.ccaStrategyAddress,
+      ccaLaunchArmAddress: target.ccaLaunchArmAddress,
       amountInput: tradeIntent.amountInput,
       amountEth: Number(formatAmount(amountEth, 8)),
       usdEstimate: Number(formatAmount(usdEstimate, 2)),
@@ -4427,7 +4427,7 @@ async function executeTelegramNativeCommand(params: {
     if (tradeIntent.actionType === 'bid' && bidQuote) {
       intentPayload.bid = {
         auctionAddress: bidQuote.auctionAddress,
-        ccaStrategyAddress: bidQuote.ccaStrategyAddress,
+        ccaLaunchArmAddress: bidQuote.ccaLaunchArmAddress,
         tokenSymbol: bidQuote.tokenSymbol,
         maxPriceQ96: bidQuote.maxPriceQ96.toString(),
         maxPriceWeiPerToken: bidQuote.maxPriceWeiPerToken.toString(),
@@ -4462,7 +4462,7 @@ async function executeTelegramNativeCommand(params: {
         ...(bidQuote
           ? {
               auctionAddress: bidQuote.auctionAddress,
-              ccaStrategyAddress: bidQuote.ccaStrategyAddress,
+              ccaLaunchArmAddress: bidQuote.ccaLaunchArmAddress,
               tokenSymbol: bidQuote.tokenSymbol,
               maxPriceQ96: bidQuote.maxPriceQ96.toString(),
               maxPriceWeiPerToken: bidQuote.maxPriceWeiPerToken.toString(),
@@ -5162,7 +5162,7 @@ function resolveVaultDeployContractsFromIntent(params: {
     wrapper: normalize(raw?.wrapper) ?? null,
     shareOFT: launchShareOft ?? normalize(raw?.shareOFT) ?? null,
     gaugeController: normalize(raw?.gaugeController) ?? null,
-    ccaStrategy: normalize(raw?.ccaStrategy) ?? null,
+    ccaLaunchArm: normalize(raw?.ccaLaunchArm) ?? null,
     oracle: normalize(raw?.oracle) ?? null,
   }
 }
@@ -5194,7 +5194,7 @@ function buildVaultDeployStatusCard(snapshot: VaultDeployStatusSnapshot): string
     }),
     formatVaultDeployContractRow({
       label: 'CCA Strategy',
-      address: snapshot.contracts.ccaStrategy,
+      address: snapshot.contracts.ccaLaunchArm,
       done: snapshot.phase2CoreDone,
     }),
     formatVaultDeployContractRow({
@@ -6735,7 +6735,7 @@ async function handleTelegramTradeCallback(params: {
   }
 
   if (actionTypeSafe === 'bid') {
-    const strategyAddressRaw = asTrimmed(intent.ccaStrategyAddress ?? '')
+    const strategyAddressRaw = asTrimmed(intent.ccaLaunchArmAddress ?? '')
     const auctionAddressRaw = asTrimmed((intent as any)?.bid?.auctionAddress ?? '')
     const maxPriceQ96Raw = asTrimmed((intent as any)?.bid?.maxPriceQ96 ?? '')
     const amountWeiRaw = asTrimmed((intent as any)?.bid?.amountWei ?? '')
@@ -6809,7 +6809,7 @@ async function handleTelegramTradeCallback(params: {
 
     try {
       const freshQuote = await readCcaAuctionQuote({
-        ccaStrategyAddress: strategyAddressRaw as `0x${string}`,
+        ccaLaunchArmAddress: strategyAddressRaw as `0x${string}`,
         usdIntent,
       })
       const previousAmountWei = toBigIntStrict(amountWeiRaw)

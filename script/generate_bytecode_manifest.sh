@@ -45,7 +45,7 @@ contracts=(
   "OFTBootstrapRegistry"
   "CreatorGaugeController"
   "AgentGaugeController"
-  "CCALaunchStrategy"
+  "CCALaunchArm"
   "CreatorOracle"
   "AgentOracle"
   "CreatorPayoutRouter"
@@ -60,14 +60,16 @@ contracts=(
   "DeploymentBatcherPhase1Module"
   "DeploymentBatcherPhase2Module"
   "DeploymentBatcherPhase3Helper"
-  "DeploymentBatcherUniV4Helper"
+  "DeploymentBatcherShareMeshHelper"
+  "ApprovedV4HooksRegistry"
+  "OVaultLPManager"
   "DeploymentBatcherUtilsHelper"
 )
 
 artifact_path() {
   local contract="$1"
   case "$contract" in
-    DeploymentBatcher|DeploymentBatcherPhase1Module|DeploymentBatcherPhase2Module|DeploymentBatcherPhase3Helper|DeploymentBatcherUniV4Helper|DeploymentBatcherUtilsHelper)
+    DeploymentBatcher|DeploymentBatcherPhase1Module|DeploymentBatcherPhase2Module|DeploymentBatcherPhase3Helper|DeploymentBatcherShareMeshHelper|DeploymentBatcherUtilsHelper)
       printf "%s/out/DeploymentBatcher.sol/%s.json" "$ROOT_DIR" "$contract"
       ;;
     *)

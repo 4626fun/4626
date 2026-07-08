@@ -12,7 +12,7 @@ interface IVRFCoordinatorSubscriptions {
     function addConsumer(uint256 subId, address consumer) external;
 }
 
-interface ICreatorVRFConsumerAdmin {
+interface IVRFConsumer4626Admin {
     function owner() external view returns (address);
 
     function authorizedLocalCallers(address caller) external view returns (bool);
@@ -99,7 +99,7 @@ contract ConfigureVrfAndLotteryV2 is Script {
         require(broadcaster == owner, "Broadcaster must equal OWNER for subscription admin");
 
         IVRFCoordinatorSubscriptions coord = IVRFCoordinatorSubscriptions(coordinatorAddr);
-        ICreatorVRFConsumerAdmin vrf = ICreatorVRFConsumerAdmin(vrfConsumerAddr);
+        IVRFConsumer4626Admin vrf = IVRFConsumer4626Admin(vrfConsumerAddr);
         ILotteryManagerAdmin lottery = ILotteryManagerAdmin(lotteryAddr);
 
         require(vrf.owner() == owner, "VRF consumer owner mismatch");

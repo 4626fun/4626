@@ -44,7 +44,7 @@ struct Ive4626Lock {
     uint256 underlyingValue;
 }
 
-interface I4626Registry {
+interface IRegistry4626VaultWhitelist {
     function isRegisteredVault(address vault) external view returns (bool);
 }
 
@@ -105,7 +105,7 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
     Ive4626 public immutable ve4626;
 
     /// @notice Optional registry for auto-whitelisting vaults
-    I4626Registry public registry;
+    IRegistry4626VaultWhitelist public registry;
 
     /// @notice Whether to use registry for whitelist
     bool public useRegistryWhitelist;
@@ -480,7 +480,7 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
     }
 
     function setRegistry(address _registry) external onlyOwner {
-        registry = I4626Registry(_registry);
+        registry = IRegistry4626VaultWhitelist(_registry);
     }
 
     function setUseRegistryWhitelist(bool enabled) external onlyOwner {

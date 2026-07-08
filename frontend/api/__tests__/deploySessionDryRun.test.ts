@@ -56,7 +56,7 @@ const {
     if (fn === 'pendingAuctions') {
       return {
         shareOFT: '0x0000000000000000000000000000000000000000',
-        ccaStrategy: '0x0000000000000000000000000000000000000000',
+        ccaLaunchArm: '0x0000000000000000000000000000000000000000',
         amount: 0n,
         lpReserveAmount: 0n,
       }
@@ -299,7 +299,7 @@ const TEST_FINALIZE_PHASE2_ABI = [
           { name: 'wrapper', type: 'address' },
           { name: 'shareOFT', type: 'address' },
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
           { name: 'version', type: 'string' },
           { name: 'depositAmount', type: 'uint256' },
@@ -357,7 +357,7 @@ function makeFinalizePhase2Data() {
         wrapper: TEST_WRAPPER,
         shareOFT: TEST_SHARE,
         gaugeController: TEST_GAUGE,
-        ccaStrategy: TEST_CCA,
+        ccaLaunchArm: TEST_CCA,
         oracle: TEST_ORACLE,
         version: 'vtest',
         depositAmount: 1n,

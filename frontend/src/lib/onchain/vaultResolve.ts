@@ -60,7 +60,7 @@ const TOKEN_HINT_ABI = [
   { type: 'function', name: 'baseToken', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const
 
-const CCA_STRATEGY_LINK_ABI = [
+const CCA_LAUNCH_ARM_LINK_ABI = [
   { type: 'function', name: 'auctionToken', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'fundsRecipient', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const
@@ -70,11 +70,11 @@ const CREATOR_VAULT_PHASE1_DEPLOYED_EVENT = parseAbiItem(
 )
 
 const CREATOR_VAULT_PHASE2_DEPLOYED_AND_LAUNCHED_EVENT = parseAbiItem(
-  'event Phase2DeployedAndLaunched(address indexed creatorToken, address indexed owner, address gaugeController, address ccaStrategy, address oracle, address auction)',
+  'event Phase2DeployedAndLaunched(address indexed creatorToken, address indexed owner, address gaugeController, address ccaLaunchArm, address oracle, address auction)',
 )
 
 const CREATOR_VAULT_PHASE2_CORE_DEPLOYED_EVENT = parseAbiItem(
-  'event Phase2CoreDeployed(address indexed creatorToken, address indexed owner, address gaugeController, address ccaStrategy, address oracle)',
+  'event Phase2CoreDeployed(address indexed creatorToken, address indexed owner, address gaugeController, address ccaLaunchArm, address oracle)',
 )
 
 export type TokenInfo = {
@@ -94,7 +94,7 @@ export type TokenInfo = {
 export type VaultResolved = {
   token: Address
   info: TokenInfo
-  ccaStrategy: Address | null
+  ccaLaunchArm: Address | null
 }
 
 function asAddress(value: unknown): Address | null {
@@ -107,6 +107,14 @@ function asAddress(value: unknown): Address | null {
 function eqAddress(a: Address | null | undefined, b: Address | null | undefined): boolean {
   if (!a || !b) return false
   return a.toLowerCase() === b.toLowerCase()
+}
+
+function readCcaLaunchArmFromLogArgs(args: Record<string, unknown> | undefined): Address | null {
+  return (
+    asAddress(args?.ccaLaunchArm) ??
+    asAddress(args?.shareCcaLaunchArm) ??
+    asAddress(args?.ccaStrategy)
+  )
 }
 
 export async function resolveCreatorTokenFromAnyAddress<
@@ -259,15 +267,15 @@ async function selectMatchingPhase2Log<
   if (!expected.shareOFT && !expected.vault) return ordered[0] ?? null
 
   for (const log of ordered) {
-    const ccaStrategy = asAddress(log?.args?.ccaStrategy)
-    if (!ccaStrategy) continue
+    const ccaLaunchArm = readCcaLaunchArmFromLogArgs(log?.args as Record<string, unknown> | undefined)
+    if (!ccaLaunchArm) continue
     let auctionToken: Address | null = null
     let fundsRecipient: Address | null = null
     try {
       const reads = await publicClient.multicall({
         contracts: [
-          { address: ccaStrategy, abi: CCA_STRATEGY_LINK_ABI, functionName: 'auctionToken' },
-          { address: ccaStrategy, abi: CCA_STRATEGY_LINK_ABI, functionName: 'fundsRecipient' },
+          { address: ccaLaunchArm, abi: CCA_LAUNCH_ARM_LINK_ABI, functionName: 'auctionToken' },
+          { address: ccaLaunchArm, abi: CCA_LAUNCH_ARM_LINK_ABI, functionName: 'fundsRecipient' },
         ],
         allowFailure: true,
       })
@@ -353,7 +361,7 @@ async function resolveVaultFromBatcherEvents<
     })
     const gaugeController = asAddress(phase2Match?.args?.gaugeController)
     const oracle = asAddress(phase2Match?.args?.oracle)
-    const ccaStrategy = asAddress(phase2Match?.args?.ccaStrategy)
+    const ccaLaunchArm = readCcaLaunchArmFromLogArgs(phase2Match?.args as Record<string, unknown> | undefined)
     const metadata = await readTokenMetadataForFallback(publicClient, token)
 
     return {
@@ -371,7 +379,7 @@ async function resolveVaultFromBatcherEvents<
         isActive: true,
         registeredAt: null,
       },
-      ccaStrategy,
+      ccaLaunchArm,
     }
   }
 
@@ -392,7 +400,7 @@ export async function resolveVaultByAnyAddress<
   if (token) {
     const batcherResolved = await resolveVaultFromBatcherEvents(publicClient, addr)
     const info = await fetchCreatorCoinInfo(publicClient, token)
-    if (info) return { token, info, ccaStrategy: batcherResolved?.ccaStrategy ?? null }
+    if (info) return { token, info, ccaLaunchArm: batcherResolved?.ccaLaunchArm ?? null }
 
     if (batcherResolved) {
       return batcherResolved
@@ -402,7 +410,7 @@ export async function resolveVaultByAnyAddress<
   const directTokenInfo = await fetchCreatorCoinInfo(publicClient, addr).catch(() => null)
   if (directTokenInfo) {
     const batcherResolved = await resolveVaultFromBatcherEvents(publicClient, addr).catch(() => null)
-    return { token: addr, info: directTokenInfo, ccaStrategy: batcherResolved?.ccaStrategy ?? null }
+    return { token: addr, info: directTokenInfo, ccaLaunchArm: batcherResolved?.ccaLaunchArm ?? null }
   }
 
   return await resolveVaultFromBatcherEvents(publicClient, addr)

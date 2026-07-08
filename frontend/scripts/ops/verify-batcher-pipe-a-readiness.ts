@@ -12,7 +12,7 @@ import {
 import { deploymentBatcherNotConfiguredMessage } from '../../src/lib/deploy/deploymentBatcherConfigError.js'
 import { assertCreatorOvaultModuleStorageCompatible } from '../../src/lib/deploy/ovaultModuleIdentity.js'
 import {
-  BASE_MAINNET_4626_REGISTRY,
+  BASE_MAINNET_REGISTRY_4626,
   readBatcherRegistryAuthorized,
 } from '../../server/_lib/deploy/ensureBatcherRegistryAuthorization.js'
 
@@ -122,7 +122,7 @@ const BATCHER_PHASE1_WITH_SALT_ABI = [
           { name: 'wrapper', type: 'address' },
           { name: 'shareOFT', type: 'address' },
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
         ],
       },
@@ -282,7 +282,7 @@ async function main() {
     client.readContract({ address: batcher, abi: BATCHER_VIEW_ABI, functionName: 'solanaDestination' }),
     client.readContract({ address: batcher, abi: BATCHER_VIEW_ABI, functionName: 'getOVaultRuntimeConfig' }),
     readSolanaShareOftPeer(client, batcher),
-    readBatcherRegistryAuthorized({ publicClient: client, batcher, registry: BASE_MAINNET_4626_REGISTRY }),
+    readBatcherRegistryAuthorized({ publicClient: client, batcher, registry: BASE_MAINNET_REGISTRY_4626 }),
     detectPhase1SaltOverrideSupport(client, batcher),
   ])
 
@@ -349,8 +349,8 @@ async function main() {
       ok: registryAuthorized === true,
       detail:
         registryAuthorized === true
-          ? `authorizedFactories(${batcher})=true on ${BASE_MAINNET_4626_REGISTRY}`
-          : `authorizedFactories(${batcher})=false — run CreatorRegistry.setAuthorizedFactory before greenfield Phase 2 finalize`,
+          ? `authorizedFactories(${batcher})=true on ${BASE_MAINNET_REGISTRY_4626}`
+          : `authorizedFactories(${batcher})=false — run Registry4626.setAuthorizedFactory before greenfield Phase 2 finalize`,
     },
     {
       id: 'solana_share_oft_peer_selector',

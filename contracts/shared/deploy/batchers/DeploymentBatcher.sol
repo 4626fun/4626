@@ -9,13 +9,13 @@ import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 
-import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
+import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 import {IAgentGaugeController} from "@4626/agent/interfaces/IAgentGaugeController.sol";
 import {ICreatorGaugeController} from "@4626/creator/interfaces/ICreatorGaugeController.sol";
 import {ICreatorOVault} from "@4626/creator/interfaces/ICreatorOVault.sol";
 import {IAjnaPoolFactory} from "@4626/shared/interfaces/external/IAjnaPool.sol";
 import {IBaseSolanaBridge} from "@4626/shared/interfaces/bridge/IBaseSolanaBridge.sol";
-import {LinearVesting4626} from "@4626/shared/vesting/LinearVesting4626.sol";
+import {LinearVesting4626} from "@4626/shared/distribution/LinearVesting4626.sol";
 import {IOFT, SendParam, MessagingFee, OFTReceipt} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
 import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 
@@ -33,6 +33,44 @@ interface IUniV4ConfigurableStrategy {
     function configurePool(address _poolManager, address _positionManager, address _permit2, PoolKey calldata _poolKey)
         external;
     function transferOwnership(address newOwner) external;
+}
+
+interface IOVaultLPManagerMesh is IUniV4ConfigurableStrategy {
+    function setTwapOracle(address _oracle) external;
+    function setManager(address _manager, bool _status) external;
+    function setVault(address _vault) external;
+}
+
+interface ICCALaunchArmMesh {
+    function getLifecycleStatus()
+        external
+        view
+        returns (
+            uint8 phase,
+            address auction,
+            bool isGraduated,
+            bool auctionWindowOpen,
+            bool claimOpen,
+            bool currencySwept,
+            bool unsoldSwept,
+            bool migrated,
+            bool failedFinalized,
+            uint64 startBlock,
+            uint64 endBlock,
+            uint64 claimBlock,
+            uint64 migrationBlock,
+            uint64 sweepBlock,
+            uint256 lpReserveAmount,
+            uint256 clearingPrice,
+            uint256 currencyRaised
+        );
+    function lpManager() external view returns (address);
+    function setLpManager(address _lpManager) external;
+    function getPoolKey() external view returns (PoolKey memory);
+}
+
+interface IDeploymentBatcherShareMesh {
+    function protocolTreasury() external view returns (address);
 }
 
 contract DeploymentBatcherPhase3Helper {
@@ -225,7 +263,7 @@ contract DeploymentBatcherPhase3Helper {
 
     function _resolveCreatorOracle(address creatorToken) internal view returns (address oracle) {
         address reg = IDeploymentBatcherRegistryAccess(batcher).registry();
-        oracle = I4626Registry(reg).getTokenInfo(creatorToken).oracle;
+        oracle = IRegistry4626(reg).getTokenInfo(creatorToken).oracle;
     }
 
     function _wireCharmAjnaSynergy(address charmStrategy, address ajnaPool, address oracle) internal {
@@ -314,13 +352,13 @@ contract DeploymentBatcherPhase3Helper {
     }
 }
 
-contract DeploymentBatcherUniV4Helper {
+contract DeploymentBatcherShareMeshHelper {
     error NotBatcher();
     error NotOwner();
     error InvalidCodeId();
     error ZeroAddress();
-    error InvalidTickSpacing();
-    error InvalidPoolCurrencies();
+    error ShareMeshNotReady();
+    error ShareMeshAlreadyDeployed();
 
     IUniversalCreate2DeployerFromStore public immutable create2Deployer;
     address public immutable poolManager;
@@ -335,31 +373,31 @@ contract DeploymentBatcherUniV4Helper {
         batcher = _batcher;
     }
 
-    function deployUniV4Strategies(
-        DeploymentBatcher.UniV4DeployParams calldata params,
-        DeploymentBatcher.UniV4CodeIds calldata codeIds,
+    function deployShareMeshLpManager(
+        DeploymentBatcher.ShareMeshDeployParams calldata params,
+        DeploymentBatcher.ShareMeshCodeIds calldata codeIds,
         bytes32 baseSalt
-    ) external returns (DeploymentBatcher.UniV4DeploymentResult memory out) {
+    ) external returns (DeploymentBatcher.ShareMeshDeployResult memory out) {
         if (msg.sender != batcher) revert NotBatcher();
         if (
-            params.creatorToken == address(0) || params.pairedToken == address(0) || params.vault == address(0)
-                || params.owner == address(0) || params.positionManager == address(0) || params.poolHook == address(0)
-                || params.registryOwner == address(0)
+            params.creatorToken == address(0) || params.shareOFT == address(0) || params.vault == address(0)
+                || params.ccaLaunchArm == address(0) || params.oracle == address(0) || params.owner == address(0)
+                || params.positionManager == address(0) || params.poolHook == address(0)
+                || params.registryOwner == address(0) || params.keeperManager == address(0)
         ) {
             revert ZeroAddress();
         }
-        if (params.tickSpacing == 0) revert InvalidTickSpacing();
-        if (params.creatorToken == params.pairedToken) revert InvalidPoolCurrencies();
         if (IOwnableView(params.vault).owner() != params.owner) revert NotOwner();
-        if (
-            codeIds.approvedV4HooksRegistry == bytes32(0) || codeIds.fullRangeStrategy == bytes32(0)
-                || codeIds.concentratedStrategy == bytes32(0) || codeIds.limitOrderStrategy == bytes32(0)
-                || codeIds.lpManager == bytes32(0)
-        ) {
+        if (codeIds.approvedV4HooksRegistry == bytes32(0) || codeIds.lpManager == bytes32(0)) {
             revert InvalidCodeId();
         }
 
-        bytes32 registrySalt = _saltFor(baseSalt, "univ4HookRegistry");
+        ICCALaunchArmMesh cca = ICCALaunchArmMesh(params.ccaLaunchArm);
+        (,, bool isGraduated,,, bool currencySwept,, bool migrated,,,,,,,,,) = cca.getLifecycleStatus();
+        if (!isGraduated || !currencySwept || !migrated) revert ShareMeshNotReady();
+        if (cca.lpManager() != address(0)) revert ShareMeshAlreadyDeployed();
+
+        bytes32 registrySalt = _saltFor(baseSalt, "shareMeshHookRegistry");
         out.hookRegistry = create2Deployer.deploy(
             registrySalt, codeIds.approvedV4HooksRegistry, abi.encode(address(this))
         );
@@ -370,84 +408,26 @@ contract DeploymentBatcherUniV4Helper {
         }
         IApprovedV4HooksRegistryAdmin(out.hookRegistry).setHookApproval(params.poolHook, true);
 
-        bytes32 managerSalt = _saltFor(baseSalt, "univ4OVaultLPManager");
+        bytes32 managerSalt = _saltFor(baseSalt, "shareMeshOVaultLPManager");
         out.lpManager = create2Deployer.deploy(
             managerSalt,
             codeIds.lpManager,
-            abi.encode(
-                params.creatorToken,
-                params.pairedToken,
-                params.vault,
-                address(this),
-                out.hookRegistry
-            )
+            abi.encode(params.shareOFT, address(0), params.vault, address(this), out.hookRegistry)
         );
 
-        bytes32 fullRangeSalt = _saltFor(baseSalt, "univ4FullRangeStrategy");
-        out.fullRangeStrategy = create2Deployer.deploy(
-            fullRangeSalt,
-            codeIds.fullRangeStrategy,
-            abi.encode(
-                params.creatorToken,
-                params.pairedToken,
-                out.lpManager,
-                address(this),
-                out.hookRegistry
-            )
-        );
-
-        bytes32 concentratedSalt = _saltFor(baseSalt, "univ4ConcentratedStrategy");
-        out.concentratedStrategy = create2Deployer.deploy(
-            concentratedSalt,
-            codeIds.concentratedStrategy,
-            abi.encode(
-                params.creatorToken,
-                params.pairedToken,
-                out.lpManager,
-                address(this),
-                out.hookRegistry
-            )
-        );
-
-        bytes32 limitOrderSalt = _saltFor(baseSalt, "univ4LimitOrderStrategy");
-        out.limitOrderStrategy = create2Deployer.deploy(
-            limitOrderSalt,
-            codeIds.limitOrderStrategy,
-            abi.encode(
-                params.creatorToken,
-                params.pairedToken,
-                out.lpManager,
-                address(this),
-                out.hookRegistry
-            )
-        );
-
-        PoolKey memory poolKey = PoolKey({
-            currency0: params.assetIsCurrency0 ? Currency.wrap(params.creatorToken) : Currency.wrap(params.pairedToken),
-            currency1: params.assetIsCurrency0 ? Currency.wrap(params.pairedToken) : Currency.wrap(params.creatorToken),
-            fee: params.fee,
-            tickSpacing: params.tickSpacing,
-            hooks: IHooks(params.poolHook)
-        });
-
-        IUniV4ConfigurableStrategy(out.fullRangeStrategy).configurePool(
+        PoolKey memory poolKey = cca.getPoolKey();
+        IOVaultLPManagerMesh(out.lpManager).configurePool(
             poolManager, params.positionManager, permit2, poolKey
         );
-        IUniV4ConfigurableStrategy(out.concentratedStrategy).configurePool(
-            poolManager, params.positionManager, permit2, poolKey
-        );
-        IUniV4ConfigurableStrategy(out.limitOrderStrategy).configurePool(
-            poolManager, params.positionManager, permit2, poolKey
-        );
-        IUniV4ConfigurableStrategy(out.lpManager).configurePool(
-            poolManager, params.positionManager, permit2, poolKey
-        );
+        IOVaultLPManagerMesh(out.lpManager).setTwapOracle(params.oracle);
+        IOVaultLPManagerMesh(out.lpManager).setManager(params.keeperManager, true);
+        IOVaultLPManagerMesh(out.lpManager).setVault(params.vault);
 
-        IUniV4ConfigurableStrategy(out.fullRangeStrategy).transferOwnership(params.owner);
-        IUniV4ConfigurableStrategy(out.concentratedStrategy).transferOwnership(params.owner);
-        IUniV4ConfigurableStrategy(out.limitOrderStrategy).transferOwnership(params.owner);
-        IUniV4ConfigurableStrategy(out.lpManager).transferOwnership(params.owner);
+        address treasury = IDeploymentBatcherShareMesh(batcher).protocolTreasury();
+        IOVaultLPManagerMesh(out.lpManager).transferOwnership(treasury);
         IApprovedV4HooksRegistryAdmin(out.hookRegistry).transferOwnership(params.registryOwner);
+
+        cca.setLpManager(out.lpManager);
     }
 
     function _saltFor(bytes32 baseSalt, string memory label) internal pure returns (bytes32) {
@@ -549,7 +529,7 @@ interface ICreatorShareOFT {
     function transferOwnership(address newOwner) external;
 }
 
-interface ICCALaunchStrategy {
+interface ICCALaunchArm {
     function setApprovedLauncher(address launcher, bool approved) external;
     function setOracleConfig(address _oracle, address _poolManager, address _taxHook, address _feeRecipient) external;
     function setLaunchDiscountBps(uint16 _discountBps) external;
@@ -1084,7 +1064,7 @@ contract DeploymentBatcherPhase2Module {
         out.gaugeController = create2Deployer.deploy(gaugeSalt, codeIds.gauge, gaugeArgs);
 
         bytes memory ccaArgs = abi.encode(params.shareOFT, address(0), params.vault, params.vault, tempOwner);
-        out.ccaStrategy = create2Deployer.deploy(ccaSalt, codeIds.cca, ccaArgs);
+        out.ccaLaunchArm = create2Deployer.deploy(ccaSalt, codeIds.cca, ccaArgs);
 
         bytes memory oracleArgs = abi.encode(registry, chainlinkEthUsd, shareSymbolLower, tempOwner);
         out.oracle = create2Deployer.deploy(oracleSalt, codeIds.oracle, oracleArgs);
@@ -1100,19 +1080,19 @@ contract DeploymentBatcherPhase2Module {
         ICreatorGaugeController(out.gaugeController).setOracle(out.oracle);
 
         ICreatorOVault(params.vault).setGaugeController(out.gaugeController);
-        ICreatorOVault(params.vault).setCCALaunchStrategy(out.ccaStrategy);
+        ICreatorOVault(params.vault).setCcaLaunchArm(out.ccaLaunchArm);
 
-        ICCALaunchStrategy(out.ccaStrategy).setApprovedLauncher(address(this), true);
+        ICCALaunchArm(out.ccaLaunchArm).setApprovedLauncher(address(this), true);
         if (vaultActivationBatcher != address(0)) {
-            ICCALaunchStrategy(out.ccaStrategy).setApprovedLauncher(vaultActivationBatcher, true);
+            ICCALaunchArm(out.ccaLaunchArm).setApprovedLauncher(vaultActivationBatcher, true);
         }
-        ICCALaunchStrategy(out.ccaStrategy).setRecipients(out.ccaStrategy, out.ccaStrategy);
-        ICCALaunchStrategy(out.ccaStrategy).setBackingVault(params.vault);
-        ICCALaunchStrategy(out.ccaStrategy)
+        ICCALaunchArm(out.ccaLaunchArm).setRecipients(out.ccaLaunchArm, out.ccaLaunchArm);
+        ICCALaunchArm(out.ccaLaunchArm).setBackingVault(params.vault);
+        ICCALaunchArm(out.ccaLaunchArm)
             .setMigrationConfig(address(0), protocolTreasury, protocolTreasury, 1, 14_400);
-        ICCALaunchStrategy(out.ccaStrategy).setOracleConfig(out.oracle, poolManager, taxHook, out.gaugeController);
-        ICCALaunchStrategy(out.ccaStrategy).setLaunchDiscountBps(DEFAULT_LAUNCH_DISCOUNT_BPS);
-        ICCALaunchStrategy(out.ccaStrategy).setLaunchTickSpacingBps(DEFAULT_LAUNCH_TICK_SPACING_BPS);
+        ICCALaunchArm(out.ccaLaunchArm).setOracleConfig(out.oracle, poolManager, taxHook, out.gaugeController);
+        ICCALaunchArm(out.ccaLaunchArm).setLaunchDiscountBps(DEFAULT_LAUNCH_DISCOUNT_BPS);
+        ICCALaunchArm(out.ccaLaunchArm).setLaunchTickSpacingBps(DEFAULT_LAUNCH_TICK_SPACING_BPS);
     }
 
     function finalizePhase2Execution(DeploymentBatcher.Phase2FinalizeParams calldata params, bytes32 baseSalt)
@@ -1131,7 +1111,7 @@ contract DeploymentBatcherPhase2Module {
             shareTokens - result.auctionAmount - result.vestingAmount - result.solanaAmount;
 
         if (result.lpReserveAmount > 0) {
-            IERC20(params.shareOFT).safeTransfer(params.ccaStrategy, result.lpReserveAmount);
+            IERC20(params.shareOFT).safeTransfer(params.ccaLaunchArm, result.lpReserveAmount);
         }
 
         if (result.solanaAmount > 0) {
@@ -1162,7 +1142,7 @@ contract DeploymentBatcherPhase2Module {
         ICreatorOVaultWrapper(params.wrapper).transferOwnership(protocolTreasury);
         ICreatorShareOFT(params.shareOFT).transferOwnership(protocolTreasury);
         ICreatorGaugeController(params.gaugeController).transferOwnership(protocolTreasury);
-        ICCALaunchStrategy(params.ccaStrategy).transferOwnership(protocolTreasury);
+        ICCALaunchArm(params.ccaLaunchArm).transferOwnership(protocolTreasury);
         IOwnableTransfer(params.oracle).transferOwnership(protocolTreasury);
     }
 
@@ -1185,8 +1165,8 @@ contract DeploymentBatcherPhase2Module {
     ) internal {
         if (solanaEid == 0) revert SolanaShareBridgeNotConfigured();
 
-        I4626Registry reg = I4626Registry(registry);
-        I4626Registry.TokenInfo memory info = reg.getTokenInfo(params.creatorToken);
+        IRegistry4626 reg = IRegistry4626(registry);
+        IRegistry4626.TokenInfo memory info = reg.getTokenInfo(params.creatorToken);
         if (info.token == address(0)) {
             (string memory name, string memory symbol) = _readTokenMetadata(params.creatorToken);
             reg.registerToken(params.creatorToken, name, symbol, params.owner, address(0), 0);
@@ -1262,7 +1242,7 @@ contract DeploymentBatcherPhase2Module {
 
     function launchDeferredAuctionExecution(
         address shareOFT,
-        address ccaStrategy,
+        address ccaLaunchArm,
         uint256 amount,
         uint256 lpReserveAmount,
         uint256 floorPriceQ96,
@@ -1271,8 +1251,8 @@ contract DeploymentBatcherPhase2Module {
     ) external returns (address auction) {
         if (address(this) != batcher) revert NotBatcherContext();
         if (IERC20(shareOFT).balanceOf(address(this)) < amount) revert AuctionAmountMismatch();
-        IERC20(shareOFT).forceApprove(ccaStrategy, amount);
-        auction = ICCALaunchStrategy(ccaStrategy)
+        IERC20(shareOFT).forceApprove(ccaLaunchArm, amount);
+        auction = ICCALaunchArm(ccaLaunchArm)
             .launchAuctionWithReserve(
                 amount, lpReserveAmount, floorPriceQ96, requiredRaise, auctionSteps
             );
@@ -1286,7 +1266,7 @@ contract DeploymentBatcherPhase2Module {
         if (params.vault == address(0) || params.wrapper == address(0) || params.shareOFT == address(0)) {
             revert ZeroAddress();
         }
-        if (params.gaugeController == address(0) || params.ccaStrategy == address(0) || params.oracle == address(0)) {
+        if (params.gaugeController == address(0) || params.ccaLaunchArm == address(0) || params.oracle == address(0)) {
             revert ZeroAddress();
         }
         if (params.depositAmount < MIN_FIRST_DEPOSIT || params.depositAmount > MAX_FIRST_DEPOSIT) {
@@ -1299,7 +1279,7 @@ contract DeploymentBatcherPhase2Module {
             revert Phase1Missing();
         }
         if (
-            params.gaugeController.code.length == 0 || params.ccaStrategy.code.length == 0
+            params.gaugeController.code.length == 0 || params.ccaLaunchArm.code.length == 0
                 || params.oracle.code.length == 0
         ) {
             revert Phase2Missing();
@@ -1318,7 +1298,7 @@ contract DeploymentBatcherPhase2Module {
         if (address(this) != batcher) revert NotBatcherContext();
         _validateFinalizePhase2(params, p1state);
         out.gaugeController = params.gaugeController;
-        out.ccaStrategy = params.ccaStrategy;
+        out.ccaLaunchArm = params.ccaLaunchArm;
         out.oracle = params.oracle;
         execution = finalizePhase2Execution(params, baseSalt);
     }
@@ -1470,7 +1450,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         address wrapper;
         address shareOFT;
         address gaugeController;
-        address ccaStrategy;
+        address ccaLaunchArm;
         address oracle;
         string version;
         uint256 depositAmount;
@@ -1503,14 +1483,14 @@ contract DeploymentBatcher is ReentrancyGuard {
 
     struct Phase2Result {
         address gaugeController;
-        address ccaStrategy;
+        address ccaLaunchArm;
         address oracle;
         address auction;
     }
 
     struct PendingAuction {
         address shareOFT;
-        address ccaStrategy;
+        address ccaLaunchArm;
         uint256 amount;
         uint256 lpReserveAmount;
     }
@@ -1573,34 +1553,28 @@ contract DeploymentBatcher is ReentrancyGuard {
         address solanaStrategy;
     }
 
-    struct UniV4CodeIds {
+    struct ShareMeshCodeIds {
         bytes32 approvedV4HooksRegistry;
-        bytes32 fullRangeStrategy;
-        bytes32 concentratedStrategy;
-        bytes32 limitOrderStrategy;
         bytes32 lpManager;
     }
 
-    struct UniV4DeployParams {
+    struct ShareMeshDeployParams {
         address creatorToken;
-        address pairedToken;
+        address shareOFT;
         address vault;
+        address ccaLaunchArm;
+        address oracle;
         address owner;
         string version;
         address positionManager;
-        uint24 fee;
-        int24 tickSpacing;
-        bool assetIsCurrency0;
         address poolHook;
         address registryOwner;
+        address keeperManager;
         address[] hooksToApprove;
     }
 
-    struct UniV4DeploymentResult {
+    struct ShareMeshDeployResult {
         address hookRegistry;
-        address fullRangeStrategy;
-        address concentratedStrategy;
-        address limitOrderStrategy;
         address lpManager;
     }
 
@@ -1660,7 +1634,7 @@ contract DeploymentBatcher is ReentrancyGuard {
     mapping(address => bytes32) public approvedPhaseModuleCodehashes;
     error Phase1ModuleMissing();
 
-    I4626Registry public immutable registry;
+    IRegistry4626 public immutable registry;
     IUniversalBytecodeStore public immutable bytecodeStore;
     IUniversalCreate2DeployerFromStore public immutable create2Deployer;
 
@@ -1704,8 +1678,8 @@ contract DeploymentBatcher is ReentrancyGuard {
     DeploymentBatcherPhase2Module public phase2Module;
     /// @notice Dedicated phase-1 execution helper (delegatecall) to keep initcode under EIP-3860 limits.
     DeploymentBatcherPhase1Module public phase1Module;
-    /// @notice Dedicated UniV4 execution helper to keep this contract under EIP-170 runtime limits.
-    DeploymentBatcherUniV4Helper public uniV4Helper;
+    /// @notice Dedicated Share-mesh LP deploy helper to keep this contract under EIP-170 runtime limits.
+    DeploymentBatcherShareMeshHelper public shareMeshHelper;
     /// @notice String/salt/hash helper contract to keep this contract under EIP-170 runtime limits.
     DeploymentBatcherUtilsHelper public utilsHelper;
 
@@ -1731,7 +1705,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         address indexed creatorToken,
         address indexed owner,
         address gaugeController,
-        address ccaStrategy,
+        address ccaLaunchArm,
         address oracle,
         address auction
     );
@@ -1740,7 +1714,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         address indexed creatorToken,
         address indexed owner,
         address gaugeController,
-        address ccaStrategy,
+        address ccaLaunchArm,
         address oracle
     );
 
@@ -1748,7 +1722,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         address indexed creatorToken,
         address indexed owner,
         address indexed shareOFT,
-        address ccaStrategy,
+        address ccaLaunchArm,
         uint256 amount,
         uint256 lpReserveAmount
     );
@@ -1757,7 +1731,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         address indexed creatorToken,
         address indexed owner,
         address indexed shareOFT,
-        address ccaStrategy,
+        address ccaLaunchArm,
         uint256 amount,
         address auction
     );
@@ -1778,14 +1752,12 @@ contract DeploymentBatcher is ReentrancyGuard {
         uint256 solanaWeightBps
     );
 
-    event UniV4StrategiesDeployed(
+    event ShareMeshLpManagerDeployed(
         address indexed creatorToken,
         address indexed owner,
         address indexed vault,
+        address ccaLaunchArm,
         address hookRegistry,
-        address fullRangeStrategy,
-        address concentratedStrategy,
-        address limitOrderStrategy,
         address lpManager,
         address poolHook,
         address registryOwner
@@ -1833,7 +1805,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         address _vaultAdminModule,
         address _phase2Module,
         address _phase3Helper,
-        address _uniV4Helper,
+        address _shareMeshHelper,
         address _utilsHelper
     ) {
         // Stack-depth fix (fixup5f): interleave each param's zero-check immediately
@@ -1842,7 +1814,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         // live at the first grouped check. Multi-use params are read from their state
         // vars in the helper deployments below (calldataload values freed above).
         if (_registry == address(0)) revert ZeroAddress();
-        registry = I4626Registry(_registry);
+        registry = IRegistry4626(_registry);
 
         if (_bytecodeStore == address(0)) revert ZeroAddress();
         bytecodeStore = IUniversalBytecodeStore(_bytecodeStore);
@@ -1892,19 +1864,19 @@ contract DeploymentBatcher is ReentrancyGuard {
         // CREATE2 shell path: pass zero for all helper slots and wire post-deploy via
         // wireDeploymentHelpers + setPhase1Module (Safe). Non-shell paths must pass
         // pre-deployed helper addresses (no inline `new` — keeps initcode under EIP-3860).
-        bool shellMode = _phase2Module == address(0) && _phase3Helper == address(0) && _uniV4Helper == address(0)
+        bool shellMode = _phase2Module == address(0) && _phase3Helper == address(0) && _shareMeshHelper == address(0)
             && _utilsHelper == address(0);
 
         if (!shellMode) {
             if (
-                _phase2Module == address(0) || _phase3Helper == address(0) || _uniV4Helper == address(0)
+                _phase2Module == address(0) || _phase3Helper == address(0) || _shareMeshHelper == address(0)
                     || _utilsHelper == address(0)
             ) {
                 revert ZeroAddress();
             }
             phase2Module = DeploymentBatcherPhase2Module(_phase2Module);
             phase3Helper = DeploymentBatcherPhase3Helper(_phase3Helper);
-            uniV4Helper = DeploymentBatcherUniV4Helper(_uniV4Helper);
+            shareMeshHelper = DeploymentBatcherShareMeshHelper(_shareMeshHelper);
             utilsHelper = DeploymentBatcherUtilsHelper(_utilsHelper);
         }
 
@@ -2010,7 +1982,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         returns (Phase2Result memory out)
     {
         out = _deployPhase2CoreInternal(params, codeIds, vaultRolePolicyId);
-        emit Phase2CoreDeployed(params.creatorToken, params.owner, out.gaugeController, out.ccaStrategy, out.oracle);
+        emit Phase2CoreDeployed(params.creatorToken, params.owner, out.gaugeController, out.ccaLaunchArm, out.oracle);
     }
 
     /**
@@ -2024,7 +1996,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         uint256 rolePolicyId
     ) external nonReentrant returns (Phase2Result memory out) {
         out = _deployPhase2CoreInternal(params, codeIds, rolePolicyId);
-        emit Phase2CoreDeployed(params.creatorToken, params.owner, out.gaugeController, out.ccaStrategy, out.oracle);
+        emit Phase2CoreDeployed(params.creatorToken, params.owner, out.gaugeController, out.ccaLaunchArm, out.oracle);
     }
 
     function _deployPhase2CoreInternal(
@@ -2130,7 +2102,7 @@ contract DeploymentBatcher is ReentrancyGuard {
             hasActivePendingAuction[tokenOwnerKey] = true;
             pendingAuctions[baseSalt] = PendingAuction({
                 shareOFT: params.shareOFT,
-                ccaStrategy: params.ccaStrategy,
+                ccaLaunchArm: params.ccaLaunchArm,
                 amount: execution.auctionAmount,
                 lpReserveAmount: execution.lpReserveAmount
             });
@@ -2138,7 +2110,7 @@ contract DeploymentBatcher is ReentrancyGuard {
                 params.creatorToken,
                 params.owner,
                 params.shareOFT,
-                params.ccaStrategy,
+                params.ccaLaunchArm,
                 execution.auctionAmount,
                 execution.lpReserveAmount
             );
@@ -2162,7 +2134,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         }
 
         emit Phase2DeployedAndLaunched(
-            params.creatorToken, params.owner, params.gaugeController, params.ccaStrategy, params.oracle, out.auction
+            params.creatorToken, params.owner, params.gaugeController, params.ccaLaunchArm, params.oracle, out.auction
         );
     }
 
@@ -2185,7 +2157,7 @@ contract DeploymentBatcher is ReentrancyGuard {
             abi.encodeWithSelector(
                 DeploymentBatcherPhase2Module.launchDeferredAuctionExecution.selector,
                 params.shareOFT,
-                pending.ccaStrategy,
+                pending.ccaLaunchArm,
                 pending.amount,
                 pending.lpReserveAmount,
                 params.floorPriceQ96,
@@ -2200,7 +2172,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         hasActivePendingAuction[tokenOwnerKey] = false;
 
         emit AuctionLaunchedDeferred(
-            params.creatorToken, params.owner, params.shareOFT, pending.ccaStrategy, pending.amount, auction
+            params.creatorToken, params.owner, params.shareOFT, pending.ccaLaunchArm, pending.amount, auction
         );
     }
 
@@ -2251,27 +2223,24 @@ contract DeploymentBatcher is ReentrancyGuard {
     }
 
     /**
-     * @notice Deploy + configure UniV4 strategy set with approved-hook enforcement.
-     * @dev Deploys a hook registry + FullRange + Concentrated + LimitOrder + OVaultLPManager,
-     *      configures all pools using the same hook, then transfers ownerships.
+     * @notice Deploy + configure the post-auction ShareOFT mesh LP manager.
+     * @dev Requires a graduated, swept, migrated CCA. Not a vault strategy sleeve.
      */
-    function deployUniV4Strategies(UniV4DeployParams calldata params, UniV4CodeIds calldata codeIds)
+    function deployShareMeshLpManager(ShareMeshDeployParams calldata params, ShareMeshCodeIds calldata codeIds)
         external
         nonReentrant
-        returns (UniV4DeploymentResult memory out)
+        returns (ShareMeshDeployResult memory out)
     {
         _requireOwner(params.owner);
         bytes32 baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
-        out = uniV4Helper.deployUniV4Strategies(params, codeIds, baseSalt);
+        out = shareMeshHelper.deployShareMeshLpManager(params, codeIds, baseSalt);
 
-        emit UniV4StrategiesDeployed(
+        emit ShareMeshLpManagerDeployed(
             params.creatorToken,
             params.owner,
             params.vault,
+            params.ccaLaunchArm,
             out.hookRegistry,
-            out.fullRangeStrategy,
-            out.concentratedStrategy,
-            out.limitOrderStrategy,
             out.lpManager,
             params.poolHook,
             params.registryOwner
@@ -2307,12 +2276,12 @@ contract DeploymentBatcher is ReentrancyGuard {
     function wireDeploymentHelpers(
         address _phase2Module,
         address _phase3Helper,
-        address _uniV4Helper,
+        address _shareMeshHelper,
         address _utilsHelper
     ) external onlyProtocolTreasury {
         phase2Module = DeploymentBatcherPhase2Module(_phase2Module);
         phase3Helper = DeploymentBatcherPhase3Helper(_phase3Helper);
-        uniV4Helper = DeploymentBatcherUniV4Helper(_uniV4Helper);
+        shareMeshHelper = DeploymentBatcherShareMeshHelper(_shareMeshHelper);
         utilsHelper = DeploymentBatcherUtilsHelper(_utilsHelper);
     }
 

@@ -19,7 +19,7 @@ import {LotteryManager4626} from "@4626/shared/lottery/manager/LotteryManager462
  * This script is intended to be safe to re-run (idempotent wiring).
  */
 
-interface I4626RegistryLotteryManager {
+interface IRegistry4626LotteryManager {
     function owner() external view returns (address);
     function getLotteryManager(uint256 chainId) external view returns (address);
     function setLotteryManager(uint256 chainId, address manager) external;
@@ -28,7 +28,7 @@ interface I4626RegistryLotteryManager {
     function getShareOFTForToken(address token) external view returns (address);
 }
 
-interface ICreatorVRFConsumerAuth {
+interface IVRFConsumer4626Auth {
     function authorizedLocalCallers(address caller) external view returns (bool);
     function setLocalCallerAuthorization(address caller, bool authorized) external;
 }
@@ -148,14 +148,14 @@ contract DeployLotteryManagerCreate2V2 is Script {
         }
 
         // Ensure the VRF consumer can callback the new lottery manager.
-        ICreatorVRFConsumerAuth vrf = ICreatorVRFConsumerAuth(VRF_CONSUMER);
+        IVRFConsumer4626Auth vrf = IVRFConsumer4626Auth(VRF_CONSUMER);
         if (!vrf.authorizedLocalCallers(predicted)) {
             vrf.setLocalCallerAuthorization(predicted, true);
             console.log("vrf.setLocalCallerAuthorization(lottery, true)");
         }
 
         // Point registry to the new lottery manager (affects existing creators too).
-        I4626RegistryLotteryManager registry = I4626RegistryLotteryManager(REGISTRY);
+        IRegistry4626LotteryManager registry = IRegistry4626LotteryManager(REGISTRY);
         address registryOwner = registry.owner();
         if (registryOwner == OWNER) {
             if (registry.getLotteryManager(BASE_CHAIN_ID) != predicted) {

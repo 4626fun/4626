@@ -19,7 +19,7 @@ Use this for Solidity/Foundry work, vault deployment, OFT cross-chain wiring, VR
 
 ## Core Components
 
-- Vault stack: `CreatorOVault`, `CreatorOVaultWrapper`, `CreatorShareOFT`, `CreatorGaugeController`, `CCALaunchStrategy`, `CreatorOracle`.
+- Vault stack: `CreatorOVault`, `CreatorOVaultWrapper`, `CreatorShareOFT`, `CreatorGaugeController`, `CCALaunchArm`, `CreatorOracle`.
 - Deployment engines:
   - Foundry infra deploy scripts (`script/DeployInfrastructure.s.sol`, `script/deploy.sh`)
   - Frontend AA deploy flow (`frontend/src/pages/deploy/DeployVault.tsx`)

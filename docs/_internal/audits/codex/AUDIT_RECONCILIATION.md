@@ -8,15 +8,15 @@
 
 ---
 
-### C-01 · CCALaunchStrategy.sol — Reentrancy
+### C-01 · CCALaunchArm.sol — Reentrancy
 **Audit claim:** External token transfer before share burn.  
-**Source reality:** `ReentrancyGuard` is **already imported and applied** (`nonReentrant` on every public mutating function: `sweepCurrency`, `finalizeFailedAuction`, `migrate`, `sweepUnsoldTokens`, `sweepResidualAuctionToken`, `sweepResidualCurrency`, and both `launchAuction` variants). `CCALaunchStrategy` is **not an ERC-4626 vault** — it is a launch strategy that delegates withdraw/redeem to the external `IContinuousClearingAuction` contract. There is no in-contract `_burn(owner, shares)` pattern. All transfers use `SafeERC20.safeTransfer`.
+**Source reality:** `ReentrancyGuard` is **already imported and applied** (`nonReentrant` on every public mutating function: `sweepCurrency`, `finalizeFailedAuction`, `migrate`, `sweepUnsoldTokens`, `sweepResidualAuctionToken`, `sweepResidualCurrency`, and both `launchAuction` variants). `CCALaunchArm` is **not an ERC-4626 vault** — it is a launch strategy that delegates withdraw/redeem to the external `IContinuousClearingAuction` contract. There is no in-contract `_burn(owner, shares)` pattern. All transfers use `SafeERC20.safeTransfer`.
 
-**True risk:** The `IContinuousClearingAuction` contract itself (not in this repo) handles bid settlement. If that external contract is ERC-777 callback-capable and does not guard re-entry, there is an indirect risk when `auction.sweepCurrency()` / `auction.claimTokens()` calls back into CCALaunchStrategy before the `currentAuction` pointer is cleared.
+**True risk:** The `IContinuousClearingAuction` contract itself (not in this repo) handles bid settlement. If that external contract is ERC-777 callback-capable and does not guard re-entry, there is an indirect risk when `auction.sweepCurrency()` / `auction.claimTokens()` calls back into CCALaunchArm before the `currentAuction` pointer is cleared.
 
 **Verdict:** Partial true positive — `ReentrancyGuard` is present but the external auction contract re-entry path is **not guarded**. The `migrate()` function calls `auction.checkpoint()` and then proceeds with state changes — if the external auction contract is adversarial, this path is exploitable.
 
-**Patch — `contracts/vault/strategies/CCALaunchStrategy.sol`:**
+**Patch — `contracts/vault/strategies/CCALaunchArm.sol`:**
 ```diff
 -    function sweepCurrency() external nonReentrant {
 +    function sweepCurrency() external nonReentrant {
@@ -310,8 +310,8 @@ The `ISolanaBridgeAdapter` interface declares `bridgeToSolana` as `external paya
 
 ---
 
-### M-01 · CCALaunchStrategy.sol — maxDeposit Returns Misleading Value
-**Source reality:** No `maxDeposit` override found in `CCALaunchStrategy.sol`. The contract does not implement ERC-4626. Deposit caps may exist in the auction contract. This finding likely applies to `CreatorOVault.sol`.
+### M-01 · CCALaunchArm.sol — maxDeposit Returns Misleading Value
+**Source reality:** No `maxDeposit` override found in `CCALaunchArm.sol`. The contract does not implement ERC-4626. Deposit caps may exist in the auction contract. This finding likely applies to `CreatorOVault.sol`.
 
 **Verdict:** Wrong contract. Audit `CreatorOVault.sol`.
 
@@ -371,7 +371,7 @@ The `ISolanaBridgeAdapter` interface declares `bridgeToSolana` as `external paya
 
 | ID | Contract | Audit Verdict | Source Reality | Action |
 |----|----------|---------------|----------------|--------|
-| C-01 | CCALaunchStrategy | CRITICAL | Partial TP — ReentrancyGuard present but external auction re-entry not guarded | Patch external call ordering in `sweepCurrency`/`migrate` |
+| C-01 | CCALaunchArm | CRITICAL | Partial TP — ReentrancyGuard present but external auction re-entry not guarded | Patch external call ordering in `sweepCurrency`/`migrate` |
 | C-02 | CreatorCharmStrategy | CRITICAL | TP — wrong contract. ERC-4626 preview issue is in `CreatorOVault` | Audit `CreatorOVault.sol` |
 | C-03 | CreatorLPManager | CRITICAL | **FALSE POSITIVE** — `setStrategy` does not exist | No action |
 | C-04 | ERC4626StrategyAdapter | CRITICAL | TP — deposit-during-rebalance window is real | Patch: `rebalanceActive` flag + clear stale allowance |
@@ -382,7 +382,7 @@ The `ISolanaBridgeAdapter` interface declares `bridgeToSolana` as `external paya
 | H-04 | CreatorCharmStrategy | HIGH | Partial TP — slippage exists for swaps; Charm rebalance unguarded | Add keeper-gated rebalance wrapper |
 | H-05 | SolanaStrategy | HIGH | TP — `reportId` not stored, replay possible | Patch: `usedReportIds` mapping |
 | H-06 | SolanaBridgeStrategy | HIGH | TP — interface returns void; silent failure possible | Patch: return bool + revert on failure |
-| M-01 | CCALaunchStrategy | MEDIUM | Wrong contract — not ERC-4626 | Audit `CreatorOVault.sol` |
+| M-01 | CCALaunchArm | MEDIUM | Wrong contract — not ERC-4626 | Audit `CreatorOVault.sol` |
 | M-02 | ApprovedV4HooksRegistry | MEDIUM | **FALSE POSITIVE** — `setHookApproval(addr, false)` already works | No action |
 | M-03 | ConcentratedStrategy | MEDIUM | Needs manual review | Flag for re-audit |
 | M-04 | FullRangeStrategy | MEDIUM | TP — `totalLiquidity` not zeroed on emergency exit | Patch: set `isEmergencyMode = true`, zero state |

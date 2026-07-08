@@ -73,7 +73,7 @@ contract DeployEverything is Script {
         console.log("\n");
         console.log("NEXT STEPS:");
         console.log("1. Save these addresses");
-        console.log("2. Deploy CCALaunchStrategy for each vault");
+        console.log("2. Deploy CCALaunchArm for each vault");
         console.log("3. Call setApprovedLauncher() on each CCA");
         console.log("========================================");
     }

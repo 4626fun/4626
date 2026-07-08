@@ -40,7 +40,7 @@ contract MockAgentLaneVault {
     address public creatorToken;
     address public owner;
     address public gaugeController;
-    address public ccaLaunchStrategy;
+    address public ccaLaunchArm;
     address public modulesCore;
 
     constructor(address _creatorToken, address _owner, string memory, string memory) {
@@ -58,8 +58,8 @@ contract MockAgentLaneVault {
         gaugeController = controller;
     }
 
-    function setCCALaunchStrategy(address strategy) external {
-        ccaLaunchStrategy = strategy;
+    function setCcaLaunchArm(address strategy) external {
+        ccaLaunchArm = strategy;
     }
 
     function setProtocolRescue(address) external {}
@@ -450,7 +450,7 @@ contract DeploymentBatcherAgentLanePhase12Test is Test {
         assertEq(gauge.wrapper(), p1.wrapper);
         assertEq(MockAgentLaneShareOFT(p1.shareOFT).gaugeController(), p2.gaugeController);
         assertEq(MockAgentLaneVault(p1.vault).gaugeController(), p2.gaugeController);
-        assertEq(MockAgentLaneVault(p1.vault).ccaLaunchStrategy(), p2.ccaStrategy);
+        assertEq(MockAgentLaneVault(p1.vault).ccaLaunchArm(), p2.ccaLaunchArm);
     }
 
     function test_creatorPhase2Core_stillWiresSetCreatorCoin() public {

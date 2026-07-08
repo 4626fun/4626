@@ -40,7 +40,7 @@ contract VaultActivationBatcherRegistryValidationTest is Test {
     address internal canonicalWrapper = makeAddr("canonicalWrapper");
     address internal rogueVault = makeAddr("rogueVault");
     address internal rogueWrapper = makeAddr("rogueWrapper");
-    address internal ccaStrategy = makeAddr("ccaStrategy");
+    address internal ccaLaunchArm = makeAddr("ccaLaunchArm");
     address internal user = makeAddr("user");
 
     uint256 internal constant DEPOSIT = 1_000e18;
@@ -63,7 +63,7 @@ contract VaultActivationBatcherRegistryValidationTest is Test {
             )
         );
         batcher.batchActivate(
-            address(creatorToken), rogueVault, canonicalWrapper, ccaStrategy, DEPOSIT, 0, 0
+            address(creatorToken), rogueVault, canonicalWrapper, ccaLaunchArm, DEPOSIT, 0, 0
         );
         vm.stopPrank();
     }
@@ -77,7 +77,7 @@ contract VaultActivationBatcherRegistryValidationTest is Test {
             )
         );
         batcher.batchActivate(
-            address(creatorToken), canonicalVault, rogueWrapper, ccaStrategy, DEPOSIT, 0, 0
+            address(creatorToken), canonicalVault, rogueWrapper, ccaLaunchArm, DEPOSIT, 0, 0
         );
         vm.stopPrank();
     }
@@ -94,7 +94,7 @@ contract VaultActivationBatcherRegistryValidationTest is Test {
             address(creatorToken),
             rogueVault,
             canonicalWrapper,
-            ccaStrategy,
+            ccaLaunchArm,
             DEPOSIT,
             0,
             0,

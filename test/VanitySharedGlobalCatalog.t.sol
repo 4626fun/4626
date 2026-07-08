@@ -38,7 +38,7 @@ contract VanitySharedGlobalCatalogTest is Test {
             vm.parseJsonBool(json, ".derivedTargets[0].suffixRequired"),
             "phase3 helper suffix cannot be required independently"
         );
-        assertEq(vm.parseJsonString(json, ".derivedTargets[1].contractName"), "DeploymentBatcherUniV4Helper");
+        assertEq(vm.parseJsonString(json, ".derivedTargets[1].contractName"), "DeploymentBatcherShareMeshHelper");
         assertEq(vm.parseJsonUint(json, ".derivedTargets[1].parentCreateNonce"), 2);
         assertFalse(
             vm.parseJsonBool(json, ".derivedTargets[1].suffixRequired"),

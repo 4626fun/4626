@@ -1,7 +1,7 @@
 // Inline contract ABIs extracted from DeployVault.tsx (mechanical move, no behavior change).
 // These are pure literal ABI arrays used by the deploy page's preflight reads and submit path.
 
-export const CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI = [
+export const CCA_LAUNCH_ARM_AUCTION_STATUS_ABI = [
   {
     name: 'getAuctionStatus',
     type: 'function',
@@ -66,7 +66,7 @@ export const CREATOR_VAULT_BATCHER_PENDING_AUCTION_ABI = [
         type: 'tuple',
         components: [
           { name: 'shareOFT', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'amount', type: 'uint256' },
         ],
       },
@@ -988,7 +988,7 @@ export const CREATOR_VAULT_BATCHER_ABI = [
         type: 'tuple',
         components: [
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
           { name: 'auction', type: 'address' },
         ],
@@ -1056,7 +1056,7 @@ export const CREATOR_VAULT_BATCHER_ABI = [
         type: 'tuple',
         components: [
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
           { name: 'auction', type: 'address' },
         ],
@@ -1078,7 +1078,7 @@ export const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'wrapper', type: 'address' },
           { name: 'shareOFT', type: 'address' },
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
           { name: 'version', type: 'string' },
           { name: 'depositAmount', type: 'uint256' },
@@ -1104,7 +1104,7 @@ export const CREATOR_VAULT_BATCHER_ABI = [
         type: 'tuple',
         components: [
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
           { name: 'auction', type: 'address' },
         ],
@@ -1126,7 +1126,7 @@ export const CREATOR_VAULT_BATCHER_ABI = [
           { name: 'wrapper', type: 'address' },
           { name: 'shareOFT', type: 'address' },
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
           { name: 'version', type: 'string' },
           { name: 'depositAmount', type: 'uint256' },
@@ -1169,7 +1169,7 @@ export const CREATOR_VAULT_BATCHER_ABI = [
         type: 'tuple',
         components: [
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
           { name: 'auction', type: 'address' },
         ],
@@ -1230,7 +1230,7 @@ export const CREATOR_VAULT_BATCHER_ABI = [
         type: 'tuple',
         components: [
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
           { name: 'auction', type: 'address' },
         ],

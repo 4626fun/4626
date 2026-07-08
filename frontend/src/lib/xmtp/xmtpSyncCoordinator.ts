@@ -73,7 +73,9 @@ export async function coordinatedConversationSync(
 
   if (syncInFlight) {
     await syncInFlight.catch(() => undefined)
-    return 'skipped_in_flight'
+    if (!options?.force) {
+      return 'skipped_in_flight'
+    }
   }
 
   const mode: 'full' | 'light' =

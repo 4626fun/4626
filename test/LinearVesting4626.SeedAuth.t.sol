@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {LinearVesting4626} from "@4626/shared/vesting/LinearVesting4626.sol";
+import {LinearVesting4626} from "@4626/shared/distribution/LinearVesting4626.sol";
 
 contract MockShareTokenForVesting is ERC20 {
     constructor() ERC20("Share", "SHR") {}

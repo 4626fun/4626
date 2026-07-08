@@ -20,7 +20,7 @@ export interface DeploymentRecord {
     wrapper: Address
     shareOFT: Address
     gaugeController?: Address
-    ccaStrategy?: Address
+    ccaLaunchArm?: Address
     burnStream?: Address
     payoutRouter?: Address
     oracle?: Address

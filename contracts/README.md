@@ -19,14 +19,16 @@ contracts/
 │   ├── bridge/
 │   ├── governance/    Platform-level (bribes, factories, ve4626 roots)
 │   ├── interfaces/    Lane-neutral + external interfaces only (bridge, core,
-│   │                  deploy, external, lottery, strategies, uniswap, vault)
+│   │                  deploy, external, lottery, shareoft-mesh, strategies, uniswap, vault)
 │   ├── libraries/     uniswap/ + vault/ (OVaultLiquidityLib)
-│   ├── lottery/       4626LotteryManager + VRF + randomness (shared singleton)
-│   ├── recovery/      Impairment claims + recovery escrow (vault-agnostic, both lanes)
-│   ├── revenue/       VaultShareBurnStream (both lanes point burnStream here)
-│   ├── strategies/    Reusable yield strategies (Ajna, CCA, Univ3/4, OVaultLPManager, etc.)
+│   ├── distribution/  LinearVesting4626 + VaultShareBurnStream (lane-shared payouts)
+│   ├── lottery/       LotteryManager4626 + VRFConsumer4626 + randomness (shared singleton)
+│   ├── shareoft-mesh/ ShareOFT mesh arms (CCA launch + post-CCA Uniswap V4 LP)
+│   │   ├── cca/       CCALaunchArm (+ config/encoding modules)
+│   │   └── univ4/     OVaultLPManager, ApprovedV4HooksRegistry
+│   ├── strategies/    Reusable yield strategies (Ajna, Charm, Univ3/4 legs, ERC4626 adapter)
 │   ├── vault/         OVaultHubComposer + lane-shared vault modules/
-│   └── vesting/       LinearVesting4626
+│   │   └── recovery/  OVaultImpairmentClaims + OVaultRecoveryEscrow
 ├── agent/
 │   ├── interfaces/    IAgentOVault, IAgentGaugeController, IAgentTokenV4, IAgentTaxAccountingAdapter
 │   ├── vault/         (AgentOVault, AgentOVaultWrapper, AgentShareOFT, core module)
@@ -49,7 +51,7 @@ contracts/
 
 | Area | Old | New |
 |------|-----|-----|
-| `Registry4626` / `I4626Registry` | `CreatorCoinInfo`, `registerCreatorCoin`, `setCreatorOracle`, `getCreatorCoin`, … | `TokenInfo`, `registerToken`, `setOracleForToken`, `getTokenInfo`, … |
+| `Registry4626` / `IRegistry4626` | `CreatorCoinInfo`, `registerCreatorCoin`, `setCreatorOracle`, `getCreatorCoin`, … | `TokenInfo`, `registerToken`, `setOracleForToken`, `getTokenInfo`, … |
 | `CharmStrategy4626` | `CREATOR`, `creatorOracle`, `setCreatorOracle` | `ASSET`, `assetOracle`, `setAssetOracle` |
 | Univ4 LP strategies + `ILPStrategy` | `CREATOR_COIN`, `creatorIsCurrency0`, `creatorCoinAmount` | `ASSET`, `assetIsCurrency0`, `assetCoinAmount` |
 | `LotteryManager4626` | `getCreatorLotteryStats`, `creatorStats` | `getTokenLotteryStats`, `tokenStats` |
@@ -84,7 +86,7 @@ All lane-specific code lives under `agent/` or `creator/`. Shared singletons and
 
 The two lane folders are **intentionally not identical**. The creator lane is the base implementation; the agent lane relates to it in three ways:
 
-1. **Thin overlays (inheritance, no duplication).** `AgentOVault` extends `CreatorOVault` and only overrides the expected core-module kind. `AgentOVaultCoreModule` extends `CreatorOVaultCoreModule`, swapping exact-transfer accounting for measured fee-on-transfer accounting. Both lanes directly reuse the lane-shared vault machinery under `shared/vault/` (admin/strategies modules, module base/storage, `OVaultLiquidityLib`, `OVaultHubComposer`), `shared/revenue/VaultShareBurnStream`, and `shared/recovery/` — those contracts have no per-lane copies on purpose (see the naming note above).
+1. **Thin overlays (inheritance, no duplication).** `AgentOVault` extends `CreatorOVault` and only overrides the expected core-module kind. `AgentOVaultCoreModule` extends `CreatorOVaultCoreModule`, swapping exact-transfer accounting for measured fee-on-transfer accounting. Both lanes directly reuse the lane-shared vault machinery under `shared/vault/` (admin/strategies modules, module base/storage, `OVaultLiquidityLib`, `OVaultHubComposer`, recovery escrow/claims), `shared/distribution/VaultShareBurnStream`, and `shared/distribution/LinearVesting4626` — those contracts have no per-lane copies on purpose (see the naming note above).
 
 2. **Copy-renamed forks (guarded).** Four contracts are per-lane forks whose logic must stay identical; only ABI-visible identifier naming differs (e.g. `agentTreasury` vs `creatorTreasury`, `setAgentToken` vs `setCreatorCoin`, `◆/◇` vs `■/▢`). The per-lane names are deliberate — they are baked into deployed ABIs, indexers, and deploy bytecode manifests — so the files stay separate, and CI enforces logic parity:
 
@@ -128,4 +130,4 @@ Deployment orchestration lives in `shared/deploy/batchers/`. `DeploymentBatcher`
 
 Bytecode epoch ops: `deployments/base/v1.16.0-bytecode-manifest.json` + `docs/_internal/deployment-releases-legacy/v1.16.0-bytecode-epoch.md` (store re-seed via `./script/seed-v1160-bytecode-store.sh`).
 
-V4 tax hook pool configuration is applied through `CCALaunchStrategy.setOracleConfig` during phase 2 — there is no separate `TaxHookConfigurator` helper contract in-tree.
+V4 tax hook pool configuration is applied through `CCALaunchArm.setOracleConfig` during phase 2 — there is no separate `TaxHookConfigurator` helper contract in-tree.

@@ -55,7 +55,7 @@ export const DEPLOY_CURRENCY_VALUES: DeployCurrencyInput[] = ['ETH', 'ZORA', 'CR
 
 export const SUPPORTED_METADATA_URI_PREFIXES = ['https://', 'http://', 'ipfs://', 'ar://', 'data:'] as const
 
-export const CCA_LAUNCH_STRATEGY_ABI = [
+export const CCA_LAUNCH_ARM_ABI = [
   {
     name: 'getAuctionStatus',
     type: 'function',

@@ -1,8 +1,20 @@
 # contracts/ Folder Architecture Optimization Proposal
 
-**Date:** 2026-07-05
-**Status:** PROPOSAL — awaiting go-ahead before execution
+**Date:** 2026-07-05  
+**Status:** PARTIAL — July 2026 slice executed (shareoft-mesh, distribution, vault/recovery, LBP archive); full proposal below remains backlog  
 **Author:** GLM 5.2 (automated audit)
+
+### Executed slice (2026-07-07)
+
+| Change | Canonical path |
+|--------|----------------|
+| CCA launch + mesh LP arms | `shared/shareoft-mesh/{cca,univ4}/` |
+| Impairment/recovery companions | `shared/vault/recovery/` |
+| Vesting + burn stream | `shared/distribution/` |
+| CCA interface | `shared/interfaces/shareoft-mesh/ICCALaunchArm.sol` |
+| Retired LBP experiment | `contracts/_archive/strategies/launchpad/` (excluded from `forge build`) |
+
+Regression guard: `pnpm -C frontend guard:contracts-folder-paths` (blocks retired paths above).
 
 ---
 
@@ -49,7 +61,7 @@ adapted to 4626's dual-lane (Creator + Agent) structure.
 ```
 contracts/
 ├── core/                          # Protocol singleton registry
-│   └── 4626Registry.sol
+│   └── Registry4626.sol
 │
 ├── vault/                         # ERC-4626 vaults + modules + wrappers
 │   ├── creator/
@@ -75,9 +87,9 @@ contracts/
 │
 ├── strategies/                    # Vault yield strategies (was vault/strategies)
 │   ├── cca/
-│   │   ├── CCALaunchStrategy.sol
-│   │   ├── CCALaunchStrategyConfigModule.sol
-│   │   └── CCALaunchStrategyEncodingHelper.sol
+│   │   ├── CCALaunchArm.sol
+│   │   ├── CCALaunchArmConfigModule.sol
+│   │   └── CCALaunchArmEncodingHelper.sol
 │   ├── ajna/
 │   │   ├── AjnaERC4626Vault.sol
 │   │   ├── AjnaVaultAuth.sol
@@ -112,8 +124,8 @@ contracts/
 │
 ├── lottery/                       # Unified lottery domain (was split)
 │   ├── manager/
-│   │   ├── 4626LotteryManager.sol
-│   │   └── 4626VRFConsumer.sol
+│   │   ├── LotteryManager4626.sol
+│   │   └── VRFConsumer4626.sol
 │   ├── randomness/
 │   │   ├── IRandomnessSource.sol
 │   │   ├── RandomnessRouter.sol
@@ -188,7 +200,7 @@ contracts/
 │
 └── interfaces/                    # ALL interfaces, organized by domain
     ├── core/
-    │   ├── I4626Registry.sol
+    │   ├── IRegistry4626.sol
     │   ├── ICreatorRegistry.sol          # alias (kept for compat)
     │   ├── ICreatorOVault.sol
     │   ├── IAgentOVault.sol
@@ -201,7 +213,7 @@ contracts/
     │   ├── IStrategy.sol
     │   ├── IStrategyValuation.sol
     │   ├── ILPStrategy.sol
-    │   └── ICCALaunchStrategy.sol
+    │   └── ICCALaunchArm.sol
     ├── oracles/
     │   └── ICreatorOracle.sol
     ├── bridge/
@@ -287,12 +299,12 @@ Add to `foundry.toml` remappings:
 This converts:
 ```solidity
 import {CreatorLinearVesting} from "../../utilities/vesting/CreatorLinearVesting.sol";
-import {I4626Registry} from "../../interfaces/core/I4626Registry.sol";
+import {IRegistry4626} from "../../interfaces/core/IRegistry4626.sol";
 ```
 to:
 ```solidity
 import {CreatorLinearVesting} from "@4626/creator/vesting/CreatorLinearVesting.sol";
-import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
+import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 ```
 
 Benefits:

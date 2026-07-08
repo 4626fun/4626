@@ -7,13 +7,13 @@ import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 
 // Reuse the existing hub harness + mocks to avoid duplicate mock contract names.
 import {
-    CreatorVRFConsumerHarness,
+    VRFConsumer4626Harness,
     MockVRFCoordinatorV2Plus,
     MockRegistry4626ForVRF,
     MockEndpointV2
 } from "test/vault/VRFConsumer4626.RelayFunding.t.sol";
 
-contract CreatorVRFConsumerV25SequenceScopingTest is Test {
+contract VRFConsumer4626SequenceScopingTest is Test {
     uint32 internal constant BASE_EID = 30184;
 
     uint32 internal constant REMOTE_EID_A = 30110;
@@ -23,7 +23,7 @@ contract CreatorVRFConsumerV25SequenceScopingTest is Test {
     bytes32 internal constant REMOTE_PEER_A = bytes32(uint256(0xA11CE));
     bytes32 internal constant REMOTE_PEER_B = bytes32(uint256(0xB0B));
 
-    CreatorVRFConsumerHarness internal consumer;
+    VRFConsumer4626Harness internal consumer;
     MockVRFCoordinatorV2Plus internal coordinator;
 
     function setUp() external {
@@ -31,7 +31,7 @@ contract CreatorVRFConsumerV25SequenceScopingTest is Test {
         MockRegistry4626ForVRF registry = new MockRegistry4626ForVRF(address(endpoint), BASE_EID);
         coordinator = new MockVRFCoordinatorV2Plus();
 
-        consumer = new CreatorVRFConsumerHarness(address(registry), address(this));
+        consumer = new VRFConsumer4626Harness(address(registry), address(this));
         consumer.setVRFCoordinator(address(coordinator));
         consumer.setVRFConfig(1, bytes32(uint256(0xAA)), 40000, 3);
 

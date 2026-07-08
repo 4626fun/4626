@@ -43,19 +43,19 @@ export async function executeSolanaGraduation(): Promise<GraduationResult> {
     deadlineTriggered: false,
   };
 
-  const ccaStrategy = process.env.CCA_STRATEGY as `0x${string}` | undefined;
+  const ccaLaunchArm = process.env.CCA_STRATEGY as `0x${string}` | undefined;
   const alphaVaultAddress = process.env.ALPHA_VAULT_ADDRESS;
   const graduationDeadline = process.env.GRADUATION_DEADLINE_UTC;
 
   // Only active during launch window — if no CCA or vault configured, skip.
-  if (!ccaStrategy || !alphaVaultAddress) {
+  if (!ccaLaunchArm || !alphaVaultAddress) {
     return result;
   }
 
   try {
     // Step 1: Check CCA graduation status on Base.
     const auctionAddress = await readContract<`0x${string}`>({
-      address: ccaStrategy,
+      address: ccaLaunchArm,
       abi: CCA_STRATEGY_ABI,
       functionName: 'currentAuction',
     });

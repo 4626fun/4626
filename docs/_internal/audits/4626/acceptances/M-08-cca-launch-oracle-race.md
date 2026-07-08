@@ -1,9 +1,9 @@
-# M-08 — CCALaunchStrategy Oracle Configuration During Pool Init Race
+# M-08 — CCALaunchArm Oracle Configuration During Pool Init Race
 
 - **Linear:** [4626-317](https://linear.app/4626fun/issue/4626-317)
 - **Severity:** Medium
 - **Confidence (auditor):** Plausible
-- **File:** `contracts/vault/strategies/CCALaunchStrategy.sol::migrate` → `_configureOracleV4Pool`
+- **File:** `contracts/vault/strategies/CCALaunchArm.sol::migrate` → `_configureOracleV4Pool`
 - **Finding:** `poolManager.initialize(key, sqrtPriceX96)` goes live before `_configureOracleV4Pool()` is called. Between those two calls the pool accepts swaps but the oracle is not yet pointed at it; any swap in the window reads a stale or unconfigured oracle price.
 
 ## Disposition: Code change deferred, operational mitigation documented below
@@ -14,7 +14,7 @@ The mechanical fix is to call `_configureOracleV4Pool()` immediately after `pool
 - whether downstream systems (lottery pricing, LBP migration) can tolerate reading the oracle during the mint phase,
 - whether any keeper job polls the pool between `initialize` and `migrate` completion.
 
-Because `CCALaunchStrategy.migrate()` is called by the deployment orchestrator in a single atomic transaction wrapping `initialize` → `mint` → `_configureOracleV4Pool`, the real-world exposure window is only the intra-transaction interval. External contracts cannot observe the pool mid-transaction. The only way to exploit this is if another transaction in the same block front-runs the rest of `migrate` after `initialize` succeeds — possible only if `migrate` is externally re-entered, which it is not (it is called once by the orchestrator).
+Because `CCALaunchArm.migrate()` is called by the deployment orchestrator in a single atomic transaction wrapping `initialize` → `mint` → `_configureOracleV4Pool`, the real-world exposure window is only the intra-transaction interval. External contracts cannot observe the pool mid-transaction. The only way to exploit this is if another transaction in the same block front-runs the rest of `migrate` after `initialize` succeeds — possible only if `migrate` is externally re-entered, which it is not (it is called once by the orchestrator).
 
 ## Operational mitigation (in force today)
 

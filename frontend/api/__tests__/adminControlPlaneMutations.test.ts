@@ -132,7 +132,7 @@ describe('admin control-plane mutation handlers', () => {
       body: {
         vaultAddress: '0x1111111111111111111111111111111111111111',
         actionType: 'vault.sweep',
-        payload: { ccaStrategyAddress: '0x3333333333333333333333333333333333333333' },
+        payload: { ccaLaunchArmAddress: '0x3333333333333333333333333333333333333333' },
       },
     })
     const res = createMockRes()

@@ -12,7 +12,7 @@
 | Domain | Key contracts |
 |--------|----------------|
 | ERC-4626 vault | `CreatorOVault`, modules (`Core`/`Admin`/`Strategies`), `CreatorOVaultWrapper`, impairment/escrow |
-| Strategies | `CCALaunchStrategy`, `ERC4626StrategyAdapter`, Charm/Ajna bundle |
+| Strategies | `CCALaunchArm`, `ERC4626StrategyAdapter`, Charm/Ajna bundle |
 | Lottery / gauge / oracle | `CreatorLotteryManager`, `CreatorGaugeController`, `CreatorOracle`, `ve4626VoterRewardsDistributor` |
 | ve(3,3) | `ve4626`, `ve4626BoostManager`, `ve4626GaugeVoting`, `BribeDepot` |
 | Cross-chain | `CreatorShareOFT`, `OVaultHubComposer`, `SolanaBridgeAdapter` |

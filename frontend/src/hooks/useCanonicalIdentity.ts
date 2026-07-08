@@ -25,7 +25,7 @@ import {
  *     authoritative parent Coinbase Smart Wallet for this profile)
  *   - SIWE session (confirms auth + as a fallback when `/accounts/me`
  *     hasn't loaded yet)
- *   - On-chain read: CreatorRegistry.getTokenForVault(csw) → creator coin addr
+ *   - On-chain read: Registry4626.getTokenForVault(csw) → creator coin addr
  *
  * Design notes:
  *   - `cswAddress` is the PARENT CSW — what owns the creator's vault,
@@ -39,7 +39,7 @@ import {
  *     non-Privy external wallet as connected. Privy's embedded wallet
  *     shows up through the Privy SDK, not wagmi.
  *   - `creatorCoinAddress` is resolved lazily once per CSW via a single
- *     `getTokenForVault` read against the live `CreatorRegistry`. Cached
+ *     `getTokenForVault` read against the live `Registry4626`. Cached
  *     in-memory for the session to avoid re-reading on every render.
  */
 

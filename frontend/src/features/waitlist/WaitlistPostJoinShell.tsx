@@ -1,9 +1,10 @@
-import { Suspense, lazy, useMemo } from 'react'
+import { useMemo } from 'react'
 
 import { LoadingInline } from '@/components/ui/LoadingState'
 import { useAccountMe } from '@/hooks/useAccountMe'
 import { isZoraLinkedFromAccountSignals } from '@/lib/wallet/userExecutionTrack'
 
+import { WaitlistChatDock } from './WaitlistChatDock'
 import { WaitlistOwnerInstallPanel } from './WaitlistOwnerInstallPanel'
 import { WaitlistWalletProvision } from './WaitlistWalletProvision'
 import { useWaitlistSigningStepComplete } from './useWaitlistSigningStepComplete'
@@ -13,11 +14,6 @@ import {
   shouldShowParentCswAddOwnerPanel,
   type WaitlistConnectTrack,
 } from './waitlistFlowState'
-
-const LazyWaitlistGroupChatPanel = lazy(async () => {
-  const mod = await import('./WaitlistGroupChatPanel')
-  return { default: mod.WaitlistGroupChatPanel }
-})
 
 type WaitlistPostJoinShellProps = {
   enabled: boolean
@@ -117,19 +113,11 @@ function WaitlistPostJoinShellInner() {
         </div>
       ) : null}
 
-      <Suspense
-        fallback={
-          <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-5">
-            <LoadingInline labelOverride="Loading waitlist chat…" />
-          </div>
-        }
-      >
-        <LazyWaitlistGroupChatPanel
-          setupComplete
-          messagingReady={messagingReady}
-          connectTrack={connectTrack}
-        />
-      </Suspense>
+      <WaitlistChatDock
+        setupComplete
+        messagingReady={messagingReady}
+        connectTrack={connectTrack}
+      />
     </div>
   )
 }

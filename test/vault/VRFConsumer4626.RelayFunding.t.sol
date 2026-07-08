@@ -49,7 +49,7 @@ contract MockVRFCoordinatorV2Plus is IVRFCoordinatorV2Plus {
     }
 }
 
-contract CreatorVRFConsumerHarness is VRFConsumer4626 {
+contract VRFConsumer4626Harness is VRFConsumer4626 {
     uint256 public mockNativeFee = 0.01 ether;
     uint256 public lzSendCount;
     uint32 public lastDstEid;
@@ -81,14 +81,14 @@ contract CreatorVRFConsumerHarness is VRFConsumer4626 {
     }
 }
 
-contract CreatorVRFConsumerV25RelayFundingTest is Test {
+contract VRFConsumer4626RelayFundingTest is Test {
     uint32 internal constant BASE_EID = 30184;
     uint32 internal constant REMOTE_EID = 30110;
     uint32 internal constant REMOTE_GAS_LIMIT = 200_000;
 
     bytes32 internal remotePeer = bytes32(uint256(0xBEEF));
 
-    CreatorVRFConsumerHarness internal consumer;
+    VRFConsumer4626Harness internal consumer;
     MockVRFCoordinatorV2Plus internal coordinator;
 
     address internal relayer = address(0x1234);
@@ -99,7 +99,7 @@ contract CreatorVRFConsumerV25RelayFundingTest is Test {
         MockRegistry4626ForVRF registry = new MockRegistry4626ForVRF(address(endpoint), BASE_EID);
         coordinator = new MockVRFCoordinatorV2Plus();
 
-        consumer = new CreatorVRFConsumerHarness(address(registry), address(this));
+        consumer = new VRFConsumer4626Harness(address(registry), address(this));
         consumer.setVRFCoordinator(address(coordinator));
         consumer.setVRFConfig(1, bytes32(uint256(0xAA)), 40000, 3);
         consumer.setSupportedChain(REMOTE_EID, true, REMOTE_GAS_LIMIT);
@@ -115,7 +115,7 @@ contract CreatorVRFConsumerV25RelayFundingTest is Test {
         MockRegistry4626ForVRF badRegistry = new MockRegistry4626ForVRF(address(endpoint), 0);
 
         vm.expectRevert(abi.encodeWithSelector(VRFConsumer4626.MissingLayerZeroEid.selector, block.chainid));
-        new CreatorVRFConsumerHarness(address(badRegistry), address(this));
+        new VRFConsumer4626Harness(address(badRegistry), address(this));
     }
 
     function test_remoteFulfillmentQueuesPendingWithoutAutoSend() external {

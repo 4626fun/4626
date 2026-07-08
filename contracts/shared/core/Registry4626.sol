@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
+import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 
 /**
  * @title Registry4626
@@ -10,7 +10,7 @@ import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
  * @notice Registry for 4626 deployments and configs (supports creator, agent, and future ecosystems).
  * @dev Used by factories, vaults, and OFTs to resolve per-lane addresses via vaultKind / token registration.
  */
-contract Registry4626 is I4626Registry, Ownable {
+contract Registry4626 is IRegistry4626, Ownable {
     // =================================
     // CONSTANTS
     // =================================

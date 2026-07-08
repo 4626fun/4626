@@ -9,7 +9,7 @@ import {
     AjnaERC4626StrategyFactory
 } from "@4626/shared/deploy/batchers/StrategyDeploymentFactories.sol";
 import "@4626/shared/deploy/batchers/VaultActivationBatcher.sol";
-import "@4626/shared/strategies/cca/ERC4626StrategyAdapter.sol";
+import "@4626/shared/strategies/ERC4626StrategyAdapter.sol";
 import "@4626/shared/strategies/univ3/CharmStrategy4626.sol";
 
 /// @notice Minimal interface for Charm vault queries

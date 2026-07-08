@@ -13,12 +13,12 @@ The most persistent hot spot is `CreatorLotteryManager` (the largest production 
 
 See the full June 2026 pass summary for context: `docs/audits/x-ray/contract-audit-pass-2026-06.md` (SC-03 and CLM size section).
 
-(The original C-04 finding was about `CCALaunchStrategy`; that risk was addressed via earlier splits and the gate below. The active risk tracked in later audits and the x-ray pass is the lottery manager.)
+(The original C-04 finding was about `CCALaunchArm`; that risk was addressed via earlier splits and the gate below. The active risk tracked in later audits and the x-ray pass is the lottery manager.)
 
 ## Current remediation scope
 
 This PR (Sprint 2) adds the following behavioural changes to
-`CCALaunchStrategy.migrate()` for audit finding H-02 (4626-294):
+`CCALaunchArm.migrate()` for audit finding H-02 (4626-294):
 
 - Imports: `StateLibrary`, `PoolIdLibrary` from Uniswap v4-core
 - New custom error: `MigrationSqrtPriceMismatch`
@@ -41,7 +41,7 @@ PR base commit and at the tip of this branch:
 ```bash
 forge clean
 forge build --sizes 2>&1 | tee /tmp/sizes.log
-grep -E "(CCALaunchStrategy|FullRangeStrategy|SolanaStrategy)" \
+grep -E "(CCALaunchArm|FullRangeStrategy|SolanaStrategy)" \
     /tmp/sizes.log
 ```
 
@@ -50,7 +50,7 @@ Acceptable outcomes for **merge**:
 1. Every contract printed by `--sizes` is **at or below 24,576 bytes**.
 2. CI's `forge build --sizes` step is green.
 
-If `CCALaunchStrategy` is within 5% of the cap (~23,347 bytes), the
+If `CCALaunchArm` is within 5% of the cap (~23,347 bytes), the
 reviewer should open a follow-up ticket to split the contract before
 the next feature lands on that file — Sprint 3 is the right window.
 
@@ -109,7 +109,7 @@ This policy was strengthened after the June 2026 pass (see also the script heade
 
 ## Why no module split in Sprint 2
 
-The audit recommended a three-way split of `CCALaunchStrategy` into:
+The audit recommended a three-way split of `CCALaunchArm` into:
 
 1. `CCALaunchSetup` — pool creation + initial liquidity
 2. `CCALaunchMigration` — LBP → full-range migration (this is the
@@ -172,6 +172,6 @@ any release that re-wires the AMOE router.
 - EIP-170: https://eips.ethereum.org/EIPS/eip-170
 - Forge `--sizes` flag: https://book.getfoundry.sh/forge/contract-sizes
 - June 2026 x-ray contract audit pass: `docs/audits/x-ray/contract-audit-pass-2026-06.md` (especially CLM size / SC-03 findings and recommendations)
-- Historical: Linear 4626-292 (C-04), earlier audit notes on CCALaunchStrategy
+- Historical: Linear 4626-292 (C-04), earlier audit notes on CCALaunchArm
 
 **Post-June 2026 pass note:** The active size risk and the strengthened "size budget review" PR policy are tracked in the x-ray pass summary and the updated warn-guard script. The hard gate + warn-guard + policy together form the current defence-in-depth.

@@ -164,9 +164,8 @@ async function classifyLinkedProfile(
   signupId: number,
 ): Promise<'verified_privy' | 'linked'> {
   const row = await db.sql`
-    SELECT p.email, p.privy_user_id, a.email_verified
+    SELECT p.email, p.privy_user_id, p.email_verified
     FROM profiles p
-    LEFT JOIN accounts a ON a.privy_user_id = p.privy_user_id
     WHERE p.id = ${signupId}
     LIMIT 1;
   `

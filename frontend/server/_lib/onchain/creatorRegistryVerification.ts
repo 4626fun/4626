@@ -216,7 +216,7 @@ export function shouldAttemptGrandfatheredKeeperFallback(
 }
 
 /**
- * Keeper listing validation: strict CreatorRegistry binding first, then on-chain
+ * Keeper listing validation: strict Registry4626 binding first, then on-chain
  * grandfathered fallback for pre-registry vaults (for example AKITA).
  */
 export async function validateKeeperVaultListing(

@@ -19,11 +19,11 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 
 | Contract | Address |
 |----------|---------|
-| CreatorRegistry | `0x1eb9A364a3E763dD9249ba3413Dc19E13c1F4461` |
+| Registry4626 | `0x1eb9A364a3E763dD9249ba3413Dc19E13c1F4461` |
 | OVaultFactory4626 | `0x26b74b1d3AadD17e714068d259051409C9f942d1` |
 | VaultActivationBatcher | `0xB06d99c81994F5829ba462c4afA78eCff75bC281` |
-| CreatorLotteryManager | `0xD62a8a2F4c25587FA80ED5782b50Af6654122b0b` |
-| CreatorVRFConsumerV2_5 | `0x933A3BE4a4BF00dD3B71c50Dee4972539a32bE47` |
+| LotteryManager4626 | `0xD62a8a2F4c25587FA80ED5782b50Af6654122b0b` |
+| VRFConsumer4626 | `0x933A3BE4a4BF00dD3B71c50Dee4972539a32bE47` |
 | SolanaBridgeAdapter | `0x363662F9728A9fd12c7CA398e5A6d1d9E7De07F1` |
 | UniversalBytecodeStoreV2 | `0x7D1029a832E2BEd2C961bC912b623b763862Ad3C` |
 | UniversalCreate2DeployerFromStore | `0xdC75A18C521f6Ae1ACa112A98E46c8231F431BC0` |

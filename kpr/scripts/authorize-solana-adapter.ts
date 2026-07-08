@@ -1,5 +1,5 @@
 /**
- * Authorize SolanaBridgeAdapter as a swap contract on CreatorLotteryManager.
+ * Authorize SolanaBridgeAdapter as a swap contract on LotteryManager4626.
  *
  * Env:
  * - LOTTERY_MANAGER (Base address)

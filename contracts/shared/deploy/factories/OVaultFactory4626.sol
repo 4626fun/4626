@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
+import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 
 /**
  * @title OVaultFactory4626
@@ -43,7 +43,7 @@ contract OVaultFactory4626 is Ownable {
     // STATE
     // =================================
 
-    I4626Registry public registry;
+    IRegistry4626 public registry;
     uint256 public deploymentCount;
 
     mapping(address => DeploymentInfo) public deployments;
@@ -58,7 +58,7 @@ contract OVaultFactory4626 is Ownable {
         address wrapper;
         address shareOFT;
         address gaugeController;
-        address ccaStrategy;
+        address ccaLaunchArm;
         address oracle;
         address creator;
         uint256 deployedAt;
@@ -75,7 +75,7 @@ contract OVaultFactory4626 is Ownable {
         address wrapper,
         address shareOFT,
         address gaugeController,
-        address ccaStrategy,
+        address ccaLaunchArm,
         address oracle,
         address creator
     );
@@ -98,7 +98,7 @@ contract OVaultFactory4626 is Ownable {
     constructor(address _registry, address _owner) Ownable(_owner) {
         if (_owner == address(0)) revert ZeroAddress();
         if (_registry != address(0)) {
-            registry = I4626Registry(_registry);
+            registry = IRegistry4626(_registry);
         }
         // Owner is always authorized
         authorizedDeployers[_owner] = true;
@@ -131,7 +131,7 @@ contract OVaultFactory4626 is Ownable {
      * @notice Update registry address
      */
     function setRegistry(address _registry) external onlyOwner {
-        registry = I4626Registry(_registry);
+        registry = IRegistry4626(_registry);
         emit RegistryUpdated(_registry);
     }
 
@@ -149,7 +149,7 @@ contract OVaultFactory4626 is Ownable {
         address _wrapper,
         address _shareOFT,
         address _gaugeController,
-        address _ccaStrategy,
+        address _ccaLaunchArm,
         address _oracle,
         address _creator
     ) external onlyAuthorizedDeployer {
@@ -166,7 +166,7 @@ contract OVaultFactory4626 is Ownable {
             wrapper: _wrapper,
             shareOFT: _shareOFT,
             gaugeController: _gaugeController,
-            ccaStrategy: _ccaStrategy,
+            ccaLaunchArm: _ccaLaunchArm,
             oracle: _oracle,
             creator: _creator,
             deployedAt: block.timestamp,
@@ -183,7 +183,7 @@ contract OVaultFactory4626 is Ownable {
         }
 
         emit DeploymentRegistered(
-            _creatorCoin, _vault, _wrapper, _shareOFT, _gaugeController, _ccaStrategy, _oracle, _creator
+            _creatorCoin, _vault, _wrapper, _shareOFT, _gaugeController, _ccaLaunchArm, _oracle, _creator
         );
     }
 

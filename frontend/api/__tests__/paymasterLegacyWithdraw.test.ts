@@ -80,7 +80,7 @@ vi.mock('../../src/deploy/bytecode.generated.js', () => ({
     CreatorShareOFT: ('0x' + '00'.repeat(32)) as `0x${string}`,
     OFTBootstrapRegistry: ('0x' + '00'.repeat(32)) as `0x${string}`,
     CreatorGaugeController: ('0x' + '00'.repeat(32)) as `0x${string}`,
-    CCALaunchStrategy: ('0x' + '00'.repeat(32)) as `0x${string}`,
+    CCALaunchArm: ('0x' + '00'.repeat(32)) as `0x${string}`,
     CreatorOracle: ('0x' + '00'.repeat(32)) as `0x${string}`,
     PayoutRouter: ('0x' + '00'.repeat(32)) as `0x${string}`,
     VaultShareBurnStream: ('0x' + '00'.repeat(32)) as `0x${string}`,

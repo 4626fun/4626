@@ -5073,6 +5073,9 @@ export type Database = {
           newest_projected_score_at: string | null
           observed_at: string | null
           oldest_projected_score_at: string | null
+          rows_missing_no_identity_key: number | null
+          rows_missing_no_matched_cache: number | null
+          rows_missing_projection_gap: number | null
           rows_missing_score: number | null
           rows_stale_over_24h: number | null
           rows_with_score: number | null

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { ChatWindow } from '@/components/chat/ChatWindow'
 import { Button } from '@/components/ui/Button'
@@ -155,9 +155,29 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
     hasGroupConversation: Boolean(groupConversation),
     syncTimedOut,
     needsConnectMessaging,
+    messagingConnected,
     prepareError,
     xmtpError: displayXmtpError,
   })
+
+  const autoConnectAttemptedRef = useRef(false)
+  useEffect(() => {
+    if (
+      joinStatus !== 'executed' ||
+      messagingConnected ||
+      isConnecting ||
+      prepareBusy ||
+      !chatReady ||
+      autoConnectAttemptedRef.current
+    ) {
+      return
+    }
+    autoConnectAttemptedRef.current = true
+    const timer = window.setTimeout(() => {
+      void connectAndJoin({ skipJoinRetry: true })
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [chatReady, connectAndJoin, isConnecting, joinStatus, messagingConnected, prepareBusy])
 
   const statusMessage = waitlistXmtpPhaseMessage(phase, {
     joinStatus,
@@ -268,11 +288,15 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
                 size="sm"
                 loading={prepareBusy || isConnecting}
                 disabled={prepareBusy || isConnecting || (isReauthError && !onRequestReauth)}
-                onClick={() => void connectAndJoin()}
+                onClick={() => void (joinStatus === 'executed' ? reconnectMessaging() : connectAndJoin())}
               >
-                {isConnecting ? 'Connecting…' : connectTrack === 'base-app-direct'
-                  ? 'Connect Base App & join chat'
-                  : 'Connect & join waitlist chat'}
+                {isConnecting
+                  ? 'Connecting…'
+                  : joinStatus === 'executed'
+                    ? 'Reconnect messaging'
+                    : connectTrack === 'base-app-direct'
+                      ? 'Connect Base App & join chat'
+                      : 'Connect & join waitlist chat'}
               </Button>
             ) : null}
 
@@ -317,7 +341,11 @@ export function WaitlistGroupChatSurface(props: WaitlistGroupChatSurfaceProps) {
 
           {isReauthError && !onRequestReauth ? (
             <p className="text-[10px] text-zinc-500">
-              Session repair is unavailable here. Use Sign out, then sign in again.
+              Session repair is unavailable here. Hard refresh the page, or sign out and sign in again with email OTP.
+            </p>
+          ) : isReauthError ? (
+            <p className="text-[10px] text-zinc-500">
+              On localhost, Privy may require a fresh email OTP sign-in if refresh does not restore the embedded signer.
             </p>
           ) : null}
         </div>

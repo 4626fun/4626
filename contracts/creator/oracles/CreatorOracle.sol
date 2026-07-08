@@ -6,7 +6,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
-import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
+import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
@@ -305,12 +305,12 @@ contract CreatorOracle is OApp, IOracle4626 {
      *      This allows same constructor args → same CREATE2 address on all chains.
      */
     constructor(address _registry, address _chainlinkFeed, string memory _assetSymbol, address _owner)
-        OApp(I4626Registry(_registry).getLayerZeroEndpoint(block.chainid), _owner)
+        OApp(IRegistry4626(_registry).getLayerZeroEndpoint(block.chainid), _owner)
         Ownable(_owner)
     {
         if (_registry == address(0)) revert ZeroAddress();
 
-        BASE_EID = I4626Registry(_registry).hubChainEid();
+        BASE_EID = IRegistry4626(_registry).hubChainEid();
         if (BASE_EID == 0) revert InvalidBaseEid();
 
         chainlinkFeed = _chainlinkFeed;

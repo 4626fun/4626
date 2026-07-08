@@ -55,7 +55,7 @@ export function mergeStrategyContracts(
   }
   return {
     ...profile.contracts,
-    ccaStrategy: readAddress('ccaStrategy') ?? readAddress('ccaStrategyAddress'),
+    ccaLaunchArm: readAddress('ccaLaunchArm') ?? readAddress('ccaLaunchArmAddress'),
     ajnaAdapter: readAddress('ajnaAdapter') ?? readAddress('strategyAdapter'),
     ajnaInnerVault: readAddress('ajnaInnerVault') ?? readAddress('innerAjnaVault'),
     ajnaAuth: readAddress('ajnaAuth'),

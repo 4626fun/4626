@@ -113,7 +113,7 @@ async function main(): Promise<void> {
     wrapper,
     shareOFT: shareOft,
     gaugeController: AKITA_DEFAULTS.gaugeController as Address,
-    ccaStrategy: AKITA_DEFAULTS.ccaStrategy as Address,
+    ccaLaunchArm: AKITA_DEFAULTS.ccaLaunchArm as Address,
     oracle: AKITA_DEFAULTS.oracle as Address,
     version: getArg('--version', 'v1.2.3x-akita-redeploy'),
     depositAmount: BigInt(getArg('--deposit-amount', String(50_000_000n * 10n ** 18n))),

@@ -47,7 +47,7 @@ export function resolveDeployLanePhase1CodeIds(vaultKind: VaultKind): DeployLane
       wrapper: keccak256(DEPLOY_BYTECODE.AgentOVaultWrapper as Hex),
       shareOFT: keccak256(DEPLOY_BYTECODE.AgentShareOFT as Hex),
       gauge: keccak256(DEPLOY_BYTECODE.AgentGaugeController as Hex),
-      cca: keccak256(DEPLOY_BYTECODE.CCALaunchStrategy as Hex),
+      cca: keccak256(DEPLOY_BYTECODE.CCALaunchArm as Hex),
       oracle: keccak256(DEPLOY_BYTECODE.AgentOracle as Hex),
       oftBootstrap: keccak256(DEPLOY_BYTECODE.OFTBootstrapRegistry as Hex),
     }
@@ -58,7 +58,7 @@ export function resolveDeployLanePhase1CodeIds(vaultKind: VaultKind): DeployLane
     wrapper: keccak256(DEPLOY_BYTECODE.CreatorOVaultWrapper as Hex),
     shareOFT: keccak256(DEPLOY_BYTECODE.CreatorShareOFT as Hex),
     gauge: keccak256(DEPLOY_BYTECODE.CreatorGaugeController as Hex),
-    cca: keccak256(DEPLOY_BYTECODE.CCALaunchStrategy as Hex),
+    cca: keccak256(DEPLOY_BYTECODE.CCALaunchArm as Hex),
     oracle: keccak256(DEPLOY_BYTECODE.CreatorOracle as Hex),
     oftBootstrap: keccak256(DEPLOY_BYTECODE.OFTBootstrapRegistry as Hex),
   }

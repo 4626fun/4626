@@ -2,15 +2,15 @@
 pragma solidity 0.8.30;
 
 import "forge-std/Test.sol";
-import {DeploymentBatcher, DeploymentBatcherUtilsHelper, DeploymentBatcherPhase1Module, DeploymentBatcherPhase2Module, DeploymentBatcherPhase3Helper, DeploymentBatcherUniV4Helper} from "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
-import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
+import {DeploymentBatcher, DeploymentBatcherUtilsHelper, DeploymentBatcherPhase1Module, DeploymentBatcherPhase2Module, DeploymentBatcherPhase3Helper, DeploymentBatcherShareMeshHelper} from "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
+import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 
 contract DeploymentBatcherFixture is Test {
     struct Helpers {
         DeploymentBatcherUtilsHelper utils;
         DeploymentBatcherPhase2Module phase2;
         DeploymentBatcherPhase3Helper phase3;
-        DeploymentBatcherUniV4Helper uniV4;
+        DeploymentBatcherShareMeshHelper shareMesh;
         DeploymentBatcherPhase1Module phase1;
     }
 
@@ -59,7 +59,7 @@ contract DeploymentBatcherFixture is Test {
             cfg.ajnaFactory,
             predictedBatcher
         );
-        h.uniV4 = new DeploymentBatcherUniV4Helper(cfg.create2Deployer, cfg.poolManager, cfg.permit2, predictedBatcher);
+        h.shareMesh = new DeploymentBatcherShareMeshHelper(cfg.create2Deployer, cfg.poolManager, cfg.permit2, predictedBatcher);
         h.phase1 = new DeploymentBatcherPhase1Module(
             cfg.create2Deployer,
             cfg.bytecodeStore,
@@ -99,7 +99,7 @@ contract DeploymentBatcherFixture is Test {
             cfg.vaultAdminModule,
             address(helpers.phase2),
             address(helpers.phase3),
-            address(helpers.uniV4),
+            address(helpers.shareMesh),
             address(helpers.utils)
         );
         require(address(batcher) == predicted, "DeploymentBatcherFixture: prediction mismatch");
@@ -108,12 +108,12 @@ contract DeploymentBatcherFixture is Test {
     }
 
     function mockRegistryCreatorCoin(address registry, address creatorToken, address oracle) public {
-        I4626Registry.TokenInfo memory info;
+        IRegistry4626.TokenInfo memory info;
         info.token = creatorToken;
         info.oracle = oracle;
         vm.mockCall(
             registry,
-            abi.encodeWithSelector(I4626Registry.getTokenInfo.selector, creatorToken),
+            abi.encodeWithSelector(IRegistry4626.getTokenInfo.selector, creatorToken),
             abi.encode(info)
         );
     }
@@ -149,7 +149,7 @@ contract DeploymentBatcherFixture is Test {
         require(address(batcher) == predicted, "DeploymentBatcherFixture: prediction mismatch");
         vm.prank(cfg.protocolTreasury);
         batcher.wireDeploymentHelpers(
-            address(helpers.phase2), address(helpers.phase3), address(helpers.uniV4), address(helpers.utils)
+            address(helpers.phase2), address(helpers.phase3), address(helpers.shareMesh), address(helpers.utils)
         );
         vm.prank(cfg.protocolTreasury);
         batcher.setPhase1Module(address(helpers.phase1));

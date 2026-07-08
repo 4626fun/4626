@@ -1,10 +1,10 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { MessageSquare } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
 import { LoadingInline } from '@/components/ui/LoadingState'
 import { XmtpChatProvider, useXmtp } from '@/lib/xmtp/provider'
-import { AccountContextProvider } from '@/wallet/accountContext'
+import { WaitlistMessagingAccountContextProvider } from './WaitlistMessagingAccountContextProvider'
 
 import {
   useWaitlistChatJoin,
@@ -14,13 +14,14 @@ import {
 import { useWaitlistXmtpStatus } from './useWaitlistXmtpStatus'
 import { WaitlistGroupChatSurface } from './WaitlistGroupChatSurface'
 import { WaitlistMessagingWalletProviders } from './WaitlistMessagingWalletProviders'
+import { useWaitlistMessagingSessionRepair } from './useWaitlistMessagingSessionRepair'
 import type { WaitlistConnectTrack } from './waitlistFlowState'
 
 type WaitlistGroupChatPanelProps = {
   setupComplete: boolean
   messagingReady: boolean
   connectTrack: WaitlistConnectTrack
-  layout?: 'inline' | 'sidebar' | 'mobile'
+  layout?: 'inline' | 'sidebar' | 'mobile' | 'dock'
   /** Forwarded to surface for the embedded signer expiry recovery path. */
   onSignOut?: () => void
   signOutBusy?: boolean
@@ -43,12 +44,32 @@ function WaitlistGroupChatPanelInner(props: WaitlistGroupChatPanelProps) {
     layout = 'inline',
     onSignOut,
     signOutBusy,
-    onRepairSession,
-    repairBusy,
+    onRepairSession: onRepairSessionProp,
+    repairBusy: repairBusyProp,
   } = props
   const statusQuery = useWaitlistXmtpStatus(setupComplete)
   const chatConfig = statusQuery.data
   const identityHintAddress = chatConfig?.xmtpMemberAddress ?? null
+  const repairSession = useWaitlistMessagingSessionRepair()
+  const [localRepairBusy, setLocalRepairBusy] = useState(false)
+
+  const handleRepairSession = useCallback(async () => {
+    setLocalRepairBusy(true)
+    try {
+      const outcome = await repairSession()
+      return outcome === 'repaired'
+    } finally {
+      setLocalRepairBusy(false)
+    }
+  }, [repairSession])
+
+  const attemptXmtpSessionRepair = useCallback(async () => {
+    const outcome = await repairSession()
+    return outcome === 'repaired'
+  }, [repairSession])
+
+  const onRepairSession = onRepairSessionProp ?? handleRepairSession
+  const repairBusy = repairBusyProp ?? localRepairBusy
 
   return (
     <WaitlistMessagingWalletProviders
@@ -59,27 +80,75 @@ function WaitlistGroupChatPanelInner(props: WaitlistGroupChatPanelProps) {
         </WaitlistChatSection>
       }
     >
-      <AccountContextProvider>
-        <XmtpChatProvider identityHintAddress={identityHintAddress} manualConnectOnly>
-          {statusQuery.isLoading && !chatConfig ? (
-            <WaitlistChatSection layout={layout}>
-              <LoadingInline labelOverride="Loading waitlist chat…" />
-            </WaitlistChatSection>
-          ) : (
-            <WaitlistGroupChatPanelBody
-              messagingReady={messagingReady}
-              connectTrack={connectTrack}
-              statusQuery={statusQuery}
-              layout={layout}
-              onSignOut={onSignOut}
-              signOutBusy={signOutBusy}
-              onRepairSession={onRepairSession}
-              repairBusy={repairBusy}
-            />
-          )}
-        </XmtpChatProvider>
-      </AccountContextProvider>
+      <WaitlistGroupChatMessagingTree
+        messagingReady={messagingReady}
+        connectTrack={connectTrack}
+        layout={layout}
+        statusQuery={statusQuery}
+        chatConfig={chatConfig}
+        identityHintAddress={identityHintAddress}
+        onSignOut={onSignOut}
+        signOutBusy={signOutBusy}
+        onRepairSession={onRepairSession}
+        repairBusy={repairBusy}
+        attemptXmtpSessionRepair={attemptXmtpSessionRepair}
+      />
     </WaitlistMessagingWalletProviders>
+  )
+}
+
+function WaitlistGroupChatMessagingTree(props: {
+  messagingReady: boolean
+  connectTrack: WaitlistConnectTrack
+  layout: 'inline' | 'sidebar' | 'mobile' | 'dock'
+  statusQuery: ReturnType<typeof useWaitlistXmtpStatus>
+  chatConfig: ReturnType<typeof useWaitlistXmtpStatus>['data']
+  identityHintAddress: string | null
+  onSignOut?: () => void
+  signOutBusy?: boolean
+  onRepairSession?: () => Promise<boolean> | boolean
+  repairBusy?: boolean
+  attemptXmtpSessionRepair: () => Promise<boolean>
+}) {
+  const {
+    messagingReady,
+    connectTrack,
+    layout,
+    statusQuery,
+    chatConfig,
+    identityHintAddress,
+    onSignOut,
+    signOutBusy,
+    onRepairSession,
+    repairBusy,
+    attemptXmtpSessionRepair,
+  } = props
+
+  return (
+    <WaitlistMessagingAccountContextProvider xmtpMemberAddress={identityHintAddress}>
+      <XmtpChatProvider
+        identityHintAddress={identityHintAddress}
+        manualConnectOnly
+        attemptSessionRepair={attemptXmtpSessionRepair}
+      >
+        {statusQuery.isLoading && !chatConfig ? (
+          <WaitlistChatSection layout={layout}>
+            <LoadingInline labelOverride="Loading waitlist chat…" />
+          </WaitlistChatSection>
+        ) : (
+          <WaitlistGroupChatPanelBody
+            messagingReady={messagingReady}
+            connectTrack={connectTrack}
+            statusQuery={statusQuery}
+            layout={layout}
+            onSignOut={onSignOut}
+            signOutBusy={signOutBusy}
+            onRepairSession={onRepairSession}
+            repairBusy={repairBusy}
+          />
+        )}
+      </XmtpChatProvider>
+    </WaitlistMessagingAccountContextProvider>
   )
 }
 
@@ -96,7 +165,7 @@ function WaitlistGroupChatPanelBody({
   messagingReady: boolean
   connectTrack: WaitlistConnectTrack
   statusQuery: ReturnType<typeof useWaitlistXmtpStatus>
-  layout: 'inline' | 'sidebar' | 'mobile'
+  layout: 'inline' | 'sidebar' | 'mobile' | 'dock'
   onSignOut?: () => void
   signOutBusy?: boolean
   onRepairSession?: () => Promise<boolean> | boolean
@@ -182,7 +251,6 @@ function WaitlistGroupChatPanelContent(props: {
     join,
     groupName,
     chatReady,
-    onSignOut,
     signOutBusy,
     onRepairSession,
     repairBusy,
@@ -252,15 +320,7 @@ function WaitlistGroupChatPanelContent(props: {
         xmtpMemberAddress={chatConfig.xmtpMemberAddress}
         retryJoin={join.retryJoin}
         chatReady={surfaceChatReady}
-        onRequestReauth={
-          onRepairSession ??
-          (onSignOut
-            ? () => {
-                onSignOut()
-                return false
-              }
-            : undefined)
-        }
+        onRequestReauth={onRepairSession}
         reauthBusy={repairBusy ?? signOutBusy}
       />
     </div>
@@ -272,10 +332,12 @@ function WaitlistChatSection({
   layout = 'inline',
 }: {
   children: React.ReactNode
-  layout?: 'inline' | 'sidebar' | 'mobile'
+  layout?: 'inline' | 'sidebar' | 'mobile' | 'dock' | 'dock'
 }) {
   const shellClass =
-    layout === 'sidebar'
+    layout === 'dock'
+      ? 'flex min-h-[300px] max-h-[min(72vh,560px)] flex-col space-y-3 overflow-hidden'
+      : layout === 'sidebar'
       ? 'flex h-full min-h-[320px] flex-col space-y-3 rounded-none border-y border-l border-white/[0.08] bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.012))] p-4 lg:min-h-[min(72vh,640px)] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
       : layout === 'mobile'
         ? 'flex min-h-[280px] flex-col space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4 max-h-[min(55vh,480px)]'

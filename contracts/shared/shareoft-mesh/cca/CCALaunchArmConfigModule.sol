@@ -10,7 +10,7 @@ import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionMa
 import {LPFeeLibrary} from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 
-contract CCALaunchStrategyConfigModule is Ownable, ReentrancyGuard {
+contract CCALaunchArmConfigModule is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint256 public constant BPS_DENOMINATOR = 10_000;
@@ -67,6 +67,8 @@ contract CCALaunchStrategyConfigModule is Ownable, ReentrancyGuard {
     address public taxHook;
     IPositionManager public positionManager;
     address public positionRecipient;
+    /// @dev Storage slot reserved for `CCALaunchArm.lpManager` (set on the facade only).
+    address public lpManager;
     address public operator;
     address public feeRecipient;
     uint256 public taxRateBps;

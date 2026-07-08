@@ -327,7 +327,20 @@ export async function orchestrateAmoeSubmitZk(
   // Step 1: epoch
   // ------------------------------------------------------------------
   const nowSec = proveOpts.nowSec ?? BigInt(Math.floor(Date.now() / 1000))
-  const epoch = computeAmoeEpoch(nowSec)
+  let epoch = computeAmoeEpoch(nowSec)
+  // Burn-then-submit: Merkle roots are pinned to the burn's closed epoch,
+  // not the wall-clock epoch at submit time (often the following day).
+  if (proveOpts.ledgerSnapshotReader) {
+    const profileId =
+      typeof inputs.profileId === 'bigint'
+        ? inputs.profileId
+        : BigInt(Math.trunc(Number(inputs.profileId)))
+    const burnSnapshot = await proveOpts.ledgerSnapshotReader.readSnapshotForBurn({
+      signupId: profileId,
+      spendRefId: inputs.spendRefId,
+    })
+    epoch = burnSnapshot.epoch
+  }
   if (epoch === 0n) {
     // Handlers should reject before this point in production; surface
     // here as a server error so a clock-skewed sandbox doesn't issue

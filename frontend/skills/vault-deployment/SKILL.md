@@ -25,7 +25,7 @@ There are multiple layers:
   - `CreatorOVaultWrapper`
   - `CreatorShareOFT` (wrapped shares; tradable token)
   - `CreatorGaugeController`
-  - `CCALaunchStrategy` (auction / launch mechanism)
+  - `CCALaunchArm` (auction / launch mechanism)
   - `CreatorOracle`
 - Optional post-deploy:
   - Strategies (Charm/Ajna) via batchers
@@ -132,7 +132,7 @@ The most common “gotcha” is approvals for launch/batchers. See:
 Common required approvals (high level):
 
 - Protocol owner (one-time per deployment of CCA / activation batcher):
-  - `CCALaunchStrategy.setApprovedLauncher(vaultActivationBatcher, true)`
+  - `CCALaunchArm.setApprovedLauncher(vaultActivationBatcher, true)`
 - Per-user (before strategy deploy):
   - Creator token approval to `StrategyDeploymentBatcher` (so it can `transferFrom` during batch calls)
 

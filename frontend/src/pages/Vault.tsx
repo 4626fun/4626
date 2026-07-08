@@ -45,7 +45,7 @@ const SHARE_OFT_ABI = [
   { name: 'totalSupply', type: 'function', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
 ] as const
 
-const CCA_STRATEGY_ABI = [
+const CCA_LAUNCH_ARM_ABI = [
   {
     name: 'getAuctionStatus',
     type: 'function',
@@ -86,8 +86,8 @@ type AuctionStatusSummary = {
   auctionTokenSymbol?: string
 }
 
-async function fetchAuctionStatusSummary(ccaStrategy: `0x${string}`): Promise<AuctionStatusSummary> {
-  const res = await apiFetch(`/api/v1/auction/status?ccaStrategy=${ccaStrategy}`)
+async function fetchAuctionStatusSummary(ccaLaunchArm: `0x${string}`): Promise<AuctionStatusSummary> {
+  const res = await apiFetch(`/api/v1/auction/status?ccaLaunchArm=${ccaLaunchArm}`)
   if (!res.ok) throw new Error('Auction status unavailable')
   const json = (await res.json()) as {
     data?: {
@@ -126,7 +126,7 @@ export function Vault() {
       lc === String(AKITA.wrapper).toLowerCase() ||
       lc === String(AKITA.shareOFT).toLowerCase() ||
       lc === String(AKITA.token).toLowerCase() ||
-      lc === String(AKITA.ccaStrategy).toLowerCase()
+      lc === String(AKITA.ccaLaunchArm).toLowerCase()
     )
   }, [addressParam])
 
@@ -153,7 +153,7 @@ export function Vault() {
   const wrapperAddress = (resolved?.info.wrapper ?? (akitaFallback ? (AKITA.wrapper as Address) : null)) as Address | null
   const shareOFTAddress = (resolved?.info.shareOFT ?? (akitaFallback ? (AKITA.shareOFT as Address) : null)) as Address | null
   const vaultAddress = (resolved?.info.vault ?? (akitaFallback ? (AKITA.vault as Address) : null)) as Address | null
-  const ccaStrategy = (resolved?.ccaStrategy ?? (akitaFallback ? (AKITA.ccaStrategy as Address) : null)) as Address | null
+  const ccaLaunchArm = (resolved?.ccaLaunchArm ?? (akitaFallback ? (AKITA.ccaLaunchArm as Address) : null)) as Address | null
   const socialPreviewPath = vaultAddress ? `/vault/${vaultAddress.toLowerCase()}` : null
   const socialPreviewUrl =
     socialPreviewPath && typeof window !== 'undefined' ? `${window.location.origin}${socialPreviewPath}` : undefined
@@ -244,16 +244,16 @@ export function Vault() {
   })
 
   const { data: auctionStatus } = useReadContract({
-    address: (ccaStrategy ?? ZERO_ADDRESS) as `0x${string}`,
-    abi: CCA_STRATEGY_ABI,
+    address: (ccaLaunchArm ?? ZERO_ADDRESS) as `0x${string}`,
+    abi: CCA_LAUNCH_ARM_ABI,
     functionName: 'getAuctionStatus',
-    query: { enabled: Boolean(ccaStrategy) },
+    query: { enabled: Boolean(ccaLaunchArm) },
   })
 
   const auctionSummaryQuery = useQuery({
-    queryKey: ['auction-status', ccaStrategy],
-    queryFn: () => fetchAuctionStatusSummary(ccaStrategy as `0x${string}`),
-    enabled: Boolean(ccaStrategy),
+    queryKey: ['auction-status', ccaLaunchArm],
+    queryFn: () => fetchAuctionStatusSummary(ccaLaunchArm as `0x${string}`),
+    enabled: Boolean(ccaLaunchArm),
     staleTime: 20_000,
   })
 
@@ -710,7 +710,7 @@ export function Vault() {
                 </div>
               </div>
               <Button variant="primary" className="w-full sm:w-auto" asChild>
-                <Link to={`/auction/bid/${ccaStrategy}`}>
+                <Link to={`/auction/bid/${ccaLaunchArm}`}>
                   Join Auction <ArrowDownToLine className="w-4 h-4 inline ml-2" />
                 </Link>
               </Button>
@@ -774,9 +774,9 @@ export function Vault() {
           ) : null}
 
           <div id="auction" className="mt-10">
-            {ccaStrategy && vaultAddress ? (
+            {ccaLaunchArm && vaultAddress ? (
               <CcaAuctionPanel
-                ccaStrategy={ccaStrategy}
+                ccaLaunchArm={ccaLaunchArm}
                 wsSymbol={shareSymbol}
                 vaultAddress={vaultAddress}
               />

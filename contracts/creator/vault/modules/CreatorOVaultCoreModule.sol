@@ -297,7 +297,7 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     }
 
     function _isCcaAuctionLive() internal view returns (bool) {
-        address strategy = ccaLaunchStrategy;
+        address strategy = ccaLaunchArm;
         if (strategy == address(0)) return false;
 
         try ICCALifecycleStatusReader(strategy).getLifecycleStatus() returns (CcaLifecycleStatus memory status) {

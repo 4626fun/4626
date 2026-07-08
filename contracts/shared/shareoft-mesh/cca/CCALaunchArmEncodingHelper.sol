@@ -4,7 +4,7 @@ pragma solidity 0.8.30;
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IOracle4626} from "@4626/shared/interfaces/oracles/IOracle4626.sol";
 
-contract CCALaunchStrategyEncodingHelper {
+contract CCALaunchArmEncodingHelper {
     uint24 public constant MPS = 1e7;
     uint256 public constant Q96 = 2 ** 96;
     uint256 public constant BPS_DENOMINATOR = 10_000;

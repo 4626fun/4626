@@ -1,7 +1,7 @@
 import { encodeFunctionData, getAddress, type Address, type Hex } from 'viem'
 
-/** Base mainnet 4626Registry (renamed from 4626Registry) — see docs/reference/addresses.md */
-export const BASE_MAINNET_4626_REGISTRY = '0x1eb9A364a3E763dD9249ba3413Dc19E13c1F4461' as const
+/** Base mainnet Registry4626 — see docs/reference/addresses.md */
+export const BASE_MAINNET_REGISTRY_4626 = '0x1eb9A364a3E763dD9249ba3413Dc19E13c1F4461' as const
 
 const REGISTRY_4626_ABI = [
   {
@@ -64,7 +64,7 @@ export async function readBatcherRegistryAuthorized(params: {
   batcher: Address
   registry?: Address
 }): Promise<boolean> {
-  const registry = getAddress(params.registry ?? BASE_MAINNET_4626_REGISTRY)
+  const registry = getAddress(params.registry ?? BASE_MAINNET_REGISTRY_4626)
   const batcher = getAddress(params.batcher)
   const authorized = (await params.publicClient.readContract({
     address: registry,
@@ -76,9 +76,9 @@ export async function readBatcherRegistryAuthorized(params: {
 }
 
 /**
- * Greenfield Phase 2 finalize registers creator coin + vault on 4626Registry.
+ * Greenfield Phase 2 finalize registers creator coin + vault on Registry4626.
  * The split DeploymentBatcher must be an authorized factory — forge tests set this in
- * setup, but mainnet may lag until Seed4626Registry / ops wiring runs.
+ * setup, but mainnet may lag until SeedCreatorRegistry / ops wiring runs.
  */
 export async function ensureBatcherRegistryAuthorizationOnFork(params: {
   publicClient: ReadContractClient
@@ -90,7 +90,7 @@ export async function ensureBatcherRegistryAuthorizationOnFork(params: {
   registry?: Address
   ownerBalanceHex?: Hex
 }): Promise<{ alreadyAuthorized: boolean; ensured: boolean }> {
-  const registry = getAddress(params.registry ?? BASE_MAINNET_4626_REGISTRY)
+  const registry = getAddress(params.registry ?? BASE_MAINNET_REGISTRY_4626)
   const batcher = getAddress(params.batcher)
   const alreadyAuthorized = await readBatcherRegistryAuthorized({
     publicClient: params.publicClient,
@@ -134,7 +134,7 @@ export async function ensureBatcherRegistryAuthorizationOnFork(params: {
     const receipt = await params.waitForTransactionReceipt({ hash })
     if (receipt.status !== 'success') {
       throw new Error(
-        `4626Registry.setAuthorizedFactory(${batcher}, true) reverted on fork (tx ${hash}).`,
+        `Registry4626.setAuthorizedFactory(${batcher}, true) reverted on fork (tx ${hash}).`,
       )
     }
   } finally {
@@ -155,7 +155,7 @@ export async function ensureBatcherRegistryAuthorizationOnFork(params: {
   })
   if (!verified) {
     throw new Error(
-      `4626Registry still reports DeploymentBatcher ${batcher} as unauthorized after fork prep.`,
+      `Registry4626 still reports DeploymentBatcher ${batcher} as unauthorized after fork prep.`,
     )
   }
 

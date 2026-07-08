@@ -421,7 +421,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     //    the same per-request replay + expiry guarantees as the
     //    ECDSA-attestation path.
     //
-    //    The message is bound to the `CreatorLotteryManager` contract
+    //    The message is bound to the `LotteryManager4626` contract
     //    address (NOT `LotteryAmoeRouter`) because clients receive the
     //    message from `_amoeNonce.ts`, which uses
     //    `getApiContracts().lotteryManager`. Cutover to a router-bound

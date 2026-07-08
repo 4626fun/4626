@@ -25,8 +25,11 @@ forge build --skip test --skip script >/dev/null
 artifact_path() {
   local contract="$1"
   case "$contract" in
-    DeploymentBatcher|DeploymentBatcherPhase1Module|DeploymentBatcherPhase2Module|DeploymentBatcherPhase3Helper|DeploymentBatcherUniV4Helper|DeploymentBatcherUtilsHelper)
+    DeploymentBatcher|DeploymentBatcherPhase1Module|DeploymentBatcherPhase2Module|DeploymentBatcherPhase3Helper|DeploymentBatcherShareMeshHelper|DeploymentBatcherUtilsHelper)
       printf "%s/out/DeploymentBatcher.sol/%s.json" "$ROOT_DIR" "$contract"
+      ;;
+    ApprovedV4HooksRegistry|OVaultLPManager)
+      printf "%s/out/%s.sol/%s.json" "$ROOT_DIR" "$contract" "$contract"
       ;;
     *)
       printf "%s/out/%s.sol/%s.json" "$ROOT_DIR" "$contract" "$contract"
@@ -89,7 +92,7 @@ printf "  AgentShareOFT: '0x' + '%s',\n" "$(bytecode AgentShareOFT)" >>"$OUT_FIL
 printf "  OFTBootstrapRegistry: '0x' + '%s',\n" "$(bytecode OFTBootstrapRegistry)" >>"$OUT_FILE"
 printf "  CreatorGaugeController: '0x' + '%s',\n" "$(bytecode CreatorGaugeController)" >>"$OUT_FILE"
 printf "  AgentGaugeController: '0x' + '%s',\n" "$(bytecode AgentGaugeController)" >>"$OUT_FILE"
-printf "  CCALaunchStrategy: '0x' + '%s',\n" "$(bytecode CCALaunchStrategy)" >>"$OUT_FILE"
+printf "  CCALaunchArm: '0x' + '%s',\n" "$(bytecode CCALaunchArm)" >>"$OUT_FILE"
 printf "  CreatorOracle: '0x' + '%s',\n" "$(bytecode CreatorOracle)" >>"$OUT_FILE"
 printf "  AgentOracle: '0x' + '%s',\n" "$(bytecode AgentOracle)" >>"$OUT_FILE"
 printf "  CreatorPayoutRouter: '0x' + '%s',\n" "$(bytecode CreatorPayoutRouter)" >>"$OUT_FILE"
@@ -100,6 +103,8 @@ printf "  CharmStrategy4626: '0x' + '%s',\n" "$(bytecode CharmStrategy4626)" >>"
 printf "  AjnaVaultAuth: '0x' + '%s',\n" "$(bytecode AjnaVaultAuth)" >>"$OUT_FILE"
 printf "  AjnaERC4626Vault: '0x' + '%s',\n" "$(bytecode AjnaERC4626Vault)" >>"$OUT_FILE"
 printf "  ERC4626StrategyAdapter: '0x' + '%s',\n" "$(bytecode ERC4626StrategyAdapter)" >>"$OUT_FILE"
+printf "  ApprovedV4HooksRegistry: '0x' + '%s',\n" "$(bytecode ApprovedV4HooksRegistry)" >>"$OUT_FILE"
+printf "  OVaultLPManager: '0x' + '%s',\n" "$(bytecode OVaultLPManager)" >>"$OUT_FILE"
 printf "  OVaultImpairmentClaims: '0x' + '%s',\n" "$(bytecode OVaultImpairmentClaims)" >>"$OUT_FILE"
 printf "  OVaultRecoveryEscrow: '0x' + '%s',\n" "$(bytecode OVaultRecoveryEscrow)" >>"$OUT_FILE"
 

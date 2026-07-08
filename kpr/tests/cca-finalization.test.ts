@@ -18,7 +18,7 @@ const SAMPLE_STRATEGY = '0xabcdef1234567890abcdef1234567890abcdef12' as `0x${str
 
 function createAuctionState(overrides: Partial<AuctionState> = {}): AuctionState {
   return {
-    ccaStrategyAddress: SAMPLE_STRATEGY,
+    ccaLaunchArmAddress: SAMPLE_STRATEGY,
     currentAuction: SAMPLE_AUCTION,
     hasActiveAuction: true,
     isGraduated: false,
@@ -131,7 +131,7 @@ describe('settlement decision logic', () => {
 describe('settlement result structure', () => {
   it('creates correct result for skipped settlement (no auction)', () => {
     const result: CcaFinalizationResult = {
-      ccaStrategyAddress: SAMPLE_STRATEGY,
+      ccaLaunchArmAddress: SAMPLE_STRATEGY,
       swept: false,
       unsoldSwept: false,
       migrated: false,
@@ -147,7 +147,7 @@ describe('settlement result structure', () => {
 
   it('creates correct result for skipped settlement (not graduated)', () => {
     const result: CcaFinalizationResult = {
-      ccaStrategyAddress: SAMPLE_STRATEGY,
+      ccaLaunchArmAddress: SAMPLE_STRATEGY,
       swept: false,
       unsoldSwept: false,
       migrated: false,
@@ -161,7 +161,7 @@ describe('settlement result structure', () => {
 
   it('creates correct result for successful settlement', () => {
     const result: CcaFinalizationResult = {
-      ccaStrategyAddress: SAMPLE_STRATEGY,
+      ccaLaunchArmAddress: SAMPLE_STRATEGY,
       swept: true,
       unsoldSwept: true,
       migrated: true,
@@ -184,7 +184,7 @@ describe('settlement result structure', () => {
 
   it('creates correct result for partial failure (sweep succeeded, unsold failed)', () => {
     const result: CcaFinalizationResult = {
-      ccaStrategyAddress: SAMPLE_STRATEGY,
+      ccaLaunchArmAddress: SAMPLE_STRATEGY,
       swept: true,
       unsoldSwept: false,
       migrated: false,
@@ -207,7 +207,7 @@ describe('settlement result structure', () => {
 
   it('creates correct result for sweep failure (stops early)', () => {
     const result: CcaFinalizationResult = {
-      ccaStrategyAddress: SAMPLE_STRATEGY,
+      ccaLaunchArmAddress: SAMPLE_STRATEGY,
       swept: false,
       unsoldSwept: false,
       migrated: false,

@@ -25,6 +25,10 @@ vi.mock('@/lib/xmtp/waitForMessagingWallet', async (importOriginal) => {
   }
 })
 
+vi.mock('@/lib/privy/refreshEmbeddedSignerSession', () => ({
+  refreshPrivyEmbeddedSignerSession: vi.fn(async () => true),
+}))
+
 const wagmiConfig = {} as import('wagmi').Config
 
 describe('prepareWaitlistMessagingWallet', () => {

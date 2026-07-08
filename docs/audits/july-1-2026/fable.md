@@ -25,7 +25,7 @@ Side-pocket ERC-1155 claims + epoch-scoped recovery escrow.
 vault/libraries/CreatorOVaultLiquidityLib.sol
 Liquidity snapshot helper.
 Strategies
-vault/strategies/CCALaunchStrategy.sol (+ ConfigModule, EncodingHelper) — continuous clearing auction launch; ERC4626StrategyAdapter.sol — wraps external 4626; SolanaStrategy.sol / SolanaBridgeStrategy.sol — cross-chain NAV.
+vault/strategies/CCALaunchArm.sol (+ ConfigModule, EncodingHelper) — continuous clearing auction launch; ERC4626StrategyAdapter.sol — wraps external 4626; SolanaStrategy.sol / SolanaBridgeStrategy.sol — cross-chain NAV.
 
 Lottery / gauge / oracle / rewards
 utilities/lottery/CreatorLotteryManager.sol — jackpot payout authority (VRF winner selection); governance/CreatorGaugeController.sol — jackpot custody + fee-split routing; utilities/oracles/CreatorOracle.sol — Chainlink+TWAP price hub with LZ broadcast; governance/ve4626VoterRewardsDistributor.sol — protocol reward routing.
@@ -135,7 +135,7 @@ Severity: Medium Title: sweepStaleEpochRewards lets owner seize all unclaimed vo
 
 Severity: Medium Title: Boost-source setters instant until timelock armed; profit-report resets unlock schedule Contract/File: CreatorLotteryManager.sol:2291-2304; CreatorOVaultCoreModule.sol:729-741 Description: (a) setBoostManager/setve4626GaugeVoting apply instantly until armBoostSourceTimelock() is called — a compromised owner can install a malicious boost source lifting odds toward 15%. (b) Each profitable report() recomputes fullProfitUnlockDate/profitUnlockingRate over old+new locked shares with a fresh window, extending realization for previously-locked profit. Impact: Pre-arming probability manipulation; slower-than-expected PPS accretion. Recommendation: Arm the timelock in the deploy script before production; use additive unlock tranches instead of resetting the timer.
 
-Severity: Medium Title: Activation batchers lack registry validation on several entrypoints Contract/File: contracts/helpers/batchers/VaultActivationBatcher.sol:192-229 Description: batchActivate and some Permit2 operator paths accept arbitrary vault/wrapper/ccaStrategy; registry-coherence checks exist only on a subset. Impact: A malicious UI can route user approvals through attacker contracts while the user approves the genuine creator token. Recommendation: Validate every entrypoint against CreatorRegistry.
+Severity: Medium Title: Activation batchers lack registry validation on several entrypoints Contract/File: contracts/helpers/batchers/VaultActivationBatcher.sol:192-229 Description: batchActivate and some Permit2 operator paths accept arbitrary vault/wrapper/ccaLaunchArm; registry-coherence checks exist only on a subset. Impact: A malicious UI can route user approvals through attacker contracts while the user approves the genuine creator token. Recommendation: Validate every entrypoint against CreatorRegistry.
 
 Severity: Medium Title: Registry authorized-factories are permanent until manually revoked; hot-swappable deploy modules Contract/File: contracts/shared/core/CreatorRegistry.sol:190-194; helpers/batchers/DeploymentBatcher.sol:2282-2292 Description: A compromised authorized factory can poison registry routes; onlyProtocolTreasury can replace phase-1/phase-2 modules (executed via delegatecall) with no timelock/codehash allowlist. Impact: Registry poisoning affects lottery, routing, and mesh; module swap can alter finalize semantics or strand deploys. Recommendation: Timelock + codehash allowlist for module swaps and factory authorization; monitor events.
 
@@ -155,7 +155,7 @@ extendLock allowed on expired locks without explicit guard — ve4626.sol:185-21
 setMinVotingPower has no timelock — ve4626BoostManager.sol:164-167, unlike other boost params.
 PayoutRouter.convertAndQueue ignores minOut on direct creator-coin deposits — CreatorPayoutRouter.sol:345-349 (documented 1:1).
 PayoutRouter._claimProtocolRewards uses hardcoded magic selectors — CreatorPayoutRouter.sol:443-449: brittle to Zora API changes.
-CCALaunchStrategy.setFeeRecipient repointable post-deploy — CCALaunchStrategyConfigModule.sol:291-294: can redirect away from tradeFeeCollector. Make immutable after launch or assert gauge equality.
+CCALaunchArm.setFeeRecipient repointable post-deploy — CCALaunchArmConfigModule.sol:291-294: can redirect away from tradeFeeCollector. Make immutable after launch or assert gauge equality.
 AjnaERC4626StrategyFactory.deploy permissionless — StrategyDeploymentFactories.sol:89-133: spam/grief risk.
 VaultShareBurnStream drip halts at MAX_FAILED_BURN_ACCUMULATOR — CreatorVaultShareBurnStream.sol:254-267: prolonged vault-burn failure stalls PPS accretion; needs monitoring/runbook.
 Solana relay decimal down-scaling truncates small amounts to 0 — SolanaBridgeAdapter.sol:686-692: silent dropped entries; revert on non-zero remainder.

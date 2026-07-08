@@ -12,7 +12,7 @@ Options for handling CCA auction completion.
 Owner/keeper manually triggers migration:
 
 ```solidity
-ccaStrategy.migrate();
+ccaLaunchArm.migrate();
 ```
 
 ## Automated Completion
@@ -21,11 +21,11 @@ Use Gelato or another external scheduler to trigger when auction ends:
 
 ```solidity
 function checkUpkeep() external view returns (bool) {
-  return ccaStrategy.isAuctionEnded() && !ccaStrategy.isMigrated();
+  return ccaLaunchArm.isAuctionEnded() && !ccaLaunchArm.isMigrated();
 }
 
 function performUpkeep() external {
-  ccaStrategy.migrate();
+  ccaLaunchArm.migrate();
 }
 ```
 

@@ -9,7 +9,7 @@ import "@4626/creator/vault/CreatorOVault.sol";
 import {OVaultAdminModule} from "@4626/shared/vault/modules/OVaultAdminModule.sol";
 import {CreatorOVaultCoreModule} from "@4626/creator/vault/modules/CreatorOVaultCoreModule.sol";
 import {OVaultStrategiesModule} from "@4626/shared/vault/modules/OVaultStrategiesModule.sol";
-import {ERC4626StrategyAdapter} from "@4626/shared/strategies/cca/ERC4626StrategyAdapter.sol";
+import {ERC4626StrategyAdapter} from "@4626/shared/strategies/ERC4626StrategyAdapter.sol";
 import "@4626/shared/interfaces/strategies/IStrategy.sol";
 import "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
 
@@ -335,7 +335,7 @@ contract CreatorOVaultValuationGuardTest is Test {
 
     function test_maxDepositAndMaxMint_returnZero_whenCcaAuctionLive() external {
         MockCcaLifecycleForVaultGuard cca = new MockCcaLifecycleForVaultGuard();
-        vault.setCCALaunchStrategy(address(cca));
+        vault.setCcaLaunchArm(address(cca));
         cca.setPhase(1); // LifecyclePhase.AuctionLive
 
         assertEq(vault.maxDeposit(alice), 0, "maxDeposit should be 0 while CCA auction is live");
@@ -344,7 +344,7 @@ contract CreatorOVaultValuationGuardTest is Test {
 
     function test_depositAndMint_revert_whenCcaAuctionLive() external {
         MockCcaLifecycleForVaultGuard cca = new MockCcaLifecycleForVaultGuard();
-        vault.setCCALaunchStrategy(address(cca));
+        vault.setCcaLaunchArm(address(cca));
         cca.setPhase(1); // LifecyclePhase.AuctionLive
 
         uint256 assets = vault.MINIMUM_FIRST_DEPOSIT() * 2;
@@ -361,7 +361,7 @@ contract CreatorOVaultValuationGuardTest is Test {
 
     function test_deposit_allowed_whenCcaPhaseNotAuctionLive() external {
         MockCcaLifecycleForVaultGuard cca = new MockCcaLifecycleForVaultGuard();
-        vault.setCCALaunchStrategy(address(cca));
+        vault.setCcaLaunchArm(address(cca));
         cca.setPhase(2); // LifecyclePhase.AuctionEndedPending
 
         uint256 assets = vault.MINIMUM_FIRST_DEPOSIT() * 2;
@@ -372,7 +372,7 @@ contract CreatorOVaultValuationGuardTest is Test {
 
     function test_depositAndMint_revert_whenCcaLifecycleUnreadable() external {
         MockUnreadableCcaForVaultGuard unreadable = new MockUnreadableCcaForVaultGuard();
-        vault.setCCALaunchStrategy(address(unreadable));
+        vault.setCcaLaunchArm(address(unreadable));
 
         uint256 assets = vault.MINIMUM_FIRST_DEPOSIT() * 2;
         uint256 shares = assets * 1000; // _decimalsOffset() = 3
@@ -388,7 +388,7 @@ contract CreatorOVaultValuationGuardTest is Test {
 
     function test_maxDepositAndMaxMint_returnZero_whenCcaLifecycleUnreadable() external {
         MockUnreadableCcaForVaultGuard unreadable = new MockUnreadableCcaForVaultGuard();
-        vault.setCCALaunchStrategy(address(unreadable));
+        vault.setCcaLaunchArm(address(unreadable));
 
         assertEq(vault.maxDeposit(alice), 0, "maxDeposit should fail closed when CCA lifecycle unreadable");
         assertEq(vault.maxMint(alice), 0, "maxMint should fail closed when CCA lifecycle unreadable");

@@ -91,7 +91,7 @@ export const AMOE_MAX_POINTS_AS_USD = 10_000n * 1_000_000n
 
 /**
  * Convert a points-burned count to the 1e6 (USDC) USD value expected by
- * `CreatorLotteryManager.processAmoeEntry`. Throws if `points` is not a
+ * `LotteryManager4626.processAmoeEntry`. Throws if `points` is not a
  * positive integer in the [MIN, MAX] range — callers MUST validate before
  * consuming credits.
  */
@@ -110,7 +110,7 @@ export function pointsToUsd1e6(points: number): bigint {
 
 /**
  * Estimate the pre-boost win chance (PPM) for a given USD value. Mirrors
- * `CreatorLotteryManager.calculateWinChance` exactly so the UI can preview
+ * `LotteryManager4626.calculateWinChance` exactly so the UI can preview
  * what the user is buying. The actual on-chain value is authoritative — this
  * is for display only.
  *
@@ -227,7 +227,7 @@ const lotteryAmoeAbi = [
   },
 ] as const
 
-// PR 2 — calls into PR 1's `processAmoeEntry` on `CreatorLotteryManager`.
+// PR 2 — calls into PR 1's `processAmoeEntry` on `LotteryManager4626`.
 // This function is gated to the authorized relayer key on-chain (single-address
 // allowlist), so calldata produced here can only be successfully submitted by a
 // transaction signed by that key. See PR 1 audit handoff for full trust model.
@@ -1232,7 +1232,7 @@ export async function createAmoeAttestation(params: {
 
 /**
  * Build the calldata for a relayer-mode AMOE entry that targets PR 1's
- * `CreatorLotteryManager.processAmoeEntry(buyer, creatorCoin, pointsBurnedAsUSD)`.
+ * `LotteryManager4626.processAmoeEntry(buyer, creatorCoin, pointsBurnedAsUSD)`.
  *
  * Unlike `createAmoeAttestation` (which produced an ECDSA-signed payload
  * for `LotteryAmoeRouter.submitAmoeEntry`), this path has no on-chain
@@ -1249,7 +1249,7 @@ export async function createAmoeAttestation(params: {
  * @param params.wallet The buyer (already verified via signed message).
  * @param params.creatorCoin The creator coin the entry is for.
  * @param params.pointsBurned Points being burned (must be in [MIN, MAX]).
- * @param params.lotteryManager Address of the deployed CreatorLotteryManager.
+ * @param params.lotteryManager Address of the deployed LotteryManager4626.
  * @returns The transaction calldata + target address for the relayer to send.
  */
 export async function buildProcessAmoeEntryCall(params: {

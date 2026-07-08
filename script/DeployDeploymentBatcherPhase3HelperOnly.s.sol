@@ -42,7 +42,7 @@ contract DeployDeploymentBatcherPhase3HelperOnly is Script {
         console2.log("HANDOFF:NEW_PHASE3_HELPER=", address(helper));
         console2.log("HANDOFF:DEPLOYMENT_BATCHER=", batcherAddr);
         console2.log("HANDOFF:PHASE2_MODULE=", address(batcher.phase2Module()));
-        console2.log("HANDOFF:UNIV4_HELPER=", address(batcher.uniV4Helper()));
+        console2.log("HANDOFF:SHARE_MESH_HELPER=", address(batcher.shareMeshHelper()));
         console2.log("HANDOFF:UTILS_HELPER=", address(batcher.utilsHelper()));
     }
 }

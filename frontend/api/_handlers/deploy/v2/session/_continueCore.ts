@@ -225,7 +225,7 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI = [
           { name: 'wrapper', type: 'address' },
           { name: 'shareToken', type: 'address' },
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
           { name: 'version', type: 'string' },
           { name: 'depositAmount', type: 'uint256' },
@@ -265,7 +265,7 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
           { name: 'wrapper', type: 'address' },
           { name: 'shareToken', type: 'address' },
           { name: 'gaugeController', type: 'address' },
-          { name: 'ccaStrategy', type: 'address' },
+          { name: 'ccaLaunchArm', type: 'address' },
           { name: 'oracle', type: 'address' },
           { name: 'version', type: 'string' },
           { name: 'depositAmount', type: 'uint256' },
@@ -319,7 +319,7 @@ function extractFinalizePhase2Info(data: Hex): {
   owner: Address | null
   vault: Address | null
   gaugeController: Address | null
-  ccaStrategy: Address | null
+  ccaLaunchArm: Address | null
   oracle: Address | null
 } | null {
   for (const abi of [CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI, CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI]) {
@@ -332,7 +332,7 @@ function extractFinalizePhase2Info(data: Hex): {
         owner?: string
         vault?: string
         gaugeController?: string
-        ccaStrategy?: string
+        ccaLaunchArm?: string
         oracle?: string
       } | null
       const creatorTokenCandidate = params?.creatorToken && isAddress(params.creatorToken)
@@ -355,7 +355,7 @@ function extractFinalizePhase2Info(data: Hex): {
         owner: normalizeAddress(params?.owner),
         vault: normalizeAddress(params?.vault),
         gaugeController: normalizeAddress(params?.gaugeController),
-        ccaStrategy: normalizeAddress(params?.ccaStrategy),
+        ccaLaunchArm: normalizeAddress(params?.ccaLaunchArm),
         oracle: normalizeAddress(params?.oracle),
       }
     } catch {
@@ -483,7 +483,7 @@ async function readPhase2ReplayState(params: {
   }
   const [gaugeDeployed, ccaDeployed, oracleDeployed, vaultOwner] = await Promise.all([
     hasRuntimeCode(params.publicClient, finalizeInfo.gaugeController),
-    hasRuntimeCode(params.publicClient, finalizeInfo.ccaStrategy),
+    hasRuntimeCode(params.publicClient, finalizeInfo.ccaLaunchArm),
     hasRuntimeCode(params.publicClient, finalizeInfo.oracle),
     readOwnableOwner(params.publicClient, finalizeInfo.vault),
   ])

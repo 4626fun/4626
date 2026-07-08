@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
+import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 
 /**
  * @title RouteCoherenceChecker
  * @notice Read-only helper to validate registry route wiring for a creator token.
  */
 contract RouteCoherenceChecker {
-    I4626Registry public immutable registry;
+    IRegistry4626 public immutable registry;
 
     struct RouteCoherenceStatus {
         bool ok;
@@ -24,7 +24,7 @@ contract RouteCoherenceChecker {
 
     constructor(address registry_) {
         if (registry_ == address(0)) revert ZeroAddress();
-        registry = I4626Registry(registry_);
+        registry = IRegistry4626(registry_);
     }
 
     /**
@@ -43,7 +43,7 @@ contract RouteCoherenceChecker {
     ) external view returns (RouteCoherenceStatus memory status) {
         if (creatorToken == address(0)) revert ZeroAddress();
 
-        I4626Registry.TokenInfo memory info = registry.getTokenInfo(creatorToken);
+        IRegistry4626.TokenInfo memory info = registry.getTokenInfo(creatorToken);
         status.active = info.isActive;
         status.registryVault = info.vault;
         status.registryShareOFT = info.shareOFT;

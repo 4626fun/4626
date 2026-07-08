@@ -7,7 +7,7 @@ function makeFinalizePhase2Data(params?: {
   creatorToken?: `0x${string}`
   shareToken?: `0x${string}`
   gaugeController?: `0x${string}`
-  ccaStrategy?: `0x${string}`
+  ccaLaunchArm?: `0x${string}`
 }) {
   return encodeFunctionData({
     abi: [
@@ -26,7 +26,7 @@ function makeFinalizePhase2Data(params?: {
               { name: 'wrapper', type: 'address' },
               { name: 'shareToken', type: 'address' },
               { name: 'gaugeController', type: 'address' },
-              { name: 'ccaStrategy', type: 'address' },
+              { name: 'ccaLaunchArm', type: 'address' },
               { name: 'oracle', type: 'address' },
               { name: 'version', type: 'string' },
               { name: 'depositAmount', type: 'uint256' },
@@ -58,7 +58,7 @@ function makeFinalizePhase2Data(params?: {
         wrapper: '0x0000000000000000000000000000000000000102',
         shareToken: params?.shareToken ?? '0x0000000000000000000000000000000000000103',
         gaugeController: params?.gaugeController ?? '0x0000000000000000000000000000000000000104',
-        ccaStrategy: params?.ccaStrategy ?? '0x0000000000000000000000000000000000000105',
+        ccaLaunchArm: params?.ccaLaunchArm ?? '0x0000000000000000000000000000000000000105',
         oracle: '0x0000000000000000000000000000000000000106',
         version: 'vtest',
         depositAmount: 5_000_000n * 10n ** 18n,

@@ -190,8 +190,8 @@ export async function getV1ApiHandler(subpath: string): Promise<ApiHandler | nul
         if (!req.query.address) req.query.address = address
         if (action === 'recentBids') {
           if (!req.query.auction) req.query.auction = address
-        } else if (!req.query.ccaStrategy) {
-          req.query.ccaStrategy = address
+        } else if (!req.query.ccaLaunchArm) {
+          req.query.ccaLaunchArm = address
         }
       })
     }

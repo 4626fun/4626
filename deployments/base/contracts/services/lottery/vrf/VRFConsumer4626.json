@@ -1,8 +1,8 @@
 {
-  "contractName": "CreatorVRFConsumerV2_5",
+  "contractName": "VRFConsumer4626",
   "network": "Base",
   "chainId": 8453,
-  "address": "0xE4AcDD5316EcF4D98301509968F0728EEDaaB68E",
+  "address": "0x933A3BE4a4BF00dD3B71c50Dee4972539a32bE47",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
   "deployedAt": "2026-05-05T04:51:21Z",
   "deploymentTx": "0x889319962baf638a796fe1444fa09b68777de2a575251ec4f30144aee120bcac",

@@ -227,3 +227,28 @@ select * from public.v_zora_owner_ethos_sync_health;
 If `pg_cron` is unavailable in the target environment, the migration keeps going
 and emits a NOTICE; schedule this function from your existing ops cron lane.
 
+### Health view columns (canonical — do not rename in Looker)
+
+`v_zora_owner_ethos_sync_health` returns **one row**. Canonical migration:
+`supabase/migrations/20260714200000_restore_ethos_sync_health_canonical_buckets.sql`
+(legacy mirror: `frontend/db/migrations-legacy/046_ethos_sync_health_missing_buckets.sql`).
+
+| Column | Meaning |
+|--------|---------|
+| `observed_at` | Snapshot timestamp |
+| `total_rows` | All `zora_csw_owner_class` rows |
+| `rows_with_score` | Rows with non-null `ethos_score` |
+| `rows_missing_score` | Rows with null `ethos_score` |
+| `rows_missing_no_identity_key` | Missing score **and** no `address:0x…` row in `user_ethos_identity_keys` |
+| `rows_missing_no_matched_cache` | Missing score, identity key exists, **no** `matched` row in `ethos_userkey_scores` |
+| `rows_missing_projection_gap` | Missing score, matched cache exists (projection lag) |
+| `rows_stale_over_24h` | Projected scores older than 24h |
+| `newest_projected_score_at` / `oldest_projected_score_at` | Owner-class projection timestamps |
+| `matched_cache_rows` / `matched_cache_stale_over_24h` / `newest_cache_score_at` | Global cache stats |
+
+The three `rows_missing_*` buckets partition `rows_missing_score` (they sum to it).
+
+Looker Studio: use data source **`v_zora_owner_ethos_sync_health`** (not raw
+`zora_csw_owner_class`). After schema changes, open **Data source → Edit →
+Refresh fields** so Looker picks up the canonical names above. Widget recipe:
+[Looker Studio widget recipe](/operations/looker-studio-widget-recipe) § Ethos sync health.

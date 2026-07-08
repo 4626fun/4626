@@ -1,7 +1,7 @@
 // PR 2 — AMOE Linear Parity (variable points) unit tests.
 //
 // Locks in the off-chain math that mirrors PR 1's on-chain
-// `CreatorLotteryManager.calculateWinChance` so the UI's win-chance preview
+// `LotteryManager4626.calculateWinChance` so the UI's win-chance preview
 // can never silently drift from the contract. The on-chain value is the
 // authoritative source — these helpers exist purely to:
 //

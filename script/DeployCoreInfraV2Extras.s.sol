@@ -6,7 +6,7 @@ import {Script, console2} from "forge-std/Script.sol";
 import {OVaultFactory4626} from "@4626/shared/deploy/factories/OVaultFactory4626.sol";
 import {VRFConsumer4626} from "@4626/shared/lottery/manager/VRFConsumer4626.sol";
 
-interface I4626RegistryAuth {
+interface IRegistry4626Auth {
     function owner() external view returns (address);
     function setAuthorizedFactory(address factory, bool authorized) external;
 }
@@ -55,7 +55,7 @@ contract DeployCoreInfraV2Extras is Script {
 
         require(block.chainid == BASE_CHAIN_ID, "Wrong chain");
 
-        I4626RegistryAuth registry = I4626RegistryAuth(registryAddr);
+        IRegistry4626Auth registry = IRegistry4626Auth(registryAddr);
         require(registry.owner() == owner, "Registry owner mismatch");
 
         vm.startBroadcast(pk);

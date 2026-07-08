@@ -99,8 +99,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'unauthorized' } satisfies ApiEnvelope<never>)
   }
 
-  const ccaStrategyAddress = envAddress('KEEPER_SWEEP_CANARY_CCA_STRATEGY_ADDRESS')
-  if (!ccaStrategyAddress) {
+  const ccaLaunchArmAddress = envAddress('KEEPER_SWEEP_CANARY_CCA_STRATEGY_ADDRESS')
+  if (!ccaLaunchArmAddress) {
     return res.status(200).json({
       success: true,
       data: { enabled: false, job: null, reason: 'not_configured' },
@@ -118,13 +118,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const body = {
-    ccaStrategyAddress,
+    ccaLaunchArmAddress,
     invariants: invariantConfig.invariants,
     ...(markSettledConfig() ? { markSettled: markSettledConfig() } : null),
   }
   const job = await enqueueKeeperJob({
     kind: 'internal_api',
-    dedupeKey: `sweep-canary:${ccaStrategyAddress}`,
+    dedupeKey: `sweep-canary:${ccaLaunchArmAddress}`,
     source: 'keeper-sweep-canary',
     payload: {
       path: '/api/keeper/sweep',

@@ -18,91 +18,40 @@ import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 import {LiquidityAmounts} from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
 
 import {IAllowanceTransfer} from "permit2/src/interfaces/IAllowanceTransfer.sol";
-import {IApprovedV4HooksRegistry} from "@4626/shared/strategies/univ4/ApprovedV4HooksRegistry.sol";
+import {IApprovedV4HooksRegistry} from "@4626/shared/shareoft-mesh/univ4/ApprovedV4HooksRegistry.sol";
 
 import {IOracle4626} from "@4626/shared/interfaces/oracles/IOracle4626.sol";
 import {V4LiquidityAmounts} from "@4626/shared/libraries/uniswap/V4LiquidityAmounts.sol";
 
 /**
  * @title OVaultLPManager
- * @author 0xakita.eth
- * @notice Lane-neutral Uniswap V4 LP orchestrator for ShareOFT mesh tokens (creator or agent lane).
- *
- * @dev PURPOSE:
- *      Manages three-position V4 liquidity (full range + concentrated base + limit order) for a vault
- *      asset token paired with WETH. Works for creator-lane ShareOFT or agent-lane ShareOFT — deploy
- *      once per vault via CREATE2 with lane-specific codeIds/salts, same bytecode for both lanes.
- *
- *      NOT for the underlying creator coin on V3 — that lane uses CharmStrategy4626.
- *      Buy-side trade fees on ShareOFT come from SwapOnly classification, not this manager.
- *
- * @dev ARCHITECTURE:
- *      OVault (creator or agent) → OVaultLPManager → Uniswap V4 Positions
- *
- * @dev THREE-POSITION STRATEGY:
- *      1. Full Range: Passive liquidity across entire price range
- *      2. Base Order: Concentrated around current price (both sides)
- *      3. Limit Order: Single-sided bid or ask (excess token)
+ * @notice Share-mesh Uniswap V4 LP orchestrator for ShareOFT paired with native ETH or WETH.
+ * @dev Manages three internal positions (full range, base, limit). Not a vault strategy sleeve.
  */
-
 contract OVaultLPManager is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using StateLibrary for IPoolManager;
-
-    // =================================
-    // CONSTANTS
-    // =================================
 
     int24 public constant MIN_TICK = -887272;
     int24 public constant MAX_TICK = 887272;
     uint256 public constant PRECISION = 1e6;
 
-    // =================================
-    // STATE - TOKENS & POOL
-    // =================================
-
-    /// @notice Lane vault asset token (token0 or token1 depending on sort)
     IERC20 public immutable ASSET;
+    /// @notice Paired token address; `address(0)` means native ETH.
+    address public immutable pairedToken;
+    bool public immutable pairedIsNative;
 
-    /// @notice Paired token (WETH)
-    IERC20 public immutable PAIRED_TOKEN;
-
-    /// @notice Uniswap V4 PoolManager (holds all pools)
     IPoolManager public poolManager;
-
-    /// @notice Uniswap V4 pool key (defines currencies/fee/tickSpacing/hooks)
     PoolKey public poolKey;
-
-    /// @notice Uniswap V4 pool id (derived from poolKey)
     PoolId public poolId;
-
-    /// @notice True if ASSET is currency0 for poolKey
     bool public assetIsCurrency0;
-
-    /// @notice Uniswap V4 PositionManager (PosM)
     address public positionManager;
-
-    /// @notice Permit2 contract used by PosM for token pulls into PoolManager
     address public permit2;
-
-    /// @notice Governance-managed hook allowlist for V4 pool configuration.
     IApprovedV4HooksRegistry public immutable hookRegistry;
-
-    /// @notice Vault that owns this manager
     address public vault;
-
-    /// @notice Tick spacing of the pool
     int24 public tickSpacing;
-
-    /// @notice Optional TWAP oracle for tick-based manipulation resistance.
-    /// @dev If maxTwapDeviation > 0 and this is unset, rebalances will revert.
     IOracle4626 public twapOracle;
 
-    // =================================
-    // STATE - POSITIONS (Charm-style)
-    // =================================
-
-    /// @notice Full range position (MIN_TICK to MAX_TICK)
     struct PositionInfo {
         int24 tickLower;
         int24 tickUpper;
@@ -114,68 +63,26 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
     PositionInfo public basePosition;
     PositionInfo public limitPosition;
 
-    // =================================
-    // STATE - PARAMETERS (Charm-style)
-    // =================================
-
-    /// @notice Proportion of liquidity in full range (multiplied by 1e6)
-    uint24 public fullRangeWeight = 400000; // 40%
-
-    /// @notice Half of the base order width in ticks
+    uint24 public fullRangeWeight = 400000;
     int24 public baseThreshold = 500;
-
-    /// @notice Limit order width in ticks
     int24 public limitThreshold = 100;
-
-    /// @notice Minimum time between rebalances
     uint32 public period = 1 hours;
-
-    /// @notice Minimum tick movement to trigger rebalance
     int24 public minTickMove = 10;
-
-    /// @notice Max deviation from TWAP (anti-manipulation)
     int24 public maxTwapDeviation = 100;
-
-    /// @notice TWAP duration in seconds
-    /// FIX: S-H02 — 60s TWAP is trivially manipulable; 900s is minimum safe window
     uint32 public twapDuration = 900;
-
-    /// @notice Last rebalance timestamp
     uint256 public lastTimestamp;
-
-    /// @notice Last tick at rebalance
     int24 public lastTick;
+    uint256 public maxRebalanceSlippageBps = 500;
 
-    /// @notice FIX: S-H02 — max allowed value loss during rebalance (basis points)
-    uint256 public maxRebalanceSlippageBps = 500; // 5% default
-
-    // =================================
-    // STATE - FEES
-    // =================================
-
-    /// @notice Accrued protocol fees (token0)
     uint256 public accruedFees0;
-
-    /// @notice Accrued protocol fees (token1)
     uint256 public accruedFees1;
-
-    /// @notice Fee recipient
     address public feeRecipient;
-
-    // =================================
-    // STATE - ACCESS
-    // =================================
-
-    /// @notice Managers who can execute rebalance
     mapping(address => bool) public isManager;
-
-    // =================================
-    // EVENTS
-    // =================================
 
     event Deposit(address indexed sender, uint256 amount0, uint256 amount1, uint256 liquidity);
     event Withdraw(address indexed sender, uint256 amount0, uint256 amount1, uint256 liquidity);
     event Rebalanced(int24 tick, uint256 balance0, uint256 balance1);
+    event SeedRebalanced(int24 tick, uint256 balance0, uint256 balance1);
     event Snapshot(int24 tick, uint256 totalAmount0, uint256 totalAmount1);
     event FeesCollected(uint256 fees0, uint256 fees1);
     event ParametersUpdated(uint24 fullRangeWeight, int24 baseThreshold, int24 limitThreshold);
@@ -183,10 +90,6 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         bytes32 poolId, address poolManager, address positionManager, address permit2, bool assetIsCurrency0
     );
     event ApprovalsReconfigured(address oldPositionManager, address oldPermit2, address newPositionManager, address newPermit2);
-
-    // =================================
-    // ERRORS
-    // =================================
 
     error NotVault();
     error NotManager();
@@ -205,12 +108,8 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
     error PoolAlreadyConfigured();
     error InvalidHook(address hook);
     error HookNotApproved(address hook);
-    // FIX: S-H02 — slippage protection for rebalance
     error RebalanceSlippageExceeded(uint256 valueBefore, uint256 valueAfter);
-
-    // =================================
-    // MODIFIERS
-    // =================================
+    error PositionsNotEmpty();
 
     modifier onlyVault() {
         if (msg.sender != vault && msg.sender != owner()) revert NotVault();
@@ -222,28 +121,20 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         _;
     }
 
-    // =================================
-    // CONSTRUCTOR
-    // =================================
+    receive() external payable {}
 
     constructor(address _asset, address _pairedToken, address _vault, address _owner, address _hookRegistry)
         Ownable(_owner)
     {
         if (_asset == address(0)) revert ZeroAddress();
-        if (_pairedToken == address(0)) revert ZeroAddress();
         if (_hookRegistry == address(0)) revert ZeroAddress();
 
         ASSET = IERC20(_asset);
-        PAIRED_TOKEN = IERC20(_pairedToken);
+        pairedToken = _pairedToken;
+        pairedIsNative = _pairedToken == address(0);
         vault = _vault;
         hookRegistry = IApprovedV4HooksRegistry(_hookRegistry);
-
-        isManager[_owner] = true;
     }
-
-    // =================================
-    // CONFIGURATION
-    // =================================
 
     function configurePool(address _poolManager, address _positionManager, address _permit2, PoolKey calldata _poolKey)
         external
@@ -256,12 +147,16 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         if (_positionManager == address(0)) revert ZeroAddress();
         if (_permit2 == address(0)) revert ZeroAddress();
 
-        // Validate poolKey currencies match our configured tokens
         address c0 = Currency.unwrap(_poolKey.currency0);
         address c1 = Currency.unwrap(_poolKey.currency1);
         bool _assetIsCurrency0 = c0 == address(ASSET);
-        if (!((_assetIsCurrency0 && c1 == address(PAIRED_TOKEN))
-                    || (c0 == address(PAIRED_TOKEN) && c1 == address(ASSET)))) revert InvalidPoolKey();
+        if (pairedIsNative) {
+            if (!((_assetIsCurrency0 && c1 == address(0)) || (c0 == address(0) && c1 == address(ASSET)))) {
+                revert InvalidPoolKey();
+            }
+        } else if (!((_assetIsCurrency0 && c1 == pairedToken) || (c0 == pairedToken && c1 == address(ASSET)))) {
+            revert InvalidPoolKey();
+        }
         if (_poolKey.tickSpacing == 0) revert InvalidPoolKey();
         address hook = address(_poolKey.hooks);
         if (hook == address(0)) revert InvalidHook(hook);
@@ -275,25 +170,19 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         assetIsCurrency0 = _assetIsCurrency0;
         tickSpacing = _poolKey.tickSpacing;
 
-        // Initialize full range bounds
         fullRangePosition.tickLower = (MIN_TICK / tickSpacing) * tickSpacing;
         fullRangePosition.tickUpper = (MAX_TICK / tickSpacing) * tickSpacing;
 
-        // Approvals for PosM: token -> Permit2, then Permit2 -> PosM
         ASSET.forceApprove(_permit2, type(uint256).max);
-        PAIRED_TOKEN.forceApprove(_permit2, type(uint256).max);
-        IAllowanceTransfer(_permit2)
-            .approve(address(ASSET), _positionManager, type(uint160).max, type(uint48).max);
-        IAllowanceTransfer(_permit2)
-            .approve(address(PAIRED_TOKEN), _positionManager, type(uint160).max, type(uint48).max);
+        IAllowanceTransfer(_permit2).approve(address(ASSET), _positionManager, type(uint160).max, type(uint48).max);
+        if (!pairedIsNative) {
+            IERC20(pairedToken).forceApprove(_permit2, type(uint256).max);
+            IAllowanceTransfer(_permit2).approve(pairedToken, _positionManager, type(uint160).max, type(uint48).max);
+        }
 
         emit PoolConfigured(PoolId.unwrap(poolId), _poolManager, _positionManager, _permit2, _assetIsCurrency0);
     }
 
-    /**
-     * @notice Rotate Permit2/PosM approval targets and revoke stale approvals.
-     * @dev Useful for operator key rotation or explicit approval hygiene.
-     */
     function reconfigureApprovals(address _positionManager, address _permit2) external onlyOwner {
         _requireConfigured();
         if (_positionManager == address(0)) revert ZeroAddress();
@@ -302,22 +191,22 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         address oldPositionManager = positionManager;
         address oldPermit2 = permit2;
 
-        // Revoke old allowances first so stale pull rights are removed.
         ASSET.forceApprove(oldPermit2, 0);
-        PAIRED_TOKEN.forceApprove(oldPermit2, 0);
         IAllowanceTransfer(oldPermit2).approve(address(ASSET), oldPositionManager, 0, 0);
-        IAllowanceTransfer(oldPermit2).approve(address(PAIRED_TOKEN), oldPositionManager, 0, 0);
+        if (!pairedIsNative) {
+            IERC20(pairedToken).forceApprove(oldPermit2, 0);
+            IAllowanceTransfer(oldPermit2).approve(pairedToken, oldPositionManager, 0, 0);
+        }
 
         positionManager = _positionManager;
         permit2 = _permit2;
 
-        // Re-grant current approval targets.
         ASSET.forceApprove(_permit2, type(uint256).max);
-        PAIRED_TOKEN.forceApprove(_permit2, type(uint256).max);
-        IAllowanceTransfer(_permit2)
-            .approve(address(ASSET), _positionManager, type(uint160).max, type(uint48).max);
-        IAllowanceTransfer(_permit2)
-            .approve(address(PAIRED_TOKEN), _positionManager, type(uint160).max, type(uint48).max);
+        IAllowanceTransfer(_permit2).approve(address(ASSET), _positionManager, type(uint160).max, type(uint48).max);
+        if (!pairedIsNative) {
+            IERC20(pairedToken).forceApprove(_permit2, type(uint256).max);
+            IAllowanceTransfer(_permit2).approve(pairedToken, _positionManager, type(uint160).max, type(uint48).max);
+        }
 
         emit ApprovalsReconfigured(oldPositionManager, oldPermit2, _positionManager, _permit2);
     }
@@ -326,9 +215,6 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         twapOracle = IOracle4626(_oracle);
     }
 
-    /**
-     * @notice Set strategy parameters (Charm-style)
-     */
     function setParameters(
         uint24 _fullRangeWeight,
         int24 _baseThreshold,
@@ -341,8 +227,10 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         if (_fullRangeWeight > PRECISION) revert InvalidParameters();
         if (_baseThreshold <= 0 || _baseThreshold > MAX_TICK) revert InvalidParameters();
         if (_limitThreshold <= 0 || _limitThreshold > MAX_TICK) revert InvalidParameters();
-        if (_baseThreshold % tickSpacing != 0) revert InvalidParameters();
-        if (_limitThreshold % tickSpacing != 0) revert InvalidParameters();
+        if (tickSpacing != 0) {
+            if (_baseThreshold % tickSpacing != 0) revert InvalidParameters();
+            if (_limitThreshold % tickSpacing != 0) revert InvalidParameters();
+        }
         if (_minTickMove < 0) revert InvalidParameters();
         if (_maxTwapDeviation < 0) revert InvalidParameters();
         if (_twapDuration == 0) revert InvalidParameters();
@@ -358,37 +246,28 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         emit ParametersUpdated(_fullRangeWeight, _baseThreshold, _limitThreshold);
     }
 
-    // =================================
-    // DEPOSIT / WITHDRAW
-    // =================================
-
-    /**
-     * @notice Deposit tokens (held until next rebalance)
-     */
     function deposit(uint256 amount0, uint256 amount1)
         external
+        payable
         nonReentrant
         onlyVault
         returns (uint256 totalLiquidity)
     {
-        if (amount0 == 0 && amount1 == 0) revert ZeroAmount();
+        if (amount0 == 0 && amount1 == 0 && msg.value == 0) revert ZeroAmount();
 
         if (amount0 > 0) {
             ASSET.safeTransferFrom(msg.sender, address(this), amount0);
         }
-        if (amount1 > 0) {
-            PAIRED_TOKEN.safeTransferFrom(msg.sender, address(this), amount1);
+        if (pairedIsNative) {
+            if (amount1 > 0 && msg.value != amount1) revert InvalidParameters();
+        } else if (amount1 > 0) {
+            IERC20(pairedToken).safeTransferFrom(msg.sender, address(this), amount1);
         }
 
-        // Liquidity will be deployed on next rebalance
-        totalLiquidity = _estimateLiquidity(amount0, amount1);
-
-        emit Deposit(msg.sender, amount0, amount1, totalLiquidity);
+        totalLiquidity = _estimateLiquidity(amount0, amount1 == 0 ? msg.value : amount1);
+        emit Deposit(msg.sender, amount0, amount1 == 0 ? msg.value : amount1, totalLiquidity);
     }
 
-    /**
-     * @notice Withdraw proportional share from all positions
-     */
     function withdraw(uint256 shares, uint256 totalShares)
         external
         nonReentrant
@@ -397,170 +276,57 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
     {
         if (shares == 0) revert ZeroAmount();
 
-        // Withdraw from each position proportionally
         (uint256 full0, uint256 full1) = _burnLiquidityShare(fullRangePosition, shares, totalShares);
         (uint256 base0, uint256 base1) = _burnLiquidityShare(basePosition, shares, totalShares);
         (uint256 limit0, uint256 limit1) = _burnLiquidityShare(limitPosition, shares, totalShares);
 
-        // Add idle balances proportionally
         uint256 idle0 = (getBalance0() * shares) / totalShares;
         uint256 idle1 = (getBalance1() * shares) / totalShares;
 
         amount0 = full0 + base0 + limit0 + idle0;
         amount1 = full1 + base1 + limit1 + idle1;
 
-        // Transfer to vault
         if (amount0 > 0) ASSET.safeTransfer(vault, amount0);
-        if (amount1 > 0) PAIRED_TOKEN.safeTransfer(vault, amount1);
+        _transferPaired(vault, amount1);
 
         emit Withdraw(msg.sender, amount0, amount1, shares);
     }
 
-    // =================================
-    // REBALANCE (Charm-style)
-    // =================================
-
-    /**
-     * @notice Rebalance all positions
-     * @dev Three-position strategy:
-     *      1. Full range (passive)
-     *      2. Base order (concentrated around price)
-     *      3. Limit order (single-sided with excess)
-     */
     function rebalance() external nonReentrant onlyManager {
         _requireConfigured();
-
-        // Check all rebalance guards
         checkCanRebalance();
-
-        // FIX: S-H02 — snapshot value before rebalance for slippage check
-        uint256 valueBefore0 = ASSET.balanceOf(address(this));
-        uint256 valueBefore1 = PAIRED_TOKEN.balanceOf(address(this));
-
-        // Withdraw all current liquidity
-        _burnAndCollect(fullRangePosition);
-        _burnAndCollect(basePosition);
-        _burnAndCollect(limitPosition);
-
-        // Get current tick and calculate new ranges
-        int24 tick = _getCurrentTick();
-        int24 tickFloor = _floor(tick);
-        int24 tickCeil = tickFloor + tickSpacing;
-
-        // Calculate new position ranges
-        int24 _baseLower = tickFloor - baseThreshold;
-        int24 _baseUpper = tickCeil + baseThreshold;
-        int24 _bidLower = tickFloor - limitThreshold;
-        int24 _bidUpper = tickFloor;
-        int24 _askLower = tickCeil;
-        int24 _askUpper = tickCeil + limitThreshold;
-
-        // Emit snapshot
-        uint256 balance0 = getBalance0();
-        uint256 balance1 = getBalance1();
-        emit Snapshot(tick, balance0, balance1);
-
-        // 1. Place full range order (weighted %)
-        {
-            uint128 maxFullLiquidity =
-                _liquidityForAmounts(fullRangePosition.tickLower, fullRangePosition.tickUpper, balance0, balance1);
-            uint128 fullLiquidity = uint128((uint256(maxFullLiquidity) * fullRangeWeight) / PRECISION);
-            _mintLiquidity(fullRangePosition, fullLiquidity);
-        }
-
-        // 2. Place base order with remaining balance
-        balance0 = getBalance0();
-        balance1 = getBalance1();
-        {
-            uint128 baseLiquidity = _liquidityForAmounts(_baseLower, _baseUpper, balance0, balance1);
-            basePosition.tickLower = _baseLower;
-            basePosition.tickUpper = _baseUpper;
-            _mintLiquidity(basePosition, baseLiquidity);
-        }
-
-        // 3. Place limit order (bid or ask) depending on which token is excess
-        balance0 = getBalance0();
-        balance1 = getBalance1();
-        {
-            uint128 bidLiquidity = _liquidityForAmounts(_bidLower, _bidUpper, balance0, balance1);
-            uint128 askLiquidity = _liquidityForAmounts(_askLower, _askUpper, balance0, balance1);
-
-            if (bidLiquidity > askLiquidity) {
-                // More token1 (WETH) - place bid order below price
-                limitPosition.tickLower = _bidLower;
-                limitPosition.tickUpper = _bidUpper;
-                _mintLiquidity(limitPosition, bidLiquidity);
-            } else {
-                // More token0 (Asset) - place ask order above price
-                limitPosition.tickLower = _askLower;
-                limitPosition.tickUpper = _askUpper;
-                _mintLiquidity(limitPosition, askLiquidity);
-            }
-        }
-
-        lastTimestamp = block.timestamp;
-        lastTick = tick;
-
-        // FIX: S-H02 — post-rebalance slippage check (token0 only as primary value measure)
-        uint256 valueAfter0 = ASSET.balanceOf(address(this));
-        if (valueBefore0 > 0) {
-            uint256 maxLoss = (valueBefore0 * maxRebalanceSlippageBps) / 10_000;
-            if (valueAfter0 + maxLoss < valueBefore0) {
-                revert RebalanceSlippageExceeded(valueBefore0, valueAfter0);
-            }
-        }
-
-        emit Rebalanced(tick, getBalance0(), getBalance1());
+        _executeRebalance(false);
     }
 
-    /**
-     * @notice Check if rebalance can be executed
-     */
+    function seedRebalance() external nonReentrant onlyManager {
+        _requireConfigured();
+        if (!_positionsEmpty()) revert PositionsNotEmpty();
+        _executeRebalance(true);
+    }
+
     function checkCanRebalance() public view {
-        // 1. Check enough time has passed
-        if (block.timestamp < lastTimestamp + period) {
-            revert PeriodNotElapsed();
-        }
+        if (block.timestamp < lastTimestamp + period) revert PeriodNotElapsed();
 
         int24 tick = _getCurrentTick();
-
-        // 2. Check price has moved enough
         int24 tickMove = tick > lastTick ? tick - lastTick : lastTick - tick;
-        if (lastTimestamp != 0 && tickMove < minTickMove) {
-            revert InsufficientTickMove();
-        }
+        if (lastTimestamp != 0 && tickMove < minTickMove) revert InsufficientTickMove();
 
-        // 3. Check price is near TWAP
         int24 twap = getTwap();
         int24 deviation = tick > twap ? tick - twap : twap - tick;
-        if (deviation > maxTwapDeviation) {
-            revert TwapDeviationTooHigh();
-        }
+        if (deviation > maxTwapDeviation) revert TwapDeviationTooHigh();
 
-        // 4. Check price not too close to boundary
         int24 maxThreshold = baseThreshold > limitThreshold ? baseThreshold : limitThreshold;
         if (tick <= MIN_TICK + maxThreshold + tickSpacing || tick >= MAX_TICK - maxThreshold - tickSpacing) {
             revert PriceTooCloseToBoundary();
         }
     }
 
-    /**
-     * @notice Get TWAP price in ticks
-     */
     function getTwap() public view returns (int24) {
-        // Allow explicitly disabling TWAP checks by setting maxTwapDeviation == 0.
         if (maxTwapDeviation == 0) return _getCurrentTick();
         if (address(twapOracle) == address(0)) revert TwapOracleNotSet();
         return twapOracle.getTWAPTick(twapDuration);
     }
 
-    // =================================
-    // VIEW FUNCTIONS
-    // =================================
-
-    /**
-     * @notice Get total amounts across all positions and idle
-     */
     function getTotalAmounts() public view returns (uint256 total0, uint256 total1) {
         (uint256 full0, uint256 full1) = _getPositionAmounts(fullRangePosition);
         (uint256 base0, uint256 base1) = _getPositionAmounts(basePosition);
@@ -570,23 +336,14 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         total1 = getBalance1() + full1 + base1 + limit1;
     }
 
-    /**
-     * @notice Idle balance of token0
-     */
     function getBalance0() public view returns (uint256) {
         return ASSET.balanceOf(address(this)) - accruedFees0;
     }
 
-    /**
-     * @notice Idle balance of token1
-     */
     function getBalance1() public view returns (uint256) {
-        return PAIRED_TOKEN.balanceOf(address(this)) - accruedFees1;
+        return _pairedBalance() - accruedFees1;
     }
 
-    /**
-     * @notice Check if rebalance is possible
-     */
     function canRebalance() external view returns (bool) {
         try this.checkCanRebalance() {
             return true;
@@ -595,9 +352,6 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         }
     }
 
-    /**
-     * @notice Get position info
-     */
     function getPositions()
         external
         view
@@ -606,9 +360,136 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         return (fullRangePosition, basePosition, limitPosition);
     }
 
-    // =================================
-    // INTERNAL - LIQUIDITY
-    // =================================
+    function setVault(address _vault) external onlyOwner {
+        if (_vault == address(0)) revert ZeroAddress();
+        vault = _vault;
+    }
+
+    function setManager(address _manager, bool _status) external onlyOwner {
+        isManager[_manager] = _status;
+    }
+
+    function setFeeRecipient(address _recipient) external onlyOwner {
+        feeRecipient = _recipient;
+    }
+
+    function collectFees() external {
+        if (feeRecipient == address(0)) return;
+
+        uint256 fees0 = accruedFees0;
+        uint256 fees1 = accruedFees1;
+        accruedFees0 = 0;
+        accruedFees1 = 0;
+
+        if (fees0 > 0) ASSET.safeTransfer(feeRecipient, fees0);
+        _transferPaired(feeRecipient, fees1);
+
+        emit FeesCollected(fees0, fees1);
+    }
+
+    function emergencyWithdraw() external onlyOwner {
+        _burnAndCollect(fullRangePosition);
+        _burnAndCollect(basePosition);
+        _burnAndCollect(limitPosition);
+
+        uint256 bal0 = ASSET.balanceOf(address(this));
+        uint256 bal1 = _pairedBalance();
+
+        if (bal0 > 0) ASSET.safeTransfer(vault, bal0);
+        _transferPaired(vault, bal1);
+    }
+
+    function _executeRebalance(bool isSeed) internal {
+        uint256 valueBefore0 = ASSET.balanceOf(address(this));
+
+        _burnAndCollect(fullRangePosition);
+        _burnAndCollect(basePosition);
+        _burnAndCollect(limitPosition);
+
+        int24 tick = _getCurrentTick();
+        int24 tickFloor = _floor(tick);
+        int24 tickCeil = tickFloor + tickSpacing;
+
+        int24 _baseLower = tickFloor - baseThreshold;
+        int24 _baseUpper = tickCeil + baseThreshold;
+        int24 _bidLower = tickFloor - limitThreshold;
+        int24 _bidUpper = tickFloor;
+        int24 _askLower = tickCeil;
+        int24 _askUpper = tickCeil + limitThreshold;
+
+        uint256 balance0 = getBalance0();
+        uint256 balance1 = getBalance1();
+        emit Snapshot(tick, balance0, balance1);
+
+        {
+            uint128 maxFullLiquidity =
+                _liquidityForAmounts(fullRangePosition.tickLower, fullRangePosition.tickUpper, balance0, balance1);
+            uint128 fullLiquidity = uint128((uint256(maxFullLiquidity) * fullRangeWeight) / PRECISION);
+            _mintLiquidity(fullRangePosition, fullLiquidity);
+        }
+
+        balance0 = getBalance0();
+        balance1 = getBalance1();
+        {
+            uint128 baseLiquidity = _liquidityForAmounts(_baseLower, _baseUpper, balance0, balance1);
+            basePosition.tickLower = _baseLower;
+            basePosition.tickUpper = _baseUpper;
+            _mintLiquidity(basePosition, baseLiquidity);
+        }
+
+        balance0 = getBalance0();
+        balance1 = getBalance1();
+        {
+            uint128 bidLiquidity = _liquidityForAmounts(_bidLower, _bidUpper, balance0, balance1);
+            uint128 askLiquidity = _liquidityForAmounts(_askLower, _askUpper, balance0, balance1);
+
+            if (bidLiquidity > askLiquidity) {
+                limitPosition.tickLower = _bidLower;
+                limitPosition.tickUpper = _bidUpper;
+                _mintLiquidity(limitPosition, bidLiquidity);
+            } else {
+                limitPosition.tickLower = _askLower;
+                limitPosition.tickUpper = _askUpper;
+                _mintLiquidity(limitPosition, askLiquidity);
+            }
+        }
+
+        lastTimestamp = block.timestamp;
+        lastTick = tick;
+
+        uint256 valueAfter0 = ASSET.balanceOf(address(this));
+        if (valueBefore0 > 0) {
+            uint256 maxLoss = (valueBefore0 * maxRebalanceSlippageBps) / 10_000;
+            if (valueAfter0 + maxLoss < valueBefore0) {
+                revert RebalanceSlippageExceeded(valueBefore0, valueAfter0);
+            }
+        }
+
+        if (isSeed) {
+            emit SeedRebalanced(tick, getBalance0(), getBalance1());
+        } else {
+            emit Rebalanced(tick, getBalance0(), getBalance1());
+        }
+    }
+
+    function _positionsEmpty() internal view returns (bool) {
+        return fullRangePosition.liquidity == 0 && basePosition.liquidity == 0 && limitPosition.liquidity == 0;
+    }
+
+    function _pairedBalance() internal view returns (uint256) {
+        if (pairedIsNative) return address(this).balance;
+        return IERC20(pairedToken).balanceOf(address(this));
+    }
+
+    function _transferPaired(address to, uint256 amount) internal {
+        if (amount == 0) return;
+        if (pairedIsNative) {
+            (bool ok,) = to.call{value: amount}("");
+            require(ok, "ETH_TRANSFER_FAILED");
+        } else {
+            IERC20(pairedToken).safeTransfer(to, amount);
+        }
+    }
 
     function _getCurrentTick() internal view returns (int24) {
         if (address(poolManager) == address(0)) return 0;
@@ -624,10 +505,8 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
 
     function _mintLiquidity(PositionInfo storage pos, uint128 liquidity) internal {
         if (liquidity == 0) return;
-
         _requireConfigured();
 
-        // Mint a new ERC721 position for this range (we burn+mint on range changes)
         uint256 tokenId = IPositionManager(positionManager).nextTokenId();
 
         bytes memory actions = new bytes(3);
@@ -649,7 +528,10 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         params[1] = abi.encode(poolKey.currency0);
         params[2] = abi.encode(poolKey.currency1);
 
-        IPositionManager(positionManager).modifyLiquidities(abi.encode(actions, params), block.timestamp + 1);
+        uint256 nativeValue = pairedIsNative ? address(this).balance : 0;
+        IPositionManager(positionManager).modifyLiquidities{value: nativeValue}(
+            abi.encode(actions, params), block.timestamp + 1
+        );
 
         pos.tokenId = tokenId;
         pos.liquidity = liquidity;
@@ -657,11 +539,10 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
 
     function _burnAndCollect(PositionInfo storage pos) internal returns (uint256 amount0, uint256 amount1) {
         if (pos.liquidity == 0) return (0, 0);
-
         _requireConfigured();
 
         uint256 balAssetBefore = ASSET.balanceOf(address(this));
-        uint256 balPairedBefore = PAIRED_TOKEN.balanceOf(address(this));
+        uint256 balPairedBefore = _pairedBalance();
 
         bytes memory actions = new bytes(3);
         actions[0] = bytes1(uint8(Actions.BURN_POSITION));
@@ -673,10 +554,13 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         params[1] = abi.encode(poolKey.currency0);
         params[2] = abi.encode(poolKey.currency1);
 
-        IPositionManager(positionManager).modifyLiquidities(abi.encode(actions, params), block.timestamp + 1);
+        uint256 nativeValue = pairedIsNative ? address(this).balance : 0;
+        IPositionManager(positionManager).modifyLiquidities{value: nativeValue}(
+            abi.encode(actions, params), block.timestamp + 1
+        );
 
         amount0 = ASSET.balanceOf(address(this)) - balAssetBefore;
-        amount1 = PAIRED_TOKEN.balanceOf(address(this)) - balPairedBefore;
+        amount1 = _pairedBalance() - balPairedBefore;
 
         pos.liquidity = 0;
         pos.tokenId = 0;
@@ -694,7 +578,7 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         _requireConfigured();
 
         uint256 balAssetBefore = ASSET.balanceOf(address(this));
-        uint256 balPairedBefore = PAIRED_TOKEN.balanceOf(address(this));
+        uint256 balPairedBefore = _pairedBalance();
 
         bytes memory actions = new bytes(3);
         actions[0] = bytes1(uint8(Actions.DECREASE_LIQUIDITY));
@@ -706,11 +590,13 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         params[1] = abi.encode(poolKey.currency0);
         params[2] = abi.encode(poolKey.currency1);
 
-        IPositionManager(positionManager).modifyLiquidities(abi.encode(actions, params), block.timestamp + 1);
+        uint256 nativeValue = pairedIsNative ? address(this).balance : 0;
+        IPositionManager(positionManager).modifyLiquidities{value: nativeValue}(
+            abi.encode(actions, params), block.timestamp + 1
+        );
 
         amount0 = ASSET.balanceOf(address(this)) - balAssetBefore;
-        amount1 = PAIRED_TOKEN.balanceOf(address(this)) - balPairedBefore;
-
+        amount1 = _pairedBalance() - balPairedBefore;
         pos.liquidity -= liquidityToBurn;
     }
 
@@ -726,9 +612,7 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
             pos.liquidity
         );
 
-        if (assetIsCurrency0) {
-            return (amountCurrency0, amountCurrency1);
-        }
+        if (assetIsCurrency0) return (amountCurrency0, amountCurrency1);
         return (amountCurrency1, amountCurrency0);
     }
 
@@ -771,52 +655,5 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
             z = (x / z + z) / 2;
         }
         return y;
-    }
-
-    // =================================
-    // ADMIN
-    // =================================
-
-    function setVault(address _vault) external onlyOwner {
-        if (_vault == address(0)) revert ZeroAddress();
-        vault = _vault;
-    }
-
-    function setManager(address _manager, bool _status) external onlyOwner {
-        isManager[_manager] = _status;
-    }
-
-    function setFeeRecipient(address _recipient) external onlyOwner {
-        feeRecipient = _recipient;
-    }
-
-    function collectFees() external {
-        if (feeRecipient == address(0)) return;
-
-        uint256 fees0 = accruedFees0;
-        uint256 fees1 = accruedFees1;
-
-        accruedFees0 = 0;
-        accruedFees1 = 0;
-
-        if (fees0 > 0) ASSET.safeTransfer(feeRecipient, fees0);
-        if (fees1 > 0) PAIRED_TOKEN.safeTransfer(feeRecipient, fees1);
-
-        emit FeesCollected(fees0, fees1);
-    }
-
-    /**
-     * @notice Emergency withdraw all liquidity
-     */
-    function emergencyWithdraw() external onlyOwner {
-        _burnAndCollect(fullRangePosition);
-        _burnAndCollect(basePosition);
-        _burnAndCollect(limitPosition);
-
-        uint256 bal0 = ASSET.balanceOf(address(this));
-        uint256 bal1 = PAIRED_TOKEN.balanceOf(address(this));
-
-        if (bal0 > 0) ASSET.safeTransfer(vault, bal0);
-        if (bal1 > 0) PAIRED_TOKEN.safeTransfer(vault, bal1);
     }
 }

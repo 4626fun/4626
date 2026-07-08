@@ -19,8 +19,8 @@ import {
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
 const ZERO_ADDRESS = addr('0000000000000000000000000000000000000000')
 
-// CCALaunchStrategy (minimal)
-const CCA_LAUNCH_STRATEGY_ABI = [
+// CCALaunchArm (minimal)
+const CCA_LAUNCH_ARM_ABI = [
   {
     name: 'getAuctionStatus',
     type: 'function',
@@ -81,11 +81,11 @@ function formatEth(wei: bigint, maxDecimals: number = 6): string {
 }
 
 export function CcaAuctionPanel({
-  ccaStrategy,
+  ccaLaunchArm,
   wsSymbol,
   vaultAddress,
 }: {
-  ccaStrategy: Address
+  ccaLaunchArm: Address
   wsSymbol: string
   vaultAddress?: Address
 }) {
@@ -101,8 +101,8 @@ export function CcaAuctionPanel({
   const [supplyDelta, setSupplyDelta] = useState<bigint>(0n)
 
   const { data: auctionStatus } = useReadContract({
-    address: ccaStrategy,
-    abi: CCA_LAUNCH_STRATEGY_ABI,
+    address: ccaLaunchArm,
+    abi: CCA_LAUNCH_ARM_ABI,
     functionName: 'getAuctionStatus',
     query: { 
       refetchInterval: 30_000, // Reduced from 12s to 30s (still feels real-time)
@@ -112,8 +112,8 @@ export function CcaAuctionPanel({
   })
 
   const { data: currencyAddress } = useReadContract({
-    address: ccaStrategy,
-    abi: CCA_LAUNCH_STRATEGY_ABI,
+    address: ccaLaunchArm,
+    abi: CCA_LAUNCH_ARM_ABI,
     functionName: 'currency',
     query: { 
       // These are immutable contract values - cache indefinitely
@@ -123,8 +123,8 @@ export function CcaAuctionPanel({
   })
 
   const { data: auctionTokenAddress } = useReadContract({
-    address: ccaStrategy,
-    abi: CCA_LAUNCH_STRATEGY_ABI,
+    address: ccaLaunchArm,
+    abi: CCA_LAUNCH_ARM_ABI,
     functionName: 'auctionToken',
     query: { 
       staleTime: Infinity,
@@ -161,7 +161,7 @@ export function CcaAuctionPanel({
     let cancelled = false
     ;(async () => {
       try {
-        const res = await apiFetch(`/api/v1/auction/status?ccaStrategy=${ccaStrategy}`)
+        const res = await apiFetch(`/api/v1/auction/status?ccaLaunchArm=${ccaLaunchArm}`)
         if (!res.ok) return
         const json = (await res.json()) as {
           data?: {
@@ -198,7 +198,7 @@ export function CcaAuctionPanel({
     return () => {
       cancelled = true
     }
-  }, [ccaStrategy])
+  }, [ccaLaunchArm])
 
   const auctionAddress = (auctionStatus?.[0] ?? ZERO_ADDRESS) as Address
   const isActive = Boolean(auctionStatus?.[1] ?? false)
@@ -467,7 +467,7 @@ export function CcaAuctionPanel({
             </Button>
             {isGraduated && (
               <Link 
-                to={`/complete-auction/${ccaStrategy}`} 
+                to={`/complete-auction/${ccaLaunchArm}`} 
                 className="bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 px-6 py-3 text-sm transition-all duration-300 font-light tracking-wide whitespace-nowrap hover:scale-105"
               >
                 Complete auction
@@ -908,7 +908,7 @@ export function CcaAuctionPanel({
                       This auction has successfully graduated. You can now sweep funds, configure fees, and complete the launch process.
                     </p>
                     <Link 
-                      to={`/complete-auction/${ccaStrategy}`} 
+                      to={`/complete-auction/${ccaLaunchArm}`} 
                       className="inline-flex items-center gap-2 bg-green-500/20 border border-green-500/40 text-green-300 hover:bg-green-500/30 px-6 py-2.5 text-sm transition-all font-light tracking-wide"
                     >
                       Complete Auction
@@ -942,12 +942,12 @@ export function CcaAuctionPanel({
             <div className="flex items-center justify-between py-1.5 border-b border-white/5">
               <span className="text-zinc-600">Strategy Contract</span>
               <a 
-                href={`https://basescan.org/address/${ccaStrategy}`}
+                href={`https://basescan.org/address/${ccaLaunchArm}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-cyan-400 hover:text-cyan-300 transition-colors"
               >
-                {ccaStrategy.slice(0, 6)}...{ccaStrategy.slice(-4)}
+                {ccaLaunchArm.slice(0, 6)}...{ccaLaunchArm.slice(-4)}
               </a>
             </div>
             {vaultAddress && (

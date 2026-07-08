@@ -7,7 +7,7 @@ import { Vault } from './Vault'
 const { RESOLVED, ONCHAIN_AUCTION_STATUS, API_AUCTION_STATUS } = vi.hoisted(() => ({
   RESOLVED: {
     token: '0x1111111111111111111111111111111111111111',
-    ccaStrategy: '0x2222222222222222222222222222222222222222',
+    ccaLaunchArm: '0x2222222222222222222222222222222222222222',
     info: {
       wrapper: '0x3333333333333333333333333333333333333333',
       shareOFT: '0x4444444444444444444444444444444444444444',
@@ -185,7 +185,7 @@ vi.mock('../config/contracts', () => ({
     wrapper: RESOLVED.info.wrapper,
     shareOFT: RESOLVED.info.shareOFT,
     vault: RESOLVED.info.vault,
-    ccaStrategy: RESOLVED.ccaStrategy,
+    ccaLaunchArm: RESOLVED.ccaLaunchArm,
   },
   CONTRACTS: { solanaBridgeAdapter: '0x6666666666666666666666666666666666666666' },
 }))

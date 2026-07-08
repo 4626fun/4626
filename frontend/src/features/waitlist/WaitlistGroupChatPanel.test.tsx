@@ -7,8 +7,15 @@ import { WaitlistGroupChatPanel } from './WaitlistGroupChatPanel'
 
 const providerMountOrder: string[] = []
 
-vi.mock('@/wallet/accountContext', () => ({
-  AccountContextProvider: ({ children }: { children: React.ReactNode }) => {
+vi.mock('@/hooks/useDeferUntilMounted', () => ({
+  useDeferWagmiHookConsumers: () => true,
+  useDeferOneMacrotask: () => true,
+  useDeferUntilMounted: () => true,
+  useDeferUntilAfterCommit: () => true,
+}))
+
+vi.mock('./WaitlistMessagingAccountContextProvider', () => ({
+  WaitlistMessagingAccountContextProvider: ({ children }: { children: React.ReactNode }) => {
     providerMountOrder.push('account-context')
     return children
   },
@@ -51,6 +58,10 @@ vi.mock('@/lib/auth/privyEmbeddedSignerAuthErrors', () => ({
 
 vi.mock('./WaitlistMessagingWalletProviders', () => ({
   WaitlistMessagingWalletProviders: ({ children }: { children: React.ReactNode }) => children,
+}))
+
+vi.mock('./useWaitlistMessagingSessionRepair', () => ({
+  useWaitlistMessagingSessionRepair: () => vi.fn(async () => 'repaired' as const),
 }))
 
 vi.mock('./usePrepareWaitlistMessagingWallet', () => ({

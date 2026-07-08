@@ -164,7 +164,7 @@ describe('keeper job coordination handlers', () => {
             payload: {
               path: '/api/keeper/sweep',
               body: {
-                ccaStrategyAddress: '0x1111111111111111111111111111111111111111',
+                ccaLaunchArmAddress: '0x1111111111111111111111111111111111111111',
                 markSettled: {
                   vaultAddress: '0x5555555555555555555555555555555555555555',
                 },
@@ -646,7 +646,7 @@ describe('keeper job coordination handlers', () => {
                   shareTokenAddress: '0x3333333333333333333333333333333333333333',
                 },
                 contracts: {
-                  ccaStrategy: '0x1111111111111111111111111111111111111111',
+                  ccaLaunchArm: '0x1111111111111111111111111111111111111111',
                   gaugeController: '0x4444444444444444444444444444444444444444',
                   payoutRouter: '0x6666666666666666666666666666666666666666',
                 },
@@ -810,7 +810,7 @@ describe('keeper job coordination handlers', () => {
               payload: {
                 path: '/api/keeper/sweep',
                 body: {
-                  ccaStrategyAddress: '0x1111111111111111111111111111111111111111',
+                  ccaLaunchArmAddress: '0x1111111111111111111111111111111111111111',
                   markSettled: {
                     vaultAddress: '0x5555555555555555555555555555555555555555',
                   },
@@ -906,7 +906,7 @@ describe('keeper job coordination handlers', () => {
               payload: {
                 path: '/api/keeper/sweep',
                 body: {
-                  ccaStrategyAddress: '0x1111111111111111111111111111111111111111',
+                  ccaLaunchArmAddress: '0x1111111111111111111111111111111111111111',
                   markSettled: {
                     vaultAddress: '0x5555555555555555555555555555555555555555',
                   },

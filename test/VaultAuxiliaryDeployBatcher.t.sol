@@ -7,7 +7,7 @@ import "@4626/shared/deploy/batchers/VaultAuxiliaryDeployBatcher.sol";
 import "@4626/shared/deploy/infra/UniversalBytecodeStoreV2.sol";
 import "@4626/creator/revenue/CreatorCoinPolicyController.sol";
 import "@4626/creator/revenue/CreatorPayoutRouter.sol";
-import "@4626/shared/revenue/VaultShareBurnStream.sol";
+import "@4626/shared/distribution/VaultShareBurnStream.sol";
 
 contract MockAuxiliaryVault {
     address public immutable owner;

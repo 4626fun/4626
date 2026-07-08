@@ -160,7 +160,7 @@ export type ParsedTelegramDeployIntent =
 
 export type CcaAuctionQuote = {
   auctionAddress: `0x${string}`
-  ccaStrategyAddress: `0x${string}`
+  ccaLaunchArmAddress: `0x${string}`
   clearingPriceQ96: bigint
   maxPriceQ96: bigint
   tokenDecimals: number
@@ -183,5 +183,5 @@ export type ScopedVaultRow = {
   chainId: number
   groupId: string
   isSettled: boolean
-  ccaStrategyAddress: `0x${string}`
+  ccaLaunchArmAddress: `0x${string}`
 }

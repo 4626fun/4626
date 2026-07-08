@@ -18,7 +18,7 @@ const COINBASE_WALLET_LOGO_URL = 'https://gist.githubusercontent.com/taycaldwell
  * Displays the canonical smart wallet (CSW) as the primary identity,
  * with a clear "CSW" label so users never confuse it with their signing
  * EOA. Optional creator coin badge when the CSW owns a registered
- * creator coin via `CreatorRegistry.getTokenForVault(csw)`.
+ * creator coin via `Registry4626.getTokenForVault(csw)`.
  *
  * Used from within `ConnectButton.tsx` — the parent component still
  * owns the dropdown menu + auth actions; this component just renders

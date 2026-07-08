@@ -12,27 +12,27 @@ function resolveCcaStrategyFromRouteParam(addr: string | undefined): Address {
   // Preserve backwards compatibility with older links in this repo that passed
   // vault/wrapper/shareOFT into `/auction/bid/:address` even though the page
   // historically ignored the param.
-  const fallback = AKITA.ccaStrategy as Address
+  const fallback = AKITA.ccaLaunchArm as Address
   if (!addr) return fallback
   if (!isAddress(addr)) return fallback
 
   const lower = addr.toLowerCase()
   const isAkitaKnown =
-    lower === String(AKITA.ccaStrategy).toLowerCase() ||
+    lower === String(AKITA.ccaLaunchArm).toLowerCase() ||
     lower === String(AKITA.vault).toLowerCase() ||
     lower === String(AKITA.wrapper).toLowerCase() ||
     lower === String(AKITA.shareOFT).toLowerCase()
 
-  if (isAkitaKnown) return AKITA.ccaStrategy as Address
+  if (isAkitaKnown) return AKITA.ccaLaunchArm as Address
 
-  // Otherwise, treat the route param as the CCALaunchStrategy address.
+  // Otherwise, treat the route param as the CCALaunchArm address.
   return addr as Address
 }
 
 export function AuctionBid() {
   const SHARE_SYMBOL = toShareSymbol('AKITA')
   const { address } = useParams()
-  const ccaStrategy = resolveCcaStrategyFromRouteParam(address)
+  const ccaLaunchArm = resolveCcaStrategyFromRouteParam(address)
 
   return (
     <div className="relative min-h-0 w-full bg-transparent">
@@ -54,7 +54,7 @@ export function AuctionBid() {
             className="space-y-6"
           >
             <CcaAuctionPanel
-              ccaStrategy={ccaStrategy}
+              ccaLaunchArm={ccaLaunchArm}
               wsSymbol={SHARE_SYMBOL}
               vaultAddress={AKITA.vault as Address}
             />

@@ -114,6 +114,11 @@ export function useWaitlistMessagingConnect(params: UseWaitlistMessagingConnectP
 
           const prepared = await prepare()
           if (!prepared.ok) {
+            const syncLag = prepared.error.toLowerCase().includes('wagmi is still syncing')
+            if (syncLag && attempt === 0) {
+              await new Promise((resolve) => window.setTimeout(resolve, 1_500))
+              continue
+            }
             setPrepareError(prepared.error)
             return
           }

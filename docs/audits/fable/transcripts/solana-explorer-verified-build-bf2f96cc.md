@@ -2705,7 +2705,7 @@ There's a potential arbitrage issue here: if people can deposit creator coins at
 
 ## Analysis
 
-I need to quote the `==` operator in my zsh command since it's being interpreted as a comparison operator, and then locate the CCALaunchStrategy file.
+I need to quote the `==` operator in my zsh command since it's being interpreted as a comparison operator, and then locate the CCALaunchArm file.
 
 *Tools invoked:* Shell
 

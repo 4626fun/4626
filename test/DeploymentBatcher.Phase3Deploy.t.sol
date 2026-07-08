@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
-import {I4626Registry} from "@4626/shared/interfaces/core/I4626Registry.sol";
+import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 import "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
 import "test/helpers/DeploymentBatcherFixture.sol";
 import "test/helpers/DeploymentBatcherPhase3Mocks.sol";
@@ -113,11 +113,11 @@ contract DeploymentBatcherPhase3DeployTest is Test {
     }
 
     function _mockCreatorOracle(address oracle) internal {
-        I4626Registry.TokenInfo memory info;
+        IRegistry4626.TokenInfo memory info;
         info.oracle = oracle;
         vm.mockCall(
             address(batcher.registry()),
-            abi.encodeWithSelector(I4626Registry.getTokenInfo.selector, creatorToken),
+            abi.encodeWithSelector(IRegistry4626.getTokenInfo.selector, creatorToken),
             abi.encode(info)
         );
     }

@@ -46,7 +46,7 @@ function isAddressLike(value: string): boolean {
 
 function getStrategyParam(req: VercelRequest): string {
   const v =
-    (typeof req.query?.ccaStrategy === 'string' ? req.query.ccaStrategy : typeof req.query?.address === 'string' ? req.query.address : '').trim()
+    (typeof req.query?.ccaLaunchArm === 'string' ? req.query.ccaLaunchArm : typeof req.query?.address === 'string' ? req.query.address : '').trim()
   return v
 }
 
@@ -69,7 +69,7 @@ function formatDisplayAmount(
   return symbol ? `${formatted} ${symbol}` : formatted
 }
 
-const CCA_LAUNCH_STRATEGY_ABI = [
+const CCA_LAUNCH_ARM_ABI = [
   {
     name: 'getAuctionStatus',
     type: 'function',
@@ -115,9 +115,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Too many requests' })
   }
 
-  const ccaStrategy = getStrategyParam(req)
-  if (!ccaStrategy) return res.status(400).json({ success: false, error: 'ccaStrategy is required' })
-  if (!isAddressLike(ccaStrategy)) return res.status(400).json({ success: false, error: 'Invalid ccaStrategy address' })
+  const ccaLaunchArm = getStrategyParam(req)
+  if (!ccaLaunchArm) return res.status(400).json({ success: false, error: 'ccaLaunchArm is required' })
+  if (!isAddressLike(ccaLaunchArm)) return res.status(400).json({ success: false, error: 'Invalid ccaLaunchArm address' })
 
   const limit = clampInt(typeof req.query?.limit === 'string' ? req.query.limit : null, 3, 1, 25)
   const MAX_LOOKBACK_BLOCKS = 200_000n
@@ -136,9 +136,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
 
     const [status, currency, auctionToken] = await Promise.all([
-      readClient.readContract({ address: ccaStrategy as any, abi: CCA_LAUNCH_STRATEGY_ABI, functionName: 'getAuctionStatus' }),
-      readClient.readContract({ address: ccaStrategy as any, abi: CCA_LAUNCH_STRATEGY_ABI, functionName: 'currency' }).catch(() => null),
-      readClient.readContract({ address: ccaStrategy as any, abi: CCA_LAUNCH_STRATEGY_ABI, functionName: 'auctionToken' }).catch(() => null),
+      readClient.readContract({ address: ccaLaunchArm as any, abi: CCA_LAUNCH_ARM_ABI, functionName: 'getAuctionStatus' }),
+      readClient.readContract({ address: ccaLaunchArm as any, abi: CCA_LAUNCH_ARM_ABI, functionName: 'currency' }).catch(() => null),
+      readClient.readContract({ address: ccaLaunchArm as any, abi: CCA_LAUNCH_ARM_ABI, functionName: 'auctionToken' }).catch(() => null),
     ])
 
     const auction = String((status as any)?.[0] ?? '')
@@ -220,7 +220,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       data: {
         chainId: 8453,
         generatedAt: new Date().toISOString(),
-        ccaStrategy: ccaStrategy.toLowerCase(),
+        ccaLaunchArm: ccaLaunchArm.toLowerCase(),
         auction: hasLiveAuction ? auction.toLowerCase() : null,
         isActive,
         isGraduated,

@@ -125,7 +125,7 @@ describe('v1 auction status handler', () => {
     const handler = mod.default
     const req = createMockReq({
       method: 'GET',
-      query: { ccaStrategy: CCA_STRATEGY },
+      query: { ccaLaunchArm: CCA_STRATEGY },
       headers: { host: 'app.4626.fun' },
     })
     const res = createMockRes()
@@ -141,7 +141,7 @@ describe('v1 auction status handler', () => {
 
     const req = createMockReq({
       method: 'GET',
-      query: { ccaStrategy: CCA_STRATEGY },
+      query: { ccaLaunchArm: CCA_STRATEGY },
       headers: { host: 'app.4626.fun' },
     })
     const res = createMockRes()
@@ -151,7 +151,7 @@ describe('v1 auction status handler', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(true)
     expect(res.body?.data).toMatchObject({
-      ccaStrategy: CCA_STRATEGY.toLowerCase(),
+      ccaLaunchArm: CCA_STRATEGY.toLowerCase(),
       auction: AUCTION.toLowerCase(),
       auctionToken: AUCTION_TOKEN.toLowerCase(),
       auctionTokenSymbol: 'SHARE',
@@ -224,7 +224,7 @@ describe('v1 auction status handler', () => {
 
     const req = createMockReq({
       method: 'GET',
-      query: { ccaStrategy: CCA_STRATEGY },
+      query: { ccaLaunchArm: CCA_STRATEGY },
       headers: { host: 'app.4626.fun' },
     })
     const res = createMockRes()
@@ -288,7 +288,7 @@ describe('v1 auction status handler', () => {
 
     const req = createMockReq({
       method: 'GET',
-      query: { ccaStrategy: CCA_STRATEGY },
+      query: { ccaLaunchArm: CCA_STRATEGY },
       headers: { host: 'app.4626.fun' },
     })
     const res = createMockRes()
@@ -308,7 +308,7 @@ describe('v1 auction status handler', () => {
 
     const req = createMockReq({
       method: 'GET',
-      query: { ccaStrategy: CCA_STRATEGY },
+      query: { ccaLaunchArm: CCA_STRATEGY },
       headers: {
         host: 'attacker.invalid',
         'x-forwarded-host': 'attacker.invalid',

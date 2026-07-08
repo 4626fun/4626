@@ -42,7 +42,7 @@ interface IOperatorAuthorizableVault {
 }
 
 // FIX: F-07 — registry interface for validating operator-supplied wrapper/vault
-interface I4626RegistryLookup {
+interface IRegistry4626Lookup {
     function getVaultForToken(address token) external view returns (address);
     function getWrapperForToken(address token) external view returns (address);
 }
@@ -56,12 +56,12 @@ contract VaultActivationBatcher is ReentrancyGuard {
     /// @notice Permit2 contract used for signature-based transfers
     address public immutable permit2;
     // FIX: F-07 — registry for validating operator-supplied wrapper/vault against canonical records
-    I4626RegistryLookup public immutable registry;
+    IRegistry4626Lookup public immutable registry;
 
     constructor(address _permit2, address _registry) {
         if (_permit2 == address(0) || _registry == address(0)) revert ZeroAddress();
         permit2 = _permit2;
-        registry = I4626RegistryLookup(_registry);
+        registry = IRegistry4626Lookup(_registry);
     }
 
     // ================================
@@ -125,7 +125,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
         address creatorToken,
         address vault,
         address wrapper,
-        address ccaStrategy,
+        address ccaLaunchArm,
         uint256 depositAmount,
         uint8 auctionPercent,
         uint8 creatorReservePercent,
@@ -159,9 +159,9 @@ contract VaultActivationBatcher is ReentrancyGuard {
         auctionAmount = 0;
         if (auctionPercent > 0) {
             auctionAmount = (shareTokens * auctionPercent) / 100;
-            IERC20(shareToken).forceApprove(ccaStrategy, auctionAmount);
-            uint256 floorPrice = ICCAStrategy(ccaStrategy).defaultFloorPrice();
-            auction = ICCAStrategy(ccaStrategy).launchAuction(auctionAmount, floorPrice, requiredRaise, bytes(""));
+            IERC20(shareToken).forceApprove(ccaLaunchArm, auctionAmount);
+            uint256 floorPrice = ICCAStrategy(ccaLaunchArm).defaultFloorPrice();
+            auction = ICCAStrategy(ccaLaunchArm).launchAuction(auctionAmount, floorPrice, requiredRaise, bytes(""));
         }
 
         // Reserve portion (creator/team allocation, e.g. vesting escrow)
@@ -192,7 +192,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
      * @param creatorToken The creator token to deposit
      * @param vault The vault contract
      * @param wrapper The wrapper contract
-     * @param ccaStrategy The CCA strategy contract
+     * @param ccaLaunchArm The CCA strategy contract
      * @param depositAmount Amount of creator tokens to deposit
      * @param auctionPercent Percent of ■TOKEN to auction (0-100)
      * @param requiredRaise Minimum ETH to raise in auction
@@ -204,13 +204,13 @@ contract VaultActivationBatcher is ReentrancyGuard {
         address creatorToken,
         address vault,
         address wrapper,
-        address ccaStrategy,
+        address ccaLaunchArm,
         uint256 depositAmount,
         uint8 auctionPercent,
         uint128 requiredRaise
     ) external nonReentrant returns (address auction) {
         // Validate inputs
-        if (creatorToken == address(0) || vault == address(0) || wrapper == address(0) || ccaStrategy == address(0)) {
+        if (creatorToken == address(0) || vault == address(0) || wrapper == address(0) || ccaLaunchArm == address(0)) {
             revert ZeroAddress();
         }
 
@@ -226,7 +226,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
             creatorToken,
             vault,
             wrapper,
-            ccaStrategy,
+            ccaLaunchArm,
             depositAmount,
             auctionPercent,
             0,
@@ -248,14 +248,14 @@ contract VaultActivationBatcher is ReentrancyGuard {
         address creatorToken,
         address vault,
         address wrapper,
-        address ccaStrategy,
+        address ccaLaunchArm,
         uint256 depositAmount,
         uint8 auctionPercent,
         uint8 creatorReservePercent,
         address creatorReserveRecipient,
         uint128 requiredRaise
     ) external nonReentrant returns (address auction) {
-        if (creatorToken == address(0) || vault == address(0) || wrapper == address(0) || ccaStrategy == address(0)) {
+        if (creatorToken == address(0) || vault == address(0) || wrapper == address(0) || ccaLaunchArm == address(0)) {
             revert ZeroAddress();
         }
 
@@ -269,7 +269,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
             creatorToken,
             vault,
             wrapper,
-            ccaStrategy,
+            ccaLaunchArm,
             depositAmount,
             auctionPercent,
             creatorReservePercent,
@@ -292,7 +292,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
         address creatorToken,
         address vault,
         address wrapper,
-        address ccaStrategy,
+        address ccaLaunchArm,
         uint256 depositAmount,
         uint8 auctionPercent,
         uint128 requiredRaise,
@@ -302,7 +302,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
         // Validate inputs
         if (
             identity == address(0) || creatorToken == address(0) || vault == address(0) || wrapper == address(0)
-                || ccaStrategy == address(0)
+                || ccaLaunchArm == address(0)
         ) revert ZeroAddress();
         if (depositAmount == 0) revert ZeroAmount();
         if (auctionPercent > 100) revert InvalidPercent();
@@ -333,7 +333,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
             creatorToken,
             vault,
             wrapper,
-            ccaStrategy,
+            ccaLaunchArm,
             depositAmount,
             auctionPercent,
             0,
@@ -355,7 +355,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
         address creatorToken,
         address vault,
         address wrapper,
-        address ccaStrategy,
+        address ccaLaunchArm,
         uint256 depositAmount,
         uint8 auctionPercent,
         uint8 creatorReservePercent,
@@ -366,7 +366,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
     ) external nonReentrant returns (address auction) {
         if (
             identity == address(0) || creatorToken == address(0) || vault == address(0) || wrapper == address(0)
-                || ccaStrategy == address(0)
+                || ccaLaunchArm == address(0)
         ) {
             revert ZeroAddress();
         }
@@ -395,7 +395,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
             creatorToken,
             vault,
             wrapper,
-            ccaStrategy,
+            ccaLaunchArm,
             depositAmount,
             auctionPercent,
             creatorReservePercent,
@@ -418,7 +418,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
         address creatorToken,
         address vault,
         address wrapper,
-        address ccaStrategy,
+        address ccaLaunchArm,
         uint256 depositAmount,
         uint8 auctionPercent,
         uint128 requiredRaise,
@@ -428,7 +428,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
         // Validate inputs
         if (
             identity == address(0) || creatorToken == address(0) || vault == address(0) || wrapper == address(0)
-                || ccaStrategy == address(0)
+                || ccaLaunchArm == address(0)
         ) revert ZeroAddress();
         if (depositAmount == 0) revert ZeroAmount();
         if (auctionPercent > 100) revert InvalidPercent();
@@ -459,7 +459,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
             creatorToken,
             vault,
             wrapper,
-            ccaStrategy,
+            ccaLaunchArm,
             depositAmount,
             auctionPercent,
             0,
@@ -481,7 +481,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
         address creatorToken,
         address vault,
         address wrapper,
-        address ccaStrategy,
+        address ccaLaunchArm,
         uint256 depositAmount,
         uint8 auctionPercent,
         uint8 creatorReservePercent,
@@ -492,7 +492,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
     ) external nonReentrant returns (address auction) {
         if (
             identity == address(0) || creatorToken == address(0) || vault == address(0) || wrapper == address(0)
-                || ccaStrategy == address(0)
+                || ccaLaunchArm == address(0)
         ) {
             revert ZeroAddress();
         }
@@ -521,7 +521,7 @@ contract VaultActivationBatcher is ReentrancyGuard {
             creatorToken,
             vault,
             wrapper,
-            ccaStrategy,
+            ccaLaunchArm,
             depositAmount,
             auctionPercent,
             creatorReservePercent,

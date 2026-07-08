@@ -39,7 +39,7 @@ const PHASE1_CODE_IDS = {
   wrapper: keccak256(DEPLOY_BYTECODE.CreatorOVaultWrapper as Hex),
   shareOFT: keccak256(DEPLOY_BYTECODE.CreatorShareOFT as Hex),
   gauge: keccak256(DEPLOY_BYTECODE.CreatorGaugeController as Hex),
-  cca: keccak256(DEPLOY_BYTECODE.CCALaunchStrategy as Hex),
+  cca: keccak256(DEPLOY_BYTECODE.CCALaunchArm as Hex),
   oracle: keccak256(DEPLOY_BYTECODE.CreatorOracle as Hex),
   oftBootstrap: keccak256(DEPLOY_BYTECODE.OFTBootstrapRegistry as Hex),
 } as const
@@ -130,7 +130,7 @@ async function main(): Promise<void> {
       client.readContract({ address: EXPECTED_STORE, abi: STORE_ABI, functionName: 'get', args: [codeId] }),
     ])
     const manifestKey =
-      label === 'cca' ? 'CCALaunchStrategy' : label === 'charm' ? 'CharmStrategy4626' : label === 'adapter' ? 'ERC4626StrategyAdapter' : label === 'ajnaAuth' ? 'AjnaVaultAuth' : label === 'ajnaVault' ? 'AjnaERC4626Vault' : label === 'oftBootstrap' ? 'OFTBootstrapRegistry' : label === 'vault' ? 'CreatorOVault' : label === 'wrapper' ? 'CreatorOVaultWrapper' : label === 'shareOFT' ? 'CreatorShareOFT' : label === 'gauge' ? 'CreatorGaugeController' : label === 'oracle' ? 'CreatorOracle' : null
+      label === 'cca' ? 'CCALaunchArm' : label === 'charm' ? 'CharmStrategy4626' : label === 'adapter' ? 'ERC4626StrategyAdapter' : label === 'ajnaAuth' ? 'AjnaVaultAuth' : label === 'ajnaVault' ? 'AjnaERC4626Vault' : label === 'oftBootstrap' ? 'OFTBootstrapRegistry' : label === 'vault' ? 'CreatorOVault' : label === 'wrapper' ? 'CreatorOVaultWrapper' : label === 'shareOFT' ? 'CreatorShareOFT' : label === 'gauge' ? 'CreatorGaugeController' : label === 'oracle' ? 'CreatorOracle' : null
     const expectedBytes = manifestKey ? manifest.contracts[manifestKey]?.creationBytecodeBytes : undefined
 
     const ok = pointer !== ZERO && chunks > 0n && size > 0n && (fromStore as Hex).length > 2

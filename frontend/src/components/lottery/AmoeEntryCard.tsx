@@ -13,7 +13,7 @@ import { resolveClientAgentXmtpAddress } from '@/lib/xmtp/agentXmtpAddress'
 
 // PR 2 — AMOE Linear Parity. Mirrors the server-side constants in
 // `frontend/server/_lib/lottery/lotteryAmoe.ts` and the on-chain math in
-// `CreatorLotteryManager.calculateWinChance` (PR 1, #395). Keep these in
+// `LotteryManager4626.calculateWinChance` (PR 1, #395). Keep these in
 // sync with the server. The on-chain value is authoritative; the preview
 // here is for display only.
 const AMOE_MIN_POINTS = 100

@@ -264,7 +264,7 @@ describe('telegram webhook parsers', () => {
         chainId: 8453,
         groupId: 'g1',
         isSettled: false,
-        ccaStrategyAddress: '0x3333333333333333333333333333333333333333',
+        ccaLaunchArmAddress: '0x3333333333333333333333333333333333333333',
       },
       {
         vaultAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -272,7 +272,7 @@ describe('telegram webhook parsers', () => {
         chainId: 8453,
         groupId: 'g2',
         isSettled: false,
-        ccaStrategyAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
+        ccaLaunchArmAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
       },
     ] as const
 

@@ -12,7 +12,7 @@ Verify your Continuous Clearing Auction deployment.
 ### 1. Check Auction Status
 
 ```solidity
-AuctionStatus status = ccaStrategy.getAuctionStatus();
+AuctionStatus status = ccaLaunchArm.getAuctionStatus();
 ```
 
 ### 2. Verify Parameters
@@ -33,7 +33,7 @@ AuctionStatus status = ccaStrategy.getAuctionStatus();
 
 ```solidity
 // Check liquidity migrated
-address pool = ccaStrategy.getPool();
+address pool = ccaLaunchArm.getPool();
 ```
 
 ### 2. Verify Trading

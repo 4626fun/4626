@@ -61,7 +61,7 @@ Two contracts exceed the 24,576-byte EIP-170 runtime size limit:
 **delegatecall documentation** — NOT YET DONE
 - `CreatorOVault.sol` lines 620, 633 and `CreatorOVaultCoreModule.sol` lines 527, 536 use `delegatecall` intentionally for the modular vault architecture. Just need NatSpec documentation noting this is by-design and access-controlled.
 
-**Exact balance comparison in CCALaunchStrategy.sol:1002** — FALSE POSITIVE
+**Exact balance comparison in CCALaunchArm.sol:1002** — FALSE POSITIVE
 - Line 1002 is `if (currency == address(0)) return holder.balance;` — it's checking if currency is native ETH, not doing a balance equality check.
 
 **Pin floating pragma versions** — NOT YET DONE

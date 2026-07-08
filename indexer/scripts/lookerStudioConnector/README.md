@@ -44,9 +44,10 @@ view that joins `zora_profiles` with cached Ethos scores from
        API key. Use service-role (not anon) because RLS rules on
        `zora_profiles` may block anon reads.
    - In connector config, pick source:
-     - **`v_looker_zora_profiles_ethos`** (recommended default)
+     - **`v_looker_zora_profiles_ethos`** (recommended default — outreach dashboard)
+     - **`v_zora_owner_ethos_sync_health`** (ops — single-row Ethos sync health; see widget recipe § Ethos sync health)
      - `zora_profiles`
-     - `zora_csw_owner_class`
+     - `zora_csw_owner_class` (legacy; prefer `wallet` compatibility column or `eoa`)
    - Optional: set **Row limit per query** (recommended 2000-10000).
    - Click **Connect** → schema appears → **Create report**.
 

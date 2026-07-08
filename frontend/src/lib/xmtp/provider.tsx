@@ -1230,21 +1230,30 @@ export function XmtpChatProvider({
     }
   }, [cleanup])
 
-  // Reset when wallet changes
+  // Reset when wallet changes. Defer state writes on manualConnectOnly surfaces
+  // (waitlist chat) so wagmi Hydrate reconnect does not cascade setState mid-render.
   useEffect(() => {
     if (!isConnected) {
       void cleanup()
-      setStatus('idle')
-      setError(null)
-      setIdentityAddress(null)
-      setConversations([])
-      conversationsRef.current = []
-      identityAddressRef.current = null
-      setInboxId(null)
-      setInstallationLimitInboxId(null)
-      setLocalStateResetRequired(false)
+      const applyDisconnectedState = () => {
+        if (!mountedRef.current) return
+        setStatus('idle')
+        setError(null)
+        setIdentityAddress(null)
+        setConversations([])
+        conversationsRef.current = []
+        identityAddressRef.current = null
+        setInboxId(null)
+        setInstallationLimitInboxId(null)
+        setLocalStateResetRequired(false)
+      }
+      if (manualConnectOnly) {
+        window.setTimeout(applyDisconnectedState, 0)
+      } else {
+        applyDisconnectedState()
+      }
     }
-  }, [isConnected, address, cleanup])
+  }, [isConnected, address, cleanup, manualConnectOnly])
 
   const markLocalStateInvalid = useCallback((errorMessage: string): void => {
     connectEpochRef.current += 1

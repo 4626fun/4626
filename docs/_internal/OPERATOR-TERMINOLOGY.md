@@ -8,7 +8,7 @@ Internal runbooks use shorthand that differs from creator-facing docs at [docs.4
 |---------------------------------------|----------------------|--------|
 | **New vault launch** | Greenfield deploy | Brand-new vault on the **current** release — not upgrading AKITA or other legacy vaults |
 | Launch bundle ($499 USDC) | `vault_full_deploy` | All-or-nothing; à-la-carte strategy keys return HTTP 410 |
-| Fair-launch auction | CCA / `CCALaunchStrategy` | Starts next **Thursday 00:00 UTC** after finalize |
+| Fair-launch auction | CCA / `CCALaunchArm` | Starts next **Thursday 00:00 UTC** after finalize |
 | **Solana bridge at finalize** (~30% of `■`) | Pipe A / `solana_ovault_mesh` | Automatic LayerZero bridge during Phase 2 finalize — **not** a separate app step or Phase 3 strategy |
 | Optional Solana trading (Meteora) | Share mesh entitlement | Operator-provisioned pool on bridged `■`; included in launch bundle |
 | Share allocation at finalize | **30 / 30 / 30 / 10** | Auction / vesting / Solana bridge / LP reserve |

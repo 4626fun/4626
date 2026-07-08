@@ -423,7 +423,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     address public impairmentClaims;
     address public impairmentRecoveryEscrow;
     // slither-disable-next-line uninitialized-state
-    address public ccaLaunchStrategy;
+    address public ccaLaunchArm;
 
     // =================================
     // EVENTS
@@ -1034,7 +1034,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     }
 
     function _isCcaAuctionLive() internal view returns (bool) {
-        address strategy = ccaLaunchStrategy;
+        address strategy = ccaLaunchArm;
         if (strategy == address(0)) return false;
 
         try ICCALifecycleStatusReader(strategy).getLifecycleStatus() returns (CcaLifecycleStatus memory status) {
@@ -1848,7 +1848,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     }
 
     /// @notice Link or clear the vault CCA strategy used for auction-time deposit gating.
-    function setCCALaunchStrategy(address _ccaLaunchStrategy) external onlyOwner {
+    function setCcaLaunchArm(address _ccaLaunchArm) external onlyOwner {
         _delegate(_adminModule);
     }
 
