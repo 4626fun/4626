@@ -1,9 +1,10 @@
 import path from 'node:path'
 import { hasDedicatedMount, resolveXmtpDbDirectory } from '../../server/_lib/messaging/xmtpDbDirectory.js'
 import {
-  hasCanonicalCswRuntimeConfig,
-  readCanonicalCswAddressEnv,
-  readCanonicalCswPrivyWalletIdEnv,
+  hasProtocolCswRuntimeConfig,
+  readProtocolCswOwnerIndexEnv,
+  readProtocolCswPrivyWalletIdEnv,
+  resolveServerAgentCswAddress,
 } from '../../server/_lib/wallet/canonicalCswEnv.js'
 
 type StartupMode = 'multi-agent' | 'single-canonical-csw' | 'single-agent-eoa' | 'standby-only' | 'unconfigured'
@@ -44,7 +45,7 @@ function normalizeMode(): StartupMode {
   const consumeXmtp = envBool('AGENT_CONSUME_XMTP', env('AGENT_RUNTIME_ROLE').toLowerCase() !== 'standby')
   const hasMultiAgent = has('DATABASE_URL') || has('POSTGRES_URL') // Supabase preferred; POSTGRES_URL = legacy fallback
   const hasDbKey = has('XMTP_AGENT_KEY_ENCRYPTION_KEY')
-  const hasCsw = hasCanonicalCswRuntimeConfig()
+  const hasCsw = hasProtocolCswRuntimeConfig()
   const hasEoa = has('XMTP_AGENT_PRIVATE_KEY')
 
   if (!consumeXmtp) return 'standby-only'
@@ -153,11 +154,11 @@ function buildChecks(mode: StartupMode): Check[] {
       detail: has('XMTP_AGENT_KEY_ENCRYPTION_KEY') ? 'configured' : 'missing',
     },
     {
-      label: 'CSW signer config',
-      ok: mode !== 'single-canonical-csw' || hasCanonicalCswRuntimeConfig(),
-      detail: hasCanonicalCswRuntimeConfig()
-          ? `address=${mask(readCanonicalCswAddressEnv())}, walletId=${mask(readCanonicalCswPrivyWalletIdEnv())}`
-          : 'not configured',
+      label: 'Protocol CSW signer config',
+      ok: mode !== 'single-canonical-csw' || hasProtocolCswRuntimeConfig(),
+      detail: hasProtocolCswRuntimeConfig()
+          ? `address=${mask(resolveServerAgentCswAddress())}, walletId=${mask(readProtocolCswPrivyWalletIdEnv())}, ownerIndex=${readProtocolCswOwnerIndexEnv() || '(auto)'}`
+          : 'not configured (set PROTOCOL_CSW_PRIVY_WALLET_ID or CANONICAL_CSW_PRIVY_WALLET_ID)',
     },
     {
       label: 'EOA fallback config',
@@ -186,8 +187,8 @@ function startupRecipe(mode: StartupMode): string[] {
       ]
     case 'single-canonical-csw':
       return [
-        'Railway primary path: keep CANONICAL_CSW_ADDRESS, CANONICAL_CSW_PRIVY_WALLET_ID, Privy server creds, XMTP_DB_ENCRYPTION_KEY, and an LLM key on Railway, then deploy there.',
-        'This is the canonical single-agent setup in 4626: CSW identity on XMTP, Privy as delegated signer.',
+        'Railway primary path: set PROTOCOL_CSW_ADDRESS, PROTOCOL_CSW_OWNER_INDEX, PROTOCOL_CSW_PRIVY_WALLET_ID (or CANONICAL_CSW_PRIVY_WALLET_ID fallback), Privy server creds, XMTP_DB_ENCRYPTION_KEY, and an LLM key on Railway, then redeploy Eliza.',
+        'XMTP/ERC-8004 agent identity uses the protocol CSW (0x793c…). Operator CANONICAL_CSW_ADDRESS (0xAb6d5…) is personal custody only — not the XMTP sender.',
       ]
     case 'multi-agent':
       return [
