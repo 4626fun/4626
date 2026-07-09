@@ -146,11 +146,26 @@ function _payoutLocalJackpot(
 
 ## Boost Integration
 
-The lottery supports ve(3,3) boosts:
+Personal + gauge layers (single envelope — **no** lock-duration additive PPM):
 
+```text
+// Base from trade size
+basePPM = min(swapUSD / 250_000, baseCeilingPPM)
+
+// Personal (only if boostManager set + covered Share USD > 0):
+//   l = min(creatorShareUSD, swapUSD)
+//   L = total creator ShareOFT supply USD
+//   ve = effective veChance
+//   working/l = min(0.4 + 0.6·(L/l)·(ve/Ve), 1.0)   ∈ [0.4, 1.0]
+//   (no position → personal mult inactive; basePPM unchanged)
+personalMult = calculateBoostForPosition(...)   // BPS, 4000–10000 when l>0
+boostedPPM   = basePPM × personalMult / 10_000
+
+// Gauge (if vaultGaugeVoting set): + size-scaled vault PPM
+// Hard cap: lotteryConfig.maxWinChance
 ```
-FinalPPM = BasePPM × PersonalBoost + LockDurationBoostPPM + VaultGaugeBoostPPM
-```
+
+Canonical product writeup: [ve■4626](/contracts/governance/ve4626) · naming: [ve-naming](/contracts/governance/ve-naming).
 
 ## Events
 

@@ -91,6 +91,13 @@ interface IChainlinkVRFIntegrator {
 
 interface Ive4626BoostManager {
     function calculateBoost(address user) external view returns (uint256 boostBps);
+    /// @notice Curve working-balance boost for (l, L, ve/Ve). Preferred personal path.
+    function calculateBoostForPosition(
+        address user,
+        uint256 shareBalanceUSD,
+        uint256 swapAmountUSD,
+        uint256 totalShareUSD
+    ) external view returns (uint256 boostBps);
     function getTotalProbabilityBoost(address user) external view returns (uint256 boostBps);
     function getCoverageBps(
         address user,
@@ -1104,8 +1111,9 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
 
     /**
      * @notice Apply ve(3,3) boosts to base win probability
-     * @dev Personal ve4626 boosts stay coverage-scaled (full 2.5x only up to covered value).
-     *      Vault gauge boost is flat additive and applies full voted PPM to every trade.
+     * @dev Personal: working-balance mult (0.4×–1.0×) via
+     *      `calculateBoostForPosition(l, L, ve/Ve)` — no post-hoc coverage scale
+     *      (l already = min(shareUSD, swapUSD)). Gauge is flat additive PPM.
      */
     function _applyBoost(
         address user,
@@ -1122,29 +1130,31 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     {
         boostedWinChance = baseWinChance;
 
-        // STEP 1: Apply coverage-scaled personal ve4626 boosts
-        if (address(boostManager) != address(0)) {
-            uint256 coverageBps = boostManager.getCoverageBps(
-                user, address(registry), token, shareBalanceToken, shareBalanceAmount, swapAmountUSD
-            );
-
-            try boostManager.calculateBoost(user) returns (uint256 boostBPS) {
-                if (boostBPS > BASIS_POINTS && coverageBps > 0) {
-                    uint256 extraMultiplierBps = boostBPS - BASIS_POINTS;
-                    uint256 effectiveMultiplierBps =
-                        BASIS_POINTS + FullMath.mulDiv(extraMultiplierBps, coverageBps, BASIS_POINTS);
-                    boostedWinChance = FullMath.mulDiv(baseWinChance, effectiveMultiplierBps, BASIS_POINTS);
+        // STEP 1: Curve personal mult (position-aware). Requires covered Share USD.
+        if (address(boostManager) != address(0) && shareBalanceAmount > 0 && swapAmountUSD > 0) {
+            uint256 totalShareUSD = _totalShareUsd(token, shareBalanceToken);
+            try boostManager.calculateBoostForPosition(user, shareBalanceAmount, swapAmountUSD, totalShareUSD)
+            returns (uint256 boostBPS) {
+                // Curve factor is the full mult (incl. tokenless 0.4×). Apply when manager
+                // returns a value; zero-position managers return 1.0× (baseBoost).
+                if (boostBPS > 0) {
+                    boostedWinChance = FullMath.mulDiv(baseWinChance, boostBPS, BASIS_POINTS);
                 }
-            } catch {}
-
-            // Additional lock-duration additive boost (also coverage-scaled).
-            try boostManager.getTotalProbabilityBoost(user) returns (uint256 probBoostBps) {
-                if (probBoostBps > 0 && coverageBps > 0) {
-                    uint256 additionalPPM = probBoostBps * 100;
-                    additionalPPM = FullMath.mulDiv(additionalPPM, coverageBps, BASIS_POINTS);
-                    boostedWinChance += additionalPPM;
-                }
-            } catch {}
+            } catch {
+                // Legacy managers without ForPosition: old mult × coverage scale.
+                try boostManager.getCoverageBps(
+                    user, address(registry), token, shareBalanceToken, shareBalanceAmount, swapAmountUSD
+                ) returns (uint256 coverageBps) {
+                    try boostManager.calculateBoost(user) returns (uint256 boostBPS) {
+                        if (boostBPS > BASIS_POINTS && coverageBps > 0) {
+                            uint256 extraMultiplierBps = boostBPS - BASIS_POINTS;
+                            uint256 effectiveMultiplierBps =
+                                BASIS_POINTS + FullMath.mulDiv(extraMultiplierBps, coverageBps, BASIS_POINTS);
+                            boostedWinChance = FullMath.mulDiv(baseWinChance, effectiveMultiplierBps, BASIS_POINTS);
+                        }
+                    } catch {}
+                } catch {}
+            }
         }
 
         // STEP 2: Add vault gauge boost (vote-directed budget).
@@ -1161,6 +1171,19 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         if (boostedWinChance > lotteryConfig.maxWinChance) {
             boostedWinChance = lotteryConfig.maxWinChance;
         }
+    }
+
+    /// @dev Value full ShareOFT supply in USD for Curve pool size L. Zero if unreadable.
+    function _totalShareUsd(address token, address shareBalanceToken) internal view returns (uint256 totalShareUSD) {
+        if (shareBalanceToken == address(0) || shareBalanceToken.code.length == 0) return 0;
+        uint256 supply;
+        try IERC20(shareBalanceToken).totalSupply() returns (uint256 s) {
+            supply = s;
+        } catch {
+            return 0;
+        }
+        if (supply == 0) return 0;
+        (totalShareUSD,,) = _calculateTokenUSD(token, shareBalanceToken, supply);
     }
 
     function _scaleGaugeBoostBySwapSize(uint256 gaugeBoostPPM, uint256 swapAmountUSD) internal view returns (uint256) {

@@ -3,10 +3,11 @@
 ## Scope
 
 This rollout ships:
-- coverage-based ve boost in `CreatorLotteryManager`
+- coverage-aware personal boost in `LotteryManager4626` via `ve4626BoostManager.calculateBoostForPosition`
 - remote payload v2 (`buyerCurrentShareBalance`) in `CreatorShareOFT`
-- one-lock global-share boost in `ve4626BoostManager` (coverage uses creator-share value only)
+- Curve-style working mult **0.4×–1.0×** (`l`=covered Share USD, `L`=Share supply USD, `ve`=effectiveChance)
 - fixed-budget gauge voting in `ve4626GaugeVoting` (`69,420` PPM total, `35,000` PPM per-vault cap)
+- launch: leave LM `boostManager` / `vaultGaugeVoting` at `0` until canary
 
 ## Breaking Interface Note
 

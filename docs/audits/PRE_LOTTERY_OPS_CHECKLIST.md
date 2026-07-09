@@ -37,8 +37,8 @@ API helpers:
 
 | Step | Action | Verify |
 |------|--------|--------|
-| 3.1 | Build + upgrade `creator-share-hook` with win_id PDA + settle threshold/auth | Program binary + IDL match repo |
-| 3.2 | Redeploy/upgrade KPR winner-relay against new `record_winner` layout | Integration smoke: record + duplicate win_id rejected |
+| 3.1 | Build + upgrade `creator-share-hook` with win_id PDA + settle threshold/auth | **DONE 2026-07-09** slot `431796316` — [upgrade record](../operations/solana-hook-upgrade-2026-07-09.md) |
+| 3.2 | Redeploy/upgrade KPR winner-relay against new `record_winner` layout | **Pending prod redeploy** — code on main; [post-upgrade checklist](../operations/post-solana-hook-upgrade-checklist.md) |
 | 3.3 | Keep **B2 `relay_entries` default-deny** until pool verify + C-01 fence still holds | `SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0` |
 | 3.4 | Single trigger plane for Solana orchestrator (M2-09) | Local cron **off** unless sole plane; action leases enabled |
 
@@ -82,7 +82,8 @@ Upgrade runbook: AGENTS.md Solana program deployment section.
 
 - [ ] Lottery readiness: zero criticals  
 - [ ] PayoutRouter owners: multisig/timelock  
-- [ ] Solana hook upgraded + winner-relay smoke  
+- [x] Solana hook upgraded (slot `431796316`)  
+- [ ] KPR/orchestrator redeployed + winner-relay smoke  
 - [ ] B2 relay_entries still off  
 - [ ] Env fail-closed confirmed on Vercel + Railway + Vultr orchestrator  
 - [ ] Public docs match R-H05 mode actually deployed  

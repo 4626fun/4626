@@ -140,6 +140,26 @@ contract MockBoostManagerAmoe {
         return boostBPS;
     }
 
+    function calculateBoostForPosition(address, uint256 shareUSD, uint256 swapUSD, uint256)
+        external
+        view
+        returns (uint256)
+    {
+        if (shareUSD == 0 || swapUSD == 0) return 10_000;
+        // Mirror legacy: scale extra mult by coverage so AMOE parity tests stay meaningful.
+        uint256 cov;
+        if (forcedCoverageActive) {
+            cov = forcedCoverageBps;
+        } else {
+            uint256 covered = shareUSD < swapUSD ? shareUSD : swapUSD;
+            cov = (covered * BOOST_PRECISION) / swapUSD;
+            if (cov > BOOST_PRECISION) cov = BOOST_PRECISION;
+        }
+        if (cov == 0 || boostBPS <= BOOST_PRECISION) return BOOST_PRECISION;
+        uint256 extra = boostBPS - BOOST_PRECISION;
+        return BOOST_PRECISION + (extra * cov) / BOOST_PRECISION;
+    }
+
     function getCoverageBps(
         address,
         address,
@@ -312,11 +332,14 @@ contract LotteryManager4626AmoeLinearParityTest is Test {
     }
 
     function test_ProcessAmoeEntry_RevertsWhenRelayerUnset() public {
-        vm.prank(owner);
-        manager.setAuthorizedAmoeRelayer(address(0));
+        // Relayer is one-shot + 2d timelock after first set (setUp already wired `relayer`).
+        vm.startPrank(owner);
+        manager.queueAmoeRelayerChange(address(0));
+        vm.warp(block.timestamp + manager.AMOE_RELAYER_TIMELOCK());
+        manager.executeAmoeRelayerChange();
+        vm.stopPrank();
 
-        // Even calling from address(0) (impossible in practice) must not pass — and
-        // any other address must revert.
+        // Even calling from the former relayer must not pass once unset.
         vm.prank(relayer);
         vm.expectRevert();
         manager.processAmoeEntry(buyer, creatorCoin, 100 * 1_000_000);
@@ -491,14 +514,19 @@ contract LotteryManager4626AmoeLinearParityTest is Test {
     }
 
     function test_SetAuthorizedAmoeRelayer_UpdatesAndAllowsZero() public {
-        vm.prank(owner);
-        manager.setAuthorizedAmoeRelayer(address(0xBABE));
+        // After first set (setUp), rewires go through queue + timelock.
+        vm.startPrank(owner);
+        manager.queueAmoeRelayerChange(address(0xBABE));
+        vm.warp(block.timestamp + manager.AMOE_RELAYER_TIMELOCK());
+        manager.executeAmoeRelayerChange();
         assertEq(manager.authorizedAmoeRelayer(), address(0xBABE));
 
         // Zero disables AMOE.
-        vm.prank(owner);
-        manager.setAuthorizedAmoeRelayer(address(0));
+        manager.queueAmoeRelayerChange(address(0));
+        vm.warp(block.timestamp + manager.AMOE_RELAYER_TIMELOCK());
+        manager.executeAmoeRelayerChange();
         assertEq(manager.authorizedAmoeRelayer(), address(0));
+        vm.stopPrank();
     }
 
     // -------------------------------------------------------------

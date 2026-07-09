@@ -35,6 +35,17 @@ interface Ive4626 {
     function getLock(address user) external view returns (Ive4626Lock memory);
 }
 
+interface Ive4626Vote {
+    function balanceOf(address user) external view returns (uint256);
+}
+
+/// @dev Minimal surface of ve4626Utility for decay-safe voting power.
+interface Ive4626Utility {
+    function sync(address user) external returns (uint256 burnedVote, uint256 burnedChance);
+    function effectiveVoteOf(address user) external view returns (uint256);
+    function vote() external view returns (address);
+}
+
 // FIX: G-09 — lock struct for getLock return
 struct Ive4626Lock {
     uint256 amount;
@@ -94,6 +105,9 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
     /// @notice Maximum number of vaults a user can vote for at once
     uint256 public constant MAX_VAULTS_PER_VOTE = 10;
 
+    /// @notice Freeze before epoch end: no new votes in the last window.
+    uint256 public constant VOTE_FREEZE_WINDOW = 1 hours;
+
     /// @notice Genesis epoch start (first Thursday 00:00 UTC after deployment)
     uint256 public immutable genesisEpochStart;
 
@@ -101,8 +115,14 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
     // STATE
     // ================================
 
-    /// @notice ve4626 token for voting power
+    /// @notice ve■4626 commitment for voting power (fallback when vote token unset)
     Ive4626 public immutable ve4626;
+
+    /// @notice Optional raw veVote token; used only if `utility` unset (legacy).
+    Ive4626Vote public voteToken;
+
+    /// @notice Preferred: ve4626Utility — `vote()` syncs then uses post-decay effective vote.
+    Ive4626Utility public utility;
 
     /// @notice Optional registry for auto-whitelisting vaults
     IRegistry4626VaultWhitelist public registry;
@@ -160,6 +180,11 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
     error LockTooRecent();
     // FIX: G-08 — error for zero normalized weight after rounding
     error NormalizedWeightZero();
+    // Power-split / epoch freeze
+    error VoteFreezeWindow();
+
+    event VoteTokenUpdated(address indexed token);
+    event UtilityUpdated(address indexed utility);
 
     // ================================
     // CONSTRUCTOR
@@ -187,20 +212,49 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
     // VOTING FUNCTIONS
     // ================================
 
+    function setVoteToken(address token) external onlyOwner {
+        voteToken = Ive4626Vote(token);
+        emit VoteTokenUpdated(token);
+    }
+
+    /// @notice Wire ve4626Utility so votes use decay-safe power (sync + effective vote).
+    function setUtility(address utility_) external onlyOwner {
+        utility = Ive4626Utility(utility_);
+        emit UtilityUpdated(utility_);
+        // Keep voteToken pointer aligned when utility is set (for explorers / integrators).
+        if (utility_ != address(0)) {
+            voteToken = Ive4626Vote(Ive4626Utility(utility_).vote());
+            emit VoteTokenUpdated(address(voteToken));
+        }
+    }
+
     function vote(address[] calldata vaults, uint256[] calldata weights) external override nonReentrant {
         if (vaults.length != weights.length) revert ArrayLengthMismatch();
         if (vaults.length > MAX_VAULTS_PER_VOTE) revert TooManyVaults();
         // FIX: G-16 — block voting before genesis epoch
         if (block.timestamp < genesisEpochStart) revert VotingNotStarted();
 
+        uint256 epoch = currentEpoch();
+        uint256 epochEnd = epochEndTime(epoch);
+        // Epoch freeze: no vote changes in the last hour of the epoch
+        if (epochEnd > block.timestamp && epochEnd - block.timestamp <= VOTE_FREEZE_WINDOW) {
+            revert VoteFreezeWindow();
+        }
+
         // FIX: G-09 — require lock to be at least 1 epoch old to prevent same-block lock→vote
         Ive4626Lock memory userLock = ve4626.getLock(msg.sender);
         if (userLock.start + EPOCH_DURATION > block.timestamp) revert LockTooRecent();
 
-        // FIX: G-03 — use epoch-end projected voting power instead of instant power
-        uint256 epoch = currentEpoch();
-        uint256 epochEnd = epochEndTime(epoch);
-        uint256 userPower = ve4626.votingPowerAt(msg.sender, epochEnd);
+        // Decay-safe power: prefer utility (sync then effective); else raw voteToken; else live ve
+        uint256 userPower;
+        if (address(utility) != address(0)) {
+            utility.sync(msg.sender);
+            userPower = utility.effectiveVoteOf(msg.sender);
+        } else if (address(voteToken) != address(0)) {
+            userPower = voteToken.balanceOf(msg.sender);
+        } else {
+            userPower = ve4626.votingPowerAt(msg.sender, epochEnd);
+        }
         if (userPower == 0) revert NoVotingPower();
         if (ve4626.getRemainingLockTime(msg.sender) < timeUntilNextEpoch()) revert LockExpiresBeforeEpochEnd();
 
