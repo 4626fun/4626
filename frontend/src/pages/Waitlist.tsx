@@ -1,16 +1,11 @@
-import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
-import { AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { META, PageMeta } from '@/components/seo/PageMeta'
+import { WaitlistFlow } from '@/features/waitlist/WaitlistFlow'
 import { WaitlistReturningWalletSignInRunner } from '@/features/waitlist/WaitlistReturningWalletSignInRunner'
 import { invalidateAccountMeCache } from '@/hooks/useAccountMe'
 import { PrivyClientProvider, usePrivyClientStatus } from '@/lib/privy/client'
 import { AppQueryProvider } from '@/web3/AppQueryProvider'
-
-const LazyWaitlistFlow = lazy(async () => {
-  const mod = await import('@/features/waitlist/WaitlistFlow')
-  return { default: mod.WaitlistFlow }
-})
 
 type WaitlistFlowGateProps = {
   walletSignInPending: boolean
@@ -25,19 +20,19 @@ type WaitlistFlowGateProps = {
 function WaitlistFlowGate(props: WaitlistFlowGateProps) {
   void usePrivyClientStatus()
 
+  // Eager mount (not lazy): Base App WebViews already pay a Privy init cost;
+  // a Suspense fallback here adds a second Loading flash on every remount.
   return (
-    <Suspense fallback={<AppLoadingRegistrar label="waitlist-page-suspense" />}>
-      <LazyWaitlistFlow
-        sectionId="waitlist-page"
-        walletSignInPending={props.walletSignInPending}
-        walletSessionAddress={props.walletSessionAddress}
-        walletSignInError={props.walletSignInError}
-        onRequestWalletSignIn={props.onRequestWalletSignIn}
-        onCancelWalletSignIn={props.onCancelWalletSignIn}
-        onClearWalletSignInError={props.onClearWalletSignInError}
-        onClearWalletSession={props.onClearWalletSession}
-      />
-    </Suspense>
+    <WaitlistFlow
+      sectionId="waitlist-page"
+      walletSignInPending={props.walletSignInPending}
+      walletSessionAddress={props.walletSessionAddress}
+      walletSignInError={props.walletSignInError}
+      onRequestWalletSignIn={props.onRequestWalletSignIn}
+      onCancelWalletSignIn={props.onCancelWalletSignIn}
+      onClearWalletSignInError={props.onClearWalletSignInError}
+      onClearWalletSession={props.onClearWalletSession}
+    />
   )
 }
 
@@ -106,6 +101,9 @@ export function Waitlist() {
     <AppQueryProvider>
       <PageMeta title={META.waitlist.title} description={META.waitlist.description} canonicalPath="/waitlist" />
       <PrivyClientProvider
+        // Keep a stable provider tree for the default email lane. Remounting
+        // Privy when wallet sign-in starts is intentional (different connectors),
+        // but email↔email must not remount on unrelated parent renders.
         key={waitlistWalletPrivyMode ? 'waitlist-wallet-lane' : 'waitlist-email'}
         showWalletLoginFirst={waitlistWalletPrivyMode}
         mode={waitlistPrivyMode}

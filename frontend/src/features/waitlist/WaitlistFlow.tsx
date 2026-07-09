@@ -605,8 +605,15 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   const [localSessionAddress, setLocalSessionAddress] = useState<string | null>(null)
   const [serverSessionAddress, setServerSessionAddress] = useState<string | null>(null)
   const [sessionProbeComplete, setSessionProbeComplete] = useState(false)
+  // Latch Privy ready for UI: Base App WebViews flap `ready` and would otherwise
+  // disable the CTA / swap helper copy every few hundred ms.
+  const [privyReadyLatched, setPrivyReadyLatched] = useState(() => privy.ready === true)
   const orphanSessionCleanupRef = useRef(false)
   const sessionProbeStartedRef = useRef(false)
+
+  useEffect(() => {
+    if (privy.ready === true) setPrivyReadyLatched(true)
+  }, [privy.ready])
   const [error, setError] = useState<string | null>(null)
   const [listCount, setListCount] = useState<number | null>(null)
   const [memberAvatars, setMemberAvatars] = useState<WaitlistAvatar[]>([])
@@ -686,8 +693,11 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     onClearWalletSignInError()
   }, [onClearWalletSignInError, props.walletSignInError])
 
+  // Probe the 4626 session cookie on mount — do not wait for Privy `ready`.
+  // Base App WebViews often flap Privy ready for several seconds; gating the
+  // probe on that signal left the UI in signup limbo (or bouncing) while a
+  // valid cookie already existed.
   useEffect(() => {
-    if (!privy.ready) return
     if (sessionProbeStartedRef.current) return
     sessionProbeStartedRef.current = true
     let cancelled = false
@@ -703,10 +713,13 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
       // otherwise a cancelled first run leaves sessionProbeComplete false forever.
       sessionProbeStartedRef.current = false
     }
-  }, [privy.ready])
+  }, [])
 
   const signupInProgress = step === 'code' || emailBusy || codeBusy || signupInFlightRef.current
-  const ORPHAN_SESSION_CLEANUP_DELAY_MS = 2_000
+  // Base App Privy auth flaps can last several seconds; keep orphan cleanup
+  // slower than those flaps so a brief unauthenticated window does not wipe
+  // a still-valid server cookie and bounce the user back to signup.
+  const ORPHAN_SESSION_CLEANUP_DELAY_MS = 8_000
 
   useEffect(() => {
     const shouldClear = shouldClearOrphanWaitlistServerSession({
@@ -833,9 +846,9 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
 
   // Auto-focus the email field on intentional CTA arrival.
   useEffect(() => {
-    if (!joinIntent || !privy.ready || joinedSessionAddress || step !== 'email') return
+    if (!joinIntent || !privyReadyLatched || joinedSessionAddress || step !== 'email') return
     emailInputRef.current?.focus()
-  }, [joinIntent, privy.ready, joinedSessionAddress, step])
+  }, [joinIntent, privyReadyLatched, joinedSessionAddress, step])
 
   // Focus the code field as soon as we advance to the OTP step.
   useEffect(() => {
@@ -1802,7 +1815,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                               value={email}
                               onChange={(event) => setEmail(event.target.value)}
                               placeholder="name@example.com"
-                              disabled={emailBusy || !privy.ready}
+                              disabled={emailBusy || !privyReadyLatched}
                               className="block h-12 w-full rounded-xl border border-white/10 bg-[rgb(var(--vault-bg))] px-4 pr-10 text-[15px] text-white outline-none transition placeholder:text-zinc-600 focus:border-[rgb(var(--brand-primary)/0.7)] focus:shadow-[0_0_0_3px_rgb(var(--brand-primary)/0.14)] disabled:opacity-60"
                             />
                             <AnimatePresence>
@@ -1828,7 +1841,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                             variant="primary"
                             size="lg"
                             className="btn-3d group/btn relative w-full overflow-hidden !rounded-full !min-h-[52px] text-[15px] font-semibold"
-                            disabled={emailBusy || !privy.ready || !isValidEmail(email)}
+                            disabled={emailBusy || !privyReadyLatched || !isValidEmail(email)}
                           >
                             <ButtonSheen />
                             {emailBusy ? (
@@ -1845,7 +1858,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                           </Button>
                         </MagneticButton>
                         <p className="text-center text-[11px] leading-relaxed text-zinc-500">
-                          {!privy.ready ? 'Preparing secure session…' : 'We’ll send a 6-digit code to your email.'}
+                          {!privyReadyLatched ? 'Preparing secure session…' : 'We’ll send a 6-digit code to your email.'}
                         </p>
                       </motion.form>
                     ) : (
