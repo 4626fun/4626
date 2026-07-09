@@ -24,7 +24,10 @@ import {
 } from '@4626/server-core'
 import { createVaultControlPlane } from '../../../server/_lib/controlPlane/vaultControlPlane.js'
 import { SWEEP_COMPLETION_AUTHORITY } from '../../../server/_lib/controlPlane/executors/executeSettleVault.js'
+import { verifyLotteryProductionReadiness } from '../../../server/_lib/lottery/lotteryProductionReadiness.js'
+import { getApiContracts } from '../../../server/_lib/onchain/contracts.js'
 import { verifyPayoutRouterHarvestReadiness } from '../../../server/_lib/onchain/payoutRouterHarvestReadiness.js'
+import { verifyPayoutRouterProductionReadiness } from '../../../server/_lib/onchain/payoutRouterProductionReadiness.js'
 import { resolvePayoutRouterSwapPathTokens } from '../../../server/_lib/onchain/payoutRouterHarvestTokens.js'
 import {
   evaluateShareMeshInvariants,
@@ -289,8 +292,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Completion invariants are enforced by env only — there is intentionally
     // no per-request bypass (audit H2-05). Disabling via env is an emergency
     // override and must page operations.
-    const enforceCompletionInvariants = process.env.KEEPER_ENFORCE_COMPLETION_INVARIANTS !== 'false'
-    if (!enforceCompletionInvariants) {
+    // Completion invariants are env-only (H2-05). In production, fail closed even if env is false (M2-02 parity).
+    const isProdRuntime =
+      String(process.env.VERCEL_ENV ?? '').trim().toLowerCase() === 'production' ||
+      String(process.env.NODE_ENV ?? '').trim().toLowerCase() === 'production'
+    let enforceCompletionInvariants = process.env.KEEPER_ENFORCE_COMPLETION_INVARIANTS !== 'false'
+    if (isProdRuntime && !enforceCompletionInvariants) {
+      console.error(
+        '[keeper/sweep] ALERT: KEEPER_ENFORCE_COMPLETION_INVARIANTS=false ignored in production (fail-closed)',
+        { ccaLaunchArmAddress: normalizedStrategyAddress },
+      )
+      enforceCompletionInvariants = true
+    } else if (!enforceCompletionInvariants) {
       console.error('[keeper/sweep] ALERT: KEEPER_ENFORCE_COMPLETION_INVARIANTS=false — completion invariants disabled via env override', {
         ccaLaunchArmAddress: normalizedStrategyAddress,
       })
@@ -481,7 +494,55 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               recordInvariantViolation(issue.code, issue.message)
             }
           }
+
+          // M2-03 / H-07: PayoutRouter owner must not be a hot EOA before settledAt.
+          try {
+            let approvedOwners: `0x${string}`[] = []
+            try {
+              const treasury = getApiContracts().protocolTreasury
+              if (treasury) approvedOwners = [treasury as `0x${string}`]
+            } catch {
+              // ignore config read failures; production check still runs without allowlist
+            }
+            const prod = await verifyPayoutRouterProductionReadiness({
+              publicClient,
+              payoutRouter: invariantInput.payoutRouterAddress,
+              approvedOwners,
+            })
+            invariantChecksRun += prod.checksRun
+            for (const issue of prod.violations) {
+              if (issue.severity !== 'critical') continue
+              recordInvariantViolation(issue.code, issue.message, issue.expected as string | number | null | undefined, issue.actual as string | number | null | undefined)
+            }
+          } catch (err) {
+            recordInvariantViolation(
+              'payout_router_production_readiness_error',
+              `PayoutRouter production-readiness check failed: ${err instanceof Error ? err.message : String(err)}`,
+            )
+          }
         }
+      }
+
+      // M2-03 / M-15 / H-06: global lottery production readiness before vault completion.
+      try {
+        const lotteryManager = getApiContracts().lotteryManager as `0x${string}` | undefined
+        if (lotteryManager && lotteryManager !== zeroAddress) {
+          const lottery = await verifyLotteryProductionReadiness({
+            publicClient,
+            lotteryManager,
+            requireBoostTimelockArmed: true,
+          })
+          invariantChecksRun += lottery.checksRun
+          for (const issue of lottery.violations) {
+            if (issue.severity !== 'critical') continue
+            recordInvariantViolation(issue.code, issue.message, issue.expected as string | number | null | undefined, issue.actual as string | number | null | undefined)
+          }
+        }
+      } catch (err) {
+        recordInvariantViolation(
+          'lottery_production_readiness_error',
+          `Lottery production-readiness check failed: ${err instanceof Error ? err.message : String(err)}`,
+        )
       }
 
       if (shareMeshConfig.enabled && invariantInput.oracleAddress) {
@@ -528,6 +589,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         migrateStatus = 'awaiting_block'
         completionStage = 'awaiting_migration_block'
       } else {
+        // M2-01: preflight completion invariants on the pre-migration snapshot.
+        // Block migrate when wiring is already wrong (fee recipient / payout recipient).
+        if (enforceCompletionInvariants) {
+          try {
+            await runCompletionInvariants()
+          } catch (err) {
+            recordInvariantViolation(
+              'preflight_invariant_check_error',
+              'Pre-migration invariant evaluation failed',
+              undefined,
+              err instanceof Error ? err.message : 'unknown_error',
+            )
+          }
+          // Only gate on preflight-stable codes (ignore post-migrate-only share-mesh noise).
+          const preflightBlocking = invariantViolations.filter((v) =>
+            [
+              'missing_expected_gauge',
+              'missing_expected_creator_coin',
+              'strategy_fee_recipient_mismatch',
+              'creator_coin_payout_recipient_mismatch',
+            ].includes(v.code),
+          )
+          if (preflightBlocking.length > 0) {
+            completionStage = 'invariant_failed'
+            return res.status(409).json({
+              success: false,
+              error: 'preflight_invariant_failed',
+              data: {
+                sweepTxHash,
+                migrateTxHash: null,
+                sweepStatus,
+                migrateStatus: 'blocked_preflight',
+                completionStage,
+                invariantViolations: preflightBlocking,
+              },
+            })
+          }
+          // Clear soft noise so post-migrate full pass re-evaluates cleanly.
+          invariantViolations.length = 0
+          invariantChecksRun = 0
+        }
+
         migrateTxHash = await walletClient.writeContract({
           address: ccaLaunchArmAddress as `0x${string}`,
           abi: CCA_STRATEGY_ABI as unknown as Abi,

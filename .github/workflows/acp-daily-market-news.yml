@@ -41,7 +41,8 @@ jobs:
           node-version: '20'
 
       - name: Install ACP CLI
-        run: npm i -g @virtuals-protocol/acp-cli
+        # M2-14 — pin CLI version (not floating latest).
+        run: npm i -g @virtuals-protocol/acp-cli@1.0.24
 
       - name: Resolve slot
         id: resolve

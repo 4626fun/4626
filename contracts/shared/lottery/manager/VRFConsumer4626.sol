@@ -500,6 +500,34 @@ contract VRFConsumer4626 is OApp, ReentrancyGuard {
         }
     }
 
+    /// @notice Retry a failed local lottery/VRF callback (M-11).
+    /// @dev Permissionless after fulfill: keeps win processing recoverable when the first
+    ///      callback reverts (e.g. temporary OOG / reentrancy in the lottery manager).
+    function retryLocalCallback(uint256 requestId) external nonReentrant {
+        VRFRequest storage request = vrfRequests[requestId];
+        if (request.timestamp == 0) revert InvalidRequest();
+        require(request.isLocalRequest, "Not local");
+        require(request.fulfilled, "Not fulfilled");
+        require(!request.callbackSent, "Callback already sent");
+
+        address requester = request.localRequester;
+        require(requester.code.length > 0, "No callback target");
+
+        uint256[] memory words = new uint256[](1);
+        words[0] = request.randomWord;
+
+        try IVRFCallbackReceiver(requester).receiveRandomWords(requestId, words) {
+            request.callbackSent = true;
+            emit LocalCallbackSent(requestId, requester, request.randomWord);
+        } catch Error(string memory reason) {
+            emit LocalCallbackFailed(requestId, requester, reason);
+            revert(reason);
+        } catch {
+            emit LocalCallbackFailed(requestId, requester, "Unknown error");
+            revert("Local callback retry failed");
+        }
+    }
+
     function _handleCrossChainResponse(uint256 requestId, VRFRequest storage request, uint256[] calldata) internal {
         (MessagingFee memory fee,) = _quoteResponseFee(request);
         pendingResponses[request.sourceChainEid][request.sequence] = true;

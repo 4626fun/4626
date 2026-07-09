@@ -32,10 +32,13 @@ import {
   readCanonicalBridgeTokenAllowlistRequired,
   readSolanaBridgeLivenessPolicy,
 } from '../../../server/_lib/onchain/solanaBridgePolicy.js'
+import {
+  BASE_SOLANA_BRIDGE_SCALARS_ABI,
+  resolveBaseSolanaBridge,
+} from '../../../server/_lib/onchain/resolveBaseSolanaBridge.js'
 
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
-const BASE_SOLANA_BRIDGE = '0x3eff766c76a1be2ce1acf2b69c78bcae257d5188' as Address
 
 const DEPLOYMENT_BATCHER_SOLANA_VIEW_ABI = [
   {
@@ -84,19 +87,6 @@ const SOLANA_BRIDGE_ADAPTER_ABI = [
     stateMutability: 'view',
     inputs: [{ name: 'mint', type: 'bytes32' }],
     outputs: [{ type: 'address' }],
-  },
-] as const
-
-const BASE_SOLANA_BRIDGE_ABI = [
-  {
-    type: 'function',
-    name: 'scalars',
-    stateMutability: 'view',
-    inputs: [
-      { name: 'localToken', type: 'address' },
-      { name: 'remoteToken', type: 'bytes32' },
-    ],
-    outputs: [{ type: 'uint256' }],
   },
 ] as const
 
@@ -419,10 +409,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .then((v) => (typeof v === 'string' && isAddress(v) ? getAddress(v as Address) : ZERO_ADDRESS))
       .catch(() => ZERO_ADDRESS)
     if (defaultRouteBridgeToken) {
+      const { address: baseSolanaBridge } = await resolveBaseSolanaBridge({
+        publicClient,
+        adapterAddress: batcherAdapter,
+      })
       const scalar = await publicClient
         .readContract({
-          address: BASE_SOLANA_BRIDGE,
-          abi: BASE_SOLANA_BRIDGE_ABI,
+          address: baseSolanaBridge,
+          abi: BASE_SOLANA_BRIDGE_SCALARS_ABI,
           functionName: 'scalars',
           args: [defaultRouteBridgeToken, defaultMintBytes32],
         })

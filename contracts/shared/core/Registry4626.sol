@@ -53,6 +53,11 @@ contract Registry4626 is IRegistry4626, Ownable {
 
     error FactoryCodehashMismatch(address factory, bytes32 expected, bytes32 actual);
 
+    /// @notice When false (default), per-token vault/shareOFT/wrapper/oracle/gauge bindings
+    ///         are one-shot: first non-zero set sticks. Owner may enable rebind for emergency
+    ///         migration only (audit M-08).
+    bool public liveRebindEnabled;
+
     // =================================
     // REMOTE OFT PEER TRACKING (Hub-Centric)
     // =================================
@@ -140,6 +145,8 @@ contract Registry4626 is IRegistry4626, Ownable {
 
     event FactoryAuthorized(address indexed factory, bool status);
     event HubChainSet(uint256 chainId, uint32 eid);
+    event LiveRebindEnabledUpdated(bool enabled);
+    event TokenBindingUpdated(address indexed token, bytes32 indexed field, address oldValue, address newValue);
 
     // =================================
     // ERRORS
@@ -155,6 +162,12 @@ contract Registry4626 is IRegistry4626, Ownable {
     error ZeroAddress();
     error ZeroBytes32();
     error NotAuthorized();
+    /// @notice Existing non-zero binding cannot be replaced while live rebind is disabled.
+    error BindingAlreadySet(address token, address existing);
+    /// @notice Live rebind of token bindings is owner-only when enabled.
+    error LiveRebindOwnerOnly();
+    /// @notice Reverse map already points at another token (M-NEW-03).
+    error ReverseMappingConflict(address entity, address existingToken, address attemptedToken);
 
     // =================================
     // MODIFIERS
@@ -256,20 +269,41 @@ contract Registry4626 is IRegistry4626, Ownable {
     }
 
     /**
+     * @notice Enable/disable live rebind of per-token core bindings (M-08).
+     * @dev Default false. When true, only the owner may replace an already-set binding.
+     */
+    function setLiveRebindEnabled(bool enabled) external onlyOwner {
+        liveRebindEnabled = enabled;
+        emit LiveRebindEnabledUpdated(enabled);
+    }
+
+    /// @dev First set is always allowed. Replacing a non-zero binding requires owner + liveRebindEnabled.
+    function _requireBindingWritable(address token, address existing, address next) internal view {
+        if (existing == address(0) || existing == next) return;
+        if (!liveRebindEnabled) revert BindingAlreadySet(token, existing);
+        if (msg.sender != owner()) revert LiveRebindOwnerOnly();
+    }
+
+    /**
      * @notice Set vault address for a token
      */
     function setVault(address _token, address _vault) external override onlyAuthorizedOrOwner {
         if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
         if (_vault == address(0)) revert ZeroAddress();
 
+        address previous = tokenInfos[_token].vault;
+        _requireBindingWritable(_token, previous, _vault);
+        if (previous == _vault) return;
+
         // Clear old reverse mapping if exists
-        if (tokenInfos[_token].vault != address(0)) {
-            delete vaultToToken[tokenInfos[_token].vault];
+        if (previous != address(0)) {
+            delete vaultToToken[previous];
         }
 
         tokenInfos[_token].vault = _vault;
         vaultToToken[_vault] = _token;
 
+        emit TokenBindingUpdated(_token, "vault", previous, _vault);
         emit TokenUpdated(_token);
     }
 
@@ -280,14 +314,24 @@ contract Registry4626 is IRegistry4626, Ownable {
         if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
         if (_shareOFT == address(0)) revert ZeroAddress();
 
-        // Clear old reverse mapping if exists
-        if (tokenInfos[_token].shareOFT != address(0)) {
-            delete shareOFTToToken[tokenInfos[_token].shareOFT];
+        address previous = tokenInfos[_token].shareOFT;
+        _requireBindingWritable(_token, previous, _shareOFT);
+        if (previous == _shareOFT) return;
+
+        // M-NEW-03: refuse to steal another token's reverse ShareOFT mapping.
+        address reverseOwner = shareOFTToToken[_shareOFT];
+        if (reverseOwner != address(0) && reverseOwner != _token) {
+            revert ReverseMappingConflict(_shareOFT, reverseOwner, _token);
+        }
+
+        if (previous != address(0)) {
+            delete shareOFTToToken[previous];
         }
 
         tokenInfos[_token].shareOFT = _shareOFT;
         shareOFTToToken[_shareOFT] = _token;
 
+        emit TokenBindingUpdated(_token, "shareOFT", previous, _shareOFT);
         emit TokenUpdated(_token);
     }
 
@@ -298,14 +342,18 @@ contract Registry4626 is IRegistry4626, Ownable {
         if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
         if (_wrapper == address(0)) revert ZeroAddress();
 
-        // Clear old reverse mapping if exists
-        if (tokenInfos[_token].wrapper != address(0)) {
-            delete wrapperToToken[tokenInfos[_token].wrapper];
+        address previous = tokenInfos[_token].wrapper;
+        _requireBindingWritable(_token, previous, _wrapper);
+        if (previous == _wrapper) return;
+
+        if (previous != address(0)) {
+            delete wrapperToToken[previous];
         }
 
         tokenInfos[_token].wrapper = _wrapper;
         wrapperToToken[_wrapper] = _token;
 
+        emit TokenBindingUpdated(_token, "wrapper", previous, _wrapper);
         emit TokenUpdated(_token);
     }
 
@@ -316,14 +364,18 @@ contract Registry4626 is IRegistry4626, Ownable {
         if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
         if (_oracle == address(0)) revert ZeroAddress();
 
-        // Clear old reverse mapping if exists
-        if (tokenInfos[_token].oracle != address(0)) {
-            delete oracleToToken[tokenInfos[_token].oracle];
+        address previous = tokenInfos[_token].oracle;
+        _requireBindingWritable(_token, previous, _oracle);
+        if (previous == _oracle) return;
+
+        if (previous != address(0)) {
+            delete oracleToToken[previous];
         }
 
         tokenInfos[_token].oracle = _oracle;
         oracleToToken[_oracle] = _token;
 
+        emit TokenBindingUpdated(_token, "oracle", previous, _oracle);
         emit TokenUpdated(_token);
     }
 
@@ -338,14 +390,18 @@ contract Registry4626 is IRegistry4626, Ownable {
         if (tokenInfos[_token].token == address(0)) revert TokenNotRegistered(_token);
         if (_gaugeController == address(0)) revert ZeroAddress();
 
-        // Clear old reverse mapping if exists
-        if (tokenInfos[_token].gaugeController != address(0)) {
-            delete gaugeControllerToToken[tokenInfos[_token].gaugeController];
+        address previous = tokenInfos[_token].gaugeController;
+        _requireBindingWritable(_token, previous, _gaugeController);
+        if (previous == _gaugeController) return;
+
+        if (previous != address(0)) {
+            delete gaugeControllerToToken[previous];
         }
 
         tokenInfos[_token].gaugeController = _gaugeController;
         gaugeControllerToToken[_gaugeController] = _token;
 
+        emit TokenBindingUpdated(_token, "gaugeController", previous, _gaugeController);
         emit TokenUpdated(_token);
     }
 
@@ -477,6 +533,12 @@ contract Registry4626 is IRegistry4626, Ownable {
         } else {
             // New chain — track it
             remoteOFTChains[_token].push(_chainEid);
+        }
+
+        // M-NEW-03: reverse map is single-valued — block remapping to a different token.
+        address reverseOwner = remoteOFTToToken[_remoteOFT];
+        if (reverseOwner != address(0) && reverseOwner != _token) {
+            revert ReverseMappingConflict(_remoteOFT, reverseOwner, _token);
         }
 
         remoteOFTPeers[_token][_chainEid] = _remoteOFT;

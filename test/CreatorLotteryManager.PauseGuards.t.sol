@@ -392,6 +392,11 @@ contract LotteryManager4626PauseGuardsTest is Test {
 
         assertEq(gauge.payCount(), 0, "unpause should not settle deferred requests");
 
+        // Out-of-order apply must fail (H-02 / M2-07 — no cherry-pick).
+        vm.prank(owner);
+        vm.expectRevert();
+        lotteryManager.applyDeferredVrf(requestId2);
+
         vm.prank(owner);
         lotteryManager.applyDeferredVrf(requestId1);
         assertEq(gauge.payCount(), 1, "first apply should settle first request");
@@ -405,6 +410,47 @@ contract LotteryManager4626PauseGuardsTest is Test {
         (address userAfter2,,,,,,) = lotteryManager.vrfRequests(requestId2);
         assertEq(userAfter1, address(0));
         assertEq(userAfter2, address(0));
+    }
+
+    function test_processDeferredVrfBatch_settlesFifoHeadFirst() public {
+        address buyer2 = makeAddr("buyer2batch");
+        shareToken.mint(buyer2, 100 ether);
+        ve4626.setLock(buyer2, shareOFT, 100 ether, 100 ether);
+
+        uint256 rawVrfId1 = localVrfConsumer.nextRequestId();
+        vm.prank(authorizedSwap);
+        uint256 requestId1 = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 100 ether);
+
+        uint256 rawVrfId2 = localVrfConsumer.nextRequestId();
+        vm.prank(authorizedSwap);
+        uint256 requestId2 = lotteryManager.processSwapLottery(buyer2, shareOFT, 1 ether, 100 ether);
+
+        vm.prank(owner);
+        lotteryManager.pause();
+
+        uint256[] memory words1 = new uint256[](1);
+        words1[0] = 0;
+        vm.prank(address(localVrfConsumer));
+        lotteryManager.receiveRandomWords(rawVrfId1, words1);
+
+        uint256[] memory words2 = new uint256[](1);
+        words2[0] = 0;
+        vm.prank(address(localVrfConsumer));
+        lotteryManager.receiveRandomWords(rawVrfId2, words2);
+
+        assertEq(lotteryManager.deferredVrfQueueLength(), 2, "both deferred on queue");
+        assertEq(lotteryManager.deferredVrfQueueHead(), requestId1, "FIFO head is first request");
+
+        vm.prank(owner);
+        lotteryManager.unpause();
+
+        vm.prank(owner);
+        uint256 processed = lotteryManager.processDeferredVrfBatch(16);
+        assertEq(processed, 2, "batch settles entire small queue");
+        assertEq(gauge.payCount(), 2, "both wins settled");
+        assertEq(lotteryManager.deferredVrfQueueLength(), 0, "queue drained");
+        assertEq(gauge.lastWinner(), buyer2, "FIFO order preserved (second last)");
+        requestId2; // silence unused if compiler complains
     }
 
     function test_DeferredVrf_RemainsValidAcrossLongPause() public {

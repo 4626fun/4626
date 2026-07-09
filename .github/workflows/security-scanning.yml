@@ -190,6 +190,10 @@ jobs:
       - name: Docs site lockfile audit
         run: pnpm --dir apps/docs-site install --frozen-lockfile && pnpm --dir apps/docs-site audit --audit-level high 2>&1 | tee "$RUNNER_TEMP/docs-site-audit.txt"
 
+      # M2-14 — KPR was audited only by the local security script; include it in CI.
+      - name: KPR lockfile audit
+        run: pnpm --dir kpr install --frozen-lockfile && pnpm --dir kpr audit --audit-level high 2>&1 | tee "$RUNNER_TEMP/kpr-audit.txt"
+
       - name: Write summary
         if: always()
         run: |
@@ -207,15 +211,22 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           tail -60 "$RUNNER_TEMP/docs-site-audit.txt" 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || echo "(no output)" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "### KPR (\`kpr/pnpm-lock.yaml\`)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -60 "$RUNNER_TEMP/kpr-audit.txt" 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || echo "(no output)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
   semgrep-api:
     name: Semgrep (frontend API surfaces)
     runs-on: ubuntu-latest
+    env:
+      # M2-14 — pin Semgrep image version (not :latest). Bump intentionally when upgrading.
+      SEMGREP_IMAGE: semgrep/semgrep:1.128.1
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Pull Semgrep image
-        run: docker pull semgrep/semgrep:latest
+        run: docker pull "$SEMGREP_IMAGE"
 
       - name: Scan API handlers and shared server lib
         # Audit finding H-4 (2026-06): `| tee` swallowed semgrep's exit code
@@ -224,7 +235,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker run --rm -v "$GITHUB_WORKSPACE:/src" semgrep/semgrep:latest semgrep scan \
+          docker run --rm -v "$GITHUB_WORKSPACE:/src" "$SEMGREP_IMAGE" semgrep scan \
             --metrics=off \
             --timeout=5 \
             --error \
@@ -274,7 +285,8 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Slither
-        run: pip install slither-analyzer
+        # M2-14 — pin Slither version for reproducible report-only scans.
+        run: pip install 'slither-analyzer==0.11.5'
 
       - name: Forge build (EIP-170 size check)
         # `--skip test` matches the deployability-gate intent: test
@@ -327,7 +339,8 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Slither
-        run: pip install slither-analyzer
+        # M2-14 — pin Slither version (match report-only job).
+        run: pip install 'slither-analyzer==0.11.5'
 
       - name: Forge build
         run: forge build --sizes || true

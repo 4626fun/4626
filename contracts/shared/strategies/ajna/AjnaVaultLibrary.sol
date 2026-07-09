@@ -21,15 +21,20 @@ library AjnaVaultLibrary {
         if (minBucketIndex != 0 && bucketIndex < minBucketIndex) revert InvalidBucketIndex();
     }
 
+    /// @dev Minimum enforced floor when auth.bufferRatio is 0 (M-14) so exit liquidity
+    ///      cannot be fully vacuumed into buckets.
+    uint256 internal constant DEFAULT_MIN_BUFFER_RATIO_BPS = 500;
+
     function ensureBufferRatio(uint256 totalAssets, uint256 currentBufferAssets, uint256 assetsLeavingBuffer, uint256 ratioBps)
         internal
         pure
     {
-        if (ratioBps == 0) return;
+        // M-14: if governance left ratio at 0, still enforce a 5% floor for withdrawals.
+        uint256 effectiveRatio = ratioBps == 0 ? DEFAULT_MIN_BUFFER_RATIO_BPS : ratioBps;
 
         uint256 remainingBufferAssets = currentBufferAssets - assetsLeavingBuffer;
         // FIX: F-10 — use ceiling division so rounding never under-reports the minimum buffer
-        uint256 minBufferAssets = Math.ceilDiv(totalAssets * ratioBps, 10_000);
+        uint256 minBufferAssets = Math.ceilDiv(totalAssets * effectiveRatio, 10_000);
         if (remainingBufferAssets < minBufferAssets) revert BufferRatioViolated();
     }
 

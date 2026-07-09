@@ -191,9 +191,9 @@ contract AjnaERC4626VaultTest is Test {
         vm.prank(user);
         vault.deposit(100e18, user);
 
-        auth.setKeeper(keeper, true);
-
-        vm.prank(keeper);
+        // moveFromBuffer is swapper-only (user is swapper).
+        // M-14: default 5% buffer floor still allows moving 90 of 100.
+        vm.prank(user);
         vault.moveFromBuffer(4_156, 90e18);
 
         vm.prank(user);
@@ -208,11 +208,12 @@ contract AjnaERC4626VaultTest is Test {
         auth.setKeeper(keeper, true);
         auth.setBufferRatio(2_000);
 
-        vm.prank(keeper);
+        // moveFromBuffer is swapper-only (user); keepers pull back via moveToBuffer.
+        vm.prank(user);
         vm.expectRevert();
         vault.moveFromBuffer(4_156, 81e18);
 
-        vm.prank(keeper);
+        vm.prank(user);
         vault.moveFromBuffer(4_156, 80e18);
 
         assertEq(vault.bufferAssets(), 20e18);

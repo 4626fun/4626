@@ -46,8 +46,11 @@ contract BribeDepot is Ownable, ReentrancyGuard {
     mapping(uint256 => mapping(address => bool)) public isClosed;
 
     /// @notice Number of epochs to wait before rolling forward leftover bribes.
-    /// @dev 4 epochs ≈ 4 weeks after the epoch ends.
+    /// @dev 4 epochs ≈ 4 weeks after the epoch ends. Owner can raise; floor is MIN_ROLLOVER_GRACE.
     uint256 public rolloverGraceEpochs = 4;
+
+    /// @notice Minimum grace epochs for leftover rollover (M-13 — late claimers).
+    uint256 public constant MIN_ROLLOVER_GRACE_EPOCHS = 2;
 
     // ================================
     // EVENTS
@@ -56,6 +59,7 @@ contract BribeDepot is Ownable, ReentrancyGuard {
     event Bribed(address indexed token, uint256 amount, uint256 indexed epoch);
     event Claimed(address indexed user, address indexed token, uint256 amount, uint256 indexed epoch);
     event BribeRolledOver(address indexed token, uint256 indexed fromEpoch, uint256 indexed toEpoch, uint256 amount);
+    event RolloverGraceEpochsUpdated(uint256 oldGrace, uint256 newGrace);
 
     // ================================
     // ERRORS
@@ -71,6 +75,7 @@ contract BribeDepot is Ownable, ReentrancyGuard {
     error NotZeroVoteEpoch();
     // FIX: G-14 — error for bribes on non-whitelisted vault
     error VaultNotWhitelisted();
+    error GraceBelowMinimum(uint256 provided, uint256 minimum);
 
     constructor(address _vault, address _gaugeVoting) Ownable(msg.sender) {
         if (_vault == address(0) || _gaugeVoting == address(0)) revert ZeroAddress();
@@ -133,7 +138,7 @@ contract BribeDepot is Ownable, ReentrancyGuard {
 
     /**
      * @notice Roll bribes from an epoch with zero vault weight into the current epoch.
-     * @dev Safe because there were no eligible claimants for that epoch.
+     * @dev Safe because there were no eligible claimants for that epoch. Permissionless.
      */
     function rolloverZeroVoteEpoch(uint256 epoch, address token) external nonReentrant returns (uint256 rolled) {
         if (token == address(0)) revert ZeroAddress();
@@ -162,9 +167,11 @@ contract BribeDepot is Ownable, ReentrancyGuard {
 
     /**
      * @notice Roll leftover (unclaimed + rounding dust) forward after a grace period.
-     * @dev Once rolled, the epoch/token is closed and can no longer be claimed.
+     * @dev M-13: owner-only so a griefing third party cannot confiscate late claims the
+     *      moment the grace window ends. Zero-vote epochs still use the permissionless path.
+     *      Once rolled, the epoch/token is closed and can no longer be claimed.
      */
-    function rolloverExpiredEpoch(uint256 epoch, address token) external nonReentrant returns (uint256 rolled) {
+    function rolloverExpiredEpoch(uint256 epoch, address token) external onlyOwner nonReentrant returns (uint256 rolled) {
         if (token == address(0)) revert ZeroAddress();
 
         uint256 current = gaugeVoting.currentEpoch();
@@ -192,5 +199,15 @@ contract BribeDepot is Ownable, ReentrancyGuard {
         }
 
         emit BribeRolledOver(token, epoch, current, rolled);
+    }
+
+    /// @notice Raise/lower leftover-claim grace (floor MIN_ROLLOVER_GRACE_EPOCHS).
+    function setRolloverGraceEpochs(uint256 newGrace) external onlyOwner {
+        if (newGrace < MIN_ROLLOVER_GRACE_EPOCHS) {
+            revert GraceBelowMinimum(newGrace, MIN_ROLLOVER_GRACE_EPOCHS);
+        }
+        uint256 old = rolloverGraceEpochs;
+        rolloverGraceEpochs = newGrace;
+        emit RolloverGraceEpochsUpdated(old, newGrace);
     }
 }

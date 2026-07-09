@@ -74,6 +74,8 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
     uint256 public lastTimestamp;
     int24 public lastTick;
     uint256 public maxRebalanceSlippageBps = 500;
+    /// @notice Hard cap for withdraw/burn min-amount slippage (audit M-10).
+    uint256 public constant MAX_WITHDRAW_SLIPPAGE_BPS = 2_000;
 
     uint256 public accruedFees0;
     uint256 public accruedFees1;
@@ -112,6 +114,7 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
     error RebalanceSlippageExceeded(uint256 valueBefore, uint256 valueAfter);
     error PositionsNotEmpty();
     error OracleAssetPriceUnavailable();
+    error SlippageBpsTooHigh(uint256 bps);
 
     modifier onlyVault() {
         if (msg.sender != vault && msg.sender != owner()) revert NotVault();
@@ -547,6 +550,7 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         if (pos.liquidity == 0) return (0, 0);
         _requireConfigured();
         (uint256 principal0, uint256 principal1) = _getPositionAmounts(pos);
+        (uint128 min0, uint128 min1) = _minsFromExpected(principal0, principal1);
 
         uint256 balAssetBefore = ASSET.balanceOf(address(this));
         uint256 balPairedBefore = _pairedBalance();
@@ -557,7 +561,8 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         actions[2] = bytes1(uint8(Actions.CLOSE_CURRENCY));
 
         bytes[] memory params = new bytes[](3);
-        params[0] = abi.encode(pos.tokenId, uint128(0), uint128(0), bytes(""));
+        // M-10: non-zero mins from principal * (1 - maxRebalanceSlippageBps).
+        params[0] = abi.encode(pos.tokenId, min0, min1, bytes(""));
         params[1] = abi.encode(poolKey.currency0);
         params[2] = abi.encode(poolKey.currency1);
 
@@ -592,6 +597,12 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
 
         _requireConfigured();
 
+        // M-10: expected amounts for the share of liquidity, with slippage floor.
+        (uint256 full0, uint256 full1) = _getPositionAmounts(pos);
+        uint256 expected0 = Math.mulDiv(full0, liquidityToBurn, pos.liquidity);
+        uint256 expected1 = Math.mulDiv(full1, liquidityToBurn, pos.liquidity);
+        (uint128 min0, uint128 min1) = _minsFromExpected(expected0, expected1);
+
         uint256 balAssetBefore = ASSET.balanceOf(address(this));
         uint256 balPairedBefore = _pairedBalance();
 
@@ -601,7 +612,7 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         actions[2] = bytes1(uint8(Actions.CLOSE_CURRENCY));
 
         bytes[] memory params = new bytes[](3);
-        params[0] = abi.encode(pos.tokenId, uint256(liquidityToBurn), uint128(0), uint128(0), bytes(""));
+        params[0] = abi.encode(pos.tokenId, uint256(liquidityToBurn), min0, min1, bytes(""));
         params[1] = abi.encode(poolKey.currency0);
         params[2] = abi.encode(poolKey.currency1);
 
@@ -612,6 +623,22 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         amount0 = ASSET.balanceOf(address(this)) - balAssetBefore;
         amount1 = _pairedBalance() - balPairedBefore;
         pos.liquidity -= liquidityToBurn;
+    }
+
+    /// @dev Apply maxRebalanceSlippageBps floor to expected token amounts for V4 burn/decrease.
+    function _minsFromExpected(uint256 expected0, uint256 expected1) internal view returns (uint128 min0, uint128 min1) {
+        uint256 bps = maxRebalanceSlippageBps;
+        if (bps > MAX_WITHDRAW_SLIPPAGE_BPS) bps = MAX_WITHDRAW_SLIPPAGE_BPS;
+        if (bps >= 10_000) bps = MAX_WITHDRAW_SLIPPAGE_BPS;
+        uint256 m0 = Math.mulDiv(expected0, 10_000 - bps, 10_000);
+        uint256 m1 = Math.mulDiv(expected1, 10_000 - bps, 10_000);
+        min0 = m0 > type(uint128).max ? type(uint128).max : uint128(m0);
+        min1 = m1 > type(uint128).max ? type(uint128).max : uint128(m1);
+    }
+
+    function setMaxRebalanceSlippageBps(uint256 bps) external onlyOwner {
+        if (bps > MAX_WITHDRAW_SLIPPAGE_BPS) revert SlippageBpsTooHigh(bps);
+        maxRebalanceSlippageBps = bps;
     }
 
     function _getPositionAmounts(PositionInfo storage pos) internal view returns (uint256 amount0, uint256 amount1) {

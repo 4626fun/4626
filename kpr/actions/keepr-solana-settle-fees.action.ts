@@ -26,12 +26,12 @@ import {
   SOLANA_BRIDGE_ADAPTER_ABI,
   parseDotenvJsonObject,
 } from '../config.js';
-import { writeContract } from '../utils/onchain.js';
+import { getPublicClient, writeContract } from '../utils/onchain.js';
 import { alertInfo, alertWarning, alertCritical } from '../utils/alerts.js';
 import { loadKeeperKeypair, solanaPubkeyToBytes32 } from '../utils/solana.js';
 import { collectKeeperBaseWritePreflight, formatKeeperPreflightSummary } from '../utils/solanaKeeperPreflight.js';
 // FIX: HGH-02 — Import isAddress for shareOFT validation
-import { isAddress } from 'viem';
+import { getAddress, isAddress, zeroAddress, type Address } from 'viem';
 
 const WORKFLOW_NAME = 'keepr-solana-settle-fees';
 
@@ -42,19 +42,122 @@ import { settleFeesInstructionDiscriminator } from '../utils/hookInstructionDisc
 
 const SETTLE_FEES_DISCRIMINATOR = settleFeesInstructionDiscriminator();
 
+const REGISTRY_SHARE_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'getShareOFTForToken',
+    stateMutability: 'view',
+    inputs: [{ name: '_token', type: 'address' }],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'getTokenForShareOFT',
+    stateMutability: 'view',
+    inputs: [{ name: '_shareOFT', type: 'address' }],
+    outputs: [{ type: 'address' }],
+  },
+] as const;
+
 export interface FeeSettlementResult {
   feesSettled: boolean;
+  /** Solana ATA delta harvested this run (may exceed what was forwarded to Base). */
+  solanaHarvestedAmount: string;
   amountSettled: string;
   bridged: boolean;
   forwardedToGauge: boolean;
+  /** M2-10 — mints skipped due to mapping / registry integrity failure. */
+  mappingIntegrityFailures: number;
+}
+
+function getRegistryAddress(): Address | null {
+  const raw = String(process.env.REGISTRY_4626 ?? process.env.REGISTRY ?? '').trim();
+  if (!raw || !isAddress(raw)) return null;
+  return getAddress(raw);
+}
+
+/** Reverse mint → creatorCoin from SOLANA_CREATOR_COIN_TO_MINT_MAPPING when present. */
+function buildMintToCreatorCoinMap(): Record<string, Address> {
+  const out: Record<string, Address> = {};
+  try {
+    const raw = String(process.env.SOLANA_CREATOR_COIN_TO_MINT_MAPPING ?? '').trim();
+    if (!raw) return out;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    for (const [creatorCoin, mint] of Object.entries(parsed)) {
+      if (typeof mint !== 'string' || !isAddress(creatorCoin)) continue;
+      out[mint.trim()] = getAddress(creatorCoin as Address);
+    }
+  } catch {
+    // ignore malformed env; integrity check will fall back to shareOFT reverse lookup
+  }
+  return out;
+}
+
+/**
+ * M2-10 — assert operator SOLANA_SHARE_OFT_MAPPING agrees with on-chain registry
+ * when creatorCoin reverse mapping is available; otherwise require getTokenForShareOFT
+ * to be non-zero so fees are not forwarded to an unregistered ShareOFT.
+ */
+async function assertShareOftMappingIntegrity(params: {
+  mint: string;
+  shareOFT: Address;
+  mintToCreatorCoin: Record<string, Address>;
+}): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const registry = getRegistryAddress();
+  if (!registry) {
+    // Soft: no registry configured — keep prior behavior but surface a warning via caller.
+    return { ok: true };
+  }
+
+  const client = getPublicClient();
+  const creatorCoin = params.mintToCreatorCoin[params.mint];
+
+  try {
+    if (creatorCoin) {
+      const onchainShare = (await client.readContract({
+        address: registry,
+        abi: REGISTRY_SHARE_VIEW_ABI,
+        functionName: 'getShareOFTForToken',
+        args: [creatorCoin],
+      })) as Address;
+      if (!onchainShare || getAddress(onchainShare) === zeroAddress) {
+        return { ok: false, reason: 'registry_share_oft_unset' };
+      }
+      if (getAddress(onchainShare) !== getAddress(params.shareOFT)) {
+        return {
+          ok: false,
+          reason: `registry_share_oft_mismatch expected=${getAddress(onchainShare)} mapped=${getAddress(params.shareOFT)}`,
+        };
+      }
+      return { ok: true };
+    }
+
+    const token = (await client.readContract({
+      address: registry,
+      abi: REGISTRY_SHARE_VIEW_ABI,
+      functionName: 'getTokenForShareOFT',
+      args: [params.shareOFT],
+    })) as Address;
+    if (!token || getAddress(token) === zeroAddress) {
+      return { ok: false, reason: 'registry_token_for_share_oft_unset' };
+    }
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      reason: `registry_read_failed:${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
 }
 
 export async function executeSolanaFeeSettlement(): Promise<FeeSettlementResult> {
   const result: FeeSettlementResult = {
     feesSettled: false,
+    solanaHarvestedAmount: '0',
     amountSettled: '0',
     bridged: false,
     forwardedToGauge: false,
+    mappingIntegrityFailures: 0,
   };
 
   const solanaRpcUrl = requireEnv('SOLANA_RPC_URL');
@@ -76,6 +179,7 @@ export async function executeSolanaFeeSettlement(): Promise<FeeSettlementResult>
         await alertWarning(WORKFLOW_NAME, `Invalid shareOFT address in SOLANA_SHARE_OFT_MAPPING for key ${key} — skipping`);
       }
     }
+    const mintToCreatorCoin = buildMintToCreatorCoinMap();
 
     if (creatorMints.length === 0) {
       await alertInfo(WORKFLOW_NAME, 'No creator mints configured — skipping');
@@ -83,6 +187,8 @@ export async function executeSolanaFeeSettlement(): Promise<FeeSettlementResult>
     }
 
     let totalFeesSettled = BigInt(0);
+    let totalSolanaHarvested = BigInt(0);
+    let totalBaseForwarded = BigInt(0);
 
     for (const mintStr of creatorMints) {
       const mint = new PublicKey(mintStr);
@@ -90,6 +196,22 @@ export async function executeSolanaFeeSettlement(): Promise<FeeSettlementResult>
 
       if (!shareOFT) {
         await alertWarning(WORKFLOW_NAME, `No ShareOFT mapping for mint ${mintStr} — skipping`);
+        continue;
+      }
+
+      // M2-10: refuse Base forward path when registry disagrees with operator mapping.
+      const integrity = await assertShareOftMappingIntegrity({
+        mint: mintStr,
+        shareOFT,
+        mintToCreatorCoin,
+      });
+      if (!integrity.ok) {
+        result.mappingIntegrityFailures += 1;
+        await alertCritical(WORKFLOW_NAME, 'ShareOFT mapping integrity failed — skipping mint', {
+          mint: mintStr,
+          shareOFT,
+          reason: integrity.reason,
+        });
         continue;
       }
 
@@ -233,10 +355,17 @@ export async function executeSolanaFeeSettlement(): Promise<FeeSettlementResult>
       // FIX: CRT-02 — Use only the delta from this settlement, not the entire ATA balance
       const feeVaultAmount = feeVaultBalanceAfter - balanceBefore;
 
+      // M2-10: track Solana harvest separately from Base forward.
+      if (feeVaultAmount > 0n) {
+        totalSolanaHarvested += feeVaultAmount;
+        result.solanaHarvestedAmount = totalSolanaHarvested.toString();
+      }
+
       if (feeVaultAmount < MIN_FEE_THRESHOLD) {
         await alertInfo(WORKFLOW_NAME, `Fee amount below threshold for ${mintStr}`, {
           withheld: feeVaultAmount.toString(),
           threshold: MIN_FEE_THRESHOLD.toString(),
+          solanaHarvestedAmount: result.solanaHarvestedAmount,
         });
         continue;
       }
@@ -249,10 +378,11 @@ export async function executeSolanaFeeSettlement(): Promise<FeeSettlementResult>
         await alertWarning(WORKFLOW_NAME, warning);
       }
       if (preflight.blockers.length > 0) {
-        await alertWarning(WORKFLOW_NAME, 'Skipping Base fee forward — keeper preflight not ready', {
+        await alertWarning(WORKFLOW_NAME, 'Skipping Base fee forward — Solana harvest kept separate (M2-10)', {
           blockers: preflight.blockers,
           summary: formatKeeperPreflightSummary(preflight),
-          withheld: feeVaultAmount.toString(),
+          solanaHarvestedAmount: feeVaultAmount.toString(),
+          baseForwarded: '0',
           mint: mintStr,
         });
         continue;
@@ -270,15 +400,20 @@ export async function executeSolanaFeeSettlement(): Promise<FeeSettlementResult>
       if (txResult.success) {
         result.forwardedToGauge = true;
         result.bridged = true;
-        result.amountSettled = totalFeesSettled.toString();
+        totalBaseForwarded += feeVaultAmount;
+        result.amountSettled = totalBaseForwarded.toString();
         await alertInfo(WORKFLOW_NAME, 'Fees forwarded to gauge', {
           txHash: txResult.txHash,
           amount: feeVaultAmount.toString(),
+          solanaHarvestedAmount: result.solanaHarvestedAmount,
+          baseForwardedAmount: result.amountSettled,
           mint: mintStr,
         });
       } else {
         await alertCritical(WORKFLOW_NAME, 'Failed to forward fees to gauge', {
           error: txResult.error,
+          solanaHarvestedAmount: feeVaultAmount.toString(),
+          baseForwarded: '0',
         });
       }
     }

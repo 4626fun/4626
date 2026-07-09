@@ -138,6 +138,11 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     // FIX: M-6 — configurable swap fee tier (was hardcoded to 3000)
     uint24 public defaultSwapFeeTier = 3000;
 
+    /// @notice Max lottery entries per `processLotteryEntryFromSolana` call (M-07 DoS bound).
+    uint256 public constant MAX_LOTTERY_ENTRY_BATCH = 50;
+    /// @notice Optional per-ShareOFT max amount (18-dec) per entry; 0 = uncapped.
+    mapping(address => uint256) public maxLotteryEntryAmount;
+
     // ================================
     // EVENTS
     // ================================
@@ -174,6 +179,7 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     event FeeKeeperSet(bytes32 indexed keeperPubkey, bool allowed);
     event EntryKeeperSet(bytes32 indexed keeperPubkey, bool allowed);
     event LotteryManagerSet(address indexed lotteryManager);
+    event MaxLotteryEntryAmountSet(address indexed shareOFT, uint256 maxAmount18);
 
     // ================================
     // ERRORS
@@ -196,6 +202,7 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     error UnauthorizedEntryKeeper(bytes32 keeperPubkey);
     error LotteryManagerNotSet();
     error GaugeNotFound(address shareOFT);
+    error LotteryEntryBatchTooLarge(uint256 length, uint256 maxLength);
 
     // ================================
     // CONSTRUCTOR
@@ -682,6 +689,10 @@ IGaugeControllerFees(gauge).receiveFees(amount);
     {
         if (!authorizedEntryKeepers[keeperPubkey]) revert UnauthorizedEntryKeeper(keeperPubkey);
         if (lotteryManager == address(0)) revert LotteryManagerNotSet();
+        // M-07: bound batch size (trusted keeper still; limit grief/gas and runaway inflation).
+        if (entries.length > MAX_LOTTERY_ENTRY_BATCH) {
+            revert LotteryEntryBatchTooLarge(entries.length, MAX_LOTTERY_ENTRY_BATCH);
+        }
 
         for (uint256 i = 0; i < entries.length; i++) {
             LotteryEntry calldata entry = entries[i];
@@ -712,6 +723,10 @@ IGaugeControllerFees(gauge).receiveFees(amount);
             }
 
             if (amount18 == 0) continue;
+
+            // M-07: optional per-token ceiling (skip oversized attested amounts).
+            uint256 maxAmt = maxLotteryEntryAmount[entry.shareOFT];
+            if (maxAmt != 0 && amount18 > maxAmt) continue;
 
             // Resolve buyer's Twin address on Base.
             address buyerTwin = IBaseSolanaBridge(BRIDGE).getPredictedTwinAddress(entry.buyerSolanaPubkey);
@@ -999,6 +1014,13 @@ IGaugeControllerFees(gauge).receiveFees(amount);
         if (_lotteryManager == address(0)) revert InvalidAddress();
         lotteryManager = _lotteryManager;
         emit LotteryManagerSet(_lotteryManager);
+    }
+
+    /// @notice Cap a single Solana lottery entry amount (18-dec Base units). 0 disables.
+    function setMaxLotteryEntryAmount(address shareOFT, uint256 maxAmount18) external onlyOwner {
+        if (shareOFT == address(0)) revert InvalidAddress();
+        maxLotteryEntryAmount[shareOFT] = maxAmount18;
+        emit MaxLotteryEntryAmountSet(shareOFT, maxAmount18);
     }
 
     // FIX: M-6 — setter for swap fee tier

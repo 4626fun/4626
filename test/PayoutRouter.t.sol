@@ -209,6 +209,15 @@ contract PayoutRouterTest is Test {
         assertEq(burnStream.queuedShares(), 30e18);
     }
 
+    function test_convertAndQueue_sharePathRevertsWhenMinOutZero() public {
+        bytes memory path = _encodePath(address(usdc), 3000, address(shareOft));
+        router.setSwapPath(address(usdc), path);
+        usdc.mint(address(router), 10e18);
+
+        vm.expectRevert(PayoutRouter.ZeroAmount.selector);
+        router.convertAndQueue(address(usdc), 10e18, 0);
+    }
+
     function test_convertAndQueue_sharePathViaSwapAndUnwrap() public {
         bytes memory path = _encodePath(address(usdc), 3000, address(shareOft));
         router.setSwapPath(address(usdc), path);

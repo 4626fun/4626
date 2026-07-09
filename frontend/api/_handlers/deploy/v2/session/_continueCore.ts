@@ -1041,7 +1041,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const hasPostPhase2 = hasPhase3 || hasPhase4
     const hasOvaultMeshStage = solanaOvaultConfig.enabled === true && hasPostPhase2
-    const enforcePhase2InvariantGate = isTruthyEnv(process.env.DEPLOY_ENFORCE_PHASE2_INVARIANTS, true)
+    // M2-02: fail closed in production — never allow env to disable phase-2 invariants on Vercel prod.
+    const isProdRuntime =
+      String(process.env.VERCEL_ENV ?? '').trim().toLowerCase() === 'production' ||
+      String(process.env.NODE_ENV ?? '').trim().toLowerCase() === 'production'
+    let enforcePhase2InvariantGate = isTruthyEnv(process.env.DEPLOY_ENFORCE_PHASE2_INVARIANTS, true)
+    if (isProdRuntime && !enforcePhase2InvariantGate) {
+      console.error(
+        '[deploy/session] ALERT: DEPLOY_ENFORCE_PHASE2_INVARIANTS=false ignored in production (fail-closed)',
+      )
+      enforcePhase2InvariantGate = true
+    }
     const defaultPayoutRecipientMode =
       String(process.env.DEPLOY_EXPECT_PAYOUT_RECIPIENT_MODE ?? '').trim().toLowerCase() === 'payout_router'
         ? 'payout_router'

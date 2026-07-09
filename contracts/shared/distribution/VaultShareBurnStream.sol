@@ -93,17 +93,14 @@ contract VaultShareBurnStream is ReentrancyGuard {
 
     // FIX: BS-01 — vault itself can authorize queuers (since this contract has no owner)
     //
-    // FIX: L-2 (audit `docs/audits/aristotle/oracle`) — deployment/integration invariant:
+    // AR-L2 — deployment/integration invariant:
     // this contract is intentionally owner-less, so `setAuthorizedQueuer` and
-    // `recoverFailedBurns` are bootstrapped *only* through `msg.sender == vault`. The
-    // deployed vault MUST expose owner/governance-gated functions that call these on
-    // its behalf, or: (a) no queuer can ever be authorized, permanently reverting
-    // `CreatorPayoutRouter._queueCreatorCoinDeposit` / `_unwrapShareOftAndQueue` at
-    // `queueShares`, and (b) `failedBurnAccumulator` can never be recovered (compounds
-    // M-2). Deployment scripts/tests MUST verify the vault can successfully call both
-    // functions before this stream is wired into the payout path.
+    // `recoverFailedBurns` are bootstrapped *only* through `msg.sender == vault`.
+    // CreatorOVault bridges these via `setBurnStreamAuthorizedQueuer` and
+    // `recoverBurnStreamFailedBurns` (admin module canaries on `setBurnStream`).
+    // `burnSharesForPriceIncrease` burns from msg.sender (the stream), not the vault.
     function setAuthorizedQueuer(address queuer, bool authorized) external {
-        require(msg.sender == vault, "Only vault");
+        if (msg.sender != vault) revert OnlyVault();
         authorizedQueuers[queuer] = authorized;
         emit QueuerAuthorizationUpdated(queuer, authorized);
     }

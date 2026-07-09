@@ -62,6 +62,10 @@ import {
   parseMintPubkeyFromWrapOutput,
   solanaPubkeyToBytes32Hex,
 } from '../../../server/_lib/onchain/solanaBridgePubkey.js'
+import {
+  BASE_SOLANA_BRIDGE_SCALARS_ABI,
+  resolveBaseSolanaBridge,
+} from '../../../server/_lib/onchain/resolveBaseSolanaBridge.js'
 
 type RegisterSolanaBridgeTokenRequest = {
   bridgeToken?: string
@@ -107,7 +111,6 @@ type RegisterSolanaBridgeTokenResponse = {
 
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
-const BASE_SOLANA_BRIDGE = '0x3eff766c76a1be2ce1acf2b69c78bcae257d5188' as Address
 const REGISTER_SOLANA_BRIDGE_TOKEN_MAX_BODY_BYTES = 64 * 1024
 
 const DEPLOYMENT_BATCHER_SOLANA_VIEW_ABI = [
@@ -159,19 +162,6 @@ const SOLANA_BRIDGE_ADAPTER_ABI = [
       { name: 'solanaDecimals', type: 'uint8' },
     ],
     outputs: [],
-  },
-] as const
-
-const BASE_SOLANA_BRIDGE_ABI = [
-  {
-    type: 'function',
-    name: 'scalars',
-    stateMutability: 'view',
-    inputs: [
-      { name: 'localToken', type: 'address' },
-      { name: 'remoteToken', type: 'bytes32' },
-    ],
-    outputs: [{ type: 'uint256' }],
   },
 ] as const
 
@@ -559,6 +549,8 @@ async function tryProvisionDynamicRoute(params: {
   solanaDecimals: number
   publicClient: any
   tokenMetadataUri?: string | null
+  /** Prefer the live batcher adapter so BRIDGE() is read on-chain (M2-05). */
+  adapterAddress?: Address | null
 }): Promise<{ mintBytes32: Hex; mintCompatibilityHints: MintCompatibilityHints | null } | null> {
   if (!readDynamicSolanaRouteEnabled()) return null
 
@@ -866,11 +858,16 @@ async function tryProvisionDynamicRoute(params: {
     throw new Error('Dynamic Solana route provisioning failed to return a mintBytes32.')
   }
 
+  const { address: baseSolanaBridge } = await resolveBaseSolanaBridge({
+    publicClient: params.publicClient,
+    adapterAddress: params.adapterAddress ?? null,
+  })
+
   for (let i = 0; i < 24; i += 1) {
     const scalar = await params.publicClient
       .readContract({
-        address: BASE_SOLANA_BRIDGE,
-        abi: BASE_SOLANA_BRIDGE_ABI,
+        address: baseSolanaBridge,
+        abi: BASE_SOLANA_BRIDGE_SCALARS_ABI,
         functionName: 'scalars',
         args: [bridgeToken, mintBytes32],
       })
@@ -1157,6 +1154,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         error: 'Solana bridge is not enabled on deployment batcher (DeploymentBatcher) (adapter/destination unset).',
       } satisfies ApiEnvelope<never>)
     }
+
+    const { address: baseSolanaBridge } = await resolveBaseSolanaBridge({
+      publicClient,
+      adapterAddress: adapter,
+    })
 
     const adapterCode = await publicClient.getBytecode({ address: adapter })
     if (!adapterCode || adapterCode === '0x') {
@@ -1506,8 +1508,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const readRouteScalar = async (mint: Hex): Promise<bigint | null> =>
       publicClient
         .readContract({
-          address: BASE_SOLANA_BRIDGE,
-          abi: BASE_SOLANA_BRIDGE_ABI,
+          address: baseSolanaBridge,
+          abi: BASE_SOLANA_BRIDGE_SCALARS_ABI,
           functionName: 'scalars',
           args: [bridgeToken, mint],
         })
@@ -1530,6 +1532,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           solanaDecimals,
           publicClient,
           tokenMetadataUri,
+          adapterAddress: adapter,
         })
         if (!dynamicMint) return false
         solanaMint = dynamicMint.mintBytes32

@@ -42,7 +42,78 @@ const PAYOUT_ROUTER = '0x5555555555555555555555555555555555555555' as const
 const EXPECTED_BURN_STREAM = '0x6666666666666666666666666666666666666666' as const
 const ACTUAL_BURN_STREAM = '0x7777777777777777777777777777777777777777' as const
 const CREATOR_TREASURY = '0x8888888888888888888888888888888888888888' as const
+const SAFE_OWNER = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as const
 const SWEEP_UNSOLD_HASH = '0x9999999999999999999999999999999999999999999999999999999999999999' as const
+
+/** Shared on-chain mocks for completion + M2-03 production-readiness gates. */
+function createInvariantPublicClient(opts?: {
+  burnStream?: `0x${string}`
+  payoutRouterOwner?: `0x${string}`
+  boostTimelockArmed?: boolean
+  ownerIsContract?: boolean
+}) {
+  const burnStream = opts?.burnStream ?? ACTUAL_BURN_STREAM
+  const owner = opts?.payoutRouterOwner ?? SAFE_OWNER
+  const armed = opts?.boostTimelockArmed !== false
+  const ownerIsContract = opts?.ownerIsContract !== false
+  return {
+    readContract: vi.fn(async (args: any) => {
+      switch (args.functionName) {
+        case 'getLifecycleStatus':
+          return createLifecycle()
+        case 'feeRecipient':
+          return GAUGE
+        case 'payoutRecipient':
+          return PAYOUT_ROUTER
+        case 'gaugeController':
+          return GAUGE
+        case 'creatorShareBps':
+          return 0n
+        case 'creatorTreasury':
+          return CREATOR_TREASURY
+        case 'burnStream':
+          return burnStream
+        case 'owner':
+          return owner
+        case 'getThreshold':
+          return 2n
+        case 'getMinDelay':
+          return 0n
+        // harvest readiness path
+        case 'wrapper':
+          return '0xcccccccccccccccccccccccccccccccccccccccc'
+        case 'isWhitelisted':
+          return true
+        case 'shareOFT':
+          return SHARE_OFT
+        case 'addressType':
+          return 2 // NoFees
+        case 'keeper':
+          return SAFE_OWNER
+        case 'authorizedQueuers':
+          return true
+        case 'swapPathToShareOFT':
+          return '0x'
+        case 'weth':
+          return '0x0000000000000000000000000000000000000000'
+        case 'authorizedHubShareOftForwarders':
+          return true
+        default:
+          throw new Error(`Unexpected read ${String(args.functionName)}`)
+      }
+    }),
+    getBytecode: vi.fn(async ({ address }: { address: string }) =>
+      ownerIsContract && address.toLowerCase() === owner.toLowerCase() ? '0x6000' : '0x',
+    ),
+    getStorageAt: vi.fn(async () =>
+      armed
+        ? ('0x0000000000000000000000000000000000000000000000000000000000000001' as const)
+        : ('0x0000000000000000000000000000000000000000000000000000000000000000' as const),
+    ),
+    waitForTransactionReceipt: vi.fn(async () => ({ status: 'success' })),
+    getBlockNumber: vi.fn(async () => 200n),
+  }
+}
 
 function createLifecycle(overrides?: Partial<{
   phase: number
@@ -73,30 +144,7 @@ describe('keeper sweep handler', () => {
       BASE_RPC_URL: 'https://mainnet.base.org',
     })
     try {
-      const publicClient = {
-        readContract: vi.fn(async (args: any) => {
-          switch (args.functionName) {
-            case 'getLifecycleStatus':
-              return createLifecycle()
-            case 'feeRecipient':
-              return GAUGE
-            case 'payoutRecipient':
-              return PAYOUT_ROUTER
-            case 'gaugeController':
-              return GAUGE
-            case 'creatorShareBps':
-              return 0n
-            case 'creatorTreasury':
-              return CREATOR_TREASURY
-            case 'burnStream':
-              return ACTUAL_BURN_STREAM
-            default:
-              throw new Error(`Unexpected read ${String(args.functionName)}`)
-          }
-        }),
-        waitForTransactionReceipt: vi.fn(async () => ({ status: 'success' })),
-        getBlockNumber: vi.fn(async () => 200n),
-      }
+      const publicClient = createInvariantPublicClient({ burnStream: ACTUAL_BURN_STREAM })
       const walletClient = {
         writeContract: vi.fn(async () => SWEEP_UNSOLD_HASH),
         sendTransaction: vi.fn(),
@@ -129,7 +177,7 @@ describe('keeper sweep handler', () => {
       expect(res.body?.error).toBe('completion_invariant_failed')
       expect(res.body?.data?.completionStage).toBe('invariant_failed')
       expect(res.body?.data?.invariantsEnforced).toBe(true)
-      expect(res.body?.data?.invariantChecksRun).toBe(6)
+      expect(res.body?.data?.invariantChecksRun).toBeGreaterThanOrEqual(6)
       expect(res.body?.data?.invariantViolations).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -151,6 +199,113 @@ describe('keeper sweep handler', () => {
     }
   })
 
+  it('blocks completion when PayoutRouter owner is a hot EOA (M2-03 / H-07)', async () => {
+    const restoreEnv = applyEnv({
+      KPR_API_KEY: 'test-key',
+      KPR_PRIVATE_KEY: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      KEEPER_ENABLE_HOOK_CONFIG: 'false',
+      KEEPER_ENFORCE_COMPLETION_INVARIANTS: 'true',
+      BASE_RPC_URL: 'https://mainnet.base.org',
+    })
+    try {
+      const eoaOwner = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' as const
+      const publicClient = createInvariantPublicClient({
+        burnStream: EXPECTED_BURN_STREAM,
+        payoutRouterOwner: eoaOwner,
+        ownerIsContract: false,
+        boostTimelockArmed: true,
+      })
+      const walletClient = {
+        writeContract: vi.fn(async () => SWEEP_UNSOLD_HASH),
+        sendTransaction: vi.fn(),
+      }
+      createPublicClientMock.mockReturnValue(publicClient as any)
+      createWalletClientMock.mockReturnValue(walletClient as any)
+
+      const req = createMockReq({
+        method: 'POST',
+        headers: { authorization: 'Bearer test-key' },
+        body: {
+          ccaLaunchArmAddress: STRATEGY,
+          attemptHookConfig: false,
+          invariants: {
+            creatorCoinAddress: CREATOR_COIN,
+            shareTokenAddress: SHARE_OFT,
+            gaugeControllerAddress: GAUGE,
+            burnStreamAddress: EXPECTED_BURN_STREAM,
+            payoutRouterAddress: PAYOUT_ROUTER,
+            payoutRecipientMode: 'payout_router',
+          },
+        },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.body?.success).toBe(false)
+      expect(res.body?.error).toBe('completion_invariant_failed')
+      expect(res.body?.data?.invariantViolations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ code: 'payout_router_owner_is_eoa' }),
+        ]),
+      )
+    } finally {
+      restoreEnv()
+    }
+  })
+
+  it('blocks completion when lottery boost timelock is unarmed (M2-03 / M-15)', async () => {
+    const restoreEnv = applyEnv({
+      KPR_API_KEY: 'test-key',
+      KPR_PRIVATE_KEY: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      KEEPER_ENABLE_HOOK_CONFIG: 'false',
+      KEEPER_ENFORCE_COMPLETION_INVARIANTS: 'true',
+      BASE_RPC_URL: 'https://mainnet.base.org',
+    })
+    try {
+      const publicClient = createInvariantPublicClient({
+        burnStream: EXPECTED_BURN_STREAM,
+        boostTimelockArmed: false,
+      })
+      const walletClient = {
+        writeContract: vi.fn(async () => SWEEP_UNSOLD_HASH),
+        sendTransaction: vi.fn(),
+      }
+      createPublicClientMock.mockReturnValue(publicClient as any)
+      createWalletClientMock.mockReturnValue(walletClient as any)
+
+      const req = createMockReq({
+        method: 'POST',
+        headers: { authorization: 'Bearer test-key' },
+        body: {
+          ccaLaunchArmAddress: STRATEGY,
+          attemptHookConfig: false,
+          invariants: {
+            creatorCoinAddress: CREATOR_COIN,
+            shareTokenAddress: SHARE_OFT,
+            gaugeControllerAddress: GAUGE,
+            burnStreamAddress: EXPECTED_BURN_STREAM,
+            payoutRouterAddress: PAYOUT_ROUTER,
+            payoutRecipientMode: 'payout_router',
+          },
+        },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.body?.success).toBe(false)
+      expect(res.body?.error).toBe('completion_invariant_failed')
+      expect(res.body?.data?.invariantViolations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ code: 'lottery_boost_timelock_not_armed' }),
+        ]),
+      )
+    } finally {
+      restoreEnv()
+    }
+  })
+
   it('ignores per-request enforceInvariants:false — invariants still run (audit H2-05)', async () => {
     const restoreEnv = applyEnv({
       KPR_API_KEY: 'test-key',
@@ -160,30 +315,7 @@ describe('keeper sweep handler', () => {
       BASE_RPC_URL: 'https://mainnet.base.org',
     })
     try {
-      const publicClient = {
-        readContract: vi.fn(async (args: any) => {
-          switch (args.functionName) {
-            case 'getLifecycleStatus':
-              return createLifecycle()
-            case 'feeRecipient':
-              return GAUGE
-            case 'payoutRecipient':
-              return PAYOUT_ROUTER
-            case 'gaugeController':
-              return GAUGE
-            case 'creatorShareBps':
-              return 0n
-            case 'creatorTreasury':
-              return CREATOR_TREASURY
-            case 'burnStream':
-              return ACTUAL_BURN_STREAM
-            default:
-              throw new Error(`Unexpected read ${String(args.functionName)}`)
-          }
-        }),
-        waitForTransactionReceipt: vi.fn(async () => ({ status: 'success' })),
-        getBlockNumber: vi.fn(async () => 200n),
-      }
+      const publicClient = createInvariantPublicClient({ burnStream: ACTUAL_BURN_STREAM })
       const walletClient = {
         writeContract: vi.fn(async () => SWEEP_UNSOLD_HASH),
         sendTransaction: vi.fn(),

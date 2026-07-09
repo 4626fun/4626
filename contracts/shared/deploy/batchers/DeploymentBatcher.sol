@@ -1657,6 +1657,7 @@ contract DeploymentBatcher is ReentrancyGuard {
     error NotProtocolTreasury();
     // FIX: F-26 — admin function to clear stuck Phase 1 state
     error Phase1StateNotStuck();
+    error Phase1AlreadyFinalized();
     error InvalidCreatorTreasury(address provided);
     // Canonical terminology note (AGENTS.md): this error guards the
     // creatorCoinPayoutRecipient (external earnings) lane. The field name
@@ -2466,9 +2467,11 @@ contract DeploymentBatcher is ReentrancyGuard {
         if (creatorToken == address(0) || owner == address(0)) revert ZeroAddress();
         bytes32 baseSalt = utilsHelper.deriveBaseSalt(creatorToken, owner, block.chainid, version);
         Phase1SplitState storage state = phase1SplitStates[baseSalt];
-        // Only allow reset if Phase 1 was started but Phase 2 has not consumed it
-        // (i.e., pending auction for this salt must not exist).
+        // Only allow reset if Phase 1 was started but not finalized, and Phase 2 has
+        // not consumed it (no pending auction). Finalized Phase 1 is live deploy truth
+        // and must not be wiped (audit M-15 / L2-01).
         if (state.vault == address(0)) revert Phase1StateNotStuck();
+        if (state.finalized) revert Phase1AlreadyFinalized();
         PendingAuction storage pending = pendingAuctions[baseSalt];
         if (pending.amount != 0) revert AuctionAlreadyPending();
         delete phase1SplitStates[baseSalt];

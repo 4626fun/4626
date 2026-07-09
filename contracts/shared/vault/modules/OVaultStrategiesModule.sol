@@ -47,6 +47,10 @@ contract OVaultStrategiesModule is OVaultModuleBase, IOVaultModuleIdentity {
     event ImpairedStrategyReinstated(address indexed strategy, uint256 indexed epochId);
     /// @dev Must match CreatorOVault / CreatorOVaultCoreModule so claim books stay consistent.
     event ImpairmentRecoveryNotified(uint256 indexed epochId, address indexed asset, uint256 amount);
+    /// @notice Eject recovered vault asset but epoch.recoveryAsset points elsewhere (M-NEW-02).
+    event ImpairmentRecoveryAssetMismatch(
+        uint256 indexed epochId, address indexed expectedAsset, address indexed recoveredAsset, uint256 amount
+    );
 
     // ---- errors (must match vault selectors) ----
     error ZeroAddress();
@@ -214,14 +218,26 @@ contract OVaultStrategiesModule is OVaultModuleBase, IOVaultModuleIdentity {
                     // match the vault asset this eject recovered (M-NEW-02).
                     bool claimSurfaceLive = epoch.status == ImpairmentEpochStatus.Finalized
                         || epoch.status == ImpairmentEpochStatus.Resolved;
-                    if (claimSurfaceLive && epoch.recoveryAsset == address(coin)) {
-                        coin.safeTransfer(impairmentRecoveryEscrow, recovered);
-                        IOVaultRecoveryEscrowStrategyModule(impairmentRecoveryEscrow).notifyRecovery(
-                            address(coin), epochId, recovered
-                        );
-                        epoch.totalRecovered += recovered;
-                        emit ImpairmentRecoveryNotified(epochId, address(coin), recovered);
-                        coinBalance = coin.balanceOf(address(this));
+                    if (claimSurfaceLive) {
+                        // If recovery asset was never set, pin it to the vault asset we recovered.
+                        if (epoch.recoveryAsset == address(0)) {
+                            epoch.recoveryAsset = address(coin);
+                        }
+                        if (epoch.recoveryAsset == address(coin)) {
+                            coin.safeTransfer(impairmentRecoveryEscrow, recovered);
+                            IOVaultRecoveryEscrowStrategyModule(impairmentRecoveryEscrow).notifyRecovery(
+                                address(coin), epochId, recovered
+                            );
+                            epoch.totalRecovered += recovered;
+                            emit ImpairmentRecoveryNotified(epochId, address(coin), recovered);
+                            coinBalance = coin.balanceOf(address(this));
+                        } else {
+                            // Recovered vault asset stays idle on the vault; claims expect a different
+                            // recovery asset (operator must reconcile / buyDebt path).
+                            emit ImpairmentRecoveryAssetMismatch(
+                                epochId, epoch.recoveryAsset, address(coin), recovered
+                            );
+                        }
                     }
                 }
             }
@@ -382,8 +398,16 @@ contract OVaultStrategiesModule is OVaultModuleBase, IOVaultModuleIdentity {
         }
 
         // Governance cap clamp — see CreatorOVault.strategyMaxAssets.
+        // M-02: cap == 0 previously meant "uncapped", so a misreporting strategy could
+        // inflate totalAssets without bound. Unset caps now only trust accounting debt
+        // (no free profit credit) until governance sets an explicit cap (or type(uint256).max).
         uint256 cap = strategyMaxAssets[strategy];
-        if (cap != 0 && assets > cap) {
+        if (cap == 0) {
+            uint256 debt = strategyDebt[strategy];
+            if (assets > debt) {
+                assets = debt;
+            }
+        } else if (assets > cap) {
             assets = cap;
         }
     }

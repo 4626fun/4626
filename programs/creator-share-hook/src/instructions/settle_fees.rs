@@ -1,10 +1,15 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_2022::Token2022;
+use anchor_spl::token_2022::spl_token_2022::{
+    extension::{
+        transfer_fee::TransferFeeConfig, BaseStateWithExtensions, StateWithExtensions,
+    },
+    state::Mint as SplMint,
+};
 use anchor_spl::token_2022_extensions::transfer_fee::{
     harvest_withheld_tokens_to_mint as cpi_harvest_withheld_tokens_to_mint,
     withdraw_withheld_tokens_from_mint as cpi_withdraw_withheld_tokens_from_mint,
-    HarvestWithheldTokensToMint,
-    WithdrawWithheldTokensFromMint,
+    HarvestWithheldTokensToMint, WithdrawWithheldTokensFromMint,
 };
 use anchor_spl::token_interface::TokenAccount as TokenInterfaceAccount;
 use anchor_spl::token_interface::Mint as MintInterface;
@@ -20,16 +25,22 @@ use crate::state::*;
 ///
 /// After this instruction, the keeper bridges the collected fees to Base
 /// via `SolanaBridgeAdapter.receiveFeeFromSolana()`.
+///
+/// M2-13:
+/// - Enforces `creator_config.settlement_threshold` against mint withheld
+///   amount (post-harvest) before withdraw.
+/// - Requires `keeper == TransferFeeConfig.withdraw_withheld_authority`.
 #[derive(Accounts)]
 pub struct SettleFees<'info> {
     /// The keeper authority (must match `creator_config.keeper_authority`).
     pub keeper: Signer<'info>,
 
-    /// CreatorConfig PDA — used to verify keeper authority.
+    /// CreatorConfig PDA — used to verify keeper authority + threshold.
     #[account(
         seeds = [CREATOR_CONFIG_SEED, mint.key().as_ref()],
         bump = creator_config.bump,
         constraint = creator_config.keeper_authority == keeper.key() @ CreatorShareHookError::UnauthorizedKeeper,
+        constraint = creator_config.creator_mint == mint.key() @ CreatorShareHookError::InvalidMint,
     )]
     pub creator_config: Box<Account<'info, CreatorConfig>>,
 
@@ -47,8 +58,23 @@ pub struct SettleFees<'info> {
     pub token_program: Program<'info, Token2022>,
 }
 
+fn read_transfer_fee_config(mint_info: &AccountInfo) -> Result<(Pubkey, u64)> {
+    let mint_data = mint_info.try_borrow_data()?;
+    let mint_state = StateWithExtensions::<SplMint>::unpack(&mint_data)
+        .map_err(|_| error!(CreatorShareHookError::InvalidMint))?;
+    let fee_config = mint_state
+        .get_extension::<TransferFeeConfig>()
+        .map_err(|_| error!(CreatorShareHookError::MissingTransferFeeConfig))?;
+
+    let authority: Option<Pubkey> = fee_config.withdraw_withheld_authority.into();
+    let authority = authority.ok_or_else(|| error!(CreatorShareHookError::UnauthorizedWithdrawAuthority))?;
+    let withheld = u64::from(fee_config.withheld_amount);
+    Ok((authority, withheld))
+}
+
 pub fn handler<'info>(ctx: Context<'info, SettleFees<'info>>) -> Result<()> {
     let mint_key = ctx.accounts.mint.key();
+    let threshold = ctx.accounts.creator_config.settlement_threshold;
 
     // Validate fee_vault is a Token-2022 account for this mint.
     let fee_vault_info = ctx.accounts.fee_vault.to_account_info();
@@ -61,6 +87,13 @@ pub fn handler<'info>(ctx: Context<'info, SettleFees<'info>>) -> Result<()> {
 
     let amount_before = fee_vault_state.amount;
     drop(fee_vault_data);
+
+    // M2-13: keeper must be the mint TransferFeeConfig withdraw authority.
+    let mint_info = ctx.accounts.mint.to_account_info();
+    let (withdraw_authority, _withheld_before) = read_transfer_fee_config(&mint_info)?;
+    if withdraw_authority != ctx.accounts.keeper.key() {
+        return err!(CreatorShareHookError::UnauthorizedWithdrawAuthority);
+    }
 
     // Step 1: Harvest withheld fees from token accounts to the mint.
     // The token accounts are provided as remaining_accounts.
@@ -78,6 +111,23 @@ pub fn handler<'info>(ctx: Context<'info, SettleFees<'info>>) -> Result<()> {
             },
         );
         cpi_harvest_withheld_tokens_to_mint(cpi_ctx, sources)?;
+    }
+
+    // M2-13: enforce settlement_threshold against post-harvest mint withheld.
+    // threshold == 0 means "settle any positive amount" (legacy default).
+    let mint_info_after_harvest = ctx.accounts.mint.to_account_info();
+    let (_auth, withheld_after_harvest) = read_transfer_fee_config(&mint_info_after_harvest)?;
+    if threshold > 0 && withheld_after_harvest < threshold {
+        return err!(CreatorShareHookError::BelowSettlementThreshold);
+    }
+    // Even with threshold == 0, skip withdraw when there is nothing to take
+    // (avoids empty withdraw CPIs that can still burn CU / fail on some configs).
+    if withheld_after_harvest == 0 {
+        emit!(FeesSettled {
+            creator_mint: ctx.accounts.creator_config.creator_mint,
+            amount: 0,
+        });
+        return Ok(());
     }
 
     // Step 2: Withdraw all withheld tokens from the mint into fee_vault.

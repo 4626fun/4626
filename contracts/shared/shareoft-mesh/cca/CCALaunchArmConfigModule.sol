@@ -52,6 +52,8 @@ contract CCALaunchArmConfigModule is Ownable, ReentrancyGuard {
         bool currencySwept;
         bool unsoldSwept;
         bool migrated;
+        // Must stay aligned with CCALaunchArm.LaunchLifecycle (delegatecall storage).
+        bool lpManagerSeeded;
         bool failedFinalized;
     }
 
@@ -121,6 +123,9 @@ contract CCALaunchArmConfigModule is Ownable, ReentrancyGuard {
     error SweepNotAllowed(uint64 sweepBlock, uint256 currentBlock);
     error NotOperator(address caller, address expected);
     error OnlyDelegateCall();
+    /// @notice Residual sweep would vacuum inventory still reserved for LP seed / active launch (M-09).
+    error ResidualSweepNotReady();
+    error ResidualSweepWouldVacuumLpReserve(uint256 balance, uint256 reserved);
 
     constructor(
         address _auctionToken,
@@ -190,8 +195,15 @@ contract CCALaunchArmConfigModule is Ownable, ReentrancyGuard {
     function sweepResidualAuctionToken() external onlyDelegateCall {
         if (msg.sender != operator) revert NotOperator(msg.sender, operator);
         if (block.number < lastSweepBlock) revert SweepNotAllowed(lastSweepBlock, block.number);
+        _requireResidualSweepReady();
 
         uint256 amount = auctionToken.balanceOf(address(this));
+        // M-09: keep lpReserveAmount until seedLpManager completes (or launch failed).
+        if (!currentLaunch.failedFinalized && !currentLaunch.lpManagerSeeded) {
+            uint256 reserved = currentLaunch.lpReserveAmount;
+            if (amount <= reserved) return;
+            amount -= reserved;
+        }
         if (amount == 0) return;
         auctionToken.safeTransfer(operator, amount);
         emit TokensSwept(address(this), amount);
@@ -200,6 +212,16 @@ contract CCALaunchArmConfigModule is Ownable, ReentrancyGuard {
     function sweepResidualCurrency() external onlyDelegateCall {
         if (msg.sender != operator) revert NotOperator(msg.sender, operator);
         if (block.number < lastSweepBlock) revert SweepNotAllowed(lastSweepBlock, block.number);
+        _requireResidualSweepReady();
+
+        // M-09: currency is fully consumed by seedLpManager — block residual sweep until seeded
+        // (or failed launch, where there is no LP seed path).
+        if (
+            !currentLaunch.failedFinalized && currentLaunch.migrated && !currentLaunch.lpManagerSeeded
+                && lpManager != address(0)
+        ) {
+            revert ResidualSweepNotReady();
+        }
 
         if (currency == address(0)) {
             uint256 nativeAmount = address(this).balance;
@@ -214,6 +236,17 @@ contract CCALaunchArmConfigModule is Ownable, ReentrancyGuard {
         if (tokenAmount == 0) return;
         IERC20(currency).safeTransfer(operator, tokenAmount);
         emit FundsSwept(address(this), tokenAmount);
+    }
+
+    /// @dev Residual sweeps are only for post-lifecycle leftovers — not mid-auction inventory.
+    function _requireResidualSweepReady() internal view {
+        if (currentLaunch.failedFinalized) return;
+        if (currentLaunch.migrated) return;
+        // Idle / no active launch: allow (true residuals from past auctions held on arm).
+        if (currentAuction == address(0) && !currentLaunch.currencySwept && currentLaunch.lpReserveAmount == 0) {
+            return;
+        }
+        revert ResidualSweepNotReady();
     }
 
     function setDefaultDuration(uint64 _duration) external onlyDelegateCall onlyOwner {

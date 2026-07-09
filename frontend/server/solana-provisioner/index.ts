@@ -25,25 +25,15 @@ import {
   parseMintPubkeyFromWrapOutput,
   solanaPubkeyToBytes32Hex,
 } from '../_lib/onchain/solanaBridgePubkey.js'
+import {
+  BASE_SOLANA_BRIDGE_SCALARS_ABI,
+  resolveBaseSolanaBridge,
+} from '../_lib/onchain/resolveBaseSolanaBridge.js'
 
 const execFileAsync = promisify(execFile)
-const BASE_SOLANA_BRIDGE = '0x3eff766c76a1be2ce1acf2b69c78bcae257d5188' as Address
 const SOLANA_NATIVE_MINT = 'So11111111111111111111111111111111111111112'
 const SOLANA_SPL_TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'
 const SOLANA_TOKEN_2022_PROGRAM = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'
-
-const BASE_SOLANA_BRIDGE_ABI = [
-  {
-    type: 'function',
-    name: 'scalars',
-    stateMutability: 'view',
-    inputs: [
-      { name: 'localToken', type: 'address' },
-      { name: 'remoteToken', type: 'bytes32' },
-    ],
-    outputs: [{ type: 'uint256' }],
-  },
-] as const
 
 type ProvisionBody = {
   bridgeToken?: string
@@ -754,12 +744,13 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
       mintPubkey,
       payerPubkey: provisionerPayerPubkey,
     })
+    const { address: baseSolanaBridge } = await resolveBaseSolanaBridge({ publicClient })
     let scalar = 0n
     for (let i = 0; i < 24; i += 1) {
       scalar = await publicClient
         .readContract({
-          address: BASE_SOLANA_BRIDGE,
-          abi: BASE_SOLANA_BRIDGE_ABI,
+          address: baseSolanaBridge,
+          abi: BASE_SOLANA_BRIDGE_SCALARS_ABI,
           functionName: 'scalars',
           args: [bridgeToken, mintBytes32],
         })
@@ -819,12 +810,13 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
           mintPubkey: existingMintPubkey,
           payerPubkey: provisionerPayerPubkey,
         })
+        const { address: baseSolanaBridge } = await resolveBaseSolanaBridge({ publicClient })
         let scalar = 0n
         for (let i = 0; i < 24; i += 1) {
           scalar = await publicClient
             .readContract({
-              address: BASE_SOLANA_BRIDGE,
-              abi: BASE_SOLANA_BRIDGE_ABI,
+              address: baseSolanaBridge,
+              abi: BASE_SOLANA_BRIDGE_SCALARS_ABI,
               functionName: 'scalars',
               args: [bridgeToken, mintBytes32],
             })

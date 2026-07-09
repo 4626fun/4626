@@ -1,5 +1,6 @@
 {
-  "schedule": "*/1 * * * *",
+  "_comment_m2_09": "Local cron disabled by default (main.ts requires SOLANA_ORCHESTRATOR_LOCAL_CRON_ENABLED=1). Canonical plane: Vercel enqueue → sidecar POST /reconcile. Do not enable both planes.",
+  "schedule": "0 0 31 2 *",
   "apiBaseUrl": "https://4626.fun/api",
   "workflowName": "solana-orchestrator",
   "actions": [

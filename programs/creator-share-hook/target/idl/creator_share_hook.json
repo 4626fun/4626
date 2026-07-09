@@ -375,7 +375,9 @@
       "name": "record_winner",
       "docs": [
         "Keeper-only: record a lottery winner on Solana.",
-        "Called by Keepr after a win is detected on Base."
+        "Called by Keepr after a win is detected on Base.",
+        "",
+        "M2-12: `win_id` is a non-zero Base-side digest; each id can be recorded once."
       ],
       "discriminator": [
         226,
@@ -391,8 +393,10 @@
         {
           "name": "keeper",
           "docs": [
-            "The keeper authority (must match `creator_config.keeper_authority`)."
+            "The keeper authority (must match `creator_config.keeper_authority`).",
+            "Pays rent for the one-shot win_id PDA."
           ],
+          "writable": true,
           "signer": true
         },
         {
@@ -437,7 +441,7 @@
         {
           "name": "winner_record",
           "docs": [
-            "WinnerRecord PDA — mutable to update with new winner."
+            "WinnerRecord PDA — mutable to update with latest winner (display)."
           ],
           "writable": true,
           "pda": {
@@ -466,6 +470,40 @@
               }
             ]
           }
+        },
+        {
+          "name": "win_id_record",
+          "docs": [
+            "M2-12 — one-shot PDA keyed by win_id. Init fails if the win was already recorded."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  110,
+                  95,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator_mint"
+              },
+              {
+                "kind": "arg",
+                "path": "win_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -476,6 +514,15 @@
         {
           "name": "shares_paid",
           "type": "u64"
+        },
+        {
+          "name": "win_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
         }
       ]
     },
@@ -749,7 +796,7 @@
         {
           "name": "creator_config",
           "docs": [
-            "CreatorConfig PDA — used to verify keeper authority."
+            "CreatorConfig PDA — used to verify keeper authority + threshold."
           ],
           "pda": {
             "seeds": [
@@ -1063,6 +1110,19 @@
       ]
     },
     {
+      "name": "WinIdRecord",
+      "discriminator": [
+        160,
+        33,
+        194,
+        65,
+        206,
+        48,
+        33,
+        86
+      ]
+    },
+    {
       "name": "WinnerRecord",
       "discriminator": [
         248,
@@ -1211,6 +1271,46 @@
       "code": 6010,
       "name": "MetaListAlreadyInitialized",
       "msg": "Extra account meta list already initialized"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidTokenAccount",
+      "msg": "Token account could not be unpacked as a Token-2022 account"
+    },
+    {
+      "code": 6012,
+      "name": "MintMismatch",
+      "msg": "Token account mint does not match the hooked mint"
+    },
+    {
+      "code": 6013,
+      "name": "TransferNotInProgress",
+      "msg": "No Token-2022 transfer in progress — hook invoked outside a real transfer"
+    },
+    {
+      "code": 6014,
+      "name": "InvalidWinId",
+      "msg": "Invalid win_id — zero win_id is not allowed"
+    },
+    {
+      "code": 6015,
+      "name": "DuplicateWinId",
+      "msg": "Duplicate win_id — this Base win was already recorded"
+    },
+    {
+      "code": 6016,
+      "name": "BelowSettlementThreshold",
+      "msg": "Withheld fees below settlement_threshold"
+    },
+    {
+      "code": 6017,
+      "name": "UnauthorizedWithdrawAuthority",
+      "msg": "Keeper is not the TransferFeeConfig withdraw_withheld_authority"
+    },
+    {
+      "code": 6018,
+      "name": "MissingTransferFeeConfig",
+      "msg": "Mint is missing TransferFeeConfig extension"
     }
   ],
   "types": [
@@ -1715,6 +1815,66 @@
       }
     },
     {
+      "name": "WinIdRecord",
+      "docs": [
+        "Replay-protection PDA for a single Base lottery win (M2-12).",
+        "",
+        "Seeds: `[WIN_ID_SEED, creator_mint.key(), win_id]`",
+        "",
+        "Created once per unique `win_id`. A second `record_winner` with the same",
+        "`win_id` fails account init (`already in use`) / explicit `DuplicateWinId`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator_mint",
+            "docs": [
+              "Creator mint this win belongs to."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "win_id",
+            "docs": [
+              "Opaque Base-side win identity (event digest / block:log hash)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "winner",
+            "docs": [
+              "Winner Solana pubkey recorded for this win."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "shares_paid",
+            "docs": [
+              "Shares paid (Base units)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Unix timestamp when recorded."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "WinnerNotified",
       "docs": [
         "Emitted when a winner is recorded on Solana."
@@ -1737,6 +1897,18 @@
           {
             "name": "timestamp",
             "type": "i64"
+          },
+          {
+            "name": "win_id",
+            "docs": [
+              "M2-12 — Base-side win identity bound to this record."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           }
         ]
       }

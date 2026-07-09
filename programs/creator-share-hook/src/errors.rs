@@ -43,4 +43,24 @@ pub enum CreatorShareHookError {
 
     #[msg("No Token-2022 transfer in progress — hook invoked outside a real transfer")]
     TransferNotInProgress,
+
+    /// M2-12 — win_id must be non-zero.
+    #[msg("Invalid win_id — zero win_id is not allowed")]
+    InvalidWinId,
+
+    /// M2-12 — same Base win cannot be recorded twice.
+    #[msg("Duplicate win_id — this Base win was already recorded")]
+    DuplicateWinId,
+
+    /// M2-13 — withheld fees below configured settlement threshold.
+    #[msg("Withheld fees below settlement_threshold")]
+    BelowSettlementThreshold,
+
+    /// M2-13 — keeper is not the mint TransferFeeConfig withdraw_withheld_authority.
+    #[msg("Keeper is not the TransferFeeConfig withdraw_withheld_authority")]
+    UnauthorizedWithdrawAuthority,
+
+    /// M2-13 — mint is missing TransferFeeConfig extension.
+    #[msg("Mint is missing TransferFeeConfig extension")]
+    MissingTransferFeeConfig,
 }

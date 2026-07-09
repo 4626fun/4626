@@ -150,4 +150,67 @@ describe('verifyDeployPhase2Invariants', () => {
     expect(result.expectations?.payoutRecipientMode).toBe('payout_router')
     expect(result.expectations?.expectedPayoutRecipient).toBeNull()
   })
+
+  it('flags hot-EOA PayoutRouter owner as a phase-2 violation (M2-03 / H-07)', async () => {
+    const gaugeController = '0x0000000000000000000000000000000000000104'
+    const payoutRouter = '0x0000000000000000000000000000000000000201'
+    const eoaOwner = '0x0000000000000000000000000000000000000001'
+
+    const result = await verifyDeployPhase2Invariants({
+      publicClient: {
+        readContract: async ({ functionName }) => {
+          switch (functionName) {
+            case 'feeRecipient':
+            case 'gaugeController':
+              return gaugeController
+            case 'payoutRecipient':
+              return payoutRouter
+            case 'creatorShareBps':
+              return 0n
+            case 'creatorTreasury':
+              return '0x0000000000000000000000000000000000000000'
+            case 'owner':
+              return eoaOwner
+            case 'burnStream':
+              return '0x0000000000000000000000000000000000000300'
+            case 'wrapper':
+              return '0x0000000000000000000000000000000000000400'
+            case 'isWhitelisted':
+              return true
+            case 'shareOFT':
+              return '0x0000000000000000000000000000000000000103'
+            case 'addressType':
+              return 2
+            case 'keeper':
+              return '0x0000000000000000000000000000000000000500'
+            case 'authorizedQueuers':
+              return true
+            case 'swapPathToShareOFT':
+              return '0x'
+            default:
+              throw new Error(`unexpected functionName=${functionName}`)
+          }
+        },
+        getBytecode: async () => '0x',
+        getStorageAt: async () =>
+          '0x0000000000000000000000000000000000000000000000000000000000000001' as `0x${string}`,
+      },
+      phase2FinalizeCalls: [
+        {
+          to: '0x0000000000000000000000000000000000000010',
+          value: 0n,
+          data: makeFinalizePhase2Data(),
+        },
+      ],
+      payload: {
+        expectedPayoutRecipientMode: 'payout_router',
+        expectedPayoutRecipient: payoutRouter,
+        expectedBurnStream: '0x0000000000000000000000000000000000000300',
+      },
+      lotteryManager: null,
+      enforceProductionReadiness: true,
+    })
+
+    expect(result.violations.map((entry) => entry.code)).toContain('payout_router_owner_is_eoa')
+  })
 })

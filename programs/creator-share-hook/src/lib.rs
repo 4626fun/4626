@@ -51,12 +51,15 @@ pub mod creator_share_hook {
 
     /// Keeper-only: record a lottery winner on Solana.
     /// Called by Keepr after a win is detected on Base.
+    ///
+    /// M2-12: `win_id` is a non-zero Base-side digest; each id can be recorded once.
     pub fn record_winner(
         ctx: Context<RecordWinner>,
         winner: Pubkey,
         shares_paid: u64,
+        win_id: [u8; 32],
     ) -> Result<()> {
-        instructions::record_winner::handler(ctx, winner, shares_paid)
+        instructions::record_winner::handler(ctx, winner, shares_paid, win_id)
     }
 
     // ── Admin ────────────────────────────────────────────────────────

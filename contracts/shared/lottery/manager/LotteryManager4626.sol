@@ -279,8 +279,14 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     /// @dev While paused, callbacks store randomness and do not settle wins/losses.
     mapping(uint256 => uint256) public pendingRandomWord;
     mapping(uint256 => bool) public hasPendingRandomWord;
-    /// @dev FIFO queue of requestIds deferred during pause.
+    /// @dev FIFO queue of requestIds deferred during pause (M2-07 / H-02).
+    ///      Settlement is head-only so owners cannot cherry-pick wins; batch flush
+    ///      avoids OOG on large queues (apply up to DEFERRED_VRF_FLUSH_BATCH_MAX).
     uint256[] internal _deferredVrfRequestIds;
+    /// @notice Hard cap on deferred VRF FIFO length (M2-07).
+    uint256 public constant MAX_DEFERRED_VRF_QUEUE = 128;
+    /// @notice Max items settled per `processDeferredVrfBatch` / single call (M2-07).
+    uint256 public constant DEFERRED_VRF_FLUSH_BATCH_MAX = 16;
 
     /// @notice Hub ShareOFT contracts authorized to forward remote lottery entries.
     mapping(address => bool) public authorizedHubShareOftForwarders;
@@ -394,6 +400,42 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     bool internal _timelockArmed;
 
     // ================================
+    // STATE — LOCAL VRF CONSUMER TIMELOCK (R-H04)
+    // ================================
+    //
+    // Appended after boost-source timelock storage; mirrored in
+    // LotteryManager4626AdminModule. Instant `setLocalVRFConsumer` is only
+    // allowed while consumer is unset (bootstrap). Subsequent changes use
+    // queue (2d) → execute, matching VRFConsumer4626 coordinator policy.
+
+    /// @notice Pending local VRF consumer (0 if none queued).
+    address public pendingLocalVRFConsumer;
+    /// @notice Earliest timestamp at which `executeLocalVRFConsumerChange` may run.
+    uint256 public pendingLocalVRFConsumerEffectiveAt;
+
+    // ================================
+    // STATE — JACKPOT PAYOUT SCOPE (R-H05)
+    // ================================
+    //
+    // Launch default true = single-vault prize (only the triggering coin's gauge pays).
+    // Multi-vault skimming (false) requires explicit product disclosure before enable.
+    // See docs/audits/R-H05-multi-vault-jackpot-decision.md.
+
+    /// @notice If true, jackpot payouts only debit the triggering vault's gauge.
+    /// @dev Defaults to true for launch safety (R-H05). Owner may set false for multi-vault.
+    bool public singleVaultJackpotOnly = true;
+
+    // ================================
+    // STATE — AMOE RELAYER TIMELOCK (M-12)
+    // ================================
+    //
+    // Instant `setAuthorizedAmoeRelayer` is bootstrap-only (while unset).
+    // Subsequent rewires use the same 2-day queue/execute flow as local VRF consumer.
+
+    address public pendingAmoeRelayer;
+    uint256 public pendingAmoeRelayerEffectiveAt;
+
+    // ================================
     // EVENTS
     // ================================
 
@@ -440,6 +482,13 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     event RemoteOFTAuthorized(uint32 indexed srcEid, bytes32 sender, bool authorized);
     event CallbackGasLimitUpdated(uint128 newGasLimit);
     event VRFConsumerUpdated(address indexed consumer);
+    event LocalVRFConsumerChangeQueued(address indexed newConsumer, uint256 effectiveAt);
+    event LocalVRFConsumerChangeExecuted(address indexed newConsumer);
+    event LocalVRFConsumerChangeCancelled(address indexed cancelled);
+    event SingleVaultJackpotOnlyUpdated(bool enabled);
+    event AmoeRelayerChangeQueued(address indexed newRelayer, uint256 effectiveAt);
+    event AmoeRelayerChangeExecuted(address indexed newRelayer);
+    event AmoeRelayerChangeCancelled(address indexed cancelled);
     event TargetEidUpdated(uint32 indexed targetEid);
     event VRFIntegratorUpdated(address indexed integrator, bool trusted);
     event VrfResultDeferred(uint256 indexed requestId, uint256 randomWord);
@@ -499,6 +548,10 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     error InvalidAmount();
     error CallerFeeMismatch(uint256 provided, uint256 required);
     error ETHRefundFailed();
+    /// @notice M2-07 — deferred VRF FIFO is full; settle some items before pausing further callbacks.
+    error DeferredVrfQueueFull();
+    /// @notice H-02 / M2-07 — only the FIFO head may be settled (prevents cherry-picking).
+    error DeferredVrfOutOfOrder(uint256 expectedHead, uint256 provided);
 
     // PR 3 — Boost-source timelock errors.
     error TimelockNotArmed();
@@ -506,6 +559,19 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     error TimelockNotExpired();
     error NoPendingProposal();
     error LegacySetterDisabled();
+
+    // R-H04 — Local VRF consumer timelock errors.
+    error LocalVRFConsumerAlreadySet();
+    error NoPendingLocalVRFConsumer();
+    // M-12 — AMOE relayer timelock errors.
+    error AmoeRelayerAlreadySet();
+    error NoPendingAmoeRelayer();
+
+    /// @notice Delay for local VRF consumer rewires (aligned with VRFConsumer4626 coordinator).
+    /// @dev Logic lives in the admin module; constant is exposed on the main ABI for ops/tests.
+    uint256 public constant LOCAL_VRF_CONSUMER_TIMELOCK = 2 days;
+    /// @notice Delay for AMOE relayer rewires (same window as local VRF consumer).
+    uint256 public constant AMOE_RELAYER_TIMELOCK = 2 days;
 
     // ================================
     // CONSTRUCTOR
@@ -807,12 +873,73 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     }
 
     /**
-     * @notice Apply one deferred VRF result (used by admin `unpause()` FIFO flush).
+     * @notice Apply the FIFO head deferred VRF result (H-02 / M2-07).
+     * @dev `requestId` must equal the queue head — prevents cherry-picking. Prefer
+     *      `processDeferredVrfBatch` for multi-item drains.
      */
-    function applyDeferredVrf(uint256 requestId) external {
+    function applyDeferredVrf(uint256 requestId) external nonReentrant {
         if (msg.sender != owner()) revert Unauthorized();
-        if (!hasPendingRandomWord[requestId]) return;
+        if (_deferredVrfRequestIds.length == 0) {
+            if (!hasPendingRandomWord[requestId]) return;
+            // Legacy orphan pending word without queue entry: allow one-shot drain.
+            _settleDeferredVrfAt(requestId);
+            return;
+        }
+        uint256 head = _deferredVrfRequestIds[0];
+        if (requestId != head) revert DeferredVrfOutOfOrder(head, requestId);
+        _popDeferredVrfHead();
+        _settleDeferredVrfAt(requestId);
+    }
 
+    /**
+     * @notice Settle up to `maxCount` deferred VRF results in FIFO order (M2-07).
+     * @dev Caps at `DEFERRED_VRF_FLUSH_BATCH_MAX` to avoid OOG. Safe to call repeatedly
+     *      until `deferredVrfQueueLength() == 0`. Works while paused or unpaused.
+     */
+    function processDeferredVrfBatch(uint256 maxCount) external nonReentrant returns (uint256 processed) {
+        if (msg.sender != owner()) revert Unauthorized();
+        if (maxCount == 0) return 0;
+        uint256 limit = maxCount > DEFERRED_VRF_FLUSH_BATCH_MAX ? DEFERRED_VRF_FLUSH_BATCH_MAX : maxCount;
+        uint256 qLen = _deferredVrfRequestIds.length;
+        if (limit > qLen) limit = qLen;
+        for (; processed < limit;) {
+            uint256 requestId = _deferredVrfRequestIds[0];
+            _popDeferredVrfHead();
+            _settleDeferredVrfAt(requestId);
+            unchecked {
+                ++processed;
+            }
+        }
+    }
+
+    function deferredVrfQueueLength() external view returns (uint256) {
+        return _deferredVrfRequestIds.length;
+    }
+
+    function deferredVrfQueueHead() external view returns (uint256) {
+        if (_deferredVrfRequestIds.length == 0) return 0;
+        return _deferredVrfRequestIds[0];
+    }
+
+    function _pushDeferredVrf(uint256 requestId) internal {
+        if (_deferredVrfRequestIds.length >= MAX_DEFERRED_VRF_QUEUE) revert DeferredVrfQueueFull();
+        _deferredVrfRequestIds.push(requestId);
+    }
+
+    function _popDeferredVrfHead() internal {
+        uint256 len = _deferredVrfRequestIds.length;
+        if (len == 0) return;
+        for (uint256 i = 1; i < len;) {
+            _deferredVrfRequestIds[i - 1] = _deferredVrfRequestIds[i];
+            unchecked {
+                ++i;
+            }
+        }
+        _deferredVrfRequestIds.pop();
+    }
+
+    function _settleDeferredVrfAt(uint256 requestId) internal {
+        if (!hasPendingRandomWord[requestId]) return;
         uint256 word = pendingRandomWord[requestId];
         delete pendingRandomWord[requestId];
         delete hasPendingRandomWord[requestId];
@@ -857,11 +984,13 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
             return;
         }
 
-        // If paused, defer settlement and preserve the request for later processing.
+        // If paused, defer settlement and preserve the request for later FIFO flush.
+        // M2-07 / H-02: enqueue once so unpause-time settlement cannot cherry-pick.
         if (paused()) {
             if (!hasPendingRandomWord[requestId]) {
                 pendingRandomWord[requestId] = randomWords[0];
                 hasPendingRandomWord[requestId] = true;
+                _pushDeferredVrf(requestId);
                 emit VrfResultDeferred(requestId, randomWords[0]);
             }
             return;
@@ -1589,17 +1718,17 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
      * @param triggeringCoin The lane token that triggered the lottery
      * @param winner The lottery winner
      * @param payoutBps Percentage of each vault's jackpot to pay (6900 = 69%)
-     * @return totalPaidOut Total number of vaults that paid out
+     * @return totalSharesPaid Sum of ShareOFT (■) units paid across vaults (M-12 — not vault count)
      */
     // FIX: CLM-04 — wrap entire payout in try/catch pattern to ensure _payoutLock always resets
     function _payoutLocalJackpot(address triggeringCoin, address winner, uint16 payoutBps) internal returns (uint256) {
         if (_payoutLock == 1) revert ReentrancyGuardReentrantCall();
         _payoutLock = 1;
 
-        uint256 totalPaidOut = _payoutLocalJackpotInner(triggeringCoin, winner, payoutBps);
+        uint256 totalSharesPaid = _payoutLocalJackpotInner(triggeringCoin, winner, payoutBps);
 
         _payoutLock = 0;
-        return totalPaidOut;
+        return totalSharesPaid;
     }
 
     /// @notice Cursor that advances through the token registry between
@@ -1623,7 +1752,10 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         uint256 slotsScanned
     );
 
-    function _payoutLocalJackpotInner(address triggeringCoin, address winner, uint16 payoutBps) internal returns (uint256 totalPaidOut) {
+    function _payoutLocalJackpotInner(address triggeringCoin, address winner, uint16 payoutBps)
+        internal
+        returns (uint256 totalSharesPaid)
+    {
         // FIX: CLM-04 — registry calls wrapped in try/catch to prevent permanent lock
         address[] memory allTokens;
         try registry.getAllTokens() returns (address[] memory result) {
@@ -1631,6 +1763,8 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         } catch {
             return 0;
         }
+
+        uint256 vaultsPaid;
 
         uint256 registrySize = allTokens.length;
         if (registrySize == 0) {
@@ -1679,6 +1813,10 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
                 continue;
             }
             if (!isActive) continue;
+
+            // R-H05: optional single-vault mode — only the triggering coin's pot pays.
+            if (singleVaultJackpotOnly && token != triggeringCoin) continue;
+
             activeIterated++;
 
             // Look up per-token contracts
@@ -1719,7 +1857,9 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
                 try gaugeController.payJackpot(winner, rewardShares) {
                     totalRewardsPaid += rewardShares;
                     tokenStats[token].rewardsPaid += rewardShares;
-                    totalPaidOut++;
+                    // M-12: accumulate ShareOFT units paid (not vault count) for callbacks/return.
+                    totalSharesPaid += rewardShares;
+                    vaultsPaid++;
 
                     emit LotteryWon(token, 0, winner, rewardShares, 0);
                     emit CrossChainJackpotPaid(token, winner, rewardShares, 0);
@@ -1745,9 +1885,9 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
             }
         }
 
-        // Emit special event for multi-token win
-        if (totalPaidOut > 0) {
-            emit MultiTokenJackpotWon(triggeringCoin, winner, totalPaidOut);
+        // Emit special event for multi-token win (num vaults paid, not share units).
+        if (vaultsPaid > 0) {
+            emit MultiTokenJackpotWon(triggeringCoin, winner, vaultsPaid);
         }
     }
 
@@ -1772,6 +1912,37 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
 
     function setLocalVRFConsumer(address _consumer) external {
         _consumer;
+        _delegateAdmin();
+    }
+
+    function queueLocalVRFConsumerChange(address _consumer) external {
+        _consumer;
+        _delegateAdmin();
+    }
+
+    function executeLocalVRFConsumerChange() external {
+        _delegateAdmin();
+    }
+
+    function cancelLocalVRFConsumerChange() external {
+        _delegateAdmin();
+    }
+
+    function setSingleVaultJackpotOnly(bool onlyTrigger) external {
+        onlyTrigger;
+        _delegateAdmin();
+    }
+
+    function queueAmoeRelayerChange(address _relayer) external {
+        _relayer;
+        _delegateAdmin();
+    }
+
+    function executeAmoeRelayerChange() external {
+        _delegateAdmin();
+    }
+
+    function cancelAmoeRelayerChange() external {
         _delegateAdmin();
     }
 
@@ -2153,6 +2324,23 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     /// @dev Once true, legacy single-call setters revert. Read via `isTimelockArmed()`.
     bool internal _timelockArmed;
 
+    // ================================
+    // STATE — LOCAL VRF CONSUMER TIMELOCK (R-H04) — MIRROR
+    // ================================
+    address public pendingLocalVRFConsumer;
+    uint256 public pendingLocalVRFConsumerEffectiveAt;
+
+    // ================================
+    // STATE — JACKPOT PAYOUT SCOPE (R-H05) — MIRROR
+    // ================================
+    bool public singleVaultJackpotOnly;
+
+    // ================================
+    // STATE — AMOE RELAYER TIMELOCK (M-12) — MIRROR
+    // ================================
+    address public pendingAmoeRelayer;
+    uint256 public pendingAmoeRelayerEffectiveAt;
+
     address private immutable _self;
 
     event SwapContractAuthorized(address indexed swapContract, bool authorized);
@@ -2162,6 +2350,13 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     event RemoteOFTAuthorized(uint32 indexed srcEid, bytes32 sender, bool authorized);
     event CallbackGasLimitUpdated(uint128 newGasLimit);
     event VRFConsumerUpdated(address indexed consumer);
+    event LocalVRFConsumerChangeQueued(address indexed newConsumer, uint256 effectiveAt);
+    event LocalVRFConsumerChangeExecuted(address indexed newConsumer);
+    event LocalVRFConsumerChangeCancelled(address indexed cancelled);
+    event SingleVaultJackpotOnlyUpdated(bool enabled);
+    event AmoeRelayerChangeQueued(address indexed newRelayer, uint256 effectiveAt);
+    event AmoeRelayerChangeExecuted(address indexed newRelayer);
+    event AmoeRelayerChangeCancelled(address indexed cancelled);
     event TargetEidUpdated(uint32 indexed targetEid);
     event VRFIntegratorUpdated(address indexed integrator, bool trusted);
     event SponsorshipPolicyUpdated(
@@ -2202,6 +2397,14 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     error TimelockNotExpired();
     error NoPendingProposal();
     error LegacySetterDisabled();
+    error LocalVRFConsumerAlreadySet();
+    error NoPendingLocalVRFConsumer();
+    error AmoeRelayerAlreadySet();
+    error NoPendingAmoeRelayer();
+
+    /// @notice Delay for local VRF consumer rewires (aligned with VRFConsumer4626 coordinator).
+    uint256 public constant LOCAL_VRF_CONSUMER_TIMELOCK = 2 days;
+    uint256 public constant AMOE_RELAYER_TIMELOCK = 2 days;
 
     constructor(address _registry, address owner_)
         OApp(IRegistry4626Lottery(_registry).getLayerZeroEndpoint(block.chainid), owner_)
@@ -2222,8 +2425,48 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
         emit SwapContractAuthorized(swapContract, authorized);
     }
 
+    /// @notice Bootstrap-only setter while `localVRFConsumer` is unset.
+    /// @dev After the first non-zero consumer is set, use
+    ///      `queueLocalVRFConsumerChange` → wait `LOCAL_VRF_CONSUMER_TIMELOCK` →
+    ///      `executeLocalVRFConsumerChange` (audit R-H04).
     function setLocalVRFConsumer(address _consumer) external onlyDelegateCall onlyOwner {
+        if (address(localVRFConsumer) != address(0)) revert LocalVRFConsumerAlreadySet();
         localVRFConsumer = IVRFConsumer4626(_consumer);
+        emit VRFConsumerUpdated(_consumer);
+    }
+
+    function queueLocalVRFConsumerChange(address _consumer) external onlyDelegateCall onlyOwner {
+        pendingLocalVRFConsumer = _consumer;
+        pendingLocalVRFConsumerEffectiveAt = block.timestamp + LOCAL_VRF_CONSUMER_TIMELOCK;
+        emit LocalVRFConsumerChangeQueued(_consumer, pendingLocalVRFConsumerEffectiveAt);
+    }
+
+    function executeLocalVRFConsumerChange() external onlyDelegateCall onlyOwner {
+        uint256 effectiveAt = pendingLocalVRFConsumerEffectiveAt;
+        if (effectiveAt == 0) revert NoPendingLocalVRFConsumer();
+        if (block.timestamp < effectiveAt) revert TimelockNotExpired();
+        address newConsumer = pendingLocalVRFConsumer;
+        localVRFConsumer = IVRFConsumer4626(newConsumer);
+        pendingLocalVRFConsumer = address(0);
+        pendingLocalVRFConsumerEffectiveAt = 0;
+        emit LocalVRFConsumerChangeExecuted(newConsumer);
+        emit VRFConsumerUpdated(newConsumer);
+    }
+
+    function cancelLocalVRFConsumerChange() external onlyDelegateCall onlyOwner {
+        if (pendingLocalVRFConsumerEffectiveAt == 0) revert NoPendingLocalVRFConsumer();
+        address cancelled = pendingLocalVRFConsumer;
+        pendingLocalVRFConsumer = address(0);
+        pendingLocalVRFConsumerEffectiveAt = 0;
+        emit LocalVRFConsumerChangeCancelled(cancelled);
+    }
+
+    /// @notice R-H05: scope jackpot payouts to the triggering vault only when `true`.
+    /// @dev Launch default is `true` (single-vault). Set `false` only after multi-vault
+    ///      prize economics are product-approved and disclosed.
+    function setSingleVaultJackpotOnly(bool onlyTrigger) external onlyDelegateCall onlyOwner {
+        singleVaultJackpotOnly = onlyTrigger;
+        emit SingleVaultJackpotOnlyUpdated(onlyTrigger);
     }
 
     function setVRFIntegrator(address _integrator) external onlyDelegateCall onlyOwner {
@@ -2474,12 +2717,42 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
 
     // PR 1 — AMOE Linear Parity admin impls.
 
-    /// @notice Set the trusted off-chain relayer for AMOE entries.
-    /// @dev Single-address allowlist. Pass address(0) to disable AMOE entirely.
+    /// @notice Bootstrap-only AMOE relayer set while unset (M-12).
+    /// @dev After the first non-zero set, use queue/execute with `AMOE_RELAYER_TIMELOCK`.
+    ///      Pass address(0) only via the timelocked path once a relayer is live
+    ///      (bootstrap may still set zero while unset for no-op).
     function setAuthorizedAmoeRelayer(address _relayer) external onlyDelegateCall onlyOwner {
+        if (authorizedAmoeRelayer != address(0)) revert AmoeRelayerAlreadySet();
         address previous = authorizedAmoeRelayer;
         authorizedAmoeRelayer = _relayer;
         emit AuthorizedAmoeRelayerUpdated(previous, _relayer);
+    }
+
+    function queueAmoeRelayerChange(address _relayer) external onlyDelegateCall onlyOwner {
+        pendingAmoeRelayer = _relayer;
+        pendingAmoeRelayerEffectiveAt = block.timestamp + AMOE_RELAYER_TIMELOCK;
+        emit AmoeRelayerChangeQueued(_relayer, pendingAmoeRelayerEffectiveAt);
+    }
+
+    function executeAmoeRelayerChange() external onlyDelegateCall onlyOwner {
+        uint256 effectiveAt = pendingAmoeRelayerEffectiveAt;
+        if (effectiveAt == 0) revert NoPendingAmoeRelayer();
+        if (block.timestamp < effectiveAt) revert TimelockNotExpired();
+        address previous = authorizedAmoeRelayer;
+        address next = pendingAmoeRelayer;
+        authorizedAmoeRelayer = next;
+        pendingAmoeRelayer = address(0);
+        pendingAmoeRelayerEffectiveAt = 0;
+        emit AmoeRelayerChangeExecuted(next);
+        emit AuthorizedAmoeRelayerUpdated(previous, next);
+    }
+
+    function cancelAmoeRelayerChange() external onlyDelegateCall onlyOwner {
+        if (pendingAmoeRelayerEffectiveAt == 0) revert NoPendingAmoeRelayer();
+        address cancelled = pendingAmoeRelayer;
+        pendingAmoeRelayer = address(0);
+        pendingAmoeRelayerEffectiveAt = 0;
+        emit AmoeRelayerChangeCancelled(cancelled);
     }
 
     /// @notice Set the pre-boost win-chance ceiling (PPM).

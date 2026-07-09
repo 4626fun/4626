@@ -38,6 +38,9 @@ contract MockCharmVault {
     address public lastDepositTo;
     uint256 public depositCallCount;
     uint256 public withdrawCallCount;
+    uint256 public lastWithdrawShares;
+    uint256 public lastWithdrawAmount0Min;
+    uint256 public lastWithdrawAmount1Min;
     mapping(address => uint256) public balanceOf;
 
     constructor(address token0_, address token1_) {
@@ -88,10 +91,20 @@ contract MockCharmVault {
         withdrawAmount1 = amount1;
     }
 
-    function withdraw(uint256, uint256, uint256, address to) external returns (uint256 amount0, uint256 amount1) {
+    function withdraw(uint256 shares, uint256 amount0Min, uint256 amount1Min, address to)
+        external
+        returns (uint256 amount0, uint256 amount1)
+    {
         withdrawCallCount += 1;
+        lastWithdrawShares = shares;
+        lastWithdrawAmount0Min = amount0Min;
+        lastWithdrawAmount1Min = amount1Min;
         amount0 = withdrawAmount0;
         amount1 = withdrawAmount1;
+        if (amount0Min > amount0 || amount1Min > amount1) revert("SLIPPAGE");
+        if (balanceOf[msg.sender] >= shares) {
+            balanceOf[msg.sender] -= shares;
+        }
         if (amount0 > 0) {
             ERC20(token0).transfer(to, amount0);
         }
@@ -1135,6 +1148,118 @@ contract CharmStrategy4626OracleTest is Test {
 
         assertEq(charm.depositCallCount(), 0, "rebalance should not call charm deposit");
         assertEq(charm.withdrawCallCount(), 0, "rebalance should not call charm withdraw");
+    }
+
+    // ------------------------------------------------------------------
+    // Audit H-07 / H-05 residuals
+    // ------------------------------------------------------------------
+
+    function test_ownerEmergencyWithdraw_rejectsOwnerRecipient() external {
+        MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
+        MockERC20 creator = new MockERC20("Creator", "CRT", 18);
+        MockV3Pool pool = new MockV3Pool(address(creator), address(usdc));
+        MockRouter router = new MockRouter();
+        MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+
+        address vaultAddr = address(0xBEEF11);
+        address ownerAddr = address(0xA11CE);
+        CharmStrategy4626 strategy = new CharmStrategy4626(
+            vaultAddr, address(creator), address(usdc), address(router), address(charm), address(pool), ownerAddr
+        );
+
+        vm.prank(ownerAddr);
+        strategy.setActive(false);
+        creator.mint(address(strategy), 10e18);
+
+        vm.prank(ownerAddr);
+        vm.expectRevert(
+            abi.encodeWithSelector(CharmStrategy4626.InvalidEmergencyWithdrawRecipient.selector, ownerAddr)
+        );
+        strategy.ownerEmergencyWithdraw(address(creator), ownerAddr, 1e18);
+
+        vm.prank(ownerAddr);
+        strategy.ownerEmergencyWithdraw(address(creator), vaultAddr, 1e18);
+        assertEq(creator.balanceOf(vaultAddr), 1e18, "emergency must deliver only to vault");
+    }
+
+    function test_ownerEmergencyWithdrawFromCharm_forwardsToVault_withMins() external {
+        MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
+        MockERC20 creator = new MockERC20("Creator", "CRT", 18);
+        MockV3Pool pool = new MockV3Pool(address(creator), address(usdc));
+        MockRouter router = new MockRouter();
+        MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+
+        address vaultAddr = address(0xBEEF11);
+        address ownerAddr = address(0xA11CE);
+        CharmStrategy4626 strategy = new CharmStrategy4626(
+            vaultAddr, address(creator), address(usdc), address(router), address(charm), address(pool), ownerAddr
+        );
+
+        charm.setTotalSupply(100e18);
+        charm.setBalance(address(strategy), 100e18);
+        charm.setTotalAmounts(100e18, 1_000_000e6);
+        charm.setWithdrawAmounts(100e18, 1_000_000e6);
+        creator.mint(address(charm), 100e18);
+        usdc.mint(address(charm), 1_000_000e6);
+
+        // 5% depositSlippageBps default => mins = 95% of expected
+        uint256 expectedMin0 = (100e18 * 9500) / 10_000;
+        uint256 expectedMin1 = (1_000_000e6 * 9500) / 10_000;
+
+        vm.prank(ownerAddr);
+        strategy.ownerEmergencyWithdrawFromCharm();
+
+        assertEq(charm.withdrawCallCount(), 1, "should pull Charm shares");
+        assertEq(charm.lastWithdrawAmount0Min(), expectedMin0, "asset min must use depositSlippageBps");
+        assertEq(charm.lastWithdrawAmount1Min(), expectedMin1, "usdc min must use depositSlippageBps");
+        assertEq(creator.balanceOf(vaultAddr), 100e18, "asset must go to vault");
+        assertEq(usdc.balanceOf(vaultAddr), 1_000_000e6, "usdc must go to vault");
+        assertEq(creator.balanceOf(address(strategy)), 0, "no residual asset for owner rug");
+        assertEq(usdc.balanceOf(address(strategy)), 0, "no residual usdc for owner rug");
+    }
+
+    function test_setParameters_capsSlippageBps() external {
+        MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
+        MockERC20 creator = new MockERC20("Creator", "CRT", 18);
+        MockV3Pool pool = new MockV3Pool(address(creator), address(usdc));
+        MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+        CharmStrategy4626 strategy = _deployStrategy(creator, usdc, charm, pool);
+
+        vm.expectRevert(abi.encodeWithSelector(CharmStrategy4626.SlippageBpsTooHigh.selector, 2_001));
+        strategy.setParameters(5, 300, 2_001, 3000);
+
+        vm.expectRevert(abi.encodeWithSelector(CharmStrategy4626.SlippageBpsTooHigh.selector, 2_500));
+        strategy.setParameters(5, 2_500, 500, 3000);
+
+        strategy.setParameters(5, 2_000, 2_000, 3000);
+        assertEq(strategy.depositSlippageBps(), 2_000);
+        assertEq(strategy.swapSlippageBps(), 2_000);
+    }
+
+    function test_emergencyWithdraw_usesNonZeroMins() external {
+        MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
+        MockERC20 creator = new MockERC20("Creator", "CRT", 18);
+        MockV3Pool pool = new MockV3Pool(address(creator), address(usdc));
+        MockRouter router = new MockRouter();
+        router.setAmountOutToReturn(1e18);
+        MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+
+        address vaultAddr = address(this);
+        CharmStrategy4626 strategy = new CharmStrategy4626(
+            vaultAddr, address(creator), address(usdc), address(router), address(charm), address(pool), address(this)
+        );
+        strategy.initializeApprovals();
+
+        charm.setTotalSupply(100e18);
+        charm.setBalance(address(strategy), 100e18);
+        charm.setTotalAmounts(100e18, 0);
+        charm.setWithdrawAmounts(100e18, 0);
+        creator.mint(address(charm), 100e18);
+
+        uint256 expectedMin0 = (100e18 * 9500) / 10_000;
+        strategy.emergencyWithdraw();
+        assertEq(charm.lastWithdrawAmount0Min(), expectedMin0, "vault emergency must not use 0/0 mins");
+        assertEq(charm.lastWithdrawAmount1Min(), 0);
     }
 
 }

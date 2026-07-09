@@ -10,6 +10,7 @@ import {OFTMsgCodec} from "@layerzerolabs/oft-evm/contracts/libs/OFTMsgCodec.sol
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ICreatorGaugeController} from "@4626/creator/interfaces/ICreatorGaugeController.sol";
 import {ICreatorOVault} from "@4626/creator/interfaces/ICreatorOVault.sol";
 import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
@@ -155,6 +156,10 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
 
     /// @notice Associated vault (hub-only, address(0) on remote chains)
     address public vault;
+
+    /// @notice Vault-share units per 1 ShareOFT (must match CreatorOVaultWrapper.NORMALIZATION_FACTOR).
+    /// @dev Used by the H-06 mint-backing check: wrapper must hold ≥ totalSupply * this many vault shares.
+    uint256 public constant VAULT_SHARE_NORMALIZATION = 1000;
 
     /// @notice All fees go here on hub chain (address(0) on remote chains)
     address public gaugeController;
@@ -332,6 +337,10 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
 
     error OnlyVaultOrMinter();
     error ZeroAddress();
+    /// @notice Mint would leave local ShareOFT supply unbacked by vault shares held by the wrapper.
+    error UnbackedShareMint(uint256 wrapperVaultShares, uint256 requiredVaultShares);
+    /// @notice Clearing wrapper while supply remains would disable the mint-backing invariant.
+    error WrapperRequiredWhileSupplyExists();
     error FeeTooHigh();
     error NotMinter();
     error NothingToFlush();
@@ -455,6 +464,11 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      *         wrap/unwrap should not be treated as a fee-bearing trade.
      */
     function setWrapper(address _wrapper) external onlyOwner {
+        // H-06: do not allow clearing the wrapper while ShareOFT still circulates locally —
+        // that would disable the mint-backing invariant for later minter mints.
+        if (wrapper != address(0) && _wrapper == address(0) && totalSupply() > 0) {
+            revert WrapperRequiredWhileSupplyExists();
+        }
         wrapper = _wrapper;
         if (_wrapper != address(0)) {
             addressType[_wrapper] = OperationType.NoFees;
@@ -463,13 +477,34 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     }
 
     /**
-     * @notice Mint shares (vault/minter only)
+     * @notice Mint shares (vault/minter only — owner is not a free minter)
      * @param _to Recipient
      * @param _amount Amount to mint
+     * @dev H-06: owner must use `setMinter` (production minter is the wrapper). When
+     *      both `vault` and `wrapper` are configured, post-mint local supply must be
+     *      backed by vault shares held by the wrapper (`VAULT_SHARE_NORMALIZATION` ▢ per ■).
+     *      LayerZero `_credit` paths are unaffected (cross-chain credit is not this mint).
      */
-    function mint(address _to, uint256 _amount) external onlyVaultOrMinter {
+    function mint(address _to, uint256 _amount) external {
+        if (msg.sender != vault && !isMinter[msg.sender]) {
+            revert OnlyVaultOrMinter();
+        }
         _mint(_to, _amount);
+        _assertMintBacking();
         emit SharesMinted(_to, _amount);
+    }
+
+    /// @dev Hub wrap invariant: wrapper vault-share balance ≥ local ShareOFT supply × 1000.
+    ///      Skipped when wrapper/vault unset (bootstrap, remote OFT without local wrap).
+    function _assertMintBacking() internal view {
+        if (wrapper == address(0) || vault == address(0)) return;
+        uint256 supply = totalSupply();
+        if (supply > type(uint256).max / VAULT_SHARE_NORMALIZATION) {
+            revert UnbackedShareMint(0, type(uint256).max);
+        }
+        uint256 required = supply * VAULT_SHARE_NORMALIZATION;
+        uint256 held = IERC20(vault).balanceOf(wrapper);
+        if (held < required) revert UnbackedShareMint(held, required);
     }
 
     /**
@@ -1362,12 +1397,21 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     // ================================
 
     /**
-     * @notice Convert shares to underlying Creator Coin amount
-     * @dev On remote chains (vault == address(0)), returns shares 1:1
+     * @notice Convert ShareOFT units to underlying Creator Coin amount
+     * @dev M-03: 1 ■ = `VAULT_SHARE_NORMALIZATION` vault shares (▢). Prior path passed
+     *      ShareOFT units directly into the vault and understated assets by ~1000×.
+     *      On remote chains (vault == address(0)), returns the denormalized vault-share units 1:1
+     *      with ▢ (no local vault PPS).
      */
     function convertToAssets(uint256 shares) public view returns (uint256) {
-        if (vault == address(0)) return shares;
-        return ICreatorOVault(vault).convertToAssets(shares);
+        if (shares == 0) return 0;
+        if (shares > type(uint256).max / VAULT_SHARE_NORMALIZATION) {
+            // Avoid overflow; callers should not pass pathological amounts.
+            shares = type(uint256).max / VAULT_SHARE_NORMALIZATION;
+        }
+        uint256 vaultShares = shares * VAULT_SHARE_NORMALIZATION;
+        if (vault == address(0)) return vaultShares;
+        return ICreatorOVault(vault).convertToAssets(vaultShares);
     }
 
     /**

@@ -164,6 +164,7 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
     error MinOutNotMet(uint256 minExpected, uint256 actualOut);
     error InvalidBatchAction(uint8 kind);
     error ExternalSwapCallFailed();
+    error ExternalSwapEthChanged();
     error ProtocolRewardsClaimFailed();
     error ProtocolRewardsHasNoCode(address candidate);
     error ProtectedPayoutAsset(address token);
@@ -454,11 +455,15 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
         if (amountIn == 0) revert ZeroAmount();
 
         if (tokenIn == address(creatorCoin)) {
+            // Direct deposit: minOut is unused (no swap).
             tokenOut = amountIn;
             sharesQueued = _queueCreatorCoinDeposit(tokenOut);
             emit ConvertedAndQueued(tokenIn, amountIn, tokenOut, sharesQueued);
             return (tokenOut, sharesQueued);
         }
+
+        // M-NEW-01 / L2-03: swap path must set a non-zero slippage floor.
+        if (minOut == 0) revert ZeroAmount();
 
         bytes memory path = swapPathToShareOFT[tokenIn];
         if (path.length == 0) revert PathNotSet(tokenIn);
@@ -503,12 +508,17 @@ contract CreatorPayoutRouter is Ownable, ReentrancyGuard {
         if (tokenInBefore < amountIn) revert ZeroAmount();
         uint256 shareBefore = shareOFT.balanceOf(address(this));
 
+        // M-05: only call contracts with code; never attach native value (custody surface).
+        if (swapTarget.code.length == 0) revert InvalidExternalSwapAddress(swapTarget);
+
         inToken.forceApprove(spender, 0);
         inToken.forceApprove(spender, amountIn);
 
-        (bool ok, bytes memory returnData) = swapTarget.call(swapCallData);
+        uint256 ethBefore = address(this).balance;
+        (bool ok, bytes memory returnData) = swapTarget.call{value: 0}(swapCallData);
         inToken.forceApprove(spender, 0);
         if (!ok) _revertWithBytes(returnData);
+        if (address(this).balance != ethBefore) revert ExternalSwapEthChanged();
 
         uint256 tokenInAfter = inToken.balanceOf(address(this));
         if (tokenInBefore - tokenInAfter > amountIn) {
