@@ -337,20 +337,19 @@ type EstablishWaitlistSessionInput = {
 }
 
 /**
- * `ensureEmbeddedWallet()` reads a ref snapshot of `privy.authenticated` that is
- * refreshed by a `useEffect` on every render of the caller. Immediately after
- * `loginWithCode` resolves, that snapshot can still be one render behind (we've
- * observed it read `authenticated: false` for a single render right after a
- * `passwordless/authenticate` retry), which makes `ensureEmbeddedWallet()` throw
- * synchronously and get swallowed as a no-op — leaving the join with zero linked
- * wallets and a 400 from `/api/auth/privy`. Retry a few times with a short delay
- * so React gets a chance to flush the pending re-render before we give up.
+ * Best-effort client embedded-wallet create before bridging.
+ *
+ * Waitlist email OTP is whitelabel (`loginWithCode`), so Privy `createOnLogin`
+ * does not run. Client `createWallet()` can also clear localhost auth when it
+ * loads the privy.4626.fun embedded-wallet iframe. Prefer a short retry here;
+ * if it still fails, continue to `/api/auth/privy`, which provisions a
+ * user-owned embedded EOA server-side when the verified user has zero wallets.
  */
 async function ensureEmbeddedWalletBestEffort(
   ensureEmbeddedWallet: () => Promise<unknown>,
   logStep: (step: string, detail?: Record<string, unknown>) => void,
-): Promise<void> {
-  const attempts = 4
+): Promise<boolean> {
+  const attempts = 3
   const retryDelayMs = 200
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
@@ -360,7 +359,7 @@ async function ensureEmbeddedWalletBestEffort(
         attempt,
         created: resultRecord?.created ?? null,
       })
-      return
+      return true
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error ?? '')
       logStep('ensure-embedded-wallet:attempt-failed', { attempt, message })
@@ -370,6 +369,7 @@ async function ensureEmbeddedWalletBestEffort(
     }
   }
   logStep('ensure-embedded-wallet:gave-up', { attempts })
+  return false
 }
 
 export async function establishWaitlistSessionAfterPrivyAuth(
@@ -401,21 +401,42 @@ export async function establishWaitlistSessionAfterPrivyAuth(
       )
     }
 
-    if (isLocalDevPrivySessionMarkerMode()) {
-      assertPrivySessionMarkerCookie()
-    }
+    // Do NOT re-assert `privy-session` on localhost between token read and
+    // bridge. The marker makes the SDK treat refresh credentials as present;
+    // with `refresh_token: "deprecated"` that kicks a sessions refresh which
+    // 400s on loopback and clears `authenticated` mid-join.
 
-    if (input.ensureEmbeddedWallet) {
-      logStep('ensure-embedded-wallet:start')
-      await ensureEmbeddedWalletBestEffort(input.ensureEmbeddedWallet, logStep)
-      logStep('ensure-embedded-wallet:done')
+    // Skip client `createWallet()` on localhost: it loads the privy.4626.fun
+    // embedded-wallet iframe (server-cookie mode) and clears the just-minted
+    // session before a wallet exists. `/api/auth/privy` provisions server-side.
+    const skipClientWalletCreate = isLocalDevPrivySessionMarkerMode()
+    if (input.ensureEmbeddedWallet && !skipClientWalletCreate) {
+      logStep('ensure-embedded-wallet:start', {
+        privyAuthenticated: privy.authenticated === true,
+      })
+      for (let settle = 0; settle < 4 && privy.authenticated !== true; settle += 1) {
+        await sleep(100)
+      }
+      const walletReady = await ensureEmbeddedWalletBestEffort(input.ensureEmbeddedWallet, logStep)
+      logStep('ensure-embedded-wallet:done', {
+        walletReady,
+        privyAuthenticated: privy.authenticated === true,
+      })
+    } else if (skipClientWalletCreate) {
+      logStep('ensure-embedded-wallet:skipped-localdev')
     }
 
     logStep('bridge:start')
     const bridgeResult = await bridgePrivySession(privyToken)
-    logStep('bridge:done', { ok: bridgeResult.ok })
+    logStep('bridge:done', {
+      ok: bridgeResult.ok,
+      error: bridgeResult.ok ? null : (bridgeResult.error ?? null),
+    })
     if (!bridgeResult.ok) {
-      throw new Error('Could not create your app session. Please try again.')
+      throw new Error(
+        bridgeResult.error?.trim() ||
+          'Could not create your app session. Please try again.',
+      )
     }
     bridged = true
     const bridgedSessionAddress = bridgeResult.address

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { getAddress, isAddress, type Address } from 'viem'
 
 import { useSafeCreateWallet, useSafePrivy } from '@/lib/privy/safeHooks'
@@ -344,14 +344,16 @@ export function useEnsurePrivyEmbeddedWallet() {
     createWallet: typeof createWallet === 'function' ? createWallet : null,
   })
 
-  useEffect(() => {
-    snapshotRef.current = {
-      authenticated: Boolean(privy.authenticated),
-      user: privy.user ?? null,
-      wallets: Array.isArray(wallets) ? wallets : [],
-      createWallet: typeof createWallet === 'function' ? createWallet : null,
-    }
-  }, [createWallet, privy.authenticated, privy.user, wallets])
+  // Keep the snapshot synchronous with render — do not wait for useEffect.
+  // Post-OTP join calls ensureEmbeddedWallet in the same turn loginWithCode
+  // resolves; an effect-backed ref can still read authenticated:false for one
+  // paint and throw before createWallet runs.
+  snapshotRef.current = {
+    authenticated: Boolean(privy.authenticated),
+    user: privy.user ?? null,
+    wallets: Array.isArray(wallets) ? wallets : [],
+    createWallet: typeof createWallet === 'function' ? createWallet : null,
+  }
 
   const readLatestEmbeddedWallet = useCallback((): Address | null => {
     const snapshot = snapshotRef.current
@@ -377,17 +379,20 @@ export function useEnsurePrivyEmbeddedWallet() {
       }
     }
 
-    const snapshot = snapshotRef.current
-    if (!snapshot.authenticated) {
+    // Prefer live Privy auth over a possibly-stale snapshot from an earlier paint.
+    const liveAuthenticated = Boolean(privy.authenticated) || snapshotRef.current.authenticated
+    if (!liveAuthenticated) {
       throw new Error('Sign in with Privy before provisioning your embedded wallet.')
     }
-    if (!snapshot.createWallet) {
+    const createWalletFn =
+      (typeof createWallet === 'function' ? createWallet : null) ?? snapshotRef.current.createWallet
+    if (!createWalletFn) {
       throw new Error('Privy embedded wallet creation is unavailable in this session.')
     }
 
     setIsCreatingEmbeddedWallet(true)
     try {
-      const createdWallet = await snapshot.createWallet()
+      const createdWallet = await createWalletFn()
       const createdWalletRecord = createdWallet && typeof createdWallet === 'object'
         ? (createdWallet as Record<string, unknown>)
         : null
@@ -431,7 +436,7 @@ export function useEnsurePrivyEmbeddedWallet() {
     } finally {
       setIsCreatingEmbeddedWallet(false)
     }
-  }, [readLatestEmbeddedWallet, waitForEmbeddedWallet])
+  }, [createWallet, privy.authenticated, readLatestEmbeddedWallet, waitForEmbeddedWallet])
 
   return {
     embeddedEoaAddress,

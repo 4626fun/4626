@@ -7,13 +7,18 @@ import { CONFIGURED_APP_ORIGIN, resolveAuthRedirectOrigin } from '@/lib/env/host
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth'
 import { base } from 'viem/chains'
 import { AppLoadingBootstrapGate } from '@/components/layout/AppLoadingOverlay'
+import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import {
   createPrivyAppearance,
   WAITLIST_EMAIL_ONLY_WALLET_LIST,
   WAITLIST_RETURNING_WALLET_LOGIN_LIST,
 } from './clientAppearance'
 import { applyLoopbackPrivySessionMarkerShim } from './loopbackSessionMarkerShim'
+import { latchPrivyClientStatus, type PrivyClientStatus } from './privyClientStatus'
 import { PrivyWalletHooksContextProvider } from './walletHooksContext'
+
+export { latchPrivyClientStatus } from './privyClientStatus'
+export type { PrivyClientStatus } from './privyClientStatus'
 
 // Must run before the Privy SDK's first getAccessToken() call — see the shim
 // module for why loopback and *.4626.fun origins need the first-party
@@ -43,7 +48,6 @@ if (typeof window !== 'undefined') {
   }
 }
 
-type PrivyClientStatus = 'disabled' | 'loading' | 'ready'
 export const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
 type PrivyClientMode = 'default' | 'waitlist-email-only' | 'waitlist-returning-wallet' | 'waitlist-wallet-joined'
 
@@ -146,6 +150,8 @@ class PrivyProviderSafetyBoundary extends Component<
 }
 
 const LOOPBACK_PRIVY_INIT_WATCHDOG_MS = 3_000
+/** Base App WebViews often stall Privy `ready` on injected-provider races; unblock the shell. */
+const BASE_APP_PRIVY_INIT_WATCHDOG_MS = 5_000
 
 function PrivyStatusObserver(props: { onStatus: (status: PrivyClientStatus) => void }) {
   const { ready } = usePrivy()
@@ -156,20 +162,31 @@ function PrivyStatusObserver(props: { onStatus: (status: PrivyClientStatus) => v
   return null
 }
 
-/** Dev-only: Privy connector init can hang forever on loopback when EVM extensions race `window.ethereum`. */
-function useLoopbackPrivyInitWatchdog(active: boolean, onForceReady: () => void) {
+/**
+ * Unblock the route shell when Privy init hangs.
+ * - Loopback: extension races on `window.ethereum`.
+ * - Base App in-app browser: injected provider / Privy iframe races leave `ready` false.
+ */
+function usePrivyInitWatchdog(active: boolean, onForceReady: () => void) {
   useEffect(() => {
     if (!active || typeof window === 'undefined') return
-    if (!isLocalDevOrigin(window.location.origin)) return
 
+    const isLoopback = isLocalDevOrigin(window.location.origin)
+    const inBaseApp = isBaseAppInAppContext()
+    if (!isLoopback && !inBaseApp) return
+
+    const timeoutMs = isLoopback ? LOOPBACK_PRIVY_INIT_WATCHDOG_MS : BASE_APP_PRIVY_INIT_WATCHDOG_MS
     const id = window.setTimeout(() => {
       console.warn(
-        '[privy] Init still pending after 3s on local dev — unblocking route shell so /deploy/vault can render.\n' +
-          'If auth or signing fails next, retry in a private window with wallet extensions disabled,\n' +
-          'confirm your dev URL is allowlisted (localhost:5174 or WSL IP:5174), then hard-reload.',
+        isLoopback
+          ? '[privy] Init still pending after 3s on local dev — unblocking route shell so /deploy/vault can render.\n' +
+              'If auth or signing fails next, retry in a private window with wallet extensions disabled,\n' +
+              'confirm your dev URL is allowlisted (localhost:5174 or WSL IP:5174), then hard-reload.'
+          : '[privy] Init still pending after 5s in Base App — unblocking waitlist shell.\n' +
+              'Email OTP may still work; if auth fails, retry after a hard reload.',
       )
       onForceReady()
-    }, LOOPBACK_PRIVY_INIT_WATCHDOG_MS)
+    }, timeoutMs)
 
     return () => window.clearTimeout(id)
   }, [active, onForceReady])
@@ -210,13 +227,16 @@ export function PrivyClientProvider(props: {
   const [runtimeStatus, setRuntimeStatus] = useState<PrivyClientStatus>('loading')
   const [forcedReady, setForcedReady] = useState(false)
   const handleRuntimeStatus = useCallback((next: PrivyClientStatus) => {
-    setRuntimeStatus((prev) => (prev === next ? prev : next))
+    setRuntimeStatus((prev) => {
+      const latched = latchPrivyClientStatus(prev, next)
+      return latched === prev ? prev : latched
+    })
   }, [])
   const forcePrivyReady = useCallback(() => {
     setForcedReady(true)
     setRuntimeStatus('ready')
   }, [])
-  useLoopbackPrivyInitWatchdog(hasRuntimeConfig && runtimeStatus === 'loading' && !forcedReady, forcePrivyReady)
+  usePrivyInitWatchdog(hasRuntimeConfig && runtimeStatus === 'loading' && !forcedReady, forcePrivyReady)
   const ctx = useMemo<PrivyClientStatus>(
     () => (hasRuntimeConfig ? runtimeStatus : 'disabled'),
     [hasRuntimeConfig, runtimeStatus],

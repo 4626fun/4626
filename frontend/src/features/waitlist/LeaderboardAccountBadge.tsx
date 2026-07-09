@@ -10,8 +10,7 @@ import {
 
 const ZORA_LOGO_URL = '/brands/zora-token.svg'
 const BASE_APP_LOGO_URL = '/base/base-square-blue.svg'
-const COINBASE_WALLET_LOGO_URL =
-  'https://gist.githubusercontent.com/taycaldwell/2291907115c0bb5589bc346661435007/raw/cbw.svg'
+const COINBASE_WALLET_LOGO_URL = '/brands/coinbase-wallet.svg'
 
 type LeaderboardAccountBadgeProps = {
   showZoraBadge?: boolean

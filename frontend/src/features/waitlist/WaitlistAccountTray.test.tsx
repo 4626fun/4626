@@ -56,6 +56,21 @@ vi.mock('@/lib/waitlist/accountTrayPoints', () => ({
   isAccountTrayPointsAuthError: () => false,
 }))
 
+vi.mock('@/lib/privy/safeHooks', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/privy/safeHooks')>()
+  return {
+    ...actual,
+    useSafePrivy: () => ({ user: null, authenticated: false, ready: true }),
+  }
+})
+
+vi.mock('@/lib/privy/walletHooksContext', () => ({
+  usePrivyWalletsFromContext: () => [],
+  usePrivyWalletsSnapshot: () => ({ wallets: [], ready: false }),
+  usePrivyConnectWalletFromContext: () => undefined,
+  usePrivySetActiveWalletFromContext: () => undefined,
+}))
+
 import { WaitlistAccountTray, type WaitlistAccountTrayProps } from './WaitlistAccountTray'
 
 function renderTray(props: Partial<WaitlistAccountTrayProps> = {}) {
@@ -65,7 +80,6 @@ function renderTray(props: Partial<WaitlistAccountTrayProps> = {}) {
     accountMeLoading: false,
     joinedSessionAddress: '0x1111111111111111111111111111111111111111',
     externalEoaAddress: null,
-    appAccepted: true,
     getPrivyAccessToken: async () => null,
     onRequestConnectWallet: vi.fn(),
     onRequestDisconnectMainWallet: vi.fn(),
@@ -73,7 +87,7 @@ function renderTray(props: Partial<WaitlistAccountTrayProps> = {}) {
     onSignOut: vi.fn(),
     signOutBusy: false,
     signOutDisabled: false,
-    accountTabExtra: <div data-testid="account-tab-extra">linked accounts + wizard</div>,
+    identitiesPanel: <div data-testid="identities-panel">social identities + wizard</div>,
   }
   const merged = { ...defaults, ...props }
   function Wrapper({ children }: { children: ReactNode }) {
@@ -92,32 +106,24 @@ describe('WaitlistAccountTray', () => {
     expect(screen.queryByLabelText('Open account menu')).toBeNull()
   })
 
-  it('shows a closed corner trigger and opens the tray with the linked-accounts slot on click', () => {
+  it('shows a closed corner trigger and opens wallets/roles + identities sections', () => {
     renderTray()
 
     const trigger = screen.getByLabelText('Open account menu')
     expect(trigger).toBeTruthy()
-    expect(screen.queryByTestId('account-tab-extra')).toBeNull()
+    expect(screen.queryByTestId('identities-panel')).toBeNull()
 
     fireEvent.click(trigger)
 
-    expect(screen.getByTestId('account-tab-extra')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /^wallets$/i })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /^identities$/i })).toBeTruthy()
+    expect(screen.getByTestId('identities-panel')).toBeTruthy()
     expect(screen.getByTestId('post-join-shell-stub')).toBeTruthy()
-    expect(screen.getByRole('button', { name: /sign out/i })).toBeTruthy()
-  })
-
-  it('only shows "Enter app" once the waitlist application has been accepted', () => {
-    renderTray({ appAccepted: false })
-    fireEvent.click(screen.getByLabelText('Open account menu'))
-
     expect(screen.queryByRole('link', { name: /enter app/i })).toBeNull()
-  })
-
-  it('shows "Enter app" once accepted', () => {
-    renderTray({ appAccepted: true })
-    fireEvent.click(screen.getByLabelText('Open account menu'))
-
-    expect(screen.getByRole('link', { name: /enter app/i })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: /sign out/i }).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByRole('link', { name: /^help$/i })).toBeTruthy()
+    expect(screen.getByRole('link', { name: /^accounts$/i })).toBeTruthy()
+    expect(screen.getByRole('link', { name: /^settings$/i })).toBeTruthy()
   })
 
   it('auto-opens the tray once when a required setup step (wallet provisioning / owner-install signing) is pending', () => {
@@ -126,14 +132,17 @@ describe('WaitlistAccountTray', () => {
 
     // Tray content is already visible without a click — the required step
     // must not be hidden behind a closed-by-default tray.
-    expect(screen.getByTestId('account-tab-extra')).toBeTruthy()
+    expect(screen.getByTestId('identities-panel')).toBeTruthy()
   })
 
   it('disables sign out via the caller-provided aggregate busy flag', () => {
     renderTray({ signOutDisabled: true })
     fireEvent.click(screen.getByLabelText('Open account menu'))
 
-    const signOutButton = screen.getByRole('button', { name: /sign out/i }) as HTMLButtonElement
-    expect(signOutButton.disabled).toBe(true)
+    const signOutButtons = screen.getAllByRole('button', { name: /sign out/i }) as HTMLButtonElement[]
+    expect(signOutButtons.length).toBeGreaterThanOrEqual(1)
+    for (const button of signOutButtons) {
+      expect(button.disabled).toBe(true)
+    }
   })
 })

@@ -25,7 +25,7 @@ import { cn } from '@/lib/shared/utils'
 import { siteAssets } from '@/config/site'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
-import { getMarketingBaseUrl } from '@/lib/env/host'
+import { APP_ORIGIN, getMarketingBaseUrl } from '@/lib/env/host'
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import {
   establishWaitlistSessionAfterPrivyAuth,
@@ -38,16 +38,12 @@ import {
 import { shouldAutoSubmitOtpCode } from '@/features/waitlist/waitlistFlowState'
 import { WaitlistReturningWalletSignIn } from '@/features/waitlist/WaitlistReturningWalletSignIn'
 import { shouldShowWaitlistEmailSignup } from '@/features/waitlist/waitlistSignupVisibility'
-import { WaitlistTwitterLinkPanel, XLogo } from '@/features/waitlist/WaitlistTwitterLinkPanel'
+import { WaitlistTwitterLinkPanel } from '@/features/waitlist/WaitlistTwitterLinkPanel'
 import { WaitlistTwitterEngagementSteps } from '@/features/waitlist/WaitlistTwitterEngagementSteps'
 import { WaitlistWalletConnectPanel } from '@/features/waitlist/WaitlistWalletConnectPanel'
-import { WaitlistZoraConnectPanel, ZoraLogo } from '@/features/waitlist/WaitlistZoraConnectPanel'
+import { WaitlistZoraConnectPanel } from '@/features/waitlist/WaitlistZoraConnectPanel'
 import { WaitlistAccountTray } from '@/features/waitlist/WaitlistAccountTray'
-import {
-  WaitlistLinkedAccountsCard,
-  useWaitlistLinkedWalletRow,
-  type WaitlistLinkedAccountRow,
-} from '@/features/waitlist/WaitlistLinkedAccountsCard'
+import { WaitlistPrivyIdentitiesPanel } from '@/features/waitlist/WaitlistPrivyIdentitiesPanel'
 import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
 import {
   clearWaitlistOnboardingStepFlags,
@@ -61,23 +57,27 @@ import {
   writeWaitlistZoraSkipped,
 } from '@/features/waitlist/waitlistStorage'
 import { performZoraCrossAppAuth, isRecoverableCrossAppAuthError, isUserRejectedCrossAppAuthError } from '@/lib/privy/zoraCrossApp'
-import { findZoraCrossAppSubject } from '@/lib/privy/zoraCrossAppAccounts'
-import { findLinkedTwitterHandle, findLinkedTwitterSubject } from '@/lib/privy/linkedAccounts'
+import { findLinkedTwitterSubject } from '@/lib/privy/linkedAccounts'
 import { hasZoraReadOnlySignals, resolveZoraReadOnlySignals } from '@/lib/zora/zoraReadOnlyResolve'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { assertPrivySessionMarkerCookie, isLocalDevPrivySessionMarkerMode } from '@/lib/privy/loopbackSessionMarkerShim'
 import { appendLocalhostPrivyAuthNoteIfNeeded } from '@/lib/privy/localhostPrivyAuthNotice'
 import { useWaitlistZoraOAuthReturnRecovery } from '@/lib/privy/useWaitlistZoraOAuthReturnRecovery'
 import { WaitlistWelcomeGreeting } from '@/features/waitlist/WaitlistWelcomeGreeting'
-import { sanitizeWaitlistZoraHandle } from '@/features/waitlist/waitlistWelcomeIdentity'
 import {
   linkAndSyncPrivyProvider,
   syncAccountsProviderLink,
-  syncProviderUnlink,
   unlinkAndSyncPrivyProvider,
 } from '@/lib/privy/providerLink'
 import { usePrivyOAuthReturnBackendSync } from '@/lib/privy/usePrivyOAuthReturnBackendSync'
-import { useSafeCrossApp, useSafeLogin, useSafeLoginWithEmail, useSafePrivy, useSafePrivyAccessToken } from '@/lib/privy/safeHooks'
+import {
+  createLivePrivyClientView,
+  useSafeCrossApp,
+  useSafeLogin,
+  useSafeLoginWithEmail,
+  useSafePrivy,
+  useSafePrivyAccessToken,
+} from '@/lib/privy/safeHooks'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import { computeAcceptedFromAppAccessStatus } from '@/app/accessShared'
 import { useAccountMe } from '@/hooks/useAccountMe'
@@ -583,6 +583,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   const onClearWalletSession = props.onClearWalletSession ?? noop
   const walletSignInPending = props.walletSignInPending === true
   const privy = useSafePrivy()
+  const privyRef = useRef(privy)
   const { sendCode, loginWithCode } = useSafeLoginWithEmail()
   const { login } = useSafeLogin()
   const getPrivyAccessToken = useSafePrivyAccessToken()
@@ -590,6 +591,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   const loginRef = useRef(login)
 
   useEffect(() => {
+    privyRef.current = privy
     loginRef.current = login
   })
 
@@ -851,9 +853,14 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   // `loginWithCode`), bridge it into a 4626 session, bootstrap the waitlist row,
   // and confirm the HttpOnly session. Identical to the prior modal path — only
   // the trigger changed (inline OTP instead of a popup).
+  //
+  // Must use a live Privy view: `usePrivy()` returns a fresh object per render,
+  // and establishWaitlistSessionAfterPrivyAuth polls `.authenticated` while
+  // settling post-OTP / waiting for embedded-wallet create. A frozen snapshot
+  // from this callback's closure would miss those flips.
   const finishJoinAfterPrivyAuth = useCallback(async () => {
     const confirmedSessionAddress = await establishWaitlistSessionAfterPrivyAuth({
-      privy,
+      privy: createLivePrivyClientView(privyRef),
       missingTokenMessage:
         'Could not verify your email session. Please try again. If the issue persists, try an incognito/private window or temporarily disable browser wallet extensions.',
       ensureEmbeddedWallet,
@@ -861,7 +868,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     setLocalSessionAddress(confirmedSessionAddress)
     setServerSessionAddress(confirmedSessionAddress)
     void fetchWaitlistStats()
-  }, [privy, fetchWaitlistStats, ensureEmbeddedWallet])
+  }, [fetchWaitlistStats, ensureEmbeddedWallet])
 
   const handleSignInWithLinkedWallet = useCallback(() => {
     if (signupInFlightRef.current || walletSignInPending) return
@@ -1014,7 +1021,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   const [walletError, setWalletError] = useState<string | null>(null)
   const [zoraBusy, setZoraBusy] = useState(false)
   const [zoraError, setZoraError] = useState<string | null>(null)
-  const { loginWithCrossAppAccount, linkCrossAppAccount, unlinkCrossAppAccount } = useSafeCrossApp()
+  const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossApp()
 
   const twitterLinked = (accountMe?.linkedMethods?.twitter ?? []).length > 0
   const externalEoaLinked = (accountMe?.linkedMethods?.external_eoa ?? []).length > 0
@@ -1028,8 +1035,6 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     const joined = joinedSessionAddress?.trim().toLowerCase()
     return Boolean(wallet && joined && wallet === joined)
   }, [joinedSessionAddress, props.walletSessionAddress])
-
-  const walletLinkedRowBase = useWaitlistLinkedWalletRow(linkedEoaAddress, PROVIDER_POINTS.external_eoa ?? 0)
 
   useEffect(() => {
     if (!props.walletSessionAddress) return
@@ -1205,99 +1210,14 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     }
   }, [externalEoaLinked, getPrivyAccessToken, linkedEoaAddress, privy, refreshAccountMe, walletBusy])
 
-  // Zora is a Privy cross-app account, not a standard OAuth provider, so its
-  // unlink call is `unlinkCrossAppAccount({ subject })` (found from
-  // `privy.user.linkedAccounts`) instead of the `unlinkX()` pattern the other
-  // providers use.
-  const handleEditZora = useCallback(async () => {
-    if (zoraBusy || !zoraLinked) return
-    setZoraBusy(true)
-    setZoraError(null)
-    try {
-      const subject = findZoraCrossAppSubject(privy.user)
-      if (subject && typeof unlinkCrossAppAccount === 'function') {
-        // Same loopback marker-cookie requirement as handleEditTwitter/handleEditWallet —
-        // unlinkCrossAppAccount needs a live Privy access token, which on localhost
-        // requires asserting the marker cookie immediately before the SDK call.
-        assertPrivySessionMarkerCookie()
-        await unlinkCrossAppAccount({ subject })
-      }
-      await syncProviderUnlink({ provider: 'zora_cross_app', getAccessToken: getPrivyAccessToken })
-      setZoraSkipped(false)
-      writeWaitlistZoraSkipped(false)
-      refreshAccountMe()
-    } catch (unlinkError) {
-      setZoraError(unlinkError instanceof Error ? unlinkError.message : 'Could not disconnect Zora.')
-    } finally {
-      setZoraBusy(false)
-    }
-  }, [getPrivyAccessToken, privy.user, refreshAccountMe, unlinkCrossAppAccount, zoraBusy, zoraLinked])
-
   // First-time link errors (provider not yet linked, so there's no row to attach
-  // the message to) vs. edit/unlink errors (provider is linked — its row above
-  // owns the message instead, see `linkedAccountRows`).
+  // the message to) vs. edit/unlink errors (X row / wallet roles section).
+  // Zora/creator already surfaces under PRIMARY IDENTITY — no separate Identities row.
   const unlinkedProviderError =
     (!twitterLinked && twitterError) ||
     (!externalEoaLinked && walletError) ||
     (!zoraLinked && zoraError) ||
     null
-
-  const twitterHandle = useMemo(() => findLinkedTwitterHandle(privy.user), [privy.user])
-  const zoraHandleForRow = sanitizeWaitlistZoraHandle(accountMe?.accountSignals?.zoraHandle)
-
-  // Already-connected identities, shown together as one summary list instead
-  // of three separately-styled "linked" rows. All three support "Edit"
-  // (unlink + re-open the connect step).
-  const linkedAccountRows = useMemo<WaitlistLinkedAccountRow[]>(() => {
-    const rows: WaitlistLinkedAccountRow[] = []
-    if (twitterLinked) {
-      rows.push({
-        key: 'twitter',
-        icon: <XLogo className="size-[18px] text-white" />,
-        identity: twitterHandle ? `@${twitterHandle}` : 'X account',
-        points: PROVIDER_POINTS.twitter ?? 0,
-        onEdit: () => void handleEditTwitter(),
-        editBusy: twitterBusy,
-        error: twitterError,
-      })
-    }
-    if (externalEoaLinked) {
-      rows.push({
-        ...walletLinkedRowBase,
-        onEdit: () => void handleEditWallet(),
-        editBusy: walletBusy,
-        error: walletError,
-      })
-    }
-    if (zoraLinked) {
-      rows.push({
-        key: 'zora',
-        icon: <ZoraLogo className="size-[18px] rounded-full object-cover" />,
-        identity: zoraHandleForRow ? `@${zoraHandleForRow}` : 'Zora account',
-        points: PROVIDER_POINTS.zora_cross_app ?? 0,
-        onEdit: () => void handleEditZora(),
-        editBusy: zoraBusy,
-        error: zoraError,
-      })
-    }
-    return rows
-  }, [
-    externalEoaLinked,
-    handleEditTwitter,
-    handleEditWallet,
-    handleEditZora,
-    twitterBusy,
-    twitterError,
-    twitterHandle,
-    twitterLinked,
-    walletBusy,
-    walletError,
-    walletLinkedRowBase,
-    zoraBusy,
-    zoraError,
-    zoraHandleForRow,
-    zoraLinked,
-  ])
 
   const handleLinkZora = useCallback(async () => {
     if (zoraBusy || zoraLinked) return
@@ -1404,8 +1324,6 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   })
 
   const appAccepted = computeAcceptedFromAppAccessStatus(accountMe?.appAccessStatus ?? null)
-  const totalPoints = accountMe?.score?.points ?? 0
-  const showPointsBadge = Boolean(joinedSessionAddress) && !accountMeLoading && accountMe?.score != null
   const showEmailSignupForm = shouldShowWaitlistEmailSignup({
     joinedSessionAddress,
     walletSignInPending,
@@ -1681,8 +1599,8 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
         >
           {/* Persistent brand mark — shown across every step of the flow (signup, code) as
               a clickable escape hatch back to 4626.fun. Hidden once approved: the success
-              state below renders the same mark (glowing) as its own success indicator, so
-              keeping this one too would show the logo twice on one screen. */}
+              state below renders the same mark as its own indicator, so keeping this one
+              too would show the logo twice on one screen. */}
           {!(joinedSessionAddress && appAccepted) ? (
             <div className="flex justify-center">
               <a
@@ -1718,25 +1636,14 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
             <div className="text-center">
               <div className="flex flex-col items-center gap-3">
                 {appAccepted ? (
-                  // Keep approval state clean/professional: no repeating pulse loop.
-                  // Use a subtle static brand-blue ring + soft ambient shadow (matches
-                  // the rest of the app's brand color instead of a green "success" tint,
-                  // which read as an odd, off-brand accent here).
+                  // Same brand mark as the pre-join header — no ambient glow.
                   <motion.div
                     initial={reduceMotion ? false : { opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
                     className="relative flex items-center justify-center"
                   >
-                    <span
-                      aria-hidden="true"
-                      className="absolute inset-0 rounded-2xl"
-                      style={{
-                        boxShadow:
-                          '0 0 0 1px rgb(var(--brand-primary) / 0.3), 0 0 28px -10px rgb(var(--brand-primary) / 0.6)',
-                      }}
-                    />
-                    <span className="relative flex size-14 items-center justify-center overflow-hidden rounded-2xl border border-[rgb(var(--brand-primary)/0.25)] bg-black/20 shadow-[0_10px_24px_-12px_rgba(0,0,0,0.55)]">
+                    <span className="brand-mark-3d flex size-14 items-center justify-center overflow-hidden rounded-2xl">
                       <img
                         src={siteAssets.logo}
                         alt=""
@@ -1761,10 +1668,6 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                       {appAccepted ? "You're approved" : "You're on the list"}
                     </motion.h1>
                   </AnimatePresence>
-                  {/* Rendered below the headline (not as its own row above it) so the
-                      identity avatar doesn't stack as a third competing circular shape
-                      directly under the big checkmark. Points now live only in the
-                      "Your points" summary below — no need to repeat the total here. */}
                   <WaitlistWelcomeGreeting
                     accountMe={accountMe}
                     accountMeLoading={accountMeLoading}
@@ -1783,194 +1686,31 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                     </p>
                   )}
                 </div>
-                </div>
 
-                <WaitlistAccountTray
-                  accountMe={accountMe}
-                  accountMeLoading={accountMeLoading}
-                  joinedSessionAddress={joinedSessionAddress}
-                  externalEoaAddress={linkedEoaAddress}
-                  appAccepted={appAccepted}
-                  getPrivyAccessToken={getPrivyAccessToken}
-                  onRequestConnectWallet={() => void handleLinkWallet()}
-                  onRequestDisconnectMainWallet={() => void handleEditWallet()}
-                  disconnectingMainWallet={walletBusy}
-                  onSignOut={handleSignOut}
-                  signOutBusy={signOutBusy}
-                  signOutDisabled={isBusy || twitterBusy || walletBusy || zoraBusy}
-                  accountTabExtra={
-                    <>
-                      {/* Earn points — optional identity links, each worth waitlist points.
-                          Lives in the same BeamCard treatment as the email/code step above,
-                          so the whole flow reads as one consistent "card per stage" language
-                          instead of a loose stack of differently-styled pieces. */}
-                      <motion.div layout="position" transition={stepTransition} className="mt-5">
-                        <BeamCard className="p-5 sm:p-6">
-                          <WaitlistLinkedAccountsCard
-                      rows={linkedAccountRows}
-                      totalPoints={totalPoints}
-                      showTotal={showPointsBadge}
-                      progress={
-                        <AnimatePresence initial={false}>
-                          {linkingWizardInProgress ? (
-                            <motion.div
-                              key="linking-progress"
-                              variants={reminderVariants}
-                              initial="initial"
-                              animate="animate"
-                              exit="exit"
-                              transition={stepTransition}
-                              className="pt-2"
-                            >
-                              <WaitlistLinkingProgress steps={linkingSteps} compact />
-                            </motion.div>
-                          ) : null}
-                        </AnimatePresence>
-                      }
-                    />
-
-                    <AnimatePresence mode="wait" initial={false} custom={linkingDirection}>
-                    {activeStepKey === 'x-link' ? (
-                      <motion.div
-                        key="x-link"
-                        custom={linkingDirection}
-                        variants={stepVariants}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                        transition={stepTransition}
+                {appAccepted ? (
+                  <div className="w-full pt-2">
+                    <MagneticButton>
+                      <Button
+                        variant="primary"
+                        size="lg"
+                        className="btn-3d group/btn relative w-full overflow-hidden !rounded-full !min-h-[52px] !text-[15px] !font-bold !tracking-wide"
+                        asChild
                       >
-                        <WaitlistTwitterLinkPanel
-                          busy={twitterBusy}
-                          onConnect={() => {
-                            setTwitterError(null)
-                            void handleLinkTwitter()
-                          }}
-                          onSkip={handleSkipXPhase}
-                        />
-                      </motion.div>
-                    ) : activeStepKey === 'x-engagement' ? (
-                      <motion.div
-                        key="x-engagement"
-                        custom={linkingDirection}
-                        variants={stepVariants}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                        transition={stepTransition}
-                      >
-                        <WaitlistTwitterEngagementSteps
-                          getAccessToken={getPrivyAccessToken}
-                          onProgressVerified={handleEngagementProgressVerified}
-                          onSkip={handleSkipXPhase}
-                        />
-                      </motion.div>
-                    ) : activeStepKey === 'wallet' ? (
-                      <motion.div
-                        key="wallet"
-                        custom={linkingDirection}
-                        variants={stepVariants}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                        transition={stepTransition}
-                      >
-                        <WaitlistWalletConnectPanel
-                          busy={walletBusy}
-                          onConnect={() => {
-                            setWalletError(null)
-                            void handleLinkWallet()
-                          }}
-                          onSkip={handleSkipWallet}
-                        />
-                      </motion.div>
-                    ) : activeStepKey === 'zora' ? (
-                      <motion.div
-                        key="zora"
-                        custom={linkingDirection}
-                        variants={stepVariants}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                        transition={stepTransition}
-                      >
-                        <WaitlistZoraConnectPanel
-                          busy={zoraBusy}
-                          onConnect={() => {
-                            setZoraError(null)
-                            void handleLinkZora()
-                          }}
-                          onSkip={handleSkipZora}
-                        />
-                      </motion.div>
-                    ) : null}
-                  </AnimatePresence>
-
-                  {/* Skipped steps aren't dead ends — let the user go back and link later. */}
-                  <AnimatePresence initial={false}>
-                    {xSkippedWithoutLink ? (
-                      <motion.div
-                        key="reminder-x"
-                        variants={reminderVariants}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                        transition={stepTransition}
-                      >
-                        <SkippedStepReminder
-                          label="X"
-                          points={PROVIDER_POINTS.twitter ?? 0}
-                          onLinkNow={handleUndoSkipX}
-                        />
-                      </motion.div>
-                    ) : null}
-                    {showWalletSkippedReminder ? (
-                      <motion.div
-                        key="reminder-wallet"
-                        variants={reminderVariants}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                        transition={stepTransition}
-                      >
-                        <SkippedStepReminder
-                          label="Wallet"
-                          points={PROVIDER_POINTS.external_eoa ?? 0}
-                          onLinkNow={handleUndoSkipWallet}
-                        />
-                      </motion.div>
-                    ) : null}
-                    {showZoraSkippedReminder ? (
-                      <motion.div
-                        key="reminder-zora"
-                        variants={reminderVariants}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                        transition={stepTransition}
-                      >
-                        <SkippedStepReminder
-                          label="Zora"
-                          points={PROVIDER_POINTS.zora_cross_app ?? 0}
-                          onLinkNow={handleUndoSkipZora}
-                        />
-                      </motion.div>
-                    ) : null}
-                  </AnimatePresence>
-                        </BeamCard>
-                      </motion.div>
-
-                      {/* Once a provider is linked its row (above) owns the error message —
-                          only show this generic caption for first-time link failures, before
-                          the row (and its edit action) exist to attach the message to. */}
-                      {unlinkedProviderError ? (
-                        <p className="mt-4 text-center text-[11px] leading-relaxed text-rose-300/90">
-                          {unlinkedProviderError}
-                        </p>
-                      ) : null}
-                    </>
-                  }
-                />
+                        <a href={`${APP_ORIGIN}/swap?restorePrivy=1`}>
+                          <ButtonSheen />
+                          <span className="relative z-10 inline-flex items-center gap-2.5">
+                            Enter app
+                            <ArrowRight
+                              className="size-[18px] transition-transform duration-200 ease-out group-hover/btn:translate-x-0.5"
+                              aria-hidden="true"
+                            />
+                          </span>
+                        </a>
+                      </Button>
+                    </MagneticButton>
+                  </div>
+                ) : null}
+              </div>
             </div>
               </motion.div>
             ) : (
@@ -2227,6 +1967,188 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
           {joinedSessionAddress ? renderSocialProof(false) : null}
         </motion.div>
       </div>
+
+      {/* Mounted on the section (not inside framer-motion transforms) so
+          `position: fixed` pins to the viewport top-right like VaultNavBar. */}
+      {joinedSessionAddress ? (
+        <WaitlistAccountTray
+          accountMe={accountMe}
+          accountMeLoading={accountMeLoading}
+          joinedSessionAddress={joinedSessionAddress}
+          externalEoaAddress={linkedEoaAddress}
+          getPrivyAccessToken={getPrivyAccessToken}
+          onRequestConnectWallet={() => void handleLinkWallet()}
+          onRequestDisconnectMainWallet={() => void handleEditWallet()}
+          disconnectingMainWallet={walletBusy}
+          onSignOut={handleSignOut}
+          signOutBusy={signOutBusy}
+          signOutDisabled={isBusy || twitterBusy || walletBusy || zoraBusy}
+          identitiesPanel={
+            <>
+              <WaitlistPrivyIdentitiesPanel
+                accountMe={accountMe}
+                onEditTwitter={() => void handleEditTwitter()}
+                twitterEditBusy={twitterBusy}
+                twitterError={twitterError}
+              />
+
+              <AnimatePresence initial={false}>
+                {linkingWizardInProgress ? (
+                  <motion.div
+                    key="linking-progress"
+                    variants={reminderVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={stepTransition}
+                    className="pt-2"
+                  >
+                    <WaitlistLinkingProgress steps={linkingSteps} compact />
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+
+              <AnimatePresence mode="wait" initial={false} custom={linkingDirection}>
+                {activeStepKey === 'x-link' ? (
+                  <motion.div
+                    key="x-link"
+                    custom={linkingDirection}
+                    variants={stepVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={stepTransition}
+                    className="mt-3"
+                  >
+                    <WaitlistTwitterLinkPanel
+                      busy={twitterBusy}
+                      onConnect={() => {
+                        setTwitterError(null)
+                        void handleLinkTwitter()
+                      }}
+                      onSkip={handleSkipXPhase}
+                    />
+                  </motion.div>
+                ) : activeStepKey === 'x-engagement' ? (
+                  <motion.div
+                    key="x-engagement"
+                    custom={linkingDirection}
+                    variants={stepVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={stepTransition}
+                    className="mt-3"
+                  >
+                    <WaitlistTwitterEngagementSteps
+                      getAccessToken={getPrivyAccessToken}
+                      onProgressVerified={handleEngagementProgressVerified}
+                      onSkip={handleSkipXPhase}
+                    />
+                  </motion.div>
+                ) : activeStepKey === 'wallet' ? (
+                  <motion.div
+                    key="wallet"
+                    custom={linkingDirection}
+                    variants={stepVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={stepTransition}
+                    className="mt-3"
+                  >
+                    <WaitlistWalletConnectPanel
+                      busy={walletBusy}
+                      onConnect={() => {
+                        setWalletError(null)
+                        void handleLinkWallet()
+                      }}
+                      onSkip={handleSkipWallet}
+                    />
+                  </motion.div>
+                ) : activeStepKey === 'zora' ? (
+                  <motion.div
+                    key="zora"
+                    custom={linkingDirection}
+                    variants={stepVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={stepTransition}
+                    className="mt-3"
+                  >
+                    <WaitlistZoraConnectPanel
+                      busy={zoraBusy}
+                      onConnect={() => {
+                        setZoraError(null)
+                        void handleLinkZora()
+                      }}
+                      onSkip={handleSkipZora}
+                    />
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+
+              <AnimatePresence initial={false}>
+                {xSkippedWithoutLink ? (
+                  <motion.div
+                    key="reminder-x"
+                    variants={reminderVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={stepTransition}
+                  >
+                    <SkippedStepReminder
+                      label="X"
+                      points={PROVIDER_POINTS.twitter ?? 0}
+                      onLinkNow={handleUndoSkipX}
+                    />
+                  </motion.div>
+                ) : null}
+                {showWalletSkippedReminder ? (
+                  <motion.div
+                    key="reminder-wallet"
+                    variants={reminderVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={stepTransition}
+                  >
+                    <SkippedStepReminder
+                      label="Wallet"
+                      points={PROVIDER_POINTS.external_eoa ?? 0}
+                      onLinkNow={handleUndoSkipWallet}
+                    />
+                  </motion.div>
+                ) : null}
+                {showZoraSkippedReminder ? (
+                  <motion.div
+                    key="reminder-zora"
+                    variants={reminderVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={stepTransition}
+                  >
+                    <SkippedStepReminder
+                      label="Zora"
+                      points={PROVIDER_POINTS.zora_cross_app ?? 0}
+                      onLinkNow={handleUndoSkipZora}
+                    />
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+
+              {unlinkedProviderError ? (
+                <p className="mt-3 text-center text-[11px] leading-relaxed text-rose-300/90">
+                  {unlinkedProviderError}
+                </p>
+              ) : null}
+            </>
+          }
+        />
+      ) : null}
     </section>
   )
 }
