@@ -23,7 +23,8 @@ import "@4626/shared/interfaces/strategies/IStrategyValuation.sol";
 //     https://docs.euler.finance/security/attack-vectors/donation-attacks/
 //
 // Cases pinned by this test:
-//   1. uncapped (cap == 0): vault recognises full reported assets.
+//   1. intentionally uncapped (cap == type(uint256).max): full reported assets.
+//   1b. unset (cap == 0, M-02): only strategyDebt is trusted (no free profit).
 //   2. cap below reported: clamp applies; totalAssets() cannot exceed
 //      idle + cap, even if the strategy reports a much larger number.
 //   3. cap equal to reported: clamp is a no-op.
@@ -123,14 +124,29 @@ contract MaxAssetsCapTest is Test {
         vault.forceDeployToStrategies();
     }
 
-    /// @notice 1. uncapped (cap == 0): full reported assets are recognised.
+    /// @notice 1. intentionally uncapped (max): full reported assets are recognised.
     function test_uncapped_recognisesFullReportedAssets() public {
+        vault.setStrategyMaxAssets(address(strat), type(uint256).max);
         // Strategy lies that it doubled its assets.
         uint256 deployed = strat.reported();
         strat.setReported(deployed * 2);
 
         uint256 idle = vault.coinBalance();
-        assertEq(vault.totalAssets(), idle + deployed * 2, "uncapped should accept inflated report");
+        assertEq(vault.totalAssets(), idle + deployed * 2, "max cap should accept full report");
+    }
+
+    /// @notice 1b. M-02: unset cap (0) only trusts strategyDebt, not free misreported profit.
+    function test_unsetCap_clampsToDebtOnly() public {
+        uint256 debt = vault.strategyDebt(address(strat));
+        assertGt(debt, 0);
+        // Ensure cap is unset.
+        vault.setStrategyMaxAssets(address(strat), 0);
+
+        uint256 deployed = strat.reported();
+        strat.setReported(deployed * 10);
+
+        uint256 idle = vault.coinBalance();
+        assertEq(vault.totalAssets(), idle + debt, "unset cap must not credit free misreport profit");
     }
 
     /// @notice 2. cap below reported: totalAssets() is clamped to idle + cap.

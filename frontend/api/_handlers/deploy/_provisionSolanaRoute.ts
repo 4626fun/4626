@@ -32,6 +32,10 @@ import {
   parseMintPubkeyFromWrapOutput,
   solanaPubkeyToBytes32Hex,
 } from '../../../server/_lib/onchain/solanaBridgePubkey.js'
+import {
+  BASE_SOLANA_BRIDGE_SCALARS_ABI,
+  resolveBaseSolanaBridge,
+} from '../../../server/_lib/onchain/resolveBaseSolanaBridge.js'
 
 type ProvisionRouteRequest = {
   bridgeToken?: string
@@ -50,20 +54,6 @@ type ProvisionRouteResponse = {
   tokenSymbol?: string
   routeScalar: string
 }
-
-const BASE_SOLANA_BRIDGE = '0x3eff766c76a1be2ce1acf2b69c78bcae257d5188' as Address
-const BASE_SOLANA_BRIDGE_ABI = [
-  {
-    type: 'function',
-    name: 'scalars',
-    stateMutability: 'view',
-    inputs: [
-      { name: 'localToken', type: 'address' },
-      { name: 'remoteToken', type: 'bytes32' },
-    ],
-    outputs: [{ type: 'uint256' }],
-  },
-] as const
 
 function readProvisionerSecret(): string {
   return String(
@@ -219,12 +209,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const mintBytes32 = solanaPubkeyToBytes32Hex(mintPubkey)
 
+    const { address: baseSolanaBridge } = await resolveBaseSolanaBridge({ publicClient })
+
     let scalar = 0n
     for (let i = 0; i < 24; i += 1) {
       scalar = await publicClient
         .readContract({
-          address: BASE_SOLANA_BRIDGE,
-          abi: BASE_SOLANA_BRIDGE_ABI,
+          address: baseSolanaBridge,
+          abi: BASE_SOLANA_BRIDGE_SCALARS_ABI,
           functionName: 'scalars',
           args: [bridgeToken, mintBytes32],
         })

@@ -111,22 +111,35 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
     }
 
     function test_resetPhase1State_reverts_whenPendingAuctionExists() public {
-        (,,, bytes32 baseSalt) = _seedPhase1State();
+        // Non-finalized so we hit the auction check rather than Phase1AlreadyFinalized.
+        bytes32 baseSalt = _seedPhase1StateWithFinalized(false);
         _seedPendingAuctionAmount(baseSalt, 1 ether);
 
         vm.prank(protocolTreasury);
         vm.expectRevert(DeploymentBatcher.AuctionAlreadyPending.selector);
-        batcher.resetPhase1State(makeAddr("phase1CreatorToken"), makeAddr("phase1Owner"), "v1");
+        batcher.resetPhase1State(
+            makeAddr("phase1CreatorTokenNonFinalized"), makeAddr("phase1OwnerNonFinalized"), "v1"
+        );
     }
 
     function test_resetPhase1State_succeeds_withMatchedTupleContext() public {
-        (,,, bytes32 baseSalt) = _seedPhase1State();
+        // M-15: reset is only for non-finalized stuck Phase-1.
+        bytes32 baseSalt = _seedPhase1StateWithFinalized(false);
         vm.prank(protocolTreasury);
-        batcher.resetPhase1State(makeAddr("phase1CreatorToken"), makeAddr("phase1Owner"), "v1");
+        batcher.resetPhase1State(
+            makeAddr("phase1CreatorTokenNonFinalized"), makeAddr("phase1OwnerNonFinalized"), "v1"
+        );
 
         (address oftBootstrapRegistry, address clearedVault,,,,,,,,) = batcher.phase1SplitStates(baseSalt);
         assertEq(oftBootstrapRegistry, address(0), "phase1 oft bootstrap not cleared");
         assertEq(clearedVault, address(0), "phase1 vault not cleared");
+    }
+
+    function test_resetPhase1State_reverts_whenFinalized() public {
+        _seedPhase1State(); // finalized = true
+        vm.prank(protocolTreasury);
+        vm.expectRevert(DeploymentBatcher.Phase1AlreadyFinalized.selector);
+        batcher.resetPhase1State(makeAddr("phase1CreatorToken"), makeAddr("phase1Owner"), "v1");
     }
 
     // P2 coverage from x-ray/review-todo.md: targeted test for deploy phase retries

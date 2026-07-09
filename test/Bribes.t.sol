@@ -446,6 +446,8 @@ contract BribesTest is Test {
         vm.warp(voting.genesisEpochStart() + 5 * WEEK + 1);
         assertEq(voting.currentEpoch(), 5);
 
+        // M-13: leftover rollover is owner-only (factory owns the depot).
+        vm.prank(address(factory));
         uint256 rolled = depot.rolloverExpiredEpoch(0, address(bribeToken));
         assertEq(rolled, amount);
         assertTrue(depot.isClosed(0, address(bribeToken)));
@@ -490,6 +492,7 @@ contract BribesTest is Test {
         vm.warp(voting.genesisEpochStart() + 5 * WEEK + 1);
         assertEq(voting.currentEpoch(), 5);
 
+        vm.prank(address(factory));
         depot.rolloverExpiredEpoch(0, address(bribeToken));
 
         vm.prank(alice);

@@ -49,6 +49,8 @@ contract CreatorShareOFTBurnAllowanceTest is Test {
 
         vm.startPrank(owner);
         shareOFT.setVault(vaultAddr);
+        // H-06: owner is not a free minter — mint via vault or explicit minter role.
+        shareOFT.setMinter(owner, true);
         shareOFT.mint(holder, 1_000 ether);
         vm.stopPrank();
     }

@@ -32,6 +32,8 @@ pub struct WinnerNotified {
     pub winner: Pubkey,
     pub shares_paid: u64,
     pub timestamp: i64,
+    /// M2-12 — Base-side win identity bound to this record.
+    pub win_id: [u8; 32],
 }
 
 /// Emitted when the keeper authority is rotated.

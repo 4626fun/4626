@@ -13,6 +13,7 @@ import { executeSolanaPriceMonitor } from './actions/keepr-solana-price-monitor.
 import { executeSolanaGraduation } from './actions/keepr-solana-graduation.action.js'
 import { executeSolanaSyncMapping } from './actions/keepr-solana-sync-mapping.action.js'
 import { executeSolanaSyncRelayConfig } from './actions/keepr-solana-sync-relay-config.action.js'
+import { withActionLease } from './utils/actionLease.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 loadKeeperEnv()
@@ -116,6 +117,31 @@ function actionEnabled(action: SolanaOrchestratorAction): boolean {
   return globalExecute
 }
 
+async function runSolanaOrchestratorActionBody(params: {
+  action: SolanaOrchestratorAction
+  payload?: Record<string, unknown>
+}): Promise<unknown> {
+  switch (params.action) {
+    case 'relay_entries':
+      return executeSolanaRelayEntries()
+    case 'settle_fees':
+      return executeSolanaFeeSettlement()
+    case 'winner_relay':
+      return executeSolanaWinnerRelay()
+    case 'price_monitor':
+      return executeSolanaPriceMonitor()
+    case 'graduation':
+      return executeSolanaGraduation()
+    case 'sync_mapping':
+      return executeSolanaSyncMapping(params.payload ?? {})
+    case 'sync_relay_config':
+      return executeSolanaSyncRelayConfig(params.payload ?? {})
+    default:
+      params.action satisfies never
+      return undefined
+  }
+}
+
 export async function executeSolanaOrchestratorAction(params: {
   workflow: string
   action: SolanaOrchestratorAction
@@ -126,31 +152,29 @@ export async function executeSolanaOrchestratorAction(params: {
     throw new Error(`action_disabled:${params.action}`)
   }
 
-  let result: unknown
-  switch (params.action) {
-    case 'relay_entries':
-      result = await executeSolanaRelayEntries()
-      break
-    case 'settle_fees':
-      result = await executeSolanaFeeSettlement()
-      break
-    case 'winner_relay':
-      result = await executeSolanaWinnerRelay()
-      break
-    case 'price_monitor':
-      result = await executeSolanaPriceMonitor()
-      break
-    case 'graduation':
-      result = await executeSolanaGraduation()
-      break
-    case 'sync_mapping':
-      result = await executeSolanaSyncMapping(params.payload ?? {})
-      break
-    case 'sync_relay_config':
-      result = await executeSolanaSyncRelayConfig(params.payload ?? {})
-      break
-    default:
-      params.action satisfies never
+  // M2-09: exclusive lease so Vultr local cron + Vercel sidecar cannot double-exec.
+  const leased = await withActionLease({
+    action: params.action,
+    holder: `${params.workflow}:${params.checkpointKey}`,
+    run: async () =>
+      runSolanaOrchestratorActionBody({
+        action: params.action,
+        payload: params.payload,
+      }),
+  })
+
+  if (!leased.ran) {
+    return {
+      ok: true,
+      workflow: params.workflow,
+      action: params.action,
+      checkpointKey: params.checkpointKey,
+      result: {
+        skipped: true,
+        reason: 'action_lease_held',
+        note: 'Another trigger plane holds the action lease (M2-09 single-plane / dedup)',
+      },
+    }
   }
 
   return {
@@ -158,7 +182,7 @@ export async function executeSolanaOrchestratorAction(params: {
     workflow: params.workflow,
     action: params.action,
     checkpointKey: params.checkpointKey,
-    result,
+    result: leased.result,
   }
 }
 

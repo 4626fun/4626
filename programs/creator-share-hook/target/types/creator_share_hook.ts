@@ -2,7 +2,7 @@
  * Program IDL in camelCase format in order to be used in JS/TS.
  *
  * Note that this is only a type helper and is not the actual IDL. The original
- * IDL can be found at `programs/creator-share-hook/target/idl/creator_share_hook.json`.
+ * IDL can be found at `target/idl/creator_share_hook.json`.
  */
 export type CreatorShareHook = {
   "address": "EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU",
@@ -83,161 +83,6 @@ export type CreatorShareHook = {
           "type": "pubkey"
         }
       ]
-    },
-    {
-      "name": "relayEntries",
-      "docs": [
-        "Keeper-only: read and clear PendingEntries for relay to Base.",
-        "Returns entries to the keeper for batch relay via SolanaBridgeAdapter."
-      ],
-      "discriminator": [
-        105,
-        69,
-        123,
-        16,
-        122,
-        215,
-        121,
-        77
-      ],
-      "accounts": [
-        {
-          "name": "keeper",
-          "docs": [
-            "The keeper authority (must match `creator_config.keeper_authority`)."
-          ],
-          "signer": true
-        },
-        {
-          "name": "creatorConfig",
-          "docs": [
-            "CreatorConfig PDA — used to verify keeper authority."
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
-                  111,
-                  114,
-                  95,
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "creatorMint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "creatorMint",
-          "docs": [
-            "The Token-2022 mint (used for PDA derivation)."
-          ]
-        },
-        {
-          "name": "pendingEntries",
-          "docs": [
-            "PendingEntries PDA — zero-copy, mutable to record and clear relayed entries."
-          ],
-          "writable": true
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "settleFees",
-      "docs": [
-        "Keeper-only: harvest withheld fees via Token-2022 CPI.",
-        "Fees are collected to a designated account for bridging to Base."
-      ],
-      "discriminator": [
-        64,
-        201,
-        33,
-        26,
-        252,
-        245,
-        24,
-        79
-      ],
-      "accounts": [
-        {
-          "name": "keeper",
-          "docs": [
-            "The keeper authority (must match `creator_config.keeper_authority`)."
-          ],
-          "signer": true
-        },
-        {
-          "name": "creatorConfig",
-          "docs": [
-            "CreatorConfig PDA — used to verify keeper authority."
-          ],
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  114,
-                  101,
-                  97,
-                  116,
-                  111,
-                  114,
-                  95,
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "mint"
-              }
-            ]
-          }
-        },
-        {
-          "name": "mint",
-          "docs": [
-            "The Token-2022 mint with TransferFeeConfig extension."
-          ],
-          "writable": true
-        },
-        {
-          "name": "feeVault",
-          "docs": [
-            "The destination token account to receive harvested fees.",
-            "Typically owned by the keeper or a fee collection wallet."
-          ],
-          "writable": true
-        },
-        {
-          "name": "tokenProgram",
-          "docs": [
-            "Token-2022 program."
-          ],
-          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
-        }
-      ],
-      "args": []
     },
     {
       "name": "initializeCreator",
@@ -536,7 +381,9 @@ export type CreatorShareHook = {
       "name": "recordWinner",
       "docs": [
         "Keeper-only: record a lottery winner on Solana.",
-        "Called by Keepr after a win is detected on Base."
+        "Called by Keepr after a win is detected on Base.",
+        "",
+        "M2-12: `win_id` is a non-zero Base-side digest; each id can be recorded once."
       ],
       "discriminator": [
         226,
@@ -547,6 +394,159 @@ export type CreatorShareHook = {
         3,
         14,
         171
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "docs": [
+            "The keeper authority (must match `creator_config.keeper_authority`).",
+            "Pays rent for the one-shot win_id PDA."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "creatorConfig",
+          "docs": [
+            "CreatorConfig PDA — used to verify keeper authority."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creatorMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creatorMint",
+          "docs": [
+            "The Token-2022 mint (used for PDA derivation)."
+          ]
+        },
+        {
+          "name": "winnerRecord",
+          "docs": [
+            "WinnerRecord PDA — mutable to update with latest winner (display)."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  110,
+                  110,
+                  101,
+                  114,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creatorMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "winIdRecord",
+          "docs": [
+            "M2-12 — one-shot PDA keyed by win_id. Init fails if the win was already recorded."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  110,
+                  95,
+                  105,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creatorMint"
+              },
+              {
+                "kind": "arg",
+                "path": "winId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "winner",
+          "type": "pubkey"
+        },
+        {
+          "name": "sharesPaid",
+          "type": "u64"
+        },
+        {
+          "name": "winId",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "relayEntries",
+      "docs": [
+        "Keeper-only: emit and clear PendingEntries for relay to Base.",
+        "Returns entries to the keeper for batch relay via SolanaBridgeAdapter."
+      ],
+      "discriminator": [
+        99,
+        52,
+        182,
+        187,
+        107,
+        100,
+        5,
+        39
       ],
       "accounts": [
         {
@@ -596,9 +596,9 @@ export type CreatorShareHook = {
           ]
         },
         {
-          "name": "winnerRecord",
+          "name": "pendingEntries",
           "docs": [
-            "WinnerRecord PDA — mutable to update with new winner."
+            "PendingEntries PDA — zero-copy, mutable to emit + clear entries."
           ],
           "writable": true,
           "pda": {
@@ -606,19 +606,21 @@ export type CreatorShareHook = {
               {
                 "kind": "const",
                 "value": [
-                  119,
+                  112,
+                  101,
+                  110,
+                  100,
                   105,
                   110,
-                  110,
-                  101,
-                  114,
+                  103,
                   95,
-                  114,
                   101,
-                  99,
-                  111,
+                  110,
+                  116,
                   114,
-                  100
+                  105,
+                  101,
+                  115
                 ]
               },
               {
@@ -629,16 +631,7 @@ export type CreatorShareHook = {
           }
         }
       ],
-      "args": [
-        {
-          "name": "winner",
-          "type": "pubkey"
-        },
-        {
-          "name": "sharesPaid",
-          "type": "u64"
-        }
-      ]
+      "args": []
     },
     {
       "name": "removeAmmProgram",
@@ -783,6 +776,88 @@ export type CreatorShareHook = {
       ]
     },
     {
+      "name": "settleFees",
+      "docs": [
+        "Keeper-only: settle withheld fees via Token-2022 CPI.",
+        "Fees are collected to a designated account for bridging to Base."
+      ],
+      "discriminator": [
+        60,
+        221,
+        130,
+        229,
+        183,
+        234,
+        6,
+        159
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "docs": [
+            "The keeper authority (must match `creator_config.keeper_authority`)."
+          ],
+          "signer": true
+        },
+        {
+          "name": "creatorConfig",
+          "docs": [
+            "CreatorConfig PDA — used to verify keeper authority + threshold."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "The Token-2022 mint with TransferFeeConfig extension."
+          ],
+          "writable": true
+        },
+        {
+          "name": "feeVault",
+          "docs": [
+            "The destination token account to receive harvested fees.",
+            "Typically owned by the keeper or a fee collection wallet."
+          ],
+          "writable": true
+        },
+        {
+          "name": "tokenProgram",
+          "docs": [
+            "Token-2022 program."
+          ],
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "transferHook",
       "docs": [
         "Transfer Hook execute — named with Anchor discriminator.",
@@ -899,7 +974,35 @@ export type CreatorShareHook = {
           "docs": [
             "PendingEntries PDA — zero-copy, writable to record buy entries."
           ],
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  101,
+                  110,
+                  100,
+                  105,
+                  110,
+                  103,
+                  95,
+                  101,
+                  110,
+                  116,
+                  114,
+                  105,
+                  101,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -912,7 +1015,7 @@ export type CreatorShareHook = {
     {
       "name": "updateConfig",
       "docs": [
-        "Update CreatorConfig parameters (fee_bps, settlement_threshold, etc.)."
+        "Update CreatorConfig parameters (fee_bps, fee settlement threshold, etc.)."
       ],
       "discriminator": [
         29,
@@ -1013,6 +1116,19 @@ export type CreatorShareHook = {
       ]
     },
     {
+      "name": "winIdRecord",
+      "discriminator": [
+        160,
+        33,
+        194,
+        65,
+        206,
+        48,
+        33,
+        86
+      ]
+    },
+    {
       "name": "winnerRecord",
       "discriminator": [
         248,
@@ -1030,14 +1146,14 @@ export type CreatorShareHook = {
     {
       "name": "entriesRelayed",
       "discriminator": [
-        15,
-        188,
-        213,
-        167,
+        221,
         201,
-        74,
-        123,
-        80
+        247,
+        244,
+        210,
+        147,
+        97,
+        159
       ]
     },
     {
@@ -1056,14 +1172,14 @@ export type CreatorShareHook = {
     {
       "name": "feesSettled",
       "discriminator": [
-        236,
-        120,
-        206,
-        154,
-        209,
-        177,
-        19,
-        1
+        67,
+        117,
+        237,
+        13,
+        182,
+        185,
+        211,
+        44
       ]
     },
     {
@@ -1161,6 +1277,46 @@ export type CreatorShareHook = {
       "code": 6010,
       "name": "metaListAlreadyInitialized",
       "msg": "Extra account meta list already initialized"
+    },
+    {
+      "code": 6011,
+      "name": "invalidTokenAccount",
+      "msg": "Token account could not be unpacked as a Token-2022 account"
+    },
+    {
+      "code": 6012,
+      "name": "mintMismatch",
+      "msg": "Token account mint does not match the hooked mint"
+    },
+    {
+      "code": 6013,
+      "name": "transferNotInProgress",
+      "msg": "No Token-2022 transfer in progress — hook invoked outside a real transfer"
+    },
+    {
+      "code": 6014,
+      "name": "invalidWinId",
+      "msg": "Invalid win_id — zero win_id is not allowed"
+    },
+    {
+      "code": 6015,
+      "name": "duplicateWinId",
+      "msg": "Duplicate win_id — this Base win was already recorded"
+    },
+    {
+      "code": 6016,
+      "name": "belowSettlementThreshold",
+      "msg": "Withheld fees below settlement_threshold"
+    },
+    {
+      "code": 6017,
+      "name": "unauthorizedWithdrawAuthority",
+      "msg": "Keeper is not the TransferFeeConfig withdraw_withheld_authority"
+    },
+    {
+      "code": 6018,
+      "name": "missingTransferFeeConfig",
+      "msg": "Mint is missing TransferFeeConfig extension"
     }
   ],
   "types": [
@@ -1234,7 +1390,7 @@ export type CreatorShareHook = {
           {
             "name": "settlementThreshold",
             "docs": [
-              "Minimum fee amount (in token smallest units) before `settle_fees`",
+              "Minimum fee amount (in token smallest units) before fee settlement",
               "will execute. Set to 0 to settle on every call."
             ],
             "type": "u64"
@@ -1397,7 +1553,7 @@ export type CreatorShareHook = {
           {
             "name": "settlementThreshold",
             "docs": [
-              "Minimum withheld fee amount before settle_fees will execute."
+              "Minimum withheld fee amount before fee settlement will execute."
             ],
             "type": "u64"
           },
@@ -1524,7 +1680,7 @@ export type CreatorShareHook = {
         "12KB buffer on the SBF stack. The runtime memory-maps the account data",
         "directly, keeping stack usage minimal.",
         "",
-        "The keeper relays this buffer periodically and delivers entries to Base.",
+        "The keeper relays this buffer periodically and forwards entries to Base.",
         "Overflow policy: drop-oldest (head advances, oldest overwritten)."
       ],
       "serialization": "bytemuck",
@@ -1646,7 +1802,7 @@ export type CreatorShareHook = {
           {
             "name": "settlementThreshold",
             "docs": [
-              "New settlement_threshold (None = keep current)."
+              "New fee settlement threshold (None = keep current)."
             ],
             "type": {
               "option": "u64"
@@ -1660,6 +1816,66 @@ export type CreatorShareHook = {
             "type": {
               "option": "bool"
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "winIdRecord",
+      "docs": [
+        "Replay-protection PDA for a single Base lottery win (M2-12).",
+        "",
+        "Seeds: `[WIN_ID_SEED, creator_mint.key(), win_id]`",
+        "",
+        "Created once per unique `win_id`. A second `record_winner` with the same",
+        "`win_id` fails account init (`already in use`) / explicit `DuplicateWinId`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creatorMint",
+            "docs": [
+              "Creator mint this win belongs to."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "winId",
+            "docs": [
+              "Opaque Base-side win identity (event digest / block:log hash)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "winner",
+            "docs": [
+              "Winner Solana pubkey recorded for this win."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "sharesPaid",
+            "docs": [
+              "Shares paid (Base units)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "docs": [
+              "Unix timestamp when recorded."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }
@@ -1687,6 +1903,18 @@ export type CreatorShareHook = {
           {
             "name": "timestamp",
             "type": "i64"
+          },
+          {
+            "name": "winId",
+            "docs": [
+              "M2-12 — Base-side win identity bound to this record."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           }
         ]
       }

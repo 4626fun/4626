@@ -1,6 +1,9 @@
 import { decodeFunctionData, getAddress, isAddress, type Address, type Hex } from 'viem'
 
+import { verifyLotteryProductionReadiness } from '../lottery/lotteryProductionReadiness.js'
+import { getApiContracts } from '../onchain/contracts.js'
 import { verifyPayoutRouterHarvestReadiness } from '../onchain/payoutRouterHarvestReadiness.js'
+import { verifyPayoutRouterProductionReadiness } from '../onchain/payoutRouterProductionReadiness.js'
 
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
 
@@ -140,7 +143,10 @@ type MinimalPublicClient = {
     address: Address
     abi: readonly unknown[]
     functionName: string
+    args?: readonly unknown[]
   }): Promise<unknown>
+  getBytecode?(params: { address: Address }): Promise<Hex | undefined>
+  getStorageAt?(params: { address: Address; slot: Hex }): Promise<Hex>
 }
 
 type VerifyPhase2InvariantsParams = {
@@ -149,6 +155,14 @@ type VerifyPhase2InvariantsParams = {
   payload: Record<string, any>
   defaultPayoutRecipientMode?: 'gauge' | 'payout_router'
   defaultPayoutRecipient?: Address | null
+  /**
+   * M2-03 — run H-07 / M-15 production-readiness gates (default true).
+   * Critical violations become phase-2 invariant failures.
+   */
+  enforceProductionReadiness?: boolean
+  lotteryManager?: Address | null
+  approvedPayoutRouterOwners?: Address[]
+  requiredHubShareOfts?: Address[]
 }
 
 export type VerifyPhase2InvariantsResult = {
@@ -356,6 +370,68 @@ export async function verifyDeployPhase2Invariants(
         issue.severity === 'critical' ? 'required' : 'recommended',
         issue.severity,
       )
+    }
+  }
+
+  // M2-03: production-readiness (H-07 owner guard, M-15 boost timelock / H-06 hub).
+  // Critical only — warnings (e.g. unverified contract owner) stay non-blocking.
+  const enforceProductionReadiness = params.enforceProductionReadiness !== false
+  if (enforceProductionReadiness) {
+    if (mode === 'payout_router' && expectedPayoutRecipient && typeof params.publicClient.getBytecode === 'function') {
+      let approvedOwners = params.approvedPayoutRouterOwners
+      if (!approvedOwners || approvedOwners.length === 0) {
+        try {
+          const treasury = normalizeAddress(getApiContracts().protocolTreasury)
+          approvedOwners = treasury ? [treasury] : []
+        } catch {
+          approvedOwners = []
+        }
+      }
+      const prod = await verifyPayoutRouterProductionReadiness({
+        publicClient: params.publicClient as Parameters<
+          typeof verifyPayoutRouterProductionReadiness
+        >[0]['publicClient'],
+        payoutRouter: expectedPayoutRecipient,
+        approvedOwners,
+      })
+      checksRun += prod.checksRun
+      for (const issue of prod.violations) {
+        if (issue.severity !== 'critical') continue
+        recordViolation(issue.code, issue.message, issue.expected as string | number | null | undefined, issue.actual as string | number | null | undefined)
+      }
+    }
+
+    const lotteryManager =
+      normalizeAddress(params.lotteryManager) ??
+      normalizeAddress(payload?.lotteryManager) ??
+      (() => {
+        try {
+          return normalizeAddress(getApiContracts().lotteryManager)
+        } catch {
+          return null
+        }
+      })()
+
+    if (lotteryManager && typeof params.publicClient.getStorageAt === 'function') {
+      const hubOfts = (params.requiredHubShareOfts ??
+        (Array.isArray(payload?.requiredHubShareOfts) ? payload.requiredHubShareOfts : [])
+      )
+        .map((a) => normalizeAddress(a))
+        .filter((a): a is Address => Boolean(a))
+
+      const lottery = await verifyLotteryProductionReadiness({
+        publicClient: params.publicClient as Parameters<
+          typeof verifyLotteryProductionReadiness
+        >[0]['publicClient'],
+        lotteryManager,
+        requiredHubShareOfts: hubOfts,
+        requireBoostTimelockArmed: true,
+      })
+      checksRun += lottery.checksRun
+      for (const issue of lottery.violations) {
+        if (issue.severity !== 'critical') continue
+        recordViolation(issue.code, issue.message, issue.expected as string | number | null | undefined, issue.actual as string | number | null | undefined)
+      }
     }
   }
 

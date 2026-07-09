@@ -46,18 +46,18 @@ This audit is read-only; no code was changed at audit time. All statuses below w
 |----|-------|--------|--------------|
 | M2-01 | Sweep mutates chain before invariant gate (TOCTOU) | **Open** | Preflight invariants on pre-migration snapshot; block migrate until pass. |
 | M2-02 | `DEPLOY_ENFORCE_PHASE2_INVARIANTS` env bypass | **Open** | Fail closed in prod + alert. |
-| M2-03 | Production-readiness gates not wired into deploy | **Partial** | Gates implemented (H-07/M-15) but tests-only; wire into phase-2/sweep. |
+| M2-03 | Production-readiness gates not wired into deploy | **Fixed** (2026-07-09) | Critical gates in `verifyDeployPhase2Invariants` + keeper `/sweep` (H-07 owner, M-15 boost timelock). |
 | M2-04 | `txRouter` non-embedded canonical fallback to `canonicalDirect` | **Open** | Throw sponsorship-required for all canonical approval+swap batches. |
-| M2-05 | Hardcoded `BASE_SOLANA_BRIDGE` may be stale vs v1.15.0 | **Open** | Derive from batcher/config; add v1.15.0 integration test. |
+| M2-05 | Hardcoded `BASE_SOLANA_BRIDGE` may be stale vs v1.15.0 | **Fixed** (2026-07-09) | `resolveBaseSolanaBridge` (env → adapter.BRIDGE → default); handlers no longer hardcode. |
 | M2-06 | x402 relayer falls back to `PRIVATE_KEY` | **Open** | Require dedicated key; reject fallback in prod. |
-| M2-07 | `unpause()` unbounded VRF FIFO OOG | **Deferred** | Cap/chunk queue; document drain runbook. Extends H-02. |
+| M2-07 | `unpause()` unbounded VRF FIFO OOG | **Fixed** (2026-07-09) | FIFO enqueue on defer; head-only `applyDeferredVrf`; `processDeferredVrfBatch` (max 16); queue cap 128. |
 | M2-08 | KPR `relay_entries` re-enables against B1 policy | **Fixed** | `executeSolanaRelayEntries()` is now default-deny in code: it returns an all-zero result (with alert) unless `SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED` is explicitly truthy — global execute flags, config re-seeds, and the standalone workflow no longer enable it. Unit tests cover the gate. |
-| M2-09 | KPR dual-scheduler double-execution | **Open** | Run one trigger plane. |
-| M2-10 | `settle_fees` payout integrity depends on mappings + ATA delta | **Partial** | Bind mapping updates to session proof; assert on-chain token↔shareOFT. |
-| M2-11 | `winner_relay` permanently skips unmapped events | **Open** | Separate skipped/processed checkpoints; alert; quarantine. |
-| M2-12 | Solana `record_winner` no replay/win-id binding | **Open** | Add win-id to PDA seeds/record; reject duplicates. Phase 5 dependency. |
-| M2-13 | Solana `settlement_threshold` unenforced; withdraw auth unvalidated | **Open** | Enforce threshold; assert withdraw authority matches mint fee config. |
-| M2-14 | Supply-chain: unpinned tools; KPR excluded from CI audit | **Open** | Pin Semgrep/Slither/CLIs; add KPR to CI `dependency-audit`. |
+| M2-09 | KPR dual-scheduler double-execution | **Fixed** (2026-07-09) | Local cron opt-in (`SOLANA_ORCHESTRATOR_LOCAL_CRON_ENABLED`); file action leases; Vercel→sidecar is canonical. |
+| M2-10 | `settle_fees` payout integrity depends on mappings + ATA delta | **Fixed** (2026-07-09) | Registry `getShareOFTForToken` / `getTokenForShareOFT` assert; separate solanaHarvested vs baseForwarded metrics. |
+| M2-11 | `winner_relay` permanently skips unmapped events | **Fixed** (2026-07-09) | Quarantine + retry + alert; successful recovery clears quarantine. |
+| M2-12 | Solana `record_winner` no replay/win-id binding | **Fixed** (2026-07-09) | Per-`win_id` PDA (`seeds=["win_id", mint, win_id]`); KPR digests Base block/log; requires program upgrade. |
+| M2-13 | Solana `settlement_threshold` unenforced; withdraw auth unvalidated | **Fixed** (2026-07-09) | `settle_fees` enforces post-harvest threshold + `withdraw_withheld_authority == keeper`. |
+| M2-14 | Supply-chain: unpinned tools; KPR excluded from CI audit | **Fixed** (2026-07-09) | Semgrep `1.128.1`, Slither `0.11.5`, vercel/acp-cli pinned; `pnpm --dir kpr audit` in CI. |
 
 ---
 

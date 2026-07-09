@@ -12,6 +12,7 @@ import {IOVaultModuleIdentity} from "@4626/shared/interfaces/vault/IOVaultModule
 
 interface IVaultShareBurnStreamQueuer {
     function setAuthorizedQueuer(address queuer, bool authorized) external;
+    function recoverFailedBurns(uint256 amount) external returns (uint256 recovered);
 }
 
 /// @notice Admin + emergency + rescue + config logic for CreatorOVault.
@@ -47,6 +48,7 @@ contract OVaultAdminModule is OVaultModuleBase, IOVaultModuleIdentity {
     event UpdateCcaLaunchArm(address indexed oldStrategy, address indexed newStrategy);
     event UpdateBurnStream(address indexed oldBurnStream, address indexed newBurnStream);
     event BurnStreamQueuerUpdated(address indexed queuer, bool authorized);
+    event BurnStreamFailedBurnsRecovered(uint256 recovered);
     event UpdatePerformanceFee(uint16 newPerformanceFee);
     event UpdatePerformanceFeeRecipient(address indexed newRecipient);
     event UpdateProfitMaxUnlockTime(uint256 newProfitMaxUnlockTime);
@@ -200,13 +202,21 @@ contract OVaultAdminModule is OVaultModuleBase, IOVaultModuleIdentity {
     function setBurnStream(address _burnStream) external onlyDelegateCall {
         if (_burnStream == address(0)) revert ZeroAddress();
 
-        // Integration canary: owner-less burn streams authorize queuers only when
-        // `msg.sender == vault`. Ensure this vault can actually call that path now,
-        // so deployment wiring fails fast instead of breaking payout routing later.
+        // AR-L2 integration canary: owner-less burn streams authorize queuers and
+        // recover failed burns only when `msg.sender == vault`. Fail wiring early.
         try IVaultShareBurnStreamQueuer(_burnStream).setAuthorizedQueuer(address(this), true) {
             IVaultShareBurnStreamQueuer(_burnStream).setAuthorizedQueuer(address(this), false);
         } catch {
             revert BurnStreamIntegrationCheckFailed(_burnStream);
+        }
+        // recoverFailedBurns with empty accumulator reverts NothingToRecover — still
+        // proves the vault is authorized (OnlyVault would also revert).
+        try IVaultShareBurnStreamQueuer(_burnStream).recoverFailedBurns(0) {
+            // empty success path (accumulator somehow non-zero)
+        } catch (bytes memory reason) {
+            if (!_isAcceptableBurnStreamRecoverRevert(reason)) {
+                revert BurnStreamIntegrationCheckFailed(_burnStream);
+            }
         }
 
         address old = burnStream;
@@ -221,6 +231,32 @@ contract OVaultAdminModule is OVaultModuleBase, IOVaultModuleIdentity {
         if (burnStream == address(0)) revert ZeroAddress();
         IVaultShareBurnStreamQueuer(burnStream).setAuthorizedQueuer(queuer, authorized);
         emit BurnStreamQueuerUpdated(queuer, authorized);
+    }
+
+    /// @notice AR-L2 — vault-bridged recovery of burn-stream failed-burn accumulator.
+    /// @dev Stream is owner-less; only the vault address may call `recoverFailedBurns`.
+    ///      Vault's `burnSharesForPriceIncrease` burns from the stream (msg.sender = stream).
+    function recoverBurnStreamFailedBurns(uint256 amount)
+        external
+        onlyDelegateCall
+        returns (uint256 recovered)
+    {
+        if (burnStream == address(0)) revert ZeroAddress();
+        recovered = IVaultShareBurnStreamQueuer(burnStream).recoverFailedBurns(amount);
+        emit BurnStreamFailedBurnsRecovered(recovered);
+    }
+
+    /// @dev Accept NothingToRecover / empty-accumulator reverts; reject OnlyVault / unknown.
+    function _isAcceptableBurnStreamRecoverRevert(bytes memory reason) internal pure returns (bool) {
+        if (reason.length < 4) return false;
+        bytes4 sel;
+        assembly {
+            sel := mload(add(reason, 0x20))
+        }
+        // VaultShareBurnStream.NothingToRecover()
+        if (sel == bytes4(keccak256("NothingToRecover()"))) return true;
+        // string "Only vault" is NOT acceptable — means vault cannot call recover.
+        return false;
     }
 
     function setKeeper(address _keeper) external onlyDelegateCall {
@@ -496,8 +532,10 @@ contract OVaultAdminModule is OVaultModuleBase, IOVaultModuleIdentity {
     }
 
     /// @notice Set the governance-enforced asset cap for a strategy.
-    /// @dev Pass 0 to disable the cap (uncapped). The cap clamps the strategy's
-    ///      contribution to `totalAssets()` so misreporting cannot inflate share price.
+    /// @dev Cap clamps the strategy's contribution to `totalAssets()` so misreporting
+    ///      cannot inflate share price. Pass `type(uint256).max` for intentionally
+    ///      uncapped. Pass 0 to clear the cap — with M-02, unset (0) only trusts
+    ///      `strategyDebt` for valuation (no free profit credit from a misreporting strategy).
     function setStrategyMaxAssets(address strategy, uint256 cap) external onlyDelegateCall {
         if (strategy == address(0)) revert ZeroAddress();
         _scheduleRiskChange(RISK_KIND_STRATEGY_MAX_ASSETS, strategy, cap);

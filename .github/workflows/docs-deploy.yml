@@ -23,7 +23,8 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Install Vercel CLI
-        run: npm i -g vercel@latest
+        # M2-14 — pin CLI version (not @latest) for reproducible deploys.
+        run: npm i -g vercel@54.21.1
 
       - name: Deploy docs.4626.fun (4626-docs project)
         env:

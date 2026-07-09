@@ -270,9 +270,12 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
             assets = strategyDebt[strategy];
         }
 
-        // Governance cap clamp — see CreatorOVault.strategyMaxAssets.
+        // Governance cap clamp — see CreatorOVault.strategyMaxAssets / M-02.
         uint256 cap = strategyMaxAssets[strategy];
-        if (cap != 0 && assets > cap) {
+        if (cap == 0) {
+            uint256 debt = strategyDebt[strategy];
+            if (assets > debt) assets = debt;
+        } else if (assets > cap) {
             assets = cap;
         }
     }

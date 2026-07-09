@@ -41,7 +41,10 @@ vi.mock('../utils/solana.js', () => ({
   sendConfirmedSolanaTransaction: sendAndConfirmTransactionMock,
 }))
 
-import { executeSolanaWinnerRelay } from '../actions/keepr-solana-winner-relay.action.js'
+import {
+  buildWinnerRelayWinId,
+  executeSolanaWinnerRelay,
+} from '../actions/keepr-solana-winner-relay.action.js'
 
 const ENV_KEYS = [
   'LOTTERY_MANAGER',
@@ -163,6 +166,61 @@ describe('keepr solana winner relay', () => {
 
     const result = await executeSolanaWinnerRelay()
     expect(result.winnersRecorded).toBe(1)
+    expect(sendAndConfirmTransactionMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('builds stable non-zero win_id digests (M2-12)', () => {
+    const a = buildWinnerRelayWinId({
+      blockNumber: 150n,
+      logIndex: 2,
+      creatorCoin: '0x2222222222222222222222222222222222222222',
+      winner: '0x1111111111111111111111111111111111111111',
+    })
+    const b = buildWinnerRelayWinId({
+      blockNumber: 150n,
+      logIndex: 2,
+      creatorCoin: '0x2222222222222222222222222222222222222222',
+      winner: '0x1111111111111111111111111111111111111111',
+    })
+    const c = buildWinnerRelayWinId({
+      blockNumber: 151n,
+      logIndex: 2,
+      creatorCoin: '0x2222222222222222222222222222222222222222',
+      winner: '0x1111111111111111111111111111111111111111',
+    })
+    expect(a.equals(b)).toBe(true)
+    expect(a.equals(c)).toBe(false)
+    expect(a.every((byte) => byte === 0)).toBe(false)
+    expect(a.length).toBe(32)
+  })
+
+  it('quarantines unmapped events and recovers after mapping is fixed (M2-11)', async () => {
+    setEnv('SOLANA_CREATOR_COIN_TO_MINT_MAPPING', '{}')
+
+    const first = await executeSolanaWinnerRelay()
+    expect(first.eventsProcessed).toBe(1)
+    expect(first.winnersRecorded).toBe(0)
+    expect(first.eventsQuarantined).toBe(1)
+    expect(first.quarantineSize).toBe(1)
+    expect(sendAndConfirmTransactionMock).not.toHaveBeenCalled()
+    expect(alertWarningMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.stringContaining('No Solana mint mapping'),
+      expect.anything(),
+    )
+
+    // Mapping fixed — quarantine should recover on next run without re-emitting logs.
+    setEnv(
+      'SOLANA_CREATOR_COIN_TO_MINT_MAPPING',
+      `{"0x2222222222222222222222222222222222222222":"${mintPubkeyMock}"}`,
+    )
+    getLogsMock.mockResolvedValue([])
+
+    const second = await executeSolanaWinnerRelay()
+    expect(second.quarantineRetried).toBe(1)
+    expect(second.quarantineRecovered).toBe(1)
+    expect(second.winnersRecorded).toBe(1)
+    expect(second.quarantineSize).toBe(0)
     expect(sendAndConfirmTransactionMock).toHaveBeenCalledTimes(1)
   })
 })

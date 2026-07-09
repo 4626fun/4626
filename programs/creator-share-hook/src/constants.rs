@@ -14,6 +14,8 @@ pub const EMERGENCY_RELAY_THRESHOLD: usize = (MAX_PENDING_ENTRIES * 8) / 10;
 pub const CREATOR_CONFIG_SEED: &[u8] = b"creator_config";
 pub const PENDING_ENTRIES_SEED: &[u8] = b"pending_entries";
 pub const WINNER_RECORD_SEED: &[u8] = b"winner_record";
+/// M2-12 — per-win replay-protection PDA seed.
+pub const WIN_ID_SEED: &[u8] = b"win_id";
 pub const EXTRA_ACCOUNT_META_LIST_SEED: &[u8] = b"extra-account-metas";
 
 /// Maximum number of known AMM programs per creator config.

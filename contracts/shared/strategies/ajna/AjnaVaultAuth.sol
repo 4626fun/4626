@@ -20,6 +20,7 @@ contract AjnaVaultAuth {
     error ZeroAddress();
     error FeeTooHigh();
     error BufferRatioTooHigh();
+    error BufferRatioTooLow(uint256 provided, uint256 minimum);
     error InvalidMinBucketIndex();
     // FIX: F-04 — two-step admin transfer errors
     error NotPendingAdmin();
@@ -120,8 +121,16 @@ contract AjnaVaultAuth {
         emit DepositCapSet(nextDepositCap);
     }
 
+    /// @notice Minimum idle buffer as bps of total assets (M-14). Prevents permanently
+    ///         zeroing exit liquidity via moveFromBuffer when ratio was left at 0.
+    uint256 public constant MIN_BUFFER_RATIO_BPS = 500; // 5%
+
     function setBufferRatio(uint256 nextBufferRatio) external onlyAdmin {
         if (nextBufferRatio > 10_000) revert BufferRatioTooHigh();
+        // M-14: disallow disabling / under-floor buffer (0 previously skipped ensureBufferRatio).
+        if (nextBufferRatio < MIN_BUFFER_RATIO_BPS) {
+            revert BufferRatioTooLow(nextBufferRatio, MIN_BUFFER_RATIO_BPS);
+        }
         bufferRatio = nextBufferRatio;
         emit BufferRatioSet(nextBufferRatio);
     }

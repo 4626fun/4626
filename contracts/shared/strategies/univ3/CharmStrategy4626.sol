@@ -119,6 +119,10 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
     uint256 public depositSlippageBps = 500; // 5% deposit slippage
     uint24 public swapPoolFee = 3000; // 0.3% fee tier (default)
 
+    /// @notice Hard cap for swap/deposit slippage params (audit H-05 residual).
+    /// @dev Prevents owner from setting 100% slippage that zeros minOut guards.
+    uint256 public constant MAX_SLIPPAGE_BPS = 2_000; // 20%
+
     bool public active = true;
 
     // Track for harvest calculations
@@ -172,6 +176,7 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
     error InvalidEmergencyWithdrawRecipient(address recipient);
     error EmergencyWithdrawRestrictedToken(address token);
     error RebalanceValuationUnavailable();
+    error SlippageBpsTooHigh(uint256 bps);
 
     // =================================
     // MODIFIERS
@@ -350,6 +355,8 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
         uint256 _depositSlippageBps,
         uint24 _swapPoolFee
     ) external onlyOwner {
+        if (_swapSlippageBps > MAX_SLIPPAGE_BPS) revert SlippageBpsTooHigh(_swapSlippageBps);
+        if (_depositSlippageBps > MAX_SLIPPAGE_BPS) revert SlippageBpsTooHigh(_depositSlippageBps);
         maxSwapPercent = _maxSwapPercent;
         swapSlippageBps = _swapSlippageBps;
         depositSlippageBps = _depositSlippageBps;
@@ -1244,7 +1251,8 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
         bool assetIsToken0 = address(charmVault.token0()) == address(ASSET);
 
         if (ourShares > 0) {
-            (uint256 amount0, uint256 amount1) = charmVault.withdraw(ourShares, 0, 0, address(this));
+            (uint256 min0, uint256 min1) = _charmWithdrawMins(ourShares);
+            (uint256 amount0, uint256 amount1) = charmVault.withdraw(ourShares, min0, min1, address(this));
             uint256 assetReceived = assetIsToken0 ? amount0 : amount1;
             uint256 usdcReceived = assetIsToken0 ? amount1 : amount0;
 
@@ -1265,6 +1273,20 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
         }
 
         emit EmergencyWithdraw(vault, withdrawn);
+    }
+
+    /// @dev Expected proportional amounts with depositSlippageBps floor (never 0/0 when exposure exists).
+    function _charmWithdrawMins(uint256 shares) internal view returns (uint256 min0, uint256 min1) {
+        if (shares == 0 || address(charmVault) == address(0)) return (0, 0);
+        uint256 totalShares = charmVault.totalSupply();
+        if (totalShares == 0) return (0, 0);
+        (uint256 total0, uint256 total1) = charmVault.getTotalAmounts();
+        uint256 expected0 = Math.mulDiv(total0, shares, totalShares);
+        uint256 expected1 = Math.mulDiv(total1, shares, totalShares);
+        uint256 bps = depositSlippageBps;
+        if (bps > MAX_SLIPPAGE_BPS) bps = MAX_SLIPPAGE_BPS;
+        min0 = Math.mulDiv(expected0, 10_000 - bps, 10_000);
+        min1 = Math.mulDiv(expected1, 10_000 - bps, 10_000);
     }
 
     // =================================
@@ -1295,21 +1317,27 @@ contract CharmStrategy4626 is IStrategy, IStrategyValuation, ReentrancyGuard, Ow
     // =================================
 
     function ownerEmergencyWithdraw(address token, address to, uint256 amount) external onlyOwner {
-        // Restrict emergency outs to canonical control addresses only.
-        if (to != vault && to != owner()) revert InvalidEmergencyWithdrawRecipient(to);
-        // Prevent draining core strategy assets while strategy is active.
+        // H-07: emergency outs must return to the vault only — never the strategy owner.
+        if (to != vault) revert InvalidEmergencyWithdrawRecipient(to);
+        // Prevent draining core strategy assets while strategy is active (use vault emergencyWithdraw).
         if (active && (token == address(ASSET) || token == address(USDC) || token == address(charmVault))) {
             revert EmergencyWithdrawRestrictedToken(token);
         }
         IERC20(token).safeTransfer(to, amount);
     }
 
+    /// @notice Pull Charm LP into this strategy and forward ASSET/USDC to the vault.
+    /// @dev H-07: recovered inventory cannot be left for ownerEmergencyWithdraw-to-owner.
+    ///      H-05: applies depositSlippageBps mins (not 0/0).
     function ownerEmergencyWithdrawFromCharm() external onlyOwner returns (uint256 amount0, uint256 amount1) {
         if (address(charmVault) == address(0)) return (0, 0);
 
         uint256 ourShares = charmVault.balanceOf(address(this));
         if (ourShares > 0) {
-            (amount0, amount1) = charmVault.withdraw(ourShares, 0, 0, address(this));
+            (uint256 min0, uint256 min1) = _charmWithdrawMins(ourShares);
+            (amount0, amount1) = charmVault.withdraw(ourShares, min0, min1, address(this));
         }
+        // Always forward core inventory to vault after pull.
+        _returnAllTokens();
     }
 }

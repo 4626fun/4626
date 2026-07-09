@@ -246,6 +246,8 @@ contract CreatorOracle is OApp, IOracle4626 {
     event AssetPriceUpdated(string symbol, int256 price, uint256 timestamp, address indexed updater);
     event AssetPriceBroadcast(uint32[] dstEids, int256 price, uint256 timestamp);
     event AssetPriceReceived(uint32 srcEid, int256 price, uint256 timestamp);
+    /// @notice Remote price update skipped or step-clamped (M-06 parity with AgentOracle).
+    event RemotePriceUpdateSkipped(uint32 indexed srcEid, int256 candidatePrice, uint256 candidateTimestamp, string reason);
     event V4PoolConfigured(PoolId indexed poolId, address poolManager, bool assetIsToken0);
     event V3PoolConfigured(
         address indexed pool, address indexed creatorToken, address indexed usdToken, uint32 twapDuration
@@ -1278,6 +1280,8 @@ contract CreatorOracle is OApp, IOracle4626 {
 
     /**
      * @notice Receive price from Base
+     * @dev M-06: apply the same deviation clamp / bounds as AgentOracle remote receive so a
+     *      compromised or buggy hub cannot jump remote price arbitrarily while still fresh.
      */
     function _lzReceive(Origin calldata origin, bytes32, bytes calldata payload, address, bytes calldata)
         internal
@@ -1289,14 +1293,41 @@ contract CreatorOracle is OApp, IOracle4626 {
 
         (int256 price, uint256 timestamp, string memory symbol) = abi.decode(payload, (int256, uint256, string));
 
-        if (price <= 0) revert InvalidPrice();
+        if (price <= 0) {
+            emit RemotePriceUpdateSkipped(origin.srcEid, price, block.timestamp, "invalid_non_positive");
+            return;
+        }
 
         // Clamp to prevent freshness spoofing and future-timestamp underflow in staleness checks.
         uint256 safeTimestamp = timestamp > block.timestamp ? block.timestamp : timestamp;
 
         // Defense-in-depth: ignore out-of-order updates so delayed/replayed packets cannot roll back freshness.
         if (assetPriceTimestamp != 0 && safeTimestamp < assetPriceTimestamp) {
+            emit RemotePriceUpdateSkipped(origin.srcEid, price, safeTimestamp, "out_of_order");
             return;
+        }
+        if (price > MAX_INITIAL_PRICE_USD) {
+            emit RemotePriceUpdateSkipped(origin.srcEid, price, safeTimestamp, "invalid_out_of_bounds");
+            return;
+        }
+        if (assetPriceUSD > 0) {
+            uint256 oldP = uint256(assetPriceUSD);
+            uint256 newP = uint256(price);
+            uint256 deviation = oldP > newP ? ((oldP - newP) * 1e18) / oldP : ((newP - oldP) * 1e18) / oldP;
+            if (deviation > MAX_PRICE_DEVIATION) {
+                // If still fresh, step-clamp toward hub value; if already stale, accept full hub price.
+                if (block.timestamp - assetPriceTimestamp <= MAX_STALENESS) {
+                    uint256 maxStep = Math.mulDiv(oldP, MAX_PRICE_DEVIATION, 1e18);
+                    if (maxStep == 0) maxStep = 1;
+                    if (newP > oldP) {
+                        newP = oldP + maxStep;
+                    } else {
+                        newP = oldP > maxStep ? oldP - maxStep : 1;
+                    }
+                    price = int256(newP);
+                    emit RemotePriceUpdateSkipped(origin.srcEid, price, safeTimestamp, "deviation_clamped");
+                }
+            }
         }
 
         assetPriceUSD = price;

@@ -1011,9 +1011,12 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
 
         // Governance cap: clamp recognised assets so a strategy reporting an
         // inflated valuation cannot push `totalAssets()` past the approved cap.
-        // 0 == uncapped (preserves prior behaviour for unconfigured strategies).
+        // M-02: cap == 0 is no longer uncapped — only trust strategyDebt until set.
         uint256 cap = strategyMaxAssets[strategy];
-        if (cap != 0 && assets > cap) {
+        if (cap == 0) {
+            uint256 debt = strategyDebt[strategy];
+            if (assets > debt) assets = debt;
+        } else if (assets > cap) {
             assets = cap;
         }
     }
@@ -1242,7 +1245,9 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         _delegateAndReturn(_coreModule);
     }
 
-    function challengeImpairmentRoot(uint256 epochId, string calldata reason) external nonReentrant onlyEmergencyAuthorized {
+    /// @notice Challenge a proposed impairment merkle root during the challenge window.
+    /// @dev M-01: public — any party can challenge a bad root; not gated to emergency roles.
+    function challengeImpairmentRoot(uint256 epochId, string calldata reason) external nonReentrant {
         _delegateAndReturn(_coreModule);
     }
 
@@ -1909,6 +1914,13 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
 
     function setBurnStreamAuthorizedQueuer(address queuer, bool authorized) external onlyOwner {
         _delegate(_adminModule);
+    }
+
+    /// @notice AR-L2 — recover failed burns on the vault-linked burn stream.
+    /// @dev Bridges owner/ops intent into owner-less `VaultShareBurnStream.recoverFailedBurns`
+    ///      (only callable by the vault address).
+    function recoverBurnStreamFailedBurns(uint256 amount) external onlyOwner returns (uint256) {
+        return abi.decode(_delegateAndReturn(_adminModule), (uint256));
     }
 
     function setKeeper(address _keeper) external onlyManagement {

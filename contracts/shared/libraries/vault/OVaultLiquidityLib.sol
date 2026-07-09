@@ -110,8 +110,12 @@ library OVaultLiquidityLib {
             assets = reader.strategyDebt(strategy);
         }
 
+        // M-02: unset cap (0) only trusts strategyDebt; explicit max for uncapped.
         uint256 cap = reader.strategyMaxAssets(strategy);
-        if (cap != 0 && assets > cap) {
+        if (cap == 0) {
+            uint256 debt = reader.strategyDebt(strategy);
+            if (assets > debt) assets = debt;
+        } else if (assets > cap) {
             assets = cap;
         }
     }

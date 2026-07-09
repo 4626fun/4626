@@ -26,6 +26,7 @@ import { assert, expect } from "chai";
 const CREATOR_CONFIG_SEED = Buffer.from("creator_config");
 const PENDING_ENTRIES_SEED = Buffer.from("pending_entries");
 const WINNER_RECORD_SEED = Buffer.from("winner_record");
+const WIN_ID_SEED = Buffer.from("win_id");
 const EXTRA_ACCOUNT_META_LIST_SEED = Buffer.from("extra-account-metas");
 
 const MAX_AMM_PROGRAMS = 8;
@@ -742,18 +743,29 @@ describe("creator_share_hook", () => {
   });
 
   // ========================================================================
-  // recordWinner
+  // recordWinner (M2-12 win_id)
   // ========================================================================
   describe("recordWinner", () => {
     const winnerPubkey = Keypair.generate().publicKey;
     const sharesPaid = new BN(50_000_000_000); // 50 tokens
+    const makeWinId = (seed: number) =>
+      Array.from({ length: 32 }, (_, i) => (seed + i * 3) % 256);
 
-    it("records a winner", async () => {
+    function winIdPda(winId: number[]) {
+      return PublicKey.findProgramAddressSync(
+        [WIN_ID_SEED, mint.publicKey.toBuffer(), Buffer.from(winId)],
+        program.programId
+      )[0];
+    }
+
+    it("records a winner with win_id", async () => {
+      const winId = makeWinId(10);
       await program.methods
-        .recordWinner(winnerPubkey, sharesPaid)
+        .recordWinner(winnerPubkey, sharesPaid, winId)
         .accounts({
           keeper: keeper.publicKey,
           creatorMint: mint.publicKey,
+          winIdRecord: winIdPda(winId),
         })
         .signers([keeper])
         .rpc();
@@ -768,17 +780,29 @@ describe("creator_share_hook", () => {
         "shares_paid matches"
       );
       assert.ok(record.timestamp.toNumber() > 0, "timestamp is set");
+
+      const winRec = await (program.account as any).winIdRecord.fetch(
+        winIdPda(winId)
+      );
+      assert.ok(winRec.winner.equals(winnerPubkey), "win_id record winner");
+      assert.deepEqual(
+        Array.from(winRec.winId as number[]),
+        winId,
+        "win_id stored"
+      );
     });
 
-    it("overwrites previous winner with new one", async () => {
+    it("overwrites previous latest-winner display with a new win_id", async () => {
       const newWinner = Keypair.generate().publicKey;
       const newShares = new BN(100_000_000_000);
+      const winId = makeWinId(20);
 
       await program.methods
-        .recordWinner(newWinner, newShares)
+        .recordWinner(newWinner, newShares, winId)
         .accounts({
           keeper: keeper.publicKey,
           creatorMint: mint.publicKey,
+          winIdRecord: winIdPda(winId),
         })
         .signers([keeper])
         .rpc();
@@ -794,13 +818,75 @@ describe("creator_share_hook", () => {
       );
     });
 
-    it("records winner with zero shares", async () => {
+    it("rejects duplicate win_id (M2-12 replay protection)", async () => {
+      const winId = makeWinId(30);
       const w = Keypair.generate().publicKey;
       await program.methods
-        .recordWinner(w, new BN(0))
+        .recordWinner(w, new BN(1), winId)
         .accounts({
           keeper: keeper.publicKey,
           creatorMint: mint.publicKey,
+          winIdRecord: winIdPda(winId),
+        })
+        .signers([keeper])
+        .rpc();
+
+      try {
+        await program.methods
+          .recordWinner(w, new BN(2), winId)
+          .accounts({
+            keeper: keeper.publicKey,
+            creatorMint: mint.publicKey,
+            winIdRecord: winIdPda(winId),
+          })
+          .signers([keeper])
+          .rpc();
+        assert.fail("Should have thrown on duplicate win_id");
+      } catch (e: any) {
+        assert.ok(
+          e.message.includes("already in use") ||
+            e.message.includes("Allocate") ||
+            e.message.includes("DuplicateWinId") ||
+            e.logs?.some(
+              (l: string) =>
+                l.includes("already in use") || l.includes("DuplicateWinId")
+            ),
+          "Expected duplicate win_id rejection"
+        );
+      }
+    });
+
+    it("rejects zero win_id", async () => {
+      const zeroWinId = Array.from({ length: 32 }, () => 0);
+      try {
+        await program.methods
+          .recordWinner(winnerPubkey, sharesPaid, zeroWinId)
+          .accounts({
+            keeper: keeper.publicKey,
+            creatorMint: mint.publicKey,
+            winIdRecord: winIdPda(zeroWinId),
+          })
+          .signers([keeper])
+          .rpc();
+        assert.fail("Should have thrown");
+      } catch (e: any) {
+        assert.ok(
+          e.message.includes("InvalidWinId") ||
+            e.logs?.some((l: string) => l.includes("InvalidWinId")),
+          "Expected InvalidWinId error"
+        );
+      }
+    });
+
+    it("records winner with zero shares", async () => {
+      const w = Keypair.generate().publicKey;
+      const winId = makeWinId(40);
+      await program.methods
+        .recordWinner(w, new BN(0), winId)
+        .accounts({
+          keeper: keeper.publicKey,
+          creatorMint: mint.publicKey,
+          winIdRecord: winIdPda(winId),
         })
         .signers([keeper])
         .rpc();
@@ -813,12 +899,14 @@ describe("creator_share_hook", () => {
     });
 
     it("rejects recordWinner from unauthorized keeper", async () => {
+      const winId = makeWinId(50);
       try {
         await program.methods
-          .recordWinner(winnerPubkey, sharesPaid)
+          .recordWinner(winnerPubkey, sharesPaid, winId)
           .accounts({
             keeper: fakeUser.publicKey,
             creatorMint: mint.publicKey,
+            winIdRecord: winIdPda(winId),
           })
           .signers([fakeUser])
           .rpc();
@@ -892,11 +980,17 @@ describe("creator_share_hook", () => {
 
     it("second creator's keeper can record a winner without affecting first", async () => {
       const winner2 = Keypair.generate().publicKey;
+      const winId2 = Array.from({ length: 32 }, (_, i) => (90 + i) % 256);
+      const [winIdRecord2] = PublicKey.findProgramAddressSync(
+        [WIN_ID_SEED, mint2.publicKey.toBuffer(), Buffer.from(winId2)],
+        program.programId
+      );
       await program.methods
-        .recordWinner(winner2, new BN(25_000_000_000))
+        .recordWinner(winner2, new BN(25_000_000_000), winId2)
         .accounts({
           keeper: keeper2.publicKey,
           creatorMint: mint2.publicKey,
+          winIdRecord: winIdRecord2,
         })
         .signers([keeper2])
         .rpc();

@@ -404,7 +404,7 @@ describe('txRouter', () => {
     }
   })
 
-  it('falls back to canonical direct when parent-CSW ERC-4337 swap sponsorship is denied', async () => {
+  it('does not fall back to canonical direct when parent-CSW approval+swap sponsorship is denied (M2-04)', async () => {
     sendCoinbaseSmartWalletUserOperationMock.mockRejectedValueOnce(
       new Error('request denied - swap_router_value_not_allowed'),
     )
@@ -430,31 +430,28 @@ describe('txRouter', () => {
       publicClient: {},
     })
 
-    const result = await buildAndSendSwap({
-      context,
-      approvalTx: {
-        to: ADDRESS_C,
-        from: ADDRESS_B,
-        data: '0xaaaa',
-        value: '0',
-        chainId: 8453,
-      },
-      swapTx: {
-        to: ADDRESS_A,
-        from: ADDRESS_B,
-        data: '0xbbbb',
-        value: '123',
-        chainId: 8453,
-      },
-    })
+    await expect(
+      buildAndSendSwap({
+        context,
+        approvalTx: {
+          to: ADDRESS_C,
+          from: ADDRESS_B,
+          data: '0xaaaa',
+          value: '0',
+          chainId: 8453,
+        },
+        swapTx: {
+          to: ADDRESS_A,
+          from: ADDRESS_B,
+          data: '0xbbbb',
+          value: '123',
+          chainId: 8453,
+        },
+      }),
+    ).rejects.toThrow(/paymaster sponsorship is required/i)
 
-    expect(result.routing.mode).toBe('sendCalls')
-    expect(result.routing.fallbackMode).toBe('canonical4337')
-    expect(result.send.mode).toBe('canonicalDirect')
-    expect(result.send.method).toBe('walletClient.sendTransaction')
-    expect(result.send.transactionHash).toBe(HASH_B)
     expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
-    expect(sendTransaction).toHaveBeenCalledTimes(1)
+    expect(sendTransaction).not.toHaveBeenCalled()
   })
 
   it('bypasses canonical ERC-4337 for swap-router native-value calls and uses canonical direct', async () => {

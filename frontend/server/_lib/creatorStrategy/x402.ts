@@ -11,9 +11,10 @@
  * the protocol treasury; after the tx confirms, the feature activates.
  *
  * This module implements self-facilitation — we broadcast the transfer
- * ourselves using a relayer key (`X402_RELAYER_PRIVATE_KEY`, or falling
- * back to `PRIVATE_KEY` if unset). We pay the (tiny) Base gas so the
- * creator doesn't need ETH on Base.
+ * ourselves using a relayer key (`X402_RELAYER_PRIVATE_KEY`). In non-production
+ * only, `PRIVATE_KEY` may be used as a local fallback. Production rejects the
+ * fallback (audit M2-06). We pay the (tiny) Base gas so the creator doesn't
+ * need ETH on Base.
  *
  * Spec:
  *   402 response shape:
@@ -384,9 +385,26 @@ export async function settleX402Payment(
   }
 }
 
+function isProductionRuntime(): boolean {
+  return (
+    String(process.env.VERCEL_ENV ?? '').trim().toLowerCase() === 'production' ||
+    String(process.env.NODE_ENV ?? '').trim().toLowerCase() === 'production'
+  )
+}
+
 function resolveRelayerAccountFromEnv(): Account | null {
-  const raw = (process.env.X402_RELAYER_PRIVATE_KEY ?? process.env.PRIVATE_KEY ?? '').trim()
-  if (!raw) return null
+  // M2-06: production requires a dedicated X402_RELAYER_PRIVATE_KEY — do not fall back to PRIVATE_KEY.
+  const dedicated = (process.env.X402_RELAYER_PRIVATE_KEY ?? '').trim()
+  const fallback = (process.env.PRIVATE_KEY ?? '').trim()
+  const raw = dedicated || (!isProductionRuntime() ? fallback : '')
+  if (!raw) {
+    if (isProductionRuntime() && !dedicated && fallback) {
+      console.error(
+        '[x402] ALERT: PRIVATE_KEY fallback rejected in production — set X402_RELAYER_PRIVATE_KEY',
+      )
+    }
+    return null
+  }
   const withPrefix = (raw.startsWith('0x') ? raw : `0x${raw}`) as Hex
   if (!/^0x[0-9a-fA-F]{64}$/.test(withPrefix)) return null
   return privateKeyToAccount(withPrefix)

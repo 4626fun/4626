@@ -332,6 +332,19 @@ function embeddedCanonicalSponsorshipRequiredError(reason: string): Error {
   )
 }
 
+/** Multi-call canonical batches (approval+swap) must stay on ERC-4337 (audit M2-04 / AGENTS). */
+function isCanonicalSponsoredBatch(calls: RoutedCall[]): boolean {
+  return calls.length > 1
+}
+
+function canonicalSponsorshipRequiredError(reason: string, isEmbedded: boolean): Error {
+  if (isEmbedded) return embeddedCanonicalSponsorshipRequiredError(reason)
+  return new Error(
+    `Paymaster sponsorship is required for canonical multi-call execution (approval+swap), but it was unavailable: ${reason}. ` +
+      'Do not fall back to un-sponsored sequential gas sends for this path.',
+  )
+}
+
 function toRoutedCalls(params: { swapTx: TransactionRequest; approvalTx?: TransactionRequest | null }): RoutedCall[] {
   const calls: RoutedCall[] = []
   if (params.approvalTx) calls.push(normalizeTx(params.approvalTx))
@@ -722,8 +735,9 @@ async function sendViaCanonical4337(params: {
   const sender = canonicalIdentity
   if (shouldBypassCanonical4337ForSwapRouterValue(calls)) {
     const reason = 'swap-router native-value call is not eligible for the current paymaster path'
-    if (requiresSponsoredCanonical4337(context)) {
-      if (shouldAllowEmbeddedCanonicalDirectFallback(context)) {
+    // M2-04: never fall back to un-sponsored gas for multi-call approval+swap batches.
+    if (isCanonicalSponsoredBatch(calls) || requiresSponsoredCanonical4337(context)) {
+      if (requiresSponsoredCanonical4337(context) && shouldAllowEmbeddedCanonicalDirectFallback(context) && !isCanonicalSponsoredBatch(calls)) {
         context.debug?.({
           event: 'send_fallback',
           mode: decision.mode,
@@ -750,7 +764,7 @@ async function sendViaCanonical4337(params: {
         callTargets: calls.map((call) => call.to),
         error: reason,
       })
-      throw embeddedCanonicalSponsorshipRequiredError(reason)
+      throw canonicalSponsorshipRequiredError(reason, requiresSponsoredCanonical4337(context))
     }
     context.debug?.({
       event: 'send_fallback',
@@ -805,8 +819,13 @@ async function sendViaCanonical4337(params: {
     const normalized = normalizeCanonicalSendError(error)
     const shouldFallbackToCanonicalDirect = isCanonicalPaymasterPolicyFallbackError(error)
     if (shouldFallbackToCanonicalDirect) {
-      if (requiresSponsoredCanonical4337(context)) {
-        if (shouldAllowEmbeddedCanonicalDirectFallback(context)) {
+      // M2-04 / AGENTS: approval+swap multi-call batches must not fall back to canonicalDirect.
+      if (isCanonicalSponsoredBatch(calls) || requiresSponsoredCanonical4337(context)) {
+        if (
+          requiresSponsoredCanonical4337(context) &&
+          shouldAllowEmbeddedCanonicalDirectFallback(context) &&
+          !isCanonicalSponsoredBatch(calls)
+        ) {
           context.debug?.({
             event: 'send_fallback',
             mode: decision.mode,
@@ -833,7 +852,7 @@ async function sendViaCanonical4337(params: {
           callTargets: calls.map((call) => call.to),
           error: normalized.message,
         })
-        throw embeddedCanonicalSponsorshipRequiredError(normalized.message)
+        throw canonicalSponsorshipRequiredError(normalized.message, requiresSponsoredCanonical4337(context))
       }
       context.debug?.({
         event: 'send_fallback',

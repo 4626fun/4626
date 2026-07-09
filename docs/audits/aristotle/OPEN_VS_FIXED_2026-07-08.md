@@ -24,11 +24,11 @@ This tracker summarizes what has been fixed in the current working branch during
 
 | Area | Source | Status | Next action |
 |---|---|---|---|
-| Burn-stream failed-burn accounting double-count | `docs/audits/aristotle/oracle/AUDIT.md` (M-2) | Open | Rework `VaultShareBurnStream` accounting so failed burns are not re-queued and double-tracked. |
+| Burn-stream failed-burn accounting double-count | `docs/audits/aristotle/oracle/AUDIT.md` (M-2) | **Fixed** (verified 2026-07-09) | `failedBurnAccumulator` included in `accounted` for sync/checkpoint/queue; test `test_recoverFailedBurnsOnlyVaultAndFailedSharesAreNotRequeued`. |
 | Burn-stream integration assumptions (`msg.sender == vault`) | `docs/audits/aristotle/oracle/AUDIT.md` (L-2) | Open | Add integration self-tests and explicit deployment/runtime checks. |
 | External-swap keeper authority model | `docs/audits/aristotle/oracle/AUDIT.md` (L-3) | Partially open (governance) | Keep strict allowlists; optionally add spend caps / timelock policies. |
 | Centralization/emergency controls across modules | Multiple audits | Open (governance) | Enforce timelock/multisig policy and monitoring, not just local code checks. |
-| CreatorOVault high/medium set (queue payout semantics, liveness, config delay, debt-buy semantics) | `docs/audits/CreatorOVault_aristotle/ARISTOTLE_SUMMARY.md` | Open | Separate focused remediation pass on `CreatorOVault` and modules. |
+| CreatorOVault high/medium set (queue payout, liveness, config delay, debt-buy) | `docs/audits/CreatorOVault_aristotle/ARISTOTLE_SUMMARY.md` | **Fixed** (see `AUDIT_FIX_REVIEW.md`) | CO-H1 uncapped `convertToAssets`; M-2 stale-trip clear; M-3 riskConfigDelay default; M-4 `buyDebt` disabled. |
 | Creator interface semantic assumptions | `creator/interfaces` audit output | Open (implementation-level) | Validate and enforce in concrete contract implementations, not in interfaces alone. |
 
 ## Validation notes

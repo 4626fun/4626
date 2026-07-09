@@ -121,6 +121,12 @@ export const BASE_DEFAULTS = {
 
   // Base↔Solana bridge integration for v1.18.0 target stack.
   solanaBridgeAdapter: addr('9A61814082A26192DD9Cb201b44058506685Be60'),
+  /**
+   * Base bridge core (`scalars` / route liveness). Distinct from `solanaBridgeAdapter`.
+   * Matches `SolanaBridgeAdapter.BRIDGE`. Prefer resolving via adapter/env at runtime
+   * (`resolveBaseSolanaBridge`) rather than hardcoding this in handlers.
+   */
+  baseSolanaBridge: addr('3eff766c76a1be2ce1acf2b69c78bcae257d5188'),
 
   // CREATE2 infra (canonical, chain-agnostic)
   create2Factory: addr('4e59b44847b379578588920cA78FbF26c0B4956C'),
