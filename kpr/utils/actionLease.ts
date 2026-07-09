@@ -65,6 +65,31 @@ async function readLease(path: string): Promise<LeaseFile | null> {
   }
 }
 
+async function writeExclusiveLease(params: {
+  leasePath: string
+  action: string
+  token: string
+  holder: string
+  now: number
+  ttlMs: number
+}): Promise<ActionLeaseAcquireResult> {
+  const body: LeaseFile = {
+    action: params.action,
+    token: params.token,
+    holder: params.holder,
+    acquiredAt: params.now,
+    expiresAt: params.now + params.ttlMs,
+  }
+  try {
+    const handle = await open(params.leasePath, 'wx')
+    await handle.writeFile(`${JSON.stringify(body, null, 2)}\n`, 'utf8')
+    await handle.close()
+    return { acquired: true, leasePath: params.leasePath, token: params.token }
+  } catch {
+    return { acquired: false, reason: 'held' }
+  }
+}
+
 /**
  * Try to acquire an exclusive lease for `action`.
  * Returns acquired:false when another live lease is held.
@@ -104,41 +129,53 @@ export async function tryAcquireActionLease(params: {
     }
   }
 
-  // Exclusive create when missing; overwrite only when expired/missing.
-  try {
-    const handle = await open(leasePath, 'wx')
-    const body: LeaseFile = {
-      action,
-      token,
-      holder,
-      acquiredAt: now,
-      expiresAt: now + ttlMs,
+  // Exclusive create when missing.
+  const created = await writeExclusiveLease({ leasePath, action, token, holder, now, ttlMs })
+  if (created.acquired) return created
+
+  // File exists: re-check liveness.
+  const raced = await readLease(leasePath)
+  if (raced && raced.expiresAt > now) {
+    return {
+      acquired: false,
+      reason: 'held',
+      holder: raced.holder,
+      expiresAt: raced.expiresAt,
     }
-    await handle.writeFile(`${JSON.stringify(body, null, 2)}\n`, 'utf8')
-    await handle.close()
-    return { acquired: true, leasePath, token }
+  }
+
+  // Expired/corrupt: atomically claim the stale file via rename, then exclusive-create.
+  // Only one racer wins the rename; losers re-read and see a live lease.
+  const stalePath = `${leasePath}.stale.${token}`
+  try {
+    await rename(leasePath, stalePath)
+    try {
+      await rm(stalePath, { force: true })
+    } catch {
+      // best-effort cleanup
+    }
   } catch {
-    // Race: re-read; if still held, fail; if expired, replace via temp+rename.
-    const raced = await readLease(leasePath)
-    if (raced && raced.expiresAt > now) {
+    const after = await readLease(leasePath)
+    if (after && after.expiresAt > now) {
       return {
         acquired: false,
         reason: 'held',
-        holder: raced.holder,
-        expiresAt: raced.expiresAt,
+        holder: after.holder,
+        expiresAt: after.expiresAt,
       }
     }
-    const body: LeaseFile = {
-      action,
-      token,
-      holder,
-      acquiredAt: now,
-      expiresAt: now + ttlMs,
-    }
-    const tempPath = `${leasePath}.${token}.tmp`
-    await writeFile(tempPath, `${JSON.stringify(body, null, 2)}\n`, 'utf8')
-    await rename(tempPath, leasePath)
-    return { acquired: true, leasePath, token }
+    // Missing or unreadable — fall through to wx create.
+  }
+
+  const recreated = await writeExclusiveLease({ leasePath, action, token, holder, now, ttlMs })
+  if (recreated.acquired) return recreated
+
+  const final = await readLease(leasePath)
+  return {
+    acquired: false,
+    reason: 'held',
+    holder: final?.holder,
+    expiresAt: final?.expiresAt,
   }
 }
 

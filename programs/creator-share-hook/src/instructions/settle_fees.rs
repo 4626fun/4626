@@ -113,16 +113,19 @@ pub fn handler<'info>(ctx: Context<'info, SettleFees<'info>>) -> Result<()> {
         cpi_harvest_withheld_tokens_to_mint(cpi_ctx, sources)?;
     }
 
-    // M2-13: enforce settlement_threshold against post-harvest mint withheld.
-    // threshold == 0 means "settle any positive amount" (legacy default).
+    // M2-13: threshold gates *withdraw*, not harvest.
+    // Keepers batch harvest (e.g. 20 accounts/tx). Reverting here would roll back
+    // partial harvests and permanently strand fees when per-batch withheld < threshold
+    // but mint-wide total would exceed it after more batches. Commit harvest and skip
+    // withdraw until mint withheld >= threshold (or any positive amount when threshold=0).
     let mint_info_after_harvest = ctx.accounts.mint.to_account_info();
     let (_auth, withheld_after_harvest) = read_transfer_fee_config(&mint_info_after_harvest)?;
-    if threshold > 0 && withheld_after_harvest < threshold {
-        return err!(CreatorShareHookError::BelowSettlementThreshold);
-    }
-    // Even with threshold == 0, skip withdraw when there is nothing to take
-    // (avoids empty withdraw CPIs that can still burn CU / fail on some configs).
-    if withheld_after_harvest == 0 {
+    let ready_to_withdraw = if threshold == 0 {
+        withheld_after_harvest > 0
+    } else {
+        withheld_after_harvest >= threshold
+    };
+    if !ready_to_withdraw {
         emit!(FeesSettled {
             creator_mint: ctx.accounts.creator_config.creator_mint,
             amount: 0,
