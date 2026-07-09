@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import type { ReactNode } from 'react'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
@@ -126,9 +126,16 @@ describe('WaitlistAccountTray', () => {
     expect(screen.getByRole('link', { name: /^settings$/i })).toBeTruthy()
   })
 
-  it('auto-opens the tray once when a required setup step (wallet provisioning / owner-install signing) is pending', () => {
+  it('auto-opens the tray once when a required setup step (wallet provisioning / owner-install signing) is pending', async () => {
     mockSetupRequired = true
     renderTray()
+
+    // Effect-driven auto-open (rAF-deferred) — must not setState during render.
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve())
+      })
+    })
 
     // Tray content is already visible without a click — the required step
     // must not be hidden behind a closed-by-default tray.

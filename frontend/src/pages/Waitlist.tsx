@@ -101,10 +101,10 @@ export function Waitlist() {
     <AppQueryProvider>
       <PageMeta title={META.waitlist.title} description={META.waitlist.description} canonicalPath="/waitlist" />
       <PrivyClientProvider
-        // Keep a stable provider tree for the default email lane. Remounting
-        // Privy when wallet sign-in starts is intentional (different connectors),
-        // but email↔email must not remount on unrelated parent renders.
-        key={waitlistWalletPrivyMode ? 'waitlist-wallet-lane' : 'waitlist-email'}
+        // Key on the full mode so Privy remounts when connectors/loginMethods
+        // change (email → returning-wallet → wallet-joined). Updating Privy
+        // config in place after wallet verify crashes in Base App WebViews.
+        key={waitlistPrivyMode}
         showWalletLoginFirst={waitlistWalletPrivyMode}
         mode={waitlistPrivyMode}
         walletChainType={waitlistWalletPrivyMode ? 'ethereum-only' : undefined}

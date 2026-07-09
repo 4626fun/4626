@@ -25,7 +25,9 @@ type WaitlistChatDockProps = {
  * do not trap `position: fixed` in the centered column.
  */
 export function WaitlistChatDock(props: WaitlistChatDockProps) {
-  const [expanded, setExpanded] = useState(true)
+  // Start collapsed so Base App / wallet-verify does not immediately mount
+  // Wagmi + Coinbase Wallet SDK (ethereum injection races crash the WebView).
+  const [expanded, setExpanded] = useState(false)
 
   if (typeof document === 'undefined') return null
 

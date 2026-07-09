@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion, useReducedMotion } from 'framer-motion'
 
@@ -119,10 +119,18 @@ export function WaitlistAccountTray(props: WaitlistAccountTrayProps) {
   const coinBadge = useCreatorCoinBadge(identity.creatorCoinAddress)
   const { setupRequired } = useWaitlistPostJoinAttention()
 
-  if (hasSession && setupRequired && !autoOpened) {
-    setAutoOpened(true)
-    setOpen(true)
-  }
+  // Auto-open once when wallet setup needs attention. Must run in an effect —
+  // setState during render races the post-join shell / chat mount and crashes
+  // Base App after wallet verify. Defer to the next frame so we do not call
+  // setState synchronously in the effect body (react-hooks/set-state-in-effect).
+  useEffect(() => {
+    if (!hasSession || !setupRequired || autoOpened) return
+    const raf = requestAnimationFrame(() => {
+      setAutoOpened(true)
+      setOpen(true)
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [autoOpened, hasSession, setupRequired])
 
   const trayAccountPointsQuery = useQuery({
     queryKey: ['waitlist-account-tray', 'accounts-me-points', props.joinedSessionAddress],
