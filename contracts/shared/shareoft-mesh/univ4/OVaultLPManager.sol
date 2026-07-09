@@ -549,8 +549,10 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
     function _burnAndCollect(PositionInfo storage pos) internal returns (uint256 amount0, uint256 amount1) {
         if (pos.liquidity == 0) return (0, 0);
         _requireConfigured();
-        (uint256 principal0, uint256 principal1) = _getPositionAmounts(pos);
-        (uint128 min0, uint128 min1) = _minsFromExpected(principal0, principal1);
+        // _getPositionAmounts returns (asset, paired); V4 BURN expects (currency0, currency1).
+        (uint256 principalAsset, uint256 principalPaired) = _getPositionAmounts(pos);
+        (uint128 minAsset, uint128 minPaired) = _minsFromExpected(principalAsset, principalPaired);
+        (uint128 min0, uint128 min1) = _minsInPoolCurrencyOrder(minAsset, minPaired);
 
         uint256 balAssetBefore = ASSET.balanceOf(address(this));
         uint256 balPairedBefore = _pairedBalance();
@@ -561,7 +563,7 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         actions[2] = bytes1(uint8(Actions.CLOSE_CURRENCY));
 
         bytes[] memory params = new bytes[](3);
-        // M-10: non-zero mins from principal * (1 - maxRebalanceSlippageBps).
+        // M-10: non-zero mins from principal * (1 - maxRebalanceSlippageBps), pool currency order.
         params[0] = abi.encode(pos.tokenId, min0, min1, bytes(""));
         params[1] = abi.encode(poolKey.currency0);
         params[2] = abi.encode(poolKey.currency1);
@@ -575,11 +577,11 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
 
         // Credit realized swap fees (collected - principal currently backing liquidity).
         // Clamp at zero for edge rounding cases where collected == principal or slightly lower.
-        if (amount0 > principal0) {
-            accruedFees0 += amount0 - principal0;
+        if (amount0 > principalAsset) {
+            accruedFees0 += amount0 - principalAsset;
         }
-        if (amount1 > principal1) {
-            accruedFees1 += amount1 - principal1;
+        if (amount1 > principalPaired) {
+            accruedFees1 += amount1 - principalPaired;
         }
 
         pos.liquidity = 0;
@@ -597,11 +599,12 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
 
         _requireConfigured();
 
-        // M-10: expected amounts for the share of liquidity, with slippage floor.
-        (uint256 full0, uint256 full1) = _getPositionAmounts(pos);
-        uint256 expected0 = Math.mulDiv(full0, liquidityToBurn, pos.liquidity);
-        uint256 expected1 = Math.mulDiv(full1, liquidityToBurn, pos.liquidity);
-        (uint128 min0, uint128 min1) = _minsFromExpected(expected0, expected1);
+        // M-10: expected amounts for the share of liquidity (asset/paired), then pool order.
+        (uint256 fullAsset, uint256 fullPaired) = _getPositionAmounts(pos);
+        uint256 expectedAsset = Math.mulDiv(fullAsset, liquidityToBurn, pos.liquidity);
+        uint256 expectedPaired = Math.mulDiv(fullPaired, liquidityToBurn, pos.liquidity);
+        (uint128 minAsset, uint128 minPaired) = _minsFromExpected(expectedAsset, expectedPaired);
+        (uint128 min0, uint128 min1) = _minsInPoolCurrencyOrder(minAsset, minPaired);
 
         uint256 balAssetBefore = ASSET.balanceOf(address(this));
         uint256 balPairedBefore = _pairedBalance();
@@ -625,15 +628,29 @@ contract OVaultLPManager is Ownable, ReentrancyGuard {
         pos.liquidity -= liquidityToBurn;
     }
 
-    /// @dev Apply maxRebalanceSlippageBps floor to expected token amounts for V4 burn/decrease.
-    function _minsFromExpected(uint256 expected0, uint256 expected1) internal view returns (uint128 min0, uint128 min1) {
+    /// @dev Apply maxRebalanceSlippageBps floor to expected token amounts (asset/paired units).
+    function _minsFromExpected(uint256 expectedAsset, uint256 expectedPaired)
+        internal
+        view
+        returns (uint128 minAsset, uint128 minPaired)
+    {
         uint256 bps = maxRebalanceSlippageBps;
         if (bps > MAX_WITHDRAW_SLIPPAGE_BPS) bps = MAX_WITHDRAW_SLIPPAGE_BPS;
         if (bps >= 10_000) bps = MAX_WITHDRAW_SLIPPAGE_BPS;
-        uint256 m0 = Math.mulDiv(expected0, 10_000 - bps, 10_000);
-        uint256 m1 = Math.mulDiv(expected1, 10_000 - bps, 10_000);
-        min0 = m0 > type(uint128).max ? type(uint128).max : uint128(m0);
-        min1 = m1 > type(uint128).max ? type(uint128).max : uint128(m1);
+        uint256 m0 = Math.mulDiv(expectedAsset, 10_000 - bps, 10_000);
+        uint256 m1 = Math.mulDiv(expectedPaired, 10_000 - bps, 10_000);
+        minAsset = m0 > type(uint128).max ? type(uint128).max : uint128(m0);
+        minPaired = m1 > type(uint128).max ? type(uint128).max : uint128(m1);
+    }
+
+    /// @dev Map asset/paired mins into V4 poolKey currency0/currency1 order.
+    function _minsInPoolCurrencyOrder(uint128 minAsset, uint128 minPaired)
+        internal
+        view
+        returns (uint128 min0, uint128 min1)
+    {
+        if (assetIsCurrency0) return (minAsset, minPaired);
+        return (minPaired, minAsset);
     }
 
     function setMaxRebalanceSlippageBps(uint256 bps) external onlyOwner {

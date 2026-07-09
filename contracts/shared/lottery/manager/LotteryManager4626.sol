@@ -1752,10 +1752,71 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         uint256 slotsScanned
     );
 
+    /// @dev R-H05 single-vault: pay only the triggering coin's gauge (no registry scan).
+    function _payTriggeringVaultJackpot(address triggeringCoin, address winner, uint16 payoutBps)
+        internal
+        returns (uint256 totalSharesPaid)
+    {
+        if (triggeringCoin == address(0)) return 0;
+
+        // Match multi-vault path: suppress payout if the lane was deactivated after entry.
+        bool isActive;
+        try registry.isTokenActive(triggeringCoin) returns (bool result) {
+            isActive = result;
+        } catch {
+            return 0;
+        }
+        if (!isActive) return 0;
+
+        address vaultAddr;
+        address gaugeAddr;
+        try registry.getVaultForToken(triggeringCoin) returns (address result) {
+            vaultAddr = result;
+        } catch {
+            return 0;
+        }
+        try registry.getGaugeControllerForToken(triggeringCoin) returns (address result) {
+            gaugeAddr = result;
+        } catch {
+            return 0;
+        }
+        if (vaultAddr == address(0) || gaugeAddr == address(0)) return 0;
+
+        IGaugeControllerLottery gaugeController = IGaugeControllerLottery(gaugeAddr);
+        uint256 jackpotShares;
+        try gaugeController.availableJackpotReserve() returns (uint256 result) {
+            jackpotShares = result;
+        } catch {
+            return 0;
+        }
+        if (jackpotShares == 0) return 0;
+
+        uint256 rewardShares = (jackpotShares * payoutBps) / BASIS_POINTS;
+        if (rewardShares == 0) return 0;
+
+        try gaugeController.payJackpot(winner, rewardShares) {
+            totalSharesPaid = rewardShares;
+            totalRewardsPaid += rewardShares;
+            tokenStats[triggeringCoin].rewardsPaid += rewardShares;
+            emit LotteryWon(triggeringCoin, 0, winner, rewardShares, 0);
+            emit CrossChainJackpotPaid(triggeringCoin, winner, rewardShares, 0);
+            emit MultiTokenJackpotWon(triggeringCoin, winner, 1);
+        } catch {
+            emit JackpotPayoutFailed(triggeringCoin, winner, rewardShares);
+            return 0;
+        }
+    }
+
     function _payoutLocalJackpotInner(address triggeringCoin, address winner, uint16 payoutBps)
         internal
         returns (uint256 totalSharesPaid)
     {
+        // R-H05: single-vault mode must not depend on the multi-vault cursor window.
+        // A large registry + scan cap could otherwise skip the triggering coin entirely.
+        if (singleVaultJackpotOnly) {
+            return _payTriggeringVaultJackpot(triggeringCoin, winner, payoutBps);
+        }
+
         // FIX: CLM-04 — registry calls wrapped in try/catch to prevent permanent lock
         address[] memory allTokens;
         try registry.getAllTokens() returns (address[] memory result) {
@@ -1813,9 +1874,6 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
                 continue;
             }
             if (!isActive) continue;
-
-            // R-H05: optional single-vault mode — only the triggering coin's pot pays.
-            if (singleVaultJackpotOnly && token != triggeringCoin) continue;
 
             activeIterated++;
 

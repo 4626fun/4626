@@ -110,4 +110,47 @@ describe('actionLease (M2-09)', () => {
     })
     expect(second.acquired).toBe(true)
   })
+
+  it('rethrows non-EEXIST errors from exclusive create', async () => {
+    await expect(
+      tryAcquireActionLease({
+        action: 'settle_fees',
+        holder: 'x',
+        leaseDir: '/definitely/not/a/writable/path/for-lease-test',
+        ttlMs: 60_000,
+      }),
+    ).rejects.toMatchObject({ code: expect.stringMatching(/ENOENT|EACCES|EROFS/) })
+  })
+
+  it('only one racer wins when both claim an expired lease', async () => {
+    const now = Date.now()
+    const first = await tryAcquireActionLease({
+      action: 'settle_fees',
+      holder: 'stale',
+      leaseDir: dir,
+      ttlMs: 1,
+      nowMs: now - 60_000,
+    })
+    expect(first.acquired).toBe(true)
+
+    // Parallel-style: both see expired; only one rename+wx succeeds.
+    const [a, b] = await Promise.all([
+      tryAcquireActionLease({
+        action: 'settle_fees',
+        holder: 'racer-a',
+        leaseDir: dir,
+        ttlMs: 60_000,
+        nowMs: now,
+      }),
+      tryAcquireActionLease({
+        action: 'settle_fees',
+        holder: 'racer-b',
+        leaseDir: dir,
+        ttlMs: 60_000,
+        nowMs: now,
+      }),
+    ])
+    const wins = [a, b].filter((r) => r.acquired)
+    expect(wins).toHaveLength(1)
+  })
 })
