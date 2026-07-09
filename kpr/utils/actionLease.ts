@@ -85,8 +85,14 @@ async function writeExclusiveLease(params: {
     await handle.writeFile(`${JSON.stringify(body, null, 2)}\n`, 'utf8')
     await handle.close()
     return { acquired: true, leasePath: params.leasePath, token: params.token }
-  } catch {
-    return { acquired: false, reason: 'held' }
+  } catch (err) {
+    // Exclusive create only races on EEXIST; surface other filesystem failures.
+    const code =
+      err && typeof err === 'object' && 'code' in err ? String((err as { code?: unknown }).code) : ''
+    if (code === 'EEXIST') {
+      return { acquired: false, reason: 'held' }
+    }
+    throw err
   }
 }
 

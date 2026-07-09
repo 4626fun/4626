@@ -1759,6 +1759,15 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     {
         if (triggeringCoin == address(0)) return 0;
 
+        // Match multi-vault path: suppress payout if the lane was deactivated after entry.
+        bool isActive;
+        try registry.isTokenActive(triggeringCoin) returns (bool result) {
+            isActive = result;
+        } catch {
+            return 0;
+        }
+        if (!isActive) return 0;
+
         address vaultAddr;
         address gaugeAddr;
         try registry.getVaultForToken(triggeringCoin) returns (address result) {
