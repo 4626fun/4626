@@ -1,6 +1,9 @@
 import { WaitlistModernParentOwnerInstall } from '@/features/accountSetup/WaitlistModernParentOwnerInstall'
 import { ZoraAddOwnerSigningPanel } from '@/features/accountSetup/ZoraAddOwnerSigningPanel'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
+import { LoadingInline } from '@/components/ui/LoadingState'
+
+import { WaitlistMessagingWalletProviders } from './WaitlistMessagingWalletProviders'
 
 type WaitlistLegacyOwnerInstallProps = {
   canonicalCswAddress: string | null
@@ -12,8 +15,28 @@ type WaitlistLegacyOwnerInstallProps = {
 /**
  * Zora / Base App owner install — mounts the full account-setup controller only
  * when this lazy chunk loads (keeps the default email-only waitlist path light).
+ *
+ * Marketing `/waitlist` has no root WagmiProvider. The controller calls wagmi
+ * hooks (`useAccount`, `useConnections`, …), so this chunk must wrap itself.
  */
 export function WaitlistLegacyOwnerInstall(props: WaitlistLegacyOwnerInstallProps) {
+  const connectTrack = props.preferBaseAppPath ? 'base-app-direct' : 'zora-owner-install'
+
+  return (
+    <WaitlistMessagingWalletProviders
+      connectTrack={connectTrack}
+      fallback={
+        <div className="py-2">
+          <LoadingInline labelOverride="Loading wallet providers…" />
+        </div>
+      }
+    >
+      <WaitlistLegacyOwnerInstallInner {...props} />
+    </WaitlistMessagingWalletProviders>
+  )
+}
+
+function WaitlistLegacyOwnerInstallInner(props: WaitlistLegacyOwnerInstallProps) {
   const controller = useAccountSetupController({ zoraReturnPath: '/waitlist' })
 
   if (props.preferBaseAppPath || controller.requiresBaseAppForOwnerInstall) {

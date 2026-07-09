@@ -25,13 +25,36 @@ describe('resolveWaitlistJoinedSessionAddress', () => {
     ).toBeNull()
   })
 
-  it('returns null when Privy is not authenticated', () => {
+  it('keeps the server session when Privy briefly flaps unauthenticated after probe', () => {
     expect(
       resolveWaitlistJoinedSessionAddress({
         ...BASE,
         privyAuthenticated: false,
       }),
-    ).toBeNull()
+    ).toBe('0xserver')
+  })
+
+  it('keeps the server session when Privy briefly flaps not-ready after probe', () => {
+    expect(
+      resolveWaitlistJoinedSessionAddress({
+        ...BASE,
+        privyReady: false,
+        privyAuthenticated: false,
+      }),
+    ).toBe('0xserver')
+  })
+
+  it('keeps a local OTP session when Privy flaps not-ready', () => {
+    expect(
+      resolveWaitlistJoinedSessionAddress({
+        ...BASE,
+        sessionProbeComplete: true,
+        privyReady: false,
+        privyAuthenticated: false,
+        localSessionAddress: '0xlocal',
+        serverSessionAddress: null,
+      }),
+    ).toBe('0xlocal')
   })
 
   it('returns local session during wallet handoff when Privy is briefly unauthenticated', () => {
@@ -186,6 +209,20 @@ describe('shouldClearOrphanWaitlistServerSession', () => {
         serverSessionAddress: '0xwallet',
         walletSessionAddress: '0xwallet',
         localSessionAddress: null,
+      }),
+    ).toBe(false)
+  })
+
+  it('does not clear when a local OTP session exists and Privy flaps unauthenticated', () => {
+    expect(
+      shouldClearOrphanWaitlistServerSession({
+        sessionProbeComplete: true,
+        privyReady: true,
+        privyAuthenticated: false,
+        walletSignInPending: false,
+        serverSessionAddress: '0xserver',
+        walletSessionAddress: null,
+        localSessionAddress: '0xlocal',
       }),
     ).toBe(false)
   })

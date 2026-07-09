@@ -31,7 +31,15 @@ function resolveWalletHandoffAddress(
   return local ?? walletHandoff
 }
 
-/** Joined waitlist UI requires a 4626 session; wallet handoff may proceed before Privy restabilizes. */
+/**
+ * Joined waitlist UI requires a 4626 session.
+ *
+ * Once any session address is known (local OTP handoff, wallet handoff, or
+ * server cookie after probe), keep the joined surface even if Privy briefly
+ * flaps `ready` / `authenticated` in Base App WebViews. Requiring live Privy
+ * auth for every render swaps signup ↔ joined via AnimatePresence and looks
+ * like a broken flicker.
+ */
 export function resolveWaitlistJoinedSessionAddress(input: WaitlistJoinedSessionInput): string | null {
   if (input.walletSignInPending) return null
 
@@ -40,14 +48,15 @@ export function resolveWaitlistJoinedSessionAddress(input: WaitlistJoinedSession
     return walletHandoffAddress
   }
 
-  if (!input.sessionProbeComplete || !input.privyReady) return null
-  if (!input.privyAuthenticated) return null
+  const local = trimAddress(input.localSessionAddress)
+  if (local) return local
 
-  return (
-    trimAddress(input.localSessionAddress) ??
-    trimAddress(input.walletSessionAddress) ??
-    trimAddress(input.serverSessionAddress)
-  )
+  const wallet = trimAddress(input.walletSessionAddress)
+  if (wallet) return wallet
+
+  const server = trimAddress(input.serverSessionAddress)
+  if (!server || !input.sessionProbeComplete) return null
+  return server
 }
 
 export type OrphanWaitlistServerSessionInput = Pick<
@@ -70,6 +79,8 @@ export function shouldClearOrphanWaitlistServerSession(input: OrphanWaitlistServ
   if (input.walletSignInPending) return false
   if (input.signupInProgress) return false
   if (input.privyAuthenticated) return false
+  // Local OTP/bootstrap session is authoritative — never treat as orphan.
+  if (trimAddress(input.localSessionAddress)) return false
   if (trimAddress(input.walletSessionAddress) && !input.walletSignInPending) return false
   if (isWalletHandoffSession(input)) return false
   return Boolean(trimAddress(input.serverSessionAddress))

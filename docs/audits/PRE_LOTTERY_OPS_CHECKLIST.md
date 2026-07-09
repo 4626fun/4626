@@ -87,3 +87,17 @@ Upgrade runbook: AGENTS.md Solana program deployment section.
 - [ ] B2 relay_entries still off  
 - [ ] Env fail-closed confirmed on Vercel + Railway + Vultr orchestrator  
 - [ ] Public docs match R-H05 mode actually deployed  
+
+---
+
+## Preflight snapshot (2026-07-09 agent)
+
+See [ops-preflight-status-2026-07-09.md](../operations/ops-preflight-status-2026-07-09.md).
+
+| Item | Snapshot |
+|------|----------|
+| Repo `main` | `f6c9fa93f` (#680+#681) |
+| Solana `.so` build | 329 632 B — fits on-chain 372 488 (no extend) |
+| Upgrade authority SOL | **0.0125** — need ~2.5 SOL before deploy |
+| Agent secrets | **None** — cannot run mainnet txs here |
+| Live LotteryManager | Responds; **missing** `singleVaultJackpotOnly` / `deferredVrfQueueLength` (pre-remediation bytecode likely) |

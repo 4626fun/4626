@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { WaitlistChatDock } from './WaitlistChatDock'
 
 describe('WaitlistChatDock', () => {
-  it('renders fixed bottom-right desktop shell and toggles minimize', () => {
+  it('starts collapsed and expands into the fixed bottom-right chat shell', () => {
     render(
       <WaitlistChatDock
         setupComplete
@@ -13,6 +13,12 @@ describe('WaitlistChatDock', () => {
         connectTrack="privy-owner-install"
       />,
     )
+
+    // Collapsed by default — avoids mounting Wagmi/Coinbase SDK on wallet-verify.
+    expect(screen.getByLabelText('Open waitlist group chat')).toBeTruthy()
+    expect(screen.queryByText('Loading waitlist chat…')).toBeNull()
+
+    fireEvent.click(screen.getByLabelText('Open waitlist group chat'))
 
     const dock = screen.getByLabelText('Minimize waitlist group chat').closest('.fixed')
     expect(dock).toBeTruthy()
@@ -23,8 +29,5 @@ describe('WaitlistChatDock', () => {
     fireEvent.click(screen.getByLabelText('Minimize waitlist group chat'))
     expect(screen.queryByText('Loading waitlist chat…')).toBeNull()
     expect(screen.getByLabelText('Open waitlist group chat')).toBeTruthy()
-
-    fireEvent.click(screen.getByLabelText('Open waitlist group chat'))
-    expect(screen.getByText('Loading waitlist chat…')).toBeTruthy()
   })
 })

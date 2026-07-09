@@ -123,12 +123,95 @@ function pickPrivySessionAddress(params: {
 const PRIVY_USER_WALLET_LINK_RETRY_ATTEMPTS = 4
 const PRIVY_USER_WALLET_LINK_RETRY_DELAY_MS = 200
 
+function logPrivyWalletProvision(detail: Record<string, unknown>): void {
+  console.info('[auth/privy] ensure-user-wallet', detail)
+}
+
+/**
+ * Waitlist email OTP uses whitelabel `loginWithCode`, which does not run Privy's
+ * `createOnLogin` auto-wallet path. Client `createWallet()` on localhost also
+ * loads the privy.4626.fun embedded-wallet iframe (server-cookie mode) and can
+ * clear the just-minted session before a wallet exists. Provision the
+ * user-owned embedded EOA server-side when the verified Privy user still has
+ * zero linked wallets so `/api/auth/privy` can mint a session.
+ */
+async function ensurePrivyUserEmbeddedWallet(
+  client: PrivyClient,
+  userId: string,
+  classified: ClassifiedLinkedAccounts,
+): Promise<{ user: any; classified: ClassifiedLinkedAccounts }> {
+  if (classified.allWallets.length > 0) {
+    return { user: null, classified }
+  }
+
+  // Path 1: legacy app users/wallet endpoint (links wallet onto the Privy user).
+  try {
+    const created = await client.createWallets({
+      userId,
+      createEthereumWallet: true,
+      createSolanaWallet: false,
+      createEthereumSmartWallet: false,
+      numberOfEthereumWalletsToCreate: 1,
+    })
+    const nextClassified = classifyLinkedAccounts(created as any)
+    logPrivyWalletProvision({
+      path: 'createWallets',
+      walletCount: nextClassified.allWallets.length,
+      primary: nextClassified.primaryWalletAddress ?? null,
+    })
+    if (nextClassified.allWallets.length > 0) {
+      return { user: created, classified: nextClassified }
+    }
+  } catch (error) {
+    logPrivyWalletProvision({
+      path: 'createWallets',
+      error: error instanceof Error ? error.message : String(error ?? ''),
+    })
+  }
+
+  // Path 2: Wallet API create with the Privy user as owner, then re-load the user.
+  try {
+    const wallet = await client.walletApi.create({
+      chainType: 'ethereum',
+      owner: { userId },
+    })
+    logPrivyWalletProvision({
+      path: 'walletApi.create',
+      address: typeof wallet?.address === 'string' ? wallet.address : null,
+      walletId: typeof wallet?.id === 'string' ? wallet.id : null,
+    })
+  } catch (error) {
+    logPrivyWalletProvision({
+      path: 'walletApi.create',
+      error: error instanceof Error ? error.message : String(error ?? ''),
+    })
+  }
+
+  const user = await client.getUserById(userId)
+  const reloaded = classifyLinkedAccounts(user as any)
+  logPrivyWalletProvision({
+    path: 'reload',
+    walletCount: reloaded.allWallets.length,
+    primary: reloaded.primaryWalletAddress ?? null,
+  })
+  return { user, classified: reloaded }
+}
+
 async function loadPrivyUserWithWalletLinkRetry(
   client: PrivyClient,
   userId: string,
 ): Promise<{ user: any; classified: ClassifiedLinkedAccounts }> {
   let user = await client.getUserById(userId)
   let classified = classifyLinkedAccounts(user as any)
+
+  if (classified.allWallets.length === 0) {
+    // Prefer server provision immediately for brand-new email OTP users.
+    // Client createWallet on localhost often clears auth before a wallet exists,
+    // so waiting for client-side link propagation just adds latency.
+    const provisioned = await ensurePrivyUserEmbeddedWallet(client, userId, classified)
+    if (provisioned.user) user = provisioned.user
+    classified = provisioned.classified
+  }
 
   for (
     let attempt = 1;

@@ -21,7 +21,7 @@ type HandoffCreateResponse = {
 
 export type BridgePrivySessionResult =
   | { ok: true; address: string }
-  | { ok: false; address?: null }
+  | { ok: false; address?: null; error?: string | null }
 
 /**
  * Exchange a Privy access token for a 4626 session on the current origin.
@@ -65,11 +65,21 @@ export async function bridgePrivySession(privyToken: string | null): Promise<Bri
   }
 
   const ok = Boolean(authRes?.ok && payload?.success)
-  if (!ok) return { ok: false }
+  if (!ok) {
+    const error =
+      payload && typeof payload.error === 'string' && payload.error.trim()
+        ? payload.error.trim()
+        : authRes
+          ? `Could not create your app session (HTTP ${authRes.status}).`
+          : 'Could not create your app session. Please try again.'
+    return { ok: false, error }
+  }
 
   const address =
     payload?.data && typeof payload.data.address === 'string' ? payload.data.address.trim() : ''
-  if (!address) return { ok: false }
+  if (!address) {
+    return { ok: false, error: 'Could not create your app session. Please try again.' }
+  }
 
   // FINDING-02: the 4626 session is now in the HttpOnly cv_auth_session
   // cookie. Clear any stale cv_siwe_session_token in sessionStorage so
