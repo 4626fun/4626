@@ -2,10 +2,14 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title ve4626 - 4626 Protocol Token
+ * @title ve4626 (ve■4626)
  * @author 0xakita.eth
- * @notice Vote-escrowed ERC4626 (ve■4626) for protocol-wide boosts.
- * @dev Users lock ■4626 to get voting power and lottery boosts.
+ * @notice Vote-escrow commitment: lock **■4626 only** for dual-decay voting power.
+ * @dev Product name: **ve■4626** (lowercase "ve" = vote-escrow).
+ *      Contract/file: `ve4626` / `ve4626.sol` — always lowercase `ve`, never `VE` / `Ve4626`.
+ *      Lock asset: immutable `wrappedShareOFT` = protocol ■4626 ($4626 stack), NOT per-creator ShareOFT.
+ *      Creator vault ■ (e.g. ■AKITA) cannot be locked here — `lock` reverts `InvalidToken`.
+ *      Optional utilities (vote / chance) live in `ve4626Utility`, not this contract.
  */
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -89,8 +93,31 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
     /// @notice User locks
     mapping(address => Lock) private _locks;
 
-    /// @notice Total voting supply
+    /// @notice Minted ERC20 snapshot supply (legacy cosmetic / getPastTotalSupply writes).
+    /// @dev Live boost/gauge math MUST use `getTotalVotingPower()` dual-decay, not this alone.
     uint256 private _totalVotingSupply;
+
+    // ================================
+    // CURVE-STYLE DUAL DECAY (total power)
+    // ================================
+    // power(user) = amount * remaining / MAX_LOCK
+    // slope(user) = amount / MAX_LOCK  (per-second decay of bias)
+    // Global bias decays with global slope; slope drops at each lock end via slopeChanges.
+
+    uint256 private constant WEEK = 7 days;
+
+    /// @dev Global bias (total voting power) as of `_decayPointTs`.
+    uint256 private _decayBias;
+    /// @dev Sum of active user slopes (amount / MAX_LOCK_DURATION).
+    uint256 private _decaySlope;
+    /// @dev Timestamp of last global decay point.
+    uint256 private _decayPointTs;
+    /// @dev Scheduled slope decreases at week-rounded lock ends: ts => slope to remove.
+    mapping(uint256 => uint256) private _slopeChanges;
+    /// @dev Per-user slope currently contributing to the global total.
+    mapping(address => uint256) private _userSlope;
+    /// @dev Per-user lock end used for slopeChanges scheduling.
+    mapping(address => uint256) private _userSlopeEnd;
 
     // FIX: H-06 — historical total-voting-supply checkpoints.
     // Previously getPastTotalSupply() returned the *current* _totalVotingSupply
@@ -129,7 +156,7 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
      * @notice Constructor
      * @param _name Token name (e.g., "Vote-Escrowed Wrapped 4626 Share")
      * @param _symbol Token symbol (e.g., "ve■4626")
-     * @param _wrappedShareOFT The ■4626 (or similar) token to lock
+     * @param _wrappedShareOFT Protocol ■4626 only (not per-creator ShareOFT)
      * @param _owner Owner address
      */
     constructor(string memory _name, string memory _symbol, address _wrappedShareOFT, address _owner)
@@ -181,9 +208,9 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
             underlyingValue: _getUnderlyingValue(_token, amount)
         });
 
-        // Mint ve4626 (non-transferable)
+        // Mint ve4626 (non-transferable) — snapshot at lock; live power uses dual-decay views
         _mint(msg.sender, votingPowerAmount);
-        _totalVotingSupply += votingPowerAmount;
+        _checkpointUserSlope(msg.sender, amount, lockEnd);
 
         // Notify boost manager
         _notifyBoostManager(msg.sender);
@@ -214,14 +241,12 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
 
         // FIX: G-22 — adjust ve4626 balance in both directions (mint or burn)
         if (newVotingPower > oldPower) {
-            uint256 diff = newVotingPower - oldPower;
-            _mint(msg.sender, diff);
-            _totalVotingSupply += diff;
+            _mint(msg.sender, newVotingPower - oldPower);
         } else if (newVotingPower < oldPower) {
-            uint256 diff = oldPower - newVotingPower;
-            _burn(msg.sender, diff);
-            _totalVotingSupply -= diff;
+            _burn(msg.sender, oldPower - newVotingPower);
         }
+
+        _checkpointUserSlope(msg.sender, userLock.amount, newEnd);
 
         // Notify boost manager
         _notifyBoostManager(msg.sender);
@@ -255,10 +280,10 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
 
         // Mint additional ve4626
         if (newVotingPower > oldPower) {
-            uint256 diff = newVotingPower - oldPower;
-            _mint(msg.sender, diff);
-            _totalVotingSupply += diff;
+            _mint(msg.sender, newVotingPower - oldPower);
         }
+
+        _checkpointUserSlope(msg.sender, userLock.amount, userLock.end);
 
         // Notify boost manager
         _notifyBoostManager(msg.sender);
@@ -282,11 +307,11 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
         uint256 veBalance = balanceOf(msg.sender);
         if (veBalance > 0) {
             _burn(msg.sender, veBalance);
-            _totalVotingSupply -= veBalance;
         }
 
         // Clear lock
         delete _locks[msg.sender];
+        _checkpointUserSlope(msg.sender, 0, 0);
         _writeLockCheckpoint(msg.sender);
 
         // Return tokens
@@ -310,8 +335,10 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
         uint256 veBalance = balanceOf(user);
         if (veBalance > 0) {
             _burn(user, veBalance);
-            _totalVotingSupply -= veBalance;
         }
+
+        // Remove dual-decay contribution; lock principal remains until unlock().
+        _checkpointUserSlope(user, 0, 0);
 
         // Notify boost manager
         _notifyBoostManager(user);
@@ -329,6 +356,109 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
         uint256 duration = lockEnd - block.timestamp;
         // Linear: max power at MAX_LOCK_DURATION
         return (amount * duration) / MAX_LOCK_DURATION;
+    }
+
+    function _weekFloor(uint256 ts) internal pure returns (uint256) {
+        return (ts / WEEK) * WEEK;
+    }
+
+    function _userSlopeOf(uint256 amount) internal pure returns (uint256) {
+        return amount / MAX_LOCK_DURATION;
+    }
+
+    /// @dev Project global bias/slope from last stored point to `t` (view).
+    function _decayStateAt(uint256 t)
+        internal
+        view
+        returns (uint256 bias, uint256 slope, uint256 pointTs)
+    {
+        bias = _decayBias;
+        slope = _decaySlope;
+        pointTs = _decayPointTs;
+        if (pointTs == 0) {
+            return (0, 0, t);
+        }
+        if (t <= pointTs) {
+            return (bias, slope, pointTs);
+        }
+
+        // Walk week boundaries applying scheduled slope decreases (Curve-style, max ~255 weeks).
+        uint256 w = _weekFloor(pointTs);
+        for (uint256 i = 0; i < 255;) {
+            uint256 next = w + WEEK;
+            if (next > t) {
+                uint256 dt = t - pointTs;
+                uint256 decay = slope * dt;
+                bias = bias > decay ? bias - decay : 0;
+                pointTs = t;
+                break;
+            }
+            {
+                uint256 dt = next - pointTs;
+                uint256 decay = slope * dt;
+                bias = bias > decay ? bias - decay : 0;
+                pointTs = next;
+            }
+            slope = slope > _slopeChanges[next] ? slope - _slopeChanges[next] : 0;
+            w = next;
+            if (pointTs == t) break;
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /// @dev Persist dual-decay global point to `block.timestamp`.
+    function _checkpointGlobal() internal {
+        (uint256 bias, uint256 slope, uint256 ts) = _decayStateAt(block.timestamp);
+        _decayBias = bias;
+        _decaySlope = slope;
+        _decayPointTs = ts == 0 ? block.timestamp : ts;
+        // Keep historical total-supply checkpoints aligned with live dual-decay total.
+        _totalVotingSupply = bias;
+    }
+
+    /// @dev Remove old user slope contribution and apply new lock amount/end.
+    function _checkpointUserSlope(address user, uint256 newAmount, uint256 newEnd) internal {
+        _checkpointGlobal();
+
+        uint256 oldSlope = _userSlope[user];
+        uint256 oldEnd = _userSlopeEnd[user];
+
+        // After global checkpoint to `now`, only still-active locks remain in slope/bias.
+        if (oldSlope > 0 && oldEnd > block.timestamp) {
+            uint256 oldBias = oldSlope * (oldEnd - block.timestamp);
+            _decayBias = _decayBias > oldBias ? _decayBias - oldBias : 0;
+            _decaySlope = _decaySlope > oldSlope ? _decaySlope - oldSlope : 0;
+            uint256 weekEnd = _weekFloor(oldEnd);
+            if (weekEnd > block.timestamp) {
+                if (_slopeChanges[weekEnd] >= oldSlope) _slopeChanges[weekEnd] -= oldSlope;
+                else _slopeChanges[weekEnd] = 0;
+            }
+        }
+
+        // Prefer exact user-power formula for bias add so totals match getVotingPower at lock time.
+        uint256 newSlope = newAmount == 0 || newEnd <= block.timestamp ? 0 : _userSlopeOf(newAmount);
+        if (newSlope > 0 || (newAmount > 0 && newEnd > block.timestamp)) {
+            uint256 newBias = _calculateVotingPower(newAmount, newEnd);
+            // Slope for decay: amount / MAX (may be 0 for dust); if 0, use ceil-1 wei slope only when bias > 0
+            if (newSlope == 0 && newBias > 0) {
+                newSlope = 1; // minimal slope so dust locks still decay eventually
+            }
+            _decaySlope += newSlope;
+            _decayBias += newBias;
+            uint256 weekEnd = _weekFloor(newEnd);
+            if (weekEnd <= block.timestamp) weekEnd = _weekFloor(block.timestamp) + WEEK;
+            _slopeChanges[weekEnd] += newSlope;
+        }
+
+        _userSlope[user] = newSlope;
+        _userSlopeEnd[user] = newSlope == 0 ? 0 : newEnd;
+        _decayPointTs = block.timestamp;
+
+        // Sync supply checkpoint trail to live dual-decay total.
+        _totalVotingSupply = _decayBias;
+        _writeSupplyCheckpoint();
     }
 
     function _getUnderlyingValue(
@@ -379,11 +509,20 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
         return _votingPowerAt(amount, end, timestamp);
     }
 
-    function getTotalVotingPower() external view override returns (uint256) {
-        return _totalVotingSupply;
+    /// @notice Live dual-decay total voting power (Curve-style bias − slope·Δt).
+    /// @dev Prefer this over minted ERC20 supply for boost/gauge share math.
+    function getTotalVotingPower() public view override returns (uint256) {
+        (uint256 bias,,) = _decayStateAt(block.timestamp);
+        return bias;
     }
 
+    /// @notice Alias of live dual-decay total (same as `getTotalVotingPower`).
     function totalVotingSupply() external view returns (uint256) {
+        return getTotalVotingPower();
+    }
+
+    /// @notice Minted ERC20 snapshot total (not dual-decay). Prefer `getTotalVotingPower`.
+    function mintedVotingSupply() external view returns (uint256) {
         return _totalVotingSupply;
     }
 

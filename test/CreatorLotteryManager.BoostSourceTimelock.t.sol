@@ -65,6 +65,9 @@ contract MockLotteryRegistryBSTL {
 
 contract MockBoostManagerBSTL {
     function calculateBoost(address) external pure returns (uint256) { return 10_000; }
+    function calculateBoostForPosition(address, uint256, uint256, uint256) external pure returns (uint256) {
+        return 10_000;
+    }
     function getCoverageBps(address, address, address, address, uint256, uint256) external pure returns (uint256) { return 0; }
     function getTotalProbabilityBoost(address) external pure returns (uint256) { return 0; }
 }

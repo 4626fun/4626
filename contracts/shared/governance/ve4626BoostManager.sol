@@ -4,15 +4,29 @@ pragma solidity ^0.8.20;
 /**
  * @title ve4626BoostManager
  * @author 0xakita.eth
- * @notice Calculates personal ve4626 lottery boost (global 2.5x max, coverage-scaled by held creator shares only)
- * @dev ONE LOCK ONLY: users lock into ve4626 once. No per-creator lock or "veAKITA" required.
- *      - Global multiplier from total ve4626 share
- *      - Coverage = only the creator shares the user actually holds (passed from swap)
- *      - Matches "full 2.5x only up to their value" requirement
+ * @notice Personal lottery boost via Curve-style split (0.4×–1.0× of position).
+ * @dev Single envelope: NO separate lock-duration additive PPM.
+ *
+ *      Working balance (tokenless 0.4 + ve remainder 0.6, capped at full = 1.0):
+ *        working = min(0.4 * l + 0.6 * L * (ve / Ve), 1.0 * l)
+ *        boost   = working / l   ∈ [0.4, 1.0]
+ *
+ *      Product framing: "up to 2.5× boost" means 2.5× the *tokenless* rate
+ *      (0.4 × 2.5 = 1.0), not a 2.5× deposit cap (gauge-style).
+ *
+ *      Lottery mapping (path A — pool = creator Share supply):
+ *        l  = min(creatorShareUSD, swapUSD)     // covered skin this trade
+ *        L  = total creator ShareOFT supply USD // pool size
+ *        ve = effective veChance (or chance/ve fallback)
+ *        Ve = total veChance (or total power)
+ *
+ *      Call `calculateBoostForPosition` from LotteryManager (needs l, L).
+ *      `calculateBoost(user)` is a UI/legacy helper only (see natspec).
  */
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 interface Ive4626 {
@@ -30,23 +44,29 @@ interface Ive4626 {
     function getLock(address user) external view returns (Lock memory);
 }
 
-interface IRegistry4626Coverage {
-    function getShareOFTForToken(address token) external view returns (address);
-    function getTokenForShareOFT(address shareOFT) external view returns (address);
-    function getOracleForToken(address token) external view returns (address);
-    function isTokenActive(address token) external view returns (bool);
-}
-
 contract ve4626BoostManager is Ownable, ReentrancyGuard {
     uint256 public constant BOOST_PRECISION = 10_000;
-    uint256 public constant MAX_VE_BOOST = 25_000;
+    /// @notice Tokenless working factor (0.4×).
+    uint256 public constant TOKENLESS_FACTOR = 4_000;
+    /// @notice Ve-weighted remainder factor (0.6×). Full = tokenless + remainder = 1.0.
+    uint256 public constant VE_FACTOR = 6_000;
+    /// @notice Max working/l (= full position). 0.4 × 2.5 "boost" framing = 1.0.
+    uint256 public constant MAX_VE_BOOST = 10_000;
     // FIX: G-20 — increase from 10 blocks (~20s) to 1 epoch (~7 days on Base L2)
     uint256 public constant MIN_HOLDING_BLOCKS = 302_400;
 
     Ive4626 public immutable ve4626;
 
-    uint256 public baseBoost = 10_000; // 1.0x
-    uint256 public maxBoost = 25_000; // 2.5x
+    /// @notice Optional veChance token (raw balances; may be stale without sync).
+    IERC20 public chanceToken;
+
+    /// @notice Preferred: ve4626Utility for decay-safe effective chance.
+    Ive4626UtilityForBoost public utility;
+
+    /// @notice Neutral mult when position is zero / flash-gated (leave base odds unchanged).
+    uint256 public baseBoost = 10_000;
+    /// @notice Max working / l (1.0× = full; tokenless 0.4× × 2.5 = 1.0).
+    uint256 public maxBoost = 10_000;
     uint256 public minVotingPower = 0.1 ether;
     bool public boostParametersLocked;
 
@@ -63,6 +83,8 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
     event BoostParametersUpdated(uint256 baseBoost, uint256 maxBoost);
     event MinVotingPowerUpdated(uint256 minPower);
     event BalanceTrackingUpdated(address indexed user, uint256 blockNumber);
+    event ChanceTokenUpdated(address indexed token);
+    event UtilityUpdated(address indexed utility);
 
     error ZeroAddress();
     error InvalidBoostParameters();
@@ -76,51 +98,115 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
         ve4626 = Ive4626(_ve4626);
     }
 
-    function calculateBoost(address user) public view returns (uint256) {
-        return calculateBoostWithProtection(user);
+    function setChanceToken(address token) external onlyOwner {
+        chanceToken = IERC20(token);
+        emit ChanceTokenUpdated(token);
     }
 
-    function calculateBoostWithProtection(address user) public view returns (uint256 boostMultiplier) {
+    function setUtility(address utility_) external onlyOwner {
+        utility = Ive4626UtilityForBoost(utility_);
+        emit UtilityUpdated(utility_);
+        if (utility_ != address(0)) {
+            chanceToken = IERC20(Ive4626UtilityForBoost(utility_).chance());
+            emit ChanceTokenUpdated(address(chanceToken));
+        }
+    }
+
+    /**
+     * @notice UI / legacy: max factor attainable with current ve if position is small enough.
+     * @dev Lottery must use `calculateBoostForPosition` — this ignores pool matching.
+     *      Any positive eligible veChance can reach `maxBoost` (1.0) when ve share ≥ LP share.
+     */
+    function calculateBoost(address user) public view returns (uint256) {
+        if (block.number < lastBalanceUpdateBlock[user] + MIN_HOLDING_BLOCKS) {
+            return baseBoost;
+        }
+        (uint256 ve,) = _powerShare(user);
+        if (ve == 0 || ve < minVotingPower) {
+            return TOKENLESS_FACTOR; // 0.4× — unboosted
+        }
+        return maxBoost; // 1.0× full
+    }
+
+    /**
+     * @notice Working-balance boost for a concrete trade position (0.4×–1.0×).
+     * @param user Trader
+     * @param shareBalanceUSD Pre-buy creator Share USD (coverage balance valued)
+     * @param swapAmountUSD Trade notional USD
+     * @param totalShareUSD Full creator ShareOFT supply in USD (pool size L)
+     * @return boostMultiplier BPS in [TOKENLESS_FACTOR, maxBoost] when l>0;
+     *         `baseBoost` when no covered position (personal layer inactive).
+     */
+    function calculateBoostForPosition(
+        address user,
+        uint256 shareBalanceUSD,
+        uint256 swapAmountUSD,
+        uint256 totalShareUSD
+    ) public view returns (uint256 boostMultiplier) {
         if (block.number < lastBalanceUpdateBlock[user] + MIN_HOLDING_BLOCKS) {
             return baseBoost;
         }
 
-        uint256 userPower = ve4626.getVotingPower(user);
-        uint256 totalPower = ve4626.getTotalVotingPower();
-
-        if (userPower == 0 || totalPower == 0 || userPower < minVotingPower) {
+        // l = covered skin this trade (Curve "balance")
+        uint256 l = shareBalanceUSD < swapAmountUSD ? shareBalanceUSD : swapAmountUSD;
+        if (l == 0) {
+            // No position → do not alter base lottery odds
             return baseBoost;
         }
 
-        uint256 scaledShare = Math.mulDiv(userPower, BOOST_PRECISION, totalPower);
-        if (scaledShare > BOOST_PRECISION) scaledShare = BOOST_PRECISION;
+        (uint256 ve, uint256 Ve) = _powerShare(user);
+        if (ve < minVotingPower) {
+            ve = 0;
+        }
 
-        uint256 boostRange = maxBoost - baseBoost;
-        boostMultiplier = baseBoost + Math.mulDiv(boostRange, scaledShare, BOOST_PRECISION);
-        if (boostMultiplier > maxBoost) boostMultiplier = maxBoost;
+        // working = 0.4 * l + 0.6 * L * (ve / Ve)
+        // If no ve pool or zero L, only tokenless term (0.4 * l).
+        uint256 working = Math.mulDiv(l, TOKENLESS_FACTOR, BOOST_PRECISION);
+        if (ve > 0 && Ve > 0 && totalShareUSD > 0) {
+            // 0.6 * L * ve / Ve
+            uint256 vePart = Math.mulDiv(Math.mulDiv(totalShareUSD, VE_FACTOR, BOOST_PRECISION), ve, Ve);
+            working += vePart;
+        }
 
-        return boostMultiplier;
+        uint256 maxWorking = Math.mulDiv(l, maxBoost, BOOST_PRECISION);
+        if (working > maxWorking) {
+            working = maxWorking;
+        }
+
+        // boost = working / l
+        boostMultiplier = Math.mulDiv(working, BOOST_PRECISION, l);
+        if (boostMultiplier > maxBoost) {
+            boostMultiplier = maxBoost;
+        }
+        // Guard: never below tokenless when a position exists
+        if (boostMultiplier < TOKENLESS_FACTOR) {
+            boostMultiplier = TOKENLESS_FACTOR;
+        }
     }
 
-    function getTotalProbabilityBoost(address user) external view returns (uint256 totalBoostBps) {
-        if (!ve4626.hasActiveLock(user)) return 0;
-
-        uint256 remainingTime = ve4626.getRemainingLockTime(user);
-        uint256 maxLockTime = 4 * 365 days;
-        uint256 maxProbBoost = 690; // becomes 69_000 PPM in lottery
-
-        totalBoostBps = Math.mulDiv(maxProbBoost, remainingTime, maxLockTime);
+    /// @notice Alias used by older call sites; same as `calculateBoost`.
+    function calculateBoostWithProtection(address user) public view returns (uint256) {
+        return calculateBoost(user);
     }
 
     /**
-     * @notice Coverage is now purely based on held creator shares in USD
-     * @dev No ve lock matching, no per-creator lock required - one ve4626 lock only
+     * @notice Deprecated lock-duration additive path — always returns 0 (single envelope).
+     * @dev LotteryManager may still call this; returning 0 removes double-count of duration.
+     */
+    function getTotalProbabilityBoost(address) external pure returns (uint256) {
+        return 0;
+    }
+
+    /**
+     * @notice Coverage fraction of swap USD backed by held creator shares.
+     * @dev Still useful for UI; Curve path uses l = min(share, swap) inside
+     *      `calculateBoostForPosition` instead of post-hoc coverage scaling.
      */
     function getCoverageBps(
-        address /*user*/,
-        address /*registry*/,
-        address /*creatorCoin*/,
-        address /*shareBalanceToken*/,
+        address, /*user*/
+        address, /*registry*/
+        address, /*creatorCoin*/
+        address, /*shareBalanceToken*/
         uint256 creatorShareBalanceUSD,
         uint256 swapAmountUSD
     ) external pure returns (uint256 coverageBps) {
@@ -139,7 +225,10 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
 
     // FIX: G-13 — replace permanent lock with 48h timelock for boost parameter updates
     function setBoostParameters(uint256 _baseBoost, uint256 _maxBoost) external onlyOwner {
-        if (_baseBoost == 0 || _maxBoost <= _baseBoost || _maxBoost > MAX_VE_BOOST) revert InvalidBoostParameters();
+        // baseBoost = neutral when no position; maxBoost = full working/l (≤ 1.0, > tokenless).
+        if (_baseBoost == 0 || _maxBoost <= TOKENLESS_FACTOR || _maxBoost > MAX_VE_BOOST) {
+            revert InvalidBoostParameters();
+        }
 
         pendingBaseBoost = _baseBoost;
         pendingMaxBoost = _maxBoost;
@@ -163,7 +252,33 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
     }
 
     function hasBoost(address user) external view returns (bool) {
-        return calculateBoost(user) > baseBoost;
+        if (block.number < lastBalanceUpdateBlock[user] + MIN_HOLDING_BLOCKS) {
+            return false;
+        }
+        (uint256 ve,) = _powerShare(user);
+        return ve >= minVotingPower && ve > 0;
+    }
+
+    function _powerShare(address user) internal view returns (uint256 userPower, uint256 totalPower) {
+        // Decay-safe: effective chance (post haircut). totalSupply may still include
+        // unsynced balances elsewhere — that only *reduces* ve share (anti-whale).
+        if (address(utility) != address(0)) {
+            userPower = utility.effectiveChanceOf(user);
+            totalPower = utility.totalChance();
+            return (userPower, totalPower);
+        }
+        if (address(chanceToken) != address(0)) {
+            userPower = chanceToken.balanceOf(user);
+            totalPower = chanceToken.totalSupply();
+            return (userPower, totalPower);
+        }
+        userPower = ve4626.getVotingPower(user);
+        totalPower = ve4626.getTotalVotingPower();
     }
 }
 
+interface Ive4626UtilityForBoost {
+    function effectiveChanceOf(address user) external view returns (uint256);
+    function totalChance() external view returns (uint256);
+    function chance() external view returns (address);
+}

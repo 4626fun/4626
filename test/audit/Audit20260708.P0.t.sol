@@ -106,6 +106,19 @@ contract MockBoostP0 {
         return boostBPS;
     }
 
+    function calculateBoostForPosition(address, uint256 shareUSD, uint256 swapUSD, uint256)
+        external
+        view
+        returns (uint256)
+    {
+        if (shareUSD == 0 || swapUSD == 0) return 10_000;
+        uint256 covered = shareUSD < swapUSD ? shareUSD : swapUSD;
+        uint256 cov = (covered * 10_000) / swapUSD;
+        if (cov == 0 || boostBPS <= 10_000) return 10_000;
+        uint256 extra = boostBPS - 10_000;
+        return 10_000 + (extra * cov) / 10_000;
+    }
+
     function getTotalProbabilityBoost(address) external view returns (uint256) {
         return probBoostBps;
     }

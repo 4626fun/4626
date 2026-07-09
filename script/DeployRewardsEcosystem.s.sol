@@ -8,6 +8,7 @@ import {ve4626VoterRewardsDistributor} from "@4626/shared/governance/ve4626Voter
 import {BribesFactory} from "@4626/shared/governance/factories/BribesFactory.sol";
 import {ve4626} from "@4626/shared/governance/ve4626.sol";
 import {ve4626BoostManager} from "@4626/shared/governance/ve4626BoostManager.sol";
+import {ve4626Utility} from "@4626/shared/governance/ve4626Utility.sol";
 
 interface ILotteryManager4626ForRewards {
     function setBoostManager(address manager) external;
@@ -26,18 +27,23 @@ interface ICreatorGaugeControllerForRewards {
 }
 
 /**
- * @notice Deploys + wires the ve(3,3) rewards ecosystem:
- * - ve4626 (vote-escrow token)
- * - ve4626BoostManager (personal lottery boost)
- * - ve4626GaugeVoting (weekly gauge voting)
+ * @notice Deploys + wires the ve■4626 rewards ecosystem:
+ * - ve4626 (ve■4626 lock, dual-decay power)
+ * - ve4626Utility (vote / chance utilities — opt-in claim)
+ * - ve4626BoostManager (lottery mult from chance or ve fallback)
+ * - ve4626GaugeVoting (weekly gauge voting from vote or ve fallback)
  * - ve4626VoterRewardsDistributor (routes the 9.61% slice to voters)
  * - BribesFactory (CREATE2 BribeDepot per vault)
  *
  * Wiring:
  * - ve4626.setBoostManager(boostManager)
+ * - boostManager.setUtility(utility)  (also sets chanceToken; decay-safe effectiveChance)
+ * - voting.setUtility(utility)        (also sets voteToken; vote() syncs then effectiveVote)
  * - lotteryManager.setBoostManager(boostManager)
  * - lotteryManager.setVe4626GaugeVoting(vaultGaugeVoting)
  * - each CreatorGaugeController: setVe4626GaugeVoting + setVe4626VoterRewardsDistributor
+ *
+ * Naming: docs/contracts/governance/ve-naming.md
  *
  * Run (broadcast):
  *   export BASE_RPC_URL="https://mainnet.base.org"
@@ -92,12 +98,20 @@ contract DeployRewardsEcosystem is Script {
         ve4626 ve = new ve4626(veName, veSymbol, wrappedShareOFT, owner);
         console2.log("ve4626:", address(ve));
 
+        console2.log("\nDeploy ve4626Utility (vote + chance)...");
+        ve4626Utility utility = new ve4626Utility(address(ve), owner);
+        console2.log("ve4626Utility:", address(utility));
+        console2.log("  veVote:", address(utility.vote()));
+        console2.log("  veChance:", address(utility.chance()));
+
         console2.log("\nDeploy ve4626BoostManager...");
         ve4626BoostManager boostManager = new ve4626BoostManager(address(ve), owner);
-        console2.log("veBoostManager:", address(boostManager));
+        boostManager.setUtility(address(utility));
+        console2.log("ve4626BoostManager:", address(boostManager));
 
         console2.log("\nDeploy ve4626GaugeVoting...");
         ve4626GaugeVoting voting = new ve4626GaugeVoting(address(ve), owner);
+        voting.setUtility(address(utility));
         console2.log("ve4626GaugeVoting:", address(voting));
 
         if (setRegistryWhitelist) {
@@ -175,7 +189,10 @@ contract DeployRewardsEcosystem is Script {
 
         console2.log("\n=== SUMMARY ===");
         console2.log("ve4626:", address(ve));
-        console2.log("veBoostManager:", address(boostManager));
+        console2.log("ve4626Utility:", address(utility));
+        console2.log("veVote:", address(utility.vote()));
+        console2.log("veChance:", address(utility.chance()));
+        console2.log("ve4626BoostManager:", address(boostManager));
         console2.log("ve4626GaugeVoting:", address(voting));
         console2.log("ve4626VoterRewardsDistributor:", address(rewards));
         console2.log("BribesFactory:", address(bribesFactory));

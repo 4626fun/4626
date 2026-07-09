@@ -178,6 +178,17 @@ contract MockBoostManagerPauseGuards {
         return boostBps;
     }
 
+    /// @dev Curve path: honor forced boostBps when coverage is non-zero.
+    function calculateBoostForPosition(address, uint256 shareUSD, uint256 swapUSD, uint256)
+        external
+        view
+        returns (uint256)
+    {
+        if (shareUSD == 0 || swapUSD == 0) return 10_000;
+        if (coverageBps == 0) return 10_000;
+        return boostBps;
+    }
+
     function getTotalProbabilityBoost(address) external view returns (uint256) {
         return probabilityBoostBps;
     }
@@ -497,30 +508,33 @@ contract LotteryManager4626PauseGuardsTest is Test {
         assertEq(userAfter, address(0), "stale request should be cleared");
     }
 
-    function test_VrfCallback_UsesStoredAdditiveProbabilityBoost() public {
-        boostManager.setProbabilityBoostBps(1); // +100 PPM
+    function test_VrfCallback_SingleEnvelope_IgnoresAdditiveProbabilityBoost() public {
+        // Design §7: lock-duration additive PPM removed. Even if boost manager returns
+        // non-zero getTotalProbabilityBoost, lottery must not add it.
+        boostManager.setProbabilityBoostBps(1); // would have been +100 PPM under old path
+        boostManager.setBoostBps(10_000); // 1.0x mult only
+        boostManager.setCoverageBps(10_000);
 
-        uint256 rawVrfId = localVrfConsumer.nextRequestId(); // raw ID before call
+        uint256 rawVrfId = localVrfConsumer.nextRequestId();
         vm.prank(authorizedSwap);
         uint256 requestId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 100 ether);
         assertGt(requestId, 0, "expected VRF request");
 
         (,, uint256 amountUSD, uint256 effectiveWinChancePPM,,,) = lotteryManager.vrfRequests(requestId);
         uint256 baseWinChance = lotteryManager.calculateWinChance(amountUSD);
-        // PR 1 — linear: $1.05 → 4 PPM base. Probability boost adds 1*100 = 100 PPM → 104.
         assertEq(baseWinChance, 4, "expected $1 trade to use base odds (linear)");
-        assertEq(effectiveWinChancePPM, 104, "request should include additive probability boost");
+        // Single envelope: no additive stack → odds stay at base when mult is 1.0x
+        assertEq(effectiveWinChancePPM, baseWinChance, "must ignore getTotalProbabilityBoost additive");
 
         boostManager.setProbabilityBoostBps(0);
 
         uint256[] memory randomWords = new uint256[](1);
-        randomWords[0] = 50; // Above base odds (4), below boosted odds (104).
+        randomWords[0] = 0; // win at base odds
 
-        // CLM-01: receiveRandomWords expects the raw VRF ID; it applies _localVrfKey internally
         vm.prank(address(localVrfConsumer));
         lotteryManager.receiveRandomWords(rawVrfId, randomWords);
 
-        assertEq(gauge.payCount(), 1, "additive probability boost should settle as a win");
+        assertEq(gauge.payCount(), 1, "base-odds win should still settle");
         assertEq(gauge.lastWinner(), buyer, "winner should match buyer");
     }
 
