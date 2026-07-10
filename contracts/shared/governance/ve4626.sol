@@ -112,7 +112,8 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
     uint256 private _decaySlope;
     /// @dev Timestamp of last global decay point.
     uint256 private _decayPointTs;
-    /// @dev Scheduled slope decreases at week-rounded lock ends: ts => slope to remove.
+    /// @dev Scheduled slope decreases at lock ends. New/extended locks are week-aligned,
+    ///      so the weekly checkpoint walk reaches the exact user expiry timestamp.
     mapping(uint256 => uint256) private _slopeChanges;
     /// @dev Per-user slope currently contributing to the global total.
     mapping(address => uint256) private _userSlope;
@@ -191,7 +192,10 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
         // FIX: G-17 — use correct error for already-locked user
         if (_locks[msg.sender].amount > 0) revert AlreadyLocked(); // Must use increaseLock
 
-        uint256 lockEnd = block.timestamp + duration;
+        uint256 lockEnd = _weekFloor(block.timestamp + duration);
+        // Flooring (never ceiling) keeps the accepted end within the requested duration.
+        // A near-boundary minimum request may floor below the minimum and is rejected.
+        if (lockEnd < block.timestamp + MIN_LOCK_DURATION) revert InvalidLockDuration();
 
         // Transfer tokens
         IERC20(_token).safeTransferFrom(msg.sender, address(this), amount);
@@ -227,8 +231,9 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
     function extendLock(uint256 newEnd) external override nonReentrant returns (uint256 newVotingPower) {
         Lock storage userLock = _locks[msg.sender];
         if (userLock.amount == 0) revert NoExistingLock();
-        if (newEnd <= userLock.end) revert LockDurationTooShort();
         if (newEnd > block.timestamp + MAX_LOCK_DURATION) revert InvalidLockDuration();
+        newEnd = _weekFloor(newEnd);
+        if (newEnd <= userLock.end) revert LockDurationTooShort();
 
         uint256 oldEnd = userLock.end;
         uint256 oldPower = balanceOf(msg.sender);
@@ -383,6 +388,11 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
         }
 
         // Walk week boundaries applying scheduled slope decreases (Curve-style, max ~255 weeks).
+        // New locks are week-aligned, making these boundaries exact expiries rather than
+        // approximations. Upgrade note: pre-alignment locks retain their legacy arbitrary
+        // end until extended (which migrates them to an aligned end) or withdrawn; no
+        // storage migration is required, but their already-scheduled legacy point cannot
+        // be repaired without enumerating holders.
         uint256 w = _weekFloor(pointTs);
         for (uint256 i = 0; i < 255;) {
             uint256 next = w + WEEK;
@@ -447,9 +457,9 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
             }
             _decaySlope += newSlope;
             _decayBias += newBias;
-            uint256 weekEnd = _weekFloor(newEnd);
-            if (weekEnd <= block.timestamp) weekEnd = _weekFloor(block.timestamp) + WEEK;
-            _slopeChanges[weekEnd] += newSlope;
+            // Accepted lock ends are exact week boundaries. Do not ceil an arbitrary end:
+            // that would retain global slope after user power has expired.
+            _slopeChanges[newEnd] += newSlope;
         }
 
         _userSlope[user] = newSlope;

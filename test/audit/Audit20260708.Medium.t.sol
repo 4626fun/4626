@@ -177,6 +177,23 @@ contract Audit20260708_M01_PublicChallenge is Test {
         vault.challengeImpairmentRoot(epochId, "public-challenge");
         assertTrue(vault.impairmentRootChallenged(epochId));
     }
+
+    function test_publicChallenge_closesAtUnlock_andCannotGriefFinalization() public {
+        uint256 epochId = vault.tripImpairment(address(strat), 1);
+        bytes32 leaf = keccak256(abi.encode(epochId, address(this), vault.balanceOf(address(this))));
+        vault.proposeImpairmentRoot(epochId, leaf, vault.balanceOf(address(this)), address(coin));
+        uint64 unlock = vault.impairmentRootUnlockTime(epochId);
+
+        vm.warp(unlock);
+        vm.prank(challenger);
+        vm.expectRevert(
+            abi.encodeWithSelector(CreatorOVault.ImpairmentChallengeWindowClosed.selector, unlock)
+        );
+        vault.challengeImpairmentRoot(epochId, "late-grief");
+
+        vault.finalizeImpairment(epochId);
+        assertFalse(vault.impairmentRootChallenged(epochId));
+    }
 }
 
 // ---------------------------------------------------------------------------

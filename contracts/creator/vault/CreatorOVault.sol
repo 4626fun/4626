@@ -610,6 +610,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
     error StrategyNotImpaired(address strategy);
     error InvalidImpairmentReason(uint256 reasonCode);
     error ImpairmentRootNotReady(uint64 unlockTime);
+    error ImpairmentChallengeWindowClosed(uint64 unlockTime);
     error ImpairmentRootRequired(uint256 epochId);
     error ImpairmentRootAlreadyFinalized(uint256 epochId);
     error ImpairmentRootChallengedErr(uint256 epochId);
@@ -1245,8 +1246,9 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permi
         _delegateAndReturn(_coreModule);
     }
 
-    /// @notice Challenge a proposed impairment merkle root during the challenge window.
-    /// @dev M-01: public — any party can challenge a bad root; not gated to emergency roles.
+    /// @notice Challenge a proposed impairment merkle root while its challenge window is open.
+    /// @dev Public in-window so any party can challenge a bad root. At the unlock timestamp
+    ///      management may finalize and late callers cannot grief finalization.
     function challengeImpairmentRoot(uint256 epochId, string calldata reason) external nonReentrant {
         _delegateAndReturn(_coreModule);
     }
