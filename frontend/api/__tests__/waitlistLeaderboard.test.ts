@@ -140,4 +140,20 @@ describe('waitlist/leaderboard', () => {
     expect(res.body?.data?.leaderboard?.[0]?.showBaseAppBadge).toBe(false)
     expect(res.body?.data?.leaderboard?.[1]?.walletProvider).toBe('rabby')
   })
+
+  it('returns a generic error without exposing internal filesystem details', async () => {
+    getDbMock.mockResolvedValue({ sql: vi.fn() } as any)
+    ensureWaitlistSchemaMock.mockRejectedValueOnce(
+      new Error('ENOENT: /workspace/frontend/server/private-schema.sql'),
+    )
+    const req = createMockReq({ method: 'GET', query: {} })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(500)
+    expect(res.body).toEqual({ success: false, error: 'Failed to load leaderboard' })
+    expect(JSON.stringify(res.body)).not.toContain('/workspace/')
+    expect(JSON.stringify(res.body)).not.toContain('ENOENT')
+  })
 })

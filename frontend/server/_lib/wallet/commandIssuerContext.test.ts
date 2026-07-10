@@ -43,6 +43,7 @@ function makeDb(sqlImpl: (...args: unknown[]) => Promise<{ rows: any[] }>) {
 const BASE_ROW = {
   profile_id: 42,
   smart_wallet_address: '0xAB6D5C10B03300326CD7FAB7267AE192842967B5',
+  profile_csw_address: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
   privy_owner_wallet_id: 'privy-wallet-1',
   owner_eoa_address: '0x6C0EA422AA7BB7E1E17C5257F7023C8F05DDF9B3',
   owner_index: 0,
@@ -78,9 +79,11 @@ describe('resolveCommandIssuerContextByAddress', () => {
   })
 
   it('returns ready context when a non-revoked row exists', async () => {
-    getDbMock.mockResolvedValue(
-      makeDb(async () => ({ rows: [BASE_ROW] })),
-    )
+    let query = ''
+    getDbMock.mockResolvedValue(makeDb(async (strings) => {
+      query = (strings as TemplateStringsArray).join('?').replace(/\s+/g, ' ')
+      return { rows: [BASE_ROW] }
+    }))
     const mod = await importModule()
     const result = await mod.resolveCommandIssuerContextByAddress(
       '0xab6d5c10b03300326cd7fab7267ae192842967b5',
@@ -95,64 +98,89 @@ describe('resolveCommandIssuerContextByAddress', () => {
       expect(result.context.revokedAt).toBeNull()
       expect(result.context.subAccount).toBeNull()
     }
+    expect(query).toContain('SELECT ctx.*, p.csw_address AS profile_csw_address')
   })
 
-  it('ignores legacy sub-account columns and always returns subAccount=null', async () => {
-    const subRow = {
-      ...BASE_ROW,
-      sub_account_address: '0x1111111111111111111111111111111111111111',
-      parent_csw_address: '0xAB6D5C10B03300326CD7FAB7267AE192842967B5',
-      spend_permission_payload: {
-        account: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
-        spender: '0x1111111111111111111111111111111111111111',
-        token: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
-        allowance: '500000000000000000',
-        period: 86400,
-        start: 1_700_000_000,
-        end: 4_700_000_000,
-        salt: '0x0000000000000000000000000000000000000000000000000000000000000001',
-        extraData: '0x',
-      },
-      spend_permission_signature: '0xabcd',
-      spend_permission_hash: '0xdeadbeef',
-      spend_allowance_wei: '500000000000000000',
-      spend_period_seconds: 86400,
-      spend_permission_end_at: '2099-01-01T00:00:00.000Z',
-      spend_permission_revoked_at: null,
-    }
-    getDbMock.mockResolvedValue(makeDb(async () => ({ rows: [subRow] })))
+  it.each([
+    ['sub-account address', { sub_account_address: '0x1111111111111111111111111111111111111111' }],
+    ['spend payload', { spend_permission_payload: { account: BASE_ROW.smart_wallet_address } }],
+    ['spend signature', { spend_permission_signature: '0xabcd' }],
+    ['spend hash', { spend_permission_hash: '0xdeadbeef' }],
+    ['spend allowance', { spend_allowance_wei: '1' }],
+    ['spend period', { spend_period_seconds: 86_400 }],
+  ])('fails closed when legacy %s remains', async (_label, artifact) => {
+    getDbMock.mockResolvedValue(makeDb(async () => ({ rows: [{ ...BASE_ROW, ...artifact }] })))
     const mod = await importModule()
     const result = await mod.resolveCommandIssuerContextByAddress(
       '0xab6d5c10b03300326cd7fab7267ae192842967b5',
     )
+    expect(result).toEqual({ status: 'not_provisioned', profileId: 42 })
+  })
+
+  it('accepts a parent-CSW row based on profiles.csw_address despite stale legacy parent metadata', async () => {
+    getDbMock.mockResolvedValue(
+      makeDb(async () => ({
+        rows: [{
+          ...BASE_ROW,
+          parent_csw_address: '0x1111111111111111111111111111111111111111',
+        }],
+      })),
+    )
+    const mod = await importModule()
+    const result = await mod.resolveCommandIssuerContextByAddress(BASE_ROW.smart_wallet_address)
     expect(result.status).toBe('ready')
     if (result.status === 'ready') {
+      expect(result.context.smartWallet).toBe(BASE_ROW.profile_csw_address)
       expect(result.context.subAccount).toBeNull()
     }
   })
 
-  it('returns subAccount=null even when sub-account columns are partially populated', async () => {
-    const badRow = {
-      ...BASE_ROW,
-      sub_account_address: '0x1111111111111111111111111111111111111111',
-      parent_csw_address: null,
-      spend_permission_payload: null,
-      spend_permission_signature: null,
-      spend_permission_hash: null,
-      spend_allowance_wei: null,
-      spend_period_seconds: null,
-      spend_permission_end_at: null,
-      spend_permission_revoked_at: null,
-    }
-    getDbMock.mockResolvedValue(makeDb(async () => ({ rows: [badRow] })))
-    const mod = await importModule()
-    const result = await mod.resolveCommandIssuerContextByAddress(
-      '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+  it('fails closed when a spend permission is expired', async () => {
+    getDbMock.mockResolvedValue(
+      makeDb(async () => ({
+        rows: [{ ...BASE_ROW, spend_permission_end_at: '2020-01-01T00:00:00.000Z' }],
+      })),
     )
-    expect(result.status).toBe('ready')
-    if (result.status === 'ready') {
-      expect(result.context.subAccount).toBeNull()
-    }
+    const mod = await importModule()
+    const result = await mod.resolveCommandIssuerContextByAddress(BASE_ROW.smart_wallet_address)
+    expect(result).toEqual({ status: 'not_provisioned', profileId: 42 })
+  })
+
+  it('surfaces a revoked spend permission as revoked', async () => {
+    getDbMock.mockResolvedValue(
+      makeDb(async () => ({
+        rows: [{ ...BASE_ROW, spend_permission_revoked_at: '2026-04-18T00:00:00.000Z' }],
+      })),
+    )
+    const mod = await importModule()
+    const result = await mod.resolveCommandIssuerContextByAddress(BASE_ROW.smart_wallet_address)
+    expect(result).toMatchObject({
+      status: 'revoked',
+      profileId: 42,
+      reason: 'legacy_spend_permission_revoked',
+    })
+  })
+
+  it('fails closed for an unparseable non-null spend revocation timestamp', async () => {
+    getDbMock.mockResolvedValue(
+      makeDb(async () => ({
+        rows: [{ ...BASE_ROW, spend_permission_revoked_at: 'not-a-date' }],
+      })),
+    )
+    const mod = await importModule()
+    const result = await mod.resolveCommandIssuerContextByAddress(BASE_ROW.smart_wallet_address)
+    expect(result).toEqual({ status: 'not_provisioned', profileId: 42 })
+  })
+
+  it('fails closed when the execution wallet differs from the profile canonical CSW', async () => {
+    getDbMock.mockResolvedValue(
+      makeDb(async () => ({
+        rows: [{ ...BASE_ROW, profile_csw_address: '0x1111111111111111111111111111111111111111' }],
+      })),
+    )
+    const mod = await importModule()
+    const result = await mod.resolveCommandIssuerContextByAddress(BASE_ROW.smart_wallet_address)
+    expect(result).toEqual({ status: 'not_provisioned', profileId: 42 })
   })
 
   it('returns revoked status when revoked_at is set', async () => {
@@ -209,10 +237,24 @@ describe('resolveCommandIssuerContextByProfileId', () => {
   })
 
   it('returns ready context for a valid row', async () => {
-    getDbMock.mockResolvedValue(makeDb(async () => ({ rows: [BASE_ROW] })))
+    let query = ''
+    getDbMock.mockResolvedValue(makeDb(async (strings) => {
+      query = (strings as TemplateStringsArray).join('?').replace(/\s+/g, ' ')
+      return { rows: [BASE_ROW] }
+    }))
     const mod = await importModule()
     const result = await mod.resolveCommandIssuerContextByProfileId(42)
     expect(result.status).toBe('ready')
+    expect(query).toContain('SELECT ctx.*, p.csw_address AS profile_csw_address')
+  })
+
+  it('applies the same legacy-artifact fail-closed policy for profile resolution', async () => {
+    getDbMock.mockResolvedValue(
+      makeDb(async () => ({ rows: [{ ...BASE_ROW, spend_permission_signature: '0xabcd' }] })),
+    )
+    const mod = await importModule()
+    const result = await mod.resolveCommandIssuerContextByProfileId(42)
+    expect(result).toEqual({ status: 'not_provisioned', profileId: 42 })
   })
 })
 
@@ -279,6 +321,7 @@ describe('provisionCommandIssuerContext UPSERT — clears legacy sub-account col
         const incoming: Record<string, unknown> = {
           profile_id: profileId,
           smart_wallet_address: smartWallet,
+          profile_csw_address: smartWallet,
           privy_owner_wallet_id: privyOwnerWalletId,
           owner_eoa_address: ownerEoa,
           owner_index: ownerIndex,
