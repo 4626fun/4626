@@ -58,6 +58,10 @@ type KeySafetyRoomContext = KeySafetyRoomOption & {
   hostSharePercent: number
   stakedSupply: number
   stakeRatioPercent: number | null
+  distributionPotUsdc: number | null
+  totalTreasuryUsdc: number | null
+  debankTotalUsd: number | null
+  hyperliquidAccountValueUsd: number | null
   attackModelPotUsdc?: number
   attackPotSource?: 'treasury' | 'distribution_fund' | 'fee_baseline'
   feeBaselinePotUsdc: number
@@ -236,8 +240,12 @@ export function AlfaClubKeySafety() {
   const stakedSupply = roomContext?.stakedSupply ?? 0
   const modeledPotUsdc =
     roomContext?.attackModelPotUsdc ?? roomContext?.feeBaselinePotUsdc ?? 0
+  const reportedTradingFundUsdc = roomContext?.distributionPotUsdc ?? modeledPotUsdc
+  const treasuryNavUsdc =
+    roomContext?.totalTreasuryUsdc ??
+    (roomContext?.attackPotSource === 'treasury' ? modeledPotUsdc : null)
   const potAtRiskUsdc = Math.max(0, modeledPotUsdc + donationUsdc)
-  const distributionPerKeyUsdc = keySupply > 0 ? modeledPotUsdc / keySupply : 0
+  const treasuryNavPerKeyUsdc = keySupply > 0 ? modeledPotUsdc / keySupply : 0
 
   // Live curve pricing for the next key at the current supply. "Current" is the
   // raw curve price; buy adds the trade fee, sell nets it out.
@@ -521,21 +529,40 @@ export function AlfaClubKeySafety() {
 
                 <p className="mt-3 text-sm leading-relaxed text-zinc-300">{statusMeta.headline}</p>
 
-                <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
                   {(
                     [
                       { label: 'Total keys', value: keySupply.toLocaleString(), hint: null },
                       { label: 'Staked', value: `${stakedPercent}%`, hint: null },
                       { label: 'Owner share', value: `${sharePercent}%`, hint: null },
-                      { label: 'Trading pot', value: formatUsd(modeledPotUsdc), hint: null },
                       {
-                        label: 'Per key',
-                        value: formatUsd(distributionPerKeyUsdc),
+                        label: 'Reported fund',
+                        value: formatUsd(reportedTradingFundUsdc),
                         hint: (
                           <p>
-                            The trading fund ({formatUsd(modeledPotUsdc)}) divided by all{' '}
-                            {keySupply.toLocaleString()} current keys — a rough "if distributed now"
-                            value per key, before the performance fee and 10% reserve.
+                            AlfaClub&apos;s reported trading-fund size from the latest room
+                            snapshot.
+                          </p>
+                        ),
+                      },
+                      {
+                        label: 'Payout NAV',
+                        value: formatUsd(modeledPotUsdc),
+                        hint: (
+                          <p>
+                            Current assets available to model a payout. Live treasury NAV combines
+                            DeBank and Hyperliquid when both are available.
+                          </p>
+                        ),
+                      },
+                      {
+                        label: 'NAV / key',
+                        value: formatUsd(treasuryNavPerKeyUsdc),
+                        hint: (
+                          <p>
+                            The payout NAV ({formatUsd(modeledPotUsdc)}) divided by all{' '}
+                            {keySupply.toLocaleString()} current keys, before performance fees and
+                            the 10% reserve.
                           </p>
                         ),
                       },
@@ -625,13 +652,17 @@ export function AlfaClubKeySafety() {
                     Cost to acquire keys at current tier — drag to test a takeover
                   </p>
                   {curvePricing ? (
-                    <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
                       {(
                         [
                           { label: 'Current price', value: formatUsd(curvePricing.currentUsdc) },
                           { label: 'Buy next key', value: formatUsd(curvePricing.buyUsdc) },
                           { label: 'Sell 1 key', value: formatUsd(curvePricing.sellUsdc) },
-                          { label: 'Trading fund', value: formatUsd(modeledPotUsdc) },
+                          { label: 'Reported fund', value: formatUsd(reportedTradingFundUsdc) },
+                          {
+                            label: treasuryNavUsdc !== null ? 'Treasury NAV' : 'Payout pot',
+                            value: formatUsd(modeledPotUsdc),
+                          },
                         ] as const
                       ).map((stat) => (
                         <div key={stat.label} className="rounded-xl bg-black/30 px-3 py-2">
@@ -709,6 +740,7 @@ export function AlfaClubKeySafety() {
                   minAttackBreakdown={minAttackBreakdown}
                   insiderWorstCase={insiderWorstCase}
                   modeledPotUsdc={modeledPotUsdc}
+                  reportedTradingFundUsdc={reportedTradingFundUsdc}
                   attackPotSource={roomContext.attackPotSource}
                   potAtRiskUsdc={potAtRiskUsdc}
                   donationUsdc={donationUsdc}

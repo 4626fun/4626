@@ -89,7 +89,6 @@ function CurveTooltip({
   if (!active || label === undefined) return null
   const supply = Math.max(0, Number(label))
   if (raidPoint) {
-    const profitable = raidPoint.profitUsdc > 0
     return (
       <div className="rounded-lg border border-white/10 bg-black/90 px-3 py-2 text-xs shadow-xl">
         <p className="font-medium text-white">
@@ -125,7 +124,7 @@ function CurveTooltip({
           Attacker payout from distribution:{' '}
           <span className="font-mono text-zinc-100">{formatUsdLong(raidPoint.payoutUsdc)}</span>
         </p>
-        <p className={profitable ? 'text-red-300' : 'text-emerald-300'}>
+        <p className="text-red-300">
           Attacker net:{' '}
           <span className="font-mono">
             {raidPoint.profitUsdc > 0 ? '+' : ''}
@@ -459,7 +458,7 @@ export function TradingRoomCurvePreview({
               x={minVotePassX}
               y={minVotePassProfitUsdc}
               r={4.5}
-              fill="rgb(250 204 21)"
+              fill="rgb(239 68 68)"
               stroke="rgb(255 255 255 / 0.95)"
               strokeWidth={1.5}
               ifOverflow="visible"

@@ -35,6 +35,7 @@ type KeySafetyAttackPanelProps = {
   minAttackBreakdown: AttackBreakdown | null
   insiderWorstCase: InsiderWorstCase | null
   modeledPotUsdc: number
+  reportedTradingFundUsdc: number
   attackPotSource?: 'treasury' | 'distribution_fund' | 'fee_baseline'
   potAtRiskUsdc: number
   donationUsdc: number
@@ -48,7 +49,7 @@ type KeySafetyAttackPanelProps = {
 function attackPotSourceLabel(source: KeySafetyAttackPanelProps['attackPotSource']): string {
   switch (source) {
     case 'treasury':
-      return 'live · on-chain + Hyperliquid'
+      return 'live treasury NAV · DeBank + Hyperliquid'
     case 'distribution_fund':
       return 'from snapshot'
     case 'fee_baseline':
@@ -99,6 +100,7 @@ export function KeySafetyAttackPanel({
   minAttackBreakdown,
   insiderWorstCase,
   modeledPotUsdc,
+  reportedTradingFundUsdc,
   attackPotSource,
   potAtRiskUsdc,
   donationUsdc,
@@ -183,14 +185,15 @@ export function KeySafetyAttackPanel({
         </div>
         <div className="flex items-center gap-1.5">
           <label htmlFor={donationInputId} className="text-sm text-zinc-300">
-            Test a bigger fund
+            Test a bigger payout pot
           </label>
           <InfoHint
             label="Why test a bigger fund"
             content={
               <p>
-                A bigger trading fund pays a takeover more. Add a what-if amount to see how large
-                the fund can grow before this selected attack scenario becomes profitable.
+                A bigger payout pot pays a takeover more. Add a what-if amount to see how large the
+                available treasury NAV can grow before this selected attack scenario becomes
+                profitable.
               </p>
             }
           />
@@ -212,7 +215,7 @@ export function KeySafetyAttackPanel({
             />
           </div>
           <p className="text-sm text-zinc-400">
-            Modeled fund:{' '}
+            Modeled payout pot:{' '}
             <span className="font-mono font-medium text-zinc-100">{formatUsd(potAtRiskUsdc)}</span>
             <span className="text-zinc-500">
               {' · '}
@@ -222,6 +225,13 @@ export function KeySafetyAttackPanel({
             </span>
           </p>
         </div>
+        {Math.abs(reportedTradingFundUsdc - modeledPotUsdc) >= 0.01 ? (
+          <p className="mt-2 text-xs text-zinc-500">
+            AlfaClub reported fund:{' '}
+            <span className="font-mono text-zinc-300">{formatUsd(reportedTradingFundUsdc)}</span>.
+            Attack payouts use available treasury NAV, which can differ as positions move.
+          </p>
+        ) : null}
         {minAttackBreakdown ? (
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             <div className="rounded-xl bg-white/[0.04] px-3 py-2">
@@ -284,7 +294,7 @@ export function KeySafetyAttackPanel({
               ? 'Positive = attack pays off after distribution.'
               : 'Negative = attack loses money at this pot size.'
           }
-          tone={minAttackBreakdown && minAttackBreakdown.attackerNetUsdc < 0 ? 'risk' : 'good'}
+          tone="risk"
         />
       </div>
 
