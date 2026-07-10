@@ -97,7 +97,7 @@ describe('derivePairedLegRebalancePlan', () => {
           coin: 'HYPE',
           side: 'short',
           positionValue: 300,
-          unrealizedPnl: -60,
+          unrealizedPnl: -120,
           entryPx: 100,
           liquidationPx: 200,
           leverage: 6,
