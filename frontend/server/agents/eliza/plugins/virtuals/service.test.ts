@@ -85,7 +85,7 @@ describe('VirtualsAcpService failed startup cleanup', () => {
     expect(result).toEqual({ started: false, reason: 'address configuration failed' })
     expect(mocks.candidate.start).toHaveBeenCalledOnce()
     expect(mocks.candidate.stop).toHaveBeenCalledOnce()
-    expect(mocks.entryListeners).toHaveSize(0)
+    expect(mocks.entryListeners.size).toBe(0)
     expect(vi.getTimerCount()).toBe(0)
     expect(service.getStatus()).toMatchObject({
       running: false,
