@@ -14,7 +14,7 @@
  *     /keepr tend [vault]       — Force-tend a vault (deploy idle funds)
  *     /keepr report [vault]     — Force-report a vault (harvest yields)
  *     /keepr settle [strategy]  — Force CCA finalization
- *     /keepr settle-fees        — Force Solana fee settlement to Base
+ *     /keepr settle-fees        — Harvest Solana fees to the keeper ATA
  *     /keepr relay-entries      — Force relay of Solana lottery entries to Base
  *     /keepr relay-winners      — Force relay winners to Solana
  *     /keepr graduate           — Force graduation check
@@ -110,11 +110,9 @@ type EntryRelayResult = {
   emergencyRelay: boolean
 }
 
-type FeeSettlementResult = {
-  feesSettled: boolean
-  amountSettled: string
-  bridged: boolean
-  forwardedToGauge: boolean
+type FeeHarvestResult = {
+  harvestThresholdMet: boolean
+  solanaHarvestedAmount: string
 }
 
 type WinnerRelayResult = {
@@ -567,7 +565,7 @@ const keeprTriggerAction: Action = {
     ],
     [
       { name: 'user', content: { text: '/keepr settle-fees' } },
-      { name: 'agent', content: { text: 'Running Solana fee settlement...\nFees settled: 1,234 tokens, bridged to Base.' } },
+      { name: 'agent', content: { text: 'Running Solana fee harvest...\nHarvested: 1,234 tokens.' } },
     ],
   ],
 }
@@ -657,17 +655,15 @@ async function handleTriggerSettleFees(callback: HandlerCallback | undefined): P
     return
   }
 
-  await callback?.({ text: 'Running Solana fee settlement...' } as Content)
+  await callback?.({ text: 'Running Solana fee harvest...' } as Content)
 
   const ff = await importFeeSettlement()
-  const result: FeeSettlementResult = await ff.executeSolanaFeeSettlement()
+  const result: FeeHarvestResult = await ff.executeSolanaFeeSettlement()
 
   const lines = [
-    `**Fee Settlement Result**`,
-    `  Fees settled: ${result.feesSettled ? 'yes' : 'no'}`,
-    `  Amount: ${result.amountSettled}`,
-    `  Bridged: ${result.bridged ? 'yes' : 'no'}`,
-    `  Forwarded to gauge: ${result.forwardedToGauge ? 'yes' : 'no'}`,
+    `**Fee Harvest Result**`,
+    `  Harvested amount: ${result.solanaHarvestedAmount}`,
+    `  Harvest threshold met: ${result.harvestThresholdMet ? 'yes' : 'no'}`,
   ]
   await callback?.({ text: lines.join('\n') } as Content)
 }
@@ -799,7 +795,7 @@ const keeprHelpAction: Action = {
       '  `/keepr tend [vault]` — Deploy idle funds',
       '  `/keepr report [vault]` — Harvest yields',
       '  `/keepr settle [strategy]` — Run CCA finalization',
-      '  `/keepr settle-fees` — Settle Solana fees to Base',
+      '  `/keepr settle-fees` — Harvest Solana fees to the keeper ATA',
       '  `/keepr relay-entries` — Relay lottery entries from Solana',
       '  `/keepr relay-winners` — Relay winners to Solana',
       '  `/keepr graduate` — Check graduation status',

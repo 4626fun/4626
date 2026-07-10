@@ -45,6 +45,7 @@ type ReconcileResult = {
   checkpointKey: string
   status: 'already_processed' | 'completed' | 'failed' | 'skipped_unconfigured'
   executed: boolean
+  retryable?: boolean
   upstreamStatusCode?: number
   upstreamResponse?: unknown
 }
@@ -71,6 +72,20 @@ function isNonEmptyString(value: unknown): value is string {
 
 function normalizeSolanaAction(raw: string): string {
   return raw.trim().toLowerCase()
+}
+
+function readObject(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function readUpstreamRetryable(response: unknown, statusCode: number): boolean {
+  const envelope = readObject(response)
+  if (typeof envelope?.retryable === 'boolean') return envelope.retryable
+  const data = readObject(envelope?.data)
+  if (typeof data?.retryable === 'boolean') return data.retryable
+  return statusCode === 429 || statusCode >= 500
 }
 
 function resolveStageKind(action: string): string {
@@ -135,9 +150,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (!isDbConfigured()) {
-    return res.status(200).json({
-      success: true,
-      data: buildSkippedResult(workflow, action, checkpointKey, 'database_not_configured'),
+    return res.status(503).json({
+      success: false,
+      error: 'database_not_configured',
+      data: { ...buildSkippedResult(workflow, action, checkpointKey, 'database_not_configured'), retryable: true },
     } satisfies ApiEnvelope<ReconcileResult>)
   }
 
@@ -145,9 +161,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await ensureKeeprSchema()
     const db = await getDbForCron()
     if (!db) {
-      return res.status(200).json({
-        success: true,
-        data: buildSkippedResult(workflow, action, checkpointKey, 'database_unavailable'),
+      return res.status(503).json({
+        success: false,
+        error: 'database_unavailable',
+        data: { ...buildSkippedResult(workflow, action, checkpointKey, 'database_unavailable'), retryable: true },
       } satisfies ApiEnvelope<ReconcileResult>)
     }
 
@@ -237,6 +254,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const solanaOrchestratorUrl = (process.env.SOLANA_ORCHESTRATOR_URL ?? '').trim().replace(/\/$/, '')
     let status: ReconcileResult['status'] = 'skipped_unconfigured'
     let executed = false
+    let retryable: boolean | undefined = true
     let upstreamStatusCode: number | undefined
     let upstreamResponse: unknown = null
 
@@ -268,8 +286,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const text = await upstream.text().catch(() => '')
         return { text }
       })
-      status = upstream.ok ? 'completed' : 'failed'
-      executed = upstream.ok
+      retryable = readUpstreamRetryable(upstreamResponse, upstream.status)
+      const nestedOk =
+        upstreamResponse !== null
+        && typeof upstreamResponse === 'object'
+        && !Array.isArray(upstreamResponse)
+        && (upstreamResponse as { ok?: unknown }).ok === true
+      status = upstream.ok && nestedOk ? 'completed' : 'failed'
+      executed = status === 'completed'
     }
 
     await db.sql`
@@ -369,6 +393,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       executed,
       ...(upstreamStatusCode !== undefined ? { upstreamStatusCode } : {}),
       ...(upstreamResponse !== null ? { upstreamResponse } : {}),
+      ...(status === 'completed' || status === 'already_processed' ? {} : { retryable: retryable ?? true }),
     }
 
     console.info('[keeper/solana/reconcile] completed', {
@@ -384,15 +409,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       resumedFromTerminal,
     })
 
-    return res.status(200).json({
-      success: true,
-      data: result,
-    } satisfies ApiEnvelope<ReconcileResult>)
+    if (status !== 'completed') {
+      return res.status(503).json({
+        success: false,
+        error:
+          status === 'skipped_unconfigured'
+            ? 'solana_orchestrator_not_configured'
+            : 'solana_reconcile_not_completed',
+        data: result,
+      } satisfies ApiEnvelope<ReconcileResult>)
+    }
+
+    return res.status(200).json({ success: true, data: result } satisfies ApiEnvelope<ReconcileResult>)
   } catch (err) {
     console.error('[keeper/solana/reconcile] Error:', err)
     return res.status(500).json({
       success: false,
-      error: err instanceof Error ? err.message : 'Unknown error',
+      error: 'solana_reconcile_failed',
     } satisfies ApiEnvelope<never>)
   }
 }

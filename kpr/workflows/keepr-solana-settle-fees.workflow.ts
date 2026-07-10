@@ -1,8 +1,9 @@
 /**
- * KPR Workflow: Keepr Solana Fee Settlement
+ * KPR Workflow: Keepr Solana Fee Harvest
  *
  * Schedule: Every 5 minutes
- * Pattern: cron → Solana RPC read (withheld fees) → Solana write (settle) → bridge → Base write
+ * Pattern: cron → Solana RPC read (withheld fees) → Solana harvest.
+ * Base forwarding is disabled until real authenticated bridge evidence exists.
  */
 
 import { executeSolanaFeeSettlement } from '../actions/keepr-solana-settle-fees.action.js';
@@ -18,10 +19,8 @@ export async function handler(): Promise<void> {
       JSON.stringify({
         workflow: WORKFLOW_NAME,
         timestamp: new Date().toISOString(),
-        feesSettled: result.feesSettled,
-        amountSettled: result.amountSettled,
-        bridged: result.bridged,
-        forwardedToGauge: result.forwardedToGauge,
+        harvestThresholdMet: result.harvestThresholdMet,
+        solanaHarvestedAmount: result.solanaHarvestedAmount,
       }),
     );
   } catch (err) {
