@@ -103,6 +103,6 @@ describe('VirtualsAcpService failed startup cleanup', () => {
     }
     expect(internals.config).toBeNull()
     expect(internals.toolQuota).toBeNull()
-    expect(internals.inFlightSessions).toHaveSize(0)
+    expect(internals.inFlightSessions.size).toBe(0)
   })
 })
