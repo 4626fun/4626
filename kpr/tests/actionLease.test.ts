@@ -12,6 +12,19 @@ import {
   withActionLease,
 } from '../utils/actionLease.js'
 
+async function waitForLeaseHolder(leasePath: string, holder: string): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    try {
+      const lease = JSON.parse(await readFile(leasePath, 'utf8')) as { holder?: string }
+      if (lease.holder === holder) return
+    } catch {
+      // Atomic publication may not have completed yet.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5))
+  }
+  throw new Error(`lease_not_published:${holder}`)
+}
+
 describe('actionLease (M2-09)', () => {
   let dir: string
   const prevLease = process.env.SOLANA_ORCHESTRATOR_ACTION_LEASE
@@ -271,7 +284,7 @@ describe('actionLease (M2-09)', () => {
     })
     const leasePath = join(dir, 'renewal_lost_after_effects.lease.json')
 
-    await new Promise((resolve) => setTimeout(resolve, 10))
+    await waitForLeaseHolder(leasePath, 'old-owner')
     await writeFile(
       leasePath,
       `${JSON.stringify({
@@ -303,7 +316,7 @@ describe('actionLease (M2-09)', () => {
     })
     const leasePath = join(dir, 'cooperative_abort.lease.json')
 
-    await new Promise((resolve) => setTimeout(resolve, 10))
+    await waitForLeaseHolder(leasePath, 'old-owner')
     await writeFile(
       leasePath,
       `${JSON.stringify({
