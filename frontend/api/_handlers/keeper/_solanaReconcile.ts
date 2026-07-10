@@ -393,7 +393,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       executed,
       ...(upstreamStatusCode !== undefined ? { upstreamStatusCode } : {}),
       ...(upstreamResponse !== null ? { upstreamResponse } : {}),
-      ...(status === 'completed' || status === 'already_processed' ? {} : { retryable: retryable ?? true }),
+      ...(status === 'completed' ? {} : { retryable: retryable ?? true }),
     }
 
     console.info('[keeper/solana/reconcile] completed', {

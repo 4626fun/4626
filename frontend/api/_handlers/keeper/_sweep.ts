@@ -669,7 +669,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       shareMeshResult = await runShareMeshCompletion({
         publicClient,
         walletClient,
-        keeperAddress: account.address,
+        keeperAddress: account.address as `0x${string}`,
         config: shareMeshConfig,
         input: {
           ccaLaunchArmAddress: ccaLaunchArmAddress as `0x${string}`,
