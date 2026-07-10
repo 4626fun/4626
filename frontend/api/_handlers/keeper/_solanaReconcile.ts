@@ -5,6 +5,7 @@
  * Stores workflow checkpoints in Postgres to ensure retry safety.
  */
 
+import { randomUUID } from 'node:crypto'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
@@ -49,6 +50,8 @@ type ReconcileResult = {
   upstreamStatusCode?: number
   upstreamResponse?: unknown
 }
+
+const RECONCILE_CLAIM_STALE_AFTER_SECONDS = 120
 
 function buildSkippedResult(
   workflow: string,
@@ -213,14 +216,72 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    const prior = await db.sql`
-      SELECT status, response_json
-      FROM keepr_workflow_checkpoints
-      WHERE workflow = ${workflow} AND checkpoint_key = ${checkpointKey}
+    const attemptToken = randomUUID()
+    const claimedAt = new Date().toISOString()
+    const claimPayload = {
+      schemaVersion: 'solana-reconcile-claim-v1',
+      request: payload,
+      claim: { attemptToken, claimedAt },
+    }
+    const claimResponse = { claim: { attemptToken } }
+    const claim = await db.sql`
+      WITH claimed AS (
+        INSERT INTO keepr_workflow_checkpoints (
+          workflow, checkpoint_key, action, status, payload_json, response_json, updated_at
+        ) VALUES (
+          ${workflow},
+          ${checkpointKey},
+          ${action},
+          'processing',
+          ${JSON.stringify(claimPayload)}::jsonb,
+          ${JSON.stringify(claimResponse)}::jsonb,
+          NOW()
+        )
+        ON CONFLICT (workflow, checkpoint_key)
+        DO UPDATE SET
+          status = 'processing',
+          payload_json = jsonb_build_object(
+            'schemaVersion', 'solana-reconcile-claim-v1',
+            'request', CASE
+              WHEN keepr_workflow_checkpoints.payload_json->>'schemaVersion' = 'solana-reconcile-claim-v1'
+                THEN COALESCE(keepr_workflow_checkpoints.payload_json->'request', '{}'::jsonb)
+              ELSE COALESCE(keepr_workflow_checkpoints.payload_json, '{}'::jsonb)
+            END,
+            'claim', EXCLUDED.payload_json->'claim'
+          ),
+          response_json = EXCLUDED.response_json,
+          updated_at = NOW()
+        WHERE keepr_workflow_checkpoints.status IN ('failed', 'skipped_unconfigured')
+          OR (
+            keepr_workflow_checkpoints.status = 'processing'
+            AND keepr_workflow_checkpoints.updated_at
+              < NOW() - (${RECONCILE_CLAIM_STALE_AFTER_SECONDS} * INTERVAL '1 second')
+          )
+        RETURNING status, response_json
+      ),
+      current_checkpoint AS (
+        SELECT status, response_json
+        FROM keepr_workflow_checkpoints
+        WHERE workflow = ${workflow} AND checkpoint_key = ${checkpointKey}
+        LIMIT 1
+      )
+      SELECT 'claimed' AS claim_outcome, status, response_json
+      FROM claimed
+      UNION ALL
+      SELECT
+        CASE WHEN status = 'completed' THEN 'completed' ELSE 'conflict' END AS claim_outcome,
+        status,
+        response_json
+      FROM current_checkpoint
+      WHERE NOT EXISTS (SELECT 1 FROM claimed)
       LIMIT 1;
     `
-    const priorRow = prior.rows[0] as { status?: string; response_json?: unknown } | undefined
-    if (priorRow?.status === 'completed') {
+    const claimRow = claim.rows[0] as {
+      claim_outcome?: 'claimed' | 'completed' | 'conflict'
+      status?: string
+      response_json?: unknown
+    } | undefined
+    if (claimRow?.claim_outcome === 'completed') {
       if (controlPlaneActive && stageId) {
         await transitionStageStatus({
           stageId,
@@ -243,11 +304,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         checkpointKey,
         status: 'already_processed',
         executed: false,
-        upstreamResponse: priorRow.response_json,
+        upstreamResponse: claimRow.response_json,
       }
       return res.status(200).json({
         success: true,
         data: existing,
+      } satisfies ApiEnvelope<ReconcileResult>)
+    }
+    if (claimRow?.claim_outcome !== 'claimed') {
+      if (controlPlaneActive && stageId) {
+        await transitionStageStatus({
+          stageId,
+          nextStatus: 'manual_review',
+          reason: 'checkpoint_claim_active',
+          actor: 'keeper',
+          errorMessage: 'Another reconcile attempt currently holds the checkpoint claim',
+        })
+      }
+      return res.status(409).json({
+        success: false,
+        error: 'solana_reconcile_claim_conflict',
+        data: {
+          workflow,
+          action,
+          checkpointKey,
+          status: 'failed',
+          executed: false,
+          retryable: true,
+          upstreamResponse: { reason: 'checkpoint_claim_active' },
+        },
       } satisfies ApiEnvelope<ReconcileResult>)
     }
 
@@ -296,26 +381,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       executed = status === 'completed'
     }
 
-    await db.sql`
-      INSERT INTO keepr_workflow_checkpoints (
-        workflow, checkpoint_key, action, status, payload_json, response_json, updated_at
-      ) VALUES (
-        ${workflow},
-        ${checkpointKey},
-        ${action},
-        ${status},
-        ${JSON.stringify(payload)},
-        ${JSON.stringify(upstreamResponse)},
-        NOW()
-      )
-      ON CONFLICT (workflow, checkpoint_key)
-      DO UPDATE SET
-        action = EXCLUDED.action,
-        status = EXCLUDED.status,
-        payload_json = EXCLUDED.payload_json,
-        response_json = EXCLUDED.response_json,
-        updated_at = NOW();
+    const finalized = await db.sql`
+      UPDATE keepr_workflow_checkpoints
+      SET
+        status = ${status},
+        response_json = ${JSON.stringify(upstreamResponse)}::jsonb,
+        updated_at = NOW()
+      WHERE workflow = ${workflow}
+        AND checkpoint_key = ${checkpointKey}
+        AND status = 'processing'
+        AND response_json->'claim'->>'attemptToken' = ${attemptToken}
+      RETURNING status;
     `
+    if (finalized.rows.length === 0) {
+      if (controlPlaneActive && stageId) {
+        await transitionStageStatus({
+          stageId,
+          nextStatus: 'manual_review',
+          reason: 'checkpoint_claim_lost',
+          actor: 'keeper',
+          errorMessage: 'Checkpoint claim changed before reconcile could finalize',
+        })
+      }
+      return res.status(409).json({
+        success: false,
+        error: 'solana_reconcile_claim_conflict',
+        data: {
+          workflow,
+          action,
+          checkpointKey,
+          status: 'failed',
+          executed: false,
+          retryable: true,
+          ...(upstreamStatusCode !== undefined ? { upstreamStatusCode } : {}),
+          upstreamResponse: { reason: 'checkpoint_claim_lost' },
+        },
+      } satisfies ApiEnvelope<ReconcileResult>)
+    }
     if (status === 'completed') {
       if (controlPlaneActive && stageId) {
         await transitionStageStatus({

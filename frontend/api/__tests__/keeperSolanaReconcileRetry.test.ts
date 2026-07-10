@@ -48,6 +48,12 @@ describe('keeper Solana reconcile retry semantics', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    dbSqlMock.mockReset()
+    dbSqlMock
+      .mockResolvedValueOnce({
+        rows: [{ claim_outcome: 'claimed', status: 'processing' }],
+      })
+      .mockResolvedValueOnce({ rows: [{ status: 'failed' }] })
     process.env.SOLANA_ORCHESTRATOR_URL = 'https://orchestrator.invalid'
   })
 
@@ -136,6 +142,91 @@ describe('keeper Solana reconcile retry semantics', () => {
           error: 'action_lease_outcome_indeterminate',
           retryable: false,
         },
+      },
+    })
+  })
+
+  it('allows only one concurrent request to reach the upstream mutation', async () => {
+    dbSqlMock.mockReset()
+    dbSqlMock
+      .mockResolvedValueOnce({
+        rows: [{ claim_outcome: 'claimed', status: 'processing' }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ claim_outcome: 'conflict', status: 'processing' }],
+      })
+      .mockResolvedValueOnce({ rows: [{ status: 'completed' }] })
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, signature: 'solana_signature' }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const requestBody = {
+      workflow: 'solana-orchestrator',
+      action: 'winner_relay',
+      checkpointKey: 'finalized:concurrent',
+      payload: { slot: 123 },
+    }
+    const firstRes = createMockRes()
+    const secondRes = createMockRes()
+
+    await Promise.all([
+      handler(createMockReq({ method: 'POST', body: requestBody }), firstRes),
+      handler(createMockReq({ method: 'POST', body: requestBody }), secondRes),
+    ])
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect([firstRes.statusCode, secondRes.statusCode].sort()).toEqual([200, 409])
+    const conflictResponse = firstRes.statusCode === 409 ? firstRes : secondRes
+    expect(conflictResponse.body).toMatchObject({
+      success: false,
+      error: 'solana_reconcile_claim_conflict',
+      data: {
+        status: 'failed',
+        executed: false,
+        retryable: true,
+        upstreamResponse: { reason: 'checkpoint_claim_active' },
+      },
+    })
+  })
+
+  it('does not report success when the attempt loses its finalize fence', async () => {
+    dbSqlMock.mockReset()
+    dbSqlMock
+      .mockResolvedValueOnce({
+        rows: [{ claim_outcome: 'claimed', status: 'processing' }],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, signature: 'late_signature' }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        workflow: 'solana-orchestrator',
+        action: 'settle_fees',
+        checkpointKey: 'harvest:lost-fence',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(res.statusCode).toBe(409)
+    expect(res.body).toMatchObject({
+      success: false,
+      error: 'solana_reconcile_claim_conflict',
+      data: {
+        status: 'failed',
+        executed: false,
+        retryable: true,
+        upstreamStatusCode: 200,
+        upstreamResponse: { reason: 'checkpoint_claim_lost' },
       },
     })
   })

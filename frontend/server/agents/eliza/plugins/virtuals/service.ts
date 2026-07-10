@@ -105,6 +105,7 @@ export class VirtualsAcpService {
       return { started: false, reason: `unsupported VIRTUALS_ACP_CHAIN_ID ${config.chainId}` }
     }
 
+    let candidate: AcpAgent | null = null
     try {
       this.transportReady = false
       const provider = await PrivyAlchemyEvmProviderAdapter.create({
@@ -113,23 +114,26 @@ export class VirtualsAcpService {
         signerPrivateKey: config.signerPrivateKey!,
         chains: [chain],
       })
-      const agent = await AcpAgent.create({ provider })
-      agent.on('entry', (session, entry) => {
+      candidate = await AcpAgent.create({ provider })
+      candidate.on('entry', (session, entry) => {
         void this.handleEntry(session, entry)
       })
-      await agent.start(() => {
+      await candidate.start(() => {
         this.transportReady = true
         logger.info('[virtuals-acp] connected — listening for ACP jobs')
       })
 
-      this.agent = agent
-      this.config = config
-      this.toolQuota = new ToolExecutionQuota(
+      const agentAddress = await candidate.getAddress()
+      const toolQuota = new ToolExecutionQuota(
         config.globalToolExecutionQuota,
         config.perJobToolExecutionQuota,
       )
+
+      this.agent = candidate
+      this.config = config
+      this.toolQuota = toolQuota
       this.startedAt = new Date()
-      this.agentAddress = await agent.getAddress()
+      this.agentAddress = agentAddress
       this.lastError = null
       logger.info('[virtuals-acp] started', {
         agentAddress: this.agentAddress,
@@ -137,15 +141,29 @@ export class VirtualsAcpService {
         autoLlm: config.autoLlmEnabled,
         autoFund: config.autoFundEnabled,
         maxBudgetUsdc: config.maxBudgetUsdc,
-        activeSessions: agent.sessions.length,
+        activeSessions: candidate.sessions.length,
       })
       return { started: true }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      if (candidate) {
+        try {
+          await candidate.stop()
+        } catch (stopError) {
+          logger.warn('[virtuals-acp] failed candidate cleanup error', {
+            error: stopError instanceof Error ? stopError.message : String(stopError),
+          })
+        }
+      }
       this.lastError = message
       logger.error('[virtuals-acp] start failed', { error: message })
       this.agent = null
       this.transportReady = false
+      this.config = null
+      this.toolQuota = null
+      this.startedAt = null
+      this.agentAddress = null
+      this.inFlightSessions.clear()
       return { started: false, reason: message }
     }
   }
