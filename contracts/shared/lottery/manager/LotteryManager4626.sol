@@ -1111,9 +1111,9 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
 
     /**
      * @notice Apply ve(3,3) boosts to base win probability
-     * @dev Personal: working-balance mult (0.4×–1.0×) via
-     *      `calculateBoostForPosition(l, L, ve/Ve)` — no post-hoc coverage scale
-     *      (l already = min(shareUSD, swapUSD)). Gauge is flat additive PPM.
+     * @dev Personal: tokenless-normalized Curve mult (1.0×–2.5×) via
+     *      `calculateBoostForPosition(l, L, ve/Ve)`. Only the covered fraction
+     *      of the trade receives the uplift. Gauge is flat additive PPM.
      */
     function _applyBoost(
         address user,
@@ -1135,10 +1135,14 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
             uint256 totalShareUSD = _totalShareUsd(token, shareBalanceToken);
             try boostManager.calculateBoostForPosition(user, shareBalanceAmount, swapAmountUSD, totalShareUSD)
             returns (uint256 boostBPS) {
-                // Curve factor is the full mult (incl. tokenless 0.4×). Apply when manager
-                // returns a value; zero-position managers return 1.0× (baseBoost).
-                if (boostBPS > 0) {
-                    boostedWinChance = FullMath.mulDiv(baseWinChance, boostBPS, BASIS_POINTS);
+                if (boostBPS > BASIS_POINTS) {
+                    uint256 coveredUSD =
+                        shareBalanceAmount < swapAmountUSD ? shareBalanceAmount : swapAmountUSD;
+                    uint256 coverageBPS = FullMath.mulDiv(coveredUSD, BASIS_POINTS, swapAmountUSD);
+                    uint256 coveredUpliftBPS =
+                        FullMath.mulDiv(boostBPS - BASIS_POINTS, coverageBPS, BASIS_POINTS);
+                    boostedWinChance =
+                        FullMath.mulDiv(baseWinChance, BASIS_POINTS + coveredUpliftBPS, BASIS_POINTS);
                 }
             } catch {
                 // Legacy managers without ForPosition: old mult × coverage scale.

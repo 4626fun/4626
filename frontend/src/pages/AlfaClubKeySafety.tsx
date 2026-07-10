@@ -2,7 +2,11 @@ import { Pencil } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { InfoHint } from '@/components/alfaclub/InfoHint'
-import { KeySafetyAttackPanel, type InsiderWorstCase } from '@/components/alfaclub/KeySafetyAttackPanel'
+import {
+  KeySafetyAttackPanel,
+  type AttackExitScenario,
+  type InsiderWorstCase,
+} from '@/components/alfaclub/KeySafetyAttackPanel'
 import { KeyOwnershipSunburst } from '@/components/alfaclub/KeyOwnershipSunburst'
 import {
   KeySafetyRoomPicker,
@@ -16,11 +20,14 @@ import { TradingRoomCurvePreview } from '@/components/alfaclub/TradingRoomCurveP
 import { TooltipProvider } from '@/components/ui/Tooltip'
 import {
   attackerKeysToPassVote,
+  breakEvenPotUsdcAfterOthersExit,
+  breakEvenPotUsdcForAttack,
   buyCostAfterFee,
   curveCost,
   curveDivisor,
   evaluateKeyDefense,
   raidProfit,
+  raidProfitAfterOthersExit,
   sellProceedsAfterFee,
   tradeFeeFraction,
   type AlfaRoomTier,
@@ -219,6 +226,8 @@ export function AlfaClubKeySafety() {
   const [roomSearch, setRoomSearch] = useState('')
   const [takeoverKeys, setTakeoverKeys] = useState(0)
   const [editingRoom, setEditingRoom] = useState(false)
+  const [attackExitScenario, setAttackExitScenario] =
+    useState<AttackExitScenario>('holders-stay')
 
   const roomTier = roomContext?.tier ?? 'club'
   const keySupply = roomContext?.keySupply ?? 0
@@ -290,27 +299,51 @@ export function AlfaClubKeySafety() {
     if (!evaluation) return null
     const minAttackKeys = evaluation.raid.minAttackKeys
     if (minAttackKeys <= 0) return null
-    const point = raidProfit(
-      {
-        roomType: 'trading',
-        roomTier,
-        keySupply,
-        yourKeys,
-        potUsdc: potAtRiskUsdc,
-      },
-      minAttackKeys,
-    )
-    const eligibleAfterAttack = keySupply + minAttackKeys
+    const scenarioInputs = {
+      roomType: 'trading',
+      roomTier,
+      keySupply,
+      yourKeys,
+    } as const
+    const point =
+      attackExitScenario === 'holders-exit'
+        ? raidProfitAfterOthersExit({ ...scenarioInputs, potUsdc: potAtRiskUsdc }, minAttackKeys)
+        : raidProfit({ ...scenarioInputs, potUsdc: potAtRiskUsdc }, minAttackKeys)
+    const eligibleAfterAttack =
+      attackExitScenario === 'holders-exit' ? minAttackKeys : keySupply + minAttackKeys
+    const breakEvenPotUsdc =
+      attackExitScenario === 'holders-exit'
+        ? breakEvenPotUsdcAfterOthersExit(scenarioInputs, minAttackKeys)
+        : breakEvenPotUsdcForAttack(scenarioInputs, minAttackKeys)
     return {
       minAttackKeys,
       minAttackKeysCostUsdc: evaluation.raid.minAttackKeysCostUsdc,
       poolFeeAddedUsdc: point.poolFeeAddedUsdc,
       potSizeUsdc: point.potSizeUsdc,
       distributedPerKeyUsdc: point.distributedPerKeyUsdc,
+      marginalBuyCostPerKeyUsdc: point.marginalBuyCostPerKeyUsdc,
       netDistributableUsdc: point.distributedPerKeyUsdc * eligibleAfterAttack,
       attackerNetUsdc: point.profitUsdc,
+      breakEvenPotUsdc,
+      fundGrowthToBreakEvenUsdc: Math.max(0, breakEvenPotUsdc - potAtRiskUsdc),
     }
-  }, [evaluation, keySupply, potAtRiskUsdc, roomTier, yourKeys])
+  }, [attackExitScenario, evaluation, keySupply, potAtRiskUsdc, roomTier, yourKeys])
+
+  const selectedRaidCurve = useMemo(() => {
+    if (!evaluation || attackExitScenario === 'holders-stay') return evaluation?.raid.curve
+    return evaluation.raid.curve.map((point) =>
+      raidProfitAfterOthersExit(
+        {
+          roomType: 'trading',
+          roomTier,
+          keySupply,
+          yourKeys,
+          potUsdc: potAtRiskUsdc,
+        },
+        point.keysBought,
+      ),
+    )
+  }, [attackExitScenario, evaluation, keySupply, potAtRiskUsdc, roomTier, yourKeys])
 
   const safetyStatus = evaluation ? resolveSafetyStatus(evaluation, potAtRiskUsdc) : 'caution'
   const recoveryPercent = evaluation ? Math.round(evaluation.recovery.donationRecoveryFraction * 100) : 0
@@ -612,6 +645,45 @@ export function AlfaClubKeySafety() {
                       ))}
                     </dl>
                   ) : null}
+                  {minAttackBreakdown ? (
+                    <dl className="mt-3 grid grid-cols-2 gap-2">
+                      <div className="rounded-xl bg-yellow-500/[0.06] px-3 py-2 ring-1 ring-inset ring-yellow-400/15">
+                        <dt className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-yellow-200/70">
+                          66% payout / key
+                          <InfoHint
+                            label="About payout per key at 66% control"
+                            content={
+                              <p>
+                                Net amount paid per eligible staked key after performance fees and
+                                the 10% trading reserve, using the pot after the hostile buyer&apos;s
+                                key-buy fees are added.
+                              </p>
+                            }
+                          />
+                        </dt>
+                        <dd className="mt-0.5 font-mono text-sm text-yellow-100 tabular-nums">
+                          {formatUsd(minAttackBreakdown.distributedPerKeyUsdc)}
+                        </dd>
+                      </div>
+                      <div className="rounded-xl bg-yellow-500/[0.06] px-3 py-2 ring-1 ring-inset ring-yellow-400/15">
+                        <dt className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-yellow-200/70">
+                          66% final key price
+                          <InfoHint
+                            label="About the final key price at 66% control"
+                            content={
+                              <p>
+                                Fee-inclusive bonding-curve price of the last key the outside buyer
+                                must acquire to reach the 66% control threshold.
+                              </p>
+                            }
+                          />
+                        </dt>
+                        <dd className="mt-0.5 font-mono text-sm text-yellow-100 tabular-nums">
+                          {formatUsd(minAttackBreakdown.marginalBuyCostPerKeyUsdc)}
+                        </dd>
+                      </div>
+                    </dl>
+                  ) : null}
                   <div className="mt-3">
                     <TradingRoomCurvePreview
                       selectedTier={roomTier}
@@ -621,7 +693,7 @@ export function AlfaClubKeySafety() {
                         setTakeoverKeys(Math.max(0, nextKeyIndex - keySupply))
                       }
                       fullRange
-                      raidCurve={evaluation?.raid.curve}
+                      raidCurve={selectedRaidCurve}
                       progressiveStage={4}
                       ownerSharePercent={sharePercent}
                       maxKeys={Math.max(80, keySupply + 10)}
@@ -641,6 +713,8 @@ export function AlfaClubKeySafety() {
                   potAtRiskUsdc={potAtRiskUsdc}
                   donationUsdc={donationUsdc}
                   onDonationChange={setDonationUsdc}
+                  exitScenario={attackExitScenario}
+                  onExitScenarioChange={setAttackExitScenario}
                   recoveryPercent={recoveryPercent}
                   formatUsd={formatUsd}
                 />

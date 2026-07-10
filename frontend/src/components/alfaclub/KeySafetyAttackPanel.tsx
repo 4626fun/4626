@@ -12,7 +12,11 @@ type AttackBreakdown = {
   potSizeUsdc: number
   netDistributableUsdc: number
   attackerNetUsdc: number
+  breakEvenPotUsdc: number
+  fundGrowthToBreakEvenUsdc: number
 }
+
+export type AttackExitScenario = 'holders-stay' | 'holders-exit'
 
 export type InsiderWorstCase = {
   holderLabel: string | null
@@ -35,6 +39,8 @@ type KeySafetyAttackPanelProps = {
   potAtRiskUsdc: number
   donationUsdc: number
   onDonationChange: (value: number) => void
+  exitScenario: AttackExitScenario
+  onExitScenarioChange: (scenario: AttackExitScenario) => void
   recoveryPercent: number
   formatUsd: (value: number) => string
 }
@@ -97,6 +103,8 @@ export function KeySafetyAttackPanel({
   potAtRiskUsdc,
   donationUsdc,
   onDonationChange,
+  exitScenario,
+  onExitScenarioChange,
   recoveryPercent,
   formatUsd,
 }: KeySafetyAttackPanelProps) {
@@ -120,8 +128,13 @@ export function KeySafetyAttackPanel({
                 </p>
                 <p>
                   So a lone buyer must mint enough fresh keys to own {voteThresholdPercent}% of the
-                  whole supply by themselves, then vote distribute and take their pro-rata share of
-                  the net payout (after performance fees and the 10% reserve).
+                  whole supply by themselves, then wait for their stake to become eligible before
+                  voting to distribute.
+                </p>
+                <p>
+                  {exitScenario === 'holders-exit'
+                    ? 'In this stress test, all original holders unstake and sell before lock. The attacker receives the full net payout, but those earlier sellers drain the expensive upper curve before the attacker can exit.'
+                    : 'When holders stay, the attacker receives only their pro-rata share of the net payout after performance fees and the 10% reserve.'}
                 </p>
               </>
             }
@@ -130,11 +143,44 @@ export function KeySafetyAttackPanel({
         <p className="mt-1 max-w-xl text-sm text-zinc-400">
           A single attacker can&apos;t borrow anyone else&apos;s votes, so they have to buy their way
           to {voteThresholdPercent}% alone — each buy inflates the supply, so it takes far more keys
-          than the headline count.
+          than the headline count.{' '}
+          {exitScenario === 'holders-exit'
+            ? 'This mode then models every original holder selling before distribution.'
+            : null}
         </p>
       </div>
 
       <div className="rounded-2xl bg-black/35 p-4">
+        <div className="mb-4 grid grid-cols-2 gap-2" role="group" aria-label="Holder exit scenario">
+          <button
+            type="button"
+            onClick={() => onExitScenarioChange('holders-stay')}
+            aria-pressed={exitScenario === 'holders-stay'}
+            className={cn(
+              'rounded-xl px-3 py-2 text-left text-xs ring-1 ring-inset transition-colors',
+              exitScenario === 'holders-stay'
+                ? 'bg-sky-500/10 text-sky-100 ring-sky-400/30'
+                : 'bg-white/[0.03] text-zinc-400 ring-white/[0.06] hover:bg-white/[0.06]',
+            )}
+          >
+            <span className="block font-medium">Holders stay</span>
+            <span className="mt-0.5 block text-[10px] opacity-70">All keys remain payout-eligible</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onExitScenarioChange('holders-exit')}
+            aria-pressed={exitScenario === 'holders-exit'}
+            className={cn(
+              'rounded-xl px-3 py-2 text-left text-xs ring-1 ring-inset transition-colors',
+              exitScenario === 'holders-exit'
+                ? 'bg-amber-500/10 text-amber-100 ring-amber-400/30'
+                : 'bg-white/[0.03] text-zinc-400 ring-white/[0.06] hover:bg-white/[0.06]',
+            )}
+          >
+            <span className="block font-medium">Everyone exits</span>
+            <span className="mt-0.5 block text-[10px] opacity-70">Original holders sell before lock</span>
+          </button>
+        </div>
         <div className="flex items-center gap-1.5">
           <label htmlFor={donationInputId} className="text-sm text-zinc-300">
             Test a bigger fund
@@ -143,8 +189,8 @@ export function KeySafetyAttackPanel({
             label="Why test a bigger fund"
             content={
               <p>
-                A bigger trading fund pays a takeover more. Add a what-if amount to see how large the
-                fund can grow before an attack becomes profitable.
+                A bigger trading fund pays a takeover more. Add a what-if amount to see how large
+                the fund can grow before this selected attack scenario becomes profitable.
               </p>
             }
           />
@@ -176,6 +222,28 @@ export function KeySafetyAttackPanel({
             </span>
           </p>
         </div>
+        {minAttackBreakdown ? (
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <div className="rounded-xl bg-white/[0.04] px-3 py-2">
+              <p className="text-[10px] uppercase tracking-wide text-zinc-500">
+                Selected scenario break-even fund
+              </p>
+              <p className="mt-0.5 font-mono text-sm text-zinc-100">
+                {formatUsd(minAttackBreakdown.breakEvenPotUsdc)}
+              </p>
+            </div>
+            <div className="rounded-xl bg-white/[0.04] px-3 py-2">
+              <p className="text-[10px] uppercase tracking-wide text-zinc-500">
+                Fund growth until profitable
+              </p>
+              <p className="mt-0.5 font-mono text-sm text-zinc-100">
+                {minAttackBreakdown.fundGrowthToBreakEvenUsdc > 0
+                  ? `+${formatUsd(minAttackBreakdown.fundGrowthToBreakEvenUsdc)}`
+                  : '$0.00 · threshold reached'}
+              </p>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
@@ -201,8 +269,9 @@ export function KeySafetyAttackPanel({
           label="Attacker profit"
           hint={
             <p>
-              Payout on the attacker&apos;s keys minus the round-trip trade fees. Positive means the
-              takeover nets money after the fund is distributed.
+              {exitScenario === 'holders-exit'
+                ? 'Full net distribution payout plus the attacker’s final key-sale proceeds, minus their initial curve purchase. One final room key cannot be sold.'
+                : 'Payout on the attacker’s keys minus the round-trip trade fees. Positive means the takeover nets money after the fund is distributed.'}
             </p>
           }
           value={
@@ -304,12 +373,14 @@ export function KeySafetyAttackPanel({
             </p>
           </div>
           <div className="rounded-xl bg-white/[0.03] p-3">
-            <p className="text-[11px] uppercase tracking-wide text-zinc-500">Pot after buys</p>
+            <p className="text-[11px] uppercase tracking-wide text-zinc-500">Pot before payout</p>
             <p className="mt-1 font-mono text-sm text-zinc-100">
               {minAttackBreakdown ? formatUsd(minAttackBreakdown.potSizeUsdc) : '—'}
             </p>
             <p className="mt-1 text-[11px] leading-relaxed text-zinc-600">
-              Trading fund + pool fees from attack key buys
+              {exitScenario === 'holders-exit'
+                ? 'Trading fund + pool fees from the attack buy and original-holder exits'
+                : 'Trading fund + pool fees from attack key buys'}
             </p>
           </div>
           <div className="rounded-xl bg-white/[0.03] p-3">
@@ -348,10 +419,9 @@ export function KeySafetyAttackPanel({
           ) : null}
         </div>
         <p className="px-4 pb-3 text-xs leading-relaxed text-zinc-500">
-          Worst case: every staked key is hostile and staked &gt;24h. Only keys staked &gt;24h can
-          vote or be paid. On distribution, performance fees are paid, 10% stays as a trading
-          reserve, and the remaining 90% (≈72% of the fund) is split pro-rata among eligible staked
-          keys.
+          {exitScenario === 'holders-exit'
+            ? 'Exit stress test: the attacker stakes for >24h; every original holder unstakes and sells before lock; the attacker receives the net distributable pool, then sells all but the final unsellable key. Sell order matters because earlier sellers withdraw the upper curve reserve.'
+            : 'Worst case: every staked key is hostile and staked >24h. Only keys staked >24h can vote or be paid. On distribution, performance fees are paid, 10% stays as a trading reserve, and the remaining 90% (≈72% of the fund) is split pro-rata among eligible staked keys.'}
         </p>
       </details>
     </section>

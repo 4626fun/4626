@@ -28,6 +28,7 @@ type CurveRow = {
   ownerFilledUsdc: number | null
   nonOwnerFilledUsdc: number | null
   attackNet: number | null
+  distributedPerKeyUsdc: number | null
   attackPositive: number | null
   attackNegative: number | null
 }
@@ -105,8 +106,20 @@ function CurveTooltip({
           <span className="font-mono text-zinc-100">{formatUsdLong(raidPoint.poolFeeAddedUsdc)}</span>
         </p>
         <p className="text-zinc-300">
-          Pot after buys:{' '}
+          Pot before payout:{' '}
           <span className="font-mono text-zinc-100">{formatUsdLong(raidPoint.potSizeUsdc)}</span>
+        </p>
+        <p className="text-zinc-300">
+          Net distribution per eligible key:{' '}
+          <span className="font-mono text-zinc-100">
+            {formatUsdLong(raidPoint.distributedPerKeyUsdc)}
+          </span>
+        </p>
+        <p className="text-zinc-300">
+          Price of final key:{' '}
+          <span className="font-mono text-zinc-100">
+            {formatUsdLong(raidPoint.marginalBuyCostPerKeyUsdc)}
+          </span>
         </p>
         <p className="text-zinc-300">
           Attacker payout from distribution:{' '}
@@ -198,6 +211,8 @@ export function TradingRoomCurvePreview({
   }, [raidCurve])
 
   const minVotePassProfitUsdc = minVotePassPoint?.profitUsdc ?? null
+  const minVotePassDistributionPerKeyUsdc =
+    minVotePassPoint?.distributedPerKeyUsdc ?? null
 
   const breakEvenX = useMemo(() => {
     if (!raidCurve || raidCurve.length < 2) return null
@@ -251,6 +266,7 @@ export function TradingRoomCurvePreview({
     const rows: CurveRow[] = []
     for (let i = xMin; i <= xMax; i += 1) {
       const attackNet = raidByKeys.get(i) ?? null
+      const raidPoint = raidPointByKeys.get(i)
       rows.push({
         keyIndex: i,
         cumulativeBackdropUsdc: curveCost(0, i, selectedDivisor),
@@ -261,12 +277,21 @@ export function TradingRoomCurvePreview({
         nonOwnerFilledUsdc:
           i <= fillLimitIndex ? curveCost(0, i, selectedDivisor) * (1 - ownerShareFraction) : null,
         attackNet,
+        distributedPerKeyUsdc: raidPoint?.distributedPerKeyUsdc ?? null,
         attackPositive: attackNet !== null && attackNet > 0 ? attackNet : null,
         attackNegative: attackNet !== null && attackNet < 0 ? attackNet : null,
       })
     }
     return rows
-  }, [fillLimitIndex, ownerShareFraction, raidByKeys, selectedDivisor, xMax, xMin])
+  }, [
+    fillLimitIndex,
+    ownerShareFraction,
+    raidByKeys,
+    raidPointByKeys,
+    selectedDivisor,
+    xMax,
+    xMin,
+  ])
 
   const [yMin, yMax] = useMemo((): [number, number] => {
     const curveMax = Math.max(...data.map((row) => row.cumulativeRawSpendUsdc), 1)
@@ -359,6 +384,25 @@ export function TradingRoomCurvePreview({
             axisLine={false}
             width={56}
           />
+          {hasAttackCurve ? (
+            <YAxis
+              yAxisId="distribution"
+              orientation="right"
+              domain={[0, 'auto']}
+              tickFormatter={formatUsdShort}
+              tick={{ fill: 'rgba(250,204,21,0.8)', fontSize: 10 }}
+              tickLine={false}
+              axisLine={false}
+              width={56}
+              label={{
+                value: 'Payout / key',
+                angle: 90,
+                position: 'insideRight',
+                fill: 'rgba(250,204,21,0.72)',
+                fontSize: 10,
+              }}
+            />
+          ) : null}
           {hasAttackCurve ? (
             <ReferenceLine y={0} stroke="rgba(245,158,11,0.4)" strokeDasharray="4 4" />
           ) : null}
@@ -510,6 +554,21 @@ export function TradingRoomCurvePreview({
           />
           {hasAttackCurve ? (
             <Line
+              yAxisId="distribution"
+              type="monotone"
+              dataKey="distributedPerKeyUsdc"
+              name="Net payout per eligible key"
+              stroke="#facc15"
+              strokeWidth={2}
+              dot={false}
+              connectNulls={false}
+              isAnimationActive
+              animationDuration={900}
+              animationEasing="ease-out"
+            />
+          ) : null}
+          {hasAttackCurve ? (
+            <Line
               type="monotone"
               dataKey="attackNet"
               name="Attack net USD"
@@ -521,6 +580,20 @@ export function TradingRoomCurvePreview({
               isAnimationActive
               animationDuration={900}
               animationEasing="ease-out"
+            />
+          ) : null}
+          {hasAttackCurve &&
+          minVotePassX !== null &&
+          minVotePassDistributionPerKeyUsdc !== null ? (
+            <ReferenceDot
+              yAxisId="distribution"
+              x={minVotePassX}
+              y={minVotePassDistributionPerKeyUsdc}
+              r={4.5}
+              fill="rgb(250 204 21)"
+              stroke="rgb(0 0 0 / 0.9)"
+              strokeWidth={1.5}
+              ifOverflow="visible"
             />
           ) : null}
           {clampedActiveKeyIndex !== undefined && activePointValue !== undefined ? (
@@ -551,6 +624,12 @@ export function TradingRoomCurvePreview({
             <span className="inline-flex items-center gap-1">
               <span className="h-0.5 w-3 rounded-full bg-red-500" />
               Attacker net
+            </span>
+          ) : null}
+          {hasAttackCurve ? (
+            <span className="inline-flex items-center gap-1">
+              <span className="h-0.5 w-3 rounded-full bg-yellow-400" />
+              Net payout / eligible key
             </span>
           ) : null}
         </div>

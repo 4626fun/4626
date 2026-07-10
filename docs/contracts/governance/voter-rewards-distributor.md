@@ -5,7 +5,7 @@ sidebar_position: 4
 
 # ve4626VoterRewardsDistributor
 
-Distributes the 9.61% voter rewards slice to ve4626 voters.
+Distributes the 21.39% voter rewards slice to ve4626 voters.
 
 ## Purpose
 
@@ -56,7 +56,7 @@ function getTotalRewards(address vault, uint256 epoch) external view returns (ui
 ```
 GaugeController distributes fees
    ↓
-9.61% sent to ve4626VoterRewardsDistributor
+21.39% sent to ve4626VoterRewardsDistributor
    ↓
 notifyRewards() tracks per vault/epoch
    ↓

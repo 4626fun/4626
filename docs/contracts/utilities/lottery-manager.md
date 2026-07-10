@@ -155,11 +155,13 @@ basePPM = min(swapUSD / 250_000, baseCeilingPPM)
 // Personal (only if boostManager set + covered Share USD > 0):
 //   l = min(creatorShareUSD, swapUSD)
 //   L = total creator ShareOFT supply USD
-//   ve = effective veChance
-//   working/l = min(0.4 + 0.6·(L/l)·(ve/Ve), 1.0)   ∈ [0.4, 1.0]
+//   ve = effective veLottery; Ve = live total ve4626 power
+//   working = min(0.4·l + 0.6·L·(ve/Ve), l)
+//   rawMult = working/(0.4·l)                         ∈ [1.0, 2.5]
+//   coverage = l/swapUSD
 //   (no position → personal mult inactive; basePPM unchanged)
-personalMult = calculateBoostForPosition(...)   // BPS, 4000–10000 when l>0
-boostedPPM   = basePPM × personalMult / 10_000
+effectiveMult = 1 + coverage·(rawMult - 1)
+boostedPPM   = basePPM × effectiveMult
 
 // Gauge (if vaultGaugeVoting set): + size-scaled vault PPM
 // Hard cap: lotteryConfig.maxWinChance

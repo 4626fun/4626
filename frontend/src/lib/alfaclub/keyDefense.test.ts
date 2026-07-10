@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   analyzeRaid,
   attackerKeysToPassVote,
+  breakEvenPotUsdcAfterOthersExit,
+  breakEvenPotUsdcForAttack,
   buyCostAfterFee,
   curveCost,
   curveDivisor,
@@ -15,6 +17,7 @@ import {
   poolFeeBaselineUsdc,
   poolFeeFraction,
   raidProfit,
+  raidProfitAfterOthersExit,
   recoveryBreakdown,
   selfInsuranceHold,
   sellProceedsAfterFee,
@@ -224,6 +227,55 @@ describe('raid economics', () => {
     expect(analyzeRaid({ ...holdings, potUsdc: safePot * 1.05 + 1 }, 1).raidUnprofitable).toBe(
       false,
     )
+  })
+
+  it('solves the exact fund break-even for the 66% attack size', () => {
+    const minAttackKeys = attackerKeysToPassVote(scenario.keySupply)
+    const breakEvenPotUsdc = breakEvenPotUsdcForAttack(scenario, minAttackKeys)
+    const atBreakEven = raidProfit({ ...scenario, potUsdc: breakEvenPotUsdc }, minAttackKeys)
+
+    expect(atBreakEven.profitUsdc).toBeCloseTo(0, 8)
+    expect(
+      raidProfit({ ...scenario, potUsdc: breakEvenPotUsdc + 1 }, minAttackKeys).profitUsdc,
+    ).toBeGreaterThan(0)
+  })
+
+  it('lowers break-even when only the attacker remains eligible', () => {
+    const minAttackKeys = attackerKeysToPassVote(scenario.keySupply)
+    const allKeysEligible = breakEvenPotUsdcForAttack(scenario, minAttackKeys)
+    const attackerOnlyEligible = breakEvenPotUsdcForAttack(
+      scenario,
+      minAttackKeys,
+      minAttackKeys,
+    )
+
+    expect(attackerOnlyEligible).toBeLessThan(allKeysEligible)
+  })
+
+  it('models existing holders selling before the attacker exits', () => {
+    const minAttackKeys = attackerKeysToPassVote(scenario.keySupply)
+    const point = raidProfitAfterOthersExit(scenario, minAttackKeys)
+    const buyCost = buyCostAfterFee(
+      scenario.keySupply,
+      minAttackKeys,
+      curveDivisor(scenario.roomType, scenario.roomTier),
+      tradeFeeFraction(scenario.roomType),
+    )
+
+    expect(point.distributedPerKeyUsdc * minAttackKeys).toBeCloseTo(point.payoutUsdc, 10)
+    expect(point.feeCostUsdc).toBeLessThan(buyCost)
+    expect(point.profitUsdc).toBeCloseTo(point.payoutUsdc - point.feeCostUsdc, 10)
+  })
+
+  it('solves break-even when all pre-existing holders exit before lock', () => {
+    const minAttackKeys = attackerKeysToPassVote(scenario.keySupply)
+    const breakEvenPotUsdc = breakEvenPotUsdcAfterOthersExit(scenario, minAttackKeys)
+    const atBreakEven = raidProfitAfterOthersExit(
+      { ...scenario, potUsdc: breakEvenPotUsdc },
+      minAttackKeys,
+    )
+
+    expect(atBreakEven.profitUsdc).toBeCloseTo(0, 8)
   })
 })
 

@@ -17,12 +17,12 @@ Current status of the ve(3,3) governance system.
 - [x] Frontend voting UI (`frontend/src/pages/GaugeVoting.tsx`)
 - [x] Bribe marketplace contract (`contracts/shared/governance/bribes/BribeDepot.sol`)
 - [x] **Curve-style dual-decay** `getTotalVotingPower()` on ve4626
-- [x] **Utility** `ve4626Utility` + `ve4626UtilityToken` (**veVote** / **veChance**) — [ve-naming.md](../contracts/governance/ve-naming.md)
-- [x] `sync(user)` — dual-decay capacity clamp (burn chance first, then vote)
-- [x] **P1 stale-utility fix:** `previewUtilities` / `effectiveVoteOf` / `effectiveChanceOf`; gauge `vote()` syncs; boost uses effective chance
-- [x] `ve4626BoostManager`: working-balance `calculateBoostForPosition` (**0.4×–1.0×**; 2.5× on tokenless); `setUtility` + chance; additive PPM ≡ 0
-- [x] LotteryManager: personal mult via ForPosition + total Share USD (pool L); single envelope; legacy fallback
-- [x] `ve4626GaugeVoting`: `setUtility` + optional `voteToken` + 1h epoch freeze
+- [x] **Utility** `ve4626Utility` + `ve4626UtilityToken` (**ve33** / **veLottery**) — [ve-naming.md](../contracts/governance/ve-naming.md)
+- [x] `sync(user)` — dual-decay capacity clamp (burn veLottery first, then ve33)
+- [x] **P1 stale-utility fix:** `previewUtilities` / `effectiveVe33Of` / `effectiveVeLotteryOf`; gauge `vote()` syncs; boost uses live effective veLottery
+- [x] `ve4626BoostManager`: working-balance `calculateBoostForPosition` (**1.0×–2.5×** tokenless-normalized); additive lock PPM ≡ 0
+- [x] LotteryManager: personal mult via ForPosition + total Share USD (pool L), with uplift blended by covered swap fraction
+- [x] `ve4626GaugeVoting`: `setUtility` + optional `ve33Token` + 1h epoch freeze
 - [x] `DeployRewardsEcosystem` deploys + wires `setUtility` on voting + boostManager
 
 ## In Progress
@@ -44,7 +44,7 @@ Current status of the ve(3,3) governance system.
        ▼ ve4626Utility
   ┌────┴────┐
   ▼         ▼
-veVote   veChance
+ve33   veLottery
   │         │
   ▼         ▼
 GaugeVoting  BoostManager → Lottery mult (+ coverage)
@@ -58,7 +58,7 @@ Trading fees (6.9%)
    ↓
 GaugeController splits
    ↓
-9.61% → ve4626VoterRewardsDistributor
+21.39% → ve4626VoterRewardsDistributor
    ↓
 Voters claim pro-rata
 ```

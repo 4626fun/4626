@@ -17,7 +17,7 @@ contract MockWrappedShare is ERC20 {
     }
 }
 
-/// @notice Final stack: dual-decay ve■4626 + ve4626Utility (vote / chance).
+/// @notice Final stack: dual-decay ve■4626 + ve4626Utility (ve33 / veLottery).
 contract Ve4626RightsSplitAndDualDecayTest is Test {
     ve4626 internal veToken;
     MockWrappedShare internal wrapped;
@@ -127,160 +127,180 @@ contract Ve4626RightsSplitAndDualDecayTest is Test {
     }
 
     // -------------------------------------------------------------------------
-    // Utility: vote / chance
+    // Utility: ve33 / veLottery
     // -------------------------------------------------------------------------
 
-    function test_utility_vote_notChance_byDefault() public {
+    function test_utility_ve33_notVeLottery_byDefault() public {
         _lockMax(user, LOCK_AMOUNT);
         vm.prank(user);
         utility.claimAllOutstanding();
-        assertEq(utility.voteOf(user), LOCK_AMOUNT);
-        assertEq(utility.chanceOf(user), 0);
+        assertEq(utility.ve33Of(user), LOCK_AMOUNT);
+        assertEq(utility.veLotteryOf(user), 0);
         assertEq(utility.freeCapacityOf(user), 0);
     }
 
-    function test_utility_chance_optIn() public {
+    function test_utility_veLottery_optIn() public {
         _lockMax(user, LOCK_AMOUNT);
         vm.startPrank(user);
-        utility.claimVote(LOCK_AMOUNT / 2);
-        utility.claimChance(LOCK_AMOUNT / 2);
+        utility.claimVe33(LOCK_AMOUNT / 2);
+        utility.claimVeLottery(LOCK_AMOUNT / 2);
         vm.stopPrank();
-        assertEq(utility.voteOf(user), LOCK_AMOUNT / 2);
-        assertEq(utility.chanceOf(user), LOCK_AMOUNT / 2);
+        assertEq(utility.ve33Of(user), LOCK_AMOUNT / 2);
+        assertEq(utility.veLotteryOf(user), LOCK_AMOUNT / 2);
+    }
+
+    function test_utilityToken_usesVe33AndVeLotteryMetadata() public view {
+        assertEq(utility.ve33().name(), "ve\u25A04626 33");
+        assertEq(utility.ve33().symbol(), "ve33");
+        assertEq(utility.veLottery().name(), "ve\u25A04626 Lottery");
+        assertEq(utility.veLottery().symbol(), "veLottery");
     }
 
     function test_utility_cannotOverClaim() public {
         _lockMax(user, LOCK_AMOUNT);
         vm.prank(user);
-        utility.claimVote(LOCK_AMOUNT);
+        utility.claimVe33(LOCK_AMOUNT);
         vm.prank(user);
         vm.expectRevert(ve4626Utility.InsufficientCapacity.selector);
-        utility.claimChance(1);
+        utility.claimVeLottery(1);
     }
 
     function test_utilityToken_nonTransferable() public {
         _lockMax(user, LOCK_AMOUNT);
         vm.prank(user);
-        utility.claimVote(1e18);
-        ve4626UtilityToken v = utility.vote();
+        utility.claimVe33(1e18);
+        ve4626UtilityToken v = utility.ve33();
         vm.prank(user);
         vm.expectRevert(ve4626UtilityToken.TransfersDisabled.selector);
         v.transfer(user2, 1);
     }
 
-    function test_utility_sync_burnsChanceThenVote_onDecay() public {
+    function test_utility_sync_burnsVeLotteryThenVe33_onDecay() public {
         _lockMax(user, LOCK_AMOUNT);
         vm.startPrank(user);
-        utility.claimVote(LOCK_AMOUNT / 2);
-        utility.claimChance(LOCK_AMOUNT / 2);
+        utility.claimVe33(LOCK_AMOUNT / 2);
+        utility.claimVeLottery(LOCK_AMOUNT / 2);
         vm.stopPrank();
 
-        // ~1y decay → capacity ≈ 75e18; claimed = 100e18 → excess ≈ 25e18 from chance first
+        // ~1y decay → capacity ≈ 75e18; claimed = 100e18 → excess comes from veLottery first
         vm.warp(block.timestamp + 365 days);
         uint256 cap = utility.capacityOf(user);
         assertLt(cap, LOCK_AMOUNT);
 
-        (uint256 burnedVote, uint256 burnedChance) = utility.sync(user);
-        assertEq(burnedVote, 0, "chance absorbs excess first");
-        assertGt(burnedChance, 0);
-        assertEq(utility.voteOf(user) + utility.chanceOf(user), cap);
+        (uint256 burnedVe33, uint256 burnedVeLottery) = utility.sync(user);
+        assertEq(burnedVe33, 0, "veLottery absorbs excess first");
+        assertGt(burnedVeLottery, 0);
+        assertEq(utility.ve33Of(user) + utility.veLotteryOf(user), cap);
         assertEq(utility.freeCapacityOf(user), 0);
     }
 
-    function test_utility_sync_burnsVote_whenChanceInsufficient() public {
+    function test_utility_sync_burnsVe33_whenVeLotteryInsufficient() public {
         _lockMax(user, LOCK_AMOUNT);
         vm.prank(user);
-        utility.claimVote(LOCK_AMOUNT); // all vote, no chance
+        utility.claimVe33(LOCK_AMOUNT); // all ve33, no veLottery
 
         vm.warp(block.timestamp + 2 * 365 days); // ~half power
         uint256 cap = utility.capacityOf(user);
         assertApproxEqRel(cap, LOCK_AMOUNT / 2, 0.02e18);
 
-        (uint256 burnedVote, uint256 burnedChance) = utility.sync(user);
-        assertEq(burnedChance, 0);
-        assertGt(burnedVote, 0);
-        assertEq(utility.voteOf(user), cap);
+        (uint256 burnedVe33, uint256 burnedVeLottery) = utility.sync(user);
+        assertEq(burnedVeLottery, 0);
+        assertGt(burnedVe33, 0);
+        assertEq(utility.ve33Of(user), cap);
     }
 
     /// @notice P1: preview/effective match post-sync balances without requiring a state write first.
     function test_utility_preview_effective_match_postSync() public {
         _lockMax(user, LOCK_AMOUNT);
         vm.startPrank(user);
-        utility.claimVote(LOCK_AMOUNT / 2);
-        utility.claimChance(LOCK_AMOUNT / 2);
+        utility.claimVe33(LOCK_AMOUNT / 2);
+        utility.claimVeLottery(LOCK_AMOUNT / 2);
         vm.stopPrank();
 
         vm.warp(block.timestamp + 365 days);
 
         (uint256 prevV, uint256 prevC) = utility.previewUtilities(user);
-        assertEq(utility.effectiveVoteOf(user), prevV);
-        assertEq(utility.effectiveChanceOf(user), prevC);
+        assertEq(utility.effectiveVe33Of(user), prevV);
+        assertEq(utility.effectiveVeLotteryOf(user), prevC);
 
         // Raw balances still stale before sync
-        assertGt(utility.voteOf(user) + utility.chanceOf(user), prevV + prevC);
+        assertGt(utility.ve33Of(user) + utility.veLotteryOf(user), prevV + prevC);
 
         utility.sync(user);
-        assertEq(utility.voteOf(user), prevV);
-        assertEq(utility.chanceOf(user), prevC);
-        assertEq(utility.effectiveVoteOf(user), prevV);
-        assertEq(utility.effectiveChanceOf(user), prevC);
+        assertEq(utility.ve33Of(user), prevV);
+        assertEq(utility.veLotteryOf(user), prevC);
+        assertEq(utility.effectiveVe33Of(user), prevV);
+        assertEq(utility.effectiveVeLotteryOf(user), prevC);
     }
 
     // -------------------------------------------------------------------------
     // Consumers
     // -------------------------------------------------------------------------
 
-    function test_boostManager_usesChance() public {
+    function test_boostManager_usesVeLottery() public {
         _lockMax(user, LOCK_AMOUNT);
         // Past flash-hold gate (lock updates lastBalanceUpdateBlock)
         vm.roll(block.number + 302_401);
-        // No veChance claimed → tokenless (0.4×) on legacy helper
-        assertEq(boostMgr.calculateBoost(user), 4_000);
-        vm.prank(user);
-        utility.claimChance(LOCK_AMOUNT);
-        // Eligible chance → full 1.0× attainable
+        // No veLottery claimed → neutral 1×.
         assertEq(boostMgr.calculateBoost(user), 10_000);
+        vm.prank(user);
+        utility.claimVeLottery(LOCK_AMOUNT);
+        // Eligible veLottery → full 2.5× attainable.
+        assertEq(boostMgr.calculateBoost(user), 25_000);
     }
 
-    /// @notice ForPosition: ve share vs LP share of creator pool; cap at 1.0×.
+    /// @notice ForPosition: ve share vs LP share of creator pool; cap at 2.5×.
     function test_boostManager_curvePosition_matchesWorkingBalance() public {
         _lockMax(user, LOCK_AMOUNT);
         vm.prank(user);
-        utility.claimChance(LOCK_AMOUNT);
+        utility.claimVeLottery(LOCK_AMOUNT);
         vm.roll(block.number + 302_401);
 
-        // Sole chance holder: ve/Ve = 1. l/L = 1% → working/l >> 1 → cap 1.0
+        // Sole veLottery holder: ve/Ve = 1. l/L = 1% → full 2.5×.
         uint256 l = 1e18;
         uint256 L = 100e18;
-        assertEq(boostMgr.calculateBoostForPosition(user, l, l, L), 10_000);
+        assertEq(boostMgr.calculateBoostForPosition(user, l, l, L), 25_000);
 
-        // No chance → tokenless 0.4×
-        assertEq(boostMgr.calculateBoostForPosition(user2, l, l, L), 4_000);
+        // No veLottery → neutral 1×.
+        assertEq(boostMgr.calculateBoostForPosition(user2, l, l, L), 10_000);
     }
 
-    /// @notice P1: effective chance used inside ve term after dual-decay.
-    function test_boostManager_usesEffectiveChance_afterDecay() public {
+    /// @notice P1: effective veLottery used inside ve term after dual-decay.
+    function test_boostManager_usesEffectiveVeLottery_afterDecay() public {
         _lockMax(user, LOCK_AMOUNT);
         _lockMax(user2, LOCK_AMOUNT);
         vm.prank(user);
-        utility.claimChance(LOCK_AMOUNT);
+        utility.claimVeLottery(LOCK_AMOUNT);
         vm.prank(user2);
-        utility.claimChance(LOCK_AMOUNT);
+        utility.claimVeLottery(LOCK_AMOUNT);
 
-        // After ~1y both decay; raw chance balances still 100e18 each until sync.
+        // After ~1y both decay; raw veLottery balances remain 100e18 each until sync.
         vm.warp(block.timestamp + 365 days);
         vm.roll(block.number + 302_401);
 
-        uint256 eff = utility.effectiveChanceOf(user);
+        uint256 eff = utility.effectiveVeLotteryOf(user);
         assertLt(eff, LOCK_AMOUNT);
-        assertEq(utility.chanceOf(user), LOCK_AMOUNT, "raw still stale");
+        assertEq(utility.veLotteryOf(user), LOCK_AMOUNT, "raw still stale");
 
         uint256 l = 1e18;
         uint256 Lpool = 10e18; // l/L = 10%
         uint256 boost = boostMgr.calculateBoostForPosition(user, l, l, Lpool);
-        assertGe(boost, 4_000);
-        assertLe(boost, 10_000);
-        assertGt(boost, 4_000, "ve term should lift above tokenless");
+        assertGe(boost, 10_000);
+        assertLe(boost, 25_000);
+        assertGt(boost, 10_000, "ve term should lift above tokenless");
+    }
+
+    function test_boostManager_denominatorUsesLiveTotalVePower() public {
+        _lockMax(user, LOCK_AMOUNT);
+        _lockMax(user2, LOCK_AMOUNT);
+        vm.prank(user);
+        utility.claimVeLottery(LOCK_AMOUNT);
+        vm.roll(block.number + 302_401);
+
+        // user veLottery / total live ve = 50%. With l/L = 60%:
+        // working = 0.4*60 + 0.6*100*0.5 = 54; boost = 54/24 = 2.25x.
+        // A raw totalVeLottery denominator would incorrectly treat the user as 100%.
+        assertEq(boostMgr.calculateBoostForPosition(user, 60e18, 60e18, 100e18), 22_500);
     }
 
     function test_boostManager_getTotalProbabilityBoost_alwaysZero() public view {
@@ -305,17 +325,17 @@ contract Ve4626RightsSplitAndDualDecayTest is Test {
 
         uint256 free = utility.freeCapacityOf(user);
         vm.prank(user);
-        utility.claimVote(free);
+        utility.claimVe33(free);
 
         vm.prank(user);
         gauges.vote(vs, ws);
     }
 
-    /// @notice P1: vote() syncs so gauge weight uses post-decay effective vote, not stale token balance.
+    /// @notice P1: vote() syncs so gauge weight uses post-decay effective ve33, not stale token balance.
     function test_gaugeVoting_vote_syncs_beforeWeight() public {
         _lockMax(user, LOCK_AMOUNT);
         vm.prank(user);
-        utility.claimVote(LOCK_AMOUNT);
+        utility.claimVe33(LOCK_AMOUNT);
 
         // Age past LockTooRecent (1 epoch)
         vm.warp(block.timestamp + 8 days);
@@ -324,8 +344,8 @@ contract Ve4626RightsSplitAndDualDecayTest is Test {
         vm.warp(block.timestamp + 2 * 365 days);
         uint256 cap = utility.capacityOf(user);
         assertLt(cap, LOCK_AMOUNT);
-        assertEq(utility.voteOf(user), LOCK_AMOUNT, "raw still stale");
-        assertEq(utility.effectiveVoteOf(user), cap);
+        assertEq(utility.ve33Of(user), LOCK_AMOUNT, "raw still stale");
+        assertEq(utility.effectiveVe33Of(user), cap);
 
         address vault = makeAddr("vault");
         gauges.setVaultWhitelist(vault, true);
@@ -339,14 +359,14 @@ contract Ve4626RightsSplitAndDualDecayTest is Test {
         gauges.vote(vs, ws);
 
         // Sync ran inside vote — storage now matches effective
-        assertEq(utility.voteOf(user), cap);
-        assertEq(utility.voteOf(user), utility.effectiveVoteOf(user));
+        assertEq(utility.ve33Of(user), cap);
+        assertEq(utility.ve33Of(user), utility.effectiveVe33Of(user));
     }
 
     function test_gaugeVoting_utilityWeight_cappedAtEpochEndPower() public {
         _lockMax(user, LOCK_AMOUNT);
         vm.prank(user);
-        utility.claimVote(LOCK_AMOUNT);
+        utility.claimVe33(LOCK_AMOUNT);
         vm.warp(block.timestamp + 8 days);
 
         address vault = makeAddr("utility-cap-vault");
@@ -358,7 +378,7 @@ contract Ve4626RightsSplitAndDualDecayTest is Test {
 
         uint256 epoch = gauges.currentEpoch();
         uint256 projected = veToken.votingPowerAt(user, gauges.epochEndTime(epoch));
-        assertGt(utility.effectiveVoteOf(user), projected);
+        assertGt(utility.effectiveVe33Of(user), projected);
         vm.prank(user);
         gauges.vote(vs, ws);
         assertEq(gauges.getUserVoteWeightAtEpoch(epoch, user, vault), projected);
@@ -367,7 +387,7 @@ contract Ve4626RightsSplitAndDualDecayTest is Test {
     function test_gaugeVoting_claimedUtilityBelowEpochCap_remainsClaimLimited() public {
         _lockMax(user, LOCK_AMOUNT);
         vm.prank(user);
-        utility.claimVote(LOCK_AMOUNT / 2);
+        utility.claimVe33(LOCK_AMOUNT / 2);
         vm.warp(block.timestamp + 8 days);
 
         address vault = makeAddr("claimed-cap-vault");
@@ -384,11 +404,11 @@ contract Ve4626RightsSplitAndDualDecayTest is Test {
         assertEq(gauges.getUserVoteWeightAtEpoch(epoch, user, vault), LOCK_AMOUNT / 2);
     }
 
-    function test_gaugeVoting_rawVoteTokenWeight_cappedAtEpochEndPower() public {
+    function test_gaugeVoting_rawVe33TokenWeight_cappedAtEpochEndPower() public {
         _lockMax(user, LOCK_AMOUNT);
         vm.prank(user);
-        utility.claimVote(LOCK_AMOUNT);
-        gauges.setUtility(address(0)); // retains the configured raw voteToken fallback
+        utility.claimVe33(LOCK_AMOUNT);
+        gauges.setUtility(address(0)); // retains the configured raw ve33Token fallback
         vm.warp(block.timestamp + 8 days);
 
         address vault = makeAddr("raw-token-cap-vault");
@@ -400,7 +420,7 @@ contract Ve4626RightsSplitAndDualDecayTest is Test {
 
         uint256 epoch = gauges.currentEpoch();
         uint256 projected = veToken.votingPowerAt(user, gauges.epochEndTime(epoch));
-        assertGt(utility.voteOf(user), projected);
+        assertGt(utility.ve33Of(user), projected);
         vm.prank(user);
         gauges.vote(vs, ws);
         assertEq(gauges.getUserVoteWeightAtEpoch(epoch, user, vault), projected);
@@ -411,7 +431,7 @@ contract Ve4626RightsSplitAndDualDecayTest is Test {
         vm.warp(block.timestamp + 8 days);
         uint256 free = utility.freeCapacityOf(user);
         vm.prank(user);
-        utility.claimVote(free);
+        utility.claimVe33(free);
 
         address vault = makeAddr("vault");
         gauges.setVaultWhitelist(vault, true);

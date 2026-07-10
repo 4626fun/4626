@@ -50,13 +50,12 @@ function getVaultGaugeProbabilityBoostPPM(address vault) external view returns (
 The lottery uses this model:
 
 ```
-FinalPPM = BasePPM × PersonalBoost + LockDurationBoostPPM + VaultGaugeBoostPPM
+FinalPPM = BasePPM × CoveredPersonalBoost + VaultGaugeBoostPPM
 ```
 
 Where:
 - **BasePPM**: Derived from swap size
-- **PersonalBoost**: ve4626 (up to 2.5x)
-- **LockDurationBoostPPM**: Additive boost from lock duration
+- **CoveredPersonalBoost**: veLottery Curve multiplier (1×–2.5×), blended by Share coverage
 - **VaultGaugeBoostPPM**: Additive boost from gauge voting
 
 ## Weekly Epochs

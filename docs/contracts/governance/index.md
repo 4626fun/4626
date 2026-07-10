@@ -12,9 +12,9 @@ Contracts that manage fee distribution and the ve■4626 / gauge incentive syste
 | Contract | Purpose |
 |----------|---------|
 | **[GaugeController](/contracts/governance/gauge-controller)** | Fee splitting and distribution |
-| **[ve■4626 naming](/contracts/governance/ve-naming)** | Canonical names: ve■4626, Utility, veVote, veChance |
+| **[ve■4626 naming](/contracts/governance/ve-naming)** | Canonical names: ve■4626, Utility, ve33, veLottery |
 | **[ve■4626 (`ve4626`)](/contracts/governance/ve4626)** | Lock **■4626 only**; dual-decay power; utility + lottery boost API |
-| **[ve4626GaugeVoting](/contracts/governance/vault-gauge-voting)** | Vote-directed probability budgets (veVote) |
+| **[ve4626GaugeVoting](/contracts/governance/vault-gauge-voting)** | Vote-directed probability budgets (ve33) |
 | **[ve4626VoterRewardsDistributor](/contracts/governance/voter-rewards-distributor)** | Voter reward claims |
 
 ## Fee Split (Defaults, Configurable)
@@ -22,5 +22,5 @@ Contracts that manage fee distribution and the ve■4626 / gauge incentive syste
 | Allocation | Percentage | Description |
 |------------|------------|-------------|
 | Lottery | 69% (default) | Jackpot reserve in `CreatorGaugeController` |
-| Burn | 21.39% (default) | Immediate PPS-accretive burn |
-| Voter/Protocol Branch | 9.61% (default) | Routed to `ve4626VoterRewardsDistributor` when configured, protocol/jackpot fallback otherwise |
+| Voter/Protocol Branch | 21.39% (default) | Routed to `ve4626VoterRewardsDistributor` when configured, protocol/jackpot fallback otherwise |
+| Burn | 9.61% (default) | Immediate PPS-accretive burn |

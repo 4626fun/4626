@@ -5,7 +5,8 @@
 This rollout ships:
 - coverage-aware personal boost in `LotteryManager4626` via `ve4626BoostManager.calculateBoostForPosition`
 - remote payload v2 (`buyerCurrentShareBalance`) in `CreatorShareOFT`
-- Curve-style working mult **0.4×–1.0×** (`l`=covered Share USD, `L`=Share supply USD, `ve`=effectiveChance)
+- Curve-style tokenless-normalized mult **1.0×–2.5×** (`l`=covered Share USD, `L`=Share supply USD, `ve`=effectiveVeLottery, `Ve`=live total ve4626)
+- covered-fraction composition `1 + (l/swapUSD)·(boost-1)` so uncovered trade value receives no personal uplift
 - fixed-budget gauge voting in `ve4626GaugeVoting` (`69,420` PPM total, `35,000` PPM per-vault cap)
 - launch: leave LM `boostManager` / `vaultGaugeVoting` at `0` until canary
 
