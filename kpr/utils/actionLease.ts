@@ -496,7 +496,8 @@ export async function withActionLease<T>(params: {
     runError = error
   } finally {
     clearInterval(renewalTimer)
-    if (renewalInFlight) await renewalInFlight.catch(() => undefined)
+    const pendingRenewal = renewalInFlight as Promise<void> | null
+    if (pendingRenewal) await pendingRenewal.catch(() => undefined)
     await releaseActionLease({ leasePath: lease.leasePath, token: lease.token })
   }
 
