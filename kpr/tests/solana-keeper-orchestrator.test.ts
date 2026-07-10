@@ -1,11 +1,29 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+const { withActionLeaseMock } = vi.hoisted(() => ({
+  withActionLeaseMock: vi.fn(),
+}))
+
+vi.mock('../utils/actionLease.js', async () => {
+  const actual = await vi.importActual<typeof import('../utils/actionLease.js')>('../utils/actionLease.js')
+  return {
+    ...actual,
+    withActionLease: withActionLeaseMock,
+  }
+})
 
 import {
   normalizeSolanaOrchestratorAction,
   executeSolanaOrchestratorAction,
+  publicOrchestratorError,
 } from '../solana-keeper-orchestrator.js'
+import { ActionLeaseError } from '../utils/actionLease.js'
 
 describe('solana keeper orchestrator', () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('normalizes supported action labels', () => {
     expect(normalizeSolanaOrchestratorAction('relay-entries')).toBe('relay_entries')
     expect(normalizeSolanaOrchestratorAction('settle_fees')).toBe('settle_fees')
@@ -58,5 +76,47 @@ describe('solana keeper orchestrator', () => {
       if (previousRelay === undefined) delete process.env.SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED
       else process.env.SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED = previousRelay
     }
+  })
+
+  it('reports a held action lease as retryable instead of successful', async () => {
+    const previousExecute = process.env.SOLANA_ORCHESTRATOR_EXECUTE
+    const previousWinnerRelay = process.env.SOLANA_ORCHESTRATOR_WINNER_RELAY_ENABLED
+    process.env.SOLANA_ORCHESTRATOR_EXECUTE = '1'
+    process.env.SOLANA_ORCHESTRATOR_WINNER_RELAY_ENABLED = '1'
+    withActionLeaseMock.mockResolvedValueOnce({ ran: false, outcome: 'held' })
+    try {
+      await expect(
+        executeSolanaOrchestratorAction({
+          workflow: 'solana-orchestrator',
+          action: 'winner_relay',
+          checkpointKey: 'finalized:123',
+        }),
+      ).rejects.toThrow('action_lease_held')
+    } finally {
+      if (previousExecute === undefined) delete process.env.SOLANA_ORCHESTRATOR_EXECUTE
+      else process.env.SOLANA_ORCHESTRATOR_EXECUTE = previousExecute
+      if (previousWinnerRelay === undefined) delete process.env.SOLANA_ORCHESTRATOR_WINNER_RELAY_ENABLED
+      else process.env.SOLANA_ORCHESTRATOR_WINNER_RELAY_ENABLED = previousWinnerRelay
+    }
+  })
+
+  it('sanitizes raw action and filesystem failures into stable external codes', () => {
+    expect(publicOrchestratorError(new Error('/var/lib/private/lease: EACCES'))).toEqual({
+      statusCode: 500,
+      code: 'action_execution_failed',
+      retryable: true,
+    })
+    expect(publicOrchestratorError(new Error('action_lease_held'))).toEqual({
+      statusCode: 409,
+      code: 'action_lease_held',
+      retryable: true,
+    })
+    expect(
+      publicOrchestratorError(new ActionLeaseError('action_lease_outcome_indeterminate')),
+    ).toEqual({
+      statusCode: 409,
+      code: 'action_lease_outcome_indeterminate',
+      retryable: false,
+    })
   })
 })

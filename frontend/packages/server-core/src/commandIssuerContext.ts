@@ -72,6 +72,60 @@ function rowToContext(row: Record<string, unknown>): CommandIssuerContext {
   }
 }
 
+const LEGACY_SUB_ACCOUNT_ARTIFACT_COLUMNS = [
+  'sub_account_address',
+  'spend_permission_payload',
+  'spend_permission_signature',
+  'spend_permission_hash',
+  'spend_allowance_wei',
+  'spend_period_seconds',
+] as const
+
+function resolveEligibleRow(row: Record<string, unknown>): CommandIssuerResolution {
+  const profileId = Number(row.profile_id)
+  const revokedAt = row.revoked_at ? new Date(String(row.revoked_at)) : null
+  if (revokedAt && Number.isFinite(revokedAt.getTime())) {
+    return {
+      status: 'revoked',
+      profileId,
+      revokedAt,
+      reason: typeof row.revoked_reason === 'string' ? row.revoked_reason : null,
+    }
+  }
+
+  if (row.spend_permission_revoked_at != null) {
+    const spendPermissionRevokedAt = new Date(String(row.spend_permission_revoked_at))
+    if (Number.isFinite(spendPermissionRevokedAt.getTime())) {
+      return {
+        status: 'revoked',
+        profileId,
+        revokedAt: spendPermissionRevokedAt,
+        reason: 'legacy_spend_permission_revoked',
+      }
+    }
+    return { status: 'not_provisioned', profileId }
+  }
+
+  const smartWallet = normalizeAddress(row.smart_wallet_address)
+  const canonicalCsw = normalizeAddress(row.profile_csw_address)
+  if (!smartWallet || !canonicalCsw || smartWallet !== canonicalCsw) {
+    return { status: 'not_provisioned', profileId }
+  }
+
+  if (LEGACY_SUB_ACCOUNT_ARTIFACT_COLUMNS.some((column) => row[column] != null)) {
+    return { status: 'not_provisioned', profileId }
+  }
+
+  if (row.spend_permission_end_at != null) {
+    const permissionEndAt = new Date(String(row.spend_permission_end_at))
+    if (!Number.isFinite(permissionEndAt.getTime()) || permissionEndAt.getTime() <= Date.now()) {
+      return { status: 'not_provisioned', profileId }
+    }
+  }
+
+  return { status: 'ready', context: rowToContext(row) }
+}
+
 export async function resolveCommandIssuerContextByAddress(address: string): Promise<CommandIssuerResolution> {
   const normalized = normalizeAddress(address)
   if (!normalized) return { status: 'not_provisioned', profileId: null }
@@ -81,7 +135,7 @@ export async function resolveCommandIssuerContextByAddress(address: string): Pro
 
   try {
     const { rows } = await db.sql`
-      SELECT ctx.*
+      SELECT ctx.*, p.csw_address AS profile_csw_address
       FROM command_issuer_execution_context ctx
       JOIN profiles p ON p.id = ctx.profile_id
       JOIN profile_wallets pw ON pw.profile_id = ctx.profile_id
@@ -95,11 +149,7 @@ export async function resolveCommandIssuerContextByAddress(address: string): Pro
       LIMIT 1
     `
     if (!rows || rows.length === 0) return { status: 'not_provisioned', profileId: null }
-    const ctx = rowToContext(rows[0] as Record<string, unknown>)
-    if (ctx.revokedAt) {
-      return { status: 'revoked', profileId: ctx.profileId, revokedAt: ctx.revokedAt, reason: (rows[0] as any).revoked_reason ?? null }
-    }
-    return { status: 'ready', context: ctx }
+    return resolveEligibleRow(rows[0] as Record<string, unknown>)
   } catch (error: any) {
     logger.error('[arch-b/context] resolveCommandIssuerContextByAddress failed', { error: error?.message })
     return { status: 'db_unavailable' }
@@ -120,17 +170,14 @@ export async function resolveCommandIssuerContextByProfileId(profileId: number):
         WHERE p.id = ${profileId}
         LIMIT 1
       )
-      SELECT ctx.*
+      SELECT ctx.*, p.csw_address AS profile_csw_address
       FROM command_issuer_execution_context ctx
       JOIN target t ON t.live_id = ctx.profile_id
+      JOIN profiles p ON p.id = ctx.profile_id
       LIMIT 1
     `
     if (!rows || rows.length === 0) return { status: 'not_provisioned', profileId }
-    const ctx = rowToContext(rows[0] as Record<string, unknown>)
-    if (ctx.revokedAt) {
-      return { status: 'revoked', profileId: ctx.profileId, revokedAt: ctx.revokedAt, reason: (rows[0] as any).revoked_reason ?? null }
-    }
-    return { status: 'ready', context: ctx }
+    return resolveEligibleRow(rows[0] as Record<string, unknown>)
   } catch (error: any) {
     logger.error('[arch-b/context] resolveCommandIssuerContextByProfileId failed', { profileId, error: error?.message })
     return { status: 'db_unavailable' }

@@ -28,6 +28,7 @@ contract Ve4626RightsSplitAndDualDecayTest is Test {
     address internal user = makeAddr("locker");
     address internal user2 = makeAddr("locker2");
     uint256 internal constant LOCK_AMOUNT = 100e18;
+    uint256 internal constant WEEK = 7 days;
 
     function setUp() public {
         wrapped = new MockWrappedShare();
@@ -43,7 +44,11 @@ contract Ve4626RightsSplitAndDualDecayTest is Test {
         wrapped.mint(user, 1_000e18);
         wrapped.mint(user2, 1_000e18);
 
-        vm.warp(block.timestamp + 14 days);
+        // Put MAX_LOCK_DURATION on a week boundary so max-lock utility tests retain
+        // their exact LOCK_AMOUNT capacity under week-aligned expiry.
+        uint256 target = block.timestamp + 14 days;
+        uint256 maxDuration = veToken.MAX_LOCK_DURATION();
+        vm.warp(((target + maxDuration + WEEK - 1) / WEEK) * WEEK - maxDuration);
     }
 
     function _lockMax(address who, uint256 amount) internal {
@@ -81,6 +86,43 @@ contract Ve4626RightsSplitAndDualDecayTest is Test {
             veToken.getVotingPower(user) + veToken.getVotingPower(user2),
             veToken.getTotalVotingPower(),
             2e15
+        );
+    }
+
+    function test_dualDecay_midWeekRequest_isAligned_andGlobalMatchesUserAroundExpiry() public {
+        uint256 amount = veToken.MAX_LOCK_DURATION(); // slope is exactly 1 wei/second
+        uint256 requestedDuration = 30 days; // requested end is deliberately mid-week
+
+        vm.startPrank(user);
+        wrapped.approve(address(veToken), amount);
+        veToken.lock(address(wrapped), amount, requestedDuration);
+        vm.stopPrank();
+        vm.startPrank(user2);
+        wrapped.approve(address(veToken), amount);
+        veToken.lock(address(wrapped), amount, 45 days);
+        vm.stopPrank();
+
+        uint256 acceptedEnd = veToken.getLock(user).end;
+        assertEq(acceptedEnd % WEEK, 0, "accepted end must match slope schedule");
+        assertLt(acceptedEnd, block.timestamp + requestedDuration, "must floor, not ceil");
+
+        vm.warp(acceptedEnd - 1);
+        assertEq(
+            veToken.getTotalVotingPower(),
+            veToken.getVotingPower(user) + veToken.getVotingPower(user2),
+            "before expiry"
+        );
+        vm.warp(acceptedEnd);
+        assertEq(
+            veToken.getTotalVotingPower(),
+            veToken.getVotingPower(user) + veToken.getVotingPower(user2),
+            "at expiry"
+        );
+        vm.warp(acceptedEnd + 3 days);
+        assertEq(
+            veToken.getTotalVotingPower(),
+            veToken.getVotingPower(user) + veToken.getVotingPower(user2),
+            "after expiry"
         );
     }
 
@@ -299,6 +341,69 @@ contract Ve4626RightsSplitAndDualDecayTest is Test {
         // Sync ran inside vote — storage now matches effective
         assertEq(utility.voteOf(user), cap);
         assertEq(utility.voteOf(user), utility.effectiveVoteOf(user));
+    }
+
+    function test_gaugeVoting_utilityWeight_cappedAtEpochEndPower() public {
+        _lockMax(user, LOCK_AMOUNT);
+        vm.prank(user);
+        utility.claimVote(LOCK_AMOUNT);
+        vm.warp(block.timestamp + 8 days);
+
+        address vault = makeAddr("utility-cap-vault");
+        gauges.setVaultWhitelist(vault, true);
+        address[] memory vs = new address[](1);
+        vs[0] = vault;
+        uint256[] memory ws = new uint256[](1);
+        ws[0] = 1;
+
+        uint256 epoch = gauges.currentEpoch();
+        uint256 projected = veToken.votingPowerAt(user, gauges.epochEndTime(epoch));
+        assertGt(utility.effectiveVoteOf(user), projected);
+        vm.prank(user);
+        gauges.vote(vs, ws);
+        assertEq(gauges.getUserVoteWeightAtEpoch(epoch, user, vault), projected);
+    }
+
+    function test_gaugeVoting_claimedUtilityBelowEpochCap_remainsClaimLimited() public {
+        _lockMax(user, LOCK_AMOUNT);
+        vm.prank(user);
+        utility.claimVote(LOCK_AMOUNT / 2);
+        vm.warp(block.timestamp + 8 days);
+
+        address vault = makeAddr("claimed-cap-vault");
+        gauges.setVaultWhitelist(vault, true);
+        address[] memory vs = new address[](1);
+        vs[0] = vault;
+        uint256[] memory ws = new uint256[](1);
+        ws[0] = 1;
+
+        uint256 epoch = gauges.currentEpoch();
+        assertGt(veToken.votingPowerAt(user, gauges.epochEndTime(epoch)), LOCK_AMOUNT / 2);
+        vm.prank(user);
+        gauges.vote(vs, ws);
+        assertEq(gauges.getUserVoteWeightAtEpoch(epoch, user, vault), LOCK_AMOUNT / 2);
+    }
+
+    function test_gaugeVoting_rawVoteTokenWeight_cappedAtEpochEndPower() public {
+        _lockMax(user, LOCK_AMOUNT);
+        vm.prank(user);
+        utility.claimVote(LOCK_AMOUNT);
+        gauges.setUtility(address(0)); // retains the configured raw voteToken fallback
+        vm.warp(block.timestamp + 8 days);
+
+        address vault = makeAddr("raw-token-cap-vault");
+        gauges.setVaultWhitelist(vault, true);
+        address[] memory vs = new address[](1);
+        vs[0] = vault;
+        uint256[] memory ws = new uint256[](1);
+        ws[0] = 1;
+
+        uint256 epoch = gauges.currentEpoch();
+        uint256 projected = veToken.votingPowerAt(user, gauges.epochEndTime(epoch));
+        assertGt(utility.voteOf(user), projected);
+        vm.prank(user);
+        gauges.vote(vs, ws);
+        assertEq(gauges.getUserVoteWeightAtEpoch(epoch, user, vault), projected);
     }
 
     function test_gaugeVoting_freezeWindow() public {

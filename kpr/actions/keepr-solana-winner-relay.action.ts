@@ -46,11 +46,18 @@ import {
 const WORKFLOW_NAME = 'keepr-solana-winner-relay';
 const INITIAL_LOOKBACK_BLOCKS = 100n;
 const DEFAULT_MAX_GET_LOGS_BLOCK_RANGE = 99_999n;
+const DEFAULT_FINALITY_DEPTH = 64n;
 
 function readMaxGetLogsBlockRange(): bigint {
   const parsed = Number.parseInt(String(process.env.KPR_GET_LOGS_MAX_BLOCK_RANGE ?? '99999'), 10);
   if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_MAX_GET_LOGS_BLOCK_RANGE;
   return BigInt(Math.min(parsed, 99999));
+}
+
+function readWinnerRelayFinalityDepth(): bigint {
+  const parsed = Number.parseInt(String(process.env.SOLANA_WINNER_RELAY_FINALITY_DEPTH ?? '64'), 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_FINALITY_DEPTH;
+  return BigInt(Math.min(parsed, 10_000));
 }
 
 async function getWinnerNotificationLogs(params: {
@@ -349,14 +356,16 @@ export async function executeSolanaWinnerRelay(): Promise<WinnerRelayResult> {
   try {
     const publicClient = getPublicClient();
     const currentBlock = await publicClient.getBlockNumber();
+    const finalityDepth = readWinnerRelayFinalityDepth();
+    const finalizedBlock = currentBlock > finalityDepth ? currentBlock - finalityDepth : 0n;
     const stateFile = getWinnerRelayStateFile();
     const state = await loadSolanaWinnerRelayState(stateFile);
     let { blockNumber: checkpointBlock, logIndex: checkpointLogIndex } = getWinnerRelayCheckpoint(state);
 
     if (checkpointBlock === 0n && checkpointLogIndex < 0) {
-      checkpointBlock = currentBlock > INITIAL_LOOKBACK_BLOCKS ? currentBlock - INITIAL_LOOKBACK_BLOCKS : 0n;
-    } else if (checkpointBlock > currentBlock) {
-      checkpointBlock = currentBlock;
+      checkpointBlock = finalizedBlock > INITIAL_LOOKBACK_BLOCKS ? finalizedBlock - INITIAL_LOOKBACK_BLOCKS : 0n;
+    } else if (checkpointBlock > finalizedBlock) {
+      checkpointBlock = finalizedBlock;
       checkpointLogIndex = -1;
     }
 
@@ -443,11 +452,11 @@ export async function executeSolanaWinnerRelay(): Promise<WinnerRelayResult> {
       publicClient,
       lotteryManager,
       fromBlock: checkpointBlock,
-      toBlock: currentBlock,
+      toBlock: finalizedBlock,
     });
 
     if (logs.length === 0) {
-      setWinnerRelayCheckpoint(state, currentBlock, -1);
+      setWinnerRelayCheckpoint(state, finalizedBlock, -1);
       await saveSolanaWinnerRelayState(stateFile, state);
       result.quarantineSize = listWinnerRelayQuarantine(state).length;
       if (result.quarantineSize > 0) {

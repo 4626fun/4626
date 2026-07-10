@@ -161,7 +161,6 @@ export async function getWaitlistLeaderboardData(params: {
         p.referral_code,
         p.border_tier,
         COALESCE(
-          NULLIF(TRIM(p.csw_address), ''),
           CASE
             WHEN NULLIF(TRIM(p.csw_address), '') IS NOT NULL
               AND lower(TRIM(p.csw_address)) NOT IN (
@@ -176,7 +175,19 @@ export async function getWaitlistLeaderboardData(params: {
           NULLIF(TRIM(azs.canonical_csw_address), ''),
           NULLIF(TRIM(zp_row.smart_wallet_address), '')
         ) AS canonical_csw,
-        NULLIF(TRIM(p.primary_wallet), '') AS primary_wallet_raw,
+        CASE
+          WHEN NULLIF(TRIM(p.primary_wallet), '') IS NOT NULL
+            AND (
+              NULLIF(TRIM(p.primary_embedded_eoa), '') IS NULL
+              OR lower(TRIM(p.primary_wallet)) <> lower(TRIM(p.primary_embedded_eoa))
+            )
+            AND (
+              NULLIF(TRIM(p.embedded_wallet), '') IS NULL
+              OR lower(TRIM(p.primary_wallet)) <> lower(TRIM(p.embedded_wallet))
+            )
+          THEN NULLIF(TRIM(p.primary_wallet), '')
+          ELSE NULL
+        END AS primary_wallet_raw,
         COALESCE(
           NULLIF(TRIM(zp_row.basename), ''),
           NULLIF(TRIM(azs.zora_handle), ''),
@@ -198,7 +209,6 @@ export async function getWaitlistLeaderboardData(params: {
         (NULLIF(TRIM(p.base_sub_account), '') IS NOT NULL) AS show_base_app_badge,
         CASE
           WHEN COALESCE(
-            NULLIF(TRIM(p.csw_address), ''),
             CASE
               WHEN NULLIF(TRIM(p.csw_address), '') IS NOT NULL
                 AND lower(TRIM(p.csw_address)) NOT IN (
@@ -412,7 +422,6 @@ export async function getWaitlistLeaderboardData(params: {
           p.referral_code,
           p.border_tier,
           COALESCE(
-            NULLIF(TRIM(p.csw_address), ''),
             CASE
               WHEN NULLIF(TRIM(p.csw_address), '') IS NOT NULL
                 AND lower(TRIM(p.csw_address)) NOT IN (
@@ -427,7 +436,19 @@ export async function getWaitlistLeaderboardData(params: {
             NULLIF(TRIM(azs.canonical_csw_address), ''),
             NULLIF(TRIM(zp_row.smart_wallet_address), '')
           ) AS canonical_csw,
-          NULLIF(TRIM(p.primary_wallet), '') AS primary_wallet_raw,
+          CASE
+            WHEN NULLIF(TRIM(p.primary_wallet), '') IS NOT NULL
+              AND (
+                NULLIF(TRIM(p.primary_embedded_eoa), '') IS NULL
+                OR lower(TRIM(p.primary_wallet)) <> lower(TRIM(p.primary_embedded_eoa))
+              )
+              AND (
+                NULLIF(TRIM(p.embedded_wallet), '') IS NULL
+                OR lower(TRIM(p.primary_wallet)) <> lower(TRIM(p.embedded_wallet))
+              )
+            THEN NULLIF(TRIM(p.primary_wallet), '')
+            ELSE NULL
+          END AS primary_wallet_raw,
           COALESCE(
             NULLIF(TRIM(zp_row.basename), ''),
             NULLIF(TRIM(azs.zora_handle), ''),
@@ -449,7 +470,6 @@ export async function getWaitlistLeaderboardData(params: {
           (NULLIF(TRIM(p.base_sub_account), '') IS NOT NULL) AS show_base_app_badge,
           CASE
             WHEN COALESCE(
-              NULLIF(TRIM(p.csw_address), ''),
               CASE
                 WHEN NULLIF(TRIM(p.csw_address), '') IS NOT NULL
                   AND lower(TRIM(p.csw_address)) NOT IN (

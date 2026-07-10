@@ -13,7 +13,7 @@ import { executeSolanaPriceMonitor } from './actions/keepr-solana-price-monitor.
 import { executeSolanaGraduation } from './actions/keepr-solana-graduation.action.js'
 import { executeSolanaSyncMapping } from './actions/keepr-solana-sync-mapping.action.js'
 import { executeSolanaSyncRelayConfig } from './actions/keepr-solana-sync-relay-config.action.js'
-import { withActionLease } from './utils/actionLease.js'
+import { ActionLeaseError, withActionLease } from './utils/actionLease.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 loadKeeperEnv()
@@ -40,6 +40,28 @@ export type ReconcileOutcome = {
   action: SolanaOrchestratorAction
   checkpointKey: string
   result: unknown
+}
+
+export function publicOrchestratorError(error: unknown): {
+  statusCode: number
+  code: string
+  retryable: boolean
+} {
+  const message = error instanceof Error ? error.message : ''
+  if (message.startsWith('action_disabled:')) {
+    return { statusCode: 503, code: 'action_disabled', retryable: true }
+  }
+  if (message === 'action_lease_held') {
+    return { statusCode: 409, code: 'action_lease_held', retryable: true }
+  }
+  if (error instanceof ActionLeaseError) {
+    return {
+      statusCode: error.code === 'action_lease_outcome_indeterminate' ? 409 : 503,
+      code: error.code,
+      retryable: error.code !== 'action_lease_outcome_indeterminate',
+    }
+  }
+  return { statusCode: 500, code: 'action_execution_failed', retryable: true }
 }
 
 function json(res: ServerResponse, statusCode: number, payload: unknown): void {
@@ -156,25 +178,25 @@ export async function executeSolanaOrchestratorAction(params: {
   const leased = await withActionLease({
     action: params.action,
     holder: `${params.workflow}:${params.checkpointKey}`,
-    run: async () =>
-      runSolanaOrchestratorActionBody({
+    run: async ({ markEffectsStarted }) => {
+      // Current actions are not cooperatively abortable, so fence the entire
+      // action as potentially effectful before entering it.
+      markEffectsStarted()
+      return runSolanaOrchestratorActionBody({
         action: params.action,
         payload: params.payload,
-      }),
+      })
+    },
   })
 
-  if (!leased.ran) {
-    return {
-      ok: true,
-      workflow: params.workflow,
-      action: params.action,
-      checkpointKey: params.checkpointKey,
-      result: {
-        skipped: true,
-        reason: 'action_lease_held',
-        note: 'Another trigger plane holds the action lease (M2-09 single-plane / dedup)',
-      },
-    }
+  if (leased.outcome === 'held') {
+    throw new Error('action_lease_held')
+  }
+  if (leased.outcome === 'aborted_before_effects') {
+    throw new ActionLeaseError('action_lease_aborted_before_effects')
+  }
+  if (leased.outcome === 'indeterminate') {
+    throw new ActionLeaseError('action_lease_outcome_indeterminate')
   }
 
   return {
@@ -213,8 +235,12 @@ async function handleReconcile(req: IncomingMessage, res: ServerResponse): Promi
     })
     json(res, 200, outcome)
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    json(res, message.startsWith('action_disabled:') ? 503 : 500, { ok: false, error: message })
+    const publicError = publicOrchestratorError(error)
+    json(res, publicError.statusCode, {
+      ok: false,
+      error: publicError.code,
+      retryable: publicError.retryable,
+    })
   }
 }
 
@@ -231,7 +257,12 @@ export function createSolanaKeeperOrchestratorServer() {
       }
       json(res, 404, { ok: false, error: 'not_found' })
     })().catch((error) => {
-      json(res, 500, { ok: false, error: error instanceof Error ? error.message : 'unknown_error' })
+      const publicError = publicOrchestratorError(error)
+      json(res, publicError.statusCode, {
+        ok: false,
+        error: publicError.code,
+        retryable: publicError.retryable,
+      })
     })
   })
 }

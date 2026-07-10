@@ -60,6 +60,15 @@ SOLANA_ORCHESTRATOR_EXECUTE=1
 SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0
 ```
 
+`settle_fees` is Solana harvest-only: withheld Token-2022 fees remain in the
+keeper ATA. The workflow must not call `receiveFeeFromSolana`, claim bridged
+funds, or mark fees as bridged without an authenticated bridge-evidence design.
+No such Base-forward lane is currently configured.
+
+`winner_relay` reads only through `head - SOLANA_WINNER_RELAY_FINALITY_DEPTH`
+(default `64` Base blocks), so unfinalized winner notifications are retried on
+a later pass rather than written to Solana.
+
 **B2 only — after verified pool buy:**
 
 ```bash

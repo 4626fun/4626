@@ -245,7 +245,10 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
         Ive4626Lock memory userLock = ve4626.getLock(msg.sender);
         if (userLock.start + EPOCH_DURATION > block.timestamp) revert LockTooRecent();
 
-        // Decay-safe power: prefer utility (sync then effective); else raw voteToken; else live ve
+        // Claimed utility semantics are preserved (a user cannot vote with unclaimed
+        // capacity), but neither utility nor the raw vote token may carry more weight
+        // than the user's ve power at the end of this epoch.
+        uint256 projectedPower = ve4626.votingPowerAt(msg.sender, epochEnd);
         uint256 userPower;
         if (address(utility) != address(0)) {
             utility.sync(msg.sender);
@@ -253,8 +256,9 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
         } else if (address(voteToken) != address(0)) {
             userPower = voteToken.balanceOf(msg.sender);
         } else {
-            userPower = ve4626.votingPowerAt(msg.sender, epochEnd);
+            userPower = projectedPower;
         }
+        if (userPower > projectedPower) userPower = projectedPower;
         if (userPower == 0) revert NoVotingPower();
         if (ve4626.getRemainingLockTime(msg.sender) < timeUntilNextEpoch()) revert LockExpiresBeforeEpochEnd();
 

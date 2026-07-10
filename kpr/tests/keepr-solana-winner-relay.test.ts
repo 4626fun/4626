@@ -57,6 +57,7 @@ const ENV_KEYS = [
   'SOLANA_CREATOR_COIN_TO_MINT_MAPPING_FILE',
   'SOLANA_TWIN_TO_PUBKEY_MAPPING_FILE',
   'KPR_GET_LOGS_MAX_BLOCK_RANGE',
+  'SOLANA_WINNER_RELAY_FINALITY_DEPTH',
 ] as const
 
 const ORIGINAL_ENV = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]])) as Record<string, string | undefined>
@@ -72,7 +73,7 @@ const EVENT_LOG = {
     creatorCoin: '0x2222222222222222222222222222222222222222',
     sharesPaid: 42n,
   },
-  blockNumber: 150n,
+  blockNumber: 130n,
   logIndex: 2,
 }
 
@@ -103,6 +104,7 @@ describe('keepr solana winner relay', () => {
     )
     setEnv('SOLANA_CREATOR_COIN_TO_MINT_MAPPING_FILE', undefined)
     setEnv('SOLANA_TWIN_TO_PUBKEY_MAPPING_FILE', undefined)
+    setEnv('SOLANA_WINNER_RELAY_FINALITY_DEPTH', undefined)
 
     getBlockNumberMock.mockResolvedValue(200n)
     getLogsMock.mockResolvedValue([EVENT_LOG])
@@ -143,7 +145,28 @@ describe('keepr solana winner relay', () => {
     expect(getLogsMock).toHaveBeenCalledTimes(3)
     expect(getLogsMock.mock.calls[0]?.[0]).toMatchObject({ fromBlock: 100n, toBlock: 1100n })
     expect(getLogsMock.mock.calls[1]?.[0]).toMatchObject({ fromBlock: 1101n, toBlock: 2101n })
-    expect(getLogsMock.mock.calls[2]?.[0]).toMatchObject({ fromBlock: 2102n, toBlock: 2500n })
+    expect(getLogsMock.mock.calls[2]?.[0]).toMatchObject({ fromBlock: 2102n, toBlock: 2436n })
+  })
+
+  it('queries only through the default finalized block depth', async () => {
+    getLogsMock.mockResolvedValue([])
+
+    await executeSolanaWinnerRelay()
+
+    expect(getLogsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ toBlock: 136n }),
+    )
+  })
+
+  it('honors a configured finality depth', async () => {
+    setEnv('SOLANA_WINNER_RELAY_FINALITY_DEPTH', '12')
+    getLogsMock.mockResolvedValue([])
+
+    await executeSolanaWinnerRelay()
+
+    expect(getLogsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ toBlock: 188n }),
+    )
   })
 
   it('supports file-backed creator/twin mappings', async () => {

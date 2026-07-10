@@ -10,7 +10,10 @@ const {
   enqueueKeeperJobMock,
 } = vi.hoisted(() => ({
   claimDueKeeperJobsMock: vi.fn<() => Promise<any[]>>(async () => []),
-  completeKeeperJobMock: vi.fn(async () => true),
+  completeKeeperJobMock: vi.fn(async (input: { id: number; status: string }) => ({
+    id: input.id,
+    status: input.status,
+  })),
   releaseExpiredKeeperJobClaimsMock: vi.fn(async () => 0),
   beginOperationExecutionMock: vi.fn(async () => ({ status: 'running', resumedFromTerminal: false })),
   transitionOperationStatusMock: vi.fn(async () => undefined),
@@ -155,6 +158,169 @@ describe('runKeeperJobTick control-plane internal_api jobs', () => {
           }),
         }),
       }),
+    )
+  })
+
+  it('keeps nested Solana reconcile and lease-held failures retryable', async () => {
+    claimDueKeeperJobsMock.mockResolvedValueOnce([
+      {
+        id: 61,
+        kind: 'internal_api',
+        payload: {
+          path: '/api/keeper/solana/reconcile',
+          method: 'POST',
+          body: {
+            workflow: 'solana-orchestrator',
+            action: 'winner_relay',
+            checkpointKey: 'finalized:123',
+          },
+        },
+      },
+    ])
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: false,
+        status: 503,
+        json: async () => ({
+          success: false,
+          error: 'solana_reconcile_not_completed',
+          data: {
+            status: 'failed',
+            executed: false,
+            retryable: true,
+            upstreamStatusCode: 409,
+            upstreamResponse: {
+              ok: false,
+              error: 'action_lease_held',
+              retryable: true,
+            },
+          },
+        }),
+      })),
+    )
+
+    const tick = await runKeeperJobTick({
+      baseUrl: 'https://example.test',
+      apiKey: 'test-key',
+      workerId: 'worker-1',
+    })
+
+    expect(tick.results[0]).toMatchObject({
+      status: 'retry',
+      error: 'solana_reconcile_not_completed',
+    })
+    expect(completeKeeperJobMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 61,
+        status: 'retry',
+      }),
+    )
+  })
+
+  it('uses the persisted completion status when the final retry becomes failed', async () => {
+    claimDueKeeperJobsMock.mockResolvedValueOnce([
+      {
+        id: 62,
+        kind: 'internal_api',
+        operationId: 'op_cp_62',
+        stageId: 'stage_cp_62',
+        payload: {
+          path: '/api/keeper/solana/reconcile',
+          method: 'POST',
+          body: {
+            workflow: 'solana-orchestrator',
+            action: 'settle_fees',
+            checkpointKey: 'harvest:123',
+          },
+        },
+      },
+    ])
+    completeKeeperJobMock.mockResolvedValueOnce({ id: 62, status: 'failed' })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: false,
+        status: 503,
+        json: async () => ({
+          success: false,
+          error: 'solana_reconcile_not_completed',
+          data: {
+            status: 'failed',
+            executed: false,
+            retryable: true,
+          },
+        }),
+      })),
+    )
+
+    const tick = await runKeeperJobTick({
+      baseUrl: 'https://example.test',
+      apiKey: 'test-key',
+      workerId: 'worker-1',
+    })
+
+    expect(tick.results[0]).toMatchObject({
+      status: 'failed',
+      error: 'solana_reconcile_not_completed',
+    })
+    expect(transitionStageStatusMock).toHaveBeenCalledWith(
+      expect.objectContaining({ stageId: 'stage_cp_62', nextStatus: 'failed' }),
+    )
+    expect(transitionOperationStatusMock).toHaveBeenCalledWith(
+      expect.objectContaining({ operationId: 'op_cp_62', nextStatus: 'failed' }),
+    )
+  })
+
+  it('does not retry non-2xx envelopes marked non-retryable', async () => {
+    claimDueKeeperJobsMock.mockResolvedValueOnce([
+      {
+        id: 63,
+        kind: 'internal_api',
+        payload: {
+          path: '/api/keeper/solana/reconcile',
+          method: 'POST',
+          body: {
+            workflow: 'solana-orchestrator',
+            action: 'settle_fees',
+            checkpointKey: 'harvest:indeterminate',
+          },
+        },
+      },
+    ])
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: false,
+        status: 503,
+        json: async () => ({
+          success: false,
+          error: 'solana_reconcile_not_completed',
+          data: {
+            status: 'failed',
+            executed: false,
+            retryable: false,
+            upstreamResponse: {
+              error: 'action_lease_outcome_indeterminate',
+              retryable: false,
+            },
+          },
+        }),
+      })),
+    )
+
+    const tick = await runKeeperJobTick({
+      baseUrl: 'https://example.test',
+      apiKey: 'test-key',
+      workerId: 'worker-1',
+    })
+
+    expect(tick.results[0]).toMatchObject({
+      status: 'failed',
+      error: 'solana_reconcile_not_completed',
+    })
+    expect(completeKeeperJobMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 63, status: 'failed' }),
     )
   })
 })

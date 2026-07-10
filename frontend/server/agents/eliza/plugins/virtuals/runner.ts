@@ -18,7 +18,7 @@
  * Optional:
  *   VIRTUALS_ACP_CHAIN_ID (default 8453), VIRTUALS_ACP_PERSONA,
  *   VIRTUALS_ACP_MAX_BUDGET_USDC (default 5), VIRTUALS_ACP_AUTO_FUND (default 0),
- *   VIRTUALS_ACP_AUTO_LLM (default 1), VIRTUALS_ACP_HEALTH_PORT (default off).
+ *   VIRTUALS_ACP_AUTO_LLM (default 0), VIRTUALS_ACP_HEALTH_PORT (default off).
  */
 
 import http from 'node:http'
@@ -26,6 +26,7 @@ import http from 'node:http'
 import { checkVirtualsAcpConfig, readVirtualsAcpConfig } from './config.js'
 import { checkVirtualsAcpRuntimeReadiness } from './readiness.js'
 import { getVirtualsAcpService } from './service.js'
+import { resolveVirtualsProbe } from './publicHealth.js'
 
 function log(message: string, extra?: Record<string, unknown>): void {
   const suffix = extra ? ` ${JSON.stringify(extra)}` : ''
@@ -79,14 +80,10 @@ async function main(): Promise<void> {
   let healthServer: http.Server | null = null
   if (Number.isInteger(healthPort) && healthPort > 0) {
     healthServer = http.createServer((req, res) => {
-      if (req.url === '/healthz' || req.url === '/readyz') {
-        const current = service.getStatus()
-        res.writeHead(current.running ? 200 : 503, { 'content-type': 'application/json' })
-        res.end(JSON.stringify(current))
-        return
-      }
-      res.writeHead(404)
-      res.end()
+      const probe = resolveVirtualsProbe(req.url, service.getStatus().ready)
+      res.statusCode = probe.status
+      if (probe.body) res.setHeader('content-type', 'application/json')
+      res.end(probe.body ? JSON.stringify(probe.body) : undefined)
     })
     healthServer.listen(healthPort, () => log('health endpoint listening', { port: healthPort }))
   }

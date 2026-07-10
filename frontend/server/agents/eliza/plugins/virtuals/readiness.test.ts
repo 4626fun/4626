@@ -49,6 +49,7 @@ describe('virtuals acp readiness', () => {
     process.env.VIRTUALS_ACP_WALLET_ADDRESS = '0x00000000000000000000000000000000000000aa'
     process.env.VIRTUALS_ACP_WALLET_ID = 'wallet-id'
     process.env.VIRTUALS_ACP_SIGNER_PRIVATE_KEY = '0x' + '11'.repeat(32)
+    process.env.VIRTUALS_ACP_AUTO_LLM = '1'
 
     const { checkVirtualsAcpRuntimeReadiness } = await import('./readiness.ts')
     const result = await checkVirtualsAcpRuntimeReadiness({ pingCompute: false })
@@ -63,6 +64,7 @@ describe('virtuals acp readiness', () => {
     process.env.VIRTUALS_ACP_WALLET_ADDRESS = '0x00000000000000000000000000000000000000aa'
     process.env.VIRTUALS_ACP_WALLET_ID = 'wallet-id'
     process.env.VIRTUALS_ACP_SIGNER_PRIVATE_KEY = '0x' + '11'.repeat(32)
+    process.env.VIRTUALS_ACP_AUTO_LLM = '1'
     process.env.GROQ_API_KEY = 'groq-key'
     process.env.ELIZA_LLM_VIRTUALS_ACP_PROVIDER_PRIORITY = 'VirtualsCompute,Groq'
 
