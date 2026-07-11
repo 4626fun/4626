@@ -1,6 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
-import { verifySolanaB2Readiness } from './solanaB2Readiness.js'
+import {
+  isExpectedHookMintProgramOwner,
+  verifySolanaB2Readiness,
+} from './solanaB2Readiness.js'
 
 const listMappingsMock = vi.fn()
 const readPoolMock = vi.fn()
@@ -44,7 +47,7 @@ describe('verifySolanaB2Readiness', () => {
     expect(result.checks.find((check) => check.id === 'share_mesh_mapping')?.passed).toBe(false)
   })
 
-  it('returns ready when db lanes and skipped rpc checks pass', async () => {
+  it('fails closed when db lanes pass but Solana RPC verification is unavailable', async () => {
     const shareMeshMint = 'ShareMesh111111111111111111111111111111111'
     listMappingsMock.mockResolvedValue([
       {
@@ -69,7 +72,23 @@ describe('verifySolanaB2Readiness', () => {
       creatorToken: '0x5b674196812451b7cec024fe9d22d2c0b172fa75',
     })
 
-    expect(result.ready).toBe(true)
-    expect(result.checks.every((check) => check.passed)).toBe(true)
+    expect(result.ready).toBe(false)
+    expect(result.checks.find((check) => check.id === 'onchain_accounts')).toEqual({
+      id: 'onchain_accounts',
+      passed: false,
+      detail: 'failed_no_solana_rpc_url',
+    })
+  })
+})
+
+describe('isExpectedHookMintProgramOwner', () => {
+  it('accepts only the Token-2022 program owner', () => {
+    expect(
+      isExpectedHookMintProgramOwner('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'),
+    ).toBe(true)
+    expect(
+      isExpectedHookMintProgramOwner('EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU'),
+    ).toBe(false)
+    expect(isExpectedHookMintProgramOwner('11111111111111111111111111111111')).toBe(false)
   })
 })

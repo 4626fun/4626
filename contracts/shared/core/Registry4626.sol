@@ -168,6 +168,8 @@ contract Registry4626 is IRegistry4626, Ownable {
     error LiveRebindOwnerOnly();
     /// @notice Reverse map already points at another token (M-NEW-03).
     error ReverseMappingConflict(address entity, address existingToken, address attemptedToken);
+    /// @notice Non-EVM reverse map already points at another token.
+    error ReverseMappingBytes32Conflict(bytes32 entity, address existingToken, address attemptedToken);
 
     // =================================
     // MODIFIERS
@@ -635,7 +637,14 @@ contract Registry4626 is IRegistry4626, Ownable {
         if (oldPeer == bytes32(0)) {
             remoteOFTChainsBytes32[_token].push(_chainEid);
         } else {
-            delete remoteOFTBytes32ToToken[oldPeer];
+            if (remoteOFTBytes32ToToken[oldPeer] == _token) {
+                delete remoteOFTBytes32ToToken[oldPeer];
+            }
+        }
+
+        address reverseOwner = remoteOFTBytes32ToToken[_remoteOFT];
+        if (reverseOwner != address(0) && reverseOwner != _token) {
+            revert ReverseMappingBytes32Conflict(_remoteOFT, reverseOwner, _token);
         }
 
         remoteOFTPeersBytes32[_token][_chainEid] = _remoteOFT;

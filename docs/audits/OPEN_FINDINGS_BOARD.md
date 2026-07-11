@@ -84,7 +84,22 @@ Update statuses in place as work lands. Prefer linking a PR or commit when closi
 | **L2-01** | Finalized phase-1 reset (overlaps M-15) | **Fixed** (with M-15) | Contracts |
 | **L2-03** | PayoutRouter `minOut == 0` (overlaps M-NEW-01) | **Fixed** (with M-NEW-01) | Contracts |
 
-**Gate:** Solana **B2 `relay_entries` stays off** until M2-12/13 + pool verify.
+**Gate:** Solana **B2 `relay_entries` stays off**. M2-12/13 and pool verification are not sufficient. The source-event identity, durable inbox, keeper-Twin transport, token/pool compatibility, and live adapter→current-LM wiring gates in [the 2026-07-11 integration audit](./solana-lottery-relay-integration-audit-2026-07-11.md) must also close.
+
+### Solana lottery relay integration (2026-07-11)
+
+| ID | Status | Gate |
+|----|--------|------|
+| SOL-P0-01 | Mitigated / transport open | KPR fails closed; build reviewed Solana→Base keeper-Twin attached-call transport |
+| SOL-P0-02 | Open | Finalized `(genesis, program, signature, event index)` identity + durable atomic inbox |
+| SOL-P0-03 | Open (live ops) | v1.18 adapter must point to current `0xB68F…` LM; no mutation authorized by audit |
+| SOL-P0-04 | Open | Resolve standard SPL vs Token-2022 TransferHook pool incompatibility |
+| SOL-P1-01 | Open | Durable atomic inbox/cursor and crash-after-submit recovery |
+| SOL-P1-02 | Open | Event-log ingestion must replace lossy 256-entry ring buffer as canonical source |
+| SOL-P1-03 | Fixed in source | Injective winner maps + strict `u64` payout |
+| SOL-P1-04 | Fixed in source / undeployed | Registry bytes32 reverse-map conflict protection |
+| SOL-P1-05 | Fixed | B2 missing-RPC and wrong-owner checks fail closed |
+| SOL-P1-06 | Fixed | KPR v1.18 defaults + release guard |
 
 ---
 

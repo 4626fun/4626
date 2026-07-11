@@ -42,8 +42,10 @@ vi.mock('../utils/solana.js', () => ({
 }))
 
 import {
+  assertInjectiveLookupMap,
   buildWinnerRelayWinId,
   executeSolanaWinnerRelay,
+  parseSharesPaidU64,
 } from '../actions/keepr-solana-winner-relay.action.js'
 
 const ENV_KEYS = [
@@ -76,6 +78,27 @@ const EVENT_LOG = {
   blockNumber: 130n,
   logIndex: 2,
 }
+
+describe('winner relay input validation', () => {
+  it('rejects duplicate reverse mappings across accounts', () => {
+    expect(() =>
+      assertInjectiveLookupMap(
+        {
+          '0x1111111111111111111111111111111111111111': 'same-solana-wallet',
+          '0x2222222222222222222222222222222222222222': 'same-solana-wallet',
+        },
+        'twin_to_solana_pubkey',
+      ),
+    ).toThrow('twin_to_solana_pubkey_mapping_conflict')
+  })
+
+  it('accepts only sharesPaid values representable as unsigned u64', () => {
+    expect(parseSharesPaidU64(42n)).toBe(42n)
+    expect(parseSharesPaidU64(-1n)).toBeNull()
+    expect(parseSharesPaidU64(1n << 64n)).toBeNull()
+    expect(parseSharesPaidU64('not-a-number')).toBeNull()
+  })
+})
 
 describe('keepr solana winner relay', () => {
   let tempDir: string

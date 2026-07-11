@@ -248,6 +248,58 @@ contract SolanaBridgeAdapterEdgeCasesTest is Test {
         assertEq(lottery.lastAmount(), 2e9);
     }
 
+    function test_processLotteryEntryFromSolana_rejectsDirectKeeperEoa() public {
+        adapter.setEntryKeeper(keeperPubkey, true);
+        SolanaBridgeAdapter.LotteryEntry[] memory entries = new SolanaBridgeAdapter.LotteryEntry[](0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(SolanaBridgeAdapter.UnauthorizedTwin.selector, address(this), keeperTwin)
+        );
+        adapter.processLotteryEntryFromSolana(keeperPubkey, entries);
+    }
+
+    function test_processLotteryEntryFromSolana_replayDoesNotCreateSecondEntry() public {
+        adapter.setEntryKeeper(keeperPubkey, true);
+        bytes32 sourceId = keccak256("stable-solana-source-event");
+        SolanaBridgeAdapter.LotteryEntry[] memory entries = new SolanaBridgeAdapter.LotteryEntry[](1);
+        entries[0] = SolanaBridgeAdapter.LotteryEntry({
+            buyerSolanaPubkey: buyerPubkey,
+            shareOFT: address(shareOFT),
+            amountSolanaUnits: 2,
+            solanaTxSig: sourceId
+        });
+
+        vm.startPrank(keeperTwin);
+        adapter.processLotteryEntryFromSolana(keeperPubkey, entries);
+        adapter.processLotteryEntryFromSolana(keeperPubkey, entries);
+        vm.stopPrank();
+
+        assertTrue(adapter.processedSolanaTxs(sourceId));
+        assertEq(lottery.calls(), 1);
+    }
+
+    function test_processLotteryEntryFromSolana_distinctSourceIdsBothCount() public {
+        adapter.setEntryKeeper(keeperPubkey, true);
+        SolanaBridgeAdapter.LotteryEntry[] memory entries = new SolanaBridgeAdapter.LotteryEntry[](2);
+        entries[0] = SolanaBridgeAdapter.LotteryEntry({
+            buyerSolanaPubkey: buyerPubkey,
+            shareOFT: address(shareOFT),
+            amountSolanaUnits: 2,
+            solanaTxSig: keccak256("signature-a:event-0")
+        });
+        entries[1] = SolanaBridgeAdapter.LotteryEntry({
+            buyerSolanaPubkey: buyerPubkey,
+            shareOFT: address(shareOFT),
+            amountSolanaUnits: 2,
+            solanaTxSig: keccak256("signature-a:event-1")
+        });
+
+        vm.prank(keeperTwin);
+        adapter.processLotteryEntryFromSolana(keeperPubkey, entries);
+
+        assertEq(lottery.calls(), 2);
+    }
+
     function test_processLotteryEntryFromSolana_skipsZeroAmount() public {
         MockERC20 lowDecimals = new MockERC20("Low", "LOW", 6);
         adapter.registerToken(address(lowDecimals), bytes32(uint256(2)), 9);

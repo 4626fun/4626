@@ -87,7 +87,7 @@ Do **not** set `PROTOCOL_AUTOMATION_SAFE` to the treasury address. Phase 3 deplo
 **Cutover checklist (production):**
 
 1. Deploy fresh `LotteryAmoeRouter` via `script/DeployLotteryAmoeRouter.s.sol` (PLONK v3).
-2. `./script/wire-amoe-router-v1161.sh` — `router.setManager(0xbE87AD…)`, `manager.setAuthorizedAmoeRelayer(<new router>)`, publishers → protocol CSW (`0x793c…`).
+2. Verify the live router points to `0xB68F359e…`, that manager authorizes the router, and that publishers resolve to protocol CSW (`0x793c…`). The v1.16.1 wiring script is historical and must not be reused.
 3. Set `LOTTERY_AMOE_ROUTER=<new router>` on Vercel (`production`, `preview`, `development`) and redeploy.
 4. Republish allowlist + points-ledger Merkle roots on the new router (`/api/v1/lottery/amoe/publish-cron` or manual ops). Roots are **one-shot per epoch** on each router address.
 5. Confirm signed AMOE messages embed `Lottery Manager: 0xB68F359e01626Ec5d15C624037311C70DacAba43` (nonce API reads live `LOTTERY_MANAGER` env).

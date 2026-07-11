@@ -360,9 +360,9 @@ The deployment batcher is configured for Solana bridging:
 
 | Contract                              | Config                | Value                                         |
 | ------------------------------------- | --------------------- | --------------------------------------------- |
-| Batcher (`0x660B25…61c1`, v1.14.1)   | `solanaBridgeAdapter` | `0x8e99bb0270bbdf2d64ff6854509CD2410A28fBae`  |
+| Batcher (`0x02D7ab…1750`, v1.18.0)   | `solanaBridgeAdapter` | `0x9A61814082A26192DD9Cb201b44058506685Be60`  |
 |                                       | `solanaDestination`   | `0x5f38e34e...d4d1`                           |
-| SolanaBridgeAdapter (`0x8e99bb…fBae`) | `owner`               | `0xB05Cf0...FdD` (= `PRIVATE_KEY` secret)     |
+| SolanaBridgeAdapter (`0x9A6181…Be60`) | `owner`               | `0xB05Cf0...FdD` (= `PRIVATE_KEY` secret)     |
 | Protocol treasury (Safe 1-of-2)       | address               | `0x7d429e...f2d3`                             |
 |                                       | owners                | `0xB05Cf0...` (`PRIVATE_KEY`), `0x2C1Af6B...` |
 
@@ -395,7 +395,7 @@ The Solana route provisioner (`frontend/server/solana-provisioner/`) handles the
 
 **Single-token architecture:** Meteora DLMM rejects Token-2022 mints with TransferHook extension (`UnsupportedMintExtension`). The deploy uses only the bridge-wrapped standard SPL token (created by `wrap-token`) for DLMM pools, Alpha Vault deposits, and trading. Transfer Hook functionality (lottery entries, fees) requires a separate Token-2022 mint if needed.
 
-**Legacy adapter registration (optional):** `POST /provision` registers bridge-wrapped creator SPL on `SolanaBridgeAdapter`. **Do not use `SOLANA_AUTO_POOL`** — it is retired. Share-mesh Meteora pools use the LZ mint runbook in `docs/operations/solana-share-mesh-budget-paths.md`.
+**Legacy adapter registration (optional):** `POST /provision` registers bridge-wrapped creator SPL on `SolanaBridgeAdapter`. **Do not use `SOLANA_AUTO_POOL`** — it is retired. Share-mesh Meteora pools use the LZ mint runbook in `docs/_internal/operations/solana/solana-share-mesh-budget-paths.md`.
 
 1. (Optional) `POST /setup-creator` — creates Token-2022 mint with Transfer Hook, inits CreatorConfig/PendingEntries/WinnerRecord PDAs
 2. Register Meteora vault config in DB or `METEORA_CREATOR_ALPHA_VAULT_MAP_JSON` env (legacy creator-SPL Alpha Vault lane only)

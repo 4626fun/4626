@@ -97,4 +97,35 @@ describe('solana winner relay state utils', () => {
       await rm(dir, { recursive: true, force: true })
     }
   })
+
+  it('persists invalid shares-paid quarantine entries across state saves', async () => {
+    const dir = await mkdtemp(join(tmpdir(), '4626-winner-relay-state-'))
+    const file = join(dir, 'state.json')
+    try {
+      const state = await loadSolanaWinnerRelayState(file)
+      setWinnerRelayCheckpoint(state, 101n, 2)
+      quarantineWinnerRelayEvent(state, {
+        blockNumber: 101n,
+        logIndex: 2,
+        winner: '0x1111111111111111111111111111111111111111',
+        creatorCoin: '0x2222222222222222222222222222222222222222',
+        sharesPaid: String(1n << 64n),
+        reason: 'invalid_shares_paid',
+      })
+      await saveSolanaWinnerRelayState(file, state)
+
+      const reloaded = await loadSolanaWinnerRelayState(file)
+      expect(getWinnerRelayCheckpoint(reloaded)).toEqual({ blockNumber: 101n, logIndex: 2 })
+      expect(listWinnerRelayQuarantine(reloaded)).toMatchObject([
+        {
+          id: '101:2',
+          sharesPaid: String(1n << 64n),
+          reason: 'invalid_shares_paid',
+          attempts: 1,
+        },
+      ])
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
 })

@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 
 export type WinnerRelaySkipReason =
   | 'invalid_args'
+  | 'invalid_shares_paid'
   | 'unmapped_creator_mint'
   | 'unmapped_twin_pubkey';
 
@@ -65,6 +66,7 @@ function normalizeQuarantineEntry(raw: unknown): WinnerRelayQuarantineEntry | nu
   const reason = e.reason;
   if (
     reason !== 'invalid_args' &&
+    reason !== 'invalid_shares_paid' &&
     reason !== 'unmapped_creator_mint' &&
     reason !== 'unmapped_twin_pubkey'
   ) {

@@ -1,10 +1,10 @@
 # Solana share mesh — budget & runbook
 
-> **Release truth:** v1.14.1 batcher `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1`. [Operator terminology](../../OPERATOR-TERMINOLOGY.md)
+> **Release truth:** v1.18.0 batcher `0x02D7abC547F8B1e7E2D7a919D8D1005918361750`. [Operator terminology](../../OPERATOR-TERMINOLOGY.md)
 
 Operator costs and sequencing for **Pipe A** (30% ShareOFT auto-bridge at `finalizePhase2`) and optional **Path 2** (Meteora + lottery).
 
-Policy: [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-policy.md). Current batcher: `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1` (legacy `0xa99058…` — historical charts only).
+Policy: [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-policy.md). Current batcher: `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` (v1.14/v1.16 batchers are historical only).
 
 ## Scope
 
@@ -97,7 +97,7 @@ Rent formula matches mainnet. Reproduce: `pnpm -C kpr solana:cost-probe-devnet` 
 3. **Verify:**
    ```bash
    pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
-     --batcher 0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1
+     --batcher 0x02D7abC547F8B1e7E2D7a919D8D1005918361750
    ```
 4. Creator pays **`vault_full_deploy`** ($499); deploy preflight uses share-mesh OVault checks (not legacy creator-SPL registration). `finalizePhase2` bridges 30% ShareOFT.
 5. Keeper until Path 2: `KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay`, `SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0`.
@@ -113,11 +113,11 @@ Prerequisite: Path 1 complete.
 3. Bridge shares from Base; seed LP.
 4. `prepare-token-badge` (below). Keep `relay_entries` **off**.
 
-### B2 — on-chain lottery relay
+### B2 — on-chain lottery relay (blocked)
 
 1. Meteora admin **`token_badge`** → `setup-creator-full` PDAs → allowlist Meteora program (**before** pool).
 2. Pool on **same** hook mint; seed LP.
-3. Enable orchestrator env (see policy). Test pool buy → `PendingEntries` → Base lottery.
+3. Keep orchestrator relay disabled. The current Meteora/TransferHook compatibility claim, finalized source-event identity, durable inbox, and keeper-Twin transport must all be proven before an end-to-end canary.
 
 ### Meteora UI + display
 
@@ -168,7 +168,7 @@ Disable automatic queue enqueue with `SOLANA_SHARE_MESH_PROVISIONING_ENABLED=0` 
 ```text
 P0  LZ share OFT + setSolanaShareOftPeer     →  Pipe A live
 P1a B1: Meteora pool + LP on share mesh       →  Solana trading (lottery on Base)
-P1b B2: badge + hook + pool + relay_entries   →  Solana pool-buy lottery
+P1b B2: blocked pending relay architecture     →  no production enablement
 ```
 
 Wrong-grain warning: do not point share-mesh Meteora or `relay_entries` at bridge-wrapped creator SPL mints (e.g. AKITA `9JWh…`). Adapter/provisioner naming rules live in [solana-bridge-naming-invariant.md](./solana-bridge-naming-invariant.md) for historical parity checks only.
@@ -177,7 +177,7 @@ Wrong-grain warning: do not point share-mesh Meteora or `relay_entries` at bridg
 
 | Role | Address |
 |------|---------|
-| DeploymentBatcher (v1.14.1) | `0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1` |
+| DeploymentBatcher (v1.18.0) | `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
 | OVaultHubComposer | `0x7dF44cBB93a5191837a988f0Cc441E3811C39CD1` |
 | Solana EID | `30168` |
 | creator-share-hook | `EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU` (upgrade: [creator-share-hook-mainnet-upgrade.md](./creator-share-hook-mainnet-upgrade.md)) |

@@ -127,6 +127,31 @@ function normalizeLookupMap(value: unknown): Record<string, string> {
   );
 }
 
+export function assertInjectiveLookupMap(
+  map: Record<string, string>,
+  label: string,
+): void {
+  const owners = new Map<string, string>();
+  for (const [key, rawValue] of Object.entries(map)) {
+    const value = rawValue.trim().toLowerCase();
+    const priorKey = owners.get(value);
+    if (priorKey && priorKey !== key) {
+      throw new Error(`${label}_mapping_conflict:${priorKey}:${key}`);
+    }
+    owners.set(value, key);
+  }
+}
+
+export function parseSharesPaidU64(value: unknown): bigint | null {
+  try {
+    const parsed = BigInt(value?.toString() ?? '');
+    const maxU64 = (1n << 64n) - 1n;
+    return parsed >= 0n && parsed <= maxU64 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 // FIX: LOW-05 — Maximum file size for lookup map reads (1 MB)
 const MAX_LOOKUP_MAP_FILE_SIZE = 1_048_576;
 
@@ -238,6 +263,10 @@ async function tryRecordWinnerOnSolana(params: {
   if (!isAddress(params.winner) || !isAddress(params.creatorCoin)) {
     return { ok: false, reason: 'invalid_args' };
   }
+  const sharesPaidU64 = parseSharesPaidU64(params.sharesPaid);
+  if (sharesPaidU64 === null) {
+    return { ok: false, reason: 'invalid_shares_paid' };
+  }
 
   const solanaMint = ctx.creatorCoinToMint[params.creatorCoin.toLowerCase()];
   if (!solanaMint) {
@@ -282,16 +311,6 @@ async function tryRecordWinnerOnSolana(params: {
   const argsBuffer = Buffer.alloc(72);
   winnerPubkey.toBuffer().copy(argsBuffer, 0);
 
-  const maxU64 = (1n << 64n) - 1n;
-  let sharesPaidU64 = BigInt(params.sharesPaid?.toString() ?? '0');
-  if (sharesPaidU64 > maxU64) {
-    await alertWarning(WORKFLOW_NAME, 'sharesPaid exceeds u64, truncating for Solana record', {
-      creatorCoin: params.creatorCoin,
-      solanaMint,
-      sharesPaid: params.sharesPaid?.toString(),
-    });
-    sharesPaidU64 = maxU64;
-  }
   argsBuffer.writeBigUInt64LE(sharesPaidU64, 32);
   winId.copy(argsBuffer, 40);
 
@@ -389,6 +408,8 @@ export async function executeSolanaWinnerRelay(): Promise<WinnerRelayResult> {
       inlineEnvKey: 'SOLANA_TWIN_TO_PUBKEY_MAPPING',
       fileEnvKey: 'SOLANA_TWIN_TO_PUBKEY_MAPPING_FILE',
     });
+    assertInjectiveLookupMap(creatorCoinToMint, 'creator_coin_to_mint');
+    assertInjectiveLookupMap(twinToSolanaPubkey, 'twin_to_solana_pubkey');
 
     const ctx: RecordWinnerContext = {
       connection,
@@ -521,6 +542,12 @@ export async function executeSolanaWinnerRelay(): Promise<WinnerRelayResult> {
           await alertWarning(WORKFLOW_NAME, 'Invalid event args — winner or creatorCoin not valid addresses', {
             winner,
             creatorCoin,
+          });
+        } else if (recorded.reason === 'invalid_shares_paid') {
+          await alertWarning(WORKFLOW_NAME, 'Invalid sharesPaid — value must fit unsigned u64', {
+            winner,
+            creatorCoin,
+            sharesPaid: sharesPaid?.toString(),
           });
         } else if (recorded.reason === 'unmapped_creator_mint') {
           await alertWarning(WORKFLOW_NAME, `No Solana mint mapping for creatorCoin ${creatorCoin}`, {

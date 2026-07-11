@@ -31,7 +31,7 @@ const shareOft = getAddress(requireEnv('SHARE_OFT_ADDRESS'));
 const bridgeAmount = BigInt(requireEnv('BRIDGE_AMOUNT'));
 const solanaDestination = requireEnv('SOLANA_DESTINATION') as Hex;
 const adapter = getAddress(
-  process.env.SOLANA_BRIDGE_ADAPTER ?? '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1',
+  process.env.SOLANA_BRIDGE_ADAPTER ?? '0x9A61814082A26192DD9Cb201b44058506685Be60',
 );
 
 const publicClient = createPublicClient({ chain: base, transport: http(rpcUrl) });

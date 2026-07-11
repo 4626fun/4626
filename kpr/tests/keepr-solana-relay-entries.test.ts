@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   executeSolanaRelayEntries,
   isRelayEntriesLaneEnabled,
+  SOLANA_TO_BASE_TRANSPORT_UNAVAILABLE,
 } from '../actions/keepr-solana-relay-entries.action.js'
 import {
   relayEntriesInstructionDiscriminator,
@@ -52,6 +53,12 @@ describe('relay-entries default-deny lane gate (audit H2-08 / C-01)', () => {
       overflowCount: 0,
       emergencyRelay: false,
     })
+  })
+
+  it('fails closed before RPC, Base submission, or Solana buffer clear when enabled', async () => {
+    await expect(withRelayFlag('1', () => executeSolanaRelayEntries())).rejects.toThrow(
+      SOLANA_TO_BASE_TRANSPORT_UNAVAILABLE,
+    )
   })
 })
 

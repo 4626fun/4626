@@ -23,7 +23,7 @@ Scope: current live Base infra addresses plus the canonical `v1.18.0` greenfield
 | `registry` | `0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0` |
 | `ovaultFactory` | `0x70d0D2411D362BA50821389383Fa6B829d736232` |
 | `vaultActivationBatcher` | `0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3` |
-| `lotteryManager` | `0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1` |
+| `lotteryManager` | `0xB68F359e01626Ec5d15C624037311C70DacAba43` |
 | `vrfConsumer` | `0x0b41AD9Eb06EE14C360E1e3D16Af63F5a172Ec36` |
 | `solanaBridgeAdapter` | `0x9A61814082A26192DD9Cb201b44058506685Be60` |
 | `bytecodeStore` | `0xfa3e3b466635DAff910057f18749B93d56F9DE50` |
@@ -47,7 +47,7 @@ From `frontend/src/config/contracts.defaults.ts`:
 | Key | Address |
 |---|---|
 | `registry` | `0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0` |
-| `lotteryManager` | `0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1` |
+| `lotteryManager` | `0xB68F359e01626Ec5d15C624037311C70DacAba43` |
 | `vrfConsumer` | `0x0b41AD9Eb06EE14C360E1e3D16Af63F5a172Ec36` |
 | `solanaBridgeAdapter` | `0x9A61814082A26192DD9Cb201b44058506685Be60` |
 | `universalBytecodeStore` | `0xfa3e3b466635DAff910057f18749B93d56F9DE50` |

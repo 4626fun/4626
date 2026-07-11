@@ -10,7 +10,11 @@ import {
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
-const CREATOR_SHARE_HOOK_PROGRAM_ID = 'EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU'
+const TOKEN_2022_PROGRAM_ID = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'
+
+export function isExpectedHookMintProgramOwner(owner: string): boolean {
+  return owner === TOKEN_2022_PROGRAM_ID
+}
 
 export type B2ReadinessCheck = {
   id: string
@@ -51,13 +55,13 @@ async function checkOnChainAccounts(params: {
     return [
       {
         id: 'onchain_accounts',
-        passed: true,
-        detail: 'skipped_no_solana_rpc_url',
+        passed: false,
+        detail: 'failed_no_solana_rpc_url',
       },
     ]
   }
 
-  const connection = new Connection(rpcUrl, 'confirmed')
+  const connection = new Connection(rpcUrl, 'finalized')
   const checks: B2ReadinessCheck[] = []
 
   if (params.poolAddress) {
@@ -104,8 +108,10 @@ async function checkOnChainAccounts(params: {
       const owner = mintInfo?.owner?.toBase58() ?? ''
       checks.push({
         id: 'hook_mint_program_owner',
-        passed: owner === CREATOR_SHARE_HOOK_PROGRAM_ID || owner.length > 0,
-        detail: owner ? `mint_owner=${owner}` : 'mint_account_missing',
+        passed: isExpectedHookMintProgramOwner(owner),
+        detail: owner
+          ? `mint_owner=${owner},expected_token_program=${TOKEN_2022_PROGRAM_ID}`
+          : 'mint_account_missing',
       })
     } catch (error) {
       checks.push({

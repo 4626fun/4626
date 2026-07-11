@@ -12,7 +12,7 @@ Related: [budget paths](./solana-share-mesh-budget-paths.md) (costs + runbooks),
 | 2 | **30% ShareOFT auto-bridges at `finalizePhase2`** when batcher OVault runtime is enabled. |
 | 3 | **Lottery = pool buy of tradable share token only** — not compose deposit, bridge receipt, or creator-coin trades. |
 | 4 | **Meteora base asset = share mesh mint** — not `wrap-token` creator SPL. |
-| 5 | **`relay_entries` off** until share-mesh pool exists **and** a live detection path is wired (**B2 hook today**; B1 off-chain relay not shipped). |
+| 5 | **`relay_entries` off.** Source-event identity, durable ingestion, and Solana→Base keeper-Twin attached-call transport are not implemented. A pool or hook deployment alone cannot satisfy this gate. |
 | 6 | **Share symbol = `■<TICKER>`**, name = `{Creator} Share Token` — all creators, Base deploy UI + Solana LZ deploy (`frontend/src/lib/tokens/tokenSymbols.ts`). |
 | 7 | **LZ ULN = 6-of-9 optional DVNs** on mainnet Base ↔ Solana — never single-DVN `1/1`. Nine-name pool (all on both chains): LayerZero Labs, Google, Nethermind, Horizen, Deutsche Telekom, Nansen, Frax, Wyoming, P-OPS; threshold **6**. Devnet rehearsal maxes at **2-of-3** (only three shared DVNs on arbsep ↔ solana-testnet). See [budget paths § ULN](./solana-share-mesh-budget-paths.md#uln-security--6-of-9-optional-dvns-mainnet). |
 
@@ -36,7 +36,7 @@ Do not use bridge-wrapped creator SPL (e.g. AKITA `9JWh…` via `SolanaBridgeAda
 |--|------------------|------------------------|
 | Mint | LZ standard SPL share mesh | Token-2022 + `TransferHook` (one mint for pool + relay) |
 | Meteora | `create-dlmm-pool.ts` after Path 1 | Meteora admin `token_badge` **before** pool create |
-| Solana lottery relay | **Off** — Base Uniswap lottery | **`relay_entries` on** (`keepr-solana-relay-entries`) |
+| Solana lottery relay | **Off** — Base Uniswap lottery | **Off** — architecture is not enablement-ready |
 
 **Default:** Path 1 + optional B1 Meteora (trading on Solana; lottery on Base); keep `relay_entries` off.
 
@@ -69,14 +69,17 @@ No such Base-forward lane is currently configured.
 (default `64` Base blocks), so unfinalized winner notifications are retried on
 a later pass rather than written to Solana.
 
-**B2 only — after verified pool buy:**
+**B2 remains blocked even after a verified pool buy:**
 
 ```bash
-KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay,relay_entries
-SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=1
-SOLANA_SHARE_OFT_MAPPING='{"<mint_pubkey>":"<base_share_oft_address>"}'
-SOLANA_CREATOR_MINTS=<mint_pubkey>   # must match PendingEntries mint
+KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay
+SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0
 ```
+
+Do not add `relay_entries` until the residual gates in
+`docs/audits/solana-lottery-relay-integration-audit-2026-07-11.md` are closed.
+The current action intentionally throws
+`solana_to_base_attached_call_transport_unavailable` if the lane is enabled.
 
 ## Phase checklist
 
@@ -84,11 +87,11 @@ SOLANA_CREATOR_MINTS=<mint_pubkey>   # must match PendingEntries mint
 |-------|-----------|
 | **A** | LZ share mesh live; batcher peer set; supply bridged; mint metadata `■<TICKER>` |
 | **B1** | Meteora pool + LP on share mesh; Meteora/Jupiter swappable; `relay_entries` still off |
-| **B2** | B1 + hook PDAs + `relay_entries`; pool buy → Base lottery |
+| **B2** | Deferred: finalized event identity + durable inbox + keeper-Twin transport + verified pool compatibility + end-to-end canary |
 
 Execution steps, costs, and commands: [solana-share-mesh-budget-paths.md](./solana-share-mesh-budget-paths.md). Per-creator LZ + registry checklist: [solana-share-mesh-creator-provisioning.md](./solana-share-mesh-creator-provisioning.md).
 
-**B2 hook upgrade (canonical ix names):** [creator-share-hook-mainnet-upgrade.md](./creator-share-hook-mainnet-upgrade.md) — required before enabling `relay_entries` against live mainnet bytecode.
+**B2 hook upgrade (canonical ix names):** [creator-share-hook-mainnet-upgrade.md](./creator-share-hook-mainnet-upgrade.md) is necessary but not sufficient. It does not close the relay architecture gates above.
 
 ## Out of scope (not share lottery)
 
