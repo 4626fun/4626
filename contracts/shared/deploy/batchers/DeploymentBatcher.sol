@@ -550,6 +550,7 @@ interface IOwnableView {
 interface ICreatorShareOFT {
     function setRegistry(address _registry) external;
     function setVault(address _vault) external;
+    function setWrapper(address _wrapper) external;
     function setMinter(address minter, bool status) external;
     function setGaugeController(address _controller) external;
     function setHubConfig(bool _isHub, uint32 _hubEid, address _hubGaugeReceiver) external;
@@ -888,6 +889,7 @@ contract DeploymentBatcherPhase1Module {
         ICreatorOVaultWrapper(out.wrapper).setShareOFT(out.shareOFT);
         ICreatorShareOFT(out.shareOFT).setRegistry(address(registry));
         ICreatorShareOFT(out.shareOFT).setVault(out.vault);
+        ICreatorShareOFT(out.shareOFT).setWrapper(out.wrapper);
         ICreatorShareOFT(out.shareOFT).setMinter(out.wrapper, true);
         ICreatorShareOFT(out.shareOFT).setHubConfig(true, 0, address(0));
 

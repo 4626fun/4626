@@ -98,6 +98,7 @@ contract MockAgentLaneShareOFT {
     address public owner;
     address public registry;
     address public vault;
+    address public wrapper;
     address public gaugeController;
 
     constructor(string memory, string memory, address _registry, address _owner) {
@@ -111,6 +112,10 @@ contract MockAgentLaneShareOFT {
 
     function setVault(address _vault) external {
         vault = _vault;
+    }
+
+    function setWrapper(address _wrapper) external {
+        wrapper = _wrapper;
     }
 
     function setMinter(address, bool) external {}
@@ -444,6 +449,7 @@ contract DeploymentBatcherAgentLanePhase12Test is Test {
         DeploymentBatcher.Phase2Result memory p2 = batcher.deployPhase2Core(params, _codeIds(true));
 
         MockAgentLaneGauge gauge = MockAgentLaneGauge(p2.gaugeController);
+        assertEq(MockAgentLaneShareOFT(p1.shareOFT).wrapper(), p1.wrapper, "share OFT wrapper");
         assertEq(gauge.agentToken(), agentToken, "agent gauge asset token");
         assertEq(gauge.creatorCoin(), address(0), "creator setter must not run on agent gauge");
         assertEq(gauge.vault(), p1.vault);
