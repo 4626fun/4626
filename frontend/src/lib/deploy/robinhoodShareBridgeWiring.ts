@@ -5,7 +5,7 @@ import {
   getAddress,
   isAddress,
   keccak256,
-  pad,
+  padHex,
   parseAbiParameters,
   type Address,
   type Hex,
@@ -193,7 +193,7 @@ export type RobinhoodShareMeshWiringStatus = {
 }
 
 function addressToBytes32(address: Address): Hex {
-  return pad(address, { size: 32 })
+  return padHex(address as Hex, { size: 32 })
 }
 
 function normalizeBytes32(value: unknown): Hex | null {

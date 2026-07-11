@@ -25,6 +25,13 @@ type WaitlistAvatar = {
   href: string | null
 }
 
+type RecentAvatarRow = {
+  avatar_url?: unknown
+  handle?: unknown
+  basename?: unknown
+  link_address?: unknown
+}
+
 type WaitlistStatsResponse = {
   signedUpCount: number
   capacity: number
@@ -160,7 +167,7 @@ async function fetchRecentMemberAvatars(db: any): Promise<WaitlistAvatar[]> {
       WHERE avatar_url IS NOT NULL
       LIMIT ${AVATAR_FETCH_LIMIT};
     `
-    const rows = Array.isArray(result?.rows) ? result.rows : []
+    const rows: RecentAvatarRow[] = Array.isArray(result?.rows) ? result.rows : []
     return rows
       .map((row) => {
         const src = normalizeAvatarSource(row?.avatar_url)

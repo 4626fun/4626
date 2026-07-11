@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMockReq, createMockRes } from './helpers'
 
 const { dbSqlMock } = vi.hoisted(() => ({
-  dbSqlMock: vi.fn(async () => ({ rows: [] })),
+  dbSqlMock: vi.fn(async (): Promise<{ rows: Array<Record<string, string>> }> => ({ rows: [] })),
 }))
 
 vi.mock('@4626/server-core', () => ({

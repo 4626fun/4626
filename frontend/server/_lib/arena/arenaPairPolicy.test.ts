@@ -10,6 +10,7 @@ function mockConfig(overrides: Partial<ArenaConfig> = {}): ArenaConfig {
     creationEnabled: true,
     dryRun: true,
     agentId: null,
+    degenProfileId: null,
     agentWalletAddress: null,
     hlApiWalletAddress: null,
     hlAgentPrivateKey: null,

@@ -162,7 +162,6 @@ function createAuthorityResolutionDb(params: {
     primary_wallet?: string | null
     primary_embedded_eoa?: string | null
     csw_address?: string | null
-    csw_address?: string | null
     base_sub_account?: string | null
     canonical_wallet?: string | null
   }
