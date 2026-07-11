@@ -1,7 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 
-const integrationDbUrl =
-  process.env.CONTROL_PLANE_INTEGRATION_DATABASE_URL?.trim() || process.env.DATABASE_URL?.trim() || ''
+const integrationDbUrl = process.env.CONTROL_PLANE_INTEGRATION_DATABASE_URL?.trim() || ''
 
 const shouldRunLinkedDbTests = /^postgres(ql)?:\/\//i.test(integrationDbUrl)
 
@@ -21,9 +20,7 @@ type Db = {
 
 async function loadDb(): Promise<Db | null> {
   if (!shouldRunLinkedDbTests) return null
-  if (process.env.CONTROL_PLANE_INTEGRATION_DATABASE_URL) {
-    process.env.DATABASE_URL = integrationDbUrl
-  }
+  process.env.DATABASE_URL = integrationDbUrl
   const { getDb, isDbConfigured } = await import('@4626/server-core')
   if (!isDbConfigured()) return null
   return (await getDb()) as Db | null

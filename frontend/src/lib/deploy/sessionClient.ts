@@ -7,6 +7,7 @@ export type PostJsonWithTimeout = <T>(params: {
   url: string
   body: unknown
   label: string
+  privyToken?: string | null
   requestTimeoutMs?: number
   parseTimeoutMs?: number
 }) => Promise<{ response: Response; json: ApiEnvelope<T> | null }>
@@ -36,6 +37,7 @@ export function shouldRetryDeploySessionAuth(message: string): boolean {
   return (
     lower.includes('not authenticated') ||
     lower.includes('no_session') ||
+    lower.includes('fresh authentication required') ||
     lower.includes('deploy ownership mismatch')
   )
 }

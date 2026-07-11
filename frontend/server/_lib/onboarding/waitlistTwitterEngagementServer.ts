@@ -249,6 +249,9 @@ async function verifyStepForTwitterActor(params: {
 }): Promise<boolean> {
   const privyUserId = await resolvePrivyUserIdForTwitterActor(params.db, params.actor)
   if (!privyUserId) return false
+  const progress = await readWaitlistTwitterEngagementProgressForPrivyUser(params.db, privyUserId)
+  if (progress[params.step]) return false
+  if (resolveActiveStep(progress) !== params.step) return false
   return awardVerifiedWaitlistTwitterEngagementStep({
     db: params.db,
     privyUserId,

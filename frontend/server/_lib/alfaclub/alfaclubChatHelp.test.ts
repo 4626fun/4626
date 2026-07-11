@@ -19,7 +19,7 @@ describe('alfaclubChatHelp', () => {
     expect(text).toContain('/meme')
     expect(text).toContain('/hermit setup')
     expect(text).toContain('/alfa brief')
-    expect(text).toContain('Room 1659')
+    expect(text).toContain('Hermit command room **1659**')
     expect(text).toContain('InverseAKITA pilot')
     expect(text).toContain('/h arena long')
     expect(text).toContain('/h rules')

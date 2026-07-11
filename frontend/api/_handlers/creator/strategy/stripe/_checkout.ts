@@ -54,11 +54,12 @@ function resolveReturnUrlBase(): string {
   return 'http://localhost:5173'
 }
 
-function isValidReturnUrl(raw: unknown): raw is string {
+function isValidReturnUrl(raw: unknown, returnUrlBase: string): raw is string {
   if (typeof raw !== 'string') return false
   try {
     const url = new URL(raw)
-    return url.protocol === 'https:' || url.protocol === 'http:'
+    const allowedOrigin = new URL(returnUrlBase).origin
+    return url.origin === allowedOrigin && (url.protocol === 'https:' || url.hostname === 'localhost')
   } catch {
     return false
   }
@@ -170,10 +171,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const base = resolveReturnUrlBase()
-  const successUrl = isValidReturnUrl(body.successUrl)
+  const successUrl = isValidReturnUrl(body.successUrl, base)
     ? (body.successUrl as string)
     : `${base}/creator/strategy/activation-success?creator=${creatorToken}&feature=${feature.key}&session_id={CHECKOUT_SESSION_ID}`
-  const cancelUrl = isValidReturnUrl(body.cancelUrl)
+  const cancelUrl = isValidReturnUrl(body.cancelUrl, base)
     ? (body.cancelUrl as string)
     : `${base}/creator/strategy/activation-cancelled?creator=${creatorToken}&feature=${feature.key}`
 

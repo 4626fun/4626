@@ -22,7 +22,6 @@ function normalizeSql(strings: TemplateStringsArray): string {
 function createMockDb(options: {
   profileSeedRow?: {
     csw_address?: string | null
-    csw_address?: string | null
     base_sub_account?: string | null
   }
   persistedCanonicalAddress?: string | null

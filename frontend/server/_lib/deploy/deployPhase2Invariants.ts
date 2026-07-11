@@ -146,7 +146,7 @@ type MinimalPublicClient = {
     args?: readonly unknown[]
   }): Promise<unknown>
   getBytecode?(params: { address: Address }): Promise<Hex | undefined>
-  getStorageAt?(params: { address: Address; slot: Hex }): Promise<Hex>
+  getStorageAt?(params: { address: Address; slot: Hex }): Promise<Hex | undefined>
 }
 
 type VerifyPhase2InvariantsParams = {

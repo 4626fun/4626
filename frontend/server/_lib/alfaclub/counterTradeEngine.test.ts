@@ -91,6 +91,16 @@ function makeFill(overrides: Partial<HyperliquidUserFillDetailed> = {}): Hyperli
   }
 }
 
+function makeClearinghouseState(): HyperliquidClearinghouseState {
+  return {
+    accountValueUsd: 10_000,
+    totalNtlPosUsd: 0,
+    totalRawUsdUsd: 0,
+    withdrawableUsd: 5_000,
+    assetPositions: [],
+  }
+}
+
 describe('counterTradeEngine', () => {
   it('derives executable opposite-side decision for favored bearish direction', () => {
     const decision = deriveCounterTradeDecision({
@@ -100,7 +110,7 @@ describe('counterTradeEngine', () => {
       userNotionalUsd: 200,
       userLeverage: 6,
       runtime: makeRuntime(),
-      counterWalletState: { accountValueUsd: 10_000, withdrawableUsd: 5_000, assetPositions: [] },
+      counterWalletState: makeClearinghouseState(),
     })
     expect(decision.ok).toBe(true)
     if (!decision.ok) return
@@ -117,7 +127,7 @@ describe('counterTradeEngine', () => {
       userNotionalUsd: 200,
       userLeverage: 6,
       runtime: makeRuntime(),
-      counterWalletState: { accountValueUsd: 10_000, withdrawableUsd: 5_000, assetPositions: [] },
+      counterWalletState: makeClearinghouseState(),
       strictInverseParity: true,
     })
     expect(decision.ok).toBe(true)
@@ -151,7 +161,7 @@ describe('counterTradeEngine', () => {
       userNotionalUsd: 50,
       userLeverage: 6,
       runtime: makeRuntime(),
-      counterWalletState: { accountValueUsd: 10_000, withdrawableUsd: 5_000, assetPositions: [] },
+      counterWalletState: makeClearinghouseState(),
       strictInverseParity: true,
     })
     expect(addDecision.ok).toBe(false)
@@ -168,7 +178,7 @@ describe('counterTradeEngine', () => {
       userNotionalUsd: 10,
       userLeverage: 5,
       runtime: makeRuntime(),
-      counterWalletState: { accountValueUsd: 10_000, withdrawableUsd: 5_000, assetPositions: [] },
+      counterWalletState: makeClearinghouseState(),
     })
     expect(decision.ok).toBe(false)
     if (decision.ok) return
@@ -216,7 +226,7 @@ describe('counterTradeEngine', () => {
       userNotionalUsd: 200,
       userLeverage: 4,
       runtime: makeRuntime(),
-      counterWalletState: { accountValueUsd: 10_000, withdrawableUsd: 5_000, assetPositions: [] },
+      counterWalletState: makeClearinghouseState(),
     })
     expect(reduceDecision.ok).toBe(false)
     if (!reduceDecision.ok) {
@@ -230,7 +240,7 @@ describe('counterTradeEngine', () => {
       userNotionalUsd: 200,
       userLeverage: 4,
       runtime: makeRuntime(),
-      counterWalletState: { accountValueUsd: 10_000, withdrawableUsd: 5_000, assetPositions: [] },
+      counterWalletState: makeClearinghouseState(),
       strictInverseParity: true,
     })
     expect(closeDecision.ok).toBe(false)

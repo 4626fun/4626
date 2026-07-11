@@ -11,26 +11,19 @@ describe('readPhase3HelperBytecodeAligned', () => {
 
     const result = await readPhase3HelperBytecodeAligned({
       batcher,
+      readLocalArtifact: () => ({
+        abi: [],
+        bytecode: '0x6000',
+        deployedBytecode: '6000',
+        immutableReferences: {},
+      }),
       publicClient: {
         readContract: async (args) => {
           if (args.functionName === 'phase3Helper') return phase3Helper
           if (args.functionName === 'batcher') return wiredBatcher
           throw new Error(`unexpected readContract ${args.functionName}`)
         },
-        getBytecode: async () => {
-          const { readFileSync } = await import('node:fs')
-          const path = await import('node:path')
-          const { fileURLToPath } = await import('node:url')
-          const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..')
-          const artifactPath = path.join(
-            repoRoot,
-            'out/DeploymentBatcher.sol/DeploymentBatcherPhase3Helper.json',
-          )
-          const artifact = JSON.parse(readFileSync(artifactPath, 'utf8')) as {
-            deployedBytecode?: { object?: string }
-          }
-          return artifact.deployedBytecode?.object as `0x${string}`
-        },
+        getBytecode: async () => '0x6000',
       },
     })
 

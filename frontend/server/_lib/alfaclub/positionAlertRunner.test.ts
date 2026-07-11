@@ -97,10 +97,9 @@ describe('runPositionAlerts', () => {
 
   it('evaluates room 1659 alerts against monitored arena wallet legs', async () => {
     vi.stubEnv('ALFACLUB_POSITION_ALERTS_ENABLED', '1')
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      text: async () => '',
-    }))
+    const fetchMock = vi.fn(async (..._args: Parameters<typeof fetch>) =>
+      new Response('', { status: 200 }),
+    )
     vi.stubGlobal('fetch', fetchMock)
 
     const result = await runPositionAlerts()

@@ -37,6 +37,8 @@ const {
   verifyDeployPhase2InvariantsMock,
   checkRateLimitMock,
   ensureShareMeshOvaultPreflightMock,
+  verifyPrivyRequestMock,
+  classifyLinkedAccountsMock,
 } = vi.hoisted(() => ({
   readJsonBodyMock: vi.fn(async (req: any) => req.body),
   readSessionFromRequestMock: vi.fn(() => ({ address: '0x0000000000000000000000000000000000000001' })),
@@ -76,6 +78,8 @@ const {
     sharePeerSet: true,
     meshStep: 'ovault_mesh_confirmed' as const,
   })),
+  verifyPrivyRequestMock: vi.fn(),
+  classifyLinkedAccountsMock: vi.fn(),
 }))
 
 vi.mock('@4626/server-core', () => ({
@@ -99,6 +103,14 @@ vi.mock('@4626/server-core', () => ({
 
 vi.mock('../../server/_lib/auth/deployAuth.js', () => ({
   readDeployAuthFromRequest: readDeployAuthFromRequestMock,
+}))
+
+vi.mock('../../server/_lib/wallet/canonicalCswDelegation.js', () => ({
+  verifyPrivyRequest: verifyPrivyRequestMock,
+}))
+
+vi.mock('../../server/_lib/wallet/walletMapping.js', () => ({
+  classifyLinkedAccounts: classifyLinkedAccountsMock,
 }))
 
 vi.mock('../../server/_lib/deploy/deploySessions.js', () => ({
@@ -260,6 +272,22 @@ describe('deploy session optimistic concurrency', () => {
     readSessionFromRequestMock.mockReturnValue({
       address: '0x0000000000000000000000000000000000000001',
     } as any)
+    verifyPrivyRequestMock.mockResolvedValue({
+      privyToken: makeFreshPrivyJwt(),
+      privyUserId: 'did:privy:test-user',
+      privyUser: { id: 'did:privy:test-user' },
+    })
+    classifyLinkedAccountsMock.mockReturnValue({
+      allWallets: [
+        {
+          address: '0x0000000000000000000000000000000000000001',
+          chain: 'evm',
+          walletType: 'embedded_eoa',
+          provider: 'privy',
+          clientType: 'privy',
+        },
+      ],
+    })
     readSiwaAgentFromRequestMock.mockReturnValue(null)
     readDeployAuthFromRequestMock.mockImplementation(() => {
       const siwa = readSiwaAgentFromRequestMock() as any
@@ -301,6 +329,53 @@ describe('deploy session optimistic concurrency', () => {
       sharePeerSet: true,
       meshStep: 'ovault_mesh_confirmed',
     })
+  })
+
+  it('rejects a deploy mutation when Privy token verification fails', async () => {
+    verifyPrivyRequestMock.mockRejectedValueOnce(new Error('invalid signature'))
+    getDeploySessionByIdMock.mockResolvedValue(makeDeploySession('created'))
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+
+    expect(res.statusCode).toBe(401)
+    expect(res.body?.error).toContain('Fresh authentication required')
+    expect(transitionDeploySessionMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a verified Privy user that is not linked to the session principal', async () => {
+    classifyLinkedAccountsMock.mockReturnValueOnce({
+      allWallets: [
+        {
+          address: '0x0000000000000000000000000000000000000002',
+          chain: 'evm',
+          walletType: 'embedded_eoa',
+          provider: 'privy',
+          clientType: 'privy',
+        },
+      ],
+    })
+    getDeploySessionByIdMock.mockResolvedValue(makeDeploySession('created'))
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+
+    expect(res.statusCode).toBe(401)
+    expect(transitionDeploySessionMock).not.toHaveBeenCalled()
+  })
+
+  it('requires verified fresh authentication before advance sends a UserOp', async () => {
+    verifyPrivyRequestMock.mockRejectedValueOnce(new Error('missing token'))
+    getDeploySessionByIdMock.mockResolvedValue(makeDeploySession('phase2_ready'))
+
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+
+    expect(res.statusCode).toBe(401)
+    expect(sendUserOperationMock).not.toHaveBeenCalled()
   })
 
   it('allows one continue transition and returns 409 on the second', async () => {

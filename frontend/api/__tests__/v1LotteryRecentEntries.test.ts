@@ -9,6 +9,7 @@ import {
   resolveRecentEntries,
   type RecentLotteryEntryEvent,
 } from '../../server/_lib/lottery/recentEntriesQuery.js'
+import { enrichLotteryEntrySources } from '../../server/_lib/lottery/lotteryEntrySource.js'
 
 const AMOE_ROUTER = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 const LOTTERY_MANAGER = '0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1'
@@ -27,7 +28,8 @@ const rpcFixture: Omit<RecentLotteryEntryEvent, 'entrySource'>[] = [
   },
 ]
 
-const enrichMock = vi.fn(async (_db, events: Array<Omit<RecentLotteryEntryEvent, 'entrySource'>>) =>
+const enrichMock = vi.fn<typeof enrichLotteryEntrySources>()
+enrichMock.mockImplementation(async (_db, events) =>
   events.map((event) => ({ ...event, entrySource: 'swap' as const })),
 )
 
@@ -55,20 +57,9 @@ describe('resolveRecentEntries', () => {
       })),
     }
 
-    enrichMock.mockResolvedValueOnce([
-      {
-        type: 'LotteryEntryCreated',
-        entrySource: 'amoe',
-        blockNumber: '48350000',
-        transactionHash: '0xabcd',
-        logIndex: 3,
-        creatorCoin: '0xcccccccccccccccccccccccccccccccccccccccc',
-        user: '0xdddddddddddddddddddddddddddddddddddddddd',
-        swapAmountUsd1e6: '100',
-        winChancePpm: '5000',
-        requestId: '7',
-      },
-    ])
+    enrichMock.mockImplementationOnce(async (_db, events) =>
+      events.map((event) => ({ ...event, entrySource: 'amoe' as const })),
+    )
 
     const result = await resolveRecentEntries(
       db as any,
@@ -79,7 +70,7 @@ describe('resolveRecentEntries', () => {
         toBlock: LOTTERY_INDEX_START_BLOCK + 1000n,
         limit: 25,
       },
-      { enrichSources: enrichMock, getTransaction: vi.fn() },
+      { enrichSources: enrichMock as typeof enrichLotteryEntrySources, getTransaction: vi.fn() },
     )
 
     expect(result.dataSource).toBe('index')
@@ -106,7 +97,11 @@ describe('resolveRecentEntries', () => {
         toBlock: LOTTERY_INDEX_START_BLOCK + 1000n,
         limit: 25,
       },
-      { fetchFromRpc: rpcMock, enrichSources: enrichMock, getTransaction: vi.fn() },
+      {
+        fetchFromRpc: rpcMock,
+        enrichSources: enrichMock as typeof enrichLotteryEntrySources,
+        getTransaction: vi.fn(),
+      },
     )
 
     expect(result.dataSource).toBe('rpc')
@@ -127,7 +122,11 @@ describe('resolveRecentEntries', () => {
         toBlock: 1000n,
         limit: 25,
       },
-      { fetchFromRpc: rpcMock, enrichSources: enrichMock, getTransaction: vi.fn() },
+      {
+        fetchFromRpc: rpcMock,
+        enrichSources: enrichMock as typeof enrichLotteryEntrySources,
+        getTransaction: vi.fn(),
+      },
     )
 
     expect(result.dataSource).toBe('rpc')

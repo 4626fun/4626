@@ -12,6 +12,7 @@ import * as arenaStore from '../arena/arenaIdentityMappingStore.js'
 import * as arenaClient from '../arena/arenaClient.js'
 import * as virtualsBacktestJobs from '../../agents/eliza/plugins/virtuals/backtestJobs.js'
 import * as counterTradeStore from '../alfaclub/counterTradeStore.js'
+import * as inverseAkitaStakerPilot from '../alfaclub/inverseAkitaStakerPilot.js'
 
 describe('executeHermitCommand', () => {
   let restoreEnv: (() => void) | null = null
@@ -357,13 +358,18 @@ describe('executeHermitCommand', () => {
       ARENA_DGCLAW_DIR: '/tmp',
       ARENA_DRY_RUN: '1',
     })
-    vi.spyOn(arenaStore, 'resolveArenaIdentityForContext').mockResolvedValue({
-      source: 'user',
+    vi.spyOn(arenaStore, 'resolveRoomDefaultArenaIdentity').mockResolvedValue({
+      source: 'room_default',
       roomId: '1659',
-      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      senderAddress: '*',
       agentId: 'agent-1',
       agentWalletAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       hlApiWalletAddress: null,
+    })
+    vi.spyOn(inverseAkitaStakerPilot, 'resolveInverseAkitaStakerPilotAccess').mockResolvedValue({
+      eligible: true,
+      stakedKeys: 1,
+      reason: 'staker',
     })
     const statusSpy = vi.spyOn(arenaClient, 'runArenaStatus').mockResolvedValue({
       ok: true,
@@ -380,10 +386,10 @@ describe('executeHermitCommand', () => {
     expect(result.kind).toBe('hermit')
     expect(result.provider).toBe('local')
     expect(result.reply).toContain('**Unified `/h` status**')
-    expect(result.reply).toContain('**Strategy (mirrored trading)**')
+    expect(result.reply).toContain('**InverseAKITA (room 1659)**')
     expect(result.reply).toContain('**Arena / Virtuals**')
     expect(result.reply).toContain('enabled=true tradingEnabled=true dryRun=true')
-    expect(result.reply).toContain('Quick actions: `/h pos` · `/h arena status`')
+    expect(result.reply).toContain('Pilot access: **enabled**')
     expect(statusSpy).toHaveBeenCalledTimes(1)
   })
 
@@ -393,10 +399,10 @@ describe('executeHermitCommand', () => {
       ARENA_DGCLAW_DIR: '/tmp',
       ARENA_DRY_RUN: '1',
     })
-    vi.spyOn(arenaStore, 'resolveArenaIdentityForContext').mockResolvedValue({
-      source: 'user',
+    vi.spyOn(arenaStore, 'resolveRoomDefaultArenaIdentity').mockResolvedValue({
+      source: 'room_default',
       roomId: '1659',
-      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      senderAddress: '*',
       agentId: 'agent-1',
       agentWalletAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       hlApiWalletAddress: null,
@@ -435,10 +441,10 @@ describe('executeHermitCommand', () => {
       ARENA_DGCLAW_DIR: '/tmp',
       ARENA_DRY_RUN: '1',
     })
-    vi.spyOn(arenaStore, 'resolveArenaIdentityForContext').mockResolvedValue({
+    vi.spyOn(arenaStore, 'resolveRoomDefaultArenaIdentity').mockResolvedValue({
       source: 'env_default',
       roomId: '1659',
-      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      senderAddress: '*',
       agentId: null,
       agentWalletAddress: null,
       hlApiWalletAddress: null,
@@ -467,10 +473,10 @@ describe('executeHermitCommand', () => {
       ARENA_DGCLAW_DIR: '/tmp',
       ARENA_DRY_RUN: '1',
     })
-    vi.spyOn(arenaStore, 'resolveArenaIdentityForContext').mockResolvedValue({
-      source: 'user',
+    vi.spyOn(arenaStore, 'resolveRoomDefaultArenaIdentity').mockResolvedValue({
+      source: 'room_default',
       roomId: '1659',
-      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      senderAddress: '*',
       agentId: 'agent-1',
       agentWalletAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       hlApiWalletAddress: null,
@@ -1715,6 +1721,7 @@ describe('executeHermitCommand', () => {
         ARENA_ENABLED: '1',
         ARENA_DGCLAW_DIR: '/tmp',
         ARENA_DRY_RUN: '1',
+        ARENA_ALLOWED_ROOM_IDS: '1043',
       })
       const sender = '0x1111111111111111111111111111111111111111'
       const createSpy = vi.spyOn(arenaClient, 'runArenaCreateAgent').mockResolvedValue({
@@ -1726,12 +1733,12 @@ describe('executeHermitCommand', () => {
       const first = await executeHermitCommand({
         commandText: '/s ?',
         senderAddress: sender,
-        roomId: '1659',
+        roomId: '1043',
       })
       const second = await executeHermitCommand({
         commandText: '/s ?',
         senderAddress: sender,
-        roomId: '1659',
+        roomId: '1043',
       })
 
       expect(first.reply).toContain('arenaSetup: auto-provision failed')
@@ -1745,6 +1752,7 @@ describe('executeHermitCommand', () => {
         ARENA_ENABLED: '1',
         ARENA_DGCLAW_DIR: '/tmp',
         ARENA_DRY_RUN: '1',
+        ARENA_ALLOWED_ROOM_IDS: '1043',
       })
       const sender = '0x2222222222222222222222222222222222222222'
       const createSpy = vi.spyOn(arenaClient, 'runArenaCreateAgent').mockResolvedValue({
@@ -1769,7 +1777,7 @@ describe('executeHermitCommand', () => {
       const result = await executeHermitCommand({
         commandText: '/s ?',
         senderAddress: sender,
-        roomId: '1659',
+        roomId: '1043',
       })
 
       expect(createSpy).toHaveBeenCalledTimes(1)
@@ -1782,6 +1790,7 @@ describe('executeHermitCommand', () => {
         ARENA_ENABLED: '1',
         ARENA_DGCLAW_DIR: '/tmp',
         ARENA_DRY_RUN: '1',
+        ARENA_ALLOWED_ROOM_IDS: '1043',
       })
       const sender = '0x4444444444444444444444444444444444444444'
       const createSpy = vi.spyOn(arenaClient, 'runArenaCreateAgent').mockResolvedValue({
@@ -1798,7 +1807,7 @@ describe('executeHermitCommand', () => {
       } as any)
       vi.spyOn(arenaClient, 'runArenaAddApiWallet').mockResolvedValue({ ok: true, message: 'ok', run: { dryRun: true } as any } as any)
       vi.spyOn(counterTradeStore, 'upsertCounterTradeOptIn').mockResolvedValue({
-        roomId: '1659',
+        roomId: '1043',
         senderAddress: sender,
         state: 'active',
         preset: 'balanced',
@@ -1811,7 +1820,7 @@ describe('executeHermitCommand', () => {
       const result = await executeHermitCommand({
         commandText: '/s optin balanced',
         senderAddress: sender,
-        roomId: '1659',
+        roomId: '1043',
       })
 
       expect(createSpy).toHaveBeenCalledTimes(1)

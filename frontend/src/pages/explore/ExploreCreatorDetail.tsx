@@ -21,6 +21,7 @@ import { CreatorVaultReserveBeat } from '@/components/explore/CreatorVaultReserv
 import { buildCreatorStats } from '@/components/explore/creatorStatsModel'
 import { LoadingInline, LoadingText } from '@/components/ui/LoadingState'
 import { requestOpenChat } from '@/lib/chat/openChat'
+import { toSafeHttpsUrl } from '@/lib/security/externalUrl'
 import { fetchZoraCoin } from '@/lib/zora/client'
 import { useZoraProfile, useZoraProfileCoins } from '@/lib/zora/hooks'
 import type { ZoraCoin, ZoraProfile } from '@/lib/zora/types'
@@ -777,6 +778,9 @@ export function ExploreCreatorDetail() {
   const handle = profile?.handle || coin?.creatorProfile?.handle
   const bio = profile?.bio
   const website = profile?.website
+  const safeWebsite = toSafeHttpsUrl(
+    website ? (website.startsWith('http://') || website.startsWith('https://') ? website : `https://${website}`) : null,
+  )
   const totalCoinsCreated = createdCoins.length
   const creatorChatAddress = resolveCreatorSmartWalletAddress(profile, creatorAddress || coin?.payoutRecipientAddress || null)
 
@@ -975,14 +979,14 @@ export function ExploreCreatorDetail() {
             </div>
 
             <div className="pointer-events-auto flex max-w-[min(68vw,20rem)] sm:max-w-none flex-nowrap items-center justify-end gap-x-3 overflow-x-auto scrollbar-hide text-right">
-              {website ? (
+              {safeWebsite ? (
                 <a
-                  href={website.startsWith('http') ? website : `https://${website}`}
+                  href={safeWebsite}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/40 px-2.5 py-1 text-sm text-zinc-300 backdrop-blur-sm hover:text-white transition-colors"
                 >
-                  <span className="max-w-[8rem] truncate sm:max-w-none">{website.replace(/^https?:\/\//, '')}</span>
+                  <span className="max-w-[8rem] truncate sm:max-w-none">{safeWebsite.replace(/^https?:\/\//, '')}</span>
                   <ExternalLink className="w-3 h-3 shrink-0 text-zinc-500" />
                 </a>
               ) : null}

@@ -102,6 +102,8 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     restoreEnv?.()
     restoreEnv = null
     vi.clearAllMocks()
+    isHermitUserAllowedMock.mockReset()
+    isHermitUserAllowedMock.mockReturnValue(true)
     isHermitOwnerMock.mockReset()
     isHermitOwnerMock.mockReturnValue(false)
     readUserPreferenceMock.mockReset()
@@ -461,7 +463,7 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     const result = await executeCommand({
       groupId: 'tg-room',
       senderWallet: ALICE,
-      text: '/arena status',
+      text: '/h arena status',
       chatId: 'alfaclub:12345',
       userId: ALICE,
     })
@@ -480,7 +482,7 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     const result = await executeCommand({
       groupId: 'tg-room',
       senderWallet: ALICE,
-      text: '/arena status',
+      text: '/h arena status',
       chatId: 'alfaclub:12345',
       userId: ALICE,
     })
@@ -498,7 +500,7 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     const result = await executeCommand({
       groupId: 'tg-room',
       senderWallet: ALICE,
-      text: '/arena status',
+      text: '/h arena status',
       chatId: 'alfaclub:12345',
       userId: ALICE,
     })

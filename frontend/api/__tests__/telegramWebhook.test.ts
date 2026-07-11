@@ -3453,6 +3453,39 @@ describe('telegram webhook handler', () => {
     expect(ackPayload.show_alert).toBe(true)
   })
 
+  it('rejects unscoped delete callbacks in group chats', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+
+    ;(fetch as any).mockReset()
+    ;(fetch as any).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 12_22_3,
+        callback_query: {
+          id: 'cb-delete-group-unscoped',
+          data: 'message:delete',
+          from: { id: 42 },
+          message: { message_id: 505, chat: { id: -100123, type: 'group' } },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect((fetch as any).mock.calls.length).toBe(1)
+    expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
+    expect(String((fetch as any).mock.calls[0][0])).not.toContain('/deleteMessage')
+  })
+
   it('renders /help connect CTA as menu callback for deterministic /link flow', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
 

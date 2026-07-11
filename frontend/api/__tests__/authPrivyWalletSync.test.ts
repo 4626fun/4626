@@ -32,11 +32,27 @@ const {
     primaryWalletAddress: '0x00000000000000000000000000000000000000aa',
   })),
   verifyAuthTokenMock: vi.fn(async () => ({ userId: 'did:privy:test-user' })),
-  getUserByIdMock: vi.fn(async () => ({
+  getUserByIdMock: vi.fn(async (): Promise<{
+    id: string
+    linkedAccounts: Array<{
+      type: string
+      address: string
+      walletClientType?: string
+      chainType?: string
+    }>
+  }> => ({
     id: 'did:privy:test-user',
     linkedAccounts: [{ type: 'smart_wallet', address: '0x00000000000000000000000000000000000000aa' }],
   })),
-  createWalletsMock: vi.fn(async () => ({
+  createWalletsMock: vi.fn(async (): Promise<{
+    id: string
+    linkedAccounts: Array<{
+      type: string
+      address: string
+      walletClientType?: string
+      chainType?: string
+    }>
+  }> => ({
     id: 'did:privy:test-user',
     linkedAccounts: [],
   })),

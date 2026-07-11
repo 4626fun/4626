@@ -19,6 +19,7 @@ function baseConfig(): ArenaConfig {
     creationEnabled: true,
     dryRun: true,
     agentId: null,
+    degenProfileId: null,
     agentWalletAddress: null,
     hlApiWalletAddress: null,
     hlAgentPrivateKey: null,

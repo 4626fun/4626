@@ -2916,6 +2916,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       req,
       sessionId,
       getDeploySessionById,
+      requireFreshPrivyJwt: true,
     })
     rec = access.rec
     sessionAddress = access.sessionAddress

@@ -4,11 +4,14 @@ import { getAddress, type Address } from 'viem'
 
 import type { DeploySessionRecord } from '../../../../../server/_lib/deploy/deploySessions.js'
 import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deployAuth.js'
+import { verifyPrivyRequest } from '../../../../../server/_lib/wallet/canonicalCswDelegation.js'
+import { classifyLinkedAccounts } from '../../../../../server/_lib/wallet/walletMapping.js'
 
 const DEPLOY_SESSION_ID_RE = /^[A-Za-z0-9_-]{1,128}$/
-// APIAUTH-012: Deploy-critical operations (resume, cancel) must require a fresh
+// APIAUTH-012: Deploy-critical operations (resume, advance, cancel) must require a fresh
 // Privy JWT (issued within the last 5 minutes) in addition to the session cookie.
 const FRESH_JWT_MAX_AGE_MS = 5 * 60 * 1000
+const FRESH_JWT_FUTURE_SKEW_MS = 30 * 1000
 
 export class DeploySessionAccessError extends Error {
   status: number
@@ -26,30 +29,38 @@ export function normalizeDeploySessionId(value: unknown): string | null {
   return DEPLOY_SESSION_ID_RE.test(sessionId) ? sessionId : null
 }
 
-/**
- * APIAUTH-012: Extract Privy JWT from request headers and check freshness.
- * Returns true if a valid JWT with a recent `iat` claim is present.
- */
-function checkFreshPrivyJwt(req: VercelRequest): boolean {
-  const fromHeader = typeof req.headers?.['x-privy-token'] === 'string' ? req.headers['x-privy-token'].trim() : ''
-  let token = fromHeader
-  if (!token) {
-    const auth = typeof req.headers?.authorization === 'string' ? req.headers.authorization.trim() : ''
-    if (auth.toLowerCase().startsWith('bearer ')) {
-      token = auth.slice('bearer '.length).trim()
-    }
-  }
-  if (!token) return false
+function readIssuedAtMs(token: string): number | null {
   try {
     const parts = token.split('.')
-    if (parts.length !== 3) return false
+    if (parts.length !== 3) return null
     const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8'))
     const iat = typeof payload?.iat === 'number' ? payload.iat : null
-    if (iat == null) return false
-    const nowSec = Math.floor(Date.now() / 1000)
-    return (nowSec - iat) * 1000 <= FRESH_JWT_MAX_AGE_MS
+    return iat == null ? null : iat * 1000
   } catch {
-    return false
+    return null
+  }
+}
+
+async function assertFreshVerifiedPrivyJwt(req: VercelRequest, expectedAddress: Address): Promise<void> {
+  try {
+    const context = await verifyPrivyRequest(req)
+    const issuedAtMs = readIssuedAtMs(context.privyToken)
+    const nowMs = Date.now()
+    if (
+      issuedAtMs == null ||
+      issuedAtMs < nowMs - FRESH_JWT_MAX_AGE_MS ||
+      issuedAtMs > nowMs + FRESH_JWT_FUTURE_SKEW_MS
+    ) {
+      throw new Error('stale_privy_token')
+    }
+
+    const normalizedExpected = expectedAddress.toLowerCase()
+    const ownsSessionAddress = classifyLinkedAccounts(context.privyUser).allWallets.some(
+      (wallet) => wallet.chain === 'evm' && wallet.address.toLowerCase() === normalizedExpected,
+    )
+    if (!ownsSessionAddress) throw new Error('privy_principal_mismatch')
+  } catch {
+    throw new DeploySessionAccessError(401, 'Fresh authentication required — please re-sign in')
   }
 }
 
@@ -80,12 +91,13 @@ export async function loadAuthorizedDeploySession(params: {
     throw new DeploySessionAccessError(401, 'Not authenticated')
   }
 
-  // APIAUTH-012: For deploy-critical operations (resume, cancel), require a
-  // fresh Privy JWT in addition to the session cookie HMAC. This prevents a
-  // stolen session cookie from controlling active deploys without recent
-  // wallet ownership proof.
-  if (params.requireFreshPrivyJwt && !checkFreshPrivyJwt(params.req)) {
-    throw new DeploySessionAccessError(401, 'Fresh authentication required — please re-sign in')
+  const sessionAddress = getAddress(auth.address)
+
+  // SIWA deploy automation has its own signed-agent authentication and does
+  // not carry a Privy user token. Browser session mutations require both a
+  // verified recent token and a wallet link matching the cookie principal.
+  if (params.requireFreshPrivyJwt && auth.type === 'session') {
+    await assertFreshVerifiedPrivyJwt(params.req, sessionAddress)
   }
 
   const rec = await params.getDeploySessionById(params.sessionId)
@@ -93,7 +105,6 @@ export async function loadAuthorizedDeploySession(params: {
     throw new DeploySessionAccessError(404, 'Not found')
   }
 
-  const sessionAddress = getAddress(auth.address)
   if (sessionAddress.toLowerCase() !== rec.sessionAddress.toLowerCase()) {
     throw new DeploySessionAccessError(403, 'Forbidden')
   }

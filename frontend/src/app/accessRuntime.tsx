@@ -10,7 +10,7 @@ import { useAdminStatusFromSession } from '@/hooks/useAdminStatus'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { WAITLIST_ME_QUERY_KEY, fetchWaitlistMe } from '@/lib/waitlist/waitlistMeQuery'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
-import { isScreenshotMode } from '@/lib/ui/screenshotMode'
+import { isScreenshotModeAllowed } from '@/lib/ui/screenshotMode'
 import {
   AccessContext,
   computeAcceptedFromAppAccessStatus,
@@ -30,7 +30,7 @@ function isValidEvmAddress(value: string): boolean {
 
 function useResolvedAccessState(): AccessState {
   const location = useLocation()
-  const screenshotMode = isScreenshotMode(location.search)
+  const screenshotMode = isScreenshotModeAllowed(location.search)
   const { address: connectedAddressRaw, isConnected } = useAccount()
   const siwe = useSiweAuth()
   const shouldLoadAdminStatus = location.pathname.startsWith('/admin')

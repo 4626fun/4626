@@ -33,6 +33,25 @@ function createDb(rows: Record<string, unknown>[]) {
   }
 }
 
+function createWebhookDb(initialProgressSources: string[]) {
+  const progressSources = new Set(initialProgressSources)
+  return {
+    sql: vi.fn(async (strings: TemplateStringsArray) => {
+      const text = strings.join(' ').toLowerCase()
+      if (text.includes('account_linked_methods')) {
+        return { rows: [{ privy_user_id: 'did:privy:abc' }] }
+      }
+      if (text.includes('from points')) {
+        return { rows: [...progressSources].map((source) => ({ source })) }
+      }
+      return { rows: [] }
+    }),
+    addProgress(source: string) {
+      progressSources.add(source)
+    },
+  }
+}
+
 describe('waitlistTwitterEngagementServer', () => {
   beforeEach(() => {
     vi.stubEnv('WAITLIST_X_ENGAGEMENT_TWEET_ID', '2031118597704265790')
@@ -58,7 +77,7 @@ describe('waitlistTwitterEngagementServer', () => {
   })
 
   it('awards follow when target is @4626fun', async () => {
-    const db = createDb([{ privy_user_id: 'did:privy:abc' }])
+    const db = createWebhookDb([])
     const awarded = await processWaitlistTwitterFollowEvent(db, {
       source: { id_str: '999', screen_name: 'fan' },
       target: { id_str: '111', screen_name: WAITLIST_X_FOLLOW_HANDLE },
@@ -83,33 +102,29 @@ describe('waitlistTwitterEngagementServer', () => {
     expect(applyPointEvent).not.toHaveBeenCalled()
   })
 
-  it('awards like for the campaign tweet', async () => {
+  it('ignores favorite events because likes are not an active verifiable quest step', async () => {
     const campaignTweetId = readWaitlistXEngagementTweetId()
     expect(campaignTweetId).toBeTruthy()
-    const db = createDb([{ privy_user_id: 'did:privy:abc' }])
+    const db = createWebhookDb(['x_engagement_follow'])
     const awarded = await processWaitlistTwitterFavoriteEvent(db, {
       user: { id_str: '999', screen_name: 'fan' },
       favorited_status: { id_str: campaignTweetId },
     })
-    expect(awarded).toBe(true)
-    expect(applyPointEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        eventType: 'x_engagement_like',
-        eventKey: campaignTweetId,
-      }),
-    )
+    expect(awarded).toBe(false)
+    expect(applyPointEvent).not.toHaveBeenCalled()
   })
 
   it('awards retweet and comment from tweet_create_events', async () => {
     const campaignTweetId = readWaitlistXEngagementTweetId()
     expect(campaignTweetId).toBeTruthy()
-    const db = createDb([{ privy_user_id: 'did:privy:abc' }])
+    const db = createWebhookDb(['x_engagement_follow', 'x_engagement_like'])
 
     const retweeted = await processWaitlistTwitterTweetCreateEvent(db, {
       user: { id_str: '999', screen_name: 'fan' },
       retweeted_status: { id_str: campaignTweetId },
     })
     expect(retweeted).toBe(true)
+    db.addProgress('x_engagement_repost')
 
     const replied = await processWaitlistTwitterTweetCreateEvent(db, {
       user: { id_str: '999', screen_name: 'fan' },
