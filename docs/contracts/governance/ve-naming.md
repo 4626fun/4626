@@ -62,7 +62,7 @@ ve4626Utility
 | `ve4626` | Lock **■4626** + dual-decay total power |
 | `ve4626Utility` | claimVote / claimChance / forfeit / sync / effective* |
 | `ve4626UtilityToken` | Non-transferable ERC-20 (not B20) |
-| `ve4626BoostManager` | `calculateBoostForPosition`: `working/l` ∈ **[0.4, 1.0]**; ve=`effectiveChance`, L=Share supply USD |
+| `ve4626BoostManager` | Curve workingFactor `working/l` ∈ **[0.4, 1.0]** (quoted boost 1–2.5× vs tokenless) |
 | `ve4626GaugeVoting` | `vote()` → `utility.sync` + `effectiveVoteOf` (preferred) or `voteToken` / ve fallback |
 | `ve4626VoterRewardsDistributor` | Fee slice to voters |
 
@@ -76,11 +76,15 @@ Raw `voteOf` / `chanceOf` / ERC-20 balances can be **stale** after dual-decay un
 | Boost share | `utility.effectiveChanceOf` (view haircut; no state write required) |
 | UI / integrators | Prefer `previewUtilities` / effective* over raw balances |
 
-## Lottery personal mult (authoritative)
+## Lottery personal mult (authoritative — Curve-correct)
+
+Curve LiquidityGauge (TOKENLESS = 40%):
 
 ```text
-working = min(0.4·l + 0.6·L·(ve/Ve), 1.0·l)
-boost   = working / l ∈ [0.4, 1.0]
+lim     = 0.4·l + 0.6·L·(ve/Ve)
+working = min(l, lim)                    # cap is l, NOT 2.5·l
+workingFactor = working/l ∈ [0.4, 1.0]   # what we return / apply to base odds
+quotedBoost   = working/(0.4·l) ∈ [1.0, 2.5]   # marketing "up to 2.5×"
 ```
 
 | Symbol | Meaning |
@@ -88,10 +92,10 @@ boost   = working / l ∈ [0.4, 1.0]
 | `l` | Covered skin = `min(creatorShareUSD, swapUSD)` |
 | `L` | Creator ShareOFT **total supply** USD |
 | `ve` | `effectiveChanceOf` (veChance) |
-| Full (1.0) | ve share ≥ LP share (`ve/Ve ≥ l/L`) |
-| Tokenless (0.4) | No veChance on a covered trade |
+| Max 2.5× quoted | when **ve share ≥ LP share** (`r ≥ 1`) |
+| Tokenless | workingFactor **0.4** = quoted boost **1.0×** |
 
-Product line “up to **2.5×** boost” = **2.5× the tokenless rate** (`0.4 × 2.5 = 1.0`), **not** Curve gauge’s `2.5·l` deposit cap. Same 40/60 split as gauges; **cap is full position weight (1.0)**.
+Do **not** cap working at `2.5·l` (that would be 6.25× vs tokenless — not Curve).
 
 No covered position → personal layer **off** (base trade odds unchanged).
 

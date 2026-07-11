@@ -4,19 +4,23 @@ pragma solidity ^0.8.20;
 /**
  * @title ve4626BoostManager
  * @author 0xakita.eth
- * @notice Personal lottery boost via Curve-style split (0.4×–1.0× of position).
+ * @notice Personal lottery mult via Curve LiquidityGauge-style working balance.
  * @dev Single envelope: NO separate lock-duration additive PPM.
  *
- *      Working balance (tokenless 0.4 + ve remainder 0.6, capped at full = 1.0):
- *        working = min(0.4 * l + 0.6 * L * (ve / Ve), 1.0 * l)
- *        boost   = working / l   ∈ [0.4, 1.0]
+ *      Curve gauges (TOKENLESS_PRODUCTION = 40):
+ *        lim = 0.4*l + 0.6*L*(ve/Ve)
+ *        working = min(l, lim)                    // cap is l, NOT 2.5*l
+ *        workingFactor = working/l ∈ [0.4, 1.0]
+ *        quotedBoost   = working/(0.4*l) ∈ [1.0, 2.5]
  *
- *      Product framing: "up to 2.5× boost" means 2.5× the *tokenless* rate
- *      (0.4 × 2.5 = 1.0), not a 2.5× deposit cap (gauge-style).
+ *      Max quoted 2.5× when ve_share >= lp_share (r >= 1), not r >= 3.5.
  *
- *      Lottery mapping (path A — pool = creator Share supply):
+ *      This contract returns workingFactor in BPS (4000–10000 when l>0).
+ *      LM multiplies size-based base odds by that factor (full = 1.0× base).
+ *
+ *      Lottery mapping:
  *        l  = min(creatorShareUSD, swapUSD)     // covered skin this trade
- *        L  = total creator ShareOFT supply USD // pool size
+ *        L  = total creator ShareOFT supply USD
  *        ve = effective veChance (or chance/ve fallback)
  *        Ve = total veChance (or total power)
  *
@@ -46,11 +50,11 @@ interface Ive4626 {
 
 contract ve4626BoostManager is Ownable, ReentrancyGuard {
     uint256 public constant BOOST_PRECISION = 10_000;
-    /// @notice Tokenless working factor (0.4×).
+    /// @notice Curve TOKENLESS_PRODUCTION: working/l floor without ve (0.4).
     uint256 public constant TOKENLESS_FACTOR = 4_000;
-    /// @notice Ve-weighted remainder factor (0.6×). Full = tokenless + remainder = 1.0.
+    /// @notice Curve remainder (0.6). working/l = min(1, 0.4 + 0.6*r).
     uint256 public constant VE_FACTOR = 6_000;
-    /// @notice Max working/l (= full position). 0.4 × 2.5 "boost" framing = 1.0.
+    /// @notice Max working/l (1.0) — Curve `lim = min(l, lim)`, not 2.5*l.
     uint256 public constant MAX_VE_BOOST = 10_000;
     // FIX: G-20 — increase from 10 blocks (~20s) to 1 epoch (~7 days on Base L2)
     uint256 public constant MIN_HOLDING_BLOCKS = 302_400;
@@ -65,7 +69,7 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
 
     /// @notice Neutral mult when position is zero / flash-gated (leave base odds unchanged).
     uint256 public baseBoost = 10_000;
-    /// @notice Max working / l (1.0× = full; tokenless 0.4× × 2.5 = 1.0).
+    /// @notice Max workingFactor (1.0). Quoted Curve boost vs tokenless = maxBoost/TOKENLESS = 2.5.
     uint256 public maxBoost = 10_000;
     uint256 public minVotingPower = 0.1 ether;
     bool public boostParametersLocked;
@@ -113,9 +117,9 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice UI / legacy: max factor attainable with current ve if position is small enough.
-     * @dev Lottery must use `calculateBoostForPosition` — this ignores pool matching.
-     *      Any positive eligible veChance can reach `maxBoost` (1.0) when ve share ≥ LP share.
+     * @notice UI / legacy: max workingFactor if position is small enough vs ve.
+     * @dev Lottery must use `calculateBoostForPosition`. Eligible ve can reach
+     *      maxBoost (1.0 workingFactor = 2.5× vs tokenless) when ve_share ≥ lp_share.
      */
     function calculateBoost(address user) public view returns (uint256) {
         if (block.number < lastBalanceUpdateBlock[user] + MIN_HOLDING_BLOCKS) {
@@ -123,19 +127,20 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
         }
         (uint256 ve,) = _powerShare(user);
         if (ve == 0 || ve < minVotingPower) {
-            return TOKENLESS_FACTOR; // 0.4× — unboosted
+            return TOKENLESS_FACTOR; // 0.4 workingFactor (1.0× quoted boost)
         }
-        return maxBoost; // 1.0× full
+        return maxBoost; // 1.0 workingFactor (2.5× quoted boost)
     }
 
     /**
-     * @notice Working-balance boost for a concrete trade position (0.4×–1.0×).
+     * @notice Curve workingFactor for a trade position: working/l ∈ [0.4, 1.0].
      * @param user Trader
      * @param shareBalanceUSD Pre-buy creator Share USD (coverage balance valued)
      * @param swapAmountUSD Trade notional USD
      * @param totalShareUSD Full creator ShareOFT supply in USD (pool size L)
-     * @return boostMultiplier BPS in [TOKENLESS_FACTOR, maxBoost] when l>0;
+     * @return boostMultiplier Working factor BPS [TOKENLESS_FACTOR, maxBoost] when l>0;
      *         `baseBoost` when no covered position (personal layer inactive).
+     * @dev Quoted Curve boost B = workingFactor / 0.4 ∈ [1.0, 2.5].
      */
     function calculateBoostForPosition(
         address user,
@@ -159,26 +164,24 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
             ve = 0;
         }
 
-        // working = 0.4 * l + 0.6 * L * (ve / Ve)
-        // If no ve pool or zero L, only tokenless term (0.4 * l).
+        // Curve: lim = 0.4*l + 0.6*L*(ve/Ve); working = min(l, lim)
         uint256 working = Math.mulDiv(l, TOKENLESS_FACTOR, BOOST_PRECISION);
         if (ve > 0 && Ve > 0 && totalShareUSD > 0) {
-            // 0.6 * L * ve / Ve
             uint256 vePart = Math.mulDiv(Math.mulDiv(totalShareUSD, VE_FACTOR, BOOST_PRECISION), ve, Ve);
             working += vePart;
         }
 
+        // Cap at l (maxBoost BPS of l) — Curve `lim = min(l, lim)`
         uint256 maxWorking = Math.mulDiv(l, maxBoost, BOOST_PRECISION);
         if (working > maxWorking) {
             working = maxWorking;
         }
 
-        // boost = working / l
+        // Return workingFactor = working/l (BPS), not quoted boost working/(0.4*l)
         boostMultiplier = Math.mulDiv(working, BOOST_PRECISION, l);
         if (boostMultiplier > maxBoost) {
             boostMultiplier = maxBoost;
         }
-        // Guard: never below tokenless when a position exists
         if (boostMultiplier < TOKENLESS_FACTOR) {
             boostMultiplier = TOKENLESS_FACTOR;
         }

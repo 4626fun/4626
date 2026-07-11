@@ -20,7 +20,7 @@ Current status of the ve(3,3) governance system.
 - [x] **Utility** `ve4626Utility` + `ve4626UtilityToken` (**veVote** / **veChance**) — [ve-naming.md](../contracts/governance/ve-naming.md)
 - [x] `sync(user)` — dual-decay capacity clamp (burn chance first, then vote)
 - [x] **P1 stale-utility fix:** `previewUtilities` / `effectiveVoteOf` / `effectiveChanceOf`; gauge `vote()` syncs; boost uses effective chance
-- [x] `ve4626BoostManager`: working-balance `calculateBoostForPosition` (**0.4×–1.0×**; 2.5× on tokenless); `setUtility` + chance; additive PPM ≡ 0
+- [x] `ve4626BoostManager`: Curve workingFactor `[0.4,1.0]` / quoted boost `[1,2.5]` vs tokenless; `setUtility`; additive PPM ≡ 0
 - [x] LotteryManager: personal mult via ForPosition + total Share USD (pool L); single envelope; legacy fallback
 - [x] `ve4626GaugeVoting`: `setUtility` + optional `voteToken` + 1h epoch freeze
 - [x] `DeployRewardsEcosystem` deploys + wires `setUtility` on voting + boostManager

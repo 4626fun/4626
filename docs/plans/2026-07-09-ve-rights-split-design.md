@@ -27,7 +27,7 @@
 | Lanes | **vote** / **chance** (not credit/unit/power) |
 | Token type | **`ve4626UtilityToken`** non-transferable ERC-20 — **not B20** |
 | Total power | Curve-style dual-decay `getTotalVotingPower()` |
-| Lottery boost | **0.4×–1.0×** `calculateBoostForPosition(l,L,ve)` (2.5× tokenless → full); additive PPM ≡ 0 |
+| Lottery boost | Curve workingFactor `[0.4,1.0]`; quoted boost `[1,2.5]` vs tokenless; additive PPM ≡ 0 |
 | Pool mapping | `l`=covered Share USD, `L`=creator Share supply USD, `ve`=effectiveChance |
 | Decay vs claims | `sync` burns excess (chance first, then vote) |
 | Stale utilities (P1) | `previewUtilities` / `effective*`; gauge `vote()` syncs; boost uses `effectiveChanceOf` |
@@ -55,12 +55,12 @@
 
 | Item | Status |
 |------|--------|
-| Formula `0.4·l + 0.6·L·(ve/Ve)`, cap `1.0·l` | Implemented |
+| Formula `working = min(l, 0.4·l + 0.6·L·ve/Ve)` | Implemented (Curve-correct cap at **l**) |
+| workingFactor ∈ [0.4,1.0]; quoted boost ∈ [1,2.5] vs tokenless | Documented; max at ve_share ≥ lp_share |
 | ve = `effectiveChanceOf` when utility wired | Implemented |
-| LM uses `calculateBoostForPosition` + total Share USD as `L` | Implemented |
+| LM uses `calculateBoostForPosition` + Share supply as `L` | Implemented |
 | Additive lock PPM | Removed (`getTotalProbabilityBoost` ≡ 0) |
-| Delta vs LiquidityGaugeV5 | Gauge caps at **2.5·l**; we cap at **1.0·l** (product) |
-| Full mult never exceeds base odds | By design (1.0× max); gauge PPM can still add |
+| Do **not** cap working at 2.5·l | That would be 6.25× vs tokenless (non-Curve) |
 | Launch | LM boost sources stay 0 until canary |
 
 ## Validation

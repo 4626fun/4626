@@ -43,7 +43,8 @@ contract MockVe4626BoostMath {
     }
 }
 
-/// @notice working = min(0.4*l + 0.6*L*(ve/Ve), 1.0*l) → factor ∈ [0.4, 1.0]
+/// @notice Curve: working = min(l, 0.4*l + 0.6*L*(ve/Ve)); workingFactor ∈ [0.4, 1.0]
+///         quoted boost = workingFactor/0.4 ∈ [1.0, 2.5]; max when ve_share ≥ lp_share
 contract Ve4626BoostManagerMathTest is Test {
     MockVe4626BoostMath internal ve;
     ve4626BoostManager internal manager;
