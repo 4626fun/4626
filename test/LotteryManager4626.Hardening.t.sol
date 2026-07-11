@@ -61,23 +61,23 @@ contract LotteryManager4626HardeningTest is Test {
         MockRegistryHardening reg = new MockRegistryHardening(address(oracle), address(0xBEEF));
 
         (uint256 usd,,) = LotteryManager4626PricingLib.calculateTokenUSD(
-            address(0), reg.token(), reg.token(), 1e18, 0, 0, 0, 0, 0
+            address(0), reg.token(), reg.token(), 1e18, 0, 0, 0, 0, 0, 0
         );
         assertEq(usd, 0, "zero registry");
 
         (usd,,) = LotteryManager4626PricingLib.calculateTokenUSD(
-            address(reg), reg.token(), address(0xBAD), 1e18, 0, 0, 0, 0, 0
+            address(reg), reg.token(), address(0xBAD), 1e18, 0, 0, 0, 0, 0, 0
         );
         assertEq(usd, 0, "wrong tokenIn");
 
         (usd,,) = LotteryManager4626PricingLib.calculateTokenUSD(
-            address(reg), reg.token(), reg.token(), 0, 0, 0, 0, 0, 0
+            address(reg), reg.token(), reg.token(), 0, 0, 0, 0, 0, 0, 0
         );
         assertEq(usd, 0, "zero amount");
 
         oracle.set(0, block.timestamp);
         (usd,,) = LotteryManager4626PricingLib.calculateTokenUSD(
-            address(reg), reg.token(), reg.token(), 1e18, 0, 0, 0, 0, 0
+            address(reg), reg.token(), reg.token(), 1e18, 0, 0, 0, 0, 0, 0
         );
         assertEq(usd, 0, "non-positive price");
     }
@@ -88,17 +88,26 @@ contract LotteryManager4626HardeningTest is Test {
         oracle.set(1e18, block.timestamp);
 
         (uint256 usd, uint256 price,) = LotteryManager4626PricingLib.calculateTokenUSD(
-            address(reg), reg.token(), reg.token(), 1e18, 3600, 0, 0, 0, 0
+            address(reg), reg.token(), reg.token(), 1e18, 3600, 0, 0, 0, 0, 0
         );
         assertEq(price, 1e18);
         assertEq(usd, 1_000_000); // $1 in 1e6
 
-        // 50% deviation vs last 1e18 with max 10% → reject
+        // 50% deviation vs last 1e18 with max 10% inside 1h window → reject
         oracle.set(15e17, block.timestamp);
         (usd,,) = LotteryManager4626PricingLib.calculateTokenUSD(
-            address(reg), reg.token(), reg.token(), 1e18, 3600, 1000, 1e18, block.timestamp, 0
+            address(reg), reg.token(), reg.token(), 1e18, 3600, 1000, 1 hours, 1e18, block.timestamp, 0
         );
-        assertEq(usd, 0, "deviation should fail closed");
+        assertEq(usd, 0, "deviation should fail closed inside window");
+
+        // After the deviation window elapses, same jump is accepted (new reference).
+        vm.warp(block.timestamp + 1 hours + 1);
+        oracle.set(15e17, block.timestamp);
+        (usd, price,) = LotteryManager4626PricingLib.calculateTokenUSD(
+            address(reg), reg.token(), reg.token(), 1e18, 3600, 1000, 1 hours, 1e18, block.timestamp - 1 hours - 1, 0
+        );
+        assertEq(usd, 1_500_000, "after window, repricing must not lock out entries");
+        assertEq(price, 15e17);
     }
 
     function test_adminModule_payoutSelector_exists() public pure {

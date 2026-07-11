@@ -1041,6 +1041,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
             amount,
             oracleMaxStaleness,
             oracleMaxDeviationBps,
+            oracleDeviationWindow,
             lastAcceptedPriceUSD1e18[token],
             lastAcceptedPriceTimestamp[token],
             lotteryConfig.usdMultiplierBps

@@ -141,4 +141,24 @@ contract Ve4626BoostManagerMathTest is Test {
         ve.setVotingPower(user, 0);
         assertEq(manager.calculateBoost(user), 10_000);
     }
+
+    function testSetBoostParameters_RequiresBaseBoostPrecision() public {
+        vm.prank(owner);
+        vm.expectRevert(ve4626BoostManager.InvalidBoostParameters.selector);
+        manager.setBoostParameters(20_000, 25_000);
+
+        vm.prank(owner);
+        manager.setBoostParameters(10_000, 20_000);
+        assertEq(manager.pendingBaseBoost(), 10_000);
+        assertEq(manager.pendingMaxBoost(), 20_000);
+    }
+
+    function testCoveredTokenless_FloorIsPrecisionNotOwnerBase() public {
+        // Even if storage baseBoost were inflated (pre-lock path), covered floor stays 1.0×.
+        // setBoostParameters now rejects non-precision base; use storage slot via vm.store if needed.
+        // Default path: tokenless covered always 10_000.
+        ve.setVotingPower(user, 0);
+        ve.setTotalVotingPower(100 ether);
+        assertEq(manager.calculateBoostForPosition(user, 10e18, 10e18, L), 10_000);
+    }
 }

@@ -174,13 +174,14 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
         }
 
         // Quoted boost B = working / (0.4*l) in BPS ∈ [10_000, 25_000]
+        // Floor is always BOOST_PRECISION (Curve tokenless 1.0×), never owner baseBoost.
         // tokenlessWorking is always > 0 when l > 0 and TOKENLESS_FACTOR > 0
         boostMultiplier = Math.mulDiv(working, BOOST_PRECISION, tokenlessWorking);
         if (boostMultiplier > maxBoost) {
             boostMultiplier = maxBoost;
         }
-        if (boostMultiplier < baseBoost) {
-            boostMultiplier = baseBoost;
+        if (boostMultiplier < BOOST_PRECISION) {
+            boostMultiplier = BOOST_PRECISION;
         }
     }
 
@@ -221,8 +222,10 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
     }
 
     // FIX: G-13 — 48h timelock for boost parameter updates
+    /// @dev baseBoost is locked to BOOST_PRECISION (1.0×). Owner may only tune maxBoost
+    ///      so covered tokenless positions never receive an owner-inflated floor.
     function setBoostParameters(uint256 _baseBoost, uint256 _maxBoost) external onlyOwner {
-        if (_baseBoost == 0 || _maxBoost <= _baseBoost || _maxBoost > MAX_VE_BOOST) {
+        if (_baseBoost != BOOST_PRECISION || _maxBoost <= _baseBoost || _maxBoost > MAX_VE_BOOST) {
             revert InvalidBoostParameters();
         }
 

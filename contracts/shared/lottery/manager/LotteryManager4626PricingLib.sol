@@ -25,9 +25,13 @@ library LotteryManager4626PricingLib {
      * @param amount Token amount (native decimals)
      * @param oracleMaxStaleness Max age of oracle timestamp (0 = disabled)
      * @param oracleMaxDeviationBps Max deviation vs last accepted price (0 = disabled)
+     * @param oracleDeviationWindow Apply deviation only while lastTs is this fresh (0 = off)
      * @param lastPrice Last accepted price 1e18 (0 if none)
      * @param lastTs Last accepted price timestamp
      * @param usdMultiplierBps Lottery USD multiplier (0 = none)
+     * @dev Deviation is windowed: after `oracleDeviationWindow` elapses, a legitimate
+     *      oracle repricing is accepted (new reference). Without the window, the first
+     *      accepted price permanently rejects moves beyond maxDeviationBps.
      */
     function calculateTokenUSD(
         address registry,
@@ -36,6 +40,7 @@ library LotteryManager4626PricingLib {
         uint256 amount,
         uint256 oracleMaxStaleness,
         uint256 oracleMaxDeviationBps,
+        uint256 oracleDeviationWindow,
         uint256 lastPrice,
         uint256 lastTs,
         uint256 usdMultiplierBps
@@ -72,7 +77,12 @@ library LotteryManager4626PricingLib {
         if (timestamp > block.timestamp) return (0, 0, 0);
         if (oracleMaxStaleness > 0 && block.timestamp - timestamp > oracleMaxStaleness) return (0, 0, 0);
 
-        if (oracleMaxDeviationBps > 0 && lastPrice > 0 && lastTs > 0) {
+        // Deviation only while the stored reference is still inside the window.
+        // After the window elapses, accept the new price so entries are not locked forever.
+        if (
+            oracleMaxDeviationBps > 0 && oracleDeviationWindow > 0 && lastPrice > 0 && lastTs > 0
+                && block.timestamp >= lastTs && block.timestamp - lastTs <= oracleDeviationWindow
+        ) {
             // forge-lint: disable-next-line(unsafe-typecast)
             uint256 currentPrice = uint256(priceUSD);
             uint256 diff = currentPrice > lastPrice ? currentPrice - lastPrice : lastPrice - currentPrice;
