@@ -43,6 +43,14 @@ export function isScreenshotMode(input: string | URLSearchParams): boolean {
   return parseScreenshotMode(input).enabled
 }
 
+export function isScreenshotModeAllowed(
+  input: string | URLSearchParams,
+  options: { production?: boolean } = {},
+): boolean {
+  const production = options.production ?? import.meta.env.PROD
+  return !production && isScreenshotMode(input)
+}
+
 export function clearAppScreenshotReady(): void {
   if (typeof window === 'undefined') return
   window.__APP_SCREENSHOT_READY = false

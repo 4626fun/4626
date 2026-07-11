@@ -7,6 +7,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { timingSafeEqual } from 'node:crypto'
 
 import { type ApiEnvelope, readJsonBody } from '@4626/server-core'
 
@@ -25,6 +26,12 @@ type HermitWebhookOk = {
   dm?: { status: string; roomId?: string | null }
 }
 
+function secretsMatch(provided: string, expected: string): boolean {
+  const providedBytes = Buffer.from(provided)
+  const expectedBytes = Buffer.from(expected)
+  return providedBytes.length === expectedBytes.length && timingSafeEqual(providedBytes, expectedBytes)
+}
+
 export async function handleHermitTelegramWebhookIngress(
   req: VercelRequest,
   res: VercelResponse,
@@ -39,7 +46,7 @@ export async function handleHermitTelegramWebhookIngress(
   }
 
   const providedSecret = asTrimmed(req.headers?.['x-telegram-bot-api-secret-token'])
-  if (providedSecret !== configuredSecret) {
+  if (!providedSecret || !secretsMatch(providedSecret, configuredSecret)) {
     res.status(401).json({ success: false, error: 'Invalid Telegram webhook secret' } satisfies ApiEnvelope<never>)
     return
   }
@@ -64,6 +71,8 @@ export async function handleHermitTelegramWebhookIngress(
     const callbackData = asTrimmed(callbackQuery.data ?? '').toLowerCase()
     const callbackQueryId = asTrimmed(String(callbackQuery.id ?? ''))
     const callbackChatId = String(callbackQuery.message?.chat?.id ?? '').trim()
+    const callbackChatType = asTrimmed(callbackQuery.message?.chat?.type).toLowerCase()
+    const callbackUserId = asTrimmed(String(callbackQuery.from?.id ?? ''))
     const callbackMessageId =
       typeof callbackQuery.message?.message_id === 'number' ? callbackQuery.message.message_id : null
     if (
@@ -76,6 +85,25 @@ export async function handleHermitTelegramWebhookIngress(
         import('./telegramApi/interactions.js'),
         import('./telegramApi/messaging.js'),
       ])
+      const dismissOwnerUserId = callbackData.startsWith('message:delete:')
+        ? asTrimmed(callbackData.slice('message:delete:'.length))
+        : ''
+      if (
+        callbackChatType !== 'private' &&
+        (!dismissOwnerUserId || dismissOwnerUserId !== callbackUserId)
+      ) {
+        await answerTelegramCallbackQuery({
+          botToken,
+          callbackQueryId,
+          text: 'Only the requester can dismiss this.',
+          showAlert: true,
+        }).catch(() => {})
+        res.status(200).json({
+          success: true,
+          data: { ok: true, updateId: update.update_id ?? null } satisfies HermitWebhookOk,
+        } satisfies ApiEnvelope<HermitWebhookOk>)
+        return
+      }
       await answerTelegramCallbackQuery({ botToken, callbackQueryId, text: 'Deleted' }).catch(() => {})
       if (typeof callbackMessageId === 'number') {
         await deleteTelegramMessage({ botToken, chatId: callbackChatId, messageId: callbackMessageId }).catch(

@@ -12,6 +12,7 @@ import {
   getClientIp,
   rateLimitKey,
   RATE_LIMITS,
+  requireAdminApiToken,
 } from '@4626/server-core'
 
 
@@ -56,7 +57,6 @@ type HealthResponse = {
   }
   adminToken: {
     configured: boolean
-    length: number
     ok: boolean
     error: string | null
   }
@@ -228,6 +228,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
+  const wantsDetails = String(req.query?.details ?? '').trim() === '1'
+  if (!wantsDetails) {
+    return res.status(200).json({
+      success: true,
+      data: { ok: true, time: new Date().toISOString() },
+    })
+  }
+  if (!requireAdminApiToken(req, res)) return
+
   const dbConfigured = isDbConfigured()
   const db = await getDb()
   const dbStatus = db
@@ -308,7 +317,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     },
     adminToken: {
       configured: Boolean((process.env.ADMIN_API_TOKEN ?? '').trim()),
-      length: (process.env.ADMIN_API_TOKEN ?? '').trim().length,
       ok: Boolean((process.env.ADMIN_API_TOKEN ?? '').trim()),
       error: null,
     },

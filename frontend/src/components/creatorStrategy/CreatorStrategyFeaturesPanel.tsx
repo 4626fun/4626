@@ -168,7 +168,11 @@ export function CreatorStrategyFeaturesPanel({
             if (!json.success || !json.data?.sessionUrl) {
               throw new Error(json.error ?? `HTTP ${res.status}`)
             }
-            window.location.href = json.data.sessionUrl
+            const checkoutUrl = new URL(json.data.sessionUrl)
+            if (checkoutUrl.protocol !== 'https:' || checkoutUrl.hostname !== 'checkout.stripe.com') {
+              throw new Error('Invalid Stripe checkout URL')
+            }
+            window.location.href = checkoutUrl.toString()
             return
           }
           case 'x402': {

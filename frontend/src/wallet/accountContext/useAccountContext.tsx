@@ -203,8 +203,9 @@ export function AccountContextProvider(props: { children: ReactNode }) {
     const signerIsAllowedEoa =
       signerType === 'EOA' &&
       isAllowedCanonicalSigner(signerAddress) &&
-      // Keep onchain ownership as an enforcement gate when available.
-      eoaIsOwnerOfCsw !== false
+      // Never promote an allowlisted EOA until the onchain owner check has
+      // positively confirmed authority over the canonical parent CSW.
+      eoaIsOwnerOfCsw === true
 
     if (signerIsCanonicalCsw || signerIsAllowedEoa) {
       return {

@@ -15,7 +15,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { Agent, createUser, createSigner } from '@xmtp/agent-sdk'
 import type { Address } from 'viem'
-import { createHash } from 'node:crypto'
+import { createHash, timingSafeEqual } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -446,7 +446,9 @@ export function isAuthorized(req: VercelRequest): boolean {
 
   // Header-only auth: query-string secret transport is intentionally rejected.
   const provided = readCronSecretFromHeaders(req)
-  return provided === cronSecret
+  const providedBytes = Buffer.from(provided)
+  const expectedBytes = Buffer.from(cronSecret)
+  return providedBytes.length === expectedBytes.length && timingSafeEqual(providedBytes, expectedBytes)
 }
 
 function isCommandLike(text: string): boolean {

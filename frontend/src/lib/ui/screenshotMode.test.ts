@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   clearAppScreenshotReady,
+  isScreenshotModeAllowed,
   parseScreenshotMode,
   setAppScreenshotReady,
 } from '@/lib/ui/screenshotMode'
@@ -19,6 +20,11 @@ describe('screenshotMode', () => {
       enabled: false,
       demo: null,
     })
+  })
+
+  it('never enables screenshot access bypasses in production', () => {
+    expect(isScreenshotModeAllowed('?screenshot=1', { production: true })).toBe(false)
+    expect(isScreenshotModeAllowed('?screenshot=1', { production: false })).toBe(true)
   })
 
   it('sets and clears the global screenshot-ready flag', () => {
