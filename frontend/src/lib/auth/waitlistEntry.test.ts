@@ -26,6 +26,7 @@ import {
 describe('waitlistEntry', () => {
   beforeEach(() => {
     window.sessionStorage.clear()
+    vi.restoreAllMocks()
   })
 
   it('builds the canonical waitlist entry path as a clean route', () => {
@@ -52,6 +53,8 @@ describe('waitlistEntry', () => {
   })
 
   it('builds setup deep links on the marketing waitlist host', () => {
+    vi.spyOn(host, 'getMarketingBaseUrl').mockReturnValue('http://localhost:3000')
+
     expect(buildWaitlistSetupUrl('base-app')).toBe('http://localhost:3000/waitlist?setup=base-app')
     expect(buildWaitlistSetupUrl('owner-install')).toBe('http://localhost:3000/waitlist?setup=owner-install')
     expect(buildWaitlistSetupPath('owner-install')).toBe('/waitlist?setup=owner-install')

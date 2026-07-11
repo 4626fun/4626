@@ -503,7 +503,7 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
           operatorOnlyCommand &&
           !canPilotInverseAkitaInRoom
         ) {
-          const restrictedCommand = hermitCommand === '/arena'
+          const restrictedCommand = hermitCommand === '/arena' || /^\/h\s+arena\b/i.test(raw)
             ? '/arena'
             : hermitCommand === '/strategy'
               ? '/strategy bias'

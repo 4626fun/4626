@@ -1,4 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('viem', async () => {
+  const actual = await vi.importActual<typeof import('viem')>('viem')
+  return {
+    ...actual,
+    createPublicClient: () => ({
+      readContract: async ({ functionName }: { functionName: string }) =>
+        functionName === 'isTokenActive' ? false : '0x0000000000000000000000000000000000000000',
+    }),
+  }
+})
 
 import { validateRegistry4626Binding } from '../../server/_lib/onchain/registry4626Verification.js'
 import { AKITA_DEFAULTS } from '../../src/config/contracts.defaults.js'

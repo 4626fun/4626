@@ -749,7 +749,9 @@ describe('orchestrateAmoeSubmitZk — end-to-end', () => {
         ) as unknown as Parameters<typeof orchestrateAmoeSubmitZk>[1]['allowlistSnapshotReader'],
       })
       expect(result.epoch).toBe(epoch)
-      expect(reader.readSnapshotForBurn).toHaveBeenCalledTimes(1)
+      // The orchestrator first pins the burn epoch, then resolves the complete
+      // snapshot used to build the witness.
+      expect(reader.readSnapshotForBurn).toHaveBeenCalledTimes(2)
       expect(reader.readSnapshotForBurn).toHaveBeenCalledWith({
         signupId: inputs.profileId,
         spendRefId: inputs.spendRefId,
@@ -770,20 +772,22 @@ describe('orchestrateAmoeSubmitZk — end-to-end', () => {
     try {
       const { buildAmoeMerkleSnapshot } = await import('../lottery/amoeMerkleTree.js')
       const fakeSnapshot = buildAmoeMerkleSnapshot([1n])
-      const reader = {
-        readSnapshotForBurn: vi.fn(async () => ({
-          // Reader returns a DIFFERENT epoch than the orchestrator's
-          // computed epoch. Orchestrator must refuse rather than build
-          // a witness against the wrong root.
-          epoch: 999n,
+      const nowSec = AMOE_EPOCH_GENESIS_UNIX_SEC + AMOE_EPOCH_SECONDS * 7n + 1n
+      const epoch = (nowSec - AMOE_EPOCH_GENESIS_UNIX_SEC) / AMOE_EPOCH_SECONDS
+      const snapshotResult = {
           pointsLedgerSnapshot: fakeSnapshot,
           pointsLedgerLeafIndex: 0,
           rootHex: ('0x' + fakeSnapshot.root.toString(16).padStart(64, '0')) as
             `0x${string}`,
-        })),
       }
-      const nowSec = AMOE_EPOCH_GENESIS_UNIX_SEC + AMOE_EPOCH_SECONDS * 7n + 1n
-      const epoch = (nowSec - AMOE_EPOCH_GENESIS_UNIX_SEC) / AMOE_EPOCH_SECONDS
+      const reader = {
+        readSnapshotForBurn: vi
+          .fn()
+          // Initial read pins the expected burn epoch.
+          .mockResolvedValueOnce({ epoch, ...snapshotResult })
+          // Witness resolution must reject a snapshot whose epoch changed.
+          .mockResolvedValueOnce({ epoch: 999n, ...snapshotResult }),
+      }
       const inputs = makeInputs()
       let err: unknown = null
       try {
