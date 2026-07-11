@@ -1131,7 +1131,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     {
         boostedWinChance = baseWinChance;
 
-        // STEP 1: Curve workingFactor (position-aware). Requires covered Share USD.
+        // STEP 1: Curve quoted boost BPS [10_000, 25_000] (position-aware). Requires covered Share USD.
         // Managers must implement calculateBoostForPosition (DeployRewardsEcosystem wiring).
         if (address(boostManager) != address(0) && shareBalanceAmount > 0 && swapAmountUSD > 0) {
             uint256 totalShareUSD = _totalShareUsd(token, shareBalanceToken);
