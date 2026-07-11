@@ -5,6 +5,8 @@
 
 **Goal:** Safe lottery traffic **without** personal boost or gauge boost on day one.
 
+**Live status (2026-07-11):** [lottery-canary-phase0-status-2026-07-11.md](./lottery-canary-phase0-status-2026-07-11.md). Re-run: `pnpm -C frontend ops:verify-lottery-canary-phase0`.
+
 ---
 
 ## Phase 0 — Do not enable (fail closed)

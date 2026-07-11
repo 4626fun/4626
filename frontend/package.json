@@ -103,6 +103,7 @@
     "ops:build-creator-share-hook": "bash ../programs/creator-share-hook/scripts/build-sbf.sh",
     "ops:verify-hook-mainnet-bytecode": "tsx scripts/ops/verify-hook-mainnet-bytecode.ts",
     "ops:verify-akita-prelaunch": "tsx scripts/ops/verify-akita-prelaunch-readiness.ts",
+    "ops:verify-lottery-canary-phase0": "tsx --env-file=.env scripts/ops/verify-lottery-canary-phase0.ts",
     "ops:verify-keeper-automation": "tsx --env-file=.env scripts/ops/verify-keeper-automation-alignment.ts",
     "ops:add-keeper-safe-owner": "tsx --env-file=.env --env-file=../.env scripts/ops/add-keeper-automation-safe-owner.ts",
     "ops:deploy-protocol-automation-safe": "tsx --env-file=.env --env-file=../.env scripts/ops/deploy-protocol-automation-safe.ts",

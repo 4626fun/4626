@@ -9,7 +9,8 @@ Code remediation for July-2 stack + contract mediums is largely complete. Do **n
 
 ## 0. Canary order (2026-07)
 
-Full phased canary (boost **off** day one): [lottery-canary-checklist-2026-07.md](../operations/lottery-canary-checklist-2026-07.md).
+Full phased canary (boost **off** day one): [lottery-canary-checklist-2026-07.md](../operations/lottery-canary-checklist-2026-07.md).  
+Live Phase 0 probe (2026-07-11): [lottery-canary-phase0-status-2026-07-11.md](../operations/lottery-canary-phase0-status-2026-07-11.md) — boost sources `0x0`; live LM still missing `singleVaultJackpotOnly` / deferred VRF until post-#687 CREATE2 cutover.
 
 | Phase | Intent |
 |-------|--------|
