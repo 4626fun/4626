@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
 import {LotteryManager4626} from "@4626/shared/lottery/manager/LotteryManager4626.sol";
+import {LotteryManager4626PricingLib} from "@4626/shared/lottery/manager/LotteryManager4626PricingLib.sol";
 
 /**
  * @title DeployLotteryManagerCreate2
@@ -13,10 +14,16 @@ import {LotteryManager4626} from "@4626/shared/lottery/manager/LotteryManager462
  * Initcode hash: 0x9887537b7bb629ec4558f3fc4607673108717efc232e0e47be88bb6482d0eeb0
  * Salt: 0x0100000000000000b67a63000000000000000000000000000000000000000000
  * Address: 0x77740C44A3E1d8262e8bfAB6204A29B2cbeE4626
+ *
+ * Library: deploys `LotteryManager4626PricingLib` first at Foundry's default
+ * CREATE2 library address (EIP-2470 + salt 0) so linked LM bytecode is valid.
  */
 contract DeployLotteryManagerCreate2 is Script {
     /// @notice Deterministic Deployment Proxy (EIP-2470)
     address constant DETERMINISTIC_DEPLOYER = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
+
+    /// @notice Foundry default `create2_library_salt` — keep in sync with foundry.toml.
+    bytes32 constant LIBRARY_SALT = bytes32(0);
 
     /// @notice Mined salt for vanity address
     bytes32 constant SALT = 0x0100000000000000b67a63000000000000000000000000000000000000000000;
@@ -27,6 +34,10 @@ contract DeployLotteryManagerCreate2 is Script {
     /// @notice Base mainnet registry + owner
     address constant REGISTRY = 0x888506B92181c57A2fD06516FFFb6F375b7A4626;
     address constant OWNER = 0xB05Cf01231cF2fF99499682E64D3780d57c80FdD;
+
+    function _create2(address deployer, bytes32 salt, bytes32 initCodeHash) internal pure returns (address) {
+        return address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), deployer, salt, initCodeHash)))));
+    }
 
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
@@ -50,6 +61,7 @@ contract DeployLotteryManagerCreate2 is Script {
         console.log("");
 
         // Build initcode: creation bytecode + constructor args
+        // (Forge links PricingLib to CREATE2(EIP-2470, LIBRARY_SALT) in creationCode.)
         bytes memory initcode = abi.encodePacked(type(LotteryManager4626).creationCode, abi.encode(REGISTRY, OWNER));
 
         // Verify init code hash
@@ -57,9 +69,7 @@ contract DeployLotteryManagerCreate2 is Script {
         console.log("Init code hash:      ", vm.toString(initCodeHash));
 
         // Predict address
-        address predicted = address(
-            uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), DETERMINISTIC_DEPLOYER, SALT, initCodeHash))))
-        );
+        address predicted = _create2(DETERMINISTIC_DEPLOYER, SALT, initCodeHash);
         console.log("Predicted address:   ", predicted);
 
         require(predicted == EXPECTED_ADDRESS, "Predicted address does not match expected; salt/initcode mismatch");
@@ -78,6 +88,21 @@ contract DeployLotteryManagerCreate2 is Script {
         }
 
         vm.startBroadcast(deployerPrivateKey);
+
+        // Deploy linked PricingLib first (Foundry CREATE2 library address).
+        bytes memory libInit = type(LotteryManager4626PricingLib).creationCode;
+        address pricingLib = _create2(DETERMINISTIC_DEPLOYER, LIBRARY_SALT, keccak256(libInit));
+        uint256 libSize;
+        assembly {
+            libSize := extcodesize(pricingLib)
+        }
+        if (libSize == 0) {
+            (bool libOk,) = DETERMINISTIC_DEPLOYER.call(abi.encodePacked(LIBRARY_SALT, libInit));
+            require(libOk, "PricingLib CREATE2 failed");
+            console.log("Deployed LotteryManager4626PricingLib:", pricingLib);
+        } else {
+            console.log("PricingLib already at:", pricingLib);
+        }
 
         // Calldata = salt (32 bytes) ++ initcode
         bytes memory callData = abi.encodePacked(SALT, initcode);

@@ -26,6 +26,9 @@ forge build --skip test --skip script >/dev/null
 contracts=(
   "Registry4626"
   "OVaultFactory4626"
+  # Pricing lib must be CREATE2-deployed (Foundry salt 0 @ EIP-2470) before LM;
+  # LM creation bytecode in this manifest is linked to that library address.
+  "LotteryManager4626PricingLib"
   "LotteryManager4626"
   "VRFConsumer4626"
   "VaultActivationBatcher"
@@ -72,6 +75,14 @@ artifact_path() {
     DeploymentBatcher|DeploymentBatcherPhase1Module|DeploymentBatcherPhase2Module|DeploymentBatcherPhase3Helper|DeploymentBatcherShareMeshHelper|DeploymentBatcherUtilsHelper)
       printf "%s/out/DeploymentBatcher.sol/%s.json" "$ROOT_DIR" "$contract"
       ;;
+    LotteryManager4626|LotteryManager4626AdminModule|LotteryManager4626PricingLib)
+      # LM + Admin share LotteryManager4626.sol; PricingLib is its own file.
+      if [[ "$contract" == "LotteryManager4626PricingLib" ]]; then
+        printf "%s/out/LotteryManager4626PricingLib.sol/%s.json" "$ROOT_DIR" "$contract"
+      else
+        printf "%s/out/LotteryManager4626.sol/%s.json" "$ROOT_DIR" "$contract"
+      fi
+      ;;
     *)
       printf "%s/out/%s.sol/%s.json" "$ROOT_DIR" "$contract" "$contract"
       ;;
@@ -86,32 +97,9 @@ bytecode() {
     echo "Missing artifact: $artifact (run forge build --skip test --skip script first)" >&2
     exit 1
   fi
-  python3 - "$artifact" <<'PY'
-import json, sys
-path = sys.argv[1]
-with open(path, "r", encoding="utf-8") as fh:
-    obj = fh.read().strip()
-# forge may emit concatenated JSON objects; keep the bytecode record only.
-decoder = json.JSONDecoder()
-bytecode_obj = None
-idx = 0
-while idx < len(obj):
-    value, end = decoder.raw_decode(obj, idx)
-    if isinstance(value, dict) and "bytecode" in value:
-        bytecode_obj = value["bytecode"]
-    idx = end
-if bytecode_obj is None or not bytecode_obj.get("object"):
-    raise SystemExit(f"bytecode.object missing in {path}")
-bc = bytecode_obj["object"]
-if bc.startswith("0x"):
-    bc = bc[2:]
-import re
-m = re.match(r"^([0-9a-fA-F]+)", bc)
-if not m:
-    raise SystemExit(f"no hex bytecode in {path}")
-bc = m.group(1).lower()
-print(bc, end="")
-PY
+  # Fully link external libraries (Foundry CREATE2 salt 0 @ EIP-2470).
+  # Do NOT truncate at `__$...$__` placeholders — that yields broken initcode.
+  python3 "$ROOT_DIR/script/lib/extract_linked_bytecode.py" "$artifact" "$ROOT_DIR"
 }
 
 json_escape() {

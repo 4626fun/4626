@@ -63,8 +63,7 @@ ve4626Utility
 | `ve4626Utility` | claimVe33 / claimVeLottery / forfeit / sync / effective* |
 | `ve4626UtilityToken` | Non-transferable ERC-20 (not B20) |
 | `ve4626BoostManager` | `calculateBoostForPosition`: `working/(0.4·l)` ∈ **[1.0, 2.5]**; ve=`effectiveVeLotteryOf`, Ve=live total ve4626 power |
-| `ve4626GaugeVoting` | `vote()` → `utility.sync` + `effectiveVe33Of` (preferred) or `ve33Token` / ve fallback |
-| `ve4626VoterRewardsDistributor` | Fee slice to voters |
+| `ve4626GaugeVoting` | `vote()` → `utility.sync` + `effectiveVe33Of` (preferred) or `ve33Token` / ve fallback || `ve4626VoterRewardsDistributor` | Fee slice to voters |
 
 ## P1 decay-safety
 
@@ -76,13 +75,14 @@ Raw `ve33Of` / `veLotteryOf` / ERC-20 balances can be **stale** after dual-decay
 | Boost share | `utility.effectiveVeLotteryOf` (view haircut; no state write required) |
 | UI / integrators | Prefer `previewUtilities` / effective* over raw balances |
 
-## Lottery personal mult (authoritative)
+## Lottery personal mult (authoritative — Curve-correct)
+
+Curve LiquidityGauge (TOKENLESS = 40%):
 
 ```text
 working = min(0.4·l + 0.6·L·(ve/Ve), 1.0·l)
 boost   = working / (0.4·l) ∈ [1.0, 2.5]
-effectiveBoost = 1 + coverage·(boost - 1)
-```
+effectiveBoost = 1 + coverage·(boost - 1)```
 
 | Symbol | Meaning |
 |--------|---------|
@@ -97,7 +97,6 @@ effectiveBoost = 1 + coverage·(boost - 1)
 Curve caps working balance at `l`. The advertised **2.5×** is the full working balance divided by the 0.4 tokenless baseline; it is not a `2.5·l` working-balance cap.
 
 No covered position → personal layer **off** (base trade odds unchanged).
-
 ## One-liner
 
 > Lock **■4626 only** into **ve■4626**. Claim **ve33** / **veLottery** via **`ve4626Utility`**. Creator ■ is not a ve lock asset.

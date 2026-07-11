@@ -22,6 +22,12 @@ The LotteryManager4626:
 
 This is a **shared utility** deployed once per chain that serves ALL Creator Coins by looking up contracts from the registry.
 
+**External pricing library:** USD pricing + oracle guards live in `LotteryManager4626PricingLib` (external CALL) so the main manager stays under EIP-170. Creation bytecode for `LotteryManager4626` therefore contains a library link:
+
+- Foundry links the lib at CREATE2(`EIP-2470`, `create2_library_salt` default `0`) — currently `0x1d74A8e2…7C6D` for the current lib initcode.
+- Deploy paths must deploy the lib first (`DeployLotteryManagerCreate2*.s.sol`), then the manager.
+- Bytecode manifests must fully link placeholders via `script/lib/extract_linked_bytecode.py` (never truncate at `__$…$__`).
+
 ## Win Probability
 
 **Formula**: $1 traded = 0.0004% instant win chance

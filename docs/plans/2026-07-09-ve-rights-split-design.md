@@ -31,8 +31,7 @@
 | Pool mapping | `l`=covered Share USD, `L`=creator Share supply USD, `ve`=effectiveVeLottery, `Ve`=live total ve4626 |
 | Coverage | `1 + (l/swapUSD)·(boost-1)` applies uplift only to covered trade value |
 | Decay vs claims | `sync` burns excess (veLottery first, then ve33) |
-| Stale utilities (P1) | `previewUtilities` / `effective*`; gauge `vote()` syncs; boost uses `effectiveVeLotteryOf` |
-| Gauge freeze | 1h before epoch end |
+| Stale utilities (P1) | `previewUtilities` / `effective*`; gauge `vote()` syncs; boost uses `effectiveVeLotteryOf` || Gauge freeze | 1h before epoch end |
 | Launch | Leave LM `boostManager` / `vaultGaugeVoting` at 0 until canary; personal boost later |
 
 ---
@@ -45,8 +44,7 @@
 | `contracts/shared/governance/ve4626Utility.sol` | claim / forfeit / sync / effective* |
 | `contracts/shared/governance/ve4626UtilityToken.sol` | Non-transferable ERC-20 |
 | `contracts/shared/governance/ve4626BoostManager.sol` | `calculateBoostForPosition` 1.0–2.5; `setUtility` → effective veLottery |
-| `contracts/shared/governance/ve4626GaugeVoting.sol` | `setUtility` → sync + effective ve33 + freeze |
-| `LotteryManager4626._applyBoost` | No additive lock PPM |
+| `contracts/shared/governance/ve4626GaugeVoting.sol` | `setUtility` → sync + effective ve33 + freeze || `LotteryManager4626._applyBoost` | No additive lock PPM |
 | `script/DeployRewardsEcosystem.s.sol` | Deploys + `setUtility` on voting + boost |
 | `test/ve4626.RightsSplitAndDualDecay.t.sol` | Dual-decay + utility + P1 consumers |
 
@@ -63,8 +61,7 @@
 | LM blends uplift by `l/swapUSD` coverage | Implemented |
 | Additive lock PPM | Removed (`getTotalProbabilityBoost` ≡ 0) |
 | LiquidityGaugeV5 parity | Working balance caps at `l`; normalized multiplier caps at **2.5×** |
-| Unboosted behavior | Neutral **1.0×**; gauge PPM can still add |
-| Launch | LM boost sources stay 0 until canary |
+| Unboosted behavior | Neutral **1.0×**; gauge PPM can still add || Launch | LM boost sources stay 0 until canary |
 
 ## Validation
 

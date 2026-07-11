@@ -48,6 +48,7 @@ import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
 import {IOracle4626} from "@4626/shared/interfaces/oracles/IOracle4626.sol";
+import {LotteryManager4626PricingLib} from "@4626/shared/lottery/manager/LotteryManager4626PricingLib.sol";
 
 // ================================
 // INTERFACES
@@ -1033,56 +1034,20 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         view
         returns (uint256 usd1e6, uint256 priceUSD1e18, uint256 oracleTimestamp)
     {
-        // Get per-token oracle
-        address oracleAddr = registry.getOracleForToken(token);
-        if (oracleAddr == address(0)) return (0, 0, 0);
-
-        // Get per-token shareOFT
-        address shareOFT = registry.getShareOFTForToken(token);
-
-        // Only works for the lane token or its shareOFT
-        if (tokenIn != token && tokenIn != shareOFT) return (0, 0, 0);
-        if (amount == 0) return (0, 0, 0);
-
-        IOracle4626 oracle = IOracle4626(oracleAddr);
-        int256 priceUSD;
-        uint256 timestamp;
-        // Oracle reads should never be able to revert swap processing.
-        try oracle.getAssetPrice() returns (int256 p, uint256 t) {
-            priceUSD = p;
-            timestamp = t;
-        } catch {
-            return (0, 0, 0);
-        }
-        if (priceUSD <= 0 || timestamp == 0) return (0, 0, 0);
-        // Prevent underflow and freshness spoofing from future timestamps.
-        if (timestamp > block.timestamp) return (0, 0, 0);
-        uint256 maxStaleness = oracleMaxStaleness;
-        if (maxStaleness > 0 && block.timestamp - timestamp > maxStaleness) return (0, 0, 0);
-
-        // FIX: CLM-07 — deviation guard applies unconditionally when valid reference exists
-        // (previously only checked within deviationWindow, leaving first entry after gap unprotected)
-        uint256 maxDeviationBps = oracleMaxDeviationBps;
-        uint256 lastPrice = lastAcceptedPriceUSD1e18[token];
-        uint256 lastTs = lastAcceptedPriceTimestamp[token];
-        if (maxDeviationBps > 0 && lastPrice > 0 && lastTs > 0) {
-            // forge-lint: disable-next-line(unsafe-typecast)
-            uint256 currentPrice = uint256(priceUSD);
-            uint256 diff = currentPrice > lastPrice ? currentPrice - lastPrice : lastPrice - currentPrice;
-            uint256 deviationBps = FullMath.mulDiv(diff, BASIS_POINTS, lastPrice);
-            if (deviationBps > maxDeviationBps) return (0, 0, 0);
-        }
-
-        // forge-lint: disable-next-line(unsafe-typecast)
-        priceUSD1e18 = uint256(priceUSD);
-        oracleTimestamp = timestamp;
-
-        uint256 usd1e18 = FullMath.mulDiv(amount, priceUSD1e18, 1e18);
-        if (lotteryConfig.usdMultiplierBps > 0) {
-            usd1e18 = FullMath.mulDiv(usd1e18, lotteryConfig.usdMultiplierBps, BASIS_POINTS);
-        }
-        usd1e6 = usd1e18 / 1e12;
+        return LotteryManager4626PricingLib.calculateTokenUSD(
+            address(registry),
+            token,
+            tokenIn,
+            amount,
+            oracleMaxStaleness,
+            oracleMaxDeviationBps,
+            oracleDeviationWindow,
+            lastAcceptedPriceUSD1e18[token],
+            lastAcceptedPriceTimestamp[token],
+            lotteryConfig.usdMultiplierBps
+        );
     }
+
 
     /// @notice Linear pre-boost win chance (PR 1 — AMOE Linear Parity).
     /// @dev Formula: `winChancePPM = swapValueUSD / 250_000`, capped at
@@ -1111,9 +1076,10 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
 
     /**
      * @notice Apply ve(3,3) boosts to base win probability
-     * @dev Personal: tokenless-normalized Curve mult (1.0×–2.5×) via
-     *      `calculateBoostForPosition(l, L, ve/Ve)`. Only the covered fraction
-     *      of the trade receives the uplift. Gauge is flat additive PPM.
+     * @dev Personal: Curve quoted boost BPS ∈ [10_000, 25_000] via
+     *      `calculateBoostForPosition` (= working/(0.4*l); working capped at l).
+     *      Only the covered fraction of the trade receives the uplift.
+     *      Gauge is flat additive PPM.
      */
     function _applyBoost(
         address user,
@@ -1130,7 +1096,8 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     {
         boostedWinChance = baseWinChance;
 
-        // STEP 1: Curve personal mult (position-aware). Requires covered Share USD.
+        // STEP 1: Curve quoted boost BPS [10_000, 25_000] (position-aware). Requires covered Share USD.
+        // Managers must implement calculateBoostForPosition (DeployRewardsEcosystem wiring).
         if (address(boostManager) != address(0) && shareBalanceAmount > 0 && swapAmountUSD > 0) {
             uint256 totalShareUSD = _totalShareUsd(token, shareBalanceToken);
             try boostManager.calculateBoostForPosition(user, shareBalanceAmount, swapAmountUSD, totalShareUSD)
@@ -1144,21 +1111,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
                     boostedWinChance =
                         FullMath.mulDiv(baseWinChance, BASIS_POINTS + coveredUpliftBPS, BASIS_POINTS);
                 }
-            } catch {
-                // Legacy managers without ForPosition: old mult × coverage scale.
-                try boostManager.getCoverageBps(
-                    user, address(registry), token, shareBalanceToken, shareBalanceAmount, swapAmountUSD
-                ) returns (uint256 coverageBps) {
-                    try boostManager.calculateBoost(user) returns (uint256 boostBPS) {
-                        if (boostBPS > BASIS_POINTS && coverageBps > 0) {
-                            uint256 extraMultiplierBps = boostBPS - BASIS_POINTS;
-                            uint256 effectiveMultiplierBps =
-                                BASIS_POINTS + FullMath.mulDiv(extraMultiplierBps, coverageBps, BASIS_POINTS);
-                            boostedWinChance = FullMath.mulDiv(baseWinChance, effectiveMultiplierBps, BASIS_POINTS);
-                        }
-                    } catch {}
-                } catch {}
-            }
+            } catch {}
         }
 
         // STEP 2: Add vault gauge boost (vote-directed budget).
@@ -1180,12 +1133,11 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     /// @dev Value full ShareOFT supply in USD for Curve pool size L. Zero if unreadable.
     function _totalShareUsd(address token, address shareBalanceToken) internal view returns (uint256 totalShareUSD) {
         if (shareBalanceToken == address(0) || shareBalanceToken.code.length == 0) return 0;
-        uint256 supply;
-        try IERC20(shareBalanceToken).totalSupply() returns (uint256 s) {
-            supply = s;
-        } catch {
-            return 0;
-        }
+        // Low-level staticcall keeps size down vs try/catch + nested legacy paths.
+        (bool ok, bytes memory data) =
+            shareBalanceToken.staticcall(abi.encodeWithSelector(IERC20.totalSupply.selector));
+        if (!ok || data.length < 32) return 0;
+        uint256 supply = abi.decode(data, (uint256));
         if (supply == 0) return 0;
         (totalShareUSD,,) = _calculateTokenUSD(token, shareBalanceToken, supply);
     }
@@ -1684,6 +1636,10 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         uint256 amountIn,
         uint256 reportedEligible
     ) internal view returns (uint256 coverageBal) {
+        // No code (test mocks / pure remote addresses): trust reportedEligible only, no live cap.
+        if (shareOFT.code.length == 0) {
+            return reportedEligible;
+        }
         uint256 live = IERC20(shareOFT).balanceOf(buyer);
         uint256 maxPreBuy = live > amountIn ? live - amountIn : 0;
         coverageBal = reportedEligible;
@@ -1741,28 +1697,46 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     }
 
     /**
-     * @notice Pay jackpot from ALL active lane vaults (multi-token prize!)
-     * @param triggeringCoin The lane token that triggered the lottery
-     * @param winner The lottery winner
-     * @param payoutBps Percentage of each vault's jackpot to pay (6900 = 69%)
-     * @return totalSharesPaid Sum of ShareOFT (■) units paid across vaults (M-12 — not vault count)
+     * @notice Pay jackpot (single- or multi-vault) via AdminModule DELEGATECALL.
+     * @dev Size extraction: payout body lives on AdminModule with mirrored storage.
+     *      Reverts bubble with original data; failed DELEGATECALL reverts roll back
+     *      `_payoutLock` writes inside the module frame.
      */
-    // FIX: CLM-04 — wrap entire payout in try/catch pattern to ensure _payoutLock always resets
     function _payoutLocalJackpot(address triggeringCoin, address winner, uint16 payoutBps) internal returns (uint256) {
-        if (_payoutLock == 1) revert ReentrancyGuardReentrantCall();
-        _payoutLock = 1;
+        address module = _adminModule;
+        if (module == address(0)) revert ZeroAddress();
+        if (winner == address(0)) revert ZeroAddress();
+        // Cap is basis points; reject > 100% so a misconfigured rewardPercentage cannot drain.
+        if (uint256(payoutBps) > BASIS_POINTS) revert InvalidAmount();
 
-        uint256 totalSharesPaid = _payoutLocalJackpotInner(triggeringCoin, winner, payoutBps);
-
-        _payoutLock = 0;
-        return totalSharesPaid;
+        (bool ok, bytes memory data) = module.delegatecall(
+            abi.encodeWithSelector(
+                LotteryManager4626AdminModule.payoutLocalJackpot.selector,
+                triggeringCoin,
+                winner,
+                payoutBps
+            )
+        );
+        if (!ok) {
+            assembly {
+                revert(add(data, 0x20), mload(data))
+            }
+        }
+        // Empty success data would decode-fail; treat as zero paid.
+        if (data.length < 32) return 0;
+        return abi.decode(data, (uint256));
     }
+
+
 
     /// @notice Cursor that advances through the token registry between
     /// jackpot payouts so that when the registry is larger than
     /// MAX_JACKPOT_PAYOUT_ITERATIONS, all coins eventually receive payouts
     /// across successive jackpots rather than being starved behind the cap.
-    /// Incremented after each payout in _payoutLocalJackpotInner (M-06).
+    /// Incremented after each payout in AdminModule.payoutLocalJackpotInner (M-06).
+    /// @dev STORAGE: declared after `pendingAmoeRelayerEffectiveAt` (slot order).
+    ///      AdminModule MUST declare `jackpotPayoutCursor` in the same relative order
+    ///      for DELEGATECALL payout. Do not reorder without a storage migration.
     uint256 public jackpotPayoutCursor;
 
     /// @notice Emitted when the per-call iteration cap truncated the payout.
@@ -1780,201 +1754,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     );
 
     /// @dev R-H05 single-vault: pay only the triggering coin's gauge (no registry scan).
-    function _payTriggeringVaultJackpot(address triggeringCoin, address winner, uint16 payoutBps)
-        internal
-        returns (uint256 totalSharesPaid)
-    {
-        if (triggeringCoin == address(0)) return 0;
 
-        // Match multi-vault path: suppress payout if the lane was deactivated after entry.
-        bool isActive;
-        try registry.isTokenActive(triggeringCoin) returns (bool result) {
-            isActive = result;
-        } catch {
-            return 0;
-        }
-        if (!isActive) return 0;
-
-        address vaultAddr;
-        address gaugeAddr;
-        try registry.getVaultForToken(triggeringCoin) returns (address result) {
-            vaultAddr = result;
-        } catch {
-            return 0;
-        }
-        try registry.getGaugeControllerForToken(triggeringCoin) returns (address result) {
-            gaugeAddr = result;
-        } catch {
-            return 0;
-        }
-        if (vaultAddr == address(0) || gaugeAddr == address(0)) return 0;
-
-        IGaugeControllerLottery gaugeController = IGaugeControllerLottery(gaugeAddr);
-        uint256 jackpotShares;
-        try gaugeController.availableJackpotReserve() returns (uint256 result) {
-            jackpotShares = result;
-        } catch {
-            return 0;
-        }
-        if (jackpotShares == 0) return 0;
-
-        uint256 rewardShares = (jackpotShares * payoutBps) / BASIS_POINTS;
-        if (rewardShares == 0) return 0;
-
-        try gaugeController.payJackpot(winner, rewardShares) {
-            totalSharesPaid = rewardShares;
-            totalRewardsPaid += rewardShares;
-            tokenStats[triggeringCoin].rewardsPaid += rewardShares;
-            emit LotteryWon(triggeringCoin, 0, winner, rewardShares, 0);
-            emit CrossChainJackpotPaid(triggeringCoin, winner, rewardShares, 0);
-            emit MultiTokenJackpotWon(triggeringCoin, winner, 1);
-        } catch {
-            emit JackpotPayoutFailed(triggeringCoin, winner, rewardShares);
-            return 0;
-        }
-    }
-
-    function _payoutLocalJackpotInner(address triggeringCoin, address winner, uint16 payoutBps)
-        internal
-        returns (uint256 totalSharesPaid)
-    {
-        // R-H05: single-vault mode must not depend on the multi-vault cursor window.
-        // A large registry + scan cap could otherwise skip the triggering coin entirely.
-        if (singleVaultJackpotOnly) {
-            return _payTriggeringVaultJackpot(triggeringCoin, winner, payoutBps);
-        }
-
-        // FIX: CLM-04 — registry calls wrapped in try/catch to prevent permanent lock
-        address[] memory allTokens;
-        try registry.getAllTokens() returns (address[] memory result) {
-            allTokens = result;
-        } catch {
-            return 0;
-        }
-
-        uint256 vaultsPaid;
-
-        uint256 registrySize = allTokens.length;
-        if (registrySize == 0) {
-            return 0;
-        }
-
-        // M-06: cap the per-call iteration count so the payout cannot be
-        // bricked by a growing registry. The cap is applied to *active*
-        // tokens actually evaluated, not to raw slot visits, so a long
-        // prefix of inactive entries at the front of registeredTokens (it
-        // is append-only) cannot starve active tokens of payouts.
-        //
-        // To keep the loop bounded in the worst case where every slot is
-        // inactive, we also cap total slot scans at
-        // MAX_JACKPOT_PAYOUT_SLOT_SCANS. If the scan budget is exhausted
-        // before the active cap fills, the cursor advances past the last
-        // slot scanned so subsequent jackpots continue where this one
-        // stopped and eventually reach every active token.
-        uint256 activeCap = registrySize < MAX_JACKPOT_PAYOUT_ITERATIONS
-            ? registrySize
-            : MAX_JACKPOT_PAYOUT_ITERATIONS;
-        uint256 slotCap = registrySize < MAX_JACKPOT_PAYOUT_SLOT_SCANS
-            ? registrySize
-            : MAX_JACKPOT_PAYOUT_SLOT_SCANS;
-        uint256 startIndex = jackpotPayoutCursor % registrySize;
-
-        uint256 activeIterated;
-        uint256 slotsScanned;
-
-        // Pay from every active lane vault within the iteration window.
-        // Loop variable k counts slot visits; activeIterated counts active
-        // tokens whose gauge was actually queried.
-        for (uint256 k = 0; k < slotCap; k++) {
-            if (activeIterated >= activeCap) break;
-
-            uint256 i = (startIndex + k) % registrySize;
-            address token = allTokens[i];
-            slotsScanned = k + 1;
-
-            // Skip inactive tokens
-            // slither-disable-next-line calls-loop
-            bool isActive;
-            try registry.isTokenActive(token) returns (bool result) {
-                isActive = result;
-            } catch {
-                continue;
-            }
-            if (!isActive) continue;
-
-            activeIterated++;
-
-            // Look up per-token contracts
-            // slither-disable-next-line calls-loop
-            address vaultAddr;
-            address gaugeAddr;
-            try registry.getVaultForToken(token) returns (address result) {
-                vaultAddr = result;
-            } catch {
-                continue;
-            }
-            // slither-disable-next-line calls-loop
-            try registry.getGaugeControllerForToken(token) returns (address result) {
-                gaugeAddr = result;
-            } catch {
-                continue;
-            }
-
-            if (vaultAddr == address(0) || gaugeAddr == address(0)) continue;
-
-            IGaugeControllerLottery gaugeController = IGaugeControllerLottery(gaugeAddr);
-
-            // slither-disable-next-line calls-loop
-            uint256 jackpotShares;
-            try gaugeController.availableJackpotReserve() returns (uint256 result) {
-                jackpotShares = result;
-            } catch {
-                continue;
-            }
-
-            if (jackpotShares == 0) continue;
-
-            uint256 rewardShares = (jackpotShares * payoutBps) / BASIS_POINTS;
-
-            if (rewardShares > 0) {
-                // slither-disable-next-line calls-loop
-                // slither-disable-next-line reentrancy-no-eth
-                try gaugeController.payJackpot(winner, rewardShares) {
-                    totalRewardsPaid += rewardShares;
-                    tokenStats[token].rewardsPaid += rewardShares;
-                    // M-12: accumulate ShareOFT units paid (not vault count) for callbacks/return.
-                    totalSharesPaid += rewardShares;
-                    vaultsPaid++;
-
-                    emit LotteryWon(token, 0, winner, rewardShares, 0);
-                    emit CrossChainJackpotPaid(token, winner, rewardShares, 0);
-                } catch {
-                    emit JackpotPayoutFailed(token, winner, rewardShares);
-                }
-            }
-        }
-
-        // Advance the cursor past the last slot actually scanned. Using
-        // unchecked add is safe: the cursor is taken modulo registrySize
-        // on every read.
-        unchecked {
-            jackpotPayoutCursor = startIndex + slotsScanned;
-        }
-
-        // Emit a capped event if either bound actually bit. This lets the
-        // off-chain monitor detect starvation (e.g. many inactive slots
-        // accumulating) and prioritise registry compaction.
-        if (activeIterated < registrySize || slotsScanned < registrySize) {
-            if (activeIterated >= activeCap || slotsScanned >= slotCap) {
-                emit JackpotPayoutCapped(registrySize, startIndex, activeIterated, slotsScanned);
-            }
-        }
-
-        // Emit special event for multi-token win (num vaults paid, not share units).
-        if (vaultsPaid > 0) {
-            emit MultiTokenJackpotWon(triggeringCoin, winner, vaultsPaid);
-        }
-    }
 
     // ================================
     // ADMIN FUNCTIONS
@@ -2276,6 +2056,8 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     uint256 public constant MIN_SWAP_USD = 1_000_000;
     uint256 public constant MAX_SWAP_USD = 1_000_000_000_000;
     uint256 public constant BASIS_POINTS = 10_000;
+    uint256 public constant MAX_JACKPOT_PAYOUT_ITERATIONS = 128;
+    uint256 public constant MAX_JACKPOT_PAYOUT_SLOT_SCANS = 1024;
     uint16 public constant MSG_TYPE_WINNER_CALLBACK = 4;
 
     uint128 internal constant DEFAULT_MSG_VALUE = 0;
@@ -2426,8 +2208,25 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     address public pendingAmoeRelayer;
     uint256 public pendingAmoeRelayerEffectiveAt;
 
+    /// @dev Mirrors main jackpotPayoutCursor (declared later in main source; next storage slot).
+    uint256 public jackpotPayoutCursor;
+
     address private immutable _self;
 
+    event LotteryWon(
+        address indexed token, uint256 indexed entryId, address indexed winner, uint256 shares, uint256 tokenValue
+    );
+    event CrossChainJackpotPaid(
+        address indexed token, address indexed winner, uint256 shares, uint256 tokenValue
+    );
+    event JackpotPayoutFailed(address indexed token, address indexed winner, uint256 shares);
+    event JackpotPayoutCapped(
+        uint256 totalRegistrySize,
+        uint256 startIndex,
+        uint256 activeIterated,
+        uint256 slotsScanned
+    );
+    event MultiTokenJackpotWon(address indexed triggeringCoin, address indexed winner, uint256 numVaultsPaid);
     event SwapContractAuthorized(address indexed swapContract, bool authorized);
     event LotteryConfigUpdated(uint256 minSwap, uint256 rewardPercentage, bool isActive);
     event OracleMaxStalenessUpdated(uint256 maxStaleness);
@@ -2549,6 +2348,224 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     /// @notice R-H05: scope jackpot payouts to the triggering vault only when `true`.
     /// @dev Launch default is `true` (single-vault). Set `false` only after multi-vault
     ///      prize economics are product-approved and disclosed.
+
+    // ================================
+    // JACKPOT PAYOUT (delegatecall from main)
+    // ================================
+
+    /// @notice Jackpot payout entry (main DELEGATECALLs here). Storage layout must match main.
+    /// @dev Reentrancy: `_payoutLock` + caller paths are `nonReentrant`. Inner gauge failures
+    ///      are try/caught; a hard revert rolls back the lock via DELEGATECALL semantics.
+    function payoutLocalJackpot(address triggeringCoin, address winner, uint16 payoutBps)
+        external
+        onlyDelegateCall
+        returns (uint256 totalSharesPaid)
+    {
+        if (winner == address(0)) revert ZeroAddress();
+        if (uint256(payoutBps) > BASIS_POINTS) revert InvalidAmount();
+        if (_payoutLock == 1) revert ReentrancyGuardReentrantCall();
+        _payoutLock = 1;
+        // Inner paths catch per-gauge failures; any uncaught revert undoes this lock.
+        totalSharesPaid = payoutLocalJackpotInner(triggeringCoin, winner, payoutBps);
+        _payoutLock = 0;
+    }
+
+    function payTriggeringVaultJackpot(address triggeringCoin, address winner, uint16 payoutBps)
+        internal
+        returns (uint256 totalSharesPaid)
+    {
+        if (triggeringCoin == address(0)) return 0;
+
+        // Match multi-vault path: suppress payout if the lane was deactivated after entry.
+        bool isActive;
+        try registry.isTokenActive(triggeringCoin) returns (bool result) {
+            isActive = result;
+        } catch {
+            return 0;
+        }
+        if (!isActive) return 0;
+
+        address vaultAddr;
+        address gaugeAddr;
+        try registry.getVaultForToken(triggeringCoin) returns (address result) {
+            vaultAddr = result;
+        } catch {
+            return 0;
+        }
+        try registry.getGaugeControllerForToken(triggeringCoin) returns (address result) {
+            gaugeAddr = result;
+        } catch {
+            return 0;
+        }
+        if (vaultAddr == address(0) || gaugeAddr == address(0)) return 0;
+
+        IGaugeControllerLottery gaugeController = IGaugeControllerLottery(gaugeAddr);
+        uint256 jackpotShares;
+        try gaugeController.availableJackpotReserve() returns (uint256 result) {
+            jackpotShares = result;
+        } catch {
+            return 0;
+        }
+        if (jackpotShares == 0) return 0;
+
+        uint256 rewardShares = (jackpotShares * payoutBps) / BASIS_POINTS;
+        if (rewardShares == 0) return 0;
+
+        try gaugeController.payJackpot(winner, rewardShares) {
+            totalSharesPaid = rewardShares;
+            totalRewardsPaid += rewardShares;
+            tokenStats[triggeringCoin].rewardsPaid += rewardShares;
+            emit LotteryWon(triggeringCoin, 0, winner, rewardShares, 0);
+            emit CrossChainJackpotPaid(triggeringCoin, winner, rewardShares, 0);
+            emit MultiTokenJackpotWon(triggeringCoin, winner, 1);
+        } catch {
+            emit JackpotPayoutFailed(triggeringCoin, winner, rewardShares);
+            return 0;
+        }
+    }
+
+    function payoutLocalJackpotInner(address triggeringCoin, address winner, uint16 payoutBps)
+        internal
+        returns (uint256 totalSharesPaid)
+    {
+        // R-H05: single-vault mode must not depend on the multi-vault cursor window.
+        // A large registry + scan cap could otherwise skip the triggering coin entirely.
+        if (singleVaultJackpotOnly) {
+            return payTriggeringVaultJackpot(triggeringCoin, winner, payoutBps);
+        }
+
+        // FIX: CLM-04 — registry calls wrapped in try/catch to prevent permanent lock
+        address[] memory allTokens;
+        try registry.getAllTokens() returns (address[] memory result) {
+            allTokens = result;
+        } catch {
+            return 0;
+        }
+
+        uint256 vaultsPaid;
+
+        uint256 registrySize = allTokens.length;
+        if (registrySize == 0) {
+            return 0;
+        }
+
+        // M-06: cap the per-call iteration count so the payout cannot be
+        // bricked by a growing registry. The cap is applied to *active*
+        // tokens actually evaluated, not to raw slot visits, so a long
+        // prefix of inactive entries at the front of registeredTokens (it
+        // is append-only) cannot starve active tokens of payouts.
+        //
+        // To keep the loop bounded in the worst case where every slot is
+        // inactive, we also cap total slot scans at
+        // MAX_JACKPOT_PAYOUT_SLOT_SCANS. If the scan budget is exhausted
+        // before the active cap fills, the cursor advances past the last
+        // slot scanned so subsequent jackpots continue where this one
+        // stopped and eventually reach every active token.
+        uint256 activeCap = registrySize < MAX_JACKPOT_PAYOUT_ITERATIONS
+            ? registrySize
+            : MAX_JACKPOT_PAYOUT_ITERATIONS;
+        uint256 slotCap = registrySize < MAX_JACKPOT_PAYOUT_SLOT_SCANS
+            ? registrySize
+            : MAX_JACKPOT_PAYOUT_SLOT_SCANS;
+        uint256 startIndex = jackpotPayoutCursor % registrySize;
+
+        uint256 activeIterated;
+        uint256 slotsScanned;
+
+        // Pay from every active lane vault within the iteration window.
+        // Loop variable k counts slot visits; activeIterated counts active
+        // tokens whose gauge was actually queried.
+        for (uint256 k = 0; k < slotCap; k++) {
+            if (activeIterated >= activeCap) break;
+
+            uint256 i = (startIndex + k) % registrySize;
+            address token = allTokens[i];
+            slotsScanned = k + 1;
+
+            // Skip inactive tokens
+            // slither-disable-next-line calls-loop
+            bool isActive;
+            try registry.isTokenActive(token) returns (bool result) {
+                isActive = result;
+            } catch {
+                continue;
+            }
+            if (!isActive) continue;
+
+            activeIterated++;
+
+            // Look up per-token contracts
+            // slither-disable-next-line calls-loop
+            address vaultAddr;
+            address gaugeAddr;
+            try registry.getVaultForToken(token) returns (address result) {
+                vaultAddr = result;
+            } catch {
+                continue;
+            }
+            // slither-disable-next-line calls-loop
+            try registry.getGaugeControllerForToken(token) returns (address result) {
+                gaugeAddr = result;
+            } catch {
+                continue;
+            }
+
+            if (vaultAddr == address(0) || gaugeAddr == address(0)) continue;
+
+            IGaugeControllerLottery gaugeController = IGaugeControllerLottery(gaugeAddr);
+
+            // slither-disable-next-line calls-loop
+            uint256 jackpotShares;
+            try gaugeController.availableJackpotReserve() returns (uint256 result) {
+                jackpotShares = result;
+            } catch {
+                continue;
+            }
+
+            if (jackpotShares == 0) continue;
+
+            uint256 rewardShares = (jackpotShares * payoutBps) / BASIS_POINTS;
+
+            if (rewardShares > 0) {
+                // slither-disable-next-line calls-loop
+                // slither-disable-next-line reentrancy-no-eth
+                try gaugeController.payJackpot(winner, rewardShares) {
+                    totalRewardsPaid += rewardShares;
+                    tokenStats[token].rewardsPaid += rewardShares;
+                    // M-12: accumulate ShareOFT units paid (not vault count) for callbacks/return.
+                    totalSharesPaid += rewardShares;
+                    vaultsPaid++;
+
+                    emit LotteryWon(token, 0, winner, rewardShares, 0);
+                    emit CrossChainJackpotPaid(token, winner, rewardShares, 0);
+                } catch {
+                    emit JackpotPayoutFailed(token, winner, rewardShares);
+                }
+            }
+        }
+
+        // Advance the cursor past the last slot actually scanned. Using
+        // unchecked add is safe: the cursor is taken modulo registrySize
+        // on every read.
+        unchecked {
+            jackpotPayoutCursor = startIndex + slotsScanned;
+        }
+
+        // Emit a capped event if either bound actually bit. This lets the
+        // off-chain monitor detect starvation (e.g. many inactive slots
+        // accumulating) and prioritise registry compaction.
+        if (activeIterated < registrySize || slotsScanned < registrySize) {
+            if (activeIterated >= activeCap || slotsScanned >= slotCap) {
+                emit JackpotPayoutCapped(registrySize, startIndex, activeIterated, slotsScanned);
+            }
+        }
+
+        // Emit special event for multi-token win (num vaults paid, not share units).
+        if (vaultsPaid > 0) {
+            emit MultiTokenJackpotWon(triggeringCoin, winner, vaultsPaid);
+        }
+    }
+
     function setSingleVaultJackpotOnly(bool onlyTrigger) external onlyDelegateCall onlyOwner {
         singleVaultJackpotOnly = onlyTrigger;
         emit SingleVaultJackpotOnlyUpdated(onlyTrigger);
