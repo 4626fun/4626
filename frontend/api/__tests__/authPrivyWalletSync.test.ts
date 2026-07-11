@@ -423,12 +423,10 @@ describe('auth privy wallet sync', () => {
     const res = createMockRes()
     await handler(req, res)
 
-    expect(createWalletsMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'did:privy:test-user',
-        createEthereumWallet: true,
-      }),
-    )
+    expect(createWalletsMock).toHaveBeenCalledWith({
+      userId: 'did:privy:test-user',
+      wallets: [{ chainType: 'ethereum', policyIds: [] }],
+    })
     expect(walletApiCreateMock).toHaveBeenCalledWith(
       expect.objectContaining({
         chainType: 'ethereum',
@@ -533,13 +531,11 @@ describe('auth privy wallet sync', () => {
     const res = createMockRes()
     await handler(req, res)
 
-    expect(createWalletsMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'did:privy:test-user',
-        createEthereumWallet: true,
-        createEthereumSmartWallet: false,
-      }),
-    )
+    expect(createWalletsMock).toHaveBeenCalledWith({
+      userId: 'did:privy:test-user',
+      wallets: [{ chainType: 'ethereum', policyIds: [] }],
+    })
+    expect(walletApiCreateMock).not.toHaveBeenCalled()
     expect(res.statusCode).toBe(200)
     expect(res.body?.data?.address).toBe('0x00000000000000000000000000000000000000cc')
   })

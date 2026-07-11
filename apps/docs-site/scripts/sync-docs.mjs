@@ -805,6 +805,23 @@ async function syncBrandAssets() {
       stats.warnings.push(`Brand asset ${brandFile}: ${message}`);
     }
   }
+
+  // Root /favicon.ico — many clients (Cursor link chips, Google favicon API, browsers)
+  // request this path by convention. Without it, docs.4626.fun/favicon.ico 404s and
+  // link previews show a wrong/default icon instead of the 4626 mark.
+  const rootFaviconSource = path.join(REPO_ROOT, 'frontend/public/favicon.ico');
+  const rootFaviconDest = path.join(STATIC_DIR, 'favicon.ico');
+  if (await sourceExists(rootFaviconSource)) {
+    try {
+      await fs.copyFile(rootFaviconSource, rootFaviconDest);
+      console.log('     - favicon.ico (site root, from frontend/public)');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      stats.warnings.push(`Brand asset favicon.ico: ${message}`);
+    }
+  } else {
+    stats.warnings.push('Brand assets: missing frontend/public/favicon.ico for site-root copy');
+  }
 }
 
 /**

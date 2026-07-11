@@ -3,14 +3,14 @@ title: Security & audits
 sidebar_label: Overview
 sidebar_position: 1
 hide_table_of_contents: true
-last_updated: '2026-06-29'
+last_updated: '2026-07-11'
 audience:
   - developers
   - protocols
   - operators
 stage: use
 owner: docs-team
-last_reviewed: '2026-06-29'
+last_reviewed: '2026-07-11'
 status: current
 ---
 
@@ -127,6 +127,11 @@ flowchart LR
     <span class="home-card__title">Full technical report</span>
     <span class="home-card__desc">Architecture map, complete finding register (C/H/M/L), baseline validation, test gaps, and remediation guidance.</span>
   </a>
+  <a class="home-card audit-card" href="/audits/aristotle">
+    <span class="home-card__tag">Lean / Aristotle</span>
+    <span class="home-card__title">Formal verification</span>
+    <span class="home-card__desc">Machine-checked lottery, boost, fee-split, and payout lemmas — including the next five Lean proof targets.</span>
+  </a>
   <a class="home-card audit-card" href="/audits/fable/key-sessions">
     <span class="home-card__tag">Appendix A</span>
     <span class="home-card__title">Source sessions</span>
@@ -140,6 +145,8 @@ flowchart LR
 </div>
 
 <div class="home-links">
+  <a class="home-links__item" href="/audits/aristotle/lean-proof-targets">Lean proof targets</a>
+  <span class="home-links__sep" aria-hidden="true">·</span>
   <a class="home-links__item" href="/audits/fable/transcripts">Transcript archive</a>
   <span class="home-links__sep" aria-hidden="true">·</span>
   <a class="home-links__item" href="/audits/fable/sessions-index">Session chronology</a>

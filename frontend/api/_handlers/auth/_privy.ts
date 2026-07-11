@@ -148,10 +148,12 @@ async function ensurePrivyUserEmbeddedWallet(
   try {
     const created = await client.createWallets({
       userId,
-      createEthereumWallet: true,
-      createSolanaWallet: false,
-      createEthereumSmartWallet: false,
-      numberOfEthereumWalletsToCreate: 1,
+      wallets: [
+        {
+          chainType: 'ethereum',
+          policyIds: [],
+        },
+      ],
     })
     const nextClassified = classifyLinkedAccounts(created as any)
     logPrivyWalletProvision({

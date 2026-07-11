@@ -11,7 +11,20 @@ const enableGitLastUpdate = process.env.DOCS_USE_GIT_LAST_UPDATE === '1';
 const config: Config = {
   title: '4626.fun Docs',
   tagline: '4626 creator vault documentation',
-  favicon: 'brand/favicon.svg',
+  // Prefer /favicon.ico so default discovery (Cursor chips, Google, browsers) hits the
+  // 4626 mark. SVG remains available at /brand/favicon.svg for sharp UI surfaces.
+  favicon: 'favicon.ico',
+
+  headTags: [
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'icon',
+        href: '/brand/favicon.svg',
+        type: 'image/svg+xml',
+      },
+    },
+  ],
 
   url: 'https://docs.4626.fun',
   baseUrl: '/',
@@ -186,6 +199,7 @@ const config: Config = {
             {label: 'June 2026 review', to: '/audits/fable'},
             {label: 'Executive summary', to: '/audits/fable/findings-summary'},
             {label: 'Full report', to: '/audits/fable/full-repo-review-2026-06'},
+            {label: 'Formal verification', to: '/audits/aristotle'},
             {label: 'Impairment disclosures', to: '/reference/impairment-v1-disclosures'},
           ],
         },

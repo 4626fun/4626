@@ -30,14 +30,16 @@ This is a **shared utility** deployed once per chain that serves ALL Creator Coi
 
 ## Win Probability
 
-**Formula**: $1 traded = 0.0004% instant win chance
+**Formula**: `winChancePPM = swapValueUSD / 250_000` (capped), i.e. **$1 traded ≈ 0.0004%** instant win chance before boosts.
 
 | Trade Size | Win Chance |
 |------------|------------|
 | $1 | 0.0004% |
 | $100 | 0.04% |
 | $1,000 | 0.4% |
-| $10,000 | 4% |
+| $10,000 | 4% (default pre-boost ceiling) |
+
+Personal Curve boost (up to **2.5×**), optional gauge probability, and `maxWinChance` caps apply after the base formula. Machine-checked backlog: [Lean proof targets](/audits/aristotle/lean-proof-targets).
 
 ## Key Functions
 

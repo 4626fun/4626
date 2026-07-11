@@ -15,7 +15,6 @@ const sidebars: SidebarsConfig = {
       items: [
         'getting-started/index',
         'overview/how-it-works',
-        'overview/agent-vault',
         'overview/solana-share-mesh',
       ],
     },
@@ -44,6 +43,8 @@ const sidebars: SidebarsConfig = {
         'audits/fable/key-sessions',
         'audits/fable/sessions-index',
         'audits/fable/transcripts/index',
+        'audits/aristotle/index',
+        'audits/aristotle/lean-proof-targets',
       ],
     },
     {

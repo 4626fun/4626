@@ -20,12 +20,14 @@ The GaugeController:
 ## Fee Split Configuration
 
 ```solidity
-// Default configuration (in basis points, 10000 = 100%)
-uint256 public burnShareBps = 2139;      // 21.39%
-uint256 public lotteryShareBps = 6900;   // 69%
-uint256 public creatorShareBps = 0;      // 0%
-uint256 public protocolShareBps = 961;   // 9.61%
+// Default configuration (in basis points, 10000 = 100%) — matches onchain constants
+uint256 public constant burnShareBps = 961;       // 9.61% → vault-share burn (PPS)
+uint256 public constant lotteryShareBps = 6900;   // 69% → jackpot reserve (ShareOFT)
+uint256 public constant creatorShareBps = 0;      // 0% → creator treasury lane (off)
+uint256 public constant protocolShareBps = 2139;  // 21.39% → voter/protocol branch
 ```
+
+Machine-checked conservation target: [Lean proof targets §4](/audits/aristotle/lean-proof-targets#4-gauge-fee-split-conservation).
 
 ## Key Functions
 
@@ -110,10 +112,10 @@ distribute() triggered (threshold or manual)
 Unwrap OFT → vault shares
    ↓
 Split according to configuration:
-   - 69% → jackpotReserve
-   - 21.39% → burn (increases PPS)
-   - creator% → creatorTreasury (if enabled)
-   - protocol/voter branch → voterRewardsDistributor, protocol treasury, or fallback (config-dependent)
+   - 69% → jackpotReserve (ShareOFT ■)
+   - 9.61% → burn (unwrap → vault shares burned; PPS ↑)
+   - 21.39% → voter/protocol branch (ve rewards / treasury / jackpot fallback)
+   - creator% → creatorTreasury (if enabled; default 0%)
 ```
 
 ## Events

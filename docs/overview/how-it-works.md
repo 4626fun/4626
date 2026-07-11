@@ -53,7 +53,7 @@ A creator coin alone does not provide:
 - **Creator revenue** — Zora `payoutRecipient` earnings (router mode) accrue holder value via vault PPS.
 - **Jackpot** — Gauge **custodies** reserves; [LotteryManager4626](/contracts/utilities/lottery-manager) **pays** winners on qualifying **buys**.
 
-Lane names: [Glossary](/reference/glossary).
+Lane names: [Glossary](/reference/glossary). Formal math backlog (win chance, VRF fairness, fee split, payout fraction): [Lean proof targets](/audits/aristotle/lean-proof-targets).
 
 ## Launch sequence
 

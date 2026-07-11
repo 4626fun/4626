@@ -41,4 +41,6 @@ export const CURATED_PUBLISH_GLOBS = [
   'audits/fable/key-sessions.md',
   'audits/fable/sessions-index.md',
   'audits/fable/transcripts/**',
+  'audits/aristotle/index.md',
+  'audits/aristotle/lean-proof-targets.md',
 ];
