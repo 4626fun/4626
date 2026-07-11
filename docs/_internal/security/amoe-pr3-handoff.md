@@ -35,8 +35,9 @@ We initially considered a per-source PPM cap inside `_applyBoost` (e.g.
 75_000 PPM per source). Investigation showed the honest worst-case
 personal contribution at $10K + full coverage + 4yr lock is ≈ 129_000 PPM
 — above the proposed cap. A per-source cap would silently truncate honest
-users. Sources already self-cap (`MAX_VE_BOOST = 25_000 BPS`,
-`maxProbBoost = 690 BPS`, `MAX_PER_VAULT_PPM = 35_000`) and
+users. Sources already self-cap (Curve workingFactor `MAX_VE_BOOST = 10_000`
+BPS i.e. working/l ≤ 1.0; quoted boost vs tokenless ≤ 2.5×;
+`getTotalProbabilityBoost` ≡ 0; `MAX_PER_VAULT_PPM = 35_000`) and
 `lotteryConfig.maxWinChance = 150_000` is the absolute backstop. Per-source
 cap is redundant and risky; not worth the bytecode and audit surface.
 

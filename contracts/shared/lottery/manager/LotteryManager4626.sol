@@ -1131,31 +1131,16 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     {
         boostedWinChance = baseWinChance;
 
-        // STEP 1: Curve personal mult (position-aware). Requires covered Share USD.
+        // STEP 1: Curve workingFactor (position-aware). Requires covered Share USD.
+        // Managers must implement calculateBoostForPosition (DeployRewardsEcosystem wiring).
         if (address(boostManager) != address(0) && shareBalanceAmount > 0 && swapAmountUSD > 0) {
             uint256 totalShareUSD = _totalShareUsd(token, shareBalanceToken);
             try boostManager.calculateBoostForPosition(user, shareBalanceAmount, swapAmountUSD, totalShareUSD)
             returns (uint256 boostBPS) {
-                // Curve factor is the full mult (incl. tokenless 0.4×). Apply when manager
-                // returns a value; zero-position managers return 1.0× (baseBoost).
                 if (boostBPS > 0) {
                     boostedWinChance = FullMath.mulDiv(baseWinChance, boostBPS, BASIS_POINTS);
                 }
-            } catch {
-                // Legacy managers without ForPosition: old mult × coverage scale.
-                try boostManager.getCoverageBps(
-                    user, address(registry), token, shareBalanceToken, shareBalanceAmount, swapAmountUSD
-                ) returns (uint256 coverageBps) {
-                    try boostManager.calculateBoost(user) returns (uint256 boostBPS) {
-                        if (boostBPS > BASIS_POINTS && coverageBps > 0) {
-                            uint256 extraMultiplierBps = boostBPS - BASIS_POINTS;
-                            uint256 effectiveMultiplierBps =
-                                BASIS_POINTS + FullMath.mulDiv(extraMultiplierBps, coverageBps, BASIS_POINTS);
-                            boostedWinChance = FullMath.mulDiv(baseWinChance, effectiveMultiplierBps, BASIS_POINTS);
-                        }
-                    } catch {}
-                } catch {}
-            }
+            } catch {}
         }
 
         // STEP 2: Add vault gauge boost (vote-directed budget).
@@ -1177,12 +1162,11 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     /// @dev Value full ShareOFT supply in USD for Curve pool size L. Zero if unreadable.
     function _totalShareUsd(address token, address shareBalanceToken) internal view returns (uint256 totalShareUSD) {
         if (shareBalanceToken == address(0) || shareBalanceToken.code.length == 0) return 0;
-        uint256 supply;
-        try IERC20(shareBalanceToken).totalSupply() returns (uint256 s) {
-            supply = s;
-        } catch {
-            return 0;
-        }
+        // Low-level staticcall keeps size down vs try/catch + nested legacy paths.
+        (bool ok, bytes memory data) =
+            shareBalanceToken.staticcall(abi.encodeWithSelector(IERC20.totalSupply.selector));
+        if (!ok || data.length < 32) return 0;
+        uint256 supply = abi.decode(data, (uint256));
         if (supply == 0) return 0;
         (totalShareUSD,,) = _calculateTokenUSD(token, shareBalanceToken, supply);
     }
@@ -1681,6 +1665,10 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         uint256 amountIn,
         uint256 reportedEligible
     ) internal view returns (uint256 coverageBal) {
+        // No code (test mocks / pure remote addresses): trust reportedEligible only, no live cap.
+        if (shareOFT.code.length == 0) {
+            return reportedEligible;
+        }
         uint256 live = IERC20(shareOFT).balanceOf(buyer);
         uint256 maxPreBuy = live > amountIn ? live - amountIn : 0;
         coverageBal = reportedEligible;
