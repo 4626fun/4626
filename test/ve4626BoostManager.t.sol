@@ -43,8 +43,7 @@ contract MockVe4626BoostMath {
     }
 }
 
-/// @notice Curve: working = min(l, 0.4*l + 0.6*L*(ve/Ve)); workingFactor ∈ [0.4, 1.0]
-///         quoted boost = workingFactor/0.4 ∈ [1.0, 2.5]; max when ve_share ≥ lp_share
+/// @notice Curve working = min(l, 0.4l+0.6L·ve/Ve); returns quotedBoost = working/(0.4l) BPS ∈ [10k, 25k]
 contract Ve4626BoostManagerMathTest is Test {
     MockVe4626BoostMath internal ve;
     ve4626BoostManager internal manager;
@@ -55,81 +54,78 @@ contract Ve4626BoostManagerMathTest is Test {
     uint256 internal constant L = 1_000e18; // pool USD
 
     function setUp() public {
-        vm.roll(302_401); // Past MIN_HOLDING_BLOCKS so boost calculation proceeds
+        vm.roll(302_401);
         ve = new MockVe4626BoostMath();
         manager = new ve4626BoostManager(address(ve), owner);
         vm.prank(owner);
         manager.setMinVotingPower(0);
     }
 
-    function testCurve_Tokenless_IsPointFour() public {
+    function testCurve_Tokenless_IsNeutralOneX() public {
         ve.setVotingPower(user, 0);
         ve.setTotalVotingPower(100 ether);
 
+        // Covered, no ve → quoted boost 1.0× (not 0.4×)
         uint256 boost = manager.calculateBoostForPosition(user, 10e18, 10e18, L);
-        assertEq(boost, 4_000);
+        assertEq(boost, 10_000);
     }
 
     function testCurve_ZeroPosition_ReturnsNeutral() public {
         ve.setVotingPower(user, 100 ether);
         ve.setTotalVotingPower(100 ether);
-        // l = 0 → personal layer inactive (baseBoost 1.0, leaves LM base odds alone)
         assertEq(manager.calculateBoostForPosition(user, 0, 10e18, L), 10_000);
         assertEq(manager.calculateBoostForPosition(user, 10e18, 0, L), 10_000);
     }
 
     function testCurve_FullBoost_WhenVeMatchesLpShare() public {
-        // ve/Ve >= l/L ⇒ working/l = 0.4 + 0.6 = 1.0
-        // l/L = 1% ⇒ need ve/Ve >= 1%
+        // ve/Ve >= l/L ⇒ working = l ⇒ quoted = 2.5×
         ve.setVotingPower(user, 10 ether);
         ve.setTotalVotingPower(1_000 ether);
 
         uint256 l = 10e18;
         uint256 boost = manager.calculateBoostForPosition(user, l, l, L);
-        assertEq(boost, 10_000);
+        assertEq(boost, 25_000);
         assertEq(boost, manager.maxBoost());
     }
 
     function testCurve_OnePercentLp_WithHalfPercentVe_IsPartial() public {
-        // l/L = 1%, ve/Ve = 0.5%
-        // working/l = 0.4 + 0.6 * (0.005/0.01) = 0.4 + 0.3 = 0.7
+        // working/l = 0.7 ⇒ quoted = 0.7/0.4 = 1.75 ⇒ 17_500
         ve.setVotingPower(user, 5 ether);
         ve.setTotalVotingPower(1_000 ether);
 
         uint256 l = 10e18;
         uint256 boost = manager.calculateBoostForPosition(user, l, l, L);
-        assertEq(boost, 7_000);
-        assertGt(boost, 4_000);
-        assertLt(boost, 10_000);
+        assertEq(boost, 17_500);
+        assertGt(boost, 10_000);
+        assertLt(boost, 25_000);
     }
 
-    function testCurve_SmallLp_LargeVe_CapsAtOne() public {
-        // Would exceed 1.0 without cap → full 1.0 (not 2.5)
+    function testCurve_SmallLp_LargeVe_CapsAtTwoPointFive() public {
         ve.setVotingPower(user, 50 ether);
         ve.setTotalVotingPower(100 ether);
 
         uint256 l = 1e18;
         uint256 boost = manager.calculateBoostForPosition(user, l, l, L);
-        assertEq(boost, 10_000);
+        assertEq(boost, 25_000);
     }
 
-    function testCurve_CoverageCaps_LAtSwap() public {
+    function testCurve_CoverageCaps_LAtSwap_TokenlessNeutral() public {
         ve.setVotingPower(user, 0);
         ve.setTotalVotingPower(1);
         uint256 boost = manager.calculateBoostForPosition(user, 1_000e18, 10e18, L);
-        assertEq(boost, 4_000);
+        assertEq(boost, 10_000);
     }
 
     function testCoverage_UsesCreatorShareUsdOnly() public view {
         uint256 coverage =
             manager.getCoverageBps(user, address(0), address(0), address(0), 250_000_000, 1_000_000_000);
-        assertEq(coverage, 2_500); // 25%
+        assertEq(coverage, 2_500);
     }
 
     function testCoverage_CapsAtFullCoverage() public view {
         uint256 coverage =
             manager.getCoverageBps(user, address(0), address(0), address(0), 2_000_000_000, 1_000_000_000);
-        assertEq(coverage, 10_000); // 100%
+        assertEq(coverage, 10_000);
     }
 
     function testCoverage_ZeroWhenMissingInputs() public view {
@@ -140,9 +136,9 @@ contract Ve4626BoostManagerMathTest is Test {
     function testLegacy_CalculateBoost_FullIfEligibleVe() public {
         ve.setVotingPower(user, 1 ether);
         ve.setTotalVotingPower(100 ether);
-        assertEq(manager.calculateBoost(user), 10_000);
+        assertEq(manager.calculateBoost(user), 25_000);
 
         ve.setVotingPower(user, 0);
-        assertEq(manager.calculateBoost(user), 4_000);
+        assertEq(manager.calculateBoost(user), 10_000);
     }
 }

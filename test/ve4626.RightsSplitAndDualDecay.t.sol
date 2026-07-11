@@ -192,28 +192,28 @@ contract Ve4626RightsSplitAndDualDecayTest is Test {
         _lockMax(user, LOCK_AMOUNT);
         // Past flash-hold gate (lock updates lastBalanceUpdateBlock)
         vm.roll(block.number + 302_401);
-        // No veChance claimed → tokenless (0.4×) on legacy helper
-        assertEq(boostMgr.calculateBoost(user), 4_000);
+        // No veChance → tokenless-neutral 1.0× (quoted)
+        assertEq(boostMgr.calculateBoost(user), 10_000);
         vm.prank(user);
         utility.claimChance(LOCK_AMOUNT);
-        // Eligible chance → full 1.0× attainable
-        assertEq(boostMgr.calculateBoost(user), 10_000);
+        // Eligible chance → full 2.5× quoted attainable
+        assertEq(boostMgr.calculateBoost(user), 25_000);
     }
 
-    /// @notice ForPosition: ve share vs LP share of creator pool; cap at 1.0×.
+    /// @notice ForPosition: quoted boost 1.0×–2.5×; full when ve share ≥ LP share.
     function test_boostManager_curvePosition_matchesWorkingBalance() public {
         _lockMax(user, LOCK_AMOUNT);
         vm.prank(user);
         utility.claimChance(LOCK_AMOUNT);
         vm.roll(block.number + 302_401);
 
-        // Sole chance holder: ve/Ve = 1. l/L = 1% → working/l >> 1 → cap 1.0
+        // Sole chance holder: ve/Ve = 1. l/L = 1% → working = l → quoted 2.5×
         uint256 l = 1e18;
         uint256 L = 100e18;
-        assertEq(boostMgr.calculateBoostForPosition(user, l, l, L), 10_000);
+        assertEq(boostMgr.calculateBoostForPosition(user, l, l, L), 25_000);
 
-        // No chance → tokenless 0.4×
-        assertEq(boostMgr.calculateBoostForPosition(user2, l, l, L), 4_000);
+        // No chance → tokenless-neutral 1.0×
+        assertEq(boostMgr.calculateBoostForPosition(user2, l, l, L), 10_000);
     }
 
     /// @notice P1: effective chance used inside ve term after dual-decay.
@@ -236,9 +236,9 @@ contract Ve4626RightsSplitAndDualDecayTest is Test {
         uint256 l = 1e18;
         uint256 Lpool = 10e18; // l/L = 10%
         uint256 boost = boostMgr.calculateBoostForPosition(user, l, l, Lpool);
-        assertGe(boost, 4_000);
-        assertLe(boost, 10_000);
-        assertGt(boost, 4_000, "ve term should lift above tokenless");
+        assertGe(boost, 10_000);
+        assertLe(boost, 25_000);
+        assertGt(boost, 10_000, "ve term should lift above tokenless-neutral");
     }
 
     function test_boostManager_getTotalProbabilityBoost_alwaysZero() public view {

@@ -1111,9 +1111,9 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
 
     /**
      * @notice Apply ve(3,3) boosts to base win probability
-     * @dev Personal: Curve workingFactor (working/l ∈ [0.4,1.0]) via
-     *      `calculateBoostForPosition` — multiplies size-based base odds.
-     *      Quoted Curve boost vs tokenless is workingFactor/0.4 ∈ [1,2.5].
+     * @dev Personal: Curve quoted boost BPS ∈ [10_000, 25_000] via
+     *      `calculateBoostForPosition` (= working/(0.4*l); working capped at l).
+     *      Tokenless-neutral 1.0×; full 2.5× when ve_share ≥ lp_share.
      *      l = min(shareUSD, swapUSD). Gauge is separate additive PPM.
      */
     function _applyBoost(

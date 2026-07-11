@@ -27,7 +27,7 @@
 | Lanes | **vote** / **chance** (not credit/unit/power) |
 | Token type | **`ve4626UtilityToken`** non-transferable ERC-20 — **not B20** |
 | Total power | Curve-style dual-decay `getTotalVotingPower()` |
-| Lottery boost | Curve workingFactor `[0.4,1.0]`; quoted boost `[1,2.5]` vs tokenless; additive PPM ≡ 0 |
+| Lottery boost | Curve quoted boost BPS `[10k,25k]` (1.0×–2.5× size-base); additive PPM ≡ 0 |
 | Pool mapping | `l`=covered Share USD, `L`=creator Share supply USD, `ve`=effectiveChance |
 | Decay vs claims | `sync` burns excess (chance first, then vote) |
 | Stale utilities (P1) | `previewUtilities` / `effective*`; gauge `vote()` syncs; boost uses `effectiveChanceOf` |
@@ -43,7 +43,7 @@
 | `contracts/shared/governance/ve4626.sol` | Lock + dual-decay |
 | `contracts/shared/governance/ve4626Utility.sol` | claim / forfeit / sync / effective* |
 | `contracts/shared/governance/ve4626UtilityToken.sol` | Non-transferable ERC-20 |
-| `contracts/shared/governance/ve4626BoostManager.sol` | `calculateBoostForPosition` 0.4–1.0; `setUtility` → effective chance |
+| `contracts/shared/governance/ve4626BoostManager.sol` | `calculateBoostForPosition` quoted BPS 10k–25k; `setUtility` |
 | `contracts/shared/governance/ve4626GaugeVoting.sol` | `setUtility` → sync + effective vote + freeze |
 | `LotteryManager4626._applyBoost` | No additive lock PPM |
 | `script/DeployRewardsEcosystem.s.sol` | Deploys + `setUtility` on voting + boost |
@@ -56,7 +56,7 @@
 | Item | Status |
 |------|--------|
 | Formula `working = min(l, 0.4·l + 0.6·L·ve/Ve)` | Implemented (Curve-correct cap at **l**) |
-| workingFactor ∈ [0.4,1.0]; quoted boost ∈ [1,2.5] vs tokenless | Documented; max at ve_share ≥ lp_share |
+| Return quotedBoost = working/(0.4·l) BPS [10k,25k] | C5: tokenless-neutral; full 2.5× at ve≥lp share |
 | ve = `effectiveChanceOf` when utility wired | Implemented |
 | LM uses `calculateBoostForPosition` + Share supply as `L` | Implemented |
 | Additive lock PPM | Removed (`getTotalProbabilityBoost` ≡ 0) |

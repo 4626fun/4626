@@ -62,7 +62,7 @@ ve4626Utility
 | `ve4626` | Lock **■4626** + dual-decay total power |
 | `ve4626Utility` | claimVote / claimChance / forfeit / sync / effective* |
 | `ve4626UtilityToken` | Non-transferable ERC-20 (not B20) |
-| `ve4626BoostManager` | Curve workingFactor `working/l` ∈ **[0.4, 1.0]** (quoted boost 1–2.5× vs tokenless) |
+| `ve4626BoostManager` | Curve quoted boost BPS **[10_000, 25_000]** (`working/(0.4·l)`; working ≤ l) |
 | `ve4626GaugeVoting` | `vote()` → `utility.sync` + `effectiveVoteOf` (preferred) or `voteToken` / ve fallback |
 | `ve4626VoterRewardsDistributor` | Fee slice to voters |
 
@@ -82,9 +82,9 @@ Curve LiquidityGauge (TOKENLESS = 40%):
 
 ```text
 lim     = 0.4·l + 0.6·L·(ve/Ve)
-working = min(l, lim)                    # cap is l, NOT 2.5·l
-workingFactor = working/l ∈ [0.4, 1.0]   # what we return / apply to base odds
-quotedBoost   = working/(0.4·l) ∈ [1.0, 2.5]   # marketing "up to 2.5×"
+working = min(l, lim)                         # cap is l, NOT 2.5·l
+quotedBoost = working/(0.4·l) ∈ [1.0, 2.5]   # returned as BPS 10_000–25_000
+odds    = baseWinChance × quotedBoost / 10_000
 ```
 
 | Symbol | Meaning |
@@ -92,12 +92,11 @@ quotedBoost   = working/(0.4·l) ∈ [1.0, 2.5]   # marketing "up to 2.5×"
 | `l` | Covered skin = `min(creatorShareUSD, swapUSD)` |
 | `L` | Creator ShareOFT **total supply** USD |
 | `ve` | `effectiveChanceOf` (veChance) |
-| Max 2.5× quoted | when **ve share ≥ LP share** (`r ≥ 1`) |
-| Tokenless | workingFactor **0.4** = quoted boost **1.0×** |
+| Max 2.5× | when **ve share ≥ LP share** (`r ≥ 1`) |
+| Tokenless (covered, no ve) | **1.0×** size-base (neutral — not 0.4× penalty) |
+| No covered position | personal off (`baseBoost` 1.0×) |
 
 Do **not** cap working at `2.5·l` (that would be 6.25× vs tokenless — not Curve).
-
-No covered position → personal layer **off** (base trade odds unchanged).
 
 ## One-liner
 

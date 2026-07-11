@@ -152,14 +152,13 @@ Personal + gauge layers (single envelope — **no** lock-duration additive PPM):
 // Base from trade size
 basePPM = min(swapUSD / 250_000, baseCeilingPPM)
 
-// Personal (Curve workingFactor; only if boostManager + covered Share > 0):
+// Personal (Curve quoted boost; only if boostManager + covered Share > 0):
 //   l = min(creatorShareUSD, swapUSD);  L = Share supply USD;  ve = effectiveChance
-//   working = min(l, 0.4·l + 0.6·L·(ve/Ve))     // cap at l (Curve)
-//   workingFactor = working/l ∈ [0.4, 1.0]       // BPS 4000–10000
-//   quotedBoost vs tokenless = workingFactor/0.4 ∈ [1.0, 2.5]
-//   max quoted 2.5× when ve_share ≥ lp_share
+//   working = min(l, 0.4·l + 0.6·L·(ve/Ve))
+//   quotedBoost = working/(0.4·l) ∈ [1.0, 2.5]   // BPS 10_000–25_000
+//   max 2.5× when ve_share ≥ lp_share; tokenless covered = 1.0× (neutral)
 //   (no position → personal off; basePPM unchanged)
-personalMult = calculateBoostForPosition(...)   // workingFactor BPS
+personalMult = calculateBoostForPosition(...)   // quoted boost BPS
 boostedPPM   = basePPM × personalMult / 10_000
 
 // Gauge (if vaultGaugeVoting set): + size-scaled vault PPM
