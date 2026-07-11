@@ -69,7 +69,7 @@ async function tryRead<T>(label: string, fn: () => Promise<T>): Promise<{ ok: tr
 async function main() {
   const rpc = process.env.BASE_RPC_URL
   if (!rpc) throw new Error('BASE_RPC_URL required')
-  const lm = getAddress((process.env.LOTTERY_MANAGER || '0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1') as Address)
+  const lm = getAddress((process.env.LOTTERY_MANAGER || '0xB68F359e01626Ec5d15C624037311C70DacAba43') as Address)
   const client = createPublicClient({ chain: base, transport: http(rpc) })
 
   const read = (functionName: string) =>

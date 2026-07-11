@@ -112,7 +112,7 @@ export function normalizeDeploymentBatcherAddress(
 export const BASE_DEFAULTS = {
   // Shared infrastructure — v1.18.0 greenfield cutover addresses.
   registry: addr('Db8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0'),
-  lotteryManager: addr('bE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1'),
+  lotteryManager: addr('B68F359e01626Ec5d15C624037311C70DacAba43'),
   vrfConsumer: addr('0b41AD9Eb06EE14C360E1e3D16Af63F5a172Ec36'),
   // No live global PayoutRouterFactory is part of the current deploy flow.
   // CreatorPayoutRouter is deployed per creator through DeploymentBatcher; keep this

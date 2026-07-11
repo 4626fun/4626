@@ -9,7 +9,7 @@ Canonical deployed contract addresses for 4626 on Base mainnet (**v1.18.0-greenf
 
 > **Post-broadcast:** on-chain cutover complete 2026-07-08. Release packet: [`v1.18.0-greenfield.md`](../_internal/deployment-releases-legacy/v1.18.0-greenfield.md). Handoff: `tmp/base-v1.18.0-handoff.env`.
 
-> **Cutover complete (2026-07-08):** treasury Safe wiring, AMOE router `0x18D180…` on manager `0xbE87AD…`, bytecode store seeded, Vercel production/development env synced, legacy v1.16.1 manager AMOE relayer kill-switched. Preview env vars remain dashboard-only (Vercel CLI skips preview targets).
+> **Cutover complete (2026-07-08):** treasury Safe wiring, AMOE router `0x18D180…` on manager (updated **2026-07-11** to remediation LM `0xB68F359e…`), bytecode store seeded, Vercel production/development env synced, legacy v1.16.1 manager AMOE relayer kill-switched. Preview env vars remain dashboard-only (Vercel CLI skips preview targets).
 
 > **Abandoned:** v1.17.0 partial broadcast (orphan infra only). Handoff: `tmp/base-v1.17.0-handoff.env`.
 
@@ -28,7 +28,7 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 | Registry4626 | `0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0` |
 | OVaultFactory4626 | `0x70d0D2411D362BA50821389383Fa6B829d736232` |
 | VaultActivationBatcher | `0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3` |
-| LotteryManager4626 | `0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1` |
+| LotteryManager4626 | `0xB68F359e01626Ec5d15C624037311C70DacAba43` |
 | VRFConsumer4626 | `0x0b41AD9Eb06EE14C360E1e3D16Af63F5a172Ec36` |
 | SolanaBridgeAdapter | `0x9A61814082A26192DD9Cb201b44058506685Be60` |
 | UniversalBytecodeStoreV2 | `0xfa3e3b466635DAff910057f18749B93d56F9DE50` |
@@ -74,9 +74,10 @@ Do **not** set `PROTOCOL_AUTOMATION_SAFE` to the treasury address. Phase 3 deplo
 
 | Contract / role | Address | Notes |
 |-----------------|---------|-------|
-| `LotteryAmoeRouter` (v3, PLONK + 9 public inputs) | `0x18D1806cfe044de1eb4652ab30Bf6937f8dfc0A7` | **Live v1.18.0 router** wired to manager `0xbE87AD…`. |
+| `LotteryAmoeRouter` (v3, PLONK + 9 public inputs) | `0x18D1806cfe044de1eb4652ab30Bf6937f8dfc0A7` | **Live v1.18.0 router** wired to manager `0xB68F359e…`. |
 | `LotteryAmoeRouter` (v3, legacy v1.16.1) | `0x066e11d795656A2A980585a414BC0fD6BB12e057` | Deprecated — do not point Vercel here after v1.18.0 cutover. |
-| `LotteryManager4626` (v1.18.0) | `0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1` | Canonical manager on Registry4626 `0xDb8570…`. |
+| `LotteryManager4626` (v1.18.0 remediation) | `0xB68F359e01626Ec5d15C624037311C70DacAba43` | Canonical manager on Registry4626 `0xDb8570…` (CREATE2 2026-07-11; PricingLib + single-vault + deferred VRF). |
+| `LotteryManager4626` (v1.18.0 prior) | `0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1` | Superseded 2026-07-11; `isActive=false`. |
 | `LotteryManager4626` (v1.16.1) | `0xD62a8a2F4c25587FA80ED5782b50Af6654122b0b` | Deprecated manager on prior registry stack. |
 | Legacy `LotteryAmoeRouter` | `0xc57aedc38eba3edfa116f92b3fc427af7eb06b0a` | **Deprecated.** Was wired to v1.11 manager `0x04CADE…`; do not point Vercel here. |
 | Legacy manager (v1.11) | `0x04CADE6FDf564A5005FF80930d8e8784cb1A7Cf8` | Pre–v1.16.1. Kill-switch relayer after cutover. |
@@ -89,7 +90,7 @@ Do **not** set `PROTOCOL_AUTOMATION_SAFE` to the treasury address. Phase 3 deplo
 2. `./script/wire-amoe-router-v1161.sh` — `router.setManager(0xbE87AD…)`, `manager.setAuthorizedAmoeRelayer(<new router>)`, publishers → protocol CSW (`0x793c…`).
 3. Set `LOTTERY_AMOE_ROUTER=<new router>` on Vercel (`production`, `preview`, `development`) and redeploy.
 4. Republish allowlist + points-ledger Merkle roots on the new router (`/api/v1/lottery/amoe/publish-cron` or manual ops). Roots are **one-shot per epoch** on each router address.
-5. Confirm signed AMOE messages embed `Lottery Manager: 0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1` (nonce API reads live `LOTTERY_MANAGER` env).
+5. Confirm signed AMOE messages embed `Lottery Manager: 0xB68F359e01626Ec5d15C624037311C70DacAba43` (nonce API reads live `LOTTERY_MANAGER` env).
 
 ## Environment cutover (v1.18.0-greenfield)
 
@@ -100,7 +101,7 @@ After an infra epoch deploy, update **local `.env`**, **Vercel** (`production`, 
 | `REGISTRY_4626` | `VITE_REGISTRY` | `0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0` |
 | `OVAULT_FACTORY` | `VITE_FACTORY` | `0x70d0D2411D362BA50821389383Fa6B829d736232` |
 | `VAULT_ACTIVATION_BATCHER` | `VITE_VAULT_ACTIVATION_BATCHER` | `0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3` |
-| `LOTTERY_MANAGER` | `VITE_LOTTERY_MANAGER` | `0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1` |
+| `LOTTERY_MANAGER` | `VITE_LOTTERY_MANAGER` | `0xB68F359e01626Ec5d15C624037311C70DacAba43` |
 | `VRF_CONSUMER` | `VITE_VRF_CONSUMER` | `0x0b41AD9Eb06EE14C360E1e3D16Af63F5a172Ec36` |
 | `UNIVERSAL_BYTECODE_STORE` | `VITE_UNIVERSAL_BYTECODE_STORE` | `0xfa3e3b466635DAff910057f18749B93d56F9DE50` |
 | `UNIVERSAL_CREATE2_FROM_STORE`, `UNIVERSAL_CREATE2_DEPLOYER` | `VITE_UNIVERSAL_CREATE2_DEPLOYER` | `0x54660E61857a652753d805aD2c7b4f759C138bD5` |
