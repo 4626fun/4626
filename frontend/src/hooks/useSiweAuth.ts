@@ -415,24 +415,18 @@ function notifyStoredSessionTokenChanged() {
   window.dispatchEvent(new CustomEvent(SESSION_TOKEN_CHANGED_EVENT))
 }
 
-export function writeStoredSessionToken(token: string | null) {
-  const normalized = typeof token === 'string' ? token.trim() : ''
-  const nextToken = normalized.length > 0 ? normalized : null
+export function writeStoredSessionToken(_token: string | null) {
   const prevToken = getStoredSessionToken()
-  if (prevToken === nextToken) return
+  if (!prevToken) return
 
   let persisted = false
   try {
-    if (!nextToken) {
-      sessionStorage.removeItem(SESSION_TOKEN_KEY)
-    } else {
-      sessionStorage.setItem(SESSION_TOKEN_KEY, nextToken)
-    }
+    sessionStorage.removeItem(SESSION_TOKEN_KEY)
     persisted = true
   } catch {
     // ignore
   }
-  if (persisted && !nextToken) autoPrivyBridgeAttempted = false
+  if (persisted) autoPrivyBridgeAttempted = false
   if (persisted) invalidateAuthMeCache()
   if (persisted) notifyStoredSessionTokenChanged()
 }

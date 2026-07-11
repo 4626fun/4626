@@ -557,6 +557,7 @@ export async function resolveDeployVanityPlan(
     !shareOftVanityUnsupportedByBatcher &&
     isShareSuffixSatisfiedByDeploymentVersion({
       create2Deployer,
+      creatorToken: params.creatorToken,
       owner: params.owner,
       shareSymbol: params.shareSymbol,
       deploymentVersion: deploymentVersionUsed,
@@ -747,6 +748,7 @@ export async function resolveDeployVanityPlan(
           .endsWith(requestedShareSuffix)
       : isShareSuffixSatisfiedByDeploymentVersion({
           create2Deployer,
+          creatorToken: params.creatorToken,
           owner: params.owner,
           shareSymbol: params.shareSymbol,
           deploymentVersion: deploymentVersionUsed,

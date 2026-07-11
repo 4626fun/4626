@@ -245,8 +245,6 @@ export type WalletClientLike = {
   signTransaction?: (args: any) => Promise<any>
 } & Record<string, any>
 
-const SESSION_TOKEN_KEY = 'cv_siwe_session_token'
-
 function isDebugEnabled(): boolean {
   if (debugLogsFlag()) return true
   if (typeof window === 'undefined') return false
@@ -1002,16 +1000,6 @@ if (AA_DEBUG && typeof window !== 'undefined') {
   if (typeof w.__cvSignatureHarness !== 'function') {
     w.__cvSignatureHarness = runSignatureExtractionHarness
     logger.debug('[ERC-4337] Signature harness attached to window.__cvSignatureHarness')
-  }
-}
-
-function getStoredSessionToken(): string | null {
-  try {
-    const v = sessionStorage.getItem(SESSION_TOKEN_KEY)
-    const t = typeof v === 'string' ? v.trim() : ''
-    return t.length > 0 ? t : null
-  } catch {
-    return null
   }
 }
 
@@ -2294,7 +2282,6 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // CDP can use separate endpoints for bundler + paymaster JSON-RPC methods.
   // If `bundlerUrl` is our same-origin proxy (`/api/paymaster`), we MUST include cookies
   // so the backend can validate the SIWE session (`cv_auth_session`).
-  const sessionToken = typeof window !== 'undefined' ? getStoredSessionToken() : null
   const buildTransport = (
     url: string,
     options: { includeSession: boolean; includeDebug?: boolean },
@@ -2313,7 +2300,6 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         ? ownerApprovalContext.customOwnerPolicyToken.trim()
         : null
     const headers: Record<string, string> = {
-      ...(sendSession && sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
       ...(shouldIncludePaymasterDebugHeader ? { 'X-CV-Paymaster-Debug': '1' } : {}),
       ...(customOwnerPolicyToken ? { 'X-CV-Custom-Owner-Policy': customOwnerPolicyToken } : {}),
     }
