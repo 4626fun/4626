@@ -40,6 +40,7 @@ describe('RootRouter', () => {
     vi.resetModules()
     mockAppOrigin = 'https://app.4626.fun'
     mockHostMode = 'app'
+    window.history.replaceState({}, '', '/')
     ;({ RootRouter } = await import('./RootRouter'))
   })
 
@@ -73,6 +74,8 @@ describe('RootRouter', () => {
   })
 
   it('routes the root marketing path through Home', async () => {
+    mockHostMode = 'marketing'
+
     render(
       <MemoryRouter initialEntries={['/']}>
         <RootRouter />
@@ -85,8 +88,8 @@ describe('RootRouter', () => {
 
   it('does not self-redirect app-only routes when marketing override shares the current origin', async () => {
     mockHostMode = 'marketing'
-    mockAppOrigin = 'http://localhost:3000'
-    window.history.replaceState({}, '', 'http://localhost:3000/swap')
+    mockAppOrigin = window.location.origin
+    window.history.replaceState({}, '', '/swap')
     const replaceSpy = vi.spyOn(window.location, 'replace').mockImplementation(() => {})
 
     render(

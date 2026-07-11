@@ -147,6 +147,7 @@ export function WaitlistLinkedAccountsCard({
   totalPoints,
   showTotal,
   progress,
+  density = 'page',
 }: {
   rows: WaitlistLinkedAccountRow[]
   totalPoints: number
@@ -155,6 +156,8 @@ export function WaitlistLinkedAccountsCard({
    * row list. Lets the caller show "where you are" in a linking wizard
    * without this card needing to know anything about that wizard's steps. */
   progress?: ReactNode
+  /** `tray` is flush with CanonicalIdentityDropdown sections (no nested card). */
+  density?: 'page' | 'tray'
 }) {
   const reduceMotion = useReducedMotion()
   const [expanded, setExpanded] = useState(true)
@@ -270,6 +273,7 @@ export function WaitlistLinkedAccountsCard({
   }
 
   const canToggle = rows.length > 0
+  const isTray = density === 'tray'
 
   return (
     <div>
@@ -281,15 +285,26 @@ export function WaitlistLinkedAccountsCard({
         aria-controls="waitlist-earn-points-rows"
         className={cn(
           'flex w-full items-center gap-3 text-left',
+          isTray ? 'py-1' : undefined,
           canToggle && 'cursor-pointer',
         )}
       >
-        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
-          Your points
+        <span
+          className={cn(
+            'font-semibold uppercase text-zinc-500',
+            isTray ? 'text-[10px] tracking-wider text-zinc-600' : 'text-[10px] tracking-[0.16em]',
+          )}
+        >
+          {isTray ? 'Linked' : 'Your points'}
         </span>
         <span className="h-px flex-1 bg-white/[0.06]" aria-hidden="true" />
         {showTotal ? (
-          <span className="relative shrink-0 text-[12px] font-semibold tabular-nums text-zinc-300">
+          <span
+            className={cn(
+              'relative shrink-0 font-semibold tabular-nums',
+              isTray ? 'text-[12px] text-zinc-300' : 'text-[12px] text-zinc-300',
+            )}
+          >
             {Math.round(displayTotal).toLocaleString()}
             <AnimatePresence>
               {popups.map((popup, index) => (
@@ -325,7 +340,10 @@ export function WaitlistLinkedAccountsCard({
 
       {progress}
 
-      <div id="waitlist-earn-points-rows" className="mx-auto flex w-full max-w-[240px] flex-col">
+      <div
+        id="waitlist-earn-points-rows"
+        className={cn('flex w-full flex-col', !isTray && 'mx-auto max-w-[240px]')}
+      >
         <AnimatePresence initial={false}>
           {expanded
             ? rows.map((row, index) => (

@@ -200,13 +200,53 @@ async function callInternalApi(params: {
       body: JSON.stringify(apiJob.body),
       signal: controller.signal,
     })
-    const json = (await response.json().catch(() => null)) as { success?: boolean; data?: unknown; error?: string } | null
+    const json = (await response.json().catch(() => null)) as {
+      success?: boolean
+      data?: unknown
+      error?: string
+      retryable?: boolean
+    } | null
     if (!response.ok || json?.success !== true) {
-      throw new Error(json?.error || `request_failed:${apiJob.path}:${response.status}`)
+      const envelopeData =
+        json?.data && typeof json.data === 'object' && !Array.isArray(json.data)
+          ? (json.data as Record<string, unknown>)
+          : null
+      const data =
+        typeof json?.retryable === 'boolean' && typeof envelopeData?.retryable !== 'boolean'
+          ? { ...(envelopeData ?? {}), retryable: json.retryable }
+          : envelopeData
+      throw new KeeperJobApiError(
+        json?.error || `request_failed:${apiJob.path}:${response.status}`,
+        { status: response.status, data },
+      )
     }
-    return json?.data && typeof json.data === 'object' && !Array.isArray(json.data)
+    const result = json?.data && typeof json.data === 'object' && !Array.isArray(json.data)
       ? (json.data as Record<string, unknown>)
       : { response: json?.data ?? null }
+    if (apiJob.path === '/api/keeper/solana/reconcile') {
+      const upstream =
+        result.upstreamResponse && typeof result.upstreamResponse === 'object' && !Array.isArray(result.upstreamResponse)
+          ? (result.upstreamResponse as Record<string, unknown>)
+          : null
+      if (
+        result.status === 'failed'
+        || result.retryable === true
+        || upstream?.ok === false
+        || upstream?.error === 'action_lease_held'
+      ) {
+        const retryable =
+          typeof result.retryable === 'boolean'
+            ? result.retryable
+            : typeof upstream?.retryable === 'boolean'
+              ? upstream.retryable
+              : upstream?.error === 'action_lease_held'
+        throw new KeeperJobApiError('solana_reconcile_not_completed', {
+          status: 503,
+          data: { ...result, retryable },
+        })
+      }
+    }
+    return result
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       throw new Error(`internal_api_timeout:${apiJob.path}:${timeoutMs}ms`)
@@ -491,7 +531,13 @@ async function runOneJob(params: {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    const retryable = !message.startsWith('unsupported_job_kind') && !message.includes('_not_allowed')
+    const explicitRetryable =
+      error instanceof KeeperJobApiError && typeof error.data?.retryable === 'boolean'
+        ? error.data.retryable
+        : null
+    const retryable =
+      explicitRetryable
+      ?? (!message.startsWith('unsupported_job_kind') && !message.includes('_not_allowed'))
     const completed = await completeKeeperJob({
       id: params.job.id,
       workerId: params.workerId,
@@ -515,9 +561,11 @@ async function runOneJob(params: {
         error: 'keeper_job_completion_lost_lease',
       }
     }
+    const finalStatus: KeeperJobRunResult['status'] =
+      completed.status === 'retry' ? 'retry' : 'failed'
     emitControlPlaneMetric({
       metric: 'control_plane.job.status',
-      status: retryable ? 'retry' : 'failed',
+      status: finalStatus,
       operationId: params.job.operationId,
       stageId: params.job.stageId,
       jobId: params.job.id,
@@ -526,8 +574,8 @@ async function runOneJob(params: {
     if (params.job.stageId) {
       await transitionStageStatus({
         stageId: params.job.stageId,
-        nextStatus: retryable ? 'retrying' : 'failed',
-        reason: retryable ? 'keeper_job_retry_scheduled' : 'keeper_job_failed',
+        nextStatus: finalStatus === 'retry' ? 'retrying' : 'failed',
+        reason: finalStatus === 'retry' ? 'keeper_job_retry_scheduled' : 'keeper_job_failed',
         actor: params.workerId,
         data: { jobId: params.job.id, kind: params.job.kind, error: message },
         errorMessage: message,
@@ -536,8 +584,8 @@ async function runOneJob(params: {
     if (params.job.operationId) {
       await transitionOperationStatus({
         operationId: params.job.operationId,
-        nextStatus: retryable ? 'retrying' : 'failed',
-        reason: retryable ? 'keeper_job_retry_scheduled' : 'keeper_job_failed',
+        nextStatus: finalStatus === 'retry' ? 'retrying' : 'failed',
+        reason: finalStatus === 'retry' ? 'keeper_job_retry_scheduled' : 'keeper_job_failed',
         actor: params.workerId,
         data: { jobId: params.job.id, kind: params.job.kind, error: message },
         errorMessage: message,
@@ -546,7 +594,7 @@ async function runOneJob(params: {
     return {
       id: params.job.id,
       kind: params.job.kind,
-      status: retryable ? 'retry' : 'failed',
+      status: finalStatus,
       error: message,
     }
   }

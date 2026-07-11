@@ -43,7 +43,7 @@ contract MockVe4626BoostMath {
     }
 }
 
-/// @notice Curve working = min(l, 0.4l+0.6L·ve/Ve); returns quotedBoost = working/(0.4l) BPS ∈ [10k, 25k]
+/// @notice working = min(0.4*l + 0.6*L*(ve/Ve), l); boost = working/(0.4*l) ∈ [1, 2.5]
 contract Ve4626BoostManagerMathTest is Test {
     MockVe4626BoostMath internal ve;
     ve4626BoostManager internal manager;
@@ -54,18 +54,17 @@ contract Ve4626BoostManagerMathTest is Test {
     uint256 internal constant L = 1_000e18; // pool USD
 
     function setUp() public {
-        vm.roll(302_401);
+        vm.roll(302_401); // Past MIN_HOLDING_BLOCKS so boost calculation proceeds
         ve = new MockVe4626BoostMath();
         manager = new ve4626BoostManager(address(ve), owner);
         vm.prank(owner);
         manager.setMinVotingPower(0);
     }
 
-    function testCurve_Tokenless_IsNeutralOneX() public {
+    function testCurve_Tokenless_IsOneX() public {
         ve.setVotingPower(user, 0);
         ve.setTotalVotingPower(100 ether);
 
-        // Covered, no ve → quoted boost 1.0× (not 0.4×)
         uint256 boost = manager.calculateBoostForPosition(user, 10e18, 10e18, L);
         assertEq(boost, 10_000);
     }
@@ -73,12 +72,14 @@ contract Ve4626BoostManagerMathTest is Test {
     function testCurve_ZeroPosition_ReturnsNeutral() public {
         ve.setVotingPower(user, 100 ether);
         ve.setTotalVotingPower(100 ether);
+        // l = 0 → personal layer inactive (baseBoost 1.0, leaves LM base odds alone)
         assertEq(manager.calculateBoostForPosition(user, 0, 10e18, L), 10_000);
         assertEq(manager.calculateBoostForPosition(user, 10e18, 0, L), 10_000);
     }
 
     function testCurve_FullBoost_WhenVeMatchesLpShare() public {
-        // ve/Ve >= l/L ⇒ working = l ⇒ quoted = 2.5×
+        // ve/Ve >= l/L ⇒ working = l ⇒ boost = l/(0.4*l) = 2.5
+        // l/L = 1% ⇒ need ve/Ve >= 1%
         ve.setVotingPower(user, 10 ether);
         ve.setTotalVotingPower(1_000 ether);
 
@@ -89,7 +90,8 @@ contract Ve4626BoostManagerMathTest is Test {
     }
 
     function testCurve_OnePercentLp_WithHalfPercentVe_IsPartial() public {
-        // working/l = 0.7 ⇒ quoted = 0.7/0.4 = 1.75 ⇒ 17_500
+        // l/L = 1%, ve/Ve = 0.5%
+        // working/l = 0.7; normalized boost = 0.7/0.4 = 1.75
         ve.setVotingPower(user, 5 ether);
         ve.setTotalVotingPower(1_000 ether);
 
@@ -101,6 +103,7 @@ contract Ve4626BoostManagerMathTest is Test {
     }
 
     function testCurve_SmallLp_LargeVe_CapsAtTwoPointFive() public {
+        // Working balance caps at l; normalized boost caps at 2.5×.
         ve.setVotingPower(user, 50 ether);
         ve.setTotalVotingPower(100 ether);
 
@@ -109,7 +112,7 @@ contract Ve4626BoostManagerMathTest is Test {
         assertEq(boost, 25_000);
     }
 
-    function testCurve_CoverageCaps_LAtSwap_TokenlessNeutral() public {
+    function testCurve_CoverageCaps_LAtSwap() public {
         ve.setVotingPower(user, 0);
         ve.setTotalVotingPower(1);
         uint256 boost = manager.calculateBoostForPosition(user, 1_000e18, 10e18, L);
@@ -119,13 +122,13 @@ contract Ve4626BoostManagerMathTest is Test {
     function testCoverage_UsesCreatorShareUsdOnly() public view {
         uint256 coverage =
             manager.getCoverageBps(user, address(0), address(0), address(0), 250_000_000, 1_000_000_000);
-        assertEq(coverage, 2_500);
+        assertEq(coverage, 2_500); // 25%
     }
 
     function testCoverage_CapsAtFullCoverage() public view {
         uint256 coverage =
             manager.getCoverageBps(user, address(0), address(0), address(0), 2_000_000_000, 1_000_000_000);
-        assertEq(coverage, 10_000);
+        assertEq(coverage, 10_000); // 100%
     }
 
     function testCoverage_ZeroWhenMissingInputs() public view {
@@ -142,23 +145,37 @@ contract Ve4626BoostManagerMathTest is Test {
         assertEq(manager.calculateBoost(user), 10_000);
     }
 
-    function testSetBoostParameters_RequiresBaseBoostPrecision() public {
+    function testBoostParameters_AcceptsCurveMaximumAfterTimelock() public {
         vm.prank(owner);
-        vm.expectRevert(ve4626BoostManager.InvalidBoostParameters.selector);
-        manager.setBoostParameters(20_000, 25_000);
+        manager.setBoostParameters(10_000, 25_000);
+        vm.warp(block.timestamp + manager.BOOST_TIMELOCK_DURATION());
+        vm.prank(owner);
+        manager.executeBoostParameterUpdate();
 
-        vm.prank(owner);
-        manager.setBoostParameters(10_000, 20_000);
-        assertEq(manager.pendingBaseBoost(), 10_000);
-        assertEq(manager.pendingMaxBoost(), 20_000);
+        assertEq(manager.baseBoost(), 10_000);
+        assertEq(manager.maxBoost(), 25_000);
     }
 
-    function testCoveredTokenless_FloorIsPrecisionNotOwnerBase() public {
-        // Even if storage baseBoost were inflated (pre-lock path), covered floor stays 1.0×.
-        // setBoostParameters now rejects non-precision base; use storage slot via vm.store if needed.
-        // Default path: tokenless covered always 10_000.
-        ve.setVotingPower(user, 0);
-        ve.setTotalVotingPower(100 ether);
-        assertEq(manager.calculateBoostForPosition(user, 10e18, 10e18, L), 10_000);
+    function testBoostParameters_RejectsNonNeutralBase() public {
+        vm.prank(owner);
+        vm.expectRevert(ve4626BoostManager.InvalidBoostParameters.selector);
+        manager.setBoostParameters(4_000, 25_000);
+    }
+
+    function testFuzz_CurveBoostStaysBoundedAndMonotone(uint96 userPowerA, uint96 userPowerB) public {
+        uint256 low = uint256(userPowerA < userPowerB ? userPowerA : userPowerB);
+        uint256 high = uint256(userPowerA < userPowerB ? userPowerB : userPowerA);
+        uint256 total = high + 1;
+        ve.setTotalVotingPower(total);
+
+        uint256 l = 10e18;
+        ve.setVotingPower(user, low);
+        uint256 lowBoost = manager.calculateBoostForPosition(user, l, l, L);
+        ve.setVotingPower(user, high);
+        uint256 highBoost = manager.calculateBoostForPosition(user, l, l, L);
+
+        assertGe(lowBoost, 10_000);
+        assertLe(highBoost, 25_000);
+        assertGe(highBoost, lowBoost);
     }
 }

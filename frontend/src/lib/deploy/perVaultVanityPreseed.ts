@@ -161,6 +161,7 @@ const defaultManifest = parseManifest(bundledManifest)
 
 export function isShareSuffixSatisfiedByDeploymentVersion(params: {
   create2Deployer: Address
+  creatorToken: Address
   owner: Address
   shareSymbol: string
   deploymentVersion: string

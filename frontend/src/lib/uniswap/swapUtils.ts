@@ -108,9 +108,7 @@ export function getCoreTokensForChain(config: ChainTokenConfig): TokenOption[] {
 }
 
 export function shareTokenLogo(address: string, chainId = BASE_CHAIN_ID, _size = 128): string {
-  void address
-  void chainId
-  return ''
+  return `/api/v1/token/${getAddress(address).toLowerCase()}/image?chain=${chainId}&format=png&style=raw&tokenKind=share`
 }
 
 export function creatorCoinRawLogo(address: string, chainId = BASE_CHAIN_ID): string {

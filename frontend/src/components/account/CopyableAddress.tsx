@@ -16,14 +16,18 @@ export function CopyableAddress({
   label,
   className,
   variant = 'default',
+  display = 'short',
 }: {
   address: string
   label?: string | null
   className?: string
   variant?: 'default' | 'muted' | 'pill'
+  /** `full` shows the complete address (wrap/break as needed). */
+  display?: 'short' | 'full'
 }) {
   const [copied, setCopied] = useState(false)
   const short = formatShort(address)
+  const shown = display === 'full' ? address : short
 
   const onCopy = useCallback(() => {
     if (!address) return
@@ -49,15 +53,25 @@ export function CopyableAddress({
       type="button"
       onClick={onCopy}
       title={address}
-      className={`${base} ${variantClass} ${className ?? ''}`}
-      aria-label={`Copy ${label ?? short}`}
+      className={`${base} ${variantClass} ${className ?? ''} ${display === 'full' ? 'max-w-full' : ''}`}
+      aria-label={`Copy ${label ?? shown}`}
     >
       {label ? <span className="truncate">{label}</span> : null}
-      <span className={label ? 'text-zinc-500' : ''}>{short}</span>
+      <span
+        className={
+          label
+            ? 'text-zinc-500'
+            : display === 'full'
+              ? 'min-w-0 break-all text-left'
+              : ''
+        }
+      >
+        {shown}
+      </span>
       {copied ? (
-        <Check className="h-3 w-3 text-emerald-300" />
+        <Check className="h-3 w-3 shrink-0 text-emerald-300" />
       ) : (
-        <Copy className="h-3 w-3 opacity-60" />
+        <Copy className="h-3 w-3 shrink-0 opacity-60" />
       )}
     </button>
   )

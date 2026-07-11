@@ -152,14 +152,16 @@ Personal + gauge layers (single envelope — **no** lock-duration additive PPM):
 // Base from trade size
 basePPM = min(swapUSD / 250_000, baseCeilingPPM)
 
-// Personal (Curve quoted boost; only if boostManager + covered Share > 0):
-//   l = min(creatorShareUSD, swapUSD);  L = Share supply USD;  ve = effectiveChance
-//   working = min(l, 0.4·l + 0.6·L·(ve/Ve))
-//   quotedBoost = working/(0.4·l) ∈ [1.0, 2.5]   // BPS 10_000–25_000
-//   max 2.5× when ve_share ≥ lp_share; tokenless covered = 1.0× (neutral)
-//   (no position → personal off; basePPM unchanged)
-personalMult = calculateBoostForPosition(...)   // quoted boost BPS
-boostedPPM   = basePPM × personalMult / 10_000
+// Personal (only if boostManager set + covered Share USD > 0):
+//   l = min(creatorShareUSD, swapUSD)
+//   L = total creator ShareOFT supply USD
+//   ve = effective veLottery; Ve = live total ve4626 power
+//   working = min(0.4·l + 0.6·L·(ve/Ve), l)
+//   rawMult = working/(0.4·l)                         ∈ [1.0, 2.5]
+//   coverage = l/swapUSD
+//   (no position → personal mult inactive; basePPM unchanged)
+effectiveMult = 1 + coverage·(rawMult - 1)
+boostedPPM   = basePPM × effectiveMult
 
 // Gauge (if vaultGaugeVoting set): + size-scaled vault PPM
 // Hard cap: lotteryConfig.maxWinChance

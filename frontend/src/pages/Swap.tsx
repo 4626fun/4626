@@ -352,8 +352,8 @@ export function Swap() {
     }
     if (privyEmbeddedEoaCanOperateCanonicalQuery.data === true) return 'owner'
     if (privyEmbeddedEoaCanOperateCanonicalQuery.data === false) return 'not-owner'
-    if (accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true) return 'owner'
     if (privyEmbeddedEoaCanOperateCanonicalQuery.data === null) return 'pending'
+    if (accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true) return 'owner'
     return 'unknown'
   }, [
     accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw,

@@ -9,6 +9,7 @@ import {
   getAddress,
   http,
   isAddress,
+  keccak256,
   type Address,
   type Hex,
 } from 'viem'
@@ -110,6 +111,22 @@ const SET_PHASE2_MODULE_ABI = [
     outputs: [],
   },
 ] as const
+
+const APPROVE_PHASE_MODULE_CODEHASH_ABI = [
+  {
+    type: 'function',
+    name: 'approvePhaseModuleCodehash',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'module', type: 'address' },
+      { name: 'codehash', type: 'bytes32' },
+    ],
+    outputs: [],
+  },
+] as const
+
+/** 100 ETH — forked Safe/treasury balances are often too low for gas. */
+const ANVIL_FUNDED_BALANCE = '0x56bc75e2d63100000'
 
 const OVAULT_RUNTIME_ABI = [
   {
@@ -346,6 +363,76 @@ async function anvilRpc<T>(method: string, params: unknown[]): Promise<T> {
   return json.result as T
 }
 
+async function fundAndImpersonate(account: Address): Promise<void> {
+  await anvilRpc('anvil_setBalance', [account, ANVIL_FUNDED_BALANCE])
+  await anvilRpc<boolean>('anvil_impersonateAccount', [account])
+}
+
+async function sendImpersonatedTx(params: {
+  from: Address
+  to: Address
+  data: Hex
+  label: string
+}): Promise<Hex> {
+  const txHash = await anvilRpc<Hex>('eth_sendTransaction', [
+    {
+      from: params.from,
+      to: params.to,
+      data: params.data,
+      value: '0x0',
+    },
+  ])
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60_000 })
+  if (receipt.status !== 'success') {
+    throw new Error(`${params.label} reverted (tx ${txHash})`)
+  }
+  return txHash
+}
+
+async function extCodehash(module: Address): Promise<Hex> {
+  const code = await publicClient.getBytecode({ address: module })
+  if (!code || code === '0x') {
+    throw new Error(`No bytecode at module ${module}`)
+  }
+  return keccak256(code)
+}
+
+/**
+ * AUDIT-2026-07-08-H08: setPhase*Module requires a prior non-zero codehash approval.
+ * Fresh local batchers start with an empty allowlist, so approve before wiring.
+ */
+async function approveAndSetPhaseModule(params: {
+  localBatcher: Address
+  protocolTreasury: Address
+  module: Address
+  setFunctionName: 'setPhase1Module' | 'setPhase2Module'
+}): Promise<void> {
+  await fundAndImpersonate(params.protocolTreasury)
+  const codehash = await extCodehash(params.module)
+  await sendImpersonatedTx({
+    from: params.protocolTreasury,
+    to: params.localBatcher,
+    data: encodeFunctionData({
+      abi: APPROVE_PHASE_MODULE_CODEHASH_ABI,
+      functionName: 'approvePhaseModuleCodehash',
+      args: [params.module, codehash],
+    }),
+    label: `approvePhaseModuleCodehash(${params.module})`,
+  })
+  const setAbi =
+    params.setFunctionName === 'setPhase1Module' ? SET_PHASE1_MODULE_ABI : SET_PHASE2_MODULE_ABI
+  await sendImpersonatedTx({
+    from: params.protocolTreasury,
+    to: params.localBatcher,
+    data: encodeFunctionData({
+      abi: setAbi,
+      functionName: params.setFunctionName,
+      args: [params.module],
+    }),
+    label: `${params.setFunctionName}(${params.module})`,
+  })
+}
+
 function runForgeCreate(contract: string, constructorArgs: readonly string[]): Address {
   const baseForgePrefixArgs = [
     'create',
@@ -519,22 +606,17 @@ async function ensureLocalBatcherCreate2Authorization(
     })) as Address,
   )
 
-  await anvilRpc('anvil_setBalance', [create2Owner, '0x56bc75e2d63100000'])
-  await anvilRpc<boolean>('anvil_impersonateAccount', [create2Owner])
-  const data = encodeFunctionData({
-    abi: CREATE2_AUTH_ABI,
-    functionName: 'setAuthorizedDeployer',
-    args: [localBatcher, true],
+  await fundAndImpersonate(create2Owner)
+  await sendImpersonatedTx({
+    from: create2Owner,
+    to: create2Deployer,
+    data: encodeFunctionData({
+      abi: CREATE2_AUTH_ABI,
+      functionName: 'setAuthorizedDeployer',
+      args: [localBatcher, true],
+    }),
+    label: `setAuthorizedDeployer(${localBatcher})`,
   })
-  const txHash = await anvilRpc<Hex>('eth_sendTransaction', [
-    {
-      from: create2Owner,
-      to: create2Deployer,
-      data,
-      value: '0x0',
-    },
-  ])
-  await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60_000 })
 
   const verified = (await publicClient.readContract({
     address: create2Deployer,
@@ -583,21 +665,12 @@ async function wireLocalPhase1Module(localBatcher: Address): Promise<Address> {
   }
 
   const protocolTreasury = await readAddressGetter(localBatcher, 'protocolTreasury')
-  await anvilRpc<boolean>('anvil_impersonateAccount', [protocolTreasury])
-  const data = encodeFunctionData({
-    abi: SET_PHASE1_MODULE_ABI,
-    functionName: 'setPhase1Module',
-    args: [localPhase1Module],
+  await approveAndSetPhaseModule({
+    localBatcher,
+    protocolTreasury,
+    module: localPhase1Module,
+    setFunctionName: 'setPhase1Module',
   })
-  const txHash = await anvilRpc<Hex>('eth_sendTransaction', [
-    {
-      from: protocolTreasury,
-      to: localBatcher,
-      data,
-      value: '0x0',
-    },
-  ])
-  await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60_000 })
 
   const configuredPhase1 = await readPhase1ModuleAddress({
     publicClient,
@@ -647,22 +720,12 @@ async function wireLocalPhase2Module(localBatcher: Address): Promise<Address> {
   }
 
   const protocolTreasury = await readAddressGetter(localBatcher, 'protocolTreasury')
-  await anvilRpc('anvil_setBalance', [protocolTreasury, '0x56bc75e2d63100000'])
-  await anvilRpc<boolean>('anvil_impersonateAccount', [protocolTreasury])
-  const data = encodeFunctionData({
-    abi: SET_PHASE2_MODULE_ABI,
-    functionName: 'setPhase2Module',
-    args: [localPhase2Module],
+  await approveAndSetPhaseModule({
+    localBatcher,
+    protocolTreasury,
+    module: localPhase2Module,
+    setFunctionName: 'setPhase2Module',
   })
-  const txHash = await anvilRpc<Hex>('eth_sendTransaction', [
-    {
-      from: protocolTreasury,
-      to: localBatcher,
-      data,
-      value: '0x0',
-    },
-  ])
-  await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60_000 })
 
   const configuredPhase2 = await readAddressGetter(localBatcher, 'phase2Module')
   if (getAddress(configuredPhase2) !== localPhase2Module) {
@@ -717,22 +780,17 @@ async function syncOvaultRuntimeConfig(localBatcher: Address): Promise<void> {
   }
 
   const protocolTreasury = await readAddressGetter(localBatcher, 'protocolTreasury')
-  await anvilRpc('anvil_setBalance', [protocolTreasury, '0x56bc75e2d63100000'])
-  await anvilRpc<boolean>('anvil_impersonateAccount', [protocolTreasury])
-  const data = encodeFunctionData({
-    abi: OVAULT_RUNTIME_ABI,
-    functionName: 'setOVaultRuntimeConfig',
-    args: [hubComposer, solanaEid, enabled],
+  await fundAndImpersonate(protocolTreasury)
+  await sendImpersonatedTx({
+    from: protocolTreasury,
+    to: localBatcher,
+    data: encodeFunctionData({
+      abi: OVAULT_RUNTIME_ABI,
+      functionName: 'setOVaultRuntimeConfig',
+      args: [hubComposer, solanaEid, enabled],
+    }),
+    label: 'setOVaultRuntimeConfig',
   })
-  const txHash = await anvilRpc<Hex>('eth_sendTransaction', [
-    {
-      from: protocolTreasury,
-      to: localBatcher,
-      data,
-      value: '0x0',
-    },
-  ])
-  await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60_000 })
 }
 
 async function syncSolanaConfig(localBatcher: Address): Promise<void> {
@@ -785,40 +843,31 @@ async function syncSolanaConfig(localBatcher: Address): Promise<void> {
   }
 
   const protocolTreasury = await readAddressGetter(localBatcher, 'protocolTreasury')
-  await anvilRpc('anvil_setBalance', [protocolTreasury, '0x56bc75e2d63100000'])
-  await anvilRpc<boolean>('anvil_impersonateAccount', [protocolTreasury])
+  await fundAndImpersonate(protocolTreasury)
   if (!solanaConfigMatches) {
-    const data = encodeFunctionData({
-      abi: SOLANA_CONFIG_ABI,
-      functionName: 'setSolanaConfig',
-      args: [sourceAdapter, sourceDestination],
+    await sendImpersonatedTx({
+      from: protocolTreasury,
+      to: localBatcher,
+      data: encodeFunctionData({
+        abi: SOLANA_CONFIG_ABI,
+        functionName: 'setSolanaConfig',
+        args: [sourceAdapter, sourceDestination],
+      }),
+      label: 'setSolanaConfig',
     })
-    const txHash = await anvilRpc<Hex>('eth_sendTransaction', [
-      {
-        from: protocolTreasury,
-        to: localBatcher,
-        data,
-        value: '0x0',
-      },
-    ])
-    await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60_000 })
   }
 
   if (!sharePeerMatches) {
-    const peerData = encodeFunctionData({
-      abi: SOLANA_CONFIG_ABI,
-      functionName: 'setSolanaShareOftPeer',
-      args: [sourceSharePeer],
+    await sendImpersonatedTx({
+      from: protocolTreasury,
+      to: localBatcher,
+      data: encodeFunctionData({
+        abi: SOLANA_CONFIG_ABI,
+        functionName: 'setSolanaShareOftPeer',
+        args: [sourceSharePeer],
+      }),
+      label: 'setSolanaShareOftPeer',
     })
-    const peerTxHash = await anvilRpc<Hex>('eth_sendTransaction', [
-      {
-        from: protocolTreasury,
-        to: localBatcher,
-        data: peerData,
-        value: '0x0',
-      },
-    ])
-    await publicClient.waitForTransactionReceipt({ hash: peerTxHash, timeout: 60_000 })
   }
 }
 
@@ -842,22 +891,17 @@ async function ensureRegistryAuthorizedFactory(localBatcher: Address): Promise<v
       functionName: 'owner',
     })) as Address,
   )
-  await anvilRpc('anvil_setBalance', [registryOwner, '0x56bc75e2d63100000'])
-  await anvilRpc<boolean>('anvil_impersonateAccount', [registryOwner])
-  const data = encodeFunctionData({
-    abi: REGISTRY_4626_AUTH_ABI,
-    functionName: 'setAuthorizedFactory',
-    args: [localBatcher, true],
+  await fundAndImpersonate(registryOwner)
+  await sendImpersonatedTx({
+    from: registryOwner,
+    to: registry,
+    data: encodeFunctionData({
+      abi: REGISTRY_4626_AUTH_ABI,
+      functionName: 'setAuthorizedFactory',
+      args: [localBatcher, true],
+    }),
+    label: `setAuthorizedFactory(${localBatcher})`,
   })
-  const txHash = await anvilRpc<Hex>('eth_sendTransaction', [
-    {
-      from: registryOwner,
-      to: registry,
-      data,
-      value: '0x0',
-    },
-  ])
-  await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 60_000 })
 }
 
 async function main() {

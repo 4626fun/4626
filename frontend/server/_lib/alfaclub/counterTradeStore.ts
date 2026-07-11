@@ -86,7 +86,8 @@ export const COUNTER_TRADE_HARVEST_ALERT_REASON = 'harvest_alert_posted'
 /**
  * Executed-row reasons that are risk-reducing rather than new entries. These
  * never advance the cooldown clock and never count toward hourly/daily entry
- * caps.
+ * caps. Rebalance dip adds are intentionally absent because they increase risk
+ * and must consume the same cooldown and usage budget as any other entry.
  */
 const NON_ENTRY_EXECUTED_REASONS = [
   COUNTER_TRADE_EXIT_EXECUTED_REASON,
@@ -94,7 +95,6 @@ const NON_ENTRY_EXECUTED_REASONS = [
   COUNTER_TRADE_HARVEST_EXECUTED_REASON,
   COUNTER_TRADE_MIRROR_REDUCE_EXECUTED_REASON,
   COUNTER_TRADE_REBALANCE_HARVEST_EXECUTED_REASON,
-  COUNTER_TRADE_REBALANCE_DIP_EXECUTED_REASON,
 ] as const
 
 export type CounterTradeRoomStrategy = {
@@ -764,17 +764,29 @@ export async function readCounterTradeUsageWindow(params: {
 
   try {
     const sinceIso = new Date(params.sinceMs).toISOString()
-    const [exitReason, defenseReason, harvestReason] = NON_ENTRY_EXECUTED_REASONS
+    const [
+      exitReason,
+      defenseReason,
+      harvestReason,
+      mirrorReduceReason,
+      rebalanceHarvestReason,
+    ] = NON_ENTRY_EXECUTED_REASONS
     const result = await db.sql`
       SELECT
         COUNT(*)::int AS action_count,
         COUNT(*) FILTER (
           WHERE status = 'executed'
-            AND reason NOT IN (${exitReason}, ${defenseReason}, ${harvestReason})
+            AND reason NOT IN (
+              ${exitReason}, ${defenseReason}, ${harvestReason},
+              ${mirrorReduceReason}, ${rebalanceHarvestReason}
+            )
         )::int AS executed_count,
         COALESCE(SUM(counter_notional_usd) FILTER (
           WHERE status = 'executed'
-            AND reason NOT IN (${exitReason}, ${defenseReason}, ${harvestReason})
+            AND reason NOT IN (
+              ${exitReason}, ${defenseReason}, ${harvestReason},
+              ${mirrorReduceReason}, ${rebalanceHarvestReason}
+            )
         ), 0)::text AS notional_usd
       FROM alfaclub.counter_trade_action_ledger
       WHERE room_id = ${roomId}

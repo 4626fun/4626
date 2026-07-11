@@ -331,6 +331,110 @@ export function raidProfit(inputs: RaidScenarioInputs, keysBought: number): Raid
   }
 }
 
+/**
+ * Existing fund balance at which a fixed attack size exactly breaks even.
+ *
+ * By default every key is assumed eligible at distribution, matching
+ * {@link raidProfit}. A smaller explicit eligibility denominator supports
+ * separately labeled exit/unstake scenarios without changing control math.
+ */
+export function breakEvenPotUsdcForAttack(
+  inputs: Omit<RaidScenarioInputs, 'potUsdc'>,
+  keysBought: number,
+  eligibleKeys = inputs.keySupply + Math.max(0, Math.floor(keysBought)),
+): number {
+  const policy = inputs.policy ?? DEFAULT_DISTRIBUTION_POLICY
+  const divisor = curveDivisor(inputs.roomType, inputs.roomTier)
+  const fee = tradeFeeFraction(inputs.roomType)
+  const poolFee = poolFeeFraction(inputs.roomType)
+  const a = Math.max(0, Math.floor(keysBought))
+  const existing = Math.max(0, Math.floor(inputs.attackerExistingKeys ?? 0))
+  const payoutKeys = existing + a
+  const eligible = Math.max(payoutKeys, Math.floor(eligibleKeys))
+  const factor = netPayoutFactor(policy)
+  if (payoutKeys <= 0 || factor <= 0) return Number.POSITIVE_INFINITY
+
+  const rawCurveCost = curveCost(inputs.keySupply, a, divisor)
+  const feeCostUsdc = 2 * fee * rawCurveCost
+  const poolFeeAddedUsdc = poolFee * rawCurveCost
+  const breakEvenPot =
+    (feeCostUsdc * eligible) / (factor * payoutKeys) - poolFeeAddedUsdc
+  return Math.max(0, breakEvenPot)
+}
+
+/**
+ * Stress test where every pre-existing holder exits after the attacker buys
+ * and stakes, but before distribution locks:
+ *
+ * - existing holders sell all `keySupply` original keys, leaving the attacker
+ *   as the only eligible staker;
+ * - those sells add their pool-fee share to the distributable pot;
+ * - after distribution, the attacker can sell all but the room's final key.
+ *
+ * Unlike the default raid model, the curve legs do not cancel: earlier sellers
+ * withdraw the expensive upper portion of the curve reserve before the
+ * attacker exits.
+ */
+export function raidProfitAfterOthersExit(
+  inputs: RaidScenarioInputs,
+  keysBought: number,
+): RaidPoint {
+  const { roomType, roomTier, keySupply, potUsdc } = inputs
+  const policy = inputs.policy ?? DEFAULT_DISTRIBUTION_POLICY
+  const divisor = curveDivisor(roomType, roomTier)
+  const fee = tradeFeeFraction(roomType)
+  const poolFee = poolFeeFraction(roomType)
+  const a = Math.max(0, Math.floor(keysBought))
+  const buyRawCurveCost = curveCost(keySupply, a, divisor)
+  const buyCostUsdc = buyRawCurveCost * (1 + fee)
+  const othersExitRawCurveValue = curveCost(a, keySupply, divisor)
+  const poolFeeAddedUsdc = poolFee * (buyRawCurveCost + othersExitRawCurveValue)
+  const potSizeUsdc = Math.max(0, potUsdc) + poolFeeAddedUsdc
+  const distributedPerKeyUsdc =
+    a > 0 ? (netPayoutFactor(policy) * potSizeUsdc) / a : 0
+  const payoutUsdc = distributedPerKeyUsdc * a
+  const attackerResaleUsdc =
+    a > 1 ? sellProceedsAfterFee(a, a - 1, divisor, fee) : 0
+  const profitUsdc = payoutUsdc + attackerResaleUsdc - buyCostUsdc
+  const rawMarginalCurveCost = a > 0 ? curveCost(keySupply + a - 1, 1, divisor) : 0
+
+  return {
+    keysBought: a,
+    poolFeeAddedUsdc,
+    potSizeUsdc,
+    distributedPerKeyUsdc,
+    marginalBuyCostPerKeyUsdc: rawMarginalCurveCost * (1 + fee),
+    averageBuyCostPerKeyUsdc: a > 0 ? buyCostUsdc / a : 0,
+    payoutUsdc,
+    feeCostUsdc: buyCostUsdc - attackerResaleUsdc,
+    profitUsdc,
+  }
+}
+
+/** Existing fund balance where the holder-exit stress test breaks even. */
+export function breakEvenPotUsdcAfterOthersExit(
+  inputs: Omit<RaidScenarioInputs, 'potUsdc'>,
+  keysBought: number,
+): number {
+  const policy = inputs.policy ?? DEFAULT_DISTRIBUTION_POLICY
+  const divisor = curveDivisor(inputs.roomType, inputs.roomTier)
+  const fee = tradeFeeFraction(inputs.roomType)
+  const poolFee = poolFeeFraction(inputs.roomType)
+  const a = Math.max(0, Math.floor(keysBought))
+  if (a <= 0) return Number.POSITIVE_INFINITY
+
+  const buyRawCurveCost = curveCost(inputs.keySupply, a, divisor)
+  const buyCostUsdc = buyRawCurveCost * (1 + fee)
+  const othersExitRawCurveValue = curveCost(a, inputs.keySupply, divisor)
+  const attackerResaleUsdc =
+    a > 1 ? sellProceedsAfterFee(a, a - 1, divisor, fee) : 0
+  const poolFeeAddedUsdc = poolFee * (buyRawCurveCost + othersExitRawCurveValue)
+  const factor = netPayoutFactor(policy)
+  if (factor <= 0) return Number.POSITIVE_INFINITY
+
+  return Math.max(0, (buyCostUsdc - attackerResaleUsdc) / factor - poolFeeAddedUsdc)
+}
+
 export type RaidAnalysis = {
   /** Minimum keys an attacker must buy to pass the vote past your keys. */
   minAttackKeys: number

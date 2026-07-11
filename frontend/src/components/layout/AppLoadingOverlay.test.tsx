@@ -85,7 +85,7 @@ describe('AppLoadingOverlay', () => {
     expect(document.body.classList.contains('app-loading-scroll-lock')).toBe(false)
   })
 
-  it('AppLoadingBootstrapGate registers loading without rendering route content', () => {
+  it('AppLoadingBootstrapGate registers loading while keeping route content mounted', () => {
     render(
       <AppLoadingProvider>
         <AppLoadingBootstrapGate active>
@@ -96,6 +96,34 @@ describe('AppLoadingOverlay', () => {
     )
 
     expect(screen.getByRole('heading', { name: /^loading\.\.\.$/i })).toBeTruthy()
-    expect(screen.queryByTestId('route-content')).toBeNull()
+    expect(screen.getByTestId('route-content')).toBeTruthy()
+  })
+
+  it('AppLoadingBootstrapGate clears the overlay after active becomes false without remounting children', () => {
+    const { rerender } = render(
+      <AppLoadingProvider>
+        <AppLoadingBootstrapGate active>
+          <div data-testid="route-content">Route body</div>
+        </AppLoadingBootstrapGate>
+        <AppLoadingOverlay />
+      </AppLoadingProvider>,
+    )
+
+    expect(screen.getByTestId('route-content')).toBeTruthy()
+
+    rerender(
+      <AppLoadingProvider>
+        <AppLoadingBootstrapGate active={false}>
+          <div data-testid="route-content">Route body</div>
+        </AppLoadingBootstrapGate>
+        <AppLoadingOverlay />
+      </AppLoadingProvider>,
+    )
+
+    expect(screen.getByTestId('route-content')).toBeTruthy()
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
+    expect(screen.queryByRole('heading', { name: /^loading\.\.\.$/i })).toBeNull()
   })
 })

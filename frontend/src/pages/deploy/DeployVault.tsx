@@ -365,13 +365,17 @@ async function postJsonWithTimeout<T>(params: {
   url: string
   body: unknown
   label: string
+  privyToken?: string | null
   requestTimeoutMs?: number
   parseTimeoutMs?: number
 }): Promise<{ response: Response; json: ApiEnvelope<T> | null }> {
   const response = await withTimeout(
     fetch(params.url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(params.privyToken ? { 'x-privy-token': params.privyToken } : {}),
+      },
       body: JSON.stringify(params.body),
     }),
     params.requestTimeoutMs ?? 20_000,
@@ -1660,6 +1664,17 @@ function DeployVaultBatcher({
     }
   }, [getAccessToken, signInWithPrivyToken])
   const { postSessionRequest, pollSession } = useDeploySessionV2()
+  const postDeployJsonWithAuth = useCallback(
+    async <T,>(params: Parameters<typeof postJsonWithTimeout<T>>[0]) => {
+      const requiresFreshPrivyToken =
+        params.url.endsWith('/resume') ||
+        params.url.endsWith('/continue') ||
+        params.url.endsWith('/cancel')
+      const privyToken = requiresFreshPrivyToken && getAccessToken ? await getAccessToken() : null
+      return await postJsonWithTimeout<T>({ ...params, privyToken })
+    },
+    [getAccessToken],
+  )
   const postDeploySessionJson = useCallback(
     async <T,>(params: {
       url: string
@@ -1669,7 +1684,7 @@ function DeployVaultBatcher({
       parseTimeoutMs?: number
     }): Promise<ApiEnvelope<T>> => {
       return await postSessionRequest<T>({
-        postJson: postJsonWithTimeout,
+        postJson: postDeployJsonWithAuth,
         url: params.url,
         body: params.body,
         label: params.label,
@@ -1678,7 +1693,7 @@ function DeployVaultBatcher({
         ensurePaymasterSession,
       })
     },
-    [ensurePaymasterSession, postSessionRequest],
+    [ensurePaymasterSession, postDeployJsonWithAuth, postSessionRequest],
   )
   const switchAuthLabel = typeof switchAuthCta?.label === 'string' && switchAuthCta.label.trim().length > 0 ? switchAuthCta.label.trim() : null
   const isVanityPaidFeatureError = useCallback((message: string | null | undefined): boolean => {
@@ -2199,7 +2214,7 @@ function DeployVaultBatcher({
 
     const completed = await pollSession({
       sessionId,
-      postJson: postJsonWithTimeout,
+      postJson: postDeployJsonWithAuth,
       ensurePaymasterSession,
       ensureDeploySessionSignerInstalled,
       clearDeploySession,
@@ -2223,6 +2238,7 @@ function DeployVaultBatcher({
     ensurePaymasterSession,
     onSuccess,
     owner,
+    postDeployJsonWithAuth,
     pollSession,
   ])
 
@@ -6793,7 +6809,7 @@ function DeployVaultBatcher({
             <ShareBridgeFinalizeWiringPanel
               enabled={ovaultMeshEnabledForSession}
               publicClient={publicClient}
-              batcherAddress={batcherAddress}
+              batcherAddress={batcherAddress ?? null}
               finalizeParams={pipeAFinalizeParams}
               wrapperDeployed={pipeAWrapperDeployed}
             />

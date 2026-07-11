@@ -39,6 +39,7 @@ describe('swapUtils token identity', () => {
     expect(options.some((o) => o.address.toLowerCase() === creator.toLowerCase() && o.group === 'creator')).toBe(true)
     expect(options.some((o) => o.address.toLowerCase() === share.toLowerCase() && o.group === 'share')).toBe(true)
     expect(options.find((o) => o.group === 'share')?.logoUrl).toBe(shareTokenLogo(share))
+    expect(shareTokenLogo(share)).toContain('tokenKind=share')
   })
 
   it('deduplicates repeated addresses and falls back share metadata to short address', () => {

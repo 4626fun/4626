@@ -148,7 +148,7 @@ The Solana integration runs as separate workflows (cron-driven, independent from
 | Workflow | What | Schedule |
 |----------|------|----------|
 | **keepr-solana-relay-entries** | Relay PendingEntries PDAs to Base | 30s |
-| **keepr-solana-settle-fees** | Settle TransferFeeConfig fees to Base gauge | 5m |
+| **keepr-solana-settle-fees** | Harvest TransferFeeConfig fees to the keeper Token-2022 ATA (no Base forward) | 5m |
 | **keepr-solana-winner-relay** | Relay Base winners to Solana WinnerRecord PDA | 1m |
 | **keepr-solana-graduation** | Close Alpha Vault when Base CCA graduates | 1m |
 | **keepr-solana-price-monitor** | Monitor DLMM price + recenter on deviation | 1m |
@@ -167,6 +167,11 @@ Optional operational hardening for the winner relay:
 - `SOLANA_WINNER_RELAY_STATE_FILE` to persist Base event checkpoints across process restarts
 - `SOLANA_CREATOR_COIN_TO_MINT_MAPPING_FILE` for file-backed creatorCoin → Solana mint mappings
 - `SOLANA_TWIN_TO_PUBKEY_MAPPING_FILE` for file-backed Twin → Solana pubkey mappings
+- `SOLANA_WINNER_RELAY_FINALITY_DEPTH` to process only blocks at least this deep (default `64`)
+
+The fee-harvest workflow is deliberately harvest-only. It leaves harvested
+tokens in the keeper Token-2022 ATA and does not call `receiveFeeFromSolana`
+or perform any Base-side accounting.
 
 ## Solana Launch Scripts
 

@@ -5,7 +5,6 @@ import { useLoginWithEmail, usePrivy } from '@privy-io/react-auth'
 
 import { META, PageMeta } from '@/components/seo/PageMeta'
 import { apiFetch } from '@/lib/api/apiBase'
-import { writeStoredSessionToken } from '@/hooks/useSiweAuth'
 import {
   clearStoredTelegramMiniAppLinkContext,
   resolveTelegramMiniAppLinkContext,
@@ -229,8 +228,6 @@ export function TelegramLink() {
       if (!authRes.ok || !authJson?.success || !authJson.data?.sessionToken) {
         throw new Error(authJson?.error || 'Could not establish a 4626 session for setup continuation.')
       }
-      writeStoredSessionToken(authJson.data.sessionToken)
-
       const handoffRes = await apiFetch('/api/auth/handoff/create', {
         method: 'POST',
         withCredentials: true,

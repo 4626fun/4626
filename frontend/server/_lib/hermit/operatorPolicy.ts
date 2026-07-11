@@ -17,6 +17,7 @@ function parseSecondToken(raw: string): string {
 export function isHermitOperatorOnlyCommand(rawCommand: string): boolean {
   const first = parseLeadingToken(rawCommand)
   if (first === '/arena' || first === '/signal') return true
+  if (first === '/h' && parseSecondToken(rawCommand) === 'arena') return true
   if (first !== '/strategy') return false
   return parseSecondToken(rawCommand) === 'bias'
 }

@@ -7364,6 +7364,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const dismissOwnerUserId = callbackDataLower.startsWith('message:delete:')
         ? asTrimmed(callbackDataLower.slice('message:delete:'.length))
         : ''
+      const callbackChatType = asTrimmed((callbackQuery as any)?.message?.chat?.type).toLowerCase()
+      const callbackIsPrivate = callbackChatType === 'private' || isPrivateChatId(chatId)
+      if (!callbackIsPrivate && !dismissOwnerUserId) {
+        await answerTelegramCallbackQuery({
+          botToken,
+          callbackQueryId,
+          text: 'This group message cannot be dismissed without an owner.',
+          showAlert: true,
+        }).catch(() => {})
+        return res.status(200).json({
+          success: true,
+          data: { ok: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
+        } satisfies ApiEnvelope<TelegramWebhookOk>)
+      }
       if (dismissOwnerUserId && dismissOwnerUserId !== userId) {
         await answerTelegramCallbackQuery({
           botToken,

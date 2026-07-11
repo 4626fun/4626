@@ -148,12 +148,14 @@ function normalizeRuntimeBytecode(code: string | undefined): string {
   return trimmed.startsWith('0x') ? trimmed.slice(2) : trimmed
 }
 
-function readLocalPhase3HelperArtifact(): {
+type LocalPhase3HelperArtifact = {
   abi: readonly unknown[]
   bytecode: Hex
   deployedBytecode: string
   immutableReferences: ImmutableReferenceMap
-} {
+}
+
+function readLocalPhase3HelperArtifact(): LocalPhase3HelperArtifact {
   const artifact = JSON.parse(readFileSync(PHASE3_HELPER_ARTIFACT_PATH, 'utf8')) as {
     abi: readonly unknown[]
     bytecode?: { object?: string }
@@ -235,6 +237,7 @@ function deployPhase3HelperViaForge(params: {
 export async function readPhase3HelperBytecodeAligned(params: {
   publicClient: ReadContractClient
   batcher: Address
+  readLocalArtifact?: () => LocalPhase3HelperArtifact
 }): Promise<{
   aligned: boolean
   batcherImmutableAligned: boolean
@@ -258,7 +261,8 @@ export async function readPhase3HelperBytecodeAligned(params: {
       functionName: 'batcher',
     })) as Address,
   )
-  const { deployedBytecode: localDeployedBytecode, immutableReferences } = readLocalPhase3HelperArtifact()
+  const { deployedBytecode: localDeployedBytecode, immutableReferences } =
+    (params.readLocalArtifact ?? readLocalPhase3HelperArtifact)()
   const onChainBytecode = normalizeRuntimeBytecode(
     await params.publicClient.getBytecode({ address: phase3Helper }),
   )

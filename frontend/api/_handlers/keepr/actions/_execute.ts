@@ -109,6 +109,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   const trustZoneEnvKey = getKeeprTrustZoneEnvKey(trustZone)
   const trustZoneSecret = String(process.env[trustZoneEnvKey] ?? '').trim()
+  const isProductionRuntime =
+    String(process.env.VERCEL_ENV ?? '').trim().toLowerCase() === 'production' ||
+    Boolean(String(process.env.RAILWAY_ENVIRONMENT_NAME ?? '').trim())
+  if (isProductionRuntime && !trustZoneSecret) {
+    return res.status(503).json({
+      success: false,
+      error: `Server misconfigured: ${trustZoneEnvKey} is required in production`,
+    } satisfies ApiEnvelope<never>)
+  }
   if (trustZoneSecret) {
     if (
       !requireOptionalHeaderEnvAuth(req, res, {

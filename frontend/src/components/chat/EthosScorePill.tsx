@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 
 import { apiFetch } from '@/lib/api/apiBase'
+import { toSafeHttpsUrl } from '@/lib/security/externalUrl'
 import { cn } from '@/lib/shared/utils'
 
 export type EthosScoreValue = {
@@ -463,6 +464,7 @@ export function EthosAvatarScoreBadge({
   const closeTimerRef = useRef<number | null>(null)
   const profile = useEthosProfileSummary(profileQuery, profileQueryKind, hoverIntent)
   const profileValue = profile.data ?? null
+  const safeProfileUrl = toSafeHttpsUrl(profileValue?.profileUrl, { allowedDomains: ['ethos.network'] })
 
   const clearCloseTimer = () => {
     if (!closeTimerRef.current) return
@@ -554,9 +556,9 @@ export function EthosAvatarScoreBadge({
               <span className={cn('mt-0.5 block text-[10px] font-semibold', palette.strongTextClass)}>{levelLabel}</span>
             </span>
           </span>
-          {profileValue?.profileUrl ? (
+          {safeProfileUrl ? (
             <a
-              href={profileValue.profileUrl}
+              href={safeProfileUrl}
               target="_blank"
               rel="noreferrer"
               className="block border-t border-white/10 px-3 py-2 text-center text-[11px] font-semibold text-white transition-colors hover:bg-white/8"

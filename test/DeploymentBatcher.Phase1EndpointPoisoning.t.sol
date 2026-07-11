@@ -83,6 +83,7 @@ contract MockShareOFT {
     string public shareSymbol;
     address public registry;
     address public vault;
+    address public wrapper;
 
     constructor(string memory _name, string memory _symbol, address _registry, address _owner) {
         shareName = _name;
@@ -98,6 +99,10 @@ contract MockShareOFT {
 
     function setVault(address _vault) external {
         vault = _vault;
+    }
+
+    function setWrapper(address _wrapper) external {
+        wrapper = _wrapper;
     }
 
     function setMinter(address, bool) external {}
@@ -354,6 +359,7 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
 
         assertEq(out.shareOFT, address(squattedShareOFT), "should reuse existing deterministic ShareOFT");
         assertEq(MockWrapper(wrapperAddr).shareOFT(), address(squattedShareOFT), "wrapper should wire existing ShareOFT");
+        assertEq(squattedShareOFT.wrapper(), wrapperAddr, "ShareOFT should wire existing wrapper");
     }
 }
 

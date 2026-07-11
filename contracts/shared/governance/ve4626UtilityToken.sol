@@ -8,8 +8,8 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
  * @title ve4626UtilityToken
  * @notice Non-transferable balance representing a utility of ve■4626 power.
  * @dev Minted only by `ve4626Utility`. Two instances:
- *      - vote   → gauge voting / fee weight
- *      - chance → optional personal lottery mult
+ *      - ve33      → gauge voting / fee weight
+ *      - veLottery → optional personal lottery multiplier
  *
  * Naming: docs/contracts/governance/ve-naming.md
  * - Product lock: ve■4626 only

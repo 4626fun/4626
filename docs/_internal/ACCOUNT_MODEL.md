@@ -33,7 +33,7 @@ and what works on `4626.fun` today:
 | # | Population | Connected wallet | Canonical CSW | Signer | Sub-account? | Spend permission? | What works on 4626.fun today |
 |---|---|---|---|---|---|---|---|
 | (a) | **Privy email-only** — signed up via email on 4626.fun | Privy embedded EOA only | none (no parent CSW) | Privy embedded EOA | No | No | All EOA-friendly flows: vault deposits, swaps, gauge votes. No CSW-gated flows. |
-| (b) | **Base App user** — signed in via Base App | Parent CSW (passkey at `owner[0]`) | The Base App CSW | Frontend: Privy embedded EOA as direct owner of parent CSW (`legacy-owner-install`); sub-account via `setToOwnerAccount()` is flag-gated swap-only fallback. Server: Privy server wallet added to parent CSW (separate track). | Wired (orchestrator + waitlist step; ships dark behind `WAITLIST_SUBACCOUNT_FLOW_ENABLED` / `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED`) | Planned (Track C / waitlist scope; v1 ships without) | **Today:** EOA-friendly flows only — same surface as population (a). The sub-account orchestrator (`setupSubAccount` + `useSubAccountSetup`) is wired into the waitlist `connect-base-app` step but the user-visible flow stays off until both `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` (server) and `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` (frontend) are flipped in production. Base App-gated owner mutations on the parent CSW are **not** available and will not be (see §4). This row will flip from "EOA-friendly flows only" to "sub-account-backed canonical flows" only after the production flag flip lands; do not edit the row earlier than that. |
+| (b) | **Base App user** — signed in via Base App | Parent CSW (passkey at `owner[0]`) | The Base App CSW | Frontend: Privy embedded EOA as direct owner of parent CSW (`legacy-owner-install`). Server automation: Privy server wallet delegated directly on the parent CSW. | Optional app-scoped swap infrastructure only; never required by waitlist onboarding or server command execution | No | Parent-CSW canonical flows use `canonical4337`. A distinct `profiles.base_sub_account` may support an explicitly flag-gated swap route, but it is not canonical identity, deploy infrastructure, or a server command sender. |
 | (c) | **Zora CSW user with EOA owner in our Supabase mapping** | The user-controlled EOA from `zora_csw_owners.current_owners` (often the Privy-embedded EOA from Zora's own onboarding) | The Zora-deployed CSW | EOA owner of the Zora CSW | Possible but not the default | No | March-9 owner-`executeBatch` lane works for owner-mutating calls on the Zora CSW (e.g. `addOwnerAddress`). Signed UserOps via the EOA owner work for `setPayoutRecipient` / `transferOwnership` on the creator coin (this is **what the deploy flow already does** — see §5). |
 | (d) | **Zora CSW user with no EOA owner** | The Zora CSW (Coinbase-managed signers only — passkeys) | The Zora-deployed CSW | None we can use from a third-party dapp | No (Base App middleware blocks owner-mutation UserOps from third-party dapps for this population — same constraint as (b) for owner mutations) | No | Read paths only. Pre-flight simulation in the deploy flow detects this and surfaces a clear error before any signature prompt. The user must complete owner-gated actions from inside Zora / Base App's own UI. |
 
@@ -102,9 +102,8 @@ drift independently:
   is the ERC-4337 sender on this track.
   Source: [`frontend/docs/account-auth-invariants.md`](../frontend/docs/account-auth-invariants.md) §"Server-side automation".
 
-- **Daily spend ledger is profile-scoped, not sub-account-scoped.** A
-  user's daily cap is a property of the issuer, independent of which
-  sub-account executes.
+- **Daily spend ledger is profile-scoped.** A user's daily cap is a
+  property of the issuer whose parent canonical CSW executes.
   Source: [docs/_internal/design/arch-b-sub-account-design-addendum.md](./design/arch-b-sub-account-design-addendum.md) §"Invariants preserved".
 
 - **Hard-fail (not silent fallback) when the issuer is not
@@ -140,22 +139,24 @@ drift independently:
 
 ## 4. Schema — `command_issuer_execution_context`
 
-Verbatim column types and semantics from
+Historical column types from
 [`frontend/db/migrations-legacy/028_arch_b_sub_accounts.sql`](../frontend/db/migrations-legacy/028_arch_b_sub_accounts.sql).
-The migration file is the source of truth; if you find this table
-documented elsewhere with different types, that other doc is wrong:
+These columns remain for schema compatibility but are retired execution
+artifacts. Active rows must keep them NULL. The shared command-issuer resolver
+fails closed if any artifact is present, if a spend permission was revoked or
+expired, or if `smart_wallet_address` differs from `profiles.csw_address`.
 
 | Column | Type | Semantics |
 |---|---|---|
-| `sub_account_address` | `TEXT` | 0x-hex execution address. When NULL, `smart_wallet_address` IS the execution surface (legacy direct-CSW execution). When non-NULL, `smart_wallet_address` is kept in sync with `sub_account_address`. |
-| `parent_csw_address` | `TEXT` | 0x-hex funding CSW whose balance backs spend. |
-| `spend_permission_payload` | `JSONB` | EIP-712 SpendPermission struct (full struct stored for replay). |
-| `spend_permission_signature` | `TEXT` | 0x-hex signature from a parent-CSW owner EOA over the EIP-712 hash. Accepted by `SpendPermissionManager.approveWithSignature`. **Stored as TEXT, not bytea.** |
-| `spend_permission_hash` | `TEXT` | 0x-hex EIP-712 hash for dedupe / lookup. **Stored as TEXT, not bytea.** |
-| `spend_allowance_wei` | `NUMERIC(78, 0)` | Wei budget per period; denormalized from payload. |
-| `spend_period_seconds` | `INTEGER` | Period length in seconds; denormalized from payload. |
-| `spend_permission_end_at` | `TIMESTAMPTZ` | End of permission validity. |
-| `spend_permission_revoked_at` | `TIMESTAMPTZ` | Soft-revocation timestamp; set ⇒ refuse. |
+| `sub_account_address` | `TEXT` | Retired; active rows must be NULL. |
+| `parent_csw_address` | `TEXT` | Retired; canonical parent is `profiles.csw_address`; active rows must be NULL. |
+| `spend_permission_payload` | `JSONB` | Retired; active rows must be NULL. |
+| `spend_permission_signature` | `TEXT` | Retired; active rows must be NULL. |
+| `spend_permission_hash` | `TEXT` | Retired; active rows must be NULL. |
+| `spend_allowance_wei` | `NUMERIC(78, 0)` | Retired; active rows must be NULL. |
+| `spend_period_seconds` | `INTEGER` | Retired; active rows must be NULL. |
+| `spend_permission_end_at` | `TIMESTAMPTZ` | Retired validity residue; an expired value fails closed. |
+| `spend_permission_revoked_at` | `TIMESTAMPTZ` | Retired revocation residue; any value fails closed as revoked. |
 
 > **Drift watch.** An older draft of the design
 > ([docs/_internal/design/arch-b-sub-account-design-addendum.md](./design/arch-b-sub-account-design-addendum.md))
@@ -237,7 +238,7 @@ including a passkey-direct UserOp lane that bypasses Base App entirely
 via `navigator.credentials.get()`. These are dev-scoped diagnostics.
 **Do not surface to end users.**
 
-### 5.3 Sub-account orchestrator — wired into waitlist signup flow
+### 5.3 Sub-account orchestrator — retained optional infrastructure
 
 **Location.** `frontend/src/lib/wallet/subAccountSetup.ts`
 (`setupSubAccount()` orchestrator) and `frontend/src/hooks/useSubAccountSetup.ts`
@@ -255,31 +256,24 @@ parent-CSW owner-install path. Server endpoint:
 3. `setToOwnerAccount(...)` — silent, no popup; routes future signing
    through the embedded EOA.
 
-**Status.** Wired into the waitlist signup flow as of Track C2. Ships
-dark behind `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED` (frontend) +
-`WAITLIST_SUBACCOUNT_FLOW_ENABLED` (server, Track C1). Default off in
-production until the flags are flipped. Spec:
+**Status.** Retained for an explicitly opted-in, flag-gated swap lane. It is
+not part of default waitlist onboarding and must not be required for account
+creation, canonical identity, deploy, XMTP, or server command execution. Spec:
 [docs/_internal/design/sub-accounts-baseapp-design.md](./design/sub-accounts-baseapp-design.md).
 
-### 5.4 Track-aware XMTP (waitlist group + app messaging)
+### 5.4 Canonical-parent XMTP (waitlist group + app messaging)
 
-**Decision (2026-05).** Waitlist group chat and user-facing XMTP must
-support **both** execution tracks:
-
-| Track | XMTP inbox / group member address | Eligibility |
-|---|---|---|
-| `legacy-owner-install` | Parent CSW (`profiles.csw_address`) | Embedded EOA is an on-chain owner of the parent CSW |
-| `sub-account` | App sub-account (`profiles.base_sub_account`) | Distinct sub-account registered; embedded EOA is the sub-account signer |
+**Current decision.** Waitlist group chat and user-facing XMTP use the parent
+canonical CSW (`profiles.csw_address`). App sub-accounts are not promoted to
+messaging identity.
 
 **Invariants preserved:**
 - Parent CSW remains custody + public identity (leaderboard, Explore
   display). Sub-account is never promoted to `profiles.csw_address` or
   `is_canonical_smart_wallet`.
-- Waitlist group membership may mix parent CSW and sub-account addresses.
-- Sub-account provisioning domain stays `4626.fun` on both
-  `4626.fun` and `app.4626.fun` so the same app wallet inbox persists
-  across hosts. Browser XMTP install state remains per-origin until a
-  dedicated cross-origin handoff ships.
+- Waitlist group membership uses canonical parent-CSW addresses.
+- Browser XMTP install state remains per-origin until a dedicated
+  cross-origin handoff ships.
 
 **Location.** Eligibility:
 `frontend/server/_lib/waitlist/waitlistXmtpChatEligibility.ts`.
@@ -289,23 +283,18 @@ Client identity resolution:
 `frontend/src/lib/xmtp/provider.tsx` (reads `xmtpMemberAddress` from
 status).
 
-### 5.5 Arch B agent commands — server-side spend-permission flow
+### 5.5 Agent commands — parent-CSW delegated-owner flow
 
-**Location.** Server: `frontend/server/_lib/wallet/userOperationSubmitter.ts`,
-`frontend/server/_lib/wallet/commandIssuerContext.ts`.
-Provisioning endpoints:
-`frontend/api/_handlers/arch-b/_subAccountProvisionPrepare.ts`,
-`_subAccountProvisionCommit.ts`. Design:
-[docs/_internal/design/arch-b-sub-account-design-addendum.md](./design/arch-b-sub-account-design-addendum.md).
+**Location.** Shared resolver:
+`frontend/packages/server-core/src/commandIssuerContext.ts`; submission:
+`frontend/server/_lib/wallet/userOperationSubmitter.ts`.
 
-**Different population than the waitlist sub-account flow.** This
-server flow requires a parent EOA owner key that the *user controls* and
-that the *server* can use to sign EIP-712 SpendPermissions. It is in
-production for the agent command paths (`/coin buy`, `/coin sell`,
-`/keepr send`, `/coin trend reserve`). It is **not** the right
-infrastructure for the waitlist Base App connection — that path needs
-its own simpler endpoint per
-[docs/_internal/design/sub-accounts-baseapp-design.md](./design/sub-accounts-baseapp-design.md).
+**Current model.** Server command execution sends from the profile's parent
+canonical CSW (`profiles.csw_address`) using its delegated Privy server-wallet
+owner. The resolver requires `smart_wallet_address` to equal that canonical
+CSW and rejects retired sub-account or SpendPermission residue. Historical
+sub-account provisioning endpoints and design documents are not active
+execution authority.
 
 ### 5.6 Indexer: `zora_csw_owners` (the (c) vs (d) discriminator)
 
@@ -324,12 +313,8 @@ owner EOAs, refreshed via cron. This is how we identify population (c)
 
 Honest inventory of what isn't built:
 
-- ~~**Sub-accounts on the waitlist signup flow (Track C).**~~ **Closed.**
-  Server half (Track C1, PR #532) and frontend half (Track C2, this PR)
-  both shipped; the flow ships dark behind
-  `WAITLIST_SUBACCOUNT_FLOW_ENABLED` (server) +
-  `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED` (frontend). See §5.3 and
-  [docs/_internal/design/sub-accounts-baseapp-design.md](./design/sub-accounts-baseapp-design.md).
+- **Optional app-scoped swap sub-account lane.** Infrastructure remains
+  flag-gated and must stay outside default waitlist onboarding. See §5.3.
 - **User-facing copy for population (d) when the deploy pre-flight
   simulation fails.** Today the deploy throws a generic-ish "Cannot set
   CreatorCoin payout recipient ... from <owner>" error. Population (d)
@@ -337,10 +322,6 @@ Honest inventory of what isn't built:
   with a link out. This is the only remaining gap from the
   [zora-payout-recipient-design.md](./zora-payout-recipient-design.md)
   reference architecture.
-
-- **Spend Permission UX for waitlist sub-accounts.** Sub-accounts in
-  v1 of the waitlist flow execute against their own balance (zero,
-  until funded). Funding via Spend Permissions is a follow-up.
 
 ---
 

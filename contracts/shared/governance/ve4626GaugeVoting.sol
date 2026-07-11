@@ -35,15 +35,15 @@ interface Ive4626 {
     function getLock(address user) external view returns (Ive4626Lock memory);
 }
 
-interface Ive4626Vote {
+interface Ive4626Ve33 {
     function balanceOf(address user) external view returns (uint256);
 }
 
 /// @dev Minimal surface of ve4626Utility for decay-safe voting power.
 interface Ive4626Utility {
-    function sync(address user) external returns (uint256 burnedVote, uint256 burnedChance);
-    function effectiveVoteOf(address user) external view returns (uint256);
-    function vote() external view returns (address);
+    function sync(address user) external returns (uint256 burnedVe33, uint256 burnedVeLottery);
+    function effectiveVe33Of(address user) external view returns (uint256);
+    function ve33() external view returns (address);
 }
 
 // FIX: G-09 — lock struct for getLock return
@@ -115,13 +115,13 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
     // STATE
     // ================================
 
-    /// @notice ve■4626 commitment for voting power (fallback when vote token unset)
+    /// @notice ve■4626 commitment for voting power (fallback when ve33 token unset)
     Ive4626 public immutable ve4626;
 
-    /// @notice Optional raw veVote token; used only if `utility` unset (legacy).
-    Ive4626Vote public voteToken;
+    /// @notice Optional raw ve33 token; used only if `utility` is unset.
+    Ive4626Ve33 public ve33Token;
 
-    /// @notice Preferred: ve4626Utility — `vote()` syncs then uses post-decay effective vote.
+    /// @notice Preferred: ve4626Utility — `vote()` syncs then uses post-decay effective ve33.
     Ive4626Utility public utility;
 
     /// @notice Optional registry for auto-whitelisting vaults
@@ -183,7 +183,7 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
     // Power-split / epoch freeze
     error VoteFreezeWindow();
 
-    event VoteTokenUpdated(address indexed token);
+    event Ve33TokenUpdated(address indexed token);
     event UtilityUpdated(address indexed utility);
 
     // ================================
@@ -212,19 +212,19 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
     // VOTING FUNCTIONS
     // ================================
 
-    function setVoteToken(address token) external onlyOwner {
-        voteToken = Ive4626Vote(token);
-        emit VoteTokenUpdated(token);
+    function setVe33Token(address token) external onlyOwner {
+        ve33Token = Ive4626Ve33(token);
+        emit Ve33TokenUpdated(token);
     }
 
-    /// @notice Wire ve4626Utility so votes use decay-safe power (sync + effective vote).
+    /// @notice Wire ve4626Utility so votes use decay-safe power (sync + effective ve33).
     function setUtility(address utility_) external onlyOwner {
         utility = Ive4626Utility(utility_);
         emit UtilityUpdated(utility_);
-        // Keep voteToken pointer aligned when utility is set (for explorers / integrators).
+        // Keep ve33Token pointer aligned when utility is set (for explorers / integrators).
         if (utility_ != address(0)) {
-            voteToken = Ive4626Vote(Ive4626Utility(utility_).vote());
-            emit VoteTokenUpdated(address(voteToken));
+            ve33Token = Ive4626Ve33(Ive4626Utility(utility_).ve33());
+            emit Ve33TokenUpdated(address(ve33Token));
         }
     }
 
@@ -245,16 +245,20 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
         Ive4626Lock memory userLock = ve4626.getLock(msg.sender);
         if (userLock.start + EPOCH_DURATION > block.timestamp) revert LockTooRecent();
 
-        // Decay-safe power: prefer utility (sync then effective); else raw voteToken; else live ve
+        // Claimed utility semantics are preserved (a user cannot vote with unclaimed
+        // capacity), but neither utility nor the raw ve33 token may carry more weight
+        // than the user's ve power at the end of this epoch.
+        uint256 projectedPower = ve4626.votingPowerAt(msg.sender, epochEnd);
         uint256 userPower;
         if (address(utility) != address(0)) {
             utility.sync(msg.sender);
-            userPower = utility.effectiveVoteOf(msg.sender);
-        } else if (address(voteToken) != address(0)) {
-            userPower = voteToken.balanceOf(msg.sender);
+            userPower = utility.effectiveVe33Of(msg.sender);
+        } else if (address(ve33Token) != address(0)) {
+            userPower = ve33Token.balanceOf(msg.sender);
         } else {
-            userPower = ve4626.votingPowerAt(msg.sender, epochEnd);
+            userPower = projectedPower;
         }
+        if (userPower > projectedPower) userPower = projectedPower;
         if (userPower == 0) revert NoVotingPower();
         if (ve4626.getRemainingLockTime(msg.sender) < timeUntilNextEpoch()) revert LockExpiresBeforeEpochEnd();
 

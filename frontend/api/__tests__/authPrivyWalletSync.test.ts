@@ -14,6 +14,8 @@ const {
   syncUserWalletsMock,
   verifyAuthTokenMock,
   getUserByIdMock,
+  createWalletsMock,
+  walletApiCreateMock,
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
@@ -30,9 +32,33 @@ const {
     primaryWalletAddress: '0x00000000000000000000000000000000000000aa',
   })),
   verifyAuthTokenMock: vi.fn(async () => ({ userId: 'did:privy:test-user' })),
-  getUserByIdMock: vi.fn(async () => ({
+  getUserByIdMock: vi.fn(async (): Promise<{
+    id: string
+    linkedAccounts: Array<{
+      type: string
+      address: string
+      walletClientType?: string
+      chainType?: string
+    }>
+  }> => ({
     id: 'did:privy:test-user',
     linkedAccounts: [{ type: 'smart_wallet', address: '0x00000000000000000000000000000000000000aa' }],
+  })),
+  createWalletsMock: vi.fn(async (): Promise<{
+    id: string
+    linkedAccounts: Array<{
+      type: string
+      address: string
+      walletClientType?: string
+      chainType?: string
+    }>
+  }> => ({
+    id: 'did:privy:test-user',
+    linkedAccounts: [],
+  })),
+  walletApiCreateMock: vi.fn(async () => ({
+    id: 'wallet-id',
+    address: '0x00000000000000000000000000000000000000dd',
   })),
 }))
 
@@ -75,6 +101,10 @@ vi.mock('@privy-io/server-auth', () => ({
   PrivyClient: class {
     verifyAuthToken = verifyAuthTokenMock
     getUserById = getUserByIdMock
+    createWallets = createWalletsMock
+    walletApi = {
+      create: walletApiCreateMock,
+    }
   },
 }))
 
@@ -85,6 +115,27 @@ describe('auth privy wallet sync', () => {
     vi.clearAllMocks()
     getDbMock.mockResolvedValue({ sql: vi.fn(async () => ({ rows: [] })) })
     checkDurableRateLimitMock.mockResolvedValue({ allowed: true, resetAt: Date.now() + 60_000 })
+    verifyAuthTokenMock.mockResolvedValue({ userId: 'did:privy:test-user' })
+    getUserByIdMock.mockResolvedValue({
+      id: 'did:privy:test-user',
+      linkedAccounts: [{ type: 'smart_wallet', address: '0x00000000000000000000000000000000000000aa' }],
+    })
+    createWalletsMock.mockResolvedValue({
+      id: 'did:privy:test-user',
+      linkedAccounts: [],
+    })
+    walletApiCreateMock.mockResolvedValue({
+      id: 'wallet-id',
+      address: '0x00000000000000000000000000000000000000dd',
+    })
+    syncUserWalletsMock.mockResolvedValue({
+      profileId: 1,
+      canonicalSmartWallet: { address: '0x00000000000000000000000000000000000000aa', provider: 'coinbase_wallet' },
+      activeOwnerWallet: { address: '0x00000000000000000000000000000000000000bb', provider: 'privy', walletType: 'embedded_eoa' },
+      embeddedEoa: { address: '0x00000000000000000000000000000000000000bb', chainType: 'evm', clientType: 'embedded' },
+      connectedWallets: [],
+      primaryWalletAddress: '0x00000000000000000000000000000000000000aa',
+    })
     restoreEnv = applyEnv({
       PRIVY_APP_ID: 'test-privy-id',
       PRIVY_APP_SECRET: 'test-privy-secret',
@@ -348,6 +399,14 @@ describe('auth privy wallet sync', () => {
       id: 'did:privy:test-user',
       linkedAccounts: [],
     })
+    createWalletsMock.mockResolvedValue({
+      id: 'did:privy:test-user',
+      linkedAccounts: [],
+    })
+    walletApiCreateMock.mockResolvedValue({
+      id: 'wallet-id',
+      address: '0x00000000000000000000000000000000000000dd',
+    })
     syncUserWalletsMock.mockResolvedValue({
       profileId: 1,
       canonicalSmartWallet: null,
@@ -364,8 +423,125 @@ describe('auth privy wallet sync', () => {
     const res = createMockRes()
     await handler(req, res)
 
+    expect(createWalletsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'did:privy:test-user',
+        createEthereumWallet: true,
+      }),
+    )
+    expect(walletApiCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chainType: 'ethereum',
+        owner: { userId: 'did:privy:test-user' },
+      }),
+    )
     expect(res.statusCode).toBe(400)
     expect(res.body?.error).toContain('No Privy wallet is ready yet')
+  })
+
+  it('falls back to walletApi.create when createWallets leaves the user empty', async () => {
+    getUserByIdMock
+      .mockResolvedValueOnce({
+        id: 'did:privy:test-user',
+        linkedAccounts: [],
+      })
+      .mockResolvedValueOnce({
+        id: 'did:privy:test-user',
+        linkedAccounts: [
+          {
+            type: 'wallet',
+            address: '0x00000000000000000000000000000000000000dd',
+            walletClientType: 'privy',
+            chainType: 'ethereum',
+          },
+        ],
+      })
+    createWalletsMock.mockResolvedValue({
+      id: 'did:privy:test-user',
+      linkedAccounts: [],
+    })
+    walletApiCreateMock.mockResolvedValue({
+      id: 'wallet-id',
+      address: '0x00000000000000000000000000000000000000dd',
+    })
+    syncUserWalletsMock.mockResolvedValue({
+      profileId: 1,
+      canonicalSmartWallet: null,
+      activeOwnerWallet: {
+        address: '0x00000000000000000000000000000000000000dd',
+        provider: 'privy',
+        walletType: 'embedded_eoa',
+      },
+      embeddedEoa: {
+        address: '0x00000000000000000000000000000000000000dd',
+        chainType: 'evm',
+        clientType: 'embedded',
+      },
+      connectedWallets: [],
+      primaryWalletAddress: '0x00000000000000000000000000000000000000dd',
+    } as any)
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-token' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(walletApiCreateMock).toHaveBeenCalled()
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.address).toBe('0x00000000000000000000000000000000000000dd')
+  })
+
+  it('provisions a user-owned embedded EOA when the Privy user has zero wallets', async () => {
+    getUserByIdMock.mockResolvedValue({
+      id: 'did:privy:test-user',
+      linkedAccounts: [],
+    })
+    createWalletsMock.mockResolvedValue({
+      id: 'did:privy:test-user',
+      linkedAccounts: [
+        {
+          type: 'wallet',
+          address: '0x00000000000000000000000000000000000000cc',
+          walletClientType: 'privy',
+          chainType: 'ethereum',
+        },
+      ],
+    })
+    syncUserWalletsMock.mockResolvedValue({
+      profileId: 1,
+      canonicalSmartWallet: null,
+      activeOwnerWallet: {
+        address: '0x00000000000000000000000000000000000000cc',
+        provider: 'privy',
+        walletType: 'embedded_eoa',
+      },
+      embeddedEoa: {
+        address: '0x00000000000000000000000000000000000000cc',
+        chainType: 'evm',
+        clientType: 'embedded',
+      },
+      connectedWallets: [],
+      primaryWalletAddress: '0x00000000000000000000000000000000000000cc',
+    } as any)
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-token' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(createWalletsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'did:privy:test-user',
+        createEthereumWallet: true,
+        createEthereumSmartWallet: false,
+      }),
+    )
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.address).toBe('0x00000000000000000000000000000000000000cc')
   })
 
   it('mints a session for base_account linked accounts when connector identity is on type', async () => {

@@ -25,6 +25,7 @@ function mockConfig(overrides: Partial<ArenaConfig> = {}): ArenaConfig {
     creationEnabled: true,
     dryRun: true,
     agentId: null,
+    degenProfileId: null,
     agentWalletAddress: null,
     hlApiWalletAddress: null,
     hlAgentPrivateKey: null,
@@ -400,10 +401,12 @@ describe('runArenaPositionIntel', () => {
 
   it('returns enriched payloads when Hyperliquid info endpoints respond', async () => {
     const originalFetch = globalThis.fetch
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({ mocked: true }),
-    }))
+    const fetchMock = vi.fn(async (..._args: Parameters<typeof fetch>) =>
+      new Response(JSON.stringify({ mocked: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
     ;(globalThis as unknown as { fetch: typeof fetch }).fetch = fetchMock as unknown as typeof fetch
     try {
       const result = await runArenaPositionIntel(

@@ -12,39 +12,39 @@ interface Ive4626 {
 
 /**
  * @title ve4626Utility
- * @notice Claim vote / chance utilities from live ve■4626 power.
+ * @notice Claim ve33 / veLottery utilities from live ve■4626 power.
  * @dev Product lock: **ve■4626** (`ve4626`). This module: **ve4626Utility** (no ■ in the id).
  *
  *      capacity = dual-decay ve■4626 power (shrinks over time)
- *      free     = capacity - claimedVote - claimedChance  (after sync)
+ *      free     = capacity - claimedVe33 - claimedVeLottery  (after sync)
  *
- *      vote   (veVote)   → ve4626GaugeVoting
- *      chance (veChance) → ve4626BoostManager (lottery mult, opt-in)
+ *      ve33      → ve4626GaugeVoting
+ *      veLottery → ve4626BoostManager (lottery mult, opt-in)
  *
- * Default claim-all: vote only.
+ * Default claim-all: ve33 only.
  *
  * When ve power decays below outstanding utilities, call `sync(user)` (or any claim/forfeit)
- * which burns excess: **chance first**, then vote.
+ * which burns excess: **veLottery first**, then ve33.
  *
  * Naming: docs/contracts/governance/ve-naming.md
  */
 contract ve4626Utility is Ownable, ReentrancyGuard {
     Ive4626 public immutable ve4626;
-    ve4626UtilityToken public immutable vote;
-    ve4626UtilityToken public immutable chance;
+    ve4626UtilityToken public immutable ve33;
+    ve4626UtilityToken public immutable veLottery;
 
-    mapping(address => uint256) public userClaimedVote;
-    mapping(address => uint256) public userClaimedChance;
+    mapping(address => uint256) public userClaimedVe33;
+    mapping(address => uint256) public userClaimedVeLottery;
 
-    /// @notice When true, `claimAllOutstanding` also claims chance (default false).
-    bool public autoClaimChance;
+    /// @notice When true, `claimAllOutstanding` also claims veLottery (default false).
+    bool public autoClaimVeLottery;
 
-    event ClaimedVote(address indexed user, uint256 amount);
-    event ClaimedChance(address indexed user, uint256 amount);
-    event ForfeitedVote(address indexed user, uint256 amount);
-    event ForfeitedChance(address indexed user, uint256 amount);
-    event Synced(address indexed user, uint256 burnedVote, uint256 burnedChance, uint256 capacity);
-    event AutoClaimChanceUpdated(bool enabled);
+    event ClaimedVe33(address indexed user, uint256 amount);
+    event ClaimedVeLottery(address indexed user, uint256 amount);
+    event ForfeitedVe33(address indexed user, uint256 amount);
+    event ForfeitedVeLottery(address indexed user, uint256 amount);
+    event Synced(address indexed user, uint256 burnedVe33, uint256 burnedVeLottery, uint256 capacity);
+    event AutoClaimVeLotteryUpdated(bool enabled);
 
     error ZeroAddress();
     error InsufficientCapacity();
@@ -56,17 +56,17 @@ contract ve4626Utility is Ownable, ReentrancyGuard {
         ve4626 = Ive4626(ve4626_);
 
         // Deploy under this contract so setMinter works, then hand ownership to protocol owner.
-        vote = new ve4626UtilityToken("ve\u25A04626 Vote", "veVote", address(this));
-        chance = new ve4626UtilityToken("ve\u25A04626 Chance", "veChance", address(this));
-        vote.setMinter(address(this));
-        chance.setMinter(address(this));
-        vote.transferOwnership(owner_);
-        chance.transferOwnership(owner_);
+        ve33 = new ve4626UtilityToken("ve\u25A04626 33", "ve33", address(this));
+        veLottery = new ve4626UtilityToken("ve\u25A04626 Lottery", "veLottery", address(this));
+        ve33.setMinter(address(this));
+        veLottery.setMinter(address(this));
+        ve33.transferOwnership(owner_);
+        veLottery.transferOwnership(owner_);
     }
 
-    function setAutoClaimChance(bool enabled) external onlyOwner {
-        autoClaimChance = enabled;
-        emit AutoClaimChanceUpdated(enabled);
+    function setAutoClaimVeLottery(bool enabled) external onlyOwner {
+        autoClaimVeLottery = enabled;
+        emit AutoClaimVeLotteryUpdated(enabled);
     }
 
     // -------------------------------------------------------------------------
@@ -86,162 +86,162 @@ contract ve4626Utility is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Vote/chance balances as if `sync` had just run (view; no state change).
-     * @dev Consumers MUST use these (or call `sync` then `voteOf`/`chanceOf`) so dual-decay
+     * @notice ve33/veLottery balances as if `sync` had just run (view; no state change).
+     * @dev Consumers MUST use these (or call `sync` then `ve33Of`/`veLotteryOf`) so dual-decay
      *      cannot leave inflated utilities after ve power shrinks.
-     *      Haircut order matches sync: **chance first**, then vote.
+     *      Haircut order matches sync: **veLottery first**, then ve33.
      */
-    function previewUtilities(address user) public view returns (uint256 voteAmt, uint256 chanceAmt) {
+    function previewUtilities(address user) public view returns (uint256 ve33Amt, uint256 veLotteryAmt) {
         uint256 cap = capacityOf(user);
-        uint256 claimedV = userClaimedVote[user];
-        uint256 claimedC = userClaimedChance[user];
+        uint256 claimedV = userClaimedVe33[user];
+        uint256 claimedC = userClaimedVeLottery[user];
         uint256 used = claimedV + claimedC;
         if (used <= cap) {
             return (claimedV, claimedC);
         }
 
         uint256 excess = used - cap;
-        chanceAmt = claimedC;
-        voteAmt = claimedV;
+        veLotteryAmt = claimedC;
+        ve33Amt = claimedV;
 
-        if (excess > 0 && chanceAmt > 0) {
-            uint256 burnC = excess > chanceAmt ? chanceAmt : excess;
-            chanceAmt -= burnC;
+        if (excess > 0 && veLotteryAmt > 0) {
+            uint256 burnC = excess > veLotteryAmt ? veLotteryAmt : excess;
+            veLotteryAmt -= burnC;
             excess -= burnC;
         }
-        if (excess > 0 && voteAmt > 0) {
-            uint256 burnV = excess > voteAmt ? voteAmt : excess;
-            voteAmt -= burnV;
+        if (excess > 0 && ve33Amt > 0) {
+            uint256 burnV = excess > ve33Amt ? ve33Amt : excess;
+            ve33Amt -= burnV;
         }
     }
 
-    /// @notice Effective veVote after dual-decay haircut (safe for gauge weight reads).
-    function effectiveVoteOf(address user) external view returns (uint256) {
+    /// @notice Effective ve33 after dual-decay haircut (safe for gauge weight reads).
+    function effectiveVe33Of(address user) external view returns (uint256) {
         (uint256 v,) = previewUtilities(user);
         return v;
     }
 
-    /// @notice Effective veChance after dual-decay haircut (safe for boost share reads).
-    function effectiveChanceOf(address user) external view returns (uint256) {
+    /// @notice Effective veLottery after dual-decay haircut (safe for boost share reads).
+    function effectiveVeLotteryOf(address user) external view returns (uint256) {
         (, uint256 c) = previewUtilities(user);
         return c;
     }
 
     /**
      * @notice Burn utilities that exceed live ve■4626 capacity after dual-decay.
-     * @dev Permissionless. Order: burn **chance** first (opt-in luxury), then **vote**.
+     * @dev Permissionless. Order: burn **veLottery** first (opt-in luxury), then **ve33**.
      *      Also call this from gauge `vote()` so storage balances stay honest.
      */
-    function sync(address user) public nonReentrant returns (uint256 burnedVote, uint256 burnedChance) {
-        (burnedVote, burnedChance) = _sync(user);
+    function sync(address user) public nonReentrant returns (uint256 burnedVe33, uint256 burnedVeLottery) {
+        (burnedVe33, burnedVeLottery) = _sync(user);
     }
 
-    function _sync(address user) internal returns (uint256 burnedVote, uint256 burnedChance) {
+    function _sync(address user) internal returns (uint256 burnedVe33, uint256 burnedVeLottery) {
         uint256 cap = capacityOf(user);
-        uint256 claimedV = userClaimedVote[user];
-        uint256 claimedC = userClaimedChance[user];
+        uint256 claimedV = userClaimedVe33[user];
+        uint256 claimedC = userClaimedVeLottery[user];
         (uint256 keepV, uint256 keepC) = previewUtilities(user);
 
         if (keepV == claimedV && keepC == claimedC) {
             return (0, 0);
         }
 
-        burnedChance = claimedC - keepC;
-        burnedVote = claimedV - keepV;
+        burnedVeLottery = claimedC - keepC;
+        burnedVe33 = claimedV - keepV;
 
-        if (burnedChance > 0) {
-            userClaimedChance[user] = keepC;
-            chance.burn(user, burnedChance);
+        if (burnedVeLottery > 0) {
+            userClaimedVeLottery[user] = keepC;
+            veLottery.burn(user, burnedVeLottery);
         }
-        if (burnedVote > 0) {
-            userClaimedVote[user] = keepV;
-            vote.burn(user, burnedVote);
+        if (burnedVe33 > 0) {
+            userClaimedVe33[user] = keepV;
+            ve33.burn(user, burnedVe33);
         }
 
-        emit Synced(user, burnedVote, burnedChance, cap);
+        emit Synced(user, burnedVe33, burnedVeLottery, cap);
     }
 
     // -------------------------------------------------------------------------
     // Claim / forfeit
     // -------------------------------------------------------------------------
 
-    function claimVote(uint256 amount) external nonReentrant {
+    function claimVe33(uint256 amount) external nonReentrant {
         if (amount == 0) revert ZeroAmount();
         _sync(msg.sender);
         uint256 free = freeCapacityOf(msg.sender);
         if (amount > free) revert InsufficientCapacity();
-        userClaimedVote[msg.sender] += amount;
-        vote.mint(msg.sender, amount);
-        emit ClaimedVote(msg.sender, amount);
+        userClaimedVe33[msg.sender] += amount;
+        ve33.mint(msg.sender, amount);
+        emit ClaimedVe33(msg.sender, amount);
     }
 
-    function claimChance(uint256 amount) external nonReentrant {
+    function claimVeLottery(uint256 amount) external nonReentrant {
         if (amount == 0) revert ZeroAmount();
         _sync(msg.sender);
         uint256 free = freeCapacityOf(msg.sender);
         if (amount > free) revert InsufficientCapacity();
-        userClaimedChance[msg.sender] += amount;
-        chance.mint(msg.sender, amount);
-        emit ClaimedChance(msg.sender, amount);
+        userClaimedVeLottery[msg.sender] += amount;
+        veLottery.mint(msg.sender, amount);
+        emit ClaimedVeLottery(msg.sender, amount);
     }
 
-    /// @notice Claim free capacity as vote (and chance if `autoClaimChance`).
+    /// @notice Claim free capacity as ve33 (and veLottery if `autoClaimVeLottery`).
     function claimAllOutstanding() external nonReentrant {
         _sync(msg.sender);
         uint256 free = freeCapacityOf(msg.sender);
         if (free == 0) return;
 
-        if (autoClaimChance) {
+        if (autoClaimVeLottery) {
             uint256 half = free / 2;
-            uint256 voteAmt = free - half;
-            if (voteAmt > 0) {
-                userClaimedVote[msg.sender] += voteAmt;
-                vote.mint(msg.sender, voteAmt);
-                emit ClaimedVote(msg.sender, voteAmt);
+            uint256 ve33Amt = free - half;
+            if (ve33Amt > 0) {
+                userClaimedVe33[msg.sender] += ve33Amt;
+                ve33.mint(msg.sender, ve33Amt);
+                emit ClaimedVe33(msg.sender, ve33Amt);
             }
             if (half > 0) {
-                userClaimedChance[msg.sender] += half;
-                chance.mint(msg.sender, half);
-                emit ClaimedChance(msg.sender, half);
+                userClaimedVeLottery[msg.sender] += half;
+                veLottery.mint(msg.sender, half);
+                emit ClaimedVeLottery(msg.sender, half);
             }
         } else {
-            userClaimedVote[msg.sender] += free;
-            vote.mint(msg.sender, free);
-            emit ClaimedVote(msg.sender, free);
+            userClaimedVe33[msg.sender] += free;
+            ve33.mint(msg.sender, free);
+            emit ClaimedVe33(msg.sender, free);
         }
     }
 
-    function forfeitVote(uint256 amount) external nonReentrant {
+    function forfeitVe33(uint256 amount) external nonReentrant {
         if (amount == 0) revert ZeroAmount();
         _sync(msg.sender);
-        if (userClaimedVote[msg.sender] < amount) revert InsufficientClaimed();
-        userClaimedVote[msg.sender] -= amount;
-        vote.burn(msg.sender, amount);
-        emit ForfeitedVote(msg.sender, amount);
+        if (userClaimedVe33[msg.sender] < amount) revert InsufficientClaimed();
+        userClaimedVe33[msg.sender] -= amount;
+        ve33.burn(msg.sender, amount);
+        emit ForfeitedVe33(msg.sender, amount);
     }
 
-    function forfeitChance(uint256 amount) external nonReentrant {
+    function forfeitVeLottery(uint256 amount) external nonReentrant {
         if (amount == 0) revert ZeroAmount();
         _sync(msg.sender);
-        if (userClaimedChance[msg.sender] < amount) revert InsufficientClaimed();
-        userClaimedChance[msg.sender] -= amount;
-        chance.burn(msg.sender, amount);
-        emit ForfeitedChance(msg.sender, amount);
+        if (userClaimedVeLottery[msg.sender] < amount) revert InsufficientClaimed();
+        userClaimedVeLottery[msg.sender] -= amount;
+        veLottery.burn(msg.sender, amount);
+        emit ForfeitedVeLottery(msg.sender, amount);
     }
 
     function forfeitAll() external nonReentrant {
         _sync(msg.sender);
-        uint256 v = userClaimedVote[msg.sender];
-        uint256 c = userClaimedChance[msg.sender];
+        uint256 v = userClaimedVe33[msg.sender];
+        uint256 c = userClaimedVeLottery[msg.sender];
         if (v > 0) {
-            userClaimedVote[msg.sender] = 0;
-            vote.burn(msg.sender, v);
-            emit ForfeitedVote(msg.sender, v);
+            userClaimedVe33[msg.sender] = 0;
+            ve33.burn(msg.sender, v);
+            emit ForfeitedVe33(msg.sender, v);
         }
         if (c > 0) {
-            userClaimedChance[msg.sender] = 0;
-            chance.burn(msg.sender, c);
-            emit ForfeitedChance(msg.sender, c);
+            userClaimedVeLottery[msg.sender] = 0;
+            veLottery.burn(msg.sender, c);
+            emit ForfeitedVeLottery(msg.sender, c);
         }
     }
 
@@ -249,21 +249,21 @@ contract ve4626Utility is Ownable, ReentrancyGuard {
     // Views
     // -------------------------------------------------------------------------
 
-    /// @notice Raw token balance (may be stale until `sync`). Prefer `effectiveVoteOf` for weight.
-    function voteOf(address user) external view returns (uint256) {
-        return vote.balanceOf(user);
+    /// @notice Raw token balance (may be stale until `sync`). Prefer `effectiveVe33Of` for weight.
+    function ve33Of(address user) external view returns (uint256) {
+        return ve33.balanceOf(user);
     }
 
-    /// @notice Raw token balance (may be stale until `sync`). Prefer `effectiveChanceOf` for boost.
-    function chanceOf(address user) external view returns (uint256) {
-        return chance.balanceOf(user);
+    /// @notice Raw token balance (may be stale until `sync`). Prefer `effectiveVeLotteryOf` for boost.
+    function veLotteryOf(address user) external view returns (uint256) {
+        return veLottery.balanceOf(user);
     }
 
-    function totalVote() external view returns (uint256) {
-        return vote.totalSupply();
+    function totalVe33() external view returns (uint256) {
+        return ve33.totalSupply();
     }
 
-    function totalChance() external view returns (uint256) {
-        return chance.totalSupply();
+    function totalVeLottery() external view returns (uint256) {
+        return veLottery.totalSupply();
     }
 }

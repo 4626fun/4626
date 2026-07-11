@@ -15,8 +15,9 @@ import { createPrivyScwSigner } from './privyXmtpSigner.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
-function readXmtpEnv(): string {
-  return (process.env.XMTP_ENV ?? 'production').trim()
+function readXmtpEnv(): 'dev' | 'local' | 'production' {
+  const env = (process.env.XMTP_ENV ?? 'production').trim()
+  return env === 'dev' || env === 'local' || env === 'production' ? env : 'production'
 }
 
 function readXmtpDbPlaintextOnly(): boolean {

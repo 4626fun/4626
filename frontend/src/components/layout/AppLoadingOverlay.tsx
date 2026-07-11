@@ -135,28 +135,31 @@ export function useAppLoadingShellActive(): boolean {
 }
 
 /**
- * Full-screen bootstrap handoff: register the shared overlay and keep route
- * content out of the document until the gate closes.
+ * Full-screen bootstrap handoff: register the shared overlay while keeping
+ * route children mounted.
+ *
+ * Children must stay mounted under the overlay. Unmounting them while Privy
+ * (or other SDKs) flip `ready` causes remount flicker in Base App / in-app
+ * WebViews — Loading → waitlist → Loading — which looks like a broken page.
  */
 export function AppLoadingBootstrapGate(props: { active: boolean; children: ReactNode; label?: string }) {
   const reduceMotion = useReducedMotion()
 
-  if (props.active) {
-    return <AppLoadingRegistrar label={props.label} />
-  }
-
   return (
-    <motion.div
-      initial={reduceMotion ? false : { opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={
-        reduceMotion
-          ? { duration: 0 }
-          : { duration: DURATION.standard, ease: BASE_EASE }
-      }
-    >
-      {props.children}
-    </motion.div>
+    <>
+      {props.active ? <AppLoadingRegistrar label={props.label} /> : null}
+      <motion.div
+        initial={reduceMotion || props.active ? false : { opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={
+          reduceMotion
+            ? { duration: 0 }
+            : { duration: DURATION.standard, ease: BASE_EASE }
+        }
+      >
+        {props.children}
+      </motion.div>
+    </>
   )
 }
 

@@ -7,10 +7,24 @@ const {
   createPublicClientMock,
   createWalletClientMock,
   privateKeyToAccountMock,
+  settleVaultMock,
+  validateKeeperVaultListingMock,
 } = vi.hoisted(() => ({
   createPublicClientMock: vi.fn(),
   createWalletClientMock: vi.fn(),
   privateKeyToAccountMock: vi.fn(),
+  settleVaultMock: vi.fn(),
+  validateKeeperVaultListingMock: vi.fn(),
+}))
+
+vi.mock('../../server/_lib/controlPlane/vaultControlPlane.js', () => ({
+  createVaultControlPlane: () => ({
+    settleVault: settleVaultMock,
+  }),
+}))
+
+vi.mock('../../server/_lib/onchain/registry4626Verification.js', () => ({
+  validateKeeperVaultListing: validateKeeperVaultListingMock,
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -43,6 +57,7 @@ const EXPECTED_BURN_STREAM = '0x6666666666666666666666666666666666666666' as con
 const ACTUAL_BURN_STREAM = '0x7777777777777777777777777777777777777777' as const
 const CREATOR_TREASURY = '0x8888888888888888888888888888888888888888' as const
 const SAFE_OWNER = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as const
+const VAULT = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' as const
 const SWEEP_UNSOLD_HASH = '0x9999999999999999999999999999999999999999999999999999999999999999' as const
 
 /** Shared on-chain mocks for completion + M2-03 production-readiness gates. */
@@ -98,6 +113,8 @@ function createInvariantPublicClient(opts?: {
           return '0x0000000000000000000000000000000000000000'
         case 'authorizedHubShareOftForwarders':
           return true
+        case 'getTaxHookCalldata':
+          return [GAUGE, '0x12345678']
         default:
           throw new Error(`Unexpected read ${String(args.functionName)}`)
       }
@@ -133,6 +150,8 @@ describe('keeper sweep handler', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     privateKeyToAccountMock.mockReturnValue({ address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' })
+    settleVaultMock.mockResolvedValue({ accepted: true, operationId: 'op_settle_1' })
+    validateKeeperVaultListingMock.mockResolvedValue({ ok: true, mode: 'registry' })
   })
 
   it('returns completion_invariant_failed when completion wiring mismatches expected router mode', async () => {
@@ -412,6 +431,96 @@ describe('keeper sweep handler', () => {
       expect(res.body?.data?.invariantViolations).toEqual([])
       expect(publicClient.readContract).toHaveBeenCalledTimes(1)
       expect(walletClient.writeContract).toHaveBeenCalledTimes(1)
+    } finally {
+      restoreEnv()
+    }
+  })
+
+  it('blocks markSettled when the invariant creator coin is not bound to that vault listing', async () => {
+    const restoreEnv = applyEnv({
+      KPR_API_KEY: 'test-key',
+      KPR_PRIVATE_KEY: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      KEEPER_ENABLE_HOOK_CONFIG: 'true',
+      KEEPER_HOOK_CONFIG_STRATEGY_ALLOWLIST: STRATEGY,
+      KEEPER_ENFORCE_COMPLETION_INVARIANTS: 'true',
+      BASE_RPC_URL: 'https://mainnet.base.org',
+    })
+    try {
+      validateKeeperVaultListingMock.mockResolvedValueOnce({ ok: false, reason: 'vault_mismatch' })
+      const publicClient = createInvariantPublicClient({ burnStream: EXPECTED_BURN_STREAM })
+      const walletClient = {
+        writeContract: vi.fn(async () => SWEEP_UNSOLD_HASH),
+        sendTransaction: vi.fn(async () => SWEEP_UNSOLD_HASH),
+      }
+      createPublicClientMock.mockReturnValue(publicClient as any)
+      createWalletClientMock.mockReturnValue(walletClient as any)
+
+      const req = createMockReq({
+        method: 'POST',
+        headers: { authorization: 'Bearer test-key' },
+        body: {
+          ccaLaunchArmAddress: STRATEGY,
+          markSettled: { vaultAddress: VAULT },
+          invariants: {
+            creatorCoinAddress: CREATOR_COIN,
+            shareTokenAddress: SHARE_OFT,
+            gaugeControllerAddress: GAUGE,
+            burnStreamAddress: EXPECTED_BURN_STREAM,
+            payoutRouterAddress: PAYOUT_ROUTER,
+            payoutRecipientMode: 'payout_router',
+            vaultAddress: VAULT,
+          },
+        },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(409)
+      expect(res.body?.success).toBe(false)
+      expect(res.body?.error).toBe('settlement_vault_binding_vault_mismatch')
+      expect(validateKeeperVaultListingMock).toHaveBeenCalledWith({
+        creatorCoinAddress: CREATOR_COIN,
+        vaultAddress: VAULT,
+        shareTokenAddress: SHARE_OFT,
+      })
+      expect(settleVaultMock).not.toHaveBeenCalled()
+    } finally {
+      restoreEnv()
+    }
+  })
+
+  it('returns a stable generic code without exposing raw RPC errors', async () => {
+    const restoreEnv = applyEnv({
+      KPR_API_KEY: 'test-key',
+      KPR_PRIVATE_KEY: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      KEEPER_ENABLE_HOOK_CONFIG: 'false',
+      KEEPER_ENFORCE_COMPLETION_INVARIANTS: 'true',
+      BASE_RPC_URL: 'https://mainnet.base.org',
+    })
+    try {
+      createPublicClientMock.mockReturnValue({
+        readContract: vi.fn(async () => {
+          throw new Error('RPC endpoint https://secret.invalid rejected private payload')
+        }),
+      } as any)
+      createWalletClientMock.mockReturnValue({ writeContract: vi.fn() } as any)
+
+      const req = createMockReq({
+        method: 'POST',
+        headers: { authorization: 'Bearer test-key' },
+        body: { ccaLaunchArmAddress: STRATEGY },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(500)
+      expect(res.body).toEqual({
+        success: false,
+        error: 'keeper_sweep_failed',
+      })
+      expect(JSON.stringify(res.body)).not.toContain('secret.invalid')
     } finally {
       restoreEnv()
     }

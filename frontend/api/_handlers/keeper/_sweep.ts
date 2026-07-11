@@ -26,6 +26,7 @@ import { createVaultControlPlane } from '../../../server/_lib/controlPlane/vault
 import { SWEEP_COMPLETION_AUTHORITY } from '../../../server/_lib/controlPlane/executors/executeSettleVault.js'
 import { verifyLotteryProductionReadiness } from '../../../server/_lib/lottery/lotteryProductionReadiness.js'
 import { getApiContracts } from '../../../server/_lib/onchain/contracts.js'
+import { validateKeeperVaultListing } from '../../../server/_lib/onchain/registry4626Verification.js'
 import { verifyPayoutRouterHarvestReadiness } from '../../../server/_lib/onchain/payoutRouterHarvestReadiness.js'
 import { verifyPayoutRouterProductionReadiness } from '../../../server/_lib/onchain/payoutRouterProductionReadiness.js'
 import { resolvePayoutRouterSwapPathTokens } from '../../../server/_lib/onchain/payoutRouterHarvestTokens.js'
@@ -668,7 +669,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       shareMeshResult = await runShareMeshCompletion({
         publicClient,
         walletClient,
-        keeperAddress: account.address,
+        keeperAddress: account.address as `0x${string}`,
         config: shareMeshConfig,
         input: {
           ccaLaunchArmAddress: ccaLaunchArmAddress as `0x${string}`,
@@ -778,24 +779,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       operationId: null as string | null,
       error: null as string | null,
     }
+    let settlementBindingFailed = false
     if (completed && markSettled) {
       try {
-        const controlPlane = createVaultControlPlane()
-        const settleResult = await controlPlane.settleVault({
-          vaultAddress: markSettled.vaultAddress,
-          settledAt: new Date().toISOString(),
-          settlementStage: 'completed',
-          settledAtAuthority: SWEEP_COMPLETION_AUTHORITY,
-          requestedBy: 'api:keeper/sweep',
-          idempotencyKey: `sweep-complete:${markSettled.vaultAddress}`,
-        })
-        settlementWrite.applied = settleResult.accepted
-        settlementWrite.operationId = settleResult.operationId
+        if (
+          !invariantInput.creatorCoinAddress
+          || !invariantInput.vaultAddress
+          || markSettled.vaultAddress !== invariantInput.vaultAddress
+        ) {
+          settlementBindingFailed = true
+          settlementWrite.error = 'settlement_vault_binding_invalid'
+        } else {
+          const listing = await validateKeeperVaultListing({
+            creatorCoinAddress: invariantInput.creatorCoinAddress,
+            vaultAddress: markSettled.vaultAddress,
+            shareTokenAddress: invariantInput.shareTokenAddress,
+          })
+          if (!listing.ok) {
+            settlementBindingFailed = true
+            settlementWrite.error = `settlement_vault_binding_${listing.reason}`
+          }
+        }
+        if (settlementBindingFailed) {
+          console.warn('[keeper/sweep] settlement write blocked by creator-coin/vault binding', {
+            vaultAddress: markSettled.vaultAddress,
+            creatorCoinAddress: invariantInput.creatorCoinAddress,
+            error: settlementWrite.error,
+          })
+        } else {
+          const controlPlane = createVaultControlPlane()
+          const settleResult = await controlPlane.settleVault({
+            vaultAddress: markSettled.vaultAddress,
+            settledAt: new Date().toISOString(),
+            settlementStage: 'completed',
+            settledAtAuthority: SWEEP_COMPLETION_AUTHORITY,
+            requestedBy: 'api:keeper/sweep',
+            idempotencyKey: `sweep-complete:${markSettled.vaultAddress}`,
+          })
+          settlementWrite.applied = settleResult.accepted
+          settlementWrite.operationId = settleResult.operationId
+        }
       } catch (error) {
-        settlementWrite.error = error instanceof Error ? error.message : String(error)
+        settlementBindingFailed = true
+        settlementWrite.error = 'settlement_registry_verification_unavailable'
         console.warn('[keeper/sweep] control-plane settle failed (will rely on follow-up):', {
           vaultAddress: markSettled.vaultAddress,
-          error: settlementWrite.error,
+          error: error instanceof Error ? error.message : String(error),
         })
       }
     }
@@ -831,6 +860,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<typeof responseData>)
     }
 
+    if (settlementBindingFailed) {
+      return res.status(409).json({
+        success: false,
+        error: settlementWrite.error ?? 'settlement_vault_binding_failed',
+        data: responseData,
+      } satisfies ApiEnvelope<typeof responseData>)
+    }
+
     return res.status(200).json({
       success: true,
       data: responseData,
@@ -859,7 +896,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error('[keeper/sweep] Error:', err)
     return res.status(500).json({
       success: false,
-      error: err instanceof Error ? err.message : 'Unknown error',
+      error: 'keeper_sweep_failed',
     } satisfies ApiEnvelope<never>)
   }
 }

@@ -34,7 +34,7 @@ contract Ve4626PastVotesCheckpointsTest is Test {
         veToken.lock(address(wrapped), LOCK_AMOUNT, maxDuration);
 
         uint256 lockStart = block.timestamp;
-        uint256 originalEnd = lockStart + maxDuration;
+        uint256 originalEnd = veToken.getLock(user).end;
         uint256 snapshot = lockStart + 45 days;
 
         vm.warp(lockStart + 90 days);
@@ -42,13 +42,13 @@ contract Ve4626PastVotesCheckpointsTest is Test {
         vm.stopPrank();
 
         uint256 expectedAtSnapshot = (LOCK_AMOUNT * (originalEnd - snapshot)) / maxDuration;
-        uint256 extendedEnd = block.timestamp + maxDuration;
+        uint256 extendedEnd = veToken.getLock(user).end;
         uint256 powerIfExtendedEndWereUsedAtSnapshot = (LOCK_AMOUNT * (extendedEnd - snapshot)) / maxDuration;
 
         assertEq(veToken.getPastVotes(user, snapshot), expectedAtSnapshot);
         assertEq(veToken.votingPowerAt(user, snapshot), expectedAtSnapshot);
         assertGt(powerIfExtendedEndWereUsedAtSnapshot, expectedAtSnapshot);
-        assertEq(veToken.votingPower(user), LOCK_AMOUNT);
+        assertEq(veToken.votingPower(user), (LOCK_AMOUNT * (extendedEnd - block.timestamp)) / maxDuration);
     }
 
     function test_getPastVotes_retainsHistoryBeforeUnlock() public {
@@ -60,9 +60,9 @@ contract Ve4626PastVotesCheckpointsTest is Test {
 
         uint256 lockStart = block.timestamp;
         uint256 snapshot = lockStart + 30 days;
-        uint256 originalEnd = lockStart + maxDuration;
+        uint256 originalEnd = veToken.getLock(user).end;
 
-        vm.warp(lockStart + maxDuration);
+        vm.warp(originalEnd);
         veToken.unlock();
         vm.stopPrank();
 

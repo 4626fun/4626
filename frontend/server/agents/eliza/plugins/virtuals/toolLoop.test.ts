@@ -1,12 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   buildToolSystemPrompt,
-  clampSpendArgs,
+  evaluateToolExecutionPolicy,
+  executeToolUnderPolicy,
   filterToolsByPolicy,
   isSpendTool,
   parseToolDecision,
-  selectMessageTool,
+  buildStructuredToolProposal,
+  validateToolArguments,
+  validateAndClampSpendArgs,
   type AcpToolLike,
 } from './toolLoop.js'
 
@@ -14,7 +17,10 @@ const TOOLS: AcpToolLike[] = [
   {
     name: 'sendMessage',
     description: 'Send a message into the job room',
-    parameters: [{ name: 'message', type: 'string', required: true }],
+    parameters: [
+      { name: 'content', type: 'string', required: true },
+      { name: 'contentType', type: 'string', required: false },
+    ],
   },
   {
     name: 'setBudget',
@@ -25,6 +31,11 @@ const TOOLS: AcpToolLike[] = [
     name: 'fund',
     description: 'Fund the job escrow in USDC',
     parameters: [{ name: 'amount', type: 'number', required: true }],
+  },
+  {
+    name: 'complete',
+    description: 'Complete the job',
+    parameters: [],
   },
 ]
 
@@ -38,45 +49,150 @@ describe('isSpendTool', () => {
 })
 
 describe('filterToolsByPolicy', () => {
-  it('removes fund when auto-fund is disabled', () => {
+  it('keeps high-risk tools visible as proposals when execution is disabled', () => {
     const filtered = filterToolsByPolicy(TOOLS, { autoFundEnabled: false })
-    expect(filtered.map((t) => t.name)).toEqual(['sendMessage', 'setBudget'])
+    expect(filtered.map((t) => t.name)).toEqual(['sendMessage', 'setBudget', 'fund', 'complete'])
   })
 
-  it('keeps fund when auto-fund is enabled', () => {
+  it('does not derive execution authority from the legacy auto-fund prompt flag', () => {
     const filtered = filterToolsByPolicy(TOOLS, { autoFundEnabled: true })
-    expect(filtered.map((t) => t.name)).toEqual(['sendMessage', 'setBudget', 'fund'])
+    expect(filtered).toEqual(TOOLS)
   })
 })
 
-describe('clampSpendArgs', () => {
+describe('evaluateToolExecutionPolicy', () => {
+  it('makes all high-risk tools proposal-only by default', () => {
+    for (const tool of ['setBudget', 'fund', 'submit', 'complete', 'reject']) {
+      expect(evaluateToolExecutionPolicy(tool, [])).toEqual({
+        allowed: false,
+        reason: 'mutating_tool_proposal_only',
+      })
+    }
+  })
+
+  it('allows only explicitly typed high-risk capabilities', () => {
+    expect(evaluateToolExecutionPolicy('complete', ['complete'])).toEqual({ allowed: true })
+    expect(evaluateToolExecutionPolicy('fund', ['complete'])).toEqual({
+      allowed: false,
+      reason: 'mutating_tool_proposal_only',
+    })
+    expect(evaluateToolExecutionPolicy('sendMessage', [])).toEqual({ allowed: true })
+    expect(evaluateToolExecutionPolicy('wait', [])).toEqual({ allowed: true })
+    expect(evaluateToolExecutionPolicy('futureUnknownMutation', [])).toEqual({
+      allowed: false,
+      reason: 'unknown_tool',
+    })
+  })
+})
+
+describe('validateAndClampSpendArgs', () => {
   it('clamps spend amounts to the configured ceiling', () => {
-    expect(clampSpendArgs('setBudget', { amount: 100 }, 5)).toEqual({ amount: 5 })
-    expect(clampSpendArgs('fund', { amount: 100 }, 5)).toEqual({ amount: 5 })
+    expect(validateAndClampSpendArgs('setBudget', { amount: 100 }, 5)).toEqual({
+      valid: true,
+      args: { amount: 5 },
+      amountUsdc: 5,
+    })
   })
 
   it('passes through amounts under the cap', () => {
-    expect(clampSpendArgs('setBudget', { amount: 2.5 }, 5)).toEqual({ amount: 2.5 })
+    expect(validateAndClampSpendArgs('setBudget', { amount: 2.5 }, 5)).toEqual({
+      valid: true,
+      args: { amount: 2.5 },
+      amountUsdc: 2.5,
+    })
   })
 
-  it('zeroes invalid or non-positive amounts on spend tools', () => {
-    expect(clampSpendArgs('fund', { amount: 'lots' }, 5)).toEqual({ amount: 0 })
-    expect(clampSpendArgs('fund', { amount: -3 }, 5)).toEqual({ amount: 0 })
-    expect(clampSpendArgs('fund', {}, 5)).toEqual({ amount: 0 })
+  it('rejects invalid, string, missing, zero, and non-positive spend amounts', () => {
+    for (const args of [{ amount: '2' }, { amount: 'lots' }, { amount: -3 }, { amount: 0 }, {}]) {
+      expect(validateAndClampSpendArgs('fund', args, 5)).toEqual({
+        valid: false,
+        reason: 'invalid_spend_amount',
+      })
+    }
   })
 
   it('does not touch non-spend tools', () => {
-    expect(clampSpendArgs('sendMessage', { message: 'hi', amount: 999 }, 5)).toEqual({
-      message: 'hi',
-      amount: 999,
+    expect(validateAndClampSpendArgs('sendMessage', { content: 'hi' }, 5)).toEqual({
+      valid: true,
+      args: { content: 'hi' },
+      amountUsdc: 0,
     })
+  })
+})
+
+describe('executeToolUnderPolicy', () => {
+  it('does not call dispatch for proposal-only high-risk tools', async () => {
+    const dispatch = vi.fn(async () => true)
+    const result = await executeToolUnderPolicy({
+      tool: TOOLS[3],
+      args: {},
+      maxBudgetUsdc: 5,
+      executableHighRiskTools: [],
+      dispatch,
+    })
+    expect(result).toEqual({ executed: false, reason: 'mutating_tool_proposal_only' })
+    expect(dispatch).not.toHaveBeenCalled()
+  })
+
+  it('does not call dispatch for invalid spend args even when fund is allowed', async () => {
+    const dispatch = vi.fn(async () => true)
+    const result = await executeToolUnderPolicy({
+      tool: TOOLS[2],
+      args: { amount: 0 },
+      maxBudgetUsdc: 5,
+      executableHighRiskTools: ['fund'],
+      dispatch,
+    })
+    expect(result).toEqual({ executed: false, reason: 'invalid_spend_amount' })
+    expect(dispatch).not.toHaveBeenCalled()
+  })
+
+  it('dispatches capped spend args only with explicit capability', async () => {
+    const dispatch = vi.fn(async () => true)
+    const result = await executeToolUnderPolicy({
+      tool: TOOLS[2],
+      args: { amount: 50 },
+      maxBudgetUsdc: 5,
+      executableHighRiskTools: ['fund'],
+      dispatch,
+    })
+    expect(result).toEqual({ executed: true })
+    expect(dispatch).toHaveBeenCalledWith({ amount: 5 })
+  })
+
+  it('denies unknown tools and SDK-invalid argument names before dispatch', async () => {
+    const dispatch = vi.fn(async () => true)
+    expect(await executeToolUnderPolicy({
+      tool: { name: 'futureMutation', description: 'Unknown', parameters: [] },
+      args: {},
+      maxBudgetUsdc: 5,
+      executableHighRiskTools: [],
+      dispatch,
+    })).toEqual({ executed: false, reason: 'unknown_tool' })
+    expect(await executeToolUnderPolicy({
+      tool: TOOLS[0],
+      args: { message: 'wrong SDK argument name' },
+      maxBudgetUsdc: 5,
+      executableHighRiskTools: [],
+      dispatch,
+    })).toEqual({ executed: false, reason: 'invalid_tool_arguments' })
+    expect(dispatch).not.toHaveBeenCalled()
+  })
+})
+
+describe('validateToolArguments', () => {
+  it('accepts only SDK-declared names with required runtime types', () => {
+    expect(validateToolArguments(TOOLS[0], { content: 'hello' })).toBe(true)
+    expect(validateToolArguments(TOOLS[0], {})).toBe(false)
+    expect(validateToolArguments(TOOLS[0], { content: 7 })).toBe(false)
+    expect(validateToolArguments(TOOLS[0], { content: 'hello', invented: true })).toBe(false)
   })
 })
 
 describe('parseToolDecision', () => {
   it('parses a valid tool decision', () => {
-    const decision = parseToolDecision('{"tool": "sendMessage", "args": {"message": "hello"}}', TOOLS)
-    expect(decision).toEqual({ kind: 'tool', name: 'sendMessage', args: { message: 'hello' } })
+    const decision = parseToolDecision('{"tool": "sendMessage", "args": {"content": "hello"}}', TOOLS)
+    expect(decision).toEqual({ kind: 'tool', name: 'sendMessage', args: { content: 'hello' } })
   })
 
   it('extracts JSON embedded in surrounding prose', () => {
@@ -130,35 +246,29 @@ describe('buildToolSystemPrompt', () => {
     expect(prompt).toContain('- setBudget:')
     expect(prompt).not.toContain('- fund:')
     expect(prompt).toContain('at most 5 USDC')
+    expect(prompt).not.toContain('"wait"')
+  })
+
+  it('documents wait only when the SDK currently exposes it', () => {
+    const prompt = buildToolSystemPrompt({
+      persona: 'You are agent 4626.',
+      tools: [{ name: 'wait', description: 'Do nothing', parameters: [] }],
+      roles: ['provider'],
+      status: 'open',
+      maxBudgetUsdc: 5,
+    })
     expect(prompt).toContain('"wait"')
   })
 })
 
-describe('selectMessageTool', () => {
-  it('prefers sendMessage and resolves message arg', () => {
-    const selected = selectMessageTool(TOOLS)
-    expect(selected).toEqual({ name: 'sendMessage', argName: 'message' })
-  })
-
-  it('falls back to respond/content style tools', () => {
-    const selected = selectMessageTool([
-      {
-        name: 'respond',
-        description: 'Respond to job room',
-        parameters: [{ name: 'content', type: 'string', required: true }],
-      },
-    ])
-    expect(selected).toEqual({ name: 'respond', argName: 'content' })
-  })
-
-  it('returns null when no text-capable tool exists', () => {
-    const selected = selectMessageTool([
-      {
-        name: 'setBudget',
-        description: 'Set budget',
-        parameters: [{ name: 'amount', type: 'number', required: true }],
-      },
-    ])
-    expect(selected).toBeNull()
+describe('buildStructuredToolProposal', () => {
+  it('builds a machine-readable counterparty proposal', () => {
+    expect(JSON.parse(buildStructuredToolProposal('complete', { reason: 'done' }))).toEqual({
+      type: 'tool_execution_proposal',
+      version: 1,
+      tool: 'complete',
+      arguments: { reason: 'done' },
+      requiresExplicitAuthorization: true,
+    })
   })
 })

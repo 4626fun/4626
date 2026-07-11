@@ -331,7 +331,14 @@ function defaultBurnThenSubmitReaderHooks() {
     ledgerSnapshotReader: {
       readSnapshotForBurn: vi.fn(async () => ({
         epoch: 7n,
-        pointsLedgerSnapshot: { root: 1n, depth: 20, levels: [[1n]] },
+        pointsLedgerSnapshot: {
+          nodes: new Map([[0, 1n]]),
+          root: 1n,
+          leafCount: 1,
+          leavesByIndex: new Map([[0, 1n]]),
+          depth: 20,
+          levels: [[1n]],
+        },
         pointsLedgerLeafIndex: 0,
         rootHex: `0x${'01'.repeat(32)}` as `0x${string}`,
       })),

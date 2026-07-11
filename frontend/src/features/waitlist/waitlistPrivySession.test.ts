@@ -91,28 +91,39 @@ describe('waitlistPrivySession', () => {
 
   it('establishWaitlistSessionAfterPrivyAuth retries ensureEmbeddedWallet on a transient failure and still succeeds', async () => {
     vi.useFakeTimers()
-    const ensureEmbeddedWallet = vi
-      .fn()
-      // Mirrors the real failure mode: `ensureEmbeddedWallet()` throws when its
-      // internal `authenticated` ref snapshot is one render behind, then succeeds
-      // once React catches up.
-      .mockRejectedValueOnce(new Error('Sign in with Privy before provisioning your embedded wallet.'))
-      .mockResolvedValueOnce({ address: '0xabc1234567890123456789012345678901234567', created: true })
+    let authenticated = false
+    const ensureEmbeddedWallet = vi.fn(async () => {
+      if (!authenticated) {
+        throw new Error('Sign in with Privy before provisioning your embedded wallet.')
+      }
+      return { address: '0xabc1234567890123456789012345678901234567', created: true }
+    })
 
-    const promise = establishWaitlistSessionAfterPrivyAuth({ privy: mockPrivy, ensureEmbeddedWallet })
+    const promise = establishWaitlistSessionAfterPrivyAuth({
+      privy: {
+        ...mockPrivy,
+        get authenticated() {
+          return authenticated
+        },
+      },
+      ensureEmbeddedWallet,
+    })
+    // Settle loop waits for authenticated; flip it mid-settle so createWallet can succeed.
+    await vi.advanceTimersByTimeAsync(150)
+    authenticated = true
     await vi.runAllTimersAsync()
     const address = await promise
 
     expect(address).toBe('0xabc1234567890123456789012345678901234567')
-    expect(ensureEmbeddedWallet).toHaveBeenCalledTimes(2)
+    expect(ensureEmbeddedWallet).toHaveBeenCalled()
     expect(bridgePrivySession).toHaveBeenCalledWith('privy-token')
     vi.useRealTimers()
   })
 
-  it('establishWaitlistSessionAfterPrivyAuth still bridges the session after ensureEmbeddedWallet exhausts all retries', async () => {
+  it('establishWaitlistSessionAfterPrivyAuth still bridges after ensureEmbeddedWallet exhausts retries', async () => {
     vi.useFakeTimers()
     const ensureEmbeddedWallet = vi.fn(async () => {
-      throw new Error('Privy embedded wallet provisioning did not complete. Retry in a moment.')
+      throw new Error('Sign in with Privy before provisioning your embedded wallet.')
     })
 
     const promise = establishWaitlistSessionAfterPrivyAuth({ privy: mockPrivy, ensureEmbeddedWallet })
@@ -120,7 +131,7 @@ describe('waitlistPrivySession', () => {
     const address = await promise
 
     expect(address).toBe('0xabc1234567890123456789012345678901234567')
-    expect(ensureEmbeddedWallet).toHaveBeenCalledTimes(4)
+    expect(ensureEmbeddedWallet).toHaveBeenCalledTimes(3)
     expect(bridgePrivySession).toHaveBeenCalledWith('privy-token')
     vi.useRealTimers()
   })

@@ -121,7 +121,94 @@ describe('derivePairedLegRebalancePlan', () => {
     expect(plan.harvest?.reduceNotionalUsd).toBe(100)
     expect(plan.dip?.silo).toBe('bot')
     expect(plan.dip?.side).toBe('short')
-    expect(plan.dip?.addNotionalUsd).toBeCloseTo(353.55, 1)
+    expect(plan.dip?.addNotionalUsd).toBeCloseTo(88.39, 1)
+  })
+
+  it('scales dip notional by the inverse rebalance percentage', () => {
+    const runtime = { ...makeRuntime(), inverseRebalanceScalePct: 50 }
+    const userWalletState = {
+      assetPositions: [
+        {
+          coin: 'HYPE',
+          side: 'long',
+          positionValue: 400,
+          unrealizedPnl: 80,
+          entryPx: 100,
+          liquidationPx: 80,
+          leverage: 6,
+        },
+      ],
+    } as unknown as HyperliquidClearinghouseState
+    const botWalletState = {
+      accountValueUsd: 10_000,
+      assetPositions: [
+        {
+          coin: 'HYPE',
+          side: 'short',
+          positionValue: 300,
+          unrealizedPnl: -60,
+          entryPx: 100,
+          liquidationPx: 200,
+          leverage: 6,
+        },
+      ],
+    } as unknown as HyperliquidClearinghouseState
+
+    const plan = derivePairedLegRebalancePlan({
+      fill: makeFill({ startPosition: 2, sz: 0.5 }),
+      fillAction: 'add',
+      runtime,
+      userWalletState,
+      botWalletState,
+    })
+
+    expect(plan.ok).toBe(true)
+    if (!plan.ok) return
+    expect(plan.rebalancePct).toBe(0.125)
+    expect(plan.dip?.addNotionalUsd).toBeCloseTo(44.19, 1)
+  })
+
+  it('keeps the maximum notional cap after applying rebalance scaling', () => {
+    const userWalletState = {
+      assetPositions: [
+        {
+          coin: 'HYPE',
+          side: 'long',
+          positionValue: 400,
+          unrealizedPnl: 80,
+          entryPx: 100,
+          liquidationPx: 80,
+          leverage: 6,
+        },
+      ],
+    } as unknown as HyperliquidClearinghouseState
+    const botWalletState = {
+      accountValueUsd: 1_000,
+      assetPositions: [
+        {
+          coin: 'HYPE',
+          side: 'short',
+          positionValue: 300,
+          unrealizedPnl: -120,
+          entryPx: 100,
+          liquidationPx: 200,
+          leverage: 6,
+        },
+      ],
+    } as unknown as HyperliquidClearinghouseState
+
+    const plan = derivePairedLegRebalancePlan({
+      fill: makeFill({ startPosition: 1, sz: 1 }),
+      fillAction: 'add',
+      runtime: makeRuntime(),
+      userWalletState,
+      botWalletState,
+    })
+
+    expect(plan.ok).toBe(true)
+    if (!plan.ok) return
+    expect(plan.rebalancePct).toBe(1)
+    expect(plan.dip?.addNotionalUsd).toBe(100)
   })
 
   it('blocks dip when max adds per leg is reached', () => {

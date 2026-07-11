@@ -8,9 +8,10 @@
  * decision, parsed, policy-clamped, and executed via `session.executeTool`.
  *
  * Safety posture:
- * - `fund` (spending USDC as a job client) is withheld from the LLM unless
- *   VIRTUALS_ACP_AUTO_FUND=1.
- * - All USDC amounts are clamped to VIRTUALS_ACP_MAX_BUDGET_USDC.
+ * - Only wait/sendMessage execute by default; mutating tools require the typed
+ *   env allowlist and unknown tools deny.
+ * - Invalid spend amounts are blocked; valid amounts are capped.
+ * - Global and per-job execution quotas are consumed before dispatch.
  * - VIRTUALS_ACP_AUTO_LLM=0 turns the service into a pure observer (events are
  *   logged; nothing is executed).
  */
@@ -30,15 +31,21 @@ import { readVirtualsAcpConfig, checkVirtualsAcpConfig, type VirtualsAcpConfig }
 import { parseBacktestRequestFromText, runRealBacktestJob } from './backtestJobs.js'
 import { evaluateBacktestPaymentGate } from './paymentGate.js'
 import {
+  buildStructuredToolProposal,
   buildToolSystemPrompt,
-  clampSpendArgs,
+  evaluateToolExecutionPolicy,
+  executeToolUnderPolicy,
   filterToolsByPolicy,
   parseToolDecision,
-  selectMessageTool,
+  validateToolArguments,
+  validateAndClampSpendArgs,
+  type AcpToolLike,
 } from './toolLoop.js'
+import { ToolExecutionQuota } from './toolQuota.js'
 
 export type VirtualsAcpServiceStatus = {
   running: boolean
+  ready: boolean
   startedAt: string | null
   agentAddress: string | null
   chainId: number | null
@@ -58,6 +65,9 @@ export type VirtualsAcpServiceStatus = {
   lastError: string | null
 }
 
+const TERMINAL_SESSION_STATUSES = new Set(['completed', 'rejected', 'expired'])
+const MAX_STATUS_SESSIONS = 100
+
 export class VirtualsAcpService {
   private agent: AcpAgent | null = null
   private config: VirtualsAcpConfig | null = null
@@ -71,10 +81,16 @@ export class VirtualsAcpService {
   private llmExecuted = 0
   private llmDecisionLatencyTotalMs = 0
   private lastError: string | null = null
+  private transportReady = false
   private readonly inFlightSessions = new Set<string>()
+  private toolQuota: ToolExecutionQuota | null = null
 
   get running(): boolean {
     return this.agent !== null
+  }
+
+  get ready(): boolean {
+    return this.agent !== null && this.transportReady
   }
 
   async start(): Promise<{ started: boolean; reason?: string }> {
@@ -89,25 +105,35 @@ export class VirtualsAcpService {
       return { started: false, reason: `unsupported VIRTUALS_ACP_CHAIN_ID ${config.chainId}` }
     }
 
+    let candidate: AcpAgent | null = null
     try {
+      this.transportReady = false
       const provider = await PrivyAlchemyEvmProviderAdapter.create({
         walletAddress: config.walletAddress!,
         walletId: config.walletId!,
         signerPrivateKey: config.signerPrivateKey!,
         chains: [chain],
       })
-      const agent = await AcpAgent.create({ provider })
-      agent.on('entry', (session, entry) => {
+      candidate = await AcpAgent.create({ provider })
+      candidate.on('entry', (session, entry) => {
         void this.handleEntry(session, entry)
       })
-      await agent.start(() => {
+      await candidate.start(() => {
+        this.transportReady = true
         logger.info('[virtuals-acp] connected — listening for ACP jobs')
       })
 
-      this.agent = agent
+      const agentAddress = await candidate.getAddress()
+      const toolQuota = new ToolExecutionQuota(
+        config.globalToolExecutionQuota,
+        config.perJobToolExecutionQuota,
+      )
+
+      this.agent = candidate
       this.config = config
+      this.toolQuota = toolQuota
       this.startedAt = new Date()
-      this.agentAddress = await agent.getAddress()
+      this.agentAddress = agentAddress
       this.lastError = null
       logger.info('[virtuals-acp] started', {
         agentAddress: this.agentAddress,
@@ -115,14 +141,29 @@ export class VirtualsAcpService {
         autoLlm: config.autoLlmEnabled,
         autoFund: config.autoFundEnabled,
         maxBudgetUsdc: config.maxBudgetUsdc,
-        activeSessions: agent.sessions.length,
+        activeSessions: candidate.sessions.length,
       })
       return { started: true }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      if (candidate) {
+        try {
+          await candidate.stop()
+        } catch (stopError) {
+          logger.warn('[virtuals-acp] failed candidate cleanup error', {
+            error: stopError instanceof Error ? stopError.message : String(stopError),
+          })
+        }
+      }
       this.lastError = message
       logger.error('[virtuals-acp] start failed', { error: message })
       this.agent = null
+      this.transportReady = false
+      this.config = null
+      this.toolQuota = null
+      this.startedAt = null
+      this.agentAddress = null
+      this.inFlightSessions.clear()
       return { started: false, reason: message }
     }
   }
@@ -130,7 +171,9 @@ export class VirtualsAcpService {
   async stop(): Promise<void> {
     const agent = this.agent
     this.agent = null
+    this.transportReady = false
     this.config = null
+    this.toolQuota = null
     if (!agent) return
     try {
       await agent.stop()
@@ -145,18 +188,22 @@ export class VirtualsAcpService {
   getStatus(): VirtualsAcpServiceStatus {
     return {
       running: this.running,
+      ready: this.ready,
       startedAt: this.startedAt?.toISOString() ?? null,
       agentAddress: this.agentAddress,
       chainId: this.config?.chainId ?? null,
       autoLlmEnabled: this.config?.autoLlmEnabled ?? false,
       autoFundEnabled: this.config?.autoFundEnabled ?? false,
       maxBudgetUsdc: this.config?.maxBudgetUsdc ?? null,
-      sessions: (this.agent?.sessions ?? []).map((session) => ({
-        jobId: session.jobId,
-        chainId: session.chainId,
-        roles: [...session.roles],
-        status: session.status,
-      })),
+      sessions: (this.agent?.sessions ?? [])
+        .filter((session) => !TERMINAL_SESSION_STATUSES.has(session.status))
+        .slice(-MAX_STATUS_SESSIONS)
+        .map((session) => ({
+          jobId: session.jobId,
+          chainId: session.chainId,
+          roles: [...session.roles],
+          status: session.status,
+        })),
       entriesHandled: this.entriesHandled,
       toolsExecuted: this.toolsExecuted,
       llmDecisions: {
@@ -176,6 +223,78 @@ export class VirtualsAcpService {
     return this.agent.browseAgents(keyword, { topK })
   }
 
+  private async executeSessionTool(
+    session: JobSession,
+    name: string,
+    args: Record<string, unknown>,
+  ): Promise<boolean> {
+    const config = this.config
+    if (!config) return false
+    const tool = session.availableTools().find((candidate) => candidate.name === name)
+    if (!tool) {
+      logger.warn('[virtuals-acp] tool no longer available at dispatch boundary', { tool: name })
+      return false
+    }
+    const jobKey = `${session.chainId}:${session.jobId}`
+    const result = await executeToolUnderPolicy({
+      tool,
+      args,
+      maxBudgetUsdc: config.maxBudgetUsdc,
+      executableHighRiskTools: config.executableHighRiskTools,
+      dispatch: async (safeArgs) => {
+        const quota = this.toolQuota?.reserve(jobKey)
+        if (!quota?.allowed) {
+          logger.warn('[virtuals-acp] tool execution blocked by quota', {
+            tool: name,
+            reason: quota && !quota.allowed ? quota.reason : 'quota_unavailable',
+          })
+          return false
+        }
+        await session.executeTool(name, safeArgs)
+        this.toolsExecuted += 1
+        return true
+      },
+    })
+    if (!result.executed && result.reason !== 'dispatch_denied') {
+      logger.info('[virtuals-acp] tool execution denied by deterministic policy', {
+        tool: name,
+        reason: result.reason,
+      })
+    }
+    return result.executed
+  }
+
+  private async sendSessionMessage(
+    session: JobSession,
+    content: string,
+    contentType: 'text' | 'proposal' | 'structured' = 'text',
+  ): Promise<boolean> {
+    const jobKey = `${session.chainId}:${session.jobId}`
+    const quota = this.toolQuota?.reserve(jobKey)
+    if (!quota?.allowed) {
+      logger.warn('[virtuals-acp] message blocked by quota', {
+        contentType,
+        reason: quota && !quota.allowed ? quota.reason : 'quota_unavailable',
+      })
+      return false
+    }
+    await session.sendMessage(content, contentType)
+    this.toolsExecuted += 1
+    return true
+  }
+
+  private async sendToolProposal(
+    session: JobSession,
+    tool: AcpToolLike,
+    args: Record<string, unknown>,
+  ): Promise<boolean> {
+    return this.sendSessionMessage(
+      session,
+      buildStructuredToolProposal(tool.name, args),
+      'proposal',
+    )
+  }
+
   private async handleEntry(session: JobSession, entry: JobRoomEntry): Promise<void> {
     const config = this.config
     if (!config) return
@@ -189,6 +308,13 @@ export class VirtualsAcpService {
       status: session.status,
       entry: entryLabel,
     })
+
+    if (
+      entry.kind === 'system' &&
+      ['job.completed', 'job.rejected', 'job.expired'].includes(entry.event.type)
+    ) {
+      this.toolQuota?.forgetJob(`${session.chainId}:${session.jobId}`)
+    }
 
     if (!config.autoLlmEnabled) return
     if (!session.shouldRespond(entry)) return
@@ -221,33 +347,29 @@ export class VirtualsAcpService {
     const latestUserMessage = [...history]
       .reverse()
       .find((message) => message.role === 'user')?.content
-    const messageTool = selectMessageTool(tools)
     const backtestRequest =
       typeof latestUserMessage === 'string' ? parseBacktestRequestFromText(latestUserMessage) : null
-    if (backtestRequest && messageTool) {
-      if (config.requirePaidBacktests) {
-        const paymentGate = evaluateBacktestPaymentGate(session as unknown)
-        if (!paymentGate.allowed) {
-          await session.executeTool(messageTool.name, {
-            [messageTool.argName]:
-              'Backtest requires a paid job before execution. ' +
-              `Current payment signal: ${paymentGate.reason}. ` +
-              'Please fund/set job budget in ACP, then resend your backtest request.',
-          })
-          this.toolsExecuted += 1
-          logger.info('[virtuals-acp] blocked unpaid backtest request', {
-            jobId: session.jobId,
-            status: session.status,
-            reason: paymentGate.reason,
-            amountUsdc: paymentGate.amountUsdc,
-          })
-          return
-        }
+    if (backtestRequest) {
+      if (!session.job) await session.fetchJob()
+      const paymentGate = evaluateBacktestPaymentGate(session as unknown)
+      if (!paymentGate.allowed) {
+        await this.sendSessionMessage(
+          session,
+          'Backtest requires a funded paid job before execution. ' +
+            `Current payment signal: ${paymentGate.reason}. ` +
+            'Please fund the job in ACP, then resend your backtest request.',
+        )
+        logger.info('[virtuals-acp] blocked unpaid backtest request', {
+          jobId: session.jobId,
+          status: session.status,
+          reason: paymentGate.reason,
+          amountUsdc: paymentGate.amountUsdc,
+        })
+        return
       }
       try {
         const backtest = await runRealBacktestJob(backtestRequest)
-        await session.executeTool(messageTool.name, { [messageTool.argName]: backtest.responseText })
-        this.toolsExecuted += 1
+        await this.sendSessionMessage(session, backtest.responseText)
         logger.info('[virtuals-acp] executed backtest job', {
           jobId: session.jobId,
           symbol: backtestRequest.symbol,
@@ -261,12 +383,11 @@ export class VirtualsAcpService {
           error instanceof Error
             ? error.message
             : 'Backtest failed due to an unknown runtime error'
-        await session.executeTool(messageTool.name, {
-          [messageTool.argName]:
-            `Backtest request failed: ${message}. ` +
+        await this.sendSessionMessage(
+          session,
+          `Backtest request failed: ${message}. ` +
             'Please retry with shorter window (for example 24h/72h) or BTC/ETH if data coverage is missing.',
-        })
-        this.toolsExecuted += 1
+        )
         logger.warn('[virtuals-acp] backtest job failed', {
           jobId: session.jobId,
           symbol: backtestRequest.symbol,
@@ -315,16 +436,44 @@ export class VirtualsAcpService {
       return
     }
 
-    const args = clampSpendArgs(decision.name, decision.args, config.maxBudgetUsdc)
+    const selectedTool = tools.find((tool) => tool.name === decision.name)
+    if (!selectedTool) {
+      this.llmDecisionLatencyTotalMs += Date.now() - decisionStartedAt
+      return
+    }
+    const spend = validateAndClampSpendArgs(decision.name, decision.args, config.maxBudgetUsdc)
+    if (!spend.valid || !validateToolArguments(selectedTool, spend.args)) {
+      this.llmDecisionLatencyTotalMs += Date.now() - decisionStartedAt
+      logger.warn('[virtuals-acp] invalid tool args blocked', {
+        tool: decision.name,
+        reason: spend.valid ? 'invalid_tool_arguments' : spend.reason,
+      })
+      return
+    }
+    const args = spend.args
+    const executionPolicy = evaluateToolExecutionPolicy(
+      decision.name,
+      config.executableHighRiskTools,
+    )
+    if (!executionPolicy.allowed) {
+      this.llmDecisionLatencyTotalMs += Date.now() - decisionStartedAt
+      if (executionPolicy.reason === 'mutating_tool_proposal_only') {
+        await this.sendToolProposal(session, selectedTool, args)
+      }
+      logger.info('[virtuals-acp] tool blocked by execution policy', {
+        tool: decision.name,
+        reason: executionPolicy.reason,
+      })
+      return
+    }
     logger.info('[virtuals-acp] executing tool', {
       jobId: session.jobId,
       tool: decision.name,
-      args,
+      argumentNames: Object.keys(args),
       provider: result.provider,
     })
-    await session.executeTool(decision.name, args)
-    this.toolsExecuted += 1
-    this.llmExecuted += 1
+    const executed = await this.executeSessionTool(session, decision.name, args)
+    if (executed) this.llmExecuted += 1
     this.llmDecisionLatencyTotalMs += Date.now() - decisionStartedAt
   }
 }

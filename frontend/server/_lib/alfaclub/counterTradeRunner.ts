@@ -447,9 +447,64 @@ export async function runCounterTradeLoop(): Promise<CounterTradeRunResult> {
             strategySubaccount,
             chatPostEnabled: runtime.chatPostEnabled,
             chatPostRoomId: runtime.chatPostRoomId,
+            authorizeDip: (dip) => {
+              const nowMs = Date.now()
+              const cooldownRemainingMs = computeCounterTradeCooldownRemainingMs({
+                lastExecutedAtMs,
+                cooldownMs: runtime.cooldownMs,
+                nowMs,
+              })
+              if (cooldownRemainingMs > 0) {
+                return { ok: false, reason: 'cooldown_active' }
+              }
+              if (!usageState.canExecuteByHourlyCap()) {
+                return { ok: false, reason: 'hourly_cap_reached' }
+              }
+
+              const dipWalletState = dip.silo === 'user' ? userWalletState : strategyCounterWalletState
+              const dipBufferRatio = computeBufferRatio(dipWalletState)
+              if (dipBufferRatio != null && dipBufferRatio < runtime.minBufferRatio) {
+                return { ok: false, reason: 'buffer_floor' }
+              }
+
+              const remainingDailyNotional = usageState.remainingDailyNotionalUsd()
+              if (remainingDailyNotional <= 0) {
+                return { ok: false, reason: 'daily_notional_cap_reached' }
+              }
+              if (runtime.subaccountsEnabled && !strategySubaccount) {
+                return { ok: false, reason: `subaccount_missing_mapping:${strategyKey}` }
+              }
+
+              const dailyCappedNotionalUsd = Math.min(dip.addNotionalUsd, remainingDailyNotional)
+              const riskGate = evaluateCounterTradeRiskGate({
+                roomId: runtime.roomId,
+                senderAddress: optIn.senderAddress,
+                strategy: strategyKey,
+                equityUsd: dipWalletState?.accountValueUsd ?? null,
+                requestedNotionalUsd: dailyCappedNotionalUsd,
+                riskProfile: runtime.riskProfile,
+              })
+              if (runtime.subaccountsEnabled && !riskGate.ok) {
+                return { ok: false, reason: `risk_gate:${riskGate.reason}` }
+              }
+              const riskCappedNotionalUsd = riskGate.ok
+                ? riskGate.sizedNotionalUsd
+                : dailyCappedNotionalUsd
+              if (riskCappedNotionalUsd < runtime.minOrderNotionalUsd) {
+                return { ok: false, reason: 'below_hl_min_order_notional' }
+              }
+              return { ok: true, addNotionalUsd: riskCappedNotionalUsd }
+            },
+            onDipExecuted: (dip) => {
+              lastExecutedAtMs = Date.now()
+              usageState.recordExecutedEntry(dip.addNotionalUsd)
+              openedCoinsThisTick.add(dip.coin.toUpperCase())
+              closedCoinsThisTick.delete(dip.coin.toUpperCase())
+            },
           })
           executed += rebalanceResult.executedDelta
           skipped += rebalanceResult.skippedDelta
+          blocked += rebalanceResult.blockedDelta
           failed += rebalanceResult.failedDelta
           continue
         }

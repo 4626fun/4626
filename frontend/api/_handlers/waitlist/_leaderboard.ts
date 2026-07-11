@@ -34,16 +34,28 @@ export default async function handler(req: any, res: any) {
   const pointsType: WaitlistLeaderboardPointsType =
     pointsTypeParam === 'total' ? 'total' : pointsTypeParam === 'agent' ? 'agent' : 'invite'
 
-  const db = await getDb()
-  if (!db) return res.status(500).json({ success: false, error: 'DB unavailable' } satisfies ApiEnvelope<never>)
-  await ensureWaitlistSchema(db as any)
-  const authorizedPrincipal = await resolveAuthorizedRequestPrincipal(req)
-  const data: WaitlistLeaderboardResponse = await getWaitlistLeaderboardData({
-    db,
-    page,
-    limit,
-    pointsType,
-    authorizedProfileId: authorizedPrincipal?.profileId ?? null,
-  })
-  return res.status(200).json({ success: true, data } satisfies ApiEnvelope<WaitlistLeaderboardResponse>)
+  try {
+    const db = await getDb()
+    if (!db) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to load leaderboard',
+      } satisfies ApiEnvelope<never>)
+    }
+    await ensureWaitlistSchema(db as any)
+    const authorizedPrincipal = await resolveAuthorizedRequestPrincipal(req)
+    const data: WaitlistLeaderboardResponse = await getWaitlistLeaderboardData({
+      db,
+      page,
+      limit,
+      pointsType,
+      authorizedProfileId: authorizedPrincipal?.profileId ?? null,
+    })
+    return res.status(200).json({ success: true, data } satisfies ApiEnvelope<WaitlistLeaderboardResponse>)
+  } catch {
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to load leaderboard',
+    } satisfies ApiEnvelope<never>)
+  }
 }

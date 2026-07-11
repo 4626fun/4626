@@ -80,8 +80,13 @@ export type PairedLegRebalancePlanResult =
 export type PairedLegRebalanceFlowResult = {
   executedDelta: number
   skippedDelta: number
+  blockedDelta: number
   failedDelta: number
 }
+
+export type PairedLegRebalanceDipAuthorization =
+  | { ok: true; addNotionalUsd: number }
+  | { ok: false; reason: string }
 
 function findWalletLegForCoin(
   state: HyperliquidClearinghouseState | null,
@@ -209,7 +214,9 @@ export function derivePairedLegRebalancePlan(params: {
     accountValueUsd: dipWalletState?.accountValueUsd,
     strictInverseParity: true,
   })
-  const dipNotionalUsd = Math.min(curveAddUsd, maxDipUsd)
+  // The drawdown curve defines the full-size dip budget. This fill only
+  // authorizes the same scaled slice used by the paired harvest.
+  const dipNotionalUsd = Math.min(curveAddUsd * rebalancePct, maxDipUsd)
   if (!Number.isFinite(dipNotionalUsd) || dipNotionalUsd < params.runtime.minOrderNotionalUsd) {
     return { ok: false, reason: 'below_min_notional' }
   }
@@ -339,6 +346,10 @@ export async function handlePairedLegRebalanceFlow(params: {
   strategySubaccount: string | null
   chatPostEnabled: boolean
   chatPostRoomId: string
+  authorizeDip?: (
+    dip: PairedLegRebalanceDip,
+  ) => Promise<PairedLegRebalanceDipAuthorization> | PairedLegRebalanceDipAuthorization
+  onDipExecuted?: (dip: PairedLegRebalanceDip) => void
 }): Promise<PairedLegRebalanceFlowResult> {
   const fillAction = classifyCounterTradeFillAction(params.fill)
   const pair = String(params.fill.coin ?? '').trim().toUpperCase()
@@ -385,13 +396,14 @@ export async function handlePairedLegRebalanceFlow(params: {
 
   if (!plan.ok) {
     await recordSkip(`rebalance_${plan.reason}`)
-    return { executedDelta: 0, skippedDelta: 1, failedDelta: 0 }
+    return { executedDelta: 0, skippedDelta: 1, blockedDelta: 0, failedDelta: 0 }
   }
 
   const userSiloMaster = params.runtime.userSiloMasterAddress ?? params.userWalletForFills
   let executedDelta = 0
   let failedDelta = 0
   let skippedDelta = 0
+  let blockedDelta = 0
 
   const executeHarvest = async (harvest: PairedLegRebalanceHarvest): Promise<boolean> => {
     const siloCfg = resolveSiloConfig({
@@ -424,7 +436,7 @@ export async function handlePairedLegRebalanceFlow(params: {
       status: tradeResult.ok ? 'executed' : 'failed',
       reason: tradeResult.ok
         ? COUNTER_TRADE_REBALANCE_HARVEST_EXECUTED_REASON
-        : `rebalance_harvest_failed:${String(tradeResult.message ?? 'arena_close_failed')}`,
+        : 'rebalance_harvest_failed',
       counterSide: harvest.side,
       counterNotionalUsd: harvest.reduceNotionalUsd,
       counterLeverage: null,
@@ -479,7 +491,7 @@ export async function handlePairedLegRebalanceFlow(params: {
       status: tradeResult.ok ? 'executed' : 'failed',
       reason: tradeResult.ok
         ? COUNTER_TRADE_REBALANCE_DIP_EXECUTED_REASON
-        : `rebalance_dip_failed:${String(tradeResult.message ?? 'arena_open_failed')}`,
+        : 'rebalance_dip_failed',
       counterSide: dip.side,
       counterNotionalUsd: dip.addNotionalUsd,
       counterLeverage: dip.leverage,
@@ -495,14 +507,41 @@ export async function handlePairedLegRebalanceFlow(params: {
         addNotionalUsd: dip.addNotionalUsd,
         leverage: dip.leverage,
       })
+      params.onDipExecuted?.(dip)
       return true
     }
     failedDelta += 1
     return false
   }
 
-  if (plan.harvest) await executeHarvest(plan.harvest)
-  if (plan.dip) await executeDip(plan.dip)
+  const harvestExecuted = plan.harvest ? await executeHarvest(plan.harvest) : false
+  let dipExecuted = false
+  let authorizedDip: PairedLegRebalanceDip | null = null
+  if (plan.dip && harvestExecuted) {
+    const authorization = params.authorizeDip
+      ? await params.authorizeDip(plan.dip)
+      : { ok: true as const, addNotionalUsd: plan.dip.addNotionalUsd }
+    if (authorization.ok) {
+      authorizedDip = { ...plan.dip, addNotionalUsd: authorization.addNotionalUsd }
+      dipExecuted = await executeDip(authorizedDip)
+    } else {
+      await recordCounterTradeAction({
+        roomId: params.roomId,
+        senderAddress: params.senderAddress,
+        eventKey: `${params.eventKey}|dip|${plan.dip.silo}`,
+        status: 'blocked',
+        reason: authorization.reason,
+        counterSide: plan.dip.side,
+        counterNotionalUsd: plan.dip.addNotionalUsd,
+        counterLeverage: plan.dip.leverage,
+      })
+      blockedDelta += 1
+    }
+  }
+  if (plan.dip && !harvestExecuted) {
+    await recordSkip('rebalance_dip_skipped:harvest_not_executed')
+    skippedDelta += 1
+  }
 
   if (params.chatPostEnabled && (executedDelta > 0 || skippedDelta > 0)) {
     try {
@@ -512,8 +551,8 @@ export async function handlePairedLegRebalanceFlow(params: {
           pair: String(params.fill.coin ?? '').trim(),
           fillAction,
           rebalancePct: plan.rebalancePct,
-          harvest: plan.harvest,
-          dip: plan.dip,
+          harvest: harvestExecuted ? plan.harvest : null,
+          dip: dipExecuted ? authorizedDip : null,
         }),
       })
     } catch (postError) {
@@ -529,7 +568,7 @@ export async function handlePairedLegRebalanceFlow(params: {
     skippedDelta = 1
   }
 
-  return { executedDelta, skippedDelta, failedDelta }
+  return { executedDelta, skippedDelta, blockedDelta, failedDelta }
 }
 
 export { findWalletLegForCoin, findCounterPositionForCoin }

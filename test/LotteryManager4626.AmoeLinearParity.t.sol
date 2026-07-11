@@ -111,12 +111,8 @@ contract MockShareTokenAmoe {
     }
 }
 
-// Pluggable boost manager: returns configurable boost / probBoost. Coverage
-// mirrors the real `ve4626BoostManager` formula:
-//   coverage = min(creatorShareBalanceUSD, swapAmountUSD) / swapAmountUSD
-// so PR 2 follow-up tests can exercise the real "coverage gates personal
-// boost" behavior end-to-end. Tests that want a fixed coverage can call
-// `setForcedCoverageBps` to override.
+// Pluggable boost manager: returns a configurable raw Curve multiplier.
+// LotteryManager applies the covered-fraction blend to the returned uplift.
 contract MockBoostManagerAmoe {
     uint256 internal constant BOOST_PRECISION = 10_000;
 
@@ -146,18 +142,7 @@ contract MockBoostManagerAmoe {
         returns (uint256)
     {
         if (shareUSD == 0 || swapUSD == 0) return 10_000;
-        // Mirror legacy: scale extra mult by coverage so AMOE parity tests stay meaningful.
-        uint256 cov;
-        if (forcedCoverageActive) {
-            cov = forcedCoverageBps;
-        } else {
-            uint256 covered = shareUSD < swapUSD ? shareUSD : swapUSD;
-            cov = (covered * BOOST_PRECISION) / swapUSD;
-            if (cov > BOOST_PRECISION) cov = BOOST_PRECISION;
-        }
-        if (cov == 0 || boostBPS <= BOOST_PRECISION) return BOOST_PRECISION;
-        uint256 extra = boostBPS - BOOST_PRECISION;
-        return BOOST_PRECISION + (extra * cov) / BOOST_PRECISION;
+        return boostBPS;
     }
 
     function getCoverageBps(
@@ -446,12 +431,9 @@ contract LotteryManager4626AmoeLinearParityTest is Test {
     // -------------------------------------------------------------
 
     function test_BoostParity_PersonalBoost_AppliesEqually_BothPaths() public {
-        // Configure a real personal boost: 2.00x multiplier and a lock-duration
-        // additive boost. Both branches in `_applyBoost` are gated by
-        // `coverageBps > 0`, so they trigger only when the buyer actually holds
-        // ShareOFT.
+        // Configure a 2.00x raw multiplier. LotteryManager blends only the
+        // uplift by ShareOFT coverage.
         boostManager.setBoostBPS(20_000); // 2.00x personal multiplier
-        boostManager.setProbBoostBps(100); // +100 bps lock-duration additive
         gauge.setGaugeBoostPPM(0); // isolate personal boost from gauge
 
         // Neutralize the 1.05x slippage bonus (`usdMultiplierBps`).
@@ -488,7 +470,6 @@ contract LotteryManager4626AmoeLinearParityTest is Test {
         // personal boost" behavior that existed before the fix, ensuring the
         // change is additive only.
         boostManager.setBoostBPS(20_000);
-        boostManager.setProbBoostBps(100);
         gauge.setGaugeBoostPPM(0);
 
         // Default `vm.mockCall` in setUp returns 0 — no override needed.

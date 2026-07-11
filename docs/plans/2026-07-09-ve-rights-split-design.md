@@ -13,7 +13,7 @@
               ▼ ve4626Utility
      ┌────────┴────────┐
      ▼                 ▼
-   veVote           veChance
+   ve33           veLottery
      │                 │
      ▼                 ▼
  GaugeVoting      BoostManager → Lottery mult
@@ -24,14 +24,14 @@
 |----------|--------|
 | ■ placement | **Only** product name **ve■4626** |
 | Desk | **`ve4626Utility`** |
-| Lanes | **vote** / **chance** (not credit/unit/power) |
+| Lanes | **ve33** / **veLottery** |
 | Token type | **`ve4626UtilityToken`** non-transferable ERC-20 — **not B20** |
 | Total power | Curve-style dual-decay `getTotalVotingPower()` |
-| Lottery boost | Curve quoted boost BPS `[10k,25k]` (1.0×–2.5× size-base); additive PPM ≡ 0 |
-| Pool mapping | `l`=covered Share USD, `L`=creator Share supply USD, `ve`=effectiveChance |
-| Decay vs claims | `sync` burns excess (chance first, then vote) |
-| Stale utilities (P1) | `previewUtilities` / `effective*`; gauge `vote()` syncs; boost uses `effectiveChanceOf` |
-| Gauge freeze | 1h before epoch end |
+| Lottery boost | **1.0×–2.5×** tokenless-normalized `calculateBoostForPosition(l,L,ve)`; additive lock PPM ≡ 0 |
+| Pool mapping | `l`=covered Share USD, `L`=creator Share supply USD, `ve`=effectiveVeLottery, `Ve`=live total ve4626 |
+| Coverage | `1 + (l/swapUSD)·(boost-1)` applies uplift only to covered trade value |
+| Decay vs claims | `sync` burns excess (veLottery first, then ve33) |
+| Stale utilities (P1) | `previewUtilities` / `effective*`; gauge `vote()` syncs; boost uses `effectiveVeLotteryOf` || Gauge freeze | 1h before epoch end |
 | Launch | Leave LM `boostManager` / `vaultGaugeVoting` at 0 until canary; personal boost later |
 
 ---
@@ -43,9 +43,8 @@
 | `contracts/shared/governance/ve4626.sol` | Lock + dual-decay |
 | `contracts/shared/governance/ve4626Utility.sol` | claim / forfeit / sync / effective* |
 | `contracts/shared/governance/ve4626UtilityToken.sol` | Non-transferable ERC-20 |
-| `contracts/shared/governance/ve4626BoostManager.sol` | `calculateBoostForPosition` quoted BPS 10k–25k; `setUtility` |
-| `contracts/shared/governance/ve4626GaugeVoting.sol` | `setUtility` → sync + effective vote + freeze |
-| `LotteryManager4626._applyBoost` | No additive lock PPM |
+| `contracts/shared/governance/ve4626BoostManager.sol` | `calculateBoostForPosition` 1.0–2.5; `setUtility` → effective veLottery |
+| `contracts/shared/governance/ve4626GaugeVoting.sol` | `setUtility` → sync + effective ve33 + freeze || `LotteryManager4626._applyBoost` | No additive lock PPM |
 | `script/DeployRewardsEcosystem.s.sol` | Deploys + `setUtility` on voting + boost |
 | `test/ve4626.RightsSplitAndDualDecay.t.sol` | Dual-decay + utility + P1 consumers |
 
@@ -55,13 +54,14 @@
 
 | Item | Status |
 |------|--------|
-| Formula `working = min(l, 0.4·l + 0.6·L·ve/Ve)` | Implemented (Curve-correct cap at **l**) |
-| Return quotedBoost = working/(0.4·l) BPS [10k,25k] | C5: tokenless-neutral; full 2.5× at ve≥lp share |
-| ve = `effectiveChanceOf` when utility wired | Implemented |
-| LM uses `calculateBoostForPosition` + Share supply as `L` | Implemented |
+| Formula `0.4·l + 0.6·L·(ve/Ve)`, cap `1.0·l` | Implemented |
+| ve = `effectiveVeLotteryOf` when utility wired | Implemented |
+| Ve = live `getTotalVotingPower()` | Implemented |
+| LM uses `calculateBoostForPosition` + total Share USD as `L` | Implemented |
+| LM blends uplift by `l/swapUSD` coverage | Implemented |
 | Additive lock PPM | Removed (`getTotalProbabilityBoost` ≡ 0) |
-| Do **not** cap working at 2.5·l | That would be 6.25× vs tokenless (non-Curve) |
-| Launch | LM boost sources stay 0 until canary |
+| LiquidityGaugeV5 parity | Working balance caps at `l`; normalized multiplier caps at **2.5×** |
+| Unboosted behavior | Neutral **1.0×**; gauge PPM can still add || Launch | LM boost sources stay 0 until canary |
 
 ## Validation
 
@@ -76,7 +76,7 @@ forge test --match-contract 'Ve4626|PauseGuards|BoostSource|AmoeLinear'
 ## Ops follow-ups (not code)
 
 1. Deploy rewards ecosystem (or partial) on Base  
-2. Confirm `setUtility` on BoostManager + GaugeVoting (sets chance/vote tokens)  
+2. Confirm `setUtility` on BoostManager + GaugeVoting (sets veLottery/ve33 tokens)
 3. Keep lottery LM sources 0 until canary; leave personal boost off day one  
 4. Arm `armBoostSourceTimelock` when boost source addresses final  
 5. Hub ShareOFT forwarders (separate lottery readiness)  

@@ -1078,8 +1078,8 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
      * @notice Apply ve(3,3) boosts to base win probability
      * @dev Personal: Curve quoted boost BPS ∈ [10_000, 25_000] via
      *      `calculateBoostForPosition` (= working/(0.4*l); working capped at l).
-     *      Tokenless-neutral 1.0×; full 2.5× when ve_share ≥ lp_share.
-     *      l = min(shareUSD, swapUSD). Gauge is separate additive PPM.
+     *      Only the covered fraction of the trade receives the uplift.
+     *      Gauge is flat additive PPM.
      */
     function _applyBoost(
         address user,
@@ -1102,8 +1102,14 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
             uint256 totalShareUSD = _totalShareUsd(token, shareBalanceToken);
             try boostManager.calculateBoostForPosition(user, shareBalanceAmount, swapAmountUSD, totalShareUSD)
             returns (uint256 boostBPS) {
-                if (boostBPS > 0) {
-                    boostedWinChance = FullMath.mulDiv(baseWinChance, boostBPS, BASIS_POINTS);
+                if (boostBPS > BASIS_POINTS) {
+                    uint256 coveredUSD =
+                        shareBalanceAmount < swapAmountUSD ? shareBalanceAmount : swapAmountUSD;
+                    uint256 coverageBPS = FullMath.mulDiv(coveredUSD, BASIS_POINTS, swapAmountUSD);
+                    uint256 coveredUpliftBPS =
+                        FullMath.mulDiv(boostBPS - BASIS_POINTS, coverageBPS, BASIS_POINTS);
+                    boostedWinChance =
+                        FullMath.mulDiv(baseWinChance, BASIS_POINTS + coveredUpliftBPS, BASIS_POINTS);
                 }
             } catch {}
         }

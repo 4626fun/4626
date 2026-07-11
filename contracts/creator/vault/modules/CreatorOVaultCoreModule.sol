@@ -143,6 +143,7 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
     error StrategyNotImpaired(address strategy);
     error InvalidImpairmentReason(uint256 reasonCode);
     error ImpairmentRootNotReady(uint64 unlockTime);
+    error ImpairmentChallengeWindowClosed(uint64 unlockTime);
     error ImpairmentRootRequired(uint256 epochId);
     error ImpairmentRootAlreadyFinalized(uint256 epochId);
     error ImpairmentRootChallengedErr(uint256 epochId);
@@ -1070,6 +1071,8 @@ contract CreatorOVaultCoreModule is OVaultModuleBase, IOVaultModuleIdentity {
         ImpairmentEpoch storage epoch = impairmentEpochs[epochId];
         if (epoch.status != ImpairmentEpochStatus.Tripped) revert InvalidImpairmentTransition(epochId);
         if (epoch.snapshotRoot == bytes32(0)) revert ImpairmentRootRequired(epochId);
+        uint64 unlock = impairmentRootUnlockTime[epochId];
+        if (block.timestamp >= unlock) revert ImpairmentChallengeWindowClosed(unlock);
         impairmentRootChallenged[epochId] = true;
         emit ImpairmentRootChallenged(epochId, msg.sender, reason);
     }

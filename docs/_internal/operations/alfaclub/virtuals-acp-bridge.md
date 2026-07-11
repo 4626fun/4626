@@ -3,8 +3,8 @@
 Connects the 4626 Eliza stack to a **Virtuals Protocol ACP agent**
 (app.virtuals.io) using `@virtuals-protocol/acp-node-v2` — the event-driven v2
 SDK. The bridge listens for ACP job-room entries and lets the Eliza LLM service
-decide which `JobSession` tool to execute (respond, negotiate, deliver,
-complete/reject), with hard spend guardrails.
+propose a `JobSession` tool action. Deterministic policy, quotas, payment gates,
+and typed capabilities decide whether any proposal may execute.
 
 This is **not** the Arena lane. The degen.virtuals.io trading agent (`/arena`)
 keeps its existing dgclaw-skill + acp-cli path under
@@ -16,7 +16,7 @@ brand.
 | Piece | Path | Role |
 | --- | --- | --- |
 | Config | `frontend/server/agents/eliza/plugins/virtuals/config.ts` | Env reader + validation (`readVirtualsAcpConfig`, `checkVirtualsAcpConfig`) |
-| Tool loop helpers | `frontend/server/agents/eliza/plugins/virtuals/toolLoop.ts` | Pure functions: tool policy filter, spend clamping, system prompt build, LLM JSON decision parsing |
+| Tool loop helpers | `frontend/server/agents/eliza/plugins/virtuals/toolLoop.ts` | Pure functions: typed execution policy, strict spend validation/capping, system prompt build, LLM JSON decision parsing |
 | Service | `frontend/server/agents/eliza/plugins/virtuals/service.ts` | `VirtualsAcpService` singleton — `AcpAgent` lifecycle, `entry` handler, LLM decision execution |
 | Eliza plugin | `frontend/server/agents/eliza/plugins/virtuals/index.ts` | Chat commands `/virtuals status`, `/virtuals browse <keyword>` |
 | Standalone runner | `frontend/server/agents/eliza/plugins/virtuals/runner.ts` | `pnpm -C frontend agent:virtuals` — runs the bridge as its own process |
@@ -37,16 +37,39 @@ never guessed.
 - **Fail-open loading.** Both the plugin and the in-process service boot use
   dynamic `import()` with catch-and-warn, so a broken SDK dependency can never
   block the Railway Keepr primary (same pattern as the AlfaClub plugin).
-- **Spend clamping.** `setBudget` / `fund` USDC amounts are clamped to
-  `VIRTUALS_ACP_MAX_BUDGET_USDC` (default 5). The clamp happens after the LLM
-  decision, in code — the model cannot exceed it.
-- **Fund opt-in.** The `fund` tool is filtered out of the prompt entirely
-  unless `VIRTUALS_ACP_AUTO_FUND=1`.
-- **Observe-only mode.** `VIRTUALS_ACP_AUTO_LLM=0` keeps the connection live
-  and logs every entry but never executes tools — useful for the first days of
-  a new agent.
-- **Paid-only backtests.** `VIRTUALS_ACP_REQUIRE_PAID_BACKTESTS=1` (default)
-  blocks ACP backtest execution unless the job shows a paid/funded signal.
+- **Observe-only by default.** `VIRTUALS_ACP_AUTO_LLM` defaults to `0`; the
+  connection stays live and logs entries without requesting or executing LLM
+  tool decisions.
+- **High-risk proposal boundary.** `setBudget`, `fund`, `submit`, `complete`,
+  and `reject` are proposal-only unless their exact typed name appears in
+  `VIRTUALS_ACP_EXECUTABLE_HIGH_RISK_TOOLS`. Prompt text never grants authority.
+  Proposal-only decisions are sent to the counterparty with
+  `JobSession.sendMessage(..., "proposal")` as versioned structured JSON; that
+  outbound message consumes the same quota as any other dispatch.
+  `VIRTUALS_ACP_AUTO_FUND` is retained only as a legacy prompt flag and grants
+  no execution authority.
+- **Default-deny tool boundary.** Only SDK `wait` and `sendMessage` are
+  low-risk by default. Known mutating tools require the typed allowlist;
+  unknown/future tools are denied. Before `executeTool`, arguments must match
+  the names, required fields, and runtime types in the current
+  `availableTools()` definition.
+- **Strict spend validation.** `setBudget` / `fund` require a finite positive
+  numeric `amount`; invalid, missing, string, zero, or negative amounts are
+  blocked rather than dispatched. Valid amounts are capped at
+  `VIRTUALS_ACP_MAX_BUDGET_USDC` (default `5`).
+- **Bounded execution.** Service-run defaults allow at most `100` tool
+  executions globally and `10` per chain/job. Configuration is hard-bounded
+  to `1000` globally and `100` per job. Quota is consumed immediately before
+  dispatch and is never restored after a thrown dispatch because a remote side
+  effect may already have occurred. Per-job counters are evicted at terminal
+  events without mutating SDK session state.
+- **Paid-only backtests.** Backtests require the SDK `JobSession` and loaded
+  `AcpJob` to both be funded plus a finite positive
+  `session.job.budget.amount`; there is no config bypass. Proposed budgets,
+  zero amounts, unloaded jobs, and unknown states fail closed.
+- **Wait semantics.** `wait` is a local no-action decision only when the SDK
+  currently lists it. It does not call `executeTool` or consume dispatch quota;
+  the prompt never offers `wait` when the current role/status omits it.
 
 ## Setup
 
@@ -87,6 +110,9 @@ primary. Use `frontend/Dockerfile.agent` with:
 | `VIRTUALS_ACP_ENABLED` | `1` |
 | `VIRTUALS_ACP_AUTO_LLM` | `0` for first rollout, then `1` |
 | `VIRTUALS_ACP_AUTO_FUND` | `0` |
+| `VIRTUALS_ACP_EXECUTABLE_HIGH_RISK_TOOLS` | empty (proposal-only) |
+| `VIRTUALS_ACP_GLOBAL_TOOL_EXECUTION_QUOTA` | `100` |
+| `VIRTUALS_ACP_PER_JOB_TOOL_EXECUTION_QUOTA` | `10` |
 | `VIRTUALS_ACP_HEALTH_PORT` | `8080` (optional probe) |
 | `ELIZA_LLM_VIRTUALS_ACP_PROVIDER_PRIORITY` | `VirtualsCompute,Groq,OpenAI,Anthropic,OpenRouter` |
 
@@ -97,9 +123,10 @@ Store these as **runtime secrets** (not committed env files):
 - `VIRTUALS_ACP_WALLET_ID`
 - `VIRTUALS_ACP_SIGNER_PRIVATE_KEY`
 
-After deploy, run preflight from a shell with the same secrets (or inspect
-startup logs — the runner pings Virtuals compute on boot when
-`VIRTUALS_API_KEY` is set and `AUTO_LLM=1`).
+After deploy, run preflight from a shell with the same secrets. The doctor
+reports credential presence/validity only; it never prints credential bytes,
+addresses, wallet-id fragments, or API-key fragments. The runner pings
+Virtuals compute on boot only when `VIRTUALS_API_KEY` is set and `AUTO_LLM=1`.
 
 ## Operating
 
@@ -107,13 +134,20 @@ startup logs — the runner pings Virtuals compute on boot when
   sessions, entries-handled / tools-executed counters, last error.
 - `/virtuals browse <keyword>` — search the ACP agent registry.
 - Standalone runner logs a heartbeat every 5 minutes with session counts.
+- Public `/healthz` and `/readyz` responses contain only `{"ok": boolean}`;
+  `/healthz` is process liveness, while `/readyz` requires the service and SDK
+  transport connection callback to be ready. Sessions, job IDs, counters, and
+  errors remain in private logs/status output; private status lists only a
+  bounded set of non-terminal sessions.
+- The dedicated Docker process runs as the unprivileged `node` user.
 
 ## Rollout recommendation
 
 Start with `VIRTUALS_ACP_AUTO_LLM=0` (observe-only) and watch the logged
 entries for a day. Then enable `VIRTUALS_ACP_AUTO_LLM=1` with
-`VIRTUALS_ACP_AUTO_FUND=0` and a small `VIRTUALS_ACP_MAX_BUDGET_USDC`. Only
-enable auto-fund once you trust the job mix the agent receives.
+an empty `VIRTUALS_ACP_EXECUTABLE_HIGH_RISK_TOOLS` list. Add one exact
+capability at a time only after review; enabling `AUTO_LLM` or prompt language
+does not authorize high-risk execution.
 
 ## Revenue-first credit policy
 
@@ -127,10 +161,12 @@ prefer this operating policy:
 2. **Phase B (constrained execute, 3-5 days)**
    - `VIRTUALS_ACP_AUTO_LLM=1`
    - `VIRTUALS_ACP_AUTO_FUND=0`
+   - `VIRTUALS_ACP_EXECUTABLE_HIGH_RISK_TOOLS=` (empty)
    - Keep conservative `VIRTUALS_ACP_MAX_BUDGET_USDC`.
 3. **Phase C (scale)**
    - Increase quality/throughput only if completion and net economics improve.
-   - Enable `AUTO_FUND` only after stable execution quality.
+   - Add only reviewed typed capabilities, with `fund` requiring explicit
+     inclusion plus the spend cap and quotas.
 
 Keep counter-trade LLM gating separate unless explicitly changing objectives.
 

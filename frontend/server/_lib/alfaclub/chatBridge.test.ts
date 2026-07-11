@@ -751,7 +751,13 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     ])
     // Empty response skips websocket send (fake timers would hang on send timeout).
     upsertAlfaClubIngestMessagesMock
-      .mockResolvedValueOnce([{ messageId: 'm-gmeow-once' }])
+      .mockResolvedValueOnce([{
+        roomId: '1043',
+        messageId: 'm-gmeow-once',
+        senderAddress: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: '/gmeow',
+        dateMs: nowMs - 10_000,
+      }])
       .mockResolvedValueOnce([])
 
     const first = await _runAlfaClubChatBridgeTickForTests(makeFlags(), {
@@ -777,7 +783,13 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
         text: '/alfa',
       },
     ])
-    upsertAlfaClubIngestMessagesMock.mockResolvedValueOnce([{ messageId: 'm-alfa-once' }])
+    upsertAlfaClubIngestMessagesMock.mockResolvedValueOnce([{
+      roomId: '1043',
+      messageId: 'm-alfa-once',
+      senderAddress: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+      text: '/alfa',
+      dateMs: nowMs - 10_000,
+    }])
 
     const result = await _runAlfaClubChatBridgeTickForTests(makeFlags(), {
       seedHistoryOnlyOnFirstTick: false,
@@ -875,7 +887,13 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
         text: '/gmeow',
       },
     ])
-    upsertAlfaClubIngestMessagesMock.mockResolvedValueOnce([{ messageId: 'm-gmeow' }])
+    upsertAlfaClubIngestMessagesMock.mockResolvedValueOnce([{
+      roomId: '1043',
+      messageId: 'm-gmeow',
+      senderAddress: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+      text: '/gmeow',
+      dateMs: nowMs - 4_000,
+    }])
 
     await _runAlfaClubChatBridgeTickForTests(makeFlags(), {
       seedHistoryOnlyOnFirstTick: false,
@@ -913,7 +931,13 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
         headers: { 'content-type': 'application/json' },
       })
     }) as unknown as typeof fetch
-    upsertAlfaClubIngestMessagesMock.mockResolvedValueOnce([{ messageId: 'm-1659-gmeow' }])
+    upsertAlfaClubIngestMessagesMock.mockResolvedValueOnce([{
+      roomId: '1659',
+      messageId: 'm-1659-gmeow',
+      senderAddress: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+      text: '/gmeow',
+      dateMs: Date.now() - 2_000,
+    }])
 
     await _runAlfaClubChatBridgeTickForTests(
       makeFlags({ roomId: '1043', hermitCommandRoomIds: ['1043', '1659'] }),
@@ -1154,7 +1178,7 @@ describe('room 1659 <-> XMTP bridge origin-aware outbound fan-out', () => {
     )
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const [, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
     const body = JSON.parse(String(requestInit.body))
     expect(body.text).toContain('from xmtp')
   })

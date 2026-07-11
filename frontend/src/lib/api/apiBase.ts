@@ -60,17 +60,7 @@ async function shouldTreat404AsRouteMiss(res: Response): Promise<boolean> {
  */
 export async function apiFetch(path: string, init: ApiFetchInit = {}, bases?: string[]): Promise<Response> {
   const withCreds = Boolean(init.withCredentials)
-  // Best-effort: attach our SIWE session token when present.
-  // This allows authenticated routes to work even when cookies are unavailable.
   const headers = new Headers(init.headers ?? undefined)
-  if (typeof window !== 'undefined' && path.startsWith('/api/') && !headers.has('Authorization')) {
-    try {
-      const token = sessionStorage.getItem('cv_siwe_session_token')
-      if (token && token.trim()) headers.set('Authorization', `Bearer ${token.trim()}`)
-    } catch {
-      // ignore
-    }
-  }
 
   // Attach SIWA receipt for agent API calls when available.
   if (

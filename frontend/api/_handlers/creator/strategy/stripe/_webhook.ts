@@ -43,13 +43,9 @@ import {
  * Idempotency: Stripe may redeliver the same event. Our handler reads
  * by session id and issues an UPDATE, so replays are no-ops.
  *
- * Note on body parsing: Stripe webhook verification needs the raw
- * bytes. Vercel Node handlers by default give us a parsed JSON object
- * in `req.body`. We re-serialize to a string for verification. This
- * works in most cases but is technically fragile. A cleaner future
- * refactor would disable body parsing for this route specifically via
- * `config.api.bodyParser = false` in a Next.js API route, or by reading
- * the raw stream. For now this is adequate.
+ * Stripe verification requires the exact bytes signed by Stripe. The dedicated
+ * Vercel route disables body parsing; a pre-parsed object is rejected rather
+ * than re-serialized into different bytes.
  */
 export const config = {
   api: {
@@ -58,19 +54,15 @@ export const config = {
 } as const
 
 async function readRawBody(req: VercelRequest): Promise<Buffer> {
-  // If Vercel has already parsed it into an object, reconstruct as JSON.
-  // This is a fallback — in the ideal setup `bodyParser: false` (above)
-  // keeps it raw. We handle both for robustness.
   const anyReq = req as unknown as {
     on: (event: string, cb: (chunk: Buffer) => void) => unknown
     body?: unknown
   }
-  if (anyReq.body && typeof anyReq.body === 'object' && !(anyReq.body instanceof Buffer)) {
-    return Buffer.from(JSON.stringify(anyReq.body), 'utf8')
-  }
   if (anyReq.body && anyReq.body instanceof Buffer) {
     return anyReq.body
   }
+  if (typeof anyReq.body === 'string') return Buffer.from(anyReq.body, 'utf8')
+  if (anyReq.body != null) throw new Error('stripe_raw_body_unavailable')
   const chunks: Buffer[] = []
   const nodeReq = anyReq as unknown as {
     on: (event: 'data' | 'end' | 'error', cb: (arg?: unknown) => void) => unknown
@@ -101,7 +93,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const signature = req.headers['stripe-signature']
   const signatureStr = Array.isArray(signature) ? signature[0] : signature
 
-  const rawBody = await readRawBody(req)
+  let rawBody: Buffer
+  try {
+    rawBody = await readRawBody(req)
+  } catch {
+    return res.status(400).json({
+      success: false,
+      error: 'Webhook verification failed (raw_body_unavailable)',
+    } satisfies ApiEnvelope<never>)
+  }
 
   const verification = await verifyStripeWebhook(rawBody, signatureStr)
   if (!verification.ok) {
