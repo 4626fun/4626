@@ -1,0 +1,109 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "forge-std/Test.sol";
+import {LotteryManager4626, LotteryManager4626AdminModule} from "@4626/shared/lottery/manager/LotteryManager4626.sol";
+import {LotteryManager4626PricingLib} from "@4626/shared/lottery/manager/LotteryManager4626PricingLib.sol";
+
+/// @dev Minimal registry/oracle for pricing-lib unit checks.
+contract MockOracleHardening {
+    int256 public price = 1e18;
+    uint256 public ts;
+
+    constructor() {
+        ts = block.timestamp;
+    }
+
+    function set(int256 p, uint256 t) external {
+        price = p;
+        ts = t;
+    }
+
+    function getAssetPrice() external view returns (int256, uint256) {
+        return (price, ts);
+    }
+}
+
+contract MockRegistryHardening {
+    address public oracle;
+    address public shareOft;
+    address public token = address(0xA11CE);
+
+    constructor(address oracle_, address shareOft_) {
+        oracle = oracle_;
+        shareOft = shareOft_;
+    }
+
+    function getOracleForToken(address) external view returns (address) {
+        return oracle;
+    }
+
+    function getShareOFTForToken(address) external view returns (address) {
+        return shareOft;
+    }
+}
+
+/// @notice Hardening checks for size-extraction: EIP-170, pricing lib fail-closed, storage mirror notes.
+contract LotteryManager4626HardeningTest is Test {
+    function test_mainAndAdmin_underEip170() public view {
+        bytes memory mainRt =
+            vm.getDeployedCode("contracts/shared/lottery/manager/LotteryManager4626.sol:LotteryManager4626");
+        bytes memory adminRt =
+            vm.getDeployedCode("contracts/shared/lottery/manager/LotteryManager4626.sol:LotteryManager4626AdminModule");
+        assertLe(mainRt.length, 24_576, "main over EIP-170");
+        assertLe(adminRt.length, 24_576, "admin over EIP-170");
+        // Prefer comfortable headroom on main after extraction (~800B measured).
+        assertGe(24_576 - mainRt.length, 200, "main headroom under 200B - size budget review required");
+    }
+
+    function test_pricingLib_failClosed_onBadInputs() public {
+        MockOracleHardening oracle = new MockOracleHardening();
+        MockRegistryHardening reg = new MockRegistryHardening(address(oracle), address(0xBEEF));
+
+        (uint256 usd,,) = LotteryManager4626PricingLib.calculateTokenUSD(
+            address(0), reg.token(), reg.token(), 1e18, 0, 0, 0, 0, 0
+        );
+        assertEq(usd, 0, "zero registry");
+
+        (usd,,) = LotteryManager4626PricingLib.calculateTokenUSD(
+            address(reg), reg.token(), address(0xBAD), 1e18, 0, 0, 0, 0, 0
+        );
+        assertEq(usd, 0, "wrong tokenIn");
+
+        (usd,,) = LotteryManager4626PricingLib.calculateTokenUSD(
+            address(reg), reg.token(), reg.token(), 0, 0, 0, 0, 0, 0
+        );
+        assertEq(usd, 0, "zero amount");
+
+        oracle.set(0, block.timestamp);
+        (usd,,) = LotteryManager4626PricingLib.calculateTokenUSD(
+            address(reg), reg.token(), reg.token(), 1e18, 0, 0, 0, 0, 0
+        );
+        assertEq(usd, 0, "non-positive price");
+    }
+
+    function test_pricingLib_happyPath_andDeviation() public {
+        MockOracleHardening oracle = new MockOracleHardening();
+        MockRegistryHardening reg = new MockRegistryHardening(address(oracle), address(0xBEEF));
+        oracle.set(1e18, block.timestamp);
+
+        (uint256 usd, uint256 price,) = LotteryManager4626PricingLib.calculateTokenUSD(
+            address(reg), reg.token(), reg.token(), 1e18, 3600, 0, 0, 0, 0
+        );
+        assertEq(price, 1e18);
+        assertEq(usd, 1_000_000); // $1 in 1e6
+
+        // 50% deviation vs last 1e18 with max 10% → reject
+        oracle.set(15e17, block.timestamp);
+        (usd,,) = LotteryManager4626PricingLib.calculateTokenUSD(
+            address(reg), reg.token(), reg.token(), 1e18, 3600, 1000, 1e18, block.timestamp, 0
+        );
+        assertEq(usd, 0, "deviation should fail closed");
+    }
+
+    function test_adminModule_payoutSelector_exists() public pure {
+        // Ensures size extraction entrypoint does not get renamed without a test break.
+        bytes4 sel = LotteryManager4626AdminModule.payoutLocalJackpot.selector;
+        assertTrue(sel != bytes4(0));
+    }
+}

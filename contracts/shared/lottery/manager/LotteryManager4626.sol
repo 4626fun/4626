@@ -1690,15 +1690,19 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     }
 
     /**
-     * @notice Pay jackpot from ALL active lane vaults (multi-token prize!)
-     * @param triggeringCoin The lane token that triggered the lottery
-     * @param winner The lottery winner
-     * @param payoutBps Percentage of each vault's jackpot to pay (6900 = 69%)
-     * @return totalSharesPaid Sum of ShareOFT (■) units paid across vaults (M-12 — not vault count)
+     * @notice Pay jackpot (single- or multi-vault) via AdminModule DELEGATECALL.
+     * @dev Size extraction: payout body lives on AdminModule with mirrored storage.
+     *      Reverts bubble with original data; failed DELEGATECALL reverts roll back
+     *      `_payoutLock` writes inside the module frame.
      */
-    // FIX: CLM-04 — wrap entire payout in try/catch pattern to ensure _payoutLock always resets
     function _payoutLocalJackpot(address triggeringCoin, address winner, uint16 payoutBps) internal returns (uint256) {
-        (bool ok, bytes memory data) = _adminModule.delegatecall(
+        address module = _adminModule;
+        if (module == address(0)) revert ZeroAddress();
+        if (winner == address(0)) revert ZeroAddress();
+        // Cap is basis points; reject > 100% so a misconfigured rewardPercentage cannot drain.
+        if (uint256(payoutBps) > BASIS_POINTS) revert InvalidAmount();
+
+        (bool ok, bytes memory data) = module.delegatecall(
             abi.encodeWithSelector(
                 LotteryManager4626AdminModule.payoutLocalJackpot.selector,
                 triggeringCoin,
@@ -1711,6 +1715,8 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
                 revert(add(data, 0x20), mload(data))
             }
         }
+        // Empty success data would decode-fail; treat as zero paid.
+        if (data.length < 32) return 0;
         return abi.decode(data, (uint256));
     }
 
@@ -1720,7 +1726,10 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     /// jackpot payouts so that when the registry is larger than
     /// MAX_JACKPOT_PAYOUT_ITERATIONS, all coins eventually receive payouts
     /// across successive jackpots rather than being starved behind the cap.
-    /// Incremented after each payout in _payoutLocalJackpotInner (M-06).
+    /// Incremented after each payout in AdminModule.payoutLocalJackpotInner (M-06).
+    /// @dev STORAGE: declared after `pendingAmoeRelayerEffectiveAt` (slot order).
+    ///      AdminModule MUST declare `jackpotPayoutCursor` in the same relative order
+    ///      for DELEGATECALL payout. Do not reorder without a storage migration.
     uint256 public jackpotPayoutCursor;
 
     /// @notice Emitted when the per-call iteration cap truncated the payout.
@@ -2337,14 +2346,21 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     // JACKPOT PAYOUT (delegatecall from main)
     // ================================
 
-    function payoutLocalJackpot(address triggeringCoin, address winner, uint16 payoutBps) external onlyDelegateCall returns (uint256) {
+    /// @notice Jackpot payout entry (main DELEGATECALLs here). Storage layout must match main.
+    /// @dev Reentrancy: `_payoutLock` + caller paths are `nonReentrant`. Inner gauge failures
+    ///      are try/caught; a hard revert rolls back the lock via DELEGATECALL semantics.
+    function payoutLocalJackpot(address triggeringCoin, address winner, uint16 payoutBps)
+        external
+        onlyDelegateCall
+        returns (uint256 totalSharesPaid)
+    {
+        if (winner == address(0)) revert ZeroAddress();
+        if (uint256(payoutBps) > BASIS_POINTS) revert InvalidAmount();
         if (_payoutLock == 1) revert ReentrancyGuardReentrantCall();
         _payoutLock = 1;
-
-        uint256 totalSharesPaid = payoutLocalJackpotInner(triggeringCoin, winner, payoutBps);
-
+        // Inner paths catch per-gauge failures; any uncaught revert undoes this lock.
+        totalSharesPaid = payoutLocalJackpotInner(triggeringCoin, winner, payoutBps);
         _payoutLock = 0;
-        return totalSharesPaid;
     }
 
     function payTriggeringVaultJackpot(address triggeringCoin, address winner, uint16 payoutBps)

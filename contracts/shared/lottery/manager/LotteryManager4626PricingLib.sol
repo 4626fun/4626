@@ -40,12 +40,25 @@ library LotteryManager4626PricingLib {
         uint256 lastTs,
         uint256 usdMultiplierBps
     ) external view returns (uint256 usd1e6, uint256 priceUSD1e18, uint256 oracleTimestamp) {
-        address oracleAddr = IRegistry4626LotteryPricing(registry).getOracleForToken(token);
-        if (oracleAddr == address(0)) return (0, 0, 0);
+        if (registry == address(0) || token == address(0) || tokenIn == address(0) || amount == 0) {
+            return (0, 0, 0);
+        }
 
-        address shareOFT = IRegistry4626LotteryPricing(registry).getShareOFTForToken(token);
+        address oracleAddr;
+        try IRegistry4626LotteryPricing(registry).getOracleForToken(token) returns (address o) {
+            oracleAddr = o;
+        } catch {
+            return (0, 0, 0);
+        }
+        if (oracleAddr == address(0) || oracleAddr.code.length == 0) return (0, 0, 0);
+
+        address shareOFT;
+        try IRegistry4626LotteryPricing(registry).getShareOFTForToken(token) returns (address s) {
+            shareOFT = s;
+        } catch {
+            return (0, 0, 0);
+        }
         if (tokenIn != token && tokenIn != shareOFT) return (0, 0, 0);
-        if (amount == 0) return (0, 0, 0);
 
         int256 priceUSD;
         uint256 timestamp;
@@ -63,6 +76,7 @@ library LotteryManager4626PricingLib {
             // forge-lint: disable-next-line(unsafe-typecast)
             uint256 currentPrice = uint256(priceUSD);
             uint256 diff = currentPrice > lastPrice ? currentPrice - lastPrice : lastPrice - currentPrice;
+            // lastPrice > 0 already; mulDiv is safe
             uint256 deviationBps = FullMath.mulDiv(diff, BASIS_POINTS, lastPrice);
             if (deviationBps > oracleMaxDeviationBps) return (0, 0, 0);
         }
@@ -72,8 +86,10 @@ library LotteryManager4626PricingLib {
         oracleTimestamp = timestamp;
 
         uint256 usd1e18 = FullMath.mulDiv(amount, priceUSD1e18, 1e18);
+        // Cap multiplier at 10x to avoid config mistakes exploding odds base
         if (usdMultiplierBps > 0) {
-            usd1e18 = FullMath.mulDiv(usd1e18, usdMultiplierBps, BASIS_POINTS);
+            uint256 mult = usdMultiplierBps > 100_000 ? 100_000 : usdMultiplierBps;
+            usd1e18 = FullMath.mulDiv(usd1e18, mult, BASIS_POINTS);
         }
         usd1e6 = usd1e18 / 1e12;
     }
