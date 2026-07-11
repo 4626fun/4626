@@ -73,7 +73,7 @@ jobs:
     name: Manager AMOE selector-surface guard
     # Runs only when invoked manually with a manager address. This is a
     # pre-deploy verification tool — it asserts that a candidate
-    # CreatorLotteryManager address actually carries the three AMOE
+    # LotteryManager4626 address actually carries the three AMOE
     # selectors (setAuthorizedAmoeRelayer, authorizedAmoeRelayer,
     # processAmoeEntry) in its deployed bytecode. v1.8.x managers
     # predate PR #395 and silently lack these selectors; routing AMOE

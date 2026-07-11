@@ -52,7 +52,7 @@ jobs:
           # gate is now blocking. See docs/operations/contract-size-gate.md.
           #
           # `--skip test` excludes test-only contracts from the gate.
-          # Test harnesses (e.g. CreatorLotteryManagerHarness) inherit
+          # Test harnesses (e.g. LotteryManager4626Harness) inherit
           # production contracts and add a few `exposed*` wrappers, so
           # whenever a production contract is within ~250 B of the cap
           # the harness will trivially overflow even though the harness
@@ -63,10 +63,10 @@ jobs:
           forge build --skip test --sizes
         id: build
 
-      - name: CreatorLotteryManager size warn-guard
+      - name: LotteryManager4626 size warn-guard
         # Defence-in-depth on top of the EIP-170 hard gate above.
         # This step is WARN-ONLY: it never fails the build. It prints a
-        # heads-up when CreatorLotteryManager.sol crosses the warn threshold
+        # heads-up when LotteryManager4626.sol crosses the warn threshold
         # (currently 24,450 B, targeting ~126 B lead time) before the
         # EIP-170 cap (24,576 B) makes the next deploy impossible.
         # The hard gate remains the primary enforcer.

@@ -6,10 +6,10 @@
 # As of commit 19ad35b21 (June 2026 x-ray audit pass) the vault
 # measured 22,915 B — 1,661 B of headroom.
 #
-# Unlike CreatorLotteryManager (which lives ~48 B from the cap and
-# uses a warn-only guard), CreatorOVault has comfortable headroom
-# today but is expected to grow as modules add features. This gate
-# provides early warning before the hard EIP-170 gate trips.
+# Unlike LotteryManager4626 (historically near the cap; uses a
+# warn-only guard), CreatorOVault has more headroom today but is
+# expected to grow as modules add features. This gate provides early
+# warning before the hard EIP-170 gate trips.
 #
 # Thresholds (update as headroom changes):
 #   WARN  = 23,500 bytes  (~1,076 B headroom under EIP-170)

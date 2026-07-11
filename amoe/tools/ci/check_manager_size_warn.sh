@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI guard: warn-only size gate for CreatorLotteryManager.
+# CI guard: warn-only size gate for LotteryManager4626.
 #
 # This is a SEPARATE, NON-BLOCKING heads-up gate that complements the
 # existing EIP-170 hard gate (`forge build --sizes`, which fails at
@@ -7,16 +7,13 @@
 # overflowed; by then a deploy is impossible until the offending PR
 # is reverted or split.
 #
-# CreatorLotteryManager.sol is the protocol's largest production
-# contract and historically lives within ~10-100 bytes of the cap.
-# June 2026 x-ray contract audit pass measured 24,528 B (48 B headroom).
-# Any innocent-looking PR (a new event field, an extra revert reason,
-# an unchecked optimisation revert, or AMOE surface change) can
-# silently consume the remaining margin.
+# LotteryManager4626.sol is the protocol's largest production
+# contract (formerly CreatorLotteryManager) and historically lives near
+# the EIP-170 cap. Any innocent-looking PR can consume remaining margin.
 #
 # This script gives advance warning (currently targeting ~126 B lead time).
 # It runs forge inspect, extracts the deployed bytecode size for
-# CreatorLotteryManager, and prints a warning (without failing) when
+# LotteryManager4626, and prints a warning (without failing) when
 # the size crosses the warn threshold but stays under the hard cap.
 #
 # Thresholds (update as headroom shrinks):
@@ -30,7 +27,7 @@
 #                             primary enforcer remains the forge build gate)
 #
 # PR requirement (enforced by policy, not this script):
-#   Any change touching contracts/shared/lottery/manager/CreatorLotteryManager.sol
+#   Any change touching contracts/shared/lottery/manager/LotteryManager4626.sol
 #   (or its AdminModule) must include a short "size budget review" note
 #   in the PR description or a linked issue. Estimate byte impact of the
 #   change and confirm remaining headroom after the change.
@@ -49,7 +46,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-CONTRACT="contracts/shared/lottery/manager/CreatorLotteryManager.sol:CreatorLotteryManager"
+CONTRACT="contracts/shared/lottery/manager/LotteryManager4626.sol:LotteryManager4626"
 WARN_THRESHOLD=24450
 HARD_THRESHOLD=24576
 
@@ -60,14 +57,13 @@ info() { printf '\033[36m[..]\033[0m   %s\n' "$*"; }
 
 command -v forge >/dev/null 2>&1 || { echo "forge not on PATH" >&2; exit 2; }
 
-info "inspecting deployed bytecode size for CreatorLotteryManager"
+info "inspecting deployed bytecode size for LotteryManager4626"
 
-# `forge inspect <contract> bytecode` returns the *deployed* runtime
+# `forge inspect <contract> deployedBytecode` returns the *deployed* runtime
 # bytecode (post-constructor code that lives on chain) as 0x-prefixed
 # hex. Length in bytes = (len(hex) - 2) / 2.
 HEX="$(forge inspect "$CONTRACT" deployedBytecode 2>/dev/null || true)"
 if [ -z "$HEX" ] || [ "$HEX" = "0x" ]; then
-  # Fall back to `bytecode` (creation) only if deployedBytecode missing.
   echo "[FAIL] forge inspect returned empty deployedBytecode for $CONTRACT" >&2
   exit 2
 fi
@@ -81,19 +77,19 @@ if (( HEX_LEN % 2 != 0 )); then
 fi
 SIZE=$(( HEX_LEN / 2 ))
 
-info "CreatorLotteryManager runtime size: ${SIZE} bytes"
-info "warn threshold:                     ${WARN_THRESHOLD} bytes (~126 B target lead time)"
-info "EIP-170 hard cap:                   ${HARD_THRESHOLD} bytes"
+info "LotteryManager4626 runtime size: ${SIZE} bytes"
+info "warn threshold:                  ${WARN_THRESHOLD} bytes (~126 B target lead time)"
+info "EIP-170 hard cap:                ${HARD_THRESHOLD} bytes"
 
 if (( SIZE >= HARD_THRESHOLD )); then
-  fail "CreatorLotteryManager runtime size ${SIZE} >= EIP-170 cap ${HARD_THRESHOLD}. \
+  fail "LotteryManager4626 runtime size ${SIZE} >= EIP-170 cap ${HARD_THRESHOLD}. \
 Contract is undeployable. (This should already have been caught by \
 \`forge build --sizes\`.)"
 fi
 
 if (( SIZE > WARN_THRESHOLD )); then
   HEADROOM=$(( HARD_THRESHOLD - SIZE ))
-  warn "CreatorLotteryManager runtime size ${SIZE} > warn threshold ${WARN_THRESHOLD}."
+  warn "LotteryManager4626 runtime size ${SIZE} > warn threshold ${WARN_THRESHOLD}."
   warn "only ${HEADROOM} bytes of EIP-170 headroom remain (cap = ${HARD_THRESHOLD})."
   warn "PRs touching this file MUST include a 'size budget review' note estimating impact."
   warn "consider extracting another helper module (AdminModule precedent) before adding new logic."
@@ -102,6 +98,6 @@ if (( SIZE > WARN_THRESHOLD )); then
 fi
 
 HEADROOM=$(( HARD_THRESHOLD - SIZE ))
-ok "CreatorLotteryManager has ${HEADROOM} bytes of EIP-170 headroom (size=${SIZE})."
+ok "LotteryManager4626 has ${HEADROOM} bytes of EIP-170 headroom (size=${SIZE})."
 ok "Any touching PRs should still note estimated size delta + remaining headroom."
 exit 0

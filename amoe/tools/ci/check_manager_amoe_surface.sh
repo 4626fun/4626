@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI guard: assert a deployed CreatorLotteryManager exposes the AMOE
+# CI guard: assert a deployed LotteryManager4626 exposes the AMOE
 # admin/runtime surface.
 #
 # Background:
