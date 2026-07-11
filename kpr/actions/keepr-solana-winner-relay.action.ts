@@ -22,6 +22,12 @@
 import { readFile, stat } from 'node:fs/promises';
 // FIX: MED-01 — Replace require('crypto') with ES module import
 import * as crypto from 'node:crypto';
+import {
+  Connection,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+} from '@solana/web3.js';
 
 import { requireEnv, CHAINS } from '../config.js';
 import { getPublicClient } from '../utils/onchain.js';
@@ -369,12 +375,7 @@ export async function executeSolanaWinnerRelay(): Promise<WinnerRelayResult> {
       checkpointLogIndex = -1;
     }
 
-    const {
-      Connection,
-      PublicKey,
-      Transaction,
-      SystemProgram,
-    } = require('@solana/web3.js');
+    // ESM package ("type": "module") — do not use require(); prod Node has no require.
     const connection = new Connection(solanaRpcUrl, 'confirmed');
     const keeperKeypair = loadKeeperKeypair();
     const programPubkey = new PublicKey(programId);
