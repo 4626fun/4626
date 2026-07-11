@@ -7,11 +7,24 @@ Code remediation for July-2 stack + contract mediums is largely complete. Do **n
 
 ---
 
+## 0. Canary order (2026-07)
+
+Full phased canary (boost **off** day one): [lottery-canary-checklist-2026-07.md](../operations/lottery-canary-checklist-2026-07.md).
+
+| Phase | Intent |
+|-------|--------|
+| 0 | Keep `boostManager` / `vaultGaugeVoting` at **0**; no armBoost; Solana relay_entries off |
+| 1 | Read-only verify LM + hub forwarders + KPR |
+| 2 | Small traffic, base odds only |
+| 3 | Wire boost/gauge **later**, then arm timelock |
+
+---
+
 ## 1. LotteryManager production readiness (M2-03 wired)
 
 | Step | Action | Verify |
 |------|--------|--------|
-| 1.1 | `armBoostSourceTimelock()` on live LotteryManager | `verifyLotteryProductionReadiness` / phase-2 + sweep report zero criticals |
+| 1.1 | `armBoostSourceTimelock()` on live LotteryManager (**only after** boost sources final — see canary Phase 3) | `verifyLotteryProductionReadiness` / phase-2 + sweep report zero criticals |
 | 1.2 | Authorize hub ShareOFT forwarders (H-06) | `authorizedHubShareOftForwarders[shareOft] == true` for each hub |
 | 1.3 | Confirm R-H05 mode | Default **single-vault** (`singleVaultJackpotOnly == true`). Multi-vault only after public disclosure |
 | 1.4 | Drain any deferred VRF after pauses | `processDeferredVrfBatch(16)` until `deferredVrfQueueLength() == 0` (M2-07) |
