@@ -15,6 +15,9 @@
  *   - Full withdrawal requires multisig approval
  */
 
+import { createRequire } from 'node:module';
+import { Connection, PublicKey } from '@solana/web3.js';
+
 import {
   requireEnv,
   CHAINS,
@@ -27,6 +30,16 @@ import { readContract } from '../utils/onchain.js';
 import { alertInfo, alertWarning, alertCritical } from '../utils/alerts.js';
 import { loadKeeperKeypair } from '../utils/solana.js';
 import { fetchActiveVaults, type VaultConfig } from '../utils/registry.js';
+
+// Meteora DLMM / bn.js are CJS-oriented; createRequire works under kpr "type":"module".
+const require = createRequire(import.meta.url);
+function loadDlmm(): any {
+  const mod = require('@meteora-ag/dlmm');
+  return mod?.default ?? mod?.DLMM ?? mod;
+}
+function loadBn(): any {
+  return require('bn.js');
+}
 
 const WORKFLOW_NAME = 'keepr-solana-price-monitor';
 const EVM_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
@@ -57,8 +70,7 @@ async function fetchDLMMPrice(
   dlmmPoolAddress: string,
   solPriceUsd: number,
 ): Promise<number> {
-  const { PublicKey } = require('@solana/web3.js');
-  const DLMM = require('@meteora-ag/dlmm').default || require('@meteora-ag/dlmm').DLMM;
+  const DLMM = loadDlmm();
 
   const dlmmPool = await DLMM.create(connection, new PublicKey(dlmmPoolAddress));
   const activeBin = await dlmmPool.getActiveBin();
@@ -220,7 +232,6 @@ export async function executeSolanaPriceMonitor(): Promise<PriceMonitorResult> {
 
     // Step 2: Read DLMM active bin price from Solana via Meteora SDK.
     const solanaRpcUrl = requireEnv('SOLANA_RPC_URL');
-    const { Connection } = require('@solana/web3.js');
     const connection = new Connection(solanaRpcUrl, 'confirmed');
 
     if (solPriceUsd === 0) {
@@ -265,8 +276,7 @@ export async function executeSolanaPriceMonitor(): Promise<PriceMonitorResult> {
 
       // Auto-recenter: remove liquidity from current range and re-add around new price
       try {
-        const { PublicKey } = require('@solana/web3.js');
-        const DLMM = require('@meteora-ag/dlmm').default || require('@meteora-ag/dlmm').DLMM;
+        const DLMM = loadDlmm();
 
         const keeperKeypair = loadKeeperKeypair();
         const dlmmInstance = await DLMM.create(connection, new PublicKey(dlmmPool));
@@ -283,7 +293,7 @@ export async function executeSolanaPriceMonitor(): Promise<PriceMonitorResult> {
               position: position.publicKey,
               user: keeperKeypair.publicKey,
               binIds: position.positionData.positionBinData.map((b: any) => b.binId),
-              bps: new (require('bn.js'))(10_000), // 100%
+              bps: new (loadBn())(10_000), // 100%
               shouldClaimAndClose: false, // Keep the position open for re-add
             });
 

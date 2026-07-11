@@ -15,10 +15,20 @@
  *   - The Keepr cranks the close instruction when Base signals graduation
  */
 
+import { createRequire } from 'node:module';
+import { Connection, PublicKey } from '@solana/web3.js';
+
 import { requireEnv, CHAINS, CCA_AUCTION_ABI, CCA_STRATEGY_ABI } from '../config.js';
 import { readContract } from '../utils/onchain.js';
 import { alertInfo, alertWarning, alertCritical } from '../utils/alerts.js';
 import { loadKeeperKeypair } from '../utils/solana.js';
+
+// Alpha Vault SDK is CJS-oriented; createRequire works under kpr "type":"module".
+const require = createRequire(import.meta.url);
+function loadAlphaVault(): any {
+  const mod = require('@meteora-ag/alpha-vault');
+  return mod?.AlphaVault ?? mod?.default?.AlphaVault ?? mod?.default ?? mod;
+}
 
 const WORKFLOW_NAME = 'keepr-solana-graduation';
 
@@ -94,7 +104,6 @@ export async function executeSolanaGraduation(): Promise<GraduationResult> {
 
     // Step 3: Close the Alpha Vault on Solana via Meteora SDK.
     const solanaRpcUrl = requireEnv('SOLANA_RPC_URL');
-    const { Connection, PublicKey } = require('@solana/web3.js');
     const connection = new Connection(solanaRpcUrl, 'confirmed');
     const keeperKeypair = loadKeeperKeypair();
 
@@ -104,7 +113,7 @@ export async function executeSolanaGraduation(): Promise<GraduationResult> {
     });
 
     try {
-      const { AlphaVault } = require('@meteora-ag/alpha-vault');
+      const AlphaVault = loadAlphaVault();
 
       const alphaVault = await AlphaVault.create(
         connection,

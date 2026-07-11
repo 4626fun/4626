@@ -48,7 +48,12 @@ export function publicOrchestratorError(error: unknown): {
   retryable: boolean
 } {
   const message = error instanceof Error ? error.message : ''
+  // Preserve full action_disabled:<action> so ops probes can assert which lane is off.
+  // These codes are intentional (not filesystem paths) and safe to expose.
   if (message.startsWith('action_disabled:')) {
+    return { statusCode: 503, code: message, retryable: true }
+  }
+  if (message === 'action_disabled') {
     return { statusCode: 503, code: 'action_disabled', retryable: true }
   }
   if (message === 'action_lease_held') {

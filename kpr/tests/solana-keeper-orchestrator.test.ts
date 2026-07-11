@@ -118,5 +118,16 @@ describe('solana keeper orchestrator', () => {
       code: 'action_lease_outcome_indeterminate',
       retryable: false,
     })
+    // Lane-specific disable codes stay specific for prelaunch/smoke gates.
+    expect(publicOrchestratorError(new Error('action_disabled:relay_entries'))).toEqual({
+      statusCode: 503,
+      code: 'action_disabled:relay_entries',
+      retryable: true,
+    })
+    expect(publicOrchestratorError(new Error('action_disabled'))).toEqual({
+      statusCode: 503,
+      code: 'action_disabled',
+      retryable: true,
+    })
   })
 })

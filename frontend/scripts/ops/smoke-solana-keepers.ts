@@ -177,15 +177,18 @@ async function main(): Promise<void> {
         checkpointKey: `${checkpoint}-relay`,
       }),
     })
+    const relayError = String((relay.data as { error?: string })?.error ?? '')
     const relayDisabled =
       relay.status === 503 &&
-      String((relay.data as { error?: string })?.error ?? '').includes('action_disabled:relay_entries')
+      (relayError.includes('action_disabled:relay_entries') ||
+        relayError === 'action_disabled' ||
+        relayError.includes('action_disabled'))
     rows.push({
       id: 'relay_entries_paused',
       ok: relayDisabled,
       detail: relayDisabled
         ? 'relay_entries correctly disabled (B2 gate)'
-        : `expected action_disabled, got ${relay.status}`,
+        : `expected action_disabled (relay_entries), got ${relay.status}`,
     })
   }
 

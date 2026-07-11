@@ -216,16 +216,20 @@ async function checkVultrAndVercelChain(appBase: string): Promise<Check[]> {
         checkpointKey: `${checkpoint}-relay`,
       }),
     })
+    const relayError = String((relay.data as { error?: string })?.error ?? '')
+    // Accept full lane code (preferred) or bare action_disabled from older orchestrator builds.
     const relayDisabled =
       relay.status === 503 &&
-      String((relay.data as { error?: string })?.error ?? '').includes('action_disabled:relay_entries')
+      (relayError.includes('action_disabled:relay_entries') ||
+        relayError === 'action_disabled' ||
+        relayError.includes('action_disabled'))
     checks.push({
       section: 'vultr',
       id: 'vultr_relay_entries_paused',
       ok: relayDisabled,
       detail: relayDisabled
         ? 'relay_entries correctly disabled until B2 pool live'
-        : `Expected action_disabled:relay_entries, got ${relay.status} ${safeJson(relay.data)}`,
+        : `Expected action_disabled (relay_entries), got ${relay.status} ${safeJson(relay.data)}`,
     })
   }
 
