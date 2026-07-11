@@ -13,6 +13,13 @@ interface IRegistry4626LotteryPricing {
  * @title LotteryManager4626PricingLib
  * @notice External library: USD pricing + oracle guards for LotteryManager4626.
  * @dev Linked via DELEGATECALL-free external CALL from the manager to shrink EIP-170 main size.
+ *
+ *      Deploy / bytecode-store:
+ *      - Foundry links this library into `LotteryManager4626` creation bytecode at the
+ *        CREATE2 address from EIP-2470 deployer + `create2_library_salt` (default 0).
+ *      - Deploy this library first (see `DeployLotteryManagerCreate2*.s.sol`), then LM.
+ *      - Manifest extraction must fully link placeholders (`script/lib/extract_linked_bytecode.py`);
+ *        truncating at `__$…$__` produces broken initcode hashes.
  */
 library LotteryManager4626PricingLib {
     uint256 internal constant BASIS_POINTS = 10_000;

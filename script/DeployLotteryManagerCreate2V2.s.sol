@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
 import {LotteryManager4626} from "@4626/shared/lottery/manager/LotteryManager4626.sol";
+import {LotteryManager4626PricingLib} from "@4626/shared/lottery/manager/LotteryManager4626PricingLib.sol";
 
 /**
  * @title DeployLotteryManagerCreate2V2
@@ -15,6 +16,11 @@ import {LotteryManager4626} from "@4626/shared/lottery/manager/LotteryManager462
  *
  * Deployer (EIP-2470 deterministic deployment proxy):
  * - 0x4e59b44847b379578588920cA78FbF26c0B4956C
+ *
+ * Library prerequisite:
+ * - `LotteryManager4626` creation bytecode is linked to `LotteryManager4626PricingLib`
+ *   at Foundry's default CREATE2 library address (EIP-2470 + `create2_library_salt` 0).
+ * - This script deploys that library first (idempotent) before CREATE2-deploying the manager.
  *
  * This script is intended to be safe to re-run (idempotent wiring).
  */
@@ -70,8 +76,32 @@ contract DeployLotteryManagerCreate2V2 is Script {
     // Legacy adapter address (safe to keep authorized).
     address constant SOLANA_BRIDGE_ADAPTER_LEGACY = 0x648A01f6e125A46c4695CA70D0EB455f053d36A2;
 
+    /// @dev Foundry default `create2_library_salt` (foundry.toml) — keep in sync.
+    bytes32 constant LIBRARY_SALT = bytes32(0);
+
     function _create2(address deployer, bytes32 salt, bytes32 initCodeHash) internal pure returns (address) {
         return address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), deployer, salt, initCodeHash)))));
+    }
+
+    /// @notice Ensure PricingLib is at the address baked into LM creation bytecode.
+    function _ensurePricingLibLinked() internal returns (address lib) {
+        bytes memory libInit = type(LotteryManager4626PricingLib).creationCode;
+        lib = _create2(DETERMINISTIC_DEPLOYER, LIBRARY_SALT, keccak256(libInit));
+        uint256 libSize;
+        assembly {
+            libSize := extcodesize(lib)
+        }
+        if (libSize == 0) {
+            (bool ok,) = DETERMINISTIC_DEPLOYER.call(abi.encodePacked(LIBRARY_SALT, libInit));
+            require(ok, "PricingLib CREATE2 failed");
+            assembly {
+                libSize := extcodesize(lib)
+            }
+            require(libSize > 0, "PricingLib missing after CREATE2");
+            console.log("Deployed LotteryManager4626PricingLib:", lib);
+        } else {
+            console.log("PricingLib already at:", lib);
+        }
     }
 
     function run() external {
@@ -84,6 +114,7 @@ contract DeployLotteryManagerCreate2V2 is Script {
         console.log("Chain ID:   ", block.chainid);
 
         // Build initcode: creation bytecode + constructor args
+        // (Forge links PricingLib to CREATE2(EIP-2470, LIBRARY_SALT) in creationCode.)
         bytes memory initcode = abi.encodePacked(type(LotteryManager4626).creationCode, abi.encode(REGISTRY, OWNER));
         bytes32 initCodeHash = keccak256(initcode);
         address predicted = _create2(DETERMINISTIC_DEPLOYER, SALT, initCodeHash);
@@ -102,6 +133,9 @@ contract DeployLotteryManagerCreate2V2 is Script {
         }
 
         vm.startBroadcast(pk);
+
+        // External pricing library must exist before LM runtime CALL targets it.
+        _ensurePricingLibLinked();
 
         if (codeSize == 0) {
             // Calldata = salt (32 bytes) ++ initcode
