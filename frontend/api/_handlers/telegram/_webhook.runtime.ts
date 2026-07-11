@@ -7365,7 +7365,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? asTrimmed(callbackDataLower.slice('message:delete:'.length))
         : ''
       const callbackChatType = asTrimmed((callbackQuery as any)?.message?.chat?.type).toLowerCase()
-      if (callbackChatType !== 'private' && !dismissOwnerUserId) {
+      const callbackIsPrivate = callbackChatType === 'private' || isPrivateChatId(chatId)
+      if (!callbackIsPrivate && !dismissOwnerUserId) {
         await answerTelegramCallbackQuery({
           botToken,
           callbackQueryId,

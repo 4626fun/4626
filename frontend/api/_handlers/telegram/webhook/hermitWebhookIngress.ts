@@ -71,7 +71,7 @@ export async function handleHermitTelegramWebhookIngress(
     const callbackData = asTrimmed(callbackQuery.data ?? '').toLowerCase()
     const callbackQueryId = asTrimmed(String(callbackQuery.id ?? ''))
     const callbackChatId = String(callbackQuery.message?.chat?.id ?? '').trim()
-    const callbackChatType = asTrimmed(callbackQuery.message?.chat?.type).toLowerCase()
+    const callbackChatType = asTrimmed((callbackQuery.message?.chat as any)?.type).toLowerCase()
     const callbackUserId = asTrimmed(String(callbackQuery.from?.id ?? ''))
     const callbackMessageId =
       typeof callbackQuery.message?.message_id === 'number' ? callbackQuery.message.message_id : null
@@ -90,6 +90,7 @@ export async function handleHermitTelegramWebhookIngress(
         : ''
       if (
         callbackChatType !== 'private' &&
+        !isPrivateChatId(callbackChatId) &&
         (!dismissOwnerUserId || dismissOwnerUserId !== callbackUserId)
       ) {
         await answerTelegramCallbackQuery({

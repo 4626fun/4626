@@ -73,7 +73,7 @@ describe('waitlist handoff helpers', () => {
 
   it('does not touch sessionStorage when Privy bridge fails', async () => {
     apiFetchMock.mockResolvedValueOnce(jsonResponse({ success: false, error: 'nope' }, { status: 401 }))
-    await expect(bridgePrivySession('privy-token-123')).resolves.toEqual({ ok: false })
+    await expect(bridgePrivySession('privy-token-123')).resolves.toEqual({ ok: false, error: 'nope' })
     expect(writeStoredSessionTokenMock).not.toHaveBeenCalled()
   })
 

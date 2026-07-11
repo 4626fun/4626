@@ -81,13 +81,8 @@ export async function bridgePrivySession(privyToken: string | null): Promise<Bri
     return { ok: false, error: 'Could not create your app session. Please try again.' }
   }
 
-  // FINDING-02: the 4626 session is now in the HttpOnly cv_auth_session
-  // cookie. Clear any stale cv_siwe_session_token in sessionStorage so
-  // apiBase.ts does not inject a mismatched Authorization header on
-  // subsequent /api/* calls. Server prefers Bearer over cookie, so a
-  // stale token would shadow the fresh cookie and surface as "logged
-  // out on /swap" after a same-origin navigation (where the cross-origin
-  // handoff redeem — which already clears sessionStorage — is skipped).
+  // The 4626 session lives in the HttpOnly cv_auth_session cookie. Remove any
+  // bearer left by older clients during the cookie-only migration.
   writeStoredSessionToken(null)
   return { ok: true, address }
 }
