@@ -130,7 +130,7 @@ flowchart LR
   <a class="home-card audit-card" href="/audits/aristotle">
     <span class="home-card__tag">Lean / Aristotle</span>
     <span class="home-card__title">Formal verification</span>
-    <span class="home-card__desc">Machine-checked lottery, boost, fee-split, and payout lemmas — including the next five Lean proof targets.</span>
+    <span class="home-card__desc">Readable Lean claims: proven 2.5× boost, plus the next five lottery and fee-split targets.</span>
   </a>
   <a class="home-card audit-card" href="/audits/fable/key-sessions">
     <span class="home-card__tag">Appendix A</span>
@@ -145,6 +145,8 @@ flowchart LR
 </div>
 
 <div class="home-links">
+  <a class="home-links__item" href="/audits/aristotle/curve-boost">2.5× boost (proven)</a>
+  <span class="home-links__sep" aria-hidden="true">·</span>
   <a class="home-links__item" href="/audits/aristotle/lean-proof-targets">Lean proof targets</a>
   <span class="home-links__sep" aria-hidden="true">·</span>
   <a class="home-links__item" href="/audits/fable/transcripts">Transcript archive</a>

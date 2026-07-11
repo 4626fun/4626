@@ -35,12 +35,13 @@ export const CURATED_PUBLISH_GLOBS = [
   'legal/privacy.md',
 
   'audits/index.md',
+  'audits/aristotle/index.md',
+  'audits/aristotle/curve-boost.md',
+  'audits/aristotle/lean-proof-targets.md',
   'audits/fable/index.md',
   'audits/fable/findings-summary.md',
   'audits/fable/full-repo-review-2026-06.md',
   'audits/fable/key-sessions.md',
   'audits/fable/sessions-index.md',
   'audits/fable/transcripts/**',
-  'audits/aristotle/index.md',
-  'audits/aristotle/lean-proof-targets.md',
 ];

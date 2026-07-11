@@ -1,7 +1,7 @@
 ---
 title: Formal verification (Aristotle / Lean)
 sidebar_label: Formal verification
-sidebar_position: 20
+sidebar_position: 10
 last_updated: '2026-07-11'
 audience:
   - developers
@@ -13,26 +13,59 @@ last_reviewed: '2026-07-11'
 status: current
 ---
 
-# Formal verification (Aristotle / Lean)
+<div class="audit-hub">
 
-4626 uses [Aristotle](https://aristotle.harmonic.fun/) (Harmonic) to produce **machine-checked Lean 4 proofs** of the protocol’s mathematical claims — lottery odds, boost envelopes, fee splits, and payout fractions.
+<nav class="audit-path" aria-label="Formal verification">
+  <a class="audit-path__step" href="/audits">Audits hub</a>
+  <a class="audit-path__step audit-path__step--current" href="/audits/aristotle">Formal verification</a>
+  <a class="audit-path__step" href="/audits/aristotle/curve-boost">2.5× boost (proven)</a>
+  <a class="audit-path__step" href="/audits/aristotle/lean-proof-targets">Next targets</a>
+</nav>
 
-This is **complementary** to the June 2026 [technical security review](/audits/fable): Lean proves abstract formulas and conservation lemmas; it does not replace Solidity audits, Foundry tests, or operational controls.
+<section class="audit-hero">
+  <span class="audit-hero__eyebrow"><span class="audit-hero__dot"></span>Machine-checked math</span>
+  <h1 class="audit-hero__title">Formal verification</h1>
+  <p class="audit-hero__subtitle">4626 uses Aristotle (Harmonic) to produce Lean&nbsp;4 proofs of lottery odds, boost math, fee splits, and payout fractions. These proofs check formulas — they do not replace Solidity audits or Foundry tests.</p>
+  <div class="home-hero__actions">
+    <a class="home-btn home-btn--primary" href="/audits/aristotle/curve-boost">Read proven 2.5× boost<span class="home-btn__arrow" aria-hidden="true">→</span></a>
+    <a class="home-btn home-btn--ghost" href="/audits/aristotle/lean-proof-targets">Next five targets</a>
+  </div>
+</section>
 
-## Status
+<div class="docs-at-a-glance">
 
-| Area | Status | Notes |
-|------|--------|--------|
-| Curve personal boost (1.0×–2.5×) + coverage blend | Proven | See internal summary under `docs/audits/aristotle/ve4626-curve-boost/` |
-| Base win chance, boost pipeline, VRF fairness, gauge split, jackpot payout | **Queued targets** | Ready-to-submit prompts: [Lean proof targets](/audits/aristotle/lean-proof-targets) |
+**In plain English:** a Lean proof is a machine-checked argument that a claim is true. If Lean accepts it, the formula holds under the stated model — not “the whole protocol is safe,” but “this math claim is correct.”
 
-## Read next
+</div>
 
-- [Lean proof targets (top 5)](/audits/aristotle/lean-proof-targets) — statements, formulas, and Aristotle submit prompts
-- [Fees, auction, and lottery](/overview/how-it-works) — product overview
-- [LotteryManager](/contracts/utilities/lottery-manager) — win chance and VRF surface
-- [GaugeController](/contracts/governance/gauge-controller) — fee split and jackpot custody
+## What is published
 
-## Disclaimer
+| Claim | Status | Read |
+|-------|--------|------|
+| Personal lottery boost is **1.0×–2.5×** (Curve working balance + coverage blend) | **Proven** | [Curve 2.5× boost](/audits/aristotle/curve-boost) |
+| Base win chance ($1 → 0.0004%) | Queued | [Target 1](/audits/aristotle/lean-proof-targets#1-base-win-probability) |
+| Boosted win chance never exceeds the hard cap | Queued | [Target 2](/audits/aristotle/lean-proof-targets#2-post-boost-win-chance-pipeline) |
+| VRF roll matches the stated probability | Queued | [Target 3](/audits/aristotle/lean-proof-targets#3-vrf-decision-fairness) |
+| Fee split BPS sum to 100%; floor residuals go to burn or voters (no unpaid dust) | Queued | [Target 4](/audits/aristotle/lean-proof-targets#4-gauge-fee-split-conservation) |
+| Jackpot pays 69% of **reserve** (not fees twice) | Queued | [Target 5](/audits/aristotle/lean-proof-targets#5-jackpot-payout-fraction) |
 
-Published Lean targets describe **intended mathematical models**. Until a target is marked **Proven** with a linked Lean artifact (or Aristotle project ID), treat it as a verification backlog item — not a completed certificate.
+## How to read a claim
+
+1. **Plain claim** — one sentence anyone can check against product docs.
+2. **Worked example** — numbers you can recalculate by hand.
+3. **Formula** — the onchain integer model.
+4. **Proven / still open** — whether Lean already accepted it.
+
+## Related product docs
+
+- [Fees, auction, and lottery](/overview/how-it-works)
+- [LotteryManager](/contracts/utilities/lottery-manager)
+- [GaugeController](/contracts/governance/gauge-controller)
+- [June 2026 security review](/audits/fable)
+
+<div class="audit-limitations">
+  <div class="audit-limitations__title">Disclaimer</div>
+  <p>Queued targets are a verification backlog until marked <strong>Proven</strong> with a Lean artifact or Aristotle project ID. Proven models cover the stated formulas only — not runtime config, operator keys, or off-model Solidity paths.</p>
+</div>
+
+</div>

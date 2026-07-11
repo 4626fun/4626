@@ -39,7 +39,7 @@ This is a **shared utility** deployed once per chain that serves ALL Creator Coi
 | $1,000 | 0.4% |
 | $10,000 | 4% (default pre-boost ceiling) |
 
-Personal Curve boost (up to **2.5×**), optional gauge probability, and `maxWinChance` caps apply after the base formula. Machine-checked backlog: [Lean proof targets](/audits/aristotle/lean-proof-targets).
+Personal Curve boost (up to **2.5×**), optional gauge probability, and `maxWinChance` caps apply after the base formula. Readable proofs: [2.5× boost (proven)](/audits/aristotle/curve-boost) · [next targets](/audits/aristotle/lean-proof-targets).
 
 ## Key Functions
 

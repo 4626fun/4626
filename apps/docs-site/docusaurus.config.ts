@@ -200,6 +200,7 @@ const config: Config = {
             {label: 'Executive summary', to: '/audits/fable/findings-summary'},
             {label: 'Full report', to: '/audits/fable/full-repo-review-2026-06'},
             {label: 'Formal verification', to: '/audits/aristotle'},
+            {label: '2.5× boost (proven)', to: '/audits/aristotle/curve-boost'},
             {label: 'Impairment disclosures', to: '/reference/impairment-v1-disclosures'},
           ],
         },

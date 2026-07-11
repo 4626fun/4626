@@ -37,14 +37,15 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       link: {type: 'doc', id: 'audits/index'},
       items: [
+        'audits/aristotle/index',
+        'audits/aristotle/curve-boost',
+        'audits/aristotle/lean-proof-targets',
         'audits/fable/index',
         'audits/fable/findings-summary',
         'audits/fable/full-repo-review-2026-06',
         'audits/fable/key-sessions',
         'audits/fable/sessions-index',
         'audits/fable/transcripts/index',
-        'audits/aristotle/index',
-        'audits/aristotle/lean-proof-targets',
       ],
     },
     {

@@ -27,7 +27,7 @@ uint256 public constant creatorShareBps = 0;      // 0% → creator treasury lan
 uint256 public constant protocolShareBps = 2139;  // 21.39% → voter/protocol branch
 ```
 
-Machine-checked conservation target: [Lean proof targets §4](/audits/aristotle/lean-proof-targets#4-gauge-fee-split-conservation).
+Machine-checked conservation target: [Lean target §4](/audits/aristotle/lean-proof-targets#4-gauge-fee-split-conservation). Proven boost math: [Curve 2.5×](/audits/aristotle/curve-boost).
 
 ## Key Functions
 

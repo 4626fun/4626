@@ -1,7 +1,7 @@
 ---
-title: Lean proof targets (top 5)
-sidebar_label: Lean proof targets
-sidebar_position: 21
+title: Lean proof targets (next 5)
+sidebar_label: Next targets
+sidebar_position: 12
 last_updated: '2026-07-11'
 audience:
   - developers
@@ -13,46 +13,74 @@ last_reviewed: '2026-07-11'
 status: current
 ---
 
-# Lean proof targets (top 5)
+<div class="audit-hub">
 
-Ready-to-submit [Aristotle](https://aristotle.harmonic.fun/) prompts for the next machine-checked lemmas after the Curve **2.5×** boost work. Each target includes the onchain formula, what “done” means, and a copy-paste prompt.
+<nav class="audit-path" aria-label="Formal verification">
+  <a class="audit-path__step" href="/audits">Audits hub</a>
+  <a class="audit-path__step" href="/audits/aristotle">Formal verification</a>
+  <a class="audit-path__step" href="/audits/aristotle/curve-boost">2.5× boost (proven)</a>
+  <a class="audit-path__step audit-path__step--current" href="/audits/aristotle/lean-proof-targets">Next targets</a>
+</nav>
 
-**Canonical BPS (onchain):** `lotteryShareBps = 6900`, `burnShareBps = 961`, `protocolShareBps = 2139`, `creatorShareBps = 0` (sum `10000`). See `CreatorGaugeController`.
+<section class="audit-hero">
+  <span class="audit-hero__eyebrow"><span class="audit-hero__dot"></span>Verification backlog</span>
+  <h1 class="audit-hero__title">Next five Lean targets</h1>
+  <p class="audit-hero__subtitle">Each target has a plain claim, a worked example, the onchain formula, and a copy-paste Aristotle prompt. Curve 2.5× boost is already proven — start there if you are new to this section.</p>
+  <div class="home-hero__actions">
+    <a class="home-btn home-btn--primary" href="/audits/aristotle/curve-boost">Proven 2.5× boost<span class="home-btn__arrow" aria-hidden="true">→</span></a>
+  </div>
+</section>
 
-**Already proven (do not re-submit unless the formula changes):** Curve working-balance boost `working / (0.4 · l) ∈ [1.0, 2.5]` and coverage blend `effectiveBPS = 10000 + ⌊(rawBoost − 10000) · coverageBPS / 10000⌋`.
+<div class="docs-at-a-glance">
+
+**Canonical fee BPS (onchain):** lottery **69%** (6900) · burn **9.61%** (961) · voters **21.39%** (2139). Sum = 10000. Creator treasury lane is off (`creatorShareBps = 0`) — omit from examples. Do not swap burn and voters.
+
+</div>
+
+## At a glance
+
+| # | Claim in one sentence | Status |
+|---|----------------------|--------|
+| 1 | Win chance scales linearly with USD trade size ($1 → 0.0004%), then hits a ceiling | Queued |
+| 2 | After boosts/multipliers, win chance never exceeds the hard cap (default 15%) | Queued |
+| 3 | A uniform VRF roll wins with exactly the stated probability | Queued |
+| 4 | Fee BPS sum to 100%; floor residuals stay on an onchain lane (burn or voters), not a fifth bucket | Queued |
+| 5 | Jackpot pays 69% of each vault **reserve** (same number as fee lottery BPS, different base) | Queued |
 
 ---
 
 ## 1. Base win probability
 
-**Status:** Queued  
-**Code:** `LotteryManager4626.calculateWinChance` — `winChancePPM = swapValueUSD / 250_000`, capped at `baseCeilingPPM` (default `40_000` PPM = 4%).
+**Status:** Queued · **Code:** `LotteryManager4626.calculateWinChance`
 
-### Model
+### Plain claim
+
+Every $1 of eligible swap USD adds **4 PPM** (0.0004%) of win chance, until the pre-boost ceiling (default **4%** at $10k).
+
+### Worked example
+
+| Trade | PPM | Chance |
+|-------|-----|--------|
+| $1 | 4 | 0.0004% |
+| $100 | 400 | 0.04% |
+| $1,000 | 4,000 | 0.4% |
+| $10,000 | 40,000 | **4%** (hits ceiling) |
+| $20,000 | 40,000 | still **4%** |
+
+### Formula
 
 ```text
 winChancePPM(usd) = min(⌊usd / 250_000⌋, baseCeilingPPM)
 ```
 
-Product table (with default ceiling):
-
-| Trade USD | Win chance PPM | Percent |
-|-----------|----------------|---------|
-| 1 | 4 | 0.0004% |
-| 10 | 40 | 0.004% |
-| 100 | 400 | 0.04% |
-| 1_000 | 4_000 | 0.4% |
-| 10_000 | 40_000 | 4% (ceiling) |
-| 20_000 | 40_000 | 4% (still ceiling) |
+Default `baseCeilingPPM = 40_000`.
 
 ### Done when Lean proves
 
-- Exact values for the table rows above (with `baseCeilingPPM = 40_000`).
-- Monotonicity in `usd`.
-- `winChancePPM ≤ baseCeilingPPM` for all `usd ≥ 0`.
-- Equivalence: `$1 → 4 PPM` matches the public “$1 = 0.0004%” claim.
+Table rows above; always `≤` ceiling; monotone in USD; `$1 → 4 PPM` equals `0.0004%` as a rational.
 
-### Aristotle prompt
+<details>
+<summary>Aristotle prompt (copy-paste)</summary>
 
 ```text
 Formalize and prove in Lean 4 (Mathlib) the 4626 lottery base win-chance model.
@@ -74,32 +102,42 @@ Prove:
 No sorry/admit. Prefer Nat lemmas; avoid floats.
 ```
 
+</details>
+
 ---
 
 ## 2. Post-boost win-chance pipeline
 
-**Status:** Queued  
-**Code:** `_applyBoost` / personal boost + optional gauge PPM + `usdMultiplierBps`, then clamp to `maxWinChance` (default `150_000` PPM = 15%).
+**Status:** Queued · **Code:** `_applyBoost` then multipliers / cap
 
-### Model (abstract)
+### Plain claim
+
+Personal boost (up to 2.5×), optional gauge add, and USD multiplier can raise odds — but the final chance is always capped (default **15%**). Neutral boost leaves the base chance unchanged.
+
+### Worked example
+
+| base | covered boost | gauge | multiplier | max | final |
+|------|---------------|-------|------------|-----|-------|
+| 40,000 PPM (4%) | 1.0× (10,000 BPS) | 0 | 1.0× | 15% | **4%** |
+| 40,000 | 2.5× | 0 | 1.0× | 15% | **10%** |
+| 40,000 | 2.5× | 0 | 1.0× | 5% | **5%** (cap binds) |
+
+### Formula
 
 ```text
-base      = winChancePPM(swapUSD, baseCeilingPPM)
-rawBoost  ∈ [10000, 25000]          -- BPS; 1.0×–2.5× (Curve target, already proven)
-covered   = coverage blend of rawBoost  -- already proven shape
-boosted   = ⌊base · covered / 10000⌋ + gaugeBoostPPM   -- gauge add optional
-scaled    = ⌊boosted · usdMultiplierBps / 10000⌋      -- 10000 = identity
-final     = min(scaled, maxWinChancePPM)
+boosted = ⌊base · coveredBps / 10_000⌋ + gaugePPM
+scaled  = ⌊boosted · usdMultiplierBps / 10_000⌋
+final   = min(scaled, maxWinChancePPM)
 ```
+
+`coveredBps` comes from the [proven Curve blend](/audits/aristotle/curve-boost).
 
 ### Done when Lean proves
 
-- If `covered = 10000` and `gauge = 0` and `usdMultiplierBps = 10000`, then `final = min(base, maxWinChance)`.
-- `final ≤ maxWinChance` always.
-- Increasing `covered` or `usdMultiplierBps` (with fixed others) does not decrease `final` before the cap.
-- Neutral boost (`covered = 10000`, `gauge = 0`) leaves base unchanged before multiplier/cap.
+Always `final ≤ max`; identity path when boost/gauge/multiplier are neutral; monotone in boost before the cap.
 
-### Aristotle prompt
+<details>
+<summary>Aristotle prompt (copy-paste)</summary>
 
 ```text
 Formalize the 4626 post-boost lottery PPM pipeline in Lean 4.
@@ -125,24 +163,40 @@ Prove:
 No sorry/admit. Integer division only.
 ```
 
+</details>
+
 ---
 
 ## 3. VRF decision fairness
 
-**Status:** Queued  
-**Code:** `(randomWords[0] % 1_000_000) < winChancePPM` in the VRF callback path.
+**Status:** Queued · **Code:** `(randomWords[0] % 1_000_000) < winChancePPM`
 
-### Model
+### Plain claim
 
-Treat VRF output as uniform on `{0,…,N−1}` with `N = 1_000_000`. Win iff `r % N < p` for `p = winChancePPM ≤ N`.
+If randomness is uniform over one million outcomes, the chance of winning equals `winChancePPM / 1_000_000`. A 4% listed chance is a real 4% under that model.
+
+### Worked example
+
+| winChancePPM | Probability |
+|--------------|-------------|
+| 0 | 0% (never) |
+| 40,000 | **4%** |
+| 150,000 | **15%** |
+| 1,000,000 | 100% (always) |
+
+### Formula
+
+```text
+win  ⇔  (r mod 1_000_000) < winChancePPM
+P(win) = winChancePPM / 1_000_000    when 0 ≤ winChancePPM ≤ 1_000_000
+```
 
 ### Done when Lean proves
 
-- For uniform `r`, `P(r % N < p) = p / N` when `0 ≤ p ≤ N`.
-- Special case: `p = 0` never wins; `p = N` always wins.
-- Tie to target 1: `$10_000` at ceiling ⇒ `p = 40_000` ⇒ probability `4%`.
+Counting / probability equality; edge cases 0 and full; corollary that 40,000 PPM = 4%.
 
-### Aristotle prompt
+<details>
+<summary>Aristotle prompt (copy-paste)</summary>
 
 ```text
 Prove in Lean 4 (Mathlib probability / Finset counting) the fairness of the 4626 VRF win check.
@@ -160,92 +214,124 @@ Prove:
 No sorry/admit. Prefer finite counting over measure theory if shorter.
 ```
 
+</details>
+
 ---
 
 ## 4. Gauge fee-split conservation
 
-**Status:** Queued  
-**Code:** `CreatorGaugeController` constants — jackpot / burn / voters / creator.
+**Status:** Queued · **Code:** `CreatorGaugeController` — `_splitShareOftAmount` / `previewDistribution` (ShareOFT path) and `_distributeVaultShares` (vault-share path)
 
-### Model
+### Plain claim
+
+Every trade fee is split **69% jackpot / 9.61% burn / 21.39% voters**. Those three BPS add to 100%. (The creator treasury lane exists in code but is **off** at `creatorShareBps = 0`, so we omit it from the examples.) Integer flooring does **not** create an unpaid dust wallet: the residual is assigned to burn or voters.
+
+### Worked example (`F = 69_000`)
+
+Independent floors (for reference):
+
+| Lane | BPS | `⌊F · bps / 10000⌋` |
+|------|-----|---------------------|
+| Jackpot | 6900 | 47,610 |
+| Burn | 961 | **6,630** |
+| Voters | 2139 | 14,759 |
+| Sum of floors | — | 68,999 |
+
+Onchain residual assignment (exact conservation `jackpot + burn + voters = F`):
+
+| Path | Residual goes to | Jackpot | Burn | Voters | Sum |
+|------|------------------|---------|------|--------|-----|
+| **ShareOFT fees** (`_splitShareOftAmount` / `previewDistribution`) | **burn** | 47,610 | **6,631** | 14,759 | 69,000 |
+| **Vault-share distribute** (`_distributeVaultShares`) | **voters** | 47,610 | 6,630 | **14,760** | 69,000 |
+
+### Formula
 
 ```text
-lotteryShareBps  = 6900   -- 69% → jackpotCustodian (ShareOFT ■)
-burnShareBps     = 961    -- 9.61% → unwrap + burn vault shares (▢) for PPS
-protocolShareBps = 2139   -- 21.39% → voter/protocol branch (ShareOFT ■)
-creatorShareBps  = 0      -- creator ongoing treasury lane (off by default)
+6900 + 961 + 2139 = 10000   -- creatorShareBps = 0 (omitted)
 
-MAX_BPS = 10000
-sum = 6900 + 961 + 2139 + 0 = 10000
-```
+-- ShareOFT path (pending ■ fees)
+L = ⌊F · 6900 / 10000⌋
+P = ⌊F · 2139 / 10000⌋
+B = F − L − P              -- residual to burn
 
-Floor split of fee amount `F`:
-
-```text
-toLottery  = ⌊F · 6900 / 10000⌋
-toBurn     = ⌊F · 961 / 10000⌋
-toProtocol = ⌊F · 2139 / 10000⌋
-remainder  = F - toLottery - toBurn - toProtocol   -- dust from flooring
+-- Vault-share path
+B = ⌊F · 961 / 10000⌋
+L = ⌊F · 6900 / 10000⌋
+P = F − B − L              -- residual to voters
 ```
 
 ### Done when Lean proves
 
-- BPS sum identity.
-- `toLottery + toBurn + toProtocol ≤ F` and `remainder < 4` (or exact identity you choose for the remainder policy).
-- Example: `F = 69_000` yields the published approximate dollar table up to flooring.
+BPS sum identity; both residual styles conserve `L+B+P = F`; for `F = 69000`, ShareOFT path yields `(47610, 6631, 14759)` and vault-share path yields `(47610, 6630, 14760)` as `(jackpot, burn, voters)`.
 
-### Aristotle prompt
+<details>
+<summary>Aristotle prompt (copy-paste)</summary>
 
 ```text
 Formalize 4626 CreatorGaugeController fee-split conservation in Lean 4.
 
-Constants:
-  lottery = 6900, burn = 961, protocol = 2139, creator = 0, maxBps = 10000
+Default launch constants (creator treasury lane off):
+  lottery = 6900, burn = 961, protocol = 2139, maxBps = 10000
+  -- creatorShareBps = 0; omit from the model
 
 Prove:
-1. lottery + burn + protocol + creator = maxBps
-2. For any F : ℕ, define
+1. lottery + burn + protocol = maxBps
+
+2. ShareOFT residual-to-burn path (matches _splitShareOftAmount / previewDistribution):
      L := F * lottery / maxBps
-     B := F * burn / maxBps
      P := F * protocol / maxBps
-     R := F - L - B - P
-   Then L + B + P ≤ F and R < 4
-3. Compute F = 69000: state L, B, P explicitly and prove the equalities
-4. Optional: show L / F approaches 69/100 as a rational bound for large F
+     B := F - L - P
+   Prove L + B + P = F for all F,
+   and for F = 69000: (L, B, P) = (47610, 6631, 14759)
+
+3. Vault-share residual-to-voters path (matches _distributeVaultShares):
+     B := F * burn / maxBps
+     L := F * lottery / maxBps
+     P := F - B - L
+   Prove L + B + P = F for all F,
+   and for F = 69000: (L, B, P) = (47610, 6630, 14760)
+
+4. Optional: B in (2) and P in (3) differ from the naive independent floor
+   by at most 3 (bounded residual), and never introduce an unpaid dust bucket.
 
 No sorry/admit. Document that burn is 9.61% and protocol/voters 21.39% (do not swap).
 ```
+
+</details>
 
 ---
 
 ## 5. Jackpot payout fraction
 
-**Status:** Queued  
-**Code:** `LotteryManager4626` default `rewardPercentage: 6900` — winner receives **69% of each vault’s jackpot reserve**, not 69% of trade fees again.
+**Status:** Queued · **Code:** `rewardPercentage = 6900` on LotteryManager
 
-### Model
+### Plain claim
 
-For each vault reserve `R`:
+A winner receives **69% of each vault’s jackpot reserve**. That is not “69% of fees again” — fee routing already filled the reserve; payout takes 69% of what is sitting there.
+
+### Worked example
+
+| Reserve R | Payout (69%) | Left in reserve |
+|-----------|--------------|-----------------|
+| 10,000 | 6,900 | 3,100 |
+| 0 | 0 | 0 |
+| Three vaults at 10,000 each | 20,700 total | 9,300 total left |
+
+### Formula
 
 ```text
 payout(R) = ⌊R · 6900 / 10000⌋
-left(R)   = R - payout(R)
+left(R)   = R − payout(R)
 ```
 
-Multi-vault win over reserves `R₁…Rₙ`:
-
-```text
-totalPayout = Σ payout(Rᵢ)
-```
+Same **6900** number as fee `lotteryShareBps`, different quantity (reserve vs incoming fee).
 
 ### Done when Lean proves
 
-- `payout(R) ≤ R` and `left(R) = R - payout(R)`.
-- `payout(R) = 0` when `R < 10000 / 6900` edge cases handled via floor.
-- Distinguish clearly from fee-split lemma #4: payout BPS applies to **reserve**, fee BPS applies to **incoming fees**.
-- Optional: `singleVaultJackpotOnly` mode is a product flag — model both “one vault” and “sum over vaults” if stating multi-vault claims.
+`payout ≤ R`; conservation `payout + left = R`; multi-vault sum ≤ sum of reserves; naming that distinguishes fee-split #4 from payout #5.
 
-### Aristotle prompt
+<details>
+<summary>Aristotle prompt (copy-paste)</summary>
 
 ```text
 Formalize 4626 jackpot payout fraction in Lean 4.
@@ -266,24 +352,25 @@ Prove:
 No sorry/admit.
 ```
 
+</details>
+
 ---
 
-## How to submit
+## How to submit (operators)
 
 ```bash
 export ARISTOTLE_API_KEY='arstl_...'
-# CLI
 aristotle submit "$(cat prompt.txt)" --wait
-
-# or Python
-# project = await Project.create(prompt="...")
+aristotle download <project-id> --destination result.tar.gz
 ```
 
-After a task completes, download the Lean tarball (`aristotle download <project-id>`), store artifacts under `docs/audits/aristotle/<topic>/`, and flip that target’s **Status** to **Proven** on this page with the project ID.
+Store Lean artifacts under `docs/audits/aristotle/<topic>/`, then mark the target **Proven** on the [hub](/audits/aristotle) and link a public summary page like [Curve 2.5× boost](/audits/aristotle/curve-boost).
 
 ## Related
 
 - [Formal verification hub](/audits/aristotle)
-- [Curve boost Aristotle summary](https://github.com/wenakita/4626/blob/main/docs/audits/aristotle/ve4626-curve-boost/ARISTOTLE_SUMMARY.md) (repo; not all internal audit notes are published on docs.4626.fun)
+- [Curve 2.5× boost (proven)](/audits/aristotle/curve-boost)
 - [LotteryManager](/contracts/utilities/lottery-manager)
 - [GaugeController](/contracts/governance/gauge-controller)
+
+</div>

@@ -133,7 +133,10 @@ function readStrategyWeights() {
 }
 
 function curatedDocPaths() {
-  return CURATED_PUBLISH_GLOBS.map((rel) => path.join(REPO_ROOT, 'docs', rel));
+  // Allowlist may include globs (e.g. transcripts/**); existence is checked for concrete files only.
+  return CURATED_PUBLISH_GLOBS
+    .filter((rel) => !rel.includes('*') && !rel.includes('?'))
+    .map((rel) => path.join(REPO_ROOT, 'docs', rel));
 }
 
 function main() {
