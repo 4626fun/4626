@@ -83,6 +83,18 @@ Keep existing public `counterTradeSignal` and free Hermit `/signal` unchanged.
 6. Require a separately reviewed Stage D ticket before any intel decision can
    affect execution, sizing, leverage, or live runner behavior.
 
+## ACP status / heartbeat metrics
+
+Railway Virtuals ACP `getStatus()` / runner heartbeat now includes:
+
+- per-offering `success`, `failure`, `submitFailures`
+- SKIP rate (`skipCount / (success + failure)`)
+- avg / last latency and last `dataAgeMs`
+- `settlementLagMs` / `lastSettlementAt` when recorded in-process
+
+Kill switch (`INV_AKITA_INTEL_KILL=1`) returns structured SKIP/insufficient
+without touching the live execution engine.
+
 ## Methodology versions
 
 | Module | Version |

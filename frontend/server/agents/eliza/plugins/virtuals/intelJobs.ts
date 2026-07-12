@@ -211,7 +211,14 @@ export function parsePortfolioHedgeRequestFromOffering(
             ? row.notionalUsd
             : Number.NaN
       if (!asset || !side || !Number.isFinite(notionalUsd)) return null
-      return {
+      const position: {
+        asset: string
+        side: 'LONG' | 'SHORT'
+        notionalUsd: number
+        entryPrice?: number
+        leverage?: number
+        liquidationPrice?: number
+      } = {
         asset,
         side,
         notionalUsd,
@@ -220,6 +227,7 @@ export function parsePortfolioHedgeRequestFromOffering(
         liquidationPrice:
           typeof row.liquidation_price === 'number' ? row.liquidation_price : undefined,
       }
+      return position
     })
     .filter((row): row is NonNullable<typeof row> => Boolean(row))
   if (positions.length === 0) return null

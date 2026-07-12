@@ -106,6 +106,19 @@ async function main(): Promise<void> {
   // Periodic heartbeat so hosted logs show liveness.
   setInterval(() => {
     const current = service.getStatus()
+    const intelOfferings = Object.entries(current.intel.offerings).map(([name, metrics]) => {
+      const denom = metrics.success + metrics.failure
+      return {
+        name,
+        success: metrics.success,
+        failure: metrics.failure,
+        submitFailures: metrics.submitFailures,
+        skipRate: denom > 0 ? Number((metrics.skipCount / denom).toFixed(4)) : 0,
+        avgLatencyMs:
+          denom > 0 ? Math.round(metrics.latencyTotalMs / denom) : 0,
+        lastDataAgeMs: metrics.lastDataAgeMs,
+      }
+    })
     log('heartbeat', {
       sessions: current.sessions.length,
       entriesHandled: current.entriesHandled,
@@ -114,6 +127,8 @@ async function main(): Promise<void> {
       llmExecuted: current.llmDecisions.executed,
       llmUnparseable: current.llmDecisions.unparseable,
       llmAvgLatencyMs: current.llmDecisions.avgLatencyMs,
+      intelOfferings,
+      settlementLagMs: current.intel.settlementLagMs,
       lastError: current.lastError ?? undefined,
     })
   }, 5 * 60 * 1000).unref()

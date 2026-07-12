@@ -52,6 +52,7 @@ import {
   type IntelJobResult,
 } from './intelJobs.js'
 import { evaluateBacktestPaymentGate } from './paymentGate.js'
+import { IntelMetricsTracker, type IntelServiceMetrics } from './intelMetrics.js'
 import {
   buildStructuredToolProposal,
   buildToolSystemPrompt,
@@ -84,6 +85,7 @@ export type VirtualsAcpServiceStatus = {
     executed: number
     avgLatencyMs: number
   }
+  intel: IntelServiceMetrics
   lastError: string | null
 }
 
@@ -106,6 +108,7 @@ export class VirtualsAcpService {
   private transportReady = false
   private readonly inFlightSessions = new Set<string>()
   private toolQuota: ToolExecutionQuota | null = null
+  private readonly intelMetrics = new IntelMetricsTracker()
 
   get running(): boolean {
     return this.agent !== null
@@ -236,6 +239,7 @@ export class VirtualsAcpService {
         avgLatencyMs:
           this.llmAttempted > 0 ? Math.round(this.llmDecisionLatencyTotalMs / this.llmAttempted) : 0,
       },
+      intel: this.intelMetrics.snapshot(),
       lastError: this.lastError,
     }
   }
@@ -363,8 +367,15 @@ export class VirtualsAcpService {
     session: JobSession,
     offeringName: string,
     result: IntelJobResult<unknown>,
+    startedAtMs = Date.now(),
   ): Promise<void> {
+    const latencyMs = Date.now() - startedAtMs
     if (!result.ok) {
+      this.intelMetrics.recordFailure({
+        offeringName,
+        latencyMs,
+        decision: result.reason === 'kill_switch' ? 'SKIP' : null,
+      })
       await this.sendSessionMessage(session, result.responseText)
       if (result.reject) {
         try {
@@ -381,6 +392,31 @@ export class VirtualsAcpService {
       return
     }
 
+    const deliverable =
+      result.deliverable && typeof result.deliverable === 'object'
+        ? (result.deliverable as Record<string, unknown>)
+        : null
+    const decision =
+      typeof deliverable?.decision === 'string'
+        ? deliverable.decision
+        : typeof (deliverable?.decision_record as { decision?: unknown } | undefined)?.decision ===
+            'string'
+          ? String((deliverable?.decision_record as { decision: string }).decision)
+          : null
+    const dataAsOfRaw =
+      typeof deliverable?.data_as_of === 'string'
+        ? deliverable.data_as_of
+        : typeof deliverable?.dataAsOf === 'string'
+          ? deliverable.dataAsOf
+          : null
+    const dataAgeMs = dataAsOfRaw ? Math.max(0, Date.now() - Date.parse(dataAsOfRaw)) : null
+    this.intelMetrics.recordSuccess({
+      offeringName,
+      latencyMs,
+      dataAgeMs: Number.isFinite(dataAgeMs) ? dataAgeMs : null,
+      decision,
+    })
+
     await this.sendSessionMessage(session, result.responseText)
     try {
       await session.submit(result.responseText)
@@ -389,6 +425,7 @@ export class VirtualsAcpService {
         offeringName,
       })
     } catch (submitError) {
+      this.intelMetrics.recordSubmitFailure(offeringName)
       logger.warn('[virtuals-acp] intel submit failed (message already sent)', {
         jobId: session.jobId,
         offeringName,
@@ -555,13 +592,14 @@ export class VirtualsAcpService {
             )
             return
           }
+          const startedAtMs = Date.now()
           const analysis = await runFundingOiRegimeIntelJob({
             asset: fundingOiIntel.asset,
             lookbackHours: fundingOiIntel.lookbackHours,
             decisionHorizonHours: fundingOiIntel.decisionHorizonHours,
             idempotencyKey: `virtuals:${session.chainId}:${session.jobId}`,
           })
-          await this.deliverIntelResult(session, offeringName, analysis)
+          await this.deliverIntelResult(session, offeringName, analysis, startedAtMs)
           return
         }
       }
@@ -630,12 +668,13 @@ export class VirtualsAcpService {
           )
           return
         }
+        const startedAtMs = Date.now()
         const result = await runCounterTradeAnalysisJob({
           ...counterAnalysisReq,
           idempotencyKey: `virtuals:${session.chainId}:${session.jobId}`,
           acpJobId: session.jobId,
         })
-        await this.deliverIntelResult(session, offeringName, result)
+        await this.deliverIntelResult(session, offeringName, result, startedAtMs)
         return
       }
 
@@ -653,8 +692,9 @@ export class VirtualsAcpService {
           )
           return
         }
+        const startedAtMs = Date.now()
         const result = await runCrowdingSnapshotJob(crowdingReq)
-        await this.deliverIntelResult(session, offeringName, result)
+        await this.deliverIntelResult(session, offeringName, result, startedAtMs)
         return
       }
 
@@ -672,8 +712,9 @@ export class VirtualsAcpService {
           )
           return
         }
+        const startedAtMs = Date.now()
         const result = await runSourceStrategyAuditJob(auditReq)
-        await this.deliverIntelResult(session, offeringName, result)
+        await this.deliverIntelResult(session, offeringName, result, startedAtMs)
         return
       }
 
@@ -691,8 +732,9 @@ export class VirtualsAcpService {
           )
           return
         }
+        const startedAtMs = Date.now()
         const result = await runPortfolioHedgeJob(hedgeReq)
-        await this.deliverIntelResult(session, offeringName, result)
+        await this.deliverIntelResult(session, offeringName, result, startedAtMs)
         return
       }
     }

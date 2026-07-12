@@ -37,9 +37,9 @@ is positive after fees, funding, slippage, latency, and failed fills — out of 
 | `fundingOiRegimeShadow` ($0.10) | Hidden canary, Stage A done (job 67942) | snapshot funding + OI/vol proxy |
 | Hermit `/signal` | Room multi-factor composite | counter 7d + Funding/OI → LONG/SHORT/STAY OUT |
 | Shadow observation store | Implemented | `alfaclub.funding_oi_shadow_observation` + 1h/4h/24h settle |
-| Historical funding / OI series | **Missing** | cannot claim ΔF, ΔOI yet |
-| Basis / order flow / liquidations | **Missing** | cannot claim OF_t, L_t, B_t yet |
-| COUNTER/DELAY/SKIP public ledger | **Missing** | required for v1 flagship |
+| Historical funding / OI series | **Implemented** | `alfaclub.market_feature_snapshots` + 5m sampler cron |
+| Basis / order flow / liquidations | **Missing** | cannot claim OF_t, L_t, B_t yet; stay `null` |
+| COUNTER/DELAY/SKIP public ledger | **Implemented** | `alfaclub.decision_ledger` + outcomes; JSONL export gated |
 | Live decision integration | **Forbidden** until Stage D | shadow invariant |
 
 ---

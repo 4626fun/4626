@@ -16,18 +16,61 @@ type DueOutcomeRow = {
 
 export type DecisionTargetPrice = { priceUsd: number; priceAtMs: number }
 
+export type DecisionHorizonSettlement = {
+  returnBps: number
+  fundingPnlBpsEst: number
+  costBps: number
+  netBps: number
+  alwaysInverseBps: number
+}
+
 function finitePositive(value: unknown): number | null {
   const parsed = typeof value === 'number' ? value : Number(value)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null
 }
 
-function sideReturnBps(params: {
+export function sideReturnBps(params: {
   side: 'LONG' | 'SHORT'
   entry: number
   exit: number
 }): number {
   const raw = ((params.exit - params.entry) / params.entry) * 10_000
   return params.side === 'LONG' ? raw : -raw
+}
+
+/** Pure settlement math used by due-outcome cron; safe for unit tests. */
+export function computeDecisionHorizonSettlement(params: {
+  sourceSide: 'LONG' | 'SHORT'
+  decision: 'COUNTER' | 'DELAY' | 'SKIP'
+  counterSide: 'LONG' | 'SHORT' | null
+  markAtDecision: number
+  markAtHorizon: number
+  estimatedCostBps?: number | null
+}): DecisionHorizonSettlement {
+  const alwaysInverseSide = params.sourceSide === 'LONG' ? 'SHORT' : 'LONG'
+  const alwaysInverseBps = sideReturnBps({
+    side: alwaysInverseSide,
+    entry: params.markAtDecision,
+    exit: params.markAtHorizon,
+  })
+  const decisionSide =
+    params.decision === 'COUNTER' && params.counterSide ? params.counterSide : null
+  const returnBps = decisionSide
+    ? sideReturnBps({
+        side: decisionSide,
+        entry: params.markAtDecision,
+        exit: params.markAtHorizon,
+      })
+    : 0
+  const costBps = Number(params.estimatedCostBps ?? 0) || 0
+  const fundingPnlBpsEst = 0
+  return {
+    returnBps,
+    fundingPnlBpsEst,
+    costBps,
+    netBps: returnBps + fundingPnlBpsEst - costBps,
+    alwaysInverseBps,
+  }
 }
 
 export async function readMarkPriceAt(
@@ -49,14 +92,20 @@ export async function readMarkPriceAt(
 export async function settleDueDecisionOutcomes(params?: {
   nowMs?: number
   readMarkPriceAt?: (symbol: string, targetAtMs: number) => Promise<DecisionTargetPrice | null>
-}): Promise<{ due: number; settled: number; deferred: number }> {
+}): Promise<{
+  due: number
+  settled: number
+  deferred: number
+  maxSettlementLagMs: number | null
+}> {
   const db = await getDb()
-  if (!db) return { due: 0, settled: 0, deferred: 0 }
+  if (!db) return { due: 0, settled: 0, deferred: 0, maxSettlementLagMs: null }
   await ensureAlfaclubDecisionLedgerSchema(db)
 
   const nowMs = params?.nowMs ?? Date.now()
   const now = new Date(nowMs)
   const readPrice = params?.readMarkPriceAt ?? readMarkPriceAt
+  let maxSettlementLagMs = 0
 
   const dueResult = await db.sql<DueOutcomeRow>`
     SELECT
@@ -105,22 +154,16 @@ export async function settleDueDecisionOutcomes(params?: {
       continue
     }
 
-    const alwaysInverseSide = row.source_side === 'LONG' ? 'SHORT' : 'LONG'
-    const alwaysInverseBps = sideReturnBps({
-      side: alwaysInverseSide,
-      entry: markAtDecision,
-      exit: markAtHorizon,
+    const settlement = computeDecisionHorizonSettlement({
+      sourceSide: row.source_side,
+      decision: row.decision,
+      counterSide: row.counter_side,
+      markAtDecision,
+      markAtHorizon,
+      estimatedCostBps:
+        row.estimated_cost_bps == null ? null : Number(row.estimated_cost_bps),
     })
-    const decisionSide =
-      row.decision === 'COUNTER' && row.counter_side
-        ? row.counter_side
-        : null
-    const returnBps = decisionSide
-      ? sideReturnBps({ side: decisionSide, entry: markAtDecision, exit: markAtHorizon })
-      : 0
-    const costBps = Number(row.estimated_cost_bps ?? 0) || 0
-    const fundingPnlBpsEst = 0
-    const netBps = returnBps + fundingPnlBpsEst - costBps
+    const { returnBps, fundingPnlBpsEst, costBps, netBps, alwaysInverseBps } = settlement
 
     const updateResult = await db.sql`
       UPDATE alfaclub.decision_outcomes
@@ -138,8 +181,17 @@ export async function settleDueDecisionOutcomes(params?: {
         AND status = 'pending'
       RETURNING decision_id
     `
-    if ((updateResult.rowCount ?? updateResult.rows.length) > 0) settled += 1
+    if ((updateResult.rowCount ?? updateResult.rows.length) > 0) {
+      settled += 1
+      const lagMs = Math.max(0, nowMs - dueAtMs)
+      maxSettlementLagMs = Math.max(maxSettlementLagMs, lagMs)
+    }
   }
 
-  return { due: dueResult.rows.length, settled, deferred }
+  return {
+    due: dueResult.rows.length,
+    settled,
+    deferred,
+    maxSettlementLagMs: settled > 0 ? maxSettlementLagMs : null,
+  }
 }
