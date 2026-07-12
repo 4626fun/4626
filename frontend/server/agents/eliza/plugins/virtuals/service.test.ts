@@ -57,6 +57,7 @@ vi.mock('./backtestJobs.js', async (importOriginal) => ({
   runFundingOiRegimeJob: mocks.runFundingOiRegimeJob,
 }))
 
+import { logger } from '../../../../_lib/infra/logger.js'
 import { VirtualsAcpService } from './service.js'
 
 const ENV_KEYS = [
@@ -180,6 +181,59 @@ describe('VirtualsAcpService funding/OI shadow offering route', () => {
       'text',
     )
     expect(submit).toHaveBeenCalledWith('Funding/OI regime: CROWDED-LONGS. Advisory only.')
+    await service.stop()
+  })
+
+  it('keeps the advisory message delivered when session.submit fails after send', async () => {
+    const sendMessage = vi.fn(async () => {})
+    const submit = vi.fn(async () => {
+      throw new Error('submit rejected by ACP')
+    })
+    const session = {
+      jobId: 'job-456',
+      chainId: 8453,
+      roles: ['seller'],
+      status: 'funded',
+      job: {
+        description: 'fundingOiRegimeShadow',
+        status: 'FUNDED',
+        budget: { amount: 0.1 },
+      },
+      shouldRespond: vi.fn(() => true),
+      availableTools: vi.fn(() => [{ name: 'sendMessage' }]),
+      toMessages: vi.fn(async () => [{ role: 'user', content: '{"symbol":"ETH"}' }]),
+      sendMessage,
+      submit,
+    }
+    const service = new VirtualsAcpService()
+    expect(await service.start()).toEqual({ started: true })
+
+    const listener = [...mocks.entryListeners][0]
+    expect(listener).toBeDefined()
+    listener?.(session, { kind: 'message', contentType: 'requirement' })
+    await vi.waitFor(() => expect(submit).toHaveBeenCalledOnce())
+
+    expect(mocks.runFundingOiRegimeJob).toHaveBeenCalledWith('ETH', {
+      idempotencyKey: 'virtuals:8453:job-456',
+    })
+    expect(sendMessage).toHaveBeenCalledWith(
+      'Funding/OI regime: CROWDED-LONGS. Advisory only.',
+      'text',
+    )
+    expect(submit).toHaveBeenCalledWith('Funding/OI regime: CROWDED-LONGS. Advisory only.')
+    expect(logger.warn).toHaveBeenCalledWith(
+      '[virtuals-acp] shadow funding/OI submit failed (message already sent)',
+      expect.objectContaining({
+        jobId: 'job-456',
+        error: 'submit rejected by ACP',
+      }),
+    )
+    // Service stays healthy after an isolated submit failure.
+    expect(service.getStatus()).toMatchObject({
+      running: true,
+      ready: true,
+      lastError: null,
+    })
     await service.stop()
   })
 })
