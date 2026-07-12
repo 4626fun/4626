@@ -2,8 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- Single /favicon.ico on the app origin — avoids Base App icon tag races on signature modals. -->
-    <link rel="icon" href="https://app.4626.fun/favicon.ico?v=21" sizes="any" />
+    <!-- Same-origin /favicon.ico — app.html is also served on alfaclub.4626.fun; absolute app.4626.fun URLs violate that host CSP img-src. -->
+    <link rel="icon" href="/favicon.ico?v=21" sizes="any" />
     <meta name="msapplication-TileColor" content="#000000" />
     <meta name="msapplication-config" content="/browserconfig.xml" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />

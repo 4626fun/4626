@@ -144,7 +144,11 @@ export function RootRouter() {
         <AppLoadingOverlay />
         {isAlfaClubHost ? (
           <LazyRouteBoundary>
-            <AlfaClubHostApp />
+            {/* Same QueryClient stack as ProtectedAppBoundary — LazyAccessBoundary
+                mounts Wagmi without AppQueryProvider of its own. */}
+            <AppQueryProvider>
+              <AlfaClubHostApp />
+            </AppQueryProvider>
           </LazyRouteBoundary>
         ) : shouldRouteToAlfaClub ? (
           <AlfaClubHostRedirect pathname={location.pathname} />

@@ -22,7 +22,14 @@ vi.mock('./App', () => ({
   default: () => <div data-testid="protected-app">protected app</div>,
 }))
 vi.mock('./web3/AppQueryProvider', () => ({
-  AppQueryProvider: ({ children }: { children: unknown }) => <>{children}</>,
+  AppQueryProvider: ({ children }: { children: unknown }) => (
+    <div data-testid="app-query-provider">{children as never}</div>
+  ),
+}))
+
+vi.mock('@/app/alfaclubHostRoutes', () => ({
+  AlfaClubHostApp: () => <div data-testid="alfaclub-host-app">alfaclub host</div>,
+  AlfaClubHostRedirect: () => <div data-testid="alfaclub-host-redirect">redirect</div>,
 }))
 
 vi.mock('./pages/Home', () => ({
@@ -96,6 +103,9 @@ describe('RootRouter', () => {
     )
 
     expect(screen.queryByTestId('home-page')).toBeNull()
+    expect(await screen.findByTestId('alfaclub-host-app')).toBeTruthy()
+    expect(screen.getByTestId('app-query-provider')).toBeTruthy()
+    expect(screen.queryByTestId('protected-app')).toBeNull()
   })
 
   it('does not self-redirect app-only routes when marketing override shares the current origin', async () => {
