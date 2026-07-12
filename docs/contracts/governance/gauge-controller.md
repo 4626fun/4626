@@ -5,117 +5,62 @@ sidebar_position: 1
 
 # CreatorGaugeController
 
-**Product role:** Receives ShareOFT **trade fees** and splits them across vault-share burn, jackpot reserve, optional creator treasury, and protocol/voter branches — the onchain fee router for share holders.
+Per-creator `tradeFeeCollector`: receives ShareOFT trade fees, splits them by **immutable** BPS, and custodies `jackpotReserve`. Jackpot **payout** authority is [LotteryManager4626](/contracts/utilities/lottery-manager).
 
-Fee splitter and jackpot custodian for creator vaults. Payout authority for jackpots resides in [LotteryManager4626](/contracts/utilities/lottery-manager), not the gauge itself.
+[Token units](/reference/glossary#token-units)
 
-## Purpose
-
-The GaugeController:
-- Receives trading fees from ShareOFT
-- Splits fees according to configured percentages
-- Routes fees to lottery, burn, optional creator treasury, and voter/protocol branch
-- Manages jackpot reserve for lottery payouts
-
-## Fee Split Configuration
+## Fee split (immutable)
 
 ```solidity
-// Default configuration (in basis points, 10000 = 100%) — matches onchain constants
-uint256 public constant burnShareBps = 961;       // 9.61% → vault-share burn (PPS)
-uint256 public constant lotteryShareBps = 6900;   // 69% → jackpot reserve (ShareOFT)
-uint256 public constant creatorShareBps = 0;      // 0% → creator treasury lane (off)
-uint256 public constant protocolShareBps = 2139;  // 21.39% → voter/protocol branch
+uint256 public constant burnShareBps = 961;       // 9.61% → unwrap → ▢ burn (PPS)
+uint256 public constant lotteryShareBps = 6900;   // 69% → jackpotReserve (■)
+uint256 public constant creatorShareBps = 0;      // 0% → creatorTreasury (off)
+uint256 public constant protocolShareBps = 2139;  // 21.39% → voter/protocol (■)
 ```
 
-Machine-checked conservation target: [Lean target §4](/audits/aristotle/lean-proof-targets#4-gauge-fee-split-conservation). Proven boost math: [Curve 2.5×](/audits/aristotle/curve-boost).
+No `setFeeSplit` — read via `getFeeSplit()`. Conservation: [Lean §4](/audits/aristotle/lean-proof-targets#4-gauge-fee-split-conservation). Boost math: [Curve 2.5×](/audits/aristotle/curve-boost).
 
-## Key Functions
+## Distribution flow
 
-### Receiving Fees
+Primary ShareOFT path — **split in ■ first**:
+
+```
+receiveFees() → pending (■)
+   ↓ distribute()
+Split:
+  - 69% → jackpotReserve (■)
+  - 21.39% → voter/protocol (■)
+  - creator% → creatorTreasury (■; default 0%)
+  - 9.61% residual → unwrap → ▢ burned (PPS ↑)
+```
+
+## Key functions
 
 ```solidity
-// Receive OFT fees from ShareOFT
 function receiveFees(uint256 amount) external;
-
-// Receive WETH fees from V4 Tax Hook
 function receiveWETHFees(uint256 amount) external;
-
-// Direct deposit
 function deposit(uint256 amount) external;
-```
 
-### WETH Fee Processing
-
-WETH fees accumulate in `pendingWETHFees` and are processed via a swap (WETH → CreatorCoin) then deposited into the vault and distributed as vault shares.
-
-```solidity
-// Process pending WETH fees: WETH → CreatorCoin → Vault → Distribute
-function processWETHFees() external;
-```
-
-Default MEV hardening behavior:
-- Large WETH swaps are not permissionless by default (owner/keeper only).
-- Permissionless execution can be enabled for small batches via a cap.
-- Auto-processing on fee intake is disabled by default.
-
-Relevant config (owner-only):
-- `setWethFeeKeeper(address keeper)` (optional)
-- `setWethProcessingConfig(uint256 maxPermissionlessWethProcess, bool autoProcessWethFees)`
-
-### Distribution
-
-```solidity
-// Distribute accumulated fees (permissionless)
 function distribute() external;
-
-// Force distribution (owner only, bypasses time check)
 function forceDistribute() external onlyOwner;
-```
 
-### Jackpot Management
-
-```solidity
-// Pay jackpot to lottery winner (only lottery manager)
-function payJackpot(address winner, uint256 shares) external;
-
-// Get available jackpot reserve
+function payJackpot(address winner, uint256 amount) external; // ShareOFT ■; lottery manager only
 function getJackpotReserve() external view returns (uint256);
+
+function setCreatorTreasury(address treasury) external onlyOwner;
+function getFeeSplit()
+    external pure
+    returns (uint256 burn, uint256 lottery, uint256 creator, uint256 protocol);
 ```
 
-### Configuration
+If `creatorShareBps > 0`, treasury must be non-zero (`CreatorTreasuryRequired`).
+
+### WETH / hook path
+
+Alternate ingress: WETH → creator coin → vault deposit. Lottery/voter slices are wrapped back to ■; burn stays ▢. Large swaps are owner/keeper-gated by default (`setWethFeeKeeper`, `setWethProcessingConfig`).
 
 ```solidity
-// Update fee split (must total 100%)
-function setFeeSplit(
-    uint256 burnBps,
-    uint256 lotteryBps,
-    uint256 creatorBps,
-    uint256 protocolBps
-) external onlyOwner;
-
-// Update creator treasury (can be zero only when creatorShareBps == 0)
-function setCreatorTreasury(address treasury) external onlyOwner;
-```
-
-Invariant guard:
-- If `creatorBps > 0`, creator treasury must be non-zero (`CreatorTreasuryRequired`).
-
-## Distribution Flow
-
-```
-ShareOFT sends fees
-   ↓
-receiveFees() accumulates pending
-   ↓
-distribute() triggered (threshold or manual)
-   ↓
-Unwrap OFT → vault shares
-   ↓
-Split according to configuration:
-   - 69% → jackpotReserve (ShareOFT ■)
-   - 9.61% → burn (unwrap → vault shares burned; PPS ↑)
-   - 21.39% → voter/protocol branch → `ve4626VoterRewardsDistributor`, protocol treasury, or jackpot fallback
-   - creator% → creatorTreasury (if enabled; default 0%)
+function processWETHFees() external;
 ```
 
 ## Events
@@ -123,5 +68,5 @@ Split according to configuration:
 ```solidity
 event FeesReceived(address indexed from, uint256 amount);
 event FeesDistributed(uint256 burned, uint256 toLottery, uint256 toCreator, uint256 toProtocol, uint256 newPPS);
-event JackpotPaid(address indexed winner, uint256 shares);
+event JackpotPaid(address indexed winner, uint256 amount);
 ```

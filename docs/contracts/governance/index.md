@@ -19,10 +19,13 @@ Contracts that manage fee distribution and the ve■4626 / gauge incentive syste
 | **[RewardStream4626](/contracts/governance/reward-stream)** | Partner multi-token epoch reward streams |
 | **[ve4626VoterRewardsDistributor](/contracts/governance/voter-rewards-distributor)** | Voter reward claims |
 
-## Fee Split (Defaults, Configurable)
+## Fee Split (immutable BPS)
 
-| Allocation | Percentage | Description |
-|------------|------------|-------------|
-| Lottery | 69% (default) | Jackpot reserve in `CreatorGaugeController` |
-| Voter/Protocol Branch | 21.39% (default) | Routed to `ve4626VoterRewardsDistributor` when configured, protocol/jackpot fallback otherwise |
-| Burn | 9.61% (default) | Immediate PPS-accretive burn |
+Split in ShareOFT ■ first. See [Token units](/reference/glossary#token-units).
+
+| Allocation | Percentage | Unit / destination |
+|------------|------------|--------------------|
+| Lottery | 69% | ShareOFT ■ → `jackpotReserve` |
+| Voter/Protocol | 21.39% | ShareOFT ■ → `ve4626VoterRewardsDistributor` (or fallback) |
+| Burn | 9.61% | ■ slice → unwrap → ▢ burned (PPS ↑) |
+| Creator | 0% (default) | ShareOFT ■ → `creatorTreasury` when enabled |

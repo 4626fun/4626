@@ -28,13 +28,14 @@ A creator coin alone does not provide:
 ## Token model {#three-tokens-one-vault}
 
 ```text
-  Creator coin ($TICKER)          Vault share (▢TICKER)         Tradable share (■TICKER)
-  ─────────────────────          ─────────────────────         ───────────────────────
-  Zora ERC-20 deposit            ERC-4626 vault share          LayerZero ShareOFT (DEX)
-  Goes into vault                Minted on deposit             Wrapped 1:1 from ▢
+  Creator coin ($TICKER)          Vault share (▢TICKER)              Tradable share (■TICKER)
+  ─────────────────────          ─────────────────────              ───────────────────────
+  Zora ERC-20; vault deposit     ERC-4626 internal claim            LayerZero ShareOFT (DEX)
+  ~1 → 1000 ▢ at bootstrap       Minted on deposit (1000× offset)  1000 ▢ → 1 ■ via wrapper
+                                 (hidden from default UX)           ≈ 1 creator coin via deposit()
 ```
 
-**Rule:** creator coin address **≠** share token address.
+**Rule:** creator coin address **≠** share token address. Full ratios: [Token units](/reference/glossary#token-units).
 
 ## After trading is live
 
@@ -46,13 +47,12 @@ A creator coin alone does not provide:
            │
            └──► Qualifying buy → instant lottery (VRF)
 
-  Zora creator earnings ──► PayoutRouter ──► vault ──► PPS accretion for holders
+  Zora creator earnings ──► creatorCoinPayoutRecipient / CreatorPayoutRouter ──► vault PPS
 ```
 
-- **Trade fees** — ShareOFT transfer fees on qualifying DEX routes.
-- **Creator revenue** — Zora `payoutRecipient` earnings (router mode) accrue holder value via vault PPS.
-- **Jackpot** — Gauge **custodies** reserves; [LotteryManager4626](/contracts/utilities/lottery-manager) **pays** winners on qualifying **buys**.
-
+- **Trade fees** — ShareOFT fees on qualifying DEX routes → gauge split.
+- **Creator revenue** — `creatorCoinPayoutRecipient` (Zora `payoutRecipient` field) accrues holder PPS in router mode.
+- **Jackpot** — Gauge **custodies**; [LotteryManager4626](/contracts/utilities/lottery-manager) **pays** on qualifying **buys**.
 Lane names: [Glossary](/reference/glossary). Formal math: [proven 2.5× boost](/audits/aristotle/curve-boost) · [next Lean targets](/audits/aristotle/lean-proof-targets).
 
 ## Launch sequence
@@ -97,7 +97,7 @@ Shared infrastructure: [Addresses](/reference/addresses) (v1.14.1). Per creator:
 |----------|------|
 | [Registry4626](/contracts/core/creator-registry) | Creator coin → stack lookup |
 | [CreatorOVault](/contracts/core/creator-ovault) | Vault · holds creator coin |
-| [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) | ▢ → ■ wrap |
+| [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) | 1000 ▢ → 1 ■ wrap |
 | [CreatorShareOFT](/contracts/core/creator-share-oft) | Tradable ■ share |
 | [CreatorGaugeController](/contracts/governance/gauge-controller) | Fee split · jackpot custody |
 | [CCA launch strategy](/contracts/strategies/cca-launch) | Fair-launch auction |

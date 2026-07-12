@@ -41,7 +41,28 @@ Deployed on an **older batcher or release**. May behave differently from a new v
 
 **Tradable share (`■TICKER`)** — LayerZero ShareOFT from [CreatorShareOFT](/contracts/core/creator-share-oft); primary DEX-facing asset.
 
-**Wrapper** — [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper); converts ▢ → ■ at 1:1.
+**Wrapper** — [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper); locks **1000 ▢ per 1 ■** (`NORMALIZATION_FACTOR = 1000`). User `deposit()` presents **~1 creator coin → ~1 ■**.
+
+## Token units {#token-units}
+
+Raw unit math vs user-facing UX:
+
+| Step | Ratio | Notes |
+|------|-------|-------|
+| Creator coin → ▢ | ~**1:1000** at bootstrap | Vault `_decimalsOffset() = 3` (virtual shares). After PPS drifts, follows live PPS. |
+| ▢ → ■ | **1000:1** | Wrapper wrap ÷1000; unwrap ×1000. Never 1:1 in raw units. |
+| Creator coin → ■ | ~**1:1** UX | Offsets cancel in `wrapper.deposit()` / `withdraw()`. **Never** means ▢ ↔ ■ is 1:1. |
+
+**Gauge trade-fee split** (immutable BPS; split in ShareOFT ■ first):
+
+| Slice | Unit | Destination |
+|-------|------|-------------|
+| 69% | ShareOFT ■ | `jackpotReserve` (gauge custodian) |
+| 21.39% | ShareOFT ■ | Voter/protocol branch |
+| 9.61% | Unwrap → ▢ burned | PPS ↑ for holders |
+| 0% (default) | ShareOFT ■ | `creatorTreasury` when enabled |
+
+**Lottery payout** — Winners receive **ShareOFT ■** from the triggering vault’s gauge reserve (default single-vault mode). Gauge custodies; [LotteryManager4626](/contracts/utilities/lottery-manager) calculates win chance and pays.
 
 ## Launch milestones
 

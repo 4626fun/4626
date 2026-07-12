@@ -10,7 +10,7 @@ slug: /compressions/engagement
 
 ## Trading Fee Lottery
 
-4626 describes a 6.9% trading fee on DEX trades which funds a VRF-backed lottery. Each qualifying trade has an instant probability of winning, and winners are paid in vault shares.
+4626 describes a 6.9% fee on qualifying ShareOFT **buys** (`SwapOnly → non-SwapOnly`) that funds a VRF-backed lottery. Each qualifying buy has an instant win chance; winners are paid in **ShareOFT ■**.
 
 ## Why This Matters
 

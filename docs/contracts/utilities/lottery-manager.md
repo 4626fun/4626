@@ -5,22 +5,19 @@ sidebar_position: 1
 
 # LotteryManager4626
 
-**Product role:** **Instant lottery** on hub-chain ShareOFT **buys** (Chainlink VRF) plus attested no-purchase AMOE entries — prizes paid from gauge jackpot reserves.
+**Product role:** Instant lottery on hub-chain ShareOFT **buys** (Chainlink VRF) plus AMOE. Prizes paid in **ShareOFT ■** from the triggering gauge `jackpotReserve` (default single-vault).
 
-Shared lottery service deployed once per chain; serves all creator coins by resolving contract addresses from [Registry4626](/contracts/core/creator-registry).
+Shared per-chain service; resolves each creator’s stack from [Registry4626](/contracts/core/creator-registry).
 
 ## Purpose
 
-The LotteryManager4626:
-- Processes lottery entries from qualifying ShareOFT DEX **buys**
-- Processes AMOE entries from server attestations (no purchase required)
-- Integrates Chainlink VRF 2.5 for verifiable randomness
-- Manages cross-chain winner notifications where configured
-- Distributes prizes from active vault jackpot reserves
+- Process lottery entries from qualifying ShareOFT DEX **buys**
+- Process AMOE entries from server attestations (no purchase required)
+- Integrate Chainlink VRF 2.5
+- Pay winners from the triggering vault’s gauge reserve (■)
+- Optional cross-chain winner notifications where configured
 
-## Architecture
-
-This is a **shared utility** deployed once per chain that serves ALL Creator Coins by looking up contracts from the registry.
+## Deploy notes
 
 **External pricing library:** USD pricing + oracle guards live in `LotteryManager4626PricingLib` (external CALL) so the main manager stays under EIP-170. Creation bytecode for `LotteryManager4626` therefore contains a library link:
 
@@ -141,7 +138,7 @@ Observability events:
 
 ## Prize Payout
 
-Winners receive **69% of jackpot** from **ALL active creator vaults**:
+By default (`singleVaultJackpotOnly = true`), winners receive `rewardPercentage` (default **69%**) of the **triggering vault’s** gauge `jackpotReserve` in **ShareOFT ■**:
 
 ```solidity
 // Internal payout function
@@ -151,6 +148,8 @@ function _payoutLocalJackpot(
     uint16 payoutBps  // 6900 = 69%
 ) internal returns (uint256 totalPaidOut);
 ```
+
+Multi-vault scanning only applies when `singleVaultJackpotOnly` is disabled. Payout asset is always ShareOFT ■ via `gaugeController.payJackpot`, not vault shares ▢.
 
 ## Boost Integration
 
@@ -184,5 +183,5 @@ event LotteryEntryCreated(address indexed creatorCoin, address indexed user, uin
 event LotteryEntrySourceTagged(address indexed creatorCoin, address indexed user, uint256 indexed requestId, EntrySource source, uint256 amountUSD);
 event AmoeEntrySubmitted(address indexed creatorCoin, address indexed user, bytes32 indexed nonce, uint256 requestId);
 event LotteryWinner(address indexed creatorCoin, address indexed user, uint256 swapAmountUSD, uint256 rewardAmount, uint256 requestId);
-event MultiTokenJackpotWon(address indexed triggeringCoin, address indexed winner, uint256 numVaultsPaid);
+event MultiTokenJackpotWon(address indexed triggeringCoin, address indexed winner, uint256 numVaultsPaid); // only when singleVaultJackpotOnly = false
 ```

@@ -5,7 +5,7 @@ sidebar_position: 1
 
 # What is 4626?
 
-4626 lets creators deposit a **Zora creator coin** into an **ERC-4626 vault** on Base, sell **tradable shares** through a **fair-launch auction**, and route trading fees and external revenue to share holders.
+4626 lets creators deposit a **Zora creator coin** into an **ERC-4626 vault** on Base, sell **tradable shares** through a **fair-launch auction**, and route trading fees and creator-coin external earnings (`creatorCoinPayoutRecipient`) to share holders.
 
 <div class="docs-at-a-glance">
 
@@ -39,7 +39,7 @@ Full timeline: [Launch checklist](/guides/launch-checklist) · [After activation
 | **Vault share (`▢`)** | ERC-4626 claim on the vault | `▢JESSE` |
 | **Tradable share (`■`)** | DEX + cross-chain ShareOFT | `■JESSE` |
 
-[CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) wraps ▢ → ■ at 1:1. Creator coin address **≠** share token address.
+[CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper) locks **1000 ▢ per 1 ■**; `deposit()` presents ~1 creator coin → ~1 ■. Creator coin address **≠** share token address. See [Token units](/reference/glossary#token-units).
 
 ## Before you launch
 

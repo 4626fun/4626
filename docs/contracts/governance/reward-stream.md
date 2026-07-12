@@ -65,7 +65,7 @@ rolloverExpiredEpoch(epoch, token)  // owner
 
 | Lane | Contract | Tokens | Who funds |
 |------|----------|--------|-----------|
-| Protocol fee → voters | `ve4626VoterRewardsDistributor` | Vault ShareOFT only | Gauge controller |
+| Protocol fee → voters | `ve4626VoterRewardsDistributor` | ShareOFT ■ only | Gauge controller |
 | One-shot bribes | `BribeDepot4626` | Any ERC-20 | Anyone |
 | Partner campaigns | `RewardStream4626` | Allowlisted ERC-20s | Partners / protocol |
 

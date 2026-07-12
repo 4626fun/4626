@@ -46,9 +46,11 @@ shareOFT.send{value: fee.nativeFee}(sendParams, fee, msg.sender);
 
 ## Fee Behavior
 
-- **Cross-chain transfers**: No 6.9% fee (only LayerZero gas)
-- **DEX trades**: 6.9% fee applies
-- **Wrap/unwrap**: No fee
+- **Cross-chain transfers**: no 6.9% fee (LayerZero gas only). Remote spokes hold bridged **■** only — no local vault or creator-coin redeem.
+- **DEX buys** (`SwapOnly → non-SwapOnly`): 6.9% native fee → gauge. Sell-side fees require an active hook.
+- **Wrap/unwrap**: fees default to 0 (owner-configurable via `setFees`).
+
+Unit ratios: [Token units](/reference/glossary#token-units).
 
 ## Tracking Transfers
 

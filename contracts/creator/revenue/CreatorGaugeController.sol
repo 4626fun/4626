@@ -60,7 +60,7 @@ interface Ive4626VoterRewardsDistributor {
 /**
  * @title CreatorGaugeController
  * @author 0xakita.eth
- * @notice Per-creator `tradeFeeCollector` — receives ShareOFT buy fees, unwraps, and splits value
+ * @notice Per-creator `tradeFeeCollector` — receives ShareOFT buy fees, splits in ■, unwraps only the burn slice
  * @dev Hub-only (Base). ShareOFT buy fees arrive via receiveFees() or bridged OFT via receiveBridgedFees().
  *      Split (all paths):
  *      - 69% ■ ShareOFT → jackpotCustodian reserve (LotteryManager4626 is jackpotPayoutAuthority)

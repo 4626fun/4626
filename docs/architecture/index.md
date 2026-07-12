@@ -35,37 +35,29 @@ Each creator vault has two extension families:
 
 ### 2. CreatorOVaultWrapper
 
-- Wraps vault shares (▢AKITA) into **LayerZero OFT** share tokens (■AKITA)
-- Enables cross-chain transfers via LayerZero V2 messaging
-- 1:1 wrapping ratio (no dilution)
+- Wraps ▢ → ■ for DEX + LayerZero (`NORMALIZATION_FACTOR = 1000`)
+- `deposit()` presents ~1 creator coin ≈ 1 ■ — [Token units](/reference/glossary#token-units)
 
 ### 3. CreatorShareOFT (LayerZero V2 OFT)
 
-- **Omnichain fungible token** - same token on all chains
-- Native fee trigger is buy-side (`SwapOnly -> non-SwapOnly`) via `setAddressType` classification
-- Sell-side and additional fee behavior are hook-config dependent (not unconditional native OFT behavior)
-- Routes trade-fee flow to the **tradeFeeCollector** domain (typically `CreatorGaugeController`)
-- Triggers instant lottery roll for all traders (win or lose determined immediately)
+- Omnichain ■ token; native fee on buy-side (`SwapOnly → non-SwapOnly`)
+- Sell-side fees are hook-dependent
+- Routes fees to `tradeFeeCollector` (typically `CreatorGaugeController`)
+- Qualifying hub buys can trigger VRF lottery
 
 ### 4. CreatorGaugeController
 
-- Receives trading fees from all share tokens
-- Splits fees by configurable bps (default: **69% lottery**, **21.39% burn**, **9.61% voter/protocol branch**, **0% creator**)
-- Unwraps fees into vault shares and routes them by configured splits
+- Receives trade fees; **immutable** BPS: **69% lottery (■)** · **21.39% voters (■)** · **9.61% burn (unwrap → ▢)** · **0% creator**
+- Splits in ■ first; only the burn slice unwraps
 
 ### 5. LotteryManager4626
 
-- **Shared service** (one per chain): triggered by approved swap contracts
-- Calculates instant win probability (percentage-based: $1 traded = 0.0004% chance)
-- Integrates **Chainlink VRF 2.5** for provably fair randomness on every qualifying trade
-- Winners receive configured payouts from jackpot reserve in **vault shares from active creator vaults** (diversified prize)
-- **Instant lottery** - each trade is an independent roll, winners paid immediately
-- Optional boosts via `ve4626BoostManager` and `ve4626GaugeVoting`
+- Shared per-chain service on qualifying **buys**
+- Win chance ≈ $1 → 0.0004%; Chainlink VRF 2.5
+- Pays **ShareOFT ■** from the triggering gauge reserve (default single-vault)
+- Optional boosts via `ve4626BoostManager` / `ve4626GaugeVoting`
 
-Important boundary:
-- `CreatorGaugeController` = jackpot custodian (`jackpotReserve`)
-- `LotteryManager4626` = jackpot payout authority (authorized caller), not custodian
-
+Boundary: gauge = jackpot **custodian**; LotteryManager = **payout authority** (+ win-chance calc).
 ### 6. Share CCA launch arm (Uniswap CCA)
 
 - **Vault arm** (not a leg / not `addStrategy`): fair-launch primary market for ■ ShareOFT via Uniswap **Continuous Clearing Auction**
@@ -87,38 +79,34 @@ Important boundary:
 ## Token Flow
 
 ```
-Creator Coin (akita)
-   ↓ Deposit
+Creator Coin (akita)  [Base only]
+   ↓ Deposit (+ virtual offset ~×1000)
 CreatorOVault (▢AKITA shares)
-   ↓ Wrap
-CreatorOVaultWrapper
-   ↓ Mint
-CreatorShareOFT (■AKITA)
-   ↓ Bridge
-LayerZero V2 Messaging → Arbitrum, Ethereum, BSC, etc.
-   ↓ Unwrap on destination chain
-▢AKITA → Redeem → akita (if available on that chain)
+   ↓ Wrap (÷1000 normalization)
+CreatorOVaultWrapper → CreatorShareOFT (■AKITA)
+   ↓ Bridge (LayerZero V2)
+Remote chain ShareOFT (■ only — no local vault / no creator-coin redeem)
 ```
+
+User `wrapper.deposit()` presents ~1 creator coin → ~1 ■ (offsets cancel). Details: [Token units](/reference/glossary#token-units).
 
 ## Trading Fee Flow
 
 ```
-User trades ■AKITA
+User buys ■AKITA (qualifying SwapOnly → non-SwapOnly)
    ↓
 Two fee planes:
   - Native OFT plane: buy-side transfer trigger
   - Hook plane: sell-side/additional policy if hook configured
    ↓
 tradeFeeCollector (typically CreatorGaugeController)
-   ↓ Route by configured split:
-     - 69% → Lottery prize pool
-     - 9.61% → Burned vault shares (increases PPS)
-     - 21.39% → Voter branch (ve4626VoterRewardsDistributor)
-CreatorGaugeController (jackpot custodian)
-   ↓ Calculate percentage-based win chance ($1 = 0.0004%)
-LotteryManager4626 (jackpot payout authority)
-   ↓ Instant Chainlink VRF roll
-   ↓ Winner (if lucky) receives 69% of prize pool in vault shares
+   ↓ Split in ShareOFT ■ (immutable BPS):
+     - 69% ■ → jackpotReserve (gauge custodian)
+     - 21.39% ■ → voter branch (ve4626VoterRewardsDistributor)
+     - 9.61% → unwrap → ▢ burned (PPS ↑)
+LotteryManager4626 (payout authority)
+   ↓ Calculates win chance ($1 = 0.0004%); instant Chainlink VRF roll
+   ↓ Winner (if lucky) receives rewardPercentage of that gauge’s jackpotReserve in ShareOFT ■
 ```
 
 ## Deployment Flow

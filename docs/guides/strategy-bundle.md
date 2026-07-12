@@ -26,7 +26,7 @@ Pay the **launch bundle** ($499 USDC on Base) before deploy appears in the appli
 |----------|----------------|
 | **Charm active LP** | CREATOR/USDC liquidity management |
 | **Ajna lending** | CREATOR lending strategy |
-| **Solana bridge** | Post-auction `■` share bridge at Phase 2 finalize (~30%) |
+| **Solana bridge** | ~30% of `■` bridges at Phase 2 finalize (activation session) |
 | **Meteora entitlement** | Operator-provisioned Solana pool (may lag finalize) |
 
 After launch, vault CREATOR targets ~**45% Charm · 45% Ajna · 10% idle**. Individual strategy keys are not sold separately for new vaults.

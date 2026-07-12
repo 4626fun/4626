@@ -33,11 +33,12 @@ flowchart TD
   OFTShares --> OtherChains["Other_chains"]
   OFTShares --> CCA["CCA_auction"]
   CCA --> V4Pool["UniswapV4_pool"]
-  V4Pool --> Fee["Trading_fee(6.9%)"]
-  Fee --> LotteryPot["Lottery_pot"]
+  V4Pool --> Fee["Buy_fee(6.9%_native)"]
+  Fee --> LotteryPot["Jackpot_reserve_ShareOFT"]
   LotteryPot --> VRF["Chainlink_VRF_draw"]
 ```
 
+Fee lanes and units: [Token units](/reference/glossary#token-units).
 ## Next Actions
 
 - [Getting Started](/getting-started)

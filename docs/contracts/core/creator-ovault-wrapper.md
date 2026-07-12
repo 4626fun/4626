@@ -5,77 +5,46 @@ sidebar_position: 3
 
 # CreatorOVaultWrapper
 
-**Product role:** Converts **▢ vault shares** into **■ ShareOFT** at **1:1** so shares can trade on DEXs and bridge via LayerZero without diluting vault ownership.
+Converts **▢ vault shares** ↔ **■ ShareOFT** for DEX trading and LayerZero bridging. Raw wrap is **1000 ▢ : 1 ■**; `deposit()` presents **~1 creator coin → ~1 ■**.
 
-Wraps ERC-4626 vault shares into LayerZero OFT tokens for cross-chain transfer.
+[Token units](/reference/glossary#token-units)
 
-## Purpose
+## Normalization
 
-The CreatorOVaultWrapper:
-- Wraps vault shares (▢TOKEN) into OFT tokens (■TOKEN)
-- Enables cross-chain transfers via LayerZero V2
-- Maintains 1:1 wrapping ratio (no dilution)
+Vault `_decimalsOffset() = 3` (~1000 ▢ per creator coin at bootstrap). The wrapper cancels that offset:
+
+| Direction | Math |
+|-----------|------|
+| Wrap | `■ = ▢ / 1000` |
+| Unwrap | `▢ = ■ × 1000` |
+| `deposit()` / `withdraw()` | ~1 creator coin ↔ ~1 ■ |
+
+Wrap/unwrap fees default to **0** (`setFees`, capped). Bridging does not dilute vault ownership. Remote spokes hold **■ only** — no local vault or creator-coin redeem.
 
 ## Key Functions
 
-### Wrapping
-
 ```solidity
-// Wrap vault shares into OFT tokens
-function wrap(uint256 shares) external returns (uint256 oftAmount);
+// Creator coin ↔ ■ (primary UX)
+function deposit(uint256 amount) external returns (uint256 shareOFTOut);
+function withdraw(uint256 amount) external returns (uint256 creatorCoinOut);
 
-// Unwrap OFT tokens back to vault shares
-function unwrap(uint256 oftAmount) external returns (uint256 shares);
+// ▢ ↔ ■ (advanced)
+function wrap(uint256 amount) external returns (uint256 amountOut);   // ÷1000
+function unwrap(uint256 amount) external returns (uint256 amountOut); // ×1000
+
+IERC20 public immutable creatorCoin;
+IERC4626 public immutable vault;
+IShareOFT public shareOFT; // set once via setShareOFT
+uint256 public constant NORMALIZATION_FACTOR = 1000;
 ```
 
-### View Functions
-
-```solidity
-// Get the vault shares token address
-function vaultShares() external view returns (address);
-
-// Get the OFT token address
-function shareOFT() external view returns (address);
-```
-
-## Wrapping Flow
+## Flows
 
 ```
-User has ▢AKITA vault shares
-   ↓
-wrapper.wrap(shares)
-   ↓
-Vault shares locked in wrapper
-   ↓
-■AKITA OFT minted to user
-   ↓
-User can bridge via LayerZero
+▢ vault shares ──wrap(÷1000)──► ■ ShareOFT ──bridge──► remote ■
+■ ShareOFT ──unwrap(×1000)──► ▢ ──redeem──► creator coin   [Base / hub only]
 ```
 
-## Unwrapping Flow
+## Gauge integration
 
-```
-User has ■AKITA OFT tokens
-   ↓
-wrapper.unwrap(oftAmount)
-   ↓
-OFT tokens burned
-   ↓
-Vault shares released to user
-   ↓
-User can redeem from vault
-```
-
-## 1:1 Ratio
-
-The wrapping ratio is always 1:1:
-- 1 ▢AKITA = 1 ■AKITA
-- No fees on wrap/unwrap
-- No dilution from cross-chain transfers
-
-## Integration with GaugeController
-
-When trading fees are collected:
-1. ShareOFT sends fees to GaugeController
-2. GaugeController calls `wrapper.unwrap()`
-3. Vault shares distributed according to split
+On ShareOFT fee distribute, the gauge **splits in ■ first**. Only the **9.61% burn slice** calls `unwrap()`; those ▢ are burned for PPS.

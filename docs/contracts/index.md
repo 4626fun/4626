@@ -15,7 +15,7 @@ Onchain reference for 4626 vault infrastructure. For the launch journey, start w
 |----------|---------------|
 | Registry4626 | [Registry](/contracts/core/creator-registry) — creator coin → vault lookup |
 | CreatorOVault | [Vault](/contracts/core/creator-ovault) — ERC-4626 · creator coin deposit |
-| CreatorOVaultWrapper | [Wrapper](/contracts/core/creator-ovault-wrapper) — ▢ → ■ at 1:1 |
+| CreatorOVaultWrapper | [Wrapper](/contracts/core/creator-ovault-wrapper) — 1000 ▢ → 1 ■ |
 | CreatorShareOFT | [ShareOFT](/contracts/core/creator-share-oft) — tradable ■ share |
 | CreatorGaugeController | [Gauge](/contracts/governance/gauge-controller) — fees · jackpot custody |
 | CCA launch strategy | [Auction](/contracts/strategies/cca-launch) — fair-launch auction |

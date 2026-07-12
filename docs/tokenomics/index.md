@@ -5,89 +5,49 @@ sidebar_position: 4
 
 # Tokenomics
 
-The 6.9% fee policy is the core incentive mechanism powering lottery growth and holder PPS accretion, with lane behavior determined by native + hook configuration.
+6.9% trade fees fund lottery growth and holder PPS accretion. Lane behavior depends on native ShareOFT + optional hook config.
 
-## Fee Structure
+[Token units](/reference/glossary#token-units) · [LotteryManager4626](/contracts/utilities/lottery-manager)
+
+## Fee structure
 
 | Action | Fee | Recipient | Notes |
 |--------|-----|-----------|-------|
-| **DEX Buy** | **6.9%** (conditional) | tradeFeeCollector domain | Native `CreatorShareOFT` trigger when transfer matches `SwapOnly -> non-SwapOnly` |
-| **DEX Sell** | **6.9%** (conditional) | tradeFeeCollector domain | Hook-dependent; requires explicit hook activation/config |
-| **Vault Deposit** (akita → ▢AKITA) | **0%** | N/A | Direct deposits are free |
-| **Vault Withdrawal** (▢AKITA → akita) | **0%** | N/A | Withdrawals are free |
-| **Cross-Chain Bridge** (via LayerZero) | **0%** + gas | LayerZero relayers | Only pay LayerZero messaging fees (~$1-5 depending on chain) |
+| **DEX buy** | **6.9%** (conditional) | `tradeFeeCollector` | Native when `SwapOnly → non-SwapOnly` |
+| **DEX sell** | **6.9%** (conditional) | `tradeFeeCollector` | Hook-dependent |
+| **Deposit / withdraw** (creator coin ↔ ■) | **0%** | — | Wrap fees default 0 |
+| **Bridge** (LayerZero) | gas only | Relayers | No ShareOFT trade fee |
 
-## Fee Distribution
+## Fee distribution (immutable BPS)
 
-The 6.9% trading fee is distributed as follows:
+Split in ShareOFT ■ first:
 
-| Allocation | Percentage | Description |
-|------------|------------|-------------|
-| **Lottery Prize Pool** | 69% | Funds the instant lottery jackpot |
-| **Voter/Protocol Branch** | 21.39% | Distributed to voter rewards path when configured, protocol fallback otherwise |
-| **Burn (PPS Increase)** | 9.61% | Shares burned to increase Price Per Share for all holders |
+| Allocation | % | Destination |
+|------------|---|-------------|
+| Lottery | 69% | ■ → `jackpotReserve` |
+| Voter / protocol | 21.39% | ■ → voter path (or fallback) |
+| Burn | 9.61% | ■ slice → unwrap → ▢ burned (PPS ↑) |
 
-### Example Distribution
+Example at $1M daily volume → $69k fees → ~$47.6k lottery · ~$14.8k voters · ~$6.6k burned.
 
-For $1M daily trading volume:
-- Total fees collected: **$69,000** (6.9%)
-- To lottery: **~$47,610** (69%)
-- Voter rewards: **~$14,770** (21.39%)
-- Burned: **~$6,630** (9.61%)
+## Lottery
 
-## Key Details
+Qualifying **buys** (and AMOE) roll instantly. Base chance: **$1 ≈ 0.0004%** (`swapValueUSD / 250_000` PPM).
 
-- **Buy/sell taxation is conditional** → Native and hook fee planes must both be configured and verified before claiming both sides are active
-- **Fee only on configured trade paths** → Deposits, withdrawals, and cross-chain transfers are NOT taxed
-- **6.9% choice** → Playful nod to meme culture while maintaining sustainability (lower than typical 10-15% meme coin fees)
-
-## Lottery Mechanics
-
-### Instant Win Chance (Percentage-Based)
-
-Every eligible fee-triggering trade has an instant chance to win proportional to USD trade value.
-
-**Win Formula**: For every **$1 traded** = **0.0004% instant win chance**
-
-| Trade Size | Win Chance |
-|------------|------------|
+| Trade | Win chance |
+|-------|------------|
 | $1 | 0.0004% |
-| $10 | 0.004% |
 | $100 | 0.04% |
 | $1,000 | 0.4% |
 | $10,000 | 4% |
 
-Each trade is an independent roll - win or lose is determined immediately.
+On a win, LotteryManager pays `rewardPercentage` (default 69%) of **that vault’s** gauge `jackpotReserve` in **ShareOFT ■**. Default is **single-vault** (`singleVaultJackpotOnly = true`). Gauge custodies; LotteryManager calculates chance and pays.
 
-### Instant Drawing Process
-
-1. Every trade triggers an instant lottery roll - no waiting for weekly/monthly draws
-2. **Chainlink VRF 2.5** requests random number onchain for each qualifying trade
-3. Random number determines if trader wins based on their trade-size percentage chance
-4. Winner receives **69% of the accumulated prize pool** immediately in **vault shares from ALL active creator vaults**
-
-### Transparency
-
-- All trades, win probabilities, VRF rolls, and payouts are onchain and auditable
-- VRF randomness is cryptographically verifiable
-- Anyone can verify the math: (Trader's USD volume) × 0.0004% = Win chance
-
-## Incentive Alignment
+## Incentive alignment
 
 | Stakeholder | Incentive |
 |-------------|-----------|
-| **Creators** | Lottery drives trading volume → more liquidity → higher token price → more fees collected → larger prize pools |
-| **Traders** | Every trade triggers instant lottery roll (larger trades = higher win probability) → FOMO + gamification |
-| **Whales** | $10,000 trade = 4% chance to win → Incentivizes large trades while keeping small traders competitive |
-| **Holders** | Prize pool grows with trading volume → incentive to participate in ecosystem → every trade is a new chance to win |
-| **Platform** | Sustainable incentives via configurable gauge splits (default 69% lottery, 21.39% voter/protocol branch, 9.61% burn, 0% creator) |
-
-## Prize Payout
-
-Winners receive a **diversified portfolio** from ALL active creator vaults:
-
-- 69% of each vault's jackpot reserve
-- Paid in vault shares (not ETH)
-- Multi-token prize from ALL active creators
-
-**Example**: If you win when there are 5 active vaults (■AKITA, ■DRAGON, ■BRET, etc.), you receive vault shares from ALL 5 vaults.
+| Creators | Volume → liquidity → fees → larger jackpots |
+| Traders | Qualifying buys = lottery tickets (size scales chance) |
+| Holders | Burn slice raises PPS; jackpot grows with volume |
+| Platform | Immutable split: 69% / 21.39% / 9.61% / 0% creator |
