@@ -1,6 +1,10 @@
 import type { ArenaConfig } from '../arena/arenaConfig.js'
 import { runArenaTrade } from '../arena/arenaClient.js'
 import { logger } from '../infra/logger.js'
+import {
+  isEntryAdvisoryEnabled,
+  postInverseAkitaEntryAdvisory,
+} from './counterTradeEntryAdvisory.js'
 import { type CounterTradeFillAction, findCounterPositionForCoin } from './counterTradeEngine.js'
 import { findCoinLeverageFromState } from './counterTradeLeverage.js'
 import { postCounterTradeRoomUpdate, postCounterTradeMonitorAlert } from './counterTradeRoomPosting.js'
@@ -112,6 +116,26 @@ export async function executeCounterTradeEntryFlow(params: {
           pair: params.pair,
           message: postError instanceof Error ? postError.message : String(postError),
         })
+      }
+
+      // Fire-and-forget InverseAKITA advisory. Must not gate or fail entry.
+      if (isEntryAdvisoryEnabled()) {
+        void postInverseAkitaEntryAdvisory({
+          runtimeRoomId: params.roomId,
+          postRoomId: params.chatPostRoomId,
+          eventKey: params.eventKey,
+          pair: params.pair,
+          userFill: params.fill,
+          counterSide: params.counterSide,
+          counterNotionalUsd: resolvedCounterNotionalUsd,
+        }).catch((err) =>
+          logger.warn('counter_trade.entry_advisory_post_failed', {
+            roomId: params.roomId,
+            postRoomId: params.chatPostRoomId,
+            pair: params.pair,
+            message: err instanceof Error ? err.message : String(err),
+          }),
+        )
       }
     }
 
