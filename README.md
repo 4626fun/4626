@@ -186,13 +186,13 @@ flowchart LR
   HookFee --> Gauge
 
   Gauge --> Lottery["69.00%\nLottery pool"]
-  Gauge --> Burn["21.39%\nBurn + PPS support"]
-  Gauge --> Rewards["9.61%\nVoter/protocol branch"]
+  Gauge --> Rewards["21.39%\nVoter/protocol branch"]
+  Gauge --> Burn["9.61%\nBurn + PPS support"]
 
   Lottery --> VRF["Chainlink VRF draw"]
   VRF --> Payout["Winner payout\n(vault shares)"]
-  Burn --> PPS["Vault share value support"]
   Rewards --> Gov["ve4626 / gauge incentives"]
+  Burn --> PPS["Vault share value support"]
 
   Untaxed["Untaxed actions:\ndeposit, withdraw,\nwrap, unwrap"] -. "0% trading fee" .-> Vault["CreatorOVault accounting"]
 

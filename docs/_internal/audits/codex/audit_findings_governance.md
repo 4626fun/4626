@@ -749,11 +749,12 @@ Allow `checkpoint()` to accept an explicit epoch parameter, or loop from `lastCh
 
 **Code Snippet:**
 ```solidity
-uint256 public constant burnShareBps = 2139;    // 21.39%
+// Current on-chain defaults (do not swap burn ↔ voters):
+uint256 public constant burnShareBps = 961;      // 9.61%
 uint256 public constant lotteryShareBps = 6900;  // 69%
 uint256 public constant creatorShareBps = 0;     // 0%
-uint256 public constant protocolShareBps = 961;  // 9.61%
-// Sum: 2139 + 6900 + 0 + 961 = 10000 ✓
+uint256 public constant protocolShareBps = 2139; // 21.39% → voter/protocol branch
+// Sum: 961 + 6900 + 0 + 2139 = 10000 ✓
 ```
 
 **Issue:**  

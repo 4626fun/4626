@@ -483,7 +483,7 @@ what we built.
 4. Run the manager AMOE selector-surface guard one more time as a
    sanity check (you can also dispatch the
    `Manager AMOE selector-surface guard` workflow in
-   `zk-pipeline-guards.yml` with the new manager address — that
+   `guards.yml` (workflow_dispatch manager probe) with the new manager address — that
    provides a CI-side audit trail).
 
 Commit on `release/v1.10.1-broadcast-evidence`.

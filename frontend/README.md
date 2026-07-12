@@ -8,7 +8,7 @@ Launch vaults. Reward holders. Win jackpots. All onchain.
 
 - **Launch Vaults** - One transaction deploys your vault
 - **Cross-Chain** - Works on Base + Solana via bridge
-- **Earn From Trades** - 6.9% fee policy with configurable gauge split (default: 69% jackpot, 21.39% burn/PPS, 9.61% voter/protocol branch)
+- **Earn From Trades** - 6.9% fee policy with configurable gauge split (default: 69% jackpot, 21.39% voter/protocol branch, 9.61% burn/PPS)
 - **Verifiable Randomness** - Chainlink VRF for fair winner selection
 - **Mobile-First** - Built for [Base App](https://docs.base.org/mini-apps)
 
@@ -259,7 +259,7 @@ For Base Build registration and ownership verification:
 - **Governance guardrails**
   - Production Vercel builds run `builder-codes:assert-env` and fail hard if `VITE_BASE_BUILDER_CODES` is missing/empty.
   - A source-scan guard test (`src/lib/ethSendTransactionAttribution.guard.test.ts`) blocks new raw `.request({ method: 'eth_sendTransaction' })` paths that bypass `appendBuilderSuffixToHex`.
-  - Dependency and attribution-sensitive changes trigger `.github/workflows/builder-codes-guardrails.yml`, which reruns `builder-codes:verify` plus targeted attribution tests.
+  - Dependency and attribution-sensitive changes trigger the Builder Codes job in `.github/workflows/guards.yml`, which reruns `builder-codes:verify` plus targeted attribution tests.
   - Keep server wrapper exceptions explicit and minimal via the guard test allowlist.
 - **Local command set**
   - `pnpm -C frontend builder-codes:verify`

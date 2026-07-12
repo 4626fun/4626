@@ -13,18 +13,25 @@ Shovel declaratively indexes Base mainnet events into `public.*` tables. Dynamic
 
 ## What gets indexed (v1.18.0-greenfield)
 
+Always-on (enabled):
+
 | Integration | Source contract | Events / data |
 |-------------|-----------------|---------------|
 | `protocol_phase1_deployed` | `DeploymentBatcher` | `Phase1Deployed` → vault, shareOFT, wrapper |
-| `protocol_phase2_launched` | `DeploymentBatcher` | `Phase2DeployedAndLaunched` |
-| `protocol_share_bridge_solana` | `DeploymentBatcher` | `ShareAllocationBridgedToSolana` (Pipe A) |
 | `protocol_lottery_*` | `LotteryManager4626` | `LotteryWinner`, `MultiTokenJackpotWon`, `LotteryEntryCreated` |
-| `protocol_share_oft_transfers` | per-vault ShareOFT | ERC-20 `Transfer` (via `filter_ref`) |
-| `protocol_share_oft_buy_fees` | per-vault ShareOFT | `BuyFee` |
-| `protocol_vault_burn_stream_set` | per-vault CreatorOVault | `UpdateBurnStream` |
-| `protocol_burn_stream_dripped` | per-vault burn stream | `StreamDripped` |
+| `protocol_share_oft_buy_fees` | per-vault ShareOFT | `BuyFee` (via `filter_ref` off phase1) |
+
+Defined but **disabled** until a product consumer needs them (avoids RPC burn):
+
+| Integration | Why disabled |
+|-------------|--------------|
+| `protocol_share_oft_transfers` | ERC-20 `Transfer` multi-address getLogs hits 20k caps → infinite `converge-retry` |
+| `protocol_phase2_launched` | No app/keeper consumer yet |
+| `protocol_share_bridge_solana` | Solana pipe still uses registry/DB paths |
+| `protocol_vault_burn_stream_set` / `protocol_burn_stream_dripped` | Unused; drip `filter_ref` also misses deploy-time burn stream |
 
 Addresses default to `docs/reference/addresses.md` (v1.18.0). Override via env before rendering config.
+Toggle integrations via `enabled` in `render-config.mjs`, then re-render + redeploy.
 
 ## Prerequisites
 
@@ -53,8 +60,10 @@ tail -f .run/shovel.log
 After first run (tables created by Shovel):
 
 ```bash
-# Apply RLS + freshness view (Supabase SQL editor or psql)
+# Apply RLS + freshness view (idempotent). Railway entrypoint retries this in the
+# background after shovel-main starts (tables must exist first).
 psql "$SHOVEL_PG_URL" -f migrations/001_protocol_index_rls.sql
+# or: ./scripts/apply-protocol-index-rls.sh
 ```
 
 ## Wire Alchemy RPC (Vercel + Shovel)
@@ -98,13 +107,14 @@ from protocol_lottery_winners
 order by block_num desc
 limit 50;
 
--- ShareOFT transfer volume by contract
+-- ShareOFT transfer volume by contract (table exists even when integration is disabled)
 select encode(log_addr, 'hex') as share_oft, count(*) as transfers
 from protocol_share_oft_transfers
 group by 1
 order by 2 desc;
 
--- Indexer freshness
+-- Indexer freshness (ops / service_role). Tip-following with row_count=0 does not
+-- prove event decoding — run scripts/smoke-index-decode.mjs.
 select * from v_protocol_index_freshness;
 ```
 
@@ -116,7 +126,15 @@ Create a new Railway service pointing at this repo:
 |---------|-------|
 | Config file | `railway.shovel.toml` |
 | Dockerfile | `indexer/shovel/Dockerfile` |
-| Healthcheck | `/health` |
+| Healthcheck | `/health` (process-only deploy readiness) |
+
+Railway only probes `/health` at deploy time and does **not** continuously restart on later 503s. For continuous monitoring use:
+
+| Signal | How |
+|--------|-----|
+| `GET /ready` | Lag-aware readiness (slowest live cursor vs chain tip). Expose privately or via a domain + uptime check. |
+| `[shovel-status]` log lines | Emitted every `SHOVEL_STATUS_LOG_MS` (default 60s) into Railway deploy logs. |
+| `scripts/smoke-index-decode.mjs` | Tip + row_count + optional RPC LotteryWinner compare (decode smoke). |
 
 Required variables on the service:
 
@@ -124,14 +142,27 @@ Required variables on the service:
 - `BASE_LOGS_RPC_URL` + `BASE_READ_RPC_URL` / `BASE_RPC_URL` — probe picks the first that passes header-batch + getLogs checks
 - `SHOVEL_BASE_START_BLOCK=48345250`
 
-Deploy from repo root:
+Optional health / tuning:
+
+- `SHOVEL_BATCH_SIZE=200` (default in `render-config.mjs`)
+- `SHOVEL_HEALTH_MAX_LAG_BLOCKS=256` — `/ready` returns 503 when enabled integration tip lags chain tip by more than this
+- `SHOVEL_HEALTH_WARMUP_MS=180000` — grace period after process start before `/ready` lag is a hard failure
+- `SHOVEL_STATUS_LOG_MS=60000` — continuous status log interval
+
+Deploy from repo root (service must use Dockerfile builder + `railway.shovel.toml`):
 
 ```bash
-railway link   # new project: 4626-shovel-indexer
-railway up --service <shovel-service> -c railway.shovel.toml
+# Prefer explicit project/service — local CLI may already be linked to shovel or hermit.
+railway link --project 4626-shovel-indexer
+# Ensure service config: dockerfilePath=indexer/shovel/Dockerfile, config file=railway.shovel.toml
+railway up --project 4626-shovel-indexer --service 4626-shovel-indexer --detach
 ```
 
-The container runs `scripts/railway-entrypoint.sh`: RPC probe → `render-config.mjs` → `shovel-main` (foreground) + `/health` sidecar.
+**CLI link residual risk:** `railway status` / bare `railway up` follow whatever project is currently linked in this workspace. Confirm with `railway status --json` before deploying; do not assume hermit/XMTP when shovel is linked (or the reverse).
+
+Note: Railway CLI `-c` means `--ci` (stream build logs), **not** config-file. Set `railway.shovel.toml` on the service via Railway UI / `update_service` (`railway_config_file`).
+
+The container runs `scripts/railway-entrypoint.sh`: RPC probe → `render-config.mjs` → `shovel-main` (foreground) + `/health`+`/ready` sidecar + deferred RLS apply (retries until required tables exist).
 
 ## VM (systemd)
 
@@ -154,10 +185,14 @@ python3 scripts/probe-shovel-rpc.py --json
 ## Ops notes
 
 - Uses **`shovel-main`** binary (`indexsupply.net/bin/main/…`) — v1.6 Docker/`1.6` binary hit `converge-retry` loops here; main works.
-- `sync-env-from-frontend.sh` probes **header batches**, not just tiny getLogs; default `SHOVEL_BATCH_SIZE=200`.
+- `sync-env-from-frontend.sh` probes **header batches**, not just tiny getLogs; default `SHOVEL_BATCH_SIZE=200` (also the `render-config.mjs` default).
 - Start block pinned to **48345250** (v1.18.0 `DeploymentBatcher` deploy window).
-- Shovel internal state lives in schema `shovel.*` (do not drop).
-- Re-render config after address cutovers: `node render-config.mjs --write && docker compose up -d`.
+- Shovel internal state lives in schema `shovel.*` (do not drop). `task_updates` is **append-only history**.
+- Lottery APIs and `/ready` gate on **`MIN(MAX(src_num) per integration)`** across required integrations (slowest *live* cursor). Bare `MIN(src_num)` is wrong.
+- `/health` = process deploy readiness; `/ready` + `[shovel-status]` logs = continuous lag monitoring.
+- Tip-following with `row_count=0` does **not** prove event decoding. Run `node scripts/smoke-index-decode.mjs` (add `--strict` when RPC should find LotteryWinner rows).
+- RLS/freshness apply is deferred until required `protocol_*` tables exist (entrypoint background retries).
+- Re-render config after address cutovers: `node render-config.mjs --write` then restart the worker.
 - For v1.16.1 historical vaults on the **old** batcher (`0xA9024e…`), add a second source block range or a separate config file — this scaffold targets v1.18.0-greenfield only.
 - Envio remains an option if you later need a public GraphQL API; keep Postgres as source of truth and add Envio as a read replica layer only if product requires it.
 
@@ -165,4 +200,4 @@ python3 scripts/probe-shovel-rpc.py --json
 
 - `indexer/README.md` — Zora CSW indexer (same Postgres pattern)
 - `docs/reference/addresses.md` — canonical contract addresses
-- `frontend/api/_handlers/v1/lottery/_recentWinners.ts` — today scans logs live; reads `protocol_lottery_winners` / `protocol_lottery_multi_jackpot` when Shovel index covers the window (RPC fallback for pre-greenfield lookback)
+- `frontend/api/_handlers/v1/lottery/_recentWinners.ts` — reads `protocol_lottery_winners` / `protocol_lottery_multi_jackpot` when Shovel index covers the window (RPC fallback for pre-greenfield lookback)

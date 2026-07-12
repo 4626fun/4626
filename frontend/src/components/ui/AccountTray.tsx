@@ -64,9 +64,8 @@ export function AccountTray({
           'pointer-events-auto fixed z-[61] flex flex-col border border-white/10 bg-vault-card text-vault-text shadow-2xl',
           pin === 'bottom'
             ? 'inset-x-0 bottom-0 max-h-[min(92vh,720px)] rounded-t-2xl'
-            : // 30rem keeps full 42-char addresses + Basescan icon on one line
-              // in the identity rows (26rem was wrapping them).
-              'top-4 right-2 bottom-2 w-[30rem] max-w-[calc(100vw-1.5rem)] rounded-2xl',
+            : // 28rem is enough once raw 42-char addresses leave the default tray body.
+              'top-4 right-2 bottom-2 w-[28rem] max-w-[calc(100vw-1.5rem)] rounded-2xl',
         )}
         style={styles?.container}
       >

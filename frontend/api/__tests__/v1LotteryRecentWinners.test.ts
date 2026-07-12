@@ -5,6 +5,7 @@ import {
   shouldServeLotteryFromIndex,
   resolveRecentWinners,
   fetchRecentWinnersFromIndex,
+  getLotteryIndexTipBlock,
   type RecentWinnerEvent,
 } from '../../server/_lib/lottery/recentWinnersQuery.js'
 
@@ -44,10 +45,43 @@ describe('shouldServeLotteryFromIndex', () => {
   })
 })
 
+describe('getLotteryIndexTipBlock', () => {
+  it('uses MIN of per-integration MAX so historical rows do not understate the live tip', async () => {
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const sql = strings.join('')
+        expect(sql).toMatch(/max\(src_num/i)
+        expect(sql).toMatch(/min\(tip\)/i)
+        expect(sql).toMatch(/group by ig_name/i)
+        expect(sql).toMatch(/count\(\*\)/i)
+        return { rows: [{ tip: '48350000', present: '3' }] }
+      }),
+    }
+
+    const tip = await getLotteryIndexTipBlock(db as any)
+    expect(tip).toBe(48350000n)
+    expect(db.sql).toHaveBeenCalledOnce()
+  })
+
+  it('returns null when tip is zero or missing', async () => {
+    const db = {
+      sql: vi.fn(async () => ({ rows: [{ tip: '0', present: '3' }] })),
+    }
+    expect(await getLotteryIndexTipBlock(db as any)).toBeNull()
+  })
+
+  it('returns null when any required lottery integration is missing', async () => {
+    const db = {
+      sql: vi.fn(async () => ({ rows: [{ tip: '48350000', present: '2' }] })),
+    }
+    expect(await getLotteryIndexTipBlock(db as any)).toBeNull()
+  })
+})
+
 describe('resolveRecentWinners', () => {
   it('returns indexed rows without RPC when index covers the window', async () => {
     const db = {
-      sql: vi.fn(async () => ({ rows: [{ tip: '48360000' }] })),
+      sql: vi.fn(async () => ({ rows: [{ tip: '48360000', present: '3' }] })),
       query: vi.fn(async () => ({
         rows: [
           {
@@ -82,7 +116,7 @@ describe('resolveRecentWinners', () => {
   it('falls back to RPC when index tip is unavailable', async () => {
     rpcMock.mockClear()
     const db = {
-      sql: vi.fn(async () => ({ rows: [{ tip: '0' }] })),
+      sql: vi.fn(async () => ({ rows: [{ tip: '0', present: '3' }] })),
       query: vi.fn(),
     }
 

@@ -15,17 +15,18 @@ status: current
 
 <div class="audit-hub">
 
-<nav class="audit-path" aria-label="Formal verification">
+<nav class="audit-path" aria-label="Aristotle">
   <a class="audit-path__step" href="/audits">Audits hub</a>
-  <a class="audit-path__step" href="/audits/aristotle">Formal verification</a>
+  <a class="audit-path__step" href="/audits/aristotle">Aristotle</a>
+  <a class="audit-path__step" href="/audits/aristotle">Introduction</a>
   <a class="audit-path__step" href="/audits/aristotle/curve-boost">2.5× boost (proven)</a>
   <a class="audit-path__step audit-path__step--current" href="/audits/aristotle/lean-proof-targets">Next targets</a>
 </nav>
 
 <section class="audit-hero">
-  <span class="audit-hero__eyebrow"><span class="audit-hero__dot"></span>Verification backlog</span>
+  <span class="audit-hero__eyebrow"><span class="audit-hero__dot"></span>Verification complete</span>
   <h1 class="audit-hero__title">Next five Lean targets</h1>
-  <p class="audit-hero__subtitle">Each target has a plain claim, a worked example, the onchain formula, and a copy-paste Aristotle prompt. Curve 2.5× boost is already proven — start there if you are new to this section.</p>
+  <p class="audit-hero__subtitle">Each target has a plain claim, a worked example, the onchain formula, and a copy-paste Aristotle prompt. All five are <strong>Proven</strong> (no <code>sorry</code>/<code>admit</code>). New here? Read the <a href="/audits/aristotle">Introduction</a>, then the proven <a href="/audits/aristotle/curve-boost">2.5× boost</a>.</p>
   <div class="home-hero__actions">
     <a class="home-btn home-btn--primary" href="/audits/aristotle/curve-boost">Proven 2.5× boost<span class="home-btn__arrow" aria-hidden="true">→</span></a>
   </div>
@@ -39,19 +40,19 @@ status: current
 
 ## At a glance
 
-| # | Claim in one sentence | Status |
-|---|----------------------|--------|
-| 1 | Win chance scales linearly with USD trade size ($1 → 0.0004%), then hits a ceiling | Queued |
-| 2 | After boosts/multipliers, win chance never exceeds the hard cap (default 15%) | Queued |
-| 3 | A uniform VRF roll wins with exactly the stated probability | Queued |
-| 4 | Fee BPS sum to 100%; floor residuals stay on an onchain lane (burn or voters), not a fifth bucket | Queued |
-| 5 | Jackpot pays 69% of each vault **reserve** (same number as fee lottery BPS, different base) | Queued |
+| # | Claim in one sentence | Status | Read |
+|---|----------------------|--------|------|
+| 1 | Win chance scales linearly with USD trade size ($1 → 0.0004%), then hits a ceiling | **Proven** | [Base win chance](/audits/aristotle/base-win-chance) · `fedb2c3c…042f` |
+| 2 | After boosts/multipliers, win chance never exceeds the hard cap (default 15%) | **Proven** | [Post-boost pipeline](/audits/aristotle/post-boost-pipeline) · `5d0e6454…c84d` |
+| 3 | A uniform VRF roll wins with exactly the stated probability | **Proven** | [VRF fairness](/audits/aristotle/vrf-fairness) · `e1fdf9eb…34d5` |
+| 4 | Fee BPS sum to 100%; floor residuals stay on an onchain lane (burn or voters), not a fifth bucket | **Proven** | [Fee-split](/audits/aristotle/gauge-fee-split) · `28ab1f5d…58ab` |
+| 5 | Jackpot pays 69% of each vault **reserve** (same number as fee lottery BPS, different base) | **Proven** | [Jackpot payout](/audits/aristotle/jackpot-payout) · `0837752f…4615` |
 
 ---
 
 ## 1. Base win probability
 
-**Status:** Queued · **Code:** `LotteryManager4626.calculateWinChance`
+**Status:** Proven · Project `fedb2c3c-b7a9-41bc-bd53-5a105964042f` · **Code:** `LotteryManager4626.calculateWinChance`
 
 ### Plain claim
 
@@ -69,15 +70,19 @@ Every $1 of eligible swap USD adds **4 PPM** (0.0004%) of win chance, until the 
 
 ### Formula
 
+Onchain (USDC 1e6 units):
+
 ```text
-winChancePPM(usd) = min(⌊usd / 250_000⌋, baseCeilingPPM)
+winChancePPM = min(⌊swapAmountUSD / 250_000⌋, baseCeilingPPM)
 ```
 
-Default `baseCeilingPPM = 40_000`.
+Default `baseCeilingPPM = 40_000`. So `$1 → 1_000_000 / 250_000 = 4` PPM.
+
+Lean encoding note: dollar table labels use the equivalent `min(⌊usdDollars · 1_000_000 / 250_000⌋, c)`. Literal `usd / 250000` with dollar numerals would truncate to 0 under ℕ division.
 
 ### Done when Lean proves
 
-Table rows above; always `≤` ceiling; monotone in USD; `$1 → 4 PPM` equals `0.0004%` as a rational.
+Table rows above; always `≤` ceiling; monotone in USD; `$1 → 4 PPM` equals `0.0004%` as a rational. **Done** — see [Base win chance (proven)](/audits/aristotle/base-win-chance).
 
 <details>
 <summary>Aristotle prompt (copy-paste)</summary>
@@ -108,7 +113,7 @@ No sorry/admit. Prefer Nat lemmas; avoid floats.
 
 ## 2. Post-boost win-chance pipeline
 
-**Status:** Queued · **Code:** `_applyBoost` then multipliers / cap
+**Status:** Proven · Project `5d0e6454-fa61-4503-b438-250c771ec84d` · **Code:** `_applyBoost` then multipliers / cap
 
 ### Plain claim
 
@@ -134,7 +139,7 @@ final   = min(scaled, maxWinChancePPM)
 
 ### Done when Lean proves
 
-Always `final ≤ max`; identity path when boost/gauge/multiplier are neutral; monotone in boost before the cap.
+Always `final ≤ max`; identity path when boost/gauge/multiplier are neutral; monotone in boost before the cap. **Done** — see [Post-boost pipeline (proven)](/audits/aristotle/post-boost-pipeline).
 
 <details>
 <summary>Aristotle prompt (copy-paste)</summary>
@@ -169,7 +174,7 @@ No sorry/admit. Integer division only.
 
 ## 3. VRF decision fairness
 
-**Status:** Queued · **Code:** `(randomWords[0] % 1_000_000) < winChancePPM`
+**Status:** Proven · Project `e1fdf9eb-ab16-46fe-9d75-e02705a934d5` · **Code:** `(randomWords[0] % 1_000_000) < winChancePPM`
 
 ### Plain claim
 
@@ -193,7 +198,7 @@ P(win) = winChancePPM / 1_000_000    when 0 ≤ winChancePPM ≤ 1_000_000
 
 ### Done when Lean proves
 
-Counting / probability equality; edge cases 0 and full; corollary that 40,000 PPM = 4%.
+Counting / probability equality; edge cases 0 and full; corollary that 40,000 PPM = 4%. **Done** — see [VRF fairness (proven)](/audits/aristotle/vrf-fairness).
 
 <details>
 <summary>Aristotle prompt (copy-paste)</summary>
@@ -220,7 +225,7 @@ No sorry/admit. Prefer finite counting over measure theory if shorter.
 
 ## 4. Gauge fee-split conservation
 
-**Status:** Queued · **Code:** `CreatorGaugeController` — `_splitShareOftAmount` / `previewDistribution` (ShareOFT path) and `_distributeVaultShares` (vault-share path)
+**Status:** Proven · Project `28ab1f5d-2e57-4131-86d2-128ba0f458ab` · **Code:** `CreatorGaugeController` — `_splitShareOftAmount` / `previewDistribution` (ShareOFT path) and `_distributeVaultShares` (vault-share path)
 
 ### Plain claim
 
@@ -262,7 +267,7 @@ P = F − B − L              -- residual to voters
 
 ### Done when Lean proves
 
-BPS sum identity; both residual styles conserve `L+B+P = F`; for `F = 69000`, ShareOFT path yields `(47610, 6631, 14759)` and vault-share path yields `(47610, 6630, 14760)` as `(jackpot, burn, voters)`.
+BPS sum identity; both residual styles conserve `L+B+P = F`; for `F = 69000`, ShareOFT path yields `(47610, 6631, 14759)` and vault-share path yields `(47610, 6630, 14760)` as `(jackpot, burn, voters)`. **Done** — see [Fee-split (proven)](/audits/aristotle/gauge-fee-split).
 
 <details>
 <summary>Aristotle prompt (copy-paste)</summary>
@@ -303,7 +308,7 @@ No sorry/admit. Document that burn is 9.61% and protocol/voters 21.39% (do not s
 
 ## 5. Jackpot payout fraction
 
-**Status:** Queued · **Code:** `rewardPercentage = 6900` on LotteryManager
+**Status:** Proven · Project `0837752f-e2f3-4eb3-b5e1-f63c14b64615` · **Code:** `rewardPercentage = 6900` on LotteryManager
 
 ### Plain claim
 
@@ -328,7 +333,7 @@ Same **6900** number as fee `lotteryShareBps`, different quantity (reserve vs in
 
 ### Done when Lean proves
 
-`payout ≤ R`; conservation `payout + left = R`; multi-vault sum ≤ sum of reserves; naming that distinguishes fee-split #4 from payout #5.
+`payout ≤ R`; conservation `payout + left = R`; multi-vault sum ≤ sum of reserves; naming that distinguishes fee-split #4 from payout #5. **Done** — see [Jackpot payout (proven)](/audits/aristotle/jackpot-payout).
 
 <details>
 <summary>Aristotle prompt (copy-paste)</summary>
@@ -364,11 +369,11 @@ aristotle submit "$(cat prompt.txt)" --wait
 aristotle download <project-id> --destination result.tar.gz
 ```
 
-Store Lean artifacts under `docs/audits/aristotle/<topic>/`, then mark the target **Proven** on the [hub](/audits/aristotle) and link a public summary page like [Curve 2.5× boost](/audits/aristotle/curve-boost).
+Store Lean artifacts under `docs/audits/aristotle/<topic>/`, then mark the target **Proven** on the [Introduction](/audits/aristotle) and link a public summary page like [Curve 2.5× boost](/audits/aristotle/curve-boost).
 
 ## Related
 
-- [Formal verification hub](/audits/aristotle)
+- [Aristotle introduction](/audits/aristotle)
 - [Curve 2.5× boost (proven)](/audits/aristotle/curve-boost)
 - [LotteryManager](/contracts/utilities/lottery-manager)
 - [GaugeController](/contracts/governance/gauge-controller)

@@ -40,7 +40,7 @@ describe('resolveRecentEntries', () => {
     enrichMock.mockClear()
     rpcMock.mockClear()
     const db = {
-      sql: vi.fn(async () => ({ rows: [{ tip: '48360000' }] })),
+      sql: vi.fn(async () => ({ rows: [{ tip: '48360000', present: '3' }] })),
       query: vi.fn(async () => ({
         rows: [
           {
@@ -84,7 +84,7 @@ describe('resolveRecentEntries', () => {
     rpcMock.mockClear()
     enrichMock.mockClear()
     const db = {
-      sql: vi.fn(async () => ({ rows: [{ tip: '0' }] })),
+      sql: vi.fn(async () => ({ rows: [{ tip: '0', present: '3' }] })),
       query: vi.fn(),
     }
 

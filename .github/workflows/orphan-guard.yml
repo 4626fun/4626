@@ -31,6 +31,7 @@ permissions:
 jobs:
   orphan-address-sweep:
     name: Orphan-address sweep
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

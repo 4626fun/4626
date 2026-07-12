@@ -38,6 +38,9 @@ jobs:
   # Single detect job (was changes + plan — two runners for one boolean matrix).
   plan:
     name: Detect paths
+    # Dependabot: Dependency Review covers high+ vulns; full forge/vitest
+    # on every lockfile bump is the largest avoidable Actions cost.
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:

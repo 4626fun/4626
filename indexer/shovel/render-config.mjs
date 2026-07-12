@@ -34,6 +34,7 @@ function blockMetaColumns() {
     { name: 'block_num', type: 'numeric' },
     { name: 'block_time', type: 'numeric' },
     { name: 'tx_hash', type: 'bytea' },
+    { name: 'log_idx', type: 'int' },
     { name: 'log_addr', type: 'bytea' },
   ]
 }
@@ -43,6 +44,7 @@ function blockMetaBindings(includeLogAddr = false) {
     { name: 'block_num', column: 'block_num' },
     { name: 'block_time', column: 'block_time' },
     { name: 'tx_hash', column: 'tx_hash' },
+    { name: 'log_idx', column: 'log_idx' },
   ]
   if (includeLogAddr) {
     bindings.push({ name: 'log_addr', column: 'log_addr' })
@@ -92,7 +94,8 @@ const config = {
   pg_url: pgUrl,
   eth_sources: [{
     ...baseSource,
-    batch_size: Number(process.env.SHOVEL_BATCH_SIZE ?? '500'),
+    // 200 matches Alchemy/matrixed header-batch probe; 500 often fails eth_getBlockByNumber batches.
+    batch_size: Number(process.env.SHOVEL_BATCH_SIZE ?? '200'),
     concurrency: Number(process.env.SHOVEL_CONCURRENCY ?? '1'),
   }],
   integrations: [
@@ -135,7 +138,8 @@ const config = {
     },
     {
       name: 'protocol_phase2_launched',
-      enabled: true,
+      // Unused by app today — keep schema defined for future deploy dashboards.
+      enabled: false,
       sources: sourceRef,
       table: {
         name: 'protocol_phase2_launched',
@@ -167,7 +171,8 @@ const config = {
     },
     {
       name: 'protocol_share_bridge_solana',
-      enabled: true,
+      // Unused by app today — Solana pipe still uses registry/DB paths.
+      enabled: false,
       sources: sourceRef,
       table: {
         name: 'protocol_share_bridge_solana',
@@ -283,7 +288,8 @@ const config = {
     },
     {
       name: 'protocol_vault_burn_stream_set',
-      enabled: true,
+      // Unused by app; filter_ref also misses deploy-time burn stream until UpdateBurnStream.
+      enabled: false,
       sources: sourceRef,
       table: {
         name: 'protocol_vault_burn_stream_set',
@@ -310,7 +316,8 @@ const config = {
     },
     {
       name: 'protocol_burn_stream_dripped',
-      enabled: true,
+      // Depends on protocol_vault_burn_stream_set; disabled until burn-stream product reads exist.
+      enabled: false,
       sources: sourceRef,
       table: {
         name: 'protocol_burn_stream_dripped',
@@ -343,7 +350,10 @@ const config = {
     },
     {
       name: 'protocol_share_oft_transfers',
-      enabled: true,
+      // Disabled: ERC-20 Transfer over all ShareOFTs hits eth_getLogs 20k caps and
+      // infinite converge-retry from SHOVEL_BASE_START_BLOCK. Re-enable only with a
+      // product consumer and a smaller per-address / capped backfill strategy.
+      enabled: false,
       sources: sourceRef,
       table: {
         name: 'protocol_share_oft_transfers',

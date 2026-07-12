@@ -19,7 +19,7 @@ status: current
 <section class="audit-hero">
   <span class="audit-hero__eyebrow"><span class="audit-hero__dot"></span>Security disclosure</span>
   <h1 class="audit-hero__title">Security &amp; audits</h1>
-  <p class="audit-hero__subtitle">Published security review materials for integrators, auditors, and token holders: scope and methodology, executive findings, the full technical report, and supplementary session records.</p>
+  <p class="audit-hero__subtitle">Published security review materials and machine-checked math proofs for integrators, auditors, and token holders: the June 2026 technical review, Aristotle / Lean claim pages, and supplementary session records.</p>
   <div class="home-hero__actions">
     <a class="home-btn home-btn--primary" href="/audits/fable/findings-summary">Executive summary<span class="home-btn__arrow" aria-hidden="true">→</span></a>
     <a class="home-btn home-btn--ghost" href="/audits/fable">Scope &amp; methodology</a>
@@ -127,11 +127,6 @@ flowchart LR
     <span class="home-card__title">Full technical report</span>
     <span class="home-card__desc">Architecture map, complete finding register (C/H/M/L), baseline validation, test gaps, and remediation guidance.</span>
   </a>
-  <a class="home-card audit-card" href="/audits/aristotle">
-    <span class="home-card__tag">Lean / Aristotle</span>
-    <span class="home-card__title">Formal verification</span>
-    <span class="home-card__desc">Readable Lean claims: proven 2.5× boost, plus the next five lottery and fee-split targets.</span>
-  </a>
   <a class="home-card audit-card" href="/audits/fable/key-sessions">
     <span class="home-card__tag">Appendix A</span>
     <span class="home-card__title">Source sessions</span>
@@ -139,12 +134,36 @@ flowchart LR
   </a>
 </div>
 
+## Aristotle
+
+Machine-checked Lean&nbsp;4 proofs of lottery and fee math, authored with [Aristotle](https://aristotle.harmonic.fun/). Complementary to the June 2026 review — not a replacement.
+
+<div class="home-cards">
+  <a class="home-card audit-card audit-card--featured" href="/audits/aristotle">
+    <span class="home-card__tag">Start here</span>
+    <span class="home-card__title">Introduction</span>
+    <span class="home-card__desc">What Aristotle and Lean are, what a proof means, and how to read Proven vs queued claims.</span>
+  </a>
+  <a class="home-card audit-card" href="/audits/aristotle/curve-boost">
+    <span class="home-card__tag">Proven</span>
+    <span class="home-card__title">2.5× boost</span>
+    <span class="home-card__desc">Personal lottery boost stays in 1.0×–2.5×; coverage blend only applies the covered uplift.</span>
+  </a>
+  <a class="home-card audit-card" href="/audits/aristotle/lean-proof-targets">
+    <span class="home-card__tag">Backlog</span>
+    <span class="home-card__title">Next targets</span>
+    <span class="home-card__desc">Five queued Lean targets: win chance, VRF fairness, fee-split conservation, jackpot fraction.</span>
+  </a>
+</div>
+
 <div class="audit-limitations">
   <div class="audit-limitations__title">Limitations &amp; disclaimer</div>
-  <p>This publication documents a <strong>read-only technical security review</strong> of the 4626 monorepo conducted in June 2026. It is <strong>not</strong> a formal smart-contract audit certificate from an independent security firm and does not constitute legal or investment advice. Findings reflect repository state at review time; verify remediation status against current code and public disclosures before launch or integration decisions. Appendices contain supplementary session records — authoritative written conclusions are in the executive summary and full report.</p>
+  <p>This publication documents a <strong>read-only technical security review</strong> of the 4626 monorepo conducted in June 2026. It is <strong>not</strong> a formal smart-contract audit certificate from an independent security firm and does not constitute legal or investment advice. Findings reflect repository state at review time; verify remediation status against current code and public disclosures before launch or integration decisions. Appendices contain supplementary session records — authoritative written conclusions are in the executive summary and full report. Aristotle pages prove stated formulas only.</p>
 </div>
 
 <div class="home-links">
+  <a class="home-links__item" href="/audits/aristotle">Aristotle</a>
+  <span class="home-links__sep" aria-hidden="true">·</span>
   <a class="home-links__item" href="/audits/aristotle/curve-boost">2.5× boost (proven)</a>
   <span class="home-links__sep" aria-hidden="true">·</span>
   <a class="home-links__item" href="/audits/aristotle/lean-proof-targets">Lean proof targets</a>

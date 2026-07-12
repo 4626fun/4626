@@ -158,7 +158,7 @@ no actionable error. This guard is the cheap pre-flight check that
 catches the wiring mistake **before** the deploy script flips any
 AMOE flag.
 
-It is wired into `.github/workflows/zk-pipeline-guards.yml` as a
+It is wired into `.github/workflows/guards.yml` (AMOE/ZK jobs) as a
 `workflow_dispatch` job (`manager-amoe-surface-guard`). Inputs:
 
 - `manager_address` — the candidate manager 0x address

@@ -6,7 +6,8 @@
 # UI settings:
 #   - Dockerfile Path: indexer/shovel/Dockerfile
 #   - Railway Config File: railway.shovel.toml
-#   - Healthcheck Path: /health
+#   - Healthcheck Path: /health   (process-only deploy readiness; Railway does not poll continuously)
+#   - Continuous monitor: GET /ready (lag-aware) via private networking / uptime check + log ticks
 #   - Healthcheck Timeout: 120
 #
 # Required variables (copy from Supabase + frontend/.env):
@@ -21,7 +22,17 @@
 #   SHOVEL_PROBE_HEADER_BATCH=200
 #   SHOVEL_BATCH_SIZE=200
 #   SHOVEL_CONCURRENCY=1
+#   SHOVEL_HEALTH_MAX_LAG_BLOCKS=256
+#   SHOVEL_HEALTH_WARMUP_MS=180000
+#   SHOVEL_STATUS_LOG_MS=60000
+#   SHOVEL_RLS_RETRY_SECONDS=30
+#   SHOVEL_RLS_RETRY_MAX=60
 #   DEPLOYMENT_BATCHER, LOTTERY_MANAGER
+#
+# CLI note: `railway status` / `railway up` use the *linked* project. This repo's
+# default workspace link may be 4626-shovel-indexer — always pass
+# `--project 4626-shovel-indexer --service 4626-shovel-indexer` (or re-link)
+# before deploys meant for shovel, and never assume hermit/XMTP context.
 # --------------------------------------------------------------------------
 
 [build]

@@ -36,6 +36,7 @@ import {
   CanonicalIdentityCard,
   CanonicalIdentityDropdown,
 } from '@/components/account/CanonicalIdentityCard'
+import { CreatorEconomyTrayModule } from '@/components/account/CreatorEconomyTrayModule'
 import {
   buildTrayAssetHoldings,
   collectTrayZoraTokenKeys,
@@ -46,6 +47,8 @@ import {
   type TrayWalletSource,
 } from '@/components/account/trayPortfolioHelpers'
 import { useAccountTrayPortfolio } from '@/components/account/useAccountTrayPortfolio'
+import { useCreatorEconomySummary } from '@/hooks/useCreatorEconomySummary'
+import type { CreatorEconomySigningStatus } from '@/lib/creatorEconomy/types'
 import { fetchTrayZoraHoldingsForWallets } from '@/lib/zora/walletHoldings'
 
 type ConnectButtonStateInput = {
@@ -357,7 +360,7 @@ export function ConnectButton({
   const { me: accountProfile, refresh: refreshAccountProfile } = useAccountMe()
   const [disconnectingMainWallet, setDisconnectingMainWallet] = useState(false)
   const [trayTab, setTrayTab] = useState<'tokens' | 'activity'>('tokens')
-  const [traySection, setTraySection] = useState<'account' | 'portfolio' | 'points'>('account')
+  const [traySection, setTraySection] = useState<'economy' | 'portfolio' | 'points'>('portfolio')
   const privyStatus = usePrivyClientStatus()
   const prefersPrivyWalletLogin = privyStatus === 'ready'
   const shouldPreferWalletLogin = useMemo(() => {
@@ -426,6 +429,35 @@ export function ConnectButton({
   const { hasMultipleInjectedProviders, lockedEthereumProviderGlobal } = providerCollision
   const shouldHideInjectedConnector = providerCollision.shouldDisableInjectedConnector
   const { trayWalletSources, trayHoldings, trayTokenRows, trayPortfolioQuery } = useAccountTrayPortfolio()
+
+  const appSigningStatus = useMemo<CreatorEconomySigningStatus>(() => {
+    if (!auth.hasSession) return 'setup'
+    if (canonicalIdentity.externalEoaAddress) return 'external'
+    if (canonicalIdentity.embeddedSignerAuthorizedOnCsw === true) return 'ready'
+    if (canonicalIdentity.embeddedSignerAuthorizedOnCsw === false) return 'unavailable'
+    if (!canonicalIdentity.cswAddress) return 'setup'
+    return 'setup'
+  }, [
+    auth.hasSession,
+    canonicalIdentity.externalEoaAddress,
+    canonicalIdentity.embeddedSignerAuthorizedOnCsw,
+    canonicalIdentity.cswAddress,
+  ])
+
+  const creatorEconomy = useCreatorEconomySummary({
+    creatorCoinAddress: canonicalIdentity.creatorCoinAddress,
+    cswAddress: canonicalIdentity.cswAddress,
+    holderAddress: canonicalIdentity.cswAddress,
+    handleOrBasename: accountProfile?.accountSignals?.basename ?? accountProfile?.accountSignals?.zoraHandle ?? null,
+    accountMe: accountProfile,
+    accountSigningStatus: appSigningStatus,
+    ownsCreatorEconomy: Boolean(canonicalIdentity.creatorCoinAddress),
+    enabled: auth.hasSession && showMenu,
+    mode: 'app',
+  })
+
+  const defaultTraySection = creatorEconomy.view.preferEconomyTab ? 'economy' : 'portfolio'
+
   const trayWalletKey = useMemo(
     () => trayWalletSources.map((wallet) => wallet.address.toLowerCase()).sort().join(','),
     [trayWalletSources],
@@ -531,9 +563,14 @@ export function ConnectButton({
   const unifiedAvatar = shouldResolveIdentity ? sharedIdentity.avatar : null
   const toggleMenu = () => {
     setShowOptions(false)
-    setShowMenu((current) => !current)
-    setTrayTab('tokens')
-    setTraySection('account')
+    setShowMenu((current) => {
+      const next = !current
+      if (next) {
+        setTrayTab('tokens')
+        setTraySection(defaultTraySection)
+      }
+      return next
+    })
   }
   const toggleOptions = () => {
     setShowMenu(false)
@@ -651,7 +688,7 @@ export function ConnectButton({
               {auth.hasSession ? (
                 <RelayTrayPrimaryTabs section={traySection} onChange={setTraySection} />
               ) : null}
-              {showCanonicalCard && (!auth.hasSession || traySection === 'account') ? (
+              {showCanonicalCard && !auth.hasSession ? (
                 <>
                   <CanonicalIdentityDropdown
                     identity={canonicalIdentity}
@@ -671,6 +708,37 @@ export function ConnectButton({
                   />
                   <div className="h-px bg-white/8 my-2" />
                 </>
+              ) : null}
+              {auth.hasSession && traySection === 'economy' ? (
+                <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-3 pt-1">
+                  <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-400">
+                    {creatorEconomy.view.symbolDisplay} economy
+                  </div>
+                  <div className="text-[18px] font-semibold tracking-[-0.02em] text-white">
+                    {creatorEconomy.view.statusLabel}
+                  </div>
+                  <CreatorEconomyTrayModule
+                    variant="app"
+                    loading={creatorEconomy.loading}
+                    view={creatorEconomy.view}
+                  />
+                  <div className="mt-4 h-px bg-white/[0.06]" />
+                  <Link
+                    to="/accounts"
+                    onClick={() => setShowMenu(false)}
+                    className="flex items-center justify-between gap-3 py-3 transition-colors hover:bg-white/[0.03]"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-[13px] font-medium text-zinc-200">Account & signing</span>
+                      <span className="mt-0.5 block text-[12px] text-zinc-400">
+                        {creatorEconomy.view.accountSigningLabel} · Manage on /accounts
+                      </span>
+                    </span>
+                    <span className="text-[13px] text-zinc-400" aria-hidden>
+                      ›
+                    </span>
+                  </Link>
+                </div>
               ) : null}
               {auth.hasSession && traySection === 'portfolio' ? (
                 <RelayTrayPortfolioModule
@@ -714,20 +782,8 @@ export function ConnectButton({
                   className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-60"
                 >
                   <span className="label block">{auth.busy ? 'Signing in…' : 'Sign in'}</span>
-                  <span className="app-meta-value text-zinc-600 block mt-1">No transaction.</span>
+                  <span className="app-meta-value text-zinc-400 block mt-1">No transaction.</span>
                 </button>
-              ) : traySection === 'account' ? (
-                <div className="px-4 py-3">
-                  <div className="label text-emerald-200">Signed in</div>
-                  <div className="app-meta-value text-zinc-600 mt-1">
-                    {getSignedInSessionCopy({
-                      walletMatchesSession: auth.walletMatchesSession,
-                      sessionAddress: sessionAddress ?? null,
-                      connectedAddress: address ?? null,
-                      embeddedAddress: canonicalIdentity.privyEmbeddedAddress,
-                    })}
-                  </div>
-                </div>
               ) : null}
               {auth.hasSession ? <div className="mt-auto" /> : null}
               {auth.hasSession ? (
@@ -817,42 +873,58 @@ export function ConnectButton({
             closeAccessibilityLabel="Close account menu"
           >
               <RelayTrayPrimaryTabs section={traySection} onChange={setTraySection} />
-              {traySection === 'account' ? (
-                <>
-                  <div className="px-4 py-3">
-                    <div className="app-meta-value text-zinc-500">
-                      Signed in. Connect your main wallet to finish setup.
-                    </div>
+              {traySection === 'economy' ? (
+                <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-3 pt-1">
+                  <div className="mb-2 rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[12px] text-zinc-400">
+                    Signed in. Connect your main wallet to finish setup.
                   </div>
+                  <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-400">
+                    {creatorEconomy.view.symbolDisplay} economy
+                  </div>
+                  <div className="text-[18px] font-semibold tracking-[-0.02em] text-white">
+                    {creatorEconomy.view.statusLabel}
+                  </div>
+                  <CreatorEconomyTrayModule
+                    variant="app"
+                    loading={creatorEconomy.loading}
+                    view={creatorEconomy.view}
+                  />
+                  <div className="mt-4 h-px bg-white/[0.06]" />
                   {showCanonicalCard ? (
-                    <>
-                      <CanonicalIdentityDropdown
-                        identity={canonicalIdentity}
-                        onRequestConnectWallet={() => {
-                          setShowMenu(false)
-                          setShowOptions(true)
-                        }}
-                        onRequestSignOut={() => {
-                          void auth.signOut()
-                          setShowMenu(false)
-                        }}
-                        signingOut={auth.busy}
-                        onRequestDisconnectMainWallet={() => {
-                          void disconnectMainWallet()
-                        }}
-                        disconnectingMainWallet={disconnectingMainWallet}
-                      />
-                      <div className="h-px bg-white/8 my-2" />
-                    </>
+                    <CanonicalIdentityDropdown
+                      identity={canonicalIdentity}
+                      onRequestConnectWallet={() => {
+                        setShowMenu(false)
+                        setShowOptions(true)
+                      }}
+                      onRequestSignOut={() => {
+                        void auth.signOut()
+                        setShowMenu(false)
+                      }}
+                      signingOut={auth.busy}
+                      onRequestDisconnectMainWallet={() => {
+                        void disconnectMainWallet()
+                      }}
+                      disconnectingMainWallet={disconnectingMainWallet}
+                    />
                   ) : (
-                    <div className="px-4 py-3">
-                      <div className="label text-emerald-200">Signed in</div>
-                      <div className="app-meta-value text-zinc-600 mt-1">
-                        Session signer: {formatAddress(sessionAddress)}.
-                      </div>
-                    </div>
+                    <Link
+                      to="/accounts"
+                      onClick={() => setShowMenu(false)}
+                      className="flex items-center justify-between gap-3 py-3 transition-colors hover:bg-white/[0.03]"
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-[13px] font-medium text-zinc-200">Account & signing</span>
+                        <span className="mt-0.5 block text-[12px] text-zinc-400">
+                          Session signer: {formatAddress(sessionAddress)}
+                        </span>
+                      </span>
+                      <span className="text-[13px] text-zinc-400" aria-hidden>
+                        ›
+                      </span>
+                    </Link>
                   )}
-                </>
+                </div>
               ) : traySection === 'portfolio' ? (
                 <RelayTrayPortfolioModule
                   tab={trayTab}
@@ -1029,14 +1101,14 @@ export function ConnectButton({
 }
 
 export function RelayTrayPrimaryTabs(props: {
-  section: 'account' | 'portfolio' | 'points'
-  onChange: (section: 'account' | 'portfolio' | 'points') => void
+  section: 'economy' | 'portfolio' | 'points'
+  onChange: (section: 'economy' | 'portfolio' | 'points') => void
   /** Defaults to all three tabs. Callers that don't offer a Portfolio surface
    * (e.g. the waitlist tray, which has no wagmi/portfolio data) can pass a
    * narrower list instead of duplicating this tab-bar component. */
-  sections?: readonly ('account' | 'portfolio' | 'points')[]
+  sections?: readonly ('economy' | 'portfolio' | 'points')[]
 }) {
-  const sections = props.sections ?? (['account', 'portfolio', 'points'] as const)
+  const sections = props.sections ?? (['economy', 'portfolio', 'points'] as const)
   return (
     <div className="px-4 pt-1 pb-2">
       <div className="inline-flex items-center gap-1 rounded-lg border border-white/8 bg-black/20 p-1">
@@ -1048,10 +1120,10 @@ export function RelayTrayPrimaryTabs(props: {
             className={`rounded-md px-2 py-1 text-[12px] font-medium transition-colors ${
               props.section === value
                 ? 'bg-white/[0.08] text-white'
-                : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200'
+                : 'text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200'
             }`}
           >
-            {value === 'account' ? 'Account' : value === 'portfolio' ? 'Portfolio' : 'Points'}
+            {value === 'economy' ? 'Economy' : value === 'portfolio' ? 'Portfolio' : 'Points'}
           </button>
         ))}
       </div>
@@ -1616,37 +1688,4 @@ export function useIsPhoneViewport(): boolean {
   }, [])
 
   return isPhone
-}
-
-function getSignedInSessionCopy({
-  walletMatchesSession,
-  sessionAddress,
-  connectedAddress,
-  embeddedAddress,
-}: {
-  walletMatchesSession: boolean
-  sessionAddress: string | null
-  connectedAddress: string | null
-  embeddedAddress: string | null
-}): string {
-  if (walletMatchesSession) return 'Session ready for sponsored smart-wallet actions.'
-
-  if (!sessionAddress) return '4626 session is active.'
-
-  if (embeddedAddress && normalizeAddressKey(sessionAddress) === normalizeAddressKey(embeddedAddress)) {
-    if (connectedAddress && normalizeAddressKey(sessionAddress) !== normalizeAddressKey(connectedAddress)) {
-      return `Embedded signer ready; connected wallet is available as fallback.`
-    }
-    return `Embedded signer ready for your smart wallet.`
-  }
-
-  if (connectedAddress && normalizeAddressKey(sessionAddress) !== normalizeAddressKey(connectedAddress)) {
-    return `Session signer: ${formatAddress(sessionAddress)}; connected wallet is fallback.`
-  }
-
-  return `Session signer: ${formatAddress(sessionAddress)}.`
-}
-
-function normalizeAddressKey(value: string | null | undefined): string {
-  return (value ?? '').toLowerCase()
 }

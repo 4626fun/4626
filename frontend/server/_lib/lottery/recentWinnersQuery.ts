@@ -60,17 +60,35 @@ function normalizeHexAddress(value: string | null | undefined): string | null {
   return raw.startsWith('0x') ? raw : `0x${raw}`
 }
 
+/** Lottery integrations that must all have a live cursor before serving index. */
+export const LOTTERY_INDEX_INTEGRATIONS = [
+  'protocol_lottery_winners',
+  'protocol_lottery_multi_jackpot',
+  'protocol_lottery_entries',
+] as const
+
 export async function getLotteryIndexTipBlock(db: DbPool): Promise<bigint | null> {
-  const result = await db.sql<{ tip: string | null }>`
-    select coalesce(max(src_num::bigint), 0)::text as tip
-    from shovel.task_updates
-    where ig_name in (
-      'protocol_lottery_winners',
-      'protocol_lottery_multi_jackpot',
-      'protocol_lottery_entries'
-    )
+  // Gate on the slowest *live* lottery cursor. shovel.task_updates is append-only
+  // history, so bare MIN(src_num) returns the oldest retained row — wrong.
+  // Correct: MIN(MAX(src_num) per integration), requiring all three present.
+  const result = await db.sql<{ tip: string | null; present: string | null }>`
+    select
+      coalesce(min(tip), 0)::text as tip,
+      count(*)::text as present
+    from (
+      select ig_name, max(src_num::bigint) as tip
+      from shovel.task_updates
+      where ig_name in (
+        'protocol_lottery_winners',
+        'protocol_lottery_multi_jackpot',
+        'protocol_lottery_entries'
+      )
+      group by ig_name
+    ) per_ig
   `
   const tipRaw = result.rows[0]?.tip
+  const present = Number(result.rows[0]?.present ?? '0')
+  if (!Number.isFinite(present) || present < LOTTERY_INDEX_INTEGRATIONS.length) return null
   if (tipRaw == null || tipRaw === '0') return null
   try {
     return BigInt(tipRaw)

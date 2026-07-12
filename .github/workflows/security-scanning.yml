@@ -31,6 +31,7 @@ jobs:
     timeout-minutes: 10
     # Skip schedule (full-history job covers it). Skip draft PRs.
     if: |
+      github.actor != 'dependabot[bot]' &&
       github.event_name != 'schedule' &&
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     steps:

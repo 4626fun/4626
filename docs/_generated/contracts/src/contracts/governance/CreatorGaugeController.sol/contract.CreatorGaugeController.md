@@ -245,7 +245,7 @@ Ive4626GaugeVoting public ve4626GaugeVoting
 
 
 ### ve4626VoterRewardsDistributor
-Voter rewards distributor (receives the 9.61% voter slice)
+Voter rewards distributor (receives the 21.39% voter slice)
 
 
 ```solidity

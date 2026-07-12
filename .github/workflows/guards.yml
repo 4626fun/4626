@@ -1,0 +1,405 @@
+name: Guards
+
+# Consolidated path-filtered guardrails (was: builder-codes, eliza-runtime,
+# env-example-address-check, protocol-assets, zk-pipeline-guards).
+# A cheap `changes` job selects which heavy jobs run so unrelated PRs do
+# not pay forge/pnpm minutes.
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      # builder-codes
+      - 'frontend/package.json'
+      - 'frontend/pnpm-lock.yaml'
+      - 'frontend/scripts/assert-builder-codes-env.ts'
+      - 'frontend/scripts/verify-builder-codes.ts'
+      - 'frontend/src/config/wagmi.ts'
+      - 'frontend/src/lib/baseBuilderCodes.ts'
+      - 'frontend/src/lib/baseBuilderCodes.test.ts'
+      - 'frontend/src/lib/ethSendTransactionAttribution.guard.test.ts'
+      - 'frontend/src/lib/txRouter.ts'
+      - 'frontend/src/lib/txRouter.test.ts'
+      - 'frontend/src/lib/aa/coinbaseErc4337.ts'
+      - 'frontend/src/lib/aa/coinbaseErc4337.builderCodes.test.ts'
+      - 'frontend/src/hooks/usePrivyCswExecute.ts'
+      - 'frontend/src/hooks/useSwapExecution.ts'
+      - 'frontend/src/pages/DeployVault.tsx'
+      - 'frontend/src/pages/AgentRegister.tsx'
+      - 'frontend/src/pages/AdminOps.tsx'
+      # eliza-runtime
+      - 'frontend/server/agents/eliza/**'
+      - 'frontend/server/_lib/privyWalletApi.ts'
+      - 'frontend/server/_lib/teeAttestationGate.ts'
+      - 'frontend/packages/server-core/**'
+      - 'frontend/server/keepr/sendCommand.ts'
+      - 'frontend/api/_handlers/v1/agents/identity/_verification.ts'
+      - 'frontend/.env.example'
+      - 'railway.toml'
+      - '.railwayignore'
+      # env-example
+      - '.env.example'
+      - 'indexer/.env.example'
+      # protocol-assets
+      - 'frontend/public/protocols/**'
+      - 'frontend/scripts/verify-protocol-assets.mjs'
+      # zk-pipeline
+      - 'contracts/utilities/lottery/zk/AmoePlonkVerifier.sol'
+      - 'contracts/utilities/lottery/zk/IAmoePlonkVerifier.sol'
+      - 'contracts/utilities/lottery/zk/LotteryAmoeRouter.sol'
+      - 'amoe/tests/zk/AmoePlonkVerifier.t.sol'
+      - 'amoe/tests/zk/LotteryAmoeRouter*.t.sol'
+      - 'amoe/tools/zk/_patch_amoe_plonk_verifier.py'
+      - 'amoe/tools/zk/regen_amoe_plonk_verifier.sh'
+      - 'amoe/tools/ci/check_amoe_plonk_patch.sh'
+      - 'amoe/tools/ci/check_lottery_amoe_failures.py'
+      - '.github/workflows/guards.yml'
+  push:
+    branches: [main, master]
+    paths:
+      - 'frontend/package.json'
+      - 'frontend/pnpm-lock.yaml'
+      - 'frontend/scripts/assert-builder-codes-env.ts'
+      - 'frontend/scripts/verify-builder-codes.ts'
+      - 'frontend/src/config/wagmi.ts'
+      - 'frontend/src/lib/baseBuilderCodes.ts'
+      - 'frontend/src/lib/baseBuilderCodes.test.ts'
+      - 'frontend/src/lib/ethSendTransactionAttribution.guard.test.ts'
+      - 'frontend/src/lib/txRouter.ts'
+      - 'frontend/src/lib/txRouter.test.ts'
+      - 'frontend/src/lib/aa/coinbaseErc4337.ts'
+      - 'frontend/src/lib/aa/coinbaseErc4337.builderCodes.test.ts'
+      - 'frontend/src/hooks/usePrivyCswExecute.ts'
+      - 'frontend/src/hooks/useSwapExecution.ts'
+      - 'frontend/src/pages/DeployVault.tsx'
+      - 'frontend/src/pages/AgentRegister.tsx'
+      - 'frontend/src/pages/AdminOps.tsx'
+      - 'frontend/server/agents/eliza/**'
+      - 'frontend/server/_lib/privyWalletApi.ts'
+      - 'frontend/server/_lib/teeAttestationGate.ts'
+      - 'frontend/packages/server-core/**'
+      - 'frontend/server/keepr/sendCommand.ts'
+      - 'frontend/api/_handlers/v1/agents/identity/_verification.ts'
+      - 'frontend/.env.example'
+      - 'railway.toml'
+      - '.railwayignore'
+      - '.env.example'
+      - 'indexer/.env.example'
+      - 'frontend/public/protocols/**'
+      - 'frontend/scripts/verify-protocol-assets.mjs'
+      - 'contracts/utilities/lottery/zk/AmoePlonkVerifier.sol'
+      - 'contracts/utilities/lottery/zk/IAmoePlonkVerifier.sol'
+      - 'contracts/utilities/lottery/zk/LotteryAmoeRouter.sol'
+      - 'amoe/tests/zk/AmoePlonkVerifier.t.sol'
+      - 'amoe/tests/zk/LotteryAmoeRouter*.t.sol'
+      - 'amoe/tools/zk/_patch_amoe_plonk_verifier.py'
+      - 'amoe/tools/zk/regen_amoe_plonk_verifier.sh'
+      - 'amoe/tools/ci/check_amoe_plonk_patch.sh'
+      - 'amoe/tools/ci/check_lottery_amoe_failures.py'
+      - '.github/workflows/guards.yml'
+  workflow_dispatch:
+    inputs:
+      manager_address:
+        description: |
+          (Optional) Manager address to probe for the AMOE selector
+          surface. When set, the `manager-amoe-surface-guard` job runs
+          amoe/tools/ci/check_manager_amoe_surface.sh against this address.
+        required: false
+        default: ''
+      manager_rpc:
+        description: |
+          (Optional) JSON-RPC endpoint to query. Defaults to Base mainnet.
+        required: false
+        default: 'https://mainnet.base.org'
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changes:
+    name: Detect changed paths
+    if: github.actor != 'dependabot[bot]' && github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      builder-codes: ${{ steps.filter.outputs.builder-codes }}
+      eliza: ${{ steps.filter.outputs.eliza }}
+      env-example: ${{ steps.filter.outputs.env-example }}
+      protocol-assets: ${{ steps.filter.outputs.protocol-assets }}
+      zk: ${{ steps.filter.outputs.zk }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            builder-codes:
+              - 'frontend/package.json'
+              - 'frontend/pnpm-lock.yaml'
+              - 'frontend/scripts/assert-builder-codes-env.ts'
+              - 'frontend/scripts/verify-builder-codes.ts'
+              - 'frontend/src/config/wagmi.ts'
+              - 'frontend/src/lib/baseBuilderCodes.ts'
+              - 'frontend/src/lib/baseBuilderCodes.test.ts'
+              - 'frontend/src/lib/ethSendTransactionAttribution.guard.test.ts'
+              - 'frontend/src/lib/txRouter.ts'
+              - 'frontend/src/lib/txRouter.test.ts'
+              - 'frontend/src/lib/aa/coinbaseErc4337.ts'
+              - 'frontend/src/lib/aa/coinbaseErc4337.builderCodes.test.ts'
+              - 'frontend/src/hooks/usePrivyCswExecute.ts'
+              - 'frontend/src/hooks/useSwapExecution.ts'
+              - 'frontend/src/pages/DeployVault.tsx'
+              - 'frontend/src/pages/AgentRegister.tsx'
+              - 'frontend/src/pages/AdminOps.tsx'
+            eliza:
+              - 'frontend/server/agents/eliza/**'
+              - 'frontend/server/_lib/privyWalletApi.ts'
+              - 'frontend/server/_lib/teeAttestationGate.ts'
+              - 'frontend/packages/server-core/**'
+              - 'frontend/server/keepr/sendCommand.ts'
+              - 'frontend/api/_handlers/v1/agents/identity/_verification.ts'
+              - 'frontend/.env.example'
+              - 'railway.toml'
+              - '.railwayignore'
+            env-example:
+              - '.env.example'
+              - 'frontend/.env.example'
+              - 'indexer/.env.example'
+            protocol-assets:
+              - 'frontend/public/protocols/**'
+              - 'frontend/scripts/verify-protocol-assets.mjs'
+              - 'frontend/package.json'
+              - 'frontend/pnpm-lock.yaml'
+            zk:
+              - 'contracts/utilities/lottery/zk/AmoePlonkVerifier.sol'
+              - 'contracts/utilities/lottery/zk/IAmoePlonkVerifier.sol'
+              - 'contracts/utilities/lottery/zk/LotteryAmoeRouter.sol'
+              - 'amoe/tests/zk/AmoePlonkVerifier.t.sol'
+              - 'amoe/tests/zk/LotteryAmoeRouter*.t.sol'
+              - 'amoe/tools/zk/_patch_amoe_plonk_verifier.py'
+              - 'amoe/tools/zk/regen_amoe_plonk_verifier.sh'
+              - 'amoe/tools/ci/check_amoe_plonk_patch.sh'
+              - 'amoe/tools/ci/check_lottery_amoe_failures.py'
+
+  verify-builder-codes:
+    needs: changes
+    if: needs.changes.outputs.builder-codes == 'true'
+    runs-on: ubuntu-latest
+    env:
+      VITE_BASE_BUILDER_CODES: bc_ci_guardrail
+      BUILDER_CODES_ENFORCE_PROD: '1'
+      AUTH_SESSION_SECRET: test-auth-session-secret-123456
+      DEPLOY_SESSION_TOKEN_HMAC_SECRET: test-deploy-hmac-secret-123456
+      MARKETING_ORIGIN: https://4626.fun
+      APP_ORIGIN: https://app.4626.fun
+      CANONICAL_ORIGIN: https://4626.fun
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          submodules: recursive
+      - name: Install pnpm
+        uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install frontend dependencies
+        run: pnpm --dir frontend install --frozen-lockfile
+      - name: Assert Builder Codes env
+        run: pnpm --dir frontend builder-codes:assert-env
+      - name: Verify Builder Codes suffix
+        run: pnpm --dir frontend builder-codes:verify
+      - name: Run attribution guard tests
+        run: >
+          pnpm --dir frontend test
+          src/lib/baseBuilderCodes.test.ts
+          src/lib/ethSendTransactionAttribution.guard.test.ts
+          src/lib/txRouter.test.ts
+          src/lib/aa/coinbaseErc4337.builderCodes.test.ts
+
+  eliza-runtime-checks:
+    needs: changes
+    if: needs.changes.outputs.eliza == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Install pnpm
+        uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install frontend dependencies
+        run: pnpm --dir frontend install --frozen-lockfile
+      - name: Verify Railway readiness probe is strict
+        run: grep -Eq 'healthcheckPath[[:space:]]*=[[:space:]]*"/healthz"' railway.toml
+      - name: Verify runtime env contract is documented
+        run: |
+          grep -Fq 'AGENT_RUNTIME_ROLE=' frontend/.env.example
+          grep -Fq 'AGENT_CONSUME_XMTP=' frontend/.env.example
+          grep -Fq 'TEE_ENFORCEMENT_ENABLED' frontend/.env.example
+      - name: Run Eliza runtime unit guardrails
+        run: |
+          pnpm --dir frontend exec vitest run \
+            server/agents/eliza/__tests__/runtimeBridge.test.ts \
+            server/agents/eliza/__tests__/llm.test.ts \
+            server/_lib/__tests__/teeAttestationGate.test.ts
+
+  env-example-address-check:
+    needs: changes
+    if: needs.changes.outputs.env-example == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Scan example env files for non-allowlisted addresses
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FILES=(
+            ".env.example"
+            "frontend/.env.example"
+            "indexer/.env.example"
+          )
+
+          # Allowlisted public addresses (lowercased):
+          #   0x0000...0000              zero address
+          #   0xca97...0088              tax hook (4626 published constant)
+          #   0x1a44...728c              LayerZero V2 endpoint (Base)
+          #   0x7104...bb70              Chainlink ETH/USD feed (Base)
+          #   0xd5d5...f634              VRF coordinator v2.5 (Base)
+          #   0x5ff1...2789              ERC-4337 EntryPoint v0.6
+          #   0x4e59...956c              Gnosis safe Create2 factory
+          #   0x4200...0006              WETH (Base canonical L2 predeploy)
+          #   0x0000...8BA3              Permit2 (Uniswap canonical across chains)
+          #   0x4985...2b2b              Uniswap V4 PoolManager (Base canonical)
+          #   0x8004...9b63              ERC-8004 Reputation Registry (canonical)
+          #   0x1111...1111              docs placeholder (ELIZA_SWARM_ROLE_MAP_JSON example)
+          #   0x2222...2222              docs placeholder (ELIZA_SWARM_ROLE_MAP_JSON example)
+          #   0x3333...3333              docs placeholder (ELIZA_SWARM_ROLE_MAP_JSON example)
+          ALLOWLIST=$(cat <<'EOF' | tr '[:upper:]' '[:lower:]'
+          0x0000000000000000000000000000000000000000
+          0xca975b9daf772c71161f3648437c3616e5be0088
+          0x1a44076050125825900e736c501f859c50fe728c
+          0x71041dddad3595f9ced3dccfbe3d1f4b0a16bb70
+          0xd5d517abe5cf79b7e95ec98db0f0277788aff634
+          0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789
+          0x4e59b44847b379578588920ca78fbf26c0b4956c
+          0x4200000000000000000000000000000000000006
+          0x000000000022d473030f116ddee9f6b43ac78ba3
+          0x498581ff718922c3f8e6a244956af099b2652b2b
+          0x8004baa17c55a88189ae136b182e5fda19de9b63
+          0x1111111111111111111111111111111111111111
+          0x2222222222222222222222222222222222222222
+          0x3333333333333333333333333333333333333333
+          EOF
+          )
+
+          fail=0
+          for f in "${FILES[@]}"; do
+            if [ ! -f "$f" ]; then continue; fi
+            addrs=$(grep -oE "0x[a-fA-F0-9]{40}" "$f" 2>/dev/null | tr '[:upper:]' '[:lower:]' | sort -u || true)
+            if [ -z "$addrs" ]; then
+              continue
+            fi
+            while IFS= read -r a; do
+              [ -z "$a" ] && continue
+              if ! grep -q "^$a$" <<<"$ALLOWLIST"; then
+                echo "::error file=$f::Non-allowlisted EVM address literal $a in example env file. Replace with 0xYOUR_<NAME>_HERE or extend the allowlist in .github/workflows/guards.yml."
+                fail=1
+              fi
+            done <<<"$addrs"
+          done
+
+          if [ $fail -ne 0 ]; then
+            exit 1
+          fi
+
+          echo "All example env files use allowlisted addresses only."
+
+  verify-protocol-assets:
+    needs: changes
+    if: needs.changes.outputs.protocol-assets == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Install pnpm
+        uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install frontend dependencies
+        run: pnpm --dir frontend install --frozen-lockfile
+      - name: Verify protocol brand assets
+        run: pnpm --dir frontend verify:protocol-assets
+
+  amoe-plonk-patch-guard:
+    needs: changes
+    if: needs.changes.outputs.zk == 'true'
+    name: AmoePlonkVerifier patch guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Run patch guard
+        run: amoe/tools/ci/check_amoe_plonk_patch.sh
+
+  manager-amoe-surface-guard:
+    name: Manager AMOE selector-surface guard
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.manager_address != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Probe manager AMOE selector surface
+        run: |
+          amoe/tools/ci/check_manager_amoe_surface.sh \
+            "${{ github.event.inputs.manager_address }}" \
+            "${{ github.event.inputs.manager_rpc }}"
+
+  amoe-plonk-tests:
+    needs: changes
+    if: needs.changes.outputs.zk == 'true'
+    name: AmoePlonkVerifier regression tests
+    runs-on: ubuntu-latest
+    env:
+      FOUNDRY_PROFILE: ci
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1
+        with:
+          version: v1.7.0
+      - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: '20'
+      - name: Install Node deps (Solidity remappings)
+        run: pnpm install --frozen-lockfile
+      - name: Run AmoePlonkVerifier suite
+        run: forge test --match-contract AmoePlonkVerifier -vv
+      - name: Run LotteryAmoeRouter suite
+        run: |
+          set +e
+          forge test --match-contract LotteryAmoe --json > /tmp/result.json
+          forge_rc=$?
+          set -e
+
+          set +e
+          python3 amoe/tools/ci/check_lottery_amoe_failures.py /tmp/result.json
+          guard_rc=$?
+          set -e
+
+          if [ "$guard_rc" -eq 0 ] && [ "$forge_rc" -ne 0 ] && [ ! -s /tmp/result.json ]; then
+              echo "forge returned non-zero exit ($forge_rc) and produced no JSON."
+              echo "This usually means compilation broke. Re-running verbosely:"
+              forge test --match-contract LotteryAmoe -vv || true
+              exit 1
+          fi
+          exit "$guard_rc"

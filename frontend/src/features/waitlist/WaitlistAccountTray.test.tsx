@@ -43,6 +43,39 @@ vi.mock('@/hooks/useCreatorCoinBadge', () => ({
   useCreatorCoinBadge: () => null,
 }))
 
+vi.mock('@/hooks/useCreatorEconomySummary', () => ({
+  useCreatorEconomySummary: () => ({
+    loading: false,
+    capabilities: {},
+    view: {
+      role: 'none',
+      headline: 'No creator economy yet',
+      statusLabel: 'No creator economy yet',
+      statusDetail: null,
+      networkLabel: 'Base',
+      legacyBadge: null,
+      showThreeTokenRail: false,
+      railActive: false,
+      primaryAction: { label: 'Launch or link coin', href: '/deploy/coin' },
+      secondaryLink: null,
+      showPaywall: false,
+      metrics: { tvlUsd: null, sharePpsUsd: null, claimableCreatorEarningsEth: null },
+      holder: null,
+      launchAllocationLabel: '30% auction · 30% vesting · 30% Solana · 10% LP',
+      strategyPlanLabel: null,
+      infrastructureLabel: 'Base primary',
+      accountSigningLabel: 'Ready',
+      connectionsSummary: '0 of 7',
+      nextConnectionBonus: { label: 'Connect Email', points: 10 },
+      symbolDisplay: 'Creator',
+      logoUrl: null,
+      handleOrBasename: null,
+      vaultHref: null,
+      preferEconomyTab: false,
+    },
+  }),
+}))
+
 vi.mock('@/lib/waitlist/accountTrayPoints', () => ({
   fetchAccountTrayPoints: vi.fn(async () => ({
     signupId: 0,
@@ -106,7 +139,7 @@ describe('WaitlistAccountTray', () => {
     expect(screen.queryByLabelText('Open account menu')).toBeNull()
   })
 
-  it('shows a closed corner trigger and opens wallets/roles + identities sections', () => {
+  it('shows a closed corner trigger and opens economy + collapsed account/connections', () => {
     renderTray()
 
     const trigger = screen.getByLabelText('Open account menu')
@@ -115,8 +148,12 @@ describe('WaitlistAccountTray', () => {
 
     fireEvent.click(trigger)
 
-    expect(screen.getByRole('heading', { name: /^wallets$/i })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: /^identities$/i })).toBeTruthy()
+    expect(screen.getByText(/no creator economy yet/i)).toBeTruthy()
+    expect(screen.getByText(/account & signing/i)).toBeTruthy()
+    expect(screen.getByText(/^connections$/i)).toBeTruthy()
+    expect(screen.queryByTestId('identities-panel')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /connections/i }))
     expect(screen.getByTestId('identities-panel')).toBeTruthy()
     expect(screen.getByTestId('post-join-shell-stub')).toBeTruthy()
     expect(screen.queryByRole('link', { name: /enter app/i })).toBeNull()
@@ -139,7 +176,8 @@ describe('WaitlistAccountTray', () => {
 
     // Tray content is already visible without a click — the required step
     // must not be hidden behind a closed-by-default tray.
-    expect(screen.getByTestId('identities-panel')).toBeTruthy()
+    expect(screen.getByText(/account & signing/i)).toBeTruthy()
+    expect(screen.getByText(/no creator economy yet/i)).toBeTruthy()
   })
 
   it('disables sign out via the caller-provided aggregate busy flag', () => {

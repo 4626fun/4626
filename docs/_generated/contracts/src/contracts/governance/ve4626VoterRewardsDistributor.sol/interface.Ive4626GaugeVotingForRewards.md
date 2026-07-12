@@ -13,7 +13,7 @@ Inspired by ve(3,3) systems where voters receive fees/bribes for voting on gauge
 Conceptually similar to bribe/fee-distributor patterns used in b(3,3)/ve(3,3) stacks
 (e.g. Hermes V2) but simplified for 4626.
 How it works:
-- Each CreatorGaugeController sends its voter slice (currently 9.61%) to this contract.
+- Each CreatorGaugeController sends its voter slice (currently 21.39%) to this contract.
 - The slice is recorded per (epoch, vault).
 - Users claim pro-rata by their vote weight for that (epoch, vault).
 Reward token:

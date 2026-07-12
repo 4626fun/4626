@@ -15,9 +15,10 @@ status: current
 
 <div class="audit-hub">
 
-<nav class="audit-path" aria-label="Formal verification">
+<nav class="audit-path" aria-label="Aristotle">
   <a class="audit-path__step" href="/audits">Audits hub</a>
-  <a class="audit-path__step" href="/audits/aristotle">Formal verification</a>
+  <a class="audit-path__step" href="/audits/aristotle">Aristotle</a>
+  <a class="audit-path__step" href="/audits/aristotle">Introduction</a>
   <a class="audit-path__step audit-path__step--current" href="/audits/aristotle/curve-boost">2.5× boost (proven)</a>
   <a class="audit-path__step" href="/audits/aristotle/lean-proof-targets">Next targets</a>
 </nav>
@@ -77,6 +78,8 @@ Zero position, zero tokenless working, or zero coverage → neutral **10,000 BPS
 
 ## What Lean proved
 
+New to this section? Start with the [Aristotle introduction](/audits/aristotle) (what Lean, Aristotle, and “no sorry” mean).
+
 Aristotle project `46f81830-e389-4fe4-b03d-63bd050d8b0b` builds with **no `sorry` / `admit`**. Core lemmas include:
 
 - Boost stays in `[1.0, 2.5]` (`curveBoost_mem_Icc`, `rawBoost_*`)
@@ -95,9 +98,10 @@ Shipping delta checks (oracle window, covered floor, LM coverage blend) were als
 
 ## Read next
 
-- [Next Lean targets](/audits/aristotle/lean-proof-targets) — win chance, VRF, fee split, payout
+- [Aristotle introduction](/audits/aristotle) — how proofs work
+- [Base win chance](/audits/aristotle/base-win-chance) · [Post-boost](/audits/aristotle/post-boost-pipeline) · [VRF](/audits/aristotle/vrf-fairness) · [Fee-split](/audits/aristotle/gauge-fee-split) · [Jackpot](/audits/aristotle/jackpot-payout)
+- [All Lean targets](/audits/aristotle/lean-proof-targets)
 - [LotteryManager](/contracts/utilities/lottery-manager)
-- [Formal verification hub](/audits/aristotle)
 
 <div class="audit-limitations">
   <div class="audit-limitations__title">Scope note</div>

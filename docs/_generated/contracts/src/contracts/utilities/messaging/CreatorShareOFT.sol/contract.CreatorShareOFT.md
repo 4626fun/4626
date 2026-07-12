@@ -27,7 +27,7 @@ REMOTE MODE (Arbitrum, etc.):
 FEE MECHANISM:
 - Register DEX pools/routers as SwapOnly
 - Buys (from SwapOnly → user) = 6.9% fee
-- Hub: fee → GaugeController → unwrap → distribute (21.39% burn, 69% lottery, 9.61% voter rewards)
+- Hub: fee → GaugeController → unwrap → distribute (69% lottery, 21.39% voter rewards, 9.61% burn)
 - Remote: fee → pendingFees → flushFees() bridges OFT back to Base gauge
 - Sells: can be taxed by a Base V4 hook when hook config is explicitly activated
 
@@ -486,9 +486,9 @@ FEE FLOW:
 2. Hub: sent to GaugeController via receiveFees()
 Remote: accumulated in pendingFees, bridged via flushFees()
 3. GaugeController on Base distributes:
-- 21.39% burned → increases PPS for all vault holders (ve(3,3) accrual)
 - 69% lottery → jackpot reserve for buyers
-- 9.61% voter rewards → ve4626 voters
+- 21.39% voter rewards → ve4626 voters
+- 9.61% burned → increases PPS for all vault holders (ve(3,3) accrual)
 
 Process buy with fees. Follows CEI pattern.
 

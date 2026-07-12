@@ -24,16 +24,16 @@ The 6.9% trading fee is distributed as follows:
 | Allocation | Percentage | Description |
 |------------|------------|-------------|
 | **Lottery Prize Pool** | 69% | Funds the instant lottery jackpot |
-| **Burn (PPS Increase)** | 21.39% | Shares burned to increase Price Per Share for all holders |
-| **Voter/Protocol Branch** | 9.61% | Distributed to voter rewards path when configured, protocol fallback otherwise |
+| **Voter/Protocol Branch** | 21.39% | Distributed to voter rewards path when configured, protocol fallback otherwise |
+| **Burn (PPS Increase)** | 9.61% | Shares burned to increase Price Per Share for all holders |
 
 ### Example Distribution
 
 For $1M daily trading volume:
 - Total fees collected: **$69,000** (6.9%)
 - To lottery: **~$47,610** (69%)
-- Burned: **~$14,770** (21.39%)
-- Voter rewards: **~$6,620** (9.61%)
+- Voter rewards: **~$14,770** (21.39%)
+- Burned: **~$6,630** (9.61%)
 
 ## Key Details
 
@@ -80,7 +80,7 @@ Each trade is an independent roll - win or lose is determined immediately.
 | **Traders** | Every trade triggers instant lottery roll (larger trades = higher win probability) → FOMO + gamification |
 | **Whales** | $10,000 trade = 4% chance to win → Incentivizes large trades while keeping small traders competitive |
 | **Holders** | Prize pool grows with trading volume → incentive to participate in ecosystem → every trade is a new chance to win |
-| **Platform** | Sustainable incentives via configurable gauge splits (default 69% lottery, 21.39% burn, 9.61% voter/protocol branch, 0% creator) |
+| **Platform** | Sustainable incentives via configurable gauge splits (default 69% lottery, 21.39% voter/protocol branch, 9.61% burn, 0% creator) |
 
 ## Prize Payout
 

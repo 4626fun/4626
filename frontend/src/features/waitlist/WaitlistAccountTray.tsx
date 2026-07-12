@@ -1,12 +1,10 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion, useReducedMotion } from 'framer-motion'
 
-import { AccountTray } from '@/components/ui/AccountTray'
+import { CreatorEconomyTrayModule } from '@/components/account/CreatorEconomyTrayModule'
 import { JazziconAvatar } from '@/components/account/JazziconAvatar'
 import {
-  AddressWithBasescan,
-  CanonicalIdentityDropdown,
   CoinbaseSmartWalletAvatar,
 } from '@/components/account/CanonicalIdentityCard'
 import {
@@ -14,9 +12,12 @@ import {
   useIsPhoneViewport,
   type TrayPointsOverview,
 } from '@/components/account/ConnectButton'
+import { AccountTray } from '@/components/ui/AccountTray'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
 import { useBasenameForAddress } from '@/hooks/useBasenameForAddress'
 import { useCreatorCoinBadge } from '@/hooks/useCreatorCoinBadge'
+import { useCreatorEconomySummary } from '@/hooks/useCreatorEconomySummary'
+import type { CreatorEconomySigningStatus } from '@/lib/creatorEconomy/types'
 import { APP_ORIGIN, getMarketingBaseUrl } from '@/lib/env/host'
 import { fetchAccountTrayPoints, isAccountTrayPointsAuthError } from '@/lib/waitlist/accountTrayPoints'
 import { resolvePublicPointsDisplay } from '@/lib/waitlist/canonicalAccountScore'
@@ -33,6 +34,20 @@ function shortAddress(address: string | null | undefined): string | null {
   const trimmed = address.trim()
   if (trimmed.length < 10) return trimmed
   return `${trimmed.slice(0, 6)}…${trimmed.slice(-4)}`
+}
+
+function resolveWaitlistSigningStatus(params: {
+  setupRequired: boolean
+  hasCsw: boolean
+  embeddedAuthorized: boolean | null
+  hasExternal: boolean
+}): CreatorEconomySigningStatus {
+  if (params.setupRequired) return 'action_required'
+  if (params.hasExternal && !params.hasCsw) return 'external'
+  if (!params.hasCsw) return 'setup'
+  if (params.embeddedAuthorized === false && !params.hasExternal) return 'unavailable'
+  if (params.embeddedAuthorized === true || params.hasExternal) return 'ready'
+  return 'setup'
 }
 
 function WaitlistTrayTabs({
@@ -57,7 +72,7 @@ function WaitlistTrayTabs({
             onClick={() => onChange(tab.id)}
             className={cn(
               'relative pb-2.5 text-[14px] font-medium tracking-[-0.01em] transition-colors',
-              active ? 'text-white' : 'text-zinc-500 hover:text-zinc-300',
+              active ? 'text-white' : 'text-zinc-400 hover:text-zinc-300',
             )}
           >
             {tab.label}
@@ -75,6 +90,44 @@ function WaitlistTrayTabs({
   )
 }
 
+function SummaryRow({
+  title,
+  value,
+  href,
+  onClick,
+}: {
+  title: string
+  value: string
+  href?: string
+  onClick?: () => void
+}) {
+  const className =
+    'flex w-full items-center justify-between gap-3 py-3 text-left transition-colors hover:bg-white/[0.03]'
+  const body = (
+    <>
+      <span className="min-w-0">
+        <span className="block text-[13px] font-medium text-zinc-200">{title}</span>
+        <span className="mt-0.5 block text-[12px] text-zinc-400">{value}</span>
+      </span>
+      <span className="shrink-0 text-[13px] text-zinc-400" aria-hidden>
+        ›
+      </span>
+    </>
+  )
+  if (href) {
+    return (
+      <a href={href} className={className}>
+        {body}
+      </a>
+    )
+  }
+  return (
+    <button type="button" onClick={onClick} className={className}>
+      {body}
+    </button>
+  )
+}
+
 export type WaitlistAccountTrayProps = {
   accountMe: AccountSetupMe | null
   accountMeLoading: boolean
@@ -89,8 +142,8 @@ export type WaitlistAccountTrayProps = {
   signOutBusy: boolean
   signOutDisabled: boolean
   /**
-   * Social identities + linking wizard. Wallet roles stay in
-   * `CanonicalIdentityDropdown` so this slot must not re-list main wallet.
+   * Social identities + linking wizard. Wallet roles stay on `/accounts`;
+   * this slot opens under Manage connections.
    */
   identitiesPanel: ReactNode
 }
@@ -104,6 +157,7 @@ export function WaitlistAccountTray(props: WaitlistAccountTrayProps) {
   const hasSession = Boolean(props.joinedSessionAddress)
   const [open, setOpen] = useState(false)
   const [section, setSection] = useState<WaitlistTraySection>('account')
+  const [connectionsOpen, setConnectionsOpen] = useState(false)
   const isPhoneViewport = useIsPhoneViewport()
   const [autoOpened, setAutoOpened] = useState(false)
   const reduceMotion = useReducedMotion()
@@ -118,6 +172,40 @@ export function WaitlistAccountTray(props: WaitlistAccountTrayProps) {
   const cswBasename = useBasenameForAddress(identity.cswAddress)
   const coinBadge = useCreatorCoinBadge(identity.creatorCoinAddress)
   const { setupRequired } = useWaitlistPostJoinAttention()
+
+  const signingStatus = useMemo(
+    () =>
+      resolveWaitlistSigningStatus({
+        setupRequired,
+        hasCsw: Boolean(identity.cswAddress),
+        embeddedAuthorized: identity.embeddedSignerAuthorizedOnCsw,
+        hasExternal: Boolean(identity.externalEoaAddress),
+      }),
+    [
+      setupRequired,
+      identity.cswAddress,
+      identity.embeddedSignerAuthorizedOnCsw,
+      identity.externalEoaAddress,
+    ],
+  )
+
+  const handleOrBasename =
+    cswBasename.displayName ??
+    props.accountMe?.accountSignals?.basename ??
+    props.accountMe?.accountSignals?.zoraHandle ??
+    null
+
+  const economy = useCreatorEconomySummary({
+    creatorCoinAddress: identity.creatorCoinAddress,
+    cswAddress: identity.cswAddress,
+    holderAddress: identity.cswAddress,
+    handleOrBasename,
+    accountMe: props.accountMe,
+    accountSigningStatus: signingStatus,
+    ownsCreatorEconomy: Boolean(identity.creatorCoinAddress),
+    enabled: hasSession && open,
+    mode: 'waitlist',
+  })
 
   // Auto-open once when wallet setup needs attention. Must run in an effect —
   // setState during render races the post-join shell / chat mount and crashes
@@ -157,21 +245,20 @@ export function WaitlistAccountTray(props: WaitlistAccountTrayProps) {
 
   const avatarAddress = identity.cswAddress ?? identity.externalEoaAddress ?? identity.privyEmbeddedAddress
   const displayName =
-    cswBasename.displayName ??
-    props.accountMe?.accountSignals?.basename ??
-    props.accountMe?.accountSignals?.zoraHandle ??
+    handleOrBasename ??
     shortAddress(avatarAddress) ??
     'Your account'
-  const addressLabel = shortAddress(identity.cswAddress ?? avatarAddress)
-  // Most waitlist joiners aren't creators, so the hero falls back to the CSW
-  // identity by default. When the account *does* own a registered creator
-  // coin, the hero leads with that instead — the CSW mark reads as generic
-  // infra next to a coin the person actually recognizes as theirs — and the
-  // CSW address moves down into the "Wallets" section below (see
-  // `omitPrimaryIdentity` on `CanonicalIdentityDropdown`) instead of being
-  // shown twice.
-  const hasCreatorCoin = Boolean(coinBadge && !coinBadge.loading)
+  const hasCreatorCoin = Boolean(coinBadge && !coinBadge.loading && coinBadge.symbol)
   const heroName = hasCreatorCoin && coinBadge?.symbol ? `$${coinBadge.symbol}` : displayName
+  const hasEconomy = economy.view.role !== 'none' || hasCreatorCoin
+  const statusLine = hasEconomy
+    ? [
+        economy.view.handleOrBasename ?? handleOrBasename ?? 'Creator economy',
+        economy.view.networkLabel,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : 'Coinbase Smart Wallet · Base'
 
   return (
     <>
@@ -241,9 +328,6 @@ export function WaitlistAccountTray(props: WaitlistAccountTrayProps) {
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             className="flex min-h-0 flex-1 flex-col"
           >
-            {/* Hero — single identity surface; wallets list below omits the
-                primary CSW row when the hero already covers it (see
-                `hasCreatorCoin` / `omitPrimaryIdentity` below). */}
             <div className="px-5 pb-5 pt-2">
               <div className="flex items-start gap-4">
                 <span className="relative shrink-0">
@@ -282,41 +366,36 @@ export function WaitlistAccountTray(props: WaitlistAccountTrayProps) {
                   <div className="truncate text-[22px] font-semibold leading-tight tracking-[-0.03em] text-white">
                     {heroName}
                   </div>
-                  {hasCreatorCoin && coinBadge ? (
-                    <div className="mt-1 min-w-0">
-                      <div className="text-[11px] text-zinc-600">
-                        Creator coin{coinBadge.name ? ` · ${coinBadge.name}` : ''}
-                      </div>
-                      <div className="mt-0.5">
-                        <AddressWithBasescan
-                          address={coinBadge.address}
-                          display="full"
-                          variant="muted"
-                          className="text-[11px] leading-snug text-zinc-500"
-                        />
-                      </div>
+                  <div className="mt-1 text-[12px] leading-snug text-zinc-400">{statusLine}</div>
+                  {hasEconomy && economy.view.statusLabel ? (
+                    <div className="mt-1 text-[12px] font-medium text-zinc-300">
+                      {economy.view.statusLabel}
                     </div>
-                  ) : identity.cswAddress ? (
-                    <div className="mt-1 min-w-0">
-                      <div className="text-[11px] text-zinc-600">Coinbase Smart Wallet</div>
-                      <div className="mt-0.5">
-                        <AddressWithBasescan
-                          address={identity.cswAddress}
-                          display="full"
-                          variant="muted"
-                          className="text-[11px] leading-snug text-zinc-500"
-                        />
-                      </div>
+                  ) : null}
+                  {economy.view.legacyBadge ? (
+                    <div className="mt-1 text-[11px] text-zinc-400">
+                      Legacy stack · {economy.view.legacyBadge}
                     </div>
-                  ) : addressLabel ? (
-                    <div className="mt-1 truncate font-mono text-[12px] text-zinc-500">{addressLabel}</div>
                   ) : null}
                 </div>
                 <div className="shrink-0 pt-1 text-right">
-                  <div className="text-[22px] font-semibold tabular-nums leading-none tracking-[-0.03em] text-white">
-                    {trayPointsDisplay.points.toLocaleString()}
-                  </div>
-                  <div className="mt-1 text-[11px] text-zinc-500">points</div>
+                  {hasEconomy && economy.view.role !== 'none' ? (
+                    <>
+                      <div className="text-[12px] font-medium text-zinc-300">
+                        {economy.view.statusLabel}
+                      </div>
+                      <div className="mt-1 text-[11px] tabular-nums text-zinc-400">
+                        {trayPointsDisplay.points.toLocaleString()} pts
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-[22px] font-semibold tabular-nums leading-none tracking-[-0.03em] text-white">
+                        {trayPointsDisplay.points.toLocaleString()}
+                      </div>
+                      <div className="mt-1 text-[11px] text-zinc-400">points</div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -324,34 +403,44 @@ export function WaitlistAccountTray(props: WaitlistAccountTrayProps) {
             <WaitlistTrayTabs section={section} onChange={setSection} />
 
             {section === 'account' ? (
-              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-5 pt-5">
-                <section>
-                  <h2 className="text-[12px] font-medium text-zinc-500">Wallets</h2>
-                  <p className="mt-0.5 text-[12px] leading-relaxed text-zinc-600">
-                    Smart wallet, signer, and main wallet roles.
-                  </p>
-                  <div className="mt-1">
-                    <CanonicalIdentityDropdown
-                      identity={identity}
-                      omitPrimaryIdentity={!hasCreatorCoin}
-                      onRequestConnectWallet={props.onRequestConnectWallet}
-                      onRequestDisconnectMainWallet={props.onRequestDisconnectMainWallet}
-                      disconnectingMainWallet={props.disconnectingMainWallet}
-                      onRequestSignOut={() => void props.onSignOut()}
-                      signingOut={props.signOutBusy}
-                      signOutDisabled={props.signOutDisabled}
-                    />
-                  </div>
-                </section>
+              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-5 pt-4">
+                <CreatorEconomyTrayModule
+                  variant="waitlist"
+                  absoluteAppLinks
+                  loading={economy.loading}
+                  view={economy.view}
+                />
 
                 <div className="my-4 h-px bg-white/[0.06]" />
 
-                <section className="min-h-0 flex-1">
-                  <h2 className="text-[12px] font-medium text-zinc-500">Identities</h2>
-                  <p className="mt-0.5 text-[12px] leading-relaxed text-zinc-600">
-                    Recovery and social channels.
-                  </p>
-                  <div className="mt-3">
+                <SummaryRow
+                  title="Account & signing"
+                  value={`${economy.view.accountSigningLabel}${
+                    identity.cswAddress ? ' · Smart wallet + embedded signer' : ''
+                  }`}
+                  href={`${APP_ORIGIN}/accounts`}
+                />
+
+                <div className="h-px bg-white/[0.06]" />
+
+                <SummaryRow
+                  title="Connections"
+                  value={economy.view.connectionsSummary}
+                  onClick={() => setConnectionsOpen((value) => !value)}
+                />
+                {economy.view.nextConnectionBonus && !connectionsOpen ? (
+                  <div className="pb-2 text-[12px] text-zinc-400">
+                    Next recommended · {economy.view.nextConnectionBonus.label}
+                    <span className="ml-1 tabular-nums text-zinc-300">
+                      +{economy.view.nextConnectionBonus.points}
+                    </span>
+                  </div>
+                ) : null}
+                {connectionsOpen ? (
+                  <div className="pb-2">
+                    <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">
+                      Manage connections
+                    </div>
                     <WaitlistPostJoinShell
                       enabled
                       onSignOut={props.onSignOut}
@@ -359,7 +448,7 @@ export function WaitlistAccountTray(props: WaitlistAccountTrayProps) {
                     />
                     {props.identitiesPanel}
                   </div>
-                </section>
+                ) : null}
               </div>
             ) : (
               <div className="mt-2 min-h-0 flex-1 px-2">
@@ -378,8 +467,6 @@ export function WaitlistAccountTray(props: WaitlistAccountTrayProps) {
               </div>
             )}
 
-            {/* Match the app ConnectButton tray footer: Help / Accounts /
-                Settings / Sign out pinned to the bottom of the tray. */}
             <div className="mt-auto" />
             <div className="border-t border-white/8 bg-black/20">
               <a

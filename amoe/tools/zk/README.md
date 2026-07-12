@@ -69,7 +69,7 @@ AMOE PLONK contracts. It enforces:
 5. The 8 calls appear between `checkProofData()` and `calculateChallenges`
 6. (Local only) The committed contract byte-matches the regen output
 
-The workflow that runs this is `.github/workflows/zk-pipeline-guards.yml`.
+The workflow that runs this is `.github/workflows/guards.yml` (AMOE/ZK jobs).
 It also re-runs the `AmoePlonkVerifier` and `LotteryAmoe` test suites, so a
 logic regression in the verifier or router is caught before merge.
 

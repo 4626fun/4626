@@ -26,7 +26,10 @@ env:
 jobs:
   a11y-lint:
     name: jsx-a11y ESLint
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    # Skip drafts; skip Dependabot (Dependency Review already covers lockfile PRs).
+    if: |
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     continue-on-error: ${{ vars.A11Y_CI_BLOCKING != 'true' }}
     timeout-minutes: 10

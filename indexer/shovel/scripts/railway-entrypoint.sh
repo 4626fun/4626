@@ -42,12 +42,35 @@ eval "$RPC_EXPORT"
 echo "[shovel-railway] using RPC host $(python3 -c "from urllib.parse import urlparse; print(urlparse('${BASE_LOGS_RPC_URL}').hostname or '?')") batch=${SHOVEL_BATCH_SIZE}" >&2
 
 export SHOVEL_CONCURRENCY="${SHOVEL_CONCURRENCY:-1}"
+export SHOVEL_BATCH_SIZE="${SHOVEL_BATCH_SIZE:-200}"
+export SHOVEL_HEALTH_MAX_LAG_BLOCKS="${SHOVEL_HEALTH_MAX_LAG_BLOCKS:-256}"
+export SHOVEL_HEALTH_WARMUP_MS="${SHOVEL_HEALTH_WARMUP_MS:-180000}"
+export SHOVEL_STATUS_LOG_MS="${SHOVEL_STATUS_LOG_MS:-60000}"
+export SHOVEL_RLS_RETRY_SECONDS="${SHOVEL_RLS_RETRY_SECONDS:-30}"
+export SHOVEL_RLS_RETRY_MAX="${SHOVEL_RLS_RETRY_MAX:-60}"
 node "$ROOT/render-config.mjs" --write
 
 if [[ ! -x "$ROOT/shovel-main" ]]; then
   curl -fsSL -o "$ROOT/shovel-main" https://indexsupply.net/bin/main/linux/amd64/shovel
   chmod +x "$ROOT/shovel-main"
 fi
+
+# Deferred RLS: Shovel creates protocol_* tables on first converge. Apply after
+# schema exists instead of before shovel-main starts.
+(
+  attempt=1
+  while (( attempt <= SHOVEL_RLS_RETRY_MAX )); do
+    sleep "$SHOVEL_RLS_RETRY_SECONDS"
+    if bash "$ROOT/scripts/apply-protocol-index-rls.sh"; then
+      echo "[shovel-rls] deferred apply succeeded on attempt ${attempt}" >&2
+      exit 0
+    fi
+    echo "[shovel-rls] deferred attempt ${attempt}/${SHOVEL_RLS_RETRY_MAX} not ready yet" >&2
+    attempt=$((attempt + 1))
+  done
+  echo "[shovel-rls] deferred apply exhausted retries — apply manually after converge" >&2
+  exit 1
+) &
 
 node "$ROOT/scripts/health-server.mjs" &
 echo "[shovel-railway] starting shovel-main (foreground)" >&2

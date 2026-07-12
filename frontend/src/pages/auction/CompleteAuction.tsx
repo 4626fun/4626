@@ -771,11 +771,11 @@ export function CompleteAuction() {
                       <span className="flex items-center gap-1 text-yellow-400">
                         <Trophy className="w-3 h-3" /> 69% Jackpot
                       </span>
-                      <span className="flex items-center gap-1 text-red-400">
-                        <Flame className="w-3 h-3" /> 21.39% Burn
-                      </span>
                       <span className="flex items-center gap-1 text-brand-400">
-                        <Zap className="w-3 h-3" /> 9.61% Voter/Protocol
+                        <Zap className="w-3 h-3" /> 21.39% Voter/Protocol
+                      </span>
+                      <span className="flex items-center gap-1 text-red-400">
+                        <Flame className="w-3 h-3" /> 9.61% Burn
                       </span>
                     </div>
 

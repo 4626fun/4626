@@ -44,7 +44,7 @@
 - `ve4626.sol`: Vote-escrow locks (one lock, duration 7d–4y), ERC20Votes + Permit.
 - `ve4626BoostManager.sol`: Coverage-scaled lottery boost (holding period, timelock params).
 - `ve4626GaugeVoting.sol`: Directs fixed probability budget (PPM) to vaults (epoch, weights, caps).
-- `CreatorGaugeController.sol`: Fee splitter (burn 21.39%, lottery 69%, protocol 9.61%, creator 0% default), jackpot custodian, WETH fee processing + swaps.
+- `CreatorGaugeController.sol`: Fee splitter (lottery 69%, voters/protocol 21.39%, burn 9.61%, creator 0% default), jackpot custodian, WETH fee processing + swaps.
 - `ve4626VoterRewardsDistributor.sol`, `BribeDepot.sol`, `BribesFactory.sol`, `VaultRolePolicyManager.sol`.
 
 **Deployment / Infra / Factories (highly privileged orchestration):**
