@@ -2,19 +2,16 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {DeployTier1Upgrade} from "script/DeployTier1Upgrade.s.sol";
 import {DeployRewardsEcosystem} from "script/DeployRewardsEcosystem.s.sol";
 import {DeployBaseMainnetDeployer} from "script/DeployBaseMainnetDeployer.s.sol";
-
-contract DeployTier1UpgradeHarness is DeployTier1Upgrade {
-    function exposedRegistry() external pure returns (address) {
-        return REGISTRY;
-    }
-}
 
 contract DeployRewardsEcosystemHarness is DeployRewardsEcosystem {
     function exposedDefaultRegistry() external pure returns (address) {
         return DEFAULT_REGISTRY;
+    }
+
+    function exposedDefaultLotteryManager() external pure returns (address) {
+        return DEFAULT_LOTTERY_MANAGER;
     }
 }
 
@@ -33,25 +30,20 @@ contract DeployBaseMainnetDeployerHarness is DeployBaseMainnetDeployer {
 }
 
 contract RegistryDefaultScriptsTest is Test {
-    address internal constant LIVE_REGISTRY = 0xDD7B106a15540bA2F59464590222bF47D8C9394E;
-    address internal constant LIVE_VAULT_ACT_BATCHER = 0x5EaFfa41f07a1aAf6ecd38833fd128C53fD8669A;
-    address internal constant LIVE_LOTTERY_MANAGER = 0x29F901864D65Eb848BC548ebCEAcD6dAD39EFd26;
-    DeployTier1UpgradeHarness internal tier1Upgrade;
+    address internal constant LIVE_REGISTRY = 0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0;
+    address internal constant LIVE_VAULT_ACT_BATCHER = 0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3;
+    address internal constant LIVE_LOTTERY_MANAGER = 0xB68F359e01626Ec5d15C624037311C70DacAba43;
     DeployRewardsEcosystemHarness internal rewardsEcosystem;
     DeployBaseMainnetDeployerHarness internal baseMainnetDeployer;
 
     function setUp() external {
-        tier1Upgrade = new DeployTier1UpgradeHarness();
         rewardsEcosystem = new DeployRewardsEcosystemHarness();
         baseMainnetDeployer = new DeployBaseMainnetDeployerHarness();
     }
 
-    function testTier1UpgradeUsesLiveRegistryDefault() external view {
-        assertEq(tier1Upgrade.exposedRegistry(), LIVE_REGISTRY);
-    }
-
-    function testRewardsEcosystemUsesLiveRegistryDefault() external view {
+    function testRewardsEcosystemUsesLiveV1180Defaults() external view {
         assertEq(rewardsEcosystem.exposedDefaultRegistry(), LIVE_REGISTRY);
+        assertEq(rewardsEcosystem.exposedDefaultLotteryManager(), LIVE_LOTTERY_MANAGER);
     }
 
     function testBaseMainnetDeployerUsesLiveSharedGlobalDefaults() external view {

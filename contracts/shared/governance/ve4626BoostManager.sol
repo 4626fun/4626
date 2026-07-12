@@ -17,7 +17,7 @@ pragma solidity ^0.8.20;
  *      Lottery mapping (path A — pool = creator Share supply):
  *        l  = min(creatorShareUSD, swapUSD)     // covered skin this trade
  *        L  = total creator ShareOFT supply USD // pool size
- *        ve = effective veLottery (or veLottery token / ve fallback)
+ *        ve = effective veLottery from ve4626Utility
  *        Ve = live total ve4626 power
  *
  *      Call `calculateBoostForPosition` from LotteryManager (needs l, L).
@@ -89,6 +89,7 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
     error ZeroAddress();
     error InvalidBoostParameters();
     error BoostParametersAreLocked();
+    error UtilityNotConfigured();
     // FIX: G-13 — timelock errors
     error TimelockNotExpired();
     error NoPendingBoostUpdate();
@@ -118,7 +119,7 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
      *      Any positive eligible veLottery can reach `maxBoost` when ve share ≥ LP share.
      */
     function calculateBoost(address user) public view returns (uint256) {
-        if (block.number < lastBalanceUpdateBlock[user] + MIN_HOLDING_BLOCKS) {
+        if (!_holdingPeriodSatisfied(user)) {
             return baseBoost;
         }
         (uint256 ve,) = _powerShare(user);
@@ -142,7 +143,7 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
         uint256 swapAmountUSD,
         uint256 totalShareUSD
     ) public view returns (uint256 boostMultiplier) {
-        if (block.number < lastBalanceUpdateBlock[user] + MIN_HOLDING_BLOCKS) {
+        if (!_holdingPeriodSatisfied(user)) {
             return baseBoost;
         }
 
@@ -254,7 +255,7 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
     }
 
     function hasBoost(address user) external view returns (bool) {
-        if (block.number < lastBalanceUpdateBlock[user] + MIN_HOLDING_BLOCKS) {
+        if (!_holdingPeriodSatisfied(user)) {
             return false;
         }
         (uint256 ve,) = _powerShare(user);
@@ -264,18 +265,14 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
     function _powerShare(address user) internal view returns (uint256 userPower, uint256 totalPower) {
         // Curve denominator is live system-wide ve power, not a utility token's
         // raw totalSupply (which can remain stale until users sync).
-        if (address(utility) != address(0)) {
-            userPower = utility.effectiveVeLotteryOf(user);
-            totalPower = ve4626.getTotalVotingPower();
-            return (userPower, totalPower);
-        }
-        if (address(veLotteryToken) != address(0)) {
-            userPower = veLotteryToken.balanceOf(user);
-            totalPower = ve4626.getTotalVotingPower();
-            return (userPower, totalPower);
-        }
-        userPower = ve4626.getVotingPower(user);
+        if (address(utility) == address(0)) revert UtilityNotConfigured();
+        userPower = utility.effectiveVeLotteryOf(user);
         totalPower = ve4626.getTotalVotingPower();
+    }
+
+    function _holdingPeriodSatisfied(address user) internal view returns (bool) {
+        uint256 updatedAt = lastBalanceUpdateBlock[user];
+        return updatedAt != 0 && block.number >= updatedAt + MIN_HOLDING_BLOCKS;
     }
 }
 

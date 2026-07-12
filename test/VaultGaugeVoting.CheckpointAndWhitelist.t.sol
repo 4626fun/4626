@@ -71,18 +71,42 @@ contract MockRegistry {
     }
 }
 
+/// @dev Minimal utility stand-in so vote() can run under mandatory utility wiring.
+contract MockUtility {
+    MockVe4626 internal ve;
+
+    constructor(MockVe4626 ve_) {
+        ve = ve_;
+    }
+
+    function sync(address) external pure returns (uint256, uint256) {
+        return (0, 0);
+    }
+
+    function effectiveVe33Of(address user) external view returns (uint256) {
+        return ve.getVotingPower(user);
+    }
+
+    function ve33() external pure returns (address) {
+        return address(0);
+    }
+}
+
 contract ve4626GaugeVotingCheckpointAndWhitelistTest is Test {
     uint256 internal constant WEEK = 7 days;
 
     ve4626GaugeVoting internal voting;
     MockVe4626 internal ve;
+    MockUtility internal utility;
 
     address internal owner = address(this);
     address internal voter = address(0xBEEF);
 
     function setUp() public {
         ve = new MockVe4626();
+        utility = new MockUtility(ve);
         voting = new ve4626GaugeVoting(address(ve), owner);
+        voting.setUtility(address(utility));
 
         ve.setVotingPower(voter, 100 ether);
         ve.setRemainingLockTime(voter, type(uint256).max);

@@ -26,7 +26,7 @@ User-facing guide to 4626 governance.
 | Benefit | Description |
 |---------|-------------|
 | Voting power | Influence probability allocations |
-| Lottery boost | Up to 2.5x win chance multiplier |
+| Lottery boost | Up to 2.5× on covered trade value when ve share ≥ LP share; requires Share coverage + veLottery |
 | Fee share | 9.61% of trading fees |
 
 ## Current Progress

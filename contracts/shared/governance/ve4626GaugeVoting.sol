@@ -115,10 +115,10 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
     // STATE
     // ================================
 
-    /// @notice ve■4626 commitment for voting power (fallback when ve33 token unset)
+    /// @notice ve■4626 commitment used for lock age and projected-power caps.
     Ive4626 public immutable ve4626;
 
-    /// @notice Optional raw ve33 token; used only if `utility` is unset.
+    /// @notice Raw ve33 token pointer retained for explorers/integrators; voting uses utility.
     Ive4626Ve33 public ve33Token;
 
     /// @notice Preferred: ve4626Utility — `vote()` syncs then uses post-decay effective ve33.
@@ -182,6 +182,7 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
     error NormalizedWeightZero();
     // Power-split / epoch freeze
     error VoteFreezeWindow();
+    error UtilityNotConfigured();
 
     event Ve33TokenUpdated(address indexed token);
     event UtilityUpdated(address indexed utility);
@@ -245,19 +246,12 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
         Ive4626Lock memory userLock = ve4626.getLock(msg.sender);
         if (userLock.start + EPOCH_DURATION > block.timestamp) revert LockTooRecent();
 
-        // Claimed utility semantics are preserved (a user cannot vote with unclaimed
-        // capacity), but neither utility nor the raw ve33 token may carry more weight
-        // than the user's ve power at the end of this epoch.
+        // Claimed utility semantics are mandatory (a user cannot vote with unclaimed
+        // capacity), and utility power cannot exceed projected ve power at epoch end.
         uint256 projectedPower = ve4626.votingPowerAt(msg.sender, epochEnd);
-        uint256 userPower;
-        if (address(utility) != address(0)) {
-            utility.sync(msg.sender);
-            userPower = utility.effectiveVe33Of(msg.sender);
-        } else if (address(ve33Token) != address(0)) {
-            userPower = ve33Token.balanceOf(msg.sender);
-        } else {
-            userPower = projectedPower;
-        }
+        if (address(utility) == address(0)) revert UtilityNotConfigured();
+        utility.sync(msg.sender);
+        uint256 userPower = utility.effectiveVe33Of(msg.sender);
         if (userPower > projectedPower) userPower = projectedPower;
         if (userPower == 0) revert NoVotingPower();
         if (ve4626.getRemainingLockTime(msg.sender) < timeUntilNextEpoch()) revert LockExpiresBeforeEpochEnd();

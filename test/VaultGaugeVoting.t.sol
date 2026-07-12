@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "@4626/shared/governance/ve4626GaugeVoting.sol";
+import {ve4626Utility} from "@4626/shared/governance/ve4626Utility.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 // Import veAKITA contract directly (not the interface)
@@ -29,6 +30,7 @@ contract MockWSToken is ERC20 {
 contract ve4626GaugeVotingTest is Test {
     ve4626GaugeVoting public voting;
     Ve4626Contract public ve;
+    ve4626Utility public utility;
     MockWSToken public wsToken;
 
     address public owner;
@@ -64,7 +66,9 @@ contract ve4626GaugeVotingTest is Test {
         ve = new Ve4626Contract("Vote-Escrowed wsAKITA", "veAKITA", address(wsToken), owner);
 
         // Deploy ve4626GaugeVoting
+        utility = new ve4626Utility(address(ve), owner);
         voting = new ve4626GaugeVoting(address(ve), owner);
+        voting.setUtility(address(utility));
 
         // Whitelist vaults
         voting.setVaultWhitelist(vault1, true);
@@ -635,6 +639,28 @@ contract ve4626GaugeVotingTest is Test {
         assertEq(voting.getVaultGaugeProbabilityBoostPPM(vault3), 0);
     }
 
+    function testVaultGaugeProbabilityBoost_TwoVaultSplitUsesFullBoundedBudget() public {
+        _lockTokens(alice, 100 ether, FOUR_YEARS);
+        vm.warp(voting.genesisEpochStart() + 1);
+
+        address[] memory vaults = new address[](2);
+        vaults[0] = vault1;
+        vaults[1] = vault2;
+        uint256[] memory weights = new uint256[](2);
+        weights[0] = 1;
+        weights[1] = 1;
+        vm.prank(alice);
+        voting.vote(vaults, weights);
+
+        uint256 first = voting.getVaultGaugeProbabilityBoostPPM(vault1);
+        uint256 second = voting.getVaultGaugeProbabilityBoostPPM(vault2);
+        assertEq(first, 34_710);
+        assertEq(second, 34_710);
+        assertEq(first + second, voting.TOTAL_GAUGE_PROBABILITY_PPM());
+        assertLe(first, voting.MAX_PER_VAULT_PPM());
+        assertLe(second, voting.MAX_PER_VAULT_PPM());
+    }
+
     function testVaultGaugeProbabilityBoost_NoVotesSingleVaultStillZero() public {
         voting.setVaultWhitelist(vault2, false);
         voting.setVaultWhitelist(vault3, false);
@@ -651,6 +677,7 @@ contract ve4626GaugeVotingTest is Test {
         vm.startPrank(user);
         wsToken.approve(address(ve), amount);
         ve.lock(address(wsToken), amount, duration);
+        utility.claimVe33(utility.capacityOf(user));
         vm.stopPrank();
     }
 

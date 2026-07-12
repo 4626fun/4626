@@ -150,5 +150,47 @@ contract LotteryManager4626OracleGuardsTest is Test {
         uint256 secondId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 0);
         assertEq(secondId, 0, "deviation guard should skip the entry");
     }
+
+    function test_ProcessSwapLottery_AcceptsJumpAfterDeviationWindowWithoutPermanentLockout() public {
+        vm.prank(owner);
+        lotteryManager.setOracleDeviationGuard(1000, 1 hours);
+
+        vm.prank(authorizedSwap);
+        uint256 firstId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 0);
+        assertGt(firstId, 0);
+        uint256 firstTimestamp = lotteryManager.lastAcceptedPriceTimestamp(creatorCoin);
+        assertEq(lotteryManager.lastAcceptedPriceUSD1e18(creatorCoin), 1e18);
+
+        oracle.setPrice(15e17);
+        vm.prank(authorizedSwap);
+        assertEq(lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 0), 0);
+        assertEq(lotteryManager.lastAcceptedPriceUSD1e18(creatorCoin), 1e18);
+        assertEq(lotteryManager.lastAcceptedPriceTimestamp(creatorCoin), firstTimestamp);
+
+        vm.warp(block.timestamp + 1 hours + 1);
+        oracle.setPrice(15e17);
+        vm.prank(authorizedSwap);
+        uint256 acceptedId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 0);
+        assertGt(acceptedId, 0);
+        assertEq(lotteryManager.lastAcceptedPriceUSD1e18(creatorCoin), 15e17);
+        assertGt(lotteryManager.lastAcceptedPriceTimestamp(creatorCoin), firstTimestamp);
+    }
+
+    function test_ProcessSwapLottery_ZeroDeviationSettingDisablesGuard() public {
+        vm.prank(authorizedSwap);
+        assertGt(lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 0), 0);
+
+        vm.prank(owner);
+        lotteryManager.setOracleDeviationGuard(0, 1 hours);
+        oracle.setPrice(2e18);
+        vm.prank(authorizedSwap);
+        assertGt(lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 0), 0);
+
+        vm.prank(owner);
+        lotteryManager.setOracleDeviationGuard(1000, 0);
+        oracle.setPrice(4e18);
+        vm.prank(authorizedSwap);
+        assertGt(lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 0), 0);
+    }
 }
 

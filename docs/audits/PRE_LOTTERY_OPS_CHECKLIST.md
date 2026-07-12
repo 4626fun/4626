@@ -10,7 +10,7 @@ Code remediation for July-2 stack + contract mediums is largely complete. Do **n
 ## 0. Canary order (2026-07)
 
 Full phased canary (boost **off** day one): [lottery-canary-checklist-2026-07.md](../operations/lottery-canary-checklist-2026-07.md).  
-Live Phase 0 probe (2026-07-11): [lottery-canary-phase0-status-2026-07-11.md](../operations/lottery-canary-phase0-status-2026-07-11.md) — boost sources `0x0`; live LM still missing `singleVaultJackpotOnly` / deferred VRF until post-#687 CREATE2 cutover.
+Live Phase 0 probe (2026-07-11): [lottery-canary-phase0-status-2026-07-11.md](../operations/lottery-canary-phase0-status-2026-07-11.md) — v1.18.0 CREATE2 cutover complete; boost sources `0x0`, `singleVaultJackpotOnly=true`, deferred VRF queue `0`.
 
 | Phase | Intent |
 |-------|--------|
@@ -25,7 +25,7 @@ Live Phase 0 probe (2026-07-11): [lottery-canary-phase0-status-2026-07-11.md](..
 
 | Step | Action | Verify |
 |------|--------|--------|
-| 1.1 | `armBoostSourceTimelock()` on live LotteryManager (**only after** boost sources final — see canary Phase 3) | `verifyLotteryProductionReadiness` / phase-2 + sweep report zero criticals |
+| 1.1 | Keep the timelock unarmed for main-launch base-odds traffic. In canary Phase 3 only: freeze source addresses, arm while sources are `0`, then propose/wait/commit. | Phase-2 deploy invariants pass with `requireBoostTimelockArmed=false`; boost-enabled readiness requires armed |
 | 1.2 | Authorize hub ShareOFT forwarders (H-06) | `authorizedHubShareOftForwarders[shareOft] == true` for each hub |
 | 1.3 | Confirm R-H05 mode | Default **single-vault** (`singleVaultJackpotOnly == true`). Multi-vault only after public disclosure |
 | 1.4 | Drain any deferred VRF after pauses | `processDeferredVrfBatch(16)` until `deferredVrfQueueLength() == 0` (M2-07) |

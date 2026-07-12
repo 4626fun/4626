@@ -81,6 +81,14 @@ contract CurveBoostGauge {
     }
 }
 
+contract RevertingCurveBoostManager {
+    error BoostUnavailable();
+
+    function calculateBoostForPosition(address, uint256, uint256, uint256) external pure returns (uint256) {
+        revert BoostUnavailable();
+    }
+}
+
 contract LotteryManager4626CurveBoostHarness is LotteryManager4626 {
     constructor(address registry_, address owner_) LotteryManager4626(registry_, owner_) {}
 
@@ -103,6 +111,7 @@ contract LotteryManager4626CurveBoostIntegrationTest is Test {
 
     address internal owner = makeAddr("owner");
     address internal user = makeAddr("user");
+    address internal user2 = makeAddr("user2");
     address internal creatorCoin = makeAddr("creatorCoin");
 
     CurveBoostToken internal wrapped;
@@ -163,6 +172,40 @@ contract LotteryManager4626CurveBoostIntegrationTest is Test {
 
     function test_tinyCoverageCannotAmplifyEntireSwap() public view {
         assertEq(manager.applyBoost(user, creatorCoin, address(share), 1e6, 100e6, 10_000), 10_150);
+    }
+
+    function test_partialVeAndPartialCoverageUseExactBlendedUplift() public {
+        // user has 100 / 20,000 = 0.5% live ve share; l/L = 10 / 1,000 = 1%.
+        // Idealized 0.5% of a 2.5× quote is 17,500 BPS, but dual-decay + nested
+        // Math.mulDiv floors yield 17,499 raw here. Ten-percent coverage then floors
+        // the uplift again: 10,000 + floor(7,499 / 10) = 10,749 (measured).
+        wrapped.mint(user2, 19_900e18);
+        vm.startPrank(user2);
+        wrapped.approve(address(ve), 19_900e18);
+        ve.lock(address(wrapped), 19_900e18, ve.MAX_LOCK_DURATION());
+        vm.stopPrank();
+        vm.roll(block.number + boost.MIN_HOLDING_BLOCKS());
+
+        assertEq(manager.applyBoost(user, creatorCoin, address(share), 10e6, 100e6, 10_000), 10_749);
+    }
+
+    function test_boostManagerRevertPreservesBaseOdds() public {
+        RevertingCurveBoostManager revertingBoost = new RevertingCurveBoostManager();
+        vm.prank(owner);
+        manager.setBoostManager(address(revertingBoost));
+
+        assertEq(manager.applyBoost(user, creatorCoin, address(share), 100e6, 100e6, 12_345), 12_345);
+    }
+
+    function test_zeroBoostManagerDoesNotTouchFormerSource() public {
+        vm.prank(owner);
+        manager.setBoostManager(address(0));
+
+        vm.record();
+        assertEq(manager.applyBoost(user, creatorCoin, address(share), 100e6, 100e6, 12_345), 12_345);
+        (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(boost));
+        assertEq(reads.length, 0);
+        assertEq(writes.length, 0);
     }
 
     function test_maxWinChanceStillCapsBoostedOdds() public view {

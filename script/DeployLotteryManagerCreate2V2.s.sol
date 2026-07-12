@@ -53,6 +53,8 @@ interface ILotteryManagerAdmin {
 }
 
 contract DeployLotteryManagerCreate2V2 is Script {
+    error DeprecatedDeploymentScript();
+
     // EIP-2470 deterministic deployment proxy (universal CREATE2 deployer).
     address constant DETERMINISTIC_DEPLOYER = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
 
@@ -105,6 +107,9 @@ contract DeployLotteryManagerCreate2V2 is Script {
     }
 
     function run() external {
+        // Historical replacement path only. Use DeployLotteryManagerCreate2V1180.
+        revert DeprecatedDeploymentScript();
+
         uint256 pk = vm.envUint("PRIVATE_KEY");
         address broadcaster = vm.addr(pk);
 

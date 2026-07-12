@@ -19,6 +19,8 @@ import {LotteryManager4626PricingLib} from "@4626/shared/lottery/manager/Lottery
  * CREATE2 library address (EIP-2470 + salt 0) so linked LM bytecode is valid.
  */
 contract DeployLotteryManagerCreate2 is Script {
+    error DeprecatedDeploymentScript();
+
     /// @notice Deterministic Deployment Proxy (EIP-2470)
     address constant DETERMINISTIC_DEPLOYER = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
 
@@ -40,6 +42,9 @@ contract DeployLotteryManagerCreate2 is Script {
     }
 
     function run() external {
+        // Historical vanity deployment only. The v1.18.0 remediation script is canonical.
+        revert DeprecatedDeploymentScript();
+
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
 

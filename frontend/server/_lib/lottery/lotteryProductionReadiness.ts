@@ -13,6 +13,26 @@ const HUB_FORWARDER_ABI = [
   },
 ] as const
 
+/** Public getters for boost sources that stay mutable until the one-way timelock is armed. */
+const BOOST_SOURCE_ABI = [
+  {
+    type: 'function',
+    name: 'boostManager',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'vaultGaugeVoting',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as Address
+
 export type LotteryProductionReadinessViolation = {
   code: string
   message: string
@@ -45,6 +65,8 @@ export type VerifyLotteryProductionReadinessResult = {
   checksRun: number
   violations: LotteryProductionReadinessViolation[]
   boostTimelockArmed: boolean | null
+  boostManager: Address | null
+  vaultGaugeVoting: Address | null
 }
 
 function normalizeAddress(value: unknown): Address | null {
@@ -71,6 +93,9 @@ export async function verifyLotteryProductionReadiness(
   const requireArmed = params.requireBoostTimelockArmed !== false
 
   let boostTimelockArmed: boolean | null = null
+  let boostManager: Address | null = null
+  let vaultGaugeVoting: Address | null = null
+
   try {
     boostTimelockArmed = await readLotteryBoostTimelockArmed(params.publicClient, params.lotteryManager)
     checksRun++
@@ -90,6 +115,56 @@ export async function verifyLotteryProductionReadiness(
       message: `Failed to read boost timelock armed flag: ${error instanceof Error ? error.message : String(error)}`,
       severity: 'critical',
     })
+  }
+
+  // Boost-off canary (requireBoostTimelockArmed=false) is only safe when both boost
+  // sources are still zero. A configured source with an unarmed timelock leaves
+  // setBoostManager / setVe4626GaugeVoting immediately mutable under production traffic.
+  if (!requireArmed) {
+    try {
+      const rawBoostManager = await params.publicClient.readContract({
+        address: params.lotteryManager,
+        abi: BOOST_SOURCE_ABI,
+        functionName: 'boostManager',
+      })
+      const rawGauge = await params.publicClient.readContract({
+        address: params.lotteryManager,
+        abi: BOOST_SOURCE_ABI,
+        functionName: 'vaultGaugeVoting',
+      })
+      boostManager = normalizeAddress(rawBoostManager) ?? ZERO_ADDRESS
+      vaultGaugeVoting = normalizeAddress(rawGauge) ?? ZERO_ADDRESS
+      checksRun += 2
+
+      if (boostManager !== ZERO_ADDRESS) {
+        violations.push({
+          code: 'lottery_boost_manager_set_while_timelock_unarmed',
+          message:
+            'boostManager is configured but boost-source timelock is unarmed; arm the timelock or clear boostManager for boost-off canary mode',
+          severity: 'critical',
+          expected: ZERO_ADDRESS,
+          actual: boostManager,
+        })
+      }
+      if (vaultGaugeVoting !== ZERO_ADDRESS) {
+        violations.push({
+          code: 'lottery_vault_gauge_set_while_timelock_unarmed',
+          message:
+            'vaultGaugeVoting is configured but boost-source timelock is unarmed; arm the timelock or clear vaultGaugeVoting for boost-off canary mode',
+          severity: 'critical',
+          expected: ZERO_ADDRESS,
+          actual: vaultGaugeVoting,
+        })
+      }
+    } catch (error) {
+      violations.push({
+        code: 'lottery_boost_sources_read_failed',
+        message: `Failed to read boost sources while timelock arm is optional: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        severity: 'critical',
+      })
+    }
   }
 
   for (const shareOftRaw of params.requiredHubShareOfts ?? []) {
@@ -130,5 +205,7 @@ export async function verifyLotteryProductionReadiness(
     checksRun,
     violations,
     boostTimelockArmed,
+    boostManager,
+    vaultGaugeVoting,
   }
 }

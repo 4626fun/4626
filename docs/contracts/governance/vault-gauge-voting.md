@@ -9,10 +9,12 @@ Weekly voting that allocates a bounded probability budget across whitelisted vau
 
 ## Purpose
 
-ve4626GaugeVoting enables ve4626 holders to:
-- Vote on probability allocations for vaults
-- Direct a bounded weekly probability budget
-- Boost lottery win chances for preferred vaults
+ve4626GaugeVoting consumes **ve33** (from `ve4626Utility`) so holders can:
+- Vote on probability allocations for vaults (gauge / fees / bribes lane)
+- Direct a bounded weekly probability budget to preferred vaults
+- **Not** the personal lottery multiplier — that is **veLottery** → `ve4626BoostManager`
+
+Canonical naming: [ve-naming.md](./ve-naming.md).
 
 ## Key Functions
 

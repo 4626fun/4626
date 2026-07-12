@@ -425,7 +425,11 @@ export async function verifyDeployPhase2Invariants(
         >[0]['publicClient'],
         lotteryManager,
         requiredHubShareOfts: hubOfts,
-        requireBoostTimelockArmed: true,
+        // Main-launch Phase 2 keeps the one-way source timelock unarmed only while
+        // both boost sources stay zero. verifyLotteryProductionReadiness enforces
+        // that zero-source gate when requireBoostTimelockArmed is false.
+        // Boost-enabled readiness (timelock armed) is checked in the Phase-3 window.
+        requireBoostTimelockArmed: false,
       })
       checksRun += lottery.checksRun
       for (const issue of lottery.violations) {

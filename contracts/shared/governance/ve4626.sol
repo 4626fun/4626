@@ -43,6 +43,7 @@ interface Ive4626 {
     error LockDurationTooShort();
     error LockExpired();
     error LockNotExpired();
+    error BoostManagerNotConfigured();
 
     // Events
     event Locked(address indexed user, address indexed token, uint256 amount, uint256 lockEnd, uint256 votingPower);
@@ -56,6 +57,7 @@ interface Ive4626 {
     function increaseLock(uint256 amount) external returns (uint256 newVotingPower);
     function unlock() external returns (uint256 amount);
     function burnExpiredLock(address user) external;
+    function checkpointBoostEligibility() external;
     function getLock(address user) external view returns (Lock memory);
     function votingPower(address user) external view returns (uint256);
     function getVotingPower(address user) external view returns (uint256);
@@ -544,6 +546,18 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
         Lock memory userLock = _locks[user];
         if (userLock.amount == 0 || block.timestamp >= userLock.end) return 0;
         return userLock.end - block.timestamp;
+    }
+
+    /**
+     * @notice Start the boost holding period for a lock created before boost-manager wiring.
+     * @dev Lock mutations continue to reset the holding period through `_notifyBoostManager`.
+     */
+    function checkpointBoostEligibility() external override {
+        Lock memory userLock = _locks[msg.sender];
+        if (userLock.amount == 0) revert NoExistingLock();
+        if (block.timestamp >= userLock.end) revert LockExpired();
+        if (boostManager == address(0)) revert BoostManagerNotConfigured();
+        IBoostManager(boostManager).updateBalanceTracking(msg.sender);
     }
 
     // ================================

@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 
 import "@4626/shared/governance/ve4626GaugeVoting.sol";
 import {ve4626 as Ve4626Contract} from "@4626/shared/governance/ve4626.sol";
+import {ve4626Utility} from "@4626/shared/governance/ve4626Utility.sol";
 
 import "@4626/shared/governance/factories/BribesFactory.sol";
 import {BribeDepot} from "@4626/shared/governance/bribes/BribeDepot.sol";
@@ -55,6 +56,7 @@ contract FeeOnTransferERC20 is ERC20 {
 contract BribesTest is Test {
     MockWSToken public wsToken;
     Ve4626Contract public ve;
+    ve4626Utility public utility;
     ve4626GaugeVoting public voting;
 
     BribesFactory public factory;
@@ -82,7 +84,9 @@ contract BribesTest is Test {
         bribeToken = new MockERC20("BribeToken", "BRIBE");
 
         ve = new Ve4626Contract("Vote-Escrowed wsAKITA", "veAKITA", address(wsToken), owner);
+        utility = new ve4626Utility(address(ve), owner);
         voting = new ve4626GaugeVoting(address(ve), owner);
+        voting.setUtility(address(utility));
         voting.setVaultWhitelist(vault1, true);
 
         factory = new BribesFactory(address(voting));
@@ -100,6 +104,8 @@ contract BribesTest is Test {
         vm.startPrank(user);
         wsToken.approve(address(ve), amount);
         ve.lock(address(wsToken), amount, duration);
+        // Claim ve33 so vote() has claimed utility weight (UtilityNotConfigured path is closed).
+        utility.claimVe33(utility.capacityOf(user));
         vm.stopPrank();
     }
 

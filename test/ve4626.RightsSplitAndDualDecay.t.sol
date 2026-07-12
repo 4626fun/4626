@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {ve4626} from "@4626/shared/governance/ve4626.sol";
+import {Ive4626, ve4626} from "@4626/shared/governance/ve4626.sol";
 import {ve4626BoostManager} from "@4626/shared/governance/ve4626BoostManager.sol";
 import {ve4626GaugeVoting} from "@4626/shared/governance/ve4626GaugeVoting.sol";
 import {ve4626Utility} from "@4626/shared/governance/ve4626Utility.sol";
@@ -40,6 +40,7 @@ contract Ve4626RightsSplitAndDualDecayTest is Test {
         // P1: wire utility so consumers use sync + effective balances (decay-safe).
         boostMgr.setUtility(address(utility));
         gauges.setUtility(address(utility));
+        veToken.setBoostManager(address(boostMgr));
 
         wrapped.mint(user, 1_000e18);
         wrapped.mint(user2, 1_000e18);
@@ -237,6 +238,31 @@ contract Ve4626RightsSplitAndDualDecayTest is Test {
     // Consumers
     // -------------------------------------------------------------------------
 
+    function test_boostEligibilityCheckpoint_enrollsPreWiringLock() public {
+        ve4626 preWiringVe = new ve4626("ve\u25A04626", "ve4626", address(wrapped), address(this));
+        ve4626BoostManager preWiringBoost = new ve4626BoostManager(address(preWiringVe), address(this));
+        preWiringBoost.setUtility(address(new ve4626Utility(address(preWiringVe), address(this))));
+
+        wrapped.mint(user, LOCK_AMOUNT);
+        vm.startPrank(user);
+        wrapped.approve(address(preWiringVe), LOCK_AMOUNT);
+        preWiringVe.lock(address(wrapped), LOCK_AMOUNT, preWiringVe.MAX_LOCK_DURATION());
+        vm.expectRevert(Ive4626.BoostManagerNotConfigured.selector);
+        preWiringVe.checkpointBoostEligibility();
+        vm.stopPrank();
+
+        preWiringVe.setBoostManager(address(preWiringBoost));
+        vm.prank(user);
+        preWiringVe.checkpointBoostEligibility();
+        assertEq(preWiringBoost.lastBalanceUpdateBlock(user), block.number);
+    }
+
+    function test_boostEligibilityCheckpoint_rejectsMissingLock() public {
+        vm.prank(user);
+        vm.expectRevert(Ive4626.NoExistingLock.selector);
+        veToken.checkpointBoostEligibility();
+    }
+
     function test_boostManager_usesVeLottery() public {
         _lockMax(user, LOCK_AMOUNT);
         // Past flash-hold gate (lock updates lastBalanceUpdateBlock)
@@ -404,11 +430,11 @@ contract Ve4626RightsSplitAndDualDecayTest is Test {
         assertEq(gauges.getUserVoteWeightAtEpoch(epoch, user, vault), LOCK_AMOUNT / 2);
     }
 
-    function test_gaugeVoting_rawVe33TokenWeight_cappedAtEpochEndPower() public {
+    function test_gaugeVoting_withoutUtility_revertsInsteadOfUsingRawVe33() public {
         _lockMax(user, LOCK_AMOUNT);
         vm.prank(user);
         utility.claimVe33(LOCK_AMOUNT);
-        gauges.setUtility(address(0)); // retains the configured raw ve33Token fallback
+        gauges.setUtility(address(0));
         vm.warp(block.timestamp + 8 days);
 
         address vault = makeAddr("raw-token-cap-vault");
@@ -418,12 +444,9 @@ contract Ve4626RightsSplitAndDualDecayTest is Test {
         uint256[] memory ws = new uint256[](1);
         ws[0] = 1;
 
-        uint256 epoch = gauges.currentEpoch();
-        uint256 projected = veToken.votingPowerAt(user, gauges.epochEndTime(epoch));
-        assertGt(utility.ve33Of(user), projected);
         vm.prank(user);
+        vm.expectRevert(ve4626GaugeVoting.UtilityNotConfigured.selector);
         gauges.vote(vs, ws);
-        assertEq(gauges.getUserVoteWeightAtEpoch(epoch, user, vault), projected);
     }
 
     function test_gaugeVoting_freezeWindow() public {

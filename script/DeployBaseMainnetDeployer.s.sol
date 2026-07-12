@@ -63,6 +63,12 @@ contract DeployBaseMainnetDeployer is Script {
     // - raw bytes32: INFRA_*_SALT
     // - string tag (hashed with keccak256): INFRA_*_SALT_TAG
     // - shared epoch: DEPLOYMENT_EPOCH_TAG
+    //
+    // CREATE2 salt lineage for store / deployer-from-store / batcher modules is still
+    // `v1.13.0` (addresses already live under that epoch). Do not bump this just because
+    // product addresses (registry, LM, …) advanced to the v1.18.0 cutover — a new epoch
+    // would predict/deploy a parallel infra set instead of matching the live one.
+    // Override with DEPLOYMENT_EPOCH_TAG only when intentionally minting a fresh epoch.
     string constant DEFAULT_DEPLOYMENT_EPOCH_TAG = "v1.13.0";
     string constant STORE_SALT_TAG_PREFIX = "base-release:UniversalBytecodeStore:";
     string constant DEPLOYER_FROM_STORE_SALT_TAG_PREFIX = "base-release:UniversalCreate2DeployerFromStore:";
@@ -80,14 +86,15 @@ contract DeployBaseMainnetDeployer is Script {
     string constant SHARE_MESH_HELPER_SALT_TAG_PREFIX = "base-release:DeploymentBatcherShareMeshHelper:";
     string constant UTILS_HELPER_SALT_TAG_PREFIX = "base-release:DeploymentBatcherUtilsHelper:";
 
-    // Live Base mainnet fallback defaults — overridden by shared/global handoff during fresh epochs.
-    address constant DEFAULT_REGISTRY = 0xDD7B106a15540bA2F59464590222bF47D8C9394E;
+    // Live product-address fallbacks (v1.18.0 Base cutover). Independent of
+    // DEFAULT_DEPLOYMENT_EPOCH_TAG, which only drives CREATE2 salt derivation.
+    address constant DEFAULT_REGISTRY = 0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0;
     address constant DEFAULT_PROTOCOL_TREASURY = 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3;
     address constant DEFAULT_POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
     address constant DEFAULT_TAX_HOOK = 0xca975B9dAF772C71161f3648437c3616E5Be0088;
     address constant DEFAULT_CHAINLINK_ETH_USD = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
-    address constant DEFAULT_VAULT_ACTIVATION_BATCHER = 0x5EaFfa41f07a1aAf6ecd38833fd128C53fD8669A;
-    address constant DEFAULT_LOTTERY_MANAGER = 0x29F901864D65Eb848BC548ebCEAcD6dAD39EFd26;
+    address constant DEFAULT_VAULT_ACTIVATION_BATCHER = 0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3;
+    address constant DEFAULT_LOTTERY_MANAGER = 0xB68F359e01626Ec5d15C624037311C70DacAba43;
     address constant DEFAULT_PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
     address constant DEFAULT_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     address constant DEFAULT_UNISWAP_V3_FACTORY = 0x33128a8fC17869897dcE68Ed026d694621f6FDfD;

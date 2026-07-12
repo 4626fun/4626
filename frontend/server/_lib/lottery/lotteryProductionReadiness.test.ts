@@ -20,6 +20,49 @@ describe('verifyLotteryProductionReadiness', () => {
     expect(result.violations.some((v) => v.code === 'lottery_boost_timelock_not_armed')).toBe(true)
   })
 
+  it('allows the explicit boost-off canary mode to remain unarmed when both sources are zero', async () => {
+    const lotteryManager = '0x0000000000000000000000000000000000000001'
+    const zero = '0x0000000000000000000000000000000000000000'
+    const result = await verifyLotteryProductionReadiness({
+      lotteryManager,
+      requireBoostTimelockArmed: false,
+      publicClient: {
+        getStorageAt: async () => '0x0000000000000000000000000000000000000000000000000000000000000000',
+        readContract: async ({ functionName }) => {
+          if (functionName === 'boostManager' || functionName === 'vaultGaugeVoting') return zero
+          return true
+        },
+      },
+    })
+
+    expect(result.boostTimelockArmed).toBe(false)
+    expect(result.boostManager).toBe(zero)
+    expect(result.vaultGaugeVoting).toBe(zero)
+    expect(result.violations).toEqual([])
+  })
+
+  it('flags boost-off canary when a boost source is set while the timelock is unarmed', async () => {
+    const lotteryManager = '0x0000000000000000000000000000000000000001'
+    const zero = '0x0000000000000000000000000000000000000000'
+    const boostManager = '0x00000000000000000000000000000000000000aa'
+    const result = await verifyLotteryProductionReadiness({
+      lotteryManager,
+      requireBoostTimelockArmed: false,
+      publicClient: {
+        getStorageAt: async () => '0x0000000000000000000000000000000000000000000000000000000000000000',
+        readContract: async ({ functionName }) => {
+          if (functionName === 'boostManager') return boostManager
+          if (functionName === 'vaultGaugeVoting') return zero
+          return true
+        },
+      },
+    })
+
+    expect(result.violations.some((v) => v.code === 'lottery_boost_manager_set_while_timelock_unarmed')).toBe(
+      true,
+    )
+  })
+
   it('passes when timelock is armed and hub ShareOFT forwarder is authorized (H-06)', async () => {
     const lotteryManager = '0x0000000000000000000000000000000000000001'
     const hubShareOft = '0x0000000000000000000000000000000000000002'

@@ -91,24 +91,13 @@ interface IChainlinkVRFIntegrator {
 }
 
 interface Ive4626BoostManager {
-    function calculateBoost(address user) external view returns (uint256 boostBps);
-    /// @notice Curve working-balance boost for (l, L, ve/Ve). Preferred personal path.
+    /// @notice Curve working-balance boost for (l, L, ve/Ve). Sole personal-boost path.
     function calculateBoostForPosition(
         address user,
         uint256 shareBalanceUSD,
         uint256 swapAmountUSD,
         uint256 totalShareUSD
     ) external view returns (uint256 boostBps);
-    function getTotalProbabilityBoost(address user) external view returns (uint256 boostBps);
-    function getCoverageBps(
-        address user,
-        address registry,
-        address token,
-        address shareBalanceToken,
-        uint256 shareBalanceAmount,
-        uint256 swapAmountUSD
-    ) external view returns (uint256 coverageBps);
-    function hasBoost(address user) external view returns (bool);
 }
 
 interface IVe4626GaugeVoting {

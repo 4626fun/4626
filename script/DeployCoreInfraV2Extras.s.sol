@@ -25,6 +25,8 @@ interface IRegistry4626Auth {
  * - This script is safe to rerun only if you pass `SKIP_*` flags once deployed.
  */
 contract DeployCoreInfraV2Extras is Script {
+    error DeprecatedDeploymentScript();
+
     // Base mainnet constants
     uint256 internal constant BASE_CHAIN_ID = 8453;
     address internal constant VRF_COORDINATOR_BASE = 0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634;
@@ -34,6 +36,9 @@ contract DeployCoreInfraV2Extras is Script {
     address internal constant DEFAULT_OWNER = 0xB05Cf01231cF2fF99499682E64D3780d57c80FdD;
 
     function run() external {
+        // Historical vanity-registry extras only. Current infrastructure is v1.18.0.
+        revert DeprecatedDeploymentScript();
+
         uint256 pk = vm.envUint("PRIVATE_KEY");
         address broadcaster = vm.addr(pk);
 

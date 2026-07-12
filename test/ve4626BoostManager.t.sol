@@ -43,9 +43,26 @@ contract MockVe4626BoostMath {
     }
 }
 
+contract MockVe4626UtilityBoostMath {
+    MockVe4626BoostMath internal immutable ve;
+
+    constructor(MockVe4626BoostMath ve_) {
+        ve = ve_;
+    }
+
+    function effectiveVeLotteryOf(address user) external view returns (uint256) {
+        return ve.votingPower(user);
+    }
+
+    function veLottery() external pure returns (address) {
+        return address(1);
+    }
+}
+
 /// @notice working = min(0.4*l + 0.6*L*(ve/Ve), l); boost = working/(0.4*l) ∈ [1, 2.5]
 contract Ve4626BoostManagerMathTest is Test {
     MockVe4626BoostMath internal ve;
+    MockVe4626UtilityBoostMath internal utility;
     ve4626BoostManager internal manager;
 
     address internal owner = address(0xA11CE);
@@ -54,11 +71,16 @@ contract Ve4626BoostManagerMathTest is Test {
     uint256 internal constant L = 1_000e18; // pool USD
 
     function setUp() public {
-        vm.roll(302_401); // Past MIN_HOLDING_BLOCKS so boost calculation proceeds
         ve = new MockVe4626BoostMath();
+        utility = new MockVe4626UtilityBoostMath(ve);
         manager = new ve4626BoostManager(address(ve), owner);
-        vm.prank(owner);
+        vm.startPrank(owner);
+        manager.setUtility(address(utility));
         manager.setMinVotingPower(0);
+        vm.stopPrank();
+        vm.prank(address(ve));
+        manager.updateBalanceTracking(user);
+        vm.roll(block.number + manager.MIN_HOLDING_BLOCKS());
     }
 
     function testCurve_Tokenless_IsOneX() public {
@@ -75,6 +97,18 @@ contract Ve4626BoostManagerMathTest is Test {
         // l = 0 → personal layer inactive (baseBoost 1.0, leaves LM base odds alone)
         assertEq(manager.calculateBoostForPosition(user, 0, 10e18, L), 10_000);
         assertEq(manager.calculateBoostForPosition(user, 10e18, 0, L), 10_000);
+    }
+
+    function testCurve_TinyPositionWithZeroTokenlessWorkingIsNeutral() public {
+        ve.setVotingPower(user, 100 ether);
+        ve.setTotalVotingPower(100 ether);
+        assertEq(manager.calculateBoostForPosition(user, 1, 1, L), 10_000);
+    }
+
+    function testCurve_ZeroTotalVeIsNeutral() public {
+        ve.setVotingPower(user, 100 ether);
+        ve.setTotalVotingPower(0);
+        assertEq(manager.calculateBoostForPosition(user, 10e18, 10e18, L), 10_000);
     }
 
     function testCurve_FullBoost_WhenVeMatchesLpShare() public {
@@ -143,6 +177,39 @@ contract Ve4626BoostManagerMathTest is Test {
 
         ve.setVotingPower(user, 0);
         assertEq(manager.calculateBoost(user), 10_000);
+    }
+
+    function testHoldingPeriod_UninitializedUserIsNeutral() public {
+        address untracked = makeAddr("untracked");
+        ve.setVotingPower(untracked, 100 ether);
+        ve.setTotalVotingPower(100 ether);
+        assertEq(manager.calculateBoostForPosition(untracked, 10e18, 10e18, L), 10_000);
+        assertFalse(manager.hasBoost(untracked));
+    }
+
+    function testHoldingPeriod_ExactBoundaryIsEligible() public {
+        ve.setVotingPower(user, 10 ether);
+        ve.setTotalVotingPower(1_000 ether);
+        assertEq(manager.calculateBoostForPosition(user, 10e18, 10e18, L), 25_000);
+    }
+
+    function testHoldingPeriod_BlockBeforeBoundaryIsNeutral() public {
+        vm.prank(address(ve));
+        manager.updateBalanceTracking(user);
+        vm.roll(block.number + manager.MIN_HOLDING_BLOCKS() - 1);
+        ve.setVotingPower(user, 10 ether);
+        ve.setTotalVotingPower(1_000 ether);
+        assertEq(manager.calculateBoostForPosition(user, 10e18, 10e18, L), 10_000);
+    }
+
+    function testUtility_MissingConfigurationRevertsAfterHoldingPeriod() public {
+        ve4626BoostManager unconfigured = new ve4626BoostManager(address(ve), owner);
+        vm.prank(address(ve));
+        unconfigured.updateBalanceTracking(user);
+        vm.roll(block.number + unconfigured.MIN_HOLDING_BLOCKS());
+
+        vm.expectRevert(ve4626BoostManager.UtilityNotConfigured.selector);
+        unconfigured.calculateBoostForPosition(user, 10e18, 10e18, L);
     }
 
     function testBoostParameters_AcceptsCurveMaximumAfterTimelock() public {

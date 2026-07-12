@@ -96,11 +96,12 @@ cast call $LM "deferredVrfQueueLength()(uint256)" --rpc-url $BASE_RPC_URL
 
 Only after Phase 2 is stable:
 
-1. Deploy rewards stack (`DeployRewardsEcosystem` or partial): `ve4626`, `ve4626Utility`, BoostManager, GaugeVoting  
-2. Wire **`boostManager.setUtility(utility)`** and **`voting.setUtility(utility)`**  
-3. Propose/commit LM `boostManager` + `vaultGaugeVoting` (**or** legacy set if not armed)  
-4. Canary: one locker with veChance + Share coverage → quoted boost up to **2.5×** size-base when ve share ≥ LP share  
-5. Then `armBoostSourceTimelock()` when sources are final (one-way)
+1. Deploy rewards stack (`DeployRewardsEcosystem`): `ve4626`, `ve4626Utility`, BoostManager, GaugeVoting. The deploy script does **not** activate LM sources.
+2. Verify **`boostManager.setUtility(utility)`**, **`voting.setUtility(utility)`**, and `ve4626.setBoostManager(boostManager)`; confirm LM sources are still `0`.
+3. Freeze and review the final source addresses, then call `armBoostSourceTimelock()` (one-way) while both LM sources remain `0`.
+4. Call `proposeBoostManager` + `proposeVe4626GaugeVoting`, wait at least 24 hours, then call both commit functions.
+5. For a lock created before BoostManager wiring, call `ve4626.checkpointBoostEligibility()` and wait the full `MIN_HOLDING_BLOCKS`.
+6. Canary one locker with **veLottery** + Share coverage. The raw quote reaches **2.5×** only when ve share ≥ LP share; only covered trade value receives the uplift.
 
 **Do not** arm timelock before boost addresses are frozen.
 
@@ -109,10 +110,12 @@ Only after Phase 2 is stable:
 ```text
 working = min(l, 0.4·l + 0.6·L·(ve/Ve))   # l = covered Share USD
 quotedBoost BPS = working/(0.4·l) ∈ [10_000, 25_000]
-odds = base × quotedBoost / 10_000
+coverageBPS = floor(l × 10_000 / swapUSD)
+effectiveBPS = 10_000 + floor((quotedBoost BPS - 10_000) × coverageBPS / 10_000)
+odds = base × effectiveBPS / 10_000
 ```
 
-Covered + no veChance → **1.0×** (neutral). Full match → **2.5×**.
+Covered + no eligible veLottery → **1.0×** (neutral). Full coverage + full ve/LP match → **2.5×**.
 
 ---
 

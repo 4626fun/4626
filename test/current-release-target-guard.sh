@@ -7,6 +7,9 @@ ADDRESSES_DOC="$ROOT_DIR/docs/reference/addresses.md"
 INVENTORY_DOC="$ROOT_DIR/docs/_internal/current-contract-inventory.md"
 DEFAULTS="$ROOT_DIR/frontend/src/config/contracts.defaults.ts"
 SEED_REGISTRY="$ROOT_DIR/script/SeedRegistry4626.s.sol"
+REWARDS_DEPLOY="$ROOT_DIR/script/DeployRewardsEcosystem.s.sol"
+POST_BROADCAST="$ROOT_DIR/script/execute-v1180-post-broadcast.sh"
+VERCEL_SYNC="$ROOT_DIR/script/sync-v1180-vercel-env.sh"
 KPR_SOLANA_CANONICAL="$ROOT_DIR/kpr/utils/solanaCanonicalAddresses.ts"
 KPR_SOLANA_SEED_ENV="$ROOT_DIR/kpr/deploy/seed-solana-orchestrator-env.sh"
 
@@ -71,6 +74,7 @@ require_rg "SolanaBridgeAdapter | \`$solana_adapter\`" "$ADDRESSES_DOC" 'SolanaB
 require_rg "UniversalBytecodeStoreV2 | \`$bytecode_store\`" "$ADDRESSES_DOC" 'UniversalBytecodeStoreV2 address'
 require_rg "UniversalCreate2DeployerFromStore | \`$create2_from_store\`" "$ADDRESSES_DOC" 'UniversalCreate2DeployerFromStore address'
 require_rg "DeploymentBatcher | \`$batcher\`" "$ADDRESSES_DOC" 'DeploymentBatcher address'
+require_rg "LotteryManager4626 | \`$lottery_manager\`" "$ADDRESSES_DOC" 'LotteryManager4626 address'
 require_rg "DeploymentBatcherPhase1Module | \`$phase1_module\`" "$ADDRESSES_DOC" 'DeploymentBatcherPhase1Module address'
 require_rg "DeploymentBatcherPhase2Module | \`$phase2_module\`" "$ADDRESSES_DOC" 'DeploymentBatcherPhase2Module address'
 require_rg "DeploymentBatcherPhase3Helper | \`$phase3_helper\`" "$ADDRESSES_DOC" 'DeploymentBatcherPhase3Helper address'
@@ -105,6 +109,21 @@ require_rg '0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1' "$KPR_SOLANA_SEED_ENV" '
 
 require_rg "VAULT_BATCHER = $batcher;" "$SEED_REGISTRY" 'SeedRegistry4626 VAULT_BATCHER'
 require_rg "VAULT_ACT_BATCHER = $activation_batcher;" "$SEED_REGISTRY" 'SeedRegistry4626 VAULT_ACT_BATCHER'
+require_rg "DEFAULT_REGISTRY = $registry;" "$SEED_REGISTRY" 'SeedRegistry4626 registry'
+require_rg "LOTTERY_MANAGER = $lottery_manager;" "$SEED_REGISTRY" 'SeedRegistry4626 lottery manager'
+require_rg "DEFAULT_REGISTRY = $registry;" "$REWARDS_DEPLOY" 'rewards registry'
+require_rg "DEFAULT_LOTTERY_MANAGER = $lottery_manager;" "$REWARDS_DEPLOY" 'rewards lottery manager'
+require_rg "LOTTERY_MANAGER=\"\${LOTTERY_MANAGER:-$lottery_manager}\"" "$POST_BROADCAST" 'post-broadcast lottery manager'
+require_rg "LOTTERY_MANAGER=\"\${LOTTERY_MANAGER:-$lottery_manager}\"" "$VERCEL_SYNC" 'Vercel sync lottery manager'
+
+for retired_script in \
+  "$ROOT_DIR/script/DeployLotteryManagerCreate2.s.sol" \
+  "$ROOT_DIR/script/DeployLotteryManagerCreate2V2.s.sol" \
+  "$ROOT_DIR/script/OperationalWiring.s.sol" \
+  "$ROOT_DIR/script/DeployCoreInfraV2Extras.s.sol" \
+  "$ROOT_DIR/script/DeployTier1Upgrade.s.sol"; do
+  require_rg 'revert DeprecatedDeploymentScript();' "$retired_script" 'deprecated-script fail-closed guard'
+done
 
 if rg "$deprecated_batchers" "$DEFAULTS" "$SEED_REGISTRY" >/dev/null; then
   echo "active deploy defaults still reference a deprecated creator-vault batcher" >&2

@@ -129,7 +129,7 @@ Update statuses in place as work lands. Prefer linking a PR or commit when closi
 forge test --match-path 'test/vault/CharmStrategy4626.Oracle.t.sol' \
   --match-test 'test_ownerEmergency|test_setParameters_caps|test_emergencyWithdraw_uses'  → 4/4
 forge test --match-path 'test/audit/Audit20260708.P2.t.sol'  → 2/2
-forge test --match-path 'test/CreatorLotteryManager.AmoeLinearParity.t.sol'  → 29/29
+forge test --match-path 'test/LotteryManager4626.AmoeLinearParity.t.sol'  → 29/29
 forge test --match-path 'test/CreatorOVault.Report.t.sol' \
   --match-test 'test_claimQueuedWithdrawal_fullQueuePaysFullEntitlement'  → 1/1  (CO-H1)
 forge test --match-path 'test/revenue/VaultShareBurnStream.Integration.t.sol' \
@@ -153,7 +153,7 @@ pnpm -C frontend exec vitest run server/_lib/onchain/resolveBaseSolanaBridge.tes
 pnpm -C kpr test  → 215/215  (M2-09 lease, M2-11 quarantine, orchestrator)
 pnpm -C kpr typecheck  → clean
 cargo check -p creator-share-hook  → ok  (M2-12 win_id PDA, M2-13 threshold/authority)
-forge test --match-path 'test/CreatorLotteryManager.PauseGuards.t.sol'  → 10/10  (M2-07 FIFO batch)
+forge test --match-path 'test/LotteryManager4626.PauseGuards.t.sol'  → 10/10  (M2-07 FIFO batch)
 forge test --match-path 'test/revenue/VaultShareBurnStream.Integration.t.sol'  → 2/2  (AR-L2)
 node scripts/check-ovault-module-storage-layout.mjs  → pass  (CO-M1)
 forge test --match-test 'test_buyDebt|test_maxImpairmentTrip|clearStaleImpairment'  → 6/6  (CO-M2/CO-M4)

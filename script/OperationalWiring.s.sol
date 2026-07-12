@@ -83,6 +83,8 @@ interface IRegistry {
 }
 
 contract OperationalWiring is Script {
+    error DeprecatedDeploymentScript();
+
     // ═══════════════════════════════════════════════════════════════════
     //                    DEPLOYED ADDRESSES
     // ═══════════════════════════════════════════════════════════════════
@@ -124,6 +126,9 @@ contract OperationalWiring is Script {
     // ═══════════════════════════════════════════════════════════════════
 
     function run() external {
+        // This wiring targets a retired registry/LM epoch and must never broadcast.
+        revert DeprecatedDeploymentScript();
+
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
         uint256 solanaRegistryKey = vm.envOr("SOLANA_REGISTRY_KEY", uint256(0));

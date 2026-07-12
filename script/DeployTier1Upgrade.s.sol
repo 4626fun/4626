@@ -46,6 +46,8 @@ import {VaultActivationBatcher} from "@4626/shared/deploy/batchers/VaultActivati
  *          -vvvv
  */
 contract DeployTier1Upgrade is Script {
+    error DeprecatedDeploymentScript();
+
     // ═══════════════════════════════════════════════════════════════════
     //                    EXISTING DEPLOYED CONTRACTS
     // ═══════════════════════════════════════════════════════════════════
@@ -90,6 +92,9 @@ contract DeployTier1Upgrade is Script {
     VaultActivationBatcher public newBatcher;
 
     function run() external {
+        // Historical v1.14.1 upgrade path. Current deployments use v1.18.0 scripts.
+        revert DeprecatedDeploymentScript();
+
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
 

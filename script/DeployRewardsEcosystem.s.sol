@@ -10,11 +10,6 @@ import {ve4626} from "@4626/shared/governance/ve4626.sol";
 import {ve4626BoostManager} from "@4626/shared/governance/ve4626BoostManager.sol";
 import {ve4626Utility} from "@4626/shared/governance/ve4626Utility.sol";
 
-interface ILotteryManager4626ForRewards {
-    function setBoostManager(address manager) external;
-    function setVe4626GaugeVoting(address vaultGaugeVoting) external;
-}
-
 interface IRegistry4626ForRewards {
     function getAllTokens() external view returns (address[] memory);
     function getGaugeControllerForToken(address token) external view returns (address);
@@ -30,8 +25,8 @@ interface ICreatorGaugeControllerForRewards {
  * @notice Deploys + wires the ve■4626 rewards ecosystem:
  * - ve4626 (ve■4626 lock, dual-decay power)
  * - ve4626Utility (ve33 / veLottery utilities — opt-in claim)
- * - ve4626BoostManager (lottery mult from veLottery or ve fallback)
- * - ve4626GaugeVoting (weekly gauge voting from ve33 or ve fallback)
+ * - ve4626BoostManager (lottery mult from decay-safe effective veLottery)
+ * - ve4626GaugeVoting (weekly gauge voting from decay-safe effective ve33)
  * - ve4626VoterRewardsDistributor (routes the 9.61% slice to voters)
  * - BribesFactory (CREATE2 BribeDepot per vault)
  *
@@ -39,8 +34,7 @@ interface ICreatorGaugeControllerForRewards {
  * - ve4626.setBoostManager(boostManager)
  * - boostManager.setUtility(utility)  (also sets veLotteryToken; decay-safe effectiveVeLottery)
  * - voting.setUtility(utility)        (also sets ve33Token; vote() syncs then effectiveVe33)
- * - lotteryManager.setBoostManager(boostManager)
- * - lotteryManager.setVe4626GaugeVoting(vaultGaugeVoting)
+ * - LotteryManager activation is intentionally a later, separate Phase-3 change window.
  * - each CreatorGaugeController: setVe4626GaugeVoting + setVe4626VoterRewardsDistributor
  *
  * Naming: docs/contracts/governance/ve-naming.md
@@ -64,8 +58,8 @@ interface ICreatorGaugeControllerForRewards {
  *   VE_SYMBOL="ve■4626"
  */
 contract DeployRewardsEcosystem is Script {
-    address constant DEFAULT_REGISTRY = 0xDD7B106a15540bA2F59464590222bF47D8C9394E;
-    address constant DEFAULT_LOTTERY_MANAGER = 0x29F901864D65Eb848BC548ebCEAcD6dAD39EFd26;
+    address constant DEFAULT_REGISTRY = 0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0;
+    address constant DEFAULT_LOTTERY_MANAGER = 0xB68F359e01626Ec5d15C624037311C70DacAba43;
     address constant DEFAULT_PROTOCOL_TREASURY = 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3;
 
     function run() external {
@@ -167,9 +161,7 @@ contract DeployRewardsEcosystem is Script {
         console2.log("\nWire ve4626 -> boostManager...");
         ve.setBoostManager(address(boostManager));
 
-        console2.log("\nWire LotteryManager4626 -> boostManager + gauge voting...");
-        ILotteryManager4626ForRewards(lotteryManager).setBoostManager(address(boostManager));
-        ILotteryManager4626ForRewards(lotteryManager).setVe4626GaugeVoting(address(voting));
+        console2.log("\nLotteryManager activation intentionally skipped (Phase 3 only):", lotteryManager);
 
         if (wireExistingGauges) {
             console2.log("\nWire existing CreatorGaugeControllers (set voting + rewards distributor)...");

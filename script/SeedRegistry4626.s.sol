@@ -33,8 +33,8 @@ contract SeedRegistry4626 is Script {
     //                    DEPLOYED REGISTRY
     // ═══════════════════════════════════════════════════════════════════
 
-    // v1.15.0 greenfield cutover (tmp/base-v1.15.0-handoff.env)
-    address internal constant DEFAULT_REGISTRY = 0x1eb9A364a3E763dD9249ba3413Dc19E13c1F4461;
+    // v1.18.0 greenfield registry.
+    address internal constant DEFAULT_REGISTRY = 0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0;
 
     // ═══════════════════════════════════════════════════════════════════
     //                    CHAIN CONSTANTS
@@ -96,9 +96,9 @@ contract SeedRegistry4626 is Script {
     // ═══════════════════════════════════════════════════════════════════
 
     address constant CHAINLINK_ETH_USD = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
-    // v1.15.0 greenfield cutover (tmp/base-v1.15.0-handoff.env)
-    address constant OVAULT_FACTORY = 0x26b74b1d3AadD17e714068d259051409C9f942d1;
-    address constant LOTTERY_MANAGER = 0xD62a8a2F4c25587FA80ED5782b50Af6654122b0b;
+    // v1.18.0 greenfield cutover.
+    address constant OVAULT_FACTORY = 0x70d0D2411D362BA50821389383Fa6B829d736232;
+    address constant LOTTERY_MANAGER = 0xB68F359e01626Ec5d15C624037311C70DacAba43;
     address constant VAULT_BATCHER = 0x02D7abC547F8B1e7E2D7a919D8D1005918361750;
     address constant VAULT_ACT_BATCHER = 0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3;
 

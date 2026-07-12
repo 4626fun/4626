@@ -75,6 +75,7 @@ function makeFinalizePhase2Data(params?: {
 describe('verifyDeployPhase2Invariants', () => {
   it('passes when strategy, share collector, and CreatorCoin payoutRecipient all match the gauge collector', async () => {
     const gaugeController = '0x0000000000000000000000000000000000000104'
+    const zero = '0x0000000000000000000000000000000000000000'
     const readContract = async ({ functionName }: { functionName: string }) => {
       switch (functionName) {
         case 'feeRecipient':
@@ -87,13 +88,21 @@ describe('verifyDeployPhase2Invariants', () => {
           return 1n
         case 'creatorTreasury':
           return '0x0000000000000000000000000000000000000200'
+        case 'boostManager':
+        case 'vaultGaugeVoting':
+          // Boost-off canary: sources must stay zero while timelock is unarmed.
+          return zero
         default:
           throw new Error(`unexpected functionName=${functionName}`)
       }
     }
 
     const result = await verifyDeployPhase2Invariants({
-      publicClient: { readContract },
+      publicClient: {
+        readContract,
+        getStorageAt: async () =>
+          '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`,
+      },
       phase2FinalizeCalls: [
         {
           to: '0x0000000000000000000000000000000000000010',
@@ -102,10 +111,13 @@ describe('verifyDeployPhase2Invariants', () => {
         },
       ],
       payload: {},
+      lotteryManager: '0x0000000000000000000000000000000000000999',
+      enforceProductionReadiness: true,
     })
 
     expect(result.checked).toBe(true)
-    expect(result.checksRun).toBe(5)
+    // Prior checks (6) + 2 zero-source reads when boost-off canary skips timelock arm.
+    expect(result.checksRun).toBe(8)
     expect(result.violations).toEqual([])
     expect(result.expectations?.expectedTradeFeeCollector).toBe(gaugeController)
     expect(result.expectations?.expectedPayoutRecipient).toBe(gaugeController)

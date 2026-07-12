@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 
 import "@4626/shared/governance/ve4626GaugeVoting.sol";
 import "@4626/shared/governance/ve4626VoterRewardsDistributor.sol";
+import {ve4626Utility} from "@4626/shared/governance/ve4626Utility.sol";
 
 // Import veAKITA contract only (avoid name collision with IveAKITA interface)
 import {ve4626 as Ve4626Contract} from "@4626/shared/governance/ve4626.sol";
@@ -52,6 +53,7 @@ contract ve4626VoterRewardsDistributorTest is Test {
     MockWSToken public wsToken;
     MockRegistry4626 public registry;
     Ve4626Contract public ve;
+    ve4626Utility public utility;
     ve4626GaugeVoting public voting;
     ve4626VoterRewardsDistributor public distributor;
 
@@ -80,7 +82,9 @@ contract ve4626VoterRewardsDistributorTest is Test {
         rewardToken = new MockERC20("VaultShares", "sTOKEN");
 
         ve = new Ve4626Contract("Vote-Escrowed wsAKITA", "veAKITA", address(wsToken), owner);
+        utility = new ve4626Utility(address(ve), owner);
         voting = new ve4626GaugeVoting(address(ve), owner);
+        voting.setUtility(address(utility));
         distributor = new ve4626VoterRewardsDistributor(address(voting), address(registry), owner);
 
         registry.setVaultToken(vault1, creatorToken);
@@ -167,6 +171,8 @@ contract ve4626VoterRewardsDistributorTest is Test {
         vm.startPrank(user);
         wsToken.approve(address(ve), amount);
         ve.lock(address(wsToken), amount, duration);
+        // Claim ve33 so vote() has claimed utility weight (UtilityNotConfigured path is closed).
+        utility.claimVe33(utility.capacityOf(user));
         vm.stopPrank();
     }
 

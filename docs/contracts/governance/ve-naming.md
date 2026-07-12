@@ -5,6 +5,35 @@ sidebar_position: 0
 
 # ve■4626 naming (canonical)
 
+## Locked lane names (2026-07-11)
+
+| Lane | Canonical | Symbol | Meaning |
+|------|-----------|--------|---------|
+| Lock | **ve■4626** | — | Locked dual-decay power |
+| Desk | **`ve4626Utility`** | — | Claim utilities from lock power |
+| Voting | **ve33** | `ve33` | Gauge / fees / bribes weight |
+| Lottery mult | **veLottery** | `veLottery` | Personal odds multiplier (opt-in) |
+
+**Choose `veLottery`, not `veLotto`.**
+
+| Candidate | Verdict | Why |
+|-----------|---------|-----|
+| **veLottery** | **Canonical** | Matches LotteryManager / product “lottery”; already on-chain (`"veLottery"`, `claimVeLottery`, `effectiveVeLotteryOf`); pairs cleanly with **ve33** |
+| veLotto | **Rejected** | Nickname / casino-brand feel; abbreviates unevenly vs full product word; would force a rename churn for zero clarity gain |
+| veChance / veVote | Rejected earlier | Too easy to confuse: gauge **vote** already directs vault lottery probability |
+| Use / Vote / Chance | Rejected earlier | Everyday words, but Vote vs Chance both sounded like “lottery” |
+
+**ve33** stays: short, maps to ve(3,3) gauge voting, and does **not** mean “personal lottery boost.”
+
+### UI copy (keep lanes distinct)
+
+| UI | Claims | Do not say |
+|----|--------|------------|
+| “Use my ve for **voting**” | `claimVe33` | “lottery chance” for this lane |
+| “Use my ve for **personal lottery boost**” | `claimVeLottery` (opt-in) | bare “chance” next to gauge copy |
+
+Integrators store **`ve33Token` / `veLotteryToken`** (or `voteToken` / `lotteryToken` locals) so they never clash with gauge `vote()`.
+
 ## ■ rule
 
 | Form | ■ between ve and 4626? | Example |
@@ -63,7 +92,8 @@ ve4626Utility
 | `ve4626Utility` | claimVe33 / claimVeLottery / forfeit / sync / effective* |
 | `ve4626UtilityToken` | Non-transferable ERC-20 (not B20) |
 | `ve4626BoostManager` | `calculateBoostForPosition`: `working/(0.4·l)` ∈ **[1.0, 2.5]**; ve=`effectiveVeLotteryOf`, Ve=live total ve4626 power |
-| `ve4626GaugeVoting` | `vote()` → `utility.sync` + `effectiveVe33Of` (preferred) or `ve33Token` / ve fallback || `ve4626VoterRewardsDistributor` | Fee slice to voters |
+| `ve4626GaugeVoting` | `vote()` requires utility, then `utility.sync` + `effectiveVe33Of`; no raw-token/raw-ve fallback |
+| `ve4626VoterRewardsDistributor` | Fee slice to voters |
 
 ## P1 decay-safety
 
@@ -82,7 +112,8 @@ Curve LiquidityGauge (TOKENLESS = 40%):
 ```text
 working = min(0.4·l + 0.6·L·(ve/Ve), 1.0·l)
 boost   = working / (0.4·l) ∈ [1.0, 2.5]
-effectiveBoost = 1 + coverage·(boost - 1)```
+effectiveBoost = 1 + coverage·(boost - 1)
+```
 
 | Symbol | Meaning |
 |--------|---------|
@@ -97,6 +128,7 @@ effectiveBoost = 1 + coverage·(boost - 1)```
 Curve caps working balance at `l`. The advertised **2.5×** is the full working balance divided by the 0.4 tokenless baseline; it is not a `2.5·l` working-balance cap.
 
 No covered position → personal layer **off** (base trade odds unchanged).
+
 ## One-liner
 
 > Lock **■4626 only** into **ve■4626**. Claim **ve33** / **veLottery** via **`ve4626Utility`**. Creator ■ is not a ve lock asset.

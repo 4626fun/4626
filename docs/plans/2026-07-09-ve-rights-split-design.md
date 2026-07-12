@@ -24,7 +24,7 @@
 |----------|--------|
 | ■ placement | **Only** product name **ve■4626** |
 | Desk | **`ve4626Utility`** |
-| Lanes | **ve33** / **veLottery** |
+| Lanes | **ve33** / **veLottery** (not `veLotto`; Vote/Chance rejected) |
 | Token type | **`ve4626UtilityToken`** non-transferable ERC-20 — **not B20** |
 | Total power | Curve-style dual-decay `getTotalVotingPower()` |
 | Lottery boost | **1.0×–2.5×** tokenless-normalized `calculateBoostForPosition(l,L,ve)`; additive lock PPM ≡ 0 |
