@@ -52,11 +52,16 @@ claim OI expansion/contraction without stored snapshot history.
 | --- | --- | --- |
 | Feature sampler cron | `/api/v1/alfaclub/market-feature-sampler` | `*/5 * * * *` |
 | Outcome settle cron | `/api/v1/alfaclub/decision-outcome-settle` | `*/5 * * * *` |
+| Settled ledger export | `/api/v1/alfaclub/decision-ledger-export` | `15 12 * * *` (read-only JSONL + claim-gate report) |
 | Auth | `CRON_SECRET` via `x-cron-secret` or Bearer | fail-closed |
 | Retention | prune snapshots older than 45 days | on sampler tick |
 
 Settlement uses point-in-time 1m candles (`readMarkPriceAt`). No current-price
 fallback. Concurrent workers use conditional updates.
+
+Export is privacy-safe (`source_id` hashed); it never includes buyer/job private
+payloads. Public “edge” language remains gated on `claimAllowed` from
+`evaluateConditionalInverseEdge`.
 
 ## Virtuals offering machine names (exact)
 

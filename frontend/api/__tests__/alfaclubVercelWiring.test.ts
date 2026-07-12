@@ -55,6 +55,18 @@ describe('alfaclub vigilante — vercel wiring', () => {
     expect(entry?.schedule).toBe('*/10 * * * *')
   })
 
+  it('frontend/vercel.json registers daily InverseAKITA decision-ledger-export cron', async () => {
+    const body = await readFile(new URL('../../vercel.json', import.meta.url), 'utf8')
+    const parsed = JSON.parse(body) as {
+      crons?: Array<{ path?: string; schedule?: string }>
+    }
+    const entry = (parsed.crons ?? []).find(
+      (c) => c.path === '/api/v1/alfaclub/decision-ledger-export',
+    )
+    expect(entry).toBeDefined()
+    expect(entry?.schedule).toBe('15 12 * * *')
+  })
+
   it('allows MetaMask SDK websocket connections in the app CSP', async () => {
     const body = await readFile(new URL('../../vercel.json', import.meta.url), 'utf8')
     const parsed = JSON.parse(body) as {
@@ -161,5 +173,8 @@ describe('alfaclub vigilante — vercel wiring', () => {
     expect(src).toContain("'alfaclub/chat-token'")
     expect(src).toContain("'alfaclub/chat-token-refresh'")
     expect(src).toContain("'alfaclub/chat-bridge-run'")
+    expect(src).toContain("'alfaclub/market-feature-sampler'")
+    expect(src).toContain("'alfaclub/decision-outcome-settle'")
+    expect(src).toContain("'alfaclub/decision-ledger-export'")
   })
 })

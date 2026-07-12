@@ -78,6 +78,7 @@ const v1RouteLoaders: ApiRouteLoaders = {
   'alfaclub/position-alerts': () => import('./v1/alfaclub/_position-alerts.js'),
   'alfaclub/market-feature-sampler': () => import('./v1/alfaclub/_market-feature-sampler.js'),
   'alfaclub/decision-outcome-settle': () => import('./v1/alfaclub/_decision-outcome-settle.js'),
+  'alfaclub/decision-ledger-export': () => import('./v1/alfaclub/_decision-ledger-export.js'),
   'alfaclub/room-label-sync': () => import('./v1/alfaclub/_room-label-sync.js'),
   'alfaclub/room-label-status': () => import('./v1/alfaclub/_room-label-status.js'),
   'alfaclub/rooms-snapshot-sync': () => import('./v1/alfaclub/_rooms-snapshot-sync.js'),

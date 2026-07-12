@@ -550,14 +550,34 @@ export async function ensureAlfaclubFundingOiObservationSchema(db: Db): Promise<
 /** Continuous Hyperliquid market feature snapshots for honest ΔF/ΔOI. */
 export async function ensureAlfaclubMarketFeatureSnapshotSchema(db: Db): Promise<void> {
   await withEnsureOnce('alfaclubMarketFeatureSnapshots', async () => {
-    await ensureMigrationApplied(db, '20260716000000_inv_akita_feature_snapshots.sql')
+    await ensureMigrationApplied(
+      db,
+      '20260716000000_inv_akita_feature_snapshots.sql',
+      async () => {
+        const result =
+          await db.sql`SELECT to_regclass('alfaclub.market_feature_snapshots') IS NOT NULL AS ok;`
+        return Boolean(result.rows?.[0]?.ok)
+      },
+    )
   })
 }
 
 /** InverseAKITA advisory decision ledger + point-in-time outcomes. */
 export async function ensureAlfaclubDecisionLedgerSchema(db: Db): Promise<void> {
   await withEnsureOnce('alfaclubDecisionLedger', async () => {
-    await ensureMigrationApplied(db, '20260716010000_inv_akita_decision_ledger.sql')
+    await ensureMigrationApplied(
+      db,
+      '20260716010000_inv_akita_decision_ledger.sql',
+      async () => {
+        const result = await db.sql`
+          SELECT
+            to_regclass('alfaclub.decision_ledger') IS NOT NULL
+            AND to_regclass('alfaclub.decision_outcomes') IS NOT NULL
+            AS ok;
+        `
+        return Boolean(result.rows?.[0]?.ok)
+      },
+    )
   })
 }
 
