@@ -503,11 +503,11 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
           operatorOnlyCommand &&
           !canPilotInverseAkitaInRoom
         ) {
-          const restrictedCommand = hermitCommand === '/arena' || /^\/h\s+arena\b/i.test(raw)
+          const restrictedCommand = hermitCommand === '/arena' || /^\s*\/h\s+arena\b/i.test(raw)
             ? '/arena'
             : hermitCommand === '/strategy'
               ? '/strategy bias'
-              : '/signal'
+              : hermitCommand || 'command'
           return {
             ok: false,
             response: isInverseAkitaPilotRoom(alfaClubRoomId)

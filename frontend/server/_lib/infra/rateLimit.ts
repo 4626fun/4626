@@ -141,6 +141,10 @@ export const RATE_LIMITS = {
   creatorQuickstart: { windowMs: 60_000, maxRequests: 20 },
   // Authenticated onboarding bootstrap: 60 per minute per Privy session
   onboardingBootstrapSession: { windowMs: 60_000, maxRequests: 60 },
+  // One-signature activation status polls: 60 per minute per client IP
+  activationStatus: { windowMs: 60_000, maxRequests: 60 },
+  // One-signature activation completion: 10 per minute per client IP
+  activationComplete: { windowMs: 60_000, maxRequests: 10 },
   // Relay owner-mutation status polling: up to ~30 polls/min for 8 minutes
   relayIntentStatus: { windowMs: 60_000, maxRequests: 300 },
   // Keeper machine-auth ingest reads: 120 per minute per client IP

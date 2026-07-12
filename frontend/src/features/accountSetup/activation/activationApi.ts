@@ -1,4 +1,5 @@
 import { apiFetch } from '@/lib/api/apiBase'
+import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
 import type { PreparedOwnerTxRequest } from '@/lib/wallet/zoraAddOwnerApi'
 
@@ -30,7 +31,7 @@ async function readEnvelope<T>(response: Response, label: string): Promise<T> {
 export async function fetchActivationStatus(params: {
   headers: Record<string, string>
 }): Promise<ActivationStatusResponse> {
-  const response = await apiFetch('/api/onboarding/activation-status', {
+  const response = await apiFetch(API_ENDPOINTS.onboarding.activationStatus, {
     method: 'GET',
     headers: {
       'Cache-Control': 'no-cache',
@@ -43,7 +44,7 @@ export async function fetchActivationStatus(params: {
 export async function provisionAutomationOwner(params: {
   headers: Record<string, string>
 }): Promise<ProvisionAutomationOwnerResponse> {
-  const response = await apiFetch('/api/onboarding/provision-agent-owner', {
+  const response = await apiFetch(API_ENDPOINTS.onboarding.provisionAgentOwner, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -58,7 +59,7 @@ export async function completeActivation(params: {
   headers: Record<string, string>
   activationToken: string
 }): Promise<{ ready: true; parentCswAddress: string; serverWalletAddress: string; xmtpIdentifier: string }> {
-  const response = await apiFetch('/api/onboarding/complete-activation', {
+  const response = await apiFetch(API_ENDPOINTS.onboarding.completeActivation, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

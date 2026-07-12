@@ -64,7 +64,7 @@ describe('silent server-owner UserOp', () => {
           chainId: 8453,
           to: CSW,
           data: addOwnerData(SERVER),
-          value: '0x1',
+          value: '0x1' as '0x0',
         },
       }),
     ).toThrow(/zero native value/i)

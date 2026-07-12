@@ -205,7 +205,7 @@ describe('executeOneSignatureActivation', () => {
           ({
             ...provisioned(),
             embeddedOwnerConfirmed: false,
-          }) as ProvisionAutomationOwnerResponse,
+          }) as unknown as ProvisionAutomationOwnerResponse,
         submitSilentServerOwnerInstall: silent,
         completeXmtpProvisioning: async () => undefined,
       }),

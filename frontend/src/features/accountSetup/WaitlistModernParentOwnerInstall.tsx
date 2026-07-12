@@ -39,7 +39,9 @@ export function WaitlistModernParentOwnerInstall({
     canonicalCswAddress,
     embeddedEoaAddress: embeddedEoaAddress ?? null,
     authHeaders,
-    baseWalletMatchesParent: baseWalletMatchesParent !== false,
+    // Fail closed when Base match is unknown (`null`). Silent resume still
+    // works after embedded ownership because the hook checks on-chain status.
+    baseWalletMatchesParent: baseWalletMatchesParent === true,
     onReady: () => onOwnerInstallSuccess?.(),
     onPendingHashChange: setPendingOwnerInstallHash,
     onPhaseChange: setOwnerInstallPhase,
@@ -53,8 +55,12 @@ export function WaitlistModernParentOwnerInstall({
     )
   const funding = modernInstall.fundingAssessment
   const fundingOk = funding?.ok === true
-  const embeddedOwnerConfirmed = activation.status?.embeddedOwnerConfirmed === true
-  const canStart = embeddedOwnerConfirmed || fundingOk
+  const embeddedOwnerConfirmed =
+    activation.status?.embeddedOwnerConfirmed === true ||
+    activation.state.embeddedOwnerConfirmed
+  const canStart =
+    (embeddedOwnerConfirmed || fundingOk) &&
+    (baseWalletMatchesParent === true || embeddedOwnerConfirmed)
   const activationError = activation.state.error ?? modernInstall.pageError
   const statusRows = [
     {
@@ -72,7 +78,7 @@ export function WaitlistModernParentOwnerInstall({
             ? 'No longer required'
             : baseWalletMatchesParent === false
               ? 'Link parent wallet'
-              : 'Verified during approval',
+              : 'Connect Base Account first',
     },
     {
       label: 'Embedded signer owner status',
@@ -98,8 +104,9 @@ export function WaitlistModernParentOwnerInstall({
       <div className="space-y-2 text-zinc-400">
         <p>
           One disclosed Base App approval adds your Privy embedded signer to your parent
-          Coinbase Smart Wallet. After that, the embedded signer completes automation setup
-          silently.
+          Coinbase Smart Wallet. After that, the Privy embedded signer submits a sponsored
+          UserOp to install automation (no second Base App approval; Privy may still ask
+          you to unlock the embedded signer).
         </p>
         <p>That one approval enables:</p>
         <ul className="list-disc space-y-1 pl-5">
@@ -154,7 +161,9 @@ export function WaitlistModernParentOwnerInstall({
           size="sm"
           disabled
         >
-          Check funding first
+          {baseWalletMatchesParent !== true && !embeddedOwnerConfirmed
+            ? 'Connect Base Account first'
+            : 'Check funding first'}
         </Button>
       ) : (
         <Button

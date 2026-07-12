@@ -325,7 +325,8 @@ export class VirtualsAcpService {
       this.toolQuota?.forgetJob(`${session.chainId}:${session.jobId}`)
     }
 
-    if (!config.autoLlmEnabled) return
+    // Deterministic offering/text handlers must run even when auto-LLM is off.
+    // Only the free-form LLM tool loop is gated by VIRTUALS_ACP_AUTO_LLM.
     if (!session.shouldRespond(entry)) return
 
     const sessionKey = `${session.chainId}:${session.jobId}`
@@ -346,11 +347,6 @@ export class VirtualsAcpService {
   }
 
   private async runLlmDecision(session: JobSession, config: VirtualsAcpConfig): Promise<void> {
-    const tools = filterToolsByPolicy(session.availableTools(), {
-      autoFundEnabled: config.autoFundEnabled,
-    })
-    if (tools.length === 0) return
-
     const history = await session.toMessages()
     if (history.length === 0) return
     const latestUserMessage = [...history]
@@ -677,6 +673,15 @@ export class VirtualsAcpService {
       }
       return
     }
+    // Free-form LLM tool loop is optional. Paid offering/text routes above stay
+    // available even when VIRTUALS_ACP_AUTO_LLM=0.
+    if (!config.autoLlmEnabled) return
+
+    const tools = filterToolsByPolicy(session.availableTools(), {
+      autoFundEnabled: config.autoFundEnabled,
+    })
+    if (tools.length === 0) return
+
     const decisionStartedAt = Date.now()
     this.llmAttempted += 1
 

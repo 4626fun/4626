@@ -524,6 +524,10 @@ export type CounterTradeSignalResult = {
   signal: 'long-bias' | 'short-bias' | 'neutral'
   conviction: number
   resolvedInterval: string
+  priceChangePct: number
+  realizedPnl: number
+  rebalanceCount: number
+  recommendedLeveragePercent: number
 }
 
 const SIGNAL_WINDOW_HOURS = 24 * 7 // 7-day lookback for signal
@@ -661,6 +665,10 @@ async function executeSignalJob(
     signal,
     conviction: effectiveConviction,
     resolvedInterval: result.resolvedInterval,
+    priceChangePct,
+    realizedPnl,
+    rebalanceCount,
+    recommendedLeveragePercent,
   }
 }
 

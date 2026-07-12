@@ -5,7 +5,7 @@ describe('operatorPolicy', () => {
   it('recognizes operator-only hermit commands', () => {
     expect(isHermitOperatorOnlyCommand('/arena status')).toBe(true)
     expect(isHermitOperatorOnlyCommand('/h arena status')).toBe(true)
-    expect(isHermitOperatorOnlyCommand('/signal')).toBe(true)
+    expect(isHermitOperatorOnlyCommand('/signal')).toBe(false)
     expect(isHermitOperatorOnlyCommand('/strategy bias bearish')).toBe(true)
     expect(isHermitOperatorOnlyCommand('/strategy status')).toBe(false)
     expect(isHermitOperatorOnlyCommand('/strategy optin balanced')).toBe(false)

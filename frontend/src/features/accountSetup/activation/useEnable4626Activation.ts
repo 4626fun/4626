@@ -71,11 +71,19 @@ export function useEnable4626Activation(params: Params) {
   })
 
   const emitStage = useCallback(
-    (stage: string, outcome: 'started' | 'succeeded' | 'failed', runId: string | null) => {
+    (
+      stage: string,
+      outcome: 'started' | 'succeeded' | 'failed',
+      runId: string | null,
+      startedAtMs?: number,
+    ) => {
       trackEvent('enable_4626_activation_stage', {
         stage,
         outcome,
         runId,
+        ...(typeof startedAtMs === 'number'
+          ? { durationMs: Math.max(0, Date.now() - startedAtMs) }
+          : {}),
       })
     },
     [],
@@ -144,9 +152,9 @@ export function useEnable4626Activation(params: Params) {
   }, [params.embeddedEoaAddress, wallets])
 
   const fail = useCallback(
-    (stage: ActivationFailureStage, error: unknown, runId: string) => {
+    (stage: ActivationFailureStage, error: unknown, runId: string, startedAtMs?: number) => {
       const message = errorMessage(error)
-      emitStage(stage, 'failed', runId)
+      emitStage(stage, 'failed', runId, startedAtMs)
       dispatch({ type: 'FAIL', stage, message })
     },
     [emitStage],
@@ -186,6 +194,7 @@ export function useEnable4626Activation(params: Params) {
     activationBusyRef.current = true
     setActivationBusy(true)
     const runId = newRunId()
+    const runStartedAtMs = Date.now()
     dispatch({ type: 'START', runId })
     emitStage('preparing', 'started', runId)
     let activeFailureStage: ActivationFailureStage = 'prepare'
@@ -202,7 +211,7 @@ export function useEnable4626Activation(params: Params) {
           case 'embedded_owner_confirmed':
             activeFailureStage = 'silent_server_owner_install'
             dispatch({ type: 'EMBEDDED_OWNER_CONFIRMED' })
-            emitStage('confirming_embedded_owner', 'succeeded', runId)
+            emitStage('confirming_embedded_owner', 'succeeded', runId, runStartedAtMs)
             return
           case 'silent_server_owner_install':
             activeFailureStage = 'silent_server_owner_install'
@@ -220,7 +229,8 @@ export function useEnable4626Activation(params: Params) {
             return
           case 'ready':
             dispatch({ type: 'XMTP_PROVISIONED' })
-            emitStage('provisioning_xmtp', 'succeeded', runId)
+            emitStage('provisioning_xmtp', 'succeeded', runId, runStartedAtMs)
+            emitStage('ready', 'succeeded', runId, runStartedAtMs)
             return
           default: {
             const exhaustive: never = stage
@@ -239,7 +249,7 @@ export function useEnable4626Activation(params: Params) {
           const submitted = await visibleInstall.handleSubmitUserOp()
           if (submitted) {
             dispatch({ type: 'VISIBLE_SIGNATURE_SUBMITTED' })
-            emitStage('awaiting_visible_signature', 'succeeded', runId)
+            emitStage('awaiting_visible_signature', 'succeeded', runId, runStartedAtMs)
             activeFailureStage = 'embedded_owner_confirmation'
           }
           return submitted
@@ -291,7 +301,7 @@ export function useEnable4626Activation(params: Params) {
             retryOnPrefund: false,
           })
           dispatch({ type: 'SILENT_SERVER_INSTALL_SUBMITTED' })
-          emitStage('installing_server_owner_silently', 'succeeded', runId)
+          emitStage('installing_server_owner_silently', 'succeeded', runId, runStartedAtMs)
           activeFailureStage = 'server_owner_confirmation'
         },
         completeXmtpProvisioning: async (activationToken) => {
@@ -305,7 +315,7 @@ export function useEnable4626Activation(params: Params) {
       await params.onReady?.()
       return true
     } catch (error) {
-      fail(activeFailureStage, error, runId)
+      fail(activeFailureStage, error, runId, runStartedAtMs)
       return false
     } finally {
       activationBusyRef.current = false

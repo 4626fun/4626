@@ -23,7 +23,7 @@ function formatHermitCreativeSection(): string[] {
   return [
     '**Hermit — creative (read-only)**',
     '• `/position` — Hyperliquid positions + alert setup',
-    '• `/signal` — position-aware enter/exit bias from your live entries',
+    '• `/signal` — multi-factor LONG/SHORT/STAY OUT (7d counter-trade + Funding/OI)',
     '• `/market` — broader majors + AlfaClub market scope',
     '• `/h arena ...` (status|register|identity ...|join|activate|trade|...) — Virtuals Arena (Degenerate Claw) controls (room/flag gated; room 1659 routes to InverseAKITA room-default wallet; stakers with ≥1 staked key have operator-equivalent pilot access)',
     '• `/h arena long|short|close` · `/h pos` · `/h rules` · `/h status` — InverseAKITA pilot (room 1659; stake ≥1 key)',

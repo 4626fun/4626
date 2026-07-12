@@ -102,7 +102,38 @@ describe('executeHermitCommand', () => {
     expect(result.reply).toMatch(/Market scope|temporarily unavailable/)
   })
 
-  it('supports /signal position-aware command', async () => {
+  it('supports /signal multi-factor composite command', async () => {
+    vi.spyOn(virtualsBacktestJobs, 'runFundingOiRegimeJob').mockResolvedValue({
+      symbol: 'BTC',
+      regime: 'crowded-longs',
+      lean: 'fade-longs',
+      strength: 'strong',
+      confidence: 82,
+      edgeScore: 82,
+      fundingBias: 'longs-paying',
+      oiParticipation: 'high',
+      fundingRate: 0.0002,
+      openInterestUsd: 900_000,
+      volume24hUsd: 1_000_000,
+      priceChange24hPct: 3.2,
+      oiToVolumeRatio: 0.9,
+      missingFields: [],
+      reasons: ['Funding is elevated longs paying at 0.0200%/period.'],
+      playbook: ['Primary lean: fade long crowding.'],
+      shadowOnly: true,
+      responseText: 'funding-only',
+    } as Awaited<ReturnType<typeof virtualsBacktestJobs.runFundingOiRegimeJob>>)
+    vi.spyOn(virtualsBacktestJobs, 'runCounterTradeSignal').mockResolvedValue({
+      responseText: 'counter-only',
+      signal: 'short-bias',
+      conviction: 80,
+      resolvedInterval: '1m',
+      priceChangePct: 6.2,
+      realizedPnl: 12,
+      rebalanceCount: 3,
+      recommendedLeveragePercent: 62,
+    })
+
     const result = await executeHermitCommand({
       commandText: '/signal',
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -111,7 +142,60 @@ describe('executeHermitCommand', () => {
 
     expect(result.kind).toBe('hermit')
     expect(result.provider).toBe('local')
-    expect(result.reply).toContain('Entry / Exit signal')
+    expect(result.reply).toContain('SIGNAL — BTC')
+    expect(result.reply).toContain('Action: **SHORT**')
+    expect(result.reply).toContain('ALIGNED')
+    expect(result.reply).toContain('Playbook')
+    expect(result.reply).not.toMatch(/Entry \/ Exit signal|Regime:|Signal: BALANCED/i)
+    expect(virtualsBacktestJobs.runFundingOiRegimeJob).toHaveBeenCalledWith(
+      'BTC',
+      expect.objectContaining({ idempotencyKey: expect.stringContaining('hermit-signal:') }),
+    )
+    expect(virtualsBacktestJobs.runCounterTradeSignal).toHaveBeenCalledWith('BTC')
+  })
+
+  it('supports /signal with an explicit symbol', async () => {
+    const fundingSpy = vi.spyOn(virtualsBacktestJobs, 'runFundingOiRegimeJob').mockResolvedValue({
+      symbol: 'ETH',
+      regime: 'balanced',
+      lean: 'no-edge',
+      strength: 'none',
+      confidence: 85,
+      edgeScore: 10,
+      fundingBias: 'flat',
+      oiParticipation: 'low',
+      fundingRate: 0.000005,
+      openInterestUsd: 1,
+      volume24hUsd: 1,
+      priceChange24hPct: 0.2,
+      oiToVolumeRatio: 0.1,
+      missingFields: [],
+      reasons: ['Funding is flat.'],
+      playbook: ['Stand aside.'],
+      shadowOnly: true,
+      responseText: 'funding-only',
+    } as Awaited<ReturnType<typeof virtualsBacktestJobs.runFundingOiRegimeJob>>)
+    const counterSpy = vi.spyOn(virtualsBacktestJobs, 'runCounterTradeSignal').mockResolvedValue({
+      responseText: 'counter-only',
+      signal: 'long-bias',
+      conviction: 70,
+      resolvedInterval: '1m',
+      priceChangePct: -4.1,
+      realizedPnl: 8,
+      rebalanceCount: 2,
+      recommendedLeveragePercent: 55,
+    })
+
+    const result = await executeHermitCommand({
+      commandText: '/signal eth',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1659',
+    })
+
+    expect(result.reply).toContain('SIGNAL — ETH')
+    expect(result.reply).toContain('Action: **LONG**')
+    expect(fundingSpy).toHaveBeenCalledWith('ETH', expect.any(Object))
+    expect(counterSpy).toHaveBeenCalledWith('ETH')
   })
 
   it('supports /position chart timeline command in room contexts', async () => {

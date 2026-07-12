@@ -16,6 +16,8 @@ import {
   extractDelegationFlags,
 } from '../../../server/_lib/wallet/canonicalCswDelegation.js'
 import { prepareAddOwnerTx } from '../../../server/_lib/wallet/coinbaseSmartWalletOwner.js'
+import { assertAddOwnerSelfCallShape } from '../../../src/lib/wallet/addOwnerCallShape.js'
+import { getAddress } from 'viem'
 type PrepareResponse =
   | { alreadyOwner: true }
   | {
@@ -76,6 +78,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const txRequest = prepareAddOwnerTx(bootstrap.canonicalCswAddress, bootstrap.privyEmbeddedEoaAddress)
+    assertAddOwnerSelfCallShape({
+      csw: getAddress(bootstrap.canonicalCswAddress),
+      txRequest,
+      expectedOwnerToAdd: getAddress(bootstrap.privyEmbeddedEoaAddress),
+    })
     return res.status(200).json({
       success: true,
       data: { alreadyOwner: false, txRequest } satisfies PrepareResponse,

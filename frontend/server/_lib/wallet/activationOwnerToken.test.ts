@@ -21,7 +21,7 @@ describe('activation owner token', () => {
     else process.env.AUTH_SESSION_SECRET = originalSecret
   })
 
-  it('binds user, profile, CSW, embedded signer, server wallet, purpose, and expiry', () => {
+  it('binds user, profile, CSW, embedded signer, server wallet, purpose, expiry, and jti', () => {
     const token = issueActivationOwnerToken({
       privyUserId: 'did:privy:user-1',
       profileId: 42,
@@ -31,9 +31,11 @@ describe('activation owner token', () => {
       serverOwnerAddress: SERVER,
       nowMs: 1_000,
       ttlSeconds: 60,
+      jti: 'activation-jti-fixture-01',
     })
 
     expect(readActivationOwnerToken(token, 30_000)).toMatchObject({
+      jti: 'activation-jti-fixture-01',
       privyUserId: 'did:privy:user-1',
       profileId: 42,
       sessionAddress: SESSION,
@@ -43,6 +45,25 @@ describe('activation owner token', () => {
       purpose: 'enable_4626_server_owner',
       expiresAtMs: 61_000,
     })
+  })
+
+  it('rejects tokens missing jti after signature forgery of an empty claim id', () => {
+    const token = issueActivationOwnerToken({
+      privyUserId: 'did:privy:user-1',
+      profileId: 42,
+      sessionAddress: SESSION,
+      smartWalletAddress: CSW,
+      embeddedOwnerAddress: SESSION,
+      serverOwnerAddress: SERVER,
+      nowMs: 1_000,
+      ttlSeconds: 60,
+      jti: 'activation-jti-fixture-02',
+    })
+    const [payloadPart] = token.split('.')
+    const payload = JSON.parse(Buffer.from(payloadPart!, 'base64url').toString('utf8'))
+    delete payload.jti
+    const forged = `${Buffer.from(JSON.stringify(payload)).toString('base64url')}.deadbeef`
+    expect(readActivationOwnerToken(forged, 2_000)).toBeNull()
   })
 
   it('rejects tampering and expiry', () => {

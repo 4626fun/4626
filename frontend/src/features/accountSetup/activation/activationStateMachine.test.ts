@@ -205,4 +205,38 @@ describe('activation state machine', () => {
       error: null,
     })
   })
+
+  it('does not wipe an in-progress stage when status polls before confirmation', () => {
+    const awaiting = activationReducer(
+      {
+        ...INITIAL_ACTIVATION_STATE,
+        stage: 'awaiting_visible_signature',
+        runId: 'run-5',
+      },
+      {
+        type: 'STATUS_RESOLVED',
+        snapshot: READY_BASE,
+      },
+    )
+    expect(awaiting.stage).toBe('awaiting_visible_signature')
+
+    const installing = activationReducer(
+      {
+        ...INITIAL_ACTIVATION_STATE,
+        stage: 'installing_server_owner_silently',
+        embeddedOwnerConfirmed: true,
+        runId: 'run-6',
+      },
+      {
+        type: 'STATUS_RESOLVED',
+        snapshot: {
+          ...READY_BASE,
+          embeddedOwnerConfirmed: true,
+          serverWalletExpected: true,
+        },
+      },
+    )
+    expect(installing.stage).toBe('installing_server_owner_silently')
+    expect(installing.embeddedOwnerConfirmed).toBe(true)
+  })
 })

@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto'
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { getAddress, isAddress, type Address } from 'viem'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -8,6 +8,7 @@ const DEFAULT_TTL_SECONDS = 10 * 60
 
 type ActivationOwnerTokenPayload = {
   v: 'act1'
+  jti: string
   uid: string
   pid: number
   sa: string
@@ -20,6 +21,7 @@ type ActivationOwnerTokenPayload = {
 }
 
 export type DecodedActivationOwnerToken = {
+  jti: string
   privyUserId: string
   profileId: number
   sessionAddress: Address
@@ -53,6 +55,12 @@ function normalizeAddress(value: string): Address {
   return getAddress(value)
 }
 
+function normalizeJti(value: unknown): string {
+  const jti = typeof value === 'string' ? value.trim() : ''
+  if (!jti || jti.length < 8 || jti.length > 128) throw new Error('invalid_activation_jti')
+  return jti
+}
+
 export function issueActivationOwnerToken(params: {
   privyUserId: string
   profileId: number
@@ -62,6 +70,7 @@ export function issueActivationOwnerToken(params: {
   serverOwnerAddress: Address
   ttlSeconds?: number
   nowMs?: number
+  jti?: string
 }): string {
   const now = params.nowMs ?? Date.now()
   const ttlSeconds =
@@ -72,6 +81,7 @@ export function issueActivationOwnerToken(params: {
       : DEFAULT_TTL_SECONDS
   const payload: ActivationOwnerTokenPayload = {
     v: 'act1',
+    jti: params.jti ? normalizeJti(params.jti) : randomBytes(16).toString('base64url'),
     uid: String(params.privyUserId).trim(),
     pid: Math.trunc(params.profileId),
     sa: normalizeAddress(params.sessionAddress).toLowerCase(),
@@ -123,6 +133,7 @@ export function readActivationOwnerToken(
   }
   try {
     return {
+      jti: normalizeJti(payload.jti),
       privyUserId: payload.uid,
       profileId: Math.trunc(payload.pid),
       sessionAddress: normalizeAddress(payload.sa),

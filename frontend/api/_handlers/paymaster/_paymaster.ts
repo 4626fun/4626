@@ -58,6 +58,7 @@ import {
   readActivationOwnerToken,
   type DecodedActivationOwnerToken,
 } from '../../../server/_lib/wallet/activationOwnerToken.js'
+import { assertActivationOwnerTokenClaimActive } from '../../../server/_lib/wallet/activationOwnerTokenClaim.js'
 
 
 import {
@@ -1407,6 +1408,14 @@ async function validateActivationOwnerBinding(params: {
     getAddress(String(row?.preprov_server_wallet_address)) ===
       params.token.serverOwnerAddress
   if (!bindingMatches) throw new Error('activation_owner_policy_binding_mismatch')
+
+  await assertActivationOwnerTokenClaimActive(db as never, {
+    jti: params.token.jti,
+    profileId: params.token.profileId,
+    privyUserId: params.token.privyUserId,
+    parentCswAddress: params.token.smartWalletAddress,
+    serverOwnerAddress: params.token.serverOwnerAddress,
+  })
 
   const client = await getBaseClient()
   const embeddedOwnerConfirmed = await client.readContract({
@@ -3782,7 +3791,16 @@ async function handlePaymasterRequest(req: VercelRequest, res: VercelResponse) {
       // FIX: FINDING-05 — enforce per-sender hourly UserOp sponsorship limit.
       // Preflight methods are intentionally weight 0; otherwise one visible
       // swap can consume several quota units before the actual submit.
-      const sponsorshipLimit = checkSponsorshipLimit(sender, sponsorshipWeightForMethod(method))
+      // Activation owner-install UserOps (valid policy token present) are weight 0
+      // so Enable 4626 silent retries do not burn swap sponsorship quota.
+      const activationPolicyLooksValid = Boolean(
+        activationOwnerPolicyTokenHeader &&
+          readActivationOwnerToken(activationOwnerPolicyTokenHeader),
+      )
+      const sponsorshipWeight = activationPolicyLooksValid
+        ? 0
+        : sponsorshipWeightForMethod(method)
+      const sponsorshipLimit = checkSponsorshipLimit(sender, sponsorshipWeight)
       if (!sponsorshipLimit.allowed) {
         res.setHeader('Retry-After', String(Math.max(1, Math.ceil((sponsorshipLimit.resetAtMs - Date.now()) / 1000))))
         return res.status(200).json(jsonRpcError((r as any)?.id ?? null, -32005, 'Sponsorship limit exceeded for this sender'))
@@ -3835,7 +3853,7 @@ async function handlePaymasterRequest(req: VercelRequest, res: VercelResponse) {
       // Basic rate limit: per session address. Count only sponsorship
       // issuance/submission so a single UserOp preflight sequence doesn't
       // burn the session quota before the user can submit.
-      enforceRateLimit(sessionAddress, sponsorshipWeightForMethod(method))
+      enforceRateLimit(sessionAddress, sponsorshipWeight)
       const initCode = isHexString(initCodeRaw) ? (initCodeRaw as Hex) : null
       const factoryRaw = extracted.userOp?.factory
       const factoryDataRaw = extracted.userOp?.factoryData

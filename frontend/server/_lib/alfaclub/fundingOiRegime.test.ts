@@ -15,13 +15,15 @@ describe('classifyFundingOiRegime', () => {
     ).toMatchObject({
       symbol: 'BTC',
       regime: 'insufficient-data',
+      lean: 'insufficient-data',
       confidence: 0,
+      edgeScore: 0,
       shadowOnly: true,
       missingFields: ['fundingRate'],
     })
   })
 
-  it('detects crowded longs from positive funding and high OI participation', () => {
+  it('detects strong fade-longs from elevated funding and high OI participation', () => {
     const result = classifyFundingOiRegime({
       symbol: 'eth',
       fundingRate: 0.00015,
@@ -33,15 +35,18 @@ describe('classifyFundingOiRegime', () => {
     expect(result).toMatchObject({
       symbol: 'ETH',
       regime: 'crowded-longs',
+      lean: 'fade-longs',
       fundingBias: 'longs-paying',
       oiParticipation: 'high',
       shadowOnly: true,
       missingFields: [],
     })
     expect(result.confidence).toBeGreaterThanOrEqual(70)
+    expect(result.edgeScore).toBeGreaterThanOrEqual(70)
+    expect(result.strength).toMatch(/moderate|strong/)
   })
 
-  it('detects crowded shorts symmetrically', () => {
+  it('detects fade-shorts symmetrically', () => {
     expect(
       classifyFundingOiRegime({
         symbol: 'SOL',
@@ -52,28 +57,68 @@ describe('classifyFundingOiRegime', () => {
       }),
     ).toMatchObject({
       regime: 'crowded-shorts',
+      lean: 'fade-shorts',
       fundingBias: 'shorts-paying',
       oiParticipation: 'high',
     })
   })
 
-  it('keeps low-participation or flat-funding markets balanced', () => {
-    expect(
-      classifyFundingOiRegime({
-        symbol: 'HYPE',
-        fundingRate: 0.000005,
-        openInterestUsd: 100_000,
-        volume24hUsd: 1_000_000,
-        priceChange24hPct: 0.4,
-      }),
-    ).toMatchObject({
-      regime: 'balanced',
-      fundingBias: 'flat',
-      oiParticipation: 'low',
+  it('marks mild funding + high OI as watch, not full fade', () => {
+    const result = classifyFundingOiRegime({
+      symbol: 'BTC',
+      fundingRate: 0.00004,
+      openInterestUsd: 3_000_000,
+      volume24hUsd: 1_000_000,
+      priceChange24hPct: 0.3,
     })
+
+    expect(result).toMatchObject({
+      regime: 'balanced',
+      lean: 'watch-longs',
+      fundingBias: 'longs-paying',
+      oiParticipation: 'high',
+    })
+    expect(result.edgeScore).toBeGreaterThan(0)
+    expect(result.edgeScore).toBeLessThan(70)
   })
 
-  it('returns an explicitly advisory, non-execution format', () => {
+  it('keeps flat-funding markets as no-edge with high certainty', () => {
+    const result = classifyFundingOiRegime({
+      symbol: 'HYPE',
+      fundingRate: 0.000005,
+      openInterestUsd: 100_000,
+      volume24hUsd: 1_000_000,
+      priceChange24hPct: 0.4,
+    })
+
+    expect(result).toMatchObject({
+      regime: 'balanced',
+      lean: 'no-edge',
+      fundingBias: 'flat',
+      oiParticipation: 'low',
+      strength: 'none',
+    })
+    expect(result.confidence).toBeGreaterThanOrEqual(70)
+    expect(result.edgeScore).toBeLessThanOrEqual(25)
+  })
+
+  it('treats the canary-like BTC snapshot as no-edge, not a soft buy', () => {
+    // Matches job 67942 shape: tiny funding, high OI/vol, flat price.
+    const result = classifyFundingOiRegime({
+      symbol: 'BTC',
+      fundingRate: 0.000013,
+      openInterestUsd: 3_010_000,
+      volume24hUsd: 1_000_000,
+      priceChange24hPct: -0.21,
+    })
+
+    expect(result.lean).toBe('no-edge')
+    expect(result.regime).toBe('balanced')
+    expect(result.edgeScore).toBeLessThan(30)
+    expect(result.confidence).toBeGreaterThanOrEqual(70)
+  })
+
+  it('returns a decisive advisory format with lean + playbook', () => {
     const text = formatFundingOiRegime(
       classifyFundingOiRegime({
         symbol: 'BTC',
@@ -84,13 +129,33 @@ describe('classifyFundingOiRegime', () => {
       }),
     )
 
-    expect(text).toContain('Shadow Funding/OI Regime for BTC')
-    expect(text).toContain('CROWDED-LONGS')
+    expect(text).toContain('Funding/OI signal — BTC')
+    expect(text).toContain('FADE LONGS')
+    expect(text).toContain('Playbook')
     expect(text).toContain('Advisory only')
     expect(text).not.toMatch(/\b(COUNTER|DELAY|SKIP)\b/)
+    expect(text).not.toMatch(/Shadow Funding\/OI Regime|Regime:/i)
   })
 
-  it('never emits live-decision vocabulary for any regime branch', () => {
+  it('formats no-edge as stand-aside, not a mushy mid confidence headline', () => {
+    const text = formatFundingOiRegime(
+      classifyFundingOiRegime({
+        symbol: 'BTC',
+        fundingRate: 0.000013,
+        openInterestUsd: 3_010_000,
+        volume24hUsd: 1_000_000,
+        priceChange24hPct: -0.21,
+      }),
+    )
+
+    expect(text).toContain('NO EDGE')
+    expect(text).toContain('Edge:')
+    expect(text).toContain('certainty no-edge')
+    expect(text).toContain('stand aside')
+    expect(text).not.toMatch(/Signal: BALANCED \(confidence: 4\d\/100\)/)
+  })
+
+  it('never emits live-decision vocabulary for any lean branch', () => {
     const cases = [
       { fundingRate: 0.0002, openInterestUsd: 900_000, volume24hUsd: 1_000_000, priceChange24hPct: 3 },
       { fundingRate: -0.0002, openInterestUsd: 900_000, volume24hUsd: 1_000_000, priceChange24hPct: -3 },

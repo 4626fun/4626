@@ -1,19 +1,20 @@
 /**
  * POST /api/onboarding/provision-agent-owner
  *
- * Provisions a Privy-managed agent wallet for the authenticated user's
- * canonical CSW and returns the `addOwnerAddress` calldata.  The client
- * sends this as a sponsored `canonical4337` self-call from the CSW,
- * signed by the already-confirmed Privy embedded EOA owner.
+ * Provisions a Privy-managed automation wallet for the authenticated user's
+ * parent Coinbase Smart Wallet and returns the `addOwnerAddress` calldata for a
+ * silent sponsored `canonical4337` self-call. The client submits that UserOp
+ * signed by the already-confirmed Privy embedded EOA owner, then completes
+ * XMTP provisioning via `/api/onboarding/complete-activation`.
  *
- * This replaces the old pattern where deploy-session lazily installed the
- * agent owner at first use.  By moving it into onboarding we can fold it
- * into the same session as sub-account creation and minimise passkey prompts.
+ * This is the automation half of one-signature Enable 4626 signing: the only
+ * visible Base App approval installs the embedded EOA; the server wallet is
+ * added silently afterward. No new CSW or sub-account is created.
  *
  * Response shape:
- *   { alreadyOwner: true }
+ *   { alreadyOwner: true, agentWalletAddress, embeddedOwnerConfirmed, activationToken }
  *   OR
- *   { alreadyOwner: false, agentWalletAddress, txRequest }
+ *   { alreadyOwner: false, agentWalletAddress, embeddedOwnerConfirmed, activationToken, txRequest }
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
@@ -36,9 +37,11 @@ import {
 } from '../../../server/_lib/wallet/canonicalCswDelegation.js'
 import { prepareAddOwnerTx, isOwner as isOwnerOnChain } from '../../../server/_lib/wallet/coinbaseSmartWalletOwner.js'
 import { createAgentWallet, getWalletById } from '../../../server/_lib/wallet/privyWalletApi.js'
-import { issueActivationOwnerToken } from '../../../server/_lib/wallet/activationOwnerToken.js'
+import { issueActivationOwnerToken, readActivationOwnerToken } from '../../../server/_lib/wallet/activationOwnerToken.js'
+import { registerActivationOwnerTokenClaim } from '../../../server/_lib/wallet/activationOwnerTokenClaim.js'
 import { resolveActivationServerWallet } from '../../../server/_lib/wallet/activationServerWallet.js'
 import { resolveServerBaseRpcUrl } from '../../../server/_lib/onchain/baseRpcUrl.js'
+import { assertAddOwnerSelfCallShape } from '../../../src/lib/wallet/addOwnerCallShape.js'
 import { createPublicClient, getAddress, http, type Address } from 'viem'
 import { base } from 'viem/chains'
 
@@ -166,6 +169,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       embeddedOwnerAddress: embeddedEoaAddress,
       serverOwnerAddress: getAddress(agentWallet.address),
     })
+    const decodedToken = readActivationOwnerToken(activationToken)
+    if (!decodedToken) throw new Error('activation_token_issue_failed')
+    await registerActivationOwnerTokenClaim(db as never, {
+      jti: decodedToken.jti,
+      profileId: decodedToken.profileId,
+      privyUserId: decodedToken.privyUserId,
+      parentCswAddress: decodedToken.smartWalletAddress,
+      serverOwnerAddress: decodedToken.serverOwnerAddress,
+      expiresAtMs: decodedToken.expiresAtMs,
+    })
 
     // 3. Check if the agent wallet is already an owner of the CSW on-chain.
     const publicClient = createPublicClient({
@@ -189,6 +202,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 4. Build the addOwnerAddress calldata for the client to submit.
     const txRequest = prepareAddOwnerTx(canonicalCswAddress, agentWallet.address)
+    assertAddOwnerSelfCallShape({
+      csw: canonicalCswAddress,
+      txRequest,
+      expectedOwnerToAdd: getAddress(agentWallet.address),
+    })
 
     return res.status(200).json({
       success: true,

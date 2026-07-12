@@ -8,7 +8,7 @@ import { ensureAlfaclubFundingOiObservationSchema } from '../db/schemaBootstrap.
 
 const OUTCOME_HORIZON_HOURS = [1, 4, 24] as const
 const SOURCE_PROVIDER = 'hyperliquid-meta-and-asset-ctxs'
-const CLASSIFIER_VERSION = 'funding-oi-regime-v1'
+const CLASSIFIER_VERSION = 'funding-oi-signal-v2'
 
 export type FundingOiObservationField =
   | 'markPriceUsd'

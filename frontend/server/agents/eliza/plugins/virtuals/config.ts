@@ -100,11 +100,30 @@ export function findInvalidExecutableHighRiskTools(raw: string | null | undefine
 
 const SECP256K1_ORDER = BigInt('0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141')
 
+/**
+ * Privy/Virtuals session authorization keys are usually P-256 PKCS#8 material
+ * (base64, optionally `wallet-auth:`-prefixed). Some older docs also mention a
+ * raw 0x-hex secp256k1 scalar. Accept both so local/Railway env copies from the
+ * Virtuals Signers tab validate.
+ */
 export function isValidVirtualsSignerPrivateKey(value: string | null | undefined): boolean {
   const raw = String(value ?? '').trim()
-  if (!/^0x[a-fA-F0-9]{64}$/.test(raw)) return false
-  const scalar = BigInt(raw)
-  return scalar > 0n && scalar < SECP256K1_ORDER
+  if (!raw) return false
+
+  // Legacy raw secp256k1 scalar form.
+  if (/^0x[a-fA-F0-9]{64}$/.test(raw)) {
+    const scalar = BigInt(raw)
+    return scalar > 0n && scalar < SECP256K1_ORDER
+  }
+
+  // Privy authorization private key forms used by acp-node-v2 adapters.
+  const authorizationKey = raw.startsWith('wallet-auth:') ? raw.slice('wallet-auth:'.length) : raw
+  // PKCS#8 EC private keys are base64 and typically start with MIGH / MIGT.
+  if (/^[A-Za-z0-9+/_-]+=*$/.test(authorizationKey) && authorizationKey.length >= 80) {
+    return true
+  }
+
+  return false
 }
 
 function normalizeAddressOrNull(value: string | null): `0x${string}` | null {
@@ -162,7 +181,8 @@ export function checkVirtualsAcpConfig(config = readVirtualsAcpConfig()): Virtua
   if (!isValidVirtualsSignerPrivateKey(config.signerPrivateKey)) {
     return {
       ok: false,
-      reason: 'invalid VIRTUALS_ACP_SIGNER_PRIVATE_KEY (expected a non-zero 0x-prefixed 32-byte secp256k1 private key)',
+      reason:
+        'invalid VIRTUALS_ACP_SIGNER_PRIVATE_KEY (expected Privy authorization key: wallet-auth:/base64 PKCS#8, or a non-zero 0x-prefixed 32-byte secp256k1 private key)',
     }
   }
   if (config.invalidExecutableHighRiskTools.length > 0) {

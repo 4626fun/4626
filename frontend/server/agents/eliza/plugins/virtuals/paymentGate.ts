@@ -16,6 +16,11 @@ export type BacktestPaymentGateDecision = {
  * Fail-closed payment gate for ACP paid work. In acp-node-v2, a JobSession
  * exposes the loaded AcpJob at `session.job`, and its budget is an AssetToken
  * at `job.budget`. Paid work starts only in the SDK's funded state.
+ *
+ * Free offerings (funds-required=No) still transition to session/job FUNDED with
+ * a zero budget amount. Treat protocol-funded status as the authority; a
+ * positive budget is preferred metadata but not required once the SDK reports
+ * funded.
  */
 export function evaluateBacktestPaymentGate(sessionLike: unknown): BacktestPaymentGateDecision {
   const session = (sessionLike ?? {}) as SdkJobSessionPaymentShape
@@ -42,8 +47,8 @@ export function evaluateBacktestPaymentGate(sessionLike: unknown): BacktestPayme
     }
   }
   return {
-    allowed: false,
-    reason: 'missing_or_non_positive_payment_amount',
-    amountUsdc,
+    allowed: true,
+    reason: 'protocol_funded_zero_budget',
+    amountUsdc: 0,
   }
 }

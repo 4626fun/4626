@@ -110,6 +110,28 @@ function isActivationFailureResolved(
   }
 }
 
+function isInProgressActivationStage(stage: ActivationStage): boolean {
+  switch (stage) {
+    case 'preparing':
+    case 'awaiting_visible_signature':
+    case 'confirming_embedded_owner':
+    case 'installing_server_owner_silently':
+    case 'confirming_server_owner':
+    case 'provisioning_xmtp':
+      return true
+    case 'idle':
+    case 'needs_base_wallet':
+    case 'ready':
+    case 'partial_ready':
+    case 'error':
+      return false
+    default: {
+      const exhaustive: never = stage
+      return exhaustive
+    }
+  }
+}
+
 export function activationReducer(
   state: ActivationState,
   event: ActivationEvent,
@@ -132,12 +154,17 @@ export function activationReducer(
           Boolean(state.error) &&
           !failureResolved &&
           nextStage !== 'ready'
+        // Status polls during an active run must not wipe the in-progress stage
+        // back to idle/partial_ready before the orchestrator advances explicitly.
+        const preserveInProgressStage =
+          isInProgressActivationStage(state.stage) && nextStage !== 'ready'
         return {
           ...state,
-          stage:
-            preserveError && embeddedOwnerConfirmed && nextStage === 'idle'
+          stage: preserveInProgressStage
+            ? state.stage
+            : preserveError && embeddedOwnerConfirmed && nextStage === 'idle'
               ? 'partial_ready'
-              : preserveError && state.stage === 'error' && nextStage !== 'ready'
+              : preserveError && state.stage === 'error'
                 ? 'error'
                 : nextStage,
           embeddedOwnerConfirmed,

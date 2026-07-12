@@ -108,7 +108,7 @@ export function formatInverseAkitaPilotStatus(params: {
     '• `/h arena long|short|close` — trade InverseAKITA wallet',
     '• `/h pos` · `/h arena status` — book + executor health',
     '• `/h rules` — full pilot guide',
-    '• `/signal` — position-aware bias',
+    '• `/signal` — multi-factor LONG/SHORT/STAY OUT',
     '',
     `Executor: agent **${params.arenaAgentId ?? 'n/a'}** · wallet **${params.arenaWalletAddress ?? 'n/a'}**`,
   ].join('\n')

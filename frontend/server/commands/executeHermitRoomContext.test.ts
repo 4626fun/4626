@@ -419,7 +419,7 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     isHermitUserAllowedMock.mockReturnValue(true)
   })
 
-  it('restricts /signal for non-allowlisted room members on AlfaClub bridge', async () => {
+  it('allows /signal for non-allowlisted room members on AlfaClub bridge', async () => {
     isHermitUserAllowedMock.mockReturnValue(false)
     listUserPreferencesMock.mockResolvedValueOnce([])
 
@@ -432,9 +432,8 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
       userId: ALICE,
     })
 
-    expect(result.ok).toBe(false)
-    expect(result.response).toContain('restricted to trusted operators')
-    expect(executeHermitCommandMock).not.toHaveBeenCalled()
+    expect(result.ok).toBe(true)
+    expect(executeHermitCommandMock).toHaveBeenCalledTimes(1)
     isHermitUserAllowedMock.mockReturnValue(true)
   })
 

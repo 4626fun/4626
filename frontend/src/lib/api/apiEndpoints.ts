@@ -7,6 +7,11 @@ export const API_ENDPOINTS = {
     accessStatus: '/api/creator-access/status',
     accessRequest: '/api/creator-access/request',
   },
+  onboarding: {
+    activationStatus: '/api/onboarding/activation-status',
+    completeActivation: '/api/onboarding/complete-activation',
+    provisionAgentOwner: '/api/onboarding/provision-agent-owner',
+  },
   waitlist: {
     leaderboard: '/api/waitlist/leaderboard',
   },

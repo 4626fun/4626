@@ -7,6 +7,10 @@ import {
   readJsonBody,
   setCors,
   setNoStore,
+  RATE_LIMITS,
+  checkDurableRateLimit,
+  getClientIp,
+  rateLimitKey,
   type ApiEnvelope,
 } from '@4626/server-core'
 import { enableCswAgent } from '../../../server/_lib/messaging/creatorXmtpAgents.js'
@@ -15,6 +19,7 @@ import {
   resolveActivationContext,
 } from '../../../server/_lib/wallet/activationContext.js'
 import { readActivationOwnerToken } from '../../../server/_lib/wallet/activationOwnerToken.js'
+import { consumeActivationOwnerTokenClaim } from '../../../server/_lib/wallet/activationOwnerTokenClaim.js'
 
 const BODY_MAX_BYTES = 8 * 1024
 
@@ -33,6 +38,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({
       success: false,
       error: 'Method not allowed',
+    } satisfies ApiEnvelope<never>)
+  }
+
+  const limiter = await checkDurableRateLimit(
+    rateLimitKey('onboarding-complete-activation', getClientIp(req)),
+    RATE_LIMITS.activationComplete,
+    { failClosed: true },
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({
+      success: false,
+      error: 'Rate limit exceeded',
     } satisfies ApiEnvelope<never>)
   }
 
@@ -101,6 +119,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<never>)
     }
 
+    // Consume only after XMTP readiness is confirmed so retries can reuse the
+    // same token if enableCswAgent/readback races before ready.
+    await consumeActivationOwnerTokenClaim(db as never, {
+      jti: token.jti,
+      profileId: token.profileId,
+      privyUserId: token.privyUserId,
+    })
+
     const data: CompleteActivationResponse = {
       ready: true,
       parentCswAddress: status.parentCswAddress,
@@ -115,7 +141,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const message = error instanceof Error ? error.message : 'Activation completion failed'
     const statusCode = message.includes('Missing Privy') || message.includes('Privy verification')
       ? 401
-      : 500
+      : message.includes('activation_token_')
+        ? 409
+        : 500
     return res.status(statusCode).json({
       success: false,
       error: message,

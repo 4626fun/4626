@@ -339,16 +339,33 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
       return getAddress(address as `0x${string}`) === serverOwner ? '0x' : '0x1234'
     })
     isDbConfiguredMock.mockReturnValue(true)
+    const activationJti = 'test-activation-jti-bound-01'
     getDbMock.mockResolvedValue({
-      sql: vi.fn(async () => ({
-        rows: [{
-          id: 42,
-          privy_user_id: 'did:privy:user-1',
-          csw_address: sender,
-          primary_embedded_eoa: sessionAddress,
-          preprov_server_wallet_address: serverOwner,
-        }],
-      })),
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ')
+        if (text.includes('activation_owner_token_claims')) {
+          return {
+            rows: [{
+              jti: activationJti,
+              consumed_at: null,
+              expires_at: new Date(Date.now() + 60_000).toISOString(),
+              profile_id: 42,
+              privy_user_id: 'did:privy:user-1',
+              parent_csw_address: sender.toLowerCase(),
+              server_owner_address: serverOwner.toLowerCase(),
+            }],
+          }
+        }
+        return {
+          rows: [{
+            id: 42,
+            privy_user_id: 'did:privy:user-1',
+            csw_address: sender,
+            primary_embedded_eoa: sessionAddress,
+            preprov_server_wallet_address: serverOwner,
+          }],
+        }
+      }),
     })
     const activationToken = issueActivationOwnerToken({
       privyUserId: 'did:privy:user-1',
@@ -357,6 +374,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
       smartWalletAddress: sender,
       embeddedOwnerAddress: sessionAddress,
       serverOwnerAddress: serverOwner,
+      jti: activationJti,
     })
     const innerData = encodeFunctionData({
       abi: [{
@@ -378,6 +396,68 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
         activationOwnerPolicyToken: activationToken,
       }),
     ).resolves.toMatchObject({ mode: 'deploy_session_setup' })
+  })
+
+  it('rejects consumed activation token claims', async () => {
+    const serverOwner = getAddress('0x4444444444444444444444444444444444444444')
+    const activationJti = 'test-activation-jti-consumed-01'
+    isDbConfiguredMock.mockReturnValue(true)
+    getDbMock.mockResolvedValue({
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ')
+        if (text.includes('activation_owner_token_claims')) {
+          return {
+            rows: [{
+              jti: activationJti,
+              consumed_at: new Date().toISOString(),
+              expires_at: new Date(Date.now() + 60_000).toISOString(),
+              profile_id: 42,
+              privy_user_id: 'did:privy:user-1',
+              parent_csw_address: sender.toLowerCase(),
+              server_owner_address: serverOwner.toLowerCase(),
+            }],
+          }
+        }
+        return {
+          rows: [{
+            id: 42,
+            privy_user_id: 'did:privy:user-1',
+            csw_address: sender,
+            primary_embedded_eoa: sessionAddress,
+            preprov_server_wallet_address: serverOwner,
+          }],
+        }
+      }),
+    })
+    const activationToken = issueActivationOwnerToken({
+      privyUserId: 'did:privy:user-1',
+      profileId: 42,
+      sessionAddress,
+      smartWalletAddress: sender,
+      embeddedOwnerAddress: sessionAddress,
+      serverOwnerAddress: serverOwner,
+      jti: activationJti,
+    })
+    const innerData = encodeFunctionData({
+      abi: [{
+        type: 'function',
+        name: 'addOwnerAddress',
+        stateMutability: 'nonpayable',
+        inputs: [{ name: 'owner', type: 'address' }],
+        outputs: [],
+      }] as const,
+      functionName: 'addOwnerAddress',
+      args: [serverOwner],
+    })
+
+    await expect(
+      validateSponsoredSmartWalletCalls({
+        sender,
+        sessionAddress,
+        calls: [{ to: sender, value: 0n, data: innerData }],
+        activationOwnerPolicyToken: activationToken,
+      }),
+    ).rejects.toThrow('activation_token_already_consumed')
   })
 
   it('rejects arbitrary targets under the activation owner policy', async () => {

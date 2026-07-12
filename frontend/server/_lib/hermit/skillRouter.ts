@@ -43,7 +43,6 @@ import {
 } from '../alfaclub/room1659Market.js'
 import { buildAlfaClubBriefContext } from '../alfaclub/dailyBrief.js'
 import {
-  buildHyperliquidEntrySignalReport,
   buildHyperliquidPositionReport,
   formatCompactArenaHlSummary,
   formatPositionAlertStatusBlock,
@@ -86,9 +85,15 @@ import {
 } from '../arena/arenaClient.js'
 import {
   parseBacktestRequestFromText,
+  runCounterTradeSignal,
+  runFundingOiRegimeJob,
   runRealBacktestJob,
   type VirtualsBacktestRequest,
 } from '../../agents/eliza/plugins/virtuals/backtestJobs.js'
+import {
+  formatCompositeMarketSignal,
+  fuseCompositeMarketSignal,
+} from '../alfaclub/compositeMarketSignal.js'
 import {
   clearArenaIdentityMapping,
   resolveArenaIdentityForContext,
@@ -1380,7 +1385,7 @@ function buildHermitHelpReply(roomId?: string | null): string {
     '- `/position host markers` — host-only chat markers',
     '- `/position sender <address|me>` — sender-specific chat markers',
     '- `/position marker latest|trade 1|host 1|<n>` — inspect marker context',
-    '- `/signal` — position-aware enter/exit bias from your live entries',
+    '- `/signal [symbol]` — multi-factor LONG/SHORT/STAY OUT (counter-trade 7d + Funding/OI)',
     '- `/market` — broader majors + AlfaClub market scope',
     '',
     'Examples:',
@@ -2620,24 +2625,64 @@ function parsePositionSubcommand(rawArgs: string): PositionSubcommand {
   return { kind: 'usage' }
 }
 
-async function buildSignalCommandReply(params: HermitExecutionParams): Promise<string> {
-  const hlWallet =
-    params.roomId === '1659'
-      ? resolveRoom1659HyperliquidUserForSnapshot(params.senderAddress)
-      : params.senderAddress
-  const [hlState, room1659Market, marketBrief] = await Promise.all([
-    getClearinghouseState(hlWallet),
-    params.roomId === '1659' ? resolveRoom1659MarketContext(params.senderAddress) : Promise.resolve(null),
-    buildMarketScopeSummary(),
-  ])
+async function buildSignalCommandReply(params: HermitExecutionParams, args = ''): Promise<string> {
+  const symbol = parseFundingOiSignalSymbol(args)
+  try {
+    const minuteBucket = Math.floor(Date.now() / 60_000)
+    const roomKey = params.roomId?.trim() || 'none'
+    const senderKey = params.senderAddress.toLowerCase()
+    const idempotencyKey = `hermit-signal:${roomKey}:${senderKey}:${symbol}:${minuteBucket}`
 
-  return buildHyperliquidEntrySignalReport({
-    walletAddress: hlWallet,
-    hlState,
-    roomId: params.roomId ?? null,
-    room1659Market,
-    marketBrief,
-  })
+    const [fundingSettled, counterSettled] = await Promise.allSettled([
+      runFundingOiRegimeJob(symbol, { idempotencyKey }),
+      runCounterTradeSignal(symbol),
+    ])
+
+    const fundingOi = fundingSettled.status === 'fulfilled' ? fundingSettled.value : null
+    const counter =
+      counterSettled.status === 'fulfilled'
+        ? {
+            signal: counterSettled.value.signal,
+            conviction: counterSettled.value.conviction,
+            priceChangePct: counterSettled.value.priceChangePct,
+            realizedPnl: counterSettled.value.realizedPnl,
+            rebalanceCount: counterSettled.value.rebalanceCount,
+            resolvedInterval: counterSettled.value.resolvedInterval,
+            recommendedLeveragePercent: counterSettled.value.recommendedLeveragePercent,
+          }
+        : null
+
+    if (!fundingOi && !counter) {
+      return `Signal for ${symbol} is temporarily unavailable. Retry \`/signal ${symbol}\` in a moment.`
+    }
+
+    const composite = fuseCompositeMarketSignal({
+      symbol,
+      fundingOi,
+      counter,
+    })
+    return formatCompositeMarketSignal(composite)
+  } catch {
+    return `Signal for ${symbol} is temporarily unavailable. Retry \`/signal ${symbol}\` in a moment.`
+  }
+}
+
+function parseFundingOiSignalSymbol(args: string): string {
+  const token = String(args ?? '').trim().split(/\s+/)[0] ?? ''
+  if (!token || token === '?' || /^help$/i.test(token)) return 'BTC'
+  const cleaned = token
+    .replace(/^\$/, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9/._-]/g, '')
+    .replace(/[-_]/g, '/')
+    .replace(/\/PERP$/i, '')
+    .replace(/PERP$/i, '')
+    .replace(/\/USDC$/i, '')
+    .replace(/\/USD$/i, '')
+    .replace(/USDC$/i, '')
+    .replace(/USD$/i, '')
+    .replace(/\//g, '')
+  return cleaned || 'BTC'
 }
 
 async function buildMarketScopeSummary(): Promise<{
@@ -3892,7 +3937,7 @@ export async function executeHermitCommand(
     return {
       kind: 'hermit',
       provider: 'local',
-      reply: await buildSignalCommandReply(params),
+      reply: await buildSignalCommandReply(params, args),
     }
   }
 

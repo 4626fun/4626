@@ -63,6 +63,19 @@ describe('Virtuals ACP hardened config', () => {
     expect(isValidVirtualsSignerPrivateKey('11'.repeat(32))).toBe(false)
     expect(isValidVirtualsSignerPrivateKey('0x1234')).toBe(false)
     expect(isValidVirtualsSignerPrivateKey(`0x${'00'.repeat(32)}`)).toBe(false)
+    // Privy/Virtuals session authorization key (P-256 PKCS#8 base64)
+    expect(
+      isValidVirtualsSignerPrivateKey(
+        'MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAAAAAAAAAE' +
+          'RANCAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      ),
+    ).toBe(true)
+    expect(
+      isValidVirtualsSignerPrivateKey(
+        'wallet-auth:MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgAAAAAAAAAAAAAAAAAAAAAAAE' +
+          'RANCAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      ),
+    ).toBe(true)
   })
 
   it('rejects malformed allowlist entries instead of silently dropping them', () => {

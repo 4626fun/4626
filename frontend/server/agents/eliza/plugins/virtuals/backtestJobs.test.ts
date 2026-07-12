@@ -226,7 +226,7 @@ describe('funding/OI shadow offering', () => {
       readMarketContext: vi.fn().mockResolvedValue(null),
     })
     expect(result.regime).toBe('insufficient-data')
-    expect(result.responseText).toContain('INSUFFICIENT-DATA')
+    expect(result.responseText).toContain('INSUFFICIENT DATA')
   })
 
   it('passes the stable ACP job key through to observation persistence', async () => {

@@ -61,7 +61,7 @@ describe('funding/OI shadow observation persistence', () => {
       'BTC',
       new Date(OBSERVED_AT_MS),
       'hyperliquid-meta-and-asset-ctxs',
-      'funding-oi-regime-v1',
+      'funding-oi-signal-v2',
       'complete',
       [],
       60_000,
@@ -98,7 +98,7 @@ describe('funding/OI shadow observation persistence', () => {
     expect(normalizedSql(0)).toContain('missing_fields')
     expect(mocks.sql.mock.calls[0]?.slice(1)).toEqual(expect.arrayContaining([
       'hyperliquid-meta-and-asset-ctxs',
-      'funding-oi-regime-v1',
+      'funding-oi-signal-v2',
       'insufficient',
       ['markPriceUsd', 'fundingRate', 'openInterestUsd', 'volume24hUsd', 'priceChange24hPct'],
     ]))

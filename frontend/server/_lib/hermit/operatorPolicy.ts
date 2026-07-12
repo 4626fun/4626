@@ -16,7 +16,8 @@ function parseSecondToken(raw: string): string {
 
 export function isHermitOperatorOnlyCommand(rawCommand: string): boolean {
   const first = parseLeadingToken(rawCommand)
-  if (first === '/arena' || first === '/signal') return true
+  // /signal is advisory Funding/OI data and is intentionally open to room members.
+  if (first === '/arena') return true
   if (first === '/h' && parseSecondToken(rawCommand) === 'arena') return true
   if (first !== '/strategy') return false
   return parseSecondToken(rawCommand) === 'bias'
