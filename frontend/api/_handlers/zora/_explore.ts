@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getNumberQuery, getStringQuery, handleOptions, requireServerKey, setCache, setCors } from '../../../server/zora/_shared.js'
 import { getDb } from '@4626/server-core'
+import { withChartQuery } from '../../../server/_lib/db/withChartQuery.js'
 import {
   loadCreatorEthosProjectionByAddresses,
   mergeCreatorEthosScores,
@@ -443,8 +444,9 @@ async function buildEthosSortedCreatorList(params: {
   ethosMin: number | null
   key: string | null
 }) {
-  const db = await getDb()
-  if (!db) throw new Error('db_unavailable')
+  const rawDb = await getDb()
+  if (!rawDb) throw new Error('db_unavailable')
+  const db = withChartQuery(rawDb, 'explore-ethos-list')
 
   const offset = Math.max(0, Number.parseInt(params.after ?? '0', 10) || 0)
   let candidateRows: Array<{

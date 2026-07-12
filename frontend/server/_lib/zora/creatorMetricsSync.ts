@@ -869,7 +869,7 @@ export async function runCreatorMetricsHotSync(): Promise<CreatorMetricsHotSyncR
     DEFAULT_HOT_SYNC_MIN_INTERVAL_MS,
   )
   const throttleResult = await db.sql`
-    SELECT last_hot_refresh_at
+    SELECT last_hot_refresh_at, cached_totals_at
     FROM creator_metrics_state
     WHERE id = 1
     LIMIT 1;
@@ -878,6 +878,9 @@ export async function runCreatorMetricsHotSync(): Promise<CreatorMetricsHotSyncR
   if (lastHotRefreshAt != null && Date.now() - lastHotRefreshAt < minIntervalMs) {
     return { ok: true, runId, coinsRefreshed: 0, pagesFetched: 0, skipped: true }
   }
+  const cachedTotalsAt = parseOptionalTimestamp(throttleResult.rows?.[0]?.cached_totals_at)
+  const skipTotalsRecompute =
+    cachedTotalsAt != null && Date.now() - cachedTotalsAt < cachedTotalsMaxAgeMs()
 
   const apiKey = requireServerKey() || process.env.VITE_ZORA_PUBLIC_API_KEY || null
   if (!apiKey) {
@@ -906,7 +909,11 @@ export async function runCreatorMetricsHotSync(): Promise<CreatorMetricsHotSyncR
     const sparklinePrecompute = await precomputeExploreSparklinesForCoins(sdk, db, {
       coinAddresses: hotRefresh.coinAddresses,
     })
-    await recomputeAndCacheCreatorMetricsTotals(db)
+    // Hot sync runs every ~5m; Explore hero reads already tolerate a 15m cache TTL.
+    // Skipping fresh totals avoids a redundant full-table SUM on creator_coins.
+    if (!skipTotalsRecompute) {
+      await recomputeAndCacheCreatorMetricsTotals(db)
+    }
     await db.sql`
       UPDATE creator_metrics_state
       SET last_hot_refresh_at = NOW()

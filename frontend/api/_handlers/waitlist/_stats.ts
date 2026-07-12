@@ -1,9 +1,13 @@
 import {
   type ApiEnvelope,
+  RATE_LIMITS,
+  checkDurableRateLimit,
+  getClientIp,
   handleOptions,
   setCors,
   setNoStore,
   getDb,
+  rateLimitKey,
 } from '@4626/server-core'
 
 import {
@@ -11,6 +15,7 @@ import {
   getWaitlistLeaderboardData,
 } from '../../../server/_lib/onboarding/waitlistLeaderboard.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
+import { withChartQuery } from '../../../server/_lib/db/withChartQuery.js'
 
 /**
  * A recent member shown in the social-proof avatar stack. Exposes only the
@@ -56,6 +61,14 @@ const RECENT_PROFILE_SCAN = 300
 const AVATAR_FETCH_LIMIT = 12
 const DEFAULT_IPFS_GATEWAY = 'https://ipfs.decentralized-content.com/ipfs/'
 const DEFAULT_ARWEAVE_GATEWAY = 'https://arweave.net/'
+const STATS_CACHE_TTL_MS = 90_000
+
+type StatsCacheEntry = {
+  expiresAt: number
+  data: WaitlistStatsResponse
+}
+
+let statsCache: StatsCacheEntry | null = null
 
 function toIpfsPath(raw: string): string {
   const value = String(raw || '').trim()
@@ -240,22 +253,41 @@ function resolveCapacity(signedUpCount: number): number {
 
 export default async function handler(req: any, res: any) {
   setCors(req, res)
-  setNoStore(res)
   if (handleOptions(req, res)) return
 
   if (req.method !== 'GET') {
+    setNoStore(res)
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
+  const limiter = await checkDurableRateLimit(
+    rateLimitKey('waitlist:stats', getClientIp(req)),
+    RATE_LIMITS.general,
+    { failClosed: false },
+  )
+  if (!limiter.allowed) {
+    setNoStore(res)
+    res.setHeader('Retry-After', Math.ceil((limiter.resetAt - Date.now()) / 1000).toString())
+    return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
+  }
+
+  const now = Date.now()
+  if (statsCache && statsCache.expiresAt > now) {
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=30')
+    return res.status(200).json({ success: true, data: statsCache.data } satisfies ApiEnvelope<WaitlistStatsResponse>)
+  }
+
   try {
-    const db = await getDb()
-    if (!db) {
+    const rawDb = await getDb()
+    if (!rawDb) {
+      setNoStore(res)
       if (shouldFailOpenForStats() || shouldFailOpenForDryRun()) {
         return res.status(200).json({ success: true, data: emptyStats() } satisfies ApiEnvelope<WaitlistStatsResponse>)
       }
       return res.status(500).json({ success: false, error: 'DB unavailable' } satisfies ApiEnvelope<never>)
     }
 
+    const db = withChartQuery(rawDb, 'waitlist-social-proof')
     await ensureWaitlistSchema(db as any)
 
     const signedUpCount = await getWaitlistMemberCount(db as any)
@@ -269,9 +301,12 @@ export default async function handler(req: any, res: any) {
       spotsRemaining,
       avatars,
     }
+    statsCache = { expiresAt: now + STATS_CACHE_TTL_MS, data }
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=30')
 
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<WaitlistStatsResponse>)
   } catch (error) {
+    setNoStore(res)
     if (shouldFailOpenForStats() || shouldFailOpenForDryRun()) {
       return res.status(200).json({ success: true, data: emptyStats() } satisfies ApiEnvelope<WaitlistStatsResponse>)
     }

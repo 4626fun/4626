@@ -25,6 +25,7 @@ export type VirtualsBacktestRequest = {
   rebalanceSizePercent: number
   initialLongUsd: number
   initialShortUsd: number
+  windowHours: number
 }
 
 export type VirtualsBacktestResult = {
@@ -33,7 +34,9 @@ export type VirtualsBacktestResult = {
 }
 
 const DEFAULT_TOTAL_EQUITY_USD = 4_000
-const FIXED_WINDOW_HOURS = 24 * 90
+const DEFAULT_WINDOW_HOURS = 24 * 90
+const MIN_WINDOW_HOURS = 24 * 1 // 1 day minimum
+const MAX_WINDOW_HOURS = 24 * 90 // 90 days maximum
 const DEFAULT_LEVERAGE_PERCENT = 50
 const DEFAULT_REBALANCE_HEALTH_PERCENT = 75
 const DEFAULT_REBALANCE_SIZE_PERCENT = 35
@@ -152,6 +155,28 @@ async function resolveAppliedLeverage(params: {
   return { appliedLeverage, maxLeverage }
 }
 
+function parseWindowHours(text: string): number {
+  // Check for explicit day/hour specifications: "7d", "30d", "90d", "7 day", "30 days"
+  const dayMatch = text.match(/\b(\d+)\s*d(?:ays?)?\b/i)
+  if (dayMatch?.[1]) {
+    const days = parseInt(dayMatch[1], 10)
+    if (days > 0) return Math.min(Math.max(days * 24, MIN_WINDOW_HOURS), MAX_WINDOW_HOURS)
+  }
+  // Check for explicit hour specifications: "168h", "720h", "2160h"
+  const hourMatch = text.match(/\b(\d+)\s*h(?:rs?|ours?)?\b/i)
+  if (hourMatch?.[1]) {
+    const hours = parseInt(hourMatch[1], 10)
+    if (hours > 0) return Math.min(Math.max(hours, MIN_WINDOW_HOURS), MAX_WINDOW_HOURS)
+  }
+  // Check for offering-name-style hints: "backtestReport7d", "backtestReport30d"
+  const nameMatch = text.match(/(?:backtest|report)(\d+)d/i)
+  if (nameMatch?.[1]) {
+    const days = parseInt(nameMatch[1], 10)
+    if (days > 0) return Math.min(Math.max(days * 24, MIN_WINDOW_HOURS), MAX_WINDOW_HOURS)
+  }
+  return DEFAULT_WINDOW_HOURS
+}
+
 export function parseBacktestRequestFromText(text: string): VirtualsBacktestRequest | null {
   const normalized = text.toLowerCase()
   if (!normalized.includes('backtest')) return null
@@ -169,6 +194,7 @@ export function parseBacktestRequestFromText(text: string): VirtualsBacktestRequ
       DEFAULT_REBALANCE_SIZE_PERCENT,
     ),
     ...parseCapital(text),
+    windowHours: parseWindowHours(text),
   }
 }
 
@@ -262,7 +288,7 @@ async function executeBacktestJob(
   const result = await run({
     symbol: request.symbol,
     interval: '1m',
-    windowHours: FIXED_WINDOW_HOURS,
+    windowHours: request.windowHours,
     leverage: appliedLeverage,
     initialLongMarginUsd: longMargin,
     initialShortMarginUsd: shortMargin,
@@ -283,7 +309,7 @@ async function executeBacktestJob(
     // just with fewer rebalance opportunities per bar.
     const summary = formatBacktestStdoutSummary(result.stdout)
     const responseText =
-      `Backtest complete for ${request.symbol} (${FIXED_WINDOW_HOURS}h, ${appliedLeverage.toFixed(2)}x from ${request.leveragePercent}% of max ${maxLeverage}x, long $${Math.round(request.initialLongUsd)}, short $${Math.round(request.initialShortUsd)}, health ${request.rebalanceHealthPercent}%, size ${request.rebalanceSizePercent}%). ` +
+      `Backtest complete for ${request.symbol} (${request.windowHours}h, ${appliedLeverage.toFixed(2)}x from ${request.leveragePercent}% of max ${maxLeverage}x, long $${Math.round(request.initialLongUsd)}, short $${Math.round(request.initialShortUsd)}, health ${request.rebalanceHealthPercent}%, size ${request.rebalanceSizePercent}%). ` +
       `Resolved interval: ${result.resolvedInterval} (WARNING: 1m cache unavailable — results use coarser candles; run cache-backtest-minute-bars.ts for 1m fidelity).\n\n` +
       `Top results:\n${summary || '(no stdout output captured)'}`
     return { responseText, resolvedInterval: result.resolvedInterval }
@@ -291,8 +317,186 @@ async function executeBacktestJob(
 
   const summary = formatBacktestStdoutSummary(result.stdout)
   const responseText =
-    `Backtest complete for ${request.symbol} (${FIXED_WINDOW_HOURS}h, ${appliedLeverage.toFixed(2)}x from ${request.leveragePercent}% of max ${maxLeverage}x, long $${Math.round(request.initialLongUsd)}, short $${Math.round(request.initialShortUsd)}, health ${request.rebalanceHealthPercent}%, size ${request.rebalanceSizePercent}%). ` +
+    `Backtest complete for ${request.symbol} (${request.windowHours}h, ${appliedLeverage.toFixed(2)}x from ${request.leveragePercent}% of max ${maxLeverage}x, long $${Math.round(request.initialLongUsd)}, short $${Math.round(request.initialShortUsd)}, health ${request.rebalanceHealthPercent}%, size ${request.rebalanceSizePercent}%). ` +
     `Resolved interval: ${result.resolvedInterval}.\n\n` +
     `Top results:\n${summary || '(no stdout output captured)'}`
   return { responseText, resolvedInterval: result.resolvedInterval }
+}
+
+// ---------------------------------------------------------------------------
+// Counter-trade signal — lightweight directional read from a short backtest.
+// Used by the `counterTradeSignal` Virtuals offering.
+// ---------------------------------------------------------------------------
+
+export type CounterTradeSignalResult = {
+  responseText: string
+  signal: 'long-bias' | 'short-bias' | 'neutral'
+  conviction: number
+  resolvedInterval: string
+}
+
+const SIGNAL_WINDOW_HOURS = 24 * 7 // 7-day lookback for signal
+const SIGNAL_NEUTRAL_THRESHOLD_PCT = 1.5 // |priceChange| below this = neutral
+const SIGNAL_MAX_CONVICTION_PCT = 15 // |priceChange| at/above this = 100 conviction
+
+/**
+ * Detects whether a message is a counter-trade signal request (as opposed to
+ * a full backtest). Triggers on keywords: signal, counter, bias, direction,
+ * zag, zig — plus a tradeable symbol.
+ */
+export function parseSignalRequestFromText(text: string): string | null {
+  const normalized = text.toLowerCase()
+  const isSignal =
+    normalized.includes('signal') ||
+    normalized.includes('counter') ||
+    normalized.includes('bias') ||
+    normalized.includes('direction') ||
+    normalized.includes('zag') ||
+    normalized.includes('zig')
+  if (!isSignal) return null
+  // Don't intercept full backtest requests
+  if (normalized.includes('backtest')) return null
+  const symbol = parseSymbol(text)
+  if (!symbol) return null
+  return symbol
+}
+
+/**
+ * Runs a short 7-day backtest and derives a counter-trade directional signal.
+ * The counter-rebalance strategy is inherently contrarian — when price rises,
+ * the short leg accrues and the signal is short-biased (InverseAKITA "zags"
+ * when akita "zigs"). When price falls, the signal is long-biased.
+ */
+export async function runCounterTradeSignal(
+  symbol: string,
+  deps?: {
+    run?: typeof executeBacktestCounterRebalance
+    resolveLeverage?: typeof resolveAppliedLeverage
+  },
+): Promise<CounterTradeSignalResult> {
+  const timeoutMs = backtestJobTimeoutMs()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      executeSignalJob(symbol, deps),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`Signal computation timed out after ${Math.round(timeoutMs / 1000)}s`)),
+          timeoutMs,
+        )
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
+async function executeSignalJob(
+  symbol: string,
+  deps?: {
+    run?: typeof executeBacktestCounterRebalance
+    resolveLeverage?: typeof resolveAppliedLeverage
+  },
+): Promise<CounterTradeSignalResult> {
+  const run = deps?.run ?? executeBacktestCounterRebalance
+  const resolveLeverage = deps?.resolveLeverage ?? resolveAppliedLeverage
+  const { appliedLeverage, maxLeverage } = await resolveLeverage({
+    symbol,
+    leveragePercent: DEFAULT_LEVERAGE_PERCENT,
+  })
+
+  // Minimal capital — we only need the price path and PnL direction, not
+  // production-scale margin. $500 per side is enough to avoid dust rounding.
+  const marginPerSide = 250
+  const result = await run({
+    symbol,
+    interval: '1m',
+    windowHours: SIGNAL_WINDOW_HOURS,
+    leverage: appliedLeverage,
+    initialLongMarginUsd: marginPerSide,
+    initialShortMarginUsd: marginPerSide,
+    initialLongBufferUsd: marginPerSide,
+    initialShortBufferUsd: marginPerSide,
+    healthFloor: 0.75,
+    deadband: 0.08,
+    minChunkUsd: 100,
+    maxChunkUsd: 100,
+    cooldownBars: 3,
+    requireNoCommingle: true,
+  })
+
+  // Parse the CSV stdout to extract priceChangePct and realizedPnl.
+  const { priceChangePct, realizedPnl, rebalanceCount } = parseSignalCsv(result.stdout)
+
+  // Derive signal direction: counter-trade logic.
+  // Price went up → short-bias (zag). Price went down → long-bias (zig).
+  const absChange = Math.abs(priceChangePct)
+  let signal: 'long-bias' | 'short-bias' | 'neutral'
+  if (absChange < SIGNAL_NEUTRAL_THRESHOLD_PCT) {
+    signal = 'neutral'
+  } else if (priceChangePct > 0) {
+    signal = 'short-bias'
+  } else {
+    signal = 'long-bias'
+  }
+
+  // Conviction: scale |priceChange| from neutral threshold to max threshold → 0-100.
+  const conviction = Math.min(
+    100,
+    Math.round(
+      ((absChange - SIGNAL_NEUTRAL_THRESHOLD_PCT) /
+        (SIGNAL_MAX_CONVICTION_PCT - SIGNAL_NEUTRAL_THRESHOLD_PCT)) *
+        100,
+    ),
+  )
+  const effectiveConviction = Math.max(0, conviction)
+
+  // Recommended leverage percent scales with conviction.
+  const recommendedLeveragePercent = signal === 'neutral' ? 25 : Math.min(75, 30 + effectiveConviction * 0.4)
+
+  const pnlDirection = realizedPnl > 0 ? 'profitable' : 'at a loss'
+  const responseText =
+    `Counter-Trade Signal for ${symbol} (${SIGNAL_WINDOW_HOURS}h lookback, ${appliedLeverage.toFixed(2)}x from ${DEFAULT_LEVERAGE_PERCENT}% of max ${maxLeverage}x).\n` +
+    `Signal: ${signal.toUpperCase()} (conviction: ${effectiveConviction}/100)\n` +
+    `Recommended leverage: ${recommendedLeveragePercent.toFixed(0)}% of market max\n` +
+    `Price change: ${priceChangePct >= 0 ? '+' : ''}${priceChangePct.toFixed(2)}% over ${SIGNAL_WINDOW_HOURS}h\n` +
+    `Counter-rebalance strategy was ${pnlDirection} (${realizedPnl >= 0 ? '+' : ''}$${realizedPnl.toFixed(2)} realized, ${rebalanceCount} rebalances)\n` +
+    `Resolved interval: ${result.resolvedInterval}\n` +
+    `Rationale: InverseAKITA counter-trades — when price zigs up, this agent zags short. When price zigs down, this agent zags long. ` +
+    `The ${SIGNAL_WINDOW_HOURS}h price move of ${priceChangePct >= 0 ? '+' : ''}${priceChangePct.toFixed(2)}% indicates a ${signal} posture.`
+
+  return {
+    responseText,
+    signal,
+    conviction: effectiveConviction,
+    resolvedInterval: result.resolvedInterval,
+  }
+}
+
+/**
+ * Parse the CSV block from backtest stdout to extract signal-relevant fields.
+ * Returns { priceChangePct, realizedPnl, rebalanceCount } with safe defaults.
+ */
+function parseSignalCsv(stdout: string): {
+  priceChangePct: number
+  realizedPnl: number
+  rebalanceCount: number
+} {
+  const defaults = { priceChangePct: 0, realizedPnl: 0, rebalanceCount: 0 }
+  const lines = stdout.split('\n')
+  // Find the CSV header line and the first data row.
+  const headerIdx = lines.findIndex((l) => l.startsWith('symbol,interval,windowHours'))
+  if (headerIdx < 0) return defaults
+  const header = lines[headerIdx].split(',')
+  const dataRow = lines[headerIdx + 1]
+  if (!dataRow) return defaults
+  const values = dataRow.split(',')
+  const priceChangeIdx = header.indexOf('priceChangePct')
+  const pnlIdx = header.indexOf('realizedPnl')
+  const rebalanceIdx = header.indexOf('rebalanceCount')
+  return {
+    priceChangePct: priceChangeIdx >= 0 ? Number(values[priceChangeIdx]) || 0 : 0,
+    realizedPnl: pnlIdx >= 0 ? Number(values[pnlIdx]) || 0 : 0,
+    rebalanceCount: rebalanceIdx >= 0 ? Number(values[rebalanceIdx]) || 0 : 0,
+  }
 }

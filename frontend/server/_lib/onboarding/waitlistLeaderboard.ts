@@ -37,6 +37,24 @@ export type WaitlistLeaderboardResponse = {
   me: WaitlistLeaderboardRow | null
 }
 
+const LEADERBOARD_CACHE_TTL_MS = 60_000
+
+type LeaderboardCacheEntry = {
+  expiresAt: number
+  value: WaitlistLeaderboardResponse
+}
+
+const leaderboardCache = new Map<string, LeaderboardCacheEntry>()
+
+function leaderboardCacheKey(params: {
+  page: number
+  limit: number
+  pointsType: WaitlistLeaderboardPointsType
+  authorizedProfileId: number | null
+}): string {
+  return `${params.page}:${params.limit}:${params.pointsType}:${params.authorizedProfileId ?? 'anon'}`
+}
+
 function safeInt(v: any): number {
   const n = typeof v === 'number' ? v : Number(v)
   return Number.isFinite(n) ? Math.floor(n) : 0
@@ -122,6 +140,12 @@ export async function getWaitlistLeaderboardData(params: {
   authorizedProfileId: number | null
 }): Promise<WaitlistLeaderboardResponse> {
   const { db, page, limit, pointsType, authorizedProfileId } = params
+  const cacheKey = leaderboardCacheKey({ page, limit, pointsType, authorizedProfileId })
+  const cached = leaderboardCache.get(cacheKey)
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value
+  }
+
   const offset = (page - 1) * limit
 
   const totalCount = await getWaitlistMemberCount(db)
@@ -646,5 +670,19 @@ export async function getWaitlistLeaderboardData(params: {
     me = raw ? toLeaderboardRow(raw, { includeReferralCode: true }) : null
   }
 
-  return { page, limit, pointsType, totalCount, totalPages, hasMore, leaderboard, me }
+  const response: WaitlistLeaderboardResponse = {
+    page,
+    limit,
+    pointsType,
+    totalCount,
+    totalPages,
+    hasMore,
+    leaderboard,
+    me,
+  }
+  leaderboardCache.set(cacheKey, {
+    expiresAt: Date.now() + LEADERBOARD_CACHE_TTL_MS,
+    value: response,
+  })
+  return response
 }

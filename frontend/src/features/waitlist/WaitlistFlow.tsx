@@ -831,16 +831,23 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     }
   }, [])
 
-  // Social proof — initial fetch plus periodic refresh (legacy flow polled every 30s).
+  // Social proof — initial fetch plus periodic refresh while the tab is visible.
+  // Hidden-tab polling was a major contributor to repeated expensive avatar queries.
   useEffect(() => {
     const runFetch = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
       void fetchWaitlistStats()
     }
     const timeoutId = window.setTimeout(runFetch, 0)
-    const intervalId = window.setInterval(runFetch, 30_000)
+    const intervalId = window.setInterval(runFetch, 60_000)
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') runFetch()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
     return () => {
       window.clearTimeout(timeoutId)
       window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [fetchWaitlistStats])
 

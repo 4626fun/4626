@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getStringQuery, handleOptions, setCache, setCors } from '../../../server/zora/_shared.js'
 import { getDb } from '@4626/server-core'
+import { withChartQuery } from '../../../server/_lib/db/withChartQuery.js'
 import {
   cachedTotalsMaxAgeMs,
   ensureCreatorMetricsSchema,
@@ -174,7 +175,8 @@ function noteRefreshFailure(err: unknown): void {
 }
 
 async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResponse> {
-  const db = await getDb()
+  const rawDb = await getDb()
+  const db = rawDb ? withChartQuery(rawDb, 'explore-hero-metrics') : null
   if (!db) {
     return {
       scope,

@@ -346,6 +346,9 @@ export async function refreshCreatorEthosProjection(params: {
       ORDER BY creator_address
     ),
     profile_identity AS (
+      -- Only resolve Zora profile identity for creators missing it on the projection.
+      -- Re-joining zora_profiles (5 OR address paths) for every top creator dominated
+      -- hot-lane latency (~12s mean); existing identity is reused via COALESCE below.
       SELECT
         tcc.creator_address,
         NULLIF(lower(trim(p.twitter_username)), '') AS twitter_username,
@@ -358,12 +361,19 @@ export async function refreshCreatorEthosProjection(params: {
             p.last_refreshed_at DESC NULLS LAST
         ) AS rn
       FROM top_creator_coin tcc
+      LEFT JOIN public.creator_ethos_projection existing
+        ON existing.creator_address = tcc.creator_address
       JOIN zora_profiles p
         ON lower(NULLIF(p.signing_eoa, '')) = tcc.creator_address
         OR lower(NULLIF(p.primary_wallet, '')) = tcc.creator_address
         OR lower(NULLIF(p.payout_recipient, '')) = tcc.creator_address
         OR lower(NULLIF(p.smart_wallet_address, '')) = tcc.creator_address
         OR lower(NULLIF(p.privy_wallet_address, '')) = tcc.creator_address
+      WHERE existing.creator_address IS NULL
+         OR (
+           NULLIF(lower(trim(existing.twitter_username)), '') IS NULL
+           AND NULLIF(lower(trim(existing.zora_handle)), '') IS NULL
+         )
     ),
     profile_best AS (
       SELECT creator_address, twitter_username, zora_handle
@@ -609,7 +619,28 @@ export async function refreshCreatorEthosProjection(params: {
         ELSE score_updated_at
       END AS score_updated_at,
       NOW()
-    FROM scored
+    FROM (
+      -- Guard against join fan-out (identity/score tables) producing duplicate
+      -- creator_address rows, which aborts ON CONFLICT DO UPDATE.
+      SELECT DISTINCT ON (creator_address)
+        creator_address,
+        coin_address,
+        created_at,
+        market_cap_usd,
+        volume_24h_usd,
+        twitter_username,
+        zora_handle,
+        ethos_score,
+        ethos_level,
+        ethos_score_source,
+        score_updated_at
+      FROM scored
+      ORDER BY
+        creator_address,
+        ethos_score DESC NULLS LAST,
+        volume_24h_usd DESC NULLS LAST,
+        coin_address ASC
+    ) scored_dedup
     ON CONFLICT (creator_address) DO UPDATE SET
       coin_address = EXCLUDED.coin_address,
       created_at = EXCLUDED.created_at,

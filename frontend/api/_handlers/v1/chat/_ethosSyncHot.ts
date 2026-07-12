@@ -371,7 +371,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     const updatePageLimit = readInt(process.env.ETHOS_SCORE_UPDATES_PAGE_LIMIT_HOT, 200, 1, 1000)
     const updateMaxPages = readInt(process.env.ETHOS_SCORE_UPDATES_MAX_PAGES_HOT, 2, 1, 20)
     const socialSeedLimit = readInt(process.env.ETHOS_HOT_SOCIAL_USERKEY_SEED_LIMIT, 250, 0, 5000)
-    const projectionRefreshLimit = readInt(process.env.ETHOS_CREATOR_PROJECTION_LIMIT_HOT, 2000, 100, 50000)
+    // Default lowered from 2000 → 500 after Jul 2026 live review: full refresh
+    // averaged ~11.8s / max ~33s. Override via ETHOS_CREATOR_PROJECTION_LIMIT_HOT.
+    const projectionRefreshLimit = readInt(process.env.ETHOS_CREATOR_PROJECTION_LIMIT_HOT, 500, 100, 50000)
     const syncBudgetMs = readInt(process.env.ETHOS_HOT_SYNC_BUDGET_MS, 52_000, 5_000, 55_000)
     const startedAtMs = Date.now()
     const remainingMs = () => Math.max(0, syncBudgetMs - (Date.now() - startedAtMs))

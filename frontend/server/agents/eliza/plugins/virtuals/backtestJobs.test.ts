@@ -18,6 +18,7 @@ describe('parseBacktestRequestFromText', () => {
       rebalanceSizePercent: 25,
       initialLongUsd: 2000,
       initialShortUsd: 2000,
+      windowHours: 2160,
     })
   })
 
@@ -32,6 +33,7 @@ describe('parseBacktestRequestFromText', () => {
       rebalanceSizePercent: 35,
       initialLongUsd: 1500,
       initialShortUsd: 900,
+      windowHours: 2160,
     })
   })
 
@@ -46,6 +48,7 @@ describe('parseBacktestRequestFromText', () => {
       rebalanceSizePercent: 35,
       initialLongUsd: 2000,
       initialShortUsd: 2000,
+      windowHours: 2160,
     })
   })
 
@@ -58,7 +61,28 @@ describe('parseBacktestRequestFromText', () => {
       rebalanceSizePercent: 35,
       initialLongUsd: 2000,
       initialShortUsd: 2000,
+      windowHours: 2160,
     })
+  })
+
+  it('parses 7d window from text', () => {
+    const parsed = parseBacktestRequestFromText('backtest BTC 7d capital 4000')
+    expect(parsed?.windowHours).toBe(168)
+  })
+
+  it('parses 30d window from text', () => {
+    const parsed = parseBacktestRequestFromText('backtest ETH 30d capital 4000')
+    expect(parsed?.windowHours).toBe(720)
+  })
+
+  it('parses offering-name-style window hint (backtestReport7d)', () => {
+    const parsed = parseBacktestRequestFromText('generateBacktestReport7d BTC capital 4000')
+    expect(parsed?.windowHours).toBe(168)
+  })
+
+  it('clamps window to minimum 1 day', () => {
+    const parsed = parseBacktestRequestFromText('backtest BTC 1d capital 4000')
+    expect(parsed?.windowHours).toBe(24)
   })
 })
 
@@ -79,6 +103,7 @@ describe('runRealBacktestJob', () => {
         rebalanceSizePercent: 25,
         initialLongUsd: 1200,
         initialShortUsd: 800,
+        windowHours: 2160,
       },
       { run: run as never, resolveLeverage: resolveLeverage as never },
     )
@@ -122,6 +147,7 @@ describe('runRealBacktestJob', () => {
         rebalanceSizePercent: 35,
         initialLongUsd: 1000,
         initialShortUsd: 1000,
+        windowHours: 2160,
       },
       { run: run as never, resolveLeverage: resolveLeverage as never },
     )

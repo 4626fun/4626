@@ -370,12 +370,32 @@ export class VirtualsAcpService {
       try {
         const backtest = await runRealBacktestJob(backtestRequest)
         await this.sendSessionMessage(session, backtest.responseText)
+        // Formally submit the deliverable so the ACP job transitions to
+        // "submitted" and the client can complete it. Without this, the job
+        // stays in "funded" forever — the result is visible in the job room
+        // but the protocol never records a deliverable, so success rate
+        // stays 0% and revenue never settles.
+        try {
+          await session.submit(backtest.responseText)
+          logger.info('[virtuals-acp] submitted backtest deliverable', {
+            jobId: session.jobId,
+            symbol: backtestRequest.symbol,
+            windowHours: backtestRequest.windowHours,
+          })
+        } catch (submitError) {
+          const submitMsg = submitError instanceof Error ? submitError.message : String(submitError)
+          logger.warn('[virtuals-acp] deliverable submit failed (message already sent)', {
+            jobId: session.jobId,
+            error: submitMsg,
+          })
+        }
         logger.info('[virtuals-acp] executed backtest job', {
           jobId: session.jobId,
           symbol: backtestRequest.symbol,
           leveragePercent: backtestRequest.leveragePercent,
           rebalanceHealthPercent: backtestRequest.rebalanceHealthPercent,
           rebalanceSizePercent: backtestRequest.rebalanceSizePercent,
+          windowHours: backtestRequest.windowHours,
           resolvedInterval: backtest.resolvedInterval,
         })
       } catch (error) {
