@@ -105,7 +105,7 @@ function normalizeMarketSymbol(raw: string): string {
   return cleaned || 'BTC'
 }
 
-function parseSymbol(text: string): string {
+function parseSymbol(text: string, noFallback = false): string | null {
   const jsonMatch = text.match(/"symbol"\s*:\s*"([^"]{1,24})"/i)
   if (jsonMatch?.[1]) return normalizeMarketSymbol(jsonMatch[1])
 
@@ -133,6 +133,20 @@ function parseSymbol(text: string): string {
       'PLEASE',
       'FOR',
       'ON',
+      'SIGNAL',
+      'COUNTER',
+      'BIAS',
+      'DIRECTION',
+      'ZAG',
+      'ZIG',
+      'GIVE',
+      'ME',
+      'THE',
+      'WHAT',
+      'IS',
+      'TELL',
+      'SHOW',
+      'TRADE',
     ])
     for (const token of fallbackTokens) {
       const normalized = normalizeMarketSymbol(token)
@@ -141,6 +155,7 @@ function parseSymbol(text: string): string {
     }
   }
 
+  if (noFallback) return null
   return 'BTC'
 }
 
@@ -356,7 +371,7 @@ export function parseSignalRequestFromText(text: string): string | null {
   if (!isSignal) return null
   // Don't intercept full backtest requests
   if (normalized.includes('backtest')) return null
-  const symbol = parseSymbol(text)
+  const symbol = parseSymbol(text, true)
   if (!symbol) return null
   return symbol
 }

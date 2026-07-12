@@ -28,7 +28,7 @@ import type { JobSession, JobRoomEntry, AcpAgentDetail } from '@virtuals-protoco
 import { logger } from '../../../../_lib/infra/logger.js'
 import { getElizaLlmService } from '../../llm.js'
 import { readVirtualsAcpConfig, checkVirtualsAcpConfig, type VirtualsAcpConfig } from './config.js'
-import { parseBacktestRequestFromText, runRealBacktestJob } from './backtestJobs.js'
+import { parseBacktestRequestFromText, parseSignalRequestFromText, runRealBacktestJob, runCounterTradeSignal } from './backtestJobs.js'
 import { evaluateBacktestPaymentGate } from './paymentGate.js'
 import {
   buildStructuredToolProposal,
@@ -411,6 +411,71 @@ export class VirtualsAcpService {
         logger.warn('[virtuals-acp] backtest job failed', {
           jobId: session.jobId,
           symbol: backtestRequest.symbol,
+          message,
+        })
+      }
+      return
+    }
+    // Counter-trade signal handler — lightweight directional read for the
+    // `counterTradeSignal` offering. Runs a 7-day backtest and derives
+    // long-bias / short-bias / neutral + conviction. Formally submits the
+    // deliverable so the job completes in the ACP protocol.
+    const signalSymbol =
+      typeof latestUserMessage === 'string' ? parseSignalRequestFromText(latestUserMessage) : null
+    if (signalSymbol) {
+      if (!session.job) await session.fetchJob()
+      const paymentGate = evaluateBacktestPaymentGate(session as unknown)
+      if (!paymentGate.allowed) {
+        await this.sendSessionMessage(
+          session,
+          'Signal request requires a funded paid job before execution. ' +
+            `Current payment signal: ${paymentGate.reason}. ` +
+            'Please fund the job in ACP, then resend your signal request.',
+        )
+        logger.info('[virtuals-acp] blocked unpaid signal request', {
+          jobId: session.jobId,
+          status: session.status,
+          reason: paymentGate.reason,
+        })
+        return
+      }
+      try {
+        const signal = await runCounterTradeSignal(signalSymbol)
+        await this.sendSessionMessage(session, signal.responseText)
+        try {
+          await session.submit(signal.responseText)
+          logger.info('[virtuals-acp] submitted counter-trade signal deliverable', {
+            jobId: session.jobId,
+            symbol: signalSymbol,
+            signal: signal.signal,
+            conviction: signal.conviction,
+          })
+        } catch (submitError) {
+          const submitMsg = submitError instanceof Error ? submitError.message : String(submitError)
+          logger.warn('[virtuals-acp] signal submit failed (message already sent)', {
+            jobId: session.jobId,
+            error: submitMsg,
+          })
+        }
+        logger.info('[virtuals-acp] executed counter-trade signal', {
+          jobId: session.jobId,
+          symbol: signalSymbol,
+          signal: signal.signal,
+          conviction: signal.conviction,
+          resolvedInterval: signal.resolvedInterval,
+        })
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Signal computation failed due to an unknown runtime error'
+        await this.sendSessionMessage(
+          session,
+          `Signal request failed: ${message}. Please retry with a different symbol (BTC, ETH, SOL, HYPE).`,
+        )
+        logger.warn('[virtuals-acp] counter-trade signal failed', {
+          jobId: session.jobId,
+          symbol: signalSymbol,
           message,
         })
       }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { parseBacktestRequestFromText, runRealBacktestJob } from './backtestJobs.js'
+import { parseBacktestRequestFromText, parseSignalRequestFromText, runRealBacktestJob, runCounterTradeSignal } from './backtestJobs.js'
 
 describe('parseBacktestRequestFromText', () => {
   it('returns null when message is not a backtest request', () => {
@@ -154,5 +154,109 @@ describe('runRealBacktestJob', () => {
     expect(result.resolvedInterval).toBe('5m')
     expect(result.responseText).toContain('WARNING: 1m cache unavailable')
     expect(result.responseText).toContain('Resolved interval: 5m')
+  })
+})
+
+describe('parseSignalRequestFromText', () => {
+  it('returns null for non-signal messages', () => {
+    expect(parseSignalRequestFromText('hello there')).toBeNull()
+  })
+
+  it('returns null for backtest messages (backtest handler takes those)', () => {
+    expect(parseSignalRequestFromText('please backtest BTC 7d')).toBeNull()
+  })
+
+  it('parses signal request with symbol', () => {
+    expect(parseSignalRequestFromText('give me a signal for BTC')).toBe('BTC')
+  })
+
+  it('parses counter-trade request', () => {
+    expect(parseSignalRequestFromText('counter-trade bias for ETH')).toBe('ETH')
+  })
+
+  it('parses zag request', () => {
+    expect(parseSignalRequestFromText('zag SOL')).toBe('SOL')
+  })
+
+  it('returns null when no symbol found', () => {
+    expect(parseSignalRequestFromText('give me a signal')).toBeNull()
+  })
+})
+
+describe('runCounterTradeSignal', () => {
+  it('derives short-bias signal when price went up', async () => {
+    const csvHeader = 'symbol,interval,windowHours,leverage,healthFloor,deadband,minChunkUsd,maxChunkUsd,cooldownBars,startPrice,endPrice,priceChangePct,finalEquity,realizedPnl,executionCost,rebalanceCount,avgChunkUsd,finalLongQty,finalShortQty,finalLongNotionalUsd,finalShortNotionalUsd,minHealthRoom,minHealthAgent,forcedSkipsInsufficientBuffer,commingleViolationCount,liquidationCount,objective'
+    const csvRow = 'BTC,1m,168,20,0.75,0.08,100,100,3,95000.0000,98000.0000,3.15789474,1010.5000,10.5000,2.3000,5,100.0000,0.00490,0.00488,480.20,478.24,0.42,0.38,0,0,0,10.5'
+    const run = vi.fn().mockResolvedValue({
+      stdout: `${csvHeader}\n${csvRow}\n`,
+      resolvedInterval: '1m',
+      sweepBasename: null,
+      series: null,
+    })
+    const resolveLeverage = vi.fn().mockResolvedValue({ appliedLeverage: 20, maxLeverage: 40 })
+    const result = await runCounterTradeSignal('BTC', {
+      run: run as never,
+      resolveLeverage: resolveLeverage as never,
+    })
+    expect(result.signal).toBe('short-bias')
+    expect(result.conviction).toBeGreaterThan(0)
+    expect(result.responseText).toContain('SHORT-BIAS')
+    expect(result.responseText).toContain('BTC')
+    expect(result.responseText).toContain('conviction')
+  })
+
+  it('derives long-bias signal when price went down', async () => {
+    const csvHeader = 'symbol,interval,windowHours,leverage,healthFloor,deadband,minChunkUsd,maxChunkUsd,cooldownBars,startPrice,endPrice,priceChangePct,finalEquity,realizedPnl,executionCost,rebalanceCount,avgChunkUsd,finalLongQty,finalShortQty,finalLongNotionalUsd,finalShortNotionalUsd,minHealthRoom,minHealthAgent,forcedSkipsInsufficientBuffer,commingleViolationCount,liquidationCount,objective'
+    const csvRow = 'ETH,1m,168,10,0.75,0.08,100,100,3,3500.0000,3300.0000,-5.71428571,990.2000,-9.8000,1.5000,3,100.0000,0.02840,0.02780,185.20,181.50,0.45,0.41,0,0,0,-9.8'
+    const run = vi.fn().mockResolvedValue({
+      stdout: `${csvHeader}\n${csvRow}\n`,
+      resolvedInterval: '1m',
+      sweepBasename: null,
+      series: null,
+    })
+    const resolveLeverage = vi.fn().mockResolvedValue({ appliedLeverage: 10, maxLeverage: 20 })
+    const result = await runCounterTradeSignal('ETH', {
+      run: run as never,
+      resolveLeverage: resolveLeverage as never,
+    })
+    expect(result.signal).toBe('long-bias')
+    expect(result.conviction).toBeGreaterThan(0)
+    expect(result.responseText).toContain('LONG-BIAS')
+  })
+
+  it('derives neutral signal when price change is small', async () => {
+    const csvHeader = 'symbol,interval,windowHours,leverage,healthFloor,deadband,minChunkUsd,maxChunkUsd,cooldownBars,startPrice,endPrice,priceChangePct,finalEquity,realizedPnl,executionCost,rebalanceCount,avgChunkUsd,finalLongQty,finalShortQty,finalLongNotionalUsd,finalShortNotionalUsd,minHealthRoom,minHealthAgent,forcedSkipsInsufficientBuffer,commingleViolationCount,liquidationCount,objective'
+    const csvRow = 'SOL,1m,168,5,0.75,0.08,100,100,3,180.0000,181.0000,0.55555556,500.2000,0.2000,0.1000,1,100.0000,2.7800,2.7700,501.40,499.80,0.50,0.48,0,0,0,0.2'
+    const run = vi.fn().mockResolvedValue({
+      stdout: `${csvHeader}\n${csvRow}\n`,
+      resolvedInterval: '1m',
+      sweepBasename: null,
+      series: null,
+    })
+    const resolveLeverage = vi.fn().mockResolvedValue({ appliedLeverage: 5, maxLeverage: 10 })
+    const result = await runCounterTradeSignal('SOL', {
+      run: run as never,
+      resolveLeverage: resolveLeverage as never,
+    })
+    expect(result.signal).toBe('neutral')
+    expect(result.conviction).toBe(0)
+    expect(result.responseText).toContain('NEUTRAL')
+  })
+
+  it('handles missing CSV gracefully with defaults', async () => {
+    const run = vi.fn().mockResolvedValue({
+      stdout: 'some non-csv output\n',
+      resolvedInterval: '5m',
+      sweepBasename: null,
+      series: null,
+    })
+    const resolveLeverage = vi.fn().mockResolvedValue({ appliedLeverage: 20, maxLeverage: 40 })
+    const result = await runCounterTradeSignal('BTC', {
+      run: run as never,
+      resolveLeverage: resolveLeverage as never,
+    })
+    expect(result.signal).toBe('neutral')
+    expect(result.conviction).toBe(0)
+    expect(result.resolvedInterval).toBe('5m')
   })
 })
