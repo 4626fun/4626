@@ -67,7 +67,7 @@ const LOTTERY_ABI = [
     type: 'function',
     name: 'getTokenLotteryStats',
     stateMutability: 'view',
-    inputs: [{ name: 'creatorCoin', type: 'address' }],
+    inputs: [{ name: 'token', type: 'address' }],
     outputs: [{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }],
   },
 ] as const

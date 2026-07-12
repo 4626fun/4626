@@ -6,6 +6,20 @@ name: Dependency Review
 on:
   pull_request:
     branches: [main, master]
+    paths:
+      - 'pnpm-lock.yaml'
+      - 'frontend/pnpm-lock.yaml'
+      - 'kpr/pnpm-lock.yaml'
+      - 'apps/docs-site/pnpm-lock.yaml'
+      - 'package.json'
+      - 'frontend/package.json'
+      - 'kpr/package.json'
+      - 'apps/docs-site/package.json'
+      - '.github/workflows/dependency-review.yml'
+
+concurrency:
+  group: dependency-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -13,6 +27,7 @@ permissions:
 jobs:
   dependency-review:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Check dependency review availability
         id: availability

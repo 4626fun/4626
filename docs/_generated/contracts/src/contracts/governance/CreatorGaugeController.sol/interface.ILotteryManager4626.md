@@ -1,0 +1,12 @@
+# ILotteryManager4626
+[Git Source](https://github.com/wenakita/4626/blob/2951e17122326ff4a23b28e80356c44121ebf59c/contracts/governance/CreatorGaugeController.sol)
+
+
+## Functions
+### addToJackpot
+
+
+```solidity
+function addToJackpot(address token, uint256 amount) external;
+```
+

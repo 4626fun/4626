@@ -94,14 +94,19 @@ cast call $LM "deferredVrfQueueLength()(uint256)" --rpc-url $BASE_RPC_URL
 
 ## Phase 3 — Boost / gauge (later; separate change window)
 
-Only after Phase 2 is stable:
+Only after Phase 2 is stable. Full deploy/wiring sequence (including **keeping LM at 0x0 until this phase**):
 
-1. Deploy rewards stack (`DeployRewardsEcosystem`): `ve4626`, `ve4626Utility`, BoostManager, GaugeVoting. The deploy script does **not** activate LM sources.
+**[rewards-ecosystem-canary-2026-07.md](./rewards-ecosystem-canary-2026-07.md)**
+
+Short path:
+
+1. Deploy rewards stack (`DeployRewardsEcosystem`, default `WIRE_LOTTERY_MANAGER=0`): `ve4626`, `ve4626Utility`, BoostManager, GaugeVoting, bribes, streams, surface registry. Script does **not** activate LM sources.
 2. Verify **`boostManager.setUtility(utility)`**, **`voting.setUtility(utility)`**, and `ve4626.setBoostManager(boostManager)`; confirm LM sources are still `0`.
-3. Freeze and review the final source addresses, then call `armBoostSourceTimelock()` (one-way) while both LM sources remain `0`.
-4. Call `proposeBoostManager` + `proposeVe4626GaugeVoting`, wait at least 24 hours, then call both commit functions.
-5. For a lock created before BoostManager wiring, call `ve4626.checkpointBoostEligibility()` and wait the full `MIN_HOLDING_BLOCKS`.
-6. Canary one locker with **veLottery** + Share coverage. The raw quote reaches **2.5×** only when ve share ≥ LP share; only covered trade value receives the uplift.
+3. Product canary on `/vote` (lock → vote → bribe/stream) **without** LM wiring.
+4. Freeze final source addresses, then `armBoostSourceTimelock()` (one-way) while both LM sources remain `0`.
+5. `proposeBoostManager` + `proposeVe4626GaugeVoting`, wait ≥24h, then commit both.
+6. For locks created before BoostManager wiring, call `ve4626.checkpointBoostEligibility()` and wait `MIN_HOLDING_BLOCKS`.
+7. Canary one locker with **veLottery** + Share coverage. Raw quote reaches **2.5×** only when ve share ≥ LP share; only covered trade value receives the uplift.
 
 **Do not** arm timelock before boost addresses are frozen.
 

@@ -26,7 +26,7 @@ readonly WHITELIST=(
   "docs/operations/deployment/v1.10.1/pre-broadcast-cleanup.md"
   # Added during §6 guard expansion — paths that legitimately reference orphan addresses:
   # Historical artifact name; live path is LotteryManager4626.json
-  "deployments/base/contracts/services/lottery/CreatorLotteryManager.json"
+  "deployments/base/contracts/services/lottery/LotteryManager4626.json"
   "deployments/base/contracts/services/lottery/LotteryManager4626.json"
   "deployments/base/v1.8.1-vanity-manifest.json"
   "docs/operations/contract-size-gate.md"

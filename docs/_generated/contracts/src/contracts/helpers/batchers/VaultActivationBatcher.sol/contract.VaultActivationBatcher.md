@@ -27,7 +27,7 @@ address public immutable permit2
 ### registry
 
 ```solidity
-ICreatorRegistryLookup public immutable registry
+IRegistry4626Lookup public immutable registry
 ```
 
 

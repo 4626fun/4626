@@ -2,11 +2,16 @@ name: Control Plane Stuck Scan
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    # Cost: was */30 → hourly → 6h → daily. Weekly + manual for stuck-session scanning.
+    - cron: '23 14 * * 1'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: control-plane-stuck-scan
+  cancel-in-progress: true
 
 # Audit finding H-6 (2026-06): this workflow previously used npm ci against a
 # nonexistent frontend/package-lock.json (the repo is pnpm-only), so every
@@ -15,6 +20,7 @@ permissions:
 jobs:
   stuck-scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 

@@ -360,14 +360,14 @@ This allows same constructor args → same CREATE2 address on all chains.
 
 ```solidity
 constructor(address _registry, address _chainlinkFeed, string memory _creatorSymbol, address _owner)
-    OApp(ICreatorRegistry(_registry).getLayerZeroEndpoint(block.chainid), _owner)
+    OApp(IRegistry4626(_registry).getLayerZeroEndpoint(block.chainid), _owner)
     Ownable(_owner);
 ```
 **Parameters**
 
 |Name|Type|Description|
 |----|----|-----------|
-|`_registry`|`address`|CreatorRegistry address (same on all chains for deterministic addresses)|
+|`_registry`|`address`|Registry4626 address (same on all chains for deterministic addresses)|
 |`_chainlinkFeed`|`address`|Chainlink ETH/USD feed address|
 |`_creatorSymbol`|`string`|Creator token symbol (e.g., "■AKITA")|
 |`_owner`|`address`|Owner address|

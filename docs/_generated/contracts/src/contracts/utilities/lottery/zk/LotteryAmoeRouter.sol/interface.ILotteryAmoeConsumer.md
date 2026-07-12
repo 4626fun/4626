@@ -16,7 +16,7 @@ transcript). See `docs/security/amoe-plonk-migration.md` for
 the full rationale, gas/bytecode tradeoffs, and the
 security divergence from stock snarkjs output (explicit
 `checkField` on all 8 public inputs).
-When PR 4b is rolled out, `CreatorLotteryManager.authorizedAmoeRelayer`
+When PR 4b is rolled out, `LotteryManager4626.authorizedAmoeRelayer`
 is set to this router's address so `processAmoeEntry` is only ever
 called with a cryptographically-bound value.
 

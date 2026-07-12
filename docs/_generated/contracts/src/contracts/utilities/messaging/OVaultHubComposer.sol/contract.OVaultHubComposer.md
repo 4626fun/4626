@@ -33,7 +33,7 @@ uint8 public constant ACTION_REDEEM = 2
 ### registry
 
 ```solidity
-ICreatorRegistry public immutable registry
+IRegistry4626 public immutable registry
 ```
 
 

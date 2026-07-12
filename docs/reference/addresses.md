@@ -115,6 +115,23 @@ Sync local env from handoff: `./script/sync-greenfield-env-from-handoff.sh tmp/b
 
 `VITE_DEPLOYMENT_VERSION` pins the CREATE2 namespace for **new vault launches**.
 
+### Rewards ecosystem (ve■4626) — canary pending
+
+ve■4626 / gauge voting / bribes / streams / surface registry are **not** on the shared-infra table until the first Base broadcast of `DeployRewardsEcosystem`.
+
+| Client env | Status |
+|------------|--------|
+| `VITE_VE4626` | null until canary |
+| `VITE_VE4626_GAUGE_VOTING` | null until canary |
+| `VITE_VE4626_BOOST_MANAGER` | null until canary |
+| `VITE_VE4626_VOTER_REWARDS_DISTRIBUTOR` | null until canary |
+| `VITE_BRIBES_FACTORY_4626` | null until canary |
+| `VITE_REWARD_STREAM_FACTORY_4626` | null until canary |
+| `VITE_GAUGE_SURFACE_REGISTRY_4626` | null until canary |
+
+**Runbook:** [rewards-ecosystem-canary-2026-07.md](../operations/rewards-ecosystem-canary-2026-07.md).  
+**Lottery posture:** leave LM `boostManager` / `vaultGaugeVoting` at `0x0` until lottery Phase 3 ([lottery-canary-checklist](../operations/lottery-canary-checklist-2026-07.md)).
+
 Redeploy the Vercel app after env changes; run `bash test/current-release-target-guard.sh` and `verify-bytecode-store-seeded.ts` against `deployments/base/v1.18.0-bytecode-manifest.json` before traffic cutover.
 
 ### Per-Creator Deployments

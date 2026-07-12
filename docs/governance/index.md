@@ -19,7 +19,7 @@ User-facing guide to 4626 governance.
 
 1. **Lock tokens** in ve4626
 2. **Vote** on vault gauge allocations
-3. **Earn** 9.61% of trading fees
+3. **Earn** the voter fee slice (21.39% of ShareOFT trade fees)
 
 ## Benefits
 
@@ -27,7 +27,7 @@ User-facing guide to 4626 governance.
 |---------|-------------|
 | Voting power | Influence probability allocations |
 | Lottery boost | Up to 2.5× on covered trade value when ve share ≥ LP share; requires Share coverage + veLottery |
-| Fee share | 9.61% of trading fees |
+| Fee share | 21.39% of ShareOFT trade fees (voter lane) |
 
 ## Current Progress
 

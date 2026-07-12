@@ -108,7 +108,7 @@ uint16 public constant DEFAULT_LAUNCH_TICK_SPACING_BPS = 100
 ### registry
 
 ```solidity
-ICreatorRegistry public immutable registry
+IRegistry4626 public immutable registry
 ```
 
 

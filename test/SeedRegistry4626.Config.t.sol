@@ -43,11 +43,12 @@ contract SeedRegistry4626Harness is SeedRegistry4626 {
 }
 
 contract SeedRegistry4626ConfigTest is Test {
-    // v1.15.0 greenfield cutover addresses (tmp/base-v1.15.0-handoff.env)
+    // Pins must match script/SeedRegistry4626.s.sol constants (mixed-epoch handoff).
     address internal constant LIVE_REGISTRY = 0x1eb9A364a3E763dD9249ba3413Dc19E13c1F4461;
     address internal constant LIVE_OVAULT_FACTORY = 0x26b74b1d3AadD17e714068d259051409C9f942d1;
-    address internal constant LIVE_VAULT_BATCHER = 0xA9024e1B89C5Be34502A275576Cc137473d65839;
-    address internal constant LIVE_VAULT_ACT_BATCHER = 0xB06d99c81994F5829ba462c4afA78eCff75bC281;
+    // VAULT_BATCHER / VAULT_ACT_BATCHER currently pin v1.18.0 infra (addresses.md)
+    address internal constant LIVE_VAULT_BATCHER = 0x02D7abC547F8B1e7E2D7a919D8D1005918361750;
+    address internal constant LIVE_VAULT_ACT_BATCHER = 0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3;
     SeedRegistry4626Harness internal harness;
 
     function setUp() external {

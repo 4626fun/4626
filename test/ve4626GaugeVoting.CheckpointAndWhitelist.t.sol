@@ -1,0 +1,216 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "forge-std/Test.sol";
+
+import {ve4626GaugeVoting} from "@4626/shared/governance/ve4626GaugeVoting.sol";
+
+contract Mockve4626 {
+    mapping(address => uint256) internal _votingPower;
+    mapping(address => uint256) internal _remainingLockTime;
+    uint256 internal _totalVotingPower;
+
+    function setVotingPower(address user, uint256 power) external {
+        _totalVotingPower = _totalVotingPower - _votingPower[user] + power;
+        _votingPower[user] = power;
+    }
+
+    function setRemainingLockTime(address user, uint256 remaining) external {
+        _remainingLockTime[user] = remaining;
+    }
+
+    function getVotingPower(address user) external view returns (uint256) {
+        return _votingPower[user];
+    }
+
+    function getTotalVotingPower() external view returns (uint256) {
+        return _totalVotingPower;
+    }
+
+    function hasActiveLock(address user) external view returns (bool) {
+        return _votingPower[user] > 0;
+    }
+
+    function getRemainingLockTime(address user) external view returns (uint256) {
+        return _remainingLockTime[user];
+    }
+
+    // G-09: ve4626GaugeVoting now calls getLock to enforce minimum lock age
+    struct Lock {
+        uint256 amount;
+        uint256 end;
+        uint256 start;
+        address lockedToken;
+        uint256 underlyingValue;
+    }
+    mapping(address => Lock) internal _locks;
+
+    function setLockStart(address user, uint256 start) external {
+        _locks[user].start = start;
+    }
+
+    function getLock(address user) external view returns (Lock memory) {
+        return _locks[user];
+    }
+
+    // G-03: ve4626GaugeVoting now calls votingPowerAt for projected epoch-end power
+    function votingPowerAt(address user, uint256) external view returns (uint256) {
+        return _votingPower[user];
+    }
+}
+
+contract MockRegistry {
+    mapping(address => bool) internal _registered;
+
+    function setRegistered(address vault, bool registered) external {
+        _registered[vault] = registered;
+    }
+
+    function isRegisteredVault(address vault) external view returns (bool) {
+        return _registered[vault];
+    }
+}
+
+/// @dev Minimal utility stand-in so vote() can run under mandatory utility wiring.
+contract MockUtility {
+    Mockve4626 internal ve;
+
+    constructor(Mockve4626 ve_) {
+        ve = ve_;
+    }
+
+    function sync(address) external pure returns (uint256, uint256) {
+        return (0, 0);
+    }
+
+    function effectiveVe33Of(address user) external view returns (uint256) {
+        return ve.getVotingPower(user);
+    }
+
+    function ve33() external pure returns (address) {
+        return address(0);
+    }
+}
+
+contract ve4626GaugeVotingCheckpointAndWhitelistTest is Test {
+    uint256 internal constant WEEK = 7 days;
+
+    ve4626GaugeVoting internal voting;
+    Mockve4626 internal ve;
+    MockUtility internal utility;
+
+    address internal owner = address(this);
+    address internal voter = address(0xBEEF);
+
+    function setUp() public {
+        ve = new Mockve4626();
+        utility = new MockUtility(ve);
+        voting = new ve4626GaugeVoting(address(ve), owner);
+        voting.setUtility(address(utility));
+
+        ve.setVotingPower(voter, 100 ether);
+        ve.setRemainingLockTime(voter, type(uint256).max);
+    }
+
+    function _warpToEpoch(uint256 epoch, uint256 offset) internal {
+        uint256 genesis = voting.genesisEpochStart();
+        vm.warp(genesis + epoch * WEEK + offset);
+    }
+
+    function _assertSingleEpochCheckpointedLog(Vm.Log[] memory logs, uint256 expectedEpoch, uint256 expectedTotalWeight)
+        internal
+        view
+    {
+        assertEq(logs.length, 1);
+        assertEq(logs[0].emitter, address(voting));
+        assertEq(logs[0].topics.length, 2);
+        assertEq(logs[0].topics[0], keccak256("EpochCheckpointed(uint256,uint256)"));
+        assertEq(uint256(logs[0].topics[1]), expectedEpoch);
+        assertEq(abi.decode(logs[0].data, (uint256)), expectedTotalWeight);
+    }
+
+    function test_checkpoint_revertsDuringEpoch0() public {
+        _warpToEpoch(0, 1);
+
+        vm.expectRevert(ve4626GaugeVoting.EpochNotEnded.selector);
+        voting.checkpoint();
+    }
+
+    function test_checkpoint_finalizesPreviousEpoch_andEmitsOnlyOncePerEpoch() public {
+        // G-23: epoch 0 is implicitly checkpointed (lastCheckpointedEpoch defaults to 0).
+        // Epoch 2 is ongoing, so checkpoint covers epoch 1 (the first explicitly checkpointed epoch).
+        _warpToEpoch(2, 1);
+
+        vm.recordLogs();
+        voting.checkpoint();
+        _assertSingleEpochCheckpointedLog(vm.getRecordedLogs(), 1, 0);
+
+        // Calling again in the same epoch must be a no-op (no duplicate event).
+        vm.recordLogs();
+        voting.checkpoint();
+        assertEq(vm.getRecordedLogs().length, 0);
+
+        // Move forward: epoch 3 is ongoing, so epoch 2 is the most recently ended epoch.
+        _warpToEpoch(3, 1);
+
+        vm.recordLogs();
+        voting.checkpoint();
+        _assertSingleEpochCheckpointedLog(vm.getRecordedLogs(), 2, 0);
+        assertEq(voting.lastCheckpointedEpoch(), 2);
+    }
+
+    function test_registryOnlyVault_isNotVoteEligible_orEnumerable_orBoosted() public {
+        MockRegistry registry = new MockRegistry();
+        voting.setRegistry(address(registry));
+        voting.setUseRegistryWhitelist(true);
+
+        address manualVault = makeAddr("manualVault");
+        address registryOnlyVault = makeAddr("registryOnlyVault");
+
+        registry.setRegistered(manualVault, true);
+        registry.setRegistered(registryOnlyVault, true);
+
+        // Make enumeration non-empty so a registry-only vault would otherwise receive
+        // an equal-split boost under the current (vulnerable) logic.
+        voting.setVaultWhitelist(manualVault, true);
+
+        assertEq(voting.canReceiveVotes(registryOnlyVault), false);
+        assertEq(voting.getVaultProbabilityBoostPPM(registryOnlyVault), 0);
+
+        _warpToEpoch(0, 1);
+
+        address[] memory vaults = new address[](1);
+        uint256[] memory weights = new uint256[](1);
+        vaults[0] = registryOnlyVault;
+        weights[0] = 100;
+
+        vm.prank(voter);
+        vm.expectRevert(abi.encodeWithSelector(ve4626GaugeVoting.VaultNotWhitelisted.selector, registryOnlyVault));
+        voting.vote(vaults, weights);
+    }
+
+    function test_setVaultWhitelist_allowsUnregisteredButVaultRemainsIneligible_whenRegistryWhitelistEnabled() public {
+        MockRegistry registry = new MockRegistry();
+        voting.setRegistry(address(registry));
+        voting.setUseRegistryWhitelist(true);
+
+        address unregisteredVault = makeAddr("unregisteredVault");
+        registry.setRegistered(unregisteredVault, false);
+
+        voting.setVaultWhitelist(unregisteredVault, true);
+
+        assertEq(voting.canReceiveVotes(unregisteredVault), false);
+        assertEq(voting.getVaultProbabilityBoostPPM(unregisteredVault), 0);
+
+        _warpToEpoch(0, 1);
+        address[] memory vaults = new address[](1);
+        uint256[] memory weights = new uint256[](1);
+        vaults[0] = unregisteredVault;
+        weights[0] = 100;
+
+        vm.prank(voter);
+        vm.expectRevert(abi.encodeWithSelector(ve4626GaugeVoting.VaultNotWhitelisted.selector, unregisteredVault));
+        voting.vote(vaults, weights);
+    }
+}
+

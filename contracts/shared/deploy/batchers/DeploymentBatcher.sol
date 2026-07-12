@@ -2483,8 +2483,19 @@ contract DeploymentBatcher is ReentrancyGuard {
     // HELPERS
     // ================================
 
+    /// @notice Callers allowed to run phase deploys on behalf of `params.owner` (e.g. OVaultFactory4626).
+    mapping(address => bool) public authorizedPhaseCallers;
+
+    event AuthorizedPhaseCallerUpdated(address indexed caller, bool authorized);
+
+    function setAuthorizedPhaseCaller(address caller, bool authorized) external onlyProtocolTreasury {
+        if (caller == address(0)) revert ZeroAddress();
+        authorizedPhaseCallers[caller] = authorized;
+        emit AuthorizedPhaseCallerUpdated(caller, authorized);
+    }
+
     function _requireOwner(address owner) internal view {
-        if (msg.sender != owner) revert NotOwner();
+        if (msg.sender != owner && !authorizedPhaseCallers[msg.sender]) revert NotOwner();
     }
 
     function _delegatePhase1(bytes memory callData) internal returns (bytes memory result) {

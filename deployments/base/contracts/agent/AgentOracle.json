@@ -1,0 +1,2576 @@
+{
+  "contractName": "AgentOracle",
+  "network": "Base",
+  "chainId": 8453,
+  "release": "v1-greenfield",
+  "address": null,
+  "deployedBy": null,
+  "deployedAt": null,
+  "deploymentTx": null,
+  "abi": [
+    {
+      "type": "constructor",
+      "inputs": [
+        {
+          "name": "_registry",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_chainlinkFeed",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_assetSymbol",
+          "type": "string",
+          "internalType": "string"
+        },
+        {
+          "name": "_owner",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "BASE_CHAIN_ID",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "BASE_EID",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "BASE_WETH",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "DEFAULT_TWAP_DURATION",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "MAX_CARDINALITY",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint16",
+          "internalType": "uint16"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "MAX_INITIAL_PRICE_USD",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "int256",
+          "internalType": "int256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "MAX_PRICE_DEVIATION",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "MAX_STALENESS",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "MIN_TWAP_DURATION",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "SEQUENCER_GRACE_PERIOD",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "_readFeedPrice18External",
+      "inputs": [
+        {
+          "name": "feed",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "price18",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "updatedAt",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "ok",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "_updatePriceFromTWAPExternal",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "allowInitializePath",
+      "inputs": [
+        {
+          "name": "origin",
+          "type": "tuple",
+          "internalType": "struct Origin",
+          "components": [
+            {
+              "name": "srcEid",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "sender",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "nonce",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "assetIsToken0",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "assetPoolKey",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "currency0",
+          "type": "address",
+          "internalType": "Currency"
+        },
+        {
+          "name": "currency1",
+          "type": "address",
+          "internalType": "Currency"
+        },
+        {
+          "name": "fee",
+          "type": "uint24",
+          "internalType": "uint24"
+        },
+        {
+          "name": "tickSpacing",
+          "type": "int24",
+          "internalType": "int24"
+        },
+        {
+          "name": "hooks",
+          "type": "address",
+          "internalType": "contract IHooks"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "assetPriceTimestamp",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "assetPriceUSD",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "int256",
+          "internalType": "int256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "assetSymbol",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string",
+          "internalType": "string"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "broadcastAssetPrice",
+      "inputs": [
+        {
+          "name": "dstEids",
+          "type": "uint32[]",
+          "internalType": "uint32[]"
+        },
+        {
+          "name": "",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple[]",
+          "internalType": "struct MessagingReceipt[]",
+          "components": [
+            {
+              "name": "guid",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "nonce",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "fee",
+              "type": "tuple",
+              "internalType": "struct MessagingFee",
+              "components": [
+                {
+                  "name": "nativeFee",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                },
+                {
+                  "name": "lzTokenFee",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "stateMutability": "payable"
+    },
+    {
+      "type": "function",
+      "name": "broadcastAssetPriceWithFees",
+      "inputs": [
+        {
+          "name": "dstEids",
+          "type": "uint32[]",
+          "internalType": "uint32[]"
+        },
+        {
+          "name": "options",
+          "type": "bytes",
+          "internalType": "bytes"
+        },
+        {
+          "name": "fees",
+          "type": "uint256[]",
+          "internalType": "uint256[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "receipts",
+          "type": "tuple[]",
+          "internalType": "struct MessagingReceipt[]",
+          "components": [
+            {
+              "name": "guid",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "nonce",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "fee",
+              "type": "tuple",
+              "internalType": "struct MessagingFee",
+              "components": [
+                {
+                  "name": "nativeFee",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                },
+                {
+                  "name": "lzTokenFee",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "stateMutability": "payable"
+    },
+    {
+      "type": "function",
+      "name": "chainlinkFeed",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "endpoint",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "contract ILayerZeroEndpointV2"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "forceSyncRemotePrice",
+      "inputs": [
+        {
+          "name": "_price",
+          "type": "int256",
+          "internalType": "int256"
+        },
+        {
+          "name": "_timestamp",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "_symbol",
+          "type": "string",
+          "internalType": "string"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "getAjnaBucketFromV3TWAP",
+      "inputs": [
+        {
+          "name": "duration",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "bucketIndex",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getAssetEthTWAP",
+      "inputs": [
+        {
+          "name": "duration",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "price",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getAssetPrice",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "price",
+          "type": "int256",
+          "internalType": "int256"
+        },
+        {
+          "name": "timestamp",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getAssetUsdTWAP",
+      "inputs": [
+        {
+          "name": "duration",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "priceUsd18",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getCurrentTick",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "tick",
+          "type": "int24",
+          "internalType": "int24"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getEthPrice",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "price",
+          "type": "int256",
+          "internalType": "int256"
+        },
+        {
+          "name": "timestamp",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getObservationState",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "index",
+          "type": "uint16",
+          "internalType": "uint16"
+        },
+        {
+          "name": "cardinality",
+          "type": "uint16",
+          "internalType": "uint16"
+        },
+        {
+          "name": "cardinalityNext",
+          "type": "uint16",
+          "internalType": "uint16"
+        },
+        {
+          "name": "lastTimestamp",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getTWAPTick",
+      "inputs": [
+        {
+          "name": "duration",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "twapTick",
+          "type": "int24",
+          "internalType": "int24"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getTickCapState",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "currentCap",
+          "type": "int24",
+          "internalType": "int24"
+        },
+        {
+          "name": "capFrequency",
+          "type": "uint64",
+          "internalType": "uint64"
+        },
+        {
+          "name": "autoTunePaused",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getV2AssetQuoteTWAP",
+      "inputs": [
+        {
+          "name": "duration",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "agentPerQuote18",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getV3TWAPTick",
+      "inputs": [
+        {
+          "name": "duration",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "twapTick",
+          "type": "int24",
+          "internalType": "int24"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "initializeAssetPrice",
+      "inputs": [
+        {
+          "name": "_price",
+          "type": "int256",
+          "internalType": "int256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "isComposeMsgSender",
+      "inputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "internalType": "struct Origin",
+          "components": [
+            {
+              "name": "srcEid",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "sender",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "nonce",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ]
+        },
+        {
+          "name": "",
+          "type": "bytes",
+          "internalType": "bytes"
+        },
+        {
+          "name": "_sender",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "isPriceFresh",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "isPriceUpdater",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "isSwapRecorder",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "lastObservationTimestamp",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "lockReferenceQuoteToken",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "lzReceive",
+      "inputs": [
+        {
+          "name": "_origin",
+          "type": "tuple",
+          "internalType": "struct Origin",
+          "components": [
+            {
+              "name": "srcEid",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "sender",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "nonce",
+              "type": "uint64",
+              "internalType": "uint64"
+            }
+          ]
+        },
+        {
+          "name": "_guid",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "_message",
+          "type": "bytes",
+          "internalType": "bytes"
+        },
+        {
+          "name": "_executor",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_extraData",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "payable"
+    },
+    {
+      "type": "function",
+      "name": "maxTicksPerObservation",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "int24",
+          "internalType": "int24"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "nextNonce",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint32",
+          "internalType": "uint32"
+        },
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nonce",
+          "type": "uint64",
+          "internalType": "uint64"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "oAppVersion",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "senderVersion",
+          "type": "uint64",
+          "internalType": "uint64"
+        },
+        {
+          "name": "receiverVersion",
+          "type": "uint64",
+          "internalType": "uint64"
+        }
+      ],
+      "stateMutability": "pure"
+    },
+    {
+      "type": "function",
+      "name": "observationState",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "index",
+          "type": "uint16",
+          "internalType": "uint16"
+        },
+        {
+          "name": "cardinality",
+          "type": "uint16",
+          "internalType": "uint16"
+        },
+        {
+          "name": "cardinalityNext",
+          "type": "uint16",
+          "internalType": "uint16"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "observations",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "blockTimestamp",
+          "type": "uint32",
+          "internalType": "uint32"
+        },
+        {
+          "name": "tickCumulative",
+          "type": "int56",
+          "internalType": "int56"
+        },
+        {
+          "name": "tickCumulativeTruncated",
+          "type": "int56",
+          "internalType": "int56"
+        },
+        {
+          "name": "secondsPerLiquidityCumulativeX128",
+          "type": "uint160",
+          "internalType": "uint160"
+        },
+        {
+          "name": "prevTruncatedTick",
+          "type": "int24",
+          "internalType": "int24"
+        },
+        {
+          "name": "initialized",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "owner",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "peers",
+      "inputs": [
+        {
+          "name": "eid",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "peer",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "poolManager",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "contract IPoolManager"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "priceUpdateCooldown",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "quoteUsdFeed",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "recordSwapObservation",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "recordV2Observation",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "referenceQuoteToken",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "referenceQuoteTokenLocked",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "renounceOwnership",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "sequencerUptimeFeed",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "setAutoTunePaused",
+      "inputs": [
+        {
+          "name": "paused",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setChainlinkFeed",
+      "inputs": [
+        {
+          "name": "_feed",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setDelegate",
+      "inputs": [
+        {
+          "name": "_delegate",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setMaxTicksPerObservation",
+      "inputs": [
+        {
+          "name": "_maxTicks",
+          "type": "int24",
+          "internalType": "int24"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setPeer",
+      "inputs": [
+        {
+          "name": "_eid",
+          "type": "uint32",
+          "internalType": "uint32"
+        },
+        {
+          "name": "_peer",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setPriceUpdateCooldown",
+      "inputs": [
+        {
+          "name": "cooldown",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setPriceUpdater",
+      "inputs": [
+        {
+          "name": "updater",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "authorized",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setQuoteUsdFeed",
+      "inputs": [
+        {
+          "name": "_feed",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setReferenceQuoteToken",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setSequencerUptimeFeed",
+      "inputs": [
+        {
+          "name": "_feed",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setSwapRecorder",
+      "inputs": [
+        {
+          "name": "recorder",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "authorized",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setTickCapPolicy",
+      "inputs": [
+        {
+          "name": "_minCap",
+          "type": "int24",
+          "internalType": "int24"
+        },
+        {
+          "name": "_maxCap",
+          "type": "int24",
+          "internalType": "int24"
+        },
+        {
+          "name": "_stepBps",
+          "type": "uint32",
+          "internalType": "uint32"
+        },
+        {
+          "name": "_budgetPpm",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setUseTruncatedTick",
+      "inputs": [
+        {
+          "name": "_use",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setV2Pair",
+      "inputs": [
+        {
+          "name": "_pair",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_agentToken",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_quoteToken",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_twapDuration",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setV3Pool",
+      "inputs": [
+        {
+          "name": "_pool",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_agentToken",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_quoteToken",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_twapDuration",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setV4Pool",
+      "inputs": [
+        {
+          "name": "_poolManager",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_poolKey",
+          "type": "tuple",
+          "internalType": "struct PoolKey",
+          "components": [
+            {
+              "name": "currency0",
+              "type": "address",
+              "internalType": "Currency"
+            },
+            {
+              "name": "currency1",
+              "type": "address",
+              "internalType": "Currency"
+            },
+            {
+              "name": "fee",
+              "type": "uint24",
+              "internalType": "uint24"
+            },
+            {
+              "name": "tickSpacing",
+              "type": "int24",
+              "internalType": "int24"
+            },
+            {
+              "name": "hooks",
+              "type": "address",
+              "internalType": "contract IHooks"
+            }
+          ]
+        },
+        {
+          "name": "_assetIsToken0",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "tickCapPolicy",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "minCap",
+          "type": "int24",
+          "internalType": "int24"
+        },
+        {
+          "name": "maxCap",
+          "type": "int24",
+          "internalType": "int24"
+        },
+        {
+          "name": "stepBps",
+          "type": "uint32",
+          "internalType": "uint32"
+        },
+        {
+          "name": "budgetPpm",
+          "type": "uint32",
+          "internalType": "uint32"
+        },
+        {
+          "name": "decayWindowSec",
+          "type": "uint32",
+          "internalType": "uint32"
+        },
+        {
+          "name": "updateIntervalSec",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "tickCapState",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "capFrequency",
+          "type": "uint64",
+          "internalType": "uint64"
+        },
+        {
+          "name": "lastCapUpdate",
+          "type": "uint48",
+          "internalType": "uint48"
+        },
+        {
+          "name": "autoTunePaused",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "tickToAjnaBucket",
+      "inputs": [
+        {
+          "name": "tick",
+          "type": "int24",
+          "internalType": "int24"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "bucketIndex",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "pure"
+    },
+    {
+      "type": "function",
+      "name": "tickToPrice",
+      "inputs": [
+        {
+          "name": "tick",
+          "type": "int24",
+          "internalType": "int24"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "price",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "transferOwnership",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "updateAssetPrice",
+      "inputs": [
+        {
+          "name": "_price",
+          "type": "int256",
+          "internalType": "int256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "updateAssetPriceFromTWAP",
+      "inputs": [
+        {
+          "name": "twapDuration",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "updateAssetPriceFromV3TWAP",
+      "inputs": [
+        {
+          "name": "twapDuration",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "useTruncatedTick",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "v2AgentDecimals",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8",
+          "internalType": "uint8"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "v2AgentToken",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "v2ObservationTimestamp",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "v2Pair",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "v2PairConfigured",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "v2PriceCumulativeLast",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "v2QuoteDecimals",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8",
+          "internalType": "uint8"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "v2QuoteToken",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "v2TwapDuration",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "v3AgentDecimals",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8",
+          "internalType": "uint8"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "v3AgentToken",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "v3Pool",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "v3PoolConfigured",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "v3QuoteDecimals",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8",
+          "internalType": "uint8"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "v3QuoteToken",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "v3TwapDuration",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "v3UsdDecimals",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8",
+          "internalType": "uint8"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "v3UsdToken",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "v4PoolConfigured",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "event",
+      "name": "AssetPriceBroadcast",
+      "inputs": [
+        {
+          "name": "dstEids",
+          "type": "uint32[]",
+          "indexed": false,
+          "internalType": "uint32[]"
+        },
+        {
+          "name": "price",
+          "type": "int256",
+          "indexed": false,
+          "internalType": "int256"
+        },
+        {
+          "name": "timestamp",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "AssetPriceReceived",
+      "inputs": [
+        {
+          "name": "srcEid",
+          "type": "uint32",
+          "indexed": false,
+          "internalType": "uint32"
+        },
+        {
+          "name": "price",
+          "type": "int256",
+          "indexed": false,
+          "internalType": "int256"
+        },
+        {
+          "name": "timestamp",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "AssetPriceUpdated",
+      "inputs": [
+        {
+          "name": "symbol",
+          "type": "string",
+          "indexed": false,
+          "internalType": "string"
+        },
+        {
+          "name": "price",
+          "type": "int256",
+          "indexed": false,
+          "internalType": "int256"
+        },
+        {
+          "name": "timestamp",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "updater",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "BroadcastEqualSplitCallAttempted",
+      "inputs": [
+        {
+          "name": "caller",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "msgValue",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "dstEids",
+          "type": "uint32[]",
+          "indexed": false,
+          "internalType": "uint32[]"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "ChainlinkFeedSet",
+      "inputs": [
+        {
+          "name": "feed",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "MaxTicksUpdated",
+      "inputs": [
+        {
+          "name": "oldMaxTicks",
+          "type": "int24",
+          "indexed": false,
+          "internalType": "int24"
+        },
+        {
+          "name": "newMaxTicks",
+          "type": "int24",
+          "indexed": false,
+          "internalType": "int24"
+        },
+        {
+          "name": "autoTuned",
+          "type": "bool",
+          "indexed": false,
+          "internalType": "bool"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "ObservationRecorded",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint16",
+          "indexed": false,
+          "internalType": "uint16"
+        },
+        {
+          "name": "tick",
+          "type": "int24",
+          "indexed": false,
+          "internalType": "int24"
+        },
+        {
+          "name": "truncatedTick",
+          "type": "int24",
+          "indexed": false,
+          "internalType": "int24"
+        },
+        {
+          "name": "timestamp",
+          "type": "uint32",
+          "indexed": false,
+          "internalType": "uint32"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "OwnershipTransferred",
+      "inputs": [
+        {
+          "name": "previousOwner",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "PeerSet",
+      "inputs": [
+        {
+          "name": "eid",
+          "type": "uint32",
+          "indexed": false,
+          "internalType": "uint32"
+        },
+        {
+          "name": "peer",
+          "type": "bytes32",
+          "indexed": false,
+          "internalType": "bytes32"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "PriceUpdaterSet",
+      "inputs": [
+        {
+          "name": "updater",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "authorized",
+          "type": "bool",
+          "indexed": false,
+          "internalType": "bool"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "QuoteUsdFeedSet",
+      "inputs": [
+        {
+          "name": "feed",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "ReferenceQuoteTokenLocked",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "ReferenceQuoteTokenSet",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "RemotePriceUpdateSkipped",
+      "inputs": [
+        {
+          "name": "srcEid",
+          "type": "uint32",
+          "indexed": true,
+          "internalType": "uint32"
+        },
+        {
+          "name": "candidatePrice",
+          "type": "int256",
+          "indexed": false,
+          "internalType": "int256"
+        },
+        {
+          "name": "candidateTimestamp",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "reason",
+          "type": "string",
+          "indexed": false,
+          "internalType": "string"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "SequencerUptimeFeedSet",
+      "inputs": [
+        {
+          "name": "feed",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "SwapRecorderSet",
+      "inputs": [
+        {
+          "name": "recorder",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "authorized",
+          "type": "bool",
+          "indexed": false,
+          "internalType": "bool"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "TickWasCapped",
+      "inputs": [
+        {
+          "name": "rawTick",
+          "type": "int24",
+          "indexed": false,
+          "internalType": "int24"
+        },
+        {
+          "name": "truncatedTick",
+          "type": "int24",
+          "indexed": false,
+          "internalType": "int24"
+        },
+        {
+          "name": "movement",
+          "type": "int24",
+          "indexed": false,
+          "internalType": "int24"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "V2ObservationRecorded",
+      "inputs": [
+        {
+          "name": "cumulativePrice",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "timestamp",
+          "type": "uint32",
+          "indexed": false,
+          "internalType": "uint32"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "V2PairConfigured",
+      "inputs": [
+        {
+          "name": "pair",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "agentToken",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "quoteToken",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "twapDuration",
+          "type": "uint32",
+          "indexed": false,
+          "internalType": "uint32"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "V3PoolConfigured",
+      "inputs": [
+        {
+          "name": "pool",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "creatorToken",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "usdToken",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "twapDuration",
+          "type": "uint32",
+          "indexed": false,
+          "internalType": "uint32"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "V4PoolConfigured",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "PoolId"
+        },
+        {
+          "name": "poolManager",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        },
+        {
+          "name": "assetIsToken0",
+          "type": "bool",
+          "indexed": false,
+          "internalType": "bool"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "error",
+      "name": "BroadcastEqualSplitDeprecated",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "HubOnly",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InitialPriceTooHigh",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidBaseEid",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidDelegate",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidDuration",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidEndpointCall",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidOriginEid",
+      "inputs": [
+        {
+          "name": "srcEid",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "InvalidPrice",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidReferenceQuoteToken",
+      "inputs": [
+        {
+          "name": "expected",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "actual",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "InvalidV2Pair",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidV3Pool",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "LzTokenUnavailable",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "MissingQuoteUsdFeed",
+      "inputs": [
+        {
+          "name": "quoteToken",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "NeedMoreObservations",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NoPeer",
+      "inputs": [
+        {
+          "name": "eid",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "NotEnoughNative",
+      "inputs": [
+        {
+          "name": "msgValue",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "OnlyEndpoint",
+      "inputs": [
+        {
+          "name": "addr",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "OnlyPeer",
+      "inputs": [
+        {
+          "name": "eid",
+          "type": "uint32",
+          "internalType": "uint32"
+        },
+        {
+          "name": "sender",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "OracleAlreadyInitialized",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "OracleNotInitialized",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "OwnableInvalidOwner",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "OwnableUnauthorizedAccount",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "PriceDeviationTooHigh",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "PriceUpdateCooldown",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ReferenceQuoteTokenIsLocked",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ReferenceQuoteTokenUnset",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "RemoteOnly",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "SafeERC20FailedOperation",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "SequencerDown",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "StaleObservationWindow",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "StalePrice",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "Unauthorized",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "UnsupportedDecimals",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "V2NotConfigured",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "V3NotConfigured",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "V4NotConfigured",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ZeroAddress",
+      "inputs": []
+    }
+  ],
+  "notes": [
+    "V1 greenfield interface snapshot: ABI matches current contracts/ source. address is null until first Base broadcast of this bytecode epoch."
+  ]
+}

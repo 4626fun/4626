@@ -68,7 +68,8 @@ type NonceResponse = CreditSnapshot & {
   message: string
 }
 
-type CreatorLotteryStatsResponse = {
+/** API payload from `/api/v1/lottery/creator` (TokenLotteryStats / getTokenLotteryStats). */
+type TokenLotteryStatsResponse = {
   jackpotUsd?: string | null
 }
 
@@ -225,7 +226,7 @@ export function AmoeEntryCard(props: {
       if (creatorCoin) statsParams.set('creatorCoin', creatorCoin)
       const statsUrl = `/api/v1/lottery/creator${statsParams.size > 0 ? `?${statsParams.toString()}` : ''}`
       const statsRes = await apiFetch(statsUrl, { method: 'GET', withCredentials: true })
-      const statsJson = parseJsonSafe<CreatorLotteryStatsResponse>(await statsRes.json().catch(() => null))
+      const statsJson = parseJsonSafe<TokenLotteryStatsResponse>(await statsRes.json().catch(() => null))
       setJackpotUsd(statsRes.ok && statsJson?.success ? (statsJson.data?.jackpotUsd ?? null) : null)
     } catch (error: unknown) {
       setErrorMessage(toErrorMessage(error, 'Unable to load AMOE points'))

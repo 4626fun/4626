@@ -198,7 +198,7 @@ export const RATE_LIMITS = {
   // Paymaster JSON-RPC endpoint: 120 requests per minute per client IP
   paymasterRpc: { windowMs: 60_000, maxRequests: 120 },
   // ve4626 lock/increase/extend calldata build endpoints: 80 per minute per principal
-  buildVe4626Calldata: { windowMs: 60_000, maxRequests: 80 },
+  buildve4626Calldata: { windowMs: 60_000, maxRequests: 80 },
   // Charm calldata build endpoints: 80 per minute per principal
   buildCharmCalldata: { windowMs: 60_000, maxRequests: 80 },
   // General API: 60 per minute per IP

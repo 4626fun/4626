@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import {ve4626BoostManager} from "@4626/shared/governance/ve4626BoostManager.sol";
 
-contract MockVe4626BoostMath {
+contract Mockve4626BoostMath {
     mapping(address => uint256) public votingPower;
     uint256 public totalVotingPower;
     mapping(address => bool) public activeLock;
@@ -44,9 +44,9 @@ contract MockVe4626BoostMath {
 }
 
 contract MockVe4626UtilityBoostMath {
-    MockVe4626BoostMath internal immutable ve;
+    Mockve4626BoostMath internal immutable ve;
 
-    constructor(MockVe4626BoostMath ve_) {
+    constructor(Mockve4626BoostMath ve_) {
         ve = ve_;
     }
 
@@ -60,8 +60,8 @@ contract MockVe4626UtilityBoostMath {
 }
 
 /// @notice working = min(0.4*l + 0.6*L*(ve/Ve), l); boost = working/(0.4*l) ∈ [1, 2.5]
-contract Ve4626BoostManagerMathTest is Test {
-    MockVe4626BoostMath internal ve;
+contract ve4626BoostManagerMathTest is Test {
+    Mockve4626BoostMath internal ve;
     MockVe4626UtilityBoostMath internal utility;
     ve4626BoostManager internal manager;
 
@@ -71,7 +71,7 @@ contract Ve4626BoostManagerMathTest is Test {
     uint256 internal constant L = 1_000e18; // pool USD
 
     function setUp() public {
-        ve = new MockVe4626BoostMath();
+        ve = new Mockve4626BoostMath();
         utility = new MockVe4626UtilityBoostMath(ve);
         manager = new ve4626BoostManager(address(ve), owner);
         vm.startPrank(owner);

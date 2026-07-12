@@ -78,9 +78,9 @@ Important boundary:
 - Tracks real-time share token price via **Uniswap V4 TWAP**
 - Used for vault accounting and lottery prize valuations
 
-### 8. CreatorRegistry
+### 8. Registry4626
 
-- Central registry for all platform contracts
+- Central registry for all platform contracts (canonical type: `Registry4626`, not legacy “CreatorRegistry”)
 - Maps Creator Coins → (Vault, Wrapper, OFT, GaugeController, Lottery)
 - Stores chain configurations (LayerZero endpoints, DEX infrastructure)
 
@@ -112,8 +112,8 @@ Two fee planes:
 tradeFeeCollector (typically CreatorGaugeController)
    ↓ Route by configured split:
      - 69% → Lottery prize pool
-     - 21.39% → Burned (increases PPS)
-     - 9.61% → Voter/protocol branch
+     - 9.61% → Burned vault shares (increases PPS)
+     - 21.39% → Voter branch (ve4626VoterRewardsDistributor)
 CreatorGaugeController (jackpot custodian)
    ↓ Calculate percentage-based win chance ($1 = 0.0004%)
 LotteryManager4626 (jackpot payout authority)
@@ -130,7 +130,7 @@ User clicks "Deploy" → wallet/bundler executes a phased sequence
 
 Phase 1 — Deterministic deploy (deployment batcher):
 - Deploy per-creator contracts (vault, wrapper, share OFT, gauge controller, oracle, share CCA launch arm)
-- Register them in CreatorRegistry
+- Register them in Registry4626
 
 Phase 2 — Configuration (deployment batcher):
 - Wire roles + addresses (vault↔wrapper↔OFT, gauge controller config, oracle config)
@@ -152,5 +152,5 @@ This layer can be deployed and enabled after the core system is live:
 - **ve4626**: Vote-escrow token that represents locked power
 - **ve4626BoostManager**: Exposes personal boost signals used by `LotteryManager4626`
 - **ve4626GaugeVoting**: Weekly voting that allocates a bounded probability budget across whitelisted vaults
-- **ve4626VoterRewardsDistributor**: Receives the voter slice (9.61% default) from each `CreatorGaugeController` and lets voters claim pro-rata per epoch/vault
-- **BribesFactory / BribeDepot**: Optional external bribes per vault (epoch-scoped)
+- **ve4626VoterRewardsDistributor**: Receives the voter slice (21.39% ShareOFT) from each `CreatorGaugeController` and lets voters claim pro-rata per epoch/vault
+- **BribesFactory4626 / BribeDepot4626**: Optional external bribes per vault (epoch-scoped)

@@ -73,7 +73,7 @@ contract MockBoostManagerBSTL {
 }
 
 contract MockVaultGaugeBSTL {
-    function getVaultGaugeProbabilityBoostPPM(address) external pure returns (uint256) { return 0; }
+    function getVaultProbabilityBoostPPM(address) external pure returns (uint256) { return 0; }
 }
 
 // =====================================================================
@@ -82,7 +82,7 @@ contract MockVaultGaugeBSTL {
 
 /// @notice PR 3 — Boost-source timelock coverage.
 /// Verifies the propose/commit/cancel lifecycle for `boostManager` and
-/// `vaultGaugeVoting`, the one-way `armBoostSourceTimelock` switch, the
+/// `ve4626GaugeVoting`, the one-way `armBoostSourceTimelock` switch, the
 /// emergency `disableBoostSources` circuit breaker, and the gating of legacy
 /// setters once the timelock is armed.
 contract LotteryManager4626BoostSourceTimelockTest is Test {
@@ -142,7 +142,7 @@ contract LotteryManager4626BoostSourceTimelockTest is Test {
         // Bootstrap initial sources via legacy setters before arming.
         vm.startPrank(owner);
         manager.setBoostManager(address(boostA));
-        manager.setVe4626GaugeVoting(address(gaugeA));
+        manager.setve4626GaugeVoting(address(gaugeA));
         vm.stopPrank();
     }
 
@@ -183,7 +183,7 @@ contract LotteryManager4626BoostSourceTimelockTest is Test {
     function test_PreArm_LegacySettersStillWork() public {
         // setUp already used the legacy setters; verify state.
         assertEq(_readBoostManager(), address(boostA), "boostManager set via legacy");
-        assertEq(_readVaultGauge(), address(gaugeA), "vaultGaugeVoting set via legacy");
+        assertEq(_readVaultGauge(), address(gaugeA), "ve4626GaugeVoting set via legacy");
         assertFalse(_readTimelockArmed(), "timelock not armed yet");
 
         // Re-call legacy setter pre-arm — should still succeed.
@@ -201,7 +201,7 @@ contract LotteryManager4626BoostSourceTimelockTest is Test {
     function test_PreArm_Proposeve4626GaugeVoting_Reverts() public {
         vm.prank(owner);
         vm.expectRevert(LotteryManager4626.TimelockNotArmed.selector);
-        manager.proposeVe4626GaugeVoting(address(gaugeB));
+        manager.proposeve4626GaugeVoting(address(gaugeB));
     }
 
     // -------------------------------------------------------------
@@ -254,7 +254,7 @@ contract LotteryManager4626BoostSourceTimelockTest is Test {
 
         vm.prank(owner);
         vm.expectRevert(LotteryManager4626.LegacySetterDisabled.selector);
-        manager.setVe4626GaugeVoting(address(gaugeB));
+        manager.setve4626GaugeVoting(address(gaugeB));
 
         assertEq(_readVaultGauge(), address(gaugeA));
     }
@@ -357,7 +357,7 @@ contract LotteryManager4626BoostSourceTimelockTest is Test {
     }
 
     // -------------------------------------------------------------
-    // 6. Symmetric path for vaultGaugeVoting
+    // 6. Symmetric path for ve4626GaugeVoting
     // -------------------------------------------------------------
 
     function test_ve4626GaugeVoting_HappyPath_ProposeWaitCommit() public {
@@ -369,7 +369,7 @@ contract LotteryManager4626BoostSourceTimelockTest is Test {
         vm.expectEmit(true, true, false, true);
         emit ve4626GaugeVotingProposed(address(gaugeA), address(gaugeB), expectedEffective);
         vm.prank(owner);
-        manager.proposeVe4626GaugeVoting(address(gaugeB));
+        manager.proposeve4626GaugeVoting(address(gaugeB));
 
         assertEq(_readPendingGauge(), address(gaugeB));
         assertEq(_readPendingGaugeEffectiveAt(), expectedEffective);
@@ -379,7 +379,7 @@ contract LotteryManager4626BoostSourceTimelockTest is Test {
         vm.expectEmit(true, true, false, true);
         emit ve4626GaugeVotingUpdated(address(gaugeA), address(gaugeB));
         vm.prank(owner);
-        manager.commitVe4626GaugeVoting();
+        manager.commitve4626GaugeVoting();
 
         assertEq(_readVaultGauge(), address(gaugeB));
         assertEq(_readPendingGauge(), address(0));
@@ -391,12 +391,12 @@ contract LotteryManager4626BoostSourceTimelockTest is Test {
         manager.armBoostSourceTimelock();
 
         vm.prank(owner);
-        manager.proposeVe4626GaugeVoting(address(gaugeB));
+        manager.proposeve4626GaugeVoting(address(gaugeB));
 
         vm.expectEmit(true, false, false, true);
         emit ve4626GaugeVotingProposalCancelled(address(gaugeB));
         vm.prank(owner);
-        manager.cancelVe4626GaugeVotingProposal();
+        manager.cancelve4626GaugeVotingProposal();
 
         assertEq(_readPendingGauge(), address(0));
         assertEq(_readVaultGauge(), address(gaugeA));
@@ -440,7 +440,7 @@ contract LotteryManager4626BoostSourceTimelockTest is Test {
         vm.prank(owner);
         manager.proposeBoostManager(address(boostB));
         vm.prank(owner);
-        manager.proposeVe4626GaugeVoting(address(gaugeB));
+        manager.proposeve4626GaugeVoting(address(gaugeB));
 
         vm.expectEmit(true, true, false, true);
         emit BoostSourcesDisabled(address(boostA), address(gaugeA));
@@ -542,6 +542,6 @@ contract LotteryManager4626BoostSourceTimelockTest is Test {
 
         vm.prank(nonOwner);
         vm.expectRevert();
-        manager.proposeVe4626GaugeVoting(address(gaugeB));
+        manager.proposeve4626GaugeVoting(address(gaugeB));
     }
 }

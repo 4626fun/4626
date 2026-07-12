@@ -5,7 +5,7 @@ Manager-facing fan-out interface. The router calls this with the
 `pointsBurnedAsUSD` value taken straight from the PLONK public
 inputs, so the manager no longer trusts an off-chain relayer's
 claim about points accounting.
-Matches `CreatorLotteryManager.processAmoeEntry`'s exact signature
+Matches `LotteryManager4626.processAmoeEntry`'s exact signature
 — when the rollout op `setAuthorizedAmoeRelayer(<router>)` runs,
 the manager treats this router as the relayer.
 

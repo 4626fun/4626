@@ -189,7 +189,8 @@ contract AlfaCreatorKeyLPTest is Test {
         assertEq(factory.getPool(address(creatorCoin), TOKEN_ID), address(pool));
         assertEq(factory.allPoolsLength(), 1);
         assertGt(pool.totalSupply(), 0);
-        assertEq(pool.balanceOf(lpCreator), pool.totalSupply());
+        // MINIMUM_LIQUIDITY (1_000) is permanently locked to address(0xdead).
+        assertEq(pool.balanceOf(lpCreator) + 1_000, pool.totalSupply());
 
         (uint256 creatorReserve, uint256 keyReserve) = pool.getReserves();
         assertEq(creatorReserve, INITIAL_CREATOR_COIN);

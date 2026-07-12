@@ -46,14 +46,14 @@ interface ISwapRouter {
     function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
 }
 
-interface IVe4626GaugeVoting {
+interface Ive4626GaugeVoting {
     function getVaultWeight(address vault) external view returns (uint256);
     function getTotalWeight() external view returns (uint256);
     function getVaultWeightBps(address vault) external view returns (uint256);
     function currentEpoch() external view returns (uint256);
 }
 
-interface IVe4626VoterRewardsDistributor {
+interface Ive4626VoterRewardsDistributor {
     function notifyRewards(address vault, address token, uint256 amount) external;
 }
 
@@ -141,10 +141,10 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     uint256 public fallbackMinOutputBps = 0;
 
     /// @notice ve4626GaugeVoting for ve(3,3) probability direction
-    IVe4626GaugeVoting public vaultGaugeVoting;
+    Ive4626GaugeVoting public ve4626GaugeVoting;
 
     /// @notice Voter rewards distributor (receives the 21.39% voter slice as ShareOFT)
-    IVe4626VoterRewardsDistributor public voterRewardsDistributor;
+    Ive4626VoterRewardsDistributor public ve4626VoterRewardsDistributor;
 
     // ================================
     // FEE SPLIT (in basis points) — IMMUTABLE
@@ -161,7 +161,7 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     /// @notice Percentage to agent treasury (ongoing lane)
     uint256 public constant treasuryShareBps = 0; // 0% - agents earn via appreciation + bribes (disabled by default)
 
-    /// @notice Voter slice (ShareOFT units via voterRewardsDistributor or treasury fallbacks)
+    /// @notice Voter slice (ShareOFT units via ve4626VoterRewardsDistributor or treasury fallbacks)
     uint256 public constant protocolShareBps = 2139; // 21.39%
 
     // ================================
@@ -252,8 +252,8 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     event SwapConfigUpdated(uint24 feeTier, uint256 slippageBps);
     event OracleSet(address indexed oracle);
     event OracleConfigUpdated(uint32 twapDuration, bool useOracle);
-    event Ve4626GaugeVotingUpdated(address indexed ve4626GaugeVoting);
-    event Ve4626VoterRewardsDistributorUpdated(address indexed distributor);
+    event ve4626GaugeVotingUpdated(address indexed ve4626GaugeVoting);
+    event ve4626VoterRewardsDistributorUpdated(address indexed distributor);
 
     event WethFeeKeeperUpdated(address indexed oldKeeper, address indexed newKeeper);
     event WethProcessingConfigUpdated(uint256 maxPermissionlessWethProcess, bool autoProcessWethFees);
@@ -754,10 +754,10 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
     function _routeVoterShareOft(uint256 toVoters) internal {
         if (toVoters == 0) return;
 
-        if (address(voterRewardsDistributor) != address(0)) {
+        if (address(ve4626VoterRewardsDistributor) != address(0)) {
             uint256 balanceBefore = shareOFT.balanceOf(address(this));
-            shareOFT.forceApprove(address(voterRewardsDistributor), toVoters);
-            try voterRewardsDistributor.notifyRewards(address(vault), address(shareOFT), toVoters) {
+            shareOFT.forceApprove(address(ve4626VoterRewardsDistributor), toVoters);
+            try ve4626VoterRewardsDistributor.notifyRewards(address(vault), address(shareOFT), toVoters) {
                 uint256 balanceAfter = shareOFT.balanceOf(address(this));
                 uint256 spent = balanceBefore > balanceAfter ? balanceBefore - balanceAfter : 0;
                 if (spent > toVoters) spent = toVoters;
@@ -779,9 +779,9 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
                 }
                 // Clear allowance on success too, so a partial-spend distributor
                 // cannot retain stale spend permissions between distributions.
-                shareOFT.forceApprove(address(voterRewardsDistributor), 0);
+                shareOFT.forceApprove(address(ve4626VoterRewardsDistributor), 0);
             } catch {
-                shareOFT.forceApprove(address(voterRewardsDistributor), 0);
+                shareOFT.forceApprove(address(ve4626VoterRewardsDistributor), 0);
                 if (protocolTreasury != address(0)) {
                     shareOFT.safeTransfer(protocolTreasury, toVoters);
                     totalProtocolEarned += toVoters;
@@ -997,18 +997,18 @@ contract AgentGaugeController is Ownable, ReentrancyGuard {
      * @notice Set ve4626GaugeVoting for ve(3,3) probability direction
      * @param _ve4626GaugeVoting Address of the ve4626GaugeVoting contract
      */
-    function setVe4626GaugeVoting(address _ve4626GaugeVoting) external onlyOwner {
-        vaultGaugeVoting = IVe4626GaugeVoting(_ve4626GaugeVoting);
-        emit Ve4626GaugeVotingUpdated(_ve4626GaugeVoting);
+    function setve4626GaugeVoting(address _ve4626GaugeVoting) external onlyOwner {
+        ve4626GaugeVoting = Ive4626GaugeVoting(_ve4626GaugeVoting);
+        emit ve4626GaugeVotingUpdated(_ve4626GaugeVoting);
     }
 
     /**
      * @notice Set the voter rewards distributor to receive the 21.39% ShareOFT voter slice.
      * @dev If unset, we fall back to protocolTreasury (or jackpot if that is unset).
      */
-    function setVe4626VoterRewardsDistributor(address _distributor) external onlyOwner {
-        voterRewardsDistributor = IVe4626VoterRewardsDistributor(_distributor);
-        emit Ve4626VoterRewardsDistributorUpdated(_distributor);
+    function setve4626VoterRewardsDistributor(address _distributor) external onlyOwner {
+        ve4626VoterRewardsDistributor = Ive4626VoterRewardsDistributor(_distributor);
+        emit ve4626VoterRewardsDistributorUpdated(_distributor);
     }
 
     /**

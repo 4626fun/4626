@@ -13,7 +13,7 @@ contract MockWrappedShareOFT is ERC20 {
     }
 }
 
-contract Ve4626PastVotesCheckpointsTest is Test {
+contract ve4626PastVotesCheckpointsTest is Test {
     ve4626 internal veToken;
     MockWrappedShareOFT internal wrapped;
 

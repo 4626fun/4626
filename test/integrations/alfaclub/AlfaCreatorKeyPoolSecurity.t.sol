@@ -420,7 +420,8 @@ contract AlfaPoolSenderFeeSecurityTest is AlfaPoolSecurityBase {
         AlfaCreatorKeyPool pool = _createPool();
         creatorCoin.setFeeBps(250);
 
-        uint256 burnShares = pool.balanceOf(lpCreator) / 10;
+        uint256 lpBefore = pool.balanceOf(lpCreator);
+        uint256 burnShares = lpBefore / 10;
         uint256 poolCoinBefore = creatorCoin.balanceOf(address(pool));
         uint256 supplyBefore = pool.totalSupply();
         (uint256 cReserveBefore,) = pool.getReserves();
@@ -432,7 +433,8 @@ contract AlfaPoolSenderFeeSecurityTest is AlfaPoolSecurityBase {
         // Revert must roll back the burn and the reserve update too — i.e.
         // none of the outflow path's earlier writes survive.
         assertEq(pool.totalSupply(), supplyBefore, "lp supply must not decrease on revert");
-        assertEq(pool.balanceOf(lpCreator), supplyBefore, "lp shares must not be burnt");
+        // Compare to pre-call LP balance (not totalSupply — MINIMUM_LIQUIDITY sits on 0xdead).
+        assertEq(pool.balanceOf(lpCreator), lpBefore, "lp shares must not be burnt");
         (uint256 cReserveAfter,) = pool.getReserves();
         assertEq(cReserveAfter, cReserveBefore, "stored reserve must not decrement on revert");
         assertEq(creatorCoin.balanceOf(address(pool)), poolCoinBefore, "pool balance must not move");

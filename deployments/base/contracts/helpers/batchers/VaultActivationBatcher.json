@@ -2,16 +2,22 @@
   "contractName": "VaultActivationBatcher",
   "network": "Base",
   "chainId": 8453,
-  "address": "0x5036FB536f53b15307825eB2006B21E22f0F3193",
-  "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-05-05T04:51:21Z",
-  "deploymentTx": "0x16ecb9261536d4099cdff42ce5f37f0aff5231376d7bf99b706ef460086d76b1",
+  "release": "v1-greenfield",
+  "address": null,
+  "deployedBy": null,
+  "deployedAt": null,
+  "deploymentTx": null,
   "abi": [
     {
       "type": "constructor",
       "inputs": [
         {
           "name": "_permit2",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_registry",
           "type": "address",
           "internalType": "address"
         }
@@ -38,7 +44,7 @@
           "internalType": "address"
         },
         {
-          "name": "ccaStrategy",
+          "name": "ccaLaunchArm",
           "type": "address",
           "internalType": "address"
         },
@@ -92,7 +98,7 @@
           "internalType": "address"
         },
         {
-          "name": "ccaStrategy",
+          "name": "ccaLaunchArm",
           "type": "address",
           "internalType": "address"
         },
@@ -185,7 +191,7 @@
           "internalType": "address"
         },
         {
-          "name": "ccaStrategy",
+          "name": "ccaLaunchArm",
           "type": "address",
           "internalType": "address"
         },
@@ -288,7 +294,7 @@
           "internalType": "address"
         },
         {
-          "name": "ccaStrategy",
+          "name": "ccaLaunchArm",
           "type": "address",
           "internalType": "address"
         },
@@ -381,7 +387,7 @@
           "internalType": "address"
         },
         {
-          "name": "ccaStrategy",
+          "name": "ccaLaunchArm",
           "type": "address",
           "internalType": "address"
         },
@@ -479,7 +485,7 @@
           "internalType": "address"
         },
         {
-          "name": "ccaStrategy",
+          "name": "ccaLaunchArm",
           "type": "address",
           "internalType": "address"
         },
@@ -527,6 +533,19 @@
           "name": "",
           "type": "address",
           "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "registry",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "contract IRegistry4626Lookup"
         }
       ],
       "stateMutability": "view"
@@ -723,6 +742,38 @@
     },
     {
       "type": "error",
+      "name": "VaultRegistryMismatch",
+      "inputs": [
+        {
+          "name": "expected",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "actual",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "WrapperRegistryMismatch",
+      "inputs": [
+        {
+          "name": "expected",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "actual",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
       "name": "ZeroAddress",
       "inputs": []
     },
@@ -731,5 +782,8 @@
       "name": "ZeroAmount",
       "inputs": []
     }
+  ],
+  "notes": [
+    "V1 greenfield interface snapshot: ABI matches current contracts/ source. address is null until first Base broadcast of this bytecode epoch."
   ]
 }

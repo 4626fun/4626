@@ -111,7 +111,7 @@ uint256 public constant creatorShareBps = 0
 
 
 ### protocolShareBps
-Voter / protocol slice (routed via voterRewardsDistributor or treasury fallbacks)
+Voter / protocol slice (routed via ve4626VoterRewardsDistributor or treasury fallbacks)
 
 
 ```solidity
@@ -161,7 +161,7 @@ Lottery manager for jackpot
 
 
 ```solidity
-ICreatorLotteryManager public lotteryManager
+ILotteryManager4626 public lotteryManager
 ```
 
 
@@ -235,21 +235,21 @@ uint256 public fallbackMinOutputBps = 0
 ```
 
 
-### vaultGaugeVoting
-VaultGaugeVoting for ve(3,3) probability direction
+### ve4626GaugeVoting
+ve4626GaugeVoting for ve(3,3) probability direction
 
 
 ```solidity
-IVaultGaugeVoting public vaultGaugeVoting
+Ive4626GaugeVoting public ve4626GaugeVoting
 ```
 
 
-### voterRewardsDistributor
+### ve4626VoterRewardsDistributor
 Voter rewards distributor (receives the 9.61% voter slice)
 
 
 ```solidity
-IVoterRewardsDistributor public voterRewardsDistributor
+IVoterRewardsDistributor public ve4626VoterRewardsDistributor
 ```
 
 
@@ -804,19 +804,19 @@ function setOracleConfig(uint32 _twapDuration, bool _useOracle) external onlyOwn
 function setFallbackMinOutputBps(uint256 _bps) external onlyOwner;
 ```
 
-### setVaultGaugeVoting
+### setve4626GaugeVoting
 
-Set VaultGaugeVoting for ve(3,3) probability direction
+Set ve4626GaugeVoting for ve(3,3) probability direction
 
 
 ```solidity
-function setVaultGaugeVoting(address _vaultGaugeVoting) external onlyOwner;
+function setve4626GaugeVoting(address _ve4626GaugeVoting) external onlyOwner;
 ```
 **Parameters**
 
 |Name|Type|Description|
 |----|----|-----------|
-|`_vaultGaugeVoting`|`address`|Address of the VaultGaugeVoting contract|
+|`_ve4626GaugeVoting`|`address`|Address of the ve4626GaugeVoting contract|
 
 
 ### setVoterRewardsDistributor
@@ -1121,10 +1121,10 @@ event OracleSet(address indexed oracle);
 event OracleConfigUpdated(uint32 twapDuration, bool useOracle);
 ```
 
-### VaultGaugeVotingUpdated
+### ve4626GaugeVotingUpdated
 
 ```solidity
-event VaultGaugeVotingUpdated(address indexed vaultGaugeVoting);
+event ve4626GaugeVotingUpdated(address indexed ve4626GaugeVoting);
 ```
 
 ### VoterRewardsDistributorUpdated

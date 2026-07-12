@@ -11,7 +11,8 @@ import {
 
 const LM_ABI = [
   { type: 'function', name: 'boostManager', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'vaultGaugeVoting', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  // On-chain storage getter is `ve4626GaugeVoting` (LotteryManager4626); product contract is ve4626GaugeVoting.
+  { type: 'function', name: 've4626GaugeVoting', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'oracleMaxStaleness', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   {
     type: 'function',
@@ -76,7 +77,7 @@ async function main() {
     client.readContract({ address: lm, abi: LM_ABI, functionName: functionName as never })
 
   const boostManager = await tryRead('boostManager', () => read('boostManager'))
-  const vaultGauge = await tryRead('vaultGaugeVoting', () => read('vaultGaugeVoting'))
+  const vaultGauge = await tryRead('ve4626GaugeVoting', () => read('ve4626GaugeVoting'))
   const singleVault = await tryRead('singleVaultJackpotOnly', () => read('singleVaultJackpotOnly'))
   const deferred = await tryRead('deferredVrfQueueLength', () => read('deferredVrfQueueLength'))
   const staleness = await tryRead('oracleMaxStaleness', () => read('oracleMaxStaleness'))

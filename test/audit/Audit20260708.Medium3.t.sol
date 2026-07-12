@@ -2,10 +2,10 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {BribeDepot} from "@4626/shared/governance/bribes/BribeDepot.sol";
+import {BribeDepot4626} from "@4626/shared/governance/bribes/BribeDepot4626.sol";
 import {AjnaVaultAuth} from "@4626/shared/strategies/ajna/AjnaVaultAuth.sol";
 
-// Minimal gauge voting mock for BribeDepot constructor.
+// Minimal gauge voting mock for BribeDepot4626 constructor.
 contract MockGaugeForBribe {
     function currentEpoch() external pure returns (uint256) {
         return 1;
@@ -19,17 +19,18 @@ contract MockGaugeForBribe {
         return 0;
     }
 
-    function canReceiveVotes(address) external pure returns (bool) {
+    function canReceiveBribes(address) external pure returns (bool) {
         return true;
     }
 }
 
 contract Audit20260708_M13_BribeOwnerRollover is Test {
-    BribeDepot internal depot;
+    BribeDepot4626 internal depot;
     address internal stranger = address(0xBAD);
+    address internal owner = address(this);
 
     function setUp() public {
-        depot = new BribeDepot(address(0xBEEF01), address(new MockGaugeForBribe()));
+        depot = new BribeDepot4626(address(0xBEEF01), address(new MockGaugeForBribe()), owner);
     }
 
     function test_rolloverExpiredEpoch_onlyOwner() public {
@@ -40,7 +41,7 @@ contract Audit20260708_M13_BribeOwnerRollover is Test {
 
     function test_setRolloverGrace_enforcesMinimum() public {
         assertEq(depot.MIN_ROLLOVER_GRACE_EPOCHS(), 2);
-        vm.expectRevert(abi.encodeWithSelector(BribeDepot.GraceBelowMinimum.selector, 1, 2));
+        vm.expectRevert(abi.encodeWithSelector(BribeDepot4626.GraceBelowMinimum.selector, 1, 2));
         depot.setRolloverGraceEpochs(1);
         depot.setRolloverGraceEpochs(6);
         assertEq(depot.rolloverGraceEpochs(), 6);

@@ -66,4 +66,19 @@ describe('deploymentBatcher config normalization', () => {
     const contracts = getApiContracts()
     expect(contracts.deploymentBatcher).toBe(BASE_DEFAULTS.deploymentBatcher)
   })
+
+  it('getApiContracts allows greenfield ve env on Vercel when no BASE_DEFAULTS exist', () => {
+    process.env.VERCEL = '1'
+    delete process.env.ALLOW_API_CONTRACT_OVERRIDES
+    const gauge = '0x1111111111111111111111111111111111111111'
+    process.env.VE4626_GAUGE_VOTING = gauge
+    process.env.BRIBES_FACTORY_4626 = '0x2222222222222222222222222222222222222222'
+
+    const contracts = getApiContracts()
+    expect(contracts.ve4626GaugeVoting).toBe(gauge)
+    expect(contracts.bribesFactory4626).toBe('0x2222222222222222222222222222222222222222')
+
+    delete process.env.VE4626_GAUGE_VOTING
+    delete process.env.BRIBES_FACTORY_4626
+  })
 })

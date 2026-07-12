@@ -34,10 +34,12 @@ function getReadRpcUrl(): string {
 }
 
 const GAUGE_ABI = [
+  // Prefer policy-aware discovery (surface registry when armed; else whitelist).
+  { type: 'function', name: 'getEligibleVaults', stateMutability: 'view', inputs: [], outputs: [{ type: 'address[]' }] },
   { type: 'function', name: 'getWhitelistedVaults', stateMutability: 'view', inputs: [], outputs: [{ type: 'address[]' }] },
   { type: 'function', name: 'getVaultWeight', stateMutability: 'view', inputs: [{ type: 'address' }], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'getVaultWeightBps', stateMutability: 'view', inputs: [{ type: 'address' }], outputs: [{ type: 'uint256' }] },
-  { type: 'function', name: 'getVaultGaugeProbabilityBoostPPM', stateMutability: 'view', inputs: [{ type: 'address' }], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'getVaultProbabilityBoostPPM', stateMutability: 'view', inputs: [{ type: 'address' }], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'getTotalWeight', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
 ] as const
 
@@ -62,7 +64,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const contracts = getApiContracts()
-  const gauge = contracts.vaultGaugeVoting
+  const gauge = contracts.ve4626GaugeVoting
   if (!gauge) {
     return res.status(503).json({ success: false, error: 've4626GaugeVoting not configured' })
   }
@@ -72,11 +74,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { base } = await import('viem/chains')
     const client = createPublicClient({ chain: base, transport: http(getReadRpcUrl(), { timeout: 20_000 }) })
 
-    const vaults = (await client.readContract({
-      address: gauge as any,
-      abi: GAUGE_ABI,
-      functionName: 'getWhitelistedVaults',
-    })) as `0x${string}`[]
+    // Prefer getEligibleVaults (surface-registry-aware); fall back for older deployments.
+    let vaults: `0x${string}`[]
+    try {
+      vaults = (await client.readContract({
+        address: gauge as any,
+        abi: GAUGE_ABI,
+        functionName: 'getEligibleVaults',
+      })) as `0x${string}`[]
+    } catch {
+      vaults = (await client.readContract({
+        address: gauge as any,
+        abi: GAUGE_ABI,
+        functionName: 'getWhitelistedVaults',
+      })) as `0x${string}`[]
+    }
 
     const totalWeight = await client
       .readContract({ address: gauge as any, abi: GAUGE_ABI, functionName: 'getTotalWeight' })
@@ -86,7 +98,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     for (const v of vaults) {
       calls.push({ address: gauge as any, abi: GAUGE_ABI, functionName: 'getVaultWeight', args: [v] })
       calls.push({ address: gauge as any, abi: GAUGE_ABI, functionName: 'getVaultWeightBps', args: [v] })
-      calls.push({ address: gauge as any, abi: GAUGE_ABI, functionName: 'getVaultGaugeProbabilityBoostPPM', args: [v] })
+      calls.push({ address: gauge as any, abi: GAUGE_ABI, functionName: 'getVaultProbabilityBoostPPM', args: [v] })
     }
 
     const resMulti = calls.length
@@ -115,7 +127,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       data: {
         chainId: 8453,
         generatedAt: new Date().toISOString(),
-        vaultGaugeVoting: String(gauge).toLowerCase(),
+        ve4626GaugeVoting: String(gauge).toLowerCase(),
         totalWeight: BigInt(totalWeight as any).toString(),
         vaults: out,
       },

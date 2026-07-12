@@ -118,9 +118,9 @@ contracts/
 │   ├── agent/
 │   │   └── AgentGaugeController.sol
 │   ├── bribes/
-│   │   └── BribeDepot.sol
+│   │   └── BribeDepot4626.sol
 │   └── factories/
-│       └── BribesFactory.sol
+│       └── BribesFactory4626.sol
 │
 ├── lottery/                       # Unified lottery domain (was split)
 │   ├── manager/
@@ -201,7 +201,7 @@ contracts/
 └── interfaces/                    # ALL interfaces, organized by domain
     ├── core/
     │   ├── IRegistry4626.sol
-    │   ├── ICreatorRegistry.sol          # alias (kept for compat)
+    │   ├── IRegistry4626.sol          # alias (kept for compat)
     │   ├── ICreatorOVault.sol
     │   ├── IAgentOVault.sol
     │   ├── ICreatorGaugeController.sol

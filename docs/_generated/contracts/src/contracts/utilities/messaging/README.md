@@ -1,7 +1,7 @@
 
 
 # Contents
-- [ICreatorLotteryManager](CreatorShareOFT.sol/interface.ICreatorLotteryManager.md)
+- [ILotteryManager4626](CreatorShareOFT.sol/interface.ILotteryManager4626.md)
 - [ILotteryBeneficiary](CreatorShareOFT.sol/interface.ILotteryBeneficiary.md)
 - [ISimpleSellTaxHook](CreatorShareOFT.sol/interface.ISimpleSellTaxHook.md)
 - [IWrapperCooldownHook](CreatorShareOFT.sol/interface.IWrapperCooldownHook.md)

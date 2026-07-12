@@ -2,10 +2,11 @@
   "contractName": "UniversalBytecodeStoreV2",
   "network": "Base",
   "chainId": 8453,
-  "address": "0x9C3e2A7bd73690d5b5DC0C47f8dB74c4dc5D1c69",
-  "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-05-05T07:51:45Z",
-  "deploymentTx": "0x0adbeddb72fa7b1245ef3bd2a9013119ff7566e04d849b96a22702b9a7f83dfa",
+  "release": "v1-greenfield",
+  "address": null,
+  "deployedBy": null,
+  "deployedAt": null,
+  "deploymentTx": null,
   "abi": [
     {
       "type": "function",
@@ -172,5 +173,8 @@
       "name": "EmptyBytecode",
       "inputs": []
     }
+  ],
+  "notes": [
+    "V1 greenfield interface snapshot: ABI matches current contracts/ source. address is null until first Base broadcast of this bytecode epoch."
   ]
 }

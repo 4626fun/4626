@@ -98,7 +98,7 @@ ILotteryAmoeConsumer public consumer
 
 
 ### manager
-CreatorLotteryManager-shaped fan-out target. When non-zero, the
+LotteryManager4626-shaped fan-out target. When non-zero, the
 router calls `manager.processAmoeEntry(buyer, coin,
 pointsBurnedAsUSD)` after a successful ZK submission, with the
 value taken directly from `pubInputs[5]`.

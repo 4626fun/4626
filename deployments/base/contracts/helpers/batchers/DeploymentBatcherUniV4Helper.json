@@ -2,10 +2,10 @@
   "contractName": "DeploymentBatcherUniV4Helper",
   "network": "Base",
   "chainId": 8453,
-  "address": "0xD7A2F1c2C5d73EeB19B495D2Bbe29A9bE2112F0b",
-  "deployedBy": "0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8",
-  "deployedAt": "2026-05-05T07:51:45Z",
-  "deploymentTx": "0x4cecc55f20967621682fb2525df27a175beb791d02fdd80c1c30c3851021f3f6",
+  "address": null,
+  "deployedBy": null,
+  "deployedAt": null,
+  "deploymentTx": null,
   "abi": [
     {
       "type": "constructor",
@@ -247,6 +247,7 @@
     }
   ],
   "notes": [
-    "Created inside the DeploymentBatcher constructor during the live v1.11.1 deployment transaction."
-  ]
+    "V1 greenfield: path retained for tooling; no forge artifact export in this epoch. Redeploy or delete when batcher layout settles."
+  ],
+  "release": "v1-greenfield"
 }

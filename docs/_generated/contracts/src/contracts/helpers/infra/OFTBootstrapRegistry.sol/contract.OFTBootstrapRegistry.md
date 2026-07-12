@@ -50,7 +50,7 @@ uint32 public constant BASE_EID = 30184
 Return the LayerZero endpoint for any chain.
 
 FIX: F-23 — Always returns LZ_COMMON_ENDPOINT regardless of chainId.
-The chainId parameter is retained solely for ICreatorRegistry interface
+The chainId parameter is retained solely for IRegistry4626 interface
 compatibility. LZ v2 EndpointV2 shares a single CREATE2 address across
 all EVM chains, so per-chain resolution is unnecessary.
 

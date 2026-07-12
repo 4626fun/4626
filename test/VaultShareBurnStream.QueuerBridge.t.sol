@@ -23,7 +23,7 @@ contract VaultShareBurnStreamQueuerBridgeTest is Test {
     }
 
     function test_nonVaultCannotAuthorizeQueuer() public {
-        vm.expectRevert("Only vault");
+        vm.expectRevert(VaultShareBurnStream.OnlyVault.selector);
         stream.setAuthorizedQueuer(payoutRouter, true);
     }
 }

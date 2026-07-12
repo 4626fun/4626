@@ -126,6 +126,11 @@ contract AgentOracleV2PrimaryPathTest is Test {
     address internal constant LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
     uint32 internal constant HUB_EID = 30184;
 
+    function setUp() public {
+        // AgentOracle TWAP/update paths are hub-only (Base).
+        vm.chainId(8453);
+    }
+
     function test_setV2Pair_rejectsMismatchedPairTokens() external {
         AgentOracle oracle = _deployOracle();
 

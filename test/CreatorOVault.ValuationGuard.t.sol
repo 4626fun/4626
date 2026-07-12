@@ -326,7 +326,7 @@ contract CreatorOVaultValuationGuardTest is Test {
 
     function test_deposit_reverts_whenTrustedPpsDeviationTooHigh() external {
         _bootstrapTrustedCheckpoint();
-        strategy.setTrackedAssets((strategy.trackedAssets() * 150) / 100); // +50%
+        _inflateStrategyAssetsBps(5_000); // +50%
 
         vm.prank(alice);
         vm.expectRevert();
@@ -396,7 +396,7 @@ contract CreatorOVaultValuationGuardTest is Test {
 
     function test_mint_reverts_whenTrustedPpsDeviationTooHigh() external {
         _bootstrapTrustedCheckpoint();
-        strategy.setTrackedAssets((strategy.trackedAssets() * 150) / 100); // +50%
+        _inflateStrategyAssetsBps(5_000); // +50%
 
         vm.prank(alice);
         vm.expectRevert();
@@ -405,7 +405,7 @@ contract CreatorOVaultValuationGuardTest is Test {
 
     function test_deposit_succeeds_whenTrustedPpsDeviationWithinLimit() external {
         _bootstrapTrustedCheckpoint();
-        strategy.setTrackedAssets((strategy.trackedAssets() * 105) / 100); // +5%
+        _inflateStrategyAssetsBps(500); // +5%
 
         vm.prank(alice);
         uint256 shares = vault.deposit(50_000e18, alice);
@@ -414,7 +414,7 @@ contract CreatorOVaultValuationGuardTest is Test {
 
     function test_ownerCanRelaxTrustedPpsDeviationLimit() external {
         _bootstrapTrustedCheckpoint();
-        strategy.setTrackedAssets((strategy.trackedAssets() * 150) / 100); // +50%
+        _inflateStrategyAssetsBps(5_000); // +50%
 
         vm.prank(alice);
         vm.expectRevert();
@@ -477,8 +477,28 @@ contract CreatorOVaultValuationGuardTest is Test {
         uint256 firstDeposit = vault.MINIMUM_FIRST_DEPOSIT() * 2;
         vm.prank(alice);
         vault.deposit(firstDeposit, alice);
+        // Allow full idle deploy so strategyDebt is recorded.
+        vault.setMinimumTotalIdle(0);
         vault.forceDeployToStrategies();
+        uint256 debt = vault.strategyDebt(address(strategy));
+        require(debt > 0, "forceDeploy must record strategyDebt");
+        strategy.setTrackedAssets(debt);
         vault.report();
+        assertGt(vault.trustedPpsCheckpoint(), 0, "checkpoint must be set");
+    }
+
+    /// @dev Raise strategy-reported assets by `bps` of current debt.
+    ///      Must raise strategyMaxAssets first — without a cap, totalAssets clamps reported
+    ///      assets to strategyDebt (so setTrackedAssets alone cannot move PPS).
+    ///      Max-assets is risk-timelocked: schedule → warp → executePendingRiskConfig.
+    function _inflateStrategyAssetsBps(uint256 bps) internal {
+        uint256 debt = vault.strategyDebt(address(strategy));
+        uint256 inflated = debt + (debt * bps) / 10_000;
+        vault.setStrategyMaxAssets(address(strategy), inflated * 2);
+        vm.warp(block.timestamp + 2 days);
+        vault.executePendingRiskConfig();
+        strategy.setTrackedAssets(inflated);
+        creatorCoin.mint(address(strategy), inflated > debt ? inflated - debt : 0);
     }
 }
 

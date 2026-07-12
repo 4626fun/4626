@@ -1,11 +1,9 @@
-name: Deploy AlfaClub Proxy Worker
+name: Deploy AlfaClub Proxy Worker (legacy pnpm)
+
+# Cost/ops: auto-deploy is owned by cloudflare-alfaclub-proxy-deploy.yml
+# (wrangler-action). Keep this file as manual-only so main does not double-deploy.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "alfaclub/infra/cloudflare-proxy/**"
-      - ".github/workflows/deploy-alfaclub-proxy.yml"
   workflow_dispatch:
 
 jobs:

@@ -46,6 +46,25 @@ Integrators store **`ve33Token` / `veLotteryToken`** (or `voteToken` / `lotteryT
 
 Always lowercase **ve** for vote-escrow. Never `VE` / `Ve4626`.
 
+### Frontend / React
+
+**Solidity / on-chain** keeps lowercase `ve4626*` (contracts, interfaces, setters).
+
+**React** must satisfy `react-hooks/rules-of-hooks` and component naming:
+
+| Kind | Canonical form | Example |
+|------|----------------|---------|
+| Hook file + export | `use` + **PascalCase** body | `useVe4626GaugeVoting.ts` → `useVe4626GaugeVoting` |
+| Component file + export | **PascalCase** | `Ve4626GaugeVotingPanel.tsx` → `Ve4626GaugeVotingPanel`, `Ve4626GaugeVotingMini` |
+
+ESLint treats `useve4626…` / `ve4626…Panel` as invalid (hook body must start with an uppercase letter after `use`; components must be PascalCase). Do **not** reintroduce the all-lowercase React forms.
+
+```tsx
+import { Ve4626GaugeVotingPanel as GaugeVotingPanel } from '@/components/ve33/Ve4626GaugeVotingPanel'
+// <GaugeVotingPanel />
+```
+
+
 ## Lock asset invariant (critical)
 
 | Token | Lockable in `ve4626`? |
@@ -132,3 +151,16 @@ No covered position → personal layer **off** (base trade odds unchanged).
 ## One-liner
 
 > Lock **■4626 only** into **ve■4626**. Claim **ve33** / **veLottery** via **`ve4626Utility`**. Creator ■ is not a ve lock asset.
+
+
+## Solidity symbol casing
+
+| Kind | Canonical |
+|------|-----------|
+| Contract | `ve4626`, `ve4626GaugeVoting`, `ve4626BoostManager`, … |
+| Interface | `Ive4626`, `Ive4626GaugeVoting`, … (**not** `IVe4626*`) |
+| Setter | `setve4626GaugeVoting`, `setve4626VoterRewardsDistributor`, `setve33Token`, `setveLotteryToken` |
+| Event | `ve4626GaugeVotingUpdated`, … |
+| Storage (gauge pointer) | `ve4626GaugeVoting` (not `vaultGaugeVoting`) |
+
+Env vars remain SCREAMING_SNAKE (`VITE_VE4626`, `VE4626_GAUGE_VOTING`) — that is not the `Ve4626` product token.

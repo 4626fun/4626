@@ -36,6 +36,18 @@ on:
       - '.github/workflows/zk-pipeline-guards.yml'
   push:
     branches: [main, master]
+    # Same path filter as PRs — do not re-run forge AMOE suite on unrelated main pushes.
+    paths:
+      - 'contracts/utilities/lottery/zk/AmoePlonkVerifier.sol'
+      - 'contracts/utilities/lottery/zk/IAmoePlonkVerifier.sol'
+      - 'contracts/utilities/lottery/zk/LotteryAmoeRouter.sol'
+      - 'amoe/tests/zk/AmoePlonkVerifier.t.sol'
+      - 'amoe/tests/zk/LotteryAmoeRouter*.t.sol'
+      - 'amoe/tools/zk/_patch_amoe_plonk_verifier.py'
+      - 'amoe/tools/zk/regen_amoe_plonk_verifier.sh'
+      - 'amoe/tools/ci/check_amoe_plonk_patch.sh'
+      - 'amoe/tools/ci/check_lottery_amoe_failures.py'
+      - '.github/workflows/zk-pipeline-guards.yml'
   workflow_dispatch:
     inputs:
       manager_address:
@@ -58,6 +70,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: zk-pipeline-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   amoe-plonk-patch-guard:

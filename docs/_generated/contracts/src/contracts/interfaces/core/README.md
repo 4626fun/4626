@@ -3,4 +3,4 @@
 # Contents
 - [ICreatorGaugeController](ICreatorGaugeController.sol/interface.ICreatorGaugeController.md)
 - [ICreatorOVault](ICreatorOVault.sol/interface.ICreatorOVault.md)
-- [ICreatorRegistry](ICreatorRegistry.sol/interface.ICreatorRegistry.md)
+- [IRegistry4626](IRegistry4626.sol/interface.IRegistry4626.md)

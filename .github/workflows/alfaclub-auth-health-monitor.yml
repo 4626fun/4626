@@ -3,12 +3,10 @@ name: AlfaClub auth-health monitor
 # External health probe for the AlfaClub Privy/JWT bridge.
 #
 # Calls GET /api/v1/alfaclub/chat-auth-health (the cron-secret-gated
-# endpoint added in PR #471) every 5 minutes and fails the workflow run
-# on any of the alert conditions documented in
+# endpoint added in PR #471) on a daily schedule and fails the workflow
+# run on any of the alert conditions documented in
 # docs/operations/alfaclub-auth-hardening.md. A failed workflow run is
-# the alerting signal — GitHub will email the repo's notification list
-# (and surface the run in the Actions tab and PR-status checks for any
-# branch this is configured to run on).
+# the alerting signal — GitHub will email the repo's notification list.
 #
 # The script is also runnable locally:
 #   ALFACLUB_HEALTH_CRON_SECRET=… node frontend/scripts/alfaclub-auth-health-monitor.mjs
@@ -18,10 +16,8 @@ name: AlfaClub auth-health monitor
 
 on:
   schedule:
-    # Every 5 minutes. GitHub may delay scheduled workflows during high
-    # load — that is acceptable because the alert thresholds (20 min
-    # minutesUntilExpiry) are intentionally larger than the cadence.
-    - cron: '*/5 * * * *'
+    # Cost: was */5 → hourly → 6h → daily. Weekly + manual unless incidents demand more.
+    - cron: '17 14 * * 1'
   workflow_dispatch:
     # Manual dispatch from the Actions UI. Used after a deploy or
     # operator restore to confirm health without waiting for the next

@@ -1,5 +1,8 @@
 import { motion } from 'framer-motion'
-import { VaultGaugeVotingPanel } from '../components/ve33/VaultGaugeVotingPanel'
+// React JSX requires a capital component tag; bind the canonical lowercase-ve export.
+import { Ve4626GaugeVotingPanel as GaugeVotingPanel } from '../components/ve33/Ve4626GaugeVotingPanel'
+import { BribeDepot4626Panel } from '../components/ve33/BribeDepot4626Panel'
+import { RewardStream4626Panel } from '../components/ve33/RewardStream4626Panel'
 import { AKITA } from '../config/contracts'
 import { toShareSymbol } from '@/lib/tokens/tokenSymbols'
 import { META, PageMeta } from '@/components/seo/PageMeta'
@@ -54,11 +57,11 @@ export default function GaugeVoting() {
             </div>
             <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 text-center">
               <div className="text-2xl font-bold text-brand-primary">21.39%</div>
-              <div className="text-sm text-zinc-500">PPS Burn</div>
+              <div className="text-sm text-zinc-500">Voter fees</div>
             </div>
             <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 text-center">
               <div className="text-2xl font-bold text-brand-primary">9.61%</div>
-              <div className="text-sm text-zinc-500">Protocol</div>
+              <div className="text-sm text-zinc-500">PPS burn</div>
             </div>
           </motion.div>
 
@@ -100,7 +103,27 @@ export default function GaugeVoting() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
           >
-            <VaultGaugeVotingPanel vaults={EXAMPLE_VAULTS} />
+            <GaugeVotingPanel vaults={EXAMPLE_VAULTS} />
+          </motion.div>
+
+          {/* Bribes */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35 }}
+            className="mt-8"
+          >
+            <BribeDepot4626Panel vaults={EXAMPLE_VAULTS} />
+          </motion.div>
+
+          {/* Partner reward streams */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.38 }}
+            className="mt-8"
+          >
+            <RewardStream4626Panel vaults={EXAMPLE_VAULTS} />
           </motion.div>
 
           {/* Formula Explanation */}

@@ -2,20 +2,42 @@ name: Orphan-address sweep
 
 on:
   push:
-    branches:
-      - main
+    branches: [main, master]
+    paths:
+      - 'amoe/tools/ci/check_no_orphan_addresses.sh'
+      - 'docs/operations/**'
+      - 'docs/reference/**'
+      - 'deployments/**'
+      - 'test/v183-release-target-guard.sh'
+      - '.github/workflows/orphan-guard.yml'
   pull_request:
-    branches:
-      - main
+    branches: [main, master]
+    paths:
+      - 'amoe/tools/ci/check_no_orphan_addresses.sh'
+      - 'docs/operations/**'
+      - 'docs/reference/**'
+      - 'deployments/**'
+      - 'test/v183-release-target-guard.sh'
+      - '.github/workflows/orphan-guard.yml'
   workflow_dispatch:
+
+concurrency:
+  group: orphan-guard-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   orphan-address-sweep:
     name: Orphan-address sweep
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 1
 
       - name: Check for stale orphan address references
         run: bash amoe/tools/ci/check_no_orphan_addresses.sh

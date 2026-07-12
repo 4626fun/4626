@@ -33,7 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const limiter = await checkDurableRateLimit(
     rateLimitKey('v1-build-ve4626-unlock', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
-    RATE_LIMITS.buildVe4626Calldata,
+    RATE_LIMITS.buildve4626Calldata,
     { failClosed: true },
   )
   if (!limiter.allowed) {

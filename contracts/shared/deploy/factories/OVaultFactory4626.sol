@@ -2,41 +2,29 @@
 pragma solidity ^0.8.20;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ISignatureTransfer} from "permit2/src/interfaces/ISignatureTransfer.sol";
 import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
+import {IOvaultLane} from "@4626/shared/deploy/lanes/IOvaultLane.sol";
+import {DeploymentBatcher} from "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
+import {IGaugeSurfaceRegistry} from "@4626/shared/governance/surfaces/IGaugeSurfaceRegistry.sol";
 
 /**
  * @title OVaultFactory4626
  * @author 0xakita.eth
- * @notice Lane-specific (creator) registrar for Creator Vault stacks (legacy; superseded by shared deploy batchers). For agent and additional ecosystems use other/ + extend registry or add similar factories.
+ * @notice Product entrypoint for 4626 vault stacks: lane router (creator / agent / future) + optional
+ *         legacy post-hoc registrar.
  *
- * @dev DEPRECATED: This factory is superseded by DeploymentBatcher (contracts/shared/deploy/batchers/).
- *      DeploymentBatcher handles phased deployment (Phase 1-3) with CREATE2 deterministic
- *      addresses, hub-centric architecture support, and remote chain OFT-only deployment.
+ * @dev Design:
+ *      - **Factory** = front door: choose `VaultKind`, resolve lane module (codeIds / salt labels).
+ *      - **DeploymentBatcher** = multi-tx CREATE2 engine (phase 1–3).
+ *      - **Registry4626** = runtime routes + `getVaultKind`.
  *
- *      The historical "Factory" name is preserved for backwards compatibility with existing
- *      deployments, artifacts, scripts, and operator documentation.
+ *      Phase A: `startPhase1` / `finalizePhase1` — lane codeIds + forced `vaultKind`.
+ *      Phase B: `startPhase2` / `finalizePhase2` / `startPhase3` — same auth model; phase2 core
+ *      injects lane codeIds; phase3 uses caller (or factory-default) strategy codeIds.
+ *      Batcher must authorize this factory via `setAuthorizedPhaseCaller`.
  *
- *      This contract does not instantiate vault stacks itself. Authorized deployers register
- *      already-deployed addresses here so they can be enumerated and mirrored into Registry4626.
- *
- *      This contract is kept for backwards compatibility with existing deployments.
- *      New deployments should use DeploymentBatcher exclusively.
- *
- * @dev LEGACY DESIGN RATIONALE:
- *      Original factory exceeded EVM contract size limit (88KB > 24KB)
- *      because it embedded bytecode for 6 contracts.
- *
- *      LEGACY APPROACH:
- *      - Contracts deployed directly via Foundry script (no size limit)
- *      - This contract records deployment info after the fact
- *      - Enables lookup, enumeration, and registry integration
- *
- * @dev DEPLOYMENT FLOW (LEGACY):
- *      1. Deploy this legacy registrar (part of infrastructure)
- *      2. Run DeployVaultStack script which:
- *         - Deploys all 6 contracts individually
- *         - Calls factory.registerDeployment() to store and mirror the addresses
- *      3. Addresses stored here for lookup
+ *      Legacy: `registerDeployment` still records already-deployed stacks (creator-oriented field names).
  */
 contract OVaultFactory4626 is Ownable {
     // =================================
@@ -44,25 +32,41 @@ contract OVaultFactory4626 is Ownable {
     // =================================
 
     IRegistry4626 public registry;
+    DeploymentBatcher public deploymentBatcher;
     uint256 public deploymentCount;
 
     mapping(address => DeploymentInfo) public deployments;
     address[] public deployedTokens;
 
-    /// @notice Authorized deployers (can register deployments)
+    /// @notice Authorized deployers (register + startPhase1)
     mapping(address => bool) public authorizedDeployers;
 
+    /// @notice Pluggable lane modules keyed by registry VaultKind.
+    mapping(IRegistry4626.VaultKind => address) public laneOf;
+
+    /// @notice Optional gauge surface registry (votes/bribes/streams eligibility).
+    IGaugeSurfaceRegistry public surfaceRegistry;
+
+    /// @notice Optional default strategy bytecode ids for `startPhase3` when caller passes empty set.
+    DeploymentBatcher.StrategyCodeIds public defaultStrategyCodeIds;
+    bool public defaultStrategyCodeIdsSet;
+
+    /// @notice Kind pinned at `startPhase1` for a token so later phases cannot switch lanes mid-stack.
+    mapping(address => IRegistry4626.VaultKind) public phaseKindByToken;
+    mapping(address => bool) public hasPhaseKind;
+
     struct DeploymentInfo {
-        address creatorCoin;
+        address creatorCoin; // underlying token (creator coin or agent token)
         address vault;
         address wrapper;
         address shareOFT;
         address gaugeController;
         address ccaLaunchArm;
         address oracle;
-        address creator;
+        address creator; // stack owner / attribution
         uint256 deployedAt;
         bool exists;
+        IRegistry4626.VaultKind vaultKind;
     }
 
     // =================================
@@ -80,8 +84,48 @@ contract OVaultFactory4626 is Ownable {
         address creator
     );
 
+    event DeploymentRegisteredWithKind(
+        address indexed token,
+        address indexed vault,
+        IRegistry4626.VaultKind kind,
+        address owner
+    );
+
     event DeployerAuthorized(address indexed deployer, bool authorized);
     event RegistryUpdated(address indexed newRegistry);
+    event DeploymentBatcherUpdated(address indexed batcher);
+    event LaneUpdated(IRegistry4626.VaultKind indexed kind, address indexed lane);
+    event SurfaceRegistryUpdated(address indexed surfaceRegistry);
+    event Phase1Started(
+        address indexed token,
+        address indexed owner,
+        IRegistry4626.VaultKind kind,
+        address vault,
+        address wrapper
+    );
+    event Phase1Finalized(
+        address indexed token, address indexed owner, IRegistry4626.VaultKind kind, address shareOFT
+    );
+    event Phase2CoreStarted(
+        address indexed token,
+        address indexed owner,
+        IRegistry4626.VaultKind kind,
+        address gaugeController,
+        address ccaLaunchArm,
+        address oracle
+    );
+    event Phase2Finalized(
+        address indexed token, address indexed owner, IRegistry4626.VaultKind kind, address auction
+    );
+    event Phase3Started(
+        address indexed token,
+        address indexed owner,
+        IRegistry4626.VaultKind kind,
+        address vault,
+        address charmStrategy,
+        address ajnaStrategy
+    );
+    event DefaultStrategyCodeIdsUpdated();
 
     // =================================
     // ERRORS
@@ -90,6 +134,11 @@ contract OVaultFactory4626 is Ownable {
     error ZeroAddress();
     error AlreadyDeployed();
     error NotAuthorized();
+    error LaneNotConfigured(IRegistry4626.VaultKind kind);
+    error LaneKindMismatch(IRegistry4626.VaultKind expected, IRegistry4626.VaultKind actual);
+    error PhaseKindMismatch(address token, IRegistry4626.VaultKind expected, IRegistry4626.VaultKind actual);
+    error BatcherNotConfigured();
+    error StrategyCodeIdsNotConfigured();
 
     // =================================
     // CONSTRUCTOR
@@ -100,7 +149,6 @@ contract OVaultFactory4626 is Ownable {
         if (_registry != address(0)) {
             registry = IRegistry4626(_registry);
         }
-        // Owner is always authorized
         authorizedDeployers[_owner] = true;
     }
 
@@ -116,32 +164,224 @@ contract OVaultFactory4626 is Ownable {
     }
 
     // =================================
-    // ADMIN FUNCTIONS
+    // ADMIN
     // =================================
 
-    /**
-     * @notice Authorize/deauthorize a deployer
-     */
     function setAuthorizedDeployer(address _deployer, bool _authorized) external onlyOwner {
         authorizedDeployers[_deployer] = _authorized;
         emit DeployerAuthorized(_deployer, _authorized);
     }
 
-    /**
-     * @notice Update registry address
-     */
     function setRegistry(address _registry) external onlyOwner {
         registry = IRegistry4626(_registry);
         emit RegistryUpdated(_registry);
     }
 
+    function setDeploymentBatcher(address _batcher) external onlyOwner {
+        deploymentBatcher = DeploymentBatcher(payable(_batcher));
+        emit DeploymentBatcherUpdated(_batcher);
+    }
+
+    /**
+     * @notice Wire a lane module for a vault kind (creator / agent / future).
+     * @dev Lane contract's `kind()` must match `kind` arg.
+     */
+    function setLane(IRegistry4626.VaultKind kind, address lane) external onlyOwner {
+        if (lane == address(0)) revert ZeroAddress();
+        IRegistry4626.VaultKind laneKind = IOvaultLane(lane).kind();
+        if (laneKind != kind) revert LaneKindMismatch(kind, laneKind);
+        laneOf[kind] = lane;
+        emit LaneUpdated(kind, lane);
+    }
+
+    function setSurfaceRegistry(address registry_) external onlyOwner {
+        surfaceRegistry = IGaugeSurfaceRegistry(registry_);
+        emit SurfaceRegistryUpdated(registry_);
+    }
+
+    /// @notice Default Charm/Ajna/Solana strategy codeIds for phase-3 when callers pass zeros.
+    function setDefaultStrategyCodeIds(DeploymentBatcher.StrategyCodeIds calldata ids) external onlyOwner {
+        defaultStrategyCodeIds = ids;
+        defaultStrategyCodeIdsSet = true;
+        emit DefaultStrategyCodeIdsUpdated();
+    }
+
     // =================================
-    // REGISTRATION (Called by deployment script)
+    // LANE FACADE → BATCHER (Phase A + B)
     // =================================
 
     /**
-     * @notice Register a deployment (called by script after deploying contracts)
-     * @dev Only authorized deployers can call this
+     * @notice Resolve lane + codeIds for a kind (tooling / UI preflight).
+     */
+    function resolveLane(IRegistry4626.VaultKind kind)
+        external
+        view
+        returns (address lane, IOvaultLane.CodeIds memory ids, string memory laneId_)
+    {
+        lane = laneOf[kind];
+        if (lane == address(0)) revert LaneNotConfigured(kind);
+        ids = IOvaultLane(lane).codeIds();
+        laneId_ = IOvaultLane(lane).laneId();
+    }
+
+    /**
+     * @notice Start phase-1 core deploy via DeploymentBatcher using the lane's codeIds.
+     * @dev `params.vaultKind` is forced from `kind`. Caller must be authorized on this factory;
+     *      this factory must be `authorizedPhaseCallers` on the batcher; `params.owner` is the
+     *      vault owner recorded in CREATE2 salts / events.
+     */
+    function startPhase1(
+        IRegistry4626.VaultKind kind,
+        DeploymentBatcher.Phase1Params calldata params,
+        bytes32 shareOftSaltOverride
+    ) external onlyAuthorizedDeployer returns (DeploymentBatcher.Phase1Result memory out) {
+        DeploymentBatcher batcher = deploymentBatcher;
+        if (address(batcher) == address(0)) revert BatcherNotConfigured();
+
+        _pinPhaseKind(params.creatorToken, kind);
+        IOvaultLane lane = _requireLane(kind);
+        DeploymentBatcher.CodeIds memory codeIds = _toBatcherCodeIds(lane.codeIds());
+
+        DeploymentBatcher.Phase1Params memory p = params;
+        p.vaultKind = _toBatcherKind(kind);
+
+        out = batcher.deployPhase1CoreWithSalt(p, codeIds, shareOftSaltOverride);
+        // Vault address is known after phase-1 core — register gauge surface once (fail-loud).
+        _maybeRegisterGaugeSurface(out.vault, kind);
+        emit Phase1Started(p.creatorToken, p.owner, kind, out.vault, out.wrapper);
+    }
+
+    /**
+     * @notice Finalize phase-1 (shareOFT leg) for a prior `startPhase1` session.
+     */
+    function finalizePhase1(
+        IRegistry4626.VaultKind kind,
+        DeploymentBatcher.Phase1Params calldata params,
+        bytes32 shareOftSaltOverride
+    ) external onlyAuthorizedDeployer returns (DeploymentBatcher.Phase1Result memory out) {
+        DeploymentBatcher batcher = deploymentBatcher;
+        if (address(batcher) == address(0)) revert BatcherNotConfigured();
+
+        _requirePhaseKind(params.creatorToken, kind);
+        IOvaultLane lane = _requireLane(kind);
+        DeploymentBatcher.CodeIds memory codeIds = _toBatcherCodeIds(lane.codeIds());
+
+        DeploymentBatcher.Phase1Params memory p = params;
+        p.vaultKind = _toBatcherKind(kind);
+
+        out = batcher.finalizePhase1WithSalt(p, codeIds, shareOftSaltOverride);
+        emit Phase1Finalized(p.creatorToken, p.owner, kind, out.shareOFT);
+    }
+
+    /**
+     * @notice Phase-2 core: gauge / CCA / oracle via lane codeIds.
+     * @dev Kind is recorded in events; stack bytecode comes from the configured lane.
+     *      When Phase 1 ran through this factory, `kind` must match the pinned Phase 1 kind.
+     */
+    function startPhase2(IRegistry4626.VaultKind kind, DeploymentBatcher.Phase2CoreParams calldata params)
+        external
+        onlyAuthorizedDeployer
+        returns (DeploymentBatcher.Phase2Result memory out)
+    {
+        DeploymentBatcher batcher = deploymentBatcher;
+        if (address(batcher) == address(0)) revert BatcherNotConfigured();
+
+        _requirePhaseKind(params.creatorToken, kind);
+        IOvaultLane lane = _requireLane(kind);
+        DeploymentBatcher.CodeIds memory codeIds = _toBatcherCodeIds(lane.codeIds());
+
+        out = batcher.deployPhase2Core(params, codeIds);
+        emit Phase2CoreStarted(
+            params.creatorToken, params.owner, kind, out.gaugeController, out.ccaLaunchArm, out.oracle
+        );
+    }
+
+    /**
+     * @notice Phase-2 core with explicit vault role policy (deploy-session guarded path).
+     */
+    function startPhase2WithRolePolicy(
+        IRegistry4626.VaultKind kind,
+        DeploymentBatcher.Phase2CoreParams calldata params,
+        uint256 rolePolicyId
+    ) external onlyAuthorizedDeployer returns (DeploymentBatcher.Phase2Result memory out) {
+        DeploymentBatcher batcher = deploymentBatcher;
+        if (address(batcher) == address(0)) revert BatcherNotConfigured();
+
+        _requirePhaseKind(params.creatorToken, kind);
+        IOvaultLane lane = _requireLane(kind);
+        DeploymentBatcher.CodeIds memory codeIds = _toBatcherCodeIds(lane.codeIds());
+
+        out = batcher.deployPhase2CoreWithRolePolicy(params, codeIds, rolePolicyId);
+        emit Phase2CoreStarted(
+            params.creatorToken, params.owner, kind, out.gaugeController, out.ccaLaunchArm, out.oracle
+        );
+    }
+
+    /**
+     * @notice Finalize phase-2 (deposit / launch / ownership handoff). Payable for native deposit paths.
+     */
+    function finalizePhase2(IRegistry4626.VaultKind kind, DeploymentBatcher.Phase2FinalizeParams calldata params)
+        external
+        payable
+        onlyAuthorizedDeployer
+        returns (DeploymentBatcher.Phase2Result memory out)
+    {
+        DeploymentBatcher batcher = deploymentBatcher;
+        if (address(batcher) == address(0)) revert BatcherNotConfigured();
+        // Ensure lane exists (kind is product routing metadata even when batcher does not re-read codeIds).
+        _requirePhaseKind(params.creatorToken, kind);
+        _requireLane(kind);
+
+        out = batcher.finalizePhase2{value: msg.value}(params);
+        emit Phase2Finalized(params.creatorToken, params.owner, kind, out.auction);
+    }
+
+    /**
+     * @notice Finalize phase-2 with Permit2 signature transfer for the creator-token deposit.
+     */
+    function finalizePhase2WithPermit2(
+        IRegistry4626.VaultKind kind,
+        DeploymentBatcher.Phase2FinalizeParams calldata params,
+        ISignatureTransfer.PermitTransferFrom calldata permit,
+        bytes calldata signature
+    ) external payable onlyAuthorizedDeployer returns (DeploymentBatcher.Phase2Result memory out) {
+        DeploymentBatcher batcher = deploymentBatcher;
+        if (address(batcher) == address(0)) revert BatcherNotConfigured();
+        _requirePhaseKind(params.creatorToken, kind);
+        _requireLane(kind);
+
+        out = batcher.finalizePhase2WithPermit2{value: msg.value}(params, permit, signature);
+        emit Phase2Finalized(params.creatorToken, params.owner, kind, out.auction);
+    }
+
+    /**
+     * @notice Phase-3 yield strategies (Charm / Ajna / optional Solana strategy module).
+     * @param strategyCodeIds_ Caller-supplied ids; if all zero and defaults are set, uses
+     *        `defaultStrategyCodeIds`.
+     */
+    function startPhase3(
+        IRegistry4626.VaultKind kind,
+        DeploymentBatcher.Phase3Params calldata params,
+        DeploymentBatcher.StrategyCodeIds calldata strategyCodeIds_
+    ) external onlyAuthorizedDeployer returns (DeploymentBatcher.Phase3Result memory out) {
+        DeploymentBatcher batcher = deploymentBatcher;
+        if (address(batcher) == address(0)) revert BatcherNotConfigured();
+        _requirePhaseKind(params.creatorToken, kind);
+        _requireLane(kind);
+
+        DeploymentBatcher.StrategyCodeIds memory ids = _resolveStrategyCodeIds(strategyCodeIds_);
+        out = batcher.deployPhase3Strategies(params, ids);
+        emit Phase3Started(
+            params.creatorToken, params.owner, kind, params.vault, out.charmStrategy, out.ajnaStrategy
+        );
+    }
+
+    // =================================
+    // REGISTRATION (legacy / post-hoc)
+    // =================================
+
+    /**
+     * @notice Register an already-deployed stack (defaults vaultKind = Creator).
      */
     function registerDeployment(
         address _creatorCoin,
@@ -153,37 +393,35 @@ contract OVaultFactory4626 is Ownable {
         address _oracle,
         address _creator
     ) external onlyAuthorizedDeployer {
-        if (_creatorCoin == address(0)) revert ZeroAddress();
-        if (deployments[_creatorCoin].exists) revert AlreadyDeployed();
-        // FIX: F-17 — verify core contracts have deployed code; prevent registering EOAs or empty addresses
-        require(_vault.code.length > 0, "vault has no code");
-        require(_wrapper.code.length > 0, "wrapper has no code");
-        require(_shareOFT.code.length > 0, "shareOFT has no code");
+        _registerDeployment(
+            _creatorCoin,
+            _vault,
+            _wrapper,
+            _shareOFT,
+            _gaugeController,
+            _ccaLaunchArm,
+            _oracle,
+            _creator,
+            IRegistry4626.VaultKind.Creator
+        );
+    }
 
-        DeploymentInfo memory info = DeploymentInfo({
-            creatorCoin: _creatorCoin,
-            vault: _vault,
-            wrapper: _wrapper,
-            shareOFT: _shareOFT,
-            gaugeController: _gaugeController,
-            ccaLaunchArm: _ccaLaunchArm,
-            oracle: _oracle,
-            creator: _creator,
-            deployedAt: block.timestamp,
-            exists: true
-        });
-
-        deployments[_creatorCoin] = info;
-        deployedTokens.push(_creatorCoin);
-        deploymentCount++;
-
-        // Register with main registry if available
-        if (address(registry) != address(0)) {
-            _registerWithRegistry(_creatorCoin, _vault, _wrapper, _shareOFT, _oracle, _gaugeController, _creator);
-        }
-
-        emit DeploymentRegistered(
-            _creatorCoin, _vault, _wrapper, _shareOFT, _gaugeController, _ccaLaunchArm, _oracle, _creator
+    /**
+     * @notice Register an already-deployed stack with explicit vault kind.
+     */
+    function registerDeploymentWithKind(
+        address _token,
+        address _vault,
+        address _wrapper,
+        address _shareOFT,
+        address _gaugeController,
+        address _ccaLaunchArm,
+        address _oracle,
+        address _owner,
+        IRegistry4626.VaultKind kind
+    ) external onlyAuthorizedDeployer {
+        _registerDeployment(
+            _token, _vault, _wrapper, _shareOFT, _gaugeController, _ccaLaunchArm, _oracle, _owner, kind
         );
     }
 
@@ -191,42 +429,155 @@ contract OVaultFactory4626 is Ownable {
     // INTERNAL
     // =================================
 
+    function _requireLane(IRegistry4626.VaultKind kind) internal view returns (IOvaultLane lane) {
+        address laneAddr = laneOf[kind];
+        if (laneAddr == address(0)) revert LaneNotConfigured(kind);
+        return IOvaultLane(laneAddr);
+    }
+
+    /// @dev Pin lane kind at Phase 1; reject later phase calls (or re-start) with a different kind.
+    function _pinPhaseKind(address token, IRegistry4626.VaultKind kind) internal {
+        if (token == address(0)) revert ZeroAddress();
+        if (hasPhaseKind[token] && phaseKindByToken[token] != kind) {
+            revert PhaseKindMismatch(token, phaseKindByToken[token], kind);
+        }
+        phaseKindByToken[token] = kind;
+        hasPhaseKind[token] = true;
+    }
+
+    /// @dev When Phase 1 ran through this factory, later phases must use the same kind.
+    ///      Tokens never started here (legacy/out-of-band) are not constrained.
+    function _requirePhaseKind(address token, IRegistry4626.VaultKind kind) internal view {
+        if (hasPhaseKind[token] && phaseKindByToken[token] != kind) {
+            revert PhaseKindMismatch(token, phaseKindByToken[token], kind);
+        }
+    }
+
+    function _toBatcherKind(IRegistry4626.VaultKind kind) internal pure returns (DeploymentBatcher.VaultKind) {
+        if (kind == IRegistry4626.VaultKind.Agent) {
+            return DeploymentBatcher.VaultKind.Agent;
+        }
+        return DeploymentBatcher.VaultKind.Creator;
+    }
+
+    function _toBatcherCodeIds(IOvaultLane.CodeIds memory ids)
+        internal
+        pure
+        returns (DeploymentBatcher.CodeIds memory out)
+    {
+        out = DeploymentBatcher.CodeIds({
+            vault: ids.vault,
+            wrapper: ids.wrapper,
+            shareOFT: ids.shareOFT,
+            gauge: ids.gauge,
+            cca: ids.cca,
+            oracle: ids.oracle,
+            oftBootstrap: ids.oftBootstrap
+        });
+    }
+
+    function _resolveStrategyCodeIds(DeploymentBatcher.StrategyCodeIds calldata passed)
+        internal
+        view
+        returns (DeploymentBatcher.StrategyCodeIds memory ids)
+    {
+        bool passedEmpty = passed.charmAlphaVaultDeploy == bytes32(0) && passed.charmStrategy4626 == bytes32(0)
+            && passed.ajnaVaultAuth == bytes32(0) && passed.ajnaVault == bytes32(0)
+            && passed.erc4626StrategyAdapter == bytes32(0) && passed.solanaStrategy == bytes32(0);
+        if (!passedEmpty) {
+            return passed;
+        }
+        if (!defaultStrategyCodeIdsSet) revert StrategyCodeIdsNotConfigured();
+        return defaultStrategyCodeIds;
+    }
+
+    function _registerDeployment(
+        address _token,
+        address _vault,
+        address _wrapper,
+        address _shareOFT,
+        address _gaugeController,
+        address _ccaLaunchArm,
+        address _oracle,
+        address _owner,
+        IRegistry4626.VaultKind kind
+    ) internal {
+        if (_token == address(0)) revert ZeroAddress();
+        if (deployments[_token].exists) revert AlreadyDeployed();
+        require(_vault.code.length > 0, "vault has no code");
+        require(_wrapper.code.length > 0, "wrapper has no code");
+        require(_shareOFT.code.length > 0, "shareOFT has no code");
+
+        DeploymentInfo memory info = DeploymentInfo({
+            creatorCoin: _token,
+            vault: _vault,
+            wrapper: _wrapper,
+            shareOFT: _shareOFT,
+            gaugeController: _gaugeController,
+            ccaLaunchArm: _ccaLaunchArm,
+            oracle: _oracle,
+            creator: _owner,
+            deployedAt: block.timestamp,
+            exists: true,
+            vaultKind: kind
+        });
+
+        deployments[_token] = info;
+        deployedTokens.push(_token);
+        deploymentCount++;
+
+        if (address(registry) != address(0)) {
+            _registerWithRegistry(_token, _vault, _wrapper, _shareOFT, _oracle, _gaugeController, _owner, kind);
+        }
+
+        emit DeploymentRegistered(
+            _token, _vault, _wrapper, _shareOFT, _gaugeController, _ccaLaunchArm, _oracle, _owner
+        );
+        emit DeploymentRegisteredWithKind(_token, _vault, kind, _owner);
+
+        // Hermes-style gauge surface: vault is the gauge id for votes / bribes / streams.
+        _maybeRegisterGaugeSurface(_vault, kind);
+    }
+
+    /// @dev Fail-loud when `surfaceRegistry` is set. Idempotent if already registered (phase1 + post-hoc).
+    function _maybeRegisterGaugeSurface(address vault, IRegistry4626.VaultKind kind) internal {
+        if (address(surfaceRegistry) == address(0) || vault == address(0)) return;
+        if (surfaceRegistry.isRegistered(vault)) return;
+        bytes32 laneIdHash = kind == IRegistry4626.VaultKind.Agent ? keccak256("agent") : keccak256("creator");
+        surfaceRegistry.registerSurface(vault, kind, laneIdHash, true, true, true);
+    }
+
     function _registerWithRegistry(
-        address _creatorCoin,
+        address _token,
         address _vault,
         address _wrapper,
         address _shareOFT,
         address _oracle,
         address _gaugeController,
-        address _creator
+        address _owner,
+        IRegistry4626.VaultKind kind
     ) internal {
-        // Get token name/symbol for registry
-        (bool success, bytes memory data) = _creatorCoin.staticcall(abi.encodeWithSignature("name()"));
+        (bool success, bytes memory data) = _token.staticcall(abi.encodeWithSignature("name()"));
         string memory name = success ? abi.decode(data, (string)) : "Unknown";
 
-        (success, data) = _creatorCoin.staticcall(abi.encodeWithSignature("symbol()"));
+        (success, data) = _token.staticcall(abi.encodeWithSignature("symbol()"));
         string memory symbol = success ? abi.decode(data, (string)) : "UNK";
 
-        // Register with basic info (pool will be set later when launched)
-        registry.registerToken(
-            _creatorCoin,
-            name,
-            symbol,
-            _creator,
-            address(0), // pool - set later after CCA graduation
-            0 // poolFee - set later
-        );
+        registry.registerToken(_token, name, symbol, _owner, address(0), 0);
+        registry.setVault(_token, _vault);
+        registry.setWrapperForToken(_token, _wrapper);
+        registry.setShareOFTForToken(_token, _shareOFT);
+        registry.setOracleForToken(_token, _oracle);
+        registry.setGaugeControllerForToken(_token, _gaugeController);
 
-        // Set vault infrastructure addresses
-        registry.setVault(_creatorCoin, _vault);
-        registry.setWrapperForToken(_creatorCoin, _wrapper);
-        registry.setShareOFTForToken(_creatorCoin, _shareOFT);
-        registry.setOracleForToken(_creatorCoin, _oracle);
-        registry.setGaugeControllerForToken(_creatorCoin, _gaugeController);
+        // Record kind so runtime getVaultKind is explicit when this factory is registry owner.
+        IRegistry4626.AgentIntegrationMeta memory meta;
+        meta.vaultKind = kind;
+        try registry.setAgentIntegrationMeta(_token, meta) {} catch {}
     }
 
     // =================================
-    // VIEW FUNCTIONS
+    // VIEWS
     // =================================
 
     function getDeployment(address _token) external view returns (DeploymentInfo memory) {
@@ -245,3 +596,4 @@ contract OVaultFactory4626 is Ownable {
         return authorizedDeployers[_deployer] || _deployer == owner();
     }
 }
+

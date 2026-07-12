@@ -14,8 +14,11 @@ Current status of the ve(3,3) governance system.
 - [x] ve4626GaugeVoting for probability direction (`contracts/shared/governance/ve4626GaugeVoting.sol`)
 - [x] ve4626VoterRewardsDistributor for fee claims (`contracts/shared/governance/ve4626VoterRewardsDistributor.sol`)
 - [x] Integration with LotteryManager4626 boost path
-- [x] Frontend voting UI (`frontend/src/pages/GaugeVoting.tsx`)
-- [x] Bribe marketplace contract (`contracts/shared/governance/bribes/BribeDepot.sol`)
+- [x] Frontend voting UI (`frontend/src/pages/GaugeVoting.tsx` + `useVe4626GaugeVoting` / `Ve4626GaugeVotingPanel`)
+- [x] Bribe marketplace contract (`contracts/shared/governance/bribes/BribeDepot4626.sol`)
+- [x] Thin multi-token partner stream (`RewardStream4626` + `RewardStreamFactory4626`) — [reward-stream.md](../contracts/governance/reward-stream.md)
+- [x] Bribe stack `*4626` rename (`BribeDepot4626`, `BribesFactory4626`) — [contract-naming.md](../contracts/governance/contract-naming.md)
+- [x] Naming second pass: frontend config/hooks + public docs (`Registry4626`, fee-split %, env keys)
 - [x] **Curve-style dual-decay** `getTotalVotingPower()` on ve4626
 - [x] **Utility** `ve4626Utility` + `ve4626UtilityToken` (**ve33** / **veLottery**) — [ve-naming.md](../contracts/governance/ve-naming.md)
 - [x] `sync(user)` — dual-decay capacity clamp (burn veLottery first, then ve33)

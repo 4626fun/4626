@@ -8,30 +8,21 @@ on:
       - 'README.md'
       - 'SECURITY.md'
       - 'deployments/**'
+      # Docs pipeline + site only (not every frontend/contracts change).
+      # Contract-fact checks still run when detect marks contract_docs_sensitive
+      # after a docs/** or apps/docs-site/** edit that references them.
       - 'frontend/docs/**'
-      - 'frontend/src/**'
-      - 'frontend/api/**'
-      - 'frontend/server/**'
-      - 'frontend/scripts/**'
-      - 'script/agent-runtime/skills/**'
-      - 'frontend/packages/server-core/**'
-      - 'frontend/package.json'
+      - 'frontend/README.md'
       - 'frontend/typedoc.json'
       - 'frontend/tsconfig.docs.json'
-      - 'frontend/README.md'
       - 'apps/docs-site/**'
-      - 'src/**'
-      - 'contracts/**'
-      - 'foundry.toml'
       - 'package.json'
-      # Root-level configs scanned by scripts/check-docs-source-link-pin.mjs.
       - 'tsconfig.json'
       - 'tsconfig*.json'
       - 'typedoc.json'
       - 'typedoc*.json'
-      # Any change to the docs pipeline / guards themselves must rerun this
-      # workflow so CI coverage matches the code that enforces it.
-      - 'scripts/**'
+      - 'scripts/check-docs-source-link-pin.mjs'
+      - 'apps/docs-site/scripts/**'
       - '.github/workflows/docs.yml'
   push:
     branches: [main, master]
@@ -41,39 +32,33 @@ on:
       - 'SECURITY.md'
       - 'deployments/**'
       - 'frontend/docs/**'
-      - 'frontend/src/**'
-      - 'frontend/api/**'
-      - 'frontend/server/**'
-      - 'frontend/scripts/**'
-      - 'script/agent-runtime/skills/**'
-      - 'frontend/packages/server-core/**'
-      - 'frontend/package.json'
+      - 'frontend/README.md'
       - 'frontend/typedoc.json'
       - 'frontend/tsconfig.docs.json'
-      - 'frontend/README.md'
       - 'apps/docs-site/**'
-      - 'src/**'
-      - 'contracts/**'
-      - 'foundry.toml'
       - 'package.json'
-      # Root-level configs scanned by scripts/check-docs-source-link-pin.mjs.
       - 'tsconfig.json'
       - 'tsconfig*.json'
       - 'typedoc.json'
       - 'typedoc*.json'
-      # Any change to the docs pipeline / guards themselves must rerun this
-      # workflow so CI coverage matches the code that enforces it.
-      - 'scripts/**'
+      - 'scripts/check-docs-source-link-pin.mjs'
+      - 'apps/docs-site/scripts/**'
       - '.github/workflows/docs.yml'
+
+concurrency:
+  group: docs-drift-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   docs:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
+      # Shallow, no submodules for detect — recursive Foundry tree is expensive.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          submodules: recursive
           fetch-depth: 0
+          submodules: false
 
       - name: Detect docs-sensitive changes
         id: detect
@@ -141,6 +126,10 @@ jobs:
       - name: Install docs-site dependencies
         if: steps.detect.outputs.docs_sensitive == 'true'
         run: pnpm --dir apps/docs-site install --frozen-lockfile
+
+      - name: Init Foundry submodules (only when regenerating contract docs)
+        if: steps.detect.outputs.docs_sensitive == 'true' && steps.detect.outputs.contract_docs_sensitive == 'true'
+        run: git submodule update --init --recursive
 
       - name: Install Foundry
         if: steps.detect.outputs.docs_sensitive == 'true' && steps.detect.outputs.contract_docs_sensitive == 'true'

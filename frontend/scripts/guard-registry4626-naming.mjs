@@ -2,15 +2,18 @@
 /**
  * Guard: block re-introduction of wrong 4626 suffix naming on shared infra types.
  *
- * Canonical names use the *4626 suffix*:
+ * Canonical names use the *4626 suffix* (or ve4626* for the ve stack):
  *   Registry4626, IRegistry4626
  *   LotteryManager4626, ILotteryManager4626
  *   VRFConsumer4626
+ *   BribeDepot4626, BribesFactory4626
+ *   RewardStream4626, RewardStreamFactory4626, IRewardStream4626
  *
  * Forbidden in active paths:
  *   - 4626Registry / I4626Registry*
  *   - CreatorRegistry*, CreatorLotteryManager, CreatorVRFConsumer*
  *   - 4626LotteryManager / 4626VRFConsumer prefix artifact paths
+ *   - bare BribeDepot / BribesFactory / RewardStream / RewardStreamFactory (missing 4626 suffix)
  *
  * Run: pnpm -C frontend guard:registry4626-naming
  */
@@ -75,8 +78,16 @@ const ALLOWLIST_SUFFIXES = new Set([
 const ALLOWLIST_RELATIVE = new Set([
   'frontend/scripts/guard-registry4626-naming.mjs',
   'frontend/scripts/guard-registry4626-naming.test.mjs',
+  // React components must be PascalCase; export alias at call sites (see ve-naming.md).
+  'frontend/src/components/ve33/Ve4626GaugeVotingPanel.tsx',
+  'frontend/src/pages/GaugeVoting.tsx',
   'docs/architecture/contracts-folder-optimization-proposal.md',
+  'docs/contracts/governance/contract-naming.md', // documents forbidden legacy aliases by name
+  'docs/contracts/governance/ve-naming.md', // documents forbidden Ve4626 token
+  'docs/contracts/governance/abi-source-naming-parity.md', // documents ABI rename maps
   'script/sync-greenfield-env-from-handoff.sh',
+  // Migration helper still mirrors retired env keys onto live addresses for one release.
+  'script/sync-v1180-vercel-env.sh',
 ])
 
 function walk(dir, out) {
@@ -125,6 +136,18 @@ function stripAllowed4626SuffixTokens(line) {
     .replaceAll('ILotteryManager4626', '')
     .replaceAll('LotteryManager4626', '')
     .replaceAll('VRFConsumer4626', '')
+    // Governance / rewards (strip longest / most-specific tokens first)
+    .replaceAll('Ive4626GaugeVotingForBribesFactory4626', '')
+    .replaceAll('Ive4626GaugeVotingForBribeDepot4626', '')
+    .replaceAll('getOrCreateBribeDepot4626', '')
+    .replaceAll('createBribeDepot4626', '')
+    .replaceAll('bribeDepot4626Of', '')
+    .replaceAll('BribeDepot4626Created', '')
+    .replaceAll('BribesFactory4626', '')
+    .replaceAll('BribeDepot4626', '')
+    .replaceAll('RewardStreamFactory4626', '')
+    .replaceAll('IRewardStream4626', '')
+    .replaceAll('RewardStream4626', '')
 }
 
 function findViolations(content) {
@@ -224,6 +247,49 @@ function findViolations(content) {
     }
     if (/\|\s*CreatorVRFConsumer/.test(line)) {
       hits.push({ lineNo, reason: 'addresses table must use VRFConsumer4626', line })
+    }
+    // Shared governance: bare names without 4626 suffix (after stripping *4626 forms)
+    if (/\bBribeDepot\b/.test(stripped)) {
+      hits.push({ lineNo, reason: 'use BribeDepot4626 (4626 suffix)', line })
+    }
+    if (/\bBribesFactory\b/.test(stripped)) {
+      hits.push({ lineNo, reason: 'use BribesFactory4626 (4626 suffix)', line })
+    }
+    if (/\bRewardStreamFactory\b/.test(stripped)) {
+      hits.push({ lineNo, reason: 'use RewardStreamFactory4626 (4626 suffix)', line })
+    }
+    if (/\bRewardStream\b/.test(stripped)) {
+      hits.push({ lineNo, reason: 'use RewardStream4626 (4626 suffix)', line })
+    }
+    if (/\bcreateBribeDepot\b/.test(stripped)) {
+      hits.push({ lineNo, reason: 'use createBribeDepot4626', line })
+    }
+    if (/\bbribeDepotOf\b/.test(stripped)) {
+      hits.push({ lineNo, reason: 'use bribeDepot4626Of', line })
+    }
+    if (/\bgetOrCreateBribeDepot\b/.test(stripped)) {
+      hits.push({ lineNo, reason: 'use getOrCreateBribeDepot4626', line })
+    }
+    // ve-naming: never capital-V "Ve4626" token (use lowercase ve4626 / Ive4626*)
+    // Skip documentation lines that only *forbid* the bad token.
+    const veDocExemption =
+      /\bnever\b/i.test(line) ||
+      /\binvent\b/i.test(line) ||
+      /\bnot the\b/i.test(line) ||
+      /\(\*\*not\*\*\)/i.test(line) ||
+      /\bnot\b[^\n]{0,40}\bIVe4626/i.test(line) ||
+      /\bnot\b[^\n]{0,40}\bVe4626/i.test(line) ||
+      /lowercase \*\*ve\*\*/i.test(line)
+    if (!veDocExemption) {
+      if (/\bIVe4626\b/.test(line) || /\bIVe4626[A-Za-z*]/.test(line)) {
+        hits.push({ lineNo, reason: 'use Ive4626* (lowercase ve), not IVe4626*', line })
+      }
+      if (/\bsetVe4626\b/.test(line) || /\bsetVe4626[A-Za-z]/.test(line)) {
+        hits.push({ lineNo, reason: 'use setve4626* (lowercase ve), not setVe4626*', line })
+      }
+      if (/\bVe4626[A-Za-z]/.test(line) || /\bVe4626\b/.test(line)) {
+        hits.push({ lineNo, reason: 'use ve4626* (lowercase ve), not Ve4626*', line })
+      }
     }
   }
   return hits

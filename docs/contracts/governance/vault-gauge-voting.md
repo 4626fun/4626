@@ -44,7 +44,7 @@ function getTotalWeight() external view returns (uint256);
 function currentEpoch() external view returns (uint256);
 
 // Get vault's probability boost (PPM)
-function getVaultGaugeProbabilityBoostPPM(address vault) external view returns (uint256);
+function getVaultProbabilityBoostPPM(address vault) external view returns (uint256);
 ```
 
 ## ve(3,3) Probability Model
@@ -65,3 +65,38 @@ Where:
 - Voting periods are weekly
 - Votes persist until changed
 - Probability budgets reset each epoch
+
+## Eligibility (whitelist vs surface registry)
+
+By default, vaults must be **manually whitelisted** (`setVaultWhitelist`) and optionally checked against `Registry4626` when `useRegistryWhitelist` is on.
+
+**Optional Hermes-style surface mode:**
+
+```solidity
+setSurfaceRegistry(address gaugeSurfaceRegistry);
+setUseSurfaceRegistry(true);
+```
+
+When enabled, `canReceiveVotes` / `canReceiveBribes` / `canReceiveStreams` read
+[GaugeSurfaceRegistry4626](./gauge-surface-registry.md) instead of the local whitelist.
+Vote **weights** still live only on this contract.
+
+### Mid-epoch delist / pause (boost budget)
+
+If a vault loses vote eligibility mid-epoch (surface pause, capability off, whitelist remove
+while surface mode is off):
+
+| Path | Behavior |
+|------|----------|
+| New votes to that vault | Revert (`VaultNotWhitelisted`) |
+| New bribes / streams | Revert (`canReceiveBribes` / `canReceiveStreams`) |
+| `getVaultProbabilityBoostPPM` | **0** for the ineligible vault |
+| Other vaults’ boost | Still divided by **full** `_epochTotalVotes` (orphaned weight stays in the denominator) |
+
+So the share of the fixed **69,420 PPM** budget that sat on the delisted vault is
+**burned for the rest of the epoch**, not redistributed. That is intentional: ops cannot
+concentrate the full budget onto remaining gauges by delisting peers. Users can re-vote to
+reallocate; past-epoch bribe/stream claims still use frozen weights and ignore live eligibility.
+
+`emergencyResetAllVotes` zeros every vault that received weight this epoch (including
+surface-only gauges), not only the local whitelist.

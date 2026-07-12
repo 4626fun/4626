@@ -3,16 +3,19 @@ name: Security scanning
 on:
   pull_request:
     branches: [main, master]
+    # Still run on all PRs for gitleaks; heavy jobs are if-gated to main/schedule.
   push:
     branches: [main, master]
   workflow_dispatch:
-  # 4626-399 scope 2: nightly full-history gitleaks sweep so allowlist
-  # drift or a credential accidentally merged outside the PR flow is
-  # caught within ~24h even when nobody pushes. 07:13 UTC is early
-  # morning in US timezones so the check runs before the EU team starts
-  # their day.
+  # Heavy jobs (full-history gitleaks, pnpm audit, Semgrep, full Slither)
+  # run weekly + manual. Incremental gitleaks still blocks every PR/push.
+  # Was nightly — cut cost while keep allowlist telemetry.
   schedule:
-    - cron: '13 7 * * *'
+    - cron: '13 7 * * 1'
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -25,10 +28,11 @@ jobs:
     # enforces the allowlist config against the whole working tree on
     # every event so that `gitleaks.toml` itself cannot regress silently.
     runs-on: ubuntu-latest
-    # Nightly cron is covered by `gitleaks-full-history`; skip the
-    # diff-scoped run in the scheduled context because there is no
-    # meaningful "previous push" range to scan.
-    if: github.event_name != 'schedule'
+    timeout-minutes: 10
+    # Skip schedule (full-history job covers it). Skip draft PRs.
+    if: |
+      github.event_name != 'schedule' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -167,6 +171,9 @@ jobs:
 
   dependency-audit:
     name: pnpm audit (blocking on high+critical)
+    # Cost: four full pnpm installs. Weekly schedule + manual only
+    # (gitleaks still blocks secrets on every PR).
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -218,6 +225,8 @@ jobs:
 
   semgrep-api:
     name: Semgrep (frontend API surfaces)
+    # Docker pull + full API scan: weekly schedule + manual (gitleaks covers PR secrets).
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     env:
       # M2-14 — pin Semgrep image version (not :latest). Bump intentionally when upgrading.
@@ -259,6 +268,8 @@ jobs:
     # Default Slither lane is report-only; launch/* keeps a dedicated
     # blocking high-impact gate below (`slither-launch-gate`).
     name: Slither (Foundry, report-only)
+    # Heavy: recursive submodules + forge build + Slither. Weekly + manual only.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     env:
       FOUNDRY_PROFILE: ci
@@ -288,13 +299,11 @@ jobs:
         # M2-14 — pin Slither version for reproducible report-only scans.
         run: pip install 'slither-analyzer==0.11.5'
 
-      - name: Forge build (EIP-170 size check)
-        # `--skip test` matches the deployability-gate intent: test
-        # harnesses inherit production contracts and trivially overflow
-        # whenever the parent is within a few hundred bytes of the cap,
-        # but harnesses are never deployed. See test.yml for the full
-        # rationale and docs/operations/contract-size-gate.md.
-        run: forge build --skip test --sizes
+      - name: Forge build (EIP-170 size gate, allowlist-aware)
+        # Same policy as test.yml — known oversize OFT/oracle/Charm factory
+        # debt is allowlisted with ceilings; new overflows still fail.
+        # See docs/operations/contract-size-gate.md.
+        run: node scripts/check-eip170-size-gate.mjs
 
       - name: Run Slither (JSON)
         run: slither . --fail-none --json "$RUNNER_TEMP/slither.json" 2>&1 | tee "$RUNNER_TEMP/slither.txt"

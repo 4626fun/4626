@@ -1,11 +1,12 @@
 {
-  "contractName": "CreatorRegistry",
+  "contractName": "Registry4626",
   "network": "Base",
   "chainId": 8453,
-  "address": "0x3f64087dc361Ad52300409E5873b26941D6418B6",
-  "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-05-05T04:51:21Z",
-  "deploymentTx": "0xa1db2a6c7206da8ca22e236688b577a4a5e054becac821df7ca502872fa57dce",
+  "release": "v1-greenfield",
+  "address": null,
+  "deployedBy": null,
+  "deployedAt": null,
+  "deploymentTx": null,
   "abi": [
     {
       "type": "constructor",
@@ -20,7 +21,7 @@
     },
     {
       "type": "function",
-      "name": "MAX_CREATOR_COINS",
+      "name": "MAX_REGISTERED_TOKENS",
       "inputs": [],
       "outputs": [
         {
@@ -40,6 +41,43 @@
           "name": "",
           "type": "uint256",
           "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "approveFactoryCodehash",
+      "inputs": [
+        {
+          "name": "factory",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "codehash",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "approvedFactoryCodehashes",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
         }
       ],
       "stateMutability": "view"
@@ -237,13 +275,56 @@
     },
     {
       "type": "function",
-      "name": "getAllCreatorCoins",
-      "inputs": [],
+      "name": "getAgentIntegrationMeta",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
       "outputs": [
         {
           "name": "",
-          "type": "address[]",
-          "internalType": "address[]"
+          "type": "tuple",
+          "internalType": "struct IRegistry4626.AgentIntegrationMeta",
+          "components": [
+            {
+              "name": "vaultKind",
+              "type": "uint8",
+              "internalType": "enum IRegistry4626.VaultKind"
+            },
+            {
+              "name": "nativeAgentVault",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "taxRecipient",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "taxAccountingAdapter",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "pairToken",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "uniswapV2Pair",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "implementationFingerprint",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
         }
       ],
       "stateMutability": "view"
@@ -298,6 +379,19 @@
     },
     {
       "type": "function",
+      "name": "getAllTokens",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address[]",
+          "internalType": "address[]"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "getCanonicalWallet",
       "inputs": [
         {
@@ -329,7 +423,7 @@
         {
           "name": "",
           "type": "tuple",
-          "internalType": "struct ICreatorRegistry.ChainConfig",
+          "internalType": "struct IRegistry4626.ChainConfig",
           "components": [
             {
               "name": "chainId",
@@ -407,115 +501,6 @@
     },
     {
       "type": "function",
-      "name": "getCreatorCoin",
-      "inputs": [
-        {
-          "name": "_token",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "tuple",
-          "internalType": "struct ICreatorRegistry.CreatorCoinInfo",
-          "components": [
-            {
-              "name": "token",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "name",
-              "type": "string",
-              "internalType": "string"
-            },
-            {
-              "name": "symbol",
-              "type": "string",
-              "internalType": "string"
-            },
-            {
-              "name": "vault",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "shareOFT",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "wrapper",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "oracle",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "gaugeController",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "creator",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "canonicalWallet",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "pool",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "poolFee",
-              "type": "uint24",
-              "internalType": "uint24"
-            },
-            {
-              "name": "primaryChainId",
-              "type": "uint256",
-              "internalType": "uint256"
-            },
-            {
-              "name": "isActive",
-              "type": "bool",
-              "internalType": "bool"
-            },
-            {
-              "name": "registeredAt",
-              "type": "uint256",
-              "internalType": "uint256"
-            }
-          ]
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "getCreatorCoinCount",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
       "name": "getCurrentChainId",
       "inputs": [],
       "outputs": [
@@ -541,7 +526,7 @@
         {
           "name": "",
           "type": "tuple",
-          "internalType": "struct ICreatorRegistry.LzConfig",
+          "internalType": "struct IRegistry4626.LzConfig",
           "components": [
             {
               "name": "endpoint",
@@ -731,7 +716,7 @@
         {
           "name": "",
           "type": "tuple",
-          "internalType": "struct ICreatorRegistry.LzConfig",
+          "internalType": "struct IRegistry4626.LzConfig",
           "components": [
             {
               "name": "endpoint",
@@ -807,7 +792,7 @@
         {
           "name": "",
           "type": "tuple",
-          "internalType": "struct ICreatorRegistry.OmnichainVaultMeshConfig",
+          "internalType": "struct IRegistry4626.OmnichainVaultMeshConfig",
           "components": [
             {
               "name": "solanaEid",
@@ -1078,6 +1063,19 @@
     },
     {
       "type": "function",
+      "name": "getTokenCount",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "getTokenForCanonicalWallet",
       "inputs": [
         {
@@ -1173,6 +1171,126 @@
     },
     {
       "type": "function",
+      "name": "getTokenInfo",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "internalType": "struct IRegistry4626.TokenInfo",
+          "components": [
+            {
+              "name": "token",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "name",
+              "type": "string",
+              "internalType": "string"
+            },
+            {
+              "name": "symbol",
+              "type": "string",
+              "internalType": "string"
+            },
+            {
+              "name": "vault",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "shareOFT",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "wrapper",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "oracle",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "gaugeController",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "creator",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "canonicalWallet",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "pool",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "poolFee",
+              "type": "uint24",
+              "internalType": "uint24"
+            },
+            {
+              "name": "primaryChainId",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "isActive",
+              "type": "bool",
+              "internalType": "bool"
+            },
+            {
+              "name": "registeredAt",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getTokensPaginated",
+      "inputs": [
+        {
+          "name": "offset",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "limit",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": "address[]",
+          "internalType": "address[]"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "getVaultForToken",
       "inputs": [
         {
@@ -1186,6 +1304,25 @@
           "name": "",
           "type": "address",
           "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getVaultKind",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8",
+          "internalType": "enum IRegistry4626.VaultKind"
         }
       ],
       "stateMutability": "view"
@@ -1275,44 +1412,6 @@
     },
     {
       "type": "function",
-      "name": "isCreatorCoinActive",
-      "inputs": [
-        {
-          "name": "_token",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "bool",
-          "internalType": "bool"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "isCreatorCoinRegistered",
-      "inputs": [
-        {
-          "name": "_token",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "bool",
-          "internalType": "bool"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
       "name": "isHubChain",
       "inputs": [],
       "outputs": [
@@ -1364,6 +1463,44 @@
     },
     {
       "type": "function",
+      "name": "isTokenActive",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "isTokenRegistered",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "layerZeroCommonEndpoint",
       "inputs": [],
       "outputs": [
@@ -1390,6 +1527,19 @@
           "name": "",
           "type": "address",
           "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "liveRebindEnabled",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
         }
       ],
       "stateMutability": "view"
@@ -1539,7 +1689,7 @@
     },
     {
       "type": "function",
-      "name": "registerCreatorCoin",
+      "name": "registerToken",
       "inputs": [
         {
           "name": "_token",
@@ -1706,6 +1856,61 @@
     },
     {
       "type": "function",
+      "name": "setAgentIntegrationMeta",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "meta",
+          "type": "tuple",
+          "internalType": "struct IRegistry4626.AgentIntegrationMeta",
+          "components": [
+            {
+              "name": "vaultKind",
+              "type": "uint8",
+              "internalType": "enum IRegistry4626.VaultKind"
+            },
+            {
+              "name": "nativeAgentVault",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "taxRecipient",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "taxAccountingAdapter",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "pairToken",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "uniswapV2Pair",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "implementationFingerprint",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "setAuthorizedFactory",
       "inputs": [
         {
@@ -1771,119 +1976,6 @@
           "name": "_isActive",
           "type": "bool",
           "internalType": "bool"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "setCreatorCoinStatus",
-      "inputs": [
-        {
-          "name": "_token",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "_isActive",
-          "type": "bool",
-          "internalType": "bool"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "setCreatorGaugeController",
-      "inputs": [
-        {
-          "name": "_token",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "_gaugeController",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "setCreatorOracle",
-      "inputs": [
-        {
-          "name": "_token",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "_oracle",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "setCreatorPool",
-      "inputs": [
-        {
-          "name": "_token",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "_pool",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "_poolFee",
-          "type": "uint24",
-          "internalType": "uint24"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "setCreatorShareOFT",
-      "inputs": [
-        {
-          "name": "_token",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "_shareOFT",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "setCreatorWrapper",
-      "inputs": [
-        {
-          "name": "_token",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "_wrapper",
-          "type": "address",
-          "internalType": "address"
         }
       ],
       "outputs": [],
@@ -2003,6 +2095,24 @@
     },
     {
       "type": "function",
+      "name": "setGaugeControllerForToken",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_gaugeController",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "setHubChain",
       "inputs": [
         {
@@ -2039,6 +2149,19 @@
     },
     {
       "type": "function",
+      "name": "setLiveRebindEnabled",
+      "inputs": [
+        {
+          "name": "enabled",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "setLotteryManager",
       "inputs": [
         {
@@ -2061,8 +2184,8 @@
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         },
         {
           "name": "_endpoint",
@@ -2125,7 +2248,7 @@
         {
           "name": "_cfg",
           "type": "tuple",
-          "internalType": "struct ICreatorRegistry.OmnichainVaultMeshConfig",
+          "internalType": "struct IRegistry4626.OmnichainVaultMeshConfig",
           "components": [
             {
               "name": "solanaEid",
@@ -2158,6 +2281,47 @@
               "internalType": "bool"
             }
           ]
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setOracleForToken",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_oracle",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setPoolForToken",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_pool",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_poolFee",
+          "type": "uint24",
+          "internalType": "uint24"
         }
       ],
       "outputs": [],
@@ -2211,6 +2375,42 @@
     },
     {
       "type": "function",
+      "name": "setShareOFTForToken",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_shareOFT",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setTokenStatus",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_isActive",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "setVault",
       "inputs": [
         {
@@ -2220,6 +2420,24 @@
         },
         {
           "name": "_vault",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setWrapperForToken",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_wrapper",
           "type": "address",
           "internalType": "address"
         }
@@ -2296,6 +2514,25 @@
         }
       ],
       "stateMutability": "view"
+    },
+    {
+      "type": "event",
+      "name": "AgentIntegrationMetaSet",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "vaultKind",
+          "type": "uint8",
+          "indexed": false,
+          "internalType": "enum IRegistry4626.VaultKind"
+        }
+      ],
+      "anonymous": false
     },
     {
       "type": "event",
@@ -2382,87 +2619,6 @@
           "type": "uint256",
           "indexed": true,
           "internalType": "uint256"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "CreatorCoinRegistered",
-      "inputs": [
-        {
-          "name": "token",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "name",
-          "type": "string",
-          "indexed": false,
-          "internalType": "string"
-        },
-        {
-          "name": "symbol",
-          "type": "string",
-          "indexed": false,
-          "internalType": "string"
-        },
-        {
-          "name": "creator",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "vault",
-          "type": "address",
-          "indexed": false,
-          "internalType": "address"
-        },
-        {
-          "name": "shareOFT",
-          "type": "address",
-          "indexed": false,
-          "internalType": "address"
-        },
-        {
-          "name": "wrapper",
-          "type": "address",
-          "indexed": false,
-          "internalType": "address"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "CreatorCoinStatusChanged",
-      "inputs": [
-        {
-          "name": "token",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "isActive",
-          "type": "bool",
-          "indexed": false,
-          "internalType": "bool"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "CreatorCoinUpdated",
-      "inputs": [
-        {
-          "name": "token",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
         }
       ],
       "anonymous": false
@@ -2564,6 +2720,19 @@
     },
     {
       "type": "event",
+      "name": "LiveRebindEnabledUpdated",
+      "inputs": [
+        {
+          "name": "enabled",
+          "type": "bool",
+          "indexed": false,
+          "internalType": "bool"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
       "name": "LzConfigUpdated",
       "inputs": [
         {
@@ -2580,7 +2749,7 @@
       "name": "OmnichainVaultMeshConfigured",
       "inputs": [
         {
-          "name": "creatorCoin",
+          "name": "token",
           "type": "address",
           "indexed": true,
           "internalType": "address"
@@ -2648,7 +2817,7 @@
       "name": "RemoteOFTPeerBytes32Removed",
       "inputs": [
         {
-          "name": "creatorCoin",
+          "name": "token",
           "type": "address",
           "indexed": true,
           "internalType": "address"
@@ -2667,7 +2836,7 @@
       "name": "RemoteOFTPeerBytes32Set",
       "inputs": [
         {
-          "name": "creatorCoin",
+          "name": "token",
           "type": "address",
           "indexed": true,
           "internalType": "address"
@@ -2692,7 +2861,7 @@
       "name": "RemoteOFTPeerRemoved",
       "inputs": [
         {
-          "name": "creatorCoin",
+          "name": "token",
           "type": "address",
           "indexed": true,
           "internalType": "address"
@@ -2711,7 +2880,7 @@
       "name": "RemoteOFTPeerSet",
       "inputs": [
         {
-          "name": "creatorCoin",
+          "name": "token",
           "type": "address",
           "indexed": true,
           "internalType": "address"
@@ -2730,6 +2899,134 @@
         }
       ],
       "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "TokenBindingUpdated",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "field",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "oldValue",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        },
+        {
+          "name": "newValue",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "TokenRegistered",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "indexed": false,
+          "internalType": "string"
+        },
+        {
+          "name": "symbol",
+          "type": "string",
+          "indexed": false,
+          "internalType": "string"
+        },
+        {
+          "name": "creator",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "vault",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        },
+        {
+          "name": "shareOFT",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        },
+        {
+          "name": "wrapper",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "TokenStatusChanged",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "isActive",
+          "type": "bool",
+          "indexed": false,
+          "internalType": "bool"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "TokenUpdated",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "error",
+      "name": "BindingAlreadySet",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "existing",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
     },
     {
       "type": "error",
@@ -2771,25 +3068,29 @@
     },
     {
       "type": "error",
-      "name": "CreatorCoinAlreadyRegistered",
+      "name": "FactoryCodehashMismatch",
       "inputs": [
         {
-          "name": "token",
+          "name": "factory",
           "type": "address",
           "internalType": "address"
+        },
+        {
+          "name": "expected",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "actual",
+          "type": "bytes32",
+          "internalType": "bytes32"
         }
       ]
     },
     {
       "type": "error",
-      "name": "CreatorCoinNotRegistered",
-      "inputs": [
-        {
-          "name": "token",
-          "type": "address",
-          "internalType": "address"
-        }
-      ]
+      "name": "LiveRebindOwnerOnly",
+      "inputs": []
     },
     {
       "type": "error",
@@ -2820,12 +3121,55 @@
     },
     {
       "type": "error",
+      "name": "ReverseMappingConflict",
+      "inputs": [
+        {
+          "name": "entity",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "existingToken",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "attemptedToken",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "TokenAlreadyRegistered",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "TokenNotRegistered",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
       "name": "TooManyChains",
       "inputs": []
     },
     {
       "type": "error",
-      "name": "TooManyCreatorCoins",
+      "name": "TooManyTokens",
       "inputs": []
     },
     {
@@ -2840,6 +3184,6 @@
     }
   ],
   "notes": [
-    "Fresh shared/global broadcast for the live v1.11.1 full release."
+    "V1 greenfield interface snapshot: ABI matches current contracts/ source. address is null until first Base broadcast of this bytecode epoch."
   ]
 }

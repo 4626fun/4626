@@ -41,7 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Too many requests' })
   }
 
-  const gauge = getApiContracts().vaultGaugeVoting
+  const gauge = getApiContracts().ve4626GaugeVoting
   if (!gauge) {
     return res.status(503).json({ success: false, error: 've4626GaugeVoting not configured' })
   }

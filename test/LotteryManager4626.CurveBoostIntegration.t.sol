@@ -76,7 +76,7 @@ contract CurveBoostGauge {
         boostPPM = boostPPM_;
     }
 
-    function getVaultGaugeProbabilityBoostPPM(address) external view returns (uint256) {
+    function getVaultProbabilityBoostPPM(address) external view returns (uint256) {
         return boostPPM;
     }
 }
@@ -142,7 +142,7 @@ contract LotteryManager4626CurveBoostIntegrationTest is Test {
         ve.setBoostManager(address(boost));
         manager = new LotteryManager4626CurveBoostHarness(address(registry), owner);
         manager.setBoostManager(address(boost));
-        manager.setVe4626GaugeVoting(address(gauge));
+        manager.setve4626GaugeVoting(address(gauge));
         vm.stopPrank();
 
         wrapped.mint(user, 100e18);

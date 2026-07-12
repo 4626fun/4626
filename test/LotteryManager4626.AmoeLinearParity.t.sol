@@ -171,7 +171,7 @@ contract MockVaultGaugeAmoe {
 
     function setGaugeBoostPPM(uint256 v) external { gaugeBoostPPM = v; }
 
-    function getVaultGaugeProbabilityBoostPPM(address) external view returns (uint256) {
+    function getVaultProbabilityBoostPPM(address) external view returns (uint256) {
         return gaugeBoostPPM;
     }
 }
@@ -221,7 +221,7 @@ contract LotteryManager4626AmoeLinearParityTest is Test {
         manager.setLocalVRFConsumer(address(vrf));
         manager.setUseLocalVRF(true);
         manager.setBoostManager(address(boostManager));
-        manager.setVe4626GaugeVoting(address(gauge));
+        manager.setve4626GaugeVoting(address(gauge));
         manager.setAuthorizedAmoeRelayer(relayer);
         vm.stopPrank();
 

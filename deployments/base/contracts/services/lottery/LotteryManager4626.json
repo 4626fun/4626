@@ -2,10 +2,11 @@
   "contractName": "LotteryManager4626",
   "network": "Base",
   "chainId": 8453,
-  "address": "0xD62a8a2F4c25587FA80ED5782b50Af6654122b0b",
-  "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-05-05T04:51:21Z",
-  "deploymentTx": "0x6ce43336c629d379ad891b405ef6c91032afcd804118918808b5a76df7600cdb",
+  "release": "v1-greenfield",
+  "address": null,
+  "deployedBy": null,
+  "deployedAt": null,
+  "deploymentTx": null,
   "abi": [
     {
       "type": "constructor",
@@ -29,7 +30,59 @@
     },
     {
       "type": "function",
+      "name": "AMOE_RELAYER_TIMELOCK",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "BASIS_POINTS",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "DEFERRED_VRF_FLUSH_BATCH_MAX",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "LOCAL_VRF_CONSUMER_TIMELOCK",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "MAX_DEFERRED_VRF_QUEUE",
       "inputs": [],
       "outputs": [
         {
@@ -472,6 +525,13 @@
     },
     {
       "type": "function",
+      "name": "cancelAmoeRelayerChange",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "cancelBoostManagerProposal",
       "inputs": [],
       "outputs": [],
@@ -479,7 +539,14 @@
     },
     {
       "type": "function",
-      "name": "cancelVaultGaugeVotingProposal",
+      "name": "cancelLocalVRFConsumerChange",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "cancelve4626GaugeVotingProposal",
       "inputs": [],
       "outputs": [],
       "stateMutability": "nonpayable"
@@ -522,34 +589,31 @@
     },
     {
       "type": "function",
-      "name": "commitVaultGaugeVoting",
+      "name": "commitve4626GaugeVoting",
       "inputs": [],
       "outputs": [],
       "stateMutability": "nonpayable"
     },
     {
       "type": "function",
-      "name": "creatorStats",
-      "inputs": [
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
+      "name": "deferredVrfQueueHead",
+      "inputs": [],
       "outputs": [
         {
-          "name": "entries",
+          "name": "",
           "type": "uint256",
           "internalType": "uint256"
-        },
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "deferredVrfQueueLength",
+      "inputs": [],
+      "outputs": [
         {
-          "name": "winners",
-          "type": "uint256",
-          "internalType": "uint256"
-        },
-        {
-          "name": "rewardsPaid",
+          "name": "",
           "type": "uint256",
           "internalType": "uint256"
         }
@@ -620,10 +684,24 @@
     },
     {
       "type": "function",
-      "name": "getCreatorLotteryStats",
+      "name": "executeAmoeRelayerChange",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "executeLocalVRFConsumerChange",
+      "inputs": [],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "getTokenLotteryStats",
       "inputs": [
         {
-          "name": "creatorCoin",
+          "name": "token",
           "type": "address",
           "internalType": "address"
         }
@@ -1004,6 +1082,58 @@
     },
     {
       "type": "function",
+      "name": "pendingAmoeRelayer",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "pendingAmoeRelayerEffectiveAt",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "pendingLocalVRFConsumer",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "pendingLocalVRFConsumerEffectiveAt",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "pendingRandomWord",
       "inputs": [
         {
@@ -1031,7 +1161,7 @@
           "internalType": "address"
         },
         {
-          "name": "creatorCoin",
+          "name": "token",
           "type": "address",
           "internalType": "address"
         },
@@ -1044,6 +1174,25 @@
       "outputs": [
         {
           "name": "entryId",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "processDeferredVrfBatch",
+      "inputs": [
+        {
+          "name": "maxCount",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "processed",
           "type": "uint256",
           "internalType": "uint256"
         }
@@ -1099,10 +1248,36 @@
     },
     {
       "type": "function",
-      "name": "proposeVaultGaugeVoting",
+      "name": "proposeve4626GaugeVoting",
       "inputs": [
         {
           "name": "_gauge",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "queueAmoeRelayerChange",
+      "inputs": [
+        {
+          "name": "_relayer",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "queueLocalVRFConsumerChange",
+      "inputs": [
+        {
+          "name": "_consumer",
           "type": "address",
           "internalType": "address"
         }
@@ -1177,7 +1352,7 @@
         {
           "name": "",
           "type": "address",
-          "internalType": "contract ICreatorRegistryLottery"
+          "internalType": "contract IRegistry4626Lottery"
         }
       ],
       "stateMutability": "view"
@@ -1496,6 +1671,19 @@
     },
     {
       "type": "function",
+      "name": "setSingleVaultJackpotOnly",
+      "inputs": [
+        {
+          "name": "onlyTrigger",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "setSponsoredVrfMinSwapAmountUSD",
       "inputs": [
         {
@@ -1540,7 +1728,7 @@
       "name": "setTargetEid",
       "inputs": [
         {
-          "name": "_eid",
+          "name": "",
           "type": "uint32",
           "internalType": "uint32"
         }
@@ -1567,19 +1755,6 @@
       "inputs": [
         {
           "name": "_integrator",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
-      "name": "setVaultGaugeVoting",
-      "inputs": [
-        {
-          "name": "_vaultGaugeVoting",
           "type": "address",
           "internalType": "address"
         }
@@ -1630,6 +1805,32 @@
     },
     {
       "type": "function",
+      "name": "setve4626GaugeVoting",
+      "inputs": [
+        {
+          "name": "_ve4626GaugeVoting",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "singleVaultJackpotOnly",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "sponsoredVrfMinSwapAmountUSD",
       "inputs": [],
       "outputs": [
@@ -1650,6 +1851,35 @@
           "name": "",
           "type": "uint32",
           "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "tokenStats",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "entries",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "winners",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "rewardsPaid",
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "stateMutability": "view"
@@ -1760,13 +1990,13 @@
     },
     {
       "type": "function",
-      "name": "vaultGaugeVoting",
+      "name": "ve4626GaugeVoting",
       "inputs": [],
       "outputs": [
         {
           "name": "",
           "type": "address",
-          "internalType": "contract IVaultGaugeVoting"
+          "internalType": "contract Ive4626GaugeVoting"
         }
       ],
       "stateMutability": "view"
@@ -1865,7 +2095,7 @@
           "internalType": "address"
         },
         {
-          "name": "creatorCoin",
+          "name": "token",
           "type": "address",
           "internalType": "address"
         },
@@ -1988,6 +2218,51 @@
     },
     {
       "type": "event",
+      "name": "AmoeRelayerChangeCancelled",
+      "inputs": [
+        {
+          "name": "cancelled",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "AmoeRelayerChangeExecuted",
+      "inputs": [
+        {
+          "name": "newRelayer",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "AmoeRelayerChangeQueued",
+      "inputs": [
+        {
+          "name": "newRelayer",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "effectiveAt",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
       "name": "AuthorizedAmoeRelayerUpdated",
       "inputs": [
         {
@@ -2098,7 +2373,7 @@
           "internalType": "address"
         },
         {
-          "name": "previousVaultGaugeVoting",
+          "name": "previousve4626GaugeVoting",
           "type": "address",
           "indexed": true,
           "internalType": "address"
@@ -2124,7 +2399,7 @@
       "name": "CrossChainJackpotPaid",
       "inputs": [
         {
-          "name": "creatorCoin",
+          "name": "token",
           "type": "address",
           "indexed": true,
           "internalType": "address"
@@ -2235,7 +2510,7 @@
       "name": "JackpotPayoutFailed",
       "inputs": [
         {
-          "name": "creatorCoin",
+          "name": "token",
           "type": "address",
           "indexed": true,
           "internalType": "address"
@@ -2248,6 +2523,51 @@
         },
         {
           "name": "shares",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "LocalVRFConsumerChangeCancelled",
+      "inputs": [
+        {
+          "name": "cancelled",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "LocalVRFConsumerChangeExecuted",
+      "inputs": [
+        {
+          "name": "newConsumer",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "LocalVRFConsumerChangeQueued",
+      "inputs": [
+        {
+          "name": "newConsumer",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "effectiveAt",
           "type": "uint256",
           "indexed": false,
           "internalType": "uint256"
@@ -2285,7 +2605,7 @@
       "name": "LotteryEntryCreated",
       "inputs": [
         {
-          "name": "creatorCoin",
+          "name": "token",
           "type": "address",
           "indexed": true,
           "internalType": "address"
@@ -2322,7 +2642,7 @@
       "name": "LotteryResultProcessed",
       "inputs": [
         {
-          "name": "creatorCoin",
+          "name": "token",
           "type": "address",
           "indexed": true,
           "internalType": "address"
@@ -2365,7 +2685,7 @@
       "name": "LotteryWinner",
       "inputs": [
         {
-          "name": "creatorCoin",
+          "name": "token",
           "type": "address",
           "indexed": true,
           "internalType": "address"
@@ -2402,7 +2722,7 @@
       "name": "LotteryWon",
       "inputs": [
         {
-          "name": "creatorCoin",
+          "name": "token",
           "type": "address",
           "indexed": true,
           "internalType": "address"
@@ -2597,6 +2917,19 @@
         },
         {
           "name": "authorized",
+          "type": "bool",
+          "indexed": false,
+          "internalType": "bool"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "SingleVaultJackpotOnlyUpdated",
+      "inputs": [
+        {
+          "name": "enabled",
           "type": "bool",
           "indexed": false,
           "internalType": "bool"
@@ -2857,63 +3190,6 @@
     },
     {
       "type": "event",
-      "name": "VaultGaugeVotingProposalCancelled",
-      "inputs": [
-        {
-          "name": "cancelled",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "VaultGaugeVotingProposed",
-      "inputs": [
-        {
-          "name": "previous",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "proposed",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "effectiveAt",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "VaultGaugeVotingUpdated",
-      "inputs": [
-        {
-          "name": "previous",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "newGauge",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
       "name": "VrfResultDeferred",
       "inputs": [
         {
@@ -2948,7 +3224,7 @@
           "internalType": "address"
         },
         {
-          "name": "creatorCoin",
+          "name": "token",
           "type": "address",
           "indexed": true,
           "internalType": "address"
@@ -2985,7 +3261,7 @@
           "internalType": "address"
         },
         {
-          "name": "creatorCoin",
+          "name": "token",
           "type": "address",
           "indexed": true,
           "internalType": "address"
@@ -2998,6 +3274,68 @@
         }
       ],
       "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "ve4626GaugeVotingProposalCancelled",
+      "inputs": [
+        {
+          "name": "cancelled",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "ve4626GaugeVotingProposed",
+      "inputs": [
+        {
+          "name": "previous",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "proposed",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "effectiveAt",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "ve4626GaugeVotingUpdated",
+      "inputs": [
+        {
+          "name": "previous",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "newGauge",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "error",
+      "name": "AmoeRelayerAlreadySet",
+      "inputs": []
     },
     {
       "type": "error",
@@ -3014,6 +3352,27 @@
           "internalType": "uint256"
         }
       ]
+    },
+    {
+      "type": "error",
+      "name": "DeferredVrfOutOfOrder",
+      "inputs": [
+        {
+          "name": "expectedHead",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "provided",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "DeferredVrfQueueFull",
+      "inputs": []
     },
     {
       "type": "error",
@@ -3074,6 +3433,11 @@
     },
     {
       "type": "error",
+      "name": "LocalVRFConsumerAlreadySet",
+      "inputs": []
+    },
+    {
+      "type": "error",
       "name": "LzTokenUnavailable",
       "inputs": []
     },
@@ -3087,6 +3451,16 @@
           "internalType": "uint32"
         }
       ]
+    },
+    {
+      "type": "error",
+      "name": "NoPendingAmoeRelayer",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NoPendingLocalVRFConsumer",
+      "inputs": []
     },
     {
       "type": "error",
@@ -3212,6 +3586,6 @@
     }
   ],
   "notes": [
-    "v1.11.1 broadcast uses the trimmed runtime that stays within the EIP-170 contract size limit."
+    "V1 greenfield interface snapshot: ABI matches current contracts/ source. address is null until first Base broadcast of this bytecode epoch."
   ]
 }

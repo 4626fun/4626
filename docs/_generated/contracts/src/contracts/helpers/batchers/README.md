@@ -47,7 +47,7 @@
 - [ICCAStrategy](VaultActivationBatcher.sol/interface.ICCAStrategy.md)
 - [IOwnable](VaultActivationBatcher.sol/interface.IOwnable.md)
 - [IOperatorAuthorizableVault](VaultActivationBatcher.sol/interface.IOperatorAuthorizableVault.md)
-- [ICreatorRegistryLookup](VaultActivationBatcher.sol/interface.ICreatorRegistryLookup.md)
+- [IRegistry4626Lookup](VaultActivationBatcher.sol/interface.IRegistry4626Lookup.md)
 - [VaultActivationBatcher](VaultActivationBatcher.sol/contract.VaultActivationBatcher.md)
 - [IAuxiliaryCreate2Deployer](VaultAuxiliaryDeployBatcher.sol/interface.IAuxiliaryCreate2Deployer.md)
 - [IAuxiliaryBytecodeStore](VaultAuxiliaryDeployBatcher.sol/interface.IAuxiliaryBytecodeStore.md)

@@ -99,7 +99,7 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
         ve4626 = Ive4626(_ve4626);
     }
 
-    function setVeLotteryToken(address token) external onlyOwner {
+    function setveLotteryToken(address token) external onlyOwner {
         veLotteryToken = IERC20(token);
         emit VeLotteryTokenUpdated(token);
     }

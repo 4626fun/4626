@@ -63,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const contracts = getApiContracts()
-  const gauge = contracts.vaultGaugeVoting
+  const gauge = contracts.ve4626GaugeVoting
   if (!gauge) {
     return res.status(503).json({ success: false, error: 've4626GaugeVoting not configured' })
   }
@@ -88,7 +88,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       data: {
         chainId: 8453,
         generatedAt: new Date().toISOString(),
-        vaultGaugeVoting: String(gauge).toLowerCase(),
+        ve4626GaugeVoting: String(gauge).toLowerCase(),
         currentEpoch: Number(currentEpoch ?? 0n),
         genesisEpochStart: BigInt(genesisStart as any).toString(),
         epochDurationSec: BigInt(duration as any).toString(),

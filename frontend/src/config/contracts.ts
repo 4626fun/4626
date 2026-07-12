@@ -71,12 +71,14 @@ export const CONTRACTS = {
   protocolTreasury: envAddress('VITE_PROTOCOL_TREASURY', BASE_DEFAULTS.protocolTreasury)!,
   protocolAutomation: envAddress('VITE_PROTOCOL_AUTOMATION', BASE_DEFAULTS.protocolAutomation),
 
-  // ve(3,3) + rewards ecosystem (optional until deployed)
-  vaultGaugeVoting: envAddress('VITE_VAULT_GAUGE_VOTING'),
-  voterRewardsDistributor: envAddress('VITE_VOTER_REWARDS_DISTRIBUTOR'),
-  bribesFactory: envAddress('VITE_BRIBES_FACTORY'),
+  // ve(3,3) + rewards ecosystem (V1 greenfield env names only)
+  ve4626GaugeVoting: envAddress('VITE_VE4626_GAUGE_VOTING'),
+  ve4626VoterRewardsDistributor: envAddress('VITE_VE4626_VOTER_REWARDS_DISTRIBUTOR'),
+  bribesFactory4626: envAddress('VITE_BRIBES_FACTORY_4626'),
+  rewardStreamFactory4626: envAddress('VITE_REWARD_STREAM_FACTORY_4626'),
+  gaugeSurfaceRegistry4626: envAddress('VITE_GAUGE_SURFACE_REGISTRY_4626'),
   ve4626: envAddress('VITE_VE4626'),
-  veBoostManager: envAddress('VITE_VE_BOOST_MANAGER'),
+  ve4626BoostManager: envAddress('VITE_VE4626_BOOST_MANAGER'),
 
   // External - Uniswap V4
   poolManager: envAddress('VITE_V4_POOL_MANAGER', BASE_DEFAULTS.poolManager)!,

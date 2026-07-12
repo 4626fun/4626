@@ -114,6 +114,7 @@ contract CreatorOracleTwapSafetyTest is Test {
     }
 
     function test_updateCreatorPriceFromTWAP_UsesDivisionForUsdPerCreator() public {
+        vm.chainId(8453);
         // Set a realistic timestamp so any accidental epoch-0 observation produces a huge window.
         vm.warp(1_700_000_000);
 

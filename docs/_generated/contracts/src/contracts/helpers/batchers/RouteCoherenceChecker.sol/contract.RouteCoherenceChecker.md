@@ -11,7 +11,7 @@ Read-only helper to validate registry route wiring for a creator token.
 ### registry
 
 ```solidity
-ICreatorRegistry public immutable registry
+IRegistry4626 public immutable registry
 ```
 
 

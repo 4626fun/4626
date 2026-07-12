@@ -2,56 +2,91 @@
 
 This directory tracks committed deployment artifacts and ABI snapshots used by tooling and operational docs.
 
-## Current Canonical Release
+## V1 greenfield posture
 
-- **Live infra (production traffic):** **v1.18.0-greenfield** — `docs/reference/addresses.md` + `test/current-release-target-guard.sh`
-- **Bytecode manifest (live store verification):** `deployments/base/v1.18.0-bytecode-manifest.json`
-- **Orphan (do not cut over):** v1.17.0 partial broadcast — `tmp/base-v1.17.0-handoff.env`
+Treat **`deployments/base/contracts/**` as the V1 interface registry**:
 
-Prior bytecode manifests: `v1.16.0`, `v1.15.1`, `v1.14.1`, … under `deployments/base/`.
+- **ABI** = current `contracts/` source (export via `node scripts/export-v1-deployment-abis.mjs` after `forge build --skip test`).
+- **`address` / `deployedAt` / `deploymentTx`** = `null` until the first Base broadcast of that bytecode.
+- **`release`**: `v1-greenfield` on exported snapshots.
 
-## Directory Map
+Do **not** mix historical on-chain addresses with V1 ABIs. Versioned bytecode manifests under `deployments/base/v*.json` remain for prior epochs / audits only.
+
+### Export command
+
+```bash
+forge build --skip test
+node scripts/export-v1-deployment-abis.mjs
+node scripts/check-abi-source-naming-parity.mjs --fail
+```
+
+## Directory map
 
 ```
 deployments/
 └── base/
-    ├── v1.7.1-bytecode-manifest.json
-    ├── v1.16.1-bytecode-manifest.json   ← prior live verification target
-    ├── v1.18.0-bytecode-manifest.json   ← live verification target
-    ├── archive/
-    │   └── 2026-01-addresses.json
-    └── contracts/
-        ├── core/
-        │   └── Registry4626.json
+    ├── v1.*.json                     ← historical bytecode manifests (audit)
+    ├── archive/                      ← historical address snapshots
+    └── contracts/                    ← V1 ABI + deploy metadata
+        ├── core/Registry4626.json
+        ├── creator/                    ← full creator vault stack ABIs
+        │   ├── CreatorOVault.json
+        │   ├── CreatorOVaultWrapper.json
+        │   ├── CreatorShareOFT.json
+        │   ├── CreatorOVaultCoreModule.json
+        │   ├── CreatorOracle.json
+        │   ├── CreatorGaugeController.json
+        │   ├── CreatorPayoutRouter.json
+        │   └── CreatorCoinPolicyController.json
+        ├── agent/                      ← full agent (AgentTokenV4) vault stack ABIs
+        │   ├── AgentOVault.json
+        │   ├── AgentOVaultWrapper.json
+        │   ├── AgentShareOFT.json
+        │   ├── AgentOVaultCoreModule.json
+        │   ├── AgentOracle.json
+        │   ├── AgentGaugeController.json
+        │   ├── AgentRevenueRouter.json
+        │   ├── AgentRevenuePolicyController.json
+        │   └── AgentOVaultTaxAdapter.json
         ├── factories/
-        │   ├── CreatorOVaultFactory.json
+        │   ├── OVaultFactory4626.json      ← lane router + legacy registrar
+        │   ├── CreatorOVaultFactory.json   ← alias path → OVaultFactory4626 ABI
+        │   ├── lanes/
+        │   │   ├── CreatorOvaultLane.json
+        │   │   └── AgentOvaultLane.json
         │   └── UniversalCreate2DeployerFromStore.json
+        ├── governance/
+        │   ├── ve4626.json
+        │   ├── ve4626GaugeVoting.json
+        │   ├── ve4626BoostManager.json
+        │   ├── ve4626VoterRewardsDistributor.json
+        │   ├── BribeDepot4626.json
+        │   ├── BribesFactory4626.json
+        │   ├── RewardStream4626.json
+        │   ├── RewardStreamFactory4626.json
+        │   └── GaugeSurfaceRegistry4626.json
         ├── helpers/
-        │   ├── batchers/
-        │   │   ├── DeploymentBatcher.json
-        │   │   ├── DeploymentBatcherPhase3Helper.json
-        │   │   └── VaultActivationBatcher.json
-        │   └── infra/
-        │       └── UniversalBytecodeStore.json
         └── services/
-            ├── bridge/
-            │   └── SolanaBridgeAdapter.json
+            ├── bridge/SolanaBridgeAdapter.json
             └── lottery/
                 ├── LotteryManager4626.json
-                └── vrf/
-                    └── VRFConsumer4626.json
+                └── vrf/VRFConsumer4626.json
 ```
 
-## File Conventions
+Lane ABIs are **templates** for per-vault deploys: V1 export sets `address: null`. After each creator/agent vault broadcast, either record the instance address in ops tooling or keep these as interface-only snapshots.
 
-- `base/vX.Y.Z-bytecode-manifest.json`: release-scoped bytecode hash manifest.
-- `base/contracts/**/<Contract>.json`: canonical ABI + deployment metadata snapshot per contract.
-- `base/archive/YYYY-MM-addresses.json`: historical address snapshots preserved for audits/runbooks.
 
-## Maintenance Rules
+## File conventions
 
-1. Add a new versioned bytecode manifest for each release that changes deployable bytecode.
-2. Update ABI snapshots under `base/contracts/` whenever deployed interfaces change.
-3. Never overwrite archive snapshots; append a new timestamped file instead.
-4. Keep this README aligned to the actual tree (no placeholder networks or pending-chain tables).
-5. After v1.18.0 greenfield cutover, keep v1.16.1 addresses in **Deprecated** in `docs/reference/addresses.md`; `test/current-release-target-guard.sh` validates v1.18.0.
+| Path | Role |
+|------|------|
+| `base/contracts/**/<Contract>.json` | V1 ABI + optional deploy metadata (`address` null pre-broadcast) |
+| `base/vX.Y.Z-bytecode-manifest.json` | Historical release bytecode hashes |
+| `base/archive/*` | Frozen address archaeology |
+
+## Maintenance
+
+1. After any ABI-affecting Solidity change: rebuild + `export-v1-deployment-abis.mjs`.
+2. After first broadcast of a contract: fill `address`, `deployedAt`, `deploymentTx`, `deployedBy` on that JSON only.
+3. Never rewrite archive snapshots; append new archive files if needed.
+4. Naming policy: `docs/contracts/governance/contract-naming.md` + `ve-naming.md`.

@@ -25,7 +25,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-interface IVe4626GaugeVotingForRewards {
+interface Ive4626GaugeVotingForRewards {
     function currentEpoch() external view returns (uint256);
     function getVaultWeightAtEpoch(uint256 epoch, address vault) external view returns (uint256);
     function getUserVoteWeightAtEpoch(uint256 epoch, address user, address vault) external view returns (uint256);
@@ -49,7 +49,7 @@ contract ve4626VoterRewardsDistributor is Ownable, ReentrancyGuard {
     // IMMUTABLES
     // ================================
 
-    IVe4626GaugeVotingForRewards public immutable gaugeVoting;
+    Ive4626GaugeVotingForRewards public immutable gaugeVoting;
     IRegistry4626ForVoterRewards public immutable registry;
 
     // ================================
@@ -112,7 +112,7 @@ contract ve4626VoterRewardsDistributor is Ownable, ReentrancyGuard {
 
     constructor(address _gaugeVoting, address _registry, address _owner) Ownable(_owner) {
         if (_gaugeVoting == address(0) || _registry == address(0)) revert ZeroAddress();
-        gaugeVoting = IVe4626GaugeVotingForRewards(_gaugeVoting);
+        gaugeVoting = Ive4626GaugeVotingForRewards(_gaugeVoting);
         registry = IRegistry4626ForVoterRewards(_registry);
     }
 

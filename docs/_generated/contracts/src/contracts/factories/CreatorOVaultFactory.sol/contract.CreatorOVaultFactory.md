@@ -18,7 +18,7 @@ addresses, hub-centric architecture support, and remote chain OFT-only deploymen
 The historical "Factory" name is preserved for backwards compatibility with existing
 deployments, artifacts, scripts, and operator documentation.
 This contract does not instantiate vault stacks itself. Authorized deployers register
-already-deployed addresses here so they can be enumerated and mirrored into CreatorRegistry.
+already-deployed addresses here so they can be enumerated and mirrored into Registry4626.
 This contract is kept for backwards compatibility with existing deployments.
 New deployments should use DeploymentBatcher exclusively.
 
@@ -42,7 +42,7 @@ DEPLOYMENT FLOW (LEGACY):
 ### registry
 
 ```solidity
-ICreatorRegistry public registry
+IRegistry4626 public registry
 ```
 
 

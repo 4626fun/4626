@@ -120,7 +120,7 @@ contract DeployLotteryManagerCreate2V1180 is Script {
 
         // Keep boost sources fail-closed (Phase 0).
         require(address(lottery.boostManager()) == address(0), "boostManager must stay 0");
-        require(address(lottery.vaultGaugeVoting()) == address(0), "vaultGaugeVoting must stay 0");
+        require(address(lottery.ve4626GaugeVoting()) == address(0), "ve4626GaugeVoting must stay 0");
 
         // VRF
         if (address(lottery.localVRFConsumer()) != VRF_CONSUMER) {

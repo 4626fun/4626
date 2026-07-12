@@ -41,6 +41,7 @@ contract CreatorOracleBroadcastFeesTest is Test {
     event BroadcastEqualSplitCallAttempted(address indexed caller, uint256 msgValue, uint32[] dstEids);
 
     function setUp() public {
+        vm.chainId(8453);
         vm.warp(1_700_000_000);
         vm.mockCall(LZ_ENDPOINT, abi.encodeWithSignature("setDelegate(address)"), abi.encode());
         vm.mockCall(LZ_ENDPOINT, abi.encodeWithSignature("delegate()"), abi.encode(address(this)));

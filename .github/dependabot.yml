@@ -1,64 +1,63 @@
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# Cost posture: fewer ecosystems, lower PR limits, monthly where possible.
+# Each Dependabot PR can re-trigger CI — keep volume low.
 
 version: 2
 updates:
-  - package-ecosystem: "npm"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
-
+  # Primary app surface
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 8
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    groups:
+      frontend-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 2
+    groups:
+      root-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "npm"
     directory: "/kpr"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
+      interval: "monthly"
+    open-pull-requests-limit: 2
+    groups:
+      kpr-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
-  # KPR Chainlink workflows: Bun lockfiles (text `bun.lock`); dirs without a lockfile rely on CI install only.
+  # Single bun ecosystem for kpr-workflows tree (was 6 separate weekly configs).
   - package-ecosystem: "bun"
     directory: "/kpr/kpr-workflows"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 3
-
-  - package-ecosystem: "bun"
-    directory: "/kpr/kpr-workflows/ajna-bucket-manager"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 2
-
-  - package-ecosystem: "bun"
-    directory: "/kpr/kpr-workflows/cca-finalization"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 2
-
-  - package-ecosystem: "bun"
-    directory: "/kpr/kpr-workflows/keepr-action-queue"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 2
-
-  - package-ecosystem: "bun"
-    directory: "/kpr/kpr-workflows/payout-integrity"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 2
-
-  - package-ecosystem: "bun"
-    directory: "/kpr/kpr-workflows/vault-keeper"
-    schedule:
-      interval: "weekly"
+      interval: "monthly"
     open-pull-requests-limit: 2
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "monthly"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 2
+    groups:
+      actions:
+        patterns:
+          - "*"

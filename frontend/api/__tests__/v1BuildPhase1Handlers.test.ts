@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   getClientIp: vi.fn(() => '127.0.0.1'),
   rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
   getApiContracts: vi.fn(() => ({
-    vaultGaugeVoting: '0x1111111111111111111111111111111111111111',
+    ve4626GaugeVoting: '0x1111111111111111111111111111111111111111',
     ve4626: '0x2222222222222222222222222222222222222222',
   })),
 }))
@@ -44,7 +44,7 @@ vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   RATE_LIMITS: {
     buildAuctionSubmitBid: { windowMs: 60_000, maxRequests: 80 },
     buildGaugeVote: { windowMs: 60_000, maxRequests: 80 },
-    buildVe4626Calldata: { windowMs: 60_000, maxRequests: 80 },
+    buildve4626Calldata: { windowMs: 60_000, maxRequests: 80 },
   },
 }))
 
@@ -156,7 +156,7 @@ describe('v1 build phase 1 handlers', () => {
     mocks.guardAgentApiRequest.mockResolvedValue({ ok: true, ip: '127.0.0.1', auth: null })
     mocks.checkRateLimit.mockReturnValue({ allowed: true, remaining: 79, resetAt: Date.now() + 60_000 })
     mocks.getApiContracts.mockReturnValue({
-      vaultGaugeVoting: '0x1111111111111111111111111111111111111111',
+      ve4626GaugeVoting: '0x1111111111111111111111111111111111111111',
       ve4626: '0x2222222222222222222222222222222222222222',
     })
   })
@@ -393,7 +393,7 @@ describe('v1 build phase 1 handlers', () => {
 
   it('returns 503 when gauge contract config is missing', async () => {
     mocks.getApiContracts.mockReturnValueOnce({
-      vaultGaugeVoting: '',
+      ve4626GaugeVoting: '',
       ve4626: '0x2222222222222222222222222222222222222222',
     })
     const req = createMockReq({ method: 'POST', body: {} })

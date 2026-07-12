@@ -29,11 +29,11 @@ export type ApiContracts = {
   deploymentBatcher?: ContractAddress
   protocolTreasury: ContractAddress
   protocolAutomation?: ContractAddress
-  vaultGaugeVoting?: ContractAddress
-  voterRewardsDistributor?: ContractAddress
-  bribesFactory?: ContractAddress
+  ve4626GaugeVoting?: ContractAddress
+  ve4626VoterRewardsDistributor?: ContractAddress
+  bribesFactory4626?: ContractAddress
   ve4626?: ContractAddress
-  veBoostManager?: ContractAddress
+  ve4626BoostManager?: ContractAddress
   poolManager: ContractAddress
   taxHook: ContractAddress
   positionManager?: ContractAddress
@@ -68,7 +68,13 @@ function pickAddressProdSafe(envKey: string, fallback?: string): ContractAddress
   const allowOverrides = (process.env.ALLOW_API_CONTRACT_OVERRIDES ?? '').trim() === '1'
   // In production serverless, prefer repo defaults to avoid mismatched env overrides
   // between frontend + backend that can cause paymaster validation failures.
-  if (isVercel && !allowOverrides) return (fallback ?? undefined) as ContractAddress | undefined
+  // When no repo default exists (V1 greenfield / not yet broadcast), allow env so canary
+  // and post-deploy wiring can set addresses without ALLOW_API_CONTRACT_OVERRIDES.
+  if (isVercel && !allowOverrides) {
+    const fb = (fallback ?? '').trim()
+    if (fb) return fb as ContractAddress
+    return pickAddress(envKey)
+  }
   return pickAddress(envKey, fallback)
 }
 
@@ -109,11 +115,12 @@ export function getApiContracts(): ApiContracts {
     deploymentBatcher: resolveDeploymentBatcherAddress(),
     protocolTreasury: pickAddress('PROTOCOL_TREASURY', BASE_DEFAULTS.protocolTreasury)!,
     protocolAutomation: pickAddressProdSafe('PROTOCOL_AUTOMATION_SAFE', BASE_DEFAULTS.protocolAutomation),
-    vaultGaugeVoting: pickAddressProdSafe('VAULT_GAUGE_VOTING'),
-    voterRewardsDistributor: pickAddressProdSafe('VOTER_REWARDS_DISTRIBUTOR'),
-    bribesFactory: pickAddressProdSafe('BRIBES_FACTORY'),
+    // V1 greenfield env names only (no legacy VAULT_GAUGE_* / VOTER_REWARDS_* fallbacks)
+    ve4626GaugeVoting: pickAddressProdSafe('VE4626_GAUGE_VOTING'),
+    ve4626VoterRewardsDistributor: pickAddressProdSafe('VE4626_VOTER_REWARDS_DISTRIBUTOR'),
+    bribesFactory4626: pickAddressProdSafe('BRIBES_FACTORY_4626'),
     ve4626: pickAddressProdSafe('VE4626'),
-    veBoostManager: pickAddressProdSafe('VE_BOOST_MANAGER'),
+    ve4626BoostManager: pickAddressProdSafe('VE4626_BOOST_MANAGER'),
     poolManager: pickAddress('POOL_MANAGER', BASE_DEFAULTS.poolManager)!,
     taxHook: pickAddress('TAX_HOOK', BASE_DEFAULTS.taxHook)!,
     positionManager: pickAddress('POSITION_MANAGER'),

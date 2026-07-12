@@ -100,6 +100,7 @@ contract MockV2PairForOracleQuoteTokenGuard {
 contract OracleReferenceQuoteTokenGuardsTest is Test {
     uint32 internal constant HUB_EID = 30184;
     address internal constant LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
+    uint256 internal constant BASE_CHAIN_ID = 8453;
 
     function test_creatorOracle_rejectsUnexpectedReferenceQuoteToken() external {
         CreatorOracle oracle = _deployCreatorOracle();
@@ -206,6 +207,7 @@ contract OracleReferenceQuoteTokenGuardsTest is Test {
     }
 
     function test_creatorOracle_v3Update_failsClosedWithoutQuoteUsdFeed_whenReferencePinned() external {
+        vm.chainId(BASE_CHAIN_ID);
         vm.warp(1_700_000_000);
         CreatorOracle oracle = _deployCreatorOracle();
 
@@ -224,6 +226,7 @@ contract OracleReferenceQuoteTokenGuardsTest is Test {
     }
 
     function test_creatorOracle_v3Update_convertsQuoteToUsd_viaQuoteUsdFeed() external {
+        vm.chainId(BASE_CHAIN_ID);
         vm.warp(1_700_000_000);
         CreatorOracle oracle = _deployCreatorOracle();
 
@@ -247,6 +250,7 @@ contract OracleReferenceQuoteTokenGuardsTest is Test {
     }
 
     function test_agentOracle_v3Update_failsClosedWithoutQuoteUsdFeed_whenReferencePinned() external {
+        vm.chainId(BASE_CHAIN_ID);
         vm.warp(1_700_000_000);
         AgentOracle oracle = _deployAgentOracle();
 
@@ -264,6 +268,7 @@ contract OracleReferenceQuoteTokenGuardsTest is Test {
     }
 
     function test_agentOracle_v3Update_convertsQuoteToUsd_viaQuoteUsdFeed() external {
+        vm.chainId(BASE_CHAIN_ID);
         vm.warp(1_700_000_000);
         AgentOracle oracle = _deployAgentOracle();
 

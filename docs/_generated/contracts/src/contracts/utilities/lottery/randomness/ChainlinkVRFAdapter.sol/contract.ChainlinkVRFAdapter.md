@@ -7,7 +7,7 @@
 **Title:**
 ChainlinkVRFAdapter
 
-Wraps `CreatorVRFConsumerV2_5` behind the `IRandomnessSource`
+Wraps `VRFConsumer4626` behind the `IRandomnessSource`
 interface. This is the REQUEST-mode side of the new selector.
 
 No state of its own — every call passes through to the existing

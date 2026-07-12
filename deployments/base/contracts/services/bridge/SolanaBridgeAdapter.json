@@ -2,10 +2,11 @@
   "contractName": "SolanaBridgeAdapter",
   "network": "Base",
   "chainId": 8453,
-  "address": "0x700b4BBAf965c013123bAd02a6562FBa487aC0f1",
-  "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-05-05T04:51:21Z",
-  "deploymentTx": "0x6825f97f753e76799692b90d3ec6f10f4ed9807b565ce196df15c3f6c55accb3",
+  "release": "v1-greenfield",
+  "address": null,
+  "deployedBy": null,
+  "deployedAt": null,
+  "deploymentTx": null,
   "abi": [
     {
       "type": "constructor",
@@ -32,6 +33,19 @@
           "name": "",
           "type": "address",
           "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "MAX_LOTTERY_ENTRY_BATCH",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "stateMutability": "view"
@@ -170,7 +184,13 @@
           "internalType": "bytes32"
         }
       ],
-      "outputs": [],
+      "outputs": [
+        {
+          "name": "success",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
       "stateMutability": "payable"
     },
     {
@@ -228,7 +248,7 @@
           "internalType": "bytes32"
         },
         {
-          "name": "creatorToken",
+          "name": "laneToken",
           "type": "address",
           "internalType": "address"
         },
@@ -272,7 +292,7 @@
           "internalType": "bytes32"
         },
         {
-          "name": "creatorToken",
+          "name": "laneToken",
           "type": "address",
           "internalType": "address"
         },
@@ -317,6 +337,30 @@
     },
     {
       "type": "function",
+      "name": "ccaBidOwner",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "claimCCATokensFromSolana",
       "inputs": [
         {
@@ -337,6 +381,19 @@
       ],
       "outputs": [],
       "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "defaultSwapFeeTier",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint24",
+          "internalType": "uint24"
+        }
+      ],
+      "stateMutability": "view"
     },
     {
       "type": "function",
@@ -382,7 +439,7 @@
           "internalType": "bytes32"
         },
         {
-          "name": "creatorToken",
+          "name": "laneToken",
           "type": "address",
           "internalType": "address"
         },
@@ -483,7 +540,7 @@
           "internalType": "bytes32"
         },
         {
-          "name": "creatorToken",
+          "name": "laneToken",
           "type": "address",
           "internalType": "address"
         },
@@ -541,7 +598,7 @@
           "internalType": "bytes32"
         },
         {
-          "name": "creatorToken",
+          "name": "laneToken",
           "type": "address",
           "internalType": "address"
         },
@@ -585,7 +642,7 @@
           "internalType": "bytes32"
         },
         {
-          "name": "creatorToken",
+          "name": "laneToken",
           "type": "address",
           "internalType": "address"
         },
@@ -741,6 +798,25 @@
     },
     {
       "type": "function",
+      "name": "maxLotteryEntryAmount",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "owner",
       "inputs": [],
       "outputs": [
@@ -780,12 +856,36 @@
               "name": "amountSolanaUnits",
               "type": "uint256",
               "internalType": "uint256"
+            },
+            {
+              "name": "solanaTxSig",
+              "type": "bytes32",
+              "internalType": "bytes32"
             }
           ]
         }
       ],
       "outputs": [],
       "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "processedSolanaTxs",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
     },
     {
       "type": "function",
@@ -873,6 +973,19 @@
     },
     {
       "type": "function",
+      "name": "setDefaultSwapFeeTier",
+      "inputs": [
+        {
+          "name": "_feeTier",
+          "type": "uint24",
+          "internalType": "uint24"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "setEntryKeeper",
       "inputs": [
         {
@@ -915,6 +1028,24 @@
           "name": "_lotteryManager",
           "type": "address",
           "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setMaxLotteryEntryAmount",
+      "inputs": [
+        {
+          "name": "shareOFT",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "maxAmount18",
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "outputs": [],
@@ -1250,6 +1381,31 @@
     },
     {
       "type": "event",
+      "name": "EmergencyWithdraw",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
       "name": "EntryKeeperSet",
       "inputs": [
         {
@@ -1282,6 +1438,37 @@
           "type": "bool",
           "indexed": false,
           "internalType": "bool"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "LotteryEntryFailed",
+      "inputs": [
+        {
+          "name": "buyerTwin",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "shareOFT",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "reason",
+          "type": "bytes",
+          "indexed": false,
+          "internalType": "bytes"
         }
       ],
       "anonymous": false
@@ -1326,6 +1513,25 @@
           "type": "address",
           "indexed": true,
           "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "MaxLotteryEntryAmountSet",
+      "inputs": [
+        {
+          "name": "shareOFT",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "maxAmount18",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
         }
       ],
       "anonymous": false
@@ -1479,17 +1685,6 @@
     },
     {
       "type": "error",
-      "name": "CreatorCoinNotRegistered",
-      "inputs": [
-        {
-          "name": "creatorToken",
-          "type": "address",
-          "internalType": "address"
-        }
-      ]
-    },
-    {
-      "type": "error",
       "name": "DexRouterNotConfigured",
       "inputs": [
         {
@@ -1527,8 +1722,61 @@
     },
     {
       "type": "error",
+      "name": "LaneTokenNotRegistered",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "LotteryEntryBatchTooLarge",
+      "inputs": [
+        {
+          "name": "length",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "maxLength",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ]
+    },
+    {
+      "type": "error",
       "name": "LotteryManagerNotSet",
       "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NotBidOwner",
+      "inputs": [
+        {
+          "name": "auction",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "bidId",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "expected",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "actual",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
     },
     {
       "type": "error",
@@ -1613,6 +1861,22 @@
     },
     {
       "type": "error",
+      "name": "UnknownBidOwner",
+      "inputs": [
+        {
+          "name": "auction",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "bidId",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ]
+    },
+    {
+      "type": "error",
       "name": "VaultAssetMismatch",
       "inputs": [
         {
@@ -1637,7 +1901,7 @@
       "name": "VaultNotConfigured",
       "inputs": [
         {
-          "name": "creatorToken",
+          "name": "token",
           "type": "address",
           "internalType": "address"
         }
@@ -1645,7 +1909,6 @@
     }
   ],
   "notes": [
-    "Deployed via script/DeployInfrastructure.s.sol as part of the live v1.11.1 shared/global broadcast.",
-    "Post-deploy lottery authorization and batcher handoff now target the live v1.11.1 registry and lottery manager."
+    "V1 greenfield interface snapshot: ABI matches current contracts/ source. address is null until first Base broadcast of this bytecode epoch."
   ]
 }

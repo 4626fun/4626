@@ -114,7 +114,7 @@ Unwrap OFT → vault shares
 Split according to configuration:
    - 69% → jackpotReserve (ShareOFT ■)
    - 9.61% → burn (unwrap → vault shares burned; PPS ↑)
-   - 21.39% → voter/protocol branch (ve rewards / treasury / jackpot fallback)
+   - 21.39% → voter/protocol branch → `ve4626VoterRewardsDistributor`, protocol treasury, or jackpot fallback
    - creator% → creatorTreasury (if enabled; default 0%)
 ```
 

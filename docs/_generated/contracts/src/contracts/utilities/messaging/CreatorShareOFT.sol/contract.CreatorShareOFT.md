@@ -16,7 +16,7 @@ ARCHITECTURE:
 This contract operates in two modes controlled by `isHub`:
 HUB MODE (Base):
 - Fees sent to local GaugeController via receiveFees()
-- Lottery entries processed by local CreatorLotteryManager
+- Lottery entries processed by local LotteryManager4626
 - Full vault/wrapper/gauge stack available
 REMOTE MODE (Arbitrum, etc.):
 - Fees accumulated internally, bridged back to Base via flushFees()
@@ -95,11 +95,11 @@ uint32 public immutable chainEid
 
 ## State Variables
 ### registry
-CreatorRegistry for ecosystem contracts
+Registry4626 for ecosystem contracts
 
 
 ```solidity
-ICreatorRegistry public registry
+IRegistry4626 public registry
 ```
 
 
@@ -349,7 +349,7 @@ After deployment, call setHubConfig() to set hub vs remote mode.
 
 ```solidity
 constructor(string memory _name, string memory _symbol, address _registry, address _owner)
-    OFT(_name, _symbol, ICreatorRegistry(_registry).getLayerZeroEndpoint(block.chainid), _owner)
+    OFT(_name, _symbol, IRegistry4626(_registry).getLayerZeroEndpoint(block.chainid), _owner)
     Ownable(_owner);
 ```
 **Parameters**
@@ -358,7 +358,7 @@ constructor(string memory _name, string memory _symbol, address _registry, addre
 |----|----|-----------|
 |`_name`|`string`|Token name (e.g., "AKITA Shares")|
 |`_symbol`|`string`|Token symbol (e.g., "■AKITA")|
-|`_registry`|`address`|CreatorRegistry address (same on all chains for deterministic addresses)|
+|`_registry`|`address`|Registry4626 address (same on all chains for deterministic addresses)|
 |`_owner`|`address`|Owner address|
 
 
@@ -389,7 +389,7 @@ function setRegistry(address _registry) external onlyOwner;
 
 |Name|Type|Description|
 |----|----|-----------|
-|`_registry`|`address`|CreatorRegistry address|
+|`_registry`|`address`|Registry4626 address|
 
 
 ### setMinter
@@ -590,7 +590,7 @@ function quoteFlushFees() external view returns (uint256 nativeFee);
 
 ### _triggerLottery
 
-Hub mode: calls local CreatorLotteryManager.processSwapLottery()
+Hub mode: calls local LotteryManager4626.processSwapLottery()
 Remote mode: queues a pending entry that the buyer submits with native gas
 
 Uses the actual transfer recipient address to support:

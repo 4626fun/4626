@@ -100,9 +100,9 @@ interface Ive4626BoostManager {
     ) external view returns (uint256 boostBps);
 }
 
-interface IVe4626GaugeVoting {
+interface Ive4626GaugeVoting {
     /// @notice Vault's vote-directed probability boost (PPM) from the global gauge budget.
-    function getVaultGaugeProbabilityBoostPPM(address vault) external view returns (uint256);
+    function getVaultProbabilityBoostPPM(address vault) external view returns (uint256);
 }
 
 contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable {
@@ -141,7 +141,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
 
     /// @notice Delay between proposing and committing a boost-source change
     /// once `timelockArmed` is true. See `proposeBoostManager` /
-    /// `proposeVe4626GaugeVoting` and docs/security/amoe-pr3-handoff.md.
+    /// `proposeve4626GaugeVoting` and docs/security/amoe-pr3-handoff.md.
     /// @dev `internal` on main to save EIP-170 budget; the same constant is
     ///      exposed `public` on the admin module for off-chain consumers and
     ///      is also surfaced via `getBoostSourceTimelockState`.
@@ -188,7 +188,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     Ive4626BoostManager public boostManager;
 
     /// @notice ve4626GaugeVoting for ve(3,3) vault probability direction
-    IVe4626GaugeVoting public vaultGaugeVoting;
+    Ive4626GaugeVoting public ve4626GaugeVoting;
 
     /// @notice Lottery configuration (shared across all tokens)
     struct LotteryConfig {
@@ -373,13 +373,13 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     // continues to read/write identical slots. See docs/security/amoe-pr3-handoff.md.
     //
     // Threat model: a compromised owner key swapping in a malicious
-    // boostManager / vaultGaugeVoting could lift any user's odds up to the
+    // boostManager / ve4626GaugeVoting could lift any user's odds up to the
     // absolute `lotteryConfig.maxWinChance` cap (default 15%) in a single tx.
     // The timelock forces a 24h pending-then-effective window so off-chain
     // monitoring + emergency response (or `disableBoostSources`) can react.
     //
     // Until `armBoostSourceTimelock()` is called, the legacy single-call
-    // setters (`setBoostManager`, `setVe4626GaugeVoting`) continue to work for
+    // setters (`setBoostManager`, `setve4626GaugeVoting`) continue to work for
     // operational bootstrap. Once armed they revert and the
     // propose/commit/cancel flow is the only path forward.
 
@@ -388,10 +388,10 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     /// under EIP-170; the storage layout is mirrored in the admin module.
     address internal _pendingBoostManager;
     uint256 internal _pendingBoostManagerEffectiveAt;
-    address internal _pendingVaultGaugeVoting;
-    uint256 internal _pendingVaultGaugeVotingEffectiveAt;
+    address internal _pendingve4626GaugeVoting;
+    uint256 internal _pendingve4626GaugeVotingEffectiveAt;
 
-    /// @dev Once true, the legacy `setBoostManager` / `setVe4626GaugeVoting`
+    /// @dev Once true, the legacy `setBoostManager` / `setve4626GaugeVoting`
     /// setters revert and the timelocked propose/commit/cancel flow is the
     /// only path. One-way switch (no disarm). Read via `isTimelockArmed()`.
     bool internal _timelockArmed;
@@ -534,7 +534,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
     event ve4626GaugeVotingProposalCancelled(address indexed cancelled);
     event ve4626GaugeVotingUpdated(address indexed previous, address indexed newGauge);
     event BoostSourceTimelockArmed();
-    event BoostSourcesDisabled(address indexed previousBoostManager, address indexed previousVe4626GaugeVoting);
+    event BoostSourcesDisabled(address indexed previousBoostManager, address indexed previousve4626GaugeVoting);
 
     // ================================
     // ERRORS
@@ -1105,8 +1105,8 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
 
         // STEP 2: Add vault gauge boost (vote-directed budget).
         // Scale by swap size so tiny swaps cannot fully consume gauge probability budget.
-        if (address(vaultGaugeVoting) != address(0) && vault != address(0)) {
-            try vaultGaugeVoting.getVaultGaugeProbabilityBoostPPM(vault) returns (uint256 gaugeBoostPPM) {
+        if (address(ve4626GaugeVoting) != address(0) && vault != address(0)) {
+            try ve4626GaugeVoting.getVaultProbabilityBoostPPM(vault) returns (uint256 gaugeBoostPPM) {
                 if (gaugeBoostPPM > 0) {
                     boostedWinChance += _scaleGaugeBoostBySwapSize(gaugeBoostPPM, swapAmountUSD);
                 }
@@ -1871,7 +1871,7 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
      * @notice Set ve4626GaugeVoting for ve(3,3) probability direction
      * @param _ve4626GaugeVoting Address of the ve4626GaugeVoting contract
      */
-    function setVe4626GaugeVoting(address _ve4626GaugeVoting) external {
+    function setve4626GaugeVoting(address _ve4626GaugeVoting) external {
         _ve4626GaugeVoting;
         _delegateAdmin();
     }
@@ -1901,16 +1901,16 @@ contract LotteryManager4626 is OApp, OAppOptionsType3, ReentrancyGuard, Pausable
         _delegateAdmin();
     }
 
-    function proposeVe4626GaugeVoting(address _gauge) external {
+    function proposeve4626GaugeVoting(address _gauge) external {
         _gauge;
         _delegateAdmin();
     }
 
-    function commitVe4626GaugeVoting() external {
+    function commitve4626GaugeVoting() external {
         _delegateAdmin();
     }
 
-    function cancelVe4626GaugeVotingProposal() external {
+    function cancelve4626GaugeVotingProposal() external {
         _delegateAdmin();
     }
 
@@ -2064,7 +2064,7 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     bool public useLocalVRF;
     mapping(address => bool) public trustedVrfIntegrators;
     Ive4626BoostManager public boostManager;
-    IVe4626GaugeVoting public vaultGaugeVoting;
+    Ive4626GaugeVoting public ve4626GaugeVoting;
 
     struct LotteryConfig {
         uint256 minSwapAmount;
@@ -2175,8 +2175,8 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     /// @dev Pending replacement for `boostManager`. Public view via `getPendingBoostSources()`.
     address internal _pendingBoostManager;
     uint256 internal _pendingBoostManagerEffectiveAt;
-    address internal _pendingVaultGaugeVoting;
-    uint256 internal _pendingVaultGaugeVotingEffectiveAt;
+    address internal _pendingve4626GaugeVoting;
+    uint256 internal _pendingve4626GaugeVotingEffectiveAt;
     /// @dev Once true, legacy single-call setters revert. Read via `isTimelockArmed()`.
     bool internal _timelockArmed;
 
@@ -2255,7 +2255,7 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     event ve4626GaugeVotingProposalCancelled(address indexed cancelled);
     event ve4626GaugeVotingUpdated(address indexed previous, address indexed newGauge);
     event BoostSourceTimelockArmed();
-    event BoostSourcesDisabled(address indexed previousBoostManager, address indexed previousVe4626GaugeVoting);
+    event BoostSourcesDisabled(address indexed previousBoostManager, address indexed previousve4626GaugeVoting);
 
     /// @notice Mirror of main-contract `BOOST_SOURCE_TIMELOCK`.
     uint256 public constant BOOST_SOURCE_TIMELOCK = 24 hours;
@@ -2658,12 +2658,12 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
         emit BoostManagerUpdated(previous, _manager);
     }
 
-    /// @notice Legacy single-call setter for `vaultGaugeVoting`.
+    /// @notice Legacy single-call setter for `ve4626GaugeVoting`.
     /// @dev Disabled once `armBoostSourceTimelock()` has been called.
-    function setVe4626GaugeVoting(address _ve4626GaugeVoting) external onlyDelegateCall onlyOwner {
+    function setve4626GaugeVoting(address _ve4626GaugeVoting) external onlyDelegateCall onlyOwner {
         if (_timelockArmed) revert LegacySetterDisabled();
-        address previous = address(vaultGaugeVoting);
-        vaultGaugeVoting = IVe4626GaugeVoting(_ve4626GaugeVoting);
+        address previous = address(ve4626GaugeVoting);
+        ve4626GaugeVoting = Ive4626GaugeVoting(_ve4626GaugeVoting);
         emit ve4626GaugeVotingUpdated(previous, _ve4626GaugeVoting);
     }
 
@@ -2672,10 +2672,10 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     // ================================
 
     /// @notice Engage the boost-source timelock. One-way switch.
-    /// @dev After this is called, `setBoostManager` / `setVe4626GaugeVoting`
+    /// @dev After this is called, `setBoostManager` / `setve4626GaugeVoting`
     ///      revert with `LegacySetterDisabled` and the only path forward is
     ///      `proposeBoostManager` + (24h delay) + `commitBoostManager`
-    ///      (and the symmetric pair for `vaultGaugeVoting`). The emergency
+    ///      (and the symmetric pair for `ve4626GaugeVoting`). The emergency
     ///      `disableBoostSources()` circuit breaker remains available with no
     ///      timelock.
     function armBoostSourceTimelock() external onlyDelegateCall onlyOwner {
@@ -2714,24 +2714,24 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
 
 
     /// @notice Propose a new `ve4626GaugeVoting`. Symmetric to `proposeBoostManager`.
-    function proposeVe4626GaugeVoting(address _gauge) external onlyDelegateCall onlyOwner {
+    function proposeve4626GaugeVoting(address _gauge) external onlyDelegateCall onlyOwner {
         if (!_timelockArmed) revert TimelockNotArmed();
         uint256 effectiveAt = block.timestamp + BOOST_SOURCE_TIMELOCK;
-        _pendingVaultGaugeVoting = _gauge;
-        _pendingVaultGaugeVotingEffectiveAt = effectiveAt;
-        emit ve4626GaugeVotingProposed(address(vaultGaugeVoting), _gauge, effectiveAt);
+        _pendingve4626GaugeVoting = _gauge;
+        _pendingve4626GaugeVotingEffectiveAt = effectiveAt;
+        emit ve4626GaugeVotingProposed(address(ve4626GaugeVoting), _gauge, effectiveAt);
     }
 
     /// @notice Commit a previously proposed `ve4626GaugeVoting` once the timelock has elapsed.
-    function commitVe4626GaugeVoting() external onlyDelegateCall onlyOwner {
-        uint256 effectiveAt = _pendingVaultGaugeVotingEffectiveAt;
+    function commitve4626GaugeVoting() external onlyDelegateCall onlyOwner {
+        uint256 effectiveAt = _pendingve4626GaugeVotingEffectiveAt;
         if (effectiveAt == 0) revert NoPendingProposal();
         if (block.timestamp < effectiveAt) revert TimelockNotExpired();
-        address previous = address(vaultGaugeVoting);
-        address proposed = _pendingVaultGaugeVoting;
-        vaultGaugeVoting = IVe4626GaugeVoting(proposed);
-        _pendingVaultGaugeVoting = address(0);
-        _pendingVaultGaugeVotingEffectiveAt = 0;
+        address previous = address(ve4626GaugeVoting);
+        address proposed = _pendingve4626GaugeVoting;
+        ve4626GaugeVoting = Ive4626GaugeVoting(proposed);
+        _pendingve4626GaugeVoting = address(0);
+        _pendingve4626GaugeVotingEffectiveAt = 0;
         emit ve4626GaugeVotingUpdated(previous, proposed);
     }
 
@@ -2745,11 +2745,11 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     }
 
     /// @notice Cancel an in-flight `ve4626GaugeVoting` proposal during the timelock window.
-    function cancelVe4626GaugeVotingProposal() external onlyDelegateCall onlyOwner {
-        if (_pendingVaultGaugeVotingEffectiveAt == 0) revert NoPendingProposal();
-        address cancelled = _pendingVaultGaugeVoting;
-        _pendingVaultGaugeVoting = address(0);
-        _pendingVaultGaugeVotingEffectiveAt = 0;
+    function cancelve4626GaugeVotingProposal() external onlyDelegateCall onlyOwner {
+        if (_pendingve4626GaugeVotingEffectiveAt == 0) revert NoPendingProposal();
+        address cancelled = _pendingve4626GaugeVoting;
+        _pendingve4626GaugeVoting = address(0);
+        _pendingve4626GaugeVotingEffectiveAt = 0;
         emit ve4626GaugeVotingProposalCancelled(cancelled);
     }
 
@@ -2761,14 +2761,14 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     ///      address can't be committed after the breaker is pulled.
     function disableBoostSources() external onlyDelegateCall onlyOwner {
         address prevBoost = address(boostManager);
-        address prevGauge = address(vaultGaugeVoting);
+        address prevGauge = address(ve4626GaugeVoting);
         boostManager = Ive4626BoostManager(address(0));
-        vaultGaugeVoting = IVe4626GaugeVoting(address(0));
+        ve4626GaugeVoting = Ive4626GaugeVoting(address(0));
         // Clear any pending proposals so they can't be committed post-breaker.
         _pendingBoostManager = address(0);
         _pendingBoostManagerEffectiveAt = 0;
-        _pendingVaultGaugeVoting = address(0);
-        _pendingVaultGaugeVotingEffectiveAt = 0;
+        _pendingve4626GaugeVoting = address(0);
+        _pendingve4626GaugeVotingEffectiveAt = 0;
         emit BoostSourcesDisabled(prevBoost, prevGauge);
     }
 
@@ -2784,7 +2784,7 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
     /// @return pendingBoostMgr The pending replacement for `boostManager`, or address(0).
     /// @return boostMgrEffectiveAt Timestamp at which `commitBoostManager` may run, or 0 if no proposal.
     /// @return pendingGauge The pending replacement for `ve4626GaugeVoting`, or address(0).
-    /// @return gaugeEffectiveAt Timestamp at which `commitVe4626GaugeVoting` may run, or 0 if no proposal.
+    /// @return gaugeEffectiveAt Timestamp at which `commitve4626GaugeVoting` may run, or 0 if no proposal.
     /// @return armed Whether the timelock has been armed (legacy setters disabled).
     function getBoostSourceTimelockState()
         external
@@ -2800,8 +2800,8 @@ contract LotteryManager4626AdminModule is OApp, OAppOptionsType3, ReentrancyGuar
         return (
             _pendingBoostManager,
             _pendingBoostManagerEffectiveAt,
-            _pendingVaultGaugeVoting,
-            _pendingVaultGaugeVotingEffectiveAt,
+            _pendingve4626GaugeVoting,
+            _pendingve4626GaugeVotingEffectiveAt,
             _timelockArmed
         );
     }

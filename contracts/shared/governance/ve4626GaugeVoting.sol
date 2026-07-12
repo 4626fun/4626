@@ -35,7 +35,7 @@ interface Ive4626 {
     function getLock(address user) external view returns (Ive4626Lock memory);
 }
 
-interface Ive4626Ve33 {
+interface Ive4626ve33 {
     function balanceOf(address user) external view returns (uint256);
 }
 
@@ -59,11 +59,18 @@ interface IRegistry4626VaultWhitelist {
     function isRegisteredVault(address vault) external view returns (bool);
 }
 
+interface IGaugeSurfaceRegistryForVoting {
+    function canReceiveVotes(address surface) external view returns (bool);
+    function canReceiveBribes(address surface) external view returns (bool);
+    function canReceiveStreams(address surface) external view returns (bool);
+    function allSurfaces() external view returns (address[] memory);
+}
+
 /**
- * @title IVe4626GaugeVoting
+ * @title Ive4626GaugeVoting
  * @notice Interface for ve4626GaugeVoting
  */
-interface IVe4626GaugeVoting {
+interface Ive4626GaugeVoting {
     // User functions
     function vote(address[] calldata vaults, uint256[] calldata weights) external;
     function resetVotes() external;
@@ -86,7 +93,7 @@ interface IVe4626GaugeVoting {
     event VaultWhitelisted(address indexed vault, bool status);
 }
 
-contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
+contract ve4626GaugeVoting is Ive4626GaugeVoting, Ownable, ReentrancyGuard {
     using EnumerableSet for EnumerableSet.AddressSet;
 
     // ================================
@@ -119,7 +126,7 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
     Ive4626 public immutable ve4626;
 
     /// @notice Raw ve33 token pointer retained for explorers/integrators; voting uses utility.
-    Ive4626Ve33 public ve33Token;
+    Ive4626ve33 public ve33Token;
 
     /// @notice Preferred: ve4626Utility — `vote()` syncs then uses post-decay effective ve33.
     Ive4626Utility public utility;
@@ -129,6 +136,12 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
 
     /// @notice Whether to use registry for whitelist
     bool public useRegistryWhitelist;
+
+    /// @notice Optional Hermes-style surface registry (overrides local whitelist when enabled).
+    IGaugeSurfaceRegistryForVoting public surfaceRegistry;
+
+    /// @notice When true and `surfaceRegistry` is set, `canReceiveVotes` uses the surface registry.
+    bool public useSurfaceRegistry;
 
     /// @notice Manually whitelisted vaults
     mapping(address => bool) public isWhitelistedVault;
@@ -151,6 +164,9 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
 
     /// @notice Set of vaults a user voted for in a given epoch: epoch => user => set(vault)
     mapping(uint256 => mapping(address => EnumerableSet.AddressSet)) private _epochUserVotedVaults;
+
+    /// @notice All vaults that received any vote weight this epoch (for emergency reset; surface-safe).
+    mapping(uint256 => EnumerableSet.AddressSet) private _epochVotedVaults;
 
     /// @notice Last epoch that emitted a checkpoint event (for UI/debug)
     uint256 public lastCheckpointedEpoch;
@@ -213,8 +229,8 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
     // VOTING FUNCTIONS
     // ================================
 
-    function setVe33Token(address token) external onlyOwner {
-        ve33Token = Ive4626Ve33(token);
+    function setve33Token(address token) external onlyOwner {
+        ve33Token = Ive4626ve33(token);
         emit Ve33TokenUpdated(token);
     }
 
@@ -224,7 +240,7 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
         emit UtilityUpdated(utility_);
         // Keep ve33Token pointer aligned when utility is set (for explorers / integrators).
         if (utility_ != address(0)) {
-            ve33Token = Ive4626Ve33(Ive4626Utility(utility_).ve33());
+            ve33Token = Ive4626ve33(Ive4626Utility(utility_).ve33());
             emit Ve33TokenUpdated(address(ve33Token));
         }
     }
@@ -291,7 +307,7 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
         uint256 totalNormalized = 0;
         for (uint256 i = 0; i < uniqueCount; i++) {
             address vault = uniqueVaults[i];
-            if (!_isVaultWhitelisted(vault)) revert VaultNotWhitelisted(vault);
+            if (!_canReceiveVotes(vault)) revert VaultNotWhitelisted(vault);
 
             uint256 normalizedWeight = (userPower * aggregatedWeights[i]) / totalWeight;
             // FIX: G-08 — revert if rounding floors weight to zero
@@ -301,6 +317,7 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
             _epochTotalVotes[epoch] += normalizedWeight;
             _epochUserVaultVotes[epoch][msg.sender][vault] = normalizedWeight;
             _epochUserVotedVaults[epoch][msg.sender].add(vault);
+            _epochVotedVaults[epoch].add(vault);
             totalNormalized += normalizedWeight;
 
             emit Voted(msg.sender, vault, normalizedWeight, epoch);
@@ -409,10 +426,15 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
 
     /**
      * @notice Vault's vote-directed probability boost in PPM (flat additive to lottery)
-     * @dev Uses fixed 69,420 PPM budget + per-vault cap
+     * @dev Uses fixed 69,420 PPM budget + per-vault cap.
+     *      Mid-epoch delist/pause: ineligible vaults return 0 but their weight remains in
+     *      `_epochTotalVotes` until users re-vote or the epoch ends. That fraction of the
+     *      budget is intentionally **burned** for the epoch (not redistributed) so ops
+     *      cannot concentrate the full budget onto remaining vaults by delisting peers.
+     *      Past-epoch claims still use frozen weights via getVaultWeightAtEpoch / user weight.
      */
-    function getVaultGaugeProbabilityBoostPPM(address vault) external view returns (uint256 boostPPM) {
-        if (!_isVaultWhitelisted(vault)) return 0;
+    function getVaultProbabilityBoostPPM(address vault) external view returns (uint256 boostPPM) {
+        if (!_canReceiveVotes(vault)) return 0;
 
         uint256 epoch = currentEpoch();
         uint256 total = _epochTotalVotes[epoch];
@@ -429,6 +451,7 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
         }
         uint256 v = _epochVaultVotes[epoch][vault];
         if (v == 0) return 0;
+        // Denominator is full epoch total (including ineligible vault weights) — see natspec.
         boostPPM = (TOTAL_GAUGE_PROBABILITY_PPM * v) / total;
 
         if (boostPPM > MAX_PER_VAULT_PPM) {
@@ -498,6 +521,42 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
         return _whitelistedVaults.length();
     }
 
+    /**
+     * @notice Vaults eligible for vote discovery (UI / API).
+     * @dev When surface-registry mode is armed, returns registered surfaces that `canReceiveVotes`.
+     *      Otherwise returns the local whitelist (same as `getWhitelistedVaults`).
+     */
+    function getEligibleVaults() external view returns (address[] memory) {
+        if (useSurfaceRegistry && address(surfaceRegistry) != address(0)) {
+            address[] memory all = surfaceRegistry.allSurfaces();
+            uint256 n = 0;
+            address[] memory tmp = new address[](all.length);
+            for (uint256 i = 0; i < all.length; i++) {
+                if (surfaceRegistry.canReceiveVotes(all[i])) {
+                    tmp[n++] = all[i];
+                }
+            }
+            address[] memory out = new address[](n);
+            for (uint256 j = 0; j < n; j++) {
+                out[j] = tmp[j];
+            }
+            return out;
+        }
+        return _whitelistedVaults.values();
+    }
+
+    function eligibleVaultCount() external view returns (uint256) {
+        if (useSurfaceRegistry && address(surfaceRegistry) != address(0)) {
+            address[] memory all = surfaceRegistry.allSurfaces();
+            uint256 n = 0;
+            for (uint256 i = 0; i < all.length; i++) {
+                if (surfaceRegistry.canReceiveVotes(all[i])) n++;
+            }
+            return n;
+        }
+        return _whitelistedVaults.length();
+    }
+
     function _isVaultWhitelisted(address vault) internal view returns (bool) {
         if (!isWhitelistedVault[vault]) return false;
         if (useRegistryWhitelist) {
@@ -510,8 +569,52 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
         return true;
     }
 
-    function canReceiveVotes(address vault) external view returns (bool) {
+    /// @dev Single policy surface for vote eligibility (whitelist vs surface registry).
+    function _canReceiveVotes(address vault) internal view returns (bool) {
+        if (useSurfaceRegistry && address(surfaceRegistry) != address(0)) {
+            return surfaceRegistry.canReceiveVotes(vault);
+        }
         return _isVaultWhitelisted(vault);
+    }
+
+    function canReceiveVotes(address vault) external view returns (bool) {
+        return _canReceiveVotes(vault);
+    }
+
+    /// @notice Bribe fund/create eligibility. Surface registry when enabled; else vault whitelist.
+    function canReceiveBribes(address vault) external view returns (bool) {
+        if (useSurfaceRegistry && address(surfaceRegistry) != address(0)) {
+            return surfaceRegistry.canReceiveBribes(vault);
+        }
+        return _isVaultWhitelisted(vault);
+    }
+
+    /// @notice Partner stream fund/create eligibility. Surface registry when enabled; else vault whitelist.
+    function canReceiveStreams(address vault) external view returns (bool) {
+        if (useSurfaceRegistry && address(surfaceRegistry) != address(0)) {
+            return surfaceRegistry.canReceiveStreams(vault);
+        }
+        return _isVaultWhitelisted(vault);
+    }
+
+    event SurfaceRegistryUpdated(address indexed surfaceRegistry);
+    event UseSurfaceRegistryUpdated(bool enabled);
+
+    function setSurfaceRegistry(address registry_) external onlyOwner {
+        surfaceRegistry = IGaugeSurfaceRegistryForVoting(registry_);
+        // Clearing the registry while surface mode is on would silently fall back to the
+        // local whitelist — disable the flag so policy stays consistent.
+        if (registry_ == address(0) && useSurfaceRegistry) {
+            useSurfaceRegistry = false;
+            emit UseSurfaceRegistryUpdated(false);
+        }
+        emit SurfaceRegistryUpdated(registry_);
+    }
+
+    function setUseSurfaceRegistry(bool enabled) external onlyOwner {
+        if (enabled && address(surfaceRegistry) == address(0)) revert ZeroAddress();
+        useSurfaceRegistry = enabled;
+        emit UseSurfaceRegistryUpdated(enabled);
     }
 
     function setVaultWhitelist(address vault, bool status) external onlyOwner {
@@ -545,13 +648,17 @@ contract ve4626GaugeVoting is IVe4626GaugeVoting, Ownable, ReentrancyGuard {
 
     function emergencyResetAllVotes() external onlyOwner {
         uint256 epoch = currentEpoch();
-        uint256 vaultCount = _whitelistedVaults.length();
-        for (uint256 i = 0; i < vaultCount; i++) {
-            address vault = _whitelistedVaults.at(i);
+        // Zero every vault that actually received votes this epoch (whitelist *or* surface-only).
+        EnumerableSet.AddressSet storage votedVaults = _epochVotedVaults[epoch];
+        uint256 vaultCount = votedVaults.length();
+        for (uint256 i = vaultCount; i > 0; i--) {
+            address vault = votedVaults.at(i - 1);
             _epochVaultVotes[epoch][vault] = 0;
+            votedVaults.remove(vault);
         }
         _epochTotalVotes[epoch] = 0;
         // FIX: G-06 — increment generation so stale per-user records are skipped in _clearUserVotes
+        // and getUserVoteWeightAtEpoch returns 0 until re-vote.
         _epochResetGeneration[epoch]++;
     }
 }

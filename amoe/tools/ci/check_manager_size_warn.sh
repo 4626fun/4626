@@ -8,7 +8,7 @@
 # is reverted or split.
 #
 # LotteryManager4626.sol is the protocol's largest production
-# contract (formerly CreatorLotteryManager) and historically lives near
+# contract (LotteryManager4626) and historically lives near
 # the EIP-170 cap. Any innocent-looking PR can consume remaining margin.
 #
 # This script gives advance warning (currently targeting ~126 B lead time).

@@ -91,6 +91,14 @@ contract MockCharmVault {
         withdrawAmount1 = amount1;
     }
 
+    /// @dev When true, ignore strategy-provided mins (tests that intentionally return
+    ///      partial withdraw amounts smaller than pro-rata expected + depositSlippageBps).
+    bool public ignoreWithdrawMins;
+
+    function setIgnoreWithdrawMins(bool value) external {
+        ignoreWithdrawMins = value;
+    }
+
     function withdraw(uint256 shares, uint256 amount0Min, uint256 amount1Min, address to)
         external
         returns (uint256 amount0, uint256 amount1)
@@ -101,7 +109,7 @@ contract MockCharmVault {
         lastWithdrawAmount1Min = amount1Min;
         amount0 = withdrawAmount0;
         amount1 = withdrawAmount1;
-        if (amount0Min > amount0 || amount1Min > amount1) revert("SLIPPAGE");
+        if (!ignoreWithdrawMins && (amount0Min > amount0 || amount1Min > amount1)) revert("SLIPPAGE");
         if (balanceOf[msg.sender] >= shares) {
             balanceOf[msg.sender] -= shares;
         }
@@ -645,6 +653,7 @@ contract CharmStrategy4626OracleTest is Test {
         router.setShouldRevert(true);
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+        charm.setIgnoreWithdrawMins(true); // return partial amounts without mock min-check
         CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
         strategy.initializeApprovals();
 
@@ -670,6 +679,7 @@ contract CharmStrategy4626OracleTest is Test {
         MockRouter router = new MockRouter();
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+        charm.setIgnoreWithdrawMins(true);
         CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
         strategy.initializeApprovals();
 
@@ -801,6 +811,7 @@ contract CharmStrategy4626OracleTest is Test {
         router.setAmountOutToReturn(15e18);
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+        charm.setIgnoreWithdrawMins(true);
         CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
         strategy.initializeApprovals();
 
@@ -869,6 +880,7 @@ contract CharmStrategy4626OracleTest is Test {
         router.setShouldRevert(true);
 
         MockCharmVault charm = new MockCharmVault(address(creator), address(usdc));
+        charm.setIgnoreWithdrawMins(true);
         CharmStrategy4626 strategy = _deployStrategyWithRouter(creator, usdc, charm, pool, router);
         MockAjnaPool ajna = new MockAjnaPool(address(creator), address(usdc));
         MockCreatorOracle oracle = new MockCreatorOracle();

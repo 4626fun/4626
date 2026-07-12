@@ -1,0 +1,45 @@
+# Ive4626GaugeVotingForRewards
+[Git Source](https://github.com/wenakita/4626/blob/2951e17122326ff4a23b28e80356c44121ebf59c/contracts/governance/ve4626VoterRewardsDistributor.sol)
+
+**Title:**
+ve4626VoterRewardsDistributor
+
+**Author:**
+0xakita.eth
+
+Distributes the "protocol" fee slice to ve4626 voters (ve(3,3) mechanics)
+
+Inspired by ve(3,3) systems where voters receive fees/bribes for voting on gauges.
+Conceptually similar to bribe/fee-distributor patterns used in b(3,3)/ve(3,3) stacks
+(e.g. Hermes V2) but simplified for 4626.
+How it works:
+- Each CreatorGaugeController sends its voter slice (currently 9.61%) to this contract.
+- The slice is recorded per (epoch, vault).
+- Users claim pro-rata by their vote weight for that (epoch, vault).
+Reward token:
+- We distribute vault shares (sTOKEN / ERC-4626 shares) for that vault.
+- This keeps everything composable: users can hold shares or redeem underlying.
+
+
+## Functions
+### currentEpoch
+
+
+```solidity
+function currentEpoch() external view returns (uint256);
+```
+
+### getVaultWeightAtEpoch
+
+
+```solidity
+function getVaultWeightAtEpoch(uint256 epoch, address vault) external view returns (uint256);
+```
+
+### getUserVoteWeightAtEpoch
+
+
+```solidity
+function getUserVoteWeightAtEpoch(uint256 epoch, address user, address vault) external view returns (uint256);
+```
+

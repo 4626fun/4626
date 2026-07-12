@@ -231,7 +231,7 @@ const lotteryAmoeAbi = [
 // This function is gated to the authorized relayer key on-chain (single-address
 // allowlist), so calldata produced here can only be successfully submitted by a
 // transaction signed by that key. See PR 1 audit handoff for full trust model.
-const creatorLotteryManagerAmoeAbi = [
+const lotteryManager4626AmoeAbi = [
   {
     type: 'function',
     name: 'processAmoeEntry',
@@ -1267,7 +1267,7 @@ export async function buildProcessAmoeEntryCall(params: {
   const pointsBurnedAsUSD = pointsToUsd1e6(params.pointsBurned)
   const { encodeFunctionData } = await import('viem')
   const callData = encodeFunctionData({
-    abi: creatorLotteryManagerAmoeAbi,
+    abi: lotteryManager4626AmoeAbi,
     functionName: 'processAmoeEntry',
     args: [params.wallet, params.creatorCoin, pointsBurnedAsUSD],
   })

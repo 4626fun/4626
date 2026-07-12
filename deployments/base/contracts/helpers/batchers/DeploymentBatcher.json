@@ -2,10 +2,11 @@
   "contractName": "DeploymentBatcher",
   "network": "Base",
   "chainId": 8453,
-  "address": "0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8",
-  "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-05-05T07:51:45Z",
-  "deploymentTx": "0x4cecc55f20967621682fb2525df27a175beb791d02fdd80c1c30c3851021f3f6",
+  "release": "v1-greenfield",
+  "address": null,
+  "deployedBy": null,
+  "deployedAt": null,
+  "deploymentTx": null,
   "abi": [
     {
       "type": "constructor",
@@ -27,6 +28,11 @@
         },
         {
           "name": "_protocolTreasury",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_protocolAutomation",
           "type": "address",
           "internalType": "address"
         },
@@ -92,6 +98,26 @@
         },
         {
           "name": "_vaultAdminModule",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_phase2Module",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_phase3Helper",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_shareMeshHelper",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_utilsHelper",
           "type": "address",
           "internalType": "address"
         }
@@ -191,6 +217,19 @@
     },
     {
       "type": "function",
+      "name": "SOLANA_ALLOC_PERCENT",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8",
+          "internalType": "uint8"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "VESTING_PERCENT",
       "inputs": [],
       "outputs": [
@@ -217,6 +256,81 @@
     },
     {
       "type": "function",
+      "name": "approvePhaseModuleCodehash",
+      "inputs": [
+        {
+          "name": "module",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "codehash",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "approvedCodeIds",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "approvedPhaseModuleCodehashes",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "authorizedPhaseCallers",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "bytecodeStore",
       "inputs": [],
       "outputs": [
@@ -237,6 +351,32 @@
           "name": "",
           "type": "address",
           "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "codeIdAllowlistEnabled",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "codeIdAllowlistFrozen",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
         }
       ],
       "stateMutability": "view"
@@ -297,6 +437,11 @@
               "name": "version",
               "type": "string",
               "internalType": "string"
+            },
+            {
+              "name": "vaultKind",
+              "type": "uint8",
+              "internalType": "enum DeploymentBatcher.VaultKind"
             }
           ]
         },
@@ -495,7 +640,147 @@
               "internalType": "address"
             },
             {
-              "name": "ccaStrategy",
+              "name": "ccaLaunchArm",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "oracle",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "auction",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "deployPhase2CoreWithRolePolicy",
+      "inputs": [
+        {
+          "name": "params",
+          "type": "tuple",
+          "internalType": "struct DeploymentBatcher.Phase2CoreParams",
+          "components": [
+            {
+              "name": "creatorToken",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "owner",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "creatorTreasury",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "payoutRecipient",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "vault",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "wrapper",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "shareOFT",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "shareSymbol",
+              "type": "string",
+              "internalType": "string"
+            },
+            {
+              "name": "version",
+              "type": "string",
+              "internalType": "string"
+            },
+            {
+              "name": "floorPriceQ96",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "name": "codeIds",
+          "type": "tuple",
+          "internalType": "struct DeploymentBatcher.CodeIds",
+          "components": [
+            {
+              "name": "vault",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "wrapper",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "shareOFT",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "gauge",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "cca",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "oracle",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "oftBootstrap",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "name": "rolePolicyId",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "out",
+          "type": "tuple",
+          "internalType": "struct DeploymentBatcher.Phase2Result",
+          "components": [
+            {
+              "name": "gaugeController",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "ccaLaunchArm",
               "type": "address",
               "internalType": "address"
             },
@@ -646,7 +931,7 @@
               "internalType": "bytes32"
             },
             {
-              "name": "creatorCharmStrategy",
+              "name": "charmStrategy4626",
               "type": "bytes32",
               "internalType": "bytes32"
             },
@@ -721,12 +1006,12 @@
     },
     {
       "type": "function",
-      "name": "deployUniV4Strategies",
+      "name": "deployShareMeshLpManager",
       "inputs": [
         {
           "name": "params",
           "type": "tuple",
-          "internalType": "struct DeploymentBatcher.UniV4DeployParams",
+          "internalType": "struct DeploymentBatcher.ShareMeshDeployParams",
           "components": [
             {
               "name": "creatorToken",
@@ -734,12 +1019,22 @@
               "internalType": "address"
             },
             {
-              "name": "pairedToken",
+              "name": "shareOFT",
               "type": "address",
               "internalType": "address"
             },
             {
               "name": "vault",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "ccaLaunchArm",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "oracle",
               "type": "address",
               "internalType": "address"
             },
@@ -759,27 +1054,17 @@
               "internalType": "address"
             },
             {
-              "name": "fee",
-              "type": "uint24",
-              "internalType": "uint24"
-            },
-            {
-              "name": "tickSpacing",
-              "type": "int24",
-              "internalType": "int24"
-            },
-            {
-              "name": "creatorIsCurrency0",
-              "type": "bool",
-              "internalType": "bool"
-            },
-            {
               "name": "poolHook",
               "type": "address",
               "internalType": "address"
             },
             {
               "name": "registryOwner",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "keeperManager",
               "type": "address",
               "internalType": "address"
             },
@@ -793,7 +1078,7 @@
         {
           "name": "codeIds",
           "type": "tuple",
-          "internalType": "struct DeploymentBatcher.UniV4CodeIds",
+          "internalType": "struct DeploymentBatcher.ShareMeshCodeIds",
           "components": [
             {
               "name": "approvedV4HooksRegistry",
@@ -801,22 +1086,7 @@
               "internalType": "bytes32"
             },
             {
-              "name": "fullRangeStrategy",
-              "type": "bytes32",
-              "internalType": "bytes32"
-            },
-            {
-              "name": "concentratedStrategy",
-              "type": "bytes32",
-              "internalType": "bytes32"
-            },
-            {
-              "name": "limitOrderStrategy",
-              "type": "bytes32",
-              "internalType": "bytes32"
-            },
-            {
-              "name": "creatorLPManager",
+              "name": "lpManager",
               "type": "bytes32",
               "internalType": "bytes32"
             }
@@ -827,7 +1097,7 @@
         {
           "name": "out",
           "type": "tuple",
-          "internalType": "struct DeploymentBatcher.UniV4DeploymentResult",
+          "internalType": "struct DeploymentBatcher.ShareMeshDeployResult",
           "components": [
             {
               "name": "hookRegistry",
@@ -835,22 +1105,7 @@
               "internalType": "address"
             },
             {
-              "name": "fullRangeStrategy",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "concentratedStrategy",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "limitOrderStrategy",
-              "type": "address",
-              "internalType": "address"
-            },
-            {
-              "name": "creatorLPManager",
+              "name": "lpManager",
               "type": "address",
               "internalType": "address"
             }
@@ -902,6 +1157,11 @@
               "name": "version",
               "type": "string",
               "internalType": "string"
+            },
+            {
+              "name": "vaultKind",
+              "type": "uint8",
+              "internalType": "enum DeploymentBatcher.VaultKind"
             }
           ]
         },
@@ -1024,7 +1284,7 @@
               "internalType": "address"
             },
             {
-              "name": "ccaStrategy",
+              "name": "ccaLaunchArm",
               "type": "address",
               "internalType": "address"
             },
@@ -1100,7 +1360,7 @@
               "internalType": "address"
             },
             {
-              "name": "ccaStrategy",
+              "name": "ccaLaunchArm",
               "type": "address",
               "internalType": "address"
             },
@@ -1117,7 +1377,7 @@
           ]
         }
       ],
-      "stateMutability": "nonpayable"
+      "stateMutability": "payable"
     },
     {
       "type": "function",
@@ -1159,7 +1419,7 @@
               "internalType": "address"
             },
             {
-              "name": "ccaStrategy",
+              "name": "ccaLaunchArm",
               "type": "address",
               "internalType": "address"
             },
@@ -1274,7 +1534,7 @@
               "internalType": "address"
             },
             {
-              "name": "ccaStrategy",
+              "name": "ccaLaunchArm",
               "type": "address",
               "internalType": "address"
             },
@@ -1291,6 +1551,13 @@
           ]
         }
       ],
+      "stateMutability": "payable"
+    },
+    {
+      "type": "function",
+      "name": "freezeCodeIdAllowlist",
+      "inputs": [],
+      "outputs": [],
       "stateMutability": "nonpayable"
     },
     {
@@ -1319,6 +1586,25 @@
               "internalType": "bool"
             }
           ]
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "hasActivePendingAuction",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
         }
       ],
       "stateMutability": "view"
@@ -1409,7 +1695,7 @@
           "internalType": "address"
         },
         {
-          "name": "ccaStrategy",
+          "name": "ccaLaunchArm",
           "type": "address",
           "internalType": "address"
         },
@@ -1435,6 +1721,19 @@
           "name": "",
           "type": "address",
           "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "phase1Module",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "contract DeploymentBatcherPhase1Module"
         }
       ],
       "stateMutability": "view"
@@ -1494,6 +1793,24 @@
           "name": "finalized",
           "type": "bool",
           "internalType": "bool"
+        },
+        {
+          "name": "vaultKind",
+          "type": "uint8",
+          "internalType": "enum DeploymentBatcher.VaultKind"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "phase2Module",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "contract DeploymentBatcherPhase2Module"
         }
       ],
       "stateMutability": "view"
@@ -1545,10 +1862,113 @@
         {
           "name": "",
           "type": "address",
-          "internalType": "contract ICreatorRegistry"
+          "internalType": "contract IRegistry4626"
         }
       ],
       "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "requireApprovedCodeId",
+      "inputs": [
+        {
+          "name": "codeId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "resetPhase1State",
+      "inputs": [
+        {
+          "name": "creatorToken",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "owner",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "version",
+          "type": "string",
+          "internalType": "string"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setApprovedCodeId",
+      "inputs": [
+        {
+          "name": "codeId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "approved",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setApprovedCodeIds",
+      "inputs": [
+        {
+          "name": "codeIds",
+          "type": "bytes32[]",
+          "internalType": "bytes32[]"
+        },
+        {
+          "name": "approved",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setAuthorizedPhaseCaller",
+      "inputs": [
+        {
+          "name": "caller",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "authorized",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setCodeIdAllowlistEnabled",
+      "inputs": [
+        {
+          "name": "enabled",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
     },
     {
       "type": "function",
@@ -1575,6 +1995,50 @@
     },
     {
       "type": "function",
+      "name": "setPayoutRouterShareOftNoFees",
+      "inputs": [
+        {
+          "name": "shareOFT",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "payoutRouter",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setPhase1Module",
+      "inputs": [
+        {
+          "name": "_phase1Module",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setPhase2Module",
+      "inputs": [
+        {
+          "name": "_phase2Module",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "setSolanaConfig",
       "inputs": [
         {
@@ -1590,6 +2054,50 @@
       ],
       "outputs": [],
       "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setSolanaShareOftPeer",
+      "inputs": [
+        {
+          "name": "_peer",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setVaultRolePolicyConfig",
+      "inputs": [
+        {
+          "name": "manager",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "policyId",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "shareMeshHelper",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "contract DeploymentBatcherShareMeshHelper"
+        }
+      ],
+      "stateMutability": "view"
     },
     {
       "type": "function",
@@ -1619,6 +2127,19 @@
     },
     {
       "type": "function",
+      "name": "solanaShareOftPeer",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "taxHook",
       "inputs": [],
       "outputs": [
@@ -1626,19 +2147,6 @@
           "name": "",
           "type": "address",
           "internalType": "address"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "uniV4Helper",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "address",
-          "internalType": "contract DeploymentBatcherUniV4Helper"
         }
       ],
       "stateMutability": "view"
@@ -1684,6 +2192,19 @@
     },
     {
       "type": "function",
+      "name": "utilsHelper",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "contract DeploymentBatcherUtilsHelper"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "vaultActivationBatcher",
       "inputs": [],
       "outputs": [
@@ -1723,6 +2244,32 @@
     },
     {
       "type": "function",
+      "name": "vaultRolePolicyId",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "vaultRolePolicyManager",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "vaultStrategiesModule",
       "inputs": [],
       "outputs": [
@@ -1733,6 +2280,52 @@
         }
       ],
       "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "whitelistPayoutRouterOnWrapper",
+      "inputs": [
+        {
+          "name": "wrapper",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "payoutRouter",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "wireDeploymentHelpers",
+      "inputs": [
+        {
+          "name": "_phase2Module",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_phase3Helper",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_shareMeshHelper",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_utilsHelper",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
     },
     {
       "type": "event",
@@ -1757,7 +2350,7 @@
           "internalType": "address"
         },
         {
-          "name": "ccaStrategy",
+          "name": "ccaLaunchArm",
           "type": "address",
           "indexed": false,
           "internalType": "address"
@@ -1800,7 +2393,7 @@
           "internalType": "address"
         },
         {
-          "name": "ccaStrategy",
+          "name": "ccaLaunchArm",
           "type": "address",
           "indexed": false,
           "internalType": "address"
@@ -1816,6 +2409,63 @@
           "type": "address",
           "indexed": false,
           "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "AuthorizedPhaseCallerUpdated",
+      "inputs": [
+        {
+          "name": "caller",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "authorized",
+          "type": "bool",
+          "indexed": false,
+          "internalType": "bool"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "CodeIdAllowlistEnabledUpdated",
+      "inputs": [
+        {
+          "name": "enabled",
+          "type": "bool",
+          "indexed": false,
+          "internalType": "bool"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "CodeIdAllowlistFrozenEvent",
+      "inputs": [],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "CodeIdApprovalUpdated",
+      "inputs": [
+        {
+          "name": "codeId",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "approved",
+          "type": "bool",
+          "indexed": false,
+          "internalType": "bool"
         }
       ],
       "anonymous": false
@@ -1997,7 +2647,7 @@
           "internalType": "address"
         },
         {
-          "name": "ccaStrategy",
+          "name": "ccaLaunchArm",
           "type": "address",
           "indexed": false,
           "internalType": "address"
@@ -2034,7 +2684,7 @@
           "internalType": "address"
         },
         {
-          "name": "ccaStrategy",
+          "name": "ccaLaunchArm",
           "type": "address",
           "indexed": false,
           "internalType": "address"
@@ -2141,13 +2791,50 @@
     },
     {
       "type": "event",
-      "name": "SolanaConfigSet",
+      "name": "PhaseModuleCodehashApproved",
       "inputs": [
         {
-          "name": "adapter",
+          "name": "module",
           "type": "address",
           "indexed": true,
           "internalType": "address"
+        },
+        {
+          "name": "codehash",
+          "type": "bytes32",
+          "indexed": false,
+          "internalType": "bytes32"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "ShareAllocationBridgedToSolana",
+      "inputs": [
+        {
+          "name": "creatorToken",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "shareOFT",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
         },
         {
           "name": "solanaDestination",
@@ -2160,7 +2847,7 @@
     },
     {
       "type": "event",
-      "name": "UniV4StrategiesDeployed",
+      "name": "ShareMeshLpManagerDeployed",
       "inputs": [
         {
           "name": "creatorToken",
@@ -2181,31 +2868,19 @@
           "internalType": "address"
         },
         {
+          "name": "ccaLaunchArm",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        },
+        {
           "name": "hookRegistry",
           "type": "address",
           "indexed": false,
           "internalType": "address"
         },
         {
-          "name": "fullRangeStrategy",
-          "type": "address",
-          "indexed": false,
-          "internalType": "address"
-        },
-        {
-          "name": "concentratedStrategy",
-          "type": "address",
-          "indexed": false,
-          "internalType": "address"
-        },
-        {
-          "name": "limitOrderStrategy",
-          "type": "address",
-          "indexed": false,
-          "internalType": "address"
-        },
-        {
-          "name": "creatorLPManager",
+          "name": "lpManager",
           "type": "address",
           "indexed": false,
           "internalType": "address"
@@ -2226,9 +2901,63 @@
       "anonymous": false
     },
     {
+      "type": "event",
+      "name": "SolanaConfigSet",
+      "inputs": [
+        {
+          "name": "adapter",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "solanaDestination",
+          "type": "bytes32",
+          "indexed": false,
+          "internalType": "bytes32"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "VaultRolePolicyConfigSet",
+      "inputs": [
+        {
+          "name": "manager",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "policyId",
+          "type": "uint256",
+          "indexed": true,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
       "type": "error",
       "name": "AuctionAlreadyPending",
       "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "AuctionAlreadyPendingForToken",
+      "inputs": [
+        {
+          "name": "creatorToken",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "owner",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
     },
     {
       "type": "error",
@@ -2290,7 +3019,33 @@
     },
     {
       "type": "error",
+      "name": "CodeIdAllowlistFrozen",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "CodeIdNotApproved",
+      "inputs": [
+        {
+          "name": "codeId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "DeprecatedFinalizeSolanaParams",
+      "inputs": []
+    },
+    {
+      "type": "error",
       "name": "InvalidCodeId",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidCreatorCoinPayoutRecipient",
       "inputs": []
     },
     {
@@ -2311,12 +3066,22 @@
     },
     {
       "type": "error",
-      "name": "InvalidPayoutRecipient",
+      "name": "InvalidPhase1Module",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidPhase2Module",
       "inputs": []
     },
     {
       "type": "error",
       "name": "InvalidPoolCurrencies",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidRolePolicyManager",
       "inputs": []
     },
     {
@@ -2346,6 +3111,27 @@
     },
     {
       "type": "error",
+      "name": "ModuleCodehashMismatch",
+      "inputs": [
+        {
+          "name": "module",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "expected",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "actual",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ]
+    },
+    {
+      "type": "error",
       "name": "NoPendingAuction",
       "inputs": []
     },
@@ -2356,12 +3142,12 @@
     },
     {
       "type": "error",
-      "name": "PermitAmountTooLow",
+      "name": "NotProtocolTreasury",
       "inputs": []
     },
     {
       "type": "error",
-      "name": "PermitTokenMismatch",
+      "name": "Phase1AlreadyFinalized",
       "inputs": []
     },
     {
@@ -2376,6 +3162,11 @@
     },
     {
       "type": "error",
+      "name": "Phase1ModuleMissing",
+      "inputs": []
+    },
+    {
+      "type": "error",
       "name": "Phase1ShareOFTMissing",
       "inputs": []
     },
@@ -2386,8 +3177,40 @@
     },
     {
       "type": "error",
+      "name": "Phase1StateNotStuck",
+      "inputs": []
+    },
+    {
+      "type": "error",
       "name": "Phase2Missing",
       "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "Phase3ManagementMismatch",
+      "inputs": [
+        {
+          "name": "expected",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "actual",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "PhaseModuleCodehashNotApproved",
+      "inputs": [
+        {
+          "name": "module",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
     },
     {
       "type": "error",
@@ -2396,10 +3219,15 @@
     },
     {
       "type": "error",
-      "name": "SafeERC20FailedOperation",
+      "name": "ShareOftOwnerMismatch",
       "inputs": [
         {
-          "name": "token",
+          "name": "shareOft",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "owner",
           "type": "address",
           "internalType": "address"
         }
@@ -2407,7 +3235,7 @@
     },
     {
       "type": "error",
-      "name": "SaltOverrideDisabled",
+      "name": "SymbolTooLong",
       "inputs": []
     },
     {
@@ -2417,14 +3245,27 @@
     },
     {
       "type": "error",
+      "name": "WrapperOwnerMismatch",
+      "inputs": [
+        {
+          "name": "wrapper",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "owner",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
       "name": "ZeroAddress",
       "inputs": []
     }
   ],
   "notes": [
-    "Deterministic live v1.11.1 deployment batcher for the Base full release.",
-    "Constructor dependencies: UniversalBytecodeStoreV2=0x9C3e2A7bd73690d5b5DC0C47f8dB74c4dc5D1c69, UniversalCreate2DeployerFromStore=0xF6538d7D18AfFe5057C6f109DBEd33c851A70c7E, CreatorOVaultCoreModule=0x5f6b5E9044179BF3C4d2f38AB5EC5c60b4B6657b, CreatorOVaultStrategiesModule=0x6048eC7103Ce9090Ad3B650931A6113a5369A164, CreatorOVaultAdminModule=0xDBC68d78D2961e4d2ca156D9F0e489B149cb7d73.",
-    "Constructor-created helpers: DeploymentBatcherPhase2Module=0x81D70248eB4276a6Db7E7DaB9c3B202e52c87593, DeploymentBatcherPhase3Helper=0xC2270DA64Cb6ab39e9361926529AA8462c7d3770, DeploymentBatcherUniV4Helper=0xbE953c5Da2Cf31C22087F528615bB8e2079b33A4, DeploymentBatcherUtilsHelper=0x9D811694842D3d67Af243bc140961fb9a9ad4040.",
-    "BaseScan verification still mismatches deployment bytecode for DeploymentBatcher and DeploymentBatcherPhase2Module after the live v1.11.1 CREATE2 deployment. Runtime wiring checks remain canonical."
+    "V1 greenfield interface snapshot: ABI matches current contracts/ source. address is null until first Base broadcast of this bytecode epoch."
   ]
 }

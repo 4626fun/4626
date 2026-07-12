@@ -126,7 +126,7 @@ contract MockShareTokenPauseGuards {
     }
 }
 
-contract MockVe4626PauseGuards {
+contract Mockve4626PauseGuards {
     struct Lock {
         uint256 amount;
         uint256 end;
@@ -166,8 +166,8 @@ contract MockBoostManagerPauseGuards {
         probabilityBoostBps = nextProbabilityBoostBps;
     }
 
-    function setVe4626(address nextVe4626) external {
-        ve4626 = nextVe4626;
+    function setve4626(address nextve4626) external {
+        ve4626 = nextve4626;
     }
 
     function setCoverageBps(uint256 nextCoverageBps) external {
@@ -209,7 +209,7 @@ contract Mockve4626GaugeVotingPauseGuards {
         boostPPMByVault[vault] = nextBoostPPM;
     }
 
-    function getVaultGaugeProbabilityBoostPPM(address vault) external view returns (uint256) {
+    function getVaultProbabilityBoostPPM(address vault) external view returns (uint256) {
         return boostPPMByVault[vault];
     }
 }
@@ -230,9 +230,9 @@ contract LotteryManager4626PauseGuardsTest is Test {
     MockGaugeControllerPauseGuards internal gauge;
     MockLocalVrfConsumerPauseGuards internal localVrfConsumer;
     MockBoostManagerPauseGuards internal boostManager;
-    Mockve4626GaugeVotingPauseGuards internal vaultGaugeVoting;
+    Mockve4626GaugeVotingPauseGuards internal ve4626GaugeVoting;
     MockShareTokenPauseGuards internal shareToken;
-    MockVe4626PauseGuards internal ve4626;
+    Mockve4626PauseGuards internal ve4626;
 
     address internal owner = address(0xA11CE);
     address internal authorizedSwap = address(0xBEEF);
@@ -256,11 +256,11 @@ contract LotteryManager4626PauseGuardsTest is Test {
         gauge = new MockGaugeControllerPauseGuards();
         localVrfConsumer = new MockLocalVrfConsumerPauseGuards();
         boostManager = new MockBoostManagerPauseGuards();
-        vaultGaugeVoting = new Mockve4626GaugeVotingPauseGuards();
+        ve4626GaugeVoting = new Mockve4626GaugeVotingPauseGuards();
         shareToken = new MockShareTokenPauseGuards();
         shareOFT = address(shareToken);
-        ve4626 = new MockVe4626PauseGuards();
-        boostManager.setVe4626(address(ve4626));
+        ve4626 = new Mockve4626PauseGuards();
+        boostManager.setve4626(address(ve4626));
         shareToken.mint(buyer, 100 ether);
         ve4626.setLock(buyer, shareOFT, 100 ether, 100 ether);
 
@@ -276,7 +276,7 @@ contract LotteryManager4626PauseGuardsTest is Test {
         lotteryManager.setLocalVRFConsumer(address(localVrfConsumer));
         lotteryManager.setUseLocalVRF(true);
         lotteryManager.setBoostManager(address(boostManager));
-        lotteryManager.setVe4626GaugeVoting(address(vaultGaugeVoting));
+        lotteryManager.setve4626GaugeVoting(address(ve4626GaugeVoting));
         lotteryManager.setAuthorizedRemoteOFT(SRC_EID, SRC_SENDER, true);
         vm.stopPrank();
     }
@@ -540,7 +540,7 @@ contract LotteryManager4626PauseGuardsTest is Test {
 
     function test_VrfCallback_UsesStoredVoteDirectedGaugeBoost() public {
         uint256 tradeAmount = 2 ether;
-        vaultGaugeVoting.setGaugeBoostPPM(vault, 10_000);
+        ve4626GaugeVoting.setGaugeBoostPPM(vault, 10_000);
 
         uint256 rawVrfId = localVrfConsumer.nextRequestId(); // raw ID before call
         vm.prank(authorizedSwap);
@@ -557,7 +557,7 @@ contract LotteryManager4626PauseGuardsTest is Test {
             "request should include stored scaled gauge boost"
         );
 
-        vaultGaugeVoting.setGaugeBoostPPM(vault, 0);
+        ve4626GaugeVoting.setGaugeBoostPPM(vault, 0);
 
         uint256[] memory randomWords = new uint256[](1);
         randomWords[0] = baseWinChance; // Loses at base odds, wins with stored gauge boost.

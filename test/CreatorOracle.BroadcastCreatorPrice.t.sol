@@ -67,6 +67,7 @@ contract CreatorOracleBroadcastCreatorPriceTest is Test {
     MockLayerZeroEndpointForCreatorOracleBroadcast internal endpoint;
 
     function setUp() public {
+        vm.chainId(8453);
         endpoint = new MockLayerZeroEndpointForCreatorOracleBroadcast();
         MockRegistryForCreatorOracleBroadcast registry = new MockRegistryForCreatorOracleBroadcast(address(endpoint), HUB_EID);
 

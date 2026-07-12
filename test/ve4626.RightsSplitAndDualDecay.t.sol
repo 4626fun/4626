@@ -18,7 +18,7 @@ contract MockWrappedShare is ERC20 {
 }
 
 /// @notice Final stack: dual-decay ve■4626 + ve4626Utility (ve33 / veLottery).
-contract Ve4626RightsSplitAndDualDecayTest is Test {
+contract ve4626RightsSplitAndDualDecayTest is Test {
     ve4626 internal veToken;
     MockWrappedShare internal wrapped;
     ve4626Utility internal utility;

@@ -5,7 +5,7 @@ import "forge-std/Test.sol";
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import {ve4626 as Ve4626} from "@4626/shared/governance/ve4626.sol";
+import {ve4626 as ve4626} from "@4626/shared/governance/ve4626.sol";
 
 contract MockToken is ERC20 {
     constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {}
@@ -15,8 +15,8 @@ contract MockToken is ERC20 {
     }
 }
 
-contract Ve4626LockTokenRestrictionTest is Test {
-    Ve4626 internal ve;
+contract ve4626LockTokenRestrictionTest is Test {
+    ve4626 internal ve;
     MockToken internal wrapped;
     MockToken internal other;
 
@@ -31,7 +31,7 @@ contract Ve4626LockTokenRestrictionTest is Test {
         other = new MockToken("Other Token", "OTHER");
 
         // ve4626 should only ever allow locking the wrapped ShareOFT token.
-        ve = new Ve4626("Vote-Escrowed wsOFT", "vewsOFT", address(wrapped), owner);
+        ve = new ve4626("Vote-Escrowed wsOFT", "vewsOFT", address(wrapped), owner);
 
         wrapped.mint(alice, 1_000 ether);
         other.mint(alice, 1_000 ether);

@@ -233,9 +233,14 @@ contract BurnStreamAccumulateUnderCapTest is BurnStreamHostileTestBase {
         for (uint256 i = 1; i <= tickCount; i++) {
             // Distribute ticks evenly across the epoch.
             vm.warp(epochStart + (epoch * i) / (tickCount + 1));
-            uint256 burnedNow = stream.drip();
+            uint256 burnedActiveBefore = stream.burnedActive();
+            // On the hostile (reverting vault) path, drip returns 0 (I-1) but still
+            // advances burnedActive and failedBurnAccumulator by the attempted amount.
+            uint256 returned = stream.drip();
+            assertEq(returned, 0, "failed burn should return 0 burned");
+            uint256 attempted = stream.burnedActive() - burnedActiveBefore;
             uint256 accum = stream.failedBurnAccumulator();
-            assertEq(accum, lastAccum + burnedNow, "accumulator drift");
+            assertEq(accum, lastAccum + attempted, "accumulator drift");
             assertEq(accum, stream.burnedActive(), "accumulator != burnedActive");
             lastAccum = accum;
         }

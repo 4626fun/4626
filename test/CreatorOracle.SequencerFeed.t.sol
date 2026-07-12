@@ -14,15 +14,20 @@ interface IChainlinkFeed {
 contract MockSequencerFeed is IChainlinkFeed {
     int256 public answer;
     uint256 public updatedAt;
+    /// @dev Status-transition time for grace-period checks (must be stable, not now).
+    uint256 public startedAt;
 
     constructor(int256 _answer) {
         answer = _answer;
         updatedAt = block.timestamp;
+        // Far enough in the past that SEQUENCER_GRACE_PERIOD (1h) is satisfied.
+        startedAt = block.timestamp > 2 hours ? block.timestamp - 2 hours : 1;
     }
 
     function setAnswer(int256 _answer) external {
         answer = _answer;
         updatedAt = block.timestamp;
+        startedAt = block.timestamp; // status transition now → grace applies until +1h
     }
 
     function setUpdatedAt(uint256 ts) external {
@@ -34,7 +39,7 @@ contract MockSequencerFeed is IChainlinkFeed {
         view
         returns (uint80 roundId, int256, uint256, uint256, uint80)
     {
-        return (1, answer, block.timestamp, updatedAt, 1);
+        return (1, answer, startedAt, updatedAt, 1);
     }
 }
 
@@ -77,6 +82,7 @@ contract CreatorOracleSequencerFeedTest is Test {
     MockSequencerFeed internal sequencerFeed;
 
     function setUp() public {
+        vm.chainId(8453);
         vm.warp(1_700_000_000);
         vm.mockCall(LZ_ENDPOINT, abi.encodeWithSignature("setDelegate(address)"), abi.encode());
         vm.mockCall(LZ_ENDPOINT, abi.encodeWithSignature("delegate()"), abi.encode(address(this)));
@@ -104,9 +110,18 @@ contract CreatorOracleSequencerFeedTest is Test {
     }
 
     function test_getEthPrice_returnsZeroWhenSequencerFeedStale() public {
-        sequencerFeed.setUpdatedAt(block.timestamp - 2 days);
-        (int256 price, uint256 ts) = oracle.getEthPrice();
-        assertEq(price, 0);
-        assertEq(ts, 0);
+        // Product: sequencer status feed is NOT subject to MAX_STALENESS (M-1);
+        // only a "down" answer or grace-period after transition fails closed.
+        // Simulate a recent transition still inside SEQUENCER_GRACE_PERIOD.
+        sequencerFeed.setAnswer(0);
+        // setAnswer refreshes startedAt to now → grace applies.
+        (int256 priceGrace, uint256 tsGrace) = oracle.getEthPrice();
+        assertEq(priceGrace, 0, "within grace after status transition");
+        assertEq(tsGrace, 0);
+
+        // After grace elapses, healthy "up" is trusted again.
+        vm.warp(block.timestamp + oracle.SEQUENCER_GRACE_PERIOD() + 1);
+        (int256 priceUp,) = oracle.getEthPrice();
+        assertGt(priceUp, 0, "after grace period feed should be trusted");
     }
 }

@@ -2,10 +2,11 @@
   "contractName": "DeploymentBatcherPhase3Helper",
   "network": "Base",
   "chainId": 8453,
-  "address": "0x809a20c6655D75C1d408dEd02a6EAB705b7b5153",
-  "deployedBy": "0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8",
-  "deployedAt": "2026-05-05T07:51:45Z",
-  "deploymentTx": "0x4cecc55f20967621682fb2525df27a175beb791d02fdd80c1c30c3851021f3f6",
+  "release": "v1-greenfield",
+  "address": null,
+  "deployedBy": null,
+  "deployedAt": null,
+  "deploymentTx": null,
   "abi": [
     {
       "type": "constructor",
@@ -17,6 +18,11 @@
         },
         {
           "name": "_protocolTreasury",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_protocolAutomation",
           "type": "address",
           "internalType": "address"
         },
@@ -37,6 +43,11 @@
         },
         {
           "name": "_ajnaFactory",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_batcher",
           "type": "address",
           "internalType": "address"
         }
@@ -214,7 +225,7 @@
               "internalType": "bytes32"
             },
             {
-              "name": "creatorCharmStrategy",
+              "name": "charmStrategy4626",
               "type": "bytes32",
               "internalType": "bytes32"
             },
@@ -291,6 +302,19 @@
         }
       ],
       "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "protocolAutomation",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
     },
     {
       "type": "function",
@@ -394,6 +418,21 @@
     },
     {
       "type": "error",
+      "name": "InvalidCodeId",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidWeight",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "MissingCreatorOracleForSynergy",
+      "inputs": []
+    },
+    {
+      "type": "error",
       "name": "MissingInitialSqrtPriceX96",
       "inputs": []
     },
@@ -404,11 +443,42 @@
     },
     {
       "type": "error",
+      "name": "NotOwner",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "Phase3HelperLostAdmin",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "Phase3ManagementMismatch",
+      "inputs": [
+        {
+          "name": "expected",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "actual",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
       "name": "V3PoolMissing",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ZeroAddress",
       "inputs": []
     }
   ],
   "notes": [
-    "Created inside the DeploymentBatcher constructor during the live v1.11.1 deployment transaction."
+    "V1 greenfield interface snapshot: ABI matches current contracts/ source. address is null until first Base broadcast of this bytecode epoch."
   ]
 }

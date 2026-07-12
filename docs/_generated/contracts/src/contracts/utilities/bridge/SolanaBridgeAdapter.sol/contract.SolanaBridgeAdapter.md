@@ -149,7 +149,7 @@ mapping(bytes32 => bool) public authorizedEntryKeepers
 
 
 ### lotteryManager
-CreatorLotteryManager on Base (hub).
+LotteryManager4626 on Base (hub).
 
 
 ```solidity
@@ -771,7 +771,7 @@ function setLotteryManager(address _lotteryManager) external onlyOwner;
 
 |Name|Type|Description|
 |----|----|-----------|
-|`_lotteryManager`|`address`|The CreatorLotteryManager contract address|
+|`_lotteryManager`|`address`|The LotteryManager4626 contract address|
 
 
 ### setDefaultSwapFeeTier

@@ -74,10 +74,11 @@ contract OVaultLPManagerNativeEthTest is Test {
         assertEq(manager.pairedToken(), address(0));
     }
 
-    function test_getTwap_usesSpotWhenDeviationDisabled() public {
+    function test_getTwap_revertsWhenTwapOracleUnset() public {
+        // Product invariant: getTwap never falls back to spot (spot-tick bypass closed).
         manager.setParameters(400000, 500, 100, 1 hours, 10, 0, 900);
-        int24 tick = manager.getTwap();
-        assertEq(tick, 0);
+        vm.expectRevert(OVaultLPManager.TwapOracleNotSet.selector);
+        manager.getTwap();
     }
 
     function test_rebalance_revertsWhenTwapOracleUnset() public {

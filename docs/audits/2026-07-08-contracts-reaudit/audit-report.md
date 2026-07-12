@@ -23,7 +23,7 @@ Severity: **Critical** permissionless fund loss / integrity break · **High** pe
 forge test --match-path 'test/audit/Audit20260708.P0.t.sol'     → 9/9
 forge test --match-contract CreatorOVaultImpairmentV1Test       → 18/18
 forge test --match-contract OVaultRecoveryEscrowTest            → 5/5
-forge test --match-path 'test/CreatorLotteryManager.AmoeLinearParity.t.sol' → 29/29
+forge test --match-path 'test/LotteryManager4626.AmoeLinearParity.t.sol' → 29/29
 ```
 
 ---
