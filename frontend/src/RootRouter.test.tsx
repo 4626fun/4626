@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 let mockAppOrigin = 'https://app.4626.fun'
-let mockHostMode: 'app' | 'marketing' = 'app'
+let mockHostMode: 'app' | 'marketing' | 'alfaclub' = 'app'
 
 vi.mock('@/lib/env/host', async () => {
   const actual = await vi.importActual<typeof import('@/lib/env/host')>('@/lib/env/host')
@@ -84,6 +84,18 @@ describe('RootRouter', () => {
 
     expect(await screen.findByTestId('home-page')).toBeTruthy()
     expect(screen.queryByTestId('protected-app')).toBeNull()
+  })
+
+  it('does not route AlfaClub host traffic through the marketing Home shell', async () => {
+    mockHostMode = 'alfaclub'
+
+    render(
+      <MemoryRouter initialEntries={['/rooms']}>
+        <RootRouter />
+      </MemoryRouter>,
+    )
+
+    expect(screen.queryByTestId('home-page')).toBeNull()
   })
 
   it('does not self-redirect app-only routes when marketing override shares the current origin', async () => {
