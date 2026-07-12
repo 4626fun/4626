@@ -1,24 +1,23 @@
 import type { ReactNode } from 'react'
 import { Component, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { getPrivyApiUrl, getPrivyAppId, getPrivyClientId, isPrivyClientEnabled, isLocalDevOrigin, canUsePrivyEmbeddedWallets } from '@/lib/flags/flags'
-import { resolveWaitlistLoopbackPrivyClientId } from '@/lib/flags/featureFlags'
-import { resolveWaitlistPrivyOAuthRedirectUrl } from '@/lib/env/waitlistOAuthRedirect'
-import { CONFIGURED_APP_ORIGIN, resolveAuthRedirectOrigin } from '@/lib/env/host'
+import { getPrivyApiUrl, getPrivyAppId, getPrivyClientId, isPrivyClientEnabled, isLocalDevOrigin } from '@/lib/flags/flags'
+import { resolveLoopbackPrivyClientId } from '@/lib/flags/featureFlags'
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth'
-import { base } from 'viem/chains'
 import { AppLoadingBootstrapGate } from '@/components/layout/AppLoadingOverlay'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
-import {
-  createPrivyAppearance,
-  WAITLIST_EMAIL_ONLY_WALLET_LIST,
-  WAITLIST_RETURNING_WALLET_LOGIN_LIST,
-} from './clientAppearance'
 import { applyLoopbackPrivySessionMarkerShim } from './loopbackSessionMarkerShim'
 import { latchPrivyClientStatus, type PrivyClientStatus } from './privyClientStatus'
+import {
+  buildPrivyExternalWallets,
+  buildPrivyProviderConfigs,
+  type PrivyClientMode,
+} from './providerConfig'
 import { PrivyWalletHooksContextProvider } from './walletHooksContext'
 
 export { latchPrivyClientStatus } from './privyClientStatus'
 export type { PrivyClientStatus } from './privyClientStatus'
+export { ZORA_PRIVY_APP_ID } from './providerConfig'
+export type { PrivyClientMode } from './providerConfig'
 
 // Must run before the Privy SDK's first getAccessToken() call — see the shim
 // module for why loopback and *.4626.fun origins need the first-party
@@ -32,7 +31,7 @@ if (typeof window !== 'undefined') {
     ;(window as any).__cv_privy_local_guidance_logged = true
     console.info(
       '[privy] Local dev pins auth.privy.io, strips custom_api_url, and rewrites privy.4626.fun API calls.\n' +
-        'Waitlist passes VITE_PRIVY_CLIENT_ID on loopback when enabled so Zora oauth/link can authenticate.\n' +
+        'All Privy surfaces use the same loopback app client when enabled so identity stays stable through linking.\n' +
         'If you hit 401 on /oauth/link: add Redirect URLs http://localhost:5174/waitlist (and :5173), allowlist that origin on the matching Privy client, sign out, re-verify email, retry.\n' +
         'See .env.example section "Privy Local Dev with custom domain".',
     )
@@ -48,16 +47,6 @@ if (typeof window !== 'undefined') {
   }
 }
 
-export const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
-type PrivyClientMode = 'default' | 'waitlist-email-only' | 'waitlist-returning-wallet' | 'waitlist-wallet-joined'
-
-/** Waitlist routes must not inherit dashboard embedded-wallet defaults (privy.4626.fun iframe → server-cookie mode). */
-const WAITLIST_EMBEDDED_WALLETS_OFF = {
-  ethereum: { createOnLogin: 'off' as const },
-  solana: { createOnLogin: 'off' as const },
-  showWalletUIs: false,
-}
-
 function isLocalDevPrivyApiBypass(): boolean {
   if (typeof window === 'undefined') return false
   return isLocalDevOrigin(window.location.origin)
@@ -65,38 +54,17 @@ function isLocalDevPrivyApiBypass(): boolean {
 
 const PrivyClientContext = createContext<PrivyClientStatus>('disabled')
 
-function isLoopbackHostname(hostname: string): boolean {
-  const h = String(hostname || '').trim().toLowerCase()
-  return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]'
-}
-
 function resolvePrivyProviderClientId(params: {
-  mode: PrivyClientMode
   clientId: string | null
   bypassCustomPrivyDomain: boolean
 }): string | null {
-  // Loopback client-id override is required for waitlist Zora cross-app oauth/link
-  // but can break wallet SIWE linking on the joined-wallet lane with 401s.
-  if (params.bypassCustomPrivyDomain && params.mode === 'waitlist-email-only') {
-    return resolveWaitlistLoopbackPrivyClientId() ?? params.clientId
+  // Client selection is origin-scoped, never route-mode-scoped. Switching a
+  // client id inside an authenticated flow can restore a different Privy
+  // session while the 4626 cookie still belongs to the email-joined profile.
+  if (params.bypassCustomPrivyDomain) {
+    return resolveLoopbackPrivyClientId() ?? params.clientId
   }
   return params.clientId
-}
-
-function coerceLoopbackAuthRedirectOrigin(input: {
-  resolvedOrigin: string
-  currentOrigin: string
-}): string {
-  try {
-    const resolved = new URL(input.resolvedOrigin)
-    const current = new URL(input.currentOrigin)
-    if (!isLoopbackHostname(current.hostname)) return input.resolvedOrigin
-    if (!isLoopbackHostname(resolved.hostname)) return current.origin
-    if (resolved.port !== current.port) return current.origin
-    return input.resolvedOrigin
-  } catch {
-    return input.currentOrigin
-  }
 }
 
 export function usePrivyClientStatus(): PrivyClientStatus {
@@ -209,7 +177,7 @@ export function PrivyClientProvider(props: {
   showWalletLoginFirst?: boolean
   mode?: PrivyClientMode
   walletList?: readonly string[]
-  walletChainType?: 'all' | 'ethereum-only' | 'solana-only' | 'ethereum-and-solana'
+  walletChainType?: 'ethereum-only' | 'solana-only' | 'ethereum-and-solana'
 }) {
   const { children, showWalletLoginFirst = false, mode = 'default', walletList, walletChainType } = props
   const enabled = isPrivyClientEnabled()
@@ -220,8 +188,8 @@ export function PrivyClientProvider(props: {
   // Localhost: pin apiUrl to auth.privy.io so Privy never enters server-cookie mode
   // against privy.4626.fun (refresh_token:"deprecated"). Fetch rewrite strips
   // custom_api_url from app config and no-ops stray deprecated session refresh POSTs.
-  // Waitlist still passes app client id on loopback so Zora cross-app oauth/link works.
-  const resolvedClientId = resolvePrivyProviderClientId({ mode, clientId, bypassCustomPrivyDomain })
+  // Loopback uses one origin-scoped App Client for every Privy surface.
+  const resolvedClientId = resolvePrivyProviderClientId({ clientId, bypassCustomPrivyDomain })
   const resolvedApiUrl = bypassCustomPrivyDomain ? (apiUrl ?? 'https://auth.privy.io') : apiUrl
   const hasRuntimeConfig = Boolean(enabled && appId)
   const [runtimeStatus, setRuntimeStatus] = useState<PrivyClientStatus>('loading')
@@ -252,55 +220,10 @@ export function PrivyClientProvider(props: {
     }),
     [],
   )
-  const externalWallets = useMemo(() => {
-    // Some extension stacks expose a getter-only `window.ethereum`, and EIP-6963
-    // provider discovery can trigger extension-side assignment crashes.
-    const sharedWalletConnectors = {
-      walletConnect: { enabled: true },
-      coinbaseWallet: { connectionOptions: 'all' as const },
-      solana: { connectors: solanaConnectors },
-    }
-
-    // Waitlist auth is intentionally email-only. Do NOT initialize any external
-    // wallet connector (Coinbase Wallet SDK, WalletConnect) on this route: those
-    // SDKs inject content scripts that race with installed EVM extensions
-    // (Rabby/MetaMask) for `window.ethereum`, producing the
-    // "injected is not defined" / "Cannot redefine property: ethereum" errors
-    // that destabilize the email OTP bootstrap. Email OTP needs no external
-    // wallet. Zora cross-app linking still needs the crossApp provider lane.
-    if (mode === 'waitlist-email-only') {
-      return {
-        solana: { connectors: solanaConnectors },
-        crossApp: {
-          providerAppIds: [ZORA_PRIVY_APP_ID],
-        },
-      }
-    }
-
-    // Returning waitlist wallet sign-in: WalletConnect + EIP-6963 only. Skip the
-    // Coinbase Wallet SDK here — it races extensions on localhost and triggers
-    // failed COOP HEAD probes against /waitlist during init.
-    if (mode === 'waitlist-returning-wallet' || mode === 'waitlist-wallet-joined') {
-      return {
-        walletConnect: { enabled: true },
-        solana: { connectors: solanaConnectors },
-        ...(mode === 'waitlist-wallet-joined'
-          ? {
-              crossApp: {
-                providerAppIds: [ZORA_PRIVY_APP_ID],
-              },
-            }
-          : null),
-      }
-    }
-
-    return {
-      ...sharedWalletConnectors,
-      crossApp: {
-        providerAppIds: [ZORA_PRIVY_APP_ID],
-      },
-    }
-  }, [mode, solanaConnectors])
+  const externalWallets = useMemo(
+    () => buildPrivyExternalWallets({ mode, solanaConnectors }),
+    [mode, solanaConnectors],
+  )
 
   if (!hasRuntimeConfig || !appId) {
     return (
@@ -310,84 +233,13 @@ export function PrivyClientProvider(props: {
     )
   }
 
-  const appearance = createPrivyAppearance({
-    showWalletLoginFirst:
-      mode === 'waitlist-returning-wallet' || mode === 'waitlist-wallet-joined' ? true : showWalletLoginFirst,
-    ...(walletList
-      ? { walletList }
-      : mode === 'waitlist-returning-wallet' || mode === 'waitlist-wallet-joined'
-        ? { walletList: WAITLIST_RETURNING_WALLET_LOGIN_LIST }
-        : mode === 'waitlist-email-only'
-          ? { walletList: WAITLIST_EMAIL_ONLY_WALLET_LIST }
-          : null),
-    ...(walletChainType ? { walletChainType } : null),
+  const { baseConfig, safeConfig } = buildPrivyProviderConfigs({
+    mode,
+    showWalletLoginFirst,
+    walletList,
+    walletChainType,
+    externalWallets,
   })
-  // Keep generic web login methods aligned with the canonical account model:
-  // verified email first, wallet-native Base second. Zora uses cross-app auth.
-  const loginMethods =
-    mode === 'waitlist-email-only'
-      ? (['email', 'twitter'] as const)
-      : mode === 'waitlist-wallet-joined'
-        ? (['wallet', 'twitter'] as const)
-      : mode === 'waitlist-returning-wallet'
-        ? (['wallet'] as const)
-        : (['email', 'wallet'] as const)
-
-  const embeddedWalletsSupported = canUsePrivyEmbeddedWallets()
-  const isWaitlistPrivyMode =
-    mode === 'waitlist-email-only' ||
-    mode === 'waitlist-returning-wallet' ||
-    mode === 'waitlist-wallet-joined'
-  // Waitlist routes defer embedded-wallet provisioning to account-setup surfaces.
-  // Explicit off + showWalletUIs:false — omitting embeddedWallets inherits dashboard
-  // defaults and loads privy.4626.fun/embedded-wallets (server-cookie mode on localhost).
-  const embeddedWallets = isWaitlistPrivyMode
-    ? WAITLIST_EMBEDDED_WALLETS_OFF
-    : !embeddedWalletsSupported
-      ? undefined
-      : {
-          ethereum: { createOnLogin: 'all-users' },
-          solana: { createOnLogin: 'all-users' },
-        }
-
-  // Privy OAuth redirects are validated against an allowlist and must match exactly.
-  // Use the bare origin so transient search/hash state on the current page never breaks OAuth init.
-  const customOAuthRedirectUrl =
-    typeof window !== 'undefined'
-      ? (() => {
-          if (mode === 'waitlist-email-only' || mode === 'waitlist-wallet-joined') {
-            return resolveWaitlistPrivyOAuthRedirectUrl(window.location.origin)
-          }
-          const resolvedOrigin = coerceLoopbackAuthRedirectOrigin({
-            resolvedOrigin: resolveAuthRedirectOrigin({
-              configuredOrigin: CONFIGURED_APP_ORIGIN,
-              currentOrigin: window.location.origin,
-            }),
-            currentOrigin: window.location.origin,
-          })
-          return resolvedOrigin
-        })()
-      : null
-
-  const baseConfig: PrivyProviderConfig = {
-    appearance,
-    ...(customOAuthRedirectUrl ? { customOAuthRedirectUrl } : {}),
-    ...(embeddedWallets ? { embeddedWallets } : {}),
-    loginMethods,
-    defaultChain: base,
-    supportedChains: [base],
-    externalWallets,
-  } as any
-
-  const safeConfig: PrivyProviderConfig = {
-    appearance,
-    ...(customOAuthRedirectUrl ? { customOAuthRedirectUrl } : {}),
-    // Intentionally omit `embeddedWallets` so HTTP/insecure dev origins don't crash the app.
-    loginMethods,
-    defaultChain: base,
-    supportedChains: [base],
-    externalWallets,
-  } as any
 
   return (
     <PrivyClientContext.Provider value={ctx}>

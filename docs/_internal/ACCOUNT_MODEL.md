@@ -30,20 +30,17 @@ changes the model.
 We treat four populations distinctly. Acceptance criteria, signing material,
 and what works on `4626.fun` today:
 
-| # | Population | Connected wallet | Canonical CSW | Signer | Sub-account? | Spend permission? | What works on 4626.fun today |
-|---|---|---|---|---|---|---|---|
-| (a) | **Privy email-only** — signed up via email on 4626.fun | Privy embedded EOA only | none (no parent CSW) | Privy embedded EOA | No | No | All EOA-friendly flows: vault deposits, swaps, gauge votes. No CSW-gated flows. |
-| (b) | **Base App user** — signed in via Base App | Parent CSW (passkey at `owner[0]`) | The Base App CSW | Frontend: Privy embedded EOA as direct owner of parent CSW (`legacy-owner-install`). Server automation: Privy server wallet delegated directly on the parent CSW. | Optional app-scoped swap infrastructure only; never required by waitlist onboarding or server command execution | No | Parent-CSW canonical flows use `canonical4337`. A distinct `profiles.base_sub_account` may support an explicitly flag-gated swap route, but it is not canonical identity, deploy infrastructure, or a server command sender. |
-| (c) | **Zora CSW user with EOA owner in our Supabase mapping** | The user-controlled EOA from `zora_csw_owners.current_owners` (often the Privy-embedded EOA from Zora's own onboarding) | The Zora-deployed CSW | EOA owner of the Zora CSW | Possible but not the default | No | March-9 owner-`executeBatch` lane works for owner-mutating calls on the Zora CSW (e.g. `addOwnerAddress`). Signed UserOps via the EOA owner work for `setPayoutRecipient` / `transferOwnership` on the creator coin (this is **what the deploy flow already does** — see §5). |
-| (d) | **Zora CSW user with no EOA owner** | The Zora CSW (Coinbase-managed signers only — passkeys) | The Zora-deployed CSW | None we can use from a third-party dapp | No (Base App middleware blocks owner-mutation UserOps from third-party dapps for this population — same constraint as (b) for owner mutations) | No | Read paths only. Pre-flight simulation in the deploy flow detects this and surfaces a clear error before any signature prompt. The user must complete owner-gated actions from inside Zora / Base App's own UI. |
+| # | Population | Connected wallet | Canonical CSW | Signer | Spend permission? | What works on 4626.fun today |
+|---|---|---|---|---|---|---|
+| (a) | **Privy email-only** — signed up via email on 4626.fun | Privy embedded EOA only | none (no parent CSW) | Privy embedded EOA | No | All EOA-friendly flows: vault deposits, swaps, gauge votes. No CSW-gated flows. |
+| (b) | **Base App user** — signed in via Base App | Parent CSW (passkey at `owner[0]`) | The Base App CSW | Frontend: Privy embedded EOA as direct owner of parent CSW (`legacy-owner-install`). Server automation: Privy server wallet delegated directly on the parent CSW. | No | Parent-CSW canonical flows use `canonical4337`. |
+| (c) | **Zora CSW user with EOA owner in our Supabase mapping** | The user-controlled EOA from `zora_csw_owners.current_owners` (often the Privy-embedded EOA from Zora's own onboarding) | The Zora-deployed CSW | EOA owner of the Zora CSW | No | March-9 owner-`executeBatch` lane works for owner-mutating calls on the Zora CSW (e.g. `addOwnerAddress`). Signed UserOps via the EOA owner work for `setPayoutRecipient` / `transferOwnership` on the creator coin (this is **what the deploy flow already does** — see §5). |
+| (d) | **Zora CSW user with no EOA owner** | The Zora CSW (Coinbase-managed signers only — passkeys) | The Zora-deployed CSW | None we can use from a third-party dapp | No | Read paths only. Pre-flight simulation in the deploy flow detects this and surfaces a clear error before any signature prompt. The user must complete owner-gated actions from inside Zora / Base App's own UI. |
 
 Sources for the population taxonomy:
 
 - [docs/_internal/wallet-notes/owner-mutation-decision-2026-05.md](./wallet-notes/owner-mutation-decision-2026-05.md)
   established (a)–(d) and the "no add-owner from third-party dapp" decision.
-- [docs/_internal/design/sub-accounts-baseapp-design.md](./design/sub-accounts-baseapp-design.md)
-  defines the (b) sub-account-on-waitlist v1 scope (currently *not yet
-  implemented* — see §6).
 - `zora_csw_owners` table is the durable source for (c) vs (d). Indexer:
   [docs/zora-csw-indexer-cron-spec.md](./zora-csw-indexer-cron-spec.md).
 
@@ -68,10 +65,6 @@ drift independently:
   account."
   Source: [`frontend/docs/account-auth-invariants.md`](../frontend/docs/account-auth-invariants.md) §"Entry-point model".
 
-- **Canonical CSW remains the parent. Sub-account is a child record.**
-  Sources:
-  [docs/_internal/design/arch-b-sub-account-design-addendum.md](./design/arch-b-sub-account-design-addendum.md) §"Invariants preserved",
-  and reaffirmed in [docs/_internal/design/sub-accounts-baseapp-design.md](./design/sub-accounts-baseapp-design.md) §"Schema".
 
 - **The parent CSW is the default execution address for user-initiated
   frontend writes** (`profiles.csw_address`). Sponsored swaps use
@@ -81,18 +74,10 @@ drift independently:
   Source: [`docs/_internal/4626-connection-methods.md`](./4626-connection-methods.md) §12,
   `frontend/server/_lib/wallet/executionTrack.ts`.
 
-- **The sub-account is a flag-gated, swap-only fallback lane — not the
-  default.** When `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` and a distinct
-  `profiles.base_sub_account` is registered, swaps may route through
-  the sub-account via `wallet_sendCalls`. Deploy still uses the parent
-  CSW. The sub-account is not promoted to canonical identity.
-  Sources: `frontend/server/_lib/wallet/executionTrack.ts`,
-  [docs/_internal/design/sub-accounts-baseapp-design.md](./design/sub-accounts-baseapp-design.md) §"Schema".
 
 - **The Privy embedded EOA is installed as a direct owner on the parent
   CSW for the user-initiated frontend track** (`legacy-owner-install`).
-  This is the default setup path; the sub-account's `setToOwnerAccount()`
-  path is the flag-gated alternative, not the primary track.
+  This is the default setup path.
   Source: [`docs/_internal/4626-connection-methods.md`](./4626-connection-methods.md) §12,
   `frontend/server/_lib/wallet/executionTrack.ts`.
 
@@ -104,7 +89,6 @@ drift independently:
 
 - **Daily spend ledger is profile-scoped.** A user's daily cap is a
   property of the issuer whose parent canonical CSW executes.
-  Source: [docs/_internal/design/arch-b-sub-account-design-addendum.md](./design/arch-b-sub-account-design-addendum.md) §"Invariants preserved".
 
 - **Hard-fail (not silent fallback) when the issuer is not
   execution-ready.** Trust boundaries: bundler URL, Privy wallet id,
@@ -128,27 +112,22 @@ drift independently:
   construct UserOps for owner-mutating selectors. The default user-side
   path for population (b) is **parent CSW + Privy embedded-owner signer**
   (`legacy-owner-install`) — the embedded EOA is installed as a direct
-  owner of the parent CSW, which becomes the `canonical4337` sender. The
-  optional **sub-account** lane (`WAITLIST_SUBACCOUNT_FLOW_ENABLED`) is a
-  flag-gated, swap-only fallback, not the default. Use `addOwnerAddress`
-  only for Zora-CSW users where an EOA owner is already known (population
-  (c)).
+  owner of the parent CSW, which becomes the `canonical4337` sender.
+  Use `addOwnerAddress` only for Zora-CSW users where an EOA owner is already known (population (c)).
   Source: [docs/_internal/wallet-notes/owner-mutation-decision-2026-05.md](./wallet-notes/owner-mutation-decision-2026-05.md).
 
 ---
 
 ## 4. Schema — `command_issuer_execution_context`
 
-Historical column types from
-[`frontend/db/migrations-legacy/028_arch_b_sub_accounts.sql`](../frontend/db/migrations-legacy/028_arch_b_sub_accounts.sql).
-These columns remain for schema compatibility but are retired execution
-artifacts. Active rows must keep them NULL. The shared command-issuer resolver
-fails closed if any artifact is present, if a spend permission was revoked or
-expired, or if `smart_wallet_address` differs from `profiles.csw_address`.
+Historical retired columns remain for schema compatibility but are retired
+execution artifacts. Active rows must keep them NULL. The shared command-issuer
+resolver fails closed if any artifact is present, if a spend permission was
+revoked or expired, or if `smart_wallet_address` differs from
+`profiles.csw_address`.
 
 | Column | Type | Semantics |
 |---|---|---|
-| `sub_account_address` | `TEXT` | Retired; active rows must be NULL. |
 | `parent_csw_address` | `TEXT` | Retired; canonical parent is `profiles.csw_address`; active rows must be NULL. |
 | `spend_permission_payload` | `JSONB` | Retired; active rows must be NULL. |
 | `spend_permission_signature` | `TEXT` | Retired; active rows must be NULL. |
@@ -158,15 +137,14 @@ expired, or if `smart_wallet_address` differs from `profiles.csw_address`.
 | `spend_permission_end_at` | `TIMESTAMPTZ` | Retired validity residue; an expired value fails closed. |
 | `spend_permission_revoked_at` | `TIMESTAMPTZ` | Retired revocation residue; any value fails closed as revoked. |
 
-> **Drift watch.** An older draft of the design
-> ([docs/_internal/design/arch-b-sub-account-design-addendum.md](./design/arch-b-sub-account-design-addendum.md))
-> shows `CITEXT` and `BYTEA` for some of these columns. The migration
-> that actually shipped uses `TEXT` everywhere and `JSONB` for the
-> payload. Trust the migration, not the historical design doc.
+> **Drift watch.** An older draft of the design shows `CITEXT` and `BYTEA` for
+> some of these columns. The migration that actually shipped uses `TEXT`
+> everywhere and `JSONB` for the payload. Trust the migration, not historical
+> design drafts.
 
-How to keep this in sync: when migration 028 is amended (or replaced by
-a follow-up migration), update this section in the same PR. Don't ship
-schema changes without touching this file.
+How to keep this in sync: when the related migration is amended (or replaced by
+a follow-up migration), update this section in the same PR. Don't ship schema
+changes without touching this file.
 
 ---
 
@@ -227,9 +205,7 @@ a working pre-flight gate. The only thing left is copy for population
 flow. The default user-side path for population (b) is **parent CSW +
 Privy embedded-owner signer** (`legacy-owner-install`) — the embedded EOA
 installed as a direct owner of the parent CSW, which becomes the
-`canonical4337` sender. The optional sub-account lane
-(`WAITLIST_SUBACCOUNT_FLOW_ENABLED`) is a flag-gated, swap-only fallback,
-not the default. Source:
+`canonical4337` sender. Source:
 [docs/_internal/wallet-notes/owner-mutation-decision-2026-05.md](./wallet-notes/owner-mutation-decision-2026-05.md).
 
 **Diagnostic lanes still exist.** `/dev/csw-signature-probe` retains
@@ -238,39 +214,14 @@ including a passkey-direct UserOp lane that bypasses Base App entirely
 via `navigator.credentials.get()`. These are dev-scoped diagnostics.
 **Do not surface to end users.**
 
-### 5.3 Sub-account orchestrator — retained optional infrastructure
 
-**Location.** `frontend/src/lib/wallet/subAccountSetup.ts`
-(`setupSubAccount()` orchestrator) and `frontend/src/hooks/useSubAccountSetup.ts`
-(React hook). Tests at `frontend/src/lib/wallet/subAccountSetup.test.ts`.
-Waitlist consumer: `frontend/src/features/waitlist/WaitlistConnectBaseApp.tsx`
-mounted in `frontend/src/features/accountSetup/AccountSetupWorkspaceView.tsx`
-(lazy-loaded), alongside `WaitlistModernParentOwnerInstall` for the
-parent-CSW owner-install path. Server endpoint:
-`POST /api/arch-b/sub-account/baseapp/register` (Track C1).
-
-**What it does.** Three stages, idempotent:
-1. `wallet_getSubAccounts({ account: parentCSW, domain })`.
-2. If none: `wallet_addSubAccount({ keys: [embeddedEOA] })` (one passkey
-   popup).
-3. `setToOwnerAccount(...)` — silent, no popup; routes future signing
-   through the embedded EOA.
-
-**Status.** Retained for an explicitly opted-in, flag-gated swap lane. It is
-not part of default waitlist onboarding and must not be required for account
-creation, canonical identity, deploy, XMTP, or server command execution. Spec:
-[docs/_internal/design/sub-accounts-baseapp-design.md](./design/sub-accounts-baseapp-design.md).
-
-### 5.4 Canonical-parent XMTP (waitlist group + app messaging)
+### 5.3 Canonical-parent XMTP (waitlist group + app messaging)
 
 **Current decision.** Waitlist group chat and user-facing XMTP use the parent
-canonical CSW (`profiles.csw_address`). App sub-accounts are not promoted to
-messaging identity.
+canonical CSW (`profiles.csw_address`).
 
 **Invariants preserved:**
-- Parent CSW remains custody + public identity (leaderboard, Explore
-  display). Sub-account is never promoted to `profiles.csw_address` or
-  `is_canonical_smart_wallet`.
+- Parent CSW remains custody + public identity (leaderboard, Explore display).
 - Waitlist group membership uses canonical parent-CSW addresses.
 - Browser XMTP install state remains per-origin until a dedicated
   cross-origin handoff ships.
@@ -283,7 +234,7 @@ Client identity resolution:
 `frontend/src/lib/xmtp/provider.tsx` (reads `xmtpMemberAddress` from
 status).
 
-### 5.5 Agent commands — parent-CSW delegated-owner flow
+### 5.4 Agent commands — parent-CSW delegated-owner flow
 
 **Location.** Shared resolver:
 `frontend/packages/server-core/src/commandIssuerContext.ts`; submission:
@@ -292,11 +243,9 @@ status).
 **Current model.** Server command execution sends from the profile's parent
 canonical CSW (`profiles.csw_address`) using its delegated Privy server-wallet
 owner. The resolver requires `smart_wallet_address` to equal that canonical
-CSW and rejects retired sub-account or SpendPermission residue. Historical
-sub-account provisioning endpoints and design documents are not active
-execution authority.
+CSW and rejects SpendPermission residue.
 
-### 5.6 Indexer: `zora_csw_owners` (the (c) vs (d) discriminator)
+### 5.5 Indexer: `zora_csw_owners` (the (c) vs (d) discriminator)
 
 **Location.** Server-side cron handlers at
 `frontend/api/_handlers/v1/zora-csw/_scanCron.ts` and `_enrichCron.ts`.
@@ -313,8 +262,7 @@ owner EOAs, refreshed via cron. This is how we identify population (c)
 
 Honest inventory of what isn't built:
 
-- **Optional app-scoped swap sub-account lane.** Infrastructure remains
-  flag-gated and must stay outside default waitlist onboarding. See §5.3.
+
 - **User-facing copy for population (d) when the deploy pre-flight
   simulation fails.** Today the deploy throws a generic-ish "Cannot set
   CreatorCoin payout recipient ... from <owner>" error. Population (d)
@@ -330,7 +278,7 @@ Honest inventory of what isn't built:
 For PRs that touch the account model:
 
 1. **Before writing a design doc** that touches who-signs-what, what
-   address is canonical, sub-account behaviour, owner-mutation lanes,
+   address is canonical, owner-mutation lanes,
    or paymaster-validated selectors: **read this file end-to-end**.
 2. **If your design conflicts with an invariant in §3:** either abandon
    the design or propose an invariant change in a separate PR. Do not
@@ -343,8 +291,7 @@ For PRs that touch the account model:
    docs-only follow-up. Don't leave conflicts in the tree.
 
 For reviewers: when a PR description mentions "canonical wallet,"
-"sub-account," "addOwnerAddress," "setPayoutRecipient,"
-"wallet_sendCalls," or modifies migration 028 / the paymaster's allowed
+"wallet_sendCalls," or modifies command-issuer schema / the paymaster's allowed
 selector list, expect to see this doc updated. If it isn't, ask why.
 
 ---
@@ -354,17 +301,13 @@ selector list, expect to see this doc updated. If it isn't, ask why.
 Direct references used by this doc, kept here for one-click navigation:
 
 - [docs/_internal/wallet-notes/owner-mutation-decision-2026-05.md](./wallet-notes/owner-mutation-decision-2026-05.md)
-- [docs/_internal/design/sub-accounts-baseapp-design.md](./design/sub-accounts-baseapp-design.md)
 - [docs/zora-payout-recipient-design.md](./zora-payout-recipient-design.md) (now reference architecture; see §5.1)
-- [docs/_internal/design/arch-b-sub-account-design-addendum.md](./design/arch-b-sub-account-design-addendum.md)
 - [docs/_internal/design/architecture-b-design.md](./design/architecture-b-design.md)
 - [docs/_internal/4626-connection-methods.md](./4626-connection-methods.md)
 - [docs/zora-csw-indexer-cron-spec.md](./zora-csw-indexer-cron-spec.md)
 - [frontend/docs/account-auth-invariants.md](../frontend/docs/account-auth-invariants.md)
-- [frontend/db/migrations-legacy/028_arch_b_sub_accounts.sql](../frontend/db/migrations-legacy/028_arch_b_sub_accounts.sql)
 - `frontend/src/pages/deploy/DeployVault.tsx` (lines 4910-4972, 5707-5740)
 - `frontend/api/_handlers/paymaster/_paymaster.ts` (lines 3285-3300)
-- `frontend/src/lib/wallet/subAccountSetup.ts`
 - `frontend/server/_lib/wallet/userOperationSubmitter.ts`
 - `contracts/utilities/routers/CreatorCoinPolicyController.sol`
 - `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`

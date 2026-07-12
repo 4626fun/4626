@@ -403,7 +403,6 @@ function DetailPanel({
             />
           )}
           <DetailField label="Solana wallet" value={detail.solanaWallet} mono />
-          <DetailField label="Base sub-account" value={detail.baseSubAccount} mono />
           <DetailField label="Contact preference" value={detail.contactPreference} />
           <DetailField label="Privy user ID" value={detail.privyUserId} mono />
           <DetailField label="Has creator coin" value={detail.hasCreatorCoin === null ? null : detail.hasCreatorCoin ? 'Yes' : 'No'} />

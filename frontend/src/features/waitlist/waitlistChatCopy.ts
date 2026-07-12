@@ -51,8 +51,9 @@ export function waitlistChatBlockedMessage(params: {
   ) {
     return 'Connect your Base Account wallet to join waitlist chat.'
   }
+  // Legacy server reason — map to signing setup copy.
   if (params.joinBlockedReason === 'sub_account_not_registered') {
-    return 'Connect Base App and finish app-wallet setup to join waitlist chat.'
+    return 'Enable 4626 signing on your smart wallet to join waitlist chat.'
   }
   return 'Enable 4626 signing to join waitlist chat.'
 }

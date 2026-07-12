@@ -55,6 +55,20 @@ describe('resolveBaseAppWalletSetupPhase', () => {
     ).toBe('needs-owner-install')
   })
 
+  it('does not treat base-app-direct as owner-install completion', () => {
+    expect(
+      resolveBaseAppWalletSetupPhase({
+        privyAuthenticated: true,
+        embeddedEoaAddress: EOA,
+        canonicalCswAddress: CSW,
+        wallets: [{ address: CSW, walletClientType: 'base_account' }],
+        providerAccounts: [CSW],
+        parentEmbeddedOwnerOnChain: false,
+        executionTrack: 'base-app-direct',
+      }),
+    ).toBe('needs-owner-install')
+  })
+
   it('is ready when embedded owner is confirmed on-chain', () => {
     expect(
       resolveBaseAppWalletSetupPhase({

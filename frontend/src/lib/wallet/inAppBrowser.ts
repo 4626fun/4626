@@ -88,7 +88,7 @@ export function detectInAppEnvironment(): InAppEnvironment | null {
 }
 
 /**
- * Broader Base App in-app browser signal for waitlist sub-account owner install.
+ * Broader Base App in-app browser signal for waitlist Base App wallet setup.
  *
  * Base App WebViews often expose Coinbase injection without `isToshi` / `isBaseApp`
  * flags, so `isBaseAppInApp` alone false-negatives and surfaces "open in Base App"

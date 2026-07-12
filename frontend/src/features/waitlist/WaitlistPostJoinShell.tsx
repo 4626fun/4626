@@ -2,7 +2,6 @@ import { LoadingInline } from '@/components/ui/LoadingState'
 
 import { WaitlistChatDock } from './WaitlistChatDock'
 import { WaitlistOwnerInstallPanel } from './WaitlistOwnerInstallPanel'
-import { WaitlistWalletProvision } from './WaitlistWalletProvision'
 import { useWaitlistPostJoinAttention } from './useWaitlistPostJoinAttention'
 
 type WaitlistPostJoinShellProps = {
@@ -27,7 +26,6 @@ function WaitlistPostJoinShellInner(props: {
     connectTrack,
     canonicalCswAddress,
     embeddedEoaAddress,
-    needsProvision,
     showOwnerInstall,
     messagingReady,
     refreshParentEmbeddedOwner,
@@ -52,8 +50,6 @@ function WaitlistPostJoinShellInner(props: {
     <div className="mt-5 space-y-4">
       {setupRequired ? (
         <div className="space-y-4">
-          <WaitlistWalletProvision enabled needsProvision={needsProvision} />
-
           {showOwnerInstall ? (
             <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-4">
               <p className="mb-3 text-sm font-medium text-zinc-200">Enable 4626 signing</p>

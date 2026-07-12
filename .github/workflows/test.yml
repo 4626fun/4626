@@ -1,17 +1,11 @@
 name: Tests
 
-# Cost posture (2026-07): path-filtered jobs, cancel-in-progress, no duplicate full-forge
-# suites, frontend jobs skip Foundry submodules. Full forge on main push still runs
-# (minus known-failing Rebalance economic suite — see AGENTS.md).
+# Cost posture (2026-07): PR + manual only. Merges to main no longer re-run the
+# full suite (branch protection should require these checks on PRs). Path-filtered
+# jobs, cancel-in-progress, no Foundry submodules on frontend jobs. Full vitest
+# is workflow_dispatch only (PRs keep lint/typecheck/guards + forge when needed).
 
 on:
-  push:
-    branches: [main, master]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'apps/docs-site/**'
-      - '**/*.mdx'
   pull_request:
     branches: [main, master]
     paths-ignore:
@@ -52,12 +46,10 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Force-all on main push or dispatch
+      - name: Force-all on manual dispatch
         id: force
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "force_all=true" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event_name }}" = "push" ] && { [ "${{ github.ref }}" = "refs/heads/main" ] || [ "${{ github.ref }}" = "refs/heads/master" ]; }; then
             echo "force_all=true" >> "$GITHUB_OUTPUT"
           else
             echo "force_all=false" >> "$GITHUB_OUTPUT"
@@ -267,13 +259,9 @@ jobs:
         run: pnpm --dir kpr typecheck
 
       # Full vitest suite is expensive (~minutes). PR = lint/typecheck/guards only;
-      # main push + workflow_dispatch run the full suite.
-      - name: Run frontend tests (main / manual only)
-        if: |
-          needs.plan.outputs.frontend == 'true' && (
-            github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
-          )
+      # workflow_dispatch runs the full suite on demand.
+      - name: Run frontend tests (manual only)
+        if: needs.plan.outputs.frontend == 'true' && github.event_name == 'workflow_dispatch'
         run: pnpm --dir frontend test -- --reporter=dot
         env:
           AUTH_SESSION_SECRET: test-auth-session-secret-123456
@@ -283,15 +271,11 @@ jobs:
           CANONICAL_ORIGIN: ${{ env.MARKETING_ORIGIN }}
 
       - name: Frontend footprint summary
-        if: |
-          always() && needs.plan.outputs.frontend == 'true' && (
-            github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
-          )
+        if: always() && needs.plan.outputs.frontend == 'true' && github.event_name == 'workflow_dispatch'
         run: pnpm --dir frontend report:footprint
 
       - name: Verify production agent registration endpoint
-        if: needs.plan.outputs.frontend == 'true' && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        if: needs.plan.outputs.frontend == 'true' && github.event_name == 'workflow_dispatch'
         run: pnpm --dir frontend check:agent-registration
         env:
           AGENT_REGISTRATION_URL: ${{ env.APP_ORIGIN }}/.well-known/agent-registration.json

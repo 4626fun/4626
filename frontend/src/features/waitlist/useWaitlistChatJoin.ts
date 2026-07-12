@@ -18,6 +18,7 @@ export {
 } from './waitlistChatCopy'
 
 function resolveJoinFailureStatus(reason: string): WaitlistChatStatus {
+  // Keep legacy blocked reasons mapped to signing setup.
   if (reason === 'embedded_owner_not_installed' || reason === 'sub_account_not_registered') {
     return 'blocked'
   }

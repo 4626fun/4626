@@ -45,7 +45,11 @@ export function useWaitlistCanonicalIdentity(params: {
 
   const csw = toAddressOrNull(accountSignals?.canonicalCswAddress ?? null)
   const privyEmbeddedAddress = toAddressOrNull(embeddedEoaAddress ?? accountSignals?.embeddedEoaAddress ?? null)
-  const externalEoa = toAddressOrNull(externalEoaAddress)
+  // Never treat the canonical CSW as an "active external signer" — Base App /
+  // Coinbase Smart Wallet identity belongs in the CSW slot.
+  const externalEoaRaw = toAddressOrNull(externalEoaAddress)
+  const externalEoa =
+    externalEoaRaw && csw && externalEoaRaw.toLowerCase() === csw.toLowerCase() ? null : externalEoaRaw
 
   const { isOwner: parentEmbeddedOwnerOnChain, status: embeddedOwnerProbeStatus } = useEmbeddedOwnerOnCsw({
     cswAddress: csw,

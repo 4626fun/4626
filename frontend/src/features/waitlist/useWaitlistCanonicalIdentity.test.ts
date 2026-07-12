@@ -163,6 +163,25 @@ describe('useWaitlistCanonicalIdentity', () => {
     expect(result.current.activeSigner).toBe('external')
   })
 
+  it('does not treat the canonical CSW address as an active external signer', () => {
+    mockEmbeddedEoaAddress = EMBEDDED
+    mockEmbeddedOwnerStatus = { isOwner: true, status: 'owner' }
+
+    const { result } = renderHook(() =>
+      useWaitlistCanonicalIdentity({
+        accountMe: buildAccountMe({ canonicalCswAddress: CSW }),
+        accountMeLoading: false,
+        hasSession: true,
+        // Misclassified Base App / Coinbase Smart Wallet path.
+        externalEoaAddress: CSW,
+      }),
+    )
+
+    expect(result.current.cswAddress).toBe(CSW)
+    expect(result.current.externalEoaAddress).toBeNull()
+    expect(result.current.activeSigner).toBe('embedded')
+  })
+
   it('falls back to the not-yet-owner server signal when the on-chain probe has not resolved', () => {
     mockEmbeddedEoaAddress = EMBEDDED
     mockEmbeddedOwnerStatus = { isOwner: false, status: 'not-owner' }

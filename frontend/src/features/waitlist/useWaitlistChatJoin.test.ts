@@ -176,7 +176,7 @@ describe('useWaitlistChatJoin', () => {
     })
   })
 
-  it('maps sub-account missing to blocked', async () => {
+  it('maps legacy blocked join reason to blocked', async () => {
     mockedApiFetch.mockResolvedValue(
       new Response(JSON.stringify({ success: false, error: 'sub_account_not_registered' }), {
         status: 403,

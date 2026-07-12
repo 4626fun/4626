@@ -45,12 +45,8 @@ updates:
           - "minor"
           - "patch"
 
-  # Single bun ecosystem for kpr-workflows tree (was 6 separate weekly configs).
-  - package-ecosystem: "bun"
-    directory: "/kpr/kpr-workflows"
-    schedule:
-      interval: "monthly"
-    open-pull-requests-limit: 2
+  # bun kpr-workflows: disabled — no stable lockfiles and high PR churn.
+  # Re-add a single monthly bun entry under /kpr/kpr-workflows if needed.
 
   - package-ecosystem: "github-actions"
     directory: "/"

@@ -1,17 +1,17 @@
 name: Accessibility
 
 on:
-  push:
-    branches: [main, master]
-    paths:
-      - 'frontend/**'
-      - '.github/workflows/accessibility.yml'
   pull_request:
     branches: [main, master]
     paths:
-      - 'frontend/**'
+      - 'frontend/src/**'
+      - 'frontend/eslint.config.js'
+      - 'frontend/scripts/a11y-smoke.ts'
       - '.github/workflows/accessibility.yml'
   workflow_dispatch:
+  # Playwright smoke is expensive; monthly + manual (PR keeps jsx-a11y lint only).
+  schedule:
+    - cron: '41 15 1 * *'
 
 # Non-blocking until the team sets repository variable A11Y_CI_BLOCKING=true
 # (or removes continue-on-error below). See frontend/docs/accessibility.md.
@@ -26,9 +26,10 @@ env:
 jobs:
   a11y-lint:
     name: jsx-a11y ESLint
-    # Skip drafts; skip Dependabot (Dependency Review already covers lockfile PRs).
+    # Skip drafts; skip Dependabot; skip schedule (smoke job covers that).
     if: |
       github.actor != 'dependabot[bot]' &&
+      github.event_name != 'schedule' &&
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     continue-on-error: ${{ vars.A11Y_CI_BLOCKING != 'true' }}
@@ -54,12 +55,10 @@ jobs:
       - name: jsx-a11y ESLint (error)
         run: pnpm --dir frontend lint:a11y
 
-  # Playwright + axe is expensive (browser install + Vite). Main / manual only.
+  # Playwright + axe is expensive (browser install + Vite). Monthly / manual only.
   a11y-smoke:
     name: axe smoke (Playwright)
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     continue-on-error: ${{ vars.A11Y_CI_BLOCKING != 'true' }}
     timeout-minutes: 25
@@ -96,5 +95,5 @@ jobs:
             echo "### Accessibility smoke"
             echo ""
             echo "- \`smoke:a11y\` — axe serious/critical on marketing + app shells"
-            echo "- Runs on **main / manual** only (PR uses jsx-a11y lint job)"
+            echo "- Runs on **monthly schedule / manual** only (PR uses jsx-a11y lint job)"
           } >> "$GITHUB_STEP_SUMMARY"

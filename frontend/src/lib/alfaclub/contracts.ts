@@ -22,6 +22,8 @@ export const FRIEND_KEY_ABI = parseAbi([
 ])
 
 export const ALFA_CREATOR_KEY_LP_FACTORY_ABI = parseAbi([
+  'function allPools(uint256 index) view returns (address)',
+  'function allPoolsLength() view returns (uint256)',
   'function poolCreatorAllowed(address account) view returns (bool)',
   'function pairAllowed(address creatorCoin, uint256 tokenId) view returns (bool)',
   'function getPool(address creatorCoin, uint256 tokenId) view returns (address)',
@@ -37,6 +39,8 @@ export const ALFA_CREATOR_KEY_POOL_ABI = parseAbi([
   'function quoteBuyKeys(uint256 keyAmount) view returns (uint256 creatorCoinAmountIn)',
   'function quoteSellKeys(uint256 keyAmount) view returns (uint256 creatorCoinAmountOut)',
   'function getReserves() view returns (uint256 creatorCoinReserve, uint256 keyReserve)',
+  'function creatorCoin() view returns (address)',
+  'function keyTokenId() view returns (uint256)',
   'function balanceOf(address account) view returns (uint256)',
   'function totalSupply() view returns (uint256)',
   'function feeBps() view returns (uint16)',

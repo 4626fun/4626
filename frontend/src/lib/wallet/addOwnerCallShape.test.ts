@@ -94,6 +94,19 @@ describe('assertAddOwnerSelfCallShape', () => {
     ).toThrow(/addOwnerAddress selector/)
   })
 
+  it('rejects nonzero native value', () => {
+    expect(() =>
+      assertAddOwnerSelfCallShape({
+        csw: CSW,
+        txRequest: {
+          to: CSW,
+          data: validAddOwnerData(),
+          value: '0x1',
+        },
+      }),
+    ).toThrow(/zero native value/)
+  })
+
   it('rejects owner arg mismatch when expectedOwnerToAdd is provided', () => {
     expect(() =>
       assertAddOwnerSelfCallShape({

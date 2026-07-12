@@ -35,7 +35,13 @@ import {
   resolveWaitlistJoinedSessionAddress,
   shouldClearOrphanWaitlistServerSession,
 } from '@/features/waitlist/resolveWaitlistJoinedSession'
-import { shouldAutoSubmitOtpCode } from '@/features/waitlist/waitlistFlowState'
+import {
+  getWaitlistOtpSubmitHelperText,
+  getWaitlistOtpSubmitLabel,
+  resolveWaitlistOtpInputStatus,
+  resolveWaitlistOtpSubmitPhase,
+  shouldAutoSubmitOtpCode,
+} from '@/features/waitlist/waitlistFlowState'
 import { WaitlistReturningWalletSignIn } from '@/features/waitlist/WaitlistReturningWalletSignIn'
 import { shouldShowWaitlistEmailSignup } from '@/features/waitlist/waitlistSignupVisibility'
 import { WaitlistTwitterLinkPanel } from '@/features/waitlist/WaitlistTwitterLinkPanel'
@@ -78,7 +84,6 @@ import {
   useSafePrivy,
   useSafePrivyAccessToken,
 } from '@/lib/privy/safeHooks'
-import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import { computeAcceptedFromAppAccessStatus } from '@/app/accessShared'
 import { useAccountMe } from '@/hooks/useAccountMe'
 
@@ -140,7 +145,7 @@ function BeamCard({
 }) {
   return (
     <div
-      className={cn('relative rounded-2xl', className)}
+      className={cn('relative rounded-2xl transition-shadow duration-500 ease-out', className)}
       style={accent === 'success' ? WAITLIST_PANEL_SUCCESS_STYLE : WAITLIST_PANEL_STYLE}
     >
       {children}
@@ -587,7 +592,6 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   const { sendCode, loginWithCode } = useSafeLoginWithEmail()
   const { login } = useSafeLogin()
   const getPrivyAccessToken = useSafePrivyAccessToken()
-  const { ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
   const loginRef = useRef(login)
 
   useEffect(() => {
@@ -883,12 +887,11 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
       privy: createLivePrivyClientView(privyRef),
       missingTokenMessage:
         'Could not verify your email session. Please try again. If the issue persists, try an incognito/private window or temporarily disable browser wallet extensions.',
-      ensureEmbeddedWallet,
     })
     setLocalSessionAddress(confirmedSessionAddress)
     setServerSessionAddress(confirmedSessionAddress)
     void fetchWaitlistStats()
-  }, [fetchWaitlistStats, ensureEmbeddedWallet])
+  }, [fetchWaitlistStats])
 
   const handleSignInWithLinkedWallet = useCallback(() => {
     if (signupInFlightRef.current || walletSignInPending) return
@@ -1028,6 +1031,10 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   }
 
   const isBusy = emailBusy || codeBusy || signOutBusy
+  const otpSubmitPhase = resolveWaitlistOtpSubmitPhase({ codeStatus, codeBusy })
+  const otpSubmitLabel = getWaitlistOtpSubmitLabel(otpSubmitPhase)
+  const otpSubmitHelperText = getWaitlistOtpSubmitHelperText(otpSubmitPhase)
+  const otpInputStatus = resolveWaitlistOtpInputStatus({ codeStatus, codeBusy })
   const canResend = resendAvailableAt == null || resendAvailableAt <= nowMs
   const resendSeconds =
     resendAvailableAt != null && resendAvailableAt > nowMs ? Math.ceil((resendAvailableAt - nowMs) / 1_000) : 0
@@ -1044,8 +1051,16 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossApp()
 
   const twitterLinked = (accountMe?.linkedMethods?.twitter ?? []).length > 0
-  const externalEoaLinked = (accountMe?.linkedMethods?.external_eoa ?? []).length > 0
-  const linkedEoaAddress = accountMe?.linkedMethods?.external_eoa?.[0] ?? null
+  const canonicalCswLower = accountMe?.accountSignals?.canonicalCswAddress?.trim().toLowerCase() ?? null
+  const linkedExternalCandidates = (accountMe?.linkedMethods?.external_eoa ?? [])
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean)
+  // Base App / Coinbase Smart Wallet can land in linkedMethods.external_eoa when
+  // Privy omits smart-wallet metadata; never treat the canonical CSW as an EOA.
+  const linkedEoaAddress =
+    linkedExternalCandidates.find((address) => address.toLowerCase() !== canonicalCswLower) ?? null
+  const externalEoaLinked = Boolean(linkedEoaAddress)
+  const walletIdentityLinked = externalEoaLinked || Boolean(canonicalCswLower)
   const zoraLinked =
     (accountMe?.linkedMethods?.zora_cross_app ?? []).length > 0 ||
     Boolean(accountMe?.accountSignals?.linked)
@@ -1181,12 +1196,15 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   }, [getPrivyAccessToken, privy, refreshAccountMe, twitterBusy, twitterLinked])
 
   const handleLinkWallet = useCallback(async () => {
-    if (walletBusy || externalEoaLinked) return
+    if (walletBusy || walletIdentityLinked) return
     setWalletBusy(true)
     setWalletError(null)
     try {
+      if (privyRef.current.ready !== true || privyRef.current.authenticated !== true) {
+        throw new Error('Your email session expired. Sign in with email OTP again, then reconnect your wallet.')
+      }
       const data = await linkAndSyncPrivyProvider({
-        privy,
+        privy: privyRef.current,
         provider: 'external_eoa',
         login: loginRef.current ?? null,
         getAccessToken: getPrivyAccessToken,
@@ -1201,11 +1219,10 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
       setWalletBusy(false)
     }
   }, [
-    externalEoaLinked,
     getPrivyAccessToken,
-    privy,
     refreshAccountMe,
     walletBusy,
+    walletIdentityLinked,
   ])
 
   const handleEditWallet = useCallback(async () => {
@@ -1481,8 +1498,8 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
 
   const showXLinkPanel = !xPhaseDone && !twitterLinked
   const showXEngagement = twitterLinked && !xPhaseDone
-  const showWalletStep = xPhaseDone && !externalEoaLinked && !walletSkipped
-  const walletPhaseDone = externalEoaLinked || walletSkipped
+  const showWalletStep = xPhaseDone && !walletIdentityLinked && !walletSkipped
+  const walletPhaseDone = walletIdentityLinked || walletSkipped
   const showZoraStep = xPhaseDone && walletPhaseDone && !zoraLinked && !zoraSkipped
 
   // The connect steps are mutually exclusive (one "current step" at a time) —
@@ -1501,7 +1518,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
   // A step that was skipped rather than linked isn't a dead end — surface a
   // small "go back" reminder so the user can reopen it later for points.
   const xSkippedWithoutLink = xPhaseDone && !twitterLinked
-  const showWalletSkippedReminder = walletSkipped && !externalEoaLinked
+  const showWalletSkippedReminder = walletSkipped && !walletIdentityLinked
   const showZoraSkippedReminder = zoraSkipped && !zoraLinked
 
   // The step tracker is only useful while the wizard is actively guiding the
@@ -1542,7 +1559,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     {
       key: 'wallet',
       label: 'Wallet',
-      status: externalEoaLinked
+      status: walletIdentityLinked
         ? 'done'
         : activeStepKey === 'wallet'
           ? 'current'
@@ -1766,7 +1783,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
               </div>
 
               {showEmailSignupForm ? (
-                <BeamCard className="p-5 sm:p-6" accent={codeStatus === 'success' ? 'success' : 'default'}>
+                <BeamCard className="p-5 sm:p-6" accent={otpSubmitPhase === 'verified' ? 'success' : 'default'}>
                   <AnimatePresence mode="wait" initial={false} custom={signupDirection}>
                     {step === 'email' ? (
                       <motion.form
@@ -1879,6 +1896,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                         animate="animate"
                         exit="exit"
                         transition={stepTransition}
+                        aria-busy={codeBusy}
                       >
                         <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-500">
                           <span className="truncate">
@@ -1905,7 +1923,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                             setCode(next)
                             if (codeStatus === 'error') setCodeStatus('default')
                           }}
-                          status={codeStatus}
+                          status={otpInputStatus}
                           disabled={codeBusy || codeStatus === 'success'}
                         />
                         <Button
@@ -1914,25 +1932,65 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                           size="lg"
                           className="btn-3d group/btn relative w-full overflow-hidden !rounded-full !min-h-[52px] text-[15px] font-semibold"
                           disabled={codeBusy || code.replace(/\s+/g, '').length < 6 || codeStatus === 'success'}
+                          aria-live="polite"
                         >
                           <ButtonSheen />
-                          {codeStatus === 'success' ? (
-                            <span className="relative z-10 inline-flex items-center gap-2">
-                              <DrawnCheck className="size-4" />
-                              Verified
-                            </span>
-                          ) : codeBusy ? (
-                            <span className="relative z-10 inline-flex items-center gap-2">
-                              <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.9)" />
-                              Verifying…
-                            </span>
-                          ) : (
-                            <span className="relative z-10 inline-flex items-center gap-2">
-                              Verify &amp; join
-                              <ArrowRight className="size-4" aria-hidden="true" />
-                            </span>
-                          )}
+                          <AnimatePresence mode="wait" initial={false}>
+                            {otpSubmitPhase === 'setting_up' || otpSubmitPhase === 'verifying' ? (
+                              <motion.span
+                                key={otpSubmitPhase}
+                                initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}
+                                transition={{ duration: 0.16, ease: 'easeOut' }}
+                                className="relative z-10 inline-flex items-center gap-2"
+                              >
+                                <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.9)" />
+                                {otpSubmitLabel}
+                              </motion.span>
+                            ) : otpSubmitPhase === 'verified' ? (
+                              <motion.span
+                                key={otpSubmitPhase}
+                                initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}
+                                transition={{ duration: 0.16, ease: 'easeOut' }}
+                                className="relative z-10 inline-flex items-center gap-2"
+                              >
+                                <DrawnCheck className="size-4" />
+                                {otpSubmitLabel}
+                              </motion.span>
+                            ) : (
+                              <motion.span
+                                key={otpSubmitPhase}
+                                initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}
+                                transition={{ duration: 0.16, ease: 'easeOut' }}
+                                className="relative z-10 inline-flex items-center gap-2"
+                              >
+                                {otpSubmitLabel}
+                                <ArrowRight className="size-4" aria-hidden="true" />
+                              </motion.span>
+                            )}
+                          </AnimatePresence>
                         </Button>
+                        <AnimatePresence initial={false}>
+                          {otpSubmitHelperText ? (
+                            <motion.p
+                              key="otp-setup-helper"
+                              variants={reminderVariants}
+                              initial="initial"
+                              animate="animate"
+                              exit="exit"
+                              transition={stepTransition}
+                              className="overflow-hidden text-center text-[11px] leading-relaxed text-zinc-500"
+                              aria-live="polite"
+                            >
+                              {otpSubmitHelperText}
+                            </motion.p>
+                          ) : null}
+                        </AnimatePresence>
                         <button
                           type="button"
                           onClick={() => void handleSendCode(true)}

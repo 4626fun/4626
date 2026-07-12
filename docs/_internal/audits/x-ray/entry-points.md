@@ -82,7 +82,7 @@
 | Value flow | None (control path), later payout outflow |
 | Reentrancy guard | yes |
 
-### `AlfaCreatorKeyLPFactory.createPool()`
+### `AlfaCreatorKeyLPFactory.createPoolWithInitialLiquidity()`
 
 | Aspect | Detail |
 |--------|--------|

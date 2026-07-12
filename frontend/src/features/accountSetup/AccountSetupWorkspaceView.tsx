@@ -1,6 +1,8 @@
 import {
   type KeyboardEvent,
   type ReactNode,
+  Suspense,
+  lazy,
   useCallback,
   useEffect,
   useMemo,
@@ -23,13 +25,13 @@ import {
   shouldShowBaseAppWalletLinkPanel,
   shouldFocusBaseAppWalletSetup,
   resolveWaitlistAccordionOpenStep,
+  resolveWaitlistConnectTrack,
 } from '@/features/waitlist/waitlistFlowState'
 import { WaitlistBaseAppWalletNudge } from '@/features/waitlist/WaitlistBaseAppWalletNudge'
 import { WaitlistBaseAppWalletSetupPanel } from '@/features/waitlist/WaitlistBaseAppWalletSetupPanel'
 import { inferWaitlistEoaOwnerRoutingHint } from '@/lib/wallet/userExecutionTrack'
 import { useEnsureCanonicalBaseAccountWallet } from '@/hooks/useEnsureCanonicalBaseAccountWallet'
 import { useWaitlistSigningStepComplete } from '@/features/waitlist/useWaitlistSigningStepComplete'
-import { WaitlistModernParentOwnerInstall } from './WaitlistModernParentOwnerInstall'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { shortValue } from './shared'
@@ -37,6 +39,11 @@ import type { useAccountSetupController } from './useAccountSetupController'
 
 const BASESCAN_BASE = 'https://basescan.org/address/'
 const ZORA_PROFILE_BASE = 'https://zora.co/'
+
+const LazyWaitlistModernParentOwnerInstall = lazy(async () => {
+  const mod = await import('./WaitlistModernParentOwnerInstall')
+  return { default: mod.WaitlistModernParentOwnerInstall }
+})
 
 function handleAccordionToggleKeyboard(event: KeyboardEvent, toggle: () => void) {
   if (event.key === 'Enter' || event.key === ' ') {
@@ -209,6 +216,13 @@ export function AccountSetupWorkspaceView(props: {
   // form used by the rendered step UI — it shadows the auto-trigger
   // helper `signingStepCompleteForAuto` once `me` is available.
   const executionTrack = me.accountSignals.executionTrack
+  const connectTrack = resolveWaitlistConnectTrack({
+    executionTrack,
+    accountSignals: me.accountSignals,
+    zoraLinked,
+    canonicalCswAddress,
+    embeddedEoaAvailable: Boolean(embeddedEoaAddress),
+  })
   const resolvedOnchainEoaOwnerCount = Math.max(
     onchainEoaOwnerCandidates.length,
     inferWaitlistEoaOwnerRoutingHint({
@@ -225,6 +239,7 @@ export function AccountSetupWorkspaceView(props: {
   })
   const showParentCswAddOwnerPanel = shouldShowParentCswAddOwnerPanel({
     inBaseApp,
+    connectTrack,
     zoraLinked,
     ownerInstallRequested: ownerInstallPathActive,
     signingStepComplete,
@@ -250,12 +265,12 @@ export function AccountSetupWorkspaceView(props: {
   const sponsorshipDiagnostic = extractSponsorshipDiagnostic(error)
   const ownerApprovalDiagnostic = extractOwnerApprovalDebugDiagnostic(error)
 
-  // Prefer the modern validated Base App self-call path (EntryPoint handleOps)
-  // for parent-CSW owner install whenever we're in a Base App context or the
-  // older sub-account connect panel is not the active one. This makes the
-  // proven 2026 direction the primary experience inside the waitlist.
+  // Keep the activation host available after embedded-owner confirmation so
+  // automation/XMTP can resume without another visible Base App approval.
   const useModernParentOwnerInstallInWaitlist =
-    showParentCswAddOwnerPanel && (inBaseApp ? baseWalletReady : true)
+    Boolean(canonicalCswAddress && embeddedEoaAddress) &&
+    (signingStepComplete || showParentCswAddOwnerPanel) &&
+    (inBaseApp ? signingStepComplete || baseWalletReady : true)
   // Zora-controlled CBSWs are passkey-owned (P256 keys held in Coinbase
   // Wallet / Base Account), not EOA-owned. The cross-app login surfaces the
   // CBSW address but cannot expose a transactional signer, so we steer users
@@ -267,6 +282,7 @@ export function AccountSetupWorkspaceView(props: {
   if (context === 'waitlist') {
     const focusBaseAppWalletSetup = shouldFocusBaseAppWalletSetup({
       inBaseApp,
+      connectTrack,
       signingStepComplete,
       baseWalletReady,
       account: {
@@ -781,18 +797,20 @@ export function AccountSetupWorkspaceView(props: {
                       <p className="text-xs text-zinc-500">
                         Owner install in progress. Use the status card above to monitor or check progress.
                       </p>
+                    ) : inBaseApp && !signingStepComplete ? (
+                      baseAppWalletSetupPanel
+                    ) : useModernParentOwnerInstallInWaitlist ? (
+                      <Suspense fallback={<LoadingText intent="processing" size="sm" labelOverride="Loading signing setup…" />}>
+                        <LazyWaitlistModernParentOwnerInstall
+                          controller={controller}
+                          embeddedEoaAddress={embeddedEoaAddress}
+                          onOwnerInstallSuccess={() => refreshParentEmbeddedOwner?.()}
+                        />
+                      </Suspense>
                     ) : signingStepComplete ? (
                       <p className="text-xs text-zinc-400 leading-relaxed">
                         Your embedded signer is confirmed as an on-chain owner of your parent smart wallet.
                       </p>
-                    ) : inBaseApp && !signingStepComplete ? (
-                      baseAppWalletSetupPanel
-                    ) : useModernParentOwnerInstallInWaitlist ? (
-                      <WaitlistModernParentOwnerInstall
-                        controller={controller}
-                        embeddedEoaAddress={embeddedEoaAddress}
-                        onOwnerInstallSuccess={() => refreshParentEmbeddedOwner?.()}
-                      />
                     ) : (
                       <p className="text-xs text-zinc-400 leading-relaxed">
                         Modern Base App owner install (validated self-call) is the primary path for parent-CSW signing.
@@ -1161,12 +1179,14 @@ export function AccountSetupWorkspaceView(props: {
                     onOwnerInstallSuccess={() => refreshParentEmbeddedOwner?.()}
                   />
                 ) : useModernParentOwnerInstallInWaitlist ? (
-                  <WaitlistModernParentOwnerInstall
-                    controller={controller}
-                    embeddedEoaAddress={embeddedEoaAddress}
-                    onOwnerInstallSuccess={() => refreshParentEmbeddedOwner?.()}
-                    className="mt-4"
-                  />
+                  <Suspense fallback={<LoadingText intent="processing" size="sm" labelOverride="Loading signing setup…" />}>
+                    <LazyWaitlistModernParentOwnerInstall
+                      controller={controller}
+                      embeddedEoaAddress={embeddedEoaAddress}
+                      onOwnerInstallSuccess={() => refreshParentEmbeddedOwner?.()}
+                      className="mt-4"
+                    />
+                  </Suspense>
                 ) : (
                   <p className="mt-4 text-xs text-zinc-500 leading-relaxed">
                     {signingStepComplete

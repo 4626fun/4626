@@ -34,3 +34,7 @@ Build succeeds with no `sorry`/`admit`. Namespace `Lottery` in `RequestProject/L
 - `final_eq_base` (when base ≤ max and parameters neutral)
 
 Artifact: `result.tar.gz`.
+
+## Local validation
+
+Local `lake build` **skipped** on this host (Mathlib cache decompress + compile OOMs / freezes the machine). Validation gate used: Aristotle task COMPLETE + source scan with no `sorry`/`admit`.

@@ -96,6 +96,56 @@ describe('wallet mapping + sync', () => {
     expect(classified.primaryWalletAddress).toBe('0x00000000000000000000000000000000000000d1')
   })
 
+  it('promotes coinbase_wallet-linked CSW to canonical identity, not active external owner', () => {
+    const csw = '0x00000000000000000000000000000000000000c5'
+    const user = {
+      id: 'did:privy:coinbase-csw-only',
+      linkedAccounts: [{ type: 'wallet', address: csw, walletClientType: 'coinbase_wallet' }],
+    }
+
+    const classified = classifyLinkedAccounts(user as any)
+    expect(classified.canonicalSmartWallet?.address).toBe(csw)
+    expect(classified.activeOwnerWallet).toBeNull()
+    expect(classified.allWallets[0]?.walletType).toBe('smart_wallet')
+    expect(classified.primaryWalletAddress).toBe(csw)
+  })
+
+  it('does not treat the canonical CSW as activeOwner when an embedded EOA also exists', () => {
+    const csw = '0x00000000000000000000000000000000000000c6'
+    const embedded = '0x00000000000000000000000000000000000000c7'
+    const user = {
+      id: 'did:privy:csw-plus-embedded',
+      linkedAccounts: [
+        { type: 'wallet', address: csw, walletClientType: 'coinbase_wallet' },
+        { type: 'wallet', address: embedded, walletClientType: 'privy' },
+      ],
+    }
+
+    const classified = classifyLinkedAccounts(user as any)
+    expect(classified.canonicalSmartWallet?.address).toBe(csw)
+    expect(classified.embeddedEoa?.address).toBe(embedded)
+    expect(classified.activeOwnerWallet?.address).toBe(embedded)
+    expect(classified.activeOwnerWallet?.address).not.toBe(csw)
+  })
+
+  it('prefers the embedded EOA owner regardless of linked-account order', () => {
+    const csw = '0x00000000000000000000000000000000000000c8'
+    const embedded = '0x00000000000000000000000000000000000000c9'
+    const external = '0x00000000000000000000000000000000000000ca'
+    const classified = classifyLinkedAccounts({
+      id: 'did:privy:ordered-owner',
+      linkedAccounts: [
+        { type: 'wallet', address: external, walletClientType: 'metamask' },
+        { type: 'smart_wallet', address: csw, walletClientType: 'coinbase_smart_wallet' },
+        { type: 'wallet', address: embedded, walletClientType: 'embedded_privy_wallet' },
+      ],
+    } as any)
+
+    expect(classified.activeOwnerWallet?.address).toBe(embedded)
+    expect(classified.canonicalSmartWallet?.address).toBe(csw)
+    expect(classified.allWallets.find((wallet) => wallet.address === external)?.walletType).toBe('external_eoa')
+  })
+
   it('tracks the active owner wallet separately from the canonical smart wallet', () => {
     const user = {
       id: 'did:privy:owner-split',

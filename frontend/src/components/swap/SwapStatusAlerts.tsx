@@ -3,6 +3,8 @@ import { shortAddress } from '@/lib/uniswap/swapUtils'
 import { getChainMeta } from '@/config/chains'
 import { SwapCompletionNotice } from './SwapCompletionNotice'
 import type { SupportedChainId } from '@/config/chains'
+import type { SwapCompletion } from '@/hooks/useSwapExecution'
+import type { TokenDisplay } from '@/lib/uniswap/swapUtils'
 
 type SwapStatusAlertsProps = {
   activePanel: 'swap' | 'liquidity'
@@ -29,9 +31,9 @@ type SwapStatusAlertsProps = {
   chainMeta: any
   swapChainId: SupportedChainId
   switchChainAsync: any
-  swapCompletion: any
-  tokenInSymbol: string
-  tokenOutSymbol: string
+  swapCompletion: SwapCompletion | null
+  tokenIn: TokenDisplay
+  tokenOut: TokenDisplay
   handleClearSwapCompletion: () => void
 }
 
@@ -62,8 +64,8 @@ export function SwapStatusAlerts(props: SwapStatusAlertsProps) {
     swapChainId,
     switchChainAsync,
     swapCompletion,
-    tokenInSymbol,
-    tokenOutSymbol,
+    tokenIn,
+    tokenOut,
     handleClearSwapCompletion,
   } = props
 
@@ -181,8 +183,8 @@ export function SwapStatusAlerts(props: SwapStatusAlertsProps) {
       {activePanel === 'swap' && swapCompletion ? (
         <SwapCompletionNotice
           completion={swapCompletion}
-          tokenInSymbol={tokenInSymbol}
-          tokenOutSymbol={tokenOutSymbol}
+          tokenIn={tokenIn}
+          tokenOut={tokenOut}
           onDismiss={handleClearSwapCompletion}
         />
       ) : null}

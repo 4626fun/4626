@@ -23,6 +23,7 @@ import {
 import { usePrivyOAuthReturnBackendSync } from '@/lib/privy/usePrivyOAuthReturnBackendSync'
 import { buildPrivyAuthHeaders, readPrivyAccessTokenOrNull } from '@/lib/privy/accessToken'
 import { useSafeActiveWallet, useSafeConnectWallet, useSafeCrossApp, useSafeLogin, useSafePrivy } from '@/lib/privy/safeHooks'
+import { waitForPrivyEmbeddedWalletAuthReady } from '@/lib/privy/waitForPrivyEmbeddedWalletAuthReady'
 import { isTelegramMiniAppContext, readPrivyTelegramLaunchParams } from '@/lib/telegram/telegramWebApp'
 import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
 
@@ -377,6 +378,10 @@ export function useAccountSetupController(params: {
           privyToken: token,
         })
         if (!canonicalization.onboardingBootstrapped && canonicalization.flags.needsEmbeddedWallet) {
+          await waitForPrivyEmbeddedWalletAuthReady({
+            getToken: getAccessTokenNow,
+            isAuthenticated: () => Boolean(privyRef.current?.authenticated),
+          })
           await ensureEmbeddedWalletNow()
           canonicalization = await runCanonicalizationPipeline({
             privyToken: token,
@@ -393,7 +398,6 @@ export function useAccountSetupController(params: {
         // /api/accounts/me so both observe the same DB snapshot. The old
         // sequential path (accounts/me -> bootstrap) allowed DB state to
         // change between the two reads, producing inconsistent merges
-        // (e.g. executionTrack from one snapshot, baseSubAccount from
         // another). allSettled keeps a zora failure from blocking the merge.
         const [meResult, bootstrapResult, zoraResult] = await Promise.allSettled([
           apiFetch('/api/accounts/me', { method: 'GET', headers }),

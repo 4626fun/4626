@@ -1709,6 +1709,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     executionMode?: string | null
     attempt?: number | null
     customOwnerPolicyToken?: string | null
+    activationOwnerPolicyToken?: string | null
   }
   onSubmissionStatus?: (message: string) => void
   /** When false, return after bundler accepts the UserOp; receipt can be polled separately. */
@@ -2299,9 +2300,18 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       ownerApprovalContext.customOwnerPolicyToken.trim()
         ? ownerApprovalContext.customOwnerPolicyToken.trim()
         : null
+    const activationOwnerPolicyToken =
+      sendSession &&
+      typeof ownerApprovalContext?.activationOwnerPolicyToken === 'string' &&
+      ownerApprovalContext.activationOwnerPolicyToken.trim()
+        ? ownerApprovalContext.activationOwnerPolicyToken.trim()
+        : null
     const headers: Record<string, string> = {
       ...(shouldIncludePaymasterDebugHeader ? { 'X-CV-Paymaster-Debug': '1' } : {}),
       ...(customOwnerPolicyToken ? { 'X-CV-Custom-Owner-Policy': customOwnerPolicyToken } : {}),
+      ...(activationOwnerPolicyToken
+        ? { 'X-CV-Activation-Owner-Policy': activationOwnerPolicyToken }
+        : {}),
     }
     return http(url, {
       fetchOptions: {

@@ -11,6 +11,8 @@ export const APP_ONLY_PATHS = [
   '/auction',
   '/admin',
   '/agents',
+  // Legacy AlfaClub prefixes remain app-only so marketing host handoff still
+  // fires before the hard cross-host redirect to alfaclub.4626.fun.
   '/alfaclub',
   '/coin',
   '/creator',
@@ -18,12 +20,24 @@ export const APP_ONLY_PATHS = [
 ] as const
 
 const APP_ONLY_PATH_PREFIXES = APP_ONLY_PATHS.map((p) => `${p}/`)
-const MARKETING_OVERRIDES = new Set(['/alfaclub/key-safety'])
+
+/**
+ * Former marketing-host exception for key-safety. Kept empty after the
+ * alfaclub.4626.fun cutover — `/alfaclub/key-safety` hard-redirects to
+ * `alfaclub.4626.fun/safety`.
+ */
+const MARKETING_OVERRIDES = new Set<string>([])
+
+function normalizePathname(pathname: string): string {
+  if (pathname.length > 1 && pathname.endsWith('/')) return pathname.slice(0, -1)
+  return pathname
+}
 
 export function isAppOnlyPath(pathname: string): boolean {
-  if (MARKETING_OVERRIDES.has(pathname)) return false
+  const normalized = normalizePathname(pathname)
+  if (MARKETING_OVERRIDES.has(normalized)) return false
   for (let i = 0; i < APP_ONLY_PATHS.length; i += 1) {
-    if (pathname === APP_ONLY_PATHS[i] || pathname.startsWith(APP_ONLY_PATH_PREFIXES[i]!)) {
+    if (normalized === APP_ONLY_PATHS[i] || normalized.startsWith(APP_ONLY_PATH_PREFIXES[i]!)) {
       return true
     }
   }

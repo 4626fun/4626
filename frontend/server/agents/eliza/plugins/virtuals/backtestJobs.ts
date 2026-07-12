@@ -1,5 +1,20 @@
 import { executeBacktestCounterRebalance } from '../../../../_lib/alfaclub/backtestCounterRebalance.js'
-import { getPerpMarkets } from '../../../../_lib/alfaclub/hyperliquid.js'
+import {
+  getPerpMarketContext,
+  getPerpMarkets,
+  getCandleSnapshot,
+  type HyperliquidPerpMarketContext,
+} from '../../../../_lib/alfaclub/hyperliquid.js'
+import {
+  classifyFundingOiRegime,
+  formatFundingOiRegime,
+  type FundingOiRegimeResult,
+} from '../../../../_lib/alfaclub/fundingOiRegime.js'
+import {
+  recordFundingOiRegimeObservation,
+  settleDueFundingOiRegimeHorizons,
+  type FundingOiObservationInput,
+} from '../../../../_lib/alfaclub/fundingOiObservationStore.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -196,7 +211,7 @@ export function parseBacktestRequestFromText(text: string): VirtualsBacktestRequ
   const normalized = text.toLowerCase()
   if (!normalized.includes('backtest')) return null
   return {
-    symbol: parseSymbol(text),
+    symbol: parseSymbol(text) ?? 'BTC',
     leveragePercent: parsePercentField(text, ['leveragePercent', 'leverage_percent'], DEFAULT_LEVERAGE_PERCENT),
     rebalanceHealthPercent: parsePercentField(
       text,
@@ -211,6 +226,167 @@ export function parseBacktestRequestFromText(text: string): VirtualsBacktestRequ
     ...parseCapital(text),
     windowHours: parseWindowHours(text),
   }
+}
+
+/**
+ * Parse a backtest request from the ACP offering name + requirement JSON.
+ *
+ * When a buyer purchases an offering (e.g. `generateBacktestReport7d`), the
+ * ACP protocol sets `job.description = offeringName` and sends the buyer's
+ * requirement data as a JSON message with contentType "requirement".
+ *
+ * This function extracts:
+ * - windowHours from the offering name suffix (7d→168h, 30d→720h, 90d→2160h)
+ * - symbol, leveragePercent, rebalanceHealthPercent, rebalanceSizePercent
+ *   from the requirement JSON
+ *
+ * Returns null if the offering name is not a backtest report offering.
+ */
+export function parseBacktestRequestFromOffering(
+  offeringName: string,
+  requirementJson: string,
+): VirtualsBacktestRequest | null {
+  // Only handle generateBacktestReport* offerings
+  const match = offeringName.match(/^generateBacktestReport(\d+)d$/i)
+  if (!match) return null
+  const days = parseInt(match[1], 10)
+  const windowHours = Math.min(Math.max(days * 24, MIN_WINDOW_HOURS), MAX_WINDOW_HOURS)
+
+  // Parse the requirement JSON for symbol and optional params
+  let req: Record<string, unknown> = {}
+  try {
+    req = JSON.parse(requirementJson)
+  } catch {
+    // If JSON parse fails, try to extract a symbol from the raw text
+    const symbol = parseSymbol(requirementJson, true)
+    if (!symbol) return null
+    return {
+      symbol,
+      leveragePercent: DEFAULT_LEVERAGE_PERCENT,
+      rebalanceHealthPercent: DEFAULT_REBALANCE_HEALTH_PERCENT,
+      rebalanceSizePercent: DEFAULT_REBALANCE_SIZE_PERCENT,
+      initialLongUsd: DEFAULT_TOTAL_EQUITY_USD / 2,
+      initialShortUsd: DEFAULT_TOTAL_EQUITY_USD / 2,
+      windowHours,
+    }
+  }
+
+  const symbol = typeof req.symbol === 'string' ? normalizeMarketSymbol(req.symbol) : null
+  if (!symbol) return null
+
+  return {
+    symbol,
+    leveragePercent: typeof req.leveragePercent === 'number' ? clampRange(req.leveragePercent, 0, 100) : DEFAULT_LEVERAGE_PERCENT,
+    rebalanceHealthPercent:
+      typeof req.rebalanceHealthPercent === 'number'
+        ? clampRange(req.rebalanceHealthPercent, 0, 100)
+        : DEFAULT_REBALANCE_HEALTH_PERCENT,
+    rebalanceSizePercent:
+      typeof req.rebalanceSizePercent === 'number'
+        ? clampRange(req.rebalanceSizePercent, 0, 100)
+        : DEFAULT_REBALANCE_SIZE_PERCENT,
+    initialLongUsd: DEFAULT_TOTAL_EQUITY_USD / 2,
+    initialShortUsd: DEFAULT_TOTAL_EQUITY_USD / 2,
+    windowHours,
+  }
+}
+
+/**
+ * Parse a counter-trade signal request from the ACP offering name + requirement JSON.
+ * Returns the symbol if this is a counterTradeSignal offering, null otherwise.
+ */
+export function parseSignalRequestFromOffering(
+  offeringName: string,
+  requirementJson: string,
+): string | null {
+  if (!offeringName.toLowerCase().includes('countertrade') && !offeringName.toLowerCase().includes('counter_trade')) {
+    return null
+  }
+  let req: Record<string, unknown> = {}
+  try {
+    req = JSON.parse(requirementJson)
+  } catch {
+    return parseSymbol(requirementJson, true)
+  }
+  const symbol = typeof req.symbol === 'string' ? normalizeMarketSymbol(req.symbol) : null
+  return symbol
+}
+
+export function parseFundingOiRegimeRequestFromOffering(
+  offeringName: string,
+  requirementJson: string,
+): string | null {
+  if (offeringName.toLowerCase() !== 'fundingoiregimeshadow') return null
+  let req: Record<string, unknown>
+  try {
+    req = JSON.parse(requirementJson) as Record<string, unknown>
+  } catch {
+    return parseSymbol(requirementJson, true)
+  }
+  return typeof req.symbol === 'string' ? normalizeMarketSymbol(req.symbol) : null
+}
+
+export type FundingOiRegimeJobResult = FundingOiRegimeResult & { responseText: string }
+
+export async function runFundingOiRegimeJob(
+  symbol: string,
+  deps?: {
+    readMarketContext?: (symbol: string) => Promise<HyperliquidPerpMarketContext | null>
+    recordObservation?: typeof recordFundingOiRegimeObservation
+    settleHorizons?: typeof settleDueFundingOiRegimeHorizons
+    now?: () => number
+    idempotencyKey?: string
+  },
+): Promise<FundingOiRegimeJobResult> {
+  const normalizedSymbol = normalizeMarketSymbol(symbol)
+  const readMarketContext = deps?.readMarketContext ?? getPerpMarketContext
+  const context = await readMarketContext(normalizedSymbol)
+  const analysis = classifyFundingOiRegime({
+    symbol: normalizedSymbol,
+    fundingRate: context?.fundingRate ?? null,
+    openInterestUsd: context?.openInterestUsd ?? null,
+    volume24hUsd: context?.volume24hUsd ?? null,
+    priceChange24hPct: context?.priceChange24hPct ?? null,
+  })
+  const observedAtMs = (deps?.now ?? Date.now)()
+  const observation: FundingOiObservationInput = {
+    idempotencyKey: deps?.idempotencyKey,
+    observedAtMs,
+    symbol: analysis.symbol,
+    markPriceUsd: context?.markPriceUsd ?? null,
+    fundingRate: analysis.fundingRate,
+    openInterestUsd: analysis.openInterestUsd,
+    volume24hUsd: analysis.volume24hUsd,
+    priceChange24hPct: analysis.priceChange24hPct,
+    regime: analysis.regime,
+    fundingBias: analysis.fundingBias,
+    oiParticipation: analysis.oiParticipation,
+    confidence: analysis.confidence,
+    reasons: analysis.reasons,
+    missingFields: [
+      ...(context?.markPriceUsd == null || !Number.isFinite(context.markPriceUsd) ? ['markPriceUsd' as const] : []),
+      ...analysis.missingFields,
+    ],
+  }
+  const recordObservation = deps?.recordObservation ?? recordFundingOiRegimeObservation
+  const settleHorizons = deps?.settleHorizons ?? settleDueFundingOiRegimeHorizons
+  await recordObservation(observation).catch(() => {})
+  await settleHorizons({
+    nowMs: observedAtMs,
+    readMarkPriceAt: async (dueSymbol, targetAtMs) => {
+      const candles = await getCandleSnapshot({
+        coin: dueSymbol,
+        interval: '1m',
+        startTimeMs: targetAtMs - 60_000,
+        endTimeMs: targetAtMs + 120_000,
+      })
+      const candle = candles
+        ?.filter((item) => Number.isFinite(item.close) && item.close > 0)
+        .sort((a, b) => Math.abs(a.time - targetAtMs) - Math.abs(b.time - targetAtMs))[0]
+      return candle ? { priceUsd: candle.close, priceAtMs: candle.time } : null
+    },
+  }).catch(() => {})
+  return { ...analysis, responseText: formatFundingOiRegime(analysis) }
 }
 
 export async function runRealBacktestJob(

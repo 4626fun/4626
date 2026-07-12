@@ -1,4 +1,4 @@
-export type HostMode = 'app' | 'marketing'
+export type HostMode = 'app' | 'marketing' | 'alfaclub'
 
 type LoopbackOriginResolutionInput = {
   configuredOrigin: string
@@ -137,6 +137,9 @@ export const CONFIGURED_MARKETING_ORIGIN =
 export const CONFIGURED_APP_ORIGIN =
   (import.meta.env.VITE_APP_ORIGIN as string)?.trim() || 'https://app.4626.fun'
 
+export const CONFIGURED_ALFACLUB_ORIGIN =
+  (import.meta.env.VITE_ALFACLUB_ORIGIN as string)?.trim() || 'https://alfaclub.4626.fun'
+
 /**
  * When rendering the marketing host, never route users to loopback app origins.
  * This protects against accidentally shipping VITE_APP_ORIGIN=localhost in a
@@ -175,6 +178,9 @@ export const MARKETING_ORIGIN = resolveConfiguredOrigin(CONFIGURED_MARKETING_ORI
 /** Canonical app domain origin (post-acceptance). */
 export const APP_ORIGIN = resolveConfiguredOrigin(CONFIGURED_APP_ORIGIN)
 
+/** Canonical AlfaClub product host origin. */
+export const ALFACLUB_ORIGIN = resolveConfiguredOrigin(CONFIGURED_ALFACLUB_ORIGIN)
+
 /**
  * Optional explicit base URL for waitlist referral links.
  * When set, waitlist share links are built from this origin instead of MARKETING_ORIGIN.
@@ -183,16 +189,22 @@ export const WAITLIST_REFERRAL_BASE_URL =
   (import.meta.env.VITE_WAITLIST_REFERRAL_BASE_URL as string)?.trim() || ''
 
 const MARKETING_HOSTNAMES = ['4626.fun', 'www.4626.fun']
+const ALFACLUB_HOSTNAMES = ['alfaclub.4626.fun']
 
-function isMarketingHost(hostname: string): boolean {
+export function isMarketingHostname(hostname: string): boolean {
   const h = hostname?.toLowerCase().trim() ?? ''
   return MARKETING_HOSTNAMES.some((m) => h === m)
+}
+
+export function isAlfaClubHostname(hostname: string): boolean {
+  const h = hostname?.toLowerCase().trim() ?? ''
+  return ALFACLUB_HOSTNAMES.some((m) => h === m)
 }
 
 function hostModeOverride(): HostMode | null {
   const raw = (import.meta.env.VITE_HOST_MODE_OVERRIDE as string | undefined) ?? ''
   const v = raw.trim().toLowerCase()
-  if (v === 'app' || v === 'marketing') return v
+  if (v === 'app' || v === 'marketing' || v === 'alfaclub') return v
   return null
 }
 
@@ -200,6 +212,7 @@ function hostModeOverride(): HostMode | null {
  * Host mode detection.
  *
  * - 4626.fun (or www.4626.fun) = marketing (waitlist landing)
+ * - alfaclub.4626.fun = AlfaClub product shell
  * - app.4626.fun (or localhost) = app
  */
 export function getHostMode(): HostMode {
@@ -207,7 +220,8 @@ export function getHostMode(): HostMode {
   const override = hostModeOverride()
   if (override) return override
   const hostname = window.location.hostname ?? ''
-  return isMarketingHost(hostname) ? 'marketing' : 'app'
+  if (isAlfaClubHostname(hostname)) return 'alfaclub'
+  return isMarketingHostname(hostname) ? 'marketing' : 'app'
 }
 
 /**
@@ -244,6 +258,21 @@ export function getMarketingBaseUrl(): string {
 }
 
 /**
+ * Base URL for the AlfaClub product shell (rooms / safety / pools).
+ */
+export function getAlfaClubBaseUrl(): string {
+  if (typeof window === 'undefined') return ALFACLUB_ORIGIN
+  const mode = getHostMode()
+  if (mode === 'alfaclub') {
+    return resolveLoopbackOriginForCurrentWindow({
+      configuredOrigin: ALFACLUB_ORIGIN,
+      currentOrigin: window.location.origin,
+    })
+  }
+  return ALFACLUB_ORIGIN
+}
+
+/**
  * Base URL used for user-facing waitlist referral links.
  */
 export function getWaitlistReferralBaseUrl(): string {
@@ -253,9 +282,7 @@ export function getWaitlistReferralBaseUrl(): string {
 }
 
 /**
- * Base Account sub-accounts are scoped to the marketing app domain
  * (`4626.fun`), not the app subdomain. Use this origin for
- * `wallet_getSubAccounts` / provisioning on both hosts.
  */
 export function getSubAccountAppDomain(): string {
   if (typeof window === 'undefined') return MARKETING_ORIGIN

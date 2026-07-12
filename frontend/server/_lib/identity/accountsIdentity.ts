@@ -243,9 +243,13 @@ function valuesForProviderFromPrivy(user: PrivyUserLike, provider: AccountLinkPr
 
   if (provider === 'external_eoa') {
     const classification = classifyLinkedAccounts(user)
+    const canonicalLower = normalizeLower(classification.canonicalSmartWallet?.address)
     for (const wallet of classification.allWallets) {
       if (wallet.chain !== 'evm') continue
       if (wallet.walletType !== 'external_eoa') continue
+      // Never surface the canonical CSW under linkedMethods.external_eoa —
+      // Base App / Coinbase Smart Wallet sign-in must stay on the identity lane.
+      if (canonicalLower && normalizeLower(wallet.address) === canonicalLower) continue
       push(normalizeEvmAddress(wallet.address))
     }
     return out
@@ -803,7 +807,7 @@ export async function resolveAndPersistZoraSignals(params: {
     resolveStoredCanonicalCswAddress({
       candidate: canonical,
       embeddedEoa: classification.embeddedEoa?.address ?? null,
-      activeOwnerEoa: classification.primaryWalletAddress ?? null,
+      activeOwnerEoa: classification.activeOwnerWallet?.address ?? null,
     }) ?? canonical
 
   const allEvmEoas = classification.allWallets

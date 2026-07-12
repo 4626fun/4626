@@ -14,8 +14,6 @@ Architecture reference: [4626 Connection Methods](/4626-connection-methods). Can
 - All transitions are event-driven; no timer-based auto-advance.
 - Signer preflight is enforced only before signer-required actions.
 - A fully onboarded account must have a Privy embedded EOA.
-- For CSW users, user-initiated frontend execution requires an app-scoped sub-account (`base_sub_account`) with its signer routed to the Privy embedded EOA via `setToOwnerAccount()`. The embedded EOA is **not** installed as a direct owner of the parent CSW on the user-initiated track.
-- Server-side automation (deploy-session, XMTP agent, ERC-8004) continues to delegate a Privy *server* wallet as a direct owner on the parent CSW per `.cursor/rules/csw-agent-lifecycle.mdc`; this is orthogonal to the user-initiated sub-account track.
 
 ## States
 
@@ -81,7 +79,5 @@ Wallet setup must then converge to the same final canonical wallet fields:
 
 - `canonicalCswAddress` (parent CSW, `profiles.csw_address`)
 - `embeddedEoaAddress` (`profiles.primary_embedded_eoa`)
-- `baseSubAccountAddress` (`profiles.base_sub_account`, user-initiated frontend execution address for CSW users)
-- `subAccountSignerConfigured` (embedded EOA routed as sub-account signer via `setToOwnerAccount()`; this supersedes `embeddedEoaOwnerInstalled` on the user-initiated track)
 
 The automated scenario matrix is covered by `frontend/src/wallet/canonicalStateMachine.test.ts`.

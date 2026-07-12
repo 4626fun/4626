@@ -3,15 +3,12 @@ name: Security scanning
 on:
   pull_request:
     branches: [main, master]
-    # Still run on all PRs for gitleaks; heavy jobs are if-gated to main/schedule.
-  push:
-    branches: [main, master]
+    # Gitleaks only on PRs; heavy jobs are schedule/manual.
   workflow_dispatch:
   # Heavy jobs (full-history gitleaks, pnpm audit, Semgrep, full Slither)
-  # run weekly + manual. Incremental gitleaks still blocks every PR/push.
-  # Was nightly — cut cost while keep allowlist telemetry.
+  # monthly + manual. Was weekly — keep allowlist telemetry cheap.
   schedule:
-    - cron: '13 7 * * 1'
+    - cron: '13 7 1 * *'
 
 concurrency:
   group: security-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -23,10 +20,10 @@ permissions:
 jobs:
   gitleaks:
     name: Gitleaks (incremental)
-    # 4626-399 scope 2: incremental scan runs on every PR and push for
+    # 4626-399 scope 2: incremental scan runs on every PR for
     # fast feedback on the commit range. A separate full-tree job below
     # enforces the allowlist config against the whole working tree on
-    # every event so that `gitleaks.toml` itself cannot regress silently.
+    # schedule/manual so that `gitleaks.toml` itself cannot regress silently.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # Skip schedule (full-history job covers it). Skip draft PRs.
@@ -71,17 +68,6 @@ jobs:
         run: |
           gitleaks detect --source . --config gitleaks.toml --no-banner --verbose --redact \
             --log-opts "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
-
-      - name: Run gitleaks on push commits
-        if: github.event_name == 'push'
-        run: |
-          if [[ "${{ github.event.before }}" =~ ^0+$ ]]; then
-            gitleaks detect --source . --config gitleaks.toml --no-banner --verbose --redact \
-              --log-opts "${{ github.sha }}^!"
-          else
-            gitleaks detect --source . --config gitleaks.toml --no-banner --verbose --redact \
-              --log-opts "${{ github.event.before }}..${{ github.event.after }}"
-          fi
 
       - name: Run gitleaks (full manual ref)
         if: github.event_name == 'workflow_dispatch'

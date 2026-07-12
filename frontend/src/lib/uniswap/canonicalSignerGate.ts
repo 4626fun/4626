@@ -84,22 +84,6 @@ export function evaluateCanonicalSignerGate(input: CanonicalSignerGateInput): Ca
     )
   }
 
-  if (input.baseAppDirectConnected) {
-    return {
-      required: true,
-      ready: true,
-      code: 'ok',
-      reason: null,
-    }
-  }
-
-  if (input.executionTrack === 'base-app-direct') {
-    return gateFailure(
-      'execution-setup-required',
-      'Connect your Coinbase Smart Wallet in Base App to enable sponsored swaps from your parent CSW.',
-    )
-  }
-
   if (input.executionTrack === 'none-yet') {
     if (input.ownerCheckStatus === 'owner') {
       // Server track can lag behind on-chain owner confirmation (e.g. stale

@@ -191,6 +191,7 @@ export function AddOwnerBaseApp() {
     publicClient: stablePublicClient,
     enabled: Boolean(privyAuthed && resolvedCanonicalCswAddress && privyEmbeddedEoaAddress),
     onSuccess: handleInstallSuccess,
+    surface: 'add-owner-page',
   })
 
   const { pendingUserOpHash } = userOpFlow
@@ -234,7 +235,7 @@ export function AddOwnerBaseApp() {
       {/* Status banner confirming this is the supported production path */}
       <div className="mx-auto max-w-2xl px-6 pt-4">
         <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-400">
-          This is the supported Base App owner install path (EntryPoint self-call). Sub-account registration is the limited fallback.
+          This is the supported Base App owner install path (EntryPoint self-call).
         </div>
       </div>
       <div className="mx-auto w-full max-w-2xl space-y-6 px-6 py-16">
@@ -259,12 +260,10 @@ export function AddOwnerBaseApp() {
               indexes.
             </p>
             <p className="text-zinc-300">
-              The primary button uses Relay Method A: Depository{' '}
-              <span className="font-mono">depositNative</span> (Part 1) then EntryPoint{' '}
-              <span className="font-mono">handleOps</span> with{' '}
-              <span className="font-mono">addOwnerAddress</span> inside the CSW UserOp (Part 2) — the
-              same shape as your earlier successful installs. Relay rides alongside as a same-chain leg;
-              the privileged call is never proxied through RelayRouter multicall.
+              The primary button submits the single CSW self-call through Base App. Relay Method A remains
+              an explicit fallback on this diagnostic page; its privileged Part 2 still lands through
+              EntryPoint and never proxies <span className="font-mono">addOwnerAddress</span> through
+              RelayRouter multicall.
             </p>
           </div>
         </div>
@@ -532,7 +531,7 @@ export function AddOwnerBaseApp() {
                     type="button"
                     variant="primary"
                     disabled={!canSubmitUserOp || userOpFlow.busy || !userOpFlow.inBaseApp}
-                    onClick={() => void userOpFlow.handleSubmitUserOp({ relayMethodAOnly: true })}
+                    onClick={() => void userOpFlow.handleSubmitUserOp()}
                   >
                     {userOpFlow.busy
                       ? userOpFlow.submitPhase === 'preflight'
@@ -554,9 +553,9 @@ export function AddOwnerBaseApp() {
                     type="button"
                     variant="secondary"
                     disabled={!canSubmitUserOp || userOpFlow.busy || !userOpFlow.inBaseApp}
-                    onClick={() => void userOpFlow.handleSubmitUserOp({ directSendCallsOnly: true })}
+                    onClick={() => void userOpFlow.handleSubmitUserOp({ relayMethodAOnly: true })}
                   >
-                    {userOpFlow.busy ? 'Submitting…' : 'Advanced: direct addOwner sendCalls'}
+                    {userOpFlow.busy ? 'Submitting…' : 'Fallback: Relay Method A'}
                   </Button>
                   <Button
                     type="button"

@@ -52,6 +52,7 @@ export const API_ENDPOINTS = {
     counterTradeStatus: '/api/v1/alfaclub/counter-trade-status',
     keySafetyRoom: '/api/v1/alfaclub/key-safety-room',
     keySafetyClubRisk: '/api/v1/alfaclub/key-safety-club-risk',
+    tradingRooms: '/api/v1/alfaclub/trading-rooms',
     backtestSweep: '/api/v1/alfaclub/backtest-sweep',
     backtestAudit: '/api/v1/alfaclub/backtest-audit',
     backtestSeries: '/api/v1/alfaclub/backtest-series',

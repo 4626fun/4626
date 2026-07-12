@@ -24,26 +24,7 @@ on:
       - 'scripts/check-docs-source-link-pin.mjs'
       - 'apps/docs-site/scripts/**'
       - '.github/workflows/docs.yml'
-  push:
-    branches: [main, master]
-    paths:
-      - 'docs/**'
-      - 'README.md'
-      - 'SECURITY.md'
-      - 'deployments/**'
-      - 'frontend/docs/**'
-      - 'frontend/README.md'
-      - 'frontend/typedoc.json'
-      - 'frontend/tsconfig.docs.json'
-      - 'apps/docs-site/**'
-      - 'package.json'
-      - 'tsconfig.json'
-      - 'tsconfig*.json'
-      - 'typedoc.json'
-      - 'typedoc*.json'
-      - 'scripts/check-docs-source-link-pin.mjs'
-      - 'apps/docs-site/scripts/**'
-      - '.github/workflows/docs.yml'
+  # Drift checks on PR only — docs-deploy.yml still deploys on main push.
 
 concurrency:
   group: docs-drift-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

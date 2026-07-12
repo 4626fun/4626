@@ -4,14 +4,12 @@
 The on-chain field on Creator Coins is still named `payoutRecipient`. In all prose, comments, and docs it must be qualified as the `creatorCoinPayoutRecipient` (external earnings lane). See the canonical definition in [creatorvault-business-logic-core-structure-audit.md](./audits/creatorvault-business-logic-core-structure-audit.md).
 
 Status: **reference architecture (already implemented)** · Author: computer · Date: 2026-05-05 · Updated: 2026-05-06
-Related: [ACCOUNT_MODEL.md](./ACCOUNT_MODEL.md), [owner-mutation-decision-2026-05.md](./owner-mutation-decision-2026-05.md), [sub-accounts-baseapp-design.md](./sub-accounts-baseapp-design.md)
-
+Related: [ACCOUNT_MODEL.md](./ACCOUNT_MODEL.md), [owner-mutation-decision-2026-05.md](./owner-mutation-decision-2026-05.md),
 ## Heads up: this is a reference doc, not a proposal
 
 A previous version of this file specced building a new "set payout
 recipient at vault launch" flow. **That flow already exists** as part of
 the `/deploy` phase-2 batch. This file is retained because the design
-rationale (why we don't use sub-accounts here, why we don't become a
 permanent owner, how population coverage maps to outcomes) is still
 useful documentation. But everything in §"What does work" below is a
 description of code that is in production, not a TODO.
@@ -32,28 +30,20 @@ Zora Coinbase Smart Wallet.
 So 4626.fun must produce a transaction where `msg.sender == userZoraCSW`
 to two specific calls on the creator coin.
 
-## Why sub-accounts don't work here
 
-A sub-account on the Zora CSW would be a separate contract address.
-Calls *from* the sub-account are `msg.sender == subAccount`, not
 `msg.sender == zoraCSW`. The hierarchy is:
 
 ```
-parentCSW ──owns──> subAccount   (parent can act on sub)
-parentCSW <──── X ──── subAccount  (sub CANNOT impersonate parent)
 ```
 
 Funds flow upward via Spend Permissions, but **execution authority does
 not.** There is no analogous "execution permission" pattern in
-Coinbase's Smart Wallet where a sub-account can make the parent be
 `msg.sender` to an arbitrary call. Confirmed from the
-[Coinbase Sub Accounts video](https://www.youtube.com/watch?v=xoLBvAB_05w):
 
 > "the user's account has all of the funds and has the hierarchical
 > ability to interact with the app account ... the sub wallet only has
 > access to the spend permissions in the main wallet"
 
-So a sub-account on the Zora CSW would let 4626.fun hold its own balance
 and execute its own logic, but it cannot update fields where the parent
 is the authorized signer.
 
@@ -147,7 +137,6 @@ Everything else in this doc describes shipped code.
 
 | Question | Answer |
 |---|---|
-| Is this a sub-account flow? | No |
 | Does 4626.fun become an owner of any user CSW? | No |
 | How many user signatures at vault launch? | Zero extra — bundled into the existing phase-2 UserOp |
 | Population covered today? | (a) N/A · (c) full · (b)+(d) blocked at pre-flight with a clear (but improvable) error |

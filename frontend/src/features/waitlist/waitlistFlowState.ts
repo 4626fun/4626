@@ -34,6 +34,7 @@ function isLegacyParentOwnerSigningReady(params: {
 
 export function shouldFocusBaseAppWalletSetup(params: {
   inBaseApp: boolean
+  connectTrack?: WaitlistConnectTrack
   signingStepComplete: boolean
   baseWalletReady: boolean
   account: {
@@ -42,6 +43,7 @@ export function shouldFocusBaseAppWalletSetup(params: {
   }
 }): boolean {
   if (!params.inBaseApp) return false
+  if (params.connectTrack === 'zora-owner-install') return false
   if (!params.account.emailVerified) return false
   if (params.signingStepComplete) return false
   return !params.baseWalletReady
@@ -67,11 +69,14 @@ export function resolveWaitlistConnectTrack(params: {
   embeddedEoaAvailable?: boolean
 }): WaitlistConnectTrack {
   const executionTrack = params.executionTrack ?? params.accountSignals?.executionTrack ?? null
-  if (executionTrack === 'base-app-direct') return 'base-app-direct'
-  if (executionTrack === 'legacy-owner-install') return 'zora-owner-install'
-
   const zoraLinked =
     params.zoraLinked ?? isZoraLinkedFromAccountSignals(params.accountSignals)
+  const canonicalSource = params.accountSignals?.canonicalSource?.trim().toLowerCase() ?? ''
+  if (executionTrack === 'base-app-direct' && canonicalSource === 'base_account') {
+    return 'base-app-direct'
+  }
+  if (executionTrack === 'legacy-owner-install') return 'zora-owner-install'
+
   const canonical =
     typeof params.canonicalCswAddress === 'string'
       ? params.canonicalCswAddress.trim()
@@ -83,6 +88,9 @@ export function resolveWaitlistConnectTrack(params: {
     Boolean(params.accountSignals?.embeddedEoaAddress?.trim())
 
   if (zoraLinked && canonical && embeddedReady) return 'zora-owner-install'
+  if (canonicalSource === 'base_account' && canonical && embeddedReady) {
+    return 'base-app-direct'
+  }
   if (params.accountSignals?.canonicalSource === 'privy_csw' && canonical && embeddedReady) {
     return 'privy-owner-install'
   }
@@ -129,8 +137,6 @@ export function isWaitlistStepTwoSigningComplete(params: {
   parentEmbeddedOwnerOnChain?: boolean
 }): boolean {
   if (params.parentEmbeddedOwnerOnChain === true) return true
-  if (params.accountSignals?.executionTrack === 'legacy-owner-install') return true
-  if (params.accountSignals?.executionTrack === 'base-app-direct') return true
   return false
 }
 
@@ -147,8 +153,6 @@ export function shouldShowParentCswAddOwnerPanel(params: {
   baseWalletReady?: boolean
 }): boolean {
   if (params.signingStepComplete) return false
-  if (params.executionTrack === 'base-app-direct') return false
-  if (params.connectTrack === 'base-app-direct') return false
   if (isLegacyParentOwnerSigningReady({ parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain })) {
     return false
   }
@@ -163,6 +167,7 @@ export function shouldShowParentCswAddOwnerPanel(params: {
     return params.baseWalletReady !== false
   }
 
+  if (params.connectTrack === 'base-app-direct') return true
   if (params.connectTrack === 'privy-owner-install') return true
 
   if (params.connectTrack === 'zora-owner-install') {
@@ -218,6 +223,64 @@ export function shouldAutoSubmitOtpCode(params: {
   if (params.codeBusy) return false
   if (params.normalizedCode.length !== 6) return false
   return params.lastAttemptedCode !== params.normalizedCode
+}
+
+/** Post-OTP submit button phases — setup must win over static "Verified" while bootstrap runs. */
+export type WaitlistOtpSubmitPhase = 'idle' | 'verifying' | 'setting_up' | 'verified'
+
+export type WaitlistOtpCodeStatus = 'default' | 'success' | 'error'
+
+/**
+ * Resolves waitlist OTP submit UI phase. While OTP is accepted and join/bootstrap
+ * is still in flight (`success` + `codeBusy`), prefer `setting_up` so the button
+ * does not look finished during session bridge work.
+ */
+export function resolveWaitlistOtpSubmitPhase(params: {
+  codeStatus: WaitlistOtpCodeStatus
+  codeBusy: boolean
+}): WaitlistOtpSubmitPhase {
+  if (params.codeBusy && params.codeStatus === 'success') return 'setting_up'
+  if (params.codeBusy) return 'verifying'
+  if (params.codeStatus === 'success') return 'verified'
+  return 'idle'
+}
+
+export function getWaitlistOtpSubmitLabel(phase: WaitlistOtpSubmitPhase): string {
+  switch (phase) {
+    case 'setting_up':
+      return 'Setting up your account…'
+    case 'verifying':
+      return 'Verifying…'
+    case 'verified':
+      return 'Verified'
+    case 'idle':
+      return 'Verify & join'
+    default: {
+      const _exhaustive: never = phase
+      return _exhaustive
+    }
+  }
+}
+
+/** Reassurance under the OTP submit button during the post-verify bootstrap gap. */
+export function getWaitlistOtpSubmitHelperText(phase: WaitlistOtpSubmitPhase): string | null {
+  if (phase === 'setting_up') return 'This usually takes a few seconds.'
+  return null
+}
+
+/**
+ * Visual status for the OTP digit cells. Mirrors `resolveWaitlistOtpSubmitPhase`'s
+ * "don't celebrate until actually done" rule: the cells only turn green once the
+ * account is fully set up (`verified`), not merely once the code was accepted while
+ * setup is still running. Error styling still surfaces immediately.
+ */
+export function resolveWaitlistOtpInputStatus(params: {
+  codeStatus: WaitlistOtpCodeStatus
+  codeBusy: boolean
+}): WaitlistOtpCodeStatus {
+  if (params.codeStatus === 'error') return 'error'
+  const phase = resolveWaitlistOtpSubmitPhase(params)
+  return phase === 'verified' ? 'success' : 'default'
 }
 
 type CanonicalBootstrapResult = {

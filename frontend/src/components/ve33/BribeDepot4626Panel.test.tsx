@@ -6,7 +6,6 @@ import type { ReactNode } from 'react'
 const {
   VAULT,
   TOKEN,
-  DEPOT,
   mockEnsureDepot,
   mockApprove,
   mockDeposit,
@@ -49,7 +48,6 @@ const {
   return {
     VAULT,
     TOKEN,
-    DEPOT,
     mockEnsureDepot,
     mockApprove,
     mockDeposit,

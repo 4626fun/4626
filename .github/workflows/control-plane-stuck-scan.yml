@@ -1,9 +1,9 @@
 name: Control Plane Stuck Scan
 
+# Cost: schedule removed (was */30 → … → weekly). Run from Actions UI when
+# investigating stuck deploy/control-plane sessions.
+
 on:
-  schedule:
-    # Cost: was */30 → hourly → 6h → daily. Weekly + manual for stuck-session scanning.
-    - cron: '23 14 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -20,7 +20,7 @@ concurrency:
 jobs:
   stuck-scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -42,8 +42,6 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           CONTROL_PLANE_STUCK_FAIL_ON_FOUND: '1'
           CONTROL_PLANE_ALERT_WEBHOOK_URL: ${{ secrets.CONTROL_PLANE_ALERT_WEBHOOK_URL }}
-        # The package script passes --env-file=.env to tsx; create an empty one
-        # so the runner (which has no checked-in .env) does not fail on it.
         run: |
           touch frontend/.env
           pnpm --dir frontend run control-plane:stuck-scan

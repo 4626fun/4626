@@ -2,34 +2,19 @@ name: AlfaClub auth-health monitor
 
 # External health probe for the AlfaClub Privy/JWT bridge.
 #
-# Calls GET /api/v1/alfaclub/chat-auth-health (the cron-secret-gated
-# endpoint added in PR #471) on a daily schedule and fails the workflow
-# run on any of the alert conditions documented in
-# docs/operations/alfaclub-auth-hardening.md. A failed workflow run is
-# the alerting signal — GitHub will email the repo's notification list.
+# Cost: schedule removed (was */5 → … → weekly). Prefer an external uptime
+# monitor or Vercel cron for continuous probing; use Actions UI after incidents.
 #
-# The script is also runnable locally:
+# Local:
 #   ALFACLUB_HEALTH_CRON_SECRET=… node frontend/scripts/alfaclub-auth-health-monitor.mjs
-#
-# Secret setup — see docs/operations/alfaclub-auth-hardening.md
-# "External GitHub Actions monitor" for instructions.
 
 on:
-  schedule:
-    # Cost: was */5 → hourly → 6h → daily. Weekly + manual unless incidents demand more.
-    - cron: '17 14 * * 1'
   workflow_dispatch:
-    # Manual dispatch from the Actions UI. Used after a deploy or
-    # operator restore to confirm health without waiting for the next
-    # scheduled tick.
 
 permissions:
   contents: read
 
 concurrency:
-  # Drop overlapping runs — only one probe at a time. If one is still
-  # running when the next cron fires (network slow, runner queued),
-  # GitHub cancels the older one. The probe is idempotent.
   group: alfaclub-auth-health-monitor
   cancel-in-progress: true
 
@@ -42,7 +27,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          # We only need the script and a recent enough Node.
           fetch-depth: 1
 
       - name: Use Node.js
@@ -52,11 +36,6 @@ jobs:
 
       - name: Run health monitor
         env:
-          # Required. Stored as a repo-level Actions secret named
-          # ALFACLUB_HEALTH_CRON_SECRET (already provisioned by the
-          # operator). The script never echoes this value.
           ALFACLUB_HEALTH_CRON_SECRET: ${{ secrets.ALFACLUB_HEALTH_CRON_SECRET }}
-          # Optional override; defaults to https://app.4626.fun/api/v1/alfaclub/chat-auth-health
-          # when unset.
           ALFACLUB_HEALTH_URL: ${{ vars.ALFACLUB_HEALTH_URL }}
         run: node frontend/scripts/alfaclub-auth-health-monitor.mjs

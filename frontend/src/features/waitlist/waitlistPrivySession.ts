@@ -324,54 +324,13 @@ type EstablishWaitlistSessionInput = {
   tokenAttempts?: number
   tokenRetryDelayMs?: number
   tokenTimeoutMs?: number | null
-  /**
-   * Best-effort hook to ensure the caller has a Privy embedded EOA before we
-   * bridge the session. Waitlist Privy modes disable auto-create-on-login
-   * (`WAITLIST_EMBEDDED_WALLETS_OFF` in lib/privy/client.tsx), so a brand-new
-   * email join otherwise has zero linked wallets at this point and
-   * /api/auth/privy fails closed with 400 "No Privy wallet is ready yet."
-   * Only the email-join tail supplies this; the wallet-sign-in path already
-   * has a wallet and omits it.
-   */
-  ensureEmbeddedWallet?: () => Promise<unknown>
 }
 
 /**
- * Best-effort client embedded-wallet create before bridging.
- *
- * Waitlist email OTP is whitelabel (`loginWithCode`), so Privy `createOnLogin`
- * does not run. Client `createWallet()` can also clear localhost auth when it
- * loads the privy.4626.fun embedded-wallet iframe. Prefer a short retry here;
- * if it still fails, continue to `/api/auth/privy`, which provisions a
- * user-owned embedded EOA server-side when the verified user has zero wallets.
+ * Bridge a settled Privy token into the 4626 session. Embedded EOA creation is
+ * server-owned in `/api/auth/privy`; the waitlist never starts an iframe wallet
+ * create between OTP completion and session binding.
  */
-async function ensureEmbeddedWalletBestEffort(
-  ensureEmbeddedWallet: () => Promise<unknown>,
-  logStep: (step: string, detail?: Record<string, unknown>) => void,
-): Promise<boolean> {
-  const attempts = 3
-  const retryDelayMs = 200
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    try {
-      const result = await ensureEmbeddedWallet()
-      const resultRecord = result && typeof result === 'object' ? (result as Record<string, unknown>) : null
-      logStep('ensure-embedded-wallet:success', {
-        attempt,
-        created: resultRecord?.created ?? null,
-      })
-      return true
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error ?? '')
-      logStep('ensure-embedded-wallet:attempt-failed', { attempt, message })
-      if (attempt < attempts) {
-        await sleep(retryDelayMs)
-      }
-    }
-  }
-  logStep('ensure-embedded-wallet:gave-up', { attempts })
-  return false
-}
-
 export async function establishWaitlistSessionAfterPrivyAuth(
   input: EstablishWaitlistSessionInput,
 ): Promise<string> {
@@ -405,26 +364,6 @@ export async function establishWaitlistSessionAfterPrivyAuth(
     // bridge. The marker makes the SDK treat refresh credentials as present;
     // with `refresh_token: "deprecated"` that kicks a sessions refresh which
     // 400s on loopback and clears `authenticated` mid-join.
-
-    // Skip client `createWallet()` on localhost: it loads the privy.4626.fun
-    // embedded-wallet iframe (server-cookie mode) and clears the just-minted
-    // session before a wallet exists. `/api/auth/privy` provisions server-side.
-    const skipClientWalletCreate = isLocalDevPrivySessionMarkerMode()
-    if (input.ensureEmbeddedWallet && !skipClientWalletCreate) {
-      logStep('ensure-embedded-wallet:start', {
-        privyAuthenticated: privy.authenticated === true,
-      })
-      for (let settle = 0; settle < 4 && privy.authenticated !== true; settle += 1) {
-        await sleep(100)
-      }
-      const walletReady = await ensureEmbeddedWalletBestEffort(input.ensureEmbeddedWallet, logStep)
-      logStep('ensure-embedded-wallet:done', {
-        walletReady,
-        privyAuthenticated: privy.authenticated === true,
-      })
-    } else if (skipClientWalletCreate) {
-      logStep('ensure-embedded-wallet:skipped-localdev')
-    }
 
     logStep('bridge:start')
     const bridgeResult = await bridgePrivySession(privyToken)

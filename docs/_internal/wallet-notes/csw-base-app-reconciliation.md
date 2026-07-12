@@ -11,7 +11,6 @@ returns a bundler `-32507` validation revert.
 
 For the canonical CSW at `0xAb6d5C10b03300326cd7fab7267ae192842967b5` on Base (migrated
 2026-04-23 from `0x4beabd…`; see `frontend/src/wallet/canonicalWalletPolicy.ts`), the
-Base App popup signs with a **per-session sub-account key that is not in the CSW's
 on-chain owner array**. ERC-1271 and bundler validation both correctly reject it.
 There is no client-side fix.
 
@@ -43,19 +42,14 @@ shape actually targets.
 
 ## Why Base App's popup signs with a substituted key
 
-The Coinbase Wallet SDK (cb-sdk) launches CSW sessions in **sub-account mode**.
-See `createSubAccountSigner.ts` in cb-sdk: `eth_accounts` returns the sub-account
 address (not the parent CSW), and `personal_sign` is fulfilled by the
-sub-account's per-session key. That key is generated client-side, lives in the
 session, and **is never written to the CSW's on-chain owner array**. The
 substitution is invisible to the dapp unless you read `eth_accounts` directly off
 the connector's provider — which is exactly what the probe's
 [wallet session snapshot](#how-to-detect-the-substitution) does.
 
-Base App routes user requests through that sub-account pseudo-wallet, which
 delegates back to the canonical CSW for execution. When you call `personal_sign`
 inside Base App, the popup returns a signature produced by a key that is
-**not in the CSW's on-chain owner array**. That key is part of the sub-account's
 session state, not the canonical wallet.
 
 For wallets where every owner is a passkey (owner[0] on the canonical CSW
@@ -87,7 +81,6 @@ Open `/dev/csw-signature-probe` in the failing context.
    configured CSW. Tri-state:
    - **Green** — `eth_accounts[0] === cswAddress`. The popup will sign as the CSW.
    - **Amber** — `eth_accounts[0] !== cswAddress`. The provider is reporting a
-     sub-account address; the popup will sign with the sub-account's ephemeral
      session key. **This is the smoking gun.**
    - **Yellow** — at least one read failed (no provider, RPC error). The probe
      can still run; reconnect and re-snapshot if you need the diagnostic.
@@ -228,7 +221,6 @@ This restores Base App as a usable signing lane for that specific user; it
 does not generalize across users. Each Base App session that exhibits the
 substitution behaviour will need its own owner-add transaction.
 
-**Chicken-and-egg caveat.** Base App sub-account session keys are *transient* —
 derived per session, not persisted across launches. Adding the current session's
 key as an owner only makes that single session usable; the next launch produces
 a different key and the on-chain entry is stale. The stable path is to add an
@@ -244,7 +236,6 @@ When a user reports "Base App signature is being rejected":
 2. Paste the affected CSW into the address field, click *load owner slots*,
    then *snapshot wallet session*.
 3. Read the snapshot block:
-   - Amber → confirmed sub-account substitution; jump to step 5.
    - Green → Base App is operating on the CSW directly; the failure is
      elsewhere. Run *probe personal_sign* and capture the JSON dump for triage.
    - Yellow → reconnect Base App and re-snapshot.
@@ -287,8 +278,6 @@ For step-by-step instructions a user can follow on their own, see
 - `frontend/src/features/accountSetup/useAccountSetupController.ts` — EOA-owner
   lane wiring (`submitOwnerInstallViaOnchainEoa`,
   `connectedOnchainEoaOwner`, `onchainEoaOwnerCandidates`)
-- cb-sdk: `packages/wallet-sdk/src/sign/scw/utils/createSubAccountSigner.ts` —
-  sub-account session key generation
 - Smart-wallet contract source: `CoinbaseSmartWallet.sol:191` (bundler path),
   `ERC1271.sol:70` (off-chain path)
 - `docs/csw-eoa-owner-lane-verification.md` — step-by-step verification doc

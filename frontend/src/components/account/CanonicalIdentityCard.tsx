@@ -165,7 +165,6 @@ export function CanonicalIdentityCard({
 
 /**
  * Dropdown body content — canonical smart wallet first, then signer lanes.
- * Sub-account is surfaced only for population (b) when it is the effective swap lane.
  */
 export function CanonicalIdentityDropdown({
   identity,

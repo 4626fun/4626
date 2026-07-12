@@ -1,11 +1,23 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  isAlfaClubHostname,
+  isMarketingHostname,
   resolveAuthRedirectOrigin,
   resolveDisallowedLoopbackRedirectUrl,
   resolveLoopbackOriginForCurrentWindow,
   resolveMarketingToAppBaseUrl,
 } from '@/lib/env/host'
+
+describe('host classification helpers', () => {
+  it('classifies marketing and AlfaClub hostnames', () => {
+    expect(isMarketingHostname('4626.fun')).toBe(true)
+    expect(isMarketingHostname('www.4626.fun')).toBe(true)
+    expect(isMarketingHostname('app.4626.fun')).toBe(false)
+    expect(isAlfaClubHostname('alfaclub.4626.fun')).toBe(true)
+    expect(isAlfaClubHostname('app.4626.fun')).toBe(false)
+  })
+})
 
 describe('resolveLoopbackOriginForCurrentWindow', () => {
   it('keeps configured origin for non-local hosts', () => {

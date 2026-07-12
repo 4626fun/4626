@@ -13,12 +13,12 @@ import {
   checkDurableRateLimit,
   getClientIp,
   rateLimitKey,
-  classifyLinkedAccounts,
   syncUserWallets,
   type ClassifiedLinkedAccounts,
 } from '@4626/server-core'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 import { isIdentityRecoveryRequiredError } from '../../../server/_lib/identity/identityRecovery.js'
+import { ensurePrivyUserEmbeddedWallet } from '../../../server/_lib/identity/privyEmbeddedWalletProvision.js'
 import { PrivyClient } from '@privy-io/server-auth'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -86,10 +86,14 @@ function pickPrivySessionAddress(params: {
 }): string | null {
   const currentLinked = collectCurrentLinkedEvmAddresses(params.classified)
   const candidates = [
+    // Prefer canonical CSW identity over active-owner when both exist.
+    // Base App / Coinbase Smart Wallet sign-in previously preferred the
+    // misclassified "active owner" and stored the CSW as an external signer.
+    params.syncedCanonicalAddress,
+    params.classified.canonicalSmartWallet?.address ?? null,
     params.syncedActiveOwnerAddress,
     params.classifiedSessionAddress,
     params.syncedPrimaryAddress,
-    params.syncedCanonicalAddress,
     params.persistedSessionAddress,
   ].map((value) => normalizeEvmAddress(value))
 
@@ -118,114 +122,6 @@ function pickPrivySessionAddress(params: {
   // Fail closed for production safety: never mint a session for an address that
   // is not currently linked on the verified Privy user object.
   return null
-}
-
-const PRIVY_USER_WALLET_LINK_RETRY_ATTEMPTS = 4
-const PRIVY_USER_WALLET_LINK_RETRY_DELAY_MS = 200
-
-function logPrivyWalletProvision(detail: Record<string, unknown>): void {
-  console.info('[auth/privy] ensure-user-wallet', detail)
-}
-
-/**
- * Waitlist email OTP uses whitelabel `loginWithCode`, which does not run Privy's
- * `createOnLogin` auto-wallet path. Client `createWallet()` on localhost also
- * loads the privy.4626.fun embedded-wallet iframe (server-cookie mode) and can
- * clear the just-minted session before a wallet exists. Provision the
- * user-owned embedded EOA server-side when the verified Privy user still has
- * zero linked wallets so `/api/auth/privy` can mint a session.
- */
-async function ensurePrivyUserEmbeddedWallet(
-  client: PrivyClient,
-  userId: string,
-  classified: ClassifiedLinkedAccounts,
-): Promise<{ user: any; classified: ClassifiedLinkedAccounts }> {
-  if (classified.allWallets.length > 0) {
-    return { user: null, classified }
-  }
-
-  // Path 1: legacy app users/wallet endpoint (links wallet onto the Privy user).
-  try {
-    const created = await client.createWallets({
-      userId,
-      wallets: [
-        {
-          chainType: 'ethereum',
-          policyIds: [],
-        },
-      ],
-    })
-    const nextClassified = classifyLinkedAccounts(created as any)
-    logPrivyWalletProvision({
-      path: 'createWallets',
-      walletCount: nextClassified.allWallets.length,
-      primary: nextClassified.primaryWalletAddress ?? null,
-    })
-    if (nextClassified.allWallets.length > 0) {
-      return { user: created, classified: nextClassified }
-    }
-  } catch (error) {
-    logPrivyWalletProvision({
-      path: 'createWallets',
-      error: error instanceof Error ? error.message : String(error ?? ''),
-    })
-  }
-
-  // Path 2: Wallet API create with the Privy user as owner, then re-load the user.
-  try {
-    const wallet = await client.walletApi.create({
-      chainType: 'ethereum',
-      owner: { userId },
-    })
-    logPrivyWalletProvision({
-      path: 'walletApi.create',
-      address: typeof wallet?.address === 'string' ? wallet.address : null,
-      walletId: typeof wallet?.id === 'string' ? wallet.id : null,
-    })
-  } catch (error) {
-    logPrivyWalletProvision({
-      path: 'walletApi.create',
-      error: error instanceof Error ? error.message : String(error ?? ''),
-    })
-  }
-
-  const user = await client.getUserById(userId)
-  const reloaded = classifyLinkedAccounts(user as any)
-  logPrivyWalletProvision({
-    path: 'reload',
-    walletCount: reloaded.allWallets.length,
-    primary: reloaded.primaryWalletAddress ?? null,
-  })
-  return { user, classified: reloaded }
-}
-
-async function loadPrivyUserWithWalletLinkRetry(
-  client: PrivyClient,
-  userId: string,
-): Promise<{ user: any; classified: ClassifiedLinkedAccounts }> {
-  let user = await client.getUserById(userId)
-  let classified = classifyLinkedAccounts(user as any)
-
-  if (classified.allWallets.length === 0) {
-    // Prefer server provision immediately for brand-new email OTP users.
-    // Client createWallet on localhost often clears auth before a wallet exists,
-    // so waiting for client-side link propagation just adds latency.
-    const provisioned = await ensurePrivyUserEmbeddedWallet(client, userId, classified)
-    if (provisioned.user) user = provisioned.user
-    classified = provisioned.classified
-  }
-
-  for (
-    let attempt = 1;
-    attempt < PRIVY_USER_WALLET_LINK_RETRY_ATTEMPTS && classified.allWallets.length === 0;
-    attempt += 1
-  ) {
-    await new Promise((resolve) => setTimeout(resolve, PRIVY_USER_WALLET_LINK_RETRY_DELAY_MS))
-    user = await client.getUserById(userId)
-    classified = classifyLinkedAccounts(user as any)
-  }
-
-  return { user, classified }
 }
 
 function shouldBypassWalletSyncThrottle(params: {
@@ -269,7 +165,6 @@ async function resolvePersistedSessionAddress(db: any, privyUserId: string): Pro
     if (!row) return null
     const candidates = [
       row.canonical_wallet,
-      row.csw_address,
       row.csw_address,
       row.base_sub_account,
       row.primary_wallet,
@@ -338,14 +233,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const client = new PrivyClient(auth.appId, auth.appSecret)
     const verificationKey = getPrivyJwtVerificationKey()
     const claims = await client.verifyAuthToken(token, verificationKey ?? undefined)
-    const loaded = await loadPrivyUserWithWalletLinkRetry(client, claims.userId)
+    const loaded = await ensurePrivyUserEmbeddedWallet(client, claims.userId)
     let user = loaded.user
     let classified = loaded.classified
-    // Session principal should prefer the active owner signer used for canonical execution.
-    // This keeps paymaster ownership checks and canonical submit guards aligned.
+    // The 4626 cookie represents canonical account identity. Prefer the parent
+    // CSW when present; execution code resolves the embedded owner separately.
     const classifiedSessionAddress =
-      classified.activeOwnerWallet?.address ??
       classified.canonicalSmartWallet?.address ??
+      classified.activeOwnerWallet?.address ??
       classified.primaryWalletAddress ??
       null
     let sessionAddress = classifiedSessionAddress

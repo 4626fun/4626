@@ -180,19 +180,16 @@ Coinbase in-app browser often **cannot** complete the funder lane reliably; reco
 | Surface | Lane | Relay? |
 |---------|------|--------|
 | [`/add-owner`](../../frontend/src/pages/AddOwnerBaseApp.tsx) | Add-owner flow → server preview → `executeAddOwnerViaRelay` | Yes |
-| Waitlist sub-account (`SubAccountOwnerInstallPanel`, `WaitlistConnectBaseApp`) | Same add-owner flow with `targetCswAddress = subAccount` | Yes |
 | Legacy prepared calls | `prepare-add-privy-owner` + `sendPreparedOwnerTx` where still wired | No |
 | Legacy replayable | `onboardingWalletReplayable` → `/api/relay/execute` (handleOps) | Yes, **legacy** |
 
 **Self-auth (Base App CSW):** `user = recipient = CSW`, `explicitDeposit: true`, submit preview-bound `userCall` via Base Account SDK `wallet_sendCalls` (not relay-kit `executeQuote` — same manual deposit lane as remove-owner).
 
-**Sub-account track:** mutation `recipient` is the app sub-account CSW, but Relay deposit `user` / depositor is the **parent custody CSW** (where ETH usually lives). Client self-auth signs with the parent wallet via `wallet_sendCalls`.
 
 **External funder:** `user = funder EOA`, `recipient = CSW`; submit preview `userCall` via `eth_sendTransaction`.
 
 **When add-owner should NOT use Relay parent-CSW mutation:**
 
-- Sub-account track users where product policy blocks third-party parent `addOwnerAddress` ([owner-mutation-decision-2026-05.md](../owner-mutation-decision-2026-05.md)) — Relay targets the **sub-account CSW**, not the parent.
 
 ### Legacy `/api/relay/execute` — avoid for product UX
 
@@ -241,7 +238,6 @@ Use this when adding relay-backed add-owner or similar:
 - [ ] Client external funder: submit preview `userCall` via `eth_sendTransaction`
 - [ ] Poll intent status; verify **on-chain owner slot** changed
 - [ ] Do not use `/api/relay/execute` + hand-built `handleOps` for default UX
-- [ ] Gate Base App CSW users to sub-account track when product policy requires it
 
 ---
 
@@ -254,7 +250,5 @@ See [`getQuote.ts`](../../frontend/server/_lib/relay/getQuote.ts) and [`buildOwn
 ## Recommended next steps
 
 1. **Keep server-preview + manual deposit as the canonical lane** for add-owner and remove-owner — it matches [Privy relay-client.ts](https://github.com/relayprotocol/relay-wallet-provider-examples/blob/main/privy/src/app/actions/relay-client.ts) and Relay call-execution docs.
-2. **Sub-account Relay deposits fund from the parent CSW** — counterfactual app wallets often have 0 ETH; preview quotes use `relayQuoteUser = parentCswAddress` while mutation still targets the sub-account.
-3. **Do not** route waitlist Base App users through parent-CSW `addOwnerAddress` when sub-account flag is on.
 4. **Retire** user-facing dependence on `/api/relay/execute` (legacy handleOps) once all owner-mutation surfaces stay on deposit + solver fill.
 5. **Optional:** If same-chain quotes succeed but destination ops stall, try `forceSolverExecution: true` on `/quote/v2` (Relay docs: forces solver execution for same-chain swap requests; evaluate for call-execution if needed).

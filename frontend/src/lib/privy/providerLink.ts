@@ -180,13 +180,14 @@ async function postAccountsLink(params: {
   getAccessToken: (() => Promise<string | null>) | null | undefined
 }): Promise<AccountSetupMe> {
   const token = await readPrivyToken(params.getAccessToken)
+  const backendProvider = params.provider === 'external_eoa' ? 'wallet' : params.provider
   const response = await apiFetch('/api/accounts/link', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-Privy-Token': token,
     },
-    body: JSON.stringify({ provider: params.provider, value: null }),
+    body: JSON.stringify({ provider: backendProvider, value: null }),
   })
   const payload = (await response.json().catch(() => null)) as ApiEnvelope<AccountSetupMe> | null
   if (!response.ok || !payload?.success || !payload.data) {

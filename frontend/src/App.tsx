@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button'
 import { APP_ORIGIN, getHostMode } from '@/lib/env/host'
 
 import { useOptionalAccessContext, waitlistEntryHref } from './app/accessShared'
+import { AlfaClubHostApp, LegacyAlfaClubRedirect } from './app/alfaclubHostRoutes'
 import {
   ACCOUNT_ROUTES,
   APP_PUBLIC_ROUTES,
@@ -105,6 +106,10 @@ function NotFoundPage() {
 }
 
 function App() {
+  if (getHostMode() === 'alfaclub') {
+    return <AlfaClubHostApp />
+  }
+
   return (
     <Routes>
       <Route
@@ -122,6 +127,13 @@ function App() {
           {renderPathRoutes(MARKETING_ONLY_ROUTES, marketingOnlyElement)}
           <Route path="/leaderboard" element={<Leaderboard />} />
         </Route>
+
+        {/* Legacy AlfaClub surfaces hard-cut to alfaclub.4626.fun */}
+        <Route path="/alfaclub" element={<LegacyAlfaClubRedirect />} />
+        <Route path="/alfaclub/trading-rooms" element={<LegacyAlfaClubRedirect />} />
+        <Route path="/alfaclub/key-safety" element={<LegacyAlfaClubRedirect />} />
+        <Route path="/alfaclub/liquidity" element={<LegacyAlfaClubRedirect />} />
+        <Route path="/alfaclub/liquidity-pools" element={<LegacyAlfaClubRedirect />} />
 
         <Route
           element={<LazyGuardedOutlet guard={LazyAuthWalletBoundary} />}

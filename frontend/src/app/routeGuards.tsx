@@ -106,7 +106,7 @@ export function MarketingOnlyRoute(props: { children: ReactNode }) {
   return <ReplaceOnMount to={target} />
 }
 
-/** Waitlist onboarding must run on 4626.fun so sub-accounts bind to the marketing domain. */
+/** Waitlist onboarding must run on 4626.fun (marketing host). */
 export function MarketingWaitlistRoute(props: { children: ReactNode }) {
   return <MarketingOnlyRoute>{props.children}</MarketingOnlyRoute>
 }
@@ -153,6 +153,13 @@ export function getGenericNotFoundCta(hostMode: HostMode): {
       href: getCanonicalMarketingWaitlistPath(),
       label: 'Join Waitlist',
       hint: 'Start from the canonical waitlist entry.',
+    }
+  }
+  if (hostMode === 'alfaclub') {
+    return {
+      href: '/rooms',
+      label: 'Go To Rooms',
+      hint: 'Continue to the AlfaClub trading rooms directory.',
     }
   }
   return {

@@ -25,16 +25,14 @@ Details: `.cursor/rules/csw-agent-lifecycle.mdc` § Canonical CSW owner allowlis
 
 The canonical asset-holding account above does not automatically equal the ERC-4337 `sender`. The correct `sender` depends on which track is executing:
 
-- **User-initiated frontend execution (CSW, `executionMode === 'canonical'`)**: the default ERC-4337 `sender` / execution address for sponsored swaps is the parent CSW (`profiles.csw_address`) through `canonical4337`, with the Privy embedded EOA (`profiles.primary_embedded_eoa`) signing as a confirmed CSW owner. This is the first-class proven path for canonical custody and gas sponsorship. An app-scoped sub-account (`profiles.base_sub_account`) may still exist as optional future/app-scoped infrastructure, but user-facing routes must not promote it as the sender unless that route actively submits from the sub-account provider.
-- **User-initiated frontend execution (external EOA, `executionMode === 'eoa'`)**: no sub-account. `msg.sender` is the user's EOA directly. `sendTransaction` is used; ERC-4337 UserOps do not apply to this track.
+- **User-initiated frontend execution (CSW, `executionMode === 'canonical'`)**: the default ERC-4337 `sender` / execution address for sponsored swaps is the parent CSW (`profiles.csw_address`) through `canonical4337`, with the Privy embedded EOA (`profiles.primary_embedded_eoa`) signing as a confirmed CSW owner. This is the first-class proven path for canonical custody and gas sponsorship.
+- **User-initiated frontend execution (external EOA, `executionMode === 'eoa'`)**: `msg.sender` is the user's EOA directly. `sendTransaction` is used; ERC-4337 UserOps do not apply to this track.
 - **Server-side ERC-4337 UserOps** — parent CSW as `sender`, Privy server wallet delegated via `addOwnerAddress` (see `.cursor/rules/csw-agent-lifecycle.mdc`):
   - **Railway XMTP / Keepr / ERC-8004**: `sender` = canonical CSW (`CANONICAL_CSW_ADDRESS` === that account's `profiles.csw_address`).
   - **Deploy-session automation**: `sender` = the **creator's** canonical CSW (`profiles.csw_address`) with a temporary delegated owner removed after deploy completes.
-  - Neither server track routes through sub-accounts.
-
 ## Common rules across tracks
 
-- `msg.sender` MUST match the track — sponsored canonical swaps use the account's parent CSW; deploy-session uses the creator's parent CSW with a server delegated signer; Railway/Keepr uses the 4626 canonical CSW with its server delegated signer; sub-account sends are allowed only for routes that explicitly opt into the sub-account provider (flag-gated user swap lane).
+- `msg.sender` MUST match the track — sponsored canonical swaps use the account's parent CSW; deploy-session uses the creator's parent CSW with a server delegated signer; Railway/Keepr uses the 4626 canonical CSW with its server delegated signer.
 - Asset checks, balance reads, and owner index resolution always use the parent CSW (`profiles.csw_address`), regardless of which track is executing.
 - **`shouldApplyCanonicalEnforcement`** applies when the active canonical or execution wallet equals `CANONICAL_CSW_ADDRESS` (same address as that account's `profiles.csw_address`). Allowlisted admin EOAs operating a different account's CSW must not trigger 4626 policy gates.
 - If you are unsure which track applies to a code path, check whether the caller is a wagmi/Privy connector in the user's browser (user-initiated frontend) or a server/agent surface (server-side). When in doubt, do not fall back silently — surface the ambiguity.

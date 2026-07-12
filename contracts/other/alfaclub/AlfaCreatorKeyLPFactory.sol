@@ -27,8 +27,8 @@ contract AlfaCreatorKeyLPFactory is Ownable {
     //   0 = Trading rooms
     //   1 = Social rooms
     // Pool fees are room-type-scoped and immutable per pool. Trading rooms
-    // run the legacy 6.9% fee that funds creator/treasury splits; Social
-    // rooms use a near-zero 3 bps fee so social key churn isn't penalised.
+    // use the 6.9% secondary-market tier; Social rooms use a near-zero 3 bps
+    // tier. Both fees remain in pool reserves and accrue to LP holders.
     uint8 internal constant ROOM_TYPE_TRADING = 0;
     uint8 internal constant ROOM_TYPE_SOCIAL = 1;
     uint16 public constant TRADING_FEE_BPS = 690;

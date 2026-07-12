@@ -248,13 +248,17 @@ export const ExploreContentPoolAlias = lazyNamed(
 // promise after HMR/server restarts, which traps `/swap` behind the root
 // boundary even once the module is available again.
 export const Swap = SwapPage
-export const AlfaClubLiquidity = lazyNamed(
-  () => import('../pages/AlfaClubLiquidity'),
-  'AlfaClubLiquidity',
+export const AlfaClubLiquidityPools = lazyNamed(
+  () => import('../pages/AlfaClubLiquidityPools'),
+  'AlfaClubLiquidityPools',
 )
 export const AlfaClubKeySafety = lazyNamed(
   () => import('../pages/AlfaClubKeySafety'),
   'AlfaClubKeySafety',
+)
+export const AlfaClubTradingRooms = lazyNamed(
+  () => import('../pages/AlfaClubTradingRooms'),
+  'AlfaClubTradingRooms',
 )
 export const Positions = lazyNamed(() => import('../pages/Positions'), 'Positions')
 export const AccountsPage = lazyNamed(() => import('../pages/accounts/AccountsPage'), 'AccountsPage')

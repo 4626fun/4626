@@ -11,7 +11,7 @@ import {
   isLocalDevOrigin,
   canUsePrivyEmbeddedWallets,
   resolvePrivyClientId,
-  resolveWaitlistLoopbackPrivyClientId,
+  resolveLoopbackPrivyClientId,
   resolveEffectivePrivyClientId,
   resolvePrivyAppId,
   resolvePrivyApiUrl,
@@ -83,7 +83,7 @@ describe('resolvePrivyClientId', () => {
   })
 })
 
-describe('resolveWaitlistLoopbackPrivyClientId', () => {
+describe('resolveLoopbackPrivyClientId', () => {
   it('returns configured client id on loopback even when ON_LOOPBACK is off', () => {
     vi.stubEnv('VITE_PRIVY_CLIENT_ID_ENABLED', '1')
     vi.stubEnv('VITE_PRIVY_CLIENT_ID', 'client_waitlist_123')
@@ -91,7 +91,7 @@ describe('resolveWaitlistLoopbackPrivyClientId', () => {
     vi.stubGlobal('window', {
       location: { origin: 'http://localhost:5174' },
     } as unknown as Window & typeof globalThis)
-    expect(resolveWaitlistLoopbackPrivyClientId()).toBe('client_waitlist_123')
+    expect(resolveLoopbackPrivyClientId()).toBe('client_waitlist_123')
     expect(resolvePrivyClientId()).toBeNull()
   })
 
@@ -101,12 +101,12 @@ describe('resolveWaitlistLoopbackPrivyClientId', () => {
     vi.stubGlobal('window', {
       location: { origin: 'https://4626.fun' },
     } as unknown as Window & typeof globalThis)
-    expect(resolveWaitlistLoopbackPrivyClientId()).toBeNull()
+    expect(resolveLoopbackPrivyClientId()).toBeNull()
   })
 })
 
 describe('resolveEffectivePrivyClientId', () => {
-  it('prefers waitlist loopback client id over generic resolvePrivyClientId', () => {
+  it('prefers origin-scoped loopback client id over generic resolvePrivyClientId', () => {
     vi.stubEnv('VITE_PRIVY_CLIENT_ID_ENABLED', '1')
     vi.stubEnv('VITE_PRIVY_CLIENT_ID', 'client_waitlist_123')
     vi.stubEnv('VITE_PRIVY_CLIENT_ID_ON_LOOPBACK', '')

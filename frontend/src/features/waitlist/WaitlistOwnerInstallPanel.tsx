@@ -32,6 +32,25 @@ export function WaitlistOwnerInstallPanel(props: WaitlistOwnerInstallPanelProps)
     )
   }
 
+  if (props.connectTrack === 'base-app-direct') {
+    return (
+      <Suspense
+        fallback={
+          <div className="py-2">
+            <LoadingInline labelOverride="Loading Base App owner install…" />
+          </div>
+        }
+      >
+        <LazyWaitlistLegacyOwnerInstall
+          canonicalCswAddress={props.canonicalCswAddress}
+          embeddedEoaAddress={props.embeddedEoaAddress}
+          onSuccess={props.onSuccess}
+          preferBaseAppPath
+        />
+      </Suspense>
+    )
+  }
+
   if (props.connectTrack === 'zora-owner-install') {
     const inBaseApp = isBaseAppInAppContext(detectInAppEnvironment())
     if (!inBaseApp) {

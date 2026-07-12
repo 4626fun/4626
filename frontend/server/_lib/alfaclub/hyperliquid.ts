@@ -84,6 +84,15 @@ export type HyperliquidPerpMarket = {
   maxLeverage: number | null
 }
 
+export type HyperliquidPerpMarketContext = {
+  symbol: string
+  markPriceUsd: number | null
+  priceChange24hPct: number | null
+  fundingRate: number | null
+  openInterestUsd: number | null
+  volume24hUsd: number | null
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -253,6 +262,47 @@ export async function getPerpMarkets(): Promise<HyperliquidPerpMarket[] | null> 
 
   out.sort((a, b) => a.symbol.localeCompare(b.symbol))
   return out
+}
+
+/** Read-only current perp context used by advisory market-intelligence tools. */
+export async function getPerpMarketContext(
+  requestedSymbol: string,
+): Promise<HyperliquidPerpMarketContext | null> {
+  const symbol = requestedSymbol.trim().toUpperCase()
+  if (!symbol) return null
+
+  const raw = await fetchJsonBounded(getInfoUrl(), { type: 'metaAndAssetCtxs' })
+  if (isErrorShape(raw) || !Array.isArray(raw) || raw.length < 2) return null
+
+  const meta = raw[0]
+  const contexts = raw[1]
+  if (!meta || typeof meta !== 'object' || !Array.isArray(contexts)) return null
+  const universe = (meta as { universe?: unknown }).universe
+  if (!Array.isArray(universe)) return null
+
+  const index = universe.findIndex((entry) => {
+    if (!entry || typeof entry !== 'object') return false
+    return String((entry as { name?: unknown }).name ?? '').trim().toUpperCase() === symbol
+  })
+  if (index < 0) return null
+  const rawContext = contexts[index]
+  if (!rawContext || typeof rawContext !== 'object') return null
+  const context = rawContext as Record<string, unknown>
+  const markPriceUsd = parseFloatSafe(context.markPx)
+  const previousDayPriceUsd = parseFloatSafe(context.prevDayPx)
+  const openInterest = parseFloatSafe(context.openInterest)
+
+  return {
+    symbol,
+    markPriceUsd,
+    priceChange24hPct:
+      markPriceUsd != null && previousDayPriceUsd != null && previousDayPriceUsd > 0
+        ? ((markPriceUsd - previousDayPriceUsd) / previousDayPriceUsd) * 100
+        : null,
+    fundingRate: parseFloatSafe(context.funding),
+    openInterestUsd: openInterest != null && markPriceUsd != null ? openInterest * markPriceUsd : null,
+    volume24hUsd: parseFloatSafe(context.dayNtlVlm),
+  }
 }
 
 export async function getClearinghouseState(

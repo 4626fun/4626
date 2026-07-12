@@ -9,7 +9,6 @@ sidebar_position: 21
 
 Reference snapshot for the Coinbase Smart Wallet / Base App provider behavior observed from the 4626 wallet probe.
 
-This is a capability inventory, not a product architecture change. The canonical 4626 wallet rules still apply: the user's Zora/Base Coinbase Smart Wallet remains the asset-holding account, and signer/sub-account behavior must be interpreted through the execution track in `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
 
 ## Observed Account
 
@@ -84,14 +83,9 @@ The spend-permission export surface was present, but runtime checks were skipped
 
 Do not read these skips as capability absence. They indicate the test did not have a connected permission hash state after the earlier interactive failures.
 
-### SDK E2E Sub-account Results
 
 | Method | Observed result | Interpretation |
 | --- | --- | --- |
-| `wallet_addSubAccount` | Failed with `4100`: must call `eth_requestAccounts` before other methods | Authorization/session ordering issue in the E2E state. |
-| `wallet_getSubAccounts` | Failed: no sub-account found in accounts list | No discoverable sub-account was available in the returned accounts. |
-| `personal_sign` for sub-account | Failed with `4100`: must call `eth_requestAccounts` before other methods | Authorization/session ordering issue in the E2E state. |
-| `wallet_sendCalls` for sub-account | Failed with `4001` / request rejected | User/modal rejection. |
 
 The skipped sign-and-send checks (`eth_signTypedData_v4`, `wallet_sendCalls`, `wallet_prepareCalls`) all reported `Not connected`, which appears downstream of the earlier rejection/disconnect path.
 
@@ -107,28 +101,21 @@ Automated E2E run:
 - Failed: `6`
 - Skipped: `1`
 
-This narrower follow-up run kept the same connected parent account and Base Sepolia chain, but successfully exercised sub-account discovery and typed-data signing.
 
 | Check | Observed result | Interpretation |
 | --- | --- | --- |
 | Connect wallet | Passed | Connected as `0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF`. |
-| Get accounts | Passed | Returned parent account plus sub-account `0x888D9755804F68CbC546Ff7b7EaC7bbC93BA914F`. |
 | Get chain ID | Passed | Returned `84532` / Base Sepolia. |
 | `personal_sign` | Failed by timeout after `30000ms` | Treat as an unreliable modal/session path in this environment; do not classify as unsupported. |
 | `base.pay()` | Failed with `4001` / request rejected | User/modal rejection. |
 | `base.subscribe()` | Failed with `4001` / request rejected | User/modal rejection. |
 | `spendPermission.requestSpendPermission()` | Failed with `4001` / request rejected | User/modal rejection. |
 | `spendPermission.fetchPermissions()` | Passed | Returned `0` permission(s). |
-| `wallet_addSubAccount` | Passed | Returned sub-account `0x888D9755804F68CbC546Ff7b7EaC7bbC93BA914F`. |
-| `wallet_getSubAccounts` | Passed | Returned sub-account `0x888D9755804F68CbC546Ff7b7EaC7bbC93BA914F`. |
-| `wallet_sendCalls` for sub-account | Failed with `4001` / request rejected | User/modal rejection. |
 | `eth_signTypedData_v4` | Passed | Returned a Coinbase smart-wallet wrapped signature. |
 | `wallet_sendCalls` | Failed with `4001` / request rejected | User/modal rejection. |
 
 Updated read from the two E2E runs together:
 
-- Sub-account support is present when the session ordering is healthy.
-- The observed sub-account is `0x888D9755804F68CbC546Ff7b7EaC7bbC93BA914F`.
 - `eth_signTypedData_v4` is usable and returns the wrapped Coinbase Smart Wallet signature shape.
 - `personal_sign` is inconsistent in this environment: one run returned `4100`, and another timed out after `30s`.
 - `4001` failures across pay, subscribe, spend-permission request, and send-calls surfaces are user/modal rejections, not missing exports.
@@ -263,7 +250,6 @@ Observed profile shape:
 ## Implementation Notes for 4626
 
 - Treat account presence, profile info, and SIWE capability as identity/session signals, not `execution-ready` proof.
-- Use parent-CSW asset checks against `profiles.csw_address`; do not promote provider-returned sub-account or counterfactual addresses into canonical custody state.
 - For sponsored canonical swaps, keep using the `canonical4337` path where required by the routing table. Do not downgrade to `eth_sendTransaction` just because direct sends are available.
 - For owner-add / co-signer actions, prefer the prepared-calls lane (`wallet_prepareCalls` -> sign prepared payload -> `wallet_sendPreparedCalls`) or the existing Base App prolink helpers where applicable.
 - Verify signatures with CSW-aware logic. Coinbase Smart Wallet signatures can be contract-wrapped and may require ERC-1271 verification instead of plain `ecrecover`.
@@ -282,7 +268,6 @@ The SDK exposes an **EIP-1193 provider** only. There is **no** dedicated `addOwn
 | **Connection** | `createCoinbaseWalletSDK` → `getProvider()` → `eth_requestAccounts` | Waitlist wallet connect; does **not** add owners |
 | **Mutation** | Encode `addOwnerAddress(address)` or `addOwnerPublicKey(x,y)`; submit via `wallet_sendCalls` self-call (`to = from = CSW`) | **Method D** (flag-gated, external browser only today) |
 | **Cross-chain replay** | Requires `executeWithoutChainIdValidation` / ERC-4337 replay lane | Relay Part 2 solver path (Method A/B) |
-| **Sub Account SDK** | `subAccount.addOwner({ address, publicKey, chainId })` convenience wrapper | **Not** waitlist canonical path — parent CSW remains asset holder |
 
 Canonical `wallet_sendCalls` payload (aligned in `frontend/src/lib/wallet/walletSendCallsPayload.ts`):
 

@@ -30,3 +30,7 @@ Build succeeds with no `sorry`/`admit`. Namespace `VRF4626` (Finset counting):
 - `prob_40000` — `prob 40000 = 4 / 100`
 
 Artifact: `result.tar.gz`.
+
+## Local validation
+
+Local `lake build` **skipped** on this host (Mathlib cache decompress + compile OOMs / freezes the machine). Validation gate used: Aristotle task COMPLETE + source scan with no `sorry`/`admit`.

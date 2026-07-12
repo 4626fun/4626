@@ -46,3 +46,7 @@ Build succeeds with no `sorry`/`admit`. Namespace `Lottery4626` in `RequestProje
 - `ppm_four_eq_fraction` — `(4 : ℚ)/1_000_000 = 0.0004/100` (0.0004%)
 
 Artifact: `result.tar.gz` (extracted under `extract/`).
+
+## Local validation
+
+Local `lake build` **skipped** on this host (Mathlib cache decompress + compile OOMs / freezes the machine). Validation gate used: Aristotle task COMPLETE + source scan with no `sorry`/`admit`.

@@ -2,6 +2,12 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { getAddress, isAddress, type Address } from 'viem'
 
 import { useSafeCreateWallet, useSafePrivy } from '@/lib/privy/safeHooks'
+import {
+  createPrivyWalletWithAuthRetries,
+  shouldPreferHydrateBeforeClientCreateWallet,
+  waitForHydratedEmbeddedWalletAddress,
+  waitForPrivyEmbeddedWalletAuthReady,
+} from '@/lib/privy/waitForPrivyEmbeddedWalletAuthReady'
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
@@ -325,6 +331,7 @@ type EmbeddedWalletSnapshot = {
   user: unknown
   wallets: unknown[]
   createWallet: CreateWalletFn
+  getAccessToken: (() => Promise<string | null>) | null
 }
 
 export function useEnsurePrivyEmbeddedWallet() {
@@ -337,11 +344,17 @@ export function useEnsurePrivyEmbeddedWallet() {
     return pickPrivyEmbeddedEoaAddressFromWallets(wallets)
   }, [wallets])
 
+  const getAccessToken =
+    typeof privy.getAccessToken === 'function'
+      ? () => privy.getAccessToken().catch(() => null)
+      : null
+
   const snapshotRef = useRef<EmbeddedWalletSnapshot>({
     authenticated: Boolean(privy.authenticated),
     user: privy.user ?? null,
     wallets: Array.isArray(wallets) ? wallets : [],
     createWallet: typeof createWallet === 'function' ? createWallet : null,
+    getAccessToken,
   })
 
   // Keep the snapshot synchronous with render — do not wait for useEffect.
@@ -353,6 +366,7 @@ export function useEnsurePrivyEmbeddedWallet() {
     user: privy.user ?? null,
     wallets: Array.isArray(wallets) ? wallets : [],
     createWallet: typeof createWallet === 'function' ? createWallet : null,
+    getAccessToken,
   }
 
   const readLatestEmbeddedWallet = useCallback((): Address | null => {
@@ -379,11 +393,36 @@ export function useEnsurePrivyEmbeddedWallet() {
       }
     }
 
-    // Prefer live Privy auth over a possibly-stale snapshot from an earlier paint.
-    const liveAuthenticated = Boolean(privy.authenticated) || snapshotRef.current.authenticated
-    if (!liveAuthenticated) {
-      throw new Error('Sign in with Privy before provisioning your embedded wallet.')
+    await waitForPrivyEmbeddedWalletAuthReady({
+      getToken: () => snapshotRef.current.getAccessToken?.() ?? Promise.resolve(null),
+      isAuthenticated: () => snapshotRef.current.authenticated,
+    })
+
+    // Server-side `/api/auth/privy` may have provisioned an EOA already (especially
+    // on localhost where join skips client createWallet). Prefer hydrate over
+    // iframe createWallet to avoid wallets/authenticate 401 races.
+    if (shouldPreferHydrateBeforeClientCreateWallet()) {
+      const hydrated = await waitForHydratedEmbeddedWalletAddress({
+        readAddress: readLatestEmbeddedWallet,
+        attempts: 24,
+        retryDelayMs: 250,
+      })
+      const hydratedAddress = normalizeAddressOrNull(hydrated)
+      if (hydratedAddress) {
+        return { address: hydratedAddress, created: false }
+      }
+    } else {
+      const quickHydrate = await waitForHydratedEmbeddedWalletAddress({
+        readAddress: readLatestEmbeddedWallet,
+        attempts: 4,
+        retryDelayMs: 150,
+      })
+      const hydratedAddress = normalizeAddressOrNull(quickHydrate)
+      if (hydratedAddress) {
+        return { address: hydratedAddress, created: false }
+      }
     }
+
     const createWalletFn =
       (typeof createWallet === 'function' ? createWallet : null) ?? snapshotRef.current.createWallet
     if (!createWalletFn) {
@@ -392,7 +431,10 @@ export function useEnsurePrivyEmbeddedWallet() {
 
     setIsCreatingEmbeddedWallet(true)
     try {
-      const createdWallet = await createWalletFn()
+      const createdWallet = await createPrivyWalletWithAuthRetries({
+        createWallet: createWalletFn,
+        readExistingAddress: readLatestEmbeddedWallet,
+      })
       const createdWalletRecord = createdWallet && typeof createdWallet === 'object'
         ? (createdWallet as Record<string, unknown>)
         : null
@@ -406,7 +448,7 @@ export function useEnsurePrivyEmbeddedWallet() {
       if (createdAddress) {
         return {
           address: createdAddress,
-          created: true,
+          created: createdWalletRecord?.hydrated !== true,
         }
       }
 
@@ -436,7 +478,7 @@ export function useEnsurePrivyEmbeddedWallet() {
     } finally {
       setIsCreatingEmbeddedWallet(false)
     }
-  }, [createWallet, privy.authenticated, readLatestEmbeddedWallet, waitForEmbeddedWallet])
+  }, [createWallet, readLatestEmbeddedWallet, waitForEmbeddedWallet])
 
   return {
     embeddedEoaAddress,

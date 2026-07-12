@@ -27,7 +27,7 @@ export type WaitlistXmtpStatus = {
 }
 
 async function fetchWaitlistXmtpStatus(): Promise<WaitlistXmtpStatus> {
-  const response = await apiFetch('/api/waitlist/xmtp-status')
+  const response = await apiFetch('/api/waitlist/xmtp-status', { withCredentials: true })
   const json = (await response.json().catch(() => null)) as {
     success?: boolean
     error?: string

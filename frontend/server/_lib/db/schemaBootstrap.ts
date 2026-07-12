@@ -540,6 +540,13 @@ export async function ensureAlfaclubCounterTradeSchema(db: Db): Promise<void> {
   })
 }
 
+/** Read-only Funding/OI shadow observations and fixed-horizon outcomes. */
+export async function ensureAlfaclubFundingOiObservationSchema(db: Db): Promise<void> {
+  await withEnsureOnce('alfaclubFundingOiObservation', async () => {
+    await ensureMigrationApplied(db, '20260712130000_alfaclub_funding_oi_shadow_observations.sql')
+  })
+}
+
 /** AlfaClub room <-> XMTP group bridge: message-origin loop-prevention ledger. */
 export async function ensureAlfaclubRoomXmtpBridgeSchema(db: Db): Promise<void> {
   await withEnsureOnce('alfaclubRoomXmtpBridge', async () => {

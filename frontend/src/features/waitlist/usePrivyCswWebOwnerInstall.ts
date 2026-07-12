@@ -6,6 +6,7 @@ import { base } from 'viem/chains'
 import { buildPrivyAuthHeaders } from '@/lib/privy/accessToken'
 import { useSafePrivyAccessToken } from '@/lib/privy/safeHooks'
 import { encodeAddOwnerCall } from '@/lib/wallet/baseAppOwnerCalls'
+import { assertAddOwnerSelfCallShape } from '@/lib/wallet/addOwnerCallShape'
 import {
   confirmOwnerInstall,
   fetchPrepareAddPrivyOwner,
@@ -117,6 +118,14 @@ export function usePrivyCswWebOwnerInstall(params: {
           csw: getAddress(canonical) as `0x${string}`,
           ownerToAdd: getAddress(embedded) as `0x${string}`,
         })
+    assertAddOwnerSelfCallShape({
+      csw: canonical,
+      txRequest: {
+        to: preparedCall.to,
+        data: preparedCall.data as `0x${string}`,
+      },
+      expectedOwnerToAdd: embedded,
+    })
 
     const hash = await client.sendTransaction({
       chain: base,
@@ -136,8 +145,10 @@ export function usePrivyCswWebOwnerInstall(params: {
       txHash: hash as `0x${string}`,
       headers,
     })
-    if (!confirmed.isOwner && confirmed.confirmationState !== 'pending_tx') {
-      throw new Error('Transaction submitted but owner confirmation is still pending. Retry shortly.')
+    if (!confirmed.isOwner) {
+      throw new Error(
+        'Transaction submitted, but the embedded signer is not yet confirmed as an on-chain owner. Check again shortly.',
+      )
     }
     return true
   }, [

@@ -37,6 +37,12 @@ const NAV_ITEMS_PUBLIC: NavItem[] = [
   { label: 'Waitlist', to: getCanonicalMarketingWaitlistPath() },
 ]
 
+const NAV_ITEMS_ALFACLUB: NavItem[] = [
+  { label: 'Rooms', to: '/rooms', activePrefixes: ['/rooms', '/trading-rooms'] },
+  { label: 'Safety', to: '/safety', activePrefixes: ['/safety', '/key-safety'] },
+  { label: 'Pools', to: '/pools', activePrefixes: ['/pools', '/liquidity'] },
+]
+
 const ADMIN_ITEM: NavItem = { label: 'Admin', to: '/admin/waitlist', activePrefixes: ['/admin'] }
 
 class NavConnectButtonBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
@@ -90,9 +96,18 @@ export function VaultNavBarContent(props: VaultNavBarContentProps) {
     hostMode === 'marketing'
       ? getCanonicalMarketingWaitlistPath()
       : buildCanonicalMarketingWaitlistUrl(getMarketingBaseUrl())
-  const baseItems = publicMode || hostMode === 'marketing' ? NAV_ITEMS_PUBLIC : NAV_ITEMS
-  const items = interactive && isAdmin && hostMode !== 'marketing' ? [...baseItems, ADMIN_ITEM] : baseItems
-  const brandHref = hostMode === 'marketing' ? MARKETING_ORIGIN : '/swap'
+  const baseItems =
+    hostMode === 'alfaclub'
+      ? NAV_ITEMS_ALFACLUB
+      : publicMode || hostMode === 'marketing'
+        ? NAV_ITEMS_PUBLIC
+        : NAV_ITEMS
+  const items =
+    interactive && isAdmin && hostMode !== 'marketing' && hostMode !== 'alfaclub'
+      ? [...baseItems, ADMIN_ITEM]
+      : baseItems
+  const brandHref =
+    hostMode === 'marketing' ? MARKETING_ORIGIN : hostMode === 'alfaclub' ? '/rooms' : '/swap'
   const showConnect = interactive && !publicMode && hostMode !== 'marketing'
   const isExploreRoute = location.pathname.startsWith('/explore')
   const exploreSearchValue = searchParams.get('q') ?? ''
@@ -246,7 +261,7 @@ export function VaultNavBar(props: { interactive?: boolean }) {
   const location = useLocation()
   const publicMode = isPublicSiteMode()
   const hostMode = getHostMode()
-  const shouldLoadAdminStatus = interactive && hostMode !== 'marketing' && !publicMode
+  const shouldLoadAdminStatus = interactive && hostMode === 'app' && !publicMode
   if (shouldLoadAdminStatus) {
     return (
       <Suspense fallback={<VaultNavBarContent interactive={interactive} location={location} publicMode={publicMode} hostMode={hostMode} isAdmin={false} />}>

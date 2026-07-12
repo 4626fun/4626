@@ -32,7 +32,6 @@ function hasLegacyOwnerInstallSigning(
   )
 }
 
-/** Population (c): embedded EOA is a direct owner on the parent CSW — not Base App sub-account. */
 export function isParentCswEmbeddedOwnerReady(params: {
   parentEmbeddedOwnerOnChain?: boolean
   accountSignals?: UserExecutionAccountSignals

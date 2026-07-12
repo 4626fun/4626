@@ -55,6 +55,7 @@ import {
   isWrongChainIdError,
   isXmtpEnvironmentMismatchError,
   isXmtpNotRegisteredError,
+  getEthereumAddressFromInboxState,
   normalizeEvmAddress,
   parseWireContent,
   shouldFallbackToOriginalXmtpRecipient,
@@ -973,18 +974,6 @@ function installationBytesMatchId(bytes: unknown, installationId: string): boole
     return hex === target
   }
   return false
-}
-
-function getEthereumAddressFromInboxState(state: any): string | null {
-  const identifiers = Array.isArray(state?.identifiers) ? state.identifiers : []
-  for (const id of identifiers) {
-    const kind = id?.identifierKind
-    const identifier = typeof id?.identifier === 'string' ? id.identifier : ''
-    if ((kind === IdentifierKind.Ethereum || kind === 0 || kind === 'Ethereum') && /^0x[a-fA-F0-9]{40}$/.test(identifier)) {
-      return identifier.toLowerCase()
-    }
-  }
-  return null
 }
 
 // ---------------------------------------------------------------------------

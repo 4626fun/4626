@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { getAddress, isAddress, parseUnits, type Address } from 'viem'
+import { getAddress, isAddress, isHex, parseUnits, type Address } from 'viem'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAccount, useConnect, usePublicClient, useReconnect, useSwitchChain, useWalletClient } from 'wagmi'
 import { useDebounceValue } from 'usehooks-ts'
@@ -332,7 +332,7 @@ export function Swap() {
     ],
   )
 
-  // Historical sub-account and Zora cross-app signer paths removed.
+  // Historical alternate signer paths removed.
   // Resolution now focuses on the primary embedded EOA (from live wallets, user metadata, ensured hook, or session).
 
 
@@ -823,12 +823,37 @@ export function Swap() {
     void tokenInBalanceQuery.refetch()
   }, [clearSwapCompletion, tokenInBalanceQuery, tokenOutBalanceQuery])
 
+  // Refresh both token balances after a swap. `swapCompletion.txHash` can appear as soon
+  // as the transaction is *submitted* (eoaDirect / canonicalDirect send immediately return a
+  // hash, before the block is mined) rather than confirmed (canonical4337 / wallet_sendCalls
+  // already poll to confirmation before exposing a hash). Refetch once immediately for the
+  // already-confirmed cases, then again once the receipt lands so the eoaDirect/canonicalDirect
+  // cases don't show stale pre-swap balances.
+  const balanceConfirmationTxHashRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!swapCompletion?.txHash) return
+    const txHash = swapCompletion?.txHash
+    if (!txHash || !isHex(txHash)) return
+
     void queryClient.invalidateQueries({ queryKey: ['swap', 'asset-balance'] })
     void tokenOutBalanceQuery.refetch()
     void tokenInBalanceQuery.refetch()
-  }, [queryClient, swapCompletion?.txHash, tokenInBalanceQuery, tokenOutBalanceQuery])
+
+    if (!publicClient || balanceConfirmationTxHashRef.current === txHash) return
+    balanceConfirmationTxHashRef.current = txHash
+    let cancelled = false
+    void publicClient
+      .waitForTransactionReceipt({ hash: txHash, timeout: 60_000 })
+      .catch(() => null)
+      .then(() => {
+        if (cancelled) return
+        void queryClient.invalidateQueries({ queryKey: ['swap', 'asset-balance'] })
+        void tokenOutBalanceQuery.refetch()
+        void tokenInBalanceQuery.refetch()
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [publicClient, queryClient, swapCompletion?.txHash, tokenInBalanceQuery, tokenOutBalanceQuery])
 
   const showCanonicalSessionGuardHint =
     activePanel === 'swap' &&
@@ -1164,8 +1189,8 @@ export function Swap() {
         swapChainId={swapChainId}
         switchChainAsync={switchChainAsync}
         swapCompletion={swapCompletion}
-        tokenInSymbol={tokenInSymbol}
-        tokenOutSymbol={tokenOutSymbol}
+        tokenIn={tokenInDisplay}
+        tokenOut={tokenOutDisplay}
         handleClearSwapCompletion={handleClearSwapCompletion}
       />
 

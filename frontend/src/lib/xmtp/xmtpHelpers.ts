@@ -2,7 +2,7 @@
 // No React, no XMTP client instantiation, no module-level singleton state.
 // Safe for unit testing in isolation.
 
-import { ConsentEntityType, ConsentState } from '@xmtp/browser-sdk'
+import { ConsentEntityType, ConsentState, IdentifierKind, type InboxState } from '@xmtp/browser-sdk'
 import { getAddress, isAddress } from 'viem'
 
 // Re-declared locally to avoid a circular import with provider.tsx.
@@ -32,6 +32,17 @@ export function normalizeEvmAddress(value: unknown): string | null {
   const raw = value.trim()
   if (!raw || !isAddress(raw)) return null
   return getAddress(raw).toLowerCase()
+}
+
+export function getEthereumAddressFromInboxState(
+  state: Pick<InboxState, 'accountIdentifiers'> | null | undefined,
+): string | null {
+  for (const accountIdentifier of state?.accountIdentifiers ?? []) {
+    if (accountIdentifier.identifierKind !== IdentifierKind.Ethereum) continue
+    const address = normalizeEvmAddress(accountIdentifier.identifier.toLowerCase())
+    if (address) return address
+  }
+  return null
 }
 
 // ---------------------------------------------------------------------------

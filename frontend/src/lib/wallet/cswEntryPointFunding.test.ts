@@ -58,6 +58,15 @@ describe('mapAddOwnerFundingErrorMessage', () => {
         new Error('Error generating transaction. Please make sure you have enough funds'),
         { fundingPreflightOk: true },
       ),
-    ).toMatch(/sub-account/)
+    ).toMatch(/retry once/)
+  })
+
+  it('keeps Relay guidance scoped to the explicit add-owner diagnostic page', () => {
+    expect(
+      mapAddOwnerFundingErrorMessage(
+        new Error('Error generating transaction. Please make sure you have enough funds'),
+        { fundingPreflightOk: true, surface: 'add-owner-page' },
+      ),
+    ).toMatch(/Relay Method A/)
   })
 })

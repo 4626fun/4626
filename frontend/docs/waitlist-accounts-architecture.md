@@ -8,14 +8,14 @@ This is the canonical product model for identity onboarding:
 - Waitlist and account creation are explicitly **email-first**.
 - Verified email is the canonical 4626 identity and recovery key.
 - No account is fully created until email OTP verification completes.
-- Privy is the auth/session backend and should create the embedded EOA during signup/auth.
+- Privy is the auth/session backend. Waitlist and Telegram use whitelabel OTP (`loginWithCode`), so embedded-EOA creation is server-owned via `/api/auth/privy` (and Telegram readiness). See [privy-integration-architecture.md](./privy-integration-architecture.md).
 - Every fully onboarded account must have a Privy embedded EOA.
-- After verified email + embedded EOA creation, signed-in users stay on `/waitlist` for the setup-first workspace: Zora linking, canonical CSW detection, sub-account setup status (for CSW users — per [docs/_internal/4626-connection-methods.md](../../docs/_internal/4626-connection-methods.md) Section 2), and the gated `Enter App` handoff.
+- After verified email + embedded EOA creation, signed-in users stay on `/waitlist` for the setup-first workspace: Zora linking, canonical CSW detection/link, parent-CSW embedded-owner install when needed, and the gated `Enter App` handoff.
 - `frontend/src/pages/accounts/AccountsPage.tsx` is now the advanced settings and recovery backstop: linked identities, Telegram/browser escapes, secondary owner actions, and recovery-only tooling.
 - Accepted users who choose `Enter App` continue through `frontend/src/features/waitlist/WaitlistFlow.tsx` + `frontend/src/features/waitlist/waitlistHandoff.ts`, and `frontend/src/hooks/useSiweAuth.ts` redeems the `cv_handoff` code before routing to the canonical app landing route.
 - Telegram, Base app, and website must all converge into the same verified-email-based account model.
 - Normal web auth should expose email first, then Base and Zora as optional native entry paths.
-- Returning waitlist users who already linked an external EOA during the earn-points step may sign back in on `/waitlist` via **Sign in with linked wallet**. This path re-authenticates an existing Privy account only — it does not replace email-first signup for new members. Wallet connector SDKs load only after the user explicitly chooses that action (the page stays email-only on first render to avoid extension conflicts during OTP).
+- Returning waitlist users who already linked an external EOA during the earn-points step may sign back in on `/waitlist` via **Sign in with linked wallet**. This path re-authenticates an existing Privy account only — it does not replace email-first signup for new members. The waitlist Privy provider stays on one stable `waitlist` mode from OTP through wallet linking; wallet actions use per-action login/link overrides without remounting Privy.
 
 Source of truth by concern:
 
@@ -39,9 +39,9 @@ Telegram-specific rules:
 Wallet invariants:
 
 - The Privy embedded EOA is created during signup/auth and must exist for every fully onboarded account.
-- For user-initiated frontend execution (CSW users, `executionMode === 'canonical'`): the canonical path is **parent CSW + Privy embedded-owner signer** (`legacy-owner-install`), not sub-account setup. The Privy embedded EOA is installed as a direct owner of the parent CSW, which becomes the default execution address via `canonical4337`. The parent CSW (`profiles.csw_address`) is both the canonical asset-holding account and the default execution address. An app-scoped sub-account (`profiles.base_sub_account`) is optional infrastructure — flag-gated, swap-only fallback that stays dormant unless both `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` and `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` are explicitly enabled. It must not be shown as the primary execution account unless the active route actually sends from it.
-- For user-initiated frontend execution (external EOA users, `executionMode === 'eoa'`): no sub-account; the wallet signs transactions directly.
-- If the user does not yet have a CSW, route them to Base app referral flow, then resume embedded-owner signing setup for the canonical parent CSW on return. Do not make waitlist onboarding explicitly create a sub-account.
+- For user-initiated frontend execution (CSW users, `executionMode === 'canonical'`): the canonical path is **parent CSW + Privy embedded-owner signer** (`legacy-owner-install`). The Privy embedded EOA is installed as a direct owner of the parent CSW, which becomes the default execution address via `canonical4337`. The parent CSW (`profiles.csw_address`) is both the canonical asset-holding account and the default execution address.
+- For user-initiated frontend execution (external EOA users, `executionMode === 'eoa'`): the wallet signs transactions directly.
+- If the user does not yet have a CSW, route them to Base app referral flow, then resume embedded-owner signing setup for the canonical parent CSW on return.
 - Wallet-dependent execution should stay gated until the appropriate track's readiness check succeeds — canonical parent CSW recorded in `profiles.csw_address`, Privy embedded EOA present in `profiles.primary_embedded_eoa`, and the embedded EOA confirmed as an owner/signing authority for the parent CSW (CSW track), or connected EOA for the EOA track.
 - **Server-side delegation** (deploy-session, XMTP agent, ERC-8004 identity) is orthogonal — it uses direct owner delegation on the parent CSW per `.cursor/rules/csw-agent-lifecycle.mdc`.
 

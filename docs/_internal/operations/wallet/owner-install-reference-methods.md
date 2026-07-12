@@ -120,5 +120,3 @@ Confirmed reference: [CSW Recovery Playbook](/operations/csw-recovery-playbook) 
 - **Base App session-key Part 1 / Part 2 split:** Method **B** + [recipe](/operations/base-app-session-key-relay-part1-recipe)
 - **Passkey Part 2 golden shape (historical):** Method **B** Part 2 tx `0x801b9d4b…`
 - **External-browser passkey recovery:** Method **C**
-
-Related decisions: [Owner mutation decision (2026-05)](/owner-mutation-decision-2026-05) (sub-account long-term alternative; parent-CSW Relay remains active product path per AGENTS.md).

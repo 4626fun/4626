@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAccount } from 'wagmi'
-import { createPublicClient, fallback, http, isAddress, type Address } from 'viem'
+import { createPublicClient, fallback, getAddress, http, isAddress, type Address } from 'viem'
 import { base } from 'viem/chains'
 import { useAccountMe } from '@/hooks/useAccountMe'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
@@ -11,6 +11,7 @@ import {
   type AccountChromeExecution,
   type UserFrontendExecutionTrack,
 } from '@/lib/wallet/userExecutionTrack'
+import { isCoinbaseWalletConnector } from '@/lib/xmtp/signerUtils'
 import { BASE_DEFAULTS } from '@/config/contracts.defaults'
 import {
   BROWSER_BASE_PUBLIC_RPC_FALLBACK,
@@ -95,11 +96,9 @@ export type CanonicalIdentity = {
   creatorCoinAddress: Address | null
   /** Loading state for async CSW → coin lookup. */
   loadingCoin: boolean
-  /** Optional app-scoped execution sub-account when the effective track uses it. */
   executionSubAccountAddress: Address | null
   /** Server-derived execution track classification (raw from `/api/accounts/me`). */
   executionTrack: UserFrontendExecutionTrack | null
-  /** Effective track after parent-owner promotion over stale sub-account state. */
   effectiveExecutionTrack: UserFrontendExecutionTrack
   /** Tray / accounts / swap chrome derived from the effective execution lane. */
   accountChrome: AccountChromeExecution
@@ -195,11 +194,26 @@ export function useCanonicalIdentity(): CanonicalIdentity {
   // wagmi's `address` could be Privy's embedded wallet OR an external
   // wallet. Distinguish by inspecting the connector id — Privy's
   // embedded connector id contains "privy".
+  // Base App / Coinbase Smart Wallet connected to the canonical CSW is
+  // identity (custody), not an "active external signer".
   const externalEoa = (() => {
     if (!isConnected || !wagmiAddress) return null
     const connectorId = String(connector?.id ?? '').toLowerCase()
     if (connectorId.includes('privy')) return null
     if (!isAddress(wagmiAddress)) return null
+    const canonical = accountMe.me?.accountSignals?.canonicalCswAddress
+    if (
+      typeof canonical === 'string' &&
+      isAddress(canonical) &&
+      getAddress(wagmiAddress).toLowerCase() === getAddress(canonical).toLowerCase()
+    ) {
+      return null
+    }
+    if (isCoinbaseWalletConnector(connector)) {
+      // Coinbase connector is smartWalletOnly — treat as CSW identity lane
+      // even before /api/accounts/me hydrates canonicalCswAddress.
+      return null
+    }
     return wagmiAddress as Address
   })()
 

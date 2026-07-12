@@ -11,13 +11,19 @@ import {
   checkDurableRateLimit,
   getClientIp,
   rateLimitKey,
+  syncUserWallets,
 } from '@4626/server-core'
 
 
 import { isIdentityRecoveryRequiredError } from '../../../server/_lib/identity/identityRecovery.js'
 import {
+  assertAccountsSessionMatchesPrivyUser,
+  isAccountsSessionBindingError,
+} from '../../../server/_lib/identity/accountsSessionBinding.js'
+import {
   buildAccountsMePayload,
   ensureAccountsIdentitySchema,
+  hasLinkedExternalEoa,
   recordProviderLink,
   syncEmailIdentity,
   type AccountLinkProvider,
@@ -25,13 +31,13 @@ import {
 } from '../../../server/_lib/identity/accountsIdentity.js'
 
 type LinkBody = {
-  provider?: AccountLinkProvider
+  provider?: AccountLinkProvider | 'wallet'
   value?: string | null
 }
 
 type AccountsLinkResponse = Awaited<ReturnType<typeof buildAccountsMePayload>>
 
-const ALLOWED_PROVIDERS = new Set<AccountLinkProvider>([
+const ALLOWED_PROVIDERS = new Set<AccountLinkProvider | 'wallet'>([
   'google',
   'apple',
   'twitter',
@@ -40,6 +46,7 @@ const ALLOWED_PROVIDERS = new Set<AccountLinkProvider>([
   'external_eoa',
   'email',
   'zora_cross_app',
+  'wallet',
 ])
 const LINK_VALUE_MAX_LENGTH = 256
 const LINK_BODY_MAX_BYTES = 16_384
@@ -94,6 +101,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const context = await verifyPrivyForAccounts(req)
+    await assertAccountsSessionMatchesPrivyUser({
+      db: db as any,
+      req,
+      privyUserId: context.privyUserId,
+    })
     await ensureAccountsIdentitySchema(db as any)
     await syncEmailIdentity({
       db: db as any,
@@ -101,14 +113,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       privyUser: context.privyUser,
     })
 
-    await recordProviderLink({
-      db: db as any,
-      privyUserId: context.privyUserId,
-      provider,
-      // Never trust caller-supplied identity values; only use verified Privy-linked identities.
-      value: null,
-      privyUser: context.privyUser,
-    })
+    if (provider === 'wallet') {
+      // "wallet" means refresh the wallet graph after Privy's verified link.
+      // Classification decides whether the result is a canonical CSW or a true
+      // external EOA; the request name must not pre-classify Coinbase/Base.
+      await syncUserWallets(db as any, context.privyUser as any)
+      if (hasLinkedExternalEoa(context.privyUser)) {
+        await recordProviderLink({
+          db: db as any,
+          privyUserId: context.privyUserId,
+          provider: 'external_eoa',
+          value: null,
+          privyUser: context.privyUser,
+        })
+      }
+    } else {
+      await recordProviderLink({
+        db: db as any,
+        privyUserId: context.privyUserId,
+        provider,
+        // Never trust caller-supplied identity values; only use verified Privy-linked identities.
+        value: null,
+        privyUser: context.privyUser,
+      })
+    }
 
     const data = await buildAccountsMePayload({
       db: db as any,
@@ -117,6 +145,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<AccountsLinkResponse>)
   } catch (error: any) {
+    if (isAccountsSessionBindingError(error)) {
+      return res.status(409).json({
+        success: false,
+        error: error.message,
+        code: error.code,
+        recoveryRequired: true,
+      } as ApiEnvelope<never> & { code: string; recoveryRequired: true })
+    }
     if (isIdentityRecoveryRequiredError(error)) {
       return res.status(409).json({
         success: false,

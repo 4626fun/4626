@@ -1,6 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { parseBacktestRequestFromText, parseSignalRequestFromText, runRealBacktestJob, runCounterTradeSignal } from './backtestJobs.js'
+import {
+  parseBacktestRequestFromText,
+  parseBacktestRequestFromOffering,
+  parseFundingOiRegimeRequestFromOffering,
+  parseSignalRequestFromText,
+  parseSignalRequestFromOffering,
+  runFundingOiRegimeJob,
+  runRealBacktestJob,
+  runCounterTradeSignal,
+} from './backtestJobs.js'
 
 describe('parseBacktestRequestFromText', () => {
   it('returns null when message is not a backtest request', () => {
@@ -83,6 +92,163 @@ describe('parseBacktestRequestFromText', () => {
   it('clamps window to minimum 1 day', () => {
     const parsed = parseBacktestRequestFromText('backtest BTC 1d capital 4000')
     expect(parsed?.windowHours).toBe(24)
+  })
+})
+
+describe('parseBacktestRequestFromOffering', () => {
+  it('parses 7d offering with JSON requirements', () => {
+    const req = parseBacktestRequestFromOffering('generateBacktestReport7d', '{"symbol":"BTC"}')
+    expect(req).not.toBeNull()
+    expect(req?.symbol).toBe('BTC')
+    expect(req?.windowHours).toBe(168) // 7 * 24
+  })
+
+  it('parses 30d offering with JSON requirements', () => {
+    const req = parseBacktestRequestFromOffering('generateBacktestReport30d', '{"symbol":"ETH","leveragePercent":40}')
+    expect(req).not.toBeNull()
+    expect(req?.symbol).toBe('ETH')
+    expect(req?.windowHours).toBe(720) // 30 * 24
+    expect(req?.leveragePercent).toBe(40)
+  })
+
+  it('parses 90d offering with JSON requirements', () => {
+    const req = parseBacktestRequestFromOffering('generateBacktestReport90d', '{"symbol":"SOL","rebalanceHealthPercent":80,"rebalanceSizePercent":25}')
+    expect(req).not.toBeNull()
+    expect(req?.symbol).toBe('SOL')
+    expect(req?.windowHours).toBe(2160) // 90 * 24
+    expect(req?.rebalanceHealthPercent).toBe(80)
+    expect(req?.rebalanceSizePercent).toBe(25)
+  })
+
+  it('returns null for non-backtest offering names', () => {
+    expect(parseBacktestRequestFromOffering('counterTradeSignal', '{"symbol":"BTC"}')).toBeNull()
+    expect(parseBacktestRequestFromOffering('someOtherOffering', '{"symbol":"BTC"}')).toBeNull()
+  })
+
+  it('returns null when requirement JSON has no symbol', () => {
+    expect(parseBacktestRequestFromOffering('generateBacktestReport7d', '{"request":"hello"}')).toBeNull()
+  })
+
+  it('handles non-JSON requirement text by extracting symbol', () => {
+    const req = parseBacktestRequestFromOffering('generateBacktestReport7d', 'BTC')
+    expect(req).not.toBeNull()
+    expect(req?.symbol).toBe('BTC')
+    expect(req?.windowHours).toBe(168)
+  })
+
+  it('normalizes symbol formats', () => {
+    const req = parseBacktestRequestFromOffering('generateBacktestReport7d', '{"symbol":"btcusd"}')
+    expect(req?.symbol).toBe('BTC')
+  })
+})
+
+describe('parseSignalRequestFromOffering', () => {
+  it('parses counterTradeSignal offering with symbol', () => {
+    expect(parseSignalRequestFromOffering('counterTradeSignal', '{"symbol":"BTC"}')).toBe('BTC')
+  })
+
+  it('returns null for non-signal offering names', () => {
+    expect(parseSignalRequestFromOffering('generateBacktestReport7d', '{"symbol":"BTC"}')).toBeNull()
+  })
+
+  it('handles non-JSON requirement text', () => {
+    expect(parseSignalRequestFromOffering('counterTradeSignal', 'ETH')).toBe('ETH')
+  })
+
+  it('returns null when no symbol in JSON', () => {
+    expect(parseSignalRequestFromOffering('counterTradeSignal', '{"request":"hello"}')).toBeNull()
+  })
+})
+
+describe('funding/OI shadow offering', () => {
+  it('only parses the dedicated offering schema', () => {
+    expect(parseFundingOiRegimeRequestFromOffering('fundingOiRegimeShadow', '{"symbol":"eth"}')).toBe('ETH')
+    expect(parseFundingOiRegimeRequestFromOffering('counterTradeSignal', '{"symbol":"ETH"}')).toBeNull()
+    expect(parseFundingOiRegimeRequestFromOffering('fundingOiRegimeShadow', '{"request":"hello"}')).toBeNull()
+  })
+
+  it('runs read-only analysis and returns explicitly advisory output', async () => {
+    const readMarketContext = vi.fn().mockResolvedValue({
+      symbol: 'BTC',
+      markPriceUsd: 100_000,
+      priceChange24hPct: 3,
+      fundingRate: 0.0002,
+      openInterestUsd: 900_000,
+      volume24hUsd: 1_000_000,
+    })
+    const result = await runFundingOiRegimeJob('BTC', { readMarketContext })
+
+    expect(readMarketContext).toHaveBeenCalledWith('BTC')
+    expect(result.regime).toBe('crowded-longs')
+    expect(result.shadowOnly).toBe(true)
+    expect(result.responseText).toContain('Advisory only')
+    expect(result.responseText).not.toMatch(/\b(COUNTER|DELAY|SKIP)\b/)
+  })
+
+  it('best-effort records the observation and settles due horizons without changing analysis', async () => {
+    const context = {
+      symbol: 'BTC',
+      markPriceUsd: 100_000,
+      priceChange24hPct: 3,
+      fundingRate: 0.0002,
+      openInterestUsd: 900_000,
+      volume24hUsd: 1_000_000,
+    }
+    const readMarketContext = vi.fn().mockResolvedValue(context)
+    const recordObservation = vi.fn().mockRejectedValue(new Error('shadow store unavailable'))
+    const settleHorizons = vi.fn().mockResolvedValue({ due: 2, settled: 2, deferred: 0 })
+
+    const result = await runFundingOiRegimeJob('BTC', {
+      readMarketContext,
+      recordObservation,
+      settleHorizons,
+      now: () => 1_752_321_600_000,
+    })
+
+    expect(recordObservation).toHaveBeenCalledWith(expect.objectContaining({
+      observedAtMs: 1_752_321_600_000,
+      symbol: 'BTC',
+      markPriceUsd: 100_000,
+      regime: 'crowded-longs',
+      fundingBias: 'longs-paying',
+      confidence: result.confidence,
+    }))
+    expect(settleHorizons).toHaveBeenCalledWith({
+      nowMs: 1_752_321_600_000,
+      readMarkPriceAt: expect.any(Function),
+    })
+    expect(result.regime).toBe('crowded-longs')
+    expect(result.responseText).toContain('Advisory only')
+  })
+
+  it('fails closed when market context is unavailable', async () => {
+    const result = await runFundingOiRegimeJob('BTC', {
+      readMarketContext: vi.fn().mockResolvedValue(null),
+    })
+    expect(result.regime).toBe('insufficient-data')
+    expect(result.responseText).toContain('INSUFFICIENT-DATA')
+  })
+
+  it('passes the stable ACP job key through to observation persistence', async () => {
+    const recordObservation = vi.fn().mockResolvedValue({ observationId: 'observation-1', inserted: true })
+
+    await runFundingOiRegimeJob('BTC', {
+      idempotencyKey: 'virtuals:8453:job-123',
+      readMarketContext: vi.fn().mockResolvedValue({
+        symbol: 'BTC',
+        markPriceUsd: 100_000,
+        priceChange24hPct: 3,
+        fundingRate: 0.0002,
+        openInterestUsd: 900_000,
+        volume24hUsd: 1_000_000,
+      }),
+      recordObservation,
+      settleHorizons: vi.fn().mockResolvedValue({ due: 0, settled: 0, deferred: 0 }),
+    })
+
+    expect(recordObservation).toHaveBeenCalledWith(expect.objectContaining({
+      idempotencyKey: 'virtuals:8453:job-123',
+    }))
   })
 })
 

@@ -262,11 +262,21 @@ function inferProvider(clientType: string): WalletProvider {
 }
 
 function isBaseAccountClientType(value: string): boolean {
+  const normalized = value.replace(/[\s_-]+/g, '')
   return (
     value.includes('base_account') ||
     value.includes('coinbase_smart_wallet') ||
-    value === 'coinbase_wallet'
+    value.includes('coinbase_wallet') ||
+    normalized.includes('baseaccount') ||
+    normalized.includes('coinbasesmartwallet') ||
+    normalized === 'coinbasewallet'
   )
+}
+
+function isCoinbaseSmartWalletProvider(provider: WalletProvider, clientType: string | null): boolean {
+  if (provider === 'coinbase_wallet') return true
+  const raw = normalizeLower(clientType)
+  return Boolean(raw) && isBaseAccountClientType(raw)
 }
 
 function extractClientType(raw: any): string {
@@ -362,6 +372,16 @@ export function classifyLinkedAccounts(user: PrivyUserLike): ClassifiedLinkedAcc
     if (smartWalletAddresses.has(normalizedAddress)) {
       wallet.walletType = 'smart_wallet'
     }
+    // Base App / Coinbase Smart Wallet sign-in often links the CSW with
+    // provider=coinbase_wallet but without type=smart_wallet. Promote those
+    // before they become activeOwnerWallet / linkedMethods.external_eoa.
+    if (
+      wallet.chain === 'evm' &&
+      wallet.walletType === 'external_eoa' &&
+      isCoinbaseSmartWalletProvider(wallet.provider, wallet.clientType)
+    ) {
+      wallet.walletType = 'smart_wallet'
+    }
     const current = byAddress.get(wallet.address)
     if (!current || rank(wallet.walletType) > rank(current.walletType)) {
       byAddress.set(wallet.address, wallet)
@@ -388,9 +408,25 @@ export function classifyLinkedAccounts(user: PrivyUserLike): ClassifiedLinkedAcc
     canonicalSmartWallet = { address: typedSmartWallet.address, provider: typedSmartWallet.provider }
   } else {
     const clientSmartWallet = canonicalCandidates.find(
-      (w) => (w.clientType || '').includes('base_account') || (w.clientType || '').includes('coinbase_smart_wallet'),
+      (w) => isBaseAccountClientType(w.clientType || '') || w.provider === 'coinbase_wallet',
     )
-    if (clientSmartWallet) canonicalSmartWallet = { address: clientSmartWallet.address, provider: clientSmartWallet.provider }
+    if (clientSmartWallet) {
+      canonicalSmartWallet = { address: clientSmartWallet.address, provider: clientSmartWallet.provider }
+    }
+  }
+
+  // Deduped allWallets may have promoted a Coinbase CSW that was missing from
+  // mappedRaw candidate filters (e.g. WalletConnect + coinbase provider hint).
+  if (!canonicalSmartWallet) {
+    const promoted = allWallets.find(
+      (w) =>
+        w.chain === 'evm' &&
+        w.walletType === 'smart_wallet' &&
+        isCanonicalSmartWalletCandidate(w),
+    )
+    if (promoted) {
+      canonicalSmartWallet = { address: promoted.address, provider: promoted.provider }
+    }
   }
 
   const extractedEmbeddedAddress = extractPrivyEmbeddedEoaAddress(user)
@@ -411,7 +447,27 @@ export function classifyLinkedAccounts(user: PrivyUserLike): ClassifiedLinkedAcc
         clientType: embeddedFromAllWallets?.clientType ?? null,
       }
     : null
-  const activeOwner = allWallets.find((w) => w.chain === 'evm' && w.walletType !== 'smart_wallet') ?? null
+  const canonicalAddressLower = normalizeLower(canonicalSmartWallet?.address)
+  // The login embedded EOA is the canonical4337 owner signer. Prefer it
+  // deterministically over unrelated external EOAs regardless of Privy's
+  // linkedAccounts ordering.
+  const activeOwner =
+    (embeddedAddress
+      ? allWallets.find((wallet) => normalizeLower(wallet.address) === normalizeLower(embeddedAddress)) ?? {
+          address: embeddedAddress,
+          chain: 'evm',
+          provider: 'privy' as const,
+          walletType: 'embedded_eoa' as const,
+          clientType: null,
+        }
+      : null) ??
+    allWallets.find(
+      (w) =>
+        w.chain === 'evm' &&
+        w.walletType !== 'smart_wallet' &&
+        normalizeLower(w.address) !== canonicalAddressLower,
+    ) ??
+    null
   const activeOwnerWallet = activeOwner
     ? {
         address: activeOwner.address,

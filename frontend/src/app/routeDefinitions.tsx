@@ -26,8 +26,6 @@ import {
   AgentDirectory,
   AgentRegister,
   AgentUriService,
-  AlfaClubKeySafety,
-  AlfaClubLiquidity,
   AuctionBid,
   AuctionDemo,
   CoinManage,
@@ -94,7 +92,6 @@ export const MARKETING_ONLY_ROUTES: PathRouteDef[] = [
   { path: '/area/positions', element: <Navigate to="/arena/positions" replace /> },
   { path: '/cca', element: <DistributeCcaLaunch /> },
   { path: '/status', element: <Status /> },
-  { path: '/alfaclub/key-safety', element: <AlfaClubKeySafety /> },
   { path: '/dev/metaball-os', element: <MetaballOsProbe /> },
   { path: '/dev/tactical-map', element: <TacticalTokenMap /> },
 ]
@@ -119,7 +116,7 @@ export const APP_PUBLIC_ROUTES: PathRouteDef[] = [
 
 /**
  * `/accounts` is the identity + execution-scope surface (canonical CSW,
- * signers, sub-account state, advanced owner recovery).
+ * signers, advanced owner recovery).
  *
  * Previously this route redirected to `/waitlist` because the waitlist
  * flow had absorbed the old `/accounts` content. Reinstated 2026-04-19
@@ -129,10 +126,8 @@ export const APP_PUBLIC_ROUTES: PathRouteDef[] = [
  * while `/accounts` handles day-two operations on an already-linked
  * identity.
  *
- * Wrapped in `SmartWalletRoute` so `useSmartWallets()` is available —
- * the sub-account SpendPermission flow signs via Privy's ERC-1271
- * smart-wallet client for Zora-cross-app profiles whose Privy embedded
- * EOA isn't on the parent CSW owner list.
+ * Wrapped in `SmartWalletRoute` so `useSmartWallets()` is available for
+ * owner-install compatibility lanes that need Privy's smart-wallet client.
  */
 export const ACCOUNT_ROUTES: PathRouteDef[] = [
   {
@@ -244,14 +239,6 @@ export const APP_ACCEPTED_ROUTES: PathRouteDef[] = [
   { path: '/agents', element: <AgentDirectory /> },
   { path: '/agents/register', element: <AgentRegister /> },
   { path: '/agents/uri-service', element: <AgentUriService /> },
-  {
-    path: '/alfaclub/liquidity',
-    element: (
-      <SmartWalletRoute>
-        <AlfaClubLiquidity />
-      </SmartWalletRoute>
-    ),
-  },
   { path: '/auction-demo', element: <AuctionDemo /> },
 ]
 

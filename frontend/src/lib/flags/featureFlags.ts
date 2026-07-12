@@ -41,13 +41,15 @@ function isFalsyEnv(v: unknown): boolean {
  * `window` without a complete `location` object.
  */
 const MARKETING_HOSTNAMES = ['4626.fun', 'www.4626.fun']
+const ALFACLUB_HOSTNAMES = ['alfaclub.4626.fun']
 
 function resolveHostMode(): HostMode {
   if (typeof window === 'undefined') return 'app'
   const override = String(import.meta.env.VITE_HOST_MODE_OVERRIDE ?? '').trim().toLowerCase()
-  if (override === 'app' || override === 'marketing') return override
-  const hostname = window.location?.hostname ?? ''
-  return MARKETING_HOSTNAMES.includes(hostname.toLowerCase().trim()) ? 'marketing' : 'app'
+  if (override === 'app' || override === 'marketing' || override === 'alfaclub') return override
+  const hostname = (window.location?.hostname ?? '').toLowerCase().trim()
+  if (ALFACLUB_HOSTNAMES.includes(hostname)) return 'alfaclub'
+  return MARKETING_HOSTNAMES.includes(hostname) ? 'marketing' : 'app'
 }
 
 // ---------------------------------------------------------------------------
@@ -85,6 +87,7 @@ const DEFAULT_PRIVY_APP_ID = 'cmk411efm034jl50cs618o8cy'
 const DEFAULT_PRIVY_ALLOWED_ORIGINS = new Set<string>([
   'https://4626.fun',
   'https://app.4626.fun',
+  'https://alfaclub.4626.fun',
   'http://localhost:5173',
   'http://localhost:5174',
 ])
@@ -173,7 +176,7 @@ function isPrivyOriginAllowed(): boolean {
 }
 
 export function isPrivyHostModeAllowed(mode: HostMode): boolean {
-  return mode === 'marketing' || mode === 'app'
+  return mode === 'marketing' || mode === 'app' || mode === 'alfaclub'
 }
 
 // ---------------------------------------------------------------------------
@@ -214,10 +217,15 @@ export const zoraMigrationVerifyImplFlag = defineFlag<boolean>({
 
 export const hostModeFlag = defineFlag<HostMode>({
   key: 'host-mode',
-  description: 'Active host mode — marketing (4626.fun) or app (app.4626.fun / localhost).',
+  description:
+    'Active host mode — marketing (4626.fun), app (app.4626.fun / localhost), or alfaclub (alfaclub.4626.fun).',
   category: 'operational',
   defaultValue: 'app',
-  options: [{ value: 'app', label: 'App' }, { value: 'marketing', label: 'Marketing' }],
+  options: [
+    { value: 'app', label: 'App' },
+    { value: 'marketing', label: 'Marketing' },
+    { value: 'alfaclub', label: 'AlfaClub' },
+  ],
   decide() {
     return resolveHostMode()
   },
@@ -367,13 +375,8 @@ export function resolvePrivyClientId(): string | null {
   return clientId
 }
 
-/**
- * Waitlist Zora cross-app `oauth/link` requires Privy app-client credentials on
- * loopback. Enable the configured client id for waitlist routes even when
- * `VITE_PRIVY_CLIENT_ID_ON_LOOPBACK=0` so email OTP can stay app-id-only on
- * other localhost surfaces until Zora linking is attempted.
- */
-export function resolveWaitlistLoopbackPrivyClientId(): string | null {
+/** One app client for every Privy surface on a loopback/local-dev origin. */
+export function resolveLoopbackPrivyClientId(): string | null {
   if (typeof window === 'undefined') return null
   if (!isLocalDevOrigin(window.location.origin)) return null
   if (!isTruthyEnv(import.meta.env.VITE_PRIVY_CLIENT_ID_ENABLED)) return null
@@ -382,13 +385,11 @@ export function resolveWaitlistLoopbackPrivyClientId(): string | null {
 }
 
 /**
- * Client id for Privy Wallet API bearer verification. Waitlist loopback OTP
- * sessions are issued against the waitlist app client even when
- * VITE_PRIVY_CLIENT_ID_ON_LOOPBACK=0 — mirror that here so authorized signing
- * does not 401 with "Missing auth token."
+ * Client id for Privy Wallet API bearer verification. Mirror the origin-scoped
+ * provider client so authorized signing uses the same session identity.
  */
 export function resolveEffectivePrivyClientId(): string | null {
-  return resolveWaitlistLoopbackPrivyClientId() ?? resolvePrivyClientId()
+  return resolveLoopbackPrivyClientId() ?? resolvePrivyClientId()
 }
 
 export function resolvePrivyApiUrl(): string | null {

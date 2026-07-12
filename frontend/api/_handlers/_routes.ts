@@ -40,6 +40,8 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'x/account-activity/webhook': () => import('./x/_accountActivityWebhook.js'),
 
   'onboarding/bootstrap': () => import('./onboarding/_bootstrap.js'),
+  'onboarding/activation-status': () => import('./onboarding/_activation-status.js'),
+  'onboarding/complete-activation': () => import('./onboarding/_complete-activation.js'),
   'onboarding/provision-agent-owner': () => import('./onboarding/_provision-agent-owner.js'),
   'onboarding/preview-agent-owner': () => import('./onboarding/_preview-agent-owner.js'),
   'onboarding/preview-add-owner': () => import('./onboarding/_preview-add-owner.js'),

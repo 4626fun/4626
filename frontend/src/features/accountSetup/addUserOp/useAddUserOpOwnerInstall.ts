@@ -17,19 +17,19 @@ import {
   type CswFundingAssessment,
 } from '@/lib/wallet/cswEntryPointFunding'
 import { ENTRY_POINT_V06_BASE } from '@/lib/wallet/cswOwnerAbi'
-import { readIsOwnerAddressIfDeployed } from '@/lib/wallet/cswOwnerRead'
 import { withWalletRequestTimeout } from '@/lib/wallet/cswSendCalls'
 import { getProductionBaseReadClient } from '@/lib/base/productionBaseReadClient'
 import { detectInAppEnvironment, isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import {
   executeAddOwnerRelayMethodA,
-  shouldAttemptRelayMethodAFallback,
 } from '@/features/accountSetup/addUserOp/addOwnerRelayFallback'
+import { mapBaseAppOwnerInstallRpcError } from '@/features/accountSetup/addUserOp/addOwnerRelayFallbackPolicy'
 import {
   confirmOwnerInstall,
   fetchPrepareAddPrivyOwner,
   type PreparedOwnerTxRequest,
 } from '@/lib/wallet/zoraAddOwnerApi'
+import { waitForEmbeddedOwnerOnChain } from './ownerInstallConfirmation'
 
 type WalletRequest = (args: { method: string; params?: unknown[] }) => Promise<unknown>
 
@@ -45,6 +45,8 @@ function getErrorMessage(
   error: unknown,
   context?: { fundingPreflightOk?: boolean; surface?: 'add-owner-page' | 'default' },
 ): string {
+  const rpcFailure = mapBaseAppOwnerInstallRpcError(error)
+  if (rpcFailure) return rpcFailure
   const funding = mapAddOwnerFundingErrorMessage(error, {
     fundingPreflightOk: context?.fundingPreflightOk,
     surface: context?.surface ?? 'add-owner-page',
@@ -135,6 +137,8 @@ export type UseAddUserOpOwnerInstallParams = {
    * in their pending banners during the long Base App signature + bundle window.
    */
   onPhaseChange?: (phase: string | null) => void
+  /** `/add` may expose an explicit documented Relay fallback; waitlist stays on the direct Base App lane. */
+  surface?: 'add-owner-page' | 'default'
 }
 
 export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams) {
@@ -147,6 +151,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     onSuccess,
     onPendingHashChange,
     onPhaseChange,
+    surface = 'default',
   } = params
 
   const { baseAccountSdk } = useBaseAccountSdk()
@@ -282,12 +287,12 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       appendEvent(`prepare:selector=${prepared.txRequest.data.slice(0, 10)}`)
       return prepared
     } catch (error) {
-      setPageError(getErrorMessage(error))
+      setPageError(getErrorMessage(error, { surface }))
       return null
     } finally {
       setPrepareLoading(false)
     }
-  }, [appendEvent, canonicalCswAddress, enabled, privyEmbeddedEoaAddress])  // authHeaders read via ref
+  }, [appendEvent, canonicalCswAddress, enabled, privyEmbeddedEoaAddress, surface])  // authHeaders read via ref
 
   useEffect(() => {
     if (!enabled) return
@@ -334,8 +339,6 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
   const handleSubmitUserOp = useCallback(async (options?: {
     /** Skip direct addOwner-only wallet_sendCalls; use Depository Part 1 + EntryPoint Part 2 only. */
     relayMethodAOnly?: boolean
-    /** Advanced: try direct CSW self-call addOwner via wallet_sendCalls before Relay (non–Base App only). */
-    directSendCallsOnly?: boolean
   }): Promise<boolean> => {
     if (busyRef.current) {
       appendEvent('submit:ignored_reentrant')
@@ -360,9 +363,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     setPageNotice(null)
     reportPendingUserOpHash(null)
     appendEvent('--- submit ---')
-    const preferRelayMethodAFirst =
-      options?.relayMethodAOnly === true ||
-      (inBaseApp && options?.directSendCallsOnly !== true)
+    const preferRelayMethodAFirst = options?.relayMethodAOnly === true
     appendEvent(
       preferRelayMethodAFirst
         ? `lane:relay_method_a_primary (Depository Part 1 + EntryPoint Part 2 addOwner UserOp → ${ENTRY_POINT_V06_BASE}; not RelayRouter multicall)`
@@ -501,14 +502,13 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       if (preferRelayMethodAFirst) {
         await runRelayMethodA()
       } else {
-        try {
-          const result = await addOwnerViaBaseAppSendCalls({
+        const result = await addOwnerViaBaseAppSendCalls({
           walletRequest,
           csw,
           ownerToAdd,
           chainId: base.id,
           timeoutMs: 120_000,
-          publicClient: publicClient as Pick<AddUserOpOwnerInstallPublicClient, 'request'> | undefined,
+          publicClient: publicClientRef.current as Pick<AddUserOpOwnerInstallPublicClient, 'request'> | undefined,
           onTelemetry: (event) => {
             appendEvent(`sendCalls:${event.step}`)
             const nextPhase =
@@ -558,18 +558,6 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
           )
         }
         setCallBundleId(result.callBundleId)
-        } catch (directError) {
-          if (
-            !shouldAttemptRelayMethodAFallback(directError, {
-              fundingPreflightOk: submitFundingPreflightOk,
-            })
-          ) {
-            throw directError
-          }
-
-          appendEvent('fallback:direct_sendCalls_failed → relay_method_a')
-          await runRelayMethodA()
-        }
       }
 
       if (!landedTxHash) {
@@ -579,22 +567,31 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
       setTxHash(landedTxHash)
       appendEvent(`tx_hash=${landedTxHash}`)
 
-      const pcForVerify = publicClientRef.current
-      if (pcForVerify) {
-        await pcForVerify
-          .waitForTransactionReceipt({ hash: landedTxHash, timeout: 90_000 })
-          .catch(() => undefined)
-        await verifyEntryPointHandleOpsTransaction({
-          publicClient: pcForVerify,
-          txHash: landedTxHash,
-        })
-        appendEvent(`verify:entrypoint_handleops=ok (${ENTRY_POINT_V06_BASE})`)
-        const installed = await readIsOwnerAddressIfDeployed({
-          publicClient: pcForVerify,
-          cswAddress: csw,
-          ownerAddress: ownerToAdd,
-        })
-        appendEvent(`verify:is_owner=${String(installed)}`)
+      const pcForVerify =
+        typeof window !== 'undefined' ? getProductionBaseReadClient() : publicClientRef.current
+      if (!pcForVerify) {
+        throw new Error(
+          'Owner install was submitted, but 4626 could not verify the embedded signer on-chain. Check again before using sponsored swaps.',
+        )
+      }
+      await pcForVerify
+        .waitForTransactionReceipt({ hash: landedTxHash, timeout: 90_000 })
+        .catch(() => undefined)
+      await verifyEntryPointHandleOpsTransaction({
+        publicClient: pcForVerify,
+        txHash: landedTxHash,
+      })
+      appendEvent(`verify:entrypoint_handleops=ok (${ENTRY_POINT_V06_BASE})`)
+      const installed = await waitForEmbeddedOwnerOnChain({
+        publicClient: pcForVerify,
+        cswAddress: csw,
+        ownerAddress: ownerToAdd,
+      })
+      appendEvent(`verify:is_owner=${String(installed)}`)
+      if (!installed) {
+        throw new Error(
+          'Owner install was submitted, but the Privy embedded signer is not yet an on-chain owner of your parent smart wallet. Use Check now before trying /swap.',
+        )
       }
 
       const headers = await authHeadersRef.current()
@@ -625,7 +622,7 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     } catch (error) {
       const message = getErrorMessage(error, {
         fundingPreflightOk: submitFundingPreflightOk,
-        surface: 'add-owner-page',
+        surface,
       })
       appendEvent(`error:${message.slice(0, 220)}`)
       setPageError(message)
@@ -639,13 +636,13 @@ export function useAddUserOpOwnerInstall(params: UseAddUserOpOwnerInstallParams)
     alreadyOwner,
     appendEvent,
     canonicalCswAddress,
-    inBaseApp,
     loadPrepare,
     onSuccess,
     preparedTx,
     privyEmbeddedEoaAddress,
     refreshFunding,
     fundingAssessment,
+    surface,
     // authHeaders, resolveWalletRequest, publicClient, connections, and baseAccountSdk
     // are read via refs (see top of file). This prevents the giant submit callback
     // from being recreated constantly during Base App interactions (main cause of React #185).

@@ -5,6 +5,7 @@ import paymasterHandler, { validateSponsoredSmartWalletCalls } from '../_handler
 import { createMockReq, createMockRes } from './helpers'
 import { applyEnv } from './helpers'
 import { issueCustomOwnerSponsorshipToken } from '../../server/_lib/paymaster/customOwnerSponsorshipToken.js'
+import { issueActivationOwnerToken } from '../../server/_lib/wallet/activationOwnerToken.js'
 
 const ENTRYPOINT_V06 = getAddress('0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789')
 const CSW_IMPLEMENTATION = getAddress('0x9999999999999999999999999999999999999998')
@@ -38,6 +39,7 @@ const readRequestPrincipalMock = vi.fn()
 const getActiveDeploySessionMock = vi.fn()
 const getApiContractsMock = vi.fn()
 const isDbConfiguredMock = vi.fn()
+const getDbMock = vi.fn()
 const isSupabaseAdminConfiguredMock = vi.fn()
 const readJsonBodyMock = vi.fn()
 const resolveAuthorizedWalletProfileMock = vi.fn()
@@ -67,7 +69,7 @@ vi.mock('../../server/_lib/onchain/contracts.js', () => ({
 
 vi.mock('../../server/_lib/db/postgres.js', () => ({
   isDbConfigured: () => isDbConfiguredMock(),
-  getDb: vi.fn(),
+  getDb: (...args: unknown[]) => getDbMock(...args),
   ensureCreatorWalletsSchema: vi.fn(),
   ensureCreatorAccessSchema: vi.fn(),
   ensureWaitlistSchema: vi.fn(),
@@ -329,6 +331,137 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     const errMsg = String(responseBody?.error?.message ?? '')
     expect(errMsg).not.toMatch(/request denied/i)
     expect(errMsg).not.toMatch(/custom_owner_policy/i)
+  })
+
+  it('accepts only the DB-bound activation server owner after embedded ownership is confirmed', async () => {
+    const serverOwner = getAddress('0x4444444444444444444444444444444444444444')
+    mockGetBytecode.mockImplementation(async ({ address }: { address: string }) => {
+      return getAddress(address as `0x${string}`) === serverOwner ? '0x' : '0x1234'
+    })
+    isDbConfiguredMock.mockReturnValue(true)
+    getDbMock.mockResolvedValue({
+      sql: vi.fn(async () => ({
+        rows: [{
+          id: 42,
+          privy_user_id: 'did:privy:user-1',
+          csw_address: sender,
+          primary_embedded_eoa: sessionAddress,
+          preprov_server_wallet_address: serverOwner,
+        }],
+      })),
+    })
+    const activationToken = issueActivationOwnerToken({
+      privyUserId: 'did:privy:user-1',
+      profileId: 42,
+      sessionAddress,
+      smartWalletAddress: sender,
+      embeddedOwnerAddress: sessionAddress,
+      serverOwnerAddress: serverOwner,
+    })
+    const innerData = encodeFunctionData({
+      abi: [{
+        type: 'function',
+        name: 'addOwnerAddress',
+        stateMutability: 'nonpayable',
+        inputs: [{ name: 'owner', type: 'address' }],
+        outputs: [],
+      }] as const,
+      functionName: 'addOwnerAddress',
+      args: [serverOwner],
+    })
+
+    await expect(
+      validateSponsoredSmartWalletCalls({
+        sender,
+        sessionAddress,
+        calls: [{ to: sender, value: 0n, data: innerData }],
+        activationOwnerPolicyToken: activationToken,
+      }),
+    ).resolves.toMatchObject({ mode: 'deploy_session_setup' })
+  })
+
+  it('rejects arbitrary targets under the activation owner policy', async () => {
+    const serverOwner = getAddress('0x4444444444444444444444444444444444444444')
+    const arbitraryTarget = getAddress('0x5555555555555555555555555555555555555555')
+    const activationToken = issueActivationOwnerToken({
+      privyUserId: 'did:privy:user-1',
+      profileId: 42,
+      sessionAddress,
+      smartWalletAddress: sender,
+      embeddedOwnerAddress: sessionAddress,
+      serverOwnerAddress: serverOwner,
+    })
+    const innerData = encodeFunctionData({
+      abi: [{
+        type: 'function',
+        name: 'addOwnerAddress',
+        stateMutability: 'nonpayable',
+        inputs: [{ name: 'owner', type: 'address' }],
+        outputs: [],
+      }] as const,
+      functionName: 'addOwnerAddress',
+      args: [serverOwner],
+    })
+
+    await expect(
+      validateSponsoredSmartWalletCalls({
+        sender,
+        sessionAddress,
+        calls: [{ to: arbitraryTarget, value: 0n, data: innerData }],
+        activationOwnerPolicyToken: activationToken,
+      }),
+    ).rejects.toThrow('activation_owner_policy_self_call_invalid')
+  })
+
+  it('rejects expired activation tokens and nonzero self-call value', async () => {
+    const serverOwner = getAddress('0x4444444444444444444444444444444444444444')
+    const expiredToken = issueActivationOwnerToken({
+      privyUserId: 'did:privy:user-1',
+      profileId: 42,
+      sessionAddress,
+      smartWalletAddress: sender,
+      embeddedOwnerAddress: sessionAddress,
+      serverOwnerAddress: serverOwner,
+      nowMs: Date.now() - 60_000,
+      ttlSeconds: 1,
+    })
+    const validToken = issueActivationOwnerToken({
+      privyUserId: 'did:privy:user-1',
+      profileId: 42,
+      sessionAddress,
+      smartWalletAddress: sender,
+      embeddedOwnerAddress: sessionAddress,
+      serverOwnerAddress: serverOwner,
+    })
+    const innerData = encodeFunctionData({
+      abi: [{
+        type: 'function',
+        name: 'addOwnerAddress',
+        stateMutability: 'nonpayable',
+        inputs: [{ name: 'owner', type: 'address' }],
+        outputs: [],
+      }] as const,
+      functionName: 'addOwnerAddress',
+      args: [serverOwner],
+    })
+
+    await expect(
+      validateSponsoredSmartWalletCalls({
+        sender,
+        sessionAddress,
+        calls: [{ to: sender, value: 0n, data: innerData }],
+        activationOwnerPolicyToken: expiredToken,
+      }),
+    ).rejects.toThrow('activation_owner_policy_invalid')
+
+    await expect(
+      validateSponsoredSmartWalletCalls({
+        sender,
+        sessionAddress,
+        calls: [{ to: sender, value: 1n, data: innerData }],
+        activationOwnerPolicyToken: validToken,
+      }),
+    ).rejects.toThrow('activation_owner_policy_self_call_invalid')
   })
 
   it('accepts relay Part 1 depositNative when custom owner policy matches session + sender', async () => {

@@ -14,6 +14,10 @@ describe('isPrivyHostModeAllowed', () => {
   it('keeps the Privy browser client available on the app host', () => {
     expect(isPrivyHostModeAllowed('app')).toBe(true)
   })
+
+  it('keeps the Privy browser client available on the AlfaClub host', () => {
+    expect(isPrivyHostModeAllowed('alfaclub')).toBe(true)
+  })
 })
 
 describe('getPrivyClientId', () => {

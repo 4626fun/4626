@@ -1,14 +1,10 @@
 name: Docs Deploy
 
+# Cost: auto-deploy on every docs push burned minutes. Deploy from Actions UI
+# (or re-add a paths-filtered push trigger if docs.4626.fun must stay CD).
+
 on:
   workflow_dispatch:
-  push:
-    branches: [main, master]
-    paths:
-      - 'docs/**'
-      - 'apps/docs-site/**'
-      - 'frontend/public/brand/**'
-      - 'README.md'
 
 concurrency:
   group: docs-deploy-production

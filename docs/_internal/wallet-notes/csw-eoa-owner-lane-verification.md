@@ -57,11 +57,9 @@ with a clear message instead of a `-32507` bundler revert.
    - More commonly, `warningState: amber` with `eth_accounts[0]` equal to
      **your EOA owner address** (not the CSW). For the EOA-owner lane that
      is the correct state — the wallet is operating on the EOA, not the CSW.
-     The amber message wording is targeted at the Base App sub-account case
      and slightly mis-reads in this scenario; what matters is that
      `eth_accounts[0]` matches the on-chain owner address. (Future polish:
      differentiate "matches an on-chain EOA owner" from "matches a
-     sub-account substitution".)
 
 If `eth_accounts[0]` does not match an on-chain owner, you have connected the
 wrong wallet — check the wagmi `useAccount().address` and reconnect.

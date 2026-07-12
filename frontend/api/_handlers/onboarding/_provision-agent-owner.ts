@@ -3,8 +3,8 @@
  *
  * Provisions a Privy-managed agent wallet for the authenticated user's
  * canonical CSW and returns the `addOwnerAddress` calldata.  The client
- * sends this as an `eth_sendTransaction` self-call from the CSW
- * during the same account-setup ceremony that creates the sub-account.
+ * sends this as a sponsored `canonical4337` self-call from the CSW,
+ * signed by the already-confirmed Privy embedded EOA owner.
  *
  * This replaces the old pattern where deploy-session lazily installed the
  * agent owner at first use.  By moving it into onboarding we can fold it
@@ -24,6 +24,7 @@ import {
   setCors,
   setNoStore,
   getDb,
+  readJsonBody,
   RATE_LIMITS,
   checkDurableRateLimit,
   getClientIp,
@@ -34,16 +35,25 @@ import {
   extractDelegationFlags,
 } from '../../../server/_lib/wallet/canonicalCswDelegation.js'
 import { prepareAddOwnerTx, isOwner as isOwnerOnChain } from '../../../server/_lib/wallet/coinbaseSmartWalletOwner.js'
-import { createAgentWallet } from '../../../server/_lib/wallet/privyWalletApi.js'
+import { createAgentWallet, getWalletById } from '../../../server/_lib/wallet/privyWalletApi.js'
+import { issueActivationOwnerToken } from '../../../server/_lib/wallet/activationOwnerToken.js'
+import { resolveActivationServerWallet } from '../../../server/_lib/wallet/activationServerWallet.js'
 import { resolveServerBaseRpcUrl } from '../../../server/_lib/onchain/baseRpcUrl.js'
-import { createPublicClient, http, type Address } from 'viem'
+import { createPublicClient, getAddress, http, type Address } from 'viem'
 import { base } from 'viem/chains'
 
 type ProvisionAgentOwnerResponse =
-  | { alreadyOwner: true; agentWalletAddress: string }
+  | {
+      alreadyOwner: true
+      agentWalletAddress: string
+      embeddedOwnerConfirmed: true
+      activationToken: string
+    }
   | {
       alreadyOwner: false
       agentWalletAddress: string
+      embeddedOwnerConfirmed: true
+      activationToken: string
       txRequest: ReturnType<typeof prepareAddOwnerTx>
     }
 
@@ -85,6 +95,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
+  const body = (await readJsonBody(req, { maxBytes: 8 * 1024 }).catch(() => null)) as
+    | Record<string, unknown>
+    | null
+  if (body?.purpose !== 'enable_4626_server_owner') {
+    return res.status(400).json({
+      success: false,
+      error: 'activation_purpose_required',
+    } satisfies ApiEnvelope<never>)
+  }
+
   const db = await getDb()
   if (!db) {
     return res.status(503).json({ success: false, error: 'Service unavailable' } satisfies ApiEnvelope<never>)
@@ -96,11 +116,55 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const bootstrap = await bootstrapCanonicalDelegationState({ db: db as any, req })
     const canonicalCswAddress = bootstrap.canonicalCswAddress as Address
 
-    // 2. Provision (or retrieve) the agent wallet for this user.
-    //    The idempotency key is tied to the canonical CSW so that the same
-    //    wallet is returned on retry.
-    const agentWallet = await createAgentWallet({
-      idempotencyKey: `agent-owner:${canonicalCswAddress.toLowerCase()}`,
+    const embeddedEoaAddress = getAddress(bootstrap.privyEmbeddedEoaAddress)
+    if (!bootstrap.privyIsOwner) {
+      return res.status(409).json({
+        success: false,
+        error: 'embedded_owner_not_confirmed',
+      } satisfies ApiEnvelope<never>)
+    }
+
+    // 2. Provision only after this explicit authenticated activation request.
+    //    Reuse the persisted server wallet first; the Privy idempotency key is
+    //    additionally bound to profile + parent CSW.
+    const persistedResult = await (db as any).sql`
+      SELECT preprov_server_wallet_id, preprov_server_wallet_address
+      FROM profiles
+      WHERE id = ${bootstrap.profileId}
+      LIMIT 1;
+    `
+    const persisted = persistedResult.rows?.[0] as Record<string, unknown> | undefined
+    const persistedWalletId =
+      typeof persisted?.preprov_server_wallet_id === 'string'
+        ? persisted.preprov_server_wallet_id.trim()
+        : ''
+    const persistedWalletAddress =
+      typeof persisted?.preprov_server_wallet_address === 'string'
+        ? persisted.preprov_server_wallet_address.trim()
+        : ''
+    const agentWallet = await resolveActivationServerWallet({
+      profileId: bootstrap.profileId,
+      parentCswAddress: canonicalCswAddress,
+      persistedWalletId: persistedWalletId || null,
+      persistedWalletAddress: persistedWalletAddress || null,
+      fetchWallet: getWalletById,
+      createWallet: async (idempotencyKey) => createAgentWallet({ idempotencyKey }),
+    })
+    await (db as any).sql`
+      UPDATE profiles
+      SET preprov_server_wallet_id = ${agentWallet.walletId},
+          preprov_server_wallet_address = ${agentWallet.address.toLowerCase()},
+          updated_at = NOW()
+      WHERE id = ${bootstrap.profileId};
+    `
+
+    const activationToken = issueActivationOwnerToken({
+      privyUserId: bootstrap.privyUserId,
+      profileId: bootstrap.profileId,
+      sessionAddress: embeddedEoaAddress,
+      smartWalletAddress: canonicalCswAddress,
+      embeddedOwnerAddress: embeddedEoaAddress,
+      serverOwnerAddress: getAddress(agentWallet.address),
     })
 
     // 3. Check if the agent wallet is already an owner of the CSW on-chain.
@@ -117,6 +181,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         data: {
           alreadyOwner: true,
           agentWalletAddress: agentWallet.address,
+          embeddedOwnerConfirmed: true,
+          activationToken,
         } satisfies ProvisionAgentOwnerResponse,
       } satisfies ApiEnvelope<ProvisionAgentOwnerResponse>)
     }
@@ -129,6 +195,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       data: {
         alreadyOwner: false,
         agentWalletAddress: agentWallet.address,
+        embeddedOwnerConfirmed: true,
+        activationToken,
         txRequest,
       } satisfies ProvisionAgentOwnerResponse,
     } satisfies ApiEnvelope<ProvisionAgentOwnerResponse>)

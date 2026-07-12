@@ -13,7 +13,6 @@ Population **(c)** (Zora CSW + connectable EOA owner) remains the first-class se
 ### Option A — (c)-only deploy (current product default)
 
 - Deploy UI gates (b) and (d) with explicit copy.
-- Base App users can complete **Connect Base App** (sub-account track) for **swaps only** when `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` / `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1`.
 - Vault deploy for (b) is operator-assisted or deferred until a native Base handoff exists.
 
 **Pros:** Honest, no fake prolinks, minimal security surface.  
@@ -32,11 +31,9 @@ Finish vault deploy inside Base App (or a Coinbase-approved prepared-call flow) 
 
 ## Recommendation
 
-Ship **Option A** now (Phase 0 + Phase 1). Spec Option B with Base team before building deploy-specific sub-account or Relay owner paths for parent CSW.
 
 ## Related docs
 
 - `docs/_internal/ACCOUNT_MODEL.md` — populations (a)–(d)
 - `docs/_internal/wallet-notes/owner-mutation-decision-2026-05.md` — why browser owner mutations are retired
-- `docs/_internal/design/sub-accounts-baseapp-design.md` — sub-account swap lane
 - `frontend/src/lib/deploy/deployEligibility.ts` — deploy gating helper

@@ -83,6 +83,7 @@ export function WaitlistBaseAppWalletSetupPanel(props: Props) {
       <WaitlistModernParentOwnerInstall
         controller={controller}
         embeddedEoaAddress={embeddedEoaAddress}
+        baseWalletMatchesParent={baseWalletLink.ready}
         onOwnerInstallSuccess={onOwnerInstallSuccess}
       />
       {me?.accountSignals?.canonicalCswAddress ? (

@@ -8,7 +8,6 @@
 | --- | --- | --- | --- |
 | **Login embedded EOA** | User signs CSW owner adds, canonical swaps | Email OTP embedded wallet; **no** `policy_ids`, **not** owned by server key quorum | **Yes — target for `addOwnerAddress`** |
 | **Server agent wallet** | Deploy-session / XMTP automation | Wallet API wallet with `owner_id = PRIVY_WALLET_OWNER_ID` + `policy_ids = [PRIVY_WALLET_POLICY_ID]` | **No — server automation only** |
-| **Canonical CSW / sub-account** | Custody + app execution | Base Account / Coinbase Smart Wallet (not a Privy Wallet API wallet) | N/A (this is the CSW being modified) |
 
 ## Canonical Privy dashboard labels
 
@@ -60,13 +59,11 @@ Do not conflate **user signing** with **server automation**:
 
 | Path | Adds | Target CSW | Live surfaces |
 | --- | --- | --- | --- |
-| **Relay embedded-owner install** | 4626 **login embedded EOA** | Parent (`profiles.csw_address`) or sub-account when flagged | `/add-owner`, waitlist `AddOwnerSigningPanel`, `?setup=owner-install` |
 | **Server agent install** | Privy **server agent wallet** (`createAgentWallet`) | Parent CSW | `provision-agent-owner`, deploy-session, outreach iframe |
 | **Legacy (unwired)** | Embedded EOA calldata only | Parent CSW | `prepare-add-privy-owner` — API registered, **no SPA caller** |
 
 Canonical user path: `POST /api/onboarding/preview-add-owner` → `useAddOwnerFlow` → `executeOwnerMutationViaRelay`. Golden txs (block 45600637): [0xa6b543…b4c3](https://basescan.org/tx/0xa6b5435718a8969905a08093a7208dadefdf702602c63e3fd322d84db5f4b4c3) (deposit) + [0xa9a063…9a36](https://basescan.org/tx/0xa9a06340a7725063f1dd9b0a29af6c72f4fbfe3a408b28dd28e2fd2db7649a36) (solver fill). Full runbook: `docs/operations/relay-owner-mutation-kit-guide.md`.
 
-An **existing CSW owner** must approve `addOwnerAddress(embeddedEoa)` — the embedded EOA is the owner being added, not the approver. Base App sub-account track (`?setup=base-app`) uses sub-account Relay install instead of parent CSW when sub-account flags are on.
 
 ## Orphan cleanup: `alfaclub` key quorum (safe to delete)
 

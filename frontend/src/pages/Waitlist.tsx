@@ -89,26 +89,10 @@ export function Waitlist() {
     setWalletSessionAddress(null)
   }, [])
 
-  const hasWalletSession = Boolean(walletSessionAddress?.trim())
-  const waitlistPrivyMode = hasWalletSession
-    ? 'waitlist-wallet-joined'
-    : walletSignInPending
-      ? 'waitlist-returning-wallet'
-      : 'waitlist-email-only'
-  const waitlistWalletPrivyMode = waitlistPrivyMode !== 'waitlist-email-only'
-
   return (
     <AppQueryProvider>
       <PageMeta title={META.waitlist.title} description={META.waitlist.description} canonicalPath="/waitlist" />
-      <PrivyClientProvider
-        // Key on the full mode so Privy remounts when connectors/loginMethods
-        // change (email → returning-wallet → wallet-joined). Updating Privy
-        // config in place after wallet verify crashes in Base App WebViews.
-        key={waitlistPrivyMode}
-        showWalletLoginFirst={waitlistWalletPrivyMode}
-        mode={waitlistPrivyMode}
-        walletChainType={waitlistWalletPrivyMode ? 'ethereum-only' : undefined}
-      >
+      <PrivyClientProvider mode="waitlist" walletChainType="ethereum-only">
         {walletSignInPending ? (
           <WaitlistReturningWalletSignInRunner
             key={walletSignInAttempt}

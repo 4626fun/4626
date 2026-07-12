@@ -46,6 +46,12 @@ function normalizeCallValue(value: SendCallsCallShape['value']): bigint {
   throw new Error('Invalid wallet_sendCalls call value.')
 }
 
+function normalizeTxRequestValue(value: AddOwnerTxRequestShape['value']): bigint {
+  if (value === undefined) return 0n
+  if (/^(0x[0-9a-f]+|[0-9]+)$/i.test(value)) return BigInt(value)
+  throw new Error('Invalid addOwnerAddress self-call value.')
+}
+
 function isBlockedRelayTarget(toLower: string): boolean {
   return (
     toLower === RELAY_ROUTER_BASE.toLowerCase() ||
@@ -112,6 +118,10 @@ export function assertAddOwnerSelfCallShape(params: {
     throw new Error(
       `Expected addOwnerAddress selector ${ADD_OWNER_ADDRESS_SELECTOR}, got ${selector || '(empty)'}.`,
     )
+  }
+
+  if (normalizeTxRequestValue(params.txRequest.value) !== 0n) {
+    throw new Error('addOwnerAddress self-call must have zero native value.')
   }
 
   if (params.expectedOwnerToAdd) {

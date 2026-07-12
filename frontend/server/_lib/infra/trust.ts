@@ -22,6 +22,10 @@ const DEFAULT_APP_ORIGINS = new Set<string>([
   'https://app.4626.fun',
 ])
 
+const DEFAULT_ALFACLUB_ORIGINS = new Set<string>([
+  'https://alfaclub.4626.fun',
+])
+
 function normalizeLower(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
 }
@@ -143,9 +147,15 @@ export function getTrustedRequestOrigins(req?: VercelRequest): Set<string> {
 
   for (const origin of DEFAULT_MARKETING_ORIGINS) out.add(origin)
   for (const origin of DEFAULT_APP_ORIGINS) out.add(origin)
+  for (const origin of DEFAULT_ALFACLUB_ORIGINS) out.add(origin)
 
   const marketing = getExplicitMarketingOrigin()
   if (marketing) out.add(marketing)
+
+  const alfaclub =
+    normalizeOrigin(String(process.env.ALFACLUB_ORIGIN ?? '').trim()) ??
+    normalizeOrigin(String(process.env.VITE_ALFACLUB_ORIGIN ?? '').trim())
+  if (alfaclub) out.add(alfaclub)
 
   for (const origin of getOriginsFromEnvVar('CORS_ALLOWED_ORIGINS')) {
     out.add(origin)

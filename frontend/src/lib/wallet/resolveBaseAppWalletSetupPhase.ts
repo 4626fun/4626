@@ -45,11 +45,7 @@ export function resolveBaseAppWalletSetupPhase(params: {
     return 'needs-base-wallet-connect'
   }
 
-  if (
-    params.parentEmbeddedOwnerOnChain === true ||
-    params.executionTrack === 'legacy-owner-install' ||
-    params.executionTrack === 'base-app-direct'
-  ) {
+  if (params.parentEmbeddedOwnerOnChain === true) {
     return 'ready'
   }
 

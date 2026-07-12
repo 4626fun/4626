@@ -154,7 +154,6 @@ We are asking for an **official, versioned recipe** for this path. Specific gaps
 | CSW with known EOA owner | EOA `personal_sign` + prepared calls, or direct EOA lane |
 | Zora CSW + EOA owner | Legacy `executeBatch` from EOA (March-9 lane) |
 
-Sub-account + spend-permission track remains the long-term Arch B alternative per [owner-mutation-decision-2026-05](/owner-mutation-decision-2026-05).
 
 ---
 

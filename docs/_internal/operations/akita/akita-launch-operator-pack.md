@@ -42,7 +42,6 @@ If any gate fails, stop and fix per the blocker table in
 - Deploy session runs from the **creator/operator wallet** on the canonical track:
   parent CSW (`profiles.csw_address`) + Privy embedded EOA confirmed as CSW owner
   (`executionMode === 'canonical'`, execution-ready per AGENTS.md account invariants).
-- Do NOT deploy from a sub-account or a bare external EOA.
 - Wallet also needs gas headroom for both phases (finalize is payable — it attaches the
   LayerZero bridge fee).
 

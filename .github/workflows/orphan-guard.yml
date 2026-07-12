@@ -1,15 +1,6 @@
 name: Orphan-address sweep
 
 on:
-  push:
-    branches: [main, master]
-    paths:
-      - 'amoe/tools/ci/check_no_orphan_addresses.sh'
-      - 'docs/operations/**'
-      - 'docs/reference/**'
-      - 'deployments/**'
-      - 'test/v183-release-target-guard.sh'
-      - '.github/workflows/orphan-guard.yml'
   pull_request:
     branches: [main, master]
     paths:

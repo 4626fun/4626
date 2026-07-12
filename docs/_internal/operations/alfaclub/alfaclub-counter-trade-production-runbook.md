@@ -358,7 +358,6 @@ Confirm the Railway Hermit `/healthz` response includes a healthy counter-trade 
 
 ## Rollout plan
 
-### Subaccount sleeve staged rollout (event -> trend -> meanRevert)
 
 Use this sequence when enabling Hyperliquid subaccount sleeves for the
 counter-trader. Keep this feature flag off by default until mappings are ready.
@@ -382,7 +381,6 @@ counter-trader. Keep this feature flag off by default until mappings are ready.
      `event` sleeve).
    - Monitor logs and ledger for:
      - `counter_trade.execution_submitted` with `strategy=event`
-     - no `subaccount_missing_mapping:*`
      - no sustained `risk_gate:daily_loss_cap_reached` or `risk_gate:drawdown_pause`
 
 3. Expand to trend sleeve:
@@ -396,7 +394,6 @@ counter-trader. Keep this feature flag off by default until mappings are ready.
 5. Full rollout:
    - Increase cohort gradually only after all three sleeves are stable.
    - Any missing sleeve mapping should remain fail-closed (expected reason:
-     `subaccount_missing_mapping:<strategy>`); do not fallback to master.
 
 ### Phase 0: Disabled deploy (safe install)
 
@@ -522,4 +519,3 @@ where room_id = '1659'
 - Operator on-call knows command and SQL emergency procedures.
 
 If any item is unresolved, remain in current phase and do not expand cohort.
-

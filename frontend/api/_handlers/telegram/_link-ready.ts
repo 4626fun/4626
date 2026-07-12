@@ -13,6 +13,7 @@ import {
   rateLimitKey,
   ensureTelegramTradingSchema,
   readTelegramMiniAppSession,
+  syncUserWallets,
 } from '@4626/server-core'
 
 
@@ -21,6 +22,10 @@ import {
   syncEmailIdentity,
   verifyPrivyForAccounts,
 } from '../../../server/_lib/identity/accountsIdentity.js'
+import {
+  createPrivyServerClientFromEnv,
+  ensurePrivyUserEmbeddedWallet,
+} from '../../../server/_lib/identity/privyEmbeddedWalletProvision.js'
 
 type LinkReadyBody = {
   email?: string
@@ -124,11 +129,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       )
     }
 
+    const provisioned = await ensurePrivyUserEmbeddedWallet(
+      createPrivyServerClientFromEnv(),
+      context.privyUserId,
+      context.privyUser,
+    )
     await syncEmailIdentity({
       db: db as any,
       privyUserId: context.privyUserId,
-      privyUser: context.privyUser,
+      privyUser: provisioned.user,
     })
+    await syncUserWallets(db as any, provisioned.user as any)
 
     const result = await db.sql`
       SELECT
@@ -146,7 +157,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const resolvedEmail = normalizeEmail(row?.email)
     const emailVerified = row?.email_verified === true
     const canonicalCswAddress = asTrimmed(row?.canonical_csw_address) || null
-    const ready = Boolean(resolvedEmail && resolvedEmail === expectedEmail && emailVerified)
+    const ready = Boolean(
+      resolvedEmail &&
+        resolvedEmail === expectedEmail &&
+        emailVerified &&
+        provisioned.classified.embeddedEoa,
+    )
 
     return res.status(200).json({
       success: true,

@@ -11,6 +11,8 @@ const {
   syncEmailIdentityMock,
   ensureTelegramTradingSchemaMock,
   readTelegramMiniAppSessionMock,
+  ensurePrivyUserEmbeddedWalletMock,
+  syncUserWalletsMock,
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   dbSqlMock: vi.fn(),
@@ -19,6 +21,8 @@ const {
   syncEmailIdentityMock: vi.fn(),
   ensureTelegramTradingSchemaMock: vi.fn(),
   readTelegramMiniAppSessionMock: vi.fn(),
+  ensurePrivyUserEmbeddedWalletMock: vi.fn(),
+  syncUserWalletsMock: vi.fn(),
 }))
 
 vi.mock('../../server/_lib/db/postgres.js', () => ({
@@ -34,6 +38,15 @@ vi.mock('../../server/_lib/identity/accountsIdentity.js', () => ({
 vi.mock('../../server/_lib/messaging/telegramTrading.js', () => ({
   ensureTelegramTradingSchema: ensureTelegramTradingSchemaMock,
   readTelegramMiniAppSession: readTelegramMiniAppSessionMock,
+}))
+
+vi.mock('../../server/_lib/identity/privyEmbeddedWalletProvision.js', () => ({
+  createPrivyServerClientFromEnv: () => ({}),
+  ensurePrivyUserEmbeddedWallet: ensurePrivyUserEmbeddedWalletMock,
+}))
+
+vi.mock('../../server/_lib/wallet/walletSync.js', () => ({
+  syncUserWallets: syncUserWalletsMock,
 }))
 
 describe('POST /api/telegram/link/ready', () => {
@@ -53,6 +66,13 @@ describe('POST /api/telegram/link/ready', () => {
         telegramUserId: '42',
       },
     })
+    ensurePrivyUserEmbeddedWalletMock.mockResolvedValue({
+      user: { id: 'did:privy:test-user' },
+      classified: {
+        embeddedEoa: { address: '0x00000000000000000000000000000000000000ee' },
+      },
+    })
+    syncUserWalletsMock.mockResolvedValue({})
     dbSqlMock.mockResolvedValue({
       rows: [
         {

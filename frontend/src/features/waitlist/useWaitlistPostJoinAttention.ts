@@ -21,16 +21,15 @@ export type WaitlistPostJoinAttentionState = {
   connectTrack: WaitlistConnectTrack
   canonicalCswAddress: string | null
   embeddedEoaAddress: string | null
-  needsProvision: boolean
   showOwnerInstall: boolean
   messagingReady: boolean
   parentEmbeddedOwnerOnChain: boolean
   refreshParentEmbeddedOwner: () => Promise<void>
-  /** True while either wallet provisioning or the "Enable 4626 signing" owner-install
-   * step is pending — the same condition `WaitlistPostJoinShell` uses to decide whether
-   * to render its wallet-setup section. Exposed here so a host surface (the account
-   * tray) can know setup is required without needing `WaitlistPostJoinShell` mounted
-   * and visible first. */
+  /** True while the "Enable 4626 signing" owner-install step is pending — the same
+   * condition `WaitlistPostJoinShell` uses to decide whether to render its wallet-setup
+   * section. Exposed so a host surface (the account tray) can know setup is required
+   * without needing `WaitlistPostJoinShell` mounted and visible first.
+   * Missing CSW is handled by explicit wallet link, not auto-provision. */
   setupRequired: boolean
 }
 
@@ -75,16 +74,6 @@ export function useWaitlistPostJoinAttention(): WaitlistPostJoinAttentionState {
     [accountSignals, canonicalCswAddress, embeddedEoaAddress, zoraLinked],
   )
 
-  // Only infer "needs provision" once `/api/accounts/me` has settled for this
-  // session. During transient auth/rate-limit windows, accountMe can be null
-  // even when the user already has a canonical smart wallet.
-  const needsProvision =
-    accountStateReady &&
-    !inBaseApp &&
-    connectTrack !== 'base-app-direct' &&
-    !zoraLinked &&
-    !canonicalCswAddress?.trim()
-
   const showOwnerInstall = shouldShowParentCswAddOwnerPanel({
     inBaseApp,
     connectTrack,
@@ -106,7 +95,10 @@ export function useWaitlistPostJoinAttention(): WaitlistPostJoinAttentionState {
     [accountSignals, connectTrack, parentEmbeddedOwnerOnChain],
   )
 
-  const setupRequired = accountStateReady && (needsProvision || showOwnerInstall)
+  // Do not treat a missing CSW as setup-required. Waitlist never auto-creates a
+  // Privy Smart Wallet; users link their Coinbase/Base CSW (or EOA) explicitly.
+  // Owner-install is the only post-join wallet setup gate.
+  const setupRequired = accountStateReady && showOwnerInstall
 
   return {
     accountMe,
@@ -116,7 +108,6 @@ export function useWaitlistPostJoinAttention(): WaitlistPostJoinAttentionState {
     connectTrack,
     canonicalCswAddress,
     embeddedEoaAddress,
-    needsProvision,
     showOwnerInstall,
     messagingReady,
     parentEmbeddedOwnerOnChain,

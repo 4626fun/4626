@@ -9,7 +9,6 @@ sidebar_position: 6
 
 This is the known-good path for gas-sponsored canonical swaps when the browser signer is the Privy embedded EOA and the user's canonical Coinbase Smart Wallet (CSW) is the asset-holding account.
 
-This path is first-class, not merely a fallback from sub-accounts. The sub-account is not involved unless a route explicitly opts into the sub-account provider and shows that sender in diagnostics.
 
 ## Preflight
 
@@ -32,7 +31,6 @@ sender / execution: canonical CSW
 signer: Privy embedded EOA that is an owner on the CSW
 paymaster: CDP paymaster through the 4626 paymaster proxy
 direct fallback: disabled
-sub-account: not involved
 ```
 
 The transaction calls are batched into one UserOperation:

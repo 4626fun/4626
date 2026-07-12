@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  getWaitlistOtpSubmitHelperText,
+  getWaitlistOtpSubmitLabel,
   isWaitlistMessagingSigningReady,
   isWaitlistStepTwoSigningComplete,
   resolveWaitlistConnectTrack,
+  resolveWaitlistOtpInputStatus,
+  resolveWaitlistOtpSubmitPhase,
   shouldAutoSubmitOtpCode,
   shouldFocusBaseAppWalletSetup,
   shouldShowBaseAppWalletLinkPanel,
@@ -35,6 +39,25 @@ describe('shouldFocusBaseAppWalletSetup', () => {
       }),
     ).toBe(false)
   })
+
+  it('does not reclassify a Zora owner-install population just because it is inside Base App', () => {
+    expect(
+      shouldFocusBaseAppWalletSetup({
+        inBaseApp: true,
+        connectTrack: 'zora-owner-install',
+        signingStepComplete: false,
+        baseWalletReady: false,
+        account: {
+          emailVerified: true,
+          accountSignals: {
+            canonicalCswAddress: CSW,
+            canonicalSource: 'wallet_sync',
+            linked: true,
+          },
+        },
+      }),
+    ).toBe(false)
+  })
 })
 
 describe('shouldShowBaseAppWalletLinkPanel', () => {
@@ -63,6 +86,25 @@ describe('shouldShowParentCswAddOwnerPanel', () => {
         accountSignals: {
           canonicalCswAddress: '0xAb6d5C10b03300326cd7fab7267ae192842967b5',
         },
+        baseWalletReady: true,
+      }),
+    ).toBe(true)
+  })
+
+  it('shows owner install for a connected base_account population until on-chain confirmation', () => {
+    expect(
+      shouldShowParentCswAddOwnerPanel({
+        inBaseApp: true,
+        signingStepComplete: false,
+        ownerInstallRequested: false,
+        connectTrack: 'base-app-direct',
+        executionTrack: 'base-app-direct',
+        accountSignals: {
+          canonicalCswAddress: CSW,
+          embeddedEoaAddress: EOA,
+          canonicalSource: 'base_account',
+        },
+        parentEmbeddedOwnerOnChain: false,
         baseWalletReady: true,
       }),
     ).toBe(true)
@@ -167,9 +209,25 @@ describe('resolveWaitlistConnectTrack', () => {
         accountSignals: {
           canonicalCswAddress: CSW,
           embeddedEoaAddress: EOA,
+          canonicalSource: 'base_account',
         },
       }),
     ).toBe('base-app-direct')
+  })
+
+  it('does not short-circuit a Zora population into base-app-direct', () => {
+    expect(
+      resolveWaitlistConnectTrack({
+        executionTrack: 'base-app-direct',
+        accountSignals: {
+          canonicalCswAddress: CSW,
+          embeddedEoaAddress: EOA,
+          canonicalSource: 'wallet_sync',
+          linked: true,
+        },
+        zoraLinked: true,
+      }),
+    ).toBe('zora-owner-install')
   })
 })
 
@@ -201,6 +259,26 @@ describe('isWaitlistStepTwoSigningComplete', () => {
         parentEmbeddedOwnerOnChain: true,
       }),
     ).toBe(true)
+  })
+
+  it('does not treat base-app-direct population as embedded-owner completion', () => {
+    expect(
+      isWaitlistStepTwoSigningComplete({
+        ownerInstallRequested: false,
+        accountSignals: { executionTrack: 'base-app-direct' },
+        parentEmbeddedOwnerOnChain: false,
+      }),
+    ).toBe(false)
+  })
+
+  it('does not trust a legacy execution-track flag without an on-chain owner result', () => {
+    expect(
+      isWaitlistStepTwoSigningComplete({
+        ownerInstallRequested: false,
+        accountSignals: { executionTrack: 'legacy-owner-install' },
+        parentEmbeddedOwnerOnChain: false,
+      }),
+    ).toBe(false)
   })
 })
 
@@ -272,5 +350,54 @@ describe('shouldAutoSubmitOtpCode', () => {
         lastAttemptedCode: null,
       }),
     ).toBe(false)
+  })
+})
+
+describe('resolveWaitlistOtpSubmitPhase', () => {
+  it('prefers setting_up over verified while bootstrap is still in flight after OTP success', () => {
+    // Regression: success used to win over busy and left the button on static "Verified"
+    // for the full session-bridge gap with no progress signal.
+    expect(resolveWaitlistOtpSubmitPhase({ codeStatus: 'success', codeBusy: true })).toBe('setting_up')
+    expect(getWaitlistOtpSubmitLabel('setting_up')).toBe('Setting up your account…')
+    expect(getWaitlistOtpSubmitHelperText('setting_up')).toBe('This usually takes a few seconds.')
+  })
+
+  it('shows verifying while Privy OTP check is in flight before success', () => {
+    expect(resolveWaitlistOtpSubmitPhase({ codeStatus: 'default', codeBusy: true })).toBe('verifying')
+    expect(getWaitlistOtpSubmitLabel('verifying')).toBe('Verifying…')
+    expect(getWaitlistOtpSubmitHelperText('verifying')).toBeNull()
+  })
+
+  it('shows verified only after success when join is no longer busy', () => {
+    expect(resolveWaitlistOtpSubmitPhase({ codeStatus: 'success', codeBusy: false })).toBe('verified')
+    expect(getWaitlistOtpSubmitLabel('verified')).toBe('Verified')
+  })
+
+  it('stays idle when the user can still submit', () => {
+    expect(resolveWaitlistOtpSubmitPhase({ codeStatus: 'default', codeBusy: false })).toBe('idle')
+    expect(resolveWaitlistOtpSubmitPhase({ codeStatus: 'error', codeBusy: false })).toBe('idle')
+    expect(getWaitlistOtpSubmitLabel('idle')).toBe('Verify & join')
+    expect(getWaitlistOtpSubmitHelperText('idle')).toBeNull()
+  })
+})
+
+describe('resolveWaitlistOtpInputStatus', () => {
+  it('does not turn the digit cells green while account setup is still running', () => {
+    // Regression: the cells used to mirror `codeStatus` directly, so they went green
+    // the instant the code was accepted even though bootstrap was still in flight.
+    expect(resolveWaitlistOtpInputStatus({ codeStatus: 'success', codeBusy: true })).toBe('default')
+  })
+
+  it('turns the digit cells green only once fully verified and no longer busy', () => {
+    expect(resolveWaitlistOtpInputStatus({ codeStatus: 'success', codeBusy: false })).toBe('success')
+  })
+
+  it('shows error styling immediately regardless of busy state', () => {
+    expect(resolveWaitlistOtpInputStatus({ codeStatus: 'error', codeBusy: false })).toBe('error')
+    expect(resolveWaitlistOtpInputStatus({ codeStatus: 'error', codeBusy: true })).toBe('error')
+  })
+
+  it('stays default while verifying', () => {
+    expect(resolveWaitlistOtpInputStatus({ codeStatus: 'default', codeBusy: true })).toBe('default')
   })
 })

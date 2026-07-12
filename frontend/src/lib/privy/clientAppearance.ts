@@ -1,24 +1,28 @@
 type PrivyAppearanceOptions = {
   showWalletLoginFirst?: boolean
   walletList?: readonly string[]
-  walletChainType?: 'all' | 'ethereum-only' | 'solana-only' | 'ethereum-and-solana'
+  walletChainType?: 'ethereum-only' | 'solana-only' | 'ethereum-and-solana'
 }
 
 /** Wallet connectors used for Coinbase Smart Wallet / Base Account sign-in. */
 export const BASE_ACCOUNT_WALLET_LOGIN_LIST = ['coinbase_wallet', 'base_account'] as const
 
+/** Stable waitlist connector list for returning sign-in and post-join linking. */
+export const WAITLIST_WALLET_JOINED_LOGIN_LIST = [
+  'detected_ethereum_wallets',
+  'coinbase_wallet',
+  'base_account',
+  'wallet_connect',
+] as const
+
 /**
- * Waitlist returning sign-in: surface EIP-6963-detected extensions (Rabby, Frame, etc.)
- * as first-class rows before named wallets. Privy does not expose a dedicated `rabby`
- * entry; detected wallets render individually at this list position on desktop.
+ * Per-action override for returning-wallet sign-in only. The provider itself
+ * stays on the stable waitlist mode; this list keeps the wallet modal light.
  */
 export const WAITLIST_RETURNING_WALLET_LOGIN_LIST = [
   'detected_ethereum_wallets',
   'wallet_connect',
 ] as const
-
-/** Email-only waitlist must not mount WalletConnect / extension discovery rows. */
-export const WAITLIST_EMAIL_ONLY_WALLET_LIST = [] as const
 
 export function createPrivyAppearance(options?: PrivyAppearanceOptions) {
   const showWalletLoginFirst = options?.showWalletLoginFirst ?? false
@@ -34,8 +38,9 @@ export function createPrivyAppearance(options?: PrivyAppearanceOptions) {
 
   return {
     showWalletLoginFirst,
-    walletChainType: options?.walletChainType ?? 'all',
-    walletList,
+    walletChainType: options?.walletChainType ?? 'ethereum-and-solana',
+    // Privy's WalletListEntry[] is mutable; spread so readonly tuples assign cleanly.
+    walletList: [...walletList],
     landingHeader: 'Continue to 4626',
     loginMessage: 'Use verified email first, or continue with your wallet-native path.',
     theme: '#0f1117',

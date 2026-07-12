@@ -58,7 +58,6 @@ Expected: FAIL because wallet sync does not consult Zora yet.
 
 - Extend `readPersistedIdentity` to:
   - Prefer the canonical from `profile_wallets.is_canonical_smart_wallet=true` when present.
-  - Fall back to legacy columns (`primary_smart_wallet`, `csw_address`, `base_sub_account`) only when profile_wallets canonical is absent.
   - Also read `preprov_zora_handle` for seeding Zora fetch.
 
 **Step 2: Infer canonical from Zora**

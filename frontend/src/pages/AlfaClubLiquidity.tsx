@@ -16,6 +16,7 @@ import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wa
 import { toast } from '@/components/ui/Toast'
 import { CONTRACTS } from '@/config/contracts'
 import { useCounterTradeStatus } from '@/hooks/useCounterTradeStatus'
+import { formatAlfaClubPoolFee } from '@/hooks/useAlfaClubLiquidityPools'
 import {
   ALFA_CREATOR_KEY_LP_FACTORY_ABI,
   ALFA_CREATOR_KEY_POOL_ABI,
@@ -124,9 +125,20 @@ type LpSnapshot = {
   addLpShares: bigint | null
   buyQuote: bigint | null
   sellQuote: bigint | null
+  feeBps: number | null
 }
 
-export function AlfaClubLiquidity() {
+type AlfaClubLiquidityProps = {
+  initialCreatorCoin?: Address | null
+  initialTokenId?: bigint | null
+  initialMode?: Mode
+}
+
+export function AlfaClubLiquidity({
+  initialCreatorCoin = null,
+  initialTokenId = null,
+  initialMode = 'create',
+}: AlfaClubLiquidityProps = {}) {
   const queryClient = useQueryClient()
   const counterTradeStatus = useCounterTradeStatus()
   const account = useAccount()
@@ -135,9 +147,9 @@ export function AlfaClubLiquidity() {
   const publicClient = usePublicClient({ chainId: base.id })
   const { data: walletClient } = useWalletClient({ chainId: base.id })
 
-  const [mode, setMode] = useState<Mode>('create')
-  const [creatorCoinInput, setCreatorCoinInput] = useState('')
-  const [tokenIdInput, setTokenIdInput] = useState('')
+  const [mode, setMode] = useState<Mode>(initialMode)
+  const [creatorCoinInput, setCreatorCoinInput] = useState(initialCreatorCoin ?? '')
+  const [tokenIdInput, setTokenIdInput] = useState(initialTokenId?.toString() ?? '')
   const [keyAmountInput, setKeyAmountInput] = useState('1')
   const [creatorCoinAmountInput, setCreatorCoinAmountInput] = useState('')
   const [lpAmountInput, setLpAmountInput] = useState('')
@@ -302,9 +314,10 @@ export function AlfaClubLiquidity() {
       let addLpShares: bigint | null = null
       let buyQuote: bigint | null = null
       let sellQuote: bigint | null = null
+      let feeBps: number | null = null
 
       if (pool) {
-        const [reservesRaw, lpBalanceRaw, lpTotalRaw, addQuoteRaw, buyQuoteRaw, sellQuoteRaw] = await Promise.all([
+        const [reservesRaw, lpBalanceRaw, lpTotalRaw, addQuoteRaw, buyQuoteRaw, sellQuoteRaw, feeBpsRaw] = await Promise.all([
           publicClient.readContract({
             address: pool,
             abi: ALFA_CREATOR_KEY_POOL_ABI,
@@ -345,6 +358,11 @@ export function AlfaClubLiquidity() {
                 args: [keyAmount],
               }).catch(() => null)
             : Promise.resolve(null),
+          publicClient.readContract({
+            address: pool,
+            abi: ALFA_CREATOR_KEY_POOL_ABI,
+            functionName: 'feeBps',
+          }).catch(() => null),
         ])
         poolCreatorReserve = reservesRaw[0]
         poolKeyReserve = reservesRaw[1]
@@ -356,6 +374,7 @@ export function AlfaClubLiquidity() {
         }
         buyQuote = buyQuoteRaw
         sellQuote = sellQuoteRaw
+        feeBps = feeBpsRaw === null ? null : Number(feeBpsRaw)
       }
 
       return {
@@ -386,6 +405,7 @@ export function AlfaClubLiquidity() {
         addLpShares,
         buyQuote,
         sellQuote,
+        feeBps,
       }
     },
   })
@@ -900,7 +920,7 @@ export function AlfaClubLiquidity() {
                     <div className="mt-1 font-mono text-sm text-zinc-200">{shortAddress(snapshot?.pool)}</div>
                   </div>
                   <div className="rounded-full border border-white/10 px-3 py-1 text-xs text-zinc-500">
-                    6.9% LP fee
+                    {snapshot?.feeBps == null ? '--' : formatAlfaClubPoolFee(snapshot.feeBps)} LP fee
                   </div>
                 </div>
                 <div className="mt-5 grid grid-cols-2 gap-4 text-sm">

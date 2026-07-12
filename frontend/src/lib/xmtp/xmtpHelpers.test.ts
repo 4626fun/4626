@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { IdentifierKind } from '@xmtp/browser-sdk'
 
 import {
   aggregateReactionsByMessageId,
   filterDisplayChatMessages,
+  getEthereumAddressFromInboxState,
   isLocalXmtpStateInvalidError,
   isOpfsAccessHandleError,
   isTransientXmtpStreamNetworkError,
@@ -14,6 +16,47 @@ import { resetXmtpSyncCoordinatorForTests } from './xmtpSyncCoordinator'
 
 beforeEach(() => {
   resetXmtpSyncCoordinatorForTests()
+})
+
+describe('getEthereumAddressFromInboxState', () => {
+  it('reads the Ethereum address from the XMTP v6 accountIdentifiers field', () => {
+    expect(
+      getEthereumAddressFromInboxState({
+        accountIdentifiers: [
+          {
+            identifier: '0xAb6d5C10b03300326cd7fab7267ae192842967b5',
+            identifierKind: IdentifierKind.Ethereum,
+          },
+        ],
+      }),
+    ).toBe('0xab6d5c10b03300326cd7fab7267ae192842967b5')
+  })
+
+  it('skips non-Ethereum and invalid identifiers', () => {
+    expect(
+      getEthereumAddressFromInboxState({
+        accountIdentifiers: [
+          {
+            identifier: 'passkey:abc',
+            identifierKind: IdentifierKind.Passkey,
+          },
+          {
+            identifier: 'not-an-address',
+            identifierKind: IdentifierKind.Ethereum,
+          },
+          {
+            identifier: '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD',
+            identifierKind: IdentifierKind.Ethereum,
+          },
+        ],
+      }),
+    ).toBe('0xb05cf01231cf2ff99499682e64d3780d57c80fdd')
+  })
+
+  it('returns null when inbox state or account identifiers are missing', () => {
+    expect(getEthereumAddressFromInboxState(null)).toBeNull()
+    expect(getEthereumAddressFromInboxState({ accountIdentifiers: [] })).toBeNull()
+  })
 })
 
 describe('shouldFallbackToOriginalXmtpRecipient', () => {

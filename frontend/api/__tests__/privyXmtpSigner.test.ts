@@ -59,6 +59,39 @@ describe('createPrivyScwSigner', () => {
     mocks.walletRpc.mockResolvedValue({
       data: { signature: `0x${'34'.repeat(65)}` },
     })
+    mocks.resolvePrivyCoinbaseSmartWalletOwnerContext.mockResolvedValue({
+      ownerIndex: 7,
+      walletAddress: '0x2222222222222222222222222222222222222222',
+    })
+  })
+
+  it('identifies as the parent CSW while signing through the server-wallet owner', async () => {
+    const signer = createPrivyScwSigner({
+      walletId: 'server-wallet-123',
+      cswAddress: '0x1111111111111111111111111111111111111111',
+      ownerIndex: 2,
+    })
+
+    expect(signer.getIdentifier()).toEqual({
+      identifier: '0x1111111111111111111111111111111111111111',
+      identifierKind: 0,
+    })
+
+    await signer.signMessage('hello world')
+    expect(mocks.walletRpc).toHaveBeenCalledWith(
+      expect.objectContaining({
+        walletId: 'server-wallet-123',
+        method: 'secp256k1_sign',
+      }),
+    )
+    expect(mocks.resolvePrivyCoinbaseSmartWalletOwnerContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        walletId: 'server-wallet-123',
+        smartWallet: '0x1111111111111111111111111111111111111111',
+        configuredOwnerIndex: 2,
+        allowConfiguredOwnerIndexFallback: false,
+      }),
+    )
   })
 
   it.each([

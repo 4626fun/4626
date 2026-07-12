@@ -41,3 +41,9 @@ Build succeeds with no `sorry`/`admit`. Namespace `Jackpot4626` in `RequestProje
 - `rewardBps_independent_of_lotteryShareBps` — numeric equality only; reserve base ≠ fee base
 
 Artifact: `result.tar.gz`.
+
+## Local validation
+
+- `lake exe cache get` + `lake build` (Lean 4.28.0, `LEAN_NUM_THREADS=2`): **exit 0**
+- No `sorry` / `admit` in sources
+- Built `RequestProject.Jackpot` successfully

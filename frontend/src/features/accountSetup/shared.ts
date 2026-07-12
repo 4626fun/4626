@@ -65,7 +65,7 @@ export function deriveOwnerAuthorityState(input: {
       label: 'Owner connected',
       hint: `Ready for one-time setup approval with ${shortValue(input.connectedAddress)}`,
       detail:
-        'This wallet is already a current CSW owner. 4626 still needs its own execution signer path (sub-account or embedded owner), and this owner wallet is used to approve that one-time setup transaction.',
+        'This wallet is already a current CSW owner. 4626 still needs the Privy embedded EOA installed as a parent-CSW owner, and this owner wallet is used to approve that one-time setup transaction.',
       badgeClass: 'border border-emerald-400/20 bg-emerald-500/10 text-emerald-200',
     }
   }

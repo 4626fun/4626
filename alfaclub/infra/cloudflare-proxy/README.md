@@ -2,6 +2,18 @@
 
 A Cloudflare Worker that the 4626 chat bridge calls instead of `https://api.alfaclub.app` directly. Bypasses the Cloudflare bot-fight challenge that was blocking Vercel egress IPs.
 
+## Canonical hostname
+
+**Custom domain: `https://relay.4626.fun`**
+
+`alfaclub.4626.fun` is reserved for the AlfaClub product SPA on Vercel. Do not re-bind this Worker to `alfaclub.4626.fun`.
+
+Set Vercel:
+
+```
+ALFACLUB_CHAT_API_PROXY_URL=https://relay.4626.fun
+```
+
 ## What it does
 
 - Accepts `GET /api/websocket/room_history_paginate`, `POST /api/websocket/update_read_msg`, and `POST /api/room/:roomId/message`.
@@ -11,6 +23,15 @@ A Cloudflare Worker that the 4626 chat bridge calls instead of `https://api.alfa
 - Returns the upstream response unchanged (including its `cf-ray`, which the bridge already parses).
 
 It is **not** a JWT minter. It is **not** a token store. It never inspects request bodies.
+
+## Cutover order (required)
+
+1. Deploy this Worker with `relay.4626.fun` bound (`pnpm deploy` from this directory).
+2. Set `ALFACLUB_CHAT_API_PROXY_URL=https://relay.4626.fun` on Vercel (Production + Preview) and redeploy.
+3. Verify `/_health` and chat-bridge traffic on `relay.4626.fun`.
+4. Only then remove any remaining `alfaclub.4626.fun` Worker binding and attach `alfaclub.4626.fun` to the frontend Vercel project.
+
+Do not release `alfaclub.4626.fun` to Vercel before step 3 — that creates a chat-proxy outage.
 
 ## Setup (5 minutes)
 
@@ -37,38 +58,22 @@ Deploy:
 
 ```bash
 pnpm deploy
-# → Published alfaclub-proxy (X.XX sec)
-#   https://alfaclub-proxy.<your-subdomain>.workers.dev
+# → Published alfaclub-proxy
+#   Custom domain: https://relay.4626.fun
+#   (workers.dev URL also available as fallback)
 ```
-
-(Optional) Bind a custom domain in the Cloudflare dashboard → Workers → `alfaclub-proxy` → **Triggers** → **Custom Domains** → `relay.4626.fun` (or any zone you control). Recommended — it's faster and not subject to `*.workers.dev` rate limits.
 
 ## Wire it into the 4626 frontend
 
 Add to Vercel project env (Production + Preview):
 
 ```
-ALFACLUB_CHAT_API_PROXY_URL=https://alfaclub-proxy.<your-subdomain>.workers.dev
+ALFACLUB_CHAT_API_PROXY_URL=https://relay.4626.fun
 ALFACLUB_CHAT_API_BASE_URL=https://api.alfaclub.app
 ALFACLUB_CHAT_API_PROXY_SECRET=<paste $SHARED_SECRET here>
 ```
 
-Then in `frontend/server/_lib/alfaclub/chatBridge.ts`, add the proxy secret to `buildAlfaClubApiHeaders`:
-
-```ts
-function buildAlfaClubApiHeaders(params: {
-  jwt: string
-  fingerprintBaseUrl: string
-}): Record<string, string> {
-  const proxySecret = (process.env.ALFACLUB_CHAT_API_PROXY_SECRET ?? '').trim()
-  return {
-    ...ALFACLUB_API_COMMON_BROWSER_HEADERS,
-    ...resolveAlfaClubOriginHeaders(params.fingerprintBaseUrl),
-    Authorization: `Bearer ${params.jwt}`,
-    ...(proxySecret ? { 'x-proxy-secret': proxySecret } : {}),
-  }
-}
-```
+The bridge already sends `x-proxy-secret` when `ALFACLUB_CHAT_API_PROXY_SECRET` is set (`frontend/server/_lib/alfaclub/chatBridge.ts`).
 
 Redeploy. The bridge will route history reads through the Worker; the fingerprint headers (`Origin: https://alfaclub.app`, `Referer`, `Sec-Fetch-Site: same-site`) are preserved because `fingerprintBaseUrl` still points at `api.alfaclub.app`.
 
@@ -76,12 +81,12 @@ Redeploy. The bridge will route history reads through the Worker; the fingerprin
 
 ```bash
 # Direct health check
-curl -s https://<worker-host>/_health
+curl -s https://relay.4626.fun/_health
 # → {"ok":true,"upstream":"https://api.alfaclub.app"}
 
 # Auth gate is enforced
 curl -s -o /dev/null -w "%{http_code}\n" \
-  https://<worker-host>/api/websocket/room_history_paginate?roomId=1043
+  https://relay.4626.fun/api/websocket/room_history_paginate?roomId=1043
 # → 401 (expected — no x-proxy-secret)
 
 # End-to-end through the bridge
@@ -111,7 +116,7 @@ In Cloudflare Workers logs (`pnpm logs` or dashboard → **Logs**), you'll see o
 ```
 alfaclub/infra/cloudflare-proxy/
   README.md           ← this file
-  wrangler.toml       ← Worker config + plain vars
+  wrangler.toml       ← Worker config + plain vars (relay.4626.fun)
   package.json
   tsconfig.json
   src/index.ts        ← the Worker (≈200 lines, no deps)

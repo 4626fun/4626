@@ -28,7 +28,16 @@ import type { JobSession, JobRoomEntry, AcpAgentDetail } from '@virtuals-protoco
 import { logger } from '../../../../_lib/infra/logger.js'
 import { getElizaLlmService } from '../../llm.js'
 import { readVirtualsAcpConfig, checkVirtualsAcpConfig, type VirtualsAcpConfig } from './config.js'
-import { parseBacktestRequestFromText, parseSignalRequestFromText, runRealBacktestJob, runCounterTradeSignal } from './backtestJobs.js'
+import {
+  parseBacktestRequestFromText,
+  parseBacktestRequestFromOffering,
+  parseFundingOiRegimeRequestFromOffering,
+  parseSignalRequestFromText,
+  parseSignalRequestFromOffering,
+  runFundingOiRegimeJob,
+  runRealBacktestJob,
+  runCounterTradeSignal,
+} from './backtestJobs.js'
 import { evaluateBacktestPaymentGate } from './paymentGate.js'
 import {
   buildStructuredToolProposal,
@@ -347,10 +356,197 @@ export class VirtualsAcpService {
     const latestUserMessage = [...history]
       .reverse()
       .find((message) => message.role === 'user')?.content
+
+    // ── Offering-name-based routing (primary path) ─────────────���────────
+    // When a buyer purchases an offering on Virtuals, the ACP protocol sets
+    // `job.description = offeringName` and sends the buyer's requirements as
+    // a JSON message (contentType "requirement"). We check the offering name
+    // FIRST because the requirement JSON won't contain the word "backtest" —
+    // it's just `{"symbol":"BTC"}`. Without this check, 7d/30d/90d jobs would
+    // fall through to the LLM path and never produce a deliverable.
+    if (!session.job) await session.fetchJob()
+    const offeringName = session.job?.description ?? ''
+    if (offeringName) {
+      const offeringBacktestRequest = parseBacktestRequestFromOffering(offeringName, latestUserMessage ?? '')
+      if (offeringBacktestRequest) {
+        const paymentGate = evaluateBacktestPaymentGate(session as unknown)
+        if (!paymentGate.allowed) {
+          await this.sendSessionMessage(
+            session,
+            'Backtest requires a funded paid job before execution. ' +
+              `Current payment signal: ${paymentGate.reason}. ` +
+              'Please fund the job in ACP, then resend your request.',
+          )
+          logger.info('[virtuals-acp] blocked unpaid backtest (offering route)', {
+            jobId: session.jobId,
+            offeringName,
+            status: session.status,
+            reason: paymentGate.reason,
+          })
+          return
+        }
+        try {
+          const backtest = await runRealBacktestJob(offeringBacktestRequest)
+          await this.sendSessionMessage(session, backtest.responseText)
+          try {
+            await session.submit(backtest.responseText)
+            logger.info('[virtuals-acp] submitted backtest deliverable (offering route)', {
+              jobId: session.jobId,
+              offeringName,
+              symbol: offeringBacktestRequest.symbol,
+              windowHours: offeringBacktestRequest.windowHours,
+            })
+          } catch (submitError) {
+            const submitMsg = submitError instanceof Error ? submitError.message : String(submitError)
+            logger.warn('[virtuals-acp] deliverable submit failed (offering route)', {
+              jobId: session.jobId,
+              error: submitMsg,
+            })
+          }
+          logger.info('[virtuals-acp] executed backtest job (offering route)', {
+            jobId: session.jobId,
+            offeringName,
+            symbol: offeringBacktestRequest.symbol,
+            windowHours: offeringBacktestRequest.windowHours,
+            resolvedInterval: backtest.resolvedInterval,
+          })
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : 'Backtest failed due to an unknown runtime error'
+          await this.sendSessionMessage(
+            session,
+            `Backtest request failed: ${message}. ` +
+              'Please retry with a different symbol (BTC, ETH, SOL, HYPE).',
+          )
+          logger.warn('[virtuals-acp] backtest job failed (offering route)', {
+            jobId: session.jobId,
+            offeringName,
+            message,
+          })
+        }
+        return
+      }
+
+      // Counter-trade signal via offering name
+      const offeringSignalSymbol = parseSignalRequestFromOffering(offeringName, latestUserMessage ?? '')
+      if (offeringSignalSymbol) {
+        const paymentGate = evaluateBacktestPaymentGate(session as unknown)
+        if (!paymentGate.allowed) {
+          await this.sendSessionMessage(
+            session,
+            'Signal request requires a funded paid job before execution. ' +
+              `Current payment signal: ${paymentGate.reason}. ` +
+              'Please fund the job in ACP, then resend your signal request.',
+          )
+          logger.info('[virtuals-acp] blocked unpaid signal (offering route)', {
+            jobId: session.jobId,
+            offeringName,
+            reason: paymentGate.reason,
+          })
+          return
+        }
+        try {
+          const signal = await runCounterTradeSignal(offeringSignalSymbol)
+          await this.sendSessionMessage(session, signal.responseText)
+          try {
+            await session.submit(signal.responseText)
+            logger.info('[virtuals-acp] submitted signal deliverable (offering route)', {
+              jobId: session.jobId,
+              offeringName,
+              symbol: offeringSignalSymbol,
+              signal: signal.signal,
+              conviction: signal.conviction,
+            })
+          } catch (submitError) {
+            const submitMsg = submitError instanceof Error ? submitError.message : String(submitError)
+            logger.warn('[virtuals-acp] signal submit failed (offering route)', {
+              jobId: session.jobId,
+              error: submitMsg,
+            })
+          }
+          logger.info('[virtuals-acp] executed signal (offering route)', {
+            jobId: session.jobId,
+            offeringName,
+            symbol: offeringSignalSymbol,
+            signal: signal.signal,
+            conviction: signal.conviction,
+          })
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : 'Signal computation failed due to an unknown runtime error'
+          await this.sendSessionMessage(
+            session,
+            `Signal request failed: ${message}. Please retry with a different symbol.`,
+          )
+          logger.warn('[virtuals-acp] signal failed (offering route)', {
+            jobId: session.jobId,
+            offeringName,
+            message,
+          })
+        }
+        return
+      }
+
+      // Unpublished shadow-only market-intelligence handler. It is deliberately
+      // isolated from the live counter-trade decision and execution engine.
+      const fundingOiSymbol = parseFundingOiRegimeRequestFromOffering(
+        offeringName,
+        latestUserMessage ?? '',
+      )
+      if (fundingOiSymbol) {
+        const paymentGate = evaluateBacktestPaymentGate(session as unknown)
+        if (!paymentGate.allowed) {
+          await this.sendSessionMessage(
+            session,
+            'Funding/OI analysis requires a funded paid job before execution. ' +
+              `Current payment signal: ${paymentGate.reason}.`,
+          )
+          return
+        }
+        try {
+          const analysis = await runFundingOiRegimeJob(fundingOiSymbol, {
+            idempotencyKey: `virtuals:${session.chainId}:${session.jobId}`,
+          })
+          await this.sendSessionMessage(session, analysis.responseText)
+          try {
+            await session.submit(analysis.responseText)
+          } catch (submitError) {
+            const submitMsg = submitError instanceof Error ? submitError.message : String(submitError)
+            logger.warn('[virtuals-acp] shadow funding/OI submit failed (message already sent)', {
+              jobId: session.jobId,
+              error: submitMsg,
+            })
+          }
+          logger.info('[virtuals-acp] processed shadow funding/OI deliverable', {
+            jobId: session.jobId,
+            offeringName,
+            symbol: fundingOiSymbol,
+            regime: analysis.regime,
+            confidence: analysis.confidence,
+            shadowOnly: analysis.shadowOnly,
+          })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          await this.sendSessionMessage(session, `Funding/OI analysis failed: ${message}.`)
+          logger.warn('[virtuals-acp] shadow funding/OI analysis failed', {
+            jobId: session.jobId,
+            offeringName,
+            message,
+          })
+        }
+        return
+      }
+    }
+
+    // ── Text-based routing (fallback for free-form chat messages) ───────
     const backtestRequest =
       typeof latestUserMessage === 'string' ? parseBacktestRequestFromText(latestUserMessage) : null
     if (backtestRequest) {
-      if (!session.job) await session.fetchJob()
+      // session.job already fetched above in the offering-name route section
       const paymentGate = evaluateBacktestPaymentGate(session as unknown)
       if (!paymentGate.allowed) {
         await this.sendSessionMessage(
@@ -423,7 +619,7 @@ export class VirtualsAcpService {
     const signalSymbol =
       typeof latestUserMessage === 'string' ? parseSignalRequestFromText(latestUserMessage) : null
     if (signalSymbol) {
-      if (!session.job) await session.fetchJob()
+      // session.job already fetched above in the offering-name route section
       const paymentGate = evaluateBacktestPaymentGate(session as unknown)
       if (!paymentGate.allowed) {
         await this.sendSessionMessage(

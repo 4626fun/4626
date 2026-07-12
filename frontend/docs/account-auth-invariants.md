@@ -11,7 +11,7 @@ If code or UX conflicts with this document, the code/UX should change unless pro
 - Verified email is the canonical 4626 identity and recovery key.
 - No account is fully created until email OTP verification completes.
 - Privy is the auth/session backend for email OTP and session management.
-- The Privy-backed signup/auth flow should also create the user's embedded EOA.
+- Whitelabel OTP surfaces (waitlist, Telegram Mini App) do not auto-create wallets on login; the authenticated server bridge ensures the user-owned Privy embedded EOA. See [privy-integration-architecture.md](./privy-integration-architecture.md).
 - Every fully onboarded account must have a Privy embedded EOA.
 - Telegram is a linked identity and acquisition channel, not the canonical recovery key.
 - Telegram Mini App verification remains required for Telegram-launched flows.
@@ -140,20 +140,20 @@ After the shared prerequisites above:
 
 Rules:
 
-- the ERC-4337 `sender` / `msg.sender` for user-initiated frontend writes is the **parent CSW** (`profiles.csw_address`), not a sub-account
+- the ERC-4337 `sender` / `msg.sender` for user-initiated frontend writes is the **parent CSW** (`profiles.csw_address`)
 - sponsored swaps use `canonical4337` with the parent CSW as sender and the Privy embedded EOA as signer
 - the Privy embedded EOA **is** installed as a direct owner on the parent CSW on this track (`legacy-owner-install`)
 - if the user does not yet have a CSW, route them to Base app with the referral flow, then resume embedded-owner signing setup for the canonical parent CSW when they return
 - do not treat wallet setup as complete until the embedded EOA is confirmed as an on-chain owner of the parent CSW
 - features that require canonical execution stay gated until `canonicalSignerGate.ready` (embedded EOA detected, canSign, and `ownerCheckStatus === 'owner'`)
 - after verified email, the default web setup surface is `/waitlist`; `/accounts` is reserved for advanced settings, recovery, and secondary identity controls
-- **Flag-gated sub-account lane:** when `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` and a distinct `profiles.base_sub_account` is registered, swaps may route through the sub-account via `wallet_sendCalls`. This is a swap-only fallback, not the deploy default. The sub-account's `setToOwnerAccount()` path is the alternative, not the primary track.
+- Default user execution is parent CSW + Privy embedded-owner (`legacy-owner-install` / `canonical4337`).
 
 ### User-initiated frontend execution (external EOA path, `executionMode === 'eoa'`)
 
 For users connecting with MetaMask / Rabby / WalletConnect:
 
-- no sub-account (EOAs are not smart contract wallets)
+- EOAs are not smart contract wallets
 - `msg.sender` is the user's EOA directly; `sendTransaction` is used
 - the Privy embedded EOA still exists but is unused for transaction signing on this track
 

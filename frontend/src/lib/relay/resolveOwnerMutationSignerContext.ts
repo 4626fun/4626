@@ -30,7 +30,6 @@ export function resolveOwnerMutationSignerContext(params: {
   /** Wagmi / controller connected address (may be embedded EOA). */
   connectedAddress?: string | null
   privyEmbeddedEoaAddress?: string | null
-  /** When true, always use `fundingCswAddress` for self-auth (sub-account parent lane). */
   preferFundingCswSelfAuth?: boolean
 }): OwnerMutationSignerContext {
   const fundingCsw = normalizeAddress(params.fundingCswAddress ?? params.canonicalCswAddress)

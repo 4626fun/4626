@@ -6,7 +6,7 @@ describe('createPrivyAppearance', () => {
   it('uses the shared appearance config by default without an empty logo src', () => {
     expect(createPrivyAppearance()).toEqual({
       showWalletLoginFirst: false,
-      walletChainType: 'all',
+      walletChainType: 'ethereum-and-solana',
       walletList: ['metamask', 'coinbase_wallet', 'base_account', 'wallet_connect', 'detected_ethereum_wallets'],
       landingHeader: 'Continue to 4626',
       loginMessage: 'Use verified email first, or continue with your wallet-native path.',
@@ -17,7 +17,7 @@ describe('createPrivyAppearance', () => {
   it('can prefer email first for waitlist auth', () => {
     expect(createPrivyAppearance({ showWalletLoginFirst: false })).toEqual({
       showWalletLoginFirst: false,
-      walletChainType: 'all',
+      walletChainType: 'ethereum-and-solana',
       walletList: ['metamask', 'coinbase_wallet', 'base_account', 'wallet_connect', 'detected_ethereum_wallets'],
       landingHeader: 'Continue to 4626',
       loginMessage: 'Use verified email first, or continue with your wallet-native path.',

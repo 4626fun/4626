@@ -39,7 +39,6 @@ This ensures that once Zora gives us a confident canonical, we converge to it an
 
 - Persist canonical CSW into:
   - `profile_wallets.is_canonical_smart_wallet` (single true row per profile)
-  - `profiles.primary_smart_wallet`, `profiles.csw_address`, `profiles.base_sub_account` (legacy columns)
 
 ## Error Handling
 

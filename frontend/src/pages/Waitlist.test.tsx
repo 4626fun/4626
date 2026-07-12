@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
 
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 
 let mockPrivyClientStatus: 'disabled' | 'loading' | 'ready' = 'disabled'
 let capturedPrivyProps: { mode?: string; showWalletLoginFirst?: boolean } = {}
+let capturedPrivyInstance: symbol | null = null
 
 vi.mock('@/lib/privy/client', () => ({
   PrivyClientProvider: ({
@@ -17,6 +18,8 @@ vi.mock('@/lib/privy/client', () => ({
     mode?: string
     showWalletLoginFirst?: boolean
   }) => {
+    const instance = useRef(Symbol('privy-provider'))
+    capturedPrivyInstance = instance.current
     capturedPrivyProps = { mode, showWalletLoginFirst }
     return <>{children}</>
   },
@@ -57,24 +60,27 @@ describe('Waitlist', () => {
   beforeEach(() => {
     mockPrivyClientStatus = 'disabled'
     capturedPrivyProps = {}
+    capturedPrivyInstance = null
   })
 
   it('still mounts the waitlist flow when Privy client is disabled', async () => {
     render(<Waitlist />)
 
     expect(await screen.findByTestId('waitlist-flow-mock')).toBeTruthy()
-    expect(capturedPrivyProps.mode).toBe('waitlist-email-only')
-    expect(capturedPrivyProps.showWalletLoginFirst).toBe(false)
+    expect(capturedPrivyProps.mode).toBe('waitlist')
+    expect(capturedPrivyProps.showWalletLoginFirst).toBeUndefined()
   })
 
-  it('switches the shared Privy provider into wallet mode when returning wallet sign-in is requested', async () => {
+  it('keeps the same waitlist provider during returning-wallet sign-in', async () => {
     render(<Waitlist />)
+    const initialInstance = capturedPrivyInstance
 
     fireEvent.click(screen.getByRole('button', { name: 'trigger wallet sign-in' }))
 
     expect(await screen.findByTestId('wallet-signin-pending')).toBeTruthy()
     expect(await screen.findByTestId('wallet-signin-runner')).toBeTruthy()
-    expect(capturedPrivyProps.mode).toBe('waitlist-returning-wallet')
-    expect(capturedPrivyProps.showWalletLoginFirst).toBe(true)
+    expect(capturedPrivyProps.mode).toBe('waitlist')
+    expect(capturedPrivyProps.showWalletLoginFirst).toBeUndefined()
+    expect(capturedPrivyInstance).toBe(initialInstance)
   })
 })

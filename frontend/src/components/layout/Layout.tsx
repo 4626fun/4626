@@ -51,6 +51,13 @@ const navItems: MobileNavItem[] = [
   { path: '/wallet', icon: Wallet, label: 'Wallet', activePrefixes: [] },
 ]
 
+const navItemsAlfaClub: MobileNavItem[] = [
+  { path: '/rooms', icon: Search, label: 'Rooms', activePrefixes: ['/rooms', '/trading-rooms'] },
+  { path: '/safety', icon: ShieldCheck, label: 'Safety', activePrefixes: ['/safety', '/key-safety'] },
+  { path: '/pools', icon: Vault, label: 'Pools', activePrefixes: ['/pools', '/liquidity'] },
+  { path: '/wallet', icon: Wallet, label: 'Wallet', activePrefixes: [] },
+]
+
 const navItemsPublic: MobileNavItem[] = [
   { path: getCanonicalMarketingWaitlistPath(), icon: Mail, label: 'Waitlist' },
 ]
@@ -118,7 +125,7 @@ export type LayoutSessionChrome = {
 export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) {
   const interactive = props.interactive ?? true
   const hostMode = getHostMode()
-  if (interactive && hostMode === 'app') {
+  if (interactive && (hostMode === 'app' || hostMode === 'alfaclub')) {
     return (
       <Suspense fallback={<LayoutFrame {...props} sessionChrome={null} />}>
         <LazyLayoutWithSessionChrome {...props} />
@@ -150,8 +157,16 @@ export function LayoutFrame(props: {
   const shouldOverlayMobileNav = location.pathname.startsWith('/explore')
   const isAdminRoute = location.pathname.startsWith('/admin')
   const showTopNavBar = !showWaitlistFocusedShell
-  const baseItems = publicMode || hostMode === 'marketing' || isWaitlistSurface ? navItemsPublic : navItems
-  const items = isAdminRoute && hostMode !== 'marketing' ? [...baseItems, adminNavItem] : baseItems
+  const baseItems =
+    hostMode === 'alfaclub'
+      ? navItemsAlfaClub
+      : publicMode || hostMode === 'marketing' || isWaitlistSurface
+        ? navItemsPublic
+        : navItems
+  const items =
+    isAdminRoute && hostMode !== 'marketing' && hostMode !== 'alfaclub'
+      ? [...baseItems, adminNavItem]
+      : baseItems
   const shouldEnableChat = interactive && chatEnabled && hostMode === 'app' && !isWaitlistSurface
 
   useEffect(() => {
@@ -352,7 +367,7 @@ export function LayoutFrame(props: {
                 </a>
               )
             }
-            if (path === '/wallet' && interactive && hostMode === 'app') {
+            if (path === '/wallet' && interactive && (hostMode === 'app' || hostMode === 'alfaclub')) {
               return (
                 <button
                   key={path}

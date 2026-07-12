@@ -32,3 +32,9 @@ Build succeeds with no `sorry`/`admit`. Namespace `CreatorGaugeController`:
 - `shareOft_no_dust` / `vault_no_dust`
 
 Burn = 9.61%, protocol/voters = 21.39% (not swapped). Artifact: `result.tar.gz`.
+
+## Local validation
+
+- `lake exe cache get` + `lake build` (Lean 4.28.0, `LEAN_NUM_THREADS=2`): **exit 0**
+- No `sorry` / `admit` in sources
+- Built `RequestProject.CreatorGaugeController` successfully

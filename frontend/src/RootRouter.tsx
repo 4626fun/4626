@@ -1,12 +1,14 @@
 import { Suspense, lazy, useEffect, type ComponentType, type ReactNode } from 'react'
 import { Route, Routes, useLocation } from 'react-router-dom'
-import { APP_ORIGIN, MARKETING_ORIGIN, getHostMode, isCurrentWindowUrl } from '@/lib/env/host'
-import { isAppOnlyPath } from '@/lib/auth/appOnlyPaths'
+import { AlfaClubHostApp, AlfaClubHostRedirect } from '@/app/alfaclubHostRoutes'
 import { MarketingWaitlistRoute } from '@/app/routeGuards'
 import { AppCanvas } from '@/components/layout/AppCanvas'
 import { AppLoadingOverlay, AppLoadingProvider, AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { Layout } from '@/components/layout/Layout'
+import { resolveAlfaClubCanonicalPath } from '@/lib/alfaclub/hostPaths'
+import { isAppOnlyPath } from '@/lib/auth/appOnlyPaths'
 import { apiFetch } from '@/lib/api/apiBase'
+import { APP_ORIGIN, MARKETING_ORIGIN, getHostMode, isCurrentWindowUrl } from '@/lib/env/host'
 import { AppQueryProvider } from './web3/AppQueryProvider'
 
 function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof TModule>(
@@ -120,9 +122,13 @@ export function RootRouter() {
   const location = useLocation()
   const hostMode = getHostMode()
   const isMarketingHost = hostMode === 'marketing'
+  const isAlfaClubHost = hostMode === 'alfaclub'
+  const legacyAlfaClubPath = resolveAlfaClubCanonicalPath(location.pathname)
+  const shouldRouteToAlfaClub = Boolean(legacyAlfaClubPath) && !isAlfaClubHost
   const appRedirectTarget = `${APP_ORIGIN}${location.pathname}${location.search}${location.hash}`
   const shouldRouteToApp =
     isMarketingHost &&
+    !shouldRouteToAlfaClub &&
     isAppOnlyPath(location.pathname) &&
     !isCurrentWindowUrl(appRedirectTarget)
   const marketingHomeTarget = `${MARKETING_ORIGIN}${location.pathname}${location.search}${location.hash}`
@@ -136,43 +142,49 @@ export function RootRouter() {
       <AppLoadingProvider>
         <AppCanvas />
         <AppLoadingOverlay />
-        {shouldRouteAppHostRootToMarketing ? (
-        <AppHostRedirect target={marketingHomeTarget} />
-      ) : shouldRouteToApp ? (
-        <AppHostRedirect target={appRedirectTarget} withSessionHandoff />
-      ) : (
-        <Routes>
-          <Route element={<MarketingLayout />}>
-            <Route path="/" element={<Home />} />
+        {isAlfaClubHost ? (
+          <LazyRouteBoundary>
+            <AlfaClubHostApp />
+          </LazyRouteBoundary>
+        ) : shouldRouteToAlfaClub ? (
+          <AlfaClubHostRedirect pathname={location.pathname} />
+        ) : shouldRouteAppHostRootToMarketing ? (
+          <AppHostRedirect target={marketingHomeTarget} />
+        ) : shouldRouteToApp ? (
+          <AppHostRedirect target={appRedirectTarget} withSessionHandoff />
+        ) : (
+          <Routes>
+            <Route element={<MarketingLayout />}>
+              <Route path="/" element={<Home />} />
+              <Route
+                path="/waitlist"
+                element={
+                  <MarketingWaitlistRoute>
+                    <Waitlist />
+                  </MarketingWaitlistRoute>
+                }
+              />
+              <Route path="/r/:referralCode" element={<WaitlistInviteEntry />} />
+            </Route>
+
+            {['/telegram/link', '/telegram/menu'].map((path) => (
+              <Route
+                key={path}
+                path={path}
+                element={<StandaloneDocumentRedirect htmlPath="/telegram-link.html" />}
+              />
+            ))}
+
             <Route
-              path="/waitlist"
+              path="*"
               element={
-                <MarketingWaitlistRoute>
-                  <Waitlist />
-                </MarketingWaitlistRoute>
+                <LazyRouteBoundary>
+                  <ProtectedAppBoundary />
+                </LazyRouteBoundary>
               }
             />
-            <Route path="/r/:referralCode" element={<WaitlistInviteEntry />} />
-          </Route>
-
-          {['/telegram/link', '/telegram/menu'].map((path) => (
-            <Route
-              key={path}
-              path={path}
-              element={<StandaloneDocumentRedirect htmlPath="/telegram-link.html" />}
-            />
-          ))}
-
-          <Route
-            path="*"
-            element={
-              <LazyRouteBoundary>
-                <ProtectedAppBoundary />
-              </LazyRouteBoundary>
-            }
-          />
-        </Routes>
-      )}
+          </Routes>
+        )}
       </AppLoadingProvider>
     </>
   )

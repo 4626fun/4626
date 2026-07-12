@@ -22,6 +22,10 @@ import {
   type AccountLinkProvider,
   verifyPrivyForAccounts,
 } from '../../../server/_lib/identity/accountsIdentity.js'
+import {
+  assertAccountsSessionMatchesPrivyUser,
+  isAccountsSessionBindingError,
+} from '../../../server/_lib/identity/accountsSessionBinding.js'
 
 type UnlinkBody = {
   provider?: AccountLinkProvider
@@ -93,6 +97,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const context = await verifyPrivyForAccounts(req)
+    await assertAccountsSessionMatchesPrivyUser({
+      db: db as any,
+      req,
+      privyUserId: context.privyUserId,
+    })
     await ensureAccountsIdentitySchema(db as any)
     await syncEmailIdentity({
       db: db as any,
@@ -118,6 +127,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<AccountsUnlinkResponse>)
   } catch (error: any) {
     const message = typeof error?.message === 'string' ? error.message : 'Failed to unlink provider'
+    if (isAccountsSessionBindingError(error)) {
+      return res.status(409).json({
+        success: false,
+        error: message,
+        code: error.code,
+        recoveryRequired: true,
+      } as ApiEnvelope<never> & { code: string; recoveryRequired: true })
+    }
     // APIAUTH-004: Handle identity recovery required errors with 409 Conflict,
     // matching the pattern in _link.ts.
     if (typeof error?.code === 'string' && error.code === 'IDENTITY_RECOVERY_REQUIRED') {

@@ -25,7 +25,7 @@ Other verified 4626 accounts each have their own `profiles.csw_address` (same ca
 
 This file covers **server-side** delegation for the XMTP agent, ERC-8004 identity, and deploy-session automation — canonical parent CSW as ERC-4337 `sender` with a Privy server wallet delegated via `addOwnerAddress`. Railway XMTP/Keepr uses the 4626 canonical CSW (`CANONICAL_CSW_ADDRESS`).
 
-**User-initiated frontend transactions** (swaps, vault interactions from `app.4626.fun`) do **not** use server delegation. Default path: the account's parent CSW (`profiles.csw_address`) as `canonical4337` sender, signed by the Privy embedded EOA when `executionTrack === 'legacy-owner-install'`. Sub-account `sendCalls` is an **optional, flag-gated** swap-only lane — not the default canonical path. See `docs/4626-connection-methods.md` and `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
+**User-initiated frontend transactions** (swaps, vault interactions from `app.4626.fun`) do **not** use server delegation. Default path: the account's parent CSW (`profiles.csw_address`) as `canonical4337` sender, signed by the Privy embedded EOA when `executionTrack === 'legacy-owner-install'`. See `docs/_internal/4626-connection-methods.md` and `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
 
 ## Architecture Invariant
 
@@ -34,7 +34,7 @@ This file covers **server-side** delegation for the XMTP agent, ERC-8004 identit
 - Privy server wallets are delegated signers added to a CSW's MultiOwnable owner list.
 - XMTP agent, ERC-8004 identity, and deploy-session automation present as the **canonical CSW address** they operate on (4626 canonical CSW for Railway; creator's `profiles.csw_address` for deploy-session).
 - No private key extraction; Privy signs on behalf of the CSW via its API.
-- Do not repurpose server delegation for routine user-initiated swaps — users sign with embedded EOA on their parent CSW (or optional sub-account when flagged).
+- Do not repurpose server delegation for routine user-initiated swaps — users sign with the embedded EOA on their parent CSW.
 
 ## Lifecycle (chronological)
 
@@ -57,7 +57,6 @@ This file covers **server-side** delegation for the XMTP agent, ERC-8004 identit
 - Adds the **4626 login embedded EOA** to the **parent CSW** via Relay: `POST /api/onboarding/preview-add-owner` → `useAddOwnerFlow` → `executeOwnerMutationViaRelay`.
 - An **existing CSW owner** (Base App self-auth or connected EOA owner) approves the mutation; the embedded EOA is only the `addOwnerAddress` target.
 - Golden reference (Base mainnet, block 45600637): deposit [0xa6b543…b4c3](https://basescan.org/tx/0xa6b5435718a8969905a08093a7208dadefdf702602c63e3fd322d84db5f4b4c3) + solver fill [0xa9a063…9a36](https://basescan.org/tx/0xa9a06340a7725063f1dd9b0a29af6c72f4fbfe3a408b28dd28e2fd2db7649a36). Runbook: `docs/operations/relay-owner-mutation-kit-guide.md`.
-- **Not** `prepare-add-privy-owner` (legacy API, no SPA caller). **Not** parent `addOwnerAddress` for Base App sub-account track when sub-account flag is on.
 
 **Server agent delegation (automation only)** — deploy-session, XMTP, outreach iframe:
 
