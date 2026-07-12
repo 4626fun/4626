@@ -14,7 +14,7 @@ export function LayoutWithSessionChrome(props: { interactive?: boolean; chatEnab
   const location = useLocation()
   const isWaitlistSurface = isMarketingWaitlistEntryLocation(location)
   const { trayHoldings, isLoading: mobileWalletLoading } = useAccountTrayPortfolio({
-    enabled: interactive && hostMode === 'app' && !isWaitlistSurface,
+    enabled: interactive && (hostMode === 'app' || hostMode === 'alfaclub') && !isWaitlistSurface,
   })
   const mobileWalletUsd = auth.hasSession ? trayHoldings.activeNetworkUsd : null
 
