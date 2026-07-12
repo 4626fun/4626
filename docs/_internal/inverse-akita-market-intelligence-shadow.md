@@ -10,57 +10,94 @@
 - Hyperliquid already supplies candles, market metadata, account state, fills,
   and current `metaAndAssetCtxs` fields. No new external provider is required
   for the first funding/open-interest slice.
-- Existing tests established a green pre-change baseline of 53 tests across
-  the engine, sizing, risk, ACP backtest/signal handler, and service cleanup.
+- Continuous `alfaclub.market_feature_snapshots` sampling now exists via
+  `/api/v1/alfaclub/market-feature-sampler` (cron every 5 minutes).
+- Decision ledger + outcomes exist for flagship COUNTER/DELAY/SKIP (`shadow_only`).
 
 ## Capability map
 
-| Product capability | Current state | This slice |
+| Product capability | Current state | Notes |
 | --- | --- | --- |
-| Counter-trade execution | Implemented | Unchanged |
-| Position sizing and risk | Implemented | Unchanged |
+| Counter-trade execution | Implemented | Unchanged; intel must not import runners |
+| Position sizing and risk | Implemented | Live path unchanged; advisory sizing is separate |
 | Historical backtesting | Implemented | Unchanged |
 | ACP backtest/signal delivery | Implemented | Unchanged |
-| Current funding/OI ingestion | Data existed in another reader | Added a small reusable read-only accessor |
-| Deterministic funding/OI regime | Missing | Added as pure classifier |
-| ACP funding/OI delivery | Missing | Added unpublished dedicated handler/schema |
-| Historical OI/funding changes | Missing | Deferred; current snapshot cannot infer deltas |
-| Liquidation map/order-book flow | Missing | Deferred pending validated data sources |
-| Live decision integration | Intentionally absent | Prohibited during shadow validation |
+| Continuous funding/OI snapshots | Implemented | `market_feature_snapshots` + sampler cron |
+| Fine regime taxonomy | Implemented | `regime_fine` + `regime_coarse` dual labels |
+| ACP `fundingOiRegime` / shadow | Implemented | Hidden canary; Virtuals visibility is operator-owned |
+| ACP `counterTradeAnalysis` | Implemented | Hidden; writes decision ledger |
+| ACP crowding / audit / hedge | Implemented | Hidden; launch order 3→4→5 |
+| Order flow / liquidations / validated basis | Missing | Stay `null` in `missing_fields` |
+| Live decision integration | Intentionally absent | Stage D only after separate review |
 
 ## Shadow invariant
 
-`fundingOiRegimeShadow` is advisory only. Its classifier and handler function
-do not call the counter-trade runner, entry, sizing, leverage, or execution
-paths (the ACP routing module also hosts unrelated backtest/signal handlers).
-Output does not emit `COUNTER`, `DELAY`, or `SKIP`, and cannot alter a live
-decision.
+Intelligence modules under `marketState/`, `regimes/`, `decisions/`, `audits/`,
+`portfolio/`, and `intelJobs.ts` are advisory only. They do not import
+`counterTradeRunner`, entry/exit/adjust flows, or the live decision engine.
 
-The current classifier uses funding, 24-hour price change, and the ratio of
-current open-interest notional to 24-hour volume. This ratio is a deterministic
-crowding proxy, not a historical OI-change claim. Missing fields fail closed as
-`insufficient-data`.
+Kill switch: `INV_AKITA_INTEL_KILL=1` forces structured SKIP/insufficient
+responses for paid intel handlers. Execution remains unaffected.
+
+`fundingOiRegimeShadow` may still emit coarse prose without COUNTER/DELAY/SKIP.
+Canonical `fundingOiRegime` and `counterTradeAnalysis` use the public fine
+taxonomy / DecisionRecord schema and remain `shadow_only: true`.
+
+Missing features stay `null` and are listed explicitly. Never impute. Never
+claim OI expansion/contraction without stored snapshot history.
+
+## Sampler + settlement operations
+
+| Surface | Path / command | Cadence |
+| --- | --- | --- |
+| Feature sampler cron | `/api/v1/alfaclub/market-feature-sampler` | `*/5 * * * *` |
+| Outcome settle cron | `/api/v1/alfaclub/decision-outcome-settle` | `*/5 * * * *` |
+| Auth | `CRON_SECRET` via `x-cron-secret` or Bearer | fail-closed |
+| Retention | prune snapshots older than 45 days | on sampler tick |
+
+Settlement uses point-in-time 1m candles (`readMarkPriceAt`). No current-price
+fallback. Concurrent workers use conditional updates.
+
+## Virtuals offering machine names (exact)
+
+Operator registration / price / visibility live on Virtuals, not in-repo:
+
+1. `fundingOiRegime` (promote from `fundingOiRegimeShadow` after warm history)
+2. `counterTradeAnalysis` (flagship; keep hidden through Stage A purchase canary)
+3. `crowdingSnapshot`
+4. `sourceStrategyAudit`
+5. `portfolioHedgeRecommendation`
+
+Keep existing public `counterTradeSignal` and free Hermit `/signal` unchanged.
 
 ## Rollout gates
 
-1. Keep the offering unpublished while collecting shadow observations.
-2. Persist timestamped inputs, regime, confidence, and subsequent price
-   outcomes before evaluating predictive usefulness. Each observation records
-   source provider (`hyperliquid-meta-and-asset-ctxs`), classifier version
-   (`funding-oi-regime-v1`), data quality, and explicit missing fields. Inserts
-   are idempotent on a stable provider/job key and create fixed 1h, 4h, and 24h
-   outcome horizons only when the observation has a valid starting price. Due
-   outcomes are settled from timestamped historical one-minute candles at the
-   target horizon (with the actual candle timestamp retained), not a later
-   request-time mark-price fetch;
-   concurrent workers use a conditional update so only one records settlement.
-3. Add historical funding/OI series and replay tests before claiming trend or
-   OI expansion/contraction.
-4. Require a separately reviewed production change before any regime signal
-   can affect execution, sizing, leverage, or live decision vocabulary.
-5. Publish only after deterministic handler/schema tests and a real ACP
-   purchase-to-`session.submit(...)` canary succeed.
+1. Keep new intel offerings unpublished while collecting ledger samples.
+2. Sampler warm-up must exist before claiming ΔF/ΔOI or joint price×OI cells.
+3. Publish `fundingOiRegime` only after fixture tests + real funded
+   purchase→`session.submit(...)` canary on the canonical name.
+4. Publish `counterTradeAnalysis` only after decision ledger settle path is live.
+5. Public “edge” language only when walk-forward Conditional Inverse Edge CI
+   excludes 0 at configured minimum n (`exportSettledDecisionsJsonl` /
+   `evaluateConditionalInverseEdge`).
+6. Require a separately reviewed Stage D ticket before any intel decision can
+   affect execution, sizing, leverage, or live runner behavior.
 
-The observation and outcome writes are best-effort telemetry. Storage or price
-read failures do not change the classifier output and cannot affect live
-counter-trading. The ACP offering remains unpublished during this validation.
+## Methodology versions
+
+| Module | Version |
+| --- | --- |
+| Feature snapshots | `market-feature-snapshot-v1.0.0` |
+| Fine regime | `inv-akita-regime-v1.0.0` |
+| Decision engine | `inv-akita-decision-v1.0.0` |
+| Edge prior | `inv-akita-edge-prior-v1.0.0-unvalidated` |
+| Crowding snapshot | `crowding-snapshot-v1.0.0` |
+| Source audit | `source-audit-v1` |
+| Portfolio hedge | `portfolio-hedge-v1.0.0` |
+
+## Rollback
+
+- Disable crons or set `INV_AKITA_INTEL_KILL=1` to fail closed on intel ACP.
+- Hide/unpublish offerings in Virtuals UI.
+- Do not drop ledger tables without an explicit migration; shadow data is
+  evidence for validation.

@@ -38,6 +38,19 @@ import {
   runRealBacktestJob,
   runCounterTradeSignal,
 } from './backtestJobs.js'
+import {
+  parseCounterTradeAnalysisRequestFromOffering,
+  parseCrowdingSnapshotRequestFromOffering,
+  parseFundingOiRegimeRequestFromOffering as parseFundingOiRegimeIntelFromOffering,
+  parsePortfolioHedgeRequestFromOffering,
+  parseSourceStrategyAuditRequestFromOffering,
+  runCounterTradeAnalysisJob,
+  runCrowdingSnapshotJob,
+  runFundingOiRegimeIntelJob,
+  runPortfolioHedgeJob,
+  runSourceStrategyAuditJob,
+  type IntelJobResult,
+} from './intelJobs.js'
 import { evaluateBacktestPaymentGate } from './paymentGate.js'
 import {
   buildStructuredToolProposal,
@@ -346,6 +359,44 @@ export class VirtualsAcpService {
     }
   }
 
+  private async deliverIntelResult(
+    session: JobSession,
+    offeringName: string,
+    result: IntelJobResult<unknown>,
+  ): Promise<void> {
+    if (!result.ok) {
+      await this.sendSessionMessage(session, result.responseText)
+      if (result.reject) {
+        try {
+          await session.executeTool('reject', { reason: result.reason })
+        } catch (rejectError) {
+          logger.warn('[virtuals-acp] intel reject tool unavailable/failed', {
+            jobId: session.jobId,
+            offeringName,
+            reason: result.reason,
+            error: rejectError instanceof Error ? rejectError.message : String(rejectError),
+          })
+        }
+      }
+      return
+    }
+
+    await this.sendSessionMessage(session, result.responseText)
+    try {
+      await session.submit(result.responseText)
+      logger.info('[virtuals-acp] submitted intel deliverable', {
+        jobId: session.jobId,
+        offeringName,
+      })
+    } catch (submitError) {
+      logger.warn('[virtuals-acp] intel submit failed (message already sent)', {
+        jobId: session.jobId,
+        offeringName,
+        error: submitError instanceof Error ? submitError.message : String(submitError),
+      })
+    }
+  }
+
   private async runLlmDecision(session: JobSession, config: VirtualsAcpConfig): Promise<void> {
     const history = await session.toMessages()
     if (history.length === 0) return
@@ -487,6 +538,34 @@ export class VirtualsAcpService {
         return
       }
 
+      // Canonical fundingOiRegime uses the fine-regime JSON intel path.
+      // fundingOiRegimeShadow stays on the Stage A legacy path below.
+      if (offeringName.toLowerCase() === 'fundingoiregime') {
+        const fundingOiIntel = parseFundingOiRegimeIntelFromOffering(
+          offeringName,
+          latestUserMessage ?? '',
+        )
+        if (fundingOiIntel) {
+          const paymentGate = evaluateBacktestPaymentGate(session as unknown)
+          if (!paymentGate.allowed) {
+            await this.sendSessionMessage(
+              session,
+              'Funding/OI analysis requires a funded paid job before execution. ' +
+                `Current payment signal: ${paymentGate.reason}.`,
+            )
+            return
+          }
+          const analysis = await runFundingOiRegimeIntelJob({
+            asset: fundingOiIntel.asset,
+            lookbackHours: fundingOiIntel.lookbackHours,
+            decisionHorizonHours: fundingOiIntel.decisionHorizonHours,
+            idempotencyKey: `virtuals:${session.chainId}:${session.jobId}`,
+          })
+          await this.deliverIntelResult(session, offeringName, analysis)
+          return
+        }
+      }
+
       // Unpublished shadow-only market-intelligence handler. It is deliberately
       // isolated from the live counter-trade decision and execution engine.
       const fundingOiSymbol = parseFundingOiRegimeRequestFromOffering(
@@ -534,6 +613,86 @@ export class VirtualsAcpService {
             message,
           })
         }
+        return
+      }
+
+      const counterAnalysisReq = parseCounterTradeAnalysisRequestFromOffering(
+        offeringName,
+        latestUserMessage ?? '',
+      )
+      if (counterAnalysisReq) {
+        const paymentGate = evaluateBacktestPaymentGate(session as unknown)
+        if (!paymentGate.allowed) {
+          await this.sendSessionMessage(
+            session,
+            'counterTradeAnalysis requires a funded paid job before execution. ' +
+              `Current payment signal: ${paymentGate.reason}.`,
+          )
+          return
+        }
+        const result = await runCounterTradeAnalysisJob({
+          ...counterAnalysisReq,
+          idempotencyKey: `virtuals:${session.chainId}:${session.jobId}`,
+          acpJobId: session.jobId,
+        })
+        await this.deliverIntelResult(session, offeringName, result)
+        return
+      }
+
+      const crowdingReq = parseCrowdingSnapshotRequestFromOffering(
+        offeringName,
+        latestUserMessage ?? '',
+      )
+      if (crowdingReq) {
+        const paymentGate = evaluateBacktestPaymentGate(session as unknown)
+        if (!paymentGate.allowed) {
+          await this.sendSessionMessage(
+            session,
+            'crowdingSnapshot requires a funded paid job before execution. ' +
+              `Current payment signal: ${paymentGate.reason}.`,
+          )
+          return
+        }
+        const result = await runCrowdingSnapshotJob(crowdingReq)
+        await this.deliverIntelResult(session, offeringName, result)
+        return
+      }
+
+      const auditReq = parseSourceStrategyAuditRequestFromOffering(
+        offeringName,
+        latestUserMessage ?? '',
+      )
+      if (auditReq) {
+        const paymentGate = evaluateBacktestPaymentGate(session as unknown)
+        if (!paymentGate.allowed) {
+          await this.sendSessionMessage(
+            session,
+            'sourceStrategyAudit requires a funded paid job before execution. ' +
+              `Current payment signal: ${paymentGate.reason}.`,
+          )
+          return
+        }
+        const result = await runSourceStrategyAuditJob(auditReq)
+        await this.deliverIntelResult(session, offeringName, result)
+        return
+      }
+
+      const hedgeReq = parsePortfolioHedgeRequestFromOffering(
+        offeringName,
+        latestUserMessage ?? '',
+      )
+      if (hedgeReq) {
+        const paymentGate = evaluateBacktestPaymentGate(session as unknown)
+        if (!paymentGate.allowed) {
+          await this.sendSessionMessage(
+            session,
+            'portfolioHedgeRecommendation requires a funded paid job before execution. ' +
+              `Current payment signal: ${paymentGate.reason}.`,
+          )
+          return
+        }
+        const result = await runPortfolioHedgeJob(hedgeReq)
+        await this.deliverIntelResult(session, offeringName, result)
         return
       }
     }

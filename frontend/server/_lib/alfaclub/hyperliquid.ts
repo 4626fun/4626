@@ -91,6 +91,10 @@ export type HyperliquidPerpMarketContext = {
   fundingRate: number | null
   openInterestUsd: number | null
   volume24hUsd: number | null
+  /** Oracle/index price when HL exposes a validated field; otherwise null. */
+  oraclePriceUsd?: number | null
+  /** Basis in bps when both mark and oracle are present; otherwise null. */
+  basisBps?: number | null
 }
 
 // ---------------------------------------------------------------------------
@@ -264,6 +268,56 @@ export async function getPerpMarkets(): Promise<HyperliquidPerpMarket[] | null> 
   return out
 }
 
+function mapAssetContext(params: {
+  symbol: string
+  context: Record<string, unknown>
+}): HyperliquidPerpMarketContext {
+  const markPriceUsd = parseFloatSafe(params.context.markPx) ?? parseFloatSafe(params.context.midPx)
+  const previousDayPriceUsd = parseFloatSafe(params.context.prevDayPx)
+  const openInterest = parseFloatSafe(params.context.openInterest)
+  // HL oracle/index fields are not yet treated as validated basis inputs.
+  // Keep null until units/semantics are confirmed end-to-end.
+  const oraclePriceUsd: number | null = null
+  const basisBps: number | null = null
+  return {
+    symbol: params.symbol,
+    markPriceUsd,
+    priceChange24hPct:
+      markPriceUsd != null && previousDayPriceUsd != null && previousDayPriceUsd > 0
+        ? ((markPriceUsd - previousDayPriceUsd) / previousDayPriceUsd) * 100
+        : null,
+    fundingRate: parseFloatSafe(params.context.funding),
+    openInterestUsd: openInterest != null && markPriceUsd != null ? openInterest * markPriceUsd : null,
+    volume24hUsd: parseFloatSafe(params.context.dayNtlVlm),
+    oraclePriceUsd,
+    basisBps,
+  }
+}
+
+/** Batch read of current perp contexts from one metaAndAssetCtxs response. */
+export async function getAllPerpMarketContexts(): Promise<HyperliquidPerpMarketContext[] | null> {
+  const raw = await fetchJsonBounded(getInfoUrl(), { type: 'metaAndAssetCtxs' })
+  if (isErrorShape(raw) || !Array.isArray(raw) || raw.length < 2) return null
+
+  const meta = raw[0]
+  const contexts = raw[1]
+  if (!meta || typeof meta !== 'object' || !Array.isArray(contexts)) return null
+  const universe = (meta as { universe?: unknown }).universe
+  if (!Array.isArray(universe)) return null
+
+  const out: HyperliquidPerpMarketContext[] = []
+  for (let index = 0; index < universe.length; index += 1) {
+    const entry = universe[index]
+    if (!entry || typeof entry !== 'object') continue
+    const symbol = String((entry as { name?: unknown }).name ?? '').trim().toUpperCase()
+    if (!symbol) continue
+    const rawContext = contexts[index]
+    if (!rawContext || typeof rawContext !== 'object') continue
+    out.push(mapAssetContext({ symbol, context: rawContext as Record<string, unknown> }))
+  }
+  return out
+}
+
 /** Read-only current perp context used by advisory market-intelligence tools. */
 export async function getPerpMarketContext(
   requestedSymbol: string,
@@ -287,22 +341,7 @@ export async function getPerpMarketContext(
   if (index < 0) return null
   const rawContext = contexts[index]
   if (!rawContext || typeof rawContext !== 'object') return null
-  const context = rawContext as Record<string, unknown>
-  const markPriceUsd = parseFloatSafe(context.markPx)
-  const previousDayPriceUsd = parseFloatSafe(context.prevDayPx)
-  const openInterest = parseFloatSafe(context.openInterest)
-
-  return {
-    symbol,
-    markPriceUsd,
-    priceChange24hPct:
-      markPriceUsd != null && previousDayPriceUsd != null && previousDayPriceUsd > 0
-        ? ((markPriceUsd - previousDayPriceUsd) / previousDayPriceUsd) * 100
-        : null,
-    fundingRate: parseFloatSafe(context.funding),
-    openInterestUsd: openInterest != null && markPriceUsd != null ? openInterest * markPriceUsd : null,
-    volume24hUsd: parseFloatSafe(context.dayNtlVlm),
-  }
+  return mapAssetContext({ symbol, context: rawContext as Record<string, unknown> })
 }
 
 export async function getClearinghouseState(

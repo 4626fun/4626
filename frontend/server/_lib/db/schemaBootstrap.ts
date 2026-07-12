@@ -547,6 +547,20 @@ export async function ensureAlfaclubFundingOiObservationSchema(db: Db): Promise<
   })
 }
 
+/** Continuous Hyperliquid market feature snapshots for honest ΔF/ΔOI. */
+export async function ensureAlfaclubMarketFeatureSnapshotSchema(db: Db): Promise<void> {
+  await withEnsureOnce('alfaclubMarketFeatureSnapshots', async () => {
+    await ensureMigrationApplied(db, '20260716000000_inv_akita_feature_snapshots.sql')
+  })
+}
+
+/** InverseAKITA advisory decision ledger + point-in-time outcomes. */
+export async function ensureAlfaclubDecisionLedgerSchema(db: Db): Promise<void> {
+  await withEnsureOnce('alfaclubDecisionLedger', async () => {
+    await ensureMigrationApplied(db, '20260716010000_inv_akita_decision_ledger.sql')
+  })
+}
+
 /** AlfaClub room <-> XMTP group bridge: message-origin loop-prevention ledger. */
 export async function ensureAlfaclubRoomXmtpBridgeSchema(db: Db): Promise<void> {
   await withEnsureOnce('alfaclubRoomXmtpBridge', async () => {

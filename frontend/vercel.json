@@ -43,6 +43,14 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/v1/alfaclub/market-feature-sampler",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/v1/alfaclub/decision-outcome-settle",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/v1/alfaclub/chat-token-refresh",
       "schedule": "*/10 * * * *"
     },

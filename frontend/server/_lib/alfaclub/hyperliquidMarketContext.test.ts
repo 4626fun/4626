@@ -26,6 +26,8 @@ describe('getPerpMarketContext', () => {
       fundingRate: -0.0002,
       openInterestUsd: 2_000_000,
       volume24hUsd: 1_000_000,
+      oraclePriceUsd: null,
+      basisBps: null,
     })
   })
 
