@@ -206,16 +206,13 @@ describe('AlfaClub room hub behavior', () => {
     expect(screen.getByText('Liquidity for room 9').closest('[hidden]')).toBeNull()
   })
 
-  it('loads remote room artwork through the same-origin image proxy', async () => {
+  it('renders remote room artwork directly (CSP allowlists the room image domains)', async () => {
     await renderHub('/rooms?roomId=1659')
     await screen.findByRole('heading', { name: 'AKITA', level: 1 })
 
-    const expected = `/api/image/external?url=${encodeURIComponent(
-      'https://project.storage.supabase.co/room-1659',
-    )}`
     expect(
       Array.from(document.querySelectorAll('img')).some(
-        (image) => image.getAttribute('src') === expected,
+        (image) => image.getAttribute('src') === 'https://project.storage.supabase.co/room-1659',
       ),
     ).toBe(true)
   })

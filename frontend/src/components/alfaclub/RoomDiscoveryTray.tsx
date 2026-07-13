@@ -17,7 +17,6 @@ import {
   formatRoomPoints,
   sortAlfaClubRooms,
 } from '@/lib/alfaclub/roomDirectory'
-import { proxiedExternalImageUrl } from '@/lib/images/externalImage'
 import { cn } from '@/lib/shared/utils'
 
 type DiscoveryEntry =
@@ -641,7 +640,7 @@ const TIER_DOT_CLASSNAME: Record<AlfaRoomTier, string> = {
 }
 
 function RoomAvatar({ room }: { room: AlfaClubRoomDirectoryItem }) {
-  const imageSrc = proxiedExternalImageUrl(room.imageUrl)
+  const imageSrc = room.imageUrl?.trim() || null
   const [failedSource, setFailedSource] = useState<string | null>(null)
   const avatarClassName = cn(
     'size-9 shrink-0 rounded-md object-cover',
