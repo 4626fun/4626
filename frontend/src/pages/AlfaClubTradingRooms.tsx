@@ -20,6 +20,7 @@ import { useSearchParams } from 'react-router-dom'
 
 import { CounterTradeStatusPanel } from '@/components/alfaclub/CounterTradeStatusPanel'
 import { CreatorCoinLinkPanel } from '@/components/alfaclub/CreatorCoinLinkPanel'
+import { KeyOwnershipSunburst } from '@/components/alfaclub/KeyOwnershipSunburst'
 import { keySafetyStatusMeta, type KeySafetyStatus } from '@/components/alfaclub/KeySafetyStatusHero'
 import {
   DEFAULT_FILTERS,
@@ -519,6 +520,32 @@ export function AlfaClubTradingRooms() {
                   aria-labelledby="room-tab-overview"
                   className="space-y-10 border-b border-white/[0.07] pb-10"
                 >
+                  {safetySummary?.ownership ? (
+                    <div className="rounded-3xl bg-black/35 p-5 ring-1 ring-white/[0.04]">
+                      <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.16em] text-sky-300">
+                        Key safety
+                      </p>
+                      <KeyOwnershipSunburst
+                        keySupply={safetySummary.ownership.keySupply}
+                        ownerKeys={safetySummary.ownership.ownerKeys}
+                        ownerStakedKeys={safetySummary.ownership.ownerStakedKeys}
+                        stakedSupply={safetySummary.ownership.stakedSupply}
+                        ownerLabel={safetySummary.ownership.ownerLabel}
+                        ownerWalletKeys={safetySummary.ownership.ownerWalletKeys}
+                        dataSource={safetySummary.ownership.dataSource}
+                        othersHolders={safetySummary.ownership.othersHolders}
+                        takeoverKeys={safetySummary.ownership.takeoverKeys}
+                        onResetTakeover={safetySummary.ownership.onResetTakeover}
+                      />
+                      <a
+                        href="#room-key-safety-analysis"
+                        className="mt-4 inline-flex items-center gap-1 text-[11px] font-medium text-sky-300 underline decoration-dotted underline-offset-2 hover:text-sky-200"
+                      >
+                        Stress-test a hostile buyer
+                        <ArrowRight className="size-3" aria-hidden />
+                      </a>
+                    </div>
+                  ) : null}
                   <OverviewPanel
                     roomId={selectedRoomId}
                     room={selectedRoom}
@@ -529,7 +556,10 @@ export function AlfaClubTradingRooms() {
                     roomId={selectedRoomId}
                     onOpenLiquidity={() => updateQuery({ tab: 'liquidity' })}
                   />
-                  <div className="border-t border-white/[0.07] pt-8">
+                  <div
+                    id="room-key-safety-analysis"
+                    className="scroll-mt-6 border-t border-white/[0.07] pt-8"
+                  >
                     <div className="mb-5">
                       <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-sky-300">
                         Key safety
@@ -542,6 +572,7 @@ export function AlfaClubTradingRooms() {
                       key={selectedRoomId}
                       roomId={selectedRoomId}
                       embedded
+                      showOwnershipCard={false}
                       onSummaryChange={handleSafetySummary}
                     />
                   </div>

@@ -7,7 +7,7 @@ import {
   type AttackExitScenario,
   type InsiderWorstCase,
 } from '@/components/alfaclub/KeySafetyAttackPanel'
-import { KeyOwnershipSunburst } from '@/components/alfaclub/KeyOwnershipSunburst'
+import { KeyOwnershipSunburst, type SunburstHolder } from '@/components/alfaclub/KeyOwnershipSunburst'
 import {
   KeySafetyRoomPicker,
   type KeySafetyRoomOption,
@@ -59,17 +59,36 @@ export type AlfaClubKeySafetyPricingSummary = {
   treasuryUsdc: number
 }
 
+/** Everything the "Who controls this room" card needs, so a caller can render
+ *  it in a different spot in the page than the rest of the key-safety analysis. */
+export type AlfaClubKeySafetyOwnershipSummary = {
+  keySupply: number
+  ownerKeys: number
+  ownerStakedKeys: number
+  stakedSupply: number
+  ownerLabel: string | null
+  ownerWalletKeys: number
+  dataSource: string | null
+  othersHolders: SunburstHolder[]
+  takeoverKeys: number
+  onResetTakeover?: () => void
+}
+
 export type AlfaClubKeySafetySummary = {
   status: SafetyStatus
   label: string
   headline: string
   pricing?: AlfaClubKeySafetyPricingSummary
+  ownership?: AlfaClubKeySafetyOwnershipSummary
 } | null
 
 type AlfaClubKeySafetyProps = {
   roomId?: string
   embedded?: boolean
   summaryOnly?: boolean
+  /** Set false when the caller renders the "Who controls this room" card itself
+   *  (via the `ownership` field on `onSummaryChange`) elsewhere on the page. */
+  showOwnershipCard?: boolean
   onSummaryChange?: (summary: AlfaClubKeySafetySummary) => void
 }
 
@@ -245,6 +264,7 @@ export function AlfaClubKeySafety({
   roomId,
   embedded = false,
   summaryOnly = false,
+  showOwnershipCard = true,
   onSummaryChange,
 }: AlfaClubKeySafetyProps = {}) {
   const [selectedRoomId, setSelectedRoomId] = useState(() => roomId ?? parseInitialRoomId())
@@ -262,6 +282,7 @@ export function AlfaClubKeySafety({
   const [editingRoom, setEditingRoom] = useState(false)
   const [attackExitScenario, setAttackExitScenario] =
     useState<AttackExitScenario>('holders-stay')
+  const resetTakeover = useCallback(() => setTakeoverKeys(0), [])
 
   const roomTier = roomContext?.tier ?? 'club'
   const roomType = roomContext?.roomType ?? 'trading'
@@ -529,18 +550,39 @@ export function AlfaClubKeySafety({
                   treasuryUsdc: modeledPotUsdc,
                 }
               : undefined,
+            ownership: roomContext
+              ? {
+                  keySupply,
+                  ownerKeys: yourKeys,
+                  ownerStakedKeys: roomContext.hostStakedKeys,
+                  stakedSupply,
+                  ownerLabel: roomContext.creatorHandle ?? null,
+                  ownerWalletKeys: roomContext.hostWalletKeys,
+                  dataSource: dataSourceLabel,
+                  othersHolders: roomContext.knownOtherHolders ?? [],
+                  takeoverKeys,
+                  onResetTakeover: takeoverKeys > 0 ? resetTakeover : undefined,
+                }
+              : undefined,
           }
         : null,
     )
   }, [
     curvePricing,
+    dataSourceLabel,
+    keySupply,
     modeledPotUsdc,
     onSummaryChange,
     reportedTradingFundUsdc,
+    resetTakeover,
+    roomContext,
     safetyStatus,
+    stakedSupply,
     statusHeadline,
     statusLabel,
+    takeoverKeys,
     treasuryNavUsdc,
+    yourKeys,
   ])
 
   if (embedded && summaryOnly) return null
@@ -688,20 +730,22 @@ export function AlfaClubKeySafety({
 
             {showResults && selectedLabel && roomContext ? (
               <>
-                <div className="rounded-3xl bg-black/35 p-5 ring-1 ring-white/[0.04]">
-                  <KeyOwnershipSunburst
-                    keySupply={keySupply}
-                    ownerKeys={yourKeys}
-                    ownerStakedKeys={roomContext.hostStakedKeys}
-                    stakedSupply={stakedSupply}
-                    ownerLabel={roomContext.creatorHandle ?? null}
-                    ownerWalletKeys={roomContext.hostWalletKeys}
-                    dataSource={dataSourceLabel}
-                    othersHolders={roomContext.knownOtherHolders}
-                    takeoverKeys={takeoverKeys}
-                    onResetTakeover={takeoverKeys > 0 ? () => setTakeoverKeys(0) : undefined}
-                  />
-                </div>
+                {showOwnershipCard ? (
+                  <div className="rounded-3xl bg-black/35 p-5 ring-1 ring-white/[0.04]">
+                    <KeyOwnershipSunburst
+                      keySupply={keySupply}
+                      ownerKeys={yourKeys}
+                      ownerStakedKeys={roomContext.hostStakedKeys}
+                      stakedSupply={stakedSupply}
+                      ownerLabel={roomContext.creatorHandle ?? null}
+                      ownerWalletKeys={roomContext.hostWalletKeys}
+                      dataSource={dataSourceLabel}
+                      othersHolders={roomContext.knownOtherHolders}
+                      takeoverKeys={takeoverKeys}
+                      onResetTakeover={takeoverKeys > 0 ? resetTakeover : undefined}
+                    />
+                  </div>
+                ) : null}
 
                 <div className="rounded-3xl bg-black/35 p-5 ring-1 ring-white/[0.04]">
                   <div className="flex items-center gap-1.5">
