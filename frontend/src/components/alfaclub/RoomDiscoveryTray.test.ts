@@ -159,9 +159,11 @@ describe('RoomDiscoveryTray grouping', () => {
     expect(screen.getByRole('button', { name: 'Points' }).getAttribute('aria-pressed')).toBe(
       'true',
     )
-    expect(screen.getByRole('option', { name: /Room 3/ }).textContent).toContain('SOC')
-    expect(screen.getByRole('option', { name: /Room 3/ }).textContent).toContain('K 3')
-    expect(screen.getByRole('option', { name: /Room 3/ }).textContent).toContain('H 30')
+    const roomThree = screen.getByRole('option', { name: /Room 3/ })
+    expect(roomThree.getAttribute('data-room-type')).toBe('social')
+    expect(roomThree.textContent).not.toContain('SOC')
+    expect(roomThree.textContent).toContain('K 3')
+    expect(roomThree.textContent).toContain('H 30')
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
     expect(onFiltersChange).toHaveBeenCalledWith(DEFAULT_FILTERS)
@@ -179,5 +181,37 @@ describe('RoomDiscoveryTray grouping', () => {
     })
 
     expect(entries[0]).toMatchObject({ kind: 'section', label: 'Results' })
+  })
+
+  it('uses row color for room type and the trading avatar ring for curve tier', async () => {
+    render(
+      createElement(RoomDiscoveryTray, {
+        rooms: [
+          room('1', 'trading', 'club'),
+          room('2', 'social', 'exclusive'),
+        ],
+        filters: DEFAULT_FILTERS,
+        onFiltersChange: vi.fn(),
+        recentRoomIds: [],
+        myRoomIds: [],
+        selectedRoomId: '',
+        loading: false,
+        error: null,
+        onRetry: vi.fn(),
+        onSelect: vi.fn(),
+      }),
+    )
+
+    const tradingRoom = await screen.findByRole('option', { name: /Room 1/ })
+    const socialRoom = screen.getByRole('option', { name: /Room 2/ })
+
+    expect(tradingRoom.className).toContain('bg-cyan')
+    expect(socialRoom.className).toContain('bg-fuchsia')
+    expect(tradingRoom.querySelector('[data-curve-tier="club"]')?.className).toContain(
+      'ring-sky-400',
+    )
+    expect(socialRoom.querySelector('[data-curve-tier]')).toBeNull()
+    expect(tradingRoom.textContent).not.toContain('TRD')
+    expect(socialRoom.textContent).not.toContain('SOC')
   })
 })

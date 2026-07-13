@@ -1,20 +1,15 @@
 import {
   ArrowRight,
-  ChevronDown,
-  Droplets,
   ExternalLink,
   GripVertical,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
-  Shield,
-  Swords,
   Users,
 } from 'lucide-react'
 import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
-  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -28,6 +23,7 @@ import { keySafetyStatusMeta, type KeySafetyStatus } from '@/components/alfaclub
 import {
   DEFAULT_FILTERS,
   RoomDiscoveryTray,
+  TIER_DOT_CLASSNAME,
   type RoomDiscoveryFilters,
 } from '@/components/alfaclub/RoomDiscoveryTray'
 import { Modal } from '@/components/ui/Modal'
@@ -42,6 +38,7 @@ import {
 } from '@/lib/alfaclub/roomDirectory'
 import { apiFetch } from '@/lib/api/apiBase'
 import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
+import { proxiedExternalImageUrl } from '@/lib/images/externalImage'
 import { cn } from '@/lib/shared/utils'
 
 import {
@@ -54,7 +51,6 @@ export type AlfaClubRoomHubTab = 'overview' | 'safety' | 'liquidity' | 'inverse'
 
 const BASE_TABS: Array<{ id: Exclude<AlfaClubRoomHubTab, 'inverse'>; label: string }> = [
   { id: 'overview', label: 'Overview' },
-  { id: 'safety', label: 'Safety' },
   { id: 'liquidity', label: 'Liquidity' },
 ]
 
@@ -115,7 +111,7 @@ export function resolveAlfaClubRoomHubTab(
     case 'overview':
       return 'overview'
     case 'safety':
-      return 'safety'
+      return 'overview'
     case 'liquidity':
       return 'liquidity'
     case 'inverse':
@@ -188,12 +184,6 @@ export function AlfaClubTradingRooms() {
   const [mobileListOpen, setMobileListOpen] = useState(false)
   const [trayWidth, setTrayWidth] = useState(readStoredTrayWidth)
   const [trayCollapsed, setTrayCollapsed] = useState(readStoredTrayCollapsed)
-  const [sectionOpen, setSectionOpen] = useState<Record<AlfaClubRoomHubTab, boolean>>({
-    overview: true,
-    safety: true,
-    liquidity: true,
-    inverse: true,
-  })
   const resizeStartRef = useRef<{ pointerX: number; width: number } | null>(null)
   const [recentRoomIds, setRecentRoomIds] = useState<string[]>(() =>
     readRecentRoomIds(typeof window === 'undefined' ? null : window.localStorage),
@@ -211,7 +201,8 @@ export function AlfaClubTradingRooms() {
       requestedTab !== null &&
       !['overview', 'safety', 'liquidity', 'inverse'].includes(requestedTab)
     const unavailableInverse = requestedTab === 'inverse' && selectedRoomId !== '1659'
-    if (!invalidTab && !unavailableInverse) return
+    const legacySafetyTab = requestedTab === 'safety'
+    if (!invalidTab && !unavailableInverse && !legacySafetyTab) return
     const next = new URLSearchParams(searchParams)
     next.set('tab', 'overview')
     setSearchParams(next, { replace: true })
@@ -247,7 +238,7 @@ export function AlfaClubTradingRooms() {
   }, [])
 
   useEffect(() => {
-    if (!selectedRoomId || activeTab === 'safety') return
+    if (!selectedRoomId || activeTab === 'overview') return
     const controller = new AbortController()
     void fetchSafetySummary(selectedRoomId, controller.signal).then((summary) => {
       if (!controller.signal.aborted) {
@@ -434,7 +425,14 @@ export function AlfaClubTradingRooms() {
         <button
           type="button"
           onClick={() => setMobileListOpen(true)}
-          className="flex w-full items-center justify-between gap-3 rounded-xl bg-white/[0.04] px-3 py-2 text-left ring-1 ring-white/[0.08]"
+          className={cn(
+            'flex w-full items-center justify-between gap-3 rounded-2xl border-l-[3px] bg-white/[0.04] px-3 py-2.5 text-left ring-1 ring-white/[0.08] transition-colors hover:bg-white/[0.06]',
+            selectedRoom?.roomType === 'trading'
+              ? 'border-cyan-400/70'
+              : selectedRoom?.roomType === 'social'
+                ? 'border-fuchsia-400/70'
+                : 'border-transparent',
+          )}
         >
           <span className="min-w-0">
             <span className="block text-[10px] uppercase tracking-[0.14em] text-zinc-500">
@@ -450,7 +448,7 @@ export function AlfaClubTradingRooms() {
               </span>
             ) : null}
           </span>
-          <span className="inline-flex shrink-0 items-center gap-1.5 text-xs text-sky-200">
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-sky-500/10 px-2.5 py-1.5 text-xs font-medium text-sky-200">
             <Menu className="size-4" aria-hidden />
             Change
           </span>
@@ -494,62 +492,53 @@ export function AlfaClubTradingRooms() {
             />
             <div className="mt-6">
               {activeTab === 'overview' ? (
-                <WorkspaceDisclosure
-                  id="overview"
-                  label="Room overview"
-                  open={sectionOpen.overview}
-                  onToggle={() =>
-                    setSectionOpen((state) => ({ ...state, overview: !state.overview }))
-                  }
+                <section
+                  role="tabpanel"
+                  id="room-panel-overview"
+                  aria-labelledby="room-tab-overview"
+                  className="space-y-10 border-b border-white/[0.07] pb-10"
                 >
                   <OverviewPanel
                     roomId={selectedRoomId}
                     room={selectedRoom}
-                    safetySummary={safetySummary}
-                    onSelectTab={(tab) => updateQuery({ tab })}
                   />
-                </WorkspaceDisclosure>
-              ) : null}
-              {activeTab === 'safety' ? (
-                <WorkspaceDisclosure
-                  id="safety"
-                  label="Key safety analysis"
-                  open={sectionOpen.safety}
-                  onToggle={() =>
-                    setSectionOpen((state) => ({ ...state, safety: !state.safety }))
-                  }
-                >
-                  <AlfaClubKeySafety
-                    key={selectedRoomId}
-                    roomId={selectedRoomId}
-                    embedded
-                    onSummaryChange={handleSafetySummary}
-                  />
-                </WorkspaceDisclosure>
+                  <div className="border-t border-white/[0.07] pt-8">
+                    <div className="mb-5">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-sky-300">
+                        Key safety
+                      </p>
+                      <h2 className="mt-2 text-lg font-semibold text-zinc-100">
+                        Ownership and takeover analysis
+                      </h2>
+                    </div>
+                    <AlfaClubKeySafety
+                      key={selectedRoomId}
+                      roomId={selectedRoomId}
+                      embedded
+                      onSummaryChange={handleSafetySummary}
+                    />
+                  </div>
+                </section>
               ) : null}
               {activeTab === 'liquidity' ? (
-                <WorkspaceDisclosure
-                  id="liquidity"
-                  label="Room liquidity"
-                  open={sectionOpen.liquidity}
-                  onToggle={() =>
-                    setSectionOpen((state) => ({ ...state, liquidity: !state.liquidity }))
-                  }
+                <section
+                  role="tabpanel"
+                  id="room-panel-liquidity"
+                  aria-labelledby="room-tab-liquidity"
+                  className="border-b border-white/[0.07] pb-10"
                 >
                   <AlfaClubRoomLiquidity key={selectedRoomId} roomId={selectedRoomId} />
-                </WorkspaceDisclosure>
+                </section>
               ) : null}
               {activeTab === 'inverse' && selectedRoomId === '1659' ? (
-                <WorkspaceDisclosure
-                  id="inverse"
-                  label="Inverse strategy"
-                  open={sectionOpen.inverse}
-                  onToggle={() =>
-                    setSectionOpen((state) => ({ ...state, inverse: !state.inverse }))
-                  }
+                <section
+                  role="tabpanel"
+                  id="room-panel-inverse"
+                  aria-labelledby="room-tab-inverse"
+                  className="border-b border-white/[0.07] pb-10"
                 >
                   <CounterTradeStatusPanel showArenaLinks />
-                </WorkspaceDisclosure>
+                </section>
               ) : null}
             </div>
             </>
@@ -569,13 +558,26 @@ function CollapsedRoomRail({
   roomId: string
   roomCount: number
 }) {
+  const tierDotClassName =
+    room?.roomType === 'trading' && room.tier ? TIER_DOT_CLASSNAME[room.tier] : null
   return (
     <div
       className="absolute inset-x-0 top-32 flex flex-col items-center gap-3 px-2 text-center"
       aria-label={roomId ? `Selected room #${roomId}` : 'No room selected'}
     >
-      <SelectedRoomAvatar room={room} />
-      <span className="max-w-full truncate font-mono text-[10px] text-sky-200">
+      <span className="relative inline-flex">
+        <SelectedRoomAvatar room={room} />
+        {tierDotClassName ? (
+          <span
+            className={cn(
+              'absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full ring-2 ring-black',
+              tierDotClassName,
+            )}
+            aria-hidden
+          />
+        ) : null}
+      </span>
+      <span className="max-w-full truncate rounded-full bg-white/[0.06] px-2 py-0.5 font-mono text-[10px] text-sky-200">
         {roomId ? `#${roomId}` : '—'}
       </span>
       <span className="h-px w-6 bg-white/[0.08]" aria-hidden />
@@ -584,56 +586,6 @@ function CollapsedRoomRail({
         <span className="sr-only"> rooms</span>
       </span>
     </div>
-  )
-}
-
-function WorkspaceDisclosure({
-  id,
-  label,
-  open,
-  onToggle,
-  children,
-}: {
-  id: AlfaClubRoomHubTab
-  label: string
-  open: boolean
-  onToggle: () => void
-  children: ReactNode
-}) {
-  const panelId = `room-panel-${id}`
-  const controlId = `room-section-toggle-${id}`
-  return (
-    <section
-      role="tabpanel"
-      id={panelId}
-      aria-labelledby={`room-tab-${id}`}
-      className="border-b border-white/[0.07] pb-8"
-    >
-      <button
-        id={controlId}
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        aria-controls={`${panelId}-content`}
-        className="mb-5 flex w-full items-center justify-between gap-4 py-2 text-left text-sm font-semibold text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50"
-      >
-        {label}
-        <ChevronDown
-          className={cn(
-            'size-4 text-zinc-500 transition-transform motion-reduce:transition-none',
-            open && 'rotate-180',
-          )}
-          aria-hidden
-        />
-      </button>
-      <div
-        id={`${panelId}-content`}
-        aria-labelledby={controlId}
-        hidden={!open}
-      >
-        {children}
-      </div>
-    </section>
   )
 }
 
@@ -722,18 +674,18 @@ function DiscoveryLanding({
   const socialCount = rooms.filter((room) => room.roomType === 'social').length
   return (
     <>
-      <section className="hidden border-b border-white/[0.07] py-12 lg:block">
-        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-sky-300">
+      <section className="hidden border-b border-white/[0.07] py-14 lg:block">
+        <p className="inline-flex items-center rounded-full bg-sky-500/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-sky-300 ring-1 ring-sky-400/15">
           AlfaClub discovery terminal
         </p>
-        <h1 className="headline mt-3 max-w-2xl text-3xl text-zinc-100">
+        <h1 className="headline mt-4 max-w-2xl text-3xl text-zinc-100">
           Select a room from the discovery rail
         </h1>
         <p className="mt-3 max-w-xl text-sm leading-relaxed text-zinc-400">
           Scan Trading and Social Rooms by points, keys, or freshness. Your filters and
           position stay intact while you move through the workspace.
         </p>
-        <dl className="mt-8 grid max-w-2xl grid-cols-3 border-y border-white/[0.07] py-4">
+        <dl className="mt-8 grid max-w-2xl grid-cols-3 divide-x divide-white/[0.07] border-y border-white/[0.07] py-4">
           <HeaderStat label="All rooms" value={rooms.length.toLocaleString()} />
           <HeaderStat label="Trading" value={tradingCount.toLocaleString()} />
           <HeaderStat label="Social" value={socialCount.toLocaleString()} />
@@ -742,10 +694,12 @@ function DiscoveryLanding({
           ↑↓ navigate · Enter open · drag the rail edge to resize
         </p>
       </section>
-      <div className="space-y-5 lg:hidden">
-        <section className="border-b border-white/[0.07] bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.1),transparent_45%)] pb-8 pt-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200">Room discovery</p>
-        <h1 className="headline mt-3 max-w-2xl text-3xl text-zinc-100 sm:text-4xl">
+      <div className="space-y-6 lg:hidden">
+        <section className="border-b border-white/[0.07] bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.1),transparent_45%)] pb-8 pt-5">
+        <p className="inline-flex items-center rounded-full bg-sky-500/10 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-sky-200 ring-1 ring-sky-400/15">
+          Room discovery
+        </p>
+        <h1 className="headline mt-4 max-w-2xl text-3xl text-zinc-100 sm:text-4xl">
           Find your next AlfaClub room
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-400">
@@ -753,8 +707,8 @@ function DiscoveryLanding({
           Club, and Exclusive describe each room&apos;s bonding curve.
         </p>
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          <CategoryCard label="Trading Rooms" count={tradingCount} detail="Markets, trades, and alpha" />
-          <CategoryCard label="Social Rooms" count={socialCount} detail="Creators and communities" />
+          <CategoryCard label="Trading Rooms" count={tradingCount} detail="Markets, trades, and alpha" accent="cyan" />
+          <CategoryCard label="Social Rooms" count={socialCount} detail="Creators and communities" accent="fuchsia" />
         </div>
       </section>
         {featured.length > 0 ? (
@@ -767,26 +721,41 @@ function DiscoveryLanding({
             <p className="text-xs text-zinc-500">Points reflect room activity, not USD volume.</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {featured.map((room) => (
-              <button
-                key={room.roomId}
-                type="button"
-                onClick={() => onSelect(room.roomId)}
-                className="group border-b border-white/[0.07] px-1 py-4 text-left transition hover:border-sky-400/30"
-              >
-                <div className="flex items-center gap-3">
-                  <SelectedRoomAvatar room={room} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-zinc-100">
-                      {room.displayLabel || room.roomName}
-                    </p>
-                    <p className="mt-1 text-xs text-zinc-500">{formatRoomType(room.roomType)}</p>
+            {featured.map((room) => {
+              const tierDotClassName =
+                room.roomType === 'trading' && room.tier ? TIER_DOT_CLASSNAME[room.tier] : null
+              return (
+                <button
+                  key={room.roomId}
+                  type="button"
+                  onClick={() => onSelect(room.roomId)}
+                  className="group rounded-xl border-b border-white/[0.07] px-2 py-4 text-left transition hover:border-sky-400/30 hover:bg-white/[0.03]"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="relative inline-flex shrink-0">
+                      <SelectedRoomAvatar room={room} />
+                      {tierDotClassName ? (
+                        <span
+                          className={cn(
+                            'absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full ring-2 ring-black',
+                            tierDotClassName,
+                          )}
+                          aria-hidden
+                        />
+                      ) : null}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-zinc-100">
+                        {room.displayLabel || room.roomName}
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-500">{formatRoomType(room.roomType)}</p>
+                    </div>
+                    <ArrowRight className="size-4 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-sky-300" aria-hidden />
                   </div>
-                  <ArrowRight className="size-4 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-sky-300" aria-hidden />
-                </div>
-                <p className="mt-3 text-xs text-zinc-400">{formatRoomPoints(room.roomPoints)}</p>
-              </button>
-            ))}
+                  <p className="mt-3 font-mono text-xs text-zinc-400">{formatRoomPoints(room.roomPoints)}</p>
+                </button>
+              )
+            })}
           </div>
         </section>
         ) : loading ? (
@@ -797,11 +766,26 @@ function DiscoveryLanding({
   )
 }
 
-function CategoryCard({ label, count, detail }: { label: string; count: number; detail: string }) {
+function CategoryCard({
+  label,
+  count,
+  detail,
+  accent,
+}: {
+  label: string
+  count: number
+  detail: string
+  accent: 'cyan' | 'fuchsia'
+}) {
   return (
-    <div className="border-l border-white/[0.1] py-2 pl-4">
+    <div
+      className={cn(
+        'border-l-2 py-2 pl-4',
+        accent === 'cyan' ? 'border-cyan-400/50' : 'border-fuchsia-400/50',
+      )}
+    >
       <div className="flex items-center gap-2 text-zinc-200">
-        <Users className="size-4 text-sky-300" aria-hidden />
+        <Users className={cn('size-4', accent === 'cyan' ? 'text-cyan-300' : 'text-fuchsia-300')} aria-hidden />
         <span className="text-sm font-semibold">{label}</span>
       </div>
       <p className="mt-2 text-2xl font-semibold tabular-nums text-zinc-100">{count.toLocaleString()}</p>
@@ -824,88 +808,61 @@ function MissingRoomBanner({ roomId, onBrowse }: { roomId: string; onBrowse: () 
 function OverviewPanel({
   roomId,
   room,
-  safetySummary,
-  onSelectTab,
 }: {
   roomId: string
   room: AlfaClubRoomDirectoryItem | null
-  safetySummary: AlfaClubKeySafetySummary
-  onSelectTab: (tab: AlfaClubRoomHubTab) => void
 }) {
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
-      <section>
-        <h2 className="text-base font-semibold text-zinc-100">Room overview</h2>
-        {room?.description ? <p className="mt-2 text-sm leading-relaxed text-zinc-400">{room.description}</p> : null}
-        <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <HeaderStat label="Room Points" value={formatRoomPoints(room?.roomPoints ?? null)} />
-          <HeaderStat label="Key supply" value={room?.keySupply?.toLocaleString() ?? '—'} />
-          <HeaderStat label="Holders" value={room?.uniqueHolders?.toLocaleString() ?? '—'} />
-          <HeaderStat label="Room type" value={room ? formatRoomType(room.roomType) : '—'} />
-          <HeaderStat label="Curve" value={room?.tier ?? '—'} />
-          <HeaderStat label="Updated" value={formatUpdatedAt(room?.ingestedAt ?? null)} />
-        </dl>
-        <a
-          href={`https://alfaclub.app/rooms/${roomId}/`}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-400"
-        >
-          Open on AlfaClub
-          <ExternalLink className="size-3.5" aria-hidden />
-        </a>
-      </section>
-      <section className="border-l border-white/[0.08] pl-5">
-        <p className="text-[11px] uppercase tracking-wide text-zinc-500">Key safety</p>
-        <h2 className="mt-2 text-base font-semibold text-zinc-100">
-          {safetySummary?.label ?? 'Analysis on demand'}
-        </h2>
-        <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-          {safetySummary?.headline ??
-            'Open Safety to load live key ownership, stake, and room fund analysis.'}
-        </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <ActionButton icon={Shield} label="Safety" onClick={() => onSelectTab('safety')} />
-          <ActionButton icon={Droplets} label="Liquidity" onClick={() => onSelectTab('liquidity')} />
-          {roomId === '1659' ? (
-            <ActionButton icon={Swords} label="Inverse" onClick={() => onSelectTab('inverse')} />
-          ) : null}
-        </div>
-      </section>
-    </div>
-  )
-}
-
-function ActionButton({
-  icon: Icon,
-  label,
-  onClick,
-}: {
-  icon: typeof Shield
-  label: string
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.04] px-3 py-2 text-xs text-zinc-200 ring-1 ring-white/[0.08]"
-    >
-      <Icon className="size-3.5" aria-hidden />
-      {label}
-    </button>
+    <section>
+      <h2 className="text-base font-semibold text-zinc-100">Room overview</h2>
+      {room?.description ? (
+        <p className="mt-2 text-sm leading-relaxed text-zinc-400">{room.description}</p>
+      ) : null}
+      <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <HeaderStat label="Room Points" value={formatRoomPoints(room?.roomPoints ?? null)} />
+        <HeaderStat label="Key supply" value={room?.keySupply?.toLocaleString() ?? '—'} />
+        <HeaderStat label="Holders" value={room?.uniqueHolders?.toLocaleString() ?? '—'} />
+        <HeaderStat label="Room type" value={room ? formatRoomType(room.roomType) : '—'} />
+        <HeaderStat label="Curve" value={room?.tier ?? '—'} />
+        <HeaderStat label="Updated" value={formatUpdatedAt(room?.ingestedAt ?? null)} />
+      </dl>
+      <a
+        href={`https://alfaclub.app/rooms/${roomId}/`}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-400"
+      >
+        Open on AlfaClub
+        <ExternalLink className="size-3.5" aria-hidden />
+      </a>
+    </section>
   )
 }
 
 function SelectedRoomAvatar({ room }: { room: AlfaClubRoomDirectoryItem | null }) {
-  if (!room?.imageUrl) {
+  const imageSrc = proxiedExternalImageUrl(room?.imageUrl)
+  const [failedSource, setFailedSource] = useState<string | null>(null)
+  if (!imageSrc || failedSource === imageSrc) {
     return (
-      <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-white/[0.05] text-sm font-semibold text-zinc-400">
+      <span
+        className="grid size-11 shrink-0 place-items-center rounded-xl bg-white/[0.05] text-sm font-semibold text-zinc-400"
+        aria-hidden
+      >
         {(room?.roomName ?? '#').slice(0, 1).toUpperCase()}
       </span>
     )
   }
-  return <img src={room.imageUrl} alt="" width={44} height={44} className="size-11 shrink-0 rounded-xl object-cover" />
+  return (
+    <img
+      src={imageSrc}
+      alt=""
+      width={44}
+      height={44}
+      loading="lazy"
+      onError={() => setFailedSource(imageSrc)}
+      className="size-11 shrink-0 rounded-xl object-cover"
+    />
+  )
 }
 
 function TierBadge({ tier }: { tier: AlfaRoomTier | null }) {

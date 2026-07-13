@@ -65,7 +65,7 @@ describe('AlfaClub room hub behavior', () => {
               tier: 'club',
               keySupply: 100,
               roomPoints: 2500,
-              imageUrl: null,
+              imageUrl: 'https://project.storage.supabase.co/room-1659',
               description: 'Trading and community room',
               featured: true,
               uniqueHolders: 50,
@@ -92,11 +92,17 @@ describe('AlfaClub room hub behavior', () => {
     })
   })
 
-  it('loads selected-room safety content and exposes inverse only for room 1659', async () => {
+  it('normalizes legacy safety links into the combined overview and exposes inverse for room 1659', async () => {
     await renderHub('/rooms?roomId=1659&tab=safety')
 
     expect(await screen.findByText('Safety analysis for room 1659')).toBeTruthy()
-    expect(screen.getByRole('tab', { name: 'Safety' }).getAttribute('aria-selected')).toBe('true')
+    await waitFor(() => {
+      expect(screen.getByTestId('location').textContent).toBe(
+        '/rooms?roomId=1659&tab=overview',
+      )
+    })
+    expect(screen.getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.queryByRole('tab', { name: 'Safety' })).toBeNull()
     expect(screen.getByRole('tab', { name: 'Inverse' })).toBeTruthy()
   })
 
@@ -133,14 +139,13 @@ describe('AlfaClub room hub behavior', () => {
     expect(screen.getByRole('button', { name: 'Club' })).toBeTruthy()
   })
 
-  it('keeps the full safety analysis deferred until the Safety tab is selected', async () => {
+  it('renders room overview and full safety analysis inline', async () => {
     await renderHub('/rooms?roomId=9')
     await screen.findByRole('heading', { name: 'Room Nine', level: 1 })
 
-    expect(screen.queryByTestId('safety-panel')).toBeNull()
-    fireEvent.click(screen.getByRole('tab', { name: 'Safety' }))
-
-    expect(await screen.findByText('Safety analysis for room 9')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Room overview', level: 2 })).toBeTruthy()
+    expect(screen.getByText('Safety analysis for room 9')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Room overview' })).toBeNull()
   })
 
   it('keeps the discovery tray and its filters mounted across workspace tabs', async () => {
@@ -148,7 +153,7 @@ describe('AlfaClub room hub behavior', () => {
     const search = await screen.findByRole('searchbox', { name: 'Search AlfaClub rooms' })
     fireEvent.change(search, { target: { value: 'AKITA' } })
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Safety' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Liquidity' }))
 
     expect(screen.getByRole('searchbox', { name: 'Search AlfaClub rooms' })).toBe(search)
     expect((search as HTMLInputElement).value).toBe('AKITA')
@@ -189,7 +194,7 @@ describe('AlfaClub room hub behavior', () => {
     expect(window.localStorage.getItem('alfaclub:room-tray-collapsed:v1')).toBe('true')
   })
 
-  it('keeps the mobile room drawer trigger available and allows panels to collapse', async () => {
+  it('keeps the mobile room drawer trigger available and renders panels inline', async () => {
     await renderHub('/rooms?roomId=9&tab=liquidity')
 
     expect(
@@ -197,11 +202,22 @@ describe('AlfaClub room hub behavior', () => {
         name: /Room Nine Social Room · casual · 100 pts Change/i,
       }),
     ).toBeTruthy()
-    const sectionToggle = screen.getByRole('button', { name: 'Room liquidity' })
-    expect(sectionToggle.getAttribute('aria-expanded')).toBe('true')
-    fireEvent.click(sectionToggle)
-    expect(sectionToggle.getAttribute('aria-expanded')).toBe('false')
-    expect(screen.getByText('Liquidity for room 9').closest('[hidden]')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Room liquidity' })).toBeNull()
+    expect(screen.getByText('Liquidity for room 9').closest('[hidden]')).toBeNull()
+  })
+
+  it('loads remote room artwork through the same-origin image proxy', async () => {
+    await renderHub('/rooms?roomId=1659')
+    await screen.findByRole('heading', { name: 'AKITA', level: 1 })
+
+    const expected = `/api/image/external?url=${encodeURIComponent(
+      'https://project.storage.supabase.co/room-1659',
+    )}`
+    expect(
+      Array.from(document.querySelectorAll('img')).some(
+        (image) => image.getAttribute('src') === expected,
+      ),
+    ).toBe(true)
   })
 
   it('shows a compact desktop discovery primer when no room is selected', async () => {

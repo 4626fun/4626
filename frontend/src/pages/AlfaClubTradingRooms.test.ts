@@ -8,8 +8,8 @@ describe('AlfaClub room hub tab routing', () => {
     expect(resolveAlfaClubRoomHubTab('unknown', '1659')).toBe('overview')
   })
 
-  it('keeps room tabs and limits inverse to room 1659', () => {
-    expect(resolveAlfaClubRoomHubTab('safety', '9')).toBe('safety')
+  it('folds legacy safety links into overview and limits inverse to room 1659', () => {
+    expect(resolveAlfaClubRoomHubTab('safety', '9')).toBe('overview')
     expect(resolveAlfaClubRoomHubTab('liquidity', '9')).toBe('liquidity')
     expect(resolveAlfaClubRoomHubTab('inverse', '1659')).toBe('inverse')
     expect(resolveAlfaClubRoomHubTab('inverse', '9')).toBe('overview')
