@@ -99,6 +99,12 @@ const PAIR_ALIASES: Record<string, string> = {
   zora: 'ZORA',
 }
 
+const MARKET_CONCEPT_CANDIDATES: Record<string, readonly string[]> = {
+  oil: ['xyz:CL', 'xyz:BRENTOIL', 'flx:OIL', 'cash:WTI', 'km:USOIL', 'mkts:USOIL'],
+  crude: ['xyz:CL', 'xyz:BRENTOIL', 'flx:OIL', 'cash:WTI', 'km:USOIL', 'mkts:USOIL'],
+  brent: ['xyz:BRENTOIL'],
+}
+
 function normalizeMarketSymbol(symbol: string): string {
   const trimmed = symbol.trim().replace(/^\$/, '')
   if (!trimmed.includes(':')) return trimmed.toUpperCase()
@@ -110,18 +116,24 @@ function resolveListedMarketSymbol(
   candidate: string,
   markets: readonly HyperliquidPerpMarket[],
 ): string | null {
+  const matches = listListedMarketSymbols(candidate, markets)
+  return matches.length === 1 ? matches[0]! : null
+}
+
+function listListedMarketSymbols(
+  candidate: string,
+  markets: readonly HyperliquidPerpMarket[],
+): string[] {
   const normalized = normalizeMarketSymbol(candidate)
   const exact = markets.find(
     (market) => normalizeMarketSymbol(market.symbol).toLowerCase() === normalized.toLowerCase(),
   )
-  if (exact) return normalizeMarketSymbol(exact.symbol)
-  if (normalized.includes(':')) return null
+  if (exact) return [normalizeMarketSymbol(exact.symbol)]
+  if (normalized.includes(':')) return []
 
-  const suffixMatches = markets.filter((market) => {
-    const listed = normalizeMarketSymbol(market.symbol)
-    return listed.includes(':') && listed.split(':', 2)[1] === normalized
-  })
-  return suffixMatches.length === 1 ? normalizeMarketSymbol(suffixMatches[0]!.symbol) : null
+  return markets
+    .map((market) => normalizeMarketSymbol(market.symbol))
+    .filter((listed) => listed.includes(':') && listed.split(':', 2)[1] === normalized)
 }
 
 /** Extract the first recognizable listed perp asset from casual chat ($TICKER wins). */
@@ -136,6 +148,14 @@ export function extractChatMarketAsset(
     return PAIR_ALIASES[raw] ?? raw.toUpperCase()
   }
   for (const word of text.toLowerCase().split(/[^a-z0-9]+/)) {
+    const conceptCandidates = MARKET_CONCEPT_CANDIDATES[word]
+    if (conceptCandidates) {
+      if (!availableMarkets) return conceptCandidates[0] ?? null
+      const listed = conceptCandidates.flatMap((candidate) =>
+        listListedMarketSymbols(candidate, availableMarkets),
+      )
+      return listed.length === 1 ? listed[0]! : null
+    }
     const mapped = PAIR_ALIASES[word]
     if (mapped) return mapped
   }
@@ -154,6 +174,33 @@ export function extractChatMarketAsset(
       const resolved = resolveListedMarketSymbol(candidate, availableMarkets)
       if (resolved) return resolved
     }
+  }
+  return null
+}
+
+export type InverseAkitaMarketClarification = {
+  concept: string
+  candidates: string[]
+}
+
+function extractChatMarketAmbiguity(
+  text: string,
+  availableMarkets: readonly HyperliquidPerpMarket[],
+): InverseAkitaMarketClarification | null {
+  const dollarMatch = /\$((?:[a-z0-9]{1,12}:)?[a-z0-9]{2,20})\b/i.exec(text)
+  if (dollarMatch) {
+    const concept = dollarMatch[1]!
+    const candidates = listListedMarketSymbols(concept, availableMarkets)
+    if (candidates.length > 1) return { concept, candidates }
+  }
+
+  for (const word of text.toLowerCase().split(/[^a-z0-9]+/)) {
+    const conceptCandidates = MARKET_CONCEPT_CANDIDATES[word]
+    if (!conceptCandidates) continue
+    const candidates = conceptCandidates.flatMap((candidate) =>
+      listListedMarketSymbols(candidate, availableMarkets),
+    )
+    if (candidates.length > 1) return { concept: word, candidates }
   }
   return null
 }
@@ -562,6 +609,7 @@ export function readInverseAkitaChatReactionCooldownMs(): number {
 export type ParsedInverseAkitaChatTradeIntent = {
   userSide: CounterTradeSide
   pair: string
+  marketClarification?: InverseAkitaMarketClarification
 }
 
 export type InverseAkitaChatHistoryMessage = {
@@ -606,6 +654,19 @@ export function parseInverseAkitaChatTradeIntent(
   if (sentimentSide) {
     const pair = extractChatMarketAsset(normalized, options?.availableMarkets)
     if (pair) return { userSide: sentimentSide, pair }
+    if (options?.availableMarkets) {
+      const marketClarification = extractChatMarketAmbiguity(
+        normalized,
+        options.availableMarkets,
+      )
+      if (marketClarification) {
+        return {
+          userSide: sentimentSide,
+          pair: marketClarification.concept.toUpperCase(),
+          marketClarification,
+        }
+      }
+    }
   }
 
   return null
@@ -618,6 +679,7 @@ export type InverseAkitaChatTradeIntentMessage = {
   text: string
   userSide: CounterTradeSide
   pair: string
+  marketClarification?: InverseAkitaMarketClarification
 }
 
 function isHexAddress(value: string): boolean {
@@ -700,6 +762,7 @@ export function collectInverseAkitaChatTradeIntents(params: {
       text,
       userSide: parsed.userSide,
       pair: parsed.pair,
+      marketClarification: parsed.marketClarification,
     })
   }
 
@@ -844,6 +907,16 @@ export function formatInverseAkitaChatReactionSkipReply(skipReason: string): str
   }
 }
 
+export function formatInverseAkitaMarketClarification(
+  clarification: InverseAkitaMarketClarification,
+): string {
+  const concept = clarification.concept.trim().toLowerCase()
+  if (concept === 'oil' || concept === 'crude') {
+    return 'which oil market are you referring to?'
+  }
+  return `which ${concept.toUpperCase()} market are you referring to?`
+}
+
 function withInverseSkipReply(
   result: Omit<InverseAkitaChatReactionResult, 'replyText' | 'reactionEmoji'>,
   messageId: string,
@@ -968,6 +1041,20 @@ export async function executeInverseAkitaChatReaction(params: {
       },
       params.intent.id,
     )
+  }
+
+  if (params.intent.marketClarification) {
+    return {
+      ok: false,
+      skipped: true,
+      skipReason: 'market_ambiguous',
+      replyText: formatInverseAkitaMarketClarification(
+        params.intent.marketClarification,
+      ),
+      reactionEmoji: resolveInverseAkitaChatReactionEmoji(params.intent.id),
+      counterSide: deriveCounterSide(params.intent.userSide),
+      pair: params.intent.pair,
+    }
   }
 
   const baseConfig = readArenaConfig()

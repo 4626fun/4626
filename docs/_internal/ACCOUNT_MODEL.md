@@ -188,7 +188,7 @@ target is rejected.
 
 **Post-deploy ownership.** After this batch, the creator coin is owned
 by the deterministic `CreatorCoinPolicyController`
-([`contracts/utilities/routers/CreatorCoinPolicyController.sol`](../contracts/utilities/routers/CreatorCoinPolicyController.sol))
+([`contracts/creator/revenue/CreatorCoinPolicyController.sol`](../../contracts/creator/revenue/CreatorCoinPolicyController.sol))
 which only permits two operations going forward:
 `enforcePayoutRouter()` (resets the recipient back to the configured
 router) and a two-step ownership handoff
@@ -262,6 +262,37 @@ owner EOAs, refreshed via cron. This is how we identify population (c)
 (`current_owners` array contains at least one EOA) vs population (d)
 (`current_owners` is null or contains only Coinbase-managed signers).
 
+### 5.6 AlfaClub Creator Coin linking — read-only proof
+
+**Location.** Server verification and immutable claim persistence:
+`frontend/server/_lib/alfaclub/creatorCoinLink.ts`. API:
+`/api/v1/alfaclub/creator-coin/{status,challenge,verify}`. Room UI:
+`frontend/src/components/alfaclub/CreatorCoinLinkPanel.tsx`.
+
+**What it does.** A room creator can attach one Base Creator Coin to one
+AlfaClub room without giving AlfaClub custody or payout authority. The server:
+
+1. verifies that the authenticated live 4626 profile controls the FriendKey
+   room and that the requested execution address belongs to the active
+   canonical-CSW or EOA track;
+2. reads contract code, Creator Coin metadata, owners, and the current
+   `payoutRecipient()`;
+3. proves direct authority with a read-only `eth_call` simulation of
+   `setPayoutRecipient(currentPayoutRecipient)` from the real execution
+   address, or recognizes the existing `CreatorCoinPolicyController` only
+   when the settled keeper-vault binding matches the profile's canonical CSW,
+   the profile's completed deployment granted that exact controller, and the
+   controller's onchain immutables bind it to the same Creator Coin and payout
+   router;
+4. requires a short-lived, single-use EOA/EIP-1271 linking signature; and
+5. writes an immutable room/coin claim with the verification block and method.
+
+**Trust boundary.** Being the current `payoutRecipient()` is never ownership
+proof. The linking flow never submits `setPayoutRecipient`, `addOwner`, or
+`transferOwnership`, never installs an AlfaClub-controlled owner, and never
+changes the parent CSW. LP inventory, factory approval, and pool creation are
+separate readiness stages; LP fees remain in LP reserves.
+
 ---
 
 ## 6. Known gaps (not-yet-implemented)
@@ -315,6 +346,6 @@ Direct references used by this doc, kept here for one-click navigation:
 - `frontend/src/pages/deploy/DeployVault.tsx` (lines 4910-4972, 5707-5740)
 - `frontend/api/_handlers/paymaster/_paymaster.ts` (lines 3285-3300)
 - `frontend/server/_lib/wallet/userOperationSubmitter.ts`
-- `contracts/utilities/routers/CreatorCoinPolicyController.sol`
+- `contracts/creator/revenue/CreatorCoinPolicyController.sol`
 - `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`
 - `.cursor/rules/csw-agent-lifecycle.mdc`

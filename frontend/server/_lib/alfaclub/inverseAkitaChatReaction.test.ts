@@ -182,6 +182,12 @@ describe('inverseAkitaChatReaction', () => {
       { symbol: 'REI', maxLeverage: 5 },
       { symbol: 'xyz:CARDS', maxLeverage: 10 },
       { symbol: 'xyz:TSLA', maxLeverage: 10 },
+      { symbol: 'xyz:CL', maxLeverage: 20 },
+      { symbol: 'xyz:BRENTOIL', maxLeverage: 20 },
+      { symbol: 'flx:OIL', maxLeverage: 15 },
+      { symbol: 'cash:WTI', maxLeverage: 10 },
+      { symbol: 'km:USOIL', maxLeverage: 10 },
+      { symbol: 'mkts:USOIL', maxLeverage: 10 },
     ]
     expect(
       parseInverseAkitaChatTradeIntent('rei has lost momentum again', {
@@ -207,9 +213,28 @@ describe('inverseAkitaChatReaction', () => {
       userSide: 'short',
       pair: 'xyz:TSLA',
     })
+    expect(
+      parseInverseAkitaChatTradeIntent('Oil going up finally', {
+        availableMarkets,
+      }),
+    ).toEqual({
+      userSide: 'long',
+      pair: 'OIL',
+      marketClarification: {
+        concept: 'oil',
+        candidates: [
+          'xyz:CL',
+          'xyz:BRENTOIL',
+          'flx:OIL',
+          'cash:WTI',
+          'km:USOIL',
+          'mkts:USOIL',
+        ],
+      },
+    })
   })
 
-  it('does not guess an unqualified symbol shared by multiple HIP-3 markets', () => {
+  it('asks for clarification when an unqualified symbol exists on multiple HIP-3 markets', () => {
     expect(
       parseInverseAkitaChatTradeIntent('bullish $tsla', {
         availableMarkets: [
@@ -217,7 +242,14 @@ describe('inverseAkitaChatReaction', () => {
           { symbol: 'cash:TSLA', maxLeverage: 10 },
         ],
       }),
-    ).toBeNull()
+    ).toEqual({
+      userSide: 'long',
+      pair: 'TSLA',
+      marketClarification: {
+        concept: 'tsla',
+        candidates: ['xyz:TSLA', 'cash:TSLA'],
+      },
+    })
   })
 
   it('flips negated sentiment and skips ambiguous or asset-free chatter', () => {
@@ -577,6 +609,41 @@ describe('inverseAkitaChatReaction', () => {
       }),
       expect.anything(),
     )
+  })
+
+  it('asks an eligible creator to clarify an ambiguous market without trading', async () => {
+    const result = await executeInverseAkitaChatReaction({
+      roomId: '1659',
+      intent: {
+        id: 'ambiguous-oil',
+        date: Date.now(),
+        sender: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
+        text: 'Oil going up finally',
+        userSide: 'long',
+        pair: 'OIL',
+        marketClarification: {
+          concept: 'oil',
+          candidates: [
+            'xyz:CL',
+            'xyz:BRENTOIL',
+            'flx:OIL',
+            'cash:WTI',
+            'km:USOIL',
+            'mkts:USOIL',
+          ],
+        },
+      },
+    })
+
+    expect(result).toMatchObject({
+      skipped: true,
+      skipReason: 'market_ambiguous',
+      pair: 'OIL',
+    })
+    expect(result.replyText).toBe('which oil market are you referring to?')
+    expect(mockResolveInverseAkitaChatAuthorAccess).toHaveBeenCalled()
+    expect(mockResolveRoomDefaultArenaIdentity).not.toHaveBeenCalled()
+    expect(mockRunArenaTrade).not.toHaveBeenCalled()
   })
 
   it('fails closed before execution when a market is not listed on Hyperliquid', async () => {

@@ -19,6 +19,7 @@ import {
 import { useSearchParams } from 'react-router-dom'
 
 import { CounterTradeStatusPanel } from '@/components/alfaclub/CounterTradeStatusPanel'
+import { CreatorCoinLinkPanel } from '@/components/alfaclub/CreatorCoinLinkPanel'
 import { keySafetyStatusMeta, type KeySafetyStatus } from '@/components/alfaclub/KeySafetyStatusHero'
 import {
   DEFAULT_FILTERS,
@@ -522,6 +523,11 @@ export function AlfaClubTradingRooms() {
                     roomId={selectedRoomId}
                     room={selectedRoom}
                     pricing={safetySummary?.pricing}
+                  />
+                  <CreatorCoinLinkPanel
+                    key={`creator-coin-${selectedRoomId}`}
+                    roomId={selectedRoomId}
+                    onOpenLiquidity={() => updateQuery({ tab: 'liquidity' })}
                   />
                   <div className="border-t border-white/[0.07] pt-8">
                     <div className="mb-5">
