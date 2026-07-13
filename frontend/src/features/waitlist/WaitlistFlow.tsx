@@ -29,7 +29,10 @@ import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { readWaitlistAlfaClubReturnPath } from '@/lib/auth/waitlistEntry'
 import { getMarketingBaseUrl } from '@/lib/env/host'
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
-import { createAlfaClubAuthHandoffTarget } from '@/features/waitlist/waitlistHandoff'
+import {
+  createAlfaClubAuthHandoffTarget,
+  createAppAuthHandoffTarget,
+} from '@/features/waitlist/waitlistHandoff'
 import {
   establishWaitlistSessionAfterPrivyAuth,
   readAuthSessionAddress,
@@ -926,6 +929,27 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     }
   }, [alfaClubReturnPath, continueBusy])
 
+  const handleAppContinue = useCallback(async () => {
+    if (continueBusy) return
+    setContinueBusy(true)
+    setError(null)
+    try {
+      const privyToken = getPrivyAccessToken ? await getPrivyAccessToken() : null
+      const target = await createAppAuthHandoffTarget({ privyToken })
+      if (!target) {
+        throw new Error('Your secure session needs to be refreshed. Sign out, verify your email, then try again.')
+      }
+      window.location.replace(target)
+    } catch (continueError) {
+      setError(
+        continueError instanceof Error
+          ? continueError.message
+          : 'Could not securely enter the app. Please try again.',
+      )
+      setContinueBusy(false)
+    }
+  }, [continueBusy, getPrivyAccessToken])
+
   const handleSignInWithLinkedWallet = useCallback(() => {
     if (signupInFlightRef.current || walletSignInPending) return
     setError(null)
@@ -1785,21 +1809,21 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                         </Button>
                       ) : (
                         <Button
+                          type="button"
                           variant="primary"
                           size="lg"
                           className="btn-3d group/btn relative w-full overflow-hidden !rounded-full !min-h-[52px] !text-[15px] !font-bold !tracking-wide"
-                          asChild
+                          disabled={continueBusy}
+                          onClick={() => void handleAppContinue()}
                         >
-                          <Link to="/swap">
-                            <ButtonSheen />
-                            <span className="relative z-10 inline-flex items-center gap-2.5">
-                              Enter app
-                              <ArrowRight
-                                className="size-[18px] transition-transform duration-200 ease-out group-hover/btn:translate-x-0.5"
-                                aria-hidden="true"
-                              />
-                            </span>
-                          </Link>
+                          <ButtonSheen />
+                          <span className="relative z-10 inline-flex items-center gap-2.5">
+                            {continueBusy ? 'Entering app…' : 'Enter app'}
+                            <ArrowRight
+                              className="size-[18px] transition-transform duration-200 ease-out group-hover/btn:translate-x-0.5"
+                              aria-hidden="true"
+                            />
+                          </span>
                         </Button>
                       )}
                     </MagneticButton>

@@ -120,6 +120,8 @@ describe('alfaclub vigilante — vercel wiring', () => {
     expect(csp).toContain('img-src')
     expect(csp).toContain('https://*.mypinata.cloud')
     expect(csp).toContain('https://4626.fun')
+    // Absolute app-origin favicon in app.html (shared by alfaclub.4626.fun).
+    expect(csp).toContain('https://app.4626.fun')
     expect(csp).toContain('https://pinata.4626.fun')
     expect(csp).toContain('https://res.cloudinary.com')
   })

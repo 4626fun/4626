@@ -1,6 +1,6 @@
 import { apiFetch } from '@/lib/api/apiBase'
 import { normalizeAlfaClubWaitlistReturnPath } from '@/lib/auth/waitlistEntry'
-import { ALFACLUB_ORIGIN } from '@/lib/env/host'
+import { ALFACLUB_ORIGIN, APP_ORIGIN } from '@/lib/env/host'
 import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
 import { writeStoredSessionToken } from '@/hooks/useSiweAuth'
 
@@ -116,6 +116,29 @@ export async function createAuthHandoffCode(params: { privyToken: string | null 
   return handoffRes?.ok && handoffJson?.success && typeof handoffJson.data?.code === 'string'
     ? handoffJson.data.code.trim()
     : ''
+}
+
+/**
+ * Refresh the waitlist session from the currently verified Privy identity
+ * before transferring it to the app host. This replaces historical cookies
+ * whose address is still linked to the profile but is no longer an authorized
+ * canonical/active signer.
+ */
+export async function createAppAuthHandoffTarget(params: {
+  privyToken: string | null
+}): Promise<string> {
+  const token = typeof params.privyToken === 'string' ? params.privyToken.trim() : ''
+  if (!token) return ''
+
+  const bridge = await bridgePrivySession(token)
+  if (!bridge.ok) return ''
+
+  const code = await createAuthHandoffCode({ privyToken: token })
+  if (!code) return ''
+
+  const target = new URL('/swap', APP_ORIGIN)
+  target.searchParams.set('cv_handoff', code)
+  return target.toString()
 }
 
 export async function createAlfaClubAuthHandoffTarget(params: {

@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { APP_ORIGIN } from '@/lib/env/host'
 import {
   bridgePrivySession,
   createAlfaClubAuthHandoffTarget,
+  createAppAuthHandoffTarget,
   createAuthHandoffCode,
 } from './waitlistHandoff'
 
@@ -120,6 +122,47 @@ describe('waitlist handoff helpers', () => {
   it('returns empty string on handoff create failure', async () => {
     apiFetchMock.mockResolvedValueOnce(jsonResponse({ success: false, error: 'unauthorized' }, { status: 401 }))
     await expect(createAuthHandoffCode({ privyToken: 'privy-token-123' })).resolves.toBe('')
+  })
+
+  it('refreshes the canonical Privy session before creating the app handoff', async () => {
+    apiFetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          success: true,
+          data: { address: '0xceca13f2686ed061c57620ecdf67e1b8c0f285e9' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          success: true,
+          data: { code: 'fresh-app-handoff', expiresAt: '2099-01-01T00:00:00.000Z' },
+        }),
+      )
+
+    await expect(
+      createAppAuthHandoffTarget({ privyToken: 'privy-token-123' }),
+    ).resolves.toBe(`${APP_ORIGIN}/swap?cv_handoff=fresh-app-handoff`)
+
+    expect(apiFetchMock.mock.calls.map(([path]) => path)).toEqual([
+      '/api/auth/privy',
+      '/api/auth/handoff/create',
+    ])
+  })
+
+  it('does not transfer a stale cookie-only identity to the app host', async () => {
+    await expect(createAppAuthHandoffTarget({ privyToken: null })).resolves.toBe('')
+    expect(apiFetchMock).not.toHaveBeenCalled()
+  })
+
+  it('stops before handoff creation when the Privy session refresh fails', async () => {
+    apiFetchMock.mockResolvedValueOnce(
+      jsonResponse({ success: false, error: 'invalid token' }, { status: 401 }),
+    )
+
+    await expect(
+      createAppAuthHandoffTarget({ privyToken: 'expired-token' }),
+    ).resolves.toBe('')
+    expect(apiFetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('creates a one-time AlfaClub continuation from the existing cookie session', async () => {

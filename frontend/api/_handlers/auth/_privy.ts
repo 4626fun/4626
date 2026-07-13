@@ -78,51 +78,18 @@ function collectCurrentLinkedEvmAddresses(classified: ClassifiedLinkedAccounts):
   return out
 }
 
-function pickPrivySessionAddress(params: {
+export function pickPrivySessionAddress(params: {
   classified: ClassifiedLinkedAccounts
-  classifiedSessionAddress: string | null
-  persistedSessionAddress?: string | null
-  syncedCanonicalAddress?: string | null
-  syncedPrimaryAddress?: string | null
-  syncedActiveOwnerAddress?: string | null
+  persistedAuthorityAddresses: readonly string[]
 }): string | null {
   const currentLinked = collectCurrentLinkedEvmAddresses(params.classified)
-  const candidates = [
-    // Prefer canonical CSW identity over active-owner when both exist.
-    // Base App / Coinbase Smart Wallet sign-in previously preferred the
-    // misclassified "active owner" and stored the CSW as an external signer.
-    params.syncedCanonicalAddress,
-    params.classified.canonicalSmartWallet?.address ?? null,
-    params.syncedActiveOwnerAddress,
-    params.classifiedSessionAddress,
-    params.syncedPrimaryAddress,
-    params.persistedSessionAddress,
-  ].map((value) => normalizeEvmAddress(value))
-
-  for (const candidate of candidates) {
+  for (const value of params.persistedAuthorityAddresses) {
+    const candidate = normalizeEvmAddress(value)
     if (candidate && currentLinked.has(candidate)) return candidate
   }
 
-  // Prefer canonical smart wallets, then owner signers, then any linked EVM wallet.
-  const smartWallet = params.classified.allWallets.find(
-    (wallet) => wallet.chain === 'evm' && wallet.walletType === 'smart_wallet',
-  )
-  const smartAddress = normalizeEvmAddress(smartWallet?.address)
-  if (smartAddress && currentLinked.has(smartAddress)) return smartAddress
-
-  const ownerAddress = normalizeEvmAddress(
-    params.classified.activeOwnerWallet?.address ?? params.classified.embeddedEoa?.address,
-  )
-  if (ownerAddress && currentLinked.has(ownerAddress)) return ownerAddress
-
-  for (const wallet of params.classified.allWallets) {
-    if (wallet.chain !== 'evm') continue
-    const linked = normalizeEvmAddress(wallet.address)
-    if (linked && currentLinked.has(linked)) return linked
-  }
-
-  // Fail closed for production safety: never mint a session for an address that
-  // is not currently linked on the verified Privy user object.
+  // Fail closed: an arbitrary linked wallet is not automatically authorized to
+  // represent the persisted 4626 profile.
   return null
 }
 
@@ -135,12 +102,20 @@ function shouldBypassWalletSyncThrottle(params: {
   return Boolean(persisted && classified && persisted !== classified)
 }
 
-async function resolvePersistedSessionAddress(db: any, privyUserId: string): Promise<string | null> {
+type PersistedSessionAuthority = {
+  profileId: number
+  addresses: string[]
+}
+
+async function resolvePersistedSessionAuthority(
+  db: any,
+  privyUserId: string,
+): Promise<PersistedSessionAuthority | null> {
   try {
     const result = await db.sql`
       SELECT
+        p.id,
         p.csw_address,
-        p.base_sub_account,
         p.primary_wallet,
         p.primary_embedded_eoa,
         canonical.address AS canonical_wallet
@@ -157,26 +132,49 @@ async function resolvePersistedSessionAddress(db: any, privyUserId: string): Pro
     `
     const row = result?.rows?.[0] as
       | {
+          id?: unknown
           csw_address?: unknown
-          base_sub_account?: unknown
           primary_wallet?: unknown
           primary_embedded_eoa?: unknown
           canonical_wallet?: unknown
         }
       | undefined
     if (!row) return null
+    const profileId = typeof row.id === 'number' ? row.id : Number(row.id)
+    if (!Number.isFinite(profileId) || profileId <= 0) return null
+
+    const roleWallets = await db.sql`
+      SELECT address
+      FROM profile_wallets
+      WHERE profile_id = ${profileId}
+        AND (
+          is_primary = true
+          OR is_embedded_eoa = true
+          OR is_canonical_smart_wallet = true
+        )
+      ORDER BY
+        is_canonical_smart_wallet DESC,
+        is_primary DESC,
+        is_embedded_eoa DESC,
+        verified_at DESC NULLS LAST,
+        address ASC;
+    `
     const candidates = [
       row.canonical_wallet,
       row.csw_address,
-      row.base_sub_account,
       row.primary_wallet,
       row.primary_embedded_eoa,
+      ...(roleWallets?.rows ?? []).map((walletRow: { address?: unknown }) => walletRow.address),
     ]
+    const addresses: string[] = []
+    const seen = new Set<string>()
     for (const candidate of candidates) {
       const normalized = normalizeEvmAddress(candidate)
-      if (normalized) return normalized
+      if (!normalized || seen.has(normalized)) continue
+      seen.add(normalized)
+      addresses.push(normalized)
     }
-    return null
+    return { profileId, addresses }
   } catch {
     return null
   }
@@ -252,8 +250,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const verificationKey = getPrivyJwtVerificationKey()
     const claims = await client.verifyAuthToken(token, verificationKey ?? undefined)
     const loaded = await ensurePrivyUserEmbeddedWallet(client, claims.userId)
-    let user = loaded.user
-    let classified = loaded.classified
+    const user = loaded.user
+    const classified = loaded.classified
     // The 4626 cookie represents canonical account identity. Prefer the parent
     // CSW when present; execution code resolves the embedded owner separately.
     const classifiedSessionAddress =
@@ -262,18 +260,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       classified.embeddedEoa?.address ??
       classified.primaryWalletAddress ??
       null
-    let sessionAddress = classifiedSessionAddress
+    let sessionAddress: string | null = null
 
     try {
       const db = await getDb()
       if (db) {
         await ensureWaitlistSchema(db as any)
-        const persistedSessionAddress = await resolvePersistedSessionAddress(db as any, claims.userId)
-        sessionAddress = pickPrivySessionAddress({
-          classified,
-          classifiedSessionAddress,
-          persistedSessionAddress,
-        })
+        const persistedAuthority = await resolvePersistedSessionAuthority(db as any, claims.userId)
+        const persistedSessionAddress = persistedAuthority?.addresses[0] ?? null
 
         const now = Date.now()
         const minInterval = getPrivyAuthDbSyncMinIntervalMs()
@@ -287,17 +281,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             classifiedSessionAddress,
           })
         if (shouldSyncNow) {
-          const syncResult = await syncUserWallets(db as any, user as any)
-          sessionAddress = pickPrivySessionAddress({
-            classified,
-            classifiedSessionAddress,
-            persistedSessionAddress,
-            syncedCanonicalAddress: syncResult.canonicalSmartWallet?.address ?? null,
-            syncedPrimaryAddress: syncResult.primaryWalletAddress ?? null,
-            syncedActiveOwnerAddress: syncResult.activeOwnerWallet?.address ?? null,
-          })
+          await syncUserWallets(db as any, user as any)
           recordPrivyAuthDbSync(claims.userId, now)
         }
+        const currentAuthority = shouldSyncNow
+          ? await resolvePersistedSessionAuthority(db as any, claims.userId)
+          : persistedAuthority
+        sessionAddress = pickPrivySessionAddress({
+          classified,
+          persistedAuthorityAddresses: currentAuthority?.addresses ?? [],
+        })
       }
     } catch (dbSyncError) {
       // FIX: M-16 / 4626-428 — Privy auth must NEVER swallow IDENTITY_RECOVERY_REQUIRED.
@@ -312,12 +305,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       //
       // The server now re-throws so the outer catch returns 409 RECOVERY_REQUIRED_EMAIL_BOUND
       // regardless of whether a session address was derivable. Other database errors
-      // continue to fall through (best-effort): auth can still succeed when the DB is
-      // unavailable for reasons unrelated to identity recovery.
+      // continue to the fail-closed response below. Without persisted authority
+      // data, a merely linked wallet must not receive a 4626 session.
       if (isIdentityRecoveryRequiredError(dbSyncError)) {
         throw dbSyncError
       }
-      // best-effort: auth should succeed even if DB is unavailable
     }
 
     if (!sessionAddress) {

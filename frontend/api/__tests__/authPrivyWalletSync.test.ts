@@ -1,8 +1,104 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import handler, { resetPrivyAuthDbSyncThrottleForTests } from '../_handlers/auth/_privy.ts'
-import { classifyLinkedAccounts as realClassifyLinkedAccounts } from '../../server/_lib/wallet/walletMapping.ts'
+import handler, {
+  pickPrivySessionAddress,
+  resetPrivyAuthDbSyncThrottleForTests,
+} from '../_handlers/auth/_privy.ts'
+import {
+  classifyLinkedAccounts as realClassifyLinkedAccounts,
+  type ClassifiedLinkedAccounts,
+} from '../../server/_lib/wallet/walletMapping.ts'
 import { applyEnv, createMockReq, createMockRes, readSetCookies } from './helpers'
+
+const CANONICAL_ADDRESS = '0x00000000000000000000000000000000000000aa'
+const EMBEDDED_ADDRESS = '0x00000000000000000000000000000000000000bb'
+const NON_AUTHORITY_ADDRESS = '0x0000000000000000000000000000000000000099'
+
+let persistedProfileRow: Record<string, unknown> | null
+let persistedRoleWalletRows: Array<{ address: string }>
+
+function setPersistedAuthority(params: {
+  canonical?: string | null
+  primary?: string | null
+  embedded?: string | null
+  roleWallets?: string[]
+}) {
+  persistedProfileRow = {
+    id: 1,
+    canonical_wallet: params.canonical ?? null,
+    csw_address: params.canonical ?? null,
+    primary_wallet: params.primary ?? null,
+    primary_embedded_eoa: params.embedded ?? null,
+  }
+  persistedRoleWalletRows = (params.roleWallets ?? []).map((address) => ({ address }))
+}
+
+function createAuthorityDb() {
+  return {
+    sql: vi.fn(async (strings: TemplateStringsArray) => {
+      const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+      if (text.includes('where p.privy_user_id')) {
+        return { rows: persistedProfileRow ? [persistedProfileRow] : [] }
+      }
+      if (text.includes('from profile_wallets') && text.includes('is_embedded_eoa = true')) {
+        return { rows: persistedRoleWalletRows }
+      }
+      return { rows: [] }
+    }),
+  }
+}
+
+function makeClassified(params: {
+  canonical?: string | null
+  embedded?: string | null
+  otherSmartWallet?: string | null
+}): ClassifiedLinkedAccounts {
+  const allWallets: ClassifiedLinkedAccounts['allWallets'] = []
+  if (params.canonical) {
+    allWallets.push({
+      address: params.canonical,
+      walletType: 'smart_wallet',
+      provider: 'coinbase_wallet',
+      chain: 'evm',
+      clientType: 'coinbase_wallet',
+    })
+  }
+  if (params.embedded) {
+    allWallets.push({
+      address: params.embedded,
+      walletType: 'embedded_eoa',
+      provider: 'privy',
+      chain: 'evm',
+      clientType: 'privy',
+    })
+  }
+  if (params.otherSmartWallet) {
+    allWallets.push({
+      address: params.otherSmartWallet,
+      walletType: 'smart_wallet',
+      provider: 'coinbase_wallet',
+      chain: 'evm',
+      clientType: 'coinbase_wallet',
+    })
+  }
+  return {
+    embeddedEoa: params.embedded
+      ? { address: params.embedded, chainType: 'evm', clientType: 'privy' }
+      : null,
+    activeOwnerWallet: params.embedded
+      ? { address: params.embedded, provider: 'privy', walletType: 'embedded_eoa' }
+      : null,
+    canonicalSmartWallet: params.canonical
+      ? { address: params.canonical, provider: 'coinbase_wallet' }
+      : params.otherSmartWallet
+        ? { address: params.otherSmartWallet, provider: 'coinbase_wallet' }
+        : null,
+    canonicalSolanaWallet: null,
+    operationalSolanaWallet: null,
+    allWallets,
+    primaryWalletAddress: params.canonical ?? params.embedded ?? params.otherSmartWallet ?? null,
+  }
+}
 
 const {
   getDbMock,
@@ -114,7 +210,12 @@ describe('auth privy wallet sync', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetPrivyAuthDbSyncThrottleForTests()
-    getDbMock.mockResolvedValue({ sql: vi.fn(async () => ({ rows: [] })) })
+    setPersistedAuthority({
+      canonical: CANONICAL_ADDRESS,
+      embedded: EMBEDDED_ADDRESS,
+      roleWallets: [CANONICAL_ADDRESS, EMBEDDED_ADDRESS],
+    })
+    getDbMock.mockResolvedValue(createAuthorityDb())
     checkDurableRateLimitMock.mockResolvedValue({ allowed: true, resetAt: Date.now() + 60_000 })
     verifyAuthTokenMock.mockResolvedValue({ userId: 'did:privy:test-user' })
     getUserByIdMock.mockResolvedValue({
@@ -147,6 +248,59 @@ describe('auth privy wallet sync', () => {
   afterEach(() => {
     if (restoreEnv) restoreEnv()
     restoreEnv = null
+  })
+
+  it('prefers the linked canonical CSW from persisted authority', () => {
+    const classified = makeClassified({
+      canonical: CANONICAL_ADDRESS,
+      embedded: EMBEDDED_ADDRESS,
+    })
+
+    expect(
+      pickPrivySessionAddress({
+        classified,
+        persistedAuthorityAddresses: [CANONICAL_ADDRESS, EMBEDDED_ADDRESS],
+      }),
+    ).toBe(CANONICAL_ADDRESS)
+  })
+
+  it('uses the persisted embedded owner when the canonical CSW is not currently linked', () => {
+    const classified = makeClassified({
+      embedded: EMBEDDED_ADDRESS,
+      otherSmartWallet: NON_AUTHORITY_ADDRESS,
+    })
+
+    expect(
+      pickPrivySessionAddress({
+        classified,
+        persistedAuthorityAddresses: [CANONICAL_ADDRESS, EMBEDDED_ADDRESS],
+      }),
+    ).toBe(EMBEDDED_ADDRESS)
+  })
+
+  it('does not select a linked Coinbase smart wallet without a persisted authority role', () => {
+    const classified = makeClassified({ otherSmartWallet: NON_AUTHORITY_ADDRESS })
+
+    expect(
+      pickPrivySessionAddress({
+        classified,
+        persistedAuthorityAddresses: [CANONICAL_ADDRESS, EMBEDDED_ADDRESS],
+      }),
+    ).toBeNull()
+  })
+
+  it('fails closed when no persisted authority candidate exists', () => {
+    const classified = makeClassified({
+      canonical: CANONICAL_ADDRESS,
+      embedded: EMBEDDED_ADDRESS,
+    })
+
+    expect(
+      pickPrivySessionAddress({
+        classified,
+        persistedAuthorityAddresses: [],
+      }),
+    ).toBeNull()
   })
 
   it('uses syncUserWallets for canonical wallet session sync', async () => {
@@ -220,25 +374,7 @@ describe('auth privy wallet sync', () => {
       PRIVY_AUTH_DB_SYNC_MIN_INTERVAL_MS: '9999999999999',
     })
 
-    getDbMock.mockResolvedValue({
-      sql: vi.fn(async (strings: TemplateStringsArray) => {
-        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
-        if (text.includes('where p.privy_user_id')) {
-          return {
-            rows: [
-              {
-                canonical_wallet: '0x00000000000000000000000000000000000000aa',
-                csw_address: null,
-                base_sub_account: null,
-                primary_wallet: null,
-                primary_embedded_eoa: null,
-              },
-            ],
-          }
-        }
-        return { rows: [] }
-      }),
-    })
+    getDbMock.mockResolvedValue(createAuthorityDb())
 
     getUserByIdMock.mockResolvedValueOnce({
       id: 'did:privy:test-user',
@@ -269,25 +405,7 @@ describe('auth privy wallet sync', () => {
       AUTH_SESSION_SECRET: 'test-auth-session-secret-1234567',
       PRIVY_AUTH_DB_SYNC_MIN_INTERVAL_MS: '9999999999999',
     })
-    getDbMock.mockResolvedValue({
-      sql: vi.fn(async (strings: TemplateStringsArray) => {
-        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
-        if (text.includes('where p.privy_user_id')) {
-          return {
-            rows: [
-              {
-                canonical_wallet: '0x00000000000000000000000000000000000000aa',
-                csw_address: null,
-                base_sub_account: null,
-                primary_wallet: null,
-                primary_embedded_eoa: null,
-              },
-            ],
-          }
-        }
-        return { rows: [] }
-      }),
-    })
+    getDbMock.mockResolvedValue(createAuthorityDb())
     verifyAuthTokenMock
       .mockResolvedValueOnce({ userId: 'did:privy:throttle-user-a' })
       .mockResolvedValueOnce({ userId: 'did:privy:throttle-user-b' })
@@ -343,25 +461,7 @@ describe('auth privy wallet sync', () => {
       PRIVY_AUTH_DB_SYNC_MIN_INTERVAL_MS: '9999999999999',
     })
 
-    getDbMock.mockResolvedValue({
-      sql: vi.fn(async (strings: TemplateStringsArray) => {
-        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
-        if (text.includes('where p.privy_user_id')) {
-          return {
-            rows: [
-              {
-                canonical_wallet: '0x00000000000000000000000000000000000000aa',
-                csw_address: null,
-                base_sub_account: null,
-                primary_wallet: null,
-                primary_embedded_eoa: null,
-              },
-            ],
-          }
-        }
-        return { rows: [] }
-      }),
-    })
+    getDbMock.mockResolvedValue(createAuthorityDb())
 
     const makeRequest = () =>
       createMockReq({
