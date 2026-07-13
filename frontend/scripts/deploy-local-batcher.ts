@@ -161,13 +161,6 @@ const OVAULT_RUNTIME_ABI = [
 const SOLANA_CONFIG_ABI = [
   {
     type: 'function',
-    name: 'solanaBridgeAdapter',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    type: 'function',
     name: 'solanaDestination',
     stateMutability: 'view',
     inputs: [],
@@ -175,26 +168,9 @@ const SOLANA_CONFIG_ABI = [
   },
   {
     type: 'function',
-    name: 'setSolanaConfig',
+    name: 'setSolanaDestination',
     stateMutability: 'nonpayable',
-    inputs: [
-      { name: '_adapter', type: 'address' },
-      { name: '_destination', type: 'bytes32' },
-    ],
-    outputs: [],
-  },
-  {
-    type: 'function',
-    name: 'solanaShareOftPeer',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'bytes32' }],
-  },
-  {
-    type: 'function',
-    name: 'setSolanaShareOftPeer',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: '_peer', type: 'bytes32' }],
+    inputs: [{ name: '_destination', type: 'bytes32' }],
     outputs: [],
   },
 ] as const
@@ -794,81 +770,35 @@ async function syncOvaultRuntimeConfig(localBatcher: Address): Promise<void> {
 }
 
 async function syncSolanaConfig(localBatcher: Address): Promise<void> {
-  const sourceAdapterRaw = await publicClient.readContract({
-    address: sourceBatcher,
-    abi: SOLANA_CONFIG_ABI,
-    functionName: 'solanaBridgeAdapter',
-  })
   const sourceDestinationRaw = await publicClient.readContract({
     address: sourceBatcher,
     abi: SOLANA_CONFIG_ABI,
     functionName: 'solanaDestination',
   })
-  const sourceSharePeerRaw = await publicClient.readContract({
-    address: sourceBatcher,
-    abi: SOLANA_CONFIG_ABI,
-    functionName: 'solanaShareOftPeer',
-  })
-  if (!isAddress(String(sourceAdapterRaw ?? ''))) return
-  const sourceAdapter = getAddress(sourceAdapterRaw as Address) as Address
   const sourceDestination = sourceDestinationRaw as Hex
-  const sourceSharePeer = sourceSharePeerRaw as Hex
 
-  const localAdapterRaw = await publicClient.readContract({
-    address: localBatcher,
-    abi: SOLANA_CONFIG_ABI,
-    functionName: 'solanaBridgeAdapter',
-  })
   const localDestinationRaw = await publicClient.readContract({
     address: localBatcher,
     abi: SOLANA_CONFIG_ABI,
     functionName: 'solanaDestination',
   })
-  const localSharePeerRaw = await publicClient.readContract({
-    address: localBatcher,
-    abi: SOLANA_CONFIG_ABI,
-    functionName: 'solanaShareOftPeer',
-  })
-  const localAdapter = isAddress(String(localAdapterRaw ?? ''))
-    ? (getAddress(localAdapterRaw as Address) as Address)
-    : ('0x0000000000000000000000000000000000000000' as Address)
   const localDestination = localDestinationRaw as Hex
-  const localSharePeer = localSharePeerRaw as Hex
-  const solanaConfigMatches =
-    localAdapter.toLowerCase() === sourceAdapter.toLowerCase() &&
-    String(localDestination).toLowerCase() === String(sourceDestination).toLowerCase()
-  const sharePeerMatches = String(localSharePeer).toLowerCase() === String(sourceSharePeer).toLowerCase()
-  if (solanaConfigMatches && sharePeerMatches) {
+  if (String(localDestination).toLowerCase() === String(sourceDestination).toLowerCase()) {
     return
   }
 
   const protocolTreasury = await readAddressGetter(localBatcher, 'protocolTreasury')
   await fundAndImpersonate(protocolTreasury)
-  if (!solanaConfigMatches) {
-    await sendImpersonatedTx({
-      from: protocolTreasury,
-      to: localBatcher,
-      data: encodeFunctionData({
-        abi: SOLANA_CONFIG_ABI,
-        functionName: 'setSolanaConfig',
-        args: [sourceAdapter, sourceDestination],
-      }),
-      label: 'setSolanaConfig',
-    })
-  }
-
-  if (!sharePeerMatches) {
-    await sendImpersonatedTx({
-      from: protocolTreasury,
-      to: localBatcher,
-      data: encodeFunctionData({
-        abi: SOLANA_CONFIG_ABI,
-        functionName: 'setSolanaShareOftPeer',
-        args: [sourceSharePeer],
-      }),
-      label: 'setSolanaShareOftPeer',
-    })
-  }
+  await sendImpersonatedTx({
+    from: protocolTreasury,
+    to: localBatcher,
+    data: encodeFunctionData({
+      abi: SOLANA_CONFIG_ABI,
+      functionName: 'setSolanaDestination',
+      args: [sourceDestination],
+    }),
+    label: 'setSolanaDestination',
+  })
 }
 
 async function ensureRegistryAuthorizedFactory(localBatcher: Address): Promise<void> {
