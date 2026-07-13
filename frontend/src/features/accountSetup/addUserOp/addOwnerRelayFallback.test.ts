@@ -49,5 +49,6 @@ describe('shouldAttemptRelayMethodAFallback', () => {
       }),
     ).toBe(false)
     expect(mapBaseAppOwnerInstallRpcError(new Error(message))).toMatch(/nothing was submitted on-chain/i)
+    expect(mapBaseAppOwnerInstallRpcError(new Error(message))).toMatch(/Do not switch to another signing lane/i)
   })
 })

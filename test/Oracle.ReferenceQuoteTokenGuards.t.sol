@@ -185,7 +185,7 @@ contract OracleReferenceQuoteTokenGuardsTest is Test {
         oracle.setReferenceQuoteToken(virtualToken);
         oracle.setV3Pool(pool, agentToken, virtualToken, 1800);
 
-        assertEq(oracle.v3UsdToken(), virtualToken);
+        assertEq(oracle.v3QuoteToken(), virtualToken);
     }
 
     function test_agentOracle_lockedReferenceQuoteTokenCannotChange() external {

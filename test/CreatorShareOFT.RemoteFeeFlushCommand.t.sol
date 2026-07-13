@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {CreatorShareOFT} from "@4626/creator/vault/CreatorShareOFT.sol";
+import {SendParam, MessagingFee} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
 
 contract MockFlushRegistry {
     function getLayerZeroEndpoint(uint256) external pure returns (address) {
@@ -14,7 +15,7 @@ contract MockFlushRegistry {
     }
 }
 
-contract CreatorShareOFTFeeFlushCommandTest is Test {
+contract CreatorShareOFTDirectSpokeFeeFlushTest is Test {
     address internal constant OWNER = address(0xA11CE);
     address internal constant LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
 
@@ -30,38 +31,43 @@ contract CreatorShareOFTFeeFlushCommandTest is Test {
         oft = new CreatorShareOFT("Test Shares", unicode"■TEST", address(registry), OWNER);
     }
 
-    function test_requestRemoteFeeFlush_revertsWhenNotHub() external {
+    function test_flushFees_revertsWhenHub() external {
+        vm.prank(OWNER);
+        oft.setHubConfig(true, 0, address(0));
+
+        vm.expectRevert(CreatorShareOFT.NotHub.selector);
+        oft.flushFees(_emptySendParam(), MessagingFee({nativeFee: 0, lzTokenFee: 0}));
+    }
+
+    function test_flushFees_revertsWhenRemoteHasNothingPending() external {
         vm.prank(OWNER);
         oft.setHubConfig(false, 30_184, address(0x1234));
 
-        vm.expectRevert(CreatorShareOFT.NotHub.selector);
-        oft.requestRemoteFeeFlush{value: 1}(30_110, 0);
+        vm.expectRevert(CreatorShareOFT.NothingToFlush.selector);
+        oft.flushFees(_emptySendParam(), MessagingFee({nativeFee: 0, lzTokenFee: 0}));
     }
 
-    function test_requestRemoteFeeFlush_revertsWhenPeerUnset() external {
+    function test_buildFlushSendParam_usesDirectSpokeRoute() external {
         vm.prank(OWNER);
-        oft.setHubConfig(true, 30_184, address(this));
+        oft.setHubConfig(false, 30_184, address(0x1234));
 
-        vm.expectRevert(CreatorShareOFT.PeerNotConfigured.selector);
-        oft.requestRemoteFeeFlush{value: 1}(30_110, 0);
+        SendParam memory sendParam = oft.buildFlushSendParam();
+        assertEq(sendParam.dstEid, 30_184);
+        assertEq(sendParam.to, bytes32(uint256(uint160(address(0x1234)))));
+        assertEq(sendParam.amountLD, 0);
+        assertEq(sendParam.minAmountLD, 0);
+        assertGt(sendParam.extraOptions.length, 0);
     }
 
-    function test_remoteFlushCommandGasLimit_defaults() external view {
-        assertEq(oft.remoteFlushCommandGasLimit(), oft.DEFAULT_REMOTE_FLUSH_COMMAND_GAS());
-    }
-
-    function test_remoteFlushCommandGasLimit_updates() external {
-        vm.prank(OWNER);
-        oft.setRemoteFlushCommandGasLimit(400_000);
-        assertEq(oft.remoteFlushCommandGasLimit(), 400_000);
-    }
-
-    function test_remoteFlushCommandGasLimit_revertsWhenOutOfBounds() external {
-        vm.startPrank(OWNER);
-        vm.expectRevert(bytes("Invalid flush command gas"));
-        oft.setRemoteFlushCommandGasLimit(100_000);
-        vm.expectRevert(bytes("Invalid flush command gas"));
-        oft.setRemoteFlushCommandGasLimit(2_000_000);
-        vm.stopPrank();
+    function _emptySendParam() internal pure returns (SendParam memory) {
+        return SendParam({
+            dstEid: 0,
+            to: bytes32(0),
+            amountLD: 0,
+            minAmountLD: 0,
+            extraOptions: "",
+            composeMsg: "",
+            oftCmd: ""
+        });
     }
 }

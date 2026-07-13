@@ -6,6 +6,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 let mockAppOrigin = 'https://app.4626.fun'
 let mockHostMode: 'app' | 'marketing' | 'alfaclub' = 'app'
+const { apiFetchMock } = vi.hoisted(() => ({
+  apiFetchMock: vi.fn(),
+}))
 
 vi.mock('@/lib/env/host', async () => {
   const actual = await vi.importActual<typeof import('@/lib/env/host')>('@/lib/env/host')
@@ -17,6 +20,10 @@ vi.mock('@/lib/env/host', async () => {
     getHostMode: () => mockHostMode,
   }
 })
+
+vi.mock('@/lib/api/apiBase', () => ({
+  apiFetch: apiFetchMock,
+}))
 
 vi.mock('./App', () => ({
   default: () => <div data-testid="protected-app">protected app</div>,
@@ -47,6 +54,7 @@ describe('RootRouter', () => {
     vi.resetModules()
     mockAppOrigin = 'https://app.4626.fun'
     mockHostMode = 'app'
+    apiFetchMock.mockReset()
     window.history.replaceState({}, '', '/')
     ;({ RootRouter } = await import('./RootRouter'))
   })
@@ -122,6 +130,44 @@ describe('RootRouter', () => {
 
     expect(await screen.findByTestId('protected-app')).toBeTruthy()
     expect(replaceSpy).not.toHaveBeenCalled()
+    replaceSpy.mockRestore()
+  })
+
+  it('hands the authenticated session to the app host for marketing app routes', async () => {
+    mockHostMode = 'marketing'
+    apiFetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { code: 'handoff-code' },
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
+    )
+    const replaceSpy = vi.spyOn(window.location, 'replace').mockImplementation(() => {})
+
+    render(
+      <MemoryRouter initialEntries={['/swap']}>
+        <RootRouter />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() =>
+      expect(replaceSpy).toHaveBeenCalledWith(
+        'https://app.4626.fun/swap?cv_handoff=handoff-code',
+      ),
+    )
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/auth/handoff/create',
+      expect.objectContaining({
+        method: 'POST',
+        withCredentials: true,
+      }),
+    )
+    expect(screen.queryByTestId('protected-app')).toBeNull()
     replaceSpy.mockRestore()
   })
 })

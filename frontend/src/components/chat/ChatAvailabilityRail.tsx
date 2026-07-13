@@ -21,7 +21,8 @@ import { canMessageAddressOnCurrentEnv, useXmtp, type ChatConversation } from '@
 import { getBasenameProfileByName, resolveBasenameAddress } from '@/lib/basename/basename-api'
 import { cn } from '@/lib/shared/utils'
 import { toast } from '@/components/ui/Toast'
-import { CANONICAL_CSW_ADDRESS, CANONICAL_CSW_ALLOWED_OWNER_EOAS } from '@/wallet/canonicalWalletPolicy'
+import { CANONICAL_CSW_ALLOWED_OWNER_EOAS, isProtocolCsw } from '@/wallet/canonicalWalletPolicy'
+import { getAgentIdentity } from './agentIdentity'
 import { EthosAvatarScoreBadge, EthosAvatarScoreForAddress, getEthosScorePalette, useEthosScore } from './EthosScorePill'
 import { useChatIdentity } from './useChatIdentity'
 import { useResolvedDmPeer } from './useResolvedDmPeer'
@@ -87,25 +88,25 @@ function resolveAgentAddress(value: string | null | undefined): `0x${string}` | 
   return value.toLowerCase() as `0x${string}`
 }
 
-function isCanonical4626AgentAddress(value: string | null | undefined): boolean {
-  return value?.toLowerCase() === CANONICAL_CSW_ADDRESS
+function isProtocol4626AgentAddress(value: string | null | undefined): boolean {
+  return isProtocolCsw(value)
 }
 
 function isCanonical4626MainAccount(value: string | null | undefined): boolean {
   return value?.toLowerCase() === CANONICAL_4626_MAIN_ACCOUNT
 }
 
-function isCanonical4626Agent(agent: AgentRow): boolean {
+function isProtocol4626Agent(agent: AgentRow): boolean {
   return (
-    isCanonical4626AgentAddress(agent.xmtpAgentAddress) ||
-    isCanonical4626AgentAddress(agent.cswAddress) ||
-    isCanonical4626AgentAddress(agent.creatorAddress)
+    isProtocol4626AgentAddress(agent.xmtpAgentAddress) ||
+    isProtocol4626AgentAddress(agent.cswAddress) ||
+    isProtocol4626AgentAddress(agent.creatorAddress)
   )
 }
 
 function getCreatorAgentDisplayGroupKey(agent: AgentRow): string {
   if (
-    isCanonical4626Agent(agent) ||
+    isProtocol4626Agent(agent) ||
     isCanonical4626MainAccount(agent.creatorAddress) ||
     isCanonical4626MainAccount(agent.cswAddress) ||
     isCanonical4626MainAccount(agent.xmtpAgentAddress)
@@ -117,8 +118,8 @@ function getCreatorAgentDisplayGroupKey(agent: AgentRow): string {
 
 function pickPreferredCreatorAgentRow(current: AgentRow | undefined, candidate: AgentRow): AgentRow {
   if (!current) return candidate
-  const currentIsCanonical = isCanonical4626Agent(current)
-  const candidateIsCanonical = isCanonical4626Agent(candidate)
+  const currentIsCanonical = isProtocol4626Agent(current)
+  const candidateIsCanonical = isProtocol4626Agent(candidate)
   if (candidateIsCanonical && !currentIsCanonical) return candidate
   if (candidate.agentType === 'csw' && current.agentType !== 'csw') return candidate
   return current
@@ -304,19 +305,6 @@ function FriendActionButton(props: {
   )
 }
 
-function agentBadgeClass(tone: BaseXmtpAgentBadgeTone): string {
-  switch (tone) {
-    case 'zora':
-      return 'border-pink-300/35 bg-pink-400/10 text-pink-100'
-    case 'base':
-      return 'border-brand-primary/20 bg-brand-primary/10 text-blue-200'
-    default: {
-      const _exhaustive: never = tone
-      return _exhaustive
-    }
-  }
-}
-
 function BaseAgentLogo({ agent }: { agent: BaseXmtpAgent }) {
   const toneClass: Record<BaseXmtpAgent['logoTone'], string> = {
     blue: 'border-blue-400/45 bg-blue-500/15 text-blue-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]',
@@ -338,6 +326,31 @@ function BaseAgentLogo({ agent }: { agent: BaseXmtpAgent }) {
       aria-hidden="true"
     >
       {agent.logoText}
+    </span>
+  )
+}
+
+function AgentChainBadge({ ecosystem }: { ecosystem: BaseXmtpAgentBadgeTone }) {
+  const chain = (() => {
+    switch (ecosystem) {
+      case 'base':
+        return { label: 'Base', src: '/base/base-square-blue.svg' }
+      case 'zora':
+        return { label: 'Zora', src: '/brands/zora-token.svg' }
+      default: {
+        const _exhaustive: never = ecosystem
+        return _exhaustive
+      }
+    }
+  })()
+
+  return (
+    <span
+      className="inline-flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/15 bg-black/35 p-0.5"
+      aria-label={`${chain.label} agent`}
+      title={chain.label}
+    >
+      <img src={chain.src} alt="" className="h-full w-full rounded-full object-contain" />
     </span>
   )
 }
@@ -590,14 +603,7 @@ function BaseAgentRow({ agent, onOpen }: { agent: BaseXmtpAgent; onOpen?: () => 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <div className="truncate text-[12.5px] font-semibold text-zinc-100">{displayName}</div>
-          <span
-            className={cn(
-              'shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em]',
-              agentBadgeClass(agent.badgeTone ?? 'base'),
-            )}
-          >
-            {agent.badgeLabel ?? 'Base'}
-          </span>
+          <AgentChainBadge ecosystem={agent.badgeTone ?? 'base'} />
         </div>
         <div className="truncate text-[10.5px] leading-tight text-zinc-400">
           {subtitle}
@@ -608,13 +614,14 @@ function BaseAgentRow({ agent, onOpen }: { agent: BaseXmtpAgent; onOpen?: () => 
 }
 
 function CreatorAgentRow({ agent, onOpen }: { agent: AgentRow; onOpen?: () => void }) {
-  const canonical = isCanonical4626Agent(agent)
-  const identityAddress = canonical
+  const protocolAgent = isProtocol4626Agent(agent)
+  const protocolIdentity = protocolAgent ? getAgentIdentity(agent.xmtpAgentAddress) : null
+  const identityAddress = protocolAgent
     ? CANONICAL_4626_MAIN_ACCOUNT
     : agent.cswAddress && isAddress(agent.cswAddress)
       ? agent.cswAddress
       : agent.creatorAddress
-  const scoreAddress = canonical ? CANONICAL_4626_MAIN_ACCOUNT : identityAddress
+  const scoreAddress = protocolAgent ? CANONICAL_4626_MAIN_ACCOUNT : identityAddress
   const creatorIdentity = useChatIdentity(identityAddress)
   const agentIdentity = useChatIdentity(agent.xmtpAgentAddress)
   const agentAddress = isAddress(agent.xmtpAgentAddress) ? agent.xmtpAgentAddress : null
@@ -623,8 +630,8 @@ function CreatorAgentRow({ agent, onOpen }: { agent: AgentRow; onOpen?: () => vo
     : agentIdentity.source !== 'address'
       ? agentIdentity.displayName
       : shortAddress(identityAddress)
-  const name = canonical ? 'agent 4626' : `${identityLabel} agent`
-  const avatar = creatorIdentity.avatar ?? agentIdentity.avatar ?? null
+  const name = protocolIdentity?.name ?? (protocolAgent ? '4626' : `${identityLabel} agent`)
+  const avatar = protocolIdentity?.avatar ?? creatorIdentity.avatar ?? agentIdentity.avatar ?? null
   const xmtpReachability = useQuery({
     queryKey: ['xmtpReachability', agentAddress],
     queryFn: async () => {
@@ -638,8 +645,8 @@ function CreatorAgentRow({ agent, onOpen }: { agent: AgentRow; onOpen?: () => vo
   const addressLabel = agentAddress ? shortAddress(agentAddress) : 'missing address'
   const subtitle = xmtpReachability.isLoading
       ? `Checking XMTP reachability · ${addressLabel}`
-      : canonical
-        ? `Canonical ERC-8004 agent · ${creatorIdentity.secondary ?? shortAddress(CANONICAL_4626_MAIN_ACCOUNT)}`
+      : protocolAgent
+        ? `${protocolIdentity?.subtitle ?? 'Agent 4626'} · ${creatorIdentity.secondary ?? shortAddress(CANONICAL_4626_MAIN_ACCOUNT)}`
         : `${agent.agentType === 'csw' ? 'Smart-wallet agent' : 'Creator agent'} · ${agentIdentity.secondary ?? shortAddress(agent.xmtpAgentAddress)}`
 
   if (xmtpReachability.data === false) return null
@@ -665,9 +672,10 @@ function CreatorAgentRow({ agent, onOpen }: { agent: AgentRow; onOpen?: () => vo
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <div className="truncate text-[12.5px] font-semibold text-zinc-100">{name}</div>
-          <span className="shrink-0 rounded-full border border-violet-300/30 bg-violet-400/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-violet-100">
-            4626
-          </span>
+          {protocolAgent ? (
+            <Bot className="h-3.5 w-3.5 shrink-0 text-violet-200" aria-label="AI agent" />
+          ) : null}
+          <AgentChainBadge ecosystem="base" />
         </div>
         <div className="truncate text-[10.5px] leading-tight text-zinc-400">
           {subtitle}
@@ -881,7 +889,7 @@ export function ChatAvailabilityRail(props: { onExpandedChange?: (expanded: bool
     const dedupedByDisplayAccount = new Map<string, AgentRow>()
     for (const agent of (agents.data ?? [])
       .filter((agent) => !q || agent.creatorAddress.toLowerCase().includes(q) || agent.xmtpAgentAddress.toLowerCase().includes(q))
-      .sort((a, b) => Number(isCanonical4626Agent(b)) - Number(isCanonical4626Agent(a)))
+      .sort((a, b) => Number(isProtocol4626Agent(b)) - Number(isProtocol4626Agent(a)))
     ) {
       const key = getCreatorAgentDisplayGroupKey(agent)
       dedupedByDisplayAccount.set(key, pickPreferredCreatorAgentRow(dedupedByDisplayAccount.get(key), agent))

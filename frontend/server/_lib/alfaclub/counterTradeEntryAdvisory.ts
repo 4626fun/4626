@@ -37,9 +37,10 @@ export function formatInverseAkitaEntryAdvisoryPost(params: {
   decision: DecisionRecord
 }): string {
   const { decision, asset } = params
+  const contradictingEvidence = decision.contradicting_evidence
   const evidence =
     decision.supporting_evidence[0] ??
-    decision.contradicting_evidence.at(-1) ??
+    contradictingEvidence[contradictingEvidence.length - 1] ??
     'n/a'
   const missing = decision.market_state_vector.missing.slice(0, 4)
   const missingLine =

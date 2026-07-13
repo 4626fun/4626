@@ -175,6 +175,38 @@ async function readPrivyToken(getAccessToken: (() => Promise<string | null>) | n
   return token
 }
 
+async function refreshPrivyBackedSession(
+  getAccessToken: (() => Promise<string | null>) | null | undefined,
+): Promise<void> {
+  const token = await readPrivyToken(getAccessToken)
+  const response = await apiFetch('/api/auth/privy', {
+    method: 'POST',
+    withCredentials: true,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/json',
+    },
+  })
+  const payload = (await response.json().catch(() => null)) as
+    | (ApiEnvelope<{ address?: unknown }> & {
+        recoveryRequired?: unknown
+        code?: unknown
+      })
+    | null
+  if (response.ok && payload?.success) return
+
+  throw new AccountsLinkError(
+    typeof payload?.error === 'string' && payload.error.trim()
+      ? payload.error.trim()
+      : 'Could not refresh your 4626 session after linking the wallet.',
+    {
+      status: response.status,
+      recoveryRequired: payload?.recoveryRequired === true,
+      code: typeof payload?.code === 'string' ? payload.code : null,
+    },
+  )
+}
+
 async function postAccountsLink(params: {
   provider: string
   getAccessToken: (() => Promise<string | null>) | null | undefined
@@ -253,11 +285,9 @@ export async function linkPrivyProvider(params: {
 }): Promise<boolean> {
   const { privy, provider, login } = params
   assertPrivyAuthenticated(privy)
-  // On localhost/loopback, Privy's getAccessToken() requires a readable
-  // first-party `privy-session` marker cookie before it will hand back the
-  // token these link calls sign requests with — see loopbackSessionMarkerShim.ts.
-  // Assert it right before the SDK call (same pattern as
-  // refreshPrivyEmbeddedSignerSession) so link doesn't 401 on a missing cookie.
+  // Production custom-domain sessions require the first-party marker. The
+  // helper intentionally clears/no-ops it on localhost, where Privy uses
+  // auth.privy.io bearer-token sessions.
   assertPrivySessionMarkerCookie()
   let navigationPending = false
 
@@ -353,9 +383,8 @@ export async function unlinkPrivyProvider(params: {
   provider: PrivyOAuthProvider
   value?: string | null
 }): Promise<void> {
-  // Same loopback marker-cookie requirement as linkPrivyProvider above —
-  // unlinkTwitter/unlinkWallet/etc. hit oauth/unlink or siwe/unlink, which
-  // 401 on localhost without a freshly-asserted marker cookie.
+  // Production custom-domain sessions require the marker; localhost must stay
+  // in bearer-token mode (the helper clears/no-ops there).
   assertPrivySessionMarkerCookie()
   const methodNames = PRIVY_UNLINK_METHODS[params.provider]
   const args = buildPrivyUnlinkMethodArgs(params.provider, params.value)
@@ -382,6 +411,12 @@ export async function linkAndSyncPrivyProvider(params: {
 }): Promise<AccountSetupMe | null> {
   const navigationPending = await linkPrivyProvider(params)
   if (navigationPending) return null
+  if (params.provider === 'external_eoa') {
+    // Privy may change the preferred identity address after SIWE linking.
+    // Remint the HttpOnly 4626 session from the verified Privy token before
+    // the strict cookie/profile binding check in /api/accounts/link.
+    await refreshPrivyBackedSession(params.getAccessToken)
+  }
   return syncAccountsProviderLink({
     provider: params.provider,
     getAccessToken: params.getAccessToken,

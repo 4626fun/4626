@@ -75,9 +75,6 @@ contract AgentOracle is OApp, IOracle4626 {
     /// @dev Mitigates H-01 (audit finding 4626-293).
     int256 public constant MAX_INITIAL_PRICE_USD = int256(uint256(1_000_000e18));
 
-    /// @notice Maximum observations to store
-    uint16 public constant MAX_CARDINALITY = 1024;
-
     // ================================
     // STATE - PRICE DATA
     // ================================
@@ -95,21 +92,10 @@ contract AgentOracle is OApp, IOracle4626 {
     /// Base mainnet reference: 0x4C4814aa04433e0FB313CB0895b582569eF52253
     address public sequencerUptimeFeed;
 
-    // ================================
-    // STATE - V4 POOL
-    // ================================
-
-    /// @notice Uniswap V4 PoolManager
-    IPoolManager public poolManager;
-
-    /// @notice V4 pool key for ◆AGENT/ETH
-    PoolKey public assetPoolKey;
-
-    /// @notice Whether V4 pool is configured
+    IPoolManager private poolManager;
+    PoolKey private assetPoolKey;
     bool public v4PoolConfigured;
-
-    /// @notice Whether agent token is token0 in the pool
-    bool public assetIsToken0;
+    bool private assetIsToken0;
 
     // ================================
     // STATE - V3 POOL (AGENT/QUOTE TWAP)
@@ -178,11 +164,6 @@ contract AgentOracle is OApp, IOracle4626 {
     /// @notice Last recorded V2 observation timestamp.
     uint32 public v2ObservationTimestamp;
 
-    // ================================
-    // STATE - TWAP OBSERVATIONS
-    // ================================
-
-    /// @notice Observation data point
     struct Observation {
         uint32 blockTimestamp;
         int56 tickCumulative;
@@ -192,36 +173,22 @@ contract AgentOracle is OApp, IOracle4626 {
         bool initialized;
     }
 
-    /// @notice Ring buffer of observations
-    Observation[65535] public observations;
-
-    /// @notice Current observation state
     struct ObservationState {
         uint16 index;
         uint16 cardinality;
         uint16 cardinalityNext;
     }
-    ObservationState public observationState;
 
-    /// @notice Last observation timestamp
-    uint32 public lastObservationTimestamp;
+    mapping(uint16 => Observation) private observations;
+    ObservationState private observationState;
+    uint32 private lastObservationTimestamp;
 
-    // ================================
-    // STATE - TICK CAPPING
-    // ================================
-
-    /// @notice Maximum tick movement per observation (manipulation resistance)
-    int24 public maxTicksPerObservation = 100; // ~1% per observation
-
-    /// @notice Tick cap auto-tuning state
     struct TickCapState {
         uint64 capFrequency;
         uint48 lastCapUpdate;
         bool autoTunePaused;
     }
-    TickCapState public tickCapState;
 
-    /// @notice Tick cap policy
     struct TickCapPolicy {
         int24 minCap;
         int24 maxCap;
@@ -230,7 +197,14 @@ contract AgentOracle is OApp, IOracle4626 {
         uint32 decayWindowSec;
         uint32 updateIntervalSec;
     }
-    TickCapPolicy public tickCapPolicy;
+
+    int24 public maxTicksPerObservation;
+    TickCapState private tickCapState;
+    TickCapPolicy private tickCapPolicy;
+    bool private useTruncatedTick;
+    uint16 private constant MAX_CARDINALITY = 1024;
+    uint32 private constant PPM = 1_000_000;
+    uint64 private constant ONE_DAY_PPM = 86_400 * 1_000_000;
 
     // ================================
     // STATE - ACCESS CONTROL
@@ -245,16 +219,6 @@ contract AgentOracle is OApp, IOracle4626 {
     /// @notice Price update cooldown (gas optimization)
     uint32 public priceUpdateCooldown = 30;
 
-    /// @notice Use truncated (manipulation-resistant) tick
-    bool public useTruncatedTick = true;
-
-    // ================================
-    // CONSTANTS - INTERNAL
-    // ================================
-
-    uint32 private constant PPM = 1_000_000;
-    uint64 private constant ONE_DAY_PPM = 86_400 * 1_000_000;
-
     // ================================
     // EVENTS
     // ================================
@@ -262,7 +226,6 @@ contract AgentOracle is OApp, IOracle4626 {
     event AssetPriceUpdated(string symbol, int256 price, uint256 timestamp, address indexed updater);
     event AssetPriceBroadcast(uint32[] dstEids, int256 price, uint256 timestamp);
     event AssetPriceReceived(uint32 srcEid, int256 price, uint256 timestamp);
-    event V4PoolConfigured(PoolId indexed poolId, address poolManager, bool assetIsToken0);
     event V3PoolConfigured(
         address indexed pool, address indexed creatorToken, address indexed usdToken, uint32 twapDuration
     );
@@ -282,7 +245,6 @@ contract AgentOracle is OApp, IOracle4626 {
     event ReferenceQuoteTokenLocked(address indexed token);
     // FIX: M-3 (4626-439) — emitted (via the deprecated entrypoint's revert path in tests / off-chain
     // call-simulation) so tooling can pick up migrations to broadcastAssetPriceWithFees.
-    event BroadcastEqualSplitCallAttempted(address indexed caller, uint256 msgValue, uint32[] dstEids);
     event RemotePriceUpdateSkipped(uint32 indexed srcEid, int256 candidatePrice, uint256 candidateTimestamp, string reason);
 
     // ================================
@@ -295,10 +257,10 @@ contract AgentOracle is OApp, IOracle4626 {
     error V4NotConfigured();
     error V3NotConfigured();
     error V2NotConfigured();
+    error NeedMoreObservations();
     error InvalidV3Pool();
     error InvalidV2Pair();
     error UnsupportedDecimals();
-    error NeedMoreObservations();
     error StalePrice();
     error SequencerDown();
     error InvalidDuration();
@@ -318,7 +280,6 @@ contract AgentOracle is OApp, IOracle4626 {
     error RemoteOnly();
     error StaleObservationWindow();
     // FIX: M-3 (4626-439) — signalled when the legacy equal-split broadcast entrypoint is called.
-    error BroadcastEqualSplitDeprecated();
 
     // ================================
     // CONSTRUCTOR
@@ -347,16 +308,6 @@ contract AgentOracle is OApp, IOracle4626 {
 
         chainlinkFeed = _chainlinkFeed;
         assetSymbol = _assetSymbol; // field name kept for interface compatibility; stores agent symbol
-
-        // Initialize tick cap policy with sensible defaults
-        tickCapPolicy = TickCapPolicy({
-            minCap: 10, // ~0.1% movement
-            maxCap: 500, // ~5% movement
-            stepBps: 500, // 5% adjustment per step
-            budgetPpm: 10000, // Target 1% of observations hit cap
-            decayWindowSec: 3600, // 1 hour decay
-            updateIntervalSec: 60 // Min 1 minute between adjustments
-        });
     }
 
     // ================================
@@ -404,47 +355,9 @@ contract AgentOracle is OApp, IOracle4626 {
         emit ReferenceQuoteTokenLocked(referenceQuoteToken);
     }
 
-    /**
-     * @notice Configure V4 pool for TWAP observations
-     * @param _poolManager Uniswap V4 PoolManager
-     * @param _poolKey Pool key for ◆AGENT/ETH
-     * @param _assetIsToken0 Whether agent token is currency0
-     */
-    function setV4Pool(address _poolManager, PoolKey calldata _poolKey, bool _assetIsToken0) external onlyOwner {
-        if (_poolManager == address(0)) revert ZeroAddress();
-
-        PoolId newPoolId = _poolKey.toId();
-        bool v4IdentityChanged =
-            !v4PoolConfigured || address(poolManager) != _poolManager
-            || PoolId.unwrap(assetPoolKey.toId()) != PoolId.unwrap(newPoolId)
-            || assetIsToken0 != _assetIsToken0;
-
-        poolManager = IPoolManager(_poolManager);
-        assetPoolKey = _poolKey;
-        assetIsToken0 = _assetIsToken0;
-        v4PoolConfigured = true;
-
-        // Get initial tick
-        (, int24 tick,,) = poolManager.getSlot0(newPoolId);
-
-        if (v4IdentityChanged || observationState.cardinality == 0) {
-            // Reset observations when pool identity changes to avoid cross-pool TWAP contamination.
-            observations[0] = Observation({
-                blockTimestamp: uint32(block.timestamp),
-                tickCumulative: 0,
-                tickCumulativeTruncated: 0,
-                secondsPerLiquidityCumulativeX128: 0,
-                prevTruncatedTick: tick,
-                initialized: true
-            });
-
-            observationState = ObservationState({index: 0, cardinality: 1, cardinalityNext: 1});
-        }
-
-        lastObservationTimestamp = uint32(block.timestamp);
-        tickCapState.lastCapUpdate = uint48(block.timestamp);
-
-        emit V4PoolConfigured(newPoolId, _poolManager, _assetIsToken0);
+    /// @dev Agent deployments use the V2/V3 lanes; V4 configuration is unsupported.
+    function setV4Pool(address, PoolKey calldata, bool) external pure {
+        revert V4NotConfigured();
     }
 
     /**
@@ -566,52 +479,11 @@ contract AgentOracle is OApp, IOracle4626 {
     }
 
     /**
-     * @notice Set maximum tick movement per observation
-     * @param _maxTicks Maximum allowed tick movement
-     */
-    function setMaxTicksPerObservation(int24 _maxTicks) external onlyOwner {
-        // FIX: L-5 — require minimum of 1; 0 disables all tick capping, removing
-        // manipulation resistance entirely
-        require(_maxTicks >= 1 && _maxTicks <= 1000, "Invalid range");
-        int24 oldMax = maxTicksPerObservation;
-        maxTicksPerObservation = _maxTicks;
-        emit MaxTicksUpdated(oldMax, _maxTicks, false);
-    }
-
-    /**
-     * @notice Set tick cap policy
-     */
-    function setTickCapPolicy(int24 _minCap, int24 _maxCap, uint32 _stepBps, uint32 _budgetPpm) external onlyOwner {
-        require(_minCap > 0 && _maxCap > _minCap, "Invalid range");
-        require(_stepBps > 0 && _stepBps <= 10000, "Invalid step");
-        require(_budgetPpm > 0 && _budgetPpm <= PPM, "Invalid budget");
-
-        tickCapPolicy.minCap = _minCap;
-        tickCapPolicy.maxCap = _maxCap;
-        tickCapPolicy.stepBps = _stepBps;
-        tickCapPolicy.budgetPpm = _budgetPpm;
-    }
-
-    /**
-     * @notice Pause/unpause auto-tuning
-     */
-    function setAutoTunePaused(bool paused) external onlyOwner {
-        tickCapState.autoTunePaused = paused;
-    }
-
-    /**
      * @notice Set price update cooldown
      */
     function setPriceUpdateCooldown(uint32 cooldown) external onlyOwner {
         require(cooldown <= 300, "Max 5 minutes");
         priceUpdateCooldown = cooldown;
-    }
-
-    /**
-     * @notice Set whether to use truncated tick
-     */
-    function setUseTruncatedTick(bool _use) external onlyOwner {
-        useTruncatedTick = _use;
     }
 
     // ================================
@@ -640,16 +512,6 @@ contract AgentOracle is OApp, IOracle4626 {
      */
     function getAssetPrice() external view returns (int256 price, uint256 timestamp) {
         return _getPrice();
-    }
-
-    /// @dev Legacy getter alias kept for ABI compatibility with existing tooling.
-    function v3UsdToken() external view returns (address) {
-        return v3QuoteToken;
-    }
-
-    /// @dev Legacy getter alias kept for ABI compatibility with existing tooling.
-    function v3UsdDecimals() external view returns (uint8) {
-        return v3QuoteDecimals;
     }
 
     function _getPrice() internal view returns (int256 price, uint256 timestamp) {
@@ -753,6 +615,7 @@ contract AgentOracle is OApp, IOracle4626 {
      * @dev Called by authorized recorders during swaps
      */
     function recordSwapObservation() external {
+        revert V4NotConfigured();
         if (!isSwapRecorder[msg.sender]) revert Unauthorized();
         if (!v4PoolConfigured) revert V4NotConfigured();
 
@@ -773,6 +636,7 @@ contract AgentOracle is OApp, IOracle4626 {
      * @notice External wrapper for try/catch
      */
     function _updatePriceFromTWAPExternal() external {
+        revert V4NotConfigured();
         require(msg.sender == address(this), "Only self");
         _updatePriceFromTWAP();
     }
@@ -781,6 +645,7 @@ contract AgentOracle is OApp, IOracle4626 {
      * @notice Internal observation recording
      */
     function _recordObservation() internal returns (bool tickWasCapped) {
+        return false;
         if (!v4PoolConfigured) return false;
 
         PoolId poolId = assetPoolKey.toId();
@@ -857,6 +722,7 @@ contract AgentOracle is OApp, IOracle4626 {
      * @notice Update cap frequency and auto-tune
      */
     function _updateCapFrequency(bool capOccurred) internal {
+        return;
         uint32 nowTs = uint32(block.timestamp);
         uint32 lastTs = uint32(tickCapState.lastCapUpdate);
         uint32 elapsed = nowTs - lastTs;
@@ -898,6 +764,7 @@ contract AgentOracle is OApp, IOracle4626 {
      * @notice Auto-tune tick cap
      */
     function _autoTuneTickCap(uint64 currentFreq) internal {
+        return;
         uint64 targetFreq = uint64(tickCapPolicy.budgetPpm) * uint64(tickCapPolicy.decayWindowSec);
 
         int24 currentCap = maxTicksPerObservation;
@@ -930,6 +797,7 @@ contract AgentOracle is OApp, IOracle4626 {
      * @notice Get current tick from V4 pool
      */
     function getCurrentTick() external view returns (int24 tick) {
+        revert V4NotConfigured();
         if (!v4PoolConfigured) revert V4NotConfigured();
         PoolId poolId = assetPoolKey.toId();
         (, tick,,) = poolManager.getSlot0(poolId);
@@ -940,6 +808,7 @@ contract AgentOracle is OApp, IOracle4626 {
      * @param duration Lookback duration in seconds
      */
     function getTWAPTick(uint32 duration) public view returns (int24 twapTick) {
+        revert V4NotConfigured();
         if (observationState.cardinality < 2) revert NeedMoreObservations();
         if (duration == 0) revert InvalidDuration();
 
@@ -968,6 +837,7 @@ contract AgentOracle is OApp, IOracle4626 {
      * @notice Find observation before target time
      */
     function _findObservationBefore(uint32 targetTime) internal view returns (uint16) {
+        revert V4NotConfigured();
         uint16 currentIndex = observationState.index;
         // FIX: H-5 — use cardinalityNext for ring buffer traversal, not cardinality;
         // when cardinalityNext > cardinality, valid initialized observations between
@@ -1008,6 +878,7 @@ contract AgentOracle is OApp, IOracle4626 {
      * @return price Price in 1e18 format
      */
     function tickToPrice(int24 tick) public view returns (uint256 price) {
+        revert V4NotConfigured();
         uint160 sqrtPriceX96 = TickMath.getSqrtPriceAtTick(tick);
         uint256 sqrtPrice = uint256(sqrtPriceX96);
 
@@ -1033,6 +904,7 @@ contract AgentOracle is OApp, IOracle4626 {
      * @return price Agent per ETH in 1e18
      */
     function getAssetEthTWAP(uint32 duration) public view returns (uint256 price) {
+        revert V4NotConfigured();
         int24 twapTick = getTWAPTick(duration);
         price = tickToPrice(twapTick);
     }
@@ -1383,30 +1255,6 @@ contract AgentOracle is OApp, IOracle4626 {
     // ================================
     // LAYERZERO - CROSS-CHAIN
     // ================================
-
-    /**
-     * @notice DEPRECATED — see `broadcastAssetPriceWithFees`.
-     * @dev FIX: M-3 (4626-439) — the equal-split variant divided `msg.value / dstEids.length`
-     *      and used that as the fee for every destination. LayerZero fees differ per
-     *      destination chain, so any chain whose real fee exceeded the split amount
-     *      reverted mid-loop and the broadcast partially failed, while leaving excess
-     *      ETH stranded on non-refund paths. Rather than carry a footgun with an
-     *      attractive short signature, this entrypoint is now a hard revert that emits
-     *      a migration-signal event against off-chain call simulation. Callers must
-     *      switch to `broadcastAssetPriceWithFees(dstEids, options, fees)` and quote
-     *      per-destination native fees via `quote()` / `endpoint.quote(...)`.
-     * @custom:deprecated Use `broadcastAssetPriceWithFees` with per-chain fees.
-     */
-    function broadcastAssetPrice(uint32[] calldata dstEids, bytes calldata /* options */)
-        external
-        payable
-        returns (MessagingReceipt[] memory /* receipts */)
-    {
-        // Emit before revert so off-chain call-simulation / trace tooling surfaces the
-        // migration signal even though the transaction aborts.
-        emit BroadcastEqualSplitCallAttempted(msg.sender, msg.value, dstEids);
-        revert BroadcastEqualSplitDeprecated();
-    }
 
     /**
      * @notice Broadcast price to other chains with per-destination LayerZero fees

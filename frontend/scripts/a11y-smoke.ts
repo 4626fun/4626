@@ -19,9 +19,10 @@ import { chromium, type Browser, type Page } from 'playwright'
 
 const HOST = process.env.A11Y_HOST ?? '127.0.0.1'
 const PORT = Number(process.env.A11Y_PORT ?? process.env.PORT ?? 4175)
-const DEFAULT_PATHS = ['/faq', '/faq/how-it-works', '/waitlist', '/swap']
+const DEFAULT_PATHS = ['/faq', '/faq/how-it-works', '/waitlist', '/swap', '/rooms?roomId=1659']
 
 const MARKETING_PATH_PREFIXES = ['/faq', '/waitlist', '/status', '/cca', '/r/'] as const
+const ALFACLUB_PATH_PREFIXES = ['/rooms'] as const
 const APP_PATH_PREFIXES = ['/swap', '/deploy', '/explore', '/accounts', '/vault', '/portfolio'] as const
 const SERVE_TIMEOUT_MS = Number(process.env.A11Y_SERVE_TIMEOUT_MS ?? 120_000)
 const PAGE_TIMEOUT_MS = Number(process.env.A11Y_PAGE_TIMEOUT_MS ?? 45_000)
@@ -52,7 +53,7 @@ Options:
 
 Environment:
   A11Y_BASE_URL        Same as --base-url
-  A11Y_HOST_MODE       Force Vite host shell: app | marketing (CI uses per-path groups)
+  A11Y_HOST_MODE       Force Vite host shell: app | marketing | alfaclub (CI uses per-path groups)
   A11Y_HOST / A11Y_PORT
   A11Y_SERVE_TIMEOUT_MS  Wait for dev server (default 120000)
   A11Y_PAGE_TIMEOUT_MS   Per-page navigation timeout (default 45000)
@@ -89,12 +90,16 @@ function isBlockingImpact(impact: AxeImpact): boolean {
   return impact === 'serious' || impact === 'critical'
 }
 
-export type A11yHostMode = 'app' | 'marketing'
+export type A11yHostMode = 'alfaclub' | 'app' | 'marketing'
 
 function pathHostMode(path: string): A11yHostMode {
-  const normalized = path.startsWith('/') ? path : `/${path}`
+  const withLeadingSlash = path.startsWith('/') ? path : `/${path}`
+  const normalized = withLeadingSlash.split(/[?#]/, 1)[0] ?? '/'
   if (MARKETING_PATH_PREFIXES.some((prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`))) {
     return 'marketing'
+  }
+  if (ALFACLUB_PATH_PREFIXES.some((prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`))) {
+    return 'alfaclub'
   }
   if (APP_PATH_PREFIXES.some((prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`))) {
     return 'app'
@@ -105,19 +110,23 @@ function pathHostMode(path: string): A11yHostMode {
 function groupPathsByHostMode(paths: string[]): Array<{ mode: A11yHostMode; paths: string[] }> {
   const marketing: string[] = []
   const app: string[] = []
+  const alfaclub: string[] = []
   for (const path of paths) {
-    if (pathHostMode(path) === 'app') app.push(path)
+    const mode = pathHostMode(path)
+    if (mode === 'app') app.push(path)
+    else if (mode === 'alfaclub') alfaclub.push(path)
     else marketing.push(path)
   }
   const groups: Array<{ mode: A11yHostMode; paths: string[] }> = []
   if (marketing.length > 0) groups.push({ mode: 'marketing', paths: marketing })
+  if (alfaclub.length > 0) groups.push({ mode: 'alfaclub', paths: alfaclub })
   if (app.length > 0) groups.push({ mode: 'app', paths: app })
   return groups
 }
 
 function resolveServeHostMode(paths: string[]): A11yHostMode {
   const override = process.env.A11Y_HOST_MODE?.trim()
-  if (override === 'app' || override === 'marketing') return override
+  if (override === 'app' || override === 'marketing' || override === 'alfaclub') return override
   const groups = groupPathsByHostMode(paths)
   if (groups.length === 1) return groups[0]!.mode
   return 'app'

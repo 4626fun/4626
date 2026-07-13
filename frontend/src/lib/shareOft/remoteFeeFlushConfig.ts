@@ -19,8 +19,6 @@ type RawFlushTarget = {
   label?: string
 }
 
-const EXECUTOR_DROP_BUFFER_BPS = 500n
-
 function readEnv(name: string): string {
   return String((import.meta.env as Record<string, string | undefined>)[name] ?? '').trim()
 }
@@ -29,10 +27,6 @@ function readAddressEnv(name: string, fallback: Address): Address {
   const raw = readEnv(name)
   if (raw && isAddress(raw)) return getAddress(raw)
   return fallback
-}
-
-export function resolveHubShareOft(): Address {
-  return readAddressEnv('VITE_HUB_SHARE_OFT', AKITA.shareOFT)
 }
 
 export function resolveHubGaugeController(): Address {
@@ -112,7 +106,3 @@ export function parseRemoteFeeFlushTargets(): RemoteFeeFlushTarget[] {
   return out
 }
 
-export function applyExecutorDropBuffer(amount: bigint): bigint {
-  if (amount === 0n) return 0n
-  return amount + (amount * EXECUTOR_DROP_BUFFER_BPS) / 10_000n
-}

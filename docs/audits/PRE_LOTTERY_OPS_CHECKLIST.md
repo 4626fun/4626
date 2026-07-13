@@ -10,7 +10,12 @@ Code remediation for July-2 stack + contract mediums is largely complete. Do **n
 ## 0. Canary order (2026-07)
 
 Full phased canary (boost **off** day one): [lottery-canary-checklist-2026-07.md](../operations/lottery-canary-checklist-2026-07.md).  
-Live Phase 0 probe (2026-07-11): [lottery-canary-phase0-status-2026-07-11.md](../operations/lottery-canary-phase0-status-2026-07-11.md) — v1.18.0 CREATE2 cutover complete; boost sources `0x0`, `singleVaultJackpotOnly=true`, deferred VRF queue `0`.
+Live Phase 0 probe (2026-07-11): [lottery-canary-phase0-status-2026-07-11.md](../operations/lottery-canary-phase0-status-2026-07-11.md) — remediation LM live; boost sources `0x0`, `singleVaultJackpotOnly=true`, deferred VRF queue `0`.
+
+v1.19.0 is a partial refresh: the v1.18 shared infrastructure remains live,
+while new creator launches use the v1.19 manifest/codeIds and CREATE2
+namespace. Before traffic, verify the active Phase2 module and
+SolanaBridgeAdapter both point to remediation LM `0xB68F359e…`.
 
 | Phase | Intent |
 |-------|--------|
@@ -29,6 +34,7 @@ Live Phase 0 probe (2026-07-11): [lottery-canary-phase0-status-2026-07-11.md](..
 | 1.2 | Authorize hub ShareOFT forwarders (H-06) | `authorizedHubShareOftForwarders[shareOft] == true` for each hub |
 | 1.3 | Confirm R-H05 mode | Default **single-vault** (`singleVaultJackpotOnly == true`). Multi-vault only after public disclosure |
 | 1.4 | Drain any deferred VRF after pauses | `processDeferredVrfBatch(16)` until `deferredVrfQueueLength() == 0` (M2-07) |
+| 1.5 | Verify v1.19 deploy wiring | active `phase2Module().lotteryManager()` and `SolanaBridgeAdapter.lotteryManager()` both equal `0xB68F359e…`; v1.19 codeIds seeded/approved |
 
 API helpers:
 
@@ -100,7 +106,8 @@ Upgrade runbook: AGENTS.md Solana program deployment section.
 - [ ] KPR/orchestrator redeployed + winner-relay smoke  
 - [ ] B2 relay_entries still off  
 - [ ] Env fail-closed confirmed on Vercel + Railway + Vultr orchestrator  
-- [ ] Public docs match R-H05 mode actually deployed  
+- [ ] Public docs match R-H05 mode actually deployed
+- [ ] v1.19 Phase2 module, adapter LM, store codeIds, and CREATE2 namespace verified
 
 ---
 
@@ -114,4 +121,4 @@ See [ops-preflight-status-2026-07-09.md](../operations/ops-preflight-status-2026
 | Solana `.so` build | 329 632 B — fits on-chain 372 488 (no extend) |
 | Upgrade authority SOL | **0.0125** — need ~2.5 SOL before deploy |
 | Agent secrets | **None** — cannot run mainnet txs here |
-| Live LotteryManager | Responds; **missing** `singleVaultJackpotOnly` / `deferredVrfQueueLength` (pre-remediation bytecode likely) |
+| Live LotteryManager | Superseded snapshot; remediation manager `0xB68F359e…` now exposes `singleVaultJackpotOnly` and `deferredVrfQueueLength` |

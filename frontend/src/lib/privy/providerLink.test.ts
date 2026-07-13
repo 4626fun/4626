@@ -105,6 +105,51 @@ describe('providerLink', () => {
       expect(data).toBeNull()
       expect(apiFetch).not.toHaveBeenCalled()
     })
+
+    it('refreshes the 4626 session before syncing an external wallet link', async () => {
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            data: { address: '0x00000000000000000000000000000000000000aa' },
+          }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            data: { privyUserId: 'did:privy:test', linkedMethods: { external_eoa: ['0xabc'] } },
+          }),
+        } as Response)
+      const privy = {
+        authenticated: true,
+        linkWallet: vi.fn(async () => ({ id: 'user' })),
+      }
+
+      await linkAndSyncPrivyProvider({
+        privy,
+        provider: 'external_eoa',
+        getAccessToken: async () => 'privy-token',
+      })
+
+      expect(apiFetch).toHaveBeenNthCalledWith(
+        1,
+        '/api/auth/privy',
+        expect.objectContaining({
+          method: 'POST',
+          withCredentials: true,
+          headers: expect.objectContaining({ Authorization: 'Bearer privy-token' }),
+        }),
+      )
+      expect(apiFetch).toHaveBeenNthCalledWith(
+        2,
+        '/api/accounts/link',
+        expect.objectContaining({ method: 'POST' }),
+      )
+    })
   })
 
   describe('buildPrivyUnlinkMethodArgs', () => {

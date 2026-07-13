@@ -8,8 +8,15 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Registry4626} from "@4626/shared/core/Registry4626.sol";
 import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 import {DeploymentBatcher, DeploymentBatcherPhase2Module} from "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
-import {IBaseSolanaBridge} from "@4626/shared/interfaces/bridge/IBaseSolanaBridge.sol";
-import {IOFT, SendParam, MessagingFee, MessagingReceipt, OFTReceipt, OFTLimit, OFTFeeDetail} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
+import {
+    IOFT,
+    SendParam,
+    MessagingFee,
+    MessagingReceipt,
+    OFTReceipt,
+    OFTLimit,
+    OFTFeeDetail
+} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
 
 contract MockCreatorTokenPeerWiring is ERC20 {
     constructor() ERC20("Creator Coin", "CR8R") {}
@@ -149,7 +156,9 @@ contract Phase2DelegatecallProbe is DeploymentBatcherPhase2Module {
         DeploymentBatcher.Phase2FinalizeParams calldata params,
         uint32 solanaEid
     ) external {
-        if (address(this) != batcher) revert NotBatcherContext();
+        if (address(this) != batcher) {
+            revert NotBatcherContext();
+        }
         _ensureRegistryAndShareOftPeerWired(params, solanaEid);
     }
 }
@@ -206,13 +215,9 @@ contract DeploymentBatcherPeerHarness is DeploymentBatcher {
         phase2Module = module_;
     }
 
-    function probePhase2DelegatecallContext()
-        external
-        returns (address selfAddr, address batcherAddr, bool matches)
-    {
-        (bool ok, bytes memory outData) = address(phase2Module).delegatecall(
-            abi.encodeWithSelector(Phase2DelegatecallProbe.probeContext.selector)
-        );
+    function probePhase2DelegatecallContext() external returns (address selfAddr, address batcherAddr, bool matches) {
+        (bool ok, bytes memory outData) =
+            address(phase2Module).delegatecall(abi.encodeWithSelector(Phase2DelegatecallProbe.probeContext.selector));
         require(ok, "probe delegatecall failed");
         return abi.decode(outData, (address, address, bool));
     }
@@ -249,7 +254,6 @@ contract DeploymentBatcherShareOftPeerWiringTest is Test {
     uint32 internal constant SOLANA_EID = 30168;
     bytes32 internal constant SOLANA_DESTINATION = bytes32(uint256(0xABCD));
     bytes32 internal constant REGISTRY_PEER = bytes32(uint256(0x1234));
-    bytes32 internal constant BATCHER_DEFAULT_PEER = bytes32(uint256(0x5678));
 
     address internal ownerAddr = makeAddr("owner");
     address internal protocolTreasury = makeAddr("protocolTreasury");
@@ -315,7 +319,7 @@ contract DeploymentBatcherShareOftPeerWiringTest is Test {
 
         vm.startPrank(protocolTreasury);
         batcher.setOVaultRuntimeConfig(makeAddr("hubComposer"), SOLANA_EID, true);
-        batcher.setSolanaConfig(makeAddr("adapter"), SOLANA_DESTINATION);
+        batcher.setSolanaDestination(SOLANA_DESTINATION);
         vm.stopPrank();
     }
 
@@ -333,9 +337,7 @@ contract DeploymentBatcherShareOftPeerWiringTest is Test {
             depositAmount: 50_000_000e18,
             requiredRaise: 1 ether,
             floorPriceQ96: 1,
-            auctionSteps: hex"1234",
-            meteoraAlphaVault: bytes32(0),
-            solanaIxs: new IBaseSolanaBridge.Ix[](0)
+            auctionSteps: hex"1234"
         });
     }
 
@@ -368,9 +370,7 @@ contract DeploymentBatcherShareOftPeerWiringTest is Test {
     }
 
     function test_ensureShareOftPeerWiring_wiresShareOftPeerFromRegistry() external {
-        registry.registerToken(
-            address(creatorToken), "Creator Coin", "CR8R", ownerAddr, address(0), 0
-        );
+        registry.registerToken(address(creatorToken), "Creator Coin", "CR8R", ownerAddr, address(0), 0);
         registry.setRemoteOFTPeerBytes32(address(creatorToken), SOLANA_EID, REGISTRY_PEER);
 
         _runPeerWiring();
@@ -379,28 +379,16 @@ contract DeploymentBatcherShareOftPeerWiringTest is Test {
         assertEq(registry.getRemoteOFTPeerBytes32(address(creatorToken), SOLANA_EID), REGISTRY_PEER);
     }
 
-    function test_ensureShareOftPeerWiring_seedsRegistryFromBatcherDefaultPeer() external {
-        vm.prank(protocolTreasury);
-        batcher.setSolanaShareOftPeer(BATCHER_DEFAULT_PEER);
-
-        _runPeerWiring();
-
-        assertEq(shareOFT.peers(SOLANA_EID), BATCHER_DEFAULT_PEER, "default peer not wired");
-        assertEq(registry.getRemoteOFTPeerBytes32(address(creatorToken), SOLANA_EID), BATCHER_DEFAULT_PEER);
-        IRegistry4626.TokenInfo memory info = registry.getTokenInfo(address(creatorToken));
-        assertEq(info.token, address(creatorToken), "creator not auto-registered");
-        assertEq(info.shareOFT, address(shareOFT), "share oft not synced");
-    }
-
-    function test_ensureShareOftPeerWiring_revertsWhenNoPeerConfigured() external {
+    function test_ensureShareOftPeerWiring_requiresExplicitPerTokenRegistryPeer() external {
         vm.expectRevert(DeploymentBatcherPhase2Module.SolanaShareOftPeerNotConfigured.selector);
         _runPeerWiring();
+
+        assertEq(registry.getRemoteOFTPeerBytes32(address(creatorToken), SOLANA_EID), bytes32(0));
+        assertEq(shareOFT.peers(SOLANA_EID), bytes32(0));
     }
 
     function test_ensureShareOftPeerWiring_skipsSetPeerWhenAlreadyMatched() external {
-        registry.registerToken(
-            address(creatorToken), "Creator Coin", "CR8R", ownerAddr, address(0), 0
-        );
+        registry.registerToken(address(creatorToken), "Creator Coin", "CR8R", ownerAddr, address(0), 0);
         registry.setRemoteOFTPeerBytes32(address(creatorToken), SOLANA_EID, REGISTRY_PEER);
         vm.prank(address(batcher));
         shareOFT.setPeer(SOLANA_EID, REGISTRY_PEER);

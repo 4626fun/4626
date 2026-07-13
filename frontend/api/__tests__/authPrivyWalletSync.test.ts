@@ -256,6 +256,32 @@ describe('auth privy wallet sync', () => {
     expect(res.body?.data?.address).toBe('0x00000000000000000000000000000000000000aa')
   })
 
+  it('does not throttle wallet persistence when the profile has no session address', async () => {
+    restoreEnv?.()
+    restoreEnv = applyEnv({
+      PRIVY_APP_ID: 'test-privy-id',
+      PRIVY_APP_SECRET: 'test-privy-secret',
+      AUTH_SESSION_SECRET: 'test-auth-session-secret-1234567',
+      PRIVY_AUTH_DB_SYNC_MIN_INTERVAL_MS: '9999999999999',
+    })
+    getDbMock.mockResolvedValue({ sql: vi.fn(async () => ({ rows: [] })) })
+
+    const makeRequest = () =>
+      createMockReq({
+        method: 'POST',
+        headers: { authorization: 'Bearer test-token' },
+      })
+
+    await handler(makeRequest(), createMockRes())
+    syncUserWalletsMock.mockClear()
+
+    const res = createMockRes()
+    await handler(makeRequest(), res)
+
+    expect(res.statusCode).toBe(200)
+    expect(syncUserWalletsMock).toHaveBeenCalledTimes(1)
+  })
+
   it('bypasses sync throttling when persisted and Privy-derived session addresses disagree', async () => {
     restoreEnv?.()
     restoreEnv = applyEnv({
@@ -403,10 +429,7 @@ describe('auth privy wallet sync', () => {
       id: 'did:privy:test-user',
       linkedAccounts: [],
     })
-    walletApiCreateMock.mockResolvedValue({
-      id: 'wallet-id',
-      address: '0x00000000000000000000000000000000000000dd',
-    })
+    walletApiCreateMock.mockRejectedValue(new Error('wallet api unavailable'))
     syncUserWalletsMock.mockResolvedValue({
       profileId: 1,
       canonicalSmartWallet: null,
@@ -425,7 +448,10 @@ describe('auth privy wallet sync', () => {
 
     expect(createWalletsMock).toHaveBeenCalledWith({
       userId: 'did:privy:test-user',
-      wallets: [{ chainType: 'ethereum', policyIds: [] }],
+      createEthereumWallet: true,
+      createSolanaWallet: false,
+      createEthereumSmartWallet: false,
+      numberOfEthereumWalletsToCreate: 1,
     })
     expect(walletApiCreateMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -438,22 +464,10 @@ describe('auth privy wallet sync', () => {
   })
 
   it('falls back to walletApi.create when createWallets leaves the user empty', async () => {
-    getUserByIdMock
-      .mockResolvedValueOnce({
-        id: 'did:privy:test-user',
-        linkedAccounts: [],
-      })
-      .mockResolvedValueOnce({
-        id: 'did:privy:test-user',
-        linkedAccounts: [
-          {
-            type: 'wallet',
-            address: '0x00000000000000000000000000000000000000dd',
-            walletClientType: 'privy',
-            chainType: 'ethereum',
-          },
-        ],
-      })
+    getUserByIdMock.mockResolvedValue({
+      id: 'did:privy:test-user',
+      linkedAccounts: [],
+    })
     createWalletsMock.mockResolvedValue({
       id: 'did:privy:test-user',
       linkedAccounts: [],
@@ -533,7 +547,10 @@ describe('auth privy wallet sync', () => {
 
     expect(createWalletsMock).toHaveBeenCalledWith({
       userId: 'did:privy:test-user',
-      wallets: [{ chainType: 'ethereum', policyIds: [] }],
+      createEthereumWallet: true,
+      createSolanaWallet: false,
+      createEthereumSmartWallet: false,
+      numberOfEthereumWalletsToCreate: 1,
     })
     expect(walletApiCreateMock).not.toHaveBeenCalled()
     expect(res.statusCode).toBe(200)

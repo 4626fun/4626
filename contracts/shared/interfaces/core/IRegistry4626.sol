@@ -489,8 +489,11 @@ interface IRegistry4626 {
     function hubChainEid() external view returns (uint32);
 
     // =================================
-    // VAULT KIND / AGENT INTEGRATION
+    // VAULT KIND / LANE INTEGRATION META
     // =================================
+    // `AgentIntegrationMeta` is a historical name for product-lane metadata (creator or agent).
+    // Rename to LaneIntegrationMeta only on a future registry epoch.
+    // `setAgentIntegrationMeta` is authorized-factory-or-owner (same gate as `registerToken`).
 
     enum VaultKind {
         Creator,
@@ -509,6 +512,7 @@ interface IRegistry4626 {
 
     event AgentIntegrationMetaSet(address indexed token, VaultKind vaultKind);
 
+    /// @notice Set lane meta for `token`. Caller must be registry owner or an authorized factory.
     function setAgentIntegrationMeta(address token, AgentIntegrationMeta calldata meta) external;
 
     function getAgentIntegrationMeta(address token) external view returns (AgentIntegrationMeta memory);

@@ -5,7 +5,8 @@
  *
  * Usage:
  *   pnpm -C frontend exec tsx scripts/ops/execute-set-phase2-module-safe.ts \
- *     --phase2-module 0x<newModuleAddress>
+ *     --phase2-module 0x<newModuleAddress> \
+ *     --lottery-manager 0x<canonicalLotteryManager>
  *
  * Loads `frontend/.env` when present (owner PK required to execute).
  */
@@ -16,7 +17,15 @@ import { fileURLToPath } from 'node:url'
 
 import Safe from '@safe-global/protocol-kit'
 import { OperationType } from '@safe-global/types-kit'
-import { createPublicClient, encodeFunctionData, getAddress, http, isAddress } from 'viem'
+import {
+  createPublicClient,
+  encodeFunctionData,
+  getAddress,
+  http,
+  isAddress,
+  keccak256,
+  type Hex,
+} from 'viem'
 import { base } from 'viem/chains'
 import { privateKeyToAccount } from 'viem/accounts'
 
@@ -63,10 +72,30 @@ const SET_PHASE2_MODULE_ABI = [
   },
 ] as const
 
-const MODULE_BATCHER_ABI = [
+const APPROVE_PHASE_MODULE_CODEHASH_ABI = [
+  {
+    type: 'function',
+    name: 'approvePhaseModuleCodehash',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'module', type: 'address' },
+      { name: 'codehash', type: 'bytes32' },
+    ],
+    outputs: [],
+  },
+] as const
+
+const MODULE_IDENTITY_ABI = [
   {
     type: 'function',
     name: 'batcher',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'lotteryManager',
     stateMutability: 'view',
     inputs: [],
     outputs: [{ name: '', type: 'address' }],
@@ -80,6 +109,13 @@ const BATCHER_PHASE2_MODULE_ABI = [
     stateMutability: 'view',
     inputs: [],
     outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'approvedPhaseModuleCodehashes',
+    stateMutability: 'view',
+    inputs: [{ name: 'module', type: 'address' }],
+    outputs: [{ name: '', type: 'bytes32' }],
   },
 ] as const
 
@@ -114,6 +150,11 @@ async function main(): Promise<void> {
     throw new Error('--phase2-module <address> required')
   }
   const phase2Module = getAddress(phase2Raw)
+  const lotteryManagerRaw = getArg('--lottery-manager')
+  if (!lotteryManagerRaw || !isAddress(lotteryManagerRaw)) {
+    throw new Error('--lottery-manager <address> required')
+  }
+  const lotteryManager = getAddress(lotteryManagerRaw)
   const batcher = getAddress(getArg('--batcher') ?? SPLIT_PHASE1_DEPLOYMENT_BATCHER)
   const safeAddress = resolveProtocolTreasuryAddress()
   const privateKey = resolveOwnerKey()
@@ -126,7 +167,7 @@ async function main(): Promise<void> {
   // on-chain InvalidPhase2Module guard so a wrong address fails before the Safe tx.
   const moduleBatcher = await publicClient.readContract({
     address: phase2Module,
-    abi: MODULE_BATCHER_ABI,
+    abi: MODULE_IDENTITY_ABI,
     functionName: 'batcher',
   })
   if (getAddress(moduleBatcher) !== batcher) {
@@ -134,15 +175,35 @@ async function main(): Promise<void> {
       `module.batcher() = ${moduleBatcher} does not match target batcher ${batcher}`,
     )
   }
+  const moduleLotteryManager = await publicClient.readContract({
+    address: phase2Module,
+    abi: MODULE_IDENTITY_ABI,
+    functionName: 'lotteryManager',
+  })
+  if (getAddress(moduleLotteryManager) !== lotteryManager) {
+    throw new Error(
+      `module.lotteryManager() = ${moduleLotteryManager} does not match canonical ${lotteryManager}`,
+    )
+  }
+  const runtimeBytecode = await publicClient.getBytecode({ address: phase2Module })
+  if (!runtimeBytecode || runtimeBytecode === '0x') {
+    throw new Error(`No runtime bytecode at replacement module ${phase2Module}`)
+  }
+  const runtimeCodehash = keccak256(runtimeBytecode as Hex)
 
-  const data = encodeFunctionData({
+  const approveData = encodeFunctionData({
+    abi: APPROVE_PHASE_MODULE_CODEHASH_ABI,
+    functionName: 'approvePhaseModuleCodehash',
+    args: [phase2Module, runtimeCodehash],
+  })
+  const setModuleData = encodeFunctionData({
     abi: SET_PHASE2_MODULE_ABI,
     functionName: 'setPhase2Module',
     args: [phase2Module],
   })
 
   process.stdout.write(
-    `Executing setPhase2Module(${phase2Module}) on batcher ${batcher} via Safe ${safeAddress} signer ${signerAddress}\n`,
+    `Atomically approving ${runtimeCodehash} and setting phase2 module ${phase2Module} on batcher ${batcher} via Safe ${safeAddress} signer ${signerAddress}\n`,
   )
 
   const protocolKit = await Safe.init({
@@ -152,7 +213,10 @@ async function main(): Promise<void> {
   })
 
   const safeTransaction = await protocolKit.createTransaction({
-    transactions: [{ to: batcher, value: '0', data, operation: OperationType.Call }],
+    transactions: [
+      { to: batcher, value: '0', data: approveData, operation: OperationType.Call },
+      { to: batcher, value: '0', data: setModuleData, operation: OperationType.Call },
+    ],
   })
 
   const executeResponse = await protocolKit.executeTransaction(safeTransaction)
@@ -173,8 +237,33 @@ async function main(): Promise<void> {
   if (getAddress(wired) !== phase2Module) {
     throw new Error(`post-swap verify failed: batcher.phase2Module() = ${wired}`)
   }
+  const approvedCodehash = await publicClient.readContract({
+    address: batcher,
+    abi: BATCHER_PHASE2_MODULE_ABI,
+    functionName: 'approvedPhaseModuleCodehashes',
+    args: [phase2Module],
+  })
+  if (approvedCodehash.toLowerCase() !== runtimeCodehash.toLowerCase()) {
+    throw new Error(
+      `post-swap codehash verify failed: approved=${approvedCodehash} runtime=${runtimeCodehash}`,
+    )
+  }
 
-  process.stdout.write(`${JSON.stringify({ ok: true, txHash, batcher, phase2Module, safeAddress }, null, 2)}\n`)
+  process.stdout.write(
+    `${JSON.stringify(
+      {
+        ok: true,
+        txHash,
+        batcher,
+        phase2Module,
+        lotteryManager,
+        runtimeCodehash,
+        safeAddress,
+      },
+      null,
+      2,
+    )}\n`,
+  )
 
   // Hygiene note: after any production module rotation, record this txHash in
   // docs/reference/addresses.md and the active release notes.

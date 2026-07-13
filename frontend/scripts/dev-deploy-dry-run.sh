@@ -537,10 +537,26 @@ resolve_vite_host_arg() {
   esac
 }
 
+windows_portproxy_connect_target() {
+  local port="$1"
+  if ! command -v /mnt/c/Windows/System32/netsh.exe >/dev/null 2>&1; then
+    return 1
+  fi
+  # netsh "show all" prints rows like: 127.0.0.1  5174  172.19.x.x  5174
+  /mnt/c/Windows/System32/netsh.exe interface portproxy show all 2>/dev/null \
+    | awk -v p="$port" '
+        $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && $2 == p {
+          print $3
+          exit
+        }
+      '
+}
+
 print_local_dev_access_hints() {
   local port="$1"
   local host_arg="$2"
   local wsl_ip
+  local proxy_target
   wsl_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
   echo ""
   echo "Open: http://localhost:${port}/waitlist"
@@ -558,6 +574,15 @@ print_local_dev_access_hints() {
         echo "  Then hard-refresh http://localhost:${port}/waitlist — or use the LAN URL above."
       fi
     fi
+  fi
+  proxy_target="$(windows_portproxy_connect_target "$port" || true)"
+  if [[ -n "$proxy_target" ]]; then
+    echo ""
+    echo "WARNING: Windows netsh portproxy is hijacking 127.0.0.1:${port} -> ${proxy_target}:${port}."
+    echo "  Under mirrored WSL networking that LAN hop is usually unreachable, so the browser hangs."
+    echo "  Fix in elevated Windows PowerShell:"
+    echo "    netsh interface portproxy delete v4tov4 listenaddress=127.0.0.1 listenport=${port}"
+    echo "  Then hard-refresh http://localhost:${port}/waitlist (no need to restart Vite)."
   fi
   echo "Vite bind host: ${host_arg} (VITE_DEV_SERVER_HOST=${VITE_DEV_SERVER_HOST})"
   if grep -qi microsoft /proc/version 2>/dev/null || [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
@@ -590,6 +615,7 @@ require_windows_localhost_lane_ready() {
   fi
   local cursor_pid
   local next_port=$((port + 1))
+  local proxy_target
   cursor_pid="$(windows_cursor_listener_pid_for_port "$port" || true)"
   if [[ -n "$cursor_pid" ]]; then
     echo ""
@@ -605,6 +631,25 @@ require_windows_localhost_lane_ready() {
     echo "Temporary bypass (not recommended): DEPLOY_DRY_RUN_ALLOW_CURSOR_PORT_HIJACK=1"
     echo ""
     if [[ "${DEPLOY_DRY_RUN_ALLOW_CURSOR_PORT_HIJACK:-0}" != "1" ]]; then
+      exit 1
+    fi
+  fi
+
+  proxy_target="$(windows_portproxy_connect_target "$port" || true)"
+  if [[ -n "$proxy_target" ]]; then
+    echo ""
+    echo "ERROR: Windows localhost lane is hijacked by a stale netsh portproxy."
+    echo "  127.0.0.1:${port} -> ${proxy_target}:${port}"
+    echo "  Mirrored WSL cannot reach that eth0 hop from Windows, so /waitlist hangs."
+    echo ""
+    echo "Fix once in elevated Windows PowerShell, then hard-refresh the browser:"
+    echo "  netsh interface portproxy delete v4tov4 listenaddress=127.0.0.1 listenport=${port}"
+    echo "  netsh interface portproxy show all"
+    echo ""
+    echo "Temporary bypass (not recommended): DEPLOY_DRY_RUN_ALLOW_STALE_PORTPROXY=1"
+    echo "Or use another port: DEPLOY_DRY_RUN_PORT=5180 pnpm -C frontend run dev:deploy-dry-run"
+    echo ""
+    if [[ "${DEPLOY_DRY_RUN_ALLOW_STALE_PORTPROXY:-0}" != "1" ]]; then
       exit 1
     fi
   fi

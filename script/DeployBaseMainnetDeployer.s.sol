@@ -37,7 +37,6 @@ import {OVaultStrategiesModule} from "@4626/shared/vault/modules/OVaultStrategie
 ///   AJNA_FACTORY=...
 /// Optional Solana wiring (requires broadcaster == protocolTreasury):
 ///   CONFIGURE_SOLANA=1
-///   SOLANA_BRIDGE_ADAPTER=...
 ///   SOLANA_DESTINATION=0x<32-byte-solana-pubkey>
 /// Optional explicit owner for UniversalCreate2DeployerFromStore.
 /// Defaults to broadcaster when unset.
@@ -46,9 +45,7 @@ import {OVaultStrategiesModule} from "@4626/shared/vault/modules/OVaultStrategie
 ///   CONFIGURE_OVAULT_RUNTIME=1
 ///   OVAULT_HUB_COMPOSER=...
 ///   OVAULT_SOLANA_EID=30168
-/// Optional default ShareOFT mesh peer (requires broadcaster == protocolTreasury):
-///   CONFIGURE_SOLANA_SHARE_OFT_PEER=1
-///   SOLANA_SHARE_OFT_PEER=0x<32-byte-solana-share-mesh-peer>
+/// Configure each token's Solana ShareOFT peer explicitly in Registry4626.
 ///   INFRA_STORE_SALT or INFRA_STORE_SALT_TAG
 ///   INFRA_DEPLOYER_FROM_STORE_SALT or INFRA_DEPLOYER_FROM_STORE_SALT_TAG
 ///   INFRA_VAULT_CORE_MODULE_SALT or INFRA_VAULT_CORE_MODULE_SALT_TAG
@@ -117,11 +114,9 @@ contract DeployBaseMainnetDeployer is Script {
         address ajnaFactory;
         address agentVaultCoreModule;
         address create2FromStoreOwner;
-        address solanaBridgeAdapter;
         bytes32 solanaDestination;
         address ovaultHubComposer;
         uint32 ovaultSolanaEid;
-        bytes32 solanaShareOftPeer;
     }
 
     struct SaltConfig {
@@ -170,7 +165,6 @@ contract DeployBaseMainnetDeployer is Script {
         return keccak256(bytes(tag));
     }
 
-
     function _predictBatcherShellAddress(
         Config memory cfg,
         bytes32 batcherSalt,
@@ -206,7 +200,9 @@ contract DeployBaseMainnetDeployer is Script {
         console2.log(string.concat("HANDOFF:UNIVERSAL_CREATE2_DEPLOYER=", vm.toString(predicted.deployerFromStore)));
         console2.log(string.concat("HANDOFF:UNIVERSAL_CREATE2_FROM_STORE=", vm.toString(predicted.deployerFromStore)));
         console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER=", vm.toString(predicted.deploymentBatcher)));
-        console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER_AUTO_HANDOFF=", vm.toString(predicted.deploymentBatcher)));
+        console2.log(
+            string.concat("HANDOFF:DEPLOYMENT_BATCHER_AUTO_HANDOFF=", vm.toString(predicted.deploymentBatcher))
+        );
         console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER_PHASE1_MODULE=", vm.toString(predicted.phase1Module)));
         console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER_PHASE2_MODULE=", vm.toString(predicted.phase2Module)));
         console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER_PHASE3_HELPER=", vm.toString(predicted.phase3Helper)));
@@ -372,7 +368,13 @@ contract DeployBaseMainnetDeployer is Script {
         predicted.utilsHelper = _create2(CREATE2_FACTORY_ADDR, salts.utilsHelper, keccak256(utilsInit));
 
         predicted.deploymentBatcher = _predictBatcherShellAddress(
-            cfg, salts.deploymentBatcher, storeAddr, create2DeployerAddr, coreModuleAddr, strategiesModuleAddr, adminModuleAddr
+            cfg,
+            salts.deploymentBatcher,
+            storeAddr,
+            create2DeployerAddr,
+            coreModuleAddr,
+            strategiesModuleAddr,
+            adminModuleAddr
         );
 
         address batcherAddr = predicted.deploymentBatcher;
@@ -436,20 +438,15 @@ contract DeployBaseMainnetDeployer is Script {
         cfg.ajnaFactory = vm.envOr("AJNA_FACTORY", DEFAULT_AJNA_FACTORY);
         cfg.agentVaultCoreModule = vm.envOr("AGENT_VAULT_CORE_MODULE", address(0));
         cfg.create2FromStoreOwner = vm.envOr("CREATE2_FROM_STORE_OWNER", broadcaster);
-        cfg.solanaBridgeAdapter = vm.envOr("SOLANA_BRIDGE_ADAPTER", address(0));
         cfg.solanaDestination = vm.envOr("SOLANA_DESTINATION", bytes32(0));
         cfg.ovaultHubComposer = vm.envOr("OVAULT_HUB_COMPOSER", address(0));
         cfg.ovaultSolanaEid = uint32(vm.envOr("OVAULT_SOLANA_EID", uint256(0)));
-        cfg.solanaShareOftPeer = vm.envOr("SOLANA_SHARE_OFT_PEER", bytes32(0));
         bool configureSolana = vm.envOr("CONFIGURE_SOLANA", uint256(0)) == 1;
         bool configureOvaultRuntime = vm.envOr("CONFIGURE_OVAULT_RUNTIME", uint256(0)) == 1;
-        bool configureSolanaShareOftPeer = vm.envOr("CONFIGURE_SOLANA_SHARE_OFT_PEER", uint256(0)) == 1;
         SaltConfig memory salts;
         salts.store = _saltFromEnvOrEpoch("INFRA_STORE_SALT", "INFRA_STORE_SALT_TAG", STORE_SALT_TAG_PREFIX);
         salts.deployerFromStore = _saltFromEnvOrEpoch(
-            "INFRA_DEPLOYER_FROM_STORE_SALT",
-            "INFRA_DEPLOYER_FROM_STORE_SALT_TAG",
-            DEPLOYER_FROM_STORE_SALT_TAG_PREFIX
+            "INFRA_DEPLOYER_FROM_STORE_SALT", "INFRA_DEPLOYER_FROM_STORE_SALT_TAG", DEPLOYER_FROM_STORE_SALT_TAG_PREFIX
         );
         salts.vaultCoreModule = _saltFromEnvOrEpoch(
             "INFRA_VAULT_CORE_MODULE_SALT", "INFRA_VAULT_CORE_MODULE_SALT_TAG", VAULT_CORE_MODULE_SALT_TAG_PREFIX
@@ -460,9 +457,7 @@ contract DeployBaseMainnetDeployer is Script {
             VAULT_STRATEGIES_MODULE_SALT_TAG_PREFIX
         );
         salts.vaultAdminModule = _saltFromEnvOrEpoch(
-            "INFRA_VAULT_ADMIN_MODULE_SALT",
-            "INFRA_VAULT_ADMIN_MODULE_SALT_TAG",
-            VAULT_ADMIN_MODULE_SALT_TAG_PREFIX
+            "INFRA_VAULT_ADMIN_MODULE_SALT", "INFRA_VAULT_ADMIN_MODULE_SALT_TAG", VAULT_ADMIN_MODULE_SALT_TAG_PREFIX
         );
         salts.phase2Module = _saltFromEnvOrEpoch(
             "INFRA_PHASE2_MODULE_SALT", "INFRA_PHASE2_MODULE_SALT_TAG", PHASE2_MODULE_SALT_TAG_PREFIX
@@ -476,13 +471,10 @@ contract DeployBaseMainnetDeployer is Script {
         salts.shareMeshHelper = _saltFromEnvOrEpoch(
             "INFRA_SHARE_MESH_HELPER_SALT", "INFRA_SHARE_MESH_HELPER_SALT_TAG", SHARE_MESH_HELPER_SALT_TAG_PREFIX
         );
-        salts.utilsHelper = _saltFromEnvOrEpoch(
-            "INFRA_UTILS_HELPER_SALT", "INFRA_UTILS_HELPER_SALT_TAG", UTILS_HELPER_SALT_TAG_PREFIX
-        );
+        salts.utilsHelper =
+            _saltFromEnvOrEpoch("INFRA_UTILS_HELPER_SALT", "INFRA_UTILS_HELPER_SALT_TAG", UTILS_HELPER_SALT_TAG_PREFIX);
         salts.deploymentBatcher = _saltFromEnvOrEpoch(
-            "INFRA_DEPLOYMENT_BATCHER_SALT",
-            "INFRA_DEPLOYMENT_BATCHER_SALT_TAG",
-            DEPLOYMENT_BATCHER_SALT_TAG_PREFIX
+            "INFRA_DEPLOYMENT_BATCHER_SALT", "INFRA_DEPLOYMENT_BATCHER_SALT_TAG", DEPLOYMENT_BATCHER_SALT_TAG_PREFIX
         );
 
         PredictedAddresses memory predicted;
@@ -574,12 +566,8 @@ contract DeployBaseMainnetDeployer is Script {
 
         // Pre-deploy batcher helpers in separate txs to stay under Base's 25M per-tx gas cap.
         _deployCreate2IfMissing(salts.utilsHelper, _buildUtilsHelperInit());
-        _deployCreate2IfMissing(
-            salts.phase2Module, _buildPhase2ModuleInit(cfg, create2DeployerAddr, deployerAddr)
-        );
-        _deployCreate2IfMissing(
-            salts.phase3Helper, _buildPhase3HelperInit(cfg, create2DeployerAddr, deployerAddr)
-        );
+        _deployCreate2IfMissing(salts.phase2Module, _buildPhase2ModuleInit(cfg, create2DeployerAddr, deployerAddr));
+        _deployCreate2IfMissing(salts.phase3Helper, _buildPhase3HelperInit(cfg, create2DeployerAddr, deployerAddr));
         _deployCreate2IfMissing(
             salts.shareMeshHelper, _buildShareMeshHelperInit(cfg, create2DeployerAddr, deployerAddr)
         );
@@ -636,11 +624,8 @@ contract DeployBaseMainnetDeployer is Script {
         }
 
         vm.startBroadcast(pk);
-        address[3] memory requiredDeployers = [
-            deployerAddr,
-            address(deployer.phase3Helper()),
-            address(deployer.shareMeshHelper())
-        ];
+        address[3] memory requiredDeployers =
+            [deployerAddr, address(deployer.phase3Helper()), address(deployer.shareMeshHelper())];
         for (uint256 i = 0; i < requiredDeployers.length; ++i) {
             address deployerCaller = requiredDeployers[i];
             if (!create2Deployer.authorizedDeployers(deployerCaller)) {
@@ -656,7 +641,9 @@ contract DeployBaseMainnetDeployer is Script {
         require(create2Deployer.owner() == cfg.create2FromStoreOwner, "Create2 owner mismatch");
         require(create2Deployer.authorizedDeployers(address(deployer)), "Batcher not authorized in create2");
         require(create2Deployer.authorizedDeployers(address(deployer.phase3Helper())), "Phase3 helper not authorized");
-        require(create2Deployer.authorizedDeployers(address(deployer.shareMeshHelper())), "Share mesh helper not authorized");
+        require(
+            create2Deployer.authorizedDeployers(address(deployer.shareMeshHelper())), "Share mesh helper not authorized"
+        );
         require(address(deployer.registry()) == cfg.registry, "Deployer registry mismatch");
         require(address(deployer.usdc()) == cfg.usdc, "Deployer USDC mismatch");
         require(address(deployer.uniswapV3Factory()) == cfg.uniswapV3Factory, "Deployer V3 factory mismatch");
@@ -668,41 +655,40 @@ contract DeployBaseMainnetDeployer is Script {
         console2.log("DeploymentBatcher:", address(deployer));
         _emitPhasedInfraHandoff(predicted);
 
-        // Optional: configure the 20% Solana allocation path on the batcher.
+        // Optional: configure the LayerZero ShareOFT recipient for the Solana allocation.
         if (configureSolana) {
-            require(cfg.solanaBridgeAdapter != address(0), "SOLANA_BRIDGE_ADAPTER required");
             require(cfg.solanaDestination != bytes32(0), "SOLANA_DESTINATION required");
             if (broadcaster != cfg.protocolTreasury) {
-                console2.log("CONFIGURE_SOLANA=1 but broadcaster != protocolTreasury; skipping setSolanaConfig");
+                console2.log("CONFIGURE_SOLANA=1 but broadcaster != protocolTreasury; skipping setSolanaDestination");
             } else {
-                address currentAdapter = deployer.solanaBridgeAdapter();
                 bytes32 currentDestination = deployer.solanaDestination();
 
-                if (currentAdapter != cfg.solanaBridgeAdapter || currentDestination != cfg.solanaDestination) {
+                if (currentDestination != cfg.solanaDestination) {
                     vm.startBroadcast(pk);
-                    deployer.setSolanaConfig(cfg.solanaBridgeAdapter, cfg.solanaDestination);
+                    deployer.setSolanaDestination(cfg.solanaDestination);
                     vm.stopBroadcast();
                 }
 
-                require(deployer.solanaBridgeAdapter() == cfg.solanaBridgeAdapter, "Solana adapter mismatch");
                 require(deployer.solanaDestination() == cfg.solanaDestination, "Solana destination mismatch");
-                console2.log("Solana adapter configured:", cfg.solanaBridgeAdapter);
+                console2.log("Solana LayerZero destination configured:");
                 console2.logBytes32(cfg.solanaDestination);
             }
         } else {
-            console2.log("CONFIGURE_SOLANA=0 (skipped setSolanaConfig)");
+            console2.log("CONFIGURE_SOLANA=0 (skipped setSolanaDestination)");
         }
 
         if (configureOvaultRuntime) {
             require(cfg.ovaultHubComposer != address(0), "OVAULT_HUB_COMPOSER required");
             require(cfg.ovaultSolanaEid != 0, "OVAULT_SOLANA_EID required");
             if (broadcaster != cfg.protocolTreasury) {
-                console2.log("CONFIGURE_OVAULT_RUNTIME=1 but broadcaster != protocolTreasury; skipping setOVaultRuntimeConfig");
+                console2.log(
+                    "CONFIGURE_OVAULT_RUNTIME=1 but broadcaster != protocolTreasury; skipping setOVaultRuntimeConfig"
+                );
             } else {
                 DeploymentBatcher.OVaultRuntimeConfig memory currentRuntime = deployer.getOVaultRuntimeConfig();
                 if (
-                    currentRuntime.hubComposer != cfg.ovaultHubComposer || currentRuntime.solanaEid != cfg.ovaultSolanaEid
-                        || !currentRuntime.enabled
+                    currentRuntime.hubComposer != cfg.ovaultHubComposer
+                        || currentRuntime.solanaEid != cfg.ovaultSolanaEid || !currentRuntime.enabled
                 ) {
                     vm.startBroadcast(pk);
                     deployer.setOVaultRuntimeConfig(cfg.ovaultHubComposer, cfg.ovaultSolanaEid, true);
@@ -718,26 +704,6 @@ contract DeployBaseMainnetDeployer is Script {
             }
         } else {
             console2.log("CONFIGURE_OVAULT_RUNTIME=0 (skipped setOVaultRuntimeConfig)");
-        }
-
-        if (configureSolanaShareOftPeer) {
-            require(cfg.solanaShareOftPeer != bytes32(0), "SOLANA_SHARE_OFT_PEER required");
-            if (broadcaster != cfg.protocolTreasury) {
-                console2.log(
-                    "CONFIGURE_SOLANA_SHARE_OFT_PEER=1 but broadcaster != protocolTreasury; skipping setSolanaShareOftPeer"
-                );
-            } else {
-                if (deployer.solanaShareOftPeer() != cfg.solanaShareOftPeer) {
-                    vm.startBroadcast(pk);
-                    deployer.setSolanaShareOftPeer(cfg.solanaShareOftPeer);
-                    vm.stopBroadcast();
-                }
-                require(deployer.solanaShareOftPeer() == cfg.solanaShareOftPeer, "Solana ShareOFT peer mismatch");
-                console2.logBytes32(cfg.solanaShareOftPeer);
-                console2.log("Solana ShareOFT default peer configured");
-            }
-        } else {
-            console2.log("CONFIGURE_SOLANA_SHARE_OFT_PEER=0 (skipped setSolanaShareOftPeer)");
         }
     }
 }

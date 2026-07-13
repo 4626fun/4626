@@ -15,6 +15,7 @@ vi.mock('@/hooks/useAlfaClubLiquidityPools', () => ({
     refetch: vi.fn(),
   }),
   filterAlfaClubLiquidityPools: () => [],
+  filterAlfaClubLiquidityPoolsByRoomId: () => [],
   formatAlfaClubPoolFee: () => '0.69%',
 }))
 
@@ -73,5 +74,32 @@ describe('AlfaClubLiquidityPools write gate', () => {
     expect(screen.getByText(/Liquidity writes require access/i)).toBeTruthy()
     expect(screen.getByRole('link', { name: /Sign in to manage liquidity/i })).toBeTruthy()
     expect(screen.queryByTestId('lp-console')).toBeNull()
+  })
+
+  it('passes accepted sessions into the unchanged SmartWalletRoute console', async () => {
+    const { AlfaClubLpWriteConsole } = await import('@/pages/AlfaClubLiquidityPools')
+    const access: AccessState = {
+      loading: false,
+      walletConnected: true,
+      sessionValid: true,
+      accepted: true,
+      creator: false,
+      admin: false,
+      allowlistEnforced: true,
+      effectiveAddress: '0x1000000000000000000000000000000000000000',
+      marketingUrl: 'https://4626.fun',
+      hostMode: 'alfaclub',
+    }
+
+    render(
+      <MemoryRouter>
+        <AccessContext.Provider value={access}>
+          <AlfaClubLpWriteConsole selectedPool={null} initialTokenId={1659n} />
+        </AccessContext.Provider>
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByTestId('lp-console')).toBeTruthy()
+    expect(screen.queryByText(/Liquidity writes require access/i)).toBeNull()
   })
 })

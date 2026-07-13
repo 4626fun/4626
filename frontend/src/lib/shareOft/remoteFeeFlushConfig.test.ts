@@ -1,13 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { applyExecutorDropBuffer } from './remoteFeeFlushConfig'
-
 describe('remoteFeeFlushConfig', () => {
-  it('applyExecutorDropBuffer adds 5% headroom by default', () => {
-    expect(applyExecutorDropBuffer(1_000_000n)).toBe(1_050_000n)
-    expect(applyExecutorDropBuffer(0n)).toBe(0n)
-  })
-
   it('parseRemoteFeeFlushTargets rejects missing lzEid', async () => {
     vi.stubEnv('VITE_REMOTE_SHARE_OFT_FLUSH_TARGETS', JSON.stringify([
       {

@@ -63,13 +63,25 @@ cast call $LM "deferredVrfQueueLength()(uint256)" --rpc-url $BASE_RPC_URL
 | `KEEPER_ENFORCE_COMPLETION_INVARIANTS` | true |
 | `X402_RELAYER_PRIVATE_KEY` | set (no bare `PRIVATE_KEY` fallback) |
 
+### 1.5 v1.19 partial-refresh wiring
+
+- [ ] `VITE_DEPLOYMENT_VERSION=v1.19.0`
+- [ ] every deploy-consumed v1.19 codeId is stored and Safe-approved
+- [ ] active `DeploymentBatcher.phase2Module()` has immutable
+  `lotteryManager() == 0xB68F359e…`
+- [ ] `SolanaBridgeAdapter.lotteryManager() == 0xB68F359e…`
+- [ ] immutable batcher-shell LM getter is treated as historical, not as the
+  active Phase2 authority
+
 ---
 
 ## Phase 2 — Canary traffic (base odds only)
 
 ### 2.1 Scope
 
-- Prefer **one** creator coin / ShareOFT lane with known oracle and gauge reserves
+- First use grandfathered AKITA only for a bounded base-odds soak after updating
+  its gauge LM pointer and seeding a deliberately small ■AKITA jackpot reserve
+- Launch the separate v1.19 greenfield creator only after the AKITA soak passes
 - Small notional swaps first (above `minSwapAmount`)
 - Confirm entries appear: events / `tokenStats` / VRF requests
 

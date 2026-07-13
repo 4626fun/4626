@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { MessageSquare, ChevronDown, Plus, Search, Wifi, WifiOff, X } from 'lucide-react'
+import { Bot, MessageSquare, ChevronDown, Plus, Search, Wifi, WifiOff, X } from 'lucide-react'
 import { useXmtp, type ChatConversation } from '@/lib/xmtp/provider'
 import { getAgentIdentity } from './agentIdentity'
 import { useAccountContext } from '@/wallet/accountContext'
@@ -68,7 +68,7 @@ function ConversationItem({
       : convo.name
   const displaySecondary =
     convo.type === 'dm' && peerAddress
-      ? (agentIdentity ? '4626 assistant' : (identity.secondary ?? truncateAddress(peerAddress)))
+      ? (agentIdentity?.subtitle ?? identity.secondary ?? truncateAddress(peerAddress))
       : null
   const avatar = convo.type === 'dm'
     ? (agentIdentity?.avatar ?? identity.avatar ?? convo.imageUrl ?? null)
@@ -104,10 +104,13 @@ function ConversationItem({
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-zinc-100">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate text-sm font-semibold text-zinc-100">
               {displayName}
             </span>
+            {agentIdentity ? (
+              <Bot className="h-3.5 w-3.5 shrink-0 text-violet-200" aria-label="AI agent" />
+            ) : null}
           </span>
           <span className="shrink-0 text-[10px] text-zinc-500 group-hover:text-zinc-400">
             {formatTime(convo.lastMessageAt)}

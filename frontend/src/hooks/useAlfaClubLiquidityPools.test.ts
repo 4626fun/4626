@@ -3,6 +3,7 @@ import { getAddress, type Address, type PublicClient } from 'viem'
 
 import {
   filterAlfaClubLiquidityPools,
+  filterAlfaClubLiquidityPoolsByRoomId,
   formatAlfaClubPoolFee,
   readAlfaClubLiquidityPools,
   type AlfaClubLiquidityPoolSummary,
@@ -50,6 +51,18 @@ describe('AlfaClub liquidity pool directory', () => {
     expect(filterAlfaClubLiquidityPools(pools, '1659')).toEqual(pools)
     expect(filterAlfaClubLiquidityPools(pools, POOL.slice(-8))).toEqual(pools)
     expect(filterAlfaClubLiquidityPools(pools, 'missing')).toEqual([])
+  })
+
+  it('filters room pools by exact FriendKey token ID', () => {
+    const roomPool = makePool()
+    const differentRoom = makePool({
+      pool: '0x5000000000000000000000000000000000000000',
+      tokenId: 16590n,
+    })
+    expect(filterAlfaClubLiquidityPoolsByRoomId([roomPool, differentRoom], '1659')).toEqual([
+      roomPool,
+    ])
+    expect(filterAlfaClubLiquidityPoolsByRoomId([roomPool], 'not-a-room')).toEqual([])
   })
 
   it('returns an empty directory without issuing empty multicalls', async () => {

@@ -38,9 +38,11 @@ const NAV_ITEMS_PUBLIC: NavItem[] = [
 ]
 
 const NAV_ITEMS_ALFACLUB: NavItem[] = [
-  { label: 'Rooms', to: '/rooms', activePrefixes: ['/rooms', '/trading-rooms'] },
-  { label: 'Safety', to: '/safety', activePrefixes: ['/safety', '/key-safety'] },
-  { label: 'Pools', to: '/pools', activePrefixes: ['/pools', '/liquidity'] },
+  {
+    label: 'Rooms',
+    to: '/rooms',
+    activePrefixes: ['/rooms', '/trading-rooms', '/safety', '/key-safety', '/pools', '/liquidity'],
+  },
 ]
 
 const ADMIN_ITEM: NavItem = { label: 'Admin', to: '/admin/waitlist', activePrefixes: ['/admin'] }

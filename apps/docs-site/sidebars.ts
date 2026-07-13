@@ -15,6 +15,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'getting-started/index',
         'overview/how-it-works',
+        'overview/ve4626',
         'overview/solana-share-mesh',
       ],
     },

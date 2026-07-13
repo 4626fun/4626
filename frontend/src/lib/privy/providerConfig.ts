@@ -24,6 +24,15 @@ export type PrivyClientMode =
   | 'telegram-link'
 
 export const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
+export const PRIVY_CANONICAL_API_URL = 'https://auth.privy.io'
+
+export function resolvePrivyProviderApiUrl(params: {
+  configuredApiUrl: string | null
+  bypassCustomPrivyDomain: boolean
+}): string | null {
+  if (params.bypassCustomPrivyDomain) return PRIVY_CANONICAL_API_URL
+  return params.configuredApiUrl
+}
 
 /** Waitlist routes must not inherit dashboard embedded-wallet defaults (privy.4626.fun iframe → server-cookie mode). */
 export const WAITLIST_EMBEDDED_WALLETS_OFF = {

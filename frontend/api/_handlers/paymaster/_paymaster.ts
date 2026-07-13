@@ -39,6 +39,7 @@ import {
   derivePayoutRouterSalt,
   deriveVaultShareBurnStreamSalt,
 } from '../../../shared/deploy/create2Salts.js'
+import { encodeCreatorPayoutRouterConstructorArgs } from '../../../shared/deploy/payoutRouterInitCode.js'
 import {
   buildImpairmentAuxPlan,
   PERMISSIONLESS_CREATE2_DEPLOYER,
@@ -956,6 +957,23 @@ const BYTECODE_STORE_ABI = [
     stateMutability: 'view',
     inputs: [{ name: 'codeId', type: 'bytes32' }],
     outputs: [{ name: 'creationCode', type: 'bytes' }],
+  },
+] as const
+
+const REGISTRY_DEPLOYMENT_ADDRESSES_ABI = [
+  {
+    type: 'function',
+    name: 'getWrapperForToken',
+    stateMutability: 'view',
+    inputs: [{ name: 'token', type: 'address' }],
+    outputs: [{ name: '', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'getShareOFTForToken',
+    stateMutability: 'view',
+    inputs: [{ name: 'token', type: 'address' }],
+    outputs: [{ name: '', type: 'address' }],
   },
 ] as const
 
@@ -3177,6 +3195,33 @@ async function validateInnerCalls(params: {
       }
     }
 
+    if ((!expectedWrapper || !expectedShareOFT) && contracts.registry && isAddress(contracts.registry)) {
+      const client = await getBaseClient()
+      const [registryWrapper, registryShareOFT] = await Promise.all([
+        client.readContract({
+          address: getAddress(contracts.registry),
+          abi: REGISTRY_DEPLOYMENT_ADDRESSES_ABI,
+          functionName: 'getWrapperForToken',
+          args: [expectedCreatorToken as Address],
+        }),
+        client.readContract({
+          address: getAddress(contracts.registry),
+          abi: REGISTRY_DEPLOYMENT_ADDRESSES_ABI,
+          functionName: 'getShareOFTForToken',
+          args: [expectedCreatorToken as Address],
+        }),
+      ])
+      if (isAddress(registryWrapper) && getAddress(registryWrapper) !== ZERO_ADDRESS) {
+        expectedWrapper = getAddress(registryWrapper)
+      }
+      if (isAddress(registryShareOFT) && getAddress(registryShareOFT) !== ZERO_ADDRESS) {
+        expectedShareOFT = getAddress(registryShareOFT)
+      }
+    }
+    if (!expectedWrapper || !expectedShareOFT) {
+      throw new Error('missing_wrapper_or_shareoft_for_payout_router')
+    }
+
     const burnSalt = deriveVaultShareBurnStreamSalt({ creatorToken: expectedCreatorToken as Address, owner: params.sender })
     expectedBurnStream = await computeCreate2AddressFromStore({
       store: bytecodeStore,
@@ -3193,15 +3238,17 @@ async function validateInnerCalls(params: {
       deployer: create2DeployerFromStore,
       salt: routerSalt,
       codeId: PAYOUT_ROUTER_CODE_ID as Hex,
-      constructorArgs: abiEncodeAddresses([
-        expectedCreatorToken as Address,
-        expectedVault,
-        expectedBurnStream,
-        expectedProtocolTreasury,
-        defaultSwapRouterForDerivedAddresses,
-        BASE_WETH,
-        ZERO_ADDRESS,
-      ]),
+      constructorArgs: encodeCreatorPayoutRouterConstructorArgs({
+        creatorToken: expectedCreatorToken as Address,
+        vault: expectedVault,
+        burnStream: expectedBurnStream,
+        shareOFT: expectedShareOFT,
+        wrapper: expectedWrapper,
+        owner: expectedProtocolTreasury,
+        swapRouter: defaultSwapRouterForDerivedAddresses,
+        weth: BASE_WETH,
+        protocolRewards: ZERO_ADDRESS,
+      }),
     })
     const policyControllerSalt = deriveCreatorCoinPolicyControllerSalt({
       creatorToken: expectedCreatorToken as Address,

@@ -84,7 +84,7 @@ export function formatPositionAlertStatusBlock(
     ]
     if (options?.roomId === '1659') {
       lines.push(
-        '• Room 1659 monitors **room HL portfolio + Virtual Arena wallet** — link Telegram in the 4626 Mini App, or DM the 4626 agent on XMTP, then `/hermit alert` · `/hermit alert test`',
+        '• Room 1659 monitors **room HL portfolio + Virtual Arena wallet** — link Telegram in the 4626 Mini App (recommended, no wallet signature), or opt into XMTP, then `/hermit alert` · `/hermit alert test`',
       )
     }
     return lines
@@ -116,9 +116,11 @@ export function formatPositionAlertStatusBlock(
     )
   }
   if (alert.xmtpEnabled && options?.protocolAgentDmLink) {
-    lines.push(`• 4626 agent XMTP: ${options.protocolAgentDmLink}`)
+    lines.push(`• 4626 agent XMTP: open once at ${options.protocolAgentDmLink}`)
   } else if (!alert.xmtpEnabled && options?.protocolAgentDmLink) {
-    lines.push(`• XMTP opt-in: DM once at ${options.protocolAgentDmLink}, then \`/hermit alert xmtp on\``)
+    lines.push(
+      `• XMTP opt-in (optional, wallet-native): open ${options.protocolAgentDmLink} once, then \`/hermit alert xmtp on\``,
+    )
   }
   if (options?.xmtpConfigured === false) {
     lines.push('• XMTP delivery: **not configured** on this runtime (`PROTOCOL_CSW_*` missing)')

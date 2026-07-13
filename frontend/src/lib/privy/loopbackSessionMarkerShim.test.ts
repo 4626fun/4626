@@ -10,8 +10,6 @@ import { isLocalDevOrigin } from '@/lib/flags/flags'
 import {
   applyLoopbackPrivySessionMarkerShim,
   assertPrivySessionMarkerCookie,
-  clearPrivySessionMarkerCookie,
-  hasPersistedPrivyLoopbackSession,
   isLocalDevPrivySessionMarkerMode,
   PRIVY_LOOPBACK_SESSION_EXPIRED_EVENT,
   resetPrivyLoopbackSessionAfterAuthFailure,
@@ -40,25 +38,32 @@ describe('loopbackSessionMarkerShim', () => {
     expect(document.cookie.includes('privy-session=t')).toBe(false)
   })
 
-  it('asserts marker on localhost when a persisted Privy session exists', () => {
+  it('keeps the marker absent on localhost when a persisted Privy session exists', () => {
     window.localStorage.setItem('privy:token', 'test-access-token')
     applyLoopbackPrivySessionMarkerShim()
-    expect(document.cookie.includes('privy-session=t')).toBe(true)
+    expect(document.cookie.includes('privy-session=t')).toBe(false)
     window.localStorage.removeItem('privy:token')
   })
 
-  it('detects persisted loopback Privy sessions', () => {
-    expect(hasPersistedPrivyLoopbackSession()).toBe(false)
-    window.localStorage.setItem('privy:refresh_token', 'real-refresh-token')
-    expect(hasPersistedPrivyLoopbackSession()).toBe(true)
-    window.localStorage.removeItem('privy:refresh_token')
+  it('refuses to assert a server-cookie marker on localhost', () => {
+    assertPrivySessionMarkerCookie()
+    expect(document.cookie.includes('privy-session=t')).toBe(false)
   })
 
-  it('assert and clear helpers manage the marker cookie', () => {
+  it('asserts the marker for production custom-domain sessions', () => {
+    vi.mocked(isLocalDevOrigin).mockReturnValue(false)
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        origin: 'https://4626.fun',
+        hostname: '4626.fun',
+        protocol: 'https:',
+      },
+    })
+
     assertPrivySessionMarkerCookie()
+
     expect(document.cookie.includes('privy-session=t')).toBe(true)
-    clearPrivySessionMarkerCookie()
-    expect(document.cookie.includes('privy-session=t')).toBe(false)
   })
 
   it('detects local dev marker mode on localhost', () => {
@@ -83,7 +88,7 @@ describe('loopbackSessionMarkerShim', () => {
     })
 
     it('clears the marker cookie', () => {
-      assertPrivySessionMarkerCookie()
+      document.cookie = 'privy-session=t; path=/'
       expect(document.cookie.includes('privy-session=t')).toBe(true)
       resetPrivyLoopbackSessionAfterAuthFailure()
       expect(document.cookie.includes('privy-session=t')).toBe(false)

@@ -69,7 +69,7 @@ export function parseAddOwnerAddressCalldataOwner(data: string): `0x${string}` |
     if (decoded.functionName !== 'addOwnerAddress') return null
     const owner = decoded.args?.[0]
     if (typeof owner !== 'string') return null
-    return getAddress(owner)
+    return getAddress(owner) as `0x${string}`
   } catch {
     return null
   }

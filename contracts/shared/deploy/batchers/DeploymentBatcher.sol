@@ -14,7 +14,6 @@ import {IAgentGaugeController} from "@4626/agent/interfaces/IAgentGaugeControlle
 import {ICreatorGaugeController} from "@4626/creator/interfaces/ICreatorGaugeController.sol";
 import {ICreatorOVault} from "@4626/creator/interfaces/ICreatorOVault.sol";
 import {IAjnaPoolFactory} from "@4626/shared/interfaces/external/IAjnaPool.sol";
-import {IBaseSolanaBridge} from "@4626/shared/interfaces/bridge/IBaseSolanaBridge.sol";
 import {LinearVesting4626} from "@4626/shared/distribution/LinearVesting4626.sol";
 import {IOFT, SendParam, MessagingFee, OFTReceipt} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
 import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
@@ -214,8 +213,7 @@ contract DeploymentBatcherPhase3Helper {
         // as Charm above.
         if (params.ajnaWeightBps != 0) {
             bytes32 ajnaAuthSalt = _saltFor(baseSalt, "ajnaVaultAuth");
-            out.ajnaVaultAuth =
-                create2Deployer.deploy(ajnaAuthSalt, codeIds.ajnaVaultAuth, abi.encode(address(this)));
+            out.ajnaVaultAuth = create2Deployer.deploy(ajnaAuthSalt, codeIds.ajnaVaultAuth, abi.encode(address(this)));
 
             if (params.ajnaBufferRatioBps != 0) {
                 IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setBufferRatio(params.ajnaBufferRatioBps);
@@ -279,9 +277,8 @@ contract DeploymentBatcherPhase3Helper {
     function _wireCharmAjnaSynergy(address charmStrategy, address ajnaPool, address oracle) internal {
         ICharmStrategy4626(charmStrategy).setAssetOracle(oracle);
         ICharmStrategy4626(charmStrategy).setAjnaPool(ajnaPool);
-        ICharmStrategy4626(charmStrategy).setAjnaBorrowConfig(
-            true, type(uint256).max, type(uint256).max, CHARM_AJNA_MIN_COLLATERAL_RATIO_BPS, 0, 0
-        );
+        ICharmStrategy4626(charmStrategy)
+            .setAjnaBorrowConfig(true, type(uint256).max, type(uint256).max, CHARM_AJNA_MIN_COLLATERAL_RATIO_BPS, 0, 0);
     }
 
     function _deployCharmPipeline(
@@ -295,21 +292,21 @@ contract DeploymentBatcherPhase3Helper {
         charmVault = ICharmFactory(CHARM_FACTORY)
             .createVault(
                 ICharmFactory.VaultParams({
-                    pool: v3Pool,
-                    manager: protocolAutomation,
-                    managerFee: CHARM_MANAGER_FEE_PIPS,
-                    rebalanceDelegate: params.owner,
-                    maxTotalSupply: type(uint256).max,
-                    baseThreshold: 3000,
-                    limitThreshold: 6000,
-                    fullRangeWeight: 0,
-                    period: 1800,
-                    minTickMove: CHARM_MIN_TICK_MOVE,
-                    maxTwapDeviation: CHARM_MAX_TWAP_DEVIATION,
-                    twapDuration: CHARM_TWAP_DURATION,
-                    name: params.charmVaultName,
-                    symbol: params.charmVaultSymbol
-                })
+                pool: v3Pool,
+                manager: protocolAutomation,
+                managerFee: CHARM_MANAGER_FEE_PIPS,
+                rebalanceDelegate: params.owner,
+                maxTotalSupply: type(uint256).max,
+                baseThreshold: 3000,
+                limitThreshold: 6000,
+                fullRangeWeight: 0,
+                period: 1800,
+                minTickMove: CHARM_MIN_TICK_MOVE,
+                maxTwapDeviation: CHARM_MAX_TWAP_DEVIATION,
+                twapDuration: CHARM_TWAP_DURATION,
+                name: params.charmVaultName,
+                symbol: params.charmVaultSymbol
+            })
             );
         _enforceCharmVaultManager(charmVault, protocolAutomation);
 
@@ -410,9 +407,8 @@ contract DeploymentBatcherShareMeshHelper {
         if (cca.lpManager() != address(0)) revert ShareMeshAlreadyDeployed();
 
         bytes32 registrySalt = _saltFor(baseSalt, "shareMeshHookRegistry");
-        out.hookRegistry = create2Deployer.deploy(
-            registrySalt, codeIds.approvedV4HooksRegistry, abi.encode(address(this))
-        );
+        out.hookRegistry =
+            create2Deployer.deploy(registrySalt, codeIds.approvedV4HooksRegistry, abi.encode(address(this)));
 
         uint256 hooksLength = params.hooksToApprove.length;
         for (uint256 i = 0; i < hooksLength; i++) {
@@ -428,9 +424,7 @@ contract DeploymentBatcherShareMeshHelper {
         );
 
         PoolKey memory poolKey = cca.getPoolKey();
-        IOVaultLPManagerMesh(out.lpManager).configurePool(
-            poolManager, params.positionManager, permit2, poolKey
-        );
+        IOVaultLPManagerMesh(out.lpManager).configurePool(poolManager, params.positionManager, permit2, poolKey);
         IOVaultLPManagerMesh(out.lpManager).setTwapOracle(params.oracle);
         IOVaultLPManagerMesh(out.lpManager).setManager(params.keeperManager, true);
         IOVaultLPManagerMesh(out.lpManager).setVault(params.vault);
@@ -697,8 +691,6 @@ interface IDeploymentBatcherSolanaConfig {
     function getOVaultRuntimeConfig() external view returns (OVaultRuntimeConfig memory);
 
     function solanaDestination() external view returns (bytes32);
-
-    function solanaShareOftPeer() external view returns (bytes32);
 }
 
 interface IERC20MetadataLite {
@@ -907,16 +899,11 @@ contract DeploymentBatcherPhase1Module {
         DeploymentBatcher.Phase1Params calldata params,
         DeploymentBatcher.CodeIds calldata codeIds,
         bytes32 shareOftSaltOverride
-    )
-        internal
-        returns (bytes32 shareOftSalt, bytes32 paramsHash, bytes32 codeIdsHash, bytes32 baseSalt)
-    {
+    ) internal returns (bytes32 shareOftSalt, bytes32 paramsHash, bytes32 codeIdsHash, bytes32 baseSalt) {
         string memory shareSymbolLower = utilsHelper.toLower(params.shareSymbol);
         baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
         shareOftSalt = shareOftSaltOverride == bytes32(0)
-            ? utilsHelper.deriveShareOftSalt(
-                params.creatorToken, params.owner, shareSymbolLower, params.version
-            )
+            ? utilsHelper.deriveShareOftSalt(params.creatorToken, params.owner, shareSymbolLower, params.version)
             : shareOftSaltOverride;
         paramsHash = utilsHelper.phase1ParamsHash(
             params.creatorToken,
@@ -977,7 +964,6 @@ contract DeploymentBatcherPhase2Module {
     error SolanaBridgeRefundFailed();
     error AuctionAmountMismatch();
     error InvalidDepositAmount();
-    error DeprecatedFinalizeSolanaParams();
     error Phase1Missing();
     error Phase2Missing();
     error Phase1StateMismatch();
@@ -1039,9 +1025,7 @@ contract DeploymentBatcherPhase2Module {
         string calldata shareSymbolLower
     ) external returns (DeploymentBatcher.Phase2Result memory out) {
         if (address(this) != batcher) revert NotBatcherContext();
-        return _deployPhase2CoreBody(
-            params, codeIds, baseSalt, shareSymbolLower, DeploymentBatcher.VaultKind.Creator
-        );
+        return _deployPhase2CoreBody(params, codeIds, baseSalt, shareSymbolLower, DeploymentBatcher.VaultKind.Creator);
     }
 
     function deployPhase2CoreOrchestrator(
@@ -1059,9 +1043,8 @@ contract DeploymentBatcherPhase2Module {
             revert ZeroAddress();
         }
         if (rolePolicyManager != address(0)) {
-            IVaultRolePolicyManager(rolePolicyManager).validateRoleAssignments(
-                rolePolicyId, params.owner, params.owner, params.owner, params.owner
-            );
+            IVaultRolePolicyManager(rolePolicyManager)
+                .validateRoleAssignments(rolePolicyId, params.owner, params.owner, params.owner, params.owner);
         }
         if (codeIds.gauge == bytes32(0) || codeIds.cca == bytes32(0) || codeIds.oracle == bytes32(0)) {
             revert InvalidCodeId();
@@ -1083,11 +1066,9 @@ contract DeploymentBatcherPhase2Module {
         return _deployPhase2CoreBody(params, codeIds, baseSalt, shareSymbolLower, p1state.vaultKind);
     }
 
-    function _wireGaugeAssetToken(
-        address gaugeController,
-        address assetToken,
-        DeploymentBatcher.VaultKind vaultKind
-    ) internal {
+    function _wireGaugeAssetToken(address gaugeController, address assetToken, DeploymentBatcher.VaultKind vaultKind)
+        internal
+    {
         if (vaultKind == DeploymentBatcher.VaultKind.Agent) {
             IAgentGaugeController(gaugeController).setAgentToken(assetToken);
         } else {
@@ -1137,11 +1118,32 @@ contract DeploymentBatcherPhase2Module {
         }
         ICCALaunchArm(out.ccaLaunchArm).setRecipients(out.ccaLaunchArm, out.ccaLaunchArm);
         ICCALaunchArm(out.ccaLaunchArm).setBackingVault(params.vault);
-        ICCALaunchArm(out.ccaLaunchArm)
-            .setMigrationConfig(address(0), protocolTreasury, protocolTreasury, 1, 14_400);
+        ICCALaunchArm(out.ccaLaunchArm).setMigrationConfig(address(0), protocolTreasury, protocolTreasury, 1, 14_400);
         ICCALaunchArm(out.ccaLaunchArm).setOracleConfig(out.oracle, poolManager, taxHook, out.gaugeController);
         ICCALaunchArm(out.ccaLaunchArm).setLaunchDiscountBps(DEFAULT_LAUNCH_DISCOUNT_BPS);
         ICCALaunchArm(out.ccaLaunchArm).setLaunchTickSpacingBps(DEFAULT_LAUNCH_TICK_SPACING_BPS);
+
+        // Persist product-lane kind so Registry4626.getVaultKind is correct after deploy.
+        // Agent-specific fields (tax adapter / pair) are left zero unless a later epoch adds params.
+        _setVaultKindMeta(params.creatorToken, params.vault, vaultKind);
+    }
+
+    /// @dev Writes AgentIntegrationMeta (historical name for lane meta). Requires the batcher
+    ///      (or this delegatecall context's address(this) = batcher) to be an authorized factory
+    ///      or the registry owner. Registry auth change lands with the next registry epoch.
+    function _setVaultKindMeta(
+        address token,
+        address vault,
+        DeploymentBatcher.VaultKind vaultKind
+    ) internal {
+        IRegistry4626.AgentIntegrationMeta memory meta;
+        meta.vaultKind = vaultKind == DeploymentBatcher.VaultKind.Agent
+            ? IRegistry4626.VaultKind.Agent
+            : IRegistry4626.VaultKind.Creator;
+        if (vaultKind == DeploymentBatcher.VaultKind.Agent) {
+            meta.nativeAgentVault = vault;
+        }
+        IRegistry4626(registry).setAgentIntegrationMeta(token, meta);
     }
 
     function finalizePhase2Execution(DeploymentBatcher.Phase2FinalizeParams calldata params, bytes32 baseSalt)
@@ -1156,8 +1158,7 @@ contract DeploymentBatcherPhase2Module {
         result.auctionAmount = (shareTokens * AUCTION_PERCENT) / 100;
         result.vestingAmount = (shareTokens * VESTING_PERCENT) / 100;
         result.solanaAmount = (shareTokens * SOLANA_ALLOC_PERCENT) / 100;
-        result.lpReserveAmount =
-            shareTokens - result.auctionAmount - result.vestingAmount - result.solanaAmount;
+        result.lpReserveAmount = shareTokens - result.auctionAmount - result.vestingAmount - result.solanaAmount;
 
         if (result.lpReserveAmount > 0) {
             IERC20(params.shareOFT).safeTransfer(params.ccaLaunchArm, result.lpReserveAmount);
@@ -1175,11 +1176,7 @@ contract DeploymentBatcherPhase2Module {
             result.vestingDurationSeconds = uint64(365 days);
             bytes32 vestingSalt = keccak256(abi.encodePacked(baseSalt, "vesting"));
             LinearVesting4626 vesting = new LinearVesting4626{salt: vestingSalt}(
-                params.shareOFT,
-                params.owner,
-                result.vestingStartTimestamp,
-                result.vestingDurationSeconds,
-                batcher
+                params.shareOFT, params.owner, result.vestingStartTimestamp, result.vestingDurationSeconds, batcher
             );
             result.vestingAddress = address(vesting);
             IERC20(params.shareOFT).safeTransfer(result.vestingAddress, result.vestingAmount);
@@ -1212,7 +1209,9 @@ contract DeploymentBatcherPhase2Module {
         DeploymentBatcher.Phase2FinalizeParams calldata params,
         uint32 solanaEid
     ) internal {
-        if (solanaEid == 0) revert SolanaShareBridgeNotConfigured();
+        if (solanaEid == 0) {
+            revert SolanaShareBridgeNotConfigured();
+        }
 
         IRegistry4626 reg = IRegistry4626(registry);
         IRegistry4626.TokenInfo memory info = reg.getTokenInfo(params.creatorToken);
@@ -1238,12 +1237,6 @@ contract DeploymentBatcherPhase2Module {
         }
 
         bytes32 peer = reg.getRemoteOFTPeerBytes32(params.creatorToken, solanaEid);
-        if (peer == bytes32(0)) {
-            peer = IDeploymentBatcherSolanaConfig(batcher).solanaShareOftPeer();
-            if (peer != bytes32(0)) {
-                reg.setRemoteOFTPeerBytes32(params.creatorToken, solanaEid, peer);
-            }
-        }
         if (peer == bytes32(0)) revert SolanaShareOftPeerNotConfigured();
 
         bytes32 currentPeer = IOFTPeerConfig(params.shareOFT).peers(solanaEid);
@@ -1271,7 +1264,7 @@ contract DeploymentBatcherPhase2Module {
             composeMsg: "",
             oftCmd: ""
         });
-        (, , OFTReceipt memory oftReceipt) = IOFT(shareOFT).quoteOFT(sendParam);
+        (,, OFTReceipt memory oftReceipt) = IOFT(shareOFT).quoteOFT(sendParam);
         sendParam.minAmountLD = oftReceipt.amountReceivedLD;
         MessagingFee memory fee = IOFT(shareOFT).quoteSend(sendParam, false);
         if (msg.value < fee.nativeFee) revert InsufficientSolanaBridgeFee(fee.nativeFee, msg.value);
@@ -1302,9 +1295,7 @@ contract DeploymentBatcherPhase2Module {
         if (IERC20(shareOFT).balanceOf(address(this)) < amount) revert AuctionAmountMismatch();
         IERC20(shareOFT).forceApprove(ccaLaunchArm, amount);
         auction = ICCALaunchArm(ccaLaunchArm)
-            .launchAuctionWithReserve(
-                amount, lpReserveAmount, floorPriceQ96, requiredRaise, auctionSteps
-            );
+            .launchAuctionWithReserve(amount, lpReserveAmount, floorPriceQ96, requiredRaise, auctionSteps);
     }
 
     function _validateFinalizePhase2(
@@ -1320,9 +1311,6 @@ contract DeploymentBatcherPhase2Module {
         }
         if (params.depositAmount < MIN_FIRST_DEPOSIT || params.depositAmount > MAX_FIRST_DEPOSIT) {
             revert InvalidDepositAmount();
-        }
-        if (params.meteoraAlphaVault != bytes32(0) || params.solanaIxs.length != 0) {
-            revert DeprecatedFinalizeSolanaParams();
         }
         if (params.vault.code.length == 0 || params.wrapper.code.length == 0 || params.shareOFT.code.length == 0) {
             revert Phase1Missing();
@@ -1506,8 +1494,6 @@ contract DeploymentBatcher is ReentrancyGuard {
         uint128 requiredRaise;
         uint256 floorPriceQ96; // Ignored by strategy; launch floor is derived onchain.
         bytes auctionSteps;
-        bytes32 meteoraAlphaVault;
-        IBaseSolanaBridge.Ix[] solanaIxs;
     }
 
     struct Phase1Result {
@@ -1730,12 +1716,8 @@ contract DeploymentBatcher is ReentrancyGuard {
     /// @notice Split phase-1 state keyed by creator/owner/version salt.
     mapping(bytes32 => Phase1SplitState) public phase1SplitStates;
 
-    /// @notice SolanaBridgeAdapter address for bridging the Solana allocation.
-    address public solanaBridgeAdapter;
-    /// @notice Solana deployer/multisig wallet address (bytes32 pubkey) to receive bridged tokens.
+    /// @notice Solana deployer/multisig wallet address (bytes32 pubkey) to receive LayerZero ShareOFT.
     bytes32 public solanaDestination;
-    /// @notice Default LayerZero remote ShareOFT peer (bytes32) for greenfield finalize wiring.
-    bytes32 public solanaShareOftPeer;
     /// @notice OVault runtime wiring used for Solana compose orchestration.
     OVaultRuntimeConfig private ovaultRuntimeConfig;
     /// @notice Dedicated phase-3 execution helper to keep this contract under EIP-170 runtime limits.
@@ -1846,7 +1828,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         bytes32 solanaDestination
     );
 
-    event SolanaConfigSet(address indexed adapter, bytes32 solanaDestination);
+    event SolanaDestinationSet(bytes32 solanaDestination);
     event OVaultRuntimeConfigSet(address indexed hubComposer, uint32 indexed solanaEid, bool enabled);
     event VaultRolePolicyConfigSet(address indexed manager, uint256 indexed policyId);
 
@@ -1973,10 +1955,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         Phase1Params calldata params,
         CodeIds calldata codeIds,
         bytes32 shareOftSaltOverride
-    )
-        internal
-        returns (Phase1Result memory out)
-    {
+    ) internal returns (Phase1Result memory out) {
         _requireOwner(params.owner);
         if (address(phase1Module) == address(0)) revert Phase1ModuleMissing();
 
@@ -2008,10 +1987,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         Phase1Params calldata params,
         CodeIds calldata codeIds,
         bytes32 shareOftSaltOverride
-    )
-        internal
-        returns (Phase1Result memory out)
-    {
+    ) internal returns (Phase1Result memory out) {
         _requireOwner(params.owner);
         if (address(phase1Module) == address(0)) revert Phase1ModuleMissing();
 
@@ -2065,11 +2041,10 @@ contract DeploymentBatcher is ReentrancyGuard {
         emit Phase2CoreDeployed(params.creatorToken, params.owner, out.gaugeController, out.ccaLaunchArm, out.oracle);
     }
 
-    function _deployPhase2CoreInternal(
-        Phase2CoreParams calldata params,
-        CodeIds calldata codeIds,
-        uint256 rolePolicyId
-    ) internal returns (Phase2Result memory out) {
+    function _deployPhase2CoreInternal(Phase2CoreParams calldata params, CodeIds calldata codeIds, uint256 rolePolicyId)
+        internal
+        returns (Phase2Result memory out)
+    {
         _requireOwner(params.owner);
         bytes32 baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
         Phase1SplitState memory p1state = phase1SplitStates[baseSalt];
@@ -2100,10 +2075,7 @@ contract DeploymentBatcher is ReentrancyGuard {
 
     /// @notice Mark the payout router ShareOFT fee-exempt while the batcher still owns ShareOFT.
     /// @dev OperationType.NoFees = 2. Must run before finalizePhase2 transfers ShareOFT to treasury.
-    function setPayoutRouterShareOftNoFees(address shareOFT, address payoutRouter)
-        external
-        onlyProtocolTreasury
-    {
+    function setPayoutRouterShareOftNoFees(address shareOFT, address payoutRouter) external onlyProtocolTreasury {
         if (shareOFT == address(0) || payoutRouter == address(0)) revert ZeroAddress();
         address shareOwner = IOwnableView(shareOFT).owner();
         if (shareOwner != address(this)) revert ShareOftOwnerMismatch(shareOFT, shareOwner);
@@ -2321,21 +2293,13 @@ contract DeploymentBatcher is ReentrancyGuard {
     // ================================
 
     /**
-     * @notice Set Solana bridge adapter + destination configuration.
+     * @notice Set the LayerZero ShareOFT recipient on Solana.
      * @dev `solanaDestination` is the LayerZero recipient for the 30% share allocation
      *      auto-bridge executed during finalizePhase2 (Solana seed wallet / mesh custody).
      */
-    function setSolanaConfig(address _adapter, bytes32 _destination) external onlyProtocolTreasury {
-        solanaBridgeAdapter = _adapter;
+    function setSolanaDestination(bytes32 _destination) external onlyProtocolTreasury {
         solanaDestination = _destination;
-    }
-
-    /**
-     * @notice Set the platform default Solana ShareOFT peer used when registry peer is unset.
-     * @dev Finalize auto-registers the creator coin, seeds registry from this default, then setPeer on ShareOFT.
-     */
-    function setSolanaShareOftPeer(bytes32 _peer) external onlyProtocolTreasury {
-        solanaShareOftPeer = _peer;
+        emit SolanaDestinationSet(_destination);
     }
 
     /**
@@ -2348,8 +2312,10 @@ contract DeploymentBatcher is ReentrancyGuard {
         address _shareMeshHelper,
         address _utilsHelper
     ) external onlyProtocolTreasury {
-        if (_phase2Module == address(0) || _phase3Helper == address(0) || _shareMeshHelper == address(0)
-            || _utilsHelper == address(0)) {
+        if (
+            _phase2Module == address(0) || _phase3Helper == address(0) || _shareMeshHelper == address(0)
+                || _utilsHelper == address(0)
+        ) {
             revert ZeroAddress();
         }
         // AUDIT-2026-07-08-H08: phase2 is delegatecall authority — require approved codehash.
@@ -2438,7 +2404,10 @@ contract DeploymentBatcher is ReentrancyGuard {
      * @notice Configure OVault runtime composer + Solana EID.
      * @dev Enabled configs require a non-zero composer and EID.
      */
-    function setOVaultRuntimeConfig(address _hubComposer, uint32 _solanaEid, bool _enabled) external onlyProtocolTreasury {
+    function setOVaultRuntimeConfig(address _hubComposer, uint32 _solanaEid, bool _enabled)
+        external
+        onlyProtocolTreasury
+    {
         if (_enabled) {
             if (_hubComposer == address(0)) revert ZeroAddress();
             if (_solanaEid == 0) revert InvalidSolanaEid();
@@ -2465,7 +2434,10 @@ contract DeploymentBatcher is ReentrancyGuard {
     // tuples are not permanently blocked by stale/abandoned deployments.
     // The reset must be tuple-scoped so callers cannot accidentally clear an
     // unrelated deployment state.
-    function resetPhase1State(address creatorToken, address owner, string calldata version) external onlyProtocolTreasury {
+    function resetPhase1State(address creatorToken, address owner, string calldata version)
+        external
+        onlyProtocolTreasury
+    {
         if (creatorToken == address(0) || owner == address(0)) revert ZeroAddress();
         bytes32 baseSalt = utilsHelper.deriveBaseSalt(creatorToken, owner, block.chainid, version);
         Phase1SplitState storage state = phase1SplitStates[baseSalt];

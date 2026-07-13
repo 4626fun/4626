@@ -65,7 +65,7 @@ export async function isOwner(
 
 export function prepareAddOwnerTx(cswAddress: string, ownerToAdd: string): {
   chainId: 8453
-  to: Address
+  to: `0x${string}`
   data: Hex
   value: '0x0'
 } {
@@ -78,7 +78,7 @@ export function prepareAddOwnerTx(cswAddress: string, ownerToAdd: string): {
   })
   return {
     chainId: 8453,
-    to: csw,
+    to: csw as `0x${string}`,
     data,
     value: '0x0',
   }

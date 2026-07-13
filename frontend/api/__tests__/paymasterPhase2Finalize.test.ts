@@ -27,6 +27,7 @@ const vaultActivationBatcher = getAddress('0xd17Ddf952Cc8614721b5F79E43E9c2562Fa
 const permit2 = getAddress('0x000000000022D473030F116dDEE9F6B43aC78BA3')
 const create2Deployer = getAddress('0x74183076C7D33346880A5bf0e263B761FB4d38BA')
 const bytecodeStore = getAddress('0x6A578022609cdb65C614FF28912C49FC1EC97071')
+const registry = getAddress('0x1234567890123456789012345678901234567890')
 
 const {
   readRequestPrincipalMock,
@@ -191,6 +192,8 @@ function configureMockReadContract(overrides: ReadContractOverrides = {}): void 
     if (functionName === 'asset') return Promise.resolve(creatorToken)
     if (functionName === 'name') return Promise.resolve('Creator OVault')
     if (functionName === 'symbol') return Promise.resolve('ovCRT')
+    if (functionName === 'getWrapperForToken') return Promise.resolve(wrapper)
+    if (functionName === 'getShareOFTForToken') return Promise.resolve(shareOFT)
 
     if (address === wrapper && functionName === 'creatorCoin') return Promise.resolve(resolved.wrapperCreatorCoin)
     if (address === wrapper && functionName === 'vault') return Promise.resolve(resolved.wrapperVault)
@@ -323,6 +326,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
       universalCreate2DeployerFromStore: create2Deployer,
       universalBytecodeStore: bytecodeStore,
       protocolTreasury: sessionAddress,
+      registry,
     })
     isDbConfiguredMock.mockReturnValue(false)
     getDbMock.mockResolvedValue(null)

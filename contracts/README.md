@@ -131,3 +131,37 @@ Deployment orchestration lives in `shared/deploy/batchers/`. `DeploymentBatcher`
 Bytecode epoch ops: `deployments/base/v1.16.0-bytecode-manifest.json` + `docs/_internal/deployment-releases-legacy/v1.16.0-bytecode-epoch.md` (store re-seed via `./script/seed-v1160-bytecode-store.sh`).
 
 V4 tax hook pool configuration is applied through `CCALaunchArm.setOracleConfig` during phase 2 — there is no separate `TaxHookConfigurator` helper contract in-tree.
+
+## Three axes (do not conflate)
+
+See also [`docs/architecture/product-lanes.md`](../docs/architecture/product-lanes.md).
+
+| Axis | Meaning |
+|------|---------|
+| Product vault lane | `VaultKind.Creator` / `VaultKind.Agent` under `creator/` / `agent/` |
+| Value lanes | Jackpot 69% / voters 21.39% / burn 9.61% (gauge + payout routing) |
+| Runtime agent | XMTP Keepr / canonical CSW automation — **not** `VaultKind.Agent` |
+
+**`getVaultKind` wiring:** `DeploymentBatcher` phase-2 calls `Registry4626.setAgentIntegrationMeta` (authorized factory or owner) with the phase-1 `vaultKind`. `AgentIntegrationMeta` is a historical name for lane meta; rename only on a future registry epoch. Unset meta defaults to Creator.
+
+## Adding a future ecosystem
+
+Two canonical paths — pick per product:
+
+### Mesh path (needs ShareOFT + gauge + lottery)
+
+1. Add `contracts/<ecosystem>/` mirroring `agent/` / `creator/` (vault, wrapper, ShareOFT, gauge, revenue router, oracle, interfaces).
+2. Add a distinct core-module kind string and vault overlay (or inheritance) as needed.
+3. Extend `VaultKind` in `IRegistry4626` + `DeploymentBatcher` (new registry/batcher epoch).
+4. Add bytecode manifest entries + `frontend/src/lib/deploy/deployLaneBytecode.ts` branch (or table).
+5. Extend `pnpm guard:lane-contract-parity` (or move intentionally divergent pairs with justification).
+6. Wire phase-2 `setAgentIntegrationMeta` / gauge asset setter for the new kind.
+
+### Non-mesh path (independent product)
+
+Place under `contracts/other/<product>/` (AlfaClub precedent). Stay outside `Registry4626` / `DeploymentBatcher` / ShareOFT mesh until the product explicitly needs those.
+
+### Known debt (do not rename in small PRs)
+
+- Batcher / API still use `creatorToken` for any lane underlying asset.
+- Solidity struct name `AgentIntegrationMeta` remains agent-flavored.

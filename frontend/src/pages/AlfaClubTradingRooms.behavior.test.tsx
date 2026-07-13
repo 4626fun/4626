@@ -1,0 +1,218 @@
+// @vitest-environment happy-dom
+
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter, useLocation } from 'react-router-dom'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const apiFetchMock = vi.fn()
+
+vi.mock('@/lib/api/apiBase', () => ({
+  apiFetch: (...args: unknown[]) => apiFetchMock(...args),
+}))
+
+vi.mock('@/components/seo/PageMeta', () => ({
+  PageMeta: () => <div data-testid="page-meta">/rooms</div>,
+}))
+
+vi.mock('./AlfaClubKeySafety', () => ({
+  AlfaClubKeySafety: ({ roomId }: { roomId?: string }) => (
+    <div data-testid="safety-panel">Safety analysis for room {roomId}</div>
+  ),
+}))
+
+vi.mock('./AlfaClubLiquidityPools', () => ({
+  AlfaClubRoomLiquidity: ({ roomId }: { roomId: string }) => (
+    <div data-testid="liquidity-panel">Liquidity for room {roomId}</div>
+  ),
+}))
+
+vi.mock('@/components/alfaclub/CounterTradeStatusPanel', () => ({
+  CounterTradeStatusPanel: () => <div data-testid="inverse-panel">Inverse status</div>,
+}))
+
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location">{`${location.pathname}${location.search}`}</div>
+}
+
+async function renderHub(url: string) {
+  const { AlfaClubTradingRooms } = await import('./AlfaClubTradingRooms')
+  return render(
+    <MemoryRouter initialEntries={[url]}>
+      <AlfaClubTradingRooms />
+      <LocationProbe />
+    </MemoryRouter>,
+  )
+}
+
+describe('AlfaClub room hub behavior', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+    window.sessionStorage.clear()
+    apiFetchMock.mockReset()
+    apiFetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: {
+          rows: [
+            {
+              roomId: '1659',
+              roomName: 'AKITA',
+              displayLabel: 'AKITA',
+              creatorHandle: 'akita',
+              roomType: 'trading',
+              tier: 'club',
+              keySupply: 100,
+              roomPoints: 2500,
+              imageUrl: null,
+              description: 'Trading and community room',
+              featured: true,
+              uniqueHolders: 50,
+              ingestedAt: '2026-07-12T12:00:00.000Z',
+            },
+            {
+              roomId: '9',
+              roomName: 'Room Nine',
+              displayLabel: 'Room Nine',
+              creatorHandle: null,
+              roomType: 'social',
+              tier: 'casual',
+              keySupply: 10,
+              roomPoints: 100,
+              imageUrl: null,
+              description: 'A social room',
+              featured: false,
+              uniqueHolders: 8,
+              ingestedAt: '2026-07-11T12:00:00.000Z',
+            },
+          ],
+        },
+      }),
+    })
+  })
+
+  it('loads selected-room safety content and exposes inverse only for room 1659', async () => {
+    await renderHub('/rooms?roomId=1659&tab=safety')
+
+    expect(await screen.findByText('Safety analysis for room 1659')).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'Safety' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('tab', { name: 'Inverse' })).toBeTruthy()
+  })
+
+  it('syncs tab clicks to the URL and hides inverse for other rooms', async () => {
+    await renderHub('/rooms?roomId=9')
+    await screen.findByRole('heading', { name: 'Room Nine', level: 1 })
+
+    expect(screen.queryByRole('tab', { name: 'Inverse' })).toBeNull()
+    fireEvent.click(screen.getByRole('tab', { name: 'Liquidity' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location').textContent).toBe(
+        '/rooms?roomId=9&tab=liquidity',
+      )
+    })
+    expect(screen.getByText('Liquidity for room 9')).toBeTruthy()
+  })
+
+  it('normalizes an unavailable inverse deep link to overview', async () => {
+    await renderHub('/rooms?roomId=9&tab=inverse')
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location').textContent).toBe('/rooms?roomId=9&tab=overview')
+    })
+  })
+
+  it('presents Room Points without USD formatting and exposes canonical room categories', async () => {
+    await renderHub('/rooms?roomId=1659')
+
+    expect(await screen.findAllByText('2.5K pts')).not.toHaveLength(0)
+    expect(screen.queryByText('$2,500')).toBeNull()
+    expect(screen.getAllByText('Trading Room')).not.toHaveLength(0)
+    expect(screen.getByRole('button', { name: 'Social' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Club' })).toBeTruthy()
+  })
+
+  it('keeps the full safety analysis deferred until the Safety tab is selected', async () => {
+    await renderHub('/rooms?roomId=9')
+    await screen.findByRole('heading', { name: 'Room Nine', level: 1 })
+
+    expect(screen.queryByTestId('safety-panel')).toBeNull()
+    fireEvent.click(screen.getByRole('tab', { name: 'Safety' }))
+
+    expect(await screen.findByText('Safety analysis for room 9')).toBeTruthy()
+  })
+
+  it('keeps the discovery tray and its filters mounted across workspace tabs', async () => {
+    await renderHub('/rooms?roomId=1659')
+    const search = await screen.findByRole('searchbox', { name: 'Search AlfaClub rooms' })
+    fireEvent.change(search, { target: { value: 'AKITA' } })
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Safety' }))
+
+    expect(screen.getByRole('searchbox', { name: 'Search AlfaClub rooms' })).toBe(search)
+    expect((search as HTMLInputElement).value).toBe('AKITA')
+    expect(screen.getByRole('button', { name: 'Collapse room tray' })).toBeTruthy()
+  })
+
+  it('restores discovery filters if the host shell remounts on a tab query change', async () => {
+    const firstRender = await renderHub('/rooms?roomId=1659')
+    const search = await screen.findByRole('searchbox', { name: 'Search AlfaClub rooms' })
+    fireEvent.change(search, { target: { value: 'AKITA' } })
+    await waitFor(() =>
+      expect(window.sessionStorage.getItem('alfaclub:room-discovery-filters:v1')).toContain(
+        'AKITA',
+      ),
+    )
+    firstRender.unmount()
+
+    await renderHub('/rooms?roomId=1659&tab=safety')
+    expect(
+      (await screen.findByRole('searchbox', { name: 'Search AlfaClub rooms' }) as HTMLInputElement)
+        .value,
+    ).toBe('AKITA')
+  })
+
+  it('supports keyboard resizing, collapsing, and persisted tray preferences', async () => {
+    await renderHub('/rooms?roomId=9')
+    const separator = await screen.findByRole('slider', { name: 'Resize room tray' })
+
+    fireEvent.keyDown(separator, { key: 'ArrowRight' })
+    await waitFor(() => {
+      expect(separator.getAttribute('aria-valuenow')).toBe('336')
+      expect(window.localStorage.getItem('alfaclub:room-tray-width:v1')).toBe('336')
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse room tray' }))
+    expect(await screen.findByRole('button', { name: 'Expand room tray' })).toBeTruthy()
+    expect(screen.getByLabelText('Selected room #9')).toBeTruthy()
+    expect(window.localStorage.getItem('alfaclub:room-tray-collapsed:v1')).toBe('true')
+  })
+
+  it('keeps the mobile room drawer trigger available and allows panels to collapse', async () => {
+    await renderHub('/rooms?roomId=9&tab=liquidity')
+
+    expect(
+      await screen.findByRole('button', {
+        name: /Room Nine Social Room · casual · 100 pts Change/i,
+      }),
+    ).toBeTruthy()
+    const sectionToggle = screen.getByRole('button', { name: 'Room liquidity' })
+    expect(sectionToggle.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(sectionToggle)
+    expect(sectionToggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.getByText('Liquidity for room 9').closest('[hidden]')).toBeTruthy()
+  })
+
+  it('shows a compact desktop discovery primer when no room is selected', async () => {
+    await renderHub('/rooms')
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Select a room from the discovery rail',
+        level: 1,
+      }),
+    ).toBeTruthy()
+    expect(screen.getByText(/↑↓ navigate · Enter open/)).toBeTruthy()
+  })
+})

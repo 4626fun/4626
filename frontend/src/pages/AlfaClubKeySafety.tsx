@@ -31,6 +31,7 @@ import {
   sellProceedsAfterFee,
   tradeFeeFraction,
   type AlfaRoomTier,
+  type AlfaRoomType,
   type KeyDefenseEvaluation,
 } from '@/lib/alfaclub/keyDefense'
 import { formatAlfaClubRoomLabel } from '@/lib/alfaclub/roomLabel'
@@ -48,6 +49,19 @@ function formatUsd(value: number): string {
 }
 
 type SafetyStatus = KeySafetyStatus
+
+export type AlfaClubKeySafetySummary = {
+  status: SafetyStatus
+  label: string
+  headline: string
+} | null
+
+type AlfaClubKeySafetyProps = {
+  roomId?: string
+  embedded?: boolean
+  summaryOnly?: boolean
+  onSummaryChange?: (summary: AlfaClubKeySafetySummary) => void
+}
 
 type KeySafetyRoomContext = KeySafetyRoomOption & {
   tokenId: string
@@ -72,6 +86,7 @@ type KeySafetyRoomContext = KeySafetyRoomOption & {
     keys: number | null
   }>
   tier: AlfaRoomTier | null
+  roomType: AlfaRoomType | null
   sources: {
     keySupply: 'onchain' | 'snapshot'
     hostWalletKeys: 'onchain' | 'snapshot'
@@ -216,8 +231,13 @@ function resolveSafetyStatus(evaluation: KeyDefenseEvaluation, potAtRiskUsdc: nu
   return nearThreshold || !evaluation.hasVeto ? 'caution' : 'safe'
 }
 
-export function AlfaClubKeySafety() {
-  const [selectedRoomId, setSelectedRoomId] = useState(parseInitialRoomId)
+export function AlfaClubKeySafety({
+  roomId,
+  embedded = false,
+  summaryOnly = false,
+  onSummaryChange,
+}: AlfaClubKeySafetyProps = {}) {
+  const [selectedRoomId, setSelectedRoomId] = useState(() => roomId ?? parseInitialRoomId())
   const [roomIdDraft, setRoomIdDraft] = useState(parseInitialRoomId)
   const [tradingWalletOverride] = useState(parseInitialTradingWallet)
   const [roomOptions, setRoomOptions] = useState<KeySafetyRoomOption[]>([])
@@ -234,6 +254,7 @@ export function AlfaClubKeySafety() {
     useState<AttackExitScenario>('holders-stay')
 
   const roomTier = roomContext?.tier ?? 'club'
+  const roomType = roomContext?.roomType ?? 'trading'
   const keySupply = roomContext?.keySupply ?? 0
   const yourKeys = roomContext?.hostKeys ?? 0
   const sharePercent = roomContext?.hostSharePercent ?? 0
@@ -251,14 +272,14 @@ export function AlfaClubKeySafety() {
   // raw curve price; buy adds the trade fee, sell nets it out.
   const curvePricing = useMemo(() => {
     if (keySupply <= 0) return null
-    const divisor = curveDivisor('trading', roomTier)
-    const fee = tradeFeeFraction('trading')
+    const divisor = curveDivisor(roomType, roomTier)
+    const fee = tradeFeeFraction(roomType)
     return {
       currentUsdc: curveCost(keySupply, 1, divisor),
       buyUsdc: buyCostAfterFee(keySupply, 1, divisor, fee),
       sellUsdc: sellProceedsAfterFee(keySupply, 1, divisor, fee),
     }
-  }, [keySupply, roomTier])
+  }, [keySupply, roomTier, roomType])
   const selectedLabel = roomContext ? roomDisplayLabel(roomContext) : null
   const stakedPercent = keySupply > 0 ? Math.round((stakedSupply / keySupply) * 100) : 0
   const creatorHandle = (roomContext?.creatorHandle ?? '').trim().replace(/^@+/, '')
@@ -291,7 +312,7 @@ export function AlfaClubKeySafety() {
     () =>
       keySupply > 0
         ? evaluateKeyDefense({
-            roomType: 'trading',
+            roomType,
             roomTier,
             keySupply,
             yourKeys,
@@ -300,7 +321,7 @@ export function AlfaClubKeySafety() {
             targetRecoveryFraction: 0.5,
           })
         : null,
-    [roomTier, keySupply, yourKeys, modeledPotUsdc, donationUsdc],
+    [roomType, roomTier, keySupply, yourKeys, modeledPotUsdc, donationUsdc],
   )
 
   const minAttackBreakdown = useMemo(() => {
@@ -308,7 +329,7 @@ export function AlfaClubKeySafety() {
     const minAttackKeys = evaluation.raid.minAttackKeys
     if (minAttackKeys <= 0) return null
     const scenarioInputs = {
-      roomType: 'trading',
+      roomType,
       roomTier,
       keySupply,
       yourKeys,
@@ -335,14 +356,14 @@ export function AlfaClubKeySafety() {
       breakEvenPotUsdc,
       fundGrowthToBreakEvenUsdc: Math.max(0, breakEvenPotUsdc - potAtRiskUsdc),
     }
-  }, [attackExitScenario, evaluation, keySupply, potAtRiskUsdc, roomTier, yourKeys])
+  }, [attackExitScenario, evaluation, keySupply, potAtRiskUsdc, roomTier, roomType, yourKeys])
 
   const selectedRaidCurve = useMemo(() => {
     if (!evaluation || attackExitScenario === 'holders-stay') return evaluation?.raid.curve
     return evaluation.raid.curve.map((point) =>
       raidProfitAfterOthersExit(
         {
-          roomType: 'trading',
+          roomType,
           roomTier,
           keySupply,
           yourKeys,
@@ -351,7 +372,7 @@ export function AlfaClubKeySafety() {
         point.keysBought,
       ),
     )
-  }, [attackExitScenario, evaluation, keySupply, potAtRiskUsdc, roomTier, yourKeys])
+  }, [attackExitScenario, evaluation, keySupply, potAtRiskUsdc, roomTier, roomType, yourKeys])
 
   const safetyStatus = evaluation ? resolveSafetyStatus(evaluation, potAtRiskUsdc) : 'caution'
   const recoveryPercent = evaluation ? Math.round(evaluation.recovery.donationRecoveryFraction * 100) : 0
@@ -382,12 +403,12 @@ export function AlfaClubKeySafety() {
     if (!roomContext || keySupply <= 0 || !biggestOtherHolder) return null
     const holderKeys = Math.min(biggestOtherHolder.keys, keySupply)
     const keysToBuy = attackerKeysToPassVote(keySupply, holderKeys)
-    const divisor = curveDivisor('trading', roomTier)
-    const fee = tradeFeeFraction('trading')
+    const divisor = curveDivisor(roomType, roomTier)
+    const fee = tradeFeeFraction(roomType)
     const costUsdc = buyCostAfterFee(keySupply, keysToBuy, divisor, fee)
     const point = raidProfit(
       {
-        roomType: 'trading',
+        roomType,
         roomTier,
         keySupply,
         yourKeys: holderKeys,
@@ -405,7 +426,7 @@ export function AlfaClubKeySafety() {
       costUsdc,
       profitUsdc: point.profitUsdc,
     }
-  }, [roomContext, keySupply, roomTier, potAtRiskUsdc, biggestOtherHolder])
+  }, [roomContext, keySupply, roomTier, roomType, potAtRiskUsdc, biggestOtherHolder])
 
   const loadRoomById = useCallback((roomId: string) => {
     const normalized = roomId.trim()
@@ -427,6 +448,7 @@ export function AlfaClubKeySafety() {
   }, [tradingWalletOverride])
 
   useEffect(() => {
+    if (embedded) return
     const controller = new AbortController()
     setRoomOptionsLoading(true)
     setRoomOptionsError(null)
@@ -444,7 +466,7 @@ export function AlfaClubKeySafety() {
       }
     })()
     return () => controller.abort()
-  }, [])
+  }, [embedded])
 
   useEffect(() => {
     if (!selectedRoomId) {
@@ -477,13 +499,29 @@ export function AlfaClubKeySafety() {
 
   const statusMeta = showResults && roomContext ? keySafetyStatusMeta(safetyStatus) : null
   const StatusIcon = statusMeta?.icon ?? null
+  const statusLabel = statusMeta?.label ?? null
+  const statusHeadline = statusMeta?.headline ?? null
+
+  useEffect(() => {
+    onSummaryChange?.(
+      statusLabel && statusHeadline
+        ? {
+            status: safetyStatus,
+            label: statusLabel,
+            headline: statusHeadline,
+          }
+        : null,
+    )
+  }, [onSummaryChange, safetyStatus, statusHeadline, statusLabel])
+
+  if (embedded && summaryOnly) return null
 
   return (
-    <div className="relative pb-24 md:pb-0">
-      <section className="cinematic-section">
+    <div className={cn('relative', !embedded && 'pb-24 md:pb-0')}>
+      <section className={cn(!embedded && 'cinematic-section')}>
         <TooltipProvider>
-          <div className="mx-auto max-w-3xl space-y-5 px-4 sm:px-6">
-            {showResults && roomContext && statusMeta && StatusIcon ? (
+          <div className={cn('mx-auto max-w-3xl space-y-5', !embedded && 'px-4 sm:px-6')}>
+            {!embedded && showResults && roomContext && statusMeta && StatusIcon ? (
               <header
                 className={cn(
                   'rounded-3xl p-5 transition-colors',
@@ -582,7 +620,7 @@ export function AlfaClubKeySafety() {
               </header>
             ) : null}
 
-            {!showResults ? (
+            {!embedded && !showResults ? (
               <div className="rounded-3xl bg-[radial-gradient(120%_140%_at_0%_0%,rgba(56,189,248,0.14),rgba(0,0,0,0))] p-6 ring-1 ring-inset ring-white/[0.04]">
                 <span className="label">AlfaClub</span>
                 <h1 className="headline mt-3 text-3xl tracking-tight sm:text-4xl">
@@ -595,7 +633,7 @@ export function AlfaClubKeySafety() {
               </div>
             ) : null}
 
-            {!showResults || editingRoom ? (
+            {!embedded && (!showResults || editingRoom) ? (
             <KeySafetyRoomPicker
               roomIdDraft={roomIdDraft}
               onRoomIdDraftChange={setRoomIdDraft}
@@ -754,6 +792,11 @@ export function AlfaClubKeySafety() {
             ) : selectedRoomId && roomContextLoading ? (
               <div className="rounded-3xl bg-black/35 p-8 text-center ring-1 ring-white/[0.04]">
                 <p className="text-sm text-zinc-400">Resolving live keys, stake, and trading fund…</p>
+              </div>
+            ) : embedded && roomContextError ? (
+              <div className="rounded-3xl bg-amber-500/[0.06] p-6 ring-1 ring-amber-400/20" role="alert">
+                <h2 className="text-sm font-semibold text-amber-100">Safety analysis unavailable</h2>
+                <p className="mt-2 text-sm text-amber-200/75">{roomContextError}</p>
               </div>
             ) : null}
           </div>

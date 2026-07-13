@@ -3,7 +3,7 @@
   "description": "ERC-4626 creator vaults on Base",
   "homepage": "https://4626.fun",
   "private": true,
-  "version": "1.18.0",
+  "version": "1.19.0",
   "engines": {
     "node": ">=20.19.0 <23"
   },
@@ -183,6 +183,7 @@
     "@solana/web3.js": "^1.98.4",
     "@supabase/supabase-js": "^2.95.0",
     "@tanstack/react-query": "^5.90.20",
+    "@tanstack/react-virtual": "^3.14.6",
     "@types/pg": "^8.16.0",
     "@vercel/blob": "^2.1.0",
     "@vercel/flags-core": "^1.3.1",

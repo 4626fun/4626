@@ -215,12 +215,19 @@ async function deliverAlertText(params: {
       skippedNoXmtp += 1
       errors += 1
     } else {
-      const ok = await sendProtocolAgentXmtpDm({
+      const result = await sendProtocolAgentXmtpDm({
         recipientAddress: params.alert.senderAddress,
         text: params.text,
       })
-      if (ok) xmtpSent = true
-      else errors += 1
+      if (result.ok) {
+        xmtpSent = true
+      } else if (result.reason === 'not_registered') {
+        // Wallet hasn't bootstrapped an XMTP conversation with the agent
+        // yet — treat as a skip, not a delivery error.
+        skippedNoXmtp += 1
+      } else {
+        errors += 1
+      }
     }
   }
 

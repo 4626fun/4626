@@ -25,7 +25,7 @@ import { cn } from '@/lib/shared/utils'
 import { siteAssets } from '@/config/site'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
-import { APP_ORIGIN, getMarketingBaseUrl } from '@/lib/env/host'
+import { getMarketingBaseUrl } from '@/lib/env/host'
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import {
   establishWaitlistSessionAfterPrivyAuth,
@@ -66,7 +66,6 @@ import { performZoraCrossAppAuth, isRecoverableCrossAppAuthError, isUserRejected
 import { findLinkedTwitterSubject } from '@/lib/privy/linkedAccounts'
 import { hasZoraReadOnlySignals, resolveZoraReadOnlySignals } from '@/lib/zora/zoraReadOnlyResolve'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
-import { assertPrivySessionMarkerCookie, isLocalDevPrivySessionMarkerMode } from '@/lib/privy/loopbackSessionMarkerShim'
 import { appendLocalhostPrivyAuthNoteIfNeeded } from '@/lib/privy/localhostPrivyAuthNotice'
 import { useWaitlistZoraOAuthReturnRecovery } from '@/lib/privy/useWaitlistZoraOAuthReturnRecovery'
 import { WaitlistWelcomeGreeting } from '@/features/waitlist/WaitlistWelcomeGreeting'
@@ -875,13 +874,12 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
 
   // Shared post-authentication tail: once Privy is authenticated (after
   // `loginWithCode`), bridge it into a 4626 session, bootstrap the waitlist row,
-  // and confirm the HttpOnly session. Identical to the prior modal path — only
-  // the trigger changed (inline OTP instead of a popup).
+  // and confirm the HttpOnly session. Embedded EOA provisioning is server-owned
+  // inside `/api/auth/privy` — do not call client createWallet here (localhost
+  // iframe create clears the OTP session).
   //
   // Must use a live Privy view: `usePrivy()` returns a fresh object per render,
-  // and establishWaitlistSessionAfterPrivyAuth polls `.authenticated` while
-  // settling post-OTP / waiting for embedded-wallet create. A frozen snapshot
-  // from this callback's closure would miss those flips.
+  // and establishWaitlistSessionAfterPrivyAuth may re-read token/auth state.
   const finishJoinAfterPrivyAuth = useCallback(async () => {
     const confirmedSessionAddress = await establishWaitlistSessionAfterPrivyAuth({
       privy: createLivePrivyClientView(privyRef),
@@ -1345,11 +1343,6 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
     },
   })
 
-  useEffect(() => {
-    if (!privy.authenticated || !isLocalDevPrivySessionMarkerMode()) return
-    assertPrivySessionMarkerCookie()
-  }, [privy.authenticated])
-
   useWaitlistZoraOAuthReturnRecovery({
     enabled: Boolean(joinedSessionAddress),
     privyReady: privy.ready,
@@ -1733,7 +1726,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                         className="btn-3d group/btn relative w-full overflow-hidden !rounded-full !min-h-[52px] !text-[15px] !font-bold !tracking-wide"
                         asChild
                       >
-                        <a href={`${APP_ORIGIN}/swap?restorePrivy=1`}>
+                        <Link to="/swap">
                           <ButtonSheen />
                           <span className="relative z-10 inline-flex items-center gap-2.5">
                             Enter app
@@ -1742,7 +1735,7 @@ export function WaitlistFlow(props: WaitlistFlowProps) {
                               aria-hidden="true"
                             />
                           </span>
-                        </a>
+                        </Link>
                       </Button>
                     </MagneticButton>
                   </div>

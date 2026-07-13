@@ -5,11 +5,15 @@ describe('alfaclub trading-rooms wiring', () => {
   it('registers the v1 route map entry', () => {
     const src = readFileSync(new URL('../_handlers/_routes.v1.ts', import.meta.url), 'utf8')
     expect(src).toContain("'alfaclub/trading-rooms'")
+    expect(src).toContain("'alfaclub/key-safety-summary'")
+    const rootRoutes = readFileSync(new URL('../_handlers/_routes.ts', import.meta.url), 'utf8')
+    expect(rootRoutes).toContain("'wallet/friend-key-holdings'")
   })
 
   it('registers the vite API import for local dev', () => {
     const src = readFileSync(new URL('../../vite.config.ts', import.meta.url), 'utf8')
     expect(src).toContain("'/api/v1/alfaclub/trading-rooms'")
+    expect(src).toContain("'/api/wallet/friend-key-holdings'")
   })
 
   it('hosts trading-rooms on the dedicated AlfaClub shell, not app/marketing tables', () => {

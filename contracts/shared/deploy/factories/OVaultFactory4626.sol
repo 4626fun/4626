@@ -27,6 +27,9 @@ import {IGaugeSurfaceRegistry} from "@4626/shared/governance/surfaces/IGaugeSurf
  *      Legacy: `registerDeployment` still records already-deployed stacks (creator-oriented field names).
  */
 contract OVaultFactory4626 is Ownable {
+    bytes32 public constant CREATOR_LANE_KEY = keccak256("creator");
+    bytes32 public constant AGENT_LANE_KEY = keccak256("agent");
+
     // =================================
     // STATE
     // =================================
@@ -44,6 +47,9 @@ contract OVaultFactory4626 is Ownable {
     /// @notice Pluggable lane modules keyed by registry VaultKind.
     mapping(IRegistry4626.VaultKind => address) public laneOf;
 
+    /// @notice Extensible ecosystem lanes keyed by keccak256(bytes(lane.laneId())).
+    mapping(bytes32 => address) public ecosystemLaneOf;
+
     /// @notice Optional gauge surface registry (votes/bribes/streams eligibility).
     IGaugeSurfaceRegistry public surfaceRegistry;
 
@@ -54,6 +60,9 @@ contract OVaultFactory4626 is Ownable {
     /// @notice Kind pinned at `startPhase1` for a token so later phases cannot switch lanes mid-stack.
     mapping(address => IRegistry4626.VaultKind) public phaseKindByToken;
     mapping(address => bool) public hasPhaseKind;
+    /// @notice Ecosystem key pinned at phase 1 so a stack cannot switch codeId lanes mid-deploy.
+    mapping(address => bytes32) public phaseLaneKeyByToken;
+    mapping(address => bool) public hasPhaseLaneKey;
 
     struct DeploymentInfo {
         address creatorCoin; // underlying token (creator coin or agent token)
@@ -95,6 +104,7 @@ contract OVaultFactory4626 is Ownable {
     event RegistryUpdated(address indexed newRegistry);
     event DeploymentBatcherUpdated(address indexed batcher);
     event LaneUpdated(IRegistry4626.VaultKind indexed kind, address indexed lane);
+    event EcosystemLaneUpdated(bytes32 indexed laneKey, IRegistry4626.VaultKind indexed executionKind, address lane);
     event SurfaceRegistryUpdated(address indexed surfaceRegistry);
     event Phase1Started(
         address indexed token,
@@ -136,7 +146,11 @@ contract OVaultFactory4626 is Ownable {
     error NotAuthorized();
     error LaneNotConfigured(IRegistry4626.VaultKind kind);
     error LaneKindMismatch(IRegistry4626.VaultKind expected, IRegistry4626.VaultKind actual);
+    error EcosystemLaneNotConfigured(bytes32 laneKey);
+    error EcosystemLaneKeyMismatch(bytes32 expected, bytes32 actual);
+    error ReservedEcosystemLaneKey(bytes32 laneKey);
     error PhaseKindMismatch(address token, IRegistry4626.VaultKind expected, IRegistry4626.VaultKind actual);
+    error PhaseLaneKeyMismatch(address token, bytes32 expected, bytes32 actual);
     error BatcherNotConfigured();
     error StrategyCodeIdsNotConfigured();
 
@@ -191,7 +205,28 @@ contract OVaultFactory4626 is Ownable {
         IRegistry4626.VaultKind laneKind = IOvaultLane(lane).kind();
         if (laneKind != kind) revert LaneKindMismatch(kind, laneKind);
         laneOf[kind] = lane;
+        bytes32 laneKey = keccak256(bytes(IOvaultLane(lane).laneId()));
+        bytes32 expectedKey = _canonicalLaneKey(kind);
+        if (laneKey != expectedKey) revert EcosystemLaneKeyMismatch(expectedKey, laneKey);
+        ecosystemLaneOf[laneKey] = lane;
         emit LaneUpdated(kind, lane);
+        emit EcosystemLaneUpdated(laneKey, kind, lane);
+    }
+
+    /**
+     * @notice Register an additional ecosystem lane without replacing the canonical
+     * creator or agent lane for its execution template.
+     */
+    function setEcosystemLane(bytes32 laneKey, address lane) external onlyOwner {
+        if (lane == address(0) || laneKey == bytes32(0)) revert ZeroAddress();
+        if (laneKey == CREATOR_LANE_KEY || laneKey == AGENT_LANE_KEY) {
+            revert ReservedEcosystemLaneKey(laneKey);
+        }
+        bytes32 declaredKey = keccak256(bytes(IOvaultLane(lane).laneId()));
+        if (declaredKey != laneKey) revert EcosystemLaneKeyMismatch(laneKey, declaredKey);
+        IRegistry4626.VaultKind executionKind = IOvaultLane(lane).kind();
+        ecosystemLaneOf[laneKey] = lane;
+        emit EcosystemLaneUpdated(laneKey, executionKind, lane);
     }
 
     function setSurfaceRegistry(address registry_) external onlyOwner {
@@ -224,6 +259,23 @@ contract OVaultFactory4626 is Ownable {
         laneId_ = IOvaultLane(lane).laneId();
     }
 
+    function resolveEcosystemLane(bytes32 laneKey)
+        external
+        view
+        returns (
+            address lane,
+            IRegistry4626.VaultKind executionKind,
+            IOvaultLane.CodeIds memory ids,
+            string memory laneId_
+        )
+    {
+        IOvaultLane resolved = _requireEcosystemLane(laneKey);
+        lane = address(resolved);
+        executionKind = resolved.kind();
+        ids = resolved.codeIds();
+        laneId_ = resolved.laneId();
+    }
+
     /**
      * @notice Start phase-1 core deploy via DeploymentBatcher using the lane's codeIds.
      * @dev `params.vaultKind` is forced from `kind`. Caller must be authorized on this factory;
@@ -238,7 +290,7 @@ contract OVaultFactory4626 is Ownable {
         DeploymentBatcher batcher = deploymentBatcher;
         if (address(batcher) == address(0)) revert BatcherNotConfigured();
 
-        _pinPhaseKind(params.creatorToken, kind);
+        _pinPhaseLane(params.creatorToken, _canonicalLaneKey(kind), kind);
         IOvaultLane lane = _requireLane(kind);
         DeploymentBatcher.CodeIds memory codeIds = _toBatcherCodeIds(lane.codeIds());
 
@@ -262,7 +314,7 @@ contract OVaultFactory4626 is Ownable {
         DeploymentBatcher batcher = deploymentBatcher;
         if (address(batcher) == address(0)) revert BatcherNotConfigured();
 
-        _requirePhaseKind(params.creatorToken, kind);
+        _requirePhaseLane(params.creatorToken, _canonicalLaneKey(kind), kind);
         IOvaultLane lane = _requireLane(kind);
         DeploymentBatcher.CodeIds memory codeIds = _toBatcherCodeIds(lane.codeIds());
 
@@ -286,7 +338,7 @@ contract OVaultFactory4626 is Ownable {
         DeploymentBatcher batcher = deploymentBatcher;
         if (address(batcher) == address(0)) revert BatcherNotConfigured();
 
-        _requirePhaseKind(params.creatorToken, kind);
+        _requirePhaseLane(params.creatorToken, _canonicalLaneKey(kind), kind);
         IOvaultLane lane = _requireLane(kind);
         DeploymentBatcher.CodeIds memory codeIds = _toBatcherCodeIds(lane.codeIds());
 
@@ -307,7 +359,7 @@ contract OVaultFactory4626 is Ownable {
         DeploymentBatcher batcher = deploymentBatcher;
         if (address(batcher) == address(0)) revert BatcherNotConfigured();
 
-        _requirePhaseKind(params.creatorToken, kind);
+        _requirePhaseLane(params.creatorToken, _canonicalLaneKey(kind), kind);
         IOvaultLane lane = _requireLane(kind);
         DeploymentBatcher.CodeIds memory codeIds = _toBatcherCodeIds(lane.codeIds());
 
@@ -329,7 +381,7 @@ contract OVaultFactory4626 is Ownable {
         DeploymentBatcher batcher = deploymentBatcher;
         if (address(batcher) == address(0)) revert BatcherNotConfigured();
         // Ensure lane exists (kind is product routing metadata even when batcher does not re-read codeIds).
-        _requirePhaseKind(params.creatorToken, kind);
+        _requirePhaseLane(params.creatorToken, _canonicalLaneKey(kind), kind);
         _requireLane(kind);
 
         out = batcher.finalizePhase2{value: msg.value}(params);
@@ -347,7 +399,7 @@ contract OVaultFactory4626 is Ownable {
     ) external payable onlyAuthorizedDeployer returns (DeploymentBatcher.Phase2Result memory out) {
         DeploymentBatcher batcher = deploymentBatcher;
         if (address(batcher) == address(0)) revert BatcherNotConfigured();
-        _requirePhaseKind(params.creatorToken, kind);
+        _requirePhaseLane(params.creatorToken, _canonicalLaneKey(kind), kind);
         _requireLane(kind);
 
         out = batcher.finalizePhase2WithPermit2{value: msg.value}(params, permit, signature);
@@ -366,11 +418,128 @@ contract OVaultFactory4626 is Ownable {
     ) external onlyAuthorizedDeployer returns (DeploymentBatcher.Phase3Result memory out) {
         DeploymentBatcher batcher = deploymentBatcher;
         if (address(batcher) == address(0)) revert BatcherNotConfigured();
-        _requirePhaseKind(params.creatorToken, kind);
+        _requirePhaseLane(params.creatorToken, _canonicalLaneKey(kind), kind);
         _requireLane(kind);
 
         DeploymentBatcher.StrategyCodeIds memory ids = _resolveStrategyCodeIds(strategyCodeIds_);
         out = batcher.deployPhase3Strategies(params, ids);
+        emit Phase3Started(
+            params.creatorToken, params.owner, kind, params.vault, out.charmStrategy, out.ajnaStrategy
+        );
+    }
+
+    // =================================
+    // KEYED ECOSYSTEM LANE FACADE
+    // =================================
+
+    function startPhase1ByLane(
+        bytes32 laneKey,
+        DeploymentBatcher.Phase1Params calldata params,
+        bytes32 shareOftSaltOverride
+    ) external onlyAuthorizedDeployer returns (DeploymentBatcher.Phase1Result memory out) {
+        DeploymentBatcher batcher = deploymentBatcher;
+        if (address(batcher) == address(0)) revert BatcherNotConfigured();
+        IOvaultLane lane = _requireEcosystemLane(laneKey);
+        IRegistry4626.VaultKind kind = lane.kind();
+        _pinPhaseLane(params.creatorToken, laneKey, kind);
+
+        DeploymentBatcher.Phase1Params memory p = params;
+        p.vaultKind = _toBatcherKind(kind);
+        out = batcher.deployPhase1CoreWithSalt(p, _toBatcherCodeIds(lane.codeIds()), shareOftSaltOverride);
+        _maybeRegisterGaugeSurfaceWithLane(out.vault, kind, laneKey);
+        emit Phase1Started(p.creatorToken, p.owner, kind, out.vault, out.wrapper);
+    }
+
+    function finalizePhase1ByLane(
+        bytes32 laneKey,
+        DeploymentBatcher.Phase1Params calldata params,
+        bytes32 shareOftSaltOverride
+    ) external onlyAuthorizedDeployer returns (DeploymentBatcher.Phase1Result memory out) {
+        DeploymentBatcher batcher = deploymentBatcher;
+        if (address(batcher) == address(0)) revert BatcherNotConfigured();
+        IOvaultLane lane = _requireEcosystemLane(laneKey);
+        IRegistry4626.VaultKind kind = lane.kind();
+        _requirePhaseLane(params.creatorToken, laneKey, kind);
+
+        DeploymentBatcher.Phase1Params memory p = params;
+        p.vaultKind = _toBatcherKind(kind);
+        out = batcher.finalizePhase1WithSalt(p, _toBatcherCodeIds(lane.codeIds()), shareOftSaltOverride);
+        emit Phase1Finalized(p.creatorToken, p.owner, kind, out.shareOFT);
+    }
+
+    function startPhase2ByLane(bytes32 laneKey, DeploymentBatcher.Phase2CoreParams calldata params)
+        external
+        onlyAuthorizedDeployer
+        returns (DeploymentBatcher.Phase2Result memory out)
+    {
+        DeploymentBatcher batcher = deploymentBatcher;
+        if (address(batcher) == address(0)) revert BatcherNotConfigured();
+        IOvaultLane lane = _requireEcosystemLane(laneKey);
+        IRegistry4626.VaultKind kind = lane.kind();
+        _requirePhaseLane(params.creatorToken, laneKey, kind);
+        out = batcher.deployPhase2Core(params, _toBatcherCodeIds(lane.codeIds()));
+        emit Phase2CoreStarted(
+            params.creatorToken, params.owner, kind, out.gaugeController, out.ccaLaunchArm, out.oracle
+        );
+    }
+
+    function startPhase2WithRolePolicyByLane(
+        bytes32 laneKey,
+        DeploymentBatcher.Phase2CoreParams calldata params,
+        uint256 rolePolicyId
+    ) external onlyAuthorizedDeployer returns (DeploymentBatcher.Phase2Result memory out) {
+        DeploymentBatcher batcher = deploymentBatcher;
+        if (address(batcher) == address(0)) revert BatcherNotConfigured();
+        IOvaultLane lane = _requireEcosystemLane(laneKey);
+        IRegistry4626.VaultKind kind = lane.kind();
+        _requirePhaseLane(params.creatorToken, laneKey, kind);
+        out = batcher.deployPhase2CoreWithRolePolicy(params, _toBatcherCodeIds(lane.codeIds()), rolePolicyId);
+        emit Phase2CoreStarted(
+            params.creatorToken, params.owner, kind, out.gaugeController, out.ccaLaunchArm, out.oracle
+        );
+    }
+
+    function finalizePhase2ByLane(bytes32 laneKey, DeploymentBatcher.Phase2FinalizeParams calldata params)
+        external
+        payable
+        onlyAuthorizedDeployer
+        returns (DeploymentBatcher.Phase2Result memory out)
+    {
+        DeploymentBatcher batcher = deploymentBatcher;
+        if (address(batcher) == address(0)) revert BatcherNotConfigured();
+        IOvaultLane lane = _requireEcosystemLane(laneKey);
+        IRegistry4626.VaultKind kind = lane.kind();
+        _requirePhaseLane(params.creatorToken, laneKey, kind);
+        out = batcher.finalizePhase2{value: msg.value}(params);
+        emit Phase2Finalized(params.creatorToken, params.owner, kind, out.auction);
+    }
+
+    function finalizePhase2WithPermit2ByLane(
+        bytes32 laneKey,
+        DeploymentBatcher.Phase2FinalizeParams calldata params,
+        ISignatureTransfer.PermitTransferFrom calldata permit,
+        bytes calldata signature
+    ) external payable onlyAuthorizedDeployer returns (DeploymentBatcher.Phase2Result memory out) {
+        DeploymentBatcher batcher = deploymentBatcher;
+        if (address(batcher) == address(0)) revert BatcherNotConfigured();
+        IOvaultLane lane = _requireEcosystemLane(laneKey);
+        IRegistry4626.VaultKind kind = lane.kind();
+        _requirePhaseLane(params.creatorToken, laneKey, kind);
+        out = batcher.finalizePhase2WithPermit2{value: msg.value}(params, permit, signature);
+        emit Phase2Finalized(params.creatorToken, params.owner, kind, out.auction);
+    }
+
+    function startPhase3ByLane(
+        bytes32 laneKey,
+        DeploymentBatcher.Phase3Params calldata params,
+        DeploymentBatcher.StrategyCodeIds calldata strategyCodeIds_
+    ) external onlyAuthorizedDeployer returns (DeploymentBatcher.Phase3Result memory out) {
+        DeploymentBatcher batcher = deploymentBatcher;
+        if (address(batcher) == address(0)) revert BatcherNotConfigured();
+        IOvaultLane lane = _requireEcosystemLane(laneKey);
+        IRegistry4626.VaultKind kind = lane.kind();
+        _requirePhaseLane(params.creatorToken, laneKey, kind);
+        out = batcher.deployPhase3Strategies(params, _resolveStrategyCodeIds(strategyCodeIds_));
         emit Phase3Started(
             params.creatorToken, params.owner, kind, params.vault, out.charmStrategy, out.ajnaStrategy
         );
@@ -433,6 +602,32 @@ contract OVaultFactory4626 is Ownable {
         address laneAddr = laneOf[kind];
         if (laneAddr == address(0)) revert LaneNotConfigured(kind);
         return IOvaultLane(laneAddr);
+    }
+
+    function _requireEcosystemLane(bytes32 laneKey) internal view returns (IOvaultLane lane) {
+        address laneAddr = ecosystemLaneOf[laneKey];
+        if (laneAddr == address(0)) revert EcosystemLaneNotConfigured(laneKey);
+        return IOvaultLane(laneAddr);
+    }
+
+    function _canonicalLaneKey(IRegistry4626.VaultKind kind) internal pure returns (bytes32) {
+        return kind == IRegistry4626.VaultKind.Agent ? AGENT_LANE_KEY : CREATOR_LANE_KEY;
+    }
+
+    function _pinPhaseLane(address token, bytes32 laneKey, IRegistry4626.VaultKind kind) internal {
+        _pinPhaseKind(token, kind);
+        if (hasPhaseLaneKey[token] && phaseLaneKeyByToken[token] != laneKey) {
+            revert PhaseLaneKeyMismatch(token, phaseLaneKeyByToken[token], laneKey);
+        }
+        phaseLaneKeyByToken[token] = laneKey;
+        hasPhaseLaneKey[token] = true;
+    }
+
+    function _requirePhaseLane(address token, bytes32 laneKey, IRegistry4626.VaultKind kind) internal view {
+        _requirePhaseKind(token, kind);
+        if (hasPhaseLaneKey[token] && phaseLaneKeyByToken[token] != laneKey) {
+            revert PhaseLaneKeyMismatch(token, phaseLaneKeyByToken[token], laneKey);
+        }
     }
 
     /// @dev Pin lane kind at Phase 1; reject later phase calls (or re-start) with a different kind.
@@ -541,10 +736,17 @@ contract OVaultFactory4626 is Ownable {
 
     /// @dev Fail-loud when `surfaceRegistry` is set. Idempotent if already registered (phase1 + post-hoc).
     function _maybeRegisterGaugeSurface(address vault, IRegistry4626.VaultKind kind) internal {
+        _maybeRegisterGaugeSurfaceWithLane(vault, kind, _canonicalLaneKey(kind));
+    }
+
+    function _maybeRegisterGaugeSurfaceWithLane(
+        address vault,
+        IRegistry4626.VaultKind kind,
+        bytes32 laneKey
+    ) internal {
         if (address(surfaceRegistry) == address(0) || vault == address(0)) return;
         if (surfaceRegistry.isRegistered(vault)) return;
-        bytes32 laneIdHash = kind == IRegistry4626.VaultKind.Agent ? keccak256("agent") : keccak256("creator");
-        surfaceRegistry.registerSurface(vault, kind, laneIdHash, true, true, true);
+        surfaceRegistry.registerSurface(vault, kind, laneKey, true, true, true);
     }
 
     function _registerWithRegistry(

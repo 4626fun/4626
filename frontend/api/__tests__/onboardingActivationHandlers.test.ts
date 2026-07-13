@@ -24,22 +24,22 @@ const {
   isOwnerMock,
   prepareAddOwnerTxMock,
 } = vi.hoisted(() => ({
-  checkDurableRateLimitMock: vi.fn(async () => ({
+  checkDurableRateLimitMock: vi.fn(async (..._args: unknown[]) => ({
     allowed: true,
     remaining: 9,
     resetAt: Date.now() + 60_000,
     source: 'memory' as const,
   })),
-  getDbMock: vi.fn(),
-  resolveActivationContextMock: vi.fn(),
-  readActivationStatusMock: vi.fn(),
-  enableCswAgentMock: vi.fn(async () => undefined),
-  registerClaimMock: vi.fn(async () => undefined),
-  consumeClaimMock: vi.fn(async () => undefined),
-  bootstrapMock: vi.fn(),
-  resolveServerWalletMock: vi.fn(),
-  isOwnerMock: vi.fn(),
-  prepareAddOwnerTxMock: vi.fn(() => ({
+  getDbMock: vi.fn<(...args: unknown[]) => unknown>(),
+  resolveActivationContextMock: vi.fn<(...args: unknown[]) => unknown>(),
+  readActivationStatusMock: vi.fn<(...args: unknown[]) => unknown>(),
+  enableCswAgentMock: vi.fn(async (..._args: unknown[]) => undefined),
+  registerClaimMock: vi.fn(async (..._args: unknown[]) => undefined),
+  consumeClaimMock: vi.fn(async (..._args: unknown[]) => undefined),
+  bootstrapMock: vi.fn<(...args: unknown[]) => unknown>(),
+  resolveServerWalletMock: vi.fn<(...args: unknown[]) => unknown>(),
+  isOwnerMock: vi.fn<(...args: unknown[]) => unknown>(),
+  prepareAddOwnerTxMock: vi.fn((..._args: unknown[]) => ({
     chainId: 8453,
     to: CSW,
     data: '0x0f0f3f240000000000000000000000003333333333333333333333333333333333333333',

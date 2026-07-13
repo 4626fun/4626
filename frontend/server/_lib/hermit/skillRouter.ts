@@ -1903,7 +1903,7 @@ async function handleHermitAlertSubcommand(
         if (!isProtocolXmtpAlertDeliveryConfigured()) {
           results.push('XMTP: failed — `PROTOCOL_CSW_*` is not configured on this runtime.')
         } else {
-          const sent = await sendProtocolAgentXmtpDm({
+          const result = await sendProtocolAgentXmtpDm({
             recipientAddress: sender,
             text: [
               '🧪 **Hermit alert test (XMTP)**',
@@ -1912,7 +1912,13 @@ async function handleHermitAlertSubcommand(
               'You will receive Hyperliquid alert DMs here when thresholds trigger.',
             ].join('\n'),
           })
-          results.push(sent ? 'XMTP: sent ✅ from the 4626 agent.' : 'XMTP: send failed — DM the agent once, then retry.')
+          results.push(
+            result.ok
+              ? 'XMTP: sent ✅ from the 4626 agent.'
+              : result.reason === 'not_registered'
+                ? `XMTP: send failed — open the 4626 chat once (${formatProtocolAgentXmtpDmLink()}), then retry.`
+                : 'XMTP: send failed — try again in a moment.',
+          )
         }
       }
 
@@ -1941,7 +1947,7 @@ async function handleHermitAlertSubcommand(
             'XMTP alert test failed: `PROTOCOL_CSW_*` is not configured on this runtime. Set protocol CSW env on Hermit/Vercel and retry.',
         }
       }
-      const sent = await sendProtocolAgentXmtpDm({
+      const result = await sendProtocolAgentXmtpDm({
         recipientAddress: sender,
         text: [
           '🧪 **Hermit alert test (XMTP)**',
@@ -1950,17 +1956,24 @@ async function handleHermitAlertSubcommand(
           'You will receive Hyperliquid alert DMs here when thresholds trigger.',
         ].join('\n'),
       })
-      if (sent) {
+      if (result.ok) {
         return {
           kind: 'hermit',
           provider: 'local',
           reply: `XMTP alert test sent ✅ from the 4626 agent. Link: ${formatProtocolAgentXmtpDmLink()}`,
         }
       }
+      if (result.reason === 'not_registered') {
+        return {
+          kind: 'hermit',
+          provider: 'local',
+          reply: `XMTP alert test failed during send. Open the 4626 chat once (${formatProtocolAgentXmtpDmLink()}) — it handles both regular wallets and smart wallets correctly, unlike third-party XMTP clients — then retry \`/hermit alert xmtp test\`.`,
+        }
+      }
       return {
         kind: 'hermit',
         provider: 'local',
-        reply: `XMTP alert test failed during send. DM the 4626 agent once (${formatProtocolAgentXmtpDmLink()}), then retry \`/hermit alert xmtp test\`.`,
+        reply: `XMTP alert test failed during send (${result.reason}). Try again in a moment, or open the 4626 chat (${formatProtocolAgentXmtpDmLink()}) to confirm your wallet can receive messages.`,
       }
     }
 
@@ -2027,7 +2040,8 @@ async function handleHermitAlertSubcommand(
         )
       }
       lines.push('', 'Live snapshot: `/position` · disable: `/hermit alert off`')
-      lines.push('Verify delivery: `/hermit alert test` · XMTP: `/hermit alert xmtp on` then `/hermit alert xmtp test`')
+      lines.push('Verify delivery: `/hermit alert test`')
+      lines.push('Optional wallet-native alt: `/hermit alert xmtp on` then `/hermit alert xmtp test`')
       return {
         kind: 'hermit',
         provider: 'local',
@@ -2091,8 +2105,9 @@ async function handleHermitAlertSubcommand(
           provider: 'local',
           reply: [
             'XMTP DMs **on** from the **4626 agent** for Hyperliquid alerts.',
-            `DM link: ${formatProtocolAgentXmtpDmLink()}`,
+            `Open the 4626 chat once to bootstrap the conversation: ${formatProtocolAgentXmtpDmLink()}`,
             'Verify delivery: `/hermit alert xmtp test`.',
+            '(No wallet signature? Prefer `/hermit alert telegram on` instead — zero setup if you already linked Telegram.)',
           ].join('\n'),
         }
       }

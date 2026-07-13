@@ -9,7 +9,7 @@ import {Script, console} from "forge-std/Script.sol";
  * @notice Wires deployed contracts together:
  *         - VRF Consumer authorizes LotteryManager as a local caller
  *         - VRF Consumer gets subscriptionId + keyHash config
- *         - LotteryManager authorizes SolanaBridgeAdapter as swap contract
+ *         - LotteryManager authorizes TaxHook as swap contract
  *         - Registry points to LotteryManager
  *         - (Optional) Registry sets Solana registry key <-> EID + bytes32 remote OFT peer
  *         - (Optional) Registry sets per-creator OVault mesh metadata
@@ -92,7 +92,6 @@ contract OperationalWiring is Script {
     address constant REGISTRY = 0x888506B92181c57A2fD06516FFFb6F375b7A4626;
     address constant LOTTERY_MANAGER = 0x77705A2f173dd52F28300447506Dc35086c34626;
     address constant VRF_CONSUMER = 0x9F85d8EEe5d2b8dC1E99b598B9c2B084934d0304;
-    address constant SOLANA_BRIDGE_ADAPTER = 0x700b4BBAf965c013123bAd02a6562FBa487aC0f1;
     address constant VRF_COORDINATOR = 0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634;
 
     // Uniswap V4 Tax Hook (processes swaps)
@@ -249,14 +248,6 @@ contract OperationalWiring is Script {
 
         console.log("\n[6/8] LotteryManager: Authorizing swap contracts...");
 
-        // SolanaBridgeAdapter (for Solana-originated lottery entries)
-        if (lotteryManager.authorizedSwapContracts(SOLANA_BRIDGE_ADAPTER)) {
-            console.log(unicode"   [skip] SolanaBridgeAdapter already authorized");
-        } else {
-            lotteryManager.setAuthorizedSwapContract(SOLANA_BRIDGE_ADAPTER, true);
-            console.log(unicode"   ✓ SolanaBridgeAdapter authorized");
-        }
-
         // TaxHook (for EVM-originated lottery entries via Uniswap V4 swaps)
         if (lotteryManager.authorizedSwapContracts(TAX_HOOK)) {
             console.log(unicode"   [skip] TaxHook already authorized");
@@ -316,11 +307,14 @@ contract OperationalWiring is Script {
                     solanaAssetMint: ovaultSolanaAssetMint,
                     enabled: ovaultMeshEnabled
                 });
-                IRegistry.OmnichainVaultMeshConfig memory currentCfg = registry.getOmnichainVaultMesh(solanaCreatorToken);
-                bool sameCfg = currentCfg.solanaEid == desiredCfg.solanaEid && currentCfg.hubComposer == desiredCfg.hubComposer
+                IRegistry.OmnichainVaultMeshConfig memory currentCfg =
+                    registry.getOmnichainVaultMesh(solanaCreatorToken);
+                bool sameCfg = currentCfg.solanaEid == desiredCfg.solanaEid
+                    && currentCfg.hubComposer == desiredCfg.hubComposer
                     && currentCfg.assetMeshToken == desiredCfg.assetMeshToken
                     && currentCfg.shareMeshToken == desiredCfg.shareMeshToken
-                    && currentCfg.solanaAssetMint == desiredCfg.solanaAssetMint && currentCfg.enabled == desiredCfg.enabled;
+                    && currentCfg.solanaAssetMint == desiredCfg.solanaAssetMint
+                    && currentCfg.enabled == desiredCfg.enabled;
                 if (sameCfg) {
                     console.log(unicode"   [skip] Omnichain OVault mesh already configured");
                 } else {
@@ -350,7 +344,7 @@ contract OperationalWiring is Script {
         console.log(unicode"  ✓ VRF Coordinator set");
         console.log(unicode"  ✓ LotteryManager -> VRF Consumer linked + local mode on");
         console.log(unicode"  ✓ LotteryManager sponsorship guardrails configured");
-        console.log(unicode"  ✓ LotteryManager authorized: SolanaBridgeAdapter, TaxHook");
+        console.log(unicode"  ✓ LotteryManager authorized: TaxHook");
         console.log(unicode"  ✓ Registry factories confirmed");
         console.log(unicode"  ✓ Optional Solana bytes32 peer + OVault mesh wiring applied when envs are set");
         console.log("");

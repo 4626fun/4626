@@ -243,6 +243,7 @@ export function AccountSetupWorkspaceView(props: {
     zoraLinked,
     ownerInstallRequested: ownerInstallPathActive,
     signingStepComplete,
+    embeddedEoaAvailable: Boolean(embeddedEoaAddress),
     executionTrack,
     accountSignals: me.accountSignals,
     parentEmbeddedOwnerOnChain,
@@ -1289,4 +1290,3 @@ export function AccountSetupWorkspaceView(props: {
     </div>
   )
 }
-

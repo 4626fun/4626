@@ -6,10 +6,10 @@ import "forge-std/Test.sol";
 import {OVaultFactory4626} from "@4626/shared/deploy/factories/OVaultFactory4626.sol";
 import {CreatorOvaultLane} from "@4626/shared/deploy/lanes/CreatorOvaultLane.sol";
 import {AgentOvaultLane} from "@4626/shared/deploy/lanes/AgentOvaultLane.sol";
+import {EcosystemOvaultLane} from "@4626/shared/deploy/lanes/EcosystemOvaultLane.sol";
 import {IOvaultLane} from "@4626/shared/deploy/lanes/IOvaultLane.sol";
 import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 import {DeploymentBatcher} from "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
-import {IBaseSolanaBridge} from "@4626/shared/interfaces/bridge/IBaseSolanaBridge.sol";
 import {GaugeSurfaceRegistry4626} from "@4626/shared/governance/surfaces/GaugeSurfaceRegistry4626.sol";
 import {IGaugeSurfaceRegistry} from "@4626/shared/governance/surfaces/IGaugeSurfaceRegistry.sol";
 
@@ -42,10 +42,7 @@ contract MockDeploymentBatcherPhase1 {
         lastSalt = shareOftSaltOverride;
         startCalls++;
         out = DeploymentBatcher.Phase1Result({
-            oftBootstrapRegistry: address(0xB00),
-            vault: address(0xBEE1),
-            wrapper: address(0xBEE2),
-            shareOFT: address(0)
+            oftBootstrapRegistry: address(0xB00), vault: address(0xBEE1), wrapper: address(0xBEE2), shareOFT: address(0)
         });
     }
 
@@ -99,7 +96,9 @@ contract MockDeploymentBatcherPhase1 {
         });
     }
 
-    function finalizePhase2(DeploymentBatcher.Phase2FinalizeParams calldata /* params */ )
+    function finalizePhase2(
+        DeploymentBatcher.Phase2FinalizeParams calldata /* params */
+    )
         external
         payable
         returns (DeploymentBatcher.Phase2Result memory out)
@@ -144,16 +143,20 @@ contract OVaultFactory4626LaneFacadeTest is Test {
     OVaultFactory4626 internal factory;
     CreatorOvaultLane internal creatorLane;
     AgentOvaultLane internal agentLane;
+    EcosystemOvaultLane internal gamingLane;
     MockDeploymentBatcherPhase1 internal batcher;
     address internal owner = address(this);
 
     IOvaultLane.CodeIds internal creatorIds;
     IOvaultLane.CodeIds internal agentIds;
+    IOvaultLane.CodeIds internal gamingIds;
+    bytes32 internal constant GAMING_LANE_KEY = keccak256("gaming");
 
     function setUp() public {
         factory = new OVaultFactory4626(address(0), owner);
         creatorLane = new CreatorOvaultLane(owner);
         agentLane = new AgentOvaultLane(owner);
+        gamingLane = new EcosystemOvaultLane(owner, "gaming", IRegistry4626.VaultKind.Agent, "gaming");
         batcher = new MockDeploymentBatcherPhase1();
 
         creatorIds = IOvaultLane.CodeIds({
@@ -174,12 +177,23 @@ contract OVaultFactory4626LaneFacadeTest is Test {
             oracle: bytes32(uint256(16)),
             oftBootstrap: bytes32(uint256(17))
         });
+        gamingIds = IOvaultLane.CodeIds({
+            vault: bytes32(uint256(21)),
+            wrapper: bytes32(uint256(22)),
+            shareOFT: bytes32(uint256(23)),
+            gauge: bytes32(uint256(24)),
+            cca: bytes32(uint256(25)),
+            oracle: bytes32(uint256(26)),
+            oftBootstrap: bytes32(uint256(27))
+        });
 
         creatorLane.setCodeIds(creatorIds);
         agentLane.setCodeIds(agentIds);
+        gamingLane.setCodeIds(gamingIds);
 
         factory.setLane(IRegistry4626.VaultKind.Creator, address(creatorLane));
         factory.setLane(IRegistry4626.VaultKind.Agent, address(agentLane));
+        factory.setEcosystemLane(GAMING_LANE_KEY, address(gamingLane));
         factory.setDeploymentBatcher(address(batcher));
     }
 
@@ -212,6 +226,23 @@ contract OVaultFactory4626LaneFacadeTest is Test {
         assertEq(keccak256(bytes(id_)), keccak256("agent"));
     }
 
+    function test_resolveEcosystemLane_keepsDistinctKeyAndExecutionTemplate() public view {
+        (address lane, IRegistry4626.VaultKind kind, IOvaultLane.CodeIds memory ids, string memory id_) =
+            factory.resolveEcosystemLane(GAMING_LANE_KEY);
+
+        assertEq(lane, address(gamingLane));
+        assertEq(uint8(kind), uint8(IRegistry4626.VaultKind.Agent));
+        assertEq(ids.vault, gamingIds.vault);
+        assertEq(keccak256(bytes(id_)), GAMING_LANE_KEY);
+        assertEq(keccak256(bytes(gamingLane.saltLabel("vault"))), keccak256("gamingvault"));
+    }
+
+    function test_setEcosystemLane_rejectsReservedCanonicalKey() public {
+        bytes32 agentLaneKey = factory.AGENT_LANE_KEY();
+        vm.expectRevert(abi.encodeWithSelector(OVaultFactory4626.ReservedEcosystemLaneKey.selector, agentLaneKey));
+        factory.setEcosystemLane(agentLaneKey, address(gamingLane));
+    }
+
     function test_startPhase1_forcesVaultKindAndLaneCodeIds() public {
         address token = address(0xA0);
         address vaultOwner = address(0xA11CE);
@@ -237,6 +268,48 @@ contract OVaultFactory4626LaneFacadeTest is Test {
         assertEq(batcher.lastVaultCodeId(), agentIds.vault);
         assertEq(batcher.lastWrapperCodeId(), agentIds.wrapper);
         assertEq(batcher.lastSalt(), bytes32(uint256(99)));
+    }
+
+    function test_startPhase1ByLane_usesEcosystemCodeIdsAndAgentTemplate() public {
+        address token = address(0xA2);
+        DeploymentBatcher.Phase1Params memory params = DeploymentBatcher.Phase1Params({
+            creatorToken: token,
+            owner: address(0xA11CE),
+            vaultName: "Gaming Vault",
+            vaultSymbol: "gV",
+            shareName: "Gaming Share",
+            shareSymbol: "gS",
+            version: "v1",
+            vaultKind: DeploymentBatcher.VaultKind.Creator
+        });
+
+        factory.startPhase1ByLane(GAMING_LANE_KEY, params, bytes32(uint256(101)));
+
+        assertEq(uint8(batcher.lastVaultKind()), uint8(DeploymentBatcher.VaultKind.Agent));
+        assertEq(batcher.lastVaultCodeId(), gamingIds.vault);
+        assertEq(factory.phaseLaneKeyByToken(token), GAMING_LANE_KEY);
+    }
+
+    function test_phaseLifecycle_rejectsSwitchFromEcosystemToCanonicalAgentLane() public {
+        address token = address(0xA3);
+        DeploymentBatcher.Phase1Params memory params = DeploymentBatcher.Phase1Params({
+            creatorToken: token,
+            owner: address(0xA11CE),
+            vaultName: "Gaming Vault",
+            vaultSymbol: "gV",
+            shareName: "Gaming Share",
+            shareSymbol: "gS",
+            version: "v1",
+            vaultKind: DeploymentBatcher.VaultKind.Agent
+        });
+        factory.startPhase1ByLane(GAMING_LANE_KEY, params, bytes32(0));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                OVaultFactory4626.PhaseLaneKeyMismatch.selector, token, GAMING_LANE_KEY, factory.AGENT_LANE_KEY()
+            )
+        );
+        factory.finalizePhase1(IRegistry4626.VaultKind.Agent, params, bytes32(0));
     }
 
     function test_finalizePhase1_usesLaneCodeIds() public {
@@ -385,7 +458,14 @@ contract OVaultFactory4626LaneFacadeTest is Test {
         address wrapper = address(new MockDeployedContract());
         address share = address(new MockDeployedContract());
         factory.registerDeploymentWithKind(
-            token, vault, wrapper, share, address(0x11), address(0x12), address(0x13), address(0x14),
+            token,
+            vault,
+            wrapper,
+            share,
+            address(0x11),
+            address(0x12),
+            address(0x13),
+            address(0x14),
             IRegistry4626.VaultKind.Creator
         );
         assertTrue(surfaces.isRegistered(vault));
@@ -398,7 +478,14 @@ contract OVaultFactory4626LaneFacadeTest is Test {
         address wrapper = address(new MockDeployedContract());
         address share = address(new MockDeployedContract());
         factory.registerDeploymentWithKind(
-            token, vault, wrapper, share, address(0x11), address(0x12), address(0x13), address(0x14),
+            token,
+            vault,
+            wrapper,
+            share,
+            address(0x11),
+            address(0x12),
+            address(0x13),
+            address(0x14),
             IRegistry4626.VaultKind.Creator
         );
         assertTrue(factory.getDeployment(token).exists);
@@ -506,9 +593,7 @@ contract OVaultFactory4626LaneFacadeTest is Test {
             depositAmount: 1 ether,
             requiredRaise: 0,
             floorPriceQ96: 0,
-            auctionSteps: "",
-            meteoraAlphaVault: bytes32(0),
-            solanaIxs: new IBaseSolanaBridge.Ix[](0)
+            auctionSteps: ""
         });
 
         // fund factory so it can forward native value
@@ -555,8 +640,7 @@ contract OVaultFactory4626LaneFacadeTest is Test {
             solanaStrategy: bytes32(uint256(105))
         });
 
-        DeploymentBatcher.Phase3Result memory out =
-            factory.startPhase3(IRegistry4626.VaultKind.Creator, p3, ids);
+        DeploymentBatcher.Phase3Result memory out = factory.startPhase3(IRegistry4626.VaultKind.Creator, p3, ids);
         assertEq(out.charmStrategy, address(0x4003));
         assertEq(batcher.phase3Calls(), 1);
         assertEq(batcher.lastStrategyCharmId(), bytes32(uint256(101)));

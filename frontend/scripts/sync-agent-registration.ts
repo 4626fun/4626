@@ -10,7 +10,7 @@ const origin = (process.env.ERC8004_PUBLIC_ORIGIN || 'https://4626.fun').replace
 
 function buildAgentCard(registration: Record<string, unknown>) {
   return {
-    name: registration.name ?? '4626 Agent',
+    name: registration.name ?? '4626',
     description: registration.description ?? '',
     url: origin,
     version: '1.0.0',

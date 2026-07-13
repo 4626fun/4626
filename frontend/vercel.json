@@ -151,9 +151,7 @@
     {
       "src": "/alfaclub/key-safety(.*)",
       "status": 308,
-      "headers": {
-        "location": "https://alfaclub.4626.fun/safety$1"
-      }
+      "dest": "https://alfaclub.4626.fun/rooms?tab=safety"
     },
     {
       "src": "/alfaclub/trading-rooms(.*)",
@@ -165,16 +163,12 @@
     {
       "src": "/alfaclub/liquidity-pools(.*)",
       "status": 308,
-      "headers": {
-        "location": "https://alfaclub.4626.fun/pools$1"
-      }
+      "dest": "https://alfaclub.4626.fun/rooms?tab=liquidity"
     },
     {
       "src": "/alfaclub/liquidity(.*)",
       "status": 308,
-      "headers": {
-        "location": "https://alfaclub.4626.fun/pools$1"
-      }
+      "dest": "https://alfaclub.4626.fun/rooms?tab=liquidity"
     },
     {
       "src": "/alfaclub/?",
@@ -209,7 +203,7 @@
       "src": "/alfaclub/key-safety",
       "has": [{ "type": "host", "value": "4626.fun" }],
       "status": 308,
-      "dest": "https://alfaclub.4626.fun/safety"
+      "dest": "https://alfaclub.4626.fun/rooms?tab=safety"
     },
     {
       "src": "/alfaclub/?",
@@ -233,19 +227,19 @@
       "src": "/alfaclub/liquidity-pools",
       "has": [{ "type": "host", "value": "app.4626.fun" }],
       "status": 308,
-      "dest": "https://alfaclub.4626.fun/pools"
+      "dest": "https://alfaclub.4626.fun/rooms?tab=liquidity"
     },
     {
       "src": "/alfaclub/liquidity",
       "has": [{ "type": "host", "value": "app.4626.fun" }],
       "status": 308,
-      "dest": "https://alfaclub.4626.fun/pools"
+      "dest": "https://alfaclub.4626.fun/rooms?tab=liquidity"
     },
     {
       "src": "/alfaclub/key-safety",
       "has": [{ "type": "host", "value": "app.4626.fun" }],
       "status": 308,
-      "dest": "https://alfaclub.4626.fun/safety"
+      "dest": "https://alfaclub.4626.fun/rooms?tab=safety"
     },
     {
       "src": "/trading-rooms",
@@ -254,22 +248,34 @@
       "dest": "/rooms"
     },
     {
+      "src": "/safety",
+      "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
+      "status": 308,
+      "dest": "/rooms?tab=safety"
+    },
+    {
+      "src": "/pools",
+      "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
+      "status": 308,
+      "dest": "/rooms?tab=liquidity"
+    },
+    {
       "src": "/key-safety",
       "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
       "status": 308,
-      "dest": "/safety"
+      "dest": "/rooms?tab=safety"
     },
     {
       "src": "/liquidity-pools",
       "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
       "status": 308,
-      "dest": "/pools"
+      "dest": "/rooms?tab=liquidity"
     },
     {
       "src": "/liquidity",
       "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
       "status": 308,
-      "dest": "/pools"
+      "dest": "/rooms?tab=liquidity"
     },
     {
       "src": "/alfaclub/trading-rooms",
@@ -281,19 +287,19 @@
       "src": "/alfaclub/key-safety",
       "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
       "status": 308,
-      "dest": "/safety"
+      "dest": "/rooms?tab=safety"
     },
     {
       "src": "/alfaclub/liquidity-pools",
       "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
       "status": 308,
-      "dest": "/pools"
+      "dest": "/rooms?tab=liquidity"
     },
     {
       "src": "/alfaclub/liquidity",
       "has": [{ "type": "host", "value": "alfaclub.4626.fun" }],
       "status": 308,
-      "dest": "/pools"
+      "dest": "/rooms?tab=liquidity"
     },
     {
       "src": "/alfaclub/?",

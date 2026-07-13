@@ -43,7 +43,6 @@ contract DeployLotteryManagerCreate2V1180 is Script {
     address constant REGISTRY = 0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0;
     address constant OWNER = 0xB05Cf01231cF2fF99499682E64D3780d57c80FdD;
     address constant VRF_CONSUMER = 0x0b41AD9Eb06EE14C360E1e3D16Af63F5a172Ec36;
-    address constant SOLANA_BRIDGE_ADAPTER = 0x9A61814082A26192DD9Cb201b44058506685Be60;
     address constant AMOE_ROUTER = 0x18D1806cfe044de1eb4652ab30Bf6937f8dfc0A7;
     uint256 constant BASE_CHAIN_ID = 8453;
 
@@ -135,11 +134,6 @@ contract DeployLotteryManagerCreate2V1180 is Script {
         lottery.setOracleDeviationGuard(ORACLE_MAX_DEV_BPS, ORACLE_DEV_WINDOW);
         lottery.setBaseCeilingPPM(BASE_CEILING_PPM);
         lottery.setLotteryConfig(MIN_SWAP, REWARD_PCT, true, BASE_WIN, MAX_WIN, USD_MULT_BPS);
-
-        // Entrypoints
-        if (!lottery.authorizedSwapContracts(SOLANA_BRIDGE_ADAPTER)) {
-            lottery.setAuthorizedSwapContract(SOLANA_BRIDGE_ADAPTER, true);
-        }
 
         IRegistry4626LotteryManager registry = IRegistry4626LotteryManager(REGISTRY);
         address[] memory tokens = registry.getAllTokens();

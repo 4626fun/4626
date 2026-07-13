@@ -29,6 +29,13 @@ const BOOST_SOURCE_ABI = [
     inputs: [],
     outputs: [{ type: 'address' }],
   },
+  {
+    type: 'function',
+    name: 've4626GaugeVoting',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
 ] as const
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as Address
@@ -85,6 +92,27 @@ export async function readLotteryBoostTimelockArmed(
   return BigInt(raw) !== 0n
 }
 
+async function readVaultGaugeVoting(
+  publicClient: ReaderClient,
+  lotteryManager: Address,
+): Promise<unknown> {
+  try {
+    return await publicClient.readContract({
+      address: lotteryManager,
+      abi: BOOST_SOURCE_ABI,
+      functionName: 'vaultGaugeVoting',
+    })
+  } catch {
+    // The July remediation deployment exposes the legacy alias above. Current
+    // source uses the canonical public-variable getter below.
+    return publicClient.readContract({
+      address: lotteryManager,
+      abi: BOOST_SOURCE_ABI,
+      functionName: 've4626GaugeVoting',
+    })
+  }
+}
+
 export async function verifyLotteryProductionReadiness(
   params: VerifyLotteryProductionReadinessParams,
 ): Promise<VerifyLotteryProductionReadinessResult> {
@@ -127,11 +155,7 @@ export async function verifyLotteryProductionReadiness(
         abi: BOOST_SOURCE_ABI,
         functionName: 'boostManager',
       })
-      const rawGauge = await params.publicClient.readContract({
-        address: params.lotteryManager,
-        abi: BOOST_SOURCE_ABI,
-        functionName: 'vaultGaugeVoting',
-      })
+      const rawGauge = await readVaultGaugeVoting(params.publicClient, params.lotteryManager)
       boostManager = normalizeAddress(rawBoostManager) ?? ZERO_ADDRESS
       vaultGaugeVoting = normalizeAddress(rawGauge) ?? ZERO_ADDRESS
       checksRun += 2

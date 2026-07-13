@@ -4,6 +4,7 @@ import { bridgePrivySession } from '@/features/waitlist/waitlistHandoff'
 import { isAlreadyLoggedInAuthError, runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import {
   assertPrivySessionMarkerCookie,
+  clearPrivySessionMarkerCookie,
   isLocalDevPrivySessionMarkerMode,
 } from '@/lib/privy/loopbackSessionMarkerShim'
 import { readPrivyAccessTokenWithRetries } from '@/lib/privy/accessToken'
@@ -251,9 +252,9 @@ export async function runWaitlistReturningWalletSignIn(params: {
 
     try {
       if (isLocalDevPrivySessionMarkerMode()) {
-        // Wallet SIWE link can 401 on loopback if Privy does not see the first-party
-        // marker right before the login/link handshake starts.
-        assertPrivySessionMarkerCookie()
+        // Loopback uses auth.privy.io bearer-token mode. A marker cookie makes
+        // Privy omit Authorization from the SIWE request.
+        clearPrivySessionMarkerCookie()
       }
       login({
         loginMethods: ['wallet'],

@@ -4,10 +4,21 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {DeploymentBatcher, DeploymentBatcherPhase2Module, DeploymentBatcherUtilsHelper} from "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
+import {
+    DeploymentBatcher,
+    DeploymentBatcherPhase2Module,
+    DeploymentBatcherUtilsHelper
+} from "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
 import {Registry4626} from "@4626/shared/core/Registry4626.sol";
-import {IOFT, SendParam, MessagingFee, MessagingReceipt, OFTReceipt, OFTLimit, OFTFeeDetail} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
-import {IBaseSolanaBridge} from "@4626/shared/interfaces/bridge/IBaseSolanaBridge.sol";
+import {
+    IOFT,
+    SendParam,
+    MessagingFee,
+    MessagingReceipt,
+    OFTReceipt,
+    OFTLimit,
+    OFTFeeDetail
+} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
 import {ISignatureTransfer} from "permit2/src/interfaces/ISignatureTransfer.sol";
 
 interface IDeploymentBatcherPermit2 {
@@ -324,10 +335,11 @@ contract DeploymentBatcherPermit2Test is Test {
         batcher.setPhase2ModuleForTest(phase2Fixture);
         batcher.setUtilsHelperForTest(new DeploymentBatcherUtilsHelper());
         registry.setAuthorizedFactory(address(batcher), true);
+        registry.registerToken(address(creatorToken), "Creator Coin", "CR8R", ownerAddr, address(0), 0);
+        registry.setRemoteOFTPeerBytes32(address(creatorToken), 30_168, bytes32(uint256(0x5678)));
         vm.startPrank(protocolTreasury);
         batcher.setOVaultRuntimeConfig(makeAddr("hubComposer"), 30_168, true);
-        batcher.setSolanaConfig(makeAddr("solanaAdapter"), bytes32(uint256(0xABCD)));
-        batcher.setSolanaShareOftPeer(bytes32(uint256(0x5678)));
+        batcher.setSolanaDestination(bytes32(uint256(0xABCD)));
         vm.stopPrank();
 
         creatorToken.mint(ownerAddr, 100_000_000e18);
@@ -335,7 +347,8 @@ contract DeploymentBatcherPermit2Test is Test {
         vm.prank(ownerAddr);
         creatorToken.approve(address(permit2), type(uint256).max);
 
-        bytes32 baseSalt = keccak256(abi.encodePacked(address(creatorToken), ownerAddr, block.chainid, "4626:deploy:", "v-test"));
+        bytes32 baseSalt =
+            keccak256(abi.encodePacked(address(creatorToken), ownerAddr, block.chainid, "4626:deploy:", "v-test"));
         batcher.seedPhase1StateForTest(baseSalt, address(vault), address(wrapper), address(shareOFT), true, true);
     }
 
@@ -354,9 +367,7 @@ contract DeploymentBatcherPermit2Test is Test {
             depositAmount: depositAmount,
             requiredRaise: 1 ether,
             floorPriceQ96: 1,
-            auctionSteps: hex"1234",
-            meteoraAlphaVault: bytes32(0),
-            solanaIxs: new IBaseSolanaBridge.Ix[](0)
+            auctionSteps: hex"1234"
         });
 
         ISignatureTransfer.PermitTransferFrom memory permit = _permit(depositAmount);
@@ -364,7 +375,8 @@ contract DeploymentBatcherPermit2Test is Test {
         vm.prank(ownerAddr);
         IDeploymentBatcherPermit2(address(batcher)).finalizePhase2WithPermit2{value: 1}(params, permit, hex"abcd");
 
-        bytes32 baseSalt = keccak256(abi.encodePacked(address(creatorToken), ownerAddr, block.chainid, "4626:deploy:", "v-test"));
+        bytes32 baseSalt =
+            keccak256(abi.encodePacked(address(creatorToken), ownerAddr, block.chainid, "4626:deploy:", "v-test"));
         (address pendingShareOFT, address pendingCca, uint256 pendingAmount, uint256 pendingLpReserveAmount) =
             batcher.pendingAuctions(baseSalt);
 

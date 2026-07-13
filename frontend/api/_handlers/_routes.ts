@@ -81,6 +81,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'wallet/zora-holdings': () => import('./wallet/_zoraHoldings.js'),
   'wallet/trayActivity': () => import('./wallet/_trayActivity.js'),
   'wallet/tokenBalance': () => import('./wallet/_tokenBalance.js'),
+  'wallet/friend-key-holdings': () => import('./wallet/_friendKeyHoldings.js'),
   'deploy/v2/session/cancel': () => import('./deploy/v2/session/_cancel.js'),
   'deploy/v2/session/create': () => import('./deploy/v2/session/_create.js'),
   'deploy/v2/session/dry-run': () => import('./deploy/v2/session/_dryRun.js'),

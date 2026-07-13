@@ -38,6 +38,8 @@ status: current
 
 Holding ve■4626 can raise your lottery odds by up to **2.5×** versus a tokenless baseline — never more under this model — and only for the portion of the trade covered by your ShareOFT balance.
 
+New to these roles? Follow [ve■4626 → ve33 / veLottery](/overview/ve4626) before reading the formula.
+
 ## Worked example
 
 | Situation | Result |
@@ -99,6 +101,7 @@ Shipping delta checks (oracle window, covered floor, LM coverage blend) were als
 ## Read next
 
 - [Aristotle introduction](/audits/aristotle) — how proofs work
+- [ve■4626 reader guide](/overview/ve4626) — lock asset, utility choice, decay, and coverage
 - [Base win chance](/audits/aristotle/base-win-chance) · [Post-boost](/audits/aristotle/post-boost-pipeline) · [VRF](/audits/aristotle/vrf-fairness) · [Fee-split](/audits/aristotle/gauge-fee-split) · [Jackpot](/audits/aristotle/jackpot-payout)
 - [All Lean targets](/audits/aristotle/lean-proof-targets)
 - [LotteryManager](/contracts/utilities/lottery-manager)

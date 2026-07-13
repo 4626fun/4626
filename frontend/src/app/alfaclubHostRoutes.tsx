@@ -8,14 +8,13 @@ import {
   ALFACLUB_ROOMS_PATH,
   ALFACLUB_SAFETY_PATH,
   buildAlfaClubAbsoluteUrl,
+  buildAlfaClubRedirectLocation,
   resolveAlfaClubCanonicalPath,
 } from '@/lib/alfaclub/hostPaths'
 import { isCurrentWindowUrl } from '@/lib/env/host'
 import { AccountContextProvider } from '@/wallet/accountContext'
 
 import {
-  AlfaClubKeySafety,
-  AlfaClubLiquidityPools,
   AlfaClubTradingRooms,
   LazyAccessBoundary,
   LazyGuardedOutlet,
@@ -26,6 +25,21 @@ import {
 export function RedirectPreserve(props: { to: string }) {
   const location = useLocation()
   return <Navigate to={`${props.to}${location.search}${location.hash}`} replace />
+}
+
+/** Merge query/hash while forcing legacy safety/liquidity aliases into the room hub tab. */
+export function AlfaClubHubRedirect() {
+  const location = useLocation()
+  return (
+    <Navigate
+      to={buildAlfaClubRedirectLocation({
+        pathname: location.pathname,
+        search: location.search,
+        hash: location.hash,
+      })}
+      replace
+    />
+  )
 }
 
 /** Hard cross-origin redirect to the AlfaClub product host. */
@@ -74,13 +88,13 @@ export function AlfaClubHostApp() {
           <Route element={<AlfaClubLayout />}>
             <Route index element={<RedirectPreserve to={ALFACLUB_ROOMS_PATH} />} />
             <Route path={ALFACLUB_ROOMS_PATH} element={<AlfaClubTradingRooms />} />
-            <Route path={ALFACLUB_SAFETY_PATH} element={<AlfaClubKeySafety />} />
-            <Route path={ALFACLUB_POOLS_PATH} element={<AlfaClubLiquidityPools />} />
+            <Route path={ALFACLUB_SAFETY_PATH} element={<AlfaClubHubRedirect />} />
+            <Route path={ALFACLUB_POOLS_PATH} element={<AlfaClubHubRedirect />} />
 
             <Route path="/trading-rooms" element={<RedirectPreserve to={ALFACLUB_ROOMS_PATH} />} />
-            <Route path="/key-safety" element={<RedirectPreserve to={ALFACLUB_SAFETY_PATH} />} />
-            <Route path="/liquidity" element={<RedirectPreserve to={ALFACLUB_POOLS_PATH} />} />
-            <Route path="/liquidity-pools" element={<RedirectPreserve to={ALFACLUB_POOLS_PATH} />} />
+            <Route path="/key-safety" element={<AlfaClubHubRedirect />} />
+            <Route path="/liquidity" element={<AlfaClubHubRedirect />} />
+            <Route path="/liquidity-pools" element={<AlfaClubHubRedirect />} />
             <Route path="/alfaclub" element={<RedirectPreserve to={ALFACLUB_ROOMS_PATH} />} />
             <Route
               path="/alfaclub/trading-rooms"
@@ -88,15 +102,15 @@ export function AlfaClubHostApp() {
             />
             <Route
               path="/alfaclub/key-safety"
-              element={<RedirectPreserve to={ALFACLUB_SAFETY_PATH} />}
+              element={<AlfaClubHubRedirect />}
             />
             <Route
               path="/alfaclub/liquidity"
-              element={<RedirectPreserve to={ALFACLUB_POOLS_PATH} />}
+              element={<AlfaClubHubRedirect />}
             />
             <Route
               path="/alfaclub/liquidity-pools"
-              element={<RedirectPreserve to={ALFACLUB_POOLS_PATH} />}
+              element={<AlfaClubHubRedirect />}
             />
 
             <Route path="*" element={<RedirectPreserve to={ALFACLUB_ROOMS_PATH} />} />

@@ -70,4 +70,24 @@ describe('xmtpConnectPolicy', () => {
       }),
     ).toBe(false)
   })
+
+  it('refuses create when OPFS existence is unknown due to prior install evidence', () => {
+    // Locked OPFS is handled before policy in provider (fail closed). Once a
+    // probe resolves to absent/present, known markers still block create.
+    expect(
+      shouldRefuseAutoCreateAfterFailedRestore({
+        restoreSucceeded: false,
+        hasKnownInstallation: true,
+        opfsDatabaseExists: false,
+      }),
+    ).toBe(true)
+    expect(
+      shouldAllowFirstTimeCreate({
+        intent: 'user',
+        hasKnownInstallation: true,
+        opfsDatabaseExists: false,
+        restoreSucceeded: false,
+      }),
+    ).toBe(false)
+  })
 })

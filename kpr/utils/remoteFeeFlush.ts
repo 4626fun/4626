@@ -43,19 +43,6 @@ export function isRemoteShareOftFlushEnabled(): boolean {
   return readEnv('KPR_REMOTE_SHARE_OFT_FLUSH_ENABLED') === '1';
 }
 
-export function resolveHubShareOft(): Address | null {
-  const raw = readFirstEnv(['KPR_HUB_SHARE_OFT', 'KPR_REMOTE_FEE_HUB_SHARE_OFT']);
-  if (!raw || !isAddress(raw)) return null;
-  return getAddress(raw);
-}
-
-export function useHubInitiatedRemoteFlush(): boolean {
-  const mode = readEnv('KPR_REMOTE_FEE_FLUSH_MODE').toLowerCase();
-  if (mode === 'spoke') return false;
-  if (mode === 'hub') return true;
-  return resolveHubShareOft() !== null;
-}
-
 export function resolveHubGaugeController(): Address | null {
   const raw = readFirstEnv(['KPR_REMOTE_FEE_HUB_GAUGE', 'KPR_HUB_GAUGE_CONTROLLER']);
   if (!raw || !isAddress(raw)) return null;

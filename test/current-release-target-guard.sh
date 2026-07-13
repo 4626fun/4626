@@ -12,6 +12,8 @@ POST_BROADCAST="$ROOT_DIR/script/execute-v1180-post-broadcast.sh"
 VERCEL_SYNC="$ROOT_DIR/script/sync-v1180-vercel-env.sh"
 KPR_SOLANA_CANONICAL="$ROOT_DIR/kpr/utils/solanaCanonicalAddresses.ts"
 KPR_SOLANA_SEED_ENV="$ROOT_DIR/kpr/deploy/seed-solana-orchestrator-env.sh"
+CURRENT_RELEASE="v1.19.0"
+CURRENT_MANIFEST="$ROOT_DIR/deployments/base/${CURRENT_RELEASE}-bytecode-manifest.json"
 
 load_env_key_if_unset() {
   local key="$1"
@@ -65,7 +67,8 @@ utils_helper="0xCBf24949Fc99e7C9b5e16e15a423543930fd4A52"
 deprecated_batchers='0x56E8527Bf0824155e1556aED5740366f248B68ca|0x32403a647e73e04ae42b02bdd1ade9c88698fd0c|0xe3F9490CfD6bd3D68010405d18Bf772C167E7178|0xcDbEeB764df9878ebAFbf101cc818370f703bC4F|0x004684670d284EF607E1B2424fcf8ccBda8ef828|0x271Ab2C53D79d52ddB14506a44133Fe3FA395332|0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8|0xa99058f424FB3ACC639F59355C65C40149030651|0x660B251F2feB28f61A8e23e65C66F9b917Ee61c1|0x17163e67dED6B45bd2A7E6a509A32fB7b0cB6D33|0xA9024e1B89C5Be34502A275576Cc137473d65839'
 deprecated_solana_adapters='0x2414b595c4f18532A5836B6e2E6d536832c572e8|0x3a9dC0b2c11b348E4bD60D9605dc3D4Be9bB6cf5|0x90F578A4e23c1cB8DDFE63fd496ED7F4474f2b00|0x363662F9728A9fd12c7CA398e5A6d1d9E7De07F1|0x700b4BBAf965c013123bAd02a6562FBa487aC0f1|0x8e99bb0270bbdf2d64ff6854509CD2410A28fBae'
 
-require_rg 'Canonical deployed contract addresses for 4626 on Base mainnet (**v1.18.0-greenfield**).' "$ADDRESSES_DOC" 'addresses doc v1.18.0 title'
+require_rg 'new per-creator launches use the' "$ADDRESSES_DOC" 'addresses doc partial-refresh title'
+require_rg '**v1.19.0** bytecode/CREATE2 epoch.' "$ADDRESSES_DOC" 'addresses doc v1.19.0 epoch'
 require_rg '### Current infrastructure' "$ADDRESSES_DOC" 'addresses doc current infrastructure heading'
 require_rg "Registry4626 | \`$registry\`" "$ADDRESSES_DOC" 'Registry4626 address'
 require_rg "OVaultFactory4626 | \`$factory\`" "$ADDRESSES_DOC" 'OVaultFactory4626 address'
@@ -81,7 +84,7 @@ require_rg "DeploymentBatcherPhase3Helper | \`$phase3_helper\`" "$ADDRESSES_DOC"
 require_rg "DeploymentBatcherShareMeshHelper | \`$share_mesh_helper\`" "$ADDRESSES_DOC" 'DeploymentBatcherShareMeshHelper address'
 require_rg "DeploymentBatcherUtilsHelper | \`$utils_helper\`" "$ADDRESSES_DOC" 'DeploymentBatcherUtilsHelper address'
 
-require_rg 'Scope: current live Base infra addresses plus the canonical `v1.18.0` greenfield deploy target' "$INVENTORY_DOC" 'inventory v1.18.0 scope'
+require_rg '`v1.19.0` bytecode/CREATE2 target for new per-creator vaults.' "$INVENTORY_DOC" 'inventory v1.19.0 scope'
 require_rg "\`solanaBridgeAdapter\` | \`$solana_adapter\`" "$INVENTORY_DOC" 'inventory SolanaBridgeAdapter address'
 require_rg "\`lotteryManager\` | \`$lottery_manager\`" "$INVENTORY_DOC" 'inventory LotteryManager4626 address'
 require_rg "\`bytecodeStore\` | \`$bytecode_store\`" "$INVENTORY_DOC" 'inventory bytecodeStore address'
@@ -150,11 +153,29 @@ if [[ -n "$stale_adapter_hits" ]]; then
 fi
 
 if command -v pnpm >/dev/null 2>&1; then
-  if ! BYTECODE_MANIFEST="$ROOT_DIR/deployments/base/v1.18.0-bytecode-manifest.json" \
-    UNIVERSAL_BYTECODE_STORE="$bytecode_store" \
-    pnpm -C "$ROOT_DIR/frontend" exec tsx scripts/ops/verify-bytecode-store-seeded.ts >/dev/null; then
-    echo "release target guard failed: deploy versioning verifier failed" >&2
+  if [[ ! -f "$CURRENT_MANIFEST" ]]; then
+    echo "release target guard failed: missing ${CURRENT_MANIFEST}" >&2
     exit 1
+  fi
+
+  source_manifest="$(mktemp)"
+  trap 'rm -f "$source_manifest"' EXIT
+  BYTECODE_MANIFEST_OUT="$source_manifest" \
+    "$ROOT_DIR/script/generate_bytecode_manifest.sh" "$CURRENT_RELEASE" >/dev/null
+  if ! diff -u \
+    <(jq -S '.contracts | map_values(.codeId)' "$source_manifest") \
+    <(jq -S '.contracts | map_values(.codeId)' "$CURRENT_MANIFEST") >/dev/null; then
+    echo "release target guard failed: ${CURRENT_RELEASE} manifest does not match current source artifacts" >&2
+    exit 1
+  fi
+
+  if [[ "${CURRENT_RELEASE_GUARD_SOURCE_ONLY:-0}" != "1" ]]; then
+    if ! BYTECODE_MANIFEST="$CURRENT_MANIFEST" \
+      UNIVERSAL_BYTECODE_STORE="$bytecode_store" \
+      pnpm -C "$ROOT_DIR/frontend" exec tsx scripts/ops/verify-bytecode-store-seeded.ts >/dev/null; then
+      echo "release target guard failed: deploy versioning verifier failed" >&2
+      exit 1
+    fi
   fi
 fi
 

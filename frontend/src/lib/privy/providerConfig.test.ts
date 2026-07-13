@@ -11,8 +11,10 @@ vi.mock('@/lib/flags/flags', async () => {
 import {
   buildPrivyExternalWallets,
   isWaitlistPrivyMode,
+  PRIVY_CANONICAL_API_URL,
   resolvePrivyEmbeddedWallets,
   resolvePrivyLoginMethods,
+  resolvePrivyProviderApiUrl,
   TELEGRAM_LINK_APPEARANCE,
   WAITLIST_EMBEDDED_WALLETS_OFF,
 } from '@/lib/privy/providerConfig'
@@ -24,6 +26,21 @@ const solanaConnectors = {
 }
 
 describe('providerConfig modes', () => {
+  it('pins loopback sessions to the canonical Privy API', () => {
+    expect(
+      resolvePrivyProviderApiUrl({
+        configuredApiUrl: 'https://privy.4626.fun',
+        bypassCustomPrivyDomain: true,
+      }),
+    ).toBe(PRIVY_CANONICAL_API_URL)
+    expect(
+      resolvePrivyProviderApiUrl({
+        configuredApiUrl: 'https://privy.4626.fun',
+        bypassCustomPrivyDomain: false,
+      }),
+    ).toBe('https://privy.4626.fun')
+  })
+
   it('keeps waitlist embedded wallets explicitly off', () => {
     expect(isWaitlistPrivyMode('waitlist')).toBe(true)
     expect(resolvePrivyEmbeddedWallets('waitlist')).toEqual(WAITLIST_EMBEDDED_WALLETS_OFF)

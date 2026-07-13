@@ -1,20 +1,27 @@
 import { ALFACLUB_ORIGIN } from '@/lib/env/host'
 
-/** Canonical short paths on alfaclub.4626.fun */
+/** Canonical hub and retained alias paths on alfaclub.4626.fun. */
 export const ALFACLUB_ROOMS_PATH = '/rooms'
 export const ALFACLUB_SAFETY_PATH = '/safety'
 export const ALFACLUB_POOLS_PATH = '/pools'
 
-const LEGACY_TO_CANONICAL: Record<string, string> = {
-  '/alfaclub': ALFACLUB_ROOMS_PATH,
-  '/alfaclub/trading-rooms': ALFACLUB_ROOMS_PATH,
-  '/trading-rooms': ALFACLUB_ROOMS_PATH,
-  '/alfaclub/key-safety': ALFACLUB_SAFETY_PATH,
-  '/key-safety': ALFACLUB_SAFETY_PATH,
-  '/alfaclub/liquidity': ALFACLUB_POOLS_PATH,
-  '/alfaclub/liquidity-pools': ALFACLUB_POOLS_PATH,
-  '/liquidity': ALFACLUB_POOLS_PATH,
-  '/liquidity-pools': ALFACLUB_POOLS_PATH,
+type AlfaClubRedirectTarget = {
+  pathname: string
+  forcedTab?: 'safety' | 'liquidity'
+}
+
+const LEGACY_TO_CANONICAL: Record<string, AlfaClubRedirectTarget> = {
+  '/alfaclub': { pathname: ALFACLUB_ROOMS_PATH },
+  '/alfaclub/trading-rooms': { pathname: ALFACLUB_ROOMS_PATH },
+  '/trading-rooms': { pathname: ALFACLUB_ROOMS_PATH },
+  '/safety': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'safety' },
+  '/alfaclub/key-safety': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'safety' },
+  '/key-safety': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'safety' },
+  '/pools': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'liquidity' },
+  '/alfaclub/liquidity': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'liquidity' },
+  '/alfaclub/liquidity-pools': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'liquidity' },
+  '/liquidity': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'liquidity' },
+  '/liquidity-pools': { pathname: ALFACLUB_ROOMS_PATH, forcedTab: 'liquidity' },
 }
 
 function normalizePathname(pathname: string): string {
@@ -25,7 +32,21 @@ function normalizePathname(pathname: string): string {
 /** Map legacy AlfaClub pathnames to canonical short paths (same-host). */
 export function resolveAlfaClubCanonicalPath(pathname: string): string | null {
   const normalized = normalizePathname(pathname)
-  return LEGACY_TO_CANONICAL[normalized] ?? null
+  return LEGACY_TO_CANONICAL[normalized]?.pathname ?? null
+}
+
+export function buildAlfaClubRedirectLocation(input: {
+  pathname: string
+  search?: string
+  hash?: string
+}): string {
+  const normalized = normalizePathname(input.pathname)
+  const target = LEGACY_TO_CANONICAL[normalized]
+  const pathname = target?.pathname ?? normalized
+  const search = new URLSearchParams(input.search ?? '')
+  if (target?.forcedTab) search.set('tab', target.forcedTab)
+  const query = search.toString()
+  return `${pathname}${query ? `?${query}` : ''}${input.hash ?? ''}`
 }
 
 /** Absolute URL on the AlfaClub product host, preserving query/hash. */
@@ -35,9 +56,6 @@ export function buildAlfaClubAbsoluteUrl(input: {
   hash?: string
   origin?: string
 }): string {
-  const canonical = resolveAlfaClubCanonicalPath(input.pathname) ?? normalizePathname(input.pathname)
   const origin = (input.origin ?? ALFACLUB_ORIGIN).replace(/\/+$/, '')
-  const search = input.search ?? ''
-  const hash = input.hash ?? ''
-  return `${origin}${canonical}${search}${hash}`
+  return `${origin}${buildAlfaClubRedirectLocation(input)}`
 }

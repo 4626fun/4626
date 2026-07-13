@@ -41,6 +41,18 @@ export type CanonicalSignerGateResult = {
   reason: string | null
 }
 
+export function deriveCanonicalOwnerCheckStatus(input: {
+  probeLoading?: boolean
+  probeFetching?: boolean
+  probeResult?: boolean | null | undefined
+}): CanonicalOwnerCheckStatus {
+  if (input.probeLoading || input.probeFetching) return 'pending'
+  if (input.probeResult === true) return 'owner'
+  if (input.probeResult === false) return 'not-owner'
+  if (input.probeResult === null) return 'pending'
+  return 'unknown'
+}
+
 function gateFailure(
   code: Exclude<CanonicalSignerGateResult['code'], 'not-required' | 'ok'>,
   reason: string,

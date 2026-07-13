@@ -53,7 +53,7 @@ A creator coin alone does not provide:
 - **Trade fees** — ShareOFT fees on qualifying DEX routes → gauge split.
 - **Creator revenue** — `creatorCoinPayoutRecipient` (Zora `payoutRecipient` field) accrues holder PPS in router mode.
 - **Jackpot** — Gauge **custodies**; [LotteryManager4626](/contracts/utilities/lottery-manager) **pays** on qualifying **buys**.
-Lane names: [Glossary](/reference/glossary). Formal math: [proven 2.5× boost](/audits/aristotle/curve-boost) · [next Lean targets](/audits/aristotle/lean-proof-targets).
+Personal boost journey: [ve■4626, ve33, and veLottery](/overview/ve4626). Lane names: [Glossary](/reference/glossary). Formal math: [proven 2.5× boost](/audits/aristotle/curve-boost) · [next Lean targets](/audits/aristotle/lean-proof-targets).
 
 ## Launch sequence
 

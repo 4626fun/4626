@@ -649,13 +649,15 @@ function buildClientRestoreOptions(
   encKeyBytes: Uint8Array,
   storedInstallationMeta: ReturnType<typeof readStoredInstallationMeta>,
   includeEncryptionKey: boolean,
+  inboxIdOverride?: string | null,
 ): Record<string, unknown> {
   const options: Record<string, unknown> = {
     ...baseOptions,
     ...(includeEncryptionKey ? { dbEncryptionKey: encKeyBytes } : {}),
   }
-  if (storedInstallationMeta?.inboxId) {
-    options.dbPath = buildXmtpDbPath(XMTP_ENV, storedInstallationMeta.inboxId)
+  const inboxId = String(inboxIdOverride ?? storedInstallationMeta?.inboxId ?? '').trim()
+  if (inboxId) {
+    options.dbPath = buildXmtpDbPath(XMTP_ENV, inboxId)
   }
   return options
 }
@@ -873,45 +875,55 @@ async function requestPersistentStorage(): Promise<void> {
   }
 }
 
+export type OpfsDatabaseProbeResult =
+  | { status: 'present' }
+  | { status: 'absent' }
+  | { status: 'locked'; message: string }
+
 /**
- * Check whether an XMTP database file exists in OPFS for the given env.
- * Returns true if at least one `xmtp-{env}-*.db3` file is present.
- * When no database exists and there is no known installation marker,
- * callers should skip Client.build and require explicit user intent
- * before Client.create.
+ * Probe whether an XMTP database file exists in OPFS for the given env.
+ *
+ * - `present` / `absent`: only `absent` (plus explicit user intent and no
+ *   known-install markers) may reach first-time `Client.create`.
+ * - `locked`: access-handle contention; callers must fail closed and retry
+ *   later — never treat this as "no DB" (that previously burned installs).
  */
-async function hasOpfsDatabase(): Promise<boolean> {
+async function probeOpfsDatabase(): Promise<OpfsDatabaseProbeResult> {
   try {
     // A just-closed XMTP client's worker can still hold its OPFS sync access
     // handle for a moment after `client.close()` returns (see `cleanup()`),
     // which makes `Opfs.create()` throw the same "another active XMTP
     // clients or Opfs instances" / NoModificationAllowedError as a genuine
     // multi-tab lock. Retry that specific, known-transient case a few times
-    // before concluding there's no local DB — otherwise a reconnect racing
-    // its own prior client's teardown would wrongly skip Client.build restore.
-    return await retryOnOpfsAccessHandleError(async () => {
+    // before concluding the DB is locked.
+    const found = await retryOnOpfsAccessHandleError(async () => {
       const opfs = await Opfs.create()
       try {
         const files = await opfs.listFiles()
         const prefix = `xmtp-${XMTP_ENV}-`
-        const found = files.some(
+        const present = files.some(
           (f) => f.startsWith(prefix) && f.endsWith('.db3'),
         )
         xmtpDebug(
-          `[xmtp] OPFS files: ${files.length} total, DB present: ${found}`,
+          `[xmtp] OPFS files: ${files.length} total, DB present: ${present}`,
           files.filter((f) => f.endsWith('.db3')),
         )
-        return found
+        return present
       } finally {
         opfs.close()
       }
     })
+    return found ? { status: 'present' } : { status: 'absent' }
   } catch (err) {
-    // OPFS not supported, or the access-handle lock never cleared after
-    // retrying. Treat as "no readable DB" so we can still fall back to
-    // Client.create instead of hard-failing init.
+    const message = err instanceof Error ? err.message : String(err)
+    if (isOpfsAccessHandleError(message)) {
+      console.warn('[xmtp] OPFS check failed (database locked by active client):', err)
+      return { status: 'locked', message }
+    }
+    // OPFS unsupported / unexpected — treat as absent so first-time create
+    // can still proceed when there are no known-install markers.
     console.warn('[xmtp] OPFS check failed (treating as no local DB):', err)
-    return false
+    return { status: 'absent' }
   }
 }
 
@@ -1206,11 +1218,15 @@ export function XmtpChatProvider({
     }
   }, [endActiveStreams, releaseTabLock, stopTabLockHeartbeat])
 
-  // Cleanup on unmount
+  // Cleanup on unmount. Bump connectEpoch first so any orphaned in-flight
+  // connect() from this instance aborts at existing epoch gates before it can
+  // reopen OPFS after a dock/route/StrictMode/Fast-Refresh remount.
   useEffect(() => {
     mountedRef.current = true
     return () => {
       mountedRef.current = false
+      connectEpochRef.current += 1
+      connectInFlightRef.current = false
       void cleanup()
     }
   }, [cleanup])
@@ -1832,14 +1848,40 @@ export function XmtpChatProvider({
     connectInFlightRef.current = true
     const connectEpoch = connectEpochRef.current
     let tabLockAcquired = false
+    // Set when this connect opened then closed an OPFS-backed client without
+    // leaving it in clientRef. finally must wait for the worker access-handle
+    // release before unlocking the tab-wide mutex, or the next mount races OPFS.
+    let mustReleaseOpfsPeerBeforeMutex = false
     let xmtpIdentityAddress = String(connectWalletAddress).toLowerCase()
     // See acquireXmtpOpfsMutex() — guards the OPFS-touching span below against
     // a Fast-Refresh-orphaned prior instance's still-running connect().
-    const releaseXmtpOpfsMutex = await acquireXmtpOpfsMutex(() =>
+    const mutexAcquire = await acquireXmtpOpfsMutex(() =>
       console.warn(
-        '[xmtp] OPFS mutex wait timed out; proceeding without waiting for a possibly-stale prior connect() to release its OPFS handle.',
+        '[xmtp] OPFS mutex wait timed out; refusing to open OPFS concurrently with a prior connect().',
       ),
     )
+    if (!mutexAcquire.ok) {
+      connectInFlightRef.current = false
+      if (mountedRef.current) {
+        setStatus('error')
+        setError(
+          'XMTP local storage is still in use by another connect attempt in this tab. ' +
+            'Close other chat surfaces, wait a moment, then retry Connect Messaging.',
+        )
+      }
+      if (intent === 'user') {
+        throw new Error(
+          'XMTP local storage is still in use by another connect attempt in this tab. Retry shortly.',
+        )
+      }
+      return
+    }
+    const releaseXmtpOpfsMutex = mutexAcquire.release
+    const closeOpfsClientDuringConnect = (client: Client | null | undefined): void => {
+      if (!client) return
+      closeClientSafe(client)
+      mustReleaseOpfsPeerBeforeMutex = true
+    }
     try {
       setError(null)
       setInstallationLimitInboxId(null)
@@ -2142,7 +2184,17 @@ export function XmtpChatProvider({
       let buildClient: Client | null = null
       let buildSucceeded = false
 
-      const dbExists = await hasOpfsDatabase()
+      const opfsProbe = await probeOpfsDatabase()
+      if (connectEpoch !== connectEpochRef.current) return
+      if (opfsProbe.status === 'locked') {
+        setStatus('error')
+        setError(
+          'XMTP local database is currently locked by another active tab/window or connect attempt. ' +
+            'Close other 4626 chat tabs/windows and retry.',
+        )
+        return
+      }
+      const dbExists = opfsProbe.status === 'present'
       const shouldAttemptRestore = shouldAttemptXmtpRestore({
         opfsDatabaseExists: dbExists,
         hasKnownInstallation: installationAlreadyProvisioned,
@@ -2155,7 +2207,7 @@ export function XmtpChatProvider({
           encKeyBytes,
           storedInstallationMeta,
           onCloseActiveClient: () => {
-            closeClientSafe(clientRef.current)
+            closeOpfsClientDuringConnect(clientRef.current)
             clientRef.current = null
           },
         })
@@ -2163,7 +2215,7 @@ export function XmtpChatProvider({
         buildSucceeded = Boolean(buildClient?.inboxId)
 
         if (connectEpoch !== connectEpochRef.current) {
-          closeClientSafe(buildClient)
+          closeOpfsClientDuringConnect(buildClient)
           return
         }
 
@@ -2240,7 +2292,7 @@ export function XmtpChatProvider({
       // Client.create for transient failures — that would burn an installation.
       if (buildSucceeded && buildClient) {
         if (connectEpoch !== connectEpochRef.current) {
-          closeClientSafe(buildClient)
+          closeOpfsClientDuringConnect(buildClient)
           return
         }
 
@@ -2250,11 +2302,29 @@ export function XmtpChatProvider({
           encKeyBytes,
           storedInstallationMeta,
           true,
+          activeClient.inboxId,
         )
+
+        const persistInstallationMeta = (client: Client): void => {
+          writeInstallationProvisioned(XMTP_ENV, xmtpIdentityAddress)
+          if (client.inboxId && client.installationId) {
+            writeStoredInstallationMeta(XMTP_ENV, xmtpIdentityAddress, {
+              inboxId: client.inboxId,
+              installationId: client.installationId,
+            })
+          }
+        }
 
         if (!(await activeClient.isRegistered())) {
           xmtpDebug('[xmtp] Built client is not registered — registering via Client.create on stored OPFS path')
+          // buildClient is closed inside registration; ensure mutex peer-wait
+          // if we abort after a failed/cancelled registration.
+          mustReleaseOpfsPeerBeforeMutex = true
           const signerSelection = await getSignerSelection()
+          if (connectEpoch !== connectEpochRef.current) {
+            closeOpfsClientDuringConnect(activeClient)
+            return
+          }
           const registered = await registerRestoredInstallationWithFallback(
             activeClient,
             [signerSelection.signer, signerSelection.scwSigner, signerSelection.eoaSigner],
@@ -2262,15 +2332,27 @@ export function XmtpChatProvider({
           )
           activeClient = registered.client
           writeStoredSignerType(xmtpIdentityAddress, registered.signer.type)
+          persistInstallationMeta(activeClient)
+          // Live registered client now owns the OPFS handle.
+          mustReleaseOpfsPeerBeforeMutex = false
+        }
+
+        if (connectEpoch !== connectEpochRef.current) {
+          closeOpfsClientDuringConnect(activeClient)
+          return
         }
 
         clientRef.current = activeClient
         setInboxId(activeClient.inboxId ?? null)
+        // Connected client retains the OPFS handle; mutex can be released
+        // without a peer wait once setup completes (or on failure we re-mark).
+        mustReleaseOpfsPeerBeforeMutex = false
 
         const finishResult = await finishRestoredXmtpClient({
           setupConversations: () => setupConversations(activeClient),
           isRegistered: () => activeClient.isRegistered(),
           registerWithFallback: async () => {
+            mustReleaseOpfsPeerBeforeMutex = true
             const signerSelection = await getSignerSelection()
             const registered = await registerRestoredInstallationWithFallback(
               activeClient,
@@ -2281,6 +2363,8 @@ export function XmtpChatProvider({
             clientRef.current = activeClient
             setInboxId(activeClient.inboxId ?? null)
             writeStoredSignerType(xmtpIdentityAddress, registered.signer.type)
+            persistInstallationMeta(activeClient)
+            mustReleaseOpfsPeerBeforeMutex = false
           },
           isLocalStateInvalidError: isLocalXmtpStateInvalidError,
         })
@@ -2290,9 +2374,7 @@ export function XmtpChatProvider({
         }
 
         console.warn('[xmtp] Client.build restored but finishRestoredXmtpClient failed:', finishResult.message)
-        try {
-          activeClient.close()
-        } catch {}
+        closeOpfsClientDuringConnect(activeClient)
         clientRef.current = null
 
         if (finishResult.kind === 'invalid_local') {
@@ -2408,8 +2490,8 @@ export function XmtpChatProvider({
         }
       }
 
-      if (!mountedRef.current) {
-        client.close()
+      if (!mountedRef.current || connectEpoch !== connectEpochRef.current) {
+        closeOpfsClientDuringConnect(client)
         return
       }
 
@@ -2427,6 +2509,7 @@ export function XmtpChatProvider({
       } catch (setupErr) {
         const setupMsg = setupErr instanceof Error ? setupErr.message : String(setupErr)
         if (isLocalXmtpStateInvalidError(setupMsg)) {
+          mustReleaseOpfsPeerBeforeMutex = true
           markLocalStateInvalid(setupMsg)
           return
         }
@@ -2471,6 +2554,10 @@ export function XmtpChatProvider({
               // "retry exactly once" silently no-ops every time.
               connectInFlightRef.current = false
               connectCooldownUntilRef.current = 0
+              if (mustReleaseOpfsPeerBeforeMutex) {
+                await waitMs(XMTP_PEER_RELEASE_WAIT_MS)
+                mustReleaseOpfsPeerBeforeMutex = false
+              }
               releaseXmtpOpfsMutex()
               await Promise.resolve(connectRef.current?.('user')).catch(() => undefined)
               return
@@ -2496,7 +2583,13 @@ export function XmtpChatProvider({
       }
     } finally {
       connectInFlightRef.current = false
-      releaseXmtpOpfsMutex()
+      try {
+        if (mustReleaseOpfsPeerBeforeMutex) {
+          await waitMs(XMTP_PEER_RELEASE_WAIT_MS)
+        }
+      } finally {
+        releaseXmtpOpfsMutex()
+      }
       if (!clientRef.current && tabLockAcquired) {
         stopTabLockHeartbeat()
         releaseTabLock()

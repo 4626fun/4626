@@ -1,19 +1,13 @@
 import { createPublicClient, getAddress, http, type Address } from 'viem'
 import { base } from 'viem/chains'
 
-import {
-  applyExecutorDropBuffer,
-  resolveHubShareOft,
-  type RemoteFeeFlushTarget,
-} from './remoteFeeFlushConfig'
+import { type RemoteFeeFlushTarget } from './remoteFeeFlushConfig'
 import { shareOftFeeFlushAbi } from './shareOftFeeFlushAbi'
 
 export type SpokeFlushQuote = {
   pendingFees: bigint
   flushThreshold: bigint
   spokeLzFee: bigint
-  hubLzFee: bigint
-  executorNativeDrop: bigint
   ready: boolean
 }
 
@@ -40,12 +34,10 @@ function hubClient() {
   })
 }
 
-export async function quoteSpokeFlushFromHub(target: RemoteFeeFlushTarget): Promise<SpokeFlushQuote> {
+export async function quoteSpokeFlushStatus(target: RemoteFeeFlushTarget): Promise<SpokeFlushQuote> {
   const spoke = spokeClient(target)
-  const hub = hubClient()
-  const hubShareOft = resolveHubShareOft()
 
-  const [pendingFees, flushThreshold, spokeLzFee, hubIsHub] = await Promise.all([
+  const [pendingFees, flushThreshold, spokeLzFee] = await Promise.all([
     spoke.readContract({
       address: target.shareOft,
       abi: shareOftFeeFlushAbi,
@@ -61,24 +53,7 @@ export async function quoteSpokeFlushFromHub(target: RemoteFeeFlushTarget): Prom
       abi: shareOftFeeFlushAbi,
       functionName: 'quoteFlushFees',
     }),
-    hub.readContract({
-      address: hubShareOft,
-      abi: shareOftFeeFlushAbi,
-      functionName: 'isHub',
-    }),
   ])
-
-  if (!hubIsHub) {
-    throw new Error('Configured hub ShareOFT is not marked isHub on Base')
-  }
-
-  const executorNativeDrop = applyExecutorDropBuffer(spokeLzFee)
-  const hubQuote = await hub.readContract({
-    address: hubShareOft,
-    abi: shareOftFeeFlushAbi,
-    functionName: 'quoteRemoteFeeFlushRequest',
-    args: [target.lzEid, executorNativeDrop],
-  })
 
   const ready = pendingFees > 0n && pendingFees >= flushThreshold && spokeLzFee > 0n
 
@@ -86,8 +61,6 @@ export async function quoteSpokeFlushFromHub(target: RemoteFeeFlushTarget): Prom
     pendingFees,
     flushThreshold,
     spokeLzFee,
-    hubLzFee: hubQuote.nativeFee,
-    executorNativeDrop,
     ready,
   }
 }

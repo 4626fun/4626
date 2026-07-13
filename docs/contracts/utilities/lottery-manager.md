@@ -36,7 +36,7 @@ Shared per-chain service; resolves each creator’s stack from [Registry4626](/c
 | $1,000 | 0.4% |
 | $10,000 | 4% (default pre-boost ceiling) |
 
-Personal Curve boost (up to **2.5×**), optional gauge probability, and `maxWinChance` caps apply after the base formula. Readable proofs: [2.5× boost (proven)](/audits/aristotle/curve-boost) · [next targets](/audits/aristotle/lean-proof-targets).
+Personal Curve boost (up to **2.5×**), optional gauge probability, and `maxWinChance` caps apply after the base formula. Start with the [ve■4626 reader guide](/overview/ve4626), then see the [2.5× proof](/audits/aristotle/curve-boost) or [next Lean targets](/audits/aristotle/lean-proof-targets).
 
 ## Key Functions
 
@@ -174,7 +174,7 @@ boostedPPM   = basePPM × effectiveMult
 // Hard cap: lotteryConfig.maxWinChance
 ```
 
-Canonical product writeup: [ve■4626](/contracts/governance/ve4626) · naming: [ve-naming](/contracts/governance/ve-naming).
+Reader journey and canonical public names: [ve■4626, ve33, and veLottery](/overview/ve4626).
 
 ## Events
 

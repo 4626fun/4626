@@ -79,6 +79,15 @@ export function filterAlfaClubLiquidityPools(
   })
 }
 
+export function filterAlfaClubLiquidityPoolsByRoomId(
+  pools: AlfaClubLiquidityPoolSummary[],
+  roomId: string,
+): AlfaClubLiquidityPoolSummary[] {
+  if (!/^\d+$/.test(roomId)) return []
+  const tokenId = BigInt(roomId)
+  return pools.filter((pool) => pool.tokenId === tokenId)
+}
+
 export async function readAlfaClubLiquidityPools(
   publicClient: PublicClient,
   factory: Address,

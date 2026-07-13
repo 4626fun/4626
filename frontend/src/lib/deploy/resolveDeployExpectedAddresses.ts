@@ -26,6 +26,7 @@ import {
   derivePayoutRouterSalt,
   deriveVaultShareBurnStreamSalt,
 } from '@/lib/deploy/create2Salts'
+import { buildCreatorPayoutRouterInitCode } from '../../../shared/deploy/payoutRouterInitCode'
 import {
   deriveDeployBaseSalt,
   deriveShareOftSaltFromVersion,
@@ -169,21 +170,20 @@ export async function resolveDeployExpectedAddresses(
       initCode: burnStreamInitCode,
     })
     let payoutRouterAddress = (() => {
-      const args = encodeAbiParameters(
-        parseAbiParameters('address,address,address,address,address,address,address,address,address'),
-        [
-          params.creatorToken,
-          vaultAddress,
-          burnStreamAddress,
-          shareOftAddress,
-          wrapperAddress,
-          protocolTreasury,
-          getAddress(BASE_SWAP_ROUTER),
+      const init = buildCreatorPayoutRouterInitCode({
+        bytecode: payoutRouterBytecode,
+        constructorParams: {
+          creatorToken: params.creatorToken,
+          vault: vaultAddress,
+          burnStream: burnStreamAddress,
+          shareOFT: shareOftAddress,
+          wrapper: wrapperAddress,
+          owner: protocolTreasury,
+          swapRouter: getAddress(BASE_SWAP_ROUTER),
           weth,
-          ZERO_ADDRESS,
-        ],
-      )
-      const init = concatHex([payoutRouterBytecode, args])
+          protocolRewards: ZERO_ADDRESS,
+        },
+      })
       return predictCreate2AddressFromInitCode({
         create2Deployer,
         salt: payoutRouterSalt,
@@ -254,21 +254,22 @@ export async function resolveDeployExpectedAddresses(
           bytecodeHash: burnInitHash,
         })
 
-        const routerArgsFixed = encodeAbiParameters(
-          parseAbiParameters('address,address,address,address,address,address,address,address,address'),
-          [
-            params.creatorToken,
-            vaultAddress,
-            burnStreamAddress,
-            shareOftAddress,
-            wrapperAddress,
-            protocolTreasury,
-            getAddress(BASE_SWAP_ROUTER),
-            weth,
-            ZERO_ADDRESS,
-          ],
+        const routerInitHash = keccak256(
+          buildCreatorPayoutRouterInitCode({
+            bytecode: routerCreation,
+            constructorParams: {
+              creatorToken: params.creatorToken,
+              vault: vaultAddress,
+              burnStream: burnStreamAddress,
+              shareOFT: shareOftAddress,
+              wrapper: wrapperAddress,
+              owner: protocolTreasury,
+              swapRouter: getAddress(BASE_SWAP_ROUTER),
+              weth,
+              protocolRewards: ZERO_ADDRESS,
+            },
+          }),
         )
-        const routerInitHash = keccak256(concatHex([routerCreation as Hex, routerArgsFixed]))
         payoutRouterAddress = getCreate2Address({
           from: create2Deployer,
           salt: payoutRouterSalt,

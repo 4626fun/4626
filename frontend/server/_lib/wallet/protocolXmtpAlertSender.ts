@@ -55,27 +55,43 @@ export function isProtocolXmtpAlertDeliveryConfigured(): boolean {
 }
 
 /**
+ * Classification for a failed `sendProtocolAgentXmtpDm` attempt so callers
+ * (Hermit reply copy, alert delivery metrics) can react differently instead
+ * of treating every failure as an opaque "send failed".
+ */
+export type ProtocolXmtpSendFailureReason =
+  | 'not_configured'
+  | 'invalid_recipient'
+  /** Recipient has no XMTP-registered identity yet (needs to bootstrap once). */
+  | 'not_registered'
+  | 'send_failed'
+
+export type ProtocolXmtpSendResult =
+  | { ok: true; reason: null }
+  | { ok: false; reason: ProtocolXmtpSendFailureReason }
+
+/**
  * Send a one-shot XMTP DM from the protocol 4626 agent CSW (`PROTOCOL_CSW_*`).
  * Uses a dedicated local XMTP DB keyed by protocol CSW address.
  */
 export async function sendProtocolAgentXmtpDm(params: {
   recipientAddress: string
   text: string
-}): Promise<boolean> {
+}): Promise<ProtocolXmtpSendResult> {
   if (!isProtocolXmtpAlertDeliveryConfigured()) {
     logger.warn('position_alert.xmtp_not_configured')
-    return false
+    return { ok: false, reason: 'not_configured' }
   }
 
   const recipient = normalizeRecipientAddress(params.recipientAddress)
-  if (!recipient) return false
+  if (!recipient) return { ok: false, reason: 'invalid_recipient' }
 
   const text = params.text.trim()
-  if (!text) return false
+  if (!text) return { ok: false, reason: 'invalid_recipient' }
 
   const cswAddress = resolveServerAgentCswAddress()
   const walletId = readProtocolCswPrivyWalletIdEnv()
-  if (!walletId) return false
+  if (!walletId) return { ok: false, reason: 'not_configured' }
 
   const ownerIndexRaw = readProtocolCswOwnerIndexEnv()
   const ownerIndexParsed = ownerIndexRaw ? Number(ownerIndexRaw) : Number.NaN
@@ -100,21 +116,43 @@ export async function sendProtocolAgentXmtpDm(params: {
 
   try {
     await xmtp.start()
+
+    // Preflight: only treat an explicit `false` as "not registered yet" —
+    // an ambiguous/unknown result (`null`) should not block the send attempt.
+    const reachable = await xmtp.canMessage(recipient)
+    if (reachable === false) {
+      logger.warn('position_alert.xmtp_recipient_not_registered', { recipient })
+      return { ok: false, reason: 'not_registered' }
+    }
+
     const conversationId = await xmtp.createDm(recipient)
     await xmtp.sendToConversation(conversationId, text)
-    return true
+    return { ok: true, reason: null }
   } catch (error) {
     logger.warn('position_alert.xmtp_send_failed', {
       recipient,
       message: error instanceof Error ? error.message : String(error),
     })
-    return false
+    return { ok: false, reason: 'send_failed' }
   } finally {
     await xmtp.stop?.()
   }
 }
 
+/**
+ * Link surfaced to users to bootstrap a first XMTP conversation with the
+ * protocol agent. Deliberately points at this app's own in-app chat (which
+ * already handles both EOA and Coinbase Smart Wallet signers, with retry
+ * logic for signer-type misclassification) rather than a third-party XMTP
+ * client — generic clients like xmtp.chat have no such fallback and can
+ * throw a raw `[SignatureError::Invalid]` for smart-contract-wallet senders.
+ */
 export function formatProtocolAgentXmtpDmLink(): string {
   const address = resolveServerAgentCswAddress()
-  return `https://xmtp.chat/dm/${address}`
+  const params = new URLSearchParams({
+    chatAction: 'help',
+    chatPeer: address,
+    chatName: '4626 Agent',
+  })
+  return `https://app.4626.fun/?${params.toString()}`
 }

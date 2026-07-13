@@ -74,9 +74,6 @@ contract DeployLotteryManagerCreate2V2 is Script {
 
     // Swap entrypoints that should be allowed to create lottery entries.
     address constant TAX_HOOK = 0xca975B9dAF772C71161f3648437c3616E5Be0088;
-    address constant SOLANA_BRIDGE_ADAPTER = 0x700b4BBAf965c013123bAd02a6562FBa487aC0f1;
-    // Legacy adapter address (safe to keep authorized).
-    address constant SOLANA_BRIDGE_ADAPTER_LEGACY = 0x648A01f6e125A46c4695CA70D0EB455f053d36A2;
 
     /// @dev Foundry default `create2_library_salt` (foundry.toml) — keep in sync.
     bytes32 constant LIBRARY_SALT = bytes32(0);
@@ -177,15 +174,6 @@ contract DeployLotteryManagerCreate2V2 is Script {
             lottery.setAuthorizedSwapContract(TAX_HOOK, true);
             console.log("authorized TAX_HOOK");
         }
-        if (!lottery.authorizedSwapContracts(SOLANA_BRIDGE_ADAPTER)) {
-            lottery.setAuthorizedSwapContract(SOLANA_BRIDGE_ADAPTER, true);
-            console.log("authorized SOLANA_BRIDGE_ADAPTER");
-        }
-        if (!lottery.authorizedSwapContracts(SOLANA_BRIDGE_ADAPTER_LEGACY)) {
-            lottery.setAuthorizedSwapContract(SOLANA_BRIDGE_ADAPTER_LEGACY, true);
-            console.log("authorized SOLANA_BRIDGE_ADAPTER_LEGACY");
-        }
-
         // Ensure the VRF consumer can callback the new lottery manager.
         IVRFConsumer4626Auth vrf = IVRFConsumer4626Auth(VRF_CONSUMER);
         if (!vrf.authorizedLocalCallers(predicted)) {

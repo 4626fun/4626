@@ -220,6 +220,12 @@ via `navigator.credentials.get()`. These are dev-scoped diagnostics.
 **Current decision.** Waitlist group chat and user-facing XMTP use the parent
 canonical CSW (`profiles.csw_address`).
 
+This describes the signed-in user's XMTP sender identity. The remote protocol
+agent is a separate public identity: `PROTOCOL_CSW_ADDRESS`
+(`0x793ca28123cba3ca3c20b9c6c67f37510c89c145`) is the Agent 4626 inbox,
+ERC-8004 wallet, and Railway Keepr sender. The operator custody/execution wallet
+remains `CANONICAL_CSW_ADDRESS` (`0xAb6d5…967b5`).
+
 **Invariants preserved:**
 - Parent CSW remains custody + public identity (leaderboard, Explore display).
 - Waitlist group membership uses canonical parent-CSW addresses.

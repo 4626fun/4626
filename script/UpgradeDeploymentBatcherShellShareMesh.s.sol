@@ -3,7 +3,14 @@ pragma solidity ^0.8.20;
 
 import {Script, console2} from "forge-std/Script.sol";
 
-import {DeploymentBatcher, DeploymentBatcherPhase1Module, DeploymentBatcherPhase2Module, DeploymentBatcherPhase3Helper, DeploymentBatcherShareMeshHelper, DeploymentBatcherUtilsHelper} from "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
+import {
+    DeploymentBatcher,
+    DeploymentBatcherPhase1Module,
+    DeploymentBatcherPhase2Module,
+    DeploymentBatcherPhase3Helper,
+    DeploymentBatcherShareMeshHelper,
+    DeploymentBatcherUtilsHelper
+} from "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
 import {UniversalCreate2DeployerFromStore} from "@4626/shared/deploy/factories/UniversalCreate2DeployerFromStore.sol";
 import {Registry4626} from "@4626/shared/core/Registry4626.sol";
 
@@ -262,21 +269,30 @@ contract UpgradeDeploymentBatcherShellShareMesh is Script {
         if (reuseUtilsHelper) {
             predicted.utilsHelper = existingUtilsHelper;
         } else {
-            predicted.utilsHelper = _create2(CREATE2_FACTORY_ADDR, salts.utilsHelper, keccak256(_buildUtilsHelperInit()));
+            predicted.utilsHelper =
+                _create2(CREATE2_FACTORY_ADDR, salts.utilsHelper, keccak256(_buildUtilsHelperInit()));
         }
 
         predicted.deploymentBatcher = _create2(
             CREATE2_FACTORY_ADDR,
             salts.deploymentBatcher,
-            keccak256(_buildBatcherShellInit(cfg, storeAddr, create2DeployerAddr, coreModuleAddr, strategiesModuleAddr, adminModuleAddr))
+            keccak256(
+                _buildBatcherShellInit(
+                    cfg, storeAddr, create2DeployerAddr, coreModuleAddr, strategiesModuleAddr, adminModuleAddr
+                )
+            )
         );
 
         address batcherAddr = predicted.deploymentBatcher;
         predicted.phase2Module = _create2(
-            CREATE2_FACTORY_ADDR, salts.phase2Module, keccak256(_buildPhase2ModuleInit(cfg, create2DeployerAddr, batcherAddr))
+            CREATE2_FACTORY_ADDR,
+            salts.phase2Module,
+            keccak256(_buildPhase2ModuleInit(cfg, create2DeployerAddr, batcherAddr))
         );
         predicted.phase3Helper = _create2(
-            CREATE2_FACTORY_ADDR, salts.phase3Helper, keccak256(_buildPhase3HelperInit(cfg, create2DeployerAddr, batcherAddr))
+            CREATE2_FACTORY_ADDR,
+            salts.phase3Helper,
+            keccak256(_buildPhase3HelperInit(cfg, create2DeployerAddr, batcherAddr))
         );
         predicted.shareMeshHelper = _create2(
             CREATE2_FACTORY_ADDR,
@@ -305,16 +321,7 @@ contract UpgradeDeploymentBatcherShellShareMesh is Script {
     function _safeExec(address treasurySafe, address target, bytes memory data, uint256 pk) internal {
         IGnosisSafe safe = IGnosisSafe(treasurySafe);
         bytes32 safeTxHash = safe.getTransactionHash(
-            target,
-            0,
-            data,
-            IGnosisSafe.Operation.Call,
-            0,
-            0,
-            0,
-            address(0),
-            payable(address(0)),
-            safe.nonce()
+            target, 0, data, IGnosisSafe.Operation.Call, 0, 0, 0, address(0), payable(address(0)), safe.nonce()
         );
         bytes32 digest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", safeTxHash));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, digest);
@@ -324,16 +331,7 @@ contract UpgradeDeploymentBatcherShellShareMesh is Script {
         }
         bytes memory signature = abi.encodePacked(r, s, v);
         bool ok = safe.execTransaction(
-            target,
-            0,
-            data,
-            IGnosisSafe.Operation.Call,
-            0,
-            0,
-            0,
-            address(0),
-            payable(address(0)),
-            signature
+            target, 0, data, IGnosisSafe.Operation.Call, 0, 0, 0, address(0), payable(address(0)), signature
         );
         require(ok, "Safe execTransaction failed");
     }
@@ -349,8 +347,7 @@ contract UpgradeDeploymentBatcherShellShareMesh is Script {
         bool skipAuthorization = vm.envOr("SKIP_AUTHORIZATION", uint256(0)) == 1;
 
         DeploymentBatcher oldBatcher = DeploymentBatcher(oldBatcherAddr);
-        DeploymentBatcherPhase3Helper oldPhase3 =
-            DeploymentBatcherPhase3Helper(address(oldBatcher.phase3Helper()));
+        DeploymentBatcherPhase3Helper oldPhase3 = DeploymentBatcherPhase3Helper(address(oldBatcher.phase3Helper()));
 
         Config memory cfg;
         cfg.registry = address(oldBatcher.registry());
@@ -442,7 +439,9 @@ contract UpgradeDeploymentBatcherShellShareMesh is Script {
         );
         _deployCreate2IfMissing(
             salts.deploymentBatcher,
-            _buildBatcherShellInit(cfg, storeAddr, create2DeployerAddr, coreModuleAddr, strategiesModuleAddr, adminModuleAddr)
+            _buildBatcherShellInit(
+                cfg, storeAddr, create2DeployerAddr, coreModuleAddr, strategiesModuleAddr, adminModuleAddr
+            )
         );
 
         vm.stopBroadcast();
@@ -487,27 +486,15 @@ contract UpgradeDeploymentBatcherShellShareMesh is Script {
         );
         console2.log("setPhase1Module executed via protocol treasury Safe");
 
-        address solanaAdapter = oldBatcher.solanaBridgeAdapter();
         bytes32 solanaDestination = oldBatcher.solanaDestination();
-        if (solanaAdapter != address(0) && solanaDestination != bytes32(0)) {
+        if (solanaDestination != bytes32(0)) {
             _safeExec(
                 cfg.protocolTreasury,
                 predicted.deploymentBatcher,
-                abi.encodeWithSelector(DeploymentBatcher.setSolanaConfig.selector, solanaAdapter, solanaDestination),
+                abi.encodeWithSelector(DeploymentBatcher.setSolanaDestination.selector, solanaDestination),
                 pk
             );
-            console2.log("setSolanaConfig copied from old batcher");
-        }
-
-        bytes32 solanaShareOftPeer = oldBatcher.solanaShareOftPeer();
-        if (solanaShareOftPeer != bytes32(0)) {
-            _safeExec(
-                cfg.protocolTreasury,
-                predicted.deploymentBatcher,
-                abi.encodeWithSelector(DeploymentBatcher.setSolanaShareOftPeer.selector, solanaShareOftPeer),
-                pk
-            );
-            console2.log("setSolanaShareOftPeer copied from old batcher");
+            console2.log("setSolanaDestination copied from old batcher");
         }
 
         DeploymentBatcher.OVaultRuntimeConfig memory runtime = oldBatcher.getOVaultRuntimeConfig();
@@ -544,8 +531,14 @@ contract UpgradeDeploymentBatcherShellShareMesh is Script {
         require(address(newBatcher.shareMeshHelper()) == predicted.shareMeshHelper, "share mesh helper mismatch");
         require(address(newBatcher.utilsHelper()) == predicted.utilsHelper, "utils helper mismatch");
         require(address(newBatcher.phase1Module()) == predicted.phase1Module, "phase1 module mismatch");
-        require(DeploymentBatcherPhase2Module(predicted.phase2Module).batcher() == predicted.deploymentBatcher, "phase2 batcher mismatch");
-        require(DeploymentBatcherShareMeshHelper(predicted.shareMeshHelper).batcher() == predicted.deploymentBatcher, "share mesh batcher mismatch");
+        require(
+            DeploymentBatcherPhase2Module(predicted.phase2Module).batcher() == predicted.deploymentBatcher,
+            "phase2 batcher mismatch"
+        );
+        require(
+            DeploymentBatcherShareMeshHelper(predicted.shareMeshHelper).batcher() == predicted.deploymentBatcher,
+            "share mesh batcher mismatch"
+        );
 
         if (skipAuthorization) {
             console2.log("SKIP_AUTHORIZATION=1 - authorize manually on create2 deployer + registry");
@@ -580,7 +573,9 @@ contract UpgradeDeploymentBatcherShellShareMesh is Script {
         console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER_PHASE2_MODULE=", vm.toString(predicted.phase2Module)));
         console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER_PHASE1_MODULE=", vm.toString(predicted.phase1Module)));
         console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER_PHASE3_HELPER=", vm.toString(predicted.phase3Helper)));
-        console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER_SHARE_MESH_HELPER=", vm.toString(predicted.shareMeshHelper)));
+        console2.log(
+            string.concat("HANDOFF:DEPLOYMENT_BATCHER_SHARE_MESH_HELPER=", vm.toString(predicted.shareMeshHelper))
+        );
         console2.log(string.concat("HANDOFF:OLD_DEPLOYMENT_BATCHER=", vm.toString(oldBatcherAddr)));
     }
 }

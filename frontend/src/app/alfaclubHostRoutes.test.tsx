@@ -4,7 +4,7 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 
-import { RedirectPreserve } from '@/app/alfaclubHostRoutes'
+import { AlfaClubHubRedirect, RedirectPreserve } from '@/app/alfaclubHostRoutes'
 import {
   ALFACLUB_POOLS_PATH,
   ALFACLUB_ROOMS_PATH,
@@ -41,9 +41,9 @@ describe('AlfaClub host path redirects', () => {
   it('maps the full legacy redirect matrix to canonical short paths', () => {
     expect(resolveAlfaClubCanonicalPath('/alfaclub')).toBe(ALFACLUB_ROOMS_PATH)
     expect(resolveAlfaClubCanonicalPath('/alfaclub/trading-rooms')).toBe(ALFACLUB_ROOMS_PATH)
-    expect(resolveAlfaClubCanonicalPath('/alfaclub/key-safety')).toBe(ALFACLUB_SAFETY_PATH)
-    expect(resolveAlfaClubCanonicalPath('/alfaclub/liquidity')).toBe(ALFACLUB_POOLS_PATH)
-    expect(resolveAlfaClubCanonicalPath('/alfaclub/liquidity-pools')).toBe(ALFACLUB_POOLS_PATH)
+    expect(resolveAlfaClubCanonicalPath('/alfaclub/key-safety')).toBe(ALFACLUB_ROOMS_PATH)
+    expect(resolveAlfaClubCanonicalPath('/alfaclub/liquidity')).toBe(ALFACLUB_ROOMS_PATH)
+    expect(resolveAlfaClubCanonicalPath('/alfaclub/liquidity-pools')).toBe(ALFACLUB_ROOMS_PATH)
 
     expect(
       buildAlfaClubAbsoluteUrl({
@@ -52,5 +52,33 @@ describe('AlfaClub host path redirects', () => {
         origin: 'https://alfaclub.4626.fun',
       }),
     ).toBe('https://alfaclub.4626.fun/rooms?roomId=1')
+  })
+
+  it('redirects safety into the room hub while preserving roomId and forcing its tab', () => {
+    render(
+      <MemoryRouter initialEntries={['/safety?roomId=1659&tab=overview#analysis']}>
+        <Routes>
+          <Route path={ALFACLUB_SAFETY_PATH} element={<AlfaClubHubRedirect />} />
+          <Route path={ALFACLUB_ROOMS_PATH} element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByTestId('location').textContent).toBe('/rooms?roomId=1659&tab=safety#analysis')
+  })
+
+  it('redirects pools into room liquidity while preserving pool selection', () => {
+    render(
+      <MemoryRouter initialEntries={['/pools?roomId=9&pool=0xabc']}>
+        <Routes>
+          <Route path={ALFACLUB_POOLS_PATH} element={<AlfaClubHubRedirect />} />
+          <Route path={ALFACLUB_ROOMS_PATH} element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByTestId('location').textContent).toBe(
+      '/rooms?roomId=9&pool=0xabc&tab=liquidity',
+    )
   })
 })

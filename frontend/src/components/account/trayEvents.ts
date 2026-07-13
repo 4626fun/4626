@@ -1,7 +1,7 @@
 export const OPEN_ACCOUNT_TRAY_EVENT = 'vault:open-account-tray'
 export const ACCOUNT_WALLET_SUMMARY_EVENT = 'vault:account-wallet-summary'
 
-export type AccountTraySection = 'economy' | 'portfolio' | 'points'
+export type AccountTraySection = 'identity' | 'portfolio' | 'points'
 export type AccountTrayTab = 'tokens' | 'activity'
 
 export type AccountTrayOpenDetail = {

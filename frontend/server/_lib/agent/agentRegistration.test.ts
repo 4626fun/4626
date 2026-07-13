@@ -102,7 +102,7 @@ describe('buildAgentRegistration', () => {
 
     expect(result.payload).toBeDefined()
     expect(result.payload).toMatchObject({
-      name: '4626 Agent',
+      name: '4626',
       registrations: [{ agentId: 2205, agentRegistry: CANONICAL_REGISTRY }],
       reputationRegistry: CANONICAL_REPUTATION_REGISTRY,
       supportedTrust: ['reputation', 'crypto-economic', 'tee-attestation'],
@@ -114,7 +114,7 @@ describe('buildAgentRegistration', () => {
     })
 
     expect(staticRegistration).toMatchObject({
-      name: '4626 Agent',
+      name: '4626',
       registrations: [{ agentId: 2205, agentRegistry: CANONICAL_REGISTRY }],
       reputationRegistry: CANONICAL_REPUTATION_REGISTRY,
       supportedTrust: ['reputation', 'crypto-economic', 'tee-attestation'],

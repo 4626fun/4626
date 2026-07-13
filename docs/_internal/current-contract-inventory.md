@@ -5,13 +5,14 @@ sidebar_position: 5
 
 # Current Contract Inventory (Base)
 
-Generated on: 2026-07-08
-Scope: current live Base infra addresses plus the canonical `v1.18.0` greenfield deploy target for new per-creator vaults.
+Updated on: 2026-07-12
+Scope: current live v1.18.0 Base shared infrastructure plus the canonical
+`v1.19.0` bytecode/CREATE2 target for new per-creator vaults.
 
 ## Sources
 
-1. Release packet: `docs/_internal/deployment-releases-legacy/v1.18.0-greenfield.md`
-2. Bytecode / codeId manifest: `deployments/base/v1.18.0-bytecode-manifest.json`
+1. Release packet: `docs/_internal/deployment-releases-legacy/v1.19.0-partial-refresh.md`
+2. Bytecode / codeId manifest: `deployments/base/v1.19.0-bytecode-manifest.json`
 3. Frontend defaults: `frontend/src/config/contracts.defaults.ts`
 4. Handoff env: `tmp/base-v1.18.0-handoff.env`
 5. Onchain `DeploymentBatcher` wiring checks against the current live Base deployment
@@ -21,6 +22,7 @@ Scope: current live Base infra addresses plus the canonical `v1.18.0` greenfield
 | Contract / Field | Address |
 |---|---|
 | `registry` | `0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0` |
+| `registryBootstrap` | `0x5CF9E2504E679edd6828af3f5B8375C61F4D92aB` |
 | `ovaultFactory` | `0x70d0D2411D362BA50821389383Fa6B829d736232` |
 | `vaultActivationBatcher` | `0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3` |
 | `lotteryManager` | `0xB68F359e01626Ec5d15C624037311C70DacAba43` |

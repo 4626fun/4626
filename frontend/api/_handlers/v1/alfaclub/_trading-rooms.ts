@@ -7,7 +7,7 @@ import {
   rateLimitKey,
 } from '@4626/server-core'
 
-import { listTradingRoomsDirectory } from '../../../../server/_lib/alfaclub/tradingRoomsDirectory.js'
+import { listAlfaClubRoomsDirectory } from '../../../../server/_lib/alfaclub/tradingRoomsDirectory.js'
 
 function setPublicCors(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -53,7 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const rows = await listTradingRoomsDirectory(parseLimit(req.query.limit))
+    const rows = await listAlfaClubRoomsDirectory(parseLimit(req.query.limit))
     res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300')
     return res.status(200).json({
       success: true,
@@ -63,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'trading_rooms_list_failed'
+    const message = error instanceof Error ? error.message : 'alfaclub_rooms_list_failed'
     return res.status(500).json({ success: false, error: message })
   }
 }

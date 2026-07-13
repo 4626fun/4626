@@ -7,6 +7,7 @@ export const CURATED_PUBLISH_GLOBS = [
 
   'getting-started/index.md',
   'overview/how-it-works.md',
+  'overview/ve4626.md',
   'overview/solana-share-mesh.md',
 
   'guides/index.md',

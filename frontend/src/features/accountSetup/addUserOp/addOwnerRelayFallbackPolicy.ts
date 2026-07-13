@@ -24,7 +24,8 @@ export function mapBaseAppOwnerInstallRpcError(error: unknown): string | null {
 
   return (
     'Base App could not prepare the signing request, so nothing was submitted on-chain. ' +
-    'Stay in Base App, force-close and reopen this link, confirm Base Mainnet, rebuild the preview, then retry once.'
+    'Stay in Base App, force-close and reopen this link, confirm Base Mainnet, rebuild the preview, then retry once. ' +
+    'Do not switch to another signing lane for this error.'
   )
 }
 

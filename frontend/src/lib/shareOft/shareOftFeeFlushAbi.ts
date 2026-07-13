@@ -1,4 +1,4 @@
-/** Minimal CreatorShareOFT + gauge ABI for hub-initiated remote fee flush. */
+/** Minimal CreatorShareOFT + gauge ABI for direct spoke fee flush monitoring. */
 export const shareOftFeeFlushAbi = [
   {
     type: 'function',
@@ -27,52 +27,6 @@ export const shareOftFeeFlushAbi = [
     inputs: [],
     outputs: [{ type: 'uint256' }],
     stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    name: 'quoteRemoteFeeFlushRequest',
-    inputs: [
-      { name: 'dstEid', type: 'uint32' },
-      { name: 'executorNativeDrop', type: 'uint128' },
-    ],
-    outputs: [
-      {
-        name: 'fee',
-        type: 'tuple',
-        components: [
-          { name: 'nativeFee', type: 'uint256' },
-          { name: 'lzTokenFee', type: 'uint256' },
-        ],
-      },
-    ],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    name: 'requestRemoteFeeFlush',
-    inputs: [
-      { name: 'dstEid', type: 'uint32' },
-      { name: 'executorNativeDrop', type: 'uint128' },
-    ],
-    outputs: [
-      {
-        name: 'receipt',
-        type: 'tuple',
-        components: [
-          { name: 'guid', type: 'bytes32' },
-          { name: 'nonce', type: 'uint64' },
-          {
-            name: 'fee',
-            type: 'tuple',
-            components: [
-              { name: 'nativeFee', type: 'uint256' },
-              { name: 'lzTokenFee', type: 'uint256' },
-            ],
-          },
-        ],
-      },
-    ],
-    stateMutability: 'payable',
   },
 ] as const
 

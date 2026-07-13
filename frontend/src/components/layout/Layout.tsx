@@ -52,9 +52,12 @@ const navItems: MobileNavItem[] = [
 ]
 
 const navItemsAlfaClub: MobileNavItem[] = [
-  { path: '/rooms', icon: Search, label: 'Rooms', activePrefixes: ['/rooms', '/trading-rooms'] },
-  { path: '/safety', icon: ShieldCheck, label: 'Safety', activePrefixes: ['/safety', '/key-safety'] },
-  { path: '/pools', icon: Vault, label: 'Pools', activePrefixes: ['/pools', '/liquidity'] },
+  {
+    path: '/rooms',
+    icon: Search,
+    label: 'Rooms',
+    activePrefixes: ['/rooms', '/trading-rooms', '/safety', '/key-safety', '/pools', '/liquidity'],
+  },
   { path: '/wallet', icon: Wallet, label: 'Wallet', activePrefixes: [] },
 ]
 

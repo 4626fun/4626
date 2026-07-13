@@ -159,6 +159,30 @@ describe('alfaclub vigilante — vercel wiring', () => {
     ])
   })
 
+  it('redirects AlfaClub safety and pools aliases into room hub tabs', async () => {
+    const body = await readFile(new URL('../../vercel.json', import.meta.url), 'utf8')
+    const parsed = JSON.parse(body) as {
+      routes?: Array<{
+        src?: string
+        status?: number
+        dest?: string
+        has?: Array<{ type?: string; value?: string }>
+      }>
+    }
+    const routes = parsed.routes ?? []
+    const hostRoute = (src: string) =>
+      routes.find(
+        (route) =>
+          route.src === src &&
+          route.has?.some(
+            (condition) => condition.type === 'host' && condition.value === 'alfaclub.4626.fun',
+          ),
+      )
+
+    expect(hostRoute('/safety')).toMatchObject({ status: 308, dest: '/rooms?tab=safety' })
+    expect(hostRoute('/pools')).toMatchObject({ status: 308, dest: '/rooms?tab=liquidity' })
+  })
+
   it('v1 route map exposes alfaclub/leaderboard, run, radar, daily-brief, compare, relay-now, chat-token, chat-token-refresh, chat-bridge-run', async () => {
     const src = await readFile(
       new URL('../_handlers/_routes.v1.ts', import.meta.url),

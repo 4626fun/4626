@@ -1102,10 +1102,16 @@ contract Registry4626 is IRegistry4626, Ownable {
     }
 
     // =================================
-    // AGENT INTEGRATION METADATA
+    // AGENT INTEGRATION METADATA (lane meta — historical name)
     // =================================
+    // `AgentIntegrationMeta` stores product-lane metadata for any VaultKind (creator or agent).
+    // Rename to LaneIntegrationMeta only on a future registry epoch.
+    // Auth matches `registerToken`: authorized factories (e.g. DeploymentBatcher) or owner.
 
-    function setAgentIntegrationMeta(address token, AgentIntegrationMeta calldata meta) external onlyOwner {
+    function setAgentIntegrationMeta(address token, AgentIntegrationMeta calldata meta)
+        external
+        onlyAuthorizedOrOwner
+    {
         if (token == address(0)) revert ZeroAddress();
         agentIntegrationMetas[token] = meta;
         emit AgentIntegrationMetaSet(token, meta.vaultKind);

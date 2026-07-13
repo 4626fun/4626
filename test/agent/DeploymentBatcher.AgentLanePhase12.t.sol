@@ -27,12 +27,39 @@ contract MockAgentLaneBytecodeStore {
 contract MockAgentLaneRegistry {
     address public endpoint;
 
+    struct AgentIntegrationMeta {
+        uint8 vaultKind;
+        address nativeAgentVault;
+        address taxRecipient;
+        address taxAccountingAdapter;
+        address pairToken;
+        address uniswapV2Pair;
+        bytes32 implementationFingerprint;
+    }
+
+    mapping(address => AgentIntegrationMeta) public agentIntegrationMetas;
+
     constructor(address _endpoint) {
         endpoint = _endpoint;
     }
 
     function getLayerZeroEndpoint(uint256) external view returns (address) {
         return endpoint;
+    }
+
+    function setAgentIntegrationMeta(address token, AgentIntegrationMeta calldata meta) external {
+        agentIntegrationMetas[token] = meta;
+    }
+
+    function getAgentIntegrationMeta(address token) external view returns (AgentIntegrationMeta memory) {
+        return agentIntegrationMetas[token];
+    }
+
+    function getVaultKind(address token) external view returns (uint8) {
+        AgentIntegrationMeta memory meta = agentIntegrationMetas[token];
+        // Mirror Registry4626: Agent only when explicitly set; else Creator (0).
+        if (meta.vaultKind == 1) return 1;
+        return 0;
     }
 }
 
@@ -457,6 +484,8 @@ contract DeploymentBatcherAgentLanePhase12Test is Test {
         assertEq(MockAgentLaneShareOFT(p1.shareOFT).gaugeController(), p2.gaugeController);
         assertEq(MockAgentLaneVault(p1.vault).gaugeController(), p2.gaugeController);
         assertEq(MockAgentLaneVault(p1.vault).ccaLaunchArm(), p2.ccaLaunchArm);
+        assertEq(uint256(registry.getVaultKind(agentToken)), uint256(1), "getVaultKind Agent");
+        assertEq(registry.getAgentIntegrationMeta(agentToken).nativeAgentVault, p1.vault, "nativeAgentVault");
     }
 
     function test_creatorPhase2Core_stillWiresSetCreatorCoin() public {
@@ -484,6 +513,7 @@ contract DeploymentBatcherAgentLanePhase12Test is Test {
         MockCreatorLaneGauge gauge = MockCreatorLaneGauge(p2.gaugeController);
         assertEq(gauge.creatorCoin(), agentToken, "creator gauge asset token");
         assertEq(gauge.agentToken(), address(0), "agent setter must not run on creator gauge");
+        assertEq(uint256(registry.getVaultKind(agentToken)), uint256(0), "getVaultKind Creator");
     }
 
     function test_phase1ParamsHash_includesVaultKind() public {

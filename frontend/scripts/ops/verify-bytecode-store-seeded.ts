@@ -8,7 +8,7 @@
  *   pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts
  *   BYTECODE_MANIFEST=../../deployments/base/v1.16.0-bytecode-manifest.json pnpm -C frontend exec tsx scripts/ops/verify-bytecode-store-seeded.ts
  */
-const DEFAULT_RELEASE = 'v1.16.1'
+const DEFAULT_RELEASE = 'v1.19.0'
 
 
 import { readFileSync } from 'node:fs'
@@ -19,6 +19,10 @@ import { keccak256 } from 'viem'
 
 import { BASE_DEFAULTS } from '../../src/config/contracts.defaults.js'
 import { DEPLOY_BYTECODE } from '../../src/deploy/bytecode.generated.js'
+import {
+  DEPLOY_CONSUMED_MANIFEST_KEYS,
+  FRONTEND_DEPLOY_MANIFEST_KEYS,
+} from './releaseBytecodeKeys.js'
 
 declare const process: {
   argv: string[]
@@ -51,46 +55,6 @@ const STORE_ABI = [
     outputs: [{ type: 'uint256' }],
   },
 ] as const
-
-/** Lane-neutral deploy bytecode (one codeId each; shared by creator and agent paths). */
-const SHARED_MANIFEST_KEYS = [
-  'OFTBootstrapRegistry',
-  'CCALaunchArm',
-  'CharmStrategy4626',
-  'AjnaVaultAuth',
-  'AjnaERC4626Vault',
-  'ERC4626StrategyAdapter',
-] as const
-
-/** Per-vault creator lane (distinct codeIds from agent counterparts). */
-const CREATOR_LANE_KEYS = [
-  'CreatorOVault',
-  'CreatorOVaultWrapper',
-  'CreatorShareOFT',
-  'CreatorGaugeController',
-  'CreatorOracle',
-] as const
-
-/** Per-vault agent lane (distinct codeIds from creator counterparts). */
-const AGENT_LANE_KEYS = [
-  'AgentOVault',
-  'AgentOVaultWrapper',
-  'AgentShareOFT',
-  'AgentGaugeController',
-  'AgentOracle',
-] as const
-
-/** Post-CCA share-mesh CREATE2 bytecode (keeper completion lane). */
-const SHARE_MESH_MANIFEST_KEYS = ['ApprovedV4HooksRegistry', 'OVaultLPManager'] as const
-
-const REQUIRED_MANIFEST_KEYS = [
-  ...SHARED_MANIFEST_KEYS,
-  ...CREATOR_LANE_KEYS,
-  ...AGENT_LANE_KEYS,
-  ...SHARE_MESH_MANIFEST_KEYS,
-] as const
-
-const FRONTEND_DEPLOY_KEYS = REQUIRED_MANIFEST_KEYS
 
 type Manifest = {
   release: string
@@ -156,7 +120,7 @@ async function main(): Promise<void> {
   const failures: string[] = []
   const checks: Array<{ id: string; ok: boolean; detail: string }> = []
 
-  for (const key of FRONTEND_DEPLOY_KEYS) {
+  for (const key of FRONTEND_DEPLOY_MANIFEST_KEYS) {
     const bytecode = DEPLOY_BYTECODE[key as keyof typeof DEPLOY_BYTECODE] as Hex
     const derived = keccak256(bytecode)
     const manifestEntry = manifest.contracts[key]
@@ -182,7 +146,7 @@ async function main(): Promise<void> {
     }
   }
 
-  for (const key of REQUIRED_MANIFEST_KEYS) {
+  for (const key of DEPLOY_CONSUMED_MANIFEST_KEYS) {
     const entry = manifest.contracts[key]
     if (!entry) {
       failures.push(`${key}: missing manifest entry`)

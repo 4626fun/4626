@@ -43,6 +43,12 @@ Deployed on an **older batcher or release**. May behave differently from a new v
 
 **Wrapper** — [CreatorOVaultWrapper](/contracts/core/creator-ovault-wrapper); locks **1000 ▢ per 1 ■** (`NORMALIZATION_FACTOR = 1000`). User `deposit()` presents **~1 creator coin → ~1 ■**.
 
+**ve■4626** — Decaying power created by locking the protocol **■4626** ShareOFT. It is not created by holding a creator’s `■TICKER`. See the [ve■4626 reader guide](/overview/ve4626).
+
+**ve33** — Utility assigned from ve■4626 for gauge voting, fees, and bribes.
+
+**veLottery** — Opt-in utility assigned from ve■4626 for the personal lottery multiplier. It works alongside creator-share coverage; it does not replace coverage.
+
 ## Token units {#token-units}
 
 Raw unit math vs user-facing UX:

@@ -58,18 +58,33 @@ export function WaitlistModernParentOwnerInstall({
   const embeddedOwnerConfirmed =
     activation.status?.embeddedOwnerConfirmed === true ||
     activation.state.embeddedOwnerConfirmed
+  const parentCswLoaded = Boolean(canonicalCswAddress?.trim())
   const canStart =
     (embeddedOwnerConfirmed || fundingOk) &&
     (baseWalletMatchesParent === true || embeddedOwnerConfirmed)
   const activationError = activation.state.error ?? modernInstall.pageError
+  const disabledStartLabel = !embeddedEoaAddress
+    ? 'Finish Privy email first'
+    : !canonicalCswAddress
+      ? 'Link parent wallet first'
+      : baseWalletMatchesParent !== true && !embeddedOwnerConfirmed
+        ? 'Connect Base Account first'
+        : 'Check funding first'
   const statusRows = [
     {
-      label: '4626/Privy session',
+      label: 'Privy email session',
       ok: Boolean(embeddedEoaAddress),
-      value: embeddedEoaAddress ? 'Ready' : 'Sign in required',
+      value: embeddedEoaAddress ? 'Embedded signer ready' : 'Sign in required',
     },
     {
-      label: 'Base Account signing connection',
+      label: 'Parent CSW on profile',
+      ok: parentCswLoaded,
+      value: canonicalCswAddress
+        ? `${canonicalCswAddress.slice(0, 6)}…${canonicalCswAddress.slice(-4)}`
+        : 'Link wallet first',
+    },
+    {
+      label: 'Base Account wallet match',
       ok: baseWalletMatchesParent === true || embeddedOwnerConfirmed,
       value:
         baseWalletMatchesParent === true
@@ -77,7 +92,7 @@ export function WaitlistModernParentOwnerInstall({
           : embeddedOwnerConfirmed
             ? 'No longer required'
             : baseWalletMatchesParent === false
-              ? 'Link parent wallet'
+              ? 'Reconnect parent wallet'
               : 'Connect Base Account first',
     },
     {
@@ -161,9 +176,7 @@ export function WaitlistModernParentOwnerInstall({
           size="sm"
           disabled
         >
-          {baseWalletMatchesParent !== true && !embeddedOwnerConfirmed
-            ? 'Connect Base Account first'
-            : 'Check funding first'}
+          {disabledStartLabel}
         </Button>
       ) : (
         <Button

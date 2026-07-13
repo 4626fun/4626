@@ -11,6 +11,7 @@ import { SmartWalletRoute } from '@/app/routeGuards'
 import { CONTRACTS } from '@/config/contracts'
 import {
   filterAlfaClubLiquidityPools,
+  filterAlfaClubLiquidityPoolsByRoomId,
   formatAlfaClubPoolFee,
   useAlfaClubLiquidityPools,
   type AlfaClubLiquidityPoolSummary,
@@ -39,7 +40,7 @@ function roomTypeLabel(roomType: number | null): string {
   return 'Unknown'
 }
 
-function PoolCard({
+export function PoolCard({
   pool,
   selected,
   onSelect,
@@ -97,8 +98,9 @@ function PoolCard({
   )
 }
 
-function AlfaClubLpWriteConsole(props: {
+export function AlfaClubLpWriteConsole(props: {
   selectedPool: AlfaClubLiquidityPoolSummary | null
+  initialTokenId?: bigint | null
 }) {
   const access = useOptionalAccessContext()
 
@@ -134,10 +136,116 @@ function AlfaClubLpWriteConsole(props: {
       <AlfaClubLiquidity
         key={props.selectedPool?.pool ?? 'new-pool'}
         initialCreatorCoin={props.selectedPool?.creatorCoin ?? null}
-        initialTokenId={props.selectedPool?.tokenId ?? null}
+        initialTokenId={props.selectedPool?.tokenId ?? props.initialTokenId ?? null}
         initialMode={props.selectedPool ? 'buy' : 'create'}
+        embedded
       />
     </SmartWalletRoute>
+  )
+}
+
+export function AlfaClubRoomLiquidity({ roomId }: { roomId: string }) {
+  const publicClient = usePublicClient({ chainId: base.id })
+  const factory = CONTRACTS.alfaCreatorKeyLpFactory as Address
+  const factoryReady = factory.toLowerCase() !== ZERO_ADDRESS
+  const directory = useAlfaClubLiquidityPools(
+    publicClient as unknown as PublicClient | undefined,
+    factoryReady ? factory : null,
+  )
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [creating, setCreating] = useState(false)
+  const pools = useMemo(() => directory.data?.pools ?? [], [directory.data?.pools])
+  const roomPools = useMemo(
+    () => filterAlfaClubLiquidityPoolsByRoomId(pools, roomId),
+    [pools, roomId],
+  )
+  const requestedPool = searchParams.get('pool')?.toLowerCase() ?? ''
+  const selectedPool = creating
+    ? null
+    : roomPools.find((pool) => pool.pool.toLowerCase() === requestedPool) ?? roomPools[0] ?? null
+  const tokenId = /^\d+$/.test(roomId) ? BigInt(roomId) : null
+
+  const selectPool = (pool: AlfaClubLiquidityPoolSummary) => {
+    setCreating(false)
+    const next = new URLSearchParams(searchParams)
+    next.set('pool', pool.pool)
+    setSearchParams(next, { replace: true })
+  }
+
+  const startCreating = () => {
+    setCreating(true)
+    const next = new URLSearchParams(searchParams)
+    next.delete('pool')
+    setSearchParams(next, { replace: true })
+  }
+
+  return (
+    <div className="space-y-5">
+      <section className="rounded-3xl bg-black/35 p-5 ring-1 ring-white/[0.06]">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-zinc-100">Room liquidity</h2>
+            <p className="mt-1 text-sm text-zinc-400">
+              Creator Coin / FriendKey pools for token ID {roomId}.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {factoryReady ? (
+              <button
+                type="button"
+                onClick={() => directory.refetch()}
+                disabled={directory.isFetching}
+                className="inline-flex h-9 items-center gap-2 rounded-xl bg-white/[0.04] px-3 text-xs text-zinc-300 ring-1 ring-white/[0.08] hover:bg-white/[0.08] disabled:text-zinc-600"
+              >
+                <RefreshCw className={cn('h-3.5 w-3.5', directory.isFetching && 'animate-spin')} aria-hidden />
+                Refresh
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={startCreating}
+              className="inline-flex h-9 items-center rounded-xl bg-sky-500 px-3 text-xs font-semibold text-white hover:bg-sky-400"
+            >
+              Create pool
+            </button>
+          </div>
+        </div>
+
+        {!factoryReady ? (
+          <p className="mt-5 text-sm text-amber-300">Pool factory deployment is not configured.</p>
+        ) : directory.isLoading ? (
+          <p className="mt-5 text-sm text-zinc-400" role="status">
+            Loading room pools from Base…
+          </p>
+        ) : directory.error ? (
+          <p className="mt-5 text-sm text-red-300" role="alert">
+            Unable to load liquidity pools.
+          </p>
+        ) : roomPools.length === 0 ? (
+          <div className="mt-5 rounded-2xl bg-white/[0.03] p-5 ring-1 ring-white/[0.06]">
+            <h3 className="text-sm font-semibold text-zinc-100">No pool for this room yet</h3>
+            <p className="mt-1 text-sm text-zinc-400">
+              Use the room-seeded create console below to open the first pair.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            {roomPools.map((pool) => (
+              <PoolCard
+                key={pool.pool}
+                pool={pool}
+                selected={!creating && selectedPool?.pool === pool.pool}
+                onSelect={() => selectPool(pool)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section id="room-liquidity-console" className="scroll-mt-40 rounded-3xl bg-black/25 p-4 ring-1 ring-white/[0.06]">
+        <AlfaClubLpWriteConsole selectedPool={selectedPool} initialTokenId={tokenId} />
+      </section>
+    </div>
   )
 }
 

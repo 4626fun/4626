@@ -25,7 +25,6 @@ import {
     MockVaultStrategyManagerForPhase3
 } from "test/helpers/DeploymentBatcherPhase3Mocks.sol";
 import {DeploymentBatcherPhase2Module} from "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
-import {IBaseSolanaBridge} from "@4626/shared/interfaces/bridge/IBaseSolanaBridge.sol";
 import {OFTBootstrapRegistry} from "@4626/shared/deploy/infra/OFTBootstrapRegistry.sol";
 import {
     MockBytecodeStore,
@@ -765,9 +764,7 @@ contract BatcherPhase2Handler is Test {
             depositAmount: depositAmount,
             requiredRaise: 1 ether,
             floorPriceQ96: 1,
-            auctionSteps: hex"1234",
-            meteoraAlphaVault: bytes32(0),
-            solanaIxs: new IBaseSolanaBridge.Ix[](0)
+            auctionSteps: hex"1234"
         });
 
         ISignatureTransfer.PermitTransferFrom memory permit = _permit(address(creatorToken), permitAmount);
@@ -857,10 +854,11 @@ contract BatcherPhase2Handler is Test {
         );
         batcher.setPhase2ModuleForTest(phase2);
         batcher.setUtilsHelperForTest(new DeploymentBatcherUtilsHelper());
+        registry.registerToken(address(creatorToken), "Creator Coin", "CR8R", ownerAddr, address(0), 0);
+        registry.setRemoteOFTPeerBytes32(address(creatorToken), 30_168, bytes32(uint256(0x5678)));
         vm.startPrank(protocolTreasury);
         batcher.setOVaultRuntimeConfig(makeAddr("hubComposer"), 30_168, true);
-        batcher.setSolanaConfig(makeAddr("solanaAdapter"), bytes32(uint256(0xABCD)));
-        batcher.setSolanaShareOftPeer(bytes32(uint256(0x5678)));
+        batcher.setSolanaDestination(bytes32(uint256(0xABCD)));
         vm.stopPrank();
         registry.setAuthorizedFactory(address(batcher), true);
         shareOFT.transferOwnership(address(batcher));

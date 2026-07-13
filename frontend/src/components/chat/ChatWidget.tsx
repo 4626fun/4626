@@ -32,6 +32,7 @@ import {
   type DmRecipientResolution,
 } from '@/lib/xmtp/socialIdentity'
 import { resolveClientAgentXmtpAddressLower } from '@/lib/xmtp/agentXmtpAddress'
+import { getAgentIdentity } from './agentIdentity'
 import { resolveDmRoute } from './dmRouting'
 import { ChatBar } from './ChatBar'
 import { ChatWindow } from './ChatWindow'
@@ -43,7 +44,9 @@ import { useChatActivation } from './useChatActivation'
 
 const MAX_OPEN_WINDOWS = 3
 const CANONICAL_CSW_INBOX_ADDRESS = resolveClientAgentXmtpAddressLower()
-const AGENT_DISPLAY_NAME = String(import.meta.env.VITE_AGENT_DISPLAY_NAME ?? 'akita').trim() || 'akita'
+const AGENT_IDENTITY = getAgentIdentity(CANONICAL_CSW_INBOX_ADDRESS)
+const AGENT_DISPLAY_NAME = AGENT_IDENTITY?.name ?? '4626'
+const AGENT_AVATAR_URL = AGENT_IDENTITY?.avatar ?? '/assets/base-app-icon-1024.png'
 const XMTP_ENV_LABEL = String(import.meta.env.VITE_XMTP_ENV ?? 'production').trim().toLowerCase() || 'production'
 const DM_PREVIEW_LOOKUP_DEBOUNCE_MS = 450
 
@@ -426,7 +429,7 @@ function ChatWidgetInner() {
         : newDmPreviewCacheRef.current.get(inputKey) ?? null
     const resolved = previewForInput ?? await resolveDmRecipient(input)
     if (!resolved) {
-      setNewDmError('Enter a valid Ethereum address or Basename (for example, akita)')
+      setNewDmError('Enter a valid Ethereum address or Basename (for example, 4626.base.eth)')
       return
     }
     newDmPreviewCacheRef.current.set(inputKey, resolved)
@@ -457,11 +460,12 @@ function ChatWidgetInner() {
       })
 
       if (!dmResult.ok && dmResult.reason === 'self_recipient' && agentAddress) {
-        setNewDmNotice('Use Akita to chat about your wallet. Opening Akita instead.')
+        setNewDmNotice('Use Agent 4626 to chat about your wallet. Opening 4626 instead.')
         destination = {
           ...destination,
           address: agentAddress,
           basenameHint: AGENT_DISPLAY_NAME,
+          avatarUrl: AGENT_AVATAR_URL,
         }
         dmResult = await startDm(agentAddress, {
           nameHint: AGENT_DISPLAY_NAME,
@@ -629,7 +633,7 @@ function ChatWidgetInner() {
                   if (newDmNotice) setNewDmNotice('')
                 }}
                 onKeyDown={(e) => { if (e.key === 'Enter') void handleStartDm() }}
-                placeholder="0x... or akita"
+                placeholder="0x... or 4626.base.eth"
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-brand-primary/40 font-mono"
               />
               {showBasenameAutocomplete && basenameAutocomplete && (

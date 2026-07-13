@@ -264,7 +264,6 @@ contract CreatorOracle is OApp, IOracle4626 {
     event QuoteUsdFeedSet(address indexed feed);
     // FIX: M-3 (4626-439) — emitted (via the deprecated entrypoint's revert path in tests / off-chain
     // call-simulation) so tooling can pick up migrations to broadcastAssetPriceWithFees.
-    event BroadcastEqualSplitCallAttempted(address indexed caller, uint256 msgValue, uint32[] dstEids);
 
     // ================================
     // ERRORS
@@ -295,8 +294,11 @@ contract CreatorOracle is OApp, IOracle4626 {
     error InvalidOriginEid(uint32 srcEid);
     error HubOnly();
     error StaleObservationWindow();
-    // FIX: M-3 (4626-439) — signalled when the legacy equal-split broadcast entrypoint is called.
-    error BroadcastEqualSplitDeprecated();
+    error NoDestinations();
+    error BroadcastLengthMismatch();
+    error ZeroBroadcastFee();
+    error InsufficientBroadcastFee();
+    error BroadcastRefundFailed();
 
     // ================================
     // CONSTRUCTOR
@@ -1201,30 +1203,6 @@ contract CreatorOracle is OApp, IOracle4626 {
     // ================================
 
     /**
-     * @notice DEPRECATED — see `broadcastAssetPriceWithFees`.
-     * @dev FIX: M-3 (4626-439) — the equal-split variant divided `msg.value / dstEids.length`
-     *      and used that as the fee for every destination. LayerZero fees differ per
-     *      destination chain, so any chain whose real fee exceeded the split amount
-     *      reverted mid-loop and the broadcast partially failed, while leaving excess
-     *      ETH stranded on non-refund paths. Rather than carry a footgun with an
-     *      attractive short signature, this entrypoint is now a hard revert that emits
-     *      a migration-signal event against off-chain call simulation. Callers must
-     *      switch to `broadcastAssetPriceWithFees(dstEids, options, fees)` and quote
-     *      per-destination native fees via `quote()` / `endpoint.quote(...)`.
-     * @custom:deprecated Use `broadcastAssetPriceWithFees` with per-chain fees.
-     */
-    function broadcastAssetPrice(uint32[] calldata dstEids, bytes calldata /* options */)
-        external
-        payable
-        returns (MessagingReceipt[] memory /* receipts */)
-    {
-        // Emit before revert so off-chain call-simulation / trace tooling surfaces the
-        // migration signal even though the transaction aborts.
-        emit BroadcastEqualSplitCallAttempted(msg.sender, msg.value, dstEids);
-        revert BroadcastEqualSplitDeprecated();
-    }
-
-    /**
      * @notice Broadcast price to other chains with per-destination LayerZero fees
      * @dev FIX: M-01 (4626-310) — the equal-split `broadcastAssetPrice` variant above
      *      divides `msg.value / dstEids.length` and uses that as the fee for every
@@ -1245,15 +1223,15 @@ contract CreatorOracle is OApp, IOracle4626 {
     ) external payable returns (MessagingReceipt[] memory receipts) {
         if (assetPriceUSD <= 0) revert InvalidPrice();
         if (!isPriceUpdater[msg.sender] && msg.sender != owner()) revert Unauthorized();
-        require(dstEids.length > 0, "No destinations");
-        require(dstEids.length == fees.length, "Length mismatch");
+        if (dstEids.length == 0) revert NoDestinations();
+        if (dstEids.length != fees.length) revert BroadcastLengthMismatch();
 
         uint256 totalFees;
         for (uint256 i = 0; i < fees.length; i++) {
-            require(fees[i] > 0, "Zero fee");
+            if (fees[i] == 0) revert ZeroBroadcastFee();
             totalFees += fees[i];
         }
-        require(msg.value >= totalFees, "Insufficient fee");
+        if (msg.value < totalFees) revert InsufficientBroadcastFee();
 
         receipts = new MessagingReceipt[](dstEids.length);
         bytes memory payload = abi.encode(assetPriceUSD, assetPriceTimestamp, assetSymbol);
@@ -1265,7 +1243,7 @@ contract CreatorOracle is OApp, IOracle4626 {
         uint256 remainder = msg.value - totalFees;
         if (remainder > 0) {
             (bool ok,) = payable(msg.sender).call{value: remainder}("");
-            require(ok, "Refund failed");
+            if (!ok) revert BroadcastRefundFailed();
         }
 
         emit AssetPriceBroadcast(dstEids, assetPriceUSD, assetPriceTimestamp);

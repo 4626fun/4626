@@ -85,10 +85,40 @@ describe('shouldShowParentCswAddOwnerPanel', () => {
         ownerInstallRequested: false,
         accountSignals: {
           canonicalCswAddress: '0xAb6d5C10b03300326cd7fab7267ae192842967b5',
+          embeddedEoaAddress: EOA,
         },
         baseWalletReady: true,
       }),
     ).toBe(true)
+  })
+
+  it('hides owner install in Base App until the Base Account wallet matches the parent CSW', () => {
+    expect(
+      shouldShowParentCswAddOwnerPanel({
+        inBaseApp: true,
+        signingStepComplete: false,
+        ownerInstallRequested: false,
+        accountSignals: {
+          canonicalCswAddress: CSW,
+          embeddedEoaAddress: EOA,
+        },
+        baseWalletReady: false,
+      }),
+    ).toBe(false)
+  })
+
+  it('hides owner install when there is no embedded EOA to add as owner', () => {
+    expect(
+      shouldShowParentCswAddOwnerPanel({
+        inBaseApp: true,
+        signingStepComplete: false,
+        ownerInstallRequested: false,
+        accountSignals: {
+          canonicalCswAddress: CSW,
+        },
+        baseWalletReady: true,
+      }),
+    ).toBe(false)
   })
 
   it('shows owner install for a connected base_account population until on-chain confirmation', () => {

@@ -11,7 +11,6 @@ import {OVaultFactory4626} from "@4626/shared/deploy/factories/OVaultFactory4626
 import {LotteryManager4626} from "@4626/shared/lottery/manager/LotteryManager4626.sol";
 import {VRFConsumer4626} from "@4626/shared/lottery/manager/VRFConsumer4626.sol";
 import {VaultActivationBatcher} from "@4626/shared/deploy/batchers/VaultActivationBatcher.sol";
-import {SolanaBridgeAdapter} from "@4626/shared/bridge/SolanaBridgeAdapter.sol";
 
 /**
  * @title DeployInfrastructure
@@ -27,7 +26,6 @@ import {SolanaBridgeAdapter} from "@4626/shared/bridge/SolanaBridgeAdapter.sol";
  *      │  3. LotteryManager4626   - Shared lottery service           │
  *      │  4. VRFConsumer4626  - Chainlink VRF hub                │
  *      │  5. VaultActivationBatcher  - Shared activation launcher       │
- *      │  6. SolanaBridgeAdapter     - Shared Solana bridge adapter     │
  *      └─────────────────────────────────────────────────────────────────┘
  *
  *      ┌─────────────────────────────────────────────────────────────────┐
@@ -91,7 +89,6 @@ contract DeployInfrastructure is Script {
     LotteryManager4626 public lotteryManager;
     VRFConsumer4626 public vrfConsumer;
     VaultActivationBatcher public vaultActivationBatcher;
-    SolanaBridgeAdapter public solanaBridgeAdapter;
 
     // ═══════════════════════════════════════════════════════════════════
     //                              MAIN
@@ -101,9 +98,8 @@ contract DeployInfrastructure is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
         string memory releaseTag = vm.envOr("DEPLOYMENT_EPOCH_TAG", string("v1.13.0"));
-        string memory outputPath = vm.envOr(
-            "BASE_SHARED_GLOBAL_OUTPUT_PATH", string.concat("./tmp/base-", releaseTag, "-shared-global.json")
-        );
+        string memory outputPath =
+            vm.envOr("BASE_SHARED_GLOBAL_OUTPUT_PATH", string.concat("./tmp/base-", releaseTag, "-shared-global.json"));
 
         _printHeader(deployer);
 
@@ -123,35 +119,30 @@ contract DeployInfrastructure is Script {
         );
 
         // 1. Registry4626
-        console.log("\n[1/6] Deploying Registry4626...");
+        console.log("\n[1/5] Deploying Registry4626...");
         registry = new Registry4626(deployer);
         console.log("       Address:", address(registry));
 
         // 2. OVaultFactory4626 (legacy deployment registrar)
-        console.log("\n[2/6] Deploying OVaultFactory4626 (legacy registrar)...");
+        console.log("\n[2/5] Deploying OVaultFactory4626 (legacy registrar)...");
         vaultFactory = new OVaultFactory4626(address(registry), deployer);
         console.log("       Address:", address(vaultFactory));
 
         // 3. VaultActivationBatcher (shared activation launcher)
-        console.log("\n[3/6] Deploying VaultActivationBatcher...");
+        console.log("\n[3/5] Deploying VaultActivationBatcher...");
         address permit2 = vm.envOr("PERMIT2", address(0x000000000022D473030F116dDEE9F6B43aC78BA3));
         vaultActivationBatcher = new VaultActivationBatcher(permit2, address(registry));
         console.log("       Address:", address(vaultActivationBatcher));
 
         // 4. LotteryManager4626 (shared service)
-        console.log("\n[4/6] Deploying LotteryManager4626...");
+        console.log("\n[4/5] Deploying LotteryManager4626...");
         lotteryManager = new LotteryManager4626(address(registry), deployer);
         console.log("       Address:", address(lotteryManager));
 
         // 5. VRFConsumer4626 (VRF hub)
-        console.log("\n[5/6] Deploying VRFConsumer4626...");
+        console.log("\n[5/5] Deploying VRFConsumer4626...");
         vrfConsumer = new VRFConsumer4626(address(registry), deployer);
         console.log("       Address:", address(vrfConsumer));
-
-        // 6. SolanaBridgeAdapter (shared bridge adapter)
-        console.log("\n[6/6] Deploying SolanaBridgeAdapter...");
-        solanaBridgeAdapter = new SolanaBridgeAdapter(address(registry), deployer);
-        console.log("       Address:", address(solanaBridgeAdapter));
 
         // ═══════════════════════════════════════════════════════════════
         //                    PHASE 2: CONFIGURATION
@@ -211,10 +202,6 @@ contract DeployInfrastructure is Script {
         console.log("[Config] Wiring LotteryManager to local VRF consumer...");
         lotteryManager.setLocalVRFConsumer(address(vrfConsumer));
         lotteryManager.setUseLocalVRF(true);
-
-        console.log("[Config] Wiring Solana bridge adapter to LotteryManager...");
-        solanaBridgeAdapter.setLotteryManager(address(lotteryManager));
-        lotteryManager.setAuthorizedSwapContract(address(solanaBridgeAdapter), true);
 
         vm.stopBroadcast();
 
@@ -290,7 +277,6 @@ contract DeployInfrastructure is Script {
         console.log("   VaultActivationBatcher: ", address(vaultActivationBatcher));
         console.log("   LotteryManager4626:  ", address(lotteryManager));
         console.log("   VRFConsumer4626: ", address(vrfConsumer));
-        console.log("   SolanaBridgeAdapter:    ", address(solanaBridgeAdapter));
         console.log(unicode"│                                                                 │");
         console.log(
             unicode"└─────────────────────────────────────────────────────────────────┘"
@@ -327,7 +313,6 @@ contract DeployInfrastructure is Script {
         console.log("   LOTTERY_MANAGER=", address(lotteryManager));
         console.log("   VRF_CONSUMER=", address(vrfConsumer));
         console.log("   VAULT_ACTIVATION_BATCHER=", address(vaultActivationBatcher));
-        console.log("   SOLANA_BRIDGE_ADAPTER=", address(solanaBridgeAdapter));
         console.log(unicode"│                                                                 │");
         console.log(
             unicode"└─────────────────────────────────────────────────────────────────┘"
@@ -378,10 +363,7 @@ contract DeployInfrastructure is Script {
         console.log(string.concat("HANDOFF:OVAULT_FACTORY=", vm.toString(address(vaultFactory))));
         console.log(string.concat("HANDOFF:LOTTERY_MANAGER=", vm.toString(address(lotteryManager))));
         console.log(string.concat("HANDOFF:VRF_CONSUMER=", vm.toString(address(vrfConsumer))));
-        console.log(
-            string.concat("HANDOFF:VAULT_ACTIVATION_BATCHER=", vm.toString(address(vaultActivationBatcher)))
-        );
-        console.log(string.concat("HANDOFF:SOLANA_BRIDGE_ADAPTER=", vm.toString(address(solanaBridgeAdapter))));
+        console.log(string.concat("HANDOFF:VAULT_ACTIVATION_BATCHER=", vm.toString(address(vaultActivationBatcher))));
     }
 
     function _writeSharedGlobalArtifact(string memory outputPath, string memory releaseTag) internal {
@@ -392,9 +374,7 @@ contract DeployInfrastructure is Script {
         vm.serializeAddress(artifactKey, "ovaultFactory", address(vaultFactory));
         vm.serializeAddress(artifactKey, "lotteryManager", address(lotteryManager));
         vm.serializeAddress(artifactKey, "vrfConsumer", address(vrfConsumer));
-        vm.serializeAddress(artifactKey, "vaultActivationBatcher", address(vaultActivationBatcher));
-        string memory json =
-            vm.serializeAddress(artifactKey, "solanaBridgeAdapter", address(solanaBridgeAdapter));
+        string memory json = vm.serializeAddress(artifactKey, "vaultActivationBatcher", address(vaultActivationBatcher));
         vm.writeJson(json, outputPath);
         console.log(string.concat("HANDOFF:BASE_SHARED_GLOBAL_OUTPUT_PATH=", outputPath));
     }
@@ -407,8 +387,6 @@ contract DeployInfrastructure is Script {
  */
 contract DeployVaultStack is Script {
     function run() external pure {
-        revert(
-            "DeployVaultStack retired: use app deploy-session flow (/deploy) with DeploymentBatcher phases"
-        );
+        revert("DeployVaultStack retired: use app deploy-session flow (/deploy) with DeploymentBatcher phases");
     }
 }

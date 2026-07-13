@@ -65,11 +65,16 @@ function createInvariantPublicClient(opts?: {
   burnStream?: `0x${string}`
   payoutRouterOwner?: `0x${string}`
   boostTimelockArmed?: boolean
+  boostManager?: `0x${string}`
+  vaultGaugeVoting?: `0x${string}`
+  currentSourceGaugeVotingGetter?: boolean
   ownerIsContract?: boolean
 }) {
   const burnStream = opts?.burnStream ?? ACTUAL_BURN_STREAM
   const owner = opts?.payoutRouterOwner ?? SAFE_OWNER
   const armed = opts?.boostTimelockArmed !== false
+  const boostManager = opts?.boostManager ?? '0x0000000000000000000000000000000000000000'
+  const vaultGaugeVoting = opts?.vaultGaugeVoting ?? '0x0000000000000000000000000000000000000000'
   const ownerIsContract = opts?.ownerIsContract !== false
   return {
     readContract: vi.fn(async (args: any) => {
@@ -113,6 +118,15 @@ function createInvariantPublicClient(opts?: {
           return '0x0000000000000000000000000000000000000000'
         case 'authorizedHubShareOftForwarders':
           return true
+        case 'boostManager':
+          return boostManager
+        case 'vaultGaugeVoting':
+          if (opts?.currentSourceGaugeVotingGetter) {
+            throw new Error('legacy getter unavailable')
+          }
+          return vaultGaugeVoting
+        case 've4626GaugeVoting':
+          return vaultGaugeVoting
         case 'getTaxHookCalldata':
           return [GAUGE, '0x12345678']
         default:
@@ -273,7 +287,7 @@ describe('keeper sweep handler', () => {
     }
   })
 
-  it('blocks completion when lottery boost timelock is unarmed (M2-03 / M-15)', async () => {
+  it('allows completion with an unarmed boost timelock while both boost sources are zero', async () => {
     const restoreEnv = applyEnv({
       KPR_API_KEY: 'test-key',
       KPR_PRIVATE_KEY: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -285,6 +299,56 @@ describe('keeper sweep handler', () => {
       const publicClient = createInvariantPublicClient({
         burnStream: EXPECTED_BURN_STREAM,
         boostTimelockArmed: false,
+        currentSourceGaugeVotingGetter: true,
+      })
+      const walletClient = {
+        writeContract: vi.fn(async () => SWEEP_UNSOLD_HASH),
+        sendTransaction: vi.fn(),
+      }
+      createPublicClientMock.mockReturnValue(publicClient as any)
+      createWalletClientMock.mockReturnValue(walletClient as any)
+
+      const req = createMockReq({
+        method: 'POST',
+        headers: { authorization: 'Bearer test-key' },
+        body: {
+          ccaLaunchArmAddress: STRATEGY,
+          attemptHookConfig: false,
+          invariants: {
+            creatorCoinAddress: CREATOR_COIN,
+            shareTokenAddress: SHARE_OFT,
+            gaugeControllerAddress: GAUGE,
+            burnStreamAddress: EXPECTED_BURN_STREAM,
+            payoutRouterAddress: PAYOUT_ROUTER,
+            payoutRecipientMode: 'payout_router',
+          },
+        },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.body?.success).toBe(true)
+      expect(res.body?.data?.completionStage).toBe('awaiting_owner_hook_config')
+      expect(res.body?.data?.invariantViolations).toEqual([])
+    } finally {
+      restoreEnv()
+    }
+  })
+
+  it('blocks completion when a boost source is configured before the timelock is armed', async () => {
+    const restoreEnv = applyEnv({
+      KPR_API_KEY: 'test-key',
+      KPR_PRIVATE_KEY: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      KEEPER_ENABLE_HOOK_CONFIG: 'false',
+      KEEPER_ENFORCE_COMPLETION_INVARIANTS: 'true',
+      BASE_RPC_URL: 'https://mainnet.base.org',
+    })
+    try {
+      const publicClient = createInvariantPublicClient({
+        burnStream: EXPECTED_BURN_STREAM,
+        boostTimelockArmed: false,
+        boostManager: '0x9999999999999999999999999999999999999999',
       })
       const walletClient = {
         writeContract: vi.fn(async () => SWEEP_UNSOLD_HASH),
@@ -317,7 +381,9 @@ describe('keeper sweep handler', () => {
       expect(res.body?.error).toBe('completion_invariant_failed')
       expect(res.body?.data?.invariantViolations).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ code: 'lottery_boost_timelock_not_armed' }),
+          expect.objectContaining({
+            code: 'lottery_boost_manager_set_while_timelock_unarmed',
+          }),
         ]),
       )
     } finally {

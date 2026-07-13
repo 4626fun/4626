@@ -10,12 +10,10 @@ import { isLocalDevOrigin } from '@/lib/flags/flags'
  * stored after login (`hasRefreshCredentials` = marker cookie OR a real
  * refresh token — cookie-mode logins return `refresh_token: "deprecated"`).
  *
- * On **localhost**, the HttpOnly refresh cookie on `privy.4626.fun` is a blocked
- * third-party cookie. Asserting the marker **before** auth makes the SDK attempt
- * `POST /api/v1/sessions` with `refresh_token: "deprecated"`, which 400s with
- * `missing_or_invalid_token`. Local dev therefore clears the marker while signed
- * out and only asserts it immediately before post-login `getAccessToken()` reads
- * (see `readPrivyAccessTokenWithRetries`) or after Privy reports authenticated.
+ * On **localhost**, `PrivyClientProvider` pins the SDK to `auth.privy.io`
+ * local-storage sessions. A marker cookie falsely advertises server-cookie
+ * credentials and makes authenticated SIWE link calls omit their bearer token.
+ * Local dev must therefore keep the marker absent, even after authentication.
  *
  * On **\*.4626.fun** production hosts the refresh cookie is first-party via the
  * reverse proxy, so the legacy interval assert remains as belt-and-suspenders.
@@ -66,6 +64,10 @@ export function isLocalDevPrivySessionMarkerMode(): boolean {
 }
 
 export function assertPrivySessionMarkerCookie(): void {
+  if (isLocalDevPrivySessionMarkerMode()) {
+    clearPrivySessionMarkerCookie()
+    return
+  }
   try {
     const secure = isSecureOrigin()
     document.cookie = `privy-session=t; path=/; max-age=2592000; SameSite=Strict${secure ? '; Secure' : ''}`
@@ -130,33 +132,13 @@ export function resetPrivyLoopbackSessionAfterAuthFailure(): void {
   }
 }
 
-/** True when loopback localStorage still holds a non-deprecated Privy session. */
-export function hasPersistedPrivyLoopbackSession(): boolean {
-  if (typeof window === 'undefined') return false
-  try {
-    const refresh = window.localStorage.getItem(PRIVY_REFRESH_TOKEN_STORAGE_KEY)
-    if (refresh && refresh !== PRIVY_DEPRECATED_REFRESH_TOKEN) return true
-    const token = window.localStorage.getItem('privy:token')
-    return Boolean(String(token ?? '').trim())
-  } catch {
-    return false
-  }
-}
-
 export function applyLoopbackPrivySessionMarkerShim(): void {
   if (typeof window === 'undefined' || typeof document === 'undefined') return
   if (!shouldUseLoopbackPrivySessionMarkerShim()) return
 
   if (isLocalDevPrivySessionMarkerMode()) {
     clearPrivyServerCookieModeStorage()
-    // OAuth redirect returns reload the page while Privy still holds a session in
-    // localStorage. Assert the marker early so oauth/link can attach the auth token.
-    if (hasPersistedPrivyLoopbackSession()) {
-      assertPrivySessionMarkerCookie()
-    } else {
-      // Signed-out localhost loads must not advertise refresh credentials.
-      clearPrivySessionMarkerCookie()
-    }
+    clearPrivySessionMarkerCookie()
     return
   }
 

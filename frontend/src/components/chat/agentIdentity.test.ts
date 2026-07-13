@@ -28,8 +28,11 @@ describe('getAgentIdentity', () => {
     const result = getAgentIdentity(PROTOCOL_CSW_ADDRESS)
 
     expect(result).not.toBeNull()
-    expect(result?.name).toBe('akita')
-    expect(result?.avatar).toBe('/base/base-square-blue.svg')
+    expect(result).toEqual({
+      name: '4626',
+      subtitle: 'Agent 4626',
+      avatar: '/assets/base-app-icon-1024.png',
+    })
   })
 
   it('returns null for the operator canonical CSW inbox address', async () => {
@@ -47,7 +50,7 @@ describe('getAgentIdentity', () => {
     const result = getAgentIdentity(uppercased)
 
     expect(result).not.toBeNull()
-    expect(result?.name).toBe('akita')
+    expect(result?.name).toBe('4626')
   })
 
   it('returns null for the Privy embedded EOA owner (delegated signer, not identity)', async () => {

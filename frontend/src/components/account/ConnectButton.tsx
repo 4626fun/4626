@@ -360,7 +360,7 @@ export function ConnectButton({
   const { me: accountProfile, refresh: refreshAccountProfile } = useAccountMe()
   const [disconnectingMainWallet, setDisconnectingMainWallet] = useState(false)
   const [trayTab, setTrayTab] = useState<'tokens' | 'activity'>('tokens')
-  const [traySection, setTraySection] = useState<'economy' | 'portfolio' | 'points'>('portfolio')
+  const [traySection, setTraySection] = useState<'identity' | 'portfolio' | 'points'>('identity')
   const privyStatus = usePrivyClientStatus()
   const prefersPrivyWalletLogin = privyStatus === 'ready'
   const shouldPreferWalletLogin = useMemo(() => {
@@ -456,7 +456,7 @@ export function ConnectButton({
     mode: 'app',
   })
 
-  const defaultTraySection = creatorEconomy.view.preferEconomyTab ? 'economy' : 'portfolio'
+  const defaultTraySection = 'identity' as const
 
   const trayWalletKey = useMemo(
     () => trayWalletSources.map((wallet) => wallet.address.toLowerCase()).sort().join(','),
@@ -592,7 +592,7 @@ export function ConnectButton({
       }
       if (buttonState === 'hydrating') return
       const customEvent = event as CustomEvent<AccountTrayOpenDetail>
-      const section = customEvent.detail?.section ?? 'portfolio'
+      const section = customEvent.detail?.section ?? 'identity'
       const nextTab = customEvent.detail?.tab ?? (section === 'portfolio' ? 'tokens' : trayTab)
       setTraySection(section)
       setTrayTab(nextTab)
@@ -709,7 +709,7 @@ export function ConnectButton({
                   <div className="h-px bg-white/8 my-2" />
                 </>
               ) : null}
-              {auth.hasSession && traySection === 'economy' ? (
+              {auth.hasSession && traySection === 'identity' ? (
                 <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-3 pt-1">
                   <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-400">
                     {creatorEconomy.view.symbolDisplay} economy
@@ -873,7 +873,7 @@ export function ConnectButton({
             closeAccessibilityLabel="Close account menu"
           >
               <RelayTrayPrimaryTabs section={traySection} onChange={setTraySection} />
-              {traySection === 'economy' ? (
+              {traySection === 'identity' ? (
                 <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-3 pt-1">
                   <div className="mb-2 rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[12px] text-zinc-400">
                     Signed in. Connect your main wallet to finish setup.
@@ -1101,14 +1101,14 @@ export function ConnectButton({
 }
 
 export function RelayTrayPrimaryTabs(props: {
-  section: 'economy' | 'portfolio' | 'points'
-  onChange: (section: 'economy' | 'portfolio' | 'points') => void
+  section: 'identity' | 'portfolio' | 'points'
+  onChange: (section: 'identity' | 'portfolio' | 'points') => void
   /** Defaults to all three tabs. Callers that don't offer a Portfolio surface
    * (e.g. the waitlist tray, which has no wagmi/portfolio data) can pass a
    * narrower list instead of duplicating this tab-bar component. */
-  sections?: readonly ('economy' | 'portfolio' | 'points')[]
+  sections?: readonly ('identity' | 'portfolio' | 'points')[]
 }) {
-  const sections = props.sections ?? (['economy', 'portfolio', 'points'] as const)
+  const sections = props.sections ?? (['identity', 'portfolio', 'points'] as const)
   return (
     <div className="px-4 pt-1 pb-2">
       <div className="inline-flex items-center gap-1 rounded-lg border border-white/8 bg-black/20 p-1">
@@ -1123,7 +1123,7 @@ export function RelayTrayPrimaryTabs(props: {
                 : 'text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200'
             }`}
           >
-            {value === 'economy' ? 'Economy' : value === 'portfolio' ? 'Portfolio' : 'Points'}
+            {value === 'identity' ? 'Identity' : value === 'portfolio' ? 'Portfolio' : 'Points'}
           </button>
         ))}
       </div>

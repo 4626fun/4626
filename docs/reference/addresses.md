@@ -5,9 +5,14 @@ sidebar_position: 1
 
 # Contract Addresses
 
-Canonical deployed contract addresses for 4626 on Base mainnet (**v1.18.0-greenfield**).
+Canonical deployed contract addresses for 4626 on Base mainnet. Shared
+infrastructure is the **v1.18.0** stack; new per-creator launches use the
+**v1.19.0** bytecode/CREATE2 epoch.
 
-> **Post-broadcast:** on-chain cutover complete 2026-07-08. Release packet: [`v1.18.0-greenfield.md`](../_internal/deployment-releases-legacy/v1.18.0-greenfield.md). Handoff: `tmp/base-v1.18.0-handoff.env`.
+> **v1.19 partial refresh:** release packet:
+> [`v1.19.0-partial-refresh.md`](../_internal/deployment-releases-legacy/v1.19.0-partial-refresh.md).
+> This reuses the v1.18 shared addresses and changes only bytecode/codeIds,
+> Phase2 module wiring, adapter LM configuration, and the launch namespace.
 
 > **Cutover complete (2026-07-08):** treasury Safe wiring, AMOE router `0x18D180…` on manager (updated **2026-07-11** to remediation LM `0xB68F359e…`), bytecode store seeded, Vercel production/development env synced, legacy v1.16.1 manager AMOE relayer kill-switched. Preview env vars remain dashboard-only (Vercel CLI skips preview targets).
 
@@ -26,6 +31,7 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 | Contract | Address |
 |----------|---------|
 | Registry4626 | `0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0` |
+| RegistryBootstrap4626 | `0x5CF9E2504E679edd6828af3f5B8375C61F4D92aB` |
 | OVaultFactory4626 | `0x70d0D2411D362BA50821389383Fa6B829d736232` |
 | VaultActivationBatcher | `0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3` |
 | LotteryManager4626 | `0xB68F359e01626Ec5d15C624037311C70DacAba43` |
@@ -44,9 +50,19 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 | DeploymentBatcherUtilsHelper | `0xCBf24949Fc99e7C9b5e16e15a423543930fd4A52` |
 
 Notes:
-- **v1.18.0-greenfield** fresh shared/global + phased deploy infra under epoch tag `v1.18.0`. Phase 3 remains **45% Charm + 45% Ajna + 10% idle**; Solana is **ShareOFT mesh at Phase 2 finalize** (~30% via Pipe A).
+- **v1.18.0** remains the shared/global infrastructure epoch. **v1.19.0** is
+  the per-creator bytecode and CREATE2 namespace for new launches.
+- `RegistryBootstrap4626` is an authorized factory on Registry4626 for ad hoc /
+  single-tx token registration + first-time field binds (vault, wrapper, shareOFT,
+  oracle, gauge, optional Solana mesh). Owner: `0xB05Cf0…FdD`. Deploy tx:
+  [`0xe93ca34b…`](https://basescan.org/tx/0xe93ca34bfe68b5a9b21d19520bb260f8a219de51cf81dfc5cca89f67d9be3553);
+  authorize tx:
+  [`0xd1d838dc…`](https://basescan.org/tx/0xd1d838dcb95b48b6eb19dce8147c3e4faa3145cf36512b8aab3eb463cb42d153)
+  (2026-07-12). Bribes factory left unset until ve■4626 canary.
 - `DeploymentBatcher` deploys as a slim shell; helpers and `DeploymentBatcherPhase1Module` wire post-deploy via protocol treasury Safe (`wireDeploymentHelpers` + `setPhase1Module`).
-- **New vault launches** use **Phase1Module immutables** (`phase1Module()` → `0x808fC8…`), not batcher-shell module getters until Safe wiring completes.
+- **New vault launches** use active module immutables. The shell
+  `lotteryManager()` getter is historical/non-authoritative after the Phase2
+  hot-swap.
 - Pre-v1.18.0 batchers (including `0xA9024e…` v1.16.1) are deprecated for **new vault launches**.
 
 ### Deprecated infrastructure
@@ -92,13 +108,14 @@ Do **not** set `PROTOCOL_AUTOMATION_SAFE` to the treasury address. Phase 3 deplo
 4. Republish allowlist + points-ledger Merkle roots on the new router (`/api/v1/lottery/amoe/publish-cron` or manual ops). Roots are **one-shot per epoch** on each router address.
 5. Confirm signed AMOE messages embed `Lottery Manager: 0xB68F359e01626Ec5d15C624037311C70DacAba43` (nonce API reads live `LOTTERY_MANAGER` env).
 
-## Environment cutover (v1.18.0-greenfield)
+## Environment for v1.19.0 launches
 
 After an infra epoch deploy, update **local `.env`**, **Vercel** (`production`, `preview`, `development`), and any operator host env to these keys. Canonical values:
 
-| Server env | Client (Vite) env | v1.18.0-greenfield value |
+| Server env | Client (Vite) env | Current value |
 |------------|-------------------|---------------------------|
 | `REGISTRY_4626` | `VITE_REGISTRY` | `0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0` |
+| `REGISTRY_BOOTSTRAP_4626` | — | `0x5CF9E2504E679edd6828af3f5B8375C61F4D92aB` |
 | `OVAULT_FACTORY` | `VITE_FACTORY` | `0x70d0D2411D362BA50821389383Fa6B829d736232` |
 | `VAULT_ACTIVATION_BATCHER` | `VITE_VAULT_ACTIVATION_BATCHER` | `0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3` |
 | `LOTTERY_MANAGER` | `VITE_LOTTERY_MANAGER` | `0xB68F359e01626Ec5d15C624037311C70DacAba43` |
@@ -109,9 +126,7 @@ After an infra epoch deploy, update **local `.env`**, **Vercel** (`production`, 
 | `DEPLOYMENT_BATCHER_AUTO_HANDOFF` | `VITE_DEPLOYMENT_BATCHER_AUTO_HANDOFF` | `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
 | `SOLANA_BRIDGE_ADAPTER` | `VITE_SOLANA_BRIDGE_ADAPTER` | `0x9A61814082A26192DD9Cb201b44058506685Be60` |
 | `LOTTERY_AMOE_ROUTER` | — | `0x18D1806cfe044de1eb4652ab30Bf6937f8dfc0A7` |
-| — | `VITE_DEPLOYMENT_VERSION` | `v1.18.0` |
-
-Sync local env from handoff: `./script/sync-greenfield-env-from-handoff.sh tmp/base-v1.18.0-handoff.env`
+| — | `VITE_DEPLOYMENT_VERSION` | `v1.19.0` |
 
 `VITE_DEPLOYMENT_VERSION` pins the CREATE2 namespace for **new vault launches**.
 

@@ -62,7 +62,7 @@ const A2A_SKILLS = [
 
 const fallbackRegistration: RegistrationFile = {
   type: REGISTRATION_TYPE,
-  name: '4626 Agent',
+  name: '4626',
   description:
     'Keepr agent for 4626 on Base. Chat over XMTP, call the public REST API, request x402-gated ERC-8004 wallet reviews, and query vault, lottery, and reputation data for creator coins and share tokens.',
   image: BASE_APP_ICON_URL,
@@ -330,7 +330,7 @@ export function buildAgentRegistration(origin: string): {
     return { error: registryConfig.error, missing: registryConfig.missing }
   }
 
-  const name = (process.env.ERC8004_AGENT_NAME || '').trim() || base.name || '4626 Agent'
+  const name = (process.env.ERC8004_AGENT_NAME || '').trim() || base.name || '4626'
   const description =
     (process.env.ERC8004_AGENT_DESCRIPTION || '').trim() || base.description || 'Agent API for 4626 on Base.'
   const imageRaw = (process.env.ERC8004_AGENT_IMAGE_URL || '').trim() || base.image || `${origin}/assets/base-app-icon-1024.png?v=${BRAND_ASSET_VERSION}`

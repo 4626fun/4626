@@ -14,17 +14,16 @@ contract VanitySharedGlobalCatalogTest is Test {
         assertEq(vm.parseJsonUint(json, ".chainId"), 8453);
         assertEq(vm.parseJsonString(json, ".vanitySuffix"), "4626");
         assertEq(vm.parseJsonString(json, ".recommendedEpochTag"), "v1.8.1");
-        assertEq(
-            vm.parseJsonString(json, ".recommendedManifestPath"),
-            "deployments/base/v1.8.1-vanity-manifest.json"
-        );
+        assertEq(vm.parseJsonString(json, ".recommendedManifestPath"), "deployments/base/v1.8.1-vanity-manifest.json");
         assertEq(vm.parseJsonString(json, ".phase1VanityTargets[0].contractName"), "UniversalBytecodeStoreV2");
         assertEq(vm.parseJsonString(json, ".phase1VanityTargets[1].contractName"), "UniversalCreate2DeployerFromStore");
         assertEq(vm.parseJsonString(json, ".phase1VanityTargets[2].contractName"), "CreatorOVaultCoreModule");
         assertEq(vm.parseJsonString(json, ".phase1VanityTargets[3].contractName"), "OVaultStrategiesModule");
         assertEq(vm.parseJsonString(json, ".phase1VanityTargets[4].contractName"), "OVaultAdminModule");
         assertEq(vm.parseJsonString(json, ".phase1VanityTargets[5].contractName"), "DeploymentBatcher");
-        assertTrue(vm.parseJsonBool(json, ".phase1VanityTargets[5].suffixRequired"), "batcher should remain suffix-enforced");
+        assertTrue(
+            vm.parseJsonBool(json, ".phase1VanityTargets[5].suffixRequired"), "batcher should remain suffix-enforced"
+        );
         assertEq(
             vm.parseJsonString(json, ".phase1VanityTargets[5].referenceSaltTag"),
             "4626:DeploymentBatcher:v1.7.1-r2-lottery3f7",
@@ -49,8 +48,9 @@ contract VanitySharedGlobalCatalogTest is Test {
         assertEq(vm.parseJsonString(json, ".deferredTargets[1].contractName"), "Registry4626");
         assertEq(vm.parseJsonString(json, ".deferredTargets[2].contractName"), "LotteryManager4626");
         assertEq(vm.parseJsonString(json, ".deferredTargets[3].contractName"), "VRFConsumer4626");
-        assertEq(vm.parseJsonString(json, ".deferredTargets[4].contractName"), "SolanaBridgeAdapter");
-        assertEq(vm.parseJsonAddress(json, ".deferredTargets[1].currentAddress"), 0x888506B92181c57A2fD06516FFFb6F375b7A4626);
+        assertEq(
+            vm.parseJsonAddress(json, ".deferredTargets[1].currentAddress"), 0x888506B92181c57A2fD06516FFFb6F375b7A4626
+        );
         assertEq(vm.parseJsonAddress(json, ".deferredTargets[2].currentAddress"), address(0));
 
         assertEq(vm.parseJsonString(json, ".namingTaxonomy[0].name"), "Factory");
@@ -64,8 +64,7 @@ contract VanitySharedGlobalCatalogTest is Test {
 
         assertEq(vm.parseJsonString(json, ".renameCandidates[0].contractName"), "OVaultFactory4626");
         assertEq(
-            vm.parseJsonString(json, ".renameCandidates[0].recommendedName"),
-            "LegacyCreatorOVaultDeploymentRegistry"
+            vm.parseJsonString(json, ".renameCandidates[0].recommendedName"), "LegacyCreatorOVaultDeploymentRegistry"
         );
         assertEq(vm.parseJsonString(json, ".renameCandidates[0].status"), "deferred");
         assertEq(
@@ -78,24 +77,16 @@ contract VanitySharedGlobalCatalogTest is Test {
         string memory json = vm.readFile(CATALOG_PATH);
 
         assertEq(
-            vm.parseJsonAddress(json, ".baseMainnetDefaults.create2Factory"),
-            0x4e59b44847b379578588920cA78FbF26c0B4956C
+            vm.parseJsonAddress(json, ".baseMainnetDefaults.create2Factory"), 0x4e59b44847b379578588920cA78FbF26c0B4956C
         );
-        assertEq(
-            vm.parseJsonAddress(json, ".baseMainnetDefaults.registry"),
-            0x888506B92181c57A2fD06516FFFb6F375b7A4626
-        );
+        assertEq(vm.parseJsonAddress(json, ".baseMainnetDefaults.registry"), 0x888506B92181c57A2fD06516FFFb6F375b7A4626);
         assertEq(
             vm.parseJsonAddress(json, ".baseMainnetDefaults.vaultActivationBatcher"),
             0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB
         );
+        assertEq(vm.parseJsonAddress(json, ".baseMainnetDefaults.lotteryManager"), address(0));
         assertEq(
-            vm.parseJsonAddress(json, ".baseMainnetDefaults.lotteryManager"),
-            address(0)
-        );
-        assertEq(
-            vm.parseJsonAddress(json, ".baseMainnetDefaults.ajnaFactory"),
-            0x214f62B5836D83f3D6c4f71F174209097B1A779C
+            vm.parseJsonAddress(json, ".baseMainnetDefaults.ajnaFactory"), 0x214f62B5836D83f3D6c4f71F174209097B1A779C
         );
     }
 }

@@ -3,16 +3,13 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import {MockAgentTokenV4} from "test/mocks/MockAgentTokenV4.sol";
-import {AgentOVault} from "@4626/agent/vault/AgentOVault.sol";
-import {AgentOVaultCoreModule} from "@4626/agent/vault/modules/AgentOVaultCoreModule.sol";
-import {OVaultAdminModule} from "@4626/shared/vault/modules/OVaultAdminModule.sol";
-import {OVaultStrategiesModule} from "@4626/shared/vault/modules/OVaultStrategiesModule.sol";
 import {IRegistry4626} from "@4626/shared/interfaces/core/IRegistry4626.sol";
 import {Registry4626} from "@4626/shared/core/Registry4626.sol";
 
 contract AgentRegistryVaultKindTest is Test {
     Registry4626 internal registry;
     MockAgentTokenV4 internal token;
+    address internal factory = address(0xFACA);
 
     function setUp() public {
         registry = new Registry4626(address(this));
@@ -33,5 +30,58 @@ contract AgentRegistryVaultKindTest is Test {
         IRegistry4626.AgentIntegrationMeta memory stored = registry.getAgentIntegrationMeta(address(token));
         assertEq(uint256(stored.vaultKind), uint256(IRegistry4626.VaultKind.Agent));
         assertEq(uint256(registry.getVaultKind(address(token))), uint256(IRegistry4626.VaultKind.Agent));
+    }
+
+    function test_setAgentIntegrationMeta_authorizedFactory() public {
+        registry.setAuthorizedFactory(factory, true);
+
+        IRegistry4626.AgentIntegrationMeta memory meta = IRegistry4626.AgentIntegrationMeta({
+            vaultKind: IRegistry4626.VaultKind.Agent,
+            nativeAgentVault: address(0xBEEF),
+            taxRecipient: address(0),
+            taxAccountingAdapter: address(0),
+            pairToken: address(0),
+            uniswapV2Pair: address(0),
+            implementationFingerprint: bytes32(0)
+        });
+
+        vm.prank(factory);
+        registry.setAgentIntegrationMeta(address(token), meta);
+
+        assertEq(uint256(registry.getVaultKind(address(token))), uint256(IRegistry4626.VaultKind.Agent));
+    }
+
+    function test_setAgentIntegrationMeta_unauthorizedReverts() public {
+        IRegistry4626.AgentIntegrationMeta memory meta = IRegistry4626.AgentIntegrationMeta({
+            vaultKind: IRegistry4626.VaultKind.Agent,
+            nativeAgentVault: address(0),
+            taxRecipient: address(0),
+            taxAccountingAdapter: address(0),
+            pairToken: address(0),
+            uniswapV2Pair: address(0),
+            implementationFingerprint: bytes32(0)
+        });
+
+        vm.prank(address(0xBAD));
+        vm.expectRevert(Registry4626.NotAuthorized.selector);
+        registry.setAgentIntegrationMeta(address(token), meta);
+    }
+
+    function test_getVaultKind_defaultsToCreator() public view {
+        assertEq(uint256(registry.getVaultKind(address(token))), uint256(IRegistry4626.VaultKind.Creator));
+    }
+
+    function test_setAgentIntegrationMeta_creatorExplicit() public {
+        IRegistry4626.AgentIntegrationMeta memory meta = IRegistry4626.AgentIntegrationMeta({
+            vaultKind: IRegistry4626.VaultKind.Creator,
+            nativeAgentVault: address(0),
+            taxRecipient: address(0),
+            taxAccountingAdapter: address(0),
+            pairToken: address(0),
+            uniswapV2Pair: address(0),
+            implementationFingerprint: bytes32(0)
+        });
+        registry.setAgentIntegrationMeta(address(token), meta);
+        assertEq(uint256(registry.getVaultKind(address(token))), uint256(IRegistry4626.VaultKind.Creator));
     }
 }

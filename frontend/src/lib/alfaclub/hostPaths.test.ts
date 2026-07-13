@@ -5,6 +5,7 @@ import {
   ALFACLUB_ROOMS_PATH,
   ALFACLUB_SAFETY_PATH,
   buildAlfaClubAbsoluteUrl,
+  buildAlfaClubRedirectLocation,
   resolveAlfaClubCanonicalPath,
 } from '@/lib/alfaclub/hostPaths'
 
@@ -13,11 +14,11 @@ describe('resolveAlfaClubCanonicalPath', () => {
     expect(resolveAlfaClubCanonicalPath('/alfaclub')).toBe(ALFACLUB_ROOMS_PATH)
     expect(resolveAlfaClubCanonicalPath('/alfaclub/trading-rooms')).toBe(ALFACLUB_ROOMS_PATH)
     expect(resolveAlfaClubCanonicalPath('/trading-rooms/')).toBe(ALFACLUB_ROOMS_PATH)
-    expect(resolveAlfaClubCanonicalPath('/alfaclub/key-safety')).toBe(ALFACLUB_SAFETY_PATH)
-    expect(resolveAlfaClubCanonicalPath('/key-safety')).toBe(ALFACLUB_SAFETY_PATH)
-    expect(resolveAlfaClubCanonicalPath('/alfaclub/liquidity')).toBe(ALFACLUB_POOLS_PATH)
-    expect(resolveAlfaClubCanonicalPath('/alfaclub/liquidity-pools')).toBe(ALFACLUB_POOLS_PATH)
-    expect(resolveAlfaClubCanonicalPath('/liquidity-pools')).toBe(ALFACLUB_POOLS_PATH)
+    expect(resolveAlfaClubCanonicalPath('/alfaclub/key-safety')).toBe(ALFACLUB_ROOMS_PATH)
+    expect(resolveAlfaClubCanonicalPath('/key-safety')).toBe(ALFACLUB_ROOMS_PATH)
+    expect(resolveAlfaClubCanonicalPath('/alfaclub/liquidity')).toBe(ALFACLUB_ROOMS_PATH)
+    expect(resolveAlfaClubCanonicalPath('/alfaclub/liquidity-pools')).toBe(ALFACLUB_ROOMS_PATH)
+    expect(resolveAlfaClubCanonicalPath('/liquidity-pools')).toBe(ALFACLUB_ROOMS_PATH)
   })
 
   it('returns null for unrelated paths', () => {
@@ -35,7 +36,7 @@ describe('buildAlfaClubAbsoluteUrl', () => {
         hash: '#panel',
         origin: 'https://alfaclub.4626.fun',
       }),
-    ).toBe('https://alfaclub.4626.fun/safety?roomId=42#panel')
+    ).toBe('https://alfaclub.4626.fun/rooms?roomId=42&tab=safety#panel')
 
     expect(
       buildAlfaClubAbsoluteUrl({
@@ -43,6 +44,21 @@ describe('buildAlfaClubAbsoluteUrl', () => {
         search: '?pool=0xabc',
         origin: 'https://alfaclub.4626.fun',
       }),
-    ).toBe('https://alfaclub.4626.fun/pools?pool=0xabc')
+    ).toBe('https://alfaclub.4626.fun/rooms?pool=0xabc&tab=liquidity')
+  })
+
+  it('forces the destination tab while preserving room and pool state', () => {
+    expect(
+      buildAlfaClubRedirectLocation({
+        pathname: ALFACLUB_SAFETY_PATH,
+        search: '?roomId=1659&tab=liquidity',
+      }),
+    ).toBe('/rooms?roomId=1659&tab=safety')
+    expect(
+      buildAlfaClubRedirectLocation({
+        pathname: ALFACLUB_POOLS_PATH,
+        search: '?roomId=9&pool=0xabc',
+      }),
+    ).toBe('/rooms?roomId=9&pool=0xabc&tab=liquidity')
   })
 })

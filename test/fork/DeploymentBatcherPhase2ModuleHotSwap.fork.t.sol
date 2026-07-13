@@ -20,7 +20,8 @@ import "@4626/shared/deploy/batchers/DeploymentBatcher.sol";
  *     forge test --match-path "test/fork/DeploymentBatcherPhase2ModuleHotSwap.fork.t.sol" -vv
  */
 contract DeploymentBatcherPhase2ModuleHotSwapForkTest is Test {
-    address constant LIVE_BATCHER = 0xa99058f424FB3ACC639F59355C65C40149030651;
+    address constant LIVE_BATCHER = 0x02D7abC547F8B1e7E2D7a919D8D1005918361750;
+    address constant CANONICAL_LOTTERY_MANAGER = 0xB68F359e01626Ec5d15C624037311C70DacAba43;
     address constant AKITA = 0x5b674196812451B7cEC024FE9d22D2c0b172fa75;
     address constant CANONICAL_CSW = 0xAb6d5C10b03300326CD7fAb7267Ae192842967b5;
 
@@ -39,14 +40,18 @@ contract DeploymentBatcherPhase2ModuleHotSwapForkTest is Test {
             batcher.poolManager(),
             batcher.taxHook(),
             batcher.protocolTreasury(),
-            batcher.lotteryManager(),
+            CANONICAL_LOTTERY_MANAGER,
             batcher.vaultActivationBatcher(),
             LIVE_BATCHER
         );
 
-        vm.prank(batcher.protocolTreasury());
+        vm.startPrank(batcher.protocolTreasury());
+        batcher.approvePhaseModuleCodehash(address(newModule), address(newModule).codehash);
         batcher.setPhase2Module(address(newModule));
+        vm.stopPrank();
         assertEq(address(batcher.phase2Module()), address(newModule), "hot-swap failed");
+        assertEq(newModule.lotteryManager(), CANONICAL_LOTTERY_MANAGER, "lottery manager mismatch");
+        deal(AKITA, CANONICAL_CSW, 101_000_001e18);
     }
 
     function test_fork_depositGate_throughLiveShell() public {

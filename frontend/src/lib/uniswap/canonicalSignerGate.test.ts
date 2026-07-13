@@ -1,9 +1,23 @@
 import { describe, expect, it } from 'vitest'
 
-import { evaluateCanonicalSignerGate } from './canonicalSignerGate'
+import { deriveCanonicalOwnerCheckStatus, evaluateCanonicalSignerGate } from './canonicalSignerGate'
 import { CANONICAL_CSW_ADDRESS } from '@/wallet/canonicalWalletPolicy'
 
 const USER_CANONICAL_CSW = '0xcccccccccccccccccccccccccccccccccccccccc'
+
+describe('deriveCanonicalOwnerCheckStatus', () => {
+  it('requires live owner probe evidence before returning owner', () => {
+    expect(deriveCanonicalOwnerCheckStatus({ probeResult: true })).toBe('owner')
+    expect(deriveCanonicalOwnerCheckStatus({ probeResult: false })).toBe('not-owner')
+    expect(deriveCanonicalOwnerCheckStatus({ probeResult: null })).toBe('pending')
+    expect(deriveCanonicalOwnerCheckStatus({ probeResult: undefined })).toBe('unknown')
+  })
+
+  it('keeps loading probes pending even when prior data is absent', () => {
+    expect(deriveCanonicalOwnerCheckStatus({ probeLoading: true })).toBe('pending')
+    expect(deriveCanonicalOwnerCheckStatus({ probeFetching: true })).toBe('pending')
+  })
+})
 
 describe('evaluateCanonicalSignerGate', () => {
   it('is not required in eoa mode', () => {

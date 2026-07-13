@@ -86,7 +86,7 @@ vi.mock('./chatBridge.js', () => ({
 
 vi.mock('../wallet/protocolXmtpAlertSender.js', () => ({
   isProtocolXmtpAlertDeliveryConfigured: vi.fn(() => true),
-  sendProtocolAgentXmtpDm: vi.fn(async () => true),
+  sendProtocolAgentXmtpDm: vi.fn(async () => ({ ok: true, reason: null })),
 }))
 
 describe('runPositionAlerts', () => {

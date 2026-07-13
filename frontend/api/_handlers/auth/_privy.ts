@@ -18,8 +18,10 @@ import {
 } from '@4626/server-core'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 import { isIdentityRecoveryRequiredError } from '../../../server/_lib/identity/identityRecovery.js'
-import { ensurePrivyUserEmbeddedWallet } from '../../../server/_lib/identity/privyEmbeddedWalletProvision.js'
-import { PrivyClient } from '@privy-io/server-auth'
+import {
+  createPrivyServerClientFromEnv,
+  ensurePrivyUserEmbeddedWallet,
+} from '../../../server/_lib/identity/privyEmbeddedWalletProvision.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -230,7 +232,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const client = new PrivyClient(auth.appId, auth.appSecret)
+    const client = createPrivyServerClientFromEnv()
     const verificationKey = getPrivyJwtVerificationKey()
     const claims = await client.verifyAuthToken(token, verificationKey ?? undefined)
     const loaded = await ensurePrivyUserEmbeddedWallet(client, claims.userId)
@@ -241,6 +243,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const classifiedSessionAddress =
       classified.canonicalSmartWallet?.address ??
       classified.activeOwnerWallet?.address ??
+      classified.embeddedEoa?.address ??
       classified.primaryWalletAddress ??
       null
     let sessionAddress = classifiedSessionAddress
@@ -259,6 +262,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const now = Date.now()
         const minInterval = getPrivyAuthDbSyncMinIntervalMs()
         const shouldSyncNow =
+          !persistedSessionAddress ||
           now - lastPrivyAuthDbSyncAtMs >= minInterval ||
           shouldBypassWalletSyncThrottle({
             persistedSessionAddress,
@@ -302,7 +306,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({
         success: false,
         error: 'No Privy wallet is ready yet. Finish email or wallet sign-in, then retry in a moment.',
-      } satisfies ApiEnvelope<never>)
+        code: 'PRIVY_WALLET_NOT_READY',
+      } satisfies ApiEnvelope<never> & { code: string })
     }
 
     const sessionToken = makeSessionToken({ address: sessionAddress })

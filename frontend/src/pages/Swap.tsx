@@ -49,6 +49,7 @@ import { resolveEmbeddedOwnerOnCanonicalCsw } from '@/lib/wallet/cswOwnerRead'
 import { isBaseAppDirectCswPath } from '@/lib/xmtp/baseAppDirectXmtp'
 import { type WalletMode } from '@/lib/uniswap/walletMode'
 import {
+  deriveCanonicalOwnerCheckStatus,
   evaluateCanonicalSignerGate,
   type CanonicalAuthStatus,
   type CanonicalOwnerCheckStatus,
@@ -347,16 +348,12 @@ export function Swap() {
     return 'unknown'
   }, [privyAuthenticated, privyClientStatus, privyReady])
   const canonicalOwnerCheckStatus = useMemo<CanonicalOwnerCheckStatus>(() => {
-    if (privyEmbeddedEoaCanOperateCanonicalQuery.isLoading || privyEmbeddedEoaCanOperateCanonicalQuery.isFetching) {
-      return 'pending'
-    }
-    if (privyEmbeddedEoaCanOperateCanonicalQuery.data === true) return 'owner'
-    if (privyEmbeddedEoaCanOperateCanonicalQuery.data === false) return 'not-owner'
-    if (privyEmbeddedEoaCanOperateCanonicalQuery.data === null) return 'pending'
-    if (accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true) return 'owner'
-    return 'unknown'
+    return deriveCanonicalOwnerCheckStatus({
+      probeLoading: privyEmbeddedEoaCanOperateCanonicalQuery.isLoading,
+      probeFetching: privyEmbeddedEoaCanOperateCanonicalQuery.isFetching,
+      probeResult: privyEmbeddedEoaCanOperateCanonicalQuery.data,
+    })
   }, [
-    accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw,
     privyEmbeddedEoaCanOperateCanonicalQuery.data,
     privyEmbeddedEoaCanOperateCanonicalQuery.isFetching,
     privyEmbeddedEoaCanOperateCanonicalQuery.isLoading,

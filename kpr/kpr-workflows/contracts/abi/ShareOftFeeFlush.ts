@@ -53,48 +53,6 @@ export const ShareOftFeeFlushABI = [
   },
   {
     type: 'function',
-    name: 'quoteRemoteFeeFlushRequest',
-    inputs: [
-      { name: 'dstEid', type: 'uint32' },
-      { name: 'executorNativeDrop', type: 'uint128' },
-    ],
-    outputs: [
-      {
-        name: 'fee',
-        type: 'tuple',
-        components: [
-          { name: 'nativeFee', type: 'uint256' },
-          { name: 'lzTokenFee', type: 'uint256' },
-        ],
-      },
-    ],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    name: 'requestRemoteFeeFlush',
-    inputs: [
-      { name: 'dstEid', type: 'uint32' },
-      { name: 'executorNativeDrop', type: 'uint128' },
-    ],
-    outputs: [
-      {
-        name: 'receipt',
-        type: 'tuple',
-        components: [
-          { name: 'guid', type: 'bytes32' },
-          { name: 'nonce', type: 'uint64' },
-          { name: 'fee', type: 'tuple', components: [
-            { name: 'nativeFee', type: 'uint256' },
-            { name: 'lzTokenFee', type: 'uint256' },
-          ]},
-        ],
-      },
-    ],
-    stateMutability: 'payable',
-  },
-  {
-    type: 'function',
     name: 'flushFees',
     inputs: [
       {

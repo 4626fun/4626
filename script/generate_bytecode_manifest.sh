@@ -14,11 +14,12 @@ if [[ -z "${RELEASE_TAG}" ]]; then
   exit 1
 fi
 
-OUT_FILE="$ROOT_DIR/deployments/base/${RELEASE_TAG}-bytecode-manifest.json"
+OUT_FILE="${BYTECODE_MANIFEST_OUT:-$ROOT_DIR/deployments/base/${RELEASE_TAG}-bytecode-manifest.json}"
+mkdir -p "$(dirname "$OUT_FILE")"
 
 cd "$ROOT_DIR"
 
-echo "Generating bytecode manifest → deployments/base/${RELEASE_TAG}-bytecode-manifest.json"
+echo "Generating bytecode manifest → ${OUT_FILE}"
 
 # Keep artifacts up to date, but ignore test/script compilation drift.
 forge build --skip test --skip script >/dev/null

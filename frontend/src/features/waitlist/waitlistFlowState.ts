@@ -1,3 +1,4 @@
+import type { InputOTPStatus } from '@/components/ui/InputOTP'
 import {
   isZoraLinkedFromAccountSignals,
   type UserExecutionAccountSignals,
@@ -146,6 +147,7 @@ export function shouldShowParentCswAddOwnerPanel(params: {
   connectTrack?: WaitlistConnectTrack
   ownerInstallRequested: boolean
   signingStepComplete: boolean
+  embeddedEoaAvailable?: boolean
   executionTrack?: WaitlistAccountWithCanonical['accountSignals']['executionTrack']
   accountSignals?: WaitlistAccountWithCanonical['accountSignals']
   parentEmbeddedOwnerOnChain?: boolean
@@ -161,10 +163,14 @@ export function shouldShowParentCswAddOwnerPanel(params: {
       ? params.accountSignals.canonicalCswAddress.trim()
       : ''
   if (!canonical) return false
+  const embeddedReady =
+    params.embeddedEoaAvailable === true ||
+    Boolean(params.accountSignals?.embeddedEoaAddress?.trim())
+  if (!embeddedReady) return false
   if (params.accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true) return false
 
   if (params.inBaseApp) {
-    return params.baseWalletReady !== false
+    return params.baseWalletReady === true
   }
 
   if (params.connectTrack === 'base-app-direct') return true
@@ -228,15 +234,13 @@ export function shouldAutoSubmitOtpCode(params: {
 /** Post-OTP submit button phases — setup must win over static "Verified" while bootstrap runs. */
 export type WaitlistOtpSubmitPhase = 'idle' | 'verifying' | 'setting_up' | 'verified'
 
-export type WaitlistOtpCodeStatus = 'default' | 'success' | 'error'
-
 /**
  * Resolves waitlist OTP submit UI phase. While OTP is accepted and join/bootstrap
  * is still in flight (`success` + `codeBusy`), prefer `setting_up` so the button
  * does not look finished during session bridge work.
  */
 export function resolveWaitlistOtpSubmitPhase(params: {
-  codeStatus: WaitlistOtpCodeStatus
+  codeStatus: InputOTPStatus
   codeBusy: boolean
 }): WaitlistOtpSubmitPhase {
   if (params.codeBusy && params.codeStatus === 'success') return 'setting_up'
@@ -275,9 +279,9 @@ export function getWaitlistOtpSubmitHelperText(phase: WaitlistOtpSubmitPhase): s
  * setup is still running. Error styling still surfaces immediately.
  */
 export function resolveWaitlistOtpInputStatus(params: {
-  codeStatus: WaitlistOtpCodeStatus
+  codeStatus: InputOTPStatus
   codeBusy: boolean
-}): WaitlistOtpCodeStatus {
+}): InputOTPStatus {
   if (params.codeStatus === 'error') return 'error'
   const phase = resolveWaitlistOtpSubmitPhase(params)
   return phase === 'verified' ? 'success' : 'default'

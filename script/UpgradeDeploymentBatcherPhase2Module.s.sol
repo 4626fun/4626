@@ -12,6 +12,7 @@ import {DeploymentBatcher, DeploymentBatcherPhase2Module} from "@4626/shared/dep
  * Required env:
  * - PRIVATE_KEY (any funded EOA for deploy-only; must equal batcher.protocolTreasury()
  *   when SET_PHASE2_MODULE=1)
+ * - LOTTERY_MANAGER (explicit canonical LotteryManager for the replacement module)
  * - DEPLOYMENT_BATCHER (defaults to live split Phase-1 batcher)
  *
  * Optional:
@@ -20,14 +21,16 @@ import {DeploymentBatcher, DeploymentBatcherPhase2Module} from "@4626/shared/dep
  *   execute the swap via frontend/scripts/ops/execute-set-phase2-module-safe.ts.
  */
 contract UpgradeDeploymentBatcherPhase2Module is Script {
-    address constant DEFAULT_DEPLOYMENT_BATCHER = 0xa99058f424FB3ACC639F59355C65C40149030651;
+    address constant DEFAULT_DEPLOYMENT_BATCHER = 0x02D7abC547F8B1e7E2D7a919D8D1005918361750;
 
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");
         address broadcaster = vm.addr(pk);
         address batcherAddr = vm.envOr("DEPLOYMENT_BATCHER", DEFAULT_DEPLOYMENT_BATCHER);
+        address lotteryManager = vm.envAddress("LOTTERY_MANAGER");
         bool setPhase2Module = vm.envOr("SET_PHASE2_MODULE", uint256(1)) == 1;
 
+        require(lotteryManager != address(0), "LOTTERY_MANAGER required");
         DeploymentBatcher batcher = DeploymentBatcher(batcherAddr);
         if (setPhase2Module) {
             require(broadcaster == batcher.protocolTreasury(), "broadcaster must equal protocolTreasury");
@@ -36,6 +39,7 @@ contract UpgradeDeploymentBatcherPhase2Module is Script {
         address previousModule = address(batcher.phase2Module());
         console2.log("Deployment batcher:", batcherAddr);
         console2.log("Previous phase2 module:", previousModule);
+        console2.log("Explicit LotteryManager:", lotteryManager);
 
         vm.startBroadcast(pk);
         DeploymentBatcherPhase2Module module = new DeploymentBatcherPhase2Module(
@@ -45,7 +49,7 @@ contract UpgradeDeploymentBatcherPhase2Module is Script {
             batcher.poolManager(),
             batcher.taxHook(),
             batcher.protocolTreasury(),
-            batcher.lotteryManager(),
+            lotteryManager,
             batcher.vaultActivationBatcher(),
             batcherAddr
         );
@@ -61,5 +65,6 @@ contract UpgradeDeploymentBatcherPhase2Module is Script {
             require(address(batcher.phase2Module()) == address(module), "phase2 module mismatch");
         }
         require(module.batcher() == batcherAddr, "module batcher mismatch");
+        require(module.lotteryManager() == lotteryManager, "module lottery manager mismatch");
     }
 }

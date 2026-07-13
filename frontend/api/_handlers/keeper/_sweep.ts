@@ -531,7 +531,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const lottery = await verifyLotteryProductionReadiness({
             publicClient,
             lotteryManager,
-            requireBoostTimelockArmed: true,
+            // Base-odds canary mode intentionally keeps the one-way timelock
+            // unarmed. The verifier only permits that state while both boost
+            // sources remain zero, so settlement stays fail-closed if either
+            // mutable source is configured before the Phase-3 window.
+            requireBoostTimelockArmed: false,
           })
           invariantChecksRun += lottery.checksRun
           for (const issue of lottery.violations) {

@@ -30,8 +30,6 @@ import {VaultActivationBatcher} from "@4626/shared/deploy/batchers/VaultActivati
  *         lotteryManager.setUseLocalVRF(true)
  *      3. Authorize VRF consumer to call back:
  *         vrfConsumer.setAuthorizedCaller(newLotteryManager, true)
- *      4. Authorize swap contracts (e.g., SolanaBridgeAdapter):
- *         lotteryManager.setAuthorizedSwapContract(adapter, true)
  *
  * @dev RUN COMMAND:
  *      forge script script/DeployTier1Upgrade.s.sol:DeployTier1Upgrade \
@@ -57,9 +55,6 @@ contract DeployTier1Upgrade is Script {
 
     /// @notice Existing VRF Consumer on Base (unchanged, just needs configuration)
     address constant VRF_CONSUMER = 0xE4AcDD5316EcF4D98301509968F0728EEDaaB68E;
-
-    /// @notice Existing SolanaBridgeAdapter on Base
-    address constant SOLANA_BRIDGE_ADAPTER = 0x700b4BBAf965c013123bAd02a6562FBa487aC0f1;
 
     /// @notice Canonical Permit2 on Base
     address constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
@@ -152,11 +147,6 @@ contract DeployTier1Upgrade is Script {
         // Enable local VRF mode (Base is the hub, VRF runs locally)
         newLotteryManager.setUseLocalVRF(true);
         console.log("  setUseLocalVRF: true");
-
-        // Authorize the SolanaBridgeAdapter as a swap contract
-        // (so it can call processSwapLottery for Solana-originated entries)
-        newLotteryManager.setAuthorizedSwapContract(SOLANA_BRIDGE_ADAPTER, true);
-        console.log("  setAuthorizedSwapContract(SolanaBridgeAdapter): true");
 
         // Configure bounded sponsorship defaults for cross-chain fees
         newLotteryManager.setSponsoredVrfMinSwapAmountUSD(SPONSORED_MIN_SWAP_USD);

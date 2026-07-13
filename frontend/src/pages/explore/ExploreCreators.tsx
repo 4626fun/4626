@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query'
+import { Globe2, List } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
 import { ExplorePageShell } from '@/components/explore/ExplorePageShell'
@@ -29,6 +31,17 @@ import { shouldShowExploreTableLoading } from '@/features/explore/exploreListNav
 import { useExploreCreatorsHeroMetrics } from '@/features/explore/useExploreCreatorsHeroMetrics'
 import { useExploreTableSparklines } from '@/features/explore/useExploreTableSparklines'
 import { resolveExploreRowTrend30d } from '@/features/explore/exploreTableSparklines'
+import {
+  buildCreatorWorldItems,
+  normalizeCreatorExploreView,
+  type CreatorExploreView,
+} from '@/features/explore/creatorWorld'
+
+const LazyCreatorWorldGallery3D = lazy(() =>
+  import('@/components/explore/CreatorWorldGallery3D').then((module) => ({
+    default: module.CreatorWorldGallery3D,
+  })),
+)
 
 const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
   volume: 'TOP_VOLUME_CREATORS_24H',
@@ -167,6 +180,48 @@ function getCoinKey(coin: ZoraCoin, fallbackIndex?: number): string {
   return `${coin.creatorAddress ?? ''}:${coin.symbol ?? ''}:${coin.name ?? ''}:${fallbackIndex ?? ''}`.toLowerCase()
 }
 
+function CreatorViewToggle({
+  value,
+  onChange,
+}: {
+  value: CreatorExploreView
+  onChange: (value: CreatorExploreView) => void
+}) {
+  const options = [
+    { value: 'table' as const, label: 'Table', icon: List },
+    { value: 'world' as const, label: 'World', icon: Globe2 },
+  ]
+
+  return (
+    <div
+      className="flex rounded-full border border-white/10 bg-white/[0.04] p-1"
+      role="group"
+      aria-label="Creator view"
+    >
+      {options.map((option) => {
+        const Icon = option.icon
+        const active = value === option.value
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            className={`flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition ${
+              active
+                ? 'bg-white text-black shadow-sm'
+                : 'text-zinc-400 hover:bg-white/8 hover:text-white'
+            }`}
+            aria-pressed={active}
+          >
+            <Icon className="size-3.5" />
+            {option.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 function deriveImmediateEthosUserkey(coin: ZoraCoin): string | null {
   const creator = typeof coin.creatorAddress === 'string' ? coin.creatorAddress.trim().toLowerCase() : ''
   if (/^0x[a-f0-9]{40}$/.test(creator)) return `address:${creator}`
@@ -260,6 +315,26 @@ export function ExploreCreators() {
   const [expandedFees, setExpandedFees] = useState<string | null>(null)
   const [collapseIdentity, setCollapseIdentity] = useState(false)
   const screenshotMode = useScreenshotMode()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const rawCreatorView = searchParams.get('view')
+  const creatorView = normalizeCreatorExploreView(rawCreatorView)
+  const handleCreatorViewChange = useCallback(
+    (nextView: CreatorExploreView) => {
+      const next = new URLSearchParams(searchParams)
+      if (nextView === 'world') next.set('view', 'world')
+      else next.delete('view')
+      setSearchParams(next)
+      window.scrollTo({ top: 0, behavior: 'auto' })
+    },
+    [searchParams, setSearchParams],
+  )
+
+  useEffect(() => {
+    if (rawCreatorView == null || rawCreatorView === 'world') return
+    const next = new URLSearchParams(searchParams)
+    next.delete('view')
+    setSearchParams(next, { replace: true })
+  }, [rawCreatorView, searchParams, setSearchParams])
 
   const { currentTimeFilter, currentSort, searchQuery, handleSearchChange, handleTimeFilterChange, handleSortChange } =
     useExploreSubnavParams({
@@ -482,6 +557,7 @@ export function ExploreCreators() {
   }, [baseDisplayCoins, clientEthosScoreByCoinKey, coinEthosUserkeys, coinsNeedingClientEthosLookup])
 
   const displayCoins = baseDisplayCoins
+  const creatorWorldItems = useMemo(() => buildCreatorWorldItems(displayCoins), [displayCoins])
 
   const hasScreenshotFallbackRows = useScreenshotFallback && displayCoins.length > 0
   const isSearchingDirectMatches =
@@ -526,6 +602,23 @@ export function ExploreCreators() {
     return () => window.clearTimeout(timer)
   }, [fetchNextPage, shouldAutoFetchForSearch])
 
+  useEffect(() => {
+    if (creatorView !== 'world') return
+    if (trimmedSearchQuery) return
+    if (creatorWorldItems.length >= 48 || hasNextPage !== true || isFetchingNextPage) return
+    const timer = window.setTimeout(() => {
+      fetchNextPage().catch(() => undefined)
+    }, 120)
+    return () => window.clearTimeout(timer)
+  }, [
+    creatorView,
+    creatorWorldItems.length,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    trimmedSearchQuery,
+  ])
+
   const onHorizontalControlsChange = useCallback(({ overflow, atLeftEdge }: { overflow: boolean; atLeftEdge: boolean }) => {
     setCollapseIdentity(overflow && !atLeftEdge && window.innerWidth <= 1024)
   }, [])
@@ -551,7 +644,7 @@ export function ExploreCreators() {
   return (
     <ExplorePageShell
       variant="table"
-      tablePending={tablePending}
+      tablePending={creatorView === 'table' && tablePending}
       tablePendingLabel="Loading creators…"
       subnav={
         <ExploreSubnav
@@ -566,6 +659,9 @@ export function ExploreCreators() {
           showTabs={false}
           showSearch={false}
           showMobileSortRow={false}
+          extraFilters={
+            <CreatorViewToggle value={creatorView} onChange={handleCreatorViewChange} />
+          }
           sortOptions={[
             { label: 'Volume', value: 'volume' },
             { label: 'Market cap', value: 'marketCap' },
@@ -576,7 +672,30 @@ export function ExploreCreators() {
         />
       }
       table={
-        <>
+        creatorView === 'world' ? (
+          isError && creatorWorldItems.length === 0 ? (
+            <ExploreTableMessage
+              title="Failed to load Creator World"
+              detail={(error as Error)?.message || 'Unknown error'}
+            />
+          ) : isLoading && creatorWorldItems.length === 0 ? (
+            <div
+              className="h-[min(72vh,760px)] min-h-[520px] animate-pulse rounded-3xl border border-white/10 bg-white/[0.03]"
+              aria-label="Loading Creator World"
+            />
+          ) : (
+            <Suspense
+              fallback={
+                <div
+                  className="h-[min(72vh,760px)] min-h-[520px] animate-pulse rounded-3xl border border-white/10 bg-white/[0.03]"
+                  aria-label="Loading Creator World"
+                />
+              }
+            >
+              <LazyCreatorWorldGallery3D items={creatorWorldItems} />
+            </Suspense>
+          )
+        ) : (
           <ExploreTableSurface
             bodyId="explore-creators-body"
             onBodyScroll={handleBodyScroll}
@@ -653,9 +772,15 @@ export function ExploreCreators() {
             rightAriaLabel="Scroll creators table right"
             collapseIdentity={collapseIdentity}
           />
-        </>
+        )
       }
-      footer={!isLoading && displayCoins.length > 0 ? `Showing ${displayCoins.length} creators` : null}
+      footer={
+        !isLoading && displayCoins.length > 0
+          ? creatorView === 'world'
+            ? `Exploring ${creatorWorldItems.length} creators`
+            : `Showing ${displayCoins.length} creators`
+          : null
+      }
     />
   )
 }

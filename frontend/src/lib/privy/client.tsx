@@ -10,6 +10,7 @@ import { latchPrivyClientStatus, type PrivyClientStatus } from './privyClientSta
 import {
   buildPrivyExternalWallets,
   buildPrivyProviderConfigs,
+  resolvePrivyProviderApiUrl,
   type PrivyClientMode,
 } from './providerConfig'
 import { PrivyWalletHooksContextProvider } from './walletHooksContext'
@@ -190,7 +191,10 @@ export function PrivyClientProvider(props: {
   // custom_api_url from app config and no-ops stray deprecated session refresh POSTs.
   // Loopback uses one origin-scoped App Client for every Privy surface.
   const resolvedClientId = resolvePrivyProviderClientId({ clientId, bypassCustomPrivyDomain })
-  const resolvedApiUrl = bypassCustomPrivyDomain ? (apiUrl ?? 'https://auth.privy.io') : apiUrl
+  const resolvedApiUrl = resolvePrivyProviderApiUrl({
+    configuredApiUrl: apiUrl,
+    bypassCustomPrivyDomain,
+  })
   const hasRuntimeConfig = Boolean(enabled && appId)
   const [runtimeStatus, setRuntimeStatus] = useState<PrivyClientStatus>('loading')
   const [forcedReady, setForcedReady] = useState(false)

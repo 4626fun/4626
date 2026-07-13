@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   ArrowLeft,
+  Bot,
   Copy,
   CornerUpLeft,
   ExternalLink,
@@ -332,7 +333,7 @@ export function ChatWindow({
     : null
   const headerSubline =
     conversationType === 'dm' && dmPeerAddress
-      ? (agentIdentity ? '4626 assistant' : identitySecondary)
+      ? (agentIdentity?.subtitle ?? identitySecondary)
       : null
   const copyablePeerAddress = conversationType === 'dm' ? dmPeerAddress : null
   const peerCreatorCoinHref = peerCreatorCoinAddress ? `/explore/creators/base/${peerCreatorCoinAddress}` : null
@@ -1229,7 +1230,10 @@ export function ChatWindow({
             onOpenProfile={handleOpenPeerProfile}
           />
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-zinc-100">{headerName}</div>
+            <div className="flex items-center gap-1.5">
+              <div className="truncate text-sm font-semibold text-zinc-100">{headerName}</div>
+              {agentIdentity ? <Bot className="h-3.5 w-3.5 shrink-0 text-violet-200" aria-label="AI agent" /> : null}
+            </div>
             {headerSubline ? (
               <div className="truncate text-[10px] text-zinc-500">{headerSubline}</div>
             ) : null}
@@ -1264,8 +1268,11 @@ export function ChatWindow({
                 aria-haspopup="menu"
                 aria-expanded={headerMenuOpen}
               >
-                <span className="block truncate text-sm font-semibold text-zinc-100">
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-zinc-100">
+                  <span className="truncate">
                   {headerName}
+                  </span>
+                  {agentIdentity ? <Bot className="h-3.5 w-3.5 shrink-0 text-violet-200" aria-label="AI agent" /> : null}
                 </span>
                 {headerSubline && (
                   <span className="block truncate text-[10px] text-zinc-500">
@@ -1342,7 +1349,10 @@ export function ChatWindow({
                 aria-haspopup="menu"
                 aria-expanded={headerMenuOpen}
               >
-                <span className={`block truncate font-medium text-zinc-200 ${isDesktopMinimized ? 'text-[13px]' : 'text-sm'}`}>{headerName}</span>
+                <span className={`flex items-center gap-1.5 font-medium text-zinc-200 ${isDesktopMinimized ? 'text-[13px]' : 'text-sm'}`}>
+                  <span className="truncate">{headerName}</span>
+                  {agentIdentity ? <Bot className="h-3.5 w-3.5 shrink-0 text-violet-200" aria-label="AI agent" /> : null}
+                </span>
                 {!isDesktopMinimized && headerSubline && (
                   <span className="block truncate text-[10px] text-zinc-500">{headerSubline}</span>
                 )}

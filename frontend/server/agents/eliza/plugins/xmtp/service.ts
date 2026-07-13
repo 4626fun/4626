@@ -19,6 +19,7 @@ import {
   type XmtpAgentReply,
 } from '../../../../_lib/messaging/xmtpInteractive.js'
 import { formatAiPromptGuidance, resolveInboundMenuText } from '../../../../_lib/messaging/chatCommandFallback.js'
+import { renderTransportText } from '../../../../_lib/messaging/transportText.js'
 import {
   isRoom1659XmtpBridgeEnabled,
   relayXmtpBridgeTextToAlfaClubRoom,
@@ -544,6 +545,25 @@ export class XmtpService {
     return dm.id
   }
 
+  /**
+   * Whether `address` is reachable on the current XMTP network (has a
+   * registered identity). Returns `null` when the check itself fails so
+   * callers can distinguish "known unreachable" from "unknown" and choose
+   * not to block on an ambiguous result.
+   */
+  async canMessage(address: string): Promise<boolean | null> {
+    if (!this.agent) throw new Error('XMTP agent not started')
+    try {
+      const result = await this.agent.client.canMessage([
+        { identifier: address.toLowerCase(), identifierKind: ETHEREUM_IDENTIFIER_KIND },
+      ])
+      const value = result.get(address.toLowerCase())
+      return typeof value === 'boolean' ? value : null
+    } catch {
+      return null
+    }
+  }
+
   /** Resolve an inbox ID to an Ethereum address */
   async resolveInboxAddress(inboxId: string): Promise<string | null> {
     if (!this.agent) return null
@@ -612,7 +632,7 @@ export class XmtpService {
     const normalized = normalizeAgentReply(reply)
     if (!normalized) return
 
-    await ctx.conversation.sendText(normalized.text)
+    await ctx.conversation.sendText(renderTransportText(normalized.text, 'xmtp'))
 
     if (normalized.reactToInbound) {
       try {

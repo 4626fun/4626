@@ -344,9 +344,10 @@ export function useEnsurePrivyEmbeddedWallet() {
     return pickPrivyEmbeddedEoaAddressFromWallets(wallets)
   }, [wallets])
 
+  const privyGetAccessToken = privy.getAccessToken
   const getAccessToken =
-    typeof privy.getAccessToken === 'function'
-      ? () => privy.getAccessToken().catch(() => null)
+    typeof privyGetAccessToken === 'function'
+      ? () => privyGetAccessToken().catch(() => null)
       : null
 
   const snapshotRef = useRef<EmbeddedWalletSnapshot>({

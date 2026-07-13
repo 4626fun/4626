@@ -3,8 +3,7 @@ pragma solidity ^0.8.20;
 
 import {OFT} from "@layerzerolabs/oft-evm/contracts/OFT.sol";
 import {SendParam} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
-import {MessagingFee, MessagingReceipt} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
-import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
+import {MessagingFee} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {OFTMsgCodec} from "@layerzerolabs/oft-evm/contracts/libs/OFTMsgCodec.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
@@ -79,7 +78,6 @@ interface IWrapperCooldownHook {
  * @dev Integrates with shared wrapper cooldowns, ILotteryBeneficiary, V4 hook for sell tax (optional).
  */
 contract AgentShareOFT is OFT, ReentrancyGuard {
-    using OptionsBuilder for bytes;
     using OFTMsgCodec for bytes;
     using OFTMsgCodec for bytes32;
 
@@ -93,7 +91,6 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     /// @notice Custom LayerZero message types (extends OFT SEND=1, SEND_AND_CALL=2)
     uint16 public constant MSG_TYPE_LOTTERY_ENTRY = 3;
     uint16 public constant MSG_TYPE_WINNER_CALLBACK = 4;
-    uint16 public constant MSG_TYPE_FLUSH_FEES = 5;
 
     /// @notice Default gas limit for cross-chain lottery entry messages
     uint128 public constant DEFAULT_LOTTERY_GAS_LIMIT = 300_000;
@@ -101,14 +98,6 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     /// @notice Default gas limit for fee flush (OFT send)
     uint128 public constant DEFAULT_FLUSH_GAS_LIMIT = 200_000;
 
-    /// @notice Default gas for hub-initiated remote flush command lzReceive
-    uint128 public constant DEFAULT_REMOTE_FLUSH_COMMAND_GAS = 350_000;
-
-    /// @notice Minimum gas for hub → remote flush command (must cover flushFees lzReceive)
-    uint128 public constant MIN_REMOTE_FLUSH_COMMAND_GAS = 250_000;
-
-    /// @notice Maximum gas for hub → remote flush command
-    uint128 public constant MAX_REMOTE_FLUSH_COMMAND_GAS = 1_000_000;
 
     // ================================
     // TYPES
@@ -177,12 +166,10 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     ///      entries to an attacker-controlled EOA.
     mapping(address => bool) public isLotteryResolver;
 
-    /// @notice Tax config delegate (hub-only, for future custom hooks)
-    address public taxConfigDelegate;
-
     /// @notice ERC-7572 contract-level metadata URI
     /// @dev Returns a URL to JSON metadata including token image, description, etc.
     string private _contractURI;
+    string private _defaultContractURI;
 
     // ================================
     // STATE - REMOTE CHAIN FEE FORWARDING
@@ -218,9 +205,6 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
 
     /// @notice Gas limit for lottery entry messages to hub
     uint128 public lotteryEntryGasLimit = DEFAULT_LOTTERY_GAS_LIMIT;
-
-    /// @notice Gas limit for hub → remote flush command lzReceive
-    uint128 public remoteFlushCommandGasLimit = DEFAULT_REMOTE_FLUSH_COMMAND_GAS;
 
     /// @notice Next id for pending remote lottery entries
     uint256 public nextPendingLotteryEntryId = 1;
@@ -265,8 +249,6 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     // FIX: M-08
     event WrapperSet(address indexed wrapper);
     event WrapperCooldownHookFailed(address indexed wrapper, address indexed from, address indexed to, bytes revertData);
-    event TaxConfigDelegateSet(address indexed delegate);
-    event TaxHookConfigured(address indexed hook, address recipient, uint256 taxRate);
 
     /// @notice ERC-7572: Emitted when contract URI is updated
     event ContractURIUpdated();
@@ -277,13 +259,6 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     /// @notice Emitted when accumulated fees are flushed (bridged) back to the hub
     event FeesFlushed(uint256 amount, address indexed hubReceiver, uint32 indexed hubEid);
 
-    /// @notice Hub requested a remote spoke to flush accumulated buy fees
-    event RemoteFeeFlushRequested(
-        uint32 indexed dstEid, uint128 executorGasLimit, uint128 executorNativeDrop, uint256 lzNativeFeePaid
-    );
-
-    /// @notice Remote spoke skipped a hub flush command (below threshold or insufficient native)
-    event RemoteFeeFlushSkipped(uint256 pendingFees, bytes32 reason);
 
     /// @notice Emitted when a lottery entry is sent to the hub from a remote chain
     event LotteryEntrySent(address indexed buyer, uint256 amount, uint32 indexed hubEid);
@@ -309,7 +284,6 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     event HubLotteryPeerSet(uint32 indexed hubEid, bytes32 hubLotteryPeer);
     event FlushThresholdUpdated(uint256 newThreshold);
     event LotteryEntryGasLimitUpdated(uint128 newGasLimit);
-    event RemoteFlushCommandGasLimitUpdated(uint128 newGasLimit);
 
     // ================================
     // ERRORS
@@ -331,7 +305,6 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     error NotPendingLotteryEntryOwner();
     error InvalidLotteryEntryFee(uint256 provided, uint256 required);
     error NotRemoteProtocolWireAuthority();
-    error PeerNotConfigured();
 
     /// @dev Base mainnet chain id — hub lane.
     uint256 internal constant BASE_CHAIN_ID = 8453;
@@ -389,6 +362,7 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
         if (resolvedChainEid == 0) revert MissingLayerZeroEid(block.chainid);
         chainEid = resolvedChainEid;
         addressType[address(this)] = OperationType.NoFees;
+        _defaultContractURI = _buildDefaultContractURI();
     }
 
     /**
@@ -722,55 +696,6 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     }
 
     /**
-     * @notice Hub-only: request a remote spoke ShareOFT to flush pending buy fees to Base.
-     * @dev Permissionless on Base — caller pays the LayerZero delivery fee. Include
-     *      `executorNativeDrop` so the remote lzReceive can fund the spoke→hub OFT send
-     *      (quote remotely via `quoteFlushFees()` + buffer). After delivery, call
-     *      `AgentGaugeController.receiveBridgedFees()` on Base.
-     *
-     * @param dstEid Remote chain LayerZero EID (e.g. Arbitrum 30110)
-     * @param executorNativeDrop Native token airdropped to remote ShareOFT during lzReceive
-     */
-    function requestRemoteFeeFlush(uint32 dstEid, uint128 executorNativeDrop)
-        external
-        payable
-        nonReentrant
-        returns (MessagingReceipt memory receipt)
-    {
-        if (!isHub) revert NotHub();
-        if (peers[dstEid] == bytes32(0)) revert PeerNotConfigured();
-
-        bytes memory payload = abi.encode(MSG_TYPE_FLUSH_FEES);
-        bytes memory options = OptionsBuilder.newOptions()
-            .addExecutorLzReceiveOption(remoteFlushCommandGasLimit, executorNativeDrop);
-
-        MessagingFee memory fee = _quote(dstEid, payload, options, false);
-        if (msg.value < fee.nativeFee) revert NotEnoughNative(msg.value);
-
-        receipt = _lzSend(dstEid, payload, options, fee, payable(_msgSender()));
-
-        emit RemoteFeeFlushRequested(dstEid, remoteFlushCommandGasLimit, executorNativeDrop, fee.nativeFee);
-    }
-
-    /**
-     * @notice Quote the Base-native LayerZero fee for `requestRemoteFeeFlush`.
-     */
-    function quoteRemoteFeeFlushRequest(uint32 dstEid, uint128 executorNativeDrop)
-        external
-        view
-        returns (MessagingFee memory fee)
-    {
-        if (!isHub) revert NotHub();
-        if (peers[dstEid] == bytes32(0)) revert PeerNotConfigured();
-
-        bytes memory payload = abi.encode(MSG_TYPE_FLUSH_FEES);
-        bytes memory options = OptionsBuilder.newOptions()
-            .addExecutorLzReceiveOption(remoteFlushCommandGasLimit, executorNativeDrop);
-
-        fee = _quote(dstEid, payload, options, false);
-    }
-
-    /**
      * @notice Build the SendParam for flushing fees (helper for off-chain callers)
      * @return sendParam The SendParam to pass to flushFees()
      */
@@ -783,7 +708,7 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
             to: bytes32(uint256(uint160(hubGaugeReceiver))),
             amountLD: pendingFees,
             minAmountLD: _removeDust(pendingFees),
-            extraOptions: OptionsBuilder.newOptions().addExecutorLzReceiveOption(DEFAULT_FLUSH_GAS_LIMIT, 0),
+            extraOptions: _lzReceiveOptions(DEFAULT_FLUSH_GAS_LIMIT, 0),
             composeMsg: "",
             oftCmd: ""
         });
@@ -801,7 +726,7 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
         }
 
         // Build the message internally for quoting
-        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(DEFAULT_FLUSH_GAS_LIMIT, 0);
+        bytes memory options = _lzReceiveOptions(DEFAULT_FLUSH_GAS_LIMIT, 0);
 
         // Use the internal _quote which accepts memory params
         MessagingFee memory fee = _quote(
@@ -926,19 +851,6 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
     }
 
     /**
-     * @notice Quote the LayerZero fee for a lottery entry message
-     * @param amount The trade amount
-     * @return fee The native gas fee required
-     */
-    function quoteLotteryEntry(uint256 amount) external view returns (MessagingFee memory fee) {
-        if (hubLotteryPeer == bytes32(0) || hubEid == 0 || peers[hubEid] == bytes32(0)) {
-            return MessagingFee(0, 0);
-        }
-
-        (,, fee) = _prepareLotteryEntryMessage(address(0), amount, 0);
-    }
-
-    /**
      * @notice Quote the LayerZero fee for a queued remote lottery entry.
      * @param entryId Pending entry id
      * @return fee LayerZero native/lzToken fee quote (zeroed if entry/config missing)
@@ -965,8 +877,17 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
             buyerCurrentShareBalance // coverage input on the hub lottery manager
         );
 
-        options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(lotteryEntryGasLimit, 0);
+        options = _lzReceiveOptions(lotteryEntryGasLimit, 0);
         fee = _quote(hubEid, payload, options, false);
+    }
+
+    /// @dev Compact LayerZero type-3 executor lzReceive option encoding.
+    ///      Equivalent to OptionsBuilder.newOptions().addExecutorLzReceiveOption(...).
+    function _lzReceiveOptions(uint128 gasLimit, uint128 nativeValue) internal pure returns (bytes memory) {
+        if (nativeValue == 0) {
+            return abi.encodePacked(uint16(3), uint8(1), uint16(17), uint8(1), gasLimit);
+        }
+        return abi.encodePacked(uint16(3), uint8(1), uint16(33), uint8(1), gasLimit, nativeValue);
     }
 
     /**
@@ -1054,12 +975,6 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
             return;
         }
 
-        // Hub-initiated flush command (remote only): Base hub ShareOFT → spoke ShareOFT
-        if (!isHub && _isRemoteFeeFlushCommand(_origin, _message)) {
-            _handleRemoteFeeFlushCommand();
-            return;
-        }
-
         // Winner callback messages are ONLY accepted when:
         // - they come from `hubLotteryPeer`, and
         // - the payload is exactly the ABI encoding of (uint16,address,address,uint256) (128 bytes).
@@ -1143,58 +1058,6 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
         return true;
     }
 
-    function _isRemoteFeeFlushCommand(Origin calldata _origin, bytes calldata _message)
-        internal
-        view
-        returns (bool)
-    {
-        if (isHub) return false;
-        if (hubEid == 0 || peers[hubEid] == bytes32(0)) return false;
-        if (_origin.srcEid != hubEid) return false;
-        if (_origin.sender != peers[hubEid]) return false;
-        if (_message.length != 32) return false;
-
-        uint256 word0;
-        assembly {
-            word0 := calldataload(_message.offset)
-        }
-        if (word0 >> 16 != 0) return false;
-        return uint16(word0) == MSG_TYPE_FLUSH_FEES;
-    }
-
-    /**
-     * @dev Execute pending fee flush on a remote spoke when commanded by the hub peer.
-     *      Uses contract ETH balance (executor native drop) to pay the spoke→hub OFT fee.
-     */
-    function _handleRemoteFeeFlushCommand() internal {
-        if (pendingFees == 0) {
-            emit RemoteFeeFlushSkipped(0, bytes32("no_pending"));
-            return;
-        }
-        if (pendingFees < flushThreshold) {
-            emit RemoteFeeFlushSkipped(pendingFees, bytes32("below_threshold"));
-            return;
-        }
-        if (hubGaugeReceiver == address(0) || hubEid == 0) revert HubNotConfigured();
-
-        uint256 nativeFee = this.quoteFlushFees();
-        if (nativeFee == 0) {
-            emit RemoteFeeFlushSkipped(pendingFees, bytes32("zero_lz_quote"));
-            return;
-        }
-        if (address(this).balance < nativeFee) {
-            emit RemoteFeeFlushSkipped(pendingFees, bytes32("insufficient_native"));
-            return;
-        }
-
-        SendParam memory sendParam = this.buildFlushSendParam();
-        MessagingFee memory fee = MessagingFee({nativeFee: nativeFee, lzTokenFee: 0});
-
-        try AgentShareOFT(payable(address(this))).flushFees{value: nativeFee}(sendParam, fee) {} catch {
-            emit RemoteFeeFlushSkipped(pendingFees, bytes32("flush_reverted"));
-        }
-    }
-
     /**
      * @dev Handle winner callback from hub LotteryManager
      *      Emits LotteryWinnerNotification on the user's chain
@@ -1270,18 +1133,6 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
         emit LotteryEntryGasLimitUpdated(_gasLimit);
     }
 
-    /**
-     * @notice Set gas limit for hub → remote flush command lzReceive
-     */
-    function setRemoteFlushCommandGasLimit(uint128 _gasLimit) external onlyOwner {
-        require(
-            _gasLimit >= MIN_REMOTE_FLUSH_COMMAND_GAS && _gasLimit <= MAX_REMOTE_FLUSH_COMMAND_GAS,
-            "Invalid flush command gas"
-        );
-        remoteFlushCommandGasLimit = _gasLimit;
-        emit RemoteFlushCommandGasLimitUpdated(_gasLimit);
-    }
-
     // ================================
     // ADMIN - EXISTING
     // ================================
@@ -1343,36 +1194,6 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
         lotteryEnabled = _enabled;
     }
 
-    /**
-     * @notice Set the tax config delegate (hub-only, for future custom hooks)
-     * @dev NOTE: The existing SimpleSellTaxHook at 0xca975B9dAF772C71161f3648437c3616E5Be0088
-     *      checks msg.sender == token.owner(), so ONLY the ◆TOKEN owner can configure it.
-     *      This delegate feature is for future hooks that accept delegated configuration.
-     * @param _delegate Address that can call configureTaxHook on behalf of this token
-     */
-    function setTaxConfigDelegate(address _delegate) external onlyOwner {
-        taxConfigDelegate = _delegate;
-        emit TaxConfigDelegateSet(_delegate);
-    }
-
-    /**
-     * @notice Get tax hook configuration data for the owner to call directly (hub-only)
-     * @dev Since the SimpleSellTaxHook requires msg.sender == token.owner(),
-     *      this helper returns the exact parameters for the owner to call.
-     *
-     * @param counterAsset Counter asset (address(0) for ETH)
-     * @return token The token address (this contract)
-     * @return recipient The GaugeController address
-     * @return counterIsEth Whether counter asset is ETH
-     */
-    function getTaxHookParams(address counterAsset)
-        external
-        view
-        returns (address token, address recipient, bool counterIsEth)
-    {
-        return (address(this), gaugeController != address(0) ? gaugeController : owner(), counterAsset == address(0));
-    }
-
     // ================================
     // VIEW FUNCTIONS
     // ================================
@@ -1391,15 +1212,6 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
         uint256 vaultShares = shares * VAULT_SHARE_NORMALIZATION;
         if (vault == address(0)) return vaultShares;
         return IAgentOVault(vault).convertToAssets(vaultShares);
-    }
-
-    /**
-     * @notice Get contract version
-     * @dev Kept as a deliberate part of the runtime ABI — indexers and
-     *      audit tooling commonly check `version()` on deployed OFTs.
-     */
-    function version() external pure returns (string memory) {
-        return "2.0.0-hub-centric";
     }
 
     // NOTE: A cluster of dead view helpers (`previewFee`, `isTradingVenue`,
@@ -1452,7 +1264,7 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
         if (bytes(_contractURI).length > 0) {
             return _contractURI;
         }
-        return _buildOnchainContractURI();
+        return _defaultContractURI;
     }
 
     /**
@@ -1471,7 +1283,7 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
      *      auto-composited fallback), allowing any client that can make an
      *      HTTP GET request to display the correct token image.
      */
-    function _buildOnchainContractURI() internal view returns (string memory) {
+    function _buildDefaultContractURI() internal view returns (string memory) {
         return string(
             abi.encodePacked(
                 "https://api.4626.fun/v1/token/",
@@ -1511,15 +1323,6 @@ contract AgentShareOFT is OFT, ReentrancyGuard {
      */
     function tradeFeeCollector() public view returns (address) {
         return gaugeController != address(0) ? gaugeController : owner();
-    }
-
-    /**
-     * @notice Helper used by integrations that check ownership-style access.
-     * @param account Address to check
-     * @return True if account is owner or current trade-fee collector
-     */
-    function isOwner(address account) external view returns (bool) {
-        return account == owner() || account == tradeFeeCollector();
     }
 
     // ================================

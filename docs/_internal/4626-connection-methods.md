@@ -39,12 +39,12 @@ The default user path is **parent CSW + Privy embedded-owner signer** (`legacy-o
 
 4626 uses Coinbase Smart Wallets (CSW) as the canonical user account. A CSW is a smart contract wallet on Base that signs transactions via WebAuthn passkeys — every transaction triggers a browser popup (Touch ID, Face ID, or hardware key).
 
-For the **4626 canonical account**, `profiles.csw_address` === **`CANONICAL_CSW_ADDRESS`** (`0xAb6d5C10b03300326cd7fab7267ae192842967b5` in `frontend/src/wallet/canonicalWalletPolicy.ts`). XMTP agent 4626 inbox, Railway Keepr ERC-4337 sender, AKITA vault owner, sponsored swaps, and owner-install are **roles on that one wallet** — not a parallel "agent CSW." Runtime env: `CANONICAL_CSW_*` / optional `VITE_CANONICAL_CSW_ADDRESS` via `canonicalCswEnv.ts` and `agentXmtpAddress.ts`. Retired: `XMTP_AGENT_CSW_*`, `VITE_AGENT_XMTP_ADDRESS`.
+The protocol and operator wallets are intentionally distinct. **`PROTOCOL_CSW_ADDRESS`** (`0x793ca28123cba3ca3c20b9c6c67f37510c89c145`) is Agent 4626's XMTP inbox, ERC-8004 identity, and Railway Keepr sender. **`CANONICAL_CSW_ADDRESS`** (`0xAb6d5C10b03300326cd7fab7267ae192842967b5`) remains the operator account's `profiles.csw_address` for custody, sponsored swaps, the AKITA vault, and owner-install. Runtime env uses `PROTOCOL_CSW_*` for the agent and `CANONICAL_CSW_*` for the operator wallet; client agent resolution optionally uses `VITE_PROTOCOL_CSW_ADDRESS`.
 
 This is secure but disruptive for an app that sends frequent transactions. 4626 solves this differently for two distinct contexts:
 
 - **User-initiated sponsored swaps** use the **parent CSW** as the ERC-4337 sender, signed silently by a Privy embedded EOA that is a CSW owner (`canonical4337`).
-- **Server-side agent operations** (XMTP messaging, ERC-8004 identity, deploy-session automation) use the **CSW directly** as the ERC-4337 sender, signed by a Privy server-managed wallet added as a CSW owner via `addOwnerAddress`.
+- **Server-side agent operations** use the applicable CSW directly, signed by a Privy server-managed wallet added as an owner: Railway XMTP/ERC-8004 uses `PROTOCOL_CSW_ADDRESS`, while deploy-session automation uses the creator's `profiles.csw_address`.
 
 Both require a one-time authorization from the user. In the default flow, the user signs in with email-only Privy and the embedded EOA is installed as a parent-CSW owner (`legacy-owner-install`).
 
@@ -344,7 +344,8 @@ These invariants are enforced in `.cursor/rules/ERC-4337-Wallet-Invariants.mdc` 
 ### Identity Invariants
 
 - The user's Coinbase Smart Wallet is the canonical account and universal identity (`profiles.csw_address`).
-- For the **4626 canonical account**, `profiles.csw_address` === `CANONICAL_CSW_ADDRESS` (`0xAb6d5…967b5`) — XMTP inbox, AKITA vault owner, and Keepr sender are roles on that wallet, not separate accounts.
+- `PROTOCOL_CSW_ADDRESS` (`0x793c…c145`) is the public Agent 4626 XMTP/ERC-8004 identity and Railway Keepr sender.
+- `CANONICAL_CSW_ADDRESS` (`0xAb6d5…967b5`) remains the operator account's `profiles.csw_address`, custody account, AKITA vault owner, and sponsored execution sender.
 - Do not automatically create a new CSW.
 - Do not silently switch to a Privy Smart Wallet.
 - Privy EOAs and Privy Smart Wallets are signer/owner identities only.
@@ -353,7 +354,7 @@ These invariants are enforced in `.cursor/rules/ERC-4337-Wallet-Invariants.mdc` 
 ### Execution Path Invariants
 
 - User-initiated frontend execution defaults to the **parent CSW** (`profiles.csw_address`) via `legacy-owner-install` / `canonical4337`, signed by the Privy embedded EOA.
-- Server-side Railway XMTP / Keepr / ERC-8004 uses **`CANONICAL_CSW_ADDRESS`** (same as that account's `profiles.csw_address`).
+- Server-side Railway XMTP / Keepr / ERC-8004 uses **`PROTOCOL_CSW_ADDRESS`**.
 - Deploy-session automation uses the **creator's** `profiles.csw_address` with a temporary delegated owner.
 - Code changes must respect which path applies — do not mix tracks silently.
 
@@ -368,7 +369,7 @@ These invariants are enforced in `.cursor/rules/ERC-4337-Wallet-Invariants.mdc` 
 ### Security Invariants
 
 - Never extract private keys from Privy; always use `secp256k1_sign` or `eth_sendTransaction` RPCs.
-- XMTP agent must present as the CSW address, not the Privy EOA address.
+- XMTP agent must present as `PROTOCOL_CSW_ADDRESS`, not the delegated Privy EOA address.
 - Deploy-session temporary owners must be removed after deployment completes.
 - ERC-8004 `agentWallet` must point to the CSW address, not any Privy wallet.
 
