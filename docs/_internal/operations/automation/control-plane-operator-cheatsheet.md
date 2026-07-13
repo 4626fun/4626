@@ -85,24 +85,19 @@ Think in lifecycle, not scripts:
 
 ---
 
-## Solana + Meteora + Alpha Vault Flow (Operator View)
+## Solana ShareOFT + Meteora Flow (Operator View)
 
-1. Ingress intent through adapter (`registerSolanaBridgeToken`, `provision-solana-route`, `meteora-ixs`).
-2. Normalize to control-plane request and attach idempotency context.
-3. Resolve policy/config:
-   - creator/bridge token mapping
-   - Meteora config source
-   - quote-mint/strict mode checks
-4. Run gates:
-   - provisioner liveness
-   - adapter ownership/authority checks
-   - fallback policy (remote/local)
-5. Execute:
-   - route provisioning
-   - bridge token registration
-   - Meteora ix payload dispatch
-   - Alpha Vault create/update
-6. Reconcile in maintenance cycle and publish status.
+1. Provision a distinct Solana LZ mint and OFT Store for the creator.
+2. Wire LayerZero peers/DVNs and attach idempotency context.
+3. Seed the explicit creator-token peer in `Registry4626` before finalize.
+4. Gate on the non-zero registry peer, batcher destination, OVault runtime, and
+   LayerZero fee quote.
+5. Finalize the Base vault and bridge the ShareOFT allocation.
+6. Optionally create Meteora against the LZ share mint, then reconcile current
+   maintenance actions and publish status.
+
+The former adapter registration, creator-SPL route provisioning, and
+Twin/Alpha-Vault fallback policy are retired.
 
 ---
 
@@ -170,5 +165,5 @@ Stale status responses are explicit and include:
 ## Verification Companion
 
 - Use [`docs/operations/control-plane-verification.md`](./control-plane-verification.md) for PR-level lifecycle proof checks and integration validation.
-- Use [`docs/runbooks/control-plane-triage.md`](../runbooks/control-plane-triage.md) for stuck-operation and manual_review triage.
+- Use [`docs/runbooks/control-plane-triage.md`](../../../runbooks/control-plane-triage.md) for stuck-operation and manual_review triage.
 

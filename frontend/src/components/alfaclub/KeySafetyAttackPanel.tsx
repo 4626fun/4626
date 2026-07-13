@@ -1,4 +1,4 @@
-import { ChevronDown, UserX } from 'lucide-react'
+import { UserX } from 'lucide-react'
 import { useId } from 'react'
 
 import { InfoHint } from '@/components/alfaclub/InfoHint'
@@ -367,15 +367,18 @@ export function KeySafetyAttackPanel({
         </div>
       ) : null}
 
-      <details className="group rounded-2xl bg-black/30">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm text-zinc-300 [&::-webkit-details-marker]:hidden">
-          <span>Full attack breakdown</span>
-          <ChevronDown
-            className="h-4 w-4 shrink-0 text-zinc-500 transition-transform group-open:rotate-180"
-            aria-hidden
-          />
-        </summary>
-        <div className="grid gap-3 p-4 pt-0 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="rounded-2xl bg-black/30 p-4">
+        <h3 className="text-sm font-medium text-zinc-300">Full attack breakdown</h3>
+        <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+          {exitScenario === 'holders-exit'
+            ? 'Exit stress test: the attacker stakes for >24h; every original holder unstakes and sells before lock; the attacker receives the net distributable pool, then sells all but the final unsellable key. Sell order matters because earlier sellers withdraw the upper curve reserve.'
+            : 'Worst case: every staked key is hostile and staked >24h. Only keys staked >24h can vote or be paid. On distribution, performance fees are paid, 10% stays as a trading reserve, and the remaining 90% (≈72% of the fund) is split pro-rata among eligible staked keys.'}
+        </p>
+
+        <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+          Payout waterfall
+        </p>
+        <div className="mt-2 grid gap-3 sm:grid-cols-3">
           <div className="rounded-xl bg-white/[0.03] p-3">
             <p className="text-[11px] uppercase tracking-wide text-zinc-500">Fees to pot</p>
             <p className="mt-1 font-mono text-sm text-zinc-100">
@@ -399,8 +402,14 @@ export function KeySafetyAttackPanel({
               {minAttackBreakdown ? formatUsd(minAttackBreakdown.netDistributableUsdc) : '—'}
             </p>
           </div>
-          {evaluation ? (
-            <>
+        </div>
+
+        {evaluation ? (
+          <>
+            <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+              Vote defense
+            </p>
+            <div className="mt-2 grid gap-3 sm:grid-cols-3">
               <div className="rounded-xl bg-white/[0.03] p-3">
                 <p className="text-[11px] uppercase tracking-wide text-zinc-500">Vote control</p>
                 <p className="mt-1 font-mono text-sm text-zinc-100">
@@ -420,20 +429,15 @@ export function KeySafetyAttackPanel({
                 </p>
               </div>
               {donationUsdc > 0 ? (
-                <div className="rounded-xl bg-white/[0.03] p-3 sm:col-span-2 xl:col-span-3">
+                <div className="rounded-xl bg-white/[0.03] p-3 sm:col-span-3">
                   <p className="text-[11px] uppercase tracking-wide text-zinc-500">Donation recovery</p>
                   <p className="mt-1 font-mono text-sm text-zinc-100">{recoveryPercent}%</p>
                 </div>
               ) : null}
-            </>
-          ) : null}
-        </div>
-        <p className="px-4 pb-3 text-xs leading-relaxed text-zinc-500">
-          {exitScenario === 'holders-exit'
-            ? 'Exit stress test: the attacker stakes for >24h; every original holder unstakes and sells before lock; the attacker receives the net distributable pool, then sells all but the final unsellable key. Sell order matters because earlier sellers withdraw the upper curve reserve.'
-            : 'Worst case: every staked key is hostile and staked >24h. Only keys staked >24h can vote or be paid. On distribution, performance fees are paid, 10% stays as a trading reserve, and the remaining 90% (≈72% of the fund) is split pro-rata among eligible staked keys.'}
-        </p>
-      </details>
+            </div>
+          </>
+        ) : null}
+      </div>
     </section>
   )
 }

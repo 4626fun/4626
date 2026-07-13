@@ -315,13 +315,9 @@ describe('deploy session optimistic concurrency', () => {
       violations: [],
       expectations: null,
     })
-    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = 'internal-secret'
     delete process.env.DEPLOY_SESSION_PERSIST_OWNER
-    delete process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT
     delete process.env.DEPLOY_SOLANA_REQUIRE_INLINE_METEORA_PAYLOAD
     delete process.env.MANAGED_TOKENLIST_INGEST_ON_DEPLOY
-    delete process.env.DEPLOY_SOLANA_REGISTRATION_ORIGINS
-    delete process.env.SOLANA_REGISTRATION_ORIGINS
     checkRateLimitMock.mockReturnValue({ allowed: true, resetAt: Date.now() + 60_000 })
     ensureShareMeshOvaultPreflightMock.mockResolvedValue({
       existingMintCompatible: true,
@@ -1656,73 +1652,6 @@ describe('deploy session optimistic concurrency', () => {
       expect(updateDeploySessionMock).toHaveBeenCalled()
     } finally {
       ;(globalThis as any).fetch = originalFetch
-    }
-  })
-
-  it('status does not call registerSolanaBridgeToken during share-mesh preflight', async () => {
-    const rec = {
-      ...makeDeploySession('phase2_confirmed'),
-      payload: JSON.stringify({
-        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
-        phase3Calls: makeGenericPhase3Calls(),
-      }),
-    }
-    const originalFetch = globalThis.fetch
-    const fetchMock = vi.fn() as any
-
-    try {
-      ;(globalThis as any).fetch = fetchMock
-      getDeploySessionByIdMock
-        .mockResolvedValueOnce(rec)
-        .mockResolvedValueOnce({ ...rec, step: 'phase3_sent', lastUserOpHash: '0xuserop' })
-      transitionDeploySessionMock.mockResolvedValue(true)
-
-      const req = createMockReq({
-        method: 'POST',
-        headers: {
-          'x-siwa-receipt': 'siwa-receipt-token',
-          'x-privy-token': makeFreshPrivyJwt(),
-        },
-        body: { sessionId: 'sess_1' },
-      })
-      const res = createMockRes()
-      await statusHandler(req, res)
-
-      expect(res.statusCode).toBe(200)
-      expect(ensureShareMeshOvaultPreflightMock).toHaveBeenCalled()
-      expect(fetchMock).not.toHaveBeenCalled()
-    } finally {
-      ;(globalThis as any).fetch = originalFetch
-    }
-  })
-
-  it('status advances to phase3 without registration secret on share-mesh path', async () => {
-    const rec = {
-      ...makeDeploySession('phase2_confirmed'),
-      payload: JSON.stringify({
-        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753')],
-        phase3Calls: makeGenericPhase3Calls(),
-      }),
-    }
-    const previous = process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
-    delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
-
-    try {
-      getDeploySessionByIdMock
-        .mockResolvedValueOnce(rec)
-        .mockResolvedValueOnce({ ...rec, step: 'phase3_sent', lastUserOpHash: '0xuserop' })
-      transitionDeploySessionMock.mockResolvedValue(true)
-
-      const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
-      const res = createMockRes()
-      await statusHandler(req, res)
-
-      expect(res.statusCode).toBe(200)
-      expect(ensureShareMeshOvaultPreflightMock).toHaveBeenCalled()
-      expect(sendUserOperationMock).toHaveBeenCalled()
-    } finally {
-      if (typeof previous === 'undefined') delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
-      else process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = previous
     }
   })
 
@@ -3137,44 +3066,6 @@ describe('deploy session optimistic concurrency', () => {
       expect.objectContaining({ id: 'sess_1', fromStep: 'ovault_mesh_sent', toStep: 'ovault_mesh_confirmed' }),
     )
     expect(sendUserOperationMock).not.toHaveBeenCalled()
-  })
-
-  it('continue uses ShareOFT mesh preflight without registerSolanaBridgeToken', async () => {
-    const rec = {
-      ...makeDeploySession('phase2_confirmed'),
-      payload: {
-        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
-        phase3Calls: makeGenericPhase3Calls(),
-        phase4Calls: [],
-        solanaOvault: { enabled: true },
-      },
-    }
-    const originalFetch = globalThis.fetch
-    const fetchMock = vi.fn() as any
-
-    try {
-      ;(globalThis as any).fetch = fetchMock
-      getDeploySessionByIdMock.mockResolvedValue(rec)
-      transitionDeploySessionMock.mockResolvedValue(true)
-
-      const req = createMockReq({
-        method: 'POST',
-        headers: {
-          'x-siwa-receipt': 'siwa-receipt-token',
-          'x-privy-token': makeFreshPrivyJwt(),
-        },
-        body: { sessionId: 'sess_1' },
-      })
-      const res = createMockRes()
-      await continueHandler(req, res)
-
-      expect(res.statusCode).toBe(200)
-      expect(res.body?.data?.step).toBe('ovault_mesh_confirmed')
-      expect(ensureShareMeshOvaultPreflightMock).toHaveBeenCalled()
-      expect(fetchMock).not.toHaveBeenCalled()
-    } finally {
-      ;(globalThis as any).fetch = originalFetch
-    }
   })
 
   it('continue blocks ovault mesh gate when ShareOFT preflight fails', async () => {

@@ -251,6 +251,16 @@ abstract contract RebalanceTestHarness is Test {
         vault.setMinimumTotalIdle(minIdle);
         vault.setFlashLoanProtection(0, type(uint256).max, 1);
         vault.setMaxTotalSupply(type(uint256).max);
+        // Risk-config changes (incl. setStrategyMaxAssets) default to a timelock;
+        // disable it so economic sims can recognize mock NAV marks synchronously.
+        vault.setRiskConfigDelay(0);
+    }
+
+    /// @dev M-02 clamps reported NAV to `strategyDebt` when `strategyMaxAssets == 0`.
+    ///      These suites intentionally simulate mark-to-market that the vault recognizes,
+    ///      so strategies must be uncapped (same pattern as MaxAssetsCap case 1).
+    function _allowRecognizedStrategyMarks(CreatorOVault vault, address strategy) internal {
+        vault.setStrategyMaxAssets(strategy, type(uint256).max);
     }
 
     function _deployScenarioVaultWithDeposit(
@@ -278,14 +288,17 @@ abstract contract RebalanceTestHarness is Test {
 
         if (charmWeightBps > 0) {
             ctx.vault.addStrategy(address(ctx.charm), charmWeightBps, true);
+            _allowRecognizedStrategyMarks(ctx.vault, address(ctx.charm));
         }
         if (ajnaWeightBps > 0) {
             ctx.vault.addStrategy(address(ctx.ajna), ajnaWeightBps, true);
+            _allowRecognizedStrategyMarks(ctx.vault, address(ctx.ajna));
         }
 
         if (thirdWeightBps > 0) {
             ctx.third = new WeightedMockStrategy(address(ctx.coin));
             ctx.vault.addStrategy(address(ctx.third), thirdWeightBps, true);
+            _allowRecognizedStrategyMarks(ctx.vault, address(ctx.third));
             ctx.hasThird = true;
         }
 
@@ -325,14 +338,17 @@ abstract contract RebalanceTestHarness is Test {
 
         if (charmWeightBps > 0) {
             ctx.vault.addStrategy(address(ctx.charm), charmWeightBps, true);
+            _allowRecognizedStrategyMarks(ctx.vault, address(ctx.charm));
         }
         if (ajnaWeightBps > 0) {
             ctx.vault.addStrategy(address(ctx.ajna), ajnaWeightBps, true);
+            _allowRecognizedStrategyMarks(ctx.vault, address(ctx.ajna));
         }
 
         if (thirdWeightBps > 0) {
             ctx.third = new WeightedMockStrategy(address(ctx.coin));
             ctx.vault.addStrategy(address(ctx.third), thirdWeightBps, true);
+            _allowRecognizedStrategyMarks(ctx.vault, address(ctx.third));
             ctx.hasThird = true;
         }
 
@@ -365,6 +381,8 @@ abstract contract RebalanceTestHarness is Test {
 
         ctx.vault.addStrategy(address(ctx.charm), 4_500, true);
         ctx.vault.addStrategy(address(ctx.ajna), 4_500, true);
+        _allowRecognizedStrategyMarks(ctx.vault, address(ctx.charm));
+        _allowRecognizedStrategyMarks(ctx.vault, address(ctx.ajna));
         synergyCharm.configureBackstop(address(ctx.ajna), backstopEnabled);
 
         ctx.coin.mint(ALICE, depositAmount + 1_000_000e18);
@@ -394,6 +412,7 @@ abstract contract RebalanceTestHarness is Test {
         ctx.ajna = new WeightedMockStrategy(address(ctx.coin));
 
         ctx.vault.addStrategy(address(ctx.charm), 9_000, true);
+        _allowRecognizedStrategyMarks(ctx.vault, address(ctx.charm));
         synergyCharm.configureBackstop(address(ctx.ajna), backstopEnabled);
 
         // Off-vault Ajna liquidity pool (borrow lane only — not registered as a vault strategy).

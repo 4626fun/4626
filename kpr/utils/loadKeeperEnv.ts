@@ -3,15 +3,7 @@ import { resolve } from 'node:path';
 
 import { config } from 'dotenv';
 
-import { normalizeLotteryManager } from './solanaCanonicalAddresses.js';
-
 const KPR_ROOT = resolve(import.meta.dirname, '..');
-
-function applyCanonicalAddressOverrides(): void {
-  if (process.env.LOTTERY_MANAGER) {
-    process.env.LOTTERY_MANAGER = normalizeLotteryManager(process.env.LOTTERY_MANAGER);
-  }
-}
 
 /** Load keeper env: kpr/.env first, then orchestrator file overrides when present. */
 export function loadKeeperEnv(): void {
@@ -24,6 +16,4 @@ export function loadKeeperEnv(): void {
   if (orchestratorEnv && existsSync(orchestratorEnv)) {
     config({ path: orchestratorEnv, override: true });
   }
-
-  applyCanonicalAddressOverrides();
 }

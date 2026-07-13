@@ -3,8 +3,8 @@
 Turn-on checklist for live vault `0x82C06EaAE27B1Ca31fA29F22341A162A670A4471` (creator `0x5b674196812451b7cec024fe9d22d2c0b172fa75`).
 
 **Solana lottery policy:** lottery on Solana would be a **pool buy of share mesh**
-only — not bridge-wrapped creator SPL or compose deposit. `relay_entries`
-remains disabled until the documented production gates close. See
+only — not a historical creator SPL or compose deposit. The old entry-relay and
+winner-relay workflows were removed with the Twin transport. See
 [solana-share-mesh-lottery-policy.md](../operations/solana/solana-share-mesh-lottery-policy.md)
 and [akita-solana-share-mesh-audit.md](../solana/akita-solana-share-mesh-audit.md).
 
@@ -15,7 +15,7 @@ and [akita-solana-share-mesh-audit.md](../solana/akita-solana-share-mesh-audit.m
 | Control plane | **Vercel** (`akita-llc/4626`) | Crons, `/api/keeper/*`, `/api/keepr/actions/*`, Ajna/Charm enqueue + queue processing |
 | Base keeper writes | **Vercel** (`KPR_PRIVATE_KEY` / `PROTOCOL_AUTOMATION_SAFE`) | `tend` / `report` via HTTP bridge; Charm `rebalance()` via **hot automation Safe** `0x08f087…8eBE` |
 | XMTP agent | **Railway** (`4626-keepr-agent`) | Eliza/XMTP primary only — **not** Charm automation |
-| Solana execution | **Vultr** (`orchestrator.4626.fun`) | `/reconcile` relay/settle/winner/rebalance |
+| Solana execution | **Vultr** (`orchestrator.4626.fun`) | `/reconcile` maintenance actions such as fee settlement, price monitoring, graduation, and mapping sync |
 | Local operator | **`kpr/.env`** | Dry-run + manual workflow runs against prod APIs |
 
 ## Phase 1 — Base keeper (Charm + Ajna bucket + vault tend/report)
@@ -35,7 +35,7 @@ Set in [Vercel → 4626 → Settings → Environment Variables](https://vercel.c
 | `KEEPER_AJNA_MANAGER_CHAIN_ID` | `8453` |
 | `KEEPER_AJNA_MANAGER_LIMIT` | `25` |
 | `KEEPER_SOLANA_RECONCILE_ENABLED` | `1` (likely already set) |
-| `KEEPER_SOLANA_RECONCILE_ACTIONS` | `settle_fees,winner_relay`; do not add `relay_entries` until the production relay gates close. Add `rebalance` only for an explicitly supported active LZ route. |
+| `KEEPER_SOLANA_RECONCILE_ACTIONS` | `settle_fees,price_monitor`; use only labels accepted by the current orchestrator. |
 | `SOLANA_ORCHESTRATOR_URL` | `https://orchestrator.4626.fun` (no path suffix) |
 | `SOLANA_ORCHESTRATOR_API_KEY` | Same secret as Vultr orchestrator env |
 | `KEEPER_PROCESS_KPR_ACTIONS_ENABLED` | `1` — Vercel cron executes `keepr_actions` queue (Charm/Ajna writes) |
@@ -140,34 +140,20 @@ Before finalize:
 
 ### Vultr orchestrator env (`/etc/4626/solana-keeper-orchestrator.env`)
 
-After LZ store/mint wiring + explicit registry-peer preflight is clean:
-
-```bash
-pnpm -C kpr preflight-orchestrator   # must exit 0
-```
-
-Then on Vultr:
+After LZ store/mint wiring + explicit registry-peer preflight is clean, configure
+only the remaining LayerZero maintenance surfaces:
 
 | Variable | Value |
 |----------|--------|
-| `SOLANA_KEEPER_BASE_WRITES_ENABLED` | `1` |
 | `SOLANA_ORCHESTRATOR_EXECUTE` | `1` |
-| `SOLANA_ORCHESTRATOR_REBALANCE_ENABLED` | `1` (when ready) |
-| `SOLANA_CREATOR_MINTS` | **Do not use** `9JWh…` — that is legacy Twin bridge-wrapped **creator** SPL. Use the LZ share-mesh mint only where the workflow requires a mint. |
+| `SOLANA_CREATOR_MINTS` | Use the LZ share-mesh mint only where a remaining workflow requires a mint. |
 | `SOLANA_SHARE_OFT_MAPPING` | After Phase B: `{"<share_mesh_mint>":"0x4df30fFfDA1D4A81bcf4DC778292Be8Ff9752a57"}` — not creator SPL → ShareOFT. |
 | `KPR_PRIVATE_KEY` | Production keeper (`0xAb6d5…`) |
 
 Restart: `sudo systemctl restart solana-keeper-orchestrator`
 
-Optional B2 hook setup remains non-production; keep `relay_entries` disabled.
-
-### Enable rebalance cron action
-
-On Vercel, append `rebalance` to `KEEPER_SOLANA_RECONCILE_ACTIONS` and set on Vultr/local:
-
-- `KPR_SOLANA_REBALANCE_EXECUTE=1`
-- `KPR_SOLANA_REBALANCE_CREATORS_JSON` only for an explicitly supported active
-  LZ route. Do not restore a Twin adapter address to make this preflight pass.
+Optional B2 hook setup remains non-production. It does not restore the removed
+Twin relay or rebalance actions.
 
 ## Historical Twin status (2026-05-25)
 

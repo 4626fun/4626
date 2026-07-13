@@ -108,7 +108,7 @@ describe('actionLease (M2-09)', () => {
   it('allows reacquire after TTL expiry', async () => {
     const now = Date.now()
     const first = await tryAcquireActionLease({
-      action: 'winner_relay',
+      action: 'price_monitor',
       holder: 'old',
       leaseDir: dir,
       ttlMs: 1,
@@ -117,7 +117,7 @@ describe('actionLease (M2-09)', () => {
     expect(first.acquired).toBe(true)
 
     const second = await tryAcquireActionLease({
-      action: 'winner_relay',
+      action: 'price_monitor',
       holder: 'new',
       leaseDir: dir,
       ttlMs: 60_000,
@@ -180,7 +180,7 @@ describe('actionLease (M2-09)', () => {
 
   it('does not renew after a newer token fences the old holder', async () => {
     const acquired = await tryAcquireActionLease({
-      action: 'winner_relay',
+      action: 'price_monitor',
       holder: 'old-owner',
       leaseDir: dir,
       ttlMs: 60_000,
@@ -189,7 +189,7 @@ describe('actionLease (M2-09)', () => {
     if (!acquired.acquired) return
 
     const replacement = {
-      action: 'winner_relay',
+      action: 'price_monitor',
       token: 'new-owner-token',
       holder: 'new-owner',
       acquiredAt: Date.now(),

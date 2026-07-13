@@ -39,6 +39,12 @@ vi.mock('@/components/alfaclub/CounterTradeStatusPanel', () => ({
   CounterTradeStatusPanel: () => <div data-testid="inverse-panel">Inverse status</div>,
 }))
 
+vi.mock('@/components/alfaclub/RoomChatPanel', () => ({
+  RoomChatPanel: ({ roomId }: { roomId: string }) => (
+    <div data-testid="chat-panel">Room chat for {roomId}</div>
+  ),
+}))
+
 function LocationProbe() {
   const location = useLocation()
   return <div data-testid="location">{`${location.pathname}${location.search}`}</div>
@@ -150,6 +156,7 @@ describe('AlfaClub room hub behavior', () => {
     await screen.findByRole('heading', { name: 'Room Nine', level: 1 })
 
     expect(screen.queryByRole('tab', { name: 'Inverse' })).toBeNull()
+    expect(screen.getByRole('tab', { name: 'Chat' })).toBeTruthy()
     fireEvent.click(screen.getByRole('tab', { name: 'Liquidity' }))
 
     await waitFor(() => {
@@ -158,6 +165,15 @@ describe('AlfaClub room hub behavior', () => {
       )
     })
     expect(screen.getByText('Liquidity for room 9')).toBeTruthy()
+  })
+
+  it('renders the chat tab for any room', async () => {
+    await renderHub('/rooms?roomId=9&tab=chat')
+    await screen.findByRole('heading', { name: 'Room Nine', level: 1 })
+
+    expect(screen.getByRole('tab', { name: 'Chat' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByTestId('chat-panel').textContent).toBe('Room chat for 9')
+    expect(screen.getByTestId('location').textContent).toBe('/rooms?roomId=9&tab=chat')
   })
 
   it('normalizes an unavailable inverse deep link to overview', async () => {

@@ -1,7 +1,6 @@
 import type { ApiHandler, ApiRouteLoaders } from './_routeLoader.js'
 import { authRouteLoaders } from './_routes.auth.js'
 import { cdpRouteLoaders } from './_routes.cdp.js'
-import { deployRouteLoaders } from './_routes.deploy.js'
 import { imageRouteLoaders } from './_routes.image.js'
 import { keeprRouteLoaders } from './_routes.keepr.js'
 import { lensRouteLoaders } from './_routes.lens.js'
@@ -100,7 +99,6 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'keeper/jobs/enqueue': () => import('./keeper/jobs/_enqueue.js'),
   'keeper/jobs/enqueue-active-vaults': () => import('./keeper/jobs/_enqueueActiveVaults.js'),
   'keeper/jobs/enqueue-ajna-manager': () => import('./keeper/jobs/_enqueueAjnaManager.js'),
-  'keeper/jobs/enqueue-bridge-integrity': () => import('./keeper/jobs/_enqueueBridgeIntegrity.js'),
   'keeper/jobs/enqueue-ethos-sync': () => import('./keeper/jobs/_enqueueEthosSync.js'),
   'keeper/jobs/enqueue-solana-reconcile': () => import('./keeper/jobs/_enqueueSolanaReconcile.js'),
   'keeper/jobs/enqueue-strategy-canary': () => import('./keeper/jobs/_enqueueStrategyCanary.js'),
@@ -117,7 +115,6 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'keeper/report': () => import('./keeper/_report.js'),
   'keeper/rebalance-strategies': () => import('./keeper/_rebalanceStrategies.js'),
   'keeper/sweep': () => import('./keeper/_sweep.js'),
-  'keeper/bridge-integrity': () => import('./keeper/_bridgeIntegrity.js'),
   'keeper/ethos-sync': () => import('./keeper/_ethosSync.js'),
   'keeper/cre-solana-nav-ingest': () => import('./keeper/_creSolanaNavIngest.js'),
   'keeper/cre-solana-nav-update': () => import('./keeper/_creSolanaNavUpdate.js'),
@@ -198,7 +195,6 @@ export const apiRouteLoaders: ApiRouteLoaders = {
 
   ...prefixRouteLoaders('auth', authRouteLoaders),
   ...prefixRouteLoaders('cdp', cdpRouteLoaders),
-  ...prefixRouteLoaders('deploy', deployRouteLoaders),
   ...prefixRouteLoaders('image', imageRouteLoaders),
   ...prefixRouteLoaders('keepr', keeprRouteLoaders),
   ...prefixRouteLoaders('lens', lensRouteLoaders),

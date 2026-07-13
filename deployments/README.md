@@ -26,7 +26,7 @@ node scripts/check-abi-source-naming-parity.mjs --fail
 deployments/
 └── base/
     ├── v1.*.json                     ← historical bytecode manifests (audit)
-    ├── archive/                      ← historical address snapshots
+    ├── archive/                      ← immutable historical address / ABI snapshots
     └── contracts/                    ← V1 ABI + deploy metadata
         ├── core/Registry4626.json
         ├── creator/                    ← full creator vault stack ABIs
@@ -67,11 +67,15 @@ deployments/
         │   └── GaugeSurfaceRegistry4626.json
         ├── helpers/
         └── services/
-            ├── bridge/SolanaBridgeAdapter.json
             └── lottery/
                 ├── LotteryManager4626.json
                 └── vrf/VRFConsumer4626.json
 ```
+
+The removed Twin `SolanaBridgeAdapter` snapshot is preserved at
+`base/archive/SolanaBridgeAdapter.retired.json` for on-chain archaeology only.
+It is not part of the V1 interface registry or the active LayerZero ShareOFT
+deployment plane.
 
 Lane ABIs are **templates** for per-vault deploys: V1 export sets `address: null`. After each creator/agent vault broadcast, either record the instance address in ops tooling or keep these as interface-only snapshots.
 

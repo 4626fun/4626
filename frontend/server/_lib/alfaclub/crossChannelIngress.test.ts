@@ -18,6 +18,7 @@ const ingressRow = {
   source_message_id: 'telegram-message-1',
   source_conversation_id: '-100123:42',
   target_room_id: '1659',
+  original_text: 'original message',
   alfaclub_room_id: null,
   alfaclub_message_id: null,
   validated_profile_id: null,
@@ -44,6 +45,7 @@ describe('crossChannelIngress', () => {
       sourceMessageId: ' telegram-message-1 ',
       sourceConversationId: ' -100123:42 ',
       targetRoomId: ' 1659 ',
+      originalText: 'original message',
     })
 
     expect(result).toEqual({
@@ -54,6 +56,7 @@ describe('crossChannelIngress', () => {
         sourceMessageId: 'telegram-message-1',
         sourceConversationId: '-100123:42',
         targetRoomId: '1659',
+        originalText: 'original message',
         alfaclubRoomId: null,
         alfaclubMessageId: null,
         validatedProfileId: null,
@@ -68,6 +71,7 @@ describe('crossChannelIngress', () => {
       'telegram-message-1',
       '-100123:42',
       '1659',
+      'original message',
     ])
   })
 
@@ -82,6 +86,7 @@ describe('crossChannelIngress', () => {
       sourceChannel: 'telegram',
       sourceMessageId: 'telegram-message-1',
       targetRoomId: '1659',
+      originalText: 'original message',
     })
 
     expect(result?.claimed).toBe(false)
@@ -142,6 +147,7 @@ describe('crossChannelIngress', () => {
         sourceChannel: 'xmtp',
         sourceMessageId: 'xmtp-message-1',
         targetRoomId: '1659',
+        originalText: 'original message',
       }),
     ).resolves.toBeNull()
     await expect(

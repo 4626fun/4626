@@ -239,11 +239,12 @@ export function TradingRoomCurvePreview({
     let max = maxKeys
     if (fullRange) {
       // Show the curve from 0 out to the meaningful range — the point where a
-      // lone attacker would seize control — plus a little headroom. We avoid
+      // lone attacker would seize control — plus extra headroom so the shape
+      // of the curve (not just its steepest tail) is visible. We still avoid
       // stretching all the way to the attack curve's expensive tail, which
       // squashes the readable part of the curve.
-      if (minVotePassX !== null) max = Math.max(max, minVotePassX + 8)
-      if (clampedActiveKeyIndex !== undefined) max = Math.max(max, clampedActiveKeyIndex + 4)
+      if (minVotePassX !== null) max = Math.max(max, minVotePassX + 20)
+      if (clampedActiveKeyIndex !== undefined) max = Math.max(max, clampedActiveKeyIndex + 15)
       return [0, max]
     }
     if (clampedActiveKeyIndex !== undefined && clampedActiveKeyIndex >= 5) {

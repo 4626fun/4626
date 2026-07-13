@@ -234,16 +234,6 @@ KEEPER_PROCESS_KPR_ACTIONS_RETRY_DELAY_SECONDS=60
 
 It fetches `/api/keepr/actions/pending`, claims one action with `updateStatus: executing`, executes `/api/keepr/actions/execute`, and finalizes with `executed`, `retry`, or `failed`. Trust-zone headers are derived from the action type and the existing `KPR_ZONE_KEY_*` env vars.
 
-## Bridge Integrity Monitor
-
-Vercel also calls `/api/keeper/jobs/enqueue-bridge-integrity` every 15 minutes. This replaces the bridge-integrity monitor when enabled:
-
-```bash
-KEEPER_BRIDGE_INTEGRITY_ENQUEUE_ENABLED=1
-```
-
-It enqueues `/api/keeper/bridge-integrity`, a read-only keeper endpoint that evaluates the existing `/api/deploy/solanaInfraStatus` response and reports `ok`, `warning`, or `critical` findings. It does not mutate bridge contracts.
-
 ## Ajna/Charm Strategy Canaries
 
 Vercel also calls `/api/keeper/jobs/enqueue-strategy-canary` every 30 minutes. This is disabled by default and enqueues existing `keepr_actions` instead of adding new direct strategy writers:
@@ -300,17 +290,18 @@ Vercel also calls `/api/keeper/jobs/enqueue-solana-reconcile` every 15 minutes. 
 ```bash
 KEEPER_SOLANA_RECONCILE_ENABLED=1
 KEEPER_SOLANA_RECONCILE_WORKFLOW=solana-orchestrator
-KEEPER_SOLANA_RECONCILE_ACTIONS=relay_entries,settle_fees,winner_relay
+KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,price_monitor
 ```
 
 Supported action labels are:
 
-- `relay_entries`
 - `settle_fees`
-- `winner_relay`
 - `price_monitor`
 - `graduation`
-- `rebalance`
+- `sync_mapping`
+
+Twin-dependent entry relay, winner relay, bridge-integrity, and Twin mapping
+sync actions were removed. Do not configure their old labels or state files.
 
 The reconcile endpoint is idempotent by `workflow + checkpointKey`. If `KEEPER_SOLANA_RECONCILE_CHECKPOINT_PREFIX` is unset, the daily UTC date is used.
 

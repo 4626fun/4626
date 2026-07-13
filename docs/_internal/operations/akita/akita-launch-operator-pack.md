@@ -224,28 +224,25 @@ Two preconditions or these checks lie to you:
   `AKITA_DEFAULTS` from `contracts.defaults.ts`. It is only meaningful AFTER the
   `--write-defaults` rewrite (or equivalent manual defaults update) is present on the
   machine running it. Without that, it green-lights the OLD stack.
-- `pnpm -C kpr preflight-orchestrator` runs **locally** and reads the local `kpr/.env`,
-  NOT the Vultr host env that `--update-vultr` edited. Before expecting it clean, update
-  `SOLANA_SHARE_OFT_MAPPING` (and `SOLANA_CREATOR_MINTS` if needed) in local `kpr/.env`
-  to the new ShareOFT — or run the preflight on the Vultr host instead.
+- Solana mapping checks read the environment of the process performing them.
+  Keep `SOLANA_SHARE_OFT_MAPPING` (and `SOLANA_CREATOR_MINTS` if needed) aligned
+  with the new ShareOFT on the actual orchestrator host.
 
 ```bash
 pnpm -C frontend exec tsx scripts/ops/read-akita-ovault-mesh-onchain.ts
 pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts
 pnpm -C frontend ops:verify-akita-prelaunch --production   # full gate re-run, expect exit 0
-pnpm -C kpr preflight-orchestrator                          # now expected clean (mapping points at new ShareOFT)
 # Base smoke: ShareOFT buy → lottery entry on the NEW share token
 ```
 
 Done when: mesh read-back shows the new addresses wired, Pipe A readiness exits 0,
-the prelaunch gate is green against the new stack, and the kpr preflight adapter
-deferral has cleared.
+the prelaunch gate is green against the new stack, and the active orchestrator
+mapping points at the new ShareOFT.
 
 ---
 
 ## Explicitly NOT required before Base vault live
 
-- B2 devnet hook deploy, `relay_entries` enabled, Meteora pool + LP,
-  legacy `SolanaBridgeAdapter` registration of the new ShareOFT,
+- B2 devnet hook deploy or any removed Twin relay, Meteora pool + LP,
   `configureCreatorMesh` on `OVaultHubComposer` (compose-deposit lane is dormant —
   see PF-2 item 2; requires the future AKITA OFT-adapter lockbox first).

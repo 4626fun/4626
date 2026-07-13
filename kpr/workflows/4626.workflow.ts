@@ -10,8 +10,7 @@
  *   4. Charm Rebalance — trigger Charm vault rebalance on 10%+ move
  *   5. Auction Settle  — sweepCurrency() graduated auctions (per CCA strategy)
  *   6. Keepr Queue     — execute pending XMTP/Neynar group actions
- *   7. Bridge Integrity — monitor bridge signer/route/scalar/liveness drift
- *   8. Strategy Reallocator — cross-strategy Charm/Ajna TVL via rebalanceStrategies (multi-pass)
+ *   7. Strategy Reallocator — cross-strategy Charm/Ajna TVL via rebalanceStrategies (multi-pass)
  *
  * All vaults are fetched from the registry API (keepr_vaults table).
  * Falls back to single-vault env vars if KPR_API_KEY is not set.
@@ -32,10 +31,6 @@ import {
 } from '../actions/charm-rebalance-manager.action.js';
 import { executeCcaFinalization, type BatchCcaFinalizationResult } from '../actions/cca-finalization.action.js';
 import { executeKeeprActionQueue, type KeeprActionQueueResult } from '../actions/keepr-action-queue.action.js';
-import {
-  executeBridgeIntegrityMonitor,
-  type BridgeIntegrityMonitorResult,
-} from '../actions/bridge-integrity-monitor.action.js';
 import {
   executeVaultStrategyReallocator,
   type BatchVaultStrategyReallocateResult,
@@ -60,7 +55,6 @@ export interface UnifiedResult {
   charmRebalance: BatchCharmRebalanceResult | null;
   settlement: BatchCcaFinalizationResult | null;
   queue: KeeprActionQueueResult | null;
-  bridgeIntegrity: BridgeIntegrityMonitorResult | null;
   strategyReallocator: BatchVaultStrategyReallocateResult | null;
   remoteFeeFlush: RemoteFeeFlushResult | null;
   errors: string[];
@@ -79,7 +73,6 @@ export async function handler(): Promise<void> {
   let charmRebalanceResult: BatchCharmRebalanceResult | null = null;
   let settlementResult: BatchCcaFinalizationResult | null = null;
   let queueResult: KeeprActionQueueResult | null = null;
-  let bridgeIntegrityResult: BridgeIntegrityMonitorResult | null = null;
   let strategyReallocatorResult: BatchVaultStrategyReallocateResult | null = null;
   let remoteFeeFlushResult: RemoteFeeFlushResult | null = null;
 
@@ -187,28 +180,7 @@ export async function handler(): Promise<void> {
     }
   }
 
-  // ── 7. Bridge Integrity Monitor (signer/route/scalar/liveness) ─────────
-  try {
-    console.log('═══ Bridge Integrity Monitor ═══');
-    bridgeIntegrityResult = await executeBridgeIntegrityMonitor();
-    console.log(
-      `  status=${bridgeIntegrityResult.status} checks=${bridgeIntegrityResult.checksRun} ` +
-        `routes=${bridgeIntegrityResult.monitoredRoutes} overlaps=${bridgeIntegrityResult.signerOverlapCount} ` +
-        `critical=${bridgeIntegrityResult.criticalFindings.length} warnings=${bridgeIntegrityResult.warningFindings.length}`,
-    );
-    // Critical monitor findings are surfaced via workflow-level error summary.
-    if (bridgeIntegrityResult.status === 'critical') {
-      errors.push(
-        `bridge-integrity-monitor: ${bridgeIntegrityResult.criticalFindings.join(' | ') || 'critical findings detected'}`,
-      );
-    }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`  bridge-integrity-monitor failed: ${msg}`);
-    errors.push(`bridge-integrity-monitor: ${msg}`);
-  }
-
-  // ── 8. Cross-strategy TVL reallocator (Charm ↔ Ajna via vault idle) ───
+  // ── 7. Cross-strategy TVL reallocator (Charm ↔ Ajna via vault idle) ───
   try {
     console.log('═══ Vault Strategy Reallocator ═══');
     strategyReallocatorResult = await executeVaultStrategyReallocator();
@@ -223,7 +195,7 @@ export async function handler(): Promise<void> {
     errors.push(`vault-strategy-reallocator: ${msg}`);
   }
 
-  // ── 9. Remote ShareOFT fee flush (spoke → Base gauge) ─────────────────
+  // ── 8. Remote ShareOFT fee flush (spoke → Base gauge) ─────────────────
   const remoteFeeFlushEnabled = String(process.env.KPR_REMOTE_SHARE_OFT_FLUSH_ENABLED ?? '0').trim() === '1';
   if (remoteFeeFlushEnabled) {
     try {
@@ -277,15 +249,6 @@ export async function handler(): Promise<void> {
       : null,
     queue: queueResult
       ? { processed: queueResult.processed, succeeded: queueResult.succeeded }
-      : null,
-    bridgeIntegrity: bridgeIntegrityResult
-      ? {
-          status: bridgeIntegrityResult.status,
-          checksRun: bridgeIntegrityResult.checksRun,
-          monitoredRoutes: bridgeIntegrityResult.monitoredRoutes,
-          criticalFindings: bridgeIntegrityResult.criticalFindings.length,
-          warningFindings: bridgeIntegrityResult.warningFindings.length,
-        }
       : null,
     strategyReallocator: strategyReallocatorResult
       ? {

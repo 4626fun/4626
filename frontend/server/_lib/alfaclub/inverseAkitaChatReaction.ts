@@ -10,7 +10,7 @@ import { resolveRoomDefaultArenaIdentity } from '../arena/arenaIdentityMappingSt
 import { logger } from '../infra/logger.js'
 import { deriveCounterSide, type CounterTradeSide } from './counterTradeConfig.js'
 import { formatInverseAkitaStakerPilotGateReply } from './inverseAkitaStakerPilot.js'
-import { getPerpMarkets, type HyperliquidPerpMarket } from './hyperliquid.js'
+import { getAllPerpMarkets, type HyperliquidPerpMarket } from './hyperliquid.js'
 import {
   INVERSE_AKITA_SHARED_EXECUTOR_ROOM_ID,
   isInverseAkitaChatReactionRoom,
@@ -21,13 +21,13 @@ import { CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy
 declare const process: { env: Record<string, string | undefined> }
 
 const CHAT_TRADE_INTENT_RE =
-  /^(?:go(?:ing)?\s+)?(long|short)\s+(?:on\s+)?([a-z0-9]{2,20})\s*[!.?]*$/i
+  /^(?:go(?:ing)?\s+)?(long|short)\s+(?:on\s+)?((?:[a-z0-9]{1,12}:)?[a-z0-9]{2,20})\s*[!.?]*$/i
 
 const QUALIFIED_TRADE_INTENT_RE =
-  /\b(?:should\s+i|shall\s+i|can\s+i|would\s+you\s+say\s+i\s+should|do\s+you\s+think\s+i\s+should)\s+(?:go\s+)?(long|short)\s+(?:on\s+)?([a-z0-9]{2,20})\b/i
+  /\b(?:should\s+i|shall\s+i|can\s+i|would\s+you\s+say\s+i\s+should|do\s+you\s+think\s+i\s+should)\s+(?:go\s+)?(long|short)\s+(?:on\s+)?((?:[a-z0-9]{1,12}:)?[a-z0-9]{2,20})\b/i
 
 const MENTION_LED_TRADE_INTENT_RE =
-  /\b(long|short)\s+(?:on\s+)?([a-z0-9]{2,20})\b/i
+  /\b(long|short)\s+(?:on\s+)?((?:[a-z0-9]{1,12}:)?[a-z0-9]{2,20})\b/i
 
 function normalizeChatTradeIntentText(text: string): string {
   return text
@@ -99,16 +99,61 @@ const PAIR_ALIASES: Record<string, string> = {
   zora: 'ZORA',
 }
 
-/** Extract the first recognizable perp asset from casual chat ($TICKER wins). */
-export function extractChatMarketAsset(text: string): string | null {
-  const dollarMatch = /\$([a-z0-9]{2,12})\b/i.exec(text)
+function normalizeMarketSymbol(symbol: string): string {
+  const trimmed = symbol.trim().replace(/^\$/, '')
+  if (!trimmed.includes(':')) return trimmed.toUpperCase()
+  const [dex, pair] = trimmed.split(':', 2)
+  return `${dex.toLowerCase()}:${(pair ?? '').toUpperCase()}`
+}
+
+function resolveListedMarketSymbol(
+  candidate: string,
+  markets: readonly HyperliquidPerpMarket[],
+): string | null {
+  const normalized = normalizeMarketSymbol(candidate)
+  const exact = markets.find(
+    (market) => normalizeMarketSymbol(market.symbol).toLowerCase() === normalized.toLowerCase(),
+  )
+  if (exact) return normalizeMarketSymbol(exact.symbol)
+  if (normalized.includes(':')) return null
+
+  const suffixMatches = markets.filter((market) => {
+    const listed = normalizeMarketSymbol(market.symbol)
+    return listed.includes(':') && listed.split(':', 2)[1] === normalized
+  })
+  return suffixMatches.length === 1 ? normalizeMarketSymbol(suffixMatches[0]!.symbol) : null
+}
+
+/** Extract the first recognizable listed perp asset from casual chat ($TICKER wins). */
+export function extractChatMarketAsset(
+  text: string,
+  availableMarkets?: readonly HyperliquidPerpMarket[],
+): string | null {
+  const dollarMatch = /\$((?:[a-z0-9]{1,12}:)?[a-z0-9]{2,20})\b/i.exec(text)
   if (dollarMatch) {
     const raw = dollarMatch[1]!.toLowerCase()
+    if (availableMarkets) return resolveListedMarketSymbol(raw, availableMarkets)
     return PAIR_ALIASES[raw] ?? raw.toUpperCase()
   }
   for (const word of text.toLowerCase().split(/[^a-z0-9]+/)) {
     const mapped = PAIR_ALIASES[word]
     if (mapped) return mapped
+  }
+  if (availableMarkets) {
+    const marketToken = '((?:[a-z0-9]{1,12}:)?[a-z0-9]{2,20})'
+    const contextualCandidates = [
+      new RegExp(`\\b(?:bullish|bearish|long|short|buy|sell|bid|fade)\\s+(?:on\\s+)?${marketToken}\\b`, 'i'),
+      new RegExp(
+        `\\b${marketToken}\\s+(?:looks?|is|seems?|feels?|has|gonna|going|could|will|to|moon|pump|dump|crash|nuke|rally|rip)\\b`,
+        'i',
+      ),
+    ]
+    for (const pattern of contextualCandidates) {
+      const candidate = pattern.exec(text)?.[1]
+      if (!candidate) continue
+      const resolved = resolveListedMarketSymbol(candidate, availableMarkets)
+      if (resolved) return resolved
+    }
   }
   return null
 }
@@ -174,6 +219,7 @@ const BEARISH_SENTIMENT_RES: RegExp[] = [
   /\bcapitulat(?:e|ion|ing)\b/i,
   /\bcorrection\b/i,
   /\bpull\s?back\b/i,
+  /\blos(?:e|ing|t)\s+(?:all\s+)?momentum\b/i,
   /\bngmi\b/i,
   /\bexit\s+liquidity\b/i,
   /\brip\b(?!(?:s|ping))/i,
@@ -478,22 +524,24 @@ function resolveFallbackMaxLeverage(pair: string): number {
   return FALLBACK_PAIR_MAX_LEVERAGE[normalizedPair] ?? DEFAULT_FALLBACK_MAX_LEVERAGE
 }
 
-async function loadPerpMarketsCached(): Promise<HyperliquidPerpMarket[] | null> {
+export async function loadInverseAkitaChatReactionMarkets(): Promise<HyperliquidPerpMarket[] | null> {
   const nowMs = Date.now()
   if (cachedPerpMarkets && nowMs - cachedPerpMarkets.fetchedAtMs < PERP_MARKET_CACHE_MS) {
     return cachedPerpMarkets.markets
   }
-  const markets = await getPerpMarkets()
-  if (!markets) return null
+  const markets = await getAllPerpMarkets()
+  if (!markets) return cachedPerpMarkets?.markets ?? null
   cachedPerpMarkets = { fetchedAtMs: nowMs, markets }
   return markets
 }
 
 async function lookupPairMaxLeverage(pair: string): Promise<number | null> {
-  const normalizedPair = String(pair ?? '').trim().toUpperCase()
-  const markets = await loadPerpMarketsCached()
+  const normalizedPair = normalizeMarketSymbol(pair)
+  const markets = await loadInverseAkitaChatReactionMarkets()
   if (!markets) return null
-  const row = markets.find((market) => market.symbol.toUpperCase() === normalizedPair)
+  const row = markets.find(
+    (market) => normalizeMarketSymbol(market.symbol).toLowerCase() === normalizedPair.toLowerCase(),
+  )
   if (!row?.maxLeverage || !Number.isFinite(row.maxLeverage) || row.maxLeverage <= 0) return null
   return row.maxLeverage
 }
@@ -528,7 +576,10 @@ export type InverseAkitaChatHistoryMessage = {
 
 export function parseInverseAkitaChatTradeIntent(
   text: string,
-  options?: { allowLooseSentiment?: boolean },
+  options?: {
+    allowLooseSentiment?: boolean
+    availableMarkets?: readonly HyperliquidPerpMarket[]
+  },
 ): ParsedInverseAkitaChatTradeIntent | null {
   const trimmed = String(text ?? '').trim()
   if (!trimmed || trimmed.startsWith('/')) return null
@@ -553,7 +604,7 @@ export function parseInverseAkitaChatTradeIntent(
 
   const sentimentSide = detectChatMarketSentiment(normalized)
   if (sentimentSide) {
-    const pair = extractChatMarketAsset(normalized)
+    const pair = extractChatMarketAsset(normalized, options?.availableMarkets)
     if (pair) return { userSide: sentimentSide, pair }
   }
 
@@ -610,6 +661,7 @@ export function collectInverseAkitaChatTradeIntents(params: {
   roomId: string
   messages: InverseAkitaChatHistoryMessage[]
   selfAddress?: string
+  availableMarkets?: readonly HyperliquidPerpMarket[]
 }): InverseAkitaChatTradeIntentMessage[] {
   if (!isInverseAkitaChatReactionRoom(params.roomId)) return []
   if (!isInverseAkitaChatReactionEnabledByEnv()) return []
@@ -636,6 +688,7 @@ export function collectInverseAkitaChatTradeIntents(params: {
     const replyId = String(message.replyId ?? message.reply_id ?? '').trim()
     const parsed = parseInverseAkitaChatTradeIntent(text, {
       allowLooseSentiment: replyId.length === 0,
+      availableMarkets: params.availableMarkets,
     })
     if (!parsed) continue
 
@@ -779,6 +832,10 @@ export function formatInverseAkitaChatReactionSkipReply(skipReason: string): str
       return 'wanted to invert your take but the room 1659 stake check failed. retry in a moment.'
     case 'arena_room_blocked':
       return 'wanted to invert your take but this room is not on the arena allowlist.'
+    case 'market_metadata_unavailable':
+      return 'wanted to invert your take but Hyperliquid market metadata is unavailable. retry in a moment.'
+    case 'market_not_listed':
+      return 'wanted to invert your take but that market is not currently listed on Hyperliquid.'
     default:
       if (skipReason.startsWith('pair_') || skipReason.includes('allowlist')) {
         return `wanted to invert your take but that pair is blocked here (${skipReason}).`
@@ -927,7 +984,34 @@ export async function executeInverseAkitaChatReaction(params: {
     )
   }
 
-  const pairCheck = validateArenaPair(params.intent.pair, baseConfig)
+  const markets = await loadInverseAkitaChatReactionMarkets()
+  if (!markets) {
+    return withInverseSkipReply(
+      {
+        ok: false,
+        skipped: true,
+        skipReason: 'market_metadata_unavailable',
+        counterSide: deriveCounterSide(params.intent.userSide),
+        pair: params.intent.pair,
+      },
+      params.intent.id,
+    )
+  }
+  const listedPair = resolveListedMarketSymbol(params.intent.pair, markets)
+  if (!listedPair) {
+    return withInverseSkipReply(
+      {
+        ok: false,
+        skipped: true,
+        skipReason: 'market_not_listed',
+        counterSide: deriveCounterSide(params.intent.userSide),
+        pair: params.intent.pair,
+      },
+      params.intent.id,
+    )
+  }
+
+  const pairCheck = validateArenaPair(listedPair, baseConfig)
   if (!pairCheck.ok) {
     return withInverseSkipReply(
       {

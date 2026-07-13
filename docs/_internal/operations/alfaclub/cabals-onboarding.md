@@ -1,6 +1,6 @@
 # InverseAKITA Cabals Onboarding
 
-Status: completed 2026-07-12
+Status: completed 2026-07-12 (profile polish 2026-07-13)
 
 ## Live Cabal
 
@@ -11,10 +11,33 @@ Status: completed 2026-07-12
 - Linked X identity: `https://x.com/hermit4626`
 - Visibility: public
 - Join policy: auto-join
+- Max members: `500`
 - Reward wallet: `0x74ab91cd845ff0d2006404440af49c3bc8c1df96`
+- Arena agent: [1213](https://degen.virtuals.io/agents/1213)
 
 The public Cabal URL is the join/share link. A private invite code is not
 required while the Cabal remains public with auto-join enabled.
+
+## Profile polish (live)
+
+- Description pins Arena agent `1213`, `@hermit4626`, and the live agent URL.
+- Avatar: official Arena art hosted on Cabals CDN
+  (`…/media/cabals/4e292dce-6250-4132-b448-68fa9d8e9be7.webp`).
+- Banner: wide crop of the same art
+  (`…/media/banners/099ff738-c0a4-411b-a681-00047c30e476.webp`).
+- Community links:
+  - Discord: `https://discord.gg/4626`
+  - Telegram: `https://t.me/fun4626`
+
+## Next growth levers (manual UI only)
+
+- Seed Cabal chat with a short welcome + Arena/agent links (no private API).
+- Encourage members to open BTC/ETH/SOL positions so competition PnL/volume
+  leave `$0` (member trades already appear under Overview).
+- Share `https://cabals.com/cabal/inverseakita` from `@hermit4626` / Discord /
+  Telegram; keep referral traffic on `https://cabals.com/join/ELUSIVEPRIEST`
+  for new Cabals accounts only.
+- Re-check reward wallet against live Arena `1213` before any payout change.
 
 ## Referral attribution
 

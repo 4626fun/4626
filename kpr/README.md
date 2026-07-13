@@ -56,7 +56,7 @@ Expected output highlights:
 
 ## What It Does
 
-Every 5 minutes, the unified `4626` workflow runs eight tasks in sequence:
+Every 5 minutes, the unified `4626` workflow runs seven tasks in sequence:
 
 | Step | Task | What | Impact |
 |------|------|------|--------|
@@ -66,8 +66,7 @@ Every 5 minutes, the unified `4626` workflow runs eight tasks in sequence:
 | 4 | **Charm Rebalance Manager** | Trigger Charm vault `rebalance()` when price deviates by >= configured threshold | Risk/Execution |
 | 5 | **CCA Finalization** | Attempt canonical completion for graduated CCA auctions | Feature |
 | 6 | **Keepr Action Queue** | Process pending XMTP group ops + Neynar/Farcaster actions | Infrastructure |
-| 7 | **Bridge Integrity Monitor** | Monitor bridge signer overlap, route/scalar drift, and liveness freshness | Risk/Integrity |
-| 8 | **Vault Strategy Reallocator** | Cross-strategy Charm ↔ Ajna TVL convergence via `rebalanceStrategies()` (multi-pass) | Risk/Execution |
+| 7 | **Vault Strategy Reallocator** | Cross-strategy Charm ↔ Ajna TVL convergence via `rebalanceStrategies()` (multi-pass) | Risk/Execution |
 
 An optional always-on listener complements cron for lower-latency strategy reactions:
 
@@ -147,12 +146,9 @@ The Solana integration runs as separate workflows (cron-driven, independent from
 
 | Workflow | What | Schedule |
 |----------|------|----------|
-| **keepr-solana-relay-entries** | Relay PendingEntries PDAs to Base | 30s |
 | **keepr-solana-settle-fees** | Harvest TransferFeeConfig fees to the keeper Token-2022 ATA (no Base forward) | 5m |
-| **keepr-solana-winner-relay** | Relay Base winners to Solana WinnerRecord PDA | 1m |
 | **keepr-solana-graduation** | Close Alpha Vault when Base CCA graduates | 1m |
 | **keepr-solana-price-monitor** | Monitor DLMM price + recenter on deviation | 1m |
-| **bridge-integrity-monitor** | Monitor bridge route/scalar/liveness invariants from 4626 integration layer | 5m |
 
 Required env vars for Solana workflows (see `secrets.example.env`):
 - `SOLANA_RPC_URL`
@@ -160,15 +156,10 @@ Required env vars for Solana workflows (see `secrets.example.env`):
 - `SOLANA_KEEPER_PUBKEY`
 - `SOLANA_CREATOR_MINTS`
 - `SOLANA_SHARE_OFT_MAPPING`
-- `LOTTERY_MANAGER`
 
-Bridging uses LayerZero ShareOFT with per-token Registry4626 peers. Twin/SolanaBridgeAdapter is retired.
-
-Optional operational hardening for the winner relay:
-- `SOLANA_WINNER_RELAY_STATE_FILE` to persist Base event checkpoints across process restarts
-- `SOLANA_CREATOR_COIN_TO_MINT_MAPPING_FILE` for file-backed creatorCoin → Solana mint mappings
-- `SOLANA_TWIN_TO_PUBKEY_MAPPING_FILE` for historical Twin → Solana pubkey mappings (winner relay only)
-- `SOLANA_WINNER_RELAY_FINALITY_DEPTH` to process only blocks at least this deep (default `64`)
+Cross-chain supply monitoring uses LayerZero ShareOFT with per-token Registry4626 peers.
+The Solana lottery B2 entry and winner relays are retired until a supported
+Solana-to-Base transport exists; the orchestrator does not register those actions.
 
 The fee-harvest workflow is deliberately harvest-only. It leaves harvested
 tokens in the keeper Token-2022 ATA and does not call `receiveFeeFromSolana`
@@ -236,7 +227,7 @@ Meteora admin **`token_badge`** for Token-2022 hook mints is a separate Meteora 
 
 ## Solana Deployment Scripts
 
-Program + mint setup and PDA initialization. Cross-chain supply uses LayerZero ShareOFT (Twin adapter retired):
+Program + mint setup and PDA initialization. Cross-chain supply uses LayerZero ShareOFT:
 
 ```bash
 # Upgrade Anchor program (uses solana CLI)
@@ -441,7 +432,6 @@ npm run start:charm-rebalance-manager
 npm run start:cca-finalization
 npm run start:keepr-action-queue
 npm run start:strategy-signal-listener
-npm run start:bridge-integrity-monitor
 
 # Tests
 npm test

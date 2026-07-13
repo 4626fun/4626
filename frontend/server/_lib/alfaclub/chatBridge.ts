@@ -53,11 +53,13 @@ import {
   recordChatBridgeMessageOrigin,
   type ChatBridgeMessageOrigin,
 } from './chatBridgeMessageOrigin.js'
+import { readTrustedAlfaClubCrossChannelIngress } from './crossChannelIngress.js'
 import { relayRoomMessagesToXmtp } from './roomChannelBridge.js'
 import { lookupEnabledAlfaClubRoomChannelBindingByRoom } from './roomChannelBindings.js'
 import {
   collectInverseAkitaChatTradeIntents,
   executeInverseAkitaChatReaction,
+  loadInverseAkitaChatReactionMarkets,
   registerInverseAkitaBotOutboundText,
   type InverseAkitaChatHistoryMessage,
   type InverseAkitaChatTradeIntentMessage,
@@ -760,6 +762,51 @@ function shouldSuppressDeterministicReply(responseText: string): boolean {
 function resolveCommandSenderWallet(sender: string): `0x${string}` {
   return isHexAddress(sender) ? (sender as `0x${string}`) : UNKNOWN_RELAY_SENDER_WALLET
 }
+
+async function resolveTrustedCommandSenderWallet(params: {
+  roomId: string
+  messageId: string
+  sender: string
+  text: string
+}): Promise<{ senderWallet: `0x${string}`; source: 'native' | 'ingress'; commandText: string } | null> {
+  const commandText = extractTelegramRelayCommandText(params.text)
+  const telegramRelayed = isTelegramRelayedSlashCommand(params.text, commandText)
+  const origins = await getChatBridgeMessageOrigins({
+    roomId: params.roomId,
+    messageIds: [params.messageId],
+  })
+  const origin = origins.get(params.messageId) ?? null
+  const requiresIngress =
+    origin === 'telegram' ||
+    origin === 'xmtp' ||
+    origin === 'web4626' ||
+    telegramRelayed ||
+    !isHexAddress(params.sender)
+
+  if (!requiresIngress) {
+    return {
+      senderWallet: resolveCommandSenderWallet(params.sender),
+      source: 'native',
+      commandText: params.text,
+    }
+  }
+
+  const ingress = await readTrustedAlfaClubCrossChannelIngress({
+    alfaclubRoomId: params.roomId,
+    alfaclubMessageId: params.messageId,
+  })
+  const issuer = String(ingress?.validatedIssuer ?? '').trim().toLowerCase()
+  if (!ingress || !isHexAddress(issuer)) return null
+  const trustedCommandText = String(ingress.originalText ?? '').trim() || params.text
+  return {
+    senderWallet: issuer as `0x${string}`,
+    source: 'ingress',
+    commandText: trustedCommandText,
+  }
+}
+
+/** Exposed for unit tests. */
+export const _resolveTrustedCommandSenderWalletForTests = resolveTrustedCommandSenderWallet
 
 /** Exposed for unit tests. */
 export const _shouldSuppressDeterministicReplyForTests = shouldSuppressDeterministicReply
@@ -3329,16 +3376,37 @@ async function executeCommandBatch(params: {
       command: commandHead,
     })
     try {
+      const trustedSender = await resolveTrustedCommandSenderWallet({
+        roomId: params.roomId,
+        messageId: command.id,
+        sender: command.sender,
+        text: command.text,
+      })
+      if (!trustedSender) {
+        logger.warn('[alfaclub-chat] command_execute_skipped_untrusted_issuer', {
+          roomId: params.roomId,
+          messageId: command.id,
+          sender: command.sender,
+          command: commandHead,
+        })
+        continue
+      }
       const { executeDeterministicCommand } = await import(
         '../../agents/core/executeDeterministicCommand.js'
       )
       const result = await executeDeterministicCommand({
         groupId: params.flags.groupId,
-        senderWallet: resolveCommandSenderWallet(command.sender),
-        text: command.text,
+        senderWallet: trustedSender.senderWallet,
+        text: trustedSender.commandText,
         chatId: `alfaclub:${params.roomId}`,
-        userId: command.sender,
+        userId: trustedSender.senderWallet,
         emptyResponseFallback: 'No response generated.',
+      })
+      logger.info('[alfaclub-chat] command_issuer_resolved', {
+        roomId: params.roomId,
+        messageId: command.id,
+        source: trustedSender.source,
+        issuer: trustedSender.senderWallet,
       })
       const responseText = String(result.responseText ?? '').trim()
       if (!responseText) continue
@@ -3974,11 +4042,13 @@ async function runBridgeTick(
       const recentInverseIntents = isInverseAkitaChatReactionRoom(
         roomId,
         flags.inverseAkitaChatReactionRoomIds,
-      )
+      ) && recentMessages.length > 0
         ? collectInverseAkitaChatTradeIntents({
             roomId,
             messages: recentMessages as InverseAkitaChatHistoryMessage[],
             selfAddress: CANONICAL_CSW_ADDRESS,
+            availableMarkets:
+              (await loadInverseAkitaChatReactionMarkets()) ?? undefined,
           })
         : []
       const recentInverseBatch =
@@ -4037,10 +4107,17 @@ async function runBridgeTick(
     jwt,
   })
 
+  const inverseChatMarkets = isInverseAkitaChatReactionRoom(
+    roomId,
+    flags.inverseAkitaChatReactionRoomIds,
+  ) && unseenMessages.length > 0
+    ? await loadInverseAkitaChatReactionMarkets()
+    : null
   const inverseChatIntents = collectInverseAkitaChatTradeIntents({
     roomId,
     messages: unseenMessages as InverseAkitaChatHistoryMessage[],
     selfAddress: CANONICAL_CSW_ADDRESS,
+    availableMarkets: inverseChatMarkets ?? undefined,
   })
   if (inverseChatIntents.length > 0) {
     logger.info('[alfaclub-chat] inverse_chat_intents_detected', {

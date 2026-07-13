@@ -1,6 +1,6 @@
 {
   "workflowName": "solana-orchestrator",
-  "actions": ["relay-entries", "settle-fees"],
+  "actions": ["settle-fees", "price-monitor"],
   "checkpointKey": "manual-run",
   "payload": {
     "reason": "operator-recovery"

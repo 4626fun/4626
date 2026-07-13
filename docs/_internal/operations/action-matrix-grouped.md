@@ -161,7 +161,6 @@ Generated from `docs/operations/action-matrix.csv`.
 | `keepr_tend`           | `/keepr tend [vault]`                        | ADMIN/OWNER                    | manual | Operational command                        | `frontend/server/commands/families/keepr.ts` |
 | `keepr_report`         | `/keepr report [vault]`                      | ADMIN/OWNER                    | manual | Operational command                        | `frontend/server/commands/families/keepr.ts` |
 | `keepr_settle_fees`    | `/keepr settle-fees`                         | ADMIN/OWNER                    | manual | Operational command                        | `frontend/server/commands/families/keepr.ts` |
-| `keepr_relay_entries`  | `/keepr relay-entries`                       | ADMIN/OWNER                    | manual | Operational command                        | `frontend/server/commands/families/keepr.ts` |
 
 
 ## queue_api
@@ -216,10 +215,7 @@ Generated from `docs/operations/action-matrix.csv`.
 | `cca_finalization`        | `workflows/cca-finalization.workflow.ts`           | permissionless strategy calls + checks | automated | sweep/migrate/sweepUnsold path          | `workflows/cca-finalization.workflow.ts`           |
 | `keepr_action_queue`      | `workflows/keepr-action-queue.workflow.ts`         | queue API key + XMTP creds             | automated | consume/execute/retry queue actions     | `workflows/keepr-action-queue.workflow.ts`         |
 | `strategy_signal_listener` | `workflows/strategy-signal-listener.workflow.ts`  | ws rpc + queue auth                    | automated | Enqueues deduped Ajna/Charm actions     | `workflows/strategy-signal-listener.workflow.ts`   |
-| `bridge_integrity_monitor` | `workflows/bridge-integrity-monitor.workflow.ts`   | monitor config                         | automated | Signer/route/scalar/liveness integrity  | `workflows/bridge-integrity-monitor.workflow.ts`   |
-| `solana_relay_entries`     | `workflows/keepr-solana-relay-entries.workflow.ts` | solana+base creds                      | automated | Relay Solana entries to Base            | `workflows/keepr-solana-relay-entries.workflow.ts` |
 | `solana_settle_fees`       | `workflows/keepr-solana-settle-fees.workflow.ts`   | solana+base creds                      | automated | Settle fees to Base gauge               | `workflows/keepr-solana-settle-fees.workflow.ts`   |
-| `solana_winner_relay`      | `workflows/keepr-solana-winner-relay.workflow.ts`  | solana+base creds                      | automated | Relay winners Base to Solana            | `workflows/keepr-solana-winner-relay.workflow.ts`  |
 | `solana_graduation_sync`   | `workflows/keepr-solana-graduation.workflow.ts`    | solana+base creds                      | automated | Close Alpha vault after graduation      | `workflows/keepr-solana-graduation.workflow.ts`    |
 | `solana_price_monitor`     | `kpr/workflows/keepr-solana-price-monitor.workflow.ts` | solana+base creds                      | automated | Price deviation monitor/recenter        | `kpr/workflows/keepr-solana-price-monitor.workflow.ts` |
 
@@ -239,6 +235,5 @@ Generated from `docs/operations/action-matrix.csv`.
 | `auction_migrate`          | `CCAStrategy.migrate()`                          | permissionless                  | automated | Settlement phase                | `kpr/actions/cca-finalization.action.ts`         |
 | `auction_sweep_unsold`     | `CCAStrategy.sweepUnsoldTokens()`                | permissionless                  | automated | Settlement phase                | `kpr/actions/cca-finalization.action.ts`         |
 | `auction_finalize_failed`  | `CCAStrategy.finalizeFailedAuction()`            | as configured                   | automated | Failure handling path           | `kpr/actions/cca-finalization.action.ts`         |
-| `solana_process_entry`     | `LotteryManager.processLotteryEntryFromSolana()` | bridge relay authority          | automated | Solana entry relay write        | `kpr/actions/keepr-solana-relay-entries.action.ts` |
 | `solana_receive_fee`       | `...receiveFeeFromSolana()`                      | bridge relay authority          | automated | Solana fee settlement write     | `kpr/actions/keepr-solana-settle-fees.action.ts`   |
 

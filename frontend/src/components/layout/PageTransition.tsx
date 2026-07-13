@@ -11,6 +11,11 @@ export type PageTransitionVariant = 'route' | 'nested'
 
 export function getRouteTransitionKey(pathname: string, locationKey: string): string {
   if (pathname === '/arena' || pathname.startsWith('/arena/')) return '/arena'
+  // The AlfaClub room hub drives room selection and tabs entirely through query params
+  // on this one route. Pinning the key to the pathname keeps the sidebar, tab panels,
+  // and room fetch mounted across those clicks instead of replaying the route fade
+  // (and refetching rooms) on every `?roomId=`/`?tab=` change.
+  if (pathname === '/rooms') return '/rooms'
   return locationKey
 }
 

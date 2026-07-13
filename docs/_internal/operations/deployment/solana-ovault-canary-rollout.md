@@ -5,73 +5,30 @@ sidebar_position: 4
 
 # Solana OVault Canary Rollout
 
-Run this guide when rolling out the Solana preflight path on mainnet.
+The Twin adapter canary described by earlier revisions of this page is retired.
+The registration endpoint, route-mode aliases, and write/rollback switches were
+removed with that surface.
 
-It uses the canonical Solana preflight route:
+## LayerZero-only canary sequence
 
-- `/api/deploy/registerSolanaBridgeToken`
+1. Provision a distinct Solana SPL mint and OFT Store for each canary creator.
+2. Wire the Base `CreatorShareOFT` and Solana OFT Store through the approved
+   LayerZero DVN configuration.
+3. Before finalize, seed the creator-specific peer:
+   `Registry4626.setRemoteOFTPeerBytes32(creatorToken, 30168, oftStorePeer)`.
+4. Verify the registry peer is non-zero and the batcher has a non-zero Solana
+   destination plus enabled OVault runtime.
+5. Run the deploy for one creator and confirm `finalizePhase2` bridges the
+   expected ShareOFT allocation to the distinct Solana mint.
+6. Expand only after Base and Solana supply accounting, peer identity, and
+   post-finalize reads agree.
 
-## Runtime Controls
+## Go / no-go
 
-Set on all deploy-session runtimes:
+No-go when the creator peer is missing, the OFT Store peer is confused with the
+mint pubkey, LayerZero wiring is incomplete, or the finalize fee quote fails.
+Do not fall back to a Twin adapter, global peer, creator-SPL registration, or
+status-route side effect.
 
-- `DEPLOY_SOLANA_OVAULT_KILL_SWITCH`
-  - `0`: normal behavior
-  - `1`: disable Solana preflight writes during incident response
-- `DEPLOY_SOLANA_LEGACY_WRITE_DISABLED`
-  - `0`: canonical endpoint accepts writes
-  - `1`: direct writes to `/api/deploy/registerSolanaBridgeToken` are disabled (`410`)
-
-Optional aliases are also supported:
-
-- `SOLANA_OVAULT_KILL_SWITCH`
-
-## Canary Sequence
-
-1. **Prepare**
-   - Ensure `DEPLOY_SOLANA_OVAULT_KILL_SWITCH=0`
-   - Ensure deploy-session TTL is long enough for mainnet latency (`DEPLOY_SESSION_TTL_MINUTES>=45`)
-   - Deploy API/runtime config
-2. **Canary creators (1-3)**
-   - Run `/deploy` for canary creators only
-   - Confirm phase progression reaches `phase3_sent`/`completed`
-3. **Verify preflight path**
-   - Confirm status handler calls `/api/deploy/registerSolanaBridgeToken`
-   - Confirm expected `depositEligible`, `redeemEligible`, and compatibility gating behavior
-4. **Expand**
-   - Keep the canonical route enabled while cohort size increases
-5. **Legacy cutover**
-   - Set `DEPLOY_SOLANA_LEGACY_WRITE_DISABLED=1`
-   - Keep `DEPLOY_SOLANA_OVAULT_KILL_SWITCH=0`
-   - Verify direct calls to `/api/deploy/registerSolanaBridgeToken` return `410`
-
-## Monitoring / Go-No-Go
-
-Watch deploy-session failures for:
-
-- `Solana preflight failed`
-- OVault eligibility failures (`existingMintCompatible`, `depositEligible`, `redeemEligible`)
-
-No-Go if canary sessions regress or preflight failures spike.
-
-## Fast Rollback
-
-If canary health degrades:
-
-1. Set `DEPLOY_SOLANA_OVAULT_KILL_SWITCH=1`
-2. Set `DEPLOY_SOLANA_LEGACY_WRITE_DISABLED=0`
-3. Redeploy config/runtime
-4. Confirm new sessions stop performing Solana preflight writes
-5. Keep investigating the preflight path before re-enabling writes
-
-When ready to re-enable:
-
-1. Set `DEPLOY_SOLANA_OVAULT_KILL_SWITCH=0`
-2. After stability, set `DEPLOY_SOLANA_LEGACY_WRITE_DISABLED=1` again if you want to freeze writes
-3. Re-run canary validation
-
-## Notes
-
-- Kill switch affects deploy-session Solana preflight routing only.
-- Legacy write-disable gate applies only to the canonical endpoint path.
-- Existing compatibility/eligibility hard gates remain active regardless of route mode.
+Canonical procedure:
+[Solana share-mesh per-creator provisioning](../operations/solana/solana-share-mesh-creator-provisioning.md).

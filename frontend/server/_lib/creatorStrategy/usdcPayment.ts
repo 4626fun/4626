@@ -178,7 +178,6 @@ export function resolveProtocolTreasuryForUsdcPayments(): Address {
   if (raw && /^0x[0-9a-fA-F]{40}$/.test(raw)) {
     return getAddress(raw as Address)
   }
-  // Fallback: the same `protocolTreasury` address used by the
-  // `DeploymentBatcher` / `SolanaBridgeAdapter` for all protocol custody.
+  // Fallback: the canonical `protocolTreasury` used for protocol custody.
   return getAddress('0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3')
 }

@@ -18,7 +18,6 @@
  *   tsx runner.ts payout-router-harvest  # Run just payout router harvest
  *   tsx runner.ts keepr-action-queue     # Run the Keepr action queue
  *   tsx runner.ts strategy-signal-listener # Run always-on strategy signal listener
- *   tsx runner.ts bridge-integrity-monitor # Run bridge integrity monitor
  *   tsx runner.ts vault-strategy-reallocator # Cross-strategy Charm/Ajna TVL rebalance
  *
  * Environment:
@@ -82,9 +81,6 @@ async function main() {
       case 'strategy-signal-listener':
         workflow = await import('./workflows/strategy-signal-listener.workflow.js');
         break;
-      case 'bridge-integrity-monitor':
-        workflow = await import('./workflows/bridge-integrity-monitor.workflow.js');
-        break;
       case 'vault-strategy-reallocator':
         workflow = await import('./workflows/vault-strategy-reallocator.workflow.js');
         break;
@@ -105,7 +101,6 @@ async function main() {
         console.error('  cca-finalization     — finalize graduated CCAs');
         console.error('  keepr-action-queue   — process queued Keepr actions');
         console.error('  strategy-signal-listener — always-on WS listener for Ajna/Charm triggers');
-        console.error('  bridge-integrity-monitor — monitor Solana bridge route/liveness integrity');
         console.error('  vault-strategy-reallocator — cross-strategy Charm/Ajna TVL rebalance');
         console.error('  keepr-remote-fee-flush — bridge remote ShareOFT buy fees to Base gauge');
         process.exit(1);

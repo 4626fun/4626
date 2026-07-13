@@ -11,23 +11,14 @@ Repeatable gate for **new vault deploys** (not grandfather migrations). Policy:
 
 | Milestone | Ready when | Solana lottery relay |
 |-----------|------------|----------------------|
-| **Base vault live** | Deploy session complete; Base ShareOFT buy → lottery works | Off (`relay_entries` paused) |
-| **Solana trading live** | Per-creator LZ OFT store/mint + explicit registry peer + Meteora pool + LP | Off; `relay_entries` is not production-ready |
+| **Base vault live** | Deploy session complete; Base ShareOFT buy → lottery works | Unavailable; former Twin workflows removed |
+| **Solana trading live** | Per-creator LZ OFT store/mint + explicit registry peer + Meteora pool + LP | Unavailable; lottery remains on Base |
 
 Base launch does not require Solana lottery relay.
 
 ## Platform gate (once)
 
 Run before opening deploy to creators:
-
-```bash
-KPR_API_KEY=... curl -sS -H "Authorization: Bearer $KPR_API_KEY" \
-  https://app.4626.fun/api/deploy/solanaInfraStatus | jq '.data | {readyForAutoRegistration, blockers}'
-```
-
-Expect `readyForAutoRegistration: true` and `blockers: []`.
-
-Also verify:
 
 | Check | Command / URL |
 |-------|----------------|
@@ -42,7 +33,6 @@ Also verify:
 
 | Variable | Purpose |
 |----------|---------|
-| `DEPLOY_SOLANA_PREFLIGHT_ROUTE_MODE=ovault_first` | Mesh-first deploy preflight |
 | `DEPLOYMENT_BATCHER` / `VITE_DEPLOYMENT_BATCHER` | v1.19.0 batcher `0x02D7…1750` |
 | Batcher onchain config | Non-zero destination + enabled OVault runtime (Solana EID `30168`) |
 | Registry per-creator config | Explicit `setRemoteOFTPeerBytes32` before finalize |
@@ -55,7 +45,7 @@ Redeploy production after env changes (`vercel deploy --prod --archive=tgz`).
 
 ```bash
 KEEPER_SOLANA_RECONCILE_ENABLED=1
-KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay
+KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,price_monitor
 KEEPER_SOLANA_RECONCILE_WORKFLOW=solana-orchestrator
 SOLANA_ORCHESTRATOR_URL=https://orchestrator.4626.fun
 ```
@@ -64,7 +54,6 @@ SOLANA_ORCHESTRATOR_URL=https://orchestrator.4626.fun
 
 ```bash
 SOLANA_ORCHESTRATOR_EXECUTE=1
-SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0
 ```
 
 ## Per-creator prep (before Deploy)
@@ -90,8 +79,8 @@ Expect `readyForPipeAFinalizeBridge: true`. The deprecated `solana_bridge_strate
 Provision the per-creator LayerZero OFT store/mint and seed
 `Registry4626.setRemoteOFTPeerBytes32` by following
 [Solana share-mesh creator provisioning](/operations/solana/solana-share-mesh-creator-provisioning).
-Never substitute Twin `wrap-token`, adapter registration, or a batcher-global
-peer.
+The Twin adapter/provisioner and batcher-global peer were removed; they are not
+fallbacks.
 
 ## Deploy session checklist
 
@@ -104,8 +93,8 @@ peer.
 After Path 1, create and seed the Meteora pool against the creator's LZ
 share-mesh mint using
 [Solana share-mesh budget paths](/operations/solana/solana-share-mesh-budget-paths).
-Keep `relay_entries` off; Base Uniswap lottery remains live. The historical
-Twin creator-SPL/Alpha-Vault grain is not a greenfield route.
+Base Uniswap lottery remains live. The former Twin entry/winner relay workflows
+and creator-SPL/Alpha-Vault grain are not greenfield routes.
 
 ## Ops helpers
 

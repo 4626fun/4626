@@ -43,6 +43,13 @@ vi.mock('./roomChannelBindings.js', () => ({
   lookupEnabledAlfaClubRoomChannelBindingByTelegram: lookupTelegramBindingMock,
 }))
 
+vi.mock('./telegramIssuerValidator.js', () => ({
+  validateTelegramAlfaClubIssuer: vi.fn(async () => ({
+    profileId: 1,
+    canonicalIssuer: '0x1111111111111111111111111111111111111111',
+  })),
+}))
+
 import { sendAlfaClubRoomText } from './chatBridge.js'
 
 describe('readTelegramToAlfaclubRelayConfig', () => {
@@ -180,6 +187,7 @@ describe('relayTelegramMessageToAlfaClub', () => {
       sourceMessageId: '-100999:7:88',
       sourceConversationId: '-100999:7',
       targetRoomId: '202',
+      originalText: 'room two only',
     })
     expect(sendAlfaClubRoomText).toHaveBeenCalledWith(
       expect.objectContaining({ roomId: '202', replyToMessageId: 'telegram:-100999:7:88' }),

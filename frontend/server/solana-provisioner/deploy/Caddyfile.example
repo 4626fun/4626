@@ -7,8 +7,8 @@ provisioner.example.com {
     reverse_proxy 127.0.0.1:8788
   }
 
-  @provision path /provision
-  handle @provision {
+  @mutations path /meteora-ixs /setup-creator /create-pool
+  handle @mutations {
     reverse_proxy 127.0.0.1:8788
   }
 

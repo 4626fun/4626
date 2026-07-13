@@ -1,5 +1,9 @@
 # Ops preflight status — 2026-07-09
 
+> **Historical status snapshot.** The Twin adapter and KPR entry/winner relay
+> surfaces referenced below were removed in July 2026; do not execute those
+> steps as current preflight.
+
 Read-only preflight after code remediations landed on `main` (`f6c9fa93f` includes #680+#681).
 
 **Environment:** this agent host has **no** production secrets (no `.env`, no `SOLANA_PRIVATE_KEY` / `PRIVATE_KEY` / `KPR_PRIVATE_KEY`). Mainnet **mutations cannot be executed here**. Below is the readiness matrix for a human/ops runner with keys.

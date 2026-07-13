@@ -94,6 +94,7 @@ const v1RouteLoaders: ApiRouteLoaders = {
   'alfaclub/trading-rooms': () => import('./v1/alfaclub/_trading-rooms.js'),
 
   'alfaclub/room-timeline': () => import('./v1/alfaclub/_room-timeline.js'),
+  'alfaclub/room-chat': () => import('./v1/alfaclub/_room-chat.js'),
   'alfaclub/room-access/status': () => import('./v1/alfaclub/_room-access-status.js'),
   'alfaclub/room-access/join': () => import('./v1/alfaclub/_room-access-join.js'),
   'alfaclub/room-access/policy': () => import('./v1/alfaclub/_room-access-policy.js'),

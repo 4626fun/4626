@@ -3,8 +3,9 @@ title: Legacy Twin Bridge Naming Invariant
 sidebar_position: 6
 ---
 
-:::info Canonical address source
-This document narrates the historical migration of the
+:::info Retired historical record
+**Do not execute commands in this document or use it as an operations
+runbook.** This document narrates the historical migration of the
 `SolanaBridgeAdapter` contract and contains the addresses that were
 current at each point in time. For the **current canonical deployment
 addresses**, always consult
@@ -40,9 +41,8 @@ finalize, and create Meteora against that LZ mint. The batcher
 runtime only. Never add adapter or batcher-global-peer operations to the
 unsigned 11-operation registration Safe packet.
 
-Do not point share-mesh Meteora pools or `relay_entries` at the creator
-SPL mint derived here (e.g. AKITA `9JWh…`) unless product explicitly
-chooses the legacy grain.
+Do not point share-mesh Meteora pools at the creator SPL mint derived here
+(e.g. AKITA `9JWh…`).
 
 ## The invariant
 

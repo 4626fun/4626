@@ -53,6 +53,7 @@ claim OI expansion/contraction without stored snapshot history.
 | Feature sampler cron | `/api/v1/alfaclub/market-feature-sampler` | `*/5 * * * *` |
 | Outcome settle cron | `/api/v1/alfaclub/decision-outcome-settle` | `*/5 * * * *` |
 | Settled ledger export | `/api/v1/alfaclub/decision-ledger-export` | `15 12 * * *` (read-only JSONL + claim-gate report) |
+| Ops health probe | `pnpm -C frontend ops:inverse-akita:shadow-health` | ad hoc / CI; DB + optional Hermit `/healthz` |
 | Auth | `CRON_SECRET` via `x-cron-secret` or Bearer | fail-closed |
 | Retention | prune snapshots older than 45 days | on sampler tick |
 

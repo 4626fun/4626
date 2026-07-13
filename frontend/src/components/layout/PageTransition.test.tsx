@@ -61,4 +61,9 @@ describe('getRouteTransitionKey', () => {
   it('uses location key outside arena', () => {
     expect(getRouteTransitionKey('/swap', 'xyz')).toBe('xyz')
   })
+
+  it('keeps the AlfaClub room hub under one transition key so tab/room clicks do not remount it', () => {
+    expect(getRouteTransitionKey('/rooms', 'abc')).toBe('/rooms')
+    expect(getRouteTransitionKey('/rooms', 'def')).toBe('/rooms')
+  })
 })

@@ -441,7 +441,6 @@ function localApiRoutesPlugin(): Plugin {
         '/api/deploy/v2/session/resume': apiImport('./api/_handlers/deploy/v2/session/_resume'),
         '/api/deploy/v2/session/start': apiImport('./api/_handlers/deploy/v2/session/_start'),
         '/api/deploy/v2/session/status': apiImport('./api/_handlers/deploy/v2/session/_status'),
-        '/api/deploy/solanaInfraStatus': apiImport('./api/[...path]'),
         '/api/wallet/solana/setCanonical': apiImport('./api/[...path]'),
         '/api/wallet/solana/sweep/enqueue': apiImport('./api/[...path]'),
         '/api/wallet/solana/sweep/process': apiImport('./api/[...path]'),

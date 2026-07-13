@@ -723,21 +723,22 @@ export function ConnectButton({
                     view={creatorEconomy.view}
                   />
                   <div className="mt-4 h-px bg-white/[0.06]" />
-                  <Link
-                    to="/accounts"
-                    onClick={() => setShowMenu(false)}
-                    className="flex items-center justify-between gap-3 py-3 transition-colors hover:bg-white/[0.03]"
-                  >
-                    <span className="min-w-0">
-                      <span className="block text-[13px] font-medium text-zinc-200">Account & signing</span>
-                      <span className="mt-0.5 block text-[12px] text-zinc-400">
-                        {creatorEconomy.view.accountSigningLabel} · Manage on /accounts
-                      </span>
-                    </span>
-                    <span className="text-[13px] text-zinc-400" aria-hidden>
-                      ›
-                    </span>
-                  </Link>
+                  <CanonicalIdentityDropdown
+                    identity={canonicalIdentity}
+                    onRequestConnectWallet={() => {
+                      setShowMenu(false)
+                      setShowOptions(true)
+                    }}
+                    onRequestSignOut={() => {
+                      void auth.signOut()
+                      setShowMenu(false)
+                    }}
+                    signingOut={auth.busy}
+                    onRequestDisconnectMainWallet={() => {
+                      void disconnectMainWallet()
+                    }}
+                    disconnectingMainWallet={disconnectingMainWallet}
+                  />
                 </div>
               ) : null}
               {auth.hasSession && traySection === 'portfolio' ? (

@@ -264,30 +264,12 @@ mapping(bytes32 => Phase1SplitState) public phase1SplitStates
 ```
 
 
-### solanaBridgeAdapter
-SolanaBridgeAdapter address for bridging the Solana allocation.
-
-
-```solidity
-address public solanaBridgeAdapter
-```
-
-
 ### solanaDestination
 Solana deployer/multisig wallet address (bytes32 pubkey) to receive bridged tokens.
 
 
 ```solidity
 bytes32 public solanaDestination
-```
-
-
-### solanaShareOftPeer
-Default LayerZero remote ShareOFT peer (bytes32) for greenfield finalize wiring.
-
-
-```solidity
-bytes32 public solanaShareOftPeer
 ```
 
 
@@ -535,27 +517,16 @@ function deployUniV4Strategies(UniV4DeployParams calldata params, UniV4CodeIds c
     returns (UniV4DeploymentResult memory out);
 ```
 
-### setSolanaConfig
+### setSolanaDestination
 
-Set Solana bridge adapter + destination configuration.
+Set the LayerZero Solana destination.
 
 `solanaDestination` is the LayerZero recipient for the 30% share allocation
 auto-bridge executed during finalizePhase2 (Solana seed wallet / mesh custody).
 
 
 ```solidity
-function setSolanaConfig(address _adapter, bytes32 _destination) external onlyProtocolTreasury;
-```
-
-### setSolanaShareOftPeer
-
-Set the platform default Solana ShareOFT peer used when registry peer is unset.
-
-Finalize auto-registers the creator coin, seeds registry from this default, then setPeer on ShareOFT.
-
-
-```solidity
-function setSolanaShareOftPeer(bytes32 _peer) external onlyProtocolTreasury;
+function setSolanaDestination(bytes32 _destination) external onlyProtocolTreasury;
 ```
 
 ### wireDeploymentHelpers
@@ -1105,8 +1076,6 @@ struct Phase2FinalizeParams {
     uint128 requiredRaise;
     uint256 floorPriceQ96; // Ignored by strategy; launch floor is derived onchain.
     bytes auctionSteps;
-    bytes32 meteoraAlphaVault;
-    IBaseSolanaBridge.Ix[] solanaIxs;
 }
 ```
 

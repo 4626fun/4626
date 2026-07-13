@@ -18,7 +18,7 @@ Defined in: [server/agents/eliza/plugins/kpr/index.ts:825](https://github.com/we
 
 ### KPR\_WRITE\_SUBCOMMAND\_PREFIXES
 
-> `const` **KPR\_WRITE\_SUBCOMMAND\_PREFIXES**: readonly \[`"tend"`, `"report"`, `"settle"`, `"settle-fees"`, `"relay-entries"`, `"relay-winners"`, `"graduate"`, `"queue"`\]
+> `const` **KPR\_WRITE\_SUBCOMMAND\_PREFIXES**: readonly \[`"tend"`, `"report"`, `"settle"`, `"settle-fees"`, `"graduate"`, `"queue"`\]
 
 Defined in: [server/agents/eliza/plugins/kpr/index.ts:146](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/kpr/index.ts#L146)
 

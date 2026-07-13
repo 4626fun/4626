@@ -40,14 +40,6 @@ export const DEFAULT_OVAULT_MESH_PREFLIGHT_RESULT: OvaultMeshPreflightResult = {
   meshStep: 'ovault_mesh_confirmed',
 }
 
-/**
- * Twin / SolanaBridgeAdapter preflight is retired. Always use LayerZero ShareOFT
- * mesh preflight (`ensureShareMeshOvaultPreflight`). Env overrides are ignored.
- */
-export function isLegacySolanaBridgePreflightEnabled(): boolean {
-  return false
-}
-
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }

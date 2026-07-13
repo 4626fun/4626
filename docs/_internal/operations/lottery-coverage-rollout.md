@@ -23,10 +23,8 @@ All callers must use the 4-arg selector before cutover.
    - lottery manager owner
    - registry owner
    - all gauge controller owners
-   - Solana adapter owner
 2. Confirm current production caller contracts are updated to 4-arg calls:
    - `CreatorShareOFT` (hub path)
-   - `SolanaBridgeAdapter` relay path
 3. Re-run verification locally:
    - `forge test --match-path test/CreatorLotteryManager.PauseGuards.t.sol`
    - `forge test --match-path test/CreatorLotteryManager.FeeSponsorship.t.sol`
@@ -43,11 +41,9 @@ All callers must use the 4-arg selector before cutover.
 2. Deploy new `CreatorLotteryManager`.
 3. Deploy updated caller contracts that invoke 4-arg lottery entry:
    - hub `CreatorShareOFT` implementations
-   - `SolanaBridgeAdapter`
 4. Rewire pointers:
    - registry lottery manager pointer
    - each `CreatorGaugeController.setLotteryManager(...)`
-   - `SolanaBridgeAdapter.setLotteryManager(...)`
    - `CreatorLotteryManager.setBoostManager(newBoostManager)`
    - `CreatorLotteryManager.setve4626GaugeVoting(activeve4626GaugeVoting)`
 5. Verify onchain reads:
@@ -68,7 +64,7 @@ All callers must use the 4-arg selector before cutover.
 
 If any critical path fails:
 1. Set registry lottery manager pointer back to prior manager.
-2. Reset gauge controller and Solana adapter pointers to prior manager.
+2. Reset gauge controller pointers to the prior manager.
 3. Keep new contracts deployed but detached.
 4. Re-run smoke checks on the restored path.
 

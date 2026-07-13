@@ -1,7 +1,7 @@
 /**
  * Anchor instruction discriminators for creator-share-hook.
  *
- * Canonical ix names: `relay_entries`, `settle_fees` (no drain/flush wording).
+ * Canonical fee-harvest instruction name: `settle_fees`.
  * Opt into pre-Mar-2026 mainnet bytecode only via SOLANA_HOOK_IX_SCHEMA=legacy.
  */
 
@@ -18,18 +18,6 @@ function anchorDiscriminator(globalName: string): Buffer {
   return crypto.createHash('sha256').update(globalName).digest().subarray(0, 8)
 }
 
-export function relayEntriesInstructionDiscriminator(schema = resolveHookInstructionSchema()): Buffer {
-  return anchorDiscriminator(
-    schema === 'legacy' ? 'global:drain_entries' : 'global:relay_entries',
-  )
-}
-
 export function settleFeesInstructionDiscriminator(schema = resolveHookInstructionSchema()): Buffer {
   return anchorDiscriminator(schema === 'legacy' ? 'global:flush_fees' : 'global:settle_fees')
 }
-
-/** @deprecated use relayEntriesInstructionDiscriminator */
-export const relayEntriesFlushDiscriminator = relayEntriesInstructionDiscriminator
-
-/** @deprecated use settleFeesInstructionDiscriminator */
-export const settleFeesDiscriminator = settleFeesInstructionDiscriminator

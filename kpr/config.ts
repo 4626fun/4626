@@ -396,9 +396,6 @@ export const DEPLOYMENT_BATCHER_SHARE_MESH_ABI = [
 // Solana timing constants
 // ---------------------------------------------------------------------------
 
-/** Seconds between Solana entry relay polls */
-export const SOLANA_ENTRY_RELAY_INTERVAL = 30;
-
 /** Seconds between Solana fee settlement polls */
 export const SOLANA_FEE_FLUSH_INTERVAL = 300; // 5 min
 

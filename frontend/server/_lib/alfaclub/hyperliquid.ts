@@ -97,6 +97,13 @@ export type HyperliquidPerpMarketContext = {
   basisBps?: number | null
 }
 
+function normalizePerpSymbol(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed.includes(':')) return trimmed.toUpperCase()
+  const [dex, symbol] = trimmed.split(':', 2)
+  return `${dex.toLowerCase()}:${(symbol ?? '').toUpperCase()}`
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -255,13 +262,50 @@ export async function getPerpMarkets(): Promise<HyperliquidPerpMarket[] | null> 
     if (!entry || typeof entry !== 'object') continue
     const nameRaw = (entry as { name?: unknown }).name
     if (typeof nameRaw !== 'string') continue
-    const symbol = nameRaw.trim().toUpperCase()
+    const symbol = normalizePerpSymbol(nameRaw)
     if (!symbol || seen.has(symbol)) continue
     seen.add(symbol)
     out.push({
       symbol,
       maxLeverage: parseFloatSafe((entry as { maxLeverage?: unknown }).maxLeverage),
     })
+  }
+
+  out.sort((a, b) => a.symbol.localeCompare(b.symbol))
+  return out
+}
+
+/**
+ * All currently listed Hyperliquid perp markets, including HIP-3 DEXs.
+ *
+ * `allPerpMetas` is the canonical single-snapshot market registry. Each
+ * response entry is `[meta, assetContexts]`; only the deterministic metadata
+ * universe is used here.
+ */
+export async function getAllPerpMarkets(): Promise<HyperliquidPerpMarket[] | null> {
+  const raw = await fetchJsonBounded(getInfoUrl(), { type: 'allPerpMetas' })
+  if (isErrorShape(raw) || !Array.isArray(raw)) return null
+
+  const seen = new Set<string>()
+  const out: HyperliquidPerpMarket[] = []
+  for (const dexEntry of raw) {
+    const meta = Array.isArray(dexEntry) ? dexEntry[0] : dexEntry
+    if (!meta || typeof meta !== 'object') continue
+    const universe = (meta as { universe?: unknown }).universe
+    if (!Array.isArray(universe)) continue
+    for (const entry of universe) {
+      if (!entry || typeof entry !== 'object') continue
+      const nameRaw = (entry as { name?: unknown }).name
+      if (typeof nameRaw !== 'string') continue
+      const symbol = normalizePerpSymbol(nameRaw)
+      const key = symbol.toLowerCase()
+      if (!symbol || seen.has(key)) continue
+      seen.add(key)
+      out.push({
+        symbol,
+        maxLeverage: parseFloatSafe((entry as { maxLeverage?: unknown }).maxLeverage),
+      })
+    }
   }
 
   out.sort((a, b) => a.symbol.localeCompare(b.symbol))

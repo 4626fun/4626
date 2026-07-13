@@ -25,6 +25,8 @@ Related:
 | DVN policy | Same template for every creator | Copy [layerzero-share-mesh.config.ts](../../templates/layerzero-share-mesh.config.ts) |
 
 Each creator gets their own Base `CreatorShareOFT` at vault deploy. Solana tradable shares are **that** creator's LZ mint — not a shared platform SPL ticker.
+The SPL mint and OFT Store are separate Solana pubkeys; the registry peer is
+the OFT Store identity, while Meteora and wallet displays use the mint pubkey.
 
 ## Prerequisites
 
@@ -159,9 +161,11 @@ Only after Path 1 mint exists for **this** creator:
 
 - B1: `TOKEN_MINT_X=<share_mesh_mint>`, `pnpm -C kpr solana:create-dlmm-pool`
 - Upsert `creator_meteora_alpha_vaults`
-- B2: hook PDAs + `relay_entries` per [lottery policy](./solana-share-mesh-lottery-policy.md)
+- B2: deferred until a new non-Twin lottery relay architecture exists; see the
+  [lottery policy](./solana-share-mesh-lottery-policy.md)
 
-Update keeper env maps with **this** mint → Base `CreatorShareOFT` address — not Twin wrap-token creator SPL.
+Update `SOLANA_SHARE_OFT_MAPPING` with **this** mint → Base `CreatorShareOFT`
+address. Do not add retired creator-coin/Twin maps.
 
 ---
 

@@ -20,7 +20,7 @@ function parseActions(raw: string | undefined): SolanaOrchestratorAction[] {
     .split(',')
     .map((value) => normalizeSolanaOrchestratorAction(value))
     .filter((value): value is SolanaOrchestratorAction => value !== null)
-  return values.length > 0 ? values : ['relay_entries', 'settle_fees', 'winner_relay']
+  return values.length > 0 ? values : ['settle_fees', 'graduation', 'price_monitor']
 }
 
 /**

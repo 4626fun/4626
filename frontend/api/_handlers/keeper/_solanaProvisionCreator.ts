@@ -102,25 +102,16 @@ function normalizeOptionalAddress(value: unknown): Address | null {
 }
 
 function deriveCreatePoolUrl(): string {
-  const explicit = env('SOLANA_METEORA_POOL_PROVISIONER_URL')
-  if (explicit) return explicit
-  const dynamic = env('SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL')
-  if (dynamic) return dynamic.replace(/\/provision\/?$/, '/create-pool')
-  return ''
+  return env('SOLANA_METEORA_POOL_PROVISIONER_URL')
 }
 
 function deriveSetupCreatorUrl(): string {
-  const explicit = env('SOLANA_HOOK_PROVISIONER_URL')
-  if (explicit) return explicit
-  const dynamic = env('SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL')
-  if (dynamic) return dynamic.replace(/\/provision\/?$/, '/setup-creator')
-  return ''
+  return env('SOLANA_HOOK_PROVISIONER_URL')
 }
 
 function readCreatePoolSecret(): string {
   return (
     env('SOLANA_METEORA_POOL_PROVISIONER_SECRET') ||
-    env('SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET') ||
     env('METEORA_IX_PROVISIONER_SECRET')
   )
 }
@@ -129,7 +120,6 @@ function readSetupCreatorSecret(): string {
   return (
     env('SOLANA_HOOK_PROVISIONER_SECRET') ||
     env('SOLANA_METEORA_POOL_PROVISIONER_SECRET') ||
-    env('SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET') ||
     env('METEORA_IX_PROVISIONER_SECRET')
   )
 }

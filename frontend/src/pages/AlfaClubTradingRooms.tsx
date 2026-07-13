@@ -23,9 +23,9 @@ import { keySafetyStatusMeta, type KeySafetyStatus } from '@/components/alfaclub
 import {
   DEFAULT_FILTERS,
   RoomDiscoveryTray,
-  TIER_DOT_CLASSNAME,
   type RoomDiscoveryFilters,
 } from '@/components/alfaclub/RoomDiscoveryTray'
+import { RoomChatPanel } from '@/components/alfaclub/RoomChatPanel'
 import { RoomTradingActivity } from '@/components/alfaclub/RoomTradingActivity'
 import { Modal } from '@/components/ui/Modal'
 import { PageMeta } from '@/components/seo/PageMeta'
@@ -36,6 +36,7 @@ import {
   formatRoomType,
   readRecentRoomIds,
   rememberRecentRoom,
+  roomCurveTierRingClassName,
 } from '@/lib/alfaclub/roomDirectory'
 import { apiFetch } from '@/lib/api/apiBase'
 import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
@@ -44,14 +45,16 @@ import { cn } from '@/lib/shared/utils'
 
 import {
   AlfaClubKeySafety,
+  type AlfaClubKeySafetyPricingSummary,
   type AlfaClubKeySafetySummary,
 } from './AlfaClubKeySafety'
 import { AlfaClubRoomLiquidity } from './AlfaClubLiquidityPools'
 
-export type AlfaClubRoomHubTab = 'overview' | 'safety' | 'liquidity' | 'inverse'
+export type AlfaClubRoomHubTab = 'overview' | 'safety' | 'liquidity' | 'chat' | 'inverse'
 
-const BASE_TABS: Array<{ id: Exclude<AlfaClubRoomHubTab, 'inverse'>; label: string }> = [
+const BASE_TABS: Array<{ id: Exclude<AlfaClubRoomHubTab, 'inverse' | 'safety'>; label: string }> = [
   { id: 'overview', label: 'Overview' },
+  { id: 'chat', label: 'Chat' },
   { id: 'liquidity', label: 'Liquidity' },
 ]
 
@@ -113,6 +116,8 @@ export function resolveAlfaClubRoomHubTab(
       return 'overview'
     case 'safety':
       return 'overview'
+    case 'chat':
+      return 'chat'
     case 'liquidity':
       return 'liquidity'
     case 'inverse':
@@ -211,7 +216,7 @@ export function AlfaClubTradingRooms() {
   useEffect(() => {
     const invalidTab =
       requestedTab !== null &&
-      !['overview', 'safety', 'liquidity', 'inverse'].includes(requestedTab)
+      !['overview', 'safety', 'liquidity', 'chat', 'inverse'].includes(requestedTab)
     const unavailableInverse = requestedTab === 'inverse' && selectedRoomId !== '1659'
     const legacySafetyTab = requestedTab === 'safety'
     if (!invalidTab && !unavailableInverse && !legacySafetyTab) return
@@ -516,6 +521,7 @@ export function AlfaClubTradingRooms() {
                   <OverviewPanel
                     roomId={selectedRoomId}
                     room={selectedRoom}
+                    pricing={safetySummary?.pricing}
                   />
                   <div className="border-t border-white/[0.07] pt-8">
                     <div className="mb-5">
@@ -545,6 +551,9 @@ export function AlfaClubTradingRooms() {
                   <AlfaClubRoomLiquidity key={selectedRoomId} roomId={selectedRoomId} />
                 </section>
               ) : null}
+              {activeTab === 'chat' ? (
+                <RoomChatPanel key={selectedRoomId} roomId={selectedRoomId} />
+              ) : null}
               {activeTab === 'inverse' && selectedRoomId === '1659' ? (
                 <section
                   role="tabpanel"
@@ -573,25 +582,12 @@ function CollapsedRoomRail({
   roomId: string
   roomCount: number
 }) {
-  const tierDotClassName =
-    room?.roomType === 'trading' && room.tier ? TIER_DOT_CLASSNAME[room.tier] : null
   return (
     <div
       className="absolute inset-x-0 top-32 flex flex-col items-center gap-3 px-2 text-center"
       aria-label={roomId ? `Selected room #${roomId}` : 'No room selected'}
     >
-      <span className="relative inline-flex">
-        <SelectedRoomAvatar room={room} />
-        {tierDotClassName ? (
-          <span
-            className={cn(
-              'absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full ring-2 ring-black',
-              tierDotClassName,
-            )}
-            aria-hidden
-          />
-        ) : null}
-      </span>
+      <SelectedRoomAvatar room={room} />
       <span className="max-w-full truncate rounded-full bg-white/[0.06] px-2 py-0.5 font-mono text-[10px] text-sky-200">
         {roomId ? `#${roomId}` : '—'}
       </span>
@@ -620,32 +616,44 @@ function RoomHeader({
   onSelectTab: (tab: AlfaClubRoomHubTab) => void
 }) {
   const selectedHandle = (room?.creatorHandle ?? '').trim().replace(/^@+/, '')
+  // room.displayLabel often already embeds "by <handle>" (e.g. "AKITA by wenakita") — use
+  // the raw roomName for the headline so the separate byline below doesn't repeat it.
+  const title = room?.roomName || room?.displayLabel || `Room #${roomId}`
+  const bannerSrc = room?.imageUrl?.trim() || null
   return (
     <header className="pt-2">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <SelectedRoomAvatar room={room} />
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono text-xs text-sky-200/80">#{roomId}</span>
-              {room ? (
-                <span className="text-[11px] text-zinc-400">
-                  {formatRoomType(room.roomType)}
-                </span>
-              ) : null}
-              <TierBadge tier={room?.tier ?? null} />
-            </div>
-            <h1 className="headline mt-2 truncate text-2xl text-zinc-100 sm:text-3xl">
-              {room?.displayLabel || room?.roomName || `Room #${roomId}`}
-            </h1>
-            {selectedHandle ? <p className="mt-1 text-sm text-zinc-400">by @{selectedHandle}</p> : null}
+      <div className="relative overflow-hidden rounded-3xl ring-1 ring-white/[0.06]">
+        {bannerSrc ? (
+          <div className="absolute inset-0" aria-hidden>
+            <img src={bannerSrc} alt="" className="h-full w-full object-cover opacity-[0.16]" />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/75 to-black" />
           </div>
+        ) : null}
+        <div className="relative flex flex-wrap items-start justify-between gap-4 px-4 py-5 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <SelectedRoomAvatar room={room} />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-xs text-sky-200/80">#{roomId}</span>
+                {room ? (
+                  <span className="text-[11px] text-zinc-400">
+                    {formatRoomType(room.roomType)}
+                  </span>
+                ) : null}
+                <TierBadge tier={room?.tier ?? null} />
+              </div>
+              <h1 className="headline mt-2 truncate text-2xl text-zinc-100 sm:text-3xl">
+                {title}
+              </h1>
+              {selectedHandle ? <p className="mt-1 text-sm text-zinc-400">by @{selectedHandle}</p> : null}
+            </div>
+          </div>
+          <dl className="grid grid-cols-2 gap-2 text-right sm:grid-cols-3">
+            <HeaderStat label="Room Points" value={formatRoomPoints(room?.roomPoints ?? null)} />
+            <HeaderStat label="Key supply" value={room?.keySupply?.toLocaleString() ?? '—'} />
+            <HeaderStat label="Safety" value={safetySummary?.label ?? 'Open tab'} />
+          </dl>
         </div>
-        <dl className="grid grid-cols-2 gap-2 text-right sm:grid-cols-3">
-          <HeaderStat label="Room Points" value={formatRoomPoints(room?.roomPoints ?? null)} />
-          <HeaderStat label="Key supply" value={room?.keySupply?.toLocaleString() ?? '—'} />
-          <HeaderStat label="Safety" value={safetySummary?.label ?? 'Open tab'} />
-        </dl>
       </div>
       <div
         className="sticky top-20 z-10 -mx-4 mt-5 flex gap-1 overflow-x-auto border-y border-white/[0.07] bg-black/85 px-4 py-2 backdrop-blur-xl md:top-16 sm:-mx-6 sm:px-6"
@@ -736,41 +744,26 @@ function DiscoveryLanding({
             <p className="text-xs text-zinc-500">Points reflect room activity, not USD volume.</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {featured.map((room) => {
-              const tierDotClassName =
-                room.roomType === 'trading' && room.tier ? TIER_DOT_CLASSNAME[room.tier] : null
-              return (
-                <button
-                  key={room.roomId}
-                  type="button"
-                  onClick={() => onSelect(room.roomId)}
-                  className="group rounded-xl border-b border-white/[0.07] px-2 py-4 text-left transition hover:border-sky-400/30 hover:bg-white/[0.03]"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="relative inline-flex shrink-0">
-                      <SelectedRoomAvatar room={room} />
-                      {tierDotClassName ? (
-                        <span
-                          className={cn(
-                            'absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full ring-2 ring-black',
-                            tierDotClassName,
-                          )}
-                          aria-hidden
-                        />
-                      ) : null}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-zinc-100">
-                        {room.displayLabel || room.roomName}
-                      </p>
-                      <p className="mt-1 text-xs text-zinc-500">{formatRoomType(room.roomType)}</p>
-                    </div>
-                    <ArrowRight className="size-4 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-sky-300" aria-hidden />
+            {featured.map((room) => (
+              <button
+                key={room.roomId}
+                type="button"
+                onClick={() => onSelect(room.roomId)}
+                className="group rounded-xl border-b border-white/[0.07] px-2 py-4 text-left transition hover:border-sky-400/30 hover:bg-white/[0.03]"
+              >
+                <div className="flex items-center gap-3">
+                  <SelectedRoomAvatar room={room} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-zinc-100">
+                      {room.displayLabel || room.roomName}
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-500">{formatRoomType(room.roomType)}</p>
                   </div>
-                  <p className="mt-3 font-mono text-xs text-zinc-400">{formatRoomPoints(room.roomPoints)}</p>
-                </button>
-              )
-            })}
+                  <ArrowRight className="size-4 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-sky-300" aria-hidden />
+                </div>
+                <p className="mt-3 font-mono text-xs text-zinc-400">{formatRoomPoints(room.roomPoints)}</p>
+              </button>
+            ))}
           </div>
         </section>
         ) : loading ? (
@@ -823,9 +816,11 @@ function MissingRoomBanner({ roomId, onBrowse }: { roomId: string; onBrowse: () 
 function OverviewPanel({
   roomId,
   room,
+  pricing,
 }: {
   roomId: string
   room: AlfaClubRoomDirectoryItem | null
+  pricing?: AlfaClubKeySafetyPricingSummary
 }) {
   // Only trading rooms have a Hyperliquid trading wallet to report on. Social rooms have no
   // host trading activity, so rendering the widget there would either sit empty or, worse,
@@ -863,6 +858,15 @@ function OverviewPanel({
           <FactCard label="Bonding curve" value={room?.tier ?? '—'} />
           <FactCard label="Last updated" value={formatUpdatedAt(room?.ingestedAt ?? null)} />
         </dl>
+        {pricing ? (
+          <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+            <FactCard label="Current price" value={formatUsd(pricing.currentUsdc)} />
+            <FactCard label="Buy next key" value={formatUsd(pricing.buyUsdc)} />
+            <FactCard label="Sell 1 key" value={formatUsd(pricing.sellUsdc)} />
+            <FactCard label="Reported fund" value={formatUsd(pricing.reportedFundUsdc)} />
+            <FactCard label={pricing.treasuryLabel} value={formatUsd(pricing.treasuryUsdc)} />
+          </dl>
+        ) : null}
       </div>
       {isTradingRoom ? <RoomTradingActivity key={roomId} roomId={roomId} /> : null}
     </section>
@@ -879,12 +883,23 @@ function FactCard({ label, value }: { label: string; value: string }) {
 }
 
 function SelectedRoomAvatar({ room }: { room: AlfaClubRoomDirectoryItem | null }) {
+  // Room artwork lives in the CSP-allowlisted room-image bucket (see vercel.json img-src),
+  // so it renders directly — no proxy hop needed here.
   const imageSrc = room?.imageUrl?.trim() || null
   const [failedSource, setFailedSource] = useState<string | null>(null)
+  const tierRing = room ? roomCurveTierRingClassName(room) : null
+  const avatarClassName = cn(
+    'size-11 shrink-0 rounded-xl object-cover',
+    tierRing && 'ring-2 ring-offset-1 ring-offset-black',
+    tierRing,
+  )
   if (!imageSrc || failedSource === imageSrc) {
     return (
       <span
-        className="grid size-11 shrink-0 place-items-center rounded-xl bg-white/[0.05] text-sm font-semibold text-zinc-400"
+        className={cn(
+          avatarClassName,
+          'grid place-items-center bg-white/[0.05] text-sm font-semibold text-zinc-400',
+        )}
         aria-hidden
       >
         {(room?.roomName ?? '#').slice(0, 1).toUpperCase()}
@@ -899,7 +914,7 @@ function SelectedRoomAvatar({ room }: { room: AlfaClubRoomDirectoryItem | null }
       height={44}
       loading="lazy"
       onError={() => setFailedSource(imageSrc)}
-      className="size-11 shrink-0 rounded-xl object-cover"
+      className={avatarClassName}
     />
   )
 }
@@ -940,4 +955,13 @@ function formatUpdatedAt(value: string | null): string {
   const hours = Math.round(minutes / 60)
   if (hours < 24) return `${hours}h ago`
   return `${Math.round(hours / 24)}d ago`
+}
+
+function formatUsd(value: number): string {
+  if (!Number.isFinite(value)) return '—'
+  return value.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: value >= 1000 ? 0 : 2,
+  })
 }

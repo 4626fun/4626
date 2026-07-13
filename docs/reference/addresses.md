@@ -12,7 +12,7 @@ infrastructure is the **v1.18.0** stack; new per-creator launches use the
 > **v1.19 partial refresh:** release packet:
 > [`v1.19.0-partial-refresh.md`](../_internal/deployment-releases-legacy/v1.19.0-partial-refresh.md).
 > This reuses the v1.18 shared addresses and changes only bytecode/codeIds,
-> Phase2 module wiring, adapter LM configuration, and the launch namespace.
+> Phase2 module wiring, lottery configuration, and the launch namespace.
 
 > **Cutover complete (2026-07-08):** treasury Safe wiring, AMOE router `0x18D180…` on manager (updated **2026-07-11** to remediation LM `0xB68F359e…`), bytecode store seeded, Vercel production/development env synced, legacy v1.16.1 manager AMOE relayer kill-switched. Preview env vars remain dashboard-only (Vercel CLI skips preview targets).
 
@@ -36,7 +36,6 @@ For launch procedures, see [Getting started](/getting-started). This page lists 
 | VaultActivationBatcher | `0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3` |
 | LotteryManager4626 | `0xB68F359e01626Ec5d15C624037311C70DacAba43` |
 | VRFConsumer4626 | `0x0b41AD9Eb06EE14C360E1e3D16Af63F5a172Ec36` |
-| SolanaBridgeAdapter | `0x9A61814082A26192DD9Cb201b44058506685Be60` |
 | UniversalBytecodeStoreV2 | `0xfa3e3b466635DAff910057f18749B93d56F9DE50` |
 | UniversalCreate2DeployerFromStore | `0x54660E61857a652753d805aD2c7b4f759C138bD5` |
 | CreatorOVaultCoreModule | `0xE5C1de158Cb66ffCE15b26BE6F40f598c642EF43` |
@@ -76,6 +75,7 @@ Notes:
 | v1.14.0 shell | Batcher `0xa99058f424FB3ACC639F59355C65C40149030651` | Pre–v1.14.1 refresh |
 | Legacy AMOE router | `0xc57aedc38eba3edfa116f92b3fc427af7eb06b0a` | v1.11 manager fan-out |
 | Legacy lottery manager | `0x04CADE6FDf564A5005FF80930d8e8784cb1A7Cf8` | Pre–v1.16.1 registry stack |
+| Retired Twin SolanaBridgeAdapter | `0x9A61814082A26192DD9Cb201b44058506685Be60` | Historical on-chain deployment only; removed from source and active env/defaults |
 
 ### Protocol Safes
 
@@ -124,11 +124,26 @@ After an infra epoch deploy, update **local `.env`**, **Vercel** (`production`, 
 | `UNIVERSAL_CREATE2_FROM_STORE`, `UNIVERSAL_CREATE2_DEPLOYER` | `VITE_UNIVERSAL_CREATE2_DEPLOYER` | `0x54660E61857a652753d805aD2c7b4f759C138bD5` |
 | `DEPLOYMENT_BATCHER` | `VITE_DEPLOYMENT_BATCHER` | `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
 | `DEPLOYMENT_BATCHER_AUTO_HANDOFF` | `VITE_DEPLOYMENT_BATCHER_AUTO_HANDOFF` | `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
-| `SOLANA_BRIDGE_ADAPTER` | `VITE_SOLANA_BRIDGE_ADAPTER` | `0x9A61814082A26192DD9Cb201b44058506685Be60` |
 | `LOTTERY_AMOE_ROUTER` | — | `0x18D1806cfe044de1eb4652ab30Bf6937f8dfc0A7` |
 | — | `VITE_DEPLOYMENT_VERSION` | `v1.19.0` |
 
 `VITE_DEPLOYMENT_VERSION` pins the CREATE2 namespace for **new vault launches**.
+
+### Solana ShareOFT identity
+
+Solana has no EVM contract address for the Base `CreatorShareOFT`. Each creator
+has a distinct Solana SPL mint pubkey and OFT Store pubkey. LayerZero peer
+wiring connects that creator's Base ShareOFT to the Solana OFT Store as one
+omnichain supply.
+
+Before every creator finalize, seed the non-zero OFT Store peer explicitly:
+
+```solidity
+Registry4626.setRemoteOFTPeerBytes32(creatorToken, 30168, peer)
+```
+
+The removed Twin adapter, its env keys, and any batcher-global peer are not
+active address/config surfaces.
 
 ### Rewards ecosystem (ve■4626) — canary pending
 

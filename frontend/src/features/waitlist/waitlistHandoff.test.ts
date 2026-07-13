@@ -147,6 +147,15 @@ describe('waitlist handoff helpers', () => {
       '/api/auth/privy',
       '/api/auth/handoff/create',
     ])
+    expect(apiFetchMock).toHaveBeenLastCalledWith(
+      '/api/auth/handoff/create',
+      expect.objectContaining({
+        body: JSON.stringify({
+          privyToken: null,
+          expectedAddress: '0xceca13f2686ed061c57620ecdf67e1b8c0f285e9',
+        }),
+      }),
+    )
   })
 
   it('does not transfer a stale cookie-only identity to the app host', async () => {

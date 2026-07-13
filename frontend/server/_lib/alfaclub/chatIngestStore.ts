@@ -35,6 +35,204 @@ export type AlfaClubInsertedIngestMessage = AlfaClubIngestMessage & {
   dateIso: string | null
 }
 
+export type AlfaClubRoomChatOrigin = 'telegram' | 'xmtp' | 'web4626'
+
+export type AlfaClubRoomChatMessage = {
+  roomId: string
+  messageId: string
+  senderAddress: string
+  text: string
+  dateMs: number | null
+  dateIso: string | null
+  username: string | null
+  avatarUrl: string | null
+  isBot: boolean | null
+  replyId: string | null
+  replyText: string | null
+  replySender: string | null
+  replyUsername: string | null
+  origin: AlfaClubRoomChatOrigin | null
+}
+
+export type ListAlfaClubRoomChatMessagesParams = {
+  roomId: string
+  /** Page size (clamped 1..100). Default 50. */
+  limit?: number
+  /** Cursor: load messages older than this message id (paired with beforeDateMs when possible). */
+  beforeMessageId?: string | null
+  /** Cursor: load messages older than this epoch ms. */
+  beforeDateMs?: number | null
+}
+
+type ChatIngestListRow = {
+  room_id: string
+  message_id: string
+  sender_address: string
+  message_text: string
+  message_date: string | null
+  username: string | null
+  avatar_url: string | null
+  is_bot: boolean | null
+  reply_id: string | null
+  reply_text: string | null
+  reply_sender: string | null
+  reply_username: string | null
+  origin: string | null
+}
+
+function parseOrigin(value: string | null | undefined): AlfaClubRoomChatOrigin | null {
+  if (value === 'telegram' || value === 'xmtp' || value === 'web4626') return value
+  return null
+}
+
+function rowToRoomChatMessage(row: ChatIngestListRow): AlfaClubRoomChatMessage {
+  const dateIso = cleanString(row.message_date)
+  let dateMs: number | null = null
+  if (dateIso) {
+    const parsed = Date.parse(dateIso)
+    dateMs = Number.isFinite(parsed) ? parsed : null
+  }
+  return {
+    roomId: String(row.room_id ?? ''),
+    messageId: String(row.message_id ?? ''),
+    senderAddress: String(row.sender_address ?? '').toLowerCase(),
+    text: String(row.message_text ?? ''),
+    dateMs,
+    dateIso,
+    username: cleanString(row.username),
+    avatarUrl: cleanString(row.avatar_url),
+    isBot: cleanBool(row.is_bot),
+    replyId: cleanString(row.reply_id),
+    replyText: cleanString(row.reply_text),
+    replySender: cleanString(row.reply_sender),
+    replyUsername: cleanString(row.reply_username),
+    origin: parseOrigin(row.origin),
+  }
+}
+
+/**
+ * Paginated room chat transcript from `alfaclub.chat_ingest`, with optional
+ * origin from `alfaclub.chat_bridge_message_origin`.
+ *
+ * Returns newest-first pages. Use `beforeDateMs` / `beforeMessageId` to load older
+ * messages. Callers that want chronological UI order should reverse the page.
+ *
+ * Fail-closed: throws when the DB is unavailable or the query fails.
+ * Does not create schema.
+ */
+export async function listAlfaClubRoomChatMessages(
+  params: ListAlfaClubRoomChatMessagesParams,
+): Promise<AlfaClubRoomChatMessage[]> {
+  const roomId = String(params.roomId ?? '').trim()
+  if (!roomId) throw new Error('room_id_required')
+
+  const db = await getDb()
+  if (!db) throw new Error('db_not_configured')
+
+  const limit = Math.max(1, Math.min(100, Math.floor(params.limit ?? 50)))
+  const beforeMessageId = cleanString(params.beforeMessageId)
+  const beforeDateMs =
+    typeof params.beforeDateMs === 'number' && Number.isFinite(params.beforeDateMs)
+      ? Math.floor(params.beforeDateMs)
+      : null
+  const beforeDateIso =
+    beforeDateMs != null && beforeDateMs > 0 ? toIsoOrNull(beforeDateMs) : null
+
+  try {
+    // Cursor semantics: "before" means strictly older than the cursor (load-more-older).
+    const result =
+      beforeDateIso && beforeMessageId
+        ? await db.sql`
+            SELECT
+              ci.room_id,
+              ci.message_id,
+              ci.sender_address,
+              ci.message_text,
+              ci.message_date,
+              ci.username,
+              ci.avatar_url,
+              ci.is_bot,
+              ci.reply_id,
+              ci.reply_text,
+              ci.reply_sender,
+              ci.reply_username,
+              o.origin
+            FROM alfaclub.chat_ingest ci
+            LEFT JOIN alfaclub.chat_bridge_message_origin o
+              ON o.room_id = ci.room_id
+             AND o.message_id = ci.message_id
+            WHERE ci.room_id = ${roomId}
+              AND ci.deleted_at IS NULL
+              AND (
+                COALESCE(ci.message_date, ci.ingested_at) < ${beforeDateIso}::timestamptz
+                OR (
+                  COALESCE(ci.message_date, ci.ingested_at) = ${beforeDateIso}::timestamptz
+                  AND ci.message_id < ${beforeMessageId}
+                )
+              )
+            ORDER BY COALESCE(ci.message_date, ci.ingested_at) DESC, ci.message_id DESC
+            LIMIT ${limit};
+          `
+        : beforeDateIso
+          ? await db.sql`
+              SELECT
+                ci.room_id,
+                ci.message_id,
+                ci.sender_address,
+                ci.message_text,
+                ci.message_date,
+                ci.username,
+                ci.avatar_url,
+                ci.is_bot,
+                ci.reply_id,
+                ci.reply_text,
+                ci.reply_sender,
+                ci.reply_username,
+                o.origin
+              FROM alfaclub.chat_ingest ci
+              LEFT JOIN alfaclub.chat_bridge_message_origin o
+                ON o.room_id = ci.room_id
+               AND o.message_id = ci.message_id
+              WHERE ci.room_id = ${roomId}
+                AND ci.deleted_at IS NULL
+                AND COALESCE(ci.message_date, ci.ingested_at) < ${beforeDateIso}::timestamptz
+              ORDER BY COALESCE(ci.message_date, ci.ingested_at) DESC, ci.message_id DESC
+              LIMIT ${limit};
+            `
+          : await db.sql`
+              SELECT
+                ci.room_id,
+                ci.message_id,
+                ci.sender_address,
+                ci.message_text,
+                ci.message_date,
+                ci.username,
+                ci.avatar_url,
+                ci.is_bot,
+                ci.reply_id,
+                ci.reply_text,
+                ci.reply_sender,
+                ci.reply_username,
+                o.origin
+              FROM alfaclub.chat_ingest ci
+              LEFT JOIN alfaclub.chat_bridge_message_origin o
+                ON o.room_id = ci.room_id
+               AND o.message_id = ci.message_id
+              WHERE ci.room_id = ${roomId}
+                AND ci.deleted_at IS NULL
+              ORDER BY COALESCE(ci.message_date, ci.ingested_at) DESC, ci.message_id DESC
+              LIMIT ${limit};
+            `
+
+    return ((result.rows ?? []) as ChatIngestListRow[])
+      .map(rowToRoomChatMessage)
+      .filter((row) => Boolean(row.roomId && row.messageId))
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`room_chat_list_failed:${message.slice(0, 180)}`)
+  }
+}
+
 function toIsoOrNull(dateMs: number | null): string | null {
   if (dateMs === null || !Number.isFinite(dateMs) || dateMs <= 0) return null
   try {

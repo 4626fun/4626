@@ -32,6 +32,21 @@ export function formatRoomPoints(value: number | null): string {
   return `${formatted} pts`
 }
 
+/**
+ * Trading rooms encode their bonding-curve tier as a ring color around the
+ * room avatar (amber = exclusive, sky = club, zinc = casual). Social rooms
+ * have no curve tier, so they render with no ring at all.
+ */
+export function roomCurveTierRingClassName(room: {
+  roomType: AlfaRoomType
+  tier: AlfaRoomTier | null
+}): string | null {
+  if (room.roomType !== 'trading') return null
+  if (room.tier === 'exclusive') return 'ring-amber-400'
+  if (room.tier === 'club') return 'ring-sky-400'
+  return 'ring-zinc-400'
+}
+
 export function formatRoomType(roomType: AlfaRoomType): string {
   switch (roomType) {
     case 'trading':

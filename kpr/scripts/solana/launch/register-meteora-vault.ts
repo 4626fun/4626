@@ -2,11 +2,11 @@
  * Register (upsert) a Meteora Alpha Vault config into the `creator_meteora_alpha_vaults`
  * Supabase table for legacy Alpha Vault ix payloads / ops maps.
  *
- * Twin `registerSolanaBridgeToken` / wrap-token is retired. Prefer LayerZero ShareOFT
- * share-mesh Path 1/2 (see docs/_internal/operations/operations/solana/solana-share-mesh-creator-provisioning.md).
+ * Use the LayerZero ShareOFT share-mesh Path 1/2
+ * (see docs/_internal/operations/operations/solana/solana-share-mesh-creator-provisioning.md).
  *
  * Run this AFTER you have:
- *   1. Provisioned the Solana LZ share-mesh mint (not Twin wrap-token)
+ *   1. Provisioned the Solana LZ share-mesh mint
  *   2. Created the Meteora DLMM pool          (`pnpm solana:create-dlmm-pool`)
  *   3. Created the Meteora Alpha Vault        (`pnpm solana:create-alpha-vault`) when that lane applies
  *

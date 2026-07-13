@@ -5,28 +5,12 @@ import * as shareBridge from '../../../src/lib/deploy/shareBridgeOftWiring.js'
 import {
   DEFAULT_OVAULT_MESH_PREFLIGHT_RESULT,
   ensureShareMeshOvaultPreflight,
-  isLegacySolanaBridgePreflightEnabled,
   isOvaultRequestEnabled,
 } from './solanaShareMeshPreflight.js'
 
 const BATCHER = getAddress('0xa99058f424FB3ACC639F59355C65C40149030651')
 const HUB = getAddress('0x7dF44cBB93a5191837a988f0Cc441E3811C39CD1')
 const FINALIZE_DATA = `0x${'ab'.repeat(32)}` as Hex
-
-describe('isLegacySolanaBridgePreflightEnabled', () => {
-  afterEach(() => {
-    delete process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT
-  })
-
-  it('defaults to share-mesh preflight (legacy off)', () => {
-    expect(isLegacySolanaBridgePreflightEnabled()).toBe(false)
-  })
-
-  it('ignores env overrides (Twin preflight is retired)', () => {
-    process.env.DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT = '1'
-    expect(isLegacySolanaBridgePreflightEnabled()).toBe(false)
-  })
-})
 
 describe('isOvaultRequestEnabled', () => {
   it('returns false for non-objects and disabled payloads', () => {

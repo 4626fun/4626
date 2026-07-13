@@ -1,8 +1,12 @@
 # creator-share-hook mainnet upgrade (relay_entries / settle_fees)
 
+> **Historical upgrade record.** The hook instruction names remain on-chain
+> history, but the KPR Twin entry-relay and winner-relay workflows were removed
+> in July 2026. Do not follow relay enablement steps in this document.
+
 Operator runbook for upgrading the live Transfer Hook program from legacy instruction names (`drain_entries`, `flush_fees`) to canonical names (`relay_entries`, `settle_fees`).
 
-Related: [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-policy.md) (B2 gating), [solana-share-mesh-budget-paths.md](./solana-share-mesh-budget-paths.md) (costs).
+Related: [solana-share-mesh-lottery-policy.md](../operations/solana/solana-share-mesh-lottery-policy.md) (current policy), [solana-share-mesh-budget-paths.md](./solana-share-mesh-budget-paths.md) (costs).
 
 ## Why this upgrade is required
 
@@ -15,7 +19,8 @@ Related: [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-polic
 
 KPR keepers default to **canonical** discriminators (`SOLANA_HOOK_IX_SCHEMA=canonical`). They will **fail** against the current mainnet bytecode until this upgrade lands.
 
-**Do not enable `relay_entries` on orchestrator until:** (1) hook upgraded, (2) share-mesh B2 mint + Meteora pool verified, (3) offline + live smoke pass.
+The hook upgrade did not authorize a production lottery relay. The corresponding
+orchestrator action was later removed.
 
 ## Constants
 
@@ -179,7 +184,8 @@ sudo systemctl restart solana-keeper-orchestrator
 curl -sS https://orchestrator.4626.fun/healthz
 ```
 
-**Keep `SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0`** until B2 pool + hook mint path is verified per [lottery policy](./solana-share-mesh-lottery-policy.md).
+This historical gate was superseded by removal of the relay action; see the
+[current lottery policy](../operations/solana/solana-share-mesh-lottery-policy.md).
 
 ### Smoke (devnet first, then mainnet B2 mint)
 
@@ -207,13 +213,9 @@ sudo bash kpr/deploy/seed-solana-orchestrator-env.sh \
   --hook-schema auto
 ```
 
-Mainnet B2 (after share-mesh pool exists):
-
-1. `setup-creator-full` for the share-mesh Token-2022 mint  
-2. Meteora pool buy → confirm `PendingEntries.count > 0`  
-3. Dry-run orchestrator reconcile with `SOLANA_ORCHESTRATOR_EXECUTE=0`  
-4. Enable `relay_entries` + `SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=1`  
-5. Confirm Base `processLotteryEntryFromSolana` receipt  
+The former Mainnet B2 relay activation sequence is intentionally omitted. The
+KPR action and Twin transport were removed; a new architecture and canary are
+required before Solana lottery relay can exist.
 
 ## Rollback
 
@@ -250,5 +252,5 @@ Verify: `pnpm -C frontend ops:verify-hook-mainnet-bytecode` → **PASS (canonica
 | `InstructionFallbackNotFound` / wrong discriminator | Keeper canonical, chain legacy (or reverse) | Align `SOLANA_HOOK_IX_SCHEMA` with deployed `.so` |
 | Keeper parses zero entries despite on-chain count | Stale parser (header padding) | Ensure `PENDING_ENTRIES_HEADER_SIZE = 64` in `kpr/utils/pendingEntriesBuffer.ts` |
 | `anchor build` edition2024 error | Cargo too old | See Build section |
-| `relay_entries` enabled but no Base txs | Wrong mint grain (creator SPL not share mesh) | [lottery policy](./solana-share-mesh-lottery-policy.md) |
+| `relay_entries` enabled but no Base txs | Historical removed action | [current lottery policy](../operations/solana/solana-share-mesh-lottery-policy.md) |
 | settle_fees scans empty | Public RPC + Token-2022 `getProgramAccounts` limits | Use paid `SOLANA_RPC_URL` on orchestrator |

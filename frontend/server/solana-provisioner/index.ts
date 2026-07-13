@@ -19,7 +19,6 @@ type MeteoraAccountMetaBody = {
 
 type MeteoraIxsBody = {
   creatorToken?: string
-  bridgeToken?: string
   meteoraAlphaVault?: string
   alphaVaultProgramId?: string
   expectedRemoteAmount?: number | string
@@ -145,7 +144,6 @@ function readFirstNonEmptyEnv(keys: string[]): { value: string; source: string |
 function readProvisionerBearerSecret(): { value: string; source: string | null } {
   return readFirstNonEmptyEnv([
     'PROVISIONER_BEARER_TOKEN',
-    'SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET',
     'METEORA_IX_PROVISIONER_SECRET',
   ])
 }
@@ -157,17 +155,39 @@ function parseMinPayerSol(): number {
   return parsed
 }
 
+function decodeBase58(value: string): Uint8Array | null {
+  const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+  let decoded = 0n
+  for (const char of value) {
+    const digit = alphabet.indexOf(char)
+    if (digit < 0) return null
+    decoded = decoded * 58n + BigInt(digit)
+  }
+
+  const bytes: number[] = []
+  while (decoded > 0n) {
+    bytes.push(Number(decoded & 0xffn))
+    decoded >>= 8n
+  }
+  bytes.reverse()
+  const leadingZeroes = value.length - value.replace(/^1+/, '').length
+  return Uint8Array.from([...new Array<number>(leadingZeroes).fill(0), ...bytes])
+}
+
 function parseSecretKeyBytes(raw: string): Uint8Array | null {
   const trimmed = raw.trim()
-  if (!trimmed.startsWith('[')) return null
-  try {
-    const parsed = JSON.parse(trimmed) as unknown
-    if (!Array.isArray(parsed) || parsed.length !== 64) return null
-    if (!parsed.every((n) => Number.isInteger(n) && n >= 0 && n <= 255)) return null
-    return Uint8Array.from(parsed as number[])
-  } catch {
-    return null
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown
+      if (!Array.isArray(parsed) || parsed.length !== 64) return null
+      if (!parsed.every((n) => Number.isInteger(n) && n >= 0 && n <= 255)) return null
+      return Uint8Array.from(parsed as number[])
+    } catch {
+      return null
+    }
   }
+  const decoded = decodeBase58(trimmed)
+  return decoded?.length === 64 ? decoded : null
 }
 
 function readSecretKeyFromFile(path: string): Uint8Array | null {
@@ -181,7 +201,7 @@ function readSecretKeyFromFile(path: string): Uint8Array | null {
 }
 
 function resolveProvisionerPayerKeypair(): { keypair: Keypair | null; source: string } {
-  const payerRef = String(process.env.SOLANA_BRIDGE_PAYER_KP ?? 'config').trim() || 'config'
+  const payerRef = String(process.env.SOLANA_KEEPER_KEYPAIR ?? 'config').trim() || 'config'
   if (payerRef === 'config') {
     const home = String(process.env.HOME ?? '').trim()
     const keypairPath = home ? `${home}/.config/solana/id.json` : ''
@@ -234,7 +254,7 @@ async function readProvisionerPayerHealth(): Promise<{
       payerBalanceSol: null,
       payerMinSol: minSol.toString(),
       payerHealthy: false,
-      payerError: 'Unable to resolve SOLANA_BRIDGE_PAYER_KP keypair.',
+      payerError: 'Unable to resolve SOLANA_KEEPER_KEYPAIR.',
     }
   }
 
@@ -272,15 +292,12 @@ async function readProvisionerPayerHealth(): Promise<{
 }
 
 async function handleHealth(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const cliDir = String(process.env.SOLANA_BRIDGE_CLI_DIR ?? '').trim()
-  const cliExists = !!cliDir && existsSync(cliDir)
   const provisionerSecret = readProvisionerBearerSecret()
   const secretSet = provisionerSecret.value.length > 0
 
   // L-01 (audit 2026-04-25): redact diagnostic fields from unauthenticated
   // responses. Previously, when no secret was configured we returned the
-  // full `{cliExists, secretSet, payerConfigured, payerHealthy, payerError,
-  // baseRpcConfigured, solanaRpcConfigured, deployEnvDefault}` body to any
+  // full payer and runtime readiness body to any
   // caller — this is useful pre-attack reconnaissance for an attacker
   // probing a misconfigured deployment. We now require either:
   //   - a configured bearer secret AND a valid Authorization header, OR
@@ -293,7 +310,7 @@ async function handleHealth(req: IncomingMessage, res: ServerResponse): Promise<
   if (secretSet && !authenticated) {
     return json(res, 401, {
       ok: false,
-      service: 'solana-route-provisioner',
+      service: 'solana-provisioner',
       error: 'Unauthorized',
     })
   }
@@ -305,7 +322,7 @@ async function handleHealth(req: IncomingMessage, res: ServerResponse): Promise<
     // dev/staging environment, set PROVISIONER_HEALTH_ALLOW_UNAUTH=1.
     return json(res, 200, {
       ok: false,
-      service: 'solana-route-provisioner',
+      service: 'solana-provisioner',
       reason: 'unconfigured',
       now: new Date().toISOString(),
     })
@@ -313,20 +330,16 @@ async function handleHealth(req: IncomingMessage, res: ServerResponse): Promise<
 
   const payerHealth = await readProvisionerPayerHealth()
   const payload: Record<string, unknown> = {
-    ok: cliExists && secretSet && payerHealth.payerHealthy,
-    service: 'solana-route-provisioner',
-    cliExists,
+    ok: secretSet && payerHealth.payerHealthy,
+    service: 'solana-provisioner',
     secretSet,
     payerConfigured: payerHealth.payerConfigured,
     payerHealthy: payerHealth.payerHealthy,
     payerError: payerHealth.payerError,
-    baseRpcConfigured: String(process.env.BASE_RPC_URL ?? '').trim().length > 0,
     solanaRpcConfigured: String(process.env.SOLANA_RPC_URL ?? '').trim().length > 0,
-    deployEnvDefault: String(process.env.SOLANA_BRIDGE_DEPLOY_ENV ?? 'mainnet').trim() || 'mainnet',
     now: new Date().toISOString(),
   }
   if (PROVISIONER_HEALTH_DEBUG_ENABLED) {
-    payload.cliDir = cliDir
     payload.secretSource = provisionerSecret.source
     payload.payerSource = payerHealth.payerSource
     payload.payerPubkey = payerHealth.payerPubkey
@@ -335,16 +348,6 @@ async function handleHealth(req: IncomingMessage, res: ServerResponse): Promise<
     payload.payerMinSol = payerHealth.payerMinSol
   }
   json(res, 200, payload)
-}
-
-async function handleProvision(_req: IncomingMessage, res: ServerResponse): Promise<void> {
-  return json(res, 410, {
-    success: false,
-    error: 'gone',
-    code: 'twin_wrap_token_provisioning_retired',
-    message:
-      'POST /provision Twin wrap-token provisioning is retired. Use LayerZero ShareOFT share-mesh provisioning instead: Registry4626.setRemoteOFTPeerBytes32(creatorToken, solanaEid, peer) plus LZ OFT store/mint setup. See docs/_internal/operations/operations/solana/solana-share-mesh-creator-provisioning.md and docs/_internal/operations/solana/solana-share-mesh-budget-paths.md.',
-  })
 }
 
 async function handleBuildMeteoraIxs(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -423,7 +426,6 @@ async function handleBuildMeteoraIxs(req: IncomingMessage, res: ServerResponse):
       success: true,
       data: {
         creatorToken: typeof body.creatorToken === 'string' ? body.creatorToken : null,
-        bridgeToken: typeof body.bridgeToken === 'string' ? body.bridgeToken : null,
         meteoraAlphaVault: meteoraAlphaVaultBytes32,
         expectedRemoteAmount: remoteAmount.toString(),
         solanaIxs,
@@ -616,7 +618,6 @@ async function main(): Promise<void> {
     const method = String(req.method ?? 'GET').toUpperCase()
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
     if (method === 'GET' && url.pathname === '/healthz') return handleHealth(req, res)
-    if (method === 'POST' && url.pathname === '/provision') return handleProvision(req, res)
     if (method === 'POST' && url.pathname === '/meteora-ixs') return handleBuildMeteoraIxs(req, res)
     if (PROVISIONER_EXTENDED_ENDPOINTS_ENABLED && method === 'POST' && url.pathname === '/setup-creator') {
       return handleSetupCreator(req, res)

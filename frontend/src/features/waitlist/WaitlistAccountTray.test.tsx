@@ -31,6 +31,15 @@ vi.mock('./useWaitlistPostJoinAttention', () => ({
   }),
 }))
 
+vi.mock('./useEmbeddedOwnerOnCsw', () => ({
+  useEmbeddedOwnerOnCsw: () => ({
+    isOwner: false,
+    status: 'idle',
+    needsInstall: false,
+    refresh: vi.fn(),
+  }),
+}))
+
 vi.mock('./WaitlistPostJoinShell', () => ({
   WaitlistPostJoinShell: () => <div data-testid="post-join-shell-stub" />,
 }))
@@ -139,7 +148,7 @@ describe('WaitlistAccountTray', () => {
     expect(screen.queryByLabelText('Open account menu')).toBeNull()
   })
 
-  it('shows a closed corner trigger and opens economy + collapsed account/connections', () => {
+  it('shows a closed corner trigger and opens identity tab with wallets, identities, and post-join shell', () => {
     renderTray()
 
     const trigger = screen.getByLabelText('Open account menu')
@@ -148,14 +157,13 @@ describe('WaitlistAccountTray', () => {
 
     fireEvent.click(trigger)
 
-    expect(screen.getByText(/no creator economy yet/i)).toBeTruthy()
-    expect(screen.getByText(/account & signing/i)).toBeTruthy()
-    expect(screen.getByText(/^connections$/i)).toBeTruthy()
-    expect(screen.queryByTestId('identities-panel')).toBeNull()
-
-    fireEvent.click(screen.getByRole('button', { name: /connections/i }))
+    expect(screen.getAllByText(/creator economy/i).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText(/embedded signer/i)).toBeTruthy()
+    expect(screen.getByText(/^identities$/i)).toBeTruthy()
     expect(screen.getByTestId('identities-panel')).toBeTruthy()
     expect(screen.getByTestId('post-join-shell-stub')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^identity$/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^points$/i })).toBeTruthy()
     expect(screen.queryByRole('link', { name: /enter app/i })).toBeNull()
     expect(screen.getAllByRole('button', { name: /sign out/i }).length).toBeGreaterThanOrEqual(1)
     expect(screen.getByRole('link', { name: /^help$/i })).toBeTruthy()
@@ -176,8 +184,8 @@ describe('WaitlistAccountTray', () => {
 
     // Tray content is already visible without a click — the required step
     // must not be hidden behind a closed-by-default tray.
-    expect(screen.getByText(/account & signing/i)).toBeTruthy()
-    expect(screen.getByText(/no creator economy yet/i)).toBeTruthy()
+    expect(screen.getByText(/embedded signer/i)).toBeTruthy()
+    expect(screen.getAllByText(/creator economy/i).length).toBeGreaterThanOrEqual(1)
   })
 
   it('disables sign out via the caller-provided aggregate busy flag', () => {

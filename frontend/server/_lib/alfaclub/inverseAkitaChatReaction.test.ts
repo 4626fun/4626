@@ -27,13 +27,13 @@ vi.mock('./inverseAkitaChatReactionPolicy.js', async () => {
 })
 
 vi.mock('./hyperliquid.js', () => ({
-  getPerpMarkets: vi.fn(),
+  getAllPerpMarkets: vi.fn(),
 }))
 
 import { runArenaOpenPositions, runArenaTrade } from '../arena/arenaClient.js'
 import { resolveRoomDefaultArenaIdentity } from '../arena/arenaIdentityMappingStore.js'
 import { resolveInverseAkitaChatAuthorAccess } from './inverseAkitaChatReactionPolicy.js'
-import { getPerpMarkets } from './hyperliquid.js'
+import { getAllPerpMarkets } from './hyperliquid.js'
 import {
   __resetInverseAkitaBotOutboundTextRegistryForTests,
   __resetInverseAkitaChatReactionCooldownForTests,
@@ -60,7 +60,7 @@ const mockRunArenaTrade = vi.mocked(runArenaTrade)
 const mockRunArenaOpenPositions = vi.mocked(runArenaOpenPositions)
 const mockResolveRoomDefaultArenaIdentity = vi.mocked(resolveRoomDefaultArenaIdentity)
 const mockResolveInverseAkitaChatAuthorAccess = vi.mocked(resolveInverseAkitaChatAuthorAccess)
-const mockGetPerpMarkets = vi.mocked(getPerpMarkets)
+const mockGetAllPerpMarkets = vi.mocked(getAllPerpMarkets)
 
 describe('inverseAkitaChatReaction', () => {
   beforeEach(() => {
@@ -71,9 +71,12 @@ describe('inverseAkitaChatReaction', () => {
     vi.stubEnv('ALFACLUB_INVERSE_AKITA_CHAT_REACTION_ENABLED', '1')
     vi.stubEnv('ARENA_ENABLED', '1')
     vi.stubEnv('ARENA_TRADING_ENABLED', '1')
-    mockGetPerpMarkets.mockResolvedValue([
+    mockGetAllPerpMarkets.mockResolvedValue([
       { symbol: 'BTC', maxLeverage: 40 },
       { symbol: 'ETH', maxLeverage: 25 },
+      { symbol: 'xyz:CARDS', maxLeverage: 10 },
+      { symbol: 'xyz:TSLA', maxLeverage: 10 },
+      { symbol: 'REI', maxLeverage: 5 },
     ])
     mockResolveRoomDefaultArenaIdentity.mockResolvedValue({
       source: 'room_default',
@@ -172,6 +175,49 @@ describe('inverseAkitaChatReaction', () => {
       userSide: 'long',
       pair: 'BTC',
     })
+  })
+
+  it('parses casual opinions for any live Hyperliquid market', () => {
+    const availableMarkets = [
+      { symbol: 'REI', maxLeverage: 5 },
+      { symbol: 'xyz:CARDS', maxLeverage: 10 },
+      { symbol: 'xyz:TSLA', maxLeverage: 10 },
+    ]
+    expect(
+      parseInverseAkitaChatTradeIntent('rei has lost momentum again', {
+        availableMarkets,
+      }),
+    ).toEqual({
+      userSide: 'short',
+      pair: 'REI',
+    })
+    expect(
+      parseInverseAkitaChatTradeIntent('makes me more bullish $cards', {
+        availableMarkets,
+      }),
+    ).toEqual({
+      userSide: 'long',
+      pair: 'xyz:CARDS',
+    })
+    expect(
+      parseInverseAkitaChatTradeIntent('bearish on xyz:tsla', {
+        availableMarkets,
+      }),
+    ).toEqual({
+      userSide: 'short',
+      pair: 'xyz:TSLA',
+    })
+  })
+
+  it('does not guess an unqualified symbol shared by multiple HIP-3 markets', () => {
+    expect(
+      parseInverseAkitaChatTradeIntent('bullish $tsla', {
+        availableMarkets: [
+          { symbol: 'xyz:TSLA', maxLeverage: 10 },
+          { symbol: 'cash:TSLA', maxLeverage: 10 },
+        ],
+      }),
+    ).toBeNull()
   })
 
   it('flips negated sentiment and skips ambiguous or asset-free chatter', () => {
@@ -284,7 +330,7 @@ describe('inverseAkitaChatReaction', () => {
   it('resolves leverage from live perp market meta', async () => {
     await expect(resolveInverseAkitaChatReactionLeverage('BTC')).resolves.toBe(27)
     await expect(resolveInverseAkitaChatReactionLeverage('ETH')).resolves.toBe(17)
-    expect(mockGetPerpMarkets).toHaveBeenCalledTimes(1)
+    expect(mockGetAllPerpMarkets).toHaveBeenCalledTimes(1)
   })
 
   it('alternates inverse trigger reaction emojis', () => {
@@ -505,6 +551,53 @@ describe('inverseAkitaChatReaction', () => {
       senderAddress: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
       roomId: '1659',
     })
+  })
+
+  it('canonicalizes a unique HIP-3 suffix before execution', async () => {
+    const result = await executeInverseAkitaChatReaction({
+      roomId: '1659',
+      intent: {
+        id: 'hip3-market',
+        date: Date.now(),
+        sender: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
+        text: 'bullish $cards',
+        userSide: 'long',
+        pair: 'CARDS',
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.pair).toBe('xyz:CARDS')
+    expect(mockRunArenaTrade).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'open',
+        pair: 'xyz:CARDS',
+        side: 'short',
+        leverage: 6,
+      }),
+      expect.anything(),
+    )
+  })
+
+  it('fails closed before execution when a market is not listed on Hyperliquid', async () => {
+    const result = await executeInverseAkitaChatReaction({
+      roomId: '1659',
+      intent: {
+        id: 'not-listed',
+        date: Date.now(),
+        sender: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
+        text: 'long nope',
+        userSide: 'long',
+        pair: 'NOPE',
+      },
+    })
+
+    expect(result).toMatchObject({
+      skipped: true,
+      skipReason: 'market_not_listed',
+    })
+    expect(mockResolveRoomDefaultArenaIdentity).not.toHaveBeenCalled()
+    expect(mockRunArenaTrade).not.toHaveBeenCalled()
   })
 
   it('replies with the staker gate when the sender has no staked keys in room 1659', async () => {

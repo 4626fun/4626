@@ -20,13 +20,13 @@ import {
   useState,
 } from 'react'
 
-import type { AlfaRoomTier } from '@/lib/alfaclub/keyDefense'
 import {
   type AlfaClubRoomDirectoryItem,
   type AlfaClubRoomSort,
   type AlfaClubRoomTierFilter,
   type AlfaClubRoomTypeFilter,
   formatRoomPoints,
+  roomCurveTierRingClassName,
   sortAlfaClubRooms,
 } from '@/lib/alfaclub/roomDirectory'
 import { cn } from '@/lib/shared/utils'
@@ -681,63 +681,42 @@ function RoomRow({
   )
 }
 
-const TIER_DOT_CLASSNAME: Record<AlfaRoomTier, string> = {
-  exclusive: 'bg-amber-400',
-  club: 'bg-sky-400',
-  casual: 'bg-zinc-400',
-}
-
 function RoomAvatar({ room }: { room: AlfaClubRoomDirectoryItem }) {
+  // Room artwork lives in the CSP-allowlisted room-image bucket (see vercel.json img-src),
+  // so it renders directly — no proxy hop needed here.
   const imageSrc = room.imageUrl?.trim() || null
   const [failedSource, setFailedSource] = useState<string | null>(null)
+  const tierRing = roomCurveTierRingClassName(room)
   const avatarClassName = cn(
     'size-9 shrink-0 rounded-md object-cover',
-    room.roomType === 'trading' &&
-      'ring-2 ring-offset-1 ring-offset-black',
-    room.roomType === 'trading' && room.tier === 'exclusive'
-      ? 'ring-amber-400'
-      : room.roomType === 'trading' && room.tier === 'club'
-        ? 'ring-sky-400'
-        : room.roomType === 'trading'
-          ? 'ring-zinc-400'
-          : null,
+    tierRing && 'ring-2 ring-offset-1 ring-offset-black',
+    tierRing,
   )
-  const tierDotClassName = room.roomType === 'trading' && room.tier ? TIER_DOT_CLASSNAME[room.tier] : null
+  if (!imageSrc || failedSource === imageSrc) {
+    return (
+      <span
+        data-curve-tier={room.roomType === 'trading' ? room.tier ?? 'unknown' : undefined}
+        className={cn(
+          avatarClassName,
+          'grid place-items-center bg-white/[0.05] text-xs font-semibold text-zinc-400',
+        )}
+        aria-hidden
+      >
+        {(room.roomName || room.roomId).slice(0, 1).toUpperCase()}
+      </span>
+    )
+  }
   return (
-    <span className="relative inline-flex shrink-0">
-      {!imageSrc || failedSource === imageSrc ? (
-        <span
-          data-curve-tier={room.roomType === 'trading' ? room.tier ?? 'unknown' : undefined}
-          className={cn(
-            avatarClassName,
-            'grid place-items-center bg-white/[0.05] text-xs font-semibold text-zinc-400',
-          )}
-          aria-hidden
-        >
-          {(room.roomName || room.roomId).slice(0, 1).toUpperCase()}
-        </span>
-      ) : (
-        <img
-          src={imageSrc}
-          alt=""
-          width={36}
-          height={36}
-          loading="lazy"
-          onError={() => setFailedSource(imageSrc)}
-          data-curve-tier={room.roomType === 'trading' ? room.tier ?? 'unknown' : undefined}
-          className={avatarClassName}
-        />
-      )}
-      {tierDotClassName ? (
-        <span
-          className={cn(
-            'absolute -bottom-0.5 -right-0.5 size-2 rounded-full ring-2 ring-black',
-            tierDotClassName,
-          )}
-          aria-hidden
-        />
-      ) : null}
-    </span>
+    <img
+      src={imageSrc}
+      alt=""
+      width={36}
+      height={36}
+      loading="lazy"
+      onError={() => setFailedSource(imageSrc)}
+      data-curve-tier={room.roomType === 'trading' ? room.tier ?? 'unknown' : undefined}
+      className={avatarClassName}
+    />
   )
 }
 
@@ -777,4 +756,4 @@ function Freshness({ rooms }: { rooms: AlfaClubRoomDirectoryItem[] }) {
   return <p className="shrink-0 pt-2 text-[10px] text-zinc-600">{label}</p>
 }
 
-export { DEFAULT_FILTERS, TIER_DOT_CLASSNAME }
+export { DEFAULT_FILTERS }

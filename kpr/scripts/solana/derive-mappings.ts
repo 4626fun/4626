@@ -45,9 +45,8 @@ async function fetchCreatorConfigs() {
   const configs = accounts.map((acc) => {
     const data = acc.account.data as Buffer;
     const creatorMint = new PublicKey(data.subarray(8, 40)).toBase58();
-    const hubCreatorCoin = bytes32ToAddress(data.subarray(104, 136));
     const hubShareOft = bytes32ToAddress(data.subarray(136, 168));
-    return { creatorMint, hubCreatorCoin, hubShareOft };
+    return { creatorMint, hubShareOft };
   });
 
   return configs;
@@ -62,22 +61,15 @@ async function main() {
 
   const creatorMints = configs.map((c) => c.creatorMint);
   const shareOftMapping: Record<string, string> = {};
-  const creatorCoinToMint: Record<string, string> = {};
-
   for (const cfg of configs) {
     if (cfg.hubShareOft && !isZeroAddress(cfg.hubShareOft)) {
       shareOftMapping[cfg.creatorMint] = cfg.hubShareOft;
-    }
-    if (cfg.hubCreatorCoin && !isZeroAddress(cfg.hubCreatorCoin)) {
-      creatorCoinToMint[cfg.hubCreatorCoin.toLowerCase()] = cfg.creatorMint;
     }
   }
 
   console.log('\n# === Suggested env values (LayerZero ShareOFT only) ===');
   console.log(`SOLANA_CREATOR_MINTS=${creatorMints.join(',')}`);
   console.log(`SOLANA_SHARE_OFT_MAPPING=${JSON.stringify(shareOftMapping)}`);
-  console.log(`SOLANA_CREATOR_COIN_TO_MINT_MAPPING=${JSON.stringify(creatorCoinToMint)}`);
-  console.log('# Twin/SolanaBridgeAdapter mapping retired — use Registry4626 per-token LZ peers');
 }
 
 main().catch((err) => {

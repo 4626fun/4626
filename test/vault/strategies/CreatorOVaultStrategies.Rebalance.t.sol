@@ -124,12 +124,16 @@ contract CreatorOVaultStrategiesRebalanceTest is Test {
         vault.setKeeper(keeper);
         vault.setMinimumTotalIdle(100e18);
         vault.setFlashLoanProtection(0, type(uint256).max, 1);
+        // Allow sync setStrategyMaxAssets so mock NAV marks are vault-visible (M-02).
+        vault.setRiskConfigDelay(0);
 
         charm = new WeightedMockStrategy(address(coin));
         ajna = new WeightedMockStrategy(address(coin));
 
         vault.addStrategy(address(charm), 4_500, true);
         vault.addStrategy(address(ajna), 4_500, true);
+        vault.setStrategyMaxAssets(address(charm), type(uint256).max);
+        vault.setStrategyMaxAssets(address(ajna), type(uint256).max);
 
         uint256 depositAmount = vault.MINIMUM_FIRST_DEPOSIT() * 2;
         coin.mint(alice, depositAmount + 500_000e18);
@@ -181,9 +185,11 @@ contract CreatorOVaultStrategiesRebalanceTest is Test {
         skewVault.setKeeper(keeper);
         skewVault.setMinimumTotalIdle(100e18);
         skewVault.setFlashLoanProtection(0, type(uint256).max, 1);
+        skewVault.setRiskConfigDelay(0);
 
         WeightedMockStrategy skewCharm = new WeightedMockStrategy(address(coin));
         skewVault.addStrategy(address(skewCharm), 9_000, true);
+        skewVault.setStrategyMaxAssets(address(skewCharm), type(uint256).max);
 
         uint256 depositAmount = skewVault.MINIMUM_FIRST_DEPOSIT() * 2;
         coin.mint(alice, depositAmount);
@@ -197,6 +203,7 @@ contract CreatorOVaultStrategiesRebalanceTest is Test {
         WeightedMockStrategy skewAjna = new WeightedMockStrategy(address(coin));
         skewVault.updateStrategyWeight(address(skewCharm), 4_500);
         skewVault.addStrategy(address(skewAjna), 4_500, true);
+        skewVault.setStrategyMaxAssets(address(skewAjna), type(uint256).max);
     }
 
     function test_rebalanceStrategies_skipsWhenWithinDeviationBand() external {
@@ -253,13 +260,15 @@ contract CreatorOVaultStrategiesRebalanceTest is Test {
     function test_rebalanceStrategies_excessIdle_depositsToUnderweightWithoutWithdraw() external {
         vault.forceDeployToStrategies();
 
+        // Mint idle first so targets recompute, then pin charm at the new target so only
+        // ajna is underweight. (Minting after pinning makes both sleeves underweight.)
+        coin.mint(address(vault), 100e18);
         uint256 target = _strategyTarget(vault, 4_500);
         charm.setTrackedAssetsForTest(target);
         ajna.setTrackedAssetsForTest(target - 100e18);
 
         uint256 charmBefore = charm.getTotalAssets();
         uint256 ajnaBefore = ajna.getTotalAssets();
-        coin.mint(address(vault), 100e18);
 
         vm.prank(keeper);
         vault.rebalanceStrategies(5_000);
@@ -334,6 +343,7 @@ contract CreatorOVaultStrategiesRebalanceTest is Test {
 
         WeightedMockStrategy third = new WeightedMockStrategy(address(coin));
         vault.addStrategy(address(third), 3_000, true);
+        vault.setStrategyMaxAssets(address(third), type(uint256).max);
         vault.forceDeployToStrategies();
 
         uint256 targetEach = _strategyTarget(vault, 3_000);

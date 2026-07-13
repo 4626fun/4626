@@ -13,7 +13,11 @@ Policy: [solana-share-mesh-lottery-policy.md](../operations/solana/solana-share-
 ## Scope
 
 - **In:** one LZ **share-mesh OFT** on Solana (EID `30168`) per creator + `Registry4626.setRemoteOFTPeerBytes32` + optional Meteora/lottery (B1/B2).
-- **Out:** compose deposit lane (Pipe B — **dormant**: no Solana asset mesh exists while the creator coin is Base-only; deposit-eligibility hints are stripped from deploy preflight/infra status and the lane reactivates only via `configureCreatorMesh` if a creator-coin bridge ever launches), Twin wrap-token creator SPL as lottery token, `POST /provision` Twin wrap-token (HTTP 410).
+- **Out:** compose deposit lane (Pipe B — **dormant**: no Solana asset mesh exists while the creator coin is Base-only; deposit-eligibility hints are stripped from deploy preflight/infra status and the lane reactivates only via `configureCreatorMesh` if a creator-coin bridge ever launches) and all retired Twin creator-SPL/provisioner paths.
+
+The Solana SPL mint and OFT Store are distinct Solana pubkeys. The OFT Store
+peer must be seeded explicitly for every creator token before finalize; no EVM
+address or prior creator's peer can be reused as the Solana identity.
 
 Reused on mainnet: `creator-share-hook` (`EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU`) — **B2 relay only**, not a substitute for LZ share OFT.
 
@@ -107,8 +111,8 @@ Rent formula matches mainnet. Reproduce: `pnpm -C kpr solana:cost-probe-devnet` 
    pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
      --batcher 0x02D7abC547F8B1e7E2D7a919D8D1005918361750
    ```
-4. Creator pays **`vault_full_deploy`** ($499); deploy preflight uses share-mesh OVault checks (not Twin wrap-token registration). `finalizePhase2` bridges 30% ShareOFT.
-5. Keeper until Path 2: `KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay`, `SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0`.
+4. Creator pays **`vault_full_deploy`** ($499); deploy preflight uses share-mesh OVault checks. `finalizePhase2` bridges 30% ShareOFT.
+5. Optional maintenance uses only currently supported orchestrator actions such as `settle_fees` and `price_monitor`.
 
 ## Path 2 — Meteora (+ optional B2 lottery)
 
@@ -119,7 +123,7 @@ Prerequisite: Path 1 complete.
 1. `TOKEN_MINT_X=<share_mesh_mint>`, `TOKEN_MINT_Y=WSOL`, `ACTIVATION_DELAY_SECONDS=0` — no alpha vault flag.
 2. `pnpm -C kpr solana:create-dlmm-pool`
 3. Bridge shares from Base; seed LP.
-4. `prepare-token-badge` (below). Keep `relay_entries` **off**.
+4. `prepare-token-badge` (below). Lottery remains on Base.
 
 ### B2 — on-chain lottery relay (blocked)
 
@@ -167,8 +171,6 @@ Deploy session preflight (`_continueCore` / `_statusCore`) defaults to **`ensure
 - `getOVaultRuntimeConfig` on the deployment batcher must be enabled.
 - `assertShareBridgeOftWiringForFinalize` validates Pipe A wiring for the finalize call.
 
-Set `DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT=1` only when intentionally exercising retired Twin paths (not supported for new creators).
-
 Disable automatic queue enqueue with `SOLANA_SHARE_MESH_PROVISIONING_ENABLED=0` (operator manual follow-up only).
 
 ## Sequencing
@@ -179,7 +181,10 @@ P1a B1: Meteora pool + LP on share mesh                   →  Solana trading (l
 P1b B2: blocked pending relay architecture                 →  no production enablement
 ```
 
-Wrong-grain warning: do not point share-mesh Meteora or `relay_entries` at Twin wrap-token creator SPL mints (e.g. AKITA `9JWh…`). Adapter/provisioner naming rules live in [solana-bridge-naming-invariant.md](../operations/solana/solana-bridge-naming-invariant.md) for historical parity checks only.
+Wrong-grain warning: do not point share-mesh Meteora at historical Twin
+creator-SPL mints (for example AKITA `9JWh…`). The
+[legacy naming record](../operations/solana/solana-bridge-naming-invariant.md)
+is historical only and contains no active provisioning procedure.
 
 ## Reference (mainnet)
 

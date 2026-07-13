@@ -127,36 +127,14 @@ quote_json_if_needed() {
   printf "'%s'" "${raw}"
 }
 
-CANONICAL_LOTTERY_MANAGER="0xB68F359e01626Ec5d15C624037311C70DacAba43"
-DEPRECATED_LOTTERY_MANAGERS="0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3|0x5c0115589d7F4930A0dc93417aE409f44186f4E7|0xbE87AD917bE7f6a9AE1F9c9dd0A7Ec7550F3F8C1"
-
-normalize_lottery_manager() {
-  local raw="$1"
-  if [[ -z "${raw}" ]]; then
-    printf '%s' "${CANONICAL_LOTTERY_MANAGER}"
-    return
-  fi
-  if echo "${raw}" | grep -Eiq "${DEPRECATED_LOTTERY_MANAGERS}"; then
-    echo "note: overriding deprecated LOTTERY_MANAGER ${raw} -> ${CANONICAL_LOTTERY_MANAGER}" >&2
-    printf '%s' "${CANONICAL_LOTTERY_MANAGER}"
-    return
-  fi
-  printf '%s' "${raw}"
-}
-
 BASE_RPC_URL="$(require_from_source BASE_RPC_URL)"
 SOLANA_RPC_URL="$(require_from_source SOLANA_RPC_URL)"
 SOLANA_PROGRAM_ID="$(require_from_source SOLANA_PROGRAM_ID)"
 SOLANA_KEEPER_KEYPAIR="$(require_from_source SOLANA_KEEPER_KEYPAIR)"
 SOLANA_KEEPER_PUBKEY="$(require_from_source SOLANA_KEEPER_PUBKEY)"
 SOLANA_CREATOR_MINTS="$(require_from_source SOLANA_CREATOR_MINTS)"
-KPR_PRIVATE_KEY="$(optional_from_source KPR_PRIVATE_KEY)"
-
-LOTTERY_MANAGER="$(normalize_lottery_manager "$(optional_from_source LOTTERY_MANAGER)")"
 
 SHARE_MAP="$(quote_json_if_needed "$(optional_from_source SOLANA_SHARE_OFT_MAPPING)")"
-CREATOR_MAP="$(quote_json_if_needed "$(optional_from_source SOLANA_CREATOR_COIN_TO_MINT_MAPPING)")"
-TWIN_MAP="$(quote_json_if_needed "$(optional_from_source SOLANA_TWIN_TO_PUBKEY_MAPPING)")"
 
 ALERT_WEBHOOK_URL="$(optional_from_source ALERT_WEBHOOK_URL)"
 
@@ -176,8 +154,8 @@ classify_hook_schema() {
     return
   fi
   # Use grep (not rg) — Vultr ops hosts often lack ripgrep.
-  if strings "${tmp}/hook.so" | grep -Eq 'relay_entries|RelayEntries' \
-    && ! strings "${tmp}/hook.so" | grep -Eq 'drain_entries|DrainEntries'; then
+  if strings "${tmp}/hook.so" | grep -Eq 'settle_fees|SettleFees' \
+    && ! strings "${tmp}/hook.so" | grep -Eq 'flush_fees|FlushFees'; then
     rm -rf "${tmp}"
     echo "canonical"
     return
@@ -203,9 +181,7 @@ cat >"${tmp}" <<EOF
 SOLANA_ORCHESTRATOR_PORT=8789
 SOLANA_ORCHESTRATOR_API_KEY=${api_key}
 SOLANA_ORCHESTRATOR_EXECUTE=1
-SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0
 SOLANA_ORCHESTRATOR_SETTLE_FEES_ENABLED=1
-SOLANA_ORCHESTRATOR_WINNER_RELAY_ENABLED=1
 SOLANA_HOOK_IX_SCHEMA=${RESOLVED_HOOK_SCHEMA}
 
 BASE_RPC_URL=${BASE_RPC_URL}
@@ -217,21 +193,7 @@ SOLANA_KEEPER_PUBKEY=${SOLANA_KEEPER_PUBKEY}
 
 SOLANA_CREATOR_MINTS=${SOLANA_CREATOR_MINTS}
 SOLANA_SHARE_OFT_MAPPING=${SHARE_MAP}
-SOLANA_CREATOR_COIN_TO_MINT_MAPPING=${CREATOR_MAP}
 EOF
-
-if [[ -n "${TWIN_MAP}" && "${TWIN_MAP}" != "'{}'" && "${TWIN_MAP}" != "{}" ]]; then
-  echo "SOLANA_TWIN_TO_PUBKEY_MAPPING=${TWIN_MAP}" >>"${tmp}"
-fi
-
-cat >>"${tmp}" <<EOF
-
-LOTTERY_MANAGER=${LOTTERY_MANAGER}
-EOF
-
-if [[ -n "${KPR_PRIVATE_KEY}" ]]; then
-  echo "KPR_PRIVATE_KEY=${KPR_PRIVATE_KEY}" >>"${tmp}"
-fi
 
 if [[ -n "${ALERT_WEBHOOK_URL}" ]]; then
   echo "ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL}" >>"${tmp}"
@@ -252,6 +214,4 @@ rm -f "${tmp}"
 
 echo "Wrote ${DEST}"
 echo "Next:"
-echo "  pnpm -C frontend ops:post-hook-upgrade-preflight"
-echo "  cd /opt/4626/kpr && pnpm preflight-orchestrator"
 echo "  sudo systemctl restart solana-keeper-orchestrator"

@@ -149,7 +149,7 @@ See `docs/audits/x-ray/contract-audit-pass-2026-06.md`, updated `review-todo.md`
 - **Foundry path**: After installing via `foundryup`, binaries are at `$HOME/.foundry/bin`. Add to PATH or invoke directly.
 - **`.env` files**: Copy `.env.example` at root and `frontend/.env.example` for local dev. Most env vars are optional for basic frontend dev — the app runs without external service credentials but wallet/auth features require Privy, Supabase, etc.
 - **API routing**: Vercel API routes go through `frontend/api/[...path].ts` dispatching to `frontend/api/_handlers/_routes.ts`. New endpoints must be registered in the static route map (no dynamic imports).
-- **AlfaClub product shell lives on `alfaclub.4626.fun`, with `/rooms` as the single room workspace.** Room state is query-driven (`roomId` plus `overview|safety|liquidity|inverse` tab); `/safety` and `/pools` are aliases that redirect into the corresponding `/rooms` tab while preserving room context. Legacy `/alfaclub/*` URLs on `4626.fun` and `app.4626.fun` hard-redirect there. Public browse is open; LP writes still require an accepted 4626 session + execution-ready wallet on the same account model. Chat API proxy uses `relay.4626.fun` (not `alfaclub.4626.fun`).
+- **AlfaClub product shell lives on `alfaclub.4626.fun`, with `/rooms` as the single room workspace.** Room state is query-driven (`roomId` plus `overview|safety|liquidity|inverse` tab); `/safety` and `/pools` are aliases that redirect into the corresponding `/rooms` tab while preserving room context. Bring the full **`/arena`** trading surface onto this host as well. Legacy `/alfaclub/*` URLs on `4626.fun` and `app.4626.fun` hard-redirect there. Public browse is open; LP writes still require an accepted 4626 session + execution-ready wallet on the same account model. Chat API proxy uses `relay.4626.fun` (not `alfaclub.4626.fun`). Privy Allowed Origins / OAuth Redirect URLs must include `https://alfaclub.4626.fun`.
 - **AlfaClub room discovery uses product taxonomy, not financial-volume semantics.** Rooms are categorized as `trading` or `social` and tiered as `casual`, `club`, or `exclusive`; the directory metric is **Room Points**, never USD volume. Keep the desktop discovery tray mounted across Overview/Safety/Liquidity/Inverse tab changes, preserve its filters/scroll/width state, and retain the full-height mobile room drawer. Prefer the open divider-based workspace treatment over nested boxed cards.
 - **AlfaClub is the authority for cross-channel room chat.** Each opted-in AlfaClub room maps to one logical 4626 group; Telegram and XMTP are synchronized room-scoped adapters, not independent message or membership authorities. Use data-driven room bindings, durable source-message idempotency, origin-aware echo suppression, and validated linked-account membership for ingress. Keep AlfaClub command replies on the Privy JWT WebSocket lane, while retaining the authenticated AlfaClub API lane for validated Telegram/XMTP ingress and other non-command posts.
 - **AlfaClub key-safety distribution vote threshold is 66% (not 50%).** Keep `keyDefense` policy/default math and related UX copy aligned to the 66% requirement.
@@ -398,14 +398,20 @@ The Solana route provisioner (`frontend/server/solana-provisioner/`) still expos
 
 ### KPR keeper bots
 
-Keeper bots in `kpr/` relay data between Solana and Base. Install: `cd kpr && npm ci`.
+Keeper bots in `kpr/` run Base automation and the remaining Solana maintenance
+actions. Install: `cd kpr && npm ci`.
 
 **Solana-specific workflows:**
 
-- `keepr-solana-relay-entries` — relays lottery entries from Solana → Base (every 30s)
 - `keepr-solana-settle-fees` — settles Solana fees → Base gauge (every 5min)
-- `keepr-solana-winner-relay` — relays Base lottery wins → records on Solana
 - `keepr-solana-price-monitor` — monitors Solana vs Base price deviation
+- `keepr-solana-graduation` — closes a configured legacy Alpha Vault after Base graduation
+- orchestrator `sync_mapping` — refreshes the LayerZero share-mint → Base ShareOFT mapping
+
+The Twin-dependent `keepr-solana-relay-entries`, `keepr-solana-winner-relay`,
+bridge-integrity monitor, and Twin mapping/config sync workflows were removed in
+July 2026. Do not add their actions, checkpoints, or secrets back to an active
+KPR deployment.
 
 **Start:** `cd kpr && tsx runner.ts` (runs all workflows). Dry-run: `DRY_RUN=true tsx runner.ts`.
 
@@ -414,11 +420,14 @@ Keeper bots in `kpr/` relay data between Solana and Base. Install: `cd kpr && np
 - `KPR_PRIVATE_KEY` — Base signer (EOA or ERC-4337 owner)
 - `SOLANA_KEEPER_KEYPAIR` — Solana payer/authority (base58)
 - `SOLANA_RPC_URL`, `BASE_RPC_URL` — RPC endpoints
-- `SOLANA_BRIDGE_ADAPTER` — Base bridge adapter address
 - `SOLANA_CREATOR_MINTS` — comma-separated Solana mints to monitor
 - `SOLANA_SHARE_OFT_MAPPING` — JSON: Solana mint → Base ShareOFT
-- `SOLANA_CREATOR_COIN_TO_MINT_MAPPING` — JSON: Base creator coin → Solana mint
-- `SOLANA_TWIN_TO_PUBKEY_MAPPING` — JSON: Base Twin contract → Solana pubkey
+
+Do not configure `SOLANA_BRIDGE_ADAPTER`, creator-coin/Twin mint maps, or Twin
+pubkey maps. The Solana mint and OFT Store are distinct Solana pubkeys; each
+Base creator token must have its own explicit
+`Registry4626.setRemoteOFTPeerBytes32(creatorToken, solanaEid, peer)` entry
+before finalize.
 
 **KPR TypeScript baseline is currently clean** (`pnpm -C kpr typecheck` passes). Keep this as a no-regression launch gate.
 

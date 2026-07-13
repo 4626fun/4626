@@ -3,9 +3,7 @@
   "apiBaseUrl": "http://127.0.0.1:8789/api",
   "workflowName": "solana-orchestrator",
   "actions": [
-    "relay-entries",
     "settle-fees",
-    "winner-relay",
     "graduation",
     "price-monitor"
   ],

@@ -20,6 +20,7 @@ import {
 import {
   listEnabledAlfaClubRoomChannelBindings,
   lookupEnabledAlfaClubRoomChannelBindingByRoom,
+  upsertAlfaClubRoomChannelBinding,
   type AlfaClubRoomChannelBinding,
 } from './roomChannelBindings.js'
 import type { ChatBridgeMessageOrigin } from './chatBridgeMessageOrigin.js'
@@ -110,7 +111,25 @@ export async function resolveRoomChannelBridgeGroupId(
   const vaultAddress = binding.xmtp.syntheticKeeprVaultAddress
   if (!vaultAddress) return null
   const vault = await getKeeprVaultByVaultAddress(vaultAddress).catch(() => null)
-  return vault?.groupId?.trim() || binding.xmtp.groupId?.trim() || null
+  const groupId = vault?.groupId?.trim() || binding.xmtp.groupId?.trim() || null
+  if (
+    groupId &&
+    groupId !== pendingGroupId(binding.roomId) &&
+    groupId !== binding.xmtp.groupId
+  ) {
+    await upsertAlfaClubRoomChannelBinding({
+      roomId: binding.roomId,
+      enabled: binding.enabled,
+      rolloutStatus: binding.rolloutStatus,
+      telegramEnabled: binding.telegram.enabled,
+      telegramChatId: binding.telegram.chatId,
+      telegramThreadId: binding.telegram.threadId,
+      xmtpEnabled: binding.xmtp.enabled,
+      xmtpGroupId: groupId,
+      syntheticKeeprVaultAddress: vaultAddress,
+    }).catch(() => null)
+  }
+  return groupId && groupId !== pendingGroupId(binding.roomId) ? groupId : groupId
 }
 
 export async function relayRoomMessagesToXmtp(
@@ -198,6 +217,7 @@ export async function relayXmtpMessageToAlfaClubRoom(params: {
     sourceMessageId: params.messageId,
     sourceConversationId: params.conversationId,
     targetRoomId: params.binding.roomId,
+    originalText: text,
   })
   if (!claim?.claimed) return false
 

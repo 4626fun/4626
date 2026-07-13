@@ -2,7 +2,7 @@
 
 ## Launch checklist
 
-1. **Executor:** Railway **`4626-inverseakita`** / service **`4626-inverseakita-agent`** only — `ALFACLUB_COUNTER_TRADE_RUNNER_ENABLED=1`; unset on Vercel, main Hermit (`4626-hermit-agent`), and XMTP primary.
+1. **Executor:** Railway **`4626-hermit-chat`** / service **`4626-hermit-agent`** only — `ALFACLUB_COUNTER_TRADE_RUNNER_ENABLED=1`; unset on Vercel and XMTP primary. (The retired `4626-inverseakita` project is not live; do not spin up a second executor.)
 2. **Engine:** `ALFACLUB_COUNTER_TRADE_ENABLED=1` + validated `ARENA_*` env ([Virtuals runbook](./virtuals-arena-railway-runbook.md)).
 3. **Room 1659:** at most one active strategy actor (runner auto-pauses extras).
 4. **Smoke:** Hermit `/healthz` shows `counterTrade` ticker; `GET /api/v1/alfaclub/counter-trade-status` for room state.
@@ -176,7 +176,7 @@ and — like mirrored exits — never count toward the cooldown clock, hourly
 action cap, or daily notional cap. Each action posts a `🛡️ Defense` /
 `🌾 Harvest` card with the resulting buffer ratio.
 
-Env knobs (Railway InverseAKITA executor):
+Env knobs (Railway Hermit executor — `4626-hermit-agent`):
 
 - **`ARENA_ASSET_ALLOWLIST`** — optional comma-separated HL perp symbols (and `xyz:` HIP-3 pairs). When **unset**, all markets the executor wallet can trade are allowed. When set
   (e.g. `HYPE` for a narrow room), the counter-trade loop skips non-listed
@@ -226,7 +226,7 @@ Wiring:
 
 1. Create + approve an API wallet from the user's master account, copy its
    private key.
-2. On the Railway InverseAKITA service set:
+2. On the Railway Hermit service (`4626-hermit-agent`) set:
    - `ALFACLUB_COUNTER_TRADE_USER_DEFENSE_ENABLED=1`
    - `ALFACLUB_COUNTER_TRADE_USER_HL_AGENT_KEY=0x…` (the API-wallet key)
    - `ALFACLUB_COUNTER_TRADE_USER_DEFENSE_MASTER=0x…` (optional; defaults to
@@ -355,6 +355,17 @@ If missing, it will be auto-created by first run/status read.
 
 Confirm the Railway Hermit `/healthz` response includes a healthy counter-trade ticker block
 (`counterTrade.started = true` and periodic `counterTrade.lastTickAt` updates).
+
+Shadow-lane DB + claim-gate probe (read-only):
+
+```bash
+pnpm -C frontend ops:inverse-akita:shadow-health
+pnpm -C frontend ops:inverse-akita:shadow-health -- --strict --probe-export-http
+```
+
+Checks: sampler warm-up (`market_feature_snapshots`), decision ledger counts
+(`hermit-entry:*`, `virtuals:*`), 8h outcome settlement backlog, local
+`claimAllowed` report, and optional Hermit ticker freshness.
 
 ## Rollout plan
 

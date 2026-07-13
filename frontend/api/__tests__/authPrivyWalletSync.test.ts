@@ -37,7 +37,7 @@ function createAuthorityDb() {
   return {
     sql: vi.fn(async (strings: TemplateStringsArray) => {
       const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
-      if (text.includes('where p.privy_user_id')) {
+      if (text.includes('as canonical_wallet') && text.includes('from profiles')) {
         return { rows: persistedProfileRow ? [persistedProfileRow] : [] }
       }
       if (text.includes('from profile_wallets') && text.includes('is_embedded_eoa = true')) {
@@ -264,7 +264,7 @@ describe('auth privy wallet sync', () => {
     ).toBe(CANONICAL_ADDRESS)
   })
 
-  it('uses the persisted embedded owner when the canonical CSW is not currently linked', () => {
+  it('uses a linked embedded owner to prove the persisted canonical CSW session', () => {
     const classified = makeClassified({
       embedded: EMBEDDED_ADDRESS,
       otherSmartWallet: NON_AUTHORITY_ADDRESS,
@@ -275,7 +275,7 @@ describe('auth privy wallet sync', () => {
         classified,
         persistedAuthorityAddresses: [CANONICAL_ADDRESS, EMBEDDED_ADDRESS],
       }),
-    ).toBe(EMBEDDED_ADDRESS)
+    ).toBe(CANONICAL_ADDRESS)
   })
 
   it('does not select a linked Coinbase smart wallet without a persisted authority role', () => {
@@ -448,7 +448,7 @@ describe('auth privy wallet sync', () => {
     const res = createMockRes()
     await handler(makeRequest(), res)
 
-    expect(res.statusCode).toBe(200)
+    expect(res.statusCode).toBe(400)
     expect(syncUserWalletsMock).toHaveBeenCalledTimes(1)
   })
 
@@ -487,9 +487,57 @@ describe('auth privy wallet sync', () => {
     const res = createMockRes()
     await handler(makeRequest(), res)
 
-    expect(res.statusCode).toBe(200)
+    expect(res.statusCode).toBe(400)
     expect(syncUserWalletsMock).toHaveBeenCalledTimes(1)
-    expect(res.body?.data?.address).toBe('0x0000000000000000000000000000000000000099')
+    expect(res.body?.code).toBe('PRIVY_WALLET_NOT_READY')
+  })
+
+  it('mints the canonical session proven by the embedded owner instead of a non-role smart wallet', async () => {
+    getUserByIdMock.mockResolvedValue({
+      id: 'did:privy:test-user',
+      linkedAccounts: [
+        { type: 'smart_wallet', address: NON_AUTHORITY_ADDRESS },
+        {
+          type: 'wallet',
+          address: EMBEDDED_ADDRESS,
+          walletClientType: 'privy',
+          chainType: 'ethereum',
+        },
+      ],
+    })
+    syncUserWalletsMock.mockResolvedValueOnce({
+      profileId: 1,
+      canonicalSmartWallet: { address: NON_AUTHORITY_ADDRESS, provider: 'coinbase_wallet' },
+      activeOwnerWallet: {
+        address: EMBEDDED_ADDRESS,
+        provider: 'privy',
+        walletType: 'embedded_eoa',
+      },
+      embeddedEoa: {
+        address: EMBEDDED_ADDRESS,
+        chainType: 'evm',
+        clientType: 'privy',
+      },
+      connectedWallets: [],
+      primaryWalletAddress: NON_AUTHORITY_ADDRESS,
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-token' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.address).toBe(CANONICAL_ADDRESS)
+    expect(readSetCookies(res).length).toBeGreaterThan(0)
+
+    const secondRes = createMockRes()
+    await handler(req, secondRes)
+    expect(secondRes.statusCode).toBe(200)
+    expect(secondRes.body?.data?.address).toBe(CANONICAL_ADDRESS)
+    expect(syncUserWalletsMock).toHaveBeenCalledTimes(1)
   })
 
   it('does not mint a session for a stale synced canonical wallet absent from current Privy-linked wallets', async () => {
@@ -501,25 +549,7 @@ describe('auth privy wallet sync', () => {
       PRIVY_AUTH_DB_SYNC_MIN_INTERVAL_MS: '9999999999999',
     })
 
-    getDbMock.mockResolvedValue({
-      sql: vi.fn(async (strings: TemplateStringsArray) => {
-        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
-        if (text.includes('where p.privy_user_id')) {
-          return {
-            rows: [
-              {
-                canonical_wallet: '0x00000000000000000000000000000000000000aa',
-                csw_address: null,
-                base_sub_account: null,
-                primary_wallet: null,
-                primary_embedded_eoa: null,
-              },
-            ],
-          }
-        }
-        return { rows: [] }
-      }),
-    })
+    getDbMock.mockResolvedValue(createAuthorityDb())
 
     getUserByIdMock.mockResolvedValue({
       id: 'did:privy:test-user',
@@ -541,9 +571,9 @@ describe('auth privy wallet sync', () => {
     const res = createMockRes()
     await handler(req, res)
 
-    expect(res.statusCode).toBe(200)
+    expect(res.statusCode).toBe(400)
     expect(syncUserWalletsMock).toHaveBeenCalledTimes(1)
-    expect(res.body?.data?.address).toBe('0x0000000000000000000000000000000000000099')
+    expect(res.body?.code).toBe('PRIVY_WALLET_NOT_READY')
   })
 
   it('returns 503 when Privy server auth is not configured', async () => {
@@ -565,6 +595,21 @@ describe('auth privy wallet sync', () => {
     expect(res.body?.error).toContain('Privy server auth is not configured')
   })
 
+  it('returns 503 instead of wallet-not-ready when the identity database is unavailable', async () => {
+    getDbMock.mockResolvedValue(null)
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-token' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(503)
+    expect(res.body?.error).toBe('Auth service unavailable')
+    expect(readSetCookies(res)).toEqual([])
+  })
+
   it('returns 401 when the Privy bearer token is missing', async () => {
     const req = createMockReq({
       method: 'POST',
@@ -577,6 +622,8 @@ describe('auth privy wallet sync', () => {
   })
 
   it('returns 400 when no Privy wallet is ready yet', async () => {
+    persistedProfileRow = null
+    persistedRoleWalletRows = []
     getUserByIdMock.mockResolvedValue({
       id: 'did:privy:test-user',
       linkedAccounts: [],
@@ -620,6 +667,10 @@ describe('auth privy wallet sync', () => {
   })
 
   it('falls back to walletApi.create when createWallets leaves the user empty', async () => {
+    setPersistedAuthority({
+      embedded: '0x00000000000000000000000000000000000000dd',
+      roleWallets: ['0x00000000000000000000000000000000000000dd'],
+    })
     getUserByIdMock.mockResolvedValue({
       id: 'did:privy:test-user',
       linkedAccounts: [],
@@ -662,6 +713,10 @@ describe('auth privy wallet sync', () => {
   })
 
   it('provisions a user-owned embedded EOA when the Privy user has zero wallets', async () => {
+    setPersistedAuthority({
+      embedded: '0x00000000000000000000000000000000000000cc',
+      roleWallets: ['0x00000000000000000000000000000000000000cc'],
+    })
     getUserByIdMock.mockResolvedValue({
       id: 'did:privy:test-user',
       linkedAccounts: [],

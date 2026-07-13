@@ -1,5 +1,9 @@
 # Solana creator-share-hook upgrade (M2-12 / M2-13)
 
+> **Historical upgrade record.** KPR entry/winner relay workflows were removed
+> in July 2026. Keep the on-chain upgrade evidence; do not use relay deployment
+> steps as current instructions.
+
 **Program ID:** `EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU`  
 **Source:** `programs/creator-share-hook/`  
 **IDL:** `programs/creator-share-hook/target/idl/creator_share_hook.json`  

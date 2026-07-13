@@ -54,7 +54,7 @@ function safeJson(value: unknown, max = 120): string {
   }
 }
 
-type Check = { id: string; ok: boolean; detail: string; section?: 'platform' | 'vultr' | 'vercel' | 'deferred' | 'creator' }
+type Check = { id: string; ok: boolean; detail: string; section?: 'platform' | 'vultr' | 'vercel' | 'creator' }
 
 function hasFlag(flag: string): boolean {
   return process.argv.includes(flag)
@@ -144,7 +144,10 @@ async function fetchResponseWithRetry(
 async function checkVultrAndVercelChain(appBase: string): Promise<Check[]> {
   const checks: Check[] = []
   const orchKey = process.env.SOLANA_ORCHESTRATOR_API_KEY?.trim()
-  const provSecret = process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET?.trim()
+  const provSecret =
+    process.env.SOLANA_HOOK_PROVISIONER_SECRET?.trim() ||
+    process.env.SOLANA_METEORA_POOL_PROVISIONER_SECRET?.trim() ||
+    process.env.METEORA_IX_PROVISIONER_SECRET?.trim()
   const kprKey = process.env.KPR_API_KEY?.trim()
   const checkpoint = `prelaunch-${Date.now()}`
   let directOrchestratorSettleOk = false
@@ -234,7 +237,7 @@ async function checkVultrAndVercelChain(appBase: string): Promise<Check[]> {
   }
 
   const provUrl =
-    process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URL?.trim() ??
+    process.env.SOLANA_PROVISIONER_HEALTH_URL?.trim() ||
     'https://provisioner.4626.fun/healthz'
   const prov = await fetchResponse(provUrl, {
     headers: provSecret ? { Authorization: `Bearer ${provSecret}` } : {},
@@ -311,21 +314,6 @@ async function checkVultrAndVercelChain(appBase: string): Promise<Check[]> {
           : `${chain.detail}: ${safeJson(chain.data)}`,
     })
 
-    const infra = await fetchResponse(`${appBase}/api/deploy/solanaInfraStatus`, {
-      headers: { Authorization: `Bearer ${kprKey}` },
-    })
-    const infraData = (infra.data as { data?: { readyForAutoRegistration?: boolean; blockers?: string[] } })
-      ?.data
-    checks.push({
-      section: 'vercel',
-      id: 'vercel_solana_infra_status',
-      ok: Boolean(
-        infra.ok && infraData?.readyForAutoRegistration && (infraData.blockers?.length ?? 0) === 0,
-      ),
-      detail: infraData
-        ? `readyForAutoRegistration=${String(infraData.readyForAutoRegistration)} blockers=${JSON.stringify(infraData.blockers ?? [])}`
-        : infra.detail,
-    })
   }
 
   return checks
@@ -491,19 +479,6 @@ async function main(): Promise<void> {
   process.stdout.write(`  oftStore:     ${AKITA_SHARE_MESH.oftStore}\n`)
   process.stdout.write(`  share mint:   ${AKITA_SHARE_MESH.shareMeshMint} (■AKITA)\n`)
   process.stdout.write(`  peer bytes32: ${AKITA_SHARE_MESH.peerBytes32}\n`)
-
-  const deferred: Check[] = []
-  const preflight = run('pnpm', ['-C', 'kpr', 'preflight-orchestrator'])
-  deferred.push({
-    section: 'deferred',
-    id: 'kpr_preflight_share_mesh_deferral',
-    ok: true,
-    detail: preflight.ok
-      ? 'preflight clean (adapter mapping already aligned)'
-      : 'EXPECTED deferral: current ShareOFT mapping is not on SolanaBridgeAdapter; Pipe A share mesh does not need adapter registration pre-deploy',
-  })
-
-  printSection('Deferred until after redeploy (informational)', deferred)
 
   const strategyChecks = await checkStrategyEntitlements()
   printSection('Creator entitlements (DB)', strategyChecks)

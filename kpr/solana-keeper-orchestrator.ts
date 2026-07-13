@@ -6,13 +6,10 @@ import { fileURLToPath } from 'node:url'
 
 import { loadKeeperEnv } from './utils/loadKeeperEnv.js'
 
-import { executeSolanaRelayEntries } from './actions/keepr-solana-relay-entries.action.js'
 import { executeSolanaFeeSettlement } from './actions/keepr-solana-settle-fees.action.js'
-import { executeSolanaWinnerRelay } from './actions/keepr-solana-winner-relay.action.js'
 import { executeSolanaPriceMonitor } from './actions/keepr-solana-price-monitor.action.js'
 import { executeSolanaGraduation } from './actions/keepr-solana-graduation.action.js'
 import { executeSolanaSyncMapping } from './actions/keepr-solana-sync-mapping.action.js'
-import { executeSolanaSyncRelayConfig } from './actions/keepr-solana-sync-relay-config.action.js'
 import { ActionLeaseError, withActionLease } from './utils/actionLease.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -26,13 +23,10 @@ type ReconcileBody = {
 }
 
 export type SolanaOrchestratorAction =
-  | 'relay_entries'
   | 'settle_fees'
-  | 'winner_relay'
   | 'price_monitor'
   | 'graduation'
   | 'sync_mapping'
-  | 'sync_relay_config'
 
 export type ReconcileOutcome = {
   ok: boolean
@@ -114,14 +108,10 @@ async function readJson(req: IncomingMessage): Promise<ReconcileBody | null> {
 export function normalizeSolanaOrchestratorAction(value: unknown): SolanaOrchestratorAction | null {
   const action = typeof value === 'string' ? value.trim().toLowerCase().replace(/-/g, '_') : ''
   switch (action) {
-    case 'relay_entries':
     case 'settle_fees':
-    case 'winner_relay':
     case 'price_monitor':
     case 'graduation':
     case 'sync_mapping':
-      return action
-    case 'sync_relay_config':
       return action
     default:
       return null
@@ -149,20 +139,14 @@ async function runSolanaOrchestratorActionBody(params: {
   payload?: Record<string, unknown>
 }): Promise<unknown> {
   switch (params.action) {
-    case 'relay_entries':
-      return executeSolanaRelayEntries()
     case 'settle_fees':
       return executeSolanaFeeSettlement()
-    case 'winner_relay':
-      return executeSolanaWinnerRelay()
     case 'price_monitor':
       return executeSolanaPriceMonitor()
     case 'graduation':
       return executeSolanaGraduation()
     case 'sync_mapping':
       return executeSolanaSyncMapping(params.payload ?? {})
-    case 'sync_relay_config':
-      return executeSolanaSyncRelayConfig(params.payload ?? {})
     default:
       params.action satisfies never
       return undefined

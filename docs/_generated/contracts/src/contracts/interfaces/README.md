@@ -6,7 +6,6 @@
 - [uniswap](/contracts/interfaces/uniswap)
 - [IAjnaPool](IAjnaPool.sol/interface.IAjnaPool.md)
 - [IAjnaPoolFactory](IAjnaPool.sol/interface.IAjnaPoolFactory.md)
-- [IBaseSolanaBridge](IBaseSolanaBridge.sol/interface.IBaseSolanaBridge.md)
 - [ICCALaunchStrategy](ICCALaunchStrategy.sol/interface.ICCALaunchStrategy.md)
 - [ICREATE2Factory](ICREATE2Factory.sol/interface.ICREATE2Factory.md)
 - [ICharmFactory](ICharmFactory.sol/interface.ICharmFactory.md)

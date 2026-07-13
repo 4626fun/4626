@@ -21,7 +21,7 @@ Virtuals / counter-trade lanes should consume model capacity.
 | Hermit creative (`/hermit`, `/meme`, `/gmeow`) | Vercel bridge + Hermit skill router | Creative copy generation | Tiered policy (`fast_default` vs `creative_premium`) via `creativePolicy.ts`; hints → `_draft.ts`; deterministic local fallback always available |
 | XMTP primary agent | Railway `4626-keepr-agent` (Eliza primary) | Long-lived conversation + protocol actions | Tool-first; one primary ops model + one fallback only |
 | Virtuals ACP plugin | Eliza plugin lane (`plugins/virtuals`) | ACP job-room tool decisions | Single decision model, hard budget clamps (`VIRTUALS_ACP_*`) |
-| InverseAKITA counter-trade | Railway `4626-inverseakita-agent` | Strategy execution + defense | Deterministic execution path; optional advisory model may veto/downsize only |
+| InverseAKITA counter-trade | Railway `4626-hermit-agent` (`4626-hermit-chat`) | Strategy execution + defense | Deterministic execution path; optional advisory model may veto/downsize only |
 
 ## Hermit creative policy (implemented)
 

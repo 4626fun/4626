@@ -97,37 +97,59 @@ Update rule:
 - When changing Telegram destination, update these env vars together and redeploy.
 - Keep this table in sync with production after each destination change.
 
-### Room 1659 &harr; XMTP bridge (optional, off by default)
+### Per-room channel bindings (AlfaClub hub ↔ Telegram ↔ XMTP)
 
-Bidirectional bridge between AlfaClub room `1659` and a dedicated XMTP group, mirroring the
-Telegram relay pattern. Sending identity is the existing protocol 4626 agent CSW
-(`PROTOCOL_CSW_*`) — no new wallet. See `frontend/server/_lib/alfaclub/room1659XmtpBridge.ts`.
+Canonical registry: `alfaclub.room_channel_bindings` (migration
+`20260716170000_alfaclub_cross_channel_foundation.sql`). Implementation:
+`frontend/server/_lib/alfaclub/roomChannelBindings.ts` +
+`roomChannelBridge.ts`. The retired `room1659XmtpBridge.ts` module is gone;
+room `1659` is the seeded canary row only.
 
-- **Env:**
-  - `ROOM_1659_XMTP_BRIDGE_ENABLED` (bool, default off) — master switch for both directions.
-  - Reuses `PROTOCOL_CSW_ADDRESS` / `PROTOCOL_CSW_PRIVY_WALLET_ID` / `PROTOCOL_CSW_OWNER_INDEX` /
-    `PROTOCOL_CSW_CHAIN_ID` (already set for XMTP DM alerts) — the bridge is disabled whenever
-    `hasProtocolCswRuntimeConfig()` is false, regardless of the flag above.
-  - The XMTP group id is **not** an env var. It's resolved from a synthetic `keepr_vaults` row
-    (`vault_address = 0x0000…001659`, mirroring the waitlist chat's synthetic vault address) and
-    self-bootstraps a real group on the first outbound send or membership sync action, the same
-    way the waitlist XMTP group does.
-- **Runtime split:**
-  - Outbound (room &rarr; XMTP) is enqueued from the AlfaClub bridge tick (`chatBridge.ts`
-    `ingestLiveMessages`, wherever it runs — Vercel cron or Railway per the existing
-    Keepr/Vercel split) as a `xmtp.group.send_message` Keepr action.
-  - Inbound (XMTP &rarr; room) and all Keepr action execution happen on the **Keepr Railway
-    primary**'s already-live `XmtpService` connection — per the Railway-only-XMTP-primary
-    invariant, no second live XMTP listener is introduced.
-- **Membership:** synced 1:1 with `alfaclub.room_access_memberships` transitions for room `1659`
-  (active &rarr; `xmtp.group.add_member`, removed &rarr; `xmtp.group.remove_member`), via hooks in
-  `roomAccessPolicy.ts`. No separate join flow.
-- **Loop prevention:** `alfaclub.chat_bridge_message_origin` tags each room message posted by a
-  relay with its origin channel (`telegram` | `xmtp`) so outbound fan-out skips re-relaying a
-  message back to the exact channel it came from, while still letting it propagate to the other
-  channel (hub-and-spoke, not two independent one-way mirrors).
-- **Rollout:** ship with the flag off, verify group bootstrap + a manual add_member + manual send
-  in a private test group, then enable for room 1659 production traffic.
+- **Authority:** AlfaClub room transcript + `alfaclub.room_access_memberships`
+  remain source of truth. Telegram / XMTP / 4626 web are adapters.
+- **Seed:** room `1659` ships with `enabled=false`, `rollout_status='canary'`,
+  synthetic Keepr vault `0x0000000000000000000000000000000000001659`.
+  No Telegram/XMTP flags are on until an operator promotes the row.
+- **Ingress ledger:** `alfaclub.cross_channel_ingress` claims source messages
+  (`telegram` | `xmtp` | `web4626`), stores original command text, and links
+  the resulting AlfaClub message id to a validated profile + parent CSW issuer.
+  Command execution refuses relayed messages without a trusted linked issuer.
+- **Loop prevention:** `alfaclub.chat_bridge_message_origin` origins are
+  `telegram` | `xmtp` | `web4626`. Fan-out skips only the source channel.
+- **Native UI:** `/rooms?tab=chat` reads/posts via
+  `GET|POST /api/v1/alfaclub/room-chat` (session auth + active membership).
+- **Sending identity for XMTP bridge actions:** protocol agent CSW
+  (`PROTOCOL_CSW_*`) via Keepr queue — never a user wallet and never a new
+  bridge wallet.
+- **Legacy env fallback:** `TELEGRAM_TO_ALFACLUB_*` and
+  `ALFACLUB_TELEGRAM_RELAY_*` remain for unconfigured rooms during transition;
+  registry rows win when present. Prefer registry over new env for additional rooms.
+
+#### Room 1659 canary stages (operator checklist)
+
+Promote only after the previous stage is healthy. Mirror **new messages only**
+(no historical backfill in MVP).
+
+1. **Web read-only** — leave binding `enabled=false`; verify Chat tab loads
+   ingest history for members with session auth.
+2. **Web posting** — enable room-access policy for 1659; confirm POST
+   `/api/v1/alfaclub/room-chat` rejects non-members and links `web4626` ingress.
+3. **Telegram bidirectional** — set `telegram_enabled` + chat/thread on the
+   binding; confirm linked Telegram identity + active membership required;
+   confirm origin-aware fan-out (no Telegram echo loops).
+4. **XMTP bidirectional** — set `xmtp_enabled=true` (requires protocol CSW
+   runtime config); confirm Keepr vault bootstrap, outbound enqueue, inbound
+   membership/issuer fail-closed path.
+5. **Active-member backfill** — run
+   `backfillActiveRoomChannelBridgeMembers({ roomId: '1659' })` once after
+   XMTP enable; verify idempotent add_member dedupe keys.
+6. **Cross-channel commands** — slash commands from Telegram/XMTP/web must
+   execute as the linked parent CSW issuer from ingress, never the relay bot.
+7. **Second curated room** — insert another binding and prove isolation before
+   enabling further rooms by registry rows (no new code).
+
+Retired note: `ROOM_1659_XMTP_BRIDGE_ENABLED` is no longer the control plane;
+use the `1659` row in `alfaclub.room_channel_bindings`.
 
 ### Fast health checks
 

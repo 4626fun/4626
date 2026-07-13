@@ -1,5 +1,8 @@
 # Post Solana hook upgrade checklist (2026-07-09)
 
+> **Historical post-upgrade record.** The Twin mapping and KPR entry/winner
+> relay instructions below are retired and must not be configured.
+
 ## Upgrade confirmed live
 
 | Field | Value |

@@ -50,10 +50,20 @@ function formatUsd(value: number): string {
 
 type SafetyStatus = KeySafetyStatus
 
+export type AlfaClubKeySafetyPricingSummary = {
+  currentUsdc: number
+  buyUsdc: number
+  sellUsdc: number
+  reportedFundUsdc: number
+  treasuryLabel: string
+  treasuryUsdc: number
+}
+
 export type AlfaClubKeySafetySummary = {
   status: SafetyStatus
   label: string
   headline: string
+  pricing?: AlfaClubKeySafetyPricingSummary
 } | null
 
 type AlfaClubKeySafetyProps = {
@@ -509,10 +519,29 @@ export function AlfaClubKeySafety({
             status: safetyStatus,
             label: statusLabel,
             headline: statusHeadline,
+            pricing: curvePricing
+              ? {
+                  currentUsdc: curvePricing.currentUsdc,
+                  buyUsdc: curvePricing.buyUsdc,
+                  sellUsdc: curvePricing.sellUsdc,
+                  reportedFundUsdc: reportedTradingFundUsdc,
+                  treasuryLabel: treasuryNavUsdc !== null ? 'Treasury NAV' : 'Payout pot',
+                  treasuryUsdc: modeledPotUsdc,
+                }
+              : undefined,
           }
         : null,
     )
-  }, [onSummaryChange, safetyStatus, statusHeadline, statusLabel])
+  }, [
+    curvePricing,
+    modeledPotUsdc,
+    onSummaryChange,
+    reportedTradingFundUsdc,
+    safetyStatus,
+    statusHeadline,
+    statusLabel,
+    treasuryNavUsdc,
+  ])
 
   if (embedded && summaryOnly) return null
 
@@ -694,31 +723,6 @@ export function AlfaClubKeySafety({
                   <p className="mt-0.5 text-sm text-zinc-300">
                     Cost to acquire keys at current tier — drag to test a takeover
                   </p>
-                  {curvePricing ? (
-                    <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
-                      {(
-                        [
-                          { label: 'Current price', value: formatUsd(curvePricing.currentUsdc) },
-                          { label: 'Buy next key', value: formatUsd(curvePricing.buyUsdc) },
-                          { label: 'Sell 1 key', value: formatUsd(curvePricing.sellUsdc) },
-                          { label: 'Reported fund', value: formatUsd(reportedTradingFundUsdc) },
-                          {
-                            label: treasuryNavUsdc !== null ? 'Treasury NAV' : 'Payout pot',
-                            value: formatUsd(modeledPotUsdc),
-                          },
-                        ] as const
-                      ).map((stat) => (
-                        <div key={stat.label} className="rounded-xl bg-black/30 px-3 py-2">
-                          <dt className="text-[10px] uppercase tracking-wide text-zinc-500">
-                            {stat.label}
-                          </dt>
-                          <dd className="mt-0.5 font-mono text-sm text-zinc-100 tabular-nums">
-                            {stat.value}
-                          </dd>
-                        </div>
-                      ))}
-                    </dl>
-                  ) : null}
                   {minAttackBreakdown ? (
                     <dl className="mt-3 grid grid-cols-2 gap-2">
                       <div className="rounded-xl bg-yellow-500/[0.06] px-3 py-2 ring-1 ring-inset ring-yellow-400/15">
@@ -770,7 +774,7 @@ export function AlfaClubKeySafety({
                       raidCurve={selectedRaidCurve}
                       progressiveStage={4}
                       ownerSharePercent={sharePercent}
-                      maxKeys={Math.max(80, keySupply + 10)}
+                      maxKeys={Math.max(140, keySupply + 30)}
                       heightClassName="h-[22rem] sm:h-[28rem]"
                       withFrame={false}
                     />

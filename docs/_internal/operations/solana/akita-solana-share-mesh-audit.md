@@ -30,7 +30,7 @@ Base ShareOFT Uniswap buys on the **current AKITA ShareOFT mapping** (`0x4df30�
 | ShareOFT on adapter `0x700b4B…` | **Not registered** — legacy Twin grain, not an active blocker |
 | Meteora on share mesh | **Not done** |
 | Orchestrator `SOLANA_CREATOR_MINTS` | **`9JWh…`** — wrong grain (creator SPL) |
-| `relay_entries` | **Must stay off** until share-mesh pool + B2 path |
+| Solana lottery relay | **Unavailable** — Twin-dependent entry/winner workflows were removed |
 
 ## Wrong grain (do not use for lottery)
 
@@ -62,14 +62,16 @@ with AKITA constants:
 - Display: `TOKEN_SYMBOL='■AKITA'`, `TOKEN_NAME='Akita Share Token'`
 - On-chain read: `pnpm -C frontend exec tsx scripts/ops/read-akita-ovault-mesh-onchain.ts`
 
-**Now:** `KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay` only; do not enable `relay_entries` on `9JWh…`.
+**Now:** configure only current maintenance actions such as
+`KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,price_monitor`; do not restore the
+historical relay on `9JWh…`.
 
 ## Blockers
 
 | Blocker | Blocks |
 |---------|--------|
 | No LZ store/mint or explicit registry peer | Pipe A |
-| `relay_entries` on creator SPL | Wrong lottery entries |
+| Historical creator-SPL relay | Removed wrong-grain path |
 | Adapter not registered | Legacy Twin grain only; does not block active Pipe A |
 | B1 pool not provisioned | Solana trading; B2 relay remains blocked |
 

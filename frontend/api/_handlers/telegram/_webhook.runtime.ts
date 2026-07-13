@@ -7869,6 +7869,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { relayTelegramMessageToAlfaClub } = await import(
         '../../../server/_lib/alfaclub/telegramToAlfaclubRelay.js'
       )
+      // Defaults to validateTelegramAlfaClubIssuer (linked identity + active membership).
       const relayResult = await relayTelegramMessageToAlfaClub({
         chatId,
         messageId,

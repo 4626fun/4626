@@ -3,9 +3,7 @@
   "apiBaseUrl": "https://4626.fun/api",
   "workflowName": "solana-orchestrator",
   "actions": [
-    "relay-entries",
     "settle-fees",
-    "winner-relay",
     "graduation",
     "price-monitor"
   ],

@@ -119,9 +119,6 @@ export const BASE_DEFAULTS = {
   // zero so stale no-code factory addresses fail closed if a legacy caller uses it.
   payoutRouterFactory: addr('0000000000000000000000000000000000000000'),
 
-  // Base↔Solana bridge core (`scalars` / route liveness). Legacy Twin adapter removed — LZ ShareOFT only.
-  baseSolanaBridge: addr('3eff766c76a1be2ce1acf2b69c78bcae257d5188'),
-
   // CREATE2 infra (canonical, chain-agnostic)
   create2Factory: addr('4e59b44847b379578588920cA78FbF26c0B4956C'),
   create2Deployer: addr('aBf645362104F34D9C3FE48440bE7c99aaDE58E7'),
@@ -138,8 +135,8 @@ export const BASE_DEFAULTS = {
   // AA helpers
   vaultActivationBatcher: addr('4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3'),
   // Module-fixed split Phase-1 deployment batcher for strict no-EOA deploy
-  // sessions. It exposes both core/finalize split selectors, Base↔Solana
-  // bridge routing, compatible CreatorOVault modules, and enabled OVault
+  // sessions. It exposes both core/finalize split selectors, compatible
+  // CreatorOVault modules, and enabled OVault
   // runtime composer config for day-one mesh preflight.
   deploymentBatcher: SPLIT_PHASE1_DEPLOYMENT_BATCHER,
   // Optional alias used by env-based rollout/cutover logic.

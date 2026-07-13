@@ -1,6 +1,6 @@
 import { apiFetch } from '@/lib/api/apiBase'
 import { normalizeAlfaClubWaitlistReturnPath } from '@/lib/auth/waitlistEntry'
-import { ALFACLUB_ORIGIN, APP_ORIGIN } from '@/lib/env/host'
+import { ALFACLUB_ORIGIN, getAppBaseUrl } from '@/lib/env/host'
 import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
 import { writeStoredSessionToken } from '@/hooks/useSiweAuth'
 
@@ -95,10 +95,13 @@ export async function bridgePrivySession(privyToken: string | null): Promise<Bri
  * the `cv_auth_session` cookie (bridged by `bridgePrivySession` first);
  * the caller does not need to pass a session token explicitly.
  *
- * `privyToken` is forwarded in the body so the redeem side can optionally
- * also rebuild a Privy context on the app origin.
+ * `expectedAddress` binds creation to the principal established immediately
+ * before this call, preventing another tab from swapping the shared cookie.
  */
-export async function createAuthHandoffCode(params: { privyToken: string | null }): Promise<string> {
+export async function createAuthHandoffCode(params: {
+  privyToken: string | null
+  expectedAddress?: string | null
+}): Promise<string> {
   const handoffRes = await apiFetch('/api/auth/handoff/create', {
     method: 'POST',
     withCredentials: true,
@@ -106,7 +109,10 @@ export async function createAuthHandoffCode(params: { privyToken: string | null 
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
-    body: JSON.stringify({ privyToken: params.privyToken }),
+    body: JSON.stringify({
+      privyToken: params.privyToken,
+      ...(params.expectedAddress ? { expectedAddress: params.expectedAddress } : {}),
+    }),
   }).catch(() => null)
 
   const handoffJson = handoffRes
@@ -133,10 +139,13 @@ export async function createAppAuthHandoffTarget(params: {
   const bridge = await bridgePrivySession(token)
   if (!bridge.ok) return ''
 
-  const code = await createAuthHandoffCode({ privyToken: token })
+  const code = await createAuthHandoffCode({
+    privyToken: null,
+    expectedAddress: bridge.address,
+  })
   if (!code) return ''
 
-  const target = new URL('/swap', APP_ORIGIN)
+  const target = new URL('/swap', getAppBaseUrl())
   target.searchParams.set('cv_handoff', code)
   return target.toString()
 }

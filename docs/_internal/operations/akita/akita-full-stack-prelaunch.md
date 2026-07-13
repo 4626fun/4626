@@ -71,7 +71,6 @@ That inserts `vault_full_deploy` (bundles Charm + Ajna + Solana mesh + Meteora e
 | Check | Expect |
 |-------|--------|
 | Pipe A batcher | `verify-batcher-pipe-a-readiness.ts` exit **0** on `0x02D7abC547F8B1e7E2D7a919D8D1005918361750` |
-| Production `solanaInfraStatus` | `readyForAutoRegistration: true`, `blockers: []` |
 | Release target | `bash test/current-release-target-guard.sh` |
 | Hook bytecode | `ops:verify-hook-mainnet-bytecode` → **PASS (canonical)** |
 
@@ -82,8 +81,8 @@ Public HTTPS probes (no SSH required):
 | Check | Expect |
 |-------|--------|
 | Orchestrator | `https://orchestrator.4626.fun/healthz` → `{"ok":true}` |
-| Orchestrator auth | `POST /reconcile` with `SOLANA_ORCHESTRATOR_API_KEY` → `settle_fees` + `winner_relay` **200** |
-| `relay_entries` paused | `POST /reconcile` action `relay_entries` → **503** `action_disabled:relay_entries` (correct until all production relay gates close) |
+| Orchestrator auth | `POST /reconcile` with `SOLANA_ORCHESTRATOR_API_KEY` → configured `settle_fees` / `price_monitor` action **200** |
+| Removed actions | Former entry-relay and winner-relay labels are rejected as unsupported |
 | Optional hook provisioner | `https://provisioner.4626.fun/healthz` + bearer → `ok: true`, `payerHealthy: true`; not the LZ OFT provisioning path |
 | Provisioner DNS | Response `Server: nginx` — **not** Vercel SPA HTML |
 
@@ -113,8 +112,7 @@ sudo systemctl restart solana-keeper-orchestrator
 
 Pre-deploy Vultr defaults (keep as-is):
 
-- `SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0`
-- `KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay` on Vercel (no `relay_entries` yet)
+- `KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,price_monitor` on Vercel
 
 **Legacy-only warning:** adapter-registration failures concern the retired Twin
 creator-SPL grain and do not gate Pipe A. Do not repair them by adding adapter
@@ -130,7 +128,7 @@ with the new ShareOFT (`■AKITA`) in `SOLANA_SHARE_OFT_MAPPING`.
 | `SOLANA_ORCHESTRATOR_URL` | `https://orchestrator.4626.fun` (no path suffix) |
 | `SOLANA_ORCHESTRATOR_API_KEY` | matches Vultr `/etc/4626/solana-keeper-orchestrator.env` |
 | `KEEPER_SOLANA_RECONCILE_ENABLED` | `1` |
-| `KEEPER_SOLANA_RECONCILE_ACTIONS` | `settle_fees,winner_relay` |
+| `KEEPER_SOLANA_RECONCILE_ACTIONS` | `settle_fees,price_monitor` |
 
 ### Solana share mesh (AKITA #1 — reuse on redeploy)
 
@@ -198,16 +196,15 @@ When Phase 1 completes, record the **new ShareOFT address** from session events 
 | Config | Update `AKITA_DEFAULTS` in `frontend/src/config/contracts.defaults.ts` + Vercel env overrides |
 | Keeper | `scripts/ops/backfill-keepr-vault.ts` with **new** vault/share addresses |
 | `SOLANA_SHARE_OFT_MAPPING` | Map share mesh mint → **new** ShareOFT (not `0x4df30…`) |
-| Orchestrator | `seed-solana-orchestrator-env.sh --hook-schema auto`; keep `RELAY_ENTRIES_ENABLED=0` until all production relay gates close |
+| Orchestrator | `seed-solana-orchestrator-env.sh --hook-schema auto`; configure only actions supported by the current orchestrator |
 | Meteora B1 | Optional after Path 1 supply on Solana — `kpr solana:create-dlmm-pool` on share mesh mint |
 | Prior stack | Keep documented for explorer traceability; avoid removing onchain history |
 
 ## Explicitly not required before Base vault live
 
 - B2 devnet hook deploy (`COST_PROBE_HOOK_PROGRAM_KEYPAIR`)
-- `relay_entries` enabled
 - Meteora pool + LP
-- Legacy `SolanaBridgeAdapter` registration of ShareOFT (mesh lane ≠ adapter grain)
+- Any retired Twin adapter registration
 - Any batcher-global `solanaShareOftPeer` operation
 
 ## Verification after you finish

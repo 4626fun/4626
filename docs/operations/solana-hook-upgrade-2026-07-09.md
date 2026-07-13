@@ -1,5 +1,8 @@
 # Mainnet creator-share-hook upgrade — 2026-07-09
 
+> **Historical deployment record.** References to KPR entry/winner relay
+> deployment describe the retired Twin era and are not current runbook steps.
+
 ## Result: **SUCCESS**
 
 | Field | Value |

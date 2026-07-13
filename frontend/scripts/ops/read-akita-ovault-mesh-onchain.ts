@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * Read AKITA OVault mesh wiring on Base mainnet (LayerZero ShareOFT; Twin adapter retired).
+ * Read AKITA OVault mesh wiring on Base mainnet (LayerZero ShareOFT).
  *
  *   pnpm -C frontend exec tsx scripts/ops/read-akita-ovault-mesh-onchain.ts
  */
@@ -107,7 +107,7 @@ async function main() {
   console.log('AKITA creator:', AKITA_DEFAULTS.token)
   console.log('Hub composer:', HUB_COMPOSER)
   console.log('Split batcher:', SPLIT_PHASE1_DEPLOYMENT_BATCHER)
-  console.log('Bridge model: LayerZero ShareOFT (Twin adapter retired)')
+  console.log('Bridge model: LayerZero ShareOFT')
   console.log('')
 
   const [composerCode, mesh, batcherCfg, batcherDestination, wrapperCode] = await Promise.all([

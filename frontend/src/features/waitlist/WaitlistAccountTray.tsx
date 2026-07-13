@@ -5,10 +5,12 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { CreatorEconomyTrayModule } from '@/components/account/CreatorEconomyTrayModule'
 import { JazziconAvatar } from '@/components/account/JazziconAvatar'
 import {
+  CanonicalIdentityDropdown,
   CoinbaseSmartWalletAvatar,
 } from '@/components/account/CanonicalIdentityCard'
 import {
   RelayTrayPointsModule,
+  RelayTrayPrimaryTabs,
   useIsPhoneViewport,
   type TrayPointsOverview,
 } from '@/components/account/ConnectButton'
@@ -21,13 +23,12 @@ import type { CreatorEconomySigningStatus } from '@/lib/creatorEconomy/types'
 import { APP_ORIGIN, getMarketingBaseUrl } from '@/lib/env/host'
 import { fetchAccountTrayPoints, isAccountTrayPointsAuthError } from '@/lib/waitlist/accountTrayPoints'
 import { resolvePublicPointsDisplay } from '@/lib/waitlist/canonicalAccountScore'
-import { cn } from '@/lib/shared/utils'
 
 import { WaitlistPostJoinShell } from './WaitlistPostJoinShell'
 import { useWaitlistCanonicalIdentity } from './useWaitlistCanonicalIdentity'
 import { useWaitlistPostJoinAttention } from './useWaitlistPostJoinAttention'
 
-type WaitlistTraySection = 'account' | 'points'
+type WaitlistTraySection = 'identity' | 'points'
 
 function shortAddress(address: string | null | undefined): string | null {
   if (!address) return null
@@ -50,84 +51,6 @@ function resolveWaitlistSigningStatus(params: {
   return 'setup'
 }
 
-function WaitlistTrayTabs({
-  section,
-  onChange,
-}: {
-  section: WaitlistTraySection
-  onChange: (next: WaitlistTraySection) => void
-}) {
-  const tabs: { id: WaitlistTraySection; label: string }[] = [
-    { id: 'account', label: 'Account' },
-    { id: 'points', label: 'Points' },
-  ]
-  return (
-    <div className="mx-5 flex items-end gap-5 border-b border-white/[0.06]">
-      {tabs.map((tab) => {
-        const active = section === tab.id
-        return (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => onChange(tab.id)}
-            className={cn(
-              'relative pb-2.5 text-[14px] font-medium tracking-[-0.01em] transition-colors',
-              active ? 'text-white' : 'text-zinc-400 hover:text-zinc-300',
-            )}
-          >
-            {tab.label}
-            {active ? (
-              <motion.span
-                layoutId="waitlist-tray-tab-underline"
-                className="absolute inset-x-0 -bottom-px h-px bg-white"
-                transition={{ type: 'spring', stiffness: 480, damping: 38 }}
-              />
-            ) : null}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-function SummaryRow({
-  title,
-  value,
-  href,
-  onClick,
-}: {
-  title: string
-  value: string
-  href?: string
-  onClick?: () => void
-}) {
-  const className =
-    'flex w-full items-center justify-between gap-3 py-3 text-left transition-colors hover:bg-white/[0.03]'
-  const body = (
-    <>
-      <span className="min-w-0">
-        <span className="block text-[13px] font-medium text-zinc-200">{title}</span>
-        <span className="mt-0.5 block text-[12px] text-zinc-400">{value}</span>
-      </span>
-      <span className="shrink-0 text-[13px] text-zinc-400" aria-hidden>
-        ›
-      </span>
-    </>
-  )
-  if (href) {
-    return (
-      <a href={href} className={className}>
-        {body}
-      </a>
-    )
-  }
-  return (
-    <button type="button" onClick={onClick} className={className}>
-      {body}
-    </button>
-  )
-}
-
 export type WaitlistAccountTrayProps = {
   accountMe: AccountSetupMe | null
   accountMeLoading: boolean
@@ -141,23 +64,21 @@ export type WaitlistAccountTrayProps = {
   onSignOut: () => void | Promise<void>
   signOutBusy: boolean
   signOutDisabled: boolean
-  /**
-   * Social identities + linking wizard. Wallet roles stay on `/accounts`;
-   * this slot opens under Manage connections.
-   */
+  /** Social identities + linking wizard (X / wallet / Zora panels). */
   identitiesPanel: ReactNode
 }
 
 /**
  * Top-right account tray for the waitlist route — the wagmi-free counterpart
- * to the app's `ConnectButton` tray. Flat, editorial chrome (hero + underline
- * tabs + open sections) so marketing `/waitlist` stays calm without nested cards.
+ * to the app's `ConnectButton` tray. Reuses the same tab chrome, economy
+ * module, wallet rows (`CanonicalIdentityDropdown`), points module, and footer
+ * as the app tray; waitlist-only post-join shell + identity linking live on
+ * the Identity tab below the shared wallet block.
  */
 export function WaitlistAccountTray(props: WaitlistAccountTrayProps) {
   const hasSession = Boolean(props.joinedSessionAddress)
   const [open, setOpen] = useState(false)
-  const [section, setSection] = useState<WaitlistTraySection>('account')
-  const [connectionsOpen, setConnectionsOpen] = useState(false)
+  const [section, setSection] = useState<WaitlistTraySection>('identity')
   const isPhoneViewport = useIsPhoneViewport()
   const [autoOpened, setAutoOpened] = useState(false)
   const reduceMotion = useReducedMotion()
@@ -259,6 +180,10 @@ export function WaitlistAccountTray(props: WaitlistAccountTrayProps) {
         .filter(Boolean)
         .join(' · ')
     : 'Coinbase Smart Wallet · Base'
+  // Hero shows CSW/basename when there is no creator coin — keep primary identity
+  // out of the dropdown to avoid duplicate rows. When the hero is coin-forward,
+  // surface the CSW under Wallets via the dropdown's primary-identity block.
+  const omitPrimaryIdentityInDropdown = !hasCreatorCoin
 
   return (
     <>
@@ -328,7 +253,7 @@ export function WaitlistAccountTray(props: WaitlistAccountTrayProps) {
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             className="flex min-h-0 flex-1 flex-col"
           >
-            <div className="px-5 pb-5 pt-2">
+            <div className="px-5 pb-4 pt-2">
               <div className="flex items-start gap-4">
                 <span className="relative shrink-0">
                   {hasCreatorCoin && coinBadge?.logoUrl ? (
@@ -372,38 +297,30 @@ export function WaitlistAccountTray(props: WaitlistAccountTrayProps) {
                       {economy.view.statusLabel}
                     </div>
                   ) : null}
-                  {economy.view.legacyBadge ? (
-                    <div className="mt-1 text-[11px] text-zinc-400">
-                      Legacy stack · {economy.view.legacyBadge}
-                    </div>
-                  ) : null}
                 </div>
                 <div className="shrink-0 pt-1 text-right">
-                  {hasEconomy && economy.view.role !== 'none' ? (
-                    <>
-                      <div className="text-[12px] font-medium text-zinc-300">
-                        {economy.view.statusLabel}
-                      </div>
-                      <div className="mt-1 text-[11px] tabular-nums text-zinc-400">
-                        {trayPointsDisplay.points.toLocaleString()} pts
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="text-[22px] font-semibold tabular-nums leading-none tracking-[-0.03em] text-white">
-                        {trayPointsDisplay.points.toLocaleString()}
-                      </div>
-                      <div className="mt-1 text-[11px] text-zinc-400">points</div>
-                    </>
-                  )}
+                  <div className="text-[22px] font-semibold tabular-nums leading-none tracking-[-0.03em] text-white">
+                    {trayPointsDisplay.points.toLocaleString()}
+                  </div>
+                  <div className="mt-1 text-[11px] text-zinc-400">points</div>
                 </div>
               </div>
             </div>
 
-            <WaitlistTrayTabs section={section} onChange={setSection} />
+            <RelayTrayPrimaryTabs
+              section={section}
+              onChange={(next) => setSection(next === 'portfolio' ? 'identity' : next)}
+              sections={['identity', 'points']}
+            />
 
-            {section === 'account' ? (
-              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-5 pt-4">
+            {section === 'identity' ? (
+              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-3 pt-1">
+                <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-400">
+                  {economy.view.symbolDisplay} economy
+                </div>
+                <div className="text-[18px] font-semibold tracking-[-0.02em] text-white">
+                  {economy.view.statusLabel}
+                </div>
                 <CreatorEconomyTrayModule
                   variant="waitlist"
                   absoluteAppLinks
@@ -411,44 +328,31 @@ export function WaitlistAccountTray(props: WaitlistAccountTrayProps) {
                   view={economy.view}
                 />
 
-                <div className="my-4 h-px bg-white/[0.06]" />
+                <div className="mt-4 h-px bg-white/[0.06]" />
 
-                <SummaryRow
-                  title="Account & signing"
-                  value={`${economy.view.accountSigningLabel}${
-                    identity.cswAddress ? ' · Smart wallet + embedded signer' : ''
-                  }`}
-                  href={`${APP_ORIGIN}/accounts`}
+                <CanonicalIdentityDropdown
+                  identity={identity}
+                  omitPrimaryIdentity={omitPrimaryIdentityInDropdown}
+                  onRequestConnectWallet={props.onRequestConnectWallet}
+                  onRequestDisconnectMainWallet={props.onRequestDisconnectMainWallet}
+                  disconnectingMainWallet={props.disconnectingMainWallet}
+                  onRequestSignOut={props.onSignOut}
+                  signingOut={props.signOutBusy}
+                  signOutDisabled={props.signOutDisabled}
                 />
 
-                <div className="h-px bg-white/[0.06]" />
+                <div className="mt-4 h-px bg-white/[0.06]" />
 
-                <SummaryRow
-                  title="Connections"
-                  value={economy.view.connectionsSummary}
-                  onClick={() => setConnectionsOpen((value) => !value)}
+                <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">
+                  Identities
+                </div>
+                {props.identitiesPanel}
+
+                <WaitlistPostJoinShell
+                  enabled
+                  onSignOut={props.onSignOut}
+                  signOutBusy={props.signOutBusy}
                 />
-                {economy.view.nextConnectionBonus && !connectionsOpen ? (
-                  <div className="pb-2 text-[12px] text-zinc-400">
-                    Next recommended · {economy.view.nextConnectionBonus.label}
-                    <span className="ml-1 tabular-nums text-zinc-300">
-                      +{economy.view.nextConnectionBonus.points}
-                    </span>
-                  </div>
-                ) : null}
-                {connectionsOpen ? (
-                  <div className="pb-2">
-                    <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">
-                      Manage connections
-                    </div>
-                    <WaitlistPostJoinShell
-                      enabled
-                      onSignOut={props.onSignOut}
-                      signOutBusy={props.signOutBusy}
-                    />
-                    {props.identitiesPanel}
-                  </div>
-                ) : null}
               </div>
             ) : (
               <div className="mt-2 min-h-0 flex-1 px-2">

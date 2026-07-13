@@ -27,7 +27,6 @@ Scope: current live v1.18.0 Base shared infrastructure plus the canonical
 | `vaultActivationBatcher` | `0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3` |
 | `lotteryManager` | `0xB68F359e01626Ec5d15C624037311C70DacAba43` |
 | `vrfConsumer` | `0x0b41AD9Eb06EE14C360E1e3D16Af63F5a172Ec36` |
-| `solanaBridgeAdapter` | `0x9A61814082A26192DD9Cb201b44058506685Be60` |
 | `bytecodeStore` | `0xfa3e3b466635DAff910057f18749B93d56F9DE50` |
 | `create2DeployerFromStore` | `0x54660E61857a652753d805aD2c7b4f759C138bD5` |
 | `ovaultCoreModule` | `0xE5C1de158Cb66ffCE15b26BE6F40f598c642EF43` |
@@ -51,7 +50,6 @@ From `frontend/src/config/contracts.defaults.ts`:
 | `registry` | `0xDb8570Dd434b6fCb7f4463d1e7C6F01d4459A4E0` |
 | `lotteryManager` | `0xB68F359e01626Ec5d15C624037311C70DacAba43` |
 | `vrfConsumer` | `0x0b41AD9Eb06EE14C360E1e3D16Af63F5a172Ec36` |
-| `solanaBridgeAdapter` | `0x9A61814082A26192DD9Cb201b44058506685Be60` |
 | `universalBytecodeStore` | `0xfa3e3b466635DAff910057f18749B93d56F9DE50` |
 | `universalCreate2DeployerFromStore` | `0x54660E61857a652753d805aD2c7b4f759C138bD5` |
 | `vaultActivationBatcher` | `0x4c4B8113ED37D8Fc4564f867edAf2B8EC13264a3` |
@@ -68,13 +66,22 @@ Current snapshot set:
 - `deployments/base/contracts/factories/CreatorOVaultFactory.json`
 - `deployments/base/contracts/services/lottery/CreatorLotteryManager.json`
 - `deployments/base/contracts/services/lottery/vrf/CreatorVRFConsumerV2_5.json`
-- `deployments/base/contracts/services/bridge/SolanaBridgeAdapter.json`
 - `deployments/base/contracts/helpers/batchers/VaultActivationBatcher.json`
 - `deployments/base/contracts/helpers/infra/UniversalBytecodeStore.json`
 - `deployments/base/contracts/factories/UniversalCreate2DeployerFromStore.json`
 - `deployments/base/contracts/helpers/batchers/DeploymentBatcher.json`
 - `deployments/base/contracts/helpers/batchers/DeploymentBatcherPhase3Helper.json`
 - `deployments/base/contracts/helpers/batchers/DeploymentBatcherShareMeshHelper.json` (post-`v1.16.1`; legacy `DeploymentBatcherUniV4Helper.json` retained for prior batchers)
+
+The Twin `SolanaBridgeAdapter` is not current infrastructure. Its immutable
+historical deployment snapshot is archived at
+`deployments/base/archive/SolanaBridgeAdapter.retired.json`.
+
+Active Solana routing is LayerZero ShareOFT only. Each creator's Solana mint
+and OFT Store are distinct Solana pubkeys, and every creator token requires an
+explicit
+`Registry4626.setRemoteOFTPeerBytes32(creatorToken, solanaEid, peer)` entry
+before `finalizePhase2`; there is no adapter or global-peer fallback.
 
 Live batcher child addresses that are read directly from `DeploymentBatcher` are also recorded in the release packet:
 

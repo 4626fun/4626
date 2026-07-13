@@ -11,6 +11,7 @@ const {
   recordChatBridgeMessageOriginMock,
   relayRoomMessagesToXmtpMock,
   lookupEnabledRoomBindingMock,
+  readTrustedAlfaClubCrossChannelIngressMock,
 } = vi.hoisted(() => ({
   loggerMock: {
     info: vi.fn(),
@@ -32,7 +33,9 @@ const {
   ),
   executeDeterministicCommandMock: vi.fn(async () => ({ responseText: '' })),
   repliedCommandLedgerMock: new Set<string>(),
-  getChatBridgeMessageOriginsMock: vi.fn(async () => new Map<string, 'telegram' | 'xmtp'>()),
+  getChatBridgeMessageOriginsMock: vi.fn(
+    async () => new Map<string, 'telegram' | 'xmtp' | 'web4626'>(),
+  ),
   recordChatBridgeMessageOriginMock: vi.fn(async () => {}),
   relayRoomMessagesToXmtpMock: vi.fn(async () => ({ enqueued: 0, skipped: 0 })),
   lookupEnabledRoomBindingMock: vi.fn(async (roomId: string) => ({
@@ -51,6 +54,23 @@ const {
       updatedAt: '2026-07-12T00:00:00.000Z',
     },
   })),
+  readTrustedAlfaClubCrossChannelIngressMock: vi.fn(
+    async (): Promise<{
+      id: string
+      sourceChannel: 'telegram' | 'xmtp' | 'web4626'
+      sourceMessageId: string
+      sourceConversationId: string | null
+      targetRoomId: string
+      originalText: string
+      alfaclubRoomId: string | null
+      alfaclubMessageId: string | null
+      validatedProfileId: string | null
+      validatedIssuer: string | null
+      claimedAt: string
+      linkedAt: string | null
+      updatedAt: string
+    } | null> => null,
+  ),
 }))
 
 vi.mock('./commandReplyLedger.js', () => ({
@@ -96,6 +116,10 @@ vi.mock('./chatBridgeMessageOrigin.js', () => ({
   recordChatBridgeMessageOrigin: recordChatBridgeMessageOriginMock,
 }))
 
+vi.mock('./crossChannelIngress.js', () => ({
+  readTrustedAlfaClubCrossChannelIngress: readTrustedAlfaClubCrossChannelIngressMock,
+}))
+
 vi.mock('./roomChannelBridge.js', () => ({
   relayRoomMessagesToXmtp: relayRoomMessagesToXmtpMock,
 }))
@@ -115,6 +139,7 @@ import {
   _getBridgeAuthStateForTests,
   _ingestLiveMessagesForTests,
   _resetAlfaClubChatBridgeStateForTests,
+  _resolveTrustedCommandSenderWalletForTests,
   _runAlfaClubChatBridgeTickForTests,
   _sendCommandReplyToRoomForTests,
   _sendRoomMessageViaWebSocketForTests,
@@ -1312,5 +1337,86 @@ describe('data-driven room channel origin-aware outbound fan-out', () => {
 
     expect(upsertAlfaClubIngestMessagesMock).not.toHaveBeenCalled()
     expect(relayRoomMessagesToXmtpMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('_resolveTrustedCommandSenderWalletForTests', () => {
+  const nativeSender = '0x1111111111111111111111111111111111111111'
+  const trustedIssuer = '0x2222222222222222222222222222222222222222'
+
+  beforeEach(() => {
+    getChatBridgeMessageOriginsMock.mockReset()
+    getChatBridgeMessageOriginsMock.mockResolvedValue(new Map())
+    readTrustedAlfaClubCrossChannelIngressMock.mockReset()
+    readTrustedAlfaClubCrossChannelIngressMock.mockResolvedValue(null)
+  })
+
+  it('allows native hex senders without an ingress envelope', async () => {
+    const resolved = await _resolveTrustedCommandSenderWalletForTests({
+      roomId: '1659',
+      messageId: 'native-1',
+      sender: nativeSender,
+      text: '/help',
+    })
+
+    expect(resolved).toEqual({
+      senderWallet: nativeSender,
+      source: 'native',
+      commandText: '/help',
+    })
+    expect(readTrustedAlfaClubCrossChannelIngressMock).not.toHaveBeenCalled()
+  })
+
+  it('denies web4626-origin commands when trusted ingress is missing', async () => {
+    getChatBridgeMessageOriginsMock.mockResolvedValueOnce(
+      new Map<string, 'telegram' | 'xmtp' | 'web4626'>([['web-1', 'web4626']]),
+    )
+
+    const resolved = await _resolveTrustedCommandSenderWalletForTests({
+      roomId: '1659',
+      messageId: 'web-1',
+      sender: 'relay-bot',
+      text: '/help',
+    })
+
+    expect(resolved).toBeNull()
+    expect(readTrustedAlfaClubCrossChannelIngressMock).toHaveBeenCalledWith({
+      alfaclubRoomId: '1659',
+      alfaclubMessageId: 'web-1',
+    })
+  })
+
+  it('allows web4626-origin commands when trusted ingress supplies the issuer', async () => {
+    getChatBridgeMessageOriginsMock.mockResolvedValueOnce(
+      new Map<string, 'telegram' | 'xmtp' | 'web4626'>([['web-2', 'web4626']]),
+    )
+    readTrustedAlfaClubCrossChannelIngressMock.mockResolvedValueOnce({
+      id: 'ing-1',
+      sourceChannel: 'web4626',
+      sourceMessageId: 'client-2',
+      sourceConversationId: 'web4626:1659',
+      targetRoomId: '1659',
+      originalText: '/status',
+      alfaclubRoomId: '1659',
+      alfaclubMessageId: 'web-2',
+      validatedProfileId: '42',
+      validatedIssuer: trustedIssuer,
+      claimedAt: '2026-07-13T00:00:00.000Z',
+      linkedAt: '2026-07-13T00:00:01.000Z',
+      updatedAt: '2026-07-13T00:00:01.000Z',
+    })
+
+    const resolved = await _resolveTrustedCommandSenderWalletForTests({
+      roomId: '1659',
+      messageId: 'web-2',
+      sender: 'relay-bot',
+      text: 'ignored wrapper',
+    })
+
+    expect(resolved).toEqual({
+      senderWallet: trustedIssuer,
+      source: 'ingress',
+      commandText: '/status',
+    })
   })
 })

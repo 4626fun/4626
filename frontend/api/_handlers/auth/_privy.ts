@@ -57,6 +57,12 @@ function normalizeEvmAddress(value: unknown): string | null {
   return raw
 }
 
+function isMissingRelationError(error: unknown): boolean {
+  const code = String((error as { code?: unknown } | null)?.code ?? '')
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  return code === '42P01' || /relation .* does not exist/i.test(message)
+}
+
 function collectCurrentLinkedEvmAddresses(classified: ClassifiedLinkedAccounts): Set<string> {
   const out = new Set<string>()
 
@@ -83,23 +89,19 @@ export function pickPrivySessionAddress(params: {
   persistedAuthorityAddresses: readonly string[]
 }): string | null {
   const currentLinked = collectCurrentLinkedEvmAddresses(params.classified)
-  for (const value of params.persistedAuthorityAddresses) {
-    const candidate = normalizeEvmAddress(value)
-    if (candidate && currentLinked.has(candidate)) return candidate
+  const persistedAuthorities = params.persistedAuthorityAddresses
+    .map((value) => normalizeEvmAddress(value))
+    .filter((value): value is string => Boolean(value))
+
+  if (!persistedAuthorities.some((candidate) => currentLinked.has(candidate))) {
+    return null
   }
 
-  // Fail closed: an arbitrary linked wallet is not automatically authorized to
-  // represent the persisted 4626 profile.
-  return null
-}
-
-function shouldBypassWalletSyncThrottle(params: {
-  persistedSessionAddress: string | null
-  classifiedSessionAddress: string | null
-}): boolean {
-  const persisted = normalizeEvmAddress(params.persistedSessionAddress)
-  const classified = normalizeEvmAddress(params.classifiedSessionAddress)
-  return Boolean(persisted && classified && persisted !== classified)
+  // A currently linked signer proves control of the persisted profile, while
+  // the session principal remains the parent CSW whenever that profile has one.
+  // This preserves canonical custody identity when Privy temporarily omits the
+  // parent wallet but still returns its confirmed embedded owner.
+  return persistedAuthorities[0] ?? null
 }
 
 type PersistedSessionAuthority = {
@@ -111,15 +113,28 @@ async function resolvePersistedSessionAuthority(
   db: any,
   privyUserId: string,
 ): Promise<PersistedSessionAuthority | null> {
+  let result: { rows?: unknown[] }
   try {
-    const result = await db.sql`
+    result = await db.sql`
+      WITH direct AS (
+        SELECT id, merged_into_profile_id
+        FROM profiles
+        WHERE id IN (
+          SELECT profile_id
+          FROM privy_user_aliases
+          WHERE privy_user_id = ${privyUserId}
+        )
+           OR privy_user_id = ${privyUserId}
+        LIMIT 1
+      )
       SELECT
         p.id,
         p.csw_address,
         p.primary_wallet,
         p.primary_embedded_eoa,
         canonical.address AS canonical_wallet
-      FROM profiles p
+      FROM direct d
+      JOIN profiles p ON p.id = COALESCE(d.merged_into_profile_id, d.id)
       LEFT JOIN LATERAL (
         SELECT pw.address
         FROM profile_wallets pw
@@ -127,57 +142,83 @@ async function resolvePersistedSessionAuthority(
           AND pw.is_canonical_smart_wallet = true
         LIMIT 1
       ) canonical ON true
-      WHERE p.privy_user_id = ${privyUserId}
+      WHERE p.merged_into_profile_id IS NULL
       LIMIT 1;
     `
-    const row = result?.rows?.[0] as
-      | {
-          id?: unknown
-          csw_address?: unknown
-          primary_wallet?: unknown
-          primary_embedded_eoa?: unknown
-          canonical_wallet?: unknown
-        }
-      | undefined
-    if (!row) return null
-    const profileId = typeof row.id === 'number' ? row.id : Number(row.id)
-    if (!Number.isFinite(profileId) || profileId <= 0) return null
-
-    const roleWallets = await db.sql`
-      SELECT address
-      FROM profile_wallets
-      WHERE profile_id = ${profileId}
-        AND (
-          is_primary = true
-          OR is_embedded_eoa = true
-          OR is_canonical_smart_wallet = true
-        )
-      ORDER BY
-        is_canonical_smart_wallet DESC,
-        is_primary DESC,
-        is_embedded_eoa DESC,
-        verified_at DESC NULLS LAST,
-        address ASC;
+  } catch (error) {
+    if (!isMissingRelationError(error)) throw error
+    result = await db.sql`
+      WITH matched AS (
+        SELECT id, merged_into_profile_id
+        FROM profiles
+        WHERE privy_user_id = ${privyUserId}
+        LIMIT 1
+      )
+      SELECT
+        p.id,
+        p.csw_address,
+        p.primary_wallet,
+        p.primary_embedded_eoa,
+        canonical.address AS canonical_wallet
+      FROM matched m
+      JOIN profiles p ON p.id = COALESCE(m.merged_into_profile_id, m.id)
+      LEFT JOIN LATERAL (
+        SELECT pw.address
+        FROM profile_wallets pw
+        WHERE pw.profile_id = p.id
+          AND pw.is_canonical_smart_wallet = true
+        LIMIT 1
+      ) canonical ON true
+      WHERE p.merged_into_profile_id IS NULL
+      LIMIT 1;
     `
-    const candidates = [
-      row.canonical_wallet,
-      row.csw_address,
-      row.primary_wallet,
-      row.primary_embedded_eoa,
-      ...(roleWallets?.rows ?? []).map((walletRow: { address?: unknown }) => walletRow.address),
-    ]
-    const addresses: string[] = []
-    const seen = new Set<string>()
-    for (const candidate of candidates) {
-      const normalized = normalizeEvmAddress(candidate)
-      if (!normalized || seen.has(normalized)) continue
-      seen.add(normalized)
-      addresses.push(normalized)
-    }
-    return { profileId, addresses }
-  } catch {
-    return null
   }
+
+  const row = result?.rows?.[0] as
+    | {
+        id?: unknown
+        csw_address?: unknown
+        primary_wallet?: unknown
+        primary_embedded_eoa?: unknown
+        canonical_wallet?: unknown
+      }
+    | undefined
+  if (!row) return null
+  const profileId = typeof row.id === 'number' ? row.id : Number(row.id)
+  if (!Number.isFinite(profileId) || profileId <= 0) return null
+
+  const roleWallets = await db.sql`
+    SELECT address
+    FROM profile_wallets
+    WHERE profile_id = ${profileId}
+      AND (
+        is_primary = true
+        OR is_embedded_eoa = true
+        OR is_canonical_smart_wallet = true
+      )
+    ORDER BY
+      is_canonical_smart_wallet DESC,
+      is_primary DESC,
+      is_embedded_eoa DESC,
+      verified_at DESC NULLS LAST,
+      address ASC;
+  `
+  const candidates = [
+    row.canonical_wallet,
+    row.csw_address,
+    row.primary_wallet,
+    row.primary_embedded_eoa,
+    ...(roleWallets?.rows ?? []).map((walletRow: { address?: unknown }) => walletRow.address),
+  ]
+  const addresses: string[] = []
+  const seen = new Set<string>()
+  for (const candidate of candidates) {
+    const normalized = normalizeEvmAddress(candidate)
+    if (!normalized || seen.has(normalized)) continue
+    seen.add(normalized)
+    addresses.push(normalized)
+  }
+  return { profileId, addresses }
 }
 
 
@@ -207,6 +248,7 @@ function recordPrivyAuthDbSync(privyUserId: string, syncedAtMs: number): void {
 
 function getPrivyAuthDbSyncMinIntervalMs(): number {
   const raw = String(process.env.PRIVY_AUTH_DB_SYNC_MIN_INTERVAL_MS ?? '').trim()
+  if (!raw) return 15_000
   const n = Number(raw)
   if (Number.isFinite(n) && n >= 0) return Math.floor(n)
   return 15_000
@@ -252,46 +294,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const loaded = await ensurePrivyUserEmbeddedWallet(client, claims.userId)
     const user = loaded.user
     const classified = loaded.classified
-    // The 4626 cookie represents canonical account identity. Prefer the parent
-    // CSW when present; execution code resolves the embedded owner separately.
-    const classifiedSessionAddress =
-      classified.canonicalSmartWallet?.address ??
-      classified.activeOwnerWallet?.address ??
-      classified.embeddedEoa?.address ??
-      classified.primaryWalletAddress ??
-      null
     let sessionAddress: string | null = null
 
     try {
       const db = await getDb()
-      if (db) {
-        await ensureWaitlistSchema(db as any)
-        const persistedAuthority = await resolvePersistedSessionAuthority(db as any, claims.userId)
-        const persistedSessionAddress = persistedAuthority?.addresses[0] ?? null
-
-        const now = Date.now()
-        const minInterval = getPrivyAuthDbSyncMinIntervalMs()
-        const lastUserSyncAtMs = lastPrivyAuthDbSyncAtMsByUser.get(claims.userId)
-        const shouldSyncNow =
-          !persistedSessionAddress ||
-          lastUserSyncAtMs === undefined ||
-          now - lastUserSyncAtMs >= minInterval ||
-          shouldBypassWalletSyncThrottle({
-            persistedSessionAddress,
-            classifiedSessionAddress,
-          })
-        if (shouldSyncNow) {
-          await syncUserWallets(db as any, user as any)
-          recordPrivyAuthDbSync(claims.userId, now)
-        }
-        const currentAuthority = shouldSyncNow
-          ? await resolvePersistedSessionAuthority(db as any, claims.userId)
-          : persistedAuthority
-        sessionAddress = pickPrivySessionAddress({
-          classified,
-          persistedAuthorityAddresses: currentAuthority?.addresses ?? [],
-        })
+      if (!db) {
+        return res.status(503).json({
+          success: false,
+          error: 'Auth service unavailable',
+        } satisfies ApiEnvelope<never>)
       }
+      await ensureWaitlistSchema(db as any)
+      const persistedAuthority = await resolvePersistedSessionAuthority(db as any, claims.userId)
+      const persistedSessionAddress = persistedAuthority?.addresses[0] ?? null
+      const persistedAuthorityProof = pickPrivySessionAddress({
+        classified,
+        persistedAuthorityAddresses: persistedAuthority?.addresses ?? [],
+      })
+
+      const now = Date.now()
+      const minInterval = getPrivyAuthDbSyncMinIntervalMs()
+      const lastUserSyncAtMs = lastPrivyAuthDbSyncAtMsByUser.get(claims.userId)
+      const shouldSyncNow =
+        !persistedSessionAddress ||
+        !persistedAuthorityProof ||
+        lastUserSyncAtMs === undefined ||
+        now - lastUserSyncAtMs >= minInterval
+      if (shouldSyncNow) {
+        await syncUserWallets(db as any, user as any)
+        recordPrivyAuthDbSync(claims.userId, now)
+      }
+      const currentAuthority = shouldSyncNow
+        ? await resolvePersistedSessionAuthority(db as any, claims.userId)
+        : persistedAuthority
+      sessionAddress = pickPrivySessionAddress({
+        classified,
+        persistedAuthorityAddresses: currentAuthority?.addresses ?? [],
+      })
     } catch (dbSyncError) {
       // FIX: M-16 / 4626-428 — Privy auth must NEVER swallow IDENTITY_RECOVERY_REQUIRED.
       //
@@ -310,6 +349,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (isIdentityRecoveryRequiredError(dbSyncError)) {
         throw dbSyncError
       }
+      return res.status(503).json({
+        success: false,
+        error: 'Auth service unavailable',
+      } satisfies ApiEnvelope<never>)
     }
 
     if (!sessionAddress) {

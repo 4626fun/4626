@@ -120,7 +120,7 @@ Options:
   process.stdout.write(`ShareOFT: ${shareOft}\n`)
   process.stdout.write(`Composer: ${HUB_COMPOSER}\n`)
   process.stdout.write(`Batcher:  ${batcher}\n`)
-  process.stdout.write(`Bridge:   LayerZero ShareOFT (Twin adapter retired)\n\n`)
+  process.stdout.write(`Bridge:   LayerZero ShareOFT\n\n`)
 
   if (!hasFlag('--skip-onchain-read')) {
     process.stdout.write('--- On-chain read (read-akita-ovault-mesh-onchain.ts) ---\n\n')
@@ -141,8 +141,7 @@ Options:
   )
   process.stdout.write('3. Grandfathered AKITA wrapper lacks isBeneficiaryOperator — configureTokenMesh reverts until wrapper upgrade/wiring\n')
   process.stdout.write('4. Solana LZ asset mesh + share mesh OFTs/peers not deployed — no OVAULT_ASSET_MESH_TOKEN / OVAULT_SHARE_MESH_TOKEN in env\n')
-  process.stdout.write('5. Twin SolanaBridgeAdapter registration is retired — use LayerZero ShareOFT peers only\n')
-  process.stdout.write('6. relay_entries paused — KEEPER_SOLANA_RECONCILE_ACTIONS must stay settle_fees,winner_relay only\n\n')
+  process.stdout.write('5. relay_entries paused — KEEPER_SOLANA_RECONCILE_ACTIONS must stay settle_fees,winner_relay only\n\n')
 
   process.stdout.write('--- Operator sequence ---\n\n')
   process.stdout.write('A. Deploy/peers: Solana asset mesh + share mesh OFTs (LayerZero), record Base addresses + Solana peers\n')
@@ -163,9 +162,7 @@ Options:
     process.stdout.write(
       'Calldata preview skipped — pass --asset-mesh, --share-mesh, --solana-asset-peer, --solana-share-peer when mesh tokens exist.\n',
     )
-    process.stdout.write(
-      'Batcher shell: setSolanaDestination + setOVaultRuntimeConfig (Twin setSolanaConfig / setSolanaShareOftPeer retired).\n',
-    )
+    process.stdout.write('Batcher shell: setSolanaDestination + setOVaultRuntimeConfig.\n')
     process.stdout.write('\n--- Registry / mesh forge wiring (when Base mesh OFTs + Solana peers exist) ---\n\n')
     process.stdout.write(`REGISTRY=${BASE_DEFAULTS.registry}\n`)
     process.stdout.write(`CREATOR_TOKEN=${AKITA_DEFAULTS.token}\n`)

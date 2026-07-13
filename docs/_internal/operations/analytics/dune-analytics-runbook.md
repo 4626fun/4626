@@ -34,7 +34,6 @@ Use [Contract addresses](/reference/addresses) as source of truth. Current green
 | CreatorRegistry | `0xDD7B106a15540bA2F59464590222bF47D8C9394E` |
 | CreatorOVaultFactory | `0xf4a4d70D9fB3b29c56eB2aaE264FBd3DF9221A6a` |
 | CreatorLotteryManager | `0x29F901864D65Eb848BC548ebCEAcD6dAD39EFd26` |
-| SolanaBridgeAdapter | `0x8e99bb0270bbdf2d64ff6854509CD2410A28fBae` |
 | Zora factory (coin creates) | `0x777777751622c0d3258f214f9df38e35bf45baf3` |
 
 Deprecated batchers (`0xa99058…`, `0x16aEA8…`) — use `02-legacy-batcher-tx-volume.sql` for historical charts only.

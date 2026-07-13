@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Installs/updates systemd unit + env file for solana route provisioner.
+# Installs/updates systemd unit + env file for the Solana provisioner.
 #
 # Usage:
 #   sudo ./install-systemd.sh \
@@ -42,8 +42,8 @@ fi
 
 FRONTEND_DIR="${REPO_ROOT}/frontend"
 DEPLOY_DIR="${FRONTEND_DIR}/server/solana-provisioner/deploy"
-UNIT_SRC="${DEPLOY_DIR}/solana-route-provisioner.service"
-UNIT_DST="/etc/systemd/system/solana-route-provisioner.service"
+UNIT_SRC="${DEPLOY_DIR}/solana-provisioner.service"
+UNIT_DST="/etc/systemd/system/solana-provisioner.service"
 ENV_DST="${ENV_DIR}/solana-provisioner.env"
 ENV_TEMPLATE="${DEPLOY_DIR}/solana-provisioner.env.example"
 
@@ -88,7 +88,7 @@ sed \
 chmod 0644 "${UNIT_DST}"
 
 systemctl daemon-reload
-systemctl enable solana-route-provisioner.service
+systemctl enable solana-provisioner.service
 
 echo
 echo "Installed unit: ${UNIT_DST}"
@@ -96,6 +96,6 @@ echo "Env file:       ${ENV_DST}"
 echo
 echo "Next:"
 echo "  1) Edit ${ENV_DST}"
-echo "  2) systemctl restart solana-route-provisioner"
-echo "  3) systemctl status solana-route-provisioner --no-pager"
+echo "  2) systemctl restart solana-provisioner"
+echo "  3) systemctl status solana-provisioner --no-pager"
 echo "  4) source ${ENV_DST} && curl -fsS -H \"Authorization: Bearer \$PROVISIONER_BEARER_TOKEN\" http://127.0.0.1:8788/healthz"

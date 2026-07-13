@@ -784,8 +784,8 @@ export function Vault() {
               <h2 className="headline text-3xl sm:text-5xl mt-4 sm:mt-6">Claim to Solana</h2>
             </motion.div>
             <Alert variant="info">
-              <span className="font-medium">Solana prize claim via Twin bridge is retired.</span>{' '}
-              LayerZero ShareOFT is the active bridge plane. Claim lottery prizes on Base for now
+              <span className="font-medium">Solana prize claims use LayerZero ShareOFT.</span>{' '}
+              Claim lottery prizes on Base for now
               {prizeAmountDisplay !== '0' ? ` (${prizeAmountDisplay} ${shareSymbol ?? 'SHARE'})` : ''}, or bridge
               ShareOFT to Solana with a standard OFT send once your wallet holds the prize token.
             </Alert>

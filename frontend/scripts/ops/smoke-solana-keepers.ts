@@ -128,7 +128,10 @@ async function checkKeeperJobsHealth(kprKey: string): Promise<Row[]> {
 
 async function main(): Promise<void> {
   const orchKey = process.env.SOLANA_ORCHESTRATOR_API_KEY?.trim()
-  const provSecret = process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET?.trim()
+  const provSecret =
+    process.env.SOLANA_HOOK_PROVISIONER_SECRET?.trim() ||
+    process.env.SOLANA_METEORA_POOL_PROVISIONER_SECRET?.trim() ||
+    process.env.METEORA_IX_PROVISIONER_SECRET?.trim()
   const kprKey = process.env.KPR_API_KEY?.trim()
   const checkpoint = `smoke-${Date.now()}`
   const rows: Row[] = []
@@ -193,7 +196,7 @@ async function main(): Promise<void> {
   }
 
   const provUrl =
-    process.env.SOLANA_DYNAMIC_ROUTE_PROVISIONER_HEALTH_URL?.trim() ??
+    process.env.SOLANA_PROVISIONER_HEALTH_URL?.trim() ||
     'https://provisioner.4626.fun/healthz'
   const prov = await fetchJson(provUrl, {
     headers: provSecret ? { Authorization: `Bearer ${provSecret}` } : {},
@@ -206,7 +209,7 @@ async function main(): Promise<void> {
       ? `payerHealthy=${String(provData?.payerHealthy)}`
       : provSecret
         ? prov.detail
-        : `${prov.detail} (set SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET)`,
+        : `${prov.detail} (set a dedicated Solana provisioner secret)`,
   })
 
   if (!kprKey) {
@@ -235,18 +238,6 @@ async function main(): Promise<void> {
       detail: chain.ok
         ? `status=${chainData?.status} executed=${String(chainData?.executed)}`
         : `${chain.detail}`,
-    })
-    const infra = await fetchJson(`${appBase}/api/deploy/solanaInfraStatus`, {
-      headers: { Authorization: `Bearer ${kprKey}` },
-    })
-    const infraData = (infra.data as { data?: { readyForAutoRegistration?: boolean; blockers?: string[] } })
-      ?.data
-    rows.push({
-      id: 'solana_infra_status',
-      ok: Boolean(infraData?.readyForAutoRegistration && (infraData.blockers?.length ?? 0) === 0),
-      detail: infraData
-        ? `ready=${String(infraData.readyForAutoRegistration)} blockers=${JSON.stringify(infraData.blockers ?? [])}`
-        : infra.detail,
     })
     rows.push(...(await checkKeeperJobsHealth(kprKey)))
   } else {

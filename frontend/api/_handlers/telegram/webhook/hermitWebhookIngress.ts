@@ -195,6 +195,8 @@ export async function handleHermitTelegramWebhookIngress(
     const { relayTelegramMessageToAlfaClub } = await import(
       '../../../../server/_lib/alfaclub/telegramToAlfaclubRelay.js'
     )
+    // Issuer validation defaults to validateTelegramAlfaClubIssuer (linked Telegram
+    // identity + active room membership). Explicit override is unnecessary here.
     const relayResult = await relayTelegramMessageToAlfaClub({
       chatId,
       messageId,

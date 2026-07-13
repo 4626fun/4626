@@ -1009,7 +1009,7 @@ describe('telegram webhook handler', () => {
 
   it('renders creator coin details for a selected linked user and adds a buy action card', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    getDbMock.mockResolvedValueOnce({
+    getDbMock.mockResolvedValue({
       sql: vi.fn(async (strings: TemplateStringsArray) => {
         const text = strings.join(' ').toLowerCase()
         if (text.includes('from telegram_user_links') && text.includes('where telegram_user_id =')) {
@@ -1051,7 +1051,7 @@ describe('telegram webhook handler', () => {
               chain_id: 8453,
               group_id: 'xmtp-group-1',
               settled_at: null,
-              creator_coin_address: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+              creator_coin_address: AKITA_TOKEN_ADDRESS,
             }],
           }
         }
