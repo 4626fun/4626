@@ -38,7 +38,6 @@ import {
 } from '@/lib/alfaclub/roomDirectory'
 import { apiFetch } from '@/lib/api/apiBase'
 import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
-import { proxiedExternalImageUrl } from '@/lib/images/externalImage'
 import { cn } from '@/lib/shared/utils'
 
 import {
@@ -840,7 +839,7 @@ function OverviewPanel({
 }
 
 function SelectedRoomAvatar({ room }: { room: AlfaClubRoomDirectoryItem | null }) {
-  const imageSrc = proxiedExternalImageUrl(room?.imageUrl)
+  const imageSrc = room?.imageUrl?.trim() || null
   const [failedSource, setFailedSource] = useState<string | null>(null)
   if (!imageSrc || failedSource === imageSrc) {
     return (
